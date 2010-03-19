@@ -1,3 +1,4 @@
+{-# LANGUAGE ExistentialQuantification #-}
 module WebPlug where
 
 import Network.Wai
@@ -10,10 +11,10 @@ newtype PathInfo = PathInfo { unPathInfo :: String }
 handleWai :: (PathInfo -> Either err url)
           -> (err -> Application)
           -> (url -> PathInfo)
-          -> (PathInfo -> AbsPath)
           -> (url -> (url -> AbsPath) -> Application)
+          -> (PathInfo -> AbsPath)
           -> Application
-handleWai parsePI onErr buildPI buildAbsPath dispatch req = do
+handleWai parsePI onErr buildPI dispatch buildAbsPath req = do
     let pi = PathInfo $ S.unpack $ pathInfo req
     case parsePI pi of
         Right url -> dispatch url (buildAbsPath . buildPI) req
@@ -24,3 +25,16 @@ default404 _ = return $ Response
                 Status404
                 [(ContentType, S.pack "text/plain")]
                 $ Right $ fromLBS $ L.pack "Not found"
+
+data WebPlug = forall url. WebPlug
+    { wpParseUrl :: PathInfo -> Maybe url
+    , wpRenderUrl :: url -> PathInfo
+    , wpDispatch :: url -> (url -> AbsPath) -> Application
+    }
+
+handleWebPlug :: WebPlug -> (PathInfo -> AbsPath) -> Application
+handleWebPlug (WebPlug parse render dispatch) = handleWai
+    (maybe (Left ()) Right . parse)
+    (const default404)
+    render
+    dispatch

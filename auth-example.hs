@@ -120,6 +120,13 @@ dispatchAuthRoutes ds ARLogin toAP req
                 $ Right $ fromLBS $ L.pack "<h1>Logged in</h1>"
     | otherwise = default404 req
 
+authPlug :: DataStore ds => ds -> WebPlug
+authPlug ds = WebPlug
+    { wpParseUrl = parseAuthRoutes
+    , wpRenderUrl = renderAuthRoutes
+    , wpDispatch = dispatchAuthRoutes ds
+    }
+
 data MySite = MyHome | MyAuth AuthRoutes
 
 parseMyRoutes (PathInfo "/") = Right MyHome
