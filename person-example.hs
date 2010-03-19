@@ -30,10 +30,24 @@ main = do
     rid <- createRecord ms personTable michael24
     print rid
     showMemoryStore ms >>= putStrLn
+
+    putStrLn "\nfilterTable"
+    filterTable ms personTable [Filter "age" (FVInt 24) [EQ, GT]] >>= print
+    filterTable ms personTable [Filter "age" (FVInt 25) [EQ, GT]] >>= print
+
     readRecord ms personTable rid >>= print
     updateRecord ms personTable rid michael25
     showMemoryStore ms >>= putStrLn
     readRecord ms personTable rid >>= print
+
+    putStrLn "\nfilterTable, 25 in db"
+    filterTable ms personTable [Filter "age" (FVInt 24) [EQ, GT]] >>= print
+    filterTable ms personTable [Filter "age" (FVInt 25) [EQ, GT]] >>= print
+
     deleteRecord ms personTable rid
     showMemoryStore ms >>= putStrLn
     readRecord ms personTable rid >>= print
+
+    putStrLn "\nfilterTable, empty db"
+    filterTable ms personTable [Filter "age" (FVInt 24) [EQ, GT]] >>= print
+    filterTable ms personTable [Filter "age" (FVInt 25) [EQ, GT]] >>= print

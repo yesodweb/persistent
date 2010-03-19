@@ -6,6 +6,10 @@ module Data.Persist
     , Field (..)
     , FieldValue (..)
     , Table (..)
+      -- * Querying
+    , Filter (..)
+    , applyFilter
+    , applyFilters
       -- * Type classes
     , DataStore (..)
       -- * Memory store sample implementation
@@ -18,6 +22,8 @@ import Data.Data (Data)
 import Data.Typeable (Typeable)
 import Control.Concurrent.MVar
 import Safe
+import Data.Maybe
+import Control.Arrow
 
 data FieldType = FTString | FTInt
     deriving (Show, Read, Data, Typeable)
@@ -31,7 +37,7 @@ data Field = Field
     }
     deriving (Show, Read, Data, Typeable)
 
-data FieldValue = FVNull | FVString String | FVInt Int
+data FieldValue = {-FVNull | -}FVString String | FVInt Int
     deriving (Show, Read, Data, Typeable)
 
 data Table a = Table
@@ -41,6 +47,28 @@ data Table a = Table
     , tableThaw :: [(String, FieldValue)] -> Maybe a -- error info?
     }
 
+data Filter = Filter
+    { filterFieldName :: String
+    , filterValue :: FieldValue
+    , filterOrderings :: [Ordering]
+    }
+
+compareFV :: FieldValue -> FieldValue -> Ordering
+compareFV (FVString x) (FVString y) = compare x y
+compareFV (FVInt x) (FVInt y) = compare x y
+compareFV x y = error $ "Invalid args to compareFV: " ++ show (x, y)
+
+applyFilter :: [(String, FieldValue)] -> Filter -> Bool
+applyFilter vals filter =
+    case lookup (filterFieldName filter) vals of
+      Nothing -> error $ "applyFilter: field not found: "
+                      ++ filterFieldName filter
+      Just val -> compareFV val (filterValue filter) `elem`
+                            filterOrderings filter
+
+applyFilters :: [(String, FieldValue)] -> [Filter] -> Bool
+applyFilters vals = and . map (applyFilter vals)
+
 class DataStore d where
     type RecordId d
     initTable :: d -> Table a -> IO ()
@@ -48,6 +76,7 @@ class DataStore d where
     readRecord :: d -> Table a -> RecordId d -> IO (Maybe a) -- error info
     updateRecord :: d -> Table a -> RecordId d -> a -> IO ()
     deleteRecord :: d -> Table a -> RecordId d -> IO ()
+    filterTable :: d -> Table a -> [Filter] -> IO [(RecordId d, a)]
 
 newtype MemoryStore = MemoryStore
     { unMemoryStore :: MVar [(String, [(Int, String)])]
@@ -104,3 +133,11 @@ instance DataStore MemoryStore where
         go' ((rid', val):rest)
             | rid == rid' = rest
             | otherwise = (rid', val) : go' rest
+    filterTable (MemoryStore ms) table filters = go `fmap` readMVar ms where
+        go store =
+          case lookup (tableName table) store of
+            Nothing -> error $ "Table not found: " ++ tableName table
+            Just vals -> mapMaybe (\(x, my) -> my >>= \y -> return (x, y))
+                       $ map (second $ tableThaw table)
+                       $ filter (flip applyFilters filters . snd)
+                       $ map (second read) vals
