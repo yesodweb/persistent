@@ -1,5 +1,6 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Data.Persist
     ( -- * Data types
       FieldType (..)
@@ -69,7 +70,7 @@ applyFilter vals filter =
 applyFilters :: [(String, FieldValue)] -> [Filter] -> Bool
 applyFilters vals = and . map (applyFilter vals)
 
-class DataStore d where
+class (Show (RecordId d), Read (RecordId d)) => DataStore d where
     type RecordId d
     initTable :: d -> Table a -> IO ()
     createRecord :: d -> Table a -> a -> IO (RecordId d)
