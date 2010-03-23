@@ -22,6 +22,8 @@ thawPerson _ = Nothing
 michael24 = Person "Michael" 24
 michael25 = Person "Michael" 25
 
+print' x () = print x >> return (Right ())
+
 main = do
     ms <- createMemoryStore
     showMemoryStore ms >>= putStrLn
@@ -32,8 +34,8 @@ main = do
     showMemoryStore ms >>= putStrLn
 
     putStrLn "\nfilterTable"
-    filterTable ms personTable [Filter "age" (FVInt 24) [EQ, GT]] >>= print
-    filterTable ms personTable [Filter "age" (FVInt 25) [EQ, GT]] >>= print
+    filterTable ms personTable [Filter "age" (FVInt 24) [EQ, GT]] print' ()
+    filterTable ms personTable [Filter "age" (FVInt 25) [EQ, GT]] print' ()
 
     readRecord ms personTable rid >>= print
     updateRecord ms personTable rid michael25
@@ -41,13 +43,13 @@ main = do
     readRecord ms personTable rid >>= print
 
     putStrLn "\nfilterTable, 25 in db"
-    filterTable ms personTable [Filter "age" (FVInt 24) [EQ, GT]] >>= print
-    filterTable ms personTable [Filter "age" (FVInt 25) [EQ, GT]] >>= print
+    filterTable ms personTable [Filter "age" (FVInt 24) [EQ, GT]] print' ()
+    filterTable ms personTable [Filter "age" (FVInt 25) [EQ, GT]] print' ()
 
     deleteRecord ms personTable rid
     showMemoryStore ms >>= putStrLn
     readRecord ms personTable rid >>= print
 
     putStrLn "\nfilterTable, empty db"
-    filterTable ms personTable [Filter "age" (FVInt 24) [EQ, GT]] >>= print
-    filterTable ms personTable [Filter "age" (FVInt 25) [EQ, GT]] >>= print
+    filterTable ms personTable [Filter "age" (FVInt 24) [EQ, GT]] print' ()
+    filterTable ms personTable [Filter "age" (FVInt 25) [EQ, GT]] print' ()

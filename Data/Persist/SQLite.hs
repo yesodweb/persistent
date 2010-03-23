@@ -79,14 +79,16 @@ instance DataStore SQLite where
         _ <- run conn sql [toSql rid]
         commit conn
         return ()
-    filterTable (SQLite conn) table filters = do
+    filterTable (SQLite conn) table filters iter a0 = do
         let sql = concat
                 [ "SELECT * FROM "
                 , safe $ tableName table
                 , " WHERE 1"
                 , concatMap go filters
                 ]
-        mapMaybe go'' `fmap` quickQuery conn sql (map go' filters)
+        stmt <- prepare conn sql
+        _ <- execute stmt $ map go' filters
+        go'' stmt a0
           where
             go (Filter name _ orderings) = concat
                 [ " AND "
@@ -102,9 +104,17 @@ instance DataStore SQLite where
                 , "?"
                 ]
             go' = fvToSql . filterValue
-            go'' (i:rest) = do
-                rec <- readSqlValues table rest
-                return (fromSql i, rec)
+            go'' stmt a = do
+                mrow <- fetchRow stmt
+                case mrow of
+                    Just (i:rest) -> do
+                        ea' <- case readSqlValues table rest of
+                                Just rec -> iter (fromSql i, rec) a
+                                Nothing -> return $ Right a
+                        case ea' of
+                            Left a' -> return $ Left a'
+                            Right a' -> go'' stmt a'
+                    _ -> return $ Right a
 
 safe :: String -> String
 safe = id -- FIXME

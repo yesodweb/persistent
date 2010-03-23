@@ -25,6 +25,7 @@ import Control.Concurrent.MVar
 import Safe
 import Data.Maybe
 import Control.Arrow
+import Control.Applicative
 
 data FieldType = FTString | FTInt
     deriving (Show, Read, Data, Typeable)
@@ -77,7 +78,10 @@ class (Show (RecordId d), Read (RecordId d)) => DataStore d where
     readRecord :: d -> Table a -> RecordId d -> IO (Maybe a) -- error info
     updateRecord :: d -> Table a -> RecordId d -> a -> IO ()
     deleteRecord :: d -> Table a -> RecordId d -> IO ()
-    filterTable :: d -> Table a -> [Filter] -> IO [(RecordId d, a)]
+    filterTable :: d -> Table a -> [Filter]
+                -> ((RecordId d, a) -> b -> IO (Either b b))
+                -> b
+                -> IO (Either b b)
 
 newtype MemoryStore = MemoryStore
     { unMemoryStore :: MVar [(String, [(Int, String)])]
@@ -134,11 +138,20 @@ instance DataStore MemoryStore where
         go' ((rid', val):rest)
             | rid == rid' = rest
             | otherwise = (rid', val) : go' rest
-    filterTable (MemoryStore ms) table filters = go `fmap` readMVar ms where
+    filterTable (MemoryStore ms) table filters iter a0 =
+        readMVar ms >>= go
+      where
         go store =
           case lookup (tableName table) store of
             Nothing -> error $ "Table not found: " ++ tableName table
-            Just vals -> mapMaybe (\(x, my) -> my >>= \y -> return (x, y))
+            Just vals -> listToEnum a0
+                       $ mapMaybe (\(x, my) -> my >>= \y -> return (x, y))
                        $ map (second $ tableThaw table)
                        $ filter (flip applyFilters filters . snd)
                        $ map (second read) vals
+        listToEnum a [] = return $ Right a
+        listToEnum a (x:xs) = do
+            ea' <- iter x a
+            case ea' of
+                Left a' -> return $ Left a'
+                Right a' -> listToEnum a' xs

@@ -23,6 +23,8 @@ thawPerson _ = Nothing
 michael24 = Person "Michael" 24
 michael25 = Person "Michael" 25
 
+print' x () = print x >> return (Right ())
+
 main = do
     db <- loadSQLite ":memory:"
     --db <- loadSQLite "test.db3"
@@ -31,20 +33,20 @@ main = do
     print rid
 
     putStrLn "\nfilterTable"
-    filterTable db personTable [Filter "age" (FVInt 24) [EQ, GT]] >>= print
-    filterTable db personTable [Filter "age" (FVInt 25) [EQ, GT]] >>= print
+    filterTable db personTable [Filter "age" (FVInt 24) [EQ, GT]] print' ()
+    filterTable db personTable [Filter "age" (FVInt 25) [EQ, GT]] print' ()
 
     readRecord db personTable rid >>= print
     updateRecord db personTable rid michael25
     readRecord db personTable rid >>= print
 
     putStrLn "\nfilterTable, 25 in db"
-    filterTable db personTable [Filter "age" (FVInt 24) [EQ, GT]] >>= print
-    filterTable db personTable [Filter "age" (FVInt 25) [EQ, GT]] >>= print
+    filterTable db personTable [Filter "age" (FVInt 24) [EQ, GT]] print' ()
+    filterTable db personTable [Filter "age" (FVInt 25) [EQ, GT]] print' ()
 
     deleteRecord db personTable rid
     readRecord db personTable rid >>= print
 
     putStrLn "\nfilterTable, empty db"
-    filterTable db personTable [Filter "age" (FVInt 24) [EQ, GT]] >>= print
-    filterTable db personTable [Filter "age" (FVInt 25) [EQ, GT]] >>= print
+    filterTable db personTable [Filter "age" (FVInt 24) [EQ, GT]] print' ()
+    filterTable db personTable [Filter "age" (FVInt 25) [EQ, GT]] print' ()
