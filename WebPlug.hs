@@ -7,7 +7,7 @@ import qualified Data.ByteString.Char8 as S
 import qualified Data.ByteString.Lazy.Char8 as L
 
 newtype AbsPath = AbsPath { unAbsPath :: String }
-newtype PathInfo = PathInfo { unPathInfo :: String }
+newtype PathInfo = PathInfo { unPathInfo :: [String] }
 handleWai :: (PathInfo -> Either err url)
           -> (err -> Application)
           -> (url -> PathInfo)
