@@ -73,3 +73,9 @@ main = flip S.evalStateT (Map.empty :: Map.Map Int Person) $ do
     update pid1 [PersonAge 27]
     mp3 <- get pid1
     liftIO $ print (pid1, mp3)
+    replace pid1 $ Person "Michael" 28
+    mp4 <- get pid1
+    liftIO $ print (pid1, mp4)
+    delete pid1
+    mplast <- get pid1
+    liftIO $ print (pid1, mplast)
