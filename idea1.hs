@@ -6,8 +6,9 @@
 
 import qualified Control.Monad.Trans.State as S
 import qualified Data.Map as Map
-import Control.Applicative
+import Control.Applicative ((<$>))
 import Control.Monad.IO.Class (liftIO)
+import Control.Arrow (first)
 
 class Monad m => HasTable val m where
     data Key val
@@ -19,15 +20,12 @@ class Monad m => HasTable val m where
     update :: Key val -> [Field val] -> m ()
 
     get :: Key val -> m (Maybe (val))
-    -- FIXME select :: [Filter val] -> m ([(Key val, val)])
+    select :: [Filter val] -> m ([(Key val, val)])
 
     delete :: Key val -> m ()
 
-data family Filter val
-
 data Person = Person String Int
     deriving Show
-data instance Filter Person = PersonNameF String
 
 class HasField a where
     data Field a
@@ -38,7 +36,16 @@ instance HasField Person where
     updateField (PersonName name) (Person _ age) = Person name age
     updateField (PersonAge age) (Person name _) = Person name age
 
-instance (Monad m, Functor m, HasField v) =>
+class HasFilter a where
+    data Filter a
+    applyFilter :: Filter a -> a -> Bool
+
+instance HasFilter Person where
+    data Filter Person = PersonNameEq String | PersonAgeLt Int
+    applyFilter (PersonNameEq x) (Person y _) = x == y
+    applyFilter (PersonAgeLt x) (Person _ y) = y < x
+
+instance (Monad m, Functor m, HasField v, HasFilter v) =>
          HasTable v (S.StateT (Map.Map Int v) m)
          where
     data Key v = MapKey { unMapKey :: !Int }
@@ -53,6 +60,10 @@ instance (Monad m, Functor m, HasField v) =>
 
     get pid = Map.lookup (unMapKey pid) <$> S.get
 
+    select fs = map (first MapKey) . filter go . Map.toList <$> S.get
+      where
+        go (_, val) = all (flip applyFilter val) fs
+
     delete = S.modify . Map.delete . unMapKey
 
     update (MapKey k) us = S.modify $ \m ->
@@ -66,16 +77,26 @@ instance (Monad m, Functor m, HasField v) =>
 main = flip S.evalStateT (Map.empty :: Map.Map Int Person) $ do
     pid1 <- insert $ Person "Michael" 25
     mp1 <- get pid1
-    liftIO $ print (pid1, mp1)
+    liftIO $ print mp1
     replace pid1 $ Person "Michael" 26
     mp2 <- get pid1
-    liftIO $ print (pid1, mp2)
+    liftIO $ print mp2
     update pid1 [PersonAge 27]
     mp3 <- get pid1
-    liftIO $ print (pid1, mp3)
+    liftIO $ print mp3
     replace pid1 $ Person "Michael" 28
     mp4 <- get pid1
-    liftIO $ print (pid1, mp4)
+    liftIO $ print mp4
+    p5s <- select [PersonNameEq "Michael"]
+    liftIO $ print p5s
+    p6s <- select [PersonAgeLt 27]
+    liftIO $ print p6s
+    p7s <- select [PersonAgeLt 29]
+    liftIO $ print p7s
+    p8s <- select [PersonNameEq "Michael", PersonAgeLt 29]
+    liftIO $ print p8s
+    p9s <- select [PersonNameEq "Michael", PersonAgeLt 27]
+    liftIO $ print p9s
     delete pid1
     mplast <- get pid1
-    liftIO $ print (pid1, mplast)
+    liftIO $ print mplast
