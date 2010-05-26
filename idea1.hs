@@ -9,46 +9,46 @@ import qualified Data.Map as Map
 import Control.Applicative
 import Control.Monad.IO.Class (liftIO)
 
-class Monad m => HasTable key m where
-    data Value key
-    data Field key
-    data Filter key
+class Monad m => HasTable val m where
+    data Key val
+    data Field val
+    data Filter val
     -- something about unique?
 
-    insert :: Value key -> m key
-    replace :: key -> Value key -> m ()
+    insert :: val -> m (Key val)
+    replace :: Key val -> val -> m ()
 
-    -- FIXME update :: key -> [Field key] -> m ()
+    -- FIXME update :: Key val -> [Field val] -> m ()
 
-    get :: key -> m (Maybe (Value key))
-    -- FIXME select :: [Filter key] -> m ([(key, Value key)])
+    get :: Key val -> m (Maybe (val))
+    -- FIXME select :: [Filter val] -> m ([(Key val, val)])
 
-    delete :: key -> m ()
+    delete :: Key val -> m ()
 
-newtype PersonId = PersonId Int
-    deriving (Eq, Ord, Show, Num)
+data Person = Person String Int
+    deriving Show
 
 instance (Monad m, Functor m) =>
-         HasTable PersonId (S.StateT (Map.Map PersonId (String, Int)) m)
+         HasTable Person (S.StateT (Map.Map Int Person) m)
          where
-    data Value PersonId = Person String Int
-    data Field PersonId = PersonName String | PersonAge Int
-    data Filter PersonId = PersonNameF String
+    data Key Person = PersonId { unPersonId :: !Int }
+    data Field Person = PersonName String | PersonAge Int
+    data Filter Person = PersonNameF String
 
-    insert (Person name age) = do
+    insert p = do
         m <- S.get
         let pid = 1 + Map.foldrWithKey (\k _ k' -> max k k') 0 m
-        S.put $ Map.insert pid (name, age) m
-        return pid
-    replace pid (Person name age) = S.modify $ Map.insert pid (name, age)
+        S.put $ Map.insert pid p m
+        return $ PersonId pid
+    replace (PersonId pid) = S.modify . Map.insert pid
 
-    get pid = fmap (uncurry Person) . Map.lookup pid <$> S.get
+    get pid = Map.lookup (unPersonId pid) <$> S.get
 
-    delete = S.modify . Map.delete
+    delete = S.modify . Map.delete . unPersonId
 
-deriving instance Show (Value PersonId)
+deriving instance Show (Key Person)
 
-main = flip S.evalStateT (Map.empty :: Map.Map PersonId (String, Int)) $ do
+main = flip S.evalStateT (Map.empty :: Map.Map Int Person) $ do
     pid1 <- insert $ Person "Michael" 25
     mp1 <- get pid1
     liftIO $ print (pid1, mp1)
