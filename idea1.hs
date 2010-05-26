@@ -6,7 +6,7 @@
 
 import qualified Control.Monad.Trans.State as S
 import qualified Data.Map as Map
-import Control.Applicative ((<$>))
+import Control.Monad (liftM)
 import Control.Monad.IO.Class (liftIO)
 import Control.Arrow (first)
 
@@ -48,9 +48,7 @@ instance HasFilter Person where
     applyFilter (PersonNameEq x) (Person y _) = x == y
     applyFilter (PersonAgeLt x) (Person _ y) = y < x
 
-instance (Monad m, Functor m) =>
-         HasTable v (S.StateT (Map.Map Int v) m)
-         where
+instance Monad m => HasTable v (S.StateT (Map.Map Int v) m) where
     data Key v = MapKey { unMapKey :: !Int }
         deriving Show
 
@@ -61,11 +59,12 @@ instance (Monad m, Functor m) =>
         return $ MapKey pid
     replace (MapKey pid) = S.modify . Map.insert pid
 
-    get pid = Map.lookup (unMapKey pid) <$> S.get
+    get pid = Map.lookup (unMapKey pid) `liftM` S.get
 
     delete = S.modify . Map.delete . unMapKey
 
-instance (Functor m, Monad m, HasField v) => HasUpdateTable v (S.StateT (Map.Map Int v) m) where
+instance (Monad m, HasField v)
+      => HasUpdateTable v (S.StateT (Map.Map Int v) m) where
     update (MapKey k) us = S.modify $ \m ->
         let moldVal = Map.lookup k m
          in case moldVal of
@@ -74,8 +73,9 @@ instance (Functor m, Monad m, HasField v) => HasUpdateTable v (S.StateT (Map.Map
                     let newVal = foldr updateField oldVal us
                      in Map.insert k newVal m
 
-instance (Functor m, Monad m, HasFilter v) => HasSelectTable v (S.StateT (Map.Map Int v) m) where
-    select fs = map (first MapKey) . filter go . Map.toList <$> S.get
+instance (Monad m, HasFilter v)
+      => HasSelectTable v (S.StateT (Map.Map Int v) m) where
+    select fs = (map (first MapKey) . filter go . Map.toList) `liftM` S.get
       where
         go (_, val) = all (flip applyFilter val) fs
 
