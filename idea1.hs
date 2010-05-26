@@ -11,42 +11,57 @@ import Control.Monad.IO.Class (liftIO)
 
 class Monad m => HasTable val m where
     data Key val
-    data Field val
-    data Filter val
     -- something about unique?
 
     insert :: val -> m (Key val)
     replace :: Key val -> val -> m ()
 
-    -- FIXME update :: Key val -> [Field val] -> m ()
+    update :: Key val -> [Field val] -> m ()
 
     get :: Key val -> m (Maybe (val))
     -- FIXME select :: [Filter val] -> m ([(Key val, val)])
 
     delete :: Key val -> m ()
 
+data family Filter val
+
 data Person = Person String Int
     deriving Show
+data instance Filter Person = PersonNameF String
 
-instance (Monad m, Functor m) =>
-         HasTable Person (S.StateT (Map.Map Int Person) m)
-         where
-    data Key Person = PersonId { unPersonId :: !Int }
+class HasField a where
+    data Field a
+    updateField :: Field a -> a -> a
+
+instance HasField Person where
     data Field Person = PersonName String | PersonAge Int
-    data Filter Person = PersonNameF String
+    updateField (PersonName name) (Person _ age) = Person name age
+    updateField (PersonAge age) (Person name _) = Person name age
+
+instance (Monad m, Functor m, HasField v) =>
+         HasTable v (S.StateT (Map.Map Int v) m)
+         where
+    data Key v = MapKey { unMapKey :: !Int }
+        deriving Show
 
     insert p = do
         m <- S.get
         let pid = 1 + Map.foldrWithKey (\k _ k' -> max k k') 0 m
         S.put $ Map.insert pid p m
-        return $ PersonId pid
-    replace (PersonId pid) = S.modify . Map.insert pid
+        return $ MapKey pid
+    replace (MapKey pid) = S.modify . Map.insert pid
 
-    get pid = Map.lookup (unPersonId pid) <$> S.get
+    get pid = Map.lookup (unMapKey pid) <$> S.get
 
-    delete = S.modify . Map.delete . unPersonId
+    delete = S.modify . Map.delete . unMapKey
 
-deriving instance Show (Key Person)
+    update (MapKey k) us = S.modify $ \m ->
+        let moldVal = Map.lookup k m
+         in case moldVal of
+                Nothing -> m
+                Just oldVal ->
+                    let newVal = foldr updateField oldVal us
+                     in Map.insert k newVal m
 
 main = flip S.evalStateT (Map.empty :: Map.Map Int Person) $ do
     pid1 <- insert $ Person "Michael" 25
@@ -55,3 +70,6 @@ main = flip S.evalStateT (Map.empty :: Map.Map Int Person) $ do
     replace pid1 $ Person "Michael" 26
     mp2 <- get pid1
     liftIO $ print (pid1, mp2)
+    update pid1 [PersonAge 27]
+    mp3 <- get pid1
+    liftIO $ print (pid1, mp3)
