@@ -13,6 +13,7 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Arrow (first)
 import qualified Database.SQLite3 as D
 import Data.Int (Int64)
+import Data.List (intercalate)
 
 class Monad m => HasTable val m where
     data Key val m
@@ -99,6 +100,10 @@ class SqlTable v where
         "CREATE TABLE " ++ tableName v ++ " (id INTEGER PRIMARY KEY" ++
         concatMap (',' :) (columnNames v) ++ ")"
 
+class SqlTable v => SqlUpdateTable v where
+    toSQLName :: Field v -> String
+    updateToSQLData :: Field v -> D.SQLData
+
 instance SqlTable v => HasTable v (R.ReaderT D.Database IO) where
     data Key v (R.ReaderT D.Database IO) = DbKey { unDbKey :: !Int64 }
         deriving Show
@@ -145,6 +150,16 @@ instance SqlTable v => HasTable v (R.ReaderT D.Database IO) where
         D.Done <- D.step s
         D.finalize s
 
+instance SqlUpdateTable v => HasUpdateTable v (R.ReaderT D.Database IO) where
+    update (DbKey k) fields = R.ask >>= \conn -> liftIO $ do
+        let sql = "UPDATE " ++ tableName (undefined :: v) ++ " SET " ++
+                  intercalate ", " (map (\x -> toSQLName x ++ "=?") fields) ++
+                  " WHERE id=?"
+        s <- D.prepare conn sql
+        D.bind s $ map updateToSQLData fields ++ [D.SQLInteger k]
+        D.Done <- D.step s
+        D.finalize s
+
 instance SqlTable Person where
     tableName _ = "Person"
     toSQLData (Person name age) =
@@ -153,6 +168,12 @@ instance SqlTable Person where
         Right $ Person name $ fromIntegral age
     fromSQLData x = Left $ "Invalid person fields: " ++ show x
     columnNames _ = ["name", "age"]
+
+instance SqlUpdateTable Person where
+    toSQLName (PersonName _) = "name"
+    toSQLName (PersonAge _) = "age"
+    updateToSQLData (PersonName n) = D.SQLText n
+    updateToSQLData (PersonAge a) = D.SQLInteger $ fromIntegral a
 
 main = do
     putStrLn "StateT Map"
@@ -197,11 +218,9 @@ main2 = do
     replace pid1 $ Person "Michael" 26
     mp2 <- get pid1
     liftIO $ print mp2
-    {- FIXME
     update pid1 [PersonAge 27]
     mp3 <- get pid1
     liftIO $ print mp3
-    -}
     replace pid1 $ Person "Michael" 28
     mp4 <- get pid1
     liftIO $ print mp4
