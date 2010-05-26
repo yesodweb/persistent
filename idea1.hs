@@ -104,6 +104,10 @@ class SqlTable v => SqlUpdateTable v where
     toSQLName :: Field v -> String
     updateToSQLData :: Field v -> D.SQLData
 
+class SqlTable v => SqlSelectTable v where
+    toWhereClause :: Filter v -> String
+    toWhereData :: Filter v -> D.SQLData
+
 instance SqlTable v => HasTable v (R.ReaderT D.Database IO) where
     data Key v (R.ReaderT D.Database IO) = DbKey { unDbKey :: !Int64 }
         deriving Show
@@ -160,6 +164,25 @@ instance SqlUpdateTable v => HasUpdateTable v (R.ReaderT D.Database IO) where
         D.Done <- D.step s
         D.finalize s
 
+instance SqlSelectTable v => HasSelectTable v (R.ReaderT D.Database IO) where
+    select filters  = R.ask >>= \conn -> liftIO $ do
+        let sql = "SELECT * FROM " ++ tableName (undefined :: v) ++ " WHERE " ++
+                  intercalate " AND " (map toWhereClause filters)
+        s <- D.prepare conn sql
+        D.bind s $ map toWhereData filters
+        go s id
+      where
+        go s front = do
+            x <- D.step s
+            case x of
+                D.Done -> do
+                    D.finalize s
+                    return $ front []
+                D.Row -> do
+                    D.SQLInteger k:cols <- D.columns s
+                    v <- either error return $ fromSQLData cols
+                    go s $ front . ((:) (DbKey k, v))
+
 instance SqlTable Person where
     tableName _ = "Person"
     toSQLData (Person name age) =
@@ -174,6 +197,12 @@ instance SqlUpdateTable Person where
     toSQLName (PersonAge _) = "age"
     updateToSQLData (PersonName n) = D.SQLText n
     updateToSQLData (PersonAge a) = D.SQLInteger $ fromIntegral a
+
+instance SqlSelectTable Person where
+    toWhereClause (PersonNameEq _) = "name=?"
+    toWhereClause (PersonAgeLt _) = "age<?"
+    toWhereData (PersonNameEq s) = D.SQLText s
+    toWhereData (PersonAgeLt a) = D.SQLInteger $ fromIntegral a
 
 main = do
     putStrLn "StateT Map"
@@ -224,7 +253,6 @@ main2 = do
     replace pid1 $ Person "Michael" 28
     mp4 <- get pid1
     liftIO $ print mp4
-    {- FIXME
     p5s <- select [PersonNameEq "Michael"]
     liftIO $ print p5s
     p6s <- select [PersonAgeLt 27]
@@ -235,7 +263,6 @@ main2 = do
     liftIO $ print p8s
     p9s <- select [PersonNameEq "Michael", PersonAgeLt 27]
     liftIO $ print p9s
-    -}
     delete pid1
     mplast <- get pid1
     liftIO $ print mplast
