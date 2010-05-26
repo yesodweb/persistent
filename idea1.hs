@@ -17,12 +17,15 @@ class Monad m => HasTable val m where
     insert :: val -> m (Key val)
     replace :: Key val -> val -> m ()
 
-    update :: Key val -> [Field val] -> m ()
-
     get :: Key val -> m (Maybe (val))
-    select :: [Filter val] -> m ([(Key val, val)])
 
     delete :: Key val -> m ()
+
+class HasTable val m => HasUpdateTable val m where
+    update :: Key val -> [Field val] -> m ()
+
+class HasTable val m => HasSelectTable val m where
+    select :: [Filter val] -> m ([(Key val, val)])
 
 data Person = Person String Int
     deriving Show
@@ -45,7 +48,7 @@ instance HasFilter Person where
     applyFilter (PersonNameEq x) (Person y _) = x == y
     applyFilter (PersonAgeLt x) (Person _ y) = y < x
 
-instance (Monad m, Functor m, HasField v, HasFilter v) =>
+instance (Monad m, Functor m) =>
          HasTable v (S.StateT (Map.Map Int v) m)
          where
     data Key v = MapKey { unMapKey :: !Int }
@@ -60,12 +63,9 @@ instance (Monad m, Functor m, HasField v, HasFilter v) =>
 
     get pid = Map.lookup (unMapKey pid) <$> S.get
 
-    select fs = map (first MapKey) . filter go . Map.toList <$> S.get
-      where
-        go (_, val) = all (flip applyFilter val) fs
-
     delete = S.modify . Map.delete . unMapKey
 
+instance (Functor m, Monad m, HasField v) => HasUpdateTable v (S.StateT (Map.Map Int v) m) where
     update (MapKey k) us = S.modify $ \m ->
         let moldVal = Map.lookup k m
          in case moldVal of
@@ -73,6 +73,11 @@ instance (Monad m, Functor m, HasField v, HasFilter v) =>
                 Just oldVal ->
                     let newVal = foldr updateField oldVal us
                      in Map.insert k newVal m
+
+instance (Functor m, Monad m, HasFilter v) => HasSelectTable v (S.StateT (Map.Map Int v) m) where
+    select fs = map (first MapKey) . filter go . Map.toList <$> S.get
+      where
+        go (_, val) = all (flip applyFilter val) fs
 
 main = flip S.evalStateT (Map.empty :: Map.Map Int Person) $ do
     pid1 <- insert $ Person "Michael" 25
