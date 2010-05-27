@@ -10,13 +10,13 @@ module Database.Persist.State
     ) where
 
 import Database.Persist hiding (filter)
+import Database.Persist.Helper
 import Control.Monad.Trans.State hiding (get)
 import qualified Control.Monad.Trans.State as S
 import qualified Data.Map as Map
 import Language.Haskell.TH.Syntax hiding (lift)
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.IO.Class (MonadIO (..))
-import Data.Char
 import Control.Arrow (first)
 import Data.List (sortBy)
 
@@ -45,35 +45,22 @@ evalPersistState :: Monad m
                  -> m (a)
 evalPersistState = evalStateT . unPersistState
 
-recName :: String -> String -> String
-recName dt f = map toLower dt ++ upperFirst f
-
 derivePersistState :: Table -> Q [Dec]
-derivePersistState (Table name cols upda filts ords uni) = do
+derivePersistState t@(Table name _cols upda filts ords _uni) = do
     let name' = mkName name
-    let cols' = map (mkCol name) cols
-    let dt = DataD [] name' [] [RecC name' cols'] []
+    let dt = dataTypeDec t
     let monad = ConT ''PersistState `AppT` ConT name' `AppT` VarT (mkName "m")
-    let key = NewtypeInstD [] ''Key [ConT name', monad]
-                (NormalC (mkName "StateKey") [(NotStrict, ConT ''Int)])
-                [''Show, ''Read, ''Num, ''Integral, ''Enum, ''Eq, ''Ord,
-                 ''Real]
-    let fil = DataInstD [] ''Filter [ConT name', monad]
-                (concatMap (mkFilter name cols) filts)
-                [''Show, ''Read, ''Eq]
-    let upd = DataInstD [] ''Update [ConT name', monad]
-                (map (mkUpdate name cols) upda)
-                [''Show, ''Read, ''Eq]
-    let ord = DataInstD [] ''Order [ConT name', monad]
-                (concatMap (mkOrder name) ords)
-                [''Show, ''Read, ''Eq]
+    let key = keyTypeDec "StateKey" "Int" t monad
+    let fil = filterTypeDec t monad
+    let upd = updateTypeDec t monad
+    let ord = orderTypeDec t monad
     insert'' <- [|insert'|]
     replace'' <- [|replace'|]
     yget <- [|xget|]
     ydelete <- [|xdelete|]
 
     yfilter' <- [|xfilter|]
-    af <- mkApplyFilter name cols filts
+    af <- mkApplyFilter name filts
     let yfilter = yfilter' `AppE` af
 
     ydw' <- [|xdeleteWhere|]
@@ -111,32 +98,7 @@ derivePersistState (Table name cols upda filts ords uni) = do
             ]
     return [dt, inst]
 
-mkCol :: String -> Column -> VarStrictType
-mkCol x (n, t) =
-    (mkName $ recName x n, NotStrict, ConT $ mkName t)
-
-filtsToList :: (String, Bool, Bool, Bool, Bool, Bool, Bool)
-            -> [(String, String)]
-filtsToList (s, a, b, c, d, e, f)
-    = go $ zip ["Eq", "Ne", "Gt", "Lt", "Ge", "Le"] [a, b, c, d, e, f]
-  where
-    go [] = []
-    go ((_, False):rest) = go rest
-    go ((x, True):rest) = (s, x) : go rest
-
-mkFilter :: String
-         -> [(String, String)]
-         -> (String, Bool, Bool, Bool, Bool, Bool, Bool)
-         -> [Con]
-mkFilter x cols filts = map go $ filtsToList filts
-  where
-    go (s, t) = NormalC (mkName $ x ++ upperFirst s ++ t)
-                               [(NotStrict, ConT $ mkName $ ty s)]
-    ty s = case lookup s cols of
-                Nothing -> error $ "Invalid column: " ++ s
-                Just ty' -> ty'
-
-mkApplyFilter base cols filts = do
+mkApplyFilter base filts = do
     v <- newName "v"
     f <- newName "f"
     return $ LamE [VarP v, VarP f] $ CaseE (VarE f) $ concatMap (go v) filts
@@ -158,15 +120,6 @@ mkApplyFilter base cols filts = do
     com' "Ge" = VarE $ mkName ">="
     com' x = error $ "invalid com': " ++ x
 
-mkUpdate :: String -> [(String, String)] -> String -> Con
-mkUpdate x cols s =
-    NormalC (mkName $ x ++ upperFirst s)
-                [(NotStrict, ConT $ mkName ty)]
-  where
-    ty = case lookup s cols of
-                Nothing -> error $ "Invalid column: " ++ s
-                Just ty' -> ty'
-
 mkApplyUpdate :: String -> [String] -> Q Exp
 mkApplyUpdate base upda = do
     v <- newName "v"
@@ -178,13 +131,6 @@ mkApplyUpdate base upda = do
                    (NormalB $ RecUpdE (VarE v)
                         [(mkName $ recName base u, VarE $ mkName "x")])
                    []
-
-mkOrder :: String -> (String, Bool, Bool) -> [Con]
-mkOrder x (s, a, d) =
-     (if a then (:) (go "Asc") else id)
-   $ (if d then (:) (go "Desc") else id) []
-  where
-    go ad = NormalC (mkName $ x ++ upperFirst s ++ ad) []
 
 mkApplyOrds :: String -> [(String, Bool, Bool)] -> Q Exp
 mkApplyOrds base ords = do
@@ -206,14 +152,10 @@ mkApplyOrds base ords = do
                     then (VarE (mkName "compare") `AppE` x' `AppE` y')
                     else (VarE (mkName "compare") `AppE` y' `AppE` x')) []
 
-upperFirst :: String -> String
-upperFirst (x:xs) = toUpper x : xs
-upperFirst [] = []
-
 insert' val = do
     m <- get'
     let k :: Int
-        k = 1 + Map.foldrWithKey (\k _ k' -> max k k') 0 m
+        k = 1 + Map.foldrWithKey (\k1 _ k2 -> max k1 k2) 0 m
     put' $ Map.insert k val m
     return $ fromIntegral k
 
