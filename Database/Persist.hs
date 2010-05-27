@@ -1,23 +1,21 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Data.Persist
+module Database.Persist
     ( -- * High level design
-      Column  (..)
+      Column
     , Table   (..)
       -- * Type class
-      Persist (..)
+    , Persist (..)
     ) where
 
-data Column = Column
-    { columnName :: String
-    , columnType :: String
-    }
+-- | name, type
+type Column = (String, String)
 
 data Table = Table
     { tableName    :: String
     , tableColumns :: [Column]
-    , tableUpdates ::
+    , tableUpdates :: [String]
     , tableFilters :: [(String, Bool, Bool, Bool, Bool, Bool, Bool)] -- eq, ne, gt, lt, ge, le
     , tableOrders  :: [(String, Bool, Bool)] -- asc, desc
     , tableUniques :: [[String]]
@@ -32,7 +30,7 @@ class Monad m => Persist val m where
 
     -- write
     insert      :: val                              -> m (Key val m)
-    replace     :: Key val m      -> val            -> m (Key val m)
+    replace     :: Key val m      -> val            -> m ()
     replaceBy   :: Unique val m   -> val            -> m (Key val m)
     update      :: Key val m      -> [Update val m] -> m ()
     delete      :: Key val m                        -> m ()
