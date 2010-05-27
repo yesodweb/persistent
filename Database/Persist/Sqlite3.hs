@@ -233,9 +233,14 @@ class HasFilter a where
 class HasOrder a where
     orderClause :: a -> String
 
+degen :: [Clause] -> Q [Clause]
+degen [] = do
+    err <- [|error "Degenerate case, should never happen"|]
+    return [Clause [WildP] (NormalB err) []]
+
 mkFilterClause :: Table -> Q [Clause]
 mkFilterClause t = do
-    return $ concatMap (concatMap go . filtsToList) $ tableFilters t
+    degen $ concatMap (concatMap go . filtsToList) $ tableFilters t
   where
     go (field, comp) =
         if snd $ ty field then goNull field comp else goNotNull field comp
@@ -283,7 +288,7 @@ mkFilterClause t = do
 mkFilterData :: Table -> Q [Clause]
 mkFilterData t = do
     ts <- [|toSql|]
-    return $ concatMap (map (go ts) . filtsToList) $ tableFilters t
+    degen $ concatMap (map (go ts) . filtsToList) $ tableFilters t
   where
     go ts (field, comp) =
         Clause [ConP (mkName $ tableName t ++ upperFirst field ++ comp) [VarP $ mkName "x"]]
@@ -292,7 +297,7 @@ mkFilterData t = do
 
 mkOrderClause :: Table -> Q [Clause]
 mkOrderClause t = do
-    return $ concatMap go $ tableOrders t
+    degen $ concatMap go $ tableOrders t
   where
     go (field, asc, desc) =
         (if asc then (:) (go' field "Asc" "") else id)
@@ -356,7 +361,7 @@ class HasUpdate a where
 
 mkUpdateClause :: Table -> Q [Clause]
 mkUpdateClause t = do
-    return $ map go $ tableUpdates t
+    degen $ map go $ tableUpdates t
   where
     go field =
         Clause [ConP (mkName $ tableName t ++ upperFirst field) [WildP]]
@@ -366,7 +371,7 @@ mkUpdateClause t = do
 mkUpdateData :: Table -> Q [Clause]
 mkUpdateData t = do
     ts <- [|toSql|]
-    return $ map (go ts) $ tableUpdates t
+    degen $ map (go ts) $ tableUpdates t
   where
     go ts field =
         Clause [ConP (mkName $ tableName t ++ upperFirst field) [VarP $ mkName "x"]]
@@ -403,7 +408,7 @@ class HasUnique a where
 
 mkUniqueClause :: Table -> Q [Clause]
 mkUniqueClause t = do
-    return $ map go $ tableUniques t
+    degen $ map go $ tableUniques t
   where
     go (constr, fields) =
         Clause [ConP (mkName constr) [WildP]]
@@ -413,7 +418,7 @@ mkUniqueClause t = do
 mkUniqueData :: Table -> Q [Clause]
 mkUniqueData t = do
     ts <- [|toSql|]
-    mapM (go ts) $ tableUniques t
+    mapM (go ts) (tableUniques t) >>= degen
   where
     go ts (constr, fields) = do
         xs <- mapM (const $ newName "x") fields
