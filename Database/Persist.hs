@@ -17,6 +17,7 @@ class Monad m => Persist val m where
     -- write
     insert      :: val                              -> m (Key val m)
     replace     :: Key val m      -> val            -> m (Key val m)
+    replaceBy   :: Unique val m   -> val            -> m (Key val m)
     update      :: Key val m      -> [Update val m] -> m ()
     delete      :: Key val m                        -> m ()
     deleteWhere :: [Filter val m]                   -> m ()
