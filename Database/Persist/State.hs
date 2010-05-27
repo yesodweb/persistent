@@ -90,6 +90,9 @@ derivePersistState (Table name cols upda filts ords uni) = do
     ao <- mkApplyOrds name ords
     let yorder = yorder' `AppE` ao
 
+    yselect' <- [|xselect|]
+    let yselect = yselect' `AppE` af `AppE` ao
+
     let inst =
           InstanceD
             [ClassP ''Monad [VarT $ mkName "m"]]
@@ -104,6 +107,7 @@ derivePersistState (Table name cols upda filts ords uni) = do
             , FunD (mkName "update") [Clause [] (NormalB yupdate) []]
             , FunD (mkName "updateWhere") [Clause [] (NormalB yuw) []]
             , FunD (mkName "order") [Clause [] (NormalB yorder) []]
+            , FunD (mkName "select") [Clause [] (NormalB yselect) []]
             ]
     return [dt, inst]
 
@@ -253,6 +257,20 @@ xorder ao ords = do
     m <- get'
     return $ map (first fromIntegral)
            $ sortBy (\(_, x) (_, y) -> go ords x y)
+           $ Map.toList m
+  where
+    go [] _ _ = EQ
+    go (o:os) x y =
+        case ao o x y of
+            LT -> LT
+            GT -> GT
+            EQ -> go os x y
+
+xselect af ao filts ords = do
+    m <- get'
+    return $ map (first fromIntegral)
+           $ sortBy (\(_, x) (_, y) -> go ords x y)
+           $ filter (\(_, v) -> all (af v) filts)
            $ Map.toList m
   where
     go [] _ _ = EQ
