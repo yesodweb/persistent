@@ -12,9 +12,10 @@ module Database.Persist.Sqlite3
     , HasFilter (..)
     , HasOrder (..)
     , HasUpdate (..)
+    , HasUnique (..)
     ) where
 
-import Database.Persist (Persist, Table (..), Key, Order, Filter, Update)
+import Database.Persist (Persist, Table (..), Key, Order, Filter, Update, Unique)
 import Database.Persist.Helper
 import Control.Monad.Trans.Reader
 import qualified Data.Map as Map
@@ -84,13 +85,24 @@ derivePersistSqlite3 t@(Table name cols upda filts ords uni) = do
             , FunD (mkName "updateData") ud
             ]
 
+    unc <- mkUniqueClause t
+    und <- mkUniqueData t
+    let hun =
+          InstanceD [] (ConT ''HasUnique `AppT`
+                        (ConT ''Unique `AppT` ConT (mkName name) `AppT` monad))
+            [ FunD (mkName "uniqueClause") unc
+            , FunD (mkName "uniqueData") und
+            ]
+
     t' <- TH.lift t
     let mkFun s e = FunD (mkName s) [Clause [] (NormalB $ e `AppE` t') []]
 
     init' <- [|initialize|]
     insert' <- [|insert|]
+    insertR' <- [|insertR|]
     replace' <- [|replace|]
     get' <- [|get|]
+    getBy' <- [|getBy|]
     select' <- [|select|]
     filter' <- [|filter''|]
     order' <- [|order|]
@@ -107,10 +119,13 @@ derivePersistSqlite3 t@(Table name cols upda filts ords uni) = do
             , filterTypeDec t monad
             , updateTypeDec t monad
             , orderTypeDec t monad
+            , uniqueTypeDec t monad
             , mkFun "initialize" $ init'
             , mkFun "insert" $ insert'
+            , mkFun "insertR" $ insertR'
             , mkFun "replace" $ replace'
             , mkFun "get" $ get'
+            , mkFun "getBy" $ getBy'
             , mkFun "select" $ select'
             , mkFun "filter" $ filter'
             , mkFun "order" $ order'
@@ -119,7 +134,7 @@ derivePersistSqlite3 t@(Table name cols upda filts ords uni) = do
             , mkFun "update" $ update'
             , mkFun "updateWhere" $ updateWhere'
             ]
-    return [dt, sq, hf, ho, hu, inst]
+    return [dt, sq, hf, ho, hu, hun, inst]
 
 initialize :: MonadIO m => Table -> v -> Sqlite3 m ()
 initialize t _ = do
@@ -131,7 +146,14 @@ initialize t _ = do
         then return ()
         else do
             _ <- liftIO $ run conn sql []
+            liftIO $ mapM_ (go conn) $ tableUniques t
             return ()
+  where
+    go conn (index, fields) = do
+        let sql = "CREATE UNIQUE INDEX " ++ index ++ " ON " ++
+                  tableName t ++ "(" ++ intercalate "," fields ++ ")"
+        _ <- run conn sql []
+        return ()
 
 class SqlValues a where
     toSqlValues :: a -> [SqlValue]
@@ -166,8 +188,10 @@ mkFromSqlValues t = do
   where
     go ap' x y = InfixE (Just x) ap' (Just y)
 
-insert t val = do
-    let sql = "INSERT INTO " ++ tableName t ++ " VALUES(NULL" ++
+insertReplace :: (MonadIO m, SqlValues val, Num key)
+              => String -> Table -> val -> Sqlite3 m key
+insertReplace word t val = do
+    let sql = word ++ " INTO " ++ tableName t ++ " VALUES(NULL" ++
               concatMap (const ",?") (tableColumns t) ++ ")"
     conn <- ask'
     ins <- liftIO $ prepare conn sql
@@ -176,6 +200,14 @@ insert t val = do
     _ <- liftIO $ execute get []
     Just [i] <- liftIO $ fetchRow get
     return $ fromInteger $ fromSql i
+
+insert :: (MonadIO m, SqlValues val, Num key)
+       => Table -> val -> Sqlite3 m key
+insert = insertReplace "INSERT"
+
+insertR :: (MonadIO m, SqlValues val, Num key)
+        => Table -> val -> Sqlite3 m key
+insertR = insertReplace "REPLACE"
 
 replace t k val = do
     let sql = "REPLACE INTO " ++ tableName t ++ " VALUES(?" ++
@@ -333,3 +365,40 @@ updateWhere t filts upds = do
     up <- liftIO $ prepare conn sql
     _ <- liftIO $ execute up dat
     return ()
+
+class HasUnique a where
+    uniqueClause :: a -> String
+    uniqueData :: a -> [SqlValue]
+
+mkUniqueClause :: Table -> Q [Clause]
+mkUniqueClause t = do
+    return $ map go $ tableUniques t
+  where
+    go (constr, fields) =
+        Clause [ConP (mkName constr) [WildP]]
+               (NormalB $ LitE $ StringL $ intercalate " AND " $ map (++ "=?") fields) -- FIXME handle nulls
+               []
+
+mkUniqueData :: Table -> Q [Clause]
+mkUniqueData t = do
+    ts <- [|toSql|]
+    mapM (go ts) $ tableUniques t
+  where
+    go ts (constr, fields) = do
+        xs <- mapM (const $ newName "x") fields
+        let xs' = map (AppE ts . VarE) xs
+        return $ Clause [ConP (mkName constr) $ map VarP xs]
+                 (NormalB $ ListE xs')
+                 []
+
+getBy t uniq = do
+    let sql = "SELECT * FROM " ++ tableName t ++ " WHERE " ++ uniqueClause uniq
+    conn <- ask'
+    get <- liftIO $ prepare conn sql
+    _ <- liftIO $ execute get $ uniqueData uniq
+    res <- liftIO $ fetchRow get
+    case res of
+        Just (k:vals) -> return $ do
+            k' <- fromSql' k
+            vals' <- fromSqlValues vals
+            return (fromInteger k', vals')

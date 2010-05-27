@@ -8,11 +8,13 @@ module Database.Persist.Helper
     , filtsToList
     , updateTypeDec
     , orderTypeDec
+    , uniqueTypeDec
     ) where
 
 import Database.Persist
 import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
+import Data.Maybe (fromJust)
 
 recName :: String -> String -> String
 recName dt f = map toLower dt ++ upperFirst f
@@ -83,6 +85,19 @@ mkOrder x (s, a, d) =
    $ (if d then (:) (go "Desc") else id) []
   where
     go ad = NormalC (mkName $ x ++ upperFirst s ++ ad) []
+
+uniqueTypeDec :: Table -> Type -> Dec
+uniqueTypeDec t monad =
+    DataInstD [] ''Unique [ConT $ mkName $ tableName t, monad]
+                (map (mkUnique t) $ tableUniques t)
+                [''Show, ''Read, ''Eq]
+
+mkUnique :: Table -> (String, [String]) -> Con
+mkUnique t (constr, fields) =
+    NormalC (mkName constr) types
+  where
+    types = map (go . fromJust . flip lookup (tableColumns t)) fields
+    go x = (NotStrict, ConT $ mkName x)
 
 filtsToList :: (String, Bool, Bool, Bool, Bool, Bool, Bool)
             -> [(String, String)]

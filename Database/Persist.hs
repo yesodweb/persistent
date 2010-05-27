@@ -21,7 +21,7 @@ data Table = Table
     , tableUpdates :: [String]
     , tableFilters :: [(String, Bool, Bool, Bool, Bool, Bool, Bool)] -- eq, ne, gt, lt, ge, le
     , tableOrders  :: [(String, Bool, Bool)] -- asc, desc
-    , tableUniques :: [[String]]
+    , tableUniques :: [(String, [String])]
     }
 
 instance Lift Table where
@@ -47,8 +47,8 @@ class Monad m => Persist val m where
 
     -- write
     insert      :: val                              -> m (Key val m)
+    insertR     :: val                              -> m (Key val m)
     replace     :: Key val m      -> val            -> m ()
-    replaceBy   :: Unique val m   -> val            -> m (Key val m)
     update      :: Key val m      -> [Update val m] -> m ()
     updateWhere :: [Filter val m] -> [Update val m] -> m ()
     delete      :: Key val m                        -> m ()
