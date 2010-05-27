@@ -48,7 +48,7 @@ recName :: String -> String -> String
 recName dt f = map toLower dt ++ upperFirst f
 
 derivePersistState :: Table -> Q [Dec]
-derivePersistState (Table name cols ups filts ords uni) = do
+derivePersistState (Table name cols upda filts ords uni) = do
     let name' = mkName name
     let cols' = map (mkCol name) cols
     let dt = DataD [] name' [] [RecC name' cols'] []
@@ -59,6 +59,9 @@ derivePersistState (Table name cols ups filts ords uni) = do
                  ''Real]
     let fil = DataInstD [] ''Filter [ConT name', monad]
                 (concatMap (mkFilter name cols) filts)
+                [''Show, ''Read, ''Eq]
+    let upd = DataInstD [] ''Update [ConT name', monad]
+                (map (mkUpdate name cols) upda)
                 [''Show, ''Read, ''Eq]
     insert'' <- [|insert'|]
     replace'' <- [|replace'|]
@@ -72,17 +75,26 @@ derivePersistState (Table name cols ups filts ords uni) = do
     ydw' <- [|xdeleteWhere|]
     let ydw = ydw' `AppE` af
 
+    yupdate' <- [|xupdate|]
+    au <- mkApplyUpdate name upda
+    let yupdate = yupdate' `AppE` au
+
+    yuw' <- [|xupdateWhere|]
+    let yuw = yuw' `AppE` af `AppE` au
+
     let inst =
           InstanceD
             [ClassP ''Monad [VarT $ mkName "m"]]
             (ConT ''Persist `AppT` ConT name' `AppT` monad)
-            [ key, fil
+            [ key, fil, upd
             , FunD (mkName "insert") [Clause [] (NormalB insert'') []]
             , FunD (mkName "replace") [Clause [] (NormalB replace'') []]
             , FunD (mkName "get") [Clause [] (NormalB yget) []]
             , FunD (mkName "delete") [Clause [] (NormalB ydelete) []]
             , FunD (mkName "filter") [Clause [] (NormalB yfilter) []]
             , FunD (mkName "deleteWhere") [Clause [] (NormalB ydw) []]
+            , FunD (mkName "update") [Clause [] (NormalB yupdate) []]
+            , FunD (mkName "updateWhere") [Clause [] (NormalB yuw) []]
             ]
     return [dt, inst]
 
@@ -133,6 +145,27 @@ mkApplyFilter base cols filts = do
     com' "Ge" = VarE $ mkName ">="
     com' x = error $ "invalid com': " ++ x
 
+mkUpdate :: String -> [(String, String)] -> String -> Con
+mkUpdate x cols s =
+    NormalC (mkName $ x ++ upperFirst s)
+                [(NotStrict, ConT $ mkName ty)]
+  where
+    ty = case lookup s cols of
+                Nothing -> error $ "Invalid column: " ++ s
+                Just ty' -> ty'
+
+mkApplyUpdate :: String -> [String] -> Q Exp
+mkApplyUpdate base upda = do
+    v <- newName "v"
+    u <- newName "u"
+    return $ LamE [VarP u, VarP v] $ CaseE (VarE u) $ map (go v) upda
+  where
+    go v u = Match (ConP (mkName $ base ++ upperFirst u)
+                            [VarP $ mkName "x"])
+                   (NormalB $ RecUpdE (VarE v)
+                        [(mkName $ recName base u, VarE $ mkName "x")])
+                   []
+
 upperFirst :: String -> String
 upperFirst (x:xs) = toUpper x : xs
 upperFirst [] = []
@@ -165,3 +198,17 @@ xdeleteWhere af filts = do
     m <- get'
     put' $ Map.fromList $ filter (\(_, v) -> not $ all (af v) filts)
          $ Map.toList m
+
+xupdate au k ups = do
+    m <- get'
+    put' $ case Map.lookup (fromIntegral k) m of
+            Nothing -> m
+            Just v -> Map.insert (fromIntegral k) (foldr au v ups) m
+
+xupdateWhere af au filts ups = do
+    m <- get'
+    put' $ Map.fromList $ map go $ Map.toList m
+  where
+    go (k, v) = if all (af v) filts
+                    then (k, foldr au v ups)
+                    else (k, v)
