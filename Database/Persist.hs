@@ -13,7 +13,7 @@ module Database.Persist
 import Language.Haskell.TH.Syntax
 
 -- | name, type
-type Column = (String, String)
+type Column = (String, (String, Bool)) -- is it nullable?
 
 data Table = Table
     { tableName    :: String

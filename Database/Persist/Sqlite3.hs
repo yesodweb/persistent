@@ -26,7 +26,7 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Data.Char
 import Control.Arrow (first)
 import Data.List (sortBy, intercalate)
-import Data.Maybe (mapMaybe)
+import Data.Maybe (mapMaybe, fromJust)
 import Database.HDBC
 import Database.HDBC.Sqlite3 (Connection)
 import "MonadCatchIO-transformers" Control.Monad.CatchIO
@@ -235,12 +235,43 @@ class HasOrder a where
 
 mkFilterClause :: Table -> Q [Clause]
 mkFilterClause t = do
-    return $ concatMap (map go . filtsToList) $ tableFilters t
+    return $ concatMap (concatMap go . filtsToList) $ tableFilters t
   where
     go (field, comp) =
-        Clause [ConP (mkName $ tableName t ++ upperFirst field ++ comp) [WildP]]
-               (NormalB $ LitE $ StringL $ field ++ comp' comp ++ "?") -- FIXME handle nulls
-               []
+        if snd $ ty field then goNull field comp else goNotNull field comp
+    goNotNull field comp =
+        [Clause
+          [ConP (mkName $ tableName t ++ upperFirst field ++ comp) [WildP]]
+          (NormalB $ LitE $ StringL $ field ++ comp' comp ++ "?")
+          []]
+    goNull field comp@"Eq" =
+        [ Clause
+          [ConP (mkName $ tableName t ++ upperFirst field ++ comp)
+                [ConP (mkName "Nothing") []]]
+          (NormalB $ LitE $ StringL $ concat
+            [ "(", field, comp' comp, "?", " OR ", field, " IS NULL)"
+            ])
+          []
+        , Clause
+          [ConP (mkName $ tableName t ++ upperFirst field ++ comp) [WildP]]
+          (NormalB $ LitE $ StringL $ field ++ comp' comp ++ "?")
+          []
+        ]
+    -- FIXME evil copy-and-paste
+    goNull field comp@"Ne" =
+        [ Clause
+          [ConP (mkName $ tableName t ++ upperFirst field ++ comp)
+                [ConP (mkName "Nothing") []]]
+          (NormalB $ LitE $ StringL $ concat
+            [ "(", field, comp' comp, "?", " OR ", field, " IS NOT NULL)"
+            ])
+          []
+        , Clause
+          [ConP (mkName $ tableName t ++ upperFirst field ++ comp) [WildP]]
+          (NormalB $ LitE $ StringL $ field ++ comp' comp ++ "?")
+          []
+        ]
+    ty = fromJust . flip lookup (tableColumns t)
     comp' "Eq" = "="
     comp' "Ne" = "<>"
     comp' "Lt" = "<"

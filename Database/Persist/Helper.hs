@@ -29,8 +29,7 @@ dataTypeDec t =
         cols = map (mkCol $ tableName t) $ tableColumns t
      in DataD [] name [] [RecC name cols] []
   where
-    mkCol x (n, ty) =
-        (mkName $ recName x n, NotStrict, ConT $ mkName ty)
+    mkCol x (n, ty) = (mkName $ recName x n, NotStrict, pairToType ty)
 
 keyTypeDec :: String -> String -> Table -> Type -> Dec
 keyTypeDec constr typ t monad =
@@ -47,13 +46,13 @@ filterTypeDec t monad =
                 [''Show, ''Read, ''Eq]
 
 mkFilter :: String
-         -> [(String, String)]
+         -> [(String, (String, Bool))]
          -> (String, Bool, Bool, Bool, Bool, Bool, Bool)
          -> [Con]
 mkFilter x cols filts = map go $ filtsToList filts
   where
     go (s, t) = NormalC (mkName $ x ++ upperFirst s ++ t)
-                               [(NotStrict, ConT $ mkName $ ty s)]
+                               [(NotStrict, pairToType $ ty s)]
     ty s = case lookup s cols of
                 Nothing -> error $ "Invalid column: " ++ s
                 Just ty' -> ty'
@@ -61,13 +60,13 @@ mkFilter x cols filts = map go $ filtsToList filts
 updateTypeDec :: Table -> Type -> Dec
 updateTypeDec t monad =
     DataInstD [] ''Update [ConT $ mkName $ tableName t, monad]
-                (map (mkUpdate (tableName t) (tableColumns t)) (tableUpdates t))
-                [''Show, ''Read, ''Eq]
+        (map (mkUpdate (tableName t) (tableColumns t)) (tableUpdates t))
+        [''Show, ''Read, ''Eq]
 
-mkUpdate :: String -> [(String, String)] -> String -> Con
+mkUpdate :: String -> [(String, (String, Bool))] -> String -> Con
 mkUpdate x cols s =
     NormalC (mkName $ x ++ upperFirst s)
-                [(NotStrict, ConT $ mkName ty)]
+                [(NotStrict, pairToType ty)]
   where
     ty = case lookup s cols of
                 Nothing -> error $ "Invalid column: " ++ s
@@ -97,7 +96,7 @@ mkUnique t (constr, fields) =
     NormalC (mkName constr) types
   where
     types = map (go . fromJust . flip lookup (tableColumns t)) fields
-    go x = (NotStrict, ConT $ mkName x)
+    go x = (NotStrict, pairToType x)
 
 filtsToList :: (String, Bool, Bool, Bool, Bool, Bool, Bool)
             -> [(String, String)]
@@ -107,3 +106,7 @@ filtsToList (s, a, b, c, d, e, f)
     go [] = []
     go ((_, False):rest) = go rest
     go ((x, True):rest) = (s, x) : go rest
+
+pairToType :: (String, Bool) -> Type
+pairToType (s, False) = ConT $ mkName s
+pairToType (s, True) = ConT (mkName "Maybe") `AppT` ConT (mkName s)
