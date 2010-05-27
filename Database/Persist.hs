@@ -3,9 +3,25 @@
 
 module Data.Persist
     ( -- * High level design
+      Column  (..)
+    , Table   (..)
       -- * Type class
       Persist (..)
     ) where
+
+data Column = Column
+    { columnName :: String
+    , columnType :: String
+    }
+
+data Table = Table
+    { tableName    :: String
+    , tableColumns :: [Column]
+    , tableUpdates ::
+    , tableFilters :: [(String, Bool, Bool, Bool, Bool, Bool, Bool)] -- eq, ne, gt, lt, ge, le
+    , tableOrders  :: [(String, Bool, Bool)] -- asc, desc
+    , tableUniques :: [[String]]
+    }
 
 class Monad m => Persist val m where
     data Key    val m
