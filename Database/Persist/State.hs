@@ -18,6 +18,7 @@ import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Char
 import Control.Arrow (first)
+import Data.List (sortBy)
 
 newtype PersistState val m a = PersistState
     { unPersistState :: StateT (Map.Map Int val) m a
@@ -63,6 +64,9 @@ derivePersistState (Table name cols upda filts ords uni) = do
     let upd = DataInstD [] ''Update [ConT name', monad]
                 (map (mkUpdate name cols) upda)
                 [''Show, ''Read, ''Eq]
+    let ord = DataInstD [] ''Order [ConT name', monad]
+                (concatMap (mkOrder name) ords)
+                [''Show, ''Read, ''Eq]
     insert'' <- [|insert'|]
     replace'' <- [|replace'|]
     yget <- [|xget|]
@@ -82,11 +86,15 @@ derivePersistState (Table name cols upda filts ords uni) = do
     yuw' <- [|xupdateWhere|]
     let yuw = yuw' `AppE` af `AppE` au
 
+    yorder' <- [|xorder|]
+    ao <- mkApplyOrds name ords
+    let yorder = yorder' `AppE` ao
+
     let inst =
           InstanceD
             [ClassP ''Monad [VarT $ mkName "m"]]
             (ConT ''Persist `AppT` ConT name' `AppT` monad)
-            [ key, fil, upd
+            [ key, fil, upd, ord
             , FunD (mkName "insert") [Clause [] (NormalB insert'') []]
             , FunD (mkName "replace") [Clause [] (NormalB replace'') []]
             , FunD (mkName "get") [Clause [] (NormalB yget) []]
@@ -95,6 +103,7 @@ derivePersistState (Table name cols upda filts ords uni) = do
             , FunD (mkName "deleteWhere") [Clause [] (NormalB ydw) []]
             , FunD (mkName "update") [Clause [] (NormalB yupdate) []]
             , FunD (mkName "updateWhere") [Clause [] (NormalB yuw) []]
+            , FunD (mkName "order") [Clause [] (NormalB yorder) []]
             ]
     return [dt, inst]
 
@@ -166,6 +175,33 @@ mkApplyUpdate base upda = do
                         [(mkName $ recName base u, VarE $ mkName "x")])
                    []
 
+mkOrder :: String -> (String, Bool, Bool) -> [Con]
+mkOrder x (s, a, d) =
+     (if a then (:) (go "Asc") else id)
+   $ (if d then (:) (go "Desc") else id) []
+  where
+    go ad = NormalC (mkName $ x ++ upperFirst s ++ ad) []
+
+mkApplyOrds :: String -> [(String, Bool, Bool)] -> Q Exp
+mkApplyOrds base ords = do
+    x <- newName "x"
+    y <- newName "y"
+    o <- newName "o"
+    return $ LamE [VarP o, VarP x, VarP y] $ CaseE (VarE o)
+        $ concatMap (go (VarE x) (VarE y)) ords
+  where
+    go x y (r, a, d) =
+        (if a then (:) (go' x y r True "Asc") else id)
+      $ (if d then (:) (go' x y r False "Desc") else id) []
+    go' x y r isAsc suf =
+        let x' = VarE (mkName (recName base r)) `AppE` x
+            y' = VarE (mkName (recName base r)) `AppE` y
+         in Match (ConP (mkName $ base ++ upperFirst r ++ suf) [])
+              (NormalB $
+                if isAsc
+                    then (VarE (mkName "compare") `AppE` x' `AppE` y')
+                    else (VarE (mkName "compare") `AppE` y' `AppE` x')) []
+
 upperFirst :: String -> String
 upperFirst (x:xs) = toUpper x : xs
 upperFirst [] = []
@@ -212,3 +248,16 @@ xupdateWhere af au filts ups = do
     go (k, v) = if all (af v) filts
                     then (k, foldr au v ups)
                     else (k, v)
+
+xorder ao ords = do
+    m <- get'
+    return $ map (first fromIntegral)
+           $ sortBy (\(_, x) (_, y) -> go ords x y)
+           $ Map.toList m
+  where
+    go [] _ _ = EQ
+    go (o:os) x y =
+        case ao o x y of
+            LT -> LT
+            GT -> GT
+            EQ -> go os x y
