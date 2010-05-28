@@ -1,0 +1,35 @@
+name:            persistent
+version:         0.0.0
+license:         BSD3
+license-file:    LICENSE
+author:          Michael Snoyman <michael@snoyman.com>
+maintainer:      Michael Snoyman <michael@snoyman.com>
+synopsis:        Type-safe, non-relational, multi-backend persistence.
+category:        Web
+stability:       Stable
+cabal-version:   >= 1.6
+build-type:      Simple
+homepage:        http://github.com/snoyberg/persistent/
+
+library
+    build-depends:   base >= 4 && < 5,
+                     template-haskell >= 2.4 && < 2.5,
+                     bytestring >= 0.9.1 && < 0.10,
+                     data-object-yaml >= 0.3.0 && < 0.4,
+                     data-object >= 0.3.1 && < 0.4,
+                     convertible >= 1.0.9 && < 1.1,
+                     HDBC-sqlite3 >= 2.3 && < 2.4,
+                     HDBC >= 2.2.6 && < 2.3,
+                     transformers >= 0.2.1 && < 0.3,
+                     containers >= 0.2 && < 0.4,
+                     MonadCatchIO-transformers >= 0.2.2 && < 0.3
+    exposed-modules: Database.Persist
+                     Database.Persist.Helper
+                     Database.Persist.QuasiYaml
+                     Database.Persist.Sqlite3
+                     Database.Persist.State
+    ghc-options:     -Wall
+
+source-repository head
+  type:     git
+  location: git://github.com/snoyberg/persistent.git
