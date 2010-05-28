@@ -351,7 +351,7 @@ select t filts ords = do
     conn <- ask'
     get <- liftIO $ prepare conn sql
     _ <- liftIO $ execute get $ map filterData filts
-    rows <- liftIO $ fetchAllRows get
+    rows <- liftIO $ fetchAllRows' get
     return $ mapMaybe fromSqlValues' rows
   where
     fromSqlValues' (x:xs) = do
