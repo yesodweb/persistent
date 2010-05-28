@@ -54,12 +54,12 @@ go = do
     p2 <- get pid
     liftIO $ print p2
 
-    p3 <- filter [PersonNameEq "Michael"]
+    p3 <- select [PersonNameEq "Michael"] []
     liftIO $ print p3
 
     _ <- insert $ Person "Michael2" 27 Nothing
     deleteWhere [PersonNameEq "Michael2"]
-    p4 <- filter [PersonAgeLt 28]
+    p4 <- select [PersonAgeLt 28] []
     liftIO $ print p4
 
     update pid [PersonAge 28]
@@ -71,7 +71,7 @@ go = do
     liftIO $ print p6
 
     insert $ Person "Eliezer" 2 $ Just "blue"
-    p7 <- order [PersonAgeAsc]
+    p7 <- select [] [PersonAgeAsc]
     liftIO $ print p7
 
     insert $ Person "Abe" 30 $ Just "black"
@@ -79,19 +79,19 @@ go = do
     liftIO $ print p8
 
     insertR $ Person "Abe" 31 $ Just "brown"
-    p9 <- filter [PersonNameEq "Abe"]
+    p9 <- select [PersonNameEq "Abe"] []
     liftIO $ print p9
 
     p10 <- getBy $ PersonNameKey "Michael"
     liftIO $ print p10
 
-    p11 <- filter [PersonColorEq $ Just "blue"]
+    p11 <- select [PersonColorEq $ Just "blue"] []
     liftIO $ print p11
 
-    p12 <- filter [PersonColorEq Nothing]
+    p12 <- select [PersonColorEq Nothing] []
     liftIO $ print p12
 
-    p13 <- filter [PersonColorNe Nothing]
+    p13 <- select [PersonColorNe Nothing] []
     liftIO $ print p13
 
     delete pid

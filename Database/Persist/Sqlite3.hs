@@ -123,8 +123,6 @@ derivePersistSqlite3 t@(Table name cols upda filts ords uni) = do
     get' <- [|get|]
     getBy' <- [|getBy|]
     select' <- [|select|]
-    filter' <- [|filter''|]
-    order' <- [|order|]
     deleteWhere' <- [|deleteWhere|]
     delete' <- [|delete|]
     deleteBy' <- [|deleteBy|]
@@ -147,8 +145,6 @@ derivePersistSqlite3 t@(Table name cols upda filts ords uni) = do
             , mkFun "get" $ get'
             , mkFun "getBy" $ getBy'
             , mkFun "select" $ select'
-            , mkFun "filter" $ filter'
-            , mkFun "order" $ order'
             , mkFun "deleteWhere" $ deleteWhere'
             , mkFun "delete" $ delete'
             , mkFun "deleteBy" $ deleteBy'
@@ -328,10 +324,6 @@ mkOrderClause t = do
         Clause [ConP (mkName $ tableName t ++ upperFirst field ++ suf) []]
                (NormalB $ LitE $ StringL $ field ++ sql)
                []
-
-filter'' t filts = select t filts []
-
-order t ords = select t [] ords
 
 select :: SqlValues val => Num key => MonadIO m
        => HasFilter (Filter val)

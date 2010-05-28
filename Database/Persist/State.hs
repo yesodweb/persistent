@@ -9,7 +9,7 @@ module Database.Persist.State
     , derivePersistState
     ) where
 
-import Database.Persist hiding (filter)
+import Database.Persist
 import Database.Persist.Helper
 import Control.Monad.Trans.State hiding (get)
 import qualified Control.Monad.Trans.State as S
