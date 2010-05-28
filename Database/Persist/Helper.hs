@@ -44,7 +44,7 @@ keyTypeDec constr typ t monad =
 
 filterTypeDec :: Table -> Type -> Dec
 filterTypeDec t monad =
-    DataInstD [] ''Filter [ConT $ mkName $ tableName t, monad]
+    DataInstD [] ''Filter [ConT $ mkName $ tableName t]
             (concatMap (mkFilter (tableName t) (tableColumns t))
               $ tableFilters t)
             (if null (tableFilters t) then [] else [''Show, ''Read, ''Eq])
@@ -63,7 +63,7 @@ mkFilter x cols filts = map go $ filtsToList filts
 
 updateTypeDec :: Table -> Type -> Dec
 updateTypeDec t monad =
-    DataInstD [] ''Update [ConT $ mkName $ tableName t, monad]
+    DataInstD [] ''Update [ConT $ mkName $ tableName t]
         (map (mkUpdate (tableName t) (tableColumns t)) (tableUpdates t))
         (if null (tableUpdates t) then [] else [''Show, ''Read, ''Eq])
 
@@ -78,7 +78,7 @@ mkUpdate x cols s =
 
 orderTypeDec :: Table -> Type -> Dec
 orderTypeDec t monad =
-    DataInstD [] ''Order [ConT $ mkName $ tableName t, monad]
+    DataInstD [] ''Order [ConT $ mkName $ tableName t]
             (concatMap (mkOrder $ tableName t) (tableOrders t))
             (if null (tableOrders t) then [] else [''Show, ''Read, ''Eq])
 
@@ -91,7 +91,7 @@ mkOrder x (s, a, d) =
 
 uniqueTypeDec :: Table -> Type -> Dec
 uniqueTypeDec t monad =
-    DataInstD [] ''Unique [ConT $ mkName $ tableName t, monad]
+    DataInstD [] ''Unique [ConT $ mkName $ tableName t]
             (map (mkUnique t) $ tableUniques t)
             (if null (tableUniques t) then [] else [''Show, ''Read, ''Eq])
 

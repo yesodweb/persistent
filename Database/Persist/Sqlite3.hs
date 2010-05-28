@@ -69,7 +69,7 @@ derivePersistSqlite3 t@(Table name cols upda filts ords uni) = do
     fd <- mkFilterData t
     let hf =
           InstanceD [] (ConT ''HasFilter `AppT`
-                        (ConT ''Filter `AppT` ConT (mkName name) `AppT` monad))
+                        (ConT ''Filter `AppT` ConT (mkName name)))
             [ FunD (mkName "filterClause") fc
             , FunD (mkName "filterData") fd
             ]
@@ -77,14 +77,14 @@ derivePersistSqlite3 t@(Table name cols upda filts ords uni) = do
     oc <- mkOrderClause t
     let ho =
           InstanceD [] (ConT ''HasOrder `AppT`
-                        (ConT ''Order `AppT` ConT (mkName name) `AppT` monad))
+                        (ConT ''Order `AppT` ConT (mkName name)))
             [FunD (mkName "orderClause") oc]
 
     uc <- mkUpdateClause t
     ud <- mkUpdateData t
     let hu =
           InstanceD [] (ConT ''HasUpdate `AppT`
-                        (ConT ''Update `AppT` ConT (mkName name) `AppT` monad))
+                        (ConT ''Update `AppT` ConT (mkName name)))
             [ FunD (mkName "updateClause") uc
             , FunD (mkName "updateData") ud
             ]
@@ -93,7 +93,7 @@ derivePersistSqlite3 t@(Table name cols upda filts ords uni) = do
     und <- mkUniqueData t
     let hun =
           InstanceD [] (ConT ''HasUnique `AppT`
-                        (ConT ''Unique `AppT` ConT (mkName name) `AppT` monad))
+                        (ConT ''Unique `AppT` ConT (mkName name)))
             [ FunD (mkName "uniqueClause") unc
             , FunD (mkName "uniqueData") und
             ]
@@ -334,9 +334,11 @@ filter'' t filts = select t filts []
 order t ords = select t [] ords
 
 select :: SqlValues val => Num key => MonadIO m
-       => HasFilter (Filter val (Sqlite3 m))
-       => HasOrder (Order val (Sqlite3 m))
-       => Table -> [Filter val (Sqlite3 m)] -> [Order val (Sqlite3 m)]
+       => HasFilter (Filter val)
+       => HasOrder (Order val)
+       => Table
+       -> [Filter val]
+       -> [Order val]
        -> Sqlite3 m [(key, val)]
 select t filts ords = do
     let wher = if null filts

@@ -37,27 +37,27 @@ instance Lift Table where
 
 class Monad m => Persist val m where
     data Key    val
-    data Update val m -- FIXME remove ms
-    data Filter val m
-    data Order  val m
-    data Unique val m
+    data Update val
+    data Filter val
+    data Order  val
+    data Unique val
 
     -- initialization, value is ignored
-    initialize  :: val                              -> m ()
+    initialize  :: val                          -> m ()
 
     -- write
-    insert      :: val                              -> m (Key val)
-    insertR     :: val                              -> m (Key val)
-    replace     :: Key val        -> val            -> m ()
-    update      :: Key val        -> [Update val m] -> m ()
-    updateWhere :: [Filter val m] -> [Update val m] -> m ()
-    delete      :: Key val                          -> m ()
-    deleteBy    :: Unique val m                     -> m ()
-    deleteWhere :: [Filter val m]                   -> m ()
+    insert      :: val                          -> m (Key val)
+    insertR     :: val                          -> m (Key val)
+    replace     :: Key val      -> val          -> m ()
+    update      :: Key val      -> [Update val] -> m ()
+    updateWhere :: [Filter val] -> [Update val] -> m ()
+    delete      :: Key val                      -> m ()
+    deleteBy    :: Unique val                   -> m ()
+    deleteWhere :: [Filter val]                 -> m ()
 
     -- read
-    get         :: Key val                          -> m (Maybe val)
-    getBy       :: Unique val m                     -> m (Maybe (Key val, val))
-    filter      :: [Filter val m]                   -> m [(Key val, val)] -- enumerator
-    order       :: [Order val m]                    -> m [(Key val, val)] -- enumerator
-    select      :: [Filter val m] -> [Order val m]  -> m [(Key val, val)] -- enumerator
+    get         :: Key val                      -> m (Maybe val)
+    getBy       :: Unique val                   -> m (Maybe (Key val, val))
+    filter      :: [Filter val]                 -> m [(Key val, val)] -- enumerator
+    order       :: [Order val]                  -> m [(Key val, val)] -- enumerator
+    select      :: [Filter val] -> [Order val]  -> m [(Key val, val)] -- enumerator
