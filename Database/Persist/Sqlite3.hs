@@ -237,6 +237,7 @@ degen :: [Clause] -> Q [Clause]
 degen [] = do
     err <- [|error "Degenerate case, should never happen"|]
     return [Clause [WildP] (NormalB err) []]
+degen x = return x
 
 mkFilterClause :: Table -> Q [Clause]
 mkFilterClause t = do
