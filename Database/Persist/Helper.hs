@@ -100,6 +100,7 @@ mkUnique t (constr, fields) =
     NormalC (mkName constr) types
   where
     types = map (go . fromJust . flip lookup (tableColumns t)) fields
+    go (_, True) = error "Error: cannot have nullables in unique"
     go x = (NotStrict, pairToType x)
 
 filtsToList :: (String, Bool, Bool, Bool, Bool, Bool, Bool)
