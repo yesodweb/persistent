@@ -16,12 +16,14 @@ persist = QuasiQuoter
     , quotePat = error "Cannot quasi-quote a Persist pattern."
     }
 
-parse :: String -> Table
+parse :: String -> [Table]
 parse s = unsafePerformIO $ do -- just for errors, not as bad as you think
     so <- decode $ pack s
     m <- fromMapping so
-    name <- lookupScalar "name" m
-    columns' <- lookupMapping "columns" m
+    mapM parseTable m
+
+parseTable (name, Mapping m) = do
+    columns' <- lookupSequence "columns" m
     x <- mapM parseColumn columns'
     let columns = map (\(a, _, _, _) -> a) x
         updates = concatMap (\(_, b, _, _) -> b) x
@@ -32,7 +34,8 @@ parse s = unsafePerformIO $ do -- just for errors, not as bad as you think
                 _ -> return []
     return $ Table name columns updates filters orders uniques
 
-parseColumn (n, Mapping m) = do
+parseColumn (Mapping m) = do
+    n <- lookupScalar "name" m
     ty <- lookupScalar "type" m
     let nullable = lookup "nullable" m == Just (Scalar "True")
     let upd = if lookup "update" m == Just (Scalar "True")
@@ -44,7 +47,6 @@ parseColumn (n, Mapping m) = do
     let ord = case lookup "order" m of
                 Just (Sequence ord') -> [parseOrder n ord']
                 _ -> []
-    print filt
     return ((n, (ty, nullable)), upd, filt, ord)
 
 parseFilter n l =

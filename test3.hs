@@ -12,26 +12,27 @@ import Database.Persist.Sqlite3
 import Control.Monad.IO.Class
 import qualified Data.Map as Map
 import Database.HDBC.Sqlite3 (connectSqlite3)
+import Data.Convertible
 
-derivePersistSqlite3 [$persist|
-name: Person
-columns:
-    name:
-        type: String
-        update: True
-        filter: [Eq, Ne]
-        order: [Desc]
-    age:
-        type: Int
-        update: True
-        filter: [Gt]
-        order: [Asc]
-    color:
-        type: String
-        nullable: True
-        filter: [Eq, Ne]
-uniques:
-    PersonNameKey: [name]
+persistSqlite3 [$persist|
+Person:
+    columns:
+        - name: name
+          type: String
+          update: True
+          filter: [Eq, Ne]
+          order: [Desc]
+        - name: age
+          type: Int
+          update: True
+          filter: [Gt]
+          order: [Asc]
+        - name: color
+          type: String
+          nullable: True
+          filter: [Eq, Ne]
+    uniques:
+        PersonNameKey: [name]
 |]
 
 deriving instance Show Person

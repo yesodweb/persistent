@@ -8,11 +8,13 @@ module Database.Persist.Sqlite3
     ( Sqlite3
     , runSqlite3
     , derivePersistSqlite3
+    , persistSqlite3
     , SqlValues (..)
     , HasFilter (..)
     , HasOrder (..)
     , HasUpdate (..)
     , HasUnique (..)
+    , Convertible (..)
     ) where
 
 import Database.Persist (Persist, Table (..), Key, Order, Filter, Update, Unique)
@@ -33,6 +35,8 @@ import "MonadCatchIO-transformers" Control.Monad.CatchIO
 import Control.Applicative (Applicative)
 import Data.Convertible (Convertible (..))
 import Control.Monad (ap)
+
+persistSqlite3 = fmap concat . mapM derivePersistSqlite3
 
 newtype Sqlite3 m a = Sqlite3
     { unSqlite3 :: ReaderT Connection m a
@@ -94,6 +98,21 @@ derivePersistSqlite3 t@(Table name cols upda filts ords uni) = do
             , FunD (mkName "uniqueData") und
             ]
 
+    fromsql <- [|either Left (Right . fromInteger) . safeConvert|]
+    let c1 =
+          InstanceD [] (ConT ''Convertible `AppT` ConT ''SqlValue `AppT`
+                        (ConT ''Key `AppT` ConT (mkName name)))
+            [FunD (mkName "safeConvert") [Clause [] (NormalB fromsql) []]]
+    tosql <- [|Right . SqlInteger . fromIntegral|]
+    let c2 =
+          InstanceD [] (ConT ''Convertible `AppT`
+                        (ConT ''Key `AppT` ConT (mkName name))
+                        `AppT` ConT ''SqlValue)
+            [FunD (mkName "safeConvert") [Clause [] (NormalB tosql) []]]
+
+    let keysyn = TySynD (mkName $ name ++ "Id") [] $
+                    ConT ''Key `AppT` ConT (mkName name)
+
     t' <- TH.lift t
     let mkFun s e = FunD (mkName s) [Clause [] (NormalB $ e `AppE` t') []]
 
@@ -108,6 +127,7 @@ derivePersistSqlite3 t@(Table name cols upda filts ords uni) = do
     order' <- [|order|]
     deleteWhere' <- [|deleteWhere|]
     delete' <- [|delete|]
+    deleteBy' <- [|deleteBy|]
     update' <- [|update|]
     updateWhere' <- [|updateWhere|]
 
@@ -115,7 +135,7 @@ derivePersistSqlite3 t@(Table name cols upda filts ords uni) = do
           InstanceD
             [ClassP ''MonadCatchIO [VarT $ mkName "m"]]
             (ConT ''Persist `AppT` ConT (mkName name) `AppT` monad)
-            [ keyTypeDec "Sqlite3Key" "Integer" t monad
+            [ keyTypeDec (name ++ "Id") "Integer" t monad
             , filterTypeDec t monad
             , updateTypeDec t monad
             , orderTypeDec t monad
@@ -131,10 +151,11 @@ derivePersistSqlite3 t@(Table name cols upda filts ords uni) = do
             , mkFun "order" $ order'
             , mkFun "deleteWhere" $ deleteWhere'
             , mkFun "delete" $ delete'
+            , mkFun "deleteBy" $ deleteBy'
             , mkFun "update" $ update'
             , mkFun "updateWhere" $ updateWhere'
             ]
-    return [dt, sq, hf, ho, hu, hun, inst]
+    return [dt, sq, hf, ho, hu, hun, inst, c1, c2, keysyn]
 
 initialize :: MonadIO m => Table -> v -> Sqlite3 m ()
 initialize t _ = do
@@ -356,6 +377,13 @@ delete t k = do
     _ <- liftIO $ execute del [SqlInteger $ fromIntegral k]
     return ()
 
+deleteBy t uniq = do
+    let sql = "DELETE FROM " ++ tableName t ++ " WHERE " ++ uniqueClause uniq
+    conn <- ask'
+    del <- liftIO $ prepare conn sql
+    _ <- liftIO $ execute del $ uniqueData uniq
+    return ()
+
 class HasUpdate a where
     updateClause :: a -> String
     updateData :: a -> SqlValue
@@ -412,7 +440,7 @@ mkUniqueClause t = do
     degen $ map go $ tableUniques t
   where
     go (constr, fields) =
-        Clause [ConP (mkName constr) [WildP]]
+        Clause [ConP (mkName constr) $ map (const WildP) fields]
                (NormalB $ LitE $ StringL $ intercalate " AND " $ map (++ "=?") fields) -- FIXME handle nulls
                []
 
@@ -439,3 +467,4 @@ getBy t uniq = do
             k' <- fromSql' k
             vals' <- fromSqlValues vals
             return (fromInteger k', vals')
+        Nothing -> return Nothing

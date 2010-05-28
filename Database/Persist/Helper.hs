@@ -17,7 +17,11 @@ import Data.Char (toLower, toUpper)
 import Data.Maybe (fromJust)
 
 recName :: String -> String -> String
-recName dt f = map toLower dt ++ upperFirst f
+recName dt f = lowerFirst dt ++ upperFirst f
+
+lowerFirst :: String -> String
+lowerFirst (x:xs) = toLower x : xs
+lowerFirst [] = []
 
 upperFirst :: String -> String
 upperFirst (x:xs) = toUpper x : xs
@@ -33,7 +37,7 @@ dataTypeDec t =
 
 keyTypeDec :: String -> String -> Table -> Type -> Dec
 keyTypeDec constr typ t monad =
-    NewtypeInstD [] ''Key [ConT $ mkName $ tableName t, monad]
+    NewtypeInstD [] ''Key [ConT $ mkName $ tableName t]
                 (NormalC (mkName constr) [(NotStrict, ConT $ mkName typ)])
                 [''Show, ''Read, ''Num, ''Integral, ''Enum, ''Eq, ''Ord,
                  ''Real]
