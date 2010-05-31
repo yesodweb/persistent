@@ -32,7 +32,7 @@ parse' (name, attribs) = Table name cols upds filts ords uniqs
     cols = concatMap takeCols attribs
     upds = concatMap takeUpds attribs
     filts = filter notAllFalse $ concatMap takeFilts attribs
-    ords = concatMap takeOrds attribs
+    ords = filter notAllFalse' $ concatMap takeOrds attribs
     uniqs = concatMap takeUniqs attribs
 
 takeCols :: [String] -> [Column]
@@ -65,6 +65,9 @@ takeOrds (n@(f:_):ty:rest)
                      , "Desc" `elem` rest
                      )]
 takeOrds _ = []
+
+notAllFalse' (_, False, False) = False
+notAllFalse' _ = True
 
 takeUniqs :: [String] -> [(String, [String])]
 takeUniqs (n@(f:_):rest)
