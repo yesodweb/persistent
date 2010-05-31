@@ -4,7 +4,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE QuasiQuotes #-}
-import Database.Persist.QuasiYaml
+import Database.Persist.Quasi
 import Prelude hiding (filter)
 import Database.Persist
 import Database.Persist.State
@@ -12,27 +12,13 @@ import Database.Persist.Sqlite3
 import Control.Monad.IO.Class
 import qualified Data.Map as Map
 import Database.HDBC.Sqlite3 (connectSqlite3)
-import Data.Convertible
 
 persistSqlite3 [$persist|
-Person:
-    columns:
-        - name: name
-          type: String
-          update: True
-          filter: [Eq, Ne]
-          order: [Desc]
-        - name: age
-          type: Int
-          update: True
-          filter: [Gt]
-          order: [Asc]
-        - name: color
-          type: String
-          nullable: True
-          filter: [Eq, Ne]
-    uniques:
-        PersonNameKey: [name]
+Person
+    name String update Eq Ne Desc
+    age Int update Lt Asc
+    color String null Eq Ne
+    PersonNameKey name
 |]
 
 deriving instance Show Person
