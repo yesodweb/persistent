@@ -35,7 +35,7 @@ library
                      Database.Persist.Redis
                      Database.Persist.Sqlite
                      Database.Sqlite
-    ghc-options:     -Wall -Werror
+    ghc-options:     -Wall
     c-sources:       cbits/sqlite3.c
 
 source-repository head

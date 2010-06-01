@@ -6,7 +6,7 @@
 import Prelude hiding (filter)
 import Database.Persist
 import Database.Persist.State
-import Database.Persist.Sqlite3
+import Database.Persist.Sqlite
 import Control.Monad.IO.Class
 import qualified Data.Map as Map
 import Database.HDBC.Sqlite3 (connectSqlite3)

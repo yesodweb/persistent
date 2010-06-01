@@ -7,39 +7,46 @@
 module Database.Persist.Sqlite
     ( SqliteReader
     , runSqlite
+    , open
+    , close
+    , withSqlite
     , persistSqlite
-    , SqlValues (..)
-    , HasFilter (..)
-    , HasOrder (..)
-    , HasUpdate (..)
-    , HasUnique (..)
-    , Convertible (..)
     ) where
 
-import Database.Persist (Persist, Table (..), Key, Order, Filter, Update, Unique)
+import Database.Persist (Persist, Table (..), Key, Order, Filter, Update,
+                         Unique, PersistValue (..), Persistable (..),
+                         SqlType (..), ToPersistables (..), ToFieldNames (..),
+                         FromPersistValues (..), toPersistValues, ToOrder (..),
+                         PersistOrder (..), ToFieldName (..),
+                         PersistFilter (..), ToFilter (..))
 import Database.Persist.Helper
 import Control.Monad.Trans.Reader
 import Language.Haskell.TH.Syntax hiding (lift)
 import qualified Language.Haskell.TH.Syntax as TH
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.List (intercalate)
-import Data.Maybe (mapMaybe, fromJust)
-import Database.HDBC
-import Database.HDBC.Sqlite3 (Connection)
 import "MonadCatchIO-transformers" Control.Monad.CatchIO
-import Data.Convertible (Convertible (..))
-import Control.Monad (ap)
+import Control.Monad (ap, when)
+import Database.Sqlite
 
 persistSqlite :: [Table] -> Q [Dec]
 persistSqlite = fmap concat . mapM derivePersistSqliteReader
 
-type SqliteReader = ReaderT Connection
+type SqliteReader = ReaderT Database
 
-runSqlite :: MonadCatchIO m => SqliteReader m a -> Connection -> m a
+withSqlite :: MonadCatchIO m => String -> (Database -> m a) -> m a
+withSqlite s f = bracket (liftIO $ open s) (liftIO . close) f
+
+runSqlite :: MonadCatchIO m => SqliteReader m a -> Database -> m a
 runSqlite r conn = do
-    res <- onException (runReaderT r conn) $ liftIO $ rollback conn
-    liftIO $ commit conn
+    Done <- liftIO begin
+    res <- onException (runReaderT r conn) $ liftIO rollback
+    Done <- liftIO commit
     return res
+  where
+    begin = bracket (prepare conn "BEGIN") finalize step
+    commit = bracket (prepare conn "COMMIT") finalize step
+    rollback = bracket (prepare conn "ROLLBACK") finalize step
 
 derivePersistSqliteReader :: Table -> Q [Dec]
 derivePersistSqliteReader t = do
@@ -47,14 +54,15 @@ derivePersistSqliteReader t = do
     let dt = dataTypeDec t
     let monad = ConT ''SqliteReader `AppT` VarT (mkName "m")
 
-    tsv <- mkToSqlValues t
-    fsv <- mkFromSqlValues t
+    tsv <- mkToPersistValues t
+    fsv <- mkFromPersistValues t
     let sq =
-          InstanceD [] (ConT ''SqlValues `AppT` ConT (mkName name))
-            [ FunD (mkName "toSqlValues") [tsv]
-            , FunD (mkName "fromSqlValues") fsv
+          InstanceD [] (ConT ''FromPersistValues `AppT` ConT (mkName name))
+            [ FunD (mkName "toPersistValues") [tsv]
+            , FunD (mkName "fromPersistValues") fsv
             ]
 
+    {-
     fc <- mkFilterClause t
     fd <- mkFilterData t
     let hf =
@@ -90,15 +98,16 @@ derivePersistSqliteReader t = do
 
     fromsql <- [|either Left (Right . fromInteger) . safeConvert|]
     let c1 =
-          InstanceD [] (ConT ''Convertible `AppT` ConT ''SqlValue `AppT`
+          InstanceD [] (ConT ''Convertible `AppT` ConT ''PersistValue `AppT`
                         (ConT ''Key `AppT` ConT (mkName name)))
             [FunD (mkName "safeConvert") [Clause [] (NormalB fromsql) []]]
-    tosql <- [|Right . SqlInteger . fromIntegral|]
+    tosql <- [|Right . PersistInt64 . fromIntegral|]
     let c2 =
           InstanceD [] (ConT ''Convertible `AppT`
                         (ConT ''Key `AppT` ConT (mkName name))
-                        `AppT` ConT ''SqlValue)
+                        `AppT` ConT ''PersistValue)
             [FunD (mkName "safeConvert") [Clause [] (NormalB tosql) []]]
+    -}
 
     let keysyn = TySynD (mkName $ name ++ "Id") [] $
                     ConT ''Key `AppT` ConT (mkName name)
@@ -123,7 +132,7 @@ derivePersistSqliteReader t = do
           InstanceD
             [ClassP ''MonadCatchIO [VarT $ mkName "m"]]
             (ConT ''Persist `AppT` ConT (mkName name) `AppT` monad)
-            [ keyTypeDec (name ++ "Id") "Integer" t
+            [ keyTypeDec (name ++ "Id") "Int64" t
             , filterTypeDec t
             , updateTypeDec t
             , orderTypeDec t
@@ -141,48 +150,56 @@ derivePersistSqliteReader t = do
             , mkFun "update" $ update'
             , mkFun "updateWhere" $ updateWhere'
             ]
-    return [dt, sq, hf, ho, hu, hun, inst, c1, c2, keysyn]
+    return [dt, sq, {-hf, ho, hu, hun, -} inst, {- FIXME c1, c2, -} keysyn]
 
-initialize :: MonadIO m => Table -> v -> SqliteReader m ()
-initialize t _ = do
-    let sql = "CREATE TABLE " ++ tableName t ++ "(id INTEGER PRIMARY KEY" ++
-              concatMap (',' :) (map fst $ tableColumns t) ++ ")"
-    conn <- ask
-    ts <- liftIO $ getTables conn
-    if tableName t `elem` ts
-        then return ()
-        else do
-            _ <- liftIO $ run conn sql []
-            liftIO $ mapM_ (go conn) $ tableUniques t
-            return ()
+initialize :: (ToPersistables v, MonadCatchIO m)
+           => Table -> v -> SqliteReader m ()
+initialize t v = withStmt getTableSql $ \getTable -> do
+    Row <- liftIO $ step getTable
+    [PersistInt64 i] <- liftIO $ columns getTable
+    when (i == 1) $ do
+        let cols = zip (tableColumns t) $ toPersistables v
+        let sql = "CREATE TABLE " ++ tableName t ++
+                  "(id INTEGER PRIMARY KEY" ++
+                  concatMap go' cols ++ ")"
+        Done <- withStmt sql (liftIO . step)
+        mapM_ go $ tableUniques t
+        return ()
   where
-    go conn (index, fields) = do
+    go' ((colName, (_, nullable)), p) = concat
+        [ colName
+        , " "
+        , showSqlType $ sqlType p
+        , if nullable then " NULL" else " NOT NULL"
+        ]
+    getTableSql = "SELECT COUNT(*) FROM sqlite_master WHERE type=? AND name=?"
+    go (index, fields) = do
         let sql = "CREATE UNIQUE INDEX " ++ index ++ " ON " ++
                   tableName t ++ "(" ++ intercalate "," fields ++ ")"
-        _ <- run conn sql []
+        Done <- withStmt sql (liftIO . step)
         return ()
+    showSqlType SqlString = "VARCHAR"
+    showSqlType SqlInteger = "INTEGER"
+    showSqlType SqlReal = "REAL"
+    showSqlType SqlDay = "DATE"
+    showSqlType SqlTime = "TIME"
+    showSqlType SqlDayTime = "TIMESTAMP"
+    showSqlType SqlBlob = "BLOB"
 
-class SqlValues a where
-    toSqlValues :: a -> [SqlValue]
-    fromSqlValues :: [SqlValue] -> Maybe a
-
-mkToSqlValues :: Table -> Q Clause
-mkToSqlValues t = do
+mkToPersistValues :: Table -> Q Clause
+mkToPersistValues t = do
     xs <- mapM (const $ newName "x") $ tableColumns t
-    ts <- [|toSql|]
+    ts <- [|toPersistValue|]
     let xs' = map (AppE ts . VarE) xs
     return $ Clause [ConP (mkName $ tableName t) $ map VarP xs]
                     (NormalB $ ListE xs') []
 
-fromSql' :: Convertible SqlValue y => SqlValue -> Maybe y
-fromSql' = either (const Nothing) Just . safeConvert
-
-mkFromSqlValues :: Table -> Q [Clause]
-mkFromSqlValues t = do
+mkFromPersistValues :: Table -> Q [Clause]
+mkFromPersistValues t = do
     nothing <- [|Nothing|]
     let cons = ConE $ mkName $ tableName t
     xs <- mapM (const $ newName "x") $ tableColumns t
-    fs <- [|fromSql'|]
+    fs <- [|fromPersistValue|]
     let xs' = map (AppE fs . VarE) xs
     let pat = ListP $ map VarP xs
     ap' <- [|ap|]
@@ -195,134 +212,62 @@ mkFromSqlValues t = do
   where
     go ap' x y = InfixE (Just x) ap' (Just y)
 
-insertReplace :: (MonadIO m, SqlValues val, Num key)
-              => String -> Table -> val -> SqliteReader m key
+insertReplace :: (MonadCatchIO m, ToPersistables val, Num (Key val))
+              => String -> Table -> val -> SqliteReader m (Key val)
 insertReplace word t val = do
     let sql = word ++ " INTO " ++ tableName t ++ " VALUES(NULL" ++
               concatMap (const ",?") (tableColumns t) ++ ")"
-    conn <- ask
-    ins <- liftIO $ prepare conn sql
-    _ <- liftIO $ execute ins $ toSqlValues val
-    stmt <- liftIO $ prepare conn "SELECT last_insert_rowid()"
-    _ <- liftIO $ execute stmt []
-    Just [i] <- liftIO $ fetchRow stmt
-    return $ fromInteger $ fromSql i
+    withStmt sql $ \ins -> do
+        liftIO $ bind ins $ toPersistValues val
+        withStmt "SELECT last_insert_rowid()" $ \lrow -> do
+            Row <- liftIO $ step lrow
+            [PersistInt64 i] <- liftIO $ columns lrow
+            return $ fromIntegral i
 
-insert :: (MonadIO m, SqlValues val, Num key)
-       => Table -> val -> SqliteReader m key
+insert :: (MonadCatchIO m, ToPersistables val, Num (Key val))
+       => Table -> val -> SqliteReader m (Key val)
 insert = insertReplace "INSERT"
 
-insertR :: (MonadIO m, SqlValues val, Num key)
-        => Table -> val -> SqliteReader m key
+insertR :: (MonadCatchIO m, ToPersistables val, Num (Key val))
+        => Table -> val -> SqliteReader m (Key val)
 insertR = insertReplace "REPLACE"
 
-replace :: (MonadIO m, Integral (Key v), SqlValues v)
+replace :: (MonadCatchIO m, Integral (Key v), ToPersistables v)
         => Table -> Key v -> v -> SqliteReader m ()
 replace t k val = do
     let sql = "REPLACE INTO " ++ tableName t ++ " VALUES(?" ++
               concatMap (const ",?") (tableColumns t) ++ ")"
-    conn <- ask
-    ins <- liftIO $ prepare conn sql
-    _ <- liftIO $ execute ins $ SqlInteger (fromIntegral k) : toSqlValues val
-    return ()
+    withStmt sql $ \ins -> do
+        liftIO $ bind ins $ PersistInt64 (fromIntegral k)
+                          : map toPersistValue (toPersistables val)
+        Done <- liftIO $ step ins
+        return ()
 
-get :: (Integral (Key v), MonadIO m, SqlValues v)
+get :: (Integral (Key v), MonadCatchIO m, FromPersistValues v)
     => Table -> Key v -> SqliteReader m (Maybe v)
 get t k = do
     let sql = "SELECT * FROM " ++ tableName t ++ " WHERE id=?"
-    conn <- ask
-    stmt <- liftIO $ prepare conn sql
-    _ <- liftIO $ execute stmt [SqlInteger $ fromIntegral k]
-    res <- liftIO $ fetchRow stmt
-    case res of
-        Just (_:vals) -> return $ fromSqlValues vals
-        _ -> return Nothing
+    withStmt sql $ \stmt -> do
+        liftIO $ bind stmt [PersistInt64 $ fromIntegral k]
+        res <- liftIO $ step stmt
+        case res of
+            Done -> return Nothing
+            Row -> do
+                (_:vals) <- liftIO $ columns stmt
+                return $ fromPersistValues vals
 
-class HasFilter a where
-    filterClause :: a -> String
-    filterData :: a -> SqlValue
-class HasOrder a where
-    orderClause :: a -> String
-
+{- FIXME
 degen :: [Clause] -> Q [Clause]
 degen [] = do
     err <- [|error "Degenerate case, should never happen"|]
     return [Clause [WildP] (NormalB err) []]
 degen x = return x
+-}
 
-mkFilterClause :: Table -> Q [Clause]
-mkFilterClause t = do
-    degen $ concatMap (concatMap go . filtsToList) $ tableFilters t
-  where
-    go (field, comp) =
-        if snd $ ty field then goNull field comp else goNotNull field comp
-    goNotNull field comp =
-        [Clause
-          [ConP (mkName $ tableName t ++ upperFirst field ++ comp) [WildP]]
-          (NormalB $ LitE $ StringL $ field ++ comp' comp ++ "?")
-          []]
-    goNull field comp@"Eq" =
-        [ Clause
-          [ConP (mkName $ tableName t ++ upperFirst field ++ comp)
-                [ConP (mkName "Nothing") []]]
-          (NormalB $ LitE $ StringL $ concat
-            [ "(", field, comp' comp, "?", " OR ", field, " IS NULL)"
-            ])
-          []
-        , Clause
-          [ConP (mkName $ tableName t ++ upperFirst field ++ comp) [WildP]]
-          (NormalB $ LitE $ StringL $ field ++ comp' comp ++ "?")
-          []
-        ]
-    -- FIXME evil copy-and-paste
-    goNull field comp@"Ne" =
-        [ Clause
-          [ConP (mkName $ tableName t ++ upperFirst field ++ comp)
-                [ConP (mkName "Nothing") []]]
-          (NormalB $ LitE $ StringL $ concat
-            [ "(", field, comp' comp, "?", " OR ", field, " IS NOT NULL)"
-            ])
-          []
-        , Clause
-          [ConP (mkName $ tableName t ++ upperFirst field ++ comp) [WildP]]
-          (NormalB $ LitE $ StringL $ field ++ comp' comp ++ "?")
-          []
-        ]
-    goNull _ _ = error "goNull called badly"
-    ty = fromJust . flip lookup (tableColumns t)
-    comp' "Eq" = "="
-    comp' "Ne" = "<>"
-    comp' "Lt" = "<"
-    comp' "Gt" = ">"
-    comp' "Le" = "<="
-    comp' "Ge" = ">="
-    comp' x = error $ "Invalid comparison: " ++ x
-
-mkFilterData :: Table -> Q [Clause]
-mkFilterData t = do
-    ts <- [|toSql|]
-    degen $ concatMap (map (go ts) . filtsToList) $ tableFilters t
-  where
-    go ts (field, comp) =
-        Clause [ConP (mkName $ tableName t ++ upperFirst field ++ comp) [VarP $ mkName "x"]]
-               (NormalB $ ts `AppE` VarE (mkName "x"))
-               []
-
-mkOrderClause :: Table -> Q [Clause]
-mkOrderClause t = do
-    degen $ concatMap go $ tableOrders t
-  where
-    go (field, asc, desc) =
-        (if asc then (:) (go' field "Asc" "") else id)
-      $ (if desc then (:) (go' field "Desc" " DESC") else id) []
-    go' field suf sql =
-        Clause [ConP (mkName $ tableName t ++ upperFirst field ++ suf) []]
-               (NormalB $ LitE $ StringL $ field ++ sql)
-               []
-
-select :: SqlValues val => Num key => MonadIO m
-       => HasFilter (Filter val)
-       => HasOrder (Order val)
+select :: FromPersistValues val => Num key => MonadCatchIO m
+       => Persistable (Filter val)
+       => ToFieldName (Filter val) => ToFilter (Filter val)
+       => ToFieldName (Order val) => ToOrder (Order val)
        => Table
        -> [Filter val]
        -> [Order val]
@@ -337,19 +282,48 @@ select t filts ords = do
                 else " ORDER BY " ++
                      intercalate "," (map orderClause ords)
     let sql = "SELECT * FROM " ++ tableName t ++ wher ++ ord
-    conn <- ask
-    stmt <- liftIO $ prepare conn sql
-    _ <- liftIO $ execute stmt $ map filterData filts
-    rows <- liftIO $ fetchAllRows' stmt
-    return $ mapMaybe fromSqlValues' rows
+    withStmt sql $ \stmt -> do
+        liftIO $ bind stmt $ map toPersistValue filts
+        liftIO $ go stmt id
   where
-    fromSqlValues' (x:xs) = do
-        x' <- fromSql' x
-        xs' <- fromSqlValues xs
-        return (fromInteger x', xs')
-    fromSqlValues' [] = Nothing
+    orderClause o = toFieldName o ++ case toOrder o of
+                                        Asc -> ""
+                                        Desc -> " DESC"
+    fromPersistValues' (PersistInt64 x:xs) = do
+        xs' <- fromPersistValues xs
+        return (fromIntegral x, xs')
+    fromPersistValues' _ = Nothing
+    go stmt front = do
+        res <- step stmt
+        case res of
+            Done -> return $ front []
+            Row -> do
+                vals <- columns stmt
+                let mrow = fromPersistValues' vals
+                case mrow of
+                    Nothing -> go stmt front
+                    Just row -> go stmt $ front . (:) row
 
-deleteWhere :: (HasFilter (Filter v), MonadIO m)
+filterClause :: (ToFilter f, ToFieldName f) => f -> String
+filterClause f = toFieldName f ++ showSqlFilter (toFilter f) ++ "?" -- FIXME NULL
+  where
+    showSqlFilter Eq = "="
+    showSqlFilter Ne = "<>"
+    showSqlFilter Gt = ">"
+    showSqlFilter Lt = "<"
+    showSqlFilter Ge = ">="
+    showSqlFilter Le = "<="
+
+delete :: (Integral (Key v), MonadCatchIO m)
+       => Table -> Key v -> SqliteReader m ()
+delete t k =
+    withStmt ("DELETE FROM " ++ tableName t ++ " WHERE id=?") $ \del -> do
+        liftIO $ bind del [PersistInt64 $ fromIntegral k]
+        Done <- liftIO $ step del
+        return ()
+
+deleteWhere :: (MonadCatchIO m, Persistable (Filter v), ToFilter (Filter v),
+                ToFieldName (Filter v))
             => Table -> [Filter v] -> SqliteReader m ()
 deleteWhere t filts = do
     let wher = if null filts
@@ -357,65 +331,38 @@ deleteWhere t filts = do
                 else " WHERE " ++
                      intercalate " AND " (map filterClause filts)
         sql = "DELETE FROM " ++ tableName t ++ wher
-    conn <- ask
-    del <- liftIO $ prepare conn sql
-    _ <- liftIO $ execute del $ map filterData filts
-    return ()
+    withStmt sql $ \del -> liftIO $ do
+        bind del $ map toPersistValue filts
+        Done <- step del
+        return ()
 
-delete :: (Integral (Key v), MonadIO m)
-       => Table -> Key v -> SqliteReader m ()
-delete t k = do
-    let sql = "DELETE FROM " ++ tableName t ++ " WHERE id=?"
-    conn <- ask
-    del <- liftIO $ prepare conn sql
-    _ <- liftIO $ execute del [SqlInteger $ fromIntegral k]
-    return ()
-
-deleteBy :: (HasUnique (Unique v), MonadIO m)
+deleteBy :: (MonadCatchIO m, ToPersistables (Unique v), ToFieldNames (Unique v))
          => Table -> Unique v -> SqliteReader m ()
 deleteBy t uniq = do
-    let sql = "DELETE FROM " ++ tableName t ++ " WHERE " ++ uniqueClause uniq
-    conn <- ask
-    del <- liftIO $ prepare conn sql
-    _ <- liftIO $ execute del $ uniqueData uniq
-    return ()
+    let sql = "DELETE FROM " ++ tableName t ++ " WHERE " ++
+              intercalate " AND " (map (++ "=?") $ toFieldNames uniq)
+    withStmt sql $ \del -> liftIO $ do
+        bind del $ map toPersistValue $ toPersistables uniq
+        Done <- step del
+        return ()
 
-class HasUpdate a where
-    updateClause :: a -> String
-    updateData :: a -> SqlValue
-
-mkUpdateClause :: Table -> Q [Clause]
-mkUpdateClause t = do
-    degen $ map go $ tableUpdates t
-  where
-    go field =
-        Clause [ConP (mkName $ tableName t ++ upperFirst field) [WildP]]
-               (NormalB $ LitE $ StringL $ field ++ "=?")
-               []
-
-mkUpdateData :: Table -> Q [Clause]
-mkUpdateData t = do
-    ts <- [|toSql|]
-    degen $ map (go ts) $ tableUpdates t
-  where
-    go ts field =
-        Clause [ConP (mkName $ tableName t ++ upperFirst field) [VarP $ mkName "x"]]
-               (NormalB $ ts `AppE` VarE (mkName "x"))
-               []
-
-update :: (Integral (Key v), HasUpdate (Update v), MonadIO m)
+update :: (Integral (Key v), MonadCatchIO m, Persistable (Update v),
+           ToFieldName (Update v))
        => Table -> Key v -> [Update v] -> SqliteReader m ()
 update _ _ [] = return ()
 update t k upds = do
     let sql = "UPDATE " ++ tableName t ++ " SET " ++
-              intercalate "," (map updateClause upds) ++
+              intercalate "," (map (++ "=?") $ map toFieldName upds) ++
               " WHERE id=?"
-    conn <- ask
-    up <- liftIO $ prepare conn sql
-    _ <- liftIO $ execute up $ map updateData upds ++ [SqlInteger $ fromIntegral k]
-    return ()
+    withStmt sql $ \up -> liftIO $ do
+        bind up $ map toPersistValue upds ++
+                  [PersistInt64 $ fromIntegral k]
+        Done <- step up
+        return ()
 
-updateWhere :: (HasFilter (Filter v), HasUpdate (Update v), MonadIO m)
+updateWhere :: (MonadCatchIO m, Persistable (Filter v), Persistable (Update v),
+                ToFieldName (Update v), ToFilter (Filter v),
+                ToFieldName (Filter v))
             => Table -> [Filter v] -> [Update v] -> SqliteReader m ()
 updateWhere _ _ [] = return ()
 updateWhere t filts upds = do
@@ -424,19 +371,16 @@ updateWhere t filts upds = do
                 else " WHERE " ++
                      intercalate " AND " (map filterClause filts)
     let sql = "UPDATE " ++ tableName t ++ " SET " ++
-              intercalate "," (map updateClause upds) ++ wher
-    let dat = map updateData upds ++ map filterData filts
-    conn <- ask
-    up <- liftIO $ prepare conn sql
-    _ <- liftIO $ execute up dat
-    return ()
+              intercalate "," (map (++ "=?") $ map toFieldName upds) ++ wher
+    let dat = map toPersistValue upds ++ map toPersistValue filts
+    withStmt sql $ \up -> liftIO $ do
+        bind up dat
+        Done <- step up
+        return ()
 
-class HasUnique a where
-    uniqueClause :: a -> String
-    uniqueData :: a -> [SqlValue]
-
+    {- FIXME
 mkUniqueClause :: Table -> Q [Clause]
-mkUniqueClause t = do
+mkUniqueClause t = do error "FIXME"
     degen $ map go $ tableUniques t
   where
     go (constr, fields) =
@@ -445,7 +389,7 @@ mkUniqueClause t = do
                []
 
 mkUniqueData :: Table -> Q [Clause]
-mkUniqueData t = do
+mkUniqueData t = do error "FIXME"
     ts <- [|toSql|]
     mapM (go ts) (tableUniques t) >>= degen
   where
@@ -455,19 +399,28 @@ mkUniqueData t = do
         return $ Clause [ConP (mkName constr) $ map VarP xs]
                  (NormalB $ ListE xs')
                  []
+    -}
 
-getBy :: (HasUnique (Unique v), Num (Key v), SqlValues v, MonadIO m)
+getBy :: (Num (Key v), FromPersistValues v, MonadCatchIO m,
+          ToPersistables (Unique v), ToFieldNames (Unique v))
       => Table -> Unique v -> SqliteReader m (Maybe (Key v, v))
 getBy t uniq = do
-    let sql = "SELECT * FROM " ++ tableName t ++ " WHERE " ++ uniqueClause uniq
+    let sql = "SELECT * FROM " ++ tableName t ++ " WHERE " ++ sqlClause
+    withStmt sql $ \stmt -> do
+        liftIO $ bind stmt $ toPersistValues uniq
+        res <- liftIO $ step stmt
+        case res of
+            Done -> return Nothing
+            Row -> do
+                PersistInt64 k:vals <- liftIO $ columns stmt
+                case fromPersistValues vals of
+                    Nothing -> return Nothing
+                    Just vals' -> return $ Just (fromIntegral k, vals')
+  where
+    sqlClause = intercalate " AND " $ map (++ "=?") $ toFieldNames uniq
+
+withStmt :: MonadCatchIO m => String -> (Statement -> SqliteReader m a)
+         -> SqliteReader m a
+withStmt sql f = do
     conn <- ask
-    stmt <- liftIO $ prepare conn sql
-    _ <- liftIO $ execute stmt $ uniqueData uniq
-    res <- liftIO $ fetchRow stmt
-    case res of
-        Just (k:vals) -> return $ do
-            k' <- fromSql' k
-            vals' <- fromSqlValues vals
-            return (fromInteger k', vals')
-        Nothing -> return Nothing
-        _ -> return Nothing
+    bracket (liftIO $ prepare conn sql) (liftIO . finalize) f
