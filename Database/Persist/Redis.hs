@@ -12,31 +12,25 @@ module Database.Persist.Redis
     , IsStrings (..)
     ) where
 
-import Database.Persist (Persist, Table (..), Key, Order, Filter, Update, Unique)
+import Database.Persist (Persist, Table (..), Key)
 import Database.Persist.Helper
 import Control.Monad.Trans.Reader
-import qualified Data.Map as Map
 import Language.Haskell.TH.Syntax hiding (lift)
 import qualified Language.Haskell.TH.Syntax as TH
-import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.IO.Class (MonadIO (..))
-import Data.Char
-import Control.Arrow (first)
-import Data.List (sortBy, intercalate)
-import Data.Maybe (mapMaybe, fromJust)
+import Data.Maybe (mapMaybe)
 import "MonadCatchIO-transformers" Control.Monad.CatchIO
-import Control.Applicative (Applicative)
-import Data.Convertible (Convertible (..))
 import Control.Monad
 import qualified Database.Redis.Redis as R
 import Data.Attempt
 import Data.Convertible.Text
 import Data.Typeable
-import Control.Exception (Exception)
 import Safe
 
+persistRedis :: [Table] -> Q [Dec]
 persistRedis = fmap concat . mapM derive
 
+runRedis :: RedisReader m a -> R.Redis -> m a
 runRedis = runReaderT
 
 type RedisReader = ReaderT R.Redis
@@ -46,7 +40,8 @@ class IsStrings a where
     fromStrings :: [String] -> Attempt a
 
 derive :: Table -> Q [Dec]
-derive t@(Table name cols upda filts ords uni) = do
+derive t = do
+    let name = tableName t
     let dt = dataTypeDec t
     let monad = ConT ''RedisReader `AppT` VarT (mkName "m")
 
@@ -83,11 +78,11 @@ derive t@(Table name cols upda filts ords uni) = do
           InstanceD
             [ClassP ''MonadCatchIO [VarT $ mkName "m"]]
             (ConT ''Persist `AppT` ConT (mkName name) `AppT` monad)
-            [ keyTypeDec (name ++ "Id") "Integer" t monad
-            , filterTypeDec t monad
-            , updateTypeDec t monad
-            , orderTypeDec t monad
-            , uniqueTypeDec t monad
+            [ keyTypeDec (name ++ "Id") "Integer" t
+            , filterTypeDec t
+            , updateTypeDec t
+            , orderTypeDec t
+            , uniqueTypeDec t
             , mkFun "initialize" $ init'
             , mkFun "select" $ select'
             , mkFun "insert" $ insert'
@@ -135,8 +130,11 @@ mkFromStrings t = do
   where
     go ap' x y = InfixE (Just x) ap' (Just y)
 
+initialize :: Monad m => x -> y -> m ()
 initialize _ _ = return ()
 
+select :: (IsStrings v, Num (Key v), MonadIO m)
+       => Table -> x -> y -> RedisReader m [(Key v, v)]
 select t _ _ = do
     r <- ask
     R.RMulti (Just s) <- liftIO $ R.smembers r (tableName t ++ ":all")
@@ -150,12 +148,14 @@ select t _ _ = do
         v'' <- fa $ fromStrings v'
         return (fromIntegral k, v'')
 
+insert :: (IsStrings a, MonadIO m, Num (Key a))
+       => Table -> a -> RedisReader m (Key a)
 insert t val = do
     let val' = show $ toStrings val
     r <- ask
     R.RInt i <- liftIO $ R.incr r $ "global:" ++ tableName t ++ ":nextId"
     liftIO $ print i
-    liftIO $ R.set r (tableName t ++ ":id:" ++ show i) val'
+    _ <- liftIO $ R.set r (tableName t ++ ":id:" ++ show i) val'
     --R.set r (tableName t ++ ":slug:" ++ show i) i
-    liftIO $ R.sadd r (tableName t ++ ":all") i
+    _ <- liftIO $ R.sadd r (tableName t ++ ":all") i
     return $ fromIntegral i

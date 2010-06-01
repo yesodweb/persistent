@@ -24,6 +24,8 @@ nest :: [(Bool, [String])] -> [(String, [[String]])]
 nest ((False, [name]):rest) =
     let (x, y) = break (not . fst) rest
      in (name, map snd x) : nest y
+nest ((False, _):_) = error "First line in block must have exactly one word"
+nest ((True, _):_) = error "Blocks must begin with non-indented lines"
 nest [] = []
 
 parse' :: (String, [[String]]) -> Table
@@ -41,12 +43,12 @@ takeCols (n@(f:_):ty:rest)
 takeCols _ = []
 
 takeUpds :: [String] -> [String]
-takeUpds (n@(f:_):ty:rest)
+takeUpds (n@(f:_):_ty:rest)
     | isLower f && "update" `elem` rest = [n]
 takeUpds _ = []
 
 takeFilts :: [String] -> [(String, Bool, Bool, Bool, Bool, Bool, Bool)]
-takeFilts (n@(f:_):ty:rest)
+takeFilts (n@(f:_):_ty:rest)
     | isLower f = [(n, "Eq" `elem` rest
                      , "Ne" `elem` rest
                      , "Gt" `elem` rest
@@ -56,16 +58,18 @@ takeFilts (n@(f:_):ty:rest)
                      )]
 takeFilts _ = []
 
+notAllFalse :: (String, Bool, Bool, Bool, Bool, Bool, Bool) -> Bool
 notAllFalse (_, False, False, False, False, False, False) = False
 notAllFalse _ = True
 
 takeOrds :: [String] -> [(String, Bool, Bool)]
-takeOrds (n@(f:_):ty:rest)
+takeOrds (n@(f:_):_ty:rest)
     | isLower f = [(n, "Asc" `elem` rest
                      , "Desc" `elem` rest
                      )]
 takeOrds _ = []
 
+notAllFalse' :: (String, Bool, Bool) -> Bool
 notAllFalse' (_, False, False) = False
 notAllFalse' _ = True
 

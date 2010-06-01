@@ -35,15 +35,15 @@ dataTypeDec t =
   where
     mkCol x (n, ty) = (mkName $ recName x n, NotStrict, pairToType ty)
 
-keyTypeDec :: String -> String -> Table -> Type -> Dec
-keyTypeDec constr typ t monad =
+keyTypeDec :: String -> String -> Table -> Dec
+keyTypeDec constr typ t =
     NewtypeInstD [] ''Key [ConT $ mkName $ tableName t]
                 (NormalC (mkName constr) [(NotStrict, ConT $ mkName typ)])
                 [''Show, ''Read, ''Num, ''Integral, ''Enum, ''Eq, ''Ord,
                  ''Real]
 
-filterTypeDec :: Table -> Type -> Dec
-filterTypeDec t monad =
+filterTypeDec :: Table -> Dec
+filterTypeDec t =
     DataInstD [] ''Filter [ConT $ mkName $ tableName t]
             (concatMap (mkFilter (tableName t) (tableColumns t))
               $ tableFilters t)
@@ -61,8 +61,8 @@ mkFilter x cols filts = map go $ filtsToList filts
                 Nothing -> error $ "Invalid column: " ++ s
                 Just ty' -> ty'
 
-updateTypeDec :: Table -> Type -> Dec
-updateTypeDec t monad =
+updateTypeDec :: Table -> Dec
+updateTypeDec t =
     DataInstD [] ''Update [ConT $ mkName $ tableName t]
         (map (mkUpdate (tableName t) (tableColumns t)) (tableUpdates t))
         (if null (tableUpdates t) then [] else [''Show, ''Read, ''Eq])
@@ -76,8 +76,8 @@ mkUpdate x cols s =
                 Nothing -> error $ "Invalid column: " ++ s
                 Just ty' -> ty'
 
-orderTypeDec :: Table -> Type -> Dec
-orderTypeDec t monad =
+orderTypeDec :: Table -> Dec
+orderTypeDec t =
     DataInstD [] ''Order [ConT $ mkName $ tableName t]
             (concatMap (mkOrder $ tableName t) (tableOrders t))
             (if null (tableOrders t) then [] else [''Show, ''Read, ''Eq])
@@ -89,8 +89,8 @@ mkOrder x (s, a, d) =
   where
     go ad = NormalC (mkName $ x ++ upperFirst s ++ ad) []
 
-uniqueTypeDec :: Table -> Type -> Dec
-uniqueTypeDec t monad =
+uniqueTypeDec :: Table -> Dec
+uniqueTypeDec t =
     DataInstD [] ''Unique [ConT $ mkName $ tableName t]
             (map (mkUnique t) $ tableUniques t)
             (if null (tableUniques t) then [] else [''Show, ''Read, ''Eq])

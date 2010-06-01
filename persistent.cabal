@@ -26,14 +26,14 @@ library
                      redis >= 0.6 && < 0.7,
                      attempt >= 0.3.0 && < 0.4,
                      convertible-text >= 0.3.0 && < 0.4,
-                     safe >= 0.2 && < 0.3
+                     safe >= 0.2 && < 0.3,
+                     time >= 1.1.4 && < 1.2
     exposed-modules: Database.Persist
                      Database.Persist.Helper
                      Database.Persist.Quasi
                      Database.Persist.Redis
-                     Database.Persist.Sqlite3
-                     Database.Persist.State
-    ghc-options:     -Wall
+                     Database.Persist.Sqlite
+    ghc-options:     -Wall -Werror
 
 source-repository head
   type:     git
