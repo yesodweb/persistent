@@ -3,7 +3,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Database.Persist
     ( -- * High level design
@@ -13,16 +13,6 @@ module Database.Persist
     , PersistValue (..)
     , SqlType (..)
     , Persistable (..)
-    , SomePersistable (..)
-    , ToPersistables (..)
-    , FromPersistValues (..)
-    , toPersistValues
-    , ToFieldNames (..)
-    , ToOrder (..)
-    , PersistOrder (..)
-    , ToFieldName (..)
-    , PersistFilter (..)
-    , ToFilter (..)
       -- * Type class
     , Persist (..)
     ) where
@@ -83,36 +73,8 @@ class Persistable a where
     toPersistValue :: a -> PersistValue
     fromPersistValue :: PersistValue -> Either String a
     sqlType :: a -> SqlType
-
-data SomePersistable = forall a. Persistable a => SomePersistable a
-instance Persistable SomePersistable where
-    toPersistValue (SomePersistable a) = toPersistValue a
-    fromPersistValue x = fmap SomePersistable (fromPersistValue x :: Either String String)
-    sqlType (SomePersistable a) = sqlType a
-
-class ToPersistables a where
-    toPersistables :: a -> [SomePersistable]
-    mostlyUndefined :: a
-
-class FromPersistValues a where
-    fromPersistValues :: [PersistValue] -> Maybe a
-
-toPersistValues :: ToPersistables a => a -> [PersistValue]
-toPersistValues = map toPersistValue . toPersistables
-
-class ToFieldNames a where
-    toFieldNames :: a -> [String]
-
-class ToFieldName a where
-    toFieldName :: a -> String
-
-data PersistOrder = Asc | Desc
-class ToOrder a where
-    toOrder :: a -> PersistOrder
-
-data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le
-class ToFilter a where
-    toFilter :: a -> PersistFilter
+    isNullable :: a -> Bool
+    isNullable _ = False
 
 instance Persistable String where
     toPersistValue = PersistString
@@ -142,6 +104,21 @@ instance Persistable Integer where
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ "Expected Integer, received: " ++ show x
     sqlType _ = SqlInteger
+
+instance Persistable Int where
+    toPersistValue = PersistInteger . fromIntegral
+    fromPersistValue (PersistInteger i) = Right $ fromInteger i
+    fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
+    fromPersistValue x = Left $ "Expected Integer, received: " ++ show x
+    sqlType _ = SqlInteger
+
+instance Persistable a => Persistable (Maybe a) where
+    toPersistValue Nothing = PersistNull
+    toPersistValue (Just a) = toPersistValue a
+    fromPersistValue PersistNull = Right Nothing
+    fromPersistValue x = fmap Just $ fromPersistValue x
+    sqlType _ = sqlType (undefined :: a)
+    isNullable _ = True
 
 class Monad m => Persist val m where
     data Key    val

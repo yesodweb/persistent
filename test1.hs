@@ -3,15 +3,13 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 import Prelude hiding (filter)
 import Database.Persist
-import Database.Persist.State
 import Database.Persist.Sqlite
 import Control.Monad.IO.Class
-import qualified Data.Map as Map
-import Database.HDBC.Sqlite3 (connectSqlite3)
 
-derivePersistSqlite3 $ Table "Person"
+persistSqlite [Table "Person"
     [ ("name", ("String", False))
     , ("age", ("Int", False))
     , ("color", ("String", True))
@@ -24,14 +22,11 @@ derivePersistSqlite3 $ Table "Person"
     [ ("name", False, True)
     , ("age", True, False)
     ]
-    [("PersonNameKey", ["name"])]
+    [("PersonNameKey", ["name"])]]
 
 deriving instance Show Person
 
-main = do
-    --evalPersistState go (Map.empty :: Map.Map Int Person)
-    conn <- connectSqlite3 "test.db3"
-    runSqlite3 go conn
+main = withSqlite "test.db3" $ runSqlite go
 
 go = do
     initialize (undefined :: Person)

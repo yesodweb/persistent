@@ -11,7 +11,18 @@ cabal-version:   >= 1.6
 build-type:      Simple
 homepage:        http://github.com/snoyberg/persistent/
 
+flag nolib
+  description: Skip building the library
+  default: False
+flag buildtests
+  description: Build the executable to run unit tests
+  default: False
+
 library
+    if flag(nolib)
+        Buildable: False
+    else
+        Buildable: True
     build-depends:   base >= 4 && < 5,
                      template-haskell >= 2.4 && < 2.5,
                      bytestring >= 0.9.1 && < 0.10,
@@ -37,6 +48,29 @@ library
                      Database.Sqlite
     ghc-options:     -Wall
     c-sources:       cbits/sqlite3.c
+
+executable           test1
+    if flag(buildtests)
+        Buildable: True
+        build-depends:   base >= 4 && < 5,
+                         template-haskell >= 2.4 && < 2.5,
+                         bytestring >= 0.9.1 && < 0.10,
+                         data-object-yaml >= 0.3.0 && < 0.4,
+                         data-object >= 0.3.1 && < 0.4,
+                         convertible >= 1.0.9 && < 1.1,
+                         transformers >= 0.2.1 && < 0.3,
+                         containers >= 0.2 && < 0.4,
+                         MonadCatchIO-transformers >= 0.2.2 && < 0.3,
+                         redis >= 0.6 && < 0.7,
+                         attempt >= 0.3.0 && < 0.4,
+                         convertible-text >= 0.3.0 && < 0.4,
+                         safe >= 0.2 && < 0.3,
+                         time >= 1.1.4 && < 1.2,
+                         utf8-string >= 0.3.6 && < 0.4
+    else
+        Buildable: False
+    Extra-Libraries: sqlite3
+    main-is:         test1.hs
 
 source-repository head
   type:     git

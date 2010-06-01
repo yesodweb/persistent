@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE ExistentialQuantification #-}
 module Database.Persist.Helper
     ( recName
     , upperFirst
@@ -6,9 +7,28 @@ module Database.Persist.Helper
     , keyTypeDec
     , filterTypeDec
     , filtsToList
+    , ordsToList
     , updateTypeDec
     , orderTypeDec
     , uniqueTypeDec
+      -- * TH helpers
+    , mkToPersistables
+    , mkToFieldNames
+    , mkToFieldName
+    , mkPersistable
+    , mkToFilter
+    , mkToOrder
+      -- * Type classes
+    , SomePersistable (..)
+    , ToPersistables (..)
+    , FromPersistValues (..)
+    , toPersistValues
+    , ToFieldNames (..)
+    , ToOrder (..)
+    , PersistOrder (..)
+    , ToFieldName (..)
+    , PersistFilter (..)
+    , ToFilter (..)
     ) where
 
 import Database.Persist
@@ -112,6 +132,109 @@ filtsToList (s, a, b, c, d, e, f)
     go ((_, False):rest) = go rest
     go ((x, True):rest) = (s, x) : go rest
 
+ordsToList :: (String, Bool, Bool) -> [(String, String)]
+ordsToList (s, a, b) = go $ zip ["Asc", "Desc"] [a, b]
+  where
+    go [] = []
+    go ((_, False):rest) = go rest
+    go ((x, True):rest) = (s, x) : go rest
+
 pairToType :: (String, Bool) -> Type
 pairToType (s, False) = ConT $ mkName s
 pairToType (s, True) = ConT (mkName "Maybe") `AppT` ConT (mkName s)
+
+data SomePersistable = forall a. Persistable a => SomePersistable a
+instance Persistable SomePersistable where
+    toPersistValue (SomePersistable a) = toPersistValue a
+    fromPersistValue x = fmap SomePersistable (fromPersistValue x :: Either String String)
+    sqlType (SomePersistable a) = sqlType a
+
+class ToPersistables a where
+    toPersistables :: a -> [SomePersistable]
+
+mkToPersistables :: Type
+                 -> [(String, Int)]
+                 -> Q Dec
+mkToPersistables typ pairs = do
+    clauses <- mapM mkToPersistables' pairs -- FIXME degen
+    return $ InstanceD [] (ConT ''ToPersistables `AppT` typ)
+                [FunD (mkName "toPersistables") clauses]
+
+mkToPersistables' :: (String, Int) -> Q Clause
+mkToPersistables' (constr, fields) = do
+    xs <- sequence $ replicate fields $ newName "x"
+    let pat = ConP (mkName constr) $ map VarP xs
+    sp <- [|SomePersistable|]
+    let bod = ListE $ map (AppE sp . VarE) xs
+    return $ Clause [pat] (NormalB bod) []
+
+class FromPersistValues a where
+    fromPersistValues :: [PersistValue] -> Maybe a
+
+toPersistValues :: ToPersistables a => a -> [PersistValue]
+toPersistValues = map toPersistValue . toPersistables
+
+class ToFieldNames a where
+    toFieldNames :: a -> [String]
+
+mkToFieldNames :: Type -> [(String, [String])] -> Dec
+mkToFieldNames typ pairs =
+    InstanceD [] (ConT ''ToFieldNames `AppT` typ)
+        [FunD (mkName "toFieldNames") $ map go pairs]
+  where
+    go (constr, names) =
+        Clause [RecP (mkName constr) []]
+               (NormalB $ ListE $ map (LitE . StringL) names)
+               []
+
+class ToFieldName a where
+    toFieldName :: a -> String
+
+mkToFieldName :: Type -> [(String, String)] -> Dec
+mkToFieldName typ pairs =
+    InstanceD [] (ConT ''ToFieldName `AppT` typ)
+        [FunD (mkName "toFieldName") $ map go pairs]
+  where
+    go (constr, name) =
+        Clause [RecP (mkName constr) []] (NormalB $ LitE $ StringL name) []
+
+data PersistOrder = Asc | Desc
+class ToOrder a where
+    toOrder :: a -> PersistOrder
+
+mkToOrder :: Type -> [(String, String)] -> Dec
+mkToOrder typ pairs =
+    InstanceD [] (ConT ''ToOrder `AppT` typ)
+        [FunD (mkName "toOrder") $ map go pairs]
+  where
+    go (constr, val) =
+        Clause [RecP (mkName constr) []] (NormalB $ ConE $ mkName val) []
+
+data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le
+class ToFilter a where
+    toFilter :: a -> PersistFilter
+
+mkToFilter :: Type -> [(String, String)] -> Dec
+mkToFilter typ pairs =
+    InstanceD [] (ConT ''ToFilter `AppT` typ)
+        [FunD (mkName "toFilter") $ map go pairs]
+  where
+    go (constr, val) =
+        Clause [RecP (mkName constr) []] (NormalB $ ConE $ mkName val) []
+
+mkPersistable :: Type -> [String] -> Dec
+mkPersistable typ constrs =
+    InstanceD [] (ConT ''Persistable `AppT` typ)
+        $ map go
+            [ "toPersistValue"
+            , "fromPersistValue"
+            , "sqlType"
+            , "isNullable"
+            ]
+  where
+    go func = FunD (mkName func) $ map (go' func) constrs
+    go' func constr =
+        let x = mkName "x"
+         in Clause [ConP (mkName constr) [VarP x]]
+                   (NormalB $ VarE (mkName func) `AppE` VarE x)
+                   []

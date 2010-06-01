@@ -11,14 +11,13 @@ module Database.Persist.Sqlite
     , close
     , withSqlite
     , persistSqlite
+    , Int64
+    , module Database.Persist.Helper
     ) where
 
 import Database.Persist (Persist, Table (..), Key, Order, Filter, Update,
-                         Unique, PersistValue (..), Persistable (..),
-                         SqlType (..), ToPersistables (..), ToFieldNames (..),
-                         FromPersistValues (..), toPersistValues, ToOrder (..),
-                         PersistOrder (..), ToFieldName (..),
-                         PersistFilter (..), ToFilter (..))
+                         Unique, SqlType (..), PersistValue (..),
+                         Persistable (..))
 import Database.Persist.Helper
 import Control.Monad.Trans.Reader
 import Language.Haskell.TH.Syntax hiding (lift)
@@ -28,6 +27,7 @@ import Data.List (intercalate)
 import "MonadCatchIO-transformers" Control.Monad.CatchIO
 import Control.Monad (ap, when)
 import Database.Sqlite
+import Data.Int (Int64)
 
 persistSqlite :: [Table] -> Q [Dec]
 persistSqlite = fmap concat . mapM derivePersistSqliteReader
@@ -58,56 +58,8 @@ derivePersistSqliteReader t = do
     fsv <- mkFromPersistValues t
     let sq =
           InstanceD [] (ConT ''FromPersistValues `AppT` ConT (mkName name))
-            [ FunD (mkName "toPersistValues") [tsv]
-            , FunD (mkName "fromPersistValues") fsv
+            [ FunD (mkName "fromPersistValues") fsv
             ]
-
-    {-
-    fc <- mkFilterClause t
-    fd <- mkFilterData t
-    let hf =
-          InstanceD [] (ConT ''HasFilter `AppT`
-                        (ConT ''Filter `AppT` ConT (mkName name)))
-            [ FunD (mkName "filterClause") fc
-            , FunD (mkName "filterData") fd
-            ]
-
-    oc <- mkOrderClause t
-    let ho =
-          InstanceD [] (ConT ''HasOrder `AppT`
-                        (ConT ''Order `AppT` ConT (mkName name)))
-            [FunD (mkName "orderClause") oc]
-
-    uc <- mkUpdateClause t
-    ud <- mkUpdateData t
-    let hu =
-          InstanceD [] (ConT ''HasUpdate `AppT`
-                        (ConT ''Update `AppT` ConT (mkName name)))
-            [ FunD (mkName "updateClause") uc
-            , FunD (mkName "updateData") ud
-            ]
-
-    unc <- mkUniqueClause t
-    und <- mkUniqueData t
-    let hun =
-          InstanceD [] (ConT ''HasUnique `AppT`
-                        (ConT ''Unique `AppT` ConT (mkName name)))
-            [ FunD (mkName "uniqueClause") unc
-            , FunD (mkName "uniqueData") und
-            ]
-
-    fromsql <- [|either Left (Right . fromInteger) . safeConvert|]
-    let c1 =
-          InstanceD [] (ConT ''Convertible `AppT` ConT ''PersistValue `AppT`
-                        (ConT ''Key `AppT` ConT (mkName name)))
-            [FunD (mkName "safeConvert") [Clause [] (NormalB fromsql) []]]
-    tosql <- [|Right . PersistInt64 . fromIntegral|]
-    let c2 =
-          InstanceD [] (ConT ''Convertible `AppT`
-                        (ConT ''Key `AppT` ConT (mkName name))
-                        `AppT` ConT ''PersistValue)
-            [FunD (mkName "safeConvert") [Clause [] (NormalB tosql) []]]
-    -}
 
     let keysyn = TySynD (mkName $ name ++ "Id") [] $
                     ConT ''Key `AppT` ConT (mkName name)
@@ -150,7 +102,43 @@ derivePersistSqliteReader t = do
             , mkFun "update" $ update'
             , mkFun "updateWhere" $ updateWhere'
             ]
-    return [dt, sq, {-hf, ho, hu, hun, -} inst, {- FIXME c1, c2, -} keysyn]
+
+    tops <- mkToPersistables (ConT $ mkName name)
+                [(name, length $ tableColumns t)]
+    topsUn <- mkToPersistables (ConT ''Unique `AppT` ConT (mkName name))
+            $ map (\(x, y) -> (x, length y))
+            $ tableUniques t
+
+    return
+        [ dt, sq, inst, keysyn, tops, topsUn
+        , mkToFieldName (ConT ''Update `AppT` ConT (mkName name))
+                $ map (\s -> (name ++ upperFirst s, s))
+                $ tableUpdates t
+        , mkPersistable (ConT ''Update `AppT` ConT (mkName name))
+                $ map (\s -> name ++ upperFirst s) $ tableUpdates t
+        , mkToFieldNames (ConT ''Unique `AppT` ConT (mkName name))
+                $ tableUniques t
+        , mkPersistable (ConT ''Filter `AppT` ConT (mkName name))
+                $ map (\(x, y) -> name ++ upperFirst x ++ y)
+                $ concatMap filtsToList
+                $ tableFilters t
+        , mkToFieldName (ConT ''Filter `AppT` ConT (mkName name))
+                $ map (\(x, y) -> (name ++ upperFirst x ++ y, x))
+                $ concatMap filtsToList
+                $ tableFilters t
+        , mkToFilter (ConT ''Filter `AppT` ConT (mkName name))
+                $ map (\(x, y) -> (name ++ upperFirst x ++ y, y))
+                $ concatMap filtsToList
+                $ tableFilters t
+        , mkToFieldName (ConT ''Order `AppT` ConT (mkName name))
+                $ map (\(x, y) -> (name ++ upperFirst x ++ y, x))
+                $ concatMap ordsToList
+                $ tableOrders t
+        , mkToOrder (ConT ''Order `AppT` ConT (mkName name))
+                $ map (\(x, y) -> (name ++ upperFirst x ++ y, y))
+                $ concatMap ordsToList
+                $ tableOrders t
+        ]
 
 initialize :: (ToPersistables v, MonadCatchIO m)
            => Table -> v -> SqliteReader m ()
@@ -170,7 +158,7 @@ initialize t v = withStmt getTableSql $ \getTable -> do
         [ colName
         , " "
         , showSqlType $ sqlType p
-        , if nullable then " NULL" else " NOT NULL"
+        , if isNullable p then " NULL" else " NOT NULL"
         ]
     getTableSql = "SELECT COUNT(*) FROM sqlite_master WHERE type=? AND name=?"
     go (index, fields) = do
@@ -255,14 +243,6 @@ get t k = do
             Row -> do
                 (_:vals) <- liftIO $ columns stmt
                 return $ fromPersistValues vals
-
-{- FIXME
-degen :: [Clause] -> Q [Clause]
-degen [] = do
-    err <- [|error "Degenerate case, should never happen"|]
-    return [Clause [WildP] (NormalB err) []]
-degen x = return x
--}
 
 select :: FromPersistValues val => Num key => MonadCatchIO m
        => Persistable (Filter val)
@@ -377,29 +357,6 @@ updateWhere t filts upds = do
         bind up dat
         Done <- step up
         return ()
-
-    {- FIXME
-mkUniqueClause :: Table -> Q [Clause]
-mkUniqueClause t = do error "FIXME"
-    degen $ map go $ tableUniques t
-  where
-    go (constr, fields) =
-        Clause [ConP (mkName constr) $ map (const WildP) fields]
-               (NormalB $ LitE $ StringL $ intercalate " AND " $ map (++ "=?") fields) -- FIXME handle nulls
-               []
-
-mkUniqueData :: Table -> Q [Clause]
-mkUniqueData t = do error "FIXME"
-    ts <- [|toSql|]
-    mapM (go ts) (tableUniques t) >>= degen
-  where
-    go ts (constr, fields) = do
-        xs <- mapM (const $ newName "x") fields
-        let xs' = map (AppE ts . VarE) xs
-        return $ Clause [ConP (mkName constr) $ map VarP xs]
-                 (NormalB $ ListE xs')
-                 []
-    -}
 
 getBy :: (Num (Key v), FromPersistValues v, MonadCatchIO m,
           ToPersistables (Unique v), ToFieldNames (Unique v))
