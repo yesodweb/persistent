@@ -1,16 +1,29 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
 module Database.Persist
     ( -- * High level design
       Column
     , Table   (..)
+      -- * Values
+    , PersistValue (..)
+    , SqlType (..)
+    , Persistable (..)
       -- * Type class
     , Persist (..)
     ) where
 
 import Language.Haskell.TH.Syntax
+import Data.Time (Day, TimeOfDay, UTCTime)
+import Data.ByteString (ByteString)
+import qualified Data.ByteString.UTF8 as BSU
+import Data.Ratio (denominator, numerator)
+import Control.Applicative
+import Data.Typeable (Typeable)
+import Data.Int (Int64)
 
 -- | name, type
 type Column = (String, (String, Bool)) -- is it nullable?
@@ -34,6 +47,60 @@ instance Lift Table where
         e' <- lift e
         f' <- lift f
         return $ t `AppE` a' `AppE` b' `AppE` c' `AppE` d' `AppE` e' `AppE` f'
+
+data PersistValue = PersistString String
+                  | PersistByteString ByteString
+                  | PersistInteger Integer
+                  | PersistInt64 Int64
+                  | PersistRational Rational
+                  | PersistDouble Double
+                  | PersistDay Day
+                  | PersistTimeOfDay TimeOfDay
+                  | PersistUTCTime UTCTime
+                  | PersistNull
+    deriving (Show, Read, Eq, Typeable)
+
+data SqlType = SqlString
+             | SqlInteger
+             | SqlReal
+             | SqlDay
+             | SqlTime
+             | SqlDayTime
+             | SqlBlob
+
+class Persistable a where
+    toPersistValue :: a -> PersistValue
+    fromPersistValue :: PersistValue -> Either String a
+    sqlType :: a -> SqlType
+
+instance Persistable String where
+    toPersistValue = PersistString
+    fromPersistValue (PersistString s) = Right s
+    fromPersistValue (PersistByteString bs) = Right $ BSU.toString bs
+    fromPersistValue (PersistInteger i) = Right $ show i
+    fromPersistValue (PersistInt64 i) = Right $ show i
+    fromPersistValue (PersistRational r)
+        | denominator r == 1 = Right $ show $ numerator r
+        | otherwise = Right $ show $ (fromRational r :: Double)
+    fromPersistValue (PersistDouble d) = Right $ show d
+    fromPersistValue (PersistDay d) = Right $ show d
+    fromPersistValue (PersistTimeOfDay d) = Right $ show d
+    fromPersistValue (PersistUTCTime d) = Right $ show d
+    fromPersistValue PersistNull = Left "Unexpected null"
+    sqlType _ = SqlString
+
+instance Persistable ByteString where
+    toPersistValue = PersistByteString
+    fromPersistValue (PersistByteString bs) = Right bs
+    fromPersistValue x = BSU.fromString <$> fromPersistValue x
+    sqlType _ = SqlBlob
+
+instance Persistable Integer where
+    toPersistValue = PersistInteger
+    fromPersistValue (PersistInteger i) = Right i
+    fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
+    fromPersistValue x = Left $ "Expected Integer, received: " ++ show x
+    sqlType _ = SqlInteger
 
 class Monad m => Persist val m where
     data Key    val
