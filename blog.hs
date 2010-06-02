@@ -4,28 +4,18 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 import Yesod
 import Database.Persist
 import Database.Persist.Quasi
-import Database.Persist.Sqlite3
-import Database.HDBC.Sqlite3 (Connection, connectSqlite3)
+import Database.Persist.Sqlite
 import Data.Time (Day)
-import Data.Convertible (Convertible (..))
-import Database.HDBC (SqlValue (..))
 import Data.ByteString (ByteString)
 import Safe
 import Control.Applicative
 
-instance Convertible HtmlContent SqlValue where
-    safeConvert = Right . SqlByteString . cs . htmlContentToText
-instance Convertible SqlValue HtmlContent where
-    safeConvert x =
-        case safeConvert x of
-            Left e -> Left e
-            Right bs -> Right $ Encoded $ cs (bs :: ByteString)
-
-persistSqlite3 [$persist|
+persistSqlite [$persist|
 Entry
     slug String
     date Day Desc
@@ -34,10 +24,10 @@ Entry
     UniqueSlug slug
 |]
 
-data Blog = Blog { conn :: Connection }
+data Blog = Blog { conn :: Database }
 
-runDB :: Sqlite3 (Handler Blog) a -> Handler Blog a
-runDB x = getYesod >>= runSqlite3 x . conn
+runDB :: SqliteReader (Handler Blog) a -> Handler Blog a
+runDB x = getYesod >>= runSqlite x . conn
 
 mkYesod "Blog" [$parseRoutes|
 /                           RootR              GET
@@ -191,7 +181,6 @@ postDeleteEntryR slug = do
     redirect RedirectTemporary RootR
 
 main :: IO ()
-main = do
-    conn <- connectSqlite3 "blog.db3"
-    runSqlite3 (initialize (undefined :: Entry)) conn
+main = withSqlite "blog.db3" $ \conn -> do
+    runSqlite (initialize (halfDefined :: Entry)) conn
     toWaiApp (Blog conn) >>= basicHandler 3000

@@ -39,7 +39,9 @@ library
                      convertible-text >= 0.3.0 && < 0.4,
                      safe >= 0.2 && < 0.3,
                      time >= 1.1.4 && < 1.2,
-                     utf8-string >= 0.3.6 && < 0.4
+                     utf8-string >= 0.3.6 && < 0.4,
+                     text >= 0.7.1 && < 0.8,
+                     hamlet >= 0.2.3.1 && < 0.3
     exposed-modules: Database.Persist
                      Database.Persist.Helper
                      Database.Persist.Quasi

@@ -24,6 +24,8 @@ import qualified Data.ByteString.UTF8 as BSU
 import Control.Applicative
 import Data.Typeable (Typeable)
 import Data.Int (Int64)
+import Text.Hamlet.Monad
+import qualified Data.Text as T
 
 -- | name, type
 type Column = (String, (String, Bool)) -- is it nullable?
@@ -95,6 +97,16 @@ instance Persistable ByteString where
     fromPersistValue (PersistByteString bs) = Right bs
     fromPersistValue x = BSU.fromString <$> fromPersistValue x
     sqlType _ = SqlBlob
+
+instance Persistable T.Text where
+    toPersistValue = PersistString . T.unpack
+    fromPersistValue = fmap T.pack . fromPersistValue
+    sqlType _ = SqlString
+
+instance Persistable HtmlContent where
+    toPersistValue = PersistString . T.unpack . htmlContentToText
+    fromPersistValue = fmap Encoded . fromPersistValue
+    sqlType _ = SqlString
 
 instance Persistable Int where
     toPersistValue = PersistInt64 . fromIntegral
