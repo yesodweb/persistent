@@ -242,7 +242,9 @@ get t k = do
             Done -> return Nothing
             Row -> do
                 (_:vals) <- liftIO $ columns stmt
-                return $ either (const Nothing) Just $ fromPersistValues vals
+                case fromPersistValues vals of
+                    Left e -> error $ "get " ++ show k ++ ": " ++ e
+                    Right v -> return $ Just v
 
 select :: FromPersistValues val => Num key => MonadCatchIO m
        => Persistable (Filter val)
