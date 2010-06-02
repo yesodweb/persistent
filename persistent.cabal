@@ -47,7 +47,8 @@ library
                      Database.Persist.Sqlite
                      Database.Sqlite
     ghc-options:     -Wall
-    c-sources:       cbits/sqlite3.c
+    Extra-Libraries: sqlite3
+    --c-sources:       cbits/sqlite3.c
 
 executable           test1
     if flag(buildtests)

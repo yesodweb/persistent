@@ -19,9 +19,8 @@ module Database.Persist
 
 import Language.Haskell.TH.Syntax
 import Data.Time (Day, TimeOfDay, UTCTime)
-import Data.ByteString (ByteString)
+import Data.ByteString.Char8 (ByteString, unpack)
 import qualified Data.ByteString.UTF8 as BSU
-import Data.Ratio (denominator, numerator)
 import Control.Applicative
 import Data.Typeable (Typeable)
 import Data.Int (Int64)
@@ -37,6 +36,7 @@ data Table = Table
     , tableOrders  :: [(String, Bool, Bool)] -- asc, desc
     , tableUniques :: [(String, [String])]
     }
+    deriving Show
 
 instance Lift Table where
     lift (Table a b c d e f) = do
@@ -51,10 +51,9 @@ instance Lift Table where
 
 data PersistValue = PersistString String
                   | PersistByteString ByteString
-                  | PersistInteger Integer
                   | PersistInt64 Int64
-                  | PersistRational Rational
                   | PersistDouble Double
+                  | PersistBool Bool
                   | PersistDay Day
                   | PersistTimeOfDay TimeOfDay
                   | PersistUTCTime UTCTime
@@ -64,10 +63,12 @@ data PersistValue = PersistString String
 data SqlType = SqlString
              | SqlInteger
              | SqlReal
+             | SqlBool
              | SqlDay
              | SqlTime
              | SqlDayTime
              | SqlBlob
+    deriving (Show, Read, Eq, Typeable)
 
 class Persistable a where
     toPersistValue :: a -> PersistValue
@@ -80,16 +81,13 @@ instance Persistable String where
     toPersistValue = PersistString
     fromPersistValue (PersistString s) = Right s
     fromPersistValue (PersistByteString bs) = Right $ BSU.toString bs
-    fromPersistValue (PersistInteger i) = Right $ show i
     fromPersistValue (PersistInt64 i) = Right $ show i
-    fromPersistValue (PersistRational r)
-        | denominator r == 1 = Right $ show $ numerator r
-        | otherwise = Right $ show $ (fromRational r :: Double)
     fromPersistValue (PersistDouble d) = Right $ show d
     fromPersistValue (PersistDay d) = Right $ show d
     fromPersistValue (PersistTimeOfDay d) = Right $ show d
     fromPersistValue (PersistUTCTime d) = Right $ show d
     fromPersistValue PersistNull = Left "Unexpected null"
+    fromPersistValue (PersistBool b) = Right $ show b
     sqlType _ = SqlString
 
 instance Persistable ByteString where
@@ -98,26 +96,79 @@ instance Persistable ByteString where
     fromPersistValue x = BSU.fromString <$> fromPersistValue x
     sqlType _ = SqlBlob
 
-instance Persistable Integer where
-    toPersistValue = PersistInteger
-    fromPersistValue (PersistInteger i) = Right i
+instance Persistable Int where
+    toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ "Expected Integer, received: " ++ show x
     sqlType _ = SqlInteger
 
-instance Persistable Int where
-    toPersistValue = PersistInteger . fromIntegral
-    fromPersistValue (PersistInteger i) = Right $ fromInteger i
+instance Persistable Int64 where
+    toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ "Expected Integer, received: " ++ show x
     sqlType _ = SqlInteger
+
+instance Persistable Double where
+    toPersistValue = PersistDouble
+    fromPersistValue (PersistDouble d) = Right d
+    fromPersistValue x = Left $ "Expected Double, received: " ++ show x
+    sqlType _ = SqlReal
+
+instance Persistable Bool where
+    toPersistValue = PersistBool
+    fromPersistValue (PersistBool b) = Right b
+    fromPersistValue (PersistInt64 i) = Right $ i /= 0
+    fromPersistValue x = Left $ "Expected Bool, received: " ++ show x
+    sqlType _ = SqlBool
+
+instance Persistable Day where
+    toPersistValue = PersistDay
+    fromPersistValue (PersistDay d) = Right d
+    fromPersistValue x@(PersistString s) =
+        case reads s of
+            (d, _):_ -> Right d
+            _ -> Left $ "Expected Day, received " ++ show x
+    fromPersistValue x@(PersistByteString s) =
+        case reads $ unpack s of
+            (d, _):_ -> Right d
+            _ -> Left $ "Expected Day, received " ++ show x
+    fromPersistValue x = Left $ "Expected Day, received: " ++ show x
+    sqlType _ = SqlDay
+
+instance Persistable TimeOfDay where
+    toPersistValue = PersistTimeOfDay
+    fromPersistValue (PersistTimeOfDay d) = Right d
+    fromPersistValue x@(PersistString s) =
+        case reads s of
+            (d, _):_ -> Right d
+            _ -> Left $ "Expected TimeOfDay, received " ++ show x
+    fromPersistValue x@(PersistByteString s) =
+        case reads $ unpack s of
+            (d, _):_ -> Right d
+            _ -> Left $ "Expected TimeOfDay, received " ++ show x
+    fromPersistValue x = Left $ "Expected TimeOfDay, received: " ++ show x
+    sqlType _ = SqlTime
+
+instance Persistable UTCTime where
+    toPersistValue = PersistUTCTime
+    fromPersistValue (PersistUTCTime d) = Right d
+    fromPersistValue x@(PersistString s) =
+        case reads s of
+            (d, _):_ -> Right d
+            _ -> Left $ "Expected UTCTime, received " ++ show x
+    fromPersistValue x@(PersistByteString s) =
+        case reads $ unpack s of
+            (d, _):_ -> Right d
+            _ -> Left $ "Expected UTCTime, received " ++ show x
+    fromPersistValue x = Left $ "Expected UTCTime, received: " ++ show x
+    sqlType _ = SqlDayTime
 
 instance Persistable a => Persistable (Maybe a) where
     toPersistValue Nothing = PersistNull
     toPersistValue (Just a) = toPersistValue a
     fromPersistValue PersistNull = Right Nothing
     fromPersistValue x = fmap Just $ fromPersistValue x
-    sqlType _ = sqlType (undefined :: a)
+    sqlType _ = sqlType (error "this is the problem" :: a)
     isNullable _ = True
 
 class Monad m => Persist val m where

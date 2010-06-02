@@ -6,6 +6,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 module Database.Persist.Sqlite
     ( SqliteReader
+    , Database
     , runSqlite
     , open
     , close
@@ -54,7 +55,6 @@ derivePersistSqliteReader t = do
     let dt = dataTypeDec t
     let monad = ConT ''SqliteReader `AppT` VarT (mkName "m")
 
-    tsv <- mkToPersistValues t
     fsv <- mkFromPersistValues t
     let sq =
           InstanceD [] (ConT ''FromPersistValues `AppT` ConT (mkName name))
@@ -138,14 +138,16 @@ derivePersistSqliteReader t = do
                 $ map (\(x, y) -> (name ++ upperFirst x ++ y, y))
                 $ concatMap ordsToList
                 $ tableOrders t
+        , mkHalfDefined (ConT $ mkName name) name $ length $ tableColumns t
         ]
 
 initialize :: (ToPersistables v, MonadCatchIO m)
            => Table -> v -> SqliteReader m ()
 initialize t v = withStmt getTableSql $ \getTable -> do
+    liftIO $ bind getTable [PersistString $ tableName t]
     Row <- liftIO $ step getTable
     [PersistInt64 i] <- liftIO $ columns getTable
-    when (i == 1) $ do
+    when (i == 0) $ do
         let cols = zip (tableColumns t) $ toPersistables v
         let sql = "CREATE TABLE " ++ tableName t ++
                   "(id INTEGER PRIMARY KEY" ++
@@ -154,13 +156,14 @@ initialize t v = withStmt getTableSql $ \getTable -> do
         mapM_ go $ tableUniques t
         return ()
   where
-    go' ((colName, (_, nullable)), p) = concat
-        [ colName
+    go' ((colName, (_, nullable)), p) = concat -- FIXME remove nullable
+        [ ","
+        , colName
         , " "
         , showSqlType $ sqlType p
-        , if isNullable p then " NULL" else " NOT NULL"
+        , if nullable then " NULL" else " NOT NULL" -- FIXME isNullable
         ]
-    getTableSql = "SELECT COUNT(*) FROM sqlite_master WHERE type=? AND name=?"
+    getTableSql = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?"
     go (index, fields) = do
         let sql = "CREATE UNIQUE INDEX " ++ index ++ " ON " ++
                   tableName t ++ "(" ++ intercalate "," fields ++ ")"
@@ -173,25 +176,18 @@ initialize t v = withStmt getTableSql $ \getTable -> do
     showSqlType SqlTime = "TIME"
     showSqlType SqlDayTime = "TIMESTAMP"
     showSqlType SqlBlob = "BLOB"
-
-mkToPersistValues :: Table -> Q Clause
-mkToPersistValues t = do
-    xs <- mapM (const $ newName "x") $ tableColumns t
-    ts <- [|toPersistValue|]
-    let xs' = map (AppE ts . VarE) xs
-    return $ Clause [ConP (mkName $ tableName t) $ map VarP xs]
-                    (NormalB $ ListE xs') []
+    showSqlType SqlBool = "BOOLEAN"
 
 mkFromPersistValues :: Table -> Q [Clause]
 mkFromPersistValues t = do
-    nothing <- [|Nothing|]
+    nothing <- [|Left "Invalid fromPersistValues input"|]
     let cons = ConE $ mkName $ tableName t
     xs <- mapM (const $ newName "x") $ tableColumns t
     fs <- [|fromPersistValue|]
     let xs' = map (AppE fs . VarE) xs
     let pat = ListP $ map VarP xs
     ap' <- [|ap|]
-    just <- [|Just|]
+    just <- [|Right|]
     let cons' = just `AppE` cons
     return
         [ Clause [pat] (NormalB $ foldl (go ap') cons' xs') []
@@ -207,6 +203,7 @@ insertReplace word t val = do
               concatMap (const ",?") (tableColumns t) ++ ")"
     withStmt sql $ \ins -> do
         liftIO $ bind ins $ toPersistValues val
+        Done <- liftIO $ step ins
         withStmt "SELECT last_insert_rowid()" $ \lrow -> do
             Row <- liftIO $ step lrow
             [PersistInt64 i] <- liftIO $ columns lrow
@@ -242,7 +239,7 @@ get t k = do
             Done -> return Nothing
             Row -> do
                 (_:vals) <- liftIO $ columns stmt
-                return $ fromPersistValues vals
+                return $ either (const Nothing) Just $ fromPersistValues vals
 
 select :: FromPersistValues val => Num key => MonadCatchIO m
        => Persistable (Filter val)
@@ -272,17 +269,16 @@ select t filts ords = do
     fromPersistValues' (PersistInt64 x:xs) = do
         xs' <- fromPersistValues xs
         return (fromIntegral x, xs')
-    fromPersistValues' _ = Nothing
+    fromPersistValues' _ = Left "error in fromPersistValues'"
     go stmt front = do
         res <- step stmt
         case res of
             Done -> return $ front []
             Row -> do
                 vals <- columns stmt
-                let mrow = fromPersistValues' vals
-                case mrow of
-                    Nothing -> go stmt front
-                    Just row -> go stmt $ front . (:) row
+                case fromPersistValues' vals of
+                    Left _ -> go stmt front
+                    Right row -> go stmt $ front . (:) row
 
 filterClause :: (ToFilter f, ToFieldName f) => f -> String
 filterClause f = toFieldName f ++ showSqlFilter (toFilter f) ++ "?" -- FIXME NULL
@@ -371,8 +367,8 @@ getBy t uniq = do
             Row -> do
                 PersistInt64 k:vals <- liftIO $ columns stmt
                 case fromPersistValues vals of
-                    Nothing -> return Nothing
-                    Just vals' -> return $ Just (fromIntegral k, vals')
+                    Left _ -> return Nothing
+                    Right vals' -> return $ Just (fromIntegral k, vals')
   where
     sqlClause = intercalate " AND " $ map (++ "=?") $ toFieldNames uniq
 

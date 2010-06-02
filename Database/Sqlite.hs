@@ -227,7 +227,7 @@ finalize statement = do
   error <- finalizeError statement
   case error of
     ErrorOK -> return ()
-    _ -> sqlError Nothing "finalize" error
+    _ -> return () -- sqlError Nothing "finalize" error
 
 foreign import ccall "sqlite3_bind_blob"
   bindBlobC :: Ptr () -> Int -> Ptr () -> Int -> Ptr () -> IO Int
@@ -320,12 +320,10 @@ bind :: Statement -> [PersistValue] -> IO ()
 bind statement sqlData = do
   mapM_ (\(parameterIndex, datum) -> do
           case datum of
-            PersistInteger int -> bindInt64 statement parameterIndex -- FIXME overflow?
-                                $ fromIntegral int
             PersistInt64 int64 -> bindInt64 statement parameterIndex int64
             PersistDouble double -> bindDouble statement parameterIndex double
-            PersistRational r -> bindDouble statement parameterIndex
-                               $ fromRational r
+            PersistBool b -> bindInt64 statement parameterIndex $
+                                if b then 1 else 0
             PersistString text -> bindText statement parameterIndex text
             PersistByteString blob -> bindBlob statement parameterIndex blob
             PersistNull -> bindNull statement parameterIndex
