@@ -116,15 +116,24 @@ runForm f = do
     a' <- a
     return (a', b)
 
-getAddEntryR :: Handler Blog RepHtml
-getAddEntryR = do
-    (_, form) <- runForm $ formable (Nothing :: Maybe Entry)
-    mmsg <- getMessage
-    applyLayout "Add new entry" (return ()) [$hamlet|
-%h1 Add new entry
-$maybe mmsg msg
-    %p.message $msg$
-%form!method=post!action=@AddEntryR@
+helper :: String -> Bool -> Maybe (EntryId, Entry) -> Handler Blog RepHtml
+helper title isPost me = do
+    (errs, form) <- runForm $ formable $ fmap snd me
+    errs' <- case (isPost, errs) of
+                (True, Success a) -> do
+                    case me of
+                        Just (eid, _) -> runDB $ replace eid a
+                        Nothing -> runDB $ insert a >> return ()
+                    redirect RedirectTemporary $ EntryR $ entrySlug a
+                (True, Failure e) -> return $ Just e
+                (False, _) -> return Nothing
+    applyLayout title (return ()) [$hamlet|
+%h1 $cs.title$
+$maybe errs' es
+    %ul
+        $forall es e
+            %li $cs.e$
+%form!method=post
     %table
         ^form^
         %tr
@@ -132,57 +141,21 @@ $maybe mmsg msg
                 %input!type=submit
 |]
 
+getAddEntryR :: Handler Blog RepHtml
+getAddEntryR = helper "Add new entry" False Nothing
+
 postAddEntryR :: Handler Blog RepHtml
-postAddEntryR = do
-    (errs, _) <- runForm $ formable Nothing
-    case errs of
-        Success a -> do
-            runDB $ insert a
-            redirect RedirectTemporary $ EntryR $ entrySlug a
-        Failure fs -> do
-            let f' = [$hamlet|
-%ul
-    $forall fs f
-        %li $cs.f$
-|]
-            t <- hamletToText undefined f'
-            setMessage $ Encoded $ T.concat $ L.toChunks t
-            redirect RedirectTemporary AddEntryR
+postAddEntryR = helper "Add new entry" True Nothing
 
 getEditEntryR :: Slug -> Handler Blog RepHtml
 getEditEntryR slug = do
-    (_, entry) <- runDB (getBy $ UniqueSlug slug) >>= maybe notFound return
-    (_, form) <- runForm $ formable $ Just entry
-    mmsg <- getMessage
-    applyLayout "Edit entry" (return ()) [$hamlet|
-%h1 Edit entry
-$maybe mmsg msg
-    %p.message $msg$
-%form!method=post!action=@EditEntryR.slug@
-    ^form^
-    %tr
-        %td!colspan=2
-            %input!type=submit
-|]
+    e <- runDB (getBy $ UniqueSlug slug) >>= maybe notFound return
+    helper "Edit entry" False $ Just e
 
 postEditEntryR :: Slug -> Handler Blog RepHtml
 postEditEntryR slug = do
-    req <- getRequest
-    (eid, e) <- runDB (getBy $ UniqueSlug slug) >>= maybe notFound return
-    (errs, _) <- runForm $ formable $ Just e
-    case errs of
-        Success a -> do
-            runDB $ replace eid a
-            redirect RedirectTemporary $ EntryR $ entrySlug a
-        Failure fs -> do
-            let f' = [$hamlet|
-%ul
-    $forall fs f
-        %li $cs.f$
-|]
-            t <- hamletToText undefined f'
-            setMessage $ Encoded $ T.concat $ L.toChunks t
-            redirect RedirectTemporary $ EditEntryR slug
+    e <- runDB (getBy $ UniqueSlug slug) >>= maybe notFound return
+    helper "Edit entry" True $ Just e
 
 getDeleteEntryR :: Slug -> Handler Blog RepHtml
 getDeleteEntryR slug = do
