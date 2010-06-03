@@ -17,31 +17,13 @@ import Control.Applicative
 import Control.Applicative.Error
 import Control.Arrow (second)
 import Yesod.Contrib.Formable
+import Yesod.Contrib.Crud
 import Text.Formlets
 import Text.Hamlet.Monad (hamletToText)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as L
-import Data.Char
 
-newtype Slug = Slug { unSlug :: String }
-    deriving (Read, Eq, Show, SinglePiece, Persistable)
-
-instance Fieldable Slug where
-    fieldable label x = input' go (fmap unSlug x) `check` asSlug
-      where
-        go name val = [$hamlet|
-%tr
-    %th $pack'.label$
-    %td
-        %input!type=text!name=$pack'.name$!value=$pack'.val$
-|]
-        asSlug [] = Failure ["Slug must be non-empty"]
-        asSlug x
-            | all (\c -> c `elem` "-_" || isAlphaNum c) x =
-                Success $ Slug x
-            | otherwise = Failure ["Slug must be alphanumeric, - and _"]
-
-persistSqlite [$persist|
+share2 persistSqlite deriveFormable [$persist|
 Entry
     slug Slug
     date Day Desc
@@ -50,26 +32,13 @@ Entry
     UniqueSlug slug
 |]
 
-deriving instance Show Entry
-
-instance Formable Entry where
-    formable Nothing =
-        Entry <$> fieldable "Slug" Nothing
-              <*> fieldable "Date" Nothing
-              <*> fieldable "Title" Nothing
-              <*> fieldable "Content" Nothing
-    formable (Just (Entry a b c d)) =
-        Entry <$> fieldable "Slug" (Just a)
-              <*> fieldable "Date" (Just b)
-              <*> fieldable "Title" (Just c)
-              <*> fieldable "Content" (Just d)
-
 data Blog = Blog { conn :: Database }
 
 type DB = SqliteReader (Handler Blog)
 
-runDB :: DB a -> Handler Blog a
-runDB x = getYesod >>= runSqlite x . conn
+instance RunDB Blog where
+    type DBConn Blog = Database
+    runDB x = getYesod >>= runSqlite x . conn
 
 mkYesod "Blog" [$parseRoutes|
 /                         RootR              GET
@@ -79,13 +48,9 @@ mkYesod "Blog" [$parseRoutes|
 /entry/crud/#Slug/delete  DeleteEntryR       GET POST
 |]
 
-class Crudable a route where
-    crudCreate :: Maybe a -> route
-    crudRead :: a -> route
-    crudEdit :: a -> route
-    crudDelete :: a -> route
-
-instance Crudable Entry BlogRoutes where
+instance Crudable Entry where
+    type CrudApp Entry = Blog
+    crudList _ = RootR
     crudCreate _ = AddEntryR
     crudRead = EntryR . entrySlug
     crudEdit = EditEntryR . entrySlug
@@ -122,56 +87,21 @@ getEntryR slug = do
 #content $entryContent.entry$
 |]
 
-runForm :: Form xml (Handler y) a -> Handler y (Failing a, xml)
-runForm f = do
-    req <- getRequest
-    (pp, _) <- liftIO $ reqRequestBody req
-    let env = map (second Left) pp
-    let (a, b, c) = runFormState env f
-    a' <- a
-    return (a', b)
-
-helper :: (Crudable a BlogRoutes, Formable a, Persist a DB)
-       => String -> Bool -> Maybe (Key a, a) -> Handler Blog RepHtml
-helper title isPost me = do
-    (errs, form) <- runForm $ formable $ fmap snd me
-    errs' <- case (isPost, errs) of
-                (True, Success a) -> do
-                    case me of
-                        Just (eid, _) -> runDB $ replace eid a
-                        Nothing -> runDB $ insert a >> return ()
-                    redirect RedirectTemporary $ crudRead a
-                (True, Failure e) -> return $ Just e
-                (False, _) -> return Nothing
-    applyLayout title (return ()) [$hamlet|
-%h1 $cs.title$
-$maybe errs' es
-    %ul
-        $forall es e
-            %li $cs.e$
-%form!method=post
-    %table
-        ^form^
-        %tr
-            %td!colspan=2
-                %input!type=submit
-|]
-
 getAddEntryR :: Handler Blog RepHtml
-getAddEntryR = helper "Add new entry" False (Nothing :: Maybe (EntryId, Entry))
+getAddEntryR = crudHelper "Add new entry" False (Nothing :: Maybe (EntryId, Entry))
 
 postAddEntryR :: Handler Blog RepHtml
-postAddEntryR = helper "Add new entry" True (Nothing :: Maybe (EntryId, Entry))
+postAddEntryR = crudHelper "Add new entry" True (Nothing :: Maybe (EntryId, Entry))
 
 getEditEntryR :: Slug -> Handler Blog RepHtml
 getEditEntryR slug = do
     e <- runDB (getBy $ UniqueSlug slug) >>= maybe notFound return
-    helper "Edit entry" False $ Just e
+    crudHelper "Edit entry" False $ Just e
 
 postEditEntryR :: Slug -> Handler Blog RepHtml
 postEditEntryR slug = do
     e <- runDB (getBy $ UniqueSlug slug) >>= maybe notFound return
-    helper "Edit entry" True $ Just e
+    crudHelper "Edit entry" True $ Just e
 
 getDeleteEntryR :: Slug -> Handler Blog RepHtml
 getDeleteEntryR slug = do
