@@ -1,5 +1,6 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -65,7 +66,9 @@ instance Formable Entry where
 
 data Blog = Blog { conn :: Database }
 
-runDB :: SqliteReader (Handler Blog) a -> Handler Blog a
+type DB = SqliteReader (Handler Blog)
+
+runDB :: DB a -> Handler Blog a
 runDB x = getYesod >>= runSqlite x . conn
 
 mkYesod "Blog" [$parseRoutes|
@@ -75,6 +78,18 @@ mkYesod "Blog" [$parseRoutes|
 /entry/crud/#Slug/edit    EditEntryR         GET POST
 /entry/crud/#Slug/delete  DeleteEntryR       GET POST
 |]
+
+class Crudable a route where
+    crudCreate :: Maybe a -> route
+    crudRead :: a -> route
+    crudEdit :: a -> route
+    crudDelete :: a -> route
+
+instance Crudable Entry BlogRoutes where
+    crudCreate _ = AddEntryR
+    crudRead = EntryR . entrySlug
+    crudEdit = EditEntryR . entrySlug
+    crudDelete = DeleteEntryR . entrySlug
 
 instance Yesod Blog where approot _ = "http://localhost:3000"
 
@@ -116,7 +131,8 @@ runForm f = do
     a' <- a
     return (a', b)
 
-helper :: String -> Bool -> Maybe (EntryId, Entry) -> Handler Blog RepHtml
+helper :: (Crudable a BlogRoutes, Formable a, Persist a DB)
+       => String -> Bool -> Maybe (Key a, a) -> Handler Blog RepHtml
 helper title isPost me = do
     (errs, form) <- runForm $ formable $ fmap snd me
     errs' <- case (isPost, errs) of
@@ -124,7 +140,7 @@ helper title isPost me = do
                     case me of
                         Just (eid, _) -> runDB $ replace eid a
                         Nothing -> runDB $ insert a >> return ()
-                    redirect RedirectTemporary $ EntryR $ entrySlug a
+                    redirect RedirectTemporary $ crudRead a
                 (True, Failure e) -> return $ Just e
                 (False, _) -> return Nothing
     applyLayout title (return ()) [$hamlet|
@@ -142,10 +158,10 @@ $maybe errs' es
 |]
 
 getAddEntryR :: Handler Blog RepHtml
-getAddEntryR = helper "Add new entry" False Nothing
+getAddEntryR = helper "Add new entry" False (Nothing :: Maybe (EntryId, Entry))
 
 postAddEntryR :: Handler Blog RepHtml
-postAddEntryR = helper "Add new entry" True Nothing
+postAddEntryR = helper "Add new entry" True (Nothing :: Maybe (EntryId, Entry))
 
 getEditEntryR :: Slug -> Handler Blog RepHtml
 getEditEntryR slug = do
