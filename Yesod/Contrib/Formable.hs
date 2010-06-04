@@ -111,7 +111,7 @@ deriveFormable = mapM derive
     derive t = do
         let cols = map (upperFirst . fst) $ tableColumns t
         ap <- [|(<*>)|]
-        just <- [|Just|]
+        just <- [|pure|]
         nothing <- [|Nothing|]
         let just' = just `AppE` ConE (mkName $ tableName t)
         let c1 = Clause [ConP (mkName "Nothing") []]
@@ -119,7 +119,8 @@ deriveFormable = mapM derive
                         []
         xs <- mapM (const $ newName "x") cols
         let xs' = map (AppE just . VarE) xs
-        let c2 = Clause [ConP (mkName "Just") $ map VarP xs]
+        let c2 = Clause [ConP (mkName "Just") [ConP (mkName $ tableName t)
+                            $ map VarP xs]]
                         (NormalB $ go ap just' $ zip cols xs')
                         []
         return $ InstanceD [] (ConT ''Formable `AppT` ConT (mkName $ tableName t))

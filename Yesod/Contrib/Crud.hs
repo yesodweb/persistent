@@ -7,13 +7,10 @@ import Database.Persist
 import Control.Applicative.Error
 import Web.Routes.Quasi (Routes)
 import Yesod.Contrib.Formable
+import Yesod.Contrib.Persist
 import Text.Formlets
 import Control.Arrow (second)
 import Control.Monad.Trans.Reader (ReaderT)
-
-class RunDB y where
-    type DBConn y
-    runDB :: ReaderT (DBConn y) (Handler y) a -> Handler y a
 
 class Crudable a where
     type CrudApp a
@@ -23,10 +20,12 @@ class Crudable a where
     crudEdit :: a -> Routes (CrudApp a)
     crudDelete :: a -> Routes (CrudApp a)
 
+{-
 crudHelper
-    :: (Crudable a, Formable a, Yesod (CrudApp a), RunDB (CrudApp a),
-        Persist a (ReaderT (DBConn (CrudApp a)) (Handler (CrudApp a))))
+    :: (Crudable a, Formable a, Yesod (CrudApp a), YesodPersist (CrudApp a),
+        Persist a (YesodDB a (Handler (CrudApp a))))
     => String -> Bool -> Maybe (Key a, a) -> Handler (CrudApp a) RepHtml
+-}
 crudHelper title isPost me = do
     (errs, form) <- runForm $ formable $ fmap snd me
     errs' <- case (isPost, errs) of

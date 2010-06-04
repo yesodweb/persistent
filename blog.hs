@@ -18,6 +18,7 @@ import Control.Applicative.Error
 import Control.Arrow (second)
 import Yesod.Contrib.Formable
 import Yesod.Contrib.Crud
+import Yesod.Contrib.Persist
 import Text.Formlets
 import Text.Hamlet.Monad (hamletToText)
 import qualified Data.Text as T
@@ -34,10 +35,8 @@ Entry
 
 data Blog = Blog { conn :: Database }
 
-type DB = SqliteReader (Handler Blog)
-
-instance RunDB Blog where
-    type DBConn Blog = Database
+instance YesodPersist Blog where
+    type YesodDB Blog = SqliteReader
     runDB x = getYesod >>= runSqlite x . conn
 
 mkYesod "Blog" [$parseRoutes|
