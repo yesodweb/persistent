@@ -14,6 +14,7 @@ module Database.Persist.Sqlite
     , persistSqlite
     , Int64
     , module Database.Persist.Helper
+    , persist
     ) where
 
 import Database.Persist (Persist, Table (..), Key, Order, Filter, Update,
@@ -29,6 +30,7 @@ import "MonadCatchIO-transformers" Control.Monad.CatchIO
 import Control.Monad (ap, when)
 import Database.Sqlite
 import Data.Int (Int64)
+import Database.Persist.Quasi
 
 persistSqlite :: [Table] -> Q [Dec]
 persistSqlite = fmap concat . mapM derivePersistSqliteReader
@@ -53,7 +55,8 @@ derivePersistSqliteReader :: Table -> Q [Dec]
 derivePersistSqliteReader t = do
     let name = tableName t
     let dt = dataTypeDec t
-    let monad = ConT ''SqliteReader `AppT` VarT (mkName "m")
+    let monad = ConT ''ReaderT `AppT` ConT ''Database
+                               `AppT` VarT (mkName "m")
 
     fsv <- mkFromPersistValues t
     let sq =

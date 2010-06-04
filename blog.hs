@@ -1,28 +1,10 @@
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE TypeFamilies, QuasiQuotes, MultiParamTypeClasses, FlexibleInstances, GeneralizedNewtypeDeriving #-}
 
 import Yesod hiding (Form)
 import Database.Persist
-import Database.Persist.Quasi
 import Database.Persist.Sqlite
 import Data.Time (Day)
-import Safe
-import Control.Applicative
-import Control.Applicative.Error
-import Control.Arrow (second)
-import Yesod.Contrib.Formable
-import Yesod.Contrib.Crud
-import Yesod.Contrib.Persist
-import Text.Formlets
-import Text.Hamlet.Monad (hamletToText)
-import qualified Data.Text as T
-import qualified Data.Text.Lazy as L
+import Yesod.Contrib
 
 share2 persistSqlite deriveFormable [$persist|
 Entry
@@ -33,11 +15,11 @@ Entry
     UniqueSlug slug
 |]
 
-data Blog = Blog { conn :: Database }
+data Blog = Blog { blogConn :: Database }
 
 instance YesodPersist Blog where
     type YesodDB Blog = SqliteReader
-    runDB x = getYesod >>= runSqlite x . conn
+    runDB x = getYesod >>= runSqlite x . blogConn
 
 mkYesod "Blog" [$parseRoutes|
 /                         RootR              GET

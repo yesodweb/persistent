@@ -5,12 +5,10 @@ module Yesod.Contrib.Crud where
 import Yesod hiding (Form)
 import Database.Persist
 import Control.Applicative.Error
-import Web.Routes.Quasi (Routes)
 import Yesod.Contrib.Formable
 import Yesod.Contrib.Persist
 import Text.Formlets
 import Control.Arrow (second)
-import Control.Monad.Trans.Reader (ReaderT)
 
 class Crudable a where
     type CrudApp a
@@ -20,12 +18,10 @@ class Crudable a where
     crudEdit :: a -> Routes (CrudApp a)
     crudDelete :: a -> Routes (CrudApp a)
 
-{-
 crudHelper
     :: (Crudable a, Formable a, Yesod (CrudApp a), YesodPersist (CrudApp a),
-        Persist a (YesodDB a (Handler (CrudApp a))))
-    => String -> Bool -> Maybe (Key a, a) -> Handler (CrudApp a) RepHtml
--}
+        Persist a (YesodDB (CrudApp a) (GHandler sub (CrudApp a))))
+    => String -> Bool -> Maybe (Key a, a) -> GHandler sub (CrudApp a) RepHtml
 crudHelper title isPost me = do
     (errs, form) <- runForm $ formable $ fmap snd me
     errs' <- case (isPost, errs) of
@@ -36,8 +32,11 @@ crudHelper title isPost me = do
                     redirect RedirectTemporary $ crudRead a
                 (True, Failure e) -> return $ Just e
                 (False, _) -> return Nothing
+    let maybe' = fmap snd me
     applyLayout title (return ()) [$hamlet|
 %h1 $cs.title$
+%p
+    %a!href=@crudList.maybe'@ Return to list
 $maybe errs' es
     %ul
         $forall es e
@@ -50,11 +49,11 @@ $maybe errs' es
                 %input!type=submit
 |]
 
-runForm :: Form xml (Handler y) a -> Handler y (Failing a, xml)
+runForm :: Form xml (GHandler sub y) a -> GHandler sub y (Failing a, xml)
 runForm f = do
     req <- getRequest
     (pp, _) <- liftIO $ reqRequestBody req
     let env = map (second Left) pp
-    let (a, b, c) = runFormState env f
+    let (a, b, _) = runFormState env f
     a' <- a
     return (a', b)
