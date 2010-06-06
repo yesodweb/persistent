@@ -104,7 +104,7 @@ instance Persistable T.Text where
     sqlType _ = SqlString
 
 instance Persistable HtmlContent where
-    toPersistValue = PersistString . T.unpack . htmlContentToText
+    toPersistValue = PersistByteString . htmlContentToByteString
     fromPersistValue = fmap Encoded . fromPersistValue
     sqlType _ = SqlString
 

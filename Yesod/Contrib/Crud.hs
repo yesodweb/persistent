@@ -1,5 +1,6 @@
 {-# LANGUAGE TypeFamilies, QuasiQuotes #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ExistentialQuantification #-}
 module Yesod.Contrib.Crud where
 
 import Yesod hiding (Form)
@@ -9,34 +10,53 @@ import Yesod.Contrib.Formable
 import Yesod.Contrib.Persist
 import Text.Formlets
 import Control.Arrow (second)
+import Data.Monoid (mempty)
 
-class Crudable a where
-    type CrudApp a
-    crudList :: Maybe a -> Routes (CrudApp a)
-    crudCreate :: Maybe a -> Routes (CrudApp a)
-    crudRead :: a -> Routes (CrudApp a)
-    crudEdit :: a -> Routes (CrudApp a)
-    crudDelete :: a -> Routes (CrudApp a)
+data Crud = forall a. Crud (Crud' a)
+
+data Crud' a = Crud'
+    { crudCreate' :: Bool -> GHandler Crud a RepHtml
+    , crudEdit'   :: Bool -> String -> GHandler Crud a RepHtml
+    , crudDelete' :: Bool -> String -> GHandler Crud a RepHtml
+    }
+
+{-
+mkCrud' :: ( Persist a (YesodDB m (GHandler Crud m))
+           , YesodPersist m
+           , Yesod m
+           , Formable a
+           )
+        => t
+        -> Crud' m
+-}
+mkCrud' _showObj = Crud $ Crud'
+    { crudCreate' = crudHelper "Create" (Nothing :: Maybe (Key a, a)) (undefined :: m)
+    , crudEdit' = undefined
+    , crudDelete' = undefined
+    }
 
 crudHelper
-    :: (Crudable a, Formable a, Yesod (CrudApp a), YesodPersist (CrudApp a),
-        Persist a (YesodDB (CrudApp a) (GHandler sub (CrudApp a))))
-    => String -> Bool -> Maybe (Key a, a) -> GHandler sub (CrudApp a) RepHtml
-crudHelper title isPost me = do
+    :: (Formable a, Yesod master, YesodPersist master,
+        Persist a (YesodDB master (GHandler sub master)))
+    => String -> Maybe (Key a, a) -> master -> Bool -> GHandler sub master RepHtml
+crudHelper title me _ isPost = do
+    _ <- getYesod :: GHandler sub master master
     (errs, form) <- runForm $ formable $ fmap snd me
     errs' <- case (isPost, errs) of
                 (True, Success a) -> do
                     case me of
                         Just (eid, _) -> runDB $ replace eid a
                         Nothing -> runDB $ insert a >> return ()
-                    redirect RedirectTemporary $ crudRead a
+                    error "FIXME" -- redirect RedirectTemporary $ crudRead a
                 (True, Failure e) -> return $ Just e
                 (False, _) -> return Nothing
-    let maybe' = fmap snd me
-    applyLayout title (return ()) [$hamlet|
-%h1 $cs.title$
+    let _maybe' = fmap snd me
+{- FIXME
 %p
     %a!href=@crudList.maybe'@ Return to list
+-}
+    applyLayout title mempty [$hamlet|
+%h1 $cs.title$
 $maybe errs' es
     %ul
         $forall es e

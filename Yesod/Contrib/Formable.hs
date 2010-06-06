@@ -6,7 +6,7 @@ module Yesod.Contrib.Formable where
 
 import Text.Formlets
 import Text.Hamlet
-import Text.Hamlet.Monad (hamletToText, htmlContentToText)
+import Text.Hamlet.Monad (hamletToByteString, htmlContentToByteString)
 import Data.Functor.Identity
 import qualified Data.Text as T
 import Data.Text.Lazy (toChunks)
@@ -19,24 +19,18 @@ import Data.Char (isAlphaNum)
 import Language.Haskell.TH.Syntax
 import Database.Persist (Table (..))
 import Database.Persist.Helper (upperFirst)
+import Data.Convertible.Text (cs)
 
 class Formable a where
     formable :: (Functor m, Applicative m, Monad m)
-             => Formlet (Hamlet url IO ()) m a
+             => Formlet (Hamlet url) m a
 
 class Fieldable a where
     fieldable :: (Functor m, Applicative m, Monad m)
-              => String -> Formlet (Hamlet url IO ()) m a
-
-hamletToHtml :: Hamlet a Identity () -> HtmlContent
-hamletToHtml =
-    Encoded . T.concat . toChunks . runIdentity . hamletToText undefined
+              => String -> Formlet (Hamlet url) m a
 
 pack' :: String -> HtmlContent
-pack' = Unencoded . T.pack
-
-repack :: HtmlContent -> HtmlContent
-repack = Encoded . htmlContentToText
+pack' = Unencoded . cs
 
 instance Fieldable [Char] where
     fieldable label = input' go
@@ -50,9 +44,9 @@ instance Fieldable [Char] where
 
 instance Fieldable HtmlContent where
     fieldable label =
-        fmap (Encoded . T.pack)
+        fmap (Encoded . cs)
       . input' go
-      . fmap (T.unpack . htmlContentToText)
+      . fmap (cs . htmlContentToByteString)
       where
         go name val = [$hamlet|
 %tr

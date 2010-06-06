@@ -7,4 +7,3 @@ module Yesod.Contrib
 import Yesod.Contrib.Formable
 import Yesod.Contrib.Crud
 import Yesod.Contrib.Persist
-import Yesod.Contrib.Orphans ()
