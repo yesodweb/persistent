@@ -38,6 +38,7 @@ import Database.Persist
 import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
 import Data.Maybe (fromJust)
+import Web.Routes.Quasi (SinglePiece)
 
 recName :: String -> String -> String
 recName dt f = lowerFirst dt ++ upperFirst f
@@ -63,7 +64,7 @@ keyTypeDec constr typ t =
     NewtypeInstD [] ''Key [ConT $ mkName $ tableName t]
                 (NormalC (mkName constr) [(NotStrict, ConT $ mkName typ)])
                 [''Show, ''Read, ''Num, ''Integral, ''Enum, ''Eq, ''Ord,
-                 ''Real, ''Persistable]
+                 ''Real, ''Persistable, ''SinglePiece]
 
 filterTypeDec :: Table -> Dec
 filterTypeDec t =
