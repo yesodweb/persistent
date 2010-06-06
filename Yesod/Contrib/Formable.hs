@@ -6,10 +6,7 @@ module Yesod.Contrib.Formable where
 
 import Text.Formlets
 import Text.Hamlet
-import Text.Hamlet.Monad (hamletToByteString, htmlContentToByteString)
-import Data.Functor.Identity
-import qualified Data.Text as T
-import Data.Text.Lazy (toChunks)
+import Text.Hamlet.Monad (htmlContentToByteString)
 import Data.Time (Day)
 import Control.Applicative
 import Control.Applicative.Error

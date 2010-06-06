@@ -1,6 +1,6 @@
 {-# LANGUAGE TypeFamilies, QuasiQuotes #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE Rank2Types #-}
 module Yesod.Contrib.Crud where
 
 import Yesod hiding (Form)
@@ -12,12 +12,10 @@ import Text.Formlets
 import Control.Arrow (second)
 import Data.Monoid (mempty)
 
-data Crud = forall a. Crud (Crud' a)
-
-data Crud' a = Crud'
-    { crudCreate' :: Bool -> GHandler Crud a RepHtml
-    , crudEdit'   :: Bool -> String -> GHandler Crud a RepHtml
-    , crudDelete' :: Bool -> String -> GHandler Crud a RepHtml
+data Crud = Crud
+    { crudCreate :: forall a. Bool -> GHandler Crud a RepHtml
+    , crudEdit   :: forall a. Bool -> String -> GHandler Crud a RepHtml
+    , crudDelete :: forall a. Bool -> String -> GHandler Crud a RepHtml
     }
 
 {-
@@ -28,12 +26,12 @@ mkCrud' :: ( Persist a (YesodDB m (GHandler Crud m))
            )
         => t
         -> Crud' m
--}
 mkCrud' _showObj = Crud $ Crud'
     { crudCreate' = crudHelper "Create" (Nothing :: Maybe (Key a, a)) (undefined :: m)
     , crudEdit' = undefined
     , crudDelete' = undefined
     }
+-}
 
 crudHelper
     :: (Formable a, Yesod master, YesodPersist master,

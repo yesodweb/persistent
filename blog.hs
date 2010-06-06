@@ -5,6 +5,7 @@ import Database.Persist
 import Database.Persist.Sqlite
 import Data.Time (Day)
 import Yesod.Contrib
+import Data.Monoid (mempty)
 
 share2 persistSqlite deriveFormable [$persist|
 Entry
@@ -29,20 +30,12 @@ mkYesod "Blog" [$parseRoutes|
 /entry/crud/#Slug/delete  DeleteEntryR       GET POST
 |]
 
-instance Crudable Entry where
-    type CrudApp Entry = Blog
-    crudList _ = RootR
-    crudCreate _ = AddEntryR
-    crudRead = EntryR . entrySlug
-    crudEdit = EditEntryR . entrySlug
-    crudDelete = DeleteEntryR . entrySlug
-
 instance Yesod Blog where approot _ = "http://localhost:3000"
 
 getRootR :: Handler Blog RepHtml
 getRootR = do
     entries <- fmap (map snd) $ runDB $ select [] [EntryDateDesc]
-    applyLayout "Persistent Blog" (return ()) [$hamlet|
+    applyLayout "Persistent Blog" mempty [$hamlet|
 %h1 Welcome to the persistent blog.
 %ul
     $forall entries entry
@@ -60,7 +53,7 @@ getRootR = do
 getEntryR :: Slug -> Handler Blog RepHtml
 getEntryR slug = do
     (_, entry) <- runDB (getBy $ UniqueSlug slug) >>= maybe notFound return
-    applyLayout (entryTitle entry) (return ()) [$hamlet|
+    applyLayout (entryTitle entry) mempty [$hamlet|
 %p
     %a!href=@RootR@ Return to homepage
 %h1 $cs.entryTitle.entry$
@@ -69,25 +62,25 @@ getEntryR slug = do
 |]
 
 getAddEntryR :: Handler Blog RepHtml
-getAddEntryR = crudHelper "Add new entry" False (Nothing :: Maybe (EntryId, Entry))
+getAddEntryR = crudHelper "Add new entry" (Nothing :: Maybe (EntryId, Entry)) (undefined :: Blog) False
 
 postAddEntryR :: Handler Blog RepHtml
-postAddEntryR = crudHelper "Add new entry" True (Nothing :: Maybe (EntryId, Entry))
+postAddEntryR = crudHelper "Add new entry" (Nothing :: Maybe (EntryId, Entry)) (undefined :: Blog) True
 
 getEditEntryR :: Slug -> Handler Blog RepHtml
 getEditEntryR slug = do
     e <- runDB (getBy $ UniqueSlug slug) >>= maybe notFound return
-    crudHelper "Edit entry" False $ Just e
+    crudHelper "Edit entry" (Just e) (undefined :: Blog) False
 
 postEditEntryR :: Slug -> Handler Blog RepHtml
 postEditEntryR slug = do
     e <- runDB (getBy $ UniqueSlug slug) >>= maybe notFound return
-    crudHelper "Edit entry" True $ Just e
+    crudHelper "Edit entry" (Just e) (undefined :: Blog) True
 
 getDeleteEntryR :: Slug -> Handler Blog RepHtml
 getDeleteEntryR slug = do
     _ <- runDB (getBy $ UniqueSlug slug) >>= maybe notFound return
-    applyLayout "Confirm delete" (return ()) [$hamlet|
+    applyLayout "Confirm delete" mempty [$hamlet|
 %form!method=post!action=@DeleteEntryR.slug@
     %h1 Really delete?
     %p
