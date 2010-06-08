@@ -24,8 +24,11 @@ import qualified Data.ByteString.UTF8 as BSU
 import Control.Applicative
 import Data.Typeable (Typeable)
 import Data.Int (Int64)
-import Text.Hamlet.Monad
+import Text.Hamlet
+import Text.Blaze
 import qualified Data.Text as T
+import qualified Data.ByteString as S
+import qualified Data.ByteString.Lazy as L
 
 -- | name, type
 type Column = (String, (String, Bool)) -- is it nullable?
@@ -103,9 +106,9 @@ instance Persistable T.Text where
     fromPersistValue = fmap T.pack . fromPersistValue
     sqlType _ = SqlString
 
-instance Persistable HtmlContent where
-    toPersistValue = PersistByteString . htmlContentToByteString
-    fromPersistValue = fmap Encoded . fromPersistValue
+instance Persistable Html where
+    toPersistValue = PersistByteString . S.concat . L.toChunks . renderHtml
+    fromPersistValue = fmap unsafeBytestring . fromPersistValue
     sqlType _ = SqlString
 
 instance Persistable Int where
