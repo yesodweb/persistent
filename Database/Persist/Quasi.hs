@@ -6,6 +6,7 @@ import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Database.Persist
 import Data.Char
+import Data.Maybe (mapMaybe)
 
 persist :: QuasiQuoter
 persist = QuasiQuoter
@@ -36,9 +37,9 @@ parse' (name, attribs) = Table name cols upds filts ords uniqs derives
     filts = filter notAllFalse $ concatMap takeFilts attribs
     ords = filter notAllFalse' $ concatMap takeOrds attribs
     uniqs = concatMap takeUniqs attribs
-    derives = case concatMap takeDerives attribs of
+    derives = case mapMaybe takeDerives attribs of
                 [] -> ["Show", "Read", "Eq"]
-                x -> x
+                x -> concat x
 
 takeCols :: [String] -> [Column]
 takeCols ("deriving":_) = []
@@ -82,6 +83,6 @@ takeUniqs (n@(f:_):rest)
     | isUpper f = [(n, rest)]
 takeUniqs _ = []
 
-takeDerives :: [String] -> [String]
-takeDerives ("deriving":rest) = rest
-takeDerives _ = []
+takeDerives :: [String] -> Maybe [String]
+takeDerives ("deriving":rest) = Just rest
+takeDerives _ = Nothing

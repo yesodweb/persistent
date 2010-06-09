@@ -4,7 +4,7 @@ import Yesod hiding (Form)
 import Database.Persist
 import Database.Persist.Sqlite
 import Data.Time (Day)
-import Yesod.Contrib
+import Yesod.Helpers.Crud
 import Data.Monoid (mempty)
 
 share2 persistSqlite deriveFormable [$persist|
@@ -14,6 +14,7 @@ Entry
     title NonEmptyString
     content Html
     UniqueSlug slug
+    deriving
 |]
 
 data Blog = Blog { blogConn :: Database }
@@ -44,7 +45,7 @@ getRootR = do
     $forall entries entry
         %li
             %a!href=@EntryR.entrySlug.entry@
-                $cs.unNonEmptyString.entryTitle.entry$
+                $string.unNonEmptyString.entryTitle.entry$
 %p
     %a!href=@AdminR.CrudListR@ Admin
 |]
@@ -55,8 +56,8 @@ getEntryR slug = do
     applyLayout (unNonEmptyString $ entryTitle entry) mempty [$hamlet|
 %p
     %a!href=@RootR@ Return to homepage
-%h1 $cs.unNonEmptyString.entryTitle.entry$
-%h2 $cs.show.entryDate.entry$
+%h1 $string.unNonEmptyString.entryTitle.entry$
+%h2 $string.show.entryDate.entry$
 #content $entryContent.entry$
 |]
 
