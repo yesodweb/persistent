@@ -11,8 +11,8 @@ share2 persistSqlite deriveFormable [$persist|
 Entry
     slug Slug
     date Day Desc
-    title String
-    content HtmlContent
+    title NonEmptyString
+    content Html
     UniqueSlug slug
 |]
 
@@ -25,7 +25,7 @@ instance YesodPersist Blog where
 type BlogCrud = Crud Blog Entry
 
 instance Item Entry where
-    itemTitle = entryTitle
+    itemTitle = unNonEmptyString . entryTitle
 
 mkYesod "Blog" [$parseRoutes|
 /                         RootR              GET
@@ -43,7 +43,8 @@ getRootR = do
 %ul
     $forall entries entry
         %li
-            %a!href=@EntryR.entrySlug.entry@ $cs.entryTitle.entry$
+            %a!href=@EntryR.entrySlug.entry@
+                $cs.unNonEmptyString.entryTitle.entry$
 %p
     %a!href=@AdminR.CrudListR@ Admin
 |]
@@ -51,10 +52,10 @@ getRootR = do
 getEntryR :: Slug -> Handler Blog RepHtml
 getEntryR slug = do
     (_, entry) <- runDB (getBy $ UniqueSlug slug) >>= maybe notFound return
-    applyLayout (entryTitle entry) mempty [$hamlet|
+    applyLayout (unNonEmptyString $ entryTitle entry) mempty [$hamlet|
 %p
     %a!href=@RootR@ Return to homepage
-%h1 $cs.entryTitle.entry$
+%h1 $cs.unNonEmptyString.entryTitle.entry$
 %h2 $cs.show.entryDate.entry$
 #content $entryContent.entry$
 |]

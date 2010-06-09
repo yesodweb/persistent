@@ -40,11 +40,12 @@ data Table = Table
     , tableFilters :: [(String, Bool, Bool, Bool, Bool, Bool, Bool)] -- eq, ne, gt, lt, ge, le
     , tableOrders  :: [(String, Bool, Bool)] -- asc, desc
     , tableUniques :: [(String, [String])]
+    , tableDerives :: [String]
     }
     deriving Show
 
 instance Lift Table where
-    lift (Table a b c d e f) = do
+    lift (Table a b c d e f g) = do
         t <- [|Table|]
         a' <- lift a
         b' <- lift b
@@ -52,7 +53,9 @@ instance Lift Table where
         d' <- lift d
         e' <- lift e
         f' <- lift f
+        g' <- lift g
         return $ t `AppE` a' `AppE` b' `AppE` c' `AppE` d' `AppE` e' `AppE` f'
+                   `AppE` g'
 
 data PersistValue = PersistString String
                   | PersistByteString ByteString

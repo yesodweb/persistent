@@ -55,7 +55,7 @@ dataTypeDec :: Table -> Dec
 dataTypeDec t =
     let name = mkName $ tableName t
         cols = map (mkCol $ tableName t) $ tableColumns t
-     in DataD [] name [] [RecC name cols] [''Show, ''Read, ''Eq]
+     in DataD [] name [] [RecC name cols] $ map mkName $ tableDerives t
   where
     mkCol x (n, ty) = (mkName $ recName x n, NotStrict, pairToType ty)
 

@@ -29,15 +29,19 @@ nest ((True, _):_) = error "Blocks must begin with non-indented lines"
 nest [] = []
 
 parse' :: (String, [[String]]) -> Table
-parse' (name, attribs) = Table name cols upds filts ords uniqs
+parse' (name, attribs) = Table name cols upds filts ords uniqs derives
   where
     cols = concatMap takeCols attribs
     upds = concatMap takeUpds attribs
     filts = filter notAllFalse $ concatMap takeFilts attribs
     ords = filter notAllFalse' $ concatMap takeOrds attribs
     uniqs = concatMap takeUniqs attribs
+    derives = case concatMap takeDerives attribs of
+                [] -> ["Show", "Read", "Eq"]
+                x -> x
 
 takeCols :: [String] -> [Column]
+takeCols ("deriving":_) = []
 takeCols (n@(f:_):ty:rest)
     | isLower f = [(n, (ty, "null" `elem` rest))]
 takeCols _ = []
@@ -77,3 +81,7 @@ takeUniqs :: [String] -> [(String, [String])]
 takeUniqs (n@(f:_):rest)
     | isUpper f = [(n, rest)]
 takeUniqs _ = []
+
+takeDerives :: [String] -> [String]
+takeDerives ("deriving":rest) = rest
+takeDerives _ = []
