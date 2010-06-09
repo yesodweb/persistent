@@ -60,18 +60,12 @@ executable           test1
         build-depends:   base >= 4 && < 5,
                          template-haskell >= 2.4 && < 2.5,
                          bytestring >= 0.9.1 && < 0.10,
-                         data-object-yaml >= 0.3.0 && < 0.4,
-                         data-object >= 0.3.1 && < 0.4,
-                         convertible >= 1.0.9 && < 1.1,
                          transformers >= 0.2.1 && < 0.3,
-                         containers >= 0.2 && < 0.4,
                          MonadCatchIO-transformers >= 0.2.2 && < 0.3,
                          redis >= 0.6 && < 0.7,
-                         attempt >= 0.3.0 && < 0.4,
-                         convertible-text >= 0.3.0 && < 0.4,
                          safe >= 0.2 && < 0.3,
                          time >= 1.1.4 && < 1.2,
-                         utf8-string >= 0.3.6 && < 0.4
+                         utf8-string >= 0.3.4 && < 0.4
     else
         Buildable: False
     Extra-Libraries: sqlite3
