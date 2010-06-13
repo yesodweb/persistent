@@ -72,7 +72,6 @@ derivePersistSqliteReader t = do
 
     init' <- [|initialize|]
     insert' <- [|insert|]
-    insertR' <- [|insertR|]
     replace' <- [|replace|]
     get' <- [|get|]
     getBy' <- [|getBy|]
@@ -94,7 +93,6 @@ derivePersistSqliteReader t = do
             , uniqueTypeDec t
             , mkFun "initialize" $ init'
             , mkFun "insert" $ insert'
-            , mkFun "insertR" $ insertR'
             , mkFun "replace" $ replace'
             , mkFun "get" $ get'
             , mkFun "getBy" $ getBy'
@@ -199,10 +197,10 @@ mkFromPersistValues t = do
   where
     go ap' x y = InfixE (Just x) ap' (Just y)
 
-insertReplace :: (MonadCatchIO m, ToPersistables val, Num (Key val))
-              => String -> Table -> val -> SqliteReader m (Key val)
-insertReplace word t val = do
-    let sql = word ++ " INTO " ++ tableName t ++ " VALUES(NULL" ++
+insert :: (MonadCatchIO m, ToPersistables val, Num (Key val))
+       => Table -> val -> SqliteReader m (Key val)
+insert t val = do
+    let sql = "INSERT INTO " ++ tableName t ++ " VALUES(NULL" ++
               concatMap (const ",?") (tableColumns t) ++ ")"
     withStmt sql $ \ins -> do
         liftIO $ bind ins $ toPersistValues val
@@ -211,14 +209,6 @@ insertReplace word t val = do
             Row <- liftIO $ step lrow
             [PersistInt64 i] <- liftIO $ columns lrow
             return $ fromIntegral i
-
-insert :: (MonadCatchIO m, ToPersistables val, Num (Key val))
-       => Table -> val -> SqliteReader m (Key val)
-insert = insertReplace "INSERT"
-
-insertR :: (MonadCatchIO m, ToPersistables val, Num (Key val))
-        => Table -> val -> SqliteReader m (Key val)
-insertR = insertReplace "REPLACE"
 
 replace :: (MonadCatchIO m, Integral (Key v), ToPersistables v)
         => Table -> Key v -> v -> SqliteReader m ()
