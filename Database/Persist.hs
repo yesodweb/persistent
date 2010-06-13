@@ -25,7 +25,6 @@ import Control.Applicative
 import Data.Typeable (Typeable)
 import Data.Int (Int64)
 import Text.Hamlet
-import Text.Blaze
 import qualified Data.Text as T
 import qualified Data.ByteString as S
 import qualified Data.ByteString.Lazy as L
@@ -201,7 +200,7 @@ class Monad m => Persist val m where
 
     -- insert
     insert      :: val                          -> m (Key val)
-    insertR     :: val                          -> m (Key val)
+    -- Removed for PostgreSQL insertR     :: val                          -> m (Key val)
     replace     :: Key val      -> val          -> m ()
 
     -- modify

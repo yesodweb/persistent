@@ -32,6 +32,8 @@ module Database.Persist.Helper
     , PersistFilter (..)
     , ToFilter (..)
     , HalfDefined (..)
+      -- * Utils
+    , apE
     ) where
 
 import Database.Persist
@@ -261,3 +263,8 @@ mkHalfDefined typ constr count =
             [Clause [] (NormalB
             $ foldl AppE (ConE $ mkName constr)
                     (replicate count $ VarE $ mkName "undefined")) []]]
+
+apE :: Either x (y -> z) -> Either x y -> Either x z
+apE (Left x) _ = Left x
+apE _ (Left x) = Left x
+apE (Right f) (Right y) = Right $ f y
