@@ -34,6 +34,7 @@ module Database.Persist.Helper
     , HalfDefined (..)
       -- * Utils
     , apE
+    , addIsNullable
     ) where
 
 import Database.Persist
@@ -225,14 +226,26 @@ mkToOrder typ pairs =
 data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le
 class ToFilter a where
     toFilter :: a -> PersistFilter
+    isNull :: a -> Bool
 
-mkToFilter :: Type -> [(String, String)] -> Dec
+mkToFilter :: Type -> [(String, (String, Bool))] -> Dec
 mkToFilter typ pairs =
     InstanceD [] (ConT ''ToFilter `AppT` typ)
-        [FunD (mkName "toFilter") $ degen $ map go pairs]
+        [ FunD (mkName "toFilter") $ degen $ map go pairs
+        , FunD (mkName "isNull") $ degen $ concatMap go' pairs
+        ]
   where
-    go (constr, val) =
+    go (constr, (val, _)) =
         Clause [RecP (mkName constr) []] (NormalB $ ConE $ mkName val) []
+    go' (constr, (_, False)) =
+        [Clause [RecP (mkName constr) []]
+            (NormalB $ ConE $ mkName "False") []]
+    go' (constr, (_, True)) =
+        [ Clause [ConP (mkName constr) [ConP (mkName "Nothing") []]]
+            (NormalB $ ConE $ mkName "True") []
+        , Clause [ConP (mkName constr) [WildP]]
+            (NormalB $ ConE $ mkName "False") []
+        ]
 
 mkPersistable :: Type -> [String] -> Dec
 mkPersistable typ constrs =
@@ -268,3 +281,10 @@ apE :: Either x (y -> z) -> Either x y -> Either x z
 apE (Left x) _ = Left x
 apE _ (Left x) = Left x
 apE (Right f) (Right y) = Right $ f y
+
+addIsNullable :: [Column] -> (String, (String, String))
+              -> (String, (String, Bool))
+addIsNullable cols (col, (name, typ)) =
+    case lookup col cols of
+        Nothing -> error $ "Missing columns: " ++ name
+        Just (_, nullable) -> (name, (typ, nullable))

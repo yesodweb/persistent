@@ -128,7 +128,8 @@ derivePersistSqliteReader t = do
                 $ concatMap filtsToList
                 $ tableFilters t
         , mkToFilter (ConT ''Filter `AppT` ConT (mkName name))
-                $ map (\(x, y) -> (name ++ upperFirst x ++ y, y))
+                $ map (addIsNullable $ tableColumns t)
+                $ map (\(x, y) -> (x, (name ++ upperFirst x ++ y, y)))
                 $ concatMap filtsToList
                 $ tableFilters t
         , mkToFieldName (ConT ''Order `AppT` ConT (mkName name))
@@ -276,8 +277,14 @@ select t filts ords = do
                     Right row -> go stmt $ front . (:) row
 
 filterClause :: (ToFilter f, ToFieldName f) => f -> String
-filterClause f = toFieldName f ++ showSqlFilter (toFilter f) ++ "?" -- FIXME NULL
+filterClause f = if isNull f then nullClause else mainClause
   where
+    mainClause = toFieldName f ++ showSqlFilter (toFilter f) ++ "?"
+    nullClause =
+        case toFilter f of
+          Eq -> '(' : mainClause ++ " OR " ++ toFieldName f ++ " IS NULL)"
+          Ne -> '(' : mainClause ++ " OR " ++ toFieldName f ++ " IS NOT NULL)"
+          _ -> mainClause
     showSqlFilter Eq = "="
     showSqlFilter Ne = "<>"
     showSqlFilter Gt = ">"
