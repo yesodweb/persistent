@@ -50,6 +50,7 @@ library
                      Database.Persist.Redis
                      Database.Persist.Sqlite
                      Database.Persist.Postgresql
+                     Database.Persist.GenericSql
                      Database.Sqlite
     ghc-options:     -Wall
     Extra-Libraries: sqlite3

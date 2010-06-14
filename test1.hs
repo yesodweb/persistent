@@ -22,14 +22,18 @@ persistSqlite [Table "Person"
     [ ("name", False, True)
     , ("age", True, False)
     ]
-    [("PersonNameKey", ["name"])]]
+    [("PersonNameKey", ["name"])]
+    []
+    ]
 
 deriving instance Show Person
 
-main = withSqlite "test.db3" $ runSqlite go
+main :: IO ()
+main = withSqlite ":memory:" $ runSqlite go
 
+go :: SqliteReader IO ()
 go = do
-    initialize (undefined :: Person)
+    initialize (halfDefined :: Person)
     pid <- insert $ Person "Michael" 25 Nothing
     liftIO $ print pid
 
@@ -56,17 +60,19 @@ go = do
     p6 <- get pid
     liftIO $ print p6
 
-    insert $ Person "Eliezer" 2 $ Just "blue"
+    _ <- insert $ Person "Eliezer" 2 $ Just "blue"
     p7 <- select [] [PersonAgeAsc]
     liftIO $ print p7
 
-    insert $ Person "Abe" 30 $ Just "black"
+    _ <- insert $ Person "Abe" 30 $ Just "black"
     p8 <- select [PersonAgeLt 30] [PersonNameDesc]
     liftIO $ print p8
 
+    {-
     insertR $ Person "Abe" 31 $ Just "brown"
     p9 <- select [PersonNameEq "Abe"] []
     liftIO $ print p9
+    -}
 
     p10 <- getBy $ PersonNameKey "Michael"
     liftIO $ print p10

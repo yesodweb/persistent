@@ -286,5 +286,5 @@ addIsNullable :: [Column] -> (String, (String, String))
               -> (String, (String, Bool))
 addIsNullable cols (col, (name, typ)) =
     case lookup col cols of
-        Nothing -> error $ "Missing columns: " ++ name
+        Nothing -> error $ "Missing columns: " ++ col ++ ", " ++ show cols
         Just (_, nullable) -> (name, (typ, nullable))
