@@ -22,7 +22,6 @@ import Database.Persist.Helper
 import Language.Haskell.TH.Syntax hiding (lift)
 import qualified Language.Haskell.TH.Syntax as TH
 import Data.List (intercalate)
-import "MonadCatchIO-transformers" Control.Monad.CatchIO
 import Control.Monad (unless, liftM)
 import Data.Int (Int64)
 import Database.Persist.Quasi
@@ -39,8 +38,8 @@ data GenericSql m = GenericSql
 
 type RowPopper m = m (Maybe [PersistValue])
 
-deriveGenericSql :: Type -> Exp -> Table -> Q [Dec]
-deriveGenericSql wrap gs t = do
+deriveGenericSql :: Type -> Name -> Exp -> Table -> Q [Dec]
+deriveGenericSql wrap super gs t = do
     let name = P.tableName t
     let dt = dataTypeDec t
     let monad = wrap `AppT` VarT (mkName "m")
@@ -72,7 +71,7 @@ deriveGenericSql wrap gs t = do
 
     let inst =
           InstanceD
-            [ClassP ''MonadCatchIO [VarT $ mkName "m"]]
+            [ClassP super [VarT $ mkName "m"]]
             (ConT ''Persist `AppT` ConT (mkName name) `AppT` monad)
             [ keyTypeDec (name ++ "Id") "Int64" t
             , filterTypeDec t
@@ -131,7 +130,7 @@ deriveGenericSql wrap gs t = do
         , mkHalfDefined (ConT $ mkName name) name $ length $ tableColumns t
         ]
 
-initialize :: (ToPersistables v, MonadCatchIO m)
+initialize :: (ToPersistables v, Monad m)
            => GenericSql m -> Table -> v -> m ()
 initialize gs t v = do
     doesExist <- gsTableExists gs $ tableName t

@@ -92,11 +92,8 @@ tableExists t = withStmt sql [PersistString t] $ \pop -> do
   where
     sql = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?"
 
-keyType :: String
-keyType = "INTEGER PRIMARY KEY"
-
 derivePersistSqliteReader :: Table -> Q [Dec]
 derivePersistSqliteReader t = do
     let wrap = ConT ''ReaderT `AppT` ConT ''Database
-    gs <- [|GenericSql withStmt execute insert tableExists keyType|]
-    deriveGenericSql wrap gs t
+    gs <- [|GenericSql withStmt execute insert tableExists "INTEGER PRIMARY KEY"|]
+    deriveGenericSql wrap ''MonadCatchIO gs t
