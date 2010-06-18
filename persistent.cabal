@@ -26,8 +26,6 @@ library
     build-depends:   base >= 4 && < 5,
                      template-haskell >= 2.4 && < 2.5,
                      bytestring >= 0.9.1 && < 0.10,
-                     data-object-yaml >= 0.3.0 && < 0.4,
-                     data-object >= 0.3.1 && < 0.4,
                      convertible >= 1.0.9 && < 1.1,
                      HDBC-sqlite3 >= 2.3 && < 2.4,
                      HDBC >= 2.2.6 && < 2.3,

@@ -140,7 +140,7 @@ initialize gs t v = do
                   "(id " ++ gsKeyType gs ++
                   concatMap go' cols ++ ")"
         gsExecute gs sql []
-        mapM_ go $ tableUniques' t
+        --mapM_ go $ tableUniques' t
   where
     go' ((colName, (_, nullable)), p) = concat -- FIXME remove nullable
         [ ","

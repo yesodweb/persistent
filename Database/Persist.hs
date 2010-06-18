@@ -4,6 +4,7 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Database.Persist
     ( -- * High level design
@@ -108,9 +109,9 @@ instance Persistable T.Text where
     fromPersistValue = fmap T.pack . fromPersistValue
     sqlType _ = SqlString
 
-instance Persistable Html where
+instance Persistable (Html ()) where
     toPersistValue = PersistByteString . S.concat . L.toChunks . renderHtml
-    fromPersistValue = fmap unsafeBytestring . fromPersistValue
+    fromPersistValue = fmap unsafeByteString . fromPersistValue
     sqlType _ = SqlString
 
 instance Persistable Int where
