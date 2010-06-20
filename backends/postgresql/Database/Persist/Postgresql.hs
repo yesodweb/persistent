@@ -15,25 +15,17 @@ module Database.Persist.Postgresql
     , connectPostgreSQL
     ) where
 
-import Database.Persist (PersistEntity, Key, Order, Filter, Update,
-                         Unique, SqlType (..), PersistValue (..),
-                         PersistField (..))
-import qualified Database.Persist as P
+import Database.Persist (PersistValue (..))
 import Database.Persist.Helper
 import Database.Persist.GenericSql
 import Control.Monad.Trans.Reader
 import Language.Haskell.TH.Syntax hiding (lift)
-import qualified Language.Haskell.TH.Syntax as TH
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.List (intercalate)
 import "MonadCatchIO-transformers" Control.Monad.CatchIO
-import Control.Monad (unless)
 import qualified Database.HDBC as H
 import Database.HDBC.PostgreSQL
-import Data.Int (Int64)
-import Database.Persist.Quasi
 import Data.Char (toLower)
-import Control.Arrow (first, second)
 
 persistPostgresql :: [EntityDef] -> Q [Dec]
 persistPostgresql = fmap concat . mapM derivePersistPostgresqlReader
@@ -57,6 +49,7 @@ withStmt sql vals f = do
     _ <- liftIO $ H.execute stmt $ map pToSql vals
     f $ liftIO $ (fmap . fmap) (map pFromSql) $ H.fetchRow stmt
 
+execute :: MonadIO m => String -> [PersistValue] -> PostgresqlReader m ()
 execute sql vals = do
     conn <- ask
     stmt <- liftIO $ H.prepare conn sql
