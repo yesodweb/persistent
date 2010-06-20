@@ -12,7 +12,7 @@ module Database.Persist.Redis
     , IsStrings (..)
     ) where
 
-import Database.Persist (PersistEntity, Table (..), Key)
+import Database.Persist (PersistEntity, Key)
 import Database.Persist.Helper
 import Control.Monad.Trans.Reader
 import Language.Haskell.TH.Syntax hiding (lift)
@@ -27,7 +27,7 @@ import Data.Convertible.Text
 import Data.Typeable
 import Safe
 
-persistRedis :: [Table] -> Q [Dec]
+persistRedis :: [EntityDef] -> Q [Dec]
 persistRedis = fmap concat . mapM derive
 
 runRedis :: RedisReader m a -> R.Redis -> m a
@@ -39,9 +39,9 @@ class IsStrings a where
     toStrings :: a -> [String]
     fromStrings :: [String] -> Attempt a
 
-derive :: Table -> Q [Dec]
+derive :: EntityDef -> Q [Dec]
 derive t = do
-    let name = tableName t
+    let name = entityName t
     let dt = dataTypeDec t
     let monad = ConT ''RedisReader `AppT` VarT (mkName "m")
 
@@ -100,23 +100,23 @@ derive t = do
             ]
     return [dt, sq, inst, keysyn]
 
-mkToStrings :: Table -> Q Clause
+mkToStrings :: EntityDef -> Q Clause
 mkToStrings t = do
-    xs <- mapM (const $ newName "x") $ tableColumns t
+    xs <- mapM (const $ newName "x") $ entityColumns t
     ts <- [|cs|]
     let xs' = map (AppE ts . VarE) xs
-    return $ Clause [ConP (mkName $ tableName t) $ map VarP xs]
+    return $ Clause [ConP (mkName $ entityName t) $ map VarP xs]
                     (NormalB $ ListE xs') []
 
 data InvalidFromStrings = InvalidFromStrings
     deriving (Show, Typeable)
 instance Exception InvalidFromStrings
 
-mkFromStrings :: Table -> Q [Clause]
+mkFromStrings :: EntityDef -> Q [Clause]
 mkFromStrings t = do
     nothing <- [|Failure InvalidFromStrings|]
-    let cons = ConE $ mkName $ tableName t
-    xs <- mapM (const $ newName "x") $ tableColumns t
+    let cons = ConE $ mkName $ entityName t
+    xs <- mapM (const $ newName "x") $ entityColumns t
     fs <- [|ca|]
     let xs' = map (AppE fs . VarE) xs
     let pat = ListP $ map VarP xs
@@ -134,12 +134,12 @@ initialize :: Monad m => x -> y -> m ()
 initialize _ _ = return ()
 
 select :: (IsStrings v, Num (Key v), MonadIO m)
-       => Table -> x -> y -> RedisReader m [(Key v, v)]
+       => EntityDef -> x -> y -> RedisReader m [(Key v, v)]
 select t _ _ = do
     r <- ask
-    R.RMulti (Just s) <- liftIO $ R.smembers r (tableName t ++ ":all")
+    R.RMulti (Just s) <- liftIO $ R.smembers r (entityName t ++ ":all")
     let s' = map (\(R.RBulk (Just x)) -> x :: Int) s
-    vals <- liftIO $ mapM (\x -> R.get r $ tableName t ++ ":id:" ++ show x) s'
+    vals <- liftIO $ mapM (\x -> R.get r $ entityName t ++ ":id:" ++ show x) s'
     let vals' = map (\(R.RBulk (Just x)) -> x :: String) vals
     return $ mapMaybe go $ zip s' vals'
   where
@@ -149,13 +149,13 @@ select t _ _ = do
         return (fromIntegral k, v'')
 
 insert :: (IsStrings a, MonadIO m, Num (Key a))
-       => Table -> a -> RedisReader m (Key a)
+       => EntityDef -> a -> RedisReader m (Key a)
 insert t val = do
     let val' = show $ toStrings val
     r <- ask
-    R.RInt i <- liftIO $ R.incr r $ "global:" ++ tableName t ++ ":nextId"
+    R.RInt i <- liftIO $ R.incr r $ "global:" ++ entityName t ++ ":nextId"
     liftIO $ print i
-    _ <- liftIO $ R.set r (tableName t ++ ":id:" ++ show i) val'
-    --R.set r (tableName t ++ ":slug:" ++ show i) i
-    _ <- liftIO $ R.sadd r (tableName t ++ ":all") i
+    _ <- liftIO $ R.set r (entityName t ++ ":id:" ++ show i) val'
+    --R.set r (entityName t ++ ":slug:" ++ show i) i
+    _ <- liftIO $ R.sadd r (entityName t ++ ":all") i
     return $ fromIntegral i

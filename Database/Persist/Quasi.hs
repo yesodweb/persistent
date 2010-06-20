@@ -4,7 +4,7 @@ module Database.Persist.Quasi
 
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
-import Database.Persist
+import Database.Persist.Helper
 import Data.Char
 import Data.Maybe (mapMaybe)
 
@@ -14,7 +14,7 @@ persist = QuasiQuoter
     , quotePat = error "Cannot quasi-quote a Persist pattern."
     }
 
-parse :: String -> [Table]
+parse :: String -> [EntityDef]
 parse = map parse' . nest . map words' . filter (not . null) . lines
 
 words' :: String -> (Bool, [String])
@@ -29,54 +29,20 @@ nest ((False, _):_) = error "First line in block must have exactly one word"
 nest ((True, _):_) = error "Blocks must begin with non-indented lines"
 nest [] = []
 
-parse' :: (String, [[String]]) -> Table
-parse' (name, attribs) = Table name cols upds filts ords uniqs derives
+parse' :: (String, [[String]]) -> EntityDef
+parse' (name, attribs) = EntityDef name cols uniqs derives
   where
     cols = concatMap takeCols attribs
-    upds = concatMap takeUpds attribs
-    filts = filter notAllFalse $ concatMap takeFilts attribs
-    ords = filter notAllFalse' $ concatMap takeOrds attribs
     uniqs = concatMap takeUniqs attribs
     derives = case mapMaybe takeDerives attribs of
                 [] -> ["Show", "Read", "Eq"]
                 x -> concat x
 
-takeCols :: [String] -> [Column]
+takeCols :: [String] -> [(String, String, [String])]
 takeCols ("deriving":_) = []
 takeCols (n@(f:_):ty:rest)
-    | isLower f = [(n, (ty, "null" `elem` rest))]
+    | isLower f = [(n, ty, rest)]
 takeCols _ = []
-
-takeUpds :: [String] -> [String]
-takeUpds (n@(f:_):_ty:rest)
-    | isLower f && "update" `elem` rest = [n]
-takeUpds _ = []
-
-takeFilts :: [String] -> [(String, Bool, Bool, Bool, Bool, Bool, Bool)]
-takeFilts (n@(f:_):_ty:rest)
-    | isLower f = [(n, "Eq" `elem` rest
-                     , "Ne" `elem` rest
-                     , "Gt" `elem` rest
-                     , "Lt" `elem` rest
-                     , "Ge" `elem` rest
-                     , "Le" `elem` rest
-                     )]
-takeFilts _ = []
-
-notAllFalse :: (String, Bool, Bool, Bool, Bool, Bool, Bool) -> Bool
-notAllFalse (_, False, False, False, False, False, False) = False
-notAllFalse _ = True
-
-takeOrds :: [String] -> [(String, Bool, Bool)]
-takeOrds (n@(f:_):_ty:rest)
-    | isLower f = [(n, "Asc" `elem` rest
-                     , "Desc" `elem` rest
-                     )]
-takeOrds _ = []
-
-notAllFalse' :: (String, Bool, Bool) -> Bool
-notAllFalse' (_, False, False) = False
-notAllFalse' _ = True
 
 takeUniqs :: [String] -> [(String, [String])]
 takeUniqs (n@(f:_):rest)

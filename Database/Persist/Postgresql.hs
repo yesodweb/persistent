@@ -15,7 +15,7 @@ module Database.Persist.Postgresql
     , connectPostgreSQL
     ) where
 
-import Database.Persist (PersistEntity, Table, Key, Order, Filter, Update,
+import Database.Persist (PersistEntity, Key, Order, Filter, Update,
                          Unique, SqlType (..), PersistValue (..),
                          PersistField (..))
 import qualified Database.Persist as P
@@ -35,7 +35,7 @@ import Database.Persist.Quasi
 import Data.Char (toLower)
 import Control.Arrow (first, second)
 
-persistPostgresql :: String -> [Table] -> Q [Dec]
+persistPostgresql :: String -> [EntityDef] -> Q [Dec]
 persistPostgresql i = fmap concat . mapM (derivePersistPostgresqlReader i)
 
 type PostgresqlReader = ReaderT Connection
@@ -81,7 +81,7 @@ tableExists t = do
     tables <- liftIO $ H.getTables conn
     return $ map toLower t `elem` tables
 
-derivePersistPostgresqlReader :: String -> Table -> Q [Dec]
+derivePersistPostgresqlReader :: String -> EntityDef -> Q [Dec]
 derivePersistPostgresqlReader inner t = do
     let wrap = ConT ''ReaderT `AppT` ConT ''Connection
     gs <- [|GenericSql withStmt execute insert tableExists "SERIAL"|]

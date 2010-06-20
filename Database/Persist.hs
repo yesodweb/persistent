@@ -6,11 +6,8 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 module Database.Persist
-    ( -- * High level design
-      Column
-    , Table   (..)
-      -- * Values
-    , PersistValue (..)
+    ( -- * Values
+      PersistValue (..)
     , SqlType (..)
     , PersistField (..)
       -- * Type class
@@ -28,33 +25,6 @@ import Text.Hamlet
 import qualified Data.Text as T
 import qualified Data.ByteString as S
 import qualified Data.ByteString.Lazy as L
-
--- | name, type
-type Column = (String, (String, Bool)) -- is it nullable?
-
-data Table = Table
-    { tableName    :: String
-    , tableColumns :: [Column]
-    , tableUpdates :: [String]
-    , tableFilters :: [(String, Bool, Bool, Bool, Bool, Bool, Bool)] -- eq, ne, gt, lt, ge, le
-    , tableOrders  :: [(String, Bool, Bool)] -- asc, desc
-    , tableUniques :: [(String, [String])]
-    , tableDerives :: [String]
-    }
-    deriving Show
-
-instance Lift Table where
-    lift (Table a b c d e f g) = do
-        t <- [|Table|]
-        a' <- lift a
-        b' <- lift b
-        c' <- lift c
-        d' <- lift d
-        e' <- lift e
-        f' <- lift f
-        g' <- lift g
-        return $ t `AppE` a' `AppE` b' `AppE` c' `AppE` d' `AppE` e' `AppE` f'
-                   `AppE` g'
 
 data PersistValue = PersistString String
                   | PersistByteString ByteString

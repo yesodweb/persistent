@@ -17,7 +17,7 @@ module Database.Persist.Sqlite
     , persist
     ) where
 
-import Database.Persist (Table, PersistValue (..))
+import Database.Persist (PersistValue (..))
 import Database.Persist.Helper
 import Control.Monad.Trans.Reader
 import Language.Haskell.TH.Syntax hiding (lift)
@@ -28,7 +28,7 @@ import Database.Sqlite
 import Database.Persist.Quasi
 import Database.Persist.GenericSql
 
-persistSqlite :: String -> [Table] -> Q [Dec]
+persistSqlite :: String -> [EntityDef] -> Q [Dec]
 persistSqlite inner = fmap concat . mapM (derivePersistSqliteReader inner)
 
 type SqliteReader = ReaderT Database
@@ -92,7 +92,7 @@ tableExists t = withStmt sql [PersistString t] $ \pop -> do
   where
     sql = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?"
 
-derivePersistSqliteReader :: String -> Table -> Q [Dec]
+derivePersistSqliteReader :: String -> EntityDef -> Q [Dec]
 derivePersistSqliteReader inner t = do
     let wrap = ConT ''ReaderT `AppT` ConT ''Database
     gs <- [|GenericSql withStmt execute insert tableExists "INTEGER PRIMARY KEY"|]

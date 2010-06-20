@@ -3,8 +3,11 @@
 module Database.Persist.Helper
     ( recName
     , upperFirst
-    , filtsToList
-    , ordsToList
+      -- * High level design
+    , EntityDef (..)
+    , entityOrders
+    , entityFilters
+    , entityUpdates
       -- * TH datatype helpers
     , dataTypeDec
     , persistMonadTypeDec
@@ -41,8 +44,25 @@ module Database.Persist.Helper
 import Database.Persist
 import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, mapMaybe)
 import Web.Routes.Quasi (SinglePiece)
+
+data EntityDef = EntityDef
+    { entityName    :: String
+    , entityColumns :: [(String, String, [String])] -- ^ name, type, attribs
+    , entityUniques :: [(String, [String])] -- ^ name, columns
+    , entityDerives :: [String]
+    }
+    deriving Show
+
+instance Lift EntityDef where
+    lift (EntityDef a b c d) = do
+        e <- [|EntityDef|]
+        a' <- lift a
+        b' <- lift b
+        c' <- lift c
+        d' <- lift d
+        return $ e `AppE` a' `AppE` b' `AppE` c' `AppE` d'
 
 recName :: String -> String -> String
 recName dt f = lowerFirst dt ++ upperFirst f
@@ -55,101 +75,109 @@ upperFirst :: String -> String
 upperFirst (x:xs) = toUpper x : xs
 upperFirst [] = []
 
-dataTypeDec :: Table -> Dec
+dataTypeDec :: EntityDef -> Dec
 dataTypeDec t =
-    let name = mkName $ tableName t
-        cols = map (mkCol $ tableName t) $ tableColumns t
-     in DataD [] name [] [RecC name cols] $ map mkName $ tableDerives t
+    let name = mkName $ entityName t
+        cols = map (mkCol $ entityName t) $ entityColumns t
+     in DataD [] name [] [RecC name cols] $ map mkName $ entityDerives t
   where
-    mkCol x (n, ty) = (mkName $ recName x n, NotStrict, pairToType ty)
+    mkCol x (n, ty, as) =
+        (mkName $ recName x n, NotStrict, pairToType (ty, "null" `elem` as))
 
-persistMonadTypeDec :: Type -> Table -> Dec
+persistMonadTypeDec :: Type -> EntityDef -> Dec
 persistMonadTypeDec monad t =
-    TySynInstD ''PersistMonad [ConT $ mkName $ tableName t] monad
+    TySynInstD ''PersistMonad [ConT $ mkName $ entityName t] monad
 
-keyTypeDec :: String -> String -> Table -> Dec
+keyTypeDec :: String -> String -> EntityDef -> Dec
 keyTypeDec constr typ t =
-    NewtypeInstD [] ''Key [ConT $ mkName $ tableName t]
+    NewtypeInstD [] ''Key [ConT $ mkName $ entityName t]
                 (NormalC (mkName constr) [(NotStrict, ConT $ mkName typ)])
                 [''Show, ''Read, ''Num, ''Integral, ''Enum, ''Eq, ''Ord,
                  ''Real, ''PersistField, ''SinglePiece]
 
-filterTypeDec :: Table -> Dec
+filterTypeDec :: EntityDef -> Dec
 filterTypeDec t =
-    DataInstD [] ''Filter [ConT $ mkName $ tableName t]
-            (concatMap (mkFilter (tableName t) (tableColumns t))
-              $ tableFilters t)
-            (if null (tableFilters t) then [] else [''Show, ''Read, ''Eq])
-
-mkFilter :: String
-         -> [(String, (String, Bool))]
-         -> (String, Bool, Bool, Bool, Bool, Bool, Bool)
-         -> [Con]
-mkFilter x cols filts = map go $ filtsToList filts
+    DataInstD [] ''Filter [ConT $ mkName $ entityName t]
+            (map (mkFilter $ entityName t) filts)
+            (if null filts then [] else [''Show, ''Read, ''Eq])
   where
-    go (s, t) = NormalC (mkName $ x ++ upperFirst s ++ t)
-                               [(NotStrict, pairToType $ ty s)]
-    ty s = case lookup s cols of
-                Nothing -> error $ "Invalid column: " ++ s
-                Just ty' -> ty'
+    filts = entityFilters t
 
-updateTypeDec :: Table -> Dec
+entityFilters :: EntityDef -> [(String, String, Bool, PersistFilter)]
+entityFilters = mapMaybe go' . concatMap go . entityColumns
+  where
+    go (x, y, as) = map (\a -> (x, y, "null" `elem` as, a)) as
+    go' (x, y, z, a) =
+        case readMay a of
+            Nothing -> Nothing
+            Just a' -> Just (x, y, z, a')
+    readMay s =
+        case reads s of
+            (x, _):_ -> Just x
+            [] -> Nothing
+
+mkFilter :: String -> (String, String, Bool, PersistFilter) -> Con
+mkFilter x (s, ty, isNull', filt) =
+    NormalC (mkName $ x ++ upperFirst s ++ show filt)
+                       [(NotStrict, pairToType (ty, isNull'))]
+
+updateTypeDec :: EntityDef -> Dec
 updateTypeDec t =
-    DataInstD [] ''Update [ConT $ mkName $ tableName t]
-        (map (mkUpdate (tableName t) (tableColumns t)) (tableUpdates t))
-        (if null (tableUpdates t) then [] else [''Show, ''Read, ''Eq])
+    DataInstD [] ''Update [ConT $ mkName $ entityName t]
+        (map (mkUpdate $ entityName t) tu)
+        (if null tu then [] else [''Show, ''Read, ''Eq])
+  where
+    tu = entityUpdates t
 
-mkUpdate :: String -> [(String, (String, Bool))] -> String -> Con
-mkUpdate x cols s =
+entityUpdates :: EntityDef -> [(String, String, Bool)]
+entityUpdates = mapMaybe go . entityColumns
+  where
+    go (name, typ, attribs)
+        | "update" `elem` attribs =
+            Just (name, typ, "null" `elem` attribs)
+        | otherwise = Nothing
+
+mkUpdate :: String -> (String, String, Bool) -> Con
+mkUpdate x (s, ty, isBool) =
     NormalC (mkName $ x ++ upperFirst s)
-                [(NotStrict, pairToType ty)]
-  where
-    ty = case lookup s cols of
-                Nothing -> error $ "Invalid column: " ++ s
-                Just ty' -> ty'
+                [(NotStrict, pairToType (ty, isBool))]
 
-orderTypeDec :: Table -> Dec
+orderTypeDec :: EntityDef -> Dec
 orderTypeDec t =
-    DataInstD [] ''Order [ConT $ mkName $ tableName t]
-            (concatMap (mkOrder $ tableName t) (tableOrders t))
-            (if null (tableOrders t) then [] else [''Show, ''Read, ''Eq])
-
-mkOrder :: String -> (String, Bool, Bool) -> [Con]
-mkOrder x (s, a, d) =
-     (if a then (:) (go "Asc") else id)
-   $ (if d then (:) (go "Desc") else id) []
+    DataInstD [] ''Order [ConT $ mkName $ entityName t]
+            (map (mkOrder $ entityName t) ords)
+            (if null ords then [] else [''Show, ''Read, ''Eq])
   where
-    go ad = NormalC (mkName $ x ++ upperFirst s ++ ad) []
+    ords = entityOrders t
 
-uniqueTypeDec :: Table -> Dec
+entityOrders :: EntityDef -> [(String, String)]
+entityOrders = concatMap go . entityColumns
+  where
+    go (x, _, ys) = mapMaybe (go' x) ys
+    go' x "Asc" = Just (x, "Asc")
+    go' x "Desc" = Just (x, "Desc")
+    go' _ _ = Nothing
+
+mkOrder :: String -> (String, String) -> Con
+mkOrder x (s, ad) = NormalC (mkName $ x ++ upperFirst s ++ ad) []
+
+uniqueTypeDec :: EntityDef -> Dec
 uniqueTypeDec t =
-    DataInstD [] ''Unique [ConT $ mkName $ tableName t]
-            (map (mkUnique t) $ tableUniques t)
-            (if null (tableUniques t) then [] else [''Show, ''Read, ''Eq])
+    DataInstD [] ''Unique [ConT $ mkName $ entityName t]
+            (map (mkUnique t) $ entityUniques t)
+            (if null (entityUniques t) then [] else [''Show, ''Read, ''Eq])
 
-mkUnique :: Table -> (String, [String]) -> Con
+mkUnique :: EntityDef -> (String, [String]) -> Con
 mkUnique t (constr, fields) =
     NormalC (mkName constr) types
   where
-    types = map (go . fromJust . flip lookup (tableColumns t)) fields
+    types = map (go . fromJust . flip lookup3 (entityColumns t)) fields
     go (_, True) = error "Error: cannot have nullables in unique"
     go x = (NotStrict, pairToType x)
-
-filtsToList :: (String, Bool, Bool, Bool, Bool, Bool, Bool)
-            -> [(String, String)]
-filtsToList (s, a, b, c, d, e, f)
-    = go $ zip ["Eq", "Ne", "Gt", "Lt", "Ge", "Le"] [a, b, c, d, e, f]
-  where
-    go [] = []
-    go ((_, False):rest) = go rest
-    go ((x, True):rest) = (s, x) : go rest
-
-ordsToList :: (String, Bool, Bool) -> [(String, String)]
-ordsToList (s, a, b) = go $ zip ["Asc", "Desc"] [a, b]
-  where
-    go [] = []
-    go ((_, False):rest) = go rest
-    go ((x, True):rest) = (s, x) : go rest
+    lookup3 _ [] = Nothing
+    lookup3 x ((x', y, z):rest)
+        | x == x' = Just (y, "null" `elem` z)
+        | otherwise = lookup3 x rest
 
 pairToType :: (String, Bool) -> Type
 pairToType (s, False) = ConT $ mkName s
@@ -229,23 +257,24 @@ mkToOrder typ pairs =
         Clause [RecP (mkName constr) []] (NormalB $ ConE $ mkName val) []
 
 data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le
+    deriving (Read, Show)
 class ToFilter a where
     toFilter :: a -> PersistFilter
     isNull :: a -> Bool
 
-mkToFilter :: Type -> [(String, (String, Bool))] -> Dec
+mkToFilter :: Type -> [(String, PersistFilter, Bool)] -> Dec
 mkToFilter typ pairs =
     InstanceD [] (ConT ''ToFilter `AppT` typ)
         [ FunD (mkName "toFilter") $ degen $ map go pairs
         , FunD (mkName "isNull") $ degen $ concatMap go' pairs
         ]
   where
-    go (constr, (val, _)) =
-        Clause [RecP (mkName constr) []] (NormalB $ ConE $ mkName val) []
-    go' (constr, (_, False)) =
+    go (constr, pf, _) =
+        Clause [RecP (mkName constr) []] (NormalB $ ConE $ mkName $ show pf) []
+    go' (constr, _, False) =
         [Clause [RecP (mkName constr) []]
             (NormalB $ ConE $ mkName "False") []]
-    go' (constr, (_, True)) =
+    go' (constr, _, True) =
         [ Clause [ConP (mkName constr) [ConP (mkName "Nothing") []]]
             (NormalB $ ConE $ mkName "True") []
         , Clause [ConP (mkName constr) [WildP]]
@@ -287,9 +316,9 @@ apE (Left x) _ = Left x
 apE _ (Left x) = Left x
 apE (Right f) (Right y) = Right $ f y
 
-addIsNullable :: [Column] -> (String, (String, String))
+addIsNullable :: EntityDef -> (String, (String, String))
               -> (String, (String, Bool))
-addIsNullable cols (col, (name, typ)) =
-    case lookup col cols of
-        Nothing -> error $ "Missing columns: " ++ col ++ ", " ++ show cols
-        Just (_, nullable) -> (name, (typ, nullable))
+addIsNullable ed (col, (name, typ)) =
+    case filter (\(x, _, _) -> x == col) $ entityColumns ed of
+        [] -> error $ "Missing columns: " ++ col ++ ", " ++ show ed
+        (_, _, attribs):_ -> (name, (typ, "null" `elem` attribs))

@@ -8,18 +8,10 @@ import Database.Persist
 import Database.Persist.Sqlite
 import Control.Monad.IO.Class
 
-persistSqlite "IO" [Table "Person"
-    [ ("name", ("String", False))
-    , ("age", ("Int", False))
-    , ("color", ("String", True))
-    ]
-    ["name", "age"]
-    [ ("name", True, True, False, False, False, False)
-    , ("age", False, False, False, True, False, False)
-    , ("color", True, True, False, False, False, False)
-    ]
-    [ ("name", False, True)
-    , ("age", True, False)
+persistSqlite "IO" [EntityDef "Person"
+    [ ("name", "String", words "update Eq Ne Desc")
+    , ("age", "Int", words "update Asc Lt")
+    , ("color", "String", words "null Eq Ne")
     ]
     [("PersonNameKey", ["name"])]
     []
