@@ -130,12 +130,13 @@ deriveGenericSql wrap super gs t = do
         , mkHalfDefined (ConT $ mkName name) name $ length $ tableColumns t
         ]
 
-initialize :: (ToPersistFields v, Monad m)
+initialize :: (ToPersistFields v, Monad m, HalfDefined v)
            => GenericSql m -> Table -> v -> m ()
 initialize gs t v = do
     doesExist <- gsTableExists gs $ tableName t
     unless doesExist $ do
-        let cols = zip (tableColumns t) $ toPersistFields v
+        let cols = zip (tableColumns t) $ toPersistFields
+                 $ halfDefined `asTypeOf` v
         let sql = "CREATE TABLE " ++ tableName t ++
                   "(id " ++ gsKeyType gs ++
                   concatMap go' cols ++ ")"

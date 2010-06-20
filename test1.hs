@@ -33,7 +33,7 @@ main = withSqlite ":memory:" $ runSqlite go
 
 go :: SqliteReader IO ()
 go = do
-    initialize (halfDefined :: Person)
+    initialize (undefined :: Person)
     pid <- insert $ Person "Michael" 25 Nothing
     liftIO $ print pid
 
