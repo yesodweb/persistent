@@ -38,12 +38,10 @@ data GenericSql m = GenericSql
 
 type RowPopper m = m (Maybe [PersistValue])
 
-deriveGenericSql :: Type -> String -> Name -> Exp -> EntityDef -> Q [Dec]
-deriveGenericSql wrap inner super gs t = do
+deriveGenericSql :: Type -> Name -> Exp -> EntityDef -> Q [Dec]
+deriveGenericSql monad super gs t = do
     let name = entityName t
     let dt = dataTypeDec t
-    let inner' = foldl1 AppT $ map (ConT . mkName) $ words inner
-    let monad = wrap `AppT` inner'
 
     fsv <- mkFromPersistValues t
     let sq =

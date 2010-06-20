@@ -8,7 +8,7 @@ import Database.Persist
 import Database.Persist.Sqlite
 import Control.Monad.IO.Class
 
-persistSqlite "IO" [EntityDef "Person"
+persistSqlite [EntityDef "Person"
     [ ("name", "String", words "update Eq Ne Desc")
     , ("age", "Int", words "update Asc Lt")
     , ("color", "String", words "null Eq Ne")

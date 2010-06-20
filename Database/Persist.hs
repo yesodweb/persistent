@@ -4,6 +4,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE PackageImports #-}
 
 module Database.Persist
     ( -- * Values
@@ -25,6 +26,7 @@ import Text.Hamlet
 import qualified Data.Text as T
 import qualified Data.ByteString as S
 import qualified Data.ByteString.Lazy as L
+import "MonadCatchIO-transformers" Control.Monad.CatchIO (MonadCatchIO)
 
 data PersistValue = PersistString String
                   | PersistByteString ByteString
@@ -159,7 +161,7 @@ instance PersistField a => PersistField (Maybe a) where
     isNullable _ = True
 
 class PersistEntity val where
-    type PersistMonad val :: * -> *
+    type PersistMonad val :: (* -> *) -> * -> *
 
     data Key    val
     data Update val
@@ -168,25 +170,28 @@ class PersistEntity val where
     data Unique val
 
     -- initialization, value is ignored
-    initialize  :: val                          -> (PersistMonad val) ()
+    initialize :: MonadCatchIO m => val -> (PersistMonad val) m ()
 
     -- insert
-    insert      :: val                          -> (PersistMonad val) (Key val)
-    -- Removed for PostgreSQL insertR     :: val                          -> m (Key val)
-    replace     :: Key val      -> val          -> (PersistMonad val) ()
+    insert :: MonadCatchIO m => val -> (PersistMonad val) m (Key val)
+    replace :: MonadCatchIO m => Key val -> val -> (PersistMonad val) m ()
 
     -- modify
-    update      :: Key val      -> [Update val] -> (PersistMonad val) ()
-    updateWhere :: [Filter val] -> [Update val] -> (PersistMonad val) ()
+    update :: MonadCatchIO m => Key val -> [Update val]
+           -> (PersistMonad val) m ()
+    updateWhere :: MonadCatchIO m => [Filter val] -> [Update val]
+                -> (PersistMonad val) m ()
 
     -- delete
-    delete      :: Key val                      -> (PersistMonad val) ()
-    deleteBy    :: Unique val                   -> (PersistMonad val) ()
-    deleteWhere :: [Filter val]                 -> (PersistMonad val) ()
+    delete :: MonadCatchIO m => Key val -> (PersistMonad val) m ()
+    deleteBy :: MonadCatchIO m => Unique val -> (PersistMonad val) m ()
+    deleteWhere :: MonadCatchIO m => [Filter val] -> (PersistMonad val) m ()
 
     -- read single
-    get         :: Key val                      -> (PersistMonad val) (Maybe val)
-    getBy       :: Unique val                   -> (PersistMonad val) (Maybe (Key val, val))
+    get :: MonadCatchIO m => Key val -> (PersistMonad val) m (Maybe val)
+    getBy :: MonadCatchIO m => Unique val
+          -> (PersistMonad val) m (Maybe (Key val, val))
 
     -- read multiple
-    select      :: [Filter val] -> [Order val]  -> (PersistMonad val) [(Key val, val)]
+    select :: MonadCatchIO m => [Filter val] -> [Order val]
+           -> (PersistMonad val) m [(Key val, val)]
