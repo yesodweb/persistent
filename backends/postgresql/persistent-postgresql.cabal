@@ -1,11 +1,11 @@
-name:            persistent
+name:            persistent-postgresql
 version:         0.0.0
 license:         BSD3
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
 maintainer:      Michael Snoyman <michael@snoyman.com>
-synopsis:        Type-safe, non-relational, multi-backend persistence.
-description:     This library provides just the general interface and helper functions. You must use a specific backend in order to make this useful.
+synopsis:        Backend for the persistent library using postgresql.
+description:     Based on the HDBC-postgresql package
 category:        Database
 stability:       Stable
 cabal-version:   >= 1.6
@@ -27,19 +27,24 @@ library
     build-depends:   base >= 4 && < 5,
                      template-haskell >= 2.4 && < 2.5,
                      bytestring >= 0.9.1 && < 0.10,
+                     convertible >= 1.0.9 && < 1.1,
+                     HDBC >= 2.2.6 && < 2.3,
                      transformers >= 0.2.1 && < 0.3,
                      MonadCatchIO-transformers >= 0.2.2 && < 0.3,
+                     attempt >= 0.3.0 && < 0.4,
+                     convertible-text >= 0.3.0 && < 0.4,
+                     safe >= 0.2 && < 0.3,
                      time >= 1.1.4 && < 1.2,
-                     utf8-string >= 0.3.4 && < 0.4,
+                     utf8-string >= 0.3.6 && < 0.4,
                      text >= 0.7.1 && < 0.8,
                      hamlet >= 0.3.0 && < 0.4,
-                     web-routes-quasi >= 0.4.0 && < 0.5
-    exposed-modules: Database.Persist
-                     Database.Persist.Helper
-                     Database.Persist.Quasi
-                     Database.Persist.GenericSql
+                     web-routes-quasi >= 0.4.0 && < 0.5,
+                     HDBC-postgresql >= 2.2.3.1 && < 2.3,
+                     persistent >= 0.0.0 && < 0.1
+    exposed-modules: Database.Persist.Postgresql
     ghc-options:     -Wall
 
 source-repository head
   type:     git
   location: git://github.com/snoyberg/persistent.git
+

@@ -17,7 +17,6 @@ module Database.Persist.GenericSql
 import Database.Persist (PersistEntity, Key, Order, Filter, Update,
                          Unique, SqlType (..), PersistValue (..),
                          PersistField (..))
-import qualified Database.Persist as P
 import Database.Persist.Helper
 import Language.Haskell.TH.Syntax hiding (lift)
 import qualified Language.Haskell.TH.Syntax as TH
@@ -25,7 +24,7 @@ import Data.List (intercalate)
 import Control.Monad (unless, liftM)
 import Data.Int (Int64)
 import Database.Persist.Quasi
-import Control.Arrow (first, second)
+import Control.Arrow (second)
 
 data GenericSql m = GenericSql
     { gsWithStmt :: forall a.
@@ -38,8 +37,8 @@ data GenericSql m = GenericSql
 
 type RowPopper m = m (Maybe [PersistValue])
 
-deriveGenericSql :: Type -> Name -> Exp -> EntityDef -> Q [Dec]
-deriveGenericSql monad super gs t = do
+deriveGenericSql :: Type -> Exp -> EntityDef -> Q [Dec]
+deriveGenericSql monad gs t = do
     let name = entityName t
     let dt = dataTypeDec t
 

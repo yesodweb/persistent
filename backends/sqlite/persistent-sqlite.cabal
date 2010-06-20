@@ -1,0 +1,65 @@
+name:            persistent-sqlite
+version:         0.0.0
+license:         BSD3
+license-file:    LICENSE
+author:          Michael Snoyman <michael@snoyman.com>
+maintainer:      Michael Snoyman <michael@snoyman.com>
+synopsis:        Backend for the persistent library using sqlite3.
+description:     This package includes a thin sqlite3 wrapper based on the direct-sqlite package, as well as the entire C library, so there are no system dependencies.
+category:        Database
+stability:       Stable
+cabal-version:   >= 1.6
+build-type:      Simple
+homepage:        http://docs.yesodweb.com/persistent/
+
+flag nolib
+  description: Skip building the library
+  default: False
+flag buildtests
+  description: Build the executable to run unit tests
+  default: False
+
+library
+    if flag(nolib)
+        Buildable: False
+    else
+        Buildable: True
+    build-depends:   base >= 4 && < 5,
+                     template-haskell >= 2.4 && < 2.5,
+                     bytestring >= 0.9.1 && < 0.10,
+                     transformers >= 0.2.1 && < 0.3,
+                     containers >= 0.2 && < 0.4,
+                     MonadCatchIO-transformers >= 0.2.2 && < 0.3,
+                     redis >= 0.6 && < 0.7,
+                     attempt >= 0.3.0 && < 0.4,
+                     convertible-text >= 0.3.0 && < 0.4,
+                     safe >= 0.2 && < 0.3,
+                     time >= 1.1.4 && < 1.2,
+                     web-routes-quasi >= 0.4.0 && < 0.5,
+                     utf8-string >= 0.3.4 && < 0.4,
+                     persistent >= 0.0.0 && < 0.1
+    exposed-modules: Database.Sqlite
+                     Database.Persist.Sqlite
+    ghc-options:     -Wall
+    c-sources:       cbits/sqlite3.c
+
+executable           test1
+    if flag(buildtests)
+        Buildable: True
+        build-depends:   base >= 4 && < 5,
+                         template-haskell >= 2.4 && < 2.5,
+                         bytestring >= 0.9.1 && < 0.10,
+                         transformers >= 0.2.1 && < 0.3,
+                         MonadCatchIO-transformers >= 0.2.2 && < 0.3,
+                         redis >= 0.6 && < 0.7,
+                         safe >= 0.2 && < 0.3,
+                         time >= 1.1.4 && < 1.2,
+                         utf8-string >= 0.3.4 && < 0.4
+    else
+        Buildable: False
+    Extra-Libraries: sqlite3
+    main-is:         test1.hs
+
+source-repository head
+  type:     git
+  location: git://github.com/snoyberg/persistent.git

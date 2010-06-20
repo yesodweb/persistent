@@ -15,7 +15,6 @@ module Database.Persist
     , PersistEntity (..)
     ) where
 
-import Language.Haskell.TH.Syntax
 import Data.Time (Day, TimeOfDay, UTCTime)
 import Data.ByteString.Char8 (ByteString, unpack)
 import qualified Data.ByteString.UTF8 as BSU

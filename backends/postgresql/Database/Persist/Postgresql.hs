@@ -85,7 +85,7 @@ derivePersistPostgresqlReader :: EntityDef -> Q [Dec]
 derivePersistPostgresqlReader t = do
     let wrap = ConT ''ReaderT `AppT` ConT ''Connection
     gs <- [|GenericSql withStmt execute insert tableExists "SERIAL"|]
-    deriveGenericSql wrap ''MonadIO gs t
+    deriveGenericSql wrap gs t
 
 pToSql :: PersistValue -> H.SqlValue
 pToSql (PersistString s) = H.SqlString s

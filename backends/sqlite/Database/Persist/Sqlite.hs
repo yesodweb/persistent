@@ -96,4 +96,4 @@ derivePersistSqliteReader :: EntityDef -> Q [Dec]
 derivePersistSqliteReader t = do
     let wrap = ConT ''ReaderT `AppT` ConT ''Database
     gs <- [|GenericSql withStmt execute insert tableExists "INTEGER PRIMARY KEY"|]
-    deriveGenericSql wrap ''MonadCatchIO gs t
+    deriveGenericSql wrap gs t
