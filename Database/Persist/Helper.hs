@@ -7,6 +7,7 @@ module Database.Persist.Helper
     , ordsToList
       -- * TH datatype helpers
     , dataTypeDec
+    , persistMonadTypeDec
     , keyTypeDec
     , filterTypeDec
     , updateTypeDec
@@ -61,6 +62,10 @@ dataTypeDec t =
      in DataD [] name [] [RecC name cols] $ map mkName $ tableDerives t
   where
     mkCol x (n, ty) = (mkName $ recName x n, NotStrict, pairToType ty)
+
+persistMonadTypeDec :: Type -> Table -> Dec
+persistMonadTypeDec monad t =
+    TySynInstD ''PersistMonad [ConT $ mkName $ tableName t] monad
 
 keyTypeDec :: String -> String -> Table -> Dec
 keyTypeDec constr typ t =

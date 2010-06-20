@@ -28,8 +28,8 @@ import Database.Sqlite
 import Database.Persist.Quasi
 import Database.Persist.GenericSql
 
-persistSqlite :: [Table] -> Q [Dec]
-persistSqlite = fmap concat . mapM derivePersistSqliteReader
+persistSqlite :: String -> [Table] -> Q [Dec]
+persistSqlite inner = fmap concat . mapM (derivePersistSqliteReader inner)
 
 type SqliteReader = ReaderT Database
 
@@ -92,8 +92,8 @@ tableExists t = withStmt sql [PersistString t] $ \pop -> do
   where
     sql = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?"
 
-derivePersistSqliteReader :: Table -> Q [Dec]
-derivePersistSqliteReader t = do
+derivePersistSqliteReader :: String -> Table -> Q [Dec]
+derivePersistSqliteReader inner t = do
     let wrap = ConT ''ReaderT `AppT` ConT ''Database
     gs <- [|GenericSql withStmt execute insert tableExists "INTEGER PRIMARY KEY"|]
-    deriveGenericSql wrap ''MonadCatchIO gs t
+    deriveGenericSql wrap inner ''MonadCatchIO gs t

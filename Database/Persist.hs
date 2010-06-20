@@ -1,5 +1,4 @@
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE DeriveDataTypeable #-}
@@ -189,7 +188,9 @@ instance PersistField a => PersistField (Maybe a) where
     sqlType _ = sqlType (error "this is the problem" :: a)
     isNullable _ = True
 
-class Monad m => PersistEntity val m where
+class PersistEntity val where
+    type PersistMonad val :: * -> *
+
     data Key    val
     data Update val
     data Filter val
@@ -197,25 +198,25 @@ class Monad m => PersistEntity val m where
     data Unique val
 
     -- initialization, value is ignored
-    initialize  :: val                          -> m ()
+    initialize  :: val                          -> (PersistMonad val) ()
 
     -- insert
-    insert      :: val                          -> m (Key val)
+    insert      :: val                          -> (PersistMonad val) (Key val)
     -- Removed for PostgreSQL insertR     :: val                          -> m (Key val)
-    replace     :: Key val      -> val          -> m ()
+    replace     :: Key val      -> val          -> (PersistMonad val) ()
 
     -- modify
-    update      :: Key val      -> [Update val] -> m ()
-    updateWhere :: [Filter val] -> [Update val] -> m ()
+    update      :: Key val      -> [Update val] -> (PersistMonad val) ()
+    updateWhere :: [Filter val] -> [Update val] -> (PersistMonad val) ()
 
     -- delete
-    delete      :: Key val                      -> m ()
-    deleteBy    :: Unique val                   -> m ()
-    deleteWhere :: [Filter val]                 -> m ()
+    delete      :: Key val                      -> (PersistMonad val) ()
+    deleteBy    :: Unique val                   -> (PersistMonad val) ()
+    deleteWhere :: [Filter val]                 -> (PersistMonad val) ()
 
     -- read single
-    get         :: Key val                      -> m (Maybe val)
-    getBy       :: Unique val                   -> m (Maybe (Key val, val))
+    get         :: Key val                      -> (PersistMonad val) (Maybe val)
+    getBy       :: Unique val                   -> (PersistMonad val) (Maybe (Key val, val))
 
     -- read multiple
-    select      :: [Filter val] -> [Order val]  -> m [(Key val, val)]
+    select      :: [Filter val] -> [Order val]  -> (PersistMonad val) [(Key val, val)]

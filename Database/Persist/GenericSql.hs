@@ -38,11 +38,12 @@ data GenericSql m = GenericSql
 
 type RowPopper m = m (Maybe [PersistValue])
 
-deriveGenericSql :: Type -> Name -> Exp -> Table -> Q [Dec]
-deriveGenericSql wrap super gs t = do
+deriveGenericSql :: Type -> String -> Name -> Exp -> Table -> Q [Dec]
+deriveGenericSql wrap inner super gs t = do
     let name = P.tableName t
     let dt = dataTypeDec t
-    let monad = wrap `AppT` VarT (mkName "m")
+    let inner' = foldl1 AppT $ map (ConT . mkName) $ words inner
+    let monad = wrap `AppT` inner'
 
     fsv <- mkFromPersistValues t
     let sq =
@@ -71,9 +72,10 @@ deriveGenericSql wrap super gs t = do
 
     let inst =
           InstanceD
-            [ClassP super [VarT $ mkName "m"]]
-            (ConT ''PersistEntity `AppT` ConT (mkName name) `AppT` monad)
-            [ keyTypeDec (name ++ "Id") "Int64" t
+            []
+            (ConT ''PersistEntity `AppT` ConT (mkName name))
+            [ persistMonadTypeDec monad t
+            , keyTypeDec (name ++ "Id") "Int64" t
             , filterTypeDec t
             , updateTypeDec t
             , orderTypeDec t

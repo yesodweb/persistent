@@ -1,6 +1,5 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -9,7 +8,7 @@ import Database.Persist
 import Database.Persist.Sqlite
 import Control.Monad.IO.Class
 
-persistSqlite [Table "Person"
+persistSqlite "IO" [Table "Person"
     [ ("name", ("String", False))
     , ("age", ("Int", False))
     , ("color", ("String", True))

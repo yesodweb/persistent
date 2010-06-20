@@ -35,8 +35,8 @@ import Database.Persist.Quasi
 import Data.Char (toLower)
 import Control.Arrow (first, second)
 
-persistPostgresql :: [Table] -> Q [Dec]
-persistPostgresql = fmap concat . mapM derivePersistPostgresqlReader
+persistPostgresql :: String -> [Table] -> Q [Dec]
+persistPostgresql i = fmap concat . mapM (derivePersistPostgresqlReader i)
 
 type PostgresqlReader = ReaderT Connection
 
@@ -81,11 +81,11 @@ tableExists t = do
     tables <- liftIO $ H.getTables conn
     return $ map toLower t `elem` tables
 
-derivePersistPostgresqlReader :: Table -> Q [Dec]
-derivePersistPostgresqlReader t = do
+derivePersistPostgresqlReader :: String -> Table -> Q [Dec]
+derivePersistPostgresqlReader inner t = do
     let wrap = ConT ''ReaderT `AppT` ConT ''Connection
     gs <- [|GenericSql withStmt execute insert tableExists "SERIAL"|]
-    deriveGenericSql wrap ''MonadIO gs t
+    deriveGenericSql wrap inner ''MonadIO gs t
 
 pToSql :: PersistValue -> H.SqlValue
 pToSql (PersistString s) = H.SqlString s
