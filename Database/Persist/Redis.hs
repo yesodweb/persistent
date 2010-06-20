@@ -12,7 +12,7 @@ module Database.Persist.Redis
     , IsStrings (..)
     ) where
 
-import Database.Persist (Persist, Table (..), Key)
+import Database.Persist (PersistEntity, Table (..), Key)
 import Database.Persist.Helper
 import Control.Monad.Trans.Reader
 import Language.Haskell.TH.Syntax hiding (lift)
@@ -77,7 +77,7 @@ derive t = do
     let inst =
           InstanceD
             [ClassP ''MonadCatchIO [VarT $ mkName "m"]]
-            (ConT ''Persist `AppT` ConT (mkName name) `AppT` monad)
+            (ConT ''PersistEntity `AppT` ConT (mkName name) `AppT` monad)
             [ keyTypeDec (name ++ "Id") "Integer" t
             , filterTypeDec t
             , updateTypeDec t

@@ -14,9 +14,9 @@ module Database.Persist.GenericSql
     , GenericSql (..)
     ) where
 
-import Database.Persist (Persist, Table, Key, Order, Filter, Update,
+import Database.Persist (PersistEntity, Table, Key, Order, Filter, Update,
                          Unique, SqlType (..), PersistValue (..),
-                         Persistable (..))
+                         PersistField (..))
 import qualified Database.Persist as P
 import Database.Persist.Helper
 import Language.Haskell.TH.Syntax hiding (lift)
@@ -72,7 +72,7 @@ deriveGenericSql wrap super gs t = do
     let inst =
           InstanceD
             [ClassP super [VarT $ mkName "m"]]
-            (ConT ''Persist `AppT` ConT (mkName name) `AppT` monad)
+            (ConT ''PersistEntity `AppT` ConT (mkName name) `AppT` monad)
             [ keyTypeDec (name ++ "Id") "Int64" t
             , filterTypeDec t
             , updateTypeDec t
@@ -91,9 +91,9 @@ deriveGenericSql wrap super gs t = do
             , mkFun "updateWhere" $ updateWhere'
             ]
 
-    tops <- mkToPersistables (ConT $ mkName name)
+    tops <- mkToPersistFields (ConT $ mkName name)
                 [(name, length $ tableColumns t)]
-    topsUn <- mkToPersistables (ConT ''Unique `AppT` ConT (mkName name))
+    topsUn <- mkToPersistFields (ConT ''Unique `AppT` ConT (mkName name))
             $ map (\(x, y) -> (x, length y))
             $ P.tableUniques t
 
@@ -102,11 +102,11 @@ deriveGenericSql wrap super gs t = do
         , mkToFieldName (ConT ''Update `AppT` ConT (mkName name))
                 $ map (\s -> (name ++ upperFirst s, s))
                 $ P.tableUpdates t
-        , mkPersistable (ConT ''Update `AppT` ConT (mkName name))
+        , mkPersistField (ConT ''Update `AppT` ConT (mkName name))
                 $ map (\s -> name ++ upperFirst s) $ P.tableUpdates t
         , mkToFieldNames (ConT ''Unique `AppT` ConT (mkName name))
                 $ P.tableUniques t
-        , mkPersistable (ConT ''Filter `AppT` ConT (mkName name))
+        , mkPersistField (ConT ''Filter `AppT` ConT (mkName name))
                 $ map (\(x, y) -> name ++ upperFirst x ++ y)
                 $ concatMap filtsToList
                 $ P.tableFilters t
@@ -130,12 +130,12 @@ deriveGenericSql wrap super gs t = do
         , mkHalfDefined (ConT $ mkName name) name $ length $ tableColumns t
         ]
 
-initialize :: (ToPersistables v, Monad m)
+initialize :: (ToPersistFields v, Monad m)
            => GenericSql m -> Table -> v -> m ()
 initialize gs t v = do
     doesExist <- gsTableExists gs $ tableName t
     unless doesExist $ do
-        let cols = zip (tableColumns t) $ toPersistables v
+        let cols = zip (tableColumns t) $ toPersistFields v
         let sql = "CREATE TABLE " ++ tableName t ++
                   "(id " ++ gsKeyType gs ++
                   concatMap go' cols ++ ")"
@@ -180,20 +180,20 @@ mkFromPersistValues t = do
   where
     go ap' x y = InfixE (Just x) ap' (Just y)
 
-insert :: (Monad m, ToPersistables val, Num (Key val))
+insert :: (Monad m, ToPersistFields val, Num (Key val))
        => GenericSql m -> Table -> val -> m (Key val)
 insert gs t = liftM fromIntegral
             . gsInsert gs (tableName t) (map fst $ tableColumns t)
             . toPersistValues
 
-replace :: (Integral (Key v), ToPersistables v, Monad m)
+replace :: (Integral (Key v), ToPersistFields v, Monad m)
         => GenericSql m -> Table -> Key v -> v -> m ()
 replace gs t k val = do
     let sql = "UPDATE " ++ tableName t ++ " SET " ++
               intercalate "," (map (go . fst) $ tableColumns t) ++
               " WHERE id=?"
     gsExecute gs sql $
-                    map toPersistValue (toPersistables val)
+                    map toPersistValue (toPersistFields val)
                     ++ [PersistInt64 (fromIntegral k)]
   where
     go = (++ "=?")
@@ -213,7 +213,7 @@ get gs t k = do
             Just [] -> error "Database.Persist.GenericSql: Empty list in get"
 
 select :: ( FromPersistValues val, Num key
-          , Persistable (Filter val), ToFieldName (Filter val)
+          , PersistField (Filter val), ToFieldName (Filter val)
           , ToFilter (Filter val), ToFieldName (Order val)
           , ToOrder (Order val), Monad m
           )
@@ -274,7 +274,7 @@ delete gs t k =
   where
     sql = "DELETE FROM " ++ tableName t ++ " WHERE id=?"
 
-deleteWhere :: (Persistable (Filter v), ToFilter (Filter v),
+deleteWhere :: (PersistField (Filter v), ToFilter (Filter v),
                 ToFieldName (Filter v), Monad m)
             => GenericSql m -> Table -> [Filter v] -> m ()
 deleteWhere gs t filts = do
@@ -285,14 +285,14 @@ deleteWhere gs t filts = do
         sql = "DELETE FROM " ++ tableName t ++ wher
     gsExecute gs sql $ map toPersistValue filts
 
-deleteBy :: (ToPersistables (Unique v), ToFieldNames (Unique v), Monad m)
+deleteBy :: (ToPersistFields (Unique v), ToFieldNames (Unique v), Monad m)
          => GenericSql m -> Table -> Unique v -> m ()
 deleteBy gs t uniq = do
     let sql = "DELETE FROM " ++ tableName t ++ " WHERE " ++
               intercalate " AND " (map (++ "=?") $ toFieldNames' uniq)
-    gsExecute gs sql $ map toPersistValue $ toPersistables uniq
+    gsExecute gs sql $ map toPersistValue $ toPersistFields uniq
 
-update :: ( Integral (Key v), Persistable (Update v), ToFieldName (Update v)
+update :: ( Integral (Key v), PersistField (Update v), ToFieldName (Update v)
           , Monad m)
        => GenericSql m -> Table -> Key v -> [Update v] -> m ()
 update _ _ _ [] = return ()
@@ -303,7 +303,7 @@ update gs t k upds = do
     gsExecute gs sql $
         map toPersistValue upds ++ [PersistInt64 $ fromIntegral k]
 
-updateWhere :: (Persistable (Filter v), Persistable (Update v),
+updateWhere :: (PersistField (Filter v), PersistField (Update v),
                 ToFieldName (Update v), ToFilter (Filter v),
                 ToFieldName (Filter v), Monad m)
             => GenericSql m
@@ -320,7 +320,7 @@ updateWhere gs t filts upds = do
     gsWithStmt gs sql dat  $ const $ return ()
 
 getBy :: (Num (Key v), FromPersistValues v, Monad m,
-          ToPersistables (Unique v), ToFieldNames (Unique v))
+          ToPersistFields (Unique v), ToFieldNames (Unique v))
       => GenericSql m
       -> Table -> Unique v -> m (Maybe (Key v, v))
 getBy gs t uniq = do

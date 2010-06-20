@@ -15,9 +15,9 @@ module Database.Persist.Postgresql
     , connectPostgreSQL
     ) where
 
-import Database.Persist (Persist, Table, Key, Order, Filter, Update,
+import Database.Persist (PersistEntity, Table, Key, Order, Filter, Update,
                          Unique, SqlType (..), PersistValue (..),
-                         Persistable (..))
+                         PersistField (..))
 import qualified Database.Persist as P
 import Database.Persist.Helper
 import Database.Persist.GenericSql

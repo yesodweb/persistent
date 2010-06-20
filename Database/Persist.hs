@@ -13,9 +13,9 @@ module Database.Persist
       -- * Values
     , PersistValue (..)
     , SqlType (..)
-    , Persistable (..)
+    , PersistField (..)
       -- * Type class
-    , Persist (..)
+    , PersistEntity (..)
     ) where
 
 import Language.Haskell.TH.Syntax
@@ -78,14 +78,14 @@ data SqlType = SqlString
              | SqlBlob
     deriving (Show, Read, Eq, Typeable)
 
-class Persistable a where
+class PersistField a where
     toPersistValue :: a -> PersistValue
     fromPersistValue :: PersistValue -> Either String a
     sqlType :: a -> SqlType
     isNullable :: a -> Bool
     isNullable _ = False
 
-instance Persistable String where
+instance PersistField String where
     toPersistValue = PersistString
     fromPersistValue (PersistString s) = Right s
     fromPersistValue (PersistByteString bs) = Right $ BSU.toString bs
@@ -98,48 +98,48 @@ instance Persistable String where
     fromPersistValue (PersistBool b) = Right $ show b
     sqlType _ = SqlString
 
-instance Persistable ByteString where
+instance PersistField ByteString where
     toPersistValue = PersistByteString
     fromPersistValue (PersistByteString bs) = Right bs
     fromPersistValue x = BSU.fromString <$> fromPersistValue x
     sqlType _ = SqlBlob
 
-instance Persistable T.Text where
+instance PersistField T.Text where
     toPersistValue = PersistString . T.unpack
     fromPersistValue = fmap T.pack . fromPersistValue
     sqlType _ = SqlString
 
-instance Persistable (Html ()) where
+instance PersistField (Html ()) where
     toPersistValue = PersistByteString . S.concat . L.toChunks . renderHtml
     fromPersistValue = fmap unsafeByteString . fromPersistValue
     sqlType _ = SqlString
 
-instance Persistable Int where
+instance PersistField Int where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ "Expected Integer, received: " ++ show x
     sqlType _ = SqlInteger
 
-instance Persistable Int64 where
+instance PersistField Int64 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ "Expected Integer, received: " ++ show x
     sqlType _ = SqlInteger
 
-instance Persistable Double where
+instance PersistField Double where
     toPersistValue = PersistDouble
     fromPersistValue (PersistDouble d) = Right d
     fromPersistValue x = Left $ "Expected Double, received: " ++ show x
     sqlType _ = SqlReal
 
-instance Persistable Bool where
+instance PersistField Bool where
     toPersistValue = PersistBool
     fromPersistValue (PersistBool b) = Right b
     fromPersistValue (PersistInt64 i) = Right $ i /= 0
     fromPersistValue x = Left $ "Expected Bool, received: " ++ show x
     sqlType _ = SqlBool
 
-instance Persistable Day where
+instance PersistField Day where
     toPersistValue = PersistDay
     fromPersistValue (PersistDay d) = Right d
     fromPersistValue x@(PersistString s) =
@@ -153,7 +153,7 @@ instance Persistable Day where
     fromPersistValue x = Left $ "Expected Day, received: " ++ show x
     sqlType _ = SqlDay
 
-instance Persistable TimeOfDay where
+instance PersistField TimeOfDay where
     toPersistValue = PersistTimeOfDay
     fromPersistValue (PersistTimeOfDay d) = Right d
     fromPersistValue x@(PersistString s) =
@@ -167,7 +167,7 @@ instance Persistable TimeOfDay where
     fromPersistValue x = Left $ "Expected TimeOfDay, received: " ++ show x
     sqlType _ = SqlTime
 
-instance Persistable UTCTime where
+instance PersistField UTCTime where
     toPersistValue = PersistUTCTime
     fromPersistValue (PersistUTCTime d) = Right d
     fromPersistValue x@(PersistString s) =
@@ -181,7 +181,7 @@ instance Persistable UTCTime where
     fromPersistValue x = Left $ "Expected UTCTime, received: " ++ show x
     sqlType _ = SqlDayTime
 
-instance Persistable a => Persistable (Maybe a) where
+instance PersistField a => PersistField (Maybe a) where
     toPersistValue Nothing = PersistNull
     toPersistValue (Just a) = toPersistValue a
     fromPersistValue PersistNull = Right Nothing
@@ -189,7 +189,7 @@ instance Persistable a => Persistable (Maybe a) where
     sqlType _ = sqlType (error "this is the problem" :: a)
     isNullable _ = True
 
-class Monad m => Persist val m where
+class Monad m => PersistEntity val m where
     data Key    val
     data Update val
     data Filter val

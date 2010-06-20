@@ -13,16 +13,16 @@ module Database.Persist.Helper
     , orderTypeDec
     , uniqueTypeDec
       -- * TH typeclass helpers
-    , mkToPersistables
+    , mkToPersistFields
     , mkToFieldNames
     , mkToFieldName
-    , mkPersistable
+    , mkPersistField
     , mkToFilter
     , mkToOrder
     , mkHalfDefined
       -- * Type classes
-    , SomePersistable (..)
-    , ToPersistables (..)
+    , SomePersistField (..)
+    , ToPersistFields (..)
     , FromPersistValues (..)
     , toPersistValues
     , ToFieldNames (..)
@@ -67,7 +67,7 @@ keyTypeDec constr typ t =
     NewtypeInstD [] ''Key [ConT $ mkName $ tableName t]
                 (NormalC (mkName constr) [(NotStrict, ConT $ mkName typ)])
                 [''Show, ''Read, ''Num, ''Integral, ''Enum, ''Eq, ''Ord,
-                 ''Real, ''Persistable, ''SinglePiece]
+                 ''Real, ''PersistField, ''SinglePiece]
 
 filterTypeDec :: Table -> Dec
 filterTypeDec t =
@@ -150,14 +150,14 @@ pairToType :: (String, Bool) -> Type
 pairToType (s, False) = ConT $ mkName s
 pairToType (s, True) = ConT (mkName "Maybe") `AppT` ConT (mkName s)
 
-data SomePersistable = forall a. Persistable a => SomePersistable a
-instance Persistable SomePersistable where
-    toPersistValue (SomePersistable a) = toPersistValue a
-    fromPersistValue x = fmap SomePersistable (fromPersistValue x :: Either String String)
-    sqlType (SomePersistable a) = sqlType a
+data SomePersistField = forall a. PersistField a => SomePersistField a
+instance PersistField SomePersistField where
+    toPersistValue (SomePersistField a) = toPersistValue a
+    fromPersistValue x = fmap SomePersistField (fromPersistValue x :: Either String String)
+    sqlType (SomePersistField a) = sqlType a
 
-class ToPersistables a where
-    toPersistables :: a -> [SomePersistable]
+class ToPersistFields a where
+    toPersistFields :: a -> [SomePersistField]
 
 degen :: [Clause] -> [Clause]
 degen [] =
@@ -166,26 +166,26 @@ degen [] =
      in [Clause [WildP] (NormalB err) []]
 degen x = x
 
-mkToPersistables :: Type
+mkToPersistFields :: Type
                  -> [(String, Int)]
                  -> Q Dec
-mkToPersistables typ pairs = do
+mkToPersistFields typ pairs = do
     clauses <- mapM go pairs
-    return $ InstanceD [] (ConT ''ToPersistables `AppT` typ)
-                [FunD (mkName "toPersistables") $ degen clauses]
+    return $ InstanceD [] (ConT ''ToPersistFields `AppT` typ)
+                [FunD (mkName "toPersistFields") $ degen clauses]
   where
     go (constr, fields) = do
         xs <- sequence $ replicate fields $ newName "x"
         let pat = ConP (mkName constr) $ map VarP xs
-        sp <- [|SomePersistable|]
+        sp <- [|SomePersistField|]
         let bod = ListE $ map (AppE sp . VarE) xs
         return $ Clause [pat] (NormalB bod) []
 
 class FromPersistValues a where
     fromPersistValues :: [PersistValue] -> Either String a
 
-toPersistValues :: ToPersistables a => a -> [PersistValue]
-toPersistValues = map toPersistValue . toPersistables
+toPersistValues :: ToPersistFields a => a -> [PersistValue]
+toPersistValues = map toPersistValue . toPersistFields
 
 class ToFieldNames a where
     toFieldNames :: a -> [String]
@@ -247,9 +247,9 @@ mkToFilter typ pairs =
             (NormalB $ ConE $ mkName "False") []
         ]
 
-mkPersistable :: Type -> [String] -> Dec
-mkPersistable typ constrs =
-    InstanceD [] (ConT ''Persistable `AppT` typ)
+mkPersistField :: Type -> [String] -> Dec
+mkPersistField typ constrs =
+    InstanceD [] (ConT ''PersistField `AppT` typ)
         $ fpv : map go
             [ "toPersistValue"
             , "sqlType"
