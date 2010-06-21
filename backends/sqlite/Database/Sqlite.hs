@@ -31,9 +31,12 @@ import qualified Data.ByteString.UTF8 as UTF8
 import Foreign
 import Foreign.C
 import Database.Persist (PersistValue (..))
+import Control.Concurrent.MVar
 
 newtype Database = Database (Ptr ())
-newtype Statement = Statement (Ptr ())
+-- | The MVar is only used for insuring the statement is not double-finalized.
+-- It won't stop you from using a statement after it's been finalized.
+data Statement = Statement (Ptr ()) (MVar Bool)
 
 data Error = ErrorOK
            | ErrorError
@@ -180,7 +183,8 @@ prepareError (Database database) text' = do
                                case error of
                                  ErrorOK -> do
                                             statement' <- peek statement
-                                            return $ Left $ Statement statement'
+                                            mvar <- newMVar True
+                                            return $ Left $ Statement statement' mvar
                                  _ -> return $ Right error))
 prepare :: Database -> String -> IO Statement
 prepare database text = do
@@ -192,7 +196,7 @@ prepare database text = do
 foreign import ccall "sqlite3_step"
   stepC :: Ptr () -> IO Int
 stepError :: Statement -> IO Error
-stepError (Statement statement) = do
+stepError (Statement statement _) = do
   error <- stepC statement
   return $ decodeError error
 step :: Statement -> IO StepResult
@@ -206,7 +210,7 @@ step statement = do
 foreign import ccall "sqlite3_reset"
   resetC :: Ptr () -> IO Int
 resetError :: Statement -> IO Error
-resetError (Statement statement) = do
+resetError (Statement statement _) = do
   error <- resetC statement
   return $ decodeError error
 reset :: Statement -> IO ()
@@ -219,9 +223,12 @@ reset statement = do
 foreign import ccall "sqlite3_finalize"
   finalizeC :: Ptr () -> IO Int
 finalizeError :: Statement -> IO Error
-finalizeError (Statement statement) = do
-  error <- finalizeC statement
-  return $ decodeError error
+finalizeError (Statement statement mvar) = modifyMVar mvar go
+  where
+    go False = return (False, ErrorOK)
+    go True = do
+      error <- finalizeC statement
+      return (False, decodeError error)
 finalize :: Statement -> IO ()
 finalize statement = do
   error <- finalizeError statement
@@ -232,7 +239,7 @@ finalize statement = do
 foreign import ccall "sqlite3_bind_blob"
   bindBlobC :: Ptr () -> Int -> Ptr () -> Int -> Ptr () -> IO Int
 bindBlobError :: Statement -> Int -> BS.ByteString -> IO Error
-bindBlobError (Statement statement) parameterIndex byteString = do
+bindBlobError (Statement statement _) parameterIndex byteString = do
   size <- return $ BS.length byteString
   BS.useAsCString byteString
                   (\dataC -> do
@@ -249,7 +256,7 @@ bindBlob statement parameterIndex byteString = do
 foreign import ccall "sqlite3_bind_double"
   bindDoubleC :: Ptr () -> Int -> Double -> IO Int
 bindDoubleError :: Statement -> Int -> Double -> IO Error
-bindDoubleError (Statement statement) parameterIndex datum = do
+bindDoubleError (Statement statement _) parameterIndex datum = do
   error <- bindDoubleC statement parameterIndex datum
   return $ decodeError error
 bindDouble :: Statement -> Int -> Double -> IO ()
@@ -262,7 +269,7 @@ bindDouble statement parameterIndex datum = do
 foreign import ccall "sqlite3_bind_int"
   bindIntC :: Ptr () -> Int -> Int -> IO Int
 bindIntError :: Statement -> Int -> Int -> IO Error
-bindIntError (Statement statement) parameterIndex datum = do
+bindIntError (Statement statement _) parameterIndex datum = do
   error <- bindIntC statement parameterIndex datum
   return $ decodeError error
 bindInt :: Statement -> Int -> Int -> IO ()
@@ -275,7 +282,7 @@ bindInt statement parameterIndex datum = do
 foreign import ccall "sqlite3_bind_int64"
   bindInt64C :: Ptr () -> Int -> Int64 -> IO Int
 bindInt64Error :: Statement -> Int -> Int64 -> IO Error
-bindInt64Error (Statement statement) parameterIndex datum = do
+bindInt64Error (Statement statement _) parameterIndex datum = do
   error <- bindInt64C statement parameterIndex datum
   return $ decodeError error
 bindInt64 :: Statement -> Int -> Int64 -> IO ()
@@ -288,7 +295,7 @@ bindInt64 statement parameterIndex datum = do
 foreign import ccall "sqlite3_bind_null"
   bindNullC :: Ptr () -> Int -> IO Int
 bindNullError :: Statement -> Int -> IO Error
-bindNullError (Statement statement) parameterIndex = do
+bindNullError (Statement statement _) parameterIndex = do
   error <- bindNullC statement parameterIndex
   return $ decodeError error
 bindNull :: Statement -> Int -> IO ()
@@ -301,7 +308,7 @@ bindNull statement parameterIndex = do
 foreign import ccall "sqlite3_bind_text"
   bindTextC :: Ptr () -> Int -> CString -> Int -> Ptr () -> IO Int
 bindTextError :: Statement -> Int -> String -> IO Error
-bindTextError (Statement statement) parameterIndex text = do
+bindTextError (Statement statement _) parameterIndex text = do
   byteString <- return $ UTF8.fromString text
   size <- return $ BS.length byteString
   BS.useAsCString byteString
@@ -336,7 +343,7 @@ bind statement sqlData = do
 foreign import ccall "sqlite3_column_type"
   columnTypeC :: Ptr () -> Int -> IO Int
 columnType :: Statement -> Int -> IO ColumnType
-columnType (Statement statement) columnIndex = do
+columnType (Statement statement _) columnIndex = do
   result <- columnTypeC statement columnIndex
   return $ decodeColumnType result
 
@@ -346,7 +353,7 @@ foreign import ccall "sqlite3_column_bytes"
 foreign import ccall "sqlite3_column_blob"
   columnBlobC :: Ptr () -> Int -> IO (Ptr ())
 columnBlob :: Statement -> Int -> IO BS.ByteString
-columnBlob (Statement statement) columnIndex = do
+columnBlob (Statement statement _) columnIndex = do
   size <- columnBytesC statement columnIndex
   BSI.create size (\resultPtr -> do
                      dataPtr <- columnBlobC statement columnIndex
@@ -357,19 +364,19 @@ columnBlob (Statement statement) columnIndex = do
 foreign import ccall "sqlite3_column_int64"
   columnInt64C :: Ptr () -> Int -> IO Int64
 columnInt64 :: Statement -> Int -> IO Int64
-columnInt64 (Statement statement) columnIndex = do
+columnInt64 (Statement statement _) columnIndex = do
   columnInt64C statement columnIndex
 
 foreign import ccall "sqlite3_column_double"
   columnDoubleC :: Ptr () -> Int -> IO Double
 columnDouble :: Statement -> Int -> IO Double
-columnDouble (Statement statement) columnIndex = do
+columnDouble (Statement statement _) columnIndex = do
   columnDoubleC statement columnIndex
 
 foreign import ccall "sqlite3_column_text"
   columnTextC :: Ptr () -> Int -> IO CString
 columnText :: Statement -> Int -> IO String
-columnText (Statement statement) columnIndex = do
+columnText (Statement statement _) columnIndex = do
   text <- columnTextC statement columnIndex
   byteString <- BS.packCString text
   return $ UTF8.toString byteString
@@ -377,7 +384,7 @@ columnText (Statement statement) columnIndex = do
 foreign import ccall "sqlite3_column_count"
   columnCountC :: Ptr () -> IO Int
 columnCount :: Statement -> IO Int
-columnCount (Statement statement) = do
+columnCount (Statement statement _) = do
   columnCountC statement
 
 column :: Statement -> Int -> IO PersistValue
