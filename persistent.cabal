@@ -20,7 +20,7 @@ library
                      time >= 1.1.4 && < 1.2,
                      utf8-string >= 0.3.4 && < 0.4,
                      text >= 0.7.1 && < 0.8,
-                     hamlet >= 0.3.0 && < 0.4,
+                     hamlet >= 0.3.1 && < 0.4,
                      web-routes-quasi >= 0.4.0 && < 0.5
     exposed-modules: Database.Persist
                      Database.Persist.Helper
