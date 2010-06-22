@@ -1,4 +1,6 @@
 {-# LANGUAGE ForeignFunctionInterface, DeriveDataTypeable #-}
+-- | A port of the direct-sqlite package for dealing directly with
+-- 'PersistValue's.
 module Database.Sqlite  (
                          Database,
                          Statement,

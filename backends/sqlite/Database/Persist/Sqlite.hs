@@ -4,14 +4,16 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE FlexibleContexts #-}
+-- | A sqlite backend for persistent.
 module Database.Persist.Sqlite
     ( SqliteReader
-    , Database
+    , persistSqlite
     , runSqlite
+    , withSqlite
+      -- * Re-exports
+    , Database
     , open
     , close
-    , withSqlite
-    , persistSqlite
     , Int64
     , module Database.Persist.Helper
     , persist
@@ -28,14 +30,20 @@ import Database.Sqlite
 import Database.Persist.Quasi
 import Database.Persist.GenericSql
 
+-- | Generate data types and instances for the given entity definitions. Can
+-- deal directly with the output of the 'persist' quasi-quoter.
 persistSqlite :: [EntityDef] -> Q [Dec]
 persistSqlite = fmap concat . mapM derivePersistSqliteReader
 
+-- | A ReaderT monad transformer holding a sqlite database connection.
 type SqliteReader = ReaderT Database
 
+-- | Handles opening and closing of the database connection automatically.
 withSqlite :: MonadCatchIO m => String -> (Database -> m a) -> m a
 withSqlite s f = bracket (liftIO $ open s) (liftIO . close) f
 
+-- | Run a series of database actions within a single transactions. On any
+-- exception, the transaction is rolled back.
 runSqlite :: MonadCatchIO m => SqliteReader m a -> Database -> m a
 runSqlite r conn = do
     Done <- liftIO begin
