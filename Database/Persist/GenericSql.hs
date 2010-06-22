@@ -5,6 +5,8 @@
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
+-- | This is a helper module for creating SQL backends. Regular users do not
+-- need to use this module.
 module Database.Persist.GenericSql
     ( Int64
     , module Database.Persist.Helper

@@ -1,5 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ExistentialQuantification #-}
+-- | This module provides utilities for creating backends. Regular users do not
+-- need to use this module.
 module Database.Persist.Helper
     ( recName
     , upperFirst

@@ -8,6 +8,8 @@ import Database.Persist.Helper
 import Data.Char
 import Data.Maybe (mapMaybe)
 
+-- | Converts a quasi-quoted syntax into a list of entity definitions, to be
+-- used as input to the backend-specific template haskell generation code.
 persist :: QuasiQuoter
 persist = QuasiQuoter
     { quoteExp = lift . parse
