@@ -4,15 +4,18 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE FlexibleContexts #-}
+-- | A postgresql backend for persistent.
 module Database.Persist.Postgresql
     ( PostgresqlReader
-    , Connection
-    , runPostgresql
     , persistPostgresql
+    , runPostgresql
+    , withPostgresql
+      -- * Re-exports
+    , Connection
+    , connectPostgreSQL
     , Int64
     , module Database.Persist.Helper
     , persist
-    , connectPostgreSQL
     ) where
 
 import Database.Persist (PersistValue (..))
@@ -27,11 +30,21 @@ import qualified Database.HDBC as H
 import Database.HDBC.PostgreSQL
 import Data.Char (toLower)
 
+-- | Generate data types and instances for the given entity definitions. Can
+-- deal directly with the output of the 'persist' quasi-quoter.
 persistPostgresql :: [EntityDef] -> Q [Dec]
 persistPostgresql = fmap concat . mapM derivePersistPostgresqlReader
 
+-- | A ReaderT monad transformer holding a postgresql database connection.
 type PostgresqlReader = ReaderT Connection
 
+-- | Handles opening and closing of the database connection automatically.
+withPostgresql :: MonadCatchIO m => String -> (Connection -> m a) -> m a
+withPostgresql s f =
+    bracket (liftIO $ connectPostgreSQL s) (liftIO . H.disconnect) f
+
+-- | Run a series of database actions within a single transactions. On any
+-- exception, the transaction is rolled back.
 runPostgresql :: MonadCatchIO m => PostgresqlReader m a -> Connection -> m a
 runPostgresql r conn = do
     res <- onException (runReaderT r conn) $ liftIO (H.rollback conn)
