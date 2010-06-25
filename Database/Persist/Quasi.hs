@@ -17,7 +17,14 @@ persist = QuasiQuoter
     }
 
 parse :: String -> [EntityDef]
-parse = map parse' . nest . map words' . filter (not . null) . lines
+parse = map parse' . nest . map words' . filter (not . null)
+      . map killCarriage . lines
+
+killCarriage :: String -> String
+killCarriage "" = ""
+killCarriage s
+    | last s == '\r' = init s
+    | otherwise = s
 
 words' :: String -> (Bool, [String])
 words' (' ':x) = (True, words x)
