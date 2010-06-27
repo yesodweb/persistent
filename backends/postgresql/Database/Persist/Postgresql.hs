@@ -18,9 +18,10 @@ module Database.Persist.Postgresql
     , persist
     ) where
 
-import Database.Persist (PersistValue (..))
+import Database.Persist
 import Database.Persist.Helper
-import Database.Persist.GenericSql
+import Database.Persist.Quasi
+import qualified Database.Persist.GenericSql as G
 import Control.Monad.Trans.Reader
 import Language.Haskell.TH.Syntax hiding (lift)
 import Control.Monad.IO.Class (MonadIO (..))
@@ -29,14 +30,19 @@ import "MonadCatchIO-transformers" Control.Monad.CatchIO
 import qualified Database.HDBC as H
 import Database.HDBC.PostgreSQL
 import Data.Char (toLower)
+import Data.Int (Int64)
+import Control.Monad.Trans.Class (MonadTrans)
+import Control.Applicative (Applicative)
 
 -- | Generate data types and instances for the given entity definitions. Can
 -- deal directly with the output of the 'persist' quasi-quoter.
 persistPostgresql :: [EntityDef] -> Q [Dec]
-persistPostgresql = fmap concat . mapM derivePersistPostgresqlReader
+persistPostgresql = fmap concat . mapM mkEntity
 
 -- | A ReaderT monad transformer holding a postgresql database connection.
-type PostgresqlReader = ReaderT Connection
+newtype PostgresqlReader m a = PostgresqlReader (ReaderT Connection m a)
+    deriving (Monad, MonadIO, MonadTrans, MonadCatchIO, Functor,
+              Applicative)
 
 -- | Handles opening and closing of the database connection automatically.
 withPostgresql :: MonadCatchIO m => String -> (Connection -> m a) -> m a
@@ -46,7 +52,7 @@ withPostgresql s f =
 -- | Run a series of database actions within a single transactions. On any
 -- exception, the transaction is rolled back.
 runPostgresql :: MonadCatchIO m => PostgresqlReader m a -> Connection -> m a
-runPostgresql r conn = do
+runPostgresql (PostgresqlReader r) conn = do
     res <- onException (runReaderT r conn) $ liftIO (H.rollback conn)
     liftIO $ H.commit conn
     return res
@@ -54,24 +60,24 @@ runPostgresql r conn = do
 withStmt :: MonadIO m
          => String
          -> [PersistValue]
-         -> (RowPopper (PostgresqlReader m) -> PostgresqlReader m a)
+         -> (G.RowPopper (PostgresqlReader m) -> PostgresqlReader m a)
          -> PostgresqlReader m a
 withStmt sql vals f = do
-    conn <- ask
+    conn <- PostgresqlReader ask
     stmt <- liftIO $ H.prepare conn sql
     _ <- liftIO $ H.execute stmt $ map pToSql vals
     f $ liftIO $ (fmap . fmap) (map pFromSql) $ H.fetchRow stmt
 
 execute :: MonadIO m => String -> [PersistValue] -> PostgresqlReader m ()
 execute sql vals = do
-    conn <- ask
+    conn <- PostgresqlReader ask
     stmt <- liftIO $ H.prepare conn sql
     _ <- liftIO $ H.execute stmt $ map pToSql vals
     return ()
 
-insert :: MonadIO m
-       => String -> [String] -> [PersistValue] -> PostgresqlReader m Int64
-insert t cols vals = do
+insert' :: MonadIO m
+        => String -> [String] -> [PersistValue] -> PostgresqlReader m Int64
+insert' t cols vals = do
     let sql = "INSERT INTO " ++ t ++
               "(" ++ intercalate "," cols ++
               ") VALUES(" ++
@@ -83,15 +89,13 @@ insert t cols vals = do
 
 tableExists :: MonadIO m => String -> PostgresqlReader m Bool
 tableExists t = do
-    conn <- ask
+    conn <- PostgresqlReader ask
     tables <- liftIO $ H.getTables conn
     return $ map toLower t `elem` tables
 
-derivePersistPostgresqlReader :: EntityDef -> Q [Dec]
-derivePersistPostgresqlReader t = do
-    let wrap = ConT ''ReaderT `AppT` ConT ''Connection
-    gs <- [|GenericSql withStmt execute insert tableExists "SERIAL UNIQUE"|]
-    deriveGenericSql wrap gs t
+genericSql :: MonadIO m => G.GenericSql (PostgresqlReader m)
+genericSql =
+    G.GenericSql withStmt execute insert' tableExists "SERIAL UNIQUE"
 
 pToSql :: PersistValue -> H.SqlValue
 pToSql (PersistString s) = H.SqlString s
@@ -121,3 +125,16 @@ pFromSql (H.SqlLocalTimeOfDay d) = PersistTimeOfDay d
 pFromSql (H.SqlUTCTime d) = PersistUTCTime d
 pFromSql H.SqlNull = PersistNull
 pFromSql x = PersistString $ H.fromSql x -- FIXME
+
+instance MonadIO m => PersistBackend (PostgresqlReader m) where
+    initialize = G.initialize genericSql
+    insert = G.insert genericSql
+    get = G.get genericSql
+    replace = G.replace genericSql
+    select = G.select genericSql
+    deleteWhere = G.deleteWhere genericSql
+    update = G.update genericSql
+    updateWhere = G.updateWhere genericSql
+    getBy = G.getBy genericSql
+    delete = G.delete genericSql
+    deleteBy = G.deleteBy genericSql

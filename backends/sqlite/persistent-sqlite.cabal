@@ -1,5 +1,5 @@
 name:            persistent-sqlite
-version:         0.0.0
+version:         0.1.0
 license:         BSD3
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -27,7 +27,7 @@ library
                      MonadCatchIO-transformers >= 0.2.2 && < 0.3,
                      web-routes-quasi >= 0.4.0 && < 0.5,
                      utf8-string >= 0.3.4 && < 0.4,
-                     persistent >= 0.0.0 && < 0.1
+                     persistent >= 0.1.0 && < 0.2
     exposed-modules: Database.Sqlite
                      Database.Persist.Sqlite
     ghc-options:     -Wall

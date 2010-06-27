@@ -8,24 +8,21 @@
 -- | This is a helper module for creating SQL backends. Regular users do not
 -- need to use this module.
 module Database.Persist.GenericSql
+{-
     ( Int64
     , module Database.Persist.Helper
     , persist
-    , deriveGenericSql
     , RowPopper
     , GenericSql (..)
-    ) where
+    ) -} where
 
-import Database.Persist (PersistEntity, Key, Order, Filter, Update,
-                         Unique, SqlType (..), PersistValue (..),
+import Database.Persist (PersistEntity (..),
+                         SqlType (..), PersistValue (..),
                          PersistField (..))
 import Database.Persist.Helper
-import Language.Haskell.TH.Syntax hiding (lift)
-import qualified Language.Haskell.TH.Syntax as TH
 import Data.List (intercalate)
 import Control.Monad (unless, liftM)
 import Data.Int (Int64)
-import Database.Persist.Quasi
 import Control.Arrow (second)
 
 data GenericSql m = GenericSql
@@ -39,6 +36,7 @@ data GenericSql m = GenericSql
 
 type RowPopper m = m (Maybe [PersistValue])
 
+{- FIXME
 deriveGenericSql :: Type -> Exp -> EntityDef -> Q [Dec]
 deriveGenericSql monad gs t = do
     let name = entityName t
@@ -117,18 +115,12 @@ deriveGenericSql monad gs t = do
                 $ map (\(x, _, z, y) ->
                     (name ++ upperFirst x ++ show y, y, z))
                 $ entityFilters t
-        , mkToFieldName (ConT ''Order `AppT` ConT (mkName name))
-                $ map (\(x, y) -> (name ++ upperFirst x ++ y, x))
-                $ entityOrders t
-        , mkToOrder (ConT ''Order `AppT` ConT (mkName name))
-                $ map (\(x, y) -> (name ++ upperFirst x ++ y, y))
-                $ entityOrders t
         , mkHalfDefined (ConT $ mkName name) name $ length $ tableColumns t
         ]
+-}
 
-initialize :: (ToPersistFields v, Monad m, HalfDefined v)
-           => GenericSql m -> EntityDef -> v -> m ()
-initialize gs t v = do
+initialize :: (Monad m, PersistEntity v) => GenericSql m -> v -> m ()
+initialize gs v = do
     doesExist <- gsEntityDefExists gs $ tableName t
     unless doesExist $ do
         let cols = zip (tableColumns t) $ toPersistFields
@@ -139,6 +131,7 @@ initialize gs t v = do
         gsExecute gs sql []
         mapM_ go $ tableUniques' t
   where
+    t = entityDef v
     go' ((colName, _, as), p) = concat
         [ ","
         , colName
@@ -158,71 +151,54 @@ initialize gs t v = do
     showSqlType SqlDayTime = "TIMESTAMP"
     showSqlType SqlBlob = "BLOB"
     showSqlType SqlBool = "BOOLEAN"
-
-mkFromPersistValues :: EntityDef -> Q [Clause]
-mkFromPersistValues t = do
-    nothing <- [|Left "Invalid fromPersistValues input"|]
-    let cons = ConE $ mkName $ entityName t
-    xs <- mapM (const $ newName "x") $ entityColumns t
-    fs <- [|fromPersistValue|]
-    let xs' = map (AppE fs . VarE) xs
-    let pat = ListP $ map VarP xs
-    ap' <- [|apE|]
-    just <- [|Right|]
-    let cons' = just `AppE` cons
-    return
-        [ Clause [pat] (NormalB $ foldl (go ap') cons' xs') []
-        , Clause [WildP] (NormalB nothing) []
-        ]
-  where
-    go ap' x y = InfixE (Just x) ap' (Just y)
-
-insert :: (Monad m, ToPersistFields val, Num (Key val))
-       => GenericSql m -> EntityDef -> val -> m (Key val)
-insert gs t = liftM fromIntegral
+insert :: (Monad m, PersistEntity val)
+       => GenericSql m -> val -> m (Key val)
+insert gs v = liftM toPersistKey
             . gsInsert gs (tableName t) (map fst3 $ tableColumns t)
-            . toPersistValues
+            . map toPersistValue . toPersistFields
+            $ v
   where
     fst3 (x, _, _) = x
+    t = entityDef v
 
-replace :: (Integral (Key v), ToPersistFields v, Monad m)
-        => GenericSql m -> EntityDef -> Key v -> v -> m ()
-replace gs t k val = do
+replace :: (PersistEntity v, Monad m)
+        => GenericSql m -> Key v -> v -> m ()
+replace gs k val = do
+    let t = entityDef val
     let sql = "UPDATE " ++ tableName t ++ " SET " ++
               intercalate "," (map (go . fst3) $ tableColumns t) ++
               " WHERE id=?"
     gsExecute gs sql $
                     map toPersistValue (toPersistFields val)
-                    ++ [PersistInt64 (fromIntegral k)]
+                    ++ [PersistInt64 $ fromPersistKey k]
   where
     go = (++ "=?")
     fst3 (x, _, _) = x
 
-get :: (Integral (Key v), FromPersistValues v, Monad m)
-    => GenericSql m -> EntityDef -> Key v -> m (Maybe v)
-get gs t k = do
+dummyFromKey :: Key v -> v
+dummyFromKey _ = error "dummyFromKey"
+
+get :: (PersistEntity v, Monad m)
+    => GenericSql m -> Key v -> m (Maybe v)
+get gs k = do
+    let t = entityDef $ dummyFromKey k
     let sql = "SELECT * FROM " ++ tableName t ++ " WHERE id=?"
-    gsWithStmt gs sql [PersistInt64 $ fromIntegral k] $ \pop -> do
+    gsWithStmt gs sql [PersistInt64 $ fromPersistKey k] $ \pop -> do
         res <- pop
         case res of
             Nothing -> return Nothing
             Just (_:vals) ->
                 case fromPersistValues vals of
-                    Left e -> error $ "get " ++ show k ++ ": " ++ e
+                    Left e -> error $ "get " ++ showPersistKey k ++ ": " ++ e
                     Right v -> return $ Just v
             Just [] -> error "Database.Persist.GenericSql: Empty list in get"
 
-select :: ( FromPersistValues val, Num key
-          , PersistField (Filter val), ToFieldName (Filter val)
-          , ToFilter (Filter val), ToFieldName (Order val)
-          , ToOrder (Order val), Monad m
-          )
+select :: (PersistEntity val, Monad m)
        => GenericSql m
-       -> EntityDef
        -> [Filter val]
        -> [Order val]
-       -> m [(key, val)]
-select gs t filts ords = do
+       -> m [(Key val, val)]
+select gs filts ords = do
     let wher = if null filts
                 then ""
                 else " WHERE " ++
@@ -232,15 +208,17 @@ select gs t filts ords = do
                 else " ORDER BY " ++
                      intercalate "," (map orderClause ords)
     let sql = "SELECT * FROM " ++ tableName t ++ wher ++ ord
-    gsWithStmt gs sql (map toPersistValue filts) $ flip go id
+    gsWithStmt gs sql (map persistFilterToValue filts) $ flip go id
   where
-    orderClause o = toFieldName' o ++ case toOrder o of
+    t = entityDef $ dummyFromFilts filts
+    orderClause o = toField (persistOrderToFieldName o)
+                    ++ case persistOrderToOrder o of
                                         Asc -> ""
                                         Desc -> " DESC"
     fromPersistValues' (PersistInt64 x:xs) = do
         case fromPersistValues xs of
             Left e -> Left e
-            Right xs' -> Right (fromIntegral x, xs')
+            Right xs' -> Right (toPersistKey x, xs')
     fromPersistValues' _ = Left "error in fromPersistValues'"
     go pop front = do
         res <- pop
@@ -251,14 +229,15 @@ select gs t filts ords = do
                     Left _ -> go pop front -- FIXME error?
                     Right row -> go pop $ front . (:) row
 
-filterClause :: (ToFilter f, ToFieldName f) => f -> String
-filterClause f = if isNull f then nullClause else mainClause
+filterClause :: PersistEntity val => Filter val -> String
+filterClause f = if persistFilterIsNull f then nullClause else mainClause
   where
-    mainClause = toFieldName' f ++ showSqlFilter (toFilter f) ++ "?"
+    name = toField $ persistFilterToFieldName f
+    mainClause = name ++ showSqlFilter (persistFilterToFilter f) ++ "?"
     nullClause =
-        case toFilter f of
-          Eq -> '(' : mainClause ++ " OR " ++ toFieldName' f ++ " IS NULL)"
-          Ne -> '(' : mainClause ++ " OR " ++ toFieldName' f ++ " IS NOT NULL)"
+        case persistFilterToFilter f of
+          Eq -> '(' : mainClause ++ " OR " ++ name ++ " IS NULL)"
+          Ne -> '(' : mainClause ++ " OR " ++ name ++ " IS NOT NULL)"
           _ -> mainClause
     showSqlFilter Eq = "="
     showSqlFilter Ne = "<>"
@@ -267,75 +246,86 @@ filterClause f = if isNull f then nullClause else mainClause
     showSqlFilter Ge = ">="
     showSqlFilter Le = "<="
 
-delete :: (Integral (Key v), Monad m)
-       => GenericSql m -> EntityDef -> Key v -> m ()
-delete gs t k =
-    gsExecute gs sql [PersistInt64 $ fromIntegral k]
+delete :: (PersistEntity v, Monad m) => GenericSql m -> Key v -> m ()
+delete gs k =
+    gsExecute gs sql [PersistInt64 $ fromPersistKey k]
   where
+    t = entityDef $ dummyFromKey k
     sql = "DELETE FROM " ++ tableName t ++ " WHERE id=?"
 
-deleteWhere :: (PersistField (Filter v), ToFilter (Filter v),
-                ToFieldName (Filter v), Monad m)
-            => GenericSql m -> EntityDef -> [Filter v] -> m ()
-deleteWhere gs t filts = do
+dummyFromFilts :: [Filter v] -> v
+dummyFromFilts _ = error "dummyFromFilts"
+
+deleteWhere :: (PersistEntity v, Monad m)
+            => GenericSql m -> [Filter v] -> m ()
+deleteWhere gs filts = do
+    let t = entityDef $ dummyFromFilts filts
     let wher = if null filts
                 then ""
                 else " WHERE " ++
                      intercalate " AND " (map filterClause filts)
         sql = "DELETE FROM " ++ tableName t ++ wher
-    gsExecute gs sql $ map toPersistValue filts
+    gsExecute gs sql $ map persistFilterToValue filts
 
-deleteBy :: (ToPersistFields (Unique v), ToFieldNames (Unique v), Monad m)
-         => GenericSql m -> EntityDef -> Unique v -> m ()
-deleteBy gs t uniq = do
-    let sql = "DELETE FROM " ++ tableName t ++ " WHERE " ++
-              intercalate " AND " (map (++ "=?") $ toFieldNames' uniq)
-    gsExecute gs sql $ map toPersistValue $ toPersistFields uniq
+deleteBy :: (PersistEntity v, Monad m) => GenericSql m -> Unique v -> m ()
+deleteBy gs uniq =
+    gsExecute gs sql $ persistUniqueToValues uniq
+  where
+    t = entityDef $ dummyFromUnique uniq
+    go = map toField . persistUniqueToFieldNames
+    sql = "DELETE FROM " ++ tableName t ++ " WHERE " ++
+          intercalate " AND " (map (++ "=?") $ go uniq)
 
-update :: ( Integral (Key v), PersistField (Update v), ToFieldName (Update v)
-          , Monad m)
-       => GenericSql m -> EntityDef -> Key v -> [Update v] -> m ()
-update _ _ _ [] = return ()
-update gs t k upds = do
+update :: (PersistEntity v, Monad m)
+       => GenericSql m -> Key v -> [Update v] -> m ()
+update _ _ [] = return ()
+update gs k upds = do
     let sql = "UPDATE " ++ tableName t ++ " SET " ++
-              intercalate "," (map (++ "=?") $ map toFieldName' upds) ++
+              intercalate "," (map (++ "=?") $ map go upds) ++
               " WHERE id=?"
     gsExecute gs sql $
-        map toPersistValue upds ++ [PersistInt64 $ fromIntegral k]
+        map persistUpdateToValue upds ++ [PersistInt64 $ fromPersistKey k]
+  where
+    t = entityDef $ dummyFromKey k
+    go = toField . persistUpdateToFieldName
 
-updateWhere :: (PersistField (Filter v), PersistField (Update v),
-                ToFieldName (Update v), ToFilter (Filter v),
-                ToFieldName (Filter v), Monad m)
-            => GenericSql m
-            -> EntityDef -> [Filter v] -> [Update v] -> m ()
-updateWhere _ _ _ [] = return ()
-updateWhere gs t filts upds = do
+updateWhere :: (PersistEntity v, Monad m)
+            => GenericSql m -> [Filter v] -> [Update v] -> m ()
+updateWhere _ _ [] = return ()
+updateWhere gs filts upds = do
+    let t = entityDef $ dummyFromFilts filts
     let wher = if null filts
                 then ""
                 else " WHERE " ++
                      intercalate " AND " (map filterClause filts)
     let sql = "UPDATE " ++ tableName t ++ " SET " ++
-              intercalate "," (map (++ "=?") $ map toFieldName' upds) ++ wher
-    let dat = map toPersistValue upds ++ map toPersistValue filts
+              intercalate "," (map (++ "=?") $ map go upds) ++ wher
+    let dat = map persistUpdateToValue upds
+           ++ map persistFilterToValue filts
     gsWithStmt gs sql dat  $ const $ return ()
+  where
+    go = toField . persistUpdateToFieldName
 
-getBy :: (Num (Key v), FromPersistValues v, Monad m,
-          ToPersistFields (Unique v), ToFieldNames (Unique v))
-      => GenericSql m
-      -> EntityDef -> Unique v -> m (Maybe (Key v, v))
-getBy gs t uniq = do
+getBy :: (PersistEntity v, Monad m)
+      => GenericSql m -> Unique v -> m (Maybe (Key v, v))
+getBy gs uniq = do
     let sql = "SELECT * FROM " ++ tableName t ++ " WHERE " ++ sqlClause
-    gsWithStmt gs sql (toPersistValues uniq) $ \pop -> do
+    gsWithStmt gs sql (persistUniqueToValues uniq) $ \pop -> do
         row <- pop
         case row of
             Nothing -> return Nothing
             Just (PersistInt64 k:vals) ->
                 case fromPersistValues vals of
                     Left _ -> return Nothing
-                    Right x -> return $ Just (fromIntegral k, x)
+                    Right x -> return $ Just (toPersistKey k, x)
             Just _ -> error "Database.Persist.GenericSql: Bad list in getBy"
   where
     sqlClause = intercalate " AND " $ map (++ "=?") $ toFieldNames' uniq
+    t = entityDef $ dummyFromUnique uniq
+    toFieldNames' = map toField . persistUniqueToFieldNames
+
+dummyFromUnique :: Unique v -> v
+dummyFromUnique _ = error "dummyFromUnique"
 
 tableName :: EntityDef -> String
 tableName t = "tbl" ++ entityName t
@@ -348,9 +338,3 @@ tableColumns = map (\(x, y, z) -> (toField x, y, z)) . entityColumns
 
 tableUniques' :: EntityDef -> [(String, [String])]
 tableUniques' = map (second $ map toField) . entityUniques
-
-toFieldName' :: ToFieldName x => x -> String
-toFieldName' = toField . toFieldName
-
-toFieldNames' :: ToFieldNames x => x -> [String]
-toFieldNames' = map toField . toFieldNames

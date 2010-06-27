@@ -19,24 +19,29 @@ module Database.Persist.Sqlite
     , persist
     ) where
 
-import Database.Persist (PersistValue (..))
+import Database.Persist (PersistValue (..), PersistBackend (..))
 import Database.Persist.Helper
 import Control.Monad.Trans.Reader
 import Language.Haskell.TH.Syntax hiding (lift)
 import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.List (intercalate)
 import "MonadCatchIO-transformers" Control.Monad.CatchIO
 import Database.Sqlite
 import Database.Persist.Quasi
-import Database.Persist.GenericSql
+import qualified Database.Persist.GenericSql as G
+import Control.Applicative (Applicative)
+import Data.Int (Int64)
 
 -- | Generate data types and instances for the given entity definitions. Can
 -- deal directly with the output of the 'persist' quasi-quoter.
 persistSqlite :: [EntityDef] -> Q [Dec]
-persistSqlite = fmap concat . mapM derivePersistSqliteReader
+persistSqlite = fmap concat . mapM mkEntity
 
 -- | A ReaderT monad transformer holding a sqlite database connection.
-type SqliteReader = ReaderT Database
+newtype SqliteReader m a = SqliteReader (ReaderT Database m a)
+    deriving (Monad, MonadIO, MonadTrans, MonadCatchIO, Functor,
+              Applicative)
 
 -- | Handles opening and closing of the database connection automatically.
 withSqlite :: MonadCatchIO m => String -> (Database -> m a) -> m a
@@ -45,7 +50,7 @@ withSqlite s f = bracket (liftIO $ open s) (liftIO . close) f
 -- | Run a series of database actions within a single transactions. On any
 -- exception, the transaction is rolled back.
 runSqlite :: MonadCatchIO m => SqliteReader m a -> Database -> m a
-runSqlite r conn = do
+runSqlite (SqliteReader r) conn = do
     Done <- liftIO begin
     res <- onException (runReaderT r conn) $ liftIO rollback
     Done <- liftIO commit
@@ -58,10 +63,10 @@ runSqlite r conn = do
 withStmt :: MonadCatchIO m
          => String
          -> [PersistValue]
-         -> (RowPopper (SqliteReader m) -> SqliteReader m a)
+         -> (G.RowPopper (SqliteReader m) -> SqliteReader m a)
          -> SqliteReader m a
 withStmt sql vals f = do
-    conn <- ask
+    conn <- SqliteReader ask
     bracket (liftIO $ prepare conn sql) (liftIO . finalize) $ \stmt -> do
         liftIO $ bind stmt vals
         f $ go stmt
@@ -76,15 +81,15 @@ withStmt sql vals f = do
 
 execute :: MonadCatchIO m => String -> [PersistValue] -> SqliteReader m ()
 execute sql vals = do
-    conn <- ask
+    conn <- SqliteReader ask
     bracket (liftIO $ prepare conn sql) (liftIO . finalize) $ \stmt -> do
         liftIO $ bind stmt vals
         Done <- liftIO $ step stmt
         return ()
 
-insert :: MonadCatchIO m
-       => String -> [String] -> [PersistValue] -> SqliteReader m Int64
-insert t cols vals = do
+insert' :: MonadCatchIO m
+        => String -> [String] -> [PersistValue] -> SqliteReader m Int64
+insert' t cols vals = do
     let sql = "INSERT INTO " ++ t ++
               "(" ++ intercalate "," cols ++ ") VALUES(" ++
               intercalate "," (map (const "?") cols) ++ ")"
@@ -100,8 +105,18 @@ tableExists t = withStmt sql [PersistString t] $ \pop -> do
   where
     sql = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?"
 
-derivePersistSqliteReader :: EntityDef -> Q [Dec]
-derivePersistSqliteReader t = do
-    let wrap = ConT ''ReaderT `AppT` ConT ''Database
-    gs <- [|GenericSql withStmt execute insert tableExists "INTEGER PRIMARY KEY"|]
-    deriveGenericSql wrap gs t
+genericSql :: MonadCatchIO m => G.GenericSql (SqliteReader m)
+genericSql = G.GenericSql withStmt execute insert' tableExists "INTEGER PRIMARY KEY"
+
+instance MonadCatchIO m => PersistBackend (SqliteReader m) where
+    initialize = G.initialize genericSql
+    insert = G.insert genericSql
+    get = G.get genericSql
+    replace = G.replace genericSql
+    select = G.select genericSql
+    deleteWhere = G.deleteWhere genericSql
+    update = G.update genericSql
+    updateWhere = G.updateWhere genericSql
+    getBy = G.getBy genericSql
+    delete = G.delete genericSql
+    deleteBy = G.deleteBy genericSql

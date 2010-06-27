@@ -5,6 +5,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE PackageImports #-}
+{-# LANGUAGE ExistentialQuantification #-}
 
 -- | This defines the API for performing database actions. There are two levels
 -- to this API: dealing with fields, and dealing with entities. In SQL, a field
@@ -12,14 +13,17 @@
 -- entity corresponds to a SQL table.  In other words: An entity is a
 -- collection of fields.
 module Database.Persist
-    ( -- * Fields
+    {-( -- * Fields
       PersistValue (..)
     , SqlType (..)
     , PersistField (..)
       -- * Entities
     , PersistEntity (..)
-    ) where
+    , PersistBackend (..)
+    , EntityDef (..)
+    )-} where
 
+import Language.Haskell.TH.Syntax
 import Data.Time (Day, TimeOfDay, UTCTime)
 import Data.ByteString.Char8 (ByteString, unpack)
 import qualified Data.ByteString.UTF8 as BSU
@@ -30,7 +34,6 @@ import Text.Hamlet
 import qualified Data.Text as T
 import qualified Data.ByteString as S
 import qualified Data.ByteString.Lazy as L
-import "MonadCatchIO-transformers" Control.Monad.CatchIO (MonadCatchIO)
 
 -- | A raw value which can be stored in any backend and can be marshalled to
 -- and from a 'PersistField'.
@@ -173,17 +176,6 @@ instance PersistField a => PersistField (Maybe a) where
 -- | A single database entity. For example, if writing a blog application, a
 -- blog entry would be an entry, containing fields such as title and content.
 class PersistEntity val where
-    -- | The monad transformer in which actions for this entity must occur. For
-    -- example, entities declared to work with a sqlite backend would most
-    -- likely use a ReaderT monad transformer holding onto a database
-    -- connection.
-    --
-    -- By using a monad transformer here, users can allow arbitrary effects to
-    -- exist in the underlying monad. For example, Yesod applications can embed
-    -- a Handler monad here. The only restriction on that underlying monad is
-    -- it must be an instance of 'MonadCatchIO'.
-    type PersistMonad val :: (* -> *) -> * -> *
-
     -- | The unique identifier associated with this entity. In general, backends also define a type synonym for this, such that \"type MyEntityId = Key MyEntity\".
     data Key    val
     -- | Fields which can be updated using the 'update' and 'updateWhere'
@@ -199,46 +191,94 @@ class PersistEntity val where
     -- | Unique keys in existence on this entity.
     data Unique val
 
+    entityDef :: val -> EntityDef
+    toPersistFields :: val -> [SomePersistField]
+    fromPersistValues :: [PersistValue] -> Either String val
+    halfDefined :: val
+    toPersistKey :: Int64 -> Key val
+    fromPersistKey :: Key val -> Int64
+    showPersistKey :: Key val -> String
+
+    persistFilterToFieldName :: Filter val -> String
+    persistFilterToFilter :: Filter val -> PersistFilter
+    persistFilterIsNull :: Filter val -> Bool
+    persistFilterToValue :: Filter val -> PersistValue
+
+    persistOrderToFieldName :: Order val -> String
+    persistOrderToOrder :: Order val -> PersistOrder
+
+    persistUpdateToFieldName :: Update val -> String
+    persistUpdateToValue :: Update val -> PersistValue
+
+    persistUniqueToFieldNames :: Unique val -> [String]
+    persistUniqueToValues :: Unique val -> [PersistValue]
+
+data PersistOrder = Asc | Desc
+
+data SomePersistField = forall a. PersistField a => SomePersistField a
+instance PersistField SomePersistField where
+    toPersistValue (SomePersistField a) = toPersistValue a
+    fromPersistValue x = fmap SomePersistField (fromPersistValue x :: Either String String)
+    sqlType (SomePersistField a) = sqlType a
+
+class PersistBackend m where
     -- | Prepare database for this entity, if necessary. In SQL, this creates
     -- values and indices if they don't exist. The first argument is not used,
     -- so you can used 'undefined'.
-    initialize :: MonadCatchIO m => val -> (PersistMonad val) m ()
+    initialize :: PersistEntity val => val -> m ()
 
     -- | Create a new record in the database, returning the newly created
     -- identifier.
-    insert :: MonadCatchIO m => val -> (PersistMonad val) m (Key val)
+    insert :: PersistEntity val => val -> m (Key val)
 
     -- | Replace the record in the database with the given key. Result is
     -- undefined if such a record does not exist.
-    replace :: MonadCatchIO m => Key val -> val -> (PersistMonad val) m ()
+    replace :: PersistEntity val => Key val -> val -> m ()
 
     -- | Update individual fields on a specific record.
-    update :: MonadCatchIO m => Key val -> [Update val]
-           -> (PersistMonad val) m ()
+    update :: PersistEntity val => Key val -> [Update val] -> m ()
 
     -- | Update individual fields on any record matching the given criterion.
-    updateWhere :: MonadCatchIO m => [Filter val] -> [Update val]
-                -> (PersistMonad val) m ()
+    updateWhere :: PersistEntity val => [Filter val] -> [Update val] -> m ()
 
     -- | Delete a specific record by identifier. Does nothing if record does
     -- not exist.
-    delete :: MonadCatchIO m => Key val -> (PersistMonad val) m ()
+    delete :: PersistEntity val => Key val -> m ()
 
     -- | Delete a specific record by unique key. Does nothing if no record
     -- matches.
-    deleteBy :: MonadCatchIO m => Unique val -> (PersistMonad val) m ()
+    deleteBy :: PersistEntity val => Unique val -> m ()
 
     -- | Delete all records matching the given criterion.
-    deleteWhere :: MonadCatchIO m => [Filter val] -> (PersistMonad val) m ()
+    deleteWhere :: PersistEntity val => [Filter val] -> m ()
 
     -- | Get a record by identifier, if available.
-    get :: MonadCatchIO m => Key val -> (PersistMonad val) m (Maybe val)
+    get :: PersistEntity val => Key val -> m (Maybe val)
 
     -- | Get a record by unique key, if available. Returns also the identifier.
-    getBy :: MonadCatchIO m => Unique val
-          -> (PersistMonad val) m (Maybe (Key val, val))
+    getBy :: PersistEntity val => Unique val -> m (Maybe (Key val, val))
 
     -- | Get all records matching the given criterion in the specified order.
     -- Returns also the identifiers.
-    select :: MonadCatchIO m => [Filter val] -> [Order val]
-           -> (PersistMonad val) m [(Key val, val)]
+    select :: PersistEntity val => [Filter val] -> [Order val]
+           -> m [(Key val, val)]
+
+data EntityDef = EntityDef
+    { entityName    :: String
+    , entityColumns :: [(String, String, [String])] -- ^ name, type, attribs
+    , entityUniques :: [(String, [String])] -- ^ name, columns
+    , entityDerives :: [String]
+    }
+    deriving Show
+
+instance Lift EntityDef where
+    lift (EntityDef a b c d) = do
+        e <- [|EntityDef|]
+        a' <- lift a
+        b' <- lift b
+        c' <- lift c
+        d' <- lift d
+        return $ e `AppE` a' `AppE` b' `AppE` c' `AppE` d'
+
+data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le
+    deriving (Read, Show)
