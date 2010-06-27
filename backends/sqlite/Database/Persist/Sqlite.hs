@@ -1,55 +1,38 @@
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PackageImports #-}
-{-# LANGUAGE FlexibleContexts #-}
 -- | A sqlite backend for persistent.
 module Database.Persist.Sqlite
     ( SqliteReader
-    , persistSqlite
     , runSqlite
     , withSqlite
-      -- * Re-exports
-    , Database
-    , open
-    , close
-    , Int64
-    , module Database.Persist.Helper
-    , persist
+    , Connection
+    , module Database.Persist
     ) where
 
-import Database.Persist (PersistValue (..), PersistBackend (..))
-import Database.Persist.Helper
+import Database.Persist
+import Database.Persist.Base
 import Control.Monad.Trans.Reader
-import Language.Haskell.TH.Syntax hiding (lift)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.List (intercalate)
 import "MonadCatchIO-transformers" Control.Monad.CatchIO
 import Database.Sqlite
-import Database.Persist.Quasi
 import qualified Database.Persist.GenericSql as G
 import Control.Applicative (Applicative)
 import Data.Int (Int64)
 
--- | Generate data types and instances for the given entity definitions. Can
--- deal directly with the output of the 'persist' quasi-quoter.
-persistSqlite :: [EntityDef] -> Q [Dec]
-persistSqlite = fmap concat . mapM mkEntity
-
 -- | A ReaderT monad transformer holding a sqlite database connection.
-newtype SqliteReader m a = SqliteReader (ReaderT Database m a)
+newtype SqliteReader m a = SqliteReader (ReaderT Connection m a)
     deriving (Monad, MonadIO, MonadTrans, MonadCatchIO, Functor,
               Applicative)
 
 -- | Handles opening and closing of the database connection automatically.
-withSqlite :: MonadCatchIO m => String -> (Database -> m a) -> m a
+withSqlite :: MonadCatchIO m => String -> (Connection -> m a) -> m a
 withSqlite s f = bracket (liftIO $ open s) (liftIO . close) f
 
 -- | Run a series of database actions within a single transactions. On any
 -- exception, the transaction is rolled back.
-runSqlite :: MonadCatchIO m => SqliteReader m a -> Database -> m a
+runSqlite :: MonadCatchIO m => SqliteReader m a -> Connection -> m a
 runSqlite (SqliteReader r) conn = do
     Done <- liftIO begin
     res <- onException (runReaderT r conn) $ liftIO rollback

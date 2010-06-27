@@ -1,15 +1,13 @@
-module Database.Persist.Quasi
-    ( persist
-    ) where
+module Database.Persist.Quasi (persist) where
 
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
-import Database.Persist.Helper
+import Database.Persist.Base
 import Data.Char
 import Data.Maybe (mapMaybe)
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
--- used as input to the backend-specific template haskell generation code.
+-- used as input to the template haskell generation code (mkPersist).
 persist :: QuasiQuoter
 persist = QuasiQuoter
     { quoteExp = lift . parse

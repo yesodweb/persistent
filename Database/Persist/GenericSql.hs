@@ -8,18 +8,22 @@
 -- | This is a helper module for creating SQL backends. Regular users do not
 -- need to use this module.
 module Database.Persist.GenericSql
-{-
-    ( Int64
-    , module Database.Persist.Helper
-    , persist
+    ( GenericSql (..)
     , RowPopper
-    , GenericSql (..)
-    ) -} where
+    , initialize
+    , insert
+    , get
+    , replace
+    , select
+    , deleteWhere
+    , update
+    , updateWhere
+    , getBy
+    , delete
+    , deleteBy
+    ) where
 
-import Database.Persist (PersistEntity (..),
-                         SqlType (..), PersistValue (..),
-                         PersistField (..))
-import Database.Persist.Helper
+import Database.Persist.Base hiding (PersistBackend (..))
 import Data.List (intercalate)
 import Control.Monad (unless, liftM)
 import Data.Int (Int64)
@@ -35,89 +39,6 @@ data GenericSql m = GenericSql
     }
 
 type RowPopper m = m (Maybe [PersistValue])
-
-{- FIXME
-deriveGenericSql :: Type -> Exp -> EntityDef -> Q [Dec]
-deriveGenericSql monad gs t = do
-    let name = entityName t
-    let dt = dataTypeDec t
-
-    fsv <- mkFromPersistValues t
-    let sq =
-          InstanceD [] (ConT ''FromPersistValues `AppT` ConT (mkName name))
-            [ FunD (mkName "fromPersistValues") fsv
-            ]
-
-    let keysyn = TySynD (mkName $ name ++ "Id") [] $
-                    ConT ''Key `AppT` ConT (mkName name)
-
-    t' <- TH.lift t
-    let mkFun s e = FunD (mkName s) [Clause [] (NormalB $ e `AppE` t') []]
-
-    let gs' = fmap (`AppE` gs)
-    init' <- gs' [|initialize|]
-    insert' <- gs' [|insert|]
-    replace' <- gs' [|replace|]
-    get' <- gs' [|get|]
-    getBy' <- gs' [|getBy|]
-    select' <- gs' [|select|]
-    deleteWhere' <- gs' [|deleteWhere|]
-    delete' <- gs' [|delete|]
-    deleteBy' <- gs' [|deleteBy|]
-    update' <- gs' [|update|]
-    updateWhere' <- gs' [|updateWhere|]
-
-    let inst =
-          InstanceD
-            []
-            (ConT ''PersistEntity `AppT` ConT (mkName name))
-            [ persistMonadTypeDec monad t
-            , keyTypeDec (name ++ "Id") "Int64" t
-            , filterTypeDec t
-            , updateTypeDec t
-            , orderTypeDec t
-            , uniqueTypeDec t
-            , mkFun "initialize" $ init'
-            , mkFun "insert" $ insert'
-            , mkFun "replace" $ replace'
-            , mkFun "get" $ get'
-            , mkFun "getBy" $ getBy'
-            , mkFun "select" $ select'
-            , mkFun "deleteWhere" $ deleteWhere'
-            , mkFun "delete" $ delete'
-            , mkFun "deleteBy" $ deleteBy'
-            , mkFun "update" $ update'
-            , mkFun "updateWhere" $ updateWhere'
-            ]
-
-    tops <- mkToPersistFields (ConT $ mkName name)
-                [(name, length $ tableColumns t)]
-    topsUn <- mkToPersistFields (ConT ''Unique `AppT` ConT (mkName name))
-            $ map (\(x, y) -> (x, length y))
-            $ entityUniques t
-
-    return
-        [ dt, sq, inst, keysyn, tops, topsUn
-        , mkToFieldName (ConT ''Update `AppT` ConT (mkName name))
-                $ map (\(s, _, _) -> (name ++ upperFirst s, s))
-                $ entityUpdates t
-        , mkPersistField (ConT ''Update `AppT` ConT (mkName name))
-                $ map (\(s, _, _) -> name ++ upperFirst s) $ entityUpdates t
-        , mkToFieldNames (ConT ''Unique `AppT` ConT (mkName name))
-                $ entityUniques t
-        , mkPersistField (ConT ''Filter `AppT` ConT (mkName name))
-                $ map (\(x, _, _, y) -> name ++ upperFirst x ++ show y)
-                $ entityFilters t
-        , mkToFieldName (ConT ''Filter `AppT` ConT (mkName name))
-                $ map (\(x, _, _, y) -> (name ++ upperFirst x ++ show y, x))
-                $ entityFilters t
-        , mkToFilter (ConT ''Filter `AppT` ConT (mkName name))
-                $ map (\(x, _, z, y) ->
-                    (name ++ upperFirst x ++ show y, y, z))
-                $ entityFilters t
-        , mkHalfDefined (ConT $ mkName name) name $ length $ tableColumns t
-        ]
--}
 
 initialize :: (Monad m, PersistEntity v) => GenericSql m -> v -> m ()
 initialize gs v = do

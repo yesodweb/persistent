@@ -2,7 +2,7 @@
 -- | A port of the direct-sqlite package for dealing directly with
 -- 'PersistValue's.
 module Database.Sqlite  (
-                         Database,
+                         Connection,
                          Statement,
                          Error(..),
                          StepResult(Row,
@@ -32,10 +32,10 @@ import qualified Data.ByteString.Internal as BSI
 import qualified Data.ByteString.UTF8 as UTF8
 import Foreign
 import Foreign.C
-import Database.Persist (PersistValue (..))
+import Database.Persist.Base (PersistValue (..))
 import Control.Concurrent.MVar
 
-newtype Database = Database (Ptr ())
+newtype Connection = Connection (Ptr ())
 -- | The MVar is only used for insuring the statement is not double-finalized.
 -- It won't stop you from using a statement after it's been finalized.
 data Statement = Statement (Ptr ()) (MVar Bool)
@@ -66,7 +66,7 @@ data Error = ErrorOK
            | ErrorAuthorization
            | ErrorFormat
            | ErrorRange
-           | ErrorNotADatabase
+           | ErrorNotAConnection
            | ErrorRow
            | ErrorDone
              deriving (Eq, Show)
@@ -107,7 +107,7 @@ decodeError 22 = ErrorNoLargeFileSupport
 decodeError 23 = ErrorAuthorization
 decodeError 24 = ErrorFormat
 decodeError 25 = ErrorRange
-decodeError 26 = ErrorNotADatabase
+decodeError 26 = ErrorNotAConnection
 decodeError 100 = ErrorRow
 decodeError 101 = ErrorDone
 decodeError i = Prelude.error $ "decodeError " ++ show i
@@ -122,15 +122,15 @@ decodeColumnType i = Prelude.error $ "decodeColumnType " ++ show i
 
 foreign import ccall "sqlite3_errmsg"
   errmsgC :: Ptr () -> IO CString
-errmsg :: Database -> IO String
-errmsg (Database database) = do
+errmsg :: Connection -> IO String
+errmsg (Connection database) = do
   message <- errmsgC database
   byteString <- BS.packCString message
   return $ UTF8.toString byteString
 
-sqlError :: Maybe Database -> String -> Error -> IO a
-sqlError maybeDatabase functionName error = do
-  details <- case maybeDatabase of
+sqlError :: Maybe Connection -> String -> Error -> IO a
+sqlError maybeConnection functionName error = do
+  details <- case maybeConnection of
                Just database -> do
                  details <- errmsg database
                  return $ ": " ++ details
@@ -141,7 +141,7 @@ sqlError maybeDatabase functionName error = do
 
 foreign import ccall "sqlite3_open"
   openC :: CString -> Ptr (Ptr ()) -> IO Int
-openError :: String -> IO (Either Database Error)
+openError :: String -> IO (Either Connection Error)
 openError path' = do
   BS.useAsCString (UTF8.fromString path')
                   (\path -> do
@@ -151,9 +151,9 @@ openError path' = do
                                case error of
                                  ErrorOK -> do
                                             database' <- peek database
-                                            return $ Left $ Database database'
+                                            return $ Left $ Connection database'
                                  _ -> return $ Right error))
-open :: String -> IO Database
+open :: String -> IO Connection
 open path = do
   databaseOrError <- openError path
   case databaseOrError of
@@ -162,11 +162,11 @@ open path = do
 
 foreign import ccall "sqlite3_close"
   closeC :: Ptr () -> IO Int
-closeError :: Database -> IO Error
-closeError (Database database) = do
+closeError :: Connection -> IO Error
+closeError (Connection database) = do
   error <- closeC database
   return $ decodeError error
-close :: Database -> IO ()
+close :: Connection -> IO ()
 close database = do
   error <- closeError database
   case error of
@@ -175,8 +175,8 @@ close database = do
 
 foreign import ccall "sqlite3_prepare_v2"
   prepareC :: Ptr () -> CString -> Int -> Ptr (Ptr ()) -> Ptr (Ptr ()) -> IO Int
-prepareError :: Database -> String -> IO (Either Statement Error)
-prepareError (Database database) text' = do
+prepareError :: Connection -> String -> IO (Either Statement Error)
+prepareError (Connection database) text' = do
   BS.useAsCString (UTF8.fromString text')
                   (\text -> do
                      alloca (\statement -> do
@@ -188,7 +188,7 @@ prepareError (Database database) text' = do
                                             mvar <- newMVar True
                                             return $ Left $ Statement statement' mvar
                                  _ -> return $ Right error))
-prepare :: Database -> String -> IO Statement
+prepare :: Connection -> String -> IO Statement
 prepare database text = do
   statementOrError <- prepareError database text
   case statementOrError of

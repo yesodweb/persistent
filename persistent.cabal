@@ -23,7 +23,8 @@ library
                      hamlet >= 0.3.1 && < 0.4,
                      web-routes-quasi >= 0.4.0 && < 0.5
     exposed-modules: Database.Persist
-                     Database.Persist.Helper
+                     Database.Persist.Base
+                     Database.Persist.TH
                      Database.Persist.Quasi
                      Database.Persist.GenericSql
     ghc-options:     -Wall

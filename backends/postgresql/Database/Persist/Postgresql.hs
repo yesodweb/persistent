@@ -1,29 +1,20 @@
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE FlexibleContexts #-}
 -- | A postgresql backend for persistent.
 module Database.Persist.Postgresql
     ( PostgresqlReader
-    , persistPostgresql
     , runPostgresql
     , withPostgresql
-      -- * Re-exports
     , Connection
     , connectPostgreSQL
-    , Int64
-    , module Database.Persist.Helper
-    , persist
+    , module Database.Persist
     ) where
 
 import Database.Persist
-import Database.Persist.Helper
-import Database.Persist.Quasi
+import Database.Persist.Base
 import qualified Database.Persist.GenericSql as G
 import Control.Monad.Trans.Reader
-import Language.Haskell.TH.Syntax hiding (lift)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.List (intercalate)
 import "MonadCatchIO-transformers" Control.Monad.CatchIO
@@ -33,11 +24,6 @@ import Data.Char (toLower)
 import Data.Int (Int64)
 import Control.Monad.Trans.Class (MonadTrans)
 import Control.Applicative (Applicative)
-
--- | Generate data types and instances for the given entity definitions. Can
--- deal directly with the output of the 'persist' quasi-quoter.
-persistPostgresql :: [EntityDef] -> Q [Dec]
-persistPostgresql = fmap concat . mapM mkEntity
 
 -- | A ReaderT monad transformer holding a postgresql database connection.
 newtype PostgresqlReader m a = PostgresqlReader (ReaderT Connection m a)

@@ -2,46 +2,19 @@
 {-# LANGUAGE ExistentialQuantification #-}
 -- | This module provides utilities for creating backends. Regular users do not
 -- need to use this module.
-module Database.Persist.Helper
-    ( recName
-    , upperFirst
-      -- * High level design
-    , EntityDef (..)
-    , entityOrders
-    , entityFilters
-    , entityUpdates
-      -- * FIXME
-    , mkEntity
-      -- * TH datatype helpers
-    , dataTypeDec
-    , keyTypeDec
-    , filterTypeDec
-    , updateTypeDec
-    , orderTypeDec
-    , uniqueTypeDec
-      -- * TH typeclass helpers
-    , mkToPersistFields
-    , mkToFieldNames
-    , mkToFieldName
-    , mkPersistField
-    , mkToFilter
-    , mkToOrder
-    , mkHalfDefined
-      -- * Type classes
-    , SomePersistField (..)
-    , ToOrder (..)
-    , PersistOrder (..)
-    , PersistFilter (..)
-      -- * Utils
-    , apE
-    , addIsNullable
-    ) where
+module Database.Persist.TH (mkPersist) where
 
-import Database.Persist
+import Database.Persist.Base
 import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
-import Data.Maybe (fromJust, mapMaybe)
+import Data.Maybe (fromJust, mapMaybe, catMaybes)
 import Web.Routes.Quasi (SinglePiece)
+import Data.Int (Int64)
+
+-- | Create data types and appropriate 'PersistEntity' instances for the given
+-- 'EntityDef's. Works well with the persist quasi-quoter.
+mkPersist :: [EntityDef] -> Q [Dec]
+mkPersist = fmap concat . mapM mkEntity
 
 recName :: String -> String -> String
 recName dt f = lowerFirst dt ++ upperFirst f
@@ -63,10 +36,10 @@ dataTypeDec t =
     mkCol x (n, ty, as) =
         (mkName $ recName x n, NotStrict, pairToType (ty, "null" `elem` as))
 
-keyTypeDec :: String -> String -> EntityDef -> Dec
+keyTypeDec :: String -> Name -> EntityDef -> Dec
 keyTypeDec constr typ t =
     NewtypeInstD [] ''Key [ConT $ mkName $ entityName t]
-                (NormalC (mkName constr) [(NotStrict, ConT $ mkName typ)])
+                (NormalC (mkName constr) [(NotStrict, ConT typ)])
                 [''Show, ''Read, ''Num, ''Integral, ''Enum, ''Eq, ''Ord,
                  ''Real, ''PersistField, ''SinglePiece]
 
@@ -117,24 +90,26 @@ mkUpdate x (s, ty, isBool) =
     NormalC (mkName $ x ++ upperFirst s)
                 [(NotStrict, pairToType (ty, isBool))]
 
-orderTypeDec :: EntityDef -> Dec
-orderTypeDec t =
-    DataInstD [] ''Order [ConT $ mkName $ entityName t]
+orderTypeDec :: EntityDef -> Q Dec
+orderTypeDec t = do
+    ords <- entityOrders t
+    return $ DataInstD [] ''Order [ConT $ mkName $ entityName t]
             (map (mkOrder $ entityName t) ords)
             (if null ords then [] else [''Show, ''Read, ''Eq])
-  where
-    ords = entityOrders t
 
-entityOrders :: EntityDef -> [(String, String)]
-entityOrders = concatMap go . entityColumns
+entityOrders :: EntityDef -> Q [(String, String, Exp)]
+entityOrders = fmap concat . mapM go . entityColumns
   where
-    go (x, _, ys) = mapMaybe (go' x) ys
-    go' x "Asc" = Just (x, "Asc")
-    go' x "Desc" = Just (x, "Desc")
-    go' _ _ = Nothing
+    go (x, _, ys) = fmap catMaybes $ mapM (go' x) ys
+    go' x s =
+        case reads s of
+            (y, _):_ -> do
+                z <- lift (y :: PersistOrder)
+                return $ Just (x, s, z)
+            _ -> return Nothing
 
-mkOrder :: String -> (String, String) -> Con
-mkOrder x (s, ad) = NormalC (mkName $ x ++ upperFirst s ++ ad) []
+mkOrder :: String -> (String, String, Exp) -> Con
+mkOrder x (s, ad, _) = NormalC (mkName $ x ++ upperFirst s ++ ad) []
 
 uniqueTypeDec :: EntityDef -> Dec
 uniqueTypeDec t =
@@ -205,24 +180,25 @@ mkToFieldName func pairs =
     go (constr, name) =
         Clause [RecP (mkName constr) []] (NormalB $ LitE $ StringL name) []
 
-class ToOrder a where
-    toOrder :: a -> PersistOrder
-
-mkToOrder :: [(String, String)] -> Dec
+mkToOrder :: [(String, Exp)] -> Dec
 mkToOrder pairs =
         FunD (mkName "persistOrderToOrder") $ degen $ map go pairs
   where
     go (constr, val) =
-        Clause [RecP (mkName constr) []] (NormalB $ ConE $ mkName val) []
+        Clause [RecP (mkName constr) []] (NormalB val) []
 
-mkToFilter :: [(String, PersistFilter, Bool)] -> [Dec]
-mkToFilter pairs =
-        [ FunD (mkName "persistFilterToFilter") $ degen $ map go pairs
-        , FunD (mkName "persistFilterIsNull") $ degen $ concatMap go' pairs
+mkToFilter :: [(String, PersistFilter, Bool)] -> Q [Dec]
+mkToFilter pairs = do
+    c1 <- mapM go pairs
+    let c2 = concatMap go' pairs
+    return
+        [ FunD (mkName "persistFilterToFilter") $ degen c1
+        , FunD (mkName "persistFilterIsNull") $ degen c2
         ]
   where
-    go (constr, pf, _) =
-        Clause [RecP (mkName constr) []] (NormalB $ ConE $ mkName $ show pf) []
+    go (constr, pf, _) = do
+        pf' <- lift pf
+        return $ Clause [RecP (mkName constr) []] (NormalB pf') []
     go' (constr, _, False) =
         [Clause [RecP (mkName constr) []]
             (NormalB $ ConE $ mkName "False") []]
@@ -242,25 +218,6 @@ mkToValue func = FunD (mkName func) . degen . map go
                    (NormalB $ VarE (mkName "toPersistValue") `AppE` VarE x)
                    []
 
-mkPersistField :: Type -> [String] -> Dec
-mkPersistField typ constrs =
-    InstanceD [] (ConT ''PersistField `AppT` typ)
-        $ fpv : map go
-            [ "toPersistValue"
-            , "sqlType"
-            , "isNullable"
-            ]
-  where
-    go func = FunD (mkName func) $ degen $ map (go' func) constrs
-    go' func constr =
-        let x = mkName "x"
-         in Clause [ConP (mkName constr) [VarP x]]
-                   (NormalB $ VarE (mkName func) `AppE` VarE x)
-                   []
-    fpv = FunD (mkName "fromPersistValue")
-            [Clause [WildP] (NormalB $ VarE (mkName "error")
-                `AppE` LitE (StringL "fromPersistValue")) []]
-
 mkHalfDefined :: String -> Int -> Dec
 mkHalfDefined constr count =
         FunD (mkName "halfDefined")
@@ -272,13 +229,6 @@ apE :: Either x (y -> z) -> Either x y -> Either x z
 apE (Left x) _ = Left x
 apE _ (Left x) = Left x
 apE (Right f) (Right y) = Right $ f y
-
-addIsNullable :: EntityDef -> (String, (String, String))
-              -> (String, (String, Bool))
-addIsNullable ed (col, (name, typ)) =
-    case filter (\(x, _, _) -> x == col) $ entityColumns ed of
-        [] -> error $ "Missing columns: " ++ col ++ ", " ++ show ed
-        (_, _, attribs):_ -> (name, (typ, "null" `elem` attribs))
 
 mkFromPersistValues :: EntityDef -> Q [Clause]
 mkFromPersistValues t = do
@@ -308,11 +258,17 @@ mkEntity t = do
     fromIntegral' <- [|fromIntegral|]
     utv <- mkUniqueToValues $ entityUniques t
     show' <- [|show|]
+    entityOrders' <- entityOrders t
+    otd <- orderTypeDec t
+    tf <- mkToFilter
+                (map (\(x, _, z, y) ->
+                    (name ++ upperFirst x ++ show y, y, z))
+                $ entityFilters t)
     return [dataTypeDec t, InstanceD [] clazz $
-        [ keyTypeDec (entityName t ++ "Id") "Int64" t
+        [ keyTypeDec (entityName t ++ "Id") ''Int64 t
         , filterTypeDec t
         , updateTypeDec t
-        , orderTypeDec t
+        , otd
         , uniqueTypeDec t
         , FunD (mkName "entityDef") [Clause [WildP] (NormalB t') []]
         , tpf
@@ -322,11 +278,11 @@ mkEntity t = do
         , FunD (mkName "fromPersistKey") [Clause [] (NormalB fromIntegral') []]
         , FunD (mkName "showPersistKey") [Clause [] (NormalB show') []]
         , mkToFieldName "persistOrderToFieldName"
-                $ map (\(x, y) -> (name ++ upperFirst x ++ y, x))
-                $ entityOrders t
+                $ map (\(x, y, _) -> (name ++ upperFirst x ++ y, x))
+                entityOrders'
         , mkToOrder
-                $ map (\(x, y) -> (name ++ upperFirst x ++ y, y))
-                $ entityOrders t
+                $ map (\(x, y, z) -> (name ++ upperFirst x ++ y, z))
+                entityOrders'
         , mkToFieldName "persistUpdateToFieldName"
                 $ map (\(s, _, _) -> (name ++ upperFirst s, s))
                 $ entityUpdates t
@@ -341,8 +297,5 @@ mkEntity t = do
                 $ entityFilters t
         , mkToFieldNames $ entityUniques t
         , utv
-        ] ++ mkToFilter
-                (map (\(x, _, z, y) ->
-                    (name ++ upperFirst x ++ show y, y, z))
-                $ entityFilters t)
+        ] ++ tf
         ]

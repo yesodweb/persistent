@@ -12,16 +12,17 @@
 -- corresponds to a column, and should be a single, non-composite value. An
 -- entity corresponds to a SQL table.  In other words: An entity is a
 -- collection of fields.
-module Database.Persist
-    {-( -- * Fields
-      PersistValue (..)
+module Database.Persist.Base
+    ( PersistValue (..)
     , SqlType (..)
     , PersistField (..)
-      -- * Entities
     , PersistEntity (..)
-    , PersistBackend (..)
     , EntityDef (..)
-    )-} where
+    , PersistBackend (..)
+    , PersistFilter (..)
+    , PersistOrder (..)
+    , SomePersistField (..)
+    ) where
 
 import Language.Haskell.TH.Syntax
 import Data.Time (Day, TimeOfDay, UTCTime)
@@ -213,8 +214,6 @@ class PersistEntity val where
     persistUniqueToFieldNames :: Unique val -> [String]
     persistUniqueToValues :: Unique val -> [PersistValue]
 
-data PersistOrder = Asc | Desc
-
 data SomePersistField = forall a. PersistField a => SomePersistField a
 instance PersistField SomePersistField where
     toPersistValue (SomePersistField a) = toPersistValue a
@@ -282,3 +281,18 @@ instance Lift EntityDef where
 
 data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le
     deriving (Read, Show)
+
+instance Lift PersistFilter where
+    lift Eq = [|Eq|]
+    lift Ne = [|Ne|]
+    lift Gt = [|Gt|]
+    lift Lt = [|Lt|]
+    lift Ge = [|Ge|]
+    lift Le = [|Le|]
+
+data PersistOrder = Asc | Desc
+    deriving (Read, Show)
+
+instance Lift PersistOrder where
+    lift Asc = [|Asc|]
+    lift Desc = [|Desc|]

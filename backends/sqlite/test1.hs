@@ -1,23 +1,20 @@
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 import Prelude hiding (filter)
-import Database.Persist
 import Database.Persist.Sqlite
 import Control.Monad.IO.Class
 
-persistSqlite [EntityDef "Person"
-    [ ("name", "String", words "update Eq Ne Desc")
-    , ("age", "Int", words "update Asc Lt")
-    , ("color", "String", words "null Eq Ne")
-    ]
-    [("PersonNameKey", ["name"])]
-    []
-    ]
-
-deriving instance Show Person
+mkPersist [$persist|
+Person
+    name String update Eq Ne Desc
+    age Int update Asc Lt
+    color String null Eq Ne
+    PersonNameKey name
+|]
 
 main :: IO ()
 main = withSqlite ":memory:" $ runSqlite go
