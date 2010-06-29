@@ -264,7 +264,11 @@ mkEntity t = do
                 (map (\(x, _, z, y) ->
                     (name ++ upperFirst x ++ show y, y, z))
                 $ entityFilters t)
-    return [dataTypeDec t, InstanceD [] clazz $
+    return
+      [ dataTypeDec t
+      , TySynD (mkName $ entityName t ++ "Id") [] $
+            ConT ''Key `AppT` ConT (mkName $ entityName t)
+      , InstanceD [] clazz $
         [ keyTypeDec (entityName t ++ "Id") ''Int64 t
         , filterTypeDec t
         , updateTypeDec t
