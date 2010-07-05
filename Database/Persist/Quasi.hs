@@ -47,16 +47,16 @@ words'' = do
         return s
     unquoted = many1 $ noneOf " \t"
 
-nest :: [(Bool, [String])] -> [(String, [[String]])]
-nest ((False, [name]):rest) =
+nest :: [(Bool, [String])] -> [(String, [String], [[String]])]
+nest ((False, name:entattribs):rest) =
     let (x, y) = break (not . fst) rest
-     in (name, map snd x) : nest y
-nest ((False, _):_) = error "First line in block must have exactly one word"
+     in (name, entattribs, map snd x) : nest y
 nest ((True, _):_) = error "Blocks must begin with non-indented lines"
 nest [] = []
 
-parse' :: (String, [[String]]) -> EntityDef
-parse' (name, attribs) = EntityDef name cols uniqs derives
+parse' :: (String, [String], [[String]]) -> EntityDef
+parse' (name, entattribs, attribs) =
+    EntityDef name entattribs cols uniqs derives
   where
     cols = concatMap takeCols attribs
     uniqs = concatMap takeUniqs attribs

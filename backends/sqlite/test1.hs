@@ -7,17 +7,22 @@
 import Prelude hiding (filter)
 import Database.Persist.Sqlite
 import Control.Monad.IO.Class
+import Database.Sqlite
 
 mkPersist [$persist|
-Person
+Person sql=PersonTable
     name String update Eq Ne Desc
-    age Int update Asc Lt
-    color String null Eq Ne
+    age Int update "Asc" Lt "some ignored attribute"
+    color String null Eq Ne sql=mycolorfield
     PersonNameKey name
 |]
 
 main :: IO ()
-main = withSqlite ":memory:" $ runSqlite go
+main = withSqlite ":memory:" $ \db -> do
+    stmt <- prepare db "CREATE TABLE tblPerson(foo)"
+    Done <- step stmt
+    finalize stmt
+    runSqlite go db
 
 go :: SqliteReader IO ()
 go = do

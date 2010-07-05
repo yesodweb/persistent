@@ -264,6 +264,7 @@ class PersistBackend m where
 
 data EntityDef = EntityDef
     { entityName    :: String
+    , entityAttribs :: [String]
     , entityColumns :: [(String, String, [String])] -- ^ name, type, attribs
     , entityUniques :: [(String, [String])] -- ^ name, columns
     , entityDerives :: [String]
@@ -271,13 +272,14 @@ data EntityDef = EntityDef
     deriving Show
 
 instance Lift EntityDef where
-    lift (EntityDef a b c d) = do
-        e <- [|EntityDef|]
+    lift (EntityDef a b c d e) = do
+        x <- [|EntityDef|]
         a' <- lift a
         b' <- lift b
         c' <- lift c
         d' <- lift d
-        return $ e `AppE` a' `AppE` b' `AppE` c' `AppE` d'
+        e' <- lift e
+        return $ x `AppE` a' `AppE` b' `AppE` c' `AppE` d' `AppE` e'
 
 data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le
     deriving (Read, Show)
