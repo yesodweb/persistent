@@ -132,7 +132,7 @@ select gs filts ords = do
     gsWithStmt gs sql (map persistFilterToValue filts) $ flip go id
   where
     t = entityDef $ dummyFromFilts filts
-    orderClause o = toField (persistOrderToFieldName o)
+    orderClause o = getFieldName t (persistOrderToFieldName o)
                     ++ case persistOrderToOrder o of
                                         Asc -> ""
                                         Desc -> " DESC"
@@ -153,7 +153,8 @@ select gs filts ords = do
 filterClause :: PersistEntity val => Filter val -> String
 filterClause f = if persistFilterIsNull f then nullClause else mainClause
   where
-    name = toField $ persistFilterToFieldName f
+    t = entityDef $ dummyFromFilts [f]
+    name = getFieldName t $ persistFilterToFieldName f
     mainClause = name ++ showSqlFilter (persistFilterToFilter f) ++ "?"
     nullClause =
         case persistFilterToFilter f of
@@ -193,7 +194,7 @@ deleteBy gs uniq =
     gsExecute gs sql $ persistUniqueToValues uniq
   where
     t = entityDef $ dummyFromUnique uniq
-    go = map toField . persistUniqueToFieldNames
+    go = map (getFieldName t) . persistUniqueToFieldNames
     sql = "DELETE FROM " ++ tableName t ++ " WHERE " ++
           intercalate " AND " (map (++ "=?") $ go uniq)
 
@@ -208,13 +209,12 @@ update gs k upds = do
         map persistUpdateToValue upds ++ [PersistInt64 $ fromPersistKey k]
   where
     t = entityDef $ dummyFromKey k
-    go = toField . persistUpdateToFieldName
+    go = getFieldName t . persistUpdateToFieldName
 
 updateWhere :: (PersistEntity v, Monad m)
             => GenericSql m -> [Filter v] -> [Update v] -> m ()
 updateWhere _ _ [] = return ()
 updateWhere gs filts upds = do
-    let t = entityDef $ dummyFromFilts filts
     let wher = if null filts
                 then ""
                 else " WHERE " ++
@@ -225,7 +225,8 @@ updateWhere gs filts upds = do
            ++ map persistFilterToValue filts
     gsWithStmt gs sql dat  $ const $ return ()
   where
-    go = toField . persistUpdateToFieldName
+    t = entityDef $ dummyFromFilts filts
+    go = getFieldName t . persistUpdateToFieldName
 
 getBy :: (PersistEntity v, Monad m)
       => GenericSql m -> Unique v -> m (Maybe (Key v, v))
@@ -243,19 +244,41 @@ getBy gs uniq = do
   where
     sqlClause = intercalate " AND " $ map (++ "=?") $ toFieldNames' uniq
     t = entityDef $ dummyFromUnique uniq
-    toFieldNames' = map toField . persistUniqueToFieldNames
+    toFieldNames' = map (getFieldName t) . persistUniqueToFieldNames
 
 dummyFromUnique :: Unique v -> v
 dummyFromUnique _ = error "dummyFromUnique"
 
 tableName :: EntityDef -> String
-tableName t = "tbl" ++ entityName t
+tableName t =
+    case getSqlValue $ entityAttribs t of
+        Nothing -> "tbl" ++ entityName t
+        Just x -> x
 
-toField :: String -> String
-toField = (++) "fld"
+toField :: (String, String, [String]) -> String
+toField (n, _, as) =
+    case getSqlValue as of
+        Just x -> x
+        Nothing -> "fld" ++ n
+
+getFieldName :: EntityDef -> String -> String
+getFieldName t s = toField $ tableColumn t s
+
+getSqlValue :: [String] -> Maybe String
+getSqlValue (('s':'q':'l':'=':x):_) = Just x
+getSqlValue (_:x) = getSqlValue x
+getSqlValue [] = Nothing
 
 tableColumns :: EntityDef -> [(String, String, [String])]
-tableColumns = map (\(x, y, z) -> (toField x, y, z)) . entityColumns
+tableColumns = map (\a@(x, y, z) -> (toField a, y, z)) . entityColumns
+
+tableColumn :: EntityDef -> String -> (String, String, [String])
+tableColumn t s = go $ entityColumns t
+  where
+    go [] = error $ "Unknown table column: " ++ s
+    go ((x, y, z):rest)
+        | x == s = (x, y, z)
+        | otherwise = go rest
 
 tableUniques' :: EntityDef -> [(String, [String])]
-tableUniques' = map (second $ map toField) . entityUniques
+tableUniques' t = map (second $ map $ getFieldName t) $ entityUniques t

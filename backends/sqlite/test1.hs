@@ -22,6 +22,9 @@ main = withSqlite ":memory:" $ \db -> do
     stmt <- prepare db "CREATE TABLE tblPerson(foo)"
     Done <- step stmt
     finalize stmt
+    stmt1 <- prepare db "CREATE TABLE PersonTable(id INTEGER PRIMARY KEY, fldname VARCHAR NOT NULL, fldage INTEGER NOT NULL, mycolorfield NULL)"
+    Done <- step stmt1
+    finalize stmt1
     runSqlite go db
 
 go :: SqliteReader IO ()
