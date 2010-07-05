@@ -5,18 +5,19 @@ import Language.Haskell.TH.Syntax
 import Database.Persist.Base
 import Data.Char
 import Data.Maybe (mapMaybe)
+import Text.ParserCombinators.Parsec hiding (token)
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
 persist :: QuasiQuoter
 persist = QuasiQuoter
-    { quoteExp = lift . parse
+    { quoteExp = lift . parse_
     , quotePat = error "Cannot quasi-quote a Persist pattern."
     }
 
-parse :: String -> [EntityDef]
-parse = map parse' . nest . map words' . filter (not . null)
-      . map killCarriage . lines
+parse_ :: String -> [EntityDef]
+parse_ = map parse' . nest . map words' . filter (not . null)
+       . map killCarriage . lines
 
 killCarriage :: String -> String
 killCarriage "" = ""
@@ -25,8 +26,26 @@ killCarriage s
     | otherwise = s
 
 words' :: String -> (Bool, [String])
-words' (' ':x) = (True, words x)
-words' x = (False, words x)
+words' s = case parse words'' s s of
+            Left e -> error $ show e
+            Right x -> x
+
+words'' :: Parser (Bool, [String])
+words'' = do
+    s <- fmap (not . null) $ many space
+    t <- many token
+    eof
+    return (s, t)
+  where
+    token = do
+        t <- (char '"' >> quoted) <|> unquoted
+        spaces
+        return t
+    quoted = do
+        s <- many1 $ noneOf "\""
+        _ <- char '"'
+        return s
+    unquoted = many1 $ noneOf " \t"
 
 nest :: [(Bool, [String])] -> [(String, [[String]])]
 nest ((False, [name]):rest) =
