@@ -89,7 +89,8 @@ tableExists t = withStmt sql [PersistString t] $ \pop -> do
     sql = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?"
 
 genericSql :: MonadCatchIO m => G.GenericSql (SqliteReader m)
-genericSql = G.GenericSql withStmt execute insert' tableExists "INTEGER PRIMARY KEY"
+genericSql = G.GenericSql withStmt execute insert' tableExists
+                          "INTEGER PRIMARY KEY" showSqlType
 
 instance MonadCatchIO m => PersistBackend (SqliteReader m) where
     initialize = G.initialize genericSql
@@ -103,3 +104,13 @@ instance MonadCatchIO m => PersistBackend (SqliteReader m) where
     getBy = G.getBy genericSql
     delete = G.delete genericSql
     deleteBy = G.deleteBy genericSql
+
+showSqlType :: SqlType -> String
+showSqlType SqlString = "VARCHAR"
+showSqlType SqlInteger = "INTEGER"
+showSqlType SqlReal = "REAL"
+showSqlType SqlDay = "DATE"
+showSqlType SqlTime = "TIME"
+showSqlType SqlDayTime = "TIMESTAMP"
+showSqlType SqlBlob = "BLOB"
+showSqlType SqlBool = "BOOLEAN"

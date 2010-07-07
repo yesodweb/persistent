@@ -81,7 +81,8 @@ tableExists t = do
 
 genericSql :: MonadIO m => G.GenericSql (PostgresqlReader m)
 genericSql =
-    G.GenericSql withStmt execute insert' tableExists "SERIAL UNIQUE"
+    G.GenericSql withStmt execute insert' tableExists
+                 "SERIAL UNIQUE" showSqlType
 
 pToSql :: PersistValue -> H.SqlValue
 pToSql (PersistString s) = H.SqlString s
@@ -124,3 +125,13 @@ instance MonadIO m => PersistBackend (PostgresqlReader m) where
     getBy = G.getBy genericSql
     delete = G.delete genericSql
     deleteBy = G.deleteBy genericSql
+
+showSqlType :: SqlType -> String
+showSqlType SqlString = "VARCHAR"
+showSqlType SqlInteger = "INTEGER"
+showSqlType SqlReal = "REAL"
+showSqlType SqlDay = "DATE"
+showSqlType SqlTime = "TIME"
+showSqlType SqlDayTime = "TIMESTAMP"
+showSqlType SqlBlob = "BYTEA"
+showSqlType SqlBool = "BOOLEAN"

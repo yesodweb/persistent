@@ -36,6 +36,7 @@ data GenericSql m = GenericSql
     , gsInsert :: String -> [String] -> [PersistValue] -> m Int64
     , gsEntityDefExists :: String -> m Bool
     , gsKeyType :: String
+    , gsShowSqlType :: SqlType -> String
     }
 
 type RowPopper m = m (Maybe [PersistValue])
@@ -57,21 +58,14 @@ initialize gs v = do
         [ ","
         , colName
         , " "
-        , showSqlType $ sqlType p
+        , gsShowSqlType gs $ sqlType p
         , if "null" `elem` as then " NULL" else " NOT NULL"
         ]
     go (index, fields) = do
         let sql = "CREATE UNIQUE INDEX " ++ index ++ " ON " ++
                   tableName t ++ "(" ++ intercalate "," fields ++ ")"
         gsExecute gs sql []
-    showSqlType SqlString = "VARCHAR"
-    showSqlType SqlInteger = "INTEGER"
-    showSqlType SqlReal = "REAL"
-    showSqlType SqlDay = "DATE"
-    showSqlType SqlTime = "TIME"
-    showSqlType SqlDayTime = "TIMESTAMP"
-    showSqlType SqlBlob = "BLOB"
-    showSqlType SqlBool = "BOOLEAN"
+
 insert :: (Monad m, PersistEntity val)
        => GenericSql m -> val -> m (Key val)
 insert gs v = liftM toPersistKey
