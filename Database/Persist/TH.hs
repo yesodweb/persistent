@@ -121,7 +121,7 @@ mkUnique :: EntityDef -> (String, [String]) -> Con
 mkUnique t (constr, fields) =
     NormalC (mkName constr) types
   where
-    types = map (go . fromJust . flip lookup3 (entityColumns t)) fields
+    types = map (go . fromJust . flip lookup3 (entityColumns t)) fields -- FIXME better error message
     go (_, True) = error "Error: cannot have nullables in unique"
     go x = (NotStrict, pairToType x)
     lookup3 _ [] = Nothing
