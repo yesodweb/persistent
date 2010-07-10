@@ -8,6 +8,7 @@ module Database.Persist.Postgresql
     , withPostgresql
     , Connection
     , connectPostgreSQL
+    , Pool
     , module Database.Persist
     ) where
 
@@ -24,6 +25,7 @@ import Data.Char (toLower)
 import Data.Int (Int64)
 import Control.Monad.Trans.Class (MonadTrans)
 import Control.Applicative (Applicative)
+import Database.Persist.Pool
 
 -- | A ReaderT monad transformer holding a postgresql database connection.
 newtype PostgresqlReader m a = PostgresqlReader (ReaderT Connection m a)
@@ -31,14 +33,21 @@ newtype PostgresqlReader m a = PostgresqlReader (ReaderT Connection m a)
               Applicative)
 
 -- | Handles opening and closing of the database connection automatically.
-withPostgresql :: MonadCatchIO m => String -> (Connection -> m a) -> m a
-withPostgresql s f =
-    bracket (liftIO $ connectPostgreSQL s) (liftIO . H.disconnect) f
+withPostgresql :: MonadCatchIO m
+               => String -- ^ connection string
+               -> Int -- ^ maximum number of connections in the pool
+               -> (Pool Connection -> m a)
+               -> m a
+withPostgresql s i f =
+    createPool (connectPostgreSQL s) H.disconnect i f
 
 -- | Run a series of database actions within a single transactions. On any
 -- exception, the transaction is rolled back.
-runPostgresql :: MonadCatchIO m => PostgresqlReader m a -> Connection -> m a
-runPostgresql (PostgresqlReader r) conn = do
+runPostgresql :: MonadCatchIO m
+              => PostgresqlReader m a
+              -> Pool Connection
+              -> m a
+runPostgresql (PostgresqlReader r) pconn = withPool' pconn $ \conn -> do
     res <- onException (runReaderT r conn) $ liftIO (H.rollback conn)
     liftIO $ H.commit conn
     return res

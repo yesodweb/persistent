@@ -20,6 +20,7 @@ import Database.Sqlite
 import qualified Database.Persist.GenericSql as G
 import Control.Applicative (Applicative)
 import Data.Int (Int64)
+import Database.Persist.Pool
 
 -- | A ReaderT monad transformer holding a sqlite database connection.
 newtype SqliteReader m a = SqliteReader (ReaderT Connection m a)
@@ -27,21 +28,26 @@ newtype SqliteReader m a = SqliteReader (ReaderT Connection m a)
               Applicative)
 
 -- | Handles opening and closing of the database connection automatically.
-withSqlite :: MonadCatchIO m => String -> (Connection -> m a) -> m a
-withSqlite s f = bracket (liftIO $ open s) (liftIO . close) f
+withSqlite :: MonadCatchIO m
+           => String
+           -> Int -- ^ number of connections to open
+           -> (Pool Connection -> m a) -> m a
+withSqlite s i f = createPool (open s) close i f
 
--- | Run a series of database actions within a single transactions. On any
+-- | Run a series of database actions within a single transaction. On any
 -- exception, the transaction is rolled back.
-runSqlite :: MonadCatchIO m => SqliteReader m a -> Connection -> m a
-runSqlite (SqliteReader r) conn = do
-    Done <- liftIO begin
-    res <- onException (runReaderT r conn) $ liftIO rollback
-    Done <- liftIO commit
-    return res
+runSqlite :: MonadCatchIO m => SqliteReader m a -> Pool Connection -> m a
+runSqlite (SqliteReader r) pconn = withPool' pconn go
   where
-    begin = bracket (prepare conn "BEGIN") finalize step
-    commit = bracket (prepare conn "COMMIT") finalize step
-    rollback = bracket (prepare conn "ROLLBACK") finalize step
+    go conn = do
+        Done <- liftIO begin
+        res <- onException (runReaderT r conn) $ liftIO rollback
+        Done <- liftIO commit
+        return res
+      where
+        begin = bracket (prepare conn "BEGIN") finalize step
+        commit = bracket (prepare conn "COMMIT") finalize step
+        rollback = bracket (prepare conn "ROLLBACK") finalize step
 
 withStmt :: MonadCatchIO m
          => String

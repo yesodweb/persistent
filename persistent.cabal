@@ -17,6 +17,7 @@ library
                      template-haskell >= 2.4 && < 2.5,
                      bytestring >= 0.9.1 && < 0.10,
                      MonadCatchIO-transformers >= 0.2.2 && < 0.3,
+                     transformers >= 0.2.1 && < 0.3,
                      time >= 1.1.4 && < 1.2,
                      utf8-string >= 0.3.4 && < 0.4,
                      text >= 0.7.1 && < 0.8,
@@ -28,6 +29,7 @@ library
                      Database.Persist.TH
                      Database.Persist.Quasi
                      Database.Persist.GenericSql
+                     Database.Persist.Pool
     ghc-options:     -Wall
 
 source-repository head

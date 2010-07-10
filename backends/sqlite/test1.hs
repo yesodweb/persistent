@@ -8,6 +8,7 @@ import Prelude hiding (filter)
 import Database.Persist.Sqlite
 import Control.Monad.IO.Class
 import Database.Sqlite
+import Database.Persist.Pool
 
 mkPersist [$persist|
 Person sql=PersonTable
@@ -18,14 +19,15 @@ Person sql=PersonTable
 |]
 
 main :: IO ()
-main = withSqlite ":memory:" $ \db -> do
-    stmt <- prepare db "CREATE TABLE tblPerson(foo)"
-    Done <- step stmt
-    finalize stmt
-    stmt1 <- prepare db "CREATE TABLE PersonTable(id INTEGER PRIMARY KEY, fldname VARCHAR NOT NULL, fldage INTEGER NOT NULL, mycolorfield NULL)"
-    Done <- step stmt1
-    finalize stmt1
-    runSqlite go db
+main = withSqlite ":memory:" 1 $ \pool -> do
+    withPool' pool $ \db -> do
+        stmt <- prepare db "CREATE TABLE tblPerson(foo)"
+        Done <- step stmt
+        finalize stmt
+        stmt1 <- prepare db "CREATE TABLE PersonTable(id INTEGER PRIMARY KEY, fldname VARCHAR NOT NULL, fldage INTEGER NOT NULL, mycolorfield NULL)"
+        Done <- step stmt1
+        finalize stmt1
+    runSqlite go pool
 
 go :: SqliteReader IO ()
 go = do
