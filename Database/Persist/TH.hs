@@ -7,7 +7,7 @@ module Database.Persist.TH (mkPersist) where
 import Database.Persist.Base
 import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
-import Data.Maybe (fromJust, mapMaybe, catMaybes)
+import Data.Maybe (mapMaybe, catMaybes)
 import Web.Routes.Quasi (SinglePiece)
 import Data.Int (Int64)
 
@@ -121,12 +121,13 @@ mkUnique :: EntityDef -> (String, [String]) -> Con
 mkUnique t (constr, fields) =
     NormalC (mkName constr) types
   where
-    types = map (go . fromJust . flip lookup3 (entityColumns t)) fields -- FIXME better error message
+    types = map (go . flip lookup3 (entityColumns t)) fields
     go (_, True) = error "Error: cannot have nullables in unique"
     go x = (NotStrict, pairToType x)
-    lookup3 _ [] = Nothing
+    lookup3 s [] =
+        error $ "Column not found: " ++ s ++ " in unique " ++ constr
     lookup3 x ((x', y, z):rest)
-        | x == x' = Just (y, "null" `elem` z)
+        | x == x' = (y, "null" `elem` z)
         | otherwise = lookup3 x rest
 
 pairToType :: (String, Bool) -> Type
