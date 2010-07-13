@@ -6,6 +6,7 @@ module Database.Persist.Sqlite
     , runSqlite
     , withSqlite
     , Connection
+    , Pool
     , module Database.Persist
     ) where
 
