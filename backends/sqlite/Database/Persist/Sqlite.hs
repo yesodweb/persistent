@@ -4,7 +4,9 @@
 module Database.Persist.Sqlite
     ( SqliteReader
     , runSqlite
+    , runSqliteConn
     , withSqlite
+    , withSqliteConn
     , Connection
     , Pool
     , module Database.Persist
@@ -35,20 +37,30 @@ withSqlite :: MonadCatchIO m
            -> (Pool Connection -> m a) -> m a
 withSqlite s i f = createPool (open s) close i f
 
--- | Run a series of database actions within a single transaction. On any
--- exception, the transaction is rolled back.
+-- | Handles opening and closing of the database connection automatically.
+-- You probably want to take advantage of connection pooling by using withSqlite instead
+withSqliteConn :: MonadCatchIO m => String -> (Connection -> m a) -> m a
+withSqliteConn s f = bracket (liftIO $ open s) (liftIO . close) f
+ 
+
+-- | Run a series of database actions within a single transactions.
+-- On any exception, the transaction is rolled back.
 runSqlite :: MonadCatchIO m => SqliteReader m a -> Pool Connection -> m a
-runSqlite (SqliteReader r) pconn = withPool' pconn go
+runSqlite r pconn = withPool' pconn $ runSqliteConn r
+
+-- | Run a series of database actions within a single transactions.
+-- On any exception, the transaction is rolled back.
+-- You probably want to take advantage of connection pooling by using runSqlite instead
+runSqliteConn :: MonadCatchIO m => SqliteReader m a -> Connection -> m a
+runSqliteConn (SqliteReader r) conn = do
+    Done <- liftIO begin
+    res <- onException (runReaderT r conn) $ liftIO rollback
+    Done <- liftIO commit
+    return res
   where
-    go conn = do
-        Done <- liftIO begin
-        res <- onException (runReaderT r conn) $ liftIO rollback
-        Done <- liftIO commit
-        return res
-      where
-        begin = bracket (prepare conn "BEGIN") finalize step
-        commit = bracket (prepare conn "COMMIT") finalize step
-        rollback = bracket (prepare conn "ROLLBACK") finalize step
+    begin = bracket (prepare conn "BEGIN") finalize step
+    commit = bracket (prepare conn "COMMIT") finalize step
+    rollback = bracket (prepare conn "ROLLBACK") finalize step
 
 withStmt :: MonadCatchIO m
          => String
