@@ -1,32 +1,71 @@
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PackageImports #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE DeriveDataTypeable #-}
+-- | A redis backend for persistent.
 module Database.Persist.Redis
     ( RedisReader
     , runRedis
-    , persistRedis
-    , IsStrings (..)
+    , withRedis
+    , Connection
+    , Pool
+    , module Database.Persist
     ) where
 
-import Database.Persist (PersistEntity, Key)
-import Database.Persist.Helper
+import Database.Persist
+import Database.Persist.Base
+import Database.Persist.Pool
 import Control.Monad.Trans.Reader
-import Language.Haskell.TH.Syntax hiding (lift)
-import qualified Language.Haskell.TH.Syntax as TH
 import Control.Monad.IO.Class (MonadIO (..))
-import Data.Maybe (mapMaybe)
+import Control.Monad.Trans.Class (MonadTrans (..))
 import "MonadCatchIO-transformers" Control.Monad.CatchIO
-import Control.Monad
 import qualified Database.Redis.Redis as R
-import Data.Attempt
-import Data.Convertible.Text
-import Data.Typeable
-import Safe
+import Control.Applicative (Applicative)
+import Control.Monad (forM_)
+import Database.Redis.ByteStringClass
+import qualified Data.ByteString.UTF8 as SU
 
+-- FIXME make more intelligent
+instance BS PersistValue where
+    toBS = SU.fromString . show
+    fromBS = read . SU.toString
+
+type Connection = R.Redis
+
+-- | A ReaderT monad transformer holding a sqlite database connection.
+newtype RedisReader m a = RedisReader (ReaderT Connection m a)
+    deriving (Monad, MonadIO, MonadTrans, MonadCatchIO, Functor,
+              Applicative)
+
+-- | Handles opening and closing of the database connection pool automatically.
+withRedis :: MonadCatchIO m
+           => String -- ^ hostname
+           -> String -- ^ port
+           -> Int -- ^ number of connections to open
+           -> (Pool Connection -> m a) -> m a
+withRedis host port i f = createPool (R.connect host port) R.disconnect i f
+
+-- | Run a series of database actions. Remember, redis does not support
+-- transactions, so nothing will be rolled back on exceptions.
+runRedis :: MonadCatchIO m => RedisReader m a -> Pool Connection -> m a
+runRedis (RedisReader r) pconn = withPool' pconn $ runReaderT r
+
+instance MonadIO m => PersistBackend (RedisReader m) where
+    initialize _ = return ()
+    insert val = do
+        r <- RedisReader ask
+        let t = entityDef val
+        let name = entityName t
+        R.RInt i <- liftIO $ R.incr r $ "global:" ++ name ++ ":nextId"
+        let vals = map toPersistValue $ toPersistFields val
+        let cols = map (\(x, _, _) -> x) $ entityColumns $ entityDef val
+        liftIO $ forM_ (zip cols vals) $ \(col, val) ->
+            R.set r (name ++ ":by-id:" ++ show i ++ ":" ++ col) val
+        liftIO $ R.sadd r (name ++ ":ids") i
+        liftIO $ print i
+        return $ toPersistKey $ fromIntegral i
+
+-- FIXME
+
+{-
 persistRedis :: [EntityDef] -> Q [Dec]
 persistRedis = fmap concat . mapM derive
 
@@ -147,15 +186,4 @@ select t _ _ = do
         v' <- readMay v
         v'' <- fa $ fromStrings v'
         return (fromIntegral k, v'')
-
-insert :: (IsStrings a, MonadIO m, Num (Key a))
-       => EntityDef -> a -> RedisReader m (Key a)
-insert t val = do
-    let val' = show $ toStrings val
-    r <- ask
-    R.RInt i <- liftIO $ R.incr r $ "global:" ++ entityName t ++ ":nextId"
-    liftIO $ print i
-    _ <- liftIO $ R.set r (entityName t ++ ":id:" ++ show i) val'
-    --R.set r (entityName t ++ ":slug:" ++ show i) i
-    _ <- liftIO $ R.sadd r (entityName t ++ ":all") i
-    return $ fromIntegral i
+-}

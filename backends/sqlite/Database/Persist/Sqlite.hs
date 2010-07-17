@@ -36,7 +36,7 @@ newtype SqliteReader m a = SqliteReader (ReaderT Connection m a)
     deriving (Monad, MonadIO, MonadTrans, MonadCatchIO, Functor,
               Applicative)
 
--- | Handles opening and closing of the database connection automatically.
+-- | Handles opening and closing of the database connection pool automatically.
 withSqlite :: MonadCatchIO m
            => String
            -> Int -- ^ number of connections to open
