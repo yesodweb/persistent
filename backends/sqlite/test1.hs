@@ -1,5 +1,6 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 import Prelude hiding (filter)
 import Database.Persist.Sqlite
 import Control.Monad.IO.Class
@@ -16,7 +17,7 @@ Person sql=PersonTable
 
 main :: IO ()
 main = withSqlite ":memory:" 1 $ \pool -> do
-    withPool' pool $ \db -> do
+    withPool' pool $ \(Connection db _) -> do
         stmt <- prepare db "CREATE TABLE tblPerson(foo)"
         Done <- step stmt
         finalize stmt

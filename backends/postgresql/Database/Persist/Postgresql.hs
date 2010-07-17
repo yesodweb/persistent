@@ -6,8 +6,8 @@ module Database.Persist.Postgresql
     ( PostgresqlReader
     , runPostgresql
     , withPostgresql
-    , Connection
-    , connectPostgreSQL
+    , Connection (..)
+    , connectPostgreSQL -- should probably be removed in the future
     , Pool
     , module Database.Persist
     ) where
@@ -20,12 +20,18 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Data.List (intercalate)
 import "MonadCatchIO-transformers" Control.Monad.CatchIO
 import qualified Database.HDBC as H
-import Database.HDBC.PostgreSQL
+import qualified Database.HDBC.PostgreSQL as H
+import Database.HDBC.PostgreSQL (connectPostgreSQL)
 import Data.Char (toLower)
 import Data.Int (Int64)
 import Control.Monad.Trans.Class (MonadTrans)
 import Control.Applicative (Applicative)
 import Database.Persist.Pool
+import Data.IORef
+import qualified Data.Map as Map
+
+type StmtMap = Map.Map String H.Statement
+data Connection = Connection H.Connection (IORef StmtMap)
 
 -- | A ReaderT monad transformer holding a postgresql database connection.
 newtype PostgresqlReader m a = PostgresqlReader (ReaderT Connection m a)
@@ -38,8 +44,16 @@ withPostgresql :: MonadCatchIO m
                -> Int -- ^ maximum number of connections in the pool
                -> (Pool Connection -> m a)
                -> m a
-withPostgresql s i f =
-    createPool (connectPostgreSQL s) H.disconnect i f
+withPostgresql s i f = createPool (open' s) close' i f
+
+open' :: String -> IO Connection
+open' sql = do
+    conn <- H.connectPostgreSQL sql
+    istmtmap <- newIORef Map.empty
+    return $ Connection conn istmtmap
+
+close' :: Connection -> IO ()
+close' (Connection conn _) = H.disconnect conn
 
 -- | Run a series of database actions within a single transactions. On any
 -- exception, the transaction is rolled back.
@@ -47,10 +61,24 @@ runPostgresql :: MonadCatchIO m
               => PostgresqlReader m a
               -> Pool Connection
               -> m a
-runPostgresql (PostgresqlReader r) pconn = withPool' pconn $ \conn -> do
-    res <- onException (runReaderT r conn) $ liftIO (H.rollback conn)
-    liftIO $ H.commit conn
+runPostgresql (PostgresqlReader r) pconn = withPool' pconn $
+  \conn@(Connection conn' _) -> do
+    res <- onException (runReaderT r conn) $ liftIO (H.rollback conn')
+    liftIO $ H.commit conn'
     return res
+
+getStmt :: String -> Connection -> IO H.Statement
+getStmt sql (Connection conn istmtmap) = do
+    stmtmap <- readIORef istmtmap
+    case Map.lookup sql stmtmap of
+        Just stmt -> do
+            H.finish stmt
+            return stmt
+        Nothing -> do
+            stmt <- H.prepare conn sql
+            let stmtmap' = Map.insert sql stmt stmtmap
+            writeIORef istmtmap stmtmap'
+            return stmt
 
 withStmt :: MonadIO m
          => String
@@ -59,14 +87,14 @@ withStmt :: MonadIO m
          -> PostgresqlReader m a
 withStmt sql vals f = do
     conn <- PostgresqlReader ask
-    stmt <- liftIO $ H.prepare conn sql
+    stmt <- liftIO $ getStmt sql conn
     _ <- liftIO $ H.execute stmt $ map pToSql vals
     f $ liftIO $ (fmap . fmap) (map pFromSql) $ H.fetchRow stmt
 
 execute :: MonadIO m => String -> [PersistValue] -> PostgresqlReader m ()
 execute sql vals = do
     conn <- PostgresqlReader ask
-    stmt <- liftIO $ H.prepare conn sql
+    stmt <- liftIO $ getStmt sql conn
     _ <- liftIO $ H.execute stmt $ map pToSql vals
     return ()
 
@@ -84,7 +112,7 @@ insert' t cols vals = do
 
 tableExists :: MonadIO m => String -> PostgresqlReader m Bool
 tableExists t = do
-    conn <- PostgresqlReader ask
+    Connection conn _ <- PostgresqlReader ask
     tables <- liftIO $ H.getTables conn
     return $ map toLower t `elem` tables
 

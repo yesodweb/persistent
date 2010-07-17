@@ -7,7 +7,7 @@ module Database.Persist.Sqlite
     , runSqliteConn
     , withSqlite
     , withSqliteConn
-    , Connection
+    , Connection (..)
     , Pool
     , module Database.Persist
     ) where
@@ -19,11 +19,17 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.List (intercalate)
 import "MonadCatchIO-transformers" Control.Monad.CatchIO
-import Database.Sqlite
+import Database.Sqlite hiding (Connection)
+import qualified Database.Sqlite as Sqlite
 import qualified Database.Persist.GenericSql as G
 import Control.Applicative (Applicative)
 import Data.Int (Int64)
 import Database.Persist.Pool
+import Data.IORef
+import qualified Data.Map as Map
+
+type StmtMap = Map.Map String Statement
+data Connection = Connection Sqlite.Connection (IORef StmtMap)
 
 -- | A ReaderT monad transformer holding a sqlite database connection.
 newtype SqliteReader m a = SqliteReader (ReaderT Connection m a)
@@ -35,13 +41,25 @@ withSqlite :: MonadCatchIO m
            => String
            -> Int -- ^ number of connections to open
            -> (Pool Connection -> m a) -> m a
-withSqlite s i f = createPool (open s) close i f
+withSqlite s i f = createPool (open' s) close' i f
+
+open' :: String -> IO Connection
+open' s = do
+    conn <- open s
+    stmtmap <- newIORef $ Map.empty
+    return $ Connection conn stmtmap
+
+close' :: Connection -> IO ()
+close' (Connection conn istmtmap) = do
+    stmtmap <- readIORef istmtmap
+    mapM_ finalize (Map.elems stmtmap)
+    close conn
 
 -- | Handles opening and closing of the database connection automatically.
--- You probably want to take advantage of connection pooling by using withSqlite instead
+-- You probably want to take advantage of connection pooling by using
+-- withSqlite instead.
 withSqliteConn :: MonadCatchIO m => String -> (Connection -> m a) -> m a
-withSqliteConn s f = bracket (liftIO $ open s) (liftIO . close) f
- 
+withSqliteConn s f = bracket (liftIO $ open' s) (liftIO . close') f
 
 -- | Run a series of database actions within a single transactions.
 -- On any exception, the transaction is rolled back.
@@ -53,14 +71,26 @@ runSqlite r pconn = withPool' pconn $ runSqliteConn r
 -- You probably want to take advantage of connection pooling by using runSqlite instead
 runSqliteConn :: MonadCatchIO m => SqliteReader m a -> Connection -> m a
 runSqliteConn (SqliteReader r) conn = do
-    Done <- liftIO begin
-    res <- onException (runReaderT r conn) $ liftIO rollback
-    Done <- liftIO commit
+    beginS <- liftIO $ getStmt "BEGIN" conn
+    commitS <- liftIO $ getStmt "COMMIT" conn
+    rollbackS <- liftIO $ getStmt "ROLLBACK" conn
+    Done <- liftIO $ step beginS
+    res <- onException (runReaderT r conn) $ liftIO (step rollbackS)
+    Done <- liftIO $ step commitS
     return res
-  where
-    begin = bracket (prepare conn "BEGIN") finalize step
-    commit = bracket (prepare conn "COMMIT") finalize step
-    rollback = bracket (prepare conn "ROLLBACK") finalize step
+
+getStmt :: String -> Connection -> IO Statement
+getStmt sql (Connection conn istmtmap) = do
+    stmtmap <- readIORef istmtmap
+    case Map.lookup sql stmtmap of
+        Just stmt -> do
+            reset stmt
+            return stmt
+        Nothing -> do
+            stmt <- prepare conn sql
+            let stmtmap' = Map.insert sql stmt stmtmap
+            writeIORef istmtmap stmtmap'
+            return stmt
 
 withStmt :: MonadCatchIO m
          => String
@@ -69,9 +99,9 @@ withStmt :: MonadCatchIO m
          -> SqliteReader m a
 withStmt sql vals f = do
     conn <- SqliteReader ask
-    bracket (liftIO $ prepare conn sql) (liftIO . finalize) $ \stmt -> do
-        liftIO $ bind stmt vals
-        f $ go stmt
+    stmt <- liftIO $ getStmt sql conn -- FIXME do we need a reset here?
+    liftIO $ bind stmt vals
+    f $ go stmt
   where
     go stmt = liftIO $ do
         x <- step stmt
@@ -84,10 +114,10 @@ withStmt sql vals f = do
 execute :: MonadCatchIO m => String -> [PersistValue] -> SqliteReader m ()
 execute sql vals = do
     conn <- SqliteReader ask
-    bracket (liftIO $ prepare conn sql) (liftIO . finalize) $ \stmt -> do
-        liftIO $ bind stmt vals
-        Done <- liftIO $ step stmt
-        return ()
+    stmt <- liftIO $ getStmt sql conn
+    liftIO $ bind stmt vals
+    Done <- liftIO $ step stmt
+    return ()
 
 insert' :: MonadCatchIO m
         => String -> [String] -> [PersistValue] -> SqliteReader m Int64
