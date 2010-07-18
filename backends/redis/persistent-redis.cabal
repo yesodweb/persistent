@@ -19,10 +19,8 @@ library
                      utf8-string >= 0.3.4 && < 0.4,
                      persistent >= 0.1.0 && < 0.2,
                      redis >= 0.7.1 && < 0.8
-    exposed-modules: Database.Sqlite
-                     Database.Persist.Sqlite
+    exposed-modules: Database.Persist.Redis
     ghc-options:     -Wall
-    c-sources:       cbits/sqlite3.c
 
 source-repository head
   type:     git

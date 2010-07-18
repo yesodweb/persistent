@@ -19,9 +19,10 @@ import Control.Monad.Trans.Class (MonadTrans (..))
 import "MonadCatchIO-transformers" Control.Monad.CatchIO
 import qualified Database.Redis.Redis as R
 import Control.Applicative (Applicative)
-import Control.Monad (forM_)
+import Control.Monad (forM_, forM)
 import Database.Redis.ByteStringClass
 import qualified Data.ByteString.UTF8 as SU
+import Data.Maybe (fromMaybe, mapMaybe)
 
 -- FIXME make more intelligent
 instance BS PersistValue where
@@ -48,6 +49,12 @@ withRedis host port i f = createPool (R.connect host port) R.disconnect i f
 runRedis :: MonadCatchIO m => RedisReader m a -> Pool Connection -> m a
 runRedis (RedisReader r) pconn = withPool' pconn $ runReaderT r
 
+dummyFromKey :: Key v -> v
+dummyFromKey _ = error "dummyFromKey"
+
+dummyFromFilts :: [Filter v] -> v
+dummyFromFilts _ = error "dummyFromFilts"
+
 instance MonadIO m => PersistBackend (RedisReader m) where
     initialize _ = return ()
     insert val = do
@@ -55,135 +62,46 @@ instance MonadIO m => PersistBackend (RedisReader m) where
         let t = entityDef val
         let name = entityName t
         R.RInt i <- liftIO $ R.incr r $ "global:" ++ name ++ ":nextId"
+        let i' = toPersistKey $ fromIntegral i
+        replace i' val
+        return i'
+    replace i' val = do
+        let i = show $ fromPersistKey i'
+        r <- RedisReader ask
+        let t = entityDef val
+        let name = entityName t
         let vals = map toPersistValue $ toPersistFields val
         let cols = map (\(x, _, _) -> x) $ entityColumns $ entityDef val
         liftIO $ forM_ (zip cols vals) $ \(col, val) ->
-            R.set r (name ++ ":by-id:" ++ show i ++ ":" ++ col) val
+            R.set r (name ++ ":by-id:" ++ i ++ ":" ++ col) val
         liftIO $ R.sadd r (name ++ ":ids") i
-        liftIO $ print i
-        return $ toPersistKey $ fromIntegral i
-
--- FIXME
-
-{-
-persistRedis :: [EntityDef] -> Q [Dec]
-persistRedis = fmap concat . mapM derive
-
-runRedis :: RedisReader m a -> R.Redis -> m a
-runRedis = runReaderT
-
-type RedisReader = ReaderT R.Redis
-
-class IsStrings a where
-    toStrings :: a -> [String]
-    fromStrings :: [String] -> Attempt a
-
-derive :: EntityDef -> Q [Dec]
-derive t = do
-    let name = entityName t
-    let dt = dataTypeDec t
-    let monad = ConT ''RedisReader `AppT` VarT (mkName "m")
-
-    tsv <- mkToStrings t
-    fsv <- mkFromStrings t
-    let sq =
-          InstanceD [] (ConT ''IsStrings `AppT` ConT (mkName name))
-            [ FunD (mkName "toStrings") [tsv]
-            , FunD (mkName "fromStrings") fsv
-            ]
-
-    let keysyn = TySynD (mkName $ name ++ "Id") [] $
-                    ConT ''Key `AppT` ConT (mkName name)
-
-    t' <- TH.lift t
-    let mkFun s e = FunD (mkName s) [Clause [] (NormalB $ e `AppE` t') []]
-
-    init' <- [|initialize|]
-    select' <- [|select|]
-    insert' <- [|insert|]
-    {-
-    getBy' <- [|getBy|]
-    insertR' <- [|insertR|]
-    replace' <- [|replace|]
-    get' <- [|get|]
-    deleteWhere' <- [|deleteWhere|]
-    delete' <- [|delete|]
-    deleteBy' <- [|deleteBy|]
-    update' <- [|update|]
-    updateWhere' <- [|updateWhere|]
-    -}
-
-    let inst =
-          InstanceD
-            [ClassP ''MonadCatchIO [VarT $ mkName "m"]]
-            (ConT ''PersistEntity `AppT` ConT (mkName name) `AppT` monad)
-            [ keyTypeDec (name ++ "Id") "Integer" t
-            , filterTypeDec t
-            , updateTypeDec t
-            , orderTypeDec t
-            , uniqueTypeDec t
-            , mkFun "initialize" $ init'
-            , mkFun "select" $ select'
-            , mkFun "insert" $ insert'
-            {-
-            , mkFun "getBy" $ getBy'
-            , mkFun "insertR" $ insertR'
-            , mkFun "replace" $ replace'
-            , mkFun "get" $ get'
-            , mkFun "deleteWhere" $ deleteWhere'
-            , mkFun "delete" $ delete'
-            , mkFun "deleteBy" $ deleteBy'
-            , mkFun "update" $ update'
-            , mkFun "updateWhere" $ updateWhere'
-            -}
-            ]
-    return [dt, sq, inst, keysyn]
-
-mkToStrings :: EntityDef -> Q Clause
-mkToStrings t = do
-    xs <- mapM (const $ newName "x") $ entityColumns t
-    ts <- [|cs|]
-    let xs' = map (AppE ts . VarE) xs
-    return $ Clause [ConP (mkName $ entityName t) $ map VarP xs]
-                    (NormalB $ ListE xs') []
-
-data InvalidFromStrings = InvalidFromStrings
-    deriving (Show, Typeable)
-instance Exception InvalidFromStrings
-
-mkFromStrings :: EntityDef -> Q [Clause]
-mkFromStrings t = do
-    nothing <- [|Failure InvalidFromStrings|]
-    let cons = ConE $ mkName $ entityName t
-    xs <- mapM (const $ newName "x") $ entityColumns t
-    fs <- [|ca|]
-    let xs' = map (AppE fs . VarE) xs
-    let pat = ListP $ map VarP xs
-    ap' <- [|ap|]
-    just <- [|Success|]
-    let cons' = just `AppE` cons
-    return
-        [ Clause [pat] (NormalB $ foldl (go ap') cons' xs') []
-        , Clause [WildP] (NormalB nothing) []
-        ]
-  where
-    go ap' x y = InfixE (Just x) ap' (Just y)
-
-initialize :: Monad m => x -> y -> m ()
-initialize _ _ = return ()
-
-select :: (IsStrings v, Num (Key v), MonadIO m)
-       => EntityDef -> x -> y -> RedisReader m [(Key v, v)]
-select t _ _ = do
-    r <- ask
-    R.RMulti (Just s) <- liftIO $ R.smembers r (entityName t ++ ":all")
-    let s' = map (\(R.RBulk (Just x)) -> x :: Int) s
-    vals <- liftIO $ mapM (\x -> R.get r $ entityName t ++ ":id:" ++ show x) s'
-    let vals' = map (\(R.RBulk (Just x)) -> x :: String) vals
-    return $ mapMaybe go $ zip s' vals'
-  where
-    go (k, v) = do
-        v' <- readMay v
-        v'' <- fa $ fromStrings v'
-        return (fromIntegral k, v'')
--}
+        return ()
+    get eid' = do
+        r <- RedisReader ask
+        let def = entityDef $ dummyFromKey eid'
+        let name = entityName def
+        let eid = show $ fromPersistKey eid'
+        let cols = map (\(x, _, _) -> x) $ entityColumns def
+        R.RInt exists <- liftIO $ R.sismember r (name ++ ":ids") eid
+        if exists == 0
+            then return Nothing
+            else do
+                let go s = do
+                    R.RBulk x <- R.get r $ name ++ ":by-id:" ++ eid ++ ":" ++ s
+                    return $ fromMaybe PersistNull x
+                vals <- liftIO $ mapM go cols
+                case fromPersistValues vals of
+                    Left s -> error s
+                    Right x -> return $ Just x
+    select filts ords = do
+        r <- RedisReader ask
+        let def = entityDef $ dummyFromFilts filts
+        let name = entityName def
+        R.RMulti x <- liftIO $ R.smembers r $ name ++ ":ids"
+        let go (R.RBulk (Just s)) = Just $ toPersistKey $ read s
+            go _ = Nothing
+        let ids = maybe [] (mapMaybe go) x
+        forM ids $ \i -> do
+            Just val <- get i
+            return (i, val)
+        -- FIXME apply filters and orders
