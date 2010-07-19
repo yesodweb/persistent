@@ -100,16 +100,17 @@ get :: (PersistEntity v, Monad m)
     => GenericSql m -> Key v -> m (Maybe v)
 get gs k = do
     let t = entityDef $ dummyFromKey k
-    let sql = "SELECT * FROM " ++ tableName t ++ " WHERE id=?"
+    let cols = intercalate "," $ map (\(x, _, _) -> x) $ tableColumns t
+    let sql = "SELECT " ++ cols ++ " FROM " ++
+              tableName t ++ " WHERE id=?"
     gsWithStmt gs sql [PersistInt64 $ fromPersistKey k] $ \pop -> do
         res <- pop
         case res of
             Nothing -> return Nothing
-            Just (_:vals) ->
+            Just vals ->
                 case fromPersistValues vals of
                     Left e -> error $ "get " ++ showPersistKey k ++ ": " ++ e
                     Right v -> return $ Just v
-            Just [] -> error "Database.Persist.GenericSql: Empty list in get"
 
 select :: (PersistEntity val, Monad m)
        => GenericSql m
@@ -125,7 +126,9 @@ select gs filts ords = do
                 then ""
                 else " ORDER BY " ++
                      intercalate "," (map orderClause ords)
-    let sql = "SELECT * FROM " ++ tableName t ++ wher ++ ord
+    let cols = intercalate "," $ "id"
+               : (map (\(x, _, _) -> x) $ tableColumns t)
+    let sql = "SELECT " ++ cols ++ " FROM " ++ tableName t ++ wher ++ ord
     gsWithStmt gs sql (map persistFilterToValue filts) $ flip go id
   where
     t = entityDef $ dummyFromFilts filts
@@ -144,7 +147,7 @@ select gs filts ords = do
             Nothing -> return $ front []
             Just vals -> do
                 case fromPersistValues' vals of
-                    Left _ -> go pop front -- FIXME error?
+                    Left s -> error s
                     Right row -> go pop $ front . (:) row
 
 filterClause :: PersistEntity val => Filter val -> String
@@ -228,14 +231,17 @@ updateWhere gs filts upds = do
 getBy :: (PersistEntity v, Monad m)
       => GenericSql m -> Unique v -> m (Maybe (Key v, v))
 getBy gs uniq = do
-    let sql = "SELECT * FROM " ++ tableName t ++ " WHERE " ++ sqlClause
+    let cols = intercalate "," $ "id"
+             : (map (\(x, _, _) -> x) $ tableColumns t)
+    let sql = "SELECT " ++ cols ++ " FROM " ++ tableName t ++ " WHERE " ++
+              sqlClause
     gsWithStmt gs sql (persistUniqueToValues uniq) $ \pop -> do
         row <- pop
         case row of
             Nothing -> return Nothing
             Just (PersistInt64 k:vals) ->
                 case fromPersistValues vals of
-                    Left _ -> return Nothing
+                    Left s -> error s
                     Right x -> return $ Just (toPersistKey k, x)
             Just _ -> error "Database.Persist.GenericSql: Bad list in getBy"
   where
