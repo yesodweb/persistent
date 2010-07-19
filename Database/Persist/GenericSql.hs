@@ -21,6 +21,9 @@ module Database.Persist.GenericSql
     , getBy
     , delete
     , deleteBy
+    , tableName
+    , getFieldName
+    , tableColumns
     ) where
 
 import Database.Persist.Base hiding (PersistBackend (..))
