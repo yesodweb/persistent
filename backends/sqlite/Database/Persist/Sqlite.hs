@@ -10,6 +10,7 @@ module Database.Persist.Sqlite
     , Connection (..)
     , Pool
     , module Database.Persist
+    , initialize
     ) where
 
 import Database.Persist
@@ -141,8 +142,10 @@ genericSql :: MonadCatchIO m => G.GenericSql (SqliteReader m)
 genericSql = G.GenericSql withStmt execute insert' tableExists
                           "INTEGER PRIMARY KEY" showSqlType
 
+initialize :: (MonadCatchIO m, PersistEntity v) => v -> SqliteReader m ()
+initialize = G.initialize genericSql -- FIXME
+
 instance MonadCatchIO m => PersistBackend (SqliteReader m) where
-    initialize = G.initialize genericSql
     insert = G.insert genericSql
     get = G.get genericSql
     replace = G.replace genericSql
