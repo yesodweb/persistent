@@ -220,11 +220,11 @@ mkToValue func = FunD (mkName func) . degen . map go
                    []
 
 mkHalfDefined :: String -> Int -> Dec
-mkHalfDefined constr count =
+mkHalfDefined constr count' =
         FunD (mkName "halfDefined")
             [Clause [] (NormalB
             $ foldl AppE (ConE $ mkName constr)
-                    (replicate count $ VarE $ mkName "undefined")) []]
+                    (replicate count' $ VarE $ mkName "undefined")) []]
 
 apE :: Either x (y -> z) -> Either x y -> Either x z
 apE (Left x) _ = Left x

@@ -40,6 +40,7 @@ import qualified Data.Map as Map
 import Data.ByteString.Char8 (unpack)
 import Data.Either (partitionEithers)
 import Control.Monad (liftM, (<=<))
+import System.IO (hPutStrLn, stderr)
 
 type StmtMap = Map.Map String H.Statement
 data Connection = Connection H.Connection (IORef StmtMap)
@@ -166,10 +167,11 @@ data Column = Column
     , _cNull :: Bool
     , _cType :: SqlType
     , _cDefault :: Maybe String
+    , _cReference :: (Maybe (String, String)) -- table name, constraint name
     }
 
 instance Show Column where
-    show (Column n nu t def) = concat
+    show (Column n nu t def ref) = concat
         [ n
         , " "
         , showSqlType t
@@ -178,10 +180,14 @@ instance Show Column where
         , case def of
             Nothing -> ""
             Just s -> " DEFAULT " ++ s
+        , case ref of
+            Nothing -> ""
+            Just (s, _) -> " REFERENCES(" ++ s ++ ")"
         ]
 
 data AlterColumn = Type SqlType | IsNull | NotNull | Add Column | Drop
                  | Default String | NoDefault | Update String
+                 | AddReference String | DropReference String
 type AlterColumn' = (String, AlterColumn)
 
 data AlterDB = AddTable String | AlterTable String AlterColumn'
@@ -216,8 +222,11 @@ runMigration m = do
 runAlterDBs :: MonadIO m => [AlterDB] -> PostgresqlReader m ()
 runAlterDBs = mapM_ go
   where
-    go (AddTable s) = execute s []
-    go (AlterTable col alt) = execute (showAlter col alt) []
+    go (AddTable s) = execute' s
+    go (AlterTable col alt) = execute' (showAlter col alt)
+    execute' s = do
+        liftIO $ hPutStrLn stderr $ "Migrating: " ++ s
+        execute s []
 
 showAlter :: String -> AlterColumn' -> String
 showAlter table (n, Type t) =
@@ -237,13 +246,33 @@ showAlter table (n, NoDefault) =
 showAlter table (n, Update s) =
     "UPDATE " ++ table ++ " SET " ++ n ++ "=" ++ s ++ " WHERE " ++
     n ++ " IS NULL"
+showAlter table (n, AddReference t2) = concat
+    [ "ALTER TABLE "
+    , table
+    , " ADD CONSTRAINT "
+    , refName table n
+    , " FOREIGN KEY("
+    , n
+    , ") REFERENCES "
+    , t2
+    ]
+showAlter table (_, DropReference cname) =
+    "ALTER TABLE " ++ table ++ " DROP CONSTRAINT " ++ cname
 
 findAlters :: Column -> [Column] -> ([AlterColumn'], [Column])
-findAlters col@(Column name isNull type_ def) cols =
+findAlters col@(Column name isNull type_ def ref) cols =
     case filter (\c -> cName c == name') cols of
         [] -> ([(name, Add col)], cols)
-        Column _ isNull' type_' def':_ ->
-            let modNull = case (isNull, isNull') of
+        Column _ isNull' type_' def' ref':_ ->
+            let refDrop Nothing = []
+                refDrop (Just (_, cname)) = [(name, DropReference cname)]
+                refAdd Nothing = []
+                refAdd (Just (tname, _)) = [(name, AddReference tname)]
+                modRef =
+                    if ref == ref'
+                        then []
+                        else refDrop ref' ++ refAdd ref
+                modNull = case (isNull, isNull') of
                             (True, False) -> [(name, IsNull)]
                             (False, True) ->
                                 let up = case def of
@@ -258,7 +287,7 @@ findAlters col@(Column name isNull type_ def) cols =
                         else case def of
                                 Nothing -> [(name, NoDefault)]
                                 Just s -> [(name, Default s)]
-             in (modDef ++ modNull ++ modType,
+             in (modRef ++ modDef ++ modNull ++ modType,
                  filter (\c -> cName c /= name') cols)
   where
     name' = map toLower name
@@ -269,16 +298,36 @@ getAlters (new:news) old =
     let (alters, old') = findAlters new old
      in alters ++ getAlters news old'
 
-getColumn :: [PersistValue] -> Either String Column
-getColumn [PersistByteString x, PersistByteString y,
-           PersistByteString z, d] = do
+getColumn :: MonadIO m => String -> [PersistValue]
+          -> PostgresqlReader m (Either String Column)
+getColumn tname
+        [PersistByteString x, PersistByteString y,
+         PersistByteString z, d] =
     case d' of
-        Left s -> Left s
+        Left s -> return $ Left s
         Right d'' ->
             case getType $ unpack z of
-                Left s -> Left s
-                Right t -> Right $ Column (unpack x) (unpack y == "YES") t d''
+                Left s -> return $ Left s
+                Right t -> do
+                    let cname = unpack x
+                    ref <- getRef cname
+                    return $ Right $ Column cname (unpack y == "YES")
+                                     t d'' ref
   where
+    getRef cname = do
+        let sql = concat
+                [ "SELECT COUNT(*) FROM "
+                , "information_schema.table_constraints "
+                , "WHERE table_name=? "
+                , "AND constraint_type='FOREIGN KEY' "
+                , "AND constraint_name=?"
+                ]
+        let ref = refName tname cname
+        withStmt sql [ PersistString $ map toLower tname
+                     , PersistString ref
+                     ] $ \pop -> do
+            Just [PersistInt64 i] <- pop
+            return $ if i == 0 then Nothing else Just ("", ref)
     d' = case d of
             PersistNull -> Right Nothing
             PersistByteString a -> Right $ Just $ unpack a
@@ -291,7 +340,8 @@ getColumn [PersistByteString x, PersistByteString y,
     getType "float4" = Right $ SqlReal
     getType "bytea" = Right $ SqlBlob
     getType a = Left $ "Unknown type: " ++ a
-getColumn x = Left $ "Invalid result from information_schema: " ++ show x
+getColumn _ x =
+    return $ Left $ "Invalid result from information_schema: " ++ show x
 
 -- | Returns all of the columns in the given table currently in the database.
 getColumns :: MonadIO m => String -> PostgresqlReader m [Either String Column]
@@ -307,7 +357,7 @@ getColumns name = do
         case x of
             Nothing -> return []
             Just x' -> do
-                let col = getColumn x'
+                col <- getColumn name x'
                 cols <- helper pop
                 return $ col : cols
 
@@ -317,10 +367,20 @@ mkColumns val =
     zipWith go (G.tableColumns t) $ toPersistFields $ halfDefined `asTypeOf` val
   where
     t = entityDef val
-    go (name, _, as) p = Column name ("null" `elem` as) (sqlType p) $ def as
+    go (name, t', as) p =
+        Column name ("null" `elem` as) (sqlType p) (def as) (ref t' as)
     def [] = Nothing
     def (('d':'e':'f':'a':'u':'l':'t':'=':d):_) = Just d
     def (_:rest) = def rest
+    ref t' [] =
+        let l = length t'
+            (f, b) = splitAt (l - 2) t'
+         in if b == "Id"
+                then Just ("tbl" ++ f, "")
+                else Nothing
+    ref _ ("noreference":_) = Nothing
+    ref _ (('r':'e':'f':'e':'r':'e':'n':'c':'e':'=':x):_) = Just (x, "")
+    ref x (_:y) = ref x y
 
 type Migration m = WriterT [String] (WriterT [AlterDB] m) ()
 
@@ -378,3 +438,7 @@ showSqlType SqlTime = "TIME"
 showSqlType SqlDayTime = "TIMESTAMP"
 showSqlType SqlBlob = "BYTEA"
 showSqlType SqlBool = "BOOLEAN"
+
+refName :: String -> String -> String
+refName table column =
+    map toLower table ++ '_' : map toLower column ++ "_fkey"

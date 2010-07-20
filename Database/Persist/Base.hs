@@ -222,7 +222,7 @@ instance PersistField SomePersistField where
     fromPersistValue x = fmap SomePersistField (fromPersistValue x :: Either String String)
     sqlType (SomePersistField a) = sqlType a
 
-class PersistBackend m where
+class Monad m => PersistBackend m where
     -- | Create a new record in the database, returning the newly created
     -- identifier.
     insert :: PersistEntity val => val -> m (Key val)
@@ -278,7 +278,7 @@ selectList :: (PersistEntity val, PersistBackend m, Monad m)
 selectList a b c d =
     either ($ []) ($ []) `liftM` select a b c d id iter
   where
-    iter front a = return $ Right $ front . (:) a
+    iter front a' = return $ Right $ front . (:) a'
 
 data EntityDef = EntityDef
     { entityName    :: String
