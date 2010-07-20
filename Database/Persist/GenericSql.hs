@@ -305,7 +305,7 @@ getSqlValue (_:x) = getSqlValue x
 getSqlValue [] = Nothing
 
 tableColumns :: EntityDef -> [(String, String, [String])]
-tableColumns = map (\a@(x, y, z) -> (toField a, y, z)) . entityColumns
+tableColumns = map (\a@(_, y, z) -> (toField a, y, z)) . entityColumns
 
 tableColumn :: EntityDef -> String -> (String, String, [String])
 tableColumn t s = go $ entityColumns t

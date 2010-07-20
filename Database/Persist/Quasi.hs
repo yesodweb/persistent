@@ -51,6 +51,7 @@ nest :: [(Bool, [String])] -> [(String, [String], [[String]])]
 nest ((False, name:entattribs):rest) =
     let (x, y) = break (not . fst) rest
      in (name, entattribs, map snd x) : nest y
+nest ((False, []):_) = error "Indented line must contain at least name"
 nest ((True, _):_) = error "Blocks must begin with non-indented lines"
 nest [] = []
 
