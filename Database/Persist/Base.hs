@@ -270,7 +270,7 @@ class PersistBackend m where
            -> (a -> (Key val, val) -> m (Either a a))
            -> m (Either a a)
 
-    -- | The total number of records fulfilling the given crierion.
+    -- | The total number of records fulfilling the given criterion.
     count :: PersistEntity val => [Filter val] -> m Int
 
 -- | Call 'select' but return the result as a list.
