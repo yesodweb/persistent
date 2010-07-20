@@ -22,6 +22,7 @@ module Database.Persist.Base
     , PersistFilter (..)
     , PersistOrder (..)
     , SomePersistField (..)
+    , selectList
     ) where
 
 import Language.Haskell.TH.Syntax
@@ -35,6 +36,7 @@ import Text.Blaze
 import qualified Data.Text as T
 import qualified Data.ByteString as S
 import qualified Data.ByteString.Lazy as L
+import Control.Monad (liftM)
 
 -- | A raw value which can be stored in any backend and can be marshalled to
 -- and from a 'PersistField'.
@@ -259,8 +261,29 @@ class PersistBackend m where
 
     -- | Get all records matching the given criterion in the specified order.
     -- Returns also the identifiers.
-    select :: PersistEntity val => [Filter val] -> [Order val]
+    select :: PersistEntity val
+           => [Filter val]
+           -> [Order val]
+           -> Int -- ^ limit
+           -> Int -- ^ offset
+           -> a -- ^ iteration seed
+           -> (a -> (Key val, val) -> m (Either a a))
+           -> m (Either a a)
+
+    -- | The total number of records fulfilling the given crierion.
+    count :: PersistEntity val => [Filter val] -> m Int
+
+-- | Call 'select' but return the result as a list.
+selectList :: (PersistEntity val, PersistBackend m, Monad m)
+           => [Filter val]
+           -> [Order val]
+           -> Int -- ^ limit
+           -> Int -- ^ offset
            -> m [(Key val, val)]
+selectList a b c d =
+    either ($ []) ($ []) `liftM` select a b c d id iter
+  where
+    iter front a = return $ Right $ front . (:) a
 
 data EntityDef = EntityDef
     { entityName    :: String

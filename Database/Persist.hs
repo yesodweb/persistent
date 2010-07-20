@@ -4,6 +4,7 @@ module Database.Persist
     , PersistBackend (..)
     , mkPersist
     , persist
+    , selectList
     ) where
 
 import Database.Persist.Base

@@ -293,6 +293,7 @@ instance MonadIO m => PersistBackend (PostgresqlReader m) where
     get = G.get genericSql
     replace = G.replace genericSql
     select = G.select genericSql
+    count = G.count genericSql
     deleteWhere = G.deleteWhere genericSql
     update = G.update genericSql
     updateWhere = G.updateWhere genericSql

@@ -15,6 +15,7 @@ module Database.Persist.GenericSql
     , get
     , replace
     , select
+    , count
     , deleteWhere
     , update
     , updateWhere
@@ -112,12 +113,32 @@ get gs k = do
                     Left e -> error $ "get " ++ showPersistKey k ++ ": " ++ e
                     Right v -> return $ Just v
 
+count :: (PersistEntity val, Monad m)
+      => GenericSql m
+      -> [Filter val]
+      -> m Int
+count gs filts = do
+    let wher = if null filts
+                then ""
+                else " WHERE " ++
+                     intercalate " AND " (map filterClause filts)
+    let sql = "SELECT COUNT(*) FROM " ++ tableName t ++ wher
+    gsWithStmt gs sql (map persistFilterToValue filts) $ \pop -> do
+        Just [PersistInt64 i] <- pop
+        return $ fromIntegral i
+  where
+    t = entityDef $ dummyFromFilts filts
+
 select :: (PersistEntity val, Monad m)
        => GenericSql m
        -> [Filter val]
        -> [Order val]
-       -> m [(Key val, val)]
-select gs filts ords = do
+       -> Int -- ^ limit
+       -> Int -- ^ offset
+       -> a -- ^ iteration seed
+       -> (a -> (Key val, val) -> m (Either a a))
+       -> m (Either a a)
+select gs filts ords limit offset seed0 iter = do
     let wher = if null filts
                 then ""
                 else " WHERE " ++
@@ -126,10 +147,17 @@ select gs filts ords = do
                 then ""
                 else " ORDER BY " ++
                      intercalate "," (map orderClause ords)
+        lim = if limit == 0
+                then ""
+                else " LIMIT " ++ show lim
+        off = if offset == 0
+                then ""
+                else " OFFSET " ++ show offset
     let cols = intercalate "," $ "id"
                : (map (\(x, _, _) -> x) $ tableColumns t)
     let sql = "SELECT " ++ cols ++ " FROM " ++ tableName t ++ wher ++ ord
-    gsWithStmt gs sql (map persistFilterToValue filts) $ flip go id
+              ++ lim ++ off
+    gsWithStmt gs sql (map persistFilterToValue filts) $ go seed0
   where
     t = entityDef $ dummyFromFilts filts
     orderClause o = getFieldName t (persistOrderToFieldName o)
@@ -141,14 +169,18 @@ select gs filts ords = do
             Left e -> Left e
             Right xs' -> Right (toPersistKey x, xs')
     fromPersistValues' _ = Left "error in fromPersistValues'"
-    go pop front = do
+    go seed pop = do
         res <- pop
         case res of
-            Nothing -> return $ front []
+            Nothing -> return $ Right seed
             Just vals -> do
                 case fromPersistValues' vals of
                     Left s -> error s
-                    Right row -> go pop $ front . (:) row
+                    Right row -> do
+                        eseed <- iter seed row
+                        case eseed of
+                            Left seed' -> return $ Left seed'
+                            Right seed' -> go seed' pop
 
 filterClause :: PersistEntity val => Filter val -> String
 filterClause f = if persistFilterIsNull f then nullClause else mainClause
