@@ -182,7 +182,7 @@ instance Show Column where
             Just s -> " DEFAULT " ++ s
         , case ref of
             Nothing -> ""
-            Just (s, _) -> " REFERENCES(" ++ s ++ ")"
+            Just (s, _) -> " REFERENCES " ++ s
         ]
 
 data AlterColumn = Type SqlType | IsNull | NotNull | Add Column | Drop
@@ -269,7 +269,7 @@ findAlters col@(Column name isNull type_ def ref) cols =
                 refAdd Nothing = []
                 refAdd (Just (tname, _)) = [(name, AddReference tname)]
                 modRef =
-                    if ref == ref'
+                    if fmap snd ref == fmap snd ref'
                         then []
                         else refDrop ref' ++ refAdd ref
                 modNull = case (isNull, isNull') of
@@ -367,20 +367,22 @@ mkColumns val =
     zipWith go (G.tableColumns t) $ toPersistFields $ halfDefined `asTypeOf` val
   where
     t = entityDef val
+    tn = map toLower $ G.tableName t
     go (name, t', as) p =
-        Column name ("null" `elem` as) (sqlType p) (def as) (ref t' as)
+        Column name ("null" `elem` as) (sqlType p) (def as) (ref name t' as)
     def [] = Nothing
     def (('d':'e':'f':'a':'u':'l':'t':'=':d):_) = Just d
     def (_:rest) = def rest
-    ref t' [] =
+    ref c t' [] =
         let l = length t'
             (f, b) = splitAt (l - 2) t'
          in if b == "Id"
-                then Just ("tbl" ++ f, "")
+                then Just ("tbl" ++ f, refName tn c)
                 else Nothing
-    ref _ ("noreference":_) = Nothing
-    ref _ (('r':'e':'f':'e':'r':'e':'n':'c':'e':'=':x):_) = Just (x, "")
-    ref x (_:y) = ref x y
+    ref _ _ ("noreference":_) = Nothing
+    ref c _ (('r':'e':'f':'e':'r':'e':'n':'c':'e':'=':x):_) =
+        Just (x, refName tn c)
+    ref c x (_:y) = ref c x y
 
 type Migration m = WriterT [String] (WriterT [AlterDB] m) ()
 
