@@ -223,11 +223,6 @@ instance PersistField SomePersistField where
     sqlType (SomePersistField a) = sqlType a
 
 class PersistBackend m where
-    -- | Prepare database for this entity, if necessary. In SQL, this creates
-    -- values and indices if they don't exist. The first argument is not used,
-    -- so you can used 'undefined'.
-    initialize :: PersistEntity val => val -> m ()
-
     -- | Create a new record in the database, returning the newly created
     -- identifier.
     insert :: PersistEntity val => val -> m (Key val)

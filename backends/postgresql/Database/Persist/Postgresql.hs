@@ -11,12 +11,19 @@ module Database.Persist.Postgresql
     , connectPostgreSQL -- should probably be removed in the future
     , Pool
     , module Database.Persist
+    , runAlterDBs
+    , parseMigration
+    , parseMigration'
+    , migrate
+    , runMigration
+    , runMigrationForce
     ) where
 
 import Database.Persist
 import Database.Persist.Base
 import qualified Database.Persist.GenericSql as G
 import Control.Monad.Trans.Reader
+import Control.Monad.Trans.Writer
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.List (intercalate)
 import "MonadCatchIO-transformers" Control.Monad.CatchIO
@@ -25,12 +32,14 @@ import qualified Database.HDBC.PostgreSQL as H
 import Database.HDBC.PostgreSQL (connectPostgreSQL)
 import Data.Char (toLower)
 import Data.Int (Int64)
-import Control.Monad.Trans.Class (MonadTrans)
+import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Applicative (Applicative)
 import Database.Persist.Pool
 import Data.IORef
 import qualified Data.Map as Map
 import Data.ByteString.Char8 (unpack)
+import Data.Either (partitionEithers)
+import Control.Monad (liftM, (<=<))
 
 type StmtMap = Map.Map String H.Statement
 data Connection = Connection H.Connection (IORef StmtMap)
@@ -175,6 +184,41 @@ data AlterColumn = Type SqlType | IsNull | NotNull | Add Column | Drop
                  | Default String | NoDefault | Update String
 type AlterColumn' = (String, AlterColumn)
 
+data AlterDB = AddTable String | AlterTable String AlterColumn'
+
+runMigrationForce :: MonadIO m
+                  => Migration (PostgresqlReader m)
+                  -> PostgresqlReader m ()
+runMigrationForce = runAlterDBs <=< parseMigration'
+
+runMigration :: MonadIO m
+             => Migration (PostgresqlReader m)
+             -> PostgresqlReader m ()
+runMigration m = do
+    m' <- parseMigration' m
+    case partitionEithers $ map noUnsafe m' of
+        ([], alts) -> runAlterDBs alts
+        (errs, _) -> error $ concat
+            [ "\n\nDatabase migration: manual intervention required.\n"
+            , "The following actions are considered unsafe:\n\n"
+            , unlines $ map ("    " ++) errs
+            ]
+  where
+    noUnsafe (AlterTable table (column, Drop)) = Left $ concat
+        [ "Drop column "
+        , table
+        , "."
+        , column
+        , "."
+        ]
+    noUnsafe x = Right x
+
+runAlterDBs :: MonadIO m => [AlterDB] -> PostgresqlReader m ()
+runAlterDBs = mapM_ go
+  where
+    go (AddTable s) = execute s []
+    go (AlterTable col alt) = execute (showAlter col alt) []
+
 showAlter :: String -> AlterColumn' -> String
 showAlter table (n, Type t) =
     "ALTER TABLE " ++ table ++ " ALTER COLUMN " ++ n ++ " TYPE " ++ showSqlType t
@@ -225,26 +269,32 @@ getAlters (new:news) old =
     let (alters, old') = findAlters new old
      in alters ++ getAlters news old'
 
-getColumn :: [PersistValue] -> Column
-getColumn [PersistByteString x, PersistByteString y, PersistByteString z, d] =
-    Column (unpack x) (unpack y == "YES") (getType $ unpack z) d'
+getColumn :: [PersistValue] -> Either String Column
+getColumn [PersistByteString x, PersistByteString y,
+           PersistByteString z, d] = do
+    case d' of
+        Left s -> Left s
+        Right d'' ->
+            case getType $ unpack z of
+                Left s -> Left s
+                Right t -> Right $ Column (unpack x) (unpack y == "YES") t d''
   where
     d' = case d of
-            PersistNull -> Nothing
-            PersistByteString a -> Just $ unpack a
-            _ -> error $ "Invalid default column: " ++ show d
-    getType "int4" = SqlInteger
-    getType "varchar" = SqlString
-    getType "date" = SqlDay
-    getType "bool" = SqlBool
-    getType "timestamp" = SqlDayTime
-    getType "float4" = SqlReal
-    getType "bytea" = SqlBlob
-    getType a = error $ "Unknown type: " ++ a
-getColumn x = error $ "Invalid result from information_schema: " ++ show x
+            PersistNull -> Right Nothing
+            PersistByteString a -> Right $ Just $ unpack a
+            _ -> Left $ "Invalid default column: " ++ show d
+    getType "int4" = Right $ SqlInteger
+    getType "varchar" = Right $ SqlString
+    getType "date" = Right $ SqlDay
+    getType "bool" = Right $ SqlBool
+    getType "timestamp" = Right $ SqlDayTime
+    getType "float4" = Right $ SqlReal
+    getType "bytea" = Right $ SqlBlob
+    getType a = Left $ "Unknown type: " ++ a
+getColumn x = Left $ "Invalid result from information_schema: " ++ show x
 
 -- | Returns all of the columns in the given table currently in the database.
-getColumns :: MonadIO m => String -> PostgresqlReader m [Column]
+getColumns :: MonadIO m => String -> PostgresqlReader m [Either String Column]
 getColumns name = do
     withStmt ("SELECT column_name,is_nullable,udt_name,column_default " ++
                 "FROM information_schema.columns " ++
@@ -272,23 +322,41 @@ mkColumns val =
     def (('d':'e':'f':'a':'u':'l':'t':'=':d):_) = Just d
     def (_:rest) = def rest
 
+type Migration m = WriterT [String] (WriterT [AlterDB] m) ()
+
+parseMigration :: Monad m => Migration m -> m (Either [String] [AlterDB])
+parseMigration m = liftM go $ runWriterT $ execWriterT m
+  where
+    go ([], x) = Right x
+    go (x, _) = Left x
+
+parseMigration' :: Monad m => Migration m -> m [AlterDB]
+parseMigration' = liftM (either (error . show) id) . parseMigration
+
+migrate :: (MonadIO m, PersistEntity val)
+        => val
+        -> Migration (PostgresqlReader m)
+migrate val = do
+    let name = map toLower $ G.tableName $ entityDef val
+    old <- lift $ lift $ getColumns name
+    case partitionEithers old of
+        ([], old') -> do
+            let new = mkColumns val
+            let alters = getAlters new old'
+            let go a = lift $ tell [AlterTable name a]
+            if null old
+                then do
+                    lift $ tell [AddTable $ concat
+                        [ "CREATE TABLE "
+                        , name
+                        , "(id SERIAL PRIMARY KEY UNIQUE"
+                        , concatMap (\x -> ',' : show x) new
+                        , ")"
+                        ]]
+                else mapM_ go alters
+        (errs, _) -> tell errs
+
 instance MonadIO m => PersistBackend (PostgresqlReader m) where
-    initialize val = do
-        let name = map toLower $ G.tableName $ entityDef val
-        old <- getColumns name
-        let new = mkColumns val
-        let alters = getAlters new old
-        let go a = execute (showAlter name a) []
-        if null old
-            then do
-                flip execute [] $ concat
-                    [ "CREATE TABLE "
-                    , name
-                    , "(id SERIAL PRIMARY KEY UNIQUE"
-                    , concatMap (\x -> ',' : show x) new
-                    , ")"
-                    ]
-            else mapM_ go alters
     insert = G.insert genericSql
     get = G.get genericSql
     replace = G.replace genericSql
