@@ -323,7 +323,9 @@ mkSave :: String -> [EntityDef] -> Q [Dec]
 mkSave name' defs' = do
     let name = mkName name'
     defs <- lift defs'
-    return [FunD name [Clause [] (NormalB defs) []]]
+    return [ SigD name $ ListT `AppT` ConT ''EntityDef
+           , FunD name [Clause [] (NormalB defs) []]
+           ]
 
 data Dep = Dep
     { depTarget :: String
