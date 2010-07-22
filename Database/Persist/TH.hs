@@ -2,7 +2,12 @@
 {-# LANGUAGE ExistentialQuantification #-}
 -- | This module provides utilities for creating backends. Regular users do not
 -- need to use this module.
-module Database.Persist.TH (mkPersist) where
+module Database.Persist.TH
+    ( mkPersist
+    , share2
+    , mkSave
+    , mkDeleteCascade
+    ) where
 
 import Database.Persist.Base
 import Language.Haskell.TH.Syntax
@@ -304,3 +309,76 @@ mkEntity t = do
         , utv
         ] ++ tf
         ]
+
+share2 :: ([EntityDef] -> Q [Dec])
+       -> ([EntityDef] -> Q [Dec])
+       -> [EntityDef]
+       -> Q [Dec]
+share2 f g x = do
+    y <- f x
+    z <- g x
+    return $ y ++ z
+
+mkSave :: String -> [EntityDef] -> Q [Dec]
+mkSave name' defs' = do
+    let name = mkName name'
+    defs <- lift defs'
+    return [FunD name [Clause [] (NormalB defs) []]]
+
+data Dep = Dep
+    { depTarget :: String
+    , depSourceTable :: String
+    , depSourceField :: String
+    , depSourceNull :: Bool
+    }
+
+mkDeleteCascade :: [EntityDef] -> Q [Dec]
+mkDeleteCascade defs = do
+    let deps = concatMap getDeps defs
+    mapM (go deps) defs
+  where
+    getDeps :: EntityDef -> [Dep]
+    getDeps def =
+        concatMap getDeps' $ entityColumns def
+      where
+        getDeps' (name, typ, attribs) =
+            let isNull = "null" `elem` attribs
+                l = length typ
+                (f, b) = splitAt (l - 2) typ
+             in if b == "Id"
+                    then return Dep
+                            { depTarget = f
+                            , depSourceTable = entityName def
+                            , depSourceField = name
+                            , depSourceNull = isNull
+                            }
+                    else []
+    go :: [Dep] -> EntityDef -> Q Dec
+    go allDeps EntityDef{entityName = name} = do
+        let deps = filter (\x -> depTarget x == name) allDeps
+        key <- newName "key"
+        del <- [|delete|]
+        dcw <- [|deleteCascadeWhere|]
+        just <- [|Just|]
+        let mkStmt dep = NoBindS
+                $ dcw `AppE`
+                  ListE
+                    [ ConE (mkName filtName) `AppE` val (depSourceNull dep)
+                    ]
+              where
+                filtName =
+                    depSourceTable dep ++ upperFirst (depSourceField dep)
+                      ++ "Eq"
+                val False = VarE key
+                val True = just `AppE` VarE key
+
+
+
+        let stmts = map mkStmt deps ++ [NoBindS $ del `AppE` VarE key]
+        return $
+            InstanceD
+            []
+            (ConT ''DeleteCascade `AppT` ConT (mkName name))
+            [ FunD (mkName "deleteCascade")
+                [Clause [VarP key] (NormalB $ DoE stmts) []]
+            ]

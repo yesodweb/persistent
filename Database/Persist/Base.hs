@@ -23,6 +23,8 @@ module Database.Persist.Base
     , PersistOrder (..)
     , SomePersistField (..)
     , selectList
+    , DeleteCascade (..)
+    , deleteCascadeWhere
     ) where
 
 import Language.Haskell.TH.Syntax
@@ -316,3 +318,13 @@ data PersistOrder = Asc | Desc
 instance Lift PersistOrder where
     lift Asc = [|Asc|]
     lift Desc = [|Desc|]
+
+class PersistEntity a => DeleteCascade a where
+    deleteCascade :: PersistBackend m => Key a -> m ()
+
+deleteCascadeWhere :: (DeleteCascade a, PersistBackend m)
+                   => [Filter a] -> m ()
+deleteCascadeWhere filts =
+    select filts [] 0 0 () go >> return ()
+  where
+    go () (key, _) = deleteCascade key >> return (Right ())
