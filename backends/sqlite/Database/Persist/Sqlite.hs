@@ -76,9 +76,15 @@ runSqliteConn (SqliteReader r) conn = do
     commitS <- liftIO $ getStmt "COMMIT" conn
     rollbackS <- liftIO $ getStmt "ROLLBACK" conn
     Done <- liftIO $ step beginS
-    res <- onException (runReaderT r conn) $ liftIO (step rollbackS)
+    res <- onException (runReaderT r conn) $ liftIO (resetAll conn >> step rollbackS)
     Done <- liftIO $ step commitS
     return res
+
+-- | Reset all statements; necessary to call a ROLLBACK.
+resetAll :: Connection -> IO ()
+resetAll (Connection conn imap) = do
+    stmts <- readIORef imap
+    mapM_ reset $ Map.elems stmts
 
 getStmt :: String -> Connection -> IO Statement
 getStmt sql (Connection conn istmtmap) = do
