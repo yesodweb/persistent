@@ -7,7 +7,6 @@ module Database.Persist.Sqlite
     , runSqliteConn
     , withSqlite
     , withSqliteConn
-    , Connection (..)
     , Pool
     , module Database.Persist
     , runMigration
@@ -74,7 +73,14 @@ open' s = do
         , G.insertSql = insertSql
         , G.close = close conn
         , G.migrateSql = migrate'
+        , G.begin = helper "BEGIN"
+        , G.commit = helper "COMMIT"
+        , G.rollback = helper "ROLLBACK"
         }
+  where
+    helper s getter = do
+        stmt <- getter s
+        G.execute stmt []
 
 prepare' :: Sqlite.Connection -> String -> IO G.Statement
 prepare' conn sql = do

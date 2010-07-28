@@ -26,6 +26,7 @@ module Database.Persist.GenericSql
     , Column (..)
     , UniqueDef
     , RowPopper
+    , refName
     ) where
 
 import Database.Persist.Base
@@ -51,6 +52,9 @@ data Connection = Connection
     , close :: IO ()
     , migrateSql :: forall v. PersistEntity v
                  => (String -> IO Statement) -> v -> IO (Either [String] [String])
+    , begin :: (String -> IO Statement) -> IO ()
+    , commit :: (String -> IO Statement) -> IO ()
+    , rollback :: (String -> IO Statement) -> IO ()
     }
 data Statement = Statement
     { finalize :: IO ()
@@ -108,7 +112,14 @@ runSqlPool :: MonadCatchIO m => SqlReader m a -> Pool Connection -> m a
 runSqlPool r pconn = withPool' pconn $ runSqlConn r
 
 runSqlConn :: MonadCatchIO m => SqlReader m a -> Connection -> m a
-runSqlConn (SqlReader r) conn = runReaderT r conn
+runSqlConn (SqlReader r) conn = do
+    let getter = getStmt' conn
+    liftIO $ begin conn getter
+    r <- onException
+            (runReaderT r conn)
+            (liftIO $ rollback conn getter)
+    liftIO $ commit conn getter
+    return r
 
 type RowPopper m = m (Maybe [PersistValue])
 
