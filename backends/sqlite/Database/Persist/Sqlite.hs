@@ -125,7 +125,7 @@ migrate' getter val = do
                 then return $ Right []
                 else do
                     sql <- getCopyTable getter val
-                    return $ Right $ map (\x -> (False, x)) sql
+                    return $ Right sql
   where
     def = entityDef val
     table = tableName def
@@ -136,23 +136,21 @@ migrate' getter val = do
             Just [PersistString y] -> return $ Just y
             Just y -> error $ "Unexpected result from sqlite_master: " ++ show y
 
-getCopyTable :: PersistEntity val => (String -> IO Statement) -> val -> IO [Sql]
+getCopyTable :: PersistEntity val => (String -> IO Statement) -> val
+             -> IO [(Bool, Sql)]
 getCopyTable getter val = do
     stmt <- getter $ "PRAGMA table_info(" ++ table ++ ")"
     oldCols' <- withStmt stmt [] getCols
     let oldCols = map (map toLower) $ filter (/= "id") oldCols'
     let newCols = map (map toLower . cName) cols :: [String]
     let common = filter (`elem` oldCols) newCols :: [String]
-    if common /= oldCols
-        then error $ "Migrating table " ++ table ++ " would drop columns."
-        else return
-                [ tmpSql
-                , copyToTemp $ "id" : common
-                , dropOld
-                , newSql
-                , copyToFinal $ "id" : newCols
-                , dropTmp
-                ]
+    return [ (False, tmpSql)
+           , (False, copyToTemp $ "id" : common)
+           , (common /= oldCols, dropOld)
+           , (False, newSql)
+           , (False, copyToFinal $ "id" : newCols)
+           , (False, dropTmp)
+           ]
   where
     def = entityDef val
     getCols pop = do
