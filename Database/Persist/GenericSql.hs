@@ -10,7 +10,6 @@
 module Database.Persist.GenericSql
     ( GenericSql (..)
     , RowPopper
-    , initialize
     , insert
     , get
     , replace
@@ -26,6 +25,9 @@ module Database.Persist.GenericSql
     , getFieldName
     , tableColumns
     , toField
+    , Column (..)
+    , UniqueDef
+    , mkColumns
     ) where
 
 import Database.Persist.Base hiding (PersistBackend (..))
@@ -33,6 +35,10 @@ import Data.List (intercalate)
 import Control.Monad (unless, liftM)
 import Data.Int (Int64)
 import Control.Arrow (second)
+import Control.Arrow
+import Data.Char (toLower)
+import Data.Maybe (fromJust)
+import Control.Monad.IO.Class
 
 data GenericSql m = GenericSql
     { gsWithStmt :: forall a.
@@ -45,31 +51,6 @@ data GenericSql m = GenericSql
     }
 
 type RowPopper m = m (Maybe [PersistValue])
-
-initialize :: (Monad m, PersistEntity v) => GenericSql m -> v -> m ()
-initialize gs v = do
-    doesExist <- gsEntityDefExists gs $ tableName t
-    unless doesExist $ do
-        let cols = zip (tableColumns t) $ toPersistFields
-                 $ halfDefined `asTypeOf` v
-        let sql = "CREATE TABLE " ++ tableName t ++
-                  "(id " ++ gsKeyType gs ++
-                  concatMap go' cols ++ ")"
-        gsExecute gs sql []
-        mapM_ go $ tableUniques' t
-  where
-    t = entityDef v
-    go' ((colName, _, as), p) = concat
-        [ ","
-        , colName
-        , " "
-        , gsShowSqlType gs $ sqlType p
-        , if "null" `elem` as then " NULL" else " NOT NULL"
-        ]
-    go (index, fields) = do
-        let sql = "CREATE UNIQUE INDEX " ++ index ++ " ON " ++
-                  tableName t ++ "(" ++ intercalate "," fields ++ ")"
-        gsExecute gs sql []
 
 insert :: (Monad m, PersistEntity val)
        => GenericSql m -> val -> m (Key val)
@@ -244,7 +225,7 @@ update gs k upds = do
     t = entityDef $ dummyFromKey k
     go = getFieldName t . persistUpdateToFieldName
 
-updateWhere :: (PersistEntity v, Monad m)
+updateWhere :: (PersistEntity v, MonadIO m)
             => GenericSql m -> [Filter v] -> [Update v] -> m ()
 updateWhere _ _ [] = return ()
 updateWhere gs filts upds = do
@@ -318,3 +299,43 @@ tableColumn t s = go $ entityColumns t
 
 tableUniques' :: EntityDef -> [(String, [String])]
 tableUniques' t = map (second $ map $ getFieldName t) $ entityUniques t
+
+type UniqueDef = (String, [String])
+
+-- | Create the list of columns for the given entity.
+mkColumns :: PersistEntity val => val -> ([Column], [UniqueDef])
+mkColumns val =
+    (cols, uniqs)
+  where
+    colNameMap = map ((\(x, _, _) -> x) &&& toField) $ entityColumns t
+    uniqs = map (second $ map $ fromJust . flip lookup colNameMap) $ entityUniques t
+    cols = zipWith go (tableColumns t) $ toPersistFields $ halfDefined `asTypeOf` val
+    t = entityDef val
+    tn = map toLower $ tableName t
+    go (name, t', as) p =
+        Column name ("null" `elem` as) (sqlType p) (def as) (ref name t' as)
+    def [] = Nothing
+    def (('d':'e':'f':'a':'u':'l':'t':'=':d):_) = Just d
+    def (_:rest) = def rest
+    ref c t' [] =
+        let l = length t'
+            (f, b) = splitAt (l - 2) t'
+         in if b == "Id"
+                then Just ("tbl" ++ f, refName tn c)
+                else Nothing
+    ref _ _ ("noreference":_) = Nothing
+    ref c _ (('r':'e':'f':'e':'r':'e':'n':'c':'e':'=':x):_) =
+        Just (x, refName tn c)
+    ref c x (_:y) = ref c x y
+
+refName :: String -> String -> String
+refName table column =
+    map toLower table ++ '_' : map toLower column ++ "_fkey"
+
+data Column = Column
+    { cName :: String
+    , _cNull :: Bool
+    , _cType :: SqlType
+    , _cDefault :: Maybe String
+    , _cReference :: (Maybe (String, String)) -- table name, constraint name
+    }

@@ -166,29 +166,6 @@ pFromSql (H.SqlUTCTime d) = PersistUTCTime d
 pFromSql H.SqlNull = PersistNull
 pFromSql x = PersistString $ H.fromSql x -- FIXME
 
-data Column = Column
-    { cName :: String
-    , _cNull :: Bool
-    , _cType :: SqlType
-    , _cDefault :: Maybe String
-    , _cReference :: (Maybe (String, String)) -- table name, constraint name
-    }
-
-instance Show Column where
-    show (Column n nu t def ref) = concat
-        [ n
-        , " "
-        , showSqlType t
-        , " "
-        , if nu then "NULL" else "NOT NULL"
-        , case def of
-            Nothing -> ""
-            Just s -> " DEFAULT " ++ s
-        , case ref of
-            Nothing -> ""
-            Just (s, _) -> " REFERENCES " ++ s
-        ]
-
 data AlterColumn = Type SqlType | IsNull | NotNull | Add Column | Drop
                  | Default String | NoDefault | Update String
                  | AddReference String | DropReference String
@@ -429,34 +406,6 @@ getColumns name = do
                 cols <- helper pop
                 return $ col' : cols
 
-type UniqueDef = (String, [String])
-
--- | Create the list of columns for the given entity.
-mkColumns :: PersistEntity val => val -> ([Column], [UniqueDef])
-mkColumns val =
-    (cols, uniqs)
-  where
-    colNameMap = map ((\(x, _, _) -> x) &&& G.toField) $ entityColumns t
-    uniqs = map (second $ map $ fromJust . flip lookup colNameMap) $ entityUniques t
-    cols = zipWith go (G.tableColumns t) $ toPersistFields $ halfDefined `asTypeOf` val
-    t = entityDef val
-    tn = map toLower $ G.tableName t
-    go (name, t', as) p =
-        Column name ("null" `elem` as) (sqlType p) (def as) (ref name t' as)
-    def [] = Nothing
-    def (('d':'e':'f':'a':'u':'l':'t':'=':d):_) = Just d
-    def (_:rest) = def rest
-    ref c t' [] =
-        let l = length t'
-            (f, b) = splitAt (l - 2) t'
-         in if b == "Id"
-                then Just ("tbl" ++ f, refName tn c)
-                else Nothing
-    ref _ _ ("noreference":_) = Nothing
-    ref c _ (('r':'e':'f':'e':'r':'e':'n':'c':'e':'=':x):_) =
-        Just (x, refName tn c)
-    ref c x (_:y) = ref c x y
-
 type Migration m = WriterT [String] (WriterT [AlterDB] m) ()
 
 parseMigration :: Monad m => Migration m -> m (Either [String] [AlterDB])
@@ -518,6 +467,17 @@ showSqlType SqlDayTime = "TIMESTAMP"
 showSqlType SqlBlob = "BYTEA"
 showSqlType SqlBool = "BOOLEAN"
 
-refName :: String -> String -> String
-refName table column =
-    map toLower table ++ '_' : map toLower column ++ "_fkey"
+instance Show Column where -- FIXME remove instance
+    show (Column n nu t def ref) = concat
+        [ n
+        , " "
+        , showSqlType t
+        , " "
+        , if nu then "NULL" else "NOT NULL"
+        , case def of
+            Nothing -> ""
+            Just s -> " DEFAULT " ++ s
+        , case ref of
+            Nothing -> ""
+            Just (s, _) -> " REFERENCES " ++ s
+        ]

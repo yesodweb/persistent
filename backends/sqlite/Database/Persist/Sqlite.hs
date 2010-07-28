@@ -10,12 +10,14 @@ module Database.Persist.Sqlite
     , Connection (..)
     , Pool
     , module Database.Persist
-    , initialize
+    , runMigration
+    , migrate
     ) where
 
 import Database.Persist
 import Database.Persist.Base
 import Control.Monad.Trans.Reader
+import Control.Monad.Trans.Writer
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.List (intercalate)
@@ -23,11 +25,14 @@ import "MonadCatchIO-transformers" Control.Monad.CatchIO
 import Database.Sqlite hiding (Connection)
 import qualified Database.Sqlite as Sqlite
 import qualified Database.Persist.GenericSql as G
+import Database.Persist.GenericSql (mkColumns, tableName, Column (..), UniqueDef)
 import Control.Applicative (Applicative)
 import Data.Int (Int64)
 import Database.Persist.Pool
 import Data.IORef
 import qualified Data.Map as Map
+import System.IO
+import Data.Char (toLower)
 
 type StmtMap = Map.Map String Statement
 data Connection = Connection Sqlite.Connection (IORef StmtMap)
@@ -106,9 +111,11 @@ withStmt :: MonadCatchIO m
          -> SqliteReader m a
 withStmt sql vals f = do
     conn <- SqliteReader ask
-    stmt <- liftIO $ getStmt sql conn -- FIXME do we need a reset here?
+    stmt <- liftIO $ getStmt sql conn
     liftIO $ bind stmt vals
-    f $ go stmt
+    x <- f $ go stmt
+    liftIO $ reset stmt
+    return x
   where
     go stmt = liftIO $ do
         x <- step stmt
@@ -148,9 +155,6 @@ genericSql :: MonadCatchIO m => G.GenericSql (SqliteReader m)
 genericSql = G.GenericSql withStmt execute insert' tableExists
                           "INTEGER PRIMARY KEY" showSqlType
 
-initialize :: (MonadCatchIO m, PersistEntity v) => v -> SqliteReader m ()
-initialize = G.initialize genericSql -- FIXME
-
 instance MonadCatchIO m => PersistBackend (SqliteReader m) where
     insert = G.insert genericSql
     get = G.get genericSql
@@ -173,3 +177,132 @@ showSqlType SqlTime = "TIME"
 showSqlType SqlDayTime = "TIMESTAMP"
 showSqlType SqlBlob = "BLOB"
 showSqlType SqlBool = "BOOLEAN"
+
+runMigration :: MonadCatchIO m
+             => Migration (SqliteReader m)
+             -> SqliteReader m ()
+runMigration m =
+    runWriterT (execWriterT m) >>= go
+  where
+    go ([], sql) = mapM_ execute' sql
+    go (errs, _) = error $ unlines errs
+    execute' s = do
+        liftIO $ hPutStrLn stderr $ "Migrating: " ++ s
+        execute s []
+
+type Sql = String
+type Migration m = WriterT [String] (WriterT [Sql] m) ()
+
+migrate :: (MonadCatchIO m, PersistEntity val)
+        => val
+        -> Migration (SqliteReader m)
+migrate val = do
+    let (cols, uniqs) = mkColumns val
+    let newSql = mkCreateTable False table (cols, uniqs)
+    oldSql' <- lift $ lift $
+              withStmt ("SELECT sql FROM sqlite_master WHERE " ++
+                        "type='table' AND name=?")
+                [PersistString table] go
+    case oldSql' of
+        Nothing -> lift $ tell [newSql]
+        Just oldSql ->
+            if oldSql == newSql
+                then return ()
+                else do
+                    sql <- lift $ lift $ getCopyTable val
+                    lift $ tell sql
+  where
+    table = tableName $ entityDef val
+    go pop = do
+        x <- pop
+        case x of
+            Nothing -> return Nothing
+            Just [PersistString y] -> return $ Just y
+            Just y -> error $ "Unexpected result from sqlite_master: " ++ show y
+
+getCopyTable :: (MonadCatchIO m, PersistEntity val) => val -> SqliteReader m [Sql]
+getCopyTable val = do
+    oldCols' <- withStmt ("PRAGMA table_info(" ++ table ++ ")") [] getCols
+    let oldCols = map (map toLower) $ filter (/= "id") oldCols'
+    let newCols = map (map toLower . cName) cols :: [String]
+    let common = filter (`elem` oldCols) newCols :: [String]
+    if common /= oldCols
+        then error $ "Migrating table " ++ table ++ " would drop columns."
+        else return
+                [ tmpSql
+                , copyToTemp $ "id" : common
+                , dropOld
+                , newSql
+                , copyToFinal $ "id" : newCols
+                , dropTmp
+                ]
+  where
+    getCols pop = do
+        x <- pop
+        case x of
+            Nothing -> return []
+            Just (_:PersistString name:_) -> do
+                names <- getCols pop
+                return $ name : names
+            Just y -> error $ "Invalid result from PRAGMA table_info: " ++ show y
+    table = tableName $ entityDef val
+    tableTmp = table ++ "_backup"
+    (cols, uniqs) = mkColumns val
+    newSql = mkCreateTable False table (cols, uniqs)
+    tmpSql = mkCreateTable True tableTmp (cols, uniqs)
+    dropTmp = "DROP TABLE " ++ tableTmp
+    dropOld = "DROP TABLE " ++ table
+    copyToTemp common = concat
+        [ "INSERT INTO "
+        , tableTmp
+        , "("
+        , intercalate "," common
+        , ") SELECT "
+        , intercalate "," common
+        , " FROM "
+        , table
+        ]
+    copyToFinal newCols = concat
+        [ "INSERT INTO "
+        , table
+        , " SELECT "
+        , intercalate "," newCols
+        , " FROM "
+        , tableTmp
+        ]
+
+mkCreateTable :: Bool -> String -> ([Column], [UniqueDef]) -> Sql
+mkCreateTable isTemp table (cols, uniqs) = concat
+    [ "CREATE"
+    , if isTemp then " TEMP" else ""
+    , " TABLE "
+    , table
+    , "(id INTEGER PRIMARY KEY"
+    , concatMap sqlColumn cols
+    , concatMap sqlUnique uniqs
+    , ")"
+    ]
+
+sqlColumn :: Column -> String
+sqlColumn (Column name isNull typ def ref) = concat
+    [ ","
+    , name
+    , " "
+    , showSqlType typ
+    , if isNull then " NULL" else " NOT NULL"
+    , case def of
+        Nothing -> ""
+        Just d -> " DEFAULT " ++ d
+    , case ref of
+        Nothing -> ""
+        Just (table, _) -> " REFERENCES " ++ table
+    ]
+
+sqlUnique :: (String, [String]) -> String
+sqlUnique (cname, cols) = concat
+    [ ",CONSTRAINT "
+    , cname
+    , " UNIQUE ("
+    , intercalate "," cols
+    , ")"
+    ]

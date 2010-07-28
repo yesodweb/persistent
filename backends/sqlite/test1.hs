@@ -13,22 +13,21 @@ Person sql=PersonTable
     age Int update "Asc" Lt "some ignored attribute"
     color String null Eq Ne sql=mycolorfield
     PersonNameKey name
+Pet
+    owner PersonId
+    name String
 |]
 
 main :: IO ()
-main = withSqlite ":memory:" 1 $ \pool -> do
-    withPool' pool $ \(Connection db _) -> do
-        stmt <- prepare db "CREATE TABLE tblPerson(foo)"
-        Done <- step stmt
-        finalize stmt
-        stmt1 <- prepare db "CREATE TABLE PersonTable(id INTEGER PRIMARY KEY, fldname VARCHAR NOT NULL, fldage INTEGER NOT NULL, mycolorfield NULL)"
-        Done <- step stmt1
-        finalize stmt1
-    runSqlite go pool
+main = withSqlite "test.db3" 1 $ runSqlite go
 
 go :: SqliteReader IO ()
 go = do
-    initialize (undefined :: Person)
+    runMigration $ do
+        migrate (undefined :: Person)
+        migrate (undefined :: Pet)
+    deleteWhere ([] :: [Filter Person])
+
     pid <- insert $ Person "Michael" 25 Nothing
     liftIO $ print pid
 
@@ -53,6 +52,7 @@ go = do
 
     updateWhere [PersonNameEq "Michael"] [PersonAge 29]
     p6 <- get pid
+    if fmap personAge p6 /= Just 29 then error "bug 57" else return ()
     liftIO $ print p6
 
     _ <- insert $ Person "Eliezer" 2 $ Just "blue"
