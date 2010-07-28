@@ -17,6 +17,10 @@ module Database.Persist.GenericSql
     , withSqlConn
     , withSqlPool
 
+    , Migration
+    , runMigration
+    , migrate
+
     , mkColumns
     , tableName
     , Column (..)
@@ -37,12 +41,16 @@ import Control.Applicative (Applicative)
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.IORef
 import Database.Persist.Pool
+import Control.Monad.Trans.Writer
+import System.IO
 
 data Connection = Connection
     { prepare :: String -> IO Statement
     , insertSql :: String -> [String] -> Either String (String, String)
     , stmtMap :: IORef (Map.Map String Statement)
     , close :: IO ()
+    , migrateSql :: forall v. PersistEntity v
+                 => (String -> IO Statement) -> v -> IO (Either [String] [String])
     }
 data Statement = Statement
     { finalize :: IO ()
@@ -81,6 +89,10 @@ execute' sql vals = do
 getStmt :: MonadIO m => String -> SqlReader m Statement
 getStmt sql = do
     conn <- SqlReader ask
+    liftIO $ getStmt' conn sql
+
+getStmt' :: Connection -> String -> IO Statement
+getStmt' conn sql = do
     smap <- liftIO $ readIORef $ stmtMap conn
     case Map.lookup sql smap of
         Just stmt -> return stmt
@@ -369,3 +381,27 @@ filterClause f = if persistFilterIsNull f then nullClause else mainClause
 
 dummyFromFilts :: [Filter v] -> v
 dummyFromFilts _ = error "dummyFromFilts"
+
+type Sql = String
+type Migration m = WriterT [String] (WriterT [Sql] m) ()
+
+runMigration :: MonadCatchIO m
+             => Migration (SqlReader m)
+             -> SqlReader m ()
+runMigration m =
+    runWriterT (execWriterT m) >>= go
+  where
+    go ([], sql) = mapM_ execute'' sql
+    go (errs, _) = error $ unlines errs
+    execute'' s = do
+        liftIO $ hPutStrLn stderr $ "Migrating: " ++ s
+        execute' s []
+
+migrate :: (MonadCatchIO m, PersistEntity val)
+        => val
+        -> Migration (SqlReader m)
+migrate val = do
+    conn <- lift $ lift $ SqlReader ask
+    let getter = getStmt' conn
+    res <- liftIO $ migrateSql conn getter val
+    either tell (lift . tell) res

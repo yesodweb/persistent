@@ -35,19 +35,19 @@ import System.IO
 import Data.Char (toLower)
 
 type SqliteReader = G.SqlReader
+type SqlReader = G.SqlReader
 type Connection = G.Connection
-type Sql = String
-type Migration m = WriterT [String] (WriterT [Sql] m) ()
+type Migration a = G.Migration a
 
 runMigration :: MonadCatchIO m
-             => Migration (SqliteReader m)
-             -> SqliteReader m ()
-runMigration _ = return ()
+             => Migration (SqlReader m)
+             -> SqlReader m ()
+runMigration = G.runMigration
 
 migrate :: (MonadCatchIO m, PersistEntity val)
         => val
-        -> Migration (SqliteReader m)
-migrate _ = return ()
+        -> Migration (SqlReader m)
+migrate = G.migrate
 
 runSqlite :: MonadCatchIO m => SqliteReader m a -> Pool Connection -> m a
 runSqlite = G.runSqlPool
@@ -73,6 +73,7 @@ open' s = do
         , G.stmtMap = smap
         , G.insertSql = insertSql
         , G.close = close conn
+        , G.migrateSql = migrate'
         }
 
 prepare' :: Sqlite.Connection -> String -> IO G.Statement
@@ -230,16 +231,6 @@ instance MonadCatchIO m => PersistBackend (SqliteReader m) where
     delete = G.delete genericSql
     deleteBy = G.deleteBy genericSql
 
-showSqlType :: SqlType -> String
-showSqlType SqlString = "VARCHAR"
-showSqlType SqlInteger = "INTEGER"
-showSqlType SqlReal = "REAL"
-showSqlType SqlDay = "DATE"
-showSqlType SqlTime = "TIME"
-showSqlType SqlDayTime = "TIMESTAMP"
-showSqlType SqlBlob = "BLOB"
-showSqlType SqlBool = "BOOLEAN"
-
 runMigration :: MonadCatchIO m
              => Migration (SqliteReader m)
              -> SqliteReader m ()
@@ -254,27 +245,39 @@ runMigration m =
 
 type Sql = String
 type Migration m = WriterT [String] (WriterT [Sql] m) ()
+-}
 
-migrate :: (MonadCatchIO m, PersistEntity val)
-        => val
-        -> Migration (SqliteReader m)
-migrate val = do
+showSqlType :: SqlType -> String
+showSqlType SqlString = "VARCHAR"
+showSqlType SqlInteger = "INTEGER"
+showSqlType SqlReal = "REAL"
+showSqlType SqlDay = "DATE"
+showSqlType SqlTime = "TIME"
+showSqlType SqlDayTime = "TIMESTAMP"
+showSqlType SqlBlob = "BLOB"
+showSqlType SqlBool = "BOOLEAN"
+
+migrate' :: PersistEntity val
+         => (String -> IO G.Statement)
+         -> val
+         -> IO (Either [String] [String])
+migrate' getter val = do
     let (cols, uniqs) = mkColumns val
     let newSql = mkCreateTable False table (cols, uniqs)
-    oldSql' <- lift $ lift $
-              withStmt ("SELECT sql FROM sqlite_master WHERE " ++
-                        "type='table' AND name=?")
-                [PersistString table] go
+    stmt <- getter $ "SELECT sql FROM sqlite_master WHERE " ++
+                        "type='table' AND name=?"
+    oldSql' <- G.withStmt stmt [PersistString table] go
     case oldSql' of
-        Nothing -> lift $ tell [newSql]
+        Nothing -> return $ Right [newSql]
         Just oldSql ->
             if oldSql == newSql
-                then return ()
+                then return $ Right []
                 else do
-                    sql <- lift $ lift $ getCopyTable val
-                    lift $ tell sql
+                    sql <- getCopyTable getter val
+                    return $ Right sql
   where
-    table = tableName $ entityDef val
+    def = entityDef val
+    table = tableName def
     go pop = do
         x <- pop
         case x of
@@ -282,9 +285,10 @@ migrate val = do
             Just [PersistString y] -> return $ Just y
             Just y -> error $ "Unexpected result from sqlite_master: " ++ show y
 
-getCopyTable :: (MonadCatchIO m, PersistEntity val) => val -> SqliteReader m [Sql]
-getCopyTable val = do
-    oldCols' <- withStmt ("PRAGMA table_info(" ++ table ++ ")") [] getCols
+getCopyTable :: PersistEntity val => (String -> IO G.Statement) -> val -> IO [Sql]
+getCopyTable getter val = do
+    stmt <- getter $ "PRAGMA table_info(" ++ table ++ ")"
+    oldCols' <- G.withStmt stmt [] getCols
     let oldCols = map (map toLower) $ filter (/= "id") oldCols'
     let newCols = map (map toLower . cName) cols :: [String]
     let common = filter (`elem` oldCols) newCols :: [String]
@@ -299,6 +303,7 @@ getCopyTable val = do
                 , dropTmp
                 ]
   where
+    def = entityDef val
     getCols pop = do
         x <- pop
         case x of
@@ -307,7 +312,7 @@ getCopyTable val = do
                 names <- getCols pop
                 return $ name : names
             Just y -> error $ "Invalid result from PRAGMA table_info: " ++ show y
-    table = tableName $ entityDef val
+    table = tableName def
     tableTmp = table ++ "_backup"
     (cols, uniqs) = mkColumns val
     newSql = mkCreateTable False table (cols, uniqs)
@@ -368,4 +373,5 @@ sqlUnique (cname, cols) = concat
     , intercalate "," cols
     , ")"
     ]
--}
+
+type Sql = String
