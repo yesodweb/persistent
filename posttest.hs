@@ -11,7 +11,7 @@ Person
     color String null Eq Ne
     PersonNameKey name
 Pet
-    owner PersonId noreference
+    owner PersonId
     name String
 |]
 

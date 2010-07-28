@@ -25,6 +25,7 @@ module Database.Persist.GenericSql
     , tableName
     , getFieldName
     , tableColumns
+    , toField
     ) where
 
 import Database.Persist.Base hiding (PersistBackend (..))

@@ -39,8 +39,10 @@ import Data.IORef
 import qualified Data.Map as Map
 import Data.ByteString.Char8 (unpack)
 import Data.Either (partitionEithers)
-import Control.Monad (liftM, (<=<))
+import Control.Monad (liftM, (<=<), forM_)
 import System.IO (hPutStrLn, stderr)
+import Control.Arrow
+import Data.Maybe (fromJust)
 
 type StmtMap = Map.Map String H.Statement
 data Connection = Connection H.Connection (IORef StmtMap)
@@ -190,7 +192,11 @@ data AlterColumn = Type SqlType | IsNull | NotNull | Add Column | Drop
                  | AddReference String | DropReference String
 type AlterColumn' = (String, AlterColumn)
 
-data AlterDB = AddTable String | AlterTable String AlterColumn'
+data AlterTable = AddUniqueConstraint String [String]
+
+data AlterDB = AddTable String
+             | AlterColumn String AlterColumn'
+             | AlterTable String AlterTable
 
 runMigrationForce :: MonadIO m
                   => Migration (PostgresqlReader m)
@@ -210,7 +216,7 @@ runMigration m = do
             , unlines $ map ("    " ++) errs
             ]
   where
-    noUnsafe (AlterTable table (column, Drop)) = Left $ concat
+    noUnsafe (AlterColumn table (column, Drop)) = Left $ concat
         [ "Drop column "
         , table
         , "."
@@ -223,10 +229,22 @@ runAlterDBs :: MonadIO m => [AlterDB] -> PostgresqlReader m ()
 runAlterDBs = mapM_ go
   where
     go (AddTable s) = execute' s
-    go (AlterTable col alt) = execute' (showAlter col alt)
+    go (AlterTable table alt) = execute' $ showAlterTable table alt
+    go (AlterColumn table alt) = execute' $ showAlter table alt
     execute' s = do
         liftIO $ hPutStrLn stderr $ "Migrating: " ++ s
         execute s []
+
+showAlterTable :: String -> AlterTable -> String
+showAlterTable table (AddUniqueConstraint cname cols) = concat
+    [ "ALTER TABLE "
+    , table
+    , " ADD CONSTRAINT "
+    , cname
+    , " UNIQUE("
+    , intercalate "," cols
+    , ")"
+    ]
 
 showAlter :: String -> AlterColumn' -> String
 showAlter table (n, Type t) =
@@ -292,11 +310,17 @@ findAlters col@(Column name isNull type_ def ref) cols =
   where
     name' = map toLower name
 
-getAlters :: [Column] -> [Column] -> [AlterColumn']
-getAlters [] old = map (\x -> (cName x, Drop)) old
-getAlters (new:news) old =
-    let (alters, old') = findAlters new old
-     in alters ++ getAlters news old'
+getAlters :: ([Column], [UniqueDef])
+          -> ([Column], [UniqueDef])
+          -> ([AlterColumn'], [AlterTable])
+getAlters (c1, u1) (c2, u2) =
+    (getAltersC c1 c2, getAltersU u1 u2)
+  where
+    getAltersC [] old = map (\x -> (cName x, Drop)) old
+    getAltersC (new:news) old =
+        let (alters, old') = findAlters new old
+         in alters ++ getAltersC news old'
+    getAltersU _ _ = [] -- FIXME
 
 getColumn :: MonadIO m => String -> [PersistValue]
           -> PostgresqlReader m (Either String Column)
@@ -344,13 +368,16 @@ getColumn _ x =
     return $ Left $ "Invalid result from information_schema: " ++ show x
 
 -- | Returns all of the columns in the given table currently in the database.
-getColumns :: MonadIO m => String -> PostgresqlReader m [Either String Column]
+getColumns :: MonadIO m => String -> PostgresqlReader m [Either String (Either Column UniqueDef)]
 getColumns name = do
-    withStmt ("SELECT column_name,is_nullable,udt_name,column_default " ++
+    cs <-
+      withStmt ("SELECT column_name,is_nullable,udt_name,column_default " ++
                 "FROM information_schema.columns " ++
                 "WHERE table_name=? AND column_name <> 'id'")
         [PersistString name]
         helper
+    us <- return [] -- FIXME
+    return $ cs ++ us
   where
     helper pop = do
         x <- pop
@@ -358,14 +385,22 @@ getColumns name = do
             Nothing -> return []
             Just x' -> do
                 col <- getColumn name x'
+                let col' = case col of
+                            Left e -> Left e
+                            Right c -> Right $ Left c
                 cols <- helper pop
-                return $ col : cols
+                return $ col' : cols
+
+type UniqueDef = (String, [String])
 
 -- | Create the list of columns for the given entity.
-mkColumns :: PersistEntity val => val -> [Column]
+mkColumns :: PersistEntity val => val -> ([Column], [UniqueDef])
 mkColumns val =
-    zipWith go (G.tableColumns t) $ toPersistFields $ halfDefined `asTypeOf` val
+    (cols, uniqs)
   where
+    colNameMap = map ((\(x, _, _) -> x) &&& G.toField) $ entityColumns t
+    uniqs = map (second $ map $ fromJust . flip lookup colNameMap) $ entityUniques t
+    cols = zipWith go (G.tableColumns t) $ toPersistFields $ halfDefined `asTypeOf` val
     t = entityDef val
     tn = map toLower $ G.tableName t
     go (name, t', as) p =
@@ -402,20 +437,24 @@ migrate val = do
     let name = map toLower $ G.tableName $ entityDef val
     old <- lift $ lift $ getColumns name
     case partitionEithers old of
-        ([], old') -> do
+        ([], old'') -> do
+            let old' = partitionEithers old''
             let new = mkColumns val
-            let alters = getAlters new old'
-            let go a = lift $ tell [AlterTable name a]
             if null old
                 then do
                     lift $ tell [AddTable $ concat
                         [ "CREATE TABLE "
                         , name
                         , "(id SERIAL PRIMARY KEY UNIQUE"
-                        , concatMap (\x -> ',' : show x) new
+                        , concatMap (\x -> ',' : show x) $ fst new
                         , ")"
                         ]]
-                else mapM_ go alters
+                    forM_ (snd new) $ \(uname, ucols) ->
+                        lift $ tell [AlterTable name $ AddUniqueConstraint uname ucols]
+                else do
+                    let (acs, ats) = getAlters new old'
+                    forM_ acs $ lift . tell . return . AlterColumn name
+                    forM_ ats $ lift . tell . return . AlterTable name
         (errs, _) -> tell errs
 
 instance MonadIO m => PersistBackend (PostgresqlReader m) where
