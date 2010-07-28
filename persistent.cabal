@@ -30,6 +30,7 @@ library
                      Database.Persist.TH
                      Database.Persist.Quasi
                      Database.Persist.GenericSql
+                     Database.Persist.GenericSql.Internal
                      Database.Persist.Pool
     ghc-options:     -Wall
 

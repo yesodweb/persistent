@@ -33,7 +33,6 @@ import qualified Data.ByteString.UTF8 as UTF8
 import Foreign
 import Foreign.C
 import Database.Persist.Base (PersistValue (..))
-import Control.Concurrent.MVar
 
 newtype Connection = Connection (Ptr ())
 newtype Statement = Statement (Ptr ())

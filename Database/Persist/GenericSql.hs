@@ -1,98 +1,55 @@
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PackageImports #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ExistentialQuantification #-}
 -- | This is a helper module for creating SQL backends. Regular users do not
 -- need to use this module.
 module Database.Persist.GenericSql
-    ( Connection (..)
-    , Statement (..)
-    , SqlReader (..)
+    ( SqlPersist (..)
+    , Connection
+    , ConnectionPool
+    , Statement
     , runSqlConn
     , runSqlPool
-    , withSqlConn
-    , withSqlPool
-
     , Migration
+    , parseMigration
     , runMigration
+    , runMigrationUnsafe
     , migrate
-
-    , mkColumns
-    , tableName
-    , Column (..)
-    , UniqueDef
-    , RowPopper
-    , refName
     ) where
 
 import Database.Persist.Base
 import Data.List (intercalate)
-import Control.Arrow
-import Data.Char (toLower)
-import Data.Maybe (fromJust)
 import Control.Monad.IO.Class
-import "MonadCatchIO-transformers" Control.Monad.CatchIO
-import qualified Data.Map as Map
 import Control.Monad.Trans.Reader
 import Control.Applicative (Applicative)
 import Control.Monad.Trans.Class (MonadTrans (..))
-import Data.IORef
 import Database.Persist.Pool
 import Control.Monad.Trans.Writer
 import System.IO
+import Database.Persist.GenericSql.Internal
+import "MonadCatchIO-transformers" Control.Monad.CatchIO
+import Data.IORef
+import qualified Data.Map as Map
+import Control.Monad (liftM)
 
-data Connection = Connection
-    { prepare :: String -> IO Statement
-    , insertSql :: String -> [String] -> Either String (String, String)
-    , stmtMap :: IORef (Map.Map String Statement)
-    , close :: IO ()
-    , migrateSql :: forall v. PersistEntity v
-                 => (String -> IO Statement) -> v -> IO (Either [String] [String])
-    , begin :: (String -> IO Statement) -> IO ()
-    , commit :: (String -> IO Statement) -> IO ()
-    , rollback :: (String -> IO Statement) -> IO ()
-    }
-data Statement = Statement
-    { finalize :: IO ()
-    , reset :: IO ()
-    , execute :: [PersistValue] -> IO ()
-    , withStmt :: forall a m. MonadCatchIO m
-               => [PersistValue] -> (RowPopper m -> m a) -> m a
-    }
-
-withSqlPool :: MonadCatchIO m
-            => IO Connection -> Int -> (Pool Connection -> m a) -> m a
-withSqlPool mkConn = createPool mkConn close'
-
-withSqlConn :: MonadCatchIO m => IO Connection -> (Connection -> m a) -> m a
-withSqlConn open = bracket (liftIO open) (liftIO . close')
-
-close' :: Connection -> IO ()
-close' conn = do
-    readIORef (stmtMap conn) >>= mapM_ finalize . Map.elems
-    close conn
+type ConnectionPool = Pool Connection
 
 withStmt' :: MonadCatchIO m => String -> [PersistValue]
-          -> (RowPopper (SqlReader m) -> SqlReader m a) -> SqlReader m a
+          -> (RowPopper (SqlPersist m) -> SqlPersist m a) -> SqlPersist m a
 withStmt' sql vals pop = do
     stmt <- getStmt sql
     ret <- withStmt stmt vals pop
     liftIO $ reset stmt
     return ret
 
-execute' :: MonadIO m => String -> [PersistValue] -> SqlReader m ()
+execute' :: MonadIO m => String -> [PersistValue] -> SqlPersist m ()
 execute' sql vals = do
     stmt <- getStmt sql
     liftIO $ execute stmt vals
     liftIO $ reset stmt
 
-getStmt :: MonadIO m => String -> SqlReader m Statement
+getStmt :: MonadIO m => String -> SqlPersist m Statement
 getStmt sql = do
-    conn <- SqlReader ask
+    conn <- SqlPersist ask
     liftIO $ getStmt' conn sql
 
 getStmt' :: Connection -> String -> IO Statement
@@ -105,27 +62,25 @@ getStmt' conn sql = do
             liftIO $ writeIORef (stmtMap conn) $ Map.insert sql stmt smap
             return stmt
 
-newtype SqlReader m a = SqlReader (ReaderT Connection m a)
+newtype SqlPersist m a = SqlPersist (ReaderT Connection m a)
     deriving (Monad, MonadIO, MonadCatchIO, MonadTrans, Functor, Applicative)
 
-runSqlPool :: MonadCatchIO m => SqlReader m a -> Pool Connection -> m a
+runSqlPool :: MonadCatchIO m => SqlPersist m a -> Pool Connection -> m a
 runSqlPool r pconn = withPool' pconn $ runSqlConn r
 
-runSqlConn :: MonadCatchIO m => SqlReader m a -> Connection -> m a
-runSqlConn (SqlReader r) conn = do
+runSqlConn :: MonadCatchIO m => SqlPersist m a -> Connection -> m a
+runSqlConn (SqlPersist r) conn = do
     let getter = getStmt' conn
     liftIO $ begin conn getter
-    r <- onException
+    x <- onException
             (runReaderT r conn)
             (liftIO $ rollback conn getter)
     liftIO $ commit conn getter
-    return r
+    return x
 
-type RowPopper m = m (Maybe [PersistValue])
-
-instance MonadCatchIO m => PersistBackend (SqlReader m) where
+instance MonadCatchIO m => PersistBackend (SqlPersist m) where
     insert val = do
-        conn <- SqlReader ask
+        conn <- SqlPersist ask
         let esql = insertSql conn (tableName t) (map fst3 $ tableColumns t)
         i <-
             case esql of
@@ -295,28 +250,8 @@ instance MonadCatchIO m => PersistBackend (SqlReader m) where
 dummyFromUnique :: Unique v -> v
 dummyFromUnique _ = error "dummyFromUnique"
 
-tableName :: EntityDef -> String
-tableName t =
-    case getSqlValue $ entityAttribs t of
-        Nothing -> "tbl" ++ entityName t
-        Just x -> x
-
-toField :: (String, String, [String]) -> String
-toField (n, _, as) =
-    case getSqlValue as of
-        Just x -> x
-        Nothing -> "fld" ++ n
-
 getFieldName :: EntityDef -> String -> String
 getFieldName t s = toField $ tableColumn t s
-
-getSqlValue :: [String] -> Maybe String
-getSqlValue (('s':'q':'l':'=':x):_) = Just x
-getSqlValue (_:x) = getSqlValue x
-getSqlValue [] = Nothing
-
-tableColumns :: EntityDef -> [(String, String, [String])]
-tableColumns = map (\a@(_, y, z) -> (toField a, y, z)) . entityColumns
 
 tableColumn :: EntityDef -> String -> (String, String, [String])
 tableColumn t s = go $ entityColumns t
@@ -325,49 +260,6 @@ tableColumn t s = go $ entityColumns t
     go ((x, y, z):rest)
         | x == s = (x, y, z)
         | otherwise = go rest
-
-tableUniques' :: EntityDef -> [(String, [String])]
-tableUniques' t = map (second $ map $ getFieldName t) $ entityUniques t
-
-type UniqueDef = (String, [String])
-
--- | Create the list of columns for the given entity.
-mkColumns :: PersistEntity val => val -> ([Column], [UniqueDef])
-mkColumns val =
-    (cols, uniqs)
-  where
-    colNameMap = map ((\(x, _, _) -> x) &&& toField) $ entityColumns t
-    uniqs = map (second $ map $ fromJust . flip lookup colNameMap) $ entityUniques t
-    cols = zipWith go (tableColumns t) $ toPersistFields $ halfDefined `asTypeOf` val
-    t = entityDef val
-    tn = map toLower $ tableName t
-    go (name, t', as) p =
-        Column name ("null" `elem` as) (sqlType p) (def as) (ref name t' as)
-    def [] = Nothing
-    def (('d':'e':'f':'a':'u':'l':'t':'=':d):_) = Just d
-    def (_:rest) = def rest
-    ref c t' [] =
-        let l = length t'
-            (f, b) = splitAt (l - 2) t'
-         in if b == "Id"
-                then Just ("tbl" ++ f, refName tn c)
-                else Nothing
-    ref _ _ ("noreference":_) = Nothing
-    ref c _ (('r':'e':'f':'e':'r':'e':'n':'c':'e':'=':x):_) =
-        Just (x, refName tn c)
-    ref c x (_:y) = ref c x y
-
-refName :: String -> String -> String
-refName table column =
-    map toLower table ++ '_' : map toLower column ++ "_fkey"
-
-data Column = Column
-    { cName :: String
-    , _cNull :: Bool
-    , _cType :: SqlType
-    , _cDefault :: Maybe String
-    , _cReference :: (Maybe (String, String)) -- table name, constraint name
-    }
 
 dummyFromKey :: Key v -> v
 dummyFromKey _ = error "dummyFromKey"
@@ -394,25 +286,50 @@ dummyFromFilts :: [Filter v] -> v
 dummyFromFilts _ = error "dummyFromFilts"
 
 type Sql = String
-type Migration m = WriterT [String] (WriterT [Sql] m) ()
+type Migration m = WriterT [String] (WriterT [(Bool, Sql)] m) ()
+
+parseMigration :: Monad m => Migration m -> m (Either [String] [(Bool, Sql)])
+parseMigration =
+    liftM go . runWriterT . execWriterT
+  where
+    go ([], sql) = Right sql
+    go (errs, _) = Left errs
 
 runMigration :: MonadCatchIO m
-             => Migration (SqlReader m)
-             -> SqlReader m ()
-runMigration m =
-    runWriterT (execWriterT m) >>= go
-  where
-    go ([], sql) = mapM_ execute'' sql
-    go (errs, _) = error $ unlines errs
-    execute'' s = do
-        liftIO $ hPutStrLn stderr $ "Migrating: " ++ s
-        execute' s []
+             => Migration (SqlPersist m)
+             -> SqlPersist m ()
+runMigration m = do
+    x <- parseMigration m
+    case x of
+        Left errs -> error $ unlines errs
+        Right sql ->
+            case filter fst sql of
+                [] -> mapM_ (executeMigrate . snd) sql
+                errs -> error $ concat
+                    [ "\n\nDatabase migration: manual intervention required.\n"
+                    , "The following actions are considered unsafe:\n\n"
+                    , unlines $ map ("    " ++) $ map snd $ filter fst errs
+                    ]
+
+runMigrationUnsafe :: MonadCatchIO m
+                   => Migration (SqlPersist m)
+                   -> SqlPersist m ()
+runMigrationUnsafe m = do
+    x <- parseMigration m
+    case x of
+        Left errs -> error $ unlines errs
+        Right sql -> mapM_ (executeMigrate . snd) sql
+
+executeMigrate :: MonadIO m => String -> SqlPersist m ()
+executeMigrate s = do
+    liftIO $ hPutStrLn stderr $ "Migrating: " ++ s
+    execute' s []
 
 migrate :: (MonadCatchIO m, PersistEntity val)
         => val
-        -> Migration (SqlReader m)
+        -> Migration (SqlPersist m)
 migrate val = do
-    conn <- lift $ lift $ SqlReader ask
+    conn <- lift $ lift $ SqlPersist ask
     let getter = getStmt' conn
     res <- liftIO $ migrateSql conn getter val
     either tell (lift . tell) res

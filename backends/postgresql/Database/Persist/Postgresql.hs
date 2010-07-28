@@ -1,105 +1,68 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PackageImports #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
 -- | A postgresql backend for persistent.
 module Database.Persist.Postgresql
-    ( PostgresqlReader
-    , runPostgresql
-    , runPostgresqlConn
-    , withPostgresql
+    ( withPostgresqlPool
     , withPostgresqlConn
-    , Pool
     , module Database.Persist
-    , runMigration
-    , migrate
+    , module Database.Persist.GenericSql
     ) where
 
 import Database.Persist
 import Database.Persist.Base
-import qualified Database.Persist.GenericSql as G
-import Control.Monad.Trans.Reader
-import Control.Monad.Trans.Writer
+import Database.Persist.GenericSql
+import Database.Persist.GenericSql.Internal
+
+import qualified Database.HDBC as H
+import qualified Database.HDBC.PostgreSQL as H
+
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.List (intercalate)
 import "MonadCatchIO-transformers" Control.Monad.CatchIO
-import qualified Database.HDBC as H
-import qualified Database.HDBC.PostgreSQL as H
-import Database.HDBC.PostgreSQL (connectPostgreSQL)
 import Data.Char (toLower)
-import Data.Int (Int64)
-import Control.Monad.Trans.Class (MonadTrans (..))
-import Control.Applicative (Applicative)
-import Database.Persist.Pool
 import Data.IORef
 import qualified Data.Map as Map
 import Data.ByteString.Char8 (unpack)
 import Data.Either (partitionEithers)
-import Control.Monad (liftM, (<=<), forM_)
-import System.IO (hPutStrLn, stderr)
 import Control.Arrow
-import Data.Maybe (fromJust)
 import Data.List (sort, groupBy)
 import Data.Function (on)
-import Database.Persist.GenericSql (mkColumns, tableName, Column (..), UniqueDef, refName)
 
-type PostgresqlReader = G.SqlReader
-type SqlReader = G.SqlReader
-type Connection = G.Connection
-type Migration a = G.Migration a
-
-runMigration :: MonadCatchIO m
-             => Migration (SqlReader m)
-             -> SqlReader m ()
-runMigration = G.runMigration
-
-migrate :: (MonadCatchIO m, PersistEntity val)
-        => val
-        -> Migration (SqlReader m)
-migrate = G.migrate
-
-runPostgresql :: MonadCatchIO m => PostgresqlReader m a -> Pool Connection -> m a
-runPostgresql = G.runSqlPool
-
-runPostgresqlConn :: MonadCatchIO m => PostgresqlReader m a -> Connection -> m a
-runPostgresqlConn = G.runSqlConn
-
-withPostgresql :: MonadCatchIO m
-           => String
-           -> Int -- ^ number of connections to open
-           -> (Pool Connection -> m a) -> m a
-withPostgresql s = G.withSqlPool $ open' s
+withPostgresqlPool :: MonadCatchIO m
+                   => String
+                   -> Int -- ^ number of connections to open
+                   -> (ConnectionPool -> m a) -> m a
+withPostgresqlPool s = withSqlPool $ open' s
 
 withPostgresqlConn :: MonadCatchIO m => String -> (Connection -> m a) -> m a
-withPostgresqlConn = G.withSqlConn . open'
+withPostgresqlConn = withSqlConn . open'
 
-open' :: String -> IO G.Connection
+open' :: String -> IO Connection
 open' s = do
     conn <- H.connectPostgreSQL s
     smap <- newIORef $ Map.empty
-    return G.Connection
-        { G.prepare = prepare' conn
-        , G.stmtMap = smap
-        , G.insertSql = insertSql
-        , G.close = H.disconnect conn
-        , G.migrateSql = migrate'
-        , G.begin = const $ return ()
-        , G.commit = const $ H.commit conn
-        , G.rollback = const $ H.rollback conn
+    return Connection
+        { prepare = prepare' conn
+        , stmtMap = smap
+        , insertSql = insertSql'
+        , close = H.disconnect conn
+        , migrateSql = migrate'
+        , begin = const $ return ()
+        , commit = const $ H.commit conn
+        , rollback = const $ H.rollback conn
         }
 
-prepare' :: H.Connection -> String -> IO G.Statement
+prepare' :: H.Connection -> String -> IO Statement
 prepare' conn sql = do
     stmt <- H.prepare conn sql
-    return G.Statement
-        { G.finalize = return ()
-        , G.reset = return ()
-        , G.execute = execute stmt
-        , G.withStmt = withStmt stmt
+    return Statement
+        { finalize = return ()
+        , reset = return ()
+        , execute = execute' stmt
+        , withStmt = withStmt' stmt
         }
 
-insertSql :: String -> [String] -> Either String (String, String)
-insertSql t cols = Left $ concat
+insertSql' :: String -> [String] -> Either String (String, String)
+insertSql' t cols = Left $ concat
     [ "INSERT INTO "
     , t
     , "("
@@ -109,178 +72,19 @@ insertSql t cols = Left $ concat
     , ") RETURNING id"
     ]
 
-execute :: H.Statement -> [PersistValue] -> IO ()
-execute stmt vals = do
+execute' :: H.Statement -> [PersistValue] -> IO ()
+execute' stmt vals = do
     _ <- H.execute stmt $ map pToSql vals
     return ()
 
-withStmt :: MonadCatchIO m
-         => H.Statement
-         -> [PersistValue]
-         -> (G.RowPopper m -> m a)
-         -> m a
-withStmt stmt vals f = do
-    liftIO $ H.execute stmt $ map pToSql vals
-    f $ liftIO $ (fmap . fmap) (map pFromSql) $ H.fetchRow stmt
-
-{-
-type StmtMap = Map.Map String H.Statement
-data Connection = Connection H.Connection (IORef StmtMap)
-
--- | A ReaderT monad transformer holding a postgresql database connection.
-newtype PostgresqlReader m a = PostgresqlReader (ReaderT Connection m a)
-    deriving (Monad, MonadIO, MonadTrans, MonadCatchIO, Functor,
-              Applicative)
-
--- | Handles opening and closing of the database connection automatically.
-withPostgresql :: MonadCatchIO m
-               => String -- ^ connection string
-               -> Int -- ^ maximum number of connections in the pool
-               -> (Pool Connection -> m a)
-               -> m a
-withPostgresql s i f = createPool (open' s) close' i f
-
-open' :: String -> IO Connection
-open' sql = do
-    conn <- H.connectPostgreSQL sql
-    istmtmap <- newIORef Map.empty
-    return $ Connection conn istmtmap
-
-close' :: Connection -> IO ()
-close' (Connection conn _) = H.disconnect conn
-
--- | Run a series of database actions within a single transactions. On any
--- exception, the transaction is rolled back.
-runPostgresql :: MonadCatchIO m
-              => PostgresqlReader m a
-              -> Pool Connection
-              -> m a
-runPostgresql (PostgresqlReader r) pconn = withPool' pconn $
-  \conn@(Connection conn' _) -> do
-    res <- onException (runReaderT r conn) $ liftIO (H.rollback conn')
-    liftIO $ H.commit conn'
-    return res
-
-getStmt :: String -> Connection -> IO H.Statement
-getStmt sql (Connection conn istmtmap) = do
-    stmtmap <- readIORef istmtmap
-    case Map.lookup sql stmtmap of
-        Just stmt -> do
-            H.finish stmt
-            return stmt
-        Nothing -> do
-            stmt <- H.prepare conn sql
-            let stmtmap' = Map.insert sql stmt stmtmap
-            writeIORef istmtmap stmtmap'
-            return stmt
-
-withStmt :: MonadIO m
-         => String
-         -> [PersistValue]
-         -> (G.RowPopper (PostgresqlReader m) -> PostgresqlReader m a)
-         -> PostgresqlReader m a
-withStmt sql vals f = do
-    conn <- PostgresqlReader ask
-    stmt <- liftIO $ getStmt sql conn
+withStmt' :: MonadCatchIO m
+          => H.Statement
+          -> [PersistValue]
+          -> (RowPopper m -> m a)
+          -> m a
+withStmt' stmt vals f = do
     _ <- liftIO $ H.execute stmt $ map pToSql vals
     f $ liftIO $ (fmap . fmap) (map pFromSql) $ H.fetchRow stmt
-
-execute :: MonadIO m => String -> [PersistValue] -> PostgresqlReader m ()
-execute sql vals = do
-    conn <- PostgresqlReader ask
-    stmt <- liftIO $ getStmt sql conn
-    _ <- liftIO $ H.execute stmt $ map pToSql vals
-    return ()
-
-insert' :: MonadIO m
-        => String -> [String] -> [PersistValue] -> PostgresqlReader m Int64
-insert' t cols vals = do
-    let sql = "INSERT INTO " ++ t ++
-              "(" ++ intercalate "," cols ++
-              ") VALUES(" ++
-              intercalate "," (map (const "?") cols) ++ ") " ++
-              "RETURNING id"
-    withStmt sql vals $ \pop -> do
-        Just [PersistInt64 i] <- pop
-        return i
-
-tableExists :: MonadIO m => String -> PostgresqlReader m Bool
-tableExists t = do
-    Connection conn _ <- PostgresqlReader ask
-    tables <- liftIO $ H.getTables conn
-    return $ map toLower t `elem` tables
-
-genericSql :: MonadIO m => G.GenericSql (PostgresqlReader m)
-genericSql =
-    G.GenericSql withStmt execute insert' tableExists
-                 "SERIAL PRIMARY KEY" showSqlType
-
-runMigrationForce :: MonadIO m
-                  => Migration (PostgresqlReader m)
-                  -> PostgresqlReader m ()
-runMigrationForce = runAlterDBs <=< parseMigration'
-
-runMigration :: MonadIO m
-             => Migration (PostgresqlReader m)
-             -> PostgresqlReader m ()
-runMigration m = do
-    m' <- parseMigration' m
-    case partitionEithers $ map noUnsafe m' of
-        ([], alts) -> runAlterDBs alts
-        (errs, _) -> error $ concat
-            [ "\n\nDatabase migration: manual intervention required.\n"
-            , "The following actions are considered unsafe:\n\n"
-            , unlines $ map ("    " ++) errs
-            ]
-  where
-    noUnsafe (AlterColumn table (column, Drop)) = Left $ concat
-        [ "Drop column "
-        , table
-        , "."
-        , column
-        , "."
-        ]
-    noUnsafe x = Right x
-
-runAlterDBs :: MonadIO m => [AlterDB] -> PostgresqlReader m ()
-runAlterDBs = mapM_ go
-  where
-    go (AddTable s) = execute' s
-    go (AlterTable table alt) = execute' $ showAlterTable table alt
-    go (AlterColumn table alt) = execute' $ showAlter table alt
-    execute' s = do
-        liftIO $ hPutStrLn stderr $ "Migrating: " ++ s
-        execute s []
-
-type Migration m = WriterT [String] (WriterT [AlterDB] m) ()
-
-parseMigration :: Monad m => Migration m -> m (Either [String] [AlterDB])
-parseMigration m = liftM go $ runWriterT $ execWriterT m
-  where
-    go ([], x) = Right x
-    go (x, _) = Left x
-
-parseMigration' :: Monad m => Migration m -> m [AlterDB]
-parseMigration' = liftM (either (error . show) id) . parseMigration
-
-migrate :: (MonadIO m, PersistEntity val)
-        => val
-        -> Migration (PostgresqlReader m)
-migrate val = do
-
-instance MonadIO m => PersistBackend (PostgresqlReader m) where
-    insert = G.insert genericSql
-    get = G.get genericSql
-    replace = G.replace genericSql
-    select = G.select genericSql
-    count = G.count genericSql
-    deleteWhere = G.deleteWhere genericSql
-    update = G.update genericSql
-    updateWhere = G.updateWhere genericSql
-    getBy = G.getBy genericSql
-    delete = G.delete genericSql
-    deleteBy = G.deleteBy genericSql
--}
 
 pToSql :: PersistValue -> H.SqlValue
 pToSql (PersistString s) = H.SqlString s
@@ -312,11 +116,11 @@ pFromSql H.SqlNull = PersistNull
 pFromSql x = PersistString $ H.fromSql x -- FIXME
 
 migrate' :: PersistEntity val
-         => (String -> IO G.Statement)
+         => (String -> IO Statement)
          -> val
-         -> IO (Either [String] [String])
+         -> IO (Either [String] [(Bool, String)])
 migrate' getter val = do
-    let name = map toLower $ G.tableName $ entityDef val
+    let name = map toLower $ tableName $ entityDef val
     old <- getColumns getter name
     case partitionEithers old of
         ([], old'') -> do
@@ -355,21 +159,21 @@ data AlterDB = AddTable String
              | AlterTable String AlterTable
 
 -- | Returns all of the columns in the given table currently in the database.
-getColumns :: (String -> IO G.Statement)
+getColumns :: (String -> IO Statement)
            -> String -> IO [Either String (Either Column UniqueDef)]
 getColumns getter name = do
     stmt <- getter $
                 "SELECT column_name,is_nullable,udt_name,column_default " ++
                 "FROM information_schema.columns " ++
                 "WHERE table_name=? AND column_name <> 'id'"
-    cs <- G.withStmt stmt [PersistString name] helper
+    cs <- withStmt stmt [PersistString name] helper
     stmt' <- getter $ concat
         [ "SELECT constraint_name, column_name "
         , "FROM information_schema.constraint_column_usage "
         , "WHERE table_name=? AND column_name <> 'id' "
         , "ORDER BY constraint_name, column_name"
         ]
-    us <- G.withStmt stmt' [PersistString name] helperU
+    us <- withStmt stmt' [PersistString name] helperU
     return $ cs ++ us
   where
     getAll pop front = do
@@ -417,7 +221,7 @@ getAlters (c1, u1) (c2, u2) =
                             : AddUniqueConstraint name cols
                             : getAltersU news old'
 
-getColumn :: (String -> IO G.Statement)
+getColumn :: (String -> IO Statement)
           -> String -> [PersistValue]
           -> IO (Either String Column)
 getColumn getter tname
@@ -444,7 +248,7 @@ getColumn getter tname
                 ]
         let ref = refName tname cname
         stmt <- getter sql
-        G.withStmt stmt
+        withStmt stmt
                      [ PersistString $ map toLower tname
                      , PersistString ref
                      ] $ \pop -> do
@@ -523,10 +327,14 @@ showSqlType SqlDayTime = "TIMESTAMP"
 showSqlType SqlBlob = "BYTEA"
 showSqlType SqlBool = "BOOLEAN"
 
-showAlterDb :: AlterDB -> String
-showAlterDb (AddTable s) = s
-showAlterDb (AlterColumn t (c, ac)) = showAlter t (c, ac)
-showAlterDb (AlterTable t at) = showAlterTable t at
+showAlterDb :: AlterDB -> (Bool, String)
+showAlterDb (AddTable s) = (False, s)
+showAlterDb (AlterColumn t (c, ac)) =
+    (isUnsafe ac, showAlter t (c, ac))
+  where
+    isUnsafe Drop = True
+    isUnsafe _ = False
+showAlterDb (AlterTable t at) = (False, showAlterTable t at)
 
 showAlterTable :: String -> AlterTable -> String
 showAlterTable table (AddUniqueConstraint cname cols) = concat

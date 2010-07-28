@@ -4,7 +4,6 @@
 import Prelude hiding (filter)
 import Database.Persist.Sqlite
 import Control.Monad.IO.Class
-import Database.Sqlite
 import Database.Persist.Pool
 
 mkPersist [$persist|
@@ -19,9 +18,9 @@ Pet
 |]
 
 main :: IO ()
-main = withSqlite "test.db3" 1 $ runSqlite go
+main = withSqlitePool "test.db3" 1 $ runSqlPool go
 
-go :: SqliteReader IO ()
+go :: SqlPersist IO ()
 go = do
     runMigration $ do
         migrate (undefined :: Person)

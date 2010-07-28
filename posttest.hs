@@ -15,11 +15,13 @@ Pet
     name String
 |]
 
-main :: IO ()
-main = withPostgresql "user=test password=test host=localhost port=5432 dbname=test" 1 $ \pool -> do
-    runPostgresql go pool
+connstr :: String
+connstr = "user=test password=test host=localhost port=5432 dbname=test"
 
-go :: PostgresqlReader IO ()
+main :: IO ()
+main = withPostgresqlPool connstr 1 $ runSqlPool go
+
+go :: SqlPersist IO ()
 go = do
     runMigration $ do
         migrate (undefined :: Person)
