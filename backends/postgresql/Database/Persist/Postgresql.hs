@@ -43,6 +43,8 @@ import Control.Monad (liftM, (<=<), forM_)
 import System.IO (hPutStrLn, stderr)
 import Control.Arrow
 import Data.Maybe (fromJust)
+import Data.List (sort, groupBy)
+import Data.Function (on)
 
 type StmtMap = Map.Map String H.Statement
 data Connection = Connection H.Connection (IORef StmtMap)
@@ -190,9 +192,12 @@ instance Show Column where
 data AlterColumn = Type SqlType | IsNull | NotNull | Add Column | Drop
                  | Default String | NoDefault | Update String
                  | AddReference String | DropReference String
+    deriving Show
 type AlterColumn' = (String, AlterColumn)
 
 data AlterTable = AddUniqueConstraint String [String]
+                | DropConstraint String
+    deriving Show
 
 data AlterDB = AddTable String
              | AlterColumn String AlterColumn'
@@ -244,6 +249,12 @@ showAlterTable table (AddUniqueConstraint cname cols) = concat
     , " UNIQUE("
     , intercalate "," cols
     , ")"
+    ]
+showAlterTable table (DropConstraint cname) = concat
+    [ "ALTER TABLE "
+    , table
+    , " DROP CONSTRAINT "
+    , cname
     ]
 
 showAlter :: String -> AlterColumn' -> String
@@ -320,7 +331,17 @@ getAlters (c1, u1) (c2, u2) =
     getAltersC (new:news) old =
         let (alters, old') = findAlters new old
          in alters ++ getAltersC news old'
-    getAltersU _ _ = [] -- FIXME
+    getAltersU [] old = map (DropConstraint . fst) old
+    getAltersU ((name, cols):news) old =
+        case lookup (map toLower name) old of
+            Nothing -> AddUniqueConstraint name cols : getAltersU news old
+            Just ocols ->
+                let old' = filter (\(x, _) -> x /= map toLower name) old
+                 in if sort (map (map toLower) cols) == ocols
+                        then getAltersU news old'
+                        else  DropConstraint name
+                            : AddUniqueConstraint name cols
+                            : getAltersU news old'
 
 getColumn :: MonadIO m => String -> [PersistValue]
           -> PostgresqlReader m (Either String Column)
@@ -376,9 +397,26 @@ getColumns name = do
                 "WHERE table_name=? AND column_name <> 'id'")
         [PersistString name]
         helper
-    us <- return [] -- FIXME
+    us <-
+      withStmt (concat
+        [ "SELECT constraint_name, column_name "
+        , "FROM information_schema.constraint_column_usage "
+        , "WHERE table_name=? AND column_name <> 'id' "
+        , "ORDER BY constraint_name, column_name"
+        ]) [PersistString name] helperU
     return $ cs ++ us
   where
+    getAll pop front = do
+        x <- pop
+        case x of
+            Nothing -> return $ front []
+            Just [PersistByteString con, PersistByteString col] ->
+                getAll pop (front . (:) (unpack con, unpack col))
+            Just _ -> getAll pop front -- FIXME error message?
+    helperU pop = do
+        rows <- getAll pop id
+        return $ map (Right . Right . (fst . head &&& map snd))
+               $ groupBy ((==) `on` fst) rows
     helper pop = do
         x <- pop
         case x of
