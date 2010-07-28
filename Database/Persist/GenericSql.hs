@@ -256,7 +256,7 @@ updateWhere gs filts upds = do
               intercalate "," (map (++ "=?") $ map go upds) ++ wher
     let dat = map persistUpdateToValue upds
            ++ map persistFilterToValue filts
-    gsWithStmt gs sql dat  $ const $ return ()
+    gsExecute gs sql dat
   where
     t = entityDef $ dummyFromFilts filts
     go = getFieldName t . persistUpdateToFieldName
