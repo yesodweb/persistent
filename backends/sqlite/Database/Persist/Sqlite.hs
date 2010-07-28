@@ -34,6 +34,97 @@ import qualified Data.Map as Map
 import System.IO
 import Data.Char (toLower)
 
+type SqliteReader = G.SqlReader
+type Connection = G.Connection
+type Sql = String
+type Migration m = WriterT [String] (WriterT [Sql] m) ()
+
+runMigration :: MonadCatchIO m
+             => Migration (SqliteReader m)
+             -> SqliteReader m ()
+runMigration _ = return ()
+
+migrate :: (MonadCatchIO m, PersistEntity val)
+        => val
+        -> Migration (SqliteReader m)
+migrate _ = return ()
+
+runSqlite :: MonadCatchIO m => SqliteReader m a -> Pool Connection -> m a
+runSqlite = G.runSqlPool
+
+runSqliteConn :: MonadCatchIO m => SqliteReader m a -> Connection -> m a
+runSqliteConn = G.runSqlConn
+
+withSqlite :: MonadCatchIO m
+           => String
+           -> Int -- ^ number of connections to open
+           -> (Pool Connection -> m a) -> m a
+withSqlite s = G.withSqlPool $ open' s
+
+withSqliteConn :: MonadCatchIO m => String -> (Connection -> m a) -> m a
+withSqliteConn = G.withSqlConn . open'
+
+open' :: String -> IO G.Connection
+open' s = do
+    conn <- open s
+    smap <- newIORef $ Map.empty
+    return G.Connection
+        { G.prepare = prepare' conn
+        , G.stmtMap = smap
+        , G.insertSql = insertSql
+        , G.close = close conn
+        }
+
+prepare' :: Sqlite.Connection -> String -> IO G.Statement
+prepare' conn sql = do
+    stmt <- prepare conn sql
+    return G.Statement
+        { G.finalize = finalize stmt
+        , G.reset = reset stmt
+        , G.execute = execute stmt
+        , G.withStmt = withStmt stmt
+        }
+
+insertSql :: String -> [String] -> Either String (String, String)
+insertSql t cols =
+    Right (ins, sel)
+  where
+    sel = "SELECT last_insert_rowid()"
+    ins = concat
+        [ "INSERT INTO "
+        , t
+        , "("
+        , intercalate "," cols
+        , ") VALUES("
+        , intercalate "," (map (const "?") cols)
+        , ")"
+        ]
+
+execute :: Statement -> [PersistValue] -> IO ()
+execute stmt vals = do
+    bind stmt vals
+    Done <- step stmt
+    return ()
+
+withStmt :: MonadCatchIO m
+         => Statement
+         -> [PersistValue]
+         -> (G.RowPopper m -> m a)
+         -> m a
+withStmt stmt vals f = do
+    liftIO $ bind stmt vals
+    x <- f $ go stmt
+    liftIO $ reset stmt
+    return x
+  where
+    go stmt = liftIO $ do
+        x <- step stmt
+        case x of
+            Done -> return Nothing
+            Row -> do
+                cols <- liftIO $ columns stmt
+                return $ Just cols
+{-
 type StmtMap = Map.Map String Statement
 data Connection = Connection Sqlite.Connection (IORef StmtMap)
 
@@ -47,7 +138,7 @@ withSqlite :: MonadCatchIO m
            => String
            -> Int -- ^ number of connections to open
            -> (Pool Connection -> m a) -> m a
-withSqlite s i f = createPool (open' s) close' i f
+withSqlite = withSqlPool . open'
 
 open' :: String -> IO Connection
 open' s = do
@@ -103,35 +194,6 @@ getStmt sql (Connection conn istmtmap) = do
             let stmtmap' = Map.insert sql stmt stmtmap
             writeIORef istmtmap stmtmap'
             return stmt
-
-withStmt :: MonadCatchIO m
-         => String
-         -> [PersistValue]
-         -> (G.RowPopper (SqliteReader m) -> SqliteReader m a)
-         -> SqliteReader m a
-withStmt sql vals f = do
-    conn <- SqliteReader ask
-    stmt <- liftIO $ getStmt sql conn
-    liftIO $ bind stmt vals
-    x <- f $ go stmt
-    liftIO $ reset stmt
-    return x
-  where
-    go stmt = liftIO $ do
-        x <- step stmt
-        case x of
-            Done -> return Nothing
-            Row -> do
-                cols <- liftIO $ columns stmt
-                return $ Just cols
-
-execute :: MonadCatchIO m => String -> [PersistValue] -> SqliteReader m ()
-execute sql vals = do
-    conn <- SqliteReader ask
-    stmt <- liftIO $ getStmt sql conn
-    liftIO $ bind stmt vals
-    Done <- liftIO $ step stmt
-    return ()
 
 insert' :: MonadCatchIO m
         => String -> [String] -> [PersistValue] -> SqliteReader m Int64
@@ -306,3 +368,4 @@ sqlUnique (cname, cols) = concat
     , intercalate "," cols
     , ")"
     ]
+-}
