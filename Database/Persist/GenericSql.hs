@@ -11,6 +11,8 @@ module Database.Persist.GenericSql
     , runSqlPool
     , Migration
     , parseMigration
+    , parseMigration'
+    , dumpMigration
     , runMigration
     , runMigrationUnsafe
     , migrate
@@ -285,40 +287,61 @@ filterClause f = if persistFilterIsNull f then nullClause else mainClause
 dummyFromFilts :: [Filter v] -> v
 dummyFromFilts _ = error "dummyFromFilts"
 
-type Sql = String
-type Migration m = WriterT [String] (WriterT [(Bool, Sql)] m) ()
 
-parseMigration :: Monad m => Migration m -> m (Either [String] [(Bool, Sql)])
+type Sql = String
+
+-- Bool indicates if the Sql is safe
+type CautiousMigration = [(Bool, Sql)]
+allSql :: CautiousMigration -> [Sql]
+allSql = map snd
+unsafeSql :: CautiousMigration -> [Sql]
+unsafeSql = allSql . filter fst
+safeSql :: CautiousMigration -> [Sql]
+safeSql = allSql . filter (not . fst)
+
+type Migration m = WriterT [String] (WriterT CautiousMigration m) ()
+
+parseMigration :: Monad m => Migration m -> m (Either [String] CautiousMigration)
 parseMigration =
     liftM go . runWriterT . execWriterT
   where
     go ([], sql) = Right sql
     go (errs, _) = Left errs
 
+-- like parseMigration, but call error or return the CautiousMigration
+parseMigration' :: Monad m => Migration m -> m (CautiousMigration)
+parseMigration' m = do
+  x <- parseMigration m
+  case x of
+      Left errs -> error $ unlines errs
+      Right sql -> return sql
+
+dumpMigration :: MonadCatchIO m
+              => Migration (SqlPersist m)
+              -> SqlPersist m ()
+dumpMigration m = do
+  mig <- parseMigration' m
+  mapM_ (liftIO . putStrLn) (allSql mig)
+
 runMigration :: MonadCatchIO m
              => Migration (SqlPersist m)
              -> SqlPersist m ()
 runMigration m = do
-    x <- parseMigration m
-    case x of
-        Left errs -> error $ unlines errs
-        Right sql ->
-            case filter fst sql of
-                [] -> mapM_ (executeMigrate . snd) sql
-                errs -> error $ concat
-                    [ "\n\nDatabase migration: manual intervention required.\n"
-                    , "The following actions are considered unsafe:\n\n"
-                    , unlines $ map ("    " ++) $ map snd $ filter fst errs
-                    ]
-
+    mig <- parseMigration' m
+    case unsafeSql mig of
+        []   -> mapM_ executeMigrate $ safeSql mig
+        errs -> error $ concat
+            [ "\n\nDatabase migration: manual intervention required.\n"
+            , "The following actions are considered unsafe:\n\n"
+            , unlines $ map ("    " ++) $ errs
+            ]
+  
 runMigrationUnsafe :: MonadCatchIO m
                    => Migration (SqlPersist m)
                    -> SqlPersist m ()
 runMigrationUnsafe m = do
-    x <- parseMigration m
-    case x of
-        Left errs -> error $ unlines errs
-        Right sql -> mapM_ (executeMigrate . snd) sql
+    mig <- parseMigration' m
+    mapM_ executeMigrate $ allSql mig
 
 executeMigrate :: MonadIO m => String -> SqlPersist m ()
 executeMigrate s = do
