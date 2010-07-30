@@ -13,6 +13,7 @@ module Database.Persist.GenericSql
     , parseMigration
     , parseMigration'
     , dumpMigration
+    , getMigration
     , runMigration
     , runMigrationUnsafe
     , migrate
@@ -316,12 +317,15 @@ parseMigration' m = do
       Left errs -> error $ unlines errs
       Right sql -> return sql
 
-dumpMigration :: MonadCatchIO m
-              => Migration (SqlPersist m)
-              -> SqlPersist m ()
+dumpMigration :: MonadCatchIO m => Migration (SqlPersist m) -> SqlPersist m ()
 dumpMigration m = do
   mig <- parseMigration' m
   mapM_ (liftIO . putStrLn) (allSql mig)
+
+getMigration :: MonadCatchIO m => Migration (SqlPersist m) -> SqlPersist m [Sql]
+getMigration m = do
+  mig <- parseMigration' m
+  return $ allSql mig
 
 runMigration :: MonadCatchIO m
              => Migration (SqlPersist m)
