@@ -23,6 +23,8 @@ module Database.Persist.Base
     , PersistOrder (..)
     , SomePersistField (..)
     , selectList
+    , insertBy
+    , checkUnique
     , DeleteCascade (..)
     , deleteCascadeWhere
     ) where
@@ -217,6 +219,7 @@ class PersistEntity val where
 
     persistUniqueToFieldNames :: Unique val -> [String]
     persistUniqueToValues :: Unique val -> [PersistValue]
+    persistUniqueKeys :: val -> [Unique val]
 
 data SomePersistField = forall a. PersistField a => SomePersistField a
 instance PersistField SomePersistField where
@@ -269,6 +272,37 @@ class Monad m => PersistBackend m where
 
     -- | The total number of records fulfilling the given criterion.
     count :: PersistEntity val => [Filter val] -> m Int
+
+-- | Try to insert the given entity; if another entity exists with the same
+-- unique key, return that entity; otherwise, return the newly created entity.
+insertBy :: (PersistEntity val, PersistBackend m) => val -> m (Key val, val)
+insertBy val =
+    go $ persistUniqueKeys val
+  where
+    go [] = do
+        key <- insert val
+        return (key, val)
+    go (x:xs) = do
+        y <- getBy x
+        case y of
+            Nothing -> go xs
+            Just z -> return z
+
+-- | Check whether there are any conflicts for unique keys with this entity and
+-- existing entities in the database.
+--
+-- Returns 'True' if the entity would be unique, and could thus safely be
+-- 'insert'ed; returns 'False' on a conflict.
+checkUnique :: (PersistEntity val, PersistBackend m) => val -> m Bool
+checkUnique val =
+    go $ persistUniqueKeys val
+  where
+    go [] = return True
+    go (x:xs) = do
+        y <- getBy x
+        case y of
+            Nothing -> go xs
+            Just _ -> return False
 
 -- | Call 'select' but return the result as a list.
 selectList :: (PersistEntity val, PersistBackend m, Monad m)

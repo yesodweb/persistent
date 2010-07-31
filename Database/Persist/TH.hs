@@ -15,6 +15,7 @@ import Data.Char (toLower, toUpper)
 import Data.Maybe (mapMaybe, catMaybes)
 import Web.Routes.Quasi (SinglePiece)
 import Data.Int (Int64)
+import Control.Monad (forM)
 
 -- | Create data types and appropriate 'PersistEntity' instances for the given
 -- 'EntityDef's. Works well with the persist quasi-quoter.
@@ -266,6 +267,7 @@ mkEntity t = do
     show' <- [|show|]
     entityOrders' <- entityOrders t
     otd <- orderTypeDec t
+    puk <- mkUniqueKeys t
     tf <- mkToFilter
                 (map (\(x, _, z, y) ->
                     (name ++ upperFirst x ++ show y, y, z))
@@ -307,6 +309,7 @@ mkEntity t = do
                 $ entityFilters t
         , mkToFieldNames $ entityUniques t
         , utv
+        , puk
         ] ++ tf
         ]
 
@@ -384,3 +387,21 @@ mkDeleteCascade defs = do
             [ FunD (mkName "deleteCascade")
                 [Clause [VarP key] (NormalB $ DoE stmts) []]
             ]
+
+mkUniqueKeys :: EntityDef -> Q Dec
+mkUniqueKeys def = do
+    c <- clause
+    return $ FunD (mkName "persistUniqueKeys") [c]
+  where
+    clause = do
+        xs <- forM (entityColumns def) $ \(x, _, _) -> do
+            x' <- newName $ '_' : x
+            return (x, x')
+        let pcs = map (go xs) $ entityUniques def
+        let pat = ConP (mkName $ entityName def) $ map (VarP . snd) xs
+        return $ Clause [pat] (NormalB $ ListE pcs) []
+    go xs (name, cols) =
+        foldl (go' xs) (ConE (mkName name)) cols
+    go' xs front col =
+        let Just col' = lookup col xs
+         in front `AppE` VarE col'

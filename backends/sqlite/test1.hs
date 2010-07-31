@@ -86,3 +86,12 @@ go = do
     delete pid
     plast <- get pid
     liftIO $ print plast
+
+    _ <- insert $ Person "Gavriella" 0 Nothing
+    x@(_, Person "Gavriella" 0 Nothing) <-
+        insertBy $ Person "Gavriella" 1 $ Just "blue"
+    liftIO $ print x
+
+    False <- checkUnique $ Person "Gavriella" 2 Nothing
+    True <- checkUnique $ Person "Gavriela (it's misspelled)" 2 Nothing
+    return ()

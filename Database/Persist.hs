@@ -5,6 +5,8 @@ module Database.Persist
     , mkPersist
     , persist
     , selectList
+    , insertBy
+    , checkUnique
     ) where
 
 import Database.Persist.Base
