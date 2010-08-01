@@ -9,11 +9,13 @@ mkPersist [$persist|
 Person sql=PersonTable
     name String update Eq Ne Desc In
     age Int update "Asc" Lt "some ignored attribute"
-    color String null Eq Ne sql=mycolorfield NotIn
+    color String null Eq Ne sql=mycolorfield NotIn Ge
     PersonNameKey name
 Pet
     owner PersonId
     name String
+Null
+    field Int null Eq Ne Gt NotIn In
 |]
 
 main :: IO ()
@@ -24,6 +26,7 @@ go = do
     runMigration $ do
         migrate (undefined :: Person)
         migrate (undefined :: Pet)
+        migrate (undefined :: Null)
     deleteWhere ([] :: [Filter Person])
 
     pid <- insert $ Person "Michael" 25 Nothing
@@ -101,3 +104,17 @@ go = do
     _ <- insert $ Person "Miriam" 23 $ Just "red"
     p16 <- selectList [PersonColorNotIn [Nothing, Just "blue"]] [] 0 0
     liftIO $ print p16
+
+    p17 <- selectList [PersonColorGe "blue"] [] 0 0
+    liftIO $ print p17
+
+    deleteWhere ([] :: [Filter Null])
+    _ <- insert $ Null $ Just 5
+    _ <- insert $ Null Nothing
+    [(_, Null (Just 5))] <- selectList [NullFieldGt 4] [] 0 0
+    [] <- selectList [NullFieldGt 5] [] 0 0
+    [(_, Null (Just 5))] <- selectList [NullFieldEq $ Just 5] [] 0 0
+    [(_, Null Nothing)] <- selectList [NullFieldNe $ Just 5] [] 0 0
+    [(_, Null Nothing)] <- selectList [NullFieldEq Nothing] [] 0 0
+    [(_, Null (Just 5))] <- selectList [NullFieldNe Nothing] [] 0 0
+    return ()

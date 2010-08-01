@@ -267,7 +267,46 @@ dummyFromKey :: Key v -> v
 dummyFromKey _ = error "dummyFromKey"
 
 filterClause :: PersistEntity val => Filter val -> String
-filterClause f = if isNull then nullClause else mainClause
+filterClause f =
+    case (isNull, persistFilterToFilter f) of
+        (True, Eq) -> name ++ " IS NULL"
+        (True, Ne) -> name ++ " IS NOT NULL"
+        (False, Ne) -> concat
+            [ "("
+            , name
+            , " IS NULL OR "
+            , name
+            , "<>?)"
+            ]
+        (False, In) -> name ++ " IN " ++ qmarks
+        (True, In) -> concat
+            [ "("
+            , name
+            , " IS NULL OR "
+            , name
+            , " IN "
+            , qmarks
+            , ")"
+            ]
+        (False, NotIn) -> concat
+            [ "("
+            , name
+            , " IS NULL OR "
+            , name
+            , " NOT IN "
+            , qmarks
+            , ")"
+            ]
+        (True, NotIn) -> concat
+            [ "("
+            , name
+            , " IS NOT NULL AND "
+            , name
+            , " NOT IN "
+            , qmarks
+            , ")"
+            ]
+        _ -> name ++ showSqlFilter (persistFilterToFilter f) ++ "?"
   where
     isNull = any (== PersistNull)
            $ either return id
@@ -279,14 +318,6 @@ filterClause f = if isNull then nullClause else mainClause
                 Right x ->
                     let x' = filter (/= PersistNull) x
                      in '(' : intercalate "," (map (const "?") x') ++ ")"
-    mainClause = name ++ showSqlFilter (persistFilterToFilter f) ++ qmarks
-    nullClause =
-        case persistFilterToFilter f of
-          Eq -> '(' : mainClause ++ " OR " ++ name ++ " IS NULL)"
-          In -> '(' : mainClause ++ " OR " ++ name ++ " IS NULL)"
-          Ne -> '(' : mainClause ++ " OR " ++ name ++ " IS NOT NULL)"
-          NotIn -> '(' : mainClause ++ " AND " ++ name ++ " IS NOT NULL)"
-          _ -> mainClause
     showSqlFilter Eq = "="
     showSqlFilter Ne = "<>"
     showSqlFilter Gt = ">"
@@ -376,5 +407,6 @@ getFiltsValues :: PersistEntity val => [Filter val] -> [PersistValue]
 getFiltsValues =
     concatMap $ go . persistFilterToValue
   where
+    go (Left PersistNull) = []
     go (Left x) = [x]
     go (Right xs) = filter (/= PersistNull) xs

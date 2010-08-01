@@ -186,7 +186,6 @@ prepareError (Connection database) text' = do
                                  _ -> return $ Right error))
 prepare :: Connection -> String -> IO Statement
 prepare database text = do
-  putStrLn text
   statementOrError <- prepareError database text
   case statementOrError of
     Left statement -> return statement

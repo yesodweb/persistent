@@ -79,8 +79,16 @@ mkFilter :: String -> (String, String, Bool, PersistFilter) -> Con
 mkFilter x (s, ty, isNull', filt) =
     NormalC (mkName $ x ++ upperFirst s ++ show filt) [(NotStrict, ty'')]
   where
-    ty' = pairToType (ty, isNull')
+    ty' = pairToType (ty, isNull' && isNullableFilter filt)
     ty'' = if isFilterList filt then ListT `AppT` ty' else ty'
+    isNullableFilter Eq = True
+    isNullableFilter Ne = True
+    isNullableFilter In = True
+    isNullableFilter NotIn = True
+    isNullableFilter Lt = False
+    isNullableFilter Le = False
+    isNullableFilter Gt = False
+    isNullableFilter Ge = False
 
 updateTypeDec :: EntityDef -> Dec
 updateTypeDec t =
