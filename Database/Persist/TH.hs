@@ -70,10 +70,17 @@ entityFilters = mapMaybe go' . concatMap go . entityColumns
             (x, _):_ -> Just x
             [] -> Nothing
 
+isFilterList :: PersistFilter -> Bool
+isFilterList In = True
+isFilterList NotIn = True
+isFilterList _ = False
+
 mkFilter :: String -> (String, String, Bool, PersistFilter) -> Con
 mkFilter x (s, ty, isNull', filt) =
-    NormalC (mkName $ x ++ upperFirst s ++ show filt)
-                       [(NotStrict, pairToType (ty, isNull'))]
+    NormalC (mkName $ x ++ upperFirst s ++ show filt) [(NotStrict, ty'')]
+  where
+    ty' = pairToType (ty, isNull')
+    ty'' = if isFilterList filt then ListT `AppT` ty' else ty'
 
 updateTypeDec :: EntityDef -> Dec
 updateTypeDec t =
@@ -197,10 +204,9 @@ mkToOrder pairs =
 mkToFilter :: [(String, PersistFilter, Bool)] -> Q [Dec]
 mkToFilter pairs = do
     c1 <- mapM go pairs
-    let c2 = concatMap go' pairs
+    let _FIXMEc2 = concatMap go' pairs
     return
         [ FunD (mkName "persistFilterToFilter") $ degen c1
-        , FunD (mkName "persistFilterIsNull") $ degen c2
         ]
   where
     go (constr, pf, _) = do
@@ -224,6 +230,20 @@ mkToValue func = FunD (mkName func) . degen . map go
          in Clause [ConP (mkName constr) [VarP x]]
                    (NormalB $ VarE (mkName "toPersistValue") `AppE` VarE x)
                    []
+
+mkToFiltValue :: String -> [(String, Bool)] -> Q Dec
+mkToFiltValue func pairs = do
+    left <- [|Left . toPersistValue|]
+    right <- [|Right . map toPersistValue|]
+    clauses <- mapM (go left right) pairs
+    return . FunD (mkName func) . degen $ clauses
+  where
+    go left right (constr, isList) = do
+        x <- newName "x"
+        return
+            $ Clause [ConP (mkName constr) [VarP x]]
+                (NormalB $ (if isList then right else left) `AppE` VarE x)
+                []
 
 mkHalfDefined :: String -> Int -> Dec
 mkHalfDefined constr count' =
@@ -272,6 +292,10 @@ mkEntity t = do
                 (map (\(x, _, z, y) ->
                     (name ++ upperFirst x ++ show y, y, z))
                 $ entityFilters t)
+    ftv <- mkToFiltValue "persistFilterToValue"
+                $ map (\(x, _, _, y) ->
+                    (name ++ upperFirst x ++ show y, isFilterList y))
+                $ entityFilters t
     return
       [ dataTypeDec t
       , TySynD (mkName $ entityName t ++ "Id") [] $
@@ -304,9 +328,7 @@ mkEntity t = do
         , mkToFieldName "persistFilterToFieldName"
                 $ map (\(x, _, _, y) -> (name ++ upperFirst x ++ show y, x))
                 $ entityFilters t
-        , mkToValue "persistFilterToValue"
-                $ map (\(x, _, _, y) -> name ++ upperFirst x ++ show y)
-                $ entityFilters t
+        , ftv
         , mkToFieldNames $ entityUniques t
         , utv
         , puk

@@ -4,13 +4,12 @@
 import Prelude hiding (filter)
 import Database.Persist.Sqlite
 import Control.Monad.IO.Class
-import Database.Persist.Pool
 
 mkPersist [$persist|
 Person sql=PersonTable
-    name String update Eq Ne Desc
+    name String update Eq Ne Desc In
     age Int update "Asc" Lt "some ignored attribute"
-    color String null Eq Ne sql=mycolorfield
+    color String null Eq Ne sql=mycolorfield NotIn
     PersonNameKey name
 Pet
     owner PersonId
@@ -95,3 +94,10 @@ go = do
     False <- checkUnique $ Person "Gavriella" 2 Nothing
     True <- checkUnique $ Person "Gavriela (it's misspelled)" 2 Nothing
     return ()
+
+    p15 <- selectList [PersonNameIn $ words "Michael Gavriella"] [] 0 0
+    liftIO $ print p15
+
+    _ <- insert $ Person "Miriam" 23 $ Just "red"
+    p16 <- selectList [PersonColorNotIn [Nothing, Just "blue"]] [] 0 0
+    liftIO $ print p16

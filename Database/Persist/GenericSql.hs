@@ -132,7 +132,7 @@ instance MonadCatchIO m => PersistBackend (SqlPersist m) where
                     else " WHERE " ++
                          intercalate " AND " (map filterClause filts)
         let sql = "SELECT COUNT(*) FROM " ++ tableName t ++ wher
-        withStmt' sql (map persistFilterToValue filts) $ \pop -> do
+        withStmt' sql (getFiltsValues filts) $ \pop -> do
             Just [PersistInt64 i] <- pop
             return $ fromIntegral i
       where
@@ -157,7 +157,7 @@ instance MonadCatchIO m => PersistBackend (SqlPersist m) where
                    : (map (\(x, _, _) -> x) $ tableColumns t)
         let sql = "SELECT " ++ cols ++ " FROM " ++ tableName t ++ wher ++ ord
                   ++ lim ++ off
-        withStmt' sql (map persistFilterToValue filts) $ go seed0
+        withStmt' sql (getFiltsValues filts) $ go seed0
       where
         t = entityDef $ dummyFromFilts filts
         orderClause o = getFieldName t (persistOrderToFieldName o)
@@ -195,7 +195,7 @@ instance MonadCatchIO m => PersistBackend (SqlPersist m) where
                     else " WHERE " ++
                          intercalate " AND " (map filterClause filts)
             sql = "DELETE FROM " ++ tableName t ++ wher
-        execute' sql $ map persistFilterToValue filts
+        execute' sql $ getFiltsValues filts
 
     deleteBy uniq =
         execute' sql $ persistUniqueToValues uniq
@@ -224,8 +224,7 @@ instance MonadCatchIO m => PersistBackend (SqlPersist m) where
                          intercalate " AND " (map filterClause filts)
         let sql = "UPDATE " ++ tableName t ++ " SET " ++
                   intercalate "," (map (++ "=?") $ map go upds) ++ wher
-        let dat = map persistUpdateToValue upds
-               ++ map persistFilterToValue filts
+        let dat = map persistUpdateToValue upds ++ getFiltsValues filts
         execute' sql dat
       where
         t = entityDef $ dummyFromFilts filts
@@ -268,15 +267,25 @@ dummyFromKey :: Key v -> v
 dummyFromKey _ = error "dummyFromKey"
 
 filterClause :: PersistEntity val => Filter val -> String
-filterClause f = if persistFilterIsNull f then nullClause else mainClause
+filterClause f = if isNull then nullClause else mainClause
   where
+    isNull = any (== PersistNull)
+           $ either return id
+           $ persistFilterToValue f
     t = entityDef $ dummyFromFilts [f]
     name = getFieldName t $ persistFilterToFieldName f
-    mainClause = name ++ showSqlFilter (persistFilterToFilter f) ++ "?"
+    qmarks = case persistFilterToValue f of
+                Left _ -> "?"
+                Right x ->
+                    let x' = filter (/= PersistNull) x
+                     in '(' : intercalate "," (map (const "?") x') ++ ")"
+    mainClause = name ++ showSqlFilter (persistFilterToFilter f) ++ qmarks
     nullClause =
         case persistFilterToFilter f of
           Eq -> '(' : mainClause ++ " OR " ++ name ++ " IS NULL)"
+          In -> '(' : mainClause ++ " OR " ++ name ++ " IS NULL)"
           Ne -> '(' : mainClause ++ " OR " ++ name ++ " IS NOT NULL)"
+          NotIn -> '(' : mainClause ++ " AND " ++ name ++ " IS NOT NULL)"
           _ -> mainClause
     showSqlFilter Eq = "="
     showSqlFilter Ne = "<>"
@@ -284,6 +293,8 @@ filterClause f = if persistFilterIsNull f then nullClause else mainClause
     showSqlFilter Lt = "<"
     showSqlFilter Ge = ">="
     showSqlFilter Le = "<="
+    showSqlFilter In = " IN "
+    showSqlFilter NotIn = " NOT IN "
 
 dummyFromFilts :: [Filter v] -> v
 dummyFromFilts _ = error "dummyFromFilts"
@@ -360,3 +371,10 @@ migrate val = do
     let getter = getStmt' conn
     res <- liftIO $ migrateSql conn getter val
     either tell (lift . tell) res
+
+getFiltsValues :: PersistEntity val => [Filter val] -> [PersistValue]
+getFiltsValues =
+    concatMap $ go . persistFilterToValue
+  where
+    go (Left x) = [x]
+    go (Right xs) = filter (/= PersistNull) xs

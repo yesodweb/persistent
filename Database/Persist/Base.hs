@@ -208,8 +208,7 @@ class PersistEntity val where
 
     persistFilterToFieldName :: Filter val -> String
     persistFilterToFilter :: Filter val -> PersistFilter
-    persistFilterIsNull :: Filter val -> Bool
-    persistFilterToValue :: Filter val -> PersistValue
+    persistFilterToValue :: Filter val -> Either PersistValue [PersistValue]
 
     persistOrderToFieldName :: Order val -> String
     persistOrderToOrder :: Order val -> PersistOrder
@@ -335,7 +334,7 @@ instance Lift EntityDef where
         e' <- lift e
         return $ x `AppE` a' `AppE` b' `AppE` c' `AppE` d' `AppE` e'
 
-data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le
+data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le | In | NotIn
     deriving (Read, Show)
 
 instance Lift PersistFilter where
@@ -345,6 +344,8 @@ instance Lift PersistFilter where
     lift Lt = [|Lt|]
     lift Ge = [|Ge|]
     lift Le = [|Le|]
+    lift In = [|In|]
+    lift NotIn = [|NotIn|]
 
 data PersistOrder = Asc | Desc
     deriving (Read, Show)
