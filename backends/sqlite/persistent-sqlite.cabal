@@ -12,13 +12,6 @@ cabal-version:   >= 1.6
 build-type:      Simple
 homepage:        http://docs.yesodweb.com/persistent/
 
-flag nolib
-  description: Skip building the library
-  default: False
-flag buildtests
-  description: Build the executable to run unit tests
-  default: False
-
 library
     build-depends:   base >= 4 && < 5,
                      template-haskell >= 2.4 && < 2.5,
