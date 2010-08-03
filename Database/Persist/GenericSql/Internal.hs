@@ -39,6 +39,7 @@ data Connection = Connection
     , begin :: (String -> IO Statement) -> IO ()
     , commit :: (String -> IO Statement) -> IO ()
     , rollback :: (String -> IO Statement) -> IO ()
+    , likeOperator :: String
     }
 data Statement = Statement
     { finalize :: IO ()

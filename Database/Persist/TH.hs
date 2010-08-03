@@ -80,7 +80,9 @@ mkFilter x (s, ty, isNull', filt) =
     NormalC (mkName $ x ++ upperFirst s ++ show filt) [(NotStrict, ty'')]
   where
     ty' = pairToType (ty, isNull' && isNullableFilter filt)
-    ty'' = if isFilterList filt then ListT `AppT` ty' else ty'
+    ty'' = case filt of
+            Like -> ConT ''String
+            _ -> if isFilterList filt then ListT `AppT` ty' else ty'
     isNullableFilter Eq = True
     isNullableFilter Ne = True
     isNullableFilter In = True
@@ -89,6 +91,7 @@ mkFilter x (s, ty, isNull', filt) =
     isNullableFilter Le = False
     isNullableFilter Gt = False
     isNullableFilter Ge = False
+    isNullableFilter Like = error "isNullableFilter Like"
 
 updateTypeDec :: EntityDef -> Dec
 updateTypeDec t =

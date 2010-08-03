@@ -7,7 +7,7 @@ import Control.Monad.IO.Class
 
 mkPersist [$persist|
 Person sql=PersonTable
-    name String update Eq Ne Desc In
+    name String update Eq Ne Desc In Like
     age Int update "Asc" Lt "some ignored attribute"
     color String null Eq Ne sql=mycolorfield NotIn Ge
     PersonNameKey name
@@ -108,6 +108,9 @@ go = do
     p17 <- selectList [PersonColorGe "blue"] [] 0 0
     liftIO $ print p17
 
+    p18 <- selectList [PersonNameLike "%vrIe%"] [] 0 0
+    liftIO $ print p18
+
     deleteWhere ([] :: [Filter Null])
     _ <- insert $ Null $ Just 5
     _ <- insert $ Null Nothing
@@ -117,4 +120,5 @@ go = do
     [(_, Null Nothing)] <- selectList [NullFieldNe $ Just 5] [] 0 0
     [(_, Null Nothing)] <- selectList [NullFieldEq Nothing] [] 0 0
     [(_, Null (Just 5))] <- selectList [NullFieldNe Nothing] [] 0 0
+
     return ()
