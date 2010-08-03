@@ -1,5 +1,5 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PackageImports #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 -- | This is a helper module for creating SQL backends. Regular users do not
 -- need to use this module.
 module Database.Persist.GenericSql
@@ -23,57 +23,31 @@ import Database.Persist.Base
 import Data.List (intercalate)
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader
-import Control.Applicative (Applicative)
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Database.Persist.Pool
 import Control.Monad.Trans.Writer
 import System.IO
 import Database.Persist.GenericSql.Internal
+import qualified Database.Persist.GenericSql.Raw as R
+import Database.Persist.GenericSql.Raw (SqlPersist (..))
 import "MonadCatchIO-transformers" Control.Monad.CatchIO
-import Data.IORef
-import qualified Data.Map as Map
 import Control.Monad (liftM)
 
 type ConnectionPool = Pool Connection
 
 withStmt' :: MonadCatchIO m => String -> [PersistValue]
-          -> (RowPopper (SqlPersist m) -> SqlPersist m a) -> SqlPersist m a
-withStmt' sql vals pop = do
-    stmt <- getStmt sql
-    ret <- withStmt stmt vals pop
-    liftIO $ reset stmt
-    return ret
+         -> (RowPopper (SqlPersist m) -> SqlPersist m a) -> SqlPersist m a
+withStmt' = R.withStmt
 
 execute' :: MonadIO m => String -> [PersistValue] -> SqlPersist m ()
-execute' sql vals = do
-    stmt <- getStmt sql
-    liftIO $ execute stmt vals
-    liftIO $ reset stmt
-
-getStmt :: MonadIO m => String -> SqlPersist m Statement
-getStmt sql = do
-    conn <- SqlPersist ask
-    liftIO $ getStmt' conn sql
-
-getStmt' :: Connection -> String -> IO Statement
-getStmt' conn sql = do
-    smap <- liftIO $ readIORef $ stmtMap conn
-    case Map.lookup sql smap of
-        Just stmt -> return stmt
-        Nothing -> do
-            stmt <- liftIO $ prepare conn sql
-            liftIO $ writeIORef (stmtMap conn) $ Map.insert sql stmt smap
-            return stmt
-
-newtype SqlPersist m a = SqlPersist (ReaderT Connection m a)
-    deriving (Monad, MonadIO, MonadCatchIO, MonadTrans, Functor, Applicative)
+execute' = R.execute
 
 runSqlPool :: MonadCatchIO m => SqlPersist m a -> Pool Connection -> m a
 runSqlPool r pconn = withPool' pconn $ runSqlConn r
 
 runSqlConn :: MonadCatchIO m => SqlPersist m a -> Connection -> m a
 runSqlConn (SqlPersist r) conn = do
-    let getter = getStmt' conn
+    let getter = R.getStmt' conn
     liftIO $ begin conn getter
     x <- onException
             (runReaderT r conn)
@@ -387,7 +361,7 @@ runMigration m = do
             , "The following actions are considered unsafe:\n\n"
             , unlines $ map ("    " ++) $ errs
             ]
-  
+
 runMigrationUnsafe :: MonadCatchIO m
                    => Migration (SqlPersist m)
                    -> SqlPersist m ()
@@ -405,7 +379,7 @@ migrate :: (MonadCatchIO m, PersistEntity val)
         -> Migration (SqlPersist m)
 migrate val = do
     conn <- lift $ lift $ SqlPersist ask
-    let getter = getStmt' conn
+    let getter = R.getStmt' conn
     res <- liftIO $ migrateSql conn getter val
     either tell (lift . tell) res
 
