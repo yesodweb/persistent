@@ -334,7 +334,7 @@ instance Lift EntityDef where
         e' <- lift e
         return $ x `AppE` a' `AppE` b' `AppE` c' `AppE` d' `AppE` e'
 
-data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le | In | NotIn | Like
+data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le | In | NotIn
     deriving (Read, Show)
 
 instance Lift PersistFilter where
@@ -346,7 +346,6 @@ instance Lift PersistFilter where
     lift Le = [|Le|]
     lift In = [|In|]
     lift NotIn = [|NotIn|]
-    lift Like = [|Like|]
 
 data PersistOrder = Asc | Desc
     deriving (Read, Show)

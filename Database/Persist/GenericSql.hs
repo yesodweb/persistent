@@ -101,11 +101,10 @@ instance MonadCatchIO m => PersistBackend (SqlPersist m) where
                         Right v -> return $ Just v
 
     count filts = do
-        conn <- SqlPersist ask
         let wher = if null filts
                     then ""
                     else " WHERE " ++
-                         intercalate " AND " (map (filterClause conn) filts)
+                         intercalate " AND " (map filterClause filts)
         let sql = "SELECT COUNT(*) FROM " ++ tableName t ++ wher
         withStmt' sql (getFiltsValues filts) $ \pop -> do
             Just [PersistInt64 i] <- pop
@@ -114,11 +113,10 @@ instance MonadCatchIO m => PersistBackend (SqlPersist m) where
         t = entityDef $ dummyFromFilts filts
 
     select filts ords limit offset seed0 iter = do
-        conn <- SqlPersist ask
         let wher = if null filts
                     then ""
                     else " WHERE " ++
-                         intercalate " AND " (map (filterClause conn) filts)
+                         intercalate " AND " (map filterClause filts)
             ord = if null ords
                     then ""
                     else " ORDER BY " ++
@@ -165,12 +163,11 @@ instance MonadCatchIO m => PersistBackend (SqlPersist m) where
         sql = "DELETE FROM " ++ tableName t ++ " WHERE id=?"
 
     deleteWhere filts = do
-        conn <- SqlPersist ask
         let t = entityDef $ dummyFromFilts filts
         let wher = if null filts
                     then ""
                     else " WHERE " ++
-                         intercalate " AND " (map (filterClause conn) filts)
+                         intercalate " AND " (map filterClause filts)
             sql = "DELETE FROM " ++ tableName t ++ wher
         execute' sql $ getFiltsValues filts
 
@@ -195,11 +192,10 @@ instance MonadCatchIO m => PersistBackend (SqlPersist m) where
 
     updateWhere _ [] = return ()
     updateWhere filts upds = do
-        conn <- SqlPersist ask
         let wher = if null filts
                     then ""
                     else " WHERE " ++
-                         intercalate " AND " (map (filterClause conn) filts)
+                         intercalate " AND " (map filterClause filts)
         let sql = "UPDATE " ++ tableName t ++ " SET " ++
                   intercalate "," (map (++ "=?") $ map go upds) ++ wher
         let dat = map persistUpdateToValue upds ++ getFiltsValues filts
@@ -244,10 +240,9 @@ tableColumn t s = go $ entityColumns t
 dummyFromKey :: Key v -> v
 dummyFromKey _ = error "dummyFromKey"
 
-filterClause :: PersistEntity val => Connection -> Filter val -> String
-filterClause conn f =
+filterClause :: PersistEntity val => Filter val -> String
+filterClause f =
     case (isNull, persistFilterToFilter f) of
-        (_, Like) -> name ++ ' ' : likeOperator conn ++ " ?"
         (True, Eq) -> name ++ " IS NULL"
         (True, Ne) -> name ++ " IS NOT NULL"
         (False, Ne) -> concat
@@ -305,7 +300,6 @@ filterClause conn f =
     showSqlFilter Le = "<="
     showSqlFilter In = " IN "
     showSqlFilter NotIn = " NOT IN "
-    showSqlFilter Like = error "showSqlFilter Like"
 
 dummyFromFilts :: [Filter v] -> v
 dummyFromFilts _ = error "dummyFromFilts"

@@ -49,7 +49,6 @@ open' s = do
         , begin = const $ return ()
         , commit = const $ H.commit conn
         , rollback = const $ H.rollback conn
-        , likeOperator = "ILIKE"
         }
 
 prepare' :: H.Connection -> String -> IO Statement
