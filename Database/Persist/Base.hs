@@ -269,6 +269,13 @@ class Monad m => PersistBackend m where
            -> (a -> (Key val, val) -> m (Either a a))
            -> m (Either a a)
 
+    -- | Get the 'Key's of all records matching the given criterion.
+    selectKeys :: PersistEntity val
+               => [Filter val]
+               -> a -- ^ iteration seed
+               -> (a -> Key val -> m (Either a a))
+               -> m (Either a a)
+
     -- | The total number of records fulfilling the given criterion.
     count :: PersistEntity val => [Filter val] -> m Int
 
@@ -360,6 +367,6 @@ class PersistEntity a => DeleteCascade a where
 deleteCascadeWhere :: (DeleteCascade a, PersistBackend m)
                    => [Filter a] -> m ()
 deleteCascadeWhere filts =
-    select filts [] 0 0 () go >> return ()
+    selectKeys filts () go >> return ()
   where
-    go () (key, _) = deleteCascade key >> return (Right ())
+    go () key = deleteCascade key >> return (Right ())

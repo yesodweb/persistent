@@ -156,6 +156,27 @@ instance MonadCatchIO m => PersistBackend (SqlPersist m) where
                                 Left seed' -> return $ Left seed'
                                 Right seed' -> go seed' pop
 
+
+    selectKeys filts seed0 iter = do
+        let wher = if null filts
+                    then ""
+                    else " WHERE " ++
+                         intercalate " AND " (map filterClause filts)
+        let sql = "SELECT id FROM " ++ tableName t ++ wher
+        withStmt' sql (getFiltsValues filts) $ go seed0
+      where
+        t = entityDef $ dummyFromFilts filts
+        go seed pop = do
+            res <- pop
+            case res of
+                Nothing -> return $ Right seed
+                Just [PersistInt64 i] -> do
+                    eseed <- iter seed $ toPersistKey i
+                    case eseed of
+                        Left seed' -> return $ Left seed'
+                        Right seed' -> go seed' pop
+                Just y -> error $ "Unexpected in selectKeys: " ++ show y
+
     delete k =
         execute' sql [PersistInt64 $ fromPersistKey k]
       where
