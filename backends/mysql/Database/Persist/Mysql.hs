@@ -69,13 +69,26 @@ prepare' conn sql = do
     stmt <- M.prepare conn sql
     return Statement
         { finalize = M.finalize stmt
-        , reset = return ()
+        , reset = M.reset stmt
         , execute = execute' stmt
         , withStmt = withStmt' stmt
         }
 
-execute' = undefined
-withStmt' = undefined
+execute' :: M.Statement -> [PersistValue] -> IO ()
+execute' stmt vals = do
+    M.bindParams stmt vals
+    M.execute stmt
+
+withStmt' :: MonadCatchIO m => M.Statement -> [PersistValue]
+          -> (RowPopper m -> m a) -> m a
+withStmt' stmt vals f = do
+    liftIO $ M.bindParams stmt vals
+    liftIO $ M.execute stmt
+    res <- f go
+    liftIO $ M.reset stmt
+    return res
+  where
+    go = return Nothing -- FIXME
 
 migrate' :: PersistEntity val
          => (String -> IO Statement)

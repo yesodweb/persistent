@@ -4,12 +4,17 @@ module Database.Mysql
     , open
     , close
     , Connection
+    , Statement
     , prepare
     , finalize
+    , bindParams
+    , execute
+    , reset
     ) where
 
 import Foreign.C
 import Foreign.Ptr
+import Database.Persist.Base
 
 data MysqlSettings = MysqlSettings
     { mysqlHost :: String
@@ -21,6 +26,7 @@ data MysqlSettings = MysqlSettings
 
 newtype Connection = Connection (Ptr ())
 newtype Statement = Statement (Ptr ())
+newtype Bind = Bind (Ptr ())
 
 foreign import ccall "mysql_init"
     c'init :: Ptr () -> IO Connection
@@ -73,3 +79,14 @@ prepare conn sql' = withCStringLen sql' $ \(sql, len') -> do
             tellError conn $ "prepare " ++ sql'
 finalize :: Statement -> IO ()
 finalize stmt = c'stmtClose stmt >> return ()
+
+foreign import ccall "mysql_stmt_execute"
+    execute :: Statement -> IO ()
+
+foreign import ccall "mysql_stmt_bind_param"
+    c'bindParam :: Statement -> Bind -> IO CInt
+bindParams :: Statement -> [PersistValue] -> IO ()
+bindParams _ _ = error "bindParams"
+
+foreign import ccall "mysql_stmt_reset"
+    reset :: Statement -> IO ()
