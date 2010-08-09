@@ -36,7 +36,7 @@ import qualified Data.ByteString.UTF8 as BSU
 import Control.Applicative
 import Data.Typeable (Typeable)
 import Data.Int (Int64)
-import Text.Blaze
+import Text.Hamlet
 import qualified Data.Text as T
 import qualified Data.ByteString as S
 import qualified Data.ByteString.Lazy as L
@@ -100,7 +100,7 @@ instance PersistField T.Text where
     fromPersistValue = fmap T.pack . fromPersistValue
     sqlType _ = SqlString
 
-instance PersistField (Html ()) where
+instance PersistField Html where
     toPersistValue = PersistByteString . S.concat . L.toChunks . renderHtml
     fromPersistValue = fmap unsafeByteString . fromPersistValue
     sqlType _ = SqlString
