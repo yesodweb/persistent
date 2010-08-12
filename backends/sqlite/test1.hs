@@ -118,3 +118,9 @@ go = do
     [(_, Null Nothing)] <- selectList [NullFieldEq Nothing] [] 0 0
     [(_, Null (Just 5))] <- selectList [NullFieldNe Nothing] [] 0 0
     return ()
+
+    _ <- selectList ([] :: [Filter Person]) [] 0 0
+    _ <- selectList ([] :: [Filter Person]) [] 10 0
+    _ <- selectList ([] :: [Filter Person]) [] 10 10
+    _ <- selectList ([] :: [Filter Person]) [] 0 10
+    return ()

@@ -121,9 +121,9 @@ instance MonadCatchIO m => PersistBackend (SqlPersist m) where
                     then ""
                     else " ORDER BY " ++
                          intercalate "," (map orderClause ords)
-            lim = if limit == 0
+            lim = if limit == 0 && offset == 0
                     then ""
-                    else " LIMIT " ++ show lim
+                    else " LIMIT " ++ show limit
             off = if offset == 0
                     then ""
                     else " OFFSET " ++ show offset
