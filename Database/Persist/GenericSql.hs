@@ -263,18 +263,19 @@ dummyFromKey _ = error "dummyFromKey"
 
 filterClause :: PersistEntity val => Filter val -> String
 filterClause f =
-    case (isNull, persistFilterToFilter f) of
-        (True, Eq) -> name ++ " IS NULL"
-        (True, Ne) -> name ++ " IS NOT NULL"
-        (False, Ne) -> concat
+    case (isNull, persistFilterToFilter f, varCount) of
+        (True, Eq, _) -> name ++ " IS NULL"
+        (True, Ne, _) -> name ++ " IS NOT NULL"
+        (False, Ne, _) -> concat
             [ "("
             , name
             , " IS NULL OR "
             , name
             , "<>?)"
             ]
-        (False, In) -> name ++ " IN " ++ qmarks
-        (True, In) -> concat
+        (_, In, 0) -> "FALSE"
+        (False, In, _) -> name ++ " IN " ++ qmarks
+        (True, In, _) -> concat
             [ "("
             , name
             , " IS NULL OR "
@@ -283,7 +284,8 @@ filterClause f =
             , qmarks
             , ")"
             ]
-        (False, NotIn) -> concat
+        (_, NotIn, 0) -> "TRUE"
+        (False, NotIn, _) -> concat
             [ "("
             , name
             , " IS NULL OR "
@@ -292,7 +294,7 @@ filterClause f =
             , qmarks
             , ")"
             ]
-        (True, NotIn) -> concat
+        (True, NotIn, _) -> concat
             [ "("
             , name
             , " IS NOT NULL AND "
@@ -313,6 +315,9 @@ filterClause f =
                 Right x ->
                     let x' = filter (/= PersistNull) x
                      in '(' : intercalate "," (map (const "?") x') ++ ")"
+    varCount = case persistFilterToValue f of
+                Left _ -> 1
+                Right x -> length x
     showSqlFilter Eq = "="
     showSqlFilter Ne = "<>"
     showSqlFilter Gt = ">"
