@@ -40,7 +40,7 @@ import Text.Hamlet
 import qualified Data.Text as T
 import qualified Data.ByteString as S
 import qualified Data.ByteString.Lazy as L
-import Control.Monad (liftM)
+import Data.Enumerator
 
 -- | A raw value which can be stored in any backend and can be marshalled to
 -- and from a 'PersistField'.
@@ -265,16 +265,12 @@ class Monad m => PersistBackend m where
            -> [Order val]
            -> Int -- ^ limit
            -> Int -- ^ offset
-           -> a -- ^ iteration seed
-           -> (a -> (Key val, val) -> m (Either a a))
-           -> m (Either a a)
+           -> Enumerator String (Key val, val) m a
 
     -- | Get the 'Key's of all records matching the given criterion.
     selectKeys :: PersistEntity val
                => [Filter val]
-               -> a -- ^ iteration seed
-               -> (a -> Key val -> m (Either a a))
-               -> m (Either a a)
+               -> Enumerator String (Key val) m a
 
     -- | The total number of records fulfilling the given criterion.
     count :: PersistEntity val => [Filter val] -> m Int
@@ -317,10 +313,15 @@ selectList :: (PersistEntity val, PersistBackend m, Monad m)
            -> Int -- ^ limit
            -> Int -- ^ offset
            -> m [(Key val, val)]
-selectList a b c d =
-    either ($ []) ($ []) `liftM` select a b c d id iter
+selectList a b c d = do
+    res <- run $ select a b c d $ Continue $ iter id
+    case res of
+        Left e -> error e
+        Right x -> return x
   where
-    iter front a' = return $ Right $ front . (:) a'
+    iter front EOF = Iteratee $ return $ Yield (front []) EOF
+    iter front (Chunks []) = Iteratee $ return $ Continue $ iter front
+    iter front (Chunks x) = Iteratee $ return $ Continue $ iter (front . (x ++))
 
 data EntityDef = EntityDef
     { entityName    :: String
@@ -366,7 +367,14 @@ class PersistEntity a => DeleteCascade a where
 
 deleteCascadeWhere :: (DeleteCascade a, PersistBackend m)
                    => [Filter a] -> m ()
-deleteCascadeWhere filts =
-    selectKeys filts () go >> return ()
+deleteCascadeWhere filts = do
+    res <- run $ selectKeys filts $ Continue iter
+    case res of
+        Left e -> error e
+        Right () -> return ()
   where
-    go () key = deleteCascade key >> return (Right ())
+    --go () key = deleteCascade key >> return (Right ())
+    iter EOF = Iteratee $ return $ Yield () EOF
+    iter (Chunks keys) = Iteratee $ do
+        mapM_ deleteCascade keys
+        return $ Continue iter

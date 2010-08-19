@@ -32,6 +32,7 @@ import qualified Database.Persist.GenericSql.Raw as R
 import Database.Persist.GenericSql.Raw (SqlPersist (..))
 import "MonadCatchIO-transformers" Control.Monad.CatchIO
 import Control.Monad (liftM)
+import Data.Enumerator hiding (map, length)
 
 type ConnectionPool = Pool Connection
 
@@ -112,27 +113,21 @@ instance MonadCatchIO m => PersistBackend (SqlPersist m) where
       where
         t = entityDef $ dummyFromFilts filts
 
-    select filts ords limit offset seed0 iter = do
-        let wher = if null filts
-                    then ""
-                    else " WHERE " ++
-                         intercalate " AND " (map filterClause filts)
-            ord = if null ords
-                    then ""
-                    else " ORDER BY " ++
-                         intercalate "," (map orderClause ords)
-            lim = if limit == 0 && offset == 0
-                    then ""
-                    else " LIMIT " ++ show limit
-            off = if offset == 0
-                    then ""
-                    else " OFFSET " ++ show offset
-        let cols = intercalate "," $ "id"
-                   : (map (\(x, _, _) -> x) $ tableColumns t)
-        let sql = "SELECT " ++ cols ++ " FROM " ++ tableName t ++ wher ++ ord
-                  ++ lim ++ off
-        withStmt' sql (getFiltsValues filts) $ go seed0
+    select filts ords limit offset =
+        Iteratee . start
       where
+        start = withStmt' sql (getFiltsValues filts) . loop
+        loop (Continue k) pop = do
+            res <- pop
+            case res of
+                Nothing -> return $ Continue k
+                Just vals -> do
+                    case fromPersistValues' vals of
+                        Left s -> return $ Error s
+                        Right row -> do
+                            step <- runIteratee $ k $ Chunks [row]
+                            loop step pop
+        loop step _ = return step
         t = entityDef $ dummyFromFilts filts
         orderClause o = getFieldName t (persistOrderToFieldName o)
                         ++ case persistOrderToOrder o of
@@ -143,39 +138,45 @@ instance MonadCatchIO m => PersistBackend (SqlPersist m) where
                 Left e -> Left e
                 Right xs' -> Right (toPersistKey x, xs')
         fromPersistValues' _ = Left "error in fromPersistValues'"
-        go seed pop = do
-            res <- pop
-            case res of
-                Nothing -> return $ Right seed
-                Just vals -> do
-                    case fromPersistValues' vals of
-                        Left s -> error s
-                        Right row -> do
-                            eseed <- iter seed row
-                            case eseed of
-                                Left seed' -> return $ Left seed'
-                                Right seed' -> go seed' pop
-
-
-    selectKeys filts seed0 iter = do
-        let wher = if null filts
+        wher = if null filts
                     then ""
                     else " WHERE " ++
                          intercalate " AND " (map filterClause filts)
-        let sql = "SELECT id FROM " ++ tableName t ++ wher
-        withStmt' sql (getFiltsValues filts) $ go seed0
+        ord = if null ords
+                    then ""
+                    else " ORDER BY " ++
+                         intercalate "," (map orderClause ords)
+        lim = if limit == 0 && offset == 0
+                    then ""
+                    else " LIMIT " ++ show limit
+        off = if offset == 0
+                    then ""
+                    else " OFFSET " ++ show offset
+        cols = intercalate "," $ "id"
+                   : (map (\(x, _, _) -> x) $ tableColumns t)
+        sql = "SELECT " ++ cols ++ " FROM " ++ tableName t ++ wher ++ ord
+                  ++ lim ++ off
+
+
+    selectKeys filts =
+        Iteratee . start
       where
-        t = entityDef $ dummyFromFilts filts
-        go seed pop = do
+        start = withStmt' sql (getFiltsValues filts) . loop
+        loop (Continue k) pop = do
             res <- pop
             case res of
-                Nothing -> return $ Right seed
+                Nothing -> return $ Continue k
                 Just [PersistInt64 i] -> do
-                    eseed <- iter seed $ toPersistKey i
-                    case eseed of
-                        Left seed' -> return $ Left seed'
-                        Right seed' -> go seed' pop
-                Just y -> error $ "Unexpected in selectKeys: " ++ show y
+                    step <- runIteratee $ k $ Chunks [toPersistKey i]
+                    loop step pop
+                Just y -> return $ Error $ "Unexpected in selectKeys: " ++ show y
+        loop step _ = return step
+        t = entityDef $ dummyFromFilts filts
+        wher = if null filts
+                    then ""
+                    else " WHERE " ++
+                         intercalate " AND " (map filterClause filts)
+        sql = "SELECT id FROM " ++ tableName t ++ wher
 
     delete k =
         execute' sql [PersistInt64 $ fromPersistKey k]
