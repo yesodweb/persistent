@@ -314,14 +314,10 @@ selectList :: (PersistEntity val, PersistBackend m, Monad m)
            -> Int -- ^ offset
            -> m [(Key val, val)]
 selectList a b c d = do
-    res <- run $ select a b c d $ Continue $ iter id
+    res <- run $ select a b c d ==<< consume
     case res of
         Left e -> error e
         Right x -> return x
-  where
-    iter front EOF = Iteratee $ return $ Yield (front []) EOF
-    iter front (Chunks []) = Iteratee $ return $ Continue $ iter front
-    iter front (Chunks x) = Iteratee $ return $ Continue $ iter (front . (x ++))
 
 data EntityDef = EntityDef
     { entityName    :: String
@@ -373,7 +369,6 @@ deleteCascadeWhere filts = do
         Left e -> error e
         Right () -> return ()
   where
-    --go () key = deleteCascade key >> return (Right ())
     iter EOF = Iteratee $ return $ Yield () EOF
     iter (Chunks keys) = Iteratee $ do
         mapM_ deleteCascade keys
