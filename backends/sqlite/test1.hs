@@ -16,6 +16,8 @@ Pet
     name String
 Null
     field Int null Eq Ne Gt NotIn In
+Table
+    table String
 |]
 
 main :: IO ()
@@ -27,6 +29,7 @@ go = do
         migrate (undefined :: Person)
         migrate (undefined :: Pet)
         migrate (undefined :: Null)
+        migrate (undefined :: Table)
     deleteWhere ([] :: [Filter Person])
 
     pid <- insert $ Person "Michael" 25 Nothing
@@ -123,4 +126,9 @@ go = do
     _ <- selectList ([] :: [Filter Person]) [] 10 0
     _ <- selectList ([] :: [Filter Person]) [] 10 10
     _ <- selectList ([] :: [Filter Person]) [] 0 10
+
+    deleteWhere ([] :: [Filter Table])
+    _ <- insert $ Table "foo"
+    _ <- insert $ Table "bar"
+
     return ()

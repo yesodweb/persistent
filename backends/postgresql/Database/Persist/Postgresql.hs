@@ -18,14 +18,13 @@ import qualified Database.HDBC.PostgreSQL as H
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.List (intercalate)
 import "MonadCatchIO-transformers" Control.Monad.CatchIO
-import Data.Char (toLower)
 import Data.IORef
 import qualified Data.Map as Map
-import Data.ByteString.Char8 (unpack)
 import Data.Either (partitionEithers)
 import Control.Arrow
 import Data.List (sort, groupBy)
 import Data.Function (on)
+import qualified Data.ByteString.UTF8 as BSU
 
 withPostgresqlPool :: MonadCatchIO m
                    => String
@@ -49,6 +48,7 @@ open' s = do
         , begin = const $ return ()
         , commit = const $ H.commit conn
         , rollback = const $ H.rollback conn
+        , escapeName = escape
         }
 
 prepare' :: H.Connection -> String -> IO Statement
@@ -61,12 +61,12 @@ prepare' conn sql = do
         , withStmt = withStmt' stmt
         }
 
-insertSql' :: String -> [String] -> Either String (String, String)
+insertSql' :: RawName -> [RawName] -> Either String (String, String)
 insertSql' t cols = Left $ concat
     [ "INSERT INTO "
-    , t
+    , escape t
     , "("
-    , intercalate "," cols
+    , intercalate "," $ map escape cols
     , ") VALUES("
     , intercalate "," (map (const "?") cols)
     , ") RETURNING id"
@@ -120,7 +120,7 @@ migrate' :: PersistEntity val
          -> val
          -> IO (Either [String] [(Bool, String)])
 migrate' getter val = do
-    let name = map toLower $ tableName $ entityDef val
+    let name = rawTableName $ entityDef val
     old <- getColumns getter name
     case partitionEithers old of
         ([], old'') -> do
@@ -130,7 +130,7 @@ migrate' getter val = do
                 then do
                     let addTable = AddTable $ concat
                             [ "CREATE TABLE "
-                            , name
+                            , escape name
                             , "(id SERIAL PRIMARY KEY UNIQUE"
                             , concatMap (\x -> ',' : showColumn x) $ fst new
                             , ")"
@@ -147,33 +147,32 @@ migrate' getter val = do
 
 data AlterColumn = Type SqlType | IsNull | NotNull | Add Column | Drop
                  | Default String | NoDefault | Update String
-                 | AddReference String | DropReference String
-type AlterColumn' = (String, AlterColumn)
+                 | AddReference RawName | DropReference RawName
+type AlterColumn' = (RawName, AlterColumn)
 
-data AlterTable = AddUniqueConstraint String [String]
-                | DropConstraint String
-    deriving Show
+data AlterTable = AddUniqueConstraint RawName [RawName]
+                | DropConstraint RawName
 
 data AlterDB = AddTable String
-             | AlterColumn String AlterColumn'
-             | AlterTable String AlterTable
+             | AlterColumn RawName AlterColumn'
+             | AlterTable RawName AlterTable
 
 -- | Returns all of the columns in the given table currently in the database.
 getColumns :: (String -> IO Statement)
-           -> String -> IO [Either String (Either Column UniqueDef)]
+           -> RawName -> IO [Either String (Either Column UniqueDef)]
 getColumns getter name = do
     stmt <- getter $
                 "SELECT column_name,is_nullable,udt_name,column_default " ++
                 "FROM information_schema.columns " ++
                 "WHERE table_name=? AND column_name <> 'id'"
-    cs <- withStmt stmt [PersistString name] helper
+    cs <- withStmt stmt [PersistString $ unRawName name] helper
     stmt' <- getter $ concat
         [ "SELECT constraint_name, column_name "
         , "FROM information_schema.constraint_column_usage "
         , "WHERE table_name=? AND column_name <> 'id' "
         , "ORDER BY constraint_name, column_name"
         ]
-    us <- withStmt stmt' [PersistString name] helperU
+    us <- withStmt stmt' [PersistString $ unRawName name] helperU
     return $ cs ++ us
   where
     getAll pop front = do
@@ -181,11 +180,11 @@ getColumns getter name = do
         case x of
             Nothing -> return $ front []
             Just [PersistByteString con, PersistByteString col] ->
-                getAll pop (front . (:) (unpack con, unpack col))
+                getAll pop (front . (:) (BSU.toString con, BSU.toString col))
             Just _ -> getAll pop front -- FIXME error message?
     helperU pop = do
         rows <- getAll pop id
-        return $ map (Right . Right . (fst . head &&& map snd))
+        return $ map (Right . Right . (RawName . fst . head &&& map (RawName . snd)))
                $ groupBy ((==) `on` fst) rows
     helper pop = do
         x <- pop
@@ -211,18 +210,18 @@ getAlters (c1, u1) (c2, u2) =
          in alters ++ getAltersC news old'
     getAltersU [] old = map (DropConstraint . fst) old
     getAltersU ((name, cols):news) old =
-        case lookup (map toLower name) old of
+        case lookup name old of
             Nothing -> AddUniqueConstraint name cols : getAltersU news old
             Just ocols ->
-                let old' = filter (\(x, _) -> x /= map toLower name) old
-                 in if sort (map (map toLower) cols) == ocols
+                let old' = filter (\(x, _) -> x /= name) old
+                 in if sort cols == ocols
                         then getAltersU news old'
                         else  DropConstraint name
                             : AddUniqueConstraint name cols
                             : getAltersU news old'
 
 getColumn :: (String -> IO Statement)
-          -> String -> [PersistValue]
+          -> RawName -> [PersistValue]
           -> IO (Either String Column)
 getColumn getter tname
         [PersistByteString x, PersistByteString y,
@@ -230,12 +229,12 @@ getColumn getter tname
     case d' of
         Left s -> return $ Left s
         Right d'' ->
-            case getType $ unpack z of
+            case getType $ BSU.toString z of
                 Left s -> return $ Left s
                 Right t -> do
-                    let cname = unpack x
+                    let cname = RawName $ BSU.toString x
                     ref <- getRef cname
-                    return $ Right $ Column cname (unpack y == "YES")
+                    return $ Right $ Column cname (BSU.toString y == "YES")
                                      t d'' ref
   where
     getRef cname = do
@@ -249,14 +248,14 @@ getColumn getter tname
         let ref = refName tname cname
         stmt <- getter sql
         withStmt stmt
-                     [ PersistString $ map toLower tname
-                     , PersistString ref
+                     [ PersistString $ unRawName tname
+                     , PersistString $ unRawName ref
                      ] $ \pop -> do
             Just [PersistInt64 i] <- pop
-            return $ if i == 0 then Nothing else Just ("", ref)
+            return $ if i == 0 then Nothing else Just (RawName "", ref)
     d' = case d of
             PersistNull -> Right Nothing
-            PersistByteString a -> Right $ Just $ unpack a
+            PersistByteString a -> Right $ Just $ BSU.toString a
             _ -> Left $ "Invalid default column: " ++ show d
     getType "int4" = Right $ SqlInteger
     getType "varchar" = Right $ SqlString
@@ -271,7 +270,7 @@ getColumn _ _ x =
 
 findAlters :: Column -> [Column] -> ([AlterColumn'], [Column])
 findAlters col@(Column name isNull type_ def ref) cols =
-    case filter (\c -> cName c == name') cols of
+    case filter (\c -> cName c == name) cols of
         [] -> ([(name, Add col)], cols)
         Column _ isNull' type_' def' ref':_ ->
             let refDrop Nothing = []
@@ -298,13 +297,11 @@ findAlters col@(Column name isNull type_ def ref) cols =
                                 Nothing -> [(name, NoDefault)]
                                 Just s -> [(name, Default s)]
              in (modRef ++ modDef ++ modNull ++ modType,
-                 filter (\c -> cName c /= name') cols)
-  where
-    name' = map toLower name
+                 filter (\c -> cName c /= name) cols)
 
 showColumn :: Column -> String
 showColumn (Column n nu t def ref) = concat
-    [ n
+    [ escape n
     , " "
     , showSqlType t
     , " "
@@ -314,7 +311,7 @@ showColumn (Column n nu t def ref) = concat
         Just s -> " DEFAULT " ++ s
     , case ref of
         Nothing -> ""
-        Just (s, _) -> " REFERENCES " ++ s
+        Just (s, _) -> " REFERENCES " ++ escape s
     ]
 
 showSqlType :: SqlType -> String
@@ -336,50 +333,107 @@ showAlterDb (AlterColumn t (c, ac)) =
     isUnsafe _ = False
 showAlterDb (AlterTable t at) = (False, showAlterTable t at)
 
-showAlterTable :: String -> AlterTable -> String
+showAlterTable :: RawName -> AlterTable -> String
 showAlterTable table (AddUniqueConstraint cname cols) = concat
     [ "ALTER TABLE "
-    , table
+    , escape table
     , " ADD CONSTRAINT "
-    , cname
+    , escape cname
     , " UNIQUE("
-    , intercalate "," cols
+    , intercalate "," $ map escape cols
     , ")"
     ]
 showAlterTable table (DropConstraint cname) = concat
     [ "ALTER TABLE "
-    , table
+    , escape table
     , " DROP CONSTRAINT "
-    , cname
+    , escape cname
     ]
 
-showAlter :: String -> AlterColumn' -> String
+showAlter :: RawName -> AlterColumn' -> String
 showAlter table (n, Type t) =
-    "ALTER TABLE " ++ table ++ " ALTER COLUMN " ++ n ++ " TYPE " ++ showSqlType t
+    concat
+        [ "ALTER TABLE "
+        , escape table
+        , " ALTER COLUMN "
+        , escape n
+        , " TYPE "
+        , showSqlType t
+        ]
 showAlter table (n, IsNull) =
-    "ALTER TABLE " ++ table ++ " ALTER COLUMN " ++ n ++ " DROP NOT NULL"
+    concat
+        [ "ALTER TABLE "
+        , escape table
+        , " ALTER COLUMN "
+        , escape n
+        , " DROP NOT NULL"
+        ]
 showAlter table (n, NotNull) =
-    "ALTER TABLE " ++ table ++ " ALTER COLUMN " ++ n ++ " SET NOT NULL"
+    concat
+        [ "ALTER TABLE "
+        , escape table
+        , " ALTER COLUMN "
+        , escape n
+        , " SET NOT NULL"
+        ]
 showAlter table (_, Add col) =
-    "ALTER TABLE " ++ table ++ " ADD COLUMN " ++ showColumn col
+    concat
+        [ "ALTER TABLE "
+        , escape table
+        , " ADD COLUMN "
+        , showColumn col
+        ]
 showAlter table (n, Drop) =
-    "ALTER TABLE " ++ table ++ " DROP COLUMN " ++ n
+    concat
+        [ "ALTER TABLE "
+        , escape table
+        , " DROP COLUMN "
+        , escape n
+        ]
 showAlter table (n, Default s) =
-    "ALTER TABLE " ++ table ++ " ALTER COLUMN " ++ n ++ " SET DEFAULT " ++ s
-showAlter table (n, NoDefault) =
-    "ALTER TABLE " ++ table ++ " ALTER COLUMN " ++ n ++ " DROP DEFAULT"
-showAlter table (n, Update s) =
-    "UPDATE " ++ table ++ " SET " ++ n ++ "=" ++ s ++ " WHERE " ++
-    n ++ " IS NULL"
+    concat
+        [ "ALTER TABLE "
+        , escape table
+        , " ALTER COLUMN "
+        , escape n
+        , " SET DEFAULT "
+        , s
+        ]
+showAlter table (n, NoDefault) = concat
+    [ "ALTER TABLE "
+    , escape table
+    , " ALTER COLUMN "
+    , escape n
+    , " DROP DEFAULT"
+    ]
+showAlter table (n, Update s) = concat
+    [ "UPDATE "
+    , escape table
+    , " SET "
+    , escape n
+    , "="
+    , s
+    , " WHERE "
+    , escape n
+    , " IS NULL"
+    ]
 showAlter table (n, AddReference t2) = concat
     [ "ALTER TABLE "
-    , table
+    , escape table
     , " ADD CONSTRAINT "
-    , refName table n
+    , escape $ refName table n
     , " FOREIGN KEY("
-    , n
+    , escape n
     , ") REFERENCES "
-    , t2
+    , escape t2
     ]
 showAlter table (_, DropReference cname) =
-    "ALTER TABLE " ++ table ++ " DROP CONSTRAINT " ++ cname
+    "ALTER TABLE " ++ escape table ++ " DROP CONSTRAINT " ++ escape cname
+
+escape :: RawName -> String
+escape (RawName s) =
+    '"' : go s ++ "\""
+  where
+    go "" = ""
+    go ('"':xs) = "\"\"" ++ go xs
+    go (x:xs) = x : go xs

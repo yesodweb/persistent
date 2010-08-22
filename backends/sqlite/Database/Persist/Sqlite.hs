@@ -43,6 +43,7 @@ open' s = do
         , begin = helper "BEGIN"
         , commit = helper "COMMIT"
         , rollback = helper "ROLLBACK"
+        , escapeName = escape
         }
   where
     helper t getter = do
@@ -59,16 +60,16 @@ prepare' conn sql = do
         , withStmt = withStmt' stmt
         }
 
-insertSql' :: String -> [String] -> Either String (String, String)
+insertSql' :: RawName -> [RawName] -> Either String (String, String)
 insertSql' t cols =
     Right (ins, sel)
   where
     sel = "SELECT last_insert_rowid()"
     ins = concat
         [ "INSERT INTO "
-        , t
+        , escape t
         , "("
-        , intercalate "," cols
+        , intercalate "," $ map escape cols
         , ") VALUES("
         , intercalate "," (map (const "?") cols)
         , ")"
@@ -117,7 +118,7 @@ migrate' getter val = do
     let newSql = mkCreateTable False table (cols, uniqs)
     stmt <- getter $ "SELECT sql FROM sqlite_master WHERE " ++
                         "type='table' AND name=?"
-    oldSql' <- withStmt stmt [PersistString table] go
+    oldSql' <- withStmt stmt [PersistString $ unRawName table] go
     case oldSql' of
         Nothing -> return $ Right [(False, newSql)]
         Just oldSql ->
@@ -128,7 +129,7 @@ migrate' getter val = do
                     return $ Right sql
   where
     def = entityDef val
-    table = tableName def
+    table = rawTableName def
     go pop = do
         x <- pop
         case x of
@@ -139,10 +140,10 @@ migrate' getter val = do
 getCopyTable :: PersistEntity val => (String -> IO Statement) -> val
              -> IO [(Bool, Sql)]
 getCopyTable getter val = do
-    stmt <- getter $ "PRAGMA table_info(" ++ table ++ ")"
+    stmt <- getter $ "PRAGMA table_info(" ++ escape table ++ ")"
     oldCols' <- withStmt stmt [] getCols
     let oldCols = map (map toLower) $ filter (/= "id") oldCols'
-    let newCols = map (map toLower . cName) cols :: [String]
+    let newCols = error "map (map toLower . cName) cols :: [String]"
     let common = filter (`elem` oldCols) newCols :: [String]
     return [ (False, tmpSql)
            , (False, copyToTemp $ "id" : common)
@@ -161,38 +162,38 @@ getCopyTable getter val = do
                 names <- getCols pop
                 return $ name : names
             Just y -> error $ "Invalid result from PRAGMA table_info: " ++ show y
-    table = tableName def
-    tableTmp = table ++ "_backup"
+    table = rawTableName def
+    tableTmp = RawName $ unRawName table ++ "_backup"
     (cols, uniqs) = mkColumns val
     newSql = mkCreateTable False table (cols, uniqs)
     tmpSql = mkCreateTable True tableTmp (cols, uniqs)
-    dropTmp = "DROP TABLE " ++ tableTmp
-    dropOld = "DROP TABLE " ++ table
+    dropTmp = "DROP TABLE " ++ escape tableTmp
+    dropOld = "DROP TABLE " ++ escape table
     copyToTemp common = concat
         [ "INSERT INTO "
-        , tableTmp
+        , escape tableTmp
         , "("
         , intercalate "," common
         , ") SELECT "
         , intercalate "," common
         , " FROM "
-        , table
+        , escape table
         ]
     copyToFinal newCols = concat
         [ "INSERT INTO "
-        , table
+        , escape table
         , " SELECT "
         , intercalate "," newCols
         , " FROM "
-        , tableTmp
+        , escape tableTmp
         ]
 
-mkCreateTable :: Bool -> String -> ([Column], [UniqueDef]) -> Sql
+mkCreateTable :: Bool -> RawName -> ([Column], [UniqueDef]) -> Sql
 mkCreateTable isTemp table (cols, uniqs) = concat
     [ "CREATE"
     , if isTemp then " TEMP" else ""
     , " TABLE "
-    , table
+    , escape table
     , "(id INTEGER PRIMARY KEY"
     , concatMap sqlColumn cols
     , concatMap sqlUnique uniqs
@@ -202,7 +203,7 @@ mkCreateTable isTemp table (cols, uniqs) = concat
 sqlColumn :: Column -> String
 sqlColumn (Column name isNull typ def ref) = concat
     [ ","
-    , name
+    , escape name
     , " "
     , showSqlType typ
     , if isNull then " NULL" else " NOT NULL"
@@ -211,16 +212,24 @@ sqlColumn (Column name isNull typ def ref) = concat
         Just d -> " DEFAULT " ++ d
     , case ref of
         Nothing -> ""
-        Just (table, _) -> " REFERENCES " ++ table
+        Just (table, _) -> " REFERENCES " ++ escape table
     ]
 
-sqlUnique :: (String, [String]) -> String
+sqlUnique :: UniqueDef -> String
 sqlUnique (cname, cols) = concat
     [ ",CONSTRAINT "
     , cname
     , " UNIQUE ("
-    , intercalate "," cols
+    , intercalate "," $ map escape cols
     , ")"
     ]
 
 type Sql = String
+
+escape :: RawName -> String
+escape (RawName s) =
+    '"' : go s ++ "\""
+  where
+    go "" = ""
+    go ('"':xs) = "\"\"" ++ go xs
+    go (x:xs) = x : go xs

@@ -59,7 +59,7 @@ runSqlConn (SqlPersist r) conn = do
 instance MonadCatchIO m => PersistBackend (SqlPersist m) where
     insert val = do
         conn <- SqlPersist ask
-        let esql = insertSql conn (tableName t) (map fst3 $ tableColumns t)
+        let esql = insertSql conn (rawTableName t) (map fst3 $ tableColumns t)
         i <-
             case esql of
                 Left sql -> withStmt' sql vals $ \pop -> do
@@ -77,21 +77,33 @@ instance MonadCatchIO m => PersistBackend (SqlPersist m) where
         vals = map toPersistValue $ toPersistFields val
 
     replace k val = do
+        conn <- SqlPersist ask
         let t = entityDef val
-        let sql = "UPDATE " ++ tableName t ++ " SET " ++
-                  intercalate "," (map (go . fst3) $ tableColumns t) ++
-                  " WHERE id=?"
+        let sql = concat
+                [ "UPDATE "
+                , escapeName conn (rawTableName t)
+                , " SET "
+                , intercalate "," (map (go conn . fst3) $ tableColumns t)
+                , " WHERE id=?"
+                ]
         execute' sql $ map toPersistValue (toPersistFields val)
                        ++ [PersistInt64 $ fromPersistKey k]
       where
-        go = (++ "=?")
+        go conn x = escapeName conn x ++ "=?"
         fst3 (x, _, _) = x
 
     get k = do
+        conn <- SqlPersist ask
         let t = entityDef $ dummyFromKey k
-        let cols = intercalate "," $ map (\(x, _, _) -> x) $ tableColumns t
-        let sql = "SELECT " ++ cols ++ " FROM " ++
-                  tableName t ++ " WHERE id=?"
+        let cols = intercalate ","
+                 $ map (\(x, _, _) -> escapeName conn x) $ tableColumns t
+        let sql = concat
+                [ "SELECT "
+                , cols
+                , " FROM "
+                , escapeName conn $ rawTableName t
+                , " WHERE id=?"
+                ]
         withStmt' sql [PersistInt64 $ fromPersistKey k] $ \pop -> do
             res <- pop
             case res of
@@ -102,11 +114,16 @@ instance MonadCatchIO m => PersistBackend (SqlPersist m) where
                         Right v -> return $ Just v
 
     count filts = do
+        conn <- SqlPersist ask
         let wher = if null filts
                     then ""
                     else " WHERE " ++
-                         intercalate " AND " (map filterClause filts)
-        let sql = "SELECT COUNT(*) FROM " ++ tableName t ++ wher
+                         intercalate " AND " (map (filterClause conn) filts)
+        let sql = concat
+                [ "SELECT COUNT(*) FROM "
+                , escapeName conn $ rawTableName t
+                , wher
+                ]
         withStmt' sql (getFiltsValues filts) $ \pop -> do
             Just [PersistInt64 i] <- pop
             return $ fromIntegral i
@@ -116,7 +133,9 @@ instance MonadCatchIO m => PersistBackend (SqlPersist m) where
     select filts ords limit offset =
         Iteratee . start
       where
-        start = withStmt' sql (getFiltsValues filts) . loop
+        start x = do
+            conn <- SqlPersist ask
+            withStmt' (sql conn) (getFiltsValues filts) $ loop x
         loop (Continue k) pop = do
             res <- pop
             case res of
@@ -129,7 +148,8 @@ instance MonadCatchIO m => PersistBackend (SqlPersist m) where
                             loop step pop
         loop step _ = return step
         t = entityDef $ dummyFromFilts filts
-        orderClause o = getFieldName t (persistOrderToFieldName o)
+        orderClause conn o =
+            escapeName conn (getFieldName t $ persistOrderToFieldName o)
                         ++ case persistOrderToOrder o of
                                             Asc -> ""
                                             Desc -> " DESC"
@@ -138,30 +158,40 @@ instance MonadCatchIO m => PersistBackend (SqlPersist m) where
                 Left e -> Left e
                 Right xs' -> Right (toPersistKey x, xs')
         fromPersistValues' _ = Left "error in fromPersistValues'"
-        wher = if null filts
+        wher conn = if null filts
                     then ""
                     else " WHERE " ++
-                         intercalate " AND " (map filterClause filts)
-        ord = if null ords
+                         intercalate " AND " (map (filterClause conn) filts)
+        ord conn = if null ords
                     then ""
                     else " ORDER BY " ++
-                         intercalate "," (map orderClause ords)
+                         intercalate "," (map (orderClause conn) ords)
         lim = if limit == 0 && offset == 0
                     then ""
                     else " LIMIT " ++ show limit
         off = if offset == 0
                     then ""
                     else " OFFSET " ++ show offset
-        cols = intercalate "," $ "id"
-                   : (map (\(x, _, _) -> x) $ tableColumns t)
-        sql = "SELECT " ++ cols ++ " FROM " ++ tableName t ++ wher ++ ord
-                  ++ lim ++ off
+        cols conn = intercalate "," $ "id"
+                   : (map (\(x, _, _) -> escapeName conn x) $ tableColumns t)
+        sql conn = concat
+            [ "SELECT "
+            , cols conn
+            , " FROM "
+            , escapeName conn $ rawTableName t
+            , wher conn
+            , ord conn
+            , lim
+            , off
+            ]
 
 
     selectKeys filts =
         Iteratee . start
       where
-        start = withStmt' sql (getFiltsValues filts) . loop
+        start x = do
+            conn <- SqlPersist ask
+            withStmt' (sql conn) (getFiltsValues filts) $ loop x
         loop (Continue k) pop = do
             res <- pop
             case res of
@@ -172,40 +202,66 @@ instance MonadCatchIO m => PersistBackend (SqlPersist m) where
                 Just y -> return $ Error $ "Unexpected in selectKeys: " ++ show y
         loop step _ = return step
         t = entityDef $ dummyFromFilts filts
-        wher = if null filts
+        wher conn = if null filts
                     then ""
                     else " WHERE " ++
-                         intercalate " AND " (map filterClause filts)
-        sql = "SELECT id FROM " ++ tableName t ++ wher
+                         intercalate " AND " (map (filterClause conn) filts)
+        sql conn = concat
+            [ "SELECT id FROM "
+            , escapeName conn $ rawTableName t
+            , wher conn
+            ]
 
-    delete k =
-        execute' sql [PersistInt64 $ fromPersistKey k]
+    delete k = do
+        conn <- SqlPersist ask
+        execute' (sql conn) [PersistInt64 $ fromPersistKey k]
       where
         t = entityDef $ dummyFromKey k
-        sql = "DELETE FROM " ++ tableName t ++ " WHERE id=?"
+        sql conn = concat
+            [ "DELETE FROM "
+            , escapeName conn $ rawTableName t
+            , " WHERE id=?"
+            ]
 
     deleteWhere filts = do
+        conn <- SqlPersist ask
         let t = entityDef $ dummyFromFilts filts
         let wher = if null filts
                     then ""
                     else " WHERE " ++
-                         intercalate " AND " (map filterClause filts)
-            sql = "DELETE FROM " ++ tableName t ++ wher
+                         intercalate " AND " (map (filterClause conn) filts)
+            sql = concat
+                [ "DELETE FROM "
+                , escapeName conn $ rawTableName t
+                , wher
+                ]
         execute' sql $ getFiltsValues filts
 
-    deleteBy uniq =
-        execute' sql $ persistUniqueToValues uniq
+    deleteBy uniq = do
+        conn <- SqlPersist ask
+        execute' (sql conn) $ persistUniqueToValues uniq
       where
         t = entityDef $ dummyFromUnique uniq
         go = map (getFieldName t) . persistUniqueToFieldNames
-        sql = "DELETE FROM " ++ tableName t ++ " WHERE " ++
-              intercalate " AND " (map (++ "=?") $ go uniq)
+        go' conn x = escapeName conn x ++ "=?"
+        sql conn = concat
+            [ "DELETE FROM "
+            , escapeName conn $ rawTableName t
+            , " WHERE "
+            , intercalate " AND " $ map (go' conn) $ go uniq
+            ]
 
     update _ [] = return ()
     update k upds = do
-        let sql = "UPDATE " ++ tableName t ++ " SET " ++
-                  intercalate "," (map (++ "=?") $ map go upds) ++
-                  " WHERE id=?"
+        conn <- SqlPersist ask
+        let go' x = escapeName conn x ++ "=?"
+        let sql = concat
+                [ "UPDATE "
+                , escapeName conn $ rawTableName t
+                , " SET "
+                , intercalate "," $ map (go' . go) upds
+                , " WHERE id=?"
+                ]
         execute' sql $
             map persistUpdateToValue upds ++ [PersistInt64 $ fromPersistKey k]
       where
@@ -214,23 +270,37 @@ instance MonadCatchIO m => PersistBackend (SqlPersist m) where
 
     updateWhere _ [] = return ()
     updateWhere filts upds = do
+        conn <- SqlPersist ask
         let wher = if null filts
                     then ""
                     else " WHERE " ++
-                         intercalate " AND " (map filterClause filts)
-        let sql = "UPDATE " ++ tableName t ++ " SET " ++
-                  intercalate "," (map (++ "=?") $ map go upds) ++ wher
+                         intercalate " AND " (map (filterClause conn) filts)
+        let sql = concat
+                [ "UPDATE "
+                , escapeName conn $ rawTableName t
+                , " SET "
+                , intercalate "," $ map (go' conn . go) upds
+                , wher
+                ]
         let dat = map persistUpdateToValue upds ++ getFiltsValues filts
         execute' sql dat
       where
         t = entityDef $ dummyFromFilts filts
         go = getFieldName t . persistUpdateToFieldName
+        go' conn x = escapeName conn x ++ "=?"
 
     getBy uniq = do
+        conn <- SqlPersist ask
         let cols = intercalate "," $ "id"
-                 : (map (\(x, _, _) -> x) $ tableColumns t)
-        let sql = "SELECT " ++ cols ++ " FROM " ++ tableName t ++ " WHERE " ++
-                  sqlClause
+                 : (map (\(x, _, _) -> escapeName conn x) $ tableColumns t)
+        let sql = concat
+                [ "SELECT "
+                , cols
+                , " FROM "
+                , escapeName conn $ rawTableName t
+                , " WHERE "
+                , sqlClause conn
+                ]
         withStmt' sql (persistUniqueToValues uniq) $ \pop -> do
             row <- pop
             case row of
@@ -241,15 +311,17 @@ instance MonadCatchIO m => PersistBackend (SqlPersist m) where
                         Right x -> return $ Just (toPersistKey k, x)
                 Just _ -> error "Database.Persist.GenericSql: Bad list in getBy"
       where
-        sqlClause = intercalate " AND " $ map (++ "=?") $ toFieldNames' uniq
+        sqlClause conn =
+            intercalate " AND " $ map (go conn) $ toFieldNames' uniq
+        go conn x = escapeName conn x ++ "=?"
         t = entityDef $ dummyFromUnique uniq
         toFieldNames' = map (getFieldName t) . persistUniqueToFieldNames
 
 dummyFromUnique :: Unique v -> v
 dummyFromUnique _ = error "dummyFromUnique"
 
-getFieldName :: EntityDef -> String -> String
-getFieldName t s = toField $ tableColumn t s
+getFieldName :: EntityDef -> String -> RawName
+getFieldName t s = rawFieldName $ tableColumn t s
 
 tableColumn :: EntityDef -> String -> (String, String, [String])
 tableColumn t s = go $ entityColumns t
@@ -262,8 +334,8 @@ tableColumn t s = go $ entityColumns t
 dummyFromKey :: Key v -> v
 dummyFromKey _ = error "dummyFromKey"
 
-filterClause :: PersistEntity val => Filter val -> String
-filterClause f =
+filterClause :: PersistEntity val => Connection -> Filter val -> String
+filterClause conn f =
     case (isNull, persistFilterToFilter f, varCount) of
         (True, Eq, _) -> name ++ " IS NULL"
         (True, Ne, _) -> name ++ " IS NOT NULL"
@@ -310,7 +382,7 @@ filterClause f =
            $ either return id
            $ persistFilterToValue f
     t = entityDef $ dummyFromFilts [f]
-    name = getFieldName t $ persistFilterToFieldName f
+    name = escapeName conn $ getFieldName t $ persistFilterToFieldName f
     qmarks = case persistFilterToValue f of
                 Left _ -> "?"
                 Right x ->
