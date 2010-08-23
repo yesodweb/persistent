@@ -218,7 +218,7 @@ sqlColumn (Column name isNull typ def ref) = concat
 sqlUnique :: UniqueDef -> String
 sqlUnique (cname, cols) = concat
     [ ",CONSTRAINT "
-    , cname
+    , escape cname
     , " UNIQUE ("
     , intercalate "," $ map escape cols
     , ")"
