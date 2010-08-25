@@ -19,7 +19,6 @@ import Data.List (intercalate)
 import "MonadCatchIO-transformers" Control.Monad.CatchIO
 import Data.IORef
 import qualified Data.Map as Map
-import Data.Char (toLower)
 
 withSqlitePool :: MonadCatchIO m
                => String
@@ -142,14 +141,14 @@ getCopyTable :: PersistEntity val => (String -> IO Statement) -> val
 getCopyTable getter val = do
     stmt <- getter $ "PRAGMA table_info(" ++ escape table ++ ")"
     oldCols' <- withStmt stmt [] getCols
-    let oldCols = map (map toLower) $ filter (/= "id") oldCols'
-    let newCols = error "map (map toLower . cName) cols :: [String]"
-    let common = filter (`elem` oldCols) newCols :: [String]
+    let oldCols = map RawName $ filter (/= "id") oldCols'
+    let newCols = map cName cols
+    let common = filter (`elem` oldCols) newCols
     return [ (False, tmpSql)
-           , (False, copyToTemp $ "id" : common)
+           , (False, copyToTemp $ RawName "id" : common)
            , (common /= oldCols, dropOld)
            , (False, newSql)
-           , (False, copyToFinal $ "id" : newCols)
+           , (False, copyToFinal $ RawName "id" : newCols)
            , (False, dropTmp)
            ]
   where
@@ -173,9 +172,9 @@ getCopyTable getter val = do
         [ "INSERT INTO "
         , escape tableTmp
         , "("
-        , intercalate "," common
+        , intercalate "," $ map escape common
         , ") SELECT "
-        , intercalate "," common
+        , intercalate "," $ map escape common
         , " FROM "
         , escape table
         ]
@@ -183,7 +182,7 @@ getCopyTable getter val = do
         [ "INSERT INTO "
         , escape table
         , " SELECT "
-        , intercalate "," newCols
+        , intercalate "," $ map escape newCols
         , " FROM "
         , escape tableTmp
         ]
