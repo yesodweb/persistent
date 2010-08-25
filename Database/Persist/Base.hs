@@ -27,6 +27,7 @@ module Database.Persist.Base
     , checkUnique
     , DeleteCascade (..)
     , deleteCascadeWhere
+    , PersistException (..)
     ) where
 
 import Language.Haskell.TH.Syntax
@@ -41,6 +42,7 @@ import qualified Data.Text as T
 import qualified Data.ByteString as S
 import qualified Data.ByteString.Lazy as L
 import Data.Enumerator
+import qualified Control.Exception as E
 
 -- | A raw value which can be stored in any backend and can be marshalled to
 -- and from a 'PersistField'.
@@ -265,12 +267,12 @@ class Monad m => PersistBackend m where
            -> [Order val]
            -> Int -- ^ limit
            -> Int -- ^ offset
-           -> Enumerator String (Key val, val) m a
+           -> Enumerator (Key val, val) m a
 
     -- | Get the 'Key's of all records matching the given criterion.
     selectKeys :: PersistEntity val
                => [Filter val]
-               -> Enumerator String (Key val) m a
+               -> Enumerator (Key val) m a
 
     -- | The total number of records fulfilling the given criterion.
     count :: PersistEntity val => [Filter val] -> m Int
@@ -316,7 +318,7 @@ selectList :: (PersistEntity val, PersistBackend m, Monad m)
 selectList a b c d = do
     res <- run $ select a b c d ==<< consume
     case res of
-        Left e -> error e
+        Left e -> error $ show e
         Right x -> return x
 
 data EntityDef = EntityDef
@@ -366,10 +368,14 @@ deleteCascadeWhere :: (DeleteCascade a, PersistBackend m)
 deleteCascadeWhere filts = do
     res <- run $ selectKeys filts $ Continue iter
     case res of
-        Left e -> error e
+        Left e -> error $ show e
         Right () -> return ()
   where
     iter EOF = Iteratee $ return $ Yield () EOF
     iter (Chunks keys) = Iteratee $ do
         mapM_ deleteCascade keys
         return $ Continue iter
+
+data PersistException = PersistMarshalException String
+    deriving (Show, Typeable)
+instance E.Exception PersistException

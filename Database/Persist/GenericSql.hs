@@ -142,7 +142,8 @@ instance MonadCatchIO m => PersistBackend (SqlPersist m) where
                 Nothing -> return $ Continue k
                 Just vals -> do
                     case fromPersistValues' vals of
-                        Left s -> return $ Error s
+                        Left s -> return $ Error $ toException
+                                $ PersistMarshalException s
                         Right row -> do
                             step <- runIteratee $ k $ Chunks [row]
                             loop step pop
@@ -199,7 +200,8 @@ instance MonadCatchIO m => PersistBackend (SqlPersist m) where
                 Just [PersistInt64 i] -> do
                     step <- runIteratee $ k $ Chunks [toPersistKey i]
                     loop step pop
-                Just y -> return $ Error $ "Unexpected in selectKeys: " ++ show y
+                Just y -> return $ Error $ toException $ PersistMarshalException
+                        $ "Unexpected in selectKeys: " ++ show y
         loop step _ = return step
         t = entityDef $ dummyFromFilts filts
         wher conn = if null filts
