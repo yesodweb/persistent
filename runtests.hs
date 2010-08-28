@@ -2,10 +2,11 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+
 import Test.Framework (defaultMain, testGroup, Test)
 import Test.Framework.Providers.HUnit
 -- import Test.Framework.Providers.QuickCheck
--- import Test.Framework.TH
 import Test.HUnit hiding (Test)
 
 import Database.Persist.Sqlite
@@ -13,8 +14,6 @@ import Control.Monad.IO.Class
 
 import Control.Monad.Trans.Reader
 import Monad (unless)
-{-import Data.ByteString.Lazy.UTF8 (toString)-}
-{-import Data.List (intercalate)-}
 
 infix 1 /=@, @/=
 
@@ -39,7 +38,7 @@ Empty
 
 Person
     name String update Eq Ne Desc
-    age Int update "Asc" Lt "some ignored attribute"
+    age Int update "Asc" Desc Lt Eq "some ignored attribute"
     color String null Eq Ne
     PersonNameKey name
 Pet
@@ -47,21 +46,27 @@ Pet
     name String
 |]
 
-connstr :: String
-connstr = "user=test password=test host=localhost port=5432 dbname=yesod_test"
+-- connstr = "user=test password=test host=localhost port=5432 dbname=yesod_test"
 
-runConn = (withSqlitePool connstr 1) . runSqlPool
+runConn = (withSqlitePool "testdb" 1) . runSqlPool
 
+-- TODO: run tests in transaction
 sqliteTest :: SqlPersist IO () -> Assertion
-sqliteTest actions = do runConn actions
+sqliteTest actions = do
+  runConn actions
+  runConn $ do cleanDB
+
+cleanDB :: SqlPersist IO ()
+cleanDB = do
+  deleteWhere ([] :: [Filter Person])
+  deleteWhere ([] :: [Filter Pet])
 
 setup :: SqlPersist IO ()
 setup = do
   runMigration $ do
     migrate (undefined :: Person)
     migrate (undefined :: Pet)
-  deleteWhere ([] :: [Filter Person])
-  deleteWhere ([] :: [Filter Pet])
+  cleanDB
 
 main :: IO ()
 main = do
@@ -73,6 +78,13 @@ testSuite = testGroup "Database.Persistent"
     [
       testCase "sqlite persistent" case_sqlitePersistent
     , testCase "sqlite deleteWhere" case_sqliteDeleteWhere
+    , testCase "sqlite deleteBy" case_sqliteDeleteBy
+    , testCase "sqlite delete" case_sqliteDelete
+    , testCase "sqlite replace" case_sqliteReplace
+    , testCase "sqlite getBy" case_sqliteGetBy
+    , testCase "sqlite update" case_sqliteUpdate
+    , testCase "sqlite updateWhere" case_sqliteUpdateWhere
+    , testCase "sqlite selectList" case_sqliteSelectList
     ]
 
                           
@@ -80,17 +92,125 @@ assertEmpty xs    = liftIO $ assertBool "" (null xs)
 assertNotEmpty xs = liftIO $ assertBool "" (not (null xs))
 
 case_sqliteDeleteWhere = sqliteTest _deleteWhere
+case_sqliteDeleteBy = sqliteTest _deleteBy
+case_sqliteDelete = sqliteTest _delete
+case_sqliteReplace = sqliteTest _replace
+case_sqliteGetBy = sqliteTest _getBy
+case_sqliteUpdate = sqliteTest _update
+case_sqliteUpdateWhere = sqliteTest _updateWhere
+case_sqliteSelectList = sqliteTest _selectList
 case_sqlitePersistent = sqliteTest _persistent
 
 _deleteWhere = do
-  _ <- insert $ Person "Michael2" 27 Nothing
+  key2 <- insert $ Person "Michael2" 90 Nothing
+  _    <- insert $ Person "Michael3" 90 Nothing
+  let p91 = Person "Michael4" 91 Nothing
+  key91 <- insert $ p91
+
+  ps90 <- selectList [PersonAgeEq 90] [] 0 0
+  assertNotEmpty ps90
+  deleteWhere [PersonAgeEq 90]
+  ps90 <- selectList [PersonAgeEq 90] [] 0 0
+  assertEmpty ps90
+  Nothing <- get key2
+
+  Just p2_91 <- get key91
+  p91 @== p2_91
+
+_deleteBy = do
+  key2 <- insert $ Person "Michael2" 27 Nothing
+  let p3 = Person "Michael3" 27 Nothing
+  key3 <- insert $ p3
+
+  ps2 <- selectList [PersonNameEq "Michael2"] [] 0 0
+  assertNotEmpty ps2
+
+  deleteBy $ PersonNameKey "Michael2"
+  ps2 <- selectList [PersonNameEq "Michael2"] [] 0 0
+  assertEmpty ps2
+
+  Just p32 <- get key3
+  p3 @== p32
+
+_delete = do
+  key2 <- insert $ Person "Michael2" 27 Nothing
+  let p3 = Person "Michael3" 27 Nothing
+  key3 <- insert $ p3
+
   pm2 <- selectList [PersonNameEq "Michael2"] [] 0 0
   assertNotEmpty pm2
-  deleteWhere [PersonNameEq "Michael2"]
+  delete key2
   pm2 <- selectList [PersonNameEq "Michael2"] [] 0 0
   assertEmpty pm2
 
+  Just p <- get key3
+  p3 @== p
 
+-- also a decent test of get
+_replace = do
+  key2 <- insert $ Person "Michael2" 27 Nothing
+  let p3 = Person "Michael3" 27 Nothing
+  replace key2 p3
+  Just p <- get key2
+  p @== p3
+
+  -- test replace an empty key
+  delete key2
+  Nothing <- get key2
+  undefined <- replace key2 p3
+  Nothing <- get key2
+  return ()
+
+_getBy = do
+  let p2 = Person "Michael2" 27 Nothing
+  key2 <- insert p2
+  Just (k, p) <- getBy $ PersonNameKey "Michael2"
+  p @== p2
+  k @== key2
+  Nothing <- getBy $ PersonNameKey "Michael3"
+  return ()
+
+_update = do
+  let p25 = Person "Michael" 25 Nothing
+  key25 <- insert p25
+  update key25 [PersonAge 28, PersonName "Updated"]
+  Just pBlue28 <- get key25
+  pBlue28 @== Person "Updated" 28 Nothing
+
+_updateWhere = do
+  let p1 = Person "Michael" 25 Nothing
+  let p2 = Person "Michael2" 25 Nothing
+  key1 <- insert p1
+  key2 <- insert p2
+  updateWhere [PersonNameEq "Michael2"] [PersonAge 28, PersonName "Updated"]
+  Just pBlue28 <- get key2
+  pBlue28 @== Person "Updated" 28 Nothing
+  Just p <- get key1
+  p @== p1
+
+_selectList = do
+  let p25 = Person "Michael" 25 Nothing
+  let p26 = Person "Michael2" 26 Nothing
+  key25 <- insert p25
+  key26 <- insert p26
+  ps <- selectList [] [] 0 0
+  ps @== [(key25, p25), (key26, p26)]
+  -- limit
+  ps <- selectList [] [] 1 0
+  ps @== [(key25, p25)]
+  -- offset -- FAILS!
+  ps <- selectList [] [] 0 1
+  ps @== [(key26, p26)]
+  -- limit & offset
+  ps <- selectList [] [] 1 1
+  ps @== [(key26, p26)]
+
+  ps <- selectList [] [PersonAgeDesc] 0 0
+  ps @== [(key26, p26), (key25, p25)]
+  ps <- selectList [PersonAgeEq 26] [] 0 0
+  ps @== [(key26, p26)]
+
+-- general tests transferred from already exising test file
 _persistent = do
   let mic = Person "Michael" 25 Nothing
   micK <- insert mic
@@ -126,13 +246,10 @@ _persistent = do
   (map snd pasc) @== [eli, mic29]
 
   let abe30 = Person "Abe" 30 $ Just "black"
-  _ <- insert abe30 
+  keyAbe30 <- insert abe30
   pdesc <- selectList [PersonAgeLt 30] [PersonNameDesc] 0 0
   (map snd pasc) @== [eli, mic29]
 
-  let abe31 = Person "Abe" 31 $ Just "brown"
-  -- error!
-  _ <- insert abe31 
   abes <- selectList [PersonNameEq "Abe"] [] 0 0
   (map snd abes) @== [abe30]
 
