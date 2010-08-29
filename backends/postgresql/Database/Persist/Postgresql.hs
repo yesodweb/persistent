@@ -49,6 +49,7 @@ open' s = do
         , commit = const $ H.commit conn
         , rollback = const $ H.rollback conn
         , escapeName = escape
+        , noLimit = "LIMIT ALL"
         }
 
 prepare' :: H.Connection -> String -> IO Statement

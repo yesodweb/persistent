@@ -167,9 +167,10 @@ instance MonadCatchIO m => PersistBackend (SqlPersist m) where
                     then ""
                     else " ORDER BY " ++
                          intercalate "," (map (orderClause conn) ords)
-        lim = if limit == 0 && offset == 0
-                    then ""
-                    else " LIMIT " ++ show limit
+        lim conn = case (limit, offset) of
+                (0, 0) -> ""
+                (0, _) -> ' ' : noLimit conn
+                (l, _) -> " LIMIT " ++ show limit
         off = if offset == 0
                     then ""
                     else " OFFSET " ++ show offset
@@ -182,7 +183,7 @@ instance MonadCatchIO m => PersistBackend (SqlPersist m) where
             , escapeName conn $ rawTableName t
             , wher conn
             , ord conn
-            , lim
+            , lim conn
             , off
             ]
 

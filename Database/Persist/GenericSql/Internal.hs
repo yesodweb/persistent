@@ -40,6 +40,7 @@ data Connection = Connection
     , commit :: (String -> IO Statement) -> IO ()
     , rollback :: (String -> IO Statement) -> IO ()
     , escapeName :: RawName -> String
+    , noLimit :: String
     }
 data Statement = Statement
     { finalize :: IO ()

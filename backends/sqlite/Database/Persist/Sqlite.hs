@@ -43,6 +43,7 @@ open' s = do
         , commit = helper "COMMIT"
         , rollback = helper "ROLLBACK"
         , escapeName = escape
+        , noLimit = "LIMIT -1"
         }
   where
     helper t getter = do
