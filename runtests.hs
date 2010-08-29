@@ -10,6 +10,7 @@ import Test.Framework.Providers.HUnit
 import Test.HUnit hiding (Test)
 
 import Database.Persist.Sqlite
+import Database.Persist.Postgresql
 import Control.Monad.IO.Class
 
 import Control.Monad.Trans.Reader
@@ -48,7 +49,9 @@ Pet
 
 -- connstr = "user=test password=test host=localhost port=5432 dbname=yesod_test"
 
-runConn = (withSqlitePool "testdb" 1) . runSqlPool
+runConn f = do
+    (withSqlitePool "testdb" 1) $ runSqlPool f
+    (withPostgresqlPool "user=test password=test host=localhost port=5432 dbname=test" 1) $ runSqlPool f
 
 -- TODO: run tests in transaction
 sqliteTest :: SqlPersist IO () -> Assertion
