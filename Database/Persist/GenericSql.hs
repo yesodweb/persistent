@@ -12,7 +12,7 @@ module Database.Persist.GenericSql
     , Migration
     , parseMigration
     , parseMigration'
-    , dumpMigration
+    , printMigration
     , getMigration
     , runMigration
     , runMigrationUnsafe
@@ -348,7 +348,9 @@ filterClause conn f =
             , name
             , "<>?)"
             ]
-        (_, In, 0) -> "FALSE"
+        -- We use 1=2 (and below 1=1) to avoid using TRUE and FALSE, since
+        -- not all databases support those words directly.
+        (_, In, 0) -> "1=2"
         (False, In, _) -> name ++ " IN " ++ qmarks
         (True, In, _) -> concat
             [ "("
@@ -359,7 +361,7 @@ filterClause conn f =
             , qmarks
             , ")"
             ]
-        (_, NotIn, 0) -> "TRUE"
+        (_, NotIn, 0) -> "1=1"
         (False, NotIn, _) -> concat
             [ "("
             , name
@@ -434,8 +436,8 @@ parseMigration' m = do
       Left errs -> error $ unlines errs
       Right sql -> return sql
 
-dumpMigration :: MonadCatchIO m => Migration (SqlPersist m) -> SqlPersist m ()
-dumpMigration m = do
+printMigration :: MonadCatchIO m => Migration (SqlPersist m) -> SqlPersist m ()
+printMigration m = do
   mig <- parseMigration' m
   mapM_ (liftIO . putStrLn) (allSql mig)
 
