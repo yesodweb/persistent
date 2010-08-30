@@ -170,7 +170,7 @@ instance MonadCatchIO m => PersistBackend (SqlPersist m) where
         lim conn = case (limit, offset) of
                 (0, 0) -> ""
                 (0, _) -> ' ' : noLimit conn
-                (l, _) -> " LIMIT " ++ show limit
+                (_, _) -> " LIMIT " ++ show limit
         off = if offset == 0
                     then ""
                     else " OFFSET " ++ show offset

@@ -36,7 +36,8 @@ import Data.ByteString.Char8 (ByteString, unpack)
 import qualified Data.ByteString.UTF8 as BSU
 import Control.Applicative
 import Data.Typeable (Typeable)
-import Data.Int (Int64)
+import Data.Int (Int8, Int16, Int32, Int64)
+import Data.Word (Word8, Word16, Word32, Word64)
 import Text.Hamlet
 import qualified Data.Text as T
 import qualified Data.ByteString as S
@@ -113,10 +114,52 @@ instance PersistField Int where
     fromPersistValue x = Left $ "Expected Integer, received: " ++ show x
     sqlType _ = SqlInteger
 
+instance PersistField Int8 where
+    toPersistValue = PersistInt64 . fromIntegral
+    fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
+    fromPersistValue x = Left $ "Expected Integer, received: " ++ show x
+    sqlType _ = SqlInteger
+
+instance PersistField Int16 where
+    toPersistValue = PersistInt64 . fromIntegral
+    fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
+    fromPersistValue x = Left $ "Expected Integer, received: " ++ show x
+    sqlType _ = SqlInteger
+
+instance PersistField Int32 where
+    toPersistValue = PersistInt64 . fromIntegral
+    fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
+    fromPersistValue x = Left $ "Expected Integer, received: " ++ show x
+    sqlType _ = SqlInteger
+
 instance PersistField Int64 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ "Expected Integer, received: " ++ show x
+    sqlType _ = SqlInteger
+
+instance PersistField Word8 where
+    toPersistValue = PersistInt64 . fromIntegral
+    fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
+    fromPersistValue x = Left $ "Expected Wordeger, received: " ++ show x
+    sqlType _ = SqlInteger
+
+instance PersistField Word16 where
+    toPersistValue = PersistInt64 . fromIntegral
+    fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
+    fromPersistValue x = Left $ "Expected Wordeger, received: " ++ show x
+    sqlType _ = SqlInteger
+
+instance PersistField Word32 where
+    toPersistValue = PersistInt64 . fromIntegral
+    fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
+    fromPersistValue x = Left $ "Expected Wordeger, received: " ++ show x
+    sqlType _ = SqlInteger
+
+instance PersistField Word64 where
+    toPersistValue = PersistInt64 . fromIntegral
+    fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
+    fromPersistValue x = Left $ "Expected Wordeger, received: " ++ show x
     sqlType _ = SqlInteger
 
 instance PersistField Double where
