@@ -263,7 +263,7 @@ getColumn getter tname
     getType "date" = Right $ SqlDay
     getType "bool" = Right $ SqlBool
     getType "timestamp" = Right $ SqlDayTime
-    getType "float4" = Right $ SqlReal
+    getType "float8" = Right $ SqlReal
     getType "bytea" = Right $ SqlBlob
     getType a = Left $ "Unknown type: " ++ a
 getColumn _ _ x =
@@ -318,7 +318,7 @@ showColumn (Column n nu t def ref) = concat
 showSqlType :: SqlType -> String
 showSqlType SqlString = "VARCHAR"
 showSqlType SqlInteger = "INTEGER"
-showSqlType SqlReal = "REAL"
+showSqlType SqlReal = "DOUBLE PRECISION"
 showSqlType SqlDay = "DATE"
 showSqlType SqlTime = "TIME"
 showSqlType SqlDayTime = "TIMESTAMP"
