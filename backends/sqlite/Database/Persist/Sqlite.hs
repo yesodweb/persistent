@@ -101,6 +101,7 @@ withStmt' stmt vals f = do
                 return $ Just cols
 showSqlType :: SqlType -> String
 showSqlType SqlString = "VARCHAR"
+showSqlType SqlInt32 = "INTEGER"
 showSqlType SqlInteger = "INTEGER"
 showSqlType SqlReal = "REAL"
 showSqlType SqlDay = "DATE"

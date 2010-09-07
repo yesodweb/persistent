@@ -15,6 +15,8 @@ import Control.Monad.IO.Class
 
 import Control.Monad.Trans.Reader
 import Monad (unless)
+import Data.Int
+import Data.Word
 
 infix 1 /=@, @/=
 
@@ -45,6 +47,12 @@ Person
 Pet
     owner PersonId
     name String
+Number
+    int Int
+    int32 Int32
+    word32 Word32
+    int64 Int64
+    word64 Word64
 |]
 
 -- connstr = "user=test password=test host=localhost port=5432 dbname=yesod_test"
@@ -57,18 +65,20 @@ runConn f = do
 sqliteTest :: SqlPersist IO () -> Assertion
 sqliteTest actions = do
   runConn actions
-  runConn $ do cleanDB
+  runConn cleanDB
 
 cleanDB :: SqlPersist IO ()
 cleanDB = do
   deleteWhere ([] :: [Filter Person])
   deleteWhere ([] :: [Filter Pet])
+  deleteWhere ([] :: [Filter Number])
 
 setup :: SqlPersist IO ()
 setup = do
   runMigration $ do
     migrate (undefined :: Person)
     migrate (undefined :: Pet)
+    migrate (undefined :: Number)
   cleanDB
 
 main :: IO ()
@@ -88,6 +98,7 @@ testSuite = testGroup "Database.Persistent"
     , testCase "sqlite update" case_sqliteUpdate
     , testCase "sqlite updateWhere" case_sqliteUpdateWhere
     , testCase "sqlite selectList" case_sqliteSelectList
+    , testCase "large numbers" case_largeNumbers
     ]
 
                           
@@ -103,6 +114,7 @@ case_sqliteUpdate = sqliteTest _update
 case_sqliteUpdateWhere = sqliteTest _updateWhere
 case_sqliteSelectList = sqliteTest _selectList
 case_sqlitePersistent = sqliteTest _persistent
+case_largeNumbers = sqliteTest _largeNumbers
 
 _deleteWhere = do
   key2 <- insert $ Person "Michael2" 90 Nothing
@@ -270,4 +282,18 @@ _persistent = do
 
   delete micK
   Nothing <- get micK
+  return ()
+
+_largeNumbers = do
+  _ <- insert $ Number maxBound 0 0 0 0
+  _ <- insert $ Number 0 maxBound 0 0 0
+  _ <- insert $ Number 0 0 maxBound 0 0
+  _ <- insert $ Number 0 0 0 maxBound 0
+  _ <- insert $ Number 0 0 0 0 maxBound
+
+  _ <- insert $ Number minBound 0 0 0 0
+  _ <- insert $ Number 0 minBound 0 0 0
+  _ <- insert $ Number 0 0 minBound 0 0
+  _ <- insert $ Number 0 0 0 minBound 0
+  _ <- insert $ Number 0 0 0 0 minBound
   return ()

@@ -44,6 +44,7 @@ import qualified Data.ByteString as S
 import qualified Data.ByteString.Lazy as L
 import Data.Enumerator
 import qualified Control.Exception as E
+import Data.Bits (bitSize)
 
 -- | A raw value which can be stored in any backend and can be marshalled to
 -- and from a 'PersistField'.
@@ -62,7 +63,8 @@ data PersistValue = PersistString String
 -- datatypes, eg SqlString instead of SqlVarchar. Different SQL databases may
 -- have different translations for these types.
 data SqlType = SqlString
-             | SqlInteger
+             | SqlInt32
+             | SqlInteger -- ^ 8-byte integer; should be renamed SqlInt64
              | SqlReal
              | SqlBool
              | SqlDay
@@ -112,25 +114,27 @@ instance PersistField Int where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ "Expected Integer, received: " ++ show x
-    sqlType _ = SqlInteger
+    sqlType x = case bitSize x of
+                    32 -> SqlInt32
+                    _ -> SqlInteger
 
 instance PersistField Int8 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ "Expected Integer, received: " ++ show x
-    sqlType _ = SqlInteger
+    sqlType _ = SqlInt32
 
 instance PersistField Int16 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ "Expected Integer, received: " ++ show x
-    sqlType _ = SqlInteger
+    sqlType _ = SqlInt32
 
 instance PersistField Int32 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ "Expected Integer, received: " ++ show x
-    sqlType _ = SqlInteger
+    sqlType _ = SqlInt32
 
 instance PersistField Int64 where
     toPersistValue = PersistInt64 . fromIntegral
@@ -142,13 +146,13 @@ instance PersistField Word8 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ "Expected Wordeger, received: " ++ show x
-    sqlType _ = SqlInteger
+    sqlType _ = SqlInt32
 
 instance PersistField Word16 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ "Expected Wordeger, received: " ++ show x
-    sqlType _ = SqlInteger
+    sqlType _ = SqlInt32
 
 instance PersistField Word32 where
     toPersistValue = PersistInt64 . fromIntegral
