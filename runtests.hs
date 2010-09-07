@@ -285,15 +285,19 @@ _persistent = do
   return ()
 
 _largeNumbers = do
-  _ <- insert $ Number maxBound 0 0 0 0
-  _ <- insert $ Number 0 maxBound 0 0 0
-  _ <- insert $ Number 0 0 maxBound 0 0
-  _ <- insert $ Number 0 0 0 maxBound 0
-  _ <- insert $ Number 0 0 0 0 maxBound
+    go $ Number maxBound 0 0 0 0
+    go $ Number 0 maxBound 0 0 0
+    go $ Number 0 0 maxBound 0 0
+    go $ Number 0 0 0 maxBound 0
+    go $ Number 0 0 0 0 maxBound
 
-  _ <- insert $ Number minBound 0 0 0 0
-  _ <- insert $ Number 0 minBound 0 0 0
-  _ <- insert $ Number 0 0 minBound 0 0
-  _ <- insert $ Number 0 0 0 minBound 0
-  _ <- insert $ Number 0 0 0 0 minBound
-  return ()
+    go $ Number minBound 0 0 0 0
+    go $ Number 0 minBound 0 0 0
+    go $ Number 0 0 minBound 0 0
+    go $ Number 0 0 0 minBound 0
+    go $ Number 0 0 0 0 minBound
+  where
+    go x = do
+        xid <- insert x
+        x' <- get xid
+        liftIO $ x' @?= Just x
