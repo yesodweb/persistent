@@ -15,6 +15,7 @@ module Database.Persist.GenericSql
     , printMigration
     , getMigration
     , runMigration
+    , runMigrationSilent
     , runMigrationUnsafe
     , migrate
     ) where
@@ -31,7 +32,7 @@ import Database.Persist.GenericSql.Internal
 import qualified Database.Persist.GenericSql.Raw as R
 import Database.Persist.GenericSql.Raw (SqlPersist (..))
 import "MonadCatchIO-transformers" Control.Monad.CatchIO
-import Control.Monad (liftM)
+import Control.Monad (liftM, unless)
 import Data.Enumerator hiding (map, length)
 
 type ConnectionPool = Pool Connection
@@ -450,10 +451,23 @@ getMigration m = do
 runMigration :: MonadCatchIO m
              => Migration (SqlPersist m)
              -> SqlPersist m ()
-runMigration m = do
+runMigration m = runMigration' m False >> return ()
+
+-- | Same as 'runMigration', but returns a list of the SQL commands executed
+-- instead of printing them to stderr.
+runMigrationSilent :: MonadCatchIO m
+                   => Migration (SqlPersist m)
+                   -> SqlPersist m [String]
+runMigrationSilent m = runMigration' m True
+
+runMigration' :: MonadCatchIO m
+              => Migration (SqlPersist m)
+              -> Bool -- ^ is silent?
+              -> SqlPersist m [String]
+runMigration' m silent = do
     mig <- parseMigration' m
     case unsafeSql mig of
-        []   -> mapM_ executeMigrate $ safeSql mig
+        []   -> mapM (executeMigrate silent) $ safeSql mig
         errs -> error $ concat
             [ "\n\nDatabase migration: manual intervention required.\n"
             , "The following actions are considered unsafe:\n\n"
@@ -465,12 +479,13 @@ runMigrationUnsafe :: MonadCatchIO m
                    -> SqlPersist m ()
 runMigrationUnsafe m = do
     mig <- parseMigration' m
-    mapM_ executeMigrate $ allSql mig
+    mapM_ (executeMigrate False) $ allSql mig
 
-executeMigrate :: MonadIO m => String -> SqlPersist m ()
-executeMigrate s = do
-    liftIO $ hPutStrLn stderr $ "Migrating: " ++ s
+executeMigrate :: MonadIO m => Bool -> String -> SqlPersist m String
+executeMigrate silent s = do
+    unless silent $ liftIO $ hPutStrLn stderr $ "Migrating: " ++ s
     execute' s []
+    return s
 
 migrate :: (MonadCatchIO m, PersistEntity val)
         => val
