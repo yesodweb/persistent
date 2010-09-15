@@ -16,8 +16,17 @@ persist = QuasiQuoter
     }
 
 parse_ :: String -> [EntityDef]
-parse_ = map parse' . nest . map words' . filter (not . null)
-       . map killCarriage . lines
+parse_ = map parse' . nest . map words'
+       . removeLeadingSpaces
+       . map killCarriage
+       . lines
+
+removeLeadingSpaces :: [String] -> [String]
+removeLeadingSpaces x =
+    let y = filter (not . null) x
+     in if all isSpace (map head y)
+            then removeLeadingSpaces (map tail y)
+            else y
 
 killCarriage :: String -> String
 killCarriage "" = ""

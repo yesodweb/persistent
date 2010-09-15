@@ -37,17 +37,17 @@ expected @== actual = liftIO $ expected @?= actual
 expected ==@ actual = liftIO $ expected @=? actual
 
 mkPersist [$persist|
-Empty
+  Empty
 
-Person
+  Person
     name String update Eq Ne Desc
     age Int update "Asc" Desc Lt Eq "some ignored attribute"
     color String null Eq Ne
     PersonNameKey name
-Pet
+  Pet
     owner PersonId
     name String
-Number
+  Number
     int Int
     int32 Int32
     word32 Word32
