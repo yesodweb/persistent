@@ -99,6 +99,7 @@ testSuite = testGroup "Database.Persistent"
     , testCase "sqlite updateWhere" case_sqliteUpdateWhere
     , testCase "sqlite selectList" case_sqliteSelectList
     , testCase "large numbers" case_largeNumbers
+    , testCase "insertBy" case_insertBy
     ]
 
                           
@@ -115,6 +116,7 @@ case_sqliteUpdateWhere = sqliteTest _updateWhere
 case_sqliteSelectList = sqliteTest _selectList
 case_sqlitePersistent = sqliteTest _persistent
 case_largeNumbers = sqliteTest _largeNumbers
+case_insertBy = sqliteTest _insertBy
 
 _deleteWhere = do
   key2 <- insert $ Person "Michael2" 90 Nothing
@@ -301,3 +303,9 @@ _largeNumbers = do
         xid <- insert x
         x' <- get xid
         liftIO $ x' @?= Just x
+
+_insertBy = do
+    Right _ <- insertBy' $ Person "name" 1 Nothing
+    Left _ <- insertBy' $ Person "name" 1 Nothing
+    Right _ <- insertBy' $ Person "name2" 1 Nothing
+    return ()
