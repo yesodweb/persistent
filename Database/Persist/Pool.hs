@@ -9,7 +9,7 @@ module Database.Persist.Pool
 
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TVar
-    (TVar, newTVarIO, readTVar, writeTVar, readTVarIO)
+    (TVar, newTVarIO, readTVar, writeTVar)
 import Control.Exception (throwIO)
 import Data.Typeable
 import "MonadCatchIO-transformers" Control.Monad.CatchIO
@@ -32,7 +32,7 @@ createPool :: MonadCatchIO m
 createPool mk fr mx f = do
     pd <- liftIO $ newTVarIO $ PoolData [] 0
     finally (f $ Pool mx pd mk) $ liftIO $ do
-        PoolData ress _ <- readTVarIO pd
+        PoolData ress _ <- atomically $ readTVar pd
         mapM_ fr ress
 
 data PoolExhaustedException = PoolExhaustedException

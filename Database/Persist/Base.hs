@@ -46,7 +46,7 @@ import qualified Data.ByteString.Lazy as L
 import Data.Enumerator
 import qualified Control.Exception as E
 import Data.Bits (bitSize)
-import Control.Monad (when, liftM)
+import Control.Monad (liftM)
 
 -- | A raw value which can be stored in any backend and can be marshalled to
 -- and from a 'PersistField'.
