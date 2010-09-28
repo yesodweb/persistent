@@ -12,7 +12,6 @@ import Text.ParserCombinators.Parsec hiding (token)
 persist :: QuasiQuoter
 persist = QuasiQuoter
     { quoteExp = lift . parse_
-    , quotePat = error "Cannot quasi-quote a Persist pattern."
     }
 
 parse_ :: String -> [EntityDef]
