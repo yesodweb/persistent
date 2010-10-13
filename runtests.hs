@@ -11,6 +11,7 @@ import Test.HUnit hiding (Test)
 
 import Database.Persist.Sqlite
 import Database.Persist.Postgresql
+import Database.Persist.TH
 import Control.Monad.IO.Class
 
 import Control.Monad.Trans.Reader
@@ -36,7 +37,7 @@ infix 1 @==, ==@
 expected @== actual = liftIO $ expected @?= actual
 expected ==@ actual = liftIO $ expected @=? actual
 
-mkPersist [$persist|
+share2 mkPersist (mkMigrate "testMigrate") [$persist|
   Empty
 
   Person
@@ -44,6 +45,8 @@ mkPersist [$persist|
     age Int update "Asc" Desc Lt "some ignored -- attribute" Eq
     color String null Eq Ne -- this is a comment sql=foobarbaz
     PersonNameKey name -- this is a comment sql=foobarbaz
+  NeedsPet
+    pet PetId
   Pet
     owner PersonId
     name String
@@ -75,10 +78,7 @@ cleanDB = do
 
 setup :: SqlPersist IO ()
 setup = do
-  runMigration $ do
-    migrate (undefined :: Person)
-    migrate (undefined :: Pet)
-    migrate (undefined :: Number)
+  runMigration testMigrate
   cleanDB
 
 main :: IO ()

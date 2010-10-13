@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE PackageImports #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 -- | This is a helper module for creating SQL backends. Regular users do not
@@ -18,6 +19,7 @@ module Database.Persist.GenericSql
     , runMigrationSilent
     , runMigrationUnsafe
     , migrate
+    , mkMigrate
     ) where
 
 import Database.Persist.Base
@@ -34,6 +36,7 @@ import Database.Persist.GenericSql.Raw (SqlPersist (..))
 import "MonadCatchIO-transformers" Control.Monad.CatchIO
 import Control.Monad (liftM, unless)
 import Data.Enumerator hiding (map, length)
+import Language.Haskell.TH.Syntax hiding (lift)
 
 type ConnectionPool = Pool Connection
 
@@ -503,3 +506,30 @@ getFiltsValues =
     go (Left PersistNull) = []
     go (Left x) = [x]
     go (Right xs) = filter (/= PersistNull) xs
+
+-- | Creates a single function to perform all migrations for the entities
+-- defined here. One thing to be aware of is dependencies: if you have entities
+-- with foreign references, make sure to place those definitions after the
+-- entities they reference.
+mkMigrate :: String -> [EntityDef] -> Q [Dec]
+mkMigrate fun defs = do
+    body' <- body
+    return
+        [ SigD (mkName fun) typ
+        , FunD (mkName fun) [Clause [] (NormalB body') []]
+        ]
+  where
+    typ = ForallT [PlainTV $ mkName "m"]
+            [ ClassP ''MonadCatchIO [VarT $ mkName "m"]
+            ]
+            $ ConT ''Migration `AppT` (ConT ''SqlPersist `AppT` VarT (mkName "m"))
+    body =
+        case defs of
+            [] -> [|return ()|]
+            _ -> DoE `fmap` mapM toStmt defs
+    toStmt ed = do
+        let n = entityName ed
+        u <- [|undefined|]
+        m <- [|migrate|]
+        let u' = SigE u $ ConT $ mkName n
+        return $ NoBindS $ m `AppE` u'
