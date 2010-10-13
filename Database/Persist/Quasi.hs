@@ -43,7 +43,7 @@ words'' = do
     s <- fmap (not . null) $ many space
     t <- many token
     eof
-    return (s, t)
+    return (s, takeWhile (/= "--") t)
   where
     token = do
         t <- (char '"' >> quoted) <|> unquoted

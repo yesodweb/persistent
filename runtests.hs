@@ -41,9 +41,9 @@ mkPersist [$persist|
 
   Person
     name String update Eq Ne Desc
-    age Int update "Asc" Desc Lt Eq "some ignored attribute"
-    color String null Eq Ne
-    PersonNameKey name
+    age Int update "Asc" Desc Lt "some ignored -- attribute" Eq
+    color String null Eq Ne -- this is a comment sql=foobarbaz
+    PersonNameKey name -- this is a comment sql=foobarbaz
   Pet
     owner PersonId
     name String
