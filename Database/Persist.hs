@@ -6,7 +6,6 @@ module Database.Persist
     , persist
     , selectList
     , insertBy
-    , insertBy'
     , checkUnique
     ) where
 

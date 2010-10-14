@@ -24,7 +24,6 @@ module Database.Persist.Base
     , SomePersistField (..)
     , selectList
     , insertBy
-    , insertBy'
     , checkUnique
     , DeleteCascade (..)
     , deleteCascadeWhere
@@ -326,31 +325,12 @@ class Monad m => PersistBackend m where
     -- | The total number of records fulfilling the given criterion.
     count :: PersistEntity val => [Filter val] -> m Int
 
-{-# DEPRECATED insertBy "Please use insertBy' instead." #-}
--- | Try to insert the given entity; if another entity exists with the same
--- unique key, return that entity; otherwise, return the newly created entity.
---
--- This function is deprecated in favor of insertBy'. In the next major
--- version, this function will be replaced with that one.
-insertBy :: (PersistEntity val, PersistBackend m) => val -> m (Key val, val)
-insertBy val =
-    go $ persistUniqueKeys val
-  where
-    go [] = do
-        key <- insert val
-        return (key, val)
-    go (x:xs) = do
-        y <- getBy x
-        case y of
-            Nothing -> go xs
-            Just z -> return z
-
--- | This is an improved version of 'insertBy', indicating whether a new value
--- was inserted. If a duplicate exists in the database, it is returned as
--- 'Left'. Otherwise, the new 'Key' is returned as 'Right'.
-insertBy' :: (PersistEntity v, PersistBackend m)
+-- | Insert a value, checking for conflicts with any unique constraints.  If a
+-- duplicate exists in the database, it is returned as 'Left'. Otherwise, the
+-- new 'Key' is returned as 'Right'.
+insertBy :: (PersistEntity v, PersistBackend m)
           => v -> m (Either (Key v, v) (Key v))
-insertBy' val =
+insertBy val =
     go $ persistUniqueKeys val
   where
     go [] = Right `liftM` insert val
