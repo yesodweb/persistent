@@ -1,5 +1,5 @@
 name:            persistent-postgresql
-version:         0.2.1.1
+version:         0.2.2
 license:         BSD3
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -19,7 +19,7 @@ library
                      transformers >= 0.2.1 && < 0.3,
                      MonadCatchIO-transformers >= 0.2.2 && < 0.3,
                      HDBC-postgresql >= 2.2.3.1 && < 2.3,
-                     persistent >= 0.2.1 && < 0.3,
+                     persistent >= 0.2.4 && < 0.3,
                      containers >= 0.2 && < 0.4,
                      bytestring >= 0.9 && < 0.10,
                      utf8-string >= 0.3.6 && < 0.4

@@ -6,6 +6,7 @@ module Database.Persist.GenericSql.Internal
     , Statement (..)
     , withSqlConn
     , withSqlPool
+    , withSqlPoolF
     , RowPopper
     , mkColumns
     , Column (..)
@@ -53,6 +54,11 @@ data Statement = Statement
 withSqlPool :: MonadCatchIO m
             => IO Connection -> Int -> (Pool Connection -> m a) -> m a
 withSqlPool mkConn = createPool mkConn close'
+
+withSqlPoolF :: MonadIO m
+             => (m a -> m () -> m a)
+             -> IO Connection -> Int -> (Pool Connection -> m a) -> m a
+withSqlPoolF finally' mkConn = createPoolF finally' mkConn close'
 
 withSqlConn :: MonadCatchIO m => IO Connection -> (Connection -> m a) -> m a
 withSqlConn open = bracket (liftIO open) (liftIO . close')

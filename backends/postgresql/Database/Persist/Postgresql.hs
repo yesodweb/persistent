@@ -2,6 +2,7 @@
 -- | A postgresql backend for persistent.
 module Database.Persist.Postgresql
     ( withPostgresqlPool
+    , withPostgresqlPoolF
     , withPostgresqlConn
     , module Database.Persist
     , module Database.Persist.GenericSql
@@ -31,6 +32,8 @@ withPostgresqlPool :: MonadCatchIO m
                    -> Int -- ^ number of connections to open
                    -> (ConnectionPool -> m a) -> m a
 withPostgresqlPool s = withSqlPool $ open' s
+
+withPostgresqlPoolF f s = withSqlPoolF f $ open' s
 
 withPostgresqlConn :: MonadCatchIO m => String -> (Connection -> m a) -> m a
 withPostgresqlConn = withSqlConn . open'

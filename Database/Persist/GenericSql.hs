@@ -10,6 +10,7 @@ module Database.Persist.GenericSql
     , Statement
     , runSqlConn
     , runSqlPool
+    , runSqlPoolF
     , Migration
     , parseMigration
     , parseMigration'
@@ -49,6 +50,11 @@ execute' = R.execute
 
 runSqlPool :: MonadCatchIO m => SqlPersist m a -> Pool Connection -> m a
 runSqlPool r pconn = withPool' pconn $ runSqlConn r
+
+runSqlPoolF :: MonadCatchIO m
+            => (m (Maybe b) -> m () -> m (Maybe b))
+            -> SqlPersist m b -> Pool Connection -> m b
+runSqlPoolF finally' r pconn = withPoolF' finally' pconn $ runSqlConn r
 
 runSqlConn :: MonadCatchIO m => SqlPersist m a -> Connection -> m a
 runSqlConn (SqlPersist r) conn = do
