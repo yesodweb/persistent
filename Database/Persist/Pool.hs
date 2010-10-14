@@ -85,15 +85,12 @@ withPoolF finally p f = block $ do
                 then return Nothing
                 else do
                     x <- liftIO $ poolMake p
-                    liftIO $ putStrLn "Created a new resource"
                     finally
                         (liftM Just $ unblock $ f x)
-                        (liftIO (putStrLn "Re-inserted newly created resource" >> insertResource 1 x))
-        Right res -> do
-            liftIO $ putStrLn "Borrowed a resource from the pool"
-            finally
+                        (insertResource 1 x)
+        Right res -> finally
                         (liftM Just $ unblock $ f res)
-                        (liftIO (putStrLn "Returned resource to the pool") >> insertResource 0 res)
+                        (insertResource 0 res)
   where
     insertResource i x = liftIO $ atomically $ do
         pd <- readTVar $ poolData p
