@@ -45,11 +45,11 @@ share2 mkPersist (mkMigrate "testMigrate") [$persist|
     age Int update "Asc" Desc Lt "some ignored -- attribute" Eq
     color String null Eq Ne -- this is a comment sql=foobarbaz
     PersonNameKey name -- this is a comment sql=foobarbaz
-  NeedsPet
-    pet PetId
   Pet
     owner PersonId
     name String
+  NeedsPet
+    pet PetId
   Number
     int Int
     int32 Int32
@@ -305,7 +305,7 @@ _largeNumbers = do
         liftIO $ x' @?= Just x
 
 _insertBy = do
-    Right _ <- insertBy' $ Person "name" 1 Nothing
-    Left _ <- insertBy' $ Person "name" 1 Nothing
-    Right _ <- insertBy' $ Person "name2" 1 Nothing
+    Right _ <- insertBy $ Person "name" 1 Nothing
+    Left _ <- insertBy $ Person "name" 1 Nothing
+    Right _ <- insertBy $ Person "name2" 1 Nothing
     return ()

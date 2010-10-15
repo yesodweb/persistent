@@ -6,7 +6,6 @@ module Database.Persist.GenericSql.Internal
     , Statement (..)
     , withSqlConn
     , withSqlPool
-    , withSqlPoolF
     , RowPopper
     , mkColumns
     , Column (..)
@@ -18,7 +17,6 @@ module Database.Persist.GenericSql.Internal
     , RawName (..)
     ) where
 
-import "MonadCatchIO-transformers" Control.Monad.CatchIO
 import qualified Data.Map as Map
 import Data.IORef
 import Control.Monad.IO.Class
@@ -26,6 +24,7 @@ import Database.Persist.Pool
 import Database.Persist.Base
 import Data.Maybe (fromJust)
 import Control.Arrow
+import Control.Monad.Invert (MonadInvertIO, bracket)
 
 type RowPopper m = m (Maybe [PersistValue])
 
@@ -47,20 +46,15 @@ data Statement = Statement
     { finalize :: IO ()
     , reset :: IO ()
     , execute :: [PersistValue] -> IO ()
-    , withStmt :: forall a m. MonadCatchIO m
+    , withStmt :: forall a m. MonadInvertIO m
                => [PersistValue] -> (RowPopper m -> m a) -> m a
     }
 
-withSqlPool :: MonadCatchIO m
+withSqlPool :: MonadInvertIO m
             => IO Connection -> Int -> (Pool Connection -> m a) -> m a
 withSqlPool mkConn = createPool mkConn close'
 
-withSqlPoolF :: MonadIO m
-             => (m a -> m () -> m a)
-             -> IO Connection -> Int -> (Pool Connection -> m a) -> m a
-withSqlPoolF finally' mkConn = createPoolF finally' mkConn close'
-
-withSqlConn :: MonadCatchIO m => IO Connection -> (Connection -> m a) -> m a
+withSqlConn :: MonadInvertIO m => IO Connection -> (Connection -> m a) -> m a
 withSqlConn open = bracket (liftIO open) (liftIO . close')
 
 close' :: Connection -> IO ()

@@ -16,17 +16,17 @@ import qualified Database.Sqlite as Sqlite
 
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.List (intercalate)
-import "MonadCatchIO-transformers" Control.Monad.CatchIO
 import Data.IORef
 import qualified Data.Map as Map
+import Control.Monad.Invert (MonadInvertIO)
 
-withSqlitePool :: MonadCatchIO m
+withSqlitePool :: MonadInvertIO m
                => String
                -> Int -- ^ number of connections to open
                -> (ConnectionPool -> m a) -> m a
 withSqlitePool s = withSqlPool $ open' s
 
-withSqliteConn :: MonadCatchIO m => String -> (Connection -> m a) -> m a
+withSqliteConn :: MonadInvertIO m => String -> (Connection -> m a) -> m a
 withSqliteConn = withSqlConn . open'
 
 open' :: String -> IO Connection
@@ -81,7 +81,7 @@ execute' stmt vals = do
     Sqlite.Done <- Sqlite.step stmt
     return ()
 
-withStmt' :: MonadCatchIO m
+withStmt' :: MonadInvertIO m
           => Sqlite.Statement
           -> [PersistValue]
           -> (RowPopper m -> m a)

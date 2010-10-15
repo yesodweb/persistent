@@ -2,7 +2,6 @@
 -- | A postgresql backend for persistent.
 module Database.Persist.Postgresql
     ( withPostgresqlPool
-    , withPostgresqlPoolF
     , withPostgresqlConn
     , module Database.Persist
     , module Database.Persist.GenericSql
@@ -18,7 +17,6 @@ import qualified Database.HDBC.PostgreSQL as H
 
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.List (intercalate)
-import "MonadCatchIO-transformers" Control.Monad.CatchIO
 import Data.IORef
 import qualified Data.Map as Map
 import Data.Either (partitionEithers)
@@ -26,16 +24,15 @@ import Control.Arrow
 import Data.List (sort, groupBy)
 import Data.Function (on)
 import qualified Data.ByteString.UTF8 as BSU
+import Control.Monad.Invert (MonadInvertIO)
 
-withPostgresqlPool :: MonadCatchIO m
+withPostgresqlPool :: MonadInvertIO m
                    => String
                    -> Int -- ^ number of connections to open
                    -> (ConnectionPool -> m a) -> m a
 withPostgresqlPool s = withSqlPool $ open' s
 
-withPostgresqlPoolF f s = withSqlPoolF f $ open' s
-
-withPostgresqlConn :: MonadCatchIO m => String -> (Connection -> m a) -> m a
+withPostgresqlConn :: MonadInvertIO m => String -> (Connection -> m a) -> m a
 withPostgresqlConn = withSqlConn . open'
 
 open' :: String -> IO Connection
@@ -81,7 +78,7 @@ execute' stmt vals = do
     _ <- H.execute stmt $ map pToSql vals
     return ()
 
-withStmt' :: MonadCatchIO m
+withStmt' :: MonadInvertIO m
           => H.Statement
           -> [PersistValue]
           -> (RowPopper m -> m a)

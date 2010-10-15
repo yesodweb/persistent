@@ -1,5 +1,6 @@
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TypeFamilies #-}
 module Database.Persist.GenericSql.Raw
     ( withStmt
     , execute
@@ -17,12 +18,22 @@ import Control.Monad.Trans.Reader
 import qualified Data.Map as Map
 import Control.Applicative (Applicative)
 import Control.Monad.Trans.Class (MonadTrans (..))
-import "MonadCatchIO-transformers" Control.Monad.CatchIO
+import Control.Monad.Invert (MonadInvertIO (..))
+import Control.Monad (liftM)
 
-newtype SqlPersist m a = SqlPersist (ReaderT Connection m a)
-    deriving (Monad, MonadIO, MonadCatchIO, MonadTrans, Functor, Applicative)
+newtype SqlPersist m a = SqlPersist { unSqlPersist :: ReaderT Connection m a }
+    deriving (Monad, MonadIO, MonadTrans, Functor, Applicative)
 
-withStmt :: MonadCatchIO m => String -> [PersistValue]
+instance MonadInvertIO m => MonadInvertIO (SqlPersist m) where
+    newtype InvertedIO (SqlPersist m) a =
+        InvSqlPersistIO
+            { runInvSqlPersistIO :: InvertedIO (ReaderT Connection m) a
+            }
+    type InvertedArg (SqlPersist m) = (Connection, InvertedArg m)
+    invertIO = liftM (fmap InvSqlPersistIO) . invertIO . unSqlPersist
+    revertIO f = SqlPersist $ revertIO $ liftM runInvSqlPersistIO . f
+
+withStmt :: MonadInvertIO m => String -> [PersistValue]
          -> (RowPopper (SqlPersist m) -> SqlPersist m a) -> SqlPersist m a
 withStmt sql vals pop = do
     stmt <- getStmt sql
