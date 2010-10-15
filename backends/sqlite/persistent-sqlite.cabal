@@ -23,6 +23,7 @@ library
                      transformers >= 0.2.1 && < 0.3,
                      utf8-string >= 0.3.4 && < 0.4,
                      persistent >= 0.3.0 && < 0.4,
+                     neither >= 0.1 && < 0.2,
                      containers >= 0.2 && < 0.5
     exposed-modules: Database.Sqlite
                      Database.Persist.Sqlite
