@@ -37,8 +37,12 @@ infix 1 @==, ==@
 expected @== actual = liftIO $ expected @?= actual
 expected ==@ actual = liftIO $ expected @=? actual
 
+data PetType = Cat | Dog
+    deriving (Show, Read, Eq)
+derivePersistField "PetType"
+
+  -- FIXME Empty
 share2 mkPersist (mkMigrate "testMigrate") [$persist|
-  Empty
 
   Person
     name String update Eq Ne Desc
@@ -48,6 +52,7 @@ share2 mkPersist (mkMigrate "testMigrate") [$persist|
   Pet
     owner PersonId
     name String
+    type PetType
   NeedsPet
     pet PetId
   Number
@@ -72,8 +77,8 @@ sqliteTest actions = do
 
 cleanDB :: SqlPersist IO ()
 cleanDB = do
-  deleteWhere ([] :: [Filter Person])
   deleteWhere ([] :: [Filter Pet])
+  deleteWhere ([] :: [Filter Person])
   deleteWhere ([] :: [Filter Number])
 
 setup :: SqlPersist IO ()
@@ -100,6 +105,7 @@ testSuite = testGroup "Database.Persistent"
     , testCase "sqlite selectList" case_sqliteSelectList
     , testCase "large numbers" case_largeNumbers
     , testCase "insertBy" case_insertBy
+    , testCase "derivePersistField" case_derivePersistField
     ]
 
                           
@@ -117,6 +123,7 @@ case_sqliteSelectList = sqliteTest _selectList
 case_sqlitePersistent = sqliteTest _persistent
 case_largeNumbers = sqliteTest _largeNumbers
 case_insertBy = sqliteTest _insertBy
+case_derivePersistField = sqliteTest _derivePersistField
 
 _deleteWhere = do
   key2 <- insert $ Person "Michael2" 90 Nothing
@@ -309,3 +316,12 @@ _insertBy = do
     Left _ <- insertBy $ Person "name" 1 Nothing
     Right _ <- insertBy $ Person "name2" 1 Nothing
     return ()
+
+_derivePersistField = do
+    person <- insert $ Person "pet owner" 30 Nothing
+    cat <- insert $ Pet person "Mittens" Cat
+    Just cat' <- get cat
+    liftIO $ petType cat' @?= Cat
+    dog <- insert $ Pet person "Spike" Dog
+    Just dog' <- get dog
+    liftIO $ petType dog' @?= Dog

@@ -7,6 +7,7 @@ module Database.Persist.TH
     , share2
     , mkSave
     , mkDeleteCascade
+    , derivePersistField
     ) where
 
 import Database.Persist.Base
@@ -435,3 +436,31 @@ mkUniqueKeys def = do
     go' xs front col =
         let Just col' = lookup col xs
          in front `AppE` VarE col'
+
+-- | Automatically creates a valid 'PersistField' instance for any datatype
+-- that has valid 'Show' and 'Read' instances. Can be very convenient for
+-- 'Enum' types.
+derivePersistField :: String -> Q [Dec]
+derivePersistField s = do
+    ss <- [|SqlString|]
+    tpv <- [|PersistString . show|]
+    fpv <- [|\dt v ->
+                case fromPersistValue v of
+                    Left e -> Left e
+                    Right s ->
+                        case reads s of
+                            (x, _):_ -> Right x
+                            [] -> Left $ "Invalid " ++ dt ++ ": " ++ s|]
+    return
+        [ InstanceD [] (ConT ''PersistField `AppT` ConT (mkName s))
+            [ FunD (mkName "sqlType")
+                [ Clause [WildP] (NormalB ss) []
+                ]
+            , FunD (mkName "toPersistValue")
+                [ Clause [] (NormalB tpv) []
+                ]
+            , FunD (mkName "fromPersistValue")
+                [ Clause [] (NormalB $ fpv `AppE` LitE (StringL s)) []
+                ]
+            ]
+        ]
