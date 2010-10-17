@@ -1,10 +1,14 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE PackageImports #-}
 module Database.Persist.Pool
-    ( createPool
+    ( -- * Using pools
+      createPool
     , withPool
     , withPool'
     , Pool
+      -- * Diagnostics
+    , PoolStats (..)
+    , poolStats
     ) where
 
 import Control.Concurrent.STM (atomically)
@@ -26,6 +30,17 @@ data Pool a = Pool
     , poolData :: TVar (PoolData a)
     , poolMake :: IO a
     }
+
+data PoolStats = PoolStats
+    { poolStatsMax :: Int
+    , poolStatsAvailable :: Int
+    , poolStatsCreated :: Int
+    }
+
+poolStats :: Pool a -> IO PoolStats
+poolStats (Pool m td _) = do
+    d <- atomically $ readTVar td
+    return $ PoolStats m (length $ poolAvail d) (poolCreated d)
 
 createPool :: (MonadIO m, I.MonadInvertIO m)
            => IO a -> (a -> IO ()) -> Int -> (Pool a -> m b) -> m b
