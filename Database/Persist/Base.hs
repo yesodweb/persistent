@@ -33,7 +33,6 @@ module Database.Persist.Base
 import Language.Haskell.TH.Syntax
 import Data.Time (Day, TimeOfDay, UTCTime)
 import Data.ByteString.Char8 (ByteString, unpack)
-import qualified Data.ByteString.UTF8 as BSU
 import Control.Applicative
 import Data.Typeable (Typeable)
 import Data.Int (Int8, Int16, Int32, Int64)
@@ -46,6 +45,9 @@ import Data.Enumerator
 import qualified Control.Exception as E
 import Data.Bits (bitSize)
 import Control.Monad (liftM)
+
+import qualified Data.Text.Encoding as T
+import qualified Data.Text.Encoding.Error as T
 
 -- | A raw value which can be stored in any backend and can be marshalled to
 -- and from a 'PersistField'.
@@ -85,7 +87,8 @@ class PersistField a where
 instance PersistField String where
     toPersistValue = PersistString
     fromPersistValue (PersistString s) = Right s
-    fromPersistValue (PersistByteString bs) = Right $ BSU.toString bs
+    fromPersistValue (PersistByteString bs) =
+        Right $ T.unpack $ T.decodeUtf8With T.lenientDecode bs
     fromPersistValue (PersistInt64 i) = Right $ show i
     fromPersistValue (PersistDouble d) = Right $ show d
     fromPersistValue (PersistDay d) = Right $ show d
@@ -98,12 +101,14 @@ instance PersistField String where
 instance PersistField ByteString where
     toPersistValue = PersistByteString
     fromPersistValue (PersistByteString bs) = Right bs
-    fromPersistValue x = BSU.fromString <$> fromPersistValue x
+    fromPersistValue x = T.encodeUtf8 . T.pack <$> fromPersistValue x
     sqlType _ = SqlBlob
 
 instance PersistField T.Text where
     toPersistValue = PersistString . T.unpack
-    fromPersistValue = fmap T.pack . fromPersistValue
+    fromPersistValue (PersistByteString bs) =
+        Right $ T.decodeUtf8With T.lenientDecode bs
+    fromPersistValue v = fmap T.pack $ fromPersistValue v
     sqlType _ = SqlString
 
 instance PersistField Html where
