@@ -23,8 +23,12 @@ import Data.Either (partitionEithers)
 import Control.Arrow
 import Data.List (sort, groupBy)
 import Data.Function (on)
-import qualified Data.ByteString.UTF8 as BSU
 import Control.Monad.Invert (MonadInvertIO)
+
+import Data.ByteString (ByteString)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
+import qualified Data.Text.Encoding.Error as T
 
 withPostgresqlPool :: MonadInvertIO m
                    => String
@@ -181,7 +185,7 @@ getColumns getter name = do
         case x of
             Nothing -> return $ front []
             Just [PersistByteString con, PersistByteString col] ->
-                getAll pop (front . (:) (BSU.toString con, BSU.toString col))
+                getAll pop (front . (:) (bsToChars con, bsToChars col))
             Just _ -> getAll pop front -- FIXME error message?
     helperU pop = do
         rows <- getAll pop id
@@ -230,12 +234,12 @@ getColumn getter tname
     case d' of
         Left s -> return $ Left s
         Right d'' ->
-            case getType $ BSU.toString z of
+            case getType $ bsToChars z of
                 Left s -> return $ Left s
                 Right t -> do
-                    let cname = RawName $ BSU.toString x
+                    let cname = RawName $ bsToChars x
                     ref <- getRef cname
-                    return $ Right $ Column cname (BSU.toString y == "YES")
+                    return $ Right $ Column cname (bsToChars y == "YES")
                                      t d'' ref
   where
     getRef cname = do
@@ -256,7 +260,7 @@ getColumn getter tname
             return $ if i == 0 then Nothing else Just (RawName "", ref)
     d' = case d of
             PersistNull -> Right Nothing
-            PersistByteString a -> Right $ Just $ BSU.toString a
+            PersistByteString a -> Right $ Just $ bsToChars a
             _ -> Left $ "Invalid default column: " ++ show d
     getType "int4" = Right $ SqlInt32
     getType "int8" = Right $ SqlInteger
@@ -441,3 +445,6 @@ escape (RawName s) =
     go "" = ""
     go ('"':xs) = "\"\"" ++ go xs
     go (x:xs) = x : go xs
+
+bsToChars :: ByteString -> String
+bsToChars = T.unpack . T.decodeUtf8With T.lenientDecode
