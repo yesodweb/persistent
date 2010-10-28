@@ -475,7 +475,7 @@ runMigration' m silent = do
         errs -> error $ concat
             [ "\n\nDatabase migration: manual intervention required.\n"
             , "The following actions are considered unsafe:\n\n"
-            , unlines $ map ("    " ++) $ errs
+            , unlines $ map (\s -> "    " ++ s ++ ";") $ errs
             ]
 
 runMigrationUnsafe :: MonadInvertIO m
