@@ -49,6 +49,7 @@ open' s = do
     helper t getter = do
         stmt <- getter t
         execute stmt []
+        reset stmt
 
 prepare' :: Sqlite.Connection -> String -> IO Statement
 prepare' conn sql = do
