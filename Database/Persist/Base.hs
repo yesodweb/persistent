@@ -20,6 +20,7 @@ module Database.Persist.Base
     , EntityDef (..)
     , PersistBackend (..)
     , PersistFilter (..)
+    , PersistUpdate (..)
     , PersistOrder (..)
     , SomePersistField (..)
     , selectList
@@ -432,3 +433,6 @@ deleteCascadeWhere filts = do
 data PersistException = PersistMarshalException String
     deriving (Show, Typeable)
 instance E.Exception PersistException
+
+data PersistUpdate = Replace | Add | Subtract | Multiply | Divide
+    deriving (Read, Show)

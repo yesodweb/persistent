@@ -17,6 +17,7 @@ import Data.Maybe (mapMaybe, catMaybes)
 import Web.Routes.Quasi (SinglePiece)
 import Data.Int (Int64)
 import Control.Monad (forM)
+import System.IO.Unsafe (unsafePerformIO)
 
 -- | Create data types and appropriate 'PersistEntity' instances for the given
 -- 'EntityDef's. Works well with the persist quasi-quoter.
@@ -41,7 +42,7 @@ dataTypeDec t =
      in DataD [] name [] [RecC name cols] $ map mkName $ entityDerives t
   where
     mkCol x (n, ty, as) =
-        (mkName $ recName x n, NotStrict, pairToType (ty, "null" `elem` as))
+        (mkName $ recName x n, NotStrict, pairToType (ty, nullable as))
 
 keyTypeDec :: String -> Name -> EntityDef -> Dec
 keyTypeDec constr typ t =
@@ -61,15 +62,17 @@ filterTypeDec t =
 entityFilters :: EntityDef -> [(String, String, Bool, PersistFilter)]
 entityFilters = mapMaybe go' . concatMap go . entityColumns
   where
-    go (x, y, as) = map (\a -> (x, y, "null" `elem` as, a)) as
+    go (x, y, as) = map (\a -> (x, y, nullable as, a)) as
     go' (x, y, z, a) =
         case readMay a of
             Nothing -> Nothing
             Just a' -> Just (x, y, z, a')
-    readMay s =
-        case reads s of
-            (x, _):_ -> Just x
-            [] -> Nothing
+
+readMay :: Read a => String -> Maybe a
+readMay s =
+    case reads s of
+        (x, _):_ -> Just x
+        [] -> Nothing
 
 isFilterList :: PersistFilter -> Bool
 isFilterList In = True
@@ -99,18 +102,21 @@ updateTypeDec t =
   where
     tu = entityUpdates t
 
-entityUpdates :: EntityDef -> [(String, String, Bool)]
-entityUpdates = mapMaybe go . entityColumns
+entityUpdates :: EntityDef -> [(String, String, Bool, PersistUpdate)]
+entityUpdates = mapMaybe go' . concatMap go . entityColumns
   where
-    go (name, typ, attribs)
-        | "update" `elem` attribs =
-            Just (name, typ, "null" `elem` attribs)
-        | otherwise = Nothing
+    go (x, y, as) = map (\a -> (x, y, nullable as, a)) as
+    go' (x, y, z, "update") =
+        deprecate "'update' is deprecated; please use 'Replace'"
+            $ Just (x, y, z, Replace)
+    go' (x, y, z, a) =
+        case readMay a of
+            Nothing -> Nothing
+            Just a' -> Just (x, y, z, a')
 
-mkUpdate :: String -> (String, String, Bool) -> Con
-mkUpdate x (s, ty, isBool) =
-    NormalC (mkName $ x ++ upperFirst s)
-                [(NotStrict, pairToType (ty, isBool))]
+mkUpdate :: String -> (String, String, Bool, PersistUpdate) -> Con
+mkUpdate x (s, ty, isBool, pu) =
+    NormalC (mkName $ updateConName x s pu) [(NotStrict, pairToType (ty, isBool))]
 
 orderTypeDec :: EntityDef -> Q Dec
 orderTypeDec t = do
@@ -149,7 +155,7 @@ mkUnique t (constr, fields) =
     lookup3 s [] =
         error $ "Column not found: " ++ s ++ " in unique " ++ constr
     lookup3 x ((x', y, z):rest)
-        | x == x' = (y, "null" `elem` z)
+        | x == x' = (y, nullable z)
         | otherwise = lookup3 x rest
 
 pairToType :: (String, Bool) -> Type
@@ -329,10 +335,10 @@ mkEntity t = do
                 $ map (\(x, y, z) -> (name ++ upperFirst x ++ y, z))
                 entityOrders'
         , mkToFieldName "persistUpdateToFieldName"
-                $ map (\(s, _, _) -> (name ++ upperFirst s, s))
+                $ map (\(s, _, _, pu) -> (updateConName name s pu, s))
                 $ entityUpdates t
         , mkToValue "persistUpdateToValue"
-                $ map (\(s, _, _) -> name ++ upperFirst s)
+                $ map (\(s, _, _, pu) -> updateConName name s pu)
                 $ entityUpdates t
         , mkToFieldName "persistFilterToFieldName"
                 $ map (\(x, _, _, y) -> (name ++ upperFirst x ++ show y, x))
@@ -343,6 +349,15 @@ mkEntity t = do
         , puk
         ] ++ tf
         ]
+
+updateConName :: String -> String -> PersistUpdate -> String
+updateConName name s pu = concat
+    [ name
+    , upperFirst s
+    , case pu of
+        Replace -> ""
+        _ -> show pu
+    ]
 
 share2 :: ([EntityDef] -> Q [Dec])
        -> ([EntityDef] -> Q [Dec])
@@ -378,7 +393,7 @@ mkDeleteCascade defs = do
         concatMap getDeps' $ entityColumns def
       where
         getDeps' (name, typ, attribs) =
-            let isNull = "null" `elem` attribs
+            let isNull = nullable attribs
                 l = length typ
                 (f, b) = splitAt (l - 2) typ
              in if b == "Id"
@@ -447,10 +462,10 @@ derivePersistField s = do
     fpv <- [|\dt v ->
                 case fromPersistValue v of
                     Left e -> Left e
-                    Right s ->
-                        case reads s of
+                    Right s' ->
+                        case reads s' of
                             (x, _):_ -> Right x
-                            [] -> Left $ "Invalid " ++ dt ++ ": " ++ s|]
+                            [] -> Left $ "Invalid " ++ dt ++ ": " ++ s'|]
     return
         [ InstanceD [] (ConT ''PersistField `AppT` ConT (mkName s))
             [ FunD (mkName "sqlType")
@@ -464,3 +479,11 @@ derivePersistField s = do
                 ]
             ]
         ]
+
+nullable :: [String] -> Bool
+nullable = elem "null" -- FIXME add support for Maybe
+
+deprecate :: String -> a -> a
+deprecate s x = unsafePerformIO $ do
+    putStrLn $ "DEPRECATED: " ++ s
+    return x

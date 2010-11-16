@@ -8,7 +8,7 @@ module Database.Persist.Postgresql
     ) where
 
 import Database.Persist
-import Database.Persist.Base
+import Database.Persist.Base hiding (Add)
 import Database.Persist.GenericSql
 import Database.Persist.GenericSql.Internal
 

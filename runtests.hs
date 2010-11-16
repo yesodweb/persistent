@@ -46,7 +46,7 @@ share2 mkPersist (mkMigrate "testMigrate") [$persist|
 
   Person
     name String update Eq Ne Desc
-    age Int update "Asc" Desc Lt "some ignored -- attribute" Eq
+    age Int update "Asc" Desc Lt "some ignored -- attribute" Eq Add
     color String null Eq Ne -- this is a comment sql=foobarbaz
     PersonNameKey name -- this is a comment sql=foobarbaz
   Pet
@@ -200,13 +200,17 @@ _update = do
   update key25 [PersonAge 28, PersonName "Updated"]
   Just pBlue28 <- get key25
   pBlue28 @== Person "Updated" 28 Nothing
+  update key25 [PersonAgeAdd 2]
+  Just pBlue30 <- get key25
+  pBlue30 @== Person "Updated" 30 Nothing
 
 _updateWhere = do
   let p1 = Person "Michael" 25 Nothing
   let p2 = Person "Michael2" 25 Nothing
   key1 <- insert p1
   key2 <- insert p2
-  updateWhere [PersonNameEq "Michael2"] [PersonAge 28, PersonName "Updated"]
+  updateWhere [PersonNameEq "Michael2"]
+              [PersonAge 28, PersonName "Updated"]
   Just pBlue28 <- get key2
   pBlue28 @== Person "Updated" 28 Nothing
   Just p <- get key1
