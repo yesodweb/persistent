@@ -262,7 +262,12 @@ instance MonadInvertIO m => PersistBackend (SqlPersist m) where
     update _ [] = return ()
     update k upds = do
         conn <- SqlPersist ask
-        let go' x = escapeName conn x ++ "=?"
+        let go'' n Replace = n ++ "=?"
+            go'' n Add = n ++ '=' : n ++ "+?"
+            go'' n Subtract = n ++ '=' : n ++ "-?"
+            go'' n Multiply = n ++ '=' : n ++ "*?"
+            go'' n Divide = n ++ '=' : n ++ "/?"
+        let go' (x, pu) = go'' (escapeName conn x) pu
         let sql = concat
                 [ "UPDATE "
                 , escapeName conn $ rawTableName t
@@ -274,7 +279,9 @@ instance MonadInvertIO m => PersistBackend (SqlPersist m) where
             map persistUpdateToValue upds ++ [PersistInt64 $ fromPersistKey k]
       where
         t = entityDef $ dummyFromKey k
-        go = getFieldName t . persistUpdateToFieldName
+        go x = ( getFieldName t $ persistUpdateToFieldName x
+               , persistUpdateToUpdate x
+               )
 
     updateWhere _ [] = return ()
     updateWhere filts upds = do

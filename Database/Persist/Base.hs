@@ -270,6 +270,7 @@ class PersistEntity val where
     persistOrderToOrder :: Order val -> PersistOrder
 
     persistUpdateToFieldName :: Update val -> String
+    persistUpdateToUpdate :: Update val -> PersistUpdate
     persistUpdateToValue :: Update val -> PersistValue
 
     persistUniqueToFieldNames :: Unique val -> [String]
@@ -436,3 +437,10 @@ instance E.Exception PersistException
 
 data PersistUpdate = Replace | Add | Subtract | Multiply | Divide
     deriving (Read, Show)
+
+instance Lift PersistUpdate where
+    lift Replace = [|Replace|]
+    lift Add = [|Add|]
+    lift Subtract = [|Subtract|]
+    lift Multiply = [|Multiply|]
+    lift Divide = [|Divide|]

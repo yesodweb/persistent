@@ -190,6 +190,15 @@ mkToFieldNames pairs =
                (NormalB $ ListE $ map (LitE . StringL) names)
                []
 
+mkToUpdate :: String -> [(String, PersistUpdate)] -> Q Dec
+mkToUpdate name pairs = do
+    pairs' <- mapM go pairs
+    return $ FunD (mkName name) $ degen pairs'
+  where
+    go (constr, pu) = do
+        pu' <- lift pu
+        return $ Clause [RecP (mkName constr) []] (NormalB pu') []
+
 mkUniqueToValues :: [(String, [String])] -> Q Dec
 mkUniqueToValues pairs = do
     pairs' <- mapM go pairs
@@ -311,6 +320,9 @@ mkEntity t = do
                 $ map (\(x, _, _, y) ->
                     (name ++ upperFirst x ++ show y, isFilterList y))
                 $ entityFilters t
+    putu <- mkToUpdate "persistUpdateToUpdate"
+                $ map (\(s, _, _, pu) -> (updateConName name s pu, pu))
+                $ entityUpdates t
     return
       [ dataTypeDec t
       , TySynD (mkName $ entityName t ++ "Id") [] $
@@ -340,6 +352,7 @@ mkEntity t = do
         , mkToValue "persistUpdateToValue"
                 $ map (\(s, _, _, pu) -> updateConName name s pu)
                 $ entityUpdates t
+        , putu
         , mkToFieldName "persistFilterToFieldName"
                 $ map (\(x, _, _, y) -> (name ++ upperFirst x ++ show y, x))
                 $ entityFilters t
