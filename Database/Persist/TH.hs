@@ -107,8 +107,8 @@ entityUpdates = mapMaybe go' . concatMap go . entityColumns
   where
     go (x, y, as) = map (\a -> (x, y, nullable as, a)) as
     go' (x, y, z, "update") =
-        deprecate "'update' is deprecated; please use 'Replace'"
-            $ Just (x, y, z, Replace)
+        deprecate "'update' is deprecated; please use 'Update'"
+            $ Just (x, y, z, Update)
     go' (x, y, z, a) =
         case readMay a of
             Nothing -> Nothing
@@ -368,7 +368,7 @@ updateConName name s pu = concat
     [ name
     , upperFirst s
     , case pu of
-        Replace -> ""
+        Update -> ""
         _ -> show pu
     ]
 

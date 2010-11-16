@@ -435,11 +435,11 @@ data PersistException = PersistMarshalException String
     deriving (Show, Typeable)
 instance E.Exception PersistException
 
-data PersistUpdate = Replace | Add | Subtract | Multiply | Divide
+data PersistUpdate = Update | Add | Subtract | Multiply | Divide
     deriving (Read, Show)
 
 instance Lift PersistUpdate where
-    lift Replace = [|Replace|]
+    lift Update = [|Update|]
     lift Add = [|Add|]
     lift Subtract = [|Subtract|]
     lift Multiply = [|Multiply|]

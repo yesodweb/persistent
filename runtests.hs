@@ -210,7 +210,7 @@ _updateWhere = do
   key1 <- insert p1
   key2 <- insert p2
   updateWhere [PersonNameEq "Michael2"]
-              [PersonAge 28, PersonName "Updated"]
+              [PersonAgeAdd 3, PersonName "Updated"]
   Just pBlue28 <- get key2
   pBlue28 @== Person "Updated" 28 Nothing
   Just p <- get key1

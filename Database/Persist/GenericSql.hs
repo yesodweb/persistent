@@ -262,7 +262,7 @@ instance MonadInvertIO m => PersistBackend (SqlPersist m) where
     update _ [] = return ()
     update k upds = do
         conn <- SqlPersist ask
-        let go'' n Replace = n ++ "=?"
+        let go'' n Update = n ++ "=?"
             go'' n Add = n ++ '=' : n ++ "+?"
             go'' n Subtract = n ++ '=' : n ++ "-?"
             go'' n Multiply = n ++ '=' : n ++ "*?"
@@ -301,8 +301,15 @@ instance MonadInvertIO m => PersistBackend (SqlPersist m) where
         execute' sql dat
       where
         t = entityDef $ dummyFromFilts filts
-        go = getFieldName t . persistUpdateToFieldName
-        go' conn x = escapeName conn x ++ "=?"
+        go'' n Update = n ++ "=?"
+        go'' n Add = n ++ '=' : n ++ "+?"
+        go'' n Subtract = n ++ '=' : n ++ "-?"
+        go'' n Multiply = n ++ '=' : n ++ "*?"
+        go'' n Divide = n ++ '=' : n ++ "/?"
+        go' conn (x, pu) = go'' (escapeName conn x) pu
+        go x = ( getFieldName t $ persistUpdateToFieldName x
+               , persistUpdateToUpdate x
+               )
 
     getBy uniq = do
         conn <- SqlPersist ask
