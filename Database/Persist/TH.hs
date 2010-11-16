@@ -494,7 +494,9 @@ derivePersistField s = do
         ]
 
 nullable :: [String] -> Bool
-nullable = elem "null" -- FIXME add support for Maybe
+nullable s
+    | "null" `elem` s = deprecate "Please replace null with Maybe" True
+    | otherwise = "Maybe" `elem` s
 
 deprecate :: String -> a -> a
 deprecate s x = unsafePerformIO $ do
