@@ -25,6 +25,7 @@ import Database.Persist.Base
 import Data.Maybe (fromJust)
 import Control.Arrow
 import Control.Monad.Invert (MonadInvertIO, bracket)
+import Database.Persist.TH (nullable)
 
 type RowPopper m = m (Maybe [PersistValue])
 
@@ -74,7 +75,7 @@ mkColumns val =
     t = entityDef val
     tn = rawTableName t
     go (name, t', as) p =
-        Column name ("null" `elem` as) (sqlType p) (def as) (ref name t' as)
+        Column name (nullable as) (sqlType p) (def as) (ref name t' as)
     def [] = Nothing
     def (('d':'e':'f':'a':'u':'l':'t':'=':d):_) = Just d
     def (_:rest) = def rest

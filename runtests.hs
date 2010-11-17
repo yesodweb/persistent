@@ -47,7 +47,7 @@ share2 mkPersist (mkMigrate "testMigrate") [$persist|
   Person
     name String update Eq Ne Desc
     age Int update "Asc" Desc Lt "some ignored -- attribute" Eq Add
-    color String null Eq Ne -- this is a comment sql=foobarbaz
+    color String Maybe Eq Ne -- this is a comment sql=foobarbaz
     PersonNameKey name -- this is a comment sql=foobarbaz
   Pet
     owner PersonId

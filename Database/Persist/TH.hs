@@ -8,6 +8,7 @@ module Database.Persist.TH
     , mkSave
     , mkDeleteCascade
     , derivePersistField
+    , nullable
     ) where
 
 import Database.Persist.Base
@@ -495,8 +496,9 @@ derivePersistField s = do
 
 nullable :: [String] -> Bool
 nullable s
+    | "Maybe" `elem` s = True
     | "null" `elem` s = deprecate "Please replace null with Maybe" True
-    | otherwise = "Maybe" `elem` s
+    | otherwise = False
 
 deprecate :: String -> a -> a
 deprecate s x = unsafePerformIO $ do
