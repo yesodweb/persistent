@@ -34,7 +34,7 @@ import Database.Persist.GenericSql.Internal
 import qualified Database.Persist.GenericSql.Raw as R
 import Database.Persist.GenericSql.Raw (SqlPersist (..))
 import Control.Monad (liftM, unless)
-import Data.Enumerator hiding (map, length)
+import Data.Enumerator (Stream (..), Iteratee (..), Step (..))
 import Language.Haskell.TH.Syntax hiding (lift)
 import Control.Monad.Invert (MonadInvertIO, onException)
 import Control.Exception (toException)
