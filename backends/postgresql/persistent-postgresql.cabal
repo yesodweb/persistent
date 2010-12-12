@@ -6,7 +6,7 @@ author:          Michael Snoyman <michael@snoyman.com>
 maintainer:      Michael Snoyman <michael@snoyman.com>
 synopsis:        Backend for the persistent library using postgresql.
 description:     Based on the HDBC-postgresql package
-category:        Database
+category:        Database, Yesod
 stability:       Stable
 cabal-version:   >= 1.6
 build-type:      Simple
