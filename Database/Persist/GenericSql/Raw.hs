@@ -18,22 +18,12 @@ import Control.Monad.Trans.Reader
 import qualified Data.Map as Map
 import Control.Applicative (Applicative)
 import Control.Monad.Trans.Class (MonadTrans (..))
-import Control.Monad.Invert (MonadInvertIO (..))
-import Control.Monad (liftM)
+import Control.Monad.IO.Peel (MonadPeelIO (..))
 
 newtype SqlPersist m a = SqlPersist { unSqlPersist :: ReaderT Connection m a }
-    deriving (Monad, MonadIO, MonadTrans, Functor, Applicative)
+    deriving (Monad, MonadIO, MonadTrans, Functor, Applicative, MonadPeelIO)
 
-instance MonadInvertIO m => MonadInvertIO (SqlPersist m) where
-    newtype InvertedIO (SqlPersist m) a =
-        InvSqlPersistIO
-            { runInvSqlPersistIO :: InvertedIO (ReaderT Connection m) a
-            }
-    type InvertedArg (SqlPersist m) = (Connection, InvertedArg m)
-    invertIO = liftM (fmap InvSqlPersistIO) . invertIO . unSqlPersist
-    revertIO f = SqlPersist $ revertIO $ liftM runInvSqlPersistIO . f
-
-withStmt :: MonadInvertIO m => String -> [PersistValue]
+withStmt :: MonadPeelIO m => String -> [PersistValue]
          -> (RowPopper (SqlPersist m) -> SqlPersist m a) -> SqlPersist m a
 withStmt sql vals pop = do
     stmt <- getStmt sql

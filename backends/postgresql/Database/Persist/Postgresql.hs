@@ -23,20 +23,20 @@ import Data.Either (partitionEithers)
 import Control.Arrow
 import Data.List (sort, groupBy)
 import Data.Function (on)
-import Control.Monad.Invert (MonadInvertIO)
+import Control.Monad.IO.Peel (MonadPeelIO)
 
 import Data.ByteString (ByteString)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.Encoding.Error as T
 
-withPostgresqlPool :: MonadInvertIO m
+withPostgresqlPool :: MonadPeelIO m
                    => String
                    -> Int -- ^ number of connections to open
                    -> (ConnectionPool -> m a) -> m a
 withPostgresqlPool s = withSqlPool $ open' s
 
-withPostgresqlConn :: MonadInvertIO m => String -> (Connection -> m a) -> m a
+withPostgresqlConn :: MonadPeelIO m => String -> (Connection -> m a) -> m a
 withPostgresqlConn = withSqlConn . open'
 
 open' :: String -> IO Connection
@@ -82,7 +82,7 @@ execute' stmt vals = do
     _ <- H.execute stmt $ map pToSql vals
     return ()
 
-withStmt' :: MonadInvertIO m
+withStmt' :: MonadPeelIO m
           => H.Statement
           -> [PersistValue]
           -> (RowPopper m -> m a)

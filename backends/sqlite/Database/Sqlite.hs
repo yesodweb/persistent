@@ -29,10 +29,12 @@ import Prelude hiding (error)
 import qualified Prelude
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Internal as BSI
-import qualified Data.ByteString.UTF8 as UTF8
 import Foreign
 import Foreign.C
 import Database.Persist.Base (PersistValue (..))
+import Data.Text (pack, unpack)
+import Data.Text.Encoding (encodeUtf8, decodeUtf8With)
+import Data.Text.Encoding.Error (lenientDecode)
 
 newtype Connection = Connection (Ptr ())
 newtype Statement = Statement (Ptr ())
@@ -123,7 +125,13 @@ errmsg :: Connection -> IO String
 errmsg (Connection database) = do
   message <- errmsgC database
   byteString <- BS.packCString message
-  return $ UTF8.toString byteString
+  return $ toString byteString
+
+toString :: BSI.ByteString -> String
+toString = unpack . decodeUtf8With lenientDecode
+
+fromString :: String -> BSI.ByteString
+fromString = encodeUtf8 . pack
 
 sqlError :: Maybe Connection -> String -> Error -> IO a
 sqlError maybeConnection functionName error = do
@@ -140,7 +148,7 @@ foreign import ccall "sqlite3_open"
   openC :: CString -> Ptr (Ptr ()) -> IO Int
 openError :: String -> IO (Either Connection Error)
 openError path' = do
-  BS.useAsCString (UTF8.fromString path')
+  BS.useAsCString (fromString path')
                   (\path -> do
                      alloca (\database -> do
                                error' <- openC path database
@@ -174,7 +182,7 @@ foreign import ccall "sqlite3_prepare_v2"
   prepareC :: Ptr () -> CString -> Int -> Ptr (Ptr ()) -> Ptr (Ptr ()) -> IO Int
 prepareError :: Connection -> String -> IO (Either Statement Error)
 prepareError (Connection database) text' = do
-  BS.useAsCString (UTF8.fromString text')
+  BS.useAsCString (fromString text')
                   (\text -> do
                      alloca (\statement -> do
                                error' <- prepareC database text (-1) statement nullPtr
@@ -304,7 +312,7 @@ foreign import ccall "sqlite3_bind_text"
   bindTextC :: Ptr () -> Int -> CString -> Int -> Ptr () -> IO Int
 bindTextError :: Statement -> Int -> String -> IO Error
 bindTextError (Statement statement) parameterIndex text = do
-  byteString <- return $ UTF8.fromString text
+  byteString <- return $ fromString text
   size <- return $ BS.length byteString
   BS.useAsCString byteString
                   (\dataC -> do
@@ -374,7 +382,7 @@ columnText :: Statement -> Int -> IO String
 columnText (Statement statement) columnIndex = do
   text <- columnTextC statement columnIndex
   byteString <- BS.packCString text
-  return $ UTF8.toString byteString
+  return $ toString byteString
 
 foreign import ccall "sqlite3_column_count"
   columnCountC :: Ptr () -> IO Int

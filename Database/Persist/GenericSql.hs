@@ -36,22 +36,23 @@ import Database.Persist.GenericSql.Raw (SqlPersist (..))
 import Control.Monad (liftM, unless)
 import Data.Enumerator (Stream (..), Iteratee (..), Step (..))
 import Language.Haskell.TH.Syntax hiding (lift)
-import Control.Monad.Invert (MonadInvertIO, onException)
+import Control.Monad.IO.Peel (MonadPeelIO)
+import Control.Exception.Peel (onException)
 import Control.Exception (toException)
 
 type ConnectionPool = Pool Connection
 
-withStmt' :: MonadInvertIO m => String -> [PersistValue]
+withStmt' :: MonadPeelIO m => String -> [PersistValue]
          -> (RowPopper (SqlPersist m) -> SqlPersist m a) -> SqlPersist m a
 withStmt' = R.withStmt
 
 execute' :: MonadIO m => String -> [PersistValue] -> SqlPersist m ()
 execute' = R.execute
 
-runSqlPool :: MonadInvertIO m => SqlPersist m a -> Pool Connection -> m a
+runSqlPool :: MonadPeelIO m => SqlPersist m a -> Pool Connection -> m a
 runSqlPool r pconn = withPool' pconn $ runSqlConn r
 
-runSqlConn :: MonadInvertIO m => SqlPersist m a -> Connection -> m a
+runSqlConn :: MonadPeelIO m => SqlPersist m a -> Connection -> m a
 runSqlConn (SqlPersist r) conn = do
     let getter = R.getStmt' conn
     liftIO $ begin conn getter
@@ -61,7 +62,7 @@ runSqlConn (SqlPersist r) conn = do
     liftIO $ commit conn getter
     return x
 
-instance MonadInvertIO m => PersistBackend (SqlPersist m) where
+instance MonadPeelIO m => PersistBackend (SqlPersist m) where
     insert val = do
         conn <- SqlPersist ask
         let esql = insertSql conn (rawTableName t) (map fst3 $ tableColumns t)
@@ -456,29 +457,29 @@ parseMigration' m = do
       Left errs -> error $ unlines errs
       Right sql -> return sql
 
-printMigration :: MonadInvertIO m => Migration (SqlPersist m) -> SqlPersist m ()
+printMigration :: MonadPeelIO m => Migration (SqlPersist m) -> SqlPersist m ()
 printMigration m = do
   mig <- parseMigration' m
   mapM_ (liftIO . putStrLn) (allSql mig)
 
-getMigration :: MonadInvertIO m => Migration (SqlPersist m) -> SqlPersist m [Sql]
+getMigration :: MonadPeelIO m => Migration (SqlPersist m) -> SqlPersist m [Sql]
 getMigration m = do
   mig <- parseMigration' m
   return $ allSql mig
 
-runMigration :: MonadInvertIO m
+runMigration :: MonadPeelIO m
              => Migration (SqlPersist m)
              -> SqlPersist m ()
 runMigration m = runMigration' m False >> return ()
 
 -- | Same as 'runMigration', but returns a list of the SQL commands executed
 -- instead of printing them to stderr.
-runMigrationSilent :: MonadInvertIO m
+runMigrationSilent :: MonadPeelIO m
                    => Migration (SqlPersist m)
                    -> SqlPersist m [String]
 runMigrationSilent m = runMigration' m True
 
-runMigration' :: MonadInvertIO m
+runMigration' :: MonadPeelIO m
               => Migration (SqlPersist m)
               -> Bool -- ^ is silent?
               -> SqlPersist m [String]
@@ -492,7 +493,7 @@ runMigration' m silent = do
             , unlines $ map (\s -> "    " ++ s ++ ";") $ errs
             ]
 
-runMigrationUnsafe :: MonadInvertIO m
+runMigrationUnsafe :: MonadPeelIO m
                    => Migration (SqlPersist m)
                    -> SqlPersist m ()
 runMigrationUnsafe m = do
@@ -505,7 +506,7 @@ executeMigrate silent s = do
     execute' s []
     return s
 
-migrate :: (MonadInvertIO m, PersistEntity val)
+migrate :: (MonadPeelIO m, PersistEntity val)
         => val
         -> Migration (SqlPersist m)
 migrate val = do
@@ -535,7 +536,7 @@ mkMigrate fun defs = do
         ]
   where
     typ = ForallT [PlainTV $ mkName "m"]
-            [ ClassP ''MonadInvertIO [VarT $ mkName "m"]
+            [ ClassP ''MonadPeelIO [VarT $ mkName "m"]
             ]
             $ ConT ''Migration `AppT` (ConT ''SqlPersist `AppT` VarT (mkName "m"))
     body =

@@ -16,7 +16,8 @@ import Control.Concurrent.STM.TVar
     (TVar, newTVarIO, readTVar, writeTVar)
 import Control.Exception (throwIO, Exception)
 import Data.Typeable
-import qualified Control.Monad.Invert as I
+import qualified Control.Monad.IO.Peel as I
+import qualified Control.Exception.Peel as I
 import Control.Monad.IO.Class
 import Control.Monad
 
@@ -42,7 +43,7 @@ poolStats (Pool m td _) = do
     d <- atomically $ readTVar td
     return $ PoolStats m (length $ poolAvail d) (poolCreated d)
 
-createPool :: (MonadIO m, I.MonadInvertIO m)
+createPool :: (MonadIO m, I.MonadPeelIO m)
            => IO a -> (a -> IO ()) -> Int -> (Pool a -> m b) -> m b
 createPool mk fr mx f = do
     pd <- liftIO $ newTVarIO $ PoolData [] 0
@@ -54,14 +55,14 @@ data PoolExhaustedException = PoolExhaustedException
     deriving (Show, Typeable)
 instance Exception PoolExhaustedException
 
-withPool' :: (MonadIO m, I.MonadInvertIO m) => Pool a -> (a -> m b) -> m b
+withPool' :: (MonadIO m, I.MonadPeelIO m) => Pool a -> (a -> m b) -> m b
 withPool' p f = do
     x <- withPool p f
     case x of
         Nothing -> liftIO $ throwIO PoolExhaustedException
         Just x' -> return x'
 
-withPool :: (MonadIO m, I.MonadInvertIO m)
+withPool :: (MonadIO m, I.MonadPeelIO m)
          => Pool a -> (a -> m b) -> m (Maybe b)
 withPool p f = I.block $ do
     eres <- liftIO $ atomically $ do

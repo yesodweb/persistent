@@ -18,15 +18,15 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Data.List (intercalate)
 import Data.IORef
 import qualified Data.Map as Map
-import Control.Monad.Invert (MonadInvertIO)
+import Control.Monad.IO.Peel (MonadPeelIO)
 
-withSqlitePool :: MonadInvertIO m
+withSqlitePool :: MonadPeelIO m
                => String
                -> Int -- ^ number of connections to open
                -> (ConnectionPool -> m a) -> m a
 withSqlitePool s = withSqlPool $ open' s
 
-withSqliteConn :: MonadInvertIO m => String -> (Connection -> m a) -> m a
+withSqliteConn :: MonadPeelIO m => String -> (Connection -> m a) -> m a
 withSqliteConn = withSqlConn . open'
 
 open' :: String -> IO Connection
@@ -82,7 +82,7 @@ execute' stmt vals = do
     Sqlite.Done <- Sqlite.step stmt
     return ()
 
-withStmt' :: MonadInvertIO m
+withStmt' :: MonadPeelIO m
           => Sqlite.Statement
           -> [PersistValue]
           -> (RowPopper m -> m a)
