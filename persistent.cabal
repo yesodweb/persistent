@@ -36,6 +36,37 @@ library
                      Database.Persist.Pool
     ghc-options:     -Wall
 
+Flag production
+    Description:   Build the production executable.
+    Default:       False
+
+executable         runtests
+    if flag(production)
+        Buildable: False
+    cpp-options:   -DDEBUG
+    main-is:       runtests.hs
+    ghc-options:   -Wall
+    build-depends:   haskell98,
+                     persistent-postgresql,
+                     persistent-sqlite,
+                     HUnit,
+                     test-framework,
+                     test-framework-hunit,
+
+                     base >= 4 && < 5,
+                     template-haskell >= 2.4 && < 2.6,
+                     bytestring >= 0.9.1 && < 0.10,
+                     transformers >= 0.2.1 && < 0.3,
+                     time >= 1.1.4 && < 1.3,
+                     text >= 0.7.1 && < 0.12,
+                     hamlet >= 0.5 && < 0.7,
+                     web-routes-quasi >= 0.6.0 && < 0.7,
+                     containers >= 0.2 && < 0.5,
+                     parsec >= 2.1 && < 4,
+                     enumerator >= 0.4 && < 0.5,
+                     stm >= 2.1 && < 2.3,
+                     neither >= 0.1 && < 0.2
+
 source-repository head
   type:     git
   location: git://github.com/snoyberg/persistent.git
