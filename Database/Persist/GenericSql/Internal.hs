@@ -20,7 +20,7 @@ module Database.Persist.GenericSql.Internal
 import qualified Data.Map as Map
 import Data.IORef
 import Control.Monad.IO.Class
-import Database.Persist.Pool
+import Data.Pool
 import Database.Persist.Base
 import Data.Maybe (fromJust)
 import Control.Arrow

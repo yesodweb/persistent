@@ -27,7 +27,7 @@ import Data.List (intercalate)
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Class (MonadTrans (..))
-import Database.Persist.Pool
+import Data.Pool
 import Control.Monad.Trans.Writer
 import System.IO
 import Database.Persist.GenericSql.Internal

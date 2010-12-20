@@ -24,8 +24,8 @@ library
                    , containers               >= 0.2       && < 0.5
                    , parsec                   >= 2.1       && < 4
                    , enumerator               >= 0.4       && < 0.5
-                   , stm                      >= 2.1       && < 2.3
                    , monad-peel               >= 0.1       && < 0.2
+                   , pool                     >= 0.0       && < 0.1
     exposed-modules: Database.Persist
                      Database.Persist.Base
                      Database.Persist.TH
@@ -33,7 +33,6 @@ library
                      Database.Persist.GenericSql
                      Database.Persist.GenericSql.Internal
                      Database.Persist.GenericSql.Raw
-                     Database.Persist.Pool
     ghc-options:     -Wall
 
 Flag test
