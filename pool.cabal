@@ -1,0 +1,25 @@
+name:            pool
+version:         0.0.0
+license:         BSD3
+license-file:    LICENSE
+author:          Michael Snoyman <michael@snoyman.com>
+maintainer:      Michael Snoyman <michael@snoyman.com>
+synopsis:        Thread-safe resource pools.
+description:     Useful for stuff like database connection pools.
+category:        Data, Database, Yesod
+stability:       Stable
+cabal-version:   >= 1.6
+build-type:      Simple
+homepage:        http://github.com/snoyberg/pool
+
+library
+    build-depends:   base                     >= 4         && < 5
+                   , transformers             >= 0.2.1     && < 0.3
+                   , stm                      >= 2.1       && < 2.3
+                   , monad-peel               >= 0.1       && < 0.2
+    exposed-modules: Data.Pool
+    ghc-options:     -Wall
+
+source-repository head
+  type:     git
+  location: git://github.com/snoyberg/pool.git
