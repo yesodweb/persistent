@@ -38,7 +38,8 @@ import Control.Applicative
 import Data.Typeable (Typeable)
 import Data.Int (Int8, Int16, Int32, Int64)
 import Data.Word (Word8, Word16, Word32, Word64)
-import Text.Hamlet
+import Text.Blaze (Html, unsafeByteString)
+import Text.Blaze.Renderer.Utf8 (renderHtml)
 import qualified Data.Text as T
 import qualified Data.ByteString as S
 import qualified Data.ByteString.Lazy as L
