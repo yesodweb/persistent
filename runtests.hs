@@ -19,6 +19,9 @@ import Monad (unless)
 import Data.Int
 import Data.Word
 
+import Control.Exception (SomeException)
+import qualified Control.Exception.Peel as Peel
+
 infix 1 /=@, @/=
 
 (/=@) :: (Eq a, Show a, MonadIO m) => a -> a -> m ()
@@ -106,6 +109,7 @@ testSuite = testGroup "Database.Persistent"
     , testCase "large numbers" case_largeNumbers
     , testCase "insertBy" case_insertBy
     , testCase "derivePersistField" case_derivePersistField
+    , testCase "afterException" case_afterException
     ]
 
                           
@@ -124,6 +128,7 @@ case_sqlitePersistent = sqliteTest _persistent
 case_largeNumbers = sqliteTest _largeNumbers
 case_insertBy = sqliteTest _insertBy
 case_derivePersistField = sqliteTest _derivePersistField
+case_afterException = sqliteTest _afterException
 
 _deleteWhere = do
   key2 <- insert $ Person "Michael2" 90 Nothing
@@ -329,3 +334,12 @@ _derivePersistField = do
     dog <- insert $ Pet person "Spike" Dog
     Just dog' <- get dog
     liftIO $ petType dog' @?= Dog
+
+_afterException = do
+    _ <- insert $ Person "A" 0 Nothing
+    _ <- (insert (Person "A" 1 Nothing) >> return ()) `Peel.catch` catcher
+    _ <- insert $ Person "B" 0 Nothing
+    return ()
+  where
+    catcher :: Monad m => SomeException -> m ()
+    catcher _ = return ()
