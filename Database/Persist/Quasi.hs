@@ -1,4 +1,7 @@
-module Database.Persist.Quasi (persist) where
+module Database.Persist.Quasi
+    ( persist
+    , persistFile
+    ) where
 
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
@@ -6,6 +9,7 @@ import Database.Persist.Base
 import Data.Char
 import Data.Maybe (mapMaybe)
 import Text.ParserCombinators.Parsec hiding (token)
+import qualified System.IO as SIO
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
@@ -13,6 +17,13 @@ persist :: QuasiQuoter
 persist = QuasiQuoter
     { quoteExp = lift . parse_
     }
+
+persistFile :: FilePath -> Q Exp
+persistFile fp = do
+    h <- qRunIO $ SIO.openFile fp SIO.ReadMode
+    qRunIO $ SIO.hSetEncoding h SIO.utf8_bom
+    s <- qRunIO $ SIO.hGetContents h
+    lift $ parse_ s
 
 parse_ :: String -> [EntityDef]
 parse_ = map parse' . nest . map words'
