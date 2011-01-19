@@ -19,6 +19,7 @@ import Data.List (intercalate)
 import Data.IORef
 import qualified Data.Map as Map
 import Control.Monad.IO.Peel (MonadPeelIO)
+import Control.Exception.Peel (finally)
 
 withSqlitePool :: MonadPeelIO m
                => String
@@ -77,7 +78,7 @@ insertSql' t cols =
         ]
 
 execute' :: Sqlite.Statement -> [PersistValue] -> IO ()
-execute' stmt vals = do
+execute' stmt vals = flip finally (liftIO $ Sqlite.reset stmt) $ do
     Sqlite.bind stmt vals
     Sqlite.Done <- Sqlite.step stmt
     return ()
@@ -87,10 +88,9 @@ withStmt' :: MonadPeelIO m
           -> [PersistValue]
           -> (RowPopper m -> m a)
           -> m a
-withStmt' stmt vals f = do
+withStmt' stmt vals f = flip finally (liftIO $ Sqlite.reset stmt) $ do
     liftIO $ Sqlite.bind stmt vals
     x <- f go
-    liftIO $ Sqlite.reset stmt
     return x
   where
     go = liftIO $ do

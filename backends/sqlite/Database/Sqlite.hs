@@ -224,7 +224,7 @@ reset statement = do
   error <- resetError statement
   case error of
     ErrorOK -> return ()
-    _ -> sqlError Nothing "reset" error
+    _ -> return () -- FIXME confirm this is correct sqlError Nothing "reset" error
 
 foreign import ccall "sqlite3_finalize"
   finalizeC :: Ptr () -> IO Int
