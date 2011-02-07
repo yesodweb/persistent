@@ -175,6 +175,7 @@ mkToPersistFields pairs = do
     clauses <- mapM go pairs
     return $ FunD (mkName "toPersistFields") $ degen clauses
   where
+    go :: (String, Int) -> Q Clause
     go (constr, fields) = do
         xs <- sequence $ replicate fields $ newName "x"
         let pat = ConP (mkName constr) $ map VarP xs
@@ -205,6 +206,7 @@ mkUniqueToValues pairs = do
     pairs' <- mapM go pairs
     return $ FunD (mkName "persistUniqueToValues") $ degen pairs'
   where
+    go :: (String, [String]) -> Q Clause
     go (constr, names) = do
         xs <- mapM (const $ newName "x") names
         let pat = ConP (mkName constr) $ map VarP xs

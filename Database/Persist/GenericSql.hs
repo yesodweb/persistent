@@ -539,10 +539,12 @@ mkMigrate fun defs = do
             [ ClassP ''MonadPeelIO [VarT $ mkName "m"]
             ]
             $ ConT ''Migration `AppT` (ConT ''SqlPersist `AppT` VarT (mkName "m"))
+    body :: Q Exp
     body =
         case defs of
             [] -> [|return ()|]
             _ -> DoE `fmap` mapM toStmt defs
+    toStmt :: EntityDef -> Q Stmt
     toStmt ed = do
         let n = entityName ed
         u <- [|undefined|]
