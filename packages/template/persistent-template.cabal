@@ -14,7 +14,7 @@ homepage:        http://docs.yesodweb.com/persistent/
 library
     build-depends:   base                     >= 4         && < 5
                    , template-haskell
-                   , persistent >= 0.5
+                   , persistent               >= 0.5       && < 0.6
                    , web-routes-quasi         >= 0.6       && < 0.7
                    , monad-peel               >= 0.1       && < 0.2
     exposed-modules: Database.Persist.TH
