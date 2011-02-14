@@ -3,6 +3,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE CPP #-}
 
 import Test.Framework (defaultMain, testGroup, Test)
 import Test.Framework.Providers.HUnit
@@ -10,7 +11,9 @@ import Test.Framework.Providers.HUnit
 import Test.HUnit hiding (Test)
 
 import Database.Persist.Sqlite
+#if WITH_POSTGRESQL
 import Database.Persist.Postgresql
+#endif
 import Database.Persist.TH
 import Control.Monad.IO.Class
 
@@ -70,7 +73,9 @@ share2 mkPersist (mkMigrate "testMigrate") [$persist|
 
 runConn f = do
     (withSqlitePool "testdb" 1) $ runSqlPool f
+#if WITH_POSTGRESQL
     (withPostgresqlPool "user=test password=test host=localhost port=5432 dbname=test" 1) $ runSqlPool f
+#endif
 
 -- TODO: run tests in transaction
 sqliteTest :: SqlPersist IO () -> Assertion
