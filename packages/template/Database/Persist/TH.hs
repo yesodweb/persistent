@@ -1,24 +1,45 @@
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE ExistentialQuantification #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 -- | This module provides utilities for creating backends. Regular users do not
 -- need to use this module.
 module Database.Persist.TH
-    ( mkPersist
+    ( persist
+    , persistFile
+    , mkPersist
     , share2
     , mkSave
     , mkDeleteCascade
     , derivePersistField
-    , nullable
+    , mkMigrate
     ) where
 
 import Database.Persist.Base
+import Database.Persist.GenericSql (Migration, SqlPersist, migrate)
+import Database.Persist.Quasi (parse)
+import Database.Persist.Util (deprecate, nullable)
+import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
 import Data.Maybe (mapMaybe, catMaybes)
 import Web.Routes.Quasi (SinglePiece)
 import Data.Int (Int64)
 import Control.Monad (forM)
-import System.IO.Unsafe (unsafePerformIO)
+import Control.Monad.IO.Peel (MonadPeelIO)
+import qualified System.IO as SIO
+
+-- | Converts a quasi-quoted syntax into a list of entity definitions, to be
+-- used as input to the template haskell generation code (mkPersist).
+persist :: QuasiQuoter
+persist = QuasiQuoter
+    { quoteExp = lift . parse
+    }
+
+persistFile :: FilePath -> Q Exp
+persistFile fp = do
+    h <- qRunIO $ SIO.openFile fp SIO.ReadMode
+    qRunIO $ SIO.hSetEncoding h SIO.utf8_bom
+    s <- qRunIO $ SIO.hGetContents h
+    lift $ parse s
 
 -- | Create data types and appropriate 'PersistEntity' instances for the given
 -- 'EntityDef's. Works well with the persist quasi-quoter.
@@ -496,13 +517,62 @@ derivePersistField s = do
             ]
         ]
 
-nullable :: [String] -> Bool
-nullable s
-    | "Maybe" `elem` s = True
-    | "null" `elem` s = deprecate "Please replace null with Maybe" True
-    | otherwise = False
+-- | Creates a single function to perform all migrations for the entities
+-- defined here. One thing to be aware of is dependencies: if you have entities
+-- with foreign references, make sure to place those definitions after the
+-- entities they reference.
+mkMigrate :: String -> [EntityDef] -> Q [Dec]
+mkMigrate fun defs = do
+    body' <- body
+    return
+        [ SigD (mkName fun) typ
+        , FunD (mkName fun) [Clause [] (NormalB body') []]
+        ]
+  where
+    typ = ForallT [PlainTV $ mkName "m"]
+            [ ClassP ''MonadPeelIO [VarT $ mkName "m"]
+            ]
+            $ ConT ''Migration `AppT` (ConT ''SqlPersist `AppT` VarT (mkName "m"))
+    body :: Q Exp
+    body =
+        case defs of
+            [] -> [|return ()|]
+            _ -> DoE `fmap` mapM toStmt defs
+    toStmt :: EntityDef -> Q Stmt
+    toStmt ed = do
+        let n = entityName ed
+        u <- [|undefined|]
+        m <- [|migrate|]
+        let u' = SigE u $ ConT $ mkName n
+        return $ NoBindS $ m `AppE` u'
 
-deprecate :: String -> a -> a
-deprecate s x = unsafePerformIO $ do
-    putStrLn $ "DEPRECATED: " ++ s
-    return x
+instance Lift EntityDef where
+    lift (EntityDef a b c d e) = do
+        x <- [|EntityDef|]
+        a' <- lift a
+        b' <- lift b
+        c' <- lift c
+        d' <- lift d
+        e' <- lift e
+        return $ x `AppE` a' `AppE` b' `AppE` c' `AppE` d' `AppE` e'
+
+instance Lift PersistFilter where
+    lift Eq = [|Eq|]
+    lift Ne = [|Ne|]
+    lift Gt = [|Gt|]
+    lift Lt = [|Lt|]
+    lift Ge = [|Ge|]
+    lift Le = [|Le|]
+    lift In = [|In|]
+    lift NotIn = [|NotIn|]
+
+instance Lift PersistOrder where
+    lift Asc = [|Asc|]
+    lift Desc = [|Desc|]
+
+instance Lift PersistUpdate where
+    lift Update = [|Update|]
+    lift Add = [|Add|]
+    lift Subtract = [|Subtract|]
+    lift Multiply = [|Multiply|]
+    lift Divide = [|Divide|]

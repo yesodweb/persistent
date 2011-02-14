@@ -1,35 +1,19 @@
 module Database.Persist.Quasi
-    ( persist
-    , persistFile
+    ( parse 
     ) where
 
-import Language.Haskell.TH.Quote
-import Language.Haskell.TH.Syntax
 import Database.Persist.Base
 import Data.Char
 import Data.Maybe (mapMaybe)
-import Text.ParserCombinators.Parsec hiding (token)
-import qualified System.IO as SIO
+import Text.ParserCombinators.Parsec hiding (parse, token)
+import qualified Text.ParserCombinators.Parsec as Parsec
 
--- | Converts a quasi-quoted syntax into a list of entity definitions, to be
--- used as input to the template haskell generation code (mkPersist).
-persist :: QuasiQuoter
-persist = QuasiQuoter
-    { quoteExp = lift . parse_
-    }
-
-persistFile :: FilePath -> Q Exp
-persistFile fp = do
-    h <- qRunIO $ SIO.openFile fp SIO.ReadMode
-    qRunIO $ SIO.hSetEncoding h SIO.utf8_bom
-    s <- qRunIO $ SIO.hGetContents h
-    lift $ parse_ s
-
-parse_ :: String -> [EntityDef]
-parse_ = map parse' . nest . map words'
-       . removeLeadingSpaces
-       . map killCarriage
-       . lines
+-- | Parses a quasi-quoted syntax into a list of entity definitions.
+parse :: String -> [EntityDef]
+parse = map parse' . nest . map words'
+      . removeLeadingSpaces
+      . map killCarriage
+      . lines
 
 removeLeadingSpaces :: [String] -> [String]
 removeLeadingSpaces x =
@@ -45,7 +29,7 @@ killCarriage s
     | otherwise = s
 
 words' :: String -> (Bool, [String])
-words' s = case parse words'' s s of
+words' s = case Parsec.parse words'' s s of
             Left e -> error $ show e
             Right x -> x
 

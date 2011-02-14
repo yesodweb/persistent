@@ -1,5 +1,5 @@
 name:            persistent
-version:         0.4.0.1
+version:         0.5.0.0
 license:         BSD3
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -14,12 +14,11 @@ homepage:        http://docs.yesodweb.com/persistent/
 
 library
     build-depends:   base                     >= 4         && < 5
-                   , template-haskell
                    , bytestring               >= 0.9       && < 0.10
                    , transformers             >= 0.2.1     && < 0.3
                    , time                     >= 1.1.4     && < 1.3
                    , text                     >= 0.8       && < 0.12
-                   , web-routes-quasi         >= 0.6       && < 0.7
+                   -- , web-routes-quasi         >= 0.6       && < 0.7
                    , containers               >= 0.2       && < 0.5
                    , parsec                   >= 2.1       && < 4
                    , enumerator               >= 0.4       && < 0.5
@@ -28,11 +27,11 @@ library
                    , blaze-html               >= 0.4       && < 0.5
     exposed-modules: Database.Persist
                      Database.Persist.Base
-                     Database.Persist.TH
                      Database.Persist.Quasi
                      Database.Persist.GenericSql
                      Database.Persist.GenericSql.Internal
                      Database.Persist.GenericSql.Raw
+                     Database.Persist.Util
     ghc-options:     -Wall
 
 Flag test

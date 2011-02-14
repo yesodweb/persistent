@@ -26,7 +26,7 @@ import Data.Maybe (fromJust)
 import Control.Arrow
 import Control.Monad.IO.Peel (MonadPeelIO)
 import Control.Exception.Peel (bracket)
-import Database.Persist.TH (nullable)
+import Database.Persist.Util (nullable)
 
 type RowPopper m = m (Maybe [PersistValue])
 
