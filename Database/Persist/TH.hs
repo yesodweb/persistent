@@ -4,6 +4,7 @@
 -- need to use this module.
 module Database.Persist.TH
     ( mkPersist
+    , share
     , share2
     , mkSave
     , mkDeleteCascade
@@ -374,6 +375,9 @@ updateConName name s pu = concat
         Update -> ""
         _ -> show pu
     ]
+
+share :: [[EntityDef] -> Q [Dec]] -> [EntityDef] -> Q [Dec]
+share fs x = fmap concat $ mapM ($ x) fs
 
 share2 :: ([EntityDef] -> Q [Dec])
        -> ([EntityDef] -> Q [Dec])
