@@ -5,6 +5,7 @@ module Data.Pool
       createPool
     , withPool
     , withPool'
+    , withPoolAllocate
     , Pool
       -- * Diagnostics
     , PoolStats (..)
@@ -30,6 +31,7 @@ data Pool a = Pool
     { poolMax :: Int
     , poolData :: TVar (PoolData a)
     , poolMake :: IO a
+    , poolFree :: a -> IO ()
     }
 
 data PoolStats = PoolStats
@@ -39,7 +41,7 @@ data PoolStats = PoolStats
     }
 
 poolStats :: Pool a -> IO PoolStats
-poolStats (Pool m td _) = do
+poolStats (Pool m td _ _) = do
     d <- atomically $ readTVar td
     return $ PoolStats m (length $ poolAvail d) (poolCreated d)
 
@@ -47,7 +49,7 @@ createPool :: (MonadIO m, I.MonadPeelIO m)
            => IO a -> (a -> IO ()) -> Int -> (Pool a -> m b) -> m b
 createPool mk fr mx f = do
     pd <- liftIO $ newTVarIO $ PoolData [] 0
-    I.finally (f $ Pool mx pd mk) $ liftIO $ do
+    I.finally (f $ Pool mx pd mk fr) $ liftIO $ do
         PoolData ress _ <- atomically $ readTVar pd
         mapM_ fr ress
 
@@ -55,12 +57,28 @@ data PoolExhaustedException = PoolExhaustedException
     deriving (Show, Typeable)
 instance Exception PoolExhaustedException
 
+-- | This function throws a 'PoolExhaustedException' when no resources are
+-- available. See 'withPoolAllocate' to avoid this.
 withPool' :: (MonadIO m, I.MonadPeelIO m) => Pool a -> (a -> m b) -> m b
 withPool' p f = do
     x <- withPool p f
     case x of
         Nothing -> liftIO $ throwIO PoolExhaustedException
         Just x' -> return x'
+
+-- | Same as @withPool'@, but instead of throwing a 'PoolExhaustedException'
+-- when there the maximum number of resources are created and allocated, it
+-- allocates a new resource, passes it to the subprocess and then frees it.
+withPoolAllocate :: I.MonadPeelIO m => Pool a -> (a -> m b) -> m b
+withPoolAllocate p f = do
+    x <- withPool p f
+    case x of
+        Just x' -> return x'
+        Nothing ->
+            I.bracket
+                (liftIO $ poolMake p)
+                (liftIO . poolFree p)
+                f
 
 withPool :: (MonadIO m, I.MonadPeelIO m)
          => Pool a -> (a -> m b) -> m (Maybe b)
