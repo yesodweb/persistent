@@ -3,6 +3,7 @@
 module Data.Pool
     ( -- * Using pools
       createPool
+    , createPoolCheckAlive
     , withPool
     , withPool'
     , withPoolAllocate
@@ -16,6 +17,7 @@ import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TVar
     (TVar, newTVarIO, readTVar, writeTVar)
 import Control.Exception (throwIO, Exception)
+import qualified Control.Exception as E
 import Data.Typeable
 import qualified Control.Monad.IO.Peel as I
 import qualified Control.Exception.Peel as I
@@ -32,6 +34,7 @@ data Pool a = Pool
     , poolData :: TVar (PoolData a)
     , poolMake :: IO a
     , poolFree :: a -> IO ()
+    , poolCheckAlive :: a -> IO Bool
     }
 
 data PoolStats = PoolStats
@@ -41,15 +44,22 @@ data PoolStats = PoolStats
     }
 
 poolStats :: Pool a -> IO PoolStats
-poolStats (Pool m td _ _) = do
-    d <- atomically $ readTVar td
-    return $ PoolStats m (length $ poolAvail d) (poolCreated d)
+poolStats p = do
+    d <- atomically $ readTVar $ poolData p
+    return $ PoolStats (poolMax p) (length $ poolAvail d) (poolCreated d)
 
 createPool :: (MonadIO m, I.MonadPeelIO m)
            => IO a -> (a -> IO ()) -> Int -> (Pool a -> m b) -> m b
-createPool mk fr mx f = do
+createPool mk fr mx f = createPoolCheckAlive mk fr mx f $ const $ return True
+
+createPoolCheckAlive
+    :: (MonadIO m, I.MonadPeelIO m)
+    => IO a -> (a -> IO ()) -> Int -> (Pool a -> m b)
+    -> (a -> IO Bool) -- ^ is the resource alive?
+    -> m b
+createPoolCheckAlive mk fr mx f ca = do
     pd <- liftIO $ newTVarIO $ PoolData [] 0
-    I.finally (f $ Pool mx pd mk fr) $ liftIO $ do
+    I.finally (f $ Pool mx pd mk fr ca) $ liftIO $ do
         PoolData ress _ <- atomically $ readTVar pd
         mapM_ fr ress
 
@@ -99,9 +109,20 @@ withPool p f = I.block $ do
                     (liftIO $ poolMake p)
                     (insertResource 1)
                     (liftM Just . I.unblock . f)
-        Right res -> I.finally
+        Right res -> do
+            isAlive <- liftIO $ E.try $ E.unblock $ poolCheckAlive p res
+            case isAlive :: Either E.SomeException Bool of
+                Right True ->
+                    I.finally
                         (liftM Just $ I.unblock $ f res)
                         (insertResource 0 res)
+                _ -> do
+                    -- decrement the poolCreated count and then start over
+                    liftIO $ atomically $ do
+                        pd <- readTVar $ poolData p
+                        let pd' = pd { poolCreated = poolCreated pd - 1 }
+                        writeTVar (poolData p) pd'
+                    I.unblock $ withPool p f
   where
     insertResource i x = liftIO $ atomically $ do
         pd <- readTVar $ poolData p
