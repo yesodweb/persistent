@@ -13,9 +13,7 @@ module Data.Pool
     , poolStats
     ) where
 
-import Control.Concurrent.STM (atomically)
-import Control.Concurrent.STM.TVar
-    (TVar, newTVarIO, readTVar, writeTVar)
+import Data.IORef (IORef, newIORef, atomicModifyIORef, readIORef)
 import Control.Exception (throwIO, Exception)
 import qualified Control.Exception as E
 import Data.Typeable
@@ -31,7 +29,7 @@ data PoolData a = PoolData
 
 data Pool a = Pool
     { poolMax :: Int
-    , poolData :: TVar (PoolData a)
+    , poolData :: IORef (PoolData a)
     , poolMake :: IO a
     , poolFree :: a -> IO ()
     , poolCheckAlive :: a -> IO Bool
@@ -45,7 +43,7 @@ data PoolStats = PoolStats
 
 poolStats :: Pool a -> IO PoolStats
 poolStats p = do
-    d <- atomically $ readTVar $ poolData p
+    d <- readIORef $ poolData p
     return $ PoolStats (poolMax p) (length $ poolAvail d) (poolCreated d)
 
 createPool :: (MonadIO m, I.MonadPeelIO m)
@@ -58,9 +56,9 @@ createPoolCheckAlive
     -> (a -> IO Bool) -- ^ is the resource alive?
     -> m b
 createPoolCheckAlive mk fr mx f ca = do
-    pd <- liftIO $ newTVarIO $ PoolData [] 0
+    pd <- liftIO $ newIORef $ PoolData [] 0
     I.finally (f $ Pool mx pd mk fr ca) $ liftIO $ do
-        PoolData ress _ <- atomically $ readTVar pd
+        PoolData ress _ <- readIORef pd
         mapM_ fr ress
 
 data PoolExhaustedException = PoolExhaustedException
@@ -93,14 +91,10 @@ withPoolAllocate p f = do
 withPool :: (MonadIO m, I.MonadPeelIO m)
          => Pool a -> (a -> m b) -> m (Maybe b)
 withPool p f = I.block $ do
-    eres <- liftIO $ atomically $ do
-        pd <- readTVar $ poolData p
-        let (pd', eres) =
-                case poolAvail pd of
-                    (x:xs) -> (pd { poolAvail = xs }, Right x)
-                    [] -> (pd, Left $ poolCreated pd)
-        writeTVar (poolData p) pd'
-        return eres
+    eres <- liftIO $ atomicModifyIORef (poolData p) $ \pd ->
+        case poolAvail pd of
+            x:xs -> (pd { poolAvail = xs }, Right x)
+            [] -> (pd, Left $ poolCreated pd)
     case eres of
         Left pc ->
             if pc >= poolMax p
@@ -118,15 +112,11 @@ withPool p f = I.block $ do
                         (insertResource 0 res)
                 _ -> do
                     -- decrement the poolCreated count and then start over
-                    liftIO $ atomically $ do
-                        pd <- readTVar $ poolData p
-                        let pd' = pd { poolCreated = poolCreated pd - 1 }
-                        writeTVar (poolData p) pd'
+                    liftIO $ atomicModifyIORef (poolData p) $ \pd ->
+                        (pd { poolCreated = poolCreated pd - 1}, ())
                     I.unblock $ withPool p f
   where
-    insertResource i x = liftIO $ atomically $ do
-        pd <- readTVar $ poolData p
-        writeTVar (poolData p)
-            pd { poolAvail = x : poolAvail pd
-               , poolCreated = i + poolCreated pd
-               }
+    insertResource i x = liftIO $ atomicModifyIORef (poolData p) $ \pd ->
+        (pd { poolAvail = x : poolAvail pd
+                , poolCreated = i + poolCreated pd
+                }, ())
