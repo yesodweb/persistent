@@ -48,8 +48,8 @@ derivePersistField "PetType"
 share2 mkPersist (mkMigrate "testMigrate") [$persist|
 
   Person
-    name String update Eq Ne Desc
-    age Int update "Asc" Desc Lt "some ignored -- attribute" Eq Add
+    name String Update Eq Ne Desc
+    age Int Update "Asc" Desc Lt "some ignored -- attribute" Eq Add
     color String Maybe Eq Ne -- this is a comment sql=foobarbaz
     PersonNameKey name -- this is a comment sql=foobarbaz
   Pet
@@ -95,9 +95,8 @@ main = do
   defaultMain [testSuite]
 
 testSuite :: Test
-testSuite = testGroup "Database.Persistent"
-    [
-      testCase "sqlite persistent" case_sqlitePersistent
+testSuite = testGroup "Database.Persistent" $ reverse
+    [ testCase "sqlite persistent" case_sqlitePersistent
     , testCase "sqlite deleteWhere" case_sqliteDeleteWhere
     , testCase "sqlite deleteBy" case_sqliteDeleteBy
     , testCase "sqlite delete" case_sqliteDelete
@@ -110,6 +109,7 @@ testSuite = testGroup "Database.Persistent"
     , testCase "insertBy" case_insertBy
     , testCase "derivePersistField" case_derivePersistField
     , testCase "afterException" case_afterException
+    , testCase "idIn" case_idIn
     ]
 
                           
@@ -128,7 +128,8 @@ case_sqlitePersistent = sqliteTest _persistent
 case_largeNumbers = sqliteTest _largeNumbers
 case_insertBy = sqliteTest _insertBy
 case_derivePersistField = sqliteTest _derivePersistField
-case_afterException = sqliteTest _afterException
+case_afterException = (withSqlitePool "testdb" 1) $ runSqlPool _afterException
+case_idIn = sqliteTest _idIn
 
 _deleteWhere = do
   key2 <- insert $ Person "Michael2" 90 Nothing
@@ -343,3 +344,13 @@ _afterException = do
   where
     catcher :: Monad m => SomeException -> m ()
     catcher _ = return ()
+
+_idIn = do
+    let p1 = Person "A" 0 Nothing
+        p2 = Person "B" 1 Nothing
+        p3 = Person "C" 2 Nothing
+    pid1 <- insert p1
+    _pid2 <- insert p2
+    pid3 <- insert p3
+    x <- selectList [PersonIdIn [pid1, pid3]] [] 0 0
+    liftIO $ x @?= [(pid1, p1), (pid3, p3)]

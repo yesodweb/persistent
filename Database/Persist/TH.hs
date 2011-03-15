@@ -56,9 +56,11 @@ keyTypeDec constr typ t =
 filterTypeDec :: EntityDef -> Dec
 filterTypeDec t =
     DataInstD [] ''Filter [ConT $ mkName $ entityName t]
-            (map (mkFilter $ entityName t) filts)
+            (NormalC (mkName $ entityName t ++ "IdIn") [(NotStrict, listOfIds)]
+            : map (mkFilter $ entityName t) filts)
             (if null filts then [] else [''Show, ''Read, ''Eq])
   where
+    listOfIds = ListT `AppT` (ConT ''Key `AppT` ConT (mkName $ entityName t))
     filts = entityFilters t
 
 entityFilters :: EntityDef -> [(String, String, Bool, PersistFilter)]
@@ -229,14 +231,21 @@ mkToOrder pairs =
     go (constr, val) =
         Clause [RecP (mkName constr) []] (NormalB val) []
 
-mkToFilter :: [(String, PersistFilter, Bool)] -> Q [Dec]
-mkToFilter pairs = do
+mkToFilter :: EntityDef -> [(String, PersistFilter, Bool)] -> Q [Dec]
+mkToFilter e pairs = do
     c1 <- mapM go pairs
+    idIn' <- idIn
     let _FIXMEc2 = concatMap go' pairs
     return
-        [ FunD (mkName "persistFilterToFilter") $ degen c1
+        [ FunD (mkName "persistFilterToFilter") $ idIn' : c1
         ]
   where
+    idIn = do
+        in_ <- [|In|]
+        return $ Clause
+            [RecP (mkName $ entityName e ++ "IdIn") []]
+            (NormalB in_)
+            []
     go (constr, pf, _) = do
         pf' <- lift pf
         return $ Clause [RecP (mkName constr) []] (NormalB pf') []
@@ -259,13 +268,20 @@ mkToValue func = FunD (mkName func) . degen . map go
                    (NormalB $ VarE (mkName "toPersistValue") `AppE` VarE x)
                    []
 
-mkToFiltValue :: String -> [(String, Bool)] -> Q Dec
-mkToFiltValue func pairs = do
+mkToFiltValue :: EntityDef -> String -> [(String, Bool)] -> Q Dec
+mkToFiltValue e func pairs = do
     left <- [|Left . toPersistValue|]
     right <- [|Right . map toPersistValue|]
     clauses <- mapM (go left right) pairs
-    return . FunD (mkName func) . degen $ clauses
+    inId' <- inId right
+    return $ FunD (mkName func) $ (inId' : clauses)
   where
+    inId right = do
+        x <- newName "x"
+        return $ Clause
+            [ConP (mkName $ entityName e ++ "IdIn") [VarP x]]
+            (NormalB $ right `AppE` VarE x)
+            []
     go left right (constr, isList) = do
         x <- newName "x"
         return
@@ -316,11 +332,11 @@ mkEntity t = do
     entityOrders' <- entityOrders t
     otd <- orderTypeDec t
     puk <- mkUniqueKeys t
-    tf <- mkToFilter
+    tf <- mkToFilter t
                 (map (\(x, _, z, y) ->
                     (name ++ upperFirst x ++ show y, y, z))
                 $ entityFilters t)
-    ftv <- mkToFiltValue "persistFilterToValue"
+    ftv <- mkToFiltValue t "persistFilterToValue"
                 $ map (\(x, _, _, y) ->
                     (name ++ upperFirst x ++ show y, isFilterList y))
                 $ entityFilters t
@@ -358,6 +374,7 @@ mkEntity t = do
                 $ entityUpdates t
         , putu
         , mkToFieldName "persistFilterToFieldName"
+                $ (:) (entityName t ++ "IdIn", "id")
                 $ map (\(x, _, _, y) -> (name ++ upperFirst x ++ show y, x))
                 $ entityFilters t
         , ftv

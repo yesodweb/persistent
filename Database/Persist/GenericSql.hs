@@ -347,6 +347,7 @@ getFieldName :: EntityDef -> String -> RawName
 getFieldName t s = rawFieldName $ tableColumn t s
 
 tableColumn :: EntityDef -> String -> (String, String, [String])
+tableColumn _ "id" = ("id", "Int64", [])
 tableColumn t s = go $ entityColumns t
   where
     go [] = error $ "Unknown table column: " ++ s
