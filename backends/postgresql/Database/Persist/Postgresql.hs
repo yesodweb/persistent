@@ -29,6 +29,7 @@ import Data.ByteString (ByteString)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.Encoding.Error as T
+import Data.Time.LocalTime (localTimeToUTC, utc)
 
 withPostgresqlPool :: MonadPeelIO m
                    => String
@@ -118,6 +119,7 @@ pFromSql (H.SqlLocalDate d) = PersistDay d
 pFromSql (H.SqlLocalTimeOfDay d) = PersistTimeOfDay d
 pFromSql (H.SqlUTCTime d) = PersistUTCTime d
 pFromSql H.SqlNull = PersistNull
+pFromSql (H.SqlLocalTime d) = PersistUTCTime $ localTimeToUTC utc d
 pFromSql x = PersistString $ H.fromSql x -- FIXME
 
 migrate' :: PersistEntity val
