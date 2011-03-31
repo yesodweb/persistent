@@ -17,8 +17,8 @@ import Data.IORef (IORef, newIORef, atomicModifyIORef, readIORef)
 import Control.Exception (throwIO, Exception)
 import qualified Control.Exception as E
 import Data.Typeable
-import qualified Control.Monad.IO.Peel as I
-import qualified Control.Exception.Peel as I
+import qualified Control.Monad.IO.Control as I
+import qualified Control.Exception.Control as I
 import Control.Monad.IO.Class
 import Control.Monad
 
@@ -46,12 +46,12 @@ poolStats p = do
     d <- readIORef $ poolData p
     return $ PoolStats (poolMax p) (length $ poolAvail d) (poolCreated d)
 
-createPool :: (MonadIO m, I.MonadPeelIO m)
+createPool :: (MonadIO m, I.MonadControlIO m)
            => IO a -> (a -> IO ()) -> Int -> (Pool a -> m b) -> m b
 createPool mk fr mx f = createPoolCheckAlive mk fr mx f $ const $ return True
 
 createPoolCheckAlive
-    :: (MonadIO m, I.MonadPeelIO m)
+    :: (MonadIO m, I.MonadControlIO m)
     => IO a -> (a -> IO ()) -> Int -> (Pool a -> m b)
     -> (a -> IO Bool) -- ^ is the resource alive?
     -> m b
@@ -67,7 +67,7 @@ instance Exception PoolExhaustedException
 
 -- | This function throws a 'PoolExhaustedException' when no resources are
 -- available. See 'withPoolAllocate' to avoid this.
-withPool' :: (MonadIO m, I.MonadPeelIO m) => Pool a -> (a -> m b) -> m b
+withPool' :: (MonadIO m, I.MonadControlIO m) => Pool a -> (a -> m b) -> m b
 withPool' p f = do
     x <- withPool p f
     case x of
@@ -77,7 +77,7 @@ withPool' p f = do
 -- | Same as @withPool'@, but instead of throwing a 'PoolExhaustedException'
 -- when there the maximum number of resources are created and allocated, it
 -- allocates a new resource, passes it to the subprocess and then frees it.
-withPoolAllocate :: I.MonadPeelIO m => Pool a -> (a -> m b) -> m b
+withPoolAllocate :: I.MonadControlIO m => Pool a -> (a -> m b) -> m b
 withPoolAllocate p f = do
     x <- withPool p f
     case x of
@@ -88,9 +88,9 @@ withPoolAllocate p f = do
                 (liftIO . poolFree p)
                 f
 
-withPool :: (MonadIO m, I.MonadPeelIO m)
+withPool :: (MonadIO m, I.MonadControlIO m)
          => Pool a -> (a -> m b) -> m (Maybe b)
-withPool p f = I.block $ do
+withPool p f = I.mask $ \unmask -> do
     eres <- liftIO $ atomicModifyIORef (poolData p) $ \pd ->
         case poolAvail pd of
             x:xs -> (pd { poolAvail = xs }, Right x)
@@ -102,19 +102,19 @@ withPool p f = I.block $ do
                 else I.bracket
                     (liftIO $ poolMake p)
                     (insertResource 1)
-                    (liftM Just . I.unblock . f)
+                    (liftM Just . unmask . f)
         Right res -> do
-            isAlive <- liftIO $ E.try $ E.unblock $ poolCheckAlive p res
+            isAlive <- I.try $ unmask $ liftIO $ poolCheckAlive p res
             case isAlive :: Either E.SomeException Bool of
                 Right True ->
                     I.finally
-                        (liftM Just $ I.unblock $ f res)
+                        (liftM Just $ unmask $ f res)
                         (insertResource 0 res)
                 _ -> do
                     -- decrement the poolCreated count and then start over
                     liftIO $ atomicModifyIORef (poolData p) $ \pd ->
                         (pd { poolCreated = poolCreated pd - 1}, ())
-                    I.unblock $ withPool p f
+                    unmask $ withPool p f
   where
     insertResource i x = liftIO $ atomicModifyIORef (poolData p) $ \pd ->
         (pd { poolAvail = x : poolAvail pd
