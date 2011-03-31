@@ -23,8 +23,8 @@ import Control.Monad.IO.Class
 import Control.Monad
 
 data PoolData a = PoolData
-    { poolAvail :: [a]
-    , poolCreated :: Int
+    { poolAvail :: ![a]
+    , poolCreated :: !Int
     }
 
 data Pool a = Pool
