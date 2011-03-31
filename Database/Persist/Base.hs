@@ -1,5 +1,4 @@
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -31,7 +30,6 @@ module Database.Persist.Base
     , PersistException (..)
     ) where
 
-import Language.Haskell.TH.Syntax
 import Data.Time (Day, TimeOfDay, UTCTime)
 import Data.ByteString.Char8 (ByteString, unpack)
 import Control.Applicative
@@ -386,35 +384,11 @@ data EntityDef = EntityDef
     }
     deriving Show
 
-instance Lift EntityDef where
-    lift (EntityDef a b c d e) = do
-        x <- [|EntityDef|]
-        a' <- lift a
-        b' <- lift b
-        c' <- lift c
-        d' <- lift d
-        e' <- lift e
-        return $ x `AppE` a' `AppE` b' `AppE` c' `AppE` d' `AppE` e'
-
 data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le | In | NotIn
     deriving (Read, Show)
 
-instance Lift PersistFilter where
-    lift Eq = [|Eq|]
-    lift Ne = [|Ne|]
-    lift Gt = [|Gt|]
-    lift Lt = [|Lt|]
-    lift Ge = [|Ge|]
-    lift Le = [|Le|]
-    lift In = [|In|]
-    lift NotIn = [|NotIn|]
-
 data PersistOrder = Asc | Desc
     deriving (Read, Show)
-
-instance Lift PersistOrder where
-    lift Asc = [|Asc|]
-    lift Desc = [|Desc|]
 
 class PersistEntity a => DeleteCascade a where
     deleteCascade :: PersistBackend m => Key a -> m ()
@@ -438,10 +412,3 @@ instance E.Exception PersistException
 
 data PersistUpdate = Update | Add | Subtract | Multiply | Divide
     deriving (Read, Show)
-
-instance Lift PersistUpdate where
-    lift Update = [|Update|]
-    lift Add = [|Add|]
-    lift Subtract = [|Subtract|]
-    lift Multiply = [|Multiply|]
-    lift Divide = [|Divide|]
