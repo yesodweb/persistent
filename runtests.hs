@@ -20,7 +20,7 @@ import Data.Int
 import Data.Word
 
 import Control.Exception (SomeException)
-import qualified Control.Exception.Peel as Peel
+import qualified Control.Exception.Control as Control
 
 infix 1 /=@, @/=
 
@@ -338,7 +338,7 @@ _derivePersistField = do
 
 _afterException = do
     _ <- insert $ Person "A" 0 Nothing
-    _ <- (insert (Person "A" 1 Nothing) >> return ()) `Peel.catch` catcher
+    _ <- (insert (Person "A" 1 Nothing) >> return ()) `Control.catch` catcher
     _ <- insert $ Person "B" 0 Nothing
     return ()
   where

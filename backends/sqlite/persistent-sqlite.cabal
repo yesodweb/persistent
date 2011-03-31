@@ -1,5 +1,5 @@
 name:            persistent-sqlite
-version:         0.4.0
+version:         0.5.0
 license:         BSD3
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -18,11 +18,10 @@ flag systemlib
 
 library
     build-depends:   base                    >= 4         && < 5
-                   , template-haskell
                    , bytestring              >= 0.9.1     && < 0.10
                    , transformers            >= 0.2.1     && < 0.3
-                   , persistent              >= 0.4       && < 0.5
-                   , monad-peel              >= 0.1       && < 0.2
+                   , persistent              >= 0.5       && < 0.6
+                   , monad-control           >= 0.2       && < 0.3
                    , containers              >= 0.2       && < 0.5
                    , text                    >= 0.7       && < 0.12
     exposed-modules: Database.Sqlite

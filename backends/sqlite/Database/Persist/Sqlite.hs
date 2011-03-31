@@ -1,4 +1,3 @@
-{-# LANGUAGE PackageImports #-}
 -- | A sqlite backend for persistent.
 module Database.Persist.Sqlite
     ( withSqlitePool
@@ -18,16 +17,16 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Data.List (intercalate)
 import Data.IORef
 import qualified Data.Map as Map
-import Control.Monad.IO.Peel (MonadPeelIO)
-import Control.Exception.Peel (finally)
+import Control.Monad.IO.Control (MonadControlIO)
+import Control.Exception.Control (finally)
 
-withSqlitePool :: MonadPeelIO m
+withSqlitePool :: MonadControlIO m
                => String
                -> Int -- ^ number of connections to open
                -> (ConnectionPool -> m a) -> m a
 withSqlitePool s = withSqlPool $ open' s
 
-withSqliteConn :: MonadPeelIO m => String -> (Connection -> m a) -> m a
+withSqliteConn :: MonadControlIO m => String -> (Connection -> m a) -> m a
 withSqliteConn = withSqlConn . open'
 
 open' :: String -> IO Connection
@@ -83,7 +82,7 @@ execute' stmt vals = flip finally (liftIO $ Sqlite.reset stmt) $ do
     Sqlite.Done <- Sqlite.step stmt
     return ()
 
-withStmt' :: MonadPeelIO m
+withStmt' :: MonadControlIO m
           => Sqlite.Statement
           -> [PersistValue]
           -> (RowPopper m -> m a)

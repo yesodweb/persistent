@@ -18,12 +18,12 @@ import Control.Monad.Trans.Reader
 import qualified Data.Map as Map
 import Control.Applicative (Applicative)
 import Control.Monad.Trans.Class (MonadTrans (..))
-import Control.Monad.IO.Peel (MonadPeelIO (..))
+import Control.Monad.IO.Control (MonadControlIO (..))
 
 newtype SqlPersist m a = SqlPersist { unSqlPersist :: ReaderT Connection m a }
-    deriving (Monad, MonadIO, MonadTrans, Functor, Applicative, MonadPeelIO)
+    deriving (Monad, MonadIO, MonadTrans, Functor, Applicative, MonadControlIO)
 
-withStmt :: MonadPeelIO m => String -> [PersistValue]
+withStmt :: MonadControlIO m => String -> [PersistValue]
          -> (RowPopper (SqlPersist m) -> SqlPersist m a) -> SqlPersist m a
 withStmt sql vals pop = do
     stmt <- getStmt sql

@@ -24,8 +24,8 @@ import Data.Pool
 import Database.Persist.Base
 import Data.Maybe (fromJust)
 import Control.Arrow
-import Control.Monad.IO.Peel (MonadPeelIO)
-import Control.Exception.Peel (bracket)
+import Control.Monad.IO.Control (MonadControlIO)
+import Control.Exception.Control (bracket)
 import Database.Persist.TH (nullable)
 
 type RowPopper m = m (Maybe [PersistValue])
@@ -48,15 +48,15 @@ data Statement = Statement
     { finalize :: IO ()
     , reset :: IO ()
     , execute :: [PersistValue] -> IO ()
-    , withStmt :: forall a m. MonadPeelIO m
+    , withStmt :: forall a m. MonadControlIO m
                => [PersistValue] -> (RowPopper m -> m a) -> m a
     }
 
-withSqlPool :: MonadPeelIO m
+withSqlPool :: MonadControlIO m
             => IO Connection -> Int -> (Pool Connection -> m a) -> m a
 withSqlPool mkConn = createPool mkConn close'
 
-withSqlConn :: MonadPeelIO m => IO Connection -> (Connection -> m a) -> m a
+withSqlConn :: MonadControlIO m => IO Connection -> (Connection -> m a) -> m a
 withSqlConn open = bracket (liftIO open) (liftIO . close')
 
 close' :: Connection -> IO ()

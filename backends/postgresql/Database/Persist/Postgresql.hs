@@ -1,4 +1,3 @@
-{-# LANGUAGE PackageImports #-}
 -- | A postgresql backend for persistent.
 module Database.Persist.Postgresql
     ( withPostgresqlPool
@@ -23,7 +22,7 @@ import Data.Either (partitionEithers)
 import Control.Arrow
 import Data.List (sort, groupBy)
 import Data.Function (on)
-import Control.Monad.IO.Peel (MonadPeelIO)
+import Control.Monad.IO.Control (MonadControlIO)
 
 import Data.ByteString (ByteString)
 import qualified Data.Text as T
@@ -31,13 +30,13 @@ import qualified Data.Text.Encoding as T
 import qualified Data.Text.Encoding.Error as T
 import Data.Time.LocalTime (localTimeToUTC, utc)
 
-withPostgresqlPool :: MonadPeelIO m
+withPostgresqlPool :: MonadControlIO m
                    => String
                    -> Int -- ^ number of connections to open
                    -> (ConnectionPool -> m a) -> m a
 withPostgresqlPool s = withSqlPool $ open' s
 
-withPostgresqlConn :: MonadPeelIO m => String -> (Connection -> m a) -> m a
+withPostgresqlConn :: MonadControlIO m => String -> (Connection -> m a) -> m a
 withPostgresqlConn = withSqlConn . open'
 
 open' :: String -> IO Connection
@@ -83,7 +82,7 @@ execute' stmt vals = do
     _ <- H.execute stmt $ map pToSql vals
     return ()
 
-withStmt' :: MonadPeelIO m
+withStmt' :: MonadControlIO m
           => H.Statement
           -> [PersistValue]
           -> (RowPopper m -> m a)
