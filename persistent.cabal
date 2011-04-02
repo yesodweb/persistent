@@ -31,6 +31,7 @@ library
                      Database.Persist.GenericSql.Internal
                      Database.Persist.GenericSql.Raw
                      Database.Persist.Util
+                     Database.Persist.Join
     ghc-options:     -Wall
 
 Flag test

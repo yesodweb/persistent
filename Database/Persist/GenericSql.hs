@@ -121,7 +121,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
         let wher = if null filts
                     then ""
                     else " WHERE " ++
-                         intercalate " AND " (map (filterClause conn) filts)
+                         intercalate " AND " (map (filterClause False conn) filts)
         let sql = concat
                 [ "SELECT COUNT(*) FROM "
                 , escapeName conn $ rawTableName t
@@ -152,11 +152,6 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
                             loop step pop
         loop step _ = return step
         t = entityDef $ dummyFromFilts filts
-        orderClause conn o =
-            escapeName conn (getFieldName t $ persistOrderToFieldName o)
-                        ++ case persistOrderToOrder o of
-                                            Asc -> ""
-                                            Desc -> " DESC"
         fromPersistValues' (PersistInt64 x:xs) = do
             case fromPersistValues xs of
                 Left e -> Left e
@@ -165,11 +160,11 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
         wher conn = if null filts
                     then ""
                     else " WHERE " ++
-                         intercalate " AND " (map (filterClause conn) filts)
+                         intercalate " AND " (map (filterClause False conn) filts)
         ord conn = if null ords
                     then ""
                     else " ORDER BY " ++
-                         intercalate "," (map (orderClause conn) ords)
+                         intercalate "," (map (orderClause False conn) ords)
         lim conn = case (limit, offset) of
                 (0, 0) -> ""
                 (0, _) -> ' ' : noLimit conn
@@ -211,7 +206,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
         wher conn = if null filts
                     then ""
                     else " WHERE " ++
-                         intercalate " AND " (map (filterClause conn) filts)
+                         intercalate " AND " (map (filterClause False conn) filts)
         sql conn = concat
             [ "SELECT id FROM "
             , escapeName conn $ rawTableName t
@@ -235,7 +230,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
         let wher = if null filts
                     then ""
                     else " WHERE " ++
-                         intercalate " AND " (map (filterClause conn) filts)
+                         intercalate " AND " (map (filterClause False conn) filts)
             sql = concat
                 [ "DELETE FROM "
                 , escapeName conn $ rawTableName t
@@ -287,7 +282,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
         let wher = if null filts
                     then ""
                     else " WHERE " ++
-                         intercalate " AND " (map (filterClause conn) filts)
+                         intercalate " AND " (map (filterClause False conn) filts)
         let sql = concat
                 [ "UPDATE "
                 , escapeName conn $ rawTableName t
@@ -340,91 +335,8 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
 dummyFromUnique :: Unique v -> v
 dummyFromUnique _ = error "dummyFromUnique"
 
-getFieldName :: EntityDef -> String -> RawName
-getFieldName t s = rawFieldName $ tableColumn t s
-
-tableColumn :: EntityDef -> String -> (String, String, [String])
-tableColumn _ "id" = ("id", "Int64", [])
-tableColumn t s = go $ entityColumns t
-  where
-    go [] = error $ "Unknown table column: " ++ s
-    go ((x, y, z):rest)
-        | x == s = (x, y, z)
-        | otherwise = go rest
-
 dummyFromKey :: Key v -> v
 dummyFromKey _ = error "dummyFromKey"
-
-filterClause :: PersistEntity val => Connection -> Filter val -> String
-filterClause conn f =
-    case (isNull, persistFilterToFilter f, varCount) of
-        (True, Eq, _) -> name ++ " IS NULL"
-        (True, Ne, _) -> name ++ " IS NOT NULL"
-        (False, Ne, _) -> concat
-            [ "("
-            , name
-            , " IS NULL OR "
-            , name
-            , "<>?)"
-            ]
-        -- We use 1=2 (and below 1=1) to avoid using TRUE and FALSE, since
-        -- not all databases support those words directly.
-        (_, In, 0) -> "1=2"
-        (False, In, _) -> name ++ " IN " ++ qmarks
-        (True, In, _) -> concat
-            [ "("
-            , name
-            , " IS NULL OR "
-            , name
-            , " IN "
-            , qmarks
-            , ")"
-            ]
-        (_, NotIn, 0) -> "1=1"
-        (False, NotIn, _) -> concat
-            [ "("
-            , name
-            , " IS NULL OR "
-            , name
-            , " NOT IN "
-            , qmarks
-            , ")"
-            ]
-        (True, NotIn, _) -> concat
-            [ "("
-            , name
-            , " IS NOT NULL AND "
-            , name
-            , " NOT IN "
-            , qmarks
-            , ")"
-            ]
-        _ -> name ++ showSqlFilter (persistFilterToFilter f) ++ "?"
-  where
-    isNull = any (== PersistNull)
-           $ either return id
-           $ persistFilterToValue f
-    t = entityDef $ dummyFromFilts [f]
-    name = escapeName conn $ getFieldName t $ persistFilterToFieldName f
-    qmarks = case persistFilterToValue f of
-                Left _ -> "?"
-                Right x ->
-                    let x' = filter (/= PersistNull) x
-                     in '(' : intercalate "," (map (const "?") x') ++ ")"
-    varCount = case persistFilterToValue f of
-                Left _ -> 1
-                Right x -> length x
-    showSqlFilter Eq = "="
-    showSqlFilter Ne = "<>"
-    showSqlFilter Gt = ">"
-    showSqlFilter Lt = "<"
-    showSqlFilter Ge = ">="
-    showSqlFilter Le = "<="
-    showSqlFilter In = " IN "
-    showSqlFilter NotIn = " NOT IN "
-
-dummyFromFilts :: [Filter v] -> v
-dummyFromFilts _ = error "dummyFromFilts"
 
 
 type Sql = String
@@ -512,11 +424,3 @@ migrate val = do
     let getter = R.getStmt' conn
     res <- liftIO $ migrateSql conn getter val
     either tell (lift . tell) res
-
-getFiltsValues :: PersistEntity val => [Filter val] -> [PersistValue]
-getFiltsValues =
-    concatMap $ go . persistFilterToValue
-  where
-    go (Left PersistNull) = []
-    go (Left x) = [x]
-    go (Right xs) = filter (/= PersistNull) xs

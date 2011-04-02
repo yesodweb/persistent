@@ -17,6 +17,9 @@ import Database.Persist.Postgresql
 import Database.Persist.TH
 import Control.Monad.IO.Class
 
+import qualified Database.Persist.Join
+import qualified Database.Persist.Join.Sql
+
 import Control.Monad.Trans.Reader
 import Monad (unless)
 import Data.Int
@@ -67,6 +70,12 @@ share2 mkPersist (mkMigrate "testMigrate") [$persist|
     word32 Word32
     int64 Int64
     word64 Word64
+
+  Author
+    name String Eq Asc
+  Entry
+    author AuthorId Eq
+    title String Desc
 |]
 
 -- connstr = "user=test password=test host=localhost port=5432 dbname=yesod_test"
@@ -88,6 +97,8 @@ cleanDB = do
   deleteWhere ([] :: [Filter Pet])
   deleteWhere ([] :: [Filter Person])
   deleteWhere ([] :: [Filter Number])
+  deleteWhere ([] :: [Filter Entry])
+  deleteWhere ([] :: [Filter Author])
 
 setup :: SqlPersist IO ()
 setup = do
@@ -115,6 +126,8 @@ testSuite = testGroup "Database.Persistent" $ reverse
     , testCase "derivePersistField" case_derivePersistField
     , testCase "afterException" case_afterException
     , testCase "idIn" case_idIn
+    , testCase "join (non-SQL)" case_joinNonSql
+    , testCase "join (SQL)" case_joinSql
     ]
 
                           
@@ -135,6 +148,8 @@ case_insertBy = sqliteTest _insertBy
 case_derivePersistField = sqliteTest _derivePersistField
 case_afterException = (withSqlitePool "testdb" 1) $ runSqlPool _afterException
 case_idIn = sqliteTest _idIn
+case_joinNonSql = sqliteTest _joinNonSql
+case_joinSql = sqliteTest _joinSql
 
 _deleteWhere = do
   key2 <- insert $ Person "Michael2" 90 Nothing
@@ -359,3 +374,54 @@ _idIn = do
     pid3 <- insert p3
     x <- selectList [PersonIdIn [pid1, pid3]] [] 0 0
     liftIO $ x @?= [(pid1, p1), (pid3, p3)]
+
+_joinNonSql = _joinGen Database.Persist.Join.selectOneMany
+_joinSql = _joinGen Database.Persist.Join.Sql.selectOneMany
+
+_joinGen selectOneMany = do
+    a <- insert $ Author "a"
+    a1 <- insert $ Entry a "a1"
+    a2 <- insert $ Entry a "a2"
+    a3 <- insert $ Entry a "a3"
+    b <- insert $ Author "b"
+    b1 <- insert $ Entry b "b1"
+    b2 <- insert $ Entry b "b2"
+    _ <- insert $ Author "c"
+
+    x <- selectOneMany [] [] [] [] EntryAuthorEq
+    liftIO $
+        x @?=
+            [ ((a, Author "a"),
+                [ (a1, Entry a "a1")
+                , (a2, Entry a "a2")
+                , (a3, Entry a "a3")
+                ])
+            , ((b, Author "b"),
+                [ (b1, Entry b "b1")
+                , (b2, Entry b "b2")
+                ])
+            ]
+
+    y <- selectOneMany [AuthorNameEq "a"] [] [] [] EntryAuthorEq
+    liftIO $
+        y @?=
+            [ ((a, Author "a"),
+                [ (a1, Entry a "a1")
+                , (a2, Entry a "a2")
+                , (a3, Entry a "a3")
+                ])
+            ]
+
+    z <- selectOneMany [] [AuthorNameAsc] [] [EntryTitleDesc] EntryAuthorEq
+    liftIO $
+        z @?=
+            [ ((a, Author "a"),
+                [ (a3, Entry a "a3")
+                , (a2, Entry a "a2")
+                , (a1, Entry a "a1")
+                ])
+            , ((b, Author "b"),
+                [ (b2, Entry b "b2")
+                , (b1, Entry b "b1")
+                ])
+            ]
