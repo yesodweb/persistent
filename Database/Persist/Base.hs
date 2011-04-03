@@ -67,7 +67,7 @@ data PersistValue = PersistString String
 -- have different translations for these types.
 data SqlType = SqlString
              | SqlInt32
-             | SqlInteger -- ^ 8-byte integer; should be renamed SqlInt64
+             | SqlInteger -- ^ FIXME 8-byte integer; should be renamed SqlInt64
              | SqlReal
              | SqlBool
              | SqlDay
@@ -257,8 +257,8 @@ class PersistEntity val where
     toPersistFields :: val -> [SomePersistField]
     fromPersistValues :: [PersistValue] -> Either String val
     halfDefined :: val
-    toPersistKey :: Int64 -> Key val
-    fromPersistKey :: Key val -> Int64
+    toPersistKey :: PersistValue -> Key val
+    fromPersistKey :: Key val -> PersistValue
     showPersistKey :: Key val -> String
 
     persistFilterToFieldName :: Filter val -> String
@@ -412,3 +412,8 @@ instance E.Exception PersistException
 
 data PersistUpdate = Update | Add | Subtract | Multiply | Divide
     deriving (Read, Show)
+
+instance PersistField PersistValue where
+    toPersistValue = id
+    fromPersistValue = Right
+    sqlType _ = SqlInteger -- since PersistValue should only be used like this for keys, which in SQL are Int64

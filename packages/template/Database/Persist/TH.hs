@@ -23,11 +23,11 @@ import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
 import Data.Maybe (mapMaybe, catMaybes)
-import Web.Routes.Quasi (SinglePiece)
-import Data.Int (Int64)
+import Web.Routes.Quasi (SinglePiece (..))
 import Control.Monad (forM)
 import Control.Monad.IO.Control (MonadControlIO)
 import qualified System.IO as SIO
+import Data.Text (unpack)
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
@@ -71,9 +71,8 @@ dataTypeDec t =
 keyTypeDec :: String -> Name -> EntityDef -> Dec
 keyTypeDec constr typ t =
     NewtypeInstD [] ''Key [ConT $ mkName $ entityName t]
-                (NormalC (mkName constr) [(NotStrict, ConT typ)])
-                [''Show, ''Read, ''Num, ''Integral, ''Enum, ''Eq, ''Ord,
-                 ''Real, ''PersistField, ''SinglePiece]
+                (RecC (mkName constr) [(mkName $ "un" ++ entityName t ++ "Id", NotStrict, ConT typ)])
+                [''Show, ''Read, ''Eq, ''PersistField, ''SinglePiece]
 
 filterTypeDec :: EntityDef -> Dec
 filterTypeDec t =
@@ -348,7 +347,6 @@ mkEntity t = do
     let clazz = ConT ''PersistEntity `AppT` ConT (mkName $ entityName t)
     tpf <- mkToPersistFields [(name, length $ entityColumns t)]
     fpv <- mkFromPersistValues t
-    fromIntegral' <- [|fromIntegral|]
     utv <- mkUniqueToValues $ entityUniques t
     show' <- [|show|]
     entityOrders' <- entityOrders t
@@ -370,7 +368,7 @@ mkEntity t = do
       , TySynD (mkName $ entityName t ++ "Id") [] $
             ConT ''Key `AppT` ConT (mkName $ entityName t)
       , InstanceD [] clazz $
-        [ keyTypeDec (entityName t ++ "Id") ''Int64 t
+        [ keyTypeDec (entityName t ++ "Id") ''PersistValue t
         , filterTypeDec t
         , updateTypeDec t
         , otd
@@ -379,8 +377,8 @@ mkEntity t = do
         , tpf
         , FunD (mkName "fromPersistValues") fpv
         , mkHalfDefined name $ length $ entityColumns t
-        , FunD (mkName "toPersistKey") [Clause [] (NormalB fromIntegral') []]
-        , FunD (mkName "fromPersistKey") [Clause [] (NormalB fromIntegral') []]
+        , FunD (mkName "toPersistKey") [Clause [] (NormalB $ ConE $ mkName $ entityName t ++ "Id") []]
+        , FunD (mkName "fromPersistKey") [Clause [] (NormalB $ VarE $ mkName $ "un" ++ entityName t ++ "Id") []]
         , FunD (mkName "showPersistKey") [Clause [] (NormalB show') []]
         , mkToFieldName "persistOrderToFieldName"
                 $ map (\(x, y, _) -> (name ++ upperFirst x ++ y, x))
@@ -598,3 +596,10 @@ instance Lift PersistUpdate where
     lift Subtract = [|Subtract|]
     lift Multiply = [|Multiply|]
     lift Divide = [|Divide|]
+
+instance SinglePiece PersistValue where
+    fromSinglePiece = Just . PersistString . unpack
+    toSinglePiece x =
+        case fromPersistValue x of
+            Left e -> error e
+            Right y -> y

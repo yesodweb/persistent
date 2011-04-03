@@ -66,12 +66,12 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
         i <-
             case esql of
                 Left sql -> withStmt' sql vals $ \pop -> do
-                    Just [PersistInt64 i] <- pop
+                    Just [i] <- pop
                     return i
                 Right (sql1, sql2) -> do
                     execute' sql1 vals
                     withStmt' sql2 [] $ \pop -> do
-                        Just [PersistInt64 i] <- pop
+                        Just [i] <- pop
                         return i
         return $ toPersistKey i
       where
@@ -90,7 +90,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
                 , " WHERE id=?"
                 ]
         execute' sql $ map toPersistValue (toPersistFields val)
-                       ++ [PersistInt64 $ fromPersistKey k]
+                       ++ [fromPersistKey k]
       where
         go conn x = escapeName conn x ++ "=?"
         fst3 (x, _, _) = x
@@ -107,7 +107,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
                 , escapeName conn $ rawTableName t
                 , " WHERE id=?"
                 ]
-        withStmt' sql [PersistInt64 $ fromPersistKey k] $ \pop -> do
+        withStmt' sql [fromPersistKey k] $ \pop -> do
             res <- pop
             case res of
                 Nothing -> return Nothing
@@ -152,7 +152,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
                             loop step pop
         loop step _ = return step
         t = entityDef $ dummyFromFilts filts
-        fromPersistValues' (PersistInt64 x:xs) = do
+        fromPersistValues' (x:xs) = do
             case fromPersistValues xs of
                 Left e -> Left e
                 Right xs' -> Right (toPersistKey x, xs')
@@ -196,7 +196,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
             res <- pop
             case res of
                 Nothing -> return $ Continue k
-                Just [PersistInt64 i] -> do
+                Just [i] -> do
                     step <- runIteratee $ k $ Chunks [toPersistKey i]
                     loop step pop
                 Just y -> return $ Error $ toException $ PersistMarshalException
@@ -215,7 +215,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
 
     delete k = do
         conn <- SqlPersist ask
-        execute' (sql conn) [PersistInt64 $ fromPersistKey k]
+        execute' (sql conn) [fromPersistKey k]
       where
         t = entityDef $ dummyFromKey k
         sql conn = concat
@@ -269,7 +269,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
                 , " WHERE id=?"
                 ]
         execute' sql $
-            map persistUpdateToValue upds ++ [PersistInt64 $ fromPersistKey k]
+            map persistUpdateToValue upds ++ [fromPersistKey k]
       where
         t = entityDef $ dummyFromKey k
         go x = ( getFieldName t $ persistUpdateToFieldName x
@@ -320,7 +320,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
             row <- pop
             case row of
                 Nothing -> return Nothing
-                Just (PersistInt64 k:vals) ->
+                Just (k:vals) ->
                     case fromPersistValues vals of
                         Left s -> error s
                         Right x -> return $ Just (toPersistKey k, x)

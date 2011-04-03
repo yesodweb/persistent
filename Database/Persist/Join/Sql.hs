@@ -17,11 +17,10 @@ import Control.Arrow ((&&&))
 
 fromPersistValuesId :: PersistEntity v => [PersistValue] -> Either String (Key v, v)
 fromPersistValuesId [] = Left "fromPersistValuesId: No values provided"
-fromPersistValuesId (PersistInt64 i:rest) =
+fromPersistValuesId (i:rest) =
     case fromPersistValues rest of
         Left e -> Left e
         Right x -> Right (toPersistKey i, x)
-fromPersistValuesId _ = Left "fromPersistValuesId: Invalid id"
 
 selectOneMany :: (PersistEntity one, PersistEntity many, MonadControlIO m, Eq (Key one))
               => [Filter one]  -> [Order one]
