@@ -60,7 +60,7 @@ data PersistValue = PersistString String
                   | PersistTimeOfDay TimeOfDay
                   | PersistUTCTime UTCTime
                   | PersistNull
-    deriving (Show, Read, Eq, Typeable)
+    deriving (Show, Read, Eq, Typeable, Ord)
 
 -- | A SQL data type. Naming attempts to reflect the underlying Haskell
 -- datatypes, eg SqlString instead of SqlVarchar. Different SQL databases may

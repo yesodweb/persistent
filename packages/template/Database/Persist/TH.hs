@@ -72,7 +72,7 @@ keyTypeDec :: String -> Name -> EntityDef -> Dec
 keyTypeDec constr typ t =
     NewtypeInstD [] ''Key [ConT $ mkName $ entityName t]
                 (RecC (mkName constr) [(mkName $ "un" ++ entityName t ++ "Id", NotStrict, ConT typ)])
-                [''Show, ''Read, ''Eq, ''PersistField, ''SinglePiece]
+                [''Show, ''Read, ''Eq, ''PersistField, ''SinglePiece, ''Ord]
 
 filterTypeDec :: EntityDef -> Dec
 filterTypeDec t =

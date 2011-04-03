@@ -5,7 +5,7 @@ module Database.Persist.Join.Sql
 
 import Database.Persist.Base
 import Control.Monad (forM, liftM)
-import Data.Maybe (catMaybes)
+import Data.Maybe (mapMaybe)
 import Data.List (intercalate, groupBy)
 import Database.Persist.GenericSql (SqlPersist (SqlPersist))
 import Database.Persist.GenericSql.Internal hiding (withStmt)
@@ -22,17 +22,21 @@ fromPersistValuesId (i:rest) =
         Left e -> Left e
         Right x -> Right (toPersistKey i, x)
 
+type Endo a = a -> a
+
 selectOneMany :: (PersistEntity one, PersistEntity many, MonadControlIO m, Eq (Key one))
               => [Filter one]  -> [Order one]
               -> [Filter many] -> [Order many]
-              -> (Key one -> Filter many)
+              -> ([Key one] -> Filter many)
+              -> (many -> Key one)
+              -> Bool -- ^ include ones without matching manys?
               -> SqlPersist m [((Key one, one), [(Key many, many)])]
-selectOneMany oneF oneO manyF manyO eq = do
+selectOneMany oneF oneO manyF manyO eq _getKey isOuter = do
     conn <- SqlPersist ask
     liftM go $ withStmt (sql conn) (getFiltsValues oneF ++ getFiltsValues manyF) $ loop id
   where
-    go :: Eq a => [((a, b), (c, d))] -> [((a, b), [(c, d)])]
-    go = map (fst . head &&& map snd) . groupBy ((==) `on` (fst . fst))
+    go :: Eq a => [((a, b), Maybe (c, d))] -> [((a, b), [(c, d)])]
+    go = map (fst . head &&& mapMaybe snd) . groupBy ((==) `on` (fst . fst))
     loop front popper = do
         x <- popper
         case x of
@@ -40,9 +44,12 @@ selectOneMany oneF oneO manyF manyO eq = do
             Just vals -> do
                 let (y, z) = splitAt oneCount vals
                 case (fromPersistValuesId y, fromPersistValuesId z) of
-                    (Right y', Right z') -> loop (front . (:) (y', z')) popper
+                    (Right y', Right z') -> loop (front . (:) (y', Just z')) popper
                     (Left e, _) -> error $ "selectOneMany: " ++ e
-                    (_, Left e) -> error $ "selectOneMany: " ++ e
+                    (Right y', Left e) ->
+                        case z of
+                            PersistNull:_ -> loop (front . (:) (y', Nothing)) popper
+                            _ -> error $ "selectOneMany: " ++ e
     oneCount = 1 + length (tableColumns $ entityDef one)
     one = dummyFromFilts oneF
     many = dummyFromFilts manyF
@@ -51,7 +58,7 @@ selectOneMany oneF oneO manyF manyO eq = do
         , intercalate "," $ colsPlusId conn one ++ colsPlusId conn many
         , " FROM "
         , escapeName conn $ rawTableName $ entityDef one
-        , " INNER JOIN "
+        , if isOuter then " LEFT JOIN " else " INNER JOIN "
         , escapeName conn $ rawTableName $ entityDef many
         , " ON "
         , escapeName conn $ rawTableName $ entityDef one

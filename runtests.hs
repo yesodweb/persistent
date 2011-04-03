@@ -74,7 +74,7 @@ share2 mkPersist (mkMigrate "testMigrate") [$persist|
   Author
     name String Eq Asc
   Entry
-    author AuthorId Eq
+    author AuthorId In
     title String Desc
 |]
 
@@ -386,9 +386,9 @@ _joinGen selectOneMany = do
     b <- insert $ Author "b"
     b1 <- insert $ Entry b "b1"
     b2 <- insert $ Entry b "b2"
-    _ <- insert $ Author "c"
+    c <- insert $ Author "c"
 
-    x <- selectOneMany [] [] [] [] EntryAuthorEq
+    x <- selectOneMany [] [] [] [] EntryAuthorIn entryAuthor False
     liftIO $
         x @?=
             [ ((a, Author "a"),
@@ -402,7 +402,7 @@ _joinGen selectOneMany = do
                 ])
             ]
 
-    y <- selectOneMany [AuthorNameEq "a"] [] [] [] EntryAuthorEq
+    y <- selectOneMany [AuthorNameEq "a"] [] [] [] EntryAuthorIn entryAuthor False
     liftIO $
         y @?=
             [ ((a, Author "a"),
@@ -412,7 +412,7 @@ _joinGen selectOneMany = do
                 ])
             ]
 
-    z <- selectOneMany [] [AuthorNameAsc] [] [EntryTitleDesc] EntryAuthorEq
+    z <- selectOneMany [] [AuthorNameAsc] [] [EntryTitleDesc] EntryAuthorIn entryAuthor False
     liftIO $
         z @?=
             [ ((a, Author "a"),
@@ -424,4 +424,19 @@ _joinGen selectOneMany = do
                 [ (b2, Entry b "b2")
                 , (b1, Entry b "b1")
                 ])
+            ]
+
+    w <- selectOneMany [] [AuthorNameAsc] [] [EntryTitleDesc] EntryAuthorIn entryAuthor True
+    liftIO $
+        w @?=
+            [ ((a, Author "a"),
+                [ (a3, Entry a "a3")
+                , (a2, Entry a "a2")
+                , (a1, Entry a "a1")
+                ])
+            , ((b, Author "b"),
+                [ (b2, Entry b "b2")
+                , (b1, Entry b "b1")
+                ])
+            , ((c, Author "c"), [])
             ]
