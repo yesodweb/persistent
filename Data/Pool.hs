@@ -14,7 +14,7 @@ module Data.Pool
     ) where
 
 import Data.IORef (IORef, newIORef, atomicModifyIORef, readIORef)
-import Control.Exception (throwIO, Exception)
+import Control.Exception (throwIO, Exception, bracket, finally)
 import qualified Control.Exception as E
 import Data.Typeable
 import qualified Control.Monad.IO.Control as I
@@ -57,10 +57,13 @@ createPoolCheckAlive
     -> m b
 createPoolCheckAlive mk fr mx f ca = do
     pd <- liftIO $ newIORef $ PoolData [] 0
-    I.finally (f $ Pool mx pd mk fr ca) $ liftIO $ do
+    finallyIO (f $ Pool mx pd mk fr ca) $ do
         PoolData ress _ <- readIORef pd
         mapM_ fr ress
 
+finallyIO :: I.MonadControlIO m => m a -> IO b -> m a
+finallyIO a io = I.controlIO $ \runInIO -> finally (runInIO a) io
+                           
 data PoolExhaustedException = PoolExhaustedException
     deriving (Show, Typeable)
 instance Exception PoolExhaustedException
@@ -82,11 +85,7 @@ withPoolAllocate p f = do
     x <- withPool p f
     case x of
         Just x' -> return x'
-        Nothing ->
-            I.bracket
-                (liftIO $ poolMake p)
-                (liftIO . poolFree p)
-                f
+        Nothing -> I.liftIOOp (bracket (poolMake p) (poolFree p)) f
 
 withPool :: I.MonadControlIO m => Pool a -> (a -> m b) -> m (Maybe b)
 withPool p f = I.mask $ \unmask -> do
@@ -98,24 +97,20 @@ withPool p f = I.mask $ \unmask -> do
         Left pc ->
             if pc >= poolMax p
                 then return Nothing
-                else I.bracket
-                    (liftIO $ poolMake p)
-                    (insertResource 1)
-                    (liftM Just . unmask . f)
+                else I.liftIOOp (bracket (poolMake p) (insertResource 1))
+                                (liftM Just . unmask . f)
         Right res -> do
             isAlive <- I.try $ unmask $ liftIO $ poolCheckAlive p res
             case isAlive :: Either E.SomeException Bool of
-                Right True ->
-                    I.finally
-                        (liftM Just $ unmask $ f res)
-                        (insertResource 0 res)
+                Right True -> finallyIO (liftM Just $ unmask $ f res)
+                                        (insertResource 0 res)
                 _ -> do
                     -- decrement the poolCreated count and then start over
                     liftIO $ atomicModifyIORef (poolData p) $ \pd ->
                         (pd { poolCreated = poolCreated pd - 1}, ())
                     unmask $ withPool p f
   where
-    insertResource i x = liftIO $ atomicModifyIORef (poolData p) $ \pd ->
+    insertResource i x = atomicModifyIORef (poolData p) $ \pd ->
         (pd { poolAvail = x : poolAvail pd
                 , poolCreated = i + poolCreated pd
                 }, ())
