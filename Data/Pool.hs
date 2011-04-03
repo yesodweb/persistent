@@ -46,12 +46,12 @@ poolStats p = do
     d <- readIORef $ poolData p
     return $ PoolStats (poolMax p) (length $ poolAvail d) (poolCreated d)
 
-createPool :: (MonadIO m, I.MonadControlIO m)
+createPool :: I.MonadControlIO m
            => IO a -> (a -> IO ()) -> Int -> (Pool a -> m b) -> m b
 createPool mk fr mx f = createPoolCheckAlive mk fr mx f $ const $ return True
 
 createPoolCheckAlive
-    :: (MonadIO m, I.MonadControlIO m)
+    :: I.MonadControlIO m
     => IO a -> (a -> IO ()) -> Int -> (Pool a -> m b)
     -> (a -> IO Bool) -- ^ is the resource alive?
     -> m b
@@ -67,7 +67,7 @@ instance Exception PoolExhaustedException
 
 -- | This function throws a 'PoolExhaustedException' when no resources are
 -- available. See 'withPoolAllocate' to avoid this.
-withPool' :: (MonadIO m, I.MonadControlIO m) => Pool a -> (a -> m b) -> m b
+withPool' :: I.MonadControlIO m => Pool a -> (a -> m b) -> m b
 withPool' p f = do
     x <- withPool p f
     case x of
@@ -88,8 +88,7 @@ withPoolAllocate p f = do
                 (liftIO . poolFree p)
                 f
 
-withPool :: (MonadIO m, I.MonadControlIO m)
-         => Pool a -> (a -> m b) -> m (Maybe b)
+withPool :: I.MonadControlIO m => Pool a -> (a -> m b) -> m (Maybe b)
 withPool p f = I.mask $ \unmask -> do
     eres <- liftIO $ atomicModifyIORef (poolData p) $ \pd ->
         case poolAvail pd of
