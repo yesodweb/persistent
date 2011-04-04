@@ -33,20 +33,21 @@ import Control.Monad.IO.Control (MonadControlIO)
 import Control.Exception.Control (bracket)
 import Database.Persist.Util (nullable)
 import Data.List (intercalate)
+import Data.Text (Text)
 
 type RowPopper m = m (Maybe [PersistValue])
 
 data Connection = Connection
-    { prepare :: String -> IO Statement
-    , insertSql :: RawName -> [RawName] -> Either String (String, String)
-    , stmtMap :: IORef (Map.Map String Statement)
+    { prepare :: Text -> IO Statement
+    , insertSql :: RawName -> [RawName] -> Either Text (Text, Text)
+    , stmtMap :: IORef (Map.Map Text Statement)
     , close :: IO ()
     , migrateSql :: forall v. PersistEntity v
-                 => (String -> IO Statement) -> v
-                 -> IO (Either [String] [(Bool, String)])
-    , begin :: (String -> IO Statement) -> IO ()
-    , commit :: (String -> IO Statement) -> IO ()
-    , rollback :: (String -> IO Statement) -> IO ()
+                 => (Text -> IO Statement) -> v
+                 -> IO (Either [Text] [(Bool, Text)])
+    , begin :: (Text -> IO Statement) -> IO ()
+    , commit :: (Text -> IO Statement) -> IO ()
+    , rollback :: (Text -> IO Statement) -> IO ()
     , escapeName :: RawName -> String
     , noLimit :: String
     }
@@ -131,7 +132,7 @@ rawTableName t = RawName $
         Nothing -> entityName t
         Just x -> x
 
-newtype RawName = RawName { unRawName :: String }
+newtype RawName = RawName { unRawName :: String } -- FIXME Text
     deriving (Eq, Ord)
 
 filterClause :: PersistEntity val

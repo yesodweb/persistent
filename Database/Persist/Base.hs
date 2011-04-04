@@ -51,7 +51,7 @@ import qualified Data.Text.Encoding.Error as T
 
 -- | A raw value which can be stored in any backend and can be marshalled to
 -- and from a 'PersistField'.
-data PersistValue = PersistString String
+data PersistValue = PersistText T.Text
                   | PersistByteString ByteString
                   | PersistInt64 Int64
                   | PersistDouble Double
@@ -85,8 +85,8 @@ class PersistField a where
     isNullable _ = False
 
 instance PersistField String where
-    toPersistValue = PersistString
-    fromPersistValue (PersistString s) = Right s
+    toPersistValue = PersistText . T.pack
+    fromPersistValue (PersistText s) = Right $ T.unpack s
     fromPersistValue (PersistByteString bs) =
         Right $ T.unpack $ T.decodeUtf8With T.lenientDecode bs
     fromPersistValue (PersistInt64 i) = Right $ show i
@@ -101,11 +101,11 @@ instance PersistField String where
 instance PersistField ByteString where
     toPersistValue = PersistByteString
     fromPersistValue (PersistByteString bs) = Right bs
-    fromPersistValue x = T.encodeUtf8 . T.pack <$> fromPersistValue x
+    fromPersistValue x = T.encodeUtf8 <$> fromPersistValue x
     sqlType _ = SqlBlob
 
 instance PersistField T.Text where
-    toPersistValue = PersistString . T.unpack
+    toPersistValue = PersistText
     fromPersistValue (PersistByteString bs) =
         Right $ T.decodeUtf8With T.lenientDecode bs
     fromPersistValue v = fmap T.pack $ fromPersistValue v
@@ -188,8 +188,8 @@ instance PersistField Bool where
 instance PersistField Day where
     toPersistValue = PersistDay
     fromPersistValue (PersistDay d) = Right d
-    fromPersistValue x@(PersistString s) =
-        case reads s of
+    fromPersistValue x@(PersistText t) =
+        case reads $ T.unpack t of
             (d, _):_ -> Right d
             _ -> Left $ "Expected Day, received " ++ show x
     fromPersistValue x@(PersistByteString s) =
@@ -202,8 +202,8 @@ instance PersistField Day where
 instance PersistField TimeOfDay where
     toPersistValue = PersistTimeOfDay
     fromPersistValue (PersistTimeOfDay d) = Right d
-    fromPersistValue x@(PersistString s) =
-        case reads s of
+    fromPersistValue x@(PersistText t) =
+        case reads $ T.unpack t of
             (d, _):_ -> Right d
             _ -> Left $ "Expected TimeOfDay, received " ++ show x
     fromPersistValue x@(PersistByteString s) =
@@ -216,8 +216,8 @@ instance PersistField TimeOfDay where
 instance PersistField UTCTime where
     toPersistValue = PersistUTCTime
     fromPersistValue (PersistUTCTime d) = Right d
-    fromPersistValue x@(PersistString s) =
-        case reads s of
+    fromPersistValue x@(PersistText t) =
+        case reads $ T.unpack t of
             (d, _):_ -> Right d
             _ -> Left $ "Expected UTCTime, received " ++ show x
     fromPersistValue x@(PersistByteString s) =

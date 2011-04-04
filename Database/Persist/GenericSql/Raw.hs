@@ -19,11 +19,12 @@ import qualified Data.Map as Map
 import Control.Applicative (Applicative)
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.IO.Control (MonadControlIO (..))
+import Data.Text (Text)
 
 newtype SqlPersist m a = SqlPersist { unSqlPersist :: ReaderT Connection m a }
     deriving (Monad, MonadIO, MonadTrans, Functor, Applicative, MonadControlIO)
 
-withStmt :: MonadControlIO m => String -> [PersistValue]
+withStmt :: MonadControlIO m => Text -> [PersistValue]
          -> (RowPopper (SqlPersist m) -> SqlPersist m a) -> SqlPersist m a
 withStmt sql vals pop = do
     stmt <- getStmt sql
@@ -31,18 +32,18 @@ withStmt sql vals pop = do
     liftIO $ reset stmt
     return ret
 
-execute :: MonadIO m => String -> [PersistValue] -> SqlPersist m ()
+execute :: MonadIO m => Text -> [PersistValue] -> SqlPersist m ()
 execute sql vals = do
     stmt <- getStmt sql
     liftIO $ I.execute stmt vals
     liftIO $ reset stmt
 
-getStmt :: MonadIO m => String -> SqlPersist m Statement
+getStmt :: MonadIO m => Text -> SqlPersist m Statement
 getStmt sql = do
     conn <- SqlPersist ask
     liftIO $ getStmt' conn sql
 
-getStmt' :: Connection -> String -> IO Statement
+getStmt' :: Connection -> Text -> IO Statement
 getStmt' conn sql = do
     smap <- liftIO $ readIORef $ stmtMap conn
     case Map.lookup sql smap of

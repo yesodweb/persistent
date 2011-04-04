@@ -27,7 +27,7 @@ import Web.Routes.Quasi (SinglePiece (..))
 import Control.Monad (forM)
 import Control.Monad.IO.Control (MonadControlIO)
 import qualified System.IO as SIO
-import Data.Text (unpack)
+import Data.Text (pack, unpack)
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
@@ -515,7 +515,7 @@ mkUniqueKeys def = do
 derivePersistField :: String -> Q [Dec]
 derivePersistField s = do
     ss <- [|SqlString|]
-    tpv <- [|PersistString . show|]
+    tpv <- [|PersistText . pack . show|]
     fpv <- [|\dt v ->
                 case fromPersistValue v of
                     Left e -> Left e
@@ -598,7 +598,7 @@ instance Lift PersistUpdate where
     lift Divide = [|Divide|]
 
 instance SinglePiece PersistValue where
-    fromSinglePiece = Just . PersistString . unpack
+    fromSinglePiece = Just . PersistText
     toSinglePiece x =
         case fromPersistValue x of
             Left e -> error e

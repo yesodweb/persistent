@@ -14,6 +14,7 @@ import Control.Monad.Trans.Reader (ask)
 import Control.Monad.IO.Control (MonadControlIO)
 import Data.Function (on)
 import Control.Arrow ((&&&))
+import Data.Text (pack)
 
 fromPersistValuesId :: PersistEntity v => [PersistValue] -> Either String (Key v, v)
 fromPersistValuesId [] = Left "fromPersistValuesId: No values provided"
@@ -53,7 +54,7 @@ selectOneMany oneF oneO manyF manyO eq _getKey isOuter = do
     oneCount = 1 + length (tableColumns $ entityDef one)
     one = dummyFromFilts oneF
     many = dummyFromFilts manyF
-    sql conn = concat
+    sql conn = pack $ concat
         [ "SELECT "
         , intercalate "," $ colsPlusId conn one ++ colsPlusId conn many
         , " FROM "

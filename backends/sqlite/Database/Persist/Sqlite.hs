@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- | A sqlite backend for persistent.
 module Database.Persist.Sqlite
     ( withSqlitePool
@@ -19,17 +20,18 @@ import Data.IORef
 import qualified Data.Map as Map
 import Control.Monad.IO.Control (MonadControlIO)
 import Control.Exception.Control (finally)
+import Data.Text (Text, pack, unpack)
 
 withSqlitePool :: MonadControlIO m
-               => String
+               => Text
                -> Int -- ^ number of connections to open
                -> (ConnectionPool -> m a) -> m a
 withSqlitePool s = withSqlPool $ open' s
 
-withSqliteConn :: MonadControlIO m => String -> (Connection -> m a) -> m a
+withSqliteConn :: MonadControlIO m => Text -> (Connection -> m a) -> m a
 withSqliteConn = withSqlConn . open'
 
-open' :: String -> IO Connection
+open' :: Text -> IO Connection
 open' s = do
     conn <- Sqlite.open s
     smap <- newIORef $ Map.empty
@@ -51,7 +53,7 @@ open' s = do
         execute stmt []
         reset stmt
 
-prepare' :: Sqlite.Connection -> String -> IO Statement
+prepare' :: Sqlite.Connection -> Text -> IO Statement
 prepare' conn sql = do
     stmt <- Sqlite.prepare conn sql
     return Statement
@@ -61,9 +63,9 @@ prepare' conn sql = do
         , withStmt = withStmt' stmt
         }
 
-insertSql' :: RawName -> [RawName] -> Either String (String, String)
+insertSql' :: RawName -> [RawName] -> Either Text (Text, Text)
 insertSql' t cols =
-    Right (ins, sel)
+    Right (pack ins, sel)
   where
     sel = "SELECT last_insert_rowid()"
     ins = concat
@@ -111,15 +113,14 @@ showSqlType SqlBlob = "BLOB"
 showSqlType SqlBool = "BOOLEAN"
 
 migrate' :: PersistEntity val
-         => (String -> IO Statement)
+         => (Text -> IO Statement)
          -> val
-         -> IO (Either [String] [(Bool, String)])
+         -> IO (Either [Text] [(Bool, Text)])
 migrate' getter val = do
     let (cols, uniqs) = mkColumns val
     let newSql = mkCreateTable False table (cols, uniqs)
-    stmt <- getter $ "SELECT sql FROM sqlite_master WHERE " ++
-                        "type='table' AND name=?"
-    oldSql' <- withStmt stmt [PersistString $ unRawName table] go
+    stmt <- getter "SELECT sql FROM sqlite_master WHERE type='table' AND name=?"
+    oldSql' <- withStmt stmt [PersistText $ pack $ unRawName table] go
     case oldSql' of
         Nothing -> return $ Right [(False, newSql)]
         Just oldSql ->
@@ -135,23 +136,23 @@ migrate' getter val = do
         x <- pop
         case x of
             Nothing -> return Nothing
-            Just [PersistString y] -> return $ Just y
+            Just [PersistText y] -> return $ Just y
             Just y -> error $ "Unexpected result from sqlite_master: " ++ show y
 
-getCopyTable :: PersistEntity val => (String -> IO Statement) -> val
+getCopyTable :: PersistEntity val => (Text -> IO Statement) -> val
              -> IO [(Bool, Sql)]
 getCopyTable getter val = do
-    stmt <- getter $ "PRAGMA table_info(" ++ escape table ++ ")"
+    stmt <- getter $ pack $ "PRAGMA table_info(" ++ escape table ++ ")"
     oldCols' <- withStmt stmt [] getCols
-    let oldCols = map RawName $ filter (/= "id") oldCols'
+    let oldCols = map (RawName . unpack) $ filter (/= "id") oldCols'
     let newCols = map cName cols
     let common = filter (`elem` oldCols) newCols
     return [ (False, tmpSql)
            , (False, copyToTemp $ RawName "id" : common)
-           , (common /= oldCols, dropOld)
+           , (common /= oldCols, pack dropOld)
            , (False, newSql)
            , (False, copyToFinal $ RawName "id" : newCols)
-           , (False, dropTmp)
+           , (False, pack dropTmp)
            ]
   where
     def = entityDef val
@@ -159,7 +160,7 @@ getCopyTable getter val = do
         x <- pop
         case x of
             Nothing -> return []
-            Just (_:PersistString name:_) -> do
+            Just (_:PersistText name:_) -> do
                 names <- getCols pop
                 return $ name : names
             Just y -> error $ "Invalid result from PRAGMA table_info: " ++ show y
@@ -170,7 +171,7 @@ getCopyTable getter val = do
     tmpSql = mkCreateTable True tableTmp (cols, uniqs)
     dropTmp = "DROP TABLE " ++ escape tableTmp
     dropOld = "DROP TABLE " ++ escape table
-    copyToTemp common = concat
+    copyToTemp common = pack $ concat
         [ "INSERT INTO "
         , escape tableTmp
         , "("
@@ -180,7 +181,7 @@ getCopyTable getter val = do
         , " FROM "
         , escape table
         ]
-    copyToFinal newCols = concat
+    copyToFinal newCols = pack $ concat
         [ "INSERT INTO "
         , escape table
         , " SELECT "
@@ -190,7 +191,7 @@ getCopyTable getter val = do
         ]
 
 mkCreateTable :: Bool -> RawName -> ([Column], [UniqueDef]) -> Sql
-mkCreateTable isTemp table (cols, uniqs) = concat
+mkCreateTable isTemp table (cols, uniqs) = pack $ concat
     [ "CREATE"
     , if isTemp then " TEMP" else ""
     , " TABLE "
@@ -225,7 +226,7 @@ sqlUnique (cname, cols) = concat
     , ")"
     ]
 
-type Sql = String
+type Sql = Text
 
 escape :: RawName -> String
 escape (RawName s) =
