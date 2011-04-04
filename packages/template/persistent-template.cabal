@@ -9,7 +9,7 @@ category:        Database, Yesod
 stability:       Stable
 cabal-version:   >= 1.6
 build-type:      Simple
-homepage:        http://docs.yesodweb.com/persistent/
+homepage:        http://www.yesodweb.com/
 
 library
     build-depends:   base                     >= 4         && < 5
@@ -17,6 +17,7 @@ library
                    , persistent               >= 0.5       && < 0.6
                    , web-routes-quasi         >= 0.7       && < 0.8
                    , monad-control            >= 0.2       && < 0.3
+                   , text                     >= 0.5       && < 1.0
     exposed-modules: Database.Persist.TH
     ghc-options:     -Wall
 
