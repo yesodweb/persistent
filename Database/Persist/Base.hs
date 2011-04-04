@@ -316,7 +316,8 @@ class Monad m => PersistBackend m where
 
     -- | Get all records matching the given criterion in the specified order.
     -- Returns also the identifiers.
-    select :: PersistEntity val
+    selectEnum
+           :: PersistEntity val
            => [Filter val]
            -> [Order val]
            -> Int -- ^ limit
@@ -370,7 +371,7 @@ selectList :: (PersistEntity val, PersistBackend m, Monad m)
            -> Int -- ^ offset
            -> m [(Key val, val)]
 selectList a b c d = do
-    res <- run $ select a b c d ==<< consume
+    res <- run $ selectEnum a b c d ==<< consume
     case res of
         Left e -> error $ show e
         Right x -> return x

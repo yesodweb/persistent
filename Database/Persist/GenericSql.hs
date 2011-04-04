@@ -133,7 +133,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
       where
         t = entityDef $ dummyFromFilts filts
 
-    select filts ords limit offset =
+    selectEnum filts ords limit offset =
         Iteratee . start
       where
         start x = do
