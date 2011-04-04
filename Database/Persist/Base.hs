@@ -61,6 +61,8 @@ data PersistValue = PersistText T.Text
                   | PersistTimeOfDay TimeOfDay
                   | PersistUTCTime UTCTime
                   | PersistNull
+                  | PersistList [PersistValue]
+                  | PersistMap [(T.Text, PersistValue)]
     deriving (Show, Read, Eq, Typeable, Ord)
 
 -- | A SQL data type. Naming attempts to reflect the underlying Haskell
@@ -97,6 +99,8 @@ instance PersistField String where
     fromPersistValue (PersistUTCTime d) = Right $ show d
     fromPersistValue PersistNull = Left "Unexpected null"
     fromPersistValue (PersistBool b) = Right $ show b
+    fromPersistValue (PersistList _) = Left "Cannot convert PersistList to String"
+    fromPersistValue (PersistMap _) = Left "Cannot convert PersistMap to String"
     sqlType _ = SqlString
 
 instance PersistField ByteString where

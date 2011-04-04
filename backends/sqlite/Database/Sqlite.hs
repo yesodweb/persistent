@@ -27,6 +27,7 @@ module Database.Sqlite  (
     where
 
 import Prelude hiding (error)
+import qualified Prelude as P
 import qualified Prelude
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Internal as BSI
@@ -339,7 +340,10 @@ bind statement sqlData = do
             PersistNull -> bindNull statement parameterIndex
             PersistDay d -> bindText statement parameterIndex $ pack $ show d
             PersistTimeOfDay d -> bindText statement parameterIndex $ pack $ show d
-            PersistUTCTime d -> bindText statement parameterIndex $ pack $ show d)
+            PersistUTCTime d -> bindText statement parameterIndex $ pack $ show d
+            PersistList _ -> P.error "Refusing to serialize a PersistList to a SQLite value"
+            PersistMap _ -> P.error "Refusing to serialize a PersistMap to a SQLite value"
+            )
        $ zip [1..] sqlData
   return ()
 
