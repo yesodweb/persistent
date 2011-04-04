@@ -18,6 +18,7 @@ import Database.Persist.Postgresql
 import Database.Persist.TH
 import Control.Monad.IO.Class
 
+import Database.Persist.Join hiding (RunJoin)
 import qualified Database.Persist.Join
 import qualified Database.Persist.Join.Sql
 
@@ -376,10 +377,10 @@ _idIn = do
     x <- selectList [PersonIdIn [pid1, pid3]] [] 0 0
     liftIO $ x @?= [(pid1, p1), (pid3, p3)]
 
-_joinNonSql = _joinGen Database.Persist.Join.selectOneMany
-_joinSql = _joinGen Database.Persist.Join.Sql.selectOneMany
+_joinNonSql = _joinGen Database.Persist.Join.runJoin
+_joinSql = _joinGen Database.Persist.Join.Sql.runJoin
 
-_joinGen selectOneMany = do
+_joinGen run = do
     a <- insert $ Author "a"
     a1 <- insert $ Entry a "a1"
     a2 <- insert $ Entry a "a2"
@@ -389,7 +390,7 @@ _joinGen selectOneMany = do
     b2 <- insert $ Entry b "b2"
     c <- insert $ Author "c"
 
-    x <- selectOneMany [] [] [] [] EntryAuthorIn entryAuthor False
+    x <- run $ selectOneMany EntryAuthorIn entryAuthor
     liftIO $
         x @?=
             [ ((a, Author "a"),
@@ -403,7 +404,9 @@ _joinGen selectOneMany = do
                 ])
             ]
 
-    y <- selectOneMany [AuthorNameEq "a"] [] [] [] EntryAuthorIn entryAuthor False
+    y <- run $ (selectOneMany EntryAuthorIn entryAuthor)
+            { somFilterOne = [AuthorNameEq "a"]
+            }
     liftIO $
         y @?=
             [ ((a, Author "a"),
@@ -413,7 +416,10 @@ _joinGen selectOneMany = do
                 ])
             ]
 
-    z <- selectOneMany [] [AuthorNameAsc] [] [EntryTitleDesc] EntryAuthorIn entryAuthor False
+    z <- run (selectOneMany EntryAuthorIn entryAuthor)
+            { somOrderOne = [AuthorNameAsc]
+            , somOrderMany = [EntryTitleDesc]
+            }
     liftIO $
         z @?=
             [ ((a, Author "a"),
@@ -427,7 +433,11 @@ _joinGen selectOneMany = do
                 ])
             ]
 
-    w <- selectOneMany [] [AuthorNameAsc] [] [EntryTitleDesc] EntryAuthorIn entryAuthor True
+    w <- run (selectOneMany EntryAuthorIn entryAuthor)
+            { somOrderOne = [AuthorNameAsc]
+            , somOrderMany = [EntryTitleDesc]
+            , somIncludeNoMatch = True
+            }
     liftIO $
         w @?=
             [ ((a, Author "a"),

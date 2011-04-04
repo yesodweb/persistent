@@ -1,8 +1,11 @@
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
 module Database.Persist.Join.Sql
-    ( selectOneMany
+    ( RunJoin (..)
     ) where
 
+import Database.Persist.Join hiding (RunJoin (..))
+import qualified Database.Persist.Join as J
 import Database.Persist.Base
 import Control.Monad (forM, liftM)
 import Data.Maybe (mapMaybe)
@@ -25,14 +28,14 @@ fromPersistValuesId (i:rest) =
 
 type Endo a = a -> a
 
-selectOneMany :: (PersistEntity one, PersistEntity many, MonadControlIO m, Eq (Key one))
-              => [Filter one]  -> [Order one]
-              -> [Filter many] -> [Order many]
-              -> ([Key one] -> Filter many)
-              -> (many -> Key one)
-              -> Bool -- ^ include ones without matching manys?
-              -> SqlPersist m [((Key one, one), [(Key many, many)])]
-selectOneMany oneF oneO manyF manyO eq _getKey isOuter = do
+class RunJoin a where
+    runJoin :: MonadControlIO m => a -> SqlPersist m (J.Result a)
+
+instance (PersistEntity one, PersistEntity many, Eq (Key one))
+    => RunJoin (SelectOneMany one many) where
+    runJoin = selectOneMany'
+
+selectOneMany' (SelectOneMany oneF oneO manyF manyO eq _getKey isOuter) = do
     conn <- SqlPersist ask
     liftM go $ withStmt (sql conn) (getFiltsValues oneF ++ getFiltsValues manyF) $ loop id
   where
