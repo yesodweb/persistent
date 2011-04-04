@@ -1,5 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE PackageImports #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE RankNTypes #-}
 module Data.Pool
     ( -- * Using pools
       createPool
@@ -87,8 +89,15 @@ withPoolAllocate p f = do
         Just x' -> return x'
         Nothing -> I.liftIOOp (bracket (poolMake p) (poolFree p)) f
 
+mask :: I.MonadControlIO m => ((forall a. m a -> m a) -> m b) -> m b
+#if MIN_VERSION_base(4,3,0)
+mask = I.mask
+#else
+mask f = I.block $ f I.unblock
+#endif
+
 withPool :: I.MonadControlIO m => Pool a -> (a -> m b) -> m (Maybe b)
-withPool p f = I.mask $ \unmask -> do
+withPool p f = mask $ \unmask -> do
     eres <- liftIO $ atomicModifyIORef (poolData p) $ \pd ->
         case poolAvail pd of
             x:xs -> (pd { poolAvail = xs }, Right x)
