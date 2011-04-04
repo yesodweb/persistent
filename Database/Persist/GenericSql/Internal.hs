@@ -235,6 +235,7 @@ getFiltsValues =
 dummyFromOrder :: Order a -> a
 dummyFromOrder _ = undefined
 
+orderClause :: PersistEntity val => Bool -> Connection -> Order val -> String
 orderClause includeTable conn o =
     name ++ case persistOrderToOrder o of
                                     Asc -> ""

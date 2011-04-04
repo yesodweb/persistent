@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_GHC -fno-warn-orphans -fno-warn-missing-fields #-}
 -- | This module provides utilities for creating backends. Regular users do not
 -- need to use this module.
 module Database.Persist.TH
@@ -7,7 +7,6 @@ module Database.Persist.TH
     , share
     , persist
     , persistFile
-    , mkPersist
     , share2
     , mkSave
     , mkDeleteCascade
@@ -27,7 +26,7 @@ import Web.Routes.Quasi (SinglePiece (..))
 import Control.Monad (forM)
 import Control.Monad.IO.Control (MonadControlIO)
 import qualified System.IO as SIO
-import Data.Text (pack, unpack)
+import Data.Text (pack)
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).

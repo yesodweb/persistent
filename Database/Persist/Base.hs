@@ -41,7 +41,8 @@ import Text.Blaze.Renderer.Utf8 (renderHtml)
 import qualified Data.Text as T
 import qualified Data.ByteString as S
 import qualified Data.ByteString.Lazy as L
-import Data.Enumerator
+import Data.Enumerator hiding (consume)
+import Data.Enumerator.List (consume)
 import qualified Control.Exception as E
 import Data.Bits (bitSize)
 import Control.Monad (liftM)

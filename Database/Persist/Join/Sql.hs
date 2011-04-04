@@ -7,7 +7,7 @@ module Database.Persist.Join.Sql
 import Database.Persist.Join hiding (RunJoin (..))
 import qualified Database.Persist.Join as J
 import Database.Persist.Base
-import Control.Monad (forM, liftM)
+import Control.Monad (liftM)
 import Data.Maybe (mapMaybe)
 import Data.List (intercalate, groupBy)
 import Database.Persist.GenericSql (SqlPersist (SqlPersist))
@@ -26,8 +26,6 @@ fromPersistValuesId (i:rest) =
         Left e -> Left e
         Right x -> Right (toPersistKey i, x)
 
-type Endo a = a -> a
-
 class RunJoin a where
     runJoin :: MonadControlIO m => a -> SqlPersist m (J.Result a)
 
@@ -35,6 +33,13 @@ instance (PersistEntity one, PersistEntity many, Eq (Key one))
     => RunJoin (SelectOneMany one many) where
     runJoin = selectOneMany'
 
+selectOneMany' :: (MonadControlIO m,
+                  PersistEntity d,
+                  PersistEntity val1,
+                  PersistEntity val,
+                  PersistEntity b,
+                  Eq (Key b)) =>
+                 SelectOneMany val val1 -> SqlPersist m [((Key b, b), [(Key d, d)])]
 selectOneMany' (SelectOneMany oneF oneO manyF manyO eq _getKey isOuter) = do
     conn <- SqlPersist ask
     liftM go $ withStmt (sql conn) (getFiltsValues oneF ++ getFiltsValues manyF) $ loop id
@@ -81,9 +86,11 @@ selectOneMany' (SelectOneMany oneF oneO manyF manyO eq _getKey isOuter) = do
         filts = map (filterClause True conn) oneF ++ map (filterClause True conn) manyF
         ords = map (orderClause True conn) oneO ++ map (orderClause True conn) manyO
 
+addTable :: PersistEntity val =>
+           Connection -> val -> [Char] -> [Char]
 addTable conn e s = concat [escapeName conn $ rawTableName $ entityDef e, ".", s]
 
---colsPlusId :: PersistEntity e => e -> [String]
+colsPlusId :: PersistEntity e => Connection -> e -> [String]
 colsPlusId conn e =
     map (addTable conn e) $
     "id" : (map (\(x, _, _) -> escapeName conn x) cols)

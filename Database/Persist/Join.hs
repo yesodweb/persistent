@@ -9,7 +9,6 @@ module Database.Persist.Join
     ) where
 
 import Database.Persist.Base
-import Control.Monad (forM, liftM)
 import Data.Maybe (mapMaybe)
 import qualified Data.Map as Map
 import Data.List (foldl')
@@ -27,7 +26,9 @@ data SelectOneMany one many = SelectOneMany
     , somGetKey :: many -> Key one
     , somIncludeNoMatch :: Bool
     }
-selectOneMany filts get = SelectOneMany [] [] [] [] filts get False
+
+selectOneMany :: ([Key one] -> Filter many) -> (many -> Key one) -> SelectOneMany one many
+selectOneMany filts get' = SelectOneMany [] [] [] [] filts get' False
 instance (PersistEntity one, PersistEntity many, Ord (Key one))
     => RunJoin (SelectOneMany one many) where
     type Result (SelectOneMany one many) =

@@ -134,7 +134,7 @@ sqlError maybeConnection functionName error = do
   details <- case maybeConnection of
                Just database -> do
                  details <- errmsg database
-                 return $ ": " <> details
+                 return $ ": " `mappend` details
                Nothing -> return "."
   fail $ unpack $ mconcat
     ["SQLite3 returned "
@@ -163,7 +163,7 @@ open path = do
   databaseOrError <- openError path
   case databaseOrError of
     Left database -> return database
-    Right error -> sqlError Nothing ("open " <> (pack $ show path)) error
+    Right error -> sqlError Nothing ("open " `mappend` (pack $ show path)) error
 
 foreign import ccall "sqlite3_close"
   closeC :: Ptr () -> IO Int
@@ -197,9 +197,7 @@ prepare database text = do
   statementOrError <- prepareError database text
   case statementOrError of
     Left statement -> return statement
-    Right error -> sqlError (Just database) ("prepare " <> (pack $ show text)) error
-
-(<>) = mappend
+    Right error -> sqlError (Just database) ("prepare " `mappend` (pack $ show text)) error
 
 foreign import ccall "sqlite3_step"
   stepC :: Ptr () -> IO Int
