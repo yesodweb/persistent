@@ -95,6 +95,8 @@ instance PersistField String where
     fromPersistValue (PersistText s) = Right $ T.unpack s
     fromPersistValue (PersistByteString bs) =
         Right $ T.unpack $ T.decodeUtf8With T.lenientDecode bs
+    fromPersistValue (PersistForeignKey bs) =
+        Right $ T.unpack $ T.decodeUtf8With T.lenientDecode bs
     fromPersistValue (PersistInt64 i) = Right $ show i
     fromPersistValue (PersistDouble d) = Right $ show d
     fromPersistValue (PersistDay d) = Right $ show d
@@ -138,7 +140,8 @@ instance PersistField Html where
 instance PersistField Int where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-    fromPersistValue x = Left $ "Expected Integer, received: " ++ show x
+    fromPersistValue (PersistNull)    = Right $ 0
+    fromPersistValue x = Left $ "Expected Integer 64 -> Integer, received: " ++ show x
     sqlType x = case bitSize x of
                     32 -> SqlInt32
                     _ -> SqlInteger
@@ -146,25 +149,25 @@ instance PersistField Int where
 instance PersistField Int8 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-    fromPersistValue x = Left $ "Expected Integer, received: " ++ show x
+    fromPersistValue x = Left $ "Expected Integer 64 -> 8, received: " ++ show x
     sqlType _ = SqlInt32
 
 instance PersistField Int16 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-    fromPersistValue x = Left $ "Expected Integer, received: " ++ show x
+    fromPersistValue x = Left $ "Expected Integer 64 -> 16, received: " ++ show x
     sqlType _ = SqlInt32
 
 instance PersistField Int32 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-    fromPersistValue x = Left $ "Expected Integer, received: " ++ show x
+    fromPersistValue x = Left $ "Expected Integer 64 -> 32, received: " ++ show x
     sqlType _ = SqlInt32
 
 instance PersistField Int64 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-    fromPersistValue x = Left $ "Expected Integer, received: " ++ show x
+    fromPersistValue x = Left $ "Expected Integer 64 -> 64, received: " ++ show x
     sqlType _ = SqlInteger
 
 instance PersistField Word8 where

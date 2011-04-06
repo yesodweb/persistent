@@ -1,0 +1,530 @@
+runtests.hs:1:1: Splicing declarations
+    derivePersistField "PetType"
+  ======>
+    runtests.hs:58:1-28
+    instance PersistField PetType where
+        { sqlType _ = Database.Persist.Base.SqlString
+          toPersistValue = (PersistText . (Data.Text.pack . show))
+          fromPersistValue
+            = \ dt[a2hg] v[a2hh]
+                -> case fromPersistValue v[a2hh] of {
+                     Left e[a2hi] -> Left e[a2hi]
+                     Right s'[a2hj]
+                       -> case reads s'[a2hj] of {
+                            (x[a2hk], _) GHC.Types.: _ -> Right x[a2hk]
+                            GHC.Types.[]
+                              -> (Left $ ("Invalid " ++ (dt[a2hg] ++ (": " ++ s'[a2hj])))) } }
+                "PetType" }
+runtests.hs:(61,44)-(86,2): Splicing expression
+    "\n\n  Person\n    name String Update Eq Ne Desc\n    age Int Update \"Asc\" Desc Lt \"some ignored -- attribute\" Eq Add\n    color String Maybe Eq Ne -- this is a comment sql=foobarbaz\n    PersonNameKey name -- this is a comment sql=foobarbaz\n  Pet\n    owner PersonId\n    name String\n    type PetType\n  NeedsPet\n    pet PetId\n  Number\n    int Int\n    int32 Int32\n    word32 Word32\n    int64 Int64\n    word64 Word64\n\n  Author\n    name String Eq Asc\n  Entry\n    author AuthorId In\n    title String Desc\n"
+  ======>
+    [Database.Persist.Base.EntityDef
+       "Person"
+       []
+       [("name", "String", ["Update", "Eq", "Ne", "Desc"]),
+        ("age", "Int", 
+         ["Update", "Asc", "Desc", "Lt", "some ignored -- attribute", "Eq",
+          "Add"]),
+        ("color", "String", ["Maybe", "Eq", "Ne"])]
+       [("PersonNameKey", ["name"])]
+       ["Show", "Read", "Eq"],
+     Database.Persist.Base.EntityDef
+       "Pet"
+       []
+       [("owner", "PersonId", []), ("name", "String", []),
+        ("type", "PetType", [])]
+       []
+       ["Show", "Read", "Eq"],
+     Database.Persist.Base.EntityDef
+       "NeedsPet" [] [("pet", "PetId", [])] [] ["Show", "Read", "Eq"],
+     Database.Persist.Base.EntityDef
+       "Number"
+       []
+       [("int", "Int", []), ("int32", "Int32", []),
+        ("word32", "Word32", []), ("int64", "Int64", []),
+        ("word64", "Word64", [])]
+       []
+       ["Show", "Read", "Eq"],
+     Database.Persist.Base.EntityDef
+       "Author"
+       []
+       [("name", "String", ["Eq", "Asc"])]
+       []
+       ["Show", "Read", "Eq"],
+     Database.Persist.Base.EntityDef
+       "Entry"
+       []
+       [("author", "AuthorId", ["In"]), ("title", "String", ["Desc"])]
+       []
+       ["Show", "Read", "Eq"]]
+runtests.hs:1:1: Splicing declarations
+    share2
+      mkPersist
+      (mkMigrate "testMigrate")
+      [Database.Persist.Base.EntityDef
+         "Person"
+         []
+         [("name", "String", ["Update", "Eq", "Ne", "Desc"]),
+          ("age", "Int", 
+           ["Update", "Asc", "Desc", "Lt", "some ignored -- attribute", "Eq",
+            "Add"]),
+          ("color", "String", ["Maybe", "Eq", "Ne"])]
+         [("PersonNameKey", ["name"])]
+         ["Show", "Read", "Eq"],
+       Database.Persist.Base.EntityDef
+         "Pet"
+         []
+         [("owner", "PersonId", []), ("name", "String", []),
+          ("type", "PetType", [])]
+         []
+         ["Show", "Read", "Eq"],
+       Database.Persist.Base.EntityDef
+         "NeedsPet" [] [("pet", "PetId", [])] [] ["Show", "Read", "Eq"],
+       Database.Persist.Base.EntityDef
+         "Number"
+         []
+         [("int", "Int", []), ("int32", "Int32", []),
+          ("word32", "Word32", []), ("int64", "Int64", []),
+          ("word64", "Word64", [])]
+         []
+         ["Show", "Read", "Eq"],
+       Database.Persist.Base.EntityDef
+         "Author"
+         []
+         [("name", "String", ["Eq", "Asc"])]
+         []
+         ["Show", "Read", "Eq"],
+       Database.Persist.Base.EntityDef
+         "Entry"
+         []
+         [("author", "AuthorId", ["In"]), ("title", "String", ["Desc"])]
+         []
+         ["Show", "Read", "Eq"]]
+  ======>
+    runtests.hs:(61,1)-(86,2)
+    data Person
+        = Person {personName :: String,
+                  personAge :: Int,
+                  personColor :: Maybe String}
+        deriving (Show, Read, Eq)
+    type PersonId = Key Person
+    instance PersistEntity Person where
+        newtype instance Key Person
+            = PersonId {unPersonId :: PersistValue}
+            deriving (Show,
+                      Read,
+                      Eq,
+                      PersistField,
+                      Web.Routes.Quasi.Classes.SinglePiece,
+                      Ord)
+        data instance Filter Person
+            = PersonIdIn [Key Person] |
+              PersonNameEq String |
+              PersonNameNe String |
+              PersonAgeLt Int |
+              PersonAgeEq Int |
+              PersonColorEq Maybe String |
+              PersonColorNe Maybe String
+            deriving (Show, Read, Eq)
+        data instance Update Person
+            = PersonName String | PersonAge Int | PersonAgeAdd Int
+            deriving (Show, Read, Eq)
+        data instance Order Person
+            = PersonNameDesc | PersonAgeAsc | PersonAgeDesc
+            deriving (Show, Read, Eq)
+        data instance Unique Person
+            = PersonNameKey String deriving (Show, Read, Eq)
+        { entityDef _
+            = Database.Persist.Base.EntityDef
+                "Person"
+                []
+                [("name", "String", ["Update", "Eq", "Ne", "Desc"]),
+                 ("age", "Int", 
+                  ["Update", "Asc", "Desc", "Lt", "some ignored -- attribute", "Eq",
+                   "Add"]),
+                 ("color", "String", ["Maybe", "Eq", "Ne"])]
+                [("PersonNameKey", ["name"])]
+                ["Show", "Read", "Eq"]
+          toPersistFields (Person x[a2wG] x[a2wH] x[a2wI])
+            = [Database.Persist.Base.SomePersistField x[a2wG],
+               Database.Persist.Base.SomePersistField x[a2wH],
+               Database.Persist.Base.SomePersistField x[a2wI]]
+          fromPersistValues [x[a2wJ], x[a2wK], x[a2wL]]
+            = (((Right Person
+               `Database.Persist.TH.apE`
+                 fromPersistValue x[a2wJ])
+              `Database.Persist.TH.apE`
+                fromPersistValue x[a2wK])
+             `Database.Persist.TH.apE`
+               fromPersistValue x[a2wL])
+          fromPersistValues _ = Left "Invalid fromPersistValues input"
+          halfDefined = Person undefined undefined undefined
+          toPersistKey = PersonId
+          fromPersistKey = unPersonId
+          showPersistKey = show
+          persistOrderToFieldName PersonNameDesc {} = "name"
+          persistOrderToFieldName PersonAgeAsc {} = "age"
+          persistOrderToFieldName PersonAgeDesc {} = "age"
+          persistOrderToOrder PersonNameDesc {} = Database.Persist.Base.Desc
+          persistOrderToOrder PersonAgeAsc {} = Database.Persist.Base.Asc
+          persistOrderToOrder PersonAgeDesc {} = Database.Persist.Base.Desc
+          persistUpdateToFieldName PersonName {} = "name"
+          persistUpdateToFieldName PersonAge {} = "age"
+          persistUpdateToFieldName PersonAgeAdd {} = "age"
+          persistUpdateToValue (PersonName x) = toPersistValue x
+          persistUpdateToValue (PersonAge x) = toPersistValue x
+          persistUpdateToValue (PersonAgeAdd x) = toPersistValue x
+          persistUpdateToUpdate PersonName {} = Database.Persist.Base.Update
+          persistUpdateToUpdate PersonAge {} = Database.Persist.Base.Update
+          persistUpdateToUpdate PersonAgeAdd {} = Database.Persist.Base.Add
+          persistFilterToFieldName PersonIdIn {} = "id"
+          persistFilterToFieldName PersonNameEq {} = "name"
+          persistFilterToFieldName PersonNameNe {} = "name"
+          persistFilterToFieldName PersonAgeLt {} = "age"
+          persistFilterToFieldName PersonAgeEq {} = "age"
+          persistFilterToFieldName PersonColorEq {} = "color"
+          persistFilterToFieldName PersonColorNe {} = "color"
+          persistFilterToValue (PersonIdIn x[a2wW])
+            = (Right . map toPersistValue) x[a2wW]
+          persistFilterToValue (PersonNameEq x[a2wQ])
+            = (Left . toPersistValue) x[a2wQ]
+          persistFilterToValue (PersonNameNe x[a2wR])
+            = (Left . toPersistValue) x[a2wR]
+          persistFilterToValue (PersonAgeLt x[a2wS])
+            = (Left . toPersistValue) x[a2wS]
+          persistFilterToValue (PersonAgeEq x[a2wT])
+            = (Left . toPersistValue) x[a2wT]
+          persistFilterToValue (PersonColorEq x[a2wU])
+            = (Left . toPersistValue) x[a2wU]
+          persistFilterToValue (PersonColorNe x[a2wV])
+            = (Left . toPersistValue) x[a2wV]
+          persistUniqueToFieldNames PersonNameKey {} = ["name"]
+          persistUniqueToValues (PersonNameKey x[a2wM])
+            = [toPersistValue x[a2wM]]
+          persistUniqueKeys (Person _name[a2wN] _age[a2wO] _color[a2wP])
+            = [PersonNameKey _name[a2wN]]
+          persistFilterToFilter PersonIdIn {} = Database.Persist.Base.In
+          persistFilterToFilter PersonNameEq {} = Database.Persist.Base.Eq
+          persistFilterToFilter PersonNameNe {} = Database.Persist.Base.Ne
+          persistFilterToFilter PersonAgeLt {} = Database.Persist.Base.Lt
+          persistFilterToFilter PersonAgeEq {} = Database.Persist.Base.Eq
+          persistFilterToFilter PersonColorEq {} = Database.Persist.Base.Eq
+          persistFilterToFilter PersonColorNe {} = Database.Persist.Base.Ne }
+    data Pet
+        = Pet {petOwner :: PersonId, petName :: String, petType :: PetType}
+        deriving (Show, Read, Eq)
+    type PetId = Key Pet
+    instance PersistEntity Pet where
+        newtype instance Key Pet
+            = PetId {unPetId :: PersistValue}
+            deriving (Show,
+                      Read,
+                      Eq,
+                      PersistField,
+                      Web.Routes.Quasi.Classes.SinglePiece,
+                      Ord)
+        data instance Filter Pet = PetIdIn [Key Pet]
+        data instance Update Pet =
+        data instance Order Pet =
+        data instance Unique Pet =
+        { entityDef _
+            = Database.Persist.Base.EntityDef
+                "Pet"
+                []
+                [("owner", "PersonId", []), ("name", "String", []),
+                 ("type", "PetType", [])]
+                []
+                ["Show", "Read", "Eq"]
+          toPersistFields (Pet x[a2wX] x[a2wY] x[a2wZ])
+            = [Database.Persist.Base.SomePersistField x[a2wX],
+               Database.Persist.Base.SomePersistField x[a2wY],
+               Database.Persist.Base.SomePersistField x[a2wZ]]
+          fromPersistValues [x[a2x0], x[a2x1], x[a2x2]]
+            = (((Right Pet `Database.Persist.TH.apE` fromPersistValue x[a2x0])
+              `Database.Persist.TH.apE`
+                fromPersistValue x[a2x1])
+             `Database.Persist.TH.apE`
+               fromPersistValue x[a2x2])
+          fromPersistValues _ = Left "Invalid fromPersistValues input"
+          halfDefined = Pet undefined undefined undefined
+          toPersistKey = PetId
+          fromPersistKey = unPetId
+          showPersistKey = show
+          persistOrderToFieldName _
+            = error "Degenerate case, should never happen"
+          persistOrderToOrder _
+            = error "Degenerate case, should never happen"
+          persistUpdateToFieldName _
+            = error "Degenerate case, should never happen"
+          persistUpdateToValue _
+            = error "Degenerate case, should never happen"
+          persistUpdateToUpdate _
+            = error "Degenerate case, should never happen"
+          persistFilterToFieldName PetIdIn {} = "id"
+          persistFilterToValue (PetIdIn x[a2x6])
+            = (Right . map toPersistValue) x[a2x6]
+          persistUniqueToFieldNames _
+            = error "Degenerate case, should never happen"
+          persistUniqueToValues _
+            = error "Degenerate case, should never happen"
+          persistUniqueKeys (Pet _owner[a2x3] _name[a2x4] _type[a2x5]) = []
+          persistFilterToFilter PetIdIn {} = Database.Persist.Base.In }
+    data NeedsPet
+        = NeedsPet {needsPetPet :: PetId} deriving (Show, Read, Eq)
+    type NeedsPetId = Key NeedsPet
+    instance PersistEntity NeedsPet where
+        newtype instance Key NeedsPet
+            = NeedsPetId {unNeedsPetId :: PersistValue}
+            deriving (Show,
+                      Read,
+                      Eq,
+                      PersistField,
+                      Web.Routes.Quasi.Classes.SinglePiece,
+                      Ord)
+        data instance Filter NeedsPet = NeedsPetIdIn [Key NeedsPet]
+        data instance Update NeedsPet =
+        data instance Order NeedsPet =
+        data instance Unique NeedsPet =
+        { entityDef _
+            = Database.Persist.Base.EntityDef
+                "NeedsPet" [] [("pet", "PetId", [])] [] ["Show", "Read", "Eq"]
+          toPersistFields (NeedsPet x[a2x7])
+            = [Database.Persist.Base.SomePersistField x[a2x7]]
+          fromPersistValues [x[a2x8]]
+            = (Right NeedsPet
+             `Database.Persist.TH.apE`
+               fromPersistValue x[a2x8])
+          fromPersistValues _ = Left "Invalid fromPersistValues input"
+          halfDefined = NeedsPet undefined
+          toPersistKey = NeedsPetId
+          fromPersistKey = unNeedsPetId
+          showPersistKey = show
+          persistOrderToFieldName _
+            = error "Degenerate case, should never happen"
+          persistOrderToOrder _
+            = error "Degenerate case, should never happen"
+          persistUpdateToFieldName _
+            = error "Degenerate case, should never happen"
+          persistUpdateToValue _
+            = error "Degenerate case, should never happen"
+          persistUpdateToUpdate _
+            = error "Degenerate case, should never happen"
+          persistFilterToFieldName NeedsPetIdIn {} = "id"
+          persistFilterToValue (NeedsPetIdIn x[a2xa])
+            = (Right . map toPersistValue) x[a2xa]
+          persistUniqueToFieldNames _
+            = error "Degenerate case, should never happen"
+          persistUniqueToValues _
+            = error "Degenerate case, should never happen"
+          persistUniqueKeys (NeedsPet _pet[a2x9]) = []
+          persistFilterToFilter NeedsPetIdIn {} = Database.Persist.Base.In }
+    data Number
+        = Number {numberInt :: Int,
+                  numberInt32 :: Int32,
+                  numberWord32 :: Word32,
+                  numberInt64 :: Int64,
+                  numberWord64 :: Word64}
+        deriving (Show, Read, Eq)
+    type NumberId = Key Number
+    instance PersistEntity Number where
+        newtype instance Key Number
+            = NumberId {unNumberId :: PersistValue}
+            deriving (Show,
+                      Read,
+                      Eq,
+                      PersistField,
+                      Web.Routes.Quasi.Classes.SinglePiece,
+                      Ord)
+        data instance Filter Number = NumberIdIn [Key Number]
+        data instance Update Number =
+        data instance Order Number =
+        data instance Unique Number =
+        { entityDef _
+            = Database.Persist.Base.EntityDef
+                "Number"
+                []
+                [("int", "Int", []), ("int32", "Int32", []),
+                 ("word32", "Word32", []), ("int64", "Int64", []),
+                 ("word64", "Word64", [])]
+                []
+                ["Show", "Read", "Eq"]
+          toPersistFields (Number x[a2xb] x[a2xc] x[a2xd] x[a2xe] x[a2xf])
+            = [Database.Persist.Base.SomePersistField x[a2xb],
+               Database.Persist.Base.SomePersistField x[a2xc],
+               Database.Persist.Base.SomePersistField x[a2xd],
+               Database.Persist.Base.SomePersistField x[a2xe],
+               Database.Persist.Base.SomePersistField x[a2xf]]
+          fromPersistValues [x[a2xg], x[a2xh], x[a2xi], x[a2xj], x[a2xk]]
+            = (((((Right Number
+                 `Database.Persist.TH.apE`
+                   fromPersistValue x[a2xg])
+                `Database.Persist.TH.apE`
+                  fromPersistValue x[a2xh])
+               `Database.Persist.TH.apE`
+                 fromPersistValue x[a2xi])
+              `Database.Persist.TH.apE`
+                fromPersistValue x[a2xj])
+             `Database.Persist.TH.apE`
+               fromPersistValue x[a2xk])
+          fromPersistValues _ = Left "Invalid fromPersistValues input"
+          halfDefined
+            = Number undefined undefined undefined undefined undefined
+          toPersistKey = NumberId
+          fromPersistKey = unNumberId
+          showPersistKey = show
+          persistOrderToFieldName _
+            = error "Degenerate case, should never happen"
+          persistOrderToOrder _
+            = error "Degenerate case, should never happen"
+          persistUpdateToFieldName _
+            = error "Degenerate case, should never happen"
+          persistUpdateToValue _
+            = error "Degenerate case, should never happen"
+          persistUpdateToUpdate _
+            = error "Degenerate case, should never happen"
+          persistFilterToFieldName NumberIdIn {} = "id"
+          persistFilterToValue (NumberIdIn x[a2xq])
+            = (Right . map toPersistValue) x[a2xq]
+          persistUniqueToFieldNames _
+            = error "Degenerate case, should never happen"
+          persistUniqueToValues _
+            = error "Degenerate case, should never happen"
+          persistUniqueKeys
+            (Number _int[a2xl]
+                    _int32[a2xm]
+                    _word32[a2xn]
+                    _int64[a2xo]
+                    _word64[a2xp])
+            = []
+          persistFilterToFilter NumberIdIn {} = Database.Persist.Base.In }
+    data Author
+        = Author {authorName :: String} deriving (Show, Read, Eq)
+    type AuthorId = Key Author
+    instance PersistEntity Author where
+        newtype instance Key Author
+            = AuthorId {unAuthorId :: PersistValue}
+            deriving (Show,
+                      Read,
+                      Eq,
+                      PersistField,
+                      Web.Routes.Quasi.Classes.SinglePiece,
+                      Ord)
+        data instance Filter Author
+            = AuthorIdIn [Key Author] | AuthorNameEq String
+            deriving (Show, Read, Eq)
+        data instance Update Author =
+        data instance Order Author
+            = AuthorNameAsc deriving (Show, Read, Eq)
+        data instance Unique Author =
+        { entityDef _
+            = Database.Persist.Base.EntityDef
+                "Author"
+                []
+                [("name", "String", ["Eq", "Asc"])]
+                []
+                ["Show", "Read", "Eq"]
+          toPersistFields (Author x[a2xr])
+            = [Database.Persist.Base.SomePersistField x[a2xr]]
+          fromPersistValues [x[a2xs]]
+            = (Right Author `Database.Persist.TH.apE` fromPersistValue x[a2xs])
+          fromPersistValues _ = Left "Invalid fromPersistValues input"
+          halfDefined = Author undefined
+          toPersistKey = AuthorId
+          fromPersistKey = unAuthorId
+          showPersistKey = show
+          persistOrderToFieldName AuthorNameAsc {} = "name"
+          persistOrderToOrder AuthorNameAsc {} = Database.Persist.Base.Asc
+          persistUpdateToFieldName _
+            = error "Degenerate case, should never happen"
+          persistUpdateToValue _
+            = error "Degenerate case, should never happen"
+          persistUpdateToUpdate _
+            = error "Degenerate case, should never happen"
+          persistFilterToFieldName AuthorIdIn {} = "id"
+          persistFilterToFieldName AuthorNameEq {} = "name"
+          persistFilterToValue (AuthorIdIn x[a2xv])
+            = (Right . map toPersistValue) x[a2xv]
+          persistFilterToValue (AuthorNameEq x[a2xu])
+            = (Left . toPersistValue) x[a2xu]
+          persistUniqueToFieldNames _
+            = error "Degenerate case, should never happen"
+          persistUniqueToValues _
+            = error "Degenerate case, should never happen"
+          persistUniqueKeys (Author _name[a2xt]) = []
+          persistFilterToFilter AuthorIdIn {} = Database.Persist.Base.In
+          persistFilterToFilter AuthorNameEq {} = Database.Persist.Base.Eq }
+    data Entry
+        = Entry {entryAuthor :: AuthorId, entryTitle :: String}
+        deriving (Show, Read, Eq)
+    type EntryId = Key Entry
+    instance PersistEntity Entry where
+        newtype instance Key Entry
+            = EntryId {unEntryId :: PersistValue}
+            deriving (Show,
+                      Read,
+                      Eq,
+                      PersistField,
+                      Web.Routes.Quasi.Classes.SinglePiece,
+                      Ord)
+        data instance Filter Entry
+            = EntryIdIn [Key Entry] | EntryAuthorIn [AuthorId]
+            deriving (Show, Read, Eq)
+        data instance Update Entry =
+        data instance Order Entry
+            = EntryTitleDesc deriving (Show, Read, Eq)
+        data instance Unique Entry =
+        { entityDef _
+            = Database.Persist.Base.EntityDef
+                "Entry"
+                []
+                [("author", "AuthorId", ["In"]), ("title", "String", ["Desc"])]
+                []
+                ["Show", "Read", "Eq"]
+          toPersistFields (Entry x[a2xw] x[a2xx])
+            = [Database.Persist.Base.SomePersistField x[a2xw],
+               Database.Persist.Base.SomePersistField x[a2xx]]
+          fromPersistValues [x[a2xy], x[a2xz]]
+            = ((Right Entry `Database.Persist.TH.apE` fromPersistValue x[a2xy])
+             `Database.Persist.TH.apE`
+               fromPersistValue x[a2xz])
+          fromPersistValues _ = Left "Invalid fromPersistValues input"
+          halfDefined = Entry undefined undefined
+          toPersistKey = EntryId
+          fromPersistKey = unEntryId
+          showPersistKey = show
+          persistOrderToFieldName EntryTitleDesc {} = "title"
+          persistOrderToOrder EntryTitleDesc {} = Database.Persist.Base.Desc
+          persistUpdateToFieldName _
+            = error "Degenerate case, should never happen"
+          persistUpdateToValue _
+            = error "Degenerate case, should never happen"
+          persistUpdateToUpdate _
+            = error "Degenerate case, should never happen"
+          persistFilterToFieldName EntryIdIn {} = "id"
+          persistFilterToFieldName EntryAuthorIn {} = "author"
+          persistFilterToValue (EntryIdIn x[a2xD])
+            = (Right . map toPersistValue) x[a2xD]
+          persistFilterToValue (EntryAuthorIn x[a2xC])
+            = (Right . map toPersistValue) x[a2xC]
+          persistUniqueToFieldNames _
+            = error "Degenerate case, should never happen"
+          persistUniqueToValues _
+            = error "Degenerate case, should never happen"
+          persistUniqueKeys (Entry _author[a2xA] _title[a2xB]) = []
+          persistFilterToFilter EntryIdIn {} = Database.Persist.Base.In
+          persistFilterToFilter EntryAuthorIn {} = Database.Persist.Base.In }
+    testMigrate ::
+      forall m. Control.Monad.IO.Control.MonadControlIO m =>
+      Database.Persist.GenericSql.Migration (Database.Persist.GenericSql.Raw.SqlPersist m)
+    testMigrate
+      = do { Database.Persist.GenericSql.migrate (undefined :: Person);
+             Database.Persist.GenericSql.migrate (undefined :: Pet);
+             Database.Persist.GenericSql.migrate (undefined :: NeedsPet);
+             Database.Persist.GenericSql.migrate (undefined :: Number);
+             Database.Persist.GenericSql.migrate (undefined :: Author);
+             Database.Persist.GenericSql.migrate (undefined :: Entry) }
+
+runtests.hs:61:44:
+    Warning: Deprecated syntax:
+               quasiquotes no longer need a dollar sign: $persist
+Linking runtests ...

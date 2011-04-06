@@ -1,0 +1,35 @@
+name:            persistent-mongoDB
+version:         0.2.2
+license:         BSD3
+license-file:    LICENSE
+author:          Greg Weber <greg@gregweber.info>
+maintainer:      Greg Weber <greg@gregweber.info>
+synopsis:        Backend for the persistent library using mongoDB.
+category:        Database
+stability:       Experimental
+cabal-version:   >= 1.6
+build-type:      Simple
+homepage:        http://docs.yesodweb.com/persistent/
+
+library
+    build-depends:   base >= 4 && < 5
+                   , persistent >= 0.5.0
+                   , neither
+                   , template-haskell >= 2.4 && < 2.6
+                   , text                     >= 0.8       && < 0.12
+                   , transformers >= 0.2.1 && < 0.3
+                   , containers >= 0.2 && < 0.5
+                   , bytestring >= 0.9 && < 0.10
+                   , enumerator >= 0.4 && < 0.5
+                   , mongoDB >= 0.9.2.1 && < 1.0
+                   , network >= 2.2.1.7
+                   , bson >= 0.1.2
+                   , compact-string-fix >= 0.3.1 && < 0.4
+                   , cereal >= 0.3.0.0
+
+    exposed-modules: Database.Persist.MongoDB
+    ghc-options:     -Wall
+
+source-repository head
+  type:     git
+  location: git://github.com/snoyberg/persistent.git
