@@ -37,6 +37,7 @@ import Control.Monad.IO.Control (MonadControlIO)
 import Control.Exception.Control (onException)
 import Control.Exception (toException)
 import Data.Text (Text, pack, unpack)
+import Data.Text.Read (signed, decimal)
 
 type ConnectionPool = Pool Connection
 
@@ -114,7 +115,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
                 Nothing -> return Nothing
                 Just vals ->
                     case fromPersistValues vals of
-                        Left e -> error $ "get " ++ showPersistKey k ++ ": " ++ e
+                        Left e -> error $ "get " ++ show k ++ ": " ++ e
                         Right v -> return $ Just v
 
     count filts = do
@@ -332,6 +333,14 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
         go conn x = escapeName conn x ++ "=?"
         t = entityDef $ dummyFromUnique uniq
         toFieldNames' = map (getFieldName t) . persistUniqueToFieldNames
+
+    readKey _ t =
+        case signed decimal t of
+            Left _ -> Nothing
+            Right (x, _) -> Just $ PersistInt64 x
+
+    showKey _ (PersistInt64 i) = pack $ show i
+    showKey _ x = error $ "Invalid SQL key: " ++ show x
 
 dummyFromUnique :: Unique v -> v
 dummyFromUnique _ = error "dummyFromUnique"

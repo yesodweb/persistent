@@ -347,7 +347,6 @@ mkEntity t = do
     tpf <- mkToPersistFields [(name, length $ entityColumns t)]
     fpv <- mkFromPersistValues t
     utv <- mkUniqueToValues $ entityUniques t
-    show' <- [|show|]
     entityOrders' <- entityOrders t
     otd <- orderTypeDec t
     puk <- mkUniqueKeys t
@@ -378,7 +377,6 @@ mkEntity t = do
         , mkHalfDefined name $ length $ entityColumns t
         , FunD (mkName "toPersistKey") [Clause [] (NormalB $ ConE $ mkName $ entityName t ++ "Id") []]
         , FunD (mkName "fromPersistKey") [Clause [] (NormalB $ VarE $ mkName $ "un" ++ entityName t ++ "Id") []]
-        , FunD (mkName "showPersistKey") [Clause [] (NormalB show') []]
         , mkToFieldName "persistOrderToFieldName"
                 $ map (\(x, y, _) -> (name ++ upperFirst x ++ y, x))
                 entityOrders'

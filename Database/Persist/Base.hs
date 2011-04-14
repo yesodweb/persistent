@@ -5,6 +5,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 -- | This defines the API for performing database actions. There are two levels
 -- to this API: dealing with fields, and dealing with entities. In SQL, a field
@@ -242,7 +243,7 @@ instance PersistField a => PersistField (Maybe a) where
 
 -- | A single database entity. For example, if writing a blog application, a
 -- blog entry would be an entry, containing fields such as title and content.
-class PersistEntity val where
+class Show (Key val) => PersistEntity val where
     -- | The unique identifier associated with this entity. In general, backends also define a type synonym for this, such that \"type MyEntityId = Key MyEntity\".
     data Key    val
     -- | Fields which can be updated using the 'update' and 'updateWhere'
@@ -264,7 +265,6 @@ class PersistEntity val where
     halfDefined :: val
     toPersistKey :: PersistValue -> Key val
     fromPersistKey :: Key val -> PersistValue
-    showPersistKey :: Key val -> String
 
     persistFilterToFieldName :: Filter val -> String
     persistFilterToFilter :: Filter val -> PersistFilter
@@ -336,6 +336,12 @@ class Monad m => PersistBackend m where
 
     -- | The total number of records fulfilling the given criterion.
     count :: PersistEntity val => [Filter val] -> m Int
+
+    -- | Read a key value.
+    readKey :: m a -> T.Text -> Maybe PersistValue
+
+    -- | Show a key value.
+    showKey :: m a -> PersistValue -> T.Text
 
 -- | Insert a value, checking for conflicts with any unique constraints.  If a
 -- duplicate exists in the database, it is returned as 'Left'. Otherwise, the
