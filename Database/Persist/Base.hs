@@ -337,12 +337,6 @@ class Monad m => PersistBackend m where
     -- | The total number of records fulfilling the given criterion.
     count :: PersistEntity val => [Filter val] -> m Int
 
-    -- | Read a key value.
-    readKey :: m a -> T.Text -> Maybe PersistValue
-
-    -- | Show a key value.
-    showKey :: m a -> PersistValue -> T.Text
-
 -- | Insert a value, checking for conflicts with any unique constraints.  If a
 -- duplicate exists in the database, it is returned as 'Left'. Otherwise, the
 -- new 'Key' is returned as 'Right'.
