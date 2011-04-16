@@ -104,7 +104,8 @@ pToSql (PersistTimeOfDay t) = H.SqlLocalTimeOfDay t
 pToSql (PersistUTCTime t) = H.SqlUTCTime t
 pToSql PersistNull = H.SqlNull
 pToSql (PersistList _) = error "Refusing to serialize a PersistList to a PostgreSQL value"
-pToSql (PersistMap _) = error "Refusing to serialize a PersistMap to a SQLite value"
+pToSql (PersistMap _) = error "Refusing to serialize a PersistMap to a PostgreSQL value"
+pToSql (PersistForeignKey _) = error "Refusing to serialize a PersistForeignKey to a PostgreSQL value"
 
 pFromSql :: H.SqlValue -> PersistValue
 pFromSql (H.SqlString s) = PersistText $ pack s

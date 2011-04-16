@@ -114,9 +114,19 @@ instance PersistField ByteString where
 
 instance PersistField T.Text where
     toPersistValue = PersistText
+    fromPersistValue (PersistText s) = Right s
     fromPersistValue (PersistByteString bs) =
         Right $ T.decodeUtf8With T.lenientDecode bs
-    fromPersistValue v = fmap T.pack $ fromPersistValue v
+    fromPersistValue (PersistInt64 i) = Right $ T.pack $ show i
+    fromPersistValue (PersistDouble d) = Right $ T.pack $ show d
+    fromPersistValue (PersistDay d) = Right $ T.pack $ show d
+    fromPersistValue (PersistTimeOfDay d) = Right $ T.pack $ show d
+    fromPersistValue (PersistUTCTime d) = Right $ T.pack $ show d
+    fromPersistValue PersistNull = Left "Unexpected null"
+    fromPersistValue (PersistBool b) = Right $ T.pack $ show b
+    fromPersistValue (PersistList _) = Left "Cannot convert PersistList to Text"
+    fromPersistValue (PersistMap _) = Left "Cannot convert PersistMap to Text"
+    fromPersistValue (PersistForeignKey _) = Left "Cannot convert PersistForeignKey to Text"
     sqlType _ = SqlString
 
 instance PersistField Html where
