@@ -220,6 +220,10 @@ _getBy = do
   p @== p2
   k @== key2
   Nothing <- getBy $ PersonNameKey "Michael3"
+
+  Just (k', p') <- getByValue p2
+  k' @== k
+  p' @== p
   return ()
 
 _update = do

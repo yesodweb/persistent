@@ -25,6 +25,7 @@ module Database.Persist.Base
     , SomePersistField (..)
     , selectList
     , insertBy
+    , getByValue
     , checkUnique
     , DeleteCascade (..)
     , deleteCascadeWhere
@@ -363,6 +364,22 @@ insertBy val =
         case y of
             Nothing -> go xs
             Just z -> return $ Left z
+
+-- | A modification of 'getBy', which takes the 'PersistEntity' itself instead
+-- of a 'Unique' value. Returns a value matching /one/ of the unique keys. This
+-- function makes the most sense on entities with a single 'Unique'
+-- constructor.
+getByValue :: (PersistEntity v, PersistBackend m)
+           => v -> m (Maybe (Key v, v))
+getByValue val =
+    go $ persistUniqueKeys val
+  where
+    go [] = return Nothing
+    go (x:xs) = do
+        y <- getBy x
+        case y of
+            Nothing -> go xs
+            Just z -> return $ Just z
 
 -- | Check whether there are any conflicts for unique keys with this entity and
 -- existing entities in the database.

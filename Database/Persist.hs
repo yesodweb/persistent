@@ -4,6 +4,7 @@ module Database.Persist
     , PersistBackend (..)
     , selectList
     , insertBy
+    , getByValue
     , checkUnique
     ) where
 
