@@ -58,7 +58,7 @@ data PetType = Cat | Dog
 derivePersistField "PetType"
 
   -- FIXME Empty
-share2 mkPersist (mkMigrate "testMigrate") [$persist|
+share2 mkPersist (mkMigrate "testMigrate") [persist|
 
   Person
     name String Update Eq Ne Desc
