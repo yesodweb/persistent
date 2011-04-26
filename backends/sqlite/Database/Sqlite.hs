@@ -163,7 +163,10 @@ open :: Text -> IO Connection
 open path = do
   databaseOrError <- openError path
   case databaseOrError of
-    Left database -> return database
+    Left database -> do
+                     st <- prepare database "PRAGMA foreign_keys = ON"
+                     step st
+                     return database
     Right error -> sqlError Nothing ("open " `mappend` (pack $ show path)) error
 
 foreign import ccall "sqlite3_close"
