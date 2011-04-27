@@ -27,6 +27,8 @@ import Control.Monad (forM)
 import Control.Monad.IO.Control (MonadControlIO)
 import qualified System.IO as SIO
 import Data.Text (pack)
+import qualified Data.Text.Read
+import qualified Data.Text as T
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
@@ -595,7 +597,11 @@ instance Lift PersistUpdate where
     lift Divide = [|Divide|]
 
 instance SinglePiece PersistValue where
-    fromSinglePiece = Just . PersistText
+    fromSinglePiece t =
+        case Data.Text.Read.signed Data.Text.Read.decimal t of
+            Right (i, t')
+                | T.null t' -> Just $ PersistInt64 i
+            _ -> Just $ PersistText t
     toSinglePiece x =
         case fromPersistValue x of
             Left e -> error e
