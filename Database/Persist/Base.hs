@@ -65,7 +65,7 @@ data PersistValue = PersistText T.Text
                   | PersistNull
                   | PersistList [PersistValue]
                   | PersistMap [(T.Text, PersistValue)]
-                  | PersistForeignKey ByteString -- ^ intended especially for MongoDB backend
+                  | PersistForeignKey ByteString -- ^ intended especially for MongoDB backend. FIXME: rename to PersistObjectId
     deriving (Show, Read, Eq, Typeable, Ord)
 
 -- | A SQL data type. Naming attempts to reflect the underlying Haskell
