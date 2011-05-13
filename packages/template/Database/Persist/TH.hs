@@ -23,6 +23,7 @@ import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
 import Data.Maybe (mapMaybe, catMaybes)
 import Web.Routes.Quasi (SinglePiece (..))
+import Control.Applicative ((<*>))
 import Control.Monad (forM)
 import Control.Monad.IO.Control (MonadControlIO)
 import qualified System.IO as SIO
@@ -318,11 +319,6 @@ mkHalfDefined constr count' =
             $ foldl AppE (ConE $ mkName constr)
                     (replicate count' $ VarE $ mkName "undefined")) []]
 
-apE :: Either x (y -> z) -> Either x y -> Either x z
-apE (Left x) _ = Left x
-apE _ (Left x) = Left x
-apE (Right f) (Right y) = Right $ f y
-
 mkFromPersistValues :: EntityDef -> Q [Clause]
 mkFromPersistValues t = do
     nothing <- [|Left "Invalid fromPersistValues input"|]
@@ -331,7 +327,7 @@ mkFromPersistValues t = do
     fs <- [|fromPersistValue|]
     let xs' = map (AppE fs . VarE) xs
     let pat = ListP $ map VarP xs
-    ap' <- [|apE|]
+    ap' <- [|(<*>)|]
     just <- [|Right|]
     let cons' = just `AppE` cons
     return
