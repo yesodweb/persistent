@@ -4,15 +4,16 @@ module Database.Persist.TH.Library
     ( apE
     ) where
 
+#if MIN_VERSION_base(4,3,0)
 import Control.Applicative
-
-#if !MIN_VERSION_base(4,3,0)
-instance Applicative (Either x) where
-    pure                      = Right
-    l@(Left x) <*> _          = l
-    _          <*> l@(Left _) = l
-    Right f    <*> Right y    = Right (f y)
-#endif // MIN_VERSION_base(4,3,0)
+#endif
 
 apE :: Either x (y -> z) -> Either x y -> Either x z
+
+#if MIN_VERSION_base(4,3,0)
 apE = (<*>)
+#else
+apE l@(Left x) _          = l
+apE _          l@(Left _) = l
+apE Right f    Right y    = Right (f y)
+#endif
