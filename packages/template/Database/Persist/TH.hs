@@ -18,12 +18,12 @@ import Database.Persist.Base
 import Database.Persist.GenericSql (Migration, SqlPersist, migrate)
 import Database.Persist.Quasi (parse)
 import Database.Persist.Util (deprecate, nullable)
+import Database.Persist.TH.Library (apE)
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
 import Data.Maybe (mapMaybe, catMaybes)
 import Web.Routes.Quasi (SinglePiece (..))
-import Control.Applicative ((<*>))
 import Control.Monad (forM)
 import Control.Monad.IO.Control (MonadControlIO)
 import qualified System.IO as SIO
@@ -327,7 +327,7 @@ mkFromPersistValues t = do
     fs <- [|fromPersistValue|]
     let xs' = map (AppE fs . VarE) xs
     let pat = ListP $ map VarP xs
-    ap' <- [|(<*>)|]
+    ap' <- [|apE|]
     just <- [|Right|]
     let cons' = just `AppE` cons
     return
