@@ -32,6 +32,7 @@ library
                      Database.Persist.GenericSql
                      Database.Persist.GenericSql.Internal
                      Database.Persist.GenericSql.Raw
+                     Database.Persist.TH.Library
                      Database.Persist.Util
                      Database.Persist.Join
                      Database.Persist.Join.Sql
