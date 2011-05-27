@@ -18,6 +18,7 @@ import Database.Persist.Base
 import Database.Persist.GenericSql (Migration, SqlPersist, migrate)
 import Database.Persist.Quasi (parse)
 import Database.Persist.Util (deprecate, nullable)
+import Database.Persist.TH.Library (apE)
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
@@ -317,11 +318,6 @@ mkHalfDefined constr count' =
             [Clause [] (NormalB
             $ foldl AppE (ConE $ mkName constr)
                     (replicate count' $ VarE $ mkName "undefined")) []]
-
-apE :: Either x (y -> z) -> Either x y -> Either x z
-apE (Left x) _ = Left x
-apE _ (Left x) = Left x
-apE (Right f) (Right y) = Right $ f y
 
 mkFromPersistValues :: EntityDef -> Q [Clause]
 mkFromPersistValues t = do
