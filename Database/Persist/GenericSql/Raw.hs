@@ -20,9 +20,10 @@ import Control.Applicative (Applicative)
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.IO.Control (MonadControlIO (..))
 import Data.Text (Text)
+import Control.Monad (MonadPlus)
 
 newtype SqlPersist m a = SqlPersist { unSqlPersist :: ReaderT Connection m a }
-    deriving (Monad, MonadIO, MonadTrans, Functor, Applicative, MonadControlIO)
+    deriving (Monad, MonadIO, MonadTrans, Functor, Applicative, MonadControlIO, MonadPlus)
 
 withStmt :: MonadControlIO m => Text -> [PersistValue]
          -> (RowPopper (SqlPersist m) -> SqlPersist m a) -> SqlPersist m a

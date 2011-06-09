@@ -26,6 +26,7 @@ import Data.Maybe (mapMaybe, fromJust)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as E
 import qualified Data.Serialize as S
+import Control.Monad (MonadPlus)
 
 {-
 import Debug.Trace
@@ -34,7 +35,7 @@ debug a = trace ("DEBUG: " ++ show a) a
 -}
 
 newtype MongoDBReader t m a = MongoDBReader (ReaderT ((DB.ConnPool t), HostName) m a)
-    deriving (Monad, Trans.MonadIO, Functor, Applicative)
+    deriving (Monad, Trans.MonadIO, Functor, Applicative, MonadPlus)
 
 withMongoDBConn :: (Network.Abstract.NetworkIO m) => t -> HostName -> ((DB.ConnPool DB.Host, t) -> m b) -> m b
 withMongoDBConn dbname hostname connectionReader = do
