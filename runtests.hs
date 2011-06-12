@@ -56,9 +56,9 @@ derivePersistField "PetType"
 share2 mkPersist (mkMigrate "testMigrate") [$persist|
 
   Person
-    name String Update Eq Ne Desc
-    age Int Update "Asc" Desc Lt "some ignored -- attribute" Eq Add
-    color String Maybe Eq Ne -- this is a comment sql=foobarbaz
+    name String
+    age Int "some ignored -- attribute"
+    color String Maybe -- this is a comment sql=foobarbaz
     PersonNameKey name -- this is a comment sql=foobarbaz
   Pet
     owner PersonId
@@ -74,10 +74,10 @@ share2 mkPersist (mkMigrate "testMigrate") [$persist|
     word64 Word64
 
   Author
-    name String Eq Asc
+    name String
   Entry
-    author AuthorId In
-    title String Desc
+    author AuthorId
+    title String
 |]
 
 -- connstr = "user=test password=test host=localhost port=5432 dbname=yesod_test"

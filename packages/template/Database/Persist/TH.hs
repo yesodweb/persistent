@@ -87,13 +87,10 @@ filterTypeDec t =
     filts = entityFilters t
 
 entityFilters :: EntityDef -> [(String, String, Bool, PersistFilter)]
-entityFilters = mapMaybe go' . concatMap go . entityColumns
+entityFilters =
+    concatMap go . entityColumns
   where
-    go (x, y, as) = map (\a -> (x, y, nullable as, a)) as
-    go' (x, y, z, a) =
-        case readMay a of
-            Nothing -> Nothing
-            Just a' -> Just (x, y, z, a')
+    go (x, y, as) = map (\a -> (x, y, nullable as, a)) [minBound..maxBound]
 
 readMay :: Read a => String -> Maybe a
 readMay s =
@@ -130,16 +127,10 @@ updateTypeDec t =
     tu = entityUpdates t
 
 entityUpdates :: EntityDef -> [(String, String, Bool, PersistUpdate)]
-entityUpdates = mapMaybe go' . concatMap go . entityColumns
+entityUpdates =
+    concatMap go . entityColumns
   where
-    go (x, y, as) = map (\a -> (x, y, nullable as, a)) as
-    go' (x, y, z, "update") =
-        deprecate "'update' is deprecated; please use 'Update'"
-            $ Just (x, y, z, Update)
-    go' (x, y, z, a) =
-        case readMay a of
-            Nothing -> Nothing
-            Just a' -> Just (x, y, z, a')
+    go (x, y, as) = map (\a -> (x, y, nullable as, a)) [minBound..maxBound]
 
 mkUpdate :: String -> (String, String, Bool, PersistUpdate) -> Con
 mkUpdate x (s, ty, isBool, pu) =
@@ -155,7 +146,7 @@ orderTypeDec t = do
 entityOrders :: EntityDef -> Q [(String, String, Exp)]
 entityOrders = fmap concat . mapM go . entityColumns
   where
-    go (x, _, ys) = fmap catMaybes $ mapM (go' x) ys
+    go (x, _, ys) = fmap catMaybes $ mapM (go' x) ["Asc", "Desc"]
     go' x s =
         case reads s of
             (y, _):_ -> do

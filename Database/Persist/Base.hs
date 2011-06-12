@@ -420,10 +420,10 @@ data EntityDef = EntityDef
     deriving Show
 
 data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le | In | NotIn
-    deriving (Read, Show)
+    deriving (Read, Show, Enum, Bounded)
 
 data PersistOrder = Asc | Desc
-    deriving (Read, Show)
+    deriving (Read, Show, Enum, Bounded)
 
 class PersistEntity a => DeleteCascade a where
     deleteCascade :: PersistBackend m => Key a -> m ()
@@ -446,7 +446,7 @@ data PersistException = PersistMarshalException String
 instance E.Exception PersistException
 
 data PersistUpdate = Update | Add | Subtract | Multiply | Divide
-    deriving (Read, Show)
+    deriving (Read, Show, Enum, Bounded)
 
 instance PersistField PersistValue where
     toPersistValue = id
