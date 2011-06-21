@@ -170,7 +170,7 @@ data AlterDB = AddTable String
 
 -- | Returns all of the columns in the given table currently in the database.
 getColumns :: (Text -> IO Statement)
-           -> RawName -> IO [Either Text (Either Column UniqueDef)]
+           -> RawName -> IO [Either Text (Either Column UniqueDef')]
 getColumns getter name = do
     stmt <- getter "SELECT column_name,is_nullable,udt_name,column_default FROM information_schema.columns WHERE table_name=? AND column_name <> 'id'"
     cs <- withStmt stmt [PersistText $ pack $ unRawName name] helper
@@ -202,8 +202,8 @@ getColumns getter name = do
                 cols <- helper pop
                 return $ col' : cols
 
-getAlters :: ([Column], [UniqueDef])
-          -> ([Column], [UniqueDef])
+getAlters :: ([Column], [UniqueDef'])
+          -> ([Column], [UniqueDef'])
           -> ([AlterColumn'], [AlterTable])
 getAlters (c1, u1) (c2, u2) =
     (getAltersC c1 c2, getAltersU u1 u2)

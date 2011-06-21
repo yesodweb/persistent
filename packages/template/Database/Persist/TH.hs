@@ -67,7 +67,7 @@ dataTypeDec t =
         cols = map (mkCol $ entityName t) $ entityColumns t
      in DataD [] name [] [RecC name cols] $ map mkName $ entityDerives t
   where
-    mkCol x (n, ty, as) =
+    mkCol x (ColumnDef n ty as) =
         (mkName $ recName x n, NotStrict, pairToType (ty, nullable as))
 
 keyTypeDec :: String -> Name -> EntityDef -> Dec
@@ -90,7 +90,7 @@ entityFilters :: EntityDef -> [(String, String, Bool, PersistFilter)]
 entityFilters =
     concatMap go . entityColumns
   where
-    go (x, y, as) = map (\a -> (x, y, nullable as, a)) [minBound..maxBound]
+    go (ColumnDef x y as) = map (\a -> (x, y, nullable as, a)) [minBound..maxBound]
 
 readMay :: Read a => String -> Maybe a
 readMay s =
@@ -130,7 +130,7 @@ entityUpdates :: EntityDef -> [(String, String, Bool, PersistUpdate)]
 entityUpdates =
     concatMap go . entityColumns
   where
-    go (x, y, as) = map (\a -> (x, y, nullable as, a)) [minBound..maxBound]
+    go (ColumnDef x y as) = map (\a -> (x, y, nullable as, a)) [minBound..maxBound]
 
 mkUpdate :: String -> (String, String, Bool, PersistUpdate) -> Con
 mkUpdate x (s, ty, isBool, pu) =
@@ -146,7 +146,7 @@ orderTypeDec t = do
 entityOrders :: EntityDef -> Q [(String, String, Exp)]
 entityOrders = fmap concat . mapM go . entityColumns
   where
-    go (x, _, ys) = fmap catMaybes $ mapM (go' x) ["Asc", "Desc"]
+    go (ColumnDef x _ ys) = fmap catMaybes $ mapM (go' x) ["Asc", "Desc"]
     go' x s =
         case reads s of
             (y, _):_ -> do
@@ -163,8 +163,8 @@ uniqueTypeDec t =
             (map (mkUnique t) $ entityUniques t)
             (if null (entityUniques t) then [] else [''Show, ''Read, ''Eq])
 
-mkUnique :: EntityDef -> (String, [String]) -> Con
-mkUnique t (constr, fields) =
+mkUnique :: EntityDef -> UniqueDef -> Con
+mkUnique t (UniqueDef constr fields) =
     NormalC (mkName constr) types
   where
     types = map (go . flip lookup3 (entityColumns t)) fields
@@ -172,7 +172,7 @@ mkUnique t (constr, fields) =
     go x = (NotStrict, pairToType x)
     lookup3 s [] =
         error $ "Column not found: " ++ s ++ " in unique " ++ constr
-    lookup3 x ((x', y, z):rest)
+    lookup3 x ((ColumnDef x' y z):rest)
         | x == x' = (y, nullable z)
         | otherwise = lookup3 x rest
 
@@ -200,11 +200,11 @@ mkToPersistFields pairs = do
         let bod = ListE $ map (AppE sp . VarE) xs
         return $ Clause [pat] (NormalB bod) []
 
-mkToFieldNames :: [(String, [String])] -> Dec
+mkToFieldNames :: [UniqueDef] -> Dec
 mkToFieldNames pairs =
         FunD (mkName "persistUniqueToFieldNames") $ degen $ map go pairs
   where
-    go (constr, names) =
+    go (UniqueDef constr names) =
         Clause [RecP (mkName constr) []]
                (NormalB $ ListE $ map (LitE . StringL) names)
                []
@@ -218,13 +218,13 @@ mkToUpdate name pairs = do
         pu' <- lift pu
         return $ Clause [RecP (mkName constr) []] (NormalB pu') []
 
-mkUniqueToValues :: [(String, [String])] -> Q Dec
+mkUniqueToValues :: [UniqueDef] -> Q Dec
 mkUniqueToValues pairs = do
     pairs' <- mapM go pairs
     return $ FunD (mkName "persistUniqueToValues") $ degen pairs'
   where
-    go :: (String, [String]) -> Q Clause
-    go (constr, names) = do
+    go :: UniqueDef -> Q Clause
+    go (UniqueDef constr names) = do
         xs <- mapM (const $ newName "x") names
         let pat = ConP (mkName constr) $ map VarP xs
         tpv <- [|toPersistValue|]
@@ -435,7 +435,7 @@ mkDeleteCascade defs = do
     getDeps def =
         concatMap getDeps' $ entityColumns def
       where
-        getDeps' (name, typ, attribs) =
+        getDeps' (ColumnDef name typ attribs) =
             let isNull = nullable attribs
                 l = length typ
                 (f, b) = splitAt (l - 2) typ
@@ -483,13 +483,13 @@ mkUniqueKeys def = do
     return $ FunD (mkName "persistUniqueKeys") [c]
   where
     clause = do
-        xs <- forM (entityColumns def) $ \(x, _, _) -> do
+        xs <- forM (entityColumns def) $ \(ColumnDef x _ _) -> do
             x' <- newName $ '_' : x
             return (x, x')
         let pcs = map (go xs) $ entityUniques def
         let pat = ConP (mkName $ entityName def) $ map (VarP . snd) xs
         return $ Clause [pat] (NormalB $ ListE pcs) []
-    go xs (name, cols) =
+    go xs (UniqueDef name cols) =
         foldl (go' xs) (ConE (mkName name)) cols
     go' xs front col =
         let Just col' = lookup col xs
@@ -561,6 +561,10 @@ instance Lift EntityDef where
         d' <- lift d
         e' <- lift e
         return $ x `AppE` a' `AppE` b' `AppE` c' `AppE` d' `AppE` e'
+instance Lift ColumnDef where
+    lift (ColumnDef a b c) = [|ColumnDef $(lift a) $(lift b) $(lift c)|]
+instance Lift UniqueDef where
+    lift (UniqueDef a b) = [|UniqueDef $(lift a) $(lift b)|]
 
 instance Lift PersistFilter where
     lift Eq = [|Eq|]

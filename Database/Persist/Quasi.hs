@@ -62,22 +62,22 @@ parse' :: (String, [String], [[String]]) -> EntityDef
 parse' (name, entattribs, attribs) =
     EntityDef name entattribs cols uniqs derives
   where
-    cols = concatMap takeCols attribs
-    uniqs = concatMap takeUniqs attribs
+    cols = mapMaybe takeCols attribs
+    uniqs = mapMaybe takeUniqs attribs
     derives = case mapMaybe takeDerives attribs of
                 [] -> ["Show", "Read", "Eq"]
                 x -> concat x
 
-takeCols :: [String] -> [(String, String, [String])]
-takeCols ("deriving":_) = []
+takeCols :: [String] -> Maybe ColumnDef
+takeCols ("deriving":_) = Nothing
 takeCols (n@(f:_):ty:rest)
-    | isLower f = [(n, ty, rest)]
-takeCols _ = []
+    | isLower f = Just $ ColumnDef n ty rest
+takeCols _ = Nothing
 
-takeUniqs :: [String] -> [(String, [String])]
+takeUniqs :: [String] -> Maybe UniqueDef
 takeUniqs (n@(f:_):rest)
-    | isUpper f = [(n, rest)]
-takeUniqs _ = []
+    | isUpper f = Just $ UniqueDef n rest
+takeUniqs _ = Nothing
 
 takeDerives :: [String] -> Maybe [String]
 takeDerives ("deriving":rest) = Just rest

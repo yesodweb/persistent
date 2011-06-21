@@ -190,7 +190,7 @@ getCopyTable getter val = do
         , escape tableTmp
         ]
 
-mkCreateTable :: Bool -> RawName -> ([Column], [UniqueDef]) -> Sql
+mkCreateTable :: Bool -> RawName -> ([Column], [UniqueDef']) -> Sql
 mkCreateTable isTemp table (cols, uniqs) = pack $ concat
     [ "CREATE"
     , if isTemp then " TEMP" else ""
@@ -217,7 +217,7 @@ sqlColumn (Column name isNull typ def ref) = concat
         Just (table, _) -> " REFERENCES " ++ escape table
     ]
 
-sqlUnique :: UniqueDef -> String
+sqlUnique :: UniqueDef' -> String
 sqlUnique (cname, cols) = concat
     [ ",CONSTRAINT "
     , escape cname

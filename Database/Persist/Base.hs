@@ -17,7 +17,6 @@ module Database.Persist.Base
     , SqlType (..)
     , PersistField (..)
     , PersistEntity (..)
-    , EntityDef (..)
     , PersistBackend (..)
     , PersistFilter (..)
     , PersistUpdate (..)
@@ -30,6 +29,12 @@ module Database.Persist.Base
     , DeleteCascade (..)
     , deleteCascadeWhere
     , PersistException (..)
+      -- * Definition
+    , EntityDef (..)
+    , ColumnName
+    , ColumnType
+    , ColumnDef (..)
+    , UniqueDef (..)
     ) where
 
 import Data.Time (Day, TimeOfDay, UTCTime)
@@ -413,9 +418,25 @@ selectList a b c d = do
 data EntityDef = EntityDef
     { entityName    :: String
     , entityAttribs :: [String]
-    , entityColumns :: [(String, String, [String])] -- ^ name, type, attribs
-    , entityUniques :: [(String, [String])] -- ^ name, columns
+    , entityColumns :: [ColumnDef]
+    , entityUniques :: [UniqueDef]
     , entityDerives :: [String]
+    }
+    deriving Show
+
+type ColumnName = String
+type ColumnType = String
+
+data ColumnDef = ColumnDef
+    { columnName    :: ColumnName
+    , columnType    :: ColumnType
+    , columnAttribs :: [String]
+    }
+    deriving Show
+
+data UniqueDef = UniqueDef
+    { uniqueName    :: String
+    , uniqueColumns :: [ColumnName]
     }
     deriving Show
 

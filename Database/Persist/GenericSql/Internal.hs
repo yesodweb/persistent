@@ -9,7 +9,7 @@ module Database.Persist.GenericSql.Internal
     , RowPopper
     , mkColumns
     , Column (..)
-    , UniqueDef
+    , UniqueDef'
     , refName
     , tableColumns
     , rawFieldName
@@ -72,12 +72,13 @@ close' conn = do
     close conn
 
 -- | Create the list of columns for the given entity.
-mkColumns :: PersistEntity val => val -> ([Column], [UniqueDef])
+mkColumns :: PersistEntity val => val -> ([Column], [UniqueDef'])
 mkColumns val =
     (cols, uniqs)
   where
-    colNameMap = map ((\(x, _, _) -> x) &&& rawFieldName) $ entityColumns t
+    colNameMap = map (columnName &&& rawFieldName) $ entityColumns t
     uniqs = map (RawName *** map (fromJust . flip lookup colNameMap))
+          $ map (uniqueName &&& uniqueColumns)
           $ entityUniques t -- FIXME don't use fromJust
     cols = zipWith go (tableColumns t) $ toPersistFields $ halfDefined `asTypeOf` val
     t = entityDef val
@@ -116,12 +117,12 @@ getSqlValue (_:x) = getSqlValue x
 getSqlValue [] = Nothing
 
 tableColumns :: EntityDef -> [(RawName, String, [String])]
-tableColumns = map (\a@(_, y, z) -> (rawFieldName a, y, z)) . entityColumns
+tableColumns = map (\a@(ColumnDef _ y z) -> (rawFieldName a, y, z)) . entityColumns
 
-type UniqueDef = (RawName, [RawName])
+type UniqueDef' = (RawName, [RawName])
 
-rawFieldName :: (String, String, [String]) -> RawName
-rawFieldName (n, _, as) = RawName $
+rawFieldName :: ColumnDef -> RawName
+rawFieldName (ColumnDef n _ as) = RawName $
     case getSqlValue as of
         Just x -> x
         Nothing -> n
@@ -215,13 +216,13 @@ dummyFromFilts _ = error "dummyFromFilts"
 getFieldName :: EntityDef -> String -> RawName
 getFieldName t s = rawFieldName $ tableColumn t s
 
-tableColumn :: EntityDef -> String -> (String, String, [String])
-tableColumn _ "id" = ("id", "Int64", [])
+tableColumn :: EntityDef -> String -> ColumnDef
+tableColumn _ "id" = ColumnDef "id" "Int64" []
 tableColumn t s = go $ entityColumns t
   where
     go [] = error $ "Unknown table column: " ++ s
-    go ((x, y, z):rest)
-        | x == s = (x, y, z)
+    go (ColumnDef x y z:rest)
+        | x == s = ColumnDef x y z
         | otherwise = go rest
 
 getFiltsValues :: PersistEntity val => [Filter val] -> [PersistValue]
