@@ -8,6 +8,7 @@ module Database.Persist
     , getByValue
     , checkUnique
     , Update (..)
+    , Order (..)
     ) where
 
 import Database.Persist.Base

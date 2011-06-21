@@ -118,27 +118,6 @@ entityUpdates =
   where
     go (ColumnDef x y as) = map (\a -> (x, y, nullable as, a)) [minBound..maxBound]
 
-orderTypeDec :: EntityDef -> Q Dec
-orderTypeDec t = do
-    ords <- entityOrders t
-    return $ DataInstD [] ''Order [ConT $ mkName $ entityName t]
-            (map (mkOrder $ entityName t) ords)
-            (if null ords then [] else [''Show, ''Read, ''Eq])
-
-entityOrders :: EntityDef -> Q [(String, String, Exp)]
-entityOrders = fmap concat . mapM go . entityColumns
-  where
-    go (ColumnDef x _ ys) = fmap catMaybes $ mapM (go' x) ["Asc", "Desc"]
-    go' x s =
-        case reads s of
-            (y, _):_ -> do
-                z <- lift (y :: PersistOrder)
-                return $ Just (x, s, z)
-            _ -> return Nothing
-
-mkOrder :: String -> (String, String, Exp) -> Con
-mkOrder x (s, ad, _) = NormalC (mkName $ x ++ upperFirst s ++ ad) []
-
 uniqueTypeDec :: EntityDef -> Dec
 uniqueTypeDec t =
     DataInstD [] ''Unique [ConT $ mkName $ entityName t]
@@ -318,8 +297,6 @@ mkEntity t = do
     tpf <- mkToPersistFields [(name, length $ entityColumns t)]
     fpv <- mkFromPersistValues t
     utv <- mkUniqueToValues $ entityUniques t
-    entityOrders' <- entityOrders t
-    otd <- orderTypeDec t
     puk <- mkUniqueKeys t
     tf <- mkToFilter t
                 (map (\(x, _, z, y) ->
@@ -336,18 +313,11 @@ mkEntity t = do
             ConT ''Key `AppT` ConT (mkName $ entityName t)
       , InstanceD [] clazz $
         [ filterTypeDec t
-        , otd
         , uniqueTypeDec t
         , FunD (mkName "entityDef") [Clause [WildP] (NormalB t') []]
         , tpf
         , FunD (mkName "fromPersistValues") fpv
         , mkHalfDefined name $ length $ entityColumns t
-        , mkToFieldName "persistOrderToFieldName"
-                $ map (\(x, y, _) -> (name ++ upperFirst x ++ y, x))
-                entityOrders'
-        , mkToOrder
-                $ map (\(x, y, z) -> (name ++ upperFirst x ++ y, z))
-                entityOrders'
         , mkToFieldName "persistFilterToFieldName"
                 $ (:) (entityName t ++ "IdIn", "id")
                 $ map (\(x, _, _, y) -> (name ++ upperFirst x ++ show y, x))
@@ -544,10 +514,6 @@ instance Lift PersistFilter where
     lift Le = [|Le|]
     lift In = [|In|]
     lift NotIn = [|NotIn|]
-
-instance Lift PersistOrder where
-    lift Asc = [|Asc|]
-    lift Desc = [|Desc|]
 
 instance Lift PersistUpdate where
     lift Assign = [|Assign|]

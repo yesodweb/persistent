@@ -269,7 +269,7 @@ _selectList = do
   ps <- selectList [] [] 1 1
   ps @== [(key26, p26)]
 
-  ps <- selectList [] [PersonAgeDesc] 0 0
+  ps <- selectList [] [Desc personAgeField] 0 0
   ps @== [(key26, p26), (key25, p25)]
   ps <- selectList [PersonAgeEq 26] [] 0 0
   ps @== [(key26, p26)]
@@ -306,12 +306,12 @@ _persistent = do
 
   let eli = Person "Eliezer" 2 $ Just "blue"
   _ <- insert eli
-  pasc <- selectList [] [PersonAgeAsc] 0 0
+  pasc <- selectList [] [Asc personAgeField] 0 0
   (map snd pasc) @== [eli, mic29]
 
   let abe30 = Person "Abe" 30 $ Just "black"
   keyAbe30 <- insert abe30
-  pdesc <- selectList [PersonAgeLt 30] [PersonNameDesc] 0 0
+  pdesc <- selectList [PersonAgeLt 30] [Desc personNameField] 0 0
   (map snd pasc) @== [eli, mic29]
 
   abes <- selectList [PersonNameEq "Abe"] [] 0 0
@@ -425,8 +425,8 @@ _joinGen run = do
             ]
 
     z <- run (selectOneMany EntryAuthorIn entryAuthor)
-            { somOrderOne = [AuthorNameAsc]
-            , somOrderMany = [EntryTitleDesc]
+            { somOrderOne = [Asc authorNameField]
+            , somOrderMany = [Desc entryTitleField]
             }
     liftIO $
         z @?=
@@ -442,8 +442,8 @@ _joinGen run = do
             ]
 
     w <- run (selectOneMany EntryAuthorIn entryAuthor)
-            { somOrderOne = [AuthorNameAsc]
-            , somOrderMany = [EntryTitleDesc]
+            { somOrderOne = [Asc authorNameField]
+            , somOrderMany = [Desc entryTitleField]
             , somIncludeNoMatch = True
             }
     liftIO $

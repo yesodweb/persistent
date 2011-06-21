@@ -22,7 +22,7 @@ module Database.Persist.Base
     , PersistBackend (..)
     , PersistFilter (..)
     , PersistUpdate (..)
-    , PersistOrder (..)
+    , Order (..)
     , SomePersistField (..)
     , selectList
     , insertBy
@@ -275,6 +275,8 @@ data Update v = forall typ. PersistField typ => Update
 
 newtype Field v typ = Field { unField :: ColumnDef }
 
+data Order v = forall typ. Asc (Field v typ) | forall typ. Desc (Field v typ)
+
 -- | A single database entity. For example, if writing a blog application, a
 -- blog entry would be an entry, containing fields such as title and content.
 class Show (Key val) => PersistEntity val where
@@ -283,8 +285,6 @@ class Show (Key val) => PersistEntity val where
     -- filtered on, the type of comparison applied (equals, not equals, etc)
     -- and the argument for the comparison.
     data Filter val
-    -- | How you can sort the results of a 'select'.
-    data Order  val
     -- | Unique keys in existence on this entity.
     data Unique val
 
@@ -296,9 +296,6 @@ class Show (Key val) => PersistEntity val where
     persistFilterToFieldName :: Filter val -> String
     persistFilterToFilter :: Filter val -> PersistFilter
     persistFilterToValue :: Filter val -> Either PersistValue [PersistValue]
-
-    persistOrderToFieldName :: Order val -> String
-    persistOrderToOrder :: Order val -> PersistOrder
 
     persistUniqueToFieldNames :: Unique val -> [String]
     persistUniqueToValues :: Unique val -> [PersistValue]
@@ -446,9 +443,6 @@ data UniqueDef = UniqueDef
     deriving Show
 
 data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le | In | NotIn
-    deriving (Read, Show, Enum, Bounded)
-
-data PersistOrder = Asc | Desc
     deriving (Read, Show, Enum, Bounded)
 
 class PersistEntity a => DeleteCascade a where

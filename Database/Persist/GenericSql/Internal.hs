@@ -238,13 +238,16 @@ dummyFromOrder _ = undefined
 
 orderClause :: PersistEntity val => Bool -> Connection -> Order val -> String
 orderClause includeTable conn o =
-    name ++ case persistOrderToOrder o of
-                                    Asc -> ""
-                                    Desc -> " DESC"
+    name ++ case o of
+                Asc _ -> ""
+                Desc _ -> " DESC"
   where
+    cd = case o of
+                Asc (Field x) -> x
+                Desc (Field x) -> x
     t = entityDef $ dummyFromOrder o
     name =
         (if includeTable
             then (++) (escapeName conn (rawTableName t) ++ ".")
             else id)
-        $ escapeName conn $ getFieldName t $ persistOrderToFieldName o
+        $ escapeName conn $ getFieldName t $ columnName cd
