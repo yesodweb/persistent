@@ -112,23 +112,11 @@ mkFilter x (s, ty, isNull', filt) =
     isNullableFilter Gt = False
     isNullableFilter Ge = False
 
-updateTypeDec :: EntityDef -> Dec
-updateTypeDec t =
-    DataInstD [] ''Update [ConT $ mkName $ entityName t]
-        (map (mkUpdate $ entityName t) tu)
-        (if null tu then [] else [''Show, ''Read, ''Eq])
-  where
-    tu = entityUpdates t
-
 entityUpdates :: EntityDef -> [(String, String, Bool, PersistUpdate)]
 entityUpdates =
     concatMap go . entityColumns
   where
     go (ColumnDef x y as) = map (\a -> (x, y, nullable as, a)) [minBound..maxBound]
-
-mkUpdate :: String -> (String, String, Bool, PersistUpdate) -> Con
-mkUpdate x (s, ty, isBool, pu) =
-    NormalC (mkName $ updateConName x s pu) [(NotStrict, pairToType (ty, isBool))]
 
 orderTypeDec :: EntityDef -> Q Dec
 orderTypeDec t = do
@@ -341,16 +329,13 @@ mkEntity t = do
                 $ map (\(x, _, _, y) ->
                     (name ++ upperFirst x ++ show y, isFilterList y))
                 $ entityFilters t
-    putu <- mkToUpdate "persistUpdateToUpdate"
-                $ map (\(s, _, _, pu) -> (updateConName name s pu, pu))
-                $ entityUpdates t
-    return
+    fields <- fmap concat $ mapM (mkField t) $ entityColumns t
+    return $
       [ dataTypeDec t
       , TySynD (mkName $ entityName t ++ "Id") [] $
             ConT ''Key `AppT` ConT (mkName $ entityName t)
       , InstanceD [] clazz $
         [ filterTypeDec t
-        , updateTypeDec t
         , otd
         , uniqueTypeDec t
         , FunD (mkName "entityDef") [Clause [WildP] (NormalB t') []]
@@ -363,13 +348,6 @@ mkEntity t = do
         , mkToOrder
                 $ map (\(x, y, z) -> (name ++ upperFirst x ++ y, z))
                 entityOrders'
-        , mkToFieldName "persistUpdateToFieldName"
-                $ map (\(s, _, _, pu) -> (updateConName name s pu, s))
-                $ entityUpdates t
-        , mkToValue "persistUpdateToValue"
-                $ map (\(s, _, _, pu) -> updateConName name s pu)
-                $ entityUpdates t
-        , putu
         , mkToFieldName "persistFilterToFieldName"
                 $ (:) (entityName t ++ "IdIn", "id")
                 $ map (\(x, _, _, y) -> (name ++ upperFirst x ++ show y, x))
@@ -379,14 +357,14 @@ mkEntity t = do
         , utv
         , puk
         ] ++ tf
-        ]
+      ] ++ fields
 
 updateConName :: String -> String -> PersistUpdate -> String
 updateConName name s pu = concat
     [ name
     , upperFirst s
     , case pu of
-        Update -> ""
+        Assign -> ""
         _ -> show pu
     ]
 
@@ -572,7 +550,7 @@ instance Lift PersistOrder where
     lift Desc = [|Desc|]
 
 instance Lift PersistUpdate where
-    lift Update = [|Update|]
+    lift Assign = [|Assign|]
     lift Add = [|Add|]
     lift Subtract = [|Subtract|]
     lift Multiply = [|Multiply|]
@@ -588,3 +566,13 @@ instance SinglePiece PersistValue where
         case fromPersistValue x of
             Left e -> error e
             Right y -> y
+
+mkField :: EntityDef -> ColumnDef -> Q [Dec]
+mkField et cd = do
+    bod <- [|Field $(lift cd)|]
+    return
+        [ SigD name $ ConT ''Field `AppT` ConT (mkName $ entityName et) `AppT` ConT (mkName $ columnType cd)
+        , FunD name [Clause [] (NormalB bod) []]
+        ]
+  where
+    name = mkName $ concat [lowerFirst $ entityName et, upperFirst $ columnName cd, "Field"]

@@ -7,6 +7,7 @@ module Database.Persist
     , insertBy
     , getByValue
     , checkUnique
+    , Update (..)
     ) where
 
 import Database.Persist.Base

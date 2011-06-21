@@ -12,6 +12,7 @@ import Test.Framework.Providers.HUnit
 import Test.HUnit hiding (Test)
 
 import Database.Persist.Sqlite
+import Database.Persist.Base (PersistUpdate (Add, Assign))
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
 #endif
@@ -226,13 +227,16 @@ _getBy = do
   p' @== p
   return ()
 
+assign x y = Update x y Assign
+add x y = Update x y Add
+
 _update = do
   let p25 = Person "Michael" 25 Nothing
   key25 <- insert p25
-  update key25 [PersonAge 28, PersonName "Updated"]
+  update key25 [personAgeField `assign` 28, personNameField `assign` "Updated"]
   Just pBlue28 <- get key25
   pBlue28 @== Person "Updated" 28 Nothing
-  update key25 [PersonAgeAdd 2]
+  update key25 [personAgeField `add` 2]
   Just pBlue30 <- get key25
   pBlue30 @== Person "Updated" 30 Nothing
 
@@ -242,7 +246,7 @@ _updateWhere = do
   key1 <- insert p1
   key2 <- insert p2
   updateWhere [PersonNameEq "Michael2"]
-              [PersonAgeAdd 3, PersonName "Updated"]
+              [personAgeField `add` 3, personNameField `assign` "Updated"]
   Just pBlue28 <- get key2
   pBlue28 @== Person "Updated" 28 Nothing
   Just p <- get key1
@@ -284,7 +288,7 @@ _persistent = do
   replace micK $ Person "Michael" 26 Nothing
   Just mic26 <- get micK
   mic26 @/= mic
-  personAge mic26 @== (personAge mic) + 1
+  personAge mic26 @== personAge mic + 1
 
   results <- selectList [PersonNameEq "Michael"] [] 0 0
   results @== [(micK, mic26)]
@@ -292,11 +296,11 @@ _persistent = do
   results <- selectList [PersonAgeLt 28] [] 0 0
   results @== [(micK, mic26)]
 
-  update micK [PersonAge 28]
+  update micK [personAgeField `assign` 28]
   Just p28 <- get micK
   personAge p28 @== 28
 
-  updateWhere [PersonNameEq "Michael"] [PersonAge 29]
+  updateWhere [PersonNameEq "Michael"] [personAgeField `assign` 29]
   Just mic29 <- get micK
   personAge mic29 @== 29
 

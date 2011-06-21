@@ -31,6 +31,8 @@ module Database.Persist.Base
     , DeleteCascade (..)
     , deleteCascadeWhere
     , PersistException (..)
+    , Update (..)
+    , Field (..)
       -- * Definition
     , EntityDef (..)
     , ColumnName
@@ -265,12 +267,17 @@ newtype Key v = Key { unKey :: PersistValue }
     deriving (Show, Read, Eq, PersistField, Ord)
     -- FIXME need to include SinglePiece above, which likely means shuffling some other libraries
 
+data Update v = forall typ. PersistField typ => Update
+    { updateField :: Field v typ
+    , updateValue :: typ
+    , updateUpdate :: PersistUpdate -- FIXME Replace with expr down the road
+    }
+
+newtype Field v typ = Field { unField :: ColumnDef }
+
 -- | A single database entity. For example, if writing a blog application, a
 -- blog entry would be an entry, containing fields such as title and content.
 class Show (Key val) => PersistEntity val where
-    -- | Fields which can be updated using the 'update' and 'updateWhere'
-    -- functions.
-    data Update val
     -- | Filters which are available for 'select', 'updateWhere' and
     -- 'deleteWhere'. Each filter constructor specifies the field being
     -- filtered on, the type of comparison applied (equals, not equals, etc)
@@ -292,10 +299,6 @@ class Show (Key val) => PersistEntity val where
 
     persistOrderToFieldName :: Order val -> String
     persistOrderToOrder :: Order val -> PersistOrder
-
-    persistUpdateToFieldName :: Update val -> String
-    persistUpdateToUpdate :: Update val -> PersistUpdate
-    persistUpdateToValue :: Update val -> PersistValue
 
     persistUniqueToFieldNames :: Unique val -> [String]
     persistUniqueToValues :: Unique val -> [PersistValue]
@@ -429,7 +432,7 @@ data EntityDef = EntityDef
 type ColumnName = String
 type ColumnType = String
 
-data ColumnDef = ColumnDef
+data ColumnDef = ColumnDef -- FIXME rename to FieldDef?
     { columnName    :: ColumnName
     , columnType    :: ColumnType
     , columnAttribs :: [String]
@@ -468,7 +471,7 @@ data PersistException = PersistMarshalException String
     deriving (Show, Typeable)
 instance E.Exception PersistException
 
-data PersistUpdate = Update | Add | Subtract | Multiply | Divide
+data PersistUpdate = Assign | Add | Subtract | Multiply | Divide -- FIXME need something else here
     deriving (Read, Show, Enum, Bounded)
 
 instance PersistField PersistValue where

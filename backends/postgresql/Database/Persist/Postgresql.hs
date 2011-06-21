@@ -7,7 +7,7 @@ module Database.Persist.Postgresql
     , module Database.Persist.GenericSql
     ) where
 
-import Database.Persist
+import Database.Persist hiding (Update)
 import Database.Persist.Base hiding (Add, Update)
 import Database.Persist.GenericSql
 import Database.Persist.GenericSql.Internal

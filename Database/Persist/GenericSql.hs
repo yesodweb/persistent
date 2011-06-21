@@ -256,7 +256,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
     update _ [] = return ()
     update k upds = do
         conn <- SqlPersist ask
-        let go'' n Update = n ++ "=?"
+        let go'' n Assign = n ++ "=?"
             go'' n Add = n ++ '=' : n ++ "+?"
             go'' n Subtract = n ++ '=' : n ++ "-?"
             go'' n Multiply = n ++ '=' : n ++ "*?"
@@ -270,11 +270,11 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
                 , " WHERE id=?"
                 ]
         execute' sql $
-            map persistUpdateToValue upds ++ [unKey k]
+            map updatePersistValue upds ++ [unKey k]
       where
         t = entityDef $ dummyFromKey k
-        go x = ( getFieldName t $ persistUpdateToFieldName x
-               , persistUpdateToUpdate x
+        go x = ( getFieldName t $ updateName x
+               , updateUpdate x
                )
 
     updateWhere _ [] = return ()
@@ -291,18 +291,18 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
                 , intercalate "," $ map (go' conn . go) upds
                 , wher
                 ]
-        let dat = map persistUpdateToValue upds ++ getFiltsValues filts
+        let dat = map updatePersistValue upds ++ getFiltsValues filts
         execute' sql dat
       where
         t = entityDef $ dummyFromFilts filts
-        go'' n Update = n ++ "=?"
+        go'' n Assign = n ++ "=?"
         go'' n Add = n ++ '=' : n ++ "+?"
         go'' n Subtract = n ++ '=' : n ++ "-?"
         go'' n Multiply = n ++ '=' : n ++ "*?"
         go'' n Divide = n ++ '=' : n ++ "/?"
         go' conn (x, pu) = go'' (escapeName conn x) pu
-        go x = ( getFieldName t $ persistUpdateToFieldName x
-               , persistUpdateToUpdate x
+        go x = ( getFieldName t $ updateName x
+               , updateUpdate x
                )
 
     getBy uniq = do
@@ -425,3 +425,9 @@ migrate val = do
     let getter = R.getStmt' conn
     res <- liftIO $ migrateSql conn getter val
     either tell (lift . tell) res
+
+updateName :: Update v -> String
+updateName (Update (Field cd) _ _) = columnName cd
+
+updatePersistValue :: Update v -> PersistValue
+updatePersistValue (Update _ v _) = toPersistValue v
