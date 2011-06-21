@@ -6,6 +6,7 @@
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 -- | This defines the API for performing database actions. There are two levels
 -- to this API: dealing with fields, and dealing with entities. In SQL, a field
@@ -14,6 +15,7 @@
 -- collection of fields.
 module Database.Persist.Base
     ( PersistValue (..)
+    , Key (..)
     , SqlType (..)
     , PersistField (..)
     , PersistEntity (..)
@@ -259,11 +261,13 @@ instance PersistField a => PersistField (Maybe a) where
     sqlType _ = sqlType (error "this is the problem" :: a)
     isNullable _ = True
 
+newtype Key v = Key { unKey :: PersistValue }
+    deriving (Show, Read, Eq, PersistField, Ord)
+    -- FIXME need to include SinglePiece above, which likely means shuffling some other libraries
+
 -- | A single database entity. For example, if writing a blog application, a
 -- blog entry would be an entry, containing fields such as title and content.
 class Show (Key val) => PersistEntity val where
-    -- | The unique identifier associated with this entity. In general, backends also define a type synonym for this, such that \"type MyEntityId = Key MyEntity\".
-    data Key    val
     -- | Fields which can be updated using the 'update' and 'updateWhere'
     -- functions.
     data Update val
@@ -281,8 +285,6 @@ class Show (Key val) => PersistEntity val where
     toPersistFields :: val -> [SomePersistField]
     fromPersistValues :: [PersistValue] -> Either String val
     halfDefined :: val
-    toPersistKey :: PersistValue -> Key val
-    fromPersistKey :: Key val -> PersistValue
 
     persistFilterToFieldName :: Filter val -> String
     persistFilterToFilter :: Filter val -> PersistFilter

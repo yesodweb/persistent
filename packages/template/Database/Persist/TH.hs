@@ -70,12 +70,6 @@ dataTypeDec t =
     mkCol x (ColumnDef n ty as) =
         (mkName $ recName x n, NotStrict, pairToType (ty, nullable as))
 
-keyTypeDec :: String -> Name -> EntityDef -> Dec
-keyTypeDec constr typ t =
-    NewtypeInstD [] ''Key [ConT $ mkName $ entityName t]
-                (RecC (mkName constr) [(mkName $ "un" ++ entityName t ++ "Id", NotStrict, ConT typ)])
-                [''Show, ''Read, ''Eq, ''PersistField, ''SinglePiece, ''Ord]
-
 filterTypeDec :: EntityDef -> Dec
 filterTypeDec t =
     DataInstD [] ''Filter [ConT $ mkName $ entityName t]
@@ -355,8 +349,7 @@ mkEntity t = do
       , TySynD (mkName $ entityName t ++ "Id") [] $
             ConT ''Key `AppT` ConT (mkName $ entityName t)
       , InstanceD [] clazz $
-        [ keyTypeDec (entityName t ++ "Id") ''PersistValue t
-        , filterTypeDec t
+        [ filterTypeDec t
         , updateTypeDec t
         , otd
         , uniqueTypeDec t
@@ -364,8 +357,6 @@ mkEntity t = do
         , tpf
         , FunD (mkName "fromPersistValues") fpv
         , mkHalfDefined name $ length $ entityColumns t
-        , FunD (mkName "toPersistKey") [Clause [] (NormalB $ ConE $ mkName $ entityName t ++ "Id") []]
-        , FunD (mkName "fromPersistKey") [Clause [] (NormalB $ VarE $ mkName $ "un" ++ entityName t ++ "Id") []]
         , mkToFieldName "persistOrderToFieldName"
                 $ map (\(x, y, _) -> (name ++ upperFirst x ++ y, x))
                 entityOrders'

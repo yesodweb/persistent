@@ -74,7 +74,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
                     withStmt' sql2 [] $ \pop -> do
                         Just [i] <- pop
                         return i
-        return $ toPersistKey i
+        return $ Key i
       where
         fst3 (x, _, _) = x
         t = entityDef val
@@ -91,7 +91,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
                 , " WHERE id=?"
                 ]
         execute' sql $ map toPersistValue (toPersistFields val)
-                       ++ [fromPersistKey k]
+                       ++ [unKey k]
       where
         go conn x = escapeName conn x ++ "=?"
         fst3 (x, _, _) = x
@@ -108,7 +108,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
                 , escapeName conn $ rawTableName t
                 , " WHERE id=?"
                 ]
-        withStmt' sql [fromPersistKey k] $ \pop -> do
+        withStmt' sql [unKey k] $ \pop -> do
             res <- pop
             case res of
                 Nothing -> return Nothing
@@ -156,7 +156,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
         fromPersistValues' (x:xs) = do
             case fromPersistValues xs of
                 Left e -> Left e
-                Right xs' -> Right (toPersistKey x, xs')
+                Right xs' -> Right (Key x, xs')
         fromPersistValues' _ = Left "error in fromPersistValues'"
         wher conn = if null filts
                     then ""
@@ -198,7 +198,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
             case res of
                 Nothing -> return $ Continue k
                 Just [i] -> do
-                    step <- runIteratee $ k $ Chunks [toPersistKey i]
+                    step <- runIteratee $ k $ Chunks [Key i]
                     loop step pop
                 Just y -> return $ Error $ toException $ PersistMarshalException
                         $ "Unexpected in selectKeys: " ++ show y
@@ -216,7 +216,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
 
     delete k = do
         conn <- SqlPersist ask
-        execute' (sql conn) [fromPersistKey k]
+        execute' (sql conn) [unKey k]
       where
         t = entityDef $ dummyFromKey k
         sql conn = pack $ concat
@@ -270,7 +270,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
                 , " WHERE id=?"
                 ]
         execute' sql $
-            map persistUpdateToValue upds ++ [fromPersistKey k]
+            map persistUpdateToValue upds ++ [unKey k]
       where
         t = entityDef $ dummyFromKey k
         go x = ( getFieldName t $ persistUpdateToFieldName x
@@ -324,7 +324,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
                 Just (k:vals) ->
                     case fromPersistValues vals of
                         Left s -> error s
-                        Right x -> return $ Just (toPersistKey k, x)
+                        Right x -> return $ Just (Key k, x)
                 Just _ -> error "Database.Persist.GenericSql: Bad list in getBy"
       where
         sqlClause conn =

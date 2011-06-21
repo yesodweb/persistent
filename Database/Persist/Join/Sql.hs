@@ -24,7 +24,7 @@ fromPersistValuesId [] = Left "fromPersistValuesId: No values provided"
 fromPersistValuesId (i:rest) =
     case fromPersistValues rest of
         Left e -> Left e
-        Right x -> Right (toPersistKey i, x)
+        Right x -> Right (Key i, x)
 
 class RunJoin a where
     runJoin :: MonadControlIO m => a -> SqlPersist m (J.Result a)
