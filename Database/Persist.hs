@@ -9,6 +9,7 @@ module Database.Persist
     , checkUnique
     , Update (..)
     , Order (..)
+    , Filter (..)
     ) where
 
 import Database.Persist.Base

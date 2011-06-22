@@ -74,7 +74,7 @@ selectOneMany' (SelectOneMany oneF oneO manyF manyO eq _getKey isOuter) = do
         , ".id = "
         , escapeName conn $ rawTableName $ entityDef many
         , "."
-        , escapeName conn $ RawName $ persistFilterToFieldName $ eq undefined
+        , escapeName conn $ RawName $ filterName $ eq undefined
         , if null filts
             then ""
             else " WHERE " ++ intercalate " AND " filts
@@ -96,3 +96,6 @@ colsPlusId conn e =
     "id" : (map (\(x, _, _) -> escapeName conn x) cols)
   where
     cols = tableColumns $ entityDef e
+
+filterName :: Filter v -> String
+filterName (Filter (Field cd) _ _) = columnName cd

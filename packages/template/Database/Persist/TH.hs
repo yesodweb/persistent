@@ -70,47 +70,11 @@ dataTypeDec t =
     mkCol x (ColumnDef n ty as) =
         (mkName $ recName x n, NotStrict, pairToType (ty, nullable as))
 
-filterTypeDec :: EntityDef -> Dec
-filterTypeDec t =
-    DataInstD [] ''Filter [ConT $ mkName $ entityName t]
-            (NormalC (mkName $ entityName t ++ "IdIn") [(NotStrict, listOfIds)]
-            : map (mkFilter $ entityName t) filts)
-            (if null filts then [] else [''Show, ''Read, ''Eq])
-  where
-    listOfIds = ListT `AppT` (ConT ''Key `AppT` ConT (mkName $ entityName t))
-    filts = entityFilters t
-
-entityFilters :: EntityDef -> [(String, String, Bool, PersistFilter)]
-entityFilters =
-    concatMap go . entityColumns
-  where
-    go (ColumnDef x y as) = map (\a -> (x, y, nullable as, a)) [minBound..maxBound]
-
 readMay :: Read a => String -> Maybe a
 readMay s =
     case reads s of
         (x, _):_ -> Just x
         [] -> Nothing
-
-isFilterList :: PersistFilter -> Bool
-isFilterList In = True
-isFilterList NotIn = True
-isFilterList _ = False
-
-mkFilter :: String -> (String, String, Bool, PersistFilter) -> Con
-mkFilter x (s, ty, isNull', filt) =
-    NormalC (mkName $ x ++ upperFirst s ++ show filt) [(NotStrict, ty'')]
-  where
-    ty' = pairToType (ty, isNull' && isNullableFilter filt)
-    ty'' = if isFilterList filt then ListT `AppT` ty' else ty'
-    isNullableFilter Eq = True
-    isNullableFilter Ne = True
-    isNullableFilter In = True
-    isNullableFilter NotIn = True
-    isNullableFilter Lt = False
-    isNullableFilter Le = False
-    isNullableFilter Gt = False
-    isNullableFilter Ge = False
 
 entityUpdates :: EntityDef -> [(String, String, Bool, PersistUpdate)]
 entityUpdates =
@@ -206,34 +170,6 @@ mkToOrder pairs =
     go (constr, val) =
         Clause [RecP (mkName constr) []] (NormalB val) []
 
-mkToFilter :: EntityDef -> [(String, PersistFilter, Bool)] -> Q [Dec]
-mkToFilter e pairs = do
-    c1 <- mapM go pairs
-    idIn' <- idIn
-    let _FIXMEc2 = concatMap go' pairs
-    return
-        [ FunD (mkName "persistFilterToFilter") $ idIn' : c1
-        ]
-  where
-    idIn = do
-        in_ <- [|In|]
-        return $ Clause
-            [RecP (mkName $ entityName e ++ "IdIn") []]
-            (NormalB in_)
-            []
-    go (constr, pf, _) = do
-        pf' <- lift pf
-        return $ Clause [RecP (mkName constr) []] (NormalB pf') []
-    go' (constr, _, False) =
-        [Clause [RecP (mkName constr) []]
-            (NormalB $ ConE $ mkName "False") []]
-    go' (constr, _, True) =
-        [ Clause [ConP (mkName constr) [ConP (mkName "Nothing") []]]
-            (NormalB $ ConE $ mkName "True") []
-        , Clause [ConP (mkName constr) [WildP]]
-            (NormalB $ ConE $ mkName "False") []
-        ]
-
 mkToValue :: String -> [String] -> Dec
 mkToValue func = FunD (mkName func) . degen . map go
   where
@@ -242,27 +178,6 @@ mkToValue func = FunD (mkName func) . degen . map go
          in Clause [ConP (mkName constr) [VarP x]]
                    (NormalB $ VarE (mkName "toPersistValue") `AppE` VarE x)
                    []
-
-mkToFiltValue :: EntityDef -> String -> [(String, Bool)] -> Q Dec
-mkToFiltValue e func pairs = do
-    left <- [|Left . toPersistValue|]
-    right <- [|Right . map toPersistValue|]
-    clauses <- mapM (go left right) pairs
-    inId' <- inId right
-    return $ FunD (mkName func) $ (inId' : clauses)
-  where
-    inId right = do
-        x <- newName "x"
-        return $ Clause
-            [ConP (mkName $ entityName e ++ "IdIn") [VarP x]]
-            (NormalB $ right `AppE` VarE x)
-            []
-    go left right (constr, isList) = do
-        x <- newName "x"
-        return
-            $ Clause [ConP (mkName constr) [VarP x]]
-                (NormalB $ (if isList then right else left) `AppE` VarE x)
-                []
 
 mkHalfDefined :: String -> Int -> Dec
 mkHalfDefined constr count' =
@@ -298,35 +213,21 @@ mkEntity t = do
     fpv <- mkFromPersistValues t
     utv <- mkUniqueToValues $ entityUniques t
     puk <- mkUniqueKeys t
-    tf <- mkToFilter t
-                (map (\(x, _, z, y) ->
-                    (name ++ upperFirst x ++ show y, y, z))
-                $ entityFilters t)
-    ftv <- mkToFiltValue t "persistFilterToValue"
-                $ map (\(x, _, _, y) ->
-                    (name ++ upperFirst x ++ show y, isFilterList y))
-                $ entityFilters t
     fields <- fmap concat $ mapM (mkField t) $ entityColumns t
     return $
       [ dataTypeDec t
       , TySynD (mkName $ entityName t ++ "Id") [] $
             ConT ''Key `AppT` ConT (mkName $ entityName t)
       , InstanceD [] clazz $
-        [ filterTypeDec t
-        , uniqueTypeDec t
+        [ uniqueTypeDec t
         , FunD (mkName "entityDef") [Clause [WildP] (NormalB t') []]
         , tpf
         , FunD (mkName "fromPersistValues") fpv
         , mkHalfDefined name $ length $ entityColumns t
-        , mkToFieldName "persistFilterToFieldName"
-                $ (:) (entityName t ++ "IdIn", "id")
-                $ map (\(x, _, _, y) -> (name ++ upperFirst x ++ show y, x))
-                $ entityFilters t
-        , ftv
         , mkToFieldNames $ entityUniques t
         , utv
         , puk
-        ] ++ tf
+        ]
       ] ++ fields
 
 updateConName :: String -> String -> PersistUpdate -> String
@@ -537,8 +438,12 @@ mkField :: EntityDef -> ColumnDef -> Q [Dec]
 mkField et cd = do
     bod <- [|Field $(lift cd)|]
     return
-        [ SigD name $ ConT ''Field `AppT` ConT (mkName $ entityName et) `AppT` ConT (mkName $ columnType cd)
+        [ SigD name $ ConT ''Field `AppT` ConT (mkName $ entityName et) `AppT` typ
         , FunD name [Clause [] (NormalB bod) []]
         ]
   where
     name = mkName $ concat [lowerFirst $ entityName et, upperFirst $ columnName cd, "Field"]
+    base = ConT (mkName $ columnType cd)
+    typ = if nullable $ columnAttribs cd
+            then ConT ''Maybe `AppT` base
+            else base

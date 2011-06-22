@@ -140,7 +140,7 @@ filterClause :: PersistEntity val
              => Bool -- ^ include table name?
              -> Connection -> Filter val -> String
 filterClause includeTable conn f =
-    case (isNull, persistFilterToFilter f, varCount) of
+    case (isNull, filterFilter f, varCount) of
         (True, Eq, _) -> name ++ " IS NULL"
         (True, Ne, _) -> name ++ " IS NOT NULL"
         (False, Ne, _) -> concat
@@ -182,23 +182,23 @@ filterClause includeTable conn f =
             , qmarks
             , ")"
             ]
-        _ -> name ++ showSqlFilter (persistFilterToFilter f) ++ "?"
+        _ -> name ++ showSqlFilter (filterFilter f) ++ "?"
   where
     isNull = any (== PersistNull)
            $ either return id
-           $ persistFilterToValue f
+           $ filterPersistValue f
     t = entityDef $ dummyFromFilts [f]
     name =
         (if includeTable
             then (++) (escapeName conn (rawTableName t) ++ ".")
             else id)
-        $ escapeName conn $ getFieldName t $ persistFilterToFieldName f
-    qmarks = case persistFilterToValue f of
+        $ escapeName conn $ getFieldName t $ filterName f
+    qmarks = case filterPersistValue f of
                 Left _ -> "?"
                 Right x ->
                     let x' = filter (/= PersistNull) x
                      in '(' : intercalate "," (map (const "?") x') ++ ")"
-    varCount = case persistFilterToValue f of
+    varCount = case filterPersistValue f of
                 Left _ -> 1
                 Right x -> length x
     showSqlFilter Eq = "="
@@ -227,7 +227,7 @@ tableColumn t s = go $ entityColumns t
 
 getFiltsValues :: PersistEntity val => [Filter val] -> [PersistValue]
 getFiltsValues =
-    concatMap $ go . persistFilterToValue
+    concatMap $ go . filterPersistValue
   where
     go (Left PersistNull) = []
     go (Left x) = [x]
@@ -251,3 +251,9 @@ orderClause includeTable conn o =
             then (++) (escapeName conn (rawTableName t) ++ ".")
             else id)
         $ escapeName conn $ getFieldName t $ columnName cd
+
+filterPersistValue :: Filter v -> Either PersistValue [PersistValue]
+filterPersistValue (Filter _ v _) = either (Left . toPersistValue) (Right . map toPersistValue) v
+
+filterName :: Filter v -> String
+filterName (Filter (Field cd) _ _) = columnName cd

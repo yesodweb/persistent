@@ -33,6 +33,7 @@ module Database.Persist.Base
     , PersistException (..)
     , Update (..)
     , Field (..)
+    , Filter (..)
       -- * Definition
     , EntityDef (..)
     , ColumnName
@@ -277,14 +278,19 @@ newtype Field v typ = Field { unField :: ColumnDef }
 
 data Order v = forall typ. Asc (Field v typ) | forall typ. Desc (Field v typ)
 
+-- | Filters which are available for 'select', 'updateWhere' and
+-- 'deleteWhere'. Each filter constructor specifies the field being
+-- filtered on, the type of comparison applied (equals, not equals, etc)
+-- and the argument for the comparison.
+data Filter v = forall typ. PersistField typ => Filter
+    { filterField :: Field v typ
+    , filterValue :: Either typ [typ] -- FIXME
+    , filterFilter :: PersistFilter -- FIXME
+    }
+
 -- | A single database entity. For example, if writing a blog application, a
 -- blog entry would be an entry, containing fields such as title and content.
 class Show (Key val) => PersistEntity val where
-    -- | Filters which are available for 'select', 'updateWhere' and
-    -- 'deleteWhere'. Each filter constructor specifies the field being
-    -- filtered on, the type of comparison applied (equals, not equals, etc)
-    -- and the argument for the comparison.
-    data Filter val
     -- | Unique keys in existence on this entity.
     data Unique val
 
@@ -292,10 +298,6 @@ class Show (Key val) => PersistEntity val where
     toPersistFields :: val -> [SomePersistField]
     fromPersistValues :: [PersistValue] -> Either String val
     halfDefined :: val
-
-    persistFilterToFieldName :: Filter val -> String
-    persistFilterToFilter :: Filter val -> PersistFilter
-    persistFilterToValue :: Filter val -> Either PersistValue [PersistValue]
 
     persistUniqueToFieldNames :: Unique val -> [String]
     persistUniqueToValues :: Unique val -> [PersistValue]
@@ -429,7 +431,7 @@ data EntityDef = EntityDef
 type ColumnName = String
 type ColumnType = String
 
-data ColumnDef = ColumnDef -- FIXME rename to FieldDef?
+data ColumnDef = ColumnDef -- FIXME rename to FieldDef? Also, do we need a columnHaskellName and columnDBName?
     { columnName    :: ColumnName
     , columnType    :: ColumnType
     , columnAttribs :: [String]
