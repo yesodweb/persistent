@@ -10,6 +10,25 @@ module Database.Persist
     , Update (..)
     , Order (..)
     , Filter (..)
+    , (=.), (+.)
+    , (==.), (/=.), (<.), (>.), (<=.), (>=.)
+    , (<-.), (/<-.)
     ) where
 
 import Database.Persist.Base
+
+infixr 3 =., +.
+f =. a = Update f a Assign
+f +. a = Update f a Add
+
+infix 4 ==., <., <=., >., >=., /=.
+f ==. a = Filter f (Left a) Eq
+f /=. a = Filter f (Left a) Ne
+f <. a = Filter f (Left a) Lt
+f <=. a = Filter f (Left a) Le
+f >. a = Filter f (Left a) Gt
+f >=. a = Filter f (Left a) Ge
+
+infix 4 <-., /<-.
+f <-. a = Filter f (Right a) In
+f /<-. a = Filter f (Right a) NotIn
