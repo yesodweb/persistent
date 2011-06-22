@@ -243,8 +243,8 @@ orderClause includeTable conn o =
                 Desc _ -> " DESC"
   where
     cd = case o of
-                Asc (Field x) -> x
-                Desc (Field x) -> x
+                Asc x -> persistColumnDef x
+                Desc x -> persistColumnDef x
     t = entityDef $ dummyFromOrder o
     name =
         (if includeTable
@@ -255,5 +255,5 @@ orderClause includeTable conn o =
 filterPersistValue :: Filter v -> Either PersistValue [PersistValue]
 filterPersistValue (Filter _ v _) = either (Left . toPersistValue) (Right . map toPersistValue) v
 
-filterName :: Filter v -> String
-filterName (Filter (Field cd) _ _) = columnName cd
+filterName :: PersistEntity v => Filter v -> String
+filterName (Filter f _ _) = columnName $ persistColumnDef f

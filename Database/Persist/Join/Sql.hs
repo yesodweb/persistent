@@ -97,5 +97,5 @@ colsPlusId conn e =
   where
     cols = tableColumns $ entityDef e
 
-filterName :: Filter v -> String
-filterName (Filter (Field cd) _ _) = columnName cd
+filterName :: PersistEntity v => Filter v -> String
+filterName (Filter f _ _) = columnName $ persistColumnDef f

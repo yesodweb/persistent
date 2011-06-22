@@ -64,7 +64,7 @@ executable         runtests
         Buildable: False
     hs-source-dirs: ., packages/template, backends/sqlite, backends/postgresql
     main-is:       runtests.hs
-    ghc-options:   -Wall
+    ghc-options:   -Wall -ddump-splices
     extra-libraries: sqlite3
 
 source-repository head

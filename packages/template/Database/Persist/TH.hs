@@ -213,7 +213,7 @@ mkEntity t = do
     fpv <- mkFromPersistValues t
     utv <- mkUniqueToValues $ entityUniques t
     puk <- mkUniqueKeys t
-    fields <- fmap concat $ mapM (mkField t) $ entityColumns t
+    fields <- mapM (mkField t) $ ColumnDef "id" (entityName t ++ "Id") [] : entityColumns t
     return $
       [ dataTypeDec t
       , TySynD (mkName $ entityName t ++ "Id") [] $
@@ -227,8 +227,17 @@ mkEntity t = do
         , mkToFieldNames $ entityUniques t
         , utv
         , puk
+        , DataInstD
+            []
+            ''Field
+            [ ConT $ mkName $ entityName t
+            , VarT $ mkName "typ"
+            ]
+            (map fst fields)
+            []
+        , FunD (mkName "persistColumnDef") (map snd fields)
         ]
-      ] ++ fields
+      ]
 
 updateConName :: String -> String -> PersistUpdate -> String
 updateConName name s pu = concat
@@ -434,15 +443,27 @@ instance SinglePiece PersistValue where
             Left e -> error e
             Right y -> y
 
-mkField :: EntityDef -> ColumnDef -> Q [Dec]
+mkField :: EntityDef -> ColumnDef -> Q (Con, Clause)
 mkField et cd = do
+    let con = ForallC
+                []
+                [EqualP (VarT $ mkName "typ") typ]
+                $ NormalC name []
+    bod <- lift cd
+    let cla = Clause
+                [ConP name []]
+                (NormalB bod)
+                []
+    return (con, cla)
+    {-
     bod <- [|Field $(lift cd)|]
     return
         [ SigD name $ ConT ''Field `AppT` ConT (mkName $ entityName et) `AppT` typ
         , FunD name [Clause [] (NormalB bod) []]
         ]
+    -}
   where
-    name = mkName $ concat [lowerFirst $ entityName et, upperFirst $ columnName cd, "Field"]
+    name = mkName $ concat [entityName et, upperFirst $ columnName cd]
     base = ConT (mkName $ columnType cd)
     typ = if nullable $ columnAttribs cd
             then ConT ''Maybe `AppT` base

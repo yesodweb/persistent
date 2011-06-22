@@ -426,8 +426,8 @@ migrate val = do
     res <- liftIO $ migrateSql conn getter val
     either tell (lift . tell) res
 
-updateName :: Update v -> String
-updateName (Update (Field cd) _ _) = columnName cd
+updateName :: PersistEntity v => Update v -> String
+updateName (Update f _ _) = columnName $ persistColumnDef f
 
 updatePersistValue :: Update v -> PersistValue
 updatePersistValue (Update _ v _) = toPersistValue v

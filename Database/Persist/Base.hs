@@ -32,7 +32,6 @@ module Database.Persist.Base
     , deleteCascadeWhere
     , PersistException (..)
     , Update (..)
-    , Field (..)
     , Filter (..)
       -- * Definition
     , EntityDef (..)
@@ -274,8 +273,6 @@ data Update v = forall typ. PersistField typ => Update
     , updateUpdate :: PersistUpdate -- FIXME Replace with expr down the road
     }
 
-newtype Field v typ = Field { unField :: ColumnDef }
-
 data Order v = forall typ. Asc (Field v typ) | forall typ. Desc (Field v typ)
 
 -- | Filters which are available for 'select', 'updateWhere' and
@@ -291,6 +288,10 @@ data Filter v = forall typ. PersistField typ => Filter
 -- | A single database entity. For example, if writing a blog application, a
 -- blog entry would be an entry, containing fields such as title and content.
 class Show (Key val) => PersistEntity val where
+    -- | Parameters: val and datatype of the field
+    data Field val :: * -> *
+    persistColumnDef :: Field val typ -> ColumnDef
+
     -- | Unique keys in existence on this entity.
     data Unique val
 

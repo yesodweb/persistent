@@ -5,6 +5,7 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE GADTs #-}
 
 import Test.Framework (defaultMain, testGroup, Test)
 import Test.Framework.Providers.HUnit
@@ -12,7 +13,7 @@ import Test.Framework.Providers.HUnit
 import Test.HUnit hiding (Test)
 
 import Database.Persist.Sqlite
-import Database.Persist.Base (PersistUpdate (Add, Assign), PersistFilter (..), Field (Field), ColumnDef (ColumnDef))
+import Database.Persist.Base (PersistUpdate (Add, Assign), PersistFilter (..), ColumnDef (ColumnDef))
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
 #endif
@@ -160,10 +161,10 @@ _deleteWhere = do
   let p91 = Person "Michael4" 91 Nothing
   key91 <- insert $ p91
 
-  ps90 <- selectList [Filter personAgeField (Left 90) Eq] [] 0 0
+  ps90 <- selectList [Filter PersonAge (Left 90) Eq] [] 0 0
   assertNotEmpty ps90
-  deleteWhere [Filter personAgeField (Left 90) Eq]
-  ps90 <- selectList [Filter personAgeField (Left 90) Eq] [] 0 0
+  deleteWhere [Filter PersonAge (Left 90) Eq]
+  ps90 <- selectList [Filter PersonAge (Left 90) Eq] [] 0 0
   assertEmpty ps90
   Nothing <- get key2
 
@@ -175,11 +176,11 @@ _deleteBy = do
   let p3 = Person "Michael3" 27 Nothing
   key3 <- insert $ p3
 
-  ps2 <- selectList [Filter personNameField (Left "Michael2") Eq] [] 0 0
+  ps2 <- selectList [Filter PersonName (Left "Michael2") Eq] [] 0 0
   assertNotEmpty ps2
 
   deleteBy $ PersonNameKey "Michael2"
-  ps2 <- selectList [Filter personNameField (Left "Michael2") Eq] [] 0 0
+  ps2 <- selectList [Filter PersonName (Left "Michael2") Eq] [] 0 0
   assertEmpty ps2
 
   Just p32 <- get key3
@@ -190,10 +191,10 @@ _delete = do
   let p3 = Person "Michael3" 27 Nothing
   key3 <- insert $ p3
 
-  pm2 <- selectList [Filter personNameField (Left "Michael2") Eq] [] 0 0
+  pm2 <- selectList [Filter PersonName (Left "Michael2") Eq] [] 0 0
   assertNotEmpty pm2
   delete key2
-  pm2 <- selectList [Filter personNameField (Left "Michael2") Eq] [] 0 0
+  pm2 <- selectList [Filter PersonName (Left "Michael2") Eq] [] 0 0
   assertEmpty pm2
 
   Just p <- get key3
@@ -233,10 +234,10 @@ add x y = Update x y Add
 _update = do
   let p25 = Person "Michael" 25 Nothing
   key25 <- insert p25
-  update key25 [personAgeField `assign` 28, personNameField `assign` "Updated"]
+  update key25 [PersonAge `assign` 28, PersonName `assign` "Updated"]
   Just pBlue28 <- get key25
   pBlue28 @== Person "Updated" 28 Nothing
-  update key25 [personAgeField `add` 2]
+  update key25 [PersonAge `add` 2]
   Just pBlue30 <- get key25
   pBlue30 @== Person "Updated" 30 Nothing
 
@@ -245,8 +246,8 @@ _updateWhere = do
   let p2 = Person "Michael2" 25 Nothing
   key1 <- insert p1
   key2 <- insert p2
-  updateWhere [Filter personNameField (Left "Michael2") Eq]
-              [personAgeField `add` 3, personNameField `assign` "Updated"]
+  updateWhere [Filter PersonName (Left "Michael2") Eq]
+              [PersonAge `add` 3, PersonName `assign` "Updated"]
   Just pBlue28 <- get key2
   pBlue28 @== Person "Updated" 28 Nothing
   Just p <- get key1
@@ -269,9 +270,9 @@ _selectList = do
   ps <- selectList [] [] 1 1
   ps @== [(key26, p26)]
 
-  ps <- selectList [] [Desc personAgeField] 0 0
+  ps <- selectList [] [Desc PersonAge] 0 0
   ps @== [(key26, p26), (key25, p25)]
-  ps <- selectList [Filter personAgeField (Left 26) Eq] [] 0 0
+  ps <- selectList [Filter PersonAge (Left 26) Eq] [] 0 0
   ps @== [(key26, p26)]
 
 -- general tests transferred from already exising test file
@@ -290,43 +291,43 @@ _persistent = do
   mic26 @/= mic
   personAge mic26 @== personAge mic + 1
 
-  results <- selectList [Filter personNameField (Left "Michael") Eq] [] 0 0
+  results <- selectList [Filter PersonName (Left "Michael") Eq] [] 0 0
   results @== [(micK, mic26)]
 
-  results <- selectList [Filter personAgeField (Left 28) Lt] [] 0 0
+  results <- selectList [Filter PersonAge (Left 28) Lt] [] 0 0
   results @== [(micK, mic26)]
 
-  update micK [personAgeField `assign` 28]
+  update micK [PersonAge `assign` 28]
   Just p28 <- get micK
   personAge p28 @== 28
 
-  updateWhere [Filter personNameField (Left "Michael") Eq] [personAgeField `assign` 29]
+  updateWhere [Filter PersonName (Left "Michael") Eq] [PersonAge `assign` 29]
   Just mic29 <- get micK
   personAge mic29 @== 29
 
   let eli = Person "Eliezer" 2 $ Just "blue"
   _ <- insert eli
-  pasc <- selectList [] [Asc personAgeField] 0 0
+  pasc <- selectList [] [Asc PersonAge] 0 0
   (map snd pasc) @== [eli, mic29]
 
   let abe30 = Person "Abe" 30 $ Just "black"
   keyAbe30 <- insert abe30
-  pdesc <- selectList [Filter personAgeField (Left 30) Lt] [Desc personNameField] 0 0
+  pdesc <- selectList [Filter PersonAge (Left 30) Lt] [Desc PersonName] 0 0
   (map snd pasc) @== [eli, mic29]
 
-  abes <- selectList [Filter personNameField (Left "Abe") Eq] [] 0 0
+  abes <- selectList [Filter PersonName (Left "Abe") Eq] [] 0 0
   (map snd abes) @== [abe30]
 
   Just (k,p) <- getBy $ PersonNameKey "Michael"
   p @== mic29
 
-  ps <- selectList [Filter personColorField (Left $ Just "blue") Eq] [] 0 0
+  ps <- selectList [Filter PersonColor (Left $ Just "blue") Eq] [] 0 0
   map snd ps @== [eli]
 
-  ps <- selectList [Filter personColorField (Left Nothing) Eq] [] 0 0
+  ps <- selectList [Filter PersonColor (Left Nothing) Eq] [] 0 0
   map snd ps @== [mic29]
 
-  ps <- selectList [Filter personColorField (Left Nothing) Ne] [] 0 0
+  ps <- selectList [Filter PersonColor (Left Nothing) Ne] [] 0 0
   map snd ps @== [eli, abe30]
 
   delete micK
@@ -382,8 +383,7 @@ _idIn = do
     pid1 <- insert p1
     _pid2 <- insert p2
     pid3 <- insert p3
-    let personIdField = Field $ ColumnDef "id" "PersonId" [] -- FIXME
-    x <- selectList [Filter personIdField (Right [pid1, pid3]) In] [] 0 0
+    x <- selectList [Filter PersonId (Right [pid1, pid3]) In] [] 0 0
     liftIO $ x @?= [(pid1, p1), (pid3, p3)]
 
 _joinNonSql = _joinGen Database.Persist.Join.runJoin
@@ -399,7 +399,7 @@ _joinGen run = do
     b2 <- insert $ Entry b "b2"
     c <- insert $ Author "c"
 
-    x <- run $ selectOneMany (\x -> Filter entryAuthorField (Right x) In) entryAuthor
+    x <- run $ selectOneMany (\x -> Filter EntryAuthor (Right x) In) entryAuthor
     liftIO $
         x @?=
             [ ((a, Author "a"),
@@ -413,8 +413,8 @@ _joinGen run = do
                 ])
             ]
 
-    y <- run $ (selectOneMany (\x -> Filter entryAuthorField (Right x) In) entryAuthor)
-            { somFilterOne = [Filter authorNameField (Left "a") Eq]
+    y <- run $ (selectOneMany (\x -> Filter EntryAuthor (Right x) In) entryAuthor)
+            { somFilterOne = [Filter AuthorName (Left "a") Eq]
             }
     liftIO $
         y @?=
@@ -425,9 +425,9 @@ _joinGen run = do
                 ])
             ]
 
-    z <- run (selectOneMany (\x -> Filter entryAuthorField (Right x) In) entryAuthor)
-            { somOrderOne = [Asc authorNameField]
-            , somOrderMany = [Desc entryTitleField]
+    z <- run (selectOneMany (\x -> Filter EntryAuthor (Right x) In) entryAuthor)
+            { somOrderOne = [Asc AuthorName]
+            , somOrderMany = [Desc EntryTitle]
             }
     liftIO $
         z @?=
@@ -442,9 +442,9 @@ _joinGen run = do
                 ])
             ]
 
-    w <- run (selectOneMany (\x -> Filter entryAuthorField (Right x) In) entryAuthor)
-            { somOrderOne = [Asc authorNameField]
-            , somOrderMany = [Desc entryTitleField]
+    w <- run (selectOneMany (\x -> Filter EntryAuthor (Right x) In) entryAuthor)
+            { somOrderOne = [Asc AuthorName]
+            , somOrderMany = [Desc EntryTitle]
             , somIncludeNoMatch = True
             }
     liftIO $
