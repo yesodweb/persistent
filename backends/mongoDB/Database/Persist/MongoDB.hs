@@ -1,4 +1,8 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE PackageImports, RankNTypes #-}
 -- | A redis backend for persistent.
 module Database.Persist.MongoDB
@@ -15,6 +19,7 @@ import Database.Persist.Base
 import Control.Monad.Trans.Reader
 import qualified Control.Monad.IO.Class as Trans
 import qualified Database.MongoDB as DB
+import Database.MongoDB.Query (Action, Failure)
 import Control.Applicative (Applicative)
 import Control.Exception (toException)
 import Data.UString (u)
@@ -26,38 +31,57 @@ import Data.Maybe (mapMaybe, fromJust)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as E
 import qualified Data.Serialize as S
-import Control.Monad (MonadPlus)
+import Control.Exception (Exception, throwIO)
+import Data.Typeable (Typeable)
+import Control.Monad.Context (Context (..))
+import Control.Monad.Throw (Throw (..))
+import Prelude hiding (catch)
 
-{-
-import Debug.Trace
-debug :: (Show a) => a -> a
-debug a = trace ("DEBUG: " ++ show a) a
--}
+newtype MongoDBReader m a = MongoDBReader { unMongoDBReader :: ReaderT DB.Database (Action m) a }
+    deriving (Monad, Trans.MonadIO, Functor, Applicative)
 
-newtype MongoDBReader t m a = MongoDBReader (ReaderT ((DB.ConnPool t), HostName) m a)
-    deriving (Monad, Trans.MonadIO, Functor, Applicative, MonadPlus)
+instance Monad m => Context DB.Database (MongoDBReader m) where
+    context = MongoDBReader ask
+    push f (MongoDBReader x) = MongoDBReader $ local f x
 
-withMongoDBConn :: (Network.Abstract.NetworkIO m) => t -> HostName -> ((DB.ConnPool DB.Host, t) -> m b) -> m b
+instance Monad m => Context DB.MasterOrSlaveOk (MongoDBReader m) where
+    context = MongoDBReader context
+    push f (MongoDBReader x) = MongoDBReader $ push f x
+
+instance Monad m => Context DB.Pipe (MongoDBReader m) where
+    context = MongoDBReader context
+    push f (MongoDBReader x) = MongoDBReader $ push f x
+
+instance Monad m => Context DB.WriteMode (MongoDBReader m) where
+    context = MongoDBReader context
+    push f (MongoDBReader x) = MongoDBReader $ push f x
+
+instance Monad m => Throw Failure (MongoDBReader m) where
+    throw = MongoDBReader . throw
+    catch (MongoDBReader x) f =
+        MongoDBReader $ ReaderT $ \db -> catch (runReaderT x db) (f' db)
+      where
+        f' db e = runReaderT (unMongoDBReader (f e)) db
+
+withMongoDBConn :: (Network.Abstract.NetworkIO m) => t -> HostName -> (DB.ConnPool DB.Host -> t -> m b) -> m b
 withMongoDBConn dbname hostname connectionReader = do
   pool <- DB.newConnPool 1 $ DB.host hostname
-  connectionReader (pool, dbname)
+  connectionReader pool dbname
 
-runMongoDBConn :: MongoDBReader t m a -> (DB.ConnPool t, HostName) -> m a
-runMongoDBConn (MongoDBReader r) = runReaderT r 
+runMongoDBConn :: (DB.Service s, Trans.MonadIO m) =>
+                                    MongoDBReader m b
+                                 -> DB.WriteMode
+                                 -> DB.MasterOrSlaveOk
+                                 -> DB.ConnPool s
+                                 -> DB.Database
+                                 -> m b
+runMongoDBConn (MongoDBReader a) wm ms cp db = do
+    res <- DB.access wm ms cp (runReaderT a db)
+    either (Trans.liftIO . throwIO . MongoDBException) return res
 
-runPool :: (DB.Service s, Trans.MonadIO m) => DB.ConnPool s -> String 
-     -> ReaderT DB.Database (DB.Action m) a -> m (Either DB.Failure a)
-runPool pool dbname action =
-  DB.access DB.safe DB.Master pool $ DB.use (DB.Database (u dbname)) action
-
-execute :: (DB.Service s, Trans.MonadIO m) =>
-     ReaderT DB.Database (DB.Action (MongoDBReader s m)) b -> MongoDBReader s m b
-execute action = do
-  (pool, dbname) <- MongoDBReader ask
-  res <-  runPool pool dbname action
-  case res of
-      (Right result) -> return result 
-      (Left x) -> fail (show x)   -- TODO what to put here?
+newtype MongoDBException = MongoDBException Failure
+    deriving (Show, Typeable)
+instance Exception MongoDBException
 
 value :: DB.Field -> DB.Value
 value (_ DB.:= val) = val
@@ -119,30 +143,30 @@ insertFields t record = zipWith (DB.:=) (toLabels) (toValues)
     toLabels = map (u . fst3) $ entityColumns t
     toValues = map (DB.val . toPersistValue) (toPersistFields record)
 
-instance (DB.DbAccess m, DB.Service t) => PersistBackend (MongoDBReader t m) where
+instance (Trans.MonadIO m, Functor m) => PersistBackend (MongoDBReader m) where
     insert record = do
-        (DB.ObjId oid) <- execute $ DB.insert (u $ entityName t) (insertFields t record)
+        (DB.ObjId oid) <- DB.insert (u $ entityName t) (insertFields t record)
         return $ toPersistKey $ dbOidToKey oid 
       where
         t = entityDef record
 
     replace k record = do
-        execute $ DB.replace (selectByKey k t) (insertFields t record)
+        DB.replace (selectByKey k t) (insertFields t record)
         return ()
       where
         t = entityDef record
 
     update _ [] = return ()
     update k upds =
-        execute $ DB.modify 
-                     (DB.Select [u"_id" DB.:= (DB.ObjId $ keyToDbOid k)]  (u $ entityName t)) 
-                     $ updateFields upds
+        DB.modify 
+           (DB.Select [u"_id" DB.:= (DB.ObjId $ keyToDbOid k)]  (u $ entityName t)) 
+           $ updateFields upds
       where
         t = entityDef $ dummyFromKey k
 
     updateWhere _ [] = return ()
     updateWhere filts upds =
-        execute $ DB.modify DB.Select {
+        DB.modify DB.Select {
           DB.coll = (u $ entityName t)
         , DB.selector = filterToSelector filts
         } $ updateFields upds
@@ -150,7 +174,7 @@ instance (DB.DbAccess m, DB.Service t) => PersistBackend (MongoDBReader t m) whe
         t = entityDef $ dummyFromFilts filts
 
     delete k =
-        execute $ DB.deleteOne DB.Select {
+        DB.deleteOne DB.Select {
           DB.coll = (u $ entityName t)
         , DB.selector = filterByKey k
         }
@@ -158,7 +182,7 @@ instance (DB.DbAccess m, DB.Service t) => PersistBackend (MongoDBReader t m) whe
         t = entityDef $ dummyFromKey k
 
     deleteWhere filts = do
-        execute $ DB.delete DB.Select {
+        DB.delete DB.Select {
           DB.coll = (u $ entityName t)
         , DB.selector = filterToSelector filts
         }
@@ -166,7 +190,7 @@ instance (DB.DbAccess m, DB.Service t) => PersistBackend (MongoDBReader t m) whe
         t = entityDef $ dummyFromFilts filts
 
     deleteBy uniq =
-        execute $ DB.delete DB.Select {
+        DB.delete DB.Select {
           DB.coll = u $ entityName t
         , DB.selector = uniqSelector uniq
         }
@@ -174,7 +198,7 @@ instance (DB.DbAccess m, DB.Service t) => PersistBackend (MongoDBReader t m) whe
         t = entityDef $ dummyFromUnique uniq
 
     get k = do
-            d <- execute $ DB.findOne (queryByKey k t)
+            d <- DB.findOne (queryByKey k t)
             case d of
               Nothing -> return Nothing
               Just doc -> do
@@ -183,7 +207,7 @@ instance (DB.DbAccess m, DB.Service t) => PersistBackend (MongoDBReader t m) whe
             t = entityDef $ dummyFromKey k
 
     getBy uniq = do
-        mdocument <- execute $ DB.findOne $
+        mdocument <- DB.findOne $
           (DB.select (uniqSelector uniq) (u $ entityName t))
         case mdocument of
           Nothing -> return Nothing
@@ -194,7 +218,7 @@ instance (DB.DbAccess m, DB.Service t) => PersistBackend (MongoDBReader t m) whe
         t = entityDef $ dummyFromUnique uniq
 
     count filts = do
-        i <- execute $ DB.count query
+        i <- DB.count query
         return $ fromIntegral i
       where
         query = DB.select (filterToSelector filts) (u $ entityName t)
@@ -203,7 +227,7 @@ instance (DB.DbAccess m, DB.Service t) => PersistBackend (MongoDBReader t m) whe
     selectEnum filts ords limit offset = Iteratee . start
       where
         start x = do
-            cursor <- execute $ DB.find query
+            cursor <- DB.find query
             loop x cursor
 
         query = (DB.select (filterToSelector filts) (u $ entityName t)) {
@@ -219,7 +243,7 @@ instance (DB.DbAccess m, DB.Service t) => PersistBackend (MongoDBReader t m) whe
                                 Desc -> -1 )
 
         loop (Continue k) curs = do
-            doc <- execute $ DB.next curs
+            doc <- DB.next curs
             case doc of
                 Nothing -> return $ Continue k
                 Just document -> case pairFromDocument t document of
@@ -234,11 +258,11 @@ instance (DB.DbAccess m, DB.Service t) => PersistBackend (MongoDBReader t m) whe
         Iteratee . start
       where
         start x = do
-            cursor <- execute $ DB.find query
+            cursor <- DB.find query
             loop x cursor
 
         loop (Continue k) curs = do
-            doc <- execute $ DB.next curs
+            doc <- DB.next curs
             case doc of
                 Nothing -> return $ Continue k
                 Just [_ DB.:= (DB.ObjId oid)] -> do
@@ -306,8 +330,8 @@ wrapFromPersistValues e doc = fromPersistValues reorder
           where
             matchOne (f:fs) tried =
               if c == fst f then (f, tried ++ fs) else matchOne fs (f:tried)
-            matchOne fields tried = error $ "field doesn't match" ++ (show c) ++ (show fields) ++ (show tried)
-        match cs fields values = error $ "fields don't match" ++ (show cs) ++ (show fields) ++ (show values)
+            matchOne fs tried = error $ "field doesn't match" ++ (show c) ++ (show fs) ++ (show tried)
+        match cs fs values = error $ "fields don't match" ++ (show cs) ++ (show fs) ++ (show values)
 
 mapFromDoc :: DB.Document -> [(T.Text, PersistValue)]
 mapFromDoc = Prelude.map (\f -> ( ( csToT (DB.label f)), (fromJust . DB.cast') (DB.value f) ) )

@@ -16,17 +16,12 @@ import Test.HUnit hiding (Test)
 import Database.Persist.MongoDB
 import Database.Persist.TH
 import Control.Monad.IO.Class
-import Control.Monad.Context
-import Control.Exception
-import Control.Monad.Throw
 
 import Database.Persist.Join hiding (RunJoin)
-import qualified Database.Persist.Join
-import qualified Database.Persist.Join.Sql
+-- import qualified Database.Persist.Join
+-- import qualified Database.Persist.Join.Sql
 import qualified Database.MongoDB as DB
-import Database.MongoDB.Connection
 
-import Control.Monad.Trans.Reader
 import Monad (unless)
 import Data.Int
 import Data.Word
@@ -88,15 +83,15 @@ share2 mkPersist (mkMigrate "testMigrate") [persist|
 -- connstr = "user=test password=test host=localhost port=5432 dbname=yesod_test"
 
 runConn f = do
-    withMongoDBConn "test" "127.0.0.1" $ runMongoDBConn f
+    withMongoDBConn (DB.Database "test") "127.0.0.1" $ runMongoDBConn f DB.safe DB.Master
 
 -- TODO: run tests in transaction
-mongoTest :: MongoDBReader Database.MongoDB.Connection.Host IO () -> Assertion
+-- mongoTest :: MongoDBReader Database.MongoDB.Connection.Host IO () -> Assertion
 mongoTest actions = do
   runConn actions
   runConn cleanDB
 
-cleanDB :: MongoDBReader Database.MongoDB.Connection.Host IO () 
+-- cleanDB :: MongoDBReader Database.MongoDB.Connection.Host IO () 
 cleanDB = do
   deleteWhere ([] :: [Filter Pet])
   deleteWhere ([] :: [Filter Person])
@@ -104,7 +99,7 @@ cleanDB = do
   deleteWhere ([] :: [Filter Entry])
   deleteWhere ([] :: [Filter Author])
 
-setup :: MongoDBReader Database.MongoDB.Connection.Host IO () 
+-- setup :: MongoDBReader Database.MongoDB.Connection.Host IO () 
 setup = do
   --runMigration testMigrate
   cleanDB
@@ -328,6 +323,7 @@ _persistent = do
   Nothing <- get micK
   return ()
 
+_largeNumbers :: (MonadIO m, PersistBackend m) => m ()
 _largeNumbers = do
     go $ Number maxBound 0 0 0 0
     go $ Number 0 maxBound 0 0 0
@@ -346,12 +342,14 @@ _largeNumbers = do
         x' <- get xid
         liftIO $ x' @?= Just x
 
+_insertBy :: (MonadIO m, PersistBackend m) => m ()
 _insertBy = do
     Right _ <- insertBy $ Person "name" 1 Nothing
     Left _ <- insertBy $ Person "name" 1 Nothing
     Right _ <- insertBy $ Person "name2" 1 Nothing
     return ()
 
+_derivePersistField :: (MonadIO m, PersistBackend m) => m ()
 _derivePersistField = do
     person <- insert $ Person "pet owner" 30 Nothing
     cat <- insert $ Pet person "Mittens" Cat
@@ -370,6 +368,7 @@ _afterException = do
     catcher :: Monad m => SomeException -> m ()
     catcher _ = return ()
 
+_idIn :: (MonadIO m, PersistBackend m) => m ()
 _idIn = do
     let p1 = Person "A" 0 Nothing
         p2 = Person "B" 1 Nothing
@@ -380,6 +379,7 @@ _idIn = do
     x <- selectList [PersonIdIn [pid1, pid3]] [] 0 0
     liftIO $ x @?= [(pid1, p1), (pid3, p3)]
 
+_joinNonSql :: (MonadIO m, PersistBackend m) => m ()
 _joinNonSql = _joinGen Database.Persist.Join.runJoin
 --_joinSql = _joinGen Database.Persist.Join.Sql.runJoin
 
@@ -454,22 +454,3 @@ _joinGen run = do
                 ])
             , ((c, Author "c"), [])
             ]
-
-
-instance Context DB.MasterOrSlaveOk IO where
-  context = undefined
-  push = undefined
-instance Context DB.Database IO where
-  context = undefined
-  push = undefined
-instance Context DB.WriteMode IO where
-  context = undefined
-  push = undefined
-instance Context DB.Pipe IO where
-  context = undefined
-  push = undefined
-instance Control.Monad.Throw.Throw DB.Failure IO where
-  throw = undefined
-  catch = undefined
-
-
