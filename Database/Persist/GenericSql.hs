@@ -134,9 +134,19 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
       where
         t = entityDef $ dummyFromFilts filts
 
-    selectEnum filts ords limit offset =
+    selectEnum filts opts =
         Iteratee . start
       where
+        limit = goL opts
+        goL [] = 0
+        goL (LimitTo x:_) = x
+        goL (_:xs) = goL xs
+
+        offset = goO opts
+        goO [] = 0
+        goO (OffsetBy x:_) = x
+        goO (_:xs) = goO xs
+
         start x = do
             conn <- SqlPersist ask
             withStmt' (sql conn) (getFiltsValues filts) $ loop x
@@ -162,6 +172,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
                     then ""
                     else " WHERE " ++
                          intercalate " AND " (map (filterClause False conn) filts)
+        ords = mapMaybe
         ord conn = if null ords
                     then ""
                     else " ORDER BY " ++

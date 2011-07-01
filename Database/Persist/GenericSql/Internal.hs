@@ -233,24 +233,23 @@ getFiltsValues =
     go (Left x) = [x]
     go (Right xs) = filter (/= PersistNull) xs
 
-dummyFromOrder :: Order a -> a
+dummyFromOrder :: SelectOpt a -> a
 dummyFromOrder _ = undefined
 
-orderClause :: PersistEntity val => Bool -> Connection -> Order val -> String
+orderClause :: PersistEntity val => Bool -> Connection -> SelectOpt val -> Maybe String
 orderClause includeTable conn o =
-    name ++ case o of
-                Asc _ -> ""
-                Desc _ -> " DESC"
+    case o of
+        Asc x -> Just $ name x
+        Desc x -> Just $ name x ++ " DESC"
+        _ -> Nothing
   where
-    cd = case o of
-                Asc x -> persistColumnDef x
-                Desc x -> persistColumnDef x
+    cd x = persistColumnDef x
     t = entityDef $ dummyFromOrder o
-    name =
+    name x =
         (if includeTable
             then (++) (escapeName conn (rawTableName t) ++ ".")
             else id)
-        $ escapeName conn $ getFieldName t $ columnName cd
+        $ escapeName conn $ getFieldName t $ columnName $ cd x
 
 filterPersistValue :: Filter v -> Either PersistValue [PersistValue]
 filterPersistValue (Filter _ v _) = either (Left . toPersistValue) (Right . map toPersistValue) v

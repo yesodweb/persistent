@@ -19,9 +19,9 @@ class RunJoin a where
 
 data SelectOneMany one many = SelectOneMany
     { somFilterOne :: [Filter one]
-    , somOrderOne :: [Order one]
+    , somOrderOne :: [SelectOpt one]
     , somFilterMany :: [Filter many]
-    , somOrderMany :: [Order many]
+    , somOrderMany :: [SelectOpt many]
     , somFilterKeys :: [Key one] -> Filter many
     , somGetKey :: many -> Key one
     , somIncludeNoMatch :: Bool
@@ -34,9 +34,9 @@ instance (PersistEntity one, PersistEntity many, Ord (Key one))
     type Result (SelectOneMany one many) =
         [((Key one, one), [(Key many, many)])]
     runJoin (SelectOneMany oneF oneO manyF manyO eq getKey isOuter) = do
-        x <- selectList oneF oneO 0 0
+        x <- selectList oneF oneO
         -- FIXME use select instead of selectList
-        y <- selectList (eq (map fst x) : manyF) manyO 0 0
+        y <- selectList (eq (map fst x) : manyF) manyO
         let y' = foldl' go Map.empty y
         return $ mapMaybe (go' y') x
       where

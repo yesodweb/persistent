@@ -22,7 +22,7 @@ module Database.Persist.Base
     , PersistBackend (..)
     , PersistFilter (..)
     , PersistUpdate (..)
-    , Order (..)
+    , SelectOpt (..)
     , SomePersistField (..)
     , selectList
     , insertBy
@@ -273,7 +273,10 @@ data Update v = forall typ. PersistField typ => Update
     , updateUpdate :: PersistUpdate -- FIXME Replace with expr down the road
     }
 
-data Order v = forall typ. Asc (Field v typ) | forall typ. Desc (Field v typ)
+data SelectOpt v = forall typ. Asc (Field v typ)
+                 | forall typ. Desc (Field v typ)
+                 | OffsetBy Int
+                 | LimitTo Int
 
 -- | Filters which are available for 'select', 'updateWhere' and
 -- 'deleteWhere'. Each filter constructor specifies the field being
@@ -347,9 +350,7 @@ class Monad m => PersistBackend m where
     selectEnum
            :: PersistEntity val
            => [Filter val]
-           -> [Order val]
-           -> Int -- ^ limit
-           -> Int -- ^ offset
+           -> [SelectOpt val]
            -> Enumerator (Key val, val) m a
 
     -- | Get the 'Key's of all records matching the given criterion.
@@ -410,12 +411,10 @@ checkUnique val =
 -- | Call 'select' but return the result as a list.
 selectList :: (PersistEntity val, PersistBackend m, Monad m)
            => [Filter val]
-           -> [Order val]
-           -> Int -- ^ limit
-           -> Int -- ^ offset
+           -> [SelectOpt val]
            -> m [(Key val, val)]
-selectList a b c d = do
-    res <- run $ selectEnum a b c d ==<< consume
+selectList a b = do
+    res <- run $ selectEnum a b ==<< consume
     case res of
         Left e -> error $ show e
         Right x -> return x
