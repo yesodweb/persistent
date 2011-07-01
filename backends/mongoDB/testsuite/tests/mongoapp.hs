@@ -17,15 +17,12 @@ import Control.Monad.Util
 
 mkPersist [persist|
 Person
-    name String
+    name String Eq
     age Int
 |]
 
-instance Context Network.Abstract.ANetwork (GGHandler M M IO) where
-    context = ask
-    push f x = local f x
-
 -- runMongo :: MongoDBReader Database.MongoDB.Connection.Host (GGHandler M M IO) a -> GHandler M M a
+runMongo :: MongoDBReader (GGHandler M M IO) a -> GHandler M M a
 runMongo x = liftIOHandler $ 
   withMongoDBConn (DB.Database "test") "127.0.0.1" $ runMongoDBConn x DB.safe DB.Master
 
@@ -33,8 +30,9 @@ getConnection :: (ConnPool t, HostName)
 getConnection = undefined
 
 -- someAction :: Monad m => MongoDBReader DB.Host -> m (Key Person)
-someAction =  insert $ Person "Bob" 20
--- selectList [PersonIdIn [1,2]] [] 0 0
+someAction = do
+  insert $ Person "Bob" 20
+  selectList [PersonNameEq "Bob"] [] 0 0
 
 data M = M
 instance Yesod M where approot _ = ""
@@ -43,8 +41,8 @@ mkYesod "M" [parseRoutes|/ RootR GET|]
 
 getRootR :: GHandler M M RepHtml
 getRootR = do
-    _ <- runMongo someAction
-    defaultLayout [hamlet|<h1>HELLO WORLD|]
+    people <- runMongo someAction
+    defaultLayout [hamlet|<h1>HELLO #{personName $ snd $ head people}|]
 
 main :: IO ()
 main = warpDebug 3000 M

@@ -36,6 +36,7 @@ import Data.Typeable (Typeable)
 import Control.Monad.Context (Context (..))
 import Control.Monad.Throw (Throw (..))
 import Prelude hiding (catch)
+import Network.Abstract (Internet (..), ANetwork (..))
 
 newtype MongoDBReader m a = MongoDBReader { unMongoDBReader :: ReaderT DB.Database (Action m) a }
     deriving (Monad, Trans.MonadIO, Functor, Applicative)
@@ -63,10 +64,11 @@ instance Monad m => Throw Failure (MongoDBReader m) where
       where
         f' db e = runReaderT (unMongoDBReader (f e)) db
 
-withMongoDBConn :: (Network.Abstract.NetworkIO m) => t -> HostName -> (DB.ConnPool DB.Host -> t -> m b) -> m b
+withMongoDBConn :: (Trans.MonadIO m, Applicative m) => t -> HostName -> (DB.ConnPool DB.Host -> t -> m b) -> m b
 withMongoDBConn dbname hostname connectionReader = do
-  pool <- DB.newConnPool 1 $ DB.host hostname
+  pool <- runReaderT (DB.newConnPool 1 $ DB.host hostname) $ ANetwork Internet
   connectionReader pool dbname
+
 
 runMongoDBConn :: (DB.Service s, Trans.MonadIO m) =>
                                     MongoDBReader m b
