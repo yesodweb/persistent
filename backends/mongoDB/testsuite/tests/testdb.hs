@@ -161,20 +161,3 @@ go = do
     _ <- insert $ Table "bar"
 
     return ()
-
-instance Context DB.MasterOrSlaveOk IO where
-  context = undefined
-  push = undefined
-instance Context DB.Database IO where
-  context = undefined
-  push = undefined
-instance Context DB.WriteMode IO where
-  context = undefined
-  push = undefined
-instance Context DB.Pipe IO where
-  context = undefined
-  push = undefined
-instance Control.Monad.Throw.Throw DB.Failure IO where
-  throw = undefined
-  catch = undefined
-
