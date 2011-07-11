@@ -3,13 +3,14 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE RankNTypes #-}
 module Data.Pool
-    ( -- * Using pools
-      createPool
+    ( -- * Creation
+      Pool
+    , createPool
     , createPoolCheckAlive
+      -- * Usage
     , withPool
     , withPool'
     , withPoolAllocate
-    , Pool
       -- * Diagnostics
     , PoolStats (..)
     , poolStats
@@ -48,13 +49,23 @@ poolStats p = do
     d <- readIORef $ poolData p
     return $ PoolStats (poolMax p) (length $ poolAvail d) (poolCreated d)
 
+-- | Create a new pool without any resource alive checking.
 createPool :: I.MonadControlIO m
-           => IO a -> (a -> IO ()) -> Int -> (Pool a -> m b) -> m b
+           => IO a -- ^ new resource creator
+           -> (a -> IO ()) -- ^ resource deallocator
+           -> Int -- ^ maximum number of resources to allow in pool
+           -> (Pool a -> m b) -- ^ inner function to run with the pool
+           -> m b
 createPool mk fr mx f = createPoolCheckAlive mk fr mx f $ const $ return True
 
+-- | Create a new pool, including a function to check if a resource is still
+-- alive. Stale resources will automatically be removed from the pool.
 createPoolCheckAlive
     :: I.MonadControlIO m
-    => IO a -> (a -> IO ()) -> Int -> (Pool a -> m b)
+    => IO a -- ^ new resource creator
+    -> (a -> IO ()) -- ^ resource deallocator
+    -> Int -- ^ maximum number of resource to allow in pool
+    -> (Pool a -> m b) -- ^ inner function to run with the pool
     -> (a -> IO Bool) -- ^ is the resource alive?
     -> m b
 createPoolCheckAlive mk fr mx f ca = do
@@ -65,7 +76,7 @@ createPoolCheckAlive mk fr mx f ca = do
 
 finallyIO :: I.MonadControlIO m => m a -> IO b -> m a
 finallyIO a io = I.controlIO $ \runInIO -> finally (runInIO a) io
-                           
+
 data PoolExhaustedException = PoolExhaustedException
     deriving (Show, Typeable)
 instance Exception PoolExhaustedException
@@ -96,6 +107,8 @@ mask = I.mask
 mask f = I.block $ f I.unblock
 #endif
 
+-- | Attempt to run the given action with a resource from the given 'Pool'.
+-- Returns 'Nothing' if no resource was available.
 withPool :: I.MonadControlIO m => Pool a -> (a -> m b) -> m (Maybe b)
 withPool p f = mask $ \unmask -> do
     eres <- liftIO $ atomicModifyIORef (poolData p) $ \pd ->
