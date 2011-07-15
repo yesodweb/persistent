@@ -1,5 +1,5 @@
 name:            pool
-version:         0.1.0.3
+version:         0.1.0.4
 license:         BSD3
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -15,7 +15,6 @@ homepage:        http://github.com/snoyberg/pool
 library
     build-depends:   base                     >= 4         && < 5
                    , transformers             >= 0.2.1     && < 0.3
-                   , stm                      >= 2.1       && < 2.3
                    , monad-control            >= 0.2       && < 0.3
     exposed-modules: Data.Pool
     ghc-options:     -Wall
