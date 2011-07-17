@@ -37,6 +37,7 @@ import Control.Monad.IO.Control (MonadControlIO)
 import Control.Exception.Control (onException)
 import Control.Exception (toException)
 import Data.Text (Text, pack, unpack)
+import Data.Maybe (mapMaybe)
 
 type ConnectionPool = Pool Connection
 
@@ -172,11 +173,10 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
                     then ""
                     else " WHERE " ++
                          intercalate " AND " (map (filterClause False conn) filts)
-        ords = mapMaybe
-        ord conn = if null ords
-                    then ""
-                    else " ORDER BY " ++
-                         intercalate "," (map (orderClause False conn) ords)
+        ord conn =
+            case mapMaybe (orderClause False conn) opts of
+                [] -> ""
+                ords -> " ORDER BY " ++ intercalate "," ords
         lim conn = case (limit, offset) of
                 (0, 0) -> ""
                 (0, _) -> ' ' : noLimit conn

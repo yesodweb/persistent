@@ -8,7 +8,7 @@ module Database.Persist
     , getByValue
     , checkUnique
     , Update (..)
-    , Order (..)
+    , SelectOpt (..)
     , Filter (..)
     , (=.), (+.)
     , (==.), (/=.), (<.), (>.), (<=.), (>=.)

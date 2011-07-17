@@ -343,7 +343,7 @@ bind statement sqlData = do
             PersistUTCTime d -> bindText statement parameterIndex $ pack $ show d
             PersistList _ -> P.error "Refusing to serialize a PersistList to a SQLite value"
             PersistMap _ -> P.error "Refusing to serialize a PersistMap to a SQLite value"
-            PersistForeignKey _ -> P.error "Refusing to serialize a PersistForeignKey to a SQLite value"
+            PersistObjectId _ -> P.error "Refusing to serialize a PersistObjectId to a SQLite value"
             )
        $ zip [1..] sqlData
   return ()

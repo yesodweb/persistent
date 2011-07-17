@@ -161,10 +161,10 @@ _deleteWhere = do
   let p91 = Person "Michael4" 91 Nothing
   key91 <- insert $ p91
 
-  ps90 <- selectList [PersonAge ==. 90] [] 0 0
+  ps90 <- selectList [PersonAge ==. 90] []
   assertNotEmpty ps90
   deleteWhere [PersonAge ==. 90]
-  ps90 <- selectList [PersonAge ==. 90] [] 0 0
+  ps90 <- selectList [PersonAge ==. 90] []
   assertEmpty ps90
   Nothing <- get key2
 
@@ -176,11 +176,11 @@ _deleteBy = do
   let p3 = Person "Michael3" 27 Nothing
   key3 <- insert $ p3
 
-  ps2 <- selectList [PersonName ==. "Michael2"] [] 0 0
+  ps2 <- selectList [PersonName ==. "Michael2"] []
   assertNotEmpty ps2
 
   deleteBy $ PersonNameKey "Michael2"
-  ps2 <- selectList [PersonName ==. "Michael2"] [] 0 0
+  ps2 <- selectList [PersonName ==. "Michael2"] []
   assertEmpty ps2
 
   Just p32 <- get key3
@@ -191,10 +191,10 @@ _delete = do
   let p3 = Person "Michael3" 27 Nothing
   key3 <- insert $ p3
 
-  pm2 <- selectList [PersonName ==. "Michael2"] [] 0 0
+  pm2 <- selectList [PersonName ==. "Michael2"] []
   assertNotEmpty pm2
   delete key2
-  pm2 <- selectList [PersonName ==. "Michael2"] [] 0 0
+  pm2 <- selectList [PersonName ==. "Michael2"] []
   assertEmpty pm2
 
   Just p <- get key3
@@ -255,21 +255,21 @@ _selectList = do
   let p26 = Person "Michael2" 26 Nothing
   key25 <- insert p25
   key26 <- insert p26
-  ps <- selectList [] [] 0 0
+  ps <- selectList [] []
   ps @== [(key25, p25), (key26, p26)]
   -- limit
-  ps <- selectList [] [] 1 0
+  ps <- selectList [] [LimitTo 1]
   ps @== [(key25, p25)]
   -- offset -- FAILS!
-  ps <- selectList [] [] 0 1
+  ps <- selectList [] [OffsetBy 1]
   ps @== [(key26, p26)]
   -- limit & offset
-  ps <- selectList [] [] 1 1
+  ps <- selectList [] [LimitTo 1, OffsetBy 1]
   ps @== [(key26, p26)]
 
-  ps <- selectList [] [Desc PersonAge] 0 0
+  ps <- selectList [] [Desc PersonAge]
   ps @== [(key26, p26), (key25, p25)]
-  ps <- selectList [PersonAge ==. 26] [] 0 0
+  ps <- selectList [PersonAge ==. 26] []
   ps @== [(key26, p26)]
 
 -- general tests transferred from already exising test file
@@ -288,10 +288,10 @@ _persistent = do
   mic26 @/= mic
   personAge mic26 @== personAge mic + 1
 
-  results <- selectList [PersonName ==. "Michael"] [] 0 0
+  results <- selectList [PersonName ==. "Michael"] []
   results @== [(micK, mic26)]
 
-  results <- selectList [PersonAge <. 28] [] 0 0
+  results <- selectList [PersonAge <. 28] []
   results @== [(micK, mic26)]
 
   update micK [PersonAge =. 28]
@@ -304,27 +304,27 @@ _persistent = do
 
   let eli = Person "Eliezer" 2 $ Just "blue"
   _ <- insert eli
-  pasc <- selectList [] [Asc PersonAge] 0 0
+  pasc <- selectList [] [Asc PersonAge]
   (map snd pasc) @== [eli, mic29]
 
   let abe30 = Person "Abe" 30 $ Just "black"
   keyAbe30 <- insert abe30
-  pdesc <- selectList [PersonAge <. 30] [Desc PersonName] 0 0
+  pdesc <- selectList [PersonAge <. 30] [Desc PersonName]
   (map snd pasc) @== [eli, mic29]
 
-  abes <- selectList [PersonName ==. "Abe"] [] 0 0
+  abes <- selectList [PersonName ==. "Abe"] []
   (map snd abes) @== [abe30]
 
   Just (k,p) <- getBy $ PersonNameKey "Michael"
   p @== mic29
 
-  ps <- selectList [PersonColor ==. Just "blue"] [] 0 0
+  ps <- selectList [PersonColor ==. Just "blue"] []
   map snd ps @== [eli]
 
-  ps <- selectList [PersonColor ==. Nothing] [] 0 0
+  ps <- selectList [PersonColor ==. Nothing] []
   map snd ps @== [mic29]
 
-  ps <- selectList [PersonColor /=. Nothing] [] 0 0
+  ps <- selectList [PersonColor /=. Nothing] []
   map snd ps @== [eli, abe30]
 
   delete micK
@@ -380,7 +380,7 @@ _idIn = do
     pid1 <- insert p1
     _pid2 <- insert p2
     pid3 <- insert p3
-    x <- selectList [PersonId <-. [pid1, pid3]] [] 0 0
+    x <- selectList [PersonId <-. [pid1, pid3]] []
     liftIO $ x @?= [(pid1, p1), (pid3, p3)]
 
 _joinNonSql = _joinGen Database.Persist.Join.runJoin

@@ -113,7 +113,7 @@ instance PersistField String where
     fromPersistValue (PersistBool b) = Right $ show b
     fromPersistValue (PersistList _) = Left "Cannot convert PersistList to String"
     fromPersistValue (PersistMap _) = Left "Cannot convert PersistMap to String"
-    fromPersistValue (PersistForeignKey _) = Left "Cannot convert PersistForeignKey to String"
+    fromPersistValue (PersistObjectId _) = Left "Cannot convert PersistObjectId to String"
     sqlType _ = SqlString
 
 instance PersistField ByteString where
@@ -136,7 +136,7 @@ instance PersistField T.Text where
     fromPersistValue (PersistBool b) = Right $ T.pack $ show b
     fromPersistValue (PersistList _) = Left "Cannot convert PersistList to Text"
     fromPersistValue (PersistMap _) = Left "Cannot convert PersistMap to Text"
-    fromPersistValue (PersistForeignKey _) = Left "Cannot convert PersistForeignKey to Text"
+    fromPersistValue (PersistObjectId _) = Left "Cannot convert PersistObjectId to Text"
     sqlType _ = SqlString
 
 instance PersistField Html where

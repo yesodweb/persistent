@@ -84,7 +84,7 @@ selectOneMany' (SelectOneMany oneF oneO manyF manyO eq _getKey isOuter) = do
         ]
       where
         filts = map (filterClause True conn) oneF ++ map (filterClause True conn) manyF
-        ords = map (orderClause True conn) oneO ++ map (orderClause True conn) manyO
+        ords = mapMaybe (orderClause True conn) oneO ++ mapMaybe (orderClause True conn) manyO
 
 addTable :: PersistEntity val =>
            Connection -> val -> [Char] -> [Char]
