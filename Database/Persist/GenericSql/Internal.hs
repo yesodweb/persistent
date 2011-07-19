@@ -209,6 +209,7 @@ filterClause includeTable conn f =
     showSqlFilter Le = "<="
     showSqlFilter In = " IN "
     showSqlFilter NotIn = " NOT IN "
+    showSqlFilter (BackendSpecificFilter s) = s
 
 dummyFromFilts :: [Filter v] -> v
 dummyFromFilts _ = error "dummyFromFilts"

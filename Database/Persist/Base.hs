@@ -457,7 +457,8 @@ data UniqueDef = UniqueDef
     deriving Show
 
 data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le | In | NotIn
-    deriving (Read, Show, Enum, Bounded)
+                   | BackendSpecificFilter String
+    deriving (Read, Show)
 
 class PersistEntity a => DeleteCascade a where
     deleteCascade :: PersistBackend m => Key a -> m ()
