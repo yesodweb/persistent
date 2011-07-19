@@ -13,7 +13,7 @@ import Test.Framework.Providers.HUnit
 import Test.HUnit hiding (Test)
 
 import Database.Persist.Sqlite
-import Database.Persist.Base (PersistUpdate (Add, Assign), PersistFilter (..), ColumnDef (ColumnDef))
+import Database.Persist.Base (PersistUpdate (Add, Assign), PersistFilter (..), ColumnDef (ColumnDef), DeleteCascade (..))
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
 #endif
@@ -55,7 +55,7 @@ data PetType = Cat | Dog
 derivePersistField "PetType"
 
   -- FIXME Empty
-share2 mkPersist (mkMigrate "testMigrate") [$persist|
+share [mkPersist,  mkMigrate "testMigrate", mkDeleteCascade] [$persist|
 
   Person
     name String

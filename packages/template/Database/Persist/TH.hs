@@ -23,7 +23,6 @@ import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
 import Data.Maybe (mapMaybe, catMaybes)
-import Web.Routes.Quasi (SinglePiece (..))
 import Control.Monad (forM)
 import Control.Monad.IO.Control (MonadControlIO)
 import qualified System.IO as SIO
@@ -303,15 +302,18 @@ mkDeleteCascade defs = do
         del <- [|delete|]
         dcw <- [|deleteCascadeWhere|]
         just <- [|Just|]
+        filt <- [|Filter|]
+        eq <- [|Eq|]
+        left <- [|Left|]
         let mkStmt dep = NoBindS
                 $ dcw `AppE`
                   ListE
-                    [ ConE (mkName filtName) `AppE` val (depSourceNull dep)
+                    [ filt `AppE` ConE (mkName filtName)
+                           `AppE` (left `AppE` val (depSourceNull dep))
+                           `AppE` eq
                     ]
               where
-                filtName =
-                    depSourceTable dep ++ upperFirst (depSourceField dep)
-                      ++ "Eq"
+                filtName = depSourceTable dep ++ upperFirst (depSourceField dep)
                 val False = VarE key
                 val True = just `AppE` VarE key
 
@@ -431,17 +433,6 @@ instance Lift PersistUpdate where
     lift Subtract = [|Subtract|]
     lift Multiply = [|Multiply|]
     lift Divide = [|Divide|]
-
-instance SinglePiece PersistValue where
-    fromSinglePiece t =
-        case Data.Text.Read.signed Data.Text.Read.decimal t of
-            Right (i, t')
-                | T.null t' -> Just $ PersistInt64 i
-            _ -> Just $ PersistText t
-    toSinglePiece x =
-        case fromPersistValue x of
-            Left e -> error e
-            Right y -> y
 
 mkField :: EntityDef -> ColumnDef -> Q (Con, Clause)
 mkField et cd = do

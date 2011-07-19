@@ -60,6 +60,8 @@ import Control.Monad (liftM)
 
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.Encoding.Error as T
+import Web.PathPieces (SinglePiece (..))
+import qualified Data.Text.Read
 
 -- | A raw value which can be stored in any backend and can be marshalled to
 -- and from a 'PersistField'.
@@ -76,6 +78,17 @@ data PersistValue = PersistText T.Text
                   | PersistMap [(T.Text, PersistValue)]
                   | PersistObjectId ByteString -- ^ intended especially for MongoDB backend
     deriving (Show, Read, Eq, Typeable, Ord)
+
+instance SinglePiece PersistValue where
+    fromSinglePiece t =
+        case Data.Text.Read.signed Data.Text.Read.decimal t of
+            Right (i, t')
+                | T.null t' -> Just $ PersistInt64 i
+            _ -> Just $ PersistText t
+    toSinglePiece x =
+        case fromPersistValue x of
+            Left e -> error e
+            Right y -> y
 
 -- | A SQL data type. Naming attempts to reflect the underlying Haskell
 -- datatypes, eg SqlString instead of SqlVarchar. Different SQL databases may
@@ -264,8 +277,7 @@ instance PersistField a => PersistField (Maybe a) where
     isNullable _ = True
 
 newtype Key v = Key { unKey :: PersistValue }
-    deriving (Show, Read, Eq, PersistField, Ord)
-    -- FIXME need to include SinglePiece above, which likely means shuffling some other libraries
+    deriving (Show, Read, Eq, PersistField, Ord, SinglePiece)
 
 data Update v = forall typ. PersistField typ => Update
     { updateField :: Field v typ

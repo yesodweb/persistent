@@ -1,5 +1,5 @@
 name:            persistent
-version:         0.5.2
+version:         0.6.0
 license:         BSD3
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -26,6 +26,7 @@ library
                    , monad-control            >= 0.2       && < 0.3
                    , pool                     >= 0.1       && < 0.2
                    , blaze-html               >= 0.4       && < 0.5
+                   , path-pieces              >= 0.0       && < 0.1
     exposed-modules: Database.Persist
                      Database.Persist.Base
                      Database.Persist.Quasi
