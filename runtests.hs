@@ -14,6 +14,7 @@ import Test.HUnit hiding (Test)
 
 import Database.Persist.Sqlite
 import Database.Persist.Base (PersistUpdate (Add, Assign), PersistFilter (..), ColumnDef (ColumnDef), DeleteCascade (..))
+import Database.Persist ((&&.), (||.))
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
 #endif
@@ -62,6 +63,9 @@ share [mkPersist,  mkMigrate "testMigrate", mkDeleteCascade] [$persist|
     age Int "some ignored -- attribute"
     color String Maybe -- this is a comment sql=foobarbaz
     PersonNameKey name -- this is a comment sql=foobarbaz
+  Person1
+    name String
+    age Int
   Pet
     owner PersonId
     name String
@@ -122,6 +126,7 @@ testSuite = testGroup "Database.Persistent" $ reverse
     , testCase "sqlite delete" case_sqliteDelete
     , testCase "sqlite replace" case_sqliteReplace
     , testCase "sqlite getBy" case_sqliteGetBy
+    , testCase "sqlite andOr" case_sqliteAndOr
     , testCase "sqlite update" case_sqliteUpdate
     , testCase "sqlite updateWhere" case_sqliteUpdateWhere
     , testCase "sqlite selectList" case_sqliteSelectList
@@ -143,6 +148,7 @@ case_sqliteDeleteBy = sqliteTest _deleteBy
 case_sqliteDelete = sqliteTest _delete
 case_sqliteReplace = sqliteTest _replace
 case_sqliteGetBy = sqliteTest _getBy
+case_sqliteAndOr = sqliteTest _andOr
 case_sqliteUpdate = sqliteTest _update
 case_sqliteUpdateWhere = sqliteTest _updateWhere
 case_sqliteSelectList = sqliteTest _selectList
@@ -227,6 +233,21 @@ _getBy = do
   k' @== k
   p' @== p
   return ()
+
+_andOr = do
+  _ <- insert $ Person1 "Michael" 25
+  _ <- insert $ Person1 "Miriam" 25
+  _ <- insert $ Person1 "Michael" 30
+  _ <- insert $ Person1 "Michael" 35
+
+  c1 <- count [(Person1Name ==. "Michael") ||. (Person1Name ==. "Miriam")]
+  c1 @== 4
+
+  c2 <- count [(Person1Name ==. "Michael") &&. (Person1Name ==. "Miriam")]
+  c2 @== 0
+
+  c3 <- count [(Person1Name ==. "Miriam") ||. ((Person1Age >. 29) &&. (Person1Age <=. 30))]
+  c3 @== 2
 
 _update = do
   let p25 = Person "Michael" 25 Nothing

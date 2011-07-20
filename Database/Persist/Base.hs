@@ -299,6 +299,8 @@ data Filter v = forall typ. PersistField typ => Filter
     , filterValue :: Either typ [typ] -- FIXME
     , filterFilter :: PersistFilter -- FIXME
     }
+    | FilterAnd [Filter v]
+    | FilterOr [Filter v]
 
 -- | A single database entity. For example, if writing a blog application, a
 -- blog entry would be an entry, containing fields such as title and content.

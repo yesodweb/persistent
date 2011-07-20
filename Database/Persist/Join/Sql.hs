@@ -42,7 +42,7 @@ selectOneMany' :: (MonadControlIO m,
                  SelectOneMany val val1 -> SqlPersist m [((Key b, b), [(Key d, d)])]
 selectOneMany' (SelectOneMany oneF oneO manyF manyO eq _getKey isOuter) = do
     conn <- SqlPersist ask
-    liftM go $ withStmt (sql conn) (getFiltsValues oneF ++ getFiltsValues manyF) $ loop id
+    liftM go $ withStmt (sql conn) (getFiltsValues conn oneF ++ getFiltsValues conn manyF) $ loop id
   where
     go :: Eq a => [((a, b), Maybe (c, d))] -> [((a, b), [(c, d)])]
     go = map (fst . head &&& mapMaybe snd) . groupBy ((==) `on` (fst . fst))
@@ -75,15 +75,19 @@ selectOneMany' (SelectOneMany oneF oneO manyF manyO eq _getKey isOuter) = do
         , escapeName conn $ rawTableName $ entityDef many
         , "."
         , escapeName conn $ RawName $ filterName $ eq undefined
-        , if null filts
-            then ""
-            else " WHERE " ++ intercalate " AND " filts
+        , filts
         , if null ords
             then ""
             else " ORDER BY " ++ intercalate ", " ords
         ]
       where
-        filts = map (filterClause True conn) oneF ++ map (filterClause True conn) manyF
+        filts1 = filterClauseNoWhere True conn oneF
+        filts2 = filterClauseNoWhere True conn manyF
+        filts
+            | null filts1 && null filts2 = ""
+            | null filts1 = " WHERE " ++ filts2
+            | null filts2 = " WHERE " ++ filts1
+            | otherwise = " WHERE " ++ filts1 ++ " AND " ++ filts2
         ords = mapMaybe (orderClause True conn) oneO ++ mapMaybe (orderClause True conn) manyO
 
 addTable :: PersistEntity val =>

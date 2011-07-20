@@ -16,10 +16,11 @@ module Database.Persist.GenericSql.Internal
     , rawTableName
     , RawName (..)
     , filterClause
+    , filterClauseNoWhere
     , getFieldName
     , dummyFromFilts
-    , getFiltsValues
     , orderClause
+    , getFiltsValues
     ) where
 
 import qualified Data.Map as Map
@@ -136,80 +137,101 @@ rawTableName t = RawName $
 newtype RawName = RawName { unRawName :: String } -- FIXME Text
     deriving (Eq, Ord)
 
+getFiltsValues conn = snd . filterClauseHelper False False conn . FilterAnd
+
 filterClause :: PersistEntity val
              => Bool -- ^ include table name?
-             -> Connection -> Filter val -> String
-filterClause includeTable conn f =
-    case (isNull, filterFilter f, varCount) of
-        (True, Eq, _) -> name ++ " IS NULL"
-        (True, Ne, _) -> name ++ " IS NOT NULL"
-        (False, Ne, _) -> concat
-            [ "("
-            , name
-            , " IS NULL OR "
-            , name
-            , "<>?)"
-            ]
-        -- We use 1=2 (and below 1=1) to avoid using TRUE and FALSE, since
-        -- not all databases support those words directly.
-        (_, In, 0) -> "1=2"
-        (False, In, _) -> name ++ " IN " ++ qmarks
-        (True, In, _) -> concat
-            [ "("
-            , name
-            , " IS NULL OR "
-            , name
-            , " IN "
-            , qmarks
-            , ")"
-            ]
-        (_, NotIn, 0) -> "1=1"
-        (False, NotIn, _) -> concat
-            [ "("
-            , name
-            , " IS NULL OR "
-            , name
-            , " NOT IN "
-            , qmarks
-            , ")"
-            ]
-        (True, NotIn, _) -> concat
-            [ "("
-            , name
-            , " IS NOT NULL AND "
-            , name
-            , " NOT IN "
-            , qmarks
-            , ")"
-            ]
-        _ -> name ++ showSqlFilter (filterFilter f) ++ "?"
+             -> Connection -> [Filter val] -> String
+filterClause b c = fst . filterClauseHelper b True c . FilterAnd
+
+filterClauseNoWhere :: PersistEntity val
+                    => Bool -- ^ include table name?
+                    -> Connection -> [Filter val] -> String
+filterClauseNoWhere b c = fst . filterClauseHelper b False c . FilterAnd
+
+filterClauseHelper :: PersistEntity val
+             => Bool -- ^ include table name?
+             -> Bool -- ^ include WHERE?
+             -> Connection -> Filter val -> (String, [PersistValue])
+filterClauseHelper includeTable includeWhere conn f0 =
+    (if not (null sql) && includeWhere
+        then " WHERE " ++ sql
+        else sql, vals)
   where
-    isNull = any (== PersistNull)
-           $ either return id
-           $ filterPersistValue f
-    t = entityDef $ dummyFromFilts [f]
-    name =
-        (if includeTable
-            then (++) (escapeName conn (rawTableName t) ++ ".")
-            else id)
-        $ escapeName conn $ getFieldName t $ filterName f
-    qmarks = case filterPersistValue f of
-                Left _ -> "?"
-                Right x ->
-                    let x' = filter (/= PersistNull) x
-                     in '(' : intercalate "," (map (const "?") x') ++ ")"
-    varCount = case filterPersistValue f of
-                Left _ -> 1
-                Right x -> length x
-    showSqlFilter Eq = "="
-    showSqlFilter Ne = "<>"
-    showSqlFilter Gt = ">"
-    showSqlFilter Lt = "<"
-    showSqlFilter Ge = ">="
-    showSqlFilter Le = "<="
-    showSqlFilter In = " IN "
-    showSqlFilter NotIn = " NOT IN "
-    showSqlFilter (BackendSpecificFilter s) = s
+    (sql, vals) = go f0
+
+    combine s fs =
+        (intercalate s a, concat b)
+      where
+        (a, b) = unzip $ map go fs
+
+    go (FilterAnd fs) = combine " AND " fs
+    go (FilterOr fs) = combine " OR " fs
+    go (Filter field value pfilter) =
+        case (isNull, pfilter, varCount) of
+            (True, Eq, _) -> (name ++ " IS NULL", [])
+            (True, Ne, _) -> (name ++ " IS NOT NULL", [])
+            (False, Ne, _) -> (name ++ " IS NULL", [])
+            -- We use 1=2 (and below 1=1) to avoid using TRUE and FALSE, since
+            -- not all databases support those words directly.
+            (_, In, 0) -> ("1=2", [])
+            (False, In, _) -> (name ++ " IN " ++ qmarks, allVals)
+            (True, In, _) -> (concat
+                [ "("
+                , name
+                , " IS NULL OR "
+                , name
+                , " IN "
+                , qmarks
+                , ")"
+                ], notNullVals)
+            (_, NotIn, 0) -> ("1=1", [])
+            (False, NotIn, _) -> (concat
+                [ "("
+                , name
+                , " IS NULL OR "
+                , name
+                , " NOT IN "
+                , qmarks
+                , ")"
+                ], notNullVals)
+            (True, NotIn, _) -> (concat
+                [ "("
+                , name
+                , " IS NOT NULL AND "
+                , name
+                , " NOT IN "
+                , qmarks
+                , ")"
+                ], notNullVals)
+            _ -> (name ++ showSqlFilter pfilter ++ "?", allVals)
+      where
+        isNull = any (== PersistNull) allVals
+        notNullVals = filter (/= PersistNull) allVals
+        allVals = map toPersistValue $ either return id value
+        t = entityDef $ dummyFromFilts [Filter field value pfilter]
+        name =
+            (if includeTable
+                then (++) (escapeName conn (rawTableName t) ++ ".")
+                else id)
+            $ escapeName conn $ getFieldName t $ columnName $ persistColumnDef field
+        qmarks = case value of
+                    Left _ -> "?"
+                    Right x ->
+                        let x' = filter (/= PersistNull) $ map toPersistValue x
+                         in '(' : intercalate "," (map (const "?") x') ++ ")"
+        varCount = case value of
+                    Left _ -> 1
+                    Right x -> length x
+        showSqlFilter Eq = "="
+        showSqlFilter Ne = "<>"
+        showSqlFilter Gt = ">"
+        showSqlFilter Lt = "<"
+        showSqlFilter Ge = ">="
+        showSqlFilter Le = "<="
+        showSqlFilter In = " IN "
+        showSqlFilter NotIn = " NOT IN "
+        showSqlFilter (BackendSpecificFilter s) = s
 
 dummyFromFilts :: [Filter v] -> v
 dummyFromFilts _ = error "dummyFromFilts"
@@ -225,14 +247,6 @@ tableColumn t s = go $ entityColumns t
     go (ColumnDef x y z:rest)
         | x == s = ColumnDef x y z
         | otherwise = go rest
-
-getFiltsValues :: PersistEntity val => [Filter val] -> [PersistValue]
-getFiltsValues =
-    concatMap $ go . filterPersistValue
-  where
-    go (Left PersistNull) = []
-    go (Left x) = [x]
-    go (Right xs) = filter (/= PersistNull) xs
 
 dummyFromOrder :: SelectOpt a -> a
 dummyFromOrder _ = undefined
@@ -251,9 +265,3 @@ orderClause includeTable conn o =
             then (++) (escapeName conn (rawTableName t) ++ ".")
             else id)
         $ escapeName conn $ getFieldName t $ columnName $ cd x
-
-filterPersistValue :: Filter v -> Either PersistValue [PersistValue]
-filterPersistValue (Filter _ v _) = either (Left . toPersistValue) (Right . map toPersistValue) v
-
-filterName :: PersistEntity v => Filter v -> String
-filterName (Filter f _ _) = columnName $ persistColumnDef f

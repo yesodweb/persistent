@@ -122,14 +122,13 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
         conn <- SqlPersist ask
         let wher = if null filts
                     then ""
-                    else " WHERE " ++
-                         intercalate " AND " (map (filterClause False conn) filts)
+                    else filterClause False conn filts
         let sql = pack $ concat
                 [ "SELECT COUNT(*) FROM "
                 , escapeName conn $ rawTableName t
                 , wher
                 ]
-        withStmt' sql (getFiltsValues filts) $ \pop -> do
+        withStmt' sql (getFiltsValues conn filts) $ \pop -> do
             Just [PersistInt64 i] <- pop
             return $ fromIntegral i
       where
@@ -150,7 +149,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
 
         start x = do
             conn <- SqlPersist ask
-            withStmt' (sql conn) (getFiltsValues filts) $ loop x
+            withStmt' (sql conn) (getFiltsValues conn filts) $ loop x
         loop (Continue k) pop = do
             res <- pop
             case res of
@@ -171,8 +170,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
         fromPersistValues' _ = Left "error in fromPersistValues'"
         wher conn = if null filts
                     then ""
-                    else " WHERE " ++
-                         intercalate " AND " (map (filterClause False conn) filts)
+                    else filterClause False conn filts
         ord conn =
             case mapMaybe (orderClause False conn) opts of
                 [] -> ""
@@ -203,7 +201,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
       where
         start x = do
             conn <- SqlPersist ask
-            withStmt' (sql conn) (getFiltsValues filts) $ loop x
+            withStmt' (sql conn) (getFiltsValues conn filts) $ loop x
         loop (Continue k) pop = do
             res <- pop
             case res of
@@ -217,8 +215,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
         t = entityDef $ dummyFromFilts filts
         wher conn = if null filts
                     then ""
-                    else " WHERE " ++
-                         intercalate " AND " (map (filterClause False conn) filts)
+                    else filterClause False conn filts
         sql conn = pack $ concat
             [ "SELECT id FROM "
             , escapeName conn $ rawTableName t
@@ -241,14 +238,13 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
         let t = entityDef $ dummyFromFilts filts
         let wher = if null filts
                     then ""
-                    else " WHERE " ++
-                         intercalate " AND " (map (filterClause False conn) filts)
+                    else filterClause False conn filts
             sql = pack $ concat
                 [ "DELETE FROM "
                 , escapeName conn $ rawTableName t
                 , wher
                 ]
-        execute' sql $ getFiltsValues filts
+        execute' sql $ getFiltsValues conn filts
 
     deleteBy uniq = do
         conn <- SqlPersist ask
@@ -293,8 +289,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
         conn <- SqlPersist ask
         let wher = if null filts
                     then ""
-                    else " WHERE " ++
-                         intercalate " AND " (map (filterClause False conn) filts)
+                    else filterClause False conn filts
         let sql = pack $ concat
                 [ "UPDATE "
                 , escapeName conn $ rawTableName t
@@ -302,7 +297,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
                 , intercalate "," $ map (go' conn . go) upds
                 , wher
                 ]
-        let dat = map updatePersistValue upds ++ getFiltsValues filts
+        let dat = map updatePersistValue upds ++ getFiltsValues conn filts
         execute' sql dat
       where
         t = entityDef $ dummyFromFilts filts

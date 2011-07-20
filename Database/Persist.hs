@@ -13,6 +13,7 @@ module Database.Persist
     , (=.), (+.)
     , (==.), (/=.), (<.), (>.), (<=.), (>=.)
     , (<-.), (/<-.)
+    , (&&.), (||.)
     ) where
 
 import Database.Persist.Base
@@ -32,3 +33,7 @@ f >=. a = Filter f (Left a) Ge
 infix 4 <-., /<-.
 f <-. a = Filter f (Right a) In
 f /<-. a = Filter f (Right a) NotIn
+
+infixr 6 &&., ||.
+a &&. b = FilterAnd [a, b]
+a ||. b = FilterOr [a, b]
