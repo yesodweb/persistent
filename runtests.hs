@@ -235,18 +235,19 @@ _getBy = do
   return ()
 
 _andOr = do
+  deleteWhere ([] :: [Filter Person1])
   _ <- insert $ Person1 "Michael" 25
   _ <- insert $ Person1 "Miriam" 25
   _ <- insert $ Person1 "Michael" 30
   _ <- insert $ Person1 "Michael" 35
 
-  c1 <- count [(Person1Name ==. "Michael") ||. (Person1Name ==. "Miriam")]
+  c1 <- count [Person1Name ==. "Michael" ||. Person1Name ==. "Miriam"]
   c1 @== 4
 
-  c2 <- count [(Person1Name ==. "Michael") &&. (Person1Name ==. "Miriam")]
+  c2 <- count [Person1Name ==. "Michael" &&. Person1Name ==. "Miriam"]
   c2 @== 0
 
-  c3 <- count [(Person1Name ==. "Miriam") ||. ((Person1Age >. 29) &&. (Person1Age <=. 30))]
+  c3 <- count [Person1Name ==. "Miriam" ||. (Person1Age >. 29 &&. Person1Age <=. 30)]
   c3 @== 2
 
 _update = do

@@ -34,6 +34,6 @@ infix 4 <-., /<-.
 f <-. a = Filter f (Right a) In
 f /<-. a = Filter f (Right a) NotIn
 
-infixr 6 &&., ||.
+infix 3 &&., ||.
 a &&. b = FilterAnd [a, b]
 a ||. b = FilterOr [a, b]
