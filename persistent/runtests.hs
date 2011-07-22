@@ -7,10 +7,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GADTs #-}
 
-import Test.Framework (defaultMain, testGroup, Test)
-import Test.Framework.Providers.HUnit
--- import Test.Framework.Providers.QuickCheck
 import Test.HUnit hiding (Test)
+import Test.Hspec
+import Test.Hspec.HUnit
 
 import Database.Persist.GenericSql
 import Database.Persist.Sqlite
@@ -27,7 +26,7 @@ import qualified Database.Persist.Join
 import qualified Database.Persist.Join.Sql
 
 import Control.Monad.Trans.Reader
-import Monad (unless)
+import Control.Monad (unless)
 import Data.Int
 import Data.Word
 
@@ -90,81 +89,58 @@ share [mkPersist,  mkMigrate "testMigrate", mkDeleteCascade] [$persist|
 -- connstr = "user=test password=test host=localhost port=5432 dbname=yesod_test"
 
 runConn f = do
-    (withSqlitePool "testdb" 1) $ runSqlPool f
+    withSqlitePool "testdb" 1 $ runSqlPool f
 #if WITH_POSTGRESQL
-    (withPostgresqlPool "user=test password=test host=localhost port=5432 dbname=test" 1) $ runSqlPool f
+    withPostgresqlPool "user=test password=test host=localhost port=5432 dbname=test" 1 $ runSqlPool f
 #endif
 
--- TODO: run tests in transaction
-sqliteTest :: SqlPersist IO () -> Assertion
-sqliteTest actions = do
-  runConn actions
+sqlTest :: SqlPersist IO () -> Assertion
+sqlTest actions = do
   runConn cleanDB
+  runConn actions
 
 cleanDB :: SqlPersist IO ()
 cleanDB = do
   deleteWhere ([] :: [Filter Pet])
   deleteWhere ([] :: [Filter Person])
+  deleteWhere ([] :: [Filter Person1])
   deleteWhere ([] :: [Filter Number])
   deleteWhere ([] :: [Filter Entry])
   deleteWhere ([] :: [Filter Author])
 
 setup :: SqlPersist IO ()
-setup = do
-  runMigration testMigrate
-  cleanDB
+setup = runMigration testMigrate
 
 main :: IO ()
 main = do
-  runConn setup
-  defaultMain [testSuite]
+    runConn setup
+    _ <- hspec $ describe "persistent"
+        [ it "passes the general tests" caseGeneral
+        , it "deleteWhere" caseDeleteWhere
+        , it "deleteBy" caseDeleteBy
+        , it "delete" caseDelete
+        , it "replace" caseReplace
+        , it "getBy" caseGetBy
+        , it "and/or" caseAndOr
+        , it "commit/rollback" caseCommitRollback
+        , it "update" caseUpdate
+        , it "updateWhere" caseUpdateWhere
+        , it "selectList" caseSelectList
+        , it "large numbers" caseLargeNumbers
+        , it "insertBy" caseInsertBy
+        , it "derivePersistField" caseDerivePersistField
+        , it "afterException" caseAfterException
+        , it "idIn" caseIdIn
+        , it "joinNonSql" caseJoinNonSql
+        , it "joinSql" caseJoinSql
+        ]
+    return ()
 
-testSuite :: Test
-testSuite = testGroup "Database.Persistent" $ reverse
-    [ testCase "sqlite persistent" case_sqlitePersistent
-    , testCase "sqlite deleteWhere" case_sqliteDeleteWhere
-    , testCase "sqlite deleteBy" case_sqliteDeleteBy
-    , testCase "sqlite delete" case_sqliteDelete
-    , testCase "sqlite replace" case_sqliteReplace
-    , testCase "sqlite getBy" case_sqliteGetBy
-    , testCase "sqlite andOr" case_sqliteAndOr
-    , testCase "commit/rollback" case_sqliteCommitRollback
-    , testCase "sqlite update" case_sqliteUpdate
-    , testCase "sqlite updateWhere" case_sqliteUpdateWhere
-    , testCase "sqlite selectList" case_sqliteSelectList
-    , testCase "large numbers" case_largeNumbers
-    , testCase "insertBy" case_insertBy
-    , testCase "derivePersistField" case_derivePersistField
-    , testCase "afterException" case_afterException
-    , testCase "idIn" case_idIn
-    , testCase "join (non-SQL)" case_joinNonSql
-    , testCase "join (SQL)" case_joinSql
-    ]
-
-                          
 assertEmpty xs    = liftIO $ assertBool "" (null xs)
 assertNotEmpty xs = liftIO $ assertBool "" (not (null xs))
 
-case_sqliteDeleteWhere = sqliteTest _deleteWhere
-case_sqliteDeleteBy = sqliteTest _deleteBy
-case_sqliteDelete = sqliteTest _delete
-case_sqliteReplace = sqliteTest _replace
-case_sqliteGetBy = sqliteTest _getBy
-case_sqliteAndOr = sqliteTest _andOr
-case_sqliteCommitRollback = sqliteTest _commitRollback
-case_sqliteUpdate = sqliteTest _update
-case_sqliteUpdateWhere = sqliteTest _updateWhere
-case_sqliteSelectList = sqliteTest _selectList
-case_sqlitePersistent = sqliteTest _persistent
-case_largeNumbers = sqliteTest _largeNumbers
-case_insertBy = sqliteTest _insertBy
-case_derivePersistField = sqliteTest _derivePersistField
-case_afterException = (withSqlitePool "testdb" 1) $ runSqlPool _afterException
-case_idIn = sqliteTest _idIn
-case_joinNonSql = sqliteTest _joinNonSql
-case_joinSql = sqliteTest _joinSql
-
-_deleteWhere = do
+caseDeleteWhere :: Assertion
+caseDeleteWhere = sqlTest $ do
   key2 <- insert $ Person "Michael2" 90 Nothing
   _    <- insert $ Person "Michael3" 90 Nothing
   let p91 = Person "Michael4" 91 Nothing
@@ -180,7 +156,8 @@ _deleteWhere = do
   Just p2_91 <- get key91
   p91 @== p2_91
 
-_deleteBy = do
+caseDeleteBy :: Assertion
+caseDeleteBy = sqlTest $ do
   key2 <- insert $ Person "Michael2" 27 Nothing
   let p3 = Person "Michael3" 27 Nothing
   key3 <- insert $ p3
@@ -195,7 +172,8 @@ _deleteBy = do
   Just p32 <- get key3
   p3 @== p32
 
-_delete = do
+caseDelete :: Assertion
+caseDelete = sqlTest $ do
   key2 <- insert $ Person "Michael2" 27 Nothing
   let p3 = Person "Michael3" 27 Nothing
   key3 <- insert $ p3
@@ -210,7 +188,8 @@ _delete = do
   p3 @== p
 
 -- also a decent test of get
-_replace = do
+caseReplace :: Assertion
+caseReplace = sqlTest $ do
   key2 <- insert $ Person "Michael2" 27 Nothing
   let p3 = Person "Michael3" 27 Nothing
   replace key2 p3
@@ -224,7 +203,8 @@ _replace = do
   Nothing <- get key2
   return ()
 
-_getBy = do
+caseGetBy :: Assertion
+caseGetBy = sqlTest $ do
   let p2 = Person "Michael2" 27 Nothing
   key2 <- insert p2
   Just (k, p) <- getBy $ PersonNameKey "Michael2"
@@ -237,7 +217,8 @@ _getBy = do
   p' @== p
   return ()
 
-_andOr = do
+caseAndOr :: Assertion
+caseAndOr = sqlTest $ do
   deleteWhere ([] :: [Filter Person1])
   _ <- insert $ Person1 "Michael" 25
   _ <- insert $ Person1 "Miriam" 25
@@ -256,7 +237,8 @@ _andOr = do
   x <- selectFirst [] [Desc Person1Age]
   fmap snd x @== Just (Person1 "Michael" 35)
 
-_update = do
+caseUpdate :: Assertion
+caseUpdate = sqlTest $ do
   let p25 = Person "Michael" 25 Nothing
   key25 <- insert p25
   update key25 [PersonAge =. 28, PersonName =. "Updated"]
@@ -266,7 +248,8 @@ _update = do
   Just pBlue30 <- get key25
   pBlue30 @== Person "Updated" 30 Nothing
 
-_updateWhere = do
+caseUpdateWhere :: Assertion
+caseUpdateWhere = sqlTest $ do
   let p1 = Person "Michael" 25 Nothing
   let p2 = Person "Michael2" 25 Nothing
   key1 <- insert p1
@@ -278,7 +261,8 @@ _updateWhere = do
   Just p <- get key1
   p @== p1
 
-_selectList = do
+caseSelectList :: Assertion
+caseSelectList = sqlTest $ do
   let p25 = Person "Michael" 25 Nothing
   let p26 = Person "Michael2" 26 Nothing
   key25 <- insert p25
@@ -301,7 +285,8 @@ _selectList = do
   ps @== [(key26, p26)]
 
 -- general tests transferred from already exising test file
-_persistent = do
+caseGeneral :: Assertion
+caseGeneral = sqlTest $ do
   let mic = Person "Michael" 25 Nothing
   micK <- insert mic
   Just p <- get micK
@@ -359,7 +344,8 @@ _persistent = do
   Nothing <- get micK
   return ()
 
-_largeNumbers = do
+caseLargeNumbers :: Assertion
+caseLargeNumbers = sqlTest $ do
     go $ Number maxBound 0 0 0 0
     go $ Number 0 maxBound 0 0 0
     go $ Number 0 0 maxBound 0 0
@@ -377,13 +363,15 @@ _largeNumbers = do
         x' <- get xid
         liftIO $ x' @?= Just x
 
-_insertBy = do
+caseInsertBy :: Assertion
+caseInsertBy = sqlTest $ do
     Right _ <- insertBy $ Person "name" 1 Nothing
     Left _ <- insertBy $ Person "name" 1 Nothing
     Right _ <- insertBy $ Person "name2" 1 Nothing
     return ()
 
-_derivePersistField = do
+caseDerivePersistField :: Assertion
+caseDerivePersistField = sqlTest $ do
     person <- insert $ Person "pet owner" 30 Nothing
     cat <- insert $ Pet person "Mittens" Cat
     Just cat' <- get cat
@@ -392,7 +380,8 @@ _derivePersistField = do
     Just dog' <- get dog
     liftIO $ petType dog' @?= Dog
 
-_commitRollback = do
+caseCommitRollback :: Assertion
+caseCommitRollback = sqlTest $ do
     let filt :: [Filter Person1]
         filt = []
     deleteWhere filt
@@ -422,7 +411,8 @@ _commitRollback = do
     c4 <- count filt
     c4 @== 4
 
-_afterException = do
+caseAfterException :: Assertion
+caseAfterException = withSqlitePool "testdb" 1 $ runSqlPool $ do
     _ <- insert $ Person "A" 0 Nothing
     _ <- (insert (Person "A" 1 Nothing) >> return ()) `Control.catch` catcher
     _ <- insert $ Person "B" 0 Nothing
@@ -431,7 +421,8 @@ _afterException = do
     catcher :: Monad m => SomeException -> m ()
     catcher _ = return ()
 
-_idIn = do
+caseIdIn :: Assertion
+caseIdIn = sqlTest $ do
     let p1 = Person "A" 0 Nothing
         p2 = Person "B" 1 Nothing
         p3 = Person "C" 2 Nothing
@@ -441,8 +432,11 @@ _idIn = do
     x <- selectList [PersonId <-. [pid1, pid3]] []
     liftIO $ x @?= [(pid1, p1), (pid3, p3)]
 
-_joinNonSql = _joinGen Database.Persist.Join.runJoin
-_joinSql = _joinGen Database.Persist.Join.Sql.runJoin
+caseJoinNonSql :: Assertion
+caseJoinNonSql = sqlTest $ _joinGen Database.Persist.Join.runJoin
+
+caseJoinSql :: Assertion
+caseJoinSql = sqlTest $ _joinGen Database.Persist.Join.Sql.runJoin
 
 _joinGen run = do
     a <- insert $ Author "a"

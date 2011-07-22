@@ -42,15 +42,13 @@ test-suite runtests
     main-is:       runtests.hs
     hs-source-dirs: ., ../persistent-template, ../persistent-sqlite, ../persistent-postgresql
 
-    build-depends:   haskell98,
-                     HUnit,
-                     test-framework,
+    build-depends:   HUnit,
+                     hspec,
                      test-framework-hunit,
                      base >= 4 && < 5,
                      template-haskell >= 2.4 && < 2.6,
                      HDBC-postgresql,
-                     HDBC,
-                     web-routes-quasi >= 0.7 && < 0.8
+                     HDBC
     cpp-options: -DWITH_POSTGRESQL
     ghc-options:   -Wall -ddump-splices
     extra-libraries: sqlite3
