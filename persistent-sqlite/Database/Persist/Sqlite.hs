@@ -3,6 +3,8 @@
 module Database.Persist.Sqlite
     ( withSqlitePool
     , withSqliteConn
+    , withSqlitePoolLogger
+    , withSqliteConnLogger
     , module Database.Persist
     , module Database.Persist.GenericSql
     ) where
@@ -23,20 +25,30 @@ import Control.Exception.Control (finally)
 import Data.Text (Text, pack, unpack)
 
 withSqlitePool :: MonadControlIO m
-               => Text
-               -> Int -- ^ number of connections to open
-               -> (ConnectionPool -> m a) -> m a
-withSqlitePool s = withSqlPool $ open' s
+                   => Text
+                   -> Int -- ^ number of connections to open
+                   -> (ConnectionPool -> m a) -> m a
+withSqlitePool = withSqlitePoolLogger (\_ -> return ())
 
 withSqliteConn :: MonadControlIO m => Text -> (Connection -> m a) -> m a
-withSqliteConn = withSqlConn . open'
+withSqliteConn = withSqliteConnLogger (\_ -> return ())
 
-open' :: Text -> IO Connection
-open' s = do
+withSqlitePoolLogger :: MonadControlIO m
+                         => (Text -> IO ()) -> Text -> Int -> (ConnectionPool -> m a)
+                         -> m a
+withSqlitePoolLogger logger s = withSqlPool $ open' logger s
+
+withSqliteConnLogger :: MonadControlIO m
+                         => (Text -> IO ()) -> Text -> (Connection -> m a)
+                         -> m a
+withSqliteConnLogger logger s = withSqlConn $ (open' logger s)
+
+open' :: (Text -> IO ()) -> Text -> IO Connection
+open' logger s = do
     conn <- Sqlite.open s
     smap <- newIORef $ Map.empty
     return Connection
-        { prepare = prepare' conn
+        { prepare = prepare' conn logger
         , stmtMap = smap
         , insertSql = insertSql'
         , close = Sqlite.close conn
@@ -53,14 +65,14 @@ open' s = do
         execute stmt []
         reset stmt
 
-prepare' :: Sqlite.Connection -> Text -> IO Statement
-prepare' conn sql = do
+prepare' :: Sqlite.Connection -> (Text -> IO ()) -> Text -> IO Statement
+prepare' conn logger sql = do
     stmt <- Sqlite.prepare conn sql
     return Statement
         { finalize = Sqlite.finalize stmt
         , reset = Sqlite.reset stmt
-        , execute = execute' stmt
-        , withStmt = withStmt' stmt
+        , execute = \vals -> logger sql >> execute' stmt vals
+        , withStmt = \vals f -> (liftIO $ logger sql) >> withStmt' stmt vals f
         }
 
 insertSql' :: RawName -> [RawName] -> Either Text (Text, Text)

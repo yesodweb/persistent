@@ -29,6 +29,7 @@ import Control.Monad.Trans.Reader
 import Control.Monad (unless)
 import Data.Int
 import Data.Word
+import qualified Data.Text as T
 
 import Control.Exception (SomeException)
 import qualified Control.Exception.Control as Control
@@ -89,10 +90,12 @@ share [mkPersist,  mkMigrate "testMigrate", mkDeleteCascade] [$persist|
 -- connstr = "user=test password=test host=localhost port=5432 dbname=yesod_test"
 
 runConn f = do
-    withSqlitePool "testdb" 1 $ runSqlPool f
+    withSqlitePoolLogger (\s->putStrLn $ T.unpack s) "testdb" 1 $ runSqlPool f
+    {-
 #if WITH_POSTGRESQL
-    withPostgresqlPool "user=test password=test host=localhost port=5432 dbname=test" 1 $ runSqlPool f
+    withPostgresqlPoolLogger (\s->putStrLn $ T.unpack s) "user=test password=test host=localhost port=5432 dbname=test" 1 $ runSqlPool f
 #endif
+-}
 
 sqlTest :: SqlPersist IO () -> Assertion
 sqlTest actions = do
