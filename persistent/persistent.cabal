@@ -63,7 +63,7 @@ executable         runtests
             cpp-options: -DWITH_POSTGRESQL
     else
         Buildable: False
-    hs-source-dirs: ., packages/template, backends/sqlite, backends/postgresql
+    hs-source-dirs: ., ../persistent-template, ../persistent-sqlite, ../persistent-postgresql
     main-is:       runtests.hs
     ghc-options:   -Wall -ddump-splices
     extra-libraries: sqlite3
