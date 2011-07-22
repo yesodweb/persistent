@@ -25,6 +25,7 @@ module Database.Persist.Base
     , SelectOpt (..)
     , SomePersistField (..)
     , selectList
+    , selectFirst
     , insertBy
     , getByValue
     , checkUnique
@@ -54,6 +55,7 @@ import qualified Data.ByteString as S
 import qualified Data.ByteString.Lazy as L
 import Data.Enumerator hiding (consume)
 import Data.Enumerator.List (consume)
+import qualified Data.Enumerator.List as EL
 import qualified Control.Exception as E
 import Data.Bits (bitSize)
 import Control.Monad (liftM)
@@ -432,6 +434,13 @@ selectList a b = do
     case res of
         Left e -> error $ show e
         Right x -> return x
+
+-- | Call 'select' and return the first result, if available.
+selectFirst :: (PersistEntity val, PersistBackend m)
+            => [Filter val]
+            -> [SelectOpt val]
+            -> m (Maybe (Key val, val))
+selectFirst a b = run_ $ selectEnum a b ==<< EL.head
 
 data EntityDef = EntityDef
     { entityName    :: String

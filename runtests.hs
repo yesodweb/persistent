@@ -250,6 +250,9 @@ _andOr = do
   c3 <- count [Person1Name ==. "Miriam" ||. (Person1Age >. 29 &&. Person1Age <=. 30)]
   c3 @== 2
 
+  x <- selectFirst [] [Desc Person1Age]
+  fmap snd x @== Just (Person1 "Michael" 35)
+
 _update = do
   let p25 = Person "Michael" 25 Nothing
   key25 <- insert p25
