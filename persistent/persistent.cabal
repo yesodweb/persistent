@@ -10,7 +10,7 @@ category:        Database, Yesod
 stability:       Stable
 cabal-version:   >= 1.6
 build-type:      Simple
-homepage:        http://docs.yesodweb.com/book/persistent
+homepage:        http://www.yesodweb.com/book/persistent
 
 library
     if flag(test)
@@ -70,4 +70,4 @@ executable         runtests
 
 source-repository head
   type:     git
-  location: git://github.com/snoyberg/persistent.git
+  location: git://github.com/yesodweb/persistent.git
