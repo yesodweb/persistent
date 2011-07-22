@@ -43,7 +43,7 @@ test-suite runtests
     hs-source-dirs: ., ../persistent-template, ../persistent-sqlite, ../persistent-postgresql
 
     build-depends:   HUnit,
-                     hspec,
+                     hspec >= 0.6 && < 0.7,
                      test-framework-hunit,
                      base >= 4 && < 5,
                      template-haskell >= 2.4 && < 2.6,

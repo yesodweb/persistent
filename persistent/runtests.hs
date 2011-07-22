@@ -114,7 +114,7 @@ setup = runMigration testMigrate
 main :: IO ()
 main = do
     runConn setup
-    _ <- hspec $ describe "persistent"
+    hspecX $ describe "persistent"
         [ it "passes the general tests" caseGeneral
         , it "deleteWhere" caseDeleteWhere
         , it "deleteBy" caseDeleteBy
@@ -126,6 +126,7 @@ main = do
         , it "update" caseUpdate
         , it "updateWhere" caseUpdateWhere
         , it "selectList" caseSelectList
+        , it "selectFirst" caseSelectFirst
         , it "large numbers" caseLargeNumbers
         , it "insertBy" caseInsertBy
         , it "derivePersistField" caseDerivePersistField
@@ -134,7 +135,6 @@ main = do
         , it "joinNonSql" caseJoinNonSql
         , it "joinSql" caseJoinSql
         ]
-    return ()
 
 assertEmpty xs    = liftIO $ assertBool "" (null xs)
 assertNotEmpty xs = liftIO $ assertBool "" (not (null xs))
@@ -225,17 +225,34 @@ caseAndOr = sqlTest $ do
   _ <- insert $ Person1 "Michael" 30
   _ <- insert $ Person1 "Michael" 35
 
-  c1 <- count [Person1Name ==. "Michael" ||. Person1Name ==. "Miriam"]
-  c1 @== 4
+  c10 <- count $ [Person1Name ==. "Michael"] ||. [Person1Name ==. "Miriam"]
+  c10 @== 4
+  c12 <- count [FilterOr [Person1Name ==. "Michael", Person1Name ==. "Miriam"]]
+  c12 @== 4
+  c14 <- count [FilterOr [Person1Name ==. "Michael", Person1Name ==. "Miriam",
+                            Person1Age >. 29, Person1Age <=. 30]]
+  c14 @== 4
 
-  c2 <- count [Person1Name ==. "Michael" &&. Person1Name ==. "Miriam"]
-  c2 @== 0
+  c20 <- count $ [Person1Name ==. "Miriam"] ||. [Person1Age >. 29, Person1Age <=. 30]
+  c20 @== 2
 
-  c3 <- count [Person1Name ==. "Miriam" ||. (Person1Age >. 29 &&. Person1Age <=. 30)]
-  c3 @== 2
+  c22 <- count $ [Person1Age <=. 30] &&. [Person1Age >. 29]
+  c22 @== 1
 
-  x <- selectFirst [] [Desc Person1Age]
-  fmap snd x @== Just (Person1 "Michael" 35)
+  c24 <- count $ [FilterAnd [Person1Age <=. 30, Person1Age >. 29]]
+  c24 @== 1
+
+  c26 <- count $ [Person1Age <=. 30] ++ [Person1Age >. 29]
+  c26 @== 1
+
+  c30 <- count $ ([Person1Name ==. "Michael"] ||. [Person1Name ==. "Miriam"]) &&.[Person1Age >.29]
+  c30 @== 3
+
+  c34 <- count $ [Person1Name ==. "Michael"] ||. [Person1Name ==. "Miriam"] &&.[Person1Age >.29]
+  c34 @== 3
+
+  c40 <- count $ ([Person1Name ==. "Michael"] ||. [Person1Name ==. "Miriam"] ||. [Person1Age >.29])
+  c40 @== 4
 
 caseUpdate :: Assertion
 caseUpdate = sqlTest $ do
@@ -283,6 +300,15 @@ caseSelectList = sqlTest $ do
   ps @== [(key26, p26), (key25, p25)]
   ps <- selectList [PersonAge ==. 26] []
   ps @== [(key26, p26)]
+
+caseSelectFirst :: Assertion
+caseSelectFirst = sqlTest $ do
+  _ <- insert $ Person "Michael" 26 Nothing
+  let pOld = Person "Oldie" 75 Nothing
+  kOld <- insert pOld
+
+  x <- selectFirst [] [Desc PersonAge]
+  x @== Just (kOld, pOld)
 
 -- general tests transferred from already exising test file
 caseGeneral :: Assertion
