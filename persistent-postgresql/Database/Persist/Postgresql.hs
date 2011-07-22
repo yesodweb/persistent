@@ -3,6 +3,8 @@
 module Database.Persist.Postgresql
     ( withPostgresqlPool
     , withPostgresqlConn
+    , withPostgresqlPoolLogger
+    , withPostgresqlConnLogger
     , module Database.Persist
     , module Database.Persist.GenericSql
     ) where
@@ -36,17 +38,27 @@ withPostgresqlPool :: MonadControlIO m
                    => T.Text
                    -> Int -- ^ number of connections to open
                    -> (ConnectionPool -> m a) -> m a
-withPostgresqlPool s = withSqlPool $ open' s
+withPostgresqlPool = withPostgresqlPoolLogger (\_ -> return ())
 
-withPostgresqlConn :: MonadControlIO m => T.Text -> (Connection -> m a) -> m a
-withPostgresqlConn = withSqlConn . open'
+withPostgresqlConn :: MonadControlIO m => Text -> (Connection -> m a) -> m a
+withPostgresqlConn = withPostgresqlConnLogger (\_ -> return ())
 
-open' :: T.Text -> IO Connection
-open' s = do
-    conn <- H.connectPostgreSQL $ T.unpack s
+withPostgresqlPoolLogger :: MonadControlIO m
+                         => (Text -> IO ()) -> Text -> Int -> (ConnectionPool -> m a)
+                         -> m a
+withPostgresqlPoolLogger logger s = withSqlPool $ open' logger s
+
+withPostgresqlConnLogger :: MonadControlIO m
+                         => (Text -> IO ()) -> Text -> (Connection -> m a)
+                         -> m a
+withPostgresqlConnLogger logger s = withSqlConn $ (open' logger s)
+
+open' :: (Text -> IO ()) -> Text -> IO Connection
+open' logger s = do
+    conn <- H.connectPostgreSQL $ unpack s
     smap <- newIORef $ Map.empty
     return Connection
-        { prepare = prepare' conn
+        { prepare = prepare' conn logger
         , stmtMap = smap
         , insertSql = insertSql'
         , close = H.disconnect conn
@@ -58,14 +70,14 @@ open' s = do
         , noLimit = "LIMIT ALL"
         }
 
-prepare' :: H.Connection -> Text -> IO Statement
-prepare' conn sql = do
+prepare' :: H.Connection -> (Text -> IO ()) -> Text -> IO Statement
+prepare' conn logger sql = do
     stmt <- H.prepare conn $ unpack sql
     return Statement
         { finalize = return ()
         , reset = return ()
-        , execute = execute' stmt
-        , withStmt = withStmt' stmt
+        , execute = \vals -> logger sql >> execute' stmt vals
+        , withStmt = \vals f -> (liftIO $ logger sql) >> withStmt' stmt vals f
         }
 
 insertSql' :: RawName -> [RawName] -> Either Text (Text, Text)
@@ -446,4 +458,4 @@ escape (RawName s) =
     go (x:xs) = x : go xs
 
 bsToChars :: ByteString -> String
-bsToChars = T.unpack . T.decodeUtf8With T.lenientDecode
+bsToChars = unpack . T.decodeUtf8With T.lenientDecode
