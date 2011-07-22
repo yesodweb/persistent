@@ -2,3 +2,4 @@ dist
 test.db3
 *.swp
 client_session_key.aes
+persistent/testdb
