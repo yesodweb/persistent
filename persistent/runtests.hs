@@ -96,8 +96,8 @@ runConn f = do
 
 sqlTest :: SqlPersist IO () -> Assertion
 sqlTest actions = do
-  runConn cleanDB
-  runConn actions
+  runConn $ actions >>= \r -> rollback >> return r
+
 
 cleanDB :: SqlPersist IO ()
 cleanDB = do
@@ -109,7 +109,9 @@ cleanDB = do
   deleteWhere ([] :: [Filter Author])
 
 setup :: SqlPersist IO ()
-setup = runMigration testMigrate
+setup = do
+  runMigration testMigrate
+  cleanDB
 
 main :: IO ()
 main = do
@@ -121,8 +123,6 @@ main = do
         , it "delete" caseDelete
         , it "replace" caseReplace
         , it "getBy" caseGetBy
-        , it "and/or" caseAndOr
-        , it "commit/rollback" caseCommitRollback
         , it "update" caseUpdate
         , it "updateWhere" caseUpdateWhere
         , it "selectList" caseSelectList
@@ -134,6 +134,8 @@ main = do
         , it "idIn" caseIdIn
         , it "joinNonSql" caseJoinNonSql
         , it "joinSql" caseJoinSql
+        , it "and/or" caseAndOr
+        , it "commit/rollback" (caseCommitRollback >> runConn cleanDB)
         ]
 
 assertEmpty xs    = liftIO $ assertBool "" (null xs)
@@ -408,7 +410,7 @@ caseCommitRollback :: Assertion
 caseCommitRollback = sqlTest $ do
     let filt :: [Filter Person1]
         filt = []
-    deleteWhere filt
+
     let p = Person1 "foo" 0
 
     _ <- insert p
