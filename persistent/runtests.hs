@@ -235,23 +235,21 @@ caseAndOr = sqlTest $ do
 
   c20 <- count $ [Person1Name ==. "Miriam"] ||. [Person1Age >. 29, Person1Age <=. 30]
   c20 @== 2
-
   c22 <- count $ [Person1Age <=. 30] &&. [Person1Age >. 29]
   c22 @== 1
-
   c24 <- count $ [FilterAnd [Person1Age <=. 30, Person1Age >. 29]]
   c24 @== 1
-
   c26 <- count $ [Person1Age <=. 30] ++ [Person1Age >. 29]
   c26 @== 1
 
-  c30 <- count $ ([Person1Name ==. "Michael"] ||. [Person1Name ==. "Miriam"]) &&.[Person1Age >.29]
-  c30 @== 3
-
-  c34 <- count $ [Person1Name ==. "Michael"] ||. [Person1Name ==. "Miriam"] &&.[Person1Age >.29]
+  c34 <- count $ [Person1Name ==. "Michael"] ||. [Person1Name ==. "Mirieam"] &&.[Person1Age <.35]
   c34 @== 3
+  c30 <- count $ ([Person1Name ==. "Michael"] ||. [Person1Name ==. "Miriam"]) &&.[Person1Age <.35]
+  c30 @== 4
+  c36 <- count $ [Person1Name ==. "Michael"] ||. ([Person1Name ==. "Miriam"] &&.[Person1Age <.35])
+  c36 @== 4
 
-  c40 <- count $ ([Person1Name ==. "Michael"] ||. [Person1Name ==. "Miriam"] ||. [Person1Age >.29])
+  c40 <- count $ ([Person1Name ==. "Michael"] ||. [Person1Name ==. "Miriam"] ||. [Person1Age <.35])
   c40 @== 4
 
 caseUpdate :: Assertion
