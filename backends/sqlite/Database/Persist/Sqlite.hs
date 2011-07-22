@@ -42,8 +42,8 @@ open' s = do
         , close = Sqlite.close conn
         , migrateSql = migrate'
         , begin = helper "BEGIN"
-        , commit = helper "COMMIT"
-        , rollback = helper "ROLLBACK"
+        , commitC = helper "COMMIT"
+        , rollbackC = helper "ROLLBACK"
         , escapeName = escape
         , noLimit = "LIMIT -1"
         }

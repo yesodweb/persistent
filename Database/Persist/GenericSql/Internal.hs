@@ -47,8 +47,8 @@ data Connection = Connection
                  => (Text -> IO Statement) -> v
                  -> IO (Either [Text] [(Bool, Text)])
     , begin :: (Text -> IO Statement) -> IO ()
-    , commit :: (Text -> IO Statement) -> IO ()
-    , rollback :: (Text -> IO Statement) -> IO ()
+    , commitC :: (Text -> IO Statement) -> IO ()
+    , rollbackC :: (Text -> IO Statement) -> IO ()
     , escapeName :: RawName -> String
     , noLimit :: String
     }

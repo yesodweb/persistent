@@ -18,6 +18,8 @@ module Database.Persist.GenericSql
     , runMigrationSilent
     , runMigrationUnsafe
     , migrate
+    , commit
+    , rollback
     ) where
 
 import Database.Persist.Base
@@ -57,8 +59,8 @@ runSqlConn (SqlPersist r) conn = do
     liftIO $ begin conn getter
     x <- onException
             (runReaderT r conn)
-            (liftIO $ rollback conn getter)
-    liftIO $ commit conn getter
+            (liftIO $ rollbackC conn getter)
+    liftIO $ commitC conn getter
     return x
 
 instance MonadControlIO m => PersistBackend (SqlPersist m) where
@@ -437,3 +439,17 @@ updateName (Update f _ _) = columnName $ persistColumnDef f
 
 updatePersistValue :: Update v -> PersistValue
 updatePersistValue (Update _ v _) = toPersistValue v
+
+-- | Perform a database commit.
+commit :: MonadIO m => SqlPersist m ()
+commit = do
+    conn <- SqlPersist ask
+    let getter = R.getStmt' conn
+    liftIO $ commitC conn getter >> begin conn getter
+
+-- | Perform a database rollback.
+rollback :: MonadIO m => SqlPersist m ()
+rollback = do
+    conn <- SqlPersist ask
+    let getter = R.getStmt' conn
+    liftIO $ rollbackC conn getter >> begin conn getter

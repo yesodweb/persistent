@@ -12,6 +12,7 @@ import Test.Framework.Providers.HUnit
 -- import Test.Framework.Providers.QuickCheck
 import Test.HUnit hiding (Test)
 
+import Database.Persist.GenericSql
 import Database.Persist.Sqlite
 import Database.Persist.Base (PersistUpdate (Add, Assign), PersistFilter (..), ColumnDef (ColumnDef), DeleteCascade (..))
 import Database.Persist ((&&.), (||.))
@@ -127,6 +128,7 @@ testSuite = testGroup "Database.Persistent" $ reverse
     , testCase "sqlite replace" case_sqliteReplace
     , testCase "sqlite getBy" case_sqliteGetBy
     , testCase "sqlite andOr" case_sqliteAndOr
+    , testCase "commit/rollback" case_sqliteCommitRollback
     , testCase "sqlite update" case_sqliteUpdate
     , testCase "sqlite updateWhere" case_sqliteUpdateWhere
     , testCase "sqlite selectList" case_sqliteSelectList
@@ -149,6 +151,7 @@ case_sqliteDelete = sqliteTest _delete
 case_sqliteReplace = sqliteTest _replace
 case_sqliteGetBy = sqliteTest _getBy
 case_sqliteAndOr = sqliteTest _andOr
+case_sqliteCommitRollback = sqliteTest _commitRollback
 case_sqliteUpdate = sqliteTest _update
 case_sqliteUpdateWhere = sqliteTest _updateWhere
 case_sqliteSelectList = sqliteTest _selectList
@@ -388,6 +391,36 @@ _derivePersistField = do
     dog <- insert $ Pet person "Spike" Dog
     Just dog' <- get dog
     liftIO $ petType dog' @?= Dog
+
+_commitRollback = do
+    let filt :: [Filter Person1]
+        filt = []
+    deleteWhere filt
+    let p = Person1 "foo" 0
+
+    _ <- insert p
+    _ <- insert p
+    _ <- insert p
+
+    c1 <- count filt
+    c1 @== 3
+
+    commit
+    c2 <- count filt
+    c2 @== 3
+
+    _ <- insert p
+    rollback
+    c3 <- count filt
+    c3 @== 3
+
+    _ <- insert p
+    commit
+    _ <- insert p
+    _ <- insert p
+    rollback
+    c4 <- count filt
+    c4 @== 4
 
 _afterException = do
     _ <- insert $ Person "A" 0 Nothing

@@ -52,8 +52,8 @@ open' s = do
         , close = H.disconnect conn
         , migrateSql = migrate'
         , begin = const $ return ()
-        , commit = const $ H.commit conn
-        , rollback = const $ H.rollback conn
+        , commitC = const $ H.commit conn
+        , rollbackC = const $ H.rollback conn
         , escapeName = escape
         , noLimit = "LIMIT ALL"
         }
