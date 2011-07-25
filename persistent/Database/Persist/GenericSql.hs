@@ -39,7 +39,6 @@ import Control.Monad.IO.Control (MonadControlIO)
 import Control.Exception.Control (onException)
 import Control.Exception (toException)
 import Data.Text (Text, pack, unpack)
-import Data.Maybe (mapMaybe)
 
 type ConnectionPool = Pool Connection
 

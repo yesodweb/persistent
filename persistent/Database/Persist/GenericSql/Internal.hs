@@ -137,6 +137,7 @@ rawTableName t = RawName $
 newtype RawName = RawName { unRawName :: String } -- FIXME Text
     deriving (Eq, Ord)
 
+getFiltsValues :: forall val.  PersistEntity val => Connection -> [Filter val] -> [PersistValue]
 getFiltsValues conn = snd . filterClauseHelper False False conn . FilterAnd
 
 filterClause :: PersistEntity val
@@ -256,7 +257,7 @@ orderClause includeTable conn o =
     case o of
         Asc  x -> name x
         Desc x -> name x ++ " DESC"
-        limitOrOffset -> error $ "expected Asc or Desc, not limit or offset"
+        _ -> error $ "expected Asc or Desc, not limit or offset"
   where
     cd x = persistColumnDef x
     t = entityDef $ dummyFromOrder o

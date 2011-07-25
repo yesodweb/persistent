@@ -67,8 +67,11 @@ import Web.PathPieces (SinglePiece (..))
 import qualified Data.Text.Read
 import Data.Maybe (fromMaybe, isJust)
 
+fst3 :: forall t t1 t2. (t, t1, t2) -> t
 fst3   (x, _, _) = x
+snd3 :: forall t t1 t2. (t, t1, t2) -> t1
 snd3   (_, x, _) = x
+third3 :: forall t t1 t2. (t, t1, t2) -> t2
 third3 (_, _, x) = x
 
 -- | A raw value which can be stored in any backend and can be marshalled to
@@ -443,9 +446,9 @@ limitOffsetOrder opts = let (l,o,ord) = go opts (Nothing, Nothing, []) in
     (fromMaybe 0 l, fromMaybe 0 o, ord)
   where
     go []              tup = tup
-    go (LimitTo  x:xs) (l,o,ord) = let tup = (Just x, o, ord) in
+    go (LimitTo  x:xs) (_,o,ord) = let tup = (Just x, o, ord) in
       if isJust o then tup else go xs tup
-    go (OffsetBy x:xs) (l,o,ord) = let tup = (l, Just x, ord) in
+    go (OffsetBy x:xs) (l,_,ord) = let tup = (l, Just x, ord) in
       if isJust l then tup else go xs tup
     go (x:xs)          (l, o, ord) = go xs (l,o,x:ord)
 
