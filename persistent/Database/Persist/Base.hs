@@ -25,7 +25,6 @@ module Database.Persist.Base
     , SelectOpt (..)
     , SomePersistField (..)
     , selectList
-    , selectFirst
     , insertBy
     , getByValue
     , checkUnique
@@ -376,6 +375,14 @@ class Monad m => PersistBackend m where
            -> [SelectOpt val]
            -> Enumerator (Key val, val) m a
 
+    -- | get just the first record for the criterion
+    selectFirst :: PersistEntity val
+                => [Filter val]
+                -> [SelectOpt val]
+                -> m (Maybe (Key val, val))
+    selectFirst filts opts = run_ $ selectEnum filts ((LimitTo 1):opts) ==<< EL.head
+
+
     -- | Get the 'Key's of all records matching the given criterion.
     selectKeys :: PersistEntity val
                => [Filter val]
@@ -452,13 +459,6 @@ selectList a b = do
     case res of
         Left e -> error $ show e
         Right x -> return x
-
--- | Call 'select' and return the first result, if available.
-selectFirst :: (PersistEntity val, PersistBackend m)
-            => [Filter val]
-            -> [SelectOpt val]
-            -> m (Maybe (Key val, val))
-selectFirst a b = run_ $ selectEnum a ((LimitTo 1):b) ==<< EL.head
 
 data EntityDef = EntityDef
     { entityName    :: String
