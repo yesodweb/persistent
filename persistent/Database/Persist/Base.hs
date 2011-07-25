@@ -440,7 +440,7 @@ selectFirst :: (PersistEntity val, PersistBackend m)
             => [Filter val]
             -> [SelectOpt val]
             -> m (Maybe (Key val, val))
-selectFirst a b = run_ $ selectEnum a b ==<< EL.head
+selectFirst a b = run_ $ selectEnum a ((LimitTo 1):b) ==<< EL.head
 
 data EntityDef = EntityDef
     { entityName    :: String
