@@ -83,12 +83,16 @@ selectOneMany' (SelectOneMany oneF oneO manyF manyO eq _getKey isOuter) = do
       where
         filts1 = filterClauseNoWhere True conn oneF
         filts2 = filterClauseNoWhere True conn manyF
+
+        orders :: PersistEntity val => [SelectOpt val] -> [SelectOpt val]
+        orders = third3 . limitOffsetOrder
+
         filts
             | null filts1 && null filts2 = ""
             | null filts1 = " WHERE " ++ filts2
             | null filts2 = " WHERE " ++ filts1
             | otherwise = " WHERE " ++ filts1 ++ " AND " ++ filts2
-        ords = mapMaybe (orderClause True conn) oneO ++ mapMaybe (orderClause True conn) manyO
+        ords = map (orderClause True conn) (orders oneO) ++ map (orderClause True conn) (orders manyO)
 
 addTable :: PersistEntity val =>
            Connection -> val -> [Char] -> [Char]
@@ -103,3 +107,5 @@ colsPlusId conn e =
 
 filterName :: PersistEntity v => Filter v -> String
 filterName (Filter f _ _) = columnName $ persistColumnDef f
+filterName (FilterAnd _) = error "expected a raw filter, not an And"
+filterName (FilterOr _) = error "expected a raw filter, not an Or"

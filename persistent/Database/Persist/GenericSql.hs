@@ -79,7 +79,6 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
                         return i
         return $ Key i
       where
-        fst3 (x, _, _) = x
         t = entityDef val
         vals = map toPersistValue $ toPersistFields val
 
@@ -139,15 +138,9 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
     selectEnum filts opts =
         Iteratee . start
       where
-        limit = goL opts
-        goL [] = 0
-        goL (LimitTo x:_) = x
-        goL (_:xs) = goL xs
-
-        offset = goO opts
-        goO [] = 0
-        goO (OffsetBy x:_) = x
-        goO (_:xs) = goO xs
+        limit  = fst3 $ limitOffsetOrder opts
+        offset = snd3 $ limitOffsetOrder opts
+        orders = third3 $ limitOffsetOrder opts
 
         start x = do
             conn <- SqlPersist ask
@@ -174,7 +167,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
                     then ""
                     else filterClause False conn filts
         ord conn =
-            case mapMaybe (orderClause False conn) opts of
+            case map (orderClause False conn) orders of
                 [] -> ""
                 ords -> " ORDER BY " ++ intercalate "," ords
         lim conn = case (limit, offset) of

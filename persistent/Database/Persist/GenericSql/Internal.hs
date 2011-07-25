@@ -251,12 +251,12 @@ tableColumn t s = go $ entityColumns t
 dummyFromOrder :: SelectOpt a -> a
 dummyFromOrder _ = undefined
 
-orderClause :: PersistEntity val => Bool -> Connection -> SelectOpt val -> Maybe String
+orderClause :: PersistEntity val => Bool -> Connection -> SelectOpt val -> String
 orderClause includeTable conn o =
     case o of
-        Asc x -> Just $ name x
-        Desc x -> Just $ name x ++ " DESC"
-        _ -> Nothing
+        Asc  x -> name x
+        Desc x -> name x ++ " DESC"
+        limitOrOffset -> error $ "expected Asc or Desc, not limit or offset"
   where
     cd x = persistColumnDef x
     t = entityDef $ dummyFromOrder o

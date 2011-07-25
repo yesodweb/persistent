@@ -226,8 +226,11 @@ instance (Trans.MonadIO m, Functor m) => PersistBackend (MongoDBReader m) where
         query = DB.select (filterToSelector filts) (u $ entityName t)
         t = entityDef $ dummyFromFilts filts
 
-    selectEnum filts ords limit offset = Iteratee . start
+    selectEnum filts opts = Iteratee . start
       where
+        limit  = fst3 $ limitOffsetOrder opts
+        offset = snd3 $ limitOffsetOrder opts
+        orders = map orderClause $ third3 $ limitOffsetOrder opts
         start x = do
             cursor <- DB.find query
             loop x cursor
@@ -235,7 +238,7 @@ instance (Trans.MonadIO m, Functor m) => PersistBackend (MongoDBReader m) where
         query = (DB.select (filterToSelector filts) (u $ entityName t)) {
           DB.limit = fromIntegral limit
         , DB.skip  = fromIntegral offset
-        , DB.sort  = if null ords then [] else map orderClause ords
+        , DB.sort  = map orderClause orders
         }
 
         t = entityDef $ dummyFromFilts filts

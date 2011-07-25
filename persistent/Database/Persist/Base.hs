@@ -40,6 +40,8 @@ module Database.Persist.Base
     , ColumnType
     , ColumnDef (..)
     , UniqueDef (..)
+    , fst3, snd3, third3
+    , limitOffsetOrder
     ) where
 
 import Data.Time (Day, TimeOfDay, UTCTime)
@@ -64,6 +66,11 @@ import qualified Data.Text.Encoding as T
 import qualified Data.Text.Encoding.Error as T
 import Web.PathPieces (SinglePiece (..))
 import qualified Data.Text.Read
+import Data.Maybe (fromMaybe, isJust)
+
+fst3   (x, _, _) = x
+snd3   (_, x, _) = x
+third3 (_, _, x) = x
 
 -- | A raw value which can be stored in any backend and can be marshalled to
 -- and from a 'PersistField'.
@@ -423,6 +430,17 @@ checkUnique val =
         case y of
             Nothing -> go xs
             Just _ -> return False
+
+limitOffsetOrder :: PersistEntity val => [SelectOpt val] -> (Int, Int, [SelectOpt val])
+limitOffsetOrder opts = let (l,o,ord) = go opts (Nothing, Nothing, []) in
+    (fromMaybe 0 l, fromMaybe 0 o, ord)
+  where
+    go []              tup = tup
+    go (LimitTo  x:xs) (l,o,ord) = let tup = (Just x, o, ord) in
+      if isJust o then tup else go xs tup
+    go (OffsetBy x:xs) (l,o,ord) = let tup = (l, Just x, ord) in
+      if isJust l then tup else go xs tup
+    go (x:xs)          (l, o, ord) = go xs (l,o,x:ord)
 
 -- | Call 'select' but return the result as a list.
 selectList :: (PersistEntity val, PersistBackend m, Monad m)
