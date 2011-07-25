@@ -8,11 +8,9 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
--- | This defines the API for performing database actions. There are two levels
--- to this API: dealing with fields, and dealing with entities. In SQL, a field
--- corresponds to a column, and should be a single, non-composite value. An
--- entity corresponds to a SQL table.  In other words: An entity is a
--- collection of fields.
+-- | API for database actions. The API deals with fields and entities.
+-- In SQL, a field corresponds to a column, and should be a single non-composite value.
+-- An entity corresponds to a SQL table, so an entity is a collection of fields.
 module Database.Persist.Base
     ( PersistValue (..)
     , Key (..)
