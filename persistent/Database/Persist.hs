@@ -48,6 +48,6 @@ f /<-. a = Filter f (Right a) NotIn
 infixl 3 &&., ||.
 (&&.), (||.) :: forall v. [Filter v] -> [Filter v] -> [Filter v]
 -- | combine two lists of filters (same as ++)
-a &&. b = [FilterAnd [FilterAnd a, FilterAnd b]]
+a &&. b = a ++ b
 -- | the OR of two lists of filters
-a ||. b = [FilterOr  [FilterAnd a, FilterAnd b]]
+a ||. b = [FilterOr  [a, b]]

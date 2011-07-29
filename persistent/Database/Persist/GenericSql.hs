@@ -95,7 +95,6 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
                        ++ [unKey k]
       where
         go conn x = escapeName conn x ++ "=?"
-        fst3 (x, _, _) = x
 
     get k = do
         conn <- SqlPersist ask
@@ -273,7 +272,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
             map updatePersistValue upds ++ [unKey k]
       where
         t = entityDef $ dummyFromKey k
-        go x = ( getFieldName t $ updateName x
+        go x = ( getFieldName t $ updateFieldName x
                , updateUpdate x
                )
 
@@ -300,7 +299,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
         go'' n Multiply = n ++ '=' : n ++ "*?"
         go'' n Divide = n ++ '=' : n ++ "/?"
         go' conn (x, pu) = go'' (escapeName conn x) pu
-        go x = ( getFieldName t $ updateName x
+        go x = ( getFieldName t $ updateFieldName x
                , updateUpdate x
                )
 
@@ -424,9 +423,6 @@ migrate val = do
     let getter = R.getStmt' conn
     res <- liftIO $ migrateSql conn getter val
     either tell (lift . tell) res
-
-updateName :: PersistEntity v => Update v -> String
-updateName (Update f _ _) = columnName $ persistColumnDef f
 
 updatePersistValue :: Update v -> PersistValue
 updatePersistValue (Update _ v _) = toPersistValue v

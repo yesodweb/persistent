@@ -229,10 +229,10 @@ caseAndOr = sqlTest $ do
 
   c10 <- count $ [Person1Name ==. "Michael"] ||. [Person1Name ==. "Miriam"]
   c10 @== 4
-  c12 <- count [FilterOr [Person1Name ==. "Michael", Person1Name ==. "Miriam"]]
+  c12 <- count [FilterOr [[Person1Name ==. "Michael", Person1Name ==. "Miriam"]]]
   c12 @== 4
-  c14 <- count [FilterOr [Person1Name ==. "Michael", Person1Name ==. "Miriam",
-                            Person1Age >. 29, Person1Age <=. 30]]
+  c14 <- count [FilterOr [[Person1Name ==. "Michael", Person1Name ==. "Miriam",
+                            Person1Age >. 29, Person1Age <=. 30]]]
   c14 @== 4
 
   c20 <- count $ [Person1Name ==. "Miriam"] ||. [Person1Age >. 29, Person1Age <=. 30]

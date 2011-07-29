@@ -93,9 +93,6 @@ rightPersistVals ent vals = case wrapFromPersistValues ent vals of
       Left e -> error e
       Right v -> v
 
-fst3 :: forall t t1 t2. (t, t1, t2) -> t
-fst3 (x, _, _) = x
-
 filterByKey :: (PersistEntity val) => Key val -> DB.Document
 filterByKey k = [u"_id" DB.=: keyToDbOid k]
 
@@ -106,23 +103,21 @@ selectByKey :: (PersistEntity val) => Key val -> EntityDef -> DB.Selection
 selectByKey k entity = (DB.select (filterByKey k) (u $ entityName entity))
 
 updateFields :: (PersistEntity val) => [Update val] -> [DB.Field]
-updateFields upds = map updateField upds 
+updateFields upds = map updateToMongoField upds 
 
-updateField :: (PersistEntity val) => Update val -> DB.Field
-updateField upd = opName DB.:= DB.Doc [( (u $ persistUpdateToFieldName upd) DB.:= opValue)]
+updateToMongoField :: (PersistEntity val) => Update val -> DB.Field
+updateToMongoField upd@(Update _ value update) = opName DB.:= DB.Doc [( (u $ updateFieldName upd) DB.:= opValue)]
     where 
-      opValue = (DB.val $ transform $ persistUpdateToValue upd)
-      transform (PersistInt64 i) = PersistInt64 $
-        case persistUpdateToUpdate upd of
-          Subtract -> -i
-          _        ->  i
-      transform x = x
-      opName = case persistUpdateToUpdate upd of
-                    Update   -> u "$set"
-                    Add      -> u "$inc"
-                    Subtract -> u "$inc"
-                    Multiply -> error "multiply not supported yet"
-                    Divide   -> error "divide not supported yet"
+      opValue = DB.val . snd $ opNameValue
+      opName = fst opNameValue
+      opNameValue =
+        case (update, toPersistValue value) of
+                  (Assign,v)    -> (u "$set", v)
+                  (Add, v)      -> (u "$inc", v)
+                  (Subtract, PersistInt64 v) -> (u "$inc", PersistInt64 (-v))
+                  (Subtract, _) -> error "expected PersistInt64"
+                  (Multiply, _) -> error "multiply not supported yet"
+                  (Divide, _)   -> error "divide not supported yet"
 
 
 uniqSelector :: forall val.  (PersistEntity val) => Unique val -> [DB.Field]
@@ -136,19 +131,19 @@ pairFromDocument ent document = pairFromPersistValues document
     pairFromPersistValues (x:xs) =
         case wrapFromPersistValues ent xs of
             Left e -> Left e
-            Right xs' -> Right ((toPersistKey . fromJust . DB.cast' . value) x, xs')
+            Right xs' -> Right ((Key . dbOidToKey . fromJust . DB.cast' . value) x, xs')
     pairFromPersistValues _ = Left "error in fromPersistValues'"
 
 insertFields :: forall val.  (PersistEntity val) => EntityDef -> val -> [DB.Field]
 insertFields t record = zipWith (DB.:=) (toLabels) (toValues)
   where
-    toLabels = map (u . fst3) $ entityColumns t
+    toLabels = map (u . columnName) $ entityColumns t
     toValues = map (DB.val . toPersistValue) (toPersistFields record)
 
 instance (Trans.MonadIO m, Functor m) => PersistBackend (MongoDBReader m) where
     insert record = do
         (DB.ObjId oid) <- DB.insert (u $ entityName t) (insertFields t record)
-        return $ toPersistKey $ dbOidToKey oid 
+        return $ Key $ dbOidToKey oid 
       where
         t = entityDef record
 
@@ -234,11 +229,6 @@ instance (Trans.MonadIO m, Functor m) => PersistBackend (MongoDBReader m) where
 
         t = entityDef $ dummyFromFilts filts
 
-        orderClause o = (u(persistOrderToFieldName o))
-                        DB.=: (case persistOrderToOrder o of
-                                Asc -> 1 :: Int
-                                Desc -> -1 )
-
         loop (Continue k) curs = do
             doc <- DB.next curs
             case doc of
@@ -256,9 +246,8 @@ instance (Trans.MonadIO m, Functor m) => PersistBackend (MongoDBReader m) where
         case doc of
             Nothing -> return Nothing
             Just document -> case pairFromDocument t document of
-                Left s -> return $ Error $ toException
-                            $ PersistMarshalException s
-                Right row -> return row
+                Left s -> fail "pairFromDocument: could not convert"
+                Right row -> return $ Just row
       where
         t = entityDef $ dummyFromFilts filts
 
@@ -274,7 +263,7 @@ instance (Trans.MonadIO m, Functor m) => PersistBackend (MongoDBReader m) where
             case doc of
                 Nothing -> return $ Continue k
                 Just [_ DB.:= (DB.ObjId oid)] -> do
-                    step <- runIteratee $ k $ Chunks [toPersistKey $ dbOidToKey oid]
+                    step <- runIteratee $ k $ Chunks [Key $ dbOidToKey oid]
                     loop step curs
                 Just y -> return $ Error $ toException $ PersistMarshalException
                         $ "Unexpected in selectKeys: " ++ show y
@@ -285,13 +274,20 @@ instance (Trans.MonadIO m, Functor m) => PersistBackend (MongoDBReader m) where
         }
         t = entityDef $ dummyFromFilts filts
 
+orderClause :: PersistEntity val => SelectOpt val -> DB.Field
+orderClause o = let (field, i) = case o of
+                              Asc f  -> (f,  1 :: Int)
+                              Desc f -> (f, -1 :: Int)
+                              _      -> error "expected Asc or Desc"
+                in  fieldName field DB.=: i
 
-makeQuery :: PersistEntity val => [Filter val] -> [SelectOpt val] -> DB.Document
+
+makeQuery :: PersistEntity val => [Filter val] -> [SelectOpt val] -> DB.Query
 makeQuery filts opts =
     (DB.select (filterToSelector filts) (u $ entityName t)) {
       DB.limit = fromIntegral limit
     , DB.skip  = fromIntegral offset
-    , DB.sort  = map orderClause orders
+    , DB.sort  = orders
     }
   where
     t = entityDef $ dummyFromFilts filts
@@ -300,20 +296,20 @@ makeQuery filts opts =
     orders = map orderClause $ third3 $ limitOffsetOrder opts
 
 filterToSelector :: PersistEntity val => [Filter val] -> DB.Document
-filterToSelector filts = map filterField filts
+filterToSelector filts = map filterToField filts
 
-filterField :: PersistEntity val => Filter val -> DB.Field
-filterField f = case filt of
-    Eq -> name DB.:= filterValue
-    _  -> name DB.=: [u(showFilter filt) DB.:= filterValue]
+fieldName = u . columnName . persistColumnDef
+
+filterToField :: PersistEntity val => Filter val -> DB.Field
+filterToField filter =
+    case filter of
+      FilterOr fs -> u"$or" DB.=: (map (map filterToField) fs)
+      Filter field value filt -> case filt of
+          Eq -> fieldName field DB.:= toValue value
+          _  -> fieldName field DB.=: [u(showFilter filt) DB.:= toValue value]
+      FilterAnd fs -> error "did not expect FilterAnd" --  map filterToField fs
   where
-    name = case (persistFilterToFieldName f) of
-            "id"  -> u "_id"
-            other -> u other
-    filt = persistFilterToFilter f
-    filterValue = case persistFilterToValue f of
-      Left v -> DB.val v
-      Right vs -> DB.Array (map DB.val vs)
+    toValue = DB.val . filterValueToPersistValues 
 
     showFilter Ne = "$ne"
     showFilter Gt = "$gt"
@@ -322,13 +318,13 @@ filterField f = case filt of
     showFilter Le = "$lte"
     showFilter In = "$in"
     showFilter NotIn = "$nin"
-    showFilter Eq = error ""
+    showFilter Eq = error "EQ not expected"
 
 wrapFromPersistValues :: (PersistEntity val) => EntityDef -> [DB.Field] -> Either String val
 wrapFromPersistValues e doc = fromPersistValues reorder
   where
     castDoc = mapFromDoc doc
-    castColumns = map (T.pack . fst3) $ (entityColumns e) 
+    castColumns = map (T.pack . columnName) $ (entityColumns e)
     -- we have an alist of fields that need to be the same order as entityColumns
     --
     -- this naive lookup is O(n^2)
@@ -365,16 +361,16 @@ tToCS :: T.Text -> CS.CompactString
 tToCS = CS.fromByteString_ . E.encodeUtf8
 
 dbOidToKey :: DB.ObjectId -> PersistValue
-dbOidToKey =  PersistForeignKey . S.encode
+dbOidToKey =  PersistObjectId . S.encode
 
-foreignKeyToDbOid :: PersistValue -> DB.ObjectId
-foreignKeyToDbOid (PersistForeignKey k) = case S.decode k of
+persistObjectIdToDbOid :: PersistValue -> DB.ObjectId
+persistObjectIdToDbOid (PersistObjectId k) = case S.decode k of
                   Left s -> error s
                   Right o -> o
-foreignKeyToDbOid _ = error "expected PersistForeignKey"
+persistObjectIdToDbOid _ = error "expected PersistObjectId"
 
 keyToDbOid :: (PersistEntity val) => Key val -> DB.ObjectId
-keyToDbOid = foreignKeyToDbOid . fromPersistKey
+keyToDbOid (Key k) = persistObjectIdToDbOid k
 
 instance DB.Val PersistValue where
   val (PersistInt64 x)   = DB.Int64 x
@@ -386,7 +382,7 @@ instance DB.Val PersistValue where
   val (PersistList l)    = DB.Array $ map DB.val l
   val (PersistMap  m)    = DB.Doc $ map (\(k, v)-> (DB.=:) (tToCS k) v) m
   val (PersistByteString x) = DB.String $ CS.fromByteString_ x 
-  val x@(PersistForeignKey _) = DB.ObjId $ foreignKeyToDbOid x
+  val x@(PersistObjectId _) = DB.ObjId $ persistObjectIdToDbOid x
   val (PersistDay _)        = error "only PersistUTCTime currently implemented"
   val (PersistTimeOfDay _)  = error "only PersistUTCTime currently implemented"
   cast' (DB.Float x)  = Just (PersistDouble x)

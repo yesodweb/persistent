@@ -30,7 +30,9 @@ module Database.Persist.Base
     , deleteCascadeWhere
     , PersistException (..)
     , Update (..)
+    , updateFieldName
     , Filter (..)
+    , filterValueToPersistValues
       -- * Definition
     , EntityDef (..)
     , ColumnName
@@ -52,7 +54,7 @@ import Text.Blaze.Renderer.Utf8 (renderHtml)
 import qualified Data.Text as T
 import qualified Data.ByteString as S
 import qualified Data.ByteString.Lazy as L
-import Data.Enumerator hiding (consume)
+import Data.Enumerator hiding (consume, map)
 import Data.Enumerator.List (consume)
 import qualified Data.Enumerator.List as EL
 import qualified Control.Exception as E
@@ -294,6 +296,9 @@ data Update v = forall typ. PersistField typ => Update
     , updateUpdate :: PersistUpdate -- FIXME Replace with expr down the road
     }
 
+updateFieldName :: PersistEntity v => Update v -> String
+updateFieldName (Update f _ _) = columnName $ persistColumnDef f
+
 data SelectOpt v = forall typ. Asc (Field v typ)
                  | forall typ. Desc (Field v typ)
                  | OffsetBy Int
@@ -308,8 +313,11 @@ data Filter v = forall typ. PersistField typ => Filter
     , filterValue :: Either typ [typ] -- FIXME
     , filterFilter :: PersistFilter -- FIXME
     }
-    | FilterAnd [Filter v]
-    | FilterOr [Filter v]
+    | FilterAnd [Filter v]  -- ^ convenient for internal use, redundant for the API
+    | FilterOr [[Filter v]]
+
+filterValueToPersistValues :: forall a.  PersistField a => Either a [a] -> [PersistValue]
+filterValueToPersistValues value = map toPersistValue $ either return id value
 
 -- | A single database entity. For example, if writing a blog application, a
 -- blog entry would be an entry, containing fields such as title and content.

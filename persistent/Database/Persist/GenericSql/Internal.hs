@@ -138,36 +138,37 @@ newtype RawName = RawName { unRawName :: String } -- FIXME Text
     deriving (Eq, Ord)
 
 getFiltsValues :: forall val.  PersistEntity val => Connection -> [Filter val] -> [PersistValue]
-getFiltsValues conn = snd . filterClauseHelper False False conn . FilterAnd
+getFiltsValues conn = snd . filterClauseHelper False False conn
 
 filterClause :: PersistEntity val
              => Bool -- ^ include table name?
              -> Connection -> [Filter val] -> String
-filterClause b c = fst . filterClauseHelper b True c . FilterAnd
+filterClause b c = fst . filterClauseHelper b True c
 
 filterClauseNoWhere :: PersistEntity val
                     => Bool -- ^ include table name?
                     -> Connection -> [Filter val] -> String
-filterClauseNoWhere b c = fst . filterClauseHelper b False c . FilterAnd
+filterClauseNoWhere b c = fst . filterClauseHelper b False c
 
 filterClauseHelper :: PersistEntity val
              => Bool -- ^ include table name?
              -> Bool -- ^ include WHERE?
-             -> Connection -> Filter val -> (String, [PersistValue])
-filterClauseHelper includeTable includeWhere conn f0 =
+             -> Connection -> [Filter val] -> (String, [PersistValue])
+filterClauseHelper includeTable includeWhere conn filters =
     (if not (null sql) && includeWhere
         then " WHERE " ++ sql
         else sql, vals)
   where
-    (sql, vals) = go f0
+    (sql, vals) = combineAND filters
+    combineAND = combine " AND "
 
     combine s fs =
         (intercalate s a, concat b)
       where
         (a, b) = unzip $ map go fs
 
-    go (FilterAnd fs) = combine " AND " fs
-    go (FilterOr fs) = combine " OR " fs
+    go (FilterAnd fs) = combineAND fs
+    go (FilterOr fs)  = combine " OR " (map FilterAnd fs)
     go (Filter field value pfilter) =
         case (isNull, pfilter, varCount) of
             (True, Eq, _) -> (name ++ " IS NULL", [])
@@ -209,7 +210,7 @@ filterClauseHelper includeTable includeWhere conn f0 =
       where
         isNull = any (== PersistNull) allVals
         notNullVals = filter (/= PersistNull) allVals
-        allVals = map toPersistValue $ either return id value
+        allVals = filterValueToPersistValues value
         t = entityDef $ dummyFromFilts [Filter field value pfilter]
         name =
             (if includeTable
