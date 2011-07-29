@@ -1,6 +1,6 @@
 #!/bin/sh
 
-PACKAGES="pool persistent persistent-sqlite persistent-postgresql persistent-mongoDB persistent-template"
+PACKAGES="pool persistent persistent-template persistent-sqlite persistent-postgresql persistent-mongoDB"
 CABAL=cabal
 
 for package in $PACKAGES

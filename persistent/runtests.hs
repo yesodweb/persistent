@@ -449,9 +449,9 @@ caseAfterException = withSqlitePool "testdb" 1 $ runSqlPool $ do
 
 caseIdIn :: Assertion
 caseIdIn = sqlTest $ do
-    let p1 = Person "A" 0 Nothing
-        p2 = Person "B" 1 Nothing
-        p3 = Person "C" 2 Nothing
+    let p1 = Person "D" 0 Nothing
+        p2 = Person "E" 1 Nothing
+        p3 = Person "F" 2 Nothing
     pid1 <- insert p1
     _pid2 <- insert p2
     pid3 <- insert p3
