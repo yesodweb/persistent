@@ -275,11 +275,10 @@ instance (Trans.MonadIO m, Functor m) => PersistBackend (MongoDBReader m) where
         t = entityDef $ dummyFromFilts filts
 
 orderClause :: PersistEntity val => SelectOpt val -> DB.Field
-orderClause o = let (field, i) = case o of
-                              Asc f  -> (f,  1 :: Int)
-                              Desc f -> (f, -1 :: Int)
-                              _      -> error "expected Asc or Desc"
-                in  fieldName field DB.=: i
+orderClause o = case o of
+                  Asc f  -> fieldName f DB.=: ( 1 :: Int)
+                  Desc f -> fieldName f DB.=: (-1 :: Int)
+                  _      -> error "expected Asc or Desc"
 
 
 makeQuery :: PersistEntity val => [Filter val] -> [SelectOpt val] -> DB.Query
@@ -298,6 +297,8 @@ makeQuery filts opts =
 filterToSelector :: PersistEntity val => [Filter val] -> DB.Document
 filterToSelector filts = map filterToField filts
 
+
+fieldName ::  forall v typ.  (PersistEntity v, PersistField typ) => Field v typ -> CS.CompactString
 fieldName = u . columnName . persistColumnDef
 
 filterToField :: PersistEntity val => Filter val -> DB.Field
@@ -309,6 +310,7 @@ filterToField filter =
           _  -> fieldName field DB.=: [u(showFilter filt) DB.:= toValue value]
       FilterAnd fs -> error "did not expect FilterAnd" --  map filterToField fs
   where
+    toValue :: forall a.  PersistField a => Either a [a] -> DB.Value
     toValue = DB.val . filterValueToPersistValues 
 
     showFilter Ne = "$ne"
