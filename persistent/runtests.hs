@@ -261,7 +261,7 @@ caseUpdate = sqlTest $ do
   update key25 [PersonAge =. 28, PersonName =. "Updated"]
   Just pBlue28 <- get key25
   pBlue28 @== Person "Updated" 28 Nothing
-  update key25 [PersonAge +. 2]
+  update key25 [PersonAge +=. 2]
   Just pBlue30 <- get key25
   pBlue30 @== Person "Updated" 30 Nothing
 
@@ -272,7 +272,7 @@ caseUpdateWhere = sqlTest $ do
   key1 <- insert p1
   key2 <- insert p2
   updateWhere [PersonName ==. "Michael2"]
-              [PersonAge +. 3, PersonName =. "Updated"]
+              [PersonAge +=. 3, PersonName =. "Updated"]
   Just pBlue28 <- get key2
   pBlue28 @== Person "Updated" 28 Nothing
   Just p <- get key1
@@ -363,7 +363,7 @@ caseGeneral = sqlTest $ do
   ps <- selectList [PersonColor ==. Nothing] []
   map snd ps @== [mic29]
 
-  ps <- selectList [PersonColor /=. Nothing] []
+  ps <- selectList [PersonColor !=. Nothing] []
   map snd ps @== [eli, abe30]
 
   delete micK
