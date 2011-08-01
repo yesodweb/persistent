@@ -14,7 +14,7 @@ module Database.Persist
     , (=.), (+.)
     , (==.), (/=.), (<.), (>.), (<=.), (>=.)
     , (<-.), (/<-.)
-    , (&&.), (||.)
+    , (||.)
     ) where
 
 -- | Export public items from Database.Persist.Base
@@ -45,9 +45,7 @@ f <-. a = Filter f (Right a) In
 -- | NotIn
 f /<-. a = Filter f (Right a) NotIn
 
-infixl 3 &&., ||.
-(&&.), (||.) :: forall v. [Filter v] -> [Filter v] -> [Filter v]
--- | combine two lists of filters (same as ++)
-a &&. b = a ++ b
+infixl 3 ||.
+(||.) :: forall v. [Filter v] -> [Filter v] -> [Filter v]
 -- | the OR of two lists of filters
-a ||. b = [FilterOr  [a, b]]
+a ||. b = [FilterOr  [FilterAnd a, FilterAnd b]]

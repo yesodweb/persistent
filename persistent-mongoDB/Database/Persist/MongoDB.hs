@@ -294,8 +294,7 @@ makeQuery filts opts =
     orders = map orderClause $ third3 $ limitOffsetOrder opts
 
 filterToSelector :: PersistEntity val => [Filter val] -> DB.Document
-filterToSelector filts = map filterToField filts
-
+filterToSelector filts = [filterToField $ FilterAnd filts]
 
 fieldName ::  forall v typ.  (PersistEntity v) => Field v typ -> CS.CompactString
 fieldName = u . columnName . persistColumnDef
@@ -303,11 +302,14 @@ fieldName = u . columnName . persistColumnDef
 filterToField :: PersistEntity val => Filter val -> DB.Field
 filterToField f =
     case f of
-      FilterOr fs -> u"$or" DB.=: (map (map filterToField) fs)
       Filter field v filt -> case filt of
           Eq -> fieldName field DB.:= toValue v
           _  -> fieldName field DB.=: [u(showFilter filt) DB.:= toValue v]
-      FilterAnd _ -> error "did not expect FilterAnd" --  map filterToField fs
+      -- I didn't even know about the $and operator.
+      -- It is unecessary in 99% of cases.
+      -- However it makes query construction easier in special cases
+      FilterAnd fs -> u"$and" DB.=: (map filterToField fs)
+      FilterOr fs  -> u"$or" DB.=: (map filterToField fs)
   where
     toValue :: forall a.  PersistField a => Either a [a] -> DB.Value
     toValue = DB.val . filterValueToPersistValues 

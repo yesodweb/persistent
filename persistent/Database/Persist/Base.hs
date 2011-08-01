@@ -313,8 +313,8 @@ data Filter v = forall typ. PersistField typ => Filter
     , filterValue :: Either typ [typ] -- FIXME
     , filterFilter :: PersistFilter -- FIXME
     }
-    | FilterAnd [Filter v]  -- ^ convenient for internal use, redundant for the API
-    | FilterOr [[Filter v]]
+    | FilterAnd [Filter v] -- ^ convenient for internal use, not needed for the API
+    | FilterOr [Filter v]
 
 filterValueToPersistValues :: forall a.  PersistField a => Either a [a] -> [PersistValue]
 filterValueToPersistValues value = map toPersistValue $ either return id value

@@ -168,7 +168,7 @@ filterClauseHelper includeTable includeWhere conn filters =
         (a, b) = unzip $ map go fs
 
     go (FilterAnd fs) = combineAND fs
-    go (FilterOr fs)  = combine " OR " (map FilterAnd fs)
+    go (FilterOr fs)  = combine " OR " fs
     go (Filter field value pfilter) =
         case (isNull, pfilter, varCount) of
             (True, Eq, _) -> (name ++ " IS NULL", [])
