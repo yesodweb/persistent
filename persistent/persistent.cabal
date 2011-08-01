@@ -57,6 +57,7 @@ test-suite runtests
                    , bson
 
     cpp-options: -DWITH_POSTGRESQL
+    -- cpp-options: -DWITH_MONGODB
     ghc-options:   -Wall
     extra-libraries: sqlite3
 
