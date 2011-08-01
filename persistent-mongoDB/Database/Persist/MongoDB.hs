@@ -26,7 +26,6 @@ import Data.UString (u)
 import qualified Data.CompactString.UTF8 as CS
 import Data.Enumerator hiding (map, length)
 import Network.Socket (HostName)
-import qualified Network.Abstract(NetworkIO)
 import Data.Maybe (mapMaybe, fromJust)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as E
@@ -106,15 +105,15 @@ updateFields :: (PersistEntity val) => [Update val] -> [DB.Field]
 updateFields upds = map updateToMongoField upds 
 
 updateToMongoField :: (PersistEntity val) => Update val -> DB.Field
-updateToMongoField upd@(Update _ value update) = opName DB.:= DB.Doc [( (u $ updateFieldName upd) DB.:= opValue)]
+updateToMongoField upd@(Update _ v up) = opName DB.:= DB.Doc [( (u $ updateFieldName upd) DB.:= opValue)]
     where 
       opValue = DB.val . snd $ opNameValue
       opName = fst opNameValue
       opNameValue =
-        case (update, toPersistValue value) of
-                  (Assign,v)    -> (u "$set", v)
-                  (Add, v)      -> (u "$inc", v)
-                  (Subtract, PersistInt64 v) -> (u "$inc", PersistInt64 (-v))
+        case (up, toPersistValue v) of
+                  (Assign,a)    -> (u "$set", a)
+                  (Add, a)      -> (u "$inc", a)
+                  (Subtract, PersistInt64 i) -> (u "$inc", PersistInt64 (-i))
                   (Subtract, _) -> error "expected PersistInt64"
                   (Multiply, _) -> error "multiply not supported yet"
                   (Divide, _)   -> error "divide not supported yet"
@@ -246,7 +245,7 @@ instance (Trans.MonadIO m, Functor m) => PersistBackend (MongoDBReader m) where
         case doc of
             Nothing -> return Nothing
             Just document -> case pairFromDocument t document of
-                Left s -> fail "pairFromDocument: could not convert"
+                Left s -> fail $ "pairFromDocument: could not convert. " ++ s
                 Right row -> return $ Just row
       where
         t = entityDef $ dummyFromFilts filts
@@ -298,17 +297,17 @@ filterToSelector :: PersistEntity val => [Filter val] -> DB.Document
 filterToSelector filts = map filterToField filts
 
 
-fieldName ::  forall v typ.  (PersistEntity v, PersistField typ) => Field v typ -> CS.CompactString
+fieldName ::  forall v typ.  (PersistEntity v) => Field v typ -> CS.CompactString
 fieldName = u . columnName . persistColumnDef
 
 filterToField :: PersistEntity val => Filter val -> DB.Field
-filterToField filter =
-    case filter of
+filterToField f =
+    case f of
       FilterOr fs -> u"$or" DB.=: (map (map filterToField) fs)
-      Filter field value filt -> case filt of
-          Eq -> fieldName field DB.:= toValue value
-          _  -> fieldName field DB.=: [u(showFilter filt) DB.:= toValue value]
-      FilterAnd fs -> error "did not expect FilterAnd" --  map filterToField fs
+      Filter field v filt -> case filt of
+          Eq -> fieldName field DB.:= toValue v
+          _  -> fieldName field DB.=: [u(showFilter filt) DB.:= toValue v]
+      FilterAnd _ -> error "did not expect FilterAnd" --  map filterToField fs
   where
     toValue :: forall a.  PersistField a => Either a [a] -> DB.Value
     toValue = DB.val . filterValueToPersistValues 
@@ -321,6 +320,7 @@ filterToField filter =
     showFilter In = "$in"
     showFilter NotIn = "$nin"
     showFilter Eq = error "EQ not expected"
+    showFilter (BackendSpecificFilter bsf) = error $ "did not expect BackendSpecificFilter " ++ bsf
 
 wrapFromPersistValues :: (PersistEntity val) => EntityDef -> [DB.Field] -> Either String val
 wrapFromPersistValues e doc = fromPersistValues reorder
