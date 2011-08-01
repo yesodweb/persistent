@@ -8,7 +8,7 @@
 {-# LANGUAGE GADTs #-}
 
 import Test.HUnit hiding (Test)
-import Test.Hspec
+import Test.Hspec.Monadic
 import Test.Hspec.HUnit
 
 import Database.Persist.GenericSql
@@ -126,10 +126,10 @@ main = do
   runConn setup
   hspecX specs
 
-specs :: IO [IO Spec]
-specs = describe "persistent" [
+specs :: Specs
+specs = describe "persistent" $ do
 
-    it "passes the general tests" $ sqlTest $ do
+  it "passes the general tests" $ sqlTest $ do
       let mic = Person "Michael" 25 Nothing
       micK <- insert mic
       Just p <- get micK
@@ -188,7 +188,7 @@ specs = describe "persistent" [
       return ()
 
 
-  , it "and/or" $ sqlTest $ do
+  it "and/or" $ sqlTest $ do
       deleteWhere ([] :: [Filter Person1])
       _ <- insert $ Person1 "Michael" 25
       _ <- insert $ Person1 "Miriam" 25
@@ -222,9 +222,8 @@ specs = describe "persistent" [
       c40 <- count $ ([Person1Name ==. "Michael"] ||. [Person1Name ==. "Miriam"] ||. [Person1Age <.35])
       c40 @== 4
 
-  , it "commit/rollback" (caseCommitRollback >> runConn cleanDB)
 
-  , it "deleteWhere" $ sqlTest $ do
+  it "deleteWhere" $ sqlTest $ do
       key2 <- insert $ Person "Michael2" 90 Nothing
       _    <- insert $ Person "Michael3" 90 Nothing
       let p91 = Person "Michael4" 91 Nothing
@@ -241,7 +240,7 @@ specs = describe "persistent" [
       p91 @== p2_91
 
 
-  , it "deleteBy" $ sqlTest $ do
+  it "deleteBy" $ sqlTest $ do
       key2 <- insert $ Person "Michael2" 27 Nothing
       let p3 = Person "Michael3" 27 Nothing
       key3 <- insert $ p3
@@ -257,7 +256,7 @@ specs = describe "persistent" [
       p3 @== p32
 
 
-  , it "delete" $ sqlTest $ do
+  it "delete" $ sqlTest $ do
       key2 <- insert $ Person "Michael2" 27 Nothing
       let p3 = Person "Michael3" 27 Nothing
       key3 <- insert $ p3
@@ -272,7 +271,7 @@ specs = describe "persistent" [
       p3 @== p
 
 
-  , it "replace" $ sqlTest $ do
+  it "replace" $ sqlTest $ do
       key2 <- insert $ Person "Michael2" 27 Nothing
       let p3 = Person "Michael3" 27 Nothing
       replace key2 p3
@@ -287,7 +286,7 @@ specs = describe "persistent" [
       return ()
 
 
-  , it "getBy" $ sqlTest $ do
+  it "getBy" $ sqlTest $ do
       let p2 = Person "Michael2" 27 Nothing
       key2 <- insert p2
       Just (k, p) <- getBy $ PersonNameKey "Michael2"
@@ -301,7 +300,7 @@ specs = describe "persistent" [
       return ()
 
 
-  , it "update" $ sqlTest $ do
+  it "update" $ sqlTest $ do
       let p25 = Person "Michael" 25 Nothing
       key25 <- insert p25
       update key25 [PersonAge =. 28, PersonName =. "Updated"]
@@ -312,7 +311,7 @@ specs = describe "persistent" [
       pBlue30 @== Person "Updated" 30 Nothing
 
 
-  , it "updateWhere" $ sqlTest $ do
+  it "updateWhere" $ sqlTest $ do
       let p1 = Person "Michael" 25 Nothing
       let p2 = Person "Michael2" 25 Nothing
       key1 <- insert p1
@@ -325,7 +324,7 @@ specs = describe "persistent" [
       p @== p1
 
 
-  , it "selectList" $ sqlTest $ do
+  it "selectList" $ sqlTest $ do
       let p25 = Person "Michael" 25 Nothing
       let p26 = Person "Michael2" 26 Nothing
       key25 <- insert p25
@@ -348,7 +347,7 @@ specs = describe "persistent" [
       ps @== [(key26, p26)]
 
 
-  , it "selectFirst" $ sqlTest $ do
+  it "selectFirst" $ sqlTest $ do
       _ <- insert $ Person "Michael" 26 Nothing
       let pOld = Person "Oldie" 75 Nothing
       kOld <- insert pOld
@@ -356,7 +355,7 @@ specs = describe "persistent" [
       x <- selectFirst [] [Desc PersonAge]
       x @== Just (kOld, pOld)
 
-  , it "large numbers" $ sqlTest $ do
+  it "large numbers" $ sqlTest $ do
       let go x = do
               xid <- insert x
               x' <- get xid
@@ -375,42 +374,42 @@ specs = describe "persistent" [
       go $ Number 0 0 0 0 minBound
 
 
-    , it "insertBy" $ sqlTest $ do
-        Right _ <- insertBy $ Person "name" 1 Nothing
-        Left _ <- insertBy $ Person "name" 1 Nothing
-        Right _ <- insertBy $ Person "name2" 1 Nothing
-        return ()
+  it "insertBy" $ sqlTest $ do
+      Right _ <- insertBy $ Person "name" 1 Nothing
+      Left _ <- insertBy $ Person "name" 1 Nothing
+      Right _ <- insertBy $ Person "name2" 1 Nothing
+      return ()
 
 
-    , it "derivePersistField" $ sqlTest $ do
-        person <- insert $ Person "pet owner" 30 Nothing
-        cat <- insert $ Pet person "Mittens" Cat
-        Just cat' <- get cat
-        liftIO $ petType cat' @?= Cat
-        dog <- insert $ Pet person "Spike" Dog
-        Just dog' <- get dog
-        liftIO $ petType dog' @?= Dog
+  it "derivePersistField" $ sqlTest $ do
+      person <- insert $ Person "pet owner" 30 Nothing
+      cat <- insert $ Pet person "Mittens" Cat
+      Just cat' <- get cat
+      liftIO $ petType cat' @?= Cat
+      dog <- insert $ Pet person "Spike" Dog
+      Just dog' <- get dog
+      liftIO $ petType dog' @?= Dog
 
 
-    , it "afterException" caseAfterException
+  it "afterException" caseAfterException
 
 
-    , it "idIn" $ sqlTest $ do
-        let p1 = Person "D" 0 Nothing
-            p2 = Person "E" 1 Nothing
-            p3 = Person "F" 2 Nothing
-        pid1 <- insert p1
-        _pid2 <- insert p2
-        pid3 <- insert p3
-        x <- selectList [PersonId <-. [pid1, pid3]] []
-        liftIO $ x @?= [(pid1, p1), (pid3, p3)]
+  it "idIn" $ sqlTest $ do
+      let p1 = Person "D" 0 Nothing
+          p2 = Person "E" 1 Nothing
+          p3 = Person "F" 2 Nothing
+      pid1 <- insert p1
+      _pid2 <- insert p2
+      pid3 <- insert p3
+      x <- selectList [PersonId <-. [pid1, pid3]] []
+      liftIO $ x @?= [(pid1, p1), (pid3, p3)]
 
 
-    , it "joinNonSql" $ sqlTest $ _joinGen Database.Persist.Join.runJoin
+  it "joinNonSql" $ sqlTest $ _joinGen Database.Persist.Join.runJoin
 
+  it "joinSql" $ sqlTest $ _joinGen Database.Persist.Join.Sql.runJoin
 
-    , it "joinSql" $ sqlTest $ _joinGen Database.Persist.Join.Sql.runJoin
-  ]
+  it "commit/rollback" (caseCommitRollback >> runConn cleanDB)
 
 assertEmpty xs    = liftIO $ assertBool "" (null xs)
 assertNotEmpty xs = liftIO $ assertBool "" (not (null xs))
