@@ -57,7 +57,7 @@ test-suite runtests
                    , bson
 
     cpp-options: -DWITH_POSTGRESQL
-    ghc-options:   -Wall -ddump-splices
+    ghc-options:   -Wall
     extra-libraries: sqlite3
 
 source-repository head

@@ -188,6 +188,42 @@ specs = describe "persistent" [
       return ()
 
 
+  , it "and/or" $ sqlTest $ do
+      deleteWhere ([] :: [Filter Person1])
+      _ <- insert $ Person1 "Michael" 25
+      _ <- insert $ Person1 "Miriam" 25
+      _ <- insert $ Person1 "Michael" 30
+      _ <- insert $ Person1 "Michael" 35
+
+      c10 <- count $ [Person1Name ==. "Michael"] ||. [Person1Name ==. "Miriam"]
+      c10 @== 4
+      c12 <- count [FilterOr [FilterAnd [Person1Name ==. "Michael"], FilterAnd [Person1Name ==. "Miriam"]]]
+      c12 @== 4
+      c14 <- count [FilterOr [FilterAnd [Person1Name ==. "Michael"], FilterAnd [Person1Name ==. "Miriam"],
+                              FilterAnd [Person1Age >. 29, Person1Age <=. 30]]]
+      c14 @== 4
+
+      c20 <- count $ [Person1Name ==. "Miriam"] ||. [Person1Age >. 29, Person1Age <=. 30]
+      c20 @== 2
+      c22 <- count $ [Person1Age <=. 30] ++ [Person1Age >. 29]
+      c22 @== 1
+      c24 <- count $ [FilterAnd [Person1Age <=. 30, Person1Age >. 29]]
+      c24 @== 1
+      c26 <- count $ [Person1Age <=. 30] ++ [Person1Age >. 29]
+      c26 @== 1
+
+      c34 <- count $ [Person1Name ==. "Michael"] ||. [Person1Name ==. "Mirieam"] ++ [Person1Age <.35]
+      c34 @== 3
+      c30 <- count $ ([Person1Name ==. "Michael"] ||. [Person1Name ==. "Miriam"]) ++ [Person1Age <.35]
+      c30 @== 4
+      c36 <- count $ [Person1Name ==. "Michael"] ||. ([Person1Name ==. "Miriam"] ++ [Person1Age <.35])
+      c36 @== 4
+
+      c40 <- count $ ([Person1Name ==. "Michael"] ||. [Person1Name ==. "Miriam"] ||. [Person1Age <.35])
+      c40 @== 4
+
+  , it "commit/rollback" (caseCommitRollback >> runConn cleanDB)
+
   , it "deleteWhere" $ sqlTest $ do
       key2 <- insert $ Person "Michael2" 90 Nothing
       _    <- insert $ Person "Michael3" 90 Nothing
@@ -374,44 +410,6 @@ specs = describe "persistent" [
 
 
     , it "joinSql" $ sqlTest $ _joinGen Database.Persist.Join.Sql.runJoin
-
-
-    , it "and/or" $ sqlTest $ do
-        deleteWhere ([] :: [Filter Person1])
-        _ <- insert $ Person1 "Michael" 25
-        _ <- insert $ Person1 "Miriam" 25
-        _ <- insert $ Person1 "Michael" 30
-        _ <- insert $ Person1 "Michael" 35
-
-        c10 <- count $ [Person1Name ==. "Michael"] ||. [Person1Name ==. "Miriam"]
-        c10 @== 4
-        c12 <- count [FilterOr [FilterAnd [Person1Name ==. "Michael"], FilterAnd [Person1Name ==. "Miriam"]]]
-        c12 @== 4
-        c14 <- count [FilterOr [FilterAnd [Person1Name ==. "Michael"], FilterAnd [Person1Name ==. "Miriam"],
-                                FilterAnd [Person1Age >. 29, Person1Age <=. 30]]]
-        c14 @== 4
-
-        c20 <- count $ [Person1Name ==. "Miriam"] ||. [Person1Age >. 29, Person1Age <=. 30]
-        c20 @== 2
-        c22 <- count $ [Person1Age <=. 30] ++ [Person1Age >. 29]
-        c22 @== 1
-        c24 <- count $ [FilterAnd [Person1Age <=. 30, Person1Age >. 29]]
-        c24 @== 1
-        c26 <- count $ [Person1Age <=. 30] ++ [Person1Age >. 29]
-        c26 @== 1
-
-        c34 <- count $ [Person1Name ==. "Michael"] ||. [Person1Name ==. "Mirieam"] ++ [Person1Age <.35]
-        c34 @== 3
-        c30 <- count $ ([Person1Name ==. "Michael"] ||. [Person1Name ==. "Miriam"]) ++ [Person1Age <.35]
-        c30 @== 4
-        c36 <- count $ [Person1Name ==. "Michael"] ||. ([Person1Name ==. "Miriam"] ++ [Person1Age <.35])
-        c36 @== 4
-
-        c40 <- count $ ([Person1Name ==. "Michael"] ||. [Person1Name ==. "Miriam"] ||. [Person1Age <.35])
-        c40 @== 4
-
-
-    , it "commit/rollback" (caseCommitRollback >> runConn cleanDB)
   ]
 
 assertEmpty xs    = liftIO $ assertBool "" (null xs)
