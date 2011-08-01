@@ -6,11 +6,10 @@
 {-# LANGUAGE PackageImports, RankNTypes #-}
 -- | A redis backend for persistent.
 module Database.Persist.MongoDB
-    ( MongoDBReader
+    ( MongoPersist
     , withMongoDBConn
     , runMongoDBConn 
     , HostName
-    , PersistValue(..)
     , module Database.Persist
     ) where
 
@@ -37,31 +36,31 @@ import Control.Monad.Throw (Throw (..))
 import Prelude hiding (catch)
 import Network.Abstract (Internet (..), ANetwork (..))
 
-newtype MongoDBReader m a = MongoDBReader { unMongoDBReader :: ReaderT DB.Database (Action m) a }
+newtype MongoPersist m a = MongoPersist { unMongoPersist :: ReaderT DB.Database (Action m) a }
     deriving (Monad, Trans.MonadIO, Functor, Applicative)
 
-instance Monad m => Context DB.Database (MongoDBReader m) where
-    context = MongoDBReader ask
-    push f (MongoDBReader x) = MongoDBReader $ local f x
+instance Monad m => Context DB.Database (MongoPersist m) where
+    context = MongoPersist ask
+    push f (MongoPersist x) = MongoPersist $ local f x
 
-instance Monad m => Context DB.MasterOrSlaveOk (MongoDBReader m) where
-    context = MongoDBReader context
-    push f (MongoDBReader x) = MongoDBReader $ push f x
+instance Monad m => Context DB.MasterOrSlaveOk (MongoPersist m) where
+    context = MongoPersist context
+    push f (MongoPersist x) = MongoPersist $ push f x
 
-instance Monad m => Context DB.Pipe (MongoDBReader m) where
-    context = MongoDBReader context
-    push f (MongoDBReader x) = MongoDBReader $ push f x
+instance Monad m => Context DB.Pipe (MongoPersist m) where
+    context = MongoPersist context
+    push f (MongoPersist x) = MongoPersist $ push f x
 
-instance Monad m => Context DB.WriteMode (MongoDBReader m) where
-    context = MongoDBReader context
-    push f (MongoDBReader x) = MongoDBReader $ push f x
+instance Monad m => Context DB.WriteMode (MongoPersist m) where
+    context = MongoPersist context
+    push f (MongoPersist x) = MongoPersist $ push f x
 
-instance Monad m => Throw Failure (MongoDBReader m) where
-    throw = MongoDBReader . throw
-    catch (MongoDBReader x) f =
-        MongoDBReader $ ReaderT $ \db -> catch (runReaderT x db) (f' db)
+instance Monad m => Throw Failure (MongoPersist m) where
+    throw = MongoPersist . throw
+    catch (MongoPersist x) f =
+        MongoPersist $ ReaderT $ \db -> catch (runReaderT x db) (f' db)
       where
-        f' db e = runReaderT (unMongoDBReader (f e)) db
+        f' db e = runReaderT (unMongoPersist (f e)) db
 
 withMongoDBConn :: (Trans.MonadIO m, Applicative m) => t -> HostName -> (DB.ConnPool DB.Host -> t -> m b) -> m b
 withMongoDBConn dbname hostname connectionReader = do
@@ -70,13 +69,13 @@ withMongoDBConn dbname hostname connectionReader = do
 
 
 runMongoDBConn :: (DB.Service s, Trans.MonadIO m) =>
-                                    MongoDBReader m b
+                                    MongoPersist m b
                                  -> DB.WriteMode
                                  -> DB.MasterOrSlaveOk
                                  -> DB.ConnPool s
                                  -> DB.Database
                                  -> m b
-runMongoDBConn (MongoDBReader a) wm ms cp db = do
+runMongoDBConn (MongoPersist a) wm ms cp db = do
     res <- DB.access wm ms cp (runReaderT a db)
     either (Trans.liftIO . throwIO . MongoDBException) return res
 
@@ -139,7 +138,7 @@ insertFields t record = zipWith (DB.:=) (toLabels) (toValues)
     toLabels = map (u . columnName) $ entityColumns t
     toValues = map (DB.val . toPersistValue) (toPersistFields record)
 
-instance (Trans.MonadIO m, Functor m) => PersistBackend (MongoDBReader m) where
+instance (Trans.MonadIO m, Functor m) => PersistBackend (MongoPersist m) where
     insert record = do
         (DB.ObjId oid) <- DB.insert (u $ entityName t) (insertFields t record)
         return $ Key $ dbOidToKey oid 

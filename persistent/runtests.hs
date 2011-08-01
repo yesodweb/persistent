@@ -12,17 +12,18 @@ import Test.Hspec.Monadic
 import Test.Hspec.HUnit
 
 import Database.Persist.GenericSql
+import Database.Persist
 import Database.Persist.Base (PersistUpdate (Add, Assign), PersistFilter (..), ColumnDef (ColumnDef), DeleteCascade (..))
 import Database.Persist ((||.))
 #if WITH_MONGODB
-import Database.Persist.MongoDB
+import qualified Database.MongoDB as MongoDB
+import Database.Persist.MongoDB (MongoPersist, withMongoDBConn, runMongoDBConn)
 #else
 import Database.Persist.Sqlite
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
 #endif
 #endif
-import qualified Database.MongoDB as MongoDB
 import Database.Persist.TH
 import Control.Monad.IO.Class
 
@@ -100,7 +101,7 @@ runConn f = do
 
 setup = return ()
 
-db :: MongoPesist IO () -> Assertion
+db :: MongoPersist IO () -> Assertion
 db actions = runConn actions
 
 #else
