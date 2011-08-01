@@ -40,15 +40,22 @@ library
 test-suite runtests
     type:          exitcode-stdio-1.0
     main-is:       runtests.hs
-    hs-source-dirs: ., ../persistent-template, ../persistent-sqlite, ../persistent-postgresql
+    hs-source-dirs: ., ../persistent-template, ../persistent-sqlite, ../persistent-postgresql ../persistent-mongoDB
 
-    build-depends:   HUnit,
-                     hspec >= 0.6 && < 0.7,
-                     test-framework-hunit,
-                     base >= 4 && < 5,
-                     template-haskell >= 2.4 && < 2.6,
-                     HDBC-postgresql,
-                     HDBC
+    build-depends:   HUnit
+                   , hspec >= 0.6 && < 0.7
+                   , test-framework-hunit
+                   , base >= 4 && < 5
+                   , template-haskell >= 2.4 && < 2.6
+                   , HDBC-postgresql
+                   , HDBC
+                   -- mongoDB dependencies
+                   , mongoDB            >= 0.9.2.1 && < 1.0
+                   , cereal
+                   , network
+                   , compact-string-fix
+                   , bson
+
     cpp-options: -DWITH_POSTGRESQL
     ghc-options:   -Wall -ddump-splices
     extra-libraries: sqlite3
