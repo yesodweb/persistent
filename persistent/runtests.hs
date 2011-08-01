@@ -14,7 +14,7 @@ import Test.Hspec.HUnit
 import Database.Persist.GenericSql
 import Database.Persist.Sqlite
 import Database.Persist.Base (PersistUpdate (Add, Assign), PersistFilter (..), ColumnDef (ColumnDef), DeleteCascade (..))
-import Database.Persist ((&&.), (||.))
+import Database.Persist ((||.))
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
 #endif
@@ -229,26 +229,26 @@ caseAndOr = sqlTest $ do
 
   c10 <- count $ [Person1Name ==. "Michael"] ||. [Person1Name ==. "Miriam"]
   c10 @== 4
-  c12 <- count [FilterOr [[Person1Name ==. "Michael", Person1Name ==. "Miriam"]]]
+  c12 <- count [FilterOr [FilterAnd [Person1Name ==. "Michael"], FilterAnd [Person1Name ==. "Miriam"]]]
   c12 @== 4
-  c14 <- count [FilterOr [[Person1Name ==. "Michael", Person1Name ==. "Miriam",
-                            Person1Age >. 29, Person1Age <=. 30]]]
+  c14 <- count [FilterOr [FilterAnd [Person1Name ==. "Michael"], FilterAnd [Person1Name ==. "Miriam"],
+                          FilterAnd [Person1Age >. 29, Person1Age <=. 30]]]
   c14 @== 4
 
   c20 <- count $ [Person1Name ==. "Miriam"] ||. [Person1Age >. 29, Person1Age <=. 30]
   c20 @== 2
-  c22 <- count $ [Person1Age <=. 30] &&. [Person1Age >. 29]
+  c22 <- count $ [Person1Age <=. 30] ++ [Person1Age >. 29]
   c22 @== 1
   c24 <- count $ [FilterAnd [Person1Age <=. 30, Person1Age >. 29]]
   c24 @== 1
   c26 <- count $ [Person1Age <=. 30] ++ [Person1Age >. 29]
   c26 @== 1
 
-  c34 <- count $ [Person1Name ==. "Michael"] ||. [Person1Name ==. "Mirieam"] &&.[Person1Age <.35]
+  c34 <- count $ [Person1Name ==. "Michael"] ||. [Person1Name ==. "Mirieam"] ++ [Person1Age <.35]
   c34 @== 3
-  c30 <- count $ ([Person1Name ==. "Michael"] ||. [Person1Name ==. "Miriam"]) &&.[Person1Age <.35]
+  c30 <- count $ ([Person1Name ==. "Michael"] ||. [Person1Name ==. "Miriam"]) ++ [Person1Age <.35]
   c30 @== 4
-  c36 <- count $ [Person1Name ==. "Michael"] ||. ([Person1Name ==. "Miriam"] &&.[Person1Age <.35])
+  c36 <- count $ [Person1Name ==. "Michael"] ||. ([Person1Name ==. "Miriam"] ++ [Person1Age <.35])
   c36 @== 4
 
   c40 <- count $ ([Person1Name ==. "Michael"] ||. [Person1Name ==. "Miriam"] ||. [Person1Age <.35])
