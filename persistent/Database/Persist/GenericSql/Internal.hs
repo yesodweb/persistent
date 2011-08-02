@@ -208,6 +208,9 @@ filterClauseHelper includeTable includeWhere conn filters =
                 ], notNullVals)
             _ -> (name ++ showSqlFilter pfilter ++ "?", allVals)
       where
+        filterValueToPersistValues :: forall a.  PersistField a => Either a [a] -> [PersistValue]
+        filterValueToPersistValues value = map toPersistValue $ either return id value
+
         isNull = any (== PersistNull) allVals
         notNullVals = filter (/= PersistNull) allVals
         allVals = filterValueToPersistValues value

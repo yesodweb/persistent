@@ -32,7 +32,6 @@ module Database.Persist.Base
     , Update (..)
     , updateFieldName
     , Filter (..)
-    , filterValueToPersistValues
       -- * Definition
     , EntityDef (..)
     , ColumnName
@@ -315,9 +314,6 @@ data Filter v = forall typ. PersistField typ => Filter
     }
     | FilterAnd [Filter v] -- ^ convenient for internal use, not needed for the API
     | FilterOr [Filter v]
-
-filterValueToPersistValues :: forall a.  PersistField a => Either a [a] -> [PersistValue]
-filterValueToPersistValues value = map toPersistValue $ either return id value
 
 -- | A single database entity. For example, if writing a blog application, a
 -- blog entry would be an entry, containing fields such as title and content.

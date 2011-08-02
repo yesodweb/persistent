@@ -25,7 +25,7 @@ import Data.UString (u)
 import qualified Data.CompactString.UTF8 as CS
 import Data.Enumerator hiding (map, length)
 import Network.Socket (HostName)
-import Data.Maybe (mapMaybe, fromJust)
+import Data.Maybe (mapMaybe, fromJust, catMaybes)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as E
 import qualified Data.Serialize as S
@@ -35,6 +35,8 @@ import Control.Monad.Context (Context (..))
 import Control.Monad.Throw (Throw (..))
 import Prelude hiding (catch)
 import Network.Abstract (Internet (..), ANetwork (..))
+
+import ErrorLocation (debug)
 
 newtype MongoPersist m a = MongoPersist { unMongoPersist :: ReaderT DB.Database (Action m) a }
     deriving (Monad, Trans.MonadIO, Functor, Applicative)
@@ -163,7 +165,7 @@ instance (Trans.MonadIO m, Functor m) => PersistBackend (MongoPersist m) where
     updateWhere filts upds =
         DB.modify DB.Select {
           DB.coll = (u $ entityName t)
-        , DB.selector = filterToSelector filts
+        , DB.selector = filtersToSelector filts
         } $ updateFields upds
       where
         t = entityDef $ dummyFromFilts filts
@@ -179,7 +181,7 @@ instance (Trans.MonadIO m, Functor m) => PersistBackend (MongoPersist m) where
     deleteWhere filts = do
         DB.delete DB.Select {
           DB.coll = (u $ entityName t)
-        , DB.selector = filterToSelector filts
+        , DB.selector = filtersToSelector filts
         }
       where
         t = entityDef $ dummyFromFilts filts
@@ -216,7 +218,7 @@ instance (Trans.MonadIO m, Functor m) => PersistBackend (MongoPersist m) where
         i <- DB.count query
         return $ fromIntegral i
       where
-        query = DB.select (filterToSelector filts) (u $ entityName t)
+        query = DB.select (filtersToSelector filts) (u $ entityName t)
         t = entityDef $ dummyFromFilts filts
 
     selectEnum filts opts = Iteratee . start
@@ -267,7 +269,7 @@ instance (Trans.MonadIO m, Functor m) => PersistBackend (MongoPersist m) where
                         $ "Unexpected in selectKeys: " ++ show y
         loop step _ = return step
 
-        query = (DB.select (filterToSelector filts) (u $ entityName t)) {
+        query = (DB.select (filtersToSelector filts) (u $ entityName t)) {
           DB.project = [u"_id" DB.=: (1 :: Int)]
         }
         t = entityDef $ dummyFromFilts filts
@@ -281,7 +283,7 @@ orderClause o = case o of
 
 makeQuery :: PersistEntity val => [Filter val] -> [SelectOpt val] -> DB.Query
 makeQuery filts opts =
-    (DB.select (filterToSelector filts) (u $ entityName t)) {
+    (DB.select (filtersToSelector filts) (u $ entityName t)) {
       DB.limit = fromIntegral limit
     , DB.skip  = fromIntegral offset
     , DB.sort  = orders
@@ -292,26 +294,31 @@ makeQuery filts opts =
     offset = snd3 $ limitOffsetOrder opts
     orders = map orderClause $ third3 $ limitOffsetOrder opts
 
-filterToSelector :: PersistEntity val => [Filter val] -> DB.Document
-filterToSelector filts = [filterToField $ FilterAnd filts]
+filtersToSelector :: PersistEntity val => [Filter val] -> DB.Document
+filtersToSelector filts = debug $ if null filts then [] else catMaybes $ map filterToField filts
 
 fieldName ::  forall v typ.  (PersistEntity v) => Field v typ -> CS.CompactString
 fieldName = u . columnName . persistColumnDef
 
-filterToField :: PersistEntity val => Filter val -> DB.Field
+filterToField :: PersistEntity val => Filter val -> Maybe DB.Field
 filterToField f =
     case f of
-      Filter field v filt -> case filt of
+      Filter field v filt -> Just $ case filt of
           Eq -> fieldName field DB.:= toValue v
           _  -> fieldName field DB.=: [u(showFilter filt) DB.:= toValue v]
       -- I didn't even know about the $and operator.
       -- It is unecessary in 99% of cases.
       -- However it makes query construction easier in special cases
-      FilterAnd fs -> u"$and" DB.=: (map filterToField fs)
-      FilterOr fs  -> u"$or" DB.=: (map filterToField fs)
+      FilterAnd fs -> multiFilter "$and" fs
+      FilterOr fs  -> multiFilter "$or" fs
   where
+    multiFilter multi fs = Just (u multi  DB.:= DB.Array [DB.Doc $ filtersToSelector fs])
+
     toValue :: forall a.  PersistField a => Either a [a] -> DB.Value
-    toValue = DB.val . filterValueToPersistValues 
+    toValue val =
+      case val of
+        Left v   -> DB.val $ toPersistValue v
+        Right vs -> DB.val $ map toPersistValue vs
 
     showFilter Ne = "$ne"
     showFilter Gt = "$gt"

@@ -44,7 +44,7 @@ test-suite runtests
 
     build-depends:   HUnit
                    , hspec >= 0.6 && < 0.7
-                   , test-framework-hunit
+                   , error-location
                    , base >= 4 && < 5
                    , template-haskell >= 2.4 && < 2.6
                    , HDBC-postgresql
@@ -56,8 +56,8 @@ test-suite runtests
                    , compact-string-fix
                    , bson
 
-    -- cpp-options: -DWITH_POSTGRESQL
-    cpp-options: -DWITH_MONGODB
+    cpp-options: -DWITH_POSTGRESQL
+    -- cpp-options: -DWITH_MONGODB
     ghc-options:   -Wall
     extra-libraries: sqlite3
 

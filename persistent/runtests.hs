@@ -14,16 +14,20 @@ import Test.Hspec.HUnit
 import Database.Persist.GenericSql
 import Database.Persist
 import Database.Persist.Base (PersistUpdate (Add, Assign), PersistFilter (..), ColumnDef (ColumnDef), DeleteCascade (..))
-import Database.Persist ((||.))
+
 #if WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
 import Database.Persist.MongoDB (MongoPersist, withMongoDBConn, runMongoDBConn)
 #else
+import Control.Monad.Trans.Reader
 import Database.Persist.Sqlite
+import Control.Exception (SomeException)
+import qualified Control.Exception.Control as Control
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
 #endif
 #endif
+
 import Database.Persist.TH
 import Control.Monad.IO.Class
 
@@ -31,18 +35,17 @@ import Database.Persist.Join hiding (RunJoin)
 import qualified Database.Persist.Join
 import qualified Database.Persist.Join.Sql
 
-import Control.Monad.Trans.Reader
 import Control.Monad (unless)
 import Data.Int
 import Data.Word
 
-import Control.Exception (SomeException)
-import qualified Control.Exception.Control as Control
 
-infix 1 /=@, @/=
+infix 1 @/= --, /=@
 
+{-
 (/=@) :: (Eq a, Show a, MonadIO m) => a -> a -> m ()
 expected /=@ actual = liftIO $ assertNotEqual "" expected actual
+-}
 
 (@/=) :: (Eq a, Show a, MonadIO m) => a -> a -> m ()
 actual @/= expected = liftIO $ assertNotEqual "" expected actual
@@ -56,9 +59,9 @@ assertNotEqual preface expected actual =
 assertEmpty xs    = liftIO $ assertBool "" (null xs)
 assertNotEmpty xs = liftIO $ assertBool "" (not (null xs))
 
-infix 1 @==, ==@
+infix 1 @== -- , ==@
 expected @== actual = liftIO $ expected @?= actual
-expected ==@ actual = liftIO $ expected @=? actual
+-- expected ==@ actual = liftIO $ expected @=? actual
 
 data PetType = Cat | Dog
     deriving (Show, Read, Eq)
@@ -95,14 +98,30 @@ share [mkPersist,  mkMigrate "testMigrate", mkDeleteCascade] [persist|
     title String
 |]
 
+cleanDB :: PersistBackend m => m ()
+cleanDB = do
+  deleteWhere ([] :: [Filter Pet])
+  deleteWhere ([] :: [Filter Person])
+  deleteWhere ([] :: [Filter Person1])
+  deleteWhere ([] :: [Filter Number])
+  deleteWhere ([] :: [Filter Entry])
+  deleteWhere ([] :: [Filter Author])
+
 #ifdef WITH_MONGODB
 runConn f = do
     withMongoDBConn (MongoDB.Database "test") "127.0.0.1" $ runMongoDBConn f MongoDB.safe MongoDB.Master
 
-setup = return ()
+setup :: MongoPersist IO ()
+setup = do
+  -- TODO: check version
+  {-let js = MongoDB.Javascript [] "version()"-}
+  {-v <- MongoDB.eval js -}
+  {-liftIO $ putStrLn $ show v-}
+  -- TODO: drop entire database
+  cleanDB
 
 db :: MongoPersist IO () -> Assertion
-db actions = runConn actions
+db actions = runConn $ actions >> cleanDB
 
 #else
 runConn f = do
@@ -114,15 +133,6 @@ runConn f = do
 db :: SqlPersist IO () -> Assertion
 db actions = do
   runConn $ actions >>= \r -> rollback >> return r
-
-cleanDB :: SqlPersist IO ()
-cleanDB = do
-  deleteWhere ([] :: [Filter Pet])
-  deleteWhere ([] :: [Filter Person])
-  deleteWhere ([] :: [Filter Person1])
-  deleteWhere ([] :: [Filter Number])
-  deleteWhere ([] :: [Filter Entry])
-  deleteWhere ([] :: [Filter Author])
 
 setup :: SqlPersist IO ()
 setup = do
@@ -217,8 +227,8 @@ specs = describe "persistent" $ do
       p @== mic
 
       replace micK $ Person "Michael" 25 Nothing
-      Just p <- get micK
-      p @== mic
+      Just p2 <- get micK
+      p2 @== mic
 
       replace micK $ Person "Michael" 26 Nothing
       Just mic26 <- get micK
@@ -228,8 +238,8 @@ specs = describe "persistent" $ do
       results <- selectList [PersonName ==. "Michael"] []
       results @== [(micK, mic26)]
 
-      results <- selectList [PersonAge <. 28] []
-      results @== [(micK, mic26)]
+      results' <- selectList [PersonAge <. 28] []
+      results' @== [(micK, mic26)]
 
       update micK [PersonAge =. 28]
       Just p28 <- get micK
@@ -252,17 +262,17 @@ specs = describe "persistent" $ do
       abes <- selectList [PersonName ==. "Abe"] []
       (map snd abes) @== [abe30]
 
-      Just (_,p) <- getBy $ PersonNameKey "Michael"
-      p @== mic29
+      Just (_,p3) <- getBy $ PersonNameKey "Michael"
+      p3 @== mic29
 
       ps <- selectList [PersonColor ==. Just "blue"] []
       map snd ps @== [eli]
 
-      ps <- selectList [PersonColor ==. Nothing] []
-      map snd ps @== [mic29]
+      ps2 <- selectList [PersonColor ==. Nothing] []
+      map snd ps2 @== [mic29]
 
-      ps <- selectList [PersonColor !=. Nothing] []
-      map snd ps @== [eli, abe30]
+      ps3 <- selectList [PersonColor !=. Nothing] []
+      map snd ps3 @== [eli, abe30]
 
       delete micK
       Nothing <- get micK
@@ -276,7 +286,7 @@ specs = describe "persistent" $ do
       _ <- insert $ Person1 "Michael" 30
       _ <- insert $ Person1 "Michael" 35
 
-      c10 <- count $ [Person1Name ==. "Michael"] ||. [Person1Name ==. "Miriam"]
+      c10 <- count $ [Person1Name ==. "Michael"] ||. [Person1Name ==. "Miriam", Person1Age ==. 25]
       c10 @== 4
       c12 <- count [FilterOr [FilterAnd [Person1Name ==. "Michael"], FilterAnd [Person1Name ==. "Miriam"]]]
       c12 @== 4
@@ -313,8 +323,8 @@ specs = describe "persistent" $ do
       ps90 <- selectList [PersonAge ==. 90] []
       assertNotEmpty ps90
       deleteWhere [PersonAge ==. 90]
-      ps90 <- selectList [PersonAge ==. 90] []
-      assertEmpty ps90
+      ps90' <- selectList [PersonAge ==. 90] []
+      assertEmpty ps90'
       Nothing <- get key2
 
       Just p2_91 <- get key91
@@ -322,7 +332,7 @@ specs = describe "persistent" $ do
 
 
   it "deleteBy" $ db $ do
-      key2 <- insert $ Person "Michael2" 27 Nothing
+      _ <- insert $ Person "Michael2" 27 Nothing
       let p3 = Person "Michael3" 27 Nothing
       key3 <- insert $ p3
 
@@ -330,8 +340,8 @@ specs = describe "persistent" $ do
       assertNotEmpty ps2
 
       deleteBy $ PersonNameKey "Michael2"
-      ps2 <- selectList [PersonName ==. "Michael2"] []
-      assertEmpty ps2
+      ps2' <- selectList [PersonName ==. "Michael2"] []
+      assertEmpty ps2'
 
       Just p32 <- get key3
       p3 @== p32
@@ -345,8 +355,8 @@ specs = describe "persistent" $ do
       pm2 <- selectList [PersonName ==. "Michael2"] []
       assertNotEmpty pm2
       delete key2
-      pm2 <- selectList [PersonName ==. "Michael2"] []
-      assertEmpty pm2
+      pm2' <- selectList [PersonName ==. "Michael2"] []
+      assertEmpty pm2'
 
       Just p <- get key3
       p3 @== p
@@ -362,7 +372,7 @@ specs = describe "persistent" $ do
       -- test replace an empty key
       delete key2
       Nothing <- get key2
-      undefined <- replace key2 p3
+      _ <- replace key2 p3
       Nothing <- get key2
       return ()
 
@@ -410,22 +420,22 @@ specs = describe "persistent" $ do
       let p26 = Person "Michael2" 26 Nothing
       key25 <- insert p25
       key26 <- insert p26
-      ps <- selectList [] []
-      ps @== [(key25, p25), (key26, p26)]
+      ps1 <- selectList [] []
+      ps1 @== [(key25, p25), (key26, p26)]
       -- limit
-      ps <- selectList [] [LimitTo 1]
-      ps @== [(key25, p25)]
+      ps2 <- selectList [] [LimitTo 1]
+      ps2 @== [(key25, p25)]
       -- offset -- FAILS!
-      ps <- selectList [] [OffsetBy 1]
-      ps @== [(key26, p26)]
+      ps3 <- selectList [] [OffsetBy 1]
+      ps3 @== [(key26, p26)]
       -- limit & offset
-      ps <- selectList [] [LimitTo 1, OffsetBy 1]
-      ps @== [(key26, p26)]
+      ps4 <- selectList [] [LimitTo 1, OffsetBy 1]
+      ps4 @== [(key26, p26)]
 
-      ps <- selectList [] [Desc PersonAge]
-      ps @== [(key26, p26), (key25, p25)]
-      ps <- selectList [PersonAge ==. 26] []
-      ps @== [(key26, p26)]
+      ps5 <- selectList [] [Desc PersonAge]
+      ps5 @== [(key26, p26), (key25, p25)]
+      ps6 <- selectList [PersonAge ==. 26] []
+      ps6 @== [(key26, p26)]
 
 
   it "selectFirst" $ db $ do
