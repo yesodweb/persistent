@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE PackageImports, RankNTypes #-}
+{-# LANGUAGE CPP #-}
 -- | A redis backend for persistent.
 module Database.Persist.MongoDB
     ( MongoPersist
