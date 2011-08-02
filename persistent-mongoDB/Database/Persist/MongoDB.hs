@@ -78,13 +78,13 @@ withMongoDBPool dbname hostname connectionPoolSize connectionReader = do
 
 
 runMongoDBConn :: (DB.Service s, Trans.MonadIO m) =>
-                                    MongoPersist m b
-                                 -> DB.WriteMode
+                                    DB.WriteMode
                                  -> DB.MasterOrSlaveOk
+                                 -> MongoPersist m b
                                  -> DB.ConnPool s
                                  -> DB.Database
                                  -> m b
-runMongoDBConn (MongoPersist a) wm ms cp db = do
+runMongoDBConn wm ms (MongoPersist a) cp db = do
     res <- DB.access wm ms cp (runReaderT a db)
     either (Trans.liftIO . throwIO . MongoDBException) return res
 

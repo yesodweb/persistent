@@ -112,7 +112,7 @@ cleanDB = do
 
 #ifdef WITH_MONGODB
 runConn f = do
-    withMongoDBConn (MongoDB.Database "test") "127.0.0.1" $ runMongoDBConn f MongoDB.safe MongoDB.Master
+    withMongoDBConn (MongoDB.Database "test") "127.0.0.1" $ runMongoDBConn MongoDB.safe MongoDB.Master f
 
 setup :: MongoPersist IO ()
 setup = do
