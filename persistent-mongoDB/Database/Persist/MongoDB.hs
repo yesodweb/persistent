@@ -26,7 +26,7 @@ import Data.UString (u)
 import qualified Data.CompactString.UTF8 as CS
 import Data.Enumerator hiding (map, length, concatMap)
 import Network.Socket (HostName)
-import Data.Maybe (mapMaybe, fromJust, catMaybes)
+import Data.Maybe (mapMaybe, fromJust)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as E
 import qualified Data.Serialize as S
