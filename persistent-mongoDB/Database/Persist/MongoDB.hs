@@ -23,7 +23,7 @@ import Control.Applicative (Applicative)
 import Control.Exception (toException)
 import Data.UString (u)
 import qualified Data.CompactString.UTF8 as CS
-import Data.Enumerator hiding (map, length)
+import Data.Enumerator hiding (map, length, concatMap)
 import Network.Socket (HostName)
 import Data.Maybe (mapMaybe, fromJust, catMaybes)
 import qualified Data.Text as T
@@ -36,7 +36,9 @@ import Control.Monad.Throw (Throw (..))
 import Prelude hiding (catch)
 import Network.Abstract (Internet (..), ANetwork (..))
 
+#ifdef DEBUG
 import ErrorLocation (debug)
+#endif
 
 newtype MongoPersist m a = MongoPersist { unMongoPersist :: ReaderT DB.Database (Action m) a }
     deriving (Monad, Trans.MonadIO, Functor, Applicative)
@@ -295,25 +297,27 @@ makeQuery filts opts =
     orders = map orderClause $ third3 $ limitOffsetOrder opts
 
 filtersToSelector :: PersistEntity val => [Filter val] -> DB.Document
-filtersToSelector filts = debug $ if null filts then [] else catMaybes $ map filterToField filts
+filtersToSelector filts = 
+#ifdef DEBUG
+  debug $
+#endif
+    if null filts then [] else concatMap filterToDocument filts
 
-fieldName ::  forall v typ.  (PersistEntity v) => Field v typ -> CS.CompactString
-fieldName = u . columnName . persistColumnDef
+multiFilter :: forall val.  PersistEntity val => String -> [Filter val] -> [DB.Field]
+multiFilter multi fs = [u multi  DB.:= DB.Array (map (DB.Doc . filterToDocument) fs)]
 
-filterToField :: PersistEntity val => Filter val -> Maybe DB.Field
-filterToField f =
+filterToDocument :: PersistEntity val => Filter val -> DB.Document
+filterToDocument f =
     case f of
-      Filter field v filt -> Just $ case filt of
+      Filter field v filt -> return $ case filt of
           Eq -> fieldName field DB.:= toValue v
           _  -> fieldName field DB.=: [u(showFilter filt) DB.:= toValue v]
+      FilterOr fs  -> multiFilter "$or" fs
       -- I didn't even know about the $and operator.
       -- It is unecessary in 99% of cases.
       -- However it makes query construction easier in special cases
       FilterAnd fs -> multiFilter "$and" fs
-      FilterOr fs  -> multiFilter "$or" fs
   where
-    multiFilter multi fs = Just (u multi  DB.:= DB.Array [DB.Doc $ filtersToSelector fs])
-
     toValue :: forall a.  PersistField a => Either a [a] -> DB.Value
     toValue val =
       case val of
@@ -329,6 +333,11 @@ filterToField f =
     showFilter NotIn = "$nin"
     showFilter Eq = error "EQ not expected"
     showFilter (BackendSpecificFilter bsf) = error $ "did not expect BackendSpecificFilter " ++ bsf
+
+fieldName ::  forall v typ.  (PersistEntity v) => Field v typ -> CS.CompactString
+fieldName = u . idfix . columnName . persistColumnDef
+  where idfix f = if f == "id" then "_id" else f
+
 
 wrapFromPersistValues :: (PersistEntity val) => EntityDef -> [DB.Field] -> Either String val
 wrapFromPersistValues e doc = fromPersistValues reorder

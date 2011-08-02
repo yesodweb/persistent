@@ -39,6 +39,8 @@ import Control.Monad (unless)
 import Data.Int
 import Data.Word
 
+import ErrorLocation (debug)
+
 
 infix 1 @/= --, /=@
 
@@ -98,6 +100,7 @@ share [mkPersist,  mkMigrate "testMigrate", mkDeleteCascade] [persist|
     title String
 |]
 
+-- this is faster then dropDatabase. Could try dropCollection
 cleanDB :: PersistBackend m => m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Pet])
@@ -114,14 +117,23 @@ runConn f = do
 setup :: MongoPersist IO ()
 setup = do
   -- TODO: check version
-  {-let js = MongoDB.Javascript [] "version()"-}
-  {-v <- MongoDB.eval js -}
-  {-liftIO $ putStrLn $ show v-}
-  -- TODO: drop entire database
-  cleanDB
+  -- v <- MongoDB.access MongoDB.pipe MongoDB.slaveOk "admin" $ MongoDB.runCommand1 "buildInfo"
+  v <- MongoDB.serverVersion
+  liftIO $ putStrLn $ "version: " ++ show v
+  if andVersion v then return () else error "mongoDB version not supported: need at least 1.9.1"
+  -- TODO: use dropDatabase 
+  MongoDB.dropDatabase (MongoDB.Database "test")
+  return ()
+  where
+    andVersion vresult = case debug $ show vresult of
+      '"':'1':'.':n:'.':minor -> let i = ((read [n]) ::Int) in i > 9 || (i == 9 && ((read $ init minor)::Int) >= 1)
+      '"':'2':'.':_ -> True
 
 db :: MongoPersist IO () -> Assertion
-db actions = runConn $ actions >> cleanDB
+db actions = do
+  r <- runConn actions
+  runConn cleanDB
+  return r
 
 #else
 runConn f = do
@@ -306,7 +318,7 @@ specs = describe "persistent" $ do
       c34 <- count $ [Person1Name ==. "Michael"] ||. [Person1Name ==. "Mirieam"] ++ [Person1Age <.35]
       c34 @== 3
       c30 <- count $ ([Person1Name ==. "Michael"] ||. [Person1Name ==. "Miriam"]) ++ [Person1Age <.35]
-      c30 @== 4
+      c30 @== 3
       c36 <- count $ [Person1Name ==. "Michael"] ||. ([Person1Name ==. "Miriam"] ++ [Person1Age <.35])
       c36 @== 4
 
