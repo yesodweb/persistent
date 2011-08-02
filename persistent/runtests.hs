@@ -39,7 +39,7 @@ import Control.Monad (unless)
 import Data.Int
 import Data.Word
 
-import ErrorLocation (debug)
+import Debug.FileLocation (debug)
 
 
 infix 1 @/= --, /=@
