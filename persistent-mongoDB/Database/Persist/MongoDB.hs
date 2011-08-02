@@ -9,6 +9,7 @@
 module Database.Persist.MongoDB
     ( MongoPersist
     , withMongoDBConn
+    , withMongoDBPool
     , runMongoDBConn 
     , HostName
     , module Database.Persist
@@ -68,8 +69,11 @@ instance Monad m => Throw Failure (MongoPersist m) where
         f' db e = runReaderT (unMongoPersist (f e)) db
 
 withMongoDBConn :: (Trans.MonadIO m, Applicative m) => t -> HostName -> (DB.ConnPool DB.Host -> t -> m b) -> m b
-withMongoDBConn dbname hostname connectionReader = do
-  pool <- runReaderT (DB.newConnPool 1 $ DB.host hostname) $ ANetwork Internet
+withMongoDBConn dbname hostname connectionReader = withMongoDBPool dbname hostname 1 connectionReader
+
+withMongoDBPool :: (Trans.MonadIO m, Applicative m) => t -> HostName -> Int -> (DB.ConnPool DB.Host -> t -> m b) -> m b
+withMongoDBPool dbname hostname connectionPoolSize connectionReader = do
+  pool <- runReaderT (DB.newConnPool connectionPoolSize $ DB.host hostname) $ ANetwork Internet
   connectionReader pool dbname
 
 
