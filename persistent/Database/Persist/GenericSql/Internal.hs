@@ -163,9 +163,10 @@ filterClauseHelper includeTable includeWhere conn filters =
     combineAND = combine " AND "
 
     combine s fs =
-        (intercalate s a, concat b)
+        (intercalate s $ map wrapP a, concat b)
       where
         (a, b) = unzip $ map go fs
+        wrapP x = concat ["(", x, ")"]
 
     go (FilterAnd fs) = combineAND fs
     go (FilterOr fs)  = combine " OR " fs
