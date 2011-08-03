@@ -12,6 +12,10 @@ module Database.Persist.MongoDB
     , withMongoDBPool
     , runMongoDBConn 
     , HostName
+    , DB.Database(..), u
+    , DB.MasterOrSlaveOk(..)
+    , DB.safe
+    , ConnectionPool
     , module Database.Persist
     ) where
 
@@ -68,10 +72,12 @@ instance Monad m => Throw Failure (MongoPersist m) where
       where
         f' db e = runReaderT (unMongoPersist (f e)) db
 
-withMongoDBConn :: (Trans.MonadIO m, Applicative m) => t -> HostName -> (DB.ConnPool DB.Host -> t -> m b) -> m b
+type ConnectionPool = DB.ConnPool DB.Host
+
+withMongoDBConn :: (Trans.MonadIO m, Applicative m) => t -> HostName -> (ConnectionPool -> t -> m b) -> m b
 withMongoDBConn dbname hostname connectionReader = withMongoDBPool dbname hostname 1 connectionReader
 
-withMongoDBPool :: (Trans.MonadIO m, Applicative m) => t -> HostName -> Int -> (DB.ConnPool DB.Host -> t -> m b) -> m b
+withMongoDBPool :: (Trans.MonadIO m, Applicative m) => t -> HostName -> Int -> (ConnectionPool -> t -> m b) -> m b
 withMongoDBPool dbname hostname connectionPoolSize connectionReader = do
   pool <- runReaderT (DB.newConnPool connectionPoolSize $ DB.host hostname) $ ANetwork Internet
   connectionReader pool dbname
