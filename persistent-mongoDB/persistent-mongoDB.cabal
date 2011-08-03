@@ -1,5 +1,5 @@
 name:            persistent-mongoDB
-version:         0.2.2
+version:         0.6
 license:         BSD3
 license-file:    LICENSE
 author:          Greg Weber <greg@gregweber.info>
