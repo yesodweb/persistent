@@ -148,6 +148,7 @@ db actions = do
 
 setup :: SqlPersist IO ()
 setup = do
+  printMigration testMigrate
   runMigration testMigrate
   cleanDB
 #endif

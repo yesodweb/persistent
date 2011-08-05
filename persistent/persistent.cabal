@@ -56,8 +56,9 @@ test-suite runtests
                    , compact-string-fix
                    , bson
 
-    -- cpp-options: -DWITH_POSTGRESQL
-    cpp-options: -DWITH_MONGODB
+    -- these are mutually exclusive options
+    cpp-options: -DWITH_POSTGRESQL
+    -- cpp-options: -DWITH_MONGODB
     ghc-options:   -Wall
     extra-libraries: sqlite3
 

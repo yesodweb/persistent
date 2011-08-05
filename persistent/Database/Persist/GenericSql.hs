@@ -38,7 +38,8 @@ import Data.Enumerator (Stream (..), Iteratee (..), Step (..))
 import Control.Monad.IO.Control (MonadControlIO)
 import Control.Exception.Control (onException)
 import Control.Exception (toException)
-import Data.Text (Text, pack, unpack)
+import Data.Text (Text, pack, unpack, snoc)
+import qualified Data.Text.IO
 
 type ConnectionPool = Pool Connection
 
@@ -369,7 +370,7 @@ parseMigration' m = do
 printMigration :: MonadControlIO m => Migration (SqlPersist m) -> SqlPersist m ()
 printMigration m = do
   mig <- parseMigration' m
-  mapM_ (liftIO . putStrLn . unpack) (allSql mig)
+  mapM_ (liftIO . Data.Text.IO.putStrLn . flip snoc ';') (allSql mig)
 
 getMigration :: MonadControlIO m => Migration (SqlPersist m) -> SqlPersist m [Sql]
 getMigration m = do
