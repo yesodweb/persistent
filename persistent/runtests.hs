@@ -17,7 +17,7 @@ import Database.Persist.Base (PersistUpdate (Add, Assign), PersistFilter (..), C
 
 #if WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
-import Database.Persist.MongoDB (MongoPersist, withMongoDBConn, runMongoDBConn)
+import Database.Persist.MongoDB (Action, withMongoDBConn, runMongoDBConn)
 #else
 import Control.Monad.Trans.Reader
 import Database.Persist.Sqlite
@@ -112,9 +112,11 @@ cleanDB = do
 
 #ifdef WITH_MONGODB
 runConn f = do
-    withMongoDBConn (MongoDB.Database "test") "127.0.0.1" $ runMongoDBConn MongoDB.safe MongoDB.Master f
+--    withMongoDBConn ("test") "127.0.0.1" $ runMongoDBConn MongoDB.safe MongoDB.Master f
+  withMongoDBConn "test" "127.0.0.1" $ runMongoDBConn MongoDB.master f
 
-setup :: MongoPersist IO ()
+--setup :: MongoPersist IO ()
+setup :: Action IO ()
 setup = do
   -- TODO: check version
   -- v <- MongoDB.access MongoDB.pipe MongoDB.slaveOk "admin" $ MongoDB.runCommand1 "buildInfo"
@@ -122,14 +124,15 @@ setup = do
   liftIO $ putStrLn $ "version: " ++ show v
   if andVersion v then return () else error "mongoDB version not supported: need at least 1.9.1"
   -- TODO: use dropDatabase 
-  MongoDB.dropDatabase (MongoDB.Database "test")
+  MongoDB.dropDatabase "test"   --(MongoDB.Database "test")
   return ()
   where
     andVersion vresult = case debug $ show vresult of
       '"':'1':'.':n:'.':minor -> let i = ((read [n]) ::Int) in i > 9 || (i == 9 && ((read $ init minor)::Int) >= 1)
       '"':'2':'.':_ -> True
 
-db :: MongoPersist IO () -> Assertion
+--db :: MongoPersist IO () -> Assertion
+db :: Action IO () -> Assertion
 db actions = do
   r <- runConn actions
   runConn cleanDB
