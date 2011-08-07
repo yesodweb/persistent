@@ -74,7 +74,7 @@ upperFirst [] = []
 
 dataTypeDec :: EntityDef -> Dec
 dataTypeDec t =
-    DataD [] nameG [PlainTV backend] [RecC name cols] [] -- $ map mkName $ entityDerives t
+    DataD [] nameG [PlainTV backend] [RecC name cols] $ map mkName $ entityDerives t
   where
     mkCol x (ColumnDef n ty as) =
         (mkName $ recName x n, NotStrict, pairToType backend (ty, nullable as))

@@ -339,7 +339,7 @@ instance PersistField SomePersistField where
     sqlType (SomePersistField a) = sqlType a
 
 newtype Key backend entity = Key { unKey :: PersistValue }
-    deriving (Show, Eq, Read, PersistField)
+    deriving (Show, Read, Eq, Ord, PersistField)
 
 class (Monad (b m), Monad m) => PersistBackend b m where
 

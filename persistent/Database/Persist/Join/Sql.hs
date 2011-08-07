@@ -25,7 +25,7 @@ fromPersistValuesId [] = Left "fromPersistValuesId: No values provided"
 fromPersistValuesId (PersistInt64 i:rest) =
     case fromPersistValues rest of
         Left e -> Left e
-        Right x -> Right (SqlKey i, x)
+        Right x -> Right (Key $ PersistInt64 i, x)
 fromPersistValuesId _ = Left "fromPersistValuesId: invalid ID"
 
 class RunJoin a where

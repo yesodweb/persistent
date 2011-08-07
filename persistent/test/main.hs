@@ -567,13 +567,3 @@ caseAfterException = withSqlitePool sqlite_database 1 $ runSqlPool $ do
     catcher _ = return ()
 
 #endif
-
--- FIXME figure out a way to make this unnecessary
-deriving instance Show Author
-deriving instance Show Entry
-deriving instance Show (PersonG backend)
-deriving instance Show (NumberG backend)
-deriving instance Eq Author
-deriving instance Eq Entry
-deriving instance Eq (PersonG backend)
-deriving instance Eq (NumberG backend)
