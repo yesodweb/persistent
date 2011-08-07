@@ -20,7 +20,7 @@ import Data.Function (on)
 import Control.Arrow ((&&&))
 import Data.Text (pack)
 
-fromPersistValuesId :: PersistEntity v => [PersistValue] -> Either String (Key (SqlPersist m) v, v)
+fromPersistValuesId :: PersistEntity v => [PersistValue] -> Either String (Key SqlPersist v, v)
 fromPersistValuesId [] = Left "fromPersistValuesId: No values provided"
 fromPersistValuesId (PersistInt64 i:rest) =
     case fromPersistValues rest of
@@ -31,8 +31,8 @@ fromPersistValuesId _ = Left "fromPersistValuesId: invalid ID"
 class RunJoin a where
     runJoin :: MonadControlIO m => a -> SqlPersist m (J.Result a)
 
-instance (PersistEntity one, PersistEntity many, Eq (Key (SqlPersist m) one))
-    => RunJoin (SelectOneMany (SqlPersist m) one many) where
+instance (PersistEntity one, PersistEntity many, Eq (Key SqlPersist one))
+    => RunJoin (SelectOneMany SqlPersist one many) where
     runJoin (SelectOneMany oneF oneO manyF manyO eq _getKey isOuter) = do
         conn <- SqlPersist ask
         liftM go $ withStmt (sql conn) (getFiltsValues conn oneF ++ getFiltsValues conn manyF) $ loop id

@@ -6,6 +6,9 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 import Test.HUnit hiding (Test)
 import Test.Hspec.Monadic
@@ -70,7 +73,7 @@ data PetType = Cat | Dog
 derivePersistField "PetType"
 
   -- FIXME Empty
-share [mkPersist sqlSettings,  mkMigrate "testMigrate"{- FIXME, mkDeleteCascade-}] [persist|
+share [mkPersist sqlSettings,  mkMigrate "testMigrate"{- FIXME , mkDeleteCascade-}] [persist|
 
   Person
     name String
@@ -101,7 +104,7 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate"{- FIXME, mkDeleteCascade-
 |]
 
 -- this is faster then dropDatabase. Could try dropCollection
-cleanDB :: PersistBackend m => m ()
+cleanDB :: PersistBackend b m => b m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Pet])
   deleteWhere ([] :: [Filter Person])
@@ -564,3 +567,13 @@ caseAfterException = withSqlitePool sqlite_database 1 $ runSqlPool $ do
     catcher _ = return ()
 
 #endif
+
+-- FIXME figure out a way to make this unnecessary
+deriving instance Show Author
+deriving instance Show Entry
+deriving instance Show (PersonG backend)
+deriving instance Show (NumberG backend)
+deriving instance Eq Author
+deriving instance Eq Entry
+deriving instance Eq (PersonG backend)
+deriving instance Eq (NumberG backend)

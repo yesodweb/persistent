@@ -1,6 +1,8 @@
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 -- | This is a helper module for creating SQL backends. Regular users do not
 -- need to use this module.
@@ -68,8 +70,8 @@ runSqlConn (SqlPersist r) conn = do
     liftIO $ commitC conn getter
     return x
 
-instance MonadControlIO m => PersistBackend (SqlPersist m) where
-    newtype Key (SqlPersist m) entity = SqlKey { unSqlKey :: Int64 }
+instance MonadControlIO m => PersistBackend SqlPersist m where
+    newtype Key SqlPersist entity = SqlKey { unSqlKey :: Int64 }
         deriving (Show, Read, Eq, Num, Ord, Enum, Bounded, SinglePiece, PersistField)
 
     insert val = do
@@ -340,10 +342,10 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
         t = entityDef $ dummyFromUnique uniq
         toFieldNames' = map (getFieldName t) . persistUniqueToFieldNames
 
-dummyFromUnique :: Unique v -> v
+dummyFromUnique :: Unique v b -> v
 dummyFromUnique _ = error "dummyFromUnique"
 
-dummyFromKey :: Key (SqlPersist m) v -> v
+dummyFromKey :: Key SqlPersist v -> v
 dummyFromKey _ = error "dummyFromKey"
 
 

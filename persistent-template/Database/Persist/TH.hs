@@ -31,6 +31,7 @@ import qualified System.IO as SIO
 import Data.Text (pack)
 import qualified Data.Text.Read
 import qualified Data.Text as T
+import Data.List (isSuffixOf)
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
@@ -57,7 +58,7 @@ data MkPersistSettings = MkPersistSettings
 
 sqlSettings :: MkPersistSettings
 sqlSettings = MkPersistSettings
-    { mpsBackend = ConT ''SqlPersist `AppT` ConT ''IO -- FIXME
+    { mpsBackend = ConT ''SqlPersist
     }
 
 recName :: String -> String -> String
@@ -73,12 +74,14 @@ upperFirst [] = []
 
 dataTypeDec :: EntityDef -> Dec
 dataTypeDec t =
-    let name = mkName $ entityName t
-        cols = map (mkCol $ entityName t) $ entityColumns t
-     in DataD [] name [] [RecC name cols] $ map mkName $ entityDerives t
+    DataD [] nameG [PlainTV backend] [RecC name cols] [] -- $ map mkName $ entityDerives t
   where
     mkCol x (ColumnDef n ty as) =
-        (mkName $ recName x n, NotStrict, pairToType (ty, nullable as))
+        (mkName $ recName x n, NotStrict, pairToType backend (ty, nullable as))
+    nameG = mkName $ entityName t ++ "G"
+    name = mkName $ entityName t
+    cols = map (mkCol $ entityName t) $ entityColumns t
+    backend = mkName "backend"
 
 readMay :: Read a => String -> Maybe a
 readMay s =
@@ -94,26 +97,35 @@ entityUpdates =
 
 uniqueTypeDec :: EntityDef -> Dec
 uniqueTypeDec t =
-    DataInstD [] ''Unique [ConT $ mkName $ entityName t]
-            (map (mkUnique t) $ entityUniques t)
+    DataInstD [] ''Unique [ConT (mkName (entityName t ++ "G")) `AppT` VarT backend, VarT backend2]
+            (map (mkUnique backend t) $ entityUniques t)
             (if null (entityUniques t) then [] else [''Show, ''Read, ''Eq])
+  where
+    backend = mkName "backend"
+    backend2 = mkName "backend2"
 
-mkUnique :: EntityDef -> UniqueDef -> Con
-mkUnique t (UniqueDef constr fields) =
+mkUnique :: Name -> EntityDef -> UniqueDef -> Con
+mkUnique backend t (UniqueDef constr fields) =
     NormalC (mkName constr) types
   where
     types = map (go . flip lookup3 (entityColumns t)) fields
     go (_, True) = error "Error: cannot have nullables in unique"
-    go x = (NotStrict, pairToType x)
+    go x = (NotStrict, pairToType backend x)
     lookup3 s [] =
         error $ "Column not found: " ++ s ++ " in unique " ++ constr
     lookup3 x ((ColumnDef x' y z):rest)
         | x == x' = (y, nullable z)
         | otherwise = lookup3 x rest
 
-pairToType :: (String, Bool) -> Type
-pairToType (s, False) = ConT $ mkName s
-pairToType (s, True) = ConT (mkName "Maybe") `AppT` ConT (mkName s)
+pairToType :: Name -- ^ backend
+           -> (String, Bool) -> Type
+pairToType backend (s, False) = idType backend s
+pairToType backend (s, True) = ConT (mkName "Maybe") `AppT` idType backend s
+
+idType :: Name -> String -> Type
+idType backend typ
+    | "Id" `isSuffixOf` typ = ConT ''Key `AppT` VarT backend `AppT` ConT (mkName $ take (length typ - 2) typ)
+    | otherwise = ConT $ mkName typ
 
 degen :: [Clause] -> [Clause]
 degen [] =
@@ -218,7 +230,7 @@ mkEntity :: MkPersistSettings -> EntityDef -> Q [Dec]
 mkEntity mps t = do
     t' <- lift t
     let name = entityName t
-    let clazz = ConT ''PersistEntity `AppT` ConT (mkName $ entityName t)
+    let clazz = ConT ''PersistEntity `AppT` (ConT (mkName $ entityName t ++ "G") `AppT` VarT (mkName "backend"))
     tpf <- mkToPersistFields [(name, length $ entityColumns t)]
     fpv <- mkFromPersistValues t
     utv <- mkUniqueToValues $ entityUniques t
@@ -226,6 +238,8 @@ mkEntity mps t = do
     fields <- mapM (mkField t) $ ColumnDef "id" (entityName t ++ "Id") [] : entityColumns t
     return $
       [ dataTypeDec t
+      , TySynD (mkName $ entityName t) [] $
+            ConT (mkName $ entityName t ++ "G") `AppT` mpsBackend mps
       , TySynD (mkName $ entityName t ++ "Id") [] $
             ConT ''Key `AppT` mpsBackend mps `AppT` ConT (mkName $ entityName t)
       , InstanceD [] clazz $
@@ -240,7 +254,7 @@ mkEntity mps t = do
         , DataInstD
             []
             ''Field
-            [ ConT $ mkName $ entityName t
+            [ ConT (mkName $ entityName t ++ "G") `AppT` VarT (mkName "backend")
             , VarT $ mkName "typ"
             ]
             (map fst fields)
@@ -334,7 +348,8 @@ mkDeleteCascade defs = do
         return $
             InstanceD
             []
-            (ConT ''DeleteCascade `AppT` ConT (mkName name))
+            (ConT ''DeleteCascade `AppT`
+                (ConT (mkName $ name ++ "G") `AppT` VarT (mkName "backend")))
             [ FunD (mkName "deleteCascade")
                 [Clause [VarP key] (NormalB $ DoE stmts) []]
             ]

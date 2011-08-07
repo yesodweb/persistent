@@ -15,9 +15,9 @@ import Data.Maybe (mapMaybe)
 import qualified Data.Map as Map
 import Data.List (foldl')
 
-class PersistBackend m => RunJoin a m where
+class PersistBackend b m => RunJoin a b m where
     type Result a
-    runJoin :: a -> m (Result a)
+    runJoin :: a -> b m (Result a)
 
 data SelectOneMany backend one many = SelectOneMany
     { somFilterOne :: [Filter one]
@@ -31,8 +31,8 @@ data SelectOneMany backend one many = SelectOneMany
 
 selectOneMany :: ([Key backend one] -> Filter many) -> (many -> Key backend one) -> SelectOneMany backend one many
 selectOneMany filts get' = SelectOneMany [] [] [] [] filts get' False
-instance (PersistEntity one, PersistEntity many, Ord (Key backend one), PersistBackend backend)
-    => RunJoin (SelectOneMany backend one many) backend where
+instance (PersistEntity one, PersistEntity many, Ord (Key backend one), PersistBackend backend monad)
+    => RunJoin (SelectOneMany backend one many) backend monad where
     type Result (SelectOneMany backend one many) =
         [((Key backend one, one), [(Key backend many, many)])]
     runJoin (SelectOneMany oneF oneO manyF manyO eq getKey isOuter) = do
