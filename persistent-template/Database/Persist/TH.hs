@@ -349,7 +349,9 @@ mkDeleteCascade defs = do
             InstanceD
             []
             (ConT ''DeleteCascade `AppT`
-                (ConT (mkName $ name ++ "G") `AppT` VarT (mkName "backend")))
+                (ConT (mkName $ name ++ "G") `AppT` VarT (mkName "backend"))
+                `AppT` VarT (mkName "backend")
+                )
             [ FunD (mkName "deleteCascade")
                 [Clause [VarP key] (NormalB $ DoE stmts) []]
             ]
@@ -481,7 +483,12 @@ mkField et cd = do
     -}
   where
     name = mkName $ concat [entityName et, upperFirst $ columnName cd]
-    base = ConT (mkName $ columnType cd)
+    base =
+        if "Id" `isSuffixOf` columnType cd
+            then ConT ''Key
+                    `AppT` (VarT $ mkName "backend")
+                    `AppT` (ConT (mkName $ take (length (columnType cd) - 2) (columnType cd) ++ "G") `AppT` VarT (mkName "backend"))
+            else ConT (mkName $ columnType cd)
     typ = if nullable $ columnAttribs cd
             then ConT ''Maybe `AppT` base
             else base

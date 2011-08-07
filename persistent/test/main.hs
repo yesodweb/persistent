@@ -8,7 +8,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 import Test.HUnit hiding (Test)
 import Test.Hspec.Monadic
@@ -72,8 +73,7 @@ data PetType = Cat | Dog
     deriving (Show, Read, Eq)
 derivePersistField "PetType"
 
-  -- FIXME Empty
-share [mkPersist sqlSettings,  mkMigrate "testMigrate"{- FIXME , mkDeleteCascade-}] [persist|
+share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persist|
 
   Person
     name String

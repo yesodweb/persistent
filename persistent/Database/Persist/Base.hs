@@ -496,10 +496,10 @@ data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le | In | NotIn
                    | BackendSpecificFilter String
     deriving (Read, Show)
 
-class PersistEntity a => DeleteCascade a where
+class PersistEntity a => DeleteCascade a b where
     deleteCascade :: PersistBackend b m => Key b a -> b m ()
 
-deleteCascadeWhere :: (DeleteCascade a, PersistBackend b m)
+deleteCascadeWhere :: (DeleteCascade a b, PersistBackend b m)
                    => [Filter a] -> b m ()
 deleteCascadeWhere filts = do
     res <- run $ selectKeys filts $ Continue iter
