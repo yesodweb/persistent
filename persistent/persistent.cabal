@@ -37,9 +37,9 @@ library
                      Database.Persist.Join.Sql
     ghc-options:     -Wall
 
-test-suite runtests
+test-suite test
     type:          exitcode-stdio-1.0
-    main-is:       runtests.hs
+    main-is:       test/main.hs
     hs-source-dirs: ., ../persistent-template, ../persistent-sqlite, ../persistent-postgresql ../persistent-mongoDB
 
     build-depends:   HUnit
@@ -47,10 +47,9 @@ test-suite runtests
                    , file-location >= 0.2 && < 0.3
                    , base >= 4 && < 5
                    , template-haskell >= 2.4 && < 2.6
-                   --, HDBC-postgresql
-                   --, HDBC
+                   , HDBC-postgresql
+                   , HDBC
                    -- mongoDB dependencies
-                   --, mongoDB            >= 0.10 && < 0.11
                    , mongoDB       >= 1.0 && < 1.1
                    , cereal
                    , network
@@ -58,8 +57,8 @@ test-suite runtests
                    , bson
 
     -- these are mutually exclusive options
-    --cpp-options: -DWITH_POSTGRESQL
-    cpp-options: -DWITH_MONGODB
+    cpp-options: -DWITH_POSTGRESQL
+    --cpp-options: -DWITH_MONGODB
     ghc-options:   -Wall
     extra-libraries: sqlite3
 

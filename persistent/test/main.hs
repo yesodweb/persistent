@@ -38,19 +38,22 @@ import qualified Database.Persist.Join.Sql
 import Control.Monad (unless)
 import Data.Int
 import Data.Word
+import qualified Control.Monad.IO.Control
 
 import Debug.FileLocation (debug)
 
 
-infix 1 @/= --, /=@
 
 {-
-(/=@) :: (Eq a, Show a, MonadIO m) => a -> a -> m ()
 expected /=@ actual = liftIO $ assertNotEqual "" expected actual
 -}
-
-(@/=) :: (Eq a, Show a, MonadIO m) => a -> a -> m ()
+(@/=), (@==) :: (Eq a, Show a, MonadIO m) => a -> a -> m ()
+infix 1 @/= --, /=@
 actual @/= expected = liftIO $ assertNotEqual "" expected actual
+
+infix 1 @== -- , ==@
+expected @== actual = liftIO $ expected @?= actual
+-- expected ==@ actual = liftIO $ expected @=? actual
 
 assertNotEqual :: (Eq a, Show a) => String -> a -> a -> Assertion
 assertNotEqual preface expected actual =
@@ -61,9 +64,6 @@ assertNotEqual preface expected actual =
 assertEmpty xs    = liftIO $ assertBool "" (null xs)
 assertNotEmpty xs = liftIO $ assertBool "" (not (null xs))
 
-infix 1 @== -- , ==@
-expected @== actual = liftIO $ expected @?= actual
--- expected ==@ actual = liftIO $ expected @=? actual
 
 data PetType = Cat | Dog
     deriving (Show, Read, Eq)
@@ -139,11 +139,14 @@ db actions = do
   return r
 
 #else
+sqlite_database = "test/testdb.sqlite3"
+runConn :: Control.Monad.IO.Control.MonadControlIO m => SqlPersist m t -> m ()
 runConn f = do
-    withSqlitePool "testdb" 1 $ runSqlPool f
+    _<-withSqlitePool sqlite_database 1 $ runSqlPool f
 #if WITH_POSTGRESQL
-    withPostgresqlPool "user=test password=test host=localhost port=5432 dbname=test" 1 $ runSqlPool f
+    _<-withPostgresqlPool "user=test password=test host=localhost port=5432 dbname=test" 1 $ runSqlPool f
 #endif
+    return ()
 
 db :: SqlPersist IO () -> Assertion
 db actions = do
@@ -161,6 +164,7 @@ main = do
   runConn setup
   hspecX specs
 
+_joinGen :: (MonadIO m, PersistBackend m) => (SelectOneMany Author Entry -> m [((Key Author, Author), [(Key Entry, Entry)])]) -> m ()
 _joinGen run = do
     a <- insert $ Author "a"
     a1 <- insert $ Entry a "a1"
@@ -550,7 +554,7 @@ caseCommitRollback = db $ do
     c4 @== 4
 
 caseAfterException :: Assertion
-caseAfterException = withSqlitePool "testdb" 1 $ runSqlPool $ do
+caseAfterException = withSqlitePool sqlite_database 1 $ runSqlPool $ do
     _ <- insert $ Person "A" 0 Nothing
     _ <- (insert (Person "A" 1 Nothing) >> return ()) `Control.catch` catcher
     _ <- insert $ Person "B" 0 Nothing
