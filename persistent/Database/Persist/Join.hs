@@ -1,5 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
 module Database.Persist.Join
     ( -- * Typeclass
       RunJoin (..)
@@ -13,26 +15,26 @@ import Data.Maybe (mapMaybe)
 import qualified Data.Map as Map
 import Data.List (foldl')
 
-class RunJoin a where
+class PersistBackend m => RunJoin a m where
     type Result a
-    runJoin :: PersistBackend m => a -> m (Result a)
+    runJoin :: a -> m (Result a)
 
-data SelectOneMany one many = SelectOneMany
+data SelectOneMany backend one many = SelectOneMany
     { somFilterOne :: [Filter one]
     , somOrderOne :: [SelectOpt one]
     , somFilterMany :: [Filter many]
     , somOrderMany :: [SelectOpt many]
-    , somFilterKeys :: [Key one] -> Filter many
-    , somGetKey :: many -> Key one
+    , somFilterKeys :: [Key backend one] -> Filter many
+    , somGetKey :: many -> Key backend one
     , somIncludeNoMatch :: Bool
     }
 
-selectOneMany :: ([Key one] -> Filter many) -> (many -> Key one) -> SelectOneMany one many
+selectOneMany :: ([Key backend one] -> Filter many) -> (many -> Key backend one) -> SelectOneMany backend one many
 selectOneMany filts get' = SelectOneMany [] [] [] [] filts get' False
-instance (PersistEntity one, PersistEntity many, Ord (Key one))
-    => RunJoin (SelectOneMany one many) where
-    type Result (SelectOneMany one many) =
-        [((Key one, one), [(Key many, many)])]
+instance (PersistEntity one, PersistEntity many, Ord (Key backend one), PersistBackend backend)
+    => RunJoin (SelectOneMany backend one many) backend where
+    type Result (SelectOneMany backend one many) =
+        [((Key backend one, one), [(Key backend many, many)])]
     runJoin (SelectOneMany oneF oneO manyF manyO eq getKey isOuter) = do
         x <- selectList oneF oneO
         -- FIXME use select instead of selectList

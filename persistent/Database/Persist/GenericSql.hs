@@ -1,4 +1,6 @@
 {-# LANGUAGE PackageImports #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 -- | This is a helper module for creating SQL backends. Regular users do not
 -- need to use this module.
@@ -20,6 +22,7 @@ module Database.Persist.GenericSql
     , migrate
     , commit
     , rollback
+    , Key (..)
     ) where
 
 import Database.Persist.Base
@@ -40,6 +43,8 @@ import Control.Exception.Control (onException)
 import Control.Exception (toException)
 import Data.Text (Text, pack, unpack, snoc)
 import qualified Data.Text.IO
+import Data.Int (Int64)
+import Web.PathPieces (SinglePiece)
 
 type ConnectionPool = Pool Connection
 
@@ -64,20 +69,23 @@ runSqlConn (SqlPersist r) conn = do
     return x
 
 instance MonadControlIO m => PersistBackend (SqlPersist m) where
+    newtype Key (SqlPersist m) entity = SqlKey { unSqlKey :: Int64 }
+        deriving (Show, Read, Eq, Num, Ord, Enum, Bounded, SinglePiece, PersistField)
+
     insert val = do
         conn <- SqlPersist ask
         let esql = insertSql conn (rawTableName t) (map fst3 $ tableColumns t)
         i <-
             case esql of
                 Left sql -> withStmt' sql vals $ \pop -> do
-                    Just [i] <- pop
+                    Just [PersistInt64 i] <- pop
                     return i
                 Right (sql1, sql2) -> do
                     execute' sql1 vals
                     withStmt' sql2 [] $ \pop -> do
-                        Just [i] <- pop
+                        Just [PersistInt64 i] <- pop
                         return i
-        return $ Key i
+        return $ SqlKey i
       where
         t = entityDef val
         vals = map toPersistValue $ toPersistFields val
@@ -93,7 +101,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
                 , " WHERE id=?"
                 ]
         execute' sql $ map toPersistValue (toPersistFields val)
-                       ++ [unKey k]
+                       ++ [PersistInt64 $ unSqlKey k]
       where
         go conn x = escapeName conn x ++ "=?"
 
@@ -109,13 +117,13 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
                 , escapeName conn $ rawTableName t
                 , " WHERE id=?"
                 ]
-        withStmt' sql [unKey k] $ \pop -> do
+        withStmt' sql [PersistInt64 $ unSqlKey k] $ \pop -> do
             res <- pop
             case res of
                 Nothing -> return Nothing
                 Just vals ->
                     case fromPersistValues vals of
-                        Left e -> error $ "get " ++ show k ++ ": " ++ e
+                        Left e -> error $ "get " ++ show (unSqlKey k) ++ ": " ++ e
                         Right v -> return $ Just v
 
     count filts = do
@@ -157,10 +165,10 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
                             loop step pop
         loop step _ = return step
         t = entityDef $ dummyFromFilts filts
-        fromPersistValues' (x:xs) = do
+        fromPersistValues' (PersistInt64 x:xs) = do
             case fromPersistValues xs of
                 Left e -> Left e
-                Right xs' -> Right (Key x, xs')
+                Right xs' -> Right (SqlKey x, xs')
         fromPersistValues' _ = Left "error in fromPersistValues'"
         wher conn = if null filts
                     then ""
@@ -199,8 +207,8 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
             res <- pop
             case res of
                 Nothing -> return $ Continue k
-                Just [i] -> do
-                    step <- runIteratee $ k $ Chunks [Key i]
+                Just [PersistInt64 i] -> do
+                    step <- runIteratee $ k $ Chunks [SqlKey i]
                     loop step pop
                 Just y -> return $ Error $ toException $ PersistMarshalException
                         $ "Unexpected in selectKeys: " ++ show y
@@ -217,7 +225,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
 
     delete k = do
         conn <- SqlPersist ask
-        execute' (sql conn) [unKey k]
+        execute' (sql conn) [PersistInt64 $ unSqlKey k]
       where
         t = entityDef $ dummyFromKey k
         sql conn = pack $ concat
@@ -270,7 +278,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
                 , " WHERE id=?"
                 ]
         execute' sql $
-            map updatePersistValue upds ++ [unKey k]
+            map updatePersistValue upds ++ [PersistInt64 $ unSqlKey k]
       where
         t = entityDef $ dummyFromKey k
         go x = ( getFieldName t $ updateFieldName x
@@ -320,10 +328,10 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
             row <- pop
             case row of
                 Nothing -> return Nothing
-                Just (k:vals) ->
+                Just (PersistInt64 k:vals) ->
                     case fromPersistValues vals of
                         Left s -> error s
-                        Right x -> return $ Just (Key k, x)
+                        Right x -> return $ Just (SqlKey k, x)
                 Just _ -> error "Database.Persist.GenericSql: Bad list in getBy"
       where
         sqlClause conn =
@@ -335,7 +343,7 @@ instance MonadControlIO m => PersistBackend (SqlPersist m) where
 dummyFromUnique :: Unique v -> v
 dummyFromUnique _ = error "dummyFromUnique"
 
-dummyFromKey :: Key v -> v
+dummyFromKey :: Key (SqlPersist m) v -> v
 dummyFromKey _ = error "dummyFromKey"
 
 

@@ -70,7 +70,7 @@ data PetType = Cat | Dog
 derivePersistField "PetType"
 
   -- FIXME Empty
-share [mkPersist,  mkMigrate "testMigrate", mkDeleteCascade] [persist|
+share [mkPersist sqlSettings,  mkMigrate "testMigrate"{- FIXME, mkDeleteCascade-}] [persist|
 
   Person
     name String

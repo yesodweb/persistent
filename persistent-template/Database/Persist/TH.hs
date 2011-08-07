@@ -12,6 +12,8 @@ module Database.Persist.TH
     , mkDeleteCascade
     , derivePersistField
     , mkMigrate
+    , MkPersistSettings (..)
+    , sqlSettings
     ) where
 
 import Database.Persist.Base
@@ -46,8 +48,17 @@ persistFile fp = do
 
 -- | Create data types and appropriate 'PersistEntity' instances for the given
 -- 'EntityDef's. Works well with the persist quasi-quoter.
-mkPersist :: [EntityDef] -> Q [Dec]
-mkPersist = fmap concat . mapM mkEntity
+mkPersist :: MkPersistSettings -> [EntityDef] -> Q [Dec]
+mkPersist mps = fmap concat . mapM (mkEntity mps)
+
+data MkPersistSettings = MkPersistSettings
+    { mpsBackend :: Type
+    }
+
+sqlSettings :: MkPersistSettings
+sqlSettings = MkPersistSettings
+    { mpsBackend = ConT ''SqlPersist `AppT` ConT ''IO -- FIXME
+    }
 
 recName :: String -> String -> String
 recName dt f = lowerFirst dt ++ upperFirst f
@@ -203,8 +214,8 @@ mkFromPersistValues t = do
   where
     go ap' x y = InfixE (Just x) ap' (Just y)
 
-mkEntity :: EntityDef -> Q [Dec]
-mkEntity t = do
+mkEntity :: MkPersistSettings -> EntityDef -> Q [Dec]
+mkEntity mps t = do
     t' <- lift t
     let name = entityName t
     let clazz = ConT ''PersistEntity `AppT` ConT (mkName $ entityName t)
@@ -216,7 +227,7 @@ mkEntity t = do
     return $
       [ dataTypeDec t
       , TySynD (mkName $ entityName t ++ "Id") [] $
-            ConT ''Key `AppT` ConT (mkName $ entityName t)
+            ConT ''Key `AppT` mpsBackend mps `AppT` ConT (mkName $ entityName t)
       , InstanceD [] clazz $
         [ uniqueTypeDec t
         , FunD (mkName "entityDef") [Clause [WildP] (NormalB t') []]
