@@ -167,7 +167,7 @@ main = do
   runConn setup
   hspecX specs
 
-_joinGen :: (MonadIO m, PersistBackend m) => (SelectOneMany Author Entry -> m [((Key Author, Author), [(Key Entry, Entry)])]) -> m ()
+--_joinGen :: (MonadIO m, PersistBackend m) => (SelectOneMany Author Entry -> m [((Key Author, Author), [(Key Entry, Entry)])]) -> m ()
 _joinGen run = do
     a <- insert $ Author "a"
     a1 <- insert $ Entry a "a1"

@@ -126,13 +126,13 @@ rightPersistVals ent vals = case wrapFromPersistValues ent vals of
       Left e -> error e
       Right v -> v
 
-filterByKey :: (PersistEntity val) => Key val -> DB.Document
+filterByKey :: (PersistEntity val) => Key DB.Action val -> DB.Document
 filterByKey k = [u"_id" DB.=: keyToDbOid k]
 
-queryByKey :: (PersistEntity val) => Key val -> EntityDef -> DB.Query 
+queryByKey :: (PersistEntity val) => Key DB.Action val -> EntityDef -> DB.Query 
 queryByKey k entity = (DB.select (filterByKey k) (u $ entityName entity)) 
 
-selectByKey :: (PersistEntity val) => Key val -> EntityDef -> DB.Selection 
+selectByKey :: (PersistEntity val) => Key DB.Action val -> EntityDef -> DB.Selection 
 selectByKey k entity = (DB.select (filterByKey k) (u $ entityName entity))
 
 updateFields :: (PersistEntity val) => [Update val] -> [DB.Field]
@@ -153,12 +153,12 @@ updateToMongoField upd@(Update _ v up) = opName DB.:= DB.Doc [( (u $ updateField
                   (Divide, _)   -> error "divide not supported yet"
 
 
-uniqSelector :: forall val.  (PersistEntity val) => Unique val -> [DB.Field]
+uniqSelector :: forall val.  (PersistEntity val) => Unique val DB.Action -> [DB.Field]
 uniqSelector uniq = zipWith (DB.:=)
   (map u (persistUniqueToFieldNames uniq))
   (map DB.val (persistUniqueToValues uniq))
 
-pairFromDocument :: forall val val1.  (PersistEntity val, PersistEntity val1) => EntityDef -> [DB.Field] -> Either String (Key val, val1)
+pairFromDocument :: forall val val1.  (PersistEntity val, PersistEntity val1) => EntityDef -> [DB.Field] -> Either String (Key DB.Action val, val1)
 pairFromDocument ent document = pairFromPersistValues document
   where
     pairFromPersistValues (x:xs) =
@@ -174,7 +174,7 @@ insertFields t record = zipWith (DB.:=) (toLabels) (toValues)
     toValues = map (DB.val . toPersistValue) (toPersistFields record)
 
 --instance (Trans.MonadIO m, Functor m) => PersistBackend (MongoPersist m) where
-instance (Trans.MonadIO m, Applicative m, Functor m, MonadMVar m) => PersistBackend (DB.Action m) where
+instance (Trans.MonadIO m, Applicative m, Functor m, MonadMVar m) => PersistBackend DB.Action m where
     insert record = do
         (DB.ObjId oid) <- DB.insert (u $ entityName t) (insertFields t record)
         return $ Key $ dbOidToKey oid 
@@ -420,7 +420,7 @@ persistObjectIdToDbOid (PersistObjectId k) = case S.decode k of
                   Right o -> o
 persistObjectIdToDbOid _ = error "expected PersistObjectId"
 
-keyToDbOid :: (PersistEntity val) => Key val -> DB.ObjectId
+keyToDbOid :: (PersistEntity val) => Key DB.Action val -> DB.ObjectId
 keyToDbOid (Key k) = persistObjectIdToDbOid k
 
 instance DB.Val PersistValue where
@@ -465,9 +465,9 @@ instance S.Serialize DB.ObjectId where
            w2 <- S.get
            return (DB.Oid w1 w2) 
 
-dummyFromKey :: Key v -> v
+dummyFromKey :: Key DB.Action v -> v
 dummyFromKey _ = error "dummyFromKey"
-dummyFromUnique :: Unique v -> v
+dummyFromUnique :: Unique v DB.Action -> v
 dummyFromUnique _ = error "dummyFromUnique"
 dummyFromFilts :: [Filter v] -> v
 dummyFromFilts _ = error "dummyFromFilts"
