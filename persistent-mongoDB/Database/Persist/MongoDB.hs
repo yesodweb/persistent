@@ -39,46 +39,16 @@ import qualified Data.Text.Encoding as E
 import qualified Data.Serialize as S
 import Control.Exception (Exception, throwIO)
 import Data.Typeable (Typeable)
---import Control.Monad.Context (Context (..))
---import Control.Monad.Throw (Throw (..))
 import Control.Monad.MVar (MonadMVar (..))
 import Prelude hiding (catch)
---import Network.Abstract (Internet (..), ANetwork (..))
 import qualified System.IO.Pool as Pool
 
 #ifdef DEBUG
-import ErrorLocation (debug)
+import FileLocation (debug)
 #endif
 
-{-
 newtype MongoPersist m a = MongoPersist { unMongoPersist :: ReaderT DB.Database (Action m) a }
     deriving (Monad, Trans.MonadIO, Functor, Applicative)
-
-instance Monad m => Context DB.Database (MongoPersist m) where
-    context = MongoPersist ask
-    push f (MongoPersist x) = MongoPersist $ local f x
-
-instance Monad m => Context DB.MasterOrSlaveOk (MongoPersist m) where
-    context = MongoPersist context
-    push f (MongoPersist x) = MongoPersist $ push f x
-
-instance Monad m => Context DB.Pipe (MongoPersist m) where
-    context = MongoPersist context
-    push f (MongoPersist x) = MongoPersist $ push f x
-
-instance Monad m => Context DB.WriteMode (MongoPersist m) where
-    context = MongoPersist context
-    push f (MongoPersist x) = MongoPersist $ push f x
-
-instance Monad m => Throw Failure (MongoPersist m) where
-    throw = MongoPersist . throw
-    catch (MongoPersist x) f =
-        MongoPersist $ ReaderT $ \db -> catch (runReaderT x db) (f' db)
-      where
-        f' db e = runReaderT (unMongoPersist (f e)) db
--}
-
---type ConnectionPool = DB.ConnPool DB.Host
 type ConnectionPool = (Pool.Pool IOError DB.Pipe, Database)
 
 withMongoDBConn :: (Trans.MonadIO m, Applicative m) =>
@@ -95,20 +65,6 @@ withMongoDBPool dbname hostname connectionPoolSize connectionReader = do
                                                   }
                                      connectionPoolSize
   connectionReader (pool, dbname)
-
-{-
-runMongoDBConn :: (DB.Service s, Trans.MonadIO m) =>
-                                    DB.WriteMode
-                                 -> DB.MasterOrSlaveOk
-                                 -> MongoPersist m b
-                                 -> DB.ConnPool s
-                                 -> DB.Database
-                                 -> m b
-runMongoDBConn wm ms (MongoPersist a) cp db = do
-    res <- DB.access wm ms cp (runReaderT a db)
-    either (Trans.liftIO . throwIO . MongoDBException) return res
--}
-
 
 --runMongoDBConn :: (Trans.MonadIO m) => DB.AccessMode -> DB.Database -> DB.Action m b -> ConnectionPool -> m b
 runMongoDBConn :: (Trans.MonadIO m) => DB.AccessMode  ->  DB.Action m b -> ConnectionPool -> m b
