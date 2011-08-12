@@ -11,20 +11,22 @@ module Database.Persist.MongoDB
     , withMongoDBPool
     , runMongoDBConn 
     , HostName
-    , DB.Database(..), u
+    , u
     , DB.Action
---    , DB.MasterOrSlaveOk(..)
---    , DB.safe
+    -- , DB.MasterOrSlaveOk(..)
+    , DB.AccessMode(..)
+    , DB.master
+    , DB.slaveOk
+    , (DB.=:)
     , ConnectionPool
     , module Database.Persist
     ) where
 
 import Database.Persist
 import Database.Persist.Base
-import Control.Monad.Trans.Reader
 import qualified Control.Monad.IO.Class as Trans
 import qualified Database.MongoDB as DB
-import Database.MongoDB.Query (Action, Failure)
+import Database.MongoDB.Query (Database, Failure)
 import Control.Applicative (Applicative)
 import Control.Exception (toException)
 import Data.UString (u)
@@ -77,12 +79,14 @@ instance Monad m => Throw Failure (MongoPersist m) where
 -}
 
 --type ConnectionPool = DB.ConnPool DB.Host
-type ConnectionPool = Pool.Pool IOError DB.Pipe
+type ConnectionPool = (Pool.Pool IOError DB.Pipe, Database)
 
-withMongoDBConn :: (Trans.MonadIO m, Applicative m) => t -> HostName -> (ConnectionPool -> t -> m b) -> m b
-withMongoDBConn dbname hostname connectionReader = withMongoDBPool dbname hostname 1 connectionReader
+withMongoDBConn :: (Trans.MonadIO m, Applicative m) =>
+  Database -> HostName -> (ConnectionPool -> m b) -> m b
+withMongoDBConn dbname hostname = withMongoDBPool dbname hostname 1
 
-withMongoDBPool :: (Trans.MonadIO m, Applicative m) => t -> HostName -> Int -> (ConnectionPool -> t -> m b) -> m b
+withMongoDBPool :: (Trans.MonadIO m, Applicative m) =>
+  Database -> HostName -> Int -> (ConnectionPool -> m b) -> m b
 withMongoDBPool dbname hostname connectionPoolSize connectionReader = do
   --pool <- runReaderT (DB.newConnPool connectionPoolSize $ DB.host hostname) $ ANetwork Internet
   pool <- Trans.liftIO $ Pool.newPool Pool.Factory { Pool.newResource  = DB.connect (DB.host hostname)
@@ -90,7 +94,7 @@ withMongoDBPool dbname hostname connectionPoolSize connectionReader = do
                                                   , Pool.isExpired    = DB.isClosed
                                                   }
                                      connectionPoolSize
-  connectionReader pool dbname
+  connectionReader (pool, dbname)
 
 {-
 runMongoDBConn :: (DB.Service s, Trans.MonadIO m) =>
@@ -107,8 +111,8 @@ runMongoDBConn wm ms (MongoPersist a) cp db = do
 
 
 --runMongoDBConn :: (Trans.MonadIO m) => DB.AccessMode -> DB.Database -> DB.Action m b -> ConnectionPool -> m b
-runMongoDBConn :: (Trans.MonadIO m) => DB.AccessMode  ->  DB.Action m b -> ConnectionPool -> DB.Database -> m b
-runMongoDBConn accessMode action pool databaseName = do
+runMongoDBConn :: (Trans.MonadIO m) => DB.AccessMode  ->  DB.Action m b -> ConnectionPool -> m b
+runMongoDBConn accessMode action (pool, databaseName) = do
   pipe <- Trans.liftIO $ DB.runIOE $ Pool.aResource pool
   res  <- DB.access pipe accessMode databaseName action
   either (Trans.liftIO . throwIO . MongoDBException) return res
