@@ -6,7 +6,6 @@
 {-# LANGUAGE PackageImports, RankNTypes #-}
 {-# LANGUAGE CPP #-}
 module Database.Persist.MongoDB
---    ( MongoPersist
     ( withMongoDBConn
     , withMongoDBPool
     , runMongoDBConn 
@@ -47,8 +46,6 @@ import qualified System.IO.Pool as Pool
 import FileLocation (debug)
 #endif
 
-newtype MongoPersist m a = MongoPersist { unMongoPersist :: ReaderT DB.Database (Action m) a }
-    deriving (Monad, Trans.MonadIO, Functor, Applicative)
 type ConnectionPool = (Pool.Pool IOError DB.Pipe, Database)
 
 withMongoDBConn :: (Trans.MonadIO m, Applicative m) =>
@@ -133,7 +130,6 @@ insertFields t record = zipWith (DB.:=) (toLabels) (toValues)
     toLabels = map (u . columnName) $ entityColumns t
     toValues = map (DB.val . toPersistValue) (toPersistFields record)
 
---instance (Trans.MonadIO m, Functor m) => PersistBackend (MongoPersist m) where
 instance (Trans.MonadIO m, Applicative m, Functor m, MonadMVar m) => PersistBackend DB.Action m where
     insert record = do
         (DB.ObjId oid) <- DB.insert (u $ entityName t) (insertFields t record)
