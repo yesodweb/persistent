@@ -46,7 +46,6 @@ import Control.Exception.Control (onException)
 import Control.Exception (toException)
 import Data.Text (Text, pack, unpack, snoc)
 import qualified Data.Text.IO
-import Data.Int (Int64)
 import Web.PathPieces (SinglePiece (..))
 import qualified Data.Text.Read
 
@@ -168,7 +167,7 @@ instance MonadControlIO m => PersistBackend SqlPersist m where
                 Just vals -> do
                     case fromPersistValues' vals of
                         Left s -> return $ Error $ toException
-                                $ PersistMarshalException s
+                                $ PersistMarshalError s
                         Right row -> do
                             step <- runIteratee $ k $ Chunks [row]
                             loop step pop
@@ -219,7 +218,7 @@ instance MonadControlIO m => PersistBackend SqlPersist m where
                 Just [PersistInt64 i] -> do
                     step <- runIteratee $ k $ Chunks [Key $ PersistInt64 i]
                     loop step pop
-                Just y -> return $ Error $ toException $ PersistMarshalException
+                Just y -> return $ Error $ toException $ PersistMarshalError
                         $ "Unexpected in selectKeys: " ++ show y
         loop step _ = return step
         t = entityDef $ dummyFromFilts filts

@@ -57,7 +57,11 @@ import qualified Data.ByteString.Lazy as L
 import Data.Enumerator hiding (consume, map)
 import Data.Enumerator.List (consume)
 import qualified Data.Enumerator.List as EL
+import qualified Control.Monad.IO.Class as Trans
+
 import qualified Control.Exception as E
+import Control.Monad.Error.Class (Error (..))
+
 import Data.Bits (bitSize)
 import Control.Monad (liftM)
 
@@ -73,6 +77,20 @@ snd3 :: forall t t1 t2. (t, t1, t2) -> t1
 snd3   (_, x, _) = x
 third3 :: forall t t1 t2. (t, t1, t2) -> t2
 third3 (_, _, x) = x
+
+-- calling the instances Error to keep the shorter. I considered suffixing with Ex instead. Maybe should just use Exception
+data PersistException
+  = PersistError String -- ^ Generic Exception
+  | PersistMarshalError String
+  | PersistForeignKeyError Integer
+  | PersistMongoDBError String
+  | PersistMongoDBUnsupportedOperation String
+    deriving (Show, Typeable)
+
+instance E.Exception PersistException
+instance Error PersistException where strMsg msg = PersistError msg
+
+
 
 -- | A raw value which can be stored in any backend and can be marshalled to
 -- and from a 'PersistField'.
@@ -341,7 +359,7 @@ instance PersistField SomePersistField where
 newtype Key backend entity = Key { unKey :: PersistValue }
     deriving (Show, Read, Eq, Ord, PersistField)
 
-class (Monad (b m), Monad m) => PersistBackend b m where
+class (Trans.MonadIO (b m), Trans.MonadIO m, Monad (b m), Monad m) => PersistBackend b m where
 
     -- | Create a new record in the database, returning the newly created
     -- identifier.
@@ -464,7 +482,7 @@ selectList :: (PersistEntity val, PersistBackend b m)
 selectList a b = do
     res <- run $ selectEnum a b ==<< consume
     case res of
-        Left e -> error $ show e
+        Left e -> Trans.liftIO . E.throwIO $ PersistError $ show e
         Right x -> return x
 
 data EntityDef = EntityDef
@@ -504,7 +522,7 @@ deleteCascadeWhere :: (DeleteCascade a b, PersistBackend b m)
 deleteCascadeWhere filts = do
     res <- run $ selectKeys filts $ Continue iter
     case res of
-        Left e -> error $ show e
+        Left e -> Trans.liftIO . E.throwIO $ PersistError $ show e
         Right () -> return ()
   where
     iter EOF = Iteratee $ return $ Yield () EOF
@@ -512,9 +530,6 @@ deleteCascadeWhere filts = do
         mapM_ deleteCascade keys
         return $ Continue iter
 
-data PersistException = PersistMarshalException String
-    deriving (Show, Typeable)
-instance E.Exception PersistException
 
 data PersistUpdate = Assign | Add | Subtract | Multiply | Divide -- FIXME need something else here
     deriving (Read, Show, Enum, Bounded)

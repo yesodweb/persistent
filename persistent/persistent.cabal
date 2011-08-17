@@ -13,18 +13,19 @@ build-type:      Simple
 homepage:        http://www.yesodweb.com/book/persistent
 
 library
-    build-depends:   base                     >= 4         && < 5
-                   , bytestring               >= 0.9       && < 0.10
-                   , transformers             >= 0.2.1     && < 0.3
-                   , time                     >= 1.1.4     && < 1.3
-                   , text                     >= 0.8       && < 0.12
-                   , containers               >= 0.2       && < 0.5
-                   , parsec                   >= 2.1       && < 4
-                   , enumerator               >= 0.4.9     && < 0.5
-                   , monad-control            >= 0.2       && < 0.3
-                   , pool                     >= 0.1       && < 0.2
-                   , blaze-html               >= 0.4       && < 0.5
-                   , path-pieces              >= 0.0       && < 0.1
+    build-depends:   base                     >= 4       && < 5
+                   , bytestring               >= 0.9     && < 0.10
+                   , transformers             >= 0.2.1   && < 0.3
+                   , time                     >= 1.1.4   && < 1.3
+                   , text                     >= 0.8     && < 0.12
+                   , containers               >= 0.2     && < 0.5
+                   , parsec                   >= 2.1     && < 4
+                   , enumerator               >= 0.4.9   && < 0.5
+                   , monad-control            >= 0.2     && < 0.3
+                   , pool                     >= 0.1     && < 0.2
+                   , blaze-html               >= 0.4     && < 0.5
+                   , path-pieces              >= 0.0     && < 0.1
+                   , mtl                      >= 2.0     && < 2.1
     exposed-modules: Database.Persist
                      Database.Persist.Base
                      Database.Persist.Quasi
@@ -58,7 +59,7 @@ test-suite test
 
     -- these are mutually exclusive options
     cpp-options: -DWITH_POSTGRESQL
-    --cpp-options: -DWITH_MONGODB
+    -- cpp-options: -DWITH_MONGODB
     ghc-options:   -Wall
     extra-libraries: sqlite3
 
