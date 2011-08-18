@@ -78,7 +78,7 @@ dataTypeDec t =
   where
     mkCol x (ColumnDef n ty as) =
         (mkName $ recName x n, NotStrict, pairToType backend (ty, nullable as))
-    nameG = mkName $ entityName t ++ "G"
+    nameG = mkName $ entityName t ++ suffix
     name = mkName $ entityName t
     cols = map (mkCol $ entityName t) $ entityColumns t
     backend = mkName "backend"
@@ -97,7 +97,7 @@ entityUpdates =
 
 uniqueTypeDec :: EntityDef -> Dec
 uniqueTypeDec t =
-    DataInstD [] ''Unique [ConT (mkName (entityName t ++ "G")) `AppT` VarT backend, VarT backend2]
+    DataInstD [] ''Unique [ConT (mkName (entityName t ++ suffix)) `AppT` VarT backend, VarT backend2]
             (map (mkUnique backend t) $ entityUniques t)
             (if null (entityUniques t) then [] else [''Show, ''Read, ''Eq])
   where
@@ -230,7 +230,7 @@ mkEntity :: MkPersistSettings -> EntityDef -> Q [Dec]
 mkEntity mps t = do
     t' <- lift t
     let name = entityName t
-    let clazz = ConT ''PersistEntity `AppT` (ConT (mkName $ entityName t ++ "G") `AppT` VarT (mkName "backend"))
+    let clazz = ConT ''PersistEntity `AppT` (ConT (mkName $ entityName t ++ suffix) `AppT` VarT (mkName "backend"))
     tpf <- mkToPersistFields [(name, length $ entityColumns t)]
     fpv <- mkFromPersistValues t
     utv <- mkUniqueToValues $ entityUniques t
@@ -239,7 +239,7 @@ mkEntity mps t = do
     return $
       [ dataTypeDec t
       , TySynD (mkName $ entityName t) [] $
-            ConT (mkName $ entityName t ++ "G") `AppT` mpsBackend mps
+            ConT (mkName $ entityName t ++ suffix) `AppT` mpsBackend mps
       , TySynD (mkName $ entityName t ++ "Id") [] $
             ConT ''Key `AppT` mpsBackend mps `AppT` ConT (mkName $ entityName t)
       , InstanceD [] clazz $
@@ -254,7 +254,7 @@ mkEntity mps t = do
         , DataInstD
             []
             ''Field
-            [ ConT (mkName $ entityName t ++ "G") `AppT` VarT (mkName "backend")
+            [ ConT (mkName $ entityName t ++ suffix) `AppT` VarT (mkName "backend")
             , VarT $ mkName "typ"
             ]
             (map fst fields)
@@ -349,7 +349,7 @@ mkDeleteCascade defs = do
             InstanceD
             []
             (ConT ''DeleteCascade `AppT`
-                (ConT (mkName $ name ++ "G") `AppT` VarT (mkName "backend"))
+                (ConT (mkName $ name ++ suffix) `AppT` VarT (mkName "backend"))
                 `AppT` VarT (mkName "backend")
                 )
             [ FunD (mkName "deleteCascade")
@@ -487,8 +487,11 @@ mkField et cd = do
         if "Id" `isSuffixOf` columnType cd
             then ConT ''Key
                     `AppT` (VarT $ mkName "backend")
-                    `AppT` (ConT (mkName $ take (length (columnType cd) - 2) (columnType cd) ++ "G") `AppT` VarT (mkName "backend"))
+                    `AppT` (ConT (mkName $ take (length (columnType cd) - 2) (columnType cd) ++ suffix) `AppT` VarT (mkName "backend"))
             else ConT (mkName $ columnType cd)
     typ = if nullable $ columnAttribs cd
             then ConT ''Maybe `AppT` base
             else base
+
+suffix :: String
+suffix = "Generic"
