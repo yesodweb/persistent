@@ -44,8 +44,13 @@ import Numeric (readHex, showHex)
 import Web.PathPieces (SinglePiece (..))
 
 #ifdef DEBUG
-#endif
 import FileLocation (debug, debugMsg)
+#else
+debug :: forall a. a -> a
+debug = id
+debugMsg :: forall t a. t -> a -> a
+debugMsg _ = id
+#endif
 
 type ConnectionPool = (Pool.Pool IOError DB.Pipe, Database)
 

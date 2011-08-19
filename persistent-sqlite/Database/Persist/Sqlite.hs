@@ -9,7 +9,7 @@ module Database.Persist.Sqlite
 
 import Database.Persist
 import Database.Persist.Base
-import Database.Persist.GenericSql
+import Database.Persist.GenericSql hiding (Key(..))
 import Database.Persist.GenericSql.Internal
 
 import qualified Database.Sqlite as Sqlite

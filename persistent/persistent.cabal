@@ -59,7 +59,7 @@ test-suite test
 
     -- these are mutually exclusive options
     cpp-options: -DWITH_POSTGRESQL
-    --cpp-options: -DWITH_MONGODB
+    --cpp-options: -DWITH_MONGODB -DDEBUG
     ghc-options:   -Wall
     extra-libraries: sqlite3
 

@@ -25,6 +25,7 @@ library
                    , bson               >= 0.1.2
                    , compact-string-fix >= 0.3.1   && < 0.4
                    , cereal             >= 0.3.0.0
+                   , path-pieces        >= 0.0     && < 0.1
 
     exposed-modules: Database.Persist.MongoDB
     ghc-options:     -Wall
