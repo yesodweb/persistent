@@ -78,13 +78,13 @@ snd3   (_, x, _) = x
 third3 :: forall t t1 t2. (t, t1, t2) -> t2
 third3 (_, _, x) = x
 
--- calling the instances Error to keep the shorter. I considered suffixing with Ex instead. Maybe should just use Exception
 data PersistException
   = PersistError String -- ^ Generic Exception
   | PersistMarshalError String
-  | PersistForeignKeyError Integer
+  | PersistInvalidField String
+  | PersistForeignConstraintUnmet Integer
   | PersistMongoDBError String
-  | PersistMongoDBUnsupportedOperation String
+  | PersistMongoDBUnsupported String
     deriving (Show, Typeable)
 
 instance E.Exception PersistException

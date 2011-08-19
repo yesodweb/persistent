@@ -16,7 +16,7 @@ import Test.Hspec.Monadic
 import Test.Hspec.HUnit()
 
 import Database.Persist
-import Database.Persist.Base (DeleteCascade (..))
+import Database.Persist.Base (DeleteCascade (..), PersistValue(..))
 
 import Database.Persist.Join hiding (RunJoin)
 import qualified Database.Persist.Join
@@ -44,21 +44,22 @@ import Data.Word
 import qualified Control.Monad.IO.Control
 
 import Data.Text (Text)
+import Web.PathPieces (SinglePiece (..))
+import Data.Maybe (fromJust)
+import Debug.FileLocation (debug, debugM)
 
--- import Debug.FileLocation (debug)
-
-
+import Numeric (showHex)
 
 {-
 expected /=@ actual = liftIO $ assertNotEqual "" expected actual
 -}
-(@/=), (@==) :: (Eq a, Show a, MonadIO m) => a -> a -> m ()
+(@/=), (@==) :: (Eq a, Show a, MonadIO m, Monad m) => a -> a -> m ()
 infix 1 @/= --, /=@
 actual @/= expected = liftIO $ assertNotEqual "" expected actual
 
-infix 1 @== -- , ==@
+infix 1 @==, ==@
 expected @== actual = liftIO $ expected @?= actual
--- expected ==@ actual = liftIO $ expected @=? actual
+expected ==@ actual = liftIO $ expected @=? actual
 
 assertNotEqual :: (Eq a, Show a) => String -> a -> a -> Assertion
 assertNotEqual preface expected actual =
@@ -66,10 +67,10 @@ assertNotEqual preface expected actual =
   where msg = (if null preface then "" else preface ++ "\n") ++
              "expected: " ++ show expected ++ "\n to not equal: " ++ show actual
 
-assertEmpty :: MonadIO m => [a] -> m ()
+assertEmpty :: (Monad m, MonadIO m) => [a] -> m ()
 assertEmpty xs    = liftIO $ assertBool "" (null xs)
 
-assertNotEmpty :: MonadIO m => [a] -> m ()
+assertNotEmpty :: (Monad m, MonadIO m) => [a] -> m ()
 assertNotEmpty xs = liftIO $ assertBool "" (not (null xs))
 
 
@@ -118,6 +119,7 @@ cleanDB = do
   deleteWhere ([] :: [Filter Author])
 
 #ifdef WITH_MONGODB
+type TheBackend = Action
 runConn f = do
 --    withMongoDBConn ("test") "127.0.0.1" $ runMongoDBConn MongoDB.safe MongoDB.Master f
   withMongoDBConn "test" "127.0.0.1" $ runMongoDBConn MongoDB.master f
@@ -146,6 +148,7 @@ db actions = do
   return r
 
 #else
+type TheBackend = SqlPersist
 sqlite_database :: Text
 sqlite_database = "test/testdb.sqlite3"
 runConn :: Control.Monad.IO.Control.MonadControlIO m => SqlPersist m t -> m ()
@@ -306,7 +309,6 @@ specs = describe "persistent" $ do
       Nothing <- get micK
       return ()
 
-
   it "and/or" $ db $ do
       deleteWhere ([] :: [Filter Person1])
       _ <- insert $ Person1 "Michael" 25
@@ -389,6 +391,12 @@ specs = describe "persistent" $ do
       Just p <- get key3
       p3 @== p
 
+  it "toSinglePiece - fromSinglePiece" $ db $ do
+      key1 <- insert $ Person "Michael2" 27 Nothing
+      let PersistObjectId b1 = unKey key1
+      let key2 = fromJust $ fromSinglePiece $ toSinglePiece key1 :: (Key TheBackend Person)
+      let PersistObjectId b2 = unKey $ key2
+      toSinglePiece key1 ==@ toSinglePiece key2
 
   it "replace" $ db $ do
       key2 <- insert $ Person "Michael2" 27 Nothing

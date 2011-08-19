@@ -4,6 +4,7 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE PackageImports, RankNTypes #-}
 {-# LANGUAGE CPP #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Database.Persist.MongoDB
     ( withMongoDBConn
     , withMongoDBPool
@@ -24,27 +25,40 @@ import Database.Persist
 import Database.Persist.Base
 
 import qualified Control.Monad.IO.Class as Trans
-import Control.Exception (toException, throwIO)
+import Control.Exception (throw, toException, throwIO)
 
 import qualified Database.MongoDB as DB
 import Database.MongoDB.Query (Database)
 import Control.Applicative (Applicative)
 import Data.UString (u)
 import qualified Data.CompactString.UTF8 as CS
-import Data.Enumerator hiding (map, length, concatMap)
+import Data.Enumerator hiding (map, length, concatMap, head)
 import Network.Socket (HostName)
 import Data.Maybe (mapMaybe, fromJust)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as E
-import qualified Data.Serialize as S
+import qualified Data.Serialize as Serialize
 import Control.Monad.MVar (MonadMVar (..))
 import qualified System.IO.Pool as Pool
+import Numeric (readHex, showHex)
+import Web.PathPieces (SinglePiece (..))
 
 #ifdef DEBUG
-import FileLocation (debug)
 #endif
+import FileLocation (debug, debugMsg)
 
 type ConnectionPool = (Pool.Pool IOError DB.Pipe, Database)
+
+instance SinglePiece (Key DB.Action entity) where
+    toSinglePiece (Key pOid@(PersistObjectId _)) =
+        let (DB.Oid w32 w64) = persistObjectIdToDbOid $ debugMsg "POid" pOid
+        in  debug $ T.pack $ showHex w32 $ showHex w64 $ ""
+    toSinglePiece k = throw $ PersistInvalidField $ "Invalid Key: " ++ show k
+
+    fromSinglePiece str =
+      case (readHex $ (T.unpack $ debug str))::[(Int,String)] of
+        [] -> Nothing
+        parsed -> Just $ Key $ PersistObjectId $ Serialize.encode . fst $ head $ debug parsed
 
 withMongoDBConn :: (Trans.MonadIO m, Applicative m) =>
   Database -> HostName -> (ConnectionPool -> m b) -> m b
@@ -97,9 +111,9 @@ updateToMongoField upd@(Update _ v up) = opName DB.:= DB.Doc [( (u $ updateField
                   (Assign,a)    -> (u "$set", a)
                   (Add, a)      -> (u "$inc", a)
                   (Subtract, PersistInt64 i) -> (u "$inc", PersistInt64 (-i))
-                  (Subtract, _) -> error "expected PersistInt64"
-                  (Multiply, _) -> error "multiply not supported yet"
-                  (Divide, _)   -> error "divide not supported yet"
+                  (Subtract, _) -> error "expected PersistInt64 for a subtraction"
+                  (Multiply, _) -> throw $ PersistMongoDBUnsupported "multiply not supported"
+                  (Divide, _)   -> throw $ PersistMongoDBUnsupported "divide not supported"
 
 
 uniqSelector :: forall val.  (PersistEntity val) => Unique val DB.Action -> [DB.Field]
@@ -260,7 +274,7 @@ orderClause :: PersistEntity val => SelectOpt val -> DB.Field
 orderClause o = case o of
                   Asc f  -> fieldName f DB.=: ( 1 :: Int)
                   Desc f -> fieldName f DB.=: (-1 :: Int)
-                  _      -> error "expected Asc or Desc"
+                  _      -> error "orderClause: expected Asc or Desc"
 
 
 makeQuery :: PersistEntity val => [Filter val] -> [SelectOpt val] -> DB.Query
@@ -311,8 +325,8 @@ filterToDocument f =
     showFilter Le = "$lte"
     showFilter In = "$in"
     showFilter NotIn = "$nin"
-    showFilter Eq = error "EQ not expected"
-    showFilter (BackendSpecificFilter bsf) = error $ "did not expect BackendSpecificFilter " ++ bsf
+    showFilter Eq = error "EQ filter not expected"
+    showFilter (BackendSpecificFilter bsf) = throw $ PersistMongoDBError $ "did not expect BackendSpecificFilter " ++ bsf
 
 fieldName ::  forall v typ.  (PersistEntity v) => Field v typ -> CS.CompactString
 fieldName = u . idfix . columnName . persistColumnDef
@@ -347,8 +361,8 @@ wrapFromPersistValues e doc = fromPersistValues reorder
           where
             matchOne (f:fs) tried =
               if c == fst f then (f, tried ++ fs) else matchOne fs (f:tried)
-            matchOne fs tried = error $ "field doesn't match" ++ (show c) ++ (show fs) ++ (show tried)
-        match cs fs values = error $ "fields don't match" ++ (show cs) ++ (show fs) ++ (show values)
+            matchOne fs tried = throw $ PersistError $ "reorder error: field doesn't match" ++ (show c) ++ (show fs) ++ (show tried)
+        match cs fs values = throw $ PersistError $ "reorder error: fields don't match" ++ (show cs) ++ (show fs) ++ (show values)
 
 mapFromDoc :: DB.Document -> [(T.Text, PersistValue)]
 mapFromDoc = Prelude.map (\f -> ( ( csToT (DB.label f)), (fromJust . DB.cast') (DB.value f) ) )
@@ -360,13 +374,13 @@ tToCS :: T.Text -> CS.CompactString
 tToCS = CS.fromByteString_ . E.encodeUtf8
 
 dbOidToKey :: DB.ObjectId -> PersistValue
-dbOidToKey =  PersistObjectId . S.encode
+dbOidToKey =  PersistObjectId . Serialize.encode
 
 persistObjectIdToDbOid :: PersistValue -> DB.ObjectId
-persistObjectIdToDbOid (PersistObjectId k) = case S.decode k of
-                  Left s -> error s
+persistObjectIdToDbOid (PersistObjectId k) = case Serialize.decode k of
+                  Left msg -> throw $ PersistError $ "error decoding " ++ (show k) ++ ": " ++ msg
                   Right o -> o
-persistObjectIdToDbOid _ = error "expected PersistObjectId"
+persistObjectIdToDbOid _ = throw $ PersistInvalidField "expected PersistObjectId"
 
 keyToDbOid :: (PersistEntity val) => Key DB.Action val -> DB.ObjectId
 keyToDbOid (Key k) = persistObjectIdToDbOid k
@@ -382,8 +396,8 @@ instance DB.Val PersistValue where
   val (PersistMap  m)    = DB.Doc $ map (\(k, v)-> (DB.=:) (tToCS k) v) m
   val (PersistByteString x) = DB.String $ CS.fromByteString_ x 
   val x@(PersistObjectId _) = DB.ObjId $ persistObjectIdToDbOid x
-  val (PersistDay _)        = error "only PersistUTCTime currently implemented"
-  val (PersistTimeOfDay _)  = error "only PersistUTCTime currently implemented"
+  val (PersistDay _)        = throw $ PersistMongoDBUnsupported "only PersistUTCTime currently implemented"
+  val (PersistTimeOfDay _)  = throw $ PersistMongoDBUnsupported "only PersistUTCTime currently implemented"
   cast' (DB.Float x)  = Just (PersistDouble x)
   cast' (DB.Int32 x)  = Just $ PersistInt64 $ fromIntegral x
   cast' (DB.Int64 x)  = Just $ PersistInt64 x
@@ -399,18 +413,18 @@ instance DB.Val PersistValue where
   cast' (DB.RegEx (DB.Regex us1 us2))    = Just $ PersistByteString $ CS.toByteString $ CS.append us1 us2
   cast' (DB.Doc doc)  = Just $ PersistMap $ mapFromDoc doc
   cast' (DB.Array xs) = Just $ PersistList $ mapMaybe DB.cast' xs
-  cast' (DB.ObjId x) = Just $ dbOidToKey x 
-  cast' (DB.JavaScr _) = error "cast operation not supported for javascript"
-  cast' (DB.Sym _) = error "cast operation not supported for sym"
-  cast' (DB.Stamp _) = error "cast operation not supported for stamp"
-  cast' (DB.MinMax _) = error "cast operation not supported for minmax"
+  cast' (DB.ObjId x)  = Just $ dbOidToKey x 
+  cast' (DB.JavaScr _) = throw $ PersistMongoDBUnsupported "cast operation not supported for javascript"
+  cast' (DB.Sym _)     = throw $ PersistMongoDBUnsupported "cast operation not supported for sym"
+  cast' (DB.Stamp _)   = throw $ PersistMongoDBUnsupported "cast operation not supported for stamp"
+  cast' (DB.MinMax _)  = throw $ PersistMongoDBUnsupported "cast operation not supported for minmax"
 
-instance S.Serialize DB.ObjectId where
-  put (DB.Oid w1 w2) = do S.put w1
-                          S.put w2
+instance Serialize.Serialize DB.ObjectId where
+  put (DB.Oid w1 w2) = do Serialize.put w1
+                          Serialize.put w2
 
-  get = do w1 <- S.get
-           w2 <- S.get
+  get = do w1 <- Serialize.get
+           w2 <- Serialize.get
            return (DB.Oid w1 w2) 
 
 dummyFromKey :: Key DB.Action v -> v

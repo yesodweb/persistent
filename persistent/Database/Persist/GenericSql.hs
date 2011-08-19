@@ -43,7 +43,7 @@ import Control.Monad (liftM, unless)
 import Data.Enumerator (Stream (..), Iteratee (..), Step (..))
 import Control.Monad.IO.Control (MonadControlIO)
 import Control.Exception.Control (onException)
-import Control.Exception (toException)
+import Control.Exception (throw, toException)
 import Data.Text (Text, pack, unpack, snoc)
 import qualified Data.Text.IO
 import Web.PathPieces (SinglePiece (..))
@@ -53,7 +53,7 @@ type ConnectionPool = Pool Connection
 
 instance SinglePiece (Key SqlPersist entity) where
     toSinglePiece (Key (PersistInt64 i)) = toSinglePiece i
-    toSinglePiece k = error $ "Invalid SqlPersist ID: " ++ show k
+    toSinglePiece k = throw $ PersistInvalidField $ "Invalid Key: " ++ show k
     fromSinglePiece t =
         case Data.Text.Read.decimal t of
             Right (i, "") -> Just $ Key $ PersistInt64 i
