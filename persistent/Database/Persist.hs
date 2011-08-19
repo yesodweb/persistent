@@ -6,6 +6,9 @@ module Database.Persist
     , Key (..)
     , selectList
     , insertBy
+    , getJust
+    , belongsTo
+    , belongsToJust
     , getByValue
     , checkUnique
     , Update (..)

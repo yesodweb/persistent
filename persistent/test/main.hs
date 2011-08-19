@@ -89,11 +89,11 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persis
     name String
     age Int
   Pet
-    owner PersonId
+    ownerId PersonId
     name String
     type PetType
   NeedsPet
-    pet PetId
+    petKey PetId
   Number
     int Int
     int32 Int32
@@ -104,9 +104,15 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persis
   Author
     name String
   Entry
-    author AuthorId
+    authorId AuthorId
     title String
 |]
+
+petOwner :: PersistBackend b m => PetGeneric b -> b m Person
+petOwner = belongsToJust petOwnerId
+
+petOwnerMaybe :: PersistBackend b m => PetGeneric b -> b m (Maybe Person)
+petOwnerMaybe = belongsTo petOwnerId
 
 -- this is faster then dropDatabase. Could try dropCollection
 cleanDB :: PersistBackend b m => b m ()
@@ -119,7 +125,7 @@ cleanDB = do
   deleteWhere ([] :: [Filter Author])
 
 #ifdef WITH_MONGODB
-type TheBackend = Action
+type BackendMonad = Action
 runConn f = do
 --    withMongoDBConn ("test") "127.0.0.1" $ runMongoDBConn MongoDB.safe MongoDB.Master f
   withMongoDBConn "test" "127.0.0.1" $ runMongoDBConn MongoDB.master f
@@ -148,7 +154,7 @@ db actions = do
   return r
 
 #else
-type TheBackend = SqlPersist
+type BackendMonad = SqlPersist
 sqlite_database :: Text
 sqlite_database = "test/testdb.sqlite3"
 runConn :: Control.Monad.IO.Control.MonadControlIO m => SqlPersist m t -> m ()
@@ -166,7 +172,7 @@ db actions = do
 setup :: SqlPersist IO ()
 setup = do
   printMigration testMigrate
-  runMigration testMigrate
+  runMigrationUnsafe testMigrate
   cleanDB
 #endif
 
@@ -186,7 +192,7 @@ _joinGen run = do
     b2 <- insert $ Entry b "b2"
     c <- insert $ Author "c"
 
-    x <- run $ selectOneMany (EntryAuthor <-.) entryAuthor
+    x <- run $ selectOneMany (EntryAuthorId <-.) entryAuthorId
     liftIO $
         x @?=
             [ ((a, Author "a"),
@@ -200,7 +206,7 @@ _joinGen run = do
                 ])
             ]
 
-    y <- run $ (selectOneMany (EntryAuthor <-.) entryAuthor)
+    y <- run $ (selectOneMany (EntryAuthorId <-.) entryAuthorId)
             { somFilterOne = [AuthorName ==. "a"]
             }
     liftIO $
@@ -212,7 +218,7 @@ _joinGen run = do
                 ])
             ]
 
-    z <- run (selectOneMany (EntryAuthor <-.) entryAuthor)
+    z <- run (selectOneMany (EntryAuthorId <-.) entryAuthorId)
             { somOrderOne = [Asc AuthorName]
             , somOrderMany = [Desc EntryTitle]
             }
@@ -229,7 +235,7 @@ _joinGen run = do
                 ])
             ]
 
-    w <- run (selectOneMany (EntryAuthor <-.) entryAuthor)
+    w <- run (selectOneMany (EntryAuthorId <-.) entryAuthorId)
             { somOrderOne = [Asc AuthorName]
             , somOrderMany = [Desc EntryTitle]
             , somIncludeNoMatch = True
@@ -394,7 +400,7 @@ specs = describe "persistent" $ do
   it "toSinglePiece - fromSinglePiece" $ db $ do
       key1 <- insert $ Person "Michael2" 27 Nothing
       let PersistObjectId b1 = unKey key1
-      let key2 = fromJust $ fromSinglePiece $ toSinglePiece key1 :: (Key TheBackend Person)
+      let key2 = fromJust $ fromSinglePiece $ toSinglePiece key1 :: (Key BackendMonad Person)
       let PersistObjectId b2 = unKey $ key2
       toSinglePiece key1 ==@ toSinglePiece key2
 
@@ -508,10 +514,21 @@ specs = describe "persistent" $ do
       return ()
 
 
+  it "gets an association" $ db $ do
+      let p = Person "pet owner" 30 Nothing
+      person <- insert $ p
+      let cat = Pet person "Mittens" Cat
+      p2 <- getJust $ petOwnerId cat
+      p @== p2
+      p3 <- petOwner cat
+      p @== p3
+      Just p4 <- petOwnerMaybe cat
+      p @== p4
+
   it "derivePersistField" $ db $ do
       person <- insert $ Person "pet owner" 30 Nothing
-      cat <- insert $ Pet person "Mittens" Cat
-      Just cat' <- get cat
+      catKey <- insert $ Pet person "Mittens" Cat
+      Just cat' <- get catKey
       liftIO $ petType cat' @?= Cat
       dog <- insert $ Pet person "Spike" Dog
       Just dog' <- get dog

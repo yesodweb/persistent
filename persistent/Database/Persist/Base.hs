@@ -22,9 +22,14 @@ module Database.Persist.Base
     , PersistUpdate (..)
     , SelectOpt (..)
     , SomePersistField (..)
+
     , selectList
     , insertBy
     , getByValue
+    , getJust
+    , belongsTo
+    , belongsToJust
+
     , checkUnique
     , DeleteCascade (..)
     , deleteCascadeWhere
@@ -82,7 +87,7 @@ data PersistException
   = PersistError String -- ^ Generic Exception
   | PersistMarshalError String
   | PersistInvalidField String
-  | PersistForeignConstraintUnmet Integer
+  | PersistForeignConstraintUnmet String
   | PersistMongoDBError String
   | PersistMongoDBUnsupported String
     deriving (Show, Typeable)
@@ -446,6 +451,29 @@ getByValue val =
         case y of
             Nothing -> go xs
             Just z -> return $ Just z
+
+-- | curry this to make a convenience function that loads an associated model
+--   > foreign = belongsTo foeignId
+belongsTo ::
+  (PersistBackend b m
+  , PersistEntity val1
+  , PersistEntity val2) => (val1 -> Key b val2) -> val1 -> b m (Maybe val2)
+belongsTo foreignKeyField model = get $ foreignKeyField model
+
+-- | same as belongsTo, but uses @getJust@ and therefore is similarly unsafe
+belongsToJust ::
+  (PersistBackend b m
+  , PersistEntity val1
+  , PersistEntity val2) => (val1 -> Key b val2) -> val1 -> b m val2
+belongsToJust foreignKeyField model = getJust $ foreignKeyField model
+
+-- | Same as get, but for a non-null (not Maybe) foreign key
+--   Unsafe unless your database is enforcing that the foreign key is valid
+getJust :: (PersistBackend b m, PersistEntity val, Show (Key b val)) => Key b val -> b m val
+getJust key = get key >>= maybe
+  (Trans.liftIO . E.throwIO $ PersistForeignConstraintUnmet (show key))
+  return
+
 
 -- | Check whether there are any conflicts for unique keys with this entity and
 -- existing entities in the database.
