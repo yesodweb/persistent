@@ -12,18 +12,19 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 import Test.HUnit hiding (Test)
-import Test.Hspec.Monadic
+import Test.Hspec.Monadic (Specs, describe, it, hspecX)
 import Test.Hspec.HUnit()
 
 import Database.Persist
 import Database.Persist.Base (DeleteCascade (..), PersistValue(..))
 
-import Database.Persist.Join hiding (RunJoin)
+import Database.Persist.Join (selectOneMany, SelectOneMany(..))
 import qualified Database.Persist.Join
 
 #if WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
 import Database.Persist.MongoDB (Action, withMongoDBConn, runMongoDBConn)
+import Language.Haskell.TH.Syntax (Type(..))
 #else
 import Database.Persist.GenericSql
 import qualified Database.Persist.Join.Sql
@@ -35,7 +36,7 @@ import Database.Persist.Postgresql
 #endif
 #endif
 
-import Database.Persist.TH
+import Database.Persist.TH (MkPersistSettings(..), mkPersist, mkMigrate, derivePersistField, share, sqlSettings, persist, mkDeleteCascade)
 import Control.Monad.IO.Class
 
 import Control.Monad (unless)
@@ -78,7 +79,11 @@ data PetType = Cat | Dog
     deriving (Show, Read, Eq)
 derivePersistField "PetType"
 
+#if WITH_MONGODB
+mkPersist MkPersistSettings { mpsBackend = ConT ''Action } [persist|
+#else
 share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persist|
+#endif
 
   Person
     name String
@@ -181,8 +186,14 @@ main = do
   runConn setup
   hspecX specs
 
---_joinGen :: (MonadIO m, PersistBackend b m) => (SelectOneMany b Author Entry -> b m [((Key b Author, Author), [(Key b Entry, Entry)])]) -> b m ()
-_joinGen run = do
+joinGeneric :: PersistBackend b m =>
+               (SelectOneMany BackendMonad (Author) (EntryGeneric BackendMonad)
+                -> b m [((Key b (Author), Author),
+                                 [(Key b (EntryGeneric b),
+                                   EntryGeneric b)])])
+                -> b m ()
+
+joinGeneric run = do
     a <- insert $ Author "a"
     a1 <- insert $ Entry a "a1"
     a2 <- insert $ Entry a "a2"
@@ -399,9 +410,9 @@ specs = describe "persistent" $ do
 
   it "toSinglePiece - fromSinglePiece" $ db $ do
       key1 <- insert $ Person "Michael2" 27 Nothing
-      let PersistObjectId b1 = unKey key1
+      let PersistObjectId _ = unKey key1
       let key2 = fromJust $ fromSinglePiece $ toSinglePiece key1 :: (Key BackendMonad Person)
-      let PersistObjectId b2 = unKey $ key2
+      let PersistObjectId _ = unKey $ key2
       toSinglePiece key1 ==@ toSinglePiece key2
 
   it "replace" $ db $ do
@@ -546,11 +557,10 @@ specs = describe "persistent" $ do
       liftIO $ x @?= [(pid1, p1), (pid3, p3)]
 
 
-#ifndef WITH_MONGODB
-  -- TODO: FIXME
-  it "joinNonSql" $ db $ _joinGen Database.Persist.Join.runJoin
+  it "joinNonSql" $ db $ joinGeneric Database.Persist.Join.runJoin
 
-  it "joinSql" $ db $ _joinGen Database.Persist.Join.Sql.runJoin
+#ifndef WITH_MONGODB
+  it "joinSql" $ db $ joinGeneric Database.Persist.Join.Sql.runJoin
 
   it "commit/rollback" (caseCommitRollback >> runConn cleanDB)
 
