@@ -9,7 +9,7 @@ module Database.Persist.Postgresql
 
 import Database.Persist hiding (Update)
 import Database.Persist.Base hiding (Add, Update)
-import Database.Persist.GenericSql
+import Database.Persist.GenericSql hiding (Key(..))
 import Database.Persist.GenericSql.Internal
 
 import qualified Database.HDBC as H
