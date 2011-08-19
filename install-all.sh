@@ -2,6 +2,9 @@
 
 CABAL=cabal
 
+# install testing dependencies
+$CABAL install HUnit QuickCheck hspec file-location-0.4
+
 # also pool and persistent
 PACKAGES="persistent-template persistent-sqlite persistent-postgresql persistent-mongoDB"
 
@@ -17,8 +20,8 @@ cabal_install() {
     echo Installing $1
     cd $1
     ($CABAL configure $configure_opts ||
-      ($CABAL update && $CABAL install HUnit QuickCheck hspec file-location-0.2.3 && $CABAL install --only-dependencies && $CABAL configure $configure_opts)
-    ) && $CABAL build && $test && ./Setup.lhs install || exit
+      ($CABAL install --only-dependencies && $CABAL configure $configure_opts)
+    ) && $CABAL build && $test && ./Setup.lhs install || exit 1
     cd ..
 }
 
