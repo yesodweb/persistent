@@ -58,7 +58,7 @@ test-suite test
                    , bson
 
     -- these are mutually exclusive options
-    cpp-options: -DWITH_POSTGRESQL
+    --- cpp-options: -DWITH_POSTGRESQL
     -- cpp-options: -DWITH_MONGODB -DDEBUG
     ghc-options:   -Wall
     extra-libraries: sqlite3
