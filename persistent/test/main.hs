@@ -97,6 +97,10 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persis
     ownerId PersonId
     name String
     type PetType
+  MaybeOwnedPet
+    ownerId PersonId Maybe
+    name String
+    type PetType
   NeedsPet
     petKey PetId
   Number
@@ -116,8 +120,8 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persis
 petOwner :: PersistBackend b m => PetGeneric b -> b m Person
 petOwner = belongsToJust petOwnerId
 
-petOwnerMaybe :: PersistBackend b m => PetGeneric b -> b m (Maybe Person)
-petOwnerMaybe = belongsTo petOwnerId
+maybeOwnedPetOwner :: PersistBackend b m => MaybeOwnedPetGeneric b -> b m (Maybe Person)
+maybeOwnedPetOwner = belongsTo maybeOwnedPetOwnerId
 
 -- this is faster then dropDatabase. Could try dropCollection
 cleanDB :: PersistBackend b m => b m ()
@@ -525,7 +529,7 @@ specs = describe "persistent" $ do
       return ()
 
 
-  it "gets an association" $ db $ do
+  it "retrieves a belongsToJust association" $ db $ do
       let p = Person "pet owner" 30 Nothing
       person <- insert $ p
       let cat = Pet person "Mittens" Cat
@@ -533,7 +537,14 @@ specs = describe "persistent" $ do
       p @== p2
       p3 <- petOwner cat
       p @== p3
-      Just p4 <- petOwnerMaybe cat
+
+  it "retrieves a belongsTo association" $ db $ do
+      let p = Person "pet owner" 30 Nothing
+      person <- insert $ p
+      let cat = MaybeOwnedPet (Just person) "Mittens" Cat
+      p2 <- getJust $ fromJust $ maybeOwnedPetOwnerId cat
+      p @== p2
+      Just p4 <- maybeOwnedPetOwner cat
       p @== p4
 
   it "derivePersistField" $ db $ do

@@ -456,16 +456,18 @@ getByValue val =
 --   > foreign = belongsTo foeignId
 belongsTo ::
   (PersistBackend b m
-  , PersistEntity val1
-  , PersistEntity val2) => (val1 -> Key b val2) -> val1 -> b m (Maybe val2)
-belongsTo foreignKeyField model = get $ foreignKeyField model
+  , PersistEntity ent1
+  , PersistEntity ent2) => (ent1 -> Maybe (Key b ent2)) -> ent1 -> b m (Maybe ent2)
+belongsTo foreignKeyField model = case foreignKeyField model of
+    Nothing -> return Nothing
+    Just f -> get f
 
 -- | same as belongsTo, but uses @getJust@ and therefore is similarly unsafe
 belongsToJust ::
   (PersistBackend b m
-  , PersistEntity val1
-  , PersistEntity val2) => (val1 -> Key b val2) -> val1 -> b m val2
-belongsToJust foreignKeyField model = getJust $ foreignKeyField model
+  , PersistEntity ent1
+  , PersistEntity ent2) => (ent1 -> Key b ent2) -> ent1 -> b m ent2
+belongsToJust getForeignKey model = getJust $ getForeignKey model
 
 -- | Same as get, but for a non-null (not Maybe) foreign key
 --   Unsafe unless your database is enforcing that the foreign key is valid
