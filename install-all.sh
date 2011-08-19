@@ -3,7 +3,12 @@
 CABAL=cabal
 
 # install testing dependencies
-$CABAL install HUnit QuickCheck hspec file-location-0.4
+install_test_deps(){
+  $CABAL install HUnit QuickCheck hspec 'file-location >= 0.4 && < 0.5'
+}
+
+install_test_deps ||
+  $CABAL update && install_test_deps
 
 # also pool and persistent
 PACKAGES="persistent-template persistent-sqlite persistent-postgresql persistent-mongoDB"
