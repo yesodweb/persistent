@@ -4,7 +4,7 @@ CABAL=cabal
 
 # install testing dependencies
 install_test_deps(){
-  $CABAL install HUnit QuickCheck hspec 'file-location >= 0.4 && < 0.5'
+  $CABAL install HUnit QuickCheck 'hspec >= 0.6.1 && < 0.7' 'file-location >= 0.4 && < 0.5'
 }
 
 install_test_deps ||
