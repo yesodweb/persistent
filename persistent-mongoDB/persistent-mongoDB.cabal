@@ -14,7 +14,7 @@ homepage:        http://www.yesodweb.com/book/persistent
 library
     build-depends:   base               >= 4 && < 5
                    , persistent         >= 0.6.0 && < 0.7.0
-                   , template-haskell   >= 2.4     && < 2.6
+                   , template-haskell   >= 2.4     && < 2.7
                    , text               >= 0.8     && < 0.12
                    , transformers       >= 0.2.1   && < 0.3
                    , containers         >= 0.2     && < 0.5
