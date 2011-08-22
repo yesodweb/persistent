@@ -10,6 +10,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE EmptyDataDecls #-}
 
 import Test.HUnit hiding (Test)
 import Test.Hspec.Monadic (Specs, describe, it, hspecX)
