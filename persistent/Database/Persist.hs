@@ -25,7 +25,7 @@ module Database.Persist
 import Database.Persist.Base
 
 infixr 3 =., +=.
-(=.), (+=.) :: forall v typ.  PersistField typ => Field v typ -> typ -> Update v
+(=.), (+=.) :: forall v typ.  PersistField typ => EntityField v typ -> typ -> Update v
 -- | assign a field a value
 f =. a = Update f a Assign
 -- | assign a field by addition (+=)
@@ -33,7 +33,7 @@ f +=. a = Update f a Add
 
 infix 4 ==., <., <=., >., >=., !=.
 (==.), (!=.), (<.), (<=.), (>.), (>=.) ::
-  forall v typ.  PersistField typ => Field v typ -> typ -> Filter v
+  forall v typ.  PersistField typ => EntityField v typ -> typ -> Filter v
 f ==. a = Filter f (Left a) Eq
 f !=. a = Filter f (Left a) Ne
 f <. a = Filter f (Left a) Lt
@@ -42,7 +42,7 @@ f >. a = Filter f (Left a) Gt
 f >=. a = Filter f (Left a) Ge
 
 infix 4 <-., /<-.
-(<-.), (/<-.) :: forall v typ.  PersistField typ => Field v typ -> [typ] -> Filter v
+(<-.), (/<-.) :: forall v typ.  PersistField typ => EntityField v typ -> [typ] -> Filter v
 -- | In
 f <-. a = Filter f (Right a) In
 -- | NotIn

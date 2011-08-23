@@ -253,7 +253,7 @@ mkEntity mps t = do
         , puk
         , DataInstD
             []
-            ''Field
+            ''EntityField
             [ ConT (mkName $ entityName t ++ suffix) `AppT` VarT (mkName "backend")
             , VarT $ mkName "typ"
             ]

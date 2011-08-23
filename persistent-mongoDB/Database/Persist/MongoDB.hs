@@ -351,7 +351,7 @@ filterToDocument f =
     showFilter Eq = error "EQ filter not expected"
     showFilter (BackendSpecificFilter bsf) = throw $ PersistMongoDBError $ "did not expect BackendSpecificFilter " ++ bsf
 
-fieldName ::  forall v typ.  (PersistEntity v) => Field v typ -> CS.CompactString
+fieldName ::  forall v typ.  (PersistEntity v) => EntityField v typ -> CS.CompactString
 fieldName = u . idfix . columnName . persistColumnDef
   where idfix f = if f == "id" then "_id" else f
 

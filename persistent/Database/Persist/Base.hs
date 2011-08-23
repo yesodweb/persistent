@@ -311,7 +311,7 @@ instance PersistField a => PersistField (Maybe a) where
     isNullable _ = True
 
 data Update v = forall typ. PersistField typ => Update
-    { updateField :: Field v typ
+    { updateField :: EntityField v typ
     , updateValue :: typ
     , updateUpdate :: PersistUpdate -- FIXME Replace with expr down the road
     }
@@ -319,8 +319,8 @@ data Update v = forall typ. PersistField typ => Update
 updateFieldName :: PersistEntity v => Update v -> String
 updateFieldName (Update f _ _) = columnName $ persistColumnDef f
 
-data SelectOpt v = forall typ. Asc (Field v typ)
-                 | forall typ. Desc (Field v typ)
+data SelectOpt v = forall typ. Asc (EntityField v typ)
+                 | forall typ. Desc (EntityField v typ)
                  | OffsetBy Int
                  | LimitTo Int
 
@@ -329,7 +329,7 @@ data SelectOpt v = forall typ. Asc (Field v typ)
 -- filtered on, the type of comparison applied (equals, not equals, etc)
 -- and the argument for the comparison.
 data Filter v = forall typ. PersistField typ => Filter
-    { filterField :: Field v typ
+    { filterField :: EntityField v typ
     , filterValue :: Either typ [typ] -- FIXME
     , filterFilter :: PersistFilter -- FIXME
     }
@@ -340,8 +340,8 @@ data Filter v = forall typ. PersistField typ => Filter
 -- blog entry would be an entry, containing fields such as title and content.
 class PersistEntity val where
     -- | Parameters: val and datatype of the field
-    data Field val :: * -> *
-    persistColumnDef :: Field val typ -> ColumnDef
+    data EntityField val :: * -> *
+    persistColumnDef :: EntityField val typ -> ColumnDef
 
     -- | Unique keys in existence on this entity.
     data Unique val :: ((* -> *) -> * -> *) -> *
