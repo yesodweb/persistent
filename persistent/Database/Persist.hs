@@ -14,7 +14,7 @@ module Database.Persist
     , Update (..)
     , SelectOpt (..)
     , Filter (..)
-    , (=.), (+=.)
+    , (=.), (+=.), (-=.), (*=.), (/=.)
     , (==.), (!=.), (<.), (>.), (<=.), (>=.)
     , (<-.), (/<-.)
     , (||.)
@@ -24,12 +24,18 @@ module Database.Persist
 -- Also defines Filter creation and composition operators.
 import Database.Persist.Base
 
-infixr 3 =., +=.
-(=.), (+=.) :: forall v typ.  PersistField typ => EntityField v typ -> typ -> Update v
+infixr 3 =., +=., -=., *=., /=.
+(=.), (+=.), (-=.), (*=.), (/=.) :: forall v typ.  PersistField typ => EntityField v typ -> typ -> Update v
 -- | assign a field a value
 f =. a = Update f a Assign
 -- | assign a field by addition (+=)
 f +=. a = Update f a Add
+-- | assign a field by subtraction (-=)
+f -=. a = Update f a Subtract
+-- | assign a field by multiplication (*=)
+f *=. a = Update f a Multiply
+-- | assign a field by division (/=)
+f /=. a = Update f a Divide
 
 infix 4 ==., <., <=., >., >=., !=.
 (==.), (!=.), (<.), (<=.), (>.), (>=.) ::
