@@ -20,7 +20,7 @@ module Database.Persist
     , (||.)
     ) where
 
--- | Export public items from Database.Persist.Base
+-- Export public items from Database.Persist.Base
 -- Also defines Filter creation and composition operators.
 import Database.Persist.Base
 
