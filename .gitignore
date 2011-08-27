@@ -3,3 +3,6 @@ test.db3
 *.swp
 client_session_key.aes
 persistent/test/testdb.sqlite3
+*.hi
+*.o
+TAGS
