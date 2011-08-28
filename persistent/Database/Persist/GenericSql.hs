@@ -192,7 +192,7 @@ instance MonadControlIO m => PersistBackend SqlPersist m where
         off = if offset == 0
                     then ""
                     else " OFFSET " ++ show offset
-        cols conn = intercalate "," $ "id"
+        cols conn = intercalate "," $ (unRawName $ rawTableIdName t)
                    : (map (\(x, _, _) -> escapeName conn x) $ tableColumns t)
         sql conn = pack $ concat
             [ "SELECT "
@@ -322,7 +322,7 @@ instance MonadControlIO m => PersistBackend SqlPersist m where
 
     getBy uniq = do
         conn <- SqlPersist ask
-        let cols = intercalate "," $ "id"
+        let cols = intercalate "," $ (unRawName $ rawTableIdName t)
                  : (map (\(x, _, _) -> escapeName conn x) $ tableColumns t)
         let sql = pack $ concat
                 [ "SELECT "
