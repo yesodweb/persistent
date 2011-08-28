@@ -8,7 +8,7 @@ synopsis:        Type-safe, non-relational, multi-backend persistence.
 description:     This library provides just the general interface and helper functions. You must use a specific backend in order to make this useful.
 category:        Database, Yesod
 stability:       Stable
-cabal-version:   >= 1.6
+cabal-version:   >= 1.8
 build-type:      Simple
 homepage:        http://www.yesodweb.com/book/persistent
 
@@ -40,8 +40,8 @@ library
 
 test-suite test
     type:          exitcode-stdio-1.0
-    main-is:       test/main.hs
-    hs-source-dirs: ., ../persistent-template, ../persistent-sqlite, ../persistent-postgresql ../persistent-mongoDB
+    main-is:       main.hs
+    hs-source-dirs: test, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mongoDB
 
     build-depends:   HUnit
                    , hspec >= 0.6.1 && < 0.7
@@ -56,6 +56,13 @@ test-suite test
                    , network
                    , compact-string-fix
                    , bson
+                   , persistent
+                   , path-pieces
+                   , text
+                   , transformers
+                   , monad-control
+                   , containers
+                   , bytestring
 
     -- these are mutually exclusive options
     -- cpp-options: -DWITH_POSTGRESQL

@@ -1,6 +1,7 @@
 name:            persistent-template
 version:         0.6.0
 license:         BSD3
+license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
 maintainer:      Michael Snoyman <michael@snoyman.com>
 synopsis:        Type-safe, non-relational, multi-backend persistence.

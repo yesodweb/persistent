@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-unused-binds #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -37,7 +38,10 @@ import Database.Persist.Postgresql
 #endif
 #endif
 
-import Database.Persist.TH (MkPersistSettings(..), mkPersist, mkMigrate, derivePersistField, share, sqlSettings, persist, mkDeleteCascade)
+#if WITH_MONGODB
+import Database.Persist.TH (MkPersistSettings(..))
+#endif
+import Database.Persist.TH (mkPersist, mkMigrate, derivePersistField, share, sqlSettings, persist, mkDeleteCascade)
 import Control.Monad.IO.Class
 
 import Control.Monad (unless)
@@ -48,14 +52,11 @@ import qualified Control.Monad.IO.Control
 import Data.Text (Text)
 import Web.PathPieces (SinglePiece (..))
 import Data.Maybe (fromJust)
-import Debug.FileLocation (debug, debugM)
-
-import Numeric (showHex)
 
 {-
 expected /=@ actual = liftIO $ assertNotEqual "" expected actual
 -}
-(@/=), (@==) :: (Eq a, Show a, MonadIO m, Monad m) => a -> a -> m ()
+(@/=), (@==), (==@) :: (Eq a, Show a, MonadIO m) => a -> a -> m ()
 infix 1 @/= --, /=@
 actual @/= expected = liftIO $ assertNotEqual "" expected actual
 

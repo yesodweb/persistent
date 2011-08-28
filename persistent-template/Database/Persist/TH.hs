@@ -19,18 +19,15 @@ module Database.Persist.TH
 import Database.Persist.Base
 import Database.Persist.GenericSql (Migration, SqlPersist, migrate)
 import Database.Persist.Quasi (parse)
-import Database.Persist.Util (deprecate, nullable)
+import Database.Persist.Util (nullable)
 import Database.Persist.TH.Library (apE)
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
-import Data.Maybe (mapMaybe, catMaybes)
 import Control.Monad (forM)
 import Control.Monad.IO.Control (MonadControlIO)
 import qualified System.IO as SIO
 import Data.Text (pack)
-import qualified Data.Text.Read
-import qualified Data.Text as T
 import Data.List (isSuffixOf)
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
@@ -454,6 +451,7 @@ instance Lift PersistFilter where
     lift Le = [|Le|]
     lift In = [|In|]
     lift NotIn = [|NotIn|]
+    lift (BackendSpecificFilter x) = [|BackendSpecificFilter $(lift x)|]
 
 instance Lift PersistUpdate where
     lift Assign = [|Assign|]

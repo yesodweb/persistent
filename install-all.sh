@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash -x
 
 CABAL=cabal
 
@@ -16,7 +16,7 @@ PACKAGES="persistent-template persistent-sqlite persistent-postgresql persistent
 cabal_install() {
     if [ "$2" == "" ]
     then
-      configure_opts="--enable-tests"
+      configure_opts="--enable-tests --ghc-options=-Wall --ghc-options=-Werror"
       test="$CABAL test"
     else
       configure_opts=$2
@@ -26,7 +26,7 @@ cabal_install() {
     cd $1
     ($CABAL configure $configure_opts ||
       ($CABAL install --only-dependencies && $CABAL configure $configure_opts)
-    ) && $CABAL build && $test && ./Setup.lhs install || exit 1
+    ) && $CABAL build && $test && $CABAL check && $CABAL haddock --executables && ./Setup.lhs install || exit 1
     cd ..
 }
 
