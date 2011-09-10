@@ -38,10 +38,10 @@ import Data.Maybe (mapMaybe, fromJust)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as E
 import qualified Data.Serialize as Serialize
-import Control.Monad.MVar (MonadMVar (..))
 import qualified System.IO.Pool as Pool
 import Numeric (readHex, showHex)
 import Web.PathPieces (SinglePiece (..))
+import Control.Monad.IO.Control (MonadControlIO)
 
 #ifdef DEBUG
 import FileLocation (debug, debugMsg)
@@ -159,7 +159,7 @@ insertFields t record = zipWith (DB.:=) (toLabels) (toValues)
     toLabels = map (u . columnName) $ entityColumns t
     toValues = map (DB.val . toPersistValue) (toPersistFields record)
 
-instance (Trans.MonadIO m, Applicative m, Functor m, MonadMVar m) => PersistBackend DB.Action m where
+instance (Applicative m, Functor m, MonadControlIO m) => PersistBackend DB.Action m where
     insert record = do
         (DB.ObjId oid) <- DB.insert (u $ entityName t) (insertFields t record)
         return $ Key $ dbOidToKey oid 
