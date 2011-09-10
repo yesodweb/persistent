@@ -144,14 +144,15 @@ getCopyTable :: PersistEntity val => (Text -> IO Statement) -> val
 getCopyTable getter val = do
     stmt <- getter $ pack $ "PRAGMA table_info(" ++ escape table ++ ")"
     oldCols' <- withStmt stmt [] getCols
-    let oldCols = map (RawName . unpack) $ filter (/= "id") oldCols'
+    let oldCols = map (RawName . unpack) $ filter (/= "id") oldCols' -- need to update for table id attribute ?
     let newCols = map cName cols
     let common = filter (`elem` oldCols) newCols
+    let id_ = rawTableIdName $ entityDef val
     return [ (False, tmpSql)
-           , (False, copyToTemp $ RawName "id" : common)
+           , (False, copyToTemp $ id_ : common)
            , (common /= oldCols, pack dropOld)
            , (False, newSql)
-           , (False, copyToFinal $ RawName "id" : newCols)
+           , (False, copyToFinal $ id_ : newCols)
            , (False, pack dropTmp)
            ]
   where

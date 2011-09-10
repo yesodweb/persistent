@@ -4,13 +4,13 @@ module Database.Persist.Quasi
 
 import Database.Persist.Base
 import Data.Char
-import Data.Maybe (mapMaybe)
+import Data.Maybe
 import Text.ParserCombinators.Parsec hiding (parse, token)
 import qualified Text.ParserCombinators.Parsec as Parsec
 
 -- | Parses a quasi-quoted syntax into a list of entity definitions.
 parse :: String -> [EntityDef]
-parse = map parse' . nest . map words'
+parse = map parse' . nest . catMaybes . map words'
       . removeLeadingSpaces
       . map killCarriage
       . lines
@@ -28,10 +28,11 @@ killCarriage s
     | last s == '\r' = init s
     | otherwise = s
 
-words' :: String -> (Bool, [String])
+words' :: String -> Maybe (Bool, [String])
 words' s = case Parsec.parse words'' s s of
-            Left e -> error $ show e
-            Right x -> x
+            Left e       -> error $ show e
+            Right (_,[]) -> Nothing
+            Right x      -> Just x
 
 words'' :: Parser (Bool, [String])
 words'' = do
@@ -51,10 +52,10 @@ words'' = do
     unquoted = many1 $ noneOf " \t"
 
 nest :: [(Bool, [String])] -> [(String, [String], [[String]])]
+nest ((_, []):rest) = nest rest
 nest ((False, name:entattribs):rest) =
     let (x, y) = break (not . fst) rest
      in (name, entattribs, map snd x) : nest y
-nest ((False, []):_) = error "Indented line must contain at least name"
 nest ((True, _):_) = error "Blocks must begin with non-indented lines"
 nest [] = []
 

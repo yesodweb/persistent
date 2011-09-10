@@ -18,6 +18,7 @@ module Database.Persist.TH
 
 import Database.Persist.Base
 import Database.Persist.GenericSql (Migration, SqlPersist, migrate)
+import Database.Persist.GenericSql.Internal (unRawName,rawFieldName,rawTableIdName) -- XXX
 import Database.Persist.Quasi (parse)
 import Database.Persist.Util (nullable)
 import Database.Persist.TH.Library (apE)
@@ -232,7 +233,10 @@ mkEntity mps t = do
     fpv <- mkFromPersistValues t
     utv <- mkUniqueToValues $ entityUniques t
     puk <- mkUniqueKeys t
-    fields <- mapM (mkField t) $ ColumnDef "id" (entityName t ++ "Id") [] : entityColumns t
+    let colnames = map (unRawName . rawFieldName) $ entityColumns t
+        idname = unRawName $ rawTableIdName t
+        idname_ = (if idname `elem` colnames then (++"_") else id) idname
+    fields <- mapM (mkField t) $ ColumnDef idname_ (entityName t ++ "Id") [] : entityColumns t
     return $
       [ dataTypeDec t
       , TySynD (mkName $ entityName t) [] $

@@ -14,6 +14,7 @@ module Database.Persist.GenericSql.Internal
     , tableColumns
     , rawFieldName
     , rawTableName
+    , rawTableIdName
     , RawName (..)
     , filterClause
     , filterClauseNoWhere
@@ -117,6 +118,11 @@ getSqlValue (('s':'q':'l':'=':x):_) = Just x
 getSqlValue (_:x) = getSqlValue x
 getSqlValue [] = Nothing
 
+getIdNameValue :: [String] -> Maybe String
+getIdNameValue (('i':'d':'=':x):_) = Just x
+getIdNameValue (_:x) = getIdNameValue x
+getIdNameValue [] = Nothing
+
 tableColumns :: EntityDef -> [(RawName, String, [String])]
 tableColumns = map (\a@(ColumnDef _ y z) -> (rawFieldName a, y, z)) . entityColumns
 
@@ -132,6 +138,12 @@ rawTableName :: EntityDef -> RawName
 rawTableName t = RawName $
     case getSqlValue $ entityAttribs t of
         Nothing -> entityName t
+        Just x -> x
+
+rawTableIdName :: EntityDef -> RawName
+rawTableIdName t = RawName $
+    case getIdNameValue $ entityAttribs t of
+        Nothing -> "id"
         Just x -> x
 
 newtype RawName = RawName { unRawName :: String } -- FIXME Text
@@ -246,7 +258,8 @@ getFieldName :: EntityDef -> String -> RawName
 getFieldName t s = rawFieldName $ tableColumn t s
 
 tableColumn :: EntityDef -> String -> ColumnDef
-tableColumn _ "id" = ColumnDef "id" "Int64" []
+tableColumn t s | s == id_ = ColumnDef id_ "Int64" []
+  where id_ = unRawName $ rawTableIdName t
 tableColumn t s = go $ entityColumns t
   where
     go [] = error $ "Unknown table column: " ++ s

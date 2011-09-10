@@ -94,8 +94,9 @@ addTable conn e s = concat [escapeName conn $ rawTableName $ entityDef e, ".", s
 colsPlusId :: PersistEntity e => Connection -> e -> [String]
 colsPlusId conn e =
     map (addTable conn e) $
-    "id" : (map (\(x, _, _) -> escapeName conn x) cols)
+    id_ : (map (\(x, _, _) -> escapeName conn x) cols)
   where
+    id_ = unRawName $ rawTableIdName $ entityDef e
     cols = tableColumns $ entityDef e
 
 filterName :: PersistEntity v => Filter v -> String
