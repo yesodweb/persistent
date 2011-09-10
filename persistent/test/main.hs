@@ -94,23 +94,34 @@ mkPersist MkPersistSettings { mpsBackend = ConT ''Action } [persist|
 #else
 share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persist|
 #endif
-
+-- Dedented comment
+  -- Header-level comment
+    -- Indented comment
   Person
     name String
-    age Int "some ignored -- attribute"
+    age Int "some ignored -- \" attribute"
     color String Maybe -- this is a comment sql=foobarbaz
     PersonNameKey name -- this is a comment sql=foobarbaz
   Person1
+-- Dedented comment
+  -- Header-level comment
+    -- Indented comment
     name String
     age Int
   Pet
     ownerId PersonId
     name String
+-- Dedented comment
+  -- Header-level comment
+    -- Indented comment
     type PetType
   MaybeOwnedPet
     ownerId PersonId Maybe
     name String
     type PetType
+-- Dedented comment
+  -- Header-level comment
+    -- Indented comment
   NeedsPet
     petKey PetId
   Number
@@ -157,7 +168,7 @@ setup = do
   v <- MongoDB.serverVersion
   liftIO $ putStrLn $ "version: " ++ show v
   if andVersion v then return () else error "mongoDB version not supported: need at least 1.9.1"
-  -- TODO: use dropDatabase 
+  -- TODO: use dropDatabase
   MongoDB.dropDatabase "test"   --(MongoDB.Database "test")
   return ()
   where
@@ -201,15 +212,15 @@ setup = do
   cleanDB
 
 instance Random Int32 where
-    random g = 
+    random g =
         let ((i::Int), g') = random g in
         (fromInteger $ toInteger i, g')
-    randomR (lo, hi) g = 
+    randomR (lo, hi) g =
         let ((i::Int), g') = randomR (fromInteger $ toInteger lo, fromInteger $ toInteger hi) g in
         (fromInteger $ toInteger i, g')
 
 instance Random Int64 where
-    random g = 
+    random g =
         let ((i0::Int32), g0) = random g
             ((i1::Int32), g1) = random g0 in
         (fromInteger (toInteger i0) + fromInteger (toInteger i1) * 2 ^ (32::Int), g1)
@@ -221,7 +232,7 @@ instance Arbitrary PersistValue where
     arbitrary = PersistInt64 `fmap` choose (0, maxBound)
 #endif
 
-                  
+
 main :: IO ()
 main = do
   runConn setup
