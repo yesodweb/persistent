@@ -55,7 +55,7 @@ instance SinglePiece (Key SqlPersist entity) where
     toSinglePiece (Key (PersistInt64 i)) = toSinglePiece i
     toSinglePiece k = throw $ PersistInvalidField $ "Invalid Key: " ++ show k
     fromSinglePiece t =
-        case Data.Text.Read.decimal t of
+        case Data.Text.Read.signed Data.Text.Read.decimal t of
             Right (i, "") -> Just $ Key $ PersistInt64 i
             _ -> Nothing
 
