@@ -38,6 +38,14 @@ library
                      Database.Persist.Join.Sql
     ghc-options:     -Wall
 
+flag test-mongodb
+    description:   Enable MongoDB tests.  Can't be used with test-postgresql.
+    default:       False
+
+flag test-postgresql
+    description:   Enable PostgreSQL tests.  Can't be used with test-mongodb.
+    default:       False
+
 test-suite test
     type:          exitcode-stdio-1.0
     main-is:       main.hs
@@ -48,14 +56,6 @@ test-suite test
                    , file-location >= 0.4 && < 0.5
                    , base >= 4 && < 5
                    , template-haskell >= 2.4 && < 2.7
-                   , HDBC-postgresql
-                   , HDBC
-                   -- mongoDB dependencies
-                   , mongoDB       == 1.1.*
-                   , bson          >= 0.1.5
-                   , cereal
-                   , network
-                   , compact-string-fix
                    , persistent
                    , path-pieces
                    , text
@@ -68,9 +68,18 @@ test-suite test
                    , random == 1.*
                    , QuickCheck == 2.4.*
 
-    -- these are mutually exclusive options
-    -- cpp-options: -DWITH_POSTGRESQL
-    -- cpp-options: -DWITH_MONGODB -DDEBUG
+    if flag(test-postgresql)
+      cpp-options: -DWITH_POSTGRESQL
+      build-depends: HDBC
+                   , HDBC-postgresql
+    else
+      if flag(test-mongodb)
+        cpp-options: -DWITH_MONGODB -DDEBUG
+        build-depends: mongoDB       == 1.1.*
+                     , bson          >= 0.1.5
+                     , cereal
+                     , network
+                     , compact-string-fix
     ghc-options:   -Wall
     extra-libraries: sqlite3
 
