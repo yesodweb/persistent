@@ -35,7 +35,7 @@ tokenize (x:xs)
 tokenize xs = let (token, rest) = break isSpace xs
               in Token token : tokenize rest
 
--- | A string to tokens is empty when it has only spaces.  There
+-- | A string of tokens is empty when it has only spaces.  There
 -- can't be two consecutive 'Spaces', so this takes /O(1)/ time.
 empty :: [Token] -> Bool
 empty []         = True
@@ -63,7 +63,7 @@ removeSpaces xs = map (makeLine . subtractSpace) xs
       headSpace (Spaces n : _) = n
       headSpace _              = 0
 
-      -- | Subtract leading space.
+      -- | Subtract the leading space.
       subtractSpace ys | s == 0 = ys
       subtractSpace (Spaces n : rest)
           | n == s    = rest
