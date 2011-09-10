@@ -1,5 +1,5 @@
 name:            persistent
-version:         0.6.1
+version:         0.6.2
 license:         BSD3
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -19,7 +19,6 @@ library
                    , time                     >= 1.1.4   && < 1.3
                    , text                     >= 0.8     && < 0.12
                    , containers               >= 0.2     && < 0.5
-                   , parsec                   >= 2.1     && < 4
                    , enumerator               >= 0.4.9   && < 0.5
                    , monad-control            >= 0.2     && < 0.3
                    , pool                     >= 0.1     && < 0.2
@@ -38,6 +37,14 @@ library
                      Database.Persist.Join.Sql
     ghc-options:     -Wall
 
+flag test-mongodb
+    description:   Enable MongoDB tests.  Can't be used with test-postgresql.
+    default:       False
+
+flag test-postgresql
+    description:   Enable PostgreSQL tests.  Can't be used with test-mongodb.
+    default:       False
+
 test-suite test
     type:          exitcode-stdio-1.0
     main-is:       main.hs
@@ -48,14 +55,6 @@ test-suite test
                    , file-location >= 0.4 && < 0.5
                    , base >= 4 && < 5
                    , template-haskell >= 2.4 && < 2.7
-                   , HDBC-postgresql
-                   , HDBC
-                   -- mongoDB dependencies
-                   , mongoDB       == 1.1.*
-                   , bson          >= 0.1.5
-                   , cereal
-                   , network
-                   , compact-string-fix
                    , persistent
                    , path-pieces
                    , text
@@ -68,9 +67,18 @@ test-suite test
                    , random == 1.*
                    , QuickCheck == 2.4.*
 
-    -- these are mutually exclusive options
-    -- cpp-options: -DWITH_POSTGRESQL
-    -- cpp-options: -DWITH_MONGODB -DDEBUG
+    if flag(test-postgresql)
+      cpp-options: -DWITH_POSTGRESQL
+      build-depends: HDBC
+                   , HDBC-postgresql
+    else
+      if flag(test-mongodb)
+        cpp-options: -DWITH_MONGODB -DDEBUG
+        build-depends: mongoDB       == 1.1.*
+                     , bson          >= 0.1.5
+                     , cereal
+                     , network
+                     , compact-string-fix
     ghc-options:   -Wall
     extra-libraries: sqlite3
 
