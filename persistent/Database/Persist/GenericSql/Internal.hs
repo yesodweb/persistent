@@ -29,7 +29,7 @@ import Data.IORef
 import Control.Monad.IO.Class
 import Data.Pool
 import Database.Persist.Base
-import Data.Maybe (fromJust)
+import Data.Maybe (fromMaybe)
 import Control.Arrow
 import Control.Monad.IO.Control (MonadControlIO)
 import Control.Exception.Control (bracket)
@@ -79,10 +79,15 @@ mkColumns val =
     (cols, uniqs)
   where
     colNameMap = map (columnName &&& rawFieldName) $ entityColumns t
-    uniqs = map (RawName *** map (fromJust . flip lookup colNameMap))
+    uniqs = map (RawName *** map (unjustLookup colNameMap))
           $ map (uniqueName &&& uniqueColumns)
-          $ entityUniques t -- FIXME don't use fromJust
+          $ entityUniques t
     cols = zipWith go (tableColumns t) $ toPersistFields $ halfDefined `asTypeOf` val
+
+    -- Like fromJust . lookup, but gives a more useful error message
+    unjustLookup m a = fromMaybe (error $ "Column not found: " ++ a)
+                     $ lookup a m
+
     t = entityDef val
     tn = rawTableName t
     go (name, t', as) p =
