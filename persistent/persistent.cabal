@@ -51,11 +51,11 @@ test-suite test
                    , HDBC-postgresql
                    , HDBC
                    -- mongoDB dependencies
-                   , mongoDB       >= 1.0 && < 1.1
+                   , mongoDB       == 1.1.*
+                   , bson          >= 0.1.5
                    , cereal
                    , network
                    , compact-string-fix
-                   , bson
                    , persistent
                    , path-pieces
                    , text
@@ -63,6 +63,10 @@ test-suite test
                    , monad-control
                    , containers
                    , bytestring
+                   , enumerator
+                   , time >= 1.2
+                   , random == 1.*
+                   , QuickCheck == 2.4.*
 
     -- these are mutually exclusive options
     -- cpp-options: -DWITH_POSTGRESQL

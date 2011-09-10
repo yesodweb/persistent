@@ -38,50 +38,34 @@ import Data.Maybe (mapMaybe, fromJust)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as E
 import qualified Data.Serialize as Serialize
-import Control.Monad.MVar (MonadMVar (..))
 import qualified System.IO.Pool as Pool
-import Numeric (readHex, showHex)
 import Web.PathPieces (SinglePiece (..))
+import Control.Monad.IO.Control (MonadControlIO)
 
 #ifdef DEBUG
-import FileLocation (debug, debugMsg)
+import FileLocation (debug)
 #else
+{-
 debug :: forall a. a -> a
 debug = id
 debugMsg :: forall t a. t -> a -> a
 debugMsg _ = id
+-}
 #endif
 
 type ConnectionPool = (Pool.Pool IOError DB.Pipe, Database)
 
 instance SinglePiece (Key DB.Action entity) where
-    toSinglePiece (Key pOid@(PersistObjectId _)) =
-        let (DB.Oid w32 w64) = persistObjectIdToDbOid $ debugMsg "POid" pOid
-        in  debug $ T.pack $ showHexLen 8 w32 ++ showHexLen 16 w64
-    toSinglePiece k = throw $ PersistInvalidField $ "Invalid Key: " ++ show k
+    toSinglePiece (Key pOid@(PersistObjectId _)) = -- T.pack $ show $ Serialize.encode bsonId
+        let oid@(DB.Oid _ _) = persistObjectIdToDbOid pOid
+        in  T.pack $ show oid
+    toSinglePiece k = throw $ PersistInvalidField $ "Invalid Key (expected PersistObjectId): " ++ show k
 
     fromSinglePiece str =
-      case (readHex $ (T.unpack $ debug str))::[(Int,String)] of
-        [] -> Nothing
-        parsed -> Just $ Key $ PersistObjectId $ Serialize.encode . fst $ head $ debug parsed
+      case (reads $ (T.unpack str))::[(DB.ObjectId,String)] of
+        (parsed,_):[] -> Just $ Key $ PersistObjectId $ Serialize.encode parsed
+        _ -> Nothing
 
-showHexLen :: (Integral a) => Int -> a -> String
-showHexLen n x = let s = showHex x ""
-                 in replicate (n - length s) '0' ++ s
-
-{-
-lexObjectIdP :: ReadP.ReadP ObjectId
-lexObjectIdP = do
-  ReadP.skipSpaces
-  digits1 <- fmap fromHex $ ReadP.count 8  hexDigit :: ReadP.ReadP Word32
-  digits2 <- fmap fromHex $ ReadP.count 16 hexDigit :: ReadP.ReadP Word64
-  return $ ObjectId (digits1, digits2)
-  where
-    hexDigit = ReadP.satisfy isHexDigit
-    
-    fromHex :: (Integral a) => String -> a
-    fromHex = foldl (\x -> (x * 16 +) . fromIntegral . digitToInt) 0
--}
 
 withMongoDBConn :: (Trans.MonadIO m, Applicative m) =>
   Database -> HostName -> (ConnectionPool -> m b) -> m b
@@ -159,7 +143,7 @@ insertFields t record = zipWith (DB.:=) (toLabels) (toValues)
     toLabels = map (u . columnName) $ entityColumns t
     toValues = map (DB.val . toPersistValue) (toPersistFields record)
 
-instance (Trans.MonadIO m, Applicative m, Functor m, MonadMVar m) => PersistBackend DB.Action m where
+instance (Applicative m, Functor m, MonadControlIO m) => PersistBackend DB.Action m where
     insert record = do
         (DB.ObjId oid) <- DB.insert (u $ entityName t) (insertFields t record)
         return $ Key $ dbOidToKey oid 

@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -fno-warn-unused-binds #-}
+{-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -12,35 +12,42 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE EmptyDataDecls #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 import Test.HUnit hiding (Test)
 import Test.Hspec.Monadic (Specs, describe, it, hspecX)
 import Test.Hspec.HUnit()
+import Test.Hspec.QuickCheck(prop)
 
 import Database.Persist
 import Database.Persist.Base (DeleteCascade (..), PersistValue(..))
 
 import Database.Persist.Join (selectOneMany, SelectOneMany(..))
 import qualified Database.Persist.Join
+import FileLocation (debug)
 
 #if WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
 import Database.Persist.MongoDB (Action, withMongoDBConn, runMongoDBConn)
 import Language.Haskell.TH.Syntax (Type(..))
+import Database.Persist.TH (MkPersistSettings(..))
+import Control.Monad (replicateM)
+import qualified Data.ByteString as BS
+
 #else
 import Database.Persist.GenericSql
 import qualified Database.Persist.Join.Sql
 import Database.Persist.Sqlite
 import Control.Exception (SomeException)
 import qualified Control.Exception.Control as Control
+import System.Random
+
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
 #endif
+
 #endif
 
-#if WITH_MONGODB
-import Database.Persist.TH (MkPersistSettings(..))
-#endif
 import Database.Persist.TH (mkPersist, mkMigrate, derivePersistField, share, sqlSettings, persist, mkDeleteCascade)
 import Control.Monad.IO.Class
 
@@ -52,6 +59,7 @@ import qualified Control.Monad.IO.Control
 import Data.Text (Text)
 import Web.PathPieces (SinglePiece (..))
 import Data.Maybe (fromJust)
+import Test.QuickCheck
 
 {-
 expected /=@ actual = liftIO $ assertNotEqual "" expected actual
@@ -164,6 +172,12 @@ db actions = do
   runConn cleanDB
   return r
 
+instance Arbitrary BS.ByteString where
+    arbitrary = BS.pack `fmap` replicateM 12 arbitrary
+
+instance Arbitrary PersistValue where
+    arbitrary = PersistObjectId `fmap` arbitrary
+
 #else
 type BackendMonad = SqlPersist
 sqlite_database :: Text
@@ -185,8 +199,29 @@ setup = do
   printMigration testMigrate
   runMigrationUnsafe testMigrate
   cleanDB
+
+instance Random Int32 where
+    random g = 
+        let ((i::Int), g') = random g in
+        (fromInteger $ toInteger i, g')
+    randomR (lo, hi) g = 
+        let ((i::Int), g') = randomR (fromInteger $ toInteger lo, fromInteger $ toInteger hi) g in
+        (fromInteger $ toInteger i, g')
+
+instance Random Int64 where
+    random g = 
+        let ((i0::Int32), g0) = random g
+            ((i1::Int32), g1) = random g0 in
+        (fromInteger (toInteger i0) + fromInteger (toInteger i1) * 2 ^ (32::Int), g1)
+    randomR (lo, hi) g = -- TODO : generate on the whole range, and not only on a part of it
+        let ((i::Int), g') = randomR (fromInteger $ toInteger lo, fromInteger $ toInteger hi) g in
+        (fromInteger $ toInteger i, g')
+
+instance Arbitrary PersistValue where
+    arbitrary = PersistInt64 `fmap` choose (0, maxBound)
 #endif
 
+                  
 main :: IO ()
 main = do
   runConn setup
@@ -273,7 +308,6 @@ joinGeneric run = do
 
 specs :: Specs
 specs = describe "persistent" $ do
-
   it "passes the general tests" $ db $ do
       let mic = Person "Michael" 25 Nothing
       micK <- insert mic
@@ -414,12 +448,10 @@ specs = describe "persistent" $ do
       Just p <- get key3
       p3 @== p
 
-  it "toSinglePiece - fromSinglePiece" $ db $ do
-      key1 <- insert $ Person "Michael2" 27 Nothing
-      let PersistObjectId _ = unKey key1
-      let key2 = fromJust $ fromSinglePiece $ toSinglePiece key1 :: (Key BackendMonad Person)
-      let PersistObjectId _ = unKey $ key2
-      toSinglePiece key1 ==@ toSinglePiece key2
+  prop "toSinglePiece - fromSinglePiece" $ \piece ->
+      let key1 = Key piece :: (Key BackendMonad Person)
+          key2 = fromJust $ fromSinglePiece $ toSinglePiece key1 :: (Key BackendMonad Person)
+      in (debug $ toSinglePiece key1) == (debug $ toSinglePiece key2)
 
   it "replace" $ db $ do
       key2 <- insert $ Person "Michael2" 27 Nothing
