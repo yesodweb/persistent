@@ -2,13 +2,13 @@ A Haskell "ORM". Supports PostgreSql, Sqlite, and MongoDB.
 
 ## Learn more: http://yesodweb.com/book/persistent
 
-
 ## Install from source
 
-Install the Haskell Platform first. clone this repo and run:
+Install the Haskell Platform first. Clone this repo and run:
 
-    cabal update && ./install-all.sh
-
+    cabal update
+    git submodule update --init
+    ./script/install
 
 # Developing persistent
 
