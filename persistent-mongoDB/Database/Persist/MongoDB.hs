@@ -57,7 +57,7 @@ type ConnectionPool = (Pool.Pool IOError DB.Pipe, Database)
 
 instance SinglePiece (Key DB.Action entity) where
     toSinglePiece (Key pOid@(PersistObjectId _)) = -- T.pack $ show $ Serialize.encode bsonId
-        let oid@(DB.Oid _ _) = persistObjectIdToDbOid pOid
+        let oid = persistObjectIdToDbOid pOid
         in  T.pack $ show oid
     toSinglePiece k = throw $ PersistInvalidField $ "Invalid Key (expected PersistObjectId): " ++ show k
 

@@ -43,7 +43,7 @@ test-suite test
     hs-source-dirs: test, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mongoDB
 
     build-depends:   HUnit
-                   , hspec >= 0.6.1 && < 0.7
+                   , hspec >= 0.8 && < 0.9
                    , file-location >= 0.4 && < 0.5
                    , base >= 4 && < 5
                    , template-haskell >= 2.4 && < 2.7
@@ -51,7 +51,7 @@ test-suite test
                    , HDBC
                    -- mongoDB dependencies
                    , mongoDB       == 1.1.*
-                   , bson          >= 0.1.5
+                   , bson          >= 0.1.6
                    , cereal
                    , network
                    , compact-string-fix

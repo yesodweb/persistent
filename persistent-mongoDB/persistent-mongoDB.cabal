@@ -1,5 +1,5 @@
 name:            persistent-mongoDB
-version:         0.6.1
+version:         0.6.2
 license:         BSD3
 license-file:    LICENSE
 author:          Greg Weber <greg@gregweber.info>
@@ -22,7 +22,7 @@ library
                    , bytestring         >= 0.9     && < 0.10
                    , enumerator         >= 0.4     && < 0.5
                    , mongoDB            >= 1.1     && < 1.2
-                   , bson               >= 0.1.5
+                   , bson               >= 0.1.6
                    , network            >= 2.2.1.7
                    , compact-string-fix >= 0.3.1   && < 0.4
                    , cereal             >= 0.3.0.0

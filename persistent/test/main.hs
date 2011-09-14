@@ -24,7 +24,6 @@ import Database.Persist.Base (DeleteCascade (..), PersistValue(..))
 
 import Database.Persist.Join (selectOneMany, SelectOneMany(..))
 import qualified Database.Persist.Join
-import FileLocation (debug)
 
 #if WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
@@ -462,7 +461,7 @@ specs = describe "persistent" $ do
   prop "toSinglePiece - fromSinglePiece" $ \piece ->
       let key1 = Key piece :: (Key BackendMonad Person)
           key2 = fromJust $ fromSinglePiece $ toSinglePiece key1 :: (Key BackendMonad Person)
-      in (debug $ toSinglePiece key1) == (debug $ toSinglePiece key2)
+      in  toSinglePiece key1 == toSinglePiece key2
 
   it "replace" $ db $ do
       key2 <- insert $ Person "Michael2" 27 Nothing
