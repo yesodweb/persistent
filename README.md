@@ -8,7 +8,7 @@ Install the Haskell Platform first. Clone this repo and run:
 
     cabal update
     git submodule update --init
-    ./script/install
+    ./scripts/install
 
 # Developing persistent
 
