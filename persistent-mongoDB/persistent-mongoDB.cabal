@@ -1,5 +1,5 @@
 name:            persistent-mongoDB
-version:         0.6.2
+version:         0.6.3
 license:         BSD3
 license-file:    LICENSE
 author:          Greg Weber <greg@gregweber.info>
@@ -14,7 +14,7 @@ description:     Backend for the persistent library using mongoDB.
 
 library
     build-depends:   base               >= 4 && < 5
-                   , persistent         >= 0.6.0 && < 0.7.0
+                   , persistent         >= 0.6.3 && < 0.7.0
                    , template-haskell   >= 2.4     && < 2.7
                    , text               >= 0.8     && < 0.12
                    , transformers       >= 0.2.1   && < 0.3
@@ -28,6 +28,8 @@ library
                    , cereal             >= 0.3.0.0
                    , path-pieces        >= 0.0     && < 0.1
                    , monad-control      >= 0.2     && < 0.3
+                   , data-object        >= 0.3     && < 0.4
+                   , neither            >= 0.3     && < 0.4
 
     exposed-modules: Database.Persist.MongoDB
     ghc-options:     -Wall

@@ -4,6 +4,8 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE PackageImports, RankNTypes #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Database.Persist.MongoDB
     ( withMongoDBConn
@@ -19,6 +21,7 @@ module Database.Persist.MongoDB
     , (DB.=:)
     , ConnectionPool
     , module Database.Persist
+    , MongoConf (..)
     ) where
 
 import Database.Persist
@@ -41,6 +44,8 @@ import qualified Data.Serialize as Serialize
 import qualified System.IO.Pool as Pool
 import Web.PathPieces (SinglePiece (..))
 import Control.Monad.IO.Control (MonadControlIO)
+import Data.Object
+import Data.Neither (MEither (..), meither)
 
 #ifdef DEBUG
 import FileLocation (debug)
@@ -440,3 +445,35 @@ dummyFromUnique :: Unique v DB.Action -> v
 dummyFromUnique _ = error "dummyFromUnique"
 dummyFromFilts :: [Filter v] -> v
 dummyFromFilts _ = error "dummyFromFilts"
+
+-- | Information required to connect to a mongo database
+data MongoConf = MongoConf
+    { mgDatabase :: String
+    , mgHost     :: String
+    , mgPoolSize :: Int
+    }
+
+instance PersistConfig MongoConf where
+    type PersistConfigBackend MongoConf = DB.Action
+    type PersistConfigPool MongoConf = ConnectionPool
+    withPool (MongoConf db host poolsize) = withMongoDBPool (u db) host poolsize
+    runPool _ = runMongoDBConn (DB.ConfirmWrites [u"j" DB.=: True])
+    loadConfig e' = meither Left Right $ do
+        e <- go $ fromMapping e'
+        db <- go $ lookupScalar "database" e
+        host <- go $ lookupScalar "host" e
+        pool' <- go $ lookupScalar "poolsize" e
+        pool <- safeRead "poolsize" pool'
+
+        return $ MongoConf (T.unpack db) (T.unpack host) pool
+      where
+        go :: MEither ObjectExtractError a -> MEither String a
+        go (MLeft e) = MLeft $ show e
+        go (MRight a) = MRight a
+
+safeRead :: String -> T.Text -> MEither String Int
+safeRead name t = case reads s of
+    (i, _):_ -> MRight i
+    []       -> MLeft $ concat ["Invalid value for ", name, ": ", s]
+  where
+    s = T.unpack t

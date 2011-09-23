@@ -1,10 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies #-}
 -- | A postgresql backend for persistent.
 module Database.Persist.Postgresql
     ( withPostgresqlPool
     , withPostgresqlConn
     , module Database.Persist
     , module Database.Persist.GenericSql
+    , PostgresConf (..)
     ) where
 
 import Database.Persist hiding (Update)
@@ -31,6 +33,9 @@ import qualified Data.Text.Encoding as T
 import qualified Data.Text.Encoding.Error as T
 import Data.Time.LocalTime (localTimeToUTC, utc)
 import Data.Text (Text, pack, unpack)
+import Data.Object
+import Control.Monad (forM)
+import Data.Neither (meither, MEither (..))
 
 withPostgresqlPool :: MonadControlIO m
                    => T.Text
@@ -447,3 +452,40 @@ escape (RawName s) =
 
 bsToChars :: ByteString -> String
 bsToChars = T.unpack . T.decodeUtf8With T.lenientDecode
+
+-- | Information required to connect to a postgres database
+data PostgresConf = PostgresConf
+    { pgConnStr  :: Text
+    , pgPoolSize :: Int
+    }
+
+instance PersistConfig PostgresConf where
+    type PersistConfigBackend PostgresConf = SqlPersist
+    type PersistConfigPool PostgresConf = ConnectionPool
+    withPool (PostgresConf cs size) = withPostgresqlPool cs size
+    runPool _ = runSqlPool
+    loadConfig e' = meither Left Right $ do
+        e <- go $ fromMapping e'
+        db <- go $ lookupScalar "database" e
+        pool' <- go $ lookupScalar "poolsize" e
+        pool <- safeRead "poolsize" pool'
+
+        -- TODO: default host/port?
+        connparts <- forM ["user", "password", "host", "port"] $ \k -> do
+            v <- go $ lookupScalar k e
+            return $ T.concat [k, "=", v, " "]
+
+        let conn = T.concat connparts
+
+        return $ PostgresConf (T.concat [conn, " dbname=", db]) pool
+      where
+        go :: MEither ObjectExtractError a -> MEither String a
+        go (MLeft e) = MLeft $ show e
+        go (MRight a) = MRight a
+
+safeRead :: String -> T.Text -> MEither String Int
+safeRead name t = case reads s of
+    (i, _):_ -> MRight i
+    []       -> MLeft $ concat ["Invalid value for ", name, ": ", s]
+  where
+    s = T.unpack t

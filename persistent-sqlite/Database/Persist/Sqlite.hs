@@ -1,10 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies #-}
 -- | A sqlite backend for persistent.
 module Database.Persist.Sqlite
     ( withSqlitePool
     , withSqliteConn
     , module Database.Persist
     , module Database.Persist.GenericSql
+    , SqliteConf (..)
     ) where
 
 import Database.Persist
@@ -21,6 +23,8 @@ import qualified Data.Map as Map
 import Control.Monad.IO.Control (MonadControlIO)
 import Control.Exception.Control (finally)
 import Data.Text (Text, pack, unpack)
+import Data.Neither (MEither (..), meither)
+import Data.Object
 
 withSqlitePool :: MonadControlIO m
                => Text
@@ -236,3 +240,33 @@ escape (RawName s) =
     go "" = ""
     go ('"':xs) = "\"\"" ++ go xs
     go (x:xs) = x : go xs
+
+-- | Information required to connect to a sqlite database
+data SqliteConf = SqliteConf
+    { sqlDatabase :: Text
+    , sqlPoolSize :: Int
+    }
+
+instance PersistConfig SqliteConf where
+    type PersistConfigBackend SqliteConf = SqlPersist
+    type PersistConfigPool SqliteConf = ConnectionPool
+    withPool (SqliteConf cs size) = withSqlitePool cs size
+    runPool _ = runSqlPool
+    loadConfig e' = meither Left Right $ do
+        e <- go $ fromMapping e'
+        db <- go $ lookupScalar "database" e
+        pool' <- go $ lookupScalar "poolsize" e
+        pool <- safeRead "poolsize" pool'
+
+        return $ SqliteConf db pool
+      where
+        go :: MEither ObjectExtractError a -> MEither String a
+        go (MLeft e) = MLeft $ show e
+        go (MRight a) = MRight a
+
+safeRead :: String -> Text -> MEither String Int
+safeRead name t = case reads s of
+    (i, _):_ -> MRight i
+    []       -> MLeft $ concat ["Invalid value for ", name, ": ", s]
+  where
+    s = unpack t
