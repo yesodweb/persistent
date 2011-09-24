@@ -46,6 +46,9 @@ module Database.Persist.Base
     , UniqueDef (..)
     , fst3, snd3, third3
     , limitOffsetOrder
+
+      -- * Config
+    , PersistConfig (..)
     ) where
 
 import Data.Time (Day, TimeOfDay, UTCTime)
@@ -75,6 +78,9 @@ import qualified Data.Text.Encoding.Error as T
 import Web.PathPieces (SinglePiece (..))
 import qualified Data.Text.Read
 import Data.Maybe (fromMaybe, isJust)
+
+import Control.Monad.IO.Control (MonadControlIO)
+import Data.Object (TextObject)
 
 fst3 :: forall t t1 t2. (t, t1, t2) -> t
 fst3   (x, _, _) = x
@@ -568,3 +574,16 @@ instance PersistField PersistValue where
     toPersistValue = id
     fromPersistValue = Right
     sqlType _ = SqlInteger -- since PersistValue should only be used like this for keys, which in SQL are Int64
+
+-- | Represents a value containing all the configuration options for a specific
+-- backend. This abstraction makes it easier to write code that can easily swap
+-- backends.
+class PersistConfig c where
+    type PersistConfigBackend c :: (* -> *) -> * -> *
+    type PersistConfigPool c
+    loadConfig :: TextObject -> Either String c
+    -- | I really don't want Applicative here, but it's necessary for Mongo.
+    withPool :: (Applicative m, MonadControlIO m) => c -> (PersistConfigPool c -> m a) -> m a
+    runPool :: MonadControlIO m => c -> PersistConfigBackend c m a
+            -> PersistConfigPool c
+            -> m a
