@@ -1,0 +1,9 @@
+#!/bin/bash -e
+
+cabal unpack persistent-sqlite
+mv persistent-sqlite-* persistent-sqlite
+cabal unpack persistent-template
+mv persistent-template-* persistent-template
+cabal configure --enable-tests
+cabal build
+cabal test
