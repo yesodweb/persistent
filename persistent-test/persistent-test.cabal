@@ -1,0 +1,63 @@
+name:            persistent-test
+version:         0.6.3
+license:         BSD3
+license-file:    LICENSE
+author:          Michael Snoyman <michael@snoyman.com>
+maintainer:      Michael Snoyman <michael@snoyman.com>
+synopsis:        Tests for Persistent
+description:     Tests for Persistent
+category:        Database, Yesod
+stability:       Stable
+cabal-version:   >= 1.8
+build-type:      Simple
+homepage:        http://www.yesodweb.com/book/persistent
+
+extra-source-files:
+  test/main.hs
+  test/from-cabal
+
+library
+    exposed-modules: Dummy
+    build-depends:   base                     >= 4       && < 5
+
+test-suite test
+    type:          exitcode-stdio-1.0
+    main-is:       main.hs
+    hs-source-dirs: test, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mongoDB
+
+    build-depends:   HUnit
+                   , hspec >= 0.8 && < 0.10
+                   , file-location >= 0.4 && < 0.5
+                   , base >= 4 && < 5
+                   , template-haskell >= 2.4 && < 2.7
+                   , HDBC-postgresql
+                   , HDBC
+                   , data-object
+                   , neither
+                   -- mongoDB dependencies
+                   , mongoDB       == 1.1.*
+                   , bson          >= 0.1.6
+                   , cereal
+                   , network
+                   , compact-string-fix
+                   , persistent
+                   , path-pieces
+                   , text
+                   , transformers
+                   , monad-control
+                   , containers
+                   , bytestring
+                   , enumerator
+                   , time >= 1.2
+                   , random == 1.*
+                   , QuickCheck == 2.4.*
+
+    -- these are mutually exclusive options
+    -- cpp-options: -DWITH_POSTGRESQL
+    -- cpp-options: -DWITH_MONGODB -DDEBUG
+    ghc-options:   -Wall
+    extra-libraries: sqlite3
+
+source-repository head
+  type:     git
+  location: git://github.com/yesodweb/persistent.git
