@@ -332,11 +332,13 @@ specs = describe "persistent" $ do
       _ <- insert $ Person "v" 1 Nothing
       _ <- insert $ Person "u" 2 Nothing
 
-      a <- fmap (map $ personName . snd) $ selectList [] [Asc PersonName, OffsetBy 2, LimitTo 3]
-      b <- fmap (map $ personName . snd) $ selectList [] [OffsetBy 2, LimitTo 3, Asc PersonName]
+      a <- fmap (map $ personName . snd) $ selectList [] [Desc PersonAge, Asc PersonName, OffsetBy 2, LimitTo 3]
+      a @== ["y", "v", "x"]
+
+      b <- fmap (map $ personName . snd) $ selectList [] [OffsetBy 2, Desc PersonAge, LimitTo 3, Asc PersonName]
       b @== a
 
-      c <- fmap (map $ personName . snd) $ selectList [] [OffsetBy 2, LimitTo 3, Asc PersonName, LimitTo 1, OffsetBy 1]
+      c <- fmap (map $ personName . snd) $ selectList [] [OffsetBy 2, Desc PersonAge, LimitTo 3, Asc PersonName, LimitTo 1, OffsetBy 1]
       c @== a
   it "passes the general tests" $ db $ do
       let mic = Person "Michael" 25 Nothing

@@ -77,7 +77,6 @@ import qualified Data.Text.Encoding as T
 import qualified Data.Text.Encoding.Error as T
 import Web.PathPieces (SinglePiece (..))
 import qualified Data.Text.Read
-import Data.Maybe (fromMaybe)
 
 import Control.Monad.IO.Control (MonadControlIO)
 import Data.Object (TextObject)
@@ -501,13 +500,11 @@ checkUnique val =
 
 limitOffsetOrder :: PersistEntity val => [SelectOpt val] -> (Int, Int, [SelectOpt val])
 limitOffsetOrder opts =
-    (fromMaybe 0 limit, fromMaybe 0 offset, ords [])
+    foldr go (0, 0, []) opts
   where
-    (limit, offset, ords) = foldr go (Nothing, Nothing, id) opts
-
-    go (LimitTo l) (_, b, c) = (Just l, b ,c)
-    go (OffsetBy o) (a, _, c) = (a, Just o, c)
-    go x (a, b, c) = (a, b, c . (x:))
+    go (LimitTo l) (_, b, c) = (l, b ,c)
+    go (OffsetBy o) (a, _, c) = (a, o, c)
+    go x (a, b, c) = (a, b, x : c)
 
 -- | Call 'select' but return the result as a list.
 selectList :: (PersistEntity val, PersistBackend b m)
