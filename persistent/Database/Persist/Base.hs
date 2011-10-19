@@ -68,7 +68,7 @@ import qualified Data.Enumerator.List as EL
 import qualified Control.Monad.IO.Class as Trans
 
 import qualified Control.Exception as E
-import Control.Monad.Error.Class (Error (..))
+import Control.Monad.Trans.Error (Error (..))
 
 import Data.Bits (bitSize)
 import Control.Monad (liftM)
@@ -77,7 +77,7 @@ import qualified Data.Text.Encoding as T
 import qualified Data.Text.Encoding.Error as T
 import Web.PathPieces (SinglePiece (..))
 import qualified Data.Text.Read
-import Data.Maybe (fromMaybe, isJust)
+import Data.Maybe (fromMaybe)
 
 import Control.Monad.IO.Control (MonadControlIO)
 import Data.Object (TextObject)
@@ -500,15 +500,14 @@ checkUnique val =
             Just _ -> return False
 
 limitOffsetOrder :: PersistEntity val => [SelectOpt val] -> (Int, Int, [SelectOpt val])
-limitOffsetOrder opts = let (l,o,ord) = go opts (Nothing, Nothing, []) in
-    (fromMaybe 0 l, fromMaybe 0 o, ord)
+limitOffsetOrder opts =
+    (fromMaybe 0 limit, fromMaybe 0 offset, ords [])
   where
-    go []              tup = tup
-    go (LimitTo  x:xs) (_,o,ord) = let tup = (Just x, o, ord) in
-      if isJust o then tup else go xs tup
-    go (OffsetBy x:xs) (l,_,ord) = let tup = (l, Just x, ord) in
-      if isJust l then tup else go xs tup
-    go (x:xs)          (l, o, ord) = go xs (l,o,x:ord)
+    (limit, offset, ords) = foldr go (Nothing, Nothing, id) opts
+
+    go (LimitTo l) (_, b, c) = (Just l, b ,c)
+    go (OffsetBy o) (a, _, c) = (a, Just o, c)
+    go x (a, b, c) = (a, b, c . (x:))
 
 -- | Call 'select' but return the result as a list.
 selectList :: (PersistEntity val, PersistBackend b m)

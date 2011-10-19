@@ -23,7 +23,7 @@ library
 test-suite test
     type:          exitcode-stdio-1.0
     main-is:       main.hs
-    hs-source-dirs: test, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mongoDB
+    hs-source-dirs: test, persistent, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mongoDB
 
     build-depends:   HUnit
                    , hspec >= 0.8 && < 0.10
@@ -40,7 +40,6 @@ test-suite test
                    , cereal
                    , network
                    , compact-string-fix
-                   , persistent
                    , path-pieces
                    , text
                    , transformers
@@ -51,6 +50,8 @@ test-suite test
                    , time >= 1.2
                    , random == 1.*
                    , QuickCheck == 2.4.*
+                   , blaze-html
+                   , pool
 
     -- these are mutually exclusive options
     -- cpp-options: -DWITH_POSTGRESQL

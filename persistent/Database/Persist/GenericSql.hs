@@ -153,9 +153,7 @@ instance MonadControlIO m => PersistBackend SqlPersist m where
     selectEnum filts opts =
         Iteratee . start
       where
-        limit  = fst3 $ limitOffsetOrder opts
-        offset = snd3 $ limitOffsetOrder opts
-        orders = third3 $ limitOffsetOrder opts
+        (limit, offset, orders) = limitOffsetOrder opts
 
         start x = do
             conn <- SqlPersist ask

@@ -20,7 +20,7 @@ import Test.Hspec.HUnit()
 import Test.Hspec.QuickCheck(prop)
 
 import Database.Persist
-import Database.Persist.Base (DeleteCascade (..), PersistValue(..))
+import Database.Persist.Base (DeleteCascade (..), PersistValue(..), limitOffsetOrder)
 
 import Database.Persist.Join (selectOneMany, SelectOneMany(..))
 import qualified Database.Persist.Join
@@ -318,6 +318,26 @@ joinGeneric run = do
 
 specs :: Specs
 specs = describe "persistent" $ do
+  it "order of opts is irrelevant" $ db $ do
+      let eq (a, b, _) (c, d) = (a, b) @== (c, d)
+      limitOffsetOrder [Desc PersonAge] `eq` (0, 0)
+      limitOffsetOrder [LimitTo 2, Desc PersonAge] `eq` (2, 0)
+      limitOffsetOrder [Desc PersonAge, LimitTo 2] `eq` (2, 0)
+      limitOffsetOrder [LimitTo 2, Desc PersonAge, OffsetBy 3] `eq` (2, 3)
+
+      _ <- insert $ Person "z" 1 Nothing
+      _ <- insert $ Person "y" 2 Nothing
+      _ <- insert $ Person "x" 1 Nothing
+      _ <- insert $ Person "w" 2 Nothing
+      _ <- insert $ Person "v" 1 Nothing
+      _ <- insert $ Person "u" 2 Nothing
+
+      a <- fmap (map $ personName . snd) $ selectList [] [Asc PersonName, OffsetBy 2, LimitTo 3]
+      b <- fmap (map $ personName . snd) $ selectList [] [OffsetBy 2, LimitTo 3, Asc PersonName]
+      b @== a
+
+      c <- fmap (map $ personName . snd) $ selectList [] [OffsetBy 2, LimitTo 3, Asc PersonName, LimitTo 1, OffsetBy 1]
+      c @== a
   it "passes the general tests" $ db $ do
       let mic = Person "Michael" 25 Nothing
       micK <- insert mic
