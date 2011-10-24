@@ -1,8 +1,8 @@
 # running persistent tests
 
-all tests are ran from the main persistent directory
+all tests are ran from the persistent-test directory
 
-    cd persistent
+    cd persistent-test
 
 Use cabal
 
@@ -10,7 +10,7 @@ Use cabal
 
 Now run with
 
-    cabal build && dist/build/runtests/runtests
+    cabal build && dist/build/test/test
 
 ## Different backends
 
