@@ -9,6 +9,8 @@ module Database.Persist.Join.Sql
 import Database.Persist.Join hiding (RunJoin (..))
 import qualified Database.Persist.Join as J
 import Database.Persist.Base
+import Database.Persist.Query
+import Database.Persist.GenericSql.Query
 import Control.Monad (liftM)
 import Data.Maybe (mapMaybe)
 import Data.List (intercalate, groupBy)

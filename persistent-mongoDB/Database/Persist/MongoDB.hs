@@ -26,6 +26,7 @@ module Database.Persist.MongoDB
 
 import Database.Persist
 import Database.Persist.Base
+import Database.Persist.Query
 
 import qualified Control.Monad.IO.Class as Trans
 import Control.Exception (throw, toException, throwIO)
@@ -148,7 +149,7 @@ insertFields t record = zipWith (DB.:=) (toLabels) (toValues)
     toLabels = map (u . columnName) $ entityColumns t
     toValues = map (DB.val . toPersistValue) (toPersistFields record)
 
-instance (Applicative m, Functor m, MonadControlIO m) => PersistBackend DB.Action m where
+instance (Applicative m, Functor m, MonadControlIO m) => PersistStore DB.Action m where
     insert record = do
         (DB.ObjId oid) <- DB.insert (u $ entityName t) (insertFields t record)
         return $ Key $ dbOidToKey oid 
@@ -161,23 +162,6 @@ instance (Applicative m, Functor m, MonadControlIO m) => PersistBackend DB.Actio
       where
         t = entityDef record
 
-    update _ [] = return ()
-    update k upds =
-        DB.modify 
-           (DB.Select [u"_id" DB.:= (DB.ObjId $ keyToDbOid k)]  (u $ entityName t)) 
-           $ updateFields upds
-      where
-        t = entityDef $ dummyFromKey k
-
-    updateWhere _ [] = return ()
-    updateWhere filts upds =
-        DB.modify DB.Select {
-          DB.coll = (u $ entityName t)
-        , DB.selector = filtersToSelector filts
-        } $ updateFields upds
-      where
-        t = entityDef $ dummyFromFilts filts
-
     delete k =
         DB.deleteOne DB.Select {
           DB.coll = (u $ entityName t)
@@ -185,22 +169,6 @@ instance (Applicative m, Functor m, MonadControlIO m) => PersistBackend DB.Actio
         }
       where
         t = entityDef $ dummyFromKey k
-
-    deleteWhere filts = do
-        DB.delete DB.Select {
-          DB.coll = (u $ entityName t)
-        , DB.selector = filtersToSelector filts
-        }
-      where
-        t = entityDef $ dummyFromFilts filts
-
-    deleteBy uniq =
-        DB.delete DB.Select {
-          DB.coll = u $ entityName t
-        , DB.selector = uniqSelector uniq
-        }
-      where
-        t = entityDef $ dummyFromUnique uniq
 
     get k = do
             d <- DB.findOne (queryByKey k t)
@@ -221,6 +189,41 @@ instance (Applicative m, Functor m, MonadControlIO m) => PersistBackend DB.Actio
               Right (k, x) -> return $ Just (k, x)
       where
         t = entityDef $ dummyFromUnique uniq
+
+    deleteBy uniq =
+        DB.delete DB.Select {
+          DB.coll = u $ entityName t
+        , DB.selector = uniqSelector uniq
+        }
+      where
+        t = entityDef $ dummyFromUnique uniq
+
+
+instance (Applicative m, Functor m, MonadControlIO m) => PersistQuery DB.Action m where
+    update _ [] = return ()
+    update k upds =
+        DB.modify 
+           (DB.Select [u"_id" DB.:= (DB.ObjId $ keyToDbOid k)]  (u $ entityName t)) 
+           $ updateFields upds
+      where
+        t = entityDef $ dummyFromKey k
+
+    updateWhere _ [] = return ()
+    updateWhere filts upds =
+        DB.modify DB.Select {
+          DB.coll = (u $ entityName t)
+        , DB.selector = filtersToSelector filts
+        } $ updateFields upds
+      where
+        t = entityDef $ dummyFromFilts filts
+
+    deleteWhere filts = do
+        DB.delete DB.Select {
+          DB.coll = (u $ entityName t)
+        , DB.selector = filtersToSelector filts
+        }
+      where
+        t = entityDef $ dummyFromFilts filts
 
     count filts = do
         i <- DB.count query

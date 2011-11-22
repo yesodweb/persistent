@@ -32,6 +32,7 @@ module Database.Persist.GenericSql
     ) where
 
 import Database.Persist.Base
+import Database.Persist.Query
 import Data.List (intercalate)
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader
@@ -40,6 +41,7 @@ import Data.Pool
 import Control.Monad.Trans.Writer
 import System.IO
 import Database.Persist.GenericSql.Internal
+import Database.Persist.GenericSql.Query
 import qualified Database.Persist.GenericSql.Raw as R
 import Database.Persist.GenericSql.Raw (SqlPersist (..))
 import Control.Monad (liftM, unless)
@@ -92,7 +94,7 @@ runSqlConn (SqlPersist r) conn = do
     liftIO $ commitC conn getter
     return x
 
-instance (MonadIO m, MBCIO m) => PersistBackend SqlPersist m where
+instance (MonadIO m, MBCIO m) => PersistStore SqlPersist m where
     insert val = do
         conn <- SqlPersist ask
         let esql = insertSql conn (rawTableName t) (map fst3 $ tableColumns t)
@@ -146,6 +148,84 @@ instance (MonadIO m, MBCIO m) => PersistBackend SqlPersist m where
                     case fromPersistValues vals of
                         Left e -> error $ "get " ++ show (unKey k) ++ ": " ++ e
                         Right v -> return $ Just v
+
+    delete k = do
+        conn <- SqlPersist ask
+        execute' (sql conn) [unKey k]
+      where
+        t = entityDef $ dummyFromKey k
+        sql conn = pack $ concat
+            [ "DELETE FROM "
+            , escapeName conn $ rawTableName t
+            , " WHERE id=?"
+            ]
+
+    deleteBy uniq = do
+        conn <- SqlPersist ask
+        execute' (sql conn) $ persistUniqueToValues uniq
+      where
+        t = entityDef $ dummyFromUnique uniq
+        go = map (getFieldName t) . persistUniqueToFieldNames
+        go' conn x = escapeName conn x ++ "=?"
+        sql conn = pack $ concat
+            [ "DELETE FROM "
+            , escapeName conn $ rawTableName t
+            , " WHERE "
+            , intercalate " AND " $ map (go' conn) $ go uniq
+            ]
+
+    getBy uniq = do
+        conn <- SqlPersist ask
+        let cols = intercalate "," $ (unRawName $ rawTableIdName t)
+                 : (map (\(x, _, _) -> escapeName conn x) $ tableColumns t)
+        let sql = pack $ concat
+                [ "SELECT "
+                , cols
+                , " FROM "
+                , escapeName conn $ rawTableName t
+                , " WHERE "
+                , sqlClause conn
+                ]
+        withStmt' sql (persistUniqueToValues uniq) $ \pop -> do
+            row <- pop
+            case row of
+                Nothing -> return Nothing
+                Just (PersistInt64 k:vals) ->
+                    case fromPersistValues vals of
+                        Left s -> error s
+                        Right x -> return $ Just (Key $ PersistInt64 k, x)
+                Just _ -> error "Database.Persist.GenericSql: Bad list in getBy"
+      where
+        sqlClause conn =
+            intercalate " AND " $ map (go conn) $ toFieldNames' uniq
+        go conn x = escapeName conn x ++ "=?"
+        t = entityDef $ dummyFromUnique uniq
+        toFieldNames' = map (getFieldName t) . persistUniqueToFieldNames
+
+instance (MonadIO m, MBCIO m) => PersistQuery SqlPersist m where
+    update _ [] = return ()
+    update k upds = do
+        conn <- SqlPersist ask
+        let go'' n Assign = n ++ "=?"
+            go'' n Add = n ++ '=' : n ++ "+?"
+            go'' n Subtract = n ++ '=' : n ++ "-?"
+            go'' n Multiply = n ++ '=' : n ++ "*?"
+            go'' n Divide = n ++ '=' : n ++ "/?"
+        let go' (x, pu) = go'' (escapeName conn x) pu
+        let sql = pack $ concat
+                [ "UPDATE "
+                , escapeName conn $ rawTableName t
+                , " SET "
+                , intercalate "," $ map (go' . go) upds
+                , " WHERE id=?"
+                ]
+        execute' sql $
+            map updatePersistValue upds ++ [unKey k]
+      where
+        t = entityDef $ dummyFromKey k
+        go x = ( getFieldName t $ updateFieldName x
+               , updateUpdate x
+               )
 
     count filts = do
         conn <- SqlPersist ask
@@ -242,17 +322,6 @@ instance (MonadIO m, MBCIO m) => PersistBackend SqlPersist m where
             , wher conn
             ]
 
-    delete k = do
-        conn <- SqlPersist ask
-        execute' (sql conn) [unKey k]
-      where
-        t = entityDef $ dummyFromKey k
-        sql conn = pack $ concat
-            [ "DELETE FROM "
-            , escapeName conn $ rawTableName t
-            , " WHERE id=?"
-            ]
-
     deleteWhere filts = do
         conn <- SqlPersist ask
         let t = entityDef $ dummyFromFilts filts
@@ -265,44 +334,6 @@ instance (MonadIO m, MBCIO m) => PersistBackend SqlPersist m where
                 , wher
                 ]
         execute' sql $ getFiltsValues conn filts
-
-    deleteBy uniq = do
-        conn <- SqlPersist ask
-        execute' (sql conn) $ persistUniqueToValues uniq
-      where
-        t = entityDef $ dummyFromUnique uniq
-        go = map (getFieldName t) . persistUniqueToFieldNames
-        go' conn x = escapeName conn x ++ "=?"
-        sql conn = pack $ concat
-            [ "DELETE FROM "
-            , escapeName conn $ rawTableName t
-            , " WHERE "
-            , intercalate " AND " $ map (go' conn) $ go uniq
-            ]
-
-    update _ [] = return ()
-    update k upds = do
-        conn <- SqlPersist ask
-        let go'' n Assign = n ++ "=?"
-            go'' n Add = n ++ '=' : n ++ "+?"
-            go'' n Subtract = n ++ '=' : n ++ "-?"
-            go'' n Multiply = n ++ '=' : n ++ "*?"
-            go'' n Divide = n ++ '=' : n ++ "/?"
-        let go' (x, pu) = go'' (escapeName conn x) pu
-        let sql = pack $ concat
-                [ "UPDATE "
-                , escapeName conn $ rawTableName t
-                , " SET "
-                , intercalate "," $ map (go' . go) upds
-                , " WHERE id=?"
-                ]
-        execute' sql $
-            map updatePersistValue upds ++ [unKey k]
-      where
-        t = entityDef $ dummyFromKey k
-        go x = ( getFieldName t $ updateFieldName x
-               , updateUpdate x
-               )
 
     updateWhere _ [] = return ()
     updateWhere filts upds = do
@@ -330,34 +361,6 @@ instance (MonadIO m, MBCIO m) => PersistBackend SqlPersist m where
         go x = ( getFieldName t $ updateFieldName x
                , updateUpdate x
                )
-
-    getBy uniq = do
-        conn <- SqlPersist ask
-        let cols = intercalate "," $ (unRawName $ rawTableIdName t)
-                 : (map (\(x, _, _) -> escapeName conn x) $ tableColumns t)
-        let sql = pack $ concat
-                [ "SELECT "
-                , cols
-                , " FROM "
-                , escapeName conn $ rawTableName t
-                , " WHERE "
-                , sqlClause conn
-                ]
-        withStmt' sql (persistUniqueToValues uniq) $ \pop -> do
-            row <- pop
-            case row of
-                Nothing -> return Nothing
-                Just (PersistInt64 k:vals) ->
-                    case fromPersistValues vals of
-                        Left s -> error s
-                        Right x -> return $ Just (Key $ PersistInt64 k, x)
-                Just _ -> error "Database.Persist.GenericSql: Bad list in getBy"
-      where
-        sqlClause conn =
-            intercalate " AND " $ map (go conn) $ toFieldNames' uniq
-        go conn x = escapeName conn x ++ "=?"
-        t = entityDef $ dummyFromUnique uniq
-        toFieldNames' = map (getFieldName t) . persistUniqueToFieldNames
 
 dummyFromUnique :: Unique v b -> v
 dummyFromUnique _ = error "dummyFromUnique"
