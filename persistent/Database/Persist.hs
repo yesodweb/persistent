@@ -3,7 +3,8 @@
 module Database.Persist
     ( PersistField (..)
     , PersistEntity (..)
-    , PersistBackend (..)
+    , PersistStore (..)
+    , PersistQuery (..)
     , Key (..)
     , selectList
     , insertBy
@@ -24,6 +25,7 @@ module Database.Persist
 -- Export public items from Database.Persist.Base
 -- Also defines Filter creation and composition operators.
 import Database.Persist.Base
+import Database.Persist.Query
 
 infixr 3 =., +=., -=., *=., /=.
 (=.), (+=.), (-=.), (*=.), (/=.) :: forall v typ.  PersistField typ => EntityField v typ -> typ -> Update v

@@ -20,7 +20,8 @@ import Test.Hspec.HUnit()
 import Test.Hspec.QuickCheck(prop)
 
 import Database.Persist
-import Database.Persist.Base (DeleteCascade (..), PersistValue(..), limitOffsetOrder)
+import Database.Persist.Base (DeleteCascade (..), PersistValue(..))
+import Database.Persist.Query (limitOffsetOrder)
 
 import Database.Persist.Join (selectOneMany, SelectOneMany(..))
 import qualified Database.Persist.Join
@@ -137,14 +138,14 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persis
     title String
 |]
 
-petOwner :: PersistBackend b m => PetGeneric b -> b m Person
+petOwner :: PersistStore b m => PetGeneric b -> b m Person
 petOwner = belongsToJust petOwnerId
 
-maybeOwnedPetOwner :: PersistBackend b m => MaybeOwnedPetGeneric b -> b m (Maybe Person)
+maybeOwnedPetOwner :: PersistStore b m => MaybeOwnedPetGeneric b -> b m (Maybe Person)
 maybeOwnedPetOwner = belongsTo maybeOwnedPetOwnerId
 
 -- this is faster then dropDatabase. Could try dropCollection
-cleanDB :: PersistBackend b m => b m ()
+cleanDB :: PersistQuery b m => b m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Pet])
   deleteWhere ([] :: [Filter Person])
@@ -237,7 +238,7 @@ main = do
   runConn setup
   hspecX specs
 
-joinGeneric :: PersistBackend b m =>
+joinGeneric :: PersistQuery b m =>
                (SelectOneMany BackendMonad (Author) (EntryGeneric BackendMonad)
                 -> b m [((Key b (Author), Author),
                                  [(Key b (EntryGeneric b),
