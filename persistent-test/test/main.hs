@@ -340,21 +340,10 @@ specs = describe "persistent" $ do
 
       c <- fmap (map $ personName . snd) $ selectList [] [OffsetBy 2, Desc PersonAge, LimitTo 3, Asc PersonName, LimitTo 1, OffsetBy 1]
       c @== a
+
   it "passes the general tests" $ db $ do
-      let mic = Person "Michael" 25 Nothing
-      micK <- insert mic
-      Just p <- get micK
-      p @== mic
-
-      replace micK $ Person "Michael" 25 Nothing
-      Just p2 <- get micK
-      p2 @== mic
-
-      replace micK $ Person "Michael" 26 Nothing
-      Just mic26 <- get micK
-      mic26 @/= mic
-      personAge mic26 @== personAge mic + 1
-
+      let mic26 = Person "Michael" 26 Nothing
+      micK <- insert mic26 
       results <- selectList [PersonName ==. "Michael"] []
       results @== [(micK, mic26)]
 
@@ -391,12 +380,24 @@ specs = describe "persistent" $ do
       ps2 <- selectList [PersonColor ==. Nothing] []
       map snd ps2 @== [mic29]
 
-      ps3 <- selectList [PersonColor !=. Nothing] []
-      map snd ps3 @== [eli, abe30]
-
       delete micK
       Nothing <- get micK
       return ()
+
+
+  it "!=." $ db $ do
+      deleteWhere ([] :: [Filter Person])
+      let mic = Person "Michael" 25 Nothing
+      _ <- insert mic
+      let eli = Person "Eliezer" 25 (Just "Red")
+      _ <- insert eli
+
+      pne <- selectList [PersonName !=. "Michael"] []
+      map snd pne @== [eli]
+
+      ps <- selectList [PersonColor !=. Nothing] []
+      map snd ps @== [eli]
+
 
   it "and/or" $ db $ do
       deleteWhere ([] :: [Filter Person1])
@@ -498,6 +499,21 @@ specs = describe "persistent" $ do
       _ <- replace key2 p3
       Nothing <- get key2
       return ()
+
+      let mic = Person "Michael" 25 Nothing
+      micK <- insert mic
+      Just p <- get micK
+      p @== mic
+
+      replace micK $ Person "Michael" 25 Nothing
+      Just p2 <- get micK
+      p2 @== mic
+
+      replace micK $ Person "Michael" 26 Nothing
+      Just mic26 <- get micK
+      mic26 @/= mic
+      personAge mic26 @== personAge mic + 1
+
 
 
   it "getBy" $ db $ do
