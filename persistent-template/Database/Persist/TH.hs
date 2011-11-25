@@ -349,10 +349,13 @@ mkDeleteCascade defs = do
         let stmts = map mkStmt deps ++ [NoBindS $ del `AppE` VarE key]
         return $
             InstanceD
-            []
+            [ ClassP ''PersistQuery [VarT $ mkName "backend", VarT $ mkName "m"]
+            , ClassP ''Monad [VarT $ mkName "m"]
+            ]
             (ConT ''DeleteCascade `AppT`
                 (ConT (mkName $ name ++ suffix) `AppT` VarT (mkName "backend"))
                 `AppT` VarT (mkName "backend")
+                `AppT` VarT (mkName "m")
                 )
             [ FunD (mkName "deleteCascade")
                 [Clause [VarP key] (NormalB $ DoE stmts) []]

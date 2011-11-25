@@ -93,7 +93,7 @@ data SelectOpt v = forall typ. Asc (EntityField v typ)
                  | LimitTo Int
 
 
-deleteCascadeWhere :: (DeleteCascade a b, PersistQuery b m)
+deleteCascadeWhere :: (DeleteCascade a b m, PersistQuery b m)
                    => [Filter a] -> b m ()
 deleteCascadeWhere filts = do
     res <- run $ selectKeys filts $ Continue iter

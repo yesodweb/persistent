@@ -460,8 +460,8 @@ data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le | In | NotIn
                    | BackendSpecificFilter String
     deriving (Read, Show)
 
-class PersistEntity a => DeleteCascade a b where
-    deleteCascade :: PersistStore b m => Key b a -> b m ()
+class PersistEntity a => DeleteCascade a b m where
+    deleteCascade :: Key b a -> b m ()
 
 instance PersistField PersistValue where
     toPersistValue = id
