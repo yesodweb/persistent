@@ -15,7 +15,6 @@ description:     Backend for the persistent library using mongoDB.
 library
     build-depends:   base               >= 4 && < 5
                    , persistent         >= 0.6.3 && < 0.7.0
-                   , template-haskell   >= 2.4     && < 2.7
                    , text               >= 0.8     && < 0.12
                    , transformers       >= 0.2.1   && < 0.3
                    , containers         >= 0.2     && < 0.5
@@ -23,7 +22,7 @@ library
                    , enumerator         >= 0.4     && < 0.5
                    , mongoDB            >= 1.1     && < 1.2
                    , bson               >= 0.1.6
-                   , network            >= 2.2.1.7
+                   , network            >= 2.2.1.7 && < 3
                    , compact-string-fix >= 0.3.1   && < 0.4
                    , cereal             >= 0.3.0.0
                    , path-pieces        >= 0.0     && < 0.1
