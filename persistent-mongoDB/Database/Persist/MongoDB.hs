@@ -366,7 +366,13 @@ wrapFromPersistValues e doc = fromPersistValues reorder
     reorder = match castColumns castDoc []
       where
         match :: [T.Text] -> [(T.Text, PersistValue)] -> [PersistValue] -> [PersistValue]
-        match [] [] values = values
+        -- when there are no more Persistent castColumns we are done
+        --
+        -- allow extra mongoDB fields that persistent does not know about
+        -- another application may use fields we don't care about
+        -- our own application may set extra fields with the raw driver
+        -- TODO: instead use a projection to avoid network overhead
+        match [] fields values = values
         match (c:cs) fields values =
           let (found, unused) = matchOne fields []
           in match cs unused (values ++ [snd found])
@@ -374,7 +380,7 @@ wrapFromPersistValues e doc = fromPersistValues reorder
             matchOne (f:fs) tried =
               if c == fst f then (f, tried ++ fs) else matchOne fs (f:tried)
             matchOne fs tried = throw $ PersistError $ "reorder error: field doesn't match" ++ (show c) ++ (show fs) ++ (show tried)
-        match cs fs values = throw $ PersistError $ "reorder error: fields don't match" ++ (show cs) ++ (show fs) ++ (show values)
+        -- match [] fs values = throw $ PersistError $ "reorder error: extra mongo fields" ++ (show fs)
 
 mapFromDoc :: DB.Document -> [(T.Text, PersistValue)]
 mapFromDoc = Prelude.map (\f -> ( ( csToT (DB.label f)), (fromJust . DB.cast') (DB.value f) ) )
