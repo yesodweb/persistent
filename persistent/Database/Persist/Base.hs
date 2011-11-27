@@ -17,13 +17,10 @@ module Database.Persist.Base
     , SqlType (..)
     , PersistField (..)
     , PersistEntity (..)
-    , PersistBackend (..)
+    , PersistStore (..)
     , PersistFilter (..)
-    , PersistUpdate (..)
-    , SelectOpt (..)
     , SomePersistField (..)
 
-    , selectList
     , insertBy
     , getByValue
     , getJust
@@ -32,11 +29,7 @@ module Database.Persist.Base
 
     , checkUnique
     , DeleteCascade (..)
-    , deleteCascadeWhere
     , PersistException (..)
-    , Update (..)
-    , updateFieldName
-    , Filter (..)
     , Key (..)
       -- * Definition
     , EntityDef (..)
@@ -45,7 +38,6 @@ module Database.Persist.Base
     , ColumnDef (..)
     , UniqueDef (..)
     , fst3, snd3, third3
-    , limitOffsetOrder
 
       -- * Config
     , PersistConfig (..)
@@ -62,9 +54,6 @@ import Text.Blaze.Renderer.Utf8 (renderHtml)
 import qualified Data.Text as T
 import qualified Data.ByteString as S
 import qualified Data.ByteString.Lazy as L
-import Data.Enumerator hiding (consume, map)
-import Data.Enumerator.List (consume)
-import qualified Data.Enumerator.List as EL
 import qualified Control.Monad.IO.Class as Trans
 
 import qualified Control.Exception as E
@@ -315,32 +304,6 @@ instance PersistField a => PersistField (Maybe a) where
     sqlType _ = sqlType (error "this is the problem" :: a)
     isNullable _ = True
 
-data Update v = forall typ. PersistField typ => Update
-    { updateField :: EntityField v typ
-    , updateValue :: typ
-    , updateUpdate :: PersistUpdate -- FIXME Replace with expr down the road
-    }
-
-updateFieldName :: PersistEntity v => Update v -> String
-updateFieldName (Update f _ _) = columnName $ persistColumnDef f
-
-data SelectOpt v = forall typ. Asc (EntityField v typ)
-                 | forall typ. Desc (EntityField v typ)
-                 | OffsetBy Int
-                 | LimitTo Int
-
--- | Filters which are available for 'select', 'updateWhere' and
--- 'deleteWhere'. Each filter constructor specifies the field being
--- filtered on, the type of comparison applied (equals, not equals, etc)
--- and the argument for the comparison.
-data Filter v = forall typ. PersistField typ => Filter
-    { filterField :: EntityField v typ
-    , filterValue :: Either typ [typ] -- FIXME
-    , filterFilter :: PersistFilter -- FIXME
-    }
-    | FilterAnd [Filter v] -- ^ convenient for internal use, not needed for the API
-    | FilterOr [Filter v]
-
 -- | A single database entity. For example, if writing a blog application, a
 -- blog entry would be an entry, containing fields such as title and content.
 class PersistEntity val where
@@ -369,7 +332,7 @@ instance PersistField SomePersistField where
 newtype Key backend entity = Key { unKey :: PersistValue }
     deriving (Show, Read, Eq, Ord, PersistField)
 
-class (Trans.MonadIO (b m), Trans.MonadIO m, Monad (b m), Monad m) => PersistBackend b m where
+class (Trans.MonadIO (b m), Trans.MonadIO m, Monad (b m), Monad m) => PersistStore b m where
 
     -- | Create a new record in the database, returning the newly created
     -- identifier.
@@ -379,22 +342,9 @@ class (Trans.MonadIO (b m), Trans.MonadIO m, Monad (b m), Monad m) => PersistBac
     -- undefined if such a record does not exist.
     replace :: PersistEntity val => Key b val -> val -> b m ()
 
-    -- | Update individual fields on a specific record.
-    update :: PersistEntity val => Key b val -> [Update val] -> b m ()
-
-    -- | Update individual fields on any record matching the given criterion.
-    updateWhere :: PersistEntity val => [Filter val] -> [Update val] -> b m ()
-
     -- | Delete a specific record by identifier. Does nothing if record does
     -- not exist.
     delete :: PersistEntity val => Key b val -> b m ()
-
-    -- | Delete a specific record by unique key. Does nothing if no record
-    -- matches.
-    deleteBy :: PersistEntity val => Unique val b -> b m ()
-
-    -- | Delete all records matching the given criterion.
-    deleteWhere :: PersistEntity val => [Filter val] -> b m ()
 
     -- | Get a record by identifier, if available.
     get :: PersistEntity val => Key b val -> b m (Maybe val)
@@ -402,34 +352,17 @@ class (Trans.MonadIO (b m), Trans.MonadIO m, Monad (b m), Monad m) => PersistBac
     -- | Get a record by unique key, if available. Returns also the identifier.
     getBy :: PersistEntity val => Unique val b -> b m (Maybe (Key b val, val))
 
-    -- | Get all records matching the given criterion in the specified order.
-    -- Returns also the identifiers.
-    selectEnum
-           :: PersistEntity val
-           => [Filter val]
-           -> [SelectOpt val]
-           -> Enumerator (Key b val, val) (b m) a
-
-    -- | get just the first record for the criterion
-    selectFirst :: PersistEntity val
-                => [Filter val]
-                -> [SelectOpt val]
-                -> b m (Maybe (Key b val, val))
-    selectFirst filts opts = run_ $ selectEnum filts ((LimitTo 1):opts) ==<< EL.head
+    -- | Delete a specific record by unique key. Does nothing if no record
+    -- matches.
+    deleteBy :: PersistEntity val => Unique val b -> b m ()
 
 
-    -- | Get the 'Key's of all records matching the given criterion.
-    selectKeys :: PersistEntity val
-               => [Filter val]
-               -> Enumerator (Key b val) (b m) a
 
-    -- | The total number of records fulfilling the given criterion.
-    count :: PersistEntity val => [Filter val] -> b m Int
 
 -- | Insert a value, checking for conflicts with any unique constraints.  If a
 -- duplicate exists in the database, it is returned as 'Left'. Otherwise, the
 -- new 'Key' is returned as 'Right'.
-insertBy :: (PersistEntity v, PersistBackend b m)
+insertBy :: (PersistEntity v, PersistStore b m)
           => v -> b m (Either (Key b v, v) (Key b v))
 insertBy val =
     go $ persistUniqueKeys val
@@ -445,7 +378,7 @@ insertBy val =
 -- of a 'Unique' value. Returns a value matching /one/ of the unique keys. This
 -- function makes the most sense on entities with a single 'Unique'
 -- constructor.
-getByValue :: (PersistEntity v, PersistBackend b m)
+getByValue :: (PersistEntity v, PersistStore b m)
            => v -> b m (Maybe (Key b v, v))
 getByValue val =
     go $ persistUniqueKeys val
@@ -460,7 +393,7 @@ getByValue val =
 -- | curry this to make a convenience function that loads an associated model
 --   > foreign = belongsTo foeignId
 belongsTo ::
-  (PersistBackend b m
+  (PersistStore b m
   , PersistEntity ent1
   , PersistEntity ent2) => (ent1 -> Maybe (Key b ent2)) -> ent1 -> b m (Maybe ent2)
 belongsTo foreignKeyField model = case foreignKeyField model of
@@ -469,14 +402,14 @@ belongsTo foreignKeyField model = case foreignKeyField model of
 
 -- | same as belongsTo, but uses @getJust@ and therefore is similarly unsafe
 belongsToJust ::
-  (PersistBackend b m
+  (PersistStore b m
   , PersistEntity ent1
   , PersistEntity ent2) => (ent1 -> Key b ent2) -> ent1 -> b m ent2
 belongsToJust getForeignKey model = getJust $ getForeignKey model
 
 -- | Same as get, but for a non-null (not Maybe) foreign key
 --   Unsafe unless your database is enforcing that the foreign key is valid
-getJust :: (PersistBackend b m, PersistEntity val, Show (Key b val)) => Key b val -> b m val
+getJust :: (PersistStore b m, PersistEntity val, Show (Key b val)) => Key b val -> b m val
 getJust key = get key >>= maybe
   (Trans.liftIO . E.throwIO $ PersistForeignConstraintUnmet (show key))
   return
@@ -487,7 +420,7 @@ getJust key = get key >>= maybe
 --
 -- Returns 'True' if the entity would be unique, and could thus safely be
 -- 'insert'ed; returns 'False' on a conflict.
-checkUnique :: (PersistEntity val, PersistBackend b m) => val -> b m Bool
+checkUnique :: (PersistEntity val, PersistStore b m) => val -> b m Bool
 checkUnique val =
     go $ persistUniqueKeys val
   where
@@ -497,25 +430,6 @@ checkUnique val =
         case y of
             Nothing -> go xs
             Just _ -> return False
-
-limitOffsetOrder :: PersistEntity val => [SelectOpt val] -> (Int, Int, [SelectOpt val])
-limitOffsetOrder opts =
-    foldr go (0, 0, []) opts
-  where
-    go (LimitTo l) (_, b, c) = (l, b ,c)
-    go (OffsetBy o) (a, _, c) = (a, o, c)
-    go x (a, b, c) = (a, b, x : c)
-
--- | Call 'select' but return the result as a list.
-selectList :: (PersistEntity val, PersistBackend b m)
-           => [Filter val]
-           -> [SelectOpt val]
-           -> b m [(Key b val, val)]
-selectList a b = do
-    res <- run $ selectEnum a b ==<< consume
-    case res of
-        Left e -> Trans.liftIO . E.throwIO $ PersistError $ show e
-        Right x -> return x
 
 data EntityDef = EntityDef
     { entityName    :: String
@@ -546,25 +460,8 @@ data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le | In | NotIn
                    | BackendSpecificFilter String
     deriving (Read, Show)
 
-class PersistEntity a => DeleteCascade a b where
-    deleteCascade :: PersistBackend b m => Key b a -> b m ()
-
-deleteCascadeWhere :: (DeleteCascade a b, PersistBackend b m)
-                   => [Filter a] -> b m ()
-deleteCascadeWhere filts = do
-    res <- run $ selectKeys filts $ Continue iter
-    case res of
-        Left e -> Trans.liftIO . E.throwIO $ PersistError $ show e
-        Right () -> return ()
-  where
-    iter EOF = Iteratee $ return $ Yield () EOF
-    iter (Chunks keys) = Iteratee $ do
-        mapM_ deleteCascade keys
-        return $ Continue iter
-
-
-data PersistUpdate = Assign | Add | Subtract | Multiply | Divide -- FIXME need something else here
-    deriving (Read, Show, Enum, Bounded)
+class PersistEntity a => DeleteCascade a b m where
+    deleteCascade :: Key b a -> b m ()
 
 instance PersistField PersistValue where
     toPersistValue = id
