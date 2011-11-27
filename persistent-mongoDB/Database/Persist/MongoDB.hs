@@ -457,29 +457,39 @@ data MongoConf = MongoConf
     { mgDatabase :: String
     , mgHost     :: String
     , mgPoolSize :: Int
+    , mgAccessMode :: DB.AccessMode
     }
 
 instance PersistConfig MongoConf where
     type PersistConfigBackend MongoConf = DB.Action
     type PersistConfigPool MongoConf = ConnectionPool
-    withPool (MongoConf db host poolsize) = withMongoDBPool (u db) host poolsize
-    runPool _ = runMongoDBConn (DB.ConfirmWrites [u"j" DB.=: True])
+    withPool (MongoConf db host poolsize _) = withMongoDBPool (u db) host poolsize
+    runPool (MongoConf _ _ _ accessMode) = runMongoDBConn accessMode
     loadConfig e' = meither Left Right $ do
-        e <- go $ fromMapping e'
-        db <- go $ lookupScalar "database" e
-        host <- go $ lookupScalar "host" e
+        e     <- go $ fromMapping e'
+        db    <- go $ lookupScalar "database" e
+        host  <- go $ lookupScalar "host" e
         pool' <- go $ lookupScalar "poolsize" e
-        pool <- safeRead "poolsize" pool'
+        pool  <- safeRead "poolsize" pool'
+        accessString <- defaultTo "ConfirmWrites" $ lookupScalar "accessMode" e
+        let accessMode = case accessString of
+               "ReadStaleOk"       -> DB.ReadStaleOk
+               "UnconfirmedWrites" -> DB.UnconfirmedWrites
+               "ConfirmWrites"     -> DB.ConfirmWrites [u"j" DB.=: True]
 
-        return $ MongoConf (T.unpack db) (T.unpack host) pool
+        return $ MongoConf (T.unpack db) (T.unpack host) pool accessMode
       where
         go :: MEither ObjectExtractError a -> MEither String a
         go (MLeft e) = MLeft $ show e
         go (MRight a) = MRight a
 
-safeRead :: String -> T.Text -> MEither String Int
-safeRead name t = case reads s of
-    (i, _):_ -> MRight i
-    []       -> MLeft $ concat ["Invalid value for ", name, ": ", s]
-  where
-    s = T.unpack t
+        defaultTo :: a -> MEither ObjectExtractError a -> MEither String a
+        defaultTo def (MLeft e) = MRight def
+        defaultTo _ (MRight v) = MRight v
+
+        safeRead :: String -> T.Text -> MEither String Int
+        safeRead name t = case reads s of
+            (i, _):_ -> MRight i
+            []       -> MLeft $ concat ["Invalid value for ", name, ": ", s]
+          where
+            s = T.unpack t
