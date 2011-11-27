@@ -25,7 +25,7 @@ module Database.Persist.MongoDB
     ) where
 
 import Database.Persist
-import Database.Persist.Base
+import Database.Persist.Store
 import Database.Persist.Query
 
 import qualified Control.Monad.IO.Class as Trans
@@ -475,11 +475,12 @@ instance PersistConfig MongoConf where
         pool' <- go $ lookupScalar "poolsize" e
         pool  <- safeRead "poolsize" pool'
         accessString <- defaultTo "ConfirmWrites" $ lookupScalar "accessMode" e
-        let accessMode = case accessString of
-               "ReadStaleOk"       -> DB.ReadStaleOk
-               "UnconfirmedWrites" -> DB.UnconfirmedWrites
-               "ConfirmWrites"     -> DB.ConfirmWrites [u"j" DB.=: True]
-               _ -> error $ "unknown access mode: " ++ T.unpack accessString
+
+        accessMode <- case accessString of
+               "ReadStaleOk"       -> MRight DB.ReadStaleOk
+               "UnconfirmedWrites" -> MRight DB.UnconfirmedWrites
+               "ConfirmWrites"     -> MRight $ DB.ConfirmWrites [u"j" DB.=: True]
+               badAccess -> MLeft $ "unknown accessMode: " ++ (T.unpack badAccess)
 
         return $ MongoConf (T.unpack db) (T.unpack host) pool accessMode
       where

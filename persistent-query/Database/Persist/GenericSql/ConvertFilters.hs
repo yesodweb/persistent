@@ -1,15 +1,14 @@
 {-# LANGUAGE RankNTypes #-}
-module Database.Persist.GenericSql.Query
+module Database.Persist.GenericSql.ConvertFilters
     ( getFiltsValues
     , filterClause
     , filterClauseNoWhere
     , dummyFromFilts
     , orderClause
-    , getFieldName
     ) where
 
 import Database.Persist.GenericSql.Internal
-import Database.Persist.Base
+import Database.Persist.Store
 import Database.Persist.Query
 
 import Data.List (intercalate)
@@ -127,9 +126,6 @@ filterClauseHelper includeTable includeWhere conn filters =
         showSqlFilter NotIn = " NOT IN "
         showSqlFilter (BackendSpecificFilter s) = s
 
-getFieldName :: EntityDef -> String -> RawName
-getFieldName t s = rawFieldName $ tableColumn t s
-
 dummyFromFilts :: [Filter v] -> v
 dummyFromFilts _ = error "dummyFromFilts"
 
@@ -150,16 +146,6 @@ orderClause includeTable conn o =
             then (++) (escapeName conn (rawTableName t) ++ ".")
             else id)
         $ escapeName conn $ getFieldName t $ columnName $ cd x
-
-tableColumn :: EntityDef -> String -> ColumnDef
-tableColumn t s | s == id_ = ColumnDef id_ "Int64" []
-  where id_ = unRawName $ rawTableIdName t
-tableColumn t s = go $ entityColumns t
-  where
-    go [] = error $ "Unknown table column: " ++ s
-    go (ColumnDef x y z:rest)
-        | x == s = ColumnDef x y z
-        | otherwise = go rest
 
 #if MIN_VERSION_monad_control(0, 3, 0)
 bracket :: MonadBaseControl IO m

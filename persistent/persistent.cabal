@@ -1,11 +1,11 @@
 name:            persistent
-version:         0.6.4.3
+version:         0.7.0
 license:         BSD3
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
 maintainer:      Michael Snoyman <michael@snoyman.com>
-synopsis:        Type-safe, non-relational, multi-backend persistence.
-description:     This library provides just the general interface and helper functions. You must use a specific backend in order to make this useful.
+synopsis:        Type-safe, multi-backend data serialization.
+description:     Type-safe, data serialization. You must use a specific backend in order to make this useful.
 category:        Database, Yesod
 stability:       Stable
 cabal-version:   >= 1.8
@@ -17,7 +17,7 @@ library
                    , bytestring               >= 0.9     && < 0.10
                    , transformers             >= 0.2.1   && < 0.3
                    , time                     >= 1.1.4
-                   , text                     >= 0.8     && < 0.12
+                   , text                     >= 0.8     && < 1
                    , containers               >= 0.2     && < 0.5
                    , enumerator               >= 0.4.9   && < 0.5
                    , monad-control            >= 0.2     && < 0.4
@@ -27,16 +27,17 @@ library
                    , mtl                      >= 2.0     && < 2.1
                    , data-object              >= 0.3.1.7 && < 0.4
                    , transformers-base
+
     exposed-modules: Database.Persist
-                     Database.Persist.Base
+                     Database.Persist.Store
                      Database.Persist.Quasi
                      Database.Persist.GenericSql
                      Database.Persist.GenericSql.Internal
                      Database.Persist.GenericSql.Raw
+                     Database.Persist.GenericSql.Migration
                      Database.Persist.TH.Library
                      Database.Persist.Util
-                     Database.Persist.Join
-                     Database.Persist.Join.Sql
+
     ghc-options:     -Wall
 
 source-repository head

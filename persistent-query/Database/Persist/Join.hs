@@ -10,7 +10,7 @@ module Database.Persist.Join
     , selectOneMany
     ) where
 
-import Database.Persist.Base
+import Database.Persist.Store
 import Database.Persist.Query
 import Data.Maybe (mapMaybe)
 import qualified Data.Map as Map

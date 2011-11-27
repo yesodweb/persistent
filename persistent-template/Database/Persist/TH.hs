@@ -17,7 +17,7 @@ module Database.Persist.TH
     , sqlSettings
     ) where
 
-import Database.Persist.Base
+import Database.Persist.Store
 import Database.Persist.Query
 import Database.Persist.GenericSql (Migration, SqlPersist, migrate)
 import Database.Persist.GenericSql.Internal (unRawName,rawFieldName,rawTableIdName) -- XXX

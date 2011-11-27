@@ -12,7 +12,7 @@ module Database.Persist.Sqlite
     ) where
 
 import Database.Persist
-import Database.Persist.Base
+import Database.Persist.Store
 import Database.Persist.GenericSql hiding (Key(..))
 import Database.Persist.GenericSql.Internal
 

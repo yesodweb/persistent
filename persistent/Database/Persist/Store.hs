@@ -13,7 +13,7 @@
 -- | API for database actions. The API deals with fields and entities.
 -- In SQL, a field corresponds to a column, and should be a single non-composite value.
 -- An entity corresponds to a SQL table, so an entity is a collection of fields.
-module Database.Persist.Base
+module Database.Persist.Store
     ( PersistValue (..)
     , SqlType (..)
     , PersistField (..)

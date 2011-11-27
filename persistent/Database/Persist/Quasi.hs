@@ -2,7 +2,7 @@ module Database.Persist.Quasi
     ( parse
     ) where
 
-import Database.Persist.Base
+import Database.Persist.Store
 import Data.Char
 import Data.Maybe (mapMaybe)
 
