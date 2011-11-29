@@ -105,12 +105,12 @@ class (PersistStore b m) => PersistQuery b m where
 -- filtered on, the type of comparison applied (equals, not equals, etc)
 -- and the argument for the comparison.
 data Filter v = forall typ. PersistField typ => Filter
-    { filterField :: EntityField v typ
-    , filterValue :: Either typ [typ] -- FIXME
+    { filterField  :: EntityField v typ
+    , filterValue  :: Either typ [typ] -- FIXME
     , filterFilter :: PersistFilter -- FIXME
     }
     | FilterAnd [Filter v] -- ^ convenient for internal use, not needed for the API
-    | FilterOr [Filter v]
+    | FilterOr  [Filter v]
 
 
 limitOffsetOrder :: PersistEntity val => [SelectOpt val] -> (Int, Int, [SelectOpt val])
