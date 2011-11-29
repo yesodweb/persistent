@@ -2,7 +2,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
-module Database.Persist.Join
+module Database.Persist.Query.Join
     ( -- * Typeclass
       RunJoin (..)
       -- * One-to-many relation
