@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-missing-fields #-}
 -- | This module provides utilities for creating backends. Regular users do not
 -- need to use this module.
@@ -26,7 +27,12 @@ import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
 import Control.Monad (forM)
+#if MIN_VERSION_monad_control(0, 3, 0)
+import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.IO.Class (MonadIO)
+#else
 import Control.Monad.IO.Control (MonadControlIO)
+#endif
 import qualified System.IO as SIO
 import Data.Text (pack)
 import Data.List (isSuffixOf)
@@ -416,8 +422,14 @@ mkMigrate fun defs = do
         ]
   where
     typ = ForallT [PlainTV $ mkName "m"]
+#if MIN_VERSION_monad_control(0, 3, 0)
+            [ ClassP ''MonadBaseControl [ConT ''IO, VarT $ mkName "m"]
+            , ClassP ''MonadIO [VarT $ mkName "m"]
+            ]
+#else
             [ ClassP ''MonadControlIO [VarT $ mkName "m"]
             ]
+#endif
             $ ConT ''Migration `AppT` (ConT ''SqlPersist `AppT` VarT (mkName "m"))
     body :: Q Exp
     body =
