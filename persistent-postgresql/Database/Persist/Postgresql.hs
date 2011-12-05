@@ -1,5 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleContexts #-}
 -- | A postgresql backend for persistent.
 module Database.Persist.Postgresql
     ( withPostgresqlPool
@@ -25,7 +27,13 @@ import Data.Either (partitionEithers)
 import Control.Arrow
 import Data.List (sort, groupBy)
 import Data.Function (on)
+#if MIN_VERSION_monad_control(0, 3, 0)
+import Control.Monad.Trans.Control (MonadBaseControl)
+#define MBCIO MonadBaseControl IO
+#else
 import Control.Monad.IO.Control (MonadControlIO)
+#define MBCIO MonadControlIO
+#endif
 
 import Data.ByteString (ByteString)
 import qualified Data.Text as T
@@ -37,13 +45,13 @@ import Data.Object
 import Control.Monad (forM)
 import Data.Neither (meither, MEither (..))
 
-withPostgresqlPool :: MonadControlIO m
+withPostgresqlPool :: (MBCIO m, MonadIO m)
                    => T.Text
                    -> Int -- ^ number of connections to open
                    -> (ConnectionPool -> m a) -> m a
 withPostgresqlPool s = withSqlPool $ open' s
 
-withPostgresqlConn :: MonadControlIO m => T.Text -> (Connection -> m a) -> m a
+withPostgresqlConn :: (MBCIO m, MonadIO m) => T.Text -> (Connection -> m a) -> m a
 withPostgresqlConn = withSqlConn . open'
 
 open' :: T.Text -> IO Connection
@@ -89,7 +97,8 @@ execute' stmt vals = do
     _ <- H.execute stmt $ map pToSql vals
     return ()
 
-withStmt' :: MonadControlIO m
+withStmt'
+          :: (MBCIO m, MonadIO m)
           => H.Statement
           -> [PersistValue]
           -> (RowPopper m -> m a)

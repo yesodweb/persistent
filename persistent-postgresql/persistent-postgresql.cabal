@@ -1,5 +1,5 @@
 name:            persistent-postgresql
-version:         0.6.1
+version:         0.6.1.1
 license:         BSD3
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -21,7 +21,7 @@ library
                    , containers            >= 0.2      && < 0.5
                    , bytestring            >= 0.9      && < 0.10
                    , text                  >= 0.7      && < 0.12
-                   , monad-control         >= 0.2      && < 0.3
+                   , monad-control         >= 0.2      && < 0.4
                    , time                  >= 1.1
                    , data-object           >= 0.3      && < 0.4
                    , neither               >= 0.3      && < 0.4
