@@ -13,6 +13,8 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE CPP #-}
+module PersistentTest (main') where
 
 import Test.HUnit hiding (Test)
 import Test.Hspec.Monadic (Specs, describe, it, hspecX)
@@ -38,7 +40,13 @@ import Database.Persist.GenericSql
 import qualified Database.Persist.Join.Sql
 import Database.Persist.Sqlite
 import Control.Exception (SomeException)
+#if MIN_VERSION_monad_control(0, 3, 0)
+import qualified Control.Exception as E
+#define CATCH catch'
+#else
 import qualified Control.Exception.Control as Control
+#define CATCH Control.catch
+#endif
 import System.Random
 
 #if WITH_POSTGRESQL
@@ -53,7 +61,11 @@ import Control.Monad.IO.Class
 import Control.Monad (unless)
 import Data.Int
 import Data.Word
+#if MIN_VERSION_monad_control(0, 3, 0)
+import qualified Control.Monad.Trans.Control
+#else
 import qualified Control.Monad.IO.Control
+#endif
 
 import Data.Text (Text)
 import Web.PathPieces (SinglePiece (..))
@@ -192,7 +204,13 @@ instance Arbitrary PersistValue where
 type BackendMonad = SqlPersist
 sqlite_database :: Text
 sqlite_database = "test/testdb.sqlite3"
-runConn :: Control.Monad.IO.Control.MonadControlIO m => SqlPersist m t -> m ()
+runConn ::
+#if MIN_VERSION_monad_control(0, 3, 0)
+    (Control.Monad.Trans.Control.MonadBaseControl IO m, MonadIO m)
+#else
+    Control.Monad.IO.Control.MonadControlIO m
+#endif
+    => SqlPersist m t -> m ()
 runConn f = do
     _<-withSqlitePool sqlite_database 1 $ runSqlPool f
 #if WITH_POSTGRESQL
@@ -232,8 +250,8 @@ instance Arbitrary PersistValue where
 #endif
 
 
-main :: IO ()
-main = do
+main' :: IO ()
+main' = do
   runConn setup
   hspecX specs
 
@@ -693,10 +711,20 @@ caseCommitRollback = db $ do
     c4 <- count filt
     c4 @== 4
 
+#if MIN_VERSION_monad_control(0, 3, 0)
+catch' :: (Control.Monad.Trans.Control.MonadBaseControl IO m, E.Exception e)
+       => m a       -- ^ The computation to run
+       -> (e -> m a) -- ^ Handler to invoke if an exception is raised
+       -> m a
+catch' a handler = Control.Monad.Trans.Control.control $ \runInIO ->
+                    E.catch (runInIO a)
+                            (\e -> runInIO $ handler e)
+#endif
+
 caseAfterException :: Assertion
 caseAfterException = withSqlitePool sqlite_database 1 $ runSqlPool $ do
     _ <- insert $ Person "A" 0 Nothing
-    _ <- (insert (Person "A" 1 Nothing) >> return ()) `Control.catch` catcher
+    _ <- (insert (Person "A" 1 Nothing) >> return ()) `CATCH` catcher
     _ <- insert $ Person "B" 0 Nothing
     return ()
   where

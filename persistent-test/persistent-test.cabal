@@ -17,18 +17,24 @@ extra-source-files:
   test/from-cabal
 
 library
-    exposed-modules: Dummy
+    exposed-modules: PersistentTest
+                     Database.Persist.Base
+                     Database.Persist.GenericSql
+                     Database.Persist.GenericSql.Raw
+                     Database.Persist.GenericSql.Internal
+                     Database.Persist.Util
+                     Database.Persist.Join
+                     Database.Persist.Join.Sql
+                     Database.Persist.TH
+                     Database.Persist.TH.Library
+                     Database.Persist.Sqlite
+                     Database.Sqlite
+                     Database.Persist
+                     Database.Persist.Quasi
     build-depends:   base                     >= 4       && < 5
-
-test-suite test
-    type:          exitcode-stdio-1.0
-    main-is:       main.hs
-    hs-source-dirs: test, persistent, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mongoDB
-
-    build-depends:   HUnit
+                   , HUnit
                    , hspec >= 0.8 && < 0.10
                    , file-location >= 0.4 && < 0.5
-                   , base >= 4 && < 5
                    , template-haskell >= 2.4 && < 2.7
                    , HDBC-postgresql
                    , HDBC
@@ -52,6 +58,16 @@ test-suite test
                    , QuickCheck == 2.4.*
                    , blaze-html
                    , pool
+                   , transformers-base
+    hs-source-dirs: ., persistent, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mongoDB
+
+test-suite test
+    type:          exitcode-stdio-1.0
+    main-is:       main.hs
+    hs-source-dirs: test
+
+    build-depends:   base >= 4 && < 5
+                   , persistent-test
 
     -- these are mutually exclusive options
     -- cpp-options: -DWITH_POSTGRESQL
