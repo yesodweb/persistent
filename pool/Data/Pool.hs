@@ -2,6 +2,7 @@
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Data.Pool
     ( -- * Creation
       Pool
@@ -20,8 +21,12 @@ import Data.IORef (IORef, newIORef, atomicModifyIORef, readIORef)
 import Control.Exception (throwIO, Exception, bracket, finally)
 import qualified Control.Exception as E
 import Data.Typeable
+#if MIN_VERSION_monad_control(0, 3, 0)
+import qualified Control.Monad.Trans.Control as I
+#else
 import qualified Control.Monad.IO.Control as I
 import qualified Control.Exception.Control as I
+#endif
 import Control.Monad.IO.Class
 import Control.Monad
 
@@ -49,8 +54,28 @@ poolStats p = do
     d <- readIORef $ poolData p
     return $ PoolStats (poolMax p) (length $ poolAvail d) (poolCreated d)
 
+#if MIN_VERSION_monad_control(0, 3, 0)
+#define MBCIO I.MonadBaseControl IO
+#define LOO I.liftBaseOp
+#define CIO I.control
+#define TRY try'
+
+sequenceEither :: I.MonadBaseControl IO m => Either e (I.StM m a) -> m (Either e a)
+sequenceEither = either (return . Left) (liftM Right . I.restoreM)
+{-# INLINE sequenceEither #-}
+
+-- |Generalized version of 'E.try'.
+try' :: (I.MonadBaseControl IO m, Exception e) => m a -> m (Either e a)
+try' m = I.liftBaseWith (\runInIO -> E.try (runInIO m)) >>= sequenceEither
+#else
+#define MBCIO I.MonadControlIO
+#define LOO I.liftIOOp
+#define CIO I.controlIO
+#define TRY I.try
+#endif
+
 -- | Create a new pool without any resource alive checking.
-createPool :: I.MonadControlIO m
+createPool :: (MBCIO m, MonadIO m)
            => IO a -- ^ new resource creator
            -> (a -> IO ()) -- ^ resource deallocator
            -> Int -- ^ maximum number of resources to allow in pool
@@ -61,7 +86,7 @@ createPool mk fr mx f = createPoolCheckAlive mk fr mx f $ const $ return True
 -- | Create a new pool, including a function to check if a resource is still
 -- alive. Stale resources will automatically be removed from the pool.
 createPoolCheckAlive
-    :: I.MonadControlIO m
+    :: (MBCIO m, MonadIO m)
     => IO a -- ^ new resource creator
     -> (a -> IO ()) -- ^ resource deallocator
     -> Int -- ^ maximum number of resource to allow in pool
@@ -74,8 +99,8 @@ createPoolCheckAlive mk fr mx f ca = do
         PoolData ress _ <- readIORef pd
         mapM_ fr ress
 
-finallyIO :: I.MonadControlIO m => m a -> IO b -> m a
-finallyIO a io = I.controlIO $ \runInIO -> finally (runInIO a) io
+finallyIO :: MBCIO m => m a -> IO b -> m a
+finallyIO a io = CIO $ \runInIO -> finally (runInIO a) io
 
 data PoolExhaustedException = PoolExhaustedException
     deriving (Show, Typeable)
@@ -83,7 +108,12 @@ instance Exception PoolExhaustedException
 
 -- | This function throws a 'PoolExhaustedException' when no resources are
 -- available. See 'withPoolAllocate' to avoid this.
-withPool' :: I.MonadControlIO m => Pool a -> (a -> m b) -> m b
+#if MIN_VERSION_monad_control(0, 3, 0)
+withPool' :: (I.MonadBaseControl IO m, MonadIO m)
+#else
+withPool' :: I.MonadControlIO m
+#endif
+          => Pool a -> (a -> m b) -> m b
 withPool' p f = do
     x <- withPool p f
     case x of
@@ -93,23 +123,32 @@ withPool' p f = do
 -- | Same as @withPool'@, but instead of throwing a 'PoolExhaustedException'
 -- when there the maximum number of resources are created and allocated, it
 -- allocates a new resource, passes it to the subprocess and then frees it.
-withPoolAllocate :: I.MonadControlIO m => Pool a -> (a -> m b) -> m b
+withPoolAllocate :: (MonadIO m, MBCIO m) => Pool a -> (a -> m b) -> m b
 withPoolAllocate p f = do
     x <- withPool p f
     case x of
         Just x' -> return x'
-        Nothing -> I.liftIOOp (bracket (poolMake p) (poolFree p)) f
+        Nothing -> LOO (bracket (poolMake p) (poolFree p)) f
 
-mask :: I.MonadControlIO m => ((forall a. m a -> m a) -> m b) -> m b
+mask :: MBCIO m => ((forall a. m a -> m a) -> m b) -> m b
 #if MIN_VERSION_base(4,3,0)
+#if MIN_VERSION_monad_control(0, 3, 0)
+mask = I.liftBaseOp E.mask . liftRestore
+
+liftRestore :: I.MonadBaseControl IO m
+            => ((forall a.  m a ->  m a) -> b)
+            -> ((forall a. IO a -> IO a) -> b)
+liftRestore f r = f $ I.liftBaseOp_ r
+#else
 mask = I.mask
+#endif
 #else
 mask f = I.block $ f I.unblock
 #endif
 
 -- | Attempt to run the given action with a resource from the given 'Pool'.
 -- Returns 'Nothing' if no resource was available.
-withPool :: I.MonadControlIO m => Pool a -> (a -> m b) -> m (Maybe b)
+withPool :: (MonadIO m, MBCIO m) => Pool a -> (a -> m b) -> m (Maybe b)
 withPool p f = mask $ \unmask -> do
     eres <- liftIO $ atomicModifyIORef (poolData p) $ \pd ->
         case poolAvail pd of
@@ -119,10 +158,10 @@ withPool p f = mask $ \unmask -> do
         Left pc ->
             if pc >= poolMax p
                 then return Nothing
-                else I.liftIOOp (bracket (poolMake p) (insertResource 1))
+                else LOO (bracket (poolMake p) (insertResource 1))
                                 (liftM Just . unmask . f)
         Right res -> do
-            isAlive <- I.try $ unmask $ liftIO $ poolCheckAlive p res
+            isAlive <- TRY $ unmask $ liftIO $ poolCheckAlive p res
             case isAlive :: Either E.SomeException Bool of
                 Right True -> finallyIO (liftM Just $ unmask $ f res)
                                         (insertResource 0 res)
