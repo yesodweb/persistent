@@ -8,6 +8,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE CPP #-}
 
 -- | API for database actions. The API deals with fields and entities.
 -- In SQL, a field corresponds to a column, and should be a single non-composite value.
