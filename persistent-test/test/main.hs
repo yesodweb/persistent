@@ -398,6 +398,9 @@ specs = describe "persistent" $ do
       ps <- selectList [PersonColor !=. Nothing] []
       map snd ps @== [eli]
 
+      pnm <- selectList [PersonName !=. "Eliezer"] []
+      map snd pnm @== [mic]
+
 
   it "and/or" $ db $ do
       deleteWhere ([] :: [Filter Person1])
