@@ -1,5 +1,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE PackageImports #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleContexts #-}
 -- | Code that is only needed for writing GenericSql backends.
 module Database.Persist.GenericSql.Internal
     ( Connection (..)
@@ -31,8 +33,16 @@ import Data.Pool
 import Database.Persist.Base
 import Data.Maybe (fromMaybe)
 import Control.Arrow
+#if MIN_VERSION_monad_control(0, 3, 0)
+import Control.Monad.Trans.Control (MonadBaseControl, control, restoreM)
+import qualified Control.Exception as E
+#define MBCIO MonadBaseControl IO
+#else
 import Control.Monad.IO.Control (MonadControlIO)
 import Control.Exception.Control (bracket)
+
+#define MBCIO MonadControlIO
+#endif
 import Database.Persist.Util (nullable)
 import Data.List (intercalate)
 import Data.Text (Text)
@@ -57,15 +67,15 @@ data Statement = Statement
     { finalize :: IO ()
     , reset :: IO ()
     , execute :: [PersistValue] -> IO ()
-    , withStmt :: forall a m. MonadControlIO m
+    , withStmt :: forall a m. MBCIO m
                => [PersistValue] -> (RowPopper m -> m a) -> m a
     }
 
-withSqlPool :: MonadControlIO m
+withSqlPool :: (MonadIO m, MBCIO m)
             => IO Connection -> Int -> (Pool Connection -> m a) -> m a
 withSqlPool mkConn = createPool mkConn close'
 
-withSqlConn :: MonadControlIO m => IO Connection -> (Connection -> m a) -> m a
+withSqlConn :: (MonadIO m, MBCIO m) => IO Connection -> (Connection -> m a) -> m a
 withSqlConn open = bracket (liftIO open) (liftIO . close')
 
 close' :: Connection -> IO ()
@@ -297,3 +307,15 @@ orderClause includeTable conn o =
             then (++) (escapeName conn (rawTableName t) ++ ".")
             else id)
         $ escapeName conn $ getFieldName t $ columnName $ cd x
+
+#if MIN_VERSION_monad_control(0, 3, 0)
+bracket :: MonadBaseControl IO m
+        => m a       -- ^ computation to run first (\"acquire resource\")
+        -> (a -> m b) -- ^ computation to run last (\"release resource\")
+        -> (a -> m c) -- ^ computation to run in-between
+        -> m c
+bracket before after thing = control $ \runInIO ->
+                               E.bracket (runInIO before)
+                                         (\st -> runInIO $ restoreM st >>= after)
+                                         (\st -> runInIO $ restoreM st >>= thing)
+#endif

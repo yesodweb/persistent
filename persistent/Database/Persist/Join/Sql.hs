@@ -1,6 +1,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE CPP #-}
 module Database.Persist.Join.Sql
     ( RunJoin (..)
     ) where
@@ -15,10 +16,17 @@ import Database.Persist.GenericSql
 import Database.Persist.GenericSql.Internal hiding (withStmt)
 import Database.Persist.GenericSql.Raw (withStmt)
 import Control.Monad.Trans.Reader (ask)
+#if MIN_VERSION_monad_control(0, 3, 0)
+import Control.Monad.Trans.Control (MonadBaseControl)
+#define MBCIO MonadBaseControl IO
+#else
 import Control.Monad.IO.Control (MonadControlIO)
+#define MBCIO MonadControlIO
+#endif
 import Data.Function (on)
 import Control.Arrow ((&&&))
 import Data.Text (pack)
+import Control.Monad.IO.Class (MonadIO)
 
 fromPersistValuesId :: PersistEntity v => [PersistValue] -> Either String (Key SqlPersist v, v)
 fromPersistValuesId [] = Left "fromPersistValuesId: No values provided"
@@ -29,7 +37,7 @@ fromPersistValuesId (PersistInt64 i:rest) =
 fromPersistValuesId _ = Left "fromPersistValuesId: invalid ID"
 
 class RunJoin a where
-    runJoin :: MonadControlIO m => a -> SqlPersist m (J.Result a)
+    runJoin :: (MonadIO m, MBCIO m) => a -> SqlPersist m (J.Result a)
 
 instance (PersistEntity one, PersistEntity many, Eq (Key SqlPersist one))
     => RunJoin (SelectOneMany SqlPersist one many) where

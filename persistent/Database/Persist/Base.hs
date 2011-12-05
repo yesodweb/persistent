@@ -77,8 +77,15 @@ import qualified Data.Text.Encoding as T
 import qualified Data.Text.Encoding.Error as T
 import Web.PathPieces (SinglePiece (..))
 import qualified Data.Text.Read
+import Control.Monad.IO.Class (MonadIO)
 
+#if MIN_VERSION_monad_control(0, 3, 0)
+import Control.Monad.Trans.Control (MonadBaseControl)
+#define MBCIO MonadBaseControl IO
+#else
 import Control.Monad.IO.Control (MonadControlIO)
+#define MBCIO MonadControlIO
+#endif
 import Data.Object (TextObject)
 
 fst3 :: forall t t1 t2. (t, t1, t2) -> t
@@ -579,7 +586,7 @@ class PersistConfig c where
     type PersistConfigPool c
     loadConfig :: TextObject -> Either String c
     -- | I really don't want Applicative here, but it's necessary for Mongo.
-    withPool :: (Applicative m, MonadControlIO m) => c -> (PersistConfigPool c -> m a) -> m a
-    runPool :: MonadControlIO m => c -> PersistConfigBackend c m a
+    withPool :: (Applicative m, MBCIO m, MonadIO m) => c -> (PersistConfigPool c -> m a) -> m a
+    runPool :: (MBCIO m, MonadIO m) => c -> PersistConfigBackend c m a
             -> PersistConfigPool c
             -> m a

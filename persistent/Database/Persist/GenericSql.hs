@@ -4,6 +4,9 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE UndecidableInstances #-} -- FIXME
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 -- | This is a helper module for creating SQL backends. Regular users do not
 -- need to use this module.
@@ -41,8 +44,16 @@ import qualified Database.Persist.GenericSql.Raw as R
 import Database.Persist.GenericSql.Raw (SqlPersist (..))
 import Control.Monad (liftM, unless)
 import Data.Enumerator (Stream (..), Iteratee (..), Step (..))
+#if MIN_VERSION_monad_control(0, 3, 0)
+import Control.Monad.Trans.Control (MonadBaseControl, control)
+import qualified Control.Exception as E
+#define MBCIO MonadBaseControl IO
+#else
 import Control.Monad.IO.Control (MonadControlIO)
 import Control.Exception.Control (onException)
+
+#define MBCIO MonadControlIO
+#endif
 import Control.Exception (throw, toException)
 import Data.Text (Text, pack, unpack, snoc)
 import qualified Data.Text.IO
@@ -59,17 +70,19 @@ instance SinglePiece (Key SqlPersist entity) where
             Right (i, "") -> Just $ Key $ PersistInt64 i
             _ -> Nothing
 
-withStmt' :: MonadControlIO m => Text -> [PersistValue]
-         -> (RowPopper (SqlPersist m) -> SqlPersist m a) -> SqlPersist m a
+withStmt'
+    :: (MBCIO m, MonadIO m)
+    => Text -> [PersistValue]
+    -> (RowPopper (SqlPersist m) -> SqlPersist m a) -> SqlPersist m a
 withStmt' = R.withStmt
 
 execute' :: MonadIO m => Text -> [PersistValue] -> SqlPersist m ()
 execute' = R.execute
 
-runSqlPool :: MonadControlIO m => SqlPersist m a -> Pool Connection -> m a
+runSqlPool :: (MBCIO m, MonadIO m) => SqlPersist m a -> Pool Connection -> m a
 runSqlPool r pconn = withPool' pconn $ runSqlConn r
 
-runSqlConn :: MonadControlIO m => SqlPersist m a -> Connection -> m a
+runSqlConn :: (MBCIO m, MonadIO m) => SqlPersist m a -> Connection -> m a
 runSqlConn (SqlPersist r) conn = do
     let getter = R.getStmt' conn
     liftIO $ begin conn getter
@@ -79,7 +92,7 @@ runSqlConn (SqlPersist r) conn = do
     liftIO $ commitC conn getter
     return x
 
-instance MonadControlIO m => PersistBackend SqlPersist m where
+instance (MonadIO m, MBCIO m) => PersistBackend SqlPersist m where
     insert val = do
         conn <- SqlPersist ask
         let esql = insertSql conn (rawTableName t) (map fst3 $ tableColumns t)
@@ -381,32 +394,33 @@ parseMigration' m = do
       Left errs -> error $ unlines $ map unpack errs
       Right sql -> return sql
 
-printMigration :: MonadControlIO m => Migration (SqlPersist m) -> SqlPersist m ()
+printMigration :: (MBCIO m, MonadIO m) => Migration (SqlPersist m) -> SqlPersist m ()
 printMigration m = do
   mig <- parseMigration' m
   mapM_ (liftIO . Data.Text.IO.putStrLn . flip snoc ';') (allSql mig)
 
-getMigration :: MonadControlIO m => Migration (SqlPersist m) -> SqlPersist m [Sql]
+getMigration :: (MBCIO m, MonadIO m) => Migration (SqlPersist m) -> SqlPersist m [Sql]
 getMigration m = do
   mig <- parseMigration' m
   return $ allSql mig
 
-runMigration :: MonadControlIO m
+runMigration :: (MonadIO m, MBCIO m)
              => Migration (SqlPersist m)
              -> SqlPersist m ()
 runMigration m = runMigration' m False >> return ()
 
 -- | Same as 'runMigration', but returns a list of the SQL commands executed
 -- instead of printing them to stderr.
-runMigrationSilent :: MonadControlIO m
+runMigrationSilent :: (MBCIO m, MonadIO m)
                    => Migration (SqlPersist m)
                    -> SqlPersist m [Text]
 runMigrationSilent m = runMigration' m True
 
-runMigration' :: MonadControlIO m
-              => Migration (SqlPersist m)
-              -> Bool -- ^ is silent?
-              -> SqlPersist m [Text]
+runMigration'
+    :: (MBCIO m, MonadIO m)
+    => Migration (SqlPersist m)
+    -> Bool -- ^ is silent?
+    -> SqlPersist m [Text]
 runMigration' m silent = do
     mig <- parseMigration' m
     case unsafeSql mig of
@@ -417,7 +431,7 @@ runMigration' m silent = do
             , unlines $ map (\s -> "    " ++ unpack s ++ ";") $ errs
             ]
 
-runMigrationUnsafe :: MonadControlIO m
+runMigrationUnsafe :: (MBCIO m, MonadIO m)
                    => Migration (SqlPersist m)
                    -> SqlPersist m ()
 runMigrationUnsafe m = do
@@ -430,7 +444,7 @@ executeMigrate silent s = do
     execute' s []
     return s
 
-migrate :: (MonadControlIO m, PersistEntity val)
+migrate :: (MonadIO m, MBCIO m, PersistEntity val)
         => val
         -> Migration (SqlPersist m)
 migrate val = do
@@ -455,3 +469,10 @@ rollback = do
     conn <- SqlPersist ask
     let getter = R.getStmt' conn
     liftIO $ rollbackC conn getter >> begin conn getter
+
+#if MIN_VERSION_monad_control(0, 3, 0)
+onException :: MonadBaseControl IO m => m α -> m β -> m α
+onException m what = control $ \runInIO ->
+                       E.onException (runInIO m)
+                                     (runInIO what)
+#endif
