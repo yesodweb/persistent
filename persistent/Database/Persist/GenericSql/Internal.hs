@@ -67,7 +67,7 @@ data Statement = Statement
     { finalize :: IO ()
     , reset :: IO ()
     , execute :: [PersistValue] -> IO ()
-    , withStmt :: forall a m. MBCIO m
+    , withStmt :: forall a m. (MBCIO m, MonadIO m)
                => [PersistValue] -> (RowPopper m -> m a) -> m a
     }
 

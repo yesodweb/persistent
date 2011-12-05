@@ -1,5 +1,5 @@
 name:            persistent-sqlite
-version:         0.6.2
+version:         0.6.2.1
 license:         BSD3
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -21,7 +21,7 @@ library
                    , bytestring              >= 0.9.1     && < 0.10
                    , transformers            >= 0.2.1     && < 0.3
                    , persistent              >= 0.6.3     && < 0.7
-                   , monad-control           >= 0.2       && < 0.3
+                   , monad-control           >= 0.2       && < 0.4
                    , containers              >= 0.2       && < 0.5
                    , text                    >= 0.7       && < 0.12
                    , data-object             >= 0.3       && < 0.4

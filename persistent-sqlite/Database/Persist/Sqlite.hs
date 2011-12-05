@@ -1,5 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleContexts #-}
 -- | A sqlite backend for persistent.
 module Database.Persist.Sqlite
     ( withSqlitePool
@@ -20,19 +22,26 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Data.List (intercalate)
 import Data.IORef
 import qualified Data.Map as Map
+#if MIN_VERSION_monad_control(0, 3, 0)
+import Control.Monad.Trans.Control (MonadBaseControl, control)
+import qualified Control.Exception as E
+#define MBCIO MonadBaseControl IO
+#else
 import Control.Monad.IO.Control (MonadControlIO)
 import Control.Exception.Control (finally)
+#define MBCIO MonadControlIO
+#endif
 import Data.Text (Text, pack, unpack)
 import Data.Neither (MEither (..), meither)
 import Data.Object
 
-withSqlitePool :: MonadControlIO m
+withSqlitePool :: (MonadIO m, MBCIO m)
                => Text
                -> Int -- ^ number of connections to open
                -> (ConnectionPool -> m a) -> m a
 withSqlitePool s = withSqlPool $ open' s
 
-withSqliteConn :: MonadControlIO m => Text -> (Connection -> m a) -> m a
+withSqliteConn :: (MonadIO m, MBCIO m) => Text -> (Connection -> m a) -> m a
 withSqliteConn = withSqlConn . open'
 
 open' :: Text -> IO Connection
@@ -88,7 +97,8 @@ execute' stmt vals = flip finally (liftIO $ Sqlite.reset stmt) $ do
     Sqlite.Done <- Sqlite.step stmt
     return ()
 
-withStmt' :: MonadControlIO m
+withStmt'
+          :: (MBCIO m, MonadIO m)
           => Sqlite.Statement
           -> [PersistValue]
           -> (RowPopper m -> m a)
@@ -270,3 +280,14 @@ safeRead name t = case reads s of
     []       -> MLeft $ concat ["Invalid value for ", name, ": ", s]
   where
     s = unpack t
+
+#if MIN_VERSION_monad_control(0, 3, 0)
+finally :: MonadBaseControl IO m
+        => m a -- ^ computation to run first
+        -> m b -- ^ computation to run afterward (even if an exception was raised)
+        -> m a
+finally a sequel = control $ \runInIO ->
+                     E.finally (runInIO a)
+                               (runInIO sequel)
+{-# INLINABLE finally #-}
+#endif
