@@ -372,7 +372,7 @@ wrapFromPersistValues e doc = fromPersistValues reorder
         -- another application may use fields we don't care about
         -- our own application may set extra fields with the raw driver
         -- TODO: instead use a projection to avoid network overhead
-        match [] fields values = values
+        match [] _ values = values
         match (c:cs) fields values =
           let (found, unused) = matchOne fields []
           in match cs unused (values ++ [snd found])
@@ -476,6 +476,7 @@ instance PersistConfig MongoConf where
                "ReadStaleOk"       -> DB.ReadStaleOk
                "UnconfirmedWrites" -> DB.UnconfirmedWrites
                "ConfirmWrites"     -> DB.ConfirmWrites [u"j" DB.=: True]
+               _ -> error $ "unknown access mode: " ++ T.unpack accessString
 
         return $ MongoConf (T.unpack db) (T.unpack host) pool accessMode
       where
@@ -484,7 +485,7 @@ instance PersistConfig MongoConf where
         go (MRight a) = MRight a
 
         defaultTo :: a -> MEither ObjectExtractError a -> MEither String a
-        defaultTo def (MLeft e) = MRight def
+        defaultTo def (MLeft _) = MRight def
         defaultTo _ (MRight v) = MRight v
 
         safeRead :: String -> T.Text -> MEither String Int
