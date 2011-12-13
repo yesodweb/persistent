@@ -42,8 +42,6 @@ import Database.Persist.GenericSql.Internal
 import Database.Persist.GenericSql.Migration
 import qualified Database.Persist.GenericSql.Raw as R
 import Database.Persist.GenericSql.Raw (SqlPersist (..))
-import Control.Monad (liftM, unless)
-import Data.Enumerator (Stream (..), Iteratee (..), Step (..))
 #if MIN_VERSION_monad_control(0, 3, 0)
 import Control.Monad.Trans.Control (MonadBaseControl, control)
 import qualified Control.Exception as E
@@ -54,9 +52,8 @@ import Control.Exception.Control (onException)
 
 #define MBCIO MonadControlIO
 #endif
-import Control.Exception (throw, toException)
-import Data.Text (Text, pack, unpack, snoc)
-import qualified Data.Text.IO
+import Control.Exception (throw)
+import Data.Text (Text, pack)
 import Web.PathPieces (SinglePiece (..))
 import qualified Data.Text.Read
 
