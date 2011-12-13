@@ -179,6 +179,7 @@ instance (Applicative m, Functor m, MonadControlIO m) => PersistStore DB.Action 
           where
             t = entityDef $ dummyFromKey k
 
+instance (Applicative m, Functor m, MonadControlIO m) => PersistUnique DB.Action m where
     getBy uniq = do
         mdocument <- DB.findOne $
           (DB.select (uniqSelector uniq) (u $ entityName t))

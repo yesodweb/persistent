@@ -155,6 +155,7 @@ instance (MonadIO m, MBCIO m) => PersistStore SqlPersist m where
             , " WHERE id=?"
             ]
 
+instance (MonadIO m, MBCIO m) => PersistUnique SqlPersist m where
     deleteBy uniq = do
         conn <- SqlPersist ask
         execute' (sql conn) $ persistUniqueToValues uniq

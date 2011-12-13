@@ -4,6 +4,7 @@ module Database.Persist
     ( PersistField (..)
     , PersistEntity (..)
     , PersistStore (..)
+    , PersistUnique (..)
     , Key (..)
     , insertBy
     , getJust

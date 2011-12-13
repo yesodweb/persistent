@@ -23,6 +23,7 @@ module Database.Persist.Store
     , PersistField (..)
     , PersistEntity (..)
     , PersistStore (..)
+    , PersistUnique (..)
     , PersistFilter (..)
     , SomePersistField (..)
 
@@ -415,6 +416,7 @@ class (Trans.MonadIO (b m), Trans.MonadIO m, Monad (b m), Monad m) => PersistSto
     -- | Get a record by identifier, if available.
     get :: PersistEntity val => Key b val -> b m (Maybe val)
 
+class (Trans.MonadIO (b m), Trans.MonadIO m, Monad (b m), Monad m) => PersistUnique b m where
     -- | Get a record by unique key, if available. Returns also the identifier.
     getBy :: PersistEntity val => Unique val b -> b m (Maybe (Key b val, val))
 
@@ -428,7 +430,7 @@ class (Trans.MonadIO (b m), Trans.MonadIO m, Monad (b m), Monad m) => PersistSto
 -- | Insert a value, checking for conflicts with any unique constraints.  If a
 -- duplicate exists in the database, it is returned as 'Left'. Otherwise, the
 -- new 'Key' is returned as 'Right'.
-insertBy :: (PersistEntity v, PersistStore b m)
+insertBy :: (PersistEntity v, PersistStore b m, PersistUnique b m)
           => v -> b m (Either (Key b v, v) (Key b v))
 insertBy val =
     go $ persistUniqueKeys val
@@ -444,7 +446,7 @@ insertBy val =
 -- of a 'Unique' value. Returns a value matching /one/ of the unique keys. This
 -- function makes the most sense on entities with a single 'Unique'
 -- constructor.
-getByValue :: (PersistEntity v, PersistStore b m)
+getByValue :: (PersistEntity v, PersistUnique b m)
            => v -> b m (Maybe (Key b v, v))
 getByValue val =
     go $ persistUniqueKeys val
@@ -486,7 +488,7 @@ getJust key = get key >>= maybe
 --
 -- Returns 'True' if the entity would be unique, and could thus safely be
 -- 'insert'ed; returns 'False' on a conflict.
-checkUnique :: (PersistEntity val, PersistStore b m) => val -> b m Bool
+checkUnique :: (PersistEntity val, PersistUnique b m) => val -> b m Bool
 checkUnique val =
     go $ persistUniqueKeys val
   where
