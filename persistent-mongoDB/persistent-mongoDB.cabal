@@ -15,7 +15,6 @@ description:     Backend for the persistent library using mongoDB.
 library
     build-depends:   base               >= 4 && < 5
                    , persistent         >= 0.7     && < 0.8
-                   , persistent-query   >= 0.7     && < 0.8
                    , text               >= 0.8     && < 1
                    , transformers       >= 0.2.1   && < 0.3
                    , containers         >= 0.2     && < 0.5

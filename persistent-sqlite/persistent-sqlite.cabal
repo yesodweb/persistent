@@ -21,7 +21,6 @@ library
                    , bytestring              >= 0.9.1     && < 0.10
                    , transformers            >= 0.2.1     && < 0.3
                    , persistent              >= 0.7       && < 0.8
-                   , persistent-query        >= 0.7       && < 0.8
                    , monad-control           >= 0.2       && < 0.4
                    , containers              >= 0.2       && < 0.5
                    , text                    >= 0.7       && < 1
