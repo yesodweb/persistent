@@ -401,12 +401,21 @@ newtype Key backend entity = Key { unKey :: PersistValue }
 
 class (Trans.MonadIO (b m), Trans.MonadIO m, Monad (b m), Monad m) => PersistStore b m where
 
-    -- | Create a new record in the database, returning the newly created
-    -- identifier.
+    -- | Create a new record in the database, returning an automatically created
+    -- key (in SQL an auto-increment id).
     insert :: PersistEntity val => val -> b m (Key b val)
 
+    -- | create a new record in the database, using the given key.
+    insertKey :: PersistEntity val => key b val -> val -> b m ()
+    insertKey = error "not implemented"
+
+    -- | put the record in the database with the given key.
+    -- Unlike replace, it will insert a new record.
+    repsert :: PersistEntity val => Key b val -> val -> b m ()
+    repsert = error "not implemented"
+
     -- | Replace the record in the database with the given key. Result is
-    -- undefined if such a record does not exist.
+    -- undefined if such a record does not exist - instead use insertKey or repsert
     replace :: PersistEntity val => Key b val -> val -> b m ()
 
     -- | Delete a specific record by identifier. Does nothing if record does

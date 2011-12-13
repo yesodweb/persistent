@@ -156,6 +156,10 @@ instance (Applicative m, Functor m, MonadControlIO m) => PersistStore DB.Action 
       where
         t = entityDef record
 
+    insertKey k record = do
+        (DB.ObjId oid) <- DB.insert (u $ entityName t) (persistKeyToMongoId k):(insertFields t record)
+        return ()
+
     replace k record = do
         DB.replace (selectByKey k t) (insertFields t record)
         return ()
@@ -199,12 +203,14 @@ instance (Applicative m, Functor m, MonadControlIO m) => PersistUnique DB.Action
       where
         t = entityDef $ dummyFromUnique uniq
 
+persistKeyToMongoId :: PersistEntity val => Key DB.Action val -> DB.Object
+persistKeyToMongoId k = u"_id" DB.:= (DB.ObjId $ keyToDbOid k)
 
 instance (Applicative m, Functor m, MonadControlIO m) => PersistQuery DB.Action m where
     update _ [] = return ()
     update k upds =
         DB.modify 
-           (DB.Select [u"_id" DB.:= (DB.ObjId $ keyToDbOid k)]  (u $ entityName t)) 
+           (DB.Select [persistKeyToMongoId k]  (u $ entityName t)) 
            $ updateFields upds
       where
         t = entityDef $ dummyFromKey k
