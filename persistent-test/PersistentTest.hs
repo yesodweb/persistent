@@ -22,10 +22,11 @@ import Test.Hspec.HUnit()
 import Test.Hspec.QuickCheck(prop)
 
 import Database.Persist
-import Database.Persist.Base (DeleteCascade (..), PersistValue(..), limitOffsetOrder)
+import Database.Persist.Store (PersistValue(..))
+import Database.Persist.Query
 
-import Database.Persist.Join (selectOneMany, SelectOneMany(..))
-import qualified Database.Persist.Join
+import Database.Persist.Query.Join (selectOneMany, SelectOneMany(..))
+import qualified Database.Persist.Query.Join
 
 #if WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
@@ -36,8 +37,9 @@ import Control.Monad (replicateM)
 import qualified Data.ByteString as BS
 
 #else
+import Database.Persist.Store ( DeleteCascade (..) )
 import Database.Persist.GenericSql
-import qualified Database.Persist.Join.Sql
+import qualified Database.Persist.Query.Join.Sql
 import Database.Persist.Sqlite
 import Control.Exception (SomeException)
 #if MIN_VERSION_monad_control(0, 3, 0)
@@ -671,10 +673,10 @@ specs = describe "persistent" $ do
       liftIO $ x @?= [(pid1, p1), (pid3, p3)]
 
 
-  it "joinNonSql" $ db $ joinGeneric Database.Persist.Join.runJoin
+  it "joinNonSql" $ db $ joinGeneric Database.Persist.Query.Join.runJoin
 
 #ifndef WITH_MONGODB
-  it "joinSql" $ db $ joinGeneric Database.Persist.Join.Sql.runJoin
+  it "joinSql" $ db $ joinGeneric Database.Persist.Query.Join.Sql.runJoin
 
   it "commit/rollback" (caseCommitRollback >> runConn cleanDB)
 

@@ -241,7 +241,16 @@ filterClauseHelper includeTable includeWhere conn filters =
         case (isNull, pfilter, varCount) of
             (True, Eq, _) -> (name ++ " IS NULL", [])
             (True, Ne, _) -> (name ++ " IS NOT NULL", [])
-            (False, Ne, _) -> (name ++ " IS NULL", [])
+            (False, Ne, _) -> (concat
+                [ "("
+                , name
+                , " IS NULL OR "
+                , name
+                , " <> "
+                , qmarks
+                , ")"
+                ], notNullVals)
+
             -- We use 1=2 (and below 1=1) to avoid using TRUE and FALSE, since
             -- not all databases support those words directly.
             (_, In, 0) -> ("1=2", [])

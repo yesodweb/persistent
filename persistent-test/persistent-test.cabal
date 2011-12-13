@@ -19,19 +19,22 @@ extra-source-files:
 library
     extra-libraries: sqlite3
     exposed-modules: PersistentTest
-                     Database.Persist.Base
+                     Database.Persist
+                     Database.Persist.Store
+                     Database.Persist.Quasi
                      Database.Persist.GenericSql
                      Database.Persist.GenericSql.Raw
                      Database.Persist.GenericSql.Internal
-                     Database.Persist.Util
-                     Database.Persist.Join
-                     Database.Persist.Join.Sql
-                     Database.Persist.TH
+                     Database.Persist.GenericSql.Migration
                      Database.Persist.TH.Library
+                     Database.Persist.Util
+                     Database.Persist.Query
+                     Database.Persist.Query.GenericSql
+                     Database.Persist.Query.Join
+                     Database.Persist.Query.Join.Sql
+                     Database.Persist.TH
                      Database.Persist.Sqlite
                      Database.Sqlite
-                     Database.Persist
-                     Database.Persist.Quasi
     build-depends:   base                     >= 4       && < 5
                    , HUnit
                    , hspec >= 0.8 && < 0.10
