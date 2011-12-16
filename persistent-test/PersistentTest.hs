@@ -339,6 +339,9 @@ specs = describe "persistent" $ do
   it "FilterOr []" $ db $ do
       _ <- selectList [FilterOr []] [Desc PersonAge]
       return ()
+  it "FilterAnd []" $ db $ do
+      _ <- selectList [FilterAnd []] [Desc PersonAge]
+      return ()
   it "order of opts is irrelevant" $ db $ do
       let eq (a, b, _) (c, d) = (a, b) @== (c, d)
       limitOffsetOrder [Desc PersonAge] `eq` (0, 0)

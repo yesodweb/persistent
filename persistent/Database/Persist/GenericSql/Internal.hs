@@ -195,6 +195,7 @@ filterClauseHelper includeTable includeWhere conn filters =
         (a, b) = unzip $ map go fs
         wrapP x = concat ["(", x, ")"]
 
+    go (FilterAnd []) = ("1=0", [])
     go (FilterAnd fs) = combineAND fs
     go (FilterOr []) = ("1=1", [])
     go (FilterOr fs)  = combine " OR " fs
