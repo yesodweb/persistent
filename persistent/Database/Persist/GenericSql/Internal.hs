@@ -196,6 +196,7 @@ filterClauseHelper includeTable includeWhere conn filters =
         wrapP x = concat ["(", x, ")"]
 
     go (FilterAnd fs) = combineAND fs
+    go (FilterOr []) = ("1=1", [])
     go (FilterOr fs)  = combine " OR " fs
     go (Filter field value pfilter) =
         case (isNull, pfilter, varCount) of
