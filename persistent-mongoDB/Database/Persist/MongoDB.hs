@@ -8,20 +8,29 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Database.Persist.MongoDB
-    ( withMongoDBConn
+    (
+    -- * using connections
+      withMongoDBConn
     , withMongoDBPool
     , runMongoDBConn 
+    , ConnectionPool
+    , MongoConf (..)
+    -- * Key conversion helpers
+    , keyToOid
+    , oidToKey
+    -- * network type
     , HostName
+    -- * UString type
     , u
+    -- * MongoDB driver types
     , DB.Action
     -- , DB.MasterOrSlaveOk(..)
     , DB.AccessMode(..)
     , DB.master
     , DB.slaveOk
     , (DB.=:)
-    , ConnectionPool
+    -- * Database.Persistent
     , module Database.Persist
-    , MongoConf (..)
     ) where
 
 import Database.Persist
@@ -103,7 +112,7 @@ rightPersistVals ent vals = case wrapFromPersistValues ent vals of
       Right v -> v
 
 filterByKey :: (PersistEntity val) => Key DB.Action val -> DB.Document
-filterByKey k = [u"_id" DB.=: keyToDbOid k]
+filterByKey k = [u"_id" DB.=: keyToOid k]
 
 queryByKey :: (PersistEntity val) => Key DB.Action val -> EntityDef -> DB.Query 
 queryByKey k entity = (DB.select (filterByKey k) (u $ entityName entity)) 
@@ -140,7 +149,7 @@ pairFromDocument ent document = pairFromPersistValues document
     pairFromPersistValues (x:xs) =
         case wrapFromPersistValues ent xs of
             Left e -> Left e
-            Right xs' -> Right ((Key . dbOidToKey . fromJust . DB.cast' . value) x, xs')
+            Right xs' -> Right ((oidToKey . fromJust . DB.cast' . value) x, xs')
     pairFromPersistValues _ = Left "error in fromPersistValues'"
 
 insertFields :: forall val.  (PersistEntity val) => EntityDef -> val -> [DB.Field]
@@ -152,7 +161,7 @@ insertFields t record = zipWith (DB.:=) (toLabels) (toValues)
 instance (Applicative m, Functor m, MonadControlIO m) => PersistStore DB.Action m where
     insert record = do
         (DB.ObjId oid) <- DB.insert (u $ entityName t) (insertFields t record)
-        return $ Key $ dbOidToKey oid 
+        return $ oidToKey oid 
       where
         t = entityDef record
 
@@ -203,8 +212,8 @@ instance (Applicative m, Functor m, MonadControlIO m) => PersistUnique DB.Action
       where
         t = entityDef $ dummyFromUnique uniq
 
-persistKeyToMongoId :: PersistEntity val => Key DB.Action val -> DB.Object
-persistKeyToMongoId k = u"_id" DB.:= (DB.ObjId $ keyToDbOid k)
+persistKeyToMongoId :: PersistEntity val => Key DB.Action val -> DB.Field
+persistKeyToMongoId k = u"_id" DB.:= (DB.ObjId $ keyToOid k)
 
 instance (Applicative m, Functor m, MonadControlIO m) => PersistQuery DB.Action m where
     update _ [] = return ()
@@ -281,7 +290,7 @@ instance (Applicative m, Functor m, MonadControlIO m) => PersistQuery DB.Action 
             case doc of
                 Nothing -> return $ Continue k
                 Just [_ DB.:= (DB.ObjId oid)] -> do
-                    step <- runIteratee $ k $ Chunks [Key $ dbOidToKey oid]
+                    step <- runIteratee $ k $ Chunks [oidToKey oid]
                     loop step curs
                 Just y -> return $ Error $ toException $ PersistMarshalError
                         $ "Unexpected in selectKeys: " ++ show y
@@ -401,8 +410,11 @@ csToT = E.decodeUtf8 . CS.toByteString
 tToCS :: T.Text -> CS.CompactString
 tToCS = CS.fromByteString_ . E.encodeUtf8
 
-dbOidToKey :: DB.ObjectId -> PersistValue
-dbOidToKey =  PersistObjectId . Serialize.encode
+oidToPersistValue :: DB.ObjectId -> PersistValue
+oidToPersistValue =  PersistObjectId . Serialize.encode
+
+oidToKey :: (PersistEntity val) => DB.ObjectId -> Key DB.Action val
+oidToKey = Key . oidToPersistValue
 
 persistObjectIdToDbOid :: PersistValue -> DB.ObjectId
 persistObjectIdToDbOid (PersistObjectId k) = case Serialize.decode k of
@@ -410,8 +422,8 @@ persistObjectIdToDbOid (PersistObjectId k) = case Serialize.decode k of
                   Right o -> o
 persistObjectIdToDbOid _ = throw $ PersistInvalidField "expected PersistObjectId"
 
-keyToDbOid :: (PersistEntity val) => Key DB.Action val -> DB.ObjectId
-keyToDbOid (Key k) = persistObjectIdToDbOid k
+keyToOid :: (PersistEntity val) => Key DB.Action val -> DB.ObjectId
+keyToOid (Key k) = persistObjectIdToDbOid k
 
 instance DB.Val PersistValue where
   val (PersistInt64 x)   = DB.Int64 x
@@ -441,7 +453,7 @@ instance DB.Val PersistValue where
   cast' (DB.RegEx (DB.Regex us1 us2))    = Just $ PersistByteString $ CS.toByteString $ CS.append us1 us2
   cast' (DB.Doc doc)  = Just $ PersistMap $ mapFromDoc doc
   cast' (DB.Array xs) = Just $ PersistList $ mapMaybe DB.cast' xs
-  cast' (DB.ObjId x)  = Just $ dbOidToKey x 
+  cast' (DB.ObjId x)  = Just $ oidToPersistValue x 
   cast' (DB.JavaScr _) = throw $ PersistMongoDBUnsupported "cast operation not supported for javascript"
   cast' (DB.Sym _)     = throw $ PersistMongoDBUnsupported "cast operation not supported for sym"
   cast' (DB.Stamp _)   = throw $ PersistMongoDBUnsupported "cast operation not supported for stamp"
