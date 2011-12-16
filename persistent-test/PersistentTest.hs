@@ -30,7 +30,8 @@ import qualified Database.Persist.Query.Join
 
 #if WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
-import Database.Persist.MongoDB (Action, withMongoDBConn, runMongoDBConn)
+import Database.Persist.MongoDB (Action, withMongoDBConn, runMongoDBConn, oidToKey)
+import Data.Bson (genObjectId)
 import Language.Haskell.TH.Syntax (Type(..))
 import Database.Persist.TH (MkPersistSettings(..))
 import Control.Monad (replicateM)
@@ -633,6 +634,26 @@ specs = describe "persistent" $ do
       Right _ <- insertBy $ Person "name2" 1 Nothing
       return ()
 
+#ifdef WITH_MONGODB
+  it "insertKey" $ db $ do
+      oid <- liftIO $ genObjectId
+      let k = oidToKey oid
+      insertKey k $ Person "Key" 26 Nothing
+      Just (k2,_) <- selectFirst [PersonName ==. "Key"] []
+      k2 @== k
+
+  it "repsert" $ db $ do
+      oid <- liftIO $ genObjectId
+      let k = oidToKey oid
+      Nothing <- selectFirst [PersonName ==. "Repsert"] []
+      repsert k $ Person "Repsert" 26 Nothing
+      Just (k2,_) <- selectFirst [PersonName ==. "Repsert"] []
+      k2 @== k
+      repsert k $ Person "Repsert" 27 Nothing
+      Just (k3,p) <- selectFirst [PersonName ==. "Repsert"] []
+      k3 @== k
+      27 @== personAge p
+#endif
 
   it "retrieves a belongsToJust association" $ db $ do
       let p = Person "pet owner" 30 Nothing
