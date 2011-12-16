@@ -341,6 +341,7 @@ class PersistEntity val where
     persistUniqueToValues :: Unique val backend -> [PersistValue]
     persistUniqueKeys :: val -> [Unique val backend]
 
+#ifdef WITH_MONGODB
 instance PersistField a => PersistField [a] where
     toPersistValue = PersistList . map toPersistValue
     fromPersistValue (PersistList l) = fromPersistList l
@@ -388,6 +389,7 @@ instance PersistField v => PersistField (M.Map T.Text v) where
 
     fromPersistValue x = Left $ "Expected PersistMap, received: " ++ show x
     sqlType _ = SqlString
+#endif
 
 
 data SomePersistField = forall a. PersistField a => SomePersistField a
@@ -405,14 +407,14 @@ class (Trans.MonadIO (b m), Trans.MonadIO m, Monad (b m), Monad m) => PersistSto
     -- key (in SQL an auto-increment id).
     insert :: PersistEntity val => val -> b m (Key b val)
 
+#if WITH_MONGODB
     -- | create a new record in the database, using the given key.
-    insertKey :: PersistEntity val => key b val -> val -> b m ()
-    insertKey = error "not implemented"
+    insertKey :: PersistEntity val => Key b val -> val -> b m ()
 
     -- | put the record in the database with the given key.
     -- Unlike replace, it will insert a new record.
     repsert :: PersistEntity val => Key b val -> val -> b m ()
-    repsert = error "not implemented"
+#endif
 
     -- | Replace the record in the database with the given key. Result is
     -- undefined if such a record does not exist - instead use insertKey or repsert
