@@ -2,6 +2,7 @@
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
 -- | Code that is only needed for writing GenericSql backends.
 module Database.Persist.GenericSql.Internal
     ( Connection (..)
@@ -11,21 +12,14 @@ module Database.Persist.GenericSql.Internal
     , RowPopper
     , mkColumns
     , Column (..)
-    , UniqueDef'
-    , refName
-    , tableColumns
-    , rawFieldName
-    , rawTableName
-    , rawTableIdName
-    , RawName (..)
     , filterClause
     , filterClauseNoWhere
-    , getFieldName
     , dummyFromFilts
     , orderClause
     , getFiltsValues
     ) where
 
+import Prelude hiding ((++))
 import qualified Data.Map as Map
 import Data.IORef
 import Control.Monad.IO.Class
@@ -44,14 +38,17 @@ import Control.Exception.Control (bracket)
 #define MBCIO MonadControlIO
 #endif
 import Database.Persist.Util (nullable)
-import Data.List (intercalate)
-import Data.Text (Text)
+import Data.Text (Text, intercalate)
+import qualified Data.Text as T
+import Data.Monoid (Monoid, mappend)
+import Database.Persist.EntityDef
 
 type RowPopper m = m (Maybe [PersistValue])
 
 data Connection = Connection
     { prepare :: Text -> IO Statement
-    , insertSql :: RawName -> [RawName] -> Either Text (Text, Text)
+    -- ^ table name, column names, either 1 or 2 statements to run
+    , insertSql :: DBName -> [DBName] -> Either Text (Text, Text)
     , stmtMap :: IORef (Map.Map Text Statement)
     , close :: IO ()
     , migrateSql :: forall v. PersistEntity v
@@ -60,8 +57,8 @@ data Connection = Connection
     , begin :: (Text -> IO Statement) -> IO ()
     , commitC :: (Text -> IO Statement) -> IO ()
     , rollbackC :: (Text -> IO Statement) -> IO ()
-    , escapeName :: RawName -> String
-    , noLimit :: String
+    , escapeName :: DBName -> Text
+    , noLimit :: Text
     }
 data Statement = Statement
     { finalize :: IO ()
@@ -84,12 +81,12 @@ close' conn = do
     close conn
 
 -- | Create the list of columns for the given entity.
-mkColumns :: PersistEntity val => val -> ([Column], [UniqueDef'])
-mkColumns val =
+mkColumns :: PersistEntity val => val -> ([Column], [UniqueDef])
+mkColumns val = error "mkColumns" {- FIXME
     (cols, uniqs)
   where
     colNameMap = map (columnName &&& rawFieldName) $ entityColumns t
-    uniqs = map (RawName *** map (unjustLookup colNameMap))
+    uniqs = map (id *** map (unjustLookup colNameMap))
           $ map (uniqueName &&& uniqueColumns)
           $ entityUniques t
     cols = zipWith go (tableColumns t) $ toPersistFields $ halfDefined `asTypeOf` val
@@ -109,25 +106,29 @@ mkColumns val =
         let l = length t'
             (f, b) = splitAt (l - 2) t'
          in if b == "Id"
-                then Just (RawName f, refName tn c)
+                then Just (f, refName tn c)
                 else Nothing
     ref _ _ ("noreference":_) = Nothing
     ref c _ (('r':'e':'f':'e':'r':'e':'n':'c':'e':'=':x):_) =
-        Just (RawName x, refName tn c)
+        Just (x, refName tn c)
     ref c x (_:y) = ref c x y
+-}
 
+{- FIXME
 refName :: RawName -> RawName -> RawName
 refName (RawName table) (RawName column) =
     RawName $ table ++ '_' : column ++ "_fkey"
+-}
 
 data Column = Column
-    { cName :: RawName
-    , cNull :: Bool
-    , cType :: SqlType
-    , cDefault :: Maybe String
-    , cReference :: (Maybe (RawName, RawName)) -- table name, constraint name
+    { cName      :: DBName
+    , cNull      :: Bool
+    , cType      :: SqlType
+    , cDefault   :: Maybe Text
+    , cReference :: (Maybe (DBName, DBName)) -- table name, constraint name
     }
 
+{- FIXME
 getSqlValue :: [String] -> Maybe String
 getSqlValue (('s':'q':'l':'=':x):_) = Just x
 getSqlValue (_:x) = getSqlValue x
@@ -137,52 +138,38 @@ getIdNameValue :: [String] -> Maybe String
 getIdNameValue (('i':'d':'=':x):_) = Just x
 getIdNameValue (_:x) = getIdNameValue x
 getIdNameValue [] = Nothing
+-}
 
+{- FIXME
 tableColumns :: EntityDef -> [(RawName, String, [String])]
 tableColumns = map (\a@(ColumnDef _ y z) -> (rawFieldName a, y, z)) . entityColumns
-
-type UniqueDef' = (RawName, [RawName])
-
-rawFieldName :: ColumnDef -> RawName
-rawFieldName (ColumnDef n _ as) = RawName $
-    case getSqlValue as of
-        Just x -> x
-        Nothing -> n
-
-rawTableName :: EntityDef -> RawName
-rawTableName t = RawName $
-    case getSqlValue $ entityAttribs t of
-        Nothing -> entityName t
-        Just x -> x
-
-rawTableIdName :: EntityDef -> RawName
-rawTableIdName t = RawName $
-    case getIdNameValue $ entityAttribs t of
-        Nothing -> "id"
-        Just x -> x
-
-newtype RawName = RawName { unRawName :: String } -- FIXME Text
-    deriving (Eq, Ord)
+-}
 
 getFiltsValues :: forall val.  PersistEntity val => Connection -> [Filter val] -> [PersistValue]
 getFiltsValues conn = snd . filterClauseHelper False False conn
 
 filterClause :: PersistEntity val
              => Bool -- ^ include table name?
-             -> Connection -> [Filter val] -> String
+             -> Connection
+             -> [Filter val]
+             -> Text
 filterClause b c = fst . filterClauseHelper b True c
 
 filterClauseNoWhere :: PersistEntity val
                     => Bool -- ^ include table name?
-                    -> Connection -> [Filter val] -> String
+                    -> Connection
+                    -> [Filter val]
+                    -> Text
 filterClauseNoWhere b c = fst . filterClauseHelper b False c
 
 filterClauseHelper :: PersistEntity val
              => Bool -- ^ include table name?
              -> Bool -- ^ include WHERE?
-             -> Connection -> [Filter val] -> (String, [PersistValue])
+             -> Connection
+             -> [Filter val]
+             -> (Text, [PersistValue])
 filterClauseHelper includeTable includeWhere conn filters =
-    (if not (null sql) && includeWhere
+    (if not (T.null sql) && includeWhere
         then " WHERE " ++ sql
         else sql, vals)
   where
@@ -193,7 +180,7 @@ filterClauseHelper includeTable includeWhere conn filters =
         (intercalate s $ map wrapP a, concat b)
       where
         (a, b) = unzip $ map go fs
-        wrapP x = concat ["(", x, ")"]
+        wrapP x = T.concat ["(", x, ")"]
 
     go (FilterAnd fs) = combineAND fs
     go (FilterOr []) = ("1=1", [])
@@ -202,12 +189,12 @@ filterClauseHelper includeTable includeWhere conn filters =
         case (isNull, pfilter, varCount) of
             (True, Eq, _) -> (name ++ " IS NULL", [])
             (True, Ne, _) -> (name ++ " IS NOT NULL", [])
-            (False, Ne, _) -> (concat
+            (False, Ne, _) -> (T.concat
                 [ "("
                 , name
                 , " IS NULL OR "
                 , name
-                , " <> "
+                , " ++ "
                 , qmarks
                 , ")"
                 ], notNullVals)
@@ -215,7 +202,7 @@ filterClauseHelper includeTable includeWhere conn filters =
             -- not all databases support those words directly.
             (_, In, 0) -> ("1=2", [])
             (False, In, _) -> (name ++ " IN " ++ qmarks, allVals)
-            (True, In, _) -> (concat
+            (True, In, _) -> (T.concat
                 [ "("
                 , name
                 , " IS NULL OR "
@@ -225,7 +212,7 @@ filterClauseHelper includeTable includeWhere conn filters =
                 , ")"
                 ], notNullVals)
             (_, NotIn, 0) -> ("1=1", [])
-            (False, NotIn, _) -> (concat
+            (False, NotIn, _) -> (T.concat
                 [ "("
                 , name
                 , " IS NULL OR "
@@ -234,7 +221,7 @@ filterClauseHelper includeTable includeWhere conn filters =
                 , qmarks
                 , ")"
                 ], notNullVals)
-            (True, NotIn, _) -> (concat
+            (True, NotIn, _) -> (T.concat
                 [ "("
                 , name
                 , " IS NOT NULL AND "
@@ -251,22 +238,23 @@ filterClauseHelper includeTable includeWhere conn filters =
         isNull = any (== PersistNull) allVals
         notNullVals = filter (/= PersistNull) allVals
         allVals = filterValueToPersistValues value
-        t = entityDef $ dummyFromFilts [Filter field value pfilter]
+        tn = escapeName conn $ entityDB
+           $ entityDef $ dummyFromFilts [Filter field value pfilter]
         name =
             (if includeTable
-                then (++) (escapeName conn (rawTableName t) ++ ".")
+                then ((tn ++ ".") ++)
                 else id)
-            $ escapeName conn $ getFieldName t $ columnName $ persistColumnDef field
+            $ escapeName conn $ fieldDB $ persistFieldDef field
         qmarks = case value of
                     Left _ -> "?"
                     Right x ->
                         let x' = filter (/= PersistNull) $ map toPersistValue x
-                         in '(' : intercalate "," (map (const "?") x') ++ ")"
+                         in "(" ++ intercalate "," (map (const "?") x') ++ ")"
         varCount = case value of
                     Left _ -> 1
                     Right x -> length x
         showSqlFilter Eq = "="
-        showSqlFilter Ne = "<>"
+        showSqlFilter Ne = "++"
         showSqlFilter Gt = ">"
         showSqlFilter Lt = "<"
         showSqlFilter Ge = ">="
@@ -278,6 +266,7 @@ filterClauseHelper includeTable includeWhere conn filters =
 dummyFromFilts :: [Filter v] -> v
 dummyFromFilts _ = error "dummyFromFilts"
 
+{- FIXME
 getFieldName :: EntityDef -> String -> RawName
 getFieldName t s = rawFieldName $ tableColumn t s
 
@@ -290,24 +279,29 @@ tableColumn t s = go $ entityColumns t
     go (ColumnDef x y z:rest)
         | x == s = ColumnDef x y z
         | otherwise = go rest
+-}
 
 dummyFromOrder :: SelectOpt a -> a
 dummyFromOrder _ = undefined
 
-orderClause :: PersistEntity val => Bool -> Connection -> SelectOpt val -> String
+orderClause :: PersistEntity val
+            => Bool -- ^ include the table name
+            -> Connection
+            -> SelectOpt val
+            -> Text
 orderClause includeTable conn o =
     case o of
         Asc  x -> name x
         Desc x -> name x ++ " DESC"
-        _ -> error $ "expected Asc or Desc, not limit or offset"
+        _ -> error $ "orderClause: expected Asc or Desc, not limit or offset"
   where
-    cd x = persistColumnDef x
-    t = entityDef $ dummyFromOrder o
+    tn = escapeName conn $ entityDB $ entityDef $ dummyFromOrder o
+
     name x =
         (if includeTable
-            then (++) (escapeName conn (rawTableName t) ++ ".")
+            then ((tn ++ ".") ++)
             else id)
-        $ escapeName conn $ getFieldName t $ columnName $ cd x
+        $ escapeName conn $ fieldDB $ persistFieldDef x
 
 #if MIN_VERSION_monad_control(0, 3, 0)
 bracket :: MonadBaseControl IO m
@@ -320,3 +314,7 @@ bracket before after thing = control $ \runInIO ->
                                          (\st -> runInIO $ restoreM st >>= after)
                                          (\st -> runInIO $ restoreM st >>= thing)
 #endif
+
+infixr 5 ++
+(++) :: Text -> Text -> Text
+(++) = mappend

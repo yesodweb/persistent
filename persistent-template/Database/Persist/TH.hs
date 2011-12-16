@@ -19,7 +19,6 @@ module Database.Persist.TH
 
 import Database.Persist.Base
 import Database.Persist.GenericSql (Migration, SqlPersist, migrate)
-import Database.Persist.GenericSql.Internal (unRawName,rawFieldName,rawTableIdName) -- XXX
 import Database.Persist.Quasi (parse)
 import Database.Persist.Util (nullable)
 import Database.Persist.TH.Library (apE)
@@ -37,14 +36,16 @@ import qualified System.IO as SIO
 import Data.Text (pack)
 import Data.List (isSuffixOf)
 
+-- FIXME PersistSettings will have information on sql=, id=, references= et al
+
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
-persist :: QuasiQuoter
+persist :: PersistSettings -> QuasiQuoter
 persist = QuasiQuoter
     { quoteExp = lift . parse
     }
 
-persistFile :: FilePath -> Q Exp
+persistFile :: PersistSettings -> FilePath -> Q Exp
 persistFile fp = do
     h <- qRunIO $ SIO.openFile fp SIO.ReadMode
     qRunIO $ SIO.hSetEncoding h SIO.utf8_bom

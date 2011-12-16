@@ -29,6 +29,7 @@ library
                    , transformers-base
     exposed-modules: Database.Persist
                      Database.Persist.Base
+                     Database.Persist.EntityDef
                      Database.Persist.Quasi
                      Database.Persist.GenericSql
                      Database.Persist.GenericSql.Internal

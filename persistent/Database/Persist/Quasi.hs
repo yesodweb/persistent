@@ -1,39 +1,53 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Database.Persist.Quasi
     ( parse
+    , ParseSettings
     ) where
 
 import Database.Persist.Base
+import Database.Persist.EntityDef
 import Data.Char
 import Data.Maybe (mapMaybe)
+import Data.Text (Text)
+import qualified Data.Text as T
+import Control.Arrow ((&&&))
+
+data ParseSettings = ParseSettings -- FIXME
 
 -- | Parses a quasi-quoted syntax into a list of entity definitions.
-parse :: String -> [EntityDef]
-parse = parse'
+parse :: ParseSettings -> Text -> [EntityDef]
+parse ps = parse'
       . removeSpaces
       . filter (not . empty)
       . map tokenize
-      . lines
+      . T.lines
 
 -- | A token used by the parser.
 data Token = Spaces !Int   -- ^ @Spaces n@ are @n@ consecutive spaces.
-           | Token String  -- ^ @Token tok@ is token @tok@ already unquoted.
+           | Token Text    -- ^ @Token tok@ is token @tok@ already unquoted.
 
 -- | Tokenize a string.
-tokenize :: String -> [Token]
-tokenize [] = []
-tokenize ('-':'-':_) = [] -- Comment until the end of the line.
-tokenize ('"':xs) = go xs ""
-    where
-      go ('\"':rest) acc = Token (reverse acc) : tokenize rest
-      go ('\\':y:ys) acc = go ys (y:acc)
-      go (y:ys)      acc = go ys (y:acc)
-      go []          acc = error $ "Unterminated quoted (\") string starting with " ++
-                                   show (reverse acc) ++ "."
-tokenize (x:xs)
-    | isSpace x = let (spaces, rest) = span isSpace xs
-                  in Spaces (1 + length spaces) : tokenize rest
-tokenize xs = let (token, rest) = break isSpace xs
-              in Token token : tokenize rest
+tokenize :: Text -> [Token]
+tokenize t
+    | T.null t = []
+    | "--" `T.isPrefixOf` t = [] -- Comment until the end of the line.
+    | T.head t == '"' = quotes (T.tail t) id
+    | isSpace (T.head t) =
+        let (spaces, rest) = T.span isSpace t
+         in Spaces (T.length spaces) : tokenize rest
+    | otherwise =
+        let (token, rest) = T.break isSpace t
+         in Token token : tokenize rest
+  where
+    quotes t front
+        | T.null t = error $ T.unpack $ T.concat $
+            "Unterminated quoted string starting with " : front []
+        | T.head t == '"' = Token (T.concat $ front []) : tokenize (T.tail t)
+        | T.head t == '\\' && T.length t > 1 =
+            quotes (T.drop 2 t) (front . (T.take 2 t:))
+        | otherwise =
+            let (x, y) = T.break (`elem` "\\\"") t
+             in quotes y (front . (x:))
 
 -- | A string of tokens is empty when it has only spaces.  There
 -- can't be two consecutive 'Spaces', so this takes /O(1)/ time.
@@ -45,7 +59,8 @@ empty _          = False
 -- | A line.  We don't care about spaces in the middle of the
 -- line.  Also, we don't care about the ammount of indentation.
 data Line = Line { lineType :: LineType
-                 , tokens   :: [String] }
+                 , tokens   :: [Text]
+                 }
 
 -- | A line may be part of a header or body.
 data LineType = Header | Body
@@ -84,14 +99,24 @@ parse' :: [Line] -> [EntityDef]
 parse' (Line Header (name:entattribs) : rest) =
     let (x, y) = span ((== Body) . lineType) rest
     in mkEntityDef name entattribs (map tokens x) : parse' y
-parse' ((Line Header []) : _) = error "Indented line must contain at least name."
-parse' ((Line Body _)    : _) = error "Blocks must begin with non-indented lines."
+parse' ((Line Header []) : _) =
+    error "Indented line must contain at least name."
+parse' ((Line Body _)    : _) =
+    error "Blocks must begin with non-indented lines."
 parse' [] = []
 
+type RawLine = [Text]
+
 -- | Construct an entity definition.
-mkEntityDef :: String -> [String] -> [[String]] -> EntityDef
+mkEntityDef :: Text -- ^ name
+            -> [Attr] -- ^ entity attributes
+            -> [RawLine] -- ^ indented lines
+            -> EntityDef
 mkEntityDef name entattribs attribs =
-    EntityDef name entattribs cols uniqs derives
+    EntityDef
+        (HaskellName name)
+        (DBName name) -- FIXME
+        entattribs cols uniqs derives
   where
     cols = mapMaybe takeCols attribs
     uniqs = mapMaybe takeUniqs attribs
@@ -99,17 +124,25 @@ mkEntityDef name entattribs attribs =
                 [] -> ["Show", "Read", "Eq"]
                 x -> concat x
 
-takeCols :: [String] -> Maybe ColumnDef
+takeCols :: [Text] -> Maybe FieldDef
 takeCols ("deriving":_) = Nothing
-takeCols (n@(f:_):ty:rest)
-    | isLower f = Just $ ColumnDef n ty rest
+takeCols (n:ty:rest)
+    | not (T.null n) && isLower (T.head n) = Just $ FieldDef
+        (HaskellName n)
+        (DBName n) -- FIXME
+        (FieldType ty)
+        rest
 takeCols _ = Nothing
 
-takeUniqs :: [String] -> Maybe UniqueDef
-takeUniqs (n@(f:_):rest)
-    | isUpper f = Just $ UniqueDef n rest
+takeUniqs :: [Text] -> Maybe UniqueDef
+takeUniqs (n:rest)
+    | not (T.null n) && isUpper (T.head n)
+        = Just $ UniqueDef
+            (HaskellName n)
+            (DBName n {- FIXME -})
+            (map (HaskellName &&& DBName) rest) -- FIXME
 takeUniqs _ = Nothing
 
-takeDerives :: [String] -> Maybe [String]
+takeDerives :: [Text] -> Maybe [Text]
 takeDerives ("deriving":rest) = Just rest
 takeDerives _ = Nothing

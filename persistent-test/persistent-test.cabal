@@ -20,6 +20,7 @@ library
     extra-libraries: sqlite3
     exposed-modules: PersistentTest
                      Database.Persist.Base
+                     Database.Persist.EntityDef
                      Database.Persist.GenericSql
                      Database.Persist.GenericSql.Raw
                      Database.Persist.GenericSql.Internal

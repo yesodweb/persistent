@@ -9,6 +9,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 -- | API for database actions. The API deals with fields and entities.
 -- In SQL, a field corresponds to a column, and should be a single non-composite value.
@@ -36,22 +37,19 @@ module Database.Persist.Base
     , deleteCascadeWhere
     , PersistException (..)
     , Update (..)
-    , updateFieldName
+    , updateFieldDef
     , Filter (..)
     , Key (..)
-      -- * Definition
-    , EntityDef (..)
-    , ColumnName
-    , ColumnType
-    , ColumnDef (..)
-    , UniqueDef (..)
-    , fst3, snd3, third3
+
     , limitOffsetOrder
 
       -- * Config
     , PersistConfig (..)
     ) where
 
+import qualified Prelude
+import Prelude hiding ((++), show)
+import Data.Monoid (mappend)
 import Data.Time (Day, TimeOfDay, UTCTime)
 import Data.ByteString.Char8 (ByteString, unpack)
 import Control.Applicative
@@ -70,6 +68,7 @@ import qualified Control.Monad.IO.Class as Trans
 
 import qualified Control.Exception as E
 import Control.Monad.Trans.Error (Error (..))
+import Database.Persist.EntityDef
 
 import Data.Bits (bitSize)
 import Control.Monad (liftM)
@@ -89,26 +88,18 @@ import Control.Monad.IO.Control (MonadControlIO)
 #endif
 import Data.Object (TextObject)
 
-fst3 :: forall t t1 t2. (t, t1, t2) -> t
-fst3   (x, _, _) = x
-snd3 :: forall t t1 t2. (t, t1, t2) -> t1
-snd3   (_, x, _) = x
-third3 :: forall t t1 t2. (t, t1, t2) -> t2
-third3 (_, _, x) = x
-
 data PersistException
-  = PersistError String -- ^ Generic Exception
-  | PersistMarshalError String
-  | PersistInvalidField String
-  | PersistForeignConstraintUnmet String
-  | PersistMongoDBError String
-  | PersistMongoDBUnsupported String
+  = PersistError T.Text -- ^ Generic Exception
+  | PersistMarshalError T.Text
+  | PersistInvalidField T.Text
+  | PersistForeignConstraintUnmet T.Text
+  | PersistMongoDBError T.Text
+  | PersistMongoDBUnsupported T.Text
     deriving (Show, Typeable)
 
 instance E.Exception PersistException
-instance Error PersistException where strMsg msg = PersistError msg
-
-
+instance Error PersistException where
+    strMsg = PersistError . T.pack
 
 -- | A raw value which can be stored in any backend and can be marshalled to
 -- and from a 'PersistField'.
@@ -134,7 +125,7 @@ instance SinglePiece PersistValue where
             _ -> Just $ PersistText t
     toSinglePiece x =
         case fromPersistValue x of
-            Left e -> error e
+            Left e -> error $ T.unpack e
             Right y -> y
 
 -- | A SQL data type. Naming attempts to reflect the underlying Haskell
@@ -154,7 +145,7 @@ data SqlType = SqlString
 -- | A value which can be marshalled to and from a 'PersistValue'.
 class PersistField a where
     toPersistValue :: a -> PersistValue
-    fromPersistValue :: PersistValue -> Either String a
+    fromPersistValue :: PersistValue -> Either T.Text a
     sqlType :: a -> SqlType
     isNullable :: a -> Bool
     isNullable _ = False
@@ -164,13 +155,13 @@ instance PersistField String where
     fromPersistValue (PersistText s) = Right $ T.unpack s
     fromPersistValue (PersistByteString bs) =
         Right $ T.unpack $ T.decodeUtf8With T.lenientDecode bs
-    fromPersistValue (PersistInt64 i) = Right $ show i
-    fromPersistValue (PersistDouble d) = Right $ show d
-    fromPersistValue (PersistDay d) = Right $ show d
-    fromPersistValue (PersistTimeOfDay d) = Right $ show d
-    fromPersistValue (PersistUTCTime d) = Right $ show d
+    fromPersistValue (PersistInt64 i) = Right $ Prelude.show i
+    fromPersistValue (PersistDouble d) = Right $ Prelude.show d
+    fromPersistValue (PersistDay d) = Right $ Prelude.show d
+    fromPersistValue (PersistTimeOfDay d) = Right $ Prelude.show d
+    fromPersistValue (PersistUTCTime d) = Right $ Prelude.show d
     fromPersistValue PersistNull = Left "Unexpected null"
-    fromPersistValue (PersistBool b) = Right $ show b
+    fromPersistValue (PersistBool b) = Right $ Prelude.show b
     fromPersistValue (PersistList _) = Left "Cannot convert PersistList to String"
     fromPersistValue (PersistMap _) = Left "Cannot convert PersistMap to String"
     fromPersistValue (PersistObjectId _) = Left "Cannot convert PersistObjectId to String"
@@ -187,13 +178,13 @@ instance PersistField T.Text where
     fromPersistValue (PersistText s) = Right s
     fromPersistValue (PersistByteString bs) =
         Right $ T.decodeUtf8With T.lenientDecode bs
-    fromPersistValue (PersistInt64 i) = Right $ T.pack $ show i
-    fromPersistValue (PersistDouble d) = Right $ T.pack $ show d
-    fromPersistValue (PersistDay d) = Right $ T.pack $ show d
-    fromPersistValue (PersistTimeOfDay d) = Right $ T.pack $ show d
-    fromPersistValue (PersistUTCTime d) = Right $ T.pack $ show d
+    fromPersistValue (PersistInt64 i) = Right $ show i
+    fromPersistValue (PersistDouble d) = Right $ show d
+    fromPersistValue (PersistDay d) = Right $ show d
+    fromPersistValue (PersistTimeOfDay d) = Right $ show d
+    fromPersistValue (PersistUTCTime d) = Right $ show d
     fromPersistValue PersistNull = Left "Unexpected null"
-    fromPersistValue (PersistBool b) = Right $ T.pack $ show b
+    fromPersistValue (PersistBool b) = Right $ show b
     fromPersistValue (PersistList _) = Left "Cannot convert PersistList to Text"
     fromPersistValue (PersistMap _) = Left "Cannot convert PersistMap to Text"
     fromPersistValue (PersistObjectId _) = Left "Cannot convert PersistObjectId to Text"
@@ -329,8 +320,8 @@ data Update v = forall typ. PersistField typ => Update
     , updateUpdate :: PersistUpdate -- FIXME Replace with expr down the road
     }
 
-updateFieldName :: PersistEntity v => Update v -> String
-updateFieldName (Update f _ _) = columnName $ persistColumnDef f
+updateFieldDef :: PersistEntity v => Update v -> FieldDef
+updateFieldDef (Update f _ _) = persistFieldDef f
 
 data SelectOpt v = forall typ. Asc (EntityField v typ)
                  | forall typ. Desc (EntityField v typ)
@@ -354,7 +345,7 @@ data Filter v = forall typ. PersistField typ => Filter
 class PersistEntity val where
     -- | Parameters: val and datatype of the field
     data EntityField val :: * -> *
-    persistColumnDef :: EntityField val typ -> ColumnDef
+    persistFieldDef :: EntityField val typ -> FieldDef
 
     -- | Unique keys in existence on this entity.
     data Unique val :: ((* -> *) -> * -> *) -> *
@@ -371,7 +362,7 @@ class PersistEntity val where
 data SomePersistField = forall a. PersistField a => SomePersistField a
 instance PersistField SomePersistField where
     toPersistValue (SomePersistField a) = toPersistValue a
-    fromPersistValue x = fmap SomePersistField (fromPersistValue x :: Either String String)
+    fromPersistValue x = fmap SomePersistField (fromPersistValue x :: Either T.Text T.Text)
     sqlType (SomePersistField a) = sqlType a
 
 newtype Key backend entity = Key { unKey :: PersistValue }
@@ -486,7 +477,7 @@ belongsToJust getForeignKey model = getJust $ getForeignKey model
 --   Unsafe unless your database is enforcing that the foreign key is valid
 getJust :: (PersistBackend b m, PersistEntity val, Show (Key b val)) => Key b val -> b m val
 getJust key = get key >>= maybe
-  (Trans.liftIO . E.throwIO $ PersistForeignConstraintUnmet (show key))
+  (Trans.liftIO $ E.throwIO $ PersistForeignConstraintUnmet $ show key)
   return
 
 
@@ -525,33 +516,8 @@ selectList a b = do
         Left e -> Trans.liftIO . E.throwIO $ PersistError $ show e
         Right x -> return x
 
-data EntityDef = EntityDef
-    { entityName    :: String
-    , entityAttribs :: [String]
-    , entityColumns :: [ColumnDef]
-    , entityUniques :: [UniqueDef]
-    , entityDerives :: [String]
-    }
-    deriving Show
-
-type ColumnName = String
-type ColumnType = String
-
-data ColumnDef = ColumnDef -- FIXME rename to FieldDef? Also, do we need a columnHaskellName and columnDBName?
-    { columnName    :: ColumnName
-    , columnType    :: ColumnType
-    , columnAttribs :: [String]
-    }
-    deriving Show
-
-data UniqueDef = UniqueDef
-    { uniqueName    :: String
-    , uniqueColumns :: [ColumnName]
-    }
-    deriving Show
-
 data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le | In | NotIn
-                   | BackendSpecificFilter String
+                   | BackendSpecificFilter T.Text
     deriving (Read, Show)
 
 class PersistEntity a => DeleteCascade a b where
@@ -591,3 +557,10 @@ class PersistConfig c where
     runPool :: (MBCIO m, MonadIO m) => c -> PersistConfigBackend c m a
             -> PersistConfigPool c
             -> m a
+
+infixr 5 ++
+(++) :: T.Text -> T.Text -> T.Text
+(++) = mappend
+
+show :: Show a => a -> T.Text
+show = T.pack . Prelude.show
