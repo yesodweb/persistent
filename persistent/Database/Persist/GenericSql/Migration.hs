@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Database.Persist.GenericSql.Migration
   (   Migration
     , parseMigration
@@ -17,7 +19,13 @@ import Database.Persist.GenericSql.Internal
 import qualified Database.Persist.GenericSql.Raw as R
 import Database.Persist.Store
 import Database.Persist.GenericSql.Raw (SqlPersist (..))
+#if MIN_VERSION_monad_control(0, 3, 0)
+import Control.Monad.Trans.Control (MonadBaseControl)
+#define MBCIO MonadBaseControl IO
+#else
 import Control.Monad.IO.Control (MonadControlIO)
+#define MBCIO MonadControlIO
+#endif
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader
@@ -27,10 +35,10 @@ import Data.Text (Text, unpack, snoc)
 import qualified Data.Text.IO
 import System.IO
 
-type Sql = Text
-
 execute' :: MonadIO m => Text -> [PersistValue] -> SqlPersist m ()
 execute' = R.execute
+
+type Sql = Text
 
 -- Bool indicates if the Sql is safe
 type CautiousMigration = [(Bool, Sql)]
@@ -58,32 +66,33 @@ parseMigration' m = do
       Left errs -> error $ unlines $ map unpack errs
       Right sql -> return sql
 
-printMigration :: MonadControlIO m => Migration (SqlPersist m) -> SqlPersist m ()
+printMigration :: (MBCIO m, MonadIO m) => Migration (SqlPersist m) -> SqlPersist m ()
 printMigration m = do
   mig <- parseMigration' m
   mapM_ (liftIO . Data.Text.IO.putStrLn . flip snoc ';') (allSql mig)
 
-getMigration :: MonadControlIO m => Migration (SqlPersist m) -> SqlPersist m [Sql]
+getMigration :: (MBCIO m, MonadIO m) => Migration (SqlPersist m) -> SqlPersist m [Sql]
 getMigration m = do
   mig <- parseMigration' m
   return $ allSql mig
 
-runMigration :: MonadControlIO m
+runMigration :: (MonadIO m, MBCIO m)
              => Migration (SqlPersist m)
              -> SqlPersist m ()
 runMigration m = runMigration' m False >> return ()
 
 -- | Same as 'runMigration', but returns a list of the SQL commands executed
 -- instead of printing them to stderr.
-runMigrationSilent :: MonadControlIO m
+runMigrationSilent :: (MBCIO m, MonadIO m)
                    => Migration (SqlPersist m)
                    -> SqlPersist m [Text]
 runMigrationSilent m = runMigration' m True
 
-runMigration' :: MonadControlIO m
-              => Migration (SqlPersist m)
-              -> Bool -- ^ is silent?
-              -> SqlPersist m [Text]
+runMigration'
+    :: (MBCIO m, MonadIO m)
+    => Migration (SqlPersist m)
+    -> Bool -- ^ is silent?
+    -> SqlPersist m [Text]
 runMigration' m silent = do
     mig <- parseMigration' m
     case unsafeSql mig of
@@ -94,7 +103,7 @@ runMigration' m silent = do
             , unlines $ map (\s -> "    " ++ unpack s ++ ";") $ errs
             ]
 
-runMigrationUnsafe :: MonadControlIO m
+runMigrationUnsafe :: (MBCIO m, MonadIO m)
                    => Migration (SqlPersist m)
                    -> SqlPersist m ()
 runMigrationUnsafe m = do
@@ -107,7 +116,7 @@ executeMigrate silent s = do
     execute' s []
     return s
 
-migrate :: (MonadControlIO m, PersistEntity val)
+migrate :: (MonadIO m, MBCIO m, PersistEntity val)
         => val
         -> Migration (SqlPersist m)
 migrate val = do

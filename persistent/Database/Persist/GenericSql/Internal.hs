@@ -171,3 +171,15 @@ newtype RawName = RawName { unRawName :: String } -- FIXME Text
 
 getFieldName :: EntityDef -> String -> RawName
 getFieldName t s = rawFieldName $ tableColumn t s
+
+#if MIN_VERSION_monad_control(0, 3, 0)
+bracket :: MonadBaseControl IO m
+        => m a       -- ^ computation to run first (\"acquire resource\")
+        -> (a -> m b) -- ^ computation to run last (\"release resource\")
+        -> (a -> m c) -- ^ computation to run in-between
+        -> m c
+bracket before after thing = control $ \runInIO ->
+                               E.bracket (runInIO before)
+                                         (\st -> runInIO $ restoreM st >>= after)
+                                         (\st -> runInIO $ restoreM st >>= thing)
+#endif

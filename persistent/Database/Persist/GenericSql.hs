@@ -202,3 +202,10 @@ dummyFromKey _ = error "dummyFromKey"
 
 dummyFromUnique :: Unique v b -> v
 dummyFromUnique _ = error "dummyFromUnique"
+
+#if MIN_VERSION_monad_control(0, 3, 0)
+onException :: MonadBaseControl IO m => m α -> m β -> m α
+onException m what = control $ \runInIO ->
+                       E.onException (runInIO m)
+                                     (runInIO what)
+#endif

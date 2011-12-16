@@ -2,6 +2,9 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE UndecidableInstances #-} -- FIXME
 
 module Database.Persist.Query.GenericSql
   ( PersistQuery (..)
@@ -27,11 +30,17 @@ import Data.Text (Text, pack)
 
 import Data.Enumerator hiding (length, filter, consume, map)
 
+#if MIN_VERSION_monad_control(0, 3, 0)
+import Control.Monad.Trans.Control (MonadBaseControl)
+#define MBCIO MonadBaseControl IO
+#else
 import Control.Monad.IO.Control (MonadControlIO)
+#define MBCIO MonadControlIO
+#endif
 import Control.Exception (toException)
 
 
-instance MonadControlIO m => PersistQuery SqlPersist m where
+instance (MonadIO m, MBCIO m) => PersistQuery SqlPersist m where
     update _ [] = return ()
     update k upds = do
         conn <- SqlPersist ask
@@ -200,8 +209,10 @@ dummyFromKey _ = error "dummyFromKey"
 execute' :: MonadIO m => Text -> [PersistValue] -> SqlPersist m ()
 execute' = R.execute
 
-withStmt' :: MonadControlIO m => Text -> [PersistValue]
-         -> (RowPopper (SqlPersist m) -> SqlPersist m a) -> SqlPersist m a
+withStmt'
+    :: (MBCIO m, MonadIO m)
+    => Text -> [PersistValue]
+    -> (RowPopper (SqlPersist m) -> SqlPersist m a) -> SqlPersist m a
 withStmt' = R.withStmt
 
 getFiltsValues :: forall val.  PersistEntity val => Connection -> [Filter val] -> [PersistValue]
