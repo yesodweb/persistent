@@ -1,7 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Database.Persist.Quasi
     ( parse
-    , ParseSettings
+    , PersistSettings (..) -- FIXME
+    , sqlSettings
     ) where
 
 import Database.Persist.Base
@@ -12,10 +13,13 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Control.Arrow ((&&&))
 
-data ParseSettings = ParseSettings -- FIXME
+data PersistSettings = PersistSettings -- FIXME
+
+sqlSettings :: PersistSettings
+sqlSettings = PersistSettings
 
 -- | Parses a quasi-quoted syntax into a list of entity definitions.
-parse :: ParseSettings -> Text -> [EntityDef]
+parse :: PersistSettings -> Text -> [EntityDef]
 parse ps = parse'
       . removeSpaces
       . filter (not . empty)

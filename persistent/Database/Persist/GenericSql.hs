@@ -454,12 +454,13 @@ executeMigrate silent s = do
     return s
 
 migrate :: (MonadIO m, MBCIO m, PersistEntity val)
-        => val
+        => [EntityDef]
+        -> val
         -> Migration (SqlPersist m)
-migrate val = do
+migrate allDefs val = do
     conn <- lift $ lift $ SqlPersist ask
     let getter = R.getStmt' conn
-    res <- liftIO $ migrateSql conn getter val
+    res <- liftIO $ migrateSql conn allDefs getter val
     either tell (lift . tell) res
 
 updatePersistValue :: Update v -> PersistValue

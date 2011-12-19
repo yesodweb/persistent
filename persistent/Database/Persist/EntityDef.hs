@@ -19,7 +19,7 @@ data EntityDef = EntityDef
     , entityFields  :: [FieldDef]
     , entityUniques :: [UniqueDef]
     , entityDerives :: [Text]
-    }
+    } -- FIXME entityDBId :: DBName
     deriving (Show, Eq, Read, Ord)
 
 newtype HaskellName = HaskellName { unHaskellName :: Text }

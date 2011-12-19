@@ -3,6 +3,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternGuards #-}
 -- | Code that is only needed for writing GenericSql backends.
 module Database.Persist.GenericSql.Internal
     ( Connection (..)
@@ -40,7 +41,7 @@ import Control.Exception.Control (bracket)
 import Database.Persist.Util (nullable)
 import Data.Text (Text, intercalate)
 import qualified Data.Text as T
-import Data.Monoid (Monoid, mappend)
+import Data.Monoid (Monoid, mappend, mconcat)
 import Database.Persist.EntityDef
 
 type RowPopper m = m (Maybe [PersistValue])
@@ -52,7 +53,9 @@ data Connection = Connection
     , stmtMap :: IORef (Map.Map Text Statement)
     , close :: IO ()
     , migrateSql :: forall v. PersistEntity v
-                 => (Text -> IO Statement) -> v
+                 => [EntityDef]
+                 -> (Text -> IO Statement)
+                 -> v
                  -> IO (Either [Text] [(Bool, Text)])
     , begin :: (Text -> IO Statement) -> IO ()
     , commitC :: (Text -> IO Statement) -> IO ()
@@ -80,45 +83,60 @@ close' conn = do
     readIORef (stmtMap conn) >>= mapM_ finalize . Map.elems
     close conn
 
+resolveTableName :: [EntityDef] -> HaskellName -> DBName
+resolveTableName [] (HaskellName hn) = error $ "Table not found: " `mappend` T.unpack hn
+resolveTableName (e:es) hn
+    | entityHaskell e == hn = entityDB e
+    | otherwise = resolveTableName es hn
+
 -- | Create the list of columns for the given entity.
-mkColumns :: PersistEntity val => val -> ([Column], [UniqueDef])
-mkColumns val = error "mkColumns" {- FIXME
-    (cols, uniqs)
+mkColumns :: PersistEntity val => [EntityDef] -> val -> ([Column], [UniqueDef])
+mkColumns allDefs val = error "mkColumns"
+    (cols, entityUniques t)
   where
-    colNameMap = map (columnName &&& rawFieldName) $ entityColumns t
-    uniqs = map (id *** map (unjustLookup colNameMap))
-          $ map (uniqueName &&& uniqueColumns)
-          $ entityUniques t
-    cols = zipWith go (tableColumns t) $ toPersistFields $ halfDefined `asTypeOf` val
+    cols :: [Column]
+    cols = zipWith go (entityFields t)
+         $ toPersistFields
+         $ halfDefined `asTypeOf` val
 
-    -- Like fromJust . lookup, but gives a more useful error message
-    unjustLookup m a = fromMaybe (error $ "Column not found: " ++ a)
-                     $ lookup a m
-
+    t :: EntityDef
     t = entityDef val
-    tn = rawTableName t
-    go (name, t', as) p =
-        Column name (nullable as) (sqlType p) (def as) (ref name t' as)
-    def [] = Nothing
-    def (('d':'e':'f':'a':'u':'l':'t':'=':d):_) = Just d
-    def (_:rest) = def rest
-    ref c t' [] =
-        let l = length t'
-            (f, b) = splitAt (l - 2) t'
-         in if b == "Id"
-                then Just (f, refName tn c)
-                else Nothing
-    ref _ _ ("noreference":_) = Nothing
-    ref c _ (('r':'e':'f':'e':'r':'e':'n':'c':'e':'=':x):_) =
-        Just (x, refName tn c)
-    ref c x (_:y) = ref c x y
--}
 
-{- FIXME
-refName :: RawName -> RawName -> RawName
-refName (RawName table) (RawName column) =
-    RawName $ table ++ '_' : column ++ "_fkey"
--}
+    tn :: DBName
+    tn = entityDB t
+
+    go :: FieldDef -> SomePersistField -> Column
+    go fd p =
+        Column
+            (fieldDB fd)
+            (nullable $ fieldAttrs fd)
+            (sqlType p)
+            (def $ fieldAttrs fd)
+            (ref (fieldDB fd) (fieldType fd) (fieldAttrs fd))
+
+    def :: [Attr] -> Maybe Text
+    def [] = Nothing
+    def (a:as)
+        | Just d <- T.stripPrefix "default=" a = Just d
+        | otherwise = def as
+
+    ref :: DBName
+        -> FieldType
+        -> [Attr]
+        -> Maybe (DBName, DBName) -- table name, constraint name
+    ref c (FieldType t') []
+        | Just f <- T.stripSuffix "Id" t' =
+            Just (resolveTableName allDefs $ HaskellName f, refName tn c)
+        | otherwise = Nothing
+    ref _ _ ("noreference":_) = Nothing
+    ref c _ (a:_)
+        | Just x <- T.stripPrefix "reference=" a =
+            Just (DBName x, refName tn c)
+    ref c x (_:as) = ref c x as
+
+refName :: DBName -> DBName -> DBName
+refName (DBName table) (DBName column) =
+    DBName $ mconcat [table, "_", column, "_fkey"]
 
 data Column = Column
     { cName      :: DBName

@@ -352,7 +352,7 @@ class PersistEntity val where
 
     entityDef :: val -> EntityDef
     toPersistFields :: val -> [SomePersistField]
-    fromPersistValues :: [PersistValue] -> Either String val
+    fromPersistValues :: [PersistValue] -> Either T.Text val
     halfDefined :: val
 
     persistUniqueToFieldNames :: Unique val backend -> [String]

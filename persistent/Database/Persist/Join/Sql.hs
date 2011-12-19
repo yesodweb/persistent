@@ -32,8 +32,9 @@ import Control.Monad.IO.Class (MonadIO)
 import qualified Prelude
 import Prelude hiding ((++), unlines, concat, show, null)
 import Data.Monoid (Monoid, mappend)
+import qualified Data.Text as T
 
-fromPersistValuesId :: PersistEntity v => [PersistValue] -> Either String (Key SqlPersist v, v)
+fromPersistValuesId :: PersistEntity v => [PersistValue] -> Either Text (Key SqlPersist v, v)
 fromPersistValuesId [] = Left "fromPersistValuesId: No values provided"
 fromPersistValuesId (PersistInt64 i:rest) =
     case fromPersistValues rest of
@@ -60,11 +61,11 @@ instance (PersistEntity one, PersistEntity many, Eq (Key SqlPersist one))
                     let (y, z) = splitAt oneCount vals
                     case (fromPersistValuesId y, fromPersistValuesId z) of
                         (Right y', Right z') -> loop (front . (:) (y', Just z')) popper
-                        (Left e, _) -> error $ "selectOneMany: " ++ e
+                        (Left e, _) -> error $ "selectOneMany: " ++ T.unpack e
                         (Right y', Left e) ->
                             case z of
                                 PersistNull:_ -> loop (front . (:) (y', Nothing)) popper
-                                _ -> error $ "selectOneMany: " ++ e
+                                _ -> error $ "selectOneMany: " ++ T.unpack e
         oneCount = error "oneCount" -- 1 + length (tableColumns $ entityDef one)
         one = dummyFromFilts oneF
         many = dummyFromFilts manyF

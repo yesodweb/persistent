@@ -1,11 +1,13 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Database.Persist.Util
     ( nullable
     , deprecate
     ) where
 
 import System.IO.Unsafe (unsafePerformIO)
+import Data.Text
 
-nullable :: [String] -> Bool
+nullable :: [Text] -> Bool
 nullable s
     | "Maybe" `elem` s = True
     | "null" `elem` s = deprecate "Please replace null with Maybe" True

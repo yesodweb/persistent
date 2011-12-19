@@ -55,7 +55,7 @@ import Database.Persist.Postgresql
 
 #endif
 
-import Database.Persist.TH (mkPersist, mkMigrate, derivePersistField, share, sqlSettings, persist, mkDeleteCascade)
+import Database.Persist.TH (mkPersist, mkMigrate, derivePersistField, share, sqlMkSettings, persistSql, mkDeleteCascade)
 import Control.Monad.IO.Class
 
 import Control.Monad (unless)
@@ -101,9 +101,9 @@ data PetType = Cat | Dog
 derivePersistField "PetType"
 
 #if WITH_MONGODB
-mkPersist MkPersistSettings { mpsBackend = ConT ''Action } [persist|
+mkPersist MkPersistSettings { mpsBackend = ConT ''Action } [persistSQL|
 #else
-share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persist|
+share [mkPersist sqlMkSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persistSql|
 #endif
 -- Dedented comment
   -- Header-level comment
