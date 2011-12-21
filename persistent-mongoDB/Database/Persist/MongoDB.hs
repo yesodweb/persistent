@@ -158,6 +158,7 @@ insertFields t record = zipWith (DB.:=) (toLabels) (toValues)
     toLabels = map (u . columnName) $ entityColumns t
     toValues = map (DB.val . toPersistValue) (toPersistFields record)
 
+#ifdef WITH_MONGODB
 saveWithKey :: forall m ent record. (Applicative m, Functor m, MonadControlIO m, PersistEntity ent, PersistEntity record)
             => (DB.Collection -> DB.Document -> DB.Action m () )
             -> Key DB.Action ent -> record -> DB.Action m ()
@@ -165,6 +166,7 @@ saveWithKey dbSave k record =
       dbSave (u $ entityName t) ((persistKeyToMongoId k):(insertFields t record))
     where
       t = entityDef record
+#endif
 
 instance (Applicative m, Functor m, MonadControlIO m) => PersistStore DB.Action m where
     insert record = do
@@ -173,9 +175,11 @@ instance (Applicative m, Functor m, MonadControlIO m) => PersistStore DB.Action 
       where
         t = entityDef record
 
+#ifdef WITH_MONGODB
     insertKey k record = saveWithKey DB.insert_ k record
 
     repsert   k record = saveWithKey DB.save k record
+#endif
 
     replace k record = do
         DB.replace (selectByKey k t) (insertFields t record)
