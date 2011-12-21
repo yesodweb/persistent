@@ -212,7 +212,7 @@ filterClauseHelper includeTable includeWhere conn filters =
                 , name
                 , " IS NULL OR "
                 , name
-                , " ++ "
+                , " <> "
                 , qmarks
                 , ")"
                 ], notNullVals)
