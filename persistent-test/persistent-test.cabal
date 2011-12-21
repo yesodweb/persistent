@@ -52,7 +52,7 @@ library
                    , path-pieces
                    , text
                    , transformers
-                   , monad-control
+                   , monad-control == 0.3.*
                    , containers
                    , bytestring
                    , enumerator

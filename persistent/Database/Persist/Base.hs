@@ -355,7 +355,7 @@ class PersistEntity val where
     fromPersistValues :: [PersistValue] -> Either T.Text val
     halfDefined :: val
 
-    persistUniqueToFieldNames :: Unique val backend -> [String]
+    persistUniqueToFieldNames :: Unique val backend -> [(HaskellName, DBName)]
     persistUniqueToValues :: Unique val backend -> [PersistValue]
     persistUniqueKeys :: val -> [Unique val backend]
 

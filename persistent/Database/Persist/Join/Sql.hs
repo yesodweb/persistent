@@ -66,28 +66,27 @@ instance (PersistEntity one, PersistEntity many, Eq (Key SqlPersist one))
                             case z of
                                 PersistNull:_ -> loop (front . (:) (y', Nothing)) popper
                                 _ -> error $ "selectOneMany: " ++ T.unpack e
-        oneCount = error "oneCount" -- 1 + length (tableColumns $ entityDef one)
+        oneCount = 1 + length (entityFields $ entityDef one)
         one = dummyFromFilts oneF
         many = dummyFromFilts manyF
-        sql conn = error "line 69" {-pack $ concat
+        sql conn = concat
             [ "SELECT "
-            , intercalate "," $ colsPlusId conn one ++ colsPlusId conn many
+            , T.intercalate "," $ colsPlusId conn one ++ colsPlusId conn many
             , " FROM "
-            , escapeName conn $ rawTableName $ entityDef one
+            , escapeName conn $ entityDB $ entityDef one
             , if isOuter then " LEFT JOIN " else " INNER JOIN "
-            , escapeName conn $ rawTableName $ entityDef many
+            , escapeName conn $ entityDB $ entityDef many
             , " ON "
-            , escapeName conn $ rawTableName $ entityDef one
+            , escapeName conn $ entityDB $ entityDef one
             , ".id = "
-            , escapeName conn $ rawTableName $ entityDef many
+            , escapeName conn $ entityDB $ entityDef many
             , "."
-            , escapeName conn $ RawName $ filterName $ eq undefined
+            , escapeName conn $ filterName $ eq undefined
             , filts
-            , if null ords
-                then ""
-                else " ORDER BY " ++ intercalate ", " ords
+            , case ords of
+                [] -> ""
+                _ -> " ORDER BY " ++ T.intercalate ", " ords
             ]
-            -}
           where
             filts1 = filterClauseNoWhere True conn oneF
             filts2 = filterClauseNoWhere True conn manyF
@@ -117,13 +116,11 @@ addTable conn e s = concat
 
 colsPlusId :: PersistEntity e => Connection -> e -> [Text]
 colsPlusId conn e =
-    error "colsPlusId" {-
     map (addTable conn e) $
-    id_ : (map (\(x, _, _) -> escapeName conn x) cols)
+    id_ : (map (escapeName conn . fieldDB) cols)
   where
-    id_ = unRawName $ rawTableIdName $ entityDef e
-    cols = tableColumns $ entityDef e
-    -}
+    id_ = escapeName conn $ entityID $ entityDef e
+    cols = entityFields $ entityDef e
 
 filterName :: PersistEntity v => Filter v -> DBName
 filterName (Filter f _ _) = fieldDB $ persistFieldDef f

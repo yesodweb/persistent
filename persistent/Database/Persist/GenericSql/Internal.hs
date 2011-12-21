@@ -91,7 +91,7 @@ resolveTableName (e:es) hn
 
 -- | Create the list of columns for the given entity.
 mkColumns :: PersistEntity val => [EntityDef] -> val -> ([Column], [UniqueDef])
-mkColumns allDefs val = error "mkColumns"
+mkColumns allDefs val =
     (cols, entityUniques t)
   where
     cols :: [Column]

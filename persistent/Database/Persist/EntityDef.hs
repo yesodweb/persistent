@@ -15,6 +15,7 @@ import Data.Text (Text)
 data EntityDef = EntityDef
     { entityHaskell :: HaskellName
     , entityDB      :: DBName
+    , entityID      :: DBName
     , entityAttrs   :: [Attr]
     , entityFields  :: [FieldDef]
     , entityUniques :: [UniqueDef]

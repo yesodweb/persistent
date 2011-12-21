@@ -120,6 +120,7 @@ mkEntityDef name entattribs attribs =
     EntityDef
         (HaskellName name)
         (DBName name) -- FIXME
+        (DBName "id") -- FIXME
         entattribs cols uniqs derives
   where
     cols = mapMaybe takeCols attribs

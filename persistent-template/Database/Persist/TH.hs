@@ -182,16 +182,18 @@ mkToPersistFields pairs = do
         let bod = ListE $ map (AppE sp . VarE) xs
         return $ Clause [pat] (NormalB bod) []
 
-mkToFieldNames :: [UniqueDef] -> Dec
-mkToFieldNames pairs =
-        FunD (mkName "persistUniqueToFieldNames") $ degen $ map go pairs
+mkToFieldNames :: [UniqueDef] -> Q Dec
+mkToFieldNames pairs = do
+    pairs' <- mapM go pairs
+    return $ FunD (mkName "persistUniqueToFieldNames") $ degen pairs'
   where
-    go (UniqueDef constr _ names) =
-        Clause [RecP (mkName $ unpack $ unHaskellName constr) []]
-               (NormalB $ ListE names')
-               []
-      where
-        names' = map (LitE . StringL . unpack . unHaskellName . fst) names
+    go (UniqueDef constr _ names) = do
+        names' <- lift names
+        return $
+            Clause
+                [RecP (mkName $ unpack $ unHaskellName constr) []]
+                (NormalB names')
+                []
 
 mkToUpdate :: String -> [(String, PersistUpdate)] -> Q Dec
 mkToUpdate name pairs = do
@@ -282,6 +284,7 @@ mkEntity mps t = do
         (DBName "Id")
         (FieldType $ unHaskellName (entityHaskell t) ++ "Id") []
         : entityFields t
+    toFieldNames <- mkToFieldNames $ entityUniques t
     return $
       [ dataTypeDec t
       , TySynD (mkName $ unpack $ unHaskellName $ entityHaskell t) [] $
@@ -295,7 +298,7 @@ mkEntity mps t = do
         , tpf
         , FunD (mkName "fromPersistValues") fpv
         , mkHalfDefined name $ length $ entityFields t
-        , mkToFieldNames $ entityUniques t
+        , toFieldNames
         , utv
         , puk
         , DataInstD
@@ -498,14 +501,15 @@ mkMigrate fun defs = do
         return $ NoBindS $ m `AppE` defs' `AppE` u'
 
 instance Lift EntityDef where
-    lift (EntityDef a b c d e f) =
+    lift (EntityDef a b c d e f g) =
         [|EntityDef
             $(lift a)
             $(lift b)
-            $(liftTs c)
-            $(lift d)
+            $(lift c)
+            $(liftTs d)
             $(lift e)
-            $(liftTs f)|]
+            $(lift f)
+            $(liftTs g)|]
 instance Lift FieldDef where
     lift (FieldDef a b c d) = [|FieldDef $(lift a) $(lift b) $(lift c) $(liftTs d)|]
 instance Lift UniqueDef where
