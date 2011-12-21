@@ -14,7 +14,11 @@
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE CPP #-}
-module PersistentTest (main') where
+module PersistentTest
+    ( specs
+    , runConn
+    , setup
+    ) where
 
 import Test.HUnit hiding (Test)
 import Test.Hspec.Monadic (Specs, describe, it, hspecX)
@@ -249,11 +253,6 @@ instance Arbitrary PersistValue where
     arbitrary = PersistInt64 `fmap` choose (0, maxBound)
 #endif
 
-
-main' :: IO ()
-main' = do
-  runConn setup
-  hspecX specs
 
 joinGeneric :: PersistBackend b m =>
                (SelectOneMany BackendMonad (Author) (EntryGeneric BackendMonad)

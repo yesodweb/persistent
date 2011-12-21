@@ -20,7 +20,8 @@ library
     ghc-options: -O0
     extra-libraries: sqlite3
     exposed-modules: PersistentTest
-                     Database.Persist.Base
+                     RenameTest
+    other-modules:   Database.Persist.Base
                      Database.Persist.EntityDef
                      Database.Persist.GenericSql
                      Database.Persist.GenericSql.Raw
@@ -71,6 +72,7 @@ test-suite test
 
     build-depends:   base >= 4 && < 5
                    , persistent-test
+                   , hspec
 
     -- these are mutually exclusive options
     -- cpp-options: -DWITH_POSTGRESQL
