@@ -271,6 +271,40 @@ mkEntity mps t = do
         ]
       ]
 
+-- | produce code similar to the following
+-- instance PersistEntity e => PersistField e where
+--    toPersistValue = PersistMap $ zip columNames (map toPersistValue . toPersistFields)
+--    fromPersistValue (PersistMap o) = fromPersistValues $ map (\(_,v) ->
+--        casefromPersistValue v of
+--            Left e -> error e
+--            Right r -> r) o
+--    fromPersistValue x = Left $ "Expected PersistMap, received: " ++ show x 
+--    sqlType _ = SqlString
+persistFieldFromEntity :: EntityDef -> Q [Dec]
+persistFieldFromEntity e = do
+    ss <- [|SqlString|]
+    unexpected <- [|\x -> Left $ "Expected PersistMap, received" ++ show x|]
+    let columnNames = map (\(ColumnDef x _ _) ->  x) (entityColumns e)
+    obj <- [|PersistMap $ zip (map pack columnNames) (map toPersistValue $ toPersistFields e)|]
+    pmName <- newName "pm"
+    fpv <- [|\v -> case fromPersistValue v of
+                    Left e -> error e
+                    Right r ->  r |]
+    fpv <- [|\x -> fromPersistValues $ map (\(_,v) -> case fromPersistValue v of
+                                                      Left e -> error e
+                                                      Right r -> r) x|]
+    return
+        [ InstanceD [] (ConT ''PersistField `AppT` ConT (mkName $ entityName e))
+            [ FunD (mkName "sqlType") [ Clause [WildP] (NormalB ss) [] ]
+            , FunD (mkName "toPersistValue") [ Clause [] (NormalB obj) [] ]
+            , FunD (mkName "fromPersistValue")
+                [ Clause [ConP (mkName "PersistMap") [VarP pmName]]
+                    (NormalB $ fpv `AppE` VarE pmName) []
+                , Clause [WildP] (NormalB unexpected) []
+                ]
+            ]
+        ]
+
 updateConName :: String -> String -> PersistUpdate -> String
 updateConName name s pu = concat
     [ name
