@@ -1,8 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Database.Persist.Quasi
     ( parse
-    , PersistSettings (..) -- FIXME
-    , sqlSettings
+    , PersistSettings (..)
+    , upperCaseSettings
+    , lowerCaseSettings
     ) where
 
 import Database.Persist.Base
@@ -13,14 +14,27 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Control.Arrow ((&&&))
 
-data PersistSettings = PersistSettings -- FIXME
+data PersistSettings = PersistSettings
+    { psToDBName :: Text -> Text
+    }
 
-sqlSettings :: PersistSettings
-sqlSettings = PersistSettings
+upperCaseSettings :: PersistSettings
+upperCaseSettings = PersistSettings
+    { psToDBName = id
+    }
+
+lowerCaseSettings :: PersistSettings
+lowerCaseSettings = PersistSettings
+    { psToDBName =
+        let go c
+                | isUpper c = T.pack ['_', toLower c]
+                | otherwise = T.singleton c
+         in T.dropWhile (== '_') . T.concatMap go
+    }
 
 -- | Parses a quasi-quoted syntax into a list of entity definitions.
 parse :: PersistSettings -> Text -> [EntityDef]
-parse ps = parse'
+parse ps = parse' ps
       . removeSpaces
       . filter (not . empty)
       . map tokenize
@@ -99,54 +113,74 @@ removeSpaces xs = map (makeLine . subtractSpace) xs
       makeLine rest              = Line Header (getTokens rest)
 
 -- | Divide lines into blocks and make entity definitions.
-parse' :: [Line] -> [EntityDef]
-parse' (Line Header (name:entattribs) : rest) =
+parse' :: PersistSettings -> [Line] -> [EntityDef]
+parse' ps (Line Header (name:entattribs) : rest) =
     let (x, y) = span ((== Body) . lineType) rest
-    in mkEntityDef name entattribs (map tokens x) : parse' y
-parse' ((Line Header []) : _) =
+    in mkEntityDef ps name entattribs (map tokens x) : parse' ps y
+parse' _ ((Line Header []) : _) =
     error "Indented line must contain at least name."
-parse' ((Line Body _)    : _) =
+parse' _ ((Line Body _)    : _) =
     error "Blocks must begin with non-indented lines."
-parse' [] = []
+parse' _ [] = []
 
 type RawLine = [Text]
 
 -- | Construct an entity definition.
-mkEntityDef :: Text -- ^ name
+mkEntityDef :: PersistSettings
+            -> Text -- ^ name
             -> [Attr] -- ^ entity attributes
             -> [RawLine] -- ^ indented lines
             -> EntityDef
-mkEntityDef name entattribs attribs =
+mkEntityDef ps name entattribs attribs =
     EntityDef
         (HaskellName name)
-        (DBName name) -- FIXME
-        (DBName "id") -- FIXME
+        (DBName $ psToDBName ps name)
+        (DBName $ idName entattribs)
         entattribs cols uniqs derives
   where
-    cols = mapMaybe takeCols attribs
-    uniqs = mapMaybe takeUniqs attribs
+    idName [] = "id"
+    idName (t:ts) =
+        case T.stripPrefix "id=" t of
+            Nothing -> idName ts
+            Just s -> s
+    cols = mapMaybe (takeCols ps) attribs
+    uniqs = mapMaybe (takeUniqs ps cols) attribs
     derives = case mapMaybe takeDerives attribs of
                 [] -> ["Show", "Read", "Eq"]
                 x -> concat x
 
-takeCols :: [Text] -> Maybe FieldDef
-takeCols ("deriving":_) = Nothing
-takeCols (n:ty:rest)
+takeCols :: PersistSettings -> [Text] -> Maybe FieldDef
+takeCols _ ("deriving":_) = Nothing
+takeCols ps (n:ty:rest)
     | not (T.null n) && isLower (T.head n) = Just $ FieldDef
         (HaskellName n)
-        (DBName n) -- FIXME
+        (DBName $ db rest)
         (FieldType ty)
         rest
-takeCols _ = Nothing
+  where
+    db [] = psToDBName ps n
+    db (a:as) =
+        case T.stripPrefix "sql=" a of
+            Nothing -> db as
+            Just s -> s
+takeCols _ _ = Nothing
 
-takeUniqs :: [Text] -> Maybe UniqueDef
-takeUniqs (n:rest)
+takeUniqs :: PersistSettings
+          -> [FieldDef]
+          -> [Text]
+          -> Maybe UniqueDef
+takeUniqs ps defs (n:rest)
     | not (T.null n) && isUpper (T.head n)
         = Just $ UniqueDef
             (HaskellName n)
-            (DBName n {- FIXME -})
-            (map (HaskellName &&& DBName) rest) -- FIXME
-takeUniqs _ = Nothing
+            (DBName $ psToDBName ps n)
+            (map (HaskellName &&& getDBName defs) rest)
+  where
+    getDBName [] t = error $ "Unknown column in unique constraint: " ++ show t
+    getDBName (d:ds) t
+        | fieldHaskell d == HaskellName t = fieldDB d
+        | otherwise = getDBName ds t
+takeUniqs _ _ _ = Nothing
 
 takeDerives :: [Text] -> Maybe [Text]
 takeDerives ("deriving":rest) = Just rest

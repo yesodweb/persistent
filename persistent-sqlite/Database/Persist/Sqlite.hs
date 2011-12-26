@@ -135,7 +135,7 @@ migrate' :: PersistEntity val
          -> IO (Either [Text] [(Bool, Text)])
 migrate' allDefs getter val = do
     let (cols, uniqs) = mkColumns allDefs val
-    let newSql = mkCreateTable False table (cols, uniqs)
+    let newSql = mkCreateTable False def (cols, uniqs)
     stmt <- getter "SELECT sql FROM sqlite_master WHERE type='table' AND name=?"
     oldSql' <- withStmt stmt [PersistText $ unDBName table] go
     case oldSql' of
@@ -167,7 +167,7 @@ getCopyTable allDefs getter val = do
     let oldCols = map DBName $ filter (/= "id") oldCols' -- need to update for table id attribute ?
     let newCols = map cName cols
     let common = filter (`elem` oldCols) newCols
-    let id_ = DBName "id" -- FIXME rawTableIdName $ entityDef val
+    let id_ = entityID $ entityDef val
     return [ (False, tmpSql)
            , (False, copyToTemp $ id_ : common)
            , (common /= oldCols, pack dropOld)
@@ -188,8 +188,8 @@ getCopyTable allDefs getter val = do
     table = entityDB def
     tableTmp = DBName $ unDBName table `T.append` "_backup"
     (cols, uniqs) = mkColumns allDefs val
-    newSql = mkCreateTable False table (cols, uniqs)
-    tmpSql = mkCreateTable True tableTmp (cols, uniqs)
+    newSql = mkCreateTable False def (cols, uniqs)
+    tmpSql = mkCreateTable True def { entityDB = tableTmp } (cols, uniqs)
     dropTmp = "DROP TABLE " ++ escape' tableTmp
     dropOld = "DROP TABLE " ++ escape' table
     copyToTemp common = pack $ concat
@@ -213,13 +213,15 @@ getCopyTable allDefs getter val = do
 
 escape' = T.unpack . escape
 
-mkCreateTable :: Bool -> DBName -> ([Column], [UniqueDef]) -> Sql
-mkCreateTable isTemp table (cols, uniqs) = pack $ concat
+mkCreateTable :: Bool -> EntityDef -> ([Column], [UniqueDef]) -> Sql
+mkCreateTable isTemp entity (cols, uniqs) = pack $ concat
     [ "CREATE"
     , if isTemp then " TEMP" else ""
     , " TABLE "
-    , T.unpack $ escape table
-    , "(id INTEGER PRIMARY KEY"
+    , T.unpack $ escape $ entityDB entity
+    , "("
+    , T.unpack $ escape $ entityID entity
+    , " INTEGER PRIMARY KEY"
     , concatMap sqlColumn cols
     , concatMap sqlUnique uniqs
     , ")"

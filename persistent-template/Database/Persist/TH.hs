@@ -8,7 +8,8 @@ module Database.Persist.TH
     ( mkPersist
     , share
     , persist
-    , persistSql
+    , persistUpperCase
+    , persistLowerCase
     , persistFile
     , share2
     , mkSave
@@ -53,8 +54,11 @@ persist ps = QuasiQuoter
     { quoteExp = lift . parse ps . pack
     }
 
-persistSql :: QuasiQuoter
-persistSql = persist sqlSettings
+persistUpperCase :: QuasiQuoter
+persistUpperCase = persist upperCaseSettings
+
+persistLowerCase :: QuasiQuoter
+persistLowerCase = persist lowerCaseSettings
 
 persistFile :: PersistSettings -> FilePath -> Q Exp
 persistFile ps fp = do
@@ -281,7 +285,7 @@ mkEntity mps t = do
                     else id) idname
     fields <- mapM (mkField t) $ FieldDef
         (HaskellName "Id")
-        (DBName "Id")
+        (entityID t)
         (FieldType $ unHaskellName (entityHaskell t) ++ "Id") []
         : entityFields t
     toFieldNames <- mkToFieldNames $ entityUniques t

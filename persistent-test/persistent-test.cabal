@@ -35,6 +35,7 @@ library
                      Database.Sqlite
                      Database.Persist
                      Database.Persist.Quasi
+                     Database.Persist.Postgresql
     build-depends:   base                     >= 4       && < 5
                    , HUnit
                    , hspec >= 0.8 && < 0.10
@@ -53,7 +54,7 @@ library
                    , path-pieces
                    , text
                    , transformers
-                   , monad-control == 0.3.*
+                   , monad-control
                    , containers
                    , bytestring
                    , enumerator
