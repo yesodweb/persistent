@@ -386,7 +386,7 @@ instance PersistField SomePersistField where
     fromPersistValue x = fmap SomePersistField (fromPersistValue x :: Either T.Text T.Text)
     sqlType (SomePersistField a) = sqlType a
 
-newtype Key backend entity = Key { unKey :: PersistValue }
+newtype Key (backend :: (* -> *) -> * -> *) entity = Key { unKey :: PersistValue }
     deriving (Show, Read, Eq, Ord, PersistField)
 
 class (Trans.MonadIO (b m), Trans.MonadIO m, Monad (b m), Monad m) => PersistStore b m where
