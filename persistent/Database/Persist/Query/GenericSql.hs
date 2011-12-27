@@ -19,7 +19,7 @@ module Database.Persist.Query.GenericSql
 
 import qualified Prelude
 import Prelude hiding ((++), unlines, concat, show)
-import Data.Text (Text, pack, unpack, snoc, unlines, concat)
+import Data.Text (Text, pack, concat)
 import Database.Persist.Store
 import Database.Persist.Query
 import Database.Persist.GenericSql
@@ -28,9 +28,6 @@ import qualified Database.Persist.GenericSql.Raw as R
 
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader
-
-import Data.List (intercalate)
-import Data.Text (Text, pack)
 
 import Data.Enumerator hiding (length, filter, consume, map)
 

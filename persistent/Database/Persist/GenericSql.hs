@@ -36,13 +36,9 @@ module Database.Persist.GenericSql
 import qualified Prelude
 import Prelude hiding ((++), unlines, concat, show)
 import Database.Persist.Store
-import Data.List (intercalate)
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader
 import Data.Pool
-import Control.Monad.Trans.Writer
-import Data.Text.IO (hPutStrLn)
-import System.IO (stderr)
 import Database.Persist.GenericSql.Internal
 import Database.Persist.GenericSql.Migration
 import qualified Database.Persist.GenericSql.Raw as R
@@ -57,10 +53,9 @@ import Control.Exception.Control (onException)
 
 #define MBCIO MonadControlIO
 #endif
-import Control.Exception (throw, toException)
-import Data.Text (Text, pack, unpack, snoc, unlines, concat)
+import Control.Exception (throw)
+import Data.Text (Text, pack, unpack, concat)
 import qualified Data.Text as T
-import qualified Data.Text.IO
 import Web.PathPieces (PathPiece (..))
 import qualified Data.Text.Read
 import Data.Monoid (Monoid, mappend)

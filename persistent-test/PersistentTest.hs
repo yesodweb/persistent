@@ -21,7 +21,7 @@ module PersistentTest
     ) where
 
 import Test.HUnit hiding (Test)
-import Test.Hspec.Monadic (Specs, describe, it, hspecX)
+import Test.Hspec.Monadic (Specs, describe, it)
 import Test.Hspec.HUnit()
 import Test.Hspec.QuickCheck(prop)
 
@@ -532,8 +532,8 @@ specs = describe "persistent" $ do
 
       let mic = Person "Michael" 25 Nothing
       micK <- insert mic
-      Just p <- get micK
-      p @== mic
+      Just p1 <- get micK
+      p1 @== mic
 
       replace micK $ Person "Michael" 25 Nothing
       Just p2 <- get micK

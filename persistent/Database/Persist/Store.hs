@@ -82,16 +82,6 @@ import Control.Monad.IO.Control (MonadControlIO)
 #endif
 import Data.Object (TextObject)
 
-import qualified Data.Map as M
-import qualified Data.Set as S
-
-fst3 :: forall t t1 t2. (t, t1, t2) -> t
-fst3   (x, _, _) = x
-snd3 :: forall t t1 t2. (t, t1, t2) -> t1
-snd3   (_, x, _) = x
-third3 :: forall t t1 t2. (t, t1, t2) -> t2
-third3 (_, _, x) = x
-
 data PersistException
   = PersistError T.Text -- ^ Generic Exception
   | PersistMarshalError T.Text

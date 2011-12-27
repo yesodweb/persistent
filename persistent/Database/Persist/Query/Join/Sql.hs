@@ -15,7 +15,7 @@ import Database.Persist.Query
 import Database.Persist.Query.GenericSql
 import Control.Monad (liftM)
 import Data.Maybe (mapMaybe)
-import Data.List (intercalate, groupBy)
+import Data.List (groupBy)
 import Database.Persist.GenericSql
 import Database.Persist.GenericSql.Internal hiding (withStmt)
 import Database.Persist.GenericSql.Raw (withStmt)
@@ -29,9 +29,8 @@ import Control.Monad.IO.Control (MonadControlIO)
 #endif
 import Data.Function (on)
 import Control.Arrow ((&&&))
-import Data.Text (Text, pack, concat, append, null)
+import Data.Text (Text, concat, null)
 import Control.Monad.IO.Class (MonadIO)
-import qualified Prelude
 import Prelude hiding ((++), unlines, concat, show, null)
 import Data.Monoid (Monoid, mappend)
 import qualified Data.Text as T

@@ -26,7 +26,6 @@ import Database.Persist.Quasi
 import Database.Persist.Store
 import Database.Persist.Query
 import Database.Persist.GenericSql (Migration, SqlPersist, migrate)
-import Database.Persist.Quasi (parse)
 import Database.Persist.Util (nullable)
 import Database.Persist.TH.Library (apE)
 import Language.Haskell.TH.Quote
@@ -255,16 +254,16 @@ mkHalfDefined constr count' =
 mkFromPersistValues :: EntityDef -> Q [Clause]
 mkFromPersistValues t = do
     nothing <- [|Left $(liftT "Invalid fromPersistValues input")|]
-    let cons = ConE $ mkName $ unpack $ unHaskellName $ entityHaskell t
+    let cons' = ConE $ mkName $ unpack $ unHaskellName $ entityHaskell t
     xs <- mapM (const $ newName "x") $ entityFields t
     fs <- [|fromPersistValue|]
     let xs' = map (AppE fs . VarE) xs
     let pat = ListP $ map VarP xs
     ap' <- [|apE|]
     just <- [|Right|]
-    let cons' = just `AppE` cons
+    let cons'' = just `AppE` cons'
     return
-        [ Clause [pat] (NormalB $ foldl (go ap') cons' xs') []
+        [ Clause [pat] (NormalB $ foldl (go ap') cons'' xs') []
         , Clause [WildP] (NormalB nothing) []
         ]
   where
@@ -279,11 +278,6 @@ mkEntity mps t = do
     fpv <- mkFromPersistValues t
     utv <- mkUniqueToValues $ entityUniques t
     puk <- mkUniqueKeys t
-    let colnames = map (unDBName . fieldDB) $ entityFields t
-        idname = unDBName $ entityDB t
-        idname_ = (if idname `elem` colnames
-                    then (++"_")
-                    else id) idname
     fields <- mapM (mkField t) $ FieldDef
         (HaskellName "Id")
         (entityID t)
@@ -334,11 +328,8 @@ persistFieldFromEntity e = do
     let columnNames = map (unpack . unHaskellName . fieldHaskell) (entityFields e)
     obj <- [|PersistMap $ zip (map pack columnNames) (map toPersistValue $ toPersistFields e)|]
     pmName <- newName "pm"
-    fpv <- [|\v -> case fromPersistValue v of
-                    Left e -> error $ unpack e
-                    Right r ->  r |]
     fpv <- [|\x -> fromPersistValues $ map (\(_,v) -> case fromPersistValue v of
-                                                      Left e -> error $ unpack e
+                                                      Left e' -> error $ unpack e'
                                                       Right r -> r) x|]
     return
         [ InstanceD [] (ConT ''PersistField `AppT` ConT (mkName $ unpack $ unHaskellName $ entityHaskell e))
@@ -557,7 +548,10 @@ instance Lift FieldDef where
 instance Lift UniqueDef where
     lift (UniqueDef a b c) = [|UniqueDef $(lift a) $(lift b) $(lift c)|]
 
+liftT :: Text -> Q Exp
 liftT t = [|pack $(lift (unpack t))|]
+
+liftTs :: [Text] -> Q Exp
 liftTs = fmap ListE . mapM liftT
 
 instance Lift HaskellName where

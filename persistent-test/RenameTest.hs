@@ -5,13 +5,10 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
-module RenameTest
-    ( renameSpecs
-    ) where
+module RenameTest where
 
 import Test.Hspec.Monadic
 import Test.Hspec.HUnit ()
-import Test.HUnit hiding (Test)
 import Database.Persist.Sqlite
 import Database.Persist.TH
 import Database.Persist.GenericSql.Raw
@@ -35,14 +32,14 @@ RefTable
     UniqueRefTable someVal
 |]
 
-runConn ::
+runConn2 ::
 #if MIN_VERSION_monad_control(0, 3, 0)
     (Control.Monad.Trans.Control.MonadBaseControl IO m, MonadIO m)
 #else
     Control.Monad.IO.Control.MonadControlIO m
 #endif
     => SqlPersist m t -> m ()
-runConn f = do
+runConn2 f = do
     _ <- withSqlitePool ":memory:" 1 $ runSqlPool f
 #if WITH_POSTGRESQL
     _ <- withPostgresqlPool "user=test password=test host=localhost port=5432 dbname=test" 1 $ runSqlPool f
@@ -52,8 +49,8 @@ runConn f = do
 renameSpecs :: Specs
 renameSpecs = describe "rename specs" $ do
     it "handles lower casing" $ asIO $ do
-        runConn $ do
-            runMigrationSilent lowerCase
+        runConn2 $ do
+            _ <- runMigrationSilent lowerCase
             withStmt "SELECT full_name from lower_case_table WHERE my_id=5" [] $ const $ return ()
             withStmt "SELECT something_else from ref_table WHERE id=4" [] $ const $ return ()
 

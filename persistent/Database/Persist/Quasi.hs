@@ -7,7 +7,6 @@ module Database.Persist.Quasi
     ) where
 
 import Database.Persist.EntityDef
-import Database.Persist.Store
 import Data.Char
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
@@ -57,14 +56,14 @@ tokenize t
         let (token, rest) = T.break isSpace t
          in Token token : tokenize rest
   where
-    quotes t front
-        | T.null t = error $ T.unpack $ T.concat $
+    quotes t' front
+        | T.null t' = error $ T.unpack $ T.concat $
             "Unterminated quoted string starting with " : front []
-        | T.head t == '"' = Token (T.concat $ front []) : tokenize (T.tail t)
-        | T.head t == '\\' && T.length t > 1 =
-            quotes (T.drop 2 t) (front . (T.take 2 t:))
+        | T.head t' == '"' = Token (T.concat $ front []) : tokenize (T.tail t')
+        | T.head t' == '\\' && T.length t' > 1 =
+            quotes (T.drop 2 t') (front . (T.take 2 t':))
         | otherwise =
-            let (x, y) = T.break (`elem` "\\\"") t
+            let (x, y) = T.break (`elem` "\\\"") t'
              in quotes y (front . (x:))
 
 -- | A string of tokens is empty when it has only spaces.  There

@@ -35,7 +35,7 @@ import Control.Exception.Control (bracket)
 #define MBCIO MonadControlIO
 #endif
 import Database.Persist.Util (nullable)
-import Data.Text (Text, intercalate)
+import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Monoid (Monoid, mappend, mconcat)
 import Database.Persist.EntityDef

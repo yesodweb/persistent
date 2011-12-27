@@ -211,6 +211,7 @@ getCopyTable allDefs getter val = do
         , escape' tableTmp
         ]
 
+escape' :: DBName -> String
 escape' = T.unpack . escape
 
 mkCreateTable :: Bool -> EntityDef -> ([Column], [UniqueDef]) -> Sql
