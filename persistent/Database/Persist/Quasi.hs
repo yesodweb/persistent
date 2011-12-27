@@ -6,8 +6,8 @@ module Database.Persist.Quasi
     , lowerCaseSettings
     ) where
 
-import Database.Persist.Base
 import Database.Persist.EntityDef
+import Database.Persist.Store
 import Data.Char
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)

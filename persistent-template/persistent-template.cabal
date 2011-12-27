@@ -1,5 +1,5 @@
 name:            persistent-template
-version:         0.6.3.1
+version:         0.7.0
 license:         BSD3
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -15,7 +15,7 @@ homepage:        http://www.yesodweb.com/book/persistent
 library
     build-depends:   base                     >= 4         && < 5
                    , template-haskell
-                   , persistent               >= 0.6.2     && < 0.7
+                   , persistent               >= 0.7       && < 0.8
                    , monad-control            >= 0.2       && < 0.4
                    , text                     >= 0.5       && < 1.0
                    , transformers             >= 0.2

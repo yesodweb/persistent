@@ -4,6 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleContexts #-}
 module RenameTest
     ( renameSpecs
     ) where
@@ -22,6 +23,7 @@ import qualified Control.Monad.Trans.Control
 #else
 import qualified Control.Monad.IO.Control
 #endif
+import Control.Monad.IO.Class (MonadIO)
 
 -- Test lower case names
 share [mkPersist sqlMkSettings, mkMigrate "lowerCase"] [persistLowerCase|

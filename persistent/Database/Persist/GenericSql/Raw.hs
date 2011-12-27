@@ -16,7 +16,7 @@ module Database.Persist.GenericSql.Raw
 
 import qualified Database.Persist.GenericSql.Internal as I
 import Database.Persist.GenericSql.Internal hiding (execute, withStmt)
-import Database.Persist.Base (PersistValue)
+import Database.Persist.Store (PersistValue)
 import Data.IORef
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader

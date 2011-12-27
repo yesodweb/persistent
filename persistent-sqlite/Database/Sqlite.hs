@@ -33,7 +33,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Internal as BSI
 import Foreign
 import Foreign.C
-import Database.Persist.Base (PersistValue (..))
+import Database.Persist.Store (PersistValue (..))
 import Data.Text (Text, pack, unpack)
 import Data.Text.Encoding (encodeUtf8, decodeUtf8With)
 import Data.Text.Encoding.Error (lenientDecode)

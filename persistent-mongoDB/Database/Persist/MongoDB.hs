@@ -8,24 +8,34 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Database.Persist.MongoDB
-    ( withMongoDBConn
+    (
+    -- * using connections
+      withMongoDBConn
     , withMongoDBPool
     , runMongoDBConn 
+    , ConnectionPool
+    , MongoConf (..)
+    -- * Key conversion helpers
+    , keyToOid
+    , oidToKey
+    -- * network type
     , HostName
+    -- * UString type
     , u
+    -- * MongoDB driver types
     , DB.Action
     -- , DB.MasterOrSlaveOk(..)
     , DB.AccessMode(..)
     , DB.master
     , DB.slaveOk
     , (DB.=:)
-    , ConnectionPool
+    -- * Database.Persistent
     , module Database.Persist
-    , MongoConf (..)
     ) where
 
 import Database.Persist
-import Database.Persist.Base
+import Database.Persist.Store
+import Database.Persist.Query
 
 import qualified Control.Monad.IO.Class as Trans
 import Control.Exception (throw, toException, throwIO)
@@ -102,7 +112,7 @@ rightPersistVals ent vals = case wrapFromPersistValues ent vals of
       Right v -> v
 
 filterByKey :: (PersistEntity val) => Key DB.Action val -> DB.Document
-filterByKey k = [u"_id" DB.=: keyToDbOid k]
+filterByKey k = [u"_id" DB.=: keyToOid k]
 
 queryByKey :: (PersistEntity val) => Key DB.Action val -> EntityDef -> DB.Query 
 queryByKey k entity = (DB.select (filterByKey k) (u $ entityName entity)) 
@@ -139,7 +149,7 @@ pairFromDocument ent document = pairFromPersistValues document
     pairFromPersistValues (x:xs) =
         case wrapFromPersistValues ent xs of
             Left e -> Left e
-            Right xs' -> Right ((Key . dbOidToKey . fromJust . DB.cast' . value) x, xs')
+            Right xs' -> Right ((oidToKey . fromJust . DB.cast' . value) x, xs')
     pairFromPersistValues _ = Left "error in fromPersistValues'"
 
 insertFields :: forall val.  (PersistEntity val) => EntityDef -> val -> [DB.Field]
@@ -148,12 +158,28 @@ insertFields t record = zipWith (DB.:=) (toLabels) (toValues)
     toLabels = map (u . columnName) $ entityColumns t
     toValues = map (DB.val . toPersistValue) (toPersistFields record)
 
-instance (Applicative m, Functor m, MonadControlIO m) => PersistBackend DB.Action m where
+#ifdef WITH_MONGODB
+saveWithKey :: forall m ent record. (Applicative m, Functor m, MonadControlIO m, PersistEntity ent, PersistEntity record)
+            => (DB.Collection -> DB.Document -> DB.Action m () )
+            -> Key DB.Action ent -> record -> DB.Action m ()
+saveWithKey dbSave k record =
+      dbSave (u $ entityName t) ((persistKeyToMongoId k):(insertFields t record))
+    where
+      t = entityDef record
+#endif
+
+instance (Applicative m, Functor m, MonadControlIO m) => PersistStore DB.Action m where
     insert record = do
         (DB.ObjId oid) <- DB.insert (u $ entityName t) (insertFields t record)
-        return $ Key $ dbOidToKey oid 
+        return $ oidToKey oid 
       where
         t = entityDef record
+
+#ifdef WITH_MONGODB
+    insertKey k record = saveWithKey DB.insert_ k record
+
+    repsert   k record = saveWithKey DB.save k record
+#endif
 
     replace k record = do
         DB.replace (selectByKey k t) (insertFields t record)
@@ -161,10 +187,51 @@ instance (Applicative m, Functor m, MonadControlIO m) => PersistBackend DB.Actio
       where
         t = entityDef record
 
+    delete k =
+        DB.deleteOne DB.Select {
+          DB.coll = (u $ entityName t)
+        , DB.selector = filterByKey k
+        }
+      where
+        t = entityDef $ dummyFromKey k
+
+    get k = do
+            d <- DB.findOne (queryByKey k t)
+            case d of
+              Nothing -> return Nothing
+              Just doc -> do
+                return $ Just $ rightPersistVals t (tail doc)
+          where
+            t = entityDef $ dummyFromKey k
+
+instance (Applicative m, Functor m, MonadControlIO m) => PersistUnique DB.Action m where
+    getBy uniq = do
+        mdocument <- DB.findOne $
+          (DB.select (uniqSelector uniq) (u $ entityName t))
+        case mdocument of
+          Nothing -> return Nothing
+          Just document -> case pairFromDocument t document of
+              Left s -> Trans.liftIO . throwIO $ PersistMarshalError s
+              Right (k, x) -> return $ Just (k, x)
+      where
+        t = entityDef $ dummyFromUnique uniq
+
+    deleteBy uniq =
+        DB.delete DB.Select {
+          DB.coll = u $ entityName t
+        , DB.selector = uniqSelector uniq
+        }
+      where
+        t = entityDef $ dummyFromUnique uniq
+
+persistKeyToMongoId :: PersistEntity val => Key DB.Action val -> DB.Field
+persistKeyToMongoId k = u"_id" DB.:= (DB.ObjId $ keyToOid k)
+
+instance (Applicative m, Functor m, MonadControlIO m) => PersistQuery DB.Action m where
     update _ [] = return ()
     update k upds =
         DB.modify 
-           (DB.Select [u"_id" DB.:= (DB.ObjId $ keyToDbOid k)]  (u $ entityName t)) 
+           (DB.Select [persistKeyToMongoId k]  (u $ entityName t)) 
            $ updateFields upds
       where
         t = entityDef $ dummyFromKey k
@@ -178,14 +245,6 @@ instance (Applicative m, Functor m, MonadControlIO m) => PersistBackend DB.Actio
       where
         t = entityDef $ dummyFromFilts filts
 
-    delete k =
-        DB.deleteOne DB.Select {
-          DB.coll = (u $ entityName t)
-        , DB.selector = filterByKey k
-        }
-      where
-        t = entityDef $ dummyFromKey k
-
     deleteWhere filts = do
         DB.delete DB.Select {
           DB.coll = (u $ entityName t)
@@ -193,34 +252,6 @@ instance (Applicative m, Functor m, MonadControlIO m) => PersistBackend DB.Actio
         }
       where
         t = entityDef $ dummyFromFilts filts
-
-    deleteBy uniq =
-        DB.delete DB.Select {
-          DB.coll = u $ entityName t
-        , DB.selector = uniqSelector uniq
-        }
-      where
-        t = entityDef $ dummyFromUnique uniq
-
-    get k = do
-            d <- DB.findOne (queryByKey k t)
-            case d of
-              Nothing -> return Nothing
-              Just doc -> do
-                return $ Just $ rightPersistVals t (tail doc)
-          where
-            t = entityDef $ dummyFromKey k
-
-    getBy uniq = do
-        mdocument <- DB.findOne $
-          (DB.select (uniqSelector uniq) (u $ entityName t))
-        case mdocument of
-          Nothing -> return Nothing
-          Just document -> case pairFromDocument t document of
-              Left s -> Trans.liftIO . throwIO $ PersistMarshalError s
-              Right (k, x) -> return $ Just (k, x)
-      where
-        t = entityDef $ dummyFromUnique uniq
 
     count filts = do
         i <- DB.count query
@@ -271,7 +302,7 @@ instance (Applicative m, Functor m, MonadControlIO m) => PersistBackend DB.Actio
             case doc of
                 Nothing -> return $ Continue k
                 Just [_ DB.:= (DB.ObjId oid)] -> do
-                    step <- runIteratee $ k $ Chunks [Key $ dbOidToKey oid]
+                    step <- runIteratee $ k $ Chunks [oidToKey oid]
                     loop step curs
                 Just y -> return $ Error $ toException $ PersistMarshalError
                         $ "Unexpected in selectKeys: " ++ show y
@@ -391,8 +422,11 @@ csToT = E.decodeUtf8 . CS.toByteString
 tToCS :: T.Text -> CS.CompactString
 tToCS = CS.fromByteString_ . E.encodeUtf8
 
-dbOidToKey :: DB.ObjectId -> PersistValue
-dbOidToKey =  PersistObjectId . Serialize.encode
+oidToPersistValue :: DB.ObjectId -> PersistValue
+oidToPersistValue =  PersistObjectId . Serialize.encode
+
+oidToKey :: (PersistEntity val) => DB.ObjectId -> Key DB.Action val
+oidToKey = Key . oidToPersistValue
 
 persistObjectIdToDbOid :: PersistValue -> DB.ObjectId
 persistObjectIdToDbOid (PersistObjectId k) = case Serialize.decode k of
@@ -400,8 +434,8 @@ persistObjectIdToDbOid (PersistObjectId k) = case Serialize.decode k of
                   Right o -> o
 persistObjectIdToDbOid _ = throw $ PersistInvalidField "expected PersistObjectId"
 
-keyToDbOid :: (PersistEntity val) => Key DB.Action val -> DB.ObjectId
-keyToDbOid (Key k) = persistObjectIdToDbOid k
+keyToOid :: (PersistEntity val) => Key DB.Action val -> DB.ObjectId
+keyToOid (Key k) = persistObjectIdToDbOid k
 
 instance DB.Val PersistValue where
   val (PersistInt64 x)   = DB.Int64 x
@@ -431,7 +465,7 @@ instance DB.Val PersistValue where
   cast' (DB.RegEx (DB.Regex us1 us2))    = Just $ PersistByteString $ CS.toByteString $ CS.append us1 us2
   cast' (DB.Doc doc)  = Just $ PersistMap $ mapFromDoc doc
   cast' (DB.Array xs) = Just $ PersistList $ mapMaybe DB.cast' xs
-  cast' (DB.ObjId x)  = Just $ dbOidToKey x 
+  cast' (DB.ObjId x)  = Just $ oidToPersistValue x 
   cast' (DB.JavaScr _) = throw $ PersistMongoDBUnsupported "cast operation not supported for javascript"
   cast' (DB.Sym _)     = throw $ PersistMongoDBUnsupported "cast operation not supported for sym"
   cast' (DB.Stamp _)   = throw $ PersistMongoDBUnsupported "cast operation not supported for stamp"
@@ -472,11 +506,12 @@ instance PersistConfig MongoConf where
         pool' <- go $ lookupScalar "poolsize" e
         pool  <- safeRead "poolsize" pool'
         accessString <- defaultTo "ConfirmWrites" $ lookupScalar "accessMode" e
-        let accessMode = case accessString of
-               "ReadStaleOk"       -> DB.ReadStaleOk
-               "UnconfirmedWrites" -> DB.UnconfirmedWrites
-               "ConfirmWrites"     -> DB.ConfirmWrites [u"j" DB.=: True]
-               _ -> error $ "unknown access mode: " ++ T.unpack accessString
+
+        accessMode <- case accessString of
+               "ReadStaleOk"       -> MRight DB.ReadStaleOk
+               "UnconfirmedWrites" -> MRight DB.UnconfirmedWrites
+               "ConfirmWrites"     -> MRight $ DB.ConfirmWrites [u"j" DB.=: True]
+               badAccess -> MLeft $ "unknown accessMode: " ++ (T.unpack badAccess)
 
         return $ MongoConf (T.unpack db) (T.unpack host) pool accessMode
       where

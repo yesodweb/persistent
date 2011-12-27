@@ -26,22 +26,25 @@ import Test.Hspec.HUnit()
 import Test.Hspec.QuickCheck(prop)
 
 import Database.Persist
-import Database.Persist.Base (DeleteCascade (..), PersistValue(..), limitOffsetOrder)
+import Database.Persist.Store (PersistValue(..))
+import Database.Persist.Query
 
-import Database.Persist.Join (selectOneMany, SelectOneMany(..))
-import qualified Database.Persist.Join
+import Database.Persist.Query.Join (selectOneMany, SelectOneMany(..))
+import qualified Database.Persist.Query.Join
 
 #if WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
-import Database.Persist.MongoDB (Action, withMongoDBConn, runMongoDBConn)
+import Database.Persist.MongoDB (Action, withMongoDBConn, runMongoDBConn, oidToKey)
+import Data.Bson (genObjectId)
 import Language.Haskell.TH.Syntax (Type(..))
 import Database.Persist.TH (MkPersistSettings(..))
 import Control.Monad (replicateM)
 import qualified Data.ByteString as BS
 
 #else
+import Database.Persist.Store ( DeleteCascade (..) )
 import Database.Persist.GenericSql
-import qualified Database.Persist.Join.Sql
+import qualified Database.Persist.Query.Join.Sql
 import Database.Persist.Sqlite
 import Control.Exception (SomeException)
 #if MIN_VERSION_monad_control(0, 3, 0)
@@ -72,7 +75,7 @@ import qualified Control.Monad.IO.Control
 #endif
 
 import Data.Text (Text)
-import Web.PathPieces (SinglePiece (..))
+import Web.PathPieces (PathPiece (..))
 import Data.Maybe (fromJust)
 import Test.QuickCheck
 
@@ -153,14 +156,14 @@ share [mkPersist sqlMkSettings,  mkMigrate "testMigrate", mkDeleteCascade] [pers
     title String
 |]
 
-petOwner :: PersistBackend b m => PetGeneric b -> b m Person
+petOwner :: PersistStore b m => PetGeneric b -> b m Person
 petOwner = belongsToJust petOwnerId
 
-maybeOwnedPetOwner :: PersistBackend b m => MaybeOwnedPetGeneric b -> b m (Maybe Person)
+maybeOwnedPetOwner :: PersistStore b m => MaybeOwnedPetGeneric b -> b m (Maybe Person)
 maybeOwnedPetOwner = belongsTo maybeOwnedPetOwnerId
 
 -- this is faster then dropDatabase. Could try dropCollection
-cleanDB :: PersistBackend b m => b m ()
+cleanDB :: PersistQuery b m => b m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Pet])
   deleteWhere ([] :: [Filter Person])
@@ -254,7 +257,8 @@ instance Arbitrary PersistValue where
 #endif
 
 
-joinGeneric :: PersistBackend b m =>
+
+joinGeneric :: PersistQuery b m =>
                (SelectOneMany BackendMonad (Author) (EntryGeneric BackendMonad)
                 -> b m [((Key b (Author), Author),
                                  [(Key b (EntryGeneric b),
@@ -507,10 +511,10 @@ specs = describe "persistent" $ do
       Just p <- get key3
       p3 @== p
 
-  prop "toSinglePiece - fromSinglePiece" $ \piece ->
+  prop "toPathPiece - fromPathPiece" $ \piece ->
       let key1 = Key piece :: (Key BackendMonad Person)
-          key2 = fromJust $ fromSinglePiece $ toSinglePiece key1 :: (Key BackendMonad Person)
-      in  toSinglePiece key1 == toSinglePiece key2
+          key2 = fromJust $ fromPathPiece $ toPathPiece key1 :: (Key BackendMonad Person)
+      in  toPathPiece key1 == toPathPiece key2
 
   it "replace" $ db $ do
       key2 <- insert $ Person "Michael2" 27 Nothing
@@ -636,6 +640,26 @@ specs = describe "persistent" $ do
       Right _ <- insertBy $ Person "name2" 1 Nothing
       return ()
 
+#ifdef WITH_MONGODB
+  it "insertKey" $ db $ do
+      oid <- liftIO $ genObjectId
+      let k = oidToKey oid
+      insertKey k $ Person "Key" 26 Nothing
+      Just (k2,_) <- selectFirst [PersonName ==. "Key"] []
+      k2 @== k
+
+  it "repsert" $ db $ do
+      oid <- liftIO $ genObjectId
+      let k = oidToKey oid
+      Nothing <- selectFirst [PersonName ==. "Repsert"] []
+      repsert k $ Person "Repsert" 26 Nothing
+      Just (k2,_) <- selectFirst [PersonName ==. "Repsert"] []
+      k2 @== k
+      repsert k $ Person "Repsert" 27 Nothing
+      Just (k3,p) <- selectFirst [PersonName ==. "Repsert"] []
+      k3 @== k
+      27 @== personAge p
+#endif
 
   it "retrieves a belongsToJust association" $ db $ do
       let p = Person "pet owner" 30 Nothing
@@ -676,10 +700,10 @@ specs = describe "persistent" $ do
       liftIO $ x @?= [(pid1, p1), (pid3, p3)]
 
 
-  it "joinNonSql" $ db $ joinGeneric Database.Persist.Join.runJoin
+  it "joinNonSql" $ db $ joinGeneric Database.Persist.Query.Join.runJoin
 
 #ifndef WITH_MONGODB
-  it "joinSql" $ db $ joinGeneric Database.Persist.Join.Sql.runJoin
+  it "joinSql" $ db $ joinGeneric Database.Persist.Query.Join.Sql.runJoin
 
   it "commit/rollback" (caseCommitRollback >> runConn cleanDB)
 

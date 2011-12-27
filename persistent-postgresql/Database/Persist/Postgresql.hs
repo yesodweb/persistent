@@ -11,8 +11,8 @@ module Database.Persist.Postgresql
     , PostgresConf (..)
     ) where
 
-import Database.Persist hiding (Update)
-import Database.Persist.Base hiding (Add, Update)
+import Database.Persist
+import Database.Persist.Store
 import Database.Persist.GenericSql hiding (Key(..))
 import Database.Persist.GenericSql.Internal
 import Database.Persist.EntityDef

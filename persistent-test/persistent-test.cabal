@@ -1,5 +1,5 @@
 name:            persistent-test
-version:         0.6.3
+version:         0.7.0
 license:         BSD3
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -19,23 +19,31 @@ extra-source-files:
 library
     ghc-options: -O0
     extra-libraries: sqlite3
+
     exposed-modules: PersistentTest
                      RenameTest
-    other-modules:   Database.Persist.Base
                      Database.Persist.EntityDef
+                     Database.Persist
+                     Database.Persist.Store
+                     Database.Persist.Quasi
                      Database.Persist.GenericSql
                      Database.Persist.GenericSql.Raw
                      Database.Persist.GenericSql.Internal
-                     Database.Persist.Util
-                     Database.Persist.Join
-                     Database.Persist.Join.Sql
-                     Database.Persist.TH
+                     Database.Persist.GenericSql.Migration
                      Database.Persist.TH.Library
+                     Database.Persist.Util
+                     Database.Persist.Query
+                     Database.Persist.Query.GenericSql
+                     Database.Persist.Query.Join
+                     Database.Persist.Query.Join.Sql
+                     Database.Persist.TH
+
                      Database.Persist.Sqlite
                      Database.Sqlite
-                     Database.Persist
-                     Database.Persist.Quasi
                      Database.Persist.Postgresql
+
+                     --Database.Persist.MongoDB
+
     build-depends:   base                     >= 4       && < 5
                    , HUnit
                    , hspec >= 0.8 && < 0.10
@@ -46,7 +54,7 @@ library
                    , data-object
                    , neither
                    -- mongoDB dependencies
-                   , mongoDB       == 1.1.*
+                   --, mongoDB       == 1.1.*
                    , bson          >= 0.1.6
                    , cereal
                    , network
@@ -66,6 +74,11 @@ library
                    , transformers-base
     hs-source-dirs: ., persistent, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mongoDB
 
+    -- these are mutually exclusive options
+    -- cpp-options: -DWITH_POSTGRESQL
+    -- cpp-options: -DWITH_MONGODB -DDEBUG
+    ghc-options:   -Wall
+
 test-suite test
     type:          exitcode-stdio-1.0
     main-is:       main.hs
@@ -74,12 +87,6 @@ test-suite test
     build-depends:   base >= 4 && < 5
                    , persistent-test
                    , hspec
-
-    -- these are mutually exclusive options
-    -- cpp-options: -DWITH_POSTGRESQL
-    -- cpp-options: -DWITH_MONGODB -DDEBUG
-    ghc-options:   -Wall
-    extra-libraries: sqlite3
 
 source-repository head
   type:     git

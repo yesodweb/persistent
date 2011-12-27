@@ -2,7 +2,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
-module Database.Persist.Join
+module Database.Persist.Query.Join
     ( -- * Typeclass
       RunJoin (..)
       -- * One-to-many relation
@@ -10,12 +10,13 @@ module Database.Persist.Join
     , selectOneMany
     ) where
 
-import Database.Persist.Base
+import Database.Persist.Store
+import Database.Persist.Query
 import Data.Maybe (mapMaybe)
 import qualified Data.Map as Map
 import Data.List (foldl')
 
-class PersistBackend b m => RunJoin a b m where
+class PersistQuery b m => RunJoin a b m where
     type Result a
     runJoin :: a -> b m (Result a)
 
@@ -31,7 +32,7 @@ data SelectOneMany backend one many = SelectOneMany
 
 selectOneMany :: ([Key backend one] -> Filter many) -> (many -> Key backend one) -> SelectOneMany backend one many
 selectOneMany filts get' = SelectOneMany [] [] [] [] filts get' False
-instance (PersistEntity one, PersistEntity many, Ord (Key backend one), PersistBackend backend monad)
+instance (PersistEntity one, PersistEntity many, Ord (Key backend one), PersistQuery backend monad)
     => RunJoin (SelectOneMany backend one many) backend monad where
     type Result (SelectOneMany backend one many) =
         [((Key backend one, one), [(Key backend many, many)])]
