@@ -14,7 +14,11 @@
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE CPP #-}
-module PersistentTest (main') where
+module PersistentTest
+    ( specs
+    , runConn
+    , setup
+    ) where
 
 import Test.HUnit hiding (Test)
 import Test.Hspec.Monadic (Specs, describe, it, hspecX)
@@ -55,7 +59,7 @@ import Database.Persist.Postgresql
 
 #endif
 
-import Database.Persist.TH (mkPersist, mkMigrate, derivePersistField, share, sqlSettings, persist, mkDeleteCascade)
+import Database.Persist.TH (mkPersist, mkMigrate, derivePersistField, share, sqlMkSettings, persistUpperCase, mkDeleteCascade)
 import Control.Monad.IO.Class
 
 import Control.Monad (unless)
@@ -101,9 +105,9 @@ data PetType = Cat | Dog
 derivePersistField "PetType"
 
 #if WITH_MONGODB
-mkPersist MkPersistSettings { mpsBackend = ConT ''Action } [persist|
+mkPersist MkPersistSettings { mpsBackend = ConT ''Action } [persistSQL|
 #else
-share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persist|
+share [mkPersist sqlMkSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persistUpperCase|
 #endif
 -- Dedented comment
   -- Header-level comment
@@ -249,11 +253,6 @@ instance Arbitrary PersistValue where
     arbitrary = PersistInt64 `fmap` choose (0, maxBound)
 #endif
 
-
-main' :: IO ()
-main' = do
-  runConn setup
-  hspecX specs
 
 joinGeneric :: PersistBackend b m =>
                (SelectOneMany BackendMonad (Author) (EntryGeneric BackendMonad)

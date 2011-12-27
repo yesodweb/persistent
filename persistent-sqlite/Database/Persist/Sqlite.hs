@@ -13,6 +13,7 @@ module Database.Persist.Sqlite
 
 import Database.Persist
 import Database.Persist.Base
+import Database.Persist.EntityDef
 import Database.Persist.GenericSql hiding (Key(..))
 import Database.Persist.GenericSql.Internal
 
@@ -34,6 +35,7 @@ import Control.Exception.Control (finally)
 import Data.Text (Text, pack, unpack)
 import Data.Neither (MEither (..), meither)
 import Data.Object
+import qualified Data.Text as T
 
 withSqlitePool :: (MonadIO m, MBCIO m)
                => Text
@@ -76,16 +78,16 @@ prepare' conn sql = do
         , withStmt = withStmt' stmt
         }
 
-insertSql' :: RawName -> [RawName] -> Either Text (Text, Text)
+insertSql' :: DBName -> [DBName] -> Either Text (Text, Text)
 insertSql' t cols =
     Right (pack ins, sel)
   where
     sel = "SELECT last_insert_rowid()"
     ins = concat
         [ "INSERT INTO "
-        , escape t
+        , escape' t
         , "("
-        , intercalate "," $ map escape cols
+        , intercalate "," $ map escape' cols
         , ") VALUES("
         , intercalate "," (map (const "?") cols)
         , ")"
@@ -127,25 +129,26 @@ showSqlType SqlBlob = "BLOB"
 showSqlType SqlBool = "BOOLEAN"
 
 migrate' :: PersistEntity val
-         => (Text -> IO Statement)
+         => [EntityDef]
+         -> (Text -> IO Statement)
          -> val
          -> IO (Either [Text] [(Bool, Text)])
-migrate' getter val = do
-    let (cols, uniqs) = mkColumns val
-    let newSql = mkCreateTable False table (cols, uniqs)
+migrate' allDefs getter val = do
+    let (cols, uniqs) = mkColumns allDefs val
+    let newSql = mkCreateTable False def (cols, uniqs)
     stmt <- getter "SELECT sql FROM sqlite_master WHERE type='table' AND name=?"
-    oldSql' <- withStmt stmt [PersistText $ pack $ unRawName table] go
+    oldSql' <- withStmt stmt [PersistText $ unDBName table] go
     case oldSql' of
         Nothing -> return $ Right [(False, newSql)]
         Just oldSql ->
             if oldSql == newSql
                 then return $ Right []
                 else do
-                    sql <- getCopyTable getter val
+                    sql <- getCopyTable allDefs getter val
                     return $ Right sql
   where
     def = entityDef val
-    table = rawTableName def
+    table = entityDB def
     go pop = do
         x <- pop
         case x of
@@ -153,15 +156,18 @@ migrate' getter val = do
             Just [PersistText y] -> return $ Just y
             Just y -> error $ "Unexpected result from sqlite_master: " ++ show y
 
-getCopyTable :: PersistEntity val => (Text -> IO Statement) -> val
+getCopyTable :: PersistEntity val
+             => [EntityDef]
+             -> (Text -> IO Statement)
+             -> val
              -> IO [(Bool, Sql)]
-getCopyTable getter val = do
-    stmt <- getter $ pack $ "PRAGMA table_info(" ++ escape table ++ ")"
+getCopyTable allDefs getter val = do
+    stmt <- getter $ pack $ "PRAGMA table_info(" ++ escape' table ++ ")"
     oldCols' <- withStmt stmt [] getCols
-    let oldCols = map (RawName . unpack) $ filter (/= "id") oldCols' -- need to update for table id attribute ?
+    let oldCols = map DBName $ filter (/= "id") oldCols' -- need to update for table id attribute ?
     let newCols = map cName cols
     let common = filter (`elem` oldCols) newCols
-    let id_ = rawTableIdName $ entityDef val
+    let id_ = entityID $ entityDef val
     return [ (False, tmpSql)
            , (False, copyToTemp $ id_ : common)
            , (common /= oldCols, pack dropOld)
@@ -179,39 +185,43 @@ getCopyTable getter val = do
                 names <- getCols pop
                 return $ name : names
             Just y -> error $ "Invalid result from PRAGMA table_info: " ++ show y
-    table = rawTableName def
-    tableTmp = RawName $ unRawName table ++ "_backup"
-    (cols, uniqs) = mkColumns val
-    newSql = mkCreateTable False table (cols, uniqs)
-    tmpSql = mkCreateTable True tableTmp (cols, uniqs)
-    dropTmp = "DROP TABLE " ++ escape tableTmp
-    dropOld = "DROP TABLE " ++ escape table
+    table = entityDB def
+    tableTmp = DBName $ unDBName table `T.append` "_backup"
+    (cols, uniqs) = mkColumns allDefs val
+    newSql = mkCreateTable False def (cols, uniqs)
+    tmpSql = mkCreateTable True def { entityDB = tableTmp } (cols, uniqs)
+    dropTmp = "DROP TABLE " ++ escape' tableTmp
+    dropOld = "DROP TABLE " ++ escape' table
     copyToTemp common = pack $ concat
         [ "INSERT INTO "
-        , escape tableTmp
+        , escape' tableTmp
         , "("
-        , intercalate "," $ map escape common
+        , intercalate "," $ map escape' common
         , ") SELECT "
-        , intercalate "," $ map escape common
+        , intercalate "," $ map escape' common
         , " FROM "
-        , escape table
+        , escape' table
         ]
     copyToFinal newCols = pack $ concat
         [ "INSERT INTO "
-        , escape table
+        , T.unpack $ escape table
         , " SELECT "
-        , intercalate "," $ map escape newCols
+        , intercalate "," $ map escape' newCols
         , " FROM "
-        , escape tableTmp
+        , escape' tableTmp
         ]
 
-mkCreateTable :: Bool -> RawName -> ([Column], [UniqueDef']) -> Sql
-mkCreateTable isTemp table (cols, uniqs) = pack $ concat
+escape' = T.unpack . escape
+
+mkCreateTable :: Bool -> EntityDef -> ([Column], [UniqueDef]) -> Sql
+mkCreateTable isTemp entity (cols, uniqs) = pack $ concat
     [ "CREATE"
     , if isTemp then " TEMP" else ""
     , " TABLE "
-    , escape table
-    , "(id INTEGER PRIMARY KEY"
+    , T.unpack $ escape $ entityDB entity
+    , "("
+    , T.unpack $ escape $ entityID entity
+    , " INTEGER PRIMARY KEY"
     , concatMap sqlColumn cols
     , concatMap sqlUnique uniqs
     , ")"
@@ -220,36 +230,36 @@ mkCreateTable isTemp table (cols, uniqs) = pack $ concat
 sqlColumn :: Column -> String
 sqlColumn (Column name isNull typ def ref) = concat
     [ ","
-    , escape name
+    , T.unpack $ escape name
     , " "
     , showSqlType typ
     , if isNull then " NULL" else " NOT NULL"
     , case def of
         Nothing -> ""
-        Just d -> " DEFAULT " ++ d
+        Just d -> " DEFAULT " ++ T.unpack d
     , case ref of
         Nothing -> ""
-        Just (table, _) -> " REFERENCES " ++ escape table
+        Just (table, _) -> " REFERENCES " ++ T.unpack (escape table)
     ]
 
-sqlUnique :: UniqueDef' -> String
-sqlUnique (cname, cols) = concat
+sqlUnique :: UniqueDef -> String
+sqlUnique (UniqueDef _ cname cols) = concat
     [ ",CONSTRAINT "
-    , escape cname
+    , T.unpack $ escape cname
     , " UNIQUE ("
-    , intercalate "," $ map escape cols
+    , intercalate "," $ map (T.unpack . escape . snd) cols
     , ")"
     ]
 
 type Sql = Text
 
-escape :: RawName -> String
-escape (RawName s) =
-    '"' : go s ++ "\""
+escape :: DBName -> Text
+escape (DBName s) =
+    T.concat [q, T.concatMap go s, q]
   where
-    go "" = ""
-    go ('"':xs) = "\"\"" ++ go xs
-    go (x:xs) = x : go xs
+    q = T.singleton '"'
+    go '"' = "\"\""
+    go c = T.singleton c
 
 -- | Information required to connect to a sqlite database
 data SqliteConf = SqliteConf

@@ -31,6 +31,8 @@ module Database.Persist.GenericSql
     , Key (..)
     ) where
 
+import qualified Prelude
+import Prelude hiding ((++), unlines, concat, show)
 import Database.Persist.Base
 import Data.List (intercalate)
 import Control.Monad.IO.Class
@@ -38,7 +40,8 @@ import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.Pool
 import Control.Monad.Trans.Writer
-import System.IO
+import Data.Text.IO (hPutStrLn)
+import System.IO (stderr)
 import Database.Persist.GenericSql.Internal
 import qualified Database.Persist.GenericSql.Raw as R
 import Database.Persist.GenericSql.Raw (SqlPersist (..))
@@ -55,10 +58,13 @@ import Control.Exception.Control (onException)
 #define MBCIO MonadControlIO
 #endif
 import Control.Exception (throw, toException)
-import Data.Text (Text, pack, unpack, snoc)
+import Data.Text (Text, pack, unpack, snoc, unlines, concat)
+import qualified Data.Text as T
 import qualified Data.Text.IO
 import Web.PathPieces (SinglePiece (..))
 import qualified Data.Text.Read
+import Data.Monoid (Monoid, mappend)
+import Database.Persist.EntityDef
 
 type ConnectionPool = Pool Connection
 
@@ -95,7 +101,7 @@ runSqlConn (SqlPersist r) conn = do
 instance (MonadIO m, MBCIO m) => PersistBackend SqlPersist m where
     insert val = do
         conn <- SqlPersist ask
-        let esql = insertSql conn (rawTableName t) (map fst3 $ tableColumns t)
+        let esql = insertSql conn (entityDB t) (map fieldDB $ entityFields t)
         i <-
             case esql of
                 Left sql -> withStmt' sql vals $ \pop -> do
@@ -114,28 +120,28 @@ instance (MonadIO m, MBCIO m) => PersistBackend SqlPersist m where
     replace k val = do
         conn <- SqlPersist ask
         let t = entityDef val
-        let sql = pack $ concat
+        let sql = concat
                 [ "UPDATE "
-                , escapeName conn (rawTableName t)
+                , escapeName conn (entityDB t)
                 , " SET "
-                , intercalate "," (map (go conn . fst3) $ tableColumns t)
+                , T.intercalate "," (map (go conn . fieldDB) $ entityFields t)
                 , " WHERE id=?"
                 ]
         execute' sql $ map toPersistValue (toPersistFields val)
-                       ++ [unKey k]
+                       `mappend` [unKey k]
       where
         go conn x = escapeName conn x ++ "=?"
 
     get k = do
         conn <- SqlPersist ask
         let t = entityDef $ dummyFromKey k
-        let cols = intercalate ","
-                 $ map (\(x, _, _) -> escapeName conn x) $ tableColumns t
-        let sql = pack $ concat
+        let cols = T.intercalate ","
+                 $ map (escapeName conn . fieldDB) $ entityFields t
+        let sql = concat
                 [ "SELECT "
                 , cols
                 , " FROM "
-                , escapeName conn $ rawTableName t
+                , escapeName conn $ entityDB t
                 , " WHERE id=?"
                 ]
         withStmt' sql [unKey k] $ \pop -> do
@@ -144,7 +150,7 @@ instance (MonadIO m, MBCIO m) => PersistBackend SqlPersist m where
                 Nothing -> return Nothing
                 Just vals ->
                     case fromPersistValues vals of
-                        Left e -> error $ "get " ++ show (unKey k) ++ ": " ++ e
+                        Left e -> error $ unpack $ "get " ++ show (unKey k) ++ ": " ++ e
                         Right v -> return $ Just v
 
     count filts = do
@@ -152,9 +158,9 @@ instance (MonadIO m, MBCIO m) => PersistBackend SqlPersist m where
         let wher = if null filts
                     then ""
                     else filterClause False conn filts
-        let sql = pack $ concat
+        let sql = concat
                 [ "SELECT COUNT(*) FROM "
-                , escapeName conn $ rawTableName t
+                , escapeName conn $ entityDB t
                 , wher
                 ]
         withStmt' sql (getFiltsValues conn filts) $ \pop -> do
@@ -195,21 +201,22 @@ instance (MonadIO m, MBCIO m) => PersistBackend SqlPersist m where
         ord conn =
             case map (orderClause False conn) orders of
                 [] -> ""
-                ords -> " ORDER BY " ++ intercalate "," ords
+                ords -> " ORDER BY " ++ T.intercalate "," ords
         lim conn = case (limit, offset) of
                 (0, 0) -> ""
-                (0, _) -> ' ' : noLimit conn
+                (0, _) -> T.cons ' ' $ noLimit conn
                 (_, _) -> " LIMIT " ++ show limit
         off = if offset == 0
                     then ""
                     else " OFFSET " ++ show offset
-        cols conn = intercalate "," $ (unRawName $ rawTableIdName t)
-                   : (map (\(x, _, _) -> escapeName conn x) $ tableColumns t)
-        sql conn = pack $ concat
+        cols conn = T.intercalate ","
+                  $ (escapeName conn $ entityID t)
+                  : map (escapeName conn . fieldDB) (entityFields t)
+        sql conn = concat
             [ "SELECT "
             , cols conn
             , " FROM "
-            , escapeName conn $ rawTableName t
+            , escapeName conn $ entityDB t
             , wher conn
             , ord conn
             , lim conn
@@ -236,9 +243,9 @@ instance (MonadIO m, MBCIO m) => PersistBackend SqlPersist m where
         wher conn = if null filts
                     then ""
                     else filterClause False conn filts
-        sql conn = pack $ concat
+        sql conn = concat
             [ "SELECT id FROM "
-            , escapeName conn $ rawTableName t
+            , escapeName conn $ entityDB t
             , wher conn
             ]
 
@@ -247,9 +254,9 @@ instance (MonadIO m, MBCIO m) => PersistBackend SqlPersist m where
         execute' (sql conn) [unKey k]
       where
         t = entityDef $ dummyFromKey k
-        sql conn = pack $ concat
+        sql conn = concat
             [ "DELETE FROM "
-            , escapeName conn $ rawTableName t
+            , escapeName conn $ entityDB t
             , " WHERE id=?"
             ]
 
@@ -259,9 +266,9 @@ instance (MonadIO m, MBCIO m) => PersistBackend SqlPersist m where
         let wher = if null filts
                     then ""
                     else filterClause False conn filts
-            sql = pack $ concat
+            sql = concat
                 [ "DELETE FROM "
-                , escapeName conn $ rawTableName t
+                , escapeName conn $ entityDB t
                 , wher
                 ]
         execute' sql $ getFiltsValues conn filts
@@ -271,38 +278,36 @@ instance (MonadIO m, MBCIO m) => PersistBackend SqlPersist m where
         execute' (sql conn) $ persistUniqueToValues uniq
       where
         t = entityDef $ dummyFromUnique uniq
-        go = map (getFieldName t) . persistUniqueToFieldNames
+        go = map snd . persistUniqueToFieldNames
         go' conn x = escapeName conn x ++ "=?"
-        sql conn = pack $ concat
+        sql conn = concat
             [ "DELETE FROM "
-            , escapeName conn $ rawTableName t
+            , escapeName conn $ entityDB t
             , " WHERE "
-            , intercalate " AND " $ map (go' conn) $ go uniq
+            , T.intercalate " AND " $ map (go' conn) $ go uniq
             ]
 
     update _ [] = return ()
     update k upds = do
         conn <- SqlPersist ask
         let go'' n Assign = n ++ "=?"
-            go'' n Add = n ++ '=' : n ++ "+?"
-            go'' n Subtract = n ++ '=' : n ++ "-?"
-            go'' n Multiply = n ++ '=' : n ++ "*?"
-            go'' n Divide = n ++ '=' : n ++ "/?"
+            go'' n Add = concat [n, "=", n, "+?"]
+            go'' n Subtract = concat [n, "=", n, "-?"]
+            go'' n Multiply = concat [n, "=", n, "*?"]
+            go'' n Divide = concat [n, "=", n, "/?"]
         let go' (x, pu) = go'' (escapeName conn x) pu
-        let sql = pack $ concat
+        let sql = concat
                 [ "UPDATE "
-                , escapeName conn $ rawTableName t
+                , escapeName conn $ entityDB t
                 , " SET "
-                , intercalate "," $ map (go' . go) upds
+                , T.intercalate "," $ map (go' . go) upds
                 , " WHERE id=?"
                 ]
         execute' sql $
-            map updatePersistValue upds ++ [unKey k]
+            map updatePersistValue upds `mappend` [unKey k]
       where
         t = entityDef $ dummyFromKey k
-        go x = ( getFieldName t $ updateFieldName x
-               , updateUpdate x
-               )
+        go x = (fieldDB $ updateFieldDef x, updateUpdate x)
 
     updateWhere _ [] = return ()
     updateWhere filts upds = do
@@ -310,36 +315,35 @@ instance (MonadIO m, MBCIO m) => PersistBackend SqlPersist m where
         let wher = if null filts
                     then ""
                     else filterClause False conn filts
-        let sql = pack $ concat
+        let sql = concat
                 [ "UPDATE "
-                , escapeName conn $ rawTableName t
+                , escapeName conn $ entityDB t
                 , " SET "
-                , intercalate "," $ map (go' conn . go) upds
+                , T.intercalate "," $ map (go' conn . go) upds
                 , wher
                 ]
-        let dat = map updatePersistValue upds ++ getFiltsValues conn filts
+        let dat = map updatePersistValue upds `mappend`
+                  getFiltsValues conn filts
         execute' sql dat
       where
         t = entityDef $ dummyFromFilts filts
         go'' n Assign = n ++ "=?"
-        go'' n Add = n ++ '=' : n ++ "+?"
-        go'' n Subtract = n ++ '=' : n ++ "-?"
-        go'' n Multiply = n ++ '=' : n ++ "*?"
-        go'' n Divide = n ++ '=' : n ++ "/?"
+        go'' n Add = concat [n, "=", n, "+?"]
+        go'' n Subtract = concat [n, "=", n, "-?"]
+        go'' n Multiply = concat [n, "=", n, "*?"]
+        go'' n Divide = concat [n, "=", n, "/?"]
         go' conn (x, pu) = go'' (escapeName conn x) pu
-        go x = ( getFieldName t $ updateFieldName x
-               , updateUpdate x
-               )
+        go x = (fieldDB $ updateFieldDef x, updateUpdate x)
 
     getBy uniq = do
         conn <- SqlPersist ask
-        let cols = intercalate "," $ (unRawName $ rawTableIdName t)
-                 : (map (\(x, _, _) -> escapeName conn x) $ tableColumns t)
-        let sql = pack $ concat
+        let cols = T.intercalate "," $ (escapeName conn $ entityID t)
+                 : map (escapeName conn . fieldDB) (entityFields t)
+        let sql = concat
                 [ "SELECT "
                 , cols
                 , " FROM "
-                , escapeName conn $ rawTableName t
+                , escapeName conn $ entityDB t
                 , " WHERE "
                 , sqlClause conn
                 ]
@@ -349,15 +353,15 @@ instance (MonadIO m, MBCIO m) => PersistBackend SqlPersist m where
                 Nothing -> return Nothing
                 Just (PersistInt64 k:vals) ->
                     case fromPersistValues vals of
-                        Left s -> error s
+                        Left s -> error $ unpack s
                         Right x -> return $ Just (Key $ PersistInt64 k, x)
                 Just _ -> error "Database.Persist.GenericSql: Bad list in getBy"
       where
         sqlClause conn =
-            intercalate " AND " $ map (go conn) $ toFieldNames' uniq
+            T.intercalate " AND " $ map (go conn) $ toFieldNames' uniq
         go conn x = escapeName conn x ++ "=?"
         t = entityDef $ dummyFromUnique uniq
-        toFieldNames' = map (getFieldName t) . persistUniqueToFieldNames
+        toFieldNames' = map snd . persistUniqueToFieldNames
 
 dummyFromUnique :: Unique v b -> v
 dummyFromUnique _ = error "dummyFromUnique"
@@ -391,7 +395,7 @@ parseMigration' :: Monad m => Migration m -> m (CautiousMigration)
 parseMigration' m = do
   x <- parseMigration m
   case x of
-      Left errs -> error $ unlines $ map unpack errs
+      Left errs -> error $ unpack $ unlines errs
       Right sql -> return sql
 
 printMigration :: (MBCIO m, MonadIO m) => Migration (SqlPersist m) -> SqlPersist m ()
@@ -425,10 +429,10 @@ runMigration' m silent = do
     mig <- parseMigration' m
     case unsafeSql mig of
         []   -> mapM (executeMigrate silent) $ safeSql mig
-        errs -> error $ concat
+        errs -> error $ unpack $ concat
             [ "\n\nDatabase migration: manual intervention required.\n"
             , "The following actions are considered unsafe:\n\n"
-            , unlines $ map (\s -> "    " ++ unpack s ++ ";") $ errs
+            , unlines $ map (\s -> "    " ++ s ++ ";") $ errs
             ]
 
 runMigrationUnsafe :: (MBCIO m, MonadIO m)
@@ -440,17 +444,18 @@ runMigrationUnsafe m = do
 
 executeMigrate :: MonadIO m => Bool -> Text -> SqlPersist m Text
 executeMigrate silent s = do
-    unless silent $ liftIO $ hPutStrLn stderr $ "Migrating: " ++ unpack s
+    unless silent $ liftIO $ hPutStrLn stderr $ "Migrating: " ++ s
     execute' s []
     return s
 
 migrate :: (MonadIO m, MBCIO m, PersistEntity val)
-        => val
+        => [EntityDef]
+        -> val
         -> Migration (SqlPersist m)
-migrate val = do
+migrate allDefs val = do
     conn <- lift $ lift $ SqlPersist ask
     let getter = R.getStmt' conn
-    res <- liftIO $ migrateSql conn getter val
+    res <- liftIO $ migrateSql conn allDefs getter val
     either tell (lift . tell) res
 
 updatePersistValue :: Update v -> PersistValue
@@ -476,3 +481,10 @@ onException m what = control $ \runInIO ->
                        E.onException (runInIO m)
                                      (runInIO what)
 #endif
+
+infixr 5 ++
+(++) :: Text -> Text -> Text
+(++) = mappend
+
+show :: Show a => a -> Text
+show = pack . Prelude.show

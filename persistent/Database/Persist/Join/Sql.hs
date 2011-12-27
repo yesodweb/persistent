@@ -2,11 +2,13 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Database.Persist.Join.Sql
     ( RunJoin (..)
     ) where
 
 import Database.Persist.Join hiding (RunJoin (..))
+import Database.Persist.EntityDef
 import qualified Database.Persist.Join as J
 import Database.Persist.Base
 import Control.Monad (liftM)
@@ -25,10 +27,14 @@ import Control.Monad.IO.Control (MonadControlIO)
 #endif
 import Data.Function (on)
 import Control.Arrow ((&&&))
-import Data.Text (pack)
+import Data.Text (Text, pack, concat, append, null)
 import Control.Monad.IO.Class (MonadIO)
+import qualified Prelude
+import Prelude hiding ((++), unlines, concat, show, null)
+import Data.Monoid (Monoid, mappend)
+import qualified Data.Text as T
 
-fromPersistValuesId :: PersistEntity v => [PersistValue] -> Either String (Key SqlPersist v, v)
+fromPersistValuesId :: PersistEntity v => [PersistValue] -> Either Text (Key SqlPersist v, v)
 fromPersistValuesId [] = Left "fromPersistValuesId: No values provided"
 fromPersistValuesId (PersistInt64 i:rest) =
     case fromPersistValues rest of
@@ -55,38 +61,40 @@ instance (PersistEntity one, PersistEntity many, Eq (Key SqlPersist one))
                     let (y, z) = splitAt oneCount vals
                     case (fromPersistValuesId y, fromPersistValuesId z) of
                         (Right y', Right z') -> loop (front . (:) (y', Just z')) popper
-                        (Left e, _) -> error $ "selectOneMany: " ++ e
+                        (Left e, _) -> error $ "selectOneMany: " ++ T.unpack e
                         (Right y', Left e) ->
                             case z of
                                 PersistNull:_ -> loop (front . (:) (y', Nothing)) popper
-                                _ -> error $ "selectOneMany: " ++ e
-        oneCount = 1 + length (tableColumns $ entityDef one)
+                                _ -> error $ "selectOneMany: " ++ T.unpack e
+        oneCount = 1 + length (entityFields $ entityDef one)
         one = dummyFromFilts oneF
         many = dummyFromFilts manyF
-        sql conn = pack $ concat
+        sql conn = concat
             [ "SELECT "
-            , intercalate "," $ colsPlusId conn one ++ colsPlusId conn many
+            , T.intercalate "," $ colsPlusId conn one ++ colsPlusId conn many
             , " FROM "
-            , escapeName conn $ rawTableName $ entityDef one
+            , escapeName conn $ entityDB $ entityDef one
             , if isOuter then " LEFT JOIN " else " INNER JOIN "
-            , escapeName conn $ rawTableName $ entityDef many
+            , escapeName conn $ entityDB $ entityDef many
             , " ON "
-            , escapeName conn $ rawTableName $ entityDef one
+            , escapeName conn $ entityDB $ entityDef one
             , ".id = "
-            , escapeName conn $ rawTableName $ entityDef many
+            , escapeName conn $ entityDB $ entityDef many
             , "."
-            , escapeName conn $ RawName $ filterName $ eq undefined
+            , escapeName conn $ filterName $ eq undefined
             , filts
-            , if null ords
-                then ""
-                else " ORDER BY " ++ intercalate ", " ords
+            , case ords of
+                [] -> ""
+                _ -> " ORDER BY " ++ T.intercalate ", " ords
             ]
           where
             filts1 = filterClauseNoWhere True conn oneF
             filts2 = filterClauseNoWhere True conn manyF
 
-            orders :: PersistEntity val => [SelectOpt val] -> [SelectOpt val]
-            orders = third3 . limitOffsetOrder
+            orders :: PersistEntity val
+                   => [SelectOpt val]
+                   -> [SelectOpt val]
+            orders x = let (_, _, y) = limitOffsetOrder x in y
 
             filts
                 | null filts1 && null filts2 = ""
@@ -95,19 +103,30 @@ instance (PersistEntity one, PersistEntity many, Eq (Key SqlPersist one))
                 | otherwise = " WHERE " ++ filts1 ++ " AND " ++ filts2
             ords = map (orderClause True conn) (orders oneO) ++ map (orderClause True conn) (orders manyO)
 
-addTable :: PersistEntity val =>
-           Connection -> val -> [Char] -> [Char]
-addTable conn e s = concat [escapeName conn $ rawTableName $ entityDef e, ".", s]
+addTable :: PersistEntity val
+         => Connection
+         -> val
+         -> Text
+         -> Text
+addTable conn e s = concat
+    [ escapeName conn $ entityDB $ entityDef e
+    , "."
+    , s
+    ]
 
-colsPlusId :: PersistEntity e => Connection -> e -> [String]
+colsPlusId :: PersistEntity e => Connection -> e -> [Text]
 colsPlusId conn e =
     map (addTable conn e) $
-    id_ : (map (\(x, _, _) -> escapeName conn x) cols)
+    id_ : (map (escapeName conn . fieldDB) cols)
   where
-    id_ = unRawName $ rawTableIdName $ entityDef e
-    cols = tableColumns $ entityDef e
+    id_ = escapeName conn $ entityID $ entityDef e
+    cols = entityFields $ entityDef e
 
-filterName :: PersistEntity v => Filter v -> String
-filterName (Filter f _ _) = columnName $ persistColumnDef f
+filterName :: PersistEntity v => Filter v -> DBName
+filterName (Filter f _ _) = fieldDB $ persistFieldDef f
 filterName (FilterAnd _) = error "expected a raw filter, not an And"
 filterName (FilterOr _) = error "expected a raw filter, not an Or"
+
+infixr 5 ++
+(++) :: Monoid m => m -> m -> m
+(++) = mappend

@@ -1,4 +1,8 @@
-import PersistentTest (main')
+import PersistentTest
+import RenameTest
+import Test.Hspec.Monadic (hspecX)
 
 main :: IO ()
-main = main'
+main = do
+  runConn setup
+  hspecX $ specs >> renameSpecs

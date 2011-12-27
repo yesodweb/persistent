@@ -17,9 +17,12 @@ extra-source-files:
   test/from-cabal
 
 library
+    ghc-options: -O0
     extra-libraries: sqlite3
     exposed-modules: PersistentTest
-                     Database.Persist.Base
+                     RenameTest
+    other-modules:   Database.Persist.Base
+                     Database.Persist.EntityDef
                      Database.Persist.GenericSql
                      Database.Persist.GenericSql.Raw
                      Database.Persist.GenericSql.Internal
@@ -32,6 +35,7 @@ library
                      Database.Sqlite
                      Database.Persist
                      Database.Persist.Quasi
+                     Database.Persist.Postgresql
     build-depends:   base                     >= 4       && < 5
                    , HUnit
                    , hspec >= 0.8 && < 0.10
@@ -69,6 +73,7 @@ test-suite test
 
     build-depends:   base >= 4 && < 5
                    , persistent-test
+                   , hspec
 
     -- these are mutually exclusive options
     -- cpp-options: -DWITH_POSTGRESQL
