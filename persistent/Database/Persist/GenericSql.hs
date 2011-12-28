@@ -60,6 +60,8 @@ import Web.PathPieces (PathPiece (..))
 import qualified Data.Text.Read
 import Data.Monoid (Monoid, mappend)
 import Database.Persist.EntityDef
+import qualified Data.Conduit as C
+import qualified Data.Conduit.List as CL
 
 type ConnectionPool = Pool Connection
 
@@ -70,12 +72,6 @@ instance PathPiece (Key SqlPersist entity) where
         case Data.Text.Read.signed Data.Text.Read.decimal t of
             Right (i, "") -> Just $ Key $ PersistInt64 i
             _ -> Nothing
-
-withStmt'
-    :: (MBCIO m, MonadIO m)
-    => Text -> [PersistValue]
-    -> (RowPopper (SqlPersist m) -> SqlPersist m a) -> SqlPersist m a
-withStmt' = R.withStmt
 
 execute' :: MonadIO m => Text -> [PersistValue] -> SqlPersist m ()
 execute' = R.execute
@@ -93,19 +89,19 @@ runSqlConn (SqlPersist r) conn = do
     liftIO $ commitC conn getter
     return x
 
-instance (MonadIO m, MBCIO m) => PersistStore SqlPersist m where
+instance C.ResourceIO m => PersistStore SqlPersist m where
     insert val = do
         conn <- SqlPersist ask
         let esql = insertSql conn (entityDB t) (map fieldDB $ entityFields t)
         i <-
             case esql of
-                Left sql -> withStmt' sql vals $ \pop -> do
-                    Just [PersistInt64 i] <- pop
+                Left sql -> C.runResourceT $ R.withStmt sql vals C.$$ do
+                    Just [PersistInt64 i] <- CL.head
                     return i
                 Right (sql1, sql2) -> do
                     execute' sql1 vals
-                    withStmt' sql2 [] $ \pop -> do
-                        Just [PersistInt64 i] <- pop
+                    C.runResourceT $ R.withStmt sql2 [] C.$$ do
+                        Just [PersistInt64 i] <- CL.head
                         return i
         return $ Key $ PersistInt64 i
       where
@@ -139,8 +135,8 @@ instance (MonadIO m, MBCIO m) => PersistStore SqlPersist m where
                 , escapeName conn $ entityDB t
                 , " WHERE id=?"
                 ]
-        withStmt' sql [unKey k] $ \pop -> do
-            res <- pop
+        C.runResourceT $ R.withStmt sql [unKey k] C.$$ do
+            res <- CL.head
             case res of
                 Nothing -> return Nothing
                 Just vals ->
@@ -159,7 +155,7 @@ instance (MonadIO m, MBCIO m) => PersistStore SqlPersist m where
             , " WHERE id=?"
             ]
 
-instance (MonadIO m, MBCIO m) => PersistUnique SqlPersist m where
+instance C.ResourceIO m => PersistUnique SqlPersist m where
     deleteBy uniq = do
         conn <- SqlPersist ask
         execute' (sql conn) $ persistUniqueToValues uniq
@@ -186,8 +182,8 @@ instance (MonadIO m, MBCIO m) => PersistUnique SqlPersist m where
                 , " WHERE "
                 , sqlClause conn
                 ]
-        withStmt' sql (persistUniqueToValues uniq) $ \pop -> do
-            row <- pop
+        C.runResourceT $ R.withStmt sql (persistUniqueToValues uniq) C.$$ do
+            row <- CL.head
             case row of
                 Nothing -> return Nothing
                 Just (PersistInt64 k:vals) ->

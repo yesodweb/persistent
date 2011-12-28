@@ -72,6 +72,7 @@ import qualified Data.Text.Encoding.Error as T
 import Web.PathPieces (PathPiece (..))
 import qualified Data.Text.Read
 import Control.Monad.IO.Class (MonadIO)
+import qualified Data.Conduit as C
 
 #if MIN_VERSION_monad_control(0, 3, 0)
 import Control.Monad.Trans.Control (MonadBaseControl)
@@ -389,7 +390,7 @@ instance PersistField SomePersistField where
 newtype Key (backend :: (* -> *) -> * -> *) entity = Key { unKey :: PersistValue }
     deriving (Show, Read, Eq, Ord, PersistField)
 
-class (Trans.MonadIO (b m), Trans.MonadIO m, Monad (b m), Monad m) => PersistStore b m where
+class (C.ResourceIO m, C.ResourceIO (b m)) => PersistStore b m where
 
     -- | Create a new record in the database, returning an automatically created
     -- key (in SQL an auto-increment id).

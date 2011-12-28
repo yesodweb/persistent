@@ -34,6 +34,8 @@ import Control.Monad.IO.Control (MonadControlIO)
 #endif
 import Data.Text (Text)
 import Control.Monad (MonadPlus)
+import Control.Monad.Trans.Resource (ResourceThrow (..), ResourceIO)
+import qualified Data.Conduit as C
 
 newtype SqlPersist m a = SqlPersist { unSqlPersist :: ReaderT Connection m a }
     deriving (Monad, MonadIO, MonadTrans, Functor, Applicative, MonadPlus
@@ -41,6 +43,9 @@ newtype SqlPersist m a = SqlPersist { unSqlPersist :: ReaderT Connection m a }
       , MonadControlIO
 #endif
       )
+
+instance ResourceThrow m => ResourceThrow (SqlPersist m) where
+    resourceThrow = lift . resourceThrow
 
 instance MonadBase b m => MonadBase b (SqlPersist m) where
     liftBase = lift . liftBase
@@ -56,13 +61,24 @@ instance MonadTransControl SqlPersist where
     restoreT = SqlPersist . ReaderT . const . liftM unStReader
 #endif
 
-withStmt :: (MonadIO m, MBCIO m) => Text -> [PersistValue]
-         -> (RowPopper (SqlPersist m) -> SqlPersist m a) -> SqlPersist m a
-withStmt sql vals pop = do
-    stmt <- getStmt sql
-    ret <- I.withStmt stmt vals pop
-    liftIO $ reset stmt
-    return ret
+withStmt :: ResourceIO m
+         => Text
+         -> [PersistValue]
+         -> C.Source (SqlPersist m) [PersistValue]
+withStmt sql vals = C.Source $ do
+    stmt <- lift $ getStmt sql
+    src <- C.prepareSource $ I.withStmt stmt vals
+    return C.PreparedSource
+        { C.sourcePull = do
+            res <- C.sourcePull src
+            case res of
+                C.Closed -> liftIO $ I.reset stmt
+                _ -> return ()
+            return res
+        , C.sourceClose = do
+            liftIO $ I.reset stmt
+            C.sourceClose src
+        }
 
 execute :: MonadIO m => Text -> [PersistValue] -> SqlPersist m ()
 execute sql vals = do

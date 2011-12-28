@@ -42,7 +42,7 @@ import qualified Data.Text.Encoding as T
 import qualified Data.Text.Encoding.Error as T
 import Data.Time.LocalTime (localTimeToUTC, utc)
 import Data.Text (Text, pack, unpack)
-import Data.Object
+import Data.Aeson
 import Control.Monad (forM)
 import Data.Neither (meither, MEither (..))
 

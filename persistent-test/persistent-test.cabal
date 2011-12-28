@@ -51,7 +51,8 @@ library
                    , template-haskell >= 2.4 && < 2.7
                    , HDBC-postgresql
                    , HDBC
-                   , data-object
+                   , aeson
+                   , lifted-base
                    , neither
                    -- mongoDB dependencies
                    --, mongoDB       == 1.1.*
@@ -65,7 +66,7 @@ library
                    , monad-control
                    , containers
                    , bytestring
-                   , enumerator
+                   , conduit
                    , time >= 1.2
                    , random == 1.*
                    , QuickCheck == 2.4.*

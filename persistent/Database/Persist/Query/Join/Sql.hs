@@ -20,20 +20,14 @@ import Database.Persist.GenericSql
 import Database.Persist.GenericSql.Internal hiding (withStmt)
 import Database.Persist.GenericSql.Raw (withStmt)
 import Control.Monad.Trans.Reader (ask)
-#if MIN_VERSION_monad_control(0, 3, 0)
-import Control.Monad.Trans.Control (MonadBaseControl)
-#define MBCIO MonadBaseControl IO
-#else
-import Control.Monad.IO.Control (MonadControlIO)
-#define MBCIO MonadControlIO
-#endif
 import Data.Function (on)
 import Control.Arrow ((&&&))
 import Data.Text (Text, concat, null)
-import Control.Monad.IO.Class (MonadIO)
 import Prelude hiding ((++), unlines, concat, show, null)
 import Data.Monoid (Monoid, mappend)
 import qualified Data.Text as T
+import qualified Data.Conduit as C
+import qualified Data.Conduit.List as CL
 
 fromPersistValuesId :: PersistEntity v => [PersistValue] -> Either Text (Key SqlPersist v, v)
 fromPersistValuesId [] = Left "fromPersistValuesId: No values provided"
@@ -44,28 +38,28 @@ fromPersistValuesId (PersistInt64 i:rest) =
 fromPersistValuesId _ = Left "fromPersistValuesId: invalid ID"
 
 class RunJoin a where
-    runJoin :: (MonadIO m, MBCIO m) => a -> SqlPersist m (J.Result a)
+    runJoin :: C.ResourceIO m => a -> SqlPersist m (J.Result a)
 
 instance (PersistEntity one, PersistEntity many, Eq (Key SqlPersist one))
     => RunJoin (SelectOneMany SqlPersist one many) where
     runJoin (SelectOneMany oneF oneO manyF manyO eq _getKey isOuter) = do
         conn <- SqlPersist ask
-        liftM go $ withStmt (sql conn) (getFiltsValues conn oneF ++ getFiltsValues conn manyF) $ loop id
+        C.runResourceT $ liftM go $ withStmt (sql conn) (getFiltsValues conn oneF ++ getFiltsValues conn manyF) C.$$ loop id
       where
         go :: Eq a => [((a, b), Maybe (c, d))] -> [((a, b), [(c, d)])]
         go = map (fst . head &&& mapMaybe snd) . groupBy ((==) `on` (fst . fst))
-        loop front popper = do
-            x <- popper
+        loop front = do
+            x <- CL.head
             case x of
                 Nothing -> return $ front []
                 Just vals -> do
                     let (y, z) = splitAt oneCount vals
                     case (fromPersistValuesId y, fromPersistValuesId z) of
-                        (Right y', Right z') -> loop (front . (:) (y', Just z')) popper
+                        (Right y', Right z') -> loop (front . (:) (y', Just z'))
                         (Left e, _) -> error $ "selectOneMany: " ++ T.unpack e
                         (Right y', Left e) ->
                             case z of
-                                PersistNull:_ -> loop (front . (:) (y', Nothing)) popper
+                                PersistNull:_ -> loop (front . (:) (y', Nothing))
                                 _ -> error $ "selectOneMany: " ++ T.unpack e
         oneCount = 1 + length (entityFields $ entityDef one)
         one = dummyFromFilts oneF

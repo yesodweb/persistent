@@ -29,7 +29,8 @@ import qualified Database.Persist.GenericSql.Raw as R
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader
 
-import Data.Enumerator hiding (length, filter, consume, map)
+import qualified Data.Conduit as C
+import qualified Data.Conduit.List as CL
 
 #if MIN_VERSION_monad_control(0, 3, 0)
 import Control.Monad.Trans.Control (MonadBaseControl)
@@ -43,7 +44,7 @@ import qualified Data.Text as T
 import Database.Persist.EntityDef
 import Data.Monoid (Monoid, mappend, mconcat)
 
-instance (MonadIO m, MBCIO m) => PersistQuery SqlPersist m where
+instance C.ResourceIO m => PersistQuery SqlPersist m where
     update _ [] = return ()
     update k upds = do
         conn <- SqlPersist ask
@@ -76,20 +77,22 @@ instance (MonadIO m, MBCIO m) => PersistQuery SqlPersist m where
                 , escapeName conn $ entityDB t
                 , wher
                 ]
-        withStmt' sql (getFiltsValues conn filts) $ \pop -> do
-            Just [PersistInt64 i] <- pop
+        C.runResourceT $ R.withStmt sql (getFiltsValues conn filts) C.$$ do
+            Just [PersistInt64 i] <- CL.head
             return $ fromIntegral i
       where
         t = entityDef $ dummyFromFilts filts
 
-    selectEnum filts opts =
+    selectSource filts opts =
+        error "selectSource"
+        {-
         Iteratee . start
       where
         (limit, offset, orders) = limitOffsetOrder opts
 
         start x = do
             conn <- SqlPersist ask
-            withStmt' (sql conn) (getFiltsValues conn filts) $ loop x
+            R.withStmt (sql conn) (getFiltsValues conn filts) $ loop x
         loop (Continue k) pop = do
             res <- pop
             case res of
@@ -135,13 +138,16 @@ instance (MonadIO m, MBCIO m) => PersistQuery SqlPersist m where
             , lim conn
             , off
             ]
+            -}
 
     selectKeys filts =
+        error "selectKeys"
+        {-
         Iteratee . start
       where
         start x = do
             conn <- SqlPersist ask
-            withStmt' (sql conn) (getFiltsValues conn filts) $ loop x
+            R.withStmt (sql conn) (getFiltsValues conn filts) $ loop x
         loop (Continue k) pop = do
             res <- pop
             case res of
@@ -163,6 +169,7 @@ instance (MonadIO m, MBCIO m) => PersistQuery SqlPersist m where
             , escapeName conn $ entityDB t
             , wher conn
             ]
+        -}
 
     deleteWhere filts = do
         conn <- SqlPersist ask
@@ -211,12 +218,6 @@ dummyFromKey _ = error "dummyFromKey"
 
 execute' :: MonadIO m => Text -> [PersistValue] -> SqlPersist m ()
 execute' = R.execute
-
-withStmt'
-    :: (MBCIO m, MonadIO m)
-    => Text -> [PersistValue]
-    -> (RowPopper (SqlPersist m) -> SqlPersist m a) -> SqlPersist m a
-withStmt' = R.withStmt
 
 getFiltsValues :: forall val.  PersistEntity val => Connection -> [Filter val] -> [PersistValue]
 getFiltsValues conn = snd . filterClauseHelper False False conn

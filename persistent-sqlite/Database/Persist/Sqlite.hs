@@ -34,7 +34,7 @@ import Control.Exception.Control (finally)
 #endif
 import Data.Text (Text, pack, unpack)
 import Data.Neither (MEither (..), meither)
-import Data.Object
+import Data.Aeson
 import qualified Data.Text as T
 
 withSqlitePool :: (MonadIO m, MBCIO m)
