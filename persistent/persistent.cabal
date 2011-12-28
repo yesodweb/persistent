@@ -32,7 +32,7 @@ library
                    , blaze-html               >= 0.4     && < 0.5
                    , path-pieces              >= 0.1     && < 0.2
                    , mtl                      >= 2.0     && < 2.1
-                   , data-object              >= 0.3.1.7 && < 0.4
+                   , aeson                    >= 0.5     && < 0.6
                    , transformers-base
 
     exposed-modules: Database.Persist
