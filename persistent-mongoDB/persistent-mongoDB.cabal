@@ -25,7 +25,7 @@ library
                    , network            >= 2.2.1.7 && < 3
                    , compact-string-fix >= 0.3.1   && < 0.4
                    , cereal             >= 0.3.0.0
-                   , path-pieces        >= 0.0     && < 0.1
+                   , path-pieces        >= 0.1     && < 0.2
                    , monad-control      >= 0.2     && < 0.3
                    , data-object        >= 0.3     && < 0.4
                    , neither            >= 0.3     && < 0.4
