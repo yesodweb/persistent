@@ -17,7 +17,6 @@ extra-source-files:
   test/from-cabal
 
 library
-    ghc-options: -O0
     extra-libraries: sqlite3
 
     exposed-modules: PersistentTest
