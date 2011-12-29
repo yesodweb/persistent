@@ -27,19 +27,13 @@ import Database.Persist.GenericSql.Internal
 import qualified Database.Persist.GenericSql.Raw as R
 
 import Control.Monad.IO.Class
+import Control.Monad.Trans.Class
 import Control.Monad.Trans.Reader
 
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 
-#if MIN_VERSION_monad_control(0, 3, 0)
-import Control.Monad.Trans.Control (MonadBaseControl)
-#define MBCIO MonadBaseControl IO
-#else
-import Control.Monad.IO.Control (MonadControlIO)
-#define MBCIO MonadControlIO
-#endif
-import Control.Exception (toException)
+import Control.Exception (throwIO)
 import qualified Data.Text as T
 import Database.Persist.EntityDef
 import Data.Monoid (Monoid, mappend, mconcat)
@@ -83,28 +77,17 @@ instance C.ResourceIO m => PersistQuery SqlPersist m where
       where
         t = entityDef $ dummyFromFilts filts
 
-    selectSource filts opts =
-        error "selectSource"
-        {-
-        Iteratee . start
+    selectSource filts opts = C.Source $ do
+        conn <- lift $ SqlPersist ask
+        C.prepareSource $ R.withStmt (sql conn) (getFiltsValues conn filts) C.$= CL.mapM parse
       where
         (limit, offset, orders) = limitOffsetOrder opts
 
-        start x = do
-            conn <- SqlPersist ask
-            R.withStmt (sql conn) (getFiltsValues conn filts) $ loop x
-        loop (Continue k) pop = do
-            res <- pop
-            case res of
-                Nothing -> return $ Continue k
-                Just vals -> do
-                    case fromPersistValues' vals of
-                        Left s -> return $ Error $ toException
-                                $ PersistMarshalError s
-                        Right row -> do
-                            step <- runIteratee $ k $ Chunks [row]
-                            loop step pop
-        loop step _ = return step
+        parse vals =
+            case fromPersistValues' vals of
+                Left s -> liftIO $ throwIO $ PersistMarshalError s
+                Right row -> return row
+
         t = entityDef $ dummyFromFilts filts
         fromPersistValues' (PersistInt64 x:xs) = do
             case fromPersistValues xs of
@@ -138,26 +121,13 @@ instance C.ResourceIO m => PersistQuery SqlPersist m where
             , lim conn
             , off
             ]
-            -}
 
-    selectKeys filts =
-        error "selectKeys"
-        {-
-        Iteratee . start
+    selectKeys filts = C.Source $ do
+        conn <- lift $ SqlPersist ask
+        C.prepareSource $ R.withStmt (sql conn) (getFiltsValues conn filts) C.$= CL.mapM parse
       where
-        start x = do
-            conn <- SqlPersist ask
-            R.withStmt (sql conn) (getFiltsValues conn filts) $ loop x
-        loop (Continue k) pop = do
-            res <- pop
-            case res of
-                Nothing -> return $ Continue k
-                Just [PersistInt64 i] -> do
-                    step <- runIteratee $ k $ Chunks [Key $ PersistInt64 i]
-                    loop step pop
-                Just y -> return $ Error $ toException $ PersistMarshalError
-                        $ "Unexpected in selectKeys: " ++ show y
-        loop step _ = return step
+        parse [PersistInt64 i] = return $ Key $ PersistInt64 i
+        parse y = liftIO $ throwIO $ PersistMarshalError $ "Unexpected in selectKeys: " ++ show y
         t = entityDef $ dummyFromFilts filts
         wher conn = if null filts
                     then ""
@@ -169,7 +139,6 @@ instance C.ResourceIO m => PersistQuery SqlPersist m where
             , escapeName conn $ entityDB t
             , wher conn
             ]
-        -}
 
     deleteWhere filts = do
         conn <- SqlPersist ask

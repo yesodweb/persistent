@@ -28,13 +28,8 @@ import Data.Either (partitionEithers)
 import Control.Arrow
 import Data.List (sort, groupBy)
 import Data.Function (on)
-#if MIN_VERSION_monad_control(0, 3, 0)
-import Control.Monad.Trans.Control (MonadBaseControl)
-#define MBCIO MonadBaseControl IO
-#else
-import Control.Monad.IO.Control (MonadControlIO)
-#define MBCIO MonadControlIO
-#endif
+import qualified Data.Conduit as C
+import qualified Data.Conduit.List as CL
 
 import Data.ByteString (ByteString)
 import qualified Data.Text as T
@@ -43,16 +38,15 @@ import qualified Data.Text.Encoding.Error as T
 import Data.Time.LocalTime (localTimeToUTC, utc)
 import Data.Text (Text, pack, unpack)
 import Data.Aeson
-import Control.Monad (forM)
-import Data.Neither (meither, MEither (..))
+import Control.Monad (forM, mzero)
 
-withPostgresqlPool :: (MBCIO m, MonadIO m)
+withPostgresqlPool :: C.ResourceIO m
                    => T.Text
                    -> Int -- ^ number of connections to open
                    -> (ConnectionPool -> m a) -> m a
 withPostgresqlPool s = withSqlPool $ open' s
 
-withPostgresqlConn :: (MBCIO m, MonadIO m) => T.Text -> (Connection -> m a) -> m a
+withPostgresqlConn :: C.ResourceIO m => T.Text -> (Connection -> m a) -> m a
 withPostgresqlConn = withSqlConn . open'
 
 open' :: T.Text -> IO Connection
@@ -99,14 +93,18 @@ execute' stmt vals = do
     return ()
 
 withStmt'
-          :: (MBCIO m, MonadIO m)
+          :: C.ResourceIO m
           => H.Statement
           -> [PersistValue]
-          -> (RowPopper m -> m a)
-          -> m a
-withStmt' stmt vals f = do
-    _ <- liftIO $ H.execute stmt $ map pToSql vals
-    f $ liftIO $ (fmap . fmap) (map pFromSql) $ H.fetchRow stmt
+          -> C.Source m [PersistValue]
+withStmt' stmt vals = C.sourceIO
+    (H.execute stmt (map pToSql vals) >> return ())
+    return
+    pull
+  where
+    pull () = do
+        x <- liftIO $ (fmap . fmap) (map pFromSql) $ H.fetchRow stmt
+        return $ maybe C.Closed C.Open x
 
 pToSql :: PersistValue -> H.SqlValue
 pToSql (PersistText t) = H.SqlString $ unpack t
@@ -196,34 +194,34 @@ getColumns getter def = do
             [ PersistText $ unDBName $ entityDB def
             , PersistText $ unDBName $ entityID def
             ]
-    cs <- withStmt stmt vals helper
+    cs <- C.runResourceT $ withStmt stmt vals C.$$ helper
     stmt' <- getter
         "SELECT constraint_name, column_name FROM information_schema.constraint_column_usage WHERE table_name=? AND column_name <> ? ORDER BY constraint_name, column_name"
-    us <- withStmt stmt' vals helperU
+    us <- C.runResourceT $ withStmt stmt' vals C.$$ helperU
     return $ cs ++ us
   where
-    getAll pop front = do
-        x <- pop
+    getAll front = do
+        x <- CL.head
         case x of
             Nothing -> return $ front []
             Just [PersistByteString con, PersistByteString col] ->
-                getAll pop (front . (:) (bsToChars con, bsToChars col))
-            Just _ -> getAll pop front -- FIXME error message?
-    helperU pop = do
-        rows <- getAll pop id
+                getAll (front . (:) (bsToChars con, bsToChars col))
+            Just _ -> getAll front -- FIXME error message?
+    helperU = do
+        rows <- getAll id
         return $ map (Right . Right . (DBName . fst . head &&& map (DBName . snd)))
                $ groupBy ((==) `on` fst)
                $ map (T.pack *** T.pack) rows
-    helper pop = do
-        x <- pop
+    helper = do
+        x <- CL.head
         case x of
             Nothing -> return []
             Just x' -> do
-                col <- getColumn getter (entityDB def) x'
+                col <- liftIO $ getColumn getter (entityDB def) x'
                 let col' = case col of
                             Left e -> Left e
                             Right c -> Right $ Left c
-                cols <- helper pop
+                cols <- helper
                 return $ col' : cols
 
 getAlters :: ([Column], [(DBName, [DBName])])
@@ -279,11 +277,11 @@ getColumn getter tname
                 ]
         let ref = refName tname cname
         stmt <- getter sql
-        withStmt stmt
+        C.runResourceT $ withStmt stmt
                      [ PersistText $ unDBName tname
                      , PersistText $ unDBName ref
-                     ] $ \pop -> do
-            Just [PersistInt64 i] <- pop
+                     ] C.$$ do
+            Just [PersistInt64 i] <- CL.head
             return $ if i == 0 then Nothing else Just (DBName "", ref)
     d' = case d of
             PersistNull -> Right Nothing
@@ -491,31 +489,19 @@ instance PersistConfig PostgresConf where
     type PersistConfigPool PostgresConf = ConnectionPool
     withPool (PostgresConf cs size) = withPostgresqlPool cs size
     runPool _ = runSqlPool
-    loadConfig e' = meither Left Right $ do
-        e <- go $ fromMapping e'
-        db <- go $ lookupScalar "database" e
-        pool' <- go $ lookupScalar "poolsize" e
-        pool <- safeRead "poolsize" pool'
+    loadConfig (Object o) = do
+        db <- o .: "database"
+        pool <- o .: "poolsize"
+        connparts <- forM ["user", "password", "host", "port"] $ \k -> do
+            v <- o .: k
+            return $ T.concat [k, "=", v, " "]
 
         -- TODO: default host/port?
-        connparts <- forM ["user", "password", "host", "port"] $ \k -> do
-            v <- go $ lookupScalar k e
-            return $ T.concat [k, "=", v, " "]
 
         let conn = T.concat connparts
 
         return $ PostgresConf (T.concat [conn, " dbname=", db]) pool
-      where
-        go :: MEither ObjectExtractError a -> MEither String a
-        go (MLeft e) = MLeft $ show e
-        go (MRight a) = MRight a
-
-safeRead :: String -> T.Text -> MEither String Int
-safeRead name t = case reads s of
-    (i, _):_ -> MRight i
-    []       -> MLeft $ concat ["Invalid value for ", name, ": ", s]
-  where
-    s = T.unpack t
+    loadConfig _ = mzero
 
 refName :: DBName -> DBName -> DBName
 refName (DBName table) (DBName column) =

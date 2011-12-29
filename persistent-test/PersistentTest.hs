@@ -56,6 +56,8 @@ import qualified Control.Exception.Control as Control
 #endif
 import System.Random
 
+import Control.Monad.Trans.Resource (ResourceIO)
+
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
 #endif
@@ -211,13 +213,7 @@ instance Arbitrary PersistValue where
 type BackendMonad = SqlPersist
 sqlite_database :: Text
 sqlite_database = "test/testdb.sqlite3"
-runConn ::
-#if MIN_VERSION_monad_control(0, 3, 0)
-    (Control.Monad.Trans.Control.MonadBaseControl IO m, MonadIO m)
-#else
-    Control.Monad.IO.Control.MonadControlIO m
-#endif
-    => SqlPersist m t -> m ()
+runConn :: ResourceIO m => SqlPersist m t -> m ()
 runConn f = do
     _<-withSqlitePool sqlite_database 1 $ runSqlPool f
 #if WITH_POSTGRESQL

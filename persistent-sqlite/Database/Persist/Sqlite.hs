@@ -32,18 +32,21 @@ import Control.Monad.IO.Control (MonadControlIO)
 import Control.Exception.Control (finally)
 #define MBCIO MonadControlIO
 #endif
-import Data.Text (Text, pack, unpack)
-import Data.Neither (MEither (..), meither)
+import Data.Text (Text, pack)
+import Control.Monad (mzero)
 import Data.Aeson
 import qualified Data.Text as T
+import qualified Data.Conduit as C
+import qualified Data.Conduit.List as CL
+import Control.Applicative
 
-withSqlitePool :: (MonadIO m, MBCIO m)
+withSqlitePool :: C.ResourceIO m
                => Text
                -> Int -- ^ number of connections to open
                -> (ConnectionPool -> m a) -> m a
 withSqlitePool s = withSqlPool $ open' s
 
-withSqliteConn :: (MonadIO m, MBCIO m) => Text -> (Connection -> m a) -> m a
+withSqliteConn :: C.ResourceIO m => Text -> (Connection -> m a) -> m a
 withSqliteConn = withSqlConn . open'
 
 open' :: Text -> IO Connection
@@ -100,23 +103,22 @@ execute' stmt vals = flip finally (liftIO $ Sqlite.reset stmt) $ do
     return ()
 
 withStmt'
-          :: (MBCIO m, MonadIO m)
+          :: C.ResourceIO m
           => Sqlite.Statement
           -> [PersistValue]
-          -> (RowPopper m -> m a)
-          -> m a
-withStmt' stmt vals f = flip finally (liftIO $ Sqlite.reset stmt) $ do
-    liftIO $ Sqlite.bind stmt vals
-    x <- f go
-    return x
+          -> C.Source m [PersistValue]
+withStmt' stmt vals = C.sourceIO
+    (Sqlite.bind stmt vals >> return stmt)
+    Sqlite.reset
+    pull
   where
-    go = liftIO $ do
+    pull _ = liftIO $ do
         x <- Sqlite.step stmt
         case x of
-            Sqlite.Done -> return Nothing
+            Sqlite.Done -> return C.Closed
             Sqlite.Row -> do
                 cols <- liftIO $ Sqlite.columns stmt
-                return $ Just cols
+                return $ C.Open cols
 showSqlType :: SqlType -> String
 showSqlType SqlString = "VARCHAR"
 showSqlType SqlInt32 = "INTEGER"
@@ -137,7 +139,8 @@ migrate' allDefs getter val = do
     let (cols, uniqs) = mkColumns allDefs val
     let newSql = mkCreateTable False def (cols, uniqs)
     stmt <- getter "SELECT sql FROM sqlite_master WHERE type='table' AND name=?"
-    oldSql' <- withStmt stmt [PersistText $ unDBName table] go
+    oldSql' <- C.runResourceT
+             $ withStmt stmt [PersistText $ unDBName table] C.$$ go
     case oldSql' of
         Nothing -> return $ Right [(False, newSql)]
         Just oldSql ->
@@ -149,8 +152,8 @@ migrate' allDefs getter val = do
   where
     def = entityDef val
     table = entityDB def
-    go pop = do
-        x <- pop
+    go = do
+        x <- CL.head
         case x of
             Nothing -> return Nothing
             Just [PersistText y] -> return $ Just y
@@ -163,7 +166,7 @@ getCopyTable :: PersistEntity val
              -> IO [(Bool, Sql)]
 getCopyTable allDefs getter val = do
     stmt <- getter $ pack $ "PRAGMA table_info(" ++ escape' table ++ ")"
-    oldCols' <- withStmt stmt [] getCols
+    oldCols' <- C.runResourceT $ withStmt stmt [] C.$$ getCols
     let oldCols = map DBName $ filter (/= "id") oldCols' -- need to update for table id attribute ?
     let newCols = map cName cols
     let common = filter (`elem` oldCols) newCols
@@ -177,12 +180,12 @@ getCopyTable allDefs getter val = do
            ]
   where
     def = entityDef val
-    getCols pop = do
-        x <- pop
+    getCols = do
+        x <- CL.head
         case x of
             Nothing -> return []
             Just (_:PersistText name:_) -> do
-                names <- getCols pop
+                names <- getCols
                 return $ name : names
             Just y -> error $ "Invalid result from PRAGMA table_info: " ++ show y
     table = entityDB def
@@ -273,24 +276,10 @@ instance PersistConfig SqliteConf where
     type PersistConfigPool SqliteConf = ConnectionPool
     withPool (SqliteConf cs size) = withSqlitePool cs size
     runPool _ = runSqlPool
-    loadConfig e' = meither Left Right $ do
-        e <- go $ fromMapping e'
-        db <- go $ lookupScalar "database" e
-        pool' <- go $ lookupScalar "poolsize" e
-        pool <- safeRead "poolsize" pool'
-
-        return $ SqliteConf db pool
-      where
-        go :: MEither ObjectExtractError a -> MEither String a
-        go (MLeft e) = MLeft $ show e
-        go (MRight a) = MRight a
-
-safeRead :: String -> Text -> MEither String Int
-safeRead name t = case reads s of
-    (i, _):_ -> MRight i
-    []       -> MLeft $ concat ["Invalid value for ", name, ": ", s]
-  where
-    s = unpack t
+    loadConfig (Object o) =
+        SqliteConf <$> o .: "database"
+                   <*> o .: "poolsize"
+    loadConfig _ = mzero
 
 #if MIN_VERSION_monad_control(0, 3, 0)
 finally :: MonadBaseControl IO m

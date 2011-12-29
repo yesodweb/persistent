@@ -82,6 +82,7 @@ import Control.Monad.IO.Control (MonadControlIO)
 #define MBCIO MonadControlIO
 #endif
 import Data.Aeson (Value)
+import Data.Aeson.Types (Parser)
 
 data PersistException
   = PersistError T.Text -- ^ Generic Exception
@@ -517,9 +518,9 @@ instance PersistField PersistValue where
 class PersistConfig c where
     type PersistConfigBackend c :: (* -> *) -> * -> *
     type PersistConfigPool c
-    loadConfig :: Value -> Either String c
+    loadConfig :: Value -> Parser c
     -- | I really don't want Applicative here, but it's necessary for Mongo.
-    withPool :: (Applicative m, MBCIO m, MonadIO m) => c -> (PersistConfigPool c -> m a) -> m a
+    withPool :: (Applicative m, C.ResourceIO m) => c -> (PersistConfigPool c -> m a) -> m a
     runPool :: (MBCIO m, MonadIO m) => c -> PersistConfigBackend c m a
             -> PersistConfigPool c
             -> m a

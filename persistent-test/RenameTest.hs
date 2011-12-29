@@ -15,12 +15,8 @@ import Database.Persist.GenericSql.Raw
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
 #endif
-#if MIN_VERSION_monad_control(0, 3, 0)
-import qualified Control.Monad.Trans.Control
-#else
-import qualified Control.Monad.IO.Control
-#endif
-import Control.Monad.IO.Class (MonadIO)
+import qualified Data.Conduit as C
+import qualified Data.Conduit.List as CL
 
 -- Test lower case names
 share [mkPersist sqlMkSettings, mkMigrate "lowerCase"] [persistLowerCase|
@@ -32,13 +28,7 @@ RefTable
     UniqueRefTable someVal
 |]
 
-runConn2 ::
-#if MIN_VERSION_monad_control(0, 3, 0)
-    (Control.Monad.Trans.Control.MonadBaseControl IO m, MonadIO m)
-#else
-    Control.Monad.IO.Control.MonadControlIO m
-#endif
-    => SqlPersist m t -> m ()
+runConn2 :: C.ResourceIO m => SqlPersist m t -> m ()
 runConn2 f = do
     _ <- withSqlitePool ":memory:" 1 $ runSqlPool f
 #if WITH_POSTGRESQL
@@ -51,8 +41,8 @@ renameSpecs = describe "rename specs" $ do
     it "handles lower casing" $ asIO $ do
         runConn2 $ do
             _ <- runMigrationSilent lowerCase
-            withStmt "SELECT full_name from lower_case_table WHERE my_id=5" [] $ const $ return ()
-            withStmt "SELECT something_else from ref_table WHERE id=4" [] $ const $ return ()
+            C.runResourceT $ withStmt "SELECT full_name from lower_case_table WHERE my_id=5" [] C.$$ CL.sinkNull
+            C.runResourceT $ withStmt "SELECT something_else from ref_table WHERE id=4" [] C.$$ CL.sinkNull
 
 asIO :: IO a -> IO a
 asIO = id
