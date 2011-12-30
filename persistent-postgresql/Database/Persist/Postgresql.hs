@@ -46,7 +46,6 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import qualified Data.Text.Encoding.Error as T
 -- import Data.Time.LocalTime (localTimeToUTC, utc)
 import Data.Text (Text, pack)
 import Data.Aeson
@@ -277,14 +276,13 @@ getColumns getter def = do
         x <- CL.head
         case x of
             Nothing -> return $ front []
-            Just [PersistByteString con, PersistByteString col] ->
-                getAll (front . (:) (bsToChars con, bsToChars col))
+            Just [PersistText con, PersistText col] ->
+                getAll (front . (:) (con, col))
             Just _ -> getAll front -- FIXME error message?
     helperU = do
         rows <- getAll id
         return $ map (Right . Right . (DBName . fst . head &&& map (DBName . snd)))
-               $ groupBy ((==) `on` fst)
-               $ map (T.pack *** T.pack) rows
+               $ groupBy ((==) `on` fst) rows
     helper = do
         x <- CL.head
         case x of
@@ -326,19 +324,16 @@ getAlters (c1, u1) (c2, u2) =
 getColumn :: (Text -> IO Statement)
           -> DBName -> [PersistValue]
           -> IO (Either Text Column)
-getColumn getter tname
-        [PersistByteString x, PersistByteString y,
-         PersistByteString z, d] =
+getColumn getter tname [PersistText x, PersistText y, PersistText z, d] =
     case d' of
         Left s -> return $ Left s
         Right d'' ->
-            case getType $ bsToChars z of
+            case getType z of
                 Left s -> return $ Left s
                 Right t -> do
-                    let cname = DBName $ T.pack $ bsToChars x
+                    let cname = DBName x
                     ref <- getRef cname
-                    return $ Right $ Column cname (bsToChars y == "YES")
-                                     t (fmap T.pack d'') ref
+                    return $ Right $ Column cname (y == "YES") t d'' ref
   where
     getRef cname = do
         let sql = pack $ concat
@@ -357,19 +352,19 @@ getColumn getter tname
             Just [PersistInt64 i] <- CL.head
             return $ if i == 0 then Nothing else Just (DBName "", ref)
     d' = case d of
-            PersistNull -> Right Nothing
-            PersistByteString a -> Right $ Just $ bsToChars a
+            PersistNull   -> Right Nothing
+            PersistText t -> Right $ Just t
             _ -> Left $ pack $ "Invalid default column: " ++ show d
-    getType "int4" = Right $ SqlInt32
-    getType "int8" = Right $ SqlInteger
-    getType "varchar" = Right $ SqlString
-    getType "date" = Right $ SqlDay
-    getType "bool" = Right $ SqlBool
+    getType "int4"      = Right $ SqlInt32
+    getType "int8"      = Right $ SqlInteger
+    getType "varchar"   = Right $ SqlString
+    getType "date"      = Right $ SqlDay
+    getType "bool"      = Right $ SqlBool
     getType "timestamp" = Right $ SqlDayTime
-    getType "float4" = Right $ SqlReal
-    getType "float8" = Right $ SqlReal
-    getType "bytea" = Right $ SqlBlob
-    getType a = Left $ pack $ "Unknown type: " ++ a
+    getType "float4"    = Right $ SqlReal
+    getType "float8"    = Right $ SqlReal
+    getType "bytea"     = Right $ SqlBlob
+    getType a           = Left $ "Unknown type: " `T.append` a
 getColumn _ _ x =
     return $ Left $ pack $ "Invalid result from information_schema: " ++ show x
 
@@ -547,9 +542,6 @@ escape (DBName s) =
     go "" = ""
     go ('"':xs) = "\"\"" ++ go xs
     go (x:xs) = x : go xs
-
-bsToChars :: ByteString -> String
-bsToChars = T.unpack . T.decodeUtf8With T.lenientDecode
 
 -- | Information required to connect to a postgres database
 data PostgresConf = PostgresConf
