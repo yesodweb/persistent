@@ -29,8 +29,8 @@ import qualified Database.PostgreSQL.Simple.Types as PG
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
-import Control.Concurrent.MVar (takeMVar, putMVar)
-import Control.Exception (SomeException, bracketOnError, throw)
+import Control.Concurrent.MVar (withMVar)
+import Control.Exception (SomeException, throw)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.List (intercalate)
 import Data.IORef
@@ -113,48 +113,44 @@ withStmt' conn query vals = C.sourceIO (liftIO   openS )
                                        (liftIO . closeS)
                                        (liftIO . pullS )
   where
-    connVar = PG.connectionHandle conn
-
     openS = do
       -- Construct raw query
       rawquery <- PG.formatQuery conn query (map P vals)
 
       -- Take raw connection
-      bracketOnError (takeMVar connVar) (putMVar connVar) $
-        \mrawconn ->
-            case mrawconn of
-              Nothing -> fail "Postgresql.withStmt': closed connection"
-              Just rawconn -> do
-                -- Execute query
-                mret <- LibPQ.exec rawconn rawquery
-                case mret of
-                  Nothing -> do
-                    merr <- LibPQ.errorMessage rawconn
-                    fail $ case merr of
-                             Nothing -> "Postgresql.withStmt': unknown error"
-                             Just e  -> "Postgresql.withStmt': " ++ B8.unpack e
-                  Just ret -> do
-                    -- Get number and type of columns
-                    LibPQ.Col cols <- LibPQ.nfields ret
-                    getters <- forM [0..cols-1] $ \i -> do
-                      let col = LibPQ.Col i
-                      oid <- LibPQ.ftype ret col
-                      case PG.oid2builtin oid of
-                        Nothing -> fail $ "Postgresql.withStmt': could not " ++
-                                          "recognize Oid of column " ++
-                                          show i ++ " (counting from zero)"
-                        Just bt -> return $ getGetter bt $
-                                   PG.Field ret col $
-                                   PG.builtin2typname bt
+      withMVar (PG.connectionHandle conn) $ \mrawconn ->
+        case mrawconn of
+          Nothing -> fail "Postgresql.withStmt': closed connection"
+          Just rawconn -> do
+            -- Execute query
+            mret <- LibPQ.exec rawconn rawquery
+            case mret of
+              Nothing -> do
+                merr <- LibPQ.errorMessage rawconn
+                fail $ case merr of
+                         Nothing -> "Postgresql.withStmt': unknown error"
+                         Just e  -> "Postgresql.withStmt': " ++ B8.unpack e
+              Just ret -> do
+                -- Get number and type of columns
+                LibPQ.Col cols <- LibPQ.nfields ret
+                getters <- forM [0..cols-1] $ \i -> do
+                  let col = LibPQ.Col i
+                  oid <- LibPQ.ftype ret col
+                  case PG.oid2builtin oid of
+                    Nothing -> fail $ "Postgresql.withStmt': could not " ++
+                                      "recognize Oid of column " ++
+                                      show i ++ " (counting from zero)"
+                    Just bt -> return $ getGetter bt $
+                               PG.Field ret col $
+                               PG.builtin2typname bt
+                 -- Ready to go!
+                rowRef   <- newIORef (LibPQ.Row 0)
+                rowCount <- LibPQ.ntuples ret
+                return (ret, rowRef, rowCount, getters)
 
-                    -- Ready to go!
-                    rowRef   <- newIORef (LibPQ.Row 0)
-                    rowCount <- LibPQ.ntuples ret
-                    return (rawconn, ret, rowRef, rowCount, getters)
+    closeS _ = return ()
 
-    closeS (rawconn, _, _, _, _) = putMVar connVar (Just rawconn)
-
-    pullS (_, ret, rowRef, rowCount, getters) = do
+    pullS (ret, rowRef, rowCount, getters) = do
         row <- atomicModifyIORef rowRef (\r -> (r+1, r))
         if row == rowCount
            then return C.Closed
