@@ -701,6 +701,30 @@ specs = describe "persistent" $ do
 #ifndef WITH_MONGODB
   it "joinSql" $ db $ joinGeneric Database.Persist.Query.Join.Sql.runJoin
 
+  it "runSql/2+2" $ db $ do
+      ret <- rawSql "SELECT 2+2" []
+      liftIO $ ret @?= [Single (4::Int)]
+
+  it "runSql/?-?" $ db $ do
+      ret <- rawSql "SELECT ?-?" [PersistInt64 5, PersistInt64 3]
+      liftIO $ ret @?= [Single (2::Int)]
+
+  it "runSql/entity" $ db $ do
+      let insert' :: (PersistStore b m, PersistEntity val) => val -> b m (Key b val, val)
+          insert' v = insert v >>= \k -> return (k, v)
+      (p1k, p1) <- insert' $ Person "Mathias"   23 Nothing
+      (p2k, p2) <- insert' $ Person "Norbert"   44 Nothing
+      (p3k, _ ) <- insert' $ Person "Cassandra" 19 Nothing
+      (_  , _ ) <- insert' $ Person "Thiago"    19 Nothing
+      (a1k, a1) <- insert' $ Pet p1k "Rodolfo" Cat
+      (a2k, a2) <- insert' $ Pet p1k "Zeno"    Cat
+      (a3k, a3) <- insert' $ Pet p2k "Lhama"   Dog
+      (_  , _ ) <- insert' $ Pet p3k "Abacate" Cat
+      ret <- rawSql "SELECT \"Person\".*, \"Pet\".* FROM \"Person\", \"Pet\" WHERE \"Person\".age >= ? AND \"Pet\".\"ownerId\" = \"Person\".id ORDER BY \"Person\".name, \"Pet\".name" [PersistInt64 20]
+      liftIO $ ret @?= [ (Entity p1k p1, Entity a1k a1)
+                       , (Entity p1k p1, Entity a2k a2)
+                       , (Entity p2k p2, Entity a3k a3) ]
+
   it "commit/rollback" (caseCommitRollback >> runConn cleanDB)
 
   it "afterException" caseAfterException
