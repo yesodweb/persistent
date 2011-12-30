@@ -385,13 +385,17 @@ data Entity backend entity =
 -- | Execute a raw SQL statement and return its results as a
 -- list.
 --
+-- You may put placeholders (question marks, @?@) in you SQL
+-- query.  These placeholders are then replaced by the values you
+-- pass by argument, already correctly escaped.  You may want to
+-- use 'toPersistValue' to help you constructing the placeholder
+-- values.
+--
 -- Since you're giving a raw SQL statement, you don't get any
 -- guarantees regarding safety.  If 'rawSql' is not able to parse
 -- the results of your query back, then an exception is raised.
 -- Common problems include swapping the order of entities and
 -- swapping the order of fields of an entity.
---
--- FIXME: Document how these placeholders work.
 rawSql :: (RawSql a, C.ResourceIO m) =>
           Text             -- ^ SQL statement, possibly with placeholders.
        -> [PersistValue]   -- ^ Values to fill the placeholders.
