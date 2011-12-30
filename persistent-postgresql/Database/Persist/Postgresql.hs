@@ -209,7 +209,7 @@ getGetter PG.Varchar = convertPV PersistText
 getGetter PG.Bit     = convertPV PersistInt64
 getGetter PG.Varbit  = convertPV PersistInt64
 getGetter PG.Numeric = convertPV PersistInt64
--- getGetter PG.Void    = convertPV (\PG.Void -> PersistNull) -- FIXME
+getGetter PG.Void    = \_ _ -> Right PersistNull
 getGetter other   = error $ "Postgresql.getGetter: type " ++
                             show other ++ " not supported."
 
