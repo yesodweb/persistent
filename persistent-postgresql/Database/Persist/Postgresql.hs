@@ -30,7 +30,7 @@ import qualified Database.PostgreSQL.Simple.Types as PG
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
 import Control.Concurrent.MVar (takeMVar, putMVar)
-import Control.Exception (SomeException, bracket, throw)
+import Control.Exception (SomeException, bracketOnError, throw)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.List (intercalate)
 import Data.IORef
@@ -120,7 +120,7 @@ withStmt' conn query vals = C.sourceIO (liftIO   openS )
       rawquery <- PG.formatQuery conn query (map P vals)
 
       -- Take raw connection
-      bracket (takeMVar connVar) (putMVar connVar) $
+      bracketOnError (takeMVar connVar) (putMVar connVar) $
         \mrawconn ->
             case mrawconn of
               Nothing -> fail "Postgresql.withStmt': closed connection"
