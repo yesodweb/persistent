@@ -371,6 +371,7 @@ show = pack . P.show
 
 -- | A single column (see 'rawSql').
 newtype Single a = Single {unSingle :: a}
+    deriving (Eq, Ord, Show, Read)
 
 
 -- | An entity taking up possibly many columns.  In your SQL
@@ -378,6 +379,7 @@ newtype Single a = Single {unSingle :: a}
 data Entity backend entity =
     Entity { entityKey :: Key backend entity
            , entityVal :: entity }
+    deriving (Eq, Ord, Show, Read)
 
 
 -- | Execute a raw SQL statement and return its results as a
