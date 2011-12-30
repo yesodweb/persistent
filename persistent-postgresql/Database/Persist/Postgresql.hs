@@ -38,7 +38,7 @@ import qualified Data.Text.Encoding.Error as T
 import Data.Time.LocalTime (localTimeToUTC, utc)
 import Data.Text (Text, pack, unpack)
 import Data.Aeson
-import Control.Monad (forM, mzero)
+import Control.Monad (mzero)
 
 withPostgresqlPool :: C.ResourceIO m
                    => T.Text
@@ -490,17 +490,29 @@ instance PersistConfig PostgresConf where
     withPool (PostgresConf cs size) = withPostgresqlPool cs size
     runPool _ = runSqlPool
     loadConfig (Object o) = do
-        db <- o .: "database"
-        pool <- o .: "poolsize"
-        connparts <- forM ["user", "password", "host", "port"] $ \k -> do
-            v <- o .: k
-            return $ T.concat [k, "=", v, " "]
+        db       <- o .: "database"
+        pool     <- o .: "poolsize"
+        user     <- o .: "user"
+        password <- o .: "password"
+        host     <- o .: "host"
+        port     <- o .: "port"
+
+        let connstr = T.concat
+                [ "user="
+                , user
+                , " password="
+                , password
+                , " host="
+                , host
+                , " port="
+                , T.pack $ show (port :: Int)
+                , " dbname="
+                , db
+                ]
 
         -- TODO: default host/port?
 
-        let conn = T.concat connparts
-
-        return $ PostgresConf (T.concat [conn, " dbname=", db]) pool
+        return $ PostgresConf connstr pool
     loadConfig _ = mzero
 
 refName :: DBName -> DBName -> DBName
