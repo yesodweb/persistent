@@ -48,13 +48,9 @@ library
                    , hspec >= 0.8 && < 0.10
                    , file-location >= 0.4 && < 0.5
                    , template-haskell >= 2.4 && < 2.7
-                   , HDBC-postgresql
-                   , HDBC
                    , aeson
                    , lifted-base
                    , neither
-                   -- mongoDB dependencies
-                   --, mongoDB       == 1.1.*
                    , bson          >= 0.1.6
                    , cereal
                    , network
@@ -72,6 +68,13 @@ library
                    , blaze-html
                    , pool
                    , transformers-base
+
+                   -- postgresql dependencies
+                   , postgresql-simple     >= 0.0      && < 1.0
+                   , postgresql-libpq      >= 0.6
+
+                   -- mongoDB dependencies
+                   --, mongoDB       == 1.1.*
     hs-source-dirs: ., persistent, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mongoDB
 
     -- these are mutually exclusive options
