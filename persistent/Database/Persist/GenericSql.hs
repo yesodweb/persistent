@@ -22,6 +22,8 @@ module Database.Persist.GenericSql
     -- * Raw SQL queries
     -- $rawSql
     , rawSql
+    , Entity(..)
+    , Single(..)
 
     -- * Migrations
     , Migration
@@ -37,8 +39,9 @@ module Database.Persist.GenericSql
     , rollback
     ) where
 
-import qualified Prelude
+import qualified Prelude as P
 import Prelude hiding ((++), unlines, concat, show)
+import Control.Applicative ((<$>), (<*>))
 import Database.Persist.Store
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader
@@ -202,7 +205,7 @@ instance C.ResourceIO m => PersistUnique SqlPersist m where
         t = entityDef $ dummyFromUnique uniq
         toFieldNames' = map snd . persistUniqueToFieldNames
 
-dummyFromKey :: Key SqlPersist v -> v 
+dummyFromKey :: Key SqlPersist v -> v
 dummyFromKey _ = error "dummyFromKey"
 
 {- FIXME
@@ -330,7 +333,7 @@ infixr 5 ++
 (++) = mappend
 
 show :: Show a => a -> Text
-show = pack . Prelude.show
+show = pack . P.show
 
 
 -- $rawSql
@@ -355,10 +358,10 @@ show = pack . Prelude.show
 --     'selectList' returns.  All of your entity's fields are
 --     automatically parsed.
 --
---   * A @'Column' a@, which is a single, raw column of type @a@.
+--   * A @'Single' a@, which is a single, raw column of type @a@.
 --     You may use a Haskell type (such as in your entity
---     definitions), for example @Column Text@ or @Column Int@,
---     or you may get the raw column value with @Column
+--     definitions), for example @Single Text@ or @Single Int@,
+--     or you may get the raw column value with @Single
 --     'PersistValue'@.
 --
 --   * A tuple combining any of these (including other tuples).
@@ -367,7 +370,7 @@ show = pack . Prelude.show
 
 
 -- | A single column (see 'rawSql').
-newtype Column a = Column {unColumn :: a}
+newtype Single a = Single {unSingle :: a}
 
 
 -- | An entity taking up possibly many columns.  In your SQL
@@ -387,17 +390,17 @@ data Entity backend entity =
 -- swapping the order of fields of an entity.
 --
 -- FIXME: Document how these placeholders work.
-rawSql :: (RawSql a, MonadIO m, MonadBaseControl IO m) =>
+rawSql :: (RawSql a, C.ResourceIO m) =>
           Text             -- ^ SQL statement, possibly with placeholders.
        -> [PersistValue]   -- ^ Values to fill the placeholders.
        -> SqlPersist m [a]
-rawSql stmt params = R.withStmt stmt params firstRow
+rawSql stmt params = C.runResourceT $ R.withStmt stmt params C.$$ firstRow
     where
-      getType :: (x -> SqlPersist y [z]) -> z
+      getType :: C.Sink x y [z] -> z
       getType = undefined
 
-      firstRow popper = do
-        mrow <- popper
+      firstRow = do
+        mrow <- CL.head
         case mrow of
           Nothing  -> return []
           Just row ->
@@ -405,19 +408,19 @@ rawSql stmt params = R.withStmt stmt params firstRow
                 colCount = rawSqlColCount x
                 process  = rawSqlProcessRow
             in if colCount == length row
-               then getter popper process mrow
-               else fail $ concat
+               then getter process mrow
+               else fail $ P.concat
                       [ "rawSql: wrong number of columns, got "
-                      , show (length row), " but expected ", show colCount
+                      , P.show (length row), " but expected ", P.show colCount
                       , " (", rawSqlColCountReason x, ")" ]
 
-      getter popper process = go id
+      getter process = go id
           where
             go acc Nothing = return (acc [])
             go acc (Just row) =
               case process row of
-                Left err -> fail err
-                Right x  -> popper >>= go (acc . (x:))
+                Left err -> fail (T.unpack err)
+                Right x  -> CL.head >>= go (acc . (x:))
 
 
 -- | Class for data types that may be retrived from a 'rawSql'
@@ -431,31 +434,31 @@ class RawSql a where
     rawSqlColCountReason :: a -> String
 
     -- | Transform a row of the result into the data type.
-    rawSqlProcessRow :: [PersistValue] -> Either String a
+    rawSqlProcessRow :: [PersistValue] -> Either Text a
 
-instance PersistField a => RawSql (Column a) where
+instance PersistField a => RawSql (Single a) where
     rawSqlColCount _       = 1
-    rawSqlColCountReason _ = "one column for a 'Column' data type"
-    rawSqlProcessRow [pv]  = Column <$> fromPersistValue pv
-    rawSqlProcessRow _     = Left "RawSql (Column a): wrong number of columns."
+    rawSqlColCountReason _ = "one column for a 'Single' data type"
+    rawSqlProcessRow [pv]  = Single <$> fromPersistValue pv
+    rawSqlProcessRow _     = Left "RawSql (Single a): wrong number of columns."
 
 instance PersistEntity a => RawSql (Entity backend a) where
-    rawSqlColCount = (+1) . length . entityColumns . entityDef . entityVal
+    rawSqlColCount = (+1) . length . entityFields . entityDef . entityVal
     rawSqlColCountReason a =
         case rawSqlColCount a of
           1 -> "one column for an 'Entity' data type without fields"
-          n -> show n ++ " columns for an 'Entity' data type"
+          n -> P.show n P.++ " columns for an 'Entity' data type"
     rawSqlProcessRow (idCol:ent) = Entity <$> fromPersistValue idCol
                                           <*> fromPersistValues ent
     rawSqlProcessRow _ = Left "RawSql (Entity a): wrong number of columns."
 
 instance (RawSql a, RawSql b) => RawSql (a, b) where
     rawSqlColCount x = rawSqlColCount (fst x) + rawSqlColCount (snd x)
-    rawSqlColCountReason x = rawSqlColCountReason (fst x) ++ ", " ++
+    rawSqlColCountReason x = rawSqlColCountReason (fst x) P.++ ", " P.++
                              rawSqlColCountReason (snd x)
     rawSqlProcessRow =
         let x = getType processRow
-            getType :: ([PersistValue] -> Either String x) -> x
+            getType :: (z -> Either y x) -> x
             getType = undefined
 
             colCountFst = rawSqlColCount (fst x)
