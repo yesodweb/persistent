@@ -9,6 +9,9 @@ module Database.Persist.Postgresql
     , module Database.Persist
     , module Database.Persist.GenericSql
     , PostgresConf (..)
+
+      -- Re-export form @postgresql-simple@
+    , PG.ConnectInfo(..)
     ) where
 
 import Database.Persist
@@ -17,9 +20,17 @@ import Database.Persist.GenericSql hiding (Key(..))
 import Database.Persist.GenericSql.Internal
 import Database.Persist.EntityDef
 
-import qualified Database.HDBC as H
-import qualified Database.HDBC.PostgreSQL as H
+import qualified Database.PostgreSQL.Simple as PG
+import qualified Database.PostgreSQL.Simple.BuiltinTypes as PG
+import qualified Database.PostgreSQL.Simple.Internal as PG
+import qualified Database.PostgreSQL.Simple.Param as PG
+import qualified Database.PostgreSQL.Simple.Result as PG
+import qualified Database.PostgreSQL.Simple.Types as PG
 
+import qualified Database.PostgreSQL.LibPQ as LibPQ
+
+import Control.Concurrent.MVar (takeMVar, putMVar)
+import Control.Exception (SomeException, bracket, throw)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.List (intercalate)
 import Data.IORef
@@ -32,48 +43,49 @@ import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 
 import Data.ByteString (ByteString)
+import qualified Data.ByteString.Char8 as B8
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.Encoding.Error as T
-import Data.Time.LocalTime (localTimeToUTC, utc)
-import Data.Text (Text, pack, unpack)
+-- import Data.Time.LocalTime (localTimeToUTC, utc)
+import Data.Text (Text, pack)
 import Data.Aeson
 import Control.Monad (mzero)
 
 withPostgresqlPool :: C.ResourceIO m
-                   => T.Text
+                   => PG.ConnectInfo
                    -> Int -- ^ number of connections to open
                    -> (ConnectionPool -> m a) -> m a
-withPostgresqlPool s = withSqlPool $ open' s
+withPostgresqlPool ci = withSqlPool $ open' ci
 
-withPostgresqlConn :: C.ResourceIO m => T.Text -> (Connection -> m a) -> m a
+withPostgresqlConn :: C.ResourceIO m => PG.ConnectInfo -> (Connection -> m a) -> m a
 withPostgresqlConn = withSqlConn . open'
 
-open' :: T.Text -> IO Connection
-open' s = do
-    conn <- H.connectPostgreSQL $ T.unpack s
+open' :: PG.ConnectInfo -> IO Connection
+open' ci = do
+    conn <- PG.connect ci
     smap <- newIORef $ Map.empty
     return Connection
-        { prepare = prepare' conn
-        , stmtMap = smap
-        , insertSql = insertSql'
-        , close = H.disconnect conn
+        { prepare    = prepare' conn
+        , stmtMap    = smap
+        , insertSql  = insertSql'
+        , close      = PG.close conn
         , migrateSql = migrate'
-        , begin = const $ return ()
-        , commitC = const $ H.commit conn
-        , rollbackC = const $ H.rollback conn
+        , begin      = const $ PG.begin    conn
+        , commitC    = const $ PG.commit   conn
+        , rollbackC  = const $ PG.rollback conn
         , escapeName = escape
-        , noLimit = "LIMIT ALL"
+        , noLimit    = "LIMIT ALL"
         }
 
-prepare' :: H.Connection -> Text -> IO Statement
+prepare' :: PG.Connection -> Text -> IO Statement
 prepare' conn sql = do
-    stmt <- H.prepare conn $ unpack sql
+    let query = PG.Query (T.encodeUtf8 sql)
     return Statement
         { finalize = return ()
         , reset = return ()
-        , execute = execute' stmt
-        , withStmt = withStmt' stmt
+        , execute = execute' conn query
+        , withStmt = withStmt' conn query
         }
 
 insertSql' :: DBName -> [DBName] -> Either Text (Text, Text)
@@ -87,57 +99,122 @@ insertSql' t cols = Left $ pack $ concat
     , ") RETURNING id"
     ]
 
-execute' :: H.Statement -> [PersistValue] -> IO ()
-execute' stmt vals = do
-    _ <- H.execute stmt $ map pToSql vals
+execute' :: PG.Connection -> PG.Query -> [PersistValue] -> IO ()
+execute' conn query vals = do
+    _ <- PG.execute conn query (map P vals)
     return ()
 
-withStmt'
-          :: C.ResourceIO m
-          => H.Statement
+withStmt' :: C.ResourceIO m
+          => PG.Connection
+          -> PG.Query
           -> [PersistValue]
           -> C.Source m [PersistValue]
-withStmt' stmt vals = C.sourceIO
-    (H.execute stmt (map pToSql vals) >> return ())
-    return
-    pull
+withStmt' conn query vals = C.sourceIO (liftIO   openS )
+                                       (liftIO . closeS)
+                                       (liftIO . pullS )
   where
-    pull () = do
-        x <- liftIO $ (fmap . fmap) (map pFromSql) $ H.fetchRow stmt
-        return $ maybe C.Closed C.Open x
+    connVar = PG.connectionHandle conn
 
-pToSql :: PersistValue -> H.SqlValue
-pToSql (PersistText t) = H.SqlString $ unpack t
-pToSql (PersistByteString bs) = H.SqlByteString bs
-pToSql (PersistInt64 i) = H.SqlInt64 i
-pToSql (PersistDouble d) = H.SqlDouble d
-pToSql (PersistBool b) = H.SqlBool b
-pToSql (PersistDay d) = H.SqlLocalDate d
-pToSql (PersistTimeOfDay t) = H.SqlLocalTimeOfDay t
-pToSql (PersistUTCTime t) = H.SqlUTCTime t
-pToSql PersistNull = H.SqlNull
-pToSql (PersistList _) = error "Refusing to serialize a PersistList to a PostgreSQL value"
-pToSql (PersistMap _) = error "Refusing to serialize a PersistMap to a PostgreSQL value"
-pToSql (PersistObjectId _) = error "Refusing to serialize a PersistObjectId to a PostgreSQL value"
+    openS = do
+      -- Construct raw query
+      rawquery <- PG.formatQuery conn query (map P vals)
 
-pFromSql :: H.SqlValue -> PersistValue
-pFromSql (H.SqlString s) = PersistText $ pack s
-pFromSql (H.SqlByteString bs) = PersistByteString bs
-pFromSql (H.SqlWord32 i) = PersistInt64 $ fromIntegral i
-pFromSql (H.SqlWord64 i) = PersistInt64 $ fromIntegral i
-pFromSql (H.SqlInt32 i) = PersistInt64 $ fromIntegral i
-pFromSql (H.SqlInt64 i) = PersistInt64 $ fromIntegral i
-pFromSql (H.SqlInteger i) = PersistInt64 $ fromIntegral i
-pFromSql (H.SqlChar c) = PersistInt64 $ fromIntegral $ fromEnum c
-pFromSql (H.SqlBool b) = PersistBool b
-pFromSql (H.SqlDouble b) = PersistDouble b
-pFromSql (H.SqlRational b) = PersistDouble $ fromRational b
-pFromSql (H.SqlLocalDate d) = PersistDay d
-pFromSql (H.SqlLocalTimeOfDay d) = PersistTimeOfDay d
-pFromSql (H.SqlUTCTime d) = PersistUTCTime d
-pFromSql H.SqlNull = PersistNull
-pFromSql (H.SqlLocalTime d) = PersistUTCTime $ localTimeToUTC utc d
-pFromSql x = PersistText $ pack $ H.fromSql x -- FIXME
+      -- Take raw connection
+      bracket (takeMVar connVar) (putMVar connVar) $
+        \mrawconn ->
+            case mrawconn of
+              Nothing -> fail "Postgresql.withStmt': closed connection"
+              Just rawconn -> do
+                -- Execute query
+                mret <- LibPQ.exec rawconn rawquery
+                case mret of
+                  Nothing -> do
+                    merr <- LibPQ.errorMessage rawconn
+                    fail $ case merr of
+                             Nothing -> "Postgresql.withStmt': unknown error"
+                             Just e  -> "Postgresql.withStmt': " ++ B8.unpack e
+                  Just ret -> do
+                    -- Get number and type of columns
+                    LibPQ.Col cols <- LibPQ.nfields ret
+                    getters <- forM [0..cols-1] $ \i -> do
+                      let col = LibPQ.Col i
+                      oid <- LibPQ.ftype ret col
+                      case PG.oid2builtin oid of
+                        Nothing -> fail $ "Postgresql.withStmt': could not " ++
+                                          "recognize Oid of column " ++
+                                          show i ++ " (counting from zero)"
+                        Just bt -> return $ getGetter bt $
+                                   PG.Field ret col $
+                                   PG.builtin2typname bt
+
+                    -- Ready to go!
+                    rowRef   <- newIORef (LibPQ.Row 0)
+                    rowCount <- LibPQ.ntuples ret
+                    return (rawconn, ret, rowRef, rowCount, getters)
+
+    closeS (rawconn, _, _, _, _) = putMVar connVar (Just rawconn)
+
+    pullS (_, ret, rowRef, rowCount, getters) = do
+        row <- atomicModifyIORef rowRef (\r -> (r+1, r))
+        if row == rowCount
+           then return C.Closed
+           else fmap C.Open $ forM (zip getters [0..]) $ \(getter, col) -> do
+                                mbs <- LibPQ.getvalue' ret row col
+                                case getter mbs of
+                                  Left exc -> throw exc
+                                  Right v  -> return v
+
+-- | Avoid orphan instances.
+newtype P = P PersistValue
+
+instance PG.Param P where
+    render (P (PersistText t))        = PG.render t
+    render (P (PersistByteString bs)) = PG.render bs
+    render (P (PersistInt64 i))       = PG.render i
+    render (P (PersistDouble d))      = PG.render d
+    render (P (PersistBool b))        = PG.render b
+    render (P (PersistDay d))         = PG.render d
+    render (P (PersistTimeOfDay t))   = PG.render t
+    render (P (PersistUTCTime t))     = PG.render t
+    render (P PersistNull)            = PG.render PG.Null
+    render (P (PersistList _))        =
+        error "Refusing to serialize a PersistList to a PostgreSQL value"
+    render (P (PersistMap _))         =
+        error "Refusing to serialize a PersistMap to a PostgreSQL value"
+    render (P (PersistObjectId _))    =
+        error "Refusing to serialize a PersistObjectId to a PostgreSQL value"
+
+type Getter a = PG.Field -> Maybe ByteString -> Either SomeException a
+
+convertPV :: PG.Result a => (a -> b) -> Getter b
+convertPV f = (fmap f .) . PG.convert
+
+-- FIXME: check if those are correct and complete.
+getGetter :: PG.BuiltinType -> Getter PersistValue
+getGetter PG.Bool    = convertPV PersistBool
+getGetter PG.Bytea   = convertPV PersistByteString
+getGetter PG.Char    = convertPV PersistText
+getGetter PG.Name    = convertPV PersistText
+getGetter PG.Int8    = convertPV PersistInt64
+getGetter PG.Int2    = convertPV PersistInt64
+getGetter PG.Int4    = convertPV PersistInt64
+getGetter PG.Text    = convertPV PersistText
+getGetter PG.Xml     = convertPV PersistText
+getGetter PG.Float4  = convertPV PersistDouble
+getGetter PG.Float8  = convertPV PersistDouble
+getGetter PG.Abstime = convertPV PersistUTCTime
+getGetter PG.Reltime = convertPV PersistUTCTime
+getGetter PG.Money   = convertPV PersistDouble
+getGetter PG.Bpchar  = convertPV PersistText
+getGetter PG.Varchar = convertPV PersistText
+-- getGetter PG.Date    = convertPV PersistDay       -- FIXME
+-- getGetter PG.Time    = convertPV PersistTimeOfDay -- FIXME
+getGetter PG.Bit     = convertPV PersistInt64
+getGetter PG.Varbit  = convertPV PersistInt64
+getGetter PG.Numeric = convertPV PersistInt64
+-- getGetter PG.Void    = convertPV (\PG.Void -> PersistNull) -- FIXME
+getGetter other   = error $ "Postgresql.getGetter: type " ++
+                            show other ++ " not supported."
 
 migrate' :: PersistEntity val
          => [EntityDef]
@@ -480,7 +557,7 @@ bsToChars = T.unpack . T.decodeUtf8With T.lenientDecode
 
 -- | Information required to connect to a postgres database
 data PostgresConf = PostgresConf
-    { pgConnStr  :: Text
+    { pgConnInfo :: PG.ConnectInfo
     , pgPoolSize :: Int
     }
 
@@ -490,29 +567,20 @@ instance PersistConfig PostgresConf where
     withPool (PostgresConf cs size) = withPostgresqlPool cs size
     runPool _ = runSqlPool
     loadConfig (Object o) = do
-        db       <- o .: "database"
-        pool     <- o .: "poolsize"
-        user     <- o .: "user"
-        password <- o .: "password"
+        database <- o .: "database"
         host     <- o .: "host"
         port     <- o .: "port"
-
-        let connstr = T.concat
-                [ "user="
-                , user
-                , " password="
-                , password
-                , " host="
-                , host
-                , " port="
-                , T.pack $ show (port :: Int)
-                , " dbname="
-                , db
-                ]
-
-        -- TODO: default host/port?
-
-        return $ PostgresConf connstr pool
+        user     <- o .: "user"
+        password <- o .: "password"
+        pool     <- o .: "poolsize"
+        let ci = PG.ConnectInfo
+                   { PG.connectHost     = host
+                   , PG.connectPort     = port
+                   , PG.connectUser     = user
+                   , PG.connectPassword = password
+                   , PG.connectDatabase = database
+                   }
+        return $ PostgresConf ci pool
     loadConfig _ = mzero
 
 refName :: DBName -> DBName -> DBName

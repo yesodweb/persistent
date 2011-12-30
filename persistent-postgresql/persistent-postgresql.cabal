@@ -5,7 +5,7 @@ license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
 maintainer:      Michael Snoyman <michael@snoyman.com>
 synopsis:        Backend for the persistent library using postgresql.
-description:     Based on the HDBC-postgresql package
+description:     Based on the postgresql-simple package
 category:        Database, Yesod
 stability:       Stable
 cabal-version:   >= 1.6
@@ -14,9 +14,9 @@ homepage:        http://www.yesodweb.com/book/persistent
 
 library
     build-depends:   base                  >= 4        && < 5
-                   , HDBC                  >= 2.2.6    && < 2.4
                    , transformers          >= 0.2.1    && < 0.3
-                   , HDBC-postgresql       >= 2.2.3.1  && < 2.4
+                   , postgresql-simple     >= 0.0      && < 1.0
+                   , postgresql-libpq      >= 0.6
                    , persistent            >= 0.7      && < 0.8
                    , containers            >= 0.2
                    , bytestring            >= 0.9      && < 0.10
