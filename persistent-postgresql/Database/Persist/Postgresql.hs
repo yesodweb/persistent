@@ -142,12 +142,12 @@ withStmt' conn query vals = C.sourceIO (liftIO   openS )
                     Just bt -> return $ getGetter bt $
                                PG.Field ret col $
                                PG.builtin2typname bt
-                 -- Ready to go!
+                -- Ready to go!
                 rowRef   <- newIORef (LibPQ.Row 0)
                 rowCount <- LibPQ.ntuples ret
                 return (ret, rowRef, rowCount, getters)
 
-    closeS _ = return ()
+    closeS (ret, _, _, _) = LibPQ.unsafeFreeResult ret
 
     pullS (ret, rowRef, rowCount, getters) = do
         row <- atomicModifyIORef rowRef (\r -> (r+1, r))
@@ -157,9 +157,9 @@ withStmt' conn query vals = C.sourceIO (liftIO   openS )
                                 mbs <- LibPQ.getvalue' ret row col
                                 case mbs of
                                   Nothing -> return PersistNull
-                                  _ -> case getter mbs of
-                                         Left exc -> throw exc
-                                         Right v  -> return v
+                                  Just bs -> bs `seq` case getter mbs of
+                                                        Left exc -> throw exc
+                                                        Right v  -> return v
 
 -- | Avoid orphan instances.
 newtype P = P PersistValue
