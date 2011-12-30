@@ -155,9 +155,11 @@ withStmt' conn query vals = C.sourceIO (liftIO   openS )
            then return C.Closed
            else fmap C.Open $ forM (zip getters [0..]) $ \(getter, col) -> do
                                 mbs <- LibPQ.getvalue' ret row col
-                                case getter mbs of
-                                  Left exc -> throw exc
-                                  Right v  -> return v
+                                case mbs of
+                                  Nothing -> return PersistNull
+                                  _ -> case getter mbs of
+                                         Left exc -> throw exc
+                                         Right v  -> return v
 
 -- | Avoid orphan instances.
 newtype P = P PersistValue
