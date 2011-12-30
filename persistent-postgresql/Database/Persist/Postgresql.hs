@@ -49,7 +49,7 @@ import qualified Data.Text.Encoding as T
 -- import Data.Time.LocalTime (localTimeToUTC, utc)
 import Data.Text (Text, pack)
 import Data.Aeson
-import Control.Monad (mzero)
+import Control.Monad (forM, mzero)
 
 withPostgresqlPool :: C.ResourceIO m
                    => PG.ConnectInfo
