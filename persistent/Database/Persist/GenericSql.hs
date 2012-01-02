@@ -468,8 +468,8 @@ rawSql stmt = run
           where
             placeholder = "??"
             makeSubsts (s:ss) (t:ts) = t : s : makeSubsts ss ts
-            makeSubsts []     [t]    = [t]
-            makeSubsts []     ts     = [T.intercalate placeholder ts]
+            makeSubsts []     []     = []
+            makeSubsts []     ts     = [T.intercalate placeholder ("":ts)]
             makeSubsts ss     []     = error (P.concat err)
                 where
                   err = [ "rawsql: there are still ", P.show (length ss)
