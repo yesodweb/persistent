@@ -702,15 +702,15 @@ specs = describe "persistent" $ do
 #ifndef WITH_MONGODB
   it "joinSql" $ db $ joinGeneric Database.Persist.Query.Join.Sql.runJoin
 
-  it "runSql/2+2" $ db $ do
+  it "rawSql/2+2" $ db $ do
       ret <- rawSql "SELECT 2+2" []
       liftIO $ ret @?= [Single (4::Int)]
 
-  it "runSql/?-?" $ db $ do
+  it "rawSql/?-?" $ db $ do
       ret <- rawSql "SELECT ?-?" [PersistInt64 5, PersistInt64 3]
       liftIO $ ret @?= [Single (2::Int)]
 
-  it "runSql/entity" $ db $ do
+  it "rawSql/entity" $ db $ do
       let insert' :: (PersistStore b m, PersistEntity val) => val -> b m (Key b val, val)
           insert' v = insert v >>= \k -> return (k, v)
       (p1k, p1) <- insert' $ Person "Mathias"   23 Nothing
@@ -726,7 +726,7 @@ specs = describe "persistent" $ do
                        , (Entity p1k p1, Entity a2k a2)
                        , (Entity p2k p2, Entity a3k a3) ]
 
-  it "runSql/order-proof" $ db $ do
+  it "rawSql/order-proof" $ db $ do
       let p1 = Person "Zacarias" 93 Nothing
       p1k <- insert p1
       ret1 <- rawSql "SELECT ?? FROM \"Person\"" []
