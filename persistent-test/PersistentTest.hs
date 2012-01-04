@@ -42,6 +42,7 @@ import Control.Monad (replicateM)
 import qualified Data.ByteString as BS
 
 #else
+import Database.Persist.EntityDef (EntityDef(..))
 import Database.Persist.Store ( DeleteCascade (..) )
 import Database.Persist.GenericSql
 import qualified Database.Persist.Query.Join.Sql
@@ -701,9 +702,59 @@ specs = describe "persistent" $ do
 #ifndef WITH_MONGODB
   it "joinSql" $ db $ joinGeneric Database.Persist.Query.Join.Sql.runJoin
 
+  it "rawSql/2+2" $ db $ do
+      ret <- rawSql "SELECT 2+2" []
+      liftIO $ ret @?= [Single (4::Int)]
+
+  it "rawSql/?-?" $ db $ do
+      ret <- rawSql "SELECT ?-?" [PersistInt64 5, PersistInt64 3]
+      liftIO $ ret @?= [Single (2::Int)]
+
+  it "rawSql/entity" $ db $ do
+      let insert' :: (PersistStore b m, PersistEntity val) => val -> b m (Key b val, val)
+          insert' v = insert v >>= \k -> return (k, v)
+      (p1k, p1) <- insert' $ Person "Mathias"   23 Nothing
+      (p2k, p2) <- insert' $ Person "Norbert"   44 Nothing
+      (p3k, _ ) <- insert' $ Person "Cassandra" 19 Nothing
+      (_  , _ ) <- insert' $ Person "Thiago"    19 Nothing
+      (a1k, a1) <- insert' $ Pet p1k "Rodolfo" Cat
+      (a2k, a2) <- insert' $ Pet p1k "Zeno"    Cat
+      (a3k, a3) <- insert' $ Pet p2k "Lhama"   Dog
+      (_  , _ ) <- insert' $ Pet p3k "Abacate" Cat
+      ret <- rawSql "SELECT ??, ?? FROM \"Person\", \"Pet\" WHERE \"Person\".age >= ? AND \"Pet\".\"ownerId\" = \"Person\".id ORDER BY \"Person\".name, \"Pet\".name" [PersistInt64 20]
+      liftIO $ ret @?= [ (Entity p1k p1, Entity a1k a1)
+                       , (Entity p1k p1, Entity a2k a2)
+                       , (Entity p2k p2, Entity a3k a3) ]
+
+  it "rawSql/order-proof" $ db $ do
+      let p1 = Person "Zacarias" 93 Nothing
+      p1k <- insert p1
+      ret1 <- rawSql "SELECT ?? FROM \"Person\"" []
+      ret2 <- rawSql "SELECT ?? FROM \"Person\"" []
+      liftIO $ ret1 @?= [Entity p1k p1]
+      liftIO $ ret2 @?= [Entity (Key $ unKey p1k) (RFO p1)]
+
   it "commit/rollback" (caseCommitRollback >> runConn cleanDB)
 
   it "afterException" caseAfterException
+
+-- | Reverses the order of the fields of an entity.  Used to test
+-- @??@ placeholders of 'rawSql'.
+newtype ReverseFieldOrder a = RFO {unRFO :: a} deriving (Eq, Show)
+instance PersistEntity a => PersistEntity (ReverseFieldOrder a) where
+    newtype EntityField (ReverseFieldOrder a) b = EFRFO {unEFRFO :: EntityField a b}
+    newtype Unique      (ReverseFieldOrder a) b = URFO  {unURFO  :: Unique      a b}
+    persistFieldDef = persistFieldDef . unEFRFO
+    entityDef = revFields . entityDef . unRFO
+        where
+          revFields ed = ed { entityFields = reverse (entityFields ed) }
+    toPersistFields = reverse . toPersistFields . unRFO
+    fromPersistValues = fmap RFO . fromPersistValues . reverse
+    halfDefined = RFO halfDefined
+    persistUniqueToFieldNames = reverse . persistUniqueToFieldNames . unURFO
+    persistUniqueToValues = reverse . persistUniqueToValues . unURFO
+    persistUniqueKeys = map URFO . reverse . persistUniqueKeys . unRFO
+
 
 caseCommitRollback :: Assertion
 caseCommitRollback = db $ do

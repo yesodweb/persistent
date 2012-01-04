@@ -19,6 +19,12 @@ module Database.Persist.GenericSql
     , runSqlPool
     , Key (..)
 
+    -- * Raw SQL queries
+    -- $rawSql
+    , rawSql
+    , Entity(..)
+    , Single(..)
+
     -- * Migrations
     , Migration
     , parseMigration
@@ -33,8 +39,10 @@ module Database.Persist.GenericSql
     , rollback
     ) where
 
-import qualified Prelude
+import qualified Prelude as P
 import Prelude hiding ((++), unlines, concat, show)
+import Control.Applicative ((<$>), (<*>))
+import Control.Arrow ((&&&))
 import Database.Persist.Store
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader
@@ -198,7 +206,7 @@ instance C.ResourceIO m => PersistUnique SqlPersist m where
         t = entityDef $ dummyFromUnique uniq
         toFieldNames' = map snd . persistUniqueToFieldNames
 
-dummyFromKey :: Key SqlPersist v -> v 
+dummyFromKey :: Key SqlPersist v -> v
 dummyFromKey _ = error "dummyFromKey"
 
 {- FIXME
@@ -326,4 +334,306 @@ infixr 5 ++
 (++) = mappend
 
 show :: Show a => a -> Text
-show = pack . Prelude.show
+show = pack . P.show
+
+
+-- $rawSql
+--
+-- Although it covers most of the useful cases, @persistent@'s
+-- API may not be enough for some of your tasks.  May be you need
+-- some complex @JOIN@ query, or a database-specific command
+-- needs to be issued.
+--
+-- To issue raw SQL queries you could use 'R.withStmt', which
+-- allows you to do anything you need.  However, its API is
+-- /low-level/ and you need to parse each row yourself.  However,
+-- most of your complex queries will have simple results -- some
+-- of your entities and maybe a couple of derived columns.
+--
+-- This is where 'rawSql' comes in.  Like 'R.withStmt', you may
+-- issue /any/ SQL query.  However, it does all the hard work for
+-- you and automatically parses the rows of the result.  It may
+-- return:
+--
+--   * An 'Entity', which is analogous to the tuples that
+--     'selectList' returns.  All of your entity's fields are
+--     automatically parsed.
+--
+--   * A @'Single' a@, which is a single, raw column of type @a@.
+--     You may use a Haskell type (such as in your entity
+--     definitions), for example @Single Text@ or @Single Int@,
+--     or you may get the raw column value with @Single
+--     'PersistValue'@.
+--
+--   * A tuple combining any of these (including other tuples).
+--     Using tuples allows you to return many entities in one
+--     query.
+--
+-- The only difference between issuing SQL queries with 'rawSql'
+-- and using other means is that we have an /entity selection/
+-- /placeholder/, the double question mark @??@.  It /must/ be
+-- used whenever you want to @SELECT@ an 'Entity' from your
+-- query.  Here's a sample SQL query @sampleStmt@ that may be
+-- issued:
+--
+-- @
+-- SELECT ??, ??
+-- FROM \"Person\", \"Likes\", \"Object\"
+-- WHERE \"Person\".id = \"Likes\".\"personId\"
+-- AND \"Object\".id = \"Likes\".\"objectId\"
+-- AND \"Person\".name LIKE ?
+-- @
+--
+-- To use that query, you could say
+--
+-- @
+-- do results <- 'rawSql' sampleStmt [\"%Luke%\"]
+--    forM_ results $
+--      \\( Entity personKey person
+--       , Entity objectKey object
+--       ) -> do ...
+-- @
+--
+-- Note that 'rawSql' knows how to replace the double question
+-- marks @??@ because of the type of the @results@.
+
+
+-- | A single column (see 'rawSql').  Any 'PersistField' may be
+-- used here, including 'PersistValue' (which does not do any
+-- processing).
+newtype Single a = Single {unSingle :: a}
+    deriving (Eq, Ord, Show, Read)
+
+
+-- | An entity taking up possibly many columns.
+--
+-- In order to reconstruct your entity on the Haskell side, we
+-- need all of your entity columns in the right order.  While you
+-- could use @SELECT Entity.* WHERE ...@ and that would work most
+-- of the time, there are times where the order of the columns on
+-- your database is different from the order that @persistent@
+-- expects.
+--
+-- So, instead of using a query like the one above, we have an
+-- /entity selection placeholder/, which is the double question
+-- mark @??@.  The query above must be written as @SELECT ??
+-- WHERE ..@.  Then 'rawSql' will replace @??@ with the list of
+-- all columns that we need from your entity in the right order.
+-- If your query returns two entities (i.e. @(Entity backend a,
+-- Entity backend b)@), then you must you use @SELECT ??, ??
+-- WHERE ...@, and so on.
+data Entity backend entity =
+    Entity { entityKey :: Key backend entity
+           , entityVal :: entity }
+    deriving (Eq, Ord, Show, Read)
+
+
+-- | Execute a raw SQL statement and return its results as a
+-- list.
+--
+-- If you're using 'Entity'@s@ (which is quite likely), then you
+-- /must/ use entity selection placeholders (double question
+-- mark, @??@).  These @??@ placeholders are then replaced for
+-- the names of the columns that we need for your entities.
+-- You'll receive an error if you don't use the placeholders.
+-- Please see the 'Entity'@s@ documentation for more details.
+--
+-- You may put value placeholders (question marks, @?@) in your
+-- SQL query.  These placeholders are then replaced by the values
+-- you pass on the second parameter, already correctly escaped.
+-- You may want to use 'toPersistValue' to help you constructing
+-- the placeholder values.
+--
+-- Since you're giving a raw SQL statement, you don't get any
+-- guarantees regarding safety.  If 'rawSql' is not able to parse
+-- the results of your query back, then an exception is raised.
+-- However, most common problems are mitigated by using the
+-- entity selection placeholder @??@, and you shouldn't see any
+-- error at all if you're not using 'Single'.
+rawSql :: (RawSql a, C.ResourceIO m) =>
+          Text             -- ^ SQL statement, possibly with placeholders.
+       -> [PersistValue]   -- ^ Values to fill the placeholders.
+       -> SqlPersist m [a]
+rawSql stmt = run
+    where
+      getType :: (x -> SqlPersist m [a]) -> a
+      getType = undefined
+
+      x = getType run
+      process = rawSqlProcessRow
+
+      withStmt' colSubsts = R.withStmt $ T.concat $
+                            makeSubsts colSubsts $
+                            T.splitOn placeholder stmt
+          where
+            placeholder = "??"
+            makeSubsts (s:ss) (t:ts) = t : s : makeSubsts ss ts
+            makeSubsts []     []     = []
+            makeSubsts []     ts     = [T.intercalate placeholder ("":ts)]
+            makeSubsts ss     []     = error (P.concat err)
+                where
+                  err = [ "rawsql: there are still ", P.show (length ss)
+                        , "'??' placeholder substitutions to be made "
+                        , "but all '??' placeholders have already been "
+                        , "consumed.  Please read 'rawSql's documentation "
+                        , "on how '??' placeholders work."
+                        ]
+
+      run params = do
+        conn <- SqlPersist ask
+        let (colCount, colSubsts) = rawSqlCols (escapeName conn) x
+        C.runResourceT $ withStmt' colSubsts params C.$$ firstRow colCount
+
+      firstRow colCount = do
+        mrow <- CL.head
+        case mrow of
+          Nothing -> return []
+          Just row
+              | colCount == length row -> getter mrow
+              | otherwise              -> fail $ P.concat
+                  [ "rawSql: wrong number of columns, got "
+                  , P.show (length row), " but expected ", P.show colCount
+                  , " (", rawSqlColCountReason x, ")." ]
+
+      getter = go id
+          where
+            go acc Nothing = return (acc [])
+            go acc (Just row) =
+              case process row of
+                Left err -> fail (T.unpack err)
+                Right r  -> CL.head >>= go (acc . (r:))
+
+
+-- | Class for data types that may be retrived from a 'rawSql'
+-- query.
+class RawSql a where
+    -- | Number of columns that this data type needs and the list
+    -- of substitutions for @SELECT@ placeholders @??@.
+    rawSqlCols :: (DBName -> Text) -> a -> (Int, [Text])
+
+    -- | A string telling the user why the column count is what
+    -- it is.
+    rawSqlColCountReason :: a -> String
+
+    -- | Transform a row of the result into the data type.
+    rawSqlProcessRow :: [PersistValue] -> Either Text a
+
+instance PersistField a => RawSql (Single a) where
+    rawSqlCols _ _         = (1, [])
+    rawSqlColCountReason _ = "one column for a 'Single' data type"
+    rawSqlProcessRow [pv]  = Single <$> fromPersistValue pv
+    rawSqlProcessRow _     = Left "RawSql (Single a): wrong number of columns."
+
+instance PersistEntity a => RawSql (Entity backend a) where
+    rawSqlCols escape = ((+1).length.entityFields &&& process) . entityDef . entityVal
+        where
+          process ed = (:[]) $
+                       T.intercalate ", " $
+                       map ((name ed ++) . escape) $
+                       (entityID ed:) $
+                       map fieldDB $
+                       entityFields ed
+          name ed = escape (entityDB ed) ++ "."
+
+    rawSqlColCountReason a =
+        case fst (rawSqlCols undefined a) of
+          1 -> "one column for an 'Entity' data type without fields"
+          n -> P.show n P.++ " columns for an 'Entity' data type"
+    rawSqlProcessRow (idCol:ent) = Entity <$> fromPersistValue idCol
+                                          <*> fromPersistValues ent
+    rawSqlProcessRow _ = Left "RawSql (Entity a): wrong number of columns."
+
+instance (RawSql a, RawSql b) => RawSql (a, b) where
+    rawSqlCols e x = rawSqlCols e (fst x) # rawSqlCols e (snd x)
+        where (cnta, lsta) # (cntb, lstb) = (cnta + cntb, lsta P.++ lstb)
+    rawSqlColCountReason x = rawSqlColCountReason (fst x) P.++ ", " P.++
+                             rawSqlColCountReason (snd x)
+    rawSqlProcessRow =
+        let x = getType processRow
+            getType :: (z -> Either y x) -> x
+            getType = undefined
+
+            colCountFst = fst $ rawSqlCols undefined (fst x)
+            processRow row =
+                let (rowFst, rowSnd) = splitAt colCountFst row
+                in (,) <$> rawSqlProcessRow rowFst
+                       <*> rawSqlProcessRow rowSnd
+
+        in colCountFst `seq` processRow
+           -- Avoids recalculating 'colCountFst'.
+
+instance (RawSql a, RawSql b, RawSql c) => RawSql (a, b, c) where
+    rawSqlCols e         = rawSqlCols e         . from3
+    rawSqlColCountReason = rawSqlColCountReason . from3
+    rawSqlProcessRow     = fmap to3 . rawSqlProcessRow
+
+from3 :: (a,b,c) -> ((a,b),c)
+from3 (a,b,c) = ((a,b),c)
+
+to3 :: ((a,b),c) -> (a,b,c)
+to3 ((a,b),c) = (a,b,c)
+
+instance (RawSql a, RawSql b, RawSql c, RawSql d) => RawSql (a, b, c, d) where
+    rawSqlCols e         = rawSqlCols e         . from4
+    rawSqlColCountReason = rawSqlColCountReason . from4
+    rawSqlProcessRow     = fmap to4 . rawSqlProcessRow
+
+from4 :: (a,b,c,d) -> ((a,b),(c,d))
+from4 (a,b,c,d) = ((a,b),(c,d))
+
+to4 :: ((a,b),(c,d)) -> (a,b,c,d)
+to4 ((a,b),(c,d)) = (a,b,c,d)
+
+instance (RawSql a, RawSql b, RawSql c,
+          RawSql d, RawSql e)
+       => RawSql (a, b, c, d, e) where
+    rawSqlCols e         = rawSqlCols e         . from5
+    rawSqlColCountReason = rawSqlColCountReason . from5
+    rawSqlProcessRow     = fmap to5 . rawSqlProcessRow
+
+from5 :: (a,b,c,d,e) -> ((a,b),(c,d),e)
+from5 (a,b,c,d,e) = ((a,b),(c,d),e)
+
+to5 :: ((a,b),(c,d),e) -> (a,b,c,d,e)
+to5 ((a,b),(c,d),e) = (a,b,c,d,e)
+
+instance (RawSql a, RawSql b, RawSql c,
+          RawSql d, RawSql e, RawSql f)
+       => RawSql (a, b, c, d, e, f) where
+    rawSqlCols e         = rawSqlCols e         . from6
+    rawSqlColCountReason = rawSqlColCountReason . from6
+    rawSqlProcessRow     = fmap to6 . rawSqlProcessRow
+
+from6 :: (a,b,c,d,e,f) -> ((a,b),(c,d),(e,f))
+from6 (a,b,c,d,e,f) = ((a,b),(c,d),(e,f))
+
+to6 :: ((a,b),(c,d),(e,f)) -> (a,b,c,d,e,f)
+to6 ((a,b),(c,d),(e,f)) = (a,b,c,d,e,f)
+
+instance (RawSql a, RawSql b, RawSql c,
+          RawSql d, RawSql e, RawSql f,
+          RawSql g)
+       => RawSql (a, b, c, d, e, f, g) where
+    rawSqlCols e         = rawSqlCols e         . from7
+    rawSqlColCountReason = rawSqlColCountReason . from7
+    rawSqlProcessRow     = fmap to7 . rawSqlProcessRow
+
+from7 :: (a,b,c,d,e,f,g) -> ((a,b),(c,d),(e,f),g)
+from7 (a,b,c,d,e,f,g) = ((a,b),(c,d),(e,f),g)
+
+to7 :: ((a,b),(c,d),(e,f),g) -> (a,b,c,d,e,f,g)
+to7 ((a,b),(c,d),(e,f),g) = (a,b,c,d,e,f,g)
+
+instance (RawSql a, RawSql b, RawSql c,
+          RawSql d, RawSql e, RawSql f,
+          RawSql g, RawSql h)
+       => RawSql (a, b, c, d, e, f, g, h) where
+    rawSqlCols e         = rawSqlCols e         . from8
+    rawSqlColCountReason = rawSqlColCountReason . from8
+    rawSqlProcessRow     = fmap to8 . rawSqlProcessRow
+
+from8 :: (a,b,c,d,e,f,g,h) -> ((a,b),(c,d),(e,f),(g,h))
+from8 (a,b,c,d,e,f,g,h) = ((a,b),(c,d),(e,f),(g,h))
+
+to8 :: ((a,b),(c,d),(e,f),(g,h)) -> (a,b,c,d,e,f,g,h)
+to8 ((a,b),(c,d),(e,f),(g,h)) = (a,b,c,d,e,f,g,h)

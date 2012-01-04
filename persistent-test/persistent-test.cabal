@@ -80,7 +80,7 @@ library
     -- these are mutually exclusive options
     -- cpp-options: -DWITH_POSTGRESQL
     -- cpp-options: -DWITH_MONGODB -DDEBUG
-    ghc-options:   -Wall
+    ghc-options:   -Wall -O0
 
 test-suite test
     type:          exitcode-stdio-1.0
