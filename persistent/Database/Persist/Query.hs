@@ -4,6 +4,7 @@ module Database.Persist.Query
   (   PersistQuery (..)
     , selectList
     , deleteCascadeWhere
+    , Entity (..)
 
     -- Internal
     , SelectOpt (..)
@@ -25,6 +26,28 @@ import Database.Persist.EntityDef
 
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
+
+-- | An entity taking up possibly many columns.
+--
+-- In order to reconstruct your entity on the Haskell side, we
+-- need all of your entity columns in the right order.  While you
+-- could use @SELECT Entity.* WHERE ...@ and that would work most
+-- of the time, there are times where the order of the columns on
+-- your database is different from the order that @persistent@
+-- expects.
+--
+-- So, instead of using a query like the one above, we have an
+-- /entity selection placeholder/, which is the double question
+-- mark @??@.  The query above must be written as @SELECT ??
+-- WHERE ..@.  Then 'rawSql' will replace @??@ with the list of
+-- all columns that we need from your entity in the right order.
+-- If your query returns two entities (i.e. @(Entity backend a,
+-- Entity backend b)@), then you must you use @SELECT ??, ??
+-- WHERE ...@, and so on.
+data Entity backend entity =
+    Entity { entityKey :: Key backend entity
+           , entityVal :: entity }
+    deriving (Eq, Ord, Show, Read)
 
 infixr 3 =., +=., -=., *=., /=.
 (=.), (+=.), (-=.), (*=.), (/=.) :: forall v typ.  PersistField typ => EntityField v typ -> typ -> Update v
@@ -78,13 +101,13 @@ class PersistStore b m => PersistQuery b m where
            :: PersistEntity val
            => [Filter val]
            -> [SelectOpt val]
-           -> C.Source (b m) (Key b val, val)
+           -> C.Source (b m) (Entity b val)
 
     -- | get just the first record for the criterion
     selectFirst :: PersistEntity val
                 => [Filter val]
                 -> [SelectOpt val]
-                -> b m (Maybe (Key b val, val))
+                -> b m (Maybe (Entity b val))
     selectFirst filts opts = C.runResourceT
         $ selectSource filts ((LimitTo 1):opts) C.$$ CL.head
 
@@ -122,7 +145,7 @@ limitOffsetOrder opts =
 selectList :: (PersistEntity val, PersistQuery b m)
            => [Filter val]
            -> [SelectOpt val]
-           -> b m [(Key b val, val)]
+           -> b m [Entity b val]
 selectList a b = C.runResourceT $ selectSource a b C.$$ CL.consume
 
 data SelectOpt v = forall typ. Asc (EntityField v typ)

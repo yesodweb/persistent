@@ -92,7 +92,7 @@ instance C.ResourceIO m => PersistQuery SqlPersist m where
         fromPersistValues' (PersistInt64 x:xs) = do
             case fromPersistValues xs of
                 Left e -> Left e
-                Right xs' -> Right (Key $ PersistInt64 x, xs')
+                Right xs' -> Right (Entity (Key $ PersistInt64 x) xs')
         fromPersistValues' _ = Left "error in fromPersistValues'"
         wher conn = if null filts
                     then ""

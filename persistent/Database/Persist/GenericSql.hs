@@ -48,6 +48,7 @@ import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader
 import Data.Pool
 import Database.Persist.GenericSql.Internal
+import Database.Persist.Query (Entity (..))
 import Database.Persist.GenericSql.Migration
 import qualified Database.Persist.GenericSql.Raw as R
 import Database.Persist.GenericSql.Raw (SqlPersist (..))
@@ -402,29 +403,6 @@ show = pack . P.show
 -- used here, including 'PersistValue' (which does not do any
 -- processing).
 newtype Single a = Single {unSingle :: a}
-    deriving (Eq, Ord, Show, Read)
-
-
--- | An entity taking up possibly many columns.
---
--- In order to reconstruct your entity on the Haskell side, we
--- need all of your entity columns in the right order.  While you
--- could use @SELECT Entity.* WHERE ...@ and that would work most
--- of the time, there are times where the order of the columns on
--- your database is different from the order that @persistent@
--- expects.
---
--- So, instead of using a query like the one above, we have an
--- /entity selection placeholder/, which is the double question
--- mark @??@.  The query above must be written as @SELECT ??
--- WHERE ..@.  Then 'rawSql' will replace @??@ with the list of
--- all columns that we need from your entity in the right order.
--- If your query returns two entities (i.e. @(Entity backend a,
--- Entity backend b)@), then you must you use @SELECT ??, ??
--- WHERE ...@, and so on.
-data Entity backend entity =
-    Entity { entityKey :: Key backend entity
-           , entityVal :: entity }
     deriving (Eq, Ord, Show, Read)
 
 

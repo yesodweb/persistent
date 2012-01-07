@@ -35,21 +35,21 @@ selectOneMany filts get' = SelectOneMany [] [] [] [] filts get' False
 instance (PersistEntity one, PersistEntity many, Ord (Key backend one), PersistQuery backend monad)
     => RunJoin (SelectOneMany backend one many) backend monad where
     type Result (SelectOneMany backend one many) =
-        [((Key backend one, one), [(Key backend many, many)])]
+        [((Entity backend one), [(Entity backend many)])]
     runJoin (SelectOneMany oneF oneO manyF manyO eq getKey isOuter) = do
         x <- selectList oneF oneO
         -- FIXME use select instead of selectList
-        y <- selectList (eq (map fst x) : manyF) manyO
+        y <- selectList (eq (map entityKey x) : manyF) manyO
         let y' = foldl' go Map.empty y
         return $ mapMaybe (go' y') x
       where
-        go m many@(_, many') =
+        go m many@(Entity _ many') =
             Map.insert (getKey many')
             (case Map.lookup (getKey many') m of
                 Nothing -> (:) many
                 Just v -> v . (:) many
                 ) m
-        go' y' one@(k, _) =
+        go' y' one@(Entity k _) =
             case Map.lookup k y' of
                 Nothing ->
                     if isOuter

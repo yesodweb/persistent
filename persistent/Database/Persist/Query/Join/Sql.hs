@@ -29,12 +29,12 @@ import qualified Data.Text as T
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 
-fromPersistValuesId :: PersistEntity v => [PersistValue] -> Either Text (Key SqlPersist v, v)
+fromPersistValuesId :: PersistEntity v => [PersistValue] -> Either Text (Entity SqlPersist v)
 fromPersistValuesId [] = Left "fromPersistValuesId: No values provided"
 fromPersistValuesId (PersistInt64 i:rest) =
     case fromPersistValues rest of
         Left e -> Left e
-        Right x -> Right (Key $ PersistInt64 i, x)
+        Right x -> Right (Entity (Key $ PersistInt64 i) x)
 fromPersistValuesId _ = Left "fromPersistValuesId: invalid ID"
 
 class RunJoin a where
@@ -46,8 +46,11 @@ instance (PersistEntity one, PersistEntity many, Eq (Key SqlPersist one))
         conn <- SqlPersist ask
         C.runResourceT $ liftM go $ withStmt (sql conn) (getFiltsValues conn oneF ++ getFiltsValues conn manyF) C.$$ loop id
       where
-        go :: Eq a => [((a, b), Maybe (c, d))] -> [((a, b), [(c, d)])]
-        go = map (fst . head &&& mapMaybe snd) . groupBy ((==) `on` (fst . fst))
+        go :: [(Entity a b, Maybe (Entity c d))]
+           -> [(Entity a b, [Entity c d])]
+        go = map (fst . head &&& mapMaybe snd)
+           . groupBy ((==) `on` (entityKey . fst))
+
         loop front = do
             x <- CL.head
             case x of
