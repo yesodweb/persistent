@@ -52,13 +52,9 @@ library
                    , HDBC
                    , aeson
                    , lifted-base
-                   , neither
                    -- mongoDB dependencies
                    --, mongoDB       == 1.1.*
-                   , bson          >= 0.1.6
-                   , cereal
                    , network
-                   , compact-string-fix
                    , path-pieces
                    , text
                    , transformers
