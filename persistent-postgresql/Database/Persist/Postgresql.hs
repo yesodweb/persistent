@@ -117,10 +117,7 @@ withStmt' conn query vals = C.sourceIO (liftIO   openS )
       rawquery <- PG.formatQuery conn query (map P vals)
 
       -- Take raw connection
-      withMVar (PG.connectionHandle conn) $ \mrawconn ->
-        case mrawconn of
-          Nothing -> fail "Postgresql.withStmt': closed connection"
-          Just rawconn -> do
+      withMVar (PG.connectionHandle conn) $ \rawconn -> do
             -- Execute query
             mret <- LibPQ.exec rawconn rawquery
             case mret of

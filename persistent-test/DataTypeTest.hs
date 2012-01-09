@@ -55,7 +55,7 @@ dataTypeSpecs = describe "data type specs" $ do
                     check s f = (s, f x) @=? (s, f y)
                 -- Check individual fields for better error messages
                 check "text" dataTypeTableText
-                -- test disabled due to buggy HDBC check "bytes" dataTypeTableBytes
+                check "bytes" dataTypeTableBytes
                 check "int" dataTypeTableInt
                 check "double" dataTypeTableDouble
                 check "bool" dataTypeTableBool
