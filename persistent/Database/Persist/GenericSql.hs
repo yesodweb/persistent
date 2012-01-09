@@ -48,7 +48,6 @@ import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader
 import Data.Pool
 import Database.Persist.GenericSql.Internal
-import Database.Persist.Query (Entity (..))
 import Database.Persist.GenericSql.Migration
 import qualified Database.Persist.GenericSql.Raw as R
 import Database.Persist.GenericSql.Raw (SqlPersist (..))
@@ -198,7 +197,7 @@ instance C.ResourceIO m => PersistUnique SqlPersist m where
                 Just (PersistInt64 k:vals) ->
                     case fromPersistValues vals of
                         Left s -> error $ unpack s
-                        Right x -> return $ Just (Key $ PersistInt64 k, x)
+                        Right x -> return $ Just (Entity (Key $ PersistInt64 k) x)
                 Just _ -> error "Database.Persist.GenericSql: Bad list in getBy"
       where
         sqlClause conn =

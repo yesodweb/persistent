@@ -393,7 +393,7 @@ specs = describe "persistent" $ do
       abes <- selectList [PersonName ==. "Abe"] []
       (map entityVal abes) @== [abe30]
 
-      Just (_,p3) <- getBy $ PersonNameKey "Michael"
+      Just (Entity _ p3) <- getBy $ PersonNameKey "Michael"
       p3 @== mic29
 
       ps <- selectList [PersonColor ==. Just "blue"] []
@@ -544,12 +544,12 @@ specs = describe "persistent" $ do
   it "getBy" $ db $ do
       let p2 = Person "Michael2" 27 Nothing
       key2 <- insert p2
-      Just (k, p) <- getBy $ PersonNameKey "Michael2"
+      Just (Entity k p) <- getBy $ PersonNameKey "Michael2"
       p @== p2
       k @== key2
       Nothing <- getBy $ PersonNameKey "Michael3"
 
-      Just (k', p') <- getByValue p2
+      Just (Entity k' p') <- getByValue p2
       k' @== k
       p' @== p
       return ()

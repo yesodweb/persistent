@@ -4,7 +4,6 @@ module Database.Persist.Query
   (   PersistQuery (..)
     , selectList
     , deleteCascadeWhere
-    , Entity (..)
 
     -- Internal
     , SelectOpt (..)
@@ -26,41 +25,6 @@ import Database.Persist.EntityDef
 
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
-
--- | Datatype that represents an entity, with both its key and
--- its Haskell representation.
---
--- When using the an SQL-based backend (such as SQLite or
--- PostgreSQL), an 'Entity' may take any number of columns
--- depending on how many fields it has. In order to reconstruct
--- your entity on the Haskell side, @persistent@ needs all of
--- your entity columns and in the right order.  Note that you
--- don't need to worry about this when using @persistent@\'s API
--- since everything is handled correctly behind the scenes.
---
--- However, if you want to issue a raw SQL command that returns
--- an 'Entity', then you have to be careful with the column
--- order.  While you could use @SELECT Entity.* WHERE ...@ and
--- that would work most of the time, there are times when the
--- order of the columns on your database is different from the
--- order that @persistent@ expects (for example, if you add a new
--- field in the middle of you entity definition and then use the
--- migration code -- @persistent@ will expect the column to be in
--- the middle, but your DBMS will put it as the last column).
--- So, instead of using a query like the one above, you may use
--- 'Database.Persist.GenericSql.rawSql' (from the
--- "Database.Persist.GenericSql" module) with its /entity
--- selection placeholder/ (a double question mark @??@).  Using
--- @rawSql@ the query above must be written as @SELECT ??  WHERE
--- ..@.  Then @rawSql@ will replace @??@ with the list of all
--- columns that we need from your entity in the right order.  If
--- your query returns two entities (i.e. @(Entity backend a,
--- Entity backend b)@), then you must you use @SELECT ??, ??
--- WHERE ...@, and so on.
-data Entity backend entity =
-    Entity { entityKey :: Key backend entity
-           , entityVal :: entity }
-    deriving (Eq, Ord, Show, Read)
 
 infixr 3 =., +=., -=., *=., /=.
 (=.), (+=.), (-=.), (*=.), (/=.) :: forall v typ.  PersistField typ => EntityField v typ -> typ -> Update v
