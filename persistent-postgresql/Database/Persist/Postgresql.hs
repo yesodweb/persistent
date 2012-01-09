@@ -200,13 +200,14 @@ getGetter PG.Reltime = convertPV PersistUTCTime
 getGetter PG.Money   = convertPV PersistDouble
 getGetter PG.Bpchar  = convertPV PersistText
 getGetter PG.Varchar = convertPV PersistText
--- getGetter PG.Date    = convertPV PersistDay       -- FIXME
--- getGetter PG.Time    = convertPV PersistTimeOfDay -- FIXME
 getGetter PG.Bit     = convertPV PersistInt64
 getGetter PG.Varbit  = convertPV PersistInt64
 getGetter PG.Numeric = convertPV PersistInt64
 getGetter PG.Void    = \_ _ -> Right PersistNull
 getGetter PG.Bytea     = convertPV (PersistByteString . unBinary)
+getGetter PG.Date      = convertPV PersistDay
+getGetter PG.Time      = convertPV PersistTimeOfDay
+getGetter PG.Timestamp = convertPV PersistUTCTime
 getGetter other   = error $ "Postgresql.getGetter: type " ++
                             show other ++ " not supported."
 
