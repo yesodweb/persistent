@@ -257,9 +257,7 @@ instance Arbitrary PersistValue where
 
 joinGeneric :: PersistQuery b m =>
                (SelectOneMany BackendMonad (Author) (EntryGeneric BackendMonad)
-                -> b m [((Key b (Author), Author),
-                                 [(Key b (EntryGeneric b),
-                                   EntryGeneric b)])])
+                -> b m [(Entity b Author, [Entity b (EntryGeneric b)])])
                 -> b m ()
 
 joinGeneric run = do
@@ -275,14 +273,14 @@ joinGeneric run = do
     x <- run $ selectOneMany (EntryAuthorId <-.) entryAuthorId
     liftIO $
         x @?=
-            [ ((a, Author "a"),
-                [ (a1, Entry a "a1")
-                , (a2, Entry a "a2")
-                , (a3, Entry a "a3")
+            [ ((Entity a $ Author "a"),
+                [ (Entity a1 $ Entry a "a1")
+                , (Entity a2 $ Entry a "a2")
+                , (Entity a3 $ Entry a "a3")
                 ])
-            , ((b, Author "b"),
-                [ (b1, Entry b "b1")
-                , (b2, Entry b "b2")
+            , ((Entity b $ Author "b"),
+                [ (Entity b1 $ Entry b "b1")
+                , (Entity b2 $ Entry b "b2")
                 ])
             ]
 
@@ -291,10 +289,10 @@ joinGeneric run = do
             }
     liftIO $
         y @?=
-            [ ((a, Author "a"),
-                [ (a1, Entry a "a1")
-                , (a2, Entry a "a2")
-                , (a3, Entry a "a3")
+            [ ((Entity a $ Author "a"),
+                [ (Entity a1 $ Entry a "a1")
+                , (Entity a2 $ Entry a "a2")
+                , (Entity a3 $ Entry a "a3")
                 ])
             ]
 
@@ -304,14 +302,14 @@ joinGeneric run = do
             }
     liftIO $
         z @?=
-            [ ((a, Author "a"),
-                [ (a3, Entry a "a3")
-                , (a2, Entry a "a2")
-                , (a1, Entry a "a1")
+            [ ((Entity a $ Author "a"),
+                [ (Entity a3 $ Entry a "a3")
+                , (Entity a2 $ Entry a "a2")
+                , (Entity a1 $ Entry a "a1")
                 ])
-            , ((b, Author "b"),
-                [ (b2, Entry b "b2")
-                , (b1, Entry b "b1")
+            , ((Entity b $ Author "b"),
+                [ (Entity b2 $ Entry b "b2")
+                , (Entity b1 $ Entry b "b1")
                 ])
             ]
 
@@ -322,16 +320,16 @@ joinGeneric run = do
             }
     liftIO $
         w @==
-            [ ((a, Author "a"),
-                [ (a3, Entry a "a3")
-                , (a2, Entry a "a2")
-                , (a1, Entry a "a1")
+            [ ((Entity a $ Author "a"),
+                [ (Entity a3 $ Entry a "a3")
+                , (Entity a2 $ Entry a "a2")
+                , (Entity a1 $ Entry a "a1")
                 ])
-            , ((b, Author "b"),
-                [ (b2, Entry b "b2")
-                , (b1, Entry b "b1")
+            , ((Entity b $ Author "b"),
+                [ (Entity b2 $ Entry b "b2")
+                , (Entity b1 $ Entry b "b1")
                 ])
-            , ((c, Author "c"), [])
+            , ((Entity c $ Author "c"), [])
             ]
 
 specs :: Specs
@@ -356,23 +354,23 @@ specs = describe "persistent" $ do
       _ <- insert $ Person "v" 1 Nothing
       _ <- insert $ Person "u" 2 Nothing
 
-      a <- fmap (map $ personName . snd) $ selectList [] [Desc PersonAge, Asc PersonName, OffsetBy 2, LimitTo 3]
+      a <- fmap (map $ personName . entityVal) $ selectList [] [Desc PersonAge, Asc PersonName, OffsetBy 2, LimitTo 3]
       a @== ["y", "v", "x"]
 
-      b <- fmap (map $ personName . snd) $ selectList [] [OffsetBy 2, Desc PersonAge, LimitTo 3, Asc PersonName]
+      b <- fmap (map $ personName . entityVal) $ selectList [] [OffsetBy 2, Desc PersonAge, LimitTo 3, Asc PersonName]
       b @== a
 
-      c <- fmap (map $ personName . snd) $ selectList [] [OffsetBy 2, Desc PersonAge, LimitTo 3, Asc PersonName, LimitTo 1, OffsetBy 1]
+      c <- fmap (map $ personName . entityVal) $ selectList [] [OffsetBy 2, Desc PersonAge, LimitTo 3, Asc PersonName, LimitTo 1, OffsetBy 1]
       c @== a
 
   it "passes the general tests" $ db $ do
       let mic26 = Person "Michael" 26 Nothing
       micK <- insert mic26 
       results <- selectList [PersonName ==. "Michael"] []
-      results @== [(micK, mic26)]
+      results @== [(Entity micK mic26)]
 
       results' <- selectList [PersonAge <. 28] []
-      results' @== [(micK, mic26)]
+      results' @== [(Entity micK mic26)]
 
       update micK [PersonAge =. 28]
       Just p28 <- get micK
@@ -385,24 +383,24 @@ specs = describe "persistent" $ do
       let eli = Person "Eliezer" 2 $ Just "blue"
       _ <- insert eli
       pasc <- selectList [] [Asc PersonAge]
-      (map snd pasc) @== [eli, mic29]
+      (map entityVal pasc) @== [eli, mic29]
 
       let abe30 = Person "Abe" 30 $ Just "black"
       _ <- insert abe30
       -- pdesc <- selectList [PersonAge <. 30] [Desc PersonName]
-      (map snd pasc) @== [eli, mic29]
+      (map entityVal pasc) @== [eli, mic29]
 
       abes <- selectList [PersonName ==. "Abe"] []
-      (map snd abes) @== [abe30]
+      (map entityVal abes) @== [abe30]
 
-      Just (_,p3) <- getBy $ PersonNameKey "Michael"
+      Just (Entity _ p3) <- getBy $ PersonNameKey "Michael"
       p3 @== mic29
 
       ps <- selectList [PersonColor ==. Just "blue"] []
-      map snd ps @== [eli]
+      map entityVal ps @== [eli]
 
       ps2 <- selectList [PersonColor ==. Nothing] []
-      map snd ps2 @== [mic29]
+      map entityVal ps2 @== [mic29]
 
       delete micK
       Nothing <- get micK
@@ -417,13 +415,13 @@ specs = describe "persistent" $ do
       _ <- insert eli
 
       pne <- selectList [PersonName !=. "Michael"] []
-      map snd pne @== [eli]
+      map entityVal pne @== [eli]
 
       ps <- selectList [PersonColor !=. Nothing] []
-      map snd ps @== [eli]
+      map entityVal ps @== [eli]
 
       pnm <- selectList [PersonName !=. "Eliezer"] []
-      map snd pnm @== [mic]
+      map entityVal pnm @== [mic]
 
 
   it "and/or" $ db $ do
@@ -546,12 +544,12 @@ specs = describe "persistent" $ do
   it "getBy" $ db $ do
       let p2 = Person "Michael2" 27 Nothing
       key2 <- insert p2
-      Just (k, p) <- getBy $ PersonNameKey "Michael2"
+      Just (Entity k p) <- getBy $ PersonNameKey "Michael2"
       p @== p2
       k @== key2
       Nothing <- getBy $ PersonNameKey "Michael3"
 
-      Just (k', p') <- getByValue p2
+      Just (Entity k' p') <- getByValue p2
       k' @== k
       p' @== p
       return ()
@@ -587,21 +585,21 @@ specs = describe "persistent" $ do
       key25 <- insert p25
       key26 <- insert p26
       ps1 <- selectList [] []
-      ps1 @== [(key25, p25), (key26, p26)]
+      ps1 @== [(Entity key25 p25), (Entity key26 p26)]
       -- limit
       ps2 <- selectList [] [LimitTo 1]
-      ps2 @== [(key25, p25)]
+      ps2 @== [(Entity key25 p25)]
       -- offset -- FAILS!
       ps3 <- selectList [] [OffsetBy 1]
-      ps3 @== [(key26, p26)]
+      ps3 @== [(Entity key26 p26)]
       -- limit & offset
       ps4 <- selectList [] [LimitTo 1, OffsetBy 1]
-      ps4 @== [(key26, p26)]
+      ps4 @== [(Entity key26 p26)]
 
       ps5 <- selectList [] [Desc PersonAge]
-      ps5 @== [(key26, p26), (key25, p25)]
+      ps5 @== [(Entity key26 p26), (Entity key25 p25)]
       ps6 <- selectList [PersonAge ==. 26] []
-      ps6 @== [(key26, p26)]
+      ps6 @== [(Entity key26 p26)]
 
 
   it "selectFirst" $ db $ do
@@ -610,7 +608,7 @@ specs = describe "persistent" $ do
       kOld <- insert pOld
 
       x <- selectFirst [] [Desc PersonAge]
-      x @== Just (kOld, pOld)
+      x @== Just (Entity kOld pOld)
 
   it "large numbers" $ db $ do
       let go x = do
@@ -694,7 +692,7 @@ specs = describe "persistent" $ do
       _ <- insert p2
       pid3 <- insert p3
       x <- selectList [PersonId <-. [pid1, pid3]] []
-      liftIO $ x @?= [(pid1, p1), (pid3, p3)]
+      liftIO $ x @?= [(Entity pid1 p1), (Entity pid3 p3)]
 
 
   it "joinNonSql" $ db $ joinGeneric Database.Persist.Query.Join.runJoin

@@ -78,13 +78,13 @@ class PersistStore b m => PersistQuery b m where
            :: PersistEntity val
            => [Filter val]
            -> [SelectOpt val]
-           -> C.Source (b m) (Key b val, val)
+           -> C.Source (b m) (Entity b val)
 
     -- | get just the first record for the criterion
     selectFirst :: PersistEntity val
                 => [Filter val]
                 -> [SelectOpt val]
-                -> b m (Maybe (Key b val, val))
+                -> b m (Maybe (Entity b val))
     selectFirst filts opts = C.runResourceT
         $ selectSource filts ((LimitTo 1):opts) C.$$ CL.head
 
@@ -122,7 +122,7 @@ limitOffsetOrder opts =
 selectList :: (PersistEntity val, PersistQuery b m)
            => [Filter val]
            -> [SelectOpt val]
-           -> b m [(Key b val, val)]
+           -> b m [Entity b val]
 selectList a b = C.runResourceT $ selectSource a b C.$$ CL.consume
 
 data SelectOpt v = forall typ. Asc (EntityField v typ)

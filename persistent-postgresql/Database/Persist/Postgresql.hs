@@ -366,6 +366,7 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d] =
     getType "float4"    = Right $ SqlReal
     getType "float8"    = Right $ SqlReal
     getType "bytea"     = Right $ SqlBlob
+    getType "time"      = Right $ SqlTime
     getType a           = Left $ "Unknown type: " `T.append` a
 getColumn _ _ x =
     return $ Left $ pack $ "Invalid result from information_schema: " ++ show x

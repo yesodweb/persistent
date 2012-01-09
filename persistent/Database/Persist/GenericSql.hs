@@ -197,7 +197,7 @@ instance C.ResourceIO m => PersistUnique SqlPersist m where
                 Just (PersistInt64 k:vals) ->
                     case fromPersistValues vals of
                         Left s -> error $ unpack s
-                        Right x -> return $ Just (Key $ PersistInt64 k, x)
+                        Right x -> return $ Just (Entity (Key $ PersistInt64 k) x)
                 Just _ -> error "Database.Persist.GenericSql: Bad list in getBy"
       where
         sqlClause conn =
@@ -405,29 +405,6 @@ newtype Single a = Single {unSingle :: a}
     deriving (Eq, Ord, Show, Read)
 
 
--- | An entity taking up possibly many columns.
---
--- In order to reconstruct your entity on the Haskell side, we
--- need all of your entity columns in the right order.  While you
--- could use @SELECT Entity.* WHERE ...@ and that would work most
--- of the time, there are times where the order of the columns on
--- your database is different from the order that @persistent@
--- expects.
---
--- So, instead of using a query like the one above, we have an
--- /entity selection placeholder/, which is the double question
--- mark @??@.  The query above must be written as @SELECT ??
--- WHERE ..@.  Then 'rawSql' will replace @??@ with the list of
--- all columns that we need from your entity in the right order.
--- If your query returns two entities (i.e. @(Entity backend a,
--- Entity backend b)@), then you must you use @SELECT ??, ??
--- WHERE ...@, and so on.
-data Entity backend entity =
-    Entity { entityKey :: Key backend entity
-           , entityVal :: entity }
-    deriving (Eq, Ord, Show, Read)
-
-
 -- | Execute a raw SQL statement and return its results as a
 -- list.
 --
@@ -469,7 +446,7 @@ rawSql stmt = run
             placeholder = "??"
             makeSubsts (s:ss) (t:ts) = t : s : makeSubsts ss ts
             makeSubsts []     []     = []
-            makeSubsts []     ts     = [T.intercalate placeholder ("":ts)]
+            makeSubsts []     ts     = [T.intercalate placeholder ts]
             makeSubsts ss     []     = error (P.concat err)
                 where
                   err = [ "rawsql: there are still ", P.show (length ss)
