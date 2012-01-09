@@ -21,6 +21,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as S
 import Data.Time (Day, TimeOfDay (..), UTCTime (..), fromGregorian)
 import RenameTest (runConn2)
+import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import System.Random (randomIO, randomRIO, Random)
 import Control.Applicative ((<$>), (<*>))
@@ -57,11 +58,15 @@ dataTypeSpecs = describe "data type specs" $ do
                 check "text" dataTypeTableText
                 check "bytes" dataTypeTableBytes
                 check "int" dataTypeTableInt
-                check "double" dataTypeTableDouble
                 check "bool" dataTypeTableBool
                 check "day" dataTypeTableDay
                 check "time" dataTypeTableTime
                 check "utc" dataTypeTableUtc
+
+                -- Do a special check for Double since it may
+                -- lose precision when serialized.
+                when (abs (dataTypeTableDouble x - dataTypeTableDouble y) > 1e-14) $
+                  check "double" dataTypeTableDouble
 
 randomValue :: IO DataTypeTable
 randomValue = DataTypeTable
