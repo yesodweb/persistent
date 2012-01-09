@@ -117,7 +117,7 @@ withStmt' conn query vals = C.sourceIO (liftIO   openS )
       rawquery <- PG.formatQuery conn query (map P vals)
 
       -- Take raw connection
-      withMVar (PG.connectionHandle conn) $ \rawconn -> do
+      PG.withConnection conn $ \rawconn -> do
             -- Execute query
             mret <- LibPQ.exec rawconn rawquery
             case mret of
@@ -128,14 +128,13 @@ withStmt' conn query vals = C.sourceIO (liftIO   openS )
                          Just e  -> "Postgresql.withStmt': " ++ B8.unpack e
               Just ret -> do
                 -- Get number and type of columns
-                LibPQ.Col cols <- LibPQ.nfields ret
-                getters <- forM [0..cols-1] $ \i -> do
-                  let col = LibPQ.Col i
+                cols <- LibPQ.nfields ret
+                getters <- forM [0..cols-1] $ \col -> do
                   oid <- LibPQ.ftype ret col
                   case PG.oid2builtin oid of
                     Nothing -> fail $ "Postgresql.withStmt': could not " ++
                                       "recognize Oid of column " ++
-                                      show i ++ " (counting from zero)"
+                                      show col ++ " (counting from zero)"
                     Just bt -> return $ getGetter bt $
                                PG.Field ret col $
                                PG.builtin2typname bt
