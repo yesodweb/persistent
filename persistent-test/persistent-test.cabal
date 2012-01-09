@@ -21,6 +21,7 @@ library
 
     exposed-modules: PersistentTest
                      RenameTest
+                     DataTypeTest
                      Database.Persist.EntityDef
                      Database.Persist
                      Database.Persist.Store
