@@ -185,29 +185,29 @@ convertPV f = (fmap f .) . PG.convert
 
 -- FIXME: check if those are correct and complete.
 getGetter :: PG.BuiltinType -> Getter PersistValue
-getGetter PG.Bool    = convertPV PersistBool
-getGetter PG.Char    = convertPV PersistText
-getGetter PG.Name    = convertPV PersistText
-getGetter PG.Int8    = convertPV PersistInt64
-getGetter PG.Int2    = convertPV PersistInt64
-getGetter PG.Int4    = convertPV PersistInt64
-getGetter PG.Text    = convertPV PersistText
-getGetter PG.Xml     = convertPV PersistText
-getGetter PG.Float4  = convertPV PersistDouble
-getGetter PG.Float8  = convertPV PersistDouble
-getGetter PG.Abstime = convertPV PersistUTCTime
-getGetter PG.Reltime = convertPV PersistUTCTime
-getGetter PG.Money   = convertPV PersistDouble
-getGetter PG.Bpchar  = convertPV PersistText
-getGetter PG.Varchar = convertPV PersistText
-getGetter PG.Bit     = convertPV PersistInt64
-getGetter PG.Varbit  = convertPV PersistInt64
-getGetter PG.Numeric = convertPV PersistInt64
-getGetter PG.Void    = \_ _ -> Right PersistNull
+getGetter PG.Bool      = convertPV PersistBool
 getGetter PG.Bytea     = convertPV (PersistByteString . unBinary)
+getGetter PG.Char      = convertPV PersistText
+getGetter PG.Name      = convertPV PersistText
+getGetter PG.Int8      = convertPV PersistInt64
+getGetter PG.Int2      = convertPV PersistInt64
+getGetter PG.Int4      = convertPV PersistInt64
+getGetter PG.Text      = convertPV PersistText
+getGetter PG.Xml       = convertPV PersistText
+getGetter PG.Float4    = convertPV PersistDouble
+getGetter PG.Float8    = convertPV PersistDouble
+getGetter PG.Abstime   = convertPV PersistUTCTime
+getGetter PG.Reltime   = convertPV PersistUTCTime
+getGetter PG.Money     = convertPV PersistDouble
+getGetter PG.Bpchar    = convertPV PersistText
+getGetter PG.Varchar   = convertPV PersistText
 getGetter PG.Date      = convertPV PersistDay
 getGetter PG.Time      = convertPV PersistTimeOfDay
 getGetter PG.Timestamp = convertPV PersistUTCTime
+getGetter PG.Bit       = convertPV PersistInt64
+getGetter PG.Varbit    = convertPV PersistInt64
+getGetter PG.Numeric   = convertPV PersistInt64
+getGetter PG.Void      = \_ _ -> Right PersistNull
 getGetter other   = error $ "Postgresql.getGetter: type " ++
                             show other ++ " not supported."
 
