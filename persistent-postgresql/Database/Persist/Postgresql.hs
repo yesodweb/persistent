@@ -43,7 +43,7 @@ import Data.Time.LocalTime (localTimeToUTC, utc)
 import Data.Text (Text, pack, unpack)
 import Data.Object
 import Control.Monad (forM)
-import Data.Neither (meither, MEither (..))
+import Data.Neither (rights, meither, MEither (..))
 
 withPostgresqlPool :: (MBCIO m, MonadIO m)
                    => T.Text
@@ -480,18 +480,16 @@ instance PersistConfig PostgresConf where
         pool' <- go $ lookupScalar "poolsize" e
         pool <- safeRead "poolsize" pool'
 
-        -- TODO: default host/port?
-        connparts <- forM ["user", "password", "host", "port"] $ \k -> do
-            v <- go $ lookupScalar k e
-            return $ T.concat [k, "=", v, " "]
-
-        let conn = T.concat connparts
+        let conn = T.concat . rights $ flip map ["user", "password", "host", "port"] $
+              \key -> formatOption key `fmap` (go $ lookupScalar key e)
 
         return $ PostgresConf (T.concat [conn, " dbname=", db]) pool
       where
         go :: MEither ObjectExtractError a -> MEither String a
         go (MLeft e) = MLeft $ show e
         go (MRight a) = MRight a
+
+        formatOption key value = T.concat [key, "=", value, " "]
 
 safeRead :: String -> T.Text -> MEither String Int
 safeRead name t = case reads s of
