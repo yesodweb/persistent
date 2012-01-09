@@ -163,7 +163,7 @@ newtype P = P PersistValue
 
 instance PG.Param P where
     render (P (PersistText t))        = PG.render t
-    render (P (PersistByteString bs)) = PG.render bs
+    render (P (PersistByteString bs)) = PG.render (PG.Binary bs)
     render (P (PersistInt64 i))       = PG.render i
     render (P (PersistDouble d))      = PG.render d
     render (P (PersistBool b))        = PG.render b
@@ -186,7 +186,6 @@ convertPV f = (fmap f .) . PG.convert
 -- FIXME: check if those are correct and complete.
 getGetter :: PG.BuiltinType -> Getter PersistValue
 getGetter PG.Bool    = convertPV PersistBool
-getGetter PG.Bytea   = convertPV PersistByteString
 getGetter PG.Char    = convertPV PersistText
 getGetter PG.Name    = convertPV PersistText
 getGetter PG.Int8    = convertPV PersistInt64
@@ -207,8 +206,12 @@ getGetter PG.Bit     = convertPV PersistInt64
 getGetter PG.Varbit  = convertPV PersistInt64
 getGetter PG.Numeric = convertPV PersistInt64
 getGetter PG.Void    = \_ _ -> Right PersistNull
+getGetter PG.Bytea     = convertPV (PersistByteString . unBinary)
 getGetter other   = error $ "Postgresql.getGetter: type " ++
                             show other ++ " not supported."
+
+unBinary :: PG.Binary a -> a
+unBinary (PG.Binary x) = x
 
 migrate' :: PersistEntity val
          => [EntityDef]
