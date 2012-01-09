@@ -29,7 +29,6 @@ import qualified Database.PostgreSQL.Simple.Types as PG
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
-import Control.Concurrent.MVar (withMVar)
 import Control.Exception (SomeException, throw)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.List (intercalate)
@@ -134,7 +133,8 @@ withStmt' conn query vals = C.sourceIO (liftIO   openS )
                   case PG.oid2builtin oid of
                     Nothing -> fail $ "Postgresql.withStmt': could not " ++
                                       "recognize Oid of column " ++
-                                      show col ++ " (counting from zero)"
+                                      show (let LibPQ.Col i = col in i) ++
+                                      " (counting from zero)"
                     Just bt -> return $ getGetter bt $
                                PG.Field ret col $
                                PG.builtin2typname bt
