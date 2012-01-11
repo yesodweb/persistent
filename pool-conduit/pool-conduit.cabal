@@ -1,0 +1,28 @@
+name:            pool-conduit
+version:         0.0.0
+license:         BSD3
+license-file:    LICENSE
+author:          Michael Snoyman <michael@snoyman.com>
+maintainer:      Michael Snoyman <michael@snoyman.com>
+synopsis:        Resource pool allocations via ResourceT.
+description:     Allocate resources from a pool, guaranteeing resource handling via the ResourceT transformer.
+category:        Database, Yesod, Conduit
+stability:       Stable
+cabal-version:   >= 1.8
+build-type:      Simple
+homepage:        http://www.yesodweb.com/book/persistent
+
+library
+
+    build-depends:   base                     >= 4       && < 5
+                   , resource-pool            >= 0.2.0.4 && < 0.3
+                   , transformers             >= 0.2.1   && < 0.3
+                   , conduit                  >= 0.0.2   && < 0.1
+
+    exposed-modules: Data.Conduit.Pool
+
+    ghc-options:     -Wall
+
+source-repository head
+  type:     git
+  location: git://github.com/yesodweb/persistent.git

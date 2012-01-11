@@ -72,16 +72,8 @@ import qualified Data.Text.Encoding as T
 import qualified Data.Text.Encoding.Error as T
 import Web.PathPieces (PathPiece (..))
 import qualified Data.Text.Read
-import Control.Monad.IO.Class (MonadIO)
 import qualified Data.Conduit as C
 
-#if MIN_VERSION_monad_control(0, 3, 0)
-import Control.Monad.Trans.Control (MonadBaseControl)
-#define MBCIO MonadBaseControl IO
-#else
-import Control.Monad.IO.Control (MonadControlIO)
-#define MBCIO MonadControlIO
-#endif
 import Data.Aeson (Value)
 import Data.Aeson.Types (Parser)
 
@@ -557,7 +549,7 @@ class PersistConfig c where
     loadConfig :: Value -> Parser c
     -- | I really don't want Applicative here, but it's necessary for Mongo.
     withPool :: (Applicative m, C.ResourceIO m) => c -> (PersistConfigPool c -> m a) -> m a
-    runPool :: (MBCIO m, MonadIO m) => c -> PersistConfigBackend c m a
+    runPool :: C.ResourceIO m => c -> PersistConfigBackend c m a
             -> PersistConfigPool c
             -> m a
 

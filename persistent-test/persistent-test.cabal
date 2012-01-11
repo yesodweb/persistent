@@ -63,7 +63,7 @@ library
                    , random == 1.*
                    , QuickCheck == 2.4.*
                    , blaze-html
-                   , pool
+                   , pool-conduit
                    , transformers-base
 
                    -- postgresql dependencies

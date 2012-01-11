@@ -20,7 +20,7 @@ import Prelude hiding ((++))
 import qualified Data.Map as Map
 import Data.IORef
 import Control.Monad.IO.Class
-import Data.Pool
+import Data.Conduit.Pool
 import Database.Persist.Store
 import Database.Persist.Query
 import Control.Exception.Lifted (bracket)
@@ -58,8 +58,13 @@ data Statement = Statement
     }
 
 withSqlPool :: C.ResourceIO m
-            => IO Connection -> Int -> (Pool Connection -> m a) -> m a
-withSqlPool mkConn = createPool mkConn close'
+            => IO Connection -- ^ create a new connection
+            -> Int -- ^ connection count
+            -> (Pool Connection -> m a)
+            -> m a
+withSqlPool mkConn connCount f = do
+    pool <- liftIO $ createPool mkConn close' 1 20 connCount
+    f pool
 
 withSqlConn :: C.ResourceIO m
             => IO Connection -> (Connection -> m a) -> m a

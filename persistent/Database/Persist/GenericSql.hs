@@ -46,7 +46,7 @@ import Control.Arrow ((&&&))
 import Database.Persist.Store
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader
-import Data.Pool
+import Data.Conduit.Pool
 import Database.Persist.GenericSql.Internal
 import Database.Persist.GenericSql.Migration
 import qualified Database.Persist.GenericSql.Raw as R
@@ -84,8 +84,8 @@ instance PathPiece (Key SqlPersist entity) where
 execute' :: MonadIO m => Text -> [PersistValue] -> SqlPersist m ()
 execute' = R.execute
 
-runSqlPool :: (MBCIO m, MonadIO m) => SqlPersist m a -> Pool Connection -> m a
-runSqlPool r pconn = withPool' pconn $ runSqlConn r
+runSqlPool :: C.ResourceIO m => SqlPersist m a -> Pool Connection -> m a
+runSqlPool r pconn = withResource pconn $ runSqlConn r
 
 runSqlConn :: (MBCIO m, MonadIO m) => SqlPersist m a -> Connection -> m a
 runSqlConn (SqlPersist r) conn = do
