@@ -14,7 +14,7 @@ module Database.Persist.Postgresql
     , PG.ConnectInfo(..)
     ) where
 
-import Database.Persist
+import Database.Persist hiding (Entity (..))
 import Database.Persist.Store
 import Database.Persist.GenericSql hiding (Key(..))
 import Database.Persist.GenericSql.Internal

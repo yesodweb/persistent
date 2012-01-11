@@ -11,7 +11,7 @@ module Database.Persist.Sqlite
     , SqliteConf (..)
     ) where
 
-import Database.Persist
+import Database.Persist hiding (Entity (..))
 import Database.Persist.Store
 import Database.Persist.EntityDef
 import Database.Persist.GenericSql hiding (Key(..))

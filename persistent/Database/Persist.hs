@@ -6,6 +6,7 @@ module Database.Persist
     , PersistStore (..)
     , PersistUnique (..)
     , Key (..)
+    , Entity (..)
     , insertBy
     , getJust
     , belongsTo
