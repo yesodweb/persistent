@@ -180,9 +180,6 @@ tableColumn t s = go $ entityColumns t
         | otherwise = go rest
 -}
 
-dummyFromOrder :: SelectOpt a -> a
-dummyFromOrder _ = undefined
-
 orderClause :: PersistEntity val
             => Bool -- ^ include the table name
             -> Connection
@@ -194,6 +191,9 @@ orderClause includeTable conn o =
         Desc x -> name x ++ " DESC"
         _ -> error $ "orderClause: expected Asc or Desc, not limit or offset"
   where
+    dummyFromOrder :: SelectOpt a -> a
+    dummyFromOrder _ = undefined
+
     tn = escapeName conn $ entityDB $ entityDef $ dummyFromOrder o
 
     name x =

@@ -11,8 +11,6 @@ module Database.Persist.Query.GenericSql
   ( PersistQuery (..)
     , SqlPersist (..)
     , filterClauseNoWhere
-    , dummyFromFilts
-    , orderClause
     , getFiltsValues
     , selectSourceConn
   )
@@ -307,29 +305,6 @@ filterClauseHelper includeTable includeWhere conn filters =
         showSqlFilter In = " IN "
         showSqlFilter NotIn = " NOT IN "
         showSqlFilter (BackendSpecificFilter s) = s
-
-{-
-dummyFromFilts :: [Filter v] -> v
-dummyFromFilts _ = error "dummyFromFilts"
-
-dummyFromOrder :: SelectOpt a -> a
-dummyFromOrder _ = undefined
-
-orderClause :: PersistEntity val => Bool -> Connection -> SelectOpt val -> String
-orderClause includeTable conn o =
-    case o of
-        Asc  x -> name x
-        Desc x -> name x ++ " DESC"
-        _ -> error $ "expected Asc or Desc, not limit or offset"
-  where
-    cd x = persistColumnDef x
-    t = entityDef $ dummyFromOrder o
-    name x =
-        (if includeTable
-            then (++) (escapeName conn (rawTableName t) ++ ".")
-            else id)
-        $ escapeName conn $ getFieldName t $ columnName $ cd x
--}
 
 infixr 5 ++
 (++) :: Text -> Text -> Text
