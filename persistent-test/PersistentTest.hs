@@ -159,10 +159,10 @@ share [mkPersist sqlMkSettings,  mkMigrate "testMigrate", mkDeleteCascade] [pers
     title String
 |]
 
-petOwner :: PersistStore b m => PetGeneric b -> b m Person
+petOwner :: PersistStore b m => PetGeneric b -> b m (PersonGeneric b)
 petOwner = belongsToJust petOwnerId
 
-maybeOwnedPetOwner :: PersistStore b m => MaybeOwnedPetGeneric b -> b m (Maybe Person)
+maybeOwnedPetOwner :: PersistStore b m => MaybeOwnedPetGeneric b -> b m (Maybe (PersonGeneric b))
 maybeOwnedPetOwner = belongsTo maybeOwnedPetOwnerId
 
 -- this is faster then dropDatabase. Could try dropCollection
@@ -256,8 +256,8 @@ instance Arbitrary PersistValue where
 
 
 joinGeneric :: PersistQuery b m =>
-               (SelectOneMany BackendMonad (Author) (EntryGeneric BackendMonad)
-                -> b m [(Entity b Author, [Entity b (EntryGeneric b)])])
+               (SelectOneMany b (AuthorGeneric b) (EntryGeneric b)
+                -> b m [(Entity b (AuthorGeneric b), [Entity b (EntryGeneric b)])])
                 -> b m ()
 
 joinGeneric run = do
@@ -806,3 +806,11 @@ caseAfterException = withSqlitePool sqlite_database 1 $ runSqlPool $ do
     catcher _ = return ()
 
 #endif
+
+-- Test proper polymorphism
+_polymorphic :: PersistQuery b m => b m ()
+_polymorphic = do
+    ((Entity id' _):_) <- selectList [] [LimitTo 1]
+    _ <- selectList [PetOwnerId ==. id'] []
+    _ <- insert $ Pet id' "foo" Cat
+    return ()

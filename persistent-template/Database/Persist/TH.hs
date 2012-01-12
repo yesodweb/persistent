@@ -163,7 +163,8 @@ idType backend typ
     | "Id" `isSuffixOf` typ =
         ConT ''Key
         `AppT` VarT backend
-        `AppT` ConT (mkName $ unpack $ take (T.length typ - 2) typ)
+        `AppT` (ConT (mkName $ unpack $ take (T.length typ - 2) typ ++ "Generic")
+                `AppT` VarT backend)
     | otherwise = ConT $ mkName $ unpack typ
 
 degen :: [Clause] -> [Clause]
