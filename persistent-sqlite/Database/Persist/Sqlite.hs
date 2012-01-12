@@ -278,7 +278,7 @@ data SqliteConf = SqliteConf
 instance PersistConfig SqliteConf where
     type PersistConfigBackend SqliteConf = SqlPersist
     type PersistConfigPool SqliteConf = ConnectionPool
-    withPool (SqliteConf cs size) = withSqlitePool cs size
+    createPoolConfig (SqliteConf cs size) = createSqlitePool cs size
     runPool _ = runSqlPool
     loadConfig (Object o) =
         SqliteConf <$> o .: "database"

@@ -6,6 +6,7 @@
 module Database.Persist.Postgresql
     ( withPostgresqlPool
     , withPostgresqlConn
+    , createPostgresqlPool
     , module Database.Persist
     , module Database.Persist.GenericSql
     , PostgresConf (..)
@@ -50,11 +51,17 @@ import Data.Text (Text, pack)
 import Data.Aeson
 import Control.Monad (forM, mzero)
 
-withPostgresqlPool :: C.ResourceIO m
+withPostgresqlPool :: MonadIO m
                    => PG.ConnectInfo
                    -> Int -- ^ number of connections to open
                    -> (ConnectionPool -> m a) -> m a
 withPostgresqlPool ci = withSqlPool $ open' ci
+
+createPostgresqlPool :: MonadIO m
+                     => PG.ConnectInfo
+                     -> Int -- ^ number of connections to open
+                     -> m ConnectionPool
+createPostgresqlPool ci = createSqlPool $ open' ci
 
 withPostgresqlConn :: C.ResourceIO m => PG.ConnectInfo -> (Connection -> m a) -> m a
 withPostgresqlConn = withSqlConn . open'
@@ -555,7 +562,7 @@ data PostgresConf = PostgresConf
 instance PersistConfig PostgresConf where
     type PersistConfigBackend PostgresConf = SqlPersist
     type PersistConfigPool PostgresConf = ConnectionPool
-    withPool (PostgresConf cs size) = withPostgresqlPool cs size
+    createPoolConfig (PostgresConf cs size) = createPostgresqlPool cs size
     runPool _ = runSqlPool
     loadConfig (Object o) = do
         database <- o .: "database"

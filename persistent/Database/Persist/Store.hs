@@ -546,9 +546,19 @@ instance PersistField PersistValue where
 class PersistConfig c where
     type PersistConfigBackend c :: (* -> *) -> * -> *
     type PersistConfigPool c
+
+    -- | Load the config settings from a 'Value', most likely taken from a YAML
+    -- config file.
     loadConfig :: Value -> Parser c
-    -- | I really don't want Applicative here, but it's necessary for Mongo.
-    withPool :: (Applicative m, C.ResourceIO m) => c -> (PersistConfigPool c -> m a) -> m a
+
+    -- | Modify the config settings based on environment variables.
+    applyEnv :: c -> IO c
+    applyEnv = return
+
+    -- | Create a new connection pool based on the given config settings.
+    createPoolConfig :: c -> IO (PersistConfigPool c)
+
+    -- | Run a database action by taking a connection from the pool.
     runPool :: C.ResourceIO m => c -> PersistConfigBackend c m a
             -> PersistConfigPool c
             -> m a
