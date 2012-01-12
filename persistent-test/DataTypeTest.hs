@@ -70,7 +70,7 @@ dataTypeSpecs = describe "data type specs" $ do
 
 randomValue :: IO DataTypeTable
 randomValue = DataTypeTable
-    <$> (T.pack <$> randomIOs)
+    <$> (T.pack . filter (/= '\0') <$> randomIOs)
     <*> (S.pack . map intToWord8 <$> randomIOs)
     <*> randomIO
     <*> randomIO
