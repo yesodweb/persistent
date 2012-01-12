@@ -10,6 +10,7 @@ module Database.Persist.GenericSql.Internal
     , Statement (..)
     , withSqlConn
     , withSqlPool
+    , createSqlPool
     , mkColumns
     , Column (..)
     , dummyFromFilts
@@ -57,14 +58,20 @@ data Statement = Statement
                -> C.Source m [PersistValue]
     }
 
-withSqlPool :: C.ResourceIO m
+withSqlPool :: MonadIO m
             => IO Connection -- ^ create a new connection
             -> Int -- ^ connection count
             -> (Pool Connection -> m a)
             -> m a
 withSqlPool mkConn connCount f = do
-    pool <- liftIO $ createPool mkConn close' 1 20 connCount
+    pool <- createSqlPool mkConn connCount
     f pool
+
+createSqlPool :: MonadIO m
+              => IO Connection
+              -> Int
+              -> m (Pool Connection)
+createSqlPool mkConn = liftIO . createPool mkConn close' 1 20
 
 withSqlConn :: C.ResourceIO m
             => IO Connection -> (Connection -> m a) -> m a

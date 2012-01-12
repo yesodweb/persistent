@@ -84,7 +84,9 @@ instance PathPiece (Key SqlPersist entity) where
 execute' :: MonadIO m => Text -> [PersistValue] -> SqlPersist m ()
 execute' = R.execute
 
-runSqlPool :: C.ResourceIO m => SqlPersist m a -> Pool Connection -> m a
+-- | Get a connection from the pool, run the given action, and then return the
+-- connection to the pool.
+runSqlPool :: (MBCIO m, MonadIO m) => SqlPersist m a -> Pool Connection -> m a
 runSqlPool r pconn = withResource pconn $ runSqlConn r
 
 runSqlConn :: (MBCIO m, MonadIO m) => SqlPersist m a -> Connection -> m a

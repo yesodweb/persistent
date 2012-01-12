@@ -6,6 +6,7 @@
 module Database.Persist.Sqlite
     ( withSqlitePool
     , withSqliteConn
+    , createSqlitePool
     , module Database.Persist
     , module Database.Persist.GenericSql
     , SqliteConf (..)
@@ -39,6 +40,9 @@ import qualified Data.Text as T
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import Control.Applicative
+
+createSqlitePool :: MonadIO m => Text -> Int -> m ConnectionPool
+createSqlitePool s = createSqlPool $ open' s
 
 withSqlitePool :: C.ResourceIO m
                => Text

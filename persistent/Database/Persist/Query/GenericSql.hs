@@ -14,6 +14,7 @@ module Database.Persist.Query.GenericSql
     , dummyFromFilts
     , orderClause
     , getFiltsValues
+    , selectSourceConn
   )
   where
 
@@ -336,3 +337,15 @@ infixr 5 ++
 
 show :: Show a => a -> Text
 show = pack . Prelude.show
+
+-- | Equivalent to 'selectSource', but instead of getting the connection from
+-- the environment inside a 'SqlPersist' monad, provide an explicit
+-- 'Connection'. This can allow you to use the returned 'Source' in an
+-- arbitrary monad.
+selectSourceConn :: (C.ResourceIO m, PersistEntity val)
+                 => Connection
+                 -> [Filter val]
+                 -> [SelectOpt val]
+                 -> C.Source m (Entity SqlPersist val)
+selectSourceConn conn fs opts =
+    C.transSource (flip runSqlConn conn) (selectSource fs opts)
