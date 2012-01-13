@@ -20,6 +20,7 @@ import Database.Persist.Store
 import Database.Persist.GenericSql hiding (Key(..))
 import Database.Persist.GenericSql.Internal
 import Database.Persist.EntityDef
+import Database.Persist.Query.GenericSql ()
 
 import qualified Database.PostgreSQL.Simple as PG
 import qualified Database.PostgreSQL.Simple.BuiltinTypes as PG
