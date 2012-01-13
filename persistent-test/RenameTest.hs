@@ -19,7 +19,7 @@ import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 
 -- Test lower case names
-share [mkPersist sqlMkSettings, mkMigrate "lowerCase"] [persistLowerCase|
+share [mkPersist sqlSettings, mkMigrate "lowerCase"] [persistLowerCase|
 LowerCaseTable id=my_id
     fullName String
 RefTable

@@ -5,19 +5,26 @@
 -- | This module provides utilities for creating backends. Regular users do not
 -- need to use this module.
 module Database.Persist.TH
-    ( mkPersist
-    , share
-    , persist
+    ( -- * Parse entity defs
+      persistWith
     , persistUpperCase
     , persistLowerCase
+    , persistFileWith
+      -- ** Deprecated synonyms
+    , persist
     , persistFile
-    , share2
+      -- * Turn @EntityDef@s into types
+    , mkPersist
+    , MkPersistSettings (..)
+    , sqlSettings
+      -- * Various other TH functions
+    , mkMigrate
     , mkSave
     , mkDeleteCascade
+    , share
     , derivePersistField
-    , mkMigrate
-    , MkPersistSettings (..)
-    , sqlMkSettings
+      -- ** Deprecated
+    , share2
     ) where
 
 import Prelude hiding ((++), take, concat, splitAt)
@@ -45,39 +52,57 @@ import qualified Data.Text.IO as TIO
 import Data.List (foldl')
 import Data.Monoid (mappend, mconcat)
 
--- FIXME PersistSettings will have information on sql=, id=, references= et al
-
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
-persist :: PersistSettings -> QuasiQuoter
-persist ps = QuasiQuoter
+persistWith :: PersistSettings -> QuasiQuoter
+persistWith ps = QuasiQuoter
     { quoteExp = lift . parse ps . pack
     }
 
+-- | Deprecate synonym for 'persistUpperCase'.
+persist :: QuasiQuoter
+persist = persistUpperCase
+{-# DEPRECATED persist "Please use persistUpperCase instead." #-}
+
+-- | Apply 'persistWith' to 'upperCaseSettings'.
 persistUpperCase :: QuasiQuoter
-persistUpperCase = persist upperCaseSettings
+persistUpperCase = persistWith upperCaseSettings
 
+-- | Apply 'persistWith' to 'lowerCaseSettings'.
 persistLowerCase :: QuasiQuoter
-persistLowerCase = persist lowerCaseSettings
+persistLowerCase = persistWith lowerCaseSettings
 
-persistFile :: PersistSettings -> FilePath -> Q Exp
-persistFile ps fp = do
+-- | Same as 'persistWith', but uses an external file instead of a
+-- quasiquotation.
+persistFileWith :: PersistSettings -> FilePath -> Q Exp
+persistFileWith ps fp = do
     h <- qRunIO $ SIO.openFile fp SIO.ReadMode
     qRunIO $ SIO.hSetEncoding h SIO.utf8_bom
     s <- qRunIO $ TIO.hGetContents h
     lift $ parse ps s
+
+-- | Deprecated function. Equivalent to @persistFileWith upperCaseSettings@.
+persistFile :: FilePath -> Q Exp
+persistFile = persistFileWith upperCaseSettings
 
 -- | Create data types and appropriate 'PersistEntity' instances for the given
 -- 'EntityDef's. Works well with the persist quasi-quoter.
 mkPersist :: MkPersistSettings -> [EntityDef] -> Q [Dec]
 mkPersist mps = fmap mconcat . mapM (mkEntity mps)
 
+-- | Settings to be passed to the 'mkPersist' function.
 data MkPersistSettings = MkPersistSettings
     { mpsBackend :: Type
+    -- ^ Which database backend we\'re using.
+    --
+    -- When generating data types, each type is given a generic version- which
+    -- works with any backend- and a type synonym for the commonly used
+    -- backend. This is where you specify that commonly used backend.
     }
 
-sqlMkSettings :: MkPersistSettings
-sqlMkSettings = MkPersistSettings
+-- | Use the 'SqlPersist' backend.
+sqlSettings :: MkPersistSettings
+sqlSettings = MkPersistSettings
     { mpsBackend = ConT ''SqlPersist
     }
 
@@ -353,9 +378,15 @@ updateConName name s pu = concat
         _ -> pack $ show pu
     ]
 
+-- | Apply the given list of functions to the same @EntityDef@s.
+--
+-- This function is useful for cases such as:
+--
+-- >>> share [mkSave "myDefs", mkPersist sqlSettings] [persistLowerCase|...|]
 share :: [[EntityDef] -> Q [Dec]] -> [EntityDef] -> Q [Dec]
 share fs x = fmap mconcat $ mapM ($ x) fs
 
+-- | Deprecated, restricted version of 'share'.
 share2 :: ([EntityDef] -> Q [Dec])
        -> ([EntityDef] -> Q [Dec])
        -> [EntityDef]
@@ -364,7 +395,9 @@ share2 f g x = do
     y <- f x
     z <- g x
     return $ y `mappend` z
+{-# DEPRECATED share2 "Use share instead" #-}
 
+-- | Save the @EntityDef@s passed in under the given name.
 mkSave :: String -> [EntityDef] -> Q [Dec]
 mkSave name' defs' = do
     let name = mkName name'
@@ -380,6 +413,7 @@ data Dep = Dep
     , depSourceNull :: Bool
     }
 
+-- | Generate a 'DeleteCascade' instance for the given @EntityDef@s.
 mkDeleteCascade :: [EntityDef] -> Q [Dec]
 mkDeleteCascade defs = do
     let deps = concatMap getDeps defs

@@ -28,7 +28,7 @@ import Control.Applicative ((<$>), (<*>))
 import Data.Word (Word8)
 
 -- Test lower case names
-share [mkPersist sqlMkSettings, mkMigrate "migrateAll"] [persistLowerCase|
+share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
 DataTypeTable
     text Text
     bytes ByteString
