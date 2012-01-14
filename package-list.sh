@@ -1,7 +1,6 @@
 #!/bin/bash
 
-pkgs=( ./pool
-       ./pool-conduit
+pkgs=( ./pool-conduit
        ./persistent
        ./persistent-template
        ./persistent-sqlite
