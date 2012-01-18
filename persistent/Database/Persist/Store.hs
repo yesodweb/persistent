@@ -445,7 +445,7 @@ class (C.ResourceIO m, C.ResourceIO (b m)) => PersistStore b m where
     -- | Get a record by identifier, if available.
     get :: PersistEntity val => Key b val -> b m (Maybe val)
 
-class (Trans.MonadIO (b m), Trans.MonadIO m, Monad (b m), Monad m) => PersistUnique b m where
+class PersistStore b m => PersistUnique b m where
     -- | Get a record by unique key, if available. Returns also the identifier.
     getBy :: PersistEntity val => Unique val b -> b m (Maybe (Entity b val))
 
@@ -453,6 +453,12 @@ class (Trans.MonadIO (b m), Trans.MonadIO m, Monad (b m), Monad m) => PersistUni
     -- matches.
     deleteBy :: PersistEntity val => Unique val b -> b m ()
 
+    -- | Like 'insert', but returns 'Nothing' when the record
+    -- couldn't be inserted because of a uniqueness constraint.
+    insertUnique :: PersistEntity val => val -> b m (Maybe (Key b val))
+    insertUnique datum = do
+        isUnique <- checkUnique datum
+        if isUnique then Just <$> insert datum else return Nothing
 
 
 
