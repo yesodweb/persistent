@@ -51,6 +51,7 @@ import qualified Data.Text.Encoding as T
 import Data.Text (Text, pack)
 import Data.Aeson
 import Control.Monad (forM, mzero)
+import System.Environment (getEnvironment)
 
 withPostgresqlPool :: MonadIO m
                    => PG.ConnectInfo
@@ -581,6 +582,59 @@ instance PersistConfig PostgresConf where
                    }
         return $ PostgresConf ci pool
     loadConfig _ = mzero
+
+    applyEnv c = do
+        env <- getEnvironment
+        return $ addUser env
+               $ addPass env
+               $ addDatabase env
+               $ addPort env
+               $ addHost env c
+      where
+        addHost env c =
+            case lookup "PGHOST" env of
+                Nothing -> c
+                Just h -> c
+                    { pgConnInfo = (pgConnInfo c)
+                        { PG.connectHost = h
+                        }
+                    }
+        addPort env c =
+            case lookup "PGPORT" env >>= readMay of
+                Nothing -> c
+                Just p -> c
+                    { pgConnInfo = (pgConnInfo c)
+                        { PG.connectPort = p
+                        }
+                    }
+        readMay s =
+            case reads s of
+                (i, _):_ -> Just i
+                [] -> Nothing
+        addUser env c =
+            case lookup "PGUSER" env of
+                Nothing -> c
+                Just h -> c
+                    { pgConnInfo = (pgConnInfo c)
+                        { PG.connectUser = h
+                        }
+                    }
+        addPass env c =
+            case lookup "PGPASS" env of
+                Nothing -> c
+                Just h -> c
+                    { pgConnInfo = (pgConnInfo c)
+                        { PG.connectPassword = h
+                        }
+                    }
+        addDatabase env c =
+            case lookup "PGDATABASE" env of
+                Nothing -> c
+                Just h -> c
+                    { pgConnInfo = (pgConnInfo c)
+                        { PG.connectDatabase = h
+                        }
+                    }
 
 refName :: DBName -> DBName -> DBName
 refName (DBName table) (DBName column) =

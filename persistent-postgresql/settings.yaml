@@ -1,0 +1,6 @@
+database: testFOO
+host: localhostFOO
+port: 5431
+user: testFOO
+password: testFOO
+poolsize: 10
