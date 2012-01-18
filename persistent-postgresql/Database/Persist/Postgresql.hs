@@ -583,13 +583,13 @@ instance PersistConfig PostgresConf where
         return $ PostgresConf ci pool
     loadConfig _ = mzero
 
-    applyEnv c = do
+    applyEnv c0 = do
         env <- getEnvironment
         return $ addUser env
                $ addPass env
                $ addDatabase env
                $ addPort env
-               $ addHost env c
+               $ addHost env c0
       where
         addHost env c =
             case lookup "PGHOST" env of
