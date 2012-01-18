@@ -51,6 +51,7 @@ import qualified Data.Text.Encoding as T
 import Data.Text (Text, pack)
 import Data.Aeson
 import Control.Monad (forM, mzero)
+import Control.Applicative ((<|>), pure)
 
 withPostgresqlPool :: MonadIO m
                    => PG.ConnectInfo
@@ -567,10 +568,10 @@ instance PersistConfig PostgresConf where
     runPool _ = runSqlPool
     loadConfig (Object o) = do
         database <- o .: "database"
-        host     <- o .: "host"
-        port     <- o .: "port"
-        user     <- o .: "user"
-        password <- o .: "password"
+        host     <- (o .: "host")     <|> pure ""
+        port     <- (o .: "port")     <|> pure (-1)
+        user     <- (o .: "user")     <|> pure ""
+        password <- (o .: "password") <|> pure ""
         pool     <- o .: "poolsize"
         let ci = PG.ConnectInfo
                    { PG.connectHost     = host
