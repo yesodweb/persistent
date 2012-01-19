@@ -5,6 +5,7 @@ module Database.Persist
     , PersistEntity (..)
     , PersistStore (..)
     , PersistUnique (..)
+    , PersistQuery (..)
     , Key (..)
     , Entity (..)
     , insertBy
@@ -13,6 +14,18 @@ module Database.Persist
     , belongsToJust
     , getByValue
     , checkUnique
+    , selectList
+    , deleteCascadeWhere
+
+    , SelectOpt (..)
+    , Filter (..)
+
+    -- * query combinators
+    , (=.), (+=.), (-=.), (*=.), (/=.)
+    , (==.), (!=.), (<.), (>.), (<=.), (>=.)
+    , (<-.), (/<-.)
+    , (||.)
     ) where
 
 import Database.Persist.Store
+import Database.Persist.Query
