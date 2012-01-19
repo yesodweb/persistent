@@ -4,3 +4,6 @@
 [submodule "pool"]
 	path = pool
 	url = https://github.com/bos/pool.git
+[submodule "mongoDB-haskell"]
+	path = mongoDB-haskell
+	url = https://github.com/TonyGen/mongoDB-haskell.git

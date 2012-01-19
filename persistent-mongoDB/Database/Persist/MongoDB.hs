@@ -12,6 +12,7 @@ module Database.Persist.MongoDB
     -- * using connections
       withMongoDBConn
     , withMongoDBPool
+    , createMongoDBPool
     , runMongoDBConn 
     , ConnectionPool
     , MongoConf (..)
@@ -39,14 +40,13 @@ import Database.Persist.Store
 import Database.Persist.Query
 
 import qualified Control.Monad.IO.Class as Trans
-import Control.Exception (throw, toException, throwIO)
+import Control.Exception (throw, throwIO)
 
 import qualified Database.MongoDB as DB
 import Database.MongoDB.Query (Database)
 import Control.Applicative (Applicative)
 import Data.UString (u)
 import qualified Data.CompactString.UTF8 as CS
-import Data.Enumerator hiding (map, length, concatMap, head, replicate)
 import Network.Socket (HostName)
 import Data.Maybe (mapMaybe, fromJust)
 import qualified Data.Text as T
@@ -54,9 +54,13 @@ import qualified Data.Text.Encoding as E
 import qualified Data.Serialize as Serialize
 import qualified System.IO.Pool as Pool
 import Web.PathPieces (PathPiece (..))
-import Control.Monad.IO.Control (MonadControlIO)
-import Data.Object
-import Data.Neither (MEither (..), meither)
+import Data.Conduit (ResourceIO)
+import qualified Data.Conduit as C
+import Control.Monad.Trans.Resource (ResourceThrow (..))
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (Value (Object), (.:), (.:?), (.!=))
+import Control.Monad (mzero)
 
 #ifdef DEBUG
 import FileLocation (debug)
@@ -87,16 +91,22 @@ withMongoDBConn :: (Trans.MonadIO m, Applicative m) =>
   Database -> HostName -> (ConnectionPool -> m b) -> m b
 withMongoDBConn dbname hostname = withMongoDBPool dbname hostname 1
 
-withMongoDBPool :: (Trans.MonadIO m, Applicative m) =>
-  Database -> HostName -> Int -> (ConnectionPool -> m b) -> m b
-withMongoDBPool dbname hostname connectionPoolSize connectionReader = do
+createMongoDBPool :: (Trans.MonadIO m, Applicative m) =>
+  Database -> HostName -> Int -> m ConnectionPool
+createMongoDBPool dbname hostname connectionPoolSize = do
   --pool <- runReaderT (DB.newConnPool connectionPoolSize $ DB.host hostname) $ ANetwork Internet
   pool <- Trans.liftIO $ Pool.newPool Pool.Factory { Pool.newResource  = DB.connect (DB.host hostname)
                                                   , Pool.killResource = DB.close
                                                   , Pool.isExpired    = DB.isClosed
                                                   }
                                      connectionPoolSize
-  connectionReader (pool, dbname)
+  return (pool, dbname)
+
+withMongoDBPool :: (Trans.MonadIO m, Applicative m) =>
+  Database -> HostName -> Int -> (ConnectionPool -> m b) -> m b
+withMongoDBPool dbname hostname connectionPoolSize connectionReader = do
+  pool <- createMongoDBPool dbname hostname connectionPoolSize
+  connectionReader pool
 
 runMongoDBConn :: (Trans.MonadIO m) => DB.AccessMode  ->  DB.Action m b -> ConnectionPool -> m b
 runMongoDBConn accessMode action (pool, databaseName) = do
@@ -145,13 +155,16 @@ uniqSelector uniq = zipWith (DB.:=)
   (map u (map (T.unpack . unDBName . snd) $ persistUniqueToFieldNames uniq))
   (map DB.val (persistUniqueToValues uniq))
 
-pairFromDocument :: forall val val1.  (PersistEntity val, PersistEntity val1) => EntityDef -> [DB.Field] -> Either String (Key DB.Action val, val1)
+pairFromDocument :: PersistEntity val
+                 => EntityDef
+                 -> [DB.Field]
+                 -> Either String (Entity DB.Action val)
 pairFromDocument ent document = pairFromPersistValues document
   where
     pairFromPersistValues (x:xs) =
         case wrapFromPersistValues ent xs of
             Left e -> Left $ T.unpack e
-            Right xs' -> Right ((oidToKey . fromJust . DB.cast' . value) x, xs')
+            Right xs' -> Right (Entity (oidToKey . fromJust . DB.cast' . value $ x) xs')
     pairFromPersistValues _ = Left "error in fromPersistValues'"
 
 insertFields :: forall val.  (PersistEntity val) => EntityDef -> val -> [DB.Field]
@@ -160,8 +173,8 @@ insertFields t record = zipWith (DB.:=) (toLabels) (toValues)
     toLabels = map (u . T.unpack . unDBName . fieldDB) $ entityFields t
     toValues = map (DB.val . toPersistValue) (toPersistFields record)
 
-#ifdef WITH_MONGODB
-saveWithKey :: forall m ent record. (Applicative m, Functor m, MonadControlIO m, PersistEntity ent, PersistEntity record)
+#if WITH_MONGODB && 0
+saveWithKey :: forall m ent record. (Applicative m, Functor m, MonadBaseControl IO m, PersistEntity ent, PersistEntity record)
             => (DB.Collection -> DB.Document -> DB.Action m () )
             -> Key DB.Action ent -> record -> DB.Action m ()
 saveWithKey dbSave k record =
@@ -170,14 +183,14 @@ saveWithKey dbSave k record =
       t = entityDef record
 #endif
 
-instance (Applicative m, Functor m, MonadControlIO m) => PersistStore DB.Action m where
+instance (Applicative m, Functor m, ResourceIO m) => PersistStore DB.Action m where
     insert record = do
         (DB.ObjId oid) <- DB.insert (u $ T.unpack $ unDBName $ entityDB t) (insertFields t record)
         return $ oidToKey oid 
       where
         t = entityDef record
 
-#ifdef WITH_MONGODB
+#if WITH_MONGODB && 0
     insertKey k record = saveWithKey DB.insert_ k record
 
     repsert   k record = saveWithKey DB.save k record
@@ -206,7 +219,10 @@ instance (Applicative m, Functor m, MonadControlIO m) => PersistStore DB.Action 
           where
             t = entityDef $ dummyFromKey k
 
-instance (Applicative m, Functor m, MonadControlIO m) => PersistUnique DB.Action m where
+instance ResourceThrow m => ResourceThrow (DB.Action m) where
+    resourceThrow = lift . resourceThrow
+
+instance (Applicative m, Functor m, ResourceIO m) => PersistUnique DB.Action m where
     getBy uniq = do
         mdocument <- DB.findOne $
           (DB.select (uniqSelector uniq) (u $ T.unpack $ unDBName $ entityDB t))
@@ -214,7 +230,7 @@ instance (Applicative m, Functor m, MonadControlIO m) => PersistUnique DB.Action
           Nothing -> return Nothing
           Just document -> case pairFromDocument t document of
               Left s -> Trans.liftIO . throwIO $ PersistMarshalError $ T.pack s
-              Right (k, x) -> return $ Just (k, x)
+              Right e -> return $ Just e
       where
         t = entityDef $ dummyFromUnique uniq
 
@@ -229,7 +245,7 @@ instance (Applicative m, Functor m, MonadControlIO m) => PersistUnique DB.Action
 persistKeyToMongoId :: PersistEntity val => Key DB.Action val -> DB.Field
 persistKeyToMongoId k = u"_id" DB.:= (DB.ObjId $ keyToOid k)
 
-instance (Applicative m, Functor m, MonadControlIO m) => PersistQuery DB.Action m where
+instance (Applicative m, Functor m, ResourceIO m) => PersistQuery DB.Action m where
     update _ [] = return ()
     update k upds =
         DB.modify 
@@ -262,25 +278,21 @@ instance (Applicative m, Functor m, MonadControlIO m) => PersistQuery DB.Action 
         query = DB.select (filtersToSelector filts) (u $ T.unpack $ unDBName $ entityDB t)
         t = entityDef $ dummyFromFilts filts
 
-    selectEnum filts opts = Iteratee . start
+    selectSource filts opts = C.Source $ do
+        cursor <- lift $ DB.find $ makeQuery filts opts
+        return $ C.PreparedSource
+            { C.sourcePull = lift $ do
+                mdoc <- DB.next cursor
+                case mdoc of
+                    Nothing -> return C.Closed
+                    Just doc ->
+                        case pairFromDocument t doc of
+                            Left s -> liftIO $ throwIO $ PersistMarshalError $ T.pack s
+                            Right row -> return $ C.Open row
+            , C.sourceClose = return ()
+            }
       where
-        start x = do
-            cursor <- DB.find $ makeQuery filts opts
-            loop x cursor
-
         t = entityDef $ dummyFromFilts filts
-
-        loop (Continue k) curs = do
-            doc <- DB.next curs
-            case doc of
-                Nothing -> return $ Continue k
-                Just document -> case pairFromDocument t document of
-                        Left s -> return $ Error $ toException
-                                    $ PersistMarshalError $ T.pack s
-                        Right row -> do
-                            step <- runIteratee $ k $ Chunks [row]
-                            loop step curs
-        loop step _ = return step
 
     selectFirst filts opts = do
         doc <- DB.findOne $ makeQuery filts opts
@@ -292,24 +304,18 @@ instance (Applicative m, Functor m, MonadControlIO m) => PersistQuery DB.Action 
       where
         t = entityDef $ dummyFromFilts filts
 
-    selectKeys filts =
-        Iteratee . start
+    selectKeys filts = C.Source $ do
+        cursor <- lift $ DB.find query
+        return $ C.PreparedSource
+            { C.sourcePull = lift $ do
+                mdoc <- DB.next cursor
+                case mdoc of
+                    Nothing -> return C.Closed
+                    Just [_ DB.:= DB.ObjId oid] -> return $ C.Open $ oidToKey oid
+                    Just y -> liftIO $ throwIO $ PersistMarshalError $ T.pack $ "Unexpected in selectKeys: " ++ show y
+            , C.sourceClose = return ()
+            }
       where
-        start x = do
-            cursor <- DB.find query
-            loop x cursor
-
-        loop (Continue k) curs = do
-            doc <- DB.next curs
-            case doc of
-                Nothing -> return $ Continue k
-                Just [_ DB.:= (DB.ObjId oid)] -> do
-                    step <- runIteratee $ k $ Chunks [oidToKey oid]
-                    loop step curs
-                Just y -> return $ Error $ toException $ PersistMarshalError
-                        $ T.pack $ "Unexpected in selectKeys: " ++ show y
-        loop step _ = return step
-
         query = (DB.select (filtersToSelector filts) (u $ T.unpack $ unDBName $ entityDB t)) {
           DB.project = [u"_id" DB.=: (1 :: Int)]
         }
@@ -498,35 +504,28 @@ data MongoConf = MongoConf
 instance PersistConfig MongoConf where
     type PersistConfigBackend MongoConf = DB.Action
     type PersistConfigPool MongoConf = ConnectionPool
-    withPool (MongoConf db host poolsize _) = withMongoDBPool (u db) host poolsize
+    createPoolConfig (MongoConf db host poolsize _) = createMongoDBPool (u db) host poolsize
     runPool (MongoConf _ _ _ accessMode) = runMongoDBConn accessMode
-    loadConfig e' = meither Left Right $ do
-        e     <- go $ fromMapping e'
-        db    <- go $ lookupScalar "database" e
-        host  <- go $ lookupScalar "host" e
-        pool' <- go $ lookupScalar "poolsize" e
-        pool  <- safeRead "poolsize" pool'
-        accessString <- defaultTo "ConfirmWrites" $ lookupScalar "accessMode" e
+    loadConfig (Object o) = do
+        db    <- o .: "database"
+        host  <- o .: "host"
+        pool  <- o .: "poolsize"
+        accessString <- o .:? "accessMode" .!= "ConfirmWrites"
 
         accessMode <- case accessString of
-               "ReadStaleOk"       -> MRight DB.ReadStaleOk
-               "UnconfirmedWrites" -> MRight DB.UnconfirmedWrites
-               "ConfirmWrites"     -> MRight $ DB.ConfirmWrites [u"j" DB.=: True]
-               badAccess -> MLeft $ "unknown accessMode: " ++ (T.unpack badAccess)
+               "ReadStaleOk"       -> return DB.ReadStaleOk
+               "UnconfirmedWrites" -> return DB.UnconfirmedWrites
+               "ConfirmWrites"     -> return $ DB.ConfirmWrites [u"j" DB.=: True]
+               badAccess -> fail $ "unknown accessMode: " ++ (T.unpack badAccess)
 
         return $ MongoConf (T.unpack db) (T.unpack host) pool accessMode
       where
-        go :: MEither ObjectExtractError a -> MEither String a
-        go (MLeft e) = MLeft $ show e
-        go (MRight a) = MRight a
-
-        defaultTo :: a -> MEither ObjectExtractError a -> MEither String a
-        defaultTo def (MLeft _) = MRight def
-        defaultTo _ (MRight v) = MRight v
-
+    {-
         safeRead :: String -> T.Text -> MEither String Int
         safeRead name t = case reads s of
             (i, _):_ -> MRight i
             []       -> MLeft $ concat ["Invalid value for ", name, ": ", s]
           where
             s = T.unpack t
+            -}
+    loadConfig _ = mzero

@@ -111,7 +111,7 @@ data PetType = Cat | Dog
 derivePersistField "PetType"
 
 #if WITH_MONGODB
-mkPersist MkPersistSettings { mpsBackend = ConT ''Action } [persistSQL|
+mkPersist MkPersistSettings { mpsBackend = ConT ''Action } [persistUpperCase|
 #else
 share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persistUpperCase|
 #endif
@@ -635,7 +635,7 @@ specs = describe "persistent" $ do
       Right _ <- insertBy $ Person "name2" 1 Nothing
       return ()
 
-#ifdef WITH_MONGODB
+#if WITH_MONGODB && 0
   it "insertKey" $ db $ do
       oid <- liftIO $ genObjectId
       let k = oidToKey oid

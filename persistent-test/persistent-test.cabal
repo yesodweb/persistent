@@ -42,7 +42,7 @@ library
                      Database.Sqlite
                      Database.Persist.Postgresql
 
-                     --Database.Persist.MongoDB
+                     Database.Persist.MongoDB
 
     build-depends:   base                     >= 4       && < 5
                    , HUnit
@@ -71,7 +71,10 @@ library
                    , postgresql-libpq      >= 0.6
 
                    -- mongoDB dependencies
-                   --, mongoDB       == 1.1.*
+                   , mongoDB       == 1.1.*
+                   , cereal
+                   , compact-string-fix
+                   , bson
     hs-source-dirs: ., persistent, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mongoDB
 
     -- these are mutually exclusive options
