@@ -17,7 +17,6 @@ import Database.Persist.Store
 import Database.Persist.EntityDef
 import Database.Persist.GenericSql hiding (Key(..))
 import Database.Persist.GenericSql.Internal
-import Database.Persist.Query.GenericSql ()
 
 import qualified Database.Sqlite as Sqlite
 

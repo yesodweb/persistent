@@ -13,6 +13,8 @@ module Database.Persist.Query.GenericSql
     , filterClauseNoWhere
     , getFiltsValues
     , selectSourceConn
+    , dummyFromFilts
+    , orderClause
   )
   where
 
@@ -20,7 +22,7 @@ import qualified Prelude
 import Prelude hiding ((++), unlines, concat, show)
 import Data.Text (Text, pack, concat)
 import Database.Persist.Store
-import Database.Persist.Query
+import Database.Persist.Query.Internal
 import Database.Persist.GenericSql
 import Database.Persist.GenericSql.Internal
 import qualified Database.Persist.GenericSql.Raw as R
@@ -37,6 +39,7 @@ import qualified Data.Text as T
 import Database.Persist.EntityDef
 import Data.Monoid (Monoid, mappend, mconcat)
 
+-- orphaned instance for convenience of modularity
 instance C.ResourceIO m => PersistQuery SqlPersist m where
     update _ [] = return ()
     update k upds = do
@@ -324,3 +327,28 @@ selectSourceConn :: (C.ResourceIO m, PersistEntity val)
                  -> C.Source m (Entity SqlPersist val)
 selectSourceConn conn fs opts =
     C.transSource (flip runSqlConn conn) (selectSource fs opts)
+
+dummyFromFilts :: [Filter v] -> v
+dummyFromFilts _ = error "dummyFromFilts"
+
+orderClause :: PersistEntity val
+            => Bool -- ^ include the table name
+            -> Connection
+            -> SelectOpt val
+            -> Text
+orderClause includeTable conn o =
+    case o of
+        Asc  x -> name x
+        Desc x -> name x ++ " DESC"
+        _ -> error $ "orderClause: expected Asc or Desc, not limit or offset"
+  where
+    dummyFromOrder :: SelectOpt a -> a
+    dummyFromOrder _ = undefined
+
+    tn = escapeName conn $ entityDB $ entityDef $ dummyFromOrder o
+
+    name x =
+        (if includeTable
+            then ((tn ++ ".") ++)
+            else id)
+        $ escapeName conn $ fieldDB $ persistFieldDef x

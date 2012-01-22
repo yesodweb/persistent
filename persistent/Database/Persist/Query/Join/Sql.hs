@@ -11,7 +11,7 @@ import Database.Persist.Query.Join hiding (RunJoin (..))
 import Database.Persist.EntityDef
 import qualified Database.Persist.Query.Join as J
 import Database.Persist.Store
-import Database.Persist.Query
+import Database.Persist.Query.Internal
 import Database.Persist.Query.GenericSql
 import Control.Monad (liftM)
 import Data.Maybe (mapMaybe)

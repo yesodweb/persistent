@@ -31,7 +31,7 @@ import Prelude hiding ((++), take, concat, splitAt)
 import Database.Persist.EntityDef
 import Database.Persist.Quasi
 import Database.Persist.Store
-import Database.Persist.Query
+import Database.Persist.Query.Internal
 import Database.Persist.GenericSql (Migration, SqlPersist, migrate)
 import Database.Persist.Util (nullable)
 import Database.Persist.TH.Library (apE)

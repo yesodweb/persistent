@@ -27,7 +27,7 @@ import Test.Hspec.QuickCheck(prop)
 
 import Database.Persist
 import Database.Persist.Store (PersistValue(..))
-import Database.Persist.Query
+import Database.Persist.Query.Internal
 
 import Database.Persist.Query.Join (selectOneMany, SelectOneMany(..))
 import qualified Database.Persist.Query.Join

@@ -11,7 +11,7 @@ module Database.Persist.Query.Join
     ) where
 
 import Database.Persist.Store
-import Database.Persist.Query
+import Database.Persist.Query.Internal
 import Data.Maybe (mapMaybe)
 import qualified Data.Map as Map
 import Data.List (foldl')

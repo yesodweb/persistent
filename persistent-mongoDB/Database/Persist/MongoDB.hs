@@ -37,7 +37,7 @@ module Database.Persist.MongoDB
 import Database.Persist
 import Database.Persist.EntityDef
 import Database.Persist.Store
-import Database.Persist.Query
+import Database.Persist.Query.Internal
 
 import qualified Control.Monad.IO.Class as Trans
 import Control.Exception (throw, throwIO)

@@ -13,17 +13,13 @@ module Database.Persist.GenericSql.Internal
     , createSqlPool
     , mkColumns
     , Column (..)
-    , dummyFromFilts
-    , orderClause
     ) where
 
-import Prelude hiding ((++))
 import qualified Data.Map as Map
 import Data.IORef
 import Control.Monad.IO.Class
 import Data.Conduit.Pool
 import Database.Persist.Store
-import Database.Persist.Query
 import Control.Exception.Lifted (bracket)
 import Database.Persist.Util (nullable)
 import Data.Text (Text)
@@ -162,9 +158,6 @@ tableColumns :: EntityDef -> [(RawName, String, [String])]
 tableColumns = map (\a@(ColumnDef _ y z) -> (rawFieldName a, y, z)) . entityColumns
 -}
 
-dummyFromFilts :: [Filter v] -> v
-dummyFromFilts _ = error "dummyFromFilts"
-
 {- FIXME
 getFieldName :: EntityDef -> String -> RawName
 getFieldName t s = rawFieldName $ tableColumn t s
@@ -179,29 +172,3 @@ tableColumn t s = go $ entityColumns t
         | x == s = ColumnDef x y z
         | otherwise = go rest
 -}
-
-orderClause :: PersistEntity val
-            => Bool -- ^ include the table name
-            -> Connection
-            -> SelectOpt val
-            -> Text
-orderClause includeTable conn o =
-    case o of
-        Asc  x -> name x
-        Desc x -> name x ++ " DESC"
-        _ -> error $ "orderClause: expected Asc or Desc, not limit or offset"
-  where
-    dummyFromOrder :: SelectOpt a -> a
-    dummyFromOrder _ = undefined
-
-    tn = escapeName conn $ entityDB $ entityDef $ dummyFromOrder o
-
-    name x =
-        (if includeTable
-            then ((tn ++ ".") ++)
-            else id)
-        $ escapeName conn $ fieldDB $ persistFieldDef x
-
-infixr 5 ++
-(++) :: Text -> Text -> Text
-(++) = mappend
