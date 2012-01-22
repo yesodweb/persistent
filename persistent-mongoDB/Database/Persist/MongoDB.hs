@@ -142,8 +142,8 @@ updateToMongoField (Update field v up) =
       opName = fst opNameValue
       opNameValue =
         case (up, toPersistValue v) of
-                  (Assign,a)    -> (u "$set", a)
-                  (Add, a)      -> (u "$inc", a)
+                  (Assign,a)    -> (u"$set", a)
+                  (Add, a)      -> (u"$inc", a)
                   (Subtract, PersistInt64 i) -> (u "$inc", PersistInt64 (-i))
                   (Subtract, _) -> error "expected PersistInt64 for a subtraction"
                   (Multiply, _) -> throw $ PersistMongoDBUnsupported "multiply not supported"
@@ -356,7 +356,10 @@ filterToDocument f =
       Filter field v filt -> return $ case filt of
           Eq -> fieldName field DB.:= toValue v
           _  -> fieldName field DB.=: [u(showFilter filt) DB.:= toValue v]
-      FilterOr [] -> []
+      FilterOr [] -> -- Michael decided to follow Haskell's semantics, which seems reasonable to me.
+                     -- in Haskell an empty or is a False
+                     -- Perhaps there is a less hacky way of creating a query that always returns false?
+                     [u"$not" DB.=: [u"$exists" DB.=: u"_id"]]
       FilterOr fs  -> multiFilter "$or" fs
       -- $and is usually unecessary but makes query construction easier in special cases
       FilterAnd [] -> []

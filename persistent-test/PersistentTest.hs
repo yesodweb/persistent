@@ -335,11 +335,17 @@ joinGeneric run = do
 specs :: Specs
 specs = describe "persistent" $ do
   it "FilterOr []" $ db $ do
-      _ <- selectList [FilterOr []] [Desc PersonAge]
-      return ()
+      let p = Person "z" 1 Nothing
+      _ <- insert p 
+      ps <- selectList [FilterOr []] [Desc PersonAge]
+      assertEmpty ps
+
   it "FilterAnd []" $ db $ do
-      _ <- selectList [FilterAnd []] [Desc PersonAge]
-      return ()
+      let p = Person "z" 1 Nothing
+      _ <- insert p
+      ps <- selectList [FilterAnd []] [Desc PersonAge]
+      assertNotEmpty ps
+
   it "order of opts is irrelevant" $ db $ do
       let eq (a, b, _) (c, d) = (a, b) @== (c, d)
       limitOffsetOrder [Desc PersonAge] `eq` (0, 0)
