@@ -356,10 +356,10 @@ filterToDocument f =
       Filter field v filt -> return $ case filt of
           Eq -> fieldName field DB.:= toValue v
           _  -> fieldName field DB.=: [u(showFilter filt) DB.:= toValue v]
+      FilterOr [] -> []
       FilterOr fs  -> multiFilter "$or" fs
-      -- I didn't even know about the $and operator.
-      -- It is unecessary in 99% of cases.
-      -- However it makes query construction easier in special cases
+      -- $and is usually unecessary but makes query construction easier in special cases
+      FilterAnd [] -> []
       FilterAnd fs -> multiFilter "$and" fs
   where
     toValue :: forall a.  PersistField a => Either a [a] -> DB.Value
