@@ -8,6 +8,7 @@ module Database.Persist.EntityDef
     , EntityDef (..)
     , FieldDef (..)
     , UniqueDef (..)
+    , ExtraLine
     ) where
 
 import Data.Text (Text)
@@ -21,9 +22,11 @@ data EntityDef = EntityDef
     , entityFields  :: [FieldDef]
     , entityUniques :: [UniqueDef]
     , entityDerives :: [Text]
-    , entityExtra   :: Map Text [Text]
+    , entityExtra   :: Map Text [ExtraLine]
     }
     deriving (Show, Eq, Read, Ord)
+
+type ExtraLine = [Text]
 
 newtype HaskellName = HaskellName { unHaskellName :: Text }
     deriving (Show, Eq, Read, Ord)

@@ -597,11 +597,14 @@ liftT t = [|pack $(lift (unpack t))|]
 liftTs :: [Text] -> Q Exp
 liftTs = fmap ListE . mapM liftT
 
-liftMap :: Map.Map Text [Text] -> Q Exp
+liftTss :: [[Text]] -> Q Exp
+liftTss = fmap ListE . mapM liftTs
+
+liftMap :: Map.Map Text [[Text]] -> Q Exp
 liftMap m = [|Map.fromList $(fmap ListE $ mapM liftPair $ Map.toList m)|]
 
-liftPair :: (Text, [Text]) -> Q Exp
-liftPair (t, ts) = [|($(liftT t), $(liftTs ts))|]
+liftPair :: (Text, [[Text]]) -> Q Exp
+liftPair (t, ts) = [|($(liftT t), $(liftTss ts))|]
 
 instance Lift HaskellName where
     lift (HaskellName t) = [|HaskellName $(liftT t)|]

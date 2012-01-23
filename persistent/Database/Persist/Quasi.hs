@@ -129,13 +129,13 @@ mkEntityDef ps name entattribs lines =
                 [] -> ["Show", "Read", "Eq"]
                 x -> concat x
 
-splitExtras :: [Line] -> ([[Text]], Map.Map Text [Text])
+splitExtras :: [Line] -> ([[Text]], Map.Map Text [[Text]])
 splitExtras [] = ([], Map.empty)
 splitExtras (Line indent [name]:rest)
     | not (T.null name) && isUpper (T.head name) =
         let (children, rest') = span ((> indent) . lineIndent) rest
             (x, y) = splitExtras rest'
-         in (x, Map.insert name (map (T.unwords . tokens) children) y)
+         in (x, Map.insert name (map tokens children) y)
 splitExtras (Line _ ts:rest) =
     let (x, y) = splitExtras rest
      in (ts:x, y)

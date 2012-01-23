@@ -20,6 +20,7 @@ import Database.Persist.Postgresql
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import qualified Data.Map as Map
+import qualified Data.Text as T
 
 -- Test lower case names
 share [mkPersist sqlSettings, mkMigrate "lowerCase"] [persistLowerCase|
@@ -55,8 +56,8 @@ renameSpecs = describe "rename specs" $ do
     it "extra blocks" $ do
         entityExtra (entityDef (undefined :: LowerCaseTable)) @?=
             Map.fromList
-                [ ("ExtraBlock", ["foo bar", "baz", "bin"])
-                , ("ExtraBlock2", ["something"])
+                [ ("ExtraBlock", map T.words ["foo bar", "baz", "bin"])
+                , ("ExtraBlock2", map T.words ["something"])
                 ]
 
 asIO :: IO a -> IO a
