@@ -335,6 +335,11 @@ mkEntity mps t = do
             (map fst fields)
             []
         , FunD (mkName "persistFieldDef") (map snd fields)
+        , TySynInstD
+            (mkName "PersistEntityBackend")
+            [ConT (mkName $ unpack $ unHaskellName (entityHaskell t) ++ suffix) `AppT` VarT (mkName "backend")]
+            (VarT (mkName "backend"))
+        , FunD (mkName "persistIdField") [Clause [] (NormalB $ ConE $ mkName $ unpack $ unHaskellName (entityHaskell t) ++ "Id") []]
         ]
       ]
 

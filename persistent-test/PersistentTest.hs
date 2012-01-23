@@ -412,6 +412,17 @@ specs = describe "persistent" $ do
       Nothing <- get micK
       return ()
 
+  it "persistIdField" $ db $ do
+      let p = Person "foo" 100 (Just "blue")
+          q = Person "bar" 101 Nothing
+      pk <- insert p
+      qk <- insert q
+
+      mp <- selectFirst [persistIdField ==. pk] []
+      fmap entityVal mp @== Just p
+
+      mq <- selectFirst [persistIdField ==. qk] []
+      fmap entityVal mq @== Just q
 
   it "!=." $ db $ do
       deleteWhere ([] :: [Filter Person])

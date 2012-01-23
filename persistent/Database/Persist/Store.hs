@@ -312,6 +312,8 @@ class PersistEntity val where
     data EntityField val :: * -> *
     persistFieldDef :: EntityField val typ -> FieldDef
 
+    type PersistEntityBackend val :: ((* -> *) -> * -> *)
+
     -- | Unique keys in existence on this entity.
     data Unique val :: ((* -> *) -> * -> *) -> *
 
@@ -323,6 +325,8 @@ class PersistEntity val where
     persistUniqueToFieldNames :: Unique val backend -> [(HaskellName, DBName)]
     persistUniqueToValues :: Unique val backend -> [PersistValue]
     persistUniqueKeys :: val -> [Unique val backend]
+
+    persistIdField :: EntityField val (Key (PersistEntityBackend val) val)
 
 #ifdef WITH_MONGODB
 instance PersistField a => PersistField [a] where
