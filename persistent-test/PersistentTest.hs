@@ -769,7 +769,8 @@ instance PersistEntity a => PersistEntity (ReverseFieldOrder a) where
     persistUniqueToFieldNames = reverse . persistUniqueToFieldNames . unURFO
     persistUniqueToValues = reverse . persistUniqueToValues . unURFO
     persistUniqueKeys = map URFO . reverse . persistUniqueKeys . unRFO
-
+    type PersistEntityBackend (ReverseFieldOrder a) = PersistEntityBackend a
+    persistIdField = error "ReverseFieldOrder.persistIdField"
 
 caseCommitRollback :: Assertion
 caseCommitRollback = db $ do
