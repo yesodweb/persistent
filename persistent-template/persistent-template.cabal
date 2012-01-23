@@ -19,6 +19,7 @@ library
                    , monad-control            >= 0.2       && < 0.4
                    , text                     >= 0.5       && < 1.0
                    , transformers             >= 0.2
+                   , containers
     exposed-modules: Database.Persist.TH
     ghc-options:     -Wall
 
