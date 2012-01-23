@@ -11,6 +11,7 @@ module Database.Persist.EntityDef
     ) where
 
 import Data.Text (Text)
+import Data.Map (Map)
 
 data EntityDef = EntityDef
     { entityHaskell :: HaskellName
@@ -20,7 +21,8 @@ data EntityDef = EntityDef
     , entityFields  :: [FieldDef]
     , entityUniques :: [UniqueDef]
     , entityDerives :: [Text]
-    } -- FIXME entityDBId :: DBName
+    , entityExtra   :: Map Text [Text]
+    }
     deriving (Show, Eq, Read, Ord)
 
 newtype HaskellName = HaskellName { unHaskellName :: Text }

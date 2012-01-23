@@ -51,6 +51,7 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import Data.List (foldl')
 import Data.Monoid (mappend, mconcat)
+import qualified Data.Map as Map
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
@@ -574,7 +575,7 @@ mkMigrate fun defs = do
         return $ NoBindS $ m `AppE` defs' `AppE` u'
 
 instance Lift EntityDef where
-    lift (EntityDef a b c d e f g) =
+    lift (EntityDef a b c d e f g h) =
         [|EntityDef
             $(lift a)
             $(lift b)
@@ -582,7 +583,9 @@ instance Lift EntityDef where
             $(liftTs d)
             $(lift e)
             $(lift f)
-            $(liftTs g)|]
+            $(liftTs g)
+            $(liftMap h)
+            |]
 instance Lift FieldDef where
     lift (FieldDef a b c d) = [|FieldDef $(lift a) $(lift b) $(lift c) $(liftTs d)|]
 instance Lift UniqueDef where
@@ -593,6 +596,12 @@ liftT t = [|pack $(lift (unpack t))|]
 
 liftTs :: [Text] -> Q Exp
 liftTs = fmap ListE . mapM liftT
+
+liftMap :: Map.Map Text [Text] -> Q Exp
+liftMap m = [|Map.fromList $(fmap ListE $ mapM liftPair $ Map.toList m)|]
+
+liftPair :: (Text, [Text]) -> Q Exp
+liftPair (t, ts) = [|($(liftT t), $(liftTs ts))|]
 
 instance Lift HaskellName where
     lift (HaskellName t) = [|HaskellName $(liftT t)|]

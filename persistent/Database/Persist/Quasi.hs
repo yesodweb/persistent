@@ -6,12 +6,14 @@ module Database.Persist.Quasi
     , lowerCaseSettings
     ) where
 
+import Prelude hiding (lines)
 import Database.Persist.EntityDef
 import Data.Char
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Control.Arrow ((&&&))
+import qualified Data.Map as Map
 
 data PersistSettings = PersistSettings
     { psToDBName :: Text -> Text
@@ -75,68 +77,47 @@ empty _          = False
 
 -- | A line.  We don't care about spaces in the middle of the
 -- line.  Also, we don't care about the ammount of indentation.
-data Line = Line { lineType :: LineType
-                 , tokens   :: [Text]
+data Line = Line { lineIndent :: Int
+                 , tokens     :: [Text]
                  }
-
--- | A line may be part of a header or body.
-data LineType = Header | Body
-                deriving (Eq)
 
 -- | Remove leading spaces and remove spaces in the middle of the
 -- tokens.
 removeSpaces :: [[Token]] -> [Line]
-removeSpaces xs = map (makeLine . subtractSpace) xs
-    where
-      -- | Ammount of leading spaces.
-      s = minimum $ map headSpace xs
+removeSpaces =
+    map toLine
+  where
+    toLine (Spaces i:rest) = toLine' i rest
+    toLine xs              = toLine' 0 xs
 
-      -- | Ammount of leading space in a single token string.
-      headSpace (Spaces n : _) = n
-      headSpace _              = 0
+    toLine' i = Line i . mapMaybe toToken
 
-      -- | Subtract the leading space.
-      subtractSpace ys | s == 0 = ys
-      subtractSpace (Spaces n : rest)
-          | n == s    = rest
-          | otherwise = Spaces (n - s) : rest
-      subtractSpace _ = error "Database.Persist.Quasi: never here"
-
-      -- | Get all tokens while ignoring spaces.
-      getTokens (Token tok : rest) = tok : getTokens rest
-      getTokens (Spaces _  : rest) =       getTokens rest
-      getTokens []                 = []
-
-      -- | Make a 'Line' from a @[Token]@.
-      makeLine (Spaces _ : rest) = Line Body   (getTokens rest)
-      makeLine rest              = Line Header (getTokens rest)
+    toToken (Token t) = Just t
+    toToken Spaces{}  = Nothing
 
 -- | Divide lines into blocks and make entity definitions.
 parse' :: PersistSettings -> [Line] -> [EntityDef]
-parse' ps (Line Header (name:entattribs) : rest) =
-    let (x, y) = span ((== Body) . lineType) rest
-    in mkEntityDef ps name entattribs (map tokens x) : parse' ps y
-parse' _ ((Line Header []) : _) =
-    error "Indented line must contain at least name."
-parse' _ ((Line Body _)    : _) =
-    error "Blocks must begin with non-indented lines."
+parse' ps (Line indent (name:entattribs) : rest) =
+    let (x, y) = span ((> indent) . lineIndent) rest
+     in mkEntityDef ps name entattribs x : parse' ps y
+parse' ps (Line _ []:rest) = parse' ps rest
 parse' _ [] = []
-
-type RawLine = [Text]
 
 -- | Construct an entity definition.
 mkEntityDef :: PersistSettings
             -> Text -- ^ name
             -> [Attr] -- ^ entity attributes
-            -> [RawLine] -- ^ indented lines
+            -> [Line] -- ^ indented lines
             -> EntityDef
-mkEntityDef ps name entattribs attribs =
+mkEntityDef ps name entattribs lines =
     EntityDef
         (HaskellName name)
         (DBName $ psToDBName ps name)
         (DBName $ idName entattribs)
         entattribs cols uniqs derives
+        extras
   where
+    (attribs, extras) = splitExtras lines
     idName [] = "id"
     idName (t:ts) =
         case T.stripPrefix "id=" t of
@@ -147,6 +128,17 @@ mkEntityDef ps name entattribs attribs =
     derives = case mapMaybe takeDerives attribs of
                 [] -> ["Show", "Read", "Eq"]
                 x -> concat x
+
+splitExtras :: [Line] -> ([[Text]], Map.Map Text [Text])
+splitExtras [] = ([], Map.empty)
+splitExtras (Line indent [name]:rest)
+    | not (T.null name) && isUpper (T.head name) =
+        let (children, rest') = span ((> indent) . lineIndent) rest
+            (x, y) = splitExtras rest'
+         in (x, Map.insert name (map (T.unwords . tokens) children) y)
+splitExtras (Line _ ts:rest) =
+    let (x, y) = splitExtras rest
+     in (ts:x, y)
 
 takeCols :: PersistSettings -> [Text] -> Maybe FieldDef
 takeCols _ ("deriving":_) = Nothing
