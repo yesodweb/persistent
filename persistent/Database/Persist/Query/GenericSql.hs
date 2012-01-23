@@ -227,9 +227,9 @@ filterClauseHelper includeTable includeWhere conn filters =
         (a, b) = unzip $ map go fs
         wrapP x = T.concat ["(", x, ")"]
 
-    go (FilterAnd []) = ("1=0", [])
+    go (FilterAnd []) = ("1=1", [])
     go (FilterAnd fs) = combineAND fs
-    go (FilterOr []) = ("1=1", [])
+    go (FilterOr []) = ("1=0", [])
     go (FilterOr fs)  = combine " OR " fs
     go (Filter field value pfilter) =
         case (isNull, pfilter, varCount) of
