@@ -51,23 +51,49 @@ import Control.Monad (forM, mzero)
 import System.Environment (getEnvironment)
 
 
--- | A @libpq@ connection string (see
+-- | A @libpq@ connection string.  A simple example of connection
+-- string would be @\"host=localhost port=5432 user=test
+-- dbname=test password=test\"@.  Please read libpq's
+-- documentation at
 -- <http://www.postgresql.org/docs/9.1/static/libpq-connect.html>
--- for more details on how to create such strings).
+-- for more details on how to create such strings.
 type ConnectionString = ByteString
 
+
+-- | Create a PostgreSQL connection pool and run the given
+-- action.  The pool is properly released after the action
+-- finishes using it.  Note that you should not use the given
+-- 'ConnectionPool' outside the action since it may be already
+-- been released.
 withPostgresqlPool :: MonadIO m
                    => ConnectionString
-                   -> Int -- ^ number of connections to open
-                   -> (ConnectionPool -> m a) -> m a
+                   -- ^ Connection string to the database.
+                   -> Int
+                   -- ^ Number of connections to be kept open in
+                   -- the pool.
+                   -> (ConnectionPool -> m a)
+                   -- ^ Action to be executed that uses the
+                   -- connection pool.
+                   -> m a
 withPostgresqlPool ci = withSqlPool $ open' ci
 
+
+-- | Create a PostgreSQL connection pool.  Note that it's your
+-- responsability to properly close the connection pool when
+-- unneeded.  Use 'withPostgresqlPool' for an automatic resource
+-- control.
 createPostgresqlPool :: MonadIO m
                      => ConnectionString
-                     -> Int -- ^ number of connections to open
+                     -- ^ Connection string to the database.
+                     -> Int
+                     -- ^ Number of connections to be kept open
+                     -- in the pool.
                      -> m ConnectionPool
 createPostgresqlPool ci = createSqlPool $ open' ci
 
+
+-- | Same as 'withPostgresqlPool', but instead of opening a pool
+-- of connections, only one connection is opened.
 withPostgresqlConn :: C.ResourceIO m => ConnectionString -> (Connection -> m a) -> m a
 withPostgresqlConn = withSqlConn . open'
 
@@ -558,10 +584,14 @@ escape (DBName s) =
     go ('"':xs) = "\"\"" ++ go xs
     go (x:xs) = x : go xs
 
--- | Information required to connect to a postgres database
+-- | Information required to connect to a PostgreSQL database
+-- using @persistent@'s generic facilities.  These values are the
+-- same that are given to 'withPostgresqlPool'.
 data PostgresConf = PostgresConf
     { pgConnStr  :: ConnectionString
+      -- ^ The connection string.
     , pgPoolSize :: Int
+      -- ^ How many connections should be held on the connection pool.
     }
 
 instance PersistConfig PostgresConf where
