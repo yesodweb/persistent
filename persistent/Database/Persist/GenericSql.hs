@@ -133,24 +133,9 @@ instance C.ResourceIO m => PersistStore SqlPersist m where
       where
         go conn x = escapeName conn x ++ "=?"
 
-    insertKey (Key k) val = do
-        conn <- SqlPersist ask
-        execute' (sql conn) vals
-      where
-        t = entityDef val
-        sql conn = concat
-            [ "INSERT INTO "
-            , escapeName conn (entityDB t)
-            , "("
-            , T.intercalate ","
-                $ map (escapeName conn)
-                $ entityID t : map fieldDB (entityFields t)
-            , ") VALUES("
-            , T.intercalate "," ("?" : map (const "?") (entityFields t))
-            , ")"
-            ]
-        vals = k : map toPersistValue (toPersistFields val)
-    repsert k val = error "Sql.repsert not implemented"
+    insertKey = insrepHelper "INSERT"
+
+    repsert = insrepHelper "REPLACE"
 
     get k = do
         conn <- SqlPersist ask
@@ -183,6 +168,30 @@ instance C.ResourceIO m => PersistStore SqlPersist m where
             , escapeName conn $ entityDB t
             , " WHERE id=?"
             ]
+
+insrepHelper :: (MonadIO m, PersistEntity val)
+             => Text
+             -> Key SqlPersist val
+             -> val
+             -> SqlPersist m ()
+insrepHelper command (Key k) val = do
+    conn <- SqlPersist ask
+    execute' (sql conn) vals
+  where
+    t = entityDef val
+    sql conn = concat
+        [ command
+        , " INTO "
+        , escapeName conn (entityDB t)
+        , "("
+        , T.intercalate ","
+            $ map (escapeName conn)
+            $ entityID t : map fieldDB (entityFields t)
+        , ") VALUES("
+        , T.intercalate "," ("?" : map (const "?") (entityFields t))
+        , ")"
+        ]
+    vals = k : map toPersistValue (toPersistFields val)
 
 instance C.ResourceIO m => PersistUnique SqlPersist m where
     deleteBy uniq = do
