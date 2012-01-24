@@ -430,16 +430,19 @@ class (C.ResourceIO m, C.ResourceIO (b m)) => PersistStore b m where
     insert :: PersistEntity val => val -> b m (Key b val)
 
 #if WITH_MONGODB
-    -- | create a new record in the database, using the given key.
+    -- | Create a new record in the database using the given key.
     insertKey :: PersistEntity val => Key b val -> val -> b m ()
 
-    -- | put the record in the database with the given key.
-    -- Unlike replace, it will insert a new record.
+    -- | Put the record in the database with the given key.
+    -- Unlike 'replace', if a record with the given key does not
+    -- exist then a new record will be inserted.
     repsert :: PersistEntity val => Key b val -> val -> b m ()
 #endif
 
-    -- | Replace the record in the database with the given key. Result is
-    -- undefined if such a record does not exist - instead use insertKey or repsert
+    -- | Replace the record in the database with the given
+    -- key. Note that the result is undefined if such record does
+    -- not exist, so you must use 'insertKey' or 'repsert' in
+    -- these cases.
     replace :: PersistEntity val => Key b val -> val -> b m ()
 
     -- | Delete a specific record by identifier. Does nothing if record does
