@@ -72,7 +72,7 @@ library
                    , postgresql-libpq      >= 0.6
 
                    -- mongoDB dependencies
-                   , mongoDB       == 1.1.*
+                   , mongoDB       == 1.2.*
                    , cereal
                    , compact-string-fix
                    , bson

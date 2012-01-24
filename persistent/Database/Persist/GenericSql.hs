@@ -133,6 +133,9 @@ instance C.ResourceIO m => PersistStore SqlPersist m where
       where
         go conn x = escapeName conn x ++ "=?"
 
+    insertKey k val = error "Sql.insertKey not implemented"
+    repsert k val = error "Sql.repsert not implemented"
+
     get k = do
         conn <- SqlPersist ask
         let t = entityDef $ dummyFromKey k

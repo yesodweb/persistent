@@ -429,7 +429,6 @@ class (C.ResourceIO m, C.ResourceIO (b m)) => PersistStore b m where
     -- key (in SQL an auto-increment id).
     insert :: PersistEntity val => val -> b m (Key b val)
 
-#if WITH_MONGODB
     -- | Create a new record in the database using the given key.
     insertKey :: PersistEntity val => Key b val -> val -> b m ()
 
@@ -437,7 +436,6 @@ class (C.ResourceIO m, C.ResourceIO (b m)) => PersistStore b m where
     -- Unlike 'replace', if a record with the given key does not
     -- exist then a new record will be inserted.
     repsert :: PersistEntity val => Key b val -> val -> b m ()
-#endif
 
     -- | Replace the record in the database with the given
     -- key. Note that the result is undefined if such record does
