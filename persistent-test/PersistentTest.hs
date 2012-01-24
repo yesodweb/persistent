@@ -218,7 +218,7 @@ runConn :: ResourceIO m => SqlPersist m t -> m ()
 runConn f = do
     _<-withSqlitePool sqlite_database 1 $ runSqlPool f
 #if WITH_POSTGRESQL
-    _<-withPostgresqlPool (ConnectInfo "localhost" 5432 "test" "test" "test") 1 $ runSqlPool f
+    _<-withPostgresqlPool "host=localhost port=5432 user=test dbname=test password=test" 1 $ runSqlPool f
 #endif
     return ()
 

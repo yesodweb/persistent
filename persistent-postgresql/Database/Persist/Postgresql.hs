@@ -9,10 +9,8 @@ module Database.Persist.Postgresql
     , createPostgresqlPool
     , module Database.Persist
     , module Database.Persist.GenericSql
+    , ConnectionString
     , PostgresConf (..)
-
-      -- Re-export form @postgresql-simple@
-    , PG.ConnectInfo(..)
     ) where
 
 import Database.Persist hiding (Entity (..))
@@ -52,24 +50,30 @@ import Data.Aeson
 import Control.Monad (forM, mzero)
 import System.Environment (getEnvironment)
 
+
+-- | A @libpq@ connection string (see
+-- <http://www.postgresql.org/docs/9.1/static/libpq-connect.html>
+-- for more details on how to create such strings).
+type ConnectionString = ByteString
+
 withPostgresqlPool :: MonadIO m
-                   => PG.ConnectInfo
+                   => ConnectionString
                    -> Int -- ^ number of connections to open
                    -> (ConnectionPool -> m a) -> m a
 withPostgresqlPool ci = withSqlPool $ open' ci
 
 createPostgresqlPool :: MonadIO m
-                     => PG.ConnectInfo
+                     => ConnectionString
                      -> Int -- ^ number of connections to open
                      -> m ConnectionPool
 createPostgresqlPool ci = createSqlPool $ open' ci
 
-withPostgresqlConn :: C.ResourceIO m => PG.ConnectInfo -> (Connection -> m a) -> m a
+withPostgresqlConn :: C.ResourceIO m => ConnectionString -> (Connection -> m a) -> m a
 withPostgresqlConn = withSqlConn . open'
 
-open' :: PG.ConnectInfo -> IO Connection
-open' ci = do
-    conn <- PG.connect ci
+open' :: ConnectionString -> IO Connection
+open' cstr = do
+    conn <- PG.connectPostgreSQL cstr
     smap <- newIORef $ Map.empty
     return Connection
         { prepare    = prepare' conn
@@ -556,7 +560,7 @@ escape (DBName s) =
 
 -- | Information required to connect to a postgres database
 data PostgresConf = PostgresConf
-    { pgConnInfo :: PG.ConnectInfo
+    { pgConnStr  :: ConnectionString
     , pgPoolSize :: Int
     }
 
@@ -579,7 +583,8 @@ instance PersistConfig PostgresConf where
                    , PG.connectPassword = password
                    , PG.connectDatabase = database
                    }
-        return $ PostgresConf ci pool
+            cstr = PG.postgreSQLConnectionString ci
+        return $ PostgresConf cstr pool
     loadConfig _ = mzero
 
     applyEnv c0 = do
@@ -590,50 +595,25 @@ instance PersistConfig PostgresConf where
                $ addPort env
                $ addHost env c0
       where
-        addHost env c =
-            case lookup "PGHOST" env of
-                Nothing -> c
-                Just h -> c
-                    { pgConnInfo = (pgConnInfo c)
-                        { PG.connectHost = h
-                        }
-                    }
-        addPort env c =
-            case lookup "PGPORT" env >>= readMay of
-                Nothing -> c
-                Just p -> c
-                    { pgConnInfo = (pgConnInfo c)
-                        { PG.connectPort = p
-                        }
-                    }
-        readMay s =
-            case reads s of
-                (i, _):_ -> Just i
-                [] -> Nothing
-        addUser env c =
-            case lookup "PGUSER" env of
-                Nothing -> c
-                Just h -> c
-                    { pgConnInfo = (pgConnInfo c)
-                        { PG.connectUser = h
-                        }
-                    }
-        addPass env c =
-            case lookup "PGPASS" env of
-                Nothing -> c
-                Just h -> c
-                    { pgConnInfo = (pgConnInfo c)
-                        { PG.connectPassword = h
-                        }
-                    }
-        addDatabase env c =
-            case lookup "PGDATABASE" env of
-                Nothing -> c
-                Just h -> c
-                    { pgConnInfo = (pgConnInfo c)
-                        { PG.connectDatabase = h
-                        }
-                    }
+        addParam param val c =
+            c { pgConnStr = B8.concat [pgConnStr c, " ", param, "='", pgescape val, "'"] }
+
+        pgescape = B8.pack . go
+            where
+              go ('\'':rest) = '\\' : '\'' : go rest
+              go ('\\':rest) = '\\' : '\\' : go rest
+              go ( x  :rest) =      x      : go rest
+              go []          = []
+
+        maybeAddParam param envvar env =
+            maybe id (addParam param) $
+            lookup envvar env
+
+        addHost     = maybeAddParam "host"     "PGHOST"
+        addPort     = maybeAddParam "port"     "PGPORT"
+        addUser     = maybeAddParam "user"     "PGUSER"
+        addPass     = maybeAddParam "password" "PGPASS"
+        addDatabase = maybeAddParam "dbname"   "PGDATABASE"
 
 refName :: DBName -> DBName -> DBName
 refName (DBName table) (DBName column) =
