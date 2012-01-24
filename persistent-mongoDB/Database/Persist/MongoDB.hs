@@ -6,6 +6,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Database.Persist.MongoDB
     (
@@ -61,6 +62,7 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value (Object), (.:), (.:?), (.!=))
 import Control.Monad (mzero)
+import Control.Monad.Trans.Control (MonadBaseControl)
 
 #ifdef DEBUG
 import FileLocation (debug)
@@ -173,15 +175,13 @@ insertFields t record = zipWith (DB.:=) (toLabels) (toValues)
     toLabels = map (u . T.unpack . unDBName . fieldDB) $ entityFields t
     toValues = map (DB.val . toPersistValue) (toPersistFields record)
 
-#if WITH_MONGODB && 0
 saveWithKey :: forall m ent record. (Applicative m, Functor m, MonadBaseControl IO m, PersistEntity ent, PersistEntity record)
             => (DB.Collection -> DB.Document -> DB.Action m () )
             -> Key DB.Action ent -> record -> DB.Action m ()
 saveWithKey dbSave k record =
-      dbSave (u $ unDBName $ entityDB t) ((persistKeyToMongoId k):(insertFields t record))
+      dbSave (u $ T.unpack $ unDBName $ entityDB t) ((persistKeyToMongoId k):(insertFields t record))
     where
       t = entityDef record
-#endif
 
 instance (Applicative m, Functor m, ResourceIO m) => PersistStore DB.Action m where
     insert record = do
@@ -190,11 +190,9 @@ instance (Applicative m, Functor m, ResourceIO m) => PersistStore DB.Action m wh
       where
         t = entityDef record
 
-#if WITH_MONGODB && 0
     insertKey k record = saveWithKey DB.insert_ k record
 
     repsert   k record = saveWithKey DB.save k record
-#endif
 
     replace k record = do
         DB.replace (selectByKey k t) (insertFields t record)
