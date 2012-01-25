@@ -20,13 +20,15 @@ module Database.Persist.MongoDB
     -- * Key conversion helpers
     , keyToOid
     , oidToKey
+    -- * CompactString helpers
+    , csToText
+    , textToCS
     -- * network type
     , HostName
     -- * UString type
     , u
     -- * MongoDB driver types
     , DB.Action
-    -- , DB.MasterOrSlaveOk(..)
     , DB.AccessMode(..)
     , DB.master
     , DB.slaveOk
@@ -422,13 +424,15 @@ wrapFromPersistValues e doc = fromPersistValues reorder
         -- match [] fs values = throw $ PersistError $ "reorder error: extra mongo fields" ++ (show fs)
 
 mapFromDoc :: DB.Document -> [(T.Text, PersistValue)]
-mapFromDoc = Prelude.map (\f -> ( ( csToT (DB.label f)), (fromJust . DB.cast') (DB.value f) ) )
+mapFromDoc = Prelude.map (\f -> ( ( csToText (DB.label f)), (fromJust . DB.cast') (DB.value f) ) )
 
-csToT :: CS.CompactString -> T.Text
-csToT = E.decodeUtf8 . CS.toByteString
+-- | CompactString is UTF8, Text is UTF16
+csToText :: CS.CompactString -> T.Text
+csToText = E.decodeUtf8 . CS.toByteString
 
-tToCS :: T.Text -> CS.CompactString
-tToCS = CS.fromByteString_ . E.encodeUtf8
+-- | CompactString is UTF8, Text is UTF16
+textToCS :: T.Text -> CS.CompactString
+textToCS = CS.fromByteString_ . E.encodeUtf8
 
 oidToPersistValue :: DB.ObjectId -> PersistValue
 oidToPersistValue =  PersistObjectId . Serialize.encode
@@ -447,13 +451,13 @@ keyToOid (Key k) = persistObjectIdToDbOid k
 
 instance DB.Val PersistValue where
   val (PersistInt64 x)   = DB.Int64 x
-  val (PersistText x)    = DB.String (tToCS x)
+  val (PersistText x)    = DB.String (textToCS x)
   val (PersistDouble x)  = DB.Float x
   val (PersistBool x)    = DB.Bool x
   val (PersistUTCTime x) = DB.UTC x
   val (PersistNull)      = DB.Null
   val (PersistList l)    = DB.Array $ map DB.val l
-  val (PersistMap  m)    = DB.Doc $ map (\(k, v)-> (DB.=:) (tToCS k) v) m
+  val (PersistMap  m)    = DB.Doc $ map (\(k, v)-> (DB.=:) (textToCS k) v) m
   val (PersistByteString x) = DB.String $ CS.fromByteString_ x 
   val x@(PersistObjectId _) = DB.ObjId $ persistObjectIdToDbOid x
   val (PersistDay _)        = throw $ PersistMongoDBUnsupported "only PersistUTCTime currently implemented"
@@ -461,7 +465,7 @@ instance DB.Val PersistValue where
   cast' (DB.Float x)  = Just (PersistDouble x)
   cast' (DB.Int32 x)  = Just $ PersistInt64 $ fromIntegral x
   cast' (DB.Int64 x)  = Just $ PersistInt64 x
-  cast' (DB.String x) = Just $ PersistText (csToT x) 
+  cast' (DB.String x) = Just $ PersistText (csToText x)
   cast' (DB.Bool x)   = Just $ PersistBool x
   cast' (DB.UTC d)    = Just $ PersistUTCTime d
   cast' DB.Null       = Just $ PersistNull
