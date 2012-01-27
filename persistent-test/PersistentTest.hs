@@ -65,6 +65,9 @@ import Control.Monad.Trans.Resource (ResourceIO)
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
 #endif
+#if WITH_MYSQL
+import Database.Persist.MySQL
+#endif
 
 #endif
 
@@ -222,6 +225,14 @@ runConn f = do
     _<-withSqlitePool sqlite_database 1 $ runSqlPool f
 #if WITH_POSTGRESQL
     _<-withPostgresqlPool "host=localhost port=5432 user=test dbname=test password=test" 1 $ runSqlPool f
+#endif
+#if WITH_MYSQL
+    _ <- withMySQLPool defaultConnectInfo
+                        { connectHost     = "localhost"
+                        , connectUser     = "test"
+                        , connectPassword = "test"
+                        , connectDatabase = "test"
+                        } 1 $ runSqlPool f
 #endif
     return ()
 
@@ -611,7 +622,7 @@ specs = describe "persistent" $ do
       -- limit
       ps2 <- selectList [] [LimitTo 1]
       ps2 @== [(Entity key25 p25)]
-      -- offset -- FAILS!
+      -- offset
       ps3 <- selectList [] [OffsetBy 1]
       ps3 @== [(Entity key26 p26)]
       -- limit & offset
