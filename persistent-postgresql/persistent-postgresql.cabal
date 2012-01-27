@@ -1,8 +1,8 @@
 name:            persistent-postgresql
-version:         0.7.0
+version:         0.7.0.1
 license:         BSD3
 license-file:    LICENSE
-author:          Michael Snoyman <michael@snoyman.com>
+author:          Felipe Lessa, Michael Snoyman <michael@snoyman.com>
 maintainer:      Michael Snoyman <michael@snoyman.com>
 synopsis:        Backend for the persistent library using postgresql.
 description:     Based on the postgresql-simple package
