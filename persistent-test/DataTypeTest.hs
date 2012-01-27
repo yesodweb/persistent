@@ -33,7 +33,7 @@ share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
 DataTypeTable
     text Text
     bytes ByteString
-    int Int
+    intx Int
     double Double
     bool Bool
     day Day
@@ -58,7 +58,7 @@ dataTypeSpecs = describe "data type specs" $ do
                 -- Check individual fields for better error messages
                 check "text" dataTypeTableText
                 check "bytes" dataTypeTableBytes
-                check "int" dataTypeTableInt
+                check "int" dataTypeTableIntx
                 check "bool" dataTypeTableBool
                 check "day" dataTypeTableDay
                 check "time" dataTypeTableTime

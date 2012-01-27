@@ -146,7 +146,7 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persis
   NeedsPet
     petKey PetId
   Number
-    int Int
+    intx Int
     int32 Int32
     word32 Word32
     int64 Int64
