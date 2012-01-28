@@ -5,6 +5,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE EmptyDataDecls #-}
 module RenameTest where
 
 import Test.Hspec.Monadic

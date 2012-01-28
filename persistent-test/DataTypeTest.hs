@@ -5,6 +5,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE EmptyDataDecls #-}
 module DataTypeTest where
 
 import Test.Hspec.Monadic

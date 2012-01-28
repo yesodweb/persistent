@@ -232,6 +232,7 @@ setup = do
   runMigrationUnsafe testMigrate
   cleanDB
 
+#if !MIN_VERSION_base(4,5,0)
 instance Random Int32 where
     random g =
         let ((i::Int), g') = random g in
@@ -248,6 +249,7 @@ instance Random Int64 where
     randomR (lo, hi) g = -- TODO : generate on the whole range, and not only on a part of it
         let ((i::Int), g') = randomR (fromInteger $ toInteger lo, fromInteger $ toInteger hi) g in
         (fromInteger $ toInteger i, g')
+#endif
 
 instance Arbitrary PersistValue where
     arbitrary = PersistInt64 `fmap` choose (0, maxBound)

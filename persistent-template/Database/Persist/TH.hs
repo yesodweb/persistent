@@ -124,9 +124,11 @@ upperFirst t =
 
 dataTypeDec :: EntityDef -> Dec
 dataTypeDec t =
-    DataD [] nameG [PlainTV backend] [RecC name cols]
+    DataD [] nameG [KindedTV backend monadTransKind] [RecC name cols]
     $ map (mkName . unpack) $ entityDerives t
   where
+    monadKind = StarK `ArrowK` StarK
+    monadTransKind = monadKind `ArrowK` monadKind
     mkCol x (FieldDef n _ ty as) =
         (mkName $ unpack $ recName x $ unHaskellName n,
          NotStrict,
