@@ -23,6 +23,7 @@ module Database.Persist.TH
     , mkDeleteCascade
     , share
     , derivePersistField
+    , persistFieldFromEntity
       -- ** Deprecated
     , share2
     ) where
@@ -129,7 +130,7 @@ dataTypeDec t =
   where
     monadKind = StarK `ArrowK` StarK
     monadTransKind = monadKind `ArrowK` monadKind
-    mkCol x (FieldDef n _ ty as) =
+    mkCol x (FieldDef n _ ty as _) =
         (mkName $ unpack $ recName x $ unHaskellName n,
          NotStrict,
          pairToType backend (unFieldType ty, nullable as)
@@ -149,7 +150,7 @@ entityUpdates :: EntityDef -> [(HaskellName, FieldType, Bool, PersistUpdate)]
 entityUpdates =
     concatMap go . entityFields
   where
-    go (FieldDef x _ y as) = map (\a -> (x, y, nullable as, a)) [minBound..maxBound]
+    go (FieldDef x _ y as _) = map (\a -> (x, y, nullable as, a)) [minBound..maxBound]
 
 uniqueTypeDec :: EntityDef -> Dec
 uniqueTypeDec t =
@@ -177,7 +178,7 @@ mkUnique backend t (UniqueDef (HaskellName constr) _ fields) =
     lookup3 :: Text -> [FieldDef] -> (FieldType, Bool)
     lookup3 s [] =
         error $ unpack $ "Column not found: " ++ s ++ " in unique " ++ constr
-    lookup3 x ((FieldDef (HaskellName x') _ y z):rest)
+    lookup3 x ((FieldDef (HaskellName x') _ y z _):rest)
         | x == x' = (y, nullable z)
         | otherwise = lookup3 x rest
 
@@ -310,7 +311,9 @@ mkEntity mps t = do
     fields <- mapM (mkField t) $ FieldDef
         (HaskellName "Id")
         (entityID t)
-        (FieldType $ unHaskellName (entityHaskell t) ++ "Id") []
+        (FieldType $ unHaskellName (entityHaskell t) ++ "Id")
+        []
+        False
         : entityFields t
     toFieldNames <- mkToFieldNames $ entityUniques t
     return $
@@ -346,7 +349,8 @@ mkEntity mps t = do
         ]
       ]
 
--- | produce code similar to the following
+-- | produce code similar to the following:
+--
 -- instance PersistEntity e => PersistField e where
 --    toPersistValue = PersistMap $ zip columNames (map toPersistValue . toPersistFields)
 --    fromPersistValue (PersistMap o) = fromPersistValues $ map (\(_,v) ->
@@ -432,7 +436,7 @@ mkDeleteCascade defs = do
         concatMap getDeps' $ entityFields def
       where
         getDeps' :: FieldDef -> [Dep]
-        getDeps' (FieldDef name _ ftyp attribs) =
+        getDeps' (FieldDef name _ ftyp attribs _) =
             let isNull = nullable attribs
                 typ = unFieldType ftyp
                 l = T.length typ
@@ -494,7 +498,7 @@ mkUniqueKeys def = do
     return $ FunD (mkName "persistUniqueKeys") [c]
   where
     clause = do
-        xs <- forM (entityFields def) $ \(FieldDef x _ _ _) -> do
+        xs <- forM (entityFields def) $ \(FieldDef x _ _ _ _) -> do
             x' <- newName $ '_' : unpack (unHaskellName x)
             return (x, x')
         let pcs = map (go xs) $ entityUniques def
@@ -586,7 +590,7 @@ instance Lift EntityDef where
             $(liftMap h)
             |]
 instance Lift FieldDef where
-    lift (FieldDef a b c d) = [|FieldDef $(lift a) $(lift b) $(lift c) $(liftTs d)|]
+    lift (FieldDef a b c d e) = [|FieldDef $(lift a) $(lift b) $(lift c) $(liftTs d) $(lift e)|]
 instance Lift UniqueDef where
     lift (UniqueDef a b c) = [|UniqueDef $(lift a) $(lift b) $(lift c)|]
 
