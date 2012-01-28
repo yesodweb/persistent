@@ -545,22 +545,19 @@ derivePersistField s = do
 -- with foreign references, make sure to place those definitions after the
 -- entities they reference.
 mkMigrate :: String -> [EntityDef] -> Q [Dec]
-mkMigrate fun defs = do
+mkMigrate fun allDefs = do
     body' <- body
     return
         [ SigD (mkName fun) typ
         , FunD (mkName fun) [Clause [] (NormalB body') []]
         ]
   where
+    defs = filter isMigrated allDefs
+    isMigrated def = not $ "no-migrate" `elem` entityAttrs def
     typ = ForallT [PlainTV $ mkName "m"]
-#if MIN_VERSION_monad_control(0, 3, 0)
             [ ClassP ''MonadBaseControl [ConT ''IO, VarT $ mkName "m"]
             , ClassP ''MonadIO [VarT $ mkName "m"]
             ]
-#else
-            [ ClassP ''MonadControlIO [VarT $ mkName "m"]
-            ]
-#endif
             $ ConT ''Migration `AppT` (ConT ''SqlPersist `AppT` VarT (mkName "m"))
     body :: Q Exp
     body =
