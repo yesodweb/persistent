@@ -78,10 +78,20 @@ library
                    , bson
     hs-source-dirs: ., persistent, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mongoDB
 
-    -- these are mutually exclusive options
-    -- cpp-options: -DWITH_POSTGRESQL
-    -- cpp-options: -DWITH_MONGODB -DDEBUG
     ghc-options:   -Wall
+
+    if flag(mongodb)
+        cpp-options: -DWITH_MONGODB -DDEBUG
+    if flag(postgresql)
+        cpp-options: -DWITH_POSTGRESQL
+
+Flag mongodb
+   Description: test MongoDB. don't use with postgresql flag
+   Default: False
+
+Flag postgresql
+   Description: test postgresql. don't use with mongodb flag
+   Default: False
 
 test-suite test
     type:          exitcode-stdio-1.0
@@ -91,6 +101,11 @@ test-suite test
     build-depends:   base >= 4 && < 5
                    , persistent-test
                    , hspec
+
+    if flag(mongodb)
+        cpp-options: -DWITH_MONGODB -DDEBUG
+    if flag(postgresql)
+        cpp-options: -DWITH_POSTGRESQL
 
 source-repository head
   type:     git
