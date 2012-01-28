@@ -77,6 +77,11 @@ import qualified Data.Conduit as C
 import Data.Aeson (Value)
 import Data.Aeson.Types (Parser)
 
+#ifdef WITH_MONGODB
+import qualified Data.Set as S
+import qualified Data.Map as M
+#endif
+
 data PersistException
   = PersistError T.Text -- ^ Generic Exception
   | PersistMarshalError T.Text
@@ -342,7 +347,7 @@ instance (Ord a, PersistField a) => PersistField (S.Set a) where
     fromPersistValue x = Left $ "Expected PersistList, received: " ++ show x
     sqlType _ = SqlString
 
-fromPersistList :: PersistField a => [PersistValue] -> Either String [a]
+fromPersistList :: PersistField a => [PersistValue] -> Either T.Text [a]
 fromPersistList list =
         foldl (\eithList v ->
               case (eithList, fromPersistValue v) of
