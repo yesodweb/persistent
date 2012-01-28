@@ -186,8 +186,8 @@ withStmt' conn query vals = C.sourceIO (liftIO   openS )
     pullS (ret, rowRef, rowCount, getters) = do
         row <- atomicModifyIORef rowRef (\r -> (r+1, r))
         if row == rowCount
-           then return C.Closed
-           else fmap C.Open $ forM (zip getters [0..]) $ \(getter, col) -> do
+           then return C.IOClosed
+           else fmap C.IOOpen $ forM (zip getters [0..]) $ \(getter, col) -> do
                                 mbs <- LibPQ.getvalue' ret row col
                                 case mbs of
                                   Nothing -> return PersistNull

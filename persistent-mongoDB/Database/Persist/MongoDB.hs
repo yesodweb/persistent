@@ -278,20 +278,22 @@ instance (Applicative m, Functor m, ResourceIO m) => PersistQuery DB.Action m wh
         query = DB.select (filtersToSelector filts) (u $ T.unpack $ unDBName $ entityDB t)
         t = entityDef $ dummyFromFilts filts
 
-    selectSource filts opts = C.Source $ do
-        cursor <- lift $ DB.find $ makeQuery filts opts
-        return $ C.PreparedSource
-            { C.sourcePull = lift $ do
-                mdoc <- DB.next cursor
-                case mdoc of
-                    Nothing -> return C.Closed
-                    Just doc ->
-                        case pairFromDocument t doc of
-                            Left s -> liftIO $ throwIO $ PersistMarshalError $ T.pack s
-                            Right row -> return $ C.Open row
-            , C.sourceClose = return ()
-            }
+    selectSource filts opts = C.Source
+        { C.sourcePull = do
+            cursor <- lift $ DB.find $ makeQuery filts opts
+            pull cursor
+        , C.sourceClose = return ()
+        }
       where
+        mkSrc cursor = C.Source (pull cursor) (return ())
+        pull cursor = lift $ do
+            mdoc <- DB.next cursor
+            case mdoc of
+                Nothing -> return C.Closed
+                Just doc ->
+                    case pairFromDocument t doc of
+                        Left s -> liftIO $ throwIO $ PersistMarshalError $ T.pack s
+                        Right row -> return $ C.Open (mkSrc cursor) row
         t = entityDef $ dummyFromFilts filts
 
     selectFirst filts opts = do
@@ -304,18 +306,20 @@ instance (Applicative m, Functor m, ResourceIO m) => PersistQuery DB.Action m wh
       where
         t = entityDef $ dummyFromFilts filts
 
-    selectKeys filts = C.Source $ do
-        cursor <- lift $ DB.find query
-        return $ C.PreparedSource
-            { C.sourcePull = lift $ do
-                mdoc <- DB.next cursor
-                case mdoc of
-                    Nothing -> return C.Closed
-                    Just [_ DB.:= DB.ObjId oid] -> return $ C.Open $ oidToKey oid
-                    Just y -> liftIO $ throwIO $ PersistMarshalError $ T.pack $ "Unexpected in selectKeys: " ++ show y
-            , C.sourceClose = return ()
-            }
+    selectKeys filts = C.Source
+        { C.sourcePull = do
+            cursor <- lift $ DB.find query
+            pull cursor
+        , C.sourceClose = return ()
+        }
       where
+        mkSrc cursor = C.Source (pull cursor) (return ())
+        pull cursor = lift $ do
+            mdoc <- DB.next cursor
+            case mdoc of
+                Nothing -> return C.Closed
+                Just [_ DB.:= DB.ObjId oid] -> return $ C.Open (mkSrc cursor) $ oidToKey oid
+                Just y -> liftIO $ throwIO $ PersistMarshalError $ T.pack $ "Unexpected in selectKeys: " ++ show y
         query = (DB.select (filtersToSelector filts) (u $ T.unpack $ unDBName $ entityDB t)) {
           DB.project = [u"_id" DB.=: (1 :: Int)]
         }

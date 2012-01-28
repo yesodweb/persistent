@@ -1,5 +1,5 @@
 name:            pool-conduit
-version:         0.0.0
+version:         0.0.0.1
 license:         BSD3
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -17,7 +17,7 @@ library
     build-depends:   base                     >= 4       && < 5
                    , resource-pool            >= 0.2.1   && < 0.3
                    , transformers             >= 0.2.1   && < 0.3
-                   , conduit                  >= 0.0.2   && < 0.2
+                   , conduit                  >= 0.0.2   && < 0.3
 
     exposed-modules: Data.Conduit.Pool
 

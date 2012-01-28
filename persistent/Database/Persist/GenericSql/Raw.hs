@@ -65,20 +65,26 @@ withStmt :: ResourceIO m
          => Text
          -> [PersistValue]
          -> C.Source (SqlPersist m) [PersistValue]
-withStmt sql vals = C.Source $ do
-    stmt <- lift $ getStmt sql
-    src <- C.prepareSource $ I.withStmt stmt vals
-    return C.PreparedSource
-        { C.sourcePull = do
-            res <- C.sourcePull src
-            case res of
-                C.Closed -> liftIO $ I.reset stmt
-                _ -> return ()
-            return res
-        , C.sourceClose = do
-            liftIO $ I.reset stmt
-            C.sourceClose src
-        }
+withStmt sql vals = C.Source
+    { C.sourcePull = do
+        stmt <- lift $ getStmt sql
+        let src = I.withStmt stmt vals
+        pull stmt src
+    , C.sourceClose = return ()
+    }
+  where
+    pull stmt src = do
+        res <- C.sourcePull src
+        case res of
+            C.Closed -> do
+                liftIO $ I.reset stmt
+                return C.Closed
+            C.Open src' val -> return $ C.Open
+                (C.Source (pull stmt src') (close' stmt src'))
+                val
+    close' stmt src = do
+        liftIO $ I.reset stmt
+        C.sourceClose src
 
 execute :: MonadIO m => Text -> [PersistValue] -> SqlPersist m ()
 execute sql vals = do

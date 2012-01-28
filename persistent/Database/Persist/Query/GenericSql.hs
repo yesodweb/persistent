@@ -79,9 +79,13 @@ instance C.ResourceIO m => PersistQuery SqlPersist m where
       where
         t = entityDef $ dummyFromFilts filts
 
-    selectSource filts opts = C.Source $ do
-        conn <- lift $ SqlPersist ask
-        C.prepareSource $ R.withStmt (sql conn) (getFiltsValues conn filts) C.$= CL.mapM parse
+    selectSource filts opts = C.Source
+        { C.sourcePull = do
+            conn <- lift $ SqlPersist ask
+            let src = R.withStmt (sql conn) (getFiltsValues conn filts) C.$= CL.mapM parse
+            C.sourcePull src
+        , C.sourceClose = return ()
+        }
       where
         (limit, offset, orders) = limitOffsetOrder opts
 
@@ -124,9 +128,13 @@ instance C.ResourceIO m => PersistQuery SqlPersist m where
             , off
             ]
 
-    selectKeys filts = C.Source $ do
-        conn <- lift $ SqlPersist ask
-        C.prepareSource $ R.withStmt (sql conn) (getFiltsValues conn filts) C.$= CL.mapM parse
+    selectKeys filts = C.Source
+        { C.sourcePull = do
+            conn <- lift $ SqlPersist ask
+            let src = R.withStmt (sql conn) (getFiltsValues conn filts) C.$= CL.mapM parse
+            C.sourcePull src
+        , C.sourceClose = return ()
+        }
       where
         parse [PersistInt64 i] = return $ Key $ PersistInt64 i
         parse y = liftIO $ throwIO $ PersistMarshalError $ "Unexpected in selectKeys: " ++ show y

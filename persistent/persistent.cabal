@@ -1,5 +1,5 @@
 name:            persistent
-version:         0.7.0.1
+version:         0.7.1
 license:         BSD3
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -26,7 +26,7 @@ library
                    , time                     >= 1.1.4
                    , text                     >= 0.8     && < 1
                    , containers               >= 0.2     && < 0.5
-                   , conduit                  >= 0.0     && < 0.2
+                   , conduit                  >= 0.2     && < 0.3
                    , monad-control            >= 0.3     && < 0.4
                    , lifted-base              >= 0.1     && < 0.2
                    , pool-conduit             >= 0.0     && < 0.1

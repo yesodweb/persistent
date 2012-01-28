@@ -119,10 +119,10 @@ withStmt' stmt vals = C.sourceIO
     pull _ = liftIO $ do
         x <- Sqlite.step stmt
         case x of
-            Sqlite.Done -> return C.Closed
+            Sqlite.Done -> return C.IOClosed
             Sqlite.Row -> do
                 cols <- liftIO $ Sqlite.columns stmt
-                return $ C.Open cols
+                return $ C.IOOpen cols
 showSqlType :: SqlType -> String
 showSqlType SqlString = "VARCHAR"
 showSqlType SqlInt32 = "INTEGER"
