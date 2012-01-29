@@ -88,11 +88,13 @@ library
 
     ghc-options:   -Wall
 
-    if flag(mongodb)
-        cpp-options: -DWITH_MONGODB -DDEBUG
-    else
-        if flag(postgresql)
-            cpp-options: -DWITH_POSTGRESQL
+-- older versions of cabal have a bug with these flags
+-- you can use: --ghc-option=-DWITH_POSTGRESQL
+--    if flag(mongodb)
+--        cpp-options: -DWITH_MONGODB -DDEBUG
+--    else
+--        if flag(postgresql)
+--            cpp-options: -DWITH_POSTGRESQL
 
 test-suite test
     type:          exitcode-stdio-1.0
@@ -103,11 +105,14 @@ test-suite test
                    , persistent-test
                    , hspec
 
-    if flag(mongodb)
-        cpp-options: -DWITH_MONGODB -DDEBUG
-    else
-        if flag(postgresql)
-            cpp-options: -DWITH_POSTGRESQL
+-- older versions of cabal have a bug with these flags
+-- you can use: --ghc-option=-DWITH_POSTGRESQL
+--    if flag(mongodb)
+--        cpp-options: -DWITH_MONGODB -DDEBUG
+--    else
+--        if flag(postgresql)
+--            cpp-options: -DWITH_POSTGRESQL
+
 
 source-repository head
   type:     git
