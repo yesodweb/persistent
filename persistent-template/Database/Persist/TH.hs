@@ -52,7 +52,7 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import Data.List (foldl')
 import Data.Monoid (mappend, mconcat)
-import qualified Data.Map as Map
+import qualified Data.Map as M
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
@@ -90,7 +90,16 @@ persistFile = persistFileWith upperCaseSettings
 -- | Create data types and appropriate 'PersistEntity' instances for the given
 -- 'EntityDef's. Works well with the persist quasi-quoter.
 mkPersist :: MkPersistSettings -> [EntityDef] -> Q [Dec]
-mkPersist mps = fmap mconcat . mapM (mkEntity mps)
+mkPersist mps ents = fmap mconcat $ mapM (mkEntity mps entLookup) ents
+  where
+    entMap = M.fromList $ zip (map (unHaskellName . entityHaskell) ents) ents
+    entLookup fd = 
+        let typName = unFieldType $ fieldType fd
+        in  case M.lookup typName entMap of
+              Nothing -> lookupError typName
+              Just ent -> ent
+    lookupError field = error $ unpack $
+        "expected the schema to define " `mappend` field
 
 -- | Settings to be passed to the 'mkPersist' function.
 data MkPersistSettings = MkPersistSettings
@@ -299,8 +308,9 @@ mkFromPersistValues t = do
   where
     go ap' x y = InfixE (Just x) ap' (Just y)
 
-mkEntity :: MkPersistSettings -> EntityDef -> Q [Dec]
-mkEntity mps t = do
+
+mkEntity :: MkPersistSettings -> (FieldDef -> EntityDef) -> EntityDef -> Q [Dec]
+mkEntity mps entLookup t = do
     t' <- lift t
     let name = unpack $ unHaskellName $ entityHaskell t
     let clazz = ConT ''PersistEntity `AppT` (ConT (mkName $ unpack $ unHaskellName (entityHaskell t) ++ suffix) `AppT` VarT (mkName "backend"))
@@ -308,6 +318,11 @@ mkEntity mps t = do
     fpv <- mkFromPersistValues t
     utv <- mkUniqueToValues $ entityUniques t
     puk <- mkUniqueKeys t
+
+    -- TODO: enforce ordering issue: embedded entities must be defined before they are later embedded
+    let embeddedFields = filter fieldEmbedded (entityFields t)
+    embeds <- fmap mconcat $ mapM persistFieldFromEntity $ map entLookup embeddedFields
+
     fields <- mapM (mkField t) $ FieldDef
         (HaskellName "Id")
         (entityID t)
@@ -316,7 +331,7 @@ mkEntity mps t = do
         False
         : entityFields t
     toFieldNames <- mkToFieldNames $ entityUniques t
-    return $
+    return $ embeds `mappend`
       [ dataTypeDec t
       , TySynD (mkName $ unpack $ unHaskellName $ entityHaskell t) [] $
             ConT (mkName $ unpack $ unHaskellName (entityHaskell t) ++ suffix)
@@ -364,22 +379,25 @@ persistFieldFromEntity e = do
     ss <- [|SqlString|]
     unexpected <- [|\x -> Left $ "Expected PersistMap, received: " ++ T.pack (show x)|]
     let columnNames = map (unpack . unHaskellName . fieldHaskell) (entityFields e)
-    obj <- [|PersistMap $ zip (map pack columnNames) (map toPersistValue $ toPersistFields e)|]
+    obj <- [|\ent -> PersistMap $ zip (map pack columnNames) (map toPersistValue $ toPersistFields ent)|]
     pmName <- newName "pm"
     fpv <- [|\x -> fromPersistValues $ map (\(_,v) -> case fromPersistValue v of
                                                       Left e' -> error $ unpack e'
                                                       Right r -> r) x|]
+    unexpectedName <- newName "unexpected"
     return
-        [ InstanceD [] (ConT ''PersistField `AppT` ConT (mkName $ unpack $ unHaskellName $ entityHaskell e))
-            [ FunD (mkName "sqlType") [ Clause [WildP] (NormalB ss) [] ]
+        [ persistFieldInstanceD entityName
+            [ sqlTypeFunD ss
             , FunD (mkName "toPersistValue") [ Clause [] (NormalB obj) [] ]
             , FunD (mkName "fromPersistValue")
                 [ Clause [ConP (mkName "PersistMap") [VarP pmName]]
                     (NormalB $ fpv `AppE` VarE pmName) []
-                , Clause [WildP] (NormalB unexpected) []
+                , Clause [VarP unexpectedName] (NormalB (unexpected `AppE` VarE unexpectedName)) []
                 ]
             ]
         ]
+    where
+      entityName = (unpack $ unHaskellName $ entityHaskell e)
 
 updateConName :: Text -> Text -> PersistUpdate -> Text
 updateConName name s pu = concat
@@ -516,6 +534,14 @@ mkUniqueKeys def = do
         let Just col' = lookup col xs
          in front `AppE` VarE col'
 
+sqlTypeFunD :: Exp -> Dec
+sqlTypeFunD st = FunD (mkName "sqlType")
+                [ Clause [WildP] (NormalB st) [] ]
+
+persistFieldInstanceD :: String -> [Dec] -> Dec
+persistFieldInstanceD name =
+   InstanceD [] (ConT ''PersistField `AppT` ConT (mkName name))
+
 -- | Automatically creates a valid 'PersistField' instance for any datatype
 -- that has valid 'Show' and 'Read' instances. Can be very convenient for
 -- 'Enum' types.
@@ -531,10 +557,8 @@ derivePersistField s = do
                             (x, _):_ -> Right x
                             [] -> Left $ "Invalid " ++ dt ++ ": " ++ s'|]
     return
-        [ InstanceD [] (ConT ''PersistField `AppT` ConT (mkName s))
-            [ FunD (mkName "sqlType")
-                [ Clause [WildP] (NormalB ss) []
-                ]
+        [ persistFieldInstanceD s
+            [ sqlTypeFunD ss 
             , FunD (mkName "toPersistValue")
                 [ Clause [] (NormalB tpv) []
                 ]
@@ -603,8 +627,8 @@ liftTs = fmap ListE . mapM liftT
 liftTss :: [[Text]] -> Q Exp
 liftTss = fmap ListE . mapM liftTs
 
-liftMap :: Map.Map Text [[Text]] -> Q Exp
-liftMap m = [|Map.fromList $(fmap ListE $ mapM liftPair $ Map.toList m)|]
+liftMap :: M.Map Text [[Text]] -> Q Exp
+liftMap m = [|M.fromList $(fmap ListE $ mapM liftPair $ M.toList m)|]
 
 liftPair :: (Text, [[Text]]) -> Q Exp
 liftPair (t, ts) = [|($(liftT t), $(liftTss ts))|]
