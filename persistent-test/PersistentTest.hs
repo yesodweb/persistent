@@ -111,15 +111,19 @@ data PetType = Cat | Dog
 derivePersistField "PetType"
 
 #if WITH_MONGODB
-data Embedded  =  Embedded { embeddedName :: String, embeddedEmbed :: Embedded2 }
-                    deriving(Show, Read, Eq)
-data Embedded2 = Embedded2 { embedded2name :: String }
-                    deriving(Show, Read, Eq)
-
 mkPersist MkPersistSettings { mpsBackend = ConT ''Action } [persistUpperCase|
+
+--  Embedded2 no-migrate
+--    embedded2name String
+
+  Embedded no-migrate
+    embeddedName String
+--    embeddedEmbed ^Embedded2
+
   HasEmbed
     name String
     embed ^Embedded
+
 #else
 share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persistUpperCase|
 #endif
@@ -381,7 +385,7 @@ specs = describe "persistent" $ do
 
 #ifdef WITH_MONGODB
   it "embedded entities" $ db $ do
-      let container = HasEmbed "container" (Embedded "embedded" (Embedded2 "2"))
+      let container = HasEmbed "container" (Embedded "embedded") -- (Embedded2 "2"))
       contK <- insert container
       Just res <- selectFirst [HasEmbedName ==. "container"] []
       res @== (Entity contK container)
