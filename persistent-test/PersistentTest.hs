@@ -659,7 +659,7 @@ specs = describe "persistent" $ do
       oid <- liftIO $ genObjectId
       let k = oidToKey oid
 #else
-      ki <- liftIO randomIO
+      ki <- liftIO $ randomRIO (0, 10000)
       let k = Key $ PersistInt64 $ abs ki
 #endif
       insertKey k $ Person "Key" 26 Nothing
@@ -671,7 +671,7 @@ specs = describe "persistent" $ do
       oid <- liftIO $ genObjectId
       let k = oidToKey oid
 #else
-      ki <- liftIO randomIO
+      ki <- liftIO $ randomRIO (0, 10000)
       let k = Key $ PersistInt64 $ abs ki
 #endif
       Nothing <- selectFirst [PersonName ==. "Repsert"] []

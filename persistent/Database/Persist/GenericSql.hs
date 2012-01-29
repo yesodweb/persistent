@@ -135,7 +135,10 @@ instance C.ResourceIO m => PersistStore SqlPersist m where
 
     insertKey = insrepHelper "INSERT"
 
-    repsert = insrepHelper "REPLACE"
+    repsert key value = do
+        -- FIXME use this for sqlite insrepHelper "REPLACE"
+        delete key
+        insertKey key value
 
     get k = do
         conn <- SqlPersist ask
