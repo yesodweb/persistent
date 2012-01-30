@@ -134,7 +134,7 @@ data SqlType = SqlString
              | SqlTime
              | SqlDayTime
              | SqlBlob
-    deriving (Show, Read, Eq, Typeable)
+    deriving (Show, Read, Eq, Typeable, Ord)
 
 -- | A value which can be marshalled to and from a 'PersistValue'.
 class PersistField a where

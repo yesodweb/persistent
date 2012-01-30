@@ -1,0 +1,44 @@
+name:            persistent-mysql
+version:         0.0
+license:         BSD3
+license-file:    LICENSE
+author:          Felipe Lessa <felipe.lessa@gmail.com>, Michael Snoyman
+maintainer:      Felipe Lessa <felipe.lessa@gmail.com>
+synopsis:        Backend for the persistent library using MySQL database server.
+category:        Database, Yesod
+stability:       Stable
+cabal-version:   >= 1.6
+build-type:      Simple
+homepage:        http://www.yesodweb.com/book/persistent
+description:
+    This package contains a backend for persistent using the
+    MySQL database server.  Internally it uses the @mysql-simple@
+    and @mysql@ packages in order to access the database.
+    .
+    This package supports only MySQL 5.1 and above.  However, it
+    has been tested only on MySQL 5.5.
+    .
+    Known problems:
+    .
+    * This package does not support statements inside other
+      statements.
+
+library
+    build-depends:   base                  >= 4        && < 5
+                   , transformers          >= 0.2.1    && < 0.3
+                   , mysql-simple          >= 0.2.2.3  && < 0.3
+                   , mysql                 >= 0.1.1.3  && < 0.2
+                   , persistent            >= 0.7      && < 0.8
+                   , containers            >= 0.2
+                   , bytestring            >= 0.9      && < 0.10
+                   , text                  >= 0.7      && < 0.12
+                   , monad-control         >= 0.2      && < 0.4
+                   , time                  >= 1.1
+                   , aeson                 >= 0.5
+                   , conduit               >= 0.2
+    exposed-modules: Database.Persist.MySQL
+    ghc-options:     -Wall
+
+source-repository head
+  type:     git
+  location: git://github.com/yesodweb/persistent.git
