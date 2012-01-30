@@ -259,7 +259,7 @@ instance Arbitrary PersistValue where
 
 joinGeneric :: PersistQuery b m =>
                (SelectOneMany b (AuthorGeneric b) (EntryGeneric b)
-                -> b m [(Entity b (AuthorGeneric b), [Entity b (EntryGeneric b)])])
+                -> b m [(Entity (AuthorGeneric b), [Entity (EntryGeneric b)])])
                 -> b m ()
 
 joinGeneric run = do

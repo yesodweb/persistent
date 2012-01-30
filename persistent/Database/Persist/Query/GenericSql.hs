@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
@@ -328,11 +329,11 @@ show = pack . Prelude.show
 -- the environment inside a 'SqlPersist' monad, provide an explicit
 -- 'Connection'. This can allow you to use the returned 'Source' in an
 -- arbitrary monad.
-selectSourceConn :: (C.ResourceIO m, PersistEntity val)
+selectSourceConn :: (C.ResourceIO m, PersistEntity val, SqlPersist ~ PersistEntityBackend val)
                  => Connection
                  -> [Filter val]
                  -> [SelectOpt val]
-                 -> C.Source m (Entity SqlPersist val)
+                 -> C.Source m (Entity val)
 selectSourceConn conn fs opts =
     C.transSource (flip runSqlConn conn) (selectSource fs opts)
 
@@ -346,8 +347,8 @@ orderClause :: PersistEntity val
             -> Text
 orderClause includeTable conn o =
     case o of
-        Asc  x -> name x
-        Desc x -> name x ++ " DESC"
+        Asc  x -> name $ persistFieldDef x
+        Desc x -> name (persistFieldDef x) ++ " DESC"
         _ -> error $ "orderClause: expected Asc or Desc, not limit or offset"
   where
     dummyFromOrder :: SelectOpt a -> a
@@ -359,4 +360,4 @@ orderClause includeTable conn o =
         (if includeTable
             then ((tn ++ ".") ++)
             else id)
-        $ escapeName conn $ fieldDB $ persistFieldDef x
+        $ escapeName conn $ fieldDB x

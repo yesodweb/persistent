@@ -29,7 +29,7 @@ import qualified Data.Text as T
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 
-fromPersistValuesId :: PersistEntity v => [PersistValue] -> Either Text (Entity SqlPersist v)
+fromPersistValuesId :: PersistEntity v => [PersistValue] -> Either Text (Entity v)
 fromPersistValuesId [] = Left "fromPersistValuesId: No values provided"
 fromPersistValuesId (PersistInt64 i:rest) =
     case fromPersistValues rest of
@@ -46,8 +46,8 @@ instance (PersistEntity one, PersistEntity many, Eq (Key SqlPersist one))
         conn <- SqlPersist ask
         C.runResourceT $ liftM go $ withStmt (sql conn) (getFiltsValues conn oneF ++ getFiltsValues conn manyF) C.$$ loop id
       where
-        go :: [(Entity a b, Maybe (Entity c d))]
-           -> [(Entity a b, [Entity c d])]
+        go :: [(Entity b, Maybe (Entity d))]
+           -> [(Entity b, [Entity d])]
         go = map (fst . head &&& mapMaybe snd)
            . groupBy ((==) `on` (entityKey . fst))
 
