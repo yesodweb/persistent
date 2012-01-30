@@ -159,10 +159,10 @@ uniqSelector uniq = zipWith (DB.:=)
   (map u (map (T.unpack . unDBName . snd) $ persistUniqueToFieldNames uniq))
   (map DB.val (persistUniqueToValues uniq))
 
-pairFromDocument :: PersistEntity val
+pairFromDocument :: (PersistEntity val, PersistEntityBackend val ~ DB.Action)
                  => EntityDef
                  -> [DB.Field]
-                 -> Either String (Entity DB.Action val)
+                 -> Either String (Entity val)
 pairFromDocument ent document = pairFromPersistValues document
   where
     pairFromPersistValues (x:xs) =

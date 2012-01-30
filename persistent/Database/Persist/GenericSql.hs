@@ -534,7 +534,7 @@ instance PersistField a => RawSql (Single a) where
     rawSqlProcessRow [pv]  = Single <$> fromPersistValue pv
     rawSqlProcessRow _     = Left "RawSql (Single a): wrong number of columns."
 
-instance PersistEntity a => RawSql (Entity backend a) where
+instance PersistEntity a => RawSql (Entity a) where
     rawSqlCols escape = ((+1).length.entityFields &&& process) . entityDef . entityVal
         where
           process ed = (:[]) $

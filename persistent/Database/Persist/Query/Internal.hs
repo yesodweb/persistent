@@ -1,5 +1,6 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeFamilies #-}
 module Database.Persist.Query.Internal
   ( -- re-exported as public
       PersistQuery (..)
@@ -35,16 +36,16 @@ class PersistStore b m => PersistQuery b m where
     -- | Get all records matching the given criterion in the specified order.
     -- Returns also the identifiers.
     selectSource
-           :: PersistEntity val
+           :: (PersistEntity val, PersistEntityBackend val ~ b)
            => [Filter val]
            -> [SelectOpt val]
-           -> C.Source (b m) (Entity b val)
+           -> C.Source (b m) (Entity val)
 
     -- | get just the first record for the criterion
-    selectFirst :: PersistEntity val
+    selectFirst :: (PersistEntity val, PersistEntityBackend val ~ b)
                 => [Filter val]
                 -> [SelectOpt val]
-                -> b m (Maybe (Entity b val))
+                -> b m (Maybe (Entity val))
     selectFirst filts opts = C.runResourceT
         $ selectSource filts ((LimitTo 1):opts) C.$$ CL.head
 
@@ -76,10 +77,10 @@ data SelectOpt v = forall typ. Asc (EntityField v typ)
                  | LimitTo Int
 
 -- | Call 'select' but return the result as a list.
-selectList :: (PersistEntity val, PersistQuery b m)
+selectList :: (PersistEntity val, PersistQuery b m, PersistEntityBackend val ~ b)
            => [Filter val]
            -> [SelectOpt val]
-           -> b m [Entity b val]
+           -> b m [Entity val]
 selectList a b = C.runResourceT $ selectSource a b C.$$ CL.consume
 
 data PersistUpdate = Assign | Add | Subtract | Multiply | Divide -- FIXME need something else here

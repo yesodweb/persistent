@@ -32,10 +32,10 @@ data SelectOneMany backend one many = SelectOneMany
 
 selectOneMany :: ([Key backend one] -> Filter many) -> (many -> Key backend one) -> SelectOneMany backend one many
 selectOneMany filts get' = SelectOneMany [] [] [] [] filts get' False
-instance (PersistEntity one, PersistEntity many, Ord (Key backend one), PersistQuery backend monad)
+instance (PersistEntity one, PersistEntity many, Ord (Key backend one), PersistQuery backend monad, backend ~ PersistEntityBackend one, backend ~ PersistEntityBackend many)
     => RunJoin (SelectOneMany backend one many) backend monad where
     type Result (SelectOneMany backend one many) =
-        [((Entity backend one), [(Entity backend many)])]
+        [((Entity one), [(Entity many)])]
     runJoin (SelectOneMany oneF oneO manyF manyO eq getKey isOuter) = do
         x <- selectList oneF oneO
         -- FIXME use select instead of selectList

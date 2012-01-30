@@ -423,8 +423,8 @@ newtype Key (backend :: (* -> *) -> * -> *) entity = Key { unKey :: PersistValue
 -- your query returns two entities (i.e. @(Entity backend a,
 -- Entity backend b)@), then you must you use @SELECT ??, ??
 -- WHERE ...@, and so on.
-data Entity backend entity =
-    Entity { entityKey :: Key backend entity
+data Entity entity =
+    Entity { entityKey :: Key (PersistEntityBackend entity) entity
            , entityVal :: entity }
     deriving (Eq, Ord, Show, Read)
 
@@ -457,7 +457,7 @@ class (C.ResourceIO m, C.ResourceIO (b m)) => PersistStore b m where
 
 class PersistStore b m => PersistUnique b m where
     -- | Get a record by unique key, if available. Returns also the identifier.
-    getBy :: PersistEntity val => Unique val b -> b m (Maybe (Entity b val))
+    getBy :: (PersistEntityBackend val ~ b, PersistEntity val) => Unique val b -> b m (Maybe (Entity val))
 
     -- | Delete a specific record by unique key. Does nothing if no record
     -- matches.
@@ -465,7 +465,7 @@ class PersistStore b m => PersistUnique b m where
 
     -- | Like 'insert', but returns 'Nothing' when the record
     -- couldn't be inserted because of a uniqueness constraint.
-    insertUnique :: PersistEntity val => val -> b m (Maybe (Key b val))
+    insertUnique :: (b ~ PersistEntityBackend val, PersistEntity val) => val -> b m (Maybe (Key b val))
     insertUnique datum = do
         isUnique <- checkUnique datum
         if isUnique then Just <$> insert datum else return Nothing
@@ -475,8 +475,8 @@ class PersistStore b m => PersistUnique b m where
 -- | Insert a value, checking for conflicts with any unique constraints.  If a
 -- duplicate exists in the database, it is returned as 'Left'. Otherwise, the
 -- new 'Key' is returned as 'Right'.
-insertBy :: (PersistEntity v, PersistStore b m, PersistUnique b m)
-          => v -> b m (Either (Entity b v) (Key b v))
+insertBy :: (PersistEntity v, PersistStore b m, PersistUnique b m, b ~ PersistEntityBackend v)
+          => v -> b m (Either (Entity v) (Key b v))
 insertBy val =
     go $ persistUniqueKeys val
   where
@@ -491,8 +491,8 @@ insertBy val =
 -- of a 'Unique' value. Returns a value matching /one/ of the unique keys. This
 -- function makes the most sense on entities with a single 'Unique'
 -- constructor.
-getByValue :: (PersistEntity v, PersistUnique b m)
-           => v -> b m (Maybe (Entity b v))
+getByValue :: (PersistEntity v, PersistUnique b m, PersistEntityBackend v ~ b)
+           => v -> b m (Maybe (Entity v))
 getByValue val =
     go $ persistUniqueKeys val
   where
@@ -533,7 +533,7 @@ getJust key = get key >>= maybe
 --
 -- Returns 'True' if the entity would be unique, and could thus safely be
 -- 'insert'ed; returns 'False' on a conflict.
-checkUnique :: (PersistEntity val, PersistUnique b m) => val -> b m Bool
+checkUnique :: (PersistEntityBackend val ~ b, PersistEntity val, PersistUnique b m) => val -> b m Bool
 checkUnique val =
     go $ persistUniqueKeys val
   where
