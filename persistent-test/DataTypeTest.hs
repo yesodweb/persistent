@@ -16,6 +16,10 @@ import Database.Persist.TH
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
 #endif
+#if WITH_MYSQL
+import Database.Persist.MySQL
+#endif
+import Data.Char (generalCategory, GeneralCategory(..))
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.ByteString (ByteString)
@@ -33,8 +37,8 @@ share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
 DataTypeTable
     text Text
     bytes ByteString
-    int Int
-    double Double
+    intx Int
+    doublex Double
     bool Bool
     day Day
     time TimeOfDay
@@ -58,7 +62,7 @@ dataTypeSpecs = describe "data type specs" $ do
                 -- Check individual fields for better error messages
                 check "text" dataTypeTableText
                 check "bytes" dataTypeTableBytes
-                check "int" dataTypeTableInt
+                check "int" dataTypeTableIntx
                 check "bool" dataTypeTableBool
                 check "day" dataTypeTableDay
                 check "time" dataTypeTableTime
@@ -66,12 +70,16 @@ dataTypeSpecs = describe "data type specs" $ do
 
                 -- Do a special check for Double since it may
                 -- lose precision when serialized.
-                when (abs (dataTypeTableDouble x - dataTypeTableDouble y) > 1e-14) $
-                  check "double" dataTypeTableDouble
+                when (abs (dataTypeTableDoublex x - dataTypeTableDoublex y) > 1e-14) $
+                  check "double" dataTypeTableDoublex
 
 randomValue :: IO DataTypeTable
 randomValue = DataTypeTable
-    <$> (T.pack . filter (/= '\0') <$> randomIOs)
+    <$> (T.pack
+              . filter ((`notElem` forbidden) . generalCategory)
+              . filter (<= '\xFFFF') -- only BMP
+              . filter (/= '\0')     -- no nulls
+         <$> randomIOs)
     <*> (S.pack . map intToWord8 <$> randomIOs)
     <*> randomIO
     <*> randomIO
@@ -79,6 +87,7 @@ randomValue = DataTypeTable
     <*> randomDay
     <*> randomTime
     <*> randomUTC
+    where forbidden = [NotAssigned, PrivateUse]
 
 asIO :: IO a -> IO a
 asIO = id

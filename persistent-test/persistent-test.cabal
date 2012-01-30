@@ -24,6 +24,10 @@ Flag postgresql
    Description: test postgresql. default is to test just sqlite.
    Default: False
 
+Flag mysql
+   Description: test MySQL
+   Default: False
+
 library
     extra-libraries: sqlite3
 
@@ -50,6 +54,7 @@ library
                      Database.Persist.Sqlite
                      Database.Sqlite
                      Database.Persist.Postgresql
+                     Database.Persist.MySQL
 
                      Database.Persist.MongoDB
 
@@ -67,7 +72,7 @@ library
                    , monad-control
                    , containers
                    , bytestring
-                   , conduit
+                   , conduit >= 0.2
                    , time >= 1.2
                    , random == 1.*
                    , QuickCheck == 2.4.*
@@ -79,12 +84,16 @@ library
                    , postgresql-simple     >= 0.0      && < 1.0
                    , postgresql-libpq      >= 0.6
 
+                   -- MySQL dependencies
+                   , mysql-simple          >= 0.2.2.3  && < 0.3
+                   , mysql                 >= 0.1.1.3  && < 0.2
+
                    -- mongoDB dependencies
                    , mongoDB       == 1.2.*
                    , cereal
                    , compact-string-fix
                    , bson
-    hs-source-dirs: ., persistent, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mongoDB
+    hs-source-dirs: ., persistent, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mysql, persistent-mongoDB
 
     ghc-options:   -Wall
 
@@ -95,6 +104,9 @@ library
 --    else
 --        if flag(postgresql)
 --            cpp-options: -DWITH_POSTGRESQL
+--        else
+--            if flag(mysql)
+--                cpp-options: -DWITH_MYSQL
 
 test-suite test
     type:          exitcode-stdio-1.0
@@ -112,6 +124,9 @@ test-suite test
 --    else
 --        if flag(postgresql)
 --            cpp-options: -DWITH_POSTGRESQL
+--        else
+--            if flag(mysql)
+--                cpp-options: -DWITH_MYSQL
 
 
 source-repository head

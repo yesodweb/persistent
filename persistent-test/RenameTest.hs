@@ -18,6 +18,9 @@ import Database.Persist.GenericSql.Raw
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
 #endif
+#if WITH_MYSQL
+import Database.Persist.MySQL
+#endif
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import qualified Data.Map as Map
@@ -44,6 +47,14 @@ runConn2 f = do
     _ <- withSqlitePool ":memory:" 1 $ runSqlPool f
 #if WITH_POSTGRESQL
     _ <- withPostgresqlPool "host=localhost port=5432 user=test dbname=test password=test" 1 $ runSqlPool f
+#endif
+#if WITH_MYSQL
+    _ <- withMySQLPool defaultConnectInfo
+                        { connectHost     = "localhost"
+                        , connectUser     = "test"
+                        , connectPassword = "test"
+                        , connectDatabase = "test"
+                        } 1 $ runSqlPool f
 #endif
     return ()
 

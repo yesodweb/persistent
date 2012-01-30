@@ -140,6 +140,7 @@ data Column = Column
     , cDefault   :: Maybe Text
     , cReference :: (Maybe (DBName, DBName)) -- table name, constraint name
     }
+    deriving (Eq, Ord, Show)
 
 {- FIXME
 getSqlValue :: [String] -> Maybe String
