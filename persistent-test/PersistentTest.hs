@@ -42,12 +42,15 @@ import Control.Monad (replicateM)
 import qualified Data.ByteString as BS
 
 #else
-import Database.Persist.EntityDef (EntityDef(..))
+import Database.Persist.EntityDef (EntityDef(..), DBName(..))
 import Database.Persist.Store ( DeleteCascade (..) )
 import Database.Persist.GenericSql
+import Database.Persist.GenericSql.Internal (escapeName)
 import qualified Database.Persist.Query.Join.Sql
 import Database.Persist.Sqlite
 import Control.Exception (SomeException)
+import Control.Monad.Trans.Reader (ask)
+import qualified Data.Text as T
 #if MIN_VERSION_monad_control(0, 3, 0)
 import qualified Control.Exception as E
 #define CATCH catch'
@@ -746,7 +749,16 @@ specs = describe "persistent" $ do
       (a2k, a2) <- insert' $ Pet p1k "Zeno"    Cat
       (a3k, a3) <- insert' $ Pet p2k "Lhama"   Dog
       (_  , _ ) <- insert' $ Pet p3k "Abacate" Cat
-      ret <- rawSql "SELECT ??, ?? FROM \"Person\", \"Pet\" WHERE \"Person\".age >= ? AND \"Pet\".\"ownerId\" = \"Person\".id ORDER BY \"Person\".name, \"Pet\".name" [PersistInt64 20]
+      escape <- ((. DBName) . escapeName) `fmap` SqlPersist ask
+      let query = T.concat [ "SELECT ??, ?? "
+                           , "FROM ", escape "Person"
+                           , ", ", escape "Pet"
+                           , " WHERE ", escape "Person", ".", escape "age", " >= ? "
+                           , "AND ", escape "Pet", ".", escape "ownerId", " = "
+                                   , escape "Person", ".", escape "id"
+                           , " ORDER BY ", escape "Person", ".", escape "name"
+                           ]
+      ret <- rawSql query [PersistInt64 20]
       liftIO $ ret @?= [ (Entity p1k p1, Entity a1k a1)
                        , (Entity p1k p1, Entity a2k a2)
                        , (Entity p2k p2, Entity a3k a3) ]
@@ -754,8 +766,12 @@ specs = describe "persistent" $ do
   it "rawSql/order-proof" $ db $ do
       let p1 = Person "Zacarias" 93 Nothing
       p1k <- insert p1
-      ret1 <- rawSql "SELECT ?? FROM \"Person\"" []
-      ret2 <- rawSql "SELECT ?? FROM \"Person\"" []
+      escape <- ((. DBName) . escapeName) `fmap` SqlPersist ask
+      let query = T.concat [ "SELECT ?? "
+                           , "FROM ", escape "Person"
+                           ]
+      ret1 <- rawSql query []
+      ret2 <- rawSql query []
       liftIO $ ret1 @?= [Entity p1k p1]
       liftIO $ ret2 @?= [Entity (Key $ unKey p1k) (RFO p1)]
 
