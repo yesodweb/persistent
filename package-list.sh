@@ -5,6 +5,7 @@ pkgs=( ./pool-conduit
        ./persistent-template
        ./persistent-sqlite
        ./persistent-postgresql
+       ./persistent-mysql
        ./persistent-mongoDB
      )
 
