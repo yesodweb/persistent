@@ -34,7 +34,7 @@ DataTypeTable
     text Text
     bytes ByteString
     intx Int
-    double Double
+    doublex Double
     bool Bool
     day Day
     time TimeOfDay
@@ -66,8 +66,8 @@ dataTypeSpecs = describe "data type specs" $ do
 
                 -- Do a special check for Double since it may
                 -- lose precision when serialized.
-                when (abs (dataTypeTableDouble x - dataTypeTableDouble y) > 1e-14) $
-                  check "double" dataTypeTableDouble
+                when (abs (dataTypeTableDoublex x - dataTypeTableDoublex y) > 1e-14) $
+                  check "double" dataTypeTableDoublex
 
 randomValue :: IO DataTypeTable
 randomValue = DataTypeTable
