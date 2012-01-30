@@ -16,6 +16,7 @@ import Database.Persist.TH
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
 #endif
+import Data.Char (generalCategory, GeneralCategory(..))
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.ByteString (ByteString)
@@ -71,7 +72,11 @@ dataTypeSpecs = describe "data type specs" $ do
 
 randomValue :: IO DataTypeTable
 randomValue = DataTypeTable
-    <$> (T.pack . filter (/= '\0') <$> randomIOs)
+    <$> (T.pack
+              . filter ((`notElem` forbidden) . generalCategory)
+              . filter (<= '\xFFFF') -- only BMP
+              . filter (/= '\0')     -- no nulls
+         <$> randomIOs)
     <*> (S.pack . map intToWord8 <$> randomIOs)
     <*> randomIO
     <*> randomIO
@@ -79,6 +84,7 @@ randomValue = DataTypeTable
     <*> randomDay
     <*> randomTime
     <*> randomUTC
+    where forbidden = [NotAssigned, PrivateUse]
 
 asIO :: IO a -> IO a
 asIO = id
