@@ -388,8 +388,8 @@ show = pack . P.show
 -- you and automatically parses the rows of the result.  It may
 -- return:
 --
---   * An 'Entity', which is analogous to the tuples that
---     'selectList' returns.  All of your entity's fields are
+--   * An 'Entity', that which 'selectList' returns.
+--     All of your entity's fields are
 --     automatically parsed.
 --
 --   * A @'Single' a@, which is a single, raw column of type @a@.
