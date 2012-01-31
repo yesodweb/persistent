@@ -223,9 +223,9 @@ getGetter MySQLBase.Double     = convertPV PersistDouble
 getGetter MySQLBase.Decimal    = convertPV PersistDouble
 getGetter MySQLBase.NewDecimal = convertPV PersistDouble
 -- Text
-getGetter MySQLBase.VarChar    = convertPV PersistText
-getGetter MySQLBase.VarString  = convertPV PersistText
-getGetter MySQLBase.String     = convertPV PersistText
+getGetter MySQLBase.VarChar    = convertPV persistText
+getGetter MySQLBase.VarString  = convertPV persistText
+getGetter MySQLBase.String     = convertPV persistText
 -- ByteString
 getGetter MySQLBase.Blob       = convertPV PersistByteString
 getGetter MySQLBase.TinyBlob   = convertPV PersistByteString
@@ -246,6 +246,9 @@ getGetter MySQLBase.Enum       = convertPV PersistText
 -- Unsupported
 getGetter other = error $ "MySQL.getGetter: type " ++
                   show other ++ " not supported."
+
+persistText :: ByteString -> PersistValue
+persistText = PersistText . T.decodeUtf8
 
 
 ----------------------------------------------------------------------
@@ -467,6 +470,7 @@ parseType "tinytext"   = return SqlString
 parseType "mediumtext" = return SqlString
 parseType "longtext"   = return SqlString
 -- ByteString
+parseType "varbinary"  = return SqlBlob
 parseType "blob"       = return SqlBlob
 parseType "tinyblob"   = return SqlBlob
 parseType "mediumblob" = return SqlBlob
@@ -552,10 +556,10 @@ findAlters allDefs col@(Column name isNull type_ def _maxLen ref) cols =
 -- | Prints the part of a @CREATE TABLE@ statement about a given
 -- column.
 showColumn :: Column -> String
-showColumn (Column n nu t def _maxLen ref) = concat
+showColumn (Column n nu t def maxLen ref) = concat
     [ escapeDBName n
     , " "
-    , showSqlType t
+    , showSqlType t maxLen
     , " "
     , if nu then "NULL" else "NOT NULL"
     , case def of
@@ -568,16 +572,20 @@ showColumn (Column n nu t def _maxLen ref) = concat
 
 
 -- | Renders an 'SqlType' in MySQL's format.
-showSqlType :: SqlType -> String
-showSqlType SqlBlob    = "BLOB"
-showSqlType SqlBool    = "TINYINT(1)"
-showSqlType SqlDay     = "DATE"
-showSqlType SqlDayTime = "DATETIME"
-showSqlType SqlInt32   = "INT"
-showSqlType SqlInteger = "BIGINT"
-showSqlType SqlReal    = "DOUBLE PRECISION"
-showSqlType SqlString  = "VARCHAR(65535)"
-showSqlType SqlTime    = "TIME"
+showSqlType :: SqlType
+            -> Maybe Integer -- ^ @maxlen@
+            -> String
+showSqlType SqlBlob    Nothing  = "BLOB"
+showSqlType SqlBlob    (Just i) = "VARBINARY(" ++ show i ++ ")"
+showSqlType SqlBool    _        = "TINYINT(1)"
+showSqlType SqlDay     _        = "DATE"
+showSqlType SqlDayTime _        = "DATETIME"
+showSqlType SqlInt32   _        = "INT"
+showSqlType SqlInteger _        = "BIGINT"
+showSqlType SqlReal    _        = "DOUBLE PRECISION"
+showSqlType SqlString  Nothing  = "TEXT CHARACTER SET utf8"
+showSqlType SqlString  (Just i) = "VARCHAR(" ++ show i ++ ") CHARACTER SET utf8"
+showSqlType SqlTime    _        = "TIME"
 
 
 -- | Render an action that must be done on the database.
