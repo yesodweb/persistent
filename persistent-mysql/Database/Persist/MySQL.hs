@@ -603,8 +603,10 @@ showAlterTable table (AddUniqueConstraint cname cols) = concat
     , ")"
     ]
     where
-      escapeDBName' (name, (FieldType "String")) = escapeDBName name ++ "(200)"
-      escapeDBName' (name, _                   ) = escapeDBName name
+      escapeDBName' (name, (FieldType "Text"      )) = escapeDBName name ++ "(200)"
+      escapeDBName' (name, (FieldType "String"    )) = escapeDBName name ++ "(200)"
+      escapeDBName' (name, (FieldType "ByteString")) = escapeDBName name ++ "(200)"
+      escapeDBName' (name, _                       ) = escapeDBName name
 showAlterTable table (DropUniqueConstraint cname) = concat
     [ "ALTER TABLE "
     , escapeDBName table
