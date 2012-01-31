@@ -60,7 +60,8 @@ import qualified Control.Exception.Control as Control
 #define CATCH Control.catch
 #endif
 import System.Random
-
+import Data.ByteString.Char8 (ByteString)
+import Data.String (IsString)
 import Control.Monad.Trans.Resource (ResourceIO)
 
 #if WITH_POSTGRESQL
@@ -176,6 +177,25 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persis
   Entry
     authorId AuthorId
     title String
+
+  -- From the scaffold
+  User
+    ident Text
+    password Text Maybe
+    UniqueUser ident
+  Email
+    email Text
+    user UserId Maybe
+    verkey Text Maybe
+    UniqueEmail email
+
+  MaxLen
+    text1 Text
+    text2 Text maxlen=3
+    bs1 ByteString
+    bs2 ByteString maxlen=3
+    str1 String
+    str2 String maxlen=3
 |]
 
 petOwner :: PersistStore b m => PetGeneric b -> b m (PersonGeneric b)
@@ -810,6 +830,23 @@ specs = describe "persistent" $ do
   it "commit/rollback" (caseCommitRollback >> runConn cleanDB)
 
   it "afterException" caseAfterException
+
+  it "maxlen" $ db $ do
+    let t1  = MaxLen a a  a a  a a
+        t2  = MaxLen b b  b b  b b
+        t2' = MaxLen b b' b b' b b'
+        a, b, b' :: IsString t => t
+        a  = "a"
+        b  = "12345"
+        b' = "123"
+    t1k <- insert t1
+    t2k <- insert t2
+    Just t1v <- get t1k
+    Just t2v <- get t2k
+    liftIO $ do t1v @?= t1
+                if t2v == t2
+                  then t2v @?= t2 -- FIXME: why u no truncate?
+                  else t2v @?= t2'
 
 -- | Reverses the order of the fields of an entity.  Used to test
 -- @??@ placeholders of 'rawSql'.

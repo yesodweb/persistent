@@ -223,9 +223,9 @@ getGetter MySQLBase.Double     = convertPV PersistDouble
 getGetter MySQLBase.Decimal    = convertPV PersistDouble
 getGetter MySQLBase.NewDecimal = convertPV PersistDouble
 -- Text
-getGetter MySQLBase.VarChar    = convertPV PersistText
-getGetter MySQLBase.VarString  = convertPV PersistText
-getGetter MySQLBase.String     = convertPV PersistText
+getGetter MySQLBase.VarChar    = convertPV persistText
+getGetter MySQLBase.VarString  = convertPV persistText
+getGetter MySQLBase.String     = convertPV persistText
 -- ByteString
 getGetter MySQLBase.Blob       = convertPV PersistByteString
 getGetter MySQLBase.TinyBlob   = convertPV PersistByteString
@@ -246,6 +246,9 @@ getGetter MySQLBase.Enum       = convertPV PersistText
 -- Unsupported
 getGetter other = error $ "MySQL.getGetter: type " ++
                   show other ++ " not supported."
+
+persistText :: ByteString -> PersistValue
+persistText = PersistText . T.decodeUtf8
 
 
 ----------------------------------------------------------------------
@@ -280,7 +283,7 @@ migrate' connectInfo allDefs getter val = do
                         AddUniqueConstraint uname $
                         map (findTypeOfColumn allDefs name) ucols ]
         let foreigns = do
-              Column cname _ _ _ (Just (refTblName, _)) <- fst new
+              Column cname _ _ _ _ (Just (refTblName, _)) <- fst new
               return $ AlterColumn name (cname, addReference allDefs refTblName)
         return $ Right $ map showAlterDb $ addTable : uniques ++ foreigns
       -- No errors and something found, migrate
@@ -436,7 +439,7 @@ getColumn connectInfo getter tname [ PersistText cname
                _ -> fail "MySQL.getColumn/getRef: never here"
 
       -- Okay!
-      return $ Column (DBName cname) (null_ == "YES") type_ default_ ref
+      return $ Column (DBName cname) (null_ == "YES") type_ default_ Nothing ref -- FIXME: maxLen
 
 getColumn _ _ _ x =
     return $ Left $ pack $ "Invalid result from INFORMATION_SCHEMA: " ++ show x
@@ -467,6 +470,7 @@ parseType "tinytext"   = return SqlString
 parseType "mediumtext" = return SqlString
 parseType "longtext"   = return SqlString
 -- ByteString
+parseType "varbinary"  = return SqlBlob
 parseType "blob"       = return SqlBlob
 parseType "tinyblob"   = return SqlBlob
 parseType "mediumblob" = return SqlBlob
@@ -521,12 +525,12 @@ getAlters allDefs tblName (c1, u1) (c2, u2) =
 -- changed in the columns @oldColumns@ for @newColumn@ to be
 -- supported.
 findAlters :: [EntityDef] -> Column -> [Column] -> ([AlterColumn'], [Column])
-findAlters allDefs col@(Column name isNull type_ def ref) cols =
+findAlters allDefs col@(Column name isNull type_ def _maxLen ref) cols =
     case filter ((name ==) . cName) cols of
         [] -> ( let cnstr = [addReference allDefs tname | Just (tname, _) <- [ref]]
                 in map ((,) name) (Add col : cnstr)
               , cols )
-        Column _ isNull' type_' def' ref':_ ->
+        Column _ isNull' type_' def' _maxLen' ref':_ ->
             let -- Foreign key
                 refDrop = case (ref == ref', ref') of
                             (False, Just (_, cname)) -> [(name, DropReference cname)]
@@ -552,10 +556,10 @@ findAlters allDefs col@(Column name isNull type_ def ref) cols =
 -- | Prints the part of a @CREATE TABLE@ statement about a given
 -- column.
 showColumn :: Column -> String
-showColumn (Column n nu t def ref) = concat
+showColumn (Column n nu t def maxLen ref) = concat
     [ escapeDBName n
     , " "
-    , showSqlType t
+    , showSqlType t maxLen
     , " "
     , if nu then "NULL" else "NOT NULL"
     , case def of
@@ -568,16 +572,20 @@ showColumn (Column n nu t def ref) = concat
 
 
 -- | Renders an 'SqlType' in MySQL's format.
-showSqlType :: SqlType -> String
-showSqlType SqlBlob    = "BLOB"
-showSqlType SqlBool    = "TINYINT(1)"
-showSqlType SqlDay     = "DATE"
-showSqlType SqlDayTime = "DATETIME"
-showSqlType SqlInt32   = "INT"
-showSqlType SqlInteger = "BIGINT"
-showSqlType SqlReal    = "DOUBLE PRECISION"
-showSqlType SqlString  = "VARCHAR(65535)"
-showSqlType SqlTime    = "TIME"
+showSqlType :: SqlType
+            -> Maybe Integer -- ^ @maxlen@
+            -> String
+showSqlType SqlBlob    Nothing  = "BLOB"
+showSqlType SqlBlob    (Just i) = "VARBINARY(" ++ show i ++ ")"
+showSqlType SqlBool    _        = "TINYINT(1)"
+showSqlType SqlDay     _        = "DATE"
+showSqlType SqlDayTime _        = "DATETIME"
+showSqlType SqlInt32   _        = "INT"
+showSqlType SqlInteger _        = "BIGINT"
+showSqlType SqlReal    _        = "DOUBLE PRECISION"
+showSqlType SqlString  Nothing  = "TEXT CHARACTER SET utf8"
+showSqlType SqlString  (Just i) = "VARCHAR(" ++ show i ++ ") CHARACTER SET utf8"
+showSqlType SqlTime    _        = "TIME"
 
 
 -- | Render an action that must be done on the database.
@@ -603,8 +611,10 @@ showAlterTable table (AddUniqueConstraint cname cols) = concat
     , ")"
     ]
     where
-      escapeDBName' (name, (FieldType "String")) = escapeDBName name ++ "(200)"
-      escapeDBName' (name, _                   ) = escapeDBName name
+      escapeDBName' (name, (FieldType "Text"      )) = escapeDBName name ++ "(200)"
+      escapeDBName' (name, (FieldType "String"    )) = escapeDBName name ++ "(200)"
+      escapeDBName' (name, (FieldType "ByteString")) = escapeDBName name ++ "(200)"
+      escapeDBName' (name, _                       ) = escapeDBName name
 showAlterTable table (DropUniqueConstraint cname) = concat
     [ "ALTER TABLE "
     , escapeDBName table

@@ -16,6 +16,7 @@ module Database.Persist.GenericSql.Internal
     ) where
 
 import qualified Data.Map as Map
+import Data.Char (isSpace)
 import Data.IORef
 import Control.Monad.IO.Class
 import Data.Conduit.Pool
@@ -107,6 +108,7 @@ mkColumns allDefs val =
             (nullable $ fieldAttrs fd)
             (sqlType p)
             (def $ fieldAttrs fd)
+            (maxLen $ fieldAttrs fd)
             (ref (fieldDB fd) (fieldType fd) (fieldAttrs fd))
 
     def :: [Attr] -> Maybe Text
@@ -114,6 +116,16 @@ mkColumns allDefs val =
     def (a:as)
         | Just d <- T.stripPrefix "default=" a = Just d
         | otherwise = def as
+
+    maxLen :: [Attr] -> Maybe Integer
+    maxLen [] = Nothing
+    maxLen (a:as)
+        | Just d <- T.stripPrefix "maxlen=" a =
+            case reads (T.unpack d) of
+              [(i, s)] | all isSpace s -> Just i
+              _ -> error $ "Could not parse maxlen field with value " ++
+                           show d ++ " on " ++ show tn
+        | otherwise = maxLen as
 
     ref :: DBName
         -> FieldType
@@ -138,6 +150,7 @@ data Column = Column
     , cNull      :: Bool
     , cType      :: SqlType
     , cDefault   :: Maybe Text
+    , cMaxLen    :: Maybe Integer
     , cReference :: (Maybe (DBName, DBName)) -- table name, constraint name
     }
     deriving (Eq, Ord, Show)
