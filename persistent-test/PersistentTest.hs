@@ -176,6 +176,18 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persis
   Entry
     authorId AuthorId
     title String
+
+  -- From the scaffold
+  User
+    ident Text
+    password Text Maybe
+    UniqueUser ident
+  Email
+    email Text
+    user UserId Maybe
+    verkey Text Maybe
+    UniqueEmail email
+
 |]
 
 petOwner :: PersistStore b m => PetGeneric b -> b m (PersonGeneric b)
