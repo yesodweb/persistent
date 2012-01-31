@@ -106,8 +106,11 @@ instance C.ResourceIO m => PersistStore SqlPersist m where
         i <-
             case esql of
                 Left sql -> C.runResourceT $ R.withStmt sql vals C.$$ do
-                    Just [PersistInt64 i] <- CL.head
-                    return i
+                    x <- CL.head
+                    case x of
+                        Just [PersistInt64 i] -> return i
+                        Nothing -> error $ "SQL insert did not return a result giving the generated ID"
+                        Just vals' -> error $ "Invalid result from a SQL insert, got: " P.++ P.show vals'
                 Right (sql1, sql2) -> do
                     execute' sql1 vals
                     C.runResourceT $ R.withStmt sql2 [] C.$$ do
