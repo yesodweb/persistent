@@ -373,7 +373,7 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d] =
                 Right t -> do
                     let cname = DBName x
                     ref <- getRef cname
-                    return $ Right $ Column cname (y == "YES") t d'' ref
+                    return $ Right $ Column cname (y == "YES") t d'' Nothing ref
   where
     getRef cname = do
         let sql = pack $ concat
@@ -410,10 +410,10 @@ getColumn _ _ x =
     return $ Left $ pack $ "Invalid result from information_schema: " ++ show x
 
 findAlters :: Column -> [Column] -> ([AlterColumn'], [Column])
-findAlters col@(Column name isNull type_ def ref) cols =
+findAlters col@(Column name isNull type_ def _maxLen ref) cols =
     case filter (\c -> cName c == name) cols of
         [] -> ([(name, Add col)], cols)
-        Column _ isNull' type_' def' ref':_ ->
+        Column _ isNull' type_' def' _maxLen' ref':_ ->
             let refDrop Nothing = []
                 refDrop (Just (_, cname)) = [(name, DropReference cname)]
                 refAdd Nothing = []
@@ -441,7 +441,7 @@ findAlters col@(Column name isNull type_ def ref) cols =
                  filter (\c -> cName c /= name) cols)
 
 showColumn :: Column -> String
-showColumn (Column n nu t def ref) = concat
+showColumn (Column n nu t def _maxLen ref) = concat
     [ T.unpack $ escape n
     , " "
     , showSqlType t

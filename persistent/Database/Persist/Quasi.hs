@@ -143,12 +143,18 @@ splitExtras (Line _ ts:rest) =
 takeCols :: PersistSettings -> [Text] -> Maybe FieldDef
 takeCols _ ("deriving":_) = Nothing
 takeCols ps (n:ty:rest)
-    | not (T.null n) && isLower (T.head n) = Just $ FieldDef
-        (HaskellName n)
-        (DBName $ db rest)
-        (FieldType ty)
-        rest
+    | not (T.null n) && isLower (T.head n) =
+      let (isEmbedded, ft) = checkEmbed ty
+      in Just $ FieldDef
+          (HaskellName n)
+          (DBName $ db rest)
+          (FieldType ft)
+          rest
+          isEmbedded
   where
+    checkEmbed typ | T.head typ == '^' = (True, T.tail typ)
+                   | otherwise = (False, typ)
+
     db [] = psToDBName ps n
     db (a:as) =
         case T.stripPrefix "sql=" a of

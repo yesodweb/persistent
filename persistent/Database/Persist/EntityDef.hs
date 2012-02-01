@@ -42,6 +42,7 @@ data FieldDef = FieldDef
     , fieldDB      :: DBName
     , fieldType    :: FieldType
     , fieldAttrs   :: [Attr]
+    , fieldEmbedded :: Bool
     }
     deriving (Show, Eq, Read, Ord)
 

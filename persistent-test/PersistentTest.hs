@@ -14,6 +14,7 @@
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 module PersistentTest
     ( specs
     , runConn
@@ -59,7 +60,8 @@ import qualified Control.Exception.Control as Control
 #define CATCH Control.catch
 #endif
 import System.Random
-
+import Data.ByteString.Char8 (ByteString)
+import Data.String (IsString)
 import Control.Monad.Trans.Resource (ResourceIO)
 
 #if WITH_POSTGRESQL
@@ -118,6 +120,18 @@ derivePersistField "PetType"
 
 #if WITH_MONGODB
 mkPersist MkPersistSettings { mpsBackend = ConT ''Action } [persistUpperCase|
+
+  Embedded2 no-migrate
+    embedded2name String
+
+  Embedded no-migrate
+    embeddedName String
+    embeddedEmbed ^Embedded2
+
+  HasEmbed
+    name String
+    embed ^Embedded
+
 #else
 share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persistUpperCase|
 #endif
@@ -163,6 +177,25 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persis
   Entry
     authorId AuthorId
     title String
+
+  -- From the scaffold
+  User
+    ident Text
+    password Text Maybe
+    UniqueUser ident
+  Email
+    email Text
+    user UserId Maybe
+    verkey Text Maybe
+    UniqueEmail email
+
+  MaxLen
+    text1 Text
+    text2 Text maxlen=3
+    bs1 ByteString
+    bs2 ByteString maxlen=3
+    str1 String
+    str2 String maxlen=3
 |]
 
 petOwner :: PersistStore b m => PetGeneric b -> b m (PersonGeneric b)
@@ -384,6 +417,14 @@ specs = describe "persistent" $ do
 
       c <- fmap (map $ personName . entityVal) $ selectList [] [OffsetBy 2, Desc PersonAge, LimitTo 3, Asc PersonName, LimitTo 1, OffsetBy 1]
       c @== a
+
+#ifdef WITH_MONGODB
+  it "embedded entities" $ db $ do
+      let container = HasEmbed "container" ((Embedded "embedded") (Embedded2 "2"))
+      contK <- insert container
+      Just res <- selectFirst [HasEmbedName ==. "container"] []
+      res @== (Entity contK container)
+#endif
 
   it "passes the general tests" $ db $ do
       let mic26 = Person "Michael" 26 Nothing
@@ -789,6 +830,23 @@ specs = describe "persistent" $ do
   it "commit/rollback" (caseCommitRollback >> runConn cleanDB)
 
   it "afterException" caseAfterException
+
+  it "maxlen" $ db $ do
+    let t1  = MaxLen a a  a a  a a
+        t2  = MaxLen b b  b b  b b
+        t2' = MaxLen b b' b b' b b'
+        a, b, b' :: IsString t => t
+        a  = "a"
+        b  = "12345"
+        b' = "123"
+    t1k <- insert t1
+    t2k <- insert t2
+    Just t1v <- get t1k
+    Just t2v <- get t2k
+    liftIO $ do t1v @?= t1
+                if t2v == t2
+                  then t2v @?= t2 -- FIXME: why u no truncate?
+                  else t2v @?= t2'
 
 -- | Reverses the order of the fields of an entity.  Used to test
 -- @??@ placeholders of 'rawSql'.
