@@ -46,7 +46,7 @@ type Attr = Text
 --   Embedded no-migrate
 --       name String
 --
---   HasEmbed no-migrate
+--   HasEmbeds
 --       name   String
 --       simple Embedded
 --       list   [Embedded]
