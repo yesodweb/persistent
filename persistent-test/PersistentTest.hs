@@ -288,7 +288,7 @@ setup = do
   runMigrationUnsafe testMigrate
   cleanDB
 
-#if !MIN_VERSION_base(4,5,0)
+#if !MIN_VERSION_random(1,0,1)
 instance Random Int32 where
     random g =
         let ((i::Int), g') = random g in
