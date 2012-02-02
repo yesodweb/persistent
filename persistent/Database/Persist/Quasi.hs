@@ -13,7 +13,8 @@ import Data.Maybe (mapMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Control.Arrow ((&&&))
-import qualified Data.Map as Map
+import qualified Data.Map as M
+import qualified Data.Set as S
 
 data PersistSettings = PersistSettings
     { psToDBName :: Text -> Text
@@ -35,7 +36,7 @@ lowerCaseSettings = PersistSettings
 
 -- | Parses a quasi-quoted syntax into a list of entity definitions.
 parse :: PersistSettings -> Text -> [EntityDef]
-parse ps = parse' ps
+parse ps = parseLines ps
       . removeSpaces
       . filter (not . empty)
       . map tokenize
@@ -90,26 +91,36 @@ removeSpaces =
     toLine (Spaces i:rest) = toLine' i rest
     toLine xs              = toLine' 0 xs
 
-    toLine' i = Line i . mapMaybe toToken
+    toLine' i = Line i . mapMaybe fromToken
 
-    toToken (Token t) = Just t
-    toToken Spaces{}  = Nothing
+    fromToken (Token t) = Just t
+    fromToken Spaces{}  = Nothing
 
 -- | Divide lines into blocks and make entity definitions.
-parse' :: PersistSettings -> [Line] -> [EntityDef]
-parse' ps (Line indent (name:entattribs) : rest) =
-    let (x, y) = span ((> indent) . lineIndent) rest
-     in mkEntityDef ps name entattribs x : parse' ps y
-parse' ps (Line _ []:rest) = parse' ps rest
-parse' _ [] = []
+parseLines :: PersistSettings -> [Line] -> [EntityDef]
+parseLines ps lines =
+    let entNames = S.fromList $ mapMaybe entName lines
+    in toEntities entNames
+  where
+    entName (Line _ (name:_)) = Just name
+    entName _ = Nothing
+
+    toEntities entNames = toEnts lines
+      where
+        toEnts (Line indent (name:entattribs) : rest) =
+            let (x, y) = span ((> indent) . lineIndent) rest
+             in mkEntityDef ps entNames name entattribs x : toEnts y
+        toEnts (Line _ []:rest) = toEnts rest
+        toEnts [] = []
 
 -- | Construct an entity definition.
 mkEntityDef :: PersistSettings
+            -> S.Set Text -- ^ Entity names
             -> Text -- ^ name
             -> [Attr] -- ^ entity attributes
             -> [Line] -- ^ indented lines
             -> EntityDef
-mkEntityDef ps name entattribs lines =
+mkEntityDef ps entityNames name entattribs lines =
     EntityDef
         (HaskellName name)
         (DBName $ psToDBName ps name)
@@ -123,37 +134,51 @@ mkEntityDef ps name entattribs lines =
         case T.stripPrefix "id=" t of
             Nothing -> idName ts
             Just s -> s
-    cols = mapMaybe (takeCols ps) attribs
     uniqs = mapMaybe (takeUniqs ps cols) attribs
     derives = case mapMaybe takeDerives attribs of
                 [] -> ["Show", "Read", "Eq"]
                 x -> concat x
+    cols :: [FieldDef]
+    cols = map toSimple noSimpleCols
+      where
+        toSimple fd@FieldDef { fieldType = (EmbedNone t) }
+            | S.member t entityNames = fd { fieldType = (EmbedSimple t) }
+        toSimple n = n
 
-splitExtras :: [Line] -> ([[Text]], Map.Map Text [[Text]])
-splitExtras [] = ([], Map.empty)
+    noSimpleCols :: [FieldDef]
+    noSimpleCols   = mapMaybe (takeCols ps) attribs
+    {-embedNoneStr x =-}
+        {-case x of-}
+          {-EmbedNone str -> Just str-}
+          {-_ -> Nothing-}
+
+splitExtras :: [Line] -> ([[Text]], M.Map Text [[Text]])
+splitExtras [] = ([], M.empty)
 splitExtras (Line indent [name]:rest)
     | not (T.null name) && isUpper (T.head name) =
         let (children, rest') = span ((> indent) . lineIndent) rest
             (x, y) = splitExtras rest'
-         in (x, Map.insert name (map tokens children) y)
+         in (x, M.insert name (map tokens children) y)
 splitExtras (Line _ ts:rest) =
     let (x, y) = splitExtras rest
      in (ts:x, y)
 
 takeCols :: PersistSettings -> [Text] -> Maybe FieldDef
 takeCols _ ("deriving":_) = Nothing
-takeCols ps (n:ty:rest)
+takeCols ps (n:typ:rest)
     | not (T.null n) && isLower (T.head n) =
-      let (isEmbedded, ft) = checkEmbed ty
+      let (rst, ft) = checkEmbed
       in Just $ FieldDef
           (HaskellName n)
           (DBName $ db rest)
-          (FieldType ft)
-          rest
-          isEmbedded
+          ft
+          rst
   where
-    checkEmbed typ | T.head typ == '^' = (True, T.tail typ)
-                   | otherwise = (False, typ)
+    checkEmbed | T.head typ == '[' && T.last typ == ']' =
+                   (rest, EmbedList (T.init $ T.tail typ))
+               | typ == "Set" = (tail rest, EmbedSet (head rest))
+               -- don't know yet if it is an EmbedSimple
+               | otherwise = (rest, EmbedNone typ)
 
     db [] = psToDBName ps n
     db (a:as) =

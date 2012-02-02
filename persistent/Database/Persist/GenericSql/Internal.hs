@@ -131,8 +131,8 @@ mkColumns allDefs val =
         -> FieldType
         -> [Attr]
         -> Maybe (DBName, DBName) -- table name, constraint name
-    ref c (FieldType t') []
-        | Just f <- T.stripSuffix "Id" t' =
+    ref c ft []
+        | Just f <- T.stripSuffix "Id" (unFieldType ft) =
             Just (resolveTableName allDefs $ HaskellName f, refName tn c)
         | otherwise = Nothing
     ref _ _ ("noreference":_) = Nothing

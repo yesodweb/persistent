@@ -41,6 +41,7 @@ import Language.Haskell.TH.Syntax (Type(..))
 import Database.Persist.TH (MkPersistSettings(..))
 import Control.Monad (replicateM)
 import qualified Data.ByteString as BS
+import qualified Data.Set as S
 
 #else
 import Database.Persist.EntityDef (EntityDef(..), DBName(..))
@@ -121,17 +122,25 @@ derivePersistField "PetType"
 #if WITH_MONGODB
 mkPersist MkPersistSettings { mpsBackend = ConT ''Action } [persistUpperCase|
 
-  Embedded2 no-migrate
-    embedded2name String
-
-  Embedded no-migrate
-    embeddedName String
-    embeddedEmbed ^Embedded2
-
-  HasEmbed
+  DoubleEmbed no-migrate
     name String
-    embed ^Embedded
 
+  HasEmbed no-migrate
+    name String
+    embed DoubleEmbed
+
+  HasEmbeds
+    name String
+    embed HasEmbed
+    double DoubleEmbed
+
+  HasListEmbed
+    name String
+    list [HasEmbed]
+
+  HasSetEmbed
+    name String
+    set Set HasEmbed
 #else
 share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persistUpperCase|
 #endif
@@ -229,7 +238,7 @@ setup = do
   liftIO $ putStrLn $ "version: " ++ show v
   if andVersion v then return () else error "mongoDB version not supported: need at least 1.9.1"
   -- TODO: use dropDatabase
-  MongoDB.dropDatabase "test"   --(MongoDB.Database "test")
+  _<-MongoDB.dropDatabase "test"
   return ()
   where
     andVersion vresult = case show vresult of
@@ -419,11 +428,32 @@ specs = describe "persistent" $ do
       c @== a
 
 #ifdef WITH_MONGODB
-  it "embedded entities" $ db $ do
-      let container = HasEmbed "container" ((Embedded "embedded") (Embedded2 "2"))
+  it "simple embedded entities" $ db $ do
+      let container = HasEmbeds "container"
+            (HasEmbed "embed" (DoubleEmbed "1")) (DoubleEmbed "2")
       contK <- insert container
-      Just res <- selectFirst [HasEmbedName ==. "container"] []
+      Just res <- selectFirst [HasEmbedsName ==. "container"] []
       res @== (Entity contK container)
+
+{-
+  it "embedded set of entities" $ db $ do
+      let container = HasSetEmbed "set" $ S.fromList [
+              (HasEmbed "embed" (DoubleEmbed "1"))
+            , (HasEmbed "embed" (DoubleEmbed "2"))
+            ]
+      contK <- insert container
+      Just res <- selectFirst [HasSetEmbedName ==. "set"] []
+      res @== (Entity contK container)
+
+  it "embedded list of entities" $ db $ do
+      let container = HasListEmbed "list" [
+              (HasEmbed "embed" (DoubleEmbed "1"))
+            , (HasEmbed "embed" (DoubleEmbed "2"))
+            ]
+      contK <- insert container
+      Just res <- selectFirst [HasSetEmbedName ==. "list"] []
+      res @== (Entity contK container)
+      -}
 #endif
 
   it "passes the general tests" $ db $ do

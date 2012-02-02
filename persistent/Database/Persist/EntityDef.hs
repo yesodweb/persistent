@@ -2,11 +2,12 @@ module Database.Persist.EntityDef
     ( -- * Helper types
       HaskellName (..)
     , DBName (..)
-    , FieldType (..)
     , Attr
       -- * Defs
     , EntityDef (..)
     , FieldDef (..)
+    , FieldType (..)
+    , isEmbedded
     , UniqueDef (..)
     , ExtraLine
     ) where
@@ -32,17 +33,26 @@ newtype HaskellName = HaskellName { unHaskellName :: Text }
     deriving (Show, Eq, Read, Ord)
 newtype DBName = DBName { unDBName :: Text }
     deriving (Show, Eq, Read, Ord)
-newtype FieldType = FieldType { unFieldType :: Text }
-    deriving (Show, Eq, Read, Ord)
 
 type Attr = Text
+
+data FieldType = EmbedNone   { unFieldType :: Text }
+               | EmbedSimple { unFieldType :: Text }
+               | EmbedList   { unFieldType :: Text }
+               | EmbedSet    { unFieldType :: Text }
+               deriving (Show, Eq, Read, Ord)
+
+isEmbedded :: FieldDef -> Bool
+isEmbedded fd = isEmbeddedType (fieldType fd)
+  where
+    isEmbeddedType (EmbedNone _) = False
+    isEmbeddedType _ = True
 
 data FieldDef = FieldDef
     { fieldHaskell :: HaskellName
     , fieldDB      :: DBName
     , fieldType    :: FieldType
     , fieldAttrs   :: [Attr]
-    , fieldEmbedded :: Bool
     }
     deriving (Show, Eq, Read, Ord)
 
