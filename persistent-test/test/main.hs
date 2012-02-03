@@ -1,9 +1,49 @@
-import PersistentTest
-import RenameTest
-import DataTypeTest
+{-# LANGUAGE CPP #-}
+
+import qualified PersistentTest
+import qualified RenameTest
+import qualified DataTypeTest
+import qualified JoinTest
+import qualified EmbedTest
+import qualified LargeNumberTest
+import qualified MaxLenTest
 import Test.Hspec.Monadic (hspecX)
+import Init
+import System.Exit
+import Control.Monad (when)
+
+
+#ifdef MongoDB
+setup = setupMongo
+#else
+import Database.Persist.GenericSql (printMigration, runMigrationUnsafe)
+
+setup migration = do
+  printMigration migration
+  runMigrationUnsafe migration
+#endif
+
+toExitCode :: Bool -> ExitCode
+toExitCode True  = ExitSuccess
+toExitCode False = ExitFailure 1
 
 main :: IO ()
 main = do
-  runConn setup
-  hspecX $ specs >> renameSpecs >> dataTypeSpecs
+  runConn (setup PersistentTest.testMigrate)
+  r <- hspecB $ PersistentTest.specs
+  (liftIO $ runConn PersistentTest.cleanDB)
+  when r $ exitWith (toExitCode r)
+
+  runConn (setup EmbedTest.embedMigrate)
+  runConn (setup LargeNumberTest.numberMigrate)
+  runConn (setup JoinTest.joinMigrate)
+
+  hspecX $
+    RenameTest.specs >>
+    DataTypeTest.specs >>
+    JoinTest.specs >>
+    EmbedTest.specs >>
+    LargeNumberTest.specs >>
+    MaxLenTest.specs
+
+  exitWith ExitSuccess

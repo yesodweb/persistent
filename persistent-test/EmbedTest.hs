@@ -1,0 +1,96 @@
+{-# OPTIONS_GHC -fno-warn-unused-binds #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE OverloadedStrings #-}
+
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
+module EmbedTest (specs, embedMigrate) where
+
+import Init
+
+import qualified Data.Text as T
+import qualified Data.Set as S
+import qualified Data.Map as M
+
+import Database.Persist
+
+#if WITH_MONGODB
+mkPersist MkPersistSettings { mpsBackend = ConT ''Action } [persist|
+#else
+share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persist|
+#endif
+
+  DoubleEmbed no-migrate
+    name String
+    deriving Show Eq Read Ord
+
+  HasEmbed no-migrate
+    name String
+    embed DoubleEmbed
+    deriving Show Eq Read Ord
+
+  HasEmbeds
+    name String
+    embed HasEmbed
+    double DoubleEmbed
+    deriving Show Eq Read Ord
+
+  HasListEmbed
+    name String
+    list [HasEmbed]
+    deriving Show Eq Read Ord
+
+  HasSetEmbed
+    name String
+    set (S.Set HasEmbed)
+    deriving Show Eq Read Ord
+
+  HasMapEmbed
+    name String
+    map (M.Map T.Text T.Text)
+    deriving Show Eq Read Ord
+|]
+
+cleanDB :: PersistQuery b m => b m ()
+cleanDB = do
+  deleteWhere ([] :: [Filter HasEmbed])
+
+specs :: Specs
+specs = describe "embedded entities" $ do
+  it "simple entities" $ db $ do
+      let container = HasEmbeds "container"
+            (HasEmbed "embed" (DoubleEmbed "1")) (DoubleEmbed "2")
+      contK <- insert container
+      Just res <- selectFirst [HasEmbedsName ==. "container"] []
+      res @== (Entity contK container)
+
+  it "Set" $ db $ do
+      let container = HasSetEmbed "set" $ S.fromList [
+              (HasEmbed "embed" (DoubleEmbed "1"))
+            , (HasEmbed "embed" (DoubleEmbed "2"))
+            ]
+      contK <- insert container
+      Just res <- selectFirst [HasSetEmbedName ==. "set"] []
+      res @== (Entity contK container)
+
+  it "List" $ db $ do
+      let container = HasListEmbed "list" [
+              (HasEmbed "embed" (DoubleEmbed "1"))
+            , (HasEmbed "embed" (DoubleEmbed "2"))
+            ]
+      contK <- insert container
+      Just res <- selectFirst [HasListEmbedName ==. "list"] []
+      res @== (Entity contK container)
+
+  it "Map" $ db $ do
+      let container = HasMapEmbed "map" $ M.fromList [
+              ("k1","v1")
+            , ("k2","v2")
+            ]
+      contK <- insert container
+      Just res <- selectFirst [HasMapEmbedName ==. "map"] []
+      res @== (Entity contK container)
+

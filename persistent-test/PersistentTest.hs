@@ -14,25 +14,15 @@
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE TypeSynonymInstances #-}
-module PersistentTest
-    ( specs
-    , runConn
-    , setup
-    ) where
+module PersistentTest where
 
 import Test.HUnit hiding (Test)
-import Test.Hspec.Monadic (Specs, describe, it)
 import Test.Hspec.HUnit()
 import Test.Hspec.QuickCheck(prop)
 
 import Database.Persist
 import Database.Persist.Store (PersistValue(..))
 import Database.Persist.Query.Internal
-
-import Database.Persist.Query.Join (selectOneMany, SelectOneMany(..))
-import qualified Database.Persist.Query.Join
-import qualified Data.Set as S
 
 #if WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
@@ -48,7 +38,6 @@ import Database.Persist.EntityDef (EntityDef(..), DBName(..))
 import Database.Persist.Store ( DeleteCascade (..) )
 import Database.Persist.GenericSql
 import Database.Persist.GenericSql.Internal (escapeName)
-import qualified Database.Persist.Query.Join.Sql
 import Database.Persist.Sqlite
 import Control.Exception (SomeException)
 import Control.Monad.Trans.Reader (ask)
@@ -61,9 +50,6 @@ import qualified Control.Exception.Control as Control
 #define CATCH Control.catch
 #endif
 import System.Random
-import Data.ByteString.Char8 (ByteString)
-import Data.String (IsString)
-import Control.Monad.Trans.Resource (ResourceIO)
 
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
@@ -74,12 +60,9 @@ import Database.Persist.MySQL
 
 #endif
 
-import Database.Persist.TH (mkPersist, mkMigrate, derivePersistField, share, sqlSettings, persistUpperCase, mkDeleteCascade)
+import Database.Persist.TH (derivePersistField, persistUpperCase, mkDeleteCascade)
 import Control.Monad.IO.Class
 
-import Control.Monad (unless)
-import Data.Int
-import Data.Word
 #if MIN_VERSION_monad_control(0, 3, 0)
 import qualified Control.Monad.Trans.Control
 #else
@@ -89,31 +72,7 @@ import qualified Control.Monad.IO.Control
 import Data.Text (Text)
 import Web.PathPieces (PathPiece (..))
 import Data.Maybe (fromJust)
-import Test.QuickCheck
-
-{-
-expected /=@ actual = liftIO $ assertNotEqual "" expected actual
--}
-(@/=), (@==), (==@) :: (Eq a, Show a, MonadIO m) => a -> a -> m ()
-infix 1 @/= --, /=@
-actual @/= expected = liftIO $ assertNotEqual "" expected actual
-
-infix 1 @==, ==@
-expected @== actual = liftIO $ expected @?= actual
-expected ==@ actual = liftIO $ expected @=? actual
-
-assertNotEqual :: (Eq a, Show a) => String -> a -> a -> Assertion
-assertNotEqual preface expected actual =
-  unless (actual /= expected) (assertFailure msg)
-  where msg = (if null preface then "" else preface ++ "\n") ++
-             "expected: " ++ show expected ++ "\n to not equal: " ++ show actual
-
-assertEmpty :: (Monad m, MonadIO m) => [a] -> m ()
-assertEmpty xs    = liftIO $ assertBool "" (null xs)
-
-assertNotEmpty :: (Monad m, MonadIO m) => [a] -> m ()
-assertNotEmpty xs = liftIO $ assertBool "" (not (null xs))
-
+import Init
 
 data PetType = Cat | Dog
     deriving (Show, Read, Eq)
@@ -124,31 +83,6 @@ mkPersist MkPersistSettings { mpsBackend = ConT ''Action } [persistUpperCase|
 #else
 share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persistUpperCase|
 #endif
-
-  DoubleEmbed no-migrate
-    name String
-    deriving Show Eq Read Ord
-
-  HasEmbed no-migrate
-    name String
-    embed DoubleEmbed
-    deriving Show Eq Read Ord
-
-  HasEmbeds
-    name String
-    embed HasEmbed
-    double DoubleEmbed
-    deriving Show Eq Read Ord
-
-  HasListEmbed
-    name String
-    list [HasEmbed]
-    deriving Show Eq Read Ord
-
-  HasSetEmbed
-    name String
-    set (S.Set HasEmbed)
-    deriving Show Eq Read Ord
 
 -- Dedented comment
   -- Header-level comment
@@ -180,18 +114,6 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persis
     -- Indented comment
   NeedsPet
     petKey PetId
-  Number
-    intx Int
-    int32 Int32
-    word32 Word32
-    int64 Int64
-    word64 Word64
-
-  Author
-    name String
-  Entry
-    authorId AuthorId
-    title String
 
   -- From the scaffold
   User
@@ -203,15 +125,15 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persis
     user UserId Maybe
     verkey Text Maybe
     UniqueEmail email
-
-  MaxLen
-    text1 Text
-    text2 Text maxlen=3
-    bs1 ByteString
-    bs2 ByteString maxlen=3
-    str1 String
-    str2 String maxlen=3
 |]
+
+
+-- this is faster then dropDatabase. Could try dropCollection
+cleanDB :: PersistQuery b m => b m ()
+cleanDB = do
+  deleteWhere ([] :: [Filter Person])
+  deleteWhere ([] :: [Filter Pet])
+  deleteWhere ([] :: [Filter Person1])
 
 petOwner :: PersistStore b m => PetGeneric b -> b m (PersonGeneric b)
 petOwner = belongsToJust petOwnerId
@@ -219,182 +141,7 @@ petOwner = belongsToJust petOwnerId
 maybeOwnedPetOwner :: PersistStore b m => MaybeOwnedPetGeneric b -> b m (Maybe (PersonGeneric b))
 maybeOwnedPetOwner = belongsTo maybeOwnedPetOwnerId
 
--- this is faster then dropDatabase. Could try dropCollection
-cleanDB :: PersistQuery b m => b m ()
-cleanDB = do
-  deleteWhere ([] :: [Filter Pet])
-  deleteWhere ([] :: [Filter Person])
-  deleteWhere ([] :: [Filter Person1])
-  deleteWhere ([] :: [Filter Number])
-  deleteWhere ([] :: [Filter Entry])
-  deleteWhere ([] :: [Filter Author])
 
-#ifdef WITH_MONGODB
-type BackendMonad = Action
-runConn f = do
---    withMongoDBConn ("test") "127.0.0.1" $ runMongoDBConn MongoDB.safe MongoDB.Master f
-  withMongoDBConn "test" "127.0.0.1" $ runMongoDBConn MongoDB.master f
-
---setup :: MongoPersist IO ()
-setup :: Action IO ()
-setup = do
-  -- TODO: check version
-  -- v <- MongoDB.access MongoDB.pipe MongoDB.slaveOk "admin" $ MongoDB.runCommand1 "buildInfo"
-  v <- MongoDB.serverVersion
-  liftIO $ putStrLn $ "version: " ++ show v
-  if andVersion v then return () else error "mongoDB version not supported: need at least 1.9.1"
-  -- TODO: use dropDatabase
-  _<-MongoDB.dropDatabase "test"
-  return ()
-  where
-    andVersion vresult = case show vresult of
-      '"':'1':'.':n:'.':minor -> let i = ((read [n]) ::Int) in i > 9 || (i == 9 && ((read $ init minor)::Int) >= 1)
-      '"':'2':'.':_ -> True
-
---db :: MongoPersist IO () -> Assertion
-db :: Action IO () -> Assertion
-db actions = do
-  r <- runConn actions
-  runConn cleanDB
-  return r
-
-instance Arbitrary BS.ByteString where
-    arbitrary = BS.pack `fmap` replicateM 12 arbitrary
-
-instance Arbitrary PersistValue where
-    arbitrary = PersistObjectId `fmap` arbitrary
-
-#else
-type BackendMonad = SqlPersist
-sqlite_database :: Text
-sqlite_database = "test/testdb.sqlite3"
-runConn :: ResourceIO m => SqlPersist m t -> m ()
-runConn f = do
-    _<-withSqlitePool sqlite_database 1 $ runSqlPool f
-#if WITH_POSTGRESQL
-    _<-withPostgresqlPool "host=localhost port=5432 user=test dbname=test password=test" 1 $ runSqlPool f
-#endif
-#if WITH_MYSQL
-    _ <- withMySQLPool defaultConnectInfo
-                        { connectHost     = "localhost"
-                        , connectUser     = "test"
-                        , connectPassword = "test"
-                        , connectDatabase = "test"
-                        } 1 $ runSqlPool f
-#endif
-    return ()
-
-db :: SqlPersist IO () -> Assertion
-db actions = do
-  runConn $ actions >>= \r -> rollback >> return r
-
-setup :: SqlPersist IO ()
-setup = do
-  printMigration testMigrate
-  runMigrationUnsafe testMigrate
-  cleanDB
-
-#if !MIN_VERSION_random(1,0,1)
-instance Random Int32 where
-    random g =
-        let ((i::Int), g') = random g in
-        (fromInteger $ toInteger i, g')
-    randomR (lo, hi) g =
-        let ((i::Int), g') = randomR (fromInteger $ toInteger lo, fromInteger $ toInteger hi) g in
-        (fromInteger $ toInteger i, g')
-
-instance Random Int64 where
-    random g =
-        let ((i0::Int32), g0) = random g
-            ((i1::Int32), g1) = random g0 in
-        (fromInteger (toInteger i0) + fromInteger (toInteger i1) * 2 ^ (32::Int), g1)
-    randomR (lo, hi) g = -- TODO : generate on the whole range, and not only on a part of it
-        let ((i::Int), g') = randomR (fromInteger $ toInteger lo, fromInteger $ toInteger hi) g in
-        (fromInteger $ toInteger i, g')
-#endif
-
-instance Arbitrary PersistValue where
-    arbitrary = PersistInt64 `fmap` choose (0, maxBound)
-#endif
-
-
-
-joinGeneric :: PersistQuery b m =>
-               (SelectOneMany b (AuthorGeneric b) (EntryGeneric b)
-                -> b m [(Entity (AuthorGeneric b), [Entity (EntryGeneric b)])])
-                -> b m ()
-
-joinGeneric run = do
-    a <- insert $ Author "a"
-    a1 <- insert $ Entry a "a1"
-    a2 <- insert $ Entry a "a2"
-    a3 <- insert $ Entry a "a3"
-    b <- insert $ Author "b"
-    b1 <- insert $ Entry b "b1"
-    b2 <- insert $ Entry b "b2"
-    c <- insert $ Author "c"
-
-    x <- run $ selectOneMany (EntryAuthorId <-.) entryAuthorId
-    liftIO $
-        x @?=
-            [ ((Entity a $ Author "a"),
-                [ (Entity a1 $ Entry a "a1")
-                , (Entity a2 $ Entry a "a2")
-                , (Entity a3 $ Entry a "a3")
-                ])
-            , ((Entity b $ Author "b"),
-                [ (Entity b1 $ Entry b "b1")
-                , (Entity b2 $ Entry b "b2")
-                ])
-            ]
-
-    y <- run $ (selectOneMany (EntryAuthorId <-.) entryAuthorId)
-            { somFilterOne = [AuthorName ==. "a"]
-            }
-    liftIO $
-        y @?=
-            [ ((Entity a $ Author "a"),
-                [ (Entity a1 $ Entry a "a1")
-                , (Entity a2 $ Entry a "a2")
-                , (Entity a3 $ Entry a "a3")
-                ])
-            ]
-
-    z <- run (selectOneMany (EntryAuthorId <-.) entryAuthorId)
-            { somOrderOne = [Asc AuthorName]
-            , somOrderMany = [Desc EntryTitle]
-            }
-    liftIO $
-        z @?=
-            [ ((Entity a $ Author "a"),
-                [ (Entity a3 $ Entry a "a3")
-                , (Entity a2 $ Entry a "a2")
-                , (Entity a1 $ Entry a "a1")
-                ])
-            , ((Entity b $ Author "b"),
-                [ (Entity b2 $ Entry b "b2")
-                , (Entity b1 $ Entry b "b1")
-                ])
-            ]
-
-    w <- run (selectOneMany (EntryAuthorId <-.) entryAuthorId)
-            { somOrderOne = [Asc AuthorName]
-            , somOrderMany = [Desc EntryTitle]
-            , somIncludeNoMatch = True
-            }
-    liftIO $
-        w @==
-            [ ((Entity a $ Author "a"),
-                [ (Entity a3 $ Entry a "a3")
-                , (Entity a2 $ Entry a "a2")
-                , (Entity a1 $ Entry a "a1")
-                ])
-            , ((Entity b $ Author "b"),
-                [ (Entity b2 $ Entry b "b2")
-                , (Entity b1 $ Entry b "b1")
-                ])
-            , ((Entity c $ Author "c"), [])
-            ]
 
 specs :: Specs
 specs = describe "persistent" $ do
@@ -433,32 +180,6 @@ specs = describe "persistent" $ do
       c <- fmap (map $ personName . entityVal) $ selectList [] [OffsetBy 2, Desc PersonAge, LimitTo 3, Asc PersonName, LimitTo 1, OffsetBy 1]
       c @== a
 
-  it "simple embedded entities" $ db $ do
-      let container = HasEmbeds "container"
-            (HasEmbed "embed" (DoubleEmbed "1")) (DoubleEmbed "2")
-      contK <- insert container
-      Just res <- selectFirst [HasEmbedsName ==. "container"] []
-      res @== (Entity contK container)
-
-  it "embedded set of entities" $ db $ do
-      let container = HasSetEmbed "set" $ S.fromList [
-              (HasEmbed "embed" (DoubleEmbed "1"))
-            , (HasEmbed "embed" (DoubleEmbed "2"))
-            ]
-      contK <- insert container
-      Just res <- selectFirst [HasSetEmbedName ==. "set"] []
-      res @== (Entity contK container)
-
-  it "embedded list of entities" $ db $ do
-      let container = HasListEmbed "list" [
-              (HasEmbed "embed" (DoubleEmbed "1"))
-            , (HasEmbed "embed" (DoubleEmbed "2"))
-            ]
-      contK <- insert container
-      Just res <- selectFirst [HasListEmbedName ==. "list"] []
-      res @== (Entity contK container)
-
-  -- FIXME embedded map test?
 
   it "passes the general tests" $ db $ do
       let mic26 = Person "Michael" 26 Nothing
@@ -718,24 +439,6 @@ specs = describe "persistent" $ do
       x <- selectFirst [] [Desc PersonAge]
       x @== Just (Entity kOld pOld)
 
-  it "large numbers" $ db $ do
-      let go x = do
-              xid <- insert x
-              x' <- get xid
-              liftIO $ x' @?= Just x
-
-      go $ Number maxBound 0 0 0 0
-      go $ Number 0 maxBound 0 0 0
-      go $ Number 0 0 maxBound 0 0
-      go $ Number 0 0 0 maxBound 0
-      go $ Number 0 0 0 0 maxBound
-
-      go $ Number minBound 0 0 0 0
-      go $ Number 0 minBound 0 0 0
-      go $ Number 0 0 minBound 0 0
-      go $ Number 0 0 0 minBound 0
-      go $ Number 0 0 0 0 minBound
-
 
   it "insertBy" $ db $ do
       Right _ <- insertBy $ Person "name" 1 Nothing
@@ -811,11 +514,7 @@ specs = describe "persistent" $ do
       liftIO $ x @?= [(Entity pid1 p1), (Entity pid3 p3)]
 
 
-  it "joinNonSql" $ db $ joinGeneric Database.Persist.Query.Join.runJoin
-
 #ifndef WITH_MONGODB
-  it "joinSql" $ db $ joinGeneric Database.Persist.Query.Join.Sql.runJoin
-
   it "rawSql/2+2" $ db $ do
       ret <- rawSql "SELECT 2+2" []
       liftIO $ ret @?= [Single (4::Int)]
@@ -865,22 +564,6 @@ specs = describe "persistent" $ do
 
   it "afterException" caseAfterException
 
-  it "maxlen" $ db $ do
-    let t1  = MaxLen a a  a a  a a
-        t2  = MaxLen b b  b b  b b
-        t2' = MaxLen b b' b b' b b'
-        a, b, b' :: IsString t => t
-        a  = "a"
-        b  = "12345"
-        b' = "123"
-    t1k <- insert t1
-    t2k <- insert t2
-    Just t1v <- get t1k
-    Just t2v <- get t2k
-    liftIO $ do t1v @?= t1
-                if t2v == t2
-                  then t2v @?= t2 -- FIXME: why u no truncate?
-                  else t2v @?= t2'
 
 -- | Reverses the order of the fields of an entity.  Used to test
 -- @??@ placeholders of 'rawSql'.

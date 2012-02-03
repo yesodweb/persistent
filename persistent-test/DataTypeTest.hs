@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-unused-binds #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -6,7 +7,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE EmptyDataDecls #-}
-module DataTypeTest where
+module DataTypeTest (specs) where
 
 import Test.Hspec.Monadic
 import Test.Hspec.HUnit ()
@@ -25,15 +26,15 @@ import qualified Data.Text as T
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as S
 import Data.Time (Day, TimeOfDay (..), UTCTime (..), fromGregorian)
-import RenameTest (runConn2)
 import Control.Monad (when)
-import Control.Monad.IO.Class (liftIO)
 import System.Random (randomIO, randomRIO, Random)
 import Control.Applicative ((<$>), (<*>))
 import Data.Word (Word8)
 
+import Init
+
 -- Test lower case names
-share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
+share [mkPersist sqlSettings, mkMigrate "dataTypeMigrate"] [persistLowerCase|
 DataTypeTable
     text Text
     bytes ByteString
@@ -45,13 +46,17 @@ DataTypeTable
     utc UTCTime
 |]
 
-dataTypeSpecs :: Specs
-dataTypeSpecs = describe "data type specs" $ do
-    it "handles all types" $ asIO $ runConn2 $ do
-        _ <- runMigrationSilent migrateAll
+cleanDB :: PersistQuery b m => b m ()
+cleanDB = do
+  deleteWhere ([] :: [Filter DataTypeTable])
+
+specs :: Specs
+specs = describe "data type specs" $ do
+    it "handles all types" $ asIO $ runConn $ do
+        _ <- runMigrationSilent dataTypeMigrate
 
         -- Ensure reading the data from the database works...
-        _ <- runMigrationSilent migrateAll
+        _ <- runMigrationSilent dataTypeMigrate
         sequence_ $ replicate 1000 $ do
             x <- liftIO randomValue
             key <- insert x

@@ -34,6 +34,11 @@ library
     exposed-modules: PersistentTest
                      RenameTest
                      DataTypeTest
+                     EmbedTest
+                     JoinTest
+                     LargeNumberTest
+                     MaxLenTest
+                     Init
                      Database.Persist.EntityDef
                      Database.Persist
                      Database.Persist.Store
@@ -97,7 +102,7 @@ library
                    , cereal
                    , compact-string-fix
                    , bson
-    hs-source-dirs: ., persistent, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mysql, persistent-mongoDB
+    hs-source-dirs: ., test, persistent, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mysql, persistent-mongoDB
 
     ghc-options:   -Wall
 

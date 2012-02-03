@@ -1,0 +1,128 @@
+{-# OPTIONS_GHC -fno-warn-unused-binds #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE CPP #-}
+
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
+module JoinTest ( specs, joinMigrate ) where
+
+import Test.Hspec.Monadic
+import Test.Hspec.HUnit ()
+
+import Database.Persist
+import Database.Persist.Query.Join (selectOneMany, SelectOneMany(..))
+import qualified Database.Persist.Query.Join
+import Database.Persist.TH (persistUpperCase)
+
+#ifndef WITH_MONGODB
+import qualified Database.Persist.Query.Join.Sql
+#endif
+
+import Init
+
+#if WITH_MONGODB
+mkPersist MkPersistSettings { mpsBackend = ConT ''Action } [persistUpperCase|
+#else
+share [mkPersist sqlSettings,  mkMigrate "joinMigrate"] [persistUpperCase|
+#endif
+
+  Author
+    name String
+  Entry
+    authorId AuthorId
+    title String
+|]
+
+cleanDB :: PersistQuery b m => b m ()
+cleanDB = do
+  deleteWhere ([] :: [Filter Author])
+  deleteWhere ([] :: [Filter Entry])
+
+
+specs :: Specs
+specs = describe "joins" $ do
+  it "NoSql" $ db $ joinGeneric Database.Persist.Query.Join.runJoin
+#ifndef WITH_MONGODB
+  it "Sql" $ db $ joinGeneric Database.Persist.Query.Join.Sql.runJoin
+#endif
+
+
+joinGeneric :: PersistQuery b m =>
+               (SelectOneMany b (AuthorGeneric b) (EntryGeneric b)
+                -> b m [(Entity (AuthorGeneric b), [Entity (EntryGeneric b)])])
+                -> b m ()
+
+joinGeneric run = do
+    a <- insert $ Author "a"
+    a1 <- insert $ Entry a "a1"
+    a2 <- insert $ Entry a "a2"
+    a3 <- insert $ Entry a "a3"
+    b <- insert $ Author "b"
+    b1 <- insert $ Entry b "b1"
+    b2 <- insert $ Entry b "b2"
+    c <- insert $ Author "c"
+
+    x <- run $ selectOneMany (EntryAuthorId <-.) entryAuthorId
+    liftIO $
+        x @?=
+            [ ((Entity a $ Author "a"),
+                [ (Entity a1 $ Entry a "a1")
+                , (Entity a2 $ Entry a "a2")
+                , (Entity a3 $ Entry a "a3")
+                ])
+            , ((Entity b $ Author "b"),
+                [ (Entity b1 $ Entry b "b1")
+                , (Entity b2 $ Entry b "b2")
+                ])
+            ]
+
+    y <- run $ (selectOneMany (EntryAuthorId <-.) entryAuthorId)
+            { somFilterOne = [AuthorName ==. "a"]
+            }
+    liftIO $
+        y @?=
+            [ ((Entity a $ Author "a"),
+                [ (Entity a1 $ Entry a "a1")
+                , (Entity a2 $ Entry a "a2")
+                , (Entity a3 $ Entry a "a3")
+                ])
+            ]
+
+    z <- run (selectOneMany (EntryAuthorId <-.) entryAuthorId)
+            { somOrderOne = [Asc AuthorName]
+            , somOrderMany = [Desc EntryTitle]
+            }
+    liftIO $
+        z @?=
+            [ ((Entity a $ Author "a"),
+                [ (Entity a3 $ Entry a "a3")
+                , (Entity a2 $ Entry a "a2")
+                , (Entity a1 $ Entry a "a1")
+                ])
+            , ((Entity b $ Author "b"),
+                [ (Entity b2 $ Entry b "b2")
+                , (Entity b1 $ Entry b "b1")
+                ])
+            ]
+
+    w <- run (selectOneMany (EntryAuthorId <-.) entryAuthorId)
+            { somOrderOne = [Asc AuthorName]
+            , somOrderMany = [Desc EntryTitle]
+            , somIncludeNoMatch = True
+            }
+    liftIO $
+        w @==
+            [ ((Entity a $ Author "a"),
+                [ (Entity a3 $ Entry a "a3")
+                , (Entity a2 $ Entry a "a2")
+                , (Entity a1 $ Entry a "a1")
+                ])
+            , ((Entity b $ Author "b"),
+                [ (Entity b2 $ Entry b "b2")
+                , (Entity b1 $ Entry b "b1")
+                ])
+            , ((Entity c $ Author "c"), [])
+            ]
+

@@ -1,12 +1,14 @@
+{-# OPTIONS_GHC -fno-warn-unused-binds #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE GADTs #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE OverloadedStrings #-}
+
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE EmptyDataDecls #-}
-module RenameTest where
+module RenameTest (specs) where
 
 import Test.Hspec.Monadic
 import Test.Hspec.HUnit ()
@@ -26,8 +28,10 @@ import qualified Data.Conduit.List as CL
 import qualified Data.Map as Map
 import qualified Data.Text as T
 
+import Init
+
 -- Test lower case names
-share [mkPersist sqlSettings, mkMigrate "lowerCase"] [persistLowerCase|
+share [mkPersist sqlSettings, mkMigrate "lowerCaseMigrate"] [persistLowerCase|
 LowerCaseTable id=my_id
     fullName String
     ExtraBlock
@@ -42,27 +46,11 @@ RefTable
     UniqueRefTable someVal
 |]
 
-runConn2 :: C.ResourceIO m => SqlPersist m t -> m ()
-runConn2 f = do
-    _ <- withSqlitePool ":memory:" 1 $ runSqlPool f
-#if WITH_POSTGRESQL
-    _ <- withPostgresqlPool "host=localhost port=5432 user=test dbname=test password=test" 1 $ runSqlPool f
-#endif
-#if WITH_MYSQL
-    _ <- withMySQLPool defaultConnectInfo
-                        { connectHost     = "localhost"
-                        , connectUser     = "test"
-                        , connectPassword = "test"
-                        , connectDatabase = "test"
-                        } 1 $ runSqlPool f
-#endif
-    return ()
-
-renameSpecs :: Specs
-renameSpecs = describe "rename specs" $ do
+specs :: Specs
+specs = describe "rename specs" $ do
     it "handles lower casing" $ asIO $ do
-        runConn2 $ do
-            _ <- runMigrationSilent lowerCase
+        runConn $ do
+            _ <- runMigrationSilent lowerCaseMigrate
             C.runResourceT $ withStmt "SELECT full_name from lower_case_table WHERE my_id=5" [] C.$$ CL.sinkNull
             C.runResourceT $ withStmt "SELECT something_else from ref_table WHERE id=4" [] C.$$ CL.sinkNull
     it "extra blocks" $ do
