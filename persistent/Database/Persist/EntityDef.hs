@@ -7,7 +7,6 @@ module Database.Persist.EntityDef
     , EntityDef (..)
     , FieldDef (..)
     , FieldType (..)
-    , isEmbedded
     , UniqueDef (..)
     , ExtraLine
     ) where
@@ -36,40 +35,11 @@ newtype DBName = DBName { unDBName :: Text }
 
 type Attr = Text
 
--- | EmbedNone signifies a simple type (Text, Int64, etc) that can already be persisted.
--- An embeddded type is one that you also define in your persistent schema.
--- So we have a schema like:
---
--- @
---   [persistUpperCase|
---
---   Embedded no-migrate
---       name String
---
---   HasEmbeds
---       name   String
---       simple Embedded
---       list   [Embedded]
---       set    Set Embedded
--- @
---
--- Note the use of the no-migrate flag to tell SQL not to generate a migration for the embedded entity.
--- In our schema we demonstrate the different supported types:
---
---    * EmbedSimple: just embed a single entity
---    * EmbedList:   embed a list of entities
---    * EmbedSet:    embed a set of entities
-data FieldType = EmbedNone   { unFieldType :: Text }
-               | EmbedSimple { unFieldType :: Text }
-               | EmbedList   { unFieldType :: Text }
-               | EmbedSet    { unFieldType :: Text }
-               deriving (Show, Eq, Read, Ord)
-
-isEmbedded :: FieldDef -> Bool
-isEmbedded fd = isEmbeddedType (fieldType fd)
-  where
-    isEmbeddedType (EmbedNone _) = False
-    isEmbeddedType _ = True
+data FieldType
+    = FTTypeCon (Maybe Text) Text -- ^ optional module, name
+    | FTApp FieldType FieldType
+    | FTList FieldType
+  deriving (Show, Eq, Read, Ord)
 
 data FieldDef = FieldDef
     { fieldHaskell :: HaskellName

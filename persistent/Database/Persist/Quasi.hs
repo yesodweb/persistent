@@ -8,6 +8,7 @@ module Database.Persist.Quasi
 #if TEST
     , Token (..)
     , tokenize
+    , parseFieldType
 #endif
     ) where
 
@@ -19,7 +20,42 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Control.Arrow ((&&&))
 import qualified Data.Map as M
-import qualified Data.Set as S
+import Data.List (foldl')
+
+data ParseState a = PSDone | PSFail | PSSuccess a Text
+
+parseFieldType :: Text -> Maybe FieldType
+parseFieldType t0 =
+    case go1 $ T.concat ["(", t0, ")"] of
+        PSSuccess ft t'
+            | T.all isSpace t' -> Just ft
+        _ -> Nothing
+  where
+    go1 t =
+        case T.uncons t of
+            Nothing -> PSDone
+            Just (c, t')
+                | isSpace c -> go1 $ T.dropWhile isSpace t'
+                | c == '(' ->
+                    case goMany id t' of
+                        PSSuccess (ft:fts) t'' ->
+                            case T.uncons $ T.dropWhile isSpace t'' of
+                                Just (')', t''') -> PSSuccess (foldl' FTApp ft fts) t'''
+                                _ -> PSFail
+                        _ -> PSFail
+                | isUpper c ->
+                    let (a, b) = T.break (\c -> isSpace c || c `elem` "()") t
+                     in PSSuccess (getCon a) b
+                | otherwise -> PSFail
+    getCon t =
+        case T.breakOnEnd "." t of
+            (_, "") -> FTTypeCon Nothing t
+            ("", _) -> FTTypeCon Nothing t
+            (a, b) -> FTTypeCon (Just $ T.init a) b
+    goMany front t =
+        case go1 t of
+            PSSuccess x t' -> goMany (front . (x:)) t'
+            _ -> PSSuccess (front []) t
 
 data PersistSettings = PersistSettings
     { psToDBName :: Text -> Text
@@ -120,28 +156,21 @@ removeSpaces =
 -- | Divide lines into blocks and make entity definitions.
 parseLines :: PersistSettings -> [Line] -> [EntityDef]
 parseLines ps lines =
-    let entNames = S.fromList $ mapMaybe entName lines
-    in toEntities entNames
+    toEnts lines
   where
-    entName (Line _ (name:_)) = Just name
-    entName _ = Nothing
-
-    toEntities entNames = toEnts lines
-      where
-        toEnts (Line indent (name:entattribs) : rest) =
-            let (x, y) = span ((> indent) . lineIndent) rest
-             in mkEntityDef ps entNames name entattribs x : toEnts y
-        toEnts (Line _ []:rest) = toEnts rest
-        toEnts [] = []
+    toEnts (Line indent (name:entattribs) : rest) =
+        let (x, y) = span ((> indent) . lineIndent) rest
+         in mkEntityDef ps name entattribs x : toEnts y
+    toEnts (Line _ []:rest) = toEnts rest
+    toEnts [] = []
 
 -- | Construct an entity definition.
 mkEntityDef :: PersistSettings
-            -> S.Set Text -- ^ Entity names
             -> Text -- ^ name
             -> [Attr] -- ^ entity attributes
             -> [Line] -- ^ indented lines
             -> EntityDef
-mkEntityDef ps entityNames name entattribs lines =
+mkEntityDef ps name entattribs lines =
     EntityDef
         (HaskellName name)
         (DBName $ psToDBName ps name)
@@ -159,19 +188,9 @@ mkEntityDef ps entityNames name entattribs lines =
     derives = case mapMaybe takeDerives attribs of
                 [] -> ["Show", "Read", "Eq"]
                 x -> concat x
-    cols :: [FieldDef]
-    cols = map toSimple noSimpleCols
-      where
-        toSimple fd@FieldDef { fieldType = (EmbedNone t) }
-            | S.member t entityNames = fd { fieldType = (EmbedSimple t) }
-        toSimple n = n
 
-    noSimpleCols :: [FieldDef]
-    noSimpleCols   = mapMaybe (takeCols ps) attribs
-    {-embedNoneStr x =-}
-        {-case x of-}
-          {-EmbedNone str -> Just str-}
-          {-_ -> Nothing-}
+    cols :: [FieldDef]
+    cols = mapMaybe (takeCols ps) attribs
 
 splitExtras :: [Line] -> ([[Text]], M.Map Text [[Text]])
 splitExtras [] = ([], M.empty)
@@ -188,19 +207,14 @@ takeCols :: PersistSettings -> [Text] -> Maybe FieldDef
 takeCols _ ("deriving":_) = Nothing
 takeCols ps (n:typ:rest)
     | not (T.null n) && isLower (T.head n) =
-      let (rst, ft) = checkEmbed
-      in Just $ FieldDef
-          (HaskellName n)
-          (DBName $ db rest)
-          ft
-          rst
+        case parseFieldType typ of
+            Nothing -> error $ "Invalid field type: " ++ show typ
+            Just ft -> Just $ FieldDef
+                (HaskellName n)
+                (DBName $ db rest)
+                ft
+                rest
   where
-    checkEmbed | T.head typ == '[' && T.last typ == ']' =
-                   (rest, EmbedList (T.init $ T.tail typ))
-               | typ == "Set" = (tail rest, EmbedSet (head rest))
-               -- don't know yet if it is an EmbedSimple
-               | otherwise = (rest, EmbedNone typ)
-
     db [] = psToDBName ps n
     db (a:as) =
         case T.stripPrefix "sql=" a of

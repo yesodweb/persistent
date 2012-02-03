@@ -4,6 +4,7 @@ import Test.Hspec.HUnit ()
 import Test.HUnit
 
 import Database.Persist.Quasi
+import Database.Persist.EntityDef
 
 main :: IO ()
 main = hspecX $ do
@@ -45,3 +46,22 @@ main = hspecX $ do
                 , Spaces 2
                 , Token "baz\""
                 ]
+    describe "parseFieldType" $ do
+        it "simple types" $
+            parseFieldType "FooBar" @?= Just (FTTypeCon Nothing "FooBar")
+        it "module types" $
+            parseFieldType "Data.Map.FooBar" @?= Just (FTTypeCon (Just "Data.Map") "FooBar")
+        it "application" $
+            parseFieldType "Foo Bar" @?= Just (
+                FTTypeCon Nothing "Foo" `FTApp` FTTypeCon Nothing "Bar")
+        it "application multiple" $
+            parseFieldType "Foo Bar Baz" @?= Just (
+                (FTTypeCon Nothing "Foo" `FTApp` FTTypeCon Nothing "Bar")
+                `FTApp` FTTypeCon Nothing "Baz"
+                )
+        it "parens" $ do
+            let foo = FTTypeCon Nothing "Foo"
+                bar = FTTypeCon Nothing "Bar"
+                baz = FTTypeCon Nothing "Baz"
+            parseFieldType "Foo (Bar Baz)" @?= Just (
+                foo `FTApp` (bar `FTApp` baz))
