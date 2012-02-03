@@ -1,9 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP #-}
 module Database.Persist.Quasi
     ( parse
     , PersistSettings (..)
     , upperCaseSettings
     , lowerCaseSettings
+#if TEST
+    , Token (..)
+    , tokenize
+#endif
     ) where
 
 import Prelude hiding (lines)
@@ -45,6 +50,7 @@ parse ps = parseLines ps
 -- | A token used by the parser.
 data Token = Spaces !Int   -- ^ @Spaces n@ are @n@ consecutive spaces.
            | Token Text    -- ^ @Token tok@ is token @tok@ already unquoted.
+  deriving (Show, Eq)
 
 -- | Tokenize a string.
 tokenize :: Text -> [Token]
@@ -52,6 +58,7 @@ tokenize t
     | T.null t = []
     | "--" `T.isPrefixOf` t = [] -- Comment until the end of the line.
     | T.head t == '"' = quotes (T.tail t) id
+    | T.head t == '(' = parens 1 (T.tail t) id
     | isSpace (T.head t) =
         let (spaces, rest) = T.span isSpace t
          in Spaces (T.length spaces) : tokenize rest
@@ -64,10 +71,24 @@ tokenize t
             "Unterminated quoted string starting with " : front []
         | T.head t' == '"' = Token (T.concat $ front []) : tokenize (T.tail t')
         | T.head t' == '\\' && T.length t' > 1 =
-            quotes (T.drop 2 t') (front . (T.take 2 t':))
+            quotes (T.drop 2 t') (front . (T.take 1 (T.drop 1 t'):))
         | otherwise =
             let (x, y) = T.break (`elem` "\\\"") t'
              in quotes y (front . (x:))
+    parens count t' front
+        | T.null t' = error $ T.unpack $ T.concat $
+            "Unterminated parens string starting with " : front []
+        | T.head t' == ')' =
+            if count == (1 :: Int)
+                then Token (T.concat $ front []) : tokenize (T.tail t')
+                else parens (count - 1) (T.tail t') (front . (")":))
+        | T.head t' == '(' =
+            parens (count + 1) (T.tail t') (front . ("(":))
+        | T.head t' == '\\' && T.length t' > 1 =
+            parens count (T.drop 2 t') (front . (T.take 1 (T.drop 1 t'):))
+        | otherwise =
+            let (x, y) = T.break (`elem` "\\()") t'
+             in parens count y (front . (x:))
 
 -- | A string of tokens is empty when it has only spaces.  There
 -- can't be two consecutive 'Spaces', so this takes /O(1)/ time.

@@ -54,6 +54,18 @@ library
 
     ghc-options:     -Wall
 
+test-suite test
+    type:          exitcode-stdio-1.0
+    main-is:       test/main.hs
+
+    build-depends:   base >= 4 && < 5
+                   , hspec
+                   , containers
+                   , text
+                   , HUnit
+
+    cpp-options: -DTEST
+
 source-repository head
   type:     git
   location: git://github.com/yesodweb/persistent.git
