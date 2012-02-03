@@ -10,7 +10,7 @@ import qualified MaxLenTest
 import Test.Hspec.Monadic (hspecX)
 import Init
 import System.Exit
-import Control.Monad (when)
+import Control.Monad (unless)
 
 
 #ifdef MongoDB
@@ -32,7 +32,7 @@ main = do
   runConn (setup PersistentTest.testMigrate)
   r <- hspecB $ PersistentTest.specs
   (liftIO $ runConn PersistentTest.cleanDB)
-  when r $ exitWith (toExitCode r)
+  unless r $ exitWith (toExitCode r)
 
   runConn (setup EmbedTest.embedMigrate)
   runConn (setup LargeNumberTest.numberMigrate)
