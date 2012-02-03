@@ -35,6 +35,10 @@ library
                    , mtl                      >= 2.0     && < 2.1
                    , aeson                    >= 0.5     && < 0.7
                    , transformers-base
+                   , base64-bytestring
+                   , unordered-containers
+                   , vector
+                   , attoparsec
 
     exposed-modules: Database.Persist
                      Database.Persist.EntityDef

@@ -609,9 +609,9 @@ showAlterTable table (AddUniqueConstraint cname cols) = concat
     , ")"
     ]
     where
-      escapeDBName' (name, (EmbedNone "Text"      )) = escapeDBName name ++ "(200)"
-      escapeDBName' (name, (EmbedNone "String"    )) = escapeDBName name ++ "(200)"
-      escapeDBName' (name, (EmbedNone "ByteString")) = escapeDBName name ++ "(200)"
+      escapeDBName' (name, (FTTypeCon _ "Text"      )) = escapeDBName name ++ "(200)"
+      escapeDBName' (name, (FTTypeCon _ "String"    )) = escapeDBName name ++ "(200)"
+      escapeDBName' (name, (FTTypeCon _ "ByteString")) = escapeDBName name ++ "(200)"
       escapeDBName' (name, _                       ) = escapeDBName name
 showAlterTable table (DropUniqueConstraint cname) = concat
     [ "ALTER TABLE "

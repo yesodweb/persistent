@@ -48,7 +48,6 @@ import Control.Monad.IO.Control (MonadControlIO)
 #endif
 import qualified System.IO as SIO
 import Data.Text (pack, Text, append, unpack, concat, uncons, cons)
-import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import Data.List (foldl')
 import Data.Monoid (mappend, mconcat)
@@ -369,14 +368,11 @@ mkEntity mps t = do
 persistFieldFromEntity :: EntityDef -> Q [Dec]
 persistFieldFromEntity e = do
     ss <- [|SqlString|]
-    unexpected <- [|\x -> Left $ "(TH)Expected PersistMap, received: " ++ T.pack (show x)|]
     let columnNames = map (unpack . unHaskellName . fieldHaskell) (entityFields e)
     obj <- [|\ent -> PersistMap $ zip (map pack columnNames) (map toPersistValue $ toPersistFields ent)|]
-    pmName <- newName "pm"
     fpv <- [|\x -> fromPersistValues $ map (\(_,v) -> case fromPersistValue v of
                                                       Left e' -> error $ unpack e'
                                                       Right r -> r) x|]
-    unexpectedName <- newName "unexpected"
     let typ = ConT (mkName $ entityName `mappend` "Generic")
               `AppT` VarT (mkName "backend")
 
