@@ -412,13 +412,7 @@ instance (Ord a, PersistField a) => PersistField (S.Set a) where
     sqlType _ = SqlString
 
 fromPersistList :: PersistField a => [PersistValue] -> Either T.Text [a]
-fromPersistList list =
-        foldl (\eithList v ->
-              case (eithList, fromPersistValue v) of
-                (Left e, _)         -> Left e
-                (_, Left e)         -> Left e
-                (Right xs, Right x) -> Right (x:xs)
-              ) (Right []) list
+fromPersistList = mapM fromPersistValue
 
 instance (PersistField a, PersistField b) => PersistField (a,b) where
     toPersistValue (x,y) = PersistList [toPersistValue x, toPersistValue y]
