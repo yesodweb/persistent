@@ -77,10 +77,8 @@ import qualified Data.Conduit as C
 import Data.Aeson (Value)
 import Data.Aeson.Types (Parser)
 
-#ifdef WITH_MONGODB
 import qualified Data.Set as S
 import qualified Data.Map as M
-#endif
 
 data PersistException
   = PersistError T.Text -- ^ Generic Exception
@@ -333,7 +331,6 @@ class PersistEntity val where
 
     persistIdField :: EntityField val (Key (PersistEntityBackend val) val)
 
-#ifdef WITH_MONGODB
 instance PersistField a => PersistField [a] where
     toPersistValue = PersistList . map toPersistValue
     fromPersistValue (PersistList l) = fromPersistList l
@@ -381,8 +378,6 @@ instance PersistField v => PersistField (M.Map T.Text v) where
 
     fromPersistValue x = Left $ "Expected PersistMap, received: " ++ show x
     sqlType _ = SqlString
-#endif
-
 
 data SomePersistField = forall a. PersistField a => SomePersistField a
 instance PersistField SomePersistField where

@@ -29,7 +29,6 @@ module Database.Persist.TH
     ) where
 
 import Prelude hiding ((++), take, concat, splitAt)
-import Data.List (nub)
 import Database.Persist.EntityDef
 import Database.Persist.Quasi
 import Database.Persist.Store
@@ -48,13 +47,12 @@ import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.IO.Control (MonadControlIO)
 #endif
 import qualified System.IO as SIO
-import Data.Text (pack, Text, append, isSuffixOf, unpack, take, concat, uncons, cons, splitAt)
+import Data.Text (pack, Text, append, unpack, concat, uncons, cons)
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import Data.List (foldl')
 import Data.Monoid (mappend, mconcat)
 import qualified Data.Map as M
-import qualified Data.Set as S
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
@@ -93,22 +91,9 @@ persistFile = persistFileWith upperCaseSettings
 -- 'EntityDef's. Works well with the persist quasi-quoter.
 mkPersist :: MkPersistSettings -> [EntityDef] -> Q [Dec]
 mkPersist mps ents = do
-    embeds <- fmap mconcat $ mapM persistFieldFromEntity $ embeddedEntities
-    noEmbeds <- fmap mconcat $ mapM (mkEntity mps) ents
-    return $ embeds `mappend` noEmbeds
-  where
-    allEmbeddedFields = nub $ mconcat $ map embeddedFields ents
-    embeddedFields = filter isEmbedded . entityFields
-    embeddedEntities = nub $ map embedLookup allEmbeddedFields
-
-    entMap = M.fromList $ zip (map (unHaskellName . entityHaskell) ents) ents
-    embedLookup fd = 
-        let typName = unFieldType $ fieldType fd
-        in  case M.lookup typName entMap of
-              Nothing -> lookupError typName
-              Just ent -> ent
-    lookupError field = error $ unpack $
-        "expected the schema to define " `mappend` field
+    x <- fmap mconcat $ mapM persistFieldFromEntity ents
+    y <- fmap mconcat $ mapM (mkEntity mps) ents
+    return $ x `mappend` y
 
 -- | Settings to be passed to the 'mkPersist' function.
 data MkPersistSettings = MkPersistSettings
@@ -151,7 +136,7 @@ dataTypeDec t =
     mkCol x (FieldDef n _ ty as) =
         (mkName $ unpack $ recName x $ unHaskellName n,
          NotStrict,
-         pairToType backend (unFieldType ty, nullable as)
+         pairToType backend (ty, nullable as)
         )
     nameG = mkName $ unpack $ unHaskellName (entityHaskell t) ++ suffix
     name = mkName $ unpack $ unHaskellName $ entityHaskell t
@@ -191,7 +176,7 @@ mkUnique backend t (UniqueDef (HaskellName constr) _ fields) =
 
     go :: (FieldType, Bool) -> (Strict, Type)
     go (_, True) = error "Error: cannot have nullables in unique"
-    go (ft, y) = (NotStrict, pairToType backend (unFieldType ft, y))
+    go (ft, y) = (NotStrict, pairToType backend (ft, y))
 
     lookup3 :: Text -> [FieldDef] -> (FieldType, Bool)
     lookup3 s [] =
@@ -201,18 +186,19 @@ mkUnique backend t (UniqueDef (HaskellName constr) _ fields) =
         | otherwise = lookup3 x rest
 
 pairToType :: Name -- ^ backend
-           -> (Text, Bool) -> Type
+           -> (FieldType, Bool) -- ^ True == has Maybe attr
+           -> Type
 pairToType backend (s, False) = idType backend s
 pairToType backend (s, True) = ConT (mkName "Maybe") `AppT` idType backend s
 
-idType :: Name -> Text -> Type
-idType backend typ
-    | "Id" `isSuffixOf` typ =
-        ConT ''Key
-        `AppT` VarT backend
-        `AppT` (ConT (mkName $ unpack $ take (T.length typ - 2) typ ++ "Generic")
-                `AppT` VarT backend)
-    | otherwise = ConT $ mkName $ unpack typ
+idType :: Name -> FieldType -> Type
+idType backend typ =
+    case stripId typ of
+        Just typ' ->
+            ConT ''Key
+            `AppT` VarT backend
+            `AppT` (ConT (mkName $ unpack $ typ' ++ "Generic") `AppT` VarT backend)
+        Nothing -> ftToType typ
 
 degen :: [Clause] -> [Clause]
 degen [] =
@@ -332,7 +318,7 @@ mkEntity mps t = do
     fields <- mapM (mkField t) $ FieldDef
         (HaskellName "Id")
         (entityID t)
-        (EmbedNone $ unHaskellName (entityHaskell t) ++ "Id")
+        (FTTypeCon Nothing $ unHaskellName (entityHaskell t) ++ "Id")
         []
         : entityFields t
     toFieldNames <- mkToFieldNames $ entityUniques t
@@ -391,12 +377,14 @@ persistFieldFromEntity e = do
                                                       Left e' -> error $ unpack e'
                                                       Right r -> r) x|]
     unexpectedName <- newName "unexpected"
+    let typ = ConT (mkName $ entityName `mappend` "Generic")
+              `AppT` VarT (mkName "backend")
     return
-        [ persistFieldInstanceD entityName
+        [ persistFieldInstanceD typ
             [ sqlTypeFunD ss
             , FunD (mkName "toPersistValue") [ Clause [] (NormalB obj) [] ]
             , FunD (mkName "fromPersistValue")
-                [ Clause [ConP (mkName "PersistMap") [VarP pmName]]
+                [ Clause [ConP 'PersistMap [VarP pmName]]
                     (NormalB $ fpv `AppE` VarE pmName) []
                 , Clause [VarP unexpectedName] (NormalB (unexpected `AppE` VarE unexpectedName)) []
                 ]
@@ -462,17 +450,15 @@ mkDeleteCascade defs = do
         getDeps' :: FieldDef -> [Dep]
         getDeps' (FieldDef name _ ftyp attribs) =
             let isNull = nullable attribs
-                typ = unFieldType ftyp
-                l = T.length typ
-                (f, b) = splitAt (l - 2) typ
-             in if b == "Id"
-                    then return Dep
+             in case stripId ftyp of
+                    Just f ->
+                         return Dep
                             { depTarget = f
                             , depSourceTable = entityHaskell def
                             , depSourceField = name
                             , depSourceNull = isNull
                             }
-                    else []
+                    Nothing -> []
     go :: [Dep] -> EntityDef -> Q Dec
     go allDeps EntityDef{entityHaskell = name} = do
         let deps = filter (\x -> depTarget x == unHaskellName name) allDeps
@@ -544,9 +530,9 @@ sqlTypeFunD :: Exp -> Dec
 sqlTypeFunD st = FunD (mkName "sqlType")
                 [ Clause [WildP] (NormalB st) [] ]
 
-persistFieldInstanceD :: String -> [Dec] -> Dec
-persistFieldInstanceD name =
-   InstanceD [] (ConT ''PersistField `AppT` ConT (mkName name))
+persistFieldInstanceD :: Type -> [Dec] -> Dec
+persistFieldInstanceD typ =
+   InstanceD [] (ConT ''PersistField `AppT` typ)
 
 -- | Automatically creates a valid 'PersistField' instance for any datatype
 -- that has valid 'Show' and 'Read' instances. Can be very convenient for
@@ -563,7 +549,7 @@ derivePersistField s = do
                             (x, _):_ -> Right x
                             [] -> Left $ "Invalid " ++ dt ++ ": " ++ s'|]
     return
-        [ persistFieldInstanceD s
+        [ persistFieldInstanceD (ConT $ mkName s)
             [ sqlTypeFunD ss 
             , FunD (mkName "toPersistValue")
                 [ Clause [] (NormalB tpv) []
@@ -644,10 +630,10 @@ instance Lift HaskellName where
 instance Lift DBName where
     lift (DBName t) = [|DBName $(liftT t)|]
 instance Lift FieldType where
-    lift (EmbedNone t)   = [|EmbedNone $(liftT t)|]
-    lift (EmbedSimple t) = [|EmbedSimple $(liftT t)|]
-    lift (EmbedList t)   = [|EmbedList $(liftT t)|]
-    lift (EmbedSet t)    = [|EmbedSet $(liftT t)|]
+    lift (FTTypeCon Nothing t)   = [|FTTypeCon Nothing $(liftT t)|]
+    lift (FTTypeCon (Just x) t)   = [|FTTypeCon (Just $(liftT x)) $(liftT t)|]
+    lift (FTApp x y) = [|FTApp $(lift x) $(lift y)|]
+    lift (FTList x) = [|FTList $(lift x)|]
 
 instance Lift PersistFilter where
     lift Eq = [|Eq|]
@@ -677,7 +663,7 @@ mkField :: EntityDef -> FieldDef -> Q (Con, Clause)
 mkField et cd = do
     let con = ForallC
                 []
-                [EqualP (VarT $ mkName "typ") typ]
+                [EqualP (VarT $ mkName "typ") maybeTyp]
                 $ NormalC name []
     bod <- lift cd
     let cla = Clause
@@ -690,24 +676,25 @@ mkField et cd = do
         [ unHaskellName $ entityHaskell et
         , upperFirst $ unHaskellName $ fieldHaskell cd
         ]
-    baseTyp =
-        if "Id" `isSuffixOf` unFieldType (fieldType cd)
-            then ConT ''Key
+    maybeTyp =
+        if nullable $ fieldAttrs cd
+            then ConT ''Maybe `AppT` typ
+            else typ
+    typ =
+        case stripId $ fieldType cd of
+            Just ft ->
+                 ConT ''Key
                     `AppT` (VarT $ mkName "backend")
                     `AppT`
-                        let len = T.length (unFieldType $ fieldType cd) - 2
-                            ft = take len $ unFieldType $ fieldType cd
-                            con = ConT $ mkName $ unpack $ ft ++ suffix
+                        let con = ConT $ mkName $ unpack $ ft ++ suffix
                          in con `AppT` VarT (mkName "backend")
-            else ConT $ mkName $ unpack $ unFieldType $ fieldType cd
-    typ = case fieldType cd of
-              EmbedNone _   -> maybeTyp
-              EmbedSimple _ -> maybeTyp
-              EmbedSet _    -> ConT ''S.Set `AppT` maybeTyp
-              EmbedList _   -> ListT `AppT` maybeTyp
-    maybeTyp = if nullable $ fieldAttrs cd
-                then ConT ''Maybe `AppT` baseTyp
-                else baseTyp
+            Nothing -> ftToType $ fieldType cd
+
+ftToType :: FieldType -> Type
+ftToType (FTTypeCon Nothing t) = ConT $ mkName $ unpack t
+ftToType (FTTypeCon (Just m) t) = ConT $ mkName $ unpack $ concat [m, ".", t]
+ftToType (FTApp x y) = ftToType x `AppT` ftToType y
+ftToType (FTList x) = ListT `AppT` ftToType x
 
 suffix :: Text
 suffix = "Generic"

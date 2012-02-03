@@ -32,6 +32,7 @@ import Database.Persist.Query.Internal
 
 import Database.Persist.Query.Join (selectOneMany, SelectOneMany(..))
 import qualified Database.Persist.Query.Join
+import qualified Data.Set as S
 
 #if WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
@@ -41,7 +42,6 @@ import Language.Haskell.TH.Syntax (Type(..))
 import Database.Persist.TH (MkPersistSettings(..))
 import Control.Monad (replicateM)
 import qualified Data.ByteString as BS
-import qualified Data.Set as S
 
 #else
 import Database.Persist.EntityDef (EntityDef(..), DBName(..))
@@ -121,29 +121,35 @@ derivePersistField "PetType"
 
 #if WITH_MONGODB
 mkPersist MkPersistSettings { mpsBackend = ConT ''Action } [persistUpperCase|
+#else
+share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persistUpperCase|
+#endif
 
   DoubleEmbed no-migrate
     name String
+    deriving Show Eq Read Ord
 
   HasEmbed no-migrate
     name String
     embed DoubleEmbed
+    deriving Show Eq Read Ord
 
   HasEmbeds
     name String
     embed HasEmbed
     double DoubleEmbed
+    deriving Show Eq Read Ord
 
   HasListEmbed
     name String
     list [HasEmbed]
+    deriving Show Eq Read Ord
 
   HasSetEmbed
     name String
-    set Set HasEmbed
-#else
-share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persistUpperCase|
-#endif
+    set (S.Set HasEmbed)
+    deriving Show Eq Read Ord
+
 -- Dedented comment
   -- Header-level comment
     -- Indented comment
@@ -427,7 +433,6 @@ specs = describe "persistent" $ do
       c <- fmap (map $ personName . entityVal) $ selectList [] [OffsetBy 2, Desc PersonAge, LimitTo 3, Asc PersonName, LimitTo 1, OffsetBy 1]
       c @== a
 
-#ifdef WITH_MONGODB
   it "simple embedded entities" $ db $ do
       let container = HasEmbeds "container"
             (HasEmbed "embed" (DoubleEmbed "1")) (DoubleEmbed "2")
@@ -435,7 +440,6 @@ specs = describe "persistent" $ do
       Just res <- selectFirst [HasEmbedsName ==. "container"] []
       res @== (Entity contK container)
 
-{-
   it "embedded set of entities" $ db $ do
       let container = HasSetEmbed "set" $ S.fromList [
               (HasEmbed "embed" (DoubleEmbed "1"))
@@ -451,10 +455,10 @@ specs = describe "persistent" $ do
             , (HasEmbed "embed" (DoubleEmbed "2"))
             ]
       contK <- insert container
-      Just res <- selectFirst [HasSetEmbedName ==. "list"] []
+      Just res <- selectFirst [HasListEmbedName ==. "list"] []
       res @== (Entity contK container)
-      -}
-#endif
+
+  -- FIXME embedded map test?
 
   it "passes the general tests" $ db $ do
       let mic26 = Person "Michael" 26 Nothing

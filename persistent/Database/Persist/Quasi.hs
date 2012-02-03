@@ -26,25 +26,38 @@ data ParseState a = PSDone | PSFail | PSSuccess a Text
 
 parseFieldType :: Text -> Maybe FieldType
 parseFieldType t0 =
-    case go1 $ T.concat ["(", t0, ")"] of
+    case go t0 of
         PSSuccess ft t'
             | T.all isSpace t' -> Just ft
         _ -> Nothing
   where
+    go t =
+        case goMany id t of
+            PSSuccess (ft:fts) t' -> PSSuccess (foldl' FTApp ft fts) t'
+            PSSuccess [] _ -> PSFail
+            PSFail -> PSFail
+            PSDone -> PSDone
     go1 t =
         case T.uncons t of
             Nothing -> PSDone
             Just (c, t')
                 | isSpace c -> go1 $ T.dropWhile isSpace t'
                 | c == '(' ->
-                    case goMany id t' of
-                        PSSuccess (ft:fts) t'' ->
+                    case go t' of
+                        PSSuccess ft t'' ->
                             case T.uncons $ T.dropWhile isSpace t'' of
-                                Just (')', t''') -> PSSuccess (foldl' FTApp ft fts) t'''
+                                Just (')', t''') -> PSSuccess ft t'''
+                                _ -> PSFail
+                        _ -> PSFail
+                | c == '[' ->
+                    case go t' of
+                        PSSuccess ft t'' ->
+                            case T.uncons $ T.dropWhile isSpace t'' of
+                                Just (']', t''') -> PSSuccess (FTList ft) t'''
                                 _ -> PSFail
                         _ -> PSFail
                 | isUpper c ->
-                    let (a, b) = T.break (\c -> isSpace c || c `elem` "()") t
+                    let (a, b) = T.break (\x -> isSpace x || x `elem` "()[]") t
                      in PSSuccess (getCon a) b
                 | otherwise -> PSFail
     getCon t =

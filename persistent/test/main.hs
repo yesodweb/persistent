@@ -65,3 +65,13 @@ main = hspecX $ do
                 baz = FTTypeCon Nothing "Baz"
             parseFieldType "Foo (Bar Baz)" @?= Just (
                 foo `FTApp` (bar `FTApp` baz))
+        it "lists" $ do
+            let foo = FTTypeCon Nothing "Foo"
+                bar = FTTypeCon Nothing "Bar"
+                bars = FTList bar
+                baz = FTTypeCon Nothing "Baz"
+            parseFieldType "Foo [Bar] Baz" @?= Just (
+                foo `FTApp` bars `FTApp` baz)
+    describe "stripId" $ do
+        it "works" $
+            (parseFieldType "FooId" >>= stripId) @?= Just "Foo"

@@ -9,9 +9,11 @@ module Database.Persist.EntityDef
     , FieldType (..)
     , UniqueDef (..)
     , ExtraLine
+      -- * Utils
+    , stripId
     ) where
 
-import Data.Text (Text)
+import Data.Text (Text, stripSuffix, pack)
 import Data.Map (Map)
 
 data EntityDef = EntityDef
@@ -55,3 +57,7 @@ data UniqueDef = UniqueDef
     , uniqueFields  :: [(HaskellName, DBName)]
     }
     deriving (Show, Eq, Read, Ord)
+
+stripId :: FieldType -> Maybe Text
+stripId (FTTypeCon Nothing t) = stripSuffix (pack "Id") t
+stripId _ = Nothing
