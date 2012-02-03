@@ -191,10 +191,8 @@ instance MySQL.Param P where
     render (P (PersistTimeOfDay t))   = MySQL.render t
     render (P (PersistUTCTime t))     = MySQL.render t
     render (P PersistNull)            = MySQL.render MySQL.Null
-    render (P (PersistList _))        =
-        error "Refusing to serialize a PersistList to a MySQL value"
-    render (P (PersistMap _))         =
-        error "Refusing to serialize a PersistMap to a MySQL value"
+    render (P (PersistList l))        = MySQL.render $ listToJSON l
+    render (P (PersistMap m))         = MySQL.render $ mapToJSON m
     render (P (PersistObjectId _))    =
         error "Refusing to serialize a PersistObjectId to a MySQL value"
 

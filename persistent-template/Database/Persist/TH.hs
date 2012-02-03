@@ -39,7 +39,7 @@ import Database.Persist.TH.Library (apE)
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
-import Control.Monad (forM)
+import Control.Monad (forM, (<=<))
 #if MIN_VERSION_monad_control(0, 3, 0)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.IO.Class (MonadIO)
@@ -369,7 +369,7 @@ mkEntity mps t = do
 persistFieldFromEntity :: EntityDef -> Q [Dec]
 persistFieldFromEntity e = do
     ss <- [|SqlString|]
-    unexpected <- [|\x -> Left $ "Expected PersistMap, received: " ++ T.pack (show x)|]
+    unexpected <- [|\x -> Left $ "(TH)Expected PersistMap, received: " ++ T.pack (show x)|]
     let columnNames = map (unpack . unHaskellName . fieldHaskell) (entityFields e)
     obj <- [|\ent -> PersistMap $ zip (map pack columnNames) (map toPersistValue $ toPersistFields ent)|]
     pmName <- newName "pm"
@@ -379,14 +379,15 @@ persistFieldFromEntity e = do
     unexpectedName <- newName "unexpected"
     let typ = ConT (mkName $ entityName `mappend` "Generic")
               `AppT` VarT (mkName "backend")
+
+    compose <- [|(<=<)|]
+    getPersistMap' <- [|getPersistMap|]
     return
         [ persistFieldInstanceD typ
             [ sqlTypeFunD ss
             , FunD (mkName "toPersistValue") [ Clause [] (NormalB obj) [] ]
             , FunD (mkName "fromPersistValue")
-                [ Clause [ConP 'PersistMap [VarP pmName]]
-                    (NormalB $ fpv `AppE` VarE pmName) []
-                , Clause [VarP unexpectedName] (NormalB (unexpected `AppE` VarE unexpectedName)) []
+                [ Clause [] (NormalB $ InfixE (Just fpv) compose $ Just getPersistMap') []
                 ]
             ]
         ]

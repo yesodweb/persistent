@@ -208,10 +208,8 @@ instance PG.Param P where
     render (P (PersistTimeOfDay t))   = PG.render t
     render (P (PersistUTCTime t))     = PG.render t
     render (P PersistNull)            = PG.render PG.Null
-    render (P (PersistList _))        =
-        error "Refusing to serialize a PersistList to a PostgreSQL value"
-    render (P (PersistMap _))         =
-        error "Refusing to serialize a PersistMap to a PostgreSQL value"
+    render (P (PersistList l))        = PG.render $ listToJSON l
+    render (P (PersistMap m))         = PG.render $ mapToJSON m
     render (P (PersistObjectId _))    =
         error "Refusing to serialize a PersistObjectId to a PostgreSQL value"
 

@@ -11,6 +11,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternGuards #-}
 -- This is to test our assumption that OverlappingInstances is just for String
 #ifndef NO_OVERLAP
 {-# LANGUAGE OverlappingInstances #-}
@@ -41,6 +42,11 @@ module Database.Persist.Store
     , Key (..)
     , Entity (..)
 
+      -- * Helpers
+    , getPersistMap
+    , listToJSON
+    , mapToJSON
+
       -- * Config
     , PersistConfig (..)
     ) where
@@ -66,7 +72,8 @@ import Control.Monad.Trans.Error (Error (..))
 import Database.Persist.EntityDef
 
 import Data.Bits (bitSize)
-import Control.Monad (liftM)
+import Control.Monad (liftM, (<=<))
+import Control.Arrow (second)
 
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.Encoding.Error as T
@@ -76,9 +83,21 @@ import qualified Data.Conduit as C
 
 import Data.Aeson (Value)
 import Data.Aeson.Types (Parser)
+import qualified Data.Aeson as A
+import qualified Data.Attoparsec.Number as AN
+import qualified Data.Vector as V
 
 import qualified Data.Set as S
 import qualified Data.Map as M
+import qualified Data.HashMap.Strict as HM
+
+import qualified Data.Text.Encoding as TE
+import qualified Data.ByteString.Base64 as B64
+
+import Data.Aeson (toJSON)
+import Data.Aeson.Encode (fromValue)
+import Data.Text.Lazy (toStrict)
+import Data.Text.Lazy.Builder (toLazyText)
 
 data PersistException
   = PersistError T.Text -- ^ Generic Exception
@@ -119,6 +138,49 @@ instance PathPiece PersistValue where
         case fromPersistValue x of
             Left e -> error $ T.unpack e
             Right y -> y
+
+instance A.ToJSON PersistValue where
+    toJSON (PersistText t) = A.String $ T.cons 's' t
+    toJSON (PersistByteString b) = A.String $ T.cons 'b' $ TE.decodeUtf8 $ B64.encode b
+    toJSON (PersistInt64 i) = A.Number $ fromIntegral i
+    toJSON (PersistDouble d) = A.Number $ AN.D d
+    toJSON (PersistBool b) = A.Bool b
+    toJSON (PersistTimeOfDay t) = A.String $ T.cons 't' $ show t
+    toJSON (PersistUTCTime u) = A.String $ T.cons 'u' $ show u
+    toJSON (PersistDay d) = A.String $ T.cons 'd' $ show d
+    toJSON PersistNull = A.Null
+    toJSON (PersistList l) = A.Array $ V.fromList $ map A.toJSON l
+    toJSON (PersistMap m) = A.object $ map (second A.toJSON) m
+    toJSON (PersistObjectId o) = A.String $ T.cons 'o' $ TE.decodeUtf8 $ B64.encode o
+
+instance A.FromJSON PersistValue where
+    parseJSON (A.String t0) =
+        case T.uncons t0 of
+            Nothing -> fail "Null string"
+            Just ('s', t) -> return $ PersistText t
+            Just ('b', t) -> either (fail "Invalid base64") (return . PersistByteString)
+                           $ B64.decode $ TE.encodeUtf8 t
+            Just ('t', t) -> fmap PersistTimeOfDay $ readMay t
+            Just ('u', t) -> fmap PersistUTCTime $ readMay t
+            Just ('d', t) -> fmap PersistDay $ readMay t
+            Just ('o', t) -> either (fail "Invalid base64") (return . PersistObjectId)
+                           $ B64.decode $ TE.encodeUtf8 t
+            Just (c, _) -> fail $ "Unknown prefix: " `mappend` [c]
+      where
+        readMay :: (Read a, Monad m) => T.Text -> m a
+        readMay t =
+            case reads $ T.unpack t of
+                (x, _):_ -> return x
+                [] -> fail "Could not read"
+    parseJSON (A.Number (AN.I i)) = return $ PersistInt64 $ fromInteger i
+    parseJSON (A.Number (AN.D d)) = return $ PersistDouble d
+    parseJSON (A.Bool b) = return $ PersistBool b
+    parseJSON A.Null = return $ PersistNull
+    parseJSON (A.Array a) = fmap PersistList (mapM A.parseJSON $ V.toList a)
+    parseJSON (A.Object o) =
+        fmap PersistMap $ mapM go $ HM.toList o
+      where
+        go (k, v) = fmap ((,) k) $ A.parseJSON v
 
 -- | A SQL data type. Naming attempts to reflect the underlying Haskell
 -- datatypes, eg SqlString instead of SqlVarchar. Different SQL databases may
@@ -334,6 +396,8 @@ class PersistEntity val where
 instance PersistField a => PersistField [a] where
     toPersistValue = PersistList . map toPersistValue
     fromPersistValue (PersistList l) = fromPersistList l
+    fromPersistValue (PersistText t)
+        | Just values <- A.decode' (L.fromChunks [TE.encodeUtf8 t]) = fromPersistList values
     fromPersistValue x = Left $ "Expected PersistList, received: " ++ show x
     sqlType _ = SqlString
 
@@ -341,6 +405,9 @@ instance (Ord a, PersistField a) => PersistField (S.Set a) where
     toPersistValue = PersistList . map toPersistValue . S.toList
     fromPersistValue (PersistList list) =
       either Left (Right . S.fromList) $ fromPersistList list
+    fromPersistValue (PersistText t)
+        | Just values <- A.decode' (L.fromChunks [TE.encodeUtf8 t]) =
+            either Left (Right . S.fromList) $ fromPersistList values
     fromPersistValue x = Left $ "Expected PersistList, received: " ++ show x
     sqlType _ = SqlString
 
@@ -365,7 +432,20 @@ instance (PersistField a, PersistField b) => PersistField (a,b) where
 
 instance PersistField v => PersistField (M.Map T.Text v) where
     toPersistValue = PersistMap . map (\(k,v) -> (k, toPersistValue v)) . M.toList
-    fromPersistValue (PersistMap kvs) = case (
+    fromPersistValue = fromPersistMap <=< getPersistMap
+    sqlType _ = SqlString
+
+getPersistMap :: PersistValue -> Either T.Text [(T.Text, PersistValue)]
+getPersistMap (PersistMap kvs) = Right kvs
+getPersistMap (PersistText t)
+    | Just pairs <- A.decode' (L.fromChunks [TE.encodeUtf8 t]) = Right pairs
+getPersistMap x = Left $ "Expected PersistMap, received: " ++ show x
+
+fromPersistMap :: PersistField v
+               => [(T.Text, PersistValue)]
+               -> Either T.Text (M.Map T.Text v)
+fromPersistMap kvs =
+      case (
         foldl (\eithAssocs (k,v) ->
               case (eithAssocs, fromPersistValue v) of
                 (Left e, _) -> Left e
@@ -375,9 +455,6 @@ instance PersistField v => PersistField (M.Map T.Text v) where
       ) of
         Right vs -> Right $ M.fromList vs
         Left e -> Left e
-
-    fromPersistValue x = Left $ "Expected PersistMap, received: " ++ show x
-    sqlType _ = SqlString
 
 data SomePersistField = forall a. PersistField a => SomePersistField a
 instance PersistField SomePersistField where
@@ -580,3 +657,9 @@ infixr 5 ++
 
 show :: Show a => a -> T.Text
 show = T.pack . Prelude.show
+
+listToJSON :: [PersistValue] -> T.Text
+listToJSON = toStrict . toLazyText . fromValue . toJSON
+
+mapToJSON :: [(T.Text, PersistValue)] -> T.Text
+mapToJSON = toStrict . toLazyText . fromValue . toJSON

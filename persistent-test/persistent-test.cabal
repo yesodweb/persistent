@@ -72,6 +72,7 @@ library
                    , monad-control
                    , containers
                    , bytestring
+                   , base64-bytestring
                    , conduit >= 0.2
                    , time >= 1.2
                    , random == 1.*
@@ -79,6 +80,9 @@ library
                    , blaze-html
                    , pool-conduit
                    , transformers-base
+                   , attoparsec
+                   , vector
+                   , unordered-containers
 
                    -- postgresql dependencies
                    , postgresql-simple     >= 0.0      && < 1.0
