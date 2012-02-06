@@ -8,7 +8,7 @@ synopsis:        Type-safe, non-relational, multi-backend persistence.
 description:     This library provides just the general interface and helper functions. You must use a specific backend in order to make this useful.
 category:        Database, Yesod
 stability:       Stable
-cabal-version:   >= 1.6
+cabal-version:   >= 1.8
 build-type:      Simple
 homepage:        http://www.yesodweb.com/book/persistent
 
@@ -20,8 +20,24 @@ library
                    , text                     >= 0.5       && < 1.0
                    , transformers             >= 0.2
                    , containers
+                   , aeson
     exposed-modules: Database.Persist.TH
     ghc-options:     -Wall
+
+test-suite test
+    type:          exitcode-stdio-1.0
+    main-is:       main.hs
+    hs-source-dirs: test
+
+    build-depends:   base >= 4 && < 5
+                   , persistent-template
+                   , aeson
+                   , hspec
+                   , text
+                   , persistent
+                   , bytestring
+                   , HUnit
+                   , QuickCheck
 
 source-repository head
   type:     git

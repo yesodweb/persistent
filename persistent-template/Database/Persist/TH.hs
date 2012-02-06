@@ -39,7 +39,7 @@ import Database.Persist.TH.Library (apE)
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
-import Control.Monad (forM, (<=<))
+import Control.Monad (forM, (<=<), mzero)
 #if MIN_VERSION_monad_control(0, 3, 0)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.IO.Class (MonadIO)
@@ -52,6 +52,8 @@ import qualified Data.Text.IO as TIO
 import Data.List (foldl')
 import Data.Monoid (mappend, mconcat)
 import qualified Data.Map as M
+import Data.Aeson (ToJSON, FromJSON (..), (.=), object, Value (Object), (.:), (.:?))
+import Control.Applicative (pure, (<*>))
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
@@ -92,7 +94,8 @@ mkPersist :: MkPersistSettings -> [EntityDef] -> Q [Dec]
 mkPersist mps ents = do
     x <- fmap mconcat $ mapM persistFieldFromEntity ents
     y <- fmap mconcat $ mapM (mkEntity mps) ents
-    return $ x `mappend` y
+    z <- fmap mconcat $ mapM mkJSON ents
+    return $ mconcat [x, y, z]
 
 -- | Settings to be passed to the 'mkPersist' function.
 data MkPersistSettings = MkPersistSettings
@@ -699,3 +702,57 @@ suffix = "Generic"
 infixr 5 ++
 (++) :: Text -> Text -> Text
 (++) = append
+
+mkJSON :: EntityDef -> Q [Dec]
+mkJSON def | "no-json" `elem` entityAttrs def = return []
+mkJSON def = do
+    pureE <- [|pure|]
+    apE' <- [|(<*>)|]
+    packE <- [|pack|]
+    dotEqualE <- [|(.=)|]
+    dotColonE <- [|(.:)|]
+    dotColonQE <- [|(.:?)|]
+    objectE <- [|object|]
+    obj <- newName "obj"
+    mzeroE <- [|mzero|]
+
+    xs <- mapM (newName . unpack . unHaskellName . fieldHaskell)
+        $ entityFields def
+
+    let con = ConT $ mkName $ unpack
+              (unHaskellName (entityHaskell def) ++ "Generic")
+        conName = mkName $ unpack $ unHaskellName $ entityHaskell def
+        typ = con `AppT` VarT (mkName "backend")
+        toJSON = InstanceD
+            []
+            (ConT ''ToJSON `AppT` typ)
+            [toJSON']
+        toJSON' = FunD (mkName "toJSON") $ return $ Clause
+            [ConP conName $ map VarP xs]
+            (NormalB $ objectE `AppE` ListE pairs)
+            []
+        pairs = zipWith toPair (entityFields def) xs
+        toPair f x = InfixE
+            (Just (packE `AppE` LitE (StringL $ unpack $ unHaskellName $ fieldHaskell f)))
+            dotEqualE
+            (Just $ VarE x)
+        fromJSON = InstanceD
+            []
+            (ConT ''FromJSON `AppT` typ)
+            [parseJSON']
+        parseJSON' = FunD (mkName "parseJSON")
+            [ Clause [ConP 'Object [VarP obj]]
+                (NormalB $ foldl'
+                    (\x y -> InfixE (Just x) apE' (Just y))
+                    (pureE `AppE` ConE conName)
+                    pulls
+                )
+                []
+            , Clause [WildP] (NormalB mzeroE) []
+            ]
+        pulls = map toPull $ entityFields def
+        toPull f = InfixE
+            (Just $ VarE obj)
+            (if nullable (fieldAttrs f) then dotColonQE else dotColonE)
+            (Just $ AppE packE $ LitE $ StringL $ unpack $ unHaskellName $ fieldHaskell f)
+    return [toJSON, fromJSON]
