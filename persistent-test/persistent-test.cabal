@@ -105,6 +105,8 @@ library
     hs-source-dirs: ., test, persistent, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mysql, persistent-mongoDB
 
     ghc-options:   -Wall
+    -- if impl(ghc >= 7.4)
+    --   cpp-options: -DGHC_7_4
 
 -- older versions of cabal have a bug with these flags
 -- you can use: --ghc-option=-DWITH_POSTGRESQL

@@ -23,6 +23,8 @@ library
                    , aeson
     exposed-modules: Database.Persist.TH
     ghc-options:     -Wall
+    if impl(ghc >= 7.4)
+       cpp-options: -DGHC_7_4
 
 test-suite test
     type:          exitcode-stdio-1.0

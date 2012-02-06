@@ -82,6 +82,9 @@ persistLowerCase = persistWith lowerCaseSettings
 -- quasiquotation.
 persistFileWith :: PersistSettings -> FilePath -> Q Exp
 persistFileWith ps fp = do
+#ifdef GHC_7_4
+    qAddDependentFile fp
+#endif
     h <- qRunIO $ SIO.openFile fp SIO.ReadMode
     qRunIO $ SIO.hSetEncoding h SIO.utf8_bom
     s <- qRunIO $ TIO.hGetContents h
