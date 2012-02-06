@@ -26,8 +26,10 @@ NoJson no-json
 |]
 
 -- ensure no-json works
-instance ToJSON (NoJsonGeneric b)
-instance FromJSON (NoJsonGeneric b)
+instance ToJSON (NoJsonGeneric b) where
+    toJSON = undefined
+instance FromJSON (NoJsonGeneric b) where
+    parseJSON = undefined
 
 arbitraryT = pack <$> arbitrary
 

@@ -52,7 +52,10 @@ import qualified Data.Text.IO as TIO
 import Data.List (foldl')
 import Data.Monoid (mappend, mconcat)
 import qualified Data.Map as M
-import Data.Aeson (ToJSON, FromJSON (..), (.=), object, Value (Object), (.:), (.:?))
+import Data.Aeson
+    ( ToJSON (toJSON), FromJSON (parseJSON), (.=), object
+    , Value (Object), (.:), (.:?)
+    )
 import Control.Applicative (pure, (<*>))
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
@@ -723,11 +726,11 @@ mkJSON def = do
               (unHaskellName (entityHaskell def) ++ "Generic")
         conName = mkName $ unpack $ unHaskellName $ entityHaskell def
         typ = con `AppT` VarT (mkName "backend")
-        toJSON = InstanceD
+        toJSONI = InstanceD
             []
             (ConT ''ToJSON `AppT` typ)
             [toJSON']
-        toJSON' = FunD (mkName "toJSON") $ return $ Clause
+        toJSON' = FunD 'toJSON $ return $ Clause
             [ConP conName $ map VarP xs]
             (NormalB $ objectE `AppE` ListE pairs)
             []
@@ -736,11 +739,11 @@ mkJSON def = do
             (Just (packE `AppE` LitE (StringL $ unpack $ unHaskellName $ fieldHaskell f)))
             dotEqualE
             (Just $ VarE x)
-        fromJSON = InstanceD
+        fromJSONI = InstanceD
             []
             (ConT ''FromJSON `AppT` typ)
             [parseJSON']
-        parseJSON' = FunD (mkName "parseJSON")
+        parseJSON' = FunD 'parseJSON
             [ Clause [ConP 'Object [VarP obj]]
                 (NormalB $ foldl'
                     (\x y -> InfixE (Just x) apE' (Just y))
@@ -755,4 +758,4 @@ mkJSON def = do
             (Just $ VarE obj)
             (if nullable (fieldAttrs f) then dotColonQE else dotColonE)
             (Just $ AppE packE $ LitE $ StringL $ unpack $ unHaskellName $ fieldHaskell f)
-    return [toJSON, fromJSON]
+    return [toJSONI, fromJSONI]
