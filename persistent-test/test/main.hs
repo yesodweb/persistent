@@ -37,6 +37,7 @@ main = do
   runConn (setup EmbedTest.embedMigrate)
   runConn (setup LargeNumberTest.numberMigrate)
   runConn (setup JoinTest.joinMigrate)
+  runConn (setup MaxLenTest.maxlenMigrate)
 
   hspecX $
     RenameTest.specs >>
