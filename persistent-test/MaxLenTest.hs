@@ -10,6 +10,7 @@
 {-# LANGUAGE EmptyDataDecls #-}
 module MaxLenTest (
   specs
+  , maxlenMigrate
 ) where
 
 import Init
@@ -20,7 +21,7 @@ import Data.ByteString (ByteString)
 #if WITH_MONGODB
 mkPersist MkPersistSettings { mpsBackend = ConT ''Action } [persist|
 #else
-share [mkPersist sqlSettings,  mkMigrate "testMigrate"] [persist|
+share [mkPersist sqlSettings,  mkMigrate "maxlenMigrate"] [persist|
 #endif
   MaxLen
     text1 Text
