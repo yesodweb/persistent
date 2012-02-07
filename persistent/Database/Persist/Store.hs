@@ -459,6 +459,12 @@ instance PersistField SomePersistField where
 newtype Key (backend :: (* -> *) -> * -> *) entity = Key { unKey :: PersistValue }
     deriving (Show, Read, Eq, Ord, PersistField)
 
+instance A.ToJSON (Key backend entity) where
+    toJSON (Key val) = A.toJSON val
+
+instance A.FromJSON (Key backend entity) where
+    parseJSON = fmap Key . A.parseJSON
+
 -- | Datatype that represents an entity, with both its key and
 -- its Haskell representation.
 --

@@ -35,7 +35,7 @@ import Init
 
 -- Test lower case names
 share [mkPersist sqlSettings, mkMigrate "dataTypeMigrate"] [persistLowerCase|
-DataTypeTable
+DataTypeTable no-json
     text Text
     bytes ByteString
     intx Int

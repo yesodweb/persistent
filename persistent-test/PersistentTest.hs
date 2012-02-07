@@ -98,14 +98,14 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persis
     -- Indented comment
     name String
     age Int
-  Pet
+  Pet no-json
     ownerId PersonId
     name String
 -- Dedented comment
   -- Header-level comment
     -- Indented comment
     type PetType
-  MaybeOwnedPet
+  MaybeOwnedPet no-json
     ownerId PersonId Maybe
     name String
     type PetType
