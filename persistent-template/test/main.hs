@@ -13,15 +13,15 @@ import Data.Text (Text, pack)
 import Data.Aeson
 
 mkPersist sqlSettings [persistUpperCase|
-Person
+Person json
     name Text
     age Int Maybe
     address Address
-Address
+Address json
     street Text
     city Text
     zip Int Maybe
-NoJson no-json
+NoJson
     foo Text
 |]
 

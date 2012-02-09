@@ -40,12 +40,8 @@ import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
 import Control.Monad (forM, (<=<), mzero)
-#if MIN_VERSION_monad_control(0, 3, 0)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.IO.Class (MonadIO)
-#else
-import Control.Monad.IO.Control (MonadControlIO)
-#endif
 import qualified System.IO as SIO
 import Data.Text (pack, Text, append, unpack, concat, uncons, cons)
 import qualified Data.Text.IO as TIO
@@ -710,7 +706,7 @@ infixr 5 ++
 (++) = append
 
 mkJSON :: EntityDef -> Q [Dec]
-mkJSON def | "no-json" `elem` entityAttrs def = return []
+mkJSON def | not ("json" `elem` entityAttrs def) = return []
 mkJSON def = do
     pureE <- [|pure|]
     apE' <- [|(<*>)|]
