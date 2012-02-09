@@ -1,5 +1,5 @@
 name:            persistent-postgresql
-version:         0.8.1
+version:         0.8.1.1
 license:         BSD3
 license-file:    LICENSE
 author:          Felipe Lessa, Michael Snoyman <michael@snoyman.com>
@@ -16,7 +16,7 @@ library
     build-depends:   base                  >= 4        && < 5
                    , transformers          >= 0.2.1    && < 0.3
                    , postgresql-simple     >= 0.0.3    && < 0.1
-                   , postgresql-libpq      >= 0.6.1    && < 0.7
+                   , postgresql-libpq      >= 0.6.1    && < 0.8
                    , persistent            >= 0.8      && < 0.9
                    , containers            >= 0.2
                    , bytestring            >= 0.9      && < 0.10
