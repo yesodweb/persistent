@@ -164,6 +164,15 @@ withStmt' conn query vals = C.sourceIO (liftIO   openS )
                          Nothing -> "Postgresql.withStmt': unknown error"
                          Just e  -> "Postgresql.withStmt': " ++ B8.unpack e
               Just ret -> do
+                -- Check result status
+                status <- LibPQ.resultStatus ret
+                case status of
+                  LibPQ.TuplesOk -> return ()
+                  _ -> do
+                    msg <- LibPQ.resStatus status
+                    fail $ "Postgresql.withStmt': bad result status " ++
+                           show status ++ " (" ++ show msg ++ ")"
+
                 -- Get number and type of columns
                 cols <- LibPQ.nfields ret
                 getters <- forM [0..cols-1] $ \col -> do
