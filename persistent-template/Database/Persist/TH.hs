@@ -327,13 +327,13 @@ mkEntity mps t = do
         : entityFields t
     toFieldNames <- mkToFieldNames $ entityUniques t
 
-    return 
+    return
       [ dataTypeDec t
       , TySynD (mkName nameS) [] $
             ConT (mkName $ unpack $ nameT ++ suffix)
                 `AppT` mpsBackend mps
       , TySynD (mkName $ unpack $ unHaskellName (entityHaskell t) ++ "Id") [] $
-            ConT ''Key `AppT` mpsBackend mps `AppT` ConT (mkName nameS) 
+            ConT ''Key `AppT` mpsBackend mps `AppT` ConT (mkName nameS)
       , InstanceD [] clazz $
         [ uniqueTypeDec t
         , FunD (mkName "entityDef") [Clause [WildP] (NormalB t') []]
@@ -368,7 +368,7 @@ mkEntity mps t = do
 --        casefromPersistValue v of
 --            Left e -> error e
 --            Right r -> r) o
---    fromPersistValue x = Left $ "Expected PersistMap, received: " ++ show x 
+--    fromPersistValue x = Left $ "Expected PersistMap, received: " ++ show x
 --    sqlType _ = SqlString
 persistFieldFromEntity :: EntityDef -> Q [Dec]
 persistFieldFromEntity e = do
@@ -552,7 +552,7 @@ derivePersistField s = do
                             [] -> Left $ "Invalid " ++ dt ++ ": " ++ s'|]
     return
         [ persistFieldInstanceD (ConT $ mkName s)
-            [ sqlTypeFunD ss 
+            [ sqlTypeFunD ss
             , FunD (mkName "toPersistValue")
                 [ Clause [] (NormalB tpv) []
                 ]
