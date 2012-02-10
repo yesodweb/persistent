@@ -585,15 +585,20 @@ mkMigrate fun allDefs = do
     body =
         case defs of
             [] -> [|return ()|]
-            _ -> DoE `fmap` mapM toStmt defs
-    toStmt :: EntityDef -> Q Stmt
-    toStmt ed = do
+            _  -> do
+              defsName <- newName "defs"
+              defsStmt <- do
+                defsExp <- lift defs
+                return $ LetS [ValD (VarP defsName) (NormalB defsExp) []]
+              stmts <- mapM (toStmt $ VarE defsName) defs
+              return (DoE $ defsStmt : stmts)
+    toStmt :: Exp -> EntityDef -> Q Stmt
+    toStmt defsExp ed = do
         let n = entityHaskell ed
         u <- [|undefined|]
         m <- [|migrate|]
-        defs' <- lift defs
         let u' = SigE u $ ConT $ mkName $ unpack $ unHaskellName n
-        return $ NoBindS $ m `AppE` defs' `AppE` u'
+        return $ NoBindS $ m `AppE` defsExp `AppE` u'
 
 instance Lift EntityDef where
     lift (EntityDef a b c d e f g h) =
