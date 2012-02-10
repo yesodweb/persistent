@@ -588,17 +588,19 @@ mkMigrate fun allDefs = do
             _  -> do
               defsName <- newName "defs"
               defsStmt <- do
-                defsExp <- lift defs
+                u <- [|undefined|]
+                e <- [|entityDef|]
+                let defsExp = ListE $ map (AppE e . undefinedEntityTH u) defs
                 return $ LetS [ValD (VarP defsName) (NormalB defsExp) []]
               stmts <- mapM (toStmt $ VarE defsName) defs
               return (DoE $ defsStmt : stmts)
     toStmt :: Exp -> EntityDef -> Q Stmt
     toStmt defsExp ed = do
-        let n = entityHaskell ed
         u <- [|undefined|]
         m <- [|migrate|]
-        let u' = SigE u $ ConT $ mkName $ unpack $ unHaskellName n
-        return $ NoBindS $ m `AppE` defsExp `AppE` u'
+        return $ NoBindS $ m `AppE` defsExp `AppE` (undefinedEntityTH u ed)
+    undefinedEntityTH :: Exp -> EntityDef -> Exp
+    undefinedEntityTH u = SigE u . ConT . mkName . unpack . unHaskellName . entityHaskell
 
 instance Lift EntityDef where
     lift (EntityDef a b c d e f g h) =
