@@ -12,8 +12,8 @@ module LargeNumberTest where
 import Init
 import Data.Word
 
-#if WITH_MONGODB
-mkPersist MkPersistSettings { mpsBackend = ConT ''Action } [persist|
+#ifdef WITH_MONGODB
+mkPersist persistSettings [persist|
 #else
 share [mkPersist sqlSettings,  mkMigrate "numberMigrate"] [persist|
 #endif
@@ -24,10 +24,12 @@ share [mkPersist sqlSettings,  mkMigrate "numberMigrate"] [persist|
     int64 Int64
     word64 Word64
 |]
-
+#ifdef WITH_MONGODB
+db = db' cleanDB
 cleanDB :: PersistQuery b m => b m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Number])
+#endif
 
 specs :: Specs
 specs = describe "persistent" $ do

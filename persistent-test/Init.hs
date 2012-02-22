@@ -10,12 +10,16 @@ module Init (
   , assertNotEmpty
   , assertEmpty
   , BackendMonad
-  , db
-  , sqlite_database
   , runConn
 
 #ifdef WITH_MONGODB
+  , db'
   , setupMongo
+  , MkPersistSettings (..)
+  , persistSettings
+#else
+  , db
+  , sqlite_database
 #endif
 
    -- re-exports
@@ -99,6 +103,8 @@ assertNotEmpty :: (Monad m, MonadIO m) => [a] -> m ()
 assertNotEmpty xs = liftIO $ assertBool "" (not (null xs))
 
 #ifdef WITH_MONGODB
+persistSettings = MkPersistSettings { mpsBackend = ConT ''Action }
+
 type BackendMonad = Action
 runConn f = do
 --    withMongoDBConn ("test") "127.0.0.1" $ runMongoDBConn MongoDB.safe MongoDB.Master f
@@ -120,11 +126,10 @@ setupMongo = do
       '"':'1':'.':n:'.':minor -> let i = ((read [n]) ::Int) in i > 9 || (i == 9 && ((read $ init minor)::Int) >= 1)
       '"':'2':'.':_ -> True
 
---db :: MongoPersist IO () -> Assertion
-db :: Action IO () -> Assertion
-db actions = do
-  r <- runConn actions
-  runConn cleanDB
+
+db' :: Action IO () -> Action IO () -> Assertion
+db' actions cleanDB = do
+  r <- runConn (actions >> cleanDB)
   return r
 
 instance Arbitrary BS.ByteString where

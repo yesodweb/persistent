@@ -29,15 +29,19 @@ toExitCode False = ExitFailure 1
 
 main :: IO ()
 main = do
+#ifndef WITH_MONGODB
   runConn (setup PersistentTest.testMigrate)
+#endif
   r <- hspecB $ PersistentTest.specs
   (liftIO $ runConn PersistentTest.cleanDB)
   unless r $ exitWith (toExitCode r)
 
+#ifndef WITH_MONGODB
   runConn (setup EmbedTest.embedMigrate)
   runConn (setup LargeNumberTest.numberMigrate)
   runConn (setup JoinTest.joinMigrate)
   runConn (setup MaxLenTest.maxlenMigrate)
+#endif
 
   hspecX $
     RenameTest.specs >>

@@ -21,19 +21,16 @@ import Test.Hspec.HUnit()
 import Test.Hspec.QuickCheck(prop)
 
 import Database.Persist
-import Database.Persist.Store (PersistValue(..))
 import Database.Persist.Query.Internal
 
-#if WITH_MONGODB
-import qualified Database.MongoDB as MongoDB
-import Database.Persist.MongoDB (Action, withMongoDBConn, runMongoDBConn, oidToKey)
+#ifdef WITH_MONGODB
+import Database.Persist.MongoDB (Action, oidToKey)
 import Data.Bson (genObjectId)
 import Language.Haskell.TH.Syntax (Type(..))
-import Database.Persist.TH (MkPersistSettings(..))
-import Control.Monad (replicateM)
-import qualified Data.ByteString as BS
 
 #else
+import Database.Persist.Store (PersistValue( PersistInt64 ))
+import Database.Persist.TH (mkDeleteCascade)
 import Database.Persist.EntityDef (EntityDef(..), DBName(..))
 import Database.Persist.Store ( DeleteCascade (..) )
 import Database.Persist.GenericSql
@@ -42,25 +39,25 @@ import Database.Persist.Sqlite
 import Control.Exception (SomeException)
 import Control.Monad.Trans.Reader (ask)
 import qualified Data.Text as T
-#if MIN_VERSION_monad_control(0, 3, 0)
+#  if MIN_VERSION_monad_control(0, 3, 0)
 import qualified Control.Exception as E
-#define CATCH catch'
-#else
+#    define CATCH catch'
+#  else
 import qualified Control.Exception.Control as Control
-#define CATCH Control.catch
-#endif
+#    define CATCH Control.catch
+#  endif
 import System.Random
 
-#if WITH_POSTGRESQL
+#  if WITH_POSTGRESQL
 import Database.Persist.Postgresql
 #endif
-#if WITH_MYSQL
-import Database.Persist.MySQL
-#endif
+#  if WITH_MYSQL
+import Database.Persist.MySQL()
+#  endif
 
 #endif
 
-import Database.Persist.TH (derivePersistField, persistUpperCase, mkDeleteCascade)
+import Database.Persist.TH (derivePersistField, persistUpperCase)
 import Control.Monad.IO.Class
 
 #if MIN_VERSION_monad_control(0, 3, 0)
@@ -78,7 +75,7 @@ data PetType = Cat | Dog
     deriving (Show, Read, Eq)
 derivePersistField "PetType"
 
-#if WITH_MONGODB
+#ifdef WITH_MONGODB
 mkPersist MkPersistSettings { mpsBackend = ConT ''Action } [persistUpperCase|
 #else
 share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persistUpperCase|
@@ -126,14 +123,18 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persis
     verkey Text Maybe
     UniqueEmail email
 |]
-
-
--- this is faster then dropDatabase. Could try dropCollection
 cleanDB :: PersistQuery b m => b m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Person])
-  deleteWhere ([] :: [Filter Pet])
   deleteWhere ([] :: [Filter Person1])
+  deleteWhere ([] :: [Filter Pet])
+  deleteWhere ([] :: [Filter MaybeOwnedPet])
+  deleteWhere ([] :: [Filter NeedsPet])
+  deleteWhere ([] :: [Filter User])
+  deleteWhere ([] :: [Filter Email])
+#ifdef WITH_MONGODB
+db = db' cleanDB
+#endif
 
 petOwner :: PersistStore b m => PetGeneric b -> b m (PersonGeneric b)
 petOwner = belongsToJust petOwnerId
@@ -376,7 +377,7 @@ specs = describe "persistent" $ do
       Just (Entity k p) <- getBy $ PersonNameKey "Michael2"
       p @== p2
       k @== key2
-      Nothing <- getBy $ PersonNameKey "Michael3"
+      Nothing <- getBy $ PersonNameKey "Michael9"
 
       Just (Entity k' p') <- getByValue p2
       k' @== k
@@ -447,7 +448,7 @@ specs = describe "persistent" $ do
       return ()
 
   it "insertKey" $ db $ do
-#if WITH_MONGODB
+#ifdef WITH_MONGODB
       oid <- liftIO $ genObjectId
       let k = oidToKey oid
 #else
@@ -459,7 +460,7 @@ specs = describe "persistent" $ do
       k2 @== k
 
   it "repsert" $ db $ do
-#if WITH_MONGODB
+#ifdef WITH_MONGODB
       oid <- liftIO $ genObjectId
       let k = oidToKey oid
 #else

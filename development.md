@@ -14,7 +14,7 @@ Now run with
 
 ## Different backends
 
-By default the sqlite and postgresql backends are tested.
-To test mongoDB use this add a CPP option. You can uncomment this in the cabal file.
+By default the sqlite backend is tested.
+To test other backends, use the CPP options. To test mongoDB use add this CPP option or uncomment this in the cabal file:
 
     -- cpp-options: -DWITH_MONGODB

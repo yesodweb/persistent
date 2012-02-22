@@ -8,7 +8,11 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-module EmbedTest (specs, embedMigrate) where
+module EmbedTest (specs,
+#ifndef WITH_MONGODB
+embedMigrate
+#endif
+) where
 
 import Init
 
@@ -16,10 +20,8 @@ import qualified Data.Text as T
 import qualified Data.Set as S
 import qualified Data.Map as M
 
-import Database.Persist
-
 #if WITH_MONGODB
-mkPersist MkPersistSettings { mpsBackend = ConT ''Action } [persist|
+mkPersist persistSettings [persist|
 #else
 share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persist|
 #endif
@@ -54,10 +56,16 @@ share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persist|
     map (M.Map T.Text T.Text)
     deriving Show Eq Read Ord
 |]
-
+#ifdef WITH_MONGODB
 cleanDB :: PersistQuery b m => b m ()
 cleanDB = do
   deleteWhere ([] :: [Filter HasEmbed])
+  deleteWhere ([] :: [Filter HasEmbeds])
+  deleteWhere ([] :: [Filter HasListEmbed])
+  deleteWhere ([] :: [Filter HasSetEmbed])
+  deleteWhere ([] :: [Filter HasMapEmbed])
+db = db' cleanDB
+#endif
 
 specs :: Specs
 specs = describe "embedded entities" $ do

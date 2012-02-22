@@ -17,21 +17,27 @@ import Database.Persist.Sqlite
 import Database.Persist.TH
 import Database.Persist.EntityDef
 import Database.Persist.GenericSql.Raw
+#ifndef WITH_MONGODB
+import qualified Data.Conduit as C
+import qualified Data.Conduit.List as CL
+#endif
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
 #endif
 #if WITH_MYSQL
 import Database.Persist.MySQL
 #endif
-import qualified Data.Conduit as C
-import qualified Data.Conduit.List as CL
 import qualified Data.Map as Map
 import qualified Data.Text as T
 
 import Init
 
 -- Test lower case names
+#if WITH_MONGODB
+mkPersist persistSettings [persistLowerCase|
+#else
 share [mkPersist sqlSettings, mkMigrate "lowerCaseMigrate"] [persistLowerCase|
+#endif
 LowerCaseTable id=my_id
     fullName String
     ExtraBlock
@@ -48,11 +54,13 @@ RefTable
 
 specs :: Specs
 specs = describe "rename specs" $ do
+#ifndef WITH_MONGODB
     it "handles lower casing" $ asIO $ do
         runConn $ do
             _ <- runMigrationSilent lowerCaseMigrate
             C.runResourceT $ withStmt "SELECT full_name from lower_case_table WHERE my_id=5" [] C.$$ CL.sinkNull
             C.runResourceT $ withStmt "SELECT something_else from ref_table WHERE id=4" [] C.$$ CL.sinkNull
+#endif
     it "extra blocks" $ do
         entityExtra (entityDef (undefined :: LowerCaseTable)) @?=
             Map.fromList

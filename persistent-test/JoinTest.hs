@@ -7,7 +7,11 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-module JoinTest ( specs, joinMigrate ) where
+module JoinTest ( specs
+#ifndef WITH_MONGODB
+, joinMigrate
+#endif
+) where
 
 import Test.Hspec.Monadic
 import Test.Hspec.HUnit ()
@@ -23,8 +27,8 @@ import qualified Database.Persist.Query.Join.Sql
 
 import Init
 
-#if WITH_MONGODB
-mkPersist MkPersistSettings { mpsBackend = ConT ''Action } [persistUpperCase|
+#ifdef WITH_MONGODB
+mkPersist persistSettings [persistUpperCase|
 #else
 share [mkPersist sqlSettings,  mkMigrate "joinMigrate"] [persistUpperCase|
 #endif
@@ -35,11 +39,13 @@ share [mkPersist sqlSettings,  mkMigrate "joinMigrate"] [persistUpperCase|
     authorId AuthorId
     title String
 |]
-
+#ifdef WITH_MONGODB
 cleanDB :: PersistQuery b m => b m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Author])
   deleteWhere ([] :: [Filter Entry])
+db = db' cleanDB
+#endif
 
 
 specs :: Specs
