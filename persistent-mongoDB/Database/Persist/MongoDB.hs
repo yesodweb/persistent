@@ -177,12 +177,11 @@ insertFields t record = zipFilter (entityFields t) (toPersistFields record)
   where
     zipFilter [] _  = []
     zipFilter _  [] = []
-    zipFilter (e:efields) (p:pfields)
-        | toPersistValue p == PersistNull = zipFilter efields pfields
-        | otherwise        = (toLabel e DB.:= toValue p):zipFilter efields pfields
+    zipFilter (e:efields) (p:pfields) = let pv = toPersistValue p in
+        if pv == PersistNull then zipFilter efields pfields
+          else (toLabel e DB.:= DB.val pv):zipFilter efields pfields
 
     toLabel = u . T.unpack . unDBName . fieldDB
-    toValue = DB.val . toPersistValue
 
 saveWithKey :: forall m ent record. (Applicative m, Functor m, MonadBaseControl IO m, PersistEntity ent, PersistEntity record)
             => (DB.Collection -> DB.Document -> DB.Action m () )
