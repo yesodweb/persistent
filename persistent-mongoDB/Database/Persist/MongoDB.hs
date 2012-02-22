@@ -146,6 +146,7 @@ updateToMongoField (Update field v up) =
       opName = fst opNameValue
       opNameValue =
         case (up, toPersistValue v) of
+                  (Assign, PersistNull) -> (u"$unset", PersistNull)
                   (Assign,a)    -> (u"$set", a)
                   (Add, a)      -> (u"$inc", a)
                   (Subtract, PersistInt64 i) -> (u "$inc", PersistInt64 (-i))
@@ -172,7 +173,7 @@ pairFromDocument ent document = pairFromPersistValues document
     pairFromPersistValues _ = Left "error in fromPersistValues'"
 
 insertFields :: forall val.  (PersistEntity val) => EntityDef -> val -> [DB.Field]
-insertFields t record = zipWith (DB.:=) (toLabels) (toValues)
+insertFields t record = filter (\x -> (DB.value x) /= DB.Null) $ zipWith (DB.:=) (toLabels) (toValues)
   where
     toLabels = map (u . T.unpack . unDBName . fieldDB) $ entityFields t
     toValues = map (DB.val . toPersistValue) (toPersistFields record)
@@ -424,7 +425,8 @@ wrapFromPersistValues e doc = fromPersistValues reorder
           where
             matchOne (f:fs) tried =
               if c == fst f then (f, tried ++ fs) else matchOne fs (f:tried)
-            matchOne fs tried = throw $ PersistError $ T.pack $ "reorder error: field doesn't match" ++ (show c) ++ (show fs) ++ (show tried)
+            matchOne [] tried = ((c, PersistNull), tried)
+--            matchOne fs tried = throw $ PersistError $ T.pack $ "reorder error: field doesn't match" ++ (show c) ++ (show fs) ++ (show tried)
         -- match [] fs values = throw $ PersistError $ "reorder error: extra mongo fields" ++ (show fs)
 
 mapFromDoc :: DB.Document -> [(T.Text, PersistValue)]
