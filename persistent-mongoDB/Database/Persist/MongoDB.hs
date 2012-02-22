@@ -146,7 +146,7 @@ updateToMongoField (Update field v up) =
       opName = fst opNameValue
       opNameValue =
         case (up, toPersistValue v) of
-                  (Assign, PersistNull) -> (u"$unset", PersistNull)
+                  (Assign, PersistNull) -> (u"$unset", PersistInt64 1)
                   (Assign,a)    -> (u"$set", a)
                   (Add, a)      -> (u"$inc", a)
                   (Subtract, PersistInt64 i) -> (u "$inc", PersistInt64 (-i))
@@ -173,10 +173,16 @@ pairFromDocument ent document = pairFromPersistValues document
     pairFromPersistValues _ = Left "error in fromPersistValues'"
 
 insertFields :: forall val.  (PersistEntity val) => EntityDef -> val -> [DB.Field]
-insertFields t record = filter (\x -> (DB.value x) /= DB.Null) $ zipWith (DB.:=) (toLabels) (toValues)
+insertFields t record = zipFilter (entityFields t) (toPersistFields record)
   where
-    toLabels = map (u . T.unpack . unDBName . fieldDB) $ entityFields t
-    toValues = map (DB.val . toPersistValue) (toPersistFields record)
+    zipFilter [] _  = []
+    zipFilter _  [] = []
+    zipFilter (e:efields) (p:pfields)
+        | toPersistValue p == PersistNull = zipFilter efields pfields
+        | otherwise        = (toLabel e DB.:= toValue p):zipFilter efields pfields
+
+    toLabel = u . T.unpack . unDBName . fieldDB
+    toValue = DB.val . toPersistValue
 
 saveWithKey :: forall m ent record. (Applicative m, Functor m, MonadBaseControl IO m, PersistEntity ent, PersistEntity record)
             => (DB.Collection -> DB.Document -> DB.Action m () )
@@ -408,6 +414,8 @@ wrapFromPersistValues e doc = fromPersistValues reorder
     -- * do an alist lookup for each column
     -- * but once we found an item in the alist use a new alist without that item for future lookups
     -- * so for the last query there is only one item left
+    --
+    -- TODO: the above should be re-thought now that we are no longer inserting null: searching for a null column will look at every returned field before giving up
     reorder :: [PersistValue] 
     reorder = match castColumns castDoc []
       where
@@ -425,9 +433,10 @@ wrapFromPersistValues e doc = fromPersistValues reorder
           where
             matchOne (f:fs) tried =
               if c == fst f then (f, tried ++ fs) else matchOne fs (f:tried)
+            -- a Nothing will not be inserted into the document as a null
+            -- so if we don't find our column it is a
+            -- this keeps the document size down
             matchOne [] tried = ((c, PersistNull), tried)
---            matchOne fs tried = throw $ PersistError $ T.pack $ "reorder error: field doesn't match" ++ (show c) ++ (show fs) ++ (show tried)
-        -- match [] fs values = throw $ PersistError $ "reorder error: extra mongo fields" ++ (show fs)
 
 mapFromDoc :: DB.Document -> [(T.Text, PersistValue)]
 mapFromDoc = Prelude.map (\f -> ( ( csToText (DB.label f)), (fromJust . DB.cast') (DB.value f) ) )
