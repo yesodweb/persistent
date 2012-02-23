@@ -142,14 +142,12 @@ updateToMongoField :: (PersistEntity val) => Update val -> DB.Field
 updateToMongoField (Update field v up) =
     opName DB.:= DB.Doc [( (u $ T.unpack $ unDBName $ fieldDB $ persistFieldDef field) DB.:= opValue)]
     where 
-      opValue = DB.val . snd $ opNameValue
-      opName = fst opNameValue
-      opNameValue =
+      (opName, opValue) =
         case (up, toPersistValue v) of
-                  (Assign, PersistNull) -> (u"$unset", PersistInt64 1)
-                  (Assign,a)    -> (u"$set", a)
-                  (Add, a)      -> (u"$inc", a)
-                  (Subtract, PersistInt64 i) -> (u "$inc", PersistInt64 (-i))
+                  (Assign, PersistNull) -> (u"$unset", DB.Int64 1)
+                  (Assign,a)    -> (u"$set", DB.val a)
+                  (Add, a)      -> (u"$inc", DB.val a)
+                  (Subtract, PersistInt64 i) -> (u "$inc", DB.Int64 (-i))
                   (Subtract, _) -> error "expected PersistInt64 for a subtraction"
                   (Multiply, _) -> throw $ PersistMongoDBUnsupported "multiply not supported"
                   (Divide, _)   -> throw $ PersistMongoDBUnsupported "divide not supported"
