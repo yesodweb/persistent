@@ -24,33 +24,23 @@ import qualified Data.Map as Map
 import Control.Applicative (Applicative)
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.Base (MonadBase (liftBase))
-#if MIN_VERSION_monad_control(0, 3, 0)
 import Control.Monad.Trans.Control (MonadBaseControl (..), ComposeSt, defaultLiftBaseWith, defaultRestoreM, MonadTransControl (..))
 import Control.Monad (liftM)
 #define MBCIO MonadBaseControl IO
-#else
-import Control.Monad.IO.Control (MonadControlIO)
-#define MBCIO MonadControlIO
-#endif
 import Data.Text (Text)
 import Control.Monad (MonadPlus)
-import Control.Monad.Trans.Resource (ResourceThrow (..), ResourceIO)
+import Control.Monad.Trans.Resource (MonadThrow (..), MonadResource (..))
 import qualified Data.Conduit as C
 
 newtype SqlPersist m a = SqlPersist { unSqlPersist :: ReaderT Connection m a }
-    deriving (Monad, MonadIO, MonadTrans, Functor, Applicative, MonadPlus
-#if !MIN_VERSION_monad_control(0, 3, 0)
-      , MonadControlIO
-#endif
-      )
+    deriving (Monad, MonadIO, MonadTrans, Functor, Applicative, MonadPlus)
 
-instance ResourceThrow m => ResourceThrow (SqlPersist m) where
-    resourceThrow = lift . resourceThrow
+instance MonadThrow m => MonadThrow (SqlPersist m) where
+    monadThrow = lift . monadThrow
 
 instance MonadBase b m => MonadBase b (SqlPersist m) where
     liftBase = lift . liftBase
 
-#if MIN_VERSION_monad_control(0, 3, 0)
 instance MonadBaseControl b m => MonadBaseControl b (SqlPersist m) where
      newtype StM (SqlPersist m) a = StMSP {unStMSP :: ComposeSt SqlPersist m a}
      liftBaseWith = defaultLiftBaseWith StMSP
@@ -59,15 +49,20 @@ instance MonadTransControl SqlPersist where
     newtype StT SqlPersist a = StReader {unStReader :: a}
     liftWith f = SqlPersist $ ReaderT $ \r -> f $ \t -> liftM StReader $ runReaderT (unSqlPersist t) r
     restoreT = SqlPersist . ReaderT . const . liftM unStReader
-#endif
 
-withStmt :: ResourceIO m
+instance MonadResource m => MonadResource (SqlPersist m) where
+    register = lift . register
+    release = lift . release
+    allocate a = lift . allocate a
+    resourceMask = lift . resourceMask
+
+withStmt :: MonadResource m
          => Text
          -> [PersistValue]
          -> C.Source (SqlPersist m) [PersistValue]
 withStmt sql vals = C.Source
     { C.sourcePull = do
-        stmt <- lift $ getStmt sql
+        stmt <- getStmt sql
         let src = I.withStmt stmt vals
         pull stmt src
     , C.sourceClose = return ()

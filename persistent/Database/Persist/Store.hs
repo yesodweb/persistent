@@ -500,7 +500,7 @@ data Entity entity =
            , entityVal :: entity }
     deriving (Eq, Ord, Show, Read)
 
-class (C.ResourceIO m, C.ResourceIO (b m)) => PersistStore b m where
+class (C.MonadResource m, C.MonadResource (b m)) => PersistStore b m where
 
     -- | Create a new record in the database, returning an automatically created
     -- key (in SQL an auto-increment id).
@@ -540,7 +540,7 @@ class PersistStore b m => PersistUnique b m where
     insertUnique :: (b ~ PersistEntityBackend val, PersistEntity val) => val -> b m (Maybe (Key b val))
     insertUnique datum = do
         isUnique <- checkUnique datum
-        if isUnique then Just <$> insert datum else return Nothing
+        if isUnique then Just `liftM` insert datum else return Nothing
 
 
 
@@ -647,7 +647,7 @@ class PersistConfig c where
     createPoolConfig :: c -> IO (PersistConfigPool c)
 
     -- | Run a database action by taking a connection from the pool.
-    runPool :: C.ResourceIO m => c -> PersistConfigBackend c m a
+    runPool :: C.MonadResource m => c -> PersistConfigBackend c m a
             -> PersistConfigPool c
             -> m a
 

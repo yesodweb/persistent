@@ -99,7 +99,7 @@ runSqlConn (SqlPersist r) conn = do
     liftIO $ commitC conn getter
     return x
 
-instance C.ResourceIO m => PersistStore SqlPersist m where
+instance C.MonadResource m => PersistStore SqlPersist m where
     insert val = do
         conn <- SqlPersist ask
         let esql = insertSql conn (entityDB t) (map fieldDB $ entityFields t)
@@ -199,7 +199,7 @@ insrepHelper command (Key k) val = do
         ]
     vals = k : map toPersistValue (toPersistFields val)
 
-instance C.ResourceIO m => PersistUnique SqlPersist m where
+instance C.MonadResource m => PersistUnique SqlPersist m where
     deleteBy uniq = do
         conn <- SqlPersist ask
         execute' (sql conn) $ persistUniqueToValues uniq
@@ -463,7 +463,7 @@ newtype Single a = Single {unSingle :: a}
 -- However, most common problems are mitigated by using the
 -- entity selection placeholder @??@, and you shouldn't see any
 -- error at all if you're not using 'Single'.
-rawSql :: (RawSql a, C.ResourceIO m) =>
+rawSql :: (RawSql a, C.MonadResource m) =>
           Text             -- ^ SQL statement, possibly with placeholders.
        -> [PersistValue]   -- ^ Values to fill the placeholders.
        -> SqlPersist m [a]

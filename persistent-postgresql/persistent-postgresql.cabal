@@ -1,5 +1,5 @@
 name:            persistent-postgresql
-version:         0.8.1.2
+version:         0.9.0
 license:         BSD3
 license-file:    LICENSE
 author:          Felipe Lessa, Michael Snoyman <michael@snoyman.com>
@@ -24,7 +24,7 @@ library
                    , monad-control         >= 0.2      && < 0.4
                    , time                  >= 1.1
                    , aeson                 >= 0.5
-                   , conduit               >= 0.2
+                   , conduit               >= 0.3      && < 0.4
     exposed-modules: Database.Persist.Postgresql
     ghc-options:     -Wall
 
