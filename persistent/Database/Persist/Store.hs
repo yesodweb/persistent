@@ -64,7 +64,6 @@ import Text.Blaze (Html, preEscapedText)
 import Text.Blaze.Renderer.Text (renderHtml)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
-import qualified Data.ByteString as S
 import qualified Data.ByteString.Lazy as L
 import qualified Control.Monad.IO.Class as Trans
 
