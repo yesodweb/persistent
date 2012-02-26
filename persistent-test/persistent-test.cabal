@@ -34,6 +34,7 @@ library
     exposed-modules: PersistentTest
                      RenameTest
                      DataTypeTest
+                     HtmlTest
                      EmbedTest
                      JoinTest
                      LargeNumberTest

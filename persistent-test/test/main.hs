@@ -3,6 +3,7 @@
 import qualified PersistentTest
 import qualified RenameTest
 import qualified DataTypeTest
+import qualified HtmlTest
 import qualified JoinTest
 import qualified EmbedTest
 import qualified LargeNumberTest
@@ -46,6 +47,7 @@ main = do
   hspecX $
     RenameTest.specs >>
     DataTypeTest.specs >>
+    HtmlTest.specs >>
     JoinTest.specs >>
     EmbedTest.specs >>
     LargeNumberTest.specs >>

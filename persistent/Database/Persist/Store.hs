@@ -60,9 +60,10 @@ import Control.Applicative
 import Data.Typeable (Typeable)
 import Data.Int (Int8, Int16, Int32, Int64)
 import Data.Word (Word8, Word16, Word32, Word64)
-import Text.Blaze (Html, unsafeByteString)
-import Text.Blaze.Renderer.Utf8 (renderHtml)
+import Text.Blaze (Html, preEscapedText)
+import Text.Blaze.Renderer.Text (renderHtml)
 import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
 import qualified Data.ByteString as S
 import qualified Data.ByteString.Lazy as L
 import qualified Control.Monad.IO.Class as Trans
@@ -247,8 +248,8 @@ instance PersistField T.Text where
     sqlType _ = SqlString
 
 instance PersistField Html where
-    toPersistValue = PersistByteString . S.concat . L.toChunks . renderHtml
-    fromPersistValue = fmap unsafeByteString . fromPersistValue
+    toPersistValue = PersistText . TL.toStrict . renderHtml
+    fromPersistValue = fmap preEscapedText . fromPersistValue
     sqlType _ = SqlString
 
 instance PersistField Int where
