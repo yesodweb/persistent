@@ -43,10 +43,11 @@ cleanDB = do
 specs :: Specs
 specs = describe "html" $ do
     it "works" $ asIO $ runConn $ do
+#ifndef WITH_MONGODB
         _ <- runMigrationSilent htmlMigrate
-
         -- Ensure reading the data from the database works...
         _ <- runMigrationSilent htmlMigrate
+#endif
 
         sequence_ $ replicate 1000 $ do
             x <- liftIO randomValue

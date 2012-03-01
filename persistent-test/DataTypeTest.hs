@@ -43,9 +43,11 @@ DataTypeTable no-json
     intx Int
     doublex Double
     bool Bool
+    utc UTCTime
+#ifndef WITH_MONGODB
     day Day
     time TimeOfDay
-    utc UTCTime
+#endif
 |]
 
 cleanDB :: PersistQuery b m => b m ()
@@ -95,9 +97,11 @@ randomValue = DataTypeTable
     <*> randomIO
     <*> randomIO
     <*> randomIO
+    <*> randomUTC
+#ifndef WITH_MONGODB
     <*> randomDay
     <*> randomTime
-    <*> randomUTC
+#endif
     where forbidden = [NotAssigned, PrivateUse]
 
 asIO :: IO a -> IO a
