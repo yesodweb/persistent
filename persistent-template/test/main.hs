@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings, QuasiQuotes, TemplateHaskell, TypeFamilies, GADTs #-}
+{-# LANGUAGE EmptyDataDecls #-}
 import Test.Hspec.Monadic
 import Test.Hspec.QuickCheck
 import Test.Hspec.HUnit()
