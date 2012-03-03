@@ -52,5 +52,3 @@ main = do
     EmbedTest.specs >>
     LargeNumberTest.specs >>
     MaxLenTest.specs
-
-  exitWith ExitSuccess

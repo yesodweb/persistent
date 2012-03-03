@@ -17,9 +17,6 @@ import Database.Persist.TH
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
 #endif
-#if WITH_MYSQL
-import Database.Persist.MySQL
-#endif
 import Data.Char (generalCategory, GeneralCategory(..))
 import qualified Data.Text as T
 import System.Random (randomIO, randomRIO, Random)
