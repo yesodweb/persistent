@@ -41,7 +41,11 @@ import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
 import Test.Hspec.HUnit()
 import Test.QuickCheck
 -- QuickCheck
+#ifdef WITH_MYSQL
 import System.Random ()
+#else
+import System.Random
+#endif
 
 import Database.Persist
 import Database.Persist.Store (PersistValue(..))
