@@ -396,8 +396,9 @@ class PersistEntity val where
 instance PersistField a => PersistField [a] where
     toPersistValue = PersistList . map toPersistValue
     fromPersistValue (PersistList l) = fromPersistList l
-    fromPersistValue (PersistText t)
-        | Just values <- A.decode' (L.fromChunks [TE.encodeUtf8 t]) = fromPersistList values
+    fromPersistValue (PersistText t) = fromPersistValue (PersistByteString $ TE.encodeUtf8 t)
+    fromPersistValue (PersistByteString bs)
+        | Just values <- A.decode' (L.fromChunks [bs]) = fromPersistList values
     fromPersistValue x = Left $ "Expected PersistList, received: " ++ show x
     sqlType _ = SqlString
 
@@ -405,10 +406,11 @@ instance (Ord a, PersistField a) => PersistField (S.Set a) where
     toPersistValue = PersistList . map toPersistValue . S.toList
     fromPersistValue (PersistList list) =
       either Left (Right . S.fromList) $ fromPersistList list
-    fromPersistValue (PersistText t)
-        | Just values <- A.decode' (L.fromChunks [TE.encodeUtf8 t]) =
+    fromPersistValue (PersistText t) = fromPersistValue (PersistByteString $ TE.encodeUtf8 t)
+    fromPersistValue (PersistByteString bs)
+        | Just values <- A.decode' (L.fromChunks [bs]) =
             either Left (Right . S.fromList) $ fromPersistList values
-    fromPersistValue x = Left $ "Expected PersistList, received: " ++ show x
+    fromPersistValue x = Left $ "Expected PersistSet, received: " ++ show x
     sqlType _ = SqlString
 
 fromPersistList :: PersistField a => [PersistValue] -> Either T.Text [a]
@@ -431,8 +433,9 @@ instance PersistField v => PersistField (M.Map T.Text v) where
 
 getPersistMap :: PersistValue -> Either T.Text [(T.Text, PersistValue)]
 getPersistMap (PersistMap kvs) = Right kvs
-getPersistMap (PersistText t)
-    | Just pairs <- A.decode' (L.fromChunks [TE.encodeUtf8 t]) = Right pairs
+getPersistMap (PersistText t)  = getPersistMap (PersistByteString $ TE.encodeUtf8 t)
+getPersistMap (PersistByteString bs)
+    | Just pairs <- A.decode' (L.fromChunks [bs]) = Right pairs
 getPersistMap x = Left $ "Expected PersistMap, received: " ++ show x
 
 fromPersistMap :: PersistField v
