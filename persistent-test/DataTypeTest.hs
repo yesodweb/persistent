@@ -24,6 +24,7 @@ import qualified Data.ByteString as S
 import Data.Time (Day, TimeOfDay (..), UTCTime (..), fromGregorian)
 import System.Random (randomIO, randomRIO, Random)
 import Control.Applicative ((<$>), (<*>))
+import Control.Monad (when)
 import Data.Word (Word8)
 
 import Init
@@ -61,9 +62,7 @@ specs = describe "data type specs" $ do
 #endif
         sequence_ $ replicate 1000 $ do
             x <- liftIO randomValue
-            _ <- insert x
-            return ()
-            {-
+            key <- insert x
             Just y <- get key
             liftIO $ do
                 let check :: (Eq a, Show a) => String -> (DataTypeTable -> a) -> IO ()
@@ -81,7 +80,6 @@ specs = describe "data type specs" $ do
                 -- lose precision when serialized.
                 when (abs (dataTypeTableDouble x - dataTypeTableDouble y) > 1e-14) $
                   check "double" dataTypeTableDouble
-                  -}
 
 randomValue :: IO DataTypeTable
 randomValue = DataTypeTable
