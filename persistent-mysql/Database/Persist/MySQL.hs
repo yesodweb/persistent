@@ -703,10 +703,12 @@ refName (DBName table) (DBName column) =
 
 
 -- | Escape a database name to be included on a query.
---
--- FIXME: Can we do better here?
 escapeDBName :: DBName -> String
-escapeDBName (DBName s) = T.unpack s
+escapeDBName (DBName s) = '`' : go (T.unpack s)
+    where
+      go ('`':xs) = '`' : '`' : go xs
+      go ( x :xs) =     x     : go xs
+      go ""       = "`"
 
 -- | Information required to connect to a MySQL database
 -- using @persistent@'s generic facilities.  These values are the
