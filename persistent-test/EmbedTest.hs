@@ -38,7 +38,7 @@ share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persist|
   HasEmbeds
     name String
     embed HasEmbed
-    double_ DoubleEmbed
+    double DoubleEmbed
     deriving Show Eq Read Ord
 
   HasListEmbed
@@ -48,7 +48,7 @@ share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persist|
 
   HasSetEmbed
     name String
-    set_ (S.Set HasEmbed)
+    set (S.Set HasEmbed)
     deriving Show Eq Read Ord
 
   HasMapEmbed

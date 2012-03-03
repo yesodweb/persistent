@@ -37,8 +37,8 @@ share [mkPersist sqlSettings, mkMigrate "dataTypeMigrate"] [persistLowerCase|
 DataTypeTable no-json
     text Text
     bytes ByteString
-    intx Int
-    doublex Double
+    int Int
+    double Double
     bool Bool
 #ifndef WITH_MONGODB
     day Day
@@ -71,7 +71,7 @@ specs = describe "data type specs" $ do
                 -- Check individual fields for better error messages
                 check "text" dataTypeTableText
                 check "bytes" dataTypeTableBytes
-                check "int" dataTypeTableIntx
+                check "int" dataTypeTableInt
                 check "bool" dataTypeTableBool
                 check "day" dataTypeTableDay
                 check "time" dataTypeTableTime
@@ -79,8 +79,8 @@ specs = describe "data type specs" $ do
 
                 -- Do a special check for Double since it may
                 -- lose precision when serialized.
-                when (abs (dataTypeTableDoublex x - dataTypeTableDoublex y) > 1e-14) $
-                  check "double" dataTypeTableDoublex
+                when (abs (dataTypeTableDouble x - dataTypeTableDouble y) > 1e-14) $
+                  check "double" dataTypeTableDouble
                   -}
 
 randomValue :: IO DataTypeTable
