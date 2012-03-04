@@ -72,8 +72,10 @@ specs = describe "data type specs" $ do
                 check "bytes" dataTypeTableBytes
                 check "int" dataTypeTableInt
                 check "bool" dataTypeTableBool
+#ifndef WITH_MONGODB
                 check "day" dataTypeTableDay
                 check "time" dataTypeTableTime
+#endif
                 check "utc" dataTypeTableUtc
 
                 -- Do a special check for Double since it may
