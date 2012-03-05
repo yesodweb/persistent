@@ -80,6 +80,7 @@ library
                    , bytestring
                    , base64-bytestring
                    , conduit >= 0.3 && < 0.4
+                   , resourcet >= 0.3 && < 0.4
                    , time >= 1.2
                    , random == 1.*
                    , QuickCheck == 2.4.*
