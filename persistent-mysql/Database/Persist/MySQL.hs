@@ -410,6 +410,12 @@ getColumn connectInfo getter tname [ PersistText cname
       default_ <- case default' of
                     PersistNull   -> return Nothing
                     PersistText t -> return (Just t)
+                    PersistByteString bs ->
+                      case T.decodeUtf8' bs of
+                        Left exc -> fail $ "Invalid default column: " ++
+                                           show default' ++ " (error: " ++
+                                           show exc ++ ")"
+                        Right t  -> return (Just t)
                     _ -> fail $ "Invalid default column: " ++ show default'
 
       -- Column type
