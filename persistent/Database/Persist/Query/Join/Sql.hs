@@ -28,6 +28,8 @@ import Data.Monoid (Monoid, mappend)
 import qualified Data.Text as T
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
+import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.Trans.Control (MonadBaseControl)
 
 fromPersistValuesId :: PersistEntity v => [PersistValue] -> Either Text (Entity v)
 fromPersistValuesId [] = Left "fromPersistValuesId: No values provided"
@@ -38,7 +40,7 @@ fromPersistValuesId (PersistInt64 i:rest) =
 fromPersistValuesId _ = Left "fromPersistValuesId: invalid ID"
 
 class RunJoin a where
-    runJoin :: C.ResourceIO m => a -> SqlPersist m (J.Result a)
+    runJoin :: (C.MonadThrow m, C.MonadUnsafeIO m, MonadIO m, MonadBaseControl IO m) => a -> SqlPersist m (J.Result a)
 
 instance (PersistEntity one, PersistEntity many, Eq (Key SqlPersist one))
     => RunJoin (SelectOneMany SqlPersist one many) where

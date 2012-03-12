@@ -61,6 +61,8 @@ class MonadIO m => MonadSqlPersist m where
 
 instance MonadIO m => MonadSqlPersist (SqlPersist m) where
     askSqlConn = SqlPersist ask
+instance MonadSqlPersist m => MonadSqlPersist (C.ResourceT m) where
+    askSqlConn = lift askSqlConn
 -- FIXME add a bunch of MonadSqlPersist instances for all transformers
 
 withStmt :: (MonadSqlPersist m, MonadResource m)
