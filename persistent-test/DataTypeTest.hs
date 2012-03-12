@@ -16,9 +16,6 @@ import Database.Persist.TH
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
 #endif
-#if WITH_MYSQL
-import Database.Persist.MySQL
-#endif
 import Data.Char (generalCategory, GeneralCategory(..))
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -27,6 +24,7 @@ import qualified Data.ByteString as S
 import Data.Time (Day, TimeOfDay (..), UTCTime (..), fromGregorian)
 import System.Random (randomIO, randomRIO, Random)
 import Control.Applicative ((<$>), (<*>))
+import Control.Monad (when)
 import Data.Word (Word8)
 
 import Init
@@ -40,11 +38,13 @@ share [mkPersist sqlSettings, mkMigrate "dataTypeMigrate"] [persistLowerCase|
 DataTypeTable no-json
     text Text
     bytes ByteString
-    intx Int
-    doublex Double
+    int Int
+    double Double
     bool Bool
+#ifndef WITH_MONGODB
     day Day
     time TimeOfDay
+#endif
     utc UTCTime
 |]
 
@@ -62,9 +62,7 @@ specs = describe "data type specs" $ do
 #endif
         sequence_ $ replicate 1000 $ do
             x <- liftIO randomValue
-            _key <- insert x
-            return ()
-            {-
+            key <- insert x
             Just y <- get key
             liftIO $ do
                 let check :: (Eq a, Show a) => String -> (DataTypeTable -> a) -> IO ()
@@ -72,17 +70,18 @@ specs = describe "data type specs" $ do
                 -- Check individual fields for better error messages
                 check "text" dataTypeTableText
                 check "bytes" dataTypeTableBytes
-                check "int" dataTypeTableIntx
+                check "int" dataTypeTableInt
                 check "bool" dataTypeTableBool
+#ifndef WITH_MONGODB
                 check "day" dataTypeTableDay
                 check "time" dataTypeTableTime
+#endif
                 check "utc" dataTypeTableUtc
 
                 -- Do a special check for Double since it may
                 -- lose precision when serialized.
-                when (abs (dataTypeTableDoublex x - dataTypeTableDoublex y) > 1e-14) $
-                  check "double" dataTypeTableDoublex
-                  -}
+                when (abs (dataTypeTableDouble x - dataTypeTableDouble y) > 1e-14) $
+                  check "double" dataTypeTableDouble
 
 randomValue :: IO DataTypeTable
 randomValue = DataTypeTable
@@ -95,8 +94,10 @@ randomValue = DataTypeTable
     <*> randomIO
     <*> randomIO
     <*> randomIO
+#ifndef WITH_MONGODB
     <*> randomDay
     <*> randomTime
+#endif
     <*> randomUTC
     where forbidden = [NotAssigned, PrivateUse]
 

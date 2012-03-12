@@ -69,7 +69,9 @@ import qualified Control.Monad.IO.Control
 import Data.Text (Text)
 import Web.PathPieces (PathPiece (..))
 import Data.Maybe (fromJust)
+import qualified Data.HashMap.Lazy as M
 import Init
+import Data.Aeson
 
 data PetType = Cat | Dog
     deriving (Show, Read, Eq)
@@ -84,7 +86,7 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persis
 -- Dedented comment
   -- Header-level comment
     -- Indented comment
-  Person
+  Person json
     name String
     age Int "some ignored -- \" attribute"
     color String Maybe -- this is a comment sql=foobarbaz
@@ -513,6 +515,11 @@ specs = describe "persistent" $ do
       pid3 <- insert p3
       x <- selectList [PersonId <-. [pid1, pid3]] []
       liftIO $ x @?= [(Entity pid1 p1), (Entity pid3 p3)]
+
+  it "serializes to JSON" $ do
+      toJSON (Person "D" 0 Nothing) @?=
+        Object (M.fromList [("color",Null),("name",String "D"),("age",Number 0)])
+    
 
 
 #ifndef WITH_MONGODB

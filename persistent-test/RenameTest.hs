@@ -24,9 +24,6 @@ import qualified Data.Conduit.List as CL
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
 #endif
-#if WITH_MYSQL
-import Database.Persist.MySQL
-#endif
 import qualified Data.Map as Map
 import qualified Data.Text as T
 

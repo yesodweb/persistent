@@ -17,9 +17,6 @@ import Database.Persist.TH
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
 #endif
-#if WITH_MYSQL
-import Database.Persist.MySQL
-#endif
 import Data.Char (generalCategory, GeneralCategory(..))
 import qualified Data.Text as T
 import System.Random (randomIO, randomRIO, Random)
@@ -43,10 +40,11 @@ cleanDB = do
 specs :: Specs
 specs = describe "html" $ do
     it "works" $ asIO $ runConn $ do
+#ifndef WITH_MONGODB
         _ <- runMigrationSilent htmlMigrate
-
         -- Ensure reading the data from the database works...
         _ <- runMigrationSilent htmlMigrate
+#endif
 
         sequence_ $ replicate 1000 $ do
             x <- liftIO randomValue
