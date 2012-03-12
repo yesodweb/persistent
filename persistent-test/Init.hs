@@ -4,6 +4,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Init (
   (@/=), (@==), (==@)
   , assertNotEqual
@@ -58,7 +59,6 @@ import qualified Data.ByteString as BS
 #else
 import Database.Persist.GenericSql
 import Database.Persist.Sqlite
-import Control.Monad.Trans.Resource (ResourceIO)
 
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
@@ -70,6 +70,7 @@ import Database.Persist.MySQL
 #endif
 
 import Control.Monad (unless)
+import Control.Monad.Trans.Control (MonadBaseControl)
 
 -- Data types
 import Data.Int (Int32, Int64)
@@ -143,7 +144,7 @@ type BackendMonad = SqlPersist
 sqlite_database :: Text
 sqlite_database = "test/testdb.sqlite3"
 -- sqlite_database = ":memory:"
-runConn :: ResourceIO m => SqlPersist m t -> m ()
+runConn :: (MonadIO m, MonadBaseControl IO m) => SqlPersist m t -> m ()
 runConn f = do
     _<-withSqlitePool sqlite_database 1 $ runSqlPool f
 #if WITH_POSTGRESQL

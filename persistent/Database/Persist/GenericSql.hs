@@ -51,16 +51,8 @@ import Database.Persist.GenericSql.Internal
 import Database.Persist.GenericSql.Migration
 import qualified Database.Persist.GenericSql.Raw as R
 import Database.Persist.GenericSql.Raw (SqlPersist (..))
-#if MIN_VERSION_monad_control(0, 3, 0)
 import Control.Monad.Trans.Control (MonadBaseControl, control)
 import qualified Control.Exception as E
-#define MBCIO MonadBaseControl IO
-#else
-import Control.Monad.IO.Control (MonadControlIO)
-import Control.Exception.Control (onException)
-
-#define MBCIO MonadControlIO
-#endif
 import Control.Exception (throw)
 import Data.Text (Text, pack, unpack, concat)
 import qualified Data.Text as T
@@ -86,10 +78,10 @@ execute' = R.execute
 
 -- | Get a connection from the pool, run the given action, and then return the
 -- connection to the pool.
-runSqlPool :: (MBCIO m, MonadIO m) => SqlPersist m a -> Pool Connection -> m a
+runSqlPool :: (MonadBaseControl IO m, MonadIO m) => SqlPersist m a -> Pool Connection -> m a
 runSqlPool r pconn = withResource pconn $ runSqlConn r
 
-runSqlConn :: (MBCIO m, MonadIO m) => SqlPersist m a -> Connection -> m a
+runSqlConn :: (MonadBaseControl IO m, MonadIO m) => SqlPersist m a -> Connection -> m a
 runSqlConn (SqlPersist r) conn = do
     let getter = R.getStmt' conn
     liftIO $ begin conn getter
@@ -463,7 +455,7 @@ newtype Single a = Single {unSingle :: a}
 -- However, most common problems are mitigated by using the
 -- entity selection placeholder @??@, and you shouldn't see any
 -- error at all if you're not using 'Single'.
-rawSql :: (RawSql a, C.MonadResource m, MonadBaseControl IO m) =>
+rawSql :: (RawSql a, C.MonadUnsafeIO m, C.MonadThrow m, MonadIO m, MonadBaseControl IO m) =>
           Text             -- ^ SQL statement, possibly with placeholders.
        -> [PersistValue]   -- ^ Values to fill the placeholders.
        -> SqlPersist m [a]

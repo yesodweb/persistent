@@ -44,13 +44,14 @@ import Control.Applicative
 createSqlitePool :: MonadIO m => Text -> Int -> m ConnectionPool
 createSqlitePool s = createSqlPool $ open' s
 
-withSqlitePool :: C.ResourceIO m
+withSqlitePool :: (MonadBaseControl IO m, MonadIO m)
                => Text
                -> Int -- ^ number of connections to open
                -> (ConnectionPool -> m a) -> m a
 withSqlitePool s = withSqlPool $ open' s
 
-withSqliteConn :: C.ResourceIO m => Text -> (Connection -> m a) -> m a
+withSqliteConn :: (MonadBaseControl IO m, MonadIO m)
+               => Text -> (Connection -> m a) -> m a
 withSqliteConn = withSqlConn . open'
 
 open' :: Text -> IO Connection
@@ -107,7 +108,7 @@ execute' stmt vals = flip finally (liftIO $ Sqlite.reset stmt) $ do
     return ()
 
 withStmt'
-          :: C.ResourceIO m
+          :: C.MonadResource m
           => Sqlite.Statement
           -> [PersistValue]
           -> C.Source m [PersistValue]

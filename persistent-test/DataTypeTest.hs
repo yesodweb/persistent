@@ -11,7 +11,6 @@ module DataTypeTest (specs) where
 
 import Test.Hspec.Monadic
 import Test.Hspec.HUnit ()
-import Test.HUnit
 import Database.Persist.Sqlite
 import Database.Persist.TH
 #if WITH_POSTGRESQL
@@ -26,7 +25,6 @@ import qualified Data.Text as T
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as S
 import Data.Time (Day, TimeOfDay (..), UTCTime (..), fromGregorian)
-import Control.Monad (when)
 import System.Random (randomIO, randomRIO, Random)
 import Control.Applicative ((<$>), (<*>))
 import Data.Word (Word8)
@@ -64,7 +62,7 @@ specs = describe "data type specs" $ do
 #endif
         sequence_ $ replicate 1000 $ do
             x <- liftIO randomValue
-            key <- insert x
+            _key <- insert x
             return ()
             {-
             Just y <- get key

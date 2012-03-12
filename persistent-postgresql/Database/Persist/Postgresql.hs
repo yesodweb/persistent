@@ -30,6 +30,7 @@ import qualified Database.PostgreSQL.LibPQ as LibPQ
 
 import Control.Exception (SomeException, throw)
 import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.List (intercalate)
 import Data.IORef
 import qualified Data.Map as Map
@@ -94,7 +95,8 @@ createPostgresqlPool ci = createSqlPool $ open' ci
 
 -- | Same as 'withPostgresqlPool', but instead of opening a pool
 -- of connections, only one connection is opened.
-withPostgresqlConn :: C.ResourceIO m => ConnectionString -> (Connection -> m a) -> m a
+withPostgresqlConn :: (MonadIO m, MonadBaseControl IO m)
+                   => ConnectionString -> (Connection -> m a) -> m a
 withPostgresqlConn = withSqlConn . open'
 
 open' :: ConnectionString -> IO Connection
@@ -140,7 +142,7 @@ execute' conn query vals = do
     _ <- PG.execute conn query (map P vals)
     return ()
 
-withStmt' :: C.ResourceIO m
+withStmt' :: C.MonadResource m
           => PG.Connection
           -> PG.Query
           -> [PersistValue]

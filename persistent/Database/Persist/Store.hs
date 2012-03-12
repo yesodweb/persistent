@@ -78,7 +78,6 @@ import qualified Data.Text.Encoding as T
 import qualified Data.Text.Encoding.Error as T
 import Web.PathPieces (PathPiece (..))
 import qualified Data.Text.Read
-import qualified Data.Conduit as C
 
 import Data.Aeson (Value)
 import Data.Aeson.Types (Parser)
@@ -100,6 +99,7 @@ import Data.Text.Lazy.Builder (toLazyText)
 
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Base (liftBase)
+import Control.Monad.IO.Class (MonadIO)
 
 data PersistException
   = PersistError T.Text -- ^ Generic Exception
@@ -649,7 +649,9 @@ class PersistConfig c where
     createPoolConfig :: c -> IO (PersistConfigPool c)
 
     -- | Run a database action by taking a connection from the pool.
-    runPool :: C.MonadResource m => c -> PersistConfigBackend c m a
+    runPool :: (MonadBaseControl IO m, MonadIO m)
+            => c
+            -> PersistConfigBackend c m a
             -> PersistConfigPool c
             -> m a
 
