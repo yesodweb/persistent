@@ -91,6 +91,7 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persis
     age Int "some ignored -- \" attribute"
     color String Maybe -- this is a comment sql=foobarbaz
     PersonNameKey name -- this is a comment sql=foobarbaz
+    deriving Show Eq
   Person1
 -- Dedented comment
   -- Header-level comment
@@ -100,6 +101,7 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persis
   Pet no-json
     ownerId PersonId
     name String
+    deriving Show Eq
 -- Dedented comment
   -- Header-level comment
     -- Indented comment

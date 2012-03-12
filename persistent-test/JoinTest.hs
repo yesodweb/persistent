@@ -36,9 +36,11 @@ share [mkPersist sqlSettings,  mkMigrate "joinMigrate"] [persistUpperCase|
 
   Author
     name String
+    deriving Show Eq
   Entry
     authorId AuthorId
     title String
+    deriving Show Eq
 |]
 #ifdef WITH_MONGODB
 cleanDB :: PersistQuery b m => b m ()

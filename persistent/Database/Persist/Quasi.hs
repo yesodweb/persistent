@@ -198,9 +198,7 @@ mkEntityDef ps name entattribs lines =
             Nothing -> idName ts
             Just s -> s
     uniqs = mapMaybe (takeUniqs ps cols) attribs
-    derives = case mapMaybe takeDerives attribs of
-                [] -> ["Show", "Read", "Eq"]
-                x -> concat x
+    derives = concat $ mapMaybe takeDerives attribs
 
     cols :: [FieldDef]
     cols = mapMaybe (takeCols ps) attribs

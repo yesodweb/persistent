@@ -166,7 +166,7 @@ uniqueTypeDec t =
           `AppT` VarT backend, VarT backend2
         ]
             (map (mkUnique backend t) $ entityUniques t)
-            (if null (entityUniques t) then [] else [''Show, ''Read, ''Eq])
+            []
   where
     backend = mkName "backend"
     backend2 = mkName "backend2"
