@@ -697,7 +697,7 @@ showAlter table (n, AddReference t2 id2) = concat
 showAlter table (_, DropReference cname) = concat
     [ "ALTER TABLE "
     , escapeDBName table
-    , " DROP CONSTRAINT "
+    , " DROP FOREIGN KEY "
     , escapeDBName cname
     ]
 
