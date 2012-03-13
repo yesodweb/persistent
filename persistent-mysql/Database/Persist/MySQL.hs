@@ -629,13 +629,14 @@ showAlterTable table (DropUniqueConstraint cname) = concat
 
 -- | Render an action that must be done on a column.
 showAlter :: DBName -> AlterColumn' -> String
-showAlter table (n, Change col) =
+showAlter table (oldName, Change (Column n nu t def maxLen _ref)) =
     concat
     [ "ALTER TABLE "
     , escapeDBName table
     , " CHANGE "
-    , escapeDBName n
-    , showColumn col
+    , escapeDBName oldName
+    , " "
+    , showColumn (Column n nu t def maxLen Nothing)
     ]
 showAlter table (_, Add col) =
     concat

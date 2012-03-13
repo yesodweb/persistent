@@ -1,5 +1,5 @@
 name:            persistent-mysql
-version:         0.8.2
+version:         0.8.3
 license:         BSD3
 license-file:    LICENSE
 author:          Felipe Lessa <felipe.lessa@gmail.com>, Michael Snoyman
