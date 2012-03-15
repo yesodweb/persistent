@@ -23,6 +23,7 @@ share [mkPersist sqlSettings,  mkMigrate "numberMigrate"] [persist|
     word32 Word32
     int64 Int64
     word64 Word64
+    deriving Show Eq
 |]
 #ifdef WITH_MONGODB
 db = db' cleanDB
