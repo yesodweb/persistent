@@ -619,8 +619,12 @@ instance Lift FieldDef where
 instance Lift UniqueDef where
     lift (UniqueDef a b c) = [|UniqueDef $(lift a) $(lift b) $(lift c)|]
 
+pack' :: String -> Text
+pack' = pack
+{-# NOINLINE pack' #-}
+
 liftT :: Text -> Q Exp
-liftT t = [|pack $(lift (unpack t))|]
+liftT t = [|pack' $(lift (unpack t))|]
 
 liftTs :: [Text] -> Q Exp
 liftTs = fmap ListE . mapM liftT
