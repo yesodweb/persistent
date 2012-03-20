@@ -20,6 +20,7 @@ import Database.Persist
 import Database.Persist.Query.Join (selectOneMany, SelectOneMany(..))
 import qualified Database.Persist.Query.Join
 import Database.Persist.TH (persistUpperCase)
+import Control.Monad.IO.Class (MonadIO)
 
 #ifndef WITH_MONGODB
 import qualified Database.Persist.Query.Join.Sql
@@ -35,9 +36,11 @@ share [mkPersist sqlSettings,  mkMigrate "joinMigrate"] [persistUpperCase|
 
   Author
     name String
+    deriving Show Eq
   Entry
     authorId AuthorId
     title String
+    deriving Show Eq
 |]
 #ifdef WITH_MONGODB
 cleanDB :: PersistQuery b m => b m ()
@@ -56,7 +59,7 @@ specs = describe "joins" $ do
 #endif
 
 
-joinGeneric :: PersistQuery b m =>
+joinGeneric :: (MonadIO (b m), PersistQuery b m) =>
                (SelectOneMany b (AuthorGeneric b) (EntryGeneric b)
                 -> b m [(Entity (AuthorGeneric b), [Entity (EntryGeneric b)])])
                 -> b m ()

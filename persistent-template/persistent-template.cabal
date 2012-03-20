@@ -1,5 +1,5 @@
 name:            persistent-template
-version:         0.8.2
+version:         0.9.0
 license:         BSD3
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -16,7 +16,7 @@ extra-source-files: test/main.hs
 library
     build-depends:   base                     >= 4         && < 5
                    , template-haskell
-                   , persistent               >= 0.8       && < 0.9
+                   , persistent               >= 0.9       && < 0.10
                    , monad-control            >= 0.2       && < 0.4
                    , text                     >= 0.5       && < 1.0
                    , transformers             >= 0.2

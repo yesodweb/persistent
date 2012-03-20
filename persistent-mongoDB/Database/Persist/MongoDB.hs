@@ -7,6 +7,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE UndecidableInstances #-} -- FIXME
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Database.Persist.MongoDB
     (
@@ -57,14 +58,13 @@ import qualified Data.Text.Encoding as E
 import qualified Data.Serialize as Serialize
 import qualified System.IO.Pool as Pool
 import Web.PathPieces (PathPiece (..))
-import Data.Conduit (ResourceIO)
 import qualified Data.Conduit as C
-import Control.Monad.Trans.Resource (ResourceThrow (..))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value (Object), (.:), (.:?), (.!=))
 import Control.Monad (mzero)
 import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.Trans.Resource (MonadThrow (..))
 
 #ifdef DEBUG
 import FileLocation (debug)
@@ -189,7 +189,7 @@ saveWithKey dbSave k record =
     where
       t = entityDef record
 
-instance (Applicative m, Functor m, ResourceIO m) => PersistStore DB.Action m where
+instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => PersistStore DB.Action m where
     insert record = do
         (DB.ObjId oid) <- DB.insert (u $ T.unpack $ unDBName $ entityDB t) (insertFields t record)
         return $ oidToKey oid 
@@ -223,10 +223,10 @@ instance (Applicative m, Functor m, ResourceIO m) => PersistStore DB.Action m wh
           where
             t = entityDef $ dummyFromKey k
 
-instance ResourceThrow m => ResourceThrow (DB.Action m) where
-    resourceThrow = lift . resourceThrow
+instance MonadThrow m => MonadThrow (DB.Action m) where
+    monadThrow = lift . monadThrow
 
-instance (Applicative m, Functor m, ResourceIO m) => PersistUnique DB.Action m where
+instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => PersistUnique DB.Action m where
     getBy uniq = do
         mdocument <- DB.findOne $
           (DB.select (uniqSelector uniq) (u $ T.unpack $ unDBName $ entityDB t))
@@ -249,7 +249,7 @@ instance (Applicative m, Functor m, ResourceIO m) => PersistUnique DB.Action m w
 persistKeyToMongoId :: PersistEntity val => Key DB.Action val -> DB.Field
 persistKeyToMongoId k = u"_id" DB.:= (DB.ObjId $ keyToOid k)
 
-instance (Applicative m, Functor m, ResourceIO m) => PersistQuery DB.Action m where
+instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => PersistQuery DB.Action m where
     update _ [] = return ()
     update k upds =
         DB.modify 
@@ -282,14 +282,13 @@ instance (Applicative m, Functor m, ResourceIO m) => PersistQuery DB.Action m wh
         query = DB.select (filtersToSelector filts) (u $ T.unpack $ unDBName $ entityDB t)
         t = entityDef $ dummyFromFilts filts
 
-    selectSource filts opts = C.Source
-        { C.sourcePull = do
+    selectSource filts opts = C.SourceM
+        (do
             cursor <- lift $ DB.find $ makeQuery filts opts
-            pull cursor
-        , C.sourceClose = return ()
-        }
+            return $ mkSrc cursor)
+        (return ())
       where
-        mkSrc cursor = C.Source (pull cursor) (return ())
+        mkSrc cursor = C.SourceM (pull cursor) (return ())
         pull cursor = lift $ do
             mdoc <- DB.next cursor
             case mdoc of
@@ -297,7 +296,7 @@ instance (Applicative m, Functor m, ResourceIO m) => PersistQuery DB.Action m wh
                 Just doc ->
                     case pairFromDocument t doc of
                         Left s -> liftIO $ throwIO $ PersistMarshalError $ T.pack s
-                        Right row -> return $ C.Open (mkSrc cursor) row
+                        Right row -> return $ C.Open (mkSrc cursor) (return ()) row
         t = entityDef $ dummyFromFilts filts
 
     selectFirst filts opts = do
@@ -310,19 +309,18 @@ instance (Applicative m, Functor m, ResourceIO m) => PersistQuery DB.Action m wh
       where
         t = entityDef $ dummyFromFilts filts
 
-    selectKeys filts = C.Source
-        { C.sourcePull = do
+    selectKeys filts = C.SourceM
+        (do
             cursor <- lift $ DB.find query
-            pull cursor
-        , C.sourceClose = return ()
-        }
+            return $ mkSrc cursor)
+        (return ())
       where
-        mkSrc cursor = C.Source (pull cursor) (return ())
+        mkSrc cursor = C.SourceM (pull cursor) (return ())
         pull cursor = lift $ do
             mdoc <- DB.next cursor
             case mdoc of
                 Nothing -> return C.Closed
-                Just [_ DB.:= DB.ObjId oid] -> return $ C.Open (mkSrc cursor) $ oidToKey oid
+                Just [_ DB.:= DB.ObjId oid] -> return $ C.Open (mkSrc cursor) (return ()) $ oidToKey oid
                 Just y -> liftIO $ throwIO $ PersistMarshalError $ T.pack $ "Unexpected in selectKeys: " ++ show y
         query = (DB.select (filtersToSelector filts) (u $ T.unpack $ unDBName $ entityDB t)) {
           DB.project = [u"_id" DB.=: (1 :: Int)]

@@ -22,6 +22,7 @@ import Control.Monad.IO.Class
 import Data.Conduit.Pool
 import Database.Persist.Store
 import Control.Exception.Lifted (bracket)
+import Control.Monad.Trans.Control (MonadBaseControl)
 import Database.Persist.Util (nullable)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -50,7 +51,7 @@ data Statement = Statement
     { finalize :: IO ()
     , reset :: IO ()
     , execute :: [PersistValue] -> IO ()
-    , withStmt :: forall m. C.ResourceIO m
+    , withStmt :: forall m. C.MonadResource m
                => [PersistValue]
                -> C.Source m [PersistValue]
     }
@@ -70,7 +71,7 @@ createSqlPool :: MonadIO m
               -> m (Pool Connection)
 createSqlPool mkConn = liftIO . createPool mkConn close' 1 20
 
-withSqlConn :: C.ResourceIO m
+withSqlConn :: (MonadIO m, MonadBaseControl IO m)
             => IO Connection -> (Connection -> m a) -> m a
 withSqlConn open = bracket (liftIO open) (liftIO . close')
 

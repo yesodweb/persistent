@@ -33,6 +33,7 @@ share [mkPersist sqlSettings,  mkMigrate "maxlenMigrate"] [persist|
     bs2 ByteString maxlen=3
     str1 String
     str2 String maxlen=3
+    deriving Show Eq
 |]
 
 specs :: Specs

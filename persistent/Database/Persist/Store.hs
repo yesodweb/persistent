@@ -65,7 +65,6 @@ import Text.Blaze.Renderer.Text (renderHtml)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.ByteString.Lazy as L
-import qualified Control.Monad.IO.Class as Trans
 
 import qualified Control.Exception as E
 import Control.Monad.Trans.Error (Error (..))
@@ -79,7 +78,6 @@ import qualified Data.Text.Encoding as T
 import qualified Data.Text.Encoding.Error as T
 import Web.PathPieces (PathPiece (..))
 import qualified Data.Text.Read
-import qualified Data.Conduit as C
 
 import Data.Aeson (Value)
 import Data.Aeson.Types (Parser)
@@ -98,6 +96,10 @@ import Data.Aeson (toJSON)
 import Data.Aeson.Encode (fromValue)
 import Data.Text.Lazy (toStrict)
 import Data.Text.Lazy.Builder (toLazyText)
+
+import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.Base (liftBase)
+import Control.Monad.IO.Class (MonadIO)
 
 data PersistException
   = PersistError T.Text -- ^ Generic Exception
@@ -503,7 +505,7 @@ data Entity entity =
            , entityVal :: entity }
     deriving (Eq, Ord, Show, Read)
 
-class (C.ResourceIO m, C.ResourceIO (b m)) => PersistStore b m where
+class (MonadBaseControl IO m, MonadBaseControl IO (b m)) => PersistStore b m where
 
     -- | Create a new record in the database, returning an automatically created
     -- key (in SQL an auto-increment id).
@@ -543,7 +545,7 @@ class PersistStore b m => PersistUnique b m where
     insertUnique :: (b ~ PersistEntityBackend val, PersistEntity val) => val -> b m (Maybe (Key b val))
     insertUnique datum = do
         isUnique <- checkUnique datum
-        if isUnique then Just <$> insert datum else return Nothing
+        if isUnique then Just `liftM` insert datum else return Nothing
 
 
 
@@ -599,7 +601,7 @@ belongsToJust getForeignKey model = getJust $ getForeignKey model
 --   Unsafe unless your database is enforcing that the foreign key is valid
 getJust :: (PersistStore b m, PersistEntity val, Show (Key b val)) => Key b val -> b m val
 getJust key = get key >>= maybe
-  (Trans.liftIO $ E.throwIO $ PersistForeignConstraintUnmet $ show key)
+  (liftBase $ E.throwIO $ PersistForeignConstraintUnmet $ show key)
   return
 
 
@@ -650,7 +652,9 @@ class PersistConfig c where
     createPoolConfig :: c -> IO (PersistConfigPool c)
 
     -- | Run a database action by taking a connection from the pool.
-    runPool :: C.ResourceIO m => c -> PersistConfigBackend c m a
+    runPool :: (MonadBaseControl IO m, MonadIO m)
+            => c
+            -> PersistConfigBackend c m a
             -> PersistConfigPool c
             -> m a
 

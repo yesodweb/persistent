@@ -24,33 +24,23 @@ import qualified Data.Map as Map
 import Control.Applicative (Applicative)
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.Base (MonadBase (liftBase))
-#if MIN_VERSION_monad_control(0, 3, 0)
 import Control.Monad.Trans.Control (MonadBaseControl (..), ComposeSt, defaultLiftBaseWith, defaultRestoreM, MonadTransControl (..))
 import Control.Monad (liftM)
 #define MBCIO MonadBaseControl IO
-#else
-import Control.Monad.IO.Control (MonadControlIO)
-#define MBCIO MonadControlIO
-#endif
 import Data.Text (Text)
 import Control.Monad (MonadPlus)
-import Control.Monad.Trans.Resource (ResourceThrow (..), ResourceIO)
+import Control.Monad.Trans.Resource (MonadThrow (..), MonadResource (..))
 import qualified Data.Conduit as C
 
 newtype SqlPersist m a = SqlPersist { unSqlPersist :: ReaderT Connection m a }
-    deriving (Monad, MonadIO, MonadTrans, Functor, Applicative, MonadPlus
-#if !MIN_VERSION_monad_control(0, 3, 0)
-      , MonadControlIO
-#endif
-      )
+    deriving (Monad, MonadIO, MonadTrans, Functor, Applicative, MonadPlus)
 
-instance ResourceThrow m => ResourceThrow (SqlPersist m) where
-    resourceThrow = lift . resourceThrow
+instance MonadThrow m => MonadThrow (SqlPersist m) where
+    monadThrow = lift . monadThrow
 
 instance MonadBase b m => MonadBase b (SqlPersist m) where
     liftBase = lift . liftBase
 
-#if MIN_VERSION_monad_control(0, 3, 0)
 instance MonadBaseControl b m => MonadBaseControl b (SqlPersist m) where
      newtype StM (SqlPersist m) a = StMSP {unStMSP :: ComposeSt SqlPersist m a}
      liftBaseWith = defaultLiftBaseWith StMSP
@@ -59,42 +49,53 @@ instance MonadTransControl SqlPersist where
     newtype StT SqlPersist a = StReader {unStReader :: a}
     liftWith f = SqlPersist $ ReaderT $ \r -> f $ \t -> liftM StReader $ runReaderT (unSqlPersist t) r
     restoreT = SqlPersist . ReaderT . const . liftM unStReader
-#endif
 
-withStmt :: ResourceIO m
+instance MonadResource m => MonadResource (SqlPersist m) where
+    register = lift . register
+    release = lift . release
+    allocate a = lift . allocate a
+    resourceMask = lift . resourceMask
+
+class MonadIO m => MonadSqlPersist m where
+    askSqlConn :: m Connection
+
+instance MonadIO m => MonadSqlPersist (SqlPersist m) where
+    askSqlConn = SqlPersist ask
+instance MonadSqlPersist m => MonadSqlPersist (C.ResourceT m) where
+    askSqlConn = lift askSqlConn
+-- FIXME add a bunch of MonadSqlPersist instances for all transformers
+
+withStmt :: (MonadSqlPersist m, MonadResource m)
          => Text
          -> [PersistValue]
-         -> C.Source (SqlPersist m) [PersistValue]
-withStmt sql vals = C.Source
-    { C.sourcePull = do
-        stmt <- lift $ getStmt sql
-        let src = I.withStmt stmt vals
-        pull stmt src
-    , C.sourceClose = return ()
-    }
+         -> C.Source m [PersistValue]
+withStmt sql vals = C.SourceM
+    (do
+        stmt <- getStmt sql
+        reset' <- register $ I.reset stmt
+        return $ pull reset' $ I.withStmt stmt vals)
+    (return ())
   where
-    pull stmt src = do
-        res <- C.sourcePull src
-        case res of
-            C.Closed -> do
-                liftIO $ I.reset stmt
-                return C.Closed
-            C.Open src' val -> return $ C.Open
-                (C.Source (pull stmt src') (close' stmt src'))
-                val
-    close' stmt src = do
-        liftIO $ I.reset stmt
-        C.sourceClose src
+    pull reset' C.Closed = C.SourceM (do
+        release reset'
+        return C.Closed) (release reset')
+    pull reset' (C.Open src close' x) = C.Open
+        (pull reset' src)
+        (release reset' >> close')
+        x
+    pull reset' (C.SourceM msrc close') = C.SourceM
+        (pull reset' `liftM` msrc)
+        (release reset' >> close')
 
-execute :: MonadIO m => Text -> [PersistValue] -> SqlPersist m ()
+execute :: MonadSqlPersist m => Text -> [PersistValue] -> m ()
 execute sql vals = do
     stmt <- getStmt sql
     liftIO $ I.execute stmt vals
     liftIO $ reset stmt
 
-getStmt :: MonadIO m => Text -> SqlPersist m Statement
+getStmt :: MonadSqlPersist m => Text -> m Statement
 getStmt sql = do
-    conn <- SqlPersist ask
+    conn <- askSqlConn
     liftIO $ getStmt' conn sql
 
 getStmt' :: Connection -> Text -> IO Statement

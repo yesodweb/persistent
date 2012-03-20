@@ -18,6 +18,7 @@ module Database.Persist.Query.Internal
 
 import Database.Persist.Store
 import Database.Persist.EntityDef
+import Control.Monad.Trans.Class (lift)
 
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
@@ -39,7 +40,7 @@ class PersistStore b m => PersistQuery b m where
            :: (PersistEntity val, PersistEntityBackend val ~ b)
            => [Filter val]
            -> [SelectOpt val]
-           -> C.Source (b m) (Entity val)
+           -> C.Source (C.ResourceT (b m)) (Entity val)
 
     -- | get just the first record for the criterion
     selectFirst :: (PersistEntity val, PersistEntityBackend val ~ b)
@@ -53,7 +54,7 @@ class PersistStore b m => PersistQuery b m where
     -- | Get the 'Key's of all records matching the given criterion.
     selectKeys :: PersistEntity val
                => [Filter val]
-               -> C.Source (b m) (Key b val)
+               -> C.Source (C.ResourceT (b m)) (Key b val)
 
     -- | The total number of records fulfilling the given criterion.
     count :: PersistEntity val => [Filter val] -> b m Int
@@ -106,4 +107,4 @@ updateFieldDef (Update f _ _) = persistFieldDef f
 deleteCascadeWhere :: (DeleteCascade a b m, PersistQuery b m)
                    => [Filter a] -> b m ()
 deleteCascadeWhere filts = do
-    C.runResourceT $ selectKeys filts C.$$ CL.mapM_ deleteCascade
+    C.runResourceT $ selectKeys filts C.$$ CL.mapM_ (lift . deleteCascade)

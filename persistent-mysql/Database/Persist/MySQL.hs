@@ -20,6 +20,7 @@ import Control.Monad (mzero)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Error (ErrorT(..))
+import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Aeson
 import Data.ByteString (ByteString)
 import Data.Either (partitionEithers)
@@ -81,7 +82,7 @@ createMySQLPool ci = createSqlPool $ open' ci
 
 -- | Same as 'withMySQLPool', but instead of opening a pool
 -- of connections, only one connection is opened.
-withMySQLConn :: C.ResourceIO m =>
+withMySQLConn :: (MonadBaseControl IO m, MonadIO m) =>
                  MySQL.ConnectInfo
               -- ^ Connection information.
               -> (Connection -> m a)
@@ -147,7 +148,7 @@ execute' conn query vals = MySQL.execute conn query (map P vals) >> return ()
 
 -- | Execute an statement that does return results.  The results
 -- are fetched all at once and stored into memory.
-withStmt' :: C.ResourceIO m
+withStmt' :: C.MonadResource m
           => MySQL.Connection
           -> MySQL.Query
           -> [PersistValue]
