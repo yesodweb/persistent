@@ -18,12 +18,15 @@ Person json
     name Text
     age Int Maybe
     address Address
+    deriving Show Eq
 Address json
     street Text
     city Text
     zip Int Maybe
+    deriving Show Eq
 NoJson
     foo Text
+    deriving Show Eq
 |]
 
 -- ensure no-json works
