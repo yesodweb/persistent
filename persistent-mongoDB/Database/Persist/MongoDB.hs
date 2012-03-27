@@ -282,21 +282,21 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
         query = DB.select (filtersToSelector filts) (u $ T.unpack $ unDBName $ entityDB t)
         t = entityDef $ dummyFromFilts filts
 
-    selectSource filts opts = C.SourceM
+    selectSource filts opts = C.PipeM
         (do
             cursor <- lift $ DB.find $ makeQuery filts opts
             return $ mkSrc cursor)
         (return ())
       where
-        mkSrc cursor = C.SourceM (pull cursor) (return ())
+        mkSrc cursor = C.PipeM (pull cursor) (return ())
         pull cursor = lift $ do
             mdoc <- DB.next cursor
             case mdoc of
-                Nothing -> return C.Closed
+                Nothing -> return $ C.Done Nothing ()
                 Just doc ->
                     case pairFromDocument t doc of
                         Left s -> liftIO $ throwIO $ PersistMarshalError $ T.pack s
-                        Right row -> return $ C.Open (mkSrc cursor) (return ()) row
+                        Right row -> return $ C.HaveOutput (mkSrc cursor) (return ()) row
         t = entityDef $ dummyFromFilts filts
 
     selectFirst filts opts = do
@@ -309,18 +309,18 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
       where
         t = entityDef $ dummyFromFilts filts
 
-    selectKeys filts = C.SourceM
+    selectKeys filts = C.PipeM
         (do
             cursor <- lift $ DB.find query
             return $ mkSrc cursor)
         (return ())
       where
-        mkSrc cursor = C.SourceM (pull cursor) (return ())
+        mkSrc cursor = C.PipeM (pull cursor) (return ())
         pull cursor = lift $ do
             mdoc <- DB.next cursor
             case mdoc of
-                Nothing -> return C.Closed
-                Just [_ DB.:= DB.ObjId oid] -> return $ C.Open (mkSrc cursor) (return ()) $ oidToKey oid
+                Nothing -> return $ C.Done Nothing ()
+                Just [_ DB.:= DB.ObjId oid] -> return $ C.HaveOutput (mkSrc cursor) (return ()) $ oidToKey oid
                 Just y -> liftIO $ throwIO $ PersistMarshalError $ T.pack $ "Unexpected in selectKeys: " ++ show y
         query = (DB.select (filtersToSelector filts) (u $ T.unpack $ unDBName $ entityDB t)) {
           DB.project = [u"_id" DB.=: (1 :: Int)]

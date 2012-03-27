@@ -69,23 +69,24 @@ withStmt :: (MonadSqlPersist m, MonadResource m)
          => Text
          -> [PersistValue]
          -> C.Source m [PersistValue]
-withStmt sql vals = C.SourceM
+withStmt sql vals = C.PipeM
     (do
         stmt <- getStmt sql
         reset' <- register $ I.reset stmt
         return $ pull reset' $ I.withStmt stmt vals)
     (return ())
   where
-    pull reset' C.Closed = C.SourceM (do
+    pull reset' (C.Done _ ()) = C.PipeM (do
         release reset'
-        return C.Closed) (release reset')
-    pull reset' (C.Open src close' x) = C.Open
+        return $ C.Done Nothing ()) (release reset')
+    pull reset' (C.HaveOutput src close' x) = C.HaveOutput
         (pull reset' src)
         (release reset' >> close')
         x
-    pull reset' (C.SourceM msrc close') = C.SourceM
+    pull reset' (C.PipeM msrc close') = C.PipeM
         (pull reset' `liftM` msrc)
         (release reset' >> close')
+    pull reset' (C.NeedInput _ c) = pull reset' c
 
 execute :: MonadSqlPersist m => Text -> [PersistValue] -> m ()
 execute sql vals = do

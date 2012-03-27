@@ -25,7 +25,7 @@ library
                    , containers              >= 0.2       && < 0.5
                    , text                    >= 0.7       && < 1
                    , aeson                   >= 0.5
-                   , conduit                 >= 0.3       && < 0.4
+                   , conduit                 >= 0.4       && < 0.5
     exposed-modules: Database.Sqlite
                      Database.Persist.Sqlite
     ghc-options:     -Wall

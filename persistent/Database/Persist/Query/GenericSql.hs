@@ -82,7 +82,7 @@ instance (C.MonadThrow m, MonadIO m, C.MonadUnsafeIO m, MonadBaseControl IO m) =
       where
         t = entityDef $ dummyFromFilts filts
 
-    selectSource filts opts = C.SourceM
+    selectSource filts opts = C.PipeM
         (do
             conn <- lift $ SqlPersist ask
             return $ R.withStmt (sql conn) (getFiltsValues conn filts) C.$= CL.mapM parse)
@@ -129,7 +129,7 @@ instance (C.MonadThrow m, MonadIO m, C.MonadUnsafeIO m, MonadBaseControl IO m) =
             , off
             ]
 
-    selectKeys filts = C.SourceM
+    selectKeys filts = C.PipeM
         (do
             conn <- lift $ SqlPersist ask
             return $ R.withStmt (sql conn) (getFiltsValues conn filts) C.$= CL.mapM parse)
@@ -333,7 +333,7 @@ selectSourceConn :: (PersistEntity val, SqlPersist ~ PersistEntityBackend val, C
                  -> [SelectOpt val]
                  -> C.Source (C.ResourceT m) (Entity val)
 selectSourceConn conn fs opts =
-    C.transSource (transResourceT $ flip runSqlConn conn) (selectSource fs opts)
+    C.transPipe (transResourceT $ flip runSqlConn conn) (selectSource fs opts)
 
 dummyFromFilts :: [Filter v] -> v
 dummyFromFilts _ = error "dummyFromFilts"
