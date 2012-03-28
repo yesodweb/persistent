@@ -16,7 +16,7 @@ library
     build-depends:   base               >= 4 && < 5
                    , persistent         >= 0.9     && < 0.10
                    , text               >= 0.8     && < 1
-                   , transformers       >= 0.2.1   && < 0.3
+                   , transformers       >= 0.2.1   && < 0.4
                    , containers         >= 0.2     && < 0.5
                    , bytestring         >= 0.9     && < 0.10
                    , conduit            >= 0.4     && < 0.5

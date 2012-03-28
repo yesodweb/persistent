@@ -19,7 +19,7 @@ library
                    , persistent               >= 0.9       && < 0.10
                    , monad-control            >= 0.2       && < 0.4
                    , text                     >= 0.5       && < 1.0
-                   , transformers             >= 0.2
+                   , transformers             >= 0.2       && < 0.4
                    , containers
                    , aeson
     exposed-modules: Database.Persist.TH
