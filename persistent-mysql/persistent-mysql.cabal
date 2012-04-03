@@ -1,6 +1,6 @@
 name:            persistent-mysql
 version:         0.9.0
-license:         BSD3
+license:         MIT
 license-file:    LICENSE
 author:          Felipe Lessa <felipe.lessa@gmail.com>, Michael Snoyman
 maintainer:      Felipe Lessa <felipe.lessa@gmail.com>
