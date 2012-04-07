@@ -6,3 +6,4 @@ persistent-test/test/testdb.sqlite3
 *.hi
 *.o
 TAGS
+.virthualenv
