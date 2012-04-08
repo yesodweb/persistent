@@ -621,7 +621,9 @@ instance Lift UniqueDef where
 
 pack' :: String -> Text
 pack' = pack
+#if !MIN_VERSION_text(0, 11, 2)
 {-# NOINLINE pack' #-}
+#endif
 
 liftT :: Text -> Q Exp
 liftT t = [|pack' $(lift (unpack t))|]
