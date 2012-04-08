@@ -98,6 +98,9 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persis
     -- Indented comment
     name String
     age Int
+  PersonMaybeAge
+    name String
+    age Int Maybe
   Pet no-json
     ownerId PersonId
     name String
@@ -398,6 +401,19 @@ specs = describe "persistent" $ do
       update key25 [PersonAge +=. 2]
       Just pBlue30 <- get key25
       pBlue30 @== Person "Updated" 30 Nothing
+
+  it "maybe update" $ db $ do
+      let noAge = PersonMaybeAge "Michael" Nothing
+      keyNoAge <- insert noAge
+      update keyNoAge [PersonMaybeAgeAge +=. Just 2]
+      Just noAge2 <- get keyNoAge
+      -- the correct answer is very debatable
+#ifdef WITH_MONGODB
+      personMaybeAgeAge noAge2 @== Just 2
+#else
+      personMaybeAgeAge noAge2 @== Nothing
+#endif
+
 
 
   it "updateWhere" $ db $ do
