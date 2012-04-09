@@ -136,3 +136,17 @@ joinGeneric run = do
             , ((Entity c $ Author "c"), [])
             ]
 
+
+    wNull <- run (selectOneMany (EntryAuthorId <-.) entryAuthorId)
+            { somOrderOne = [Asc AuthorName]
+            , somOrderMany = [Desc EntryTitle]
+            , somFilterMany = [EntryTitle ==. "this should not match anything"
+            , somIncludeNoMatch = True
+            }
+    liftIO $
+        wNull @==
+            [ ((Entity a $ Author "a"), [])
+            , ((Entity b $ Author "b"), [])
+            , ((Entity c $ Author "c"), [])
+            ]
+
