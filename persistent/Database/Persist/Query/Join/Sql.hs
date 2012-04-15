@@ -89,7 +89,7 @@ instance (PersistEntity one, PersistEntity many, Eq (Key SqlPersist one))
             ]
           where
             filts1 = filterClauseNoWhere True conn oneF
-            filts2 = filterClauseNoWhere True conn manyF
+            filts2 = (if isOuter then filterClauseNoWhereOrNull else filterClauseNoWhere) True conn manyF
 
             orders :: PersistEntity val
                    => [SelectOpt val]

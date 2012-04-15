@@ -12,6 +12,7 @@ module Database.Persist.Query.GenericSql
   ( PersistQuery (..)
     , SqlPersist (..)
     , filterClauseNoWhere
+    , filterClauseNoWhereOrNull
     , getFiltsValues
     , selectSourceConn
     , dummyFromFilts
@@ -198,29 +199,39 @@ execute' :: MonadIO m => Text -> [PersistValue] -> SqlPersist m ()
 execute' = R.execute
 
 getFiltsValues :: forall val.  PersistEntity val => Connection -> [Filter val] -> [PersistValue]
-getFiltsValues conn = snd . filterClauseHelper False False conn
+getFiltsValues conn = snd . filterClauseHelper False False conn OrNullNo
 
 filterClause :: PersistEntity val
              => Bool -- ^ include table name?
              -> Connection
              -> [Filter val]
              -> Text
-filterClause b c = fst . filterClauseHelper b True c
+filterClause b c = fst . filterClauseHelper b True c OrNullNo
+
+data OrNull = OrNullYes | OrNullNo
 
 filterClauseNoWhere :: PersistEntity val
                     => Bool -- ^ include table name?
                     -> Connection
                     -> [Filter val]
                     -> Text
-filterClauseNoWhere b c = fst . filterClauseHelper b False c
+filterClauseNoWhere b c = fst . filterClauseHelper b False c OrNullNo
+
+filterClauseNoWhereOrNull :: PersistEntity val
+                    => Bool -- ^ include table name?
+                    -> Connection
+                    -> [Filter val]
+                    -> Text
+filterClauseNoWhereOrNull b c = fst . filterClauseHelper b False c OrNullYes
 
 filterClauseHelper :: PersistEntity val
              => Bool -- ^ include table name?
              -> Bool -- ^ include WHERE?
              -> Connection
+             -> OrNull
              -> [Filter val]
              -> (Text, [PersistValue])
-filterClauseHelper includeTable includeWhere conn filters =
+filterClauseHelper includeTable includeWhere conn orNull filters =
     (if not (T.null sql) && includeWhere
         then " WHERE " ++ sql
         else sql, vals)
@@ -253,8 +264,8 @@ filterClauseHelper includeTable includeWhere conn filters =
                 ], notNullVals)
             -- We use 1=2 (and below 1=1) to avoid using TRUE and FALSE, since
             -- not all databases support those words directly.
-            (_, In, 0) -> ("1=2", [])
-            (False, In, _) -> (name ++ " IN " ++ qmarks, allVals)
+            (_, In, 0) -> ("1=2" ++ orNullSuffix, [])
+            (False, In, _) -> (name ++ " IN " ++ qmarks ++ orNullSuffix, allVals)
             (True, In, _) -> (T.concat
                 [ "("
                 , name
@@ -283,10 +294,15 @@ filterClauseHelper includeTable includeWhere conn filters =
                 , qmarks
                 , ")"
                 ], notNullVals)
-            _ -> (name ++ showSqlFilter pfilter ++ "?", allVals)
+            _ -> (name ++ showSqlFilter pfilter ++ "?" ++ orNullSuffix, allVals)
       where
         filterValueToPersistValues :: forall a.  PersistField a => Either a [a] -> [PersistValue]
         filterValueToPersistValues v = map toPersistValue $ either return id v
+
+        orNullSuffix =
+            case orNull of
+                OrNullYes -> concat [" OR ", name, " IS NULL"]
+                OrNullNo -> ""
 
         isNull = any (== PersistNull) allVals
         notNullVals = filter (/= PersistNull) allVals

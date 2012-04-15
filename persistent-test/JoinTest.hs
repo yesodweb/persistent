@@ -53,18 +53,19 @@ db = db' cleanDB
 
 specs :: Specs
 specs = describe "joins" $ do
-  it "NoSql" $ db $ joinGeneric Database.Persist.Query.Join.runJoin
+  it "NoSql" $ db $ joinGeneric Database.Persist.Query.Join.runJoin False
 #ifndef WITH_MONGODB
-  it "Sql" $ db $ joinGeneric Database.Persist.Query.Join.Sql.runJoin
+  it "Sql" $ db $ joinGeneric Database.Persist.Query.Join.Sql.runJoin True
 #endif
 
 
 joinGeneric :: (MonadIO (b m), PersistQuery b m) =>
                (SelectOneMany b (AuthorGeneric b) (EntryGeneric b)
                 -> b m [(Entity (AuthorGeneric b), [Entity (EntryGeneric b)])])
+                -> Bool
                 -> b m ()
 
-joinGeneric run = do
+joinGeneric run isSql = do
     a <- insert $ Author "a"
     a1 <- insert $ Entry a "a1"
     a2 <- insert $ Entry a "a2"
@@ -140,13 +141,16 @@ joinGeneric run = do
     wNull <- run (selectOneMany (EntryAuthorId <-.) entryAuthorId)
             { somOrderOne = [Asc AuthorName]
             , somOrderMany = [Desc EntryTitle]
-            , somFilterMany = [EntryTitle ==. "this should not match anything"
+            , somFilterMany = [EntryTitle ==. "this should not match anything"]
             , somIncludeNoMatch = True
             }
     liftIO $
         wNull @==
-            [ ((Entity a $ Author "a"), [])
-            , ((Entity b $ Author "b"), [])
-            , ((Entity c $ Author "c"), [])
-            ]
+            if isSql
+                then [ ((Entity c $ Author "c"), [])
+                     ]
+                else [ ((Entity a $ Author "a"), [])
+                     , ((Entity b $ Author "b"), [])
+                     , ((Entity c $ Author "c"), [])
+                     ]
 
