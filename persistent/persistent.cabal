@@ -11,6 +11,8 @@ stability:       Stable
 cabal-version:   >= 1.8
 build-type:      Simple
 homepage:        http://www.yesodweb.com/book/persistent
+extra-source-files:
+  test/main.hs
 
 flag nooverlap
     default: False
