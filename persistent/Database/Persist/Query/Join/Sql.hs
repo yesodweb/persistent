@@ -82,7 +82,8 @@ instance (PersistEntity one, PersistEntity many, Eq (Key SqlPersist one))
             , escapeName conn $ entityDB $ entityDef many
             , "."
             , escapeName conn $ filterName $ eq undefined
-            , filts
+            , onFilts
+            , whereFilts
             , case ords of
                 [] -> ""
                 _ -> " ORDER BY " ++ T.intercalate ", " ords
@@ -91,16 +92,25 @@ instance (PersistEntity one, PersistEntity many, Eq (Key SqlPersist one))
             filts1 = filterClauseNoWhere True conn oneF
             filts2 = (if isOuter then filterClauseNoWhereOrNull else filterClauseNoWhere) True conn manyF
 
+            whereFilts
+                | isOuter =
+                    if null filts1
+                        then ""
+                        else " WHERE " ++ filts1
+                | null filts1 && null filts2 = ""
+                | null filts1 = " WHERE " ++ filts2
+                | null filts2 = " WHERE " ++ filts1
+                | otherwise = " WHERE " ++ filts1 ++ " AND " ++ filts2
+
+            onFilts
+                | isOuter && not (null filts2) = " AND " ++ filts2
+                | otherwise = ""
+
             orders :: PersistEntity val
                    => [SelectOpt val]
                    -> [SelectOpt val]
             orders x = let (_, _, y) = limitOffsetOrder x in y
 
-            filts
-                | null filts1 && null filts2 = ""
-                | null filts1 = " WHERE " ++ filts2
-                | null filts2 = " WHERE " ++ filts1
-                | otherwise = " WHERE " ++ filts1 ++ " AND " ++ filts2
             ords = map (orderClause True conn) (orders oneO) ++ map (orderClause True conn) (orders manyO)
 
 addTable :: PersistEntity val

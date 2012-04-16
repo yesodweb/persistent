@@ -145,12 +145,7 @@ joinGeneric run isSql = do
             , somIncludeNoMatch = True
             }
     liftIO $
-        wNull @==
-            if isSql
-                then [ ((Entity c $ Author "c"), [])
-                     ]
-                else [ ((Entity a $ Author "a"), [])
-                     , ((Entity b $ Author "b"), [])
-                     , ((Entity c $ Author "c"), [])
-                     ]
-
+        wNull @== [ ((Entity a $ Author "a"), [])
+                  , ((Entity b $ Author "b"), [])
+                  , ((Entity c $ Author "c"), [])
+                  ]
