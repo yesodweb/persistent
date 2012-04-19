@@ -1,5 +1,5 @@
 name:            persistent-postgresql
-version:         0.9.0.1
+version:         0.9.0.2
 license:         MIT
 license-file:    LICENSE
 author:          Felipe Lessa, Michael Snoyman <michael@snoyman.com>
@@ -16,7 +16,7 @@ library
     build-depends:   base                  >= 4        && < 5
                    , transformers          >= 0.2.1    && < 0.4
                    , postgresql-simple     >= 0.0.3    && < 0.1
-                   , postgresql-libpq      >= 0.6.1    && < 0.8
+                   , postgresql-libpq      >= 0.6.1    && < 0.9
                    , persistent            >= 0.9      && < 0.10
                    , containers            >= 0.2
                    , bytestring            >= 0.9      && < 0.10
