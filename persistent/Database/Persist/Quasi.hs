@@ -186,7 +186,7 @@ mkEntityDef :: PersistSettings
 mkEntityDef ps name entattribs lines =
     EntityDef
         (HaskellName name)
-        (DBName $ psToDBName ps name)
+        (DBName $ getDbName ps name entattribs)
         (DBName $ idName entattribs)
         entattribs cols uniqs derives
         extras
@@ -222,16 +222,17 @@ takeCols ps (n:typ:rest)
             Nothing -> error $ "Invalid field type: " ++ show typ
             Just ft -> Just $ FieldDef
                 (HaskellName n)
-                (DBName $ db rest)
+                (DBName $ getDbName ps n rest)
                 ft
                 rest
-  where
-    db [] = psToDBName ps n
-    db (a:as) =
-        case T.stripPrefix "sql=" a of
-            Nothing -> db as
-            Just s -> s
 takeCols _ _ = Nothing
+
+getDbName :: PersistSettings -> Text -> [Text] -> Text
+getDbName ps n [] = psToDBName ps n
+getDbName ps n (a:as) =
+    case T.stripPrefix "sql=" a of
+      Nothing -> getDbName ps n as
+      Just s  -> s
 
 takeUniqs :: PersistSettings
           -> [FieldDef]
