@@ -18,6 +18,10 @@ flag nooverlap
     default: False
     description: test out our assumption that OverlappingInstances is just for String
 
+flag blaze_html_0_5
+    description: use blaze-html 0.5 and blaze-markup 0.5
+    default: False
+
 library
     if flag(nooverlap)
         cpp-options: -DNO_OVERLAP
@@ -33,7 +37,6 @@ library
                    , monad-control            >= 0.3     && < 0.4
                    , lifted-base              >= 0.1     && < 0.2
                    , pool-conduit             >= 0.1     && < 0.2
-                   , blaze-html               >= 0.4     && < 0.5
                    , path-pieces              >= 0.1     && < 0.2
                    , aeson                    >= 0.5     && < 0.7
                    , transformers-base
@@ -41,6 +44,14 @@ library
                    , unordered-containers
                    , vector
                    , attoparsec
+
+    if flag(blaze_html_0_5)
+        build-depends:
+                     blaze-html               >= 0.5     && < 0.6
+                   , blaze-markup             >= 0.5.1   && < 0.6
+    else
+        build-depends:
+                     blaze-html               >= 0.4     && < 0.5
 
     exposed-modules: Database.Persist
                      Database.Persist.EntityDef
