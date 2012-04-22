@@ -60,8 +60,16 @@ import Control.Applicative
 import Data.Typeable (Typeable)
 import Data.Int (Int8, Int16, Int32, Int64)
 import Data.Word (Word8, Word16, Word32, Word64)
+
+#if MIN_VERSION_blaze_html(0,5,0)
+import Text.Blaze.Html
+import Text.Blaze.Internal (preEscapedText)
+import Text.Blaze.Html.Renderer.Text (renderHtml)
+#else
 import Text.Blaze (Html, preEscapedText)
 import Text.Blaze.Renderer.Text (renderHtml)
+#endif
+
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.ByteString.Lazy as L
