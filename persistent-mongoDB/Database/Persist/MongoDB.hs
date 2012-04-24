@@ -99,7 +99,7 @@ connectMongoDB :: Database -> HostName -> UString -> UString -> DB.IOE DB.Pipe
 connectMongoDB dbname hostname user pass = do
     x <- DB.connect (DB.host hostname)
     _ <- DB.access x DB.UnconfirmedWrites dbname (DB.auth user pass)
-    return(x)
+    return x
 
 createMongoDBPool :: (Trans.MonadIO m, Applicative m) =>
   Database -> HostName -> UString -> UString -> Int -> m ConnectionPool
