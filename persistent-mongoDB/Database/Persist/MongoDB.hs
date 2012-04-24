@@ -49,7 +49,7 @@ import Control.Exception (throw, throwIO)
 import qualified Database.MongoDB as DB
 import Database.MongoDB.Query (Database)
 import Control.Applicative (Applicative)
-import Data.UString (u)
+import Data.UString (u, UString)
 import qualified Data.CompactString.UTF8 as CS
 import Network.Socket (HostName)
 import Data.Maybe (mapMaybe, fromJust)
@@ -92,14 +92,20 @@ instance PathPiece (Key DB.Action entity) where
 
 
 withMongoDBConn :: (Trans.MonadIO m, Applicative m) =>
-  Database -> HostName -> (ConnectionPool -> m b) -> m b
-withMongoDBConn dbname hostname = withMongoDBPool dbname hostname 1
+  Database -> HostName -> UString -> UString ->(ConnectionPool -> m b) -> m b
+withMongoDBConn dbname hostname user pass = withMongoDBPool dbname hostname user pass 1
+
+connectMongoDB :: Database -> HostName -> UString -> UString -> DB.IOE DB.Pipe
+connectMongoDB dbname hostname user pass = do
+    x <- DB.connect (DB.host hostname)
+    _ <- DB.access x DB.UnconfirmedWrites dbname (DB.auth user pass)
+    return x
 
 createMongoDBPool :: (Trans.MonadIO m, Applicative m) =>
-  Database -> HostName -> Int -> m ConnectionPool
-createMongoDBPool dbname hostname connectionPoolSize = do
+  Database -> HostName -> UString -> UString -> Int -> m ConnectionPool
+createMongoDBPool dbname hostname user pass connectionPoolSize = do
   --pool <- runReaderT (DB.newConnPool connectionPoolSize $ DB.host hostname) $ ANetwork Internet
-  pool <- Trans.liftIO $ Pool.newPool Pool.Factory { Pool.newResource  = DB.connect (DB.host hostname)
+  pool <- Trans.liftIO $ Pool.newPool Pool.Factory { Pool.newResource  = connectMongoDB dbname hostname user pass
                                                   , Pool.killResource = DB.close
                                                   , Pool.isExpired    = DB.isClosed
                                                   }
@@ -107,9 +113,9 @@ createMongoDBPool dbname hostname connectionPoolSize = do
   return (pool, dbname)
 
 withMongoDBPool :: (Trans.MonadIO m, Applicative m) =>
-  Database -> HostName -> Int -> (ConnectionPool -> m b) -> m b
-withMongoDBPool dbname hostname connectionPoolSize connectionReader = do
-  pool <- createMongoDBPool dbname hostname connectionPoolSize
+  Database -> HostName -> UString -> UString -> Int -> (ConnectionPool -> m b) -> m b
+withMongoDBPool dbname hostname user pass connectionPoolSize connectionReader = do
+  pool <- createMongoDBPool dbname hostname user pass connectionPoolSize
   connectionReader pool
 
 runMongoDBConn :: (Trans.MonadIO m) => DB.AccessMode  ->  DB.Action m b -> ConnectionPool -> m b
@@ -512,6 +518,8 @@ dummyFromFilts _ = error "dummyFromFilts"
 data MongoConf = MongoConf
     { mgDatabase :: String
     , mgHost     :: String
+    , mgUser     :: String
+    , mgPass     :: String
     , mgPoolSize :: Int
     , mgAccessMode :: DB.AccessMode
     }
@@ -519,11 +527,13 @@ data MongoConf = MongoConf
 instance PersistConfig MongoConf where
     type PersistConfigBackend MongoConf = DB.Action
     type PersistConfigPool MongoConf = ConnectionPool
-    createPoolConfig (MongoConf db host poolsize _) = createMongoDBPool (u db) host poolsize
-    runPool (MongoConf _ _ _ accessMode) = runMongoDBConn accessMode
+    createPoolConfig (MongoConf db host user pass poolsize _) = createMongoDBPool (u db) host (u user) (u pass) poolsize
+    runPool (MongoConf _ _ _ _ _ accessMode) = runMongoDBConn accessMode
     loadConfig (Object o) = do
         db    <- o .: "database"
         host  <- o .: "host"
+        user  <- o .: "user"
+        pass  <- o .: "password"
         pool  <- o .: "poolsize"
         accessString <- o .:? "accessMode" .!= "ConfirmWrites"
 
@@ -533,7 +543,7 @@ instance PersistConfig MongoConf where
                "ConfirmWrites"     -> return $ DB.ConfirmWrites [u"j" DB.=: True]
                badAccess -> fail $ "unknown accessMode: " ++ (T.unpack badAccess)
 
-        return $ MongoConf (T.unpack db) (T.unpack host) pool accessMode
+        return $ MongoConf (T.unpack db) (T.unpack host) (T.unpack user) (T.unpack pass) pool accessMode
       where
     {-
         safeRead :: String -> T.Text -> MEither String Int
