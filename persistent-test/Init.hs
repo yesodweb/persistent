@@ -109,7 +109,7 @@ persistSettings = MkPersistSettings { mpsBackend = ConT ''Action }
 type BackendMonad = Action
 runConn f = do
 --    withMongoDBConn ("test") "127.0.0.1" $ runMongoDBConn MongoDB.safe MongoDB.Master f
-  withMongoDBConn "test" "127.0.0.1" $ runMongoDBConn MongoDB.master f
+  withMongoDBConn "test" "127.0.0.1" Nothing $ runMongoDBConn MongoDB.master f
 
 --setup :: MongoPersist IO ()
 setupMongo :: Action IO ()

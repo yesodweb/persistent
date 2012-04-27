@@ -92,20 +92,22 @@ instance PathPiece (Key DB.Action entity) where
 
 
 withMongoDBConn :: (Trans.MonadIO m, Applicative m) =>
-  Database -> HostName -> UString -> UString ->(ConnectionPool -> m b) -> m b
-withMongoDBConn dbname hostname user pass = withMongoDBPool dbname hostname user pass 1
+  Database -> HostName -> Maybe (UString, UString) -> (ConnectionPool -> m b) -> m b
+withMongoDBConn dbname hostname mauth = withMongoDBPool dbname hostname mauth 1
 
-connectMongoDB :: Database -> HostName -> UString -> UString -> DB.IOE DB.Pipe
-connectMongoDB dbname hostname user pass = do
+connectMongoDB :: Database -> HostName -> Maybe (UString, UString) -> DB.IOE DB.Pipe
+connectMongoDB dbname hostname mAuth = do
     x <- DB.connect (DB.host hostname)
-    _ <- DB.access x DB.UnconfirmedWrites dbname (DB.auth user pass)
+    _ <- case mAuth of
+      Just (user, pass) -> DB.access x DB.UnconfirmedWrites dbname (DB.auth user pass)
+      Nothing -> return undefined
     return x
 
 createMongoDBPool :: (Trans.MonadIO m, Applicative m) =>
-  Database -> HostName -> UString -> UString -> Int -> m ConnectionPool
-createMongoDBPool dbname hostname user pass connectionPoolSize = do
+  Database -> HostName -> Maybe (UString, UString) -> Int -> m ConnectionPool
+createMongoDBPool dbname hostname mAuth connectionPoolSize = do
   --pool <- runReaderT (DB.newConnPool connectionPoolSize $ DB.host hostname) $ ANetwork Internet
-  pool <- Trans.liftIO $ Pool.newPool Pool.Factory { Pool.newResource  = connectMongoDB dbname hostname user pass
+  pool <- Trans.liftIO $ Pool.newPool Pool.Factory { Pool.newResource  = connectMongoDB dbname hostname mAuth
                                                   , Pool.killResource = DB.close
                                                   , Pool.isExpired    = DB.isClosed
                                                   }
@@ -113,9 +115,9 @@ createMongoDBPool dbname hostname user pass connectionPoolSize = do
   return (pool, dbname)
 
 withMongoDBPool :: (Trans.MonadIO m, Applicative m) =>
-  Database -> HostName -> UString -> UString -> Int -> (ConnectionPool -> m b) -> m b
-withMongoDBPool dbname hostname user pass connectionPoolSize connectionReader = do
-  pool <- createMongoDBPool dbname hostname user pass connectionPoolSize
+  Database -> HostName -> Maybe (UString, UString) -> Int -> (ConnectionPool -> m b) -> m b
+withMongoDBPool dbname hostname mauth connectionPoolSize connectionReader = do
+  pool <- createMongoDBPool dbname hostname mauth connectionPoolSize
   connectionReader pool
 
 runMongoDBConn :: (Trans.MonadIO m) => DB.AccessMode  ->  DB.Action m b -> ConnectionPool -> m b
@@ -393,7 +395,7 @@ filterToDocument f =
     showFilter Eq = error "EQ filter not expected"
     showFilter (BackendSpecificFilter bsf) = throw $ PersistMongoDBError $ T.pack $ "did not expect BackendSpecificFilter " ++ T.unpack bsf
 
-fieldName ::  forall v typ.  (PersistEntity v) => EntityField v typ -> CS.CompactString
+fieldName ::  forall v typ.  (PersistEntity v) => EntityField v typ -> UString
 fieldName = u . idfix . T.unpack . unDBName . fieldDB . persistFieldDef
   where idfix f = if f == "id" then "_id" else f
 
@@ -443,11 +445,11 @@ mapFromDoc :: DB.Document -> [(T.Text, PersistValue)]
 mapFromDoc = Prelude.map (\f -> ( ( csToText (DB.label f)), (fromJust . DB.cast') (DB.value f) ) )
 
 -- | CompactString is UTF8, Text is UTF16
-csToText :: CS.CompactString -> T.Text
+csToText :: UString -> T.Text
 csToText = E.decodeUtf8 . CS.toByteString
 
 -- | CompactString is UTF8, Text is UTF16
-textToCS :: T.Text -> CS.CompactString
+textToCS :: T.Text -> UString
 textToCS = CS.fromByteString_ . E.encodeUtf8
 
 oidToPersistValue :: DB.ObjectId -> PersistValue
@@ -518,8 +520,7 @@ dummyFromFilts _ = error "dummyFromFilts"
 data MongoConf = MongoConf
     { mgDatabase :: String
     , mgHost     :: String
-    , mgUser     :: String
-    , mgPass     :: String
+    , mgAuth     :: Maybe (String, String)
     , mgPoolSize :: Int
     , mgAccessMode :: DB.AccessMode
     }
@@ -527,14 +528,16 @@ data MongoConf = MongoConf
 instance PersistConfig MongoConf where
     type PersistConfigBackend MongoConf = DB.Action
     type PersistConfigPool MongoConf = ConnectionPool
-    createPoolConfig (MongoConf db host user pass poolsize _) = createMongoDBPool (u db) host (u user) (u pass) poolsize
-    runPool (MongoConf _ _ _ _ _ accessMode) = runMongoDBConn accessMode
+    createPoolConfig (MongoConf db host mAuth poolsize _) =
+      createMongoDBPool (u db) host (fmap (\(us,p)-> (u us,u p) ) mAuth)
+      poolsize
+    runPool (MongoConf _ _ _ _ accessMode) = runMongoDBConn accessMode
     loadConfig (Object o) = do
         db    <- o .: "database"
         host  <- o .: "host"
-        user  <- o .: "user"
-        pass  <- o .: "password"
         pool  <- o .: "poolsize"
+        mUser  <- o .:? "user"
+        mPass  <- o .:? "password"
         accessString <- o .:? "accessMode" .!= "ConfirmWrites"
 
         accessMode <- case accessString of
@@ -543,7 +546,12 @@ instance PersistConfig MongoConf where
                "ConfirmWrites"     -> return $ DB.ConfirmWrites [u"j" DB.=: True]
                badAccess -> fail $ "unknown accessMode: " ++ (T.unpack badAccess)
 
-        return $ MongoConf (T.unpack db) (T.unpack host) (T.unpack user) (T.unpack pass) pool accessMode
+        return $ MongoConf (T.unpack db) (T.unpack host)
+          (case (mUser, mPass) of
+            (Just user, Just pass) -> Just ((T.unpack user), (T.unpack pass))
+            _ -> Nothing
+          )
+          pool accessMode
       where
     {-
         safeRead :: String -> T.Text -> MEither String Int
