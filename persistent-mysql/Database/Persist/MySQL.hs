@@ -174,7 +174,7 @@ withStmt' conn query vals = C.sourceIO (liftIO   openS )
     pullS (result, getters) = do
       row <- MySQLBase.fetchRow result
       case row of
-        [] -> MySQLBase.freeResult result >> return C.IOClosed
+        [] -> return C.IOClosed -- Do not free the result per sourceIO's docs.
         _  -> return $ C.IOOpen $ zipWith ($) getters row
 
 
