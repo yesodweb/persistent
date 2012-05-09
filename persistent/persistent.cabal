@@ -1,5 +1,5 @@
 name:            persistent
-version:         0.9.0.3
+version:         0.9.0.4
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -31,7 +31,7 @@ library
                    , transformers             >= 0.2.1   && < 0.4
                    , time                     >= 1.1.4
                    , text                     >= 0.8     && < 1
-                   , containers               >= 0.2     && < 0.5
+                   , containers               >= 0.2
                    , conduit                  >= 0.4     && < 0.5
                    , resourcet                >= 0.3     && < 0.4
                    , monad-control            >= 0.3     && < 0.4
