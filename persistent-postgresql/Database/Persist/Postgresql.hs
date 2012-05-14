@@ -22,13 +22,14 @@ import Database.Persist.EntityDef
 import qualified Database.PostgreSQL.Simple as PG
 import qualified Database.PostgreSQL.Simple.BuiltinTypes as PG
 import qualified Database.PostgreSQL.Simple.Internal as PG
-import qualified Database.PostgreSQL.Simple.Param as PG
-import qualified Database.PostgreSQL.Simple.Result as PG
+import qualified Database.PostgreSQL.Simple.ToField as PGTF
+import qualified Database.PostgreSQL.Simple.FromField as PGFF
 import qualified Database.PostgreSQL.Simple.Types as PG
+import Database.PostgreSQL.Simple.Ok (Ok (..))
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
-import Control.Exception (SomeException, throw)
+import Control.Exception (throw)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.List (intercalate)
@@ -203,31 +204,32 @@ withStmt' conn query vals = C.sourceIO (liftIO   openS )
                                 case mbs of
                                   Nothing -> return PersistNull
                                   Just bs -> bs `seq` case getter mbs of
-                                                        Left exc -> throw exc
-                                                        Right v  -> return v
+                                                        Errors (exc:_) -> throw exc
+                                                        Errors [] -> error "Got an Errors, but no exceptions"
+                                                        Ok v  -> return v
 
 -- | Avoid orphan instances.
 newtype P = P PersistValue
 
-instance PG.Param P where
-    render (P (PersistText t))        = PG.render t
-    render (P (PersistByteString bs)) = PG.render (PG.Binary bs)
-    render (P (PersistInt64 i))       = PG.render i
-    render (P (PersistDouble d))      = PG.render d
-    render (P (PersistBool b))        = PG.render b
-    render (P (PersistDay d))         = PG.render d
-    render (P (PersistTimeOfDay t))   = PG.render t
-    render (P (PersistUTCTime t))     = PG.render t
-    render (P PersistNull)            = PG.render PG.Null
-    render (P (PersistList l))        = PG.render $ listToJSON l
-    render (P (PersistMap m))         = PG.render $ mapToJSON m
-    render (P (PersistObjectId _))    =
+instance PGTF.ToField P where
+    toField (P (PersistText t))        = PGTF.toField t
+    toField (P (PersistByteString bs)) = PGTF.toField (PG.Binary bs)
+    toField (P (PersistInt64 i))       = PGTF.toField i
+    toField (P (PersistDouble d))      = PGTF.toField d
+    toField (P (PersistBool b))        = PGTF.toField b
+    toField (P (PersistDay d))         = PGTF.toField d
+    toField (P (PersistTimeOfDay t))   = PGTF.toField t
+    toField (P (PersistUTCTime t))     = PGTF.toField t
+    toField (P PersistNull)            = PGTF.toField PG.Null
+    toField (P (PersistList l))        = PGTF.toField $ listToJSON l
+    toField (P (PersistMap m))         = PGTF.toField $ mapToJSON m
+    toField (P (PersistObjectId _))    =
         error "Refusing to serialize a PersistObjectId to a PostgreSQL value"
 
-type Getter a = PG.Field -> Maybe ByteString -> Either SomeException a
+type Getter a = PG.Field -> Maybe ByteString -> Ok a
 
-convertPV :: PG.Result a => (a -> b) -> Getter b
-convertPV f = (fmap f .) . PG.convert
+convertPV :: PGFF.FromField a => (a -> b) -> Getter b
+convertPV f = (fmap f .) . PGFF.fromField
 
 -- FIXME: check if those are correct and complete.
 getGetter :: PG.BuiltinType -> Getter PersistValue
@@ -253,7 +255,7 @@ getGetter PG.Timestamp = convertPV PersistUTCTime
 getGetter PG.Bit       = convertPV PersistInt64
 getGetter PG.Varbit    = convertPV PersistInt64
 getGetter PG.Numeric   = convertPV (PersistDouble . fromRational)
-getGetter PG.Void      = \_ _ -> Right PersistNull
+getGetter PG.Void      = \_ _ -> Ok PersistNull
 getGetter other   = error $ "Postgresql.getGetter: type " ++
                             show other ++ " not supported."
 
