@@ -92,7 +92,7 @@ library
                    , unordered-containers
 
                    -- postgresql dependencies
-                   , postgresql-simple     >= 0.0      && < 1.0
+                   , postgresql-simple     >= 0.1      && < 0.2
                    , postgresql-libpq      >= 0.6
 
                    -- MySQL dependencies
