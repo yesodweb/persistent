@@ -39,6 +39,7 @@ library
                      JoinTest
                      LargeNumberTest
                      MaxLenTest
+                     SumTypeTest
                      Init
                      Database.Persist.EntityDef
                      Database.Persist

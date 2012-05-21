@@ -25,6 +25,7 @@ data EntityDef = EntityDef
     , entityUniques :: [UniqueDef]
     , entityDerives :: [Text]
     , entityExtra   :: Map Text [ExtraLine]
+    , entitySum     :: Bool
     }
     deriving (Show, Eq, Read, Ord)
 

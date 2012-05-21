@@ -132,7 +132,7 @@ upperFirst t =
 
 dataTypeDec :: EntityDef -> Dec
 dataTypeDec t =
-    DataD [] nameG [KindedTV backend monadTransKind] [RecC name cols]
+    DataD [] nameG [KindedTV backend monadTransKind] constrs
     $ map (mkName . unpack) $ entityDerives t
   where
     monadKind = StarK `ArrowK` StarK
@@ -146,6 +146,21 @@ dataTypeDec t =
     name = mkName $ unpack $ unHaskellName $ entityHaskell t
     cols = map (mkCol $ unHaskellName $ entityHaskell t) $ entityFields t
     backend = mkName "backend"
+
+    constrs
+        | entitySum t = map sumCon $ entityFields t
+        | otherwise = [RecC name cols]
+
+    sumCon fd@(FieldDef _ _ ty _) = NormalC
+        (sumConstrName t fd)
+        [(NotStrict, pairToType backend (ty, False))]
+
+sumConstrName :: EntityDef -> FieldDef -> Name
+sumConstrName t (FieldDef n _ _ _) = mkName $ unpack $ concat
+    [ unHaskellName $ entityHaskell t
+    , upperFirst $ unHaskellName n
+    , "Sum"
+    ]
 
 readMay :: Read a => String -> Maybe a
 readMay s =
@@ -211,18 +226,41 @@ degen [] =
      in [Clause [WildP] (NormalB err) []]
 degen x = x
 
-mkToPersistFields :: [(String, Int)] -> Q Dec
-mkToPersistFields pairs = do
-    clauses <- mapM go pairs
-    return $ FunD (mkName "toPersistFields") $ degen clauses
+mkToPersistFields :: String -> EntityDef -> Q Dec
+mkToPersistFields constr ed@EntityDef { entitySum = isSum, entityFields = fields } = do
+    clauses <-
+        if isSum
+            then sequence $ zipWith goSum fields [1..]
+            else fmap return $ go constr
+    return $ FunD (mkName "toPersistFields") clauses
   where
-    go :: (String, Int) -> Q Clause
-    go (constr, fields) = do
-        xs <- sequence $ replicate fields $ newName "x"
+    go :: String -> Q Clause
+    go constr = do
+        xs <- sequence $ replicate fieldCount $ newName "x"
         let pat = ConP (mkName constr) $ map VarP xs
         sp <- [|SomePersistField|]
         let bod = ListE $ map (AppE sp . VarE) xs
         return $ Clause [pat] (NormalB bod) []
+
+    fieldCount = length fields
+
+    goSum :: FieldDef -> Int -> Q Clause
+    goSum fd idx = do
+        let name = sumConstrName ed fd
+        enull <- [|SomePersistField PersistNull|]
+        let beforeCount = idx - 1
+            afterCount = fieldCount - idx
+            before = replicate beforeCount enull
+            after = replicate afterCount enull
+        x <- newName "x"
+        sp <- [|SomePersistField|]
+        let body = NormalB $ ListE $ mconcat
+                [ before
+                , [sp `AppE` VarE x]
+                , after
+                ]
+        return $ Clause [ConP name [VarP x]] body []
+
 
 mkToFieldNames :: [UniqueDef] -> Q Dec
 mkToFieldNames pairs = do
@@ -290,7 +328,7 @@ mkHalfDefined constr count' =
                     (replicate count' $ VarE $ mkName "undefined")) []]
 
 mkFromPersistValues :: EntityDef -> Q [Clause]
-mkFromPersistValues t = do
+mkFromPersistValues t@(EntityDef { entitySum = False }) = do
     nothing <- [|Left $(liftT "Invalid fromPersistValues input")|]
     let cons' = ConE $ mkName $ unpack $ unHaskellName $ entityHaskell t
     xs <- mapM (const $ newName "x") $ entityFields t
@@ -306,7 +344,7 @@ mkFromPersistValues t = do
         ]
   where
     go ap' x y = InfixE (Just x) ap' (Just y)
-
+mkFromPersistValues t = return [] -- FIXME
 
 mkEntity :: MkPersistSettings -> EntityDef -> Q [Dec]
 mkEntity mps t = do
@@ -314,7 +352,7 @@ mkEntity mps t = do
     let nameT = unHaskellName $ entityHaskell t
     let nameS = unpack nameT
     let clazz = ConT ''PersistEntity `AppT` (ConT (mkName $ unpack $ unHaskellName (entityHaskell t) ++ suffix) `AppT` VarT (mkName "backend"))
-    tpf <- mkToPersistFields [(nameS, length $ entityFields t)]
+    tpf <- mkToPersistFields nameS t
     fpv <- mkFromPersistValues t
     utv <- mkUniqueToValues $ entityUniques t
     puk <- mkUniqueKeys t
@@ -603,7 +641,7 @@ mkMigrate fun allDefs = do
     undefinedEntityTH u = SigE u . ConT . mkName . unpack . unHaskellName . entityHaskell
 
 instance Lift EntityDef where
-    lift (EntityDef a b c d e f g h) =
+    lift (EntityDef a b c d e f g h i) =
         [|EntityDef
             $(lift a)
             $(lift b)
@@ -613,6 +651,7 @@ instance Lift EntityDef where
             $(lift f)
             $(liftTs g)
             $(liftMap h)
+            $(lift i)
             |]
 instance Lift FieldDef where
     lift (FieldDef a b c d) = [|FieldDef $(lift a) $(lift b) $(lift c) $(liftTs d)|]
