@@ -233,29 +233,30 @@ convertPV f = (fmap f .) . PGFF.fromField
 
 -- FIXME: check if those are correct and complete.
 getGetter :: PG.BuiltinType -> Getter PersistValue
-getGetter PG.Bool      = convertPV PersistBool
-getGetter PG.Bytea     = convertPV (PersistByteString . unBinary)
-getGetter PG.Char      = convertPV PersistText
-getGetter PG.Name      = convertPV PersistText
-getGetter PG.Int8      = convertPV PersistInt64
-getGetter PG.Int2      = convertPV PersistInt64
-getGetter PG.Int4      = convertPV PersistInt64
-getGetter PG.Text      = convertPV PersistText
-getGetter PG.Xml       = convertPV PersistText
-getGetter PG.Float4    = convertPV PersistDouble
-getGetter PG.Float8    = convertPV PersistDouble
-getGetter PG.Abstime   = convertPV PersistUTCTime
-getGetter PG.Reltime   = convertPV PersistUTCTime
-getGetter PG.Money     = convertPV PersistDouble
-getGetter PG.Bpchar    = convertPV PersistText
-getGetter PG.Varchar   = convertPV PersistText
-getGetter PG.Date      = convertPV PersistDay
-getGetter PG.Time      = convertPV PersistTimeOfDay
-getGetter PG.Timestamp = convertPV PersistUTCTime
-getGetter PG.Bit       = convertPV PersistInt64
-getGetter PG.Varbit    = convertPV PersistInt64
-getGetter PG.Numeric   = convertPV (PersistDouble . fromRational)
-getGetter PG.Void      = \_ _ -> Ok PersistNull
+getGetter PG.Bool                  = convertPV PersistBool
+getGetter PG.Bytea                 = convertPV (PersistByteString . unBinary)
+getGetter PG.Char                  = convertPV PersistText
+getGetter PG.Name                  = convertPV PersistText
+getGetter PG.Int8                  = convertPV PersistInt64
+getGetter PG.Int2                  = convertPV PersistInt64
+getGetter PG.Int4                  = convertPV PersistInt64
+getGetter PG.Text                  = convertPV PersistText
+getGetter PG.Xml                   = convertPV PersistText
+getGetter PG.Float4                = convertPV PersistDouble
+getGetter PG.Float8                = convertPV PersistDouble
+getGetter PG.Abstime               = convertPV PersistUTCTime
+getGetter PG.Reltime               = convertPV PersistUTCTime
+getGetter PG.Money                 = convertPV PersistDouble
+getGetter PG.Bpchar                = convertPV PersistText
+getGetter PG.Varchar               = convertPV PersistText
+getGetter PG.Date                  = convertPV PersistDay
+getGetter PG.Time                  = convertPV PersistTimeOfDay
+getGetter PG.Timestamp             = convertPV PersistUTCTime
+getGetter PG.TimestampWithTimeZone = convertPV PersistUTCTime
+getGetter PG.Bit                   = convertPV PersistInt64
+getGetter PG.Varbit                = convertPV PersistInt64
+getGetter PG.Numeric               = convertPV (PersistDouble . fromRational)
+getGetter PG.Void                  = \_ _ -> Ok PersistNull
 getGetter other   = error $ "Postgresql.getGetter: type " ++
                             show other ++ " not supported."
 
@@ -406,17 +407,18 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d] =
             PersistNull   -> Right Nothing
             PersistText t -> Right $ Just t
             _ -> Left $ pack $ "Invalid default column: " ++ show d
-    getType "int4"      = Right $ SqlInt32
-    getType "int8"      = Right $ SqlInteger
-    getType "varchar"   = Right $ SqlString
-    getType "date"      = Right $ SqlDay
-    getType "bool"      = Right $ SqlBool
-    getType "timestamp" = Right $ SqlDayTime
-    getType "float4"    = Right $ SqlReal
-    getType "float8"    = Right $ SqlReal
-    getType "bytea"     = Right $ SqlBlob
-    getType "time"      = Right $ SqlTime
-    getType a           = Left $ "Unknown type: " `T.append` a
+    getType "int4"        = Right $ SqlInt32
+    getType "int8"        = Right $ SqlInteger
+    getType "varchar"     = Right $ SqlString
+    getType "date"        = Right $ SqlDay
+    getType "bool"        = Right $ SqlBool
+    getType "timestamp"   = Right $ SqlDayTime
+    getType "timestamptz" = Right $ SqlDayTime
+    getType "float4"      = Right $ SqlReal
+    getType "float8"      = Right $ SqlReal
+    getType "bytea"       = Right $ SqlBlob
+    getType "time"        = Right $ SqlTime
+    getType a             = Left $ "Unknown type: " `T.append` a
 getColumn _ _ x =
     return $ Left $ pack $ "Invalid result from information_schema: " ++ show x
 
