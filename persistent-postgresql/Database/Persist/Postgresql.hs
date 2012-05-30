@@ -414,7 +414,7 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d] =
     getType "date"        = Right $ SqlDay
     getType "bool"        = Right $ SqlBool
     getType "timestamp"   = Right $ SqlDayTime
-    getType "timestamptz" = Right $ SqlDayTime
+    getType "timestamptz" = Right $ SqlDayTimeZoned
     getType "float4"      = Right $ SqlReal
     getType "float8"      = Right $ SqlReal
     getType "bytea"       = Right $ SqlBlob
@@ -477,6 +477,7 @@ showSqlType SqlReal = "DOUBLE PRECISION"
 showSqlType SqlDay = "DATE"
 showSqlType SqlTime = "TIME"
 showSqlType SqlDayTime = "TIMESTAMP"
+showSqlType SqlDayTimeZoned = "TIMESTAMP WITH TIME ZONE"
 showSqlType SqlBlob = "BYTEA"
 showSqlType SqlBool = "BOOLEAN"
 

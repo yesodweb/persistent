@@ -212,6 +212,7 @@ data SqlType = SqlString
              | SqlDay
              | SqlTime
              | SqlDayTime
+             | SqlDayTimeZoned
              | SqlBlob
     deriving (Show, Read, Eq, Typeable, Ord)
 
@@ -395,7 +396,7 @@ instance PersistField ZonedTime where
             (z, _):_ -> Right z
             _ -> Left $ "Expected ZonedTime, received " ++ show x
     fromPersistValue x = Left $ "Expected ZonedTime, received: " ++ show x
-    sqlType _ = SqlDayTime
+    sqlType _ = SqlDayTimeZoned
 
 instance PersistField a => PersistField (Maybe a) where
     toPersistValue Nothing = PersistNull
