@@ -37,7 +37,9 @@ share [mkPersist sqlSettings, mkMigrate "dataTypeMigrate"] [persistLowerCase|
 #endif
 DataTypeTable no-json
     text Text
+    textMaxLen Text maxlen=100
     bytes ByteString
+    bytesMaxLen ByteString maxlen=100
     int Int
     double Double
     bool Bool
@@ -69,7 +71,9 @@ specs = describe "data type specs" $ do
                     check s f = (s, f x) @=? (s, f y)
                 -- Check individual fields for better error messages
                 check "text" dataTypeTableText
+                check "textMaxLen" dataTypeTableTextMaxLen
                 check "bytes" dataTypeTableBytes
+                check "bytesMaxLen" dataTypeTableBytesMaxLen
                 check "int" dataTypeTableInt
                 check "bool" dataTypeTableBool
 #ifndef WITH_MONGODB
@@ -85,12 +89,10 @@ specs = describe "data type specs" $ do
 
 randomValue :: IO DataTypeTable
 randomValue = DataTypeTable
-    <$> (T.pack
-              . filter ((`notElem` forbidden) . generalCategory)
-              . filter (<= '\xFFFF') -- only BMP
-              . filter (/= '\0')     -- no nulls
-         <$> randomIOs)
-    <*> (S.pack . map intToWord8 <$> randomIOs)
+    <$> randomText
+    <*> randomText
+    <*> randomBS
+    <*> randomBS
     <*> randomIO
     <*> randomIO
     <*> randomIO
@@ -100,6 +102,13 @@ randomValue = DataTypeTable
 #endif
     <*> randomUTC
     where forbidden = [NotAssigned, PrivateUse]
+          randomText =
+               T.pack
+            .  filter ((`notElem` forbidden) . generalCategory)
+            .  filter (<= '\xFFFF') -- only BMP
+            .  filter (/= '\0')     -- no nulls
+           <$> randomIOs
+          randomBS = S.pack . map intToWord8 <$> randomIOs
 
 asIO :: IO a -> IO a
 asIO = id

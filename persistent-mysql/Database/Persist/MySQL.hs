@@ -221,11 +221,10 @@ getGetter MySQLBase.Float      = convertPV PersistDouble
 getGetter MySQLBase.Double     = convertPV PersistDouble
 getGetter MySQLBase.Decimal    = convertPV PersistDouble
 getGetter MySQLBase.NewDecimal = convertPV PersistDouble
--- Text
-getGetter MySQLBase.VarChar    = convertPV persistText
-getGetter MySQLBase.VarString  = convertPV persistText
-getGetter MySQLBase.String     = convertPV persistText
--- ByteString
+-- ByteString and Text
+getGetter MySQLBase.VarChar    = convertPV PersistByteString
+getGetter MySQLBase.VarString  = convertPV PersistByteString
+getGetter MySQLBase.String     = convertPV PersistByteString
 getGetter MySQLBase.Blob       = convertPV PersistByteString
 getGetter MySQLBase.TinyBlob   = convertPV PersistByteString
 getGetter MySQLBase.MediumBlob = convertPV PersistByteString
@@ -245,9 +244,6 @@ getGetter MySQLBase.Enum       = convertPV PersistText
 -- Unsupported
 getGetter other = error $ "MySQL.getGetter: type " ++
                   show other ++ " not supported."
-
-persistText :: ByteString -> PersistValue
-persistText = PersistText . T.decodeUtf8
 
 
 ----------------------------------------------------------------------
@@ -388,7 +384,9 @@ getColumns connectInfo getter def = do
                   getColumn connectInfo getter (entityDB def)
 
     helperCntrs = do
-      let check [PersistText cntrName, PersistText clmnName] = return (cntrName, clmnName)
+      let check [ PersistByteString cntrName
+                , PersistByteString clmnName] = return ( T.decodeUtf8 cntrName
+                                                       , T.decodeUtf8 clmnName )
           check other = fail $ "helperCntrs: unexpected " ++ show other
       rows <- mapM check =<< CL.consume
       return $ map (Right . Right . (DBName . fst . head &&& map (DBName . snd)))
@@ -401,9 +399,9 @@ getColumn :: MySQL.ConnectInfo
           -> DBName
           -> [PersistValue]
           -> IO (Either Text Column)
-getColumn connectInfo getter tname [ PersistText cname
-                                   , PersistText null_
-                                   , PersistText type'
+getColumn connectInfo getter tname [ PersistByteString cname
+                                   , PersistByteString null_
+                                   , PersistByteString type'
                                    , default'] =
     fmap (either (Left . pack) Right) $
     runErrorT $ do
@@ -434,17 +432,17 @@ getColumn connectInfo getter tname [ PersistText cname
                                      \COLUMN_NAME"
       let vars = [ PersistText $ pack $ MySQL.connectDatabase connectInfo
                  , PersistText $ unDBName $ tname
-                 , PersistText $ cname
+                 , PersistByteString cname
                  , PersistText $ pack $ MySQL.connectDatabase connectInfo ]
       cntrs <- C.runResourceT $ withStmt stmt vars C.$$ CL.consume
       ref <- case cntrs of
                [] -> return Nothing
-               [[PersistText tab, PersistText ref]] ->
-                   return $ Just (DBName tab, DBName ref)
+               [[PersistByteString tab, PersistByteString ref]] ->
+                   return $ Just (DBName $ T.decodeUtf8 tab, DBName $ T.decodeUtf8 ref)
                _ -> fail "MySQL.getColumn/getRef: never here"
 
       -- Okay!
-      return $ Column (DBName cname) (null_ == "YES") type_ default_ Nothing ref -- FIXME: maxLen
+      return $ Column (DBName $ T.decodeUtf8 cname) (null_ == "YES") type_ default_ Nothing ref -- FIXME: maxLen
 
 getColumn _ _ _ x =
     return $ Left $ pack $ "Invalid result from INFORMATION_SCHEMA: " ++ show x
@@ -452,7 +450,7 @@ getColumn _ _ _ x =
 
 -- | Parse the type of column as returned by MySQL's
 -- @INFORMATION_SCHEMA@ tables.
-parseType :: Monad m => Text -> m SqlType
+parseType :: Monad m => ByteString -> m SqlType
 parseType "tinyint"    = return SqlBool
 -- Ints
 parseType "int"        = return SqlInt32
