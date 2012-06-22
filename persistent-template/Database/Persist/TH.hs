@@ -320,11 +320,11 @@ mkToValue func = FunD (mkName func) . degen . map go
                    (NormalB $ VarE (mkName "toPersistValue") `AppE` VarE x)
                    []
 
-mkHalfDefined :: String -> Int -> Dec
+mkHalfDefined :: Name -> Int -> Dec
 mkHalfDefined constr count' =
         FunD (mkName "halfDefined")
             [Clause [] (NormalB
-            $ foldl AppE (ConE $ mkName constr)
+            $ foldl AppE (ConE constr)
                     (replicate count' $ VarE $ mkName "undefined")) []]
 
 mkFromPersistValues :: EntityDef -> Q [Clause]
@@ -344,7 +344,26 @@ mkFromPersistValues t@(EntityDef { entitySum = False }) = do
         ]
   where
     go ap' x y = InfixE (Just x) ap' (Just y)
-mkFromPersistValues t = return [] -- FIXME
+mkFromPersistValues t@(EntityDef { entitySum = True }) = do
+    nothing <- [|Left $(liftT "Invalid fromPersistValues input")|]
+    clauses <- mkClauses [] $ entityFields t
+    return $ clauses `mappend` [Clause [WildP] (NormalB nothing) []]
+  where
+    mkClauses _ [] = return []
+    mkClauses before (field:after) = do
+        x <- newName "x"
+        let null' = ConP 'PersistNull []
+            pat = ListP $ mconcat
+                [ map (const null') before
+                , [VarP x]
+                , map (const null') after
+                ]
+            constr = ConE $ sumConstrName t field
+        fmap' <- [|fmap|]
+        fs <- [|fromPersistValue $(return $ VarE x)|]
+        let clause = Clause [pat] (NormalB $ InfixE (Just constr) fmap' (Just fs)) []
+        clauses <- mkClauses (field : before) after
+        return $ clause : clauses
 
 mkEntity :: MkPersistSettings -> EntityDef -> Q [Dec]
 mkEntity mps t = do
@@ -377,7 +396,11 @@ mkEntity mps t = do
         , FunD (mkName "entityDef") [Clause [WildP] (NormalB t') []]
         , tpf
         , FunD (mkName "fromPersistValues") fpv
-        , mkHalfDefined nameS $ length $ entityFields t
+        , mkHalfDefined
+            (if entitySum t
+                then sumConstrName t (head $ entityFields t)
+                else mkName nameS)
+            (if entitySum t then 1 else length $ entityFields t)
         , toFieldNames
         , utv
         , puk
@@ -543,6 +566,8 @@ mkDeleteCascade defs = do
             ]
 
 mkUniqueKeys :: EntityDef -> Q Dec
+mkUniqueKeys def | entitySum def =
+    return $ FunD (mkName "persistUniqueKeys") [Clause [WildP] (NormalB $ ListE []) []]
 mkUniqueKeys def = do
     c <- clause
     return $ FunD (mkName "persistUniqueKeys") [c]

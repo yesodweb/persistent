@@ -106,7 +106,7 @@ mkColumns allDefs val =
     go fd p =
         Column
             (fieldDB fd)
-            (nullable $ fieldAttrs fd)
+            (nullable (fieldAttrs fd) || entitySum t)
             (sqlType p)
             (def $ fieldAttrs fd)
             (maxLen $ fieldAttrs fd)

@@ -2,6 +2,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 -- | A sqlite backend for persistent.
 module Database.Persist.Sqlite
     ( withSqlitePool
@@ -66,7 +67,7 @@ open' s = do
         , migrateSql = migrate'
         , begin = helper "BEGIN"
         , commitC = helper "COMMIT"
-        , rollbackC = helper "ROLLBACK"
+        , rollbackC = ignoreExceptions . helper "ROLLBACK"
         , escapeName = escape
         , noLimit = "LIMIT -1"
         }
@@ -75,6 +76,7 @@ open' s = do
         stmt <- getter t
         execute stmt []
         reset stmt
+    ignoreExceptions = E.handle (\(_ :: E.SomeException) -> return ())
 
 prepare' :: Sqlite.Connection -> Text -> IO Statement
 prepare' conn sql = do

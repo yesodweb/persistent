@@ -32,7 +32,7 @@ import Init
 #if WITH_MONGODB
 mkPersist persistSettings [persistLowerCase|
 #else
-share [mkPersist sqlSettings, mkMigrate "lowerCaseMigrate"] [persistLowerCase|
+share [mkPersist sqlSettings, mkMigrate "sumTypeMigrate"] [persistLowerCase|
 #endif
 Bicycle
     brand T.Text
@@ -42,11 +42,14 @@ Car
 +Vehicle
     bicycle BicycleId
     car CarId
+    deriving Show Eq
 |]
 
 specs :: Specs
 specs = describe "sum types" $ do
     it "works" $ asIO $ runConn $ do
+        _ <- runMigrationSilent sumTypeMigrate
+
         car1 <- insert $ Car "Ford" "Thunderbird"
         car2 <- insert $ Car "Kia" "Rio"
         bike1 <- insert $ Bicycle "Shwinn"
