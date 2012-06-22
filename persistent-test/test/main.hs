@@ -52,5 +52,5 @@ main = do
     JoinTest.specs >>
     EmbedTest.specs >>
     LargeNumberTest.specs >>
-    MaxLenTest.specsA >>
+    MaxLenTest.specs >>
     SumTypeTest.specs
