@@ -29,8 +29,8 @@ import Control.Monad (liftM)
 #define MBCIO MonadBaseControl IO
 import Data.Text (Text)
 import Control.Monad (MonadPlus)
-import Control.Monad.Trans.Resource (MonadThrow (..), MonadResource (..))
-import qualified Data.Conduit as C
+import Control.Monad.Trans.Resource (MonadResource (..))
+import Data.Conduit
 
 newtype SqlPersist m a = SqlPersist { unSqlPersist :: ReaderT Connection m a }
     deriving (Monad, MonadIO, MonadTrans, Functor, Applicative, MonadPlus)
@@ -61,32 +61,20 @@ class MonadIO m => MonadSqlPersist m where
 
 instance MonadIO m => MonadSqlPersist (SqlPersist m) where
     askSqlConn = SqlPersist ask
-instance MonadSqlPersist m => MonadSqlPersist (C.ResourceT m) where
+instance MonadSqlPersist m => MonadSqlPersist (ResourceT m) where
     askSqlConn = lift askSqlConn
 -- FIXME add a bunch of MonadSqlPersist instances for all transformers
 
 withStmt :: (MonadSqlPersist m, MonadResource m)
          => Text
          -> [PersistValue]
-         -> C.Source m [PersistValue]
-withStmt sql vals = C.PipeM
-    (do
-        stmt <- getStmt sql
-        reset' <- register $ I.reset stmt
-        return $ pull reset' $ I.withStmt stmt vals)
-    (return ())
-  where
-    pull reset' (C.Done _ ()) = C.PipeM (do
-        release reset'
-        return $ C.Done Nothing ()) (release reset')
-    pull reset' (C.HaveOutput src close' x) = C.HaveOutput
-        (pull reset' src)
-        (release reset' >> close')
-        x
-    pull reset' (C.PipeM msrc close') = C.PipeM
-        (pull reset' `liftM` msrc)
-        (release reset' >> close')
-    pull reset' (C.NeedInput _ c) = pull reset' c
+         -> Source m [PersistValue]
+withStmt sql vals = do
+    conn <- lift askSqlConn
+    bracketP
+        (getStmt' conn sql)
+        I.reset
+        (flip I.withStmt vals)
 
 execute :: MonadSqlPersist m => Text -> [PersistValue] -> m ()
 execute sql vals = do

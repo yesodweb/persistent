@@ -34,7 +34,7 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Control (MonadBaseControl)
 
-import qualified Data.Conduit as C
+import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Control.Monad.Trans.Resource (transResourceT)
 
@@ -44,7 +44,7 @@ import Database.Persist.EntityDef
 import Data.Monoid (Monoid, mappend, mconcat)
 
 -- orphaned instance for convenience of modularity
-instance (C.MonadThrow m, MonadIO m, C.MonadUnsafeIO m, MonadBaseControl IO m) => PersistQuery SqlPersist m where
+instance (MonadThrow m, MonadIO m, MonadUnsafeIO m, MonadBaseControl IO m) => PersistQuery SqlPersist m where
     update _ [] = return ()
     update k upds = do
         conn <- SqlPersist ask
@@ -77,17 +77,15 @@ instance (C.MonadThrow m, MonadIO m, C.MonadUnsafeIO m, MonadBaseControl IO m) =
                 , escapeName conn $ entityDB t
                 , wher
                 ]
-        C.runResourceT $ R.withStmt sql (getFiltsValues conn filts) C.$$ do
+        runResourceT $ R.withStmt sql (getFiltsValues conn filts) $$ do
             Just [PersistInt64 i] <- CL.head
             return $ fromIntegral i
       where
         t = entityDef $ dummyFromFilts filts
 
-    selectSource filts opts = C.PipeM
-        (do
-            conn <- lift $ SqlPersist ask
-            return $ R.withStmt (sql conn) (getFiltsValues conn filts) C.$= CL.mapM parse)
-        (return ())
+    selectSource filts opts = do
+        conn <- lift $ lift $ SqlPersist ask
+        R.withStmt (sql conn) (getFiltsValues conn filts) $= CL.mapM parse
       where
         (limit, offset, orders) = limitOffsetOrder opts
 
@@ -130,11 +128,9 @@ instance (C.MonadThrow m, MonadIO m, C.MonadUnsafeIO m, MonadBaseControl IO m) =
             , off
             ]
 
-    selectKeys filts = C.PipeM
-        (do
-            conn <- lift $ SqlPersist ask
-            return $ R.withStmt (sql conn) (getFiltsValues conn filts) C.$= CL.mapM parse)
-        (return ())
+    selectKeys filts = do
+        conn <- lift $ lift $ SqlPersist ask
+        R.withStmt (sql conn) (getFiltsValues conn filts) $= CL.mapM parse
       where
         parse [PersistInt64 i] = return $ Key $ PersistInt64 i
         parse y = liftIO $ throwIO $ PersistMarshalError $ "Unexpected in selectKeys: " ++ show y
@@ -343,13 +339,13 @@ show = pack . Prelude.show
 -- the environment inside a 'SqlPersist' monad, provide an explicit
 -- 'Connection'. This can allow you to use the returned 'Source' in an
 -- arbitrary monad.
-selectSourceConn :: (PersistEntity val, SqlPersist ~ PersistEntityBackend val, C.MonadThrow m, C.MonadUnsafeIO m, MonadIO m, MonadBaseControl IO m)
+selectSourceConn :: (PersistEntity val, SqlPersist ~ PersistEntityBackend val, MonadThrow m, MonadUnsafeIO m, MonadIO m, MonadBaseControl IO m)
                  => Connection
                  -> [Filter val]
                  -> [SelectOpt val]
-                 -> C.Source (C.ResourceT m) (Entity val)
+                 -> Source (ResourceT m) (Entity val)
 selectSourceConn conn fs opts =
-    C.transPipe (transResourceT $ flip runSqlConn conn) (selectSource fs opts)
+    transPipe (transResourceT $ flip runSqlConn conn) (selectSource fs opts)
 
 dummyFromFilts :: [Filter v] -> v
 dummyFromFilts _ = error "dummyFromFilts"

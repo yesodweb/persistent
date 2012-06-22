@@ -231,11 +231,11 @@ mkToPersistFields constr ed@EntityDef { entitySum = isSum, entityFields = fields
     clauses <-
         if isSum
             then sequence $ zipWith goSum fields [1..]
-            else fmap return $ go constr
+            else fmap return go
     return $ FunD (mkName "toPersistFields") clauses
   where
-    go :: String -> Q Clause
-    go constr = do
+    go :: Q Clause
+    go = do
         xs <- sequence $ replicate fieldCount $ newName "x"
         let pat = ConP (mkName constr) $ map VarP xs
         sp <- [|SomePersistField|]
