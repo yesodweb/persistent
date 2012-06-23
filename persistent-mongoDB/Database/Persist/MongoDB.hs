@@ -85,14 +85,22 @@ instance PathPiece (Key DB.Action entity) where
 
 
 withMongoDBConn :: (Trans.MonadIO m, Applicative m) =>
-  Database -> HostName -> (ConnectionPool -> m b) -> m b
-withMongoDBConn dbname hostname = withMongoDBPool dbname hostname 1
+  Database -> HostName -> Maybe (Text, Text) -> (ConnectionPool -> m b) -> m b
+withMongoDBConn dbname hostname mauth = withMongoDBPool dbname hostname mauth 1
+
+connectMongoDB :: Database -> HostName -> Maybe (Text, Text) -> DB.IOE DB.Pipe
+connectMongoDB dbname hostname mAuth = do
+    x <- DB.connect (DB.host hostname)
+    _ <- case mAuth of
+      Just (user, pass) -> DB.access x DB.UnconfirmedWrites dbname (DB.auth user pass)
+      Nothing -> return undefined
+    return x
 
 createMongoDBPool :: (Trans.MonadIO m, Applicative m) =>
-  Database -> HostName -> Int -> m ConnectionPool
-createMongoDBPool dbname hostname connectionPoolSize = do
+  Database -> HostName -> Maybe (Text, Text) -> Int -> m ConnectionPool
+createMongoDBPool dbname hostname mAuth connectionPoolSize = do
   --pool <- runReaderT (DB.newConnPool connectionPoolSize $ DB.host hostname) $ ANetwork Internet
-  pool <- Trans.liftIO $ Pool.newPool Pool.Factory { Pool.newResource  = DB.connect (DB.host hostname)
+  pool <- Trans.liftIO $ Pool.newPool Pool.Factory { Pool.newResource  = connectMongoDB dbname hostname mAuth
                                                   , Pool.killResource = DB.close
                                                   , Pool.isExpired    = DB.isClosed
                                                   }
@@ -100,9 +108,9 @@ createMongoDBPool dbname hostname connectionPoolSize = do
   return (pool, dbname)
 
 withMongoDBPool :: (Trans.MonadIO m, Applicative m) =>
-  Database -> HostName -> Int -> (ConnectionPool -> m b) -> m b
-withMongoDBPool dbname hostname connectionPoolSize connectionReader = do
-  pool <- createMongoDBPool dbname hostname connectionPoolSize
+  Database -> HostName -> Maybe (Text, Text) -> Int -> (ConnectionPool -> m b) -> m b
+withMongoDBPool dbname hostname mauth connectionPoolSize connectionReader = do
+  pool <- createMongoDBPool dbname hostname mauth connectionPoolSize
   connectionReader pool
 
 runMongoDBConn :: (Trans.MonadIO m) => DB.AccessMode  ->  DB.Action m b -> ConnectionPool -> m b
@@ -497,6 +505,7 @@ dummyFromFilts _ = error "dummyFromFilts"
 data MongoConf = MongoConf
     { mgDatabase :: String
     , mgHost     :: String
+    , mgAuth     :: Maybe (String, String)
     , mgPoolSize :: Int
     , mgAccessMode :: DB.AccessMode
     }
@@ -504,13 +513,16 @@ data MongoConf = MongoConf
 instance PersistConfig MongoConf where
     type PersistConfigBackend MongoConf = DB.Action
     type PersistConfigPool MongoConf = ConnectionPool
-    createPoolConfig (MongoConf db host poolsize _) =
-        createMongoDBPool (T.pack db) host poolsize
-    runPool (MongoConf _ _ _ accessMode) = runMongoDBConn accessMode
+    createPoolConfig (MongoConf db host mAuth poolsize _) =
+      createMongoDBPool (T.pack db) host (fmap (\(us,p)-> (u us,u p) ) mAuth)
+        poolsize
+    runPool (MongoConf _ _ _ _ accessMode) = runMongoDBConn accessMode
     loadConfig (Object o) = do
         db    <- o .: "database"
         host  <- o .: "host"
         pool  <- o .: "poolsize"
+        mUser  <- o .:? "user"
+        mPass  <- o .:? "password"
         accessString <- o .:? "accessMode" .!= "ConfirmWrites"
 
         accessMode <- case accessString of
@@ -519,7 +531,12 @@ instance PersistConfig MongoConf where
                "ConfirmWrites"     -> return $ DB.ConfirmWrites ["j" DB.=: True]
                badAccess -> fail $ "unknown accessMode: " ++ (T.unpack badAccess)
 
-        return $ MongoConf (T.unpack db) (T.unpack host) pool accessMode
+        return $ MongoConf (T.unpack db) (T.unpack host)
+          (case (mUser, mPass) of
+            (Just user, Just pass) -> Just ((T.unpack user), (T.unpack pass))
+            _ -> Nothing
+          )
+          pool accessMode
       where
     {-
         safeRead :: String -> T.Text -> MEither String Int
