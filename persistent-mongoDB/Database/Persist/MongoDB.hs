@@ -3,7 +3,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE PackageImports, RankNTypes #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -47,6 +46,7 @@ import Control.Applicative (Applicative)
 import Network.Socket (HostName)
 import Data.Maybe (mapMaybe, fromJust)
 import qualified Data.Text as T
+import Data.Text (Text)
 import qualified Data.Text.Encoding as E
 import qualified Data.Serialize as Serialize
 import qualified System.IO.Pool as Pool
@@ -59,16 +59,16 @@ import Control.Monad (mzero)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Resource (MonadThrow (..))
 
+{-
 #ifdef DEBUG
 import FileLocation (debug)
 #else
-{-
 debug :: forall a. a -> a
 debug = id
 debugMsg :: forall t a. t -> a -> a
 debugMsg _ = id
--}
 #endif
+-}
 
 type ConnectionPool = (Pool.Pool IOError DB.Pipe, Database)
 
@@ -349,9 +349,11 @@ makeQuery filts opts =
 
 filtersToSelector :: PersistEntity val => [Filter val] -> DB.Document
 filtersToSelector filts = 
+{-
 #ifdef DEBUG
   debug $
 #endif
+-}
     if null filts then [] else concatMap filterToDocument filts
 
 multiFilter :: forall val.  PersistEntity val => String -> [Filter val] -> [DB.Field]
@@ -388,7 +390,7 @@ filterToDocument f =
     showFilter Eq = error "EQ filter not expected"
     showFilter (BackendSpecificFilter bsf) = throw $ PersistMongoDBError $ T.pack $ "did not expect BackendSpecificFilter " ++ T.unpack bsf
 
-fieldName ::  forall v typ.  (PersistEntity v) => EntityField v typ -> T.Text
+fieldName ::  forall v typ.  (PersistEntity v) => EntityField v typ -> DB.Label
 fieldName = idfix . unDBName . fieldDB . persistFieldDef
   where idfix f = if f == "id" then "_id" else f
 
@@ -434,7 +436,7 @@ wrapFromPersistValues e doc = fromPersistValues reorder
             -- this keeps the document size down
             matchOne [] tried = ((c, PersistNull), tried)
 
-mapFromDoc :: DB.Document -> [(T.Text, PersistValue)]
+mapFromDoc :: DB.Document -> [(Text, PersistValue)]
 mapFromDoc = Prelude.map (\f -> ( (DB.label f), (fromJust . DB.cast') (DB.value f) ) )
 
 oidToPersistValue :: DB.ObjectId -> PersistValue
@@ -503,9 +505,9 @@ dummyFromFilts _ = error "dummyFromFilts"
 
 -- | Information required to connect to a mongo database
 data MongoConf = MongoConf
-    { mgDatabase :: String
-    , mgHost     :: String
-    , mgAuth     :: Maybe (String, String)
+    { mgDatabase :: Text
+    , mgHost     :: Text
+    , mgAuth     :: Maybe (Text, Text)
     , mgPoolSize :: Int
     , mgAccessMode :: DB.AccessMode
     }
@@ -514,7 +516,7 @@ instance PersistConfig MongoConf where
     type PersistConfigBackend MongoConf = DB.Action
     type PersistConfigPool MongoConf = ConnectionPool
     createPoolConfig (MongoConf db host mAuth poolsize _) =
-      createMongoDBPool (T.pack db) host (fmap (\(us,p)-> (u us,u p) ) mAuth)
+      createMongoDBPool db (T.unpack host) mAuth
         poolsize
     runPool (MongoConf _ _ _ _ accessMode) = runMongoDBConn accessMode
     loadConfig (Object o) = do
@@ -531,9 +533,9 @@ instance PersistConfig MongoConf where
                "ConfirmWrites"     -> return $ DB.ConfirmWrites ["j" DB.=: True]
                badAccess -> fail $ "unknown accessMode: " ++ (T.unpack badAccess)
 
-        return $ MongoConf (T.unpack db) (T.unpack host)
+        return $ MongoConf db host
           (case (mUser, mPass) of
-            (Just user, Just pass) -> Just ((T.unpack user), (T.unpack pass))
+            (Just user, Just pass) -> Just (user, pass)
             _ -> Nothing
           )
           pool accessMode
