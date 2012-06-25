@@ -114,9 +114,8 @@ library
    if flag(mongodb)
      build-depends:
                    -- mongoDB dependencies
-                     mongoDB       == 1.2.*
+                     mongoDB       == 1.3.*
                    , cereal
-                   , compact-string-fix
                    , bson
 
      exposed-modules:
