@@ -14,7 +14,7 @@ module Database.Persist.MongoDB
       withMongoDBConn
     , withMongoDBPool
     , createMongoDBPool
-    , runMongoDBConn 
+    , runMongoDBConn
     , ConnectionPool
     , MongoConf (..)
     -- * Key conversion helpers
@@ -130,19 +130,19 @@ rightPersistVals ent vals = case wrapFromPersistValues ent vals of
 filterByKey :: (PersistEntity val) => Key DB.Action val -> DB.Document
 filterByKey k = ["_id" DB.=: keyToOid k]
 
-queryByKey :: (PersistEntity val) => Key DB.Action val -> EntityDef -> DB.Query 
-queryByKey k entity = (DB.select (filterByKey k) (unDBName $ entityDB entity)) 
+queryByKey :: (PersistEntity val) => Key DB.Action val -> EntityDef -> DB.Query
+queryByKey k entity = (DB.select (filterByKey k) (unDBName $ entityDB entity))
 
-selectByKey :: (PersistEntity val) => Key DB.Action val -> EntityDef -> DB.Selection 
+selectByKey :: (PersistEntity val) => Key DB.Action val -> EntityDef -> DB.Selection
 selectByKey k entity = (DB.select (filterByKey k) (unDBName $ entityDB entity))
 
 updateFields :: (PersistEntity val) => [Update val] -> [DB.Field]
-updateFields upds = map updateToMongoField upds 
+updateFields upds = map updateToMongoField upds
 
 updateToMongoField :: (PersistEntity val) => Update val -> DB.Field
 updateToMongoField (Update field v up) =
     opName DB.:= DB.Doc [( (unDBName $ fieldDB $ persistFieldDef field) DB.:= opValue)]
-    where 
+    where
       (opName, opValue) =
         case (up, toPersistValue v) of
                   (Assign, PersistNull) -> ("$unset", DB.Int64 1)
@@ -178,7 +178,16 @@ insertFields t record = zipFilter (entityFields t) (toPersistFields record)
     zipFilter _  [] = []
     zipFilter (e:efields) (p:pfields) = let pv = toPersistValue p in
         if pv == PersistNull then zipFilter efields pfields
-          else (toLabel e DB.:= DB.val pv):zipFilter efields pfields
+        else (expand (toLabel e) (DB.val pv)):zipFilter efields pfields
+
+    -- Expand a nested label into a chain of nested documents, for example
+    -- @["foo.bar.baz" := "boo"]@ would be expanded into
+    -- @["foo" := ["bar" := ["baz" := "boo"]]]@
+    expand :: DB.Label -> DB.Value -> DB.Field
+    expand l v =
+        let labels = T.split (== '.') l
+            DB.Doc [f] = foldr (\chunk acc -> DB.Doc [chunk DB.:= acc]) v labels
+        in f
 
     toLabel = unDBName . fieldDB
 
@@ -193,7 +202,7 @@ saveWithKey dbSave k record =
 instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => PersistStore DB.Action m where
     insert record = do
         (DB.ObjId oid) <- DB.insert (unDBName $ entityDB t) (insertFields t record)
-        return $ oidToKey oid 
+        return $ oidToKey oid
       where
         t = entityDef record
 
@@ -253,8 +262,8 @@ persistKeyToMongoId k = "_id" DB.:= (DB.ObjId $ keyToOid k)
 instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => PersistQuery DB.Action m where
     update _ [] = return ()
     update k upds =
-        DB.modify 
-           (DB.Select [persistKeyToMongoId k]  (unDBName $ entityDB t)) 
+        DB.modify
+           (DB.Select [persistKeyToMongoId k]  (unDBName $ entityDB t))
            $ updateFields upds
       where
         t = entityDef $ dummyFromKey k
@@ -348,7 +357,7 @@ makeQuery filts opts =
     orders = map orderClause orders'
 
 filtersToSelector :: PersistEntity val => [Filter val] -> DB.Document
-filtersToSelector filts = 
+filtersToSelector filts =
 {-
 #ifdef DEBUG
   debug $
@@ -406,7 +415,7 @@ wrapFromPersistValues e doc = fromPersistValues reorder
     -- reorder = map (fromJust . (flip Prelude.lookup $ castDoc)) castColumns
     --
     -- this is O(n * log(n))
-    -- reorder =  map (\c -> (M.fromList castDoc) M.! c) castColumns 
+    -- reorder =  map (\c -> (M.fromList castDoc) M.! c) castColumns
     --
     -- and finally, this is O(n * log(n))
     -- * do an alist lookup for each column
@@ -414,7 +423,7 @@ wrapFromPersistValues e doc = fromPersistValues reorder
     -- * so for the last query there is only one item left
     --
     -- TODO: the above should be re-thought now that we are no longer inserting null: searching for a null column will look at every returned field before giving up
-    reorder :: [PersistValue] 
+    reorder :: [PersistValue]
     reorder = match castColumns castDoc []
       where
         match :: [T.Text] -> [(T.Text, PersistValue)] -> [PersistValue] -> [PersistValue]
@@ -437,7 +446,20 @@ wrapFromPersistValues e doc = fromPersistValues reorder
             matchOne [] tried = ((c, PersistNull), tried)
 
 mapFromDoc :: DB.Document -> [(Text, PersistValue)]
-mapFromDoc = Prelude.map (\f -> ( (DB.label f), (fromJust . DB.cast') (DB.value f) ) )
+mapFromDoc = squash T.empty where
+  -- Squash nested documents' labels, for example @["foo" := ["bar" := "baz"]]@
+  -- would be squashed into @["foo.bar" := "baz"]@.
+  squash :: Text -> DB.Document -> [(Text, PersistValue)]
+  squash prefix = concatMap (go prefix)
+
+  go :: T.Text -> DB.Field -> [(Text, PersistValue)]
+  go prefix (l DB.:= v) =
+      let full = if prefix == T.empty
+                 then l
+                 else T.append prefix $ T.cons '.' l
+      in case v of
+          DB.Doc doc -> squash full doc
+          _          -> [(full, fromJust $ DB.cast' v)]
 
 oidToPersistValue :: DB.ObjectId -> PersistValue
 oidToPersistValue =  PersistObjectId . Serialize.encode
@@ -482,7 +504,7 @@ instance DB.Val PersistValue where
   cast' (DB.RegEx (DB.Regex us1 us2))    = Just $ PersistByteString $ E.encodeUtf8 $ T.append us1 us2
   cast' (DB.Doc doc)  = Just $ PersistMap $ mapFromDoc doc
   cast' (DB.Array xs) = Just $ PersistList $ mapMaybe DB.cast' xs
-  cast' (DB.ObjId x)  = Just $ oidToPersistValue x 
+  cast' (DB.ObjId x)  = Just $ oidToPersistValue x
   cast' (DB.JavaScr _) = throw $ PersistMongoDBUnsupported "cast operation not supported for javascript"
   cast' (DB.Sym _)     = throw $ PersistMongoDBUnsupported "cast operation not supported for sym"
   cast' (DB.Stamp _)   = throw $ PersistMongoDBUnsupported "cast operation not supported for stamp"
@@ -494,7 +516,7 @@ instance Serialize.Serialize DB.ObjectId where
 
   get = do w1 <- Serialize.get
            w2 <- Serialize.get
-           return (DB.Oid w1 w2) 
+           return (DB.Oid w1 w2)
 
 dummyFromKey :: Key DB.Action v -> v
 dummyFromKey _ = error "dummyFromKey"
