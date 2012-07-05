@@ -32,7 +32,7 @@ import Data.Text (Text)
 import Control.Monad (MonadPlus)
 import Control.Monad.Trans.Resource (MonadResource (..))
 import Data.Conduit
-import System.Log.FastLogger (MonadLogging (..))
+import Control.Monad.Logger (MonadLogger (..))
 
 newtype SqlPersist m a = SqlPersist { unSqlPersist :: ReaderT Connection m a }
     deriving (Monad, MonadIO, MonadTrans, Functor, Applicative, MonadPlus)
@@ -58,17 +58,17 @@ instance MonadResource m => MonadResource (SqlPersist m) where
     allocate a = lift . allocate a
     resourceMask = lift . resourceMask
 
-class (MonadIO m, MonadLogging m) => MonadSqlPersist m where
+class (MonadIO m, MonadLogger m) => MonadSqlPersist m where
     askSqlConn :: m Connection
 
-instance (MonadIO m, MonadLogging m) => MonadSqlPersist (SqlPersist m) where
+instance (MonadIO m, MonadLogger m) => MonadSqlPersist (SqlPersist m) where
     askSqlConn = SqlPersist ask
 instance MonadSqlPersist m => MonadSqlPersist (ResourceT m) where
     askSqlConn = lift askSqlConn
 -- FIXME add a bunch of MonadSqlPersist instances for all transformers
 
-instance MonadLogging m => MonadLogging (SqlPersist m) where
-    monadLoggingLog a b c = lift $ monadLoggingLog a b c
+instance MonadLogger m => MonadLogger (SqlPersist m) where
+    monadLoggerLog a b c = lift $ monadLoggerLog a b c
 
 withStmt :: (MonadSqlPersist m, MonadResource m)
          => Text

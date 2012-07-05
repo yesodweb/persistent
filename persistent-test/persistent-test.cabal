@@ -91,7 +91,7 @@ library
                    , attoparsec
                    , vector
                    , unordered-containers
-                   , fast-logger
+                   , monad-logger
 
                    -- postgresql dependencies
                    , postgresql-simple     >= 0.1      && < 0.2

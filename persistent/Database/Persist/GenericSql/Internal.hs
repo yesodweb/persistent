@@ -32,7 +32,7 @@ import Data.Monoid (Monoid, mappend, mconcat)
 import Database.Persist.EntityDef
 import qualified Data.Conduit as C
 import Language.Haskell.TH.Syntax (Q, Exp)
-import System.Log.FastLogger (logOther)
+import Control.Monad.Logger (logOther)
 
 data Connection = Connection
     { prepare :: Text -> IO Statement
