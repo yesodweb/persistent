@@ -23,8 +23,8 @@ import System.Random (randomIO, randomRIO, Random)
 import Control.Applicative ((<$>))
 
 import Init
-import Text.Blaze
-import Text.Blaze.Renderer.Text
+import Text.Blaze.Html
+import Text.Blaze.Html.Renderer.Text
 
 -- Test lower case names
 share [mkPersist sqlSettings, mkMigrate "htmlMigrate"] [persistLowerCase|
@@ -55,7 +55,7 @@ specs = describe "html" $ do
 
 randomValue :: IO Html
 randomValue =
-                preEscapedText
+                preEscapedToMarkup
               . T.pack
               . filter ((`notElem` forbidden) . generalCategory)
               . filter (<= '\xFFFF') -- only BMP

@@ -41,8 +41,6 @@ import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persist)
 import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
 import Test.Hspec.HUnit()
 import Test.QuickCheck
--- QuickCheck
-import System.Random
 
 import Database.Persist
 import Database.Persist.Store (PersistValue(..))
