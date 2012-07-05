@@ -39,11 +39,13 @@ library
                    , pool-conduit             >= 0.1     && < 0.2
                    , path-pieces              >= 0.1     && < 0.2
                    , aeson                    >= 0.5     && < 0.7
+                   , fast-logger              >= 0.1     && < 0.2
                    , transformers-base
                    , base64-bytestring
                    , unordered-containers
                    , vector
                    , attoparsec
+                   , template-haskell
 
     if flag(blaze_html_0_5)
         build-depends:

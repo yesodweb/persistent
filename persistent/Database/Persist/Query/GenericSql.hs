@@ -42,9 +42,10 @@ import Control.Exception (throwIO)
 import qualified Data.Text as T
 import Database.Persist.EntityDef
 import Data.Monoid (Monoid, mappend, mconcat)
+import System.Log.FastLogger (MonadLogging)
 
 -- orphaned instance for convenience of modularity
-instance (MonadThrow m, MonadIO m, MonadUnsafeIO m, MonadBaseControl IO m) => PersistQuery SqlPersist m where
+instance (MonadThrow m, MonadIO m, MonadUnsafeIO m, MonadBaseControl IO m, MonadLogging m) => PersistQuery SqlPersist m where
     update _ [] = return ()
     update k upds = do
         conn <- SqlPersist ask
@@ -191,7 +192,7 @@ updatePersistValue (Update _ v _) = toPersistValue v
 dummyFromKey :: Key SqlPersist v -> v 
 dummyFromKey _ = error "dummyFromKey"
 
-execute' :: MonadIO m => Text -> [PersistValue] -> SqlPersist m ()
+execute' :: (MonadLogging m, MonadIO m) => Text -> [PersistValue] -> SqlPersist m ()
 execute' = R.execute
 
 getFiltsValues :: forall val.  PersistEntity val => Connection -> [Filter val] -> [PersistValue]
@@ -339,7 +340,7 @@ show = pack . Prelude.show
 -- the environment inside a 'SqlPersist' monad, provide an explicit
 -- 'Connection'. This can allow you to use the returned 'Source' in an
 -- arbitrary monad.
-selectSourceConn :: (PersistEntity val, SqlPersist ~ PersistEntityBackend val, MonadThrow m, MonadUnsafeIO m, MonadIO m, MonadBaseControl IO m)
+selectSourceConn :: (PersistEntity val, SqlPersist ~ PersistEntityBackend val, MonadThrow m, MonadUnsafeIO m, MonadIO m, MonadBaseControl IO m, MonadLogging m)
                  => Connection
                  -> [Filter val]
                  -> [SelectOpt val]
