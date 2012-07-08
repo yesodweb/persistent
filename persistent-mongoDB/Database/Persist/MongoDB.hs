@@ -1,11 +1,8 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE PackageImports, RankNTypes #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE CPP, PackageImports, OverloadedStrings  #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, MultiParamTypeClasses  #-}
+{-# LANGUAGE TypeSynonymInstances, FlexibleInstances, FlexibleContexts #-}
+{-# LANGUAGE RankNTypes, TypeFamilies #-}
+
 {-# LANGUAGE UndecidableInstances #-} -- FIXME
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Database.Persist.MongoDB
@@ -28,7 +25,7 @@ module Database.Persist.MongoDB
     , DB.master
     , DB.slaveOk
     , (DB.=:)
-    -- * Database.Persistent
+    -- * Database.Persist
     , module Database.Persist
     ) where
 
@@ -59,16 +56,13 @@ import Control.Monad (mzero)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Resource (MonadThrow (..))
 
-{-
 #ifdef DEBUG
 import FileLocation (debug)
 #else
 debug :: forall a. a -> a
 debug = id
-debugMsg :: forall t a. t -> a -> a
-debugMsg _ = id
+{- debugMsg :: forall t a. t -> a -> a debugMsg _ = id -}
 #endif
--}
 
 type ConnectionPool = (Pool.Pool IOError DB.Pipe, Database)
 
@@ -349,11 +343,9 @@ makeQuery filts opts =
 
 filtersToSelector :: PersistEntity val => [Filter val] -> DB.Document
 filtersToSelector filts = 
-{-
 #ifdef DEBUG
   debug $
 #endif
--}
     if null filts then [] else concatMap filterToDocument filts
 
 multiFilter :: forall val.  PersistEntity val => String -> [Filter val] -> [DB.Field]

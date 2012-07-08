@@ -24,7 +24,7 @@ import Database.Persist
 import Database.Persist.Query.Internal
 
 #ifdef WITH_MONGODB
-import Database.Persist.MongoDB (Action, oidToKey)
+import Database.Persist.MongoDB (oidToKey)
 import Data.Bson (genObjectId)
 import Language.Haskell.TH.Syntax (Type(..))
 
@@ -139,7 +139,9 @@ cleanDB = do
   deleteWhere ([] :: [Filter NeedsPet])
   deleteWhere ([] :: [Filter User])
   deleteWhere ([] :: [Filter Email])
+
 #ifdef WITH_MONGODB
+db :: Action IO () -> Assertion
 db = db' cleanDB
 #endif
 

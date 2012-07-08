@@ -26,19 +26,19 @@ mkPersist persistSettings [persist|
 share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persist|
 #endif
 
-  DoubleEmbed no-migrate
+  OnlyName no-migrate
     name String
     deriving Show Eq Read Ord
 
   HasEmbed no-migrate
     name String
-    embed DoubleEmbed
+    embed OnlyName
     deriving Show Eq Read Ord
 
   HasEmbeds
     name String
-    embed HasEmbed
-    double DoubleEmbed
+    embed OnlyName
+    double HasEmbed
     deriving Show Eq Read Ord
 
   HasListEmbed
@@ -70,16 +70,22 @@ db = db' cleanDB
 specs :: Specs
 specs = describe "embedded entities" $ do
   it "simple entities" $ db $ do
-      let container = HasEmbeds "container"
-            (HasEmbed "embed" (DoubleEmbed "1")) (DoubleEmbed "2")
+      let container = HasEmbeds "container" (OnlyName "2")
+            (HasEmbed "embed" (OnlyName "1"))
       contK <- insert container
       Just res <- selectFirst [HasEmbedsName ==. "container"] []
       res @== (Entity contK container)
 
+  it "query for equality of embeded entity" $ db $ do
+      let container = HasEmbed "container" (OnlyName "2")
+      contK <- insert container
+      Just res <- selectFirst [HasEmbedEmbed ==. (OnlyName "2")] []
+      res @== (Entity contK container)
+
   it "Set" $ db $ do
       let container = HasSetEmbed "set" $ S.fromList [
-              (HasEmbed "embed" (DoubleEmbed "1"))
-            , (HasEmbed "embed" (DoubleEmbed "2"))
+              (HasEmbed "embed" (OnlyName "1"))
+            , (HasEmbed "embed" (OnlyName "2"))
             ]
       contK <- insert container
       Just res <- selectFirst [HasSetEmbedName ==. "set"] []
@@ -87,8 +93,8 @@ specs = describe "embedded entities" $ do
 
   it "List" $ db $ do
       let container = HasListEmbed "list" [
-              (HasEmbed "embed" (DoubleEmbed "1"))
-            , (HasEmbed "embed" (DoubleEmbed "2"))
+              (HasEmbed "embed" (OnlyName "1"))
+            , (HasEmbed "embed" (OnlyName "2"))
             ]
       contK <- insert container
       Just res <- selectFirst [HasListEmbedName ==. "list"] []
