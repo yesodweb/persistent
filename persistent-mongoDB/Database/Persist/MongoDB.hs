@@ -58,10 +58,6 @@ import Control.Monad.Trans.Resource (MonadThrow (..))
 
 #ifdef DEBUG
 import FileLocation (debug)
-#else
-debug :: forall a. a -> a
-debug = id
-{- debugMsg :: forall t a. t -> a -> a debugMsg _ = id -}
 #endif
 
 type ConnectionPool = (Pool.Pool IOError DB.Pipe, Database)
