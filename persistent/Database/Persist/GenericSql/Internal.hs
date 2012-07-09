@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE CPP #-}
@@ -13,6 +14,7 @@ module Database.Persist.GenericSql.Internal
     , createSqlPool
     , mkColumns
     , Column (..)
+    , logSQL
     ) where
 
 import qualified Data.Map as Map
@@ -29,6 +31,8 @@ import qualified Data.Text as T
 import Data.Monoid (Monoid, mappend, mconcat)
 import Database.Persist.EntityDef
 import qualified Data.Conduit as C
+import Language.Haskell.TH.Syntax (Q, Exp)
+import Control.Monad.Logger (logOther)
 
 data Connection = Connection
     { prepare :: Text -> IO Statement
@@ -106,7 +110,7 @@ mkColumns allDefs val =
     go fd p =
         Column
             (fieldDB fd)
-            (nullable $ fieldAttrs fd)
+            (nullable (fieldAttrs fd) || entitySum t)
             (sqlType p)
             (def $ fieldAttrs fd)
             (maxLen $ fieldAttrs fd)
@@ -187,3 +191,6 @@ tableColumn t s = go $ entityColumns t
         | x == s = ColumnDef x y z
         | otherwise = go rest
 -}
+
+logSQL :: Q Exp
+logSQL = [|\sql_foo params_foo -> $(logOther "SQL") $ T.pack $ show (sql_foo :: Text) ++ " " ++ show (params_foo :: [PersistValue])|]

@@ -48,13 +48,12 @@ import qualified Data.Text.Encoding as E
 import qualified Data.Serialize as Serialize
 import qualified System.IO.Pool as Pool
 import Web.PathPieces (PathPiece (..))
-import qualified Data.Conduit as C
+import Data.Conduit
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value (Object), (.:), (.:?), (.!=))
 import Control.Monad (mzero)
 import Control.Monad.Trans.Control (MonadBaseControl)
-import Control.Monad.Trans.Resource (MonadThrow (..))
 
 #ifdef DEBUG
 import FileLocation (debug)
@@ -273,21 +272,20 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
         query = DB.select (filtersToSelector filts) (unDBName $ entityDB t)
         t = entityDef $ dummyFromFilts filts
 
-    selectSource filts opts = C.PipeM
-        (do
-            cursor <- lift $ DB.find $ makeQuery filts opts
-            return $ mkSrc cursor)
-        (return ())
+    selectSource filts opts = do
+        cursor <- lift $ lift $ DB.find $ makeQuery filts opts
+        pull cursor
       where
-        mkSrc cursor = C.PipeM (pull cursor) (return ())
-        pull cursor = lift $ do
-            mdoc <- DB.next cursor
+        pull cursor = do
+            mdoc <- lift $ lift $ DB.next cursor
             case mdoc of
-                Nothing -> return $ C.Done Nothing ()
+                Nothing -> return ()
                 Just doc ->
                     case pairFromDocument t doc of
                         Left s -> liftIO $ throwIO $ PersistMarshalError $ T.pack s
-                        Right row -> return $ C.HaveOutput (mkSrc cursor) (return ()) row
+                        Right row -> do
+                            yield row
+                            pull cursor
         t = entityDef $ dummyFromFilts filts
 
     selectFirst filts opts = do
@@ -300,18 +298,17 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
       where
         t = entityDef $ dummyFromFilts filts
 
-    selectKeys filts = C.PipeM
-        (do
-            cursor <- lift $ DB.find query
-            return $ mkSrc cursor)
-        (return ())
+    selectKeys filts = do
+        cursor <- lift $ lift $ DB.find query
+        pull cursor
       where
-        mkSrc cursor = C.PipeM (pull cursor) (return ())
-        pull cursor = lift $ do
-            mdoc <- DB.next cursor
+        pull cursor = do
+            mdoc <- lift $ lift $ DB.next cursor
             case mdoc of
-                Nothing -> return $ C.Done Nothing ()
-                Just [_ DB.:= DB.ObjId oid] -> return $ C.HaveOutput (mkSrc cursor) (return ()) $ oidToKey oid
+                Nothing -> return ()
+                Just [_ DB.:= DB.ObjId oid] -> do
+                    yield $ oidToKey oid
+                    pull cursor
                 Just y -> liftIO $ throwIO $ PersistMarshalError $ T.pack $ "Unexpected in selectKeys: " ++ show y
         query = (DB.select (filtersToSelector filts) (unDBName $ entityDB t)) {
           DB.project = ["_id" DB.=: (1 :: Int)]

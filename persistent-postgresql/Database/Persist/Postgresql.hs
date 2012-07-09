@@ -39,7 +39,7 @@ import Data.Either (partitionEithers)
 import Control.Arrow
 import Data.List (sort, groupBy)
 import Data.Function (on)
-import qualified Data.Conduit as C
+import Data.Conduit
 import qualified Data.Conduit.List as CL
 
 import Data.ByteString (ByteString)
@@ -143,14 +143,13 @@ execute' conn query vals = do
     _ <- PG.execute conn query (map P vals)
     return ()
 
-withStmt' :: C.MonadResource m
+withStmt' :: MonadResource m
           => PG.Connection
           -> PG.Query
           -> [PersistValue]
-          -> C.Source m [PersistValue]
-withStmt' conn query vals = C.sourceIO (liftIO   openS )
-                                       (liftIO . closeS)
-                                       (liftIO . pullS )
+          -> Source m [PersistValue]
+withStmt' conn query vals =
+    bracketP openS closeS pull
   where
     openS = do
       -- Construct raw query
@@ -195,11 +194,17 @@ withStmt' conn query vals = C.sourceIO (liftIO   openS )
 
     closeS (ret, _, _, _) = LibPQ.unsafeFreeResult ret
 
+    pull x = do
+        y <- liftIO $ pullS x
+        case y of
+            Nothing -> return ()
+            Just z -> yield z >> pull x
+
     pullS (ret, rowRef, rowCount, getters) = do
         row <- atomicModifyIORef rowRef (\r -> (r+1, r))
         if row == rowCount
-           then return C.IOClosed
-           else fmap C.IOOpen $ forM (zip getters [0..]) $ \(getter, col) -> do
+           then return Nothing
+           else fmap Just $ forM (zip getters [0..]) $ \(getter, col) -> do
                                 mbs <- LibPQ.getvalue' ret row col
                                 case mbs of
                                   Nothing -> return PersistNull
@@ -317,10 +322,10 @@ getColumns getter def = do
             [ PersistText $ unDBName $ entityDB def
             , PersistText $ unDBName $ entityID def
             ]
-    cs <- C.runResourceT $ withStmt stmt vals C.$$ helper
+    cs <- runResourceT $ withStmt stmt vals $$ helper
     stmt' <- getter
         "SELECT constraint_name, column_name FROM information_schema.constraint_column_usage WHERE table_name=? AND column_name <> ? ORDER BY constraint_name, column_name"
-    us <- C.runResourceT $ withStmt stmt' vals C.$$ helperU
+    us <- runResourceT $ withStmt stmt' vals $$ helperU
     return $ cs ++ us
   where
     getAll front = do
@@ -396,10 +401,10 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d] =
                 ]
         let ref = refName tname cname
         stmt <- getter sql
-        C.runResourceT $ withStmt stmt
+        runResourceT $ withStmt stmt
                      [ PersistText $ unDBName tname
                      , PersistText $ unDBName ref
-                     ] C.$$ do
+                     ] $$ do
             Just [PersistInt64 i] <- CL.head
             return $ if i == 0 then Nothing else Just (DBName "", ref)
     d' = case d of

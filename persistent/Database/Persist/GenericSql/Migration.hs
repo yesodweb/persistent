@@ -35,8 +35,9 @@ import Control.Monad (liftM, unless)
 import Data.Text (Text, unpack, snoc)
 import qualified Data.Text.IO
 import System.IO
+import Control.Monad.Logger (MonadLogger)
 
-execute' :: MonadIO m => Text -> [PersistValue] -> SqlPersist m ()
+execute' :: (MonadIO m, MonadLogger m) => Text -> [PersistValue] -> SqlPersist m ()
 execute' = R.execute
 
 type Sql = Text
@@ -77,20 +78,20 @@ getMigration m = do
   mig <- parseMigration' m
   return $ allSql mig
 
-runMigration :: (MonadIO m, MBCIO m)
+runMigration :: (MonadIO m, MBCIO m, MonadLogger m)
              => Migration (SqlPersist m)
              -> SqlPersist m ()
 runMigration m = runMigration' m False >> return ()
 
 -- | Same as 'runMigration', but returns a list of the SQL commands executed
 -- instead of printing them to stderr.
-runMigrationSilent :: (MBCIO m, MonadIO m)
+runMigrationSilent :: (MBCIO m, MonadIO m, MonadLogger m)
                    => Migration (SqlPersist m)
                    -> SqlPersist m [Text]
 runMigrationSilent m = runMigration' m True
 
 runMigration'
-    :: (MBCIO m, MonadIO m)
+    :: (MBCIO m, MonadIO m, MonadLogger m)
     => Migration (SqlPersist m)
     -> Bool -- ^ is silent?
     -> SqlPersist m [Text]
@@ -104,14 +105,14 @@ runMigration' m silent = do
             , unlines $ map (\s -> "    " ++ unpack s ++ ";") $ errs
             ]
 
-runMigrationUnsafe :: (MBCIO m, MonadIO m)
+runMigrationUnsafe :: (MBCIO m, MonadIO m, MonadLogger m)
                    => Migration (SqlPersist m)
                    -> SqlPersist m ()
 runMigrationUnsafe m = do
     mig <- parseMigration' m
     mapM_ (executeMigrate False) $ allSql mig
 
-executeMigrate :: MonadIO m => Bool -> Text -> SqlPersist m Text
+executeMigrate :: (MonadIO m, MonadLogger m) => Bool -> Text -> SqlPersist m Text
 executeMigrate silent s = do
     unless silent $ liftIO $ hPutStrLn stderr $ "Migrating: " ++ unpack s
     execute' s []

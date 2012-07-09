@@ -31,7 +31,7 @@ import Data.Text (Text, pack)
 -- import Data.Time.LocalTime (localTimeToUTC, utc)
 import System.Environment (getEnvironment)
 
-import qualified Data.Conduit as C
+import Data.Conduit
 import qualified Data.Conduit.List as CL
 import qualified Data.Map as Map
 import qualified Data.Text as T
@@ -148,14 +148,13 @@ execute' conn query vals = MySQL.execute conn query (map P vals) >> return ()
 
 -- | Execute an statement that does return results.  The results
 -- are fetched all at once and stored into memory.
-withStmt' :: C.MonadResource m
+withStmt' :: MonadResource m
           => MySQL.Connection
           -> MySQL.Query
           -> [PersistValue]
-          -> C.Source m [PersistValue]
-withStmt' conn query vals = C.sourceIO (liftIO   openS )
-                                       (liftIO . closeS)
-                                       (liftIO . pullS )
+          -> Source m [PersistValue]
+withStmt' conn query vals =
+    bracketP openS closeS pull
   where
     openS = do
       -- Execute the query
@@ -171,11 +170,17 @@ withStmt' conn query vals = C.sourceIO (liftIO   openS )
 
     closeS (result, _) = MySQLBase.freeResult result
 
+    pull x = do
+        y <- liftIO $ pullS x
+        case y of
+            Nothing -> return ()
+            Just z -> yield z >> pull x
+
     pullS (result, getters) = do
       row <- MySQLBase.fetchRow result
       case row of
-        [] -> return C.IOClosed -- Do not free the result per sourceIO's docs.
-        _  -> return $ C.IOOpen $ zipWith ($) getters row
+        [] -> return Nothing -- Do not free the result per sourceIO's docs.
+        _  -> return $ Just $ zipWith ($) getters row
 
 
 -- | @newtype@ around 'PersistValue' that supports the
@@ -359,8 +364,8 @@ getColumns connectInfo getter def = do
                         \WHERE TABLE_SCHEMA = ? \
                           \AND TABLE_NAME   = ? \
                           \AND COLUMN_NAME <> ?"
-    inter <- C.runResourceT $ withStmt stmtClmns vals C.$$ CL.consume
-    cs <- C.runResourceT $ CL.sourceList inter C.$$ helperClmns -- avoid nested queries
+    inter <- runResourceT $ withStmt stmtClmns vals $$ CL.consume
+    cs <- runResourceT $ CL.sourceList inter $$ helperClmns -- avoid nested queries
 
     -- Find out the constraints.
     stmtCntrs <- getter "SELECT CONSTRAINT_NAME, \
@@ -372,7 +377,7 @@ getColumns connectInfo getter def = do
                           \AND REFERENCED_TABLE_SCHEMA IS NULL \
                         \ORDER BY CONSTRAINT_NAME, \
                                  \COLUMN_NAME"
-    us <- C.runResourceT $ withStmt stmtCntrs vals C.$$ helperCntrs
+    us <- runResourceT $ withStmt stmtCntrs vals $$ helperCntrs
 
     -- Return both
     return $ cs ++ us
@@ -381,7 +386,7 @@ getColumns connectInfo getter def = do
            , PersistText $ unDBName $ entityDB def
            , PersistText $ unDBName $ entityID def ]
 
-    helperClmns = CL.mapM getIt C.=$ CL.consume
+    helperClmns = CL.mapM getIt =$ CL.consume
         where
           getIt = fmap (either Left (Right . Left)) .
                   liftIO .
@@ -436,7 +441,7 @@ getColumn connectInfo getter tname [ PersistText cname
                  , PersistText $ unDBName $ tname
                  , PersistText $ cname
                  , PersistText $ pack $ MySQL.connectDatabase connectInfo ]
-      cntrs <- C.runResourceT $ withStmt stmt vars C.$$ CL.consume
+      cntrs <- runResourceT $ withStmt stmt vars $$ CL.consume
       ref <- case cntrs of
                [] -> return Nothing
                [[PersistText tab, PersistText ref]] ->

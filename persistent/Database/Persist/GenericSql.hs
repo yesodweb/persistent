@@ -62,6 +62,7 @@ import Data.Monoid (Monoid, mappend)
 import Database.Persist.EntityDef
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
+import Control.Monad.Logger (MonadLogger)
 
 type ConnectionPool = Pool Connection
 
@@ -73,7 +74,7 @@ instance PathPiece (Key SqlPersist entity) where
             Right (i, "") -> Just $ Key $ PersistInt64 i
             _ -> Nothing
 
-execute' :: MonadIO m => Text -> [PersistValue] -> SqlPersist m ()
+execute' :: (MonadIO m, MonadLogger m) => Text -> [PersistValue] -> SqlPersist m ()
 execute' = R.execute
 
 -- | Get a connection from the pool, run the given action, and then return the
@@ -91,7 +92,7 @@ runSqlConn (SqlPersist r) conn = do
     liftIO $ commitC conn getter
     return x
 
-instance (MonadBaseControl IO m, MonadIO m, C.MonadThrow m, C.MonadUnsafeIO m) => PersistStore SqlPersist m where
+instance (MonadBaseControl IO m, MonadIO m, C.MonadThrow m, C.MonadUnsafeIO m, MonadLogger m) => PersistStore SqlPersist m where
     insert val = do
         conn <- SqlPersist ask
         let esql = insertSql conn (entityDB t) (map fieldDB $ entityFields t)
@@ -123,8 +124,8 @@ instance (MonadBaseControl IO m, MonadIO m, C.MonadThrow m, C.MonadUnsafeIO m) =
                 , T.intercalate "," (map (go conn . fieldDB) $ entityFields t)
                 , " WHERE id=?"
                 ]
-        execute' sql $ map toPersistValue (toPersistFields val)
-                       `mappend` [unKey k]
+            vals = map toPersistValue (toPersistFields val) `mappend` [unKey k]
+        execute' sql vals
       where
         go conn x = escapeName conn x ++ "=?"
 
@@ -147,7 +148,8 @@ instance (MonadBaseControl IO m, MonadIO m, C.MonadThrow m, C.MonadUnsafeIO m) =
                 , escapeName conn $ entityDB t
                 , " WHERE id=?"
                 ]
-        C.runResourceT $ R.withStmt sql [unKey k] C.$$ do
+            vals' = [unKey k]
+        C.runResourceT $ R.withStmt sql vals' C.$$ do
             res <- CL.head
             case res of
                 Nothing -> return Nothing
@@ -167,7 +169,7 @@ instance (MonadBaseControl IO m, MonadIO m, C.MonadThrow m, C.MonadUnsafeIO m) =
             , " WHERE id=?"
             ]
 
-insrepHelper :: (MonadIO m, PersistEntity val)
+insrepHelper :: (MonadIO m, PersistEntity val, MonadLogger m)
              => Text
              -> Key SqlPersist val
              -> val
@@ -191,10 +193,12 @@ insrepHelper command (Key k) val = do
         ]
     vals = k : map toPersistValue (toPersistFields val)
 
-instance (MonadBaseControl IO m, C.MonadUnsafeIO m, MonadIO m, C.MonadThrow m) => PersistUnique SqlPersist m where
+instance (MonadBaseControl IO m, C.MonadUnsafeIO m, MonadIO m, C.MonadThrow m, MonadLogger m) => PersistUnique SqlPersist m where
     deleteBy uniq = do
         conn <- SqlPersist ask
-        execute' (sql conn) $ persistUniqueToValues uniq
+        let sql' = sql conn
+            vals = persistUniqueToValues uniq
+        execute' sql' vals
       where
         t = entityDef $ dummyFromUnique uniq
         go = map snd . persistUniqueToFieldNames
@@ -218,7 +222,8 @@ instance (MonadBaseControl IO m, C.MonadUnsafeIO m, MonadIO m, C.MonadThrow m) =
                 , " WHERE "
                 , sqlClause conn
                 ]
-        C.runResourceT $ R.withStmt sql (persistUniqueToValues uniq) C.$$ do
+            vals' = persistUniqueToValues uniq
+        C.runResourceT $ R.withStmt sql vals' C.$$ do
             row <- CL.head
             case row of
                 Nothing -> return Nothing
@@ -455,7 +460,7 @@ newtype Single a = Single {unSingle :: a}
 -- However, most common problems are mitigated by using the
 -- entity selection placeholder @??@, and you shouldn't see any
 -- error at all if you're not using 'Single'.
-rawSql :: (RawSql a, C.MonadUnsafeIO m, C.MonadThrow m, MonadIO m, MonadBaseControl IO m) =>
+rawSql :: (RawSql a, C.MonadUnsafeIO m, C.MonadThrow m, MonadIO m, MonadBaseControl IO m, MonadLogger m) =>
           Text             -- ^ SQL statement, possibly with placeholders.
        -> [PersistValue]   -- ^ Values to fill the placeholders.
        -> SqlPersist m [a]
@@ -467,10 +472,10 @@ rawSql stmt = run
       x = getType run
       process = rawSqlProcessRow
 
-      withStmt' colSubsts = R.withStmt $ T.concat $
-                            makeSubsts colSubsts $
-                            T.splitOn placeholder stmt
+      withStmt' colSubsts params = do
+            R.withStmt sql params
           where
+            sql = T.concat $ makeSubsts colSubsts $ T.splitOn placeholder stmt
             placeholder = "??"
             makeSubsts (s:ss) (t:ts) = t : s : makeSubsts ss ts
             makeSubsts []     []     = []

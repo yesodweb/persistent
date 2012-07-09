@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -29,8 +30,9 @@ import Control.Monad (liftM)
 #define MBCIO MonadBaseControl IO
 import Data.Text (Text)
 import Control.Monad (MonadPlus)
-import Control.Monad.Trans.Resource (MonadThrow (..), MonadResource (..))
-import qualified Data.Conduit as C
+import Control.Monad.Trans.Resource (MonadResource (..))
+import Data.Conduit
+import Control.Monad.Logger (MonadLogger (..))
 
 newtype SqlPersist m a = SqlPersist { unSqlPersist :: ReaderT Connection m a }
     deriving (Monad, MonadIO, MonadTrans, Functor, Applicative, MonadPlus)
@@ -56,40 +58,33 @@ instance MonadResource m => MonadResource (SqlPersist m) where
     allocate a = lift . allocate a
     resourceMask = lift . resourceMask
 
-class MonadIO m => MonadSqlPersist m where
+class (MonadIO m, MonadLogger m) => MonadSqlPersist m where
     askSqlConn :: m Connection
 
-instance MonadIO m => MonadSqlPersist (SqlPersist m) where
+instance (MonadIO m, MonadLogger m) => MonadSqlPersist (SqlPersist m) where
     askSqlConn = SqlPersist ask
-instance MonadSqlPersist m => MonadSqlPersist (C.ResourceT m) where
+instance MonadSqlPersist m => MonadSqlPersist (ResourceT m) where
     askSqlConn = lift askSqlConn
 -- FIXME add a bunch of MonadSqlPersist instances for all transformers
+
+instance MonadLogger m => MonadLogger (SqlPersist m) where
+    monadLoggerLog a b c = lift $ monadLoggerLog a b c
 
 withStmt :: (MonadSqlPersist m, MonadResource m)
          => Text
          -> [PersistValue]
-         -> C.Source m [PersistValue]
-withStmt sql vals = C.PipeM
-    (do
-        stmt <- getStmt sql
-        reset' <- register $ I.reset stmt
-        return $ pull reset' $ I.withStmt stmt vals)
-    (return ())
-  where
-    pull reset' (C.Done _ ()) = C.PipeM (do
-        release reset'
-        return $ C.Done Nothing ()) (release reset')
-    pull reset' (C.HaveOutput src close' x) = C.HaveOutput
-        (pull reset' src)
-        (release reset' >> close')
-        x
-    pull reset' (C.PipeM msrc close') = C.PipeM
-        (pull reset' `liftM` msrc)
-        (release reset' >> close')
-    pull reset' (C.NeedInput _ c) = pull reset' c
+         -> Source m [PersistValue]
+withStmt sql vals = do
+    lift $ $logSQL sql vals
+    conn <- lift askSqlConn
+    bracketP
+        (getStmt' conn sql)
+        I.reset
+        (flip I.withStmt vals)
 
 execute :: MonadSqlPersist m => Text -> [PersistValue] -> m ()
 execute sql vals = do
+    $logSQL sql vals
     stmt <- getStmt sql
     liftIO $ I.execute stmt vals
     liftIO $ reset stmt

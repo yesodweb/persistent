@@ -8,6 +8,7 @@ import qualified JoinTest
 import qualified EmbedTest
 import qualified LargeNumberTest
 import qualified MaxLenTest
+import qualified SumTypeTest
 import Test.Hspec.Monadic (hspecX)
 import Init
 import System.Exit
@@ -51,4 +52,5 @@ main = do
     JoinTest.specs >>
     EmbedTest.specs >>
     LargeNumberTest.specs >>
-    MaxLenTest.specs
+    MaxLenTest.specs >>
+    SumTypeTest.specs

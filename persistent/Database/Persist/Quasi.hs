@@ -185,12 +185,17 @@ mkEntityDef :: PersistSettings
             -> EntityDef
 mkEntityDef ps name entattribs lines =
     EntityDef
-        (HaskellName name)
-        (DBName $ getDbName ps name entattribs)
+        (HaskellName name')
+        (DBName $ getDbName ps name' entattribs)
         (DBName $ idName entattribs)
         entattribs cols uniqs derives
         extras
+        isSum
   where
+    (isSum, name') =
+        case T.uncons name of
+            Just ('+', x) -> (True, x)
+            _ -> (False, name)
     (attribs, extras) = splitExtras lines
     idName [] = "id"
     idName (t:ts) =
