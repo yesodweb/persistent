@@ -15,6 +15,7 @@ module JoinTest ( specs
 
 import Test.Hspec.Monadic
 import Test.Hspec.HUnit ()
+import Test.HUnit (Assertion)
 
 import Database.Persist
 import Database.Persist.Query.Join (selectOneMany, SelectOneMany(..))
@@ -47,6 +48,7 @@ cleanDB :: PersistQuery b m => b m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Author])
   deleteWhere ([] :: [Filter Entry])
+db :: Action IO () -> Assertion
 db = db' cleanDB
 #endif
 
@@ -65,7 +67,7 @@ joinGeneric :: (MonadIO (b m), PersistQuery b m) =>
                 -> Bool
                 -> b m ()
 
-joinGeneric run isSql = do
+joinGeneric run _ = do
     a <- insert $ Author "a"
     a1 <- insert $ Entry a "a1"
     a2 <- insert $ Entry a "a2"

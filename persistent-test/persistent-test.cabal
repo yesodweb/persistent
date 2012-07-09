@@ -60,10 +60,12 @@ library
 
                      Database.Persist.Sqlite
                      Database.Sqlite
-                     Database.Persist.Postgresql
-                     Database.Persist.MySQL
 
-                     Database.Persist.MongoDB
+    hs-source-dirs: ., test, persistent, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mysql, persistent-mongoDB
+
+    ghc-options:   -Wall
+    -- if impl(ghc >= 7.4)
+    --   cpp-options: -DGHC_7_4
 
     build-depends:   base                     >= 4       && < 5
                    , HUnit
@@ -93,24 +95,33 @@ library
                    , unordered-containers
                    , monad-logger
 
+   if flag(postgresql)
+     build-depends:
                    -- postgresql dependencies
-                   , postgresql-simple     >= 0.1      && < 0.2
+                     postgresql-simple     >= 0.1      && < 0.2
                    , postgresql-libpq      >= 0.6
 
+     exposed-modules:
+                     Database.Persist.Postgresql
+
+   if flag(mysql)
+     build-depends:
                    -- MySQL dependencies
-                   , mysql-simple          >= 0.2.2.3  && < 0.3
+                     mysql-simple          >= 0.2.2.3  && < 0.3
                    , mysql                 >= 0.1.1.3  && < 0.2
 
-                   -- mongoDB dependencies
-                   , mongoDB       == 1.2.*
-                   , cereal
-                   , compact-string-fix
-                   , bson
-    hs-source-dirs: ., test, persistent, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mysql, persistent-mongoDB
+     exposed-modules:
+                     Database.Persist.MySQL
 
-    ghc-options:   -Wall
-    -- if impl(ghc >= 7.4)
-    --   cpp-options: -DGHC_7_4
+   if flag(mongodb)
+     build-depends:
+                   -- mongoDB dependencies
+                     mongoDB       == 1.3.*
+                   , cereal
+                   , bson
+
+     exposed-modules:
+                     Database.Persist.MongoDB
 
 -- older versions of cabal have a bug with these flags
 -- you can use: --ghc-option=-DWITH_POSTGRESQL
