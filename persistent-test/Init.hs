@@ -79,6 +79,9 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Int (Int32, Int64)
 
 import Control.Monad.IO.Class
+#if !MIN_VERSION_random(1,0,1)
+import System.Random
+#endif
 
 (@/=), (@==), (==@) :: (Eq a, Show a, MonadIO m) => a -> a -> m ()
 infix 1 @/= --, /=@
