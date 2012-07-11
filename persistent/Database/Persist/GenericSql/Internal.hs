@@ -33,6 +33,7 @@ import Database.Persist.EntityDef
 import qualified Data.Conduit as C
 import Language.Haskell.TH.Syntax (Q, Exp)
 import Control.Monad.Logger (logOther)
+import Data.Maybe (mapMaybe, listToMaybe)
 
 data Connection = Connection
     { prepare :: Text -> IO Statement
@@ -111,7 +112,7 @@ mkColumns allDefs val =
         Column
             (fieldDB fd)
             (nullable (fieldAttrs fd) || entitySum t)
-            (sqlType p)
+            (maybe (sqlType p) SqlOther $ listToMaybe $ mapMaybe (T.stripPrefix "sqltype=") $ fieldAttrs fd)
             (def $ fieldAttrs fd)
             (maxLen $ fieldAttrs fd)
             (ref (fieldDB fd) (fieldType fd) (fieldAttrs fd))

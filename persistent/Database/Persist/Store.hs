@@ -191,13 +191,14 @@ instance A.FromJSON PersistValue where
 -- have different translations for these types.
 data SqlType = SqlString
              | SqlInt32
-             | SqlInteger -- ^ FIXME 8-byte integer; should be renamed SqlInt64
+             | SqlInt64
              | SqlReal
              | SqlBool
              | SqlDay
              | SqlTime
              | SqlDayTime
              | SqlBlob
+             | SqlOther T.Text -- ^ a backend-specific name
     deriving (Show, Read, Eq, Typeable, Ord)
 
 -- | A value which can be marshalled to and from a 'PersistValue'.
@@ -261,7 +262,7 @@ instance PersistField Int where
     fromPersistValue x = Left $ "Expected Integer, received: " ++ show x
     sqlType x = case bitSize x of
                     32 -> SqlInt32
-                    _ -> SqlInteger
+                    _ -> SqlInt64
 
 instance PersistField Int8 where
     toPersistValue = PersistInt64 . fromIntegral
@@ -285,7 +286,7 @@ instance PersistField Int64 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ "Expected Integer, received: " ++ show x
-    sqlType _ = SqlInteger
+    sqlType _ = SqlInt64
 
 instance PersistField Word8 where
     toPersistValue = PersistInt64 . fromIntegral
@@ -303,13 +304,13 @@ instance PersistField Word32 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ "Expected Wordeger, received: " ++ show x
-    sqlType _ = SqlInteger
+    sqlType _ = SqlInt64
 
 instance PersistField Word64 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ "Expected Wordeger, received: " ++ show x
-    sqlType _ = SqlInteger
+    sqlType _ = SqlInt64
 
 instance PersistField Double where
     toPersistValue = PersistDouble
@@ -633,7 +634,7 @@ class PersistEntity a => DeleteCascade a b m where
 instance PersistField PersistValue where
     toPersistValue = id
     fromPersistValue = Right
-    sqlType _ = SqlInteger -- since PersistValue should only be used like this for keys, which in SQL are Int64
+    sqlType _ = SqlInt64 -- since PersistValue should only be used like this for keys, which in SQL are Int64
 
 -- | Represents a value containing all the configuration options for a specific
 -- backend. This abstraction makes it easier to write code that can easily swap

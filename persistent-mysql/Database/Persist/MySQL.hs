@@ -462,10 +462,10 @@ parseType "tinyint"    = return SqlBool
 -- Ints
 parseType "int"        = return SqlInt32
 parseType "short"      = return SqlInt32
-parseType "long"       = return SqlInteger
-parseType "longlong"   = return SqlInteger
+parseType "long"       = return SqlInt64
+parseType "longlong"   = return SqlInt64
 parseType "mediumint"  = return SqlInt32
-parseType "bigint"     = return SqlInteger
+parseType "bigint"     = return SqlInt64
 -- Double
 parseType "float"      = return SqlReal
 parseType "double"     = return SqlReal
@@ -591,12 +591,12 @@ showSqlType SqlBool    _        = "TINYINT(1)"
 showSqlType SqlDay     _        = "DATE"
 showSqlType SqlDayTime _        = "DATETIME"
 showSqlType SqlInt32   _        = "INT"
-showSqlType SqlInteger _        = "BIGINT"
+showSqlType SqlInt64   _        = "BIGINT"
 showSqlType SqlReal    _        = "DOUBLE PRECISION"
 showSqlType SqlString  Nothing  = "TEXT CHARACTER SET utf8"
 showSqlType SqlString  (Just i) = "VARCHAR(" ++ show i ++ ") CHARACTER SET utf8"
 showSqlType SqlTime    _        = "TIME"
-
+showSqlType (SqlOther t) _      = T.unpack t
 
 -- | Render an action that must be done on the database.
 showAlterDb :: AlterDB -> (Bool, Text)

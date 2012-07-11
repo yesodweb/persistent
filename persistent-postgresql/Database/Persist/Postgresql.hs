@@ -412,7 +412,7 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d] =
             PersistText t -> Right $ Just t
             _ -> Left $ pack $ "Invalid default column: " ++ show d
     getType "int4"      = Right $ SqlInt32
-    getType "int8"      = Right $ SqlInteger
+    getType "int8"      = Right $ SqlInt64
     getType "varchar"   = Right $ SqlString
     getType "date"      = Right $ SqlDay
     getType "bool"      = Right $ SqlBool
@@ -474,13 +474,14 @@ showColumn (Column n nu t def _maxLen ref) = concat
 showSqlType :: SqlType -> String
 showSqlType SqlString = "VARCHAR"
 showSqlType SqlInt32 = "INT4"
-showSqlType SqlInteger = "INT8"
+showSqlType SqlInt64 = "INT8"
 showSqlType SqlReal = "DOUBLE PRECISION"
 showSqlType SqlDay = "DATE"
 showSqlType SqlTime = "TIME"
 showSqlType SqlDayTime = "TIMESTAMP"
 showSqlType SqlBlob = "BYTEA"
 showSqlType SqlBool = "BOOLEAN"
+showSqlType (SqlOther t) = T.unpack t
 
 showAlterDb :: AlterDB -> (Bool, Text)
 showAlterDb (AddTable s) = (False, pack s)

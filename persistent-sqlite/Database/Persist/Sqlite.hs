@@ -130,13 +130,14 @@ withStmt' stmt vals = bracketP
 showSqlType :: SqlType -> String
 showSqlType SqlString = "VARCHAR"
 showSqlType SqlInt32 = "INTEGER"
-showSqlType SqlInteger = "INTEGER"
+showSqlType SqlInt64 = "INTEGER"
 showSqlType SqlReal = "REAL"
 showSqlType SqlDay = "DATE"
 showSqlType SqlTime = "TIME"
 showSqlType SqlDayTime = "TIMESTAMP"
 showSqlType SqlBlob = "BLOB"
 showSqlType SqlBool = "BOOLEAN"
+showSqlType (SqlOther t) = T.unpack t
 
 migrate' :: PersistEntity val
          => [EntityDef]
