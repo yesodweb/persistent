@@ -26,11 +26,11 @@ mkPersist persistSettings [persist|
 share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persist|
 #endif
 
-  OnlyName no-migrate
+  OnlyName
     name String
     deriving Show Eq Read Ord
 
-  HasEmbed no-migrate
+  HasEmbed
     name String
     embed OnlyName
     deriving Show Eq Read Ord
