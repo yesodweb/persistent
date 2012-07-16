@@ -123,10 +123,13 @@ instance E.Exception PersistException
 instance Error PersistException where
     strMsg = PersistError . T.pack
 
-instance Eq ZonedTime where
-    a /= b = zonedTimeToLocalTime a /= zonedTimeToLocalTime b || zonedTimeZone a /= zonedTimeZone b
-instance Ord ZonedTime where
-    a `compare` b = zonedTimeToUTC a `compare` zonedTimeToUTC b
+-- | Avoid orphan instances.
+newtype ZT = ZT ZonedTime deriving (Show, Read, Typeable)
+
+instance Eq ZT where
+    ZT a /= ZT b = zonedTimeToLocalTime a /= zonedTimeToLocalTime b || zonedTimeZone a /= zonedTimeZone b
+instance Ord ZT where
+    ZT a `compare` ZT b = zonedTimeToUTC a `compare` zonedTimeToUTC b
 
 -- | A raw value which can be stored in any backend and can be marshalled to
 -- and from a 'PersistField'.
@@ -138,7 +141,7 @@ data PersistValue = PersistText T.Text
                   | PersistDay Day
                   | PersistTimeOfDay TimeOfDay
                   | PersistUTCTime UTCTime
-                  | PersistZonedTime ZonedTime
+                  | PersistZonedTime ZT
                   | PersistNull
                   | PersistList [PersistValue]
                   | PersistMap [(T.Text, PersistValue)]
@@ -235,7 +238,7 @@ instance PersistField String where
     fromPersistValue (PersistDay d) = Right $ Prelude.show d
     fromPersistValue (PersistTimeOfDay d) = Right $ Prelude.show d
     fromPersistValue (PersistUTCTime d) = Right $ Prelude.show d
-    fromPersistValue (PersistZonedTime z) = Right $ Prelude.show z
+    fromPersistValue (PersistZonedTime (ZT z)) = Right $ Prelude.show z
     fromPersistValue PersistNull = Left "Unexpected null"
     fromPersistValue (PersistBool b) = Right $ Prelude.show b
     fromPersistValue (PersistList _) = Left "Cannot convert PersistList to String"
@@ -260,7 +263,7 @@ instance PersistField T.Text where
     fromPersistValue (PersistDay d) = Right $ show d
     fromPersistValue (PersistTimeOfDay d) = Right $ show d
     fromPersistValue (PersistUTCTime d) = Right $ show d
-    fromPersistValue (PersistZonedTime z) = Right $ show z
+    fromPersistValue (PersistZonedTime (ZT z)) = Right $ show z
     fromPersistValue PersistNull = Left "Unexpected null"
     fromPersistValue (PersistBool b) = Right $ show b
     fromPersistValue (PersistList _) = Left "Cannot convert PersistList to Text"
@@ -385,8 +388,8 @@ instance PersistField UTCTime where
     sqlType _ = SqlDayTime
 
 instance PersistField ZonedTime where
-    toPersistValue = PersistZonedTime
-    fromPersistValue (PersistZonedTime z) = Right z
+    toPersistValue = PersistZonedTime . ZT
+    fromPersistValue (PersistZonedTime (ZT z)) = Right z
     fromPersistValue x@(PersistText t) =
         case reads $ T.unpack t of
             (z, _):_ -> Right z
