@@ -98,7 +98,7 @@ library
    if flag(postgresql)
      build-depends:
                    -- postgresql dependencies
-                     postgresql-simple     >= 0.1      && < 0.2
+                     postgresql-simple     >= 0.2      && < 0.3
                    , postgresql-libpq      >= 0.6
 
      exposed-modules:

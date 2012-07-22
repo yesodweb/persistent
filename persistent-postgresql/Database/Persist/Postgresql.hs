@@ -46,7 +46,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
--- import Data.Time.LocalTime (localTimeToUTC, utc)
+import Data.Time.LocalTime (localTimeToUTC, utc)
 import Data.Text (Text, pack)
 import Data.Aeson
 import Control.Monad (forM, mzero)
@@ -239,7 +239,7 @@ convertPV f = (fmap f .) . PGFF.fromField
 -- FIXME: check if those are correct and complete.
 getGetter :: PG.BuiltinType -> Getter PersistValue
 getGetter PG.Bool      = convertPV PersistBool
-getGetter PG.Bytea     = convertPV (PersistByteString . unBinary)
+getGetter PG.ByteA     = convertPV (PersistByteString . unBinary)
 getGetter PG.Char      = convertPV PersistText
 getGetter PG.Name      = convertPV PersistText
 getGetter PG.Int8      = convertPV PersistInt64
@@ -249,16 +249,16 @@ getGetter PG.Text      = convertPV PersistText
 getGetter PG.Xml       = convertPV PersistText
 getGetter PG.Float4    = convertPV PersistDouble
 getGetter PG.Float8    = convertPV PersistDouble
-getGetter PG.Abstime   = convertPV PersistUTCTime
-getGetter PG.Reltime   = convertPV PersistUTCTime
+getGetter PG.AbsTime   = convertPV PersistUTCTime
+getGetter PG.RelTime   = convertPV PersistUTCTime
 getGetter PG.Money     = convertPV PersistDouble
-getGetter PG.Bpchar    = convertPV PersistText
-getGetter PG.Varchar   = convertPV PersistText
+getGetter PG.BpChar    = convertPV PersistText
+getGetter PG.VarChar   = convertPV PersistText
 getGetter PG.Date      = convertPV PersistDay
 getGetter PG.Time      = convertPV PersistTimeOfDay
-getGetter PG.Timestamp = convertPV PersistUTCTime
+getGetter PG.Timestamp = convertPV $ PersistUTCTime . localTimeToUTC utc
 getGetter PG.Bit       = convertPV PersistInt64
-getGetter PG.Varbit    = convertPV PersistInt64
+getGetter PG.VarBit    = convertPV PersistInt64
 getGetter PG.Numeric   = convertPV (PersistDouble . fromRational)
 getGetter PG.Void      = \_ _ -> Ok PersistNull
 getGetter other   = error $ "Postgresql.getGetter: type " ++
