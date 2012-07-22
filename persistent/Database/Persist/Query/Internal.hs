@@ -1,6 +1,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 module Database.Persist.Query.Internal
   ( -- re-exported as public
       PersistQuery (..)
@@ -14,19 +15,40 @@ module Database.Persist.Query.Internal
     , Update (..)
     , updateFieldDef
     , deleteCascadeWhere
+
+    -- * Exceptions
+    , UpdateGetException (..)
   ) where
 
 import Database.Persist.Store
 import Database.Persist.EntityDef
 import Control.Monad.Trans.Class (lift)
+import Control.Monad.Base (liftBase)
+import Control.Exception (Exception, throwIO)
+import Data.Typeable (Typeable)
 
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 
+data UpdateGetException = KeyNotFound String
+    deriving Typeable
+instance Show UpdateGetException where
+    show (KeyNotFound key) = "Key not found during updateGet: " ++ key
+instance Exception UpdateGetException
 
 class PersistStore b m => PersistQuery b m where
     -- | Update individual fields on a specific record.
     update :: PersistEntity val => Key b val -> [Update val] -> b m ()
+
+    -- | Update individual fields on a specific record, and retrieve the
+    -- updated value from the database.
+    --
+    -- Note that this function will throw an exception if the given key is not
+    -- found in the database.
+    updateGet :: PersistEntity val => Key b val -> [Update val] -> b m val
+    updateGet key ups = do
+        update key ups
+        get key >>= maybe (liftBase $ throwIO $ KeyNotFound $ show key) return
 
     -- | Update individual fields on any record matching the given criterion.
     updateWhere :: PersistEntity val => [Filter val] -> [Update val] -> b m ()
