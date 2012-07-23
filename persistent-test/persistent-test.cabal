@@ -120,14 +120,12 @@ library
                    , cereal
                    , bson
 
+     cpp-options: -DWITH_MONGODB -DDEBUG
      exposed-modules:
                      Database.Persist.MongoDB
 
 -- older versions of cabal have a bug with these flags
 -- you can use: --ghc-option=-DWITH_POSTGRESQL
---    if flag(mongodb)
---        cpp-options: -DWITH_MONGODB -DDEBUG
---    else
 --        if flag(postgresql)
 --            cpp-options: -DWITH_POSTGRESQL
 --        else
@@ -143,11 +141,11 @@ test-suite test
                    , persistent-test
                    , hspec
 
+    if flag(mongodb)
+        cpp-options: -DWITH_MONGODB -DDEBUG
+
 -- older versions of cabal have a bug with these flags
 -- you can use: --ghc-option=-DWITH_POSTGRESQL
---    if flag(mongodb)
---        cpp-options: -DWITH_MONGODB -DDEBUG
---    else
 --        if flag(postgresql)
 --            cpp-options: -DWITH_POSTGRESQL
 --        else

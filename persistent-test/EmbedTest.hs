@@ -15,6 +15,7 @@ embedMigrate
 ) where
 
 import Init
+import Test.HUnit (Assertion)
 
 import qualified Data.Text as T
 import qualified Data.Set as S
@@ -64,10 +65,12 @@ cleanDB = do
   deleteWhere ([] :: [Filter HasListEmbed])
   deleteWhere ([] :: [Filter HasSetEmbed])
   deleteWhere ([] :: [Filter HasMapEmbed])
+
+db :: Action IO () -> Assertion
 db = db' cleanDB
 #endif
 
-specs :: Specs
+specs :: Spec
 specs = describe "embedded entities" $ do
   it "simple entities" $ db $ do
       let container = HasEmbeds "container" (OnlyName "2")

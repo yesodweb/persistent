@@ -117,7 +117,7 @@ rightPersistVals ent vals = case wrapFromPersistValues ent vals of
       Right v -> v
 
 filterByKey :: (PersistEntity val) => Key DB.Action val -> DB.Document
-filterByKey k = ["_id" DB.=: keyToOid k]
+filterByKey k = [_id DB.=: keyToOid k]
 
 queryByKey :: (PersistEntity val) => Key DB.Action val -> EntityDef -> DB.Query 
 queryByKey k entity = (DB.select (filterByKey k) (unDBName $ entityDB entity)) 
@@ -236,17 +236,41 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
       where
         t = entityDef $ dummyFromUnique uniq
 
+_id :: T.Text
+_id = "_id"
+
 persistKeyToMongoId :: PersistEntity val => Key DB.Action val -> DB.Field
-persistKeyToMongoId k = "_id" DB.:= (DB.ObjId $ keyToOid k)
+persistKeyToMongoId k = _id DB.:= (DB.ObjId $ keyToOid k)
+
+
+findAndModifyOne :: (Applicative m, Trans.MonadIO m) => DB.Collection -> DB.Field -> [DB.Field] -> DB.Action m DB.Document
+findAndModifyOne coll idMatch updates = DB.runCommand [
+     "findAndModify" DB.:= DB.String coll,
+     "new" DB.:= DB.Bool True, -- return updated document, not original document
+     "query" DB.:= DB.Doc [idMatch],
+     "update" DB.:= DB.Doc updates
+   ]
 
 instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => PersistQuery DB.Action m where
     update _ [] = return ()
-    update k upds =
+    update key upds =
         DB.modify 
-           (DB.Select [persistKeyToMongoId k]  (unDBName $ entityDB t)) 
+           (DB.Select [persistKeyToMongoId key] (unDBName $ entityDB t))
            $ updateFields upds
       where
-        t = entityDef $ dummyFromKey k
+        t = entityDef $ dummyFromKey key
+
+    updateGet key upds = do
+        result <- findAndModifyOne (unDBName $ entityDB t) (persistKeyToMongoId key) $ updateFields upds
+        case DB.lookup "err" (DB.at "lastErrorObject" result) result of
+          Just e -> err e
+          Nothing -> case DB.lookup "value" result of
+            Nothing -> err "no value field"
+            Just doc -> return $ rightPersistVals t (tail doc)
+      where
+        err msg = Trans.liftIO $ throwIO $ KeyNotFound $ show key ++ msg
+        t = entityDef $ dummyFromKey key
+
 
     updateWhere _ [] = return ()
     updateWhere filts upds =
@@ -311,7 +335,7 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
                     pull cursor
                 Just y -> liftIO $ throwIO $ PersistMarshalError $ T.pack $ "Unexpected in selectKeys: " ++ show y
         query = (DB.select (filtersToSelector filts) (unDBName $ entityDB t)) {
-          DB.project = ["_id" DB.=: (1 :: Int)]
+          DB.project = [_id DB.=: (1 :: Int)]
         }
         t = entityDef $ dummyFromFilts filts
 
@@ -353,7 +377,7 @@ filterToDocument f =
       FilterOr [] -> -- Michael decided to follow Haskell's semantics, which seems reasonable to me.
                      -- in Haskell an empty or is a False
                      -- Perhaps there is a less hacky way of creating a query that always returns false?
-                     ["$not" DB.=: ["$exists" DB.=: ("_id" :: T.Text)]]
+                     ["$not" DB.=: ["$exists" DB.=: _id]]
       FilterOr fs  -> multiFilter "$or" fs
       -- $and is usually unecessary but makes query construction easier in special cases
       FilterAnd [] -> []
@@ -377,7 +401,7 @@ filterToDocument f =
 
 fieldName ::  forall v typ.  (PersistEntity v) => EntityField v typ -> DB.Label
 fieldName = idfix . unDBName . fieldDB . persistFieldDef
-  where idfix f = if f == "id" then "_id" else f
+  where idfix f = if f == "id" then _id else f
 
 
 wrapFromPersistValues :: (PersistEntity val) => EntityDef -> [DB.Field] -> Either T.Text val

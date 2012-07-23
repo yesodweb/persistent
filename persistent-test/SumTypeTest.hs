@@ -15,16 +15,16 @@ import Test.Hspec.HUnit ()
 import Test.HUnit
 import Database.Persist.Sqlite
 import Database.Persist.TH
-import Database.Persist.EntityDef
-import Database.Persist.GenericSql.Raw
 #ifndef WITH_MONGODB
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
+import Database.Persist.EntityDef
+import Database.Persist.GenericSql.Raw
+import qualified Data.Map as Map
 #endif
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
 #endif
-import qualified Data.Map as Map
 import qualified Data.Text as T
 
 import Init
@@ -45,11 +45,12 @@ Car
     deriving Show Eq
 |]
 
-specs :: Specs
+specs :: Spec
 specs = describe "sum types" $ do
     it "works" $ asIO $ runConn $ do
+#ifndef WITH_MONGODB
         _ <- runMigrationSilent sumTypeMigrate
-
+#endif
         car1 <- insert $ Car "Ford" "Thunderbird"
         car2 <- insert $ Car "Kia" "Rio"
         bike1 <- insert $ Bicycle "Shwinn"
