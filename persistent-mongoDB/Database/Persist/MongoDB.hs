@@ -17,6 +17,9 @@ module Database.Persist.MongoDB
     -- * Key conversion helpers
     , keyToOid
     , oidToKey
+    -- * Entity conversion
+    , entityToFields
+    , toInsertFields
     -- * network type
     , HostName
     -- * MongoDB driver types
@@ -160,38 +163,59 @@ pairFromDocument ent document = pairFromPersistValues document
             Right xs' -> Right (Entity (oidToKey . fromJust . DB.cast' . value $ x) xs')
     pairFromPersistValues _ = Left "error in fromPersistValues'"
 
-insertFields :: forall val.  (PersistEntity val) => EntityDef -> val -> [DB.Field]
-insertFields t record = zipFilter (entityFields t) (toPersistFields record)
+-- | convert a PersistEntity into document fields.
+-- for inserts only: nulls are ignored so they will be unset in the document.
+-- 'entityToFields' includes nulls
+toInsertFields :: forall val.  (PersistEntity val) => val -> [DB.Field]
+toInsertFields record = zipFilter (entityFields entity) (toPersistFields record)
   where
     zipFilter [] _  = []
     zipFilter _  [] = []
     zipFilter (e:efields) (p:pfields) = let pv = toPersistValue p in
         if pv == PersistNull then zipFilter efields pfields
           else (toLabel e DB.:= DB.val pv):zipFilter efields pfields
+    entity = entityDef record
 
-    toLabel = unDBName . fieldDB
+-- | convert a PersistEntity into document fields.
+-- unlike 'toInsertFields', nulls are included.
+entityToFields :: forall val.  (PersistEntity val) => val -> [DB.Field]
+entityToFields record = zipIt (entityFields entity) (toPersistFields record)
+  where
+    zipIt [] _  = []
+    zipIt _  [] = []
+    zipIt (e:efields) (p:pfields) =
+      let pv = toPersistValue p
+      in  (toLabel e DB.:= DB.val pv):zipIt efields pfields
+    entity = entityDef record
 
-saveWithKey :: forall m ent record. (Applicative m, Functor m, MonadBaseControl IO m, PersistEntity ent, PersistEntity record)
-            => (DB.Collection -> DB.Document -> DB.Action m () )
-            -> Key DB.Action ent -> record -> DB.Action m ()
-saveWithKey dbSave k record =
-      dbSave (unDBName $ entityDB t) ((keyToMongoIdField k):(insertFields t record))
+toLabel :: FieldDef -> Text
+toLabel = unDBName . fieldDB
+
+saveWithKey :: forall m record keyEntity. -- (Applicative m, Functor m, MonadBaseControl IO m,
+                                    (PersistEntity keyEntity, PersistEntity record)
+            => (record -> [DB.Field])
+            -> (DB.Collection -> DB.Document -> DB.Action m () )
+            -> Key DB.Action keyEntity
+            -> record
+            -> DB.Action m ()
+saveWithKey entToFields dbSave key record =
+      dbSave (unDBName $ entityDB entity) ((keyToMongoIdField key):(entToFields record))
     where
-      t = entityDef record
+      entity = entityDef record
 
 instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => PersistStore DB.Action m where
     insert record = do
-        (DB.ObjId oid) <- DB.insert (unDBName $ entityDB t) (insertFields t record)
+        DB.ObjId oid <- DB.insert (unDBName $ entityDB entity) (toInsertFields record)
         return $ oidToKey oid 
       where
-        t = entityDef record
+        entity = entityDef record
 
-    insertKey k record = saveWithKey DB.insert_ k record
+    insertKey k record = saveWithKey toInsertFields DB.insert_ k record
 
-    repsert   k record = saveWithKey DB.save k record
+    repsert   k record = saveWithKey entityToFields DB.save k record
 
     replace k record = do
-        DB.replace (selectByKey k t) (insertFields t record)
+        DB.replace (selectByKey k t) (toInsertFields record)
         return ()
       where
         t = entityDef record
@@ -248,11 +272,11 @@ findAndModifyOne :: (Applicative m, Trans.MonadIO m)
                  -> DB.ObjectId -- ^ _id for query
                  -> [DB.Field]  -- ^ updates
                  -> DB.Action m (Either String DB.Document)
-findAndModifyOne coll id updates = do
+findAndModifyOne coll objectId updates = do
   result <- DB.runCommand [
      "findAndModify" DB.:= DB.String coll,
      "new" DB.:= DB.Bool True, -- return updated document, not original document
-     "query" DB.:= DB.Doc [_id DB.:= DB.ObjId id],
+     "query" DB.:= DB.Doc [_id DB.:= DB.ObjId objectId],
      "update" DB.:= DB.Doc updates
    ]
   return $ case DB.lookup "err" (DB.at "lastErrorObject" result) result of

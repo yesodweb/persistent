@@ -19,8 +19,10 @@ import Init
 import Data.Text (Text)
 import Data.String (IsString)
 import Data.ByteString (ByteString)
+import Test.HUnit (Assertion)
 
 #ifdef WITH_MONGODB
+db :: Action IO () -> Assertion
 db = db' (return ())
 mkPersist persistSettings [persist|
 #else
@@ -36,7 +38,7 @@ share [mkPersist sqlSettings,  mkMigrate "maxlenMigrate"] [persist|
     deriving Show Eq
 |]
 
-specs :: Specs
+specs :: Spec
 specs = describe "Maximum length attribute" $ do
   it "" $ db $ do
     let t1  = MaxLen a a  a a  a a
