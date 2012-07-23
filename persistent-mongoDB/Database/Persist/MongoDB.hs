@@ -175,7 +175,7 @@ saveWithKey :: forall m ent record. (Applicative m, Functor m, MonadBaseControl 
             => (DB.Collection -> DB.Document -> DB.Action m () )
             -> Key DB.Action ent -> record -> DB.Action m ()
 saveWithKey dbSave k record =
-      dbSave (unDBName $ entityDB t) ((persistKeyToMongoId k):(insertFields t record))
+      dbSave (unDBName $ entityDB t) ((keyToMongoIdField k):(insertFields t record))
     where
       t = entityDef record
 
@@ -239,34 +239,43 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
 _id :: T.Text
 _id = "_id"
 
-persistKeyToMongoId :: PersistEntity val => Key DB.Action val -> DB.Field
-persistKeyToMongoId k = _id DB.:= (DB.ObjId $ keyToOid k)
+keyToMongoIdField :: PersistEntity val => Key DB.Action val -> DB.Field
+keyToMongoIdField k = _id DB.:= (DB.ObjId $ keyToOid k)
 
 
-findAndModifyOne :: (Applicative m, Trans.MonadIO m) => DB.Collection -> DB.Field -> [DB.Field] -> DB.Action m DB.Document
-findAndModifyOne coll idMatch updates = DB.runCommand [
+findAndModifyOne :: (Applicative m, Trans.MonadIO m)
+                 => DB.Collection
+                 -> DB.ObjectId -- ^ _id for query
+                 -> [DB.Field]  -- ^ updates
+                 -> DB.Action m (Either String DB.Document)
+findAndModifyOne coll id updates = do
+  result <- DB.runCommand [
      "findAndModify" DB.:= DB.String coll,
      "new" DB.:= DB.Bool True, -- return updated document, not original document
-     "query" DB.:= DB.Doc [idMatch],
+     "query" DB.:= DB.Doc [_id DB.:= DB.ObjId id],
      "update" DB.:= DB.Doc updates
    ]
+  return $ case DB.lookup "err" (DB.at "lastErrorObject" result) result of
+    Just e -> Left e
+    Nothing -> case DB.lookup "value" result of
+      Nothing -> Left "no value field"
+      Just doc -> Right doc
 
 instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => PersistQuery DB.Action m where
     update _ [] = return ()
     update key upds =
         DB.modify 
-           (DB.Select [persistKeyToMongoId key] (unDBName $ entityDB t))
+           (DB.Select [keyToMongoIdField key] (unDBName $ entityDB t))
            $ updateFields upds
       where
         t = entityDef $ dummyFromKey key
 
     updateGet key upds = do
-        result <- findAndModifyOne (unDBName $ entityDB t) (persistKeyToMongoId key) $ updateFields upds
-        case DB.lookup "err" (DB.at "lastErrorObject" result) result of
-          Just e -> err e
-          Nothing -> case DB.lookup "value" result of
-            Nothing -> err "no value field"
-            Just doc -> return $ rightPersistVals t (tail doc)
+        result <- findAndModifyOne (unDBName $ entityDB t)
+                   (keyToOid key) (updateFields upds)
+        case result of
+          Left e -> err e
+          Right doc -> return $ (rightPersistVals t) $ tail doc
       where
         err msg = Trans.liftIO $ throwIO $ KeyNotFound $ show key ++ msg
         t = entityDef $ dummyFromKey key
