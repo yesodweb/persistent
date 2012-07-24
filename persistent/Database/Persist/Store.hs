@@ -30,6 +30,8 @@ module Database.Persist.Store
     , PersistFilter (..)
     , SomePersistField (..)
 
+    , ZT (..) -- ZonedTime wrapper
+
     , insertBy
     , getByValue
     , getJust

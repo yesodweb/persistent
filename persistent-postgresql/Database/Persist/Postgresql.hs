@@ -220,7 +220,7 @@ instance PGTF.ToField P where
     toField (P (PersistDay d))         = PGTF.toField d
     toField (P (PersistTimeOfDay t))   = PGTF.toField t
     toField (P (PersistUTCTime t))     = PGTF.toField t
-    toField (P (PersistZonedTime t))   = PGTF.toField t
+    toField (P (PersistZonedTime (ZT t))) = PGTF.toField t
     toField (P PersistNull)            = PGTF.toField PG.Null
     toField (P (PersistList l))        = PGTF.toField $ listToJSON l
     toField (P (PersistMap m))         = PGTF.toField $ mapToJSON m
@@ -253,7 +253,7 @@ getGetter PG.Varchar               = convertPV PersistText
 getGetter PG.Date                  = convertPV PersistDay
 getGetter PG.Time                  = convertPV PersistTimeOfDay
 getGetter PG.Timestamp             = convertPV PersistUTCTime
-getGetter PG.TimestampWithTimeZone = convertPV PersistZonedTime
+getGetter PG.TimestampWithTimeZone = convertPV (PersistZonedTime . ZT)
 getGetter PG.Bit                   = convertPV PersistInt64
 getGetter PG.Varbit                = convertPV PersistInt64
 getGetter PG.Numeric               = convertPV (PersistDouble . fromRational)
