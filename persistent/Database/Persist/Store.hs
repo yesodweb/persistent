@@ -30,6 +30,8 @@ module Database.Persist.Store
     , PersistFilter (..)
     , SomePersistField (..)
 
+    , ZT (..) -- ZonedTime wrapper
+
     , insertBy
     , getByValue
     , getJust
@@ -55,6 +57,7 @@ import qualified Prelude
 import Prelude hiding ((++), show)
 import Data.Monoid (mappend)
 import Data.Time (Day, TimeOfDay, UTCTime)
+import Data.Time.LocalTime (ZonedTime, zonedTimeToUTC, zonedTimeToLocalTime, zonedTimeZone)
 import Data.ByteString.Char8 (ByteString, unpack)
 import Control.Applicative
 import Data.Typeable (Typeable)
@@ -116,6 +119,14 @@ instance E.Exception PersistException
 instance Error PersistException where
     strMsg = PersistError . T.pack
 
+-- | Avoid orphan instances.
+newtype ZT = ZT ZonedTime deriving (Show, Read, Typeable)
+
+instance Eq ZT where
+    ZT a /= ZT b = zonedTimeToLocalTime a /= zonedTimeToLocalTime b || zonedTimeZone a /= zonedTimeZone b
+instance Ord ZT where
+    ZT a `compare` ZT b = zonedTimeToUTC a `compare` zonedTimeToUTC b
+
 -- | A raw value which can be stored in any backend and can be marshalled to
 -- and from a 'PersistField'.
 data PersistValue = PersistText T.Text
@@ -126,6 +137,7 @@ data PersistValue = PersistText T.Text
                   | PersistDay Day
                   | PersistTimeOfDay TimeOfDay
                   | PersistUTCTime UTCTime
+                  | PersistZonedTime ZT
                   | PersistNull
                   | PersistList [PersistValue]
                   | PersistMap [(T.Text, PersistValue)]
@@ -151,6 +163,7 @@ instance A.ToJSON PersistValue where
     toJSON (PersistBool b) = A.Bool b
     toJSON (PersistTimeOfDay t) = A.String $ T.cons 't' $ show t
     toJSON (PersistUTCTime u) = A.String $ T.cons 'u' $ show u
+    toJSON (PersistZonedTime z) = A.String $ T.cons 'z' $ show z
     toJSON (PersistDay d) = A.String $ T.cons 'd' $ show d
     toJSON PersistNull = A.Null
     toJSON (PersistList l) = A.Array $ V.fromList $ map A.toJSON l
@@ -166,6 +179,7 @@ instance A.FromJSON PersistValue where
                            $ B64.decode $ TE.encodeUtf8 t
             Just ('t', t) -> fmap PersistTimeOfDay $ readMay t
             Just ('u', t) -> fmap PersistUTCTime $ readMay t
+            Just ('z', t) -> fmap PersistZonedTime $ readMay t
             Just ('d', t) -> fmap PersistDay $ readMay t
             Just ('o', t) -> either (fail "Invalid base64") (return . PersistObjectId)
                            $ B64.decode $ TE.encodeUtf8 t
@@ -197,6 +211,7 @@ data SqlType = SqlString
              | SqlDay
              | SqlTime
              | SqlDayTime
+             | SqlDayTimeZoned
              | SqlBlob
              | SqlOther T.Text -- ^ a backend-specific name
     deriving (Show, Read, Eq, Typeable, Ord)
@@ -220,6 +235,7 @@ instance PersistField String where
     fromPersistValue (PersistDay d) = Right $ Prelude.show d
     fromPersistValue (PersistTimeOfDay d) = Right $ Prelude.show d
     fromPersistValue (PersistUTCTime d) = Right $ Prelude.show d
+    fromPersistValue (PersistZonedTime (ZT z)) = Right $ Prelude.show z
     fromPersistValue PersistNull = Left "Unexpected null"
     fromPersistValue (PersistBool b) = Right $ Prelude.show b
     fromPersistValue (PersistList _) = Left "Cannot convert PersistList to String"
@@ -244,6 +260,7 @@ instance PersistField T.Text where
     fromPersistValue (PersistDay d) = Right $ show d
     fromPersistValue (PersistTimeOfDay d) = Right $ show d
     fromPersistValue (PersistUTCTime d) = Right $ show d
+    fromPersistValue (PersistZonedTime (ZT z)) = Right $ show z
     fromPersistValue PersistNull = Left "Unexpected null"
     fromPersistValue (PersistBool b) = Right $ show b
     fromPersistValue (PersistList _) = Left "Cannot convert PersistList to Text"
@@ -366,6 +383,20 @@ instance PersistField UTCTime where
             _ -> Left $ "Expected UTCTime, received " ++ show x
     fromPersistValue x = Left $ "Expected UTCTime, received: " ++ show x
     sqlType _ = SqlDayTime
+
+instance PersistField ZonedTime where
+    toPersistValue = PersistZonedTime . ZT
+    fromPersistValue (PersistZonedTime (ZT z)) = Right z
+    fromPersistValue x@(PersistText t) =
+        case reads $ T.unpack t of
+            (z, _):_ -> Right z
+            _ -> Left $ "Expected ZonedTime, received " ++ show x
+    fromPersistValue x@(PersistByteString s) =
+        case reads $ unpack s of
+            (z, _):_ -> Right z
+            _ -> Left $ "Expected ZonedTime, received " ++ show x
+    fromPersistValue x = Left $ "Expected ZonedTime, received: " ++ show x
+    sqlType _ = SqlDayTimeZoned
 
 instance PersistField a => PersistField (Maybe a) where
     toPersistValue Nothing = PersistNull
