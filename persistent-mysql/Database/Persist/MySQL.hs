@@ -28,7 +28,7 @@ import Data.Function (on)
 import Data.IORef
 import Data.List (find, intercalate, sort, groupBy)
 import Data.Text (Text, pack)
--- import Data.Time.LocalTime (localTimeToUTC, utc)
+import Data.Time.LocalTime (zonedTimeToUTC)
 import System.Environment (getEnvironment)
 
 import Data.Conduit
@@ -196,6 +196,7 @@ instance MySQL.Param P where
     render (P (PersistDay d))         = MySQL.render d
     render (P (PersistTimeOfDay t))   = MySQL.render t
     render (P (PersistUTCTime t))     = MySQL.render t
+    render (P (PersistZonedTime (ZT t))) = MySQL.render $ zonedTimeToUTC t
     render (P PersistNull)            = MySQL.render MySQL.Null
     render (P (PersistList l))        = MySQL.render $ listToJSON l
     render (P (PersistMap m))         = MySQL.render $ mapToJSON m
@@ -590,6 +591,7 @@ showSqlType SqlBlob    (Just i) = "VARBINARY(" ++ show i ++ ")"
 showSqlType SqlBool    _        = "TINYINT(1)"
 showSqlType SqlDay     _        = "DATE"
 showSqlType SqlDayTime _        = "DATETIME"
+showSqlType SqlDayTimeZoned _        = "DATETIME"
 showSqlType SqlInt32   _        = "INT"
 showSqlType SqlInt64   _        = "BIGINT"
 showSqlType SqlReal    _        = "DOUBLE PRECISION"

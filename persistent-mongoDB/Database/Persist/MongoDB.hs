@@ -54,6 +54,7 @@ import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value (Object), (.:), (.:?), (.!=))
 import Control.Monad (mzero)
 import Control.Monad.Trans.Control (MonadBaseControl)
+import Data.Time (zonedTimeToUTC)
 
 #ifdef DEBUG
 import FileLocation (debug)
@@ -445,6 +446,7 @@ instance DB.Val PersistValue where
   val (PersistDouble x)  = DB.Float x
   val (PersistBool x)    = DB.Bool x
   val (PersistUTCTime x) = DB.UTC x
+  val (PersistZonedTime (ZT x)) = DB.UTC (zonedTimeToUTC x)
   val (PersistNull)      = DB.Null
   val (PersistList l)    = DB.Array $ map DB.val l
   val (PersistMap  m)    = DB.Doc $ map (\(k, v)-> (DB.=:) k v) m
