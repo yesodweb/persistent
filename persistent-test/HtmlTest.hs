@@ -37,7 +37,7 @@ cleanDB :: PersistQuery b m => b m ()
 cleanDB = do
   deleteWhere ([] :: [Filter HtmlTable])
 
-specs :: Specs
+specs :: Spec
 specs = describe "html" $ do
     it "works" $ asIO $ runConn $ do
 #ifndef WITH_MONGODB

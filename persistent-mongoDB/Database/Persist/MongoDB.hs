@@ -17,6 +17,9 @@ module Database.Persist.MongoDB
     -- * Key conversion helpers
     , keyToOid
     , oidToKey
+    -- * Entity conversion
+    , entityToFields
+    , toInsertFields
     -- * network type
     , HostName
     -- * MongoDB driver types
@@ -118,7 +121,7 @@ rightPersistVals ent vals = case wrapFromPersistValues ent vals of
       Right v -> v
 
 filterByKey :: (PersistEntity val) => Key DB.Action val -> DB.Document
-filterByKey k = ["_id" DB.=: keyToOid k]
+filterByKey k = [_id DB.=: keyToOid k]
 
 queryByKey :: (PersistEntity val) => Key DB.Action val -> EntityDef -> DB.Query 
 queryByKey k entity = (DB.select (filterByKey k) (unDBName $ entityDB entity)) 
@@ -161,38 +164,59 @@ pairFromDocument ent document = pairFromPersistValues document
             Right xs' -> Right (Entity (oidToKey . fromJust . DB.cast' . value $ x) xs')
     pairFromPersistValues _ = Left "error in fromPersistValues'"
 
-insertFields :: forall val.  (PersistEntity val) => EntityDef -> val -> [DB.Field]
-insertFields t record = zipFilter (entityFields t) (toPersistFields record)
+-- | convert a PersistEntity into document fields.
+-- for inserts only: nulls are ignored so they will be unset in the document.
+-- 'entityToFields' includes nulls
+toInsertFields :: forall val.  (PersistEntity val) => val -> [DB.Field]
+toInsertFields record = zipFilter (entityFields entity) (toPersistFields record)
   where
     zipFilter [] _  = []
     zipFilter _  [] = []
     zipFilter (e:efields) (p:pfields) = let pv = toPersistValue p in
         if pv == PersistNull then zipFilter efields pfields
           else (toLabel e DB.:= DB.val pv):zipFilter efields pfields
+    entity = entityDef record
 
-    toLabel = unDBName . fieldDB
+-- | convert a PersistEntity into document fields.
+-- unlike 'toInsertFields', nulls are included.
+entityToFields :: forall val.  (PersistEntity val) => val -> [DB.Field]
+entityToFields record = zipIt (entityFields entity) (toPersistFields record)
+  where
+    zipIt [] _  = []
+    zipIt _  [] = []
+    zipIt (e:efields) (p:pfields) =
+      let pv = toPersistValue p
+      in  (toLabel e DB.:= DB.val pv):zipIt efields pfields
+    entity = entityDef record
 
-saveWithKey :: forall m ent record. (Applicative m, Functor m, MonadBaseControl IO m, PersistEntity ent, PersistEntity record)
-            => (DB.Collection -> DB.Document -> DB.Action m () )
-            -> Key DB.Action ent -> record -> DB.Action m ()
-saveWithKey dbSave k record =
-      dbSave (unDBName $ entityDB t) ((persistKeyToMongoId k):(insertFields t record))
+toLabel :: FieldDef -> Text
+toLabel = unDBName . fieldDB
+
+saveWithKey :: forall m record keyEntity. -- (Applicative m, Functor m, MonadBaseControl IO m,
+                                    (PersistEntity keyEntity, PersistEntity record)
+            => (record -> [DB.Field])
+            -> (DB.Collection -> DB.Document -> DB.Action m () )
+            -> Key DB.Action keyEntity
+            -> record
+            -> DB.Action m ()
+saveWithKey entToFields dbSave key record =
+      dbSave (unDBName $ entityDB entity) ((keyToMongoIdField key):(entToFields record))
     where
-      t = entityDef record
+      entity = entityDef record
 
 instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => PersistStore DB.Action m where
     insert record = do
-        (DB.ObjId oid) <- DB.insert (unDBName $ entityDB t) (insertFields t record)
+        DB.ObjId oid <- DB.insert (unDBName $ entityDB entity) (toInsertFields record)
         return $ oidToKey oid 
       where
-        t = entityDef record
+        entity = entityDef record
 
-    insertKey k record = saveWithKey DB.insert_ k record
+    insertKey k record = saveWithKey toInsertFields DB.insert_ k record
 
-    repsert   k record = saveWithKey DB.save k record
+    repsert   k record = saveWithKey entityToFields DB.save k record
 
     replace k record = do
-        DB.replace (selectByKey k t) (insertFields t record)
+        DB.replace (selectByKey k t) (toInsertFields record)
         return ()
       where
         t = entityDef record
@@ -237,17 +261,50 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
       where
         t = entityDef $ dummyFromUnique uniq
 
-persistKeyToMongoId :: PersistEntity val => Key DB.Action val -> DB.Field
-persistKeyToMongoId k = "_id" DB.:= (DB.ObjId $ keyToOid k)
+_id :: T.Text
+_id = "_id"
+
+keyToMongoIdField :: PersistEntity val => Key DB.Action val -> DB.Field
+keyToMongoIdField k = _id DB.:= (DB.ObjId $ keyToOid k)
+
+
+findAndModifyOne :: (Applicative m, Trans.MonadIO m)
+                 => DB.Collection
+                 -> DB.ObjectId -- ^ _id for query
+                 -> [DB.Field]  -- ^ updates
+                 -> DB.Action m (Either String DB.Document)
+findAndModifyOne coll objectId updates = do
+  result <- DB.runCommand [
+     "findAndModify" DB.:= DB.String coll,
+     "new" DB.:= DB.Bool True, -- return updated document, not original document
+     "query" DB.:= DB.Doc [_id DB.:= DB.ObjId objectId],
+     "update" DB.:= DB.Doc updates
+   ]
+  return $ case DB.lookup "err" (DB.at "lastErrorObject" result) result of
+    Just e -> Left e
+    Nothing -> case DB.lookup "value" result of
+      Nothing -> Left "no value field"
+      Just doc -> Right doc
 
 instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => PersistQuery DB.Action m where
     update _ [] = return ()
-    update k upds =
+    update key upds =
         DB.modify 
-           (DB.Select [persistKeyToMongoId k]  (unDBName $ entityDB t)) 
+           (DB.Select [keyToMongoIdField key] (unDBName $ entityDB t))
            $ updateFields upds
       where
-        t = entityDef $ dummyFromKey k
+        t = entityDef $ dummyFromKey key
+
+    updateGet key upds = do
+        result <- findAndModifyOne (unDBName $ entityDB t)
+                   (keyToOid key) (updateFields upds)
+        case result of
+          Left e -> err e
+          Right doc -> return $ (rightPersistVals t) $ tail doc
+      where
+        err msg = Trans.liftIO $ throwIO $ KeyNotFound $ show key ++ msg
+        t = entityDef $ dummyFromKey key
+
 
     updateWhere _ [] = return ()
     updateWhere filts upds =
@@ -312,7 +369,7 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
                     pull cursor
                 Just y -> liftIO $ throwIO $ PersistMarshalError $ T.pack $ "Unexpected in selectKeys: " ++ show y
         query = (DB.select (filtersToSelector filts) (unDBName $ entityDB t)) {
-          DB.project = ["_id" DB.=: (1 :: Int)]
+          DB.project = [_id DB.=: (1 :: Int)]
         }
         t = entityDef $ dummyFromFilts filts
 
@@ -354,7 +411,7 @@ filterToDocument f =
       FilterOr [] -> -- Michael decided to follow Haskell's semantics, which seems reasonable to me.
                      -- in Haskell an empty or is a False
                      -- Perhaps there is a less hacky way of creating a query that always returns false?
-                     ["$not" DB.=: ["$exists" DB.=: ("_id" :: T.Text)]]
+                     ["$not" DB.=: ["$exists" DB.=: _id]]
       FilterOr fs  -> multiFilter "$or" fs
       -- $and is usually unecessary but makes query construction easier in special cases
       FilterAnd [] -> []
@@ -378,7 +435,7 @@ filterToDocument f =
 
 fieldName ::  forall v typ.  (PersistEntity v) => EntityField v typ -> DB.Label
 fieldName = idfix . unDBName . fieldDB . persistFieldDef
-  where idfix f = if f == "id" then "_id" else f
+  where idfix f = if f == "id" then _id else f
 
 
 wrapFromPersistValues :: (PersistEntity val) => EntityDef -> [DB.Field] -> Either T.Text val

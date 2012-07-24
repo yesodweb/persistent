@@ -9,7 +9,7 @@ import qualified EmbedTest
 import qualified LargeNumberTest
 import qualified MaxLenTest
 import qualified SumTypeTest
-import Test.Hspec.Monadic (hspecX)
+import Test.Hspec.Monadic (hspec)
 import Init
 import System.Exit
 import Control.Monad (unless)
@@ -45,7 +45,7 @@ main = do
   runConn (setup MaxLenTest.maxlenMigrate)
 #endif
 
-  hspecX $
+  hspec $
     RenameTest.specs >>
     DataTypeTest.specs >>
     HtmlTest.specs >>

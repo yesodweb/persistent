@@ -53,7 +53,7 @@ db = db' cleanDB
 #endif
 
 
-specs :: Specs
+specs :: Spec
 specs = describe "joins" $ do
   it "NoSql" $ db $ joinGeneric Database.Persist.Query.Join.runJoin False
 #ifndef WITH_MONGODB

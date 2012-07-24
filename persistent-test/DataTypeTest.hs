@@ -52,7 +52,7 @@ cleanDB :: PersistQuery b m => b m ()
 cleanDB = do
   deleteWhere ([] :: [Filter DataTypeTable])
 
-specs :: Specs
+specs :: Spec
 specs = describe "data type specs" $ do
     it "handles all types" $ asIO $ runConn $ do
 #ifndef WITH_MONGODB

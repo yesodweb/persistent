@@ -11,6 +11,7 @@ module LargeNumberTest where
 
 import Init
 import Data.Word
+import Test.HUnit (Assertion)
 
 #ifdef WITH_MONGODB
 mkPersist persistSettings [persist|
@@ -26,13 +27,14 @@ share [mkPersist sqlSettings,  mkMigrate "numberMigrate"] [persist|
     deriving Show Eq
 |]
 #ifdef WITH_MONGODB
-db = db' cleanDB
 cleanDB :: PersistQuery b m => b m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Number])
+db :: Action IO () -> Assertion
+db = db' cleanDB
 #endif
 
-specs :: Specs
+specs :: Spec
 specs = describe "persistent" $ do
   it "large numbers" $ db $ do
       let go x = do

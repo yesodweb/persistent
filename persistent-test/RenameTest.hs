@@ -16,10 +16,10 @@ import Test.HUnit
 import Database.Persist.Sqlite
 import Database.Persist.TH
 import Database.Persist.EntityDef
-import Database.Persist.GenericSql.Raw
 #ifndef WITH_MONGODB
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
+import Database.Persist.GenericSql.Raw
 #endif
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
@@ -49,7 +49,7 @@ RefTable
     UniqueRefTable someVal
 |]
 
-specs :: Specs
+specs :: Spec
 specs = describe "rename specs" $ do
 #ifndef WITH_MONGODB
     it "handles lower casing" $ asIO $ do

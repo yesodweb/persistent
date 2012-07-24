@@ -153,7 +153,7 @@ maybeOwnedPetOwner = belongsTo maybeOwnedPetOwnerId
 
 
 
-specs :: Specs
+specs :: Spec
 specs = describe "persistent" $ do
   it "FilterOr []" $ db $ do
       let p = Person "z" 1 Nothing
@@ -200,8 +200,7 @@ specs = describe "persistent" $ do
       results' <- selectList [PersonAge <. 28] []
       results' @== [(Entity micK mic26)]
 
-      update micK [PersonAge =. 28]
-      Just p28 <- get micK
+      p28 <- updateGet micK [PersonAge =. 28]
       personAge p28 @== 28
 
       updateWhere [PersonName ==. "Michael"] [PersonAge =. 29]
@@ -397,18 +396,15 @@ specs = describe "persistent" $ do
   it "update" $ db $ do
       let p25 = Person "Michael" 25 Nothing
       key25 <- insert p25
-      update key25 [PersonAge =. 28, PersonName =. "Updated"]
-      Just pBlue28 <- get key25
+      pBlue28 <- updateGet key25 [PersonAge =. 28, PersonName =. "Updated"]
       pBlue28 @== Person "Updated" 28 Nothing
-      update key25 [PersonAge +=. 2]
-      Just pBlue30 <- get key25
+      pBlue30 <- updateGet key25 [PersonAge +=. 2]
       pBlue30 @== Person "Updated" 30 Nothing
 
   it "maybe update" $ db $ do
       let noAge = PersonMaybeAge "Michael" Nothing
       keyNoAge <- insert noAge
-      update keyNoAge [PersonMaybeAgeAge +=. Just 2]
-      Just noAge2 <- get keyNoAge
+      noAge2 <- updateGet keyNoAge [PersonMaybeAgeAge +=. Just 2]
       -- the correct answer is very debatable
 #ifdef WITH_MONGODB
       personMaybeAgeAge noAge2 @== Just 2
