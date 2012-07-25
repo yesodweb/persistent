@@ -28,7 +28,6 @@ library
                    , path-pieces        >= 0.1     && < 0.2
                    , monad-control      >= 0.3     && < 0.4
                    , aeson              >= 0.5
-                   , time
 
     exposed-modules: Database.Persist.MongoDB
     ghc-options:     -Wall
