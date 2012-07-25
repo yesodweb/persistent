@@ -34,7 +34,6 @@ import qualified Data.ByteString.Internal as BSI
 import Foreign
 import Foreign.C
 import Database.Persist.Store (PersistValue (..), listToJSON, mapToJSON, ZT (ZT))
-import Data.Time (zonedTimeToUTC)
 import Data.Text (Text, pack, unpack)
 import Data.Text.Encoding (encodeUtf8, decodeUtf8With)
 import Data.Text.Encoding.Error (lenientDecode)
@@ -342,7 +341,7 @@ bind statement sqlData = do
             PersistDay d -> bindText statement parameterIndex $ pack $ show d
             PersistTimeOfDay d -> bindText statement parameterIndex $ pack $ show d
             PersistUTCTime d -> bindText statement parameterIndex $ pack $ show d
-            PersistZonedTime (ZT d) -> bindText statement parameterIndex $ pack $ show $ zonedTimeToUTC d
+            PersistZonedTime (ZT d) -> bindText statement parameterIndex $ pack $ show d
             PersistList l -> bindText statement parameterIndex $ listToJSON l
             PersistMap m -> bindText statement parameterIndex $ mapToJSON m
             PersistObjectId _ -> P.error "Refusing to serialize a PersistObjectId to a SQLite value"
