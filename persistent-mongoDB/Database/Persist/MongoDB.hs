@@ -355,7 +355,9 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
       where
         t = entityDef $ dummyFromFilts filts
 
-    selectKeys filts = do
+    selectKeys filts {- opts -} = do
+     -- new selectKeys implementation with options
+     -- cursor <- lift $ lift $ DB.find $ makeQuery filts opts
         cursor <- lift $ lift $ DB.find query
         pull cursor
       where
