@@ -17,7 +17,7 @@ extra-source-files:
   test/from-cabal
 
 Flag mongodb
-   Description: test only MongoDB.
+   Description: test only MongoDB.  default is to test just sqlite.
    Default: False
 
 Flag postgresql
@@ -25,7 +25,7 @@ Flag postgresql
    Default: False
 
 Flag mysql
-   Description: test MySQL
+   Description: test MySQL. default is to test just sqlite.
    Default: False
 
 library

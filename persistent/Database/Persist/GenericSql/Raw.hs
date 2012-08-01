@@ -40,10 +40,10 @@ newtype SqlPersist m a = SqlPersist { unSqlPersist :: ReaderT Connection m a }
 instance MonadThrow m => MonadThrow (SqlPersist m) where
     monadThrow = lift . monadThrow
 
-instance MonadBase b m => MonadBase b (SqlPersist m) where
+instance MonadBase backend m => MonadBase backend (SqlPersist m) where
     liftBase = lift . liftBase
 
-instance MonadBaseControl b m => MonadBaseControl b (SqlPersist m) where
+instance MonadBaseControl backend m => MonadBaseControl backend (SqlPersist m) where
      newtype StM (SqlPersist m) a = StMSP {unStMSP :: ComposeSt SqlPersist m a}
      liftBaseWith = defaultLiftBaseWith StMSP
      restoreM     = defaultRestoreM   unStMSP

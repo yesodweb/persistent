@@ -36,39 +36,39 @@ instance Show UpdateGetException where
     show (KeyNotFound key) = "Key not found during updateGet: " ++ key
 instance Exception UpdateGetException
 
-class PersistStore b m => PersistQuery b m where
+class PersistStore backend m => PersistQuery backend m where
     -- | Update individual fields on a specific record.
-    update :: PersistEntity val => Key b val -> [Update val] -> b m ()
+    update :: PersistEntity val => Key backend val -> [Update val] -> backend m ()
 
     -- | Update individual fields on a specific record, and retrieve the
     -- updated value from the database.
     --
     -- Note that this function will throw an exception if the given key is not
     -- found in the database.
-    updateGet :: PersistEntity val => Key b val -> [Update val] -> b m val
+    updateGet :: PersistEntity val => Key backend val -> [Update val] -> backend m val
     updateGet key ups = do
         update key ups
         get key >>= maybe (liftBase $ throwIO $ KeyNotFound $ show key) return
 
     -- | Update individual fields on any record matching the given criterion.
-    updateWhere :: PersistEntity val => [Filter val] -> [Update val] -> b m ()
+    updateWhere :: PersistEntity val => [Filter val] -> [Update val] -> backend m ()
 
     -- | Delete all records matching the given criterion.
-    deleteWhere :: PersistEntity val => [Filter val] -> b m ()
+    deleteWhere :: PersistEntity val => [Filter val] -> backend m ()
 
     -- | Get all records matching the given criterion in the specified order.
     -- Returns also the identifiers.
     selectSource
-           :: (PersistEntity val, PersistEntityBackend val ~ b)
+           :: (PersistEntity val, PersistEntityBackend val ~ backend)
            => [Filter val]
            -> [SelectOpt val]
-           -> C.Source (C.ResourceT (b m)) (Entity val)
+           -> C.Source (C.ResourceT (backend m)) (Entity val)
 
     -- | get just the first record for the criterion
-    selectFirst :: (PersistEntity val, PersistEntityBackend val ~ b)
+    selectFirst :: (PersistEntity val, PersistEntityBackend val ~ backend)
                 => [Filter val]
                 -> [SelectOpt val]
-                -> b m (Maybe (Entity val))
+                -> backend m (Maybe (Entity val))
     selectFirst filts opts = C.runResourceT
         $ selectSource filts ((LimitTo 1):opts) C.$$ CL.head
 
@@ -77,10 +77,10 @@ class PersistStore b m => PersistQuery b m where
     selectKeys :: PersistEntity val
                => [Filter val]
                -> [SelectOpt val]
-               -> C.Source (C.ResourceT (b m)) (Key b val)
+               -> C.Source (C.ResourceT (backend m)) (Key backend val)
 
     -- | The total number of records fulfilling the given criterion.
-    count :: PersistEntity val => [Filter val] -> b m Int
+    count :: PersistEntity val => [Filter val] -> backend m Int
 
 -- | Filters which are available for 'select', 'updateWhere' and
 -- 'deleteWhere'. Each filter constructor specifies the field being
@@ -101,10 +101,10 @@ data SelectOpt v = forall typ. Asc (EntityField v typ)
                  | LimitTo Int
 
 -- | Call 'select' but return the result as a list.
-selectList :: (PersistEntity val, PersistQuery b m, PersistEntityBackend val ~ b)
+selectList :: (PersistEntity val, PersistQuery backend m, PersistEntityBackend val ~ backend)
            => [Filter val]
            -> [SelectOpt val]
-           -> b m [Entity val]
+           -> backend m [Entity val]
 selectList a b = C.runResourceT $ selectSource a b C.$$ CL.consume
 
 data PersistUpdate = Assign | Add | Subtract | Multiply | Divide -- FIXME need something else here
@@ -127,7 +127,7 @@ limitOffsetOrder opts =
 updateFieldDef :: PersistEntity v => Update v -> FieldDef
 updateFieldDef (Update f _ _) = persistFieldDef f
 
-deleteCascadeWhere :: (DeleteCascade a b m, PersistQuery b m)
-                   => [Filter a] -> b m ()
+deleteCascadeWhere :: (DeleteCascade a backend m, PersistQuery backend m)
+                   => [Filter a] -> backend m ()
 deleteCascadeWhere filts = do
     C.runResourceT $ selectKeys filts [] C.$$ CL.mapM_ (lift . deleteCascade)

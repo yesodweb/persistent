@@ -58,7 +58,7 @@ share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persist|
     deriving Show Eq Read Ord
 |]
 #ifdef WITH_MONGODB
-cleanDB :: PersistQuery b m => b m ()
+cleanDB :: PersistQuery backend m => backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter HasEmbed])
   deleteWhere ([] :: [Filter HasEmbeds])

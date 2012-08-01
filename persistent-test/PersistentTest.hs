@@ -133,7 +133,7 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persis
     verkey Text Maybe
     UniqueEmail email
 |]
-cleanDB :: PersistQuery b m => b m ()
+cleanDB :: PersistQuery backend m => backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Person])
   deleteWhere ([] :: [Filter Person1])
@@ -148,10 +148,10 @@ db :: Action IO () -> Assertion
 db = db' cleanDB
 #endif
 
-petOwner :: PersistStore b m => PetGeneric b -> b m (PersonGeneric b)
+petOwner :: PersistStore backend m => PetGeneric backend -> backend m (PersonGeneric backend)
 petOwner = belongsToJust petOwnerId
 
-maybeOwnedPetOwner :: PersistStore b m => MaybeOwnedPetGeneric b -> b m (Maybe (PersonGeneric b))
+maybeOwnedPetOwner :: PersistStore backend m => MaybeOwnedPetGeneric backend -> backend m (Maybe (PersonGeneric backend))
 maybeOwnedPetOwner = belongsTo maybeOwnedPetOwnerId
 
 
@@ -605,7 +605,7 @@ specs = describe "persistent" $ do
       liftIO $ ret @?= [Single (2::Int)]
 
   it "rawSql/entity" $ db $ do
-      let insert' :: (PersistStore b m, PersistEntity val) => val -> b m (Key b val, val)
+      let insert' :: (PersistStore backend m, PersistEntity val) => val -> backend m (Key backend val, val)
           insert' v = insert v >>= \k -> return (k, v)
       (p1k, p1) <- insert' $ Person "Mathias"   23 Nothing
       (p2k, p2) <- insert' $ Person "Norbert"   44 Nothing
@@ -719,7 +719,7 @@ caseAfterException = withSqlitePool sqlite_database 1 $ runSqlPool $ do
 #endif
 
 -- Test proper polymorphism
-_polymorphic :: PersistQuery b m => b m ()
+_polymorphic :: PersistQuery backend m => backend m ()
 _polymorphic = do
     ((Entity id' _):_) <- selectList [] [LimitTo 1]
     _ <- selectList [PetOwnerId ==. id'] []

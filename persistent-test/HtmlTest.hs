@@ -33,7 +33,7 @@ HtmlTable
     deriving
 |]
 
-cleanDB :: PersistQuery b m => b m ()
+cleanDB :: PersistQuery backend m => backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter HtmlTable])
 

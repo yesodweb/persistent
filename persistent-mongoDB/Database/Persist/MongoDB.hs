@@ -105,7 +105,7 @@ withMongoDBPool dbname hostname mauth connectionPoolSize connectionReader = do
   pool <- createMongoDBPool dbname hostname mauth connectionPoolSize
   connectionReader pool
 
-runMongoDBConn :: (Trans.MonadIO m) => DB.AccessMode  ->  DB.Action m b -> ConnectionPool -> m b
+runMongoDBConn :: (Trans.MonadIO m) => DB.AccessMode  ->  DB.Action m backend -> ConnectionPool -> m backend
 runMongoDBConn accessMode action (pool, databaseName) = do
   pipe <- Trans.liftIO $ DB.runIOE $ Pool.aResource pool
   res  <- DB.access pipe accessMode databaseName action

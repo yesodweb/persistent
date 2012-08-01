@@ -539,44 +539,44 @@ data Entity entity =
            , entityVal :: entity }
     deriving (Eq, Ord, Show, Read)
 
-class (MonadBaseControl IO m, MonadBaseControl IO (b m)) => PersistStore b m where
+class (MonadBaseControl IO m, MonadBaseControl IO (backend m)) => PersistStore backend m where
 
     -- | Create a new record in the database, returning an automatically created
     -- key (in SQL an auto-increment id).
-    insert :: PersistEntity val => val -> b m (Key b val)
+    insert :: PersistEntity val => val -> backend m (Key backend val)
 
     -- | Create a new record in the database using the given key.
-    insertKey :: PersistEntity val => Key b val -> val -> b m ()
+    insertKey :: PersistEntity val => Key backend val -> val -> backend m ()
 
     -- | Put the record in the database with the given key.
     -- Unlike 'replace', if a record with the given key does not
     -- exist then a new record will be inserted.
-    repsert :: PersistEntity val => Key b val -> val -> b m ()
+    repsert :: PersistEntity val => Key backend val -> val -> backend m ()
 
     -- | Replace the record in the database with the given
     -- key. Note that the result is undefined if such record does
     -- not exist, so you must use 'insertKey' or 'repsert' in
     -- these cases.
-    replace :: PersistEntity val => Key b val -> val -> b m ()
+    replace :: PersistEntity val => Key backend val -> val -> backend m ()
 
     -- | Delete a specific record by identifier. Does nothing if record does
     -- not exist.
-    delete :: PersistEntity val => Key b val -> b m ()
+    delete :: PersistEntity val => Key backend val -> backend m ()
 
     -- | Get a record by identifier, if available.
-    get :: PersistEntity val => Key b val -> b m (Maybe val)
+    get :: PersistEntity val => Key backend val -> backend m (Maybe val)
 
-class PersistStore b m => PersistUnique b m where
+class PersistStore backend m => PersistUnique backend m where
     -- | Get a record by unique key, if available. Returns also the identifier.
-    getBy :: (PersistEntityBackend val ~ b, PersistEntity val) => Unique val b -> b m (Maybe (Entity val))
+    getBy :: (PersistEntityBackend val ~ backend, PersistEntity val) => Unique val backend -> backend m (Maybe (Entity val))
 
     -- | Delete a specific record by unique key. Does nothing if no record
     -- matches.
-    deleteBy :: PersistEntity val => Unique val b -> b m ()
+    deleteBy :: PersistEntity val => Unique val backend -> backend m ()
 
     -- | Like 'insert', but returns 'Nothing' when the record
     -- couldn't be inserted because of a uniqueness constraint.
-    insertUnique :: (b ~ PersistEntityBackend val, PersistEntity val) => val -> b m (Maybe (Key b val))
+    insertUnique :: (backend ~ PersistEntityBackend val, PersistEntity val) => val -> backend m (Maybe (Key backend val))
     insertUnique datum = do
         isUnique <- checkUnique datum
         if isUnique then Just `liftM` insert datum else return Nothing
@@ -586,8 +586,8 @@ class PersistStore b m => PersistUnique b m where
 -- | Insert a value, checking for conflicts with any unique constraints.  If a
 -- duplicate exists in the database, it is returned as 'Left'. Otherwise, the
 -- new 'Key' is returned as 'Right'.
-insertBy :: (PersistEntity v, PersistStore b m, PersistUnique b m, b ~ PersistEntityBackend v)
-          => v -> b m (Either (Entity v) (Key b v))
+insertBy :: (PersistEntity v, PersistStore backend m, PersistUnique backend m, backend ~ PersistEntityBackend v)
+          => v -> backend m (Either (Entity v) (Key backend v))
 insertBy val =
     go $ persistUniqueKeys val
   where
@@ -602,8 +602,8 @@ insertBy val =
 -- of a 'Unique' value. Returns a value matching /one/ of the unique keys. This
 -- function makes the most sense on entities with a single 'Unique'
 -- constructor.
-getByValue :: (PersistEntity v, PersistUnique b m, PersistEntityBackend v ~ b)
-           => v -> b m (Maybe (Entity v))
+getByValue :: (PersistEntity v, PersistUnique backend m, PersistEntityBackend v ~ backend)
+           => v -> backend m (Maybe (Entity v))
 getByValue val =
     go $ persistUniqueKeys val
   where
@@ -617,23 +617,23 @@ getByValue val =
 -- | curry this to make a convenience function that loads an associated model
 --   > foreign = belongsTo foeignId
 belongsTo ::
-  (PersistStore b m
+  (PersistStore backend m
   , PersistEntity ent1
-  , PersistEntity ent2) => (ent1 -> Maybe (Key b ent2)) -> ent1 -> b m (Maybe ent2)
+  , PersistEntity ent2) => (ent1 -> Maybe (Key backend ent2)) -> ent1 -> backend m (Maybe ent2)
 belongsTo foreignKeyField model = case foreignKeyField model of
     Nothing -> return Nothing
     Just f -> get f
 
 -- | same as belongsTo, but uses @getJust@ and therefore is similarly unsafe
 belongsToJust ::
-  (PersistStore b m
+  (PersistStore backend m
   , PersistEntity ent1
-  , PersistEntity ent2) => (ent1 -> Key b ent2) -> ent1 -> b m ent2
+  , PersistEntity ent2) => (ent1 -> Key backend ent2) -> ent1 -> backend m ent2
 belongsToJust getForeignKey model = getJust $ getForeignKey model
 
 -- | Same as get, but for a non-null (not Maybe) foreign key
 --   Unsafe unless your database is enforcing that the foreign key is valid
-getJust :: (PersistStore b m, PersistEntity val, Show (Key b val)) => Key b val -> b m val
+getJust :: (PersistStore backend m, PersistEntity val, Show (Key backend val)) => Key backend val -> backend m val
 getJust key = get key >>= maybe
   (liftBase $ E.throwIO $ PersistForeignConstraintUnmet $ show key)
   return
@@ -644,7 +644,7 @@ getJust key = get key >>= maybe
 --
 -- Returns 'True' if the entity would be unique, and could thus safely be
 -- 'insert'ed; returns 'False' on a conflict.
-checkUnique :: (PersistEntityBackend val ~ b, PersistEntity val, PersistUnique b m) => val -> b m Bool
+checkUnique :: (PersistEntityBackend val ~ backend, PersistEntity val, PersistUnique backend m) => val -> backend m Bool
 checkUnique val =
     go $ persistUniqueKeys val
   where
@@ -659,8 +659,8 @@ data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le | In | NotIn
                    | BackendSpecificFilter T.Text
     deriving (Read, Show)
 
-class PersistEntity a => DeleteCascade a b m where
-    deleteCascade :: Key b a -> b m ()
+class PersistEntity a => DeleteCascade a backend m where
+    deleteCascade :: Key backend a -> backend m ()
 
 instance PersistField PersistValue where
     toPersistValue = id

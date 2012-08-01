@@ -44,7 +44,7 @@ share [mkPersist sqlSettings,  mkMigrate "joinMigrate"] [persistUpperCase|
     deriving Show Eq
 |]
 #ifdef WITH_MONGODB
-cleanDB :: PersistQuery b m => b m ()
+cleanDB :: PersistQuery backend m => backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Author])
   deleteWhere ([] :: [Filter Entry])
@@ -61,11 +61,11 @@ specs = describe "joins" $ do
 #endif
 
 
-joinGeneric :: (MonadIO (b m), PersistQuery b m) =>
-               (SelectOneMany b (AuthorGeneric b) (EntryGeneric b)
-                -> b m [(Entity (AuthorGeneric b), [Entity (EntryGeneric b)])])
+joinGeneric :: (MonadIO (backend m), PersistQuery backend m) =>
+               (SelectOneMany backend (AuthorGeneric backend) (EntryGeneric backend)
+                -> backend m [(Entity (AuthorGeneric backend), [Entity (EntryGeneric backend)])])
                 -> Bool
-                -> b m ()
+                -> backend m ()
 
 joinGeneric run _ = do
     a <- insert $ Author "a"
