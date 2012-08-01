@@ -73,6 +73,9 @@ import qualified Data.HashMap.Lazy as M
 import Init
 import Data.Aeson
 
+import Data.Conduit
+import qualified Data.Conduit.List as CL
+
 data PetType = Cat | Dog
     deriving (Show, Read, Eq)
 derivePersistField "PetType"
@@ -449,6 +452,32 @@ specs = describe "persistent" $ do
       ps6 <- selectList [PersonAge ==. 26] []
       ps6 @== [(Entity key26 p26)]
 
+  it "selectSource" $ db $ do
+      let p1 = Person "selectSource1" 1 Nothing
+          p2 = Person "selectSource2" 2 Nothing
+          p3 = Person "selectSource3" 3 Nothing
+      k1 <- insert p1
+      k2 <- insert p2
+      k3 <- insert p3
+
+      ps1 <- runResourceT $ selectSource [] [Desc PersonAge] $$ await
+      ps1 @== Just (Entity k3 p3)
+
+      ps2 <- runResourceT $ selectSource [PersonAge <. 3] [Asc PersonAge] $$ CL.consume
+      ps2 @== [Entity k1 p1, Entity k2 p2]
+
+      runResourceT $ selectSource [] [Desc PersonAge] $$ do
+          e1 <- await
+          e1 @== Just (Entity k3 p3)
+
+          e2 <- await
+          e2 @== Just (Entity k2 p2)
+
+          e3 <- await
+          e3 @== Just (Entity k1 p1)
+
+          e4 <- await
+          e4 @== Nothing
 
   it "selectFirst" $ db $ do
       _ <- insert $ Person "Michael" 26 Nothing
@@ -460,12 +489,31 @@ specs = describe "persistent" $ do
 
 
   it "selectKeys" $ db $ do
-      p1 <- insert $ Person "Michael" 26 Nothing
-      p2 <- insert $ Person "Oldie" 75 Nothing
+      let p1 = Person "selectKeys1" 1 Nothing
+          p2 = Person "selectKeys2" 2 Nothing
+          p3 = Person "selectKeys3" 3 Nothing
+      k1 <- insert p1
+      k2 <- insert p2
+      k3 <- insert p3
 
-      x <- selectKeys [] []
-      -- TODO: this is a conduit
-      x @== [p1,p2]
+      ps1 <- runResourceT $ selectKeys [] [Desc PersonAge] $$ await
+      ps1 @== Just k3
+
+      ps2 <- runResourceT $ selectKeys [PersonAge <. 3] [Asc PersonAge] $$ CL.consume
+      ps2 @== [k1, k2]
+
+      runResourceT $ selectKeys [] [Desc PersonAge] $$ do
+          e1 <- await
+          e1 @== Just k3
+
+          e2 <- await
+          e2 @== Just k2
+
+          e3 <- await
+          e3 @== Just k1
+
+          e4 <- await
+          e4 @== Nothing
 
 
   it "insertBy" $ db $ do
