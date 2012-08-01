@@ -33,9 +33,9 @@ toExitCode False = ExitFailure 1
 
 main :: IO ()
 main = do
+#ifndef WITH_MONGODB
   sqExists <- isFile $ fromText sqlite_database
   when sqExists $ removeFile $ fromText sqlite_database
-#ifndef WITH_MONGODB
   runConn (setup PersistentTest.testMigrate)
 #endif
   r <- hspecB $ PersistentTest.specs
