@@ -140,6 +140,8 @@ test-suite test
     build-depends:   base >= 4 && < 5
                    , persistent-test
                    , hspec
+                   , system-filepath
+                   , system-fileio
 
     if flag(mongodb)
         cpp-options: -DWITH_MONGODB -DDEBUG

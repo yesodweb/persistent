@@ -12,7 +12,9 @@ import qualified SumTypeTest
 import Test.Hspec.Monadic (hspec)
 import Init
 import System.Exit
-import Control.Monad (unless)
+import Control.Monad (unless, when)
+import Filesystem (isFile, removeFile)
+import Filesystem.Path.CurrentOS (fromText)
 
 
 #ifdef MongoDB
@@ -31,6 +33,8 @@ toExitCode False = ExitFailure 1
 
 main :: IO ()
 main = do
+  sqExists <- isFile $ fromText sqlite_database
+  when sqExists $ removeFile $ fromText sqlite_database
 #ifndef WITH_MONGODB
   runConn (setup PersistentTest.testMigrate)
 #endif
