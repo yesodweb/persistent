@@ -459,6 +459,15 @@ specs = describe "persistent" $ do
       x @== Just (Entity kOld pOld)
 
 
+  it "selectKeys" $ db $ do
+      p1 <- insert $ Person "Michael" 26 Nothing
+      p2 <- insert $ Person "Oldie" 75 Nothing
+
+      x <- selectKeys [] []
+      -- TODO: this is a conduit
+      x @== [p1,p2]
+
+
   it "insertBy" $ db $ do
       Right _ <- insertBy $ Person "name" 1 Nothing
       Left _ <- insertBy $ Person "name" 1 Nothing

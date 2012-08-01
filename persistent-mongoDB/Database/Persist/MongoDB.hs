@@ -356,7 +356,9 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
         t = entityDef $ dummyFromFilts filts
 
     selectKeys filts opts = do
-        cursor <- lift $ lift $ DB.find $ makeQuery filts opts
+        cursor <- lift $ lift $ DB.find $ (makeQuery filts opts) {
+            DB.project = [_id DB.=: (1 :: Int)]
+          }
         pull cursor
       where
         pull cursor = do
