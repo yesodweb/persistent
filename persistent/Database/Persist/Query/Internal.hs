@@ -76,6 +76,7 @@ class PersistStore b m => PersistQuery b m where
     -- | Get the 'Key's of all records matching the given criterion.
     selectKeys :: PersistEntity val
                => [Filter val]
+               -> [SelectOpt val]
                -> C.Source (C.ResourceT (b m)) (Key b val)
 
     -- | The total number of records fulfilling the given criterion.
@@ -129,4 +130,4 @@ updateFieldDef (Update f _ _) = persistFieldDef f
 deleteCascadeWhere :: (DeleteCascade a b m, PersistQuery b m)
                    => [Filter a] -> b m ()
 deleteCascadeWhere filts = do
-    C.runResourceT $ selectKeys filts C.$$ CL.mapM_ (lift . deleteCascade)
+    C.runResourceT $ selectKeys filts [] C.$$ CL.mapM_ (lift . deleteCascade)

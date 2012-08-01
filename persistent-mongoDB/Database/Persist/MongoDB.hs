@@ -355,10 +355,8 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
       where
         t = entityDef $ dummyFromFilts filts
 
-    selectKeys filts {- opts -} = do
-     -- new selectKeys implementation with options
-     -- cursor <- lift $ lift $ DB.find $ makeQuery filts opts
-        cursor <- lift $ lift $ DB.find query
+    selectKeys filts opts = do
+        cursor <- lift $ lift $ DB.find $ makeQuery filts opts
         pull cursor
       where
         pull cursor = do
@@ -369,10 +367,6 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
                     yield $ oidToKey oid
                     pull cursor
                 Just y -> liftIO $ throwIO $ PersistMarshalError $ T.pack $ "Unexpected in selectKeys: " ++ show y
-        query = (DB.select (filtersToSelector filts) (unDBName $ entityDB t)) {
-          DB.project = [_id DB.=: (1 :: Int)]
-        }
-        t = entityDef $ dummyFromFilts filts
 
 orderClause :: PersistEntity val => SelectOpt val -> DB.Field
 orderClause o = case o of

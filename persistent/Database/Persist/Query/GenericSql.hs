@@ -129,7 +129,7 @@ instance (MonadThrow m, MonadIO m, MonadUnsafeIO m, MonadBaseControl IO m, Monad
             , off
             ]
 
-    selectKeys filts = do
+    selectKeys filts opts = do
         conn <- lift $ lift $ SqlPersist ask
         R.withStmt (sql conn) (getFiltsValues conn filts) $= CL.mapM parse
       where
@@ -145,7 +145,24 @@ instance (MonadThrow m, MonadIO m, MonadUnsafeIO m, MonadBaseControl IO m, Monad
             , " FROM "
             , escapeName conn $ entityDB t
             , wher conn
+            , ord conn
+            , lim conn
+            , off
             ]
+
+        (limit, offset, orders) = limitOffsetOrder opts
+
+        ord conn =
+            case map (orderClause False conn) orders of
+                [] -> ""
+                ords -> " ORDER BY " ++ T.intercalate "," ords
+        lim conn = case (limit, offset) of
+                (0, 0) -> ""
+                (0, _) -> T.cons ' ' $ noLimit conn
+                (_, _) -> " LIMIT " ++ show limit
+        off = if offset == 0
+                    then ""
+                    else " OFFSET " ++ show offset
 
     deleteWhere filts = do
         conn <- SqlPersist ask
