@@ -6,6 +6,7 @@ module Database.Persist.Query.Internal
   ( -- re-exported as public
       PersistQuery (..)
     , selectList
+    , selectKeysList
 
     -- just Internal
     , SelectOpt (..)
@@ -100,12 +101,19 @@ data SelectOpt v = forall typ. Asc (EntityField v typ)
                  | OffsetBy Int
                  | LimitTo Int
 
--- | Call 'select' but return the result as a list.
+-- | Call 'selectSource' but return the result as a list.
 selectList :: (PersistEntity val, PersistQuery backend m, PersistEntityBackend val ~ backend)
            => [Filter val]
            -> [SelectOpt val]
            -> backend m [Entity val]
 selectList a b = C.runResourceT $ selectSource a b C.$$ CL.consume
+
+-- | Call 'selectKeys' but return the result as a list.
+selectKeysList :: (PersistEntity val, PersistQuery b m, PersistEntityBackend val ~ b)
+               => [Filter val]
+               -> [SelectOpt val]
+               -> b m [Key b val]
+selectKeysList a b = C.runResourceT $ selectKeys a b C.$$ CL.consume
 
 data PersistUpdate = Assign | Add | Subtract | Multiply | Divide -- FIXME need something else here
     deriving (Read, Show, Enum, Bounded)
