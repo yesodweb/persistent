@@ -1,7 +1,8 @@
-{-# LANGUAGE CPP, PackageImports, OverloadedStrings  #-}
+{-# LANGUAGE CPP, PackageImports, OverloadedStrings, ScopedTypeVariables  #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving, MultiParamTypeClasses  #-}
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE RankNTypes, TypeFamilies #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 {-# LANGUAGE UndecidableInstances #-} -- FIXME
 {-# OPTIONS_GHC -fno-warn-orphans #-}
@@ -13,6 +14,7 @@ module Database.Persist.MongoDB
     , createMongoDBPool
     , runMongoDBConn 
     , ConnectionPool
+    , Connection
     , MongoConf (..)
     -- * Key conversion helpers
     , keyToOid
@@ -49,20 +51,31 @@ import qualified Data.Text as T
 import Data.Text (Text)
 import qualified Data.Text.Encoding as E
 import qualified Data.Serialize as Serialize
-import qualified System.IO.Pool as Pool
 import Web.PathPieces (PathPiece (..))
 import Data.Conduit
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.IO.Class (liftIO)
-import Data.Aeson (Value (Object), (.:), (.:?), (.!=))
+import Data.Aeson (Value (Object, Number), (.:), (.:?), (.!=), FromJSON(..))
 import Control.Monad (mzero)
 import Control.Monad.Trans.Control (MonadBaseControl)
+import qualified Data.Conduit.Pool as Pool
+import Data.Time (NominalDiffTime)
+import Data.Attoparsec.Number
 
 #ifdef DEBUG
 import FileLocation (debug)
 #endif
 
-type ConnectionPool = (Pool.Pool IOError DB.Pipe, Database)
+newtype NoOrphanNominalDiffTime = NoOrphanNominalDiffTime NominalDiffTime
+                                deriving Num
+
+instance FromJSON NoOrphanNominalDiffTime where
+    parseJSON (Number (I x)) = (return . NoOrphanNominalDiffTime . fromInteger) x
+    parseJSON (Number (D x)) = (return . NoOrphanNominalDiffTime . fromRational . toRational) x
+    parseJSON _ = fail "couldn't parse diff time"
+
+data Connection = Connection DB.Pipe DB.Database
+type ConnectionPool = Pool.Pool Connection
 
 instance PathPiece (Key DB.Action entity) where
     toPathPiece (Key pOid@(PersistObjectId _)) = -- T.pack $ show $ Serialize.encode bsonId
@@ -77,39 +90,42 @@ instance PathPiece (Key DB.Action entity) where
 
 
 withMongoDBConn :: (Trans.MonadIO m, Applicative m) =>
-  Database -> HostName -> Maybe (Text, Text) -> (ConnectionPool -> m b) -> m b
-withMongoDBConn dbname hostname mauth = withMongoDBPool dbname hostname mauth 1
+  Database -> HostName -> Maybe MongoAuth -> NominalDiffTime -> (ConnectionPool -> m b) -> m b
+withMongoDBConn dbname hostname mauth connectionIdleTime = withMongoDBPool dbname hostname mauth 1 1 connectionIdleTime
 
-connectMongoDB :: Database -> HostName -> Maybe (Text, Text) -> DB.IOE DB.Pipe
-connectMongoDB dbname hostname mAuth = do
-    x <- DB.connect (DB.host hostname)
+createConnection :: Database -> HostName -> Maybe MongoAuth -> IO Connection
+createConnection dbname hostname mAuth = do
+    pipe <- DB.runIOE $ DB.connect (DB.host hostname)
     _ <- case mAuth of
-      Just (user, pass) -> DB.access x DB.UnconfirmedWrites dbname (DB.auth user pass)
+      Just (MongoAuth user pass) -> DB.access pipe DB.UnconfirmedWrites dbname (DB.auth user pass)
       Nothing -> return undefined
-    return x
+    return $ Connection pipe dbname
 
-createMongoDBPool :: (Trans.MonadIO m, Applicative m) =>
-  Database -> HostName -> Maybe (Text, Text) -> Int -> m ConnectionPool
-createMongoDBPool dbname hostname mAuth connectionPoolSize = do
-  --pool <- runReaderT (DB.newConnPool connectionPoolSize $ DB.host hostname) $ ANetwork Internet
-  pool <- Trans.liftIO $ Pool.newPool Pool.Factory { Pool.newResource  = connectMongoDB dbname hostname mAuth
-                                                  , Pool.killResource = DB.close
-                                                  , Pool.isExpired    = DB.isClosed
-                                                  }
-                                     connectionPoolSize
-  return (pool, dbname)
+createMongoDBPool :: (Trans.MonadIO m, Applicative m) => Database -> HostName
+                  -> Maybe MongoAuth
+                  -> Int -- ^ pool size (number of stripes)
+                  -> Int -- ^ stripe size (number of connections per stripe)
+                  -> NominalDiffTime -- ^ time a connection is left idle before closing
+                  -> m ConnectionPool
+createMongoDBPool dbname hostname mAuth connectionPoolSize stripeSize connectionIdleTime = do
+  Trans.liftIO $ Pool.createPool
+                          (createConnection dbname hostname mAuth)
+                          (\(Connection pipe _) -> DB.close pipe)
+                          connectionPoolSize
+                          connectionIdleTime
+                          stripeSize
 
 withMongoDBPool :: (Trans.MonadIO m, Applicative m) =>
-  Database -> HostName -> Maybe (Text, Text) -> Int -> (ConnectionPool -> m b) -> m b
-withMongoDBPool dbname hostname mauth connectionPoolSize connectionReader = do
-  pool <- createMongoDBPool dbname hostname mauth connectionPoolSize
+  Database -> HostName -> Maybe MongoAuth -> Int -> Int -> NominalDiffTime -> (ConnectionPool -> m b) -> m b
+withMongoDBPool dbname hostname mauth poolStripes stripeConnections connectionIdleTime connectionReader = do
+  pool <- createMongoDBPool dbname hostname mauth poolStripes stripeConnections connectionIdleTime
   connectionReader pool
 
-runMongoDBConn :: (Trans.MonadIO m) => DB.AccessMode  ->  DB.Action m backend -> ConnectionPool -> m backend
-runMongoDBConn accessMode action (pool, databaseName) = do
-  pipe <- Trans.liftIO $ DB.runIOE $ Pool.aResource pool
-  res  <- DB.access pipe accessMode databaseName action
-  either (Trans.liftIO . throwIO . PersistMongoDBError . T.pack . show) return res
+runMongoDBConn :: (Trans.MonadIO m, MonadBaseControl IO m) => DB.AccessMode  -> DB.Action m backend -> ConnectionPool -> m backend
+runMongoDBConn accessMode action pool =
+  Pool.withResource pool $ \(Connection pipe db) -> do
+    res  <- DB.access pipe accessMode db action
+    either (Trans.liftIO . throwIO . PersistMongoDBError . T.pack . show) return res
 
 value :: DB.Field -> DB.Value
 value (_ DB.:= val) = val
@@ -544,29 +560,43 @@ dummyFromUnique _ = error "dummyFromUnique"
 dummyFromFilts :: [Filter v] -> v
 dummyFromFilts _ = error "dummyFromFilts"
 
+data MongoAuth = MongoAuth DB.Username DB.Password
 -- | Information required to connect to a mongo database
 data MongoConf = MongoConf
     { mgDatabase :: Text
     , mgHost     :: Text
-    , mgAuth     :: Maybe (Text, Text)
-    , mgPoolSize :: Int
+    , mgAuth     :: Maybe MongoAuth
     , mgAccessMode :: DB.AccessMode
+    , mgPoolStripes :: Int
+    , mgStripeConnections :: Int
+    , mgConnectionIdleTime :: NominalDiffTime
     }
 
 instance PersistConfig MongoConf where
     type PersistConfigBackend MongoConf = DB.Action
     type PersistConfigPool MongoConf = ConnectionPool
-    createPoolConfig (MongoConf db host mAuth poolsize _) =
-      createMongoDBPool db (T.unpack host) mAuth
-        poolsize
-    runPool (MongoConf _ _ _ _ accessMode) = runMongoDBConn accessMode
+
+    createPoolConfig c =
+      createMongoDBPool 
+         (mgDatabase c) (T.unpack (mgHost c))
+         (mgAuth c)
+         (mgPoolStripes c) (mgStripeConnections c) (mgConnectionIdleTime c)
+
+    runPool c = runMongoDBConn (mgAccessMode c)
     loadConfig (Object o) = do
-        db    <- o .: "database"
-        host  <- o .: "host"
-        pool  <- o .: "poolsize"
-        mUser  <- o .:? "user"
-        mPass  <- o .:? "password"
-        accessString <- o .:? "accessMode" .!= "ConfirmWrites"
+        db                 <- o .:  "database"
+        host               <- o .:? "host" .!= "127.0.0.1"
+        poolStripes        <- o .:? "poolstripes" .!= 1
+        stripeConnections  <- o .:  "connections"
+        (NoOrphanNominalDiffTime connectionIdleTime) <- o .:? "connectionIdleTime" .!= 20
+        mUser              <- o .:? "user"
+        mPass              <- o .:? "password"
+        accessString       <- o .:? "accessMode" .!= "ConfirmWrites"
+
+        mPoolSize         <- o .:? "poolsize"
+        case mPoolSize of
+          Nothing -> return ()
+          Just (_::Int) -> fail "specified deprecated poolsize attribute. Please specify a connections. You can also specify a pools attribute which defaults to 1. Total connections opened to the db are connections * pools"
 
         accessMode <- case accessString of
                "ReadStaleOk"       -> return DB.ReadStaleOk
@@ -574,12 +604,19 @@ instance PersistConfig MongoConf where
                "ConfirmWrites"     -> return $ DB.ConfirmWrites ["j" DB.=: True]
                badAccess -> fail $ "unknown accessMode: " ++ (T.unpack badAccess)
 
-        return $ MongoConf db host
-          (case (mUser, mPass) of
-            (Just user, Just pass) -> Just (user, pass)
-            _ -> Nothing
-          )
-          pool accessMode
+        return $ MongoConf {
+            mgDatabase = db
+          , mgHost = host
+          , mgAuth =
+              (case (mUser, mPass) of
+                (Just user, Just pass) -> Just (MongoAuth user pass)
+                _ -> Nothing
+              )
+          , mgPoolStripes = poolStripes
+          , mgStripeConnections = stripeConnections
+          , mgAccessMode = accessMode
+          , mgConnectionIdleTime = connectionIdleTime
+          }
       where
     {-
         safeRead :: String -> T.Text -> MEither String Int
