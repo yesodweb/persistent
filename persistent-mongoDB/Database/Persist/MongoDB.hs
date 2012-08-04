@@ -1,7 +1,8 @@
-{-# LANGUAGE CPP, PackageImports, OverloadedStrings  #-}
+{-# LANGUAGE CPP, PackageImports, OverloadedStrings, ScopedTypeVariables  #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving, MultiParamTypeClasses  #-}
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE RankNTypes, TypeFamilies #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 {-# LANGUAGE UndecidableInstances #-} -- FIXME
 {-# OPTIONS_GHC -fno-warn-orphans #-}
@@ -53,23 +54,24 @@ import Web.PathPieces (PathPiece (..))
 import Data.Conduit
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.IO.Class (liftIO)
-import Data.Aeson (Value (Object), (.:), (.:?), (.!=))
+import Data.Aeson (Value (Object, Number), (.:), (.:?), (.!=), FromJSON(..))
 import Control.Monad (mzero)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.Conduit.Pool as Pool
+import Data.Time (NominalDiffTime)
+import Data.Attoparsec.Number
 
 #ifdef DEBUG
 import FileLocation (debug)
 #endif
 
-type ConnectionPool = Pool.Pool DB.Pipe
+instance FromJSON NominalDiffTime where
+    parseJSON (Number (I x)) = (return . fromInteger) x
+    parseJSON (Number (D x)) = (return . fromRational . toRational) x
+    parseJSON _ = fail "couldn't parse diff time"
 
-{-
-data Connection = Connection {
-        connPipe :: DB.Pipe
-      , connDB :: Database
-    }
-    -}
+data Connection = Connection DB.Pipe DB.Database
+type ConnectionPool = Pool.Pool Connection
 
 instance PathPiece (Key DB.Action entity) where
     toPathPiece (Key pOid@(PersistObjectId _)) = -- T.pack $ show $ Serialize.encode bsonId
@@ -84,42 +86,41 @@ instance PathPiece (Key DB.Action entity) where
 
 
 withMongoDBConn :: (Trans.MonadIO m, Applicative m) =>
-  Database -> HostName -> Maybe MongoAuth -> (ConnectionPool -> m b) -> m b
-withMongoDBConn dbname hostname mauth = withMongoDBPool dbname hostname mauth 1 1 20
+  Database -> HostName -> Maybe MongoAuth -> NominalDiffTime -> (ConnectionPool -> m b) -> m b
+withMongoDBConn dbname hostname mauth connectionIdleTime = withMongoDBPool dbname hostname mauth 1 1 connectionIdleTime
 
-createMongoPipe :: Database -> HostName -> Maybe MongoAuth -> IO DB.Pipe
-createMongoPipe dbname hostname mAuth = do
+createConnection :: Database -> HostName -> Maybe MongoAuth -> IO Connection
+createConnection dbname hostname mAuth = do
     pipe <- DB.runIOE $ DB.connect (DB.host hostname)
     _ <- case mAuth of
       Just (MongoAuth user pass) -> DB.access pipe DB.UnconfirmedWrites dbname (DB.auth user pass)
       Nothing -> return undefined
-    return $ pipe
+    return $ Connection pipe dbname
 
 createMongoDBPool :: (Trans.MonadIO m, Applicative m) => Database -> HostName
                   -> Maybe MongoAuth
                   -> Int -- ^ pool size (number of stripes)
                   -> Int -- ^ stripe size (number of connections per stripe)
-                  -> Int -- ^ time a connection is left idle before closing
+                  -> NominalDiffTime -- ^ time a connection is left idle before closing
                   -> m ConnectionPool
 createMongoDBPool dbname hostname mAuth connectionPoolSize stripeSize connectionIdleTime = do
   Trans.liftIO $ Pool.createPool
-                          (createMongoPipe dbname hostname mAuth)
-                          DB.close
+                          (createConnection dbname hostname mAuth)
+                          (\(Connection pipe _) -> DB.close pipe)
                           connectionPoolSize
-                          20 -- expire time - lookup from MongoDB driver
+                          connectionIdleTime
                           stripeSize
 
 withMongoDBPool :: (Trans.MonadIO m, Applicative m) =>
-  Database -> HostName -> Maybe MongoAuth -> Int -> Int -> Int -> (ConnectionPool -> m b) -> m b
+  Database -> HostName -> Maybe MongoAuth -> Int -> Int -> NominalDiffTime -> (ConnectionPool -> m b) -> m b
 withMongoDBPool dbname hostname mauth poolStripes stripeConnections connectionIdleTime connectionReader = do
   pool <- createMongoDBPool dbname hostname mauth poolStripes stripeConnections connectionIdleTime
   connectionReader pool
 
-runMongoDBConn :: (Trans.MonadIO m) => DB.AccessMode  -> DB.Database -> DB.Action m backend -> ConnectionPool -> m backend
-runMongoDBConn accessMode databaseName action pool =
-  Pool.withResource pool $ \pipe -> do
-    -- pipe <- Trans.liftIO $ DB.runIOE pipe
-    res  <- DB.access pipe accessMode databaseName action
+runMongoDBConn :: (Trans.MonadIO m, MonadBaseControl IO m) => DB.AccessMode  -> DB.Action m backend -> ConnectionPool -> m backend
+runMongoDBConn accessMode action pool =
+  Pool.withResource pool $ \(Connection pipe db) -> do
+    res  <- DB.access pipe accessMode db action
     either (Trans.liftIO . throwIO . PersistMongoDBError . T.pack . show) return res
 
 value :: DB.Field -> DB.Value
@@ -564,7 +565,7 @@ data MongoConf = MongoConf
     , mgAccessMode :: DB.AccessMode
     , mgPoolStripes :: Int
     , mgStripeConnections :: Int
-    , mgConnectionIdleTime :: Int
+    , mgConnectionIdleTime :: NominalDiffTime
     }
 
 instance PersistConfig MongoConf where
@@ -577,7 +578,7 @@ instance PersistConfig MongoConf where
          (mgAuth c)
          (mgPoolStripes c) (mgStripeConnections c) (mgConnectionIdleTime c)
 
-    runPool c = runMongoDBConn (mgAccessMode c) (mgDatabase c)
+    runPool c = runMongoDBConn (mgAccessMode c)
     loadConfig (Object o) = do
         db                <- o .: "database"
         host              <- o .: "host"
@@ -591,7 +592,7 @@ instance PersistConfig MongoConf where
         mPoolSize         <- o .: "poolsize"
         case mPoolSize of
           Nothing -> return ()
-          Just _ -> fail "specified deprecated poolsize attribute. Please specify a connections. You can also specify a pools attribute which defaults to 1. Total connections opened to the db are connections * pools"
+          Just (_::Int) -> fail "specified deprecated poolsize attribute. Please specify a connections. You can also specify a pools attribute which defaults to 1. Total connections opened to the db are connections * pools"
 
         accessMode <- case accessString of
                "ReadStaleOk"       -> return DB.ReadStaleOk
