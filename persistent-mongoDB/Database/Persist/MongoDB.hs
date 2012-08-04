@@ -14,6 +14,7 @@ module Database.Persist.MongoDB
     , createMongoDBPool
     , runMongoDBConn 
     , ConnectionPool
+    , Connection
     , MongoConf (..)
     -- * Key conversion helpers
     , keyToOid
@@ -580,16 +581,16 @@ instance PersistConfig MongoConf where
 
     runPool c = runMongoDBConn (mgAccessMode c)
     loadConfig (Object o) = do
-        db                <- o .: "database"
-        host              <- o .: "host"
-        poolStripes       <- o .: "poolstripes" .!= 1
-        stripeConnections <- o .: "connections"
-        connectionIdleTime <- o .: "connectionIdleTime" .!= 20
-        mUser             <- o .:? "user"
-        mPass             <- o .:? "password"
-        accessString      <- o .:? "accessMode" .!= "ConfirmWrites"
+        db                 <- o .:  "database"
+        host               <- o .:? "host" .!= "127.0.0.1"
+        poolStripes        <- o .:? "poolstripes" .!= 1
+        stripeConnections  <- o .:  "connections"
+        connectionIdleTime <- o .:? "connectionIdleTime" .!= 20
+        mUser              <- o .:? "user"
+        mPass              <- o .:? "password"
+        accessString       <- o .:? "accessMode" .!= "ConfirmWrites"
 
-        mPoolSize         <- o .: "poolsize"
+        mPoolSize         <- o .:? "poolsize"
         case mPoolSize of
           Nothing -> return ()
           Just (_::Int) -> fail "specified deprecated poolsize attribute. Please specify a connections. You can also specify a pools attribute which defaults to 1. Total connections opened to the db are connections * pools"
