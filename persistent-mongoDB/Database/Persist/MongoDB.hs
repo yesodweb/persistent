@@ -66,7 +66,7 @@ import FileLocation (debug)
 #endif
 
 newtype NoOrphanNominalDiffTime = NoOrphanNominalDiffTime NominalDiffTime
-                                deriving Num
+                                deriving (Show, Eq, Num)
 
 instance FromJSON NoOrphanNominalDiffTime where
     parseJSON (Number (I x)) = (return . NoOrphanNominalDiffTime . fromInteger) x
