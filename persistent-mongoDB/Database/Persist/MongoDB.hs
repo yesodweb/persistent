@@ -2,7 +2,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, MultiParamTypeClasses  #-}
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE RankNTypes, TypeFamilies #-}
-{-# LANGUAGE DeriveGeneric #-}
 
 {-# LANGUAGE UndecidableInstances #-} -- FIXME
 {-# OPTIONS_GHC -fno-warn-orphans #-}
