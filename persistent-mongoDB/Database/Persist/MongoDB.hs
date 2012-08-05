@@ -66,9 +66,12 @@ import Data.Attoparsec.Number
 import FileLocation (debug)
 #endif
 
-instance FromJSON NominalDiffTime where
-    parseJSON (Number (I x)) = (return . fromInteger) x
-    parseJSON (Number (D x)) = (return . fromRational . toRational) x
+newtype NoOrphanNominalDiffTime = NoOrphanNominalDiffTime NominalDiffTime
+                                deriving Num
+
+instance FromJSON NoOrphanNominalDiffTime where
+    parseJSON (Number (I x)) = (return . NoOrphanNominalDiffTime . fromInteger) x
+    parseJSON (Number (D x)) = (return . NoOrphanNominalDiffTime . fromRational . toRational) x
     parseJSON _ = fail "couldn't parse diff time"
 
 data Connection = Connection DB.Pipe DB.Database
@@ -585,7 +588,7 @@ instance PersistConfig MongoConf where
         host               <- o .:? "host" .!= "127.0.0.1"
         poolStripes        <- o .:? "poolstripes" .!= 1
         stripeConnections  <- o .:  "connections"
-        connectionIdleTime <- o .:? "connectionIdleTime" .!= 20
+        (NoOrphanNominalDiffTime connectionIdleTime) <- o .:? "connectionIdleTime" .!= 20
         mUser              <- o .:? "user"
         mPass              <- o .:? "password"
         accessString       <- o .:? "accessMode" .!= "ConfirmWrites"
