@@ -48,7 +48,7 @@ import Database.Persist.Store (PersistValue(..))
 
 #if WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
-import Database.Persist.MongoDB (Action, withMongoDBConn, runMongoDBConn)
+import Database.Persist.MongoDB (Action, withMongoDBConn, runMongoDBPool)
 {-
 import Database.Persist.MongoDB (oidToKey)
 import Data.Bson (genObjectId)
@@ -116,7 +116,7 @@ type BackendMonad = Action
 runConn :: (MonadIO m, MonadBaseControl IO m) => Action m backend -> m ()
 runConn f = do
   _<-withMongoDBConn "test" "127.0.0.1" Nothing 5 $
-      runMongoDBConn MongoDB.master f
+      runMongoDBPool MongoDB.master f
   return ()
 
 --setup :: MongoPersist IO ()

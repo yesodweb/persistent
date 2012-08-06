@@ -11,7 +11,8 @@ module Database.Persist.MongoDB
       withMongoDBConn
     , withMongoDBPool
     , createMongoDBPool
-    , runMongoDBConn 
+    , runMongoDBPool
+    , runMongoDBPoolDef
     , ConnectionPool
     , Connection
     , MongoConf (..)
@@ -120,11 +121,14 @@ withMongoDBPool dbname hostname mauth poolStripes stripeConnections connectionId
   pool <- createMongoDBPool dbname hostname mauth poolStripes stripeConnections connectionIdleTime
   connectionReader pool
 
-runMongoDBConn :: (Trans.MonadIO m, MonadBaseControl IO m) => DB.AccessMode  -> DB.Action m backend -> ConnectionPool -> m backend
-runMongoDBConn accessMode action pool =
+runMongoDBPool :: (Trans.MonadIO m, MonadBaseControl IO m) => DB.AccessMode  -> DB.Action m a -> ConnectionPool -> m a
+runMongoDBPool accessMode action pool =
   Pool.withResource pool $ \(Connection pipe db) -> do
     res  <- DB.access pipe accessMode db action
     either (Trans.liftIO . throwIO . PersistMongoDBError . T.pack . show) return res
+
+runMongoDBPoolDef :: (Trans.MonadIO m, MonadBaseControl IO m) => DB.Action m a -> ConnectionPool -> m a
+runMongoDBPoolDef = runMongoDBPool (DB.ConfirmWrites ["j" DB.=: True])
 
 value :: DB.Field -> DB.Value
 value (_ DB.:= val) = val
@@ -581,7 +585,7 @@ instance PersistConfig MongoConf where
          (mgAuth c)
          (mgPoolStripes c) (mgStripeConnections c) (mgConnectionIdleTime c)
 
-    runPool c = runMongoDBConn (mgAccessMode c)
+    runPool c = runMongoDBPool (mgAccessMode c)
     loadConfig (Object o) = do
         db                 <- o .:  "database"
         host               <- o .:? "host" .!= "127.0.0.1"
