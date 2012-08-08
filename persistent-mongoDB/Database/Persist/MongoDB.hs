@@ -130,10 +130,7 @@ runMongoDBPool accessMode action pool =
 runMongoDBPoolDef :: (Trans.MonadIO m, MonadBaseControl IO m) => DB.Action m a -> ConnectionPool -> m a
 runMongoDBPoolDef = runMongoDBPool (DB.ConfirmWrites ["j" DB.=: True])
 
-value :: DB.Field -> DB.Value
-value (_ DB.:= val) = val
-
-rightPersistVals :: (PersistEntity val) => EntityDef -> [DB.Field] -> val
+rightPersistVals :: (PersistEntity val) => EntityDef -> [DB.Field] -> Entity val
 rightPersistVals ent vals = case wrapFromPersistValues ent vals of
       Left e -> error $ T.unpack e
       Right v -> v
@@ -169,18 +166,6 @@ uniqSelector :: forall val.  (PersistEntity val) => Unique val DB.Action -> [DB.
 uniqSelector uniq = zipWith (DB.:=)
   (map (unDBName . snd) $ persistUniqueToFieldNames uniq)
   (map DB.val (persistUniqueToValues uniq))
-
-pairFromDocument :: (PersistEntity val, PersistEntityBackend val ~ DB.Action)
-                 => EntityDef
-                 -> [DB.Field]
-                 -> Either String (Entity val)
-pairFromDocument ent document = pairFromPersistValues document
-  where
-    pairFromPersistValues (x:xs) =
-        case wrapFromPersistValues ent xs of
-            Left e -> Left $ T.unpack e
-            Right xs' -> Right (Entity (oidToKey . fromJust . DB.cast' . value $ x) xs')
-    pairFromPersistValues _ = Left "error in fromPersistValues'"
 
 -- | convert a PersistEntity into document fields.
 -- for inserts only: nulls are ignored so they will be unset in the document.
@@ -251,8 +236,9 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
             d <- DB.findOne (queryByKey k t)
             case d of
               Nothing -> return Nothing
-              Just doc -> do
-                return $ Just $ rightPersistVals t (tail doc)
+              Just doc ->
+                let Entity _ ent = rightPersistVals t doc
+                in  return $ Just $ ent
           where
             t = entityDef $ dummyFromKey k
 
@@ -265,9 +251,9 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
           (DB.select (uniqSelector uniq) (unDBName $ entityDB t))
         case mdocument of
           Nothing -> return Nothing
-          Just document -> case pairFromDocument t document of
-              Left s -> Trans.liftIO . throwIO $ PersistMarshalError $ T.pack s
-              Right e -> return $ Just e
+          Just document -> case wrapFromPersistValues t document of
+              Left s -> Trans.liftIO . throwIO $ PersistMarshalError $ s
+              Right entity -> return $ Just entity
       where
         t = entityDef $ dummyFromUnique uniq
 
@@ -318,7 +304,8 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
                    (keyToOid key) (updateFields upds)
         case result of
           Left e -> err e
-          Right doc -> return $ (rightPersistVals t) $ tail doc
+          Right doc -> let Entity _ ent = rightPersistVals t doc
+                      in  return ent
       where
         err msg = Trans.liftIO $ throwIO $ KeyNotFound $ show key ++ msg
         t = entityDef $ dummyFromKey key
@@ -357,10 +344,10 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
             case mdoc of
                 Nothing -> return ()
                 Just doc ->
-                    case pairFromDocument t doc of
-                        Left s -> liftIO $ throwIO $ PersistMarshalError $ T.pack s
-                        Right row -> do
-                            yield row
+                    case wrapFromPersistValues t doc of
+                        Left s -> liftIO $ throwIO $ PersistMarshalError $ s
+                        Right entity -> do
+                            yield entity
                             pull cursor
         t = entityDef $ dummyFromFilts filts
 
@@ -368,9 +355,9 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
         doc <- DB.findOne $ makeQuery filts opts
         case doc of
             Nothing -> return Nothing
-            Just document -> case pairFromDocument t document of
-                Left s -> Trans.liftIO . throwIO $ PersistMarshalError $ T.pack s
-                Right row -> return $ Just row
+            Just document -> case wrapFromPersistValues t document of
+                Left s -> Trans.liftIO . throwIO $ PersistMarshalError $ s
+                Right entity -> return $ Just entity
       where
         t = entityDef $ dummyFromFilts filts
 
@@ -384,7 +371,7 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
             mdoc <- lift $ lift $ DB.next cursor
             case mdoc of
                 Nothing -> return ()
-                Just [_ DB.:= DB.ObjId oid] -> do
+                Just [_id DB.:= DB.ObjId oid] -> do
                     yield $ oidToKey oid
                     pull cursor
                 Just y -> liftIO $ throwIO $ PersistMarshalError $ T.pack $ "Unexpected in selectKeys: " ++ show y
@@ -454,11 +441,18 @@ fieldName = idfix . unDBName . fieldDB . persistFieldDef
   where idfix f = if f == "id" then _id else f
 
 
-wrapFromPersistValues :: (PersistEntity val) => EntityDef -> [DB.Field] -> Either T.Text val
-wrapFromPersistValues e doc = fromPersistValues reorder
+wrapFromPersistValues :: (PersistEntity val) => EntityDef -> [DB.Field] -> Either T.Text (Entity val)
+wrapFromPersistValues entDef doc =
+    -- normally the id is the first field: this is probably best even if worst case is worse
+    let mKey = lookup _id castDoc
+    in case mKey of
+         Nothing -> Left "could not find _id field"
+         Just key -> case fromPersistValues reorder of
+             Right body -> Right $ Entity (Key key) body
+             Left e -> Left e
   where
     castDoc = mapFromDoc doc
-    castColumns = map (unDBName . fieldDB) $ (entityFields e)
+    castColumns = map (unDBName . fieldDB) $ (entityFields entDef)
     -- we have an alist of fields that need to be the same order as entityColumns
     --
     -- this naive lookup is O(n^2)
@@ -473,6 +467,7 @@ wrapFromPersistValues e doc = fromPersistValues reorder
     -- * so for the last query there is only one item left
     --
     -- TODO: the above should be re-thought now that we are no longer inserting null: searching for a null column will look at every returned field before giving up
+    -- Also, we are now doing the _id lookup at the start.
     reorder :: [PersistValue] 
     reorder = match castColumns castDoc []
       where
