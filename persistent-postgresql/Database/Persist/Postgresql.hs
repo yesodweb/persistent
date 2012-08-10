@@ -42,6 +42,7 @@ import Data.Function (on)
 import Data.Conduit
 import qualified Data.Conduit.List as CL
 
+import Blaze.ByteString.Builder
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.Text as T
@@ -51,7 +52,6 @@ import Data.Text (Text, pack)
 import Data.Aeson
 import Control.Monad (forM, mzero)
 import System.Environment (getEnvironment)
-
 
 -- | A @libpq@ connection string.  A simple example of connection
 -- string would be @\"host=localhost port=5432 user=test
@@ -180,10 +180,10 @@ withStmt' conn query vals =
                 getters <- forM [0..cols-1] $ \col -> do
                   oid <- LibPQ.ftype ret col
                   case PG.oid2builtin oid of
-                    Nothing -> fail $ "Postgresql.withStmt': could not " ++
-                                      "recognize Oid of column " ++
-                                      show (let LibPQ.Col i = col in i) ++
-                                      " (counting from zero)"
+                    Nothing -> return $ \mb->
+                       case mb of
+                        Nothing -> fail "Unexpected null value"
+                        Just b -> return (PersistSpecific b)
                     Just bt -> return $ getGetter bt $
                                PG.Field ret col $
                                PG.builtin2typname bt
@@ -229,6 +229,7 @@ instance PGTF.ToField P where
     toField (P PersistNull)            = PGTF.toField PG.Null
     toField (P (PersistList l))        = PGTF.toField $ listToJSON l
     toField (P (PersistMap m))         = PGTF.toField $ mapToJSON m
+    toField (P (PersistSpecific l))  = PGTF.Plain $ fromByteString l
     toField (P (PersistObjectId _))    =
         error "Refusing to serialize a PersistObjectId to a PostgreSQL value"
 
@@ -424,7 +425,7 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d] =
     getType "float8"      = Right $ SqlReal
     getType "bytea"       = Right $ SqlBlob
     getType "time"        = Right $ SqlTime
-    getType a             = Left $ "Unknown type: " `T.append` a
+    getType a             = Right $ SqlOther a
 getColumn _ _ x =
     return $ Left $ pack $ "Invalid result from information_schema: " ++ show x
 
