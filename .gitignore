@@ -7,3 +7,5 @@ persistent-test/test/testdb.sqlite3
 *.o
 TAGS
 .virthualenv
+# hsenv does this
+dist_y

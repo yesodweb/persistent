@@ -30,6 +30,8 @@ module Database.Persist.Store
     , PersistFilter (..)
     , SomePersistField (..)
 
+    , ZT (..) -- ZonedTime wrapper
+
     , insertBy
     , getByValue
     , getJust
@@ -55,20 +57,15 @@ import qualified Prelude
 import Prelude hiding ((++), show)
 import Data.Monoid (mappend)
 import Data.Time (Day, TimeOfDay, UTCTime)
+import Data.Time.LocalTime (ZonedTime, zonedTimeToUTC, zonedTimeToLocalTime, zonedTimeZone)
 import Data.ByteString.Char8 (ByteString, unpack)
 import Control.Applicative
 import Data.Typeable (Typeable)
 import Data.Int (Int8, Int16, Int32, Int64)
 import Data.Word (Word8, Word16, Word32, Word64)
 
-#if MIN_VERSION_blaze_html(0,5,0)
 import Text.Blaze.Html
-import Text.Blaze.Internal (preEscapedText)
 import Text.Blaze.Html.Renderer.Text (renderHtml)
-#else
-import Text.Blaze (Html, preEscapedText)
-import Text.Blaze.Renderer.Text (renderHtml)
-#endif
 
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
@@ -122,6 +119,14 @@ instance E.Exception PersistException
 instance Error PersistException where
     strMsg = PersistError . T.pack
 
+-- | Avoid orphan instances.
+newtype ZT = ZT ZonedTime deriving (Show, Read, Typeable)
+
+instance Eq ZT where
+    ZT a /= ZT b = zonedTimeToLocalTime a /= zonedTimeToLocalTime b || zonedTimeZone a /= zonedTimeZone b
+instance Ord ZT where
+    ZT a `compare` ZT b = zonedTimeToUTC a `compare` zonedTimeToUTC b
+
 -- | A raw value which can be stored in any backend and can be marshalled to
 -- and from a 'PersistField'.
 data PersistValue = PersistText T.Text
@@ -132,6 +137,7 @@ data PersistValue = PersistText T.Text
                   | PersistDay Day
                   | PersistTimeOfDay TimeOfDay
                   | PersistUTCTime UTCTime
+                  | PersistZonedTime ZT
                   | PersistNull
                   | PersistList [PersistValue]
                   | PersistMap [(T.Text, PersistValue)]
@@ -157,6 +163,7 @@ instance A.ToJSON PersistValue where
     toJSON (PersistBool b) = A.Bool b
     toJSON (PersistTimeOfDay t) = A.String $ T.cons 't' $ show t
     toJSON (PersistUTCTime u) = A.String $ T.cons 'u' $ show u
+    toJSON (PersistZonedTime z) = A.String $ T.cons 'z' $ show z
     toJSON (PersistDay d) = A.String $ T.cons 'd' $ show d
     toJSON PersistNull = A.Null
     toJSON (PersistList l) = A.Array $ V.fromList $ map A.toJSON l
@@ -172,6 +179,7 @@ instance A.FromJSON PersistValue where
                            $ B64.decode $ TE.encodeUtf8 t
             Just ('t', t) -> fmap PersistTimeOfDay $ readMay t
             Just ('u', t) -> fmap PersistUTCTime $ readMay t
+            Just ('z', t) -> fmap PersistZonedTime $ readMay t
             Just ('d', t) -> fmap PersistDay $ readMay t
             Just ('o', t) -> either (fail "Invalid base64") (return . PersistObjectId)
                            $ B64.decode $ TE.encodeUtf8 t
@@ -197,13 +205,15 @@ instance A.FromJSON PersistValue where
 -- have different translations for these types.
 data SqlType = SqlString
              | SqlInt32
-             | SqlInteger -- ^ FIXME 8-byte integer; should be renamed SqlInt64
+             | SqlInt64
              | SqlReal
              | SqlBool
              | SqlDay
              | SqlTime
              | SqlDayTime
+             | SqlDayTimeZoned
              | SqlBlob
+             | SqlOther T.Text -- ^ a backend-specific name
     deriving (Show, Read, Eq, Typeable, Ord)
 
 -- | A value which can be marshalled to and from a 'PersistValue'.
@@ -225,6 +235,7 @@ instance PersistField String where
     fromPersistValue (PersistDay d) = Right $ Prelude.show d
     fromPersistValue (PersistTimeOfDay d) = Right $ Prelude.show d
     fromPersistValue (PersistUTCTime d) = Right $ Prelude.show d
+    fromPersistValue (PersistZonedTime (ZT z)) = Right $ Prelude.show z
     fromPersistValue PersistNull = Left "Unexpected null"
     fromPersistValue (PersistBool b) = Right $ Prelude.show b
     fromPersistValue (PersistList _) = Left "Cannot convert PersistList to String"
@@ -249,6 +260,7 @@ instance PersistField T.Text where
     fromPersistValue (PersistDay d) = Right $ show d
     fromPersistValue (PersistTimeOfDay d) = Right $ show d
     fromPersistValue (PersistUTCTime d) = Right $ show d
+    fromPersistValue (PersistZonedTime (ZT z)) = Right $ show z
     fromPersistValue PersistNull = Left "Unexpected null"
     fromPersistValue (PersistBool b) = Right $ show b
     fromPersistValue (PersistList _) = Left "Cannot convert PersistList to Text"
@@ -258,7 +270,7 @@ instance PersistField T.Text where
 
 instance PersistField Html where
     toPersistValue = PersistText . TL.toStrict . renderHtml
-    fromPersistValue = fmap preEscapedText . fromPersistValue
+    fromPersistValue = fmap (preEscapedToMarkup :: T.Text -> Html) . fromPersistValue
     sqlType _ = SqlString
 
 instance PersistField Int where
@@ -267,7 +279,7 @@ instance PersistField Int where
     fromPersistValue x = Left $ "Expected Integer, received: " ++ show x
     sqlType x = case bitSize x of
                     32 -> SqlInt32
-                    _ -> SqlInteger
+                    _ -> SqlInt64
 
 instance PersistField Int8 where
     toPersistValue = PersistInt64 . fromIntegral
@@ -291,7 +303,7 @@ instance PersistField Int64 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ "Expected Integer, received: " ++ show x
-    sqlType _ = SqlInteger
+    sqlType _ = SqlInt64
 
 instance PersistField Word8 where
     toPersistValue = PersistInt64 . fromIntegral
@@ -309,13 +321,13 @@ instance PersistField Word32 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ "Expected Wordeger, received: " ++ show x
-    sqlType _ = SqlInteger
+    sqlType _ = SqlInt64
 
 instance PersistField Word64 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ "Expected Wordeger, received: " ++ show x
-    sqlType _ = SqlInteger
+    sqlType _ = SqlInt64
 
 instance PersistField Double where
     toPersistValue = PersistDouble
@@ -371,6 +383,20 @@ instance PersistField UTCTime where
             _ -> Left $ "Expected UTCTime, received " ++ show x
     fromPersistValue x = Left $ "Expected UTCTime, received: " ++ show x
     sqlType _ = SqlDayTime
+
+instance PersistField ZonedTime where
+    toPersistValue = PersistZonedTime . ZT
+    fromPersistValue (PersistZonedTime (ZT z)) = Right z
+    fromPersistValue x@(PersistText t) =
+        case reads $ T.unpack t of
+            (z, _):_ -> Right z
+            _ -> Left $ "Expected ZonedTime, received " ++ show x
+    fromPersistValue x@(PersistByteString s) =
+        case reads $ unpack s of
+            (z, _):_ -> Right z
+            _ -> Left $ "Expected ZonedTime, received " ++ show x
+    fromPersistValue x = Left $ "Expected ZonedTime, received: " ++ show x
+    sqlType _ = SqlDayTimeZoned
 
 instance PersistField a => PersistField (Maybe a) where
     toPersistValue Nothing = PersistNull
@@ -513,44 +539,44 @@ data Entity entity =
            , entityVal :: entity }
     deriving (Eq, Ord, Show, Read)
 
-class (MonadBaseControl IO m, MonadBaseControl IO (b m)) => PersistStore b m where
+class (MonadBaseControl IO m, MonadBaseControl IO (backend m)) => PersistStore backend m where
 
     -- | Create a new record in the database, returning an automatically created
     -- key (in SQL an auto-increment id).
-    insert :: PersistEntity val => val -> b m (Key b val)
+    insert :: PersistEntity val => val -> backend m (Key backend val)
 
     -- | Create a new record in the database using the given key.
-    insertKey :: PersistEntity val => Key b val -> val -> b m ()
+    insertKey :: PersistEntity val => Key backend val -> val -> backend m ()
 
     -- | Put the record in the database with the given key.
     -- Unlike 'replace', if a record with the given key does not
     -- exist then a new record will be inserted.
-    repsert :: PersistEntity val => Key b val -> val -> b m ()
+    repsert :: PersistEntity val => Key backend val -> val -> backend m ()
 
     -- | Replace the record in the database with the given
     -- key. Note that the result is undefined if such record does
     -- not exist, so you must use 'insertKey' or 'repsert' in
     -- these cases.
-    replace :: PersistEntity val => Key b val -> val -> b m ()
+    replace :: PersistEntity val => Key backend val -> val -> backend m ()
 
     -- | Delete a specific record by identifier. Does nothing if record does
     -- not exist.
-    delete :: PersistEntity val => Key b val -> b m ()
+    delete :: PersistEntity val => Key backend val -> backend m ()
 
     -- | Get a record by identifier, if available.
-    get :: PersistEntity val => Key b val -> b m (Maybe val)
+    get :: PersistEntity val => Key backend val -> backend m (Maybe val)
 
-class PersistStore b m => PersistUnique b m where
+class PersistStore backend m => PersistUnique backend m where
     -- | Get a record by unique key, if available. Returns also the identifier.
-    getBy :: (PersistEntityBackend val ~ b, PersistEntity val) => Unique val b -> b m (Maybe (Entity val))
+    getBy :: (PersistEntityBackend val ~ backend, PersistEntity val) => Unique val backend -> backend m (Maybe (Entity val))
 
     -- | Delete a specific record by unique key. Does nothing if no record
     -- matches.
-    deleteBy :: PersistEntity val => Unique val b -> b m ()
+    deleteBy :: PersistEntity val => Unique val backend -> backend m ()
 
     -- | Like 'insert', but returns 'Nothing' when the record
     -- couldn't be inserted because of a uniqueness constraint.
-    insertUnique :: (b ~ PersistEntityBackend val, PersistEntity val) => val -> b m (Maybe (Key b val))
+    insertUnique :: (backend ~ PersistEntityBackend val, PersistEntity val) => val -> backend m (Maybe (Key backend val))
     insertUnique datum = do
         isUnique <- checkUnique datum
         if isUnique then Just `liftM` insert datum else return Nothing
@@ -560,8 +586,8 @@ class PersistStore b m => PersistUnique b m where
 -- | Insert a value, checking for conflicts with any unique constraints.  If a
 -- duplicate exists in the database, it is returned as 'Left'. Otherwise, the
 -- new 'Key' is returned as 'Right'.
-insertBy :: (PersistEntity v, PersistStore b m, PersistUnique b m, b ~ PersistEntityBackend v)
-          => v -> b m (Either (Entity v) (Key b v))
+insertBy :: (PersistEntity v, PersistStore backend m, PersistUnique backend m, backend ~ PersistEntityBackend v)
+          => v -> backend m (Either (Entity v) (Key backend v))
 insertBy val =
     go $ persistUniqueKeys val
   where
@@ -576,8 +602,8 @@ insertBy val =
 -- of a 'Unique' value. Returns a value matching /one/ of the unique keys. This
 -- function makes the most sense on entities with a single 'Unique'
 -- constructor.
-getByValue :: (PersistEntity v, PersistUnique b m, PersistEntityBackend v ~ b)
-           => v -> b m (Maybe (Entity v))
+getByValue :: (PersistEntity v, PersistUnique backend m, PersistEntityBackend v ~ backend)
+           => v -> backend m (Maybe (Entity v))
 getByValue val =
     go $ persistUniqueKeys val
   where
@@ -591,23 +617,23 @@ getByValue val =
 -- | curry this to make a convenience function that loads an associated model
 --   > foreign = belongsTo foeignId
 belongsTo ::
-  (PersistStore b m
+  (PersistStore backend m
   , PersistEntity ent1
-  , PersistEntity ent2) => (ent1 -> Maybe (Key b ent2)) -> ent1 -> b m (Maybe ent2)
+  , PersistEntity ent2) => (ent1 -> Maybe (Key backend ent2)) -> ent1 -> backend m (Maybe ent2)
 belongsTo foreignKeyField model = case foreignKeyField model of
     Nothing -> return Nothing
     Just f -> get f
 
 -- | same as belongsTo, but uses @getJust@ and therefore is similarly unsafe
 belongsToJust ::
-  (PersistStore b m
+  (PersistStore backend m
   , PersistEntity ent1
-  , PersistEntity ent2) => (ent1 -> Key b ent2) -> ent1 -> b m ent2
+  , PersistEntity ent2) => (ent1 -> Key backend ent2) -> ent1 -> backend m ent2
 belongsToJust getForeignKey model = getJust $ getForeignKey model
 
 -- | Same as get, but for a non-null (not Maybe) foreign key
 --   Unsafe unless your database is enforcing that the foreign key is valid
-getJust :: (PersistStore b m, PersistEntity val, Show (Key b val)) => Key b val -> b m val
+getJust :: (PersistStore backend m, PersistEntity val, Show (Key backend val)) => Key backend val -> backend m val
 getJust key = get key >>= maybe
   (liftBase $ E.throwIO $ PersistForeignConstraintUnmet $ show key)
   return
@@ -618,7 +644,7 @@ getJust key = get key >>= maybe
 --
 -- Returns 'True' if the entity would be unique, and could thus safely be
 -- 'insert'ed; returns 'False' on a conflict.
-checkUnique :: (PersistEntityBackend val ~ b, PersistEntity val, PersistUnique b m) => val -> b m Bool
+checkUnique :: (PersistEntityBackend val ~ backend, PersistEntity val, PersistUnique backend m) => val -> backend m Bool
 checkUnique val =
     go $ persistUniqueKeys val
   where
@@ -633,13 +659,13 @@ data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le | In | NotIn
                    | BackendSpecificFilter T.Text
     deriving (Read, Show)
 
-class PersistEntity a => DeleteCascade a b m where
-    deleteCascade :: Key b a -> b m ()
+class PersistEntity a => DeleteCascade a backend m where
+    deleteCascade :: Key backend a -> backend m ()
 
 instance PersistField PersistValue where
     toPersistValue = id
     fromPersistValue = Right
-    sqlType _ = SqlInteger -- since PersistValue should only be used like this for keys, which in SQL are Int64
+    sqlType _ = SqlInt64 -- since PersistValue should only be used like this for keys, which in SQL are Int64
 
 -- | Represents a value containing all the configuration options for a specific
 -- backend. This abstraction makes it easier to write code that can easily swap

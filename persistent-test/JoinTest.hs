@@ -15,6 +15,7 @@ module JoinTest ( specs
 
 import Test.Hspec.Monadic
 import Test.Hspec.HUnit ()
+import Test.HUnit (Assertion)
 
 import Database.Persist
 import Database.Persist.Query.Join (selectOneMany, SelectOneMany(..))
@@ -43,15 +44,16 @@ share [mkPersist sqlSettings,  mkMigrate "joinMigrate"] [persistUpperCase|
     deriving Show Eq
 |]
 #ifdef WITH_MONGODB
-cleanDB :: PersistQuery b m => b m ()
+cleanDB :: PersistQuery backend m => backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Author])
   deleteWhere ([] :: [Filter Entry])
+db :: Action IO () -> Assertion
 db = db' cleanDB
 #endif
 
 
-specs :: Specs
+specs :: Spec
 specs = describe "joins" $ do
   it "NoSql" $ db $ joinGeneric Database.Persist.Query.Join.runJoin False
 #ifndef WITH_MONGODB
@@ -59,13 +61,13 @@ specs = describe "joins" $ do
 #endif
 
 
-joinGeneric :: (MonadIO (b m), PersistQuery b m) =>
-               (SelectOneMany b (AuthorGeneric b) (EntryGeneric b)
-                -> b m [(Entity (AuthorGeneric b), [Entity (EntryGeneric b)])])
+joinGeneric :: (MonadIO (backend m), PersistQuery backend m) =>
+               (SelectOneMany backend (AuthorGeneric backend) (EntryGeneric backend)
+                -> backend m [(Entity (AuthorGeneric backend), [Entity (EntryGeneric backend)])])
                 -> Bool
-                -> b m ()
+                -> backend m ()
 
-joinGeneric run isSql = do
+joinGeneric run _ = do
     a <- insert $ Author "a"
     a1 <- insert $ Entry a "a1"
     a2 <- insert $ Entry a "a2"

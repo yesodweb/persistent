@@ -21,7 +21,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as S
-import Data.Time (Day, TimeOfDay (..), UTCTime (..), fromGregorian)
+import Data.Time (Day, TimeOfDay (..), UTCTime (..), fromGregorian, ZonedTime (..), LocalTime (..), TimeZone (..))
 import System.Random (randomIO, randomRIO, Random)
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad (when)
@@ -48,13 +48,14 @@ DataTypeTable no-json
     time TimeOfDay
 #endif
     utc UTCTime
+    zonedTime ZonedTime
 |]
 
-cleanDB :: PersistQuery b m => b m ()
+cleanDB :: PersistQuery backend m => backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter DataTypeTable])
 
-specs :: Specs
+specs :: Spec
 specs = describe "data type specs" $ do
     it "handles all types" $ asIO $ runConn $ do
 #ifndef WITH_MONGODB
@@ -81,6 +82,7 @@ specs = describe "data type specs" $ do
                 check "time" dataTypeTableTime
 #endif
                 check "utc" dataTypeTableUtc
+                check "zoned" dataTypeTableZonedTime
 
                 -- Do a special check for Double since it may
                 -- lose precision when serialized.
@@ -101,6 +103,7 @@ randomValue = DataTypeTable
     <*> randomTime
 #endif
     <*> randomUTC
+    <*> randomZonedTime
     where forbidden = [NotAssigned, PrivateUse]
           randomText =
                T.pack
@@ -126,6 +129,12 @@ randomDay = fromGregorian <$> randomRIO (1900, 9400) <*> randomIO <*> randomIO
 
 randomUTC :: IO UTCTime
 randomUTC = UTCTime <$> randomDay <*> return 0 -- precision issues
+
+randomZonedTime :: IO ZonedTime
+randomZonedTime = ZonedTime <$> (LocalTime <$> randomDay <*> randomTime) <*> (TimeZone <$> randomRIO (-600, 600) <*> randomIO <*> return "")
+
+instance Eq ZonedTime where
+    a == b = show a == show b
 
 randomTime :: IO TimeOfDay
 randomTime = TimeOfDay <$> randomRIO (0, 23)

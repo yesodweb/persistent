@@ -18,6 +18,7 @@ module Init (
   , setupMongo
   , MkPersistSettings (..)
   , persistSettings
+  , Action
 #else
   , db
   , sqlite_database
@@ -41,16 +42,17 @@ import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persist)
 import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
 import Test.Hspec.HUnit()
 import Test.QuickCheck
--- QuickCheck
-import System.Random
 
 import Database.Persist
 import Database.Persist.Store (PersistValue(..))
 
 #if WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
-import Database.Persist.MongoDB (Action, withMongoDBConn, runMongoDBConn, oidToKey)
+import Database.Persist.MongoDB (Action, withMongoDBConn, runMongoDBPool)
+{-
+import Database.Persist.MongoDB (oidToKey)
 import Data.Bson (genObjectId)
+-}
 import Language.Haskell.TH.Syntax (Type(..))
 import Database.Persist.TH (MkPersistSettings(..))
 import Control.Monad (replicateM)
@@ -59,6 +61,7 @@ import qualified Data.ByteString as BS
 #else
 import Database.Persist.GenericSql
 import Database.Persist.Sqlite
+import Data.Text (Text)
 
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
@@ -74,9 +77,11 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 
 -- Data types
 import Data.Int (Int32, Int64)
-import Data.Text (Text)
 
 import Control.Monad.IO.Class
+#if !MIN_VERSION_random(1,0,1)
+import System.Random
+#endif
 
 (@/=), (@==), (==@) :: (Eq a, Show a, MonadIO m) => a -> a -> m ()
 infix 1 @/= --, /=@
@@ -104,12 +109,15 @@ assertNotEmpty :: (Monad m, MonadIO m) => [a] -> m ()
 assertNotEmpty xs = liftIO $ assertBool "" (not (null xs))
 
 #ifdef WITH_MONGODB
+persistSettings :: MkPersistSettings
 persistSettings = MkPersistSettings { mpsBackend = ConT ''Action }
 
 type BackendMonad = Action
+runConn :: (MonadIO m, MonadBaseControl IO m) => Action m backend -> m ()
 runConn f = do
---    withMongoDBConn ("test") "127.0.0.1" $ runMongoDBConn MongoDB.safe MongoDB.Master f
-  withMongoDBConn "test" "127.0.0.1" $ runMongoDBConn MongoDB.master f
+  _<-withMongoDBConn "test" "127.0.0.1" Nothing 5 $
+      runMongoDBPool MongoDB.master f
+  return ()
 
 --setup :: MongoPersist IO ()
 setupMongo :: Action IO ()
@@ -126,6 +134,7 @@ setupMongo = do
     andVersion vresult = case show vresult of
       '"':'1':'.':n:'.':minor -> let i = ((read [n]) ::Int) in i > 9 || (i == 9 && ((read $ init minor)::Int) >= 1)
       '"':'2':'.':_ -> True
+      _ -> error "unkown version"
 
 
 db' :: Action IO () -> Action IO () -> Assertion

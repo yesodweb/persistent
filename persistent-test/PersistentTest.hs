@@ -24,7 +24,7 @@ import Database.Persist
 import Database.Persist.Query.Internal
 
 #ifdef WITH_MONGODB
-import Database.Persist.MongoDB (Action, oidToKey)
+import Database.Persist.MongoDB (oidToKey)
 import Data.Bson (genObjectId)
 import Language.Haskell.TH.Syntax (Type(..))
 
@@ -72,6 +72,9 @@ import Data.Maybe (fromJust)
 import qualified Data.HashMap.Lazy as M
 import Init
 import Data.Aeson
+
+import Data.Conduit
+import qualified Data.Conduit.List as CL
 
 data PetType = Cat | Dog
     deriving (Show, Read, Eq)
@@ -130,7 +133,7 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persis
     verkey Text Maybe
     UniqueEmail email
 |]
-cleanDB :: PersistQuery b m => b m ()
+cleanDB :: PersistQuery backend m => backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Person])
   deleteWhere ([] :: [Filter Person1])
@@ -139,19 +142,21 @@ cleanDB = do
   deleteWhere ([] :: [Filter NeedsPet])
   deleteWhere ([] :: [Filter User])
   deleteWhere ([] :: [Filter Email])
+
 #ifdef WITH_MONGODB
+db :: Action IO () -> Assertion
 db = db' cleanDB
 #endif
 
-petOwner :: PersistStore b m => PetGeneric b -> b m (PersonGeneric b)
+petOwner :: PersistStore backend m => PetGeneric backend -> backend m (PersonGeneric backend)
 petOwner = belongsToJust petOwnerId
 
-maybeOwnedPetOwner :: PersistStore b m => MaybeOwnedPetGeneric b -> b m (Maybe (PersonGeneric b))
+maybeOwnedPetOwner :: PersistStore backend m => MaybeOwnedPetGeneric backend -> backend m (Maybe (PersonGeneric backend))
 maybeOwnedPetOwner = belongsTo maybeOwnedPetOwnerId
 
 
 
-specs :: Specs
+specs :: Spec
 specs = describe "persistent" $ do
   it "FilterOr []" $ db $ do
       let p = Person "z" 1 Nothing
@@ -198,8 +203,7 @@ specs = describe "persistent" $ do
       results' <- selectList [PersonAge <. 28] []
       results' @== [(Entity micK mic26)]
 
-      update micK [PersonAge =. 28]
-      Just p28 <- get micK
+      p28 <- updateGet micK [PersonAge =. 28]
       personAge p28 @== 28
 
       updateWhere [PersonName ==. "Michael"] [PersonAge =. 29]
@@ -395,18 +399,15 @@ specs = describe "persistent" $ do
   it "update" $ db $ do
       let p25 = Person "Michael" 25 Nothing
       key25 <- insert p25
-      update key25 [PersonAge =. 28, PersonName =. "Updated"]
-      Just pBlue28 <- get key25
+      pBlue28 <- updateGet key25 [PersonAge =. 28, PersonName =. "Updated"]
       pBlue28 @== Person "Updated" 28 Nothing
-      update key25 [PersonAge +=. 2]
-      Just pBlue30 <- get key25
+      pBlue30 <- updateGet key25 [PersonAge +=. 2]
       pBlue30 @== Person "Updated" 30 Nothing
 
   it "maybe update" $ db $ do
       let noAge = PersonMaybeAge "Michael" Nothing
       keyNoAge <- insert noAge
-      update keyNoAge [PersonMaybeAgeAge +=. Just 2]
-      Just noAge2 <- get keyNoAge
+      noAge2 <- updateGet keyNoAge [PersonMaybeAgeAge +=. Just 2]
       -- the correct answer is very debatable
 #ifdef WITH_MONGODB
       personMaybeAgeAge noAge2 @== Just 2
@@ -451,6 +452,32 @@ specs = describe "persistent" $ do
       ps6 <- selectList [PersonAge ==. 26] []
       ps6 @== [(Entity key26 p26)]
 
+  it "selectSource" $ db $ do
+      let p1 = Person "selectSource1" 1 Nothing
+          p2 = Person "selectSource2" 2 Nothing
+          p3 = Person "selectSource3" 3 Nothing
+      k1 <- insert p1
+      k2 <- insert p2
+      k3 <- insert p3
+
+      ps1 <- runResourceT $ selectSource [] [Desc PersonAge] $$ await
+      ps1 @== Just (Entity k3 p3)
+
+      ps2 <- runResourceT $ selectSource [PersonAge <. 3] [Asc PersonAge] $$ CL.consume
+      ps2 @== [Entity k1 p1, Entity k2 p2]
+
+      runResourceT $ selectSource [] [Desc PersonAge] $$ do
+          e1 <- await
+          e1 @== Just (Entity k3 p3)
+
+          e2 <- await
+          e2 @== Just (Entity k2 p2)
+
+          e3 <- await
+          e3 @== Just (Entity k1 p1)
+
+          e4 <- await
+          e4 @== Nothing
 
   it "selectFirst" $ db $ do
       _ <- insert $ Person "Michael" 26 Nothing
@@ -459,6 +486,34 @@ specs = describe "persistent" $ do
 
       x <- selectFirst [] [Desc PersonAge]
       x @== Just (Entity kOld pOld)
+
+
+  it "selectKeys" $ db $ do
+      let p1 = Person "selectKeys1" 1 Nothing
+          p2 = Person "selectKeys2" 2 Nothing
+          p3 = Person "selectKeys3" 3 Nothing
+      k1 <- insert p1
+      k2 <- insert p2
+      k3 <- insert p3
+
+      ps1 <- runResourceT $ selectKeys [] [Desc PersonAge] $$ await
+      ps1 @== Just k3
+
+      ps2 <- runResourceT $ selectKeys [PersonAge <. 3] [Asc PersonAge] $$ CL.consume
+      ps2 @== [k1, k2]
+
+      runResourceT $ selectKeys [] [Desc PersonAge] $$ do
+          e1 <- await
+          e1 @== Just k3
+
+          e2 <- await
+          e2 @== Just k2
+
+          e3 <- await
+          e3 @== Just k1
+
+          e4 <- await
+          e4 @== Nothing
 
 
   it "insertBy" $ db $ do
@@ -550,7 +605,7 @@ specs = describe "persistent" $ do
       liftIO $ ret @?= [Single (2::Int)]
 
   it "rawSql/entity" $ db $ do
-      let insert' :: (PersistStore b m, PersistEntity val) => val -> b m (Key b val, val)
+      let insert' :: (PersistStore backend m, PersistEntity val) => val -> backend m (Key backend val, val)
           insert' v = insert v >>= \k -> return (k, v)
       (p1k, p1) <- insert' $ Person "Mathias"   23 Nothing
       (p2k, p2) <- insert' $ Person "Norbert"   44 Nothing
@@ -664,7 +719,7 @@ caseAfterException = withSqlitePool sqlite_database 1 $ runSqlPool $ do
 #endif
 
 -- Test proper polymorphism
-_polymorphic :: PersistQuery b m => b m ()
+_polymorphic :: PersistQuery backend m => backend m ()
 _polymorphic = do
     ((Entity id' _):_) <- selectList [] [LimitTo 1]
     _ <- selectList [PetOwnerId ==. id'] []

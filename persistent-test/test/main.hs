@@ -8,10 +8,13 @@ import qualified JoinTest
 import qualified EmbedTest
 import qualified LargeNumberTest
 import qualified MaxLenTest
-import Test.Hspec.Monadic (hspecX)
+import qualified SumTypeTest
+import Test.Hspec.Monadic (hspec)
 import Init
 import System.Exit
-import Control.Monad (unless)
+import Control.Monad (unless, when)
+import Filesystem (isFile, removeFile)
+import Filesystem.Path.CurrentOS (fromText)
 
 
 #ifdef MongoDB
@@ -31,6 +34,8 @@ toExitCode False = ExitFailure 1
 main :: IO ()
 main = do
 #ifndef WITH_MONGODB
+  sqExists <- isFile $ fromText sqlite_database
+  when sqExists $ removeFile $ fromText sqlite_database
   runConn (setup PersistentTest.testMigrate)
 #endif
   r <- hspecB $ PersistentTest.specs
@@ -44,11 +49,12 @@ main = do
   runConn (setup MaxLenTest.maxlenMigrate)
 #endif
 
-  hspecX $
+  hspec $
     RenameTest.specs >>
     DataTypeTest.specs >>
     HtmlTest.specs >>
     JoinTest.specs >>
     EmbedTest.specs >>
     LargeNumberTest.specs >>
-    MaxLenTest.specs
+    MaxLenTest.specs >>
+    SumTypeTest.specs

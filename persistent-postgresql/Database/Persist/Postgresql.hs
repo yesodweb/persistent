@@ -22,13 +22,14 @@ import Database.Persist.EntityDef
 import qualified Database.PostgreSQL.Simple as PG
 import qualified Database.PostgreSQL.Simple.BuiltinTypes as PG
 import qualified Database.PostgreSQL.Simple.Internal as PG
-import qualified Database.PostgreSQL.Simple.Param as PG
-import qualified Database.PostgreSQL.Simple.Result as PG
+import qualified Database.PostgreSQL.Simple.ToField as PGTF
+import qualified Database.PostgreSQL.Simple.FromField as PGFF
 import qualified Database.PostgreSQL.Simple.Types as PG
+import Database.PostgreSQL.Simple.Ok (Ok (..))
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
-import Control.Exception (SomeException, throw)
+import Control.Exception (throw)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.List (intercalate)
@@ -38,14 +39,14 @@ import Data.Either (partitionEithers)
 import Control.Arrow
 import Data.List (sort, groupBy)
 import Data.Function (on)
-import qualified Data.Conduit as C
+import Data.Conduit
 import qualified Data.Conduit.List as CL
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
--- import Data.Time.LocalTime (localTimeToUTC, utc)
+import Data.Time.LocalTime (localTimeToUTC, utc)
 import Data.Text (Text, pack)
 import Data.Aeson
 import Control.Monad (forM, mzero)
@@ -142,14 +143,13 @@ execute' conn query vals = do
     _ <- PG.execute conn query (map P vals)
     return ()
 
-withStmt' :: C.MonadResource m
+withStmt' :: MonadResource m
           => PG.Connection
           -> PG.Query
           -> [PersistValue]
-          -> C.Source m [PersistValue]
-withStmt' conn query vals = C.sourceIO (liftIO   openS )
-                                       (liftIO . closeS)
-                                       (liftIO . pullS )
+          -> Source m [PersistValue]
+withStmt' conn query vals =
+    bracketP openS closeS pull
   where
     openS = do
       -- Construct raw query
@@ -194,66 +194,75 @@ withStmt' conn query vals = C.sourceIO (liftIO   openS )
 
     closeS (ret, _, _, _) = LibPQ.unsafeFreeResult ret
 
+    pull x = do
+        y <- liftIO $ pullS x
+        case y of
+            Nothing -> return ()
+            Just z -> yield z >> pull x
+
     pullS (ret, rowRef, rowCount, getters) = do
         row <- atomicModifyIORef rowRef (\r -> (r+1, r))
         if row == rowCount
-           then return C.IOClosed
-           else fmap C.IOOpen $ forM (zip getters [0..]) $ \(getter, col) -> do
+           then return Nothing
+           else fmap Just $ forM (zip getters [0..]) $ \(getter, col) -> do
                                 mbs <- LibPQ.getvalue' ret row col
                                 case mbs of
                                   Nothing -> return PersistNull
                                   Just bs -> bs `seq` case getter mbs of
-                                                        Left exc -> throw exc
-                                                        Right v  -> return v
+                                                        Errors (exc:_) -> throw exc
+                                                        Errors [] -> error "Got an Errors, but no exceptions"
+                                                        Ok v  -> return v
 
 -- | Avoid orphan instances.
 newtype P = P PersistValue
 
-instance PG.Param P where
-    render (P (PersistText t))        = PG.render t
-    render (P (PersistByteString bs)) = PG.render (PG.Binary bs)
-    render (P (PersistInt64 i))       = PG.render i
-    render (P (PersistDouble d))      = PG.render d
-    render (P (PersistBool b))        = PG.render b
-    render (P (PersistDay d))         = PG.render d
-    render (P (PersistTimeOfDay t))   = PG.render t
-    render (P (PersistUTCTime t))     = PG.render t
-    render (P PersistNull)            = PG.render PG.Null
-    render (P (PersistList l))        = PG.render $ listToJSON l
-    render (P (PersistMap m))         = PG.render $ mapToJSON m
-    render (P (PersistObjectId _))    =
+instance PGTF.ToField P where
+    toField (P (PersistText t))        = PGTF.toField t
+    toField (P (PersistByteString bs)) = PGTF.toField (PG.Binary bs)
+    toField (P (PersistInt64 i))       = PGTF.toField i
+    toField (P (PersistDouble d))      = PGTF.toField d
+    toField (P (PersistBool b))        = PGTF.toField b
+    toField (P (PersistDay d))         = PGTF.toField d
+    toField (P (PersistTimeOfDay t))   = PGTF.toField t
+    toField (P (PersistUTCTime t))     = PGTF.toField t
+    toField (P (PersistZonedTime (ZT t))) = PGTF.toField t
+    toField (P PersistNull)            = PGTF.toField PG.Null
+    toField (P (PersistList l))        = PGTF.toField $ listToJSON l
+    toField (P (PersistMap m))         = PGTF.toField $ mapToJSON m
+    toField (P (PersistObjectId _))    =
         error "Refusing to serialize a PersistObjectId to a PostgreSQL value"
 
-type Getter a = PG.Field -> Maybe ByteString -> Either SomeException a
+type Getter a = PG.Field -> Maybe ByteString -> Ok a
 
-convertPV :: PG.Result a => (a -> b) -> Getter b
-convertPV f = (fmap f .) . PG.convert
+convertPV :: PGFF.FromField a => (a -> b) -> Getter b
+convertPV f = (fmap f .) . PGFF.fromField
 
 -- FIXME: check if those are correct and complete.
 getGetter :: PG.BuiltinType -> Getter PersistValue
-getGetter PG.Bool      = convertPV PersistBool
-getGetter PG.Bytea     = convertPV (PersistByteString . unBinary)
-getGetter PG.Char      = convertPV PersistText
-getGetter PG.Name      = convertPV PersistText
-getGetter PG.Int8      = convertPV PersistInt64
-getGetter PG.Int2      = convertPV PersistInt64
-getGetter PG.Int4      = convertPV PersistInt64
-getGetter PG.Text      = convertPV PersistText
-getGetter PG.Xml       = convertPV PersistText
-getGetter PG.Float4    = convertPV PersistDouble
-getGetter PG.Float8    = convertPV PersistDouble
-getGetter PG.Abstime   = convertPV PersistUTCTime
-getGetter PG.Reltime   = convertPV PersistUTCTime
-getGetter PG.Money     = convertPV PersistDouble
-getGetter PG.Bpchar    = convertPV PersistText
-getGetter PG.Varchar   = convertPV PersistText
-getGetter PG.Date      = convertPV PersistDay
-getGetter PG.Time      = convertPV PersistTimeOfDay
-getGetter PG.Timestamp = convertPV PersistUTCTime
-getGetter PG.Bit       = convertPV PersistInt64
-getGetter PG.Varbit    = convertPV PersistInt64
-getGetter PG.Numeric   = convertPV (PersistDouble . fromRational)
-getGetter PG.Void      = \_ _ -> Right PersistNull
+getGetter PG.Bool                  = convertPV PersistBool
+getGetter PG.ByteA                 = convertPV (PersistByteString . unBinary)
+getGetter PG.Char                  = convertPV PersistText
+getGetter PG.Name                  = convertPV PersistText
+getGetter PG.Int8                  = convertPV PersistInt64
+getGetter PG.Int2                  = convertPV PersistInt64
+getGetter PG.Int4                  = convertPV PersistInt64
+getGetter PG.Text                  = convertPV PersistText
+getGetter PG.Xml                   = convertPV PersistText
+getGetter PG.Float4                = convertPV PersistDouble
+getGetter PG.Float8                = convertPV PersistDouble
+getGetter PG.AbsTime               = convertPV PersistUTCTime
+getGetter PG.RelTime               = convertPV PersistUTCTime
+getGetter PG.Money                 = convertPV PersistDouble
+getGetter PG.BpChar                = convertPV PersistText
+getGetter PG.VarChar               = convertPV PersistText
+getGetter PG.Date                  = convertPV PersistDay
+getGetter PG.Time                  = convertPV PersistTimeOfDay
+getGetter PG.Timestamp             = convertPV (PersistUTCTime . localTimeToUTC utc)
+getGetter PG.TimestampTZ           = convertPV (PersistZonedTime . ZT)
+getGetter PG.Bit                   = convertPV PersistInt64
+getGetter PG.VarBit                = convertPV PersistInt64
+getGetter PG.Numeric               = convertPV (PersistDouble . fromRational)
+getGetter PG.Void                  = \_ _ -> Ok PersistNull
 getGetter other   = error $ "Postgresql.getGetter: type " ++
                             show other ++ " not supported."
 
@@ -315,10 +324,10 @@ getColumns getter def = do
             [ PersistText $ unDBName $ entityDB def
             , PersistText $ unDBName $ entityID def
             ]
-    cs <- C.runResourceT $ withStmt stmt vals C.$$ helper
+    cs <- runResourceT $ withStmt stmt vals $$ helper
     stmt' <- getter
         "SELECT constraint_name, column_name FROM information_schema.constraint_column_usage WHERE table_name=? AND column_name <> ? ORDER BY constraint_name, column_name"
-    us <- C.runResourceT $ withStmt stmt' vals C.$$ helperU
+    us <- runResourceT $ withStmt stmt' vals $$ helperU
     return $ cs ++ us
   where
     getAll front = do
@@ -394,27 +403,28 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d] =
                 ]
         let ref = refName tname cname
         stmt <- getter sql
-        C.runResourceT $ withStmt stmt
+        runResourceT $ withStmt stmt
                      [ PersistText $ unDBName tname
                      , PersistText $ unDBName ref
-                     ] C.$$ do
+                     ] $$ do
             Just [PersistInt64 i] <- CL.head
             return $ if i == 0 then Nothing else Just (DBName "", ref)
     d' = case d of
             PersistNull   -> Right Nothing
             PersistText t -> Right $ Just t
             _ -> Left $ pack $ "Invalid default column: " ++ show d
-    getType "int4"      = Right $ SqlInt32
-    getType "int8"      = Right $ SqlInteger
-    getType "varchar"   = Right $ SqlString
-    getType "date"      = Right $ SqlDay
-    getType "bool"      = Right $ SqlBool
-    getType "timestamp" = Right $ SqlDayTime
-    getType "float4"    = Right $ SqlReal
-    getType "float8"    = Right $ SqlReal
-    getType "bytea"     = Right $ SqlBlob
-    getType "time"      = Right $ SqlTime
-    getType a           = Left $ "Unknown type: " `T.append` a
+    getType "int4"        = Right $ SqlInt32
+    getType "int8"        = Right $ SqlInt64
+    getType "varchar"     = Right $ SqlString
+    getType "date"        = Right $ SqlDay
+    getType "bool"        = Right $ SqlBool
+    getType "timestamp"   = Right $ SqlDayTime
+    getType "timestamptz" = Right $ SqlDayTimeZoned
+    getType "float4"      = Right $ SqlReal
+    getType "float8"      = Right $ SqlReal
+    getType "bytea"       = Right $ SqlBlob
+    getType "time"        = Right $ SqlTime
+    getType a             = Left $ "Unknown type: " `T.append` a
 getColumn _ _ x =
     return $ Left $ pack $ "Invalid result from information_schema: " ++ show x
 
@@ -467,13 +477,15 @@ showColumn (Column n nu t def _maxLen ref) = concat
 showSqlType :: SqlType -> String
 showSqlType SqlString = "VARCHAR"
 showSqlType SqlInt32 = "INT4"
-showSqlType SqlInteger = "INT8"
+showSqlType SqlInt64 = "INT8"
 showSqlType SqlReal = "DOUBLE PRECISION"
 showSqlType SqlDay = "DATE"
 showSqlType SqlTime = "TIME"
 showSqlType SqlDayTime = "TIMESTAMP"
+showSqlType SqlDayTimeZoned = "TIMESTAMP WITH TIME ZONE"
 showSqlType SqlBlob = "BYTEA"
 showSqlType SqlBool = "BOOLEAN"
+showSqlType (SqlOther t) = T.unpack t
 
 showAlterDb :: AlterDB -> (Bool, Text)
 showAlterDb (AddTable s) = (False, pack s)

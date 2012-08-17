@@ -2,6 +2,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 -- | A sqlite backend for persistent.
 module Database.Persist.Sqlite
     ( withSqlitePool
@@ -37,7 +38,7 @@ import Data.Text (Text, pack)
 import Control.Monad (mzero)
 import Data.Aeson
 import qualified Data.Text as T
-import qualified Data.Conduit as C
+import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Control.Applicative
 
@@ -66,7 +67,7 @@ open' s = do
         , migrateSql = migrate'
         , begin = helper "BEGIN"
         , commitC = helper "COMMIT"
-        , rollbackC = helper "ROLLBACK"
+        , rollbackC = ignoreExceptions . helper "ROLLBACK"
         , escapeName = escape
         , noLimit = "LIMIT -1"
         }
@@ -75,6 +76,7 @@ open' s = do
         stmt <- getter t
         execute stmt []
         reset stmt
+    ignoreExceptions = E.handle (\(_ :: E.SomeException) -> return ())
 
 prepare' :: Sqlite.Connection -> Text -> IO Statement
 prepare' conn sql = do
@@ -108,32 +110,35 @@ execute' stmt vals = flip finally (liftIO $ Sqlite.reset stmt) $ do
     return ()
 
 withStmt'
-          :: C.MonadResource m
+          :: MonadResource m
           => Sqlite.Statement
           -> [PersistValue]
-          -> C.Source m [PersistValue]
-withStmt' stmt vals = C.sourceIO
+          -> Source m [PersistValue]
+withStmt' stmt vals = bracketP
     (Sqlite.bind stmt vals >> return stmt)
     Sqlite.reset
-    pull
+    (const pull)
   where
-    pull _ = liftIO $ do
-        x <- Sqlite.step stmt
+    pull = do
+        x <- liftIO $ Sqlite.step stmt
         case x of
-            Sqlite.Done -> return C.IOClosed
+            Sqlite.Done -> return ()
             Sqlite.Row -> do
                 cols <- liftIO $ Sqlite.columns stmt
-                return $ C.IOOpen cols
+                yield cols
+                pull
 showSqlType :: SqlType -> String
 showSqlType SqlString = "VARCHAR"
 showSqlType SqlInt32 = "INTEGER"
-showSqlType SqlInteger = "INTEGER"
+showSqlType SqlInt64 = "INTEGER"
 showSqlType SqlReal = "REAL"
 showSqlType SqlDay = "DATE"
 showSqlType SqlTime = "TIME"
+showSqlType SqlDayTimeZoned = "TIMESTAMP"
 showSqlType SqlDayTime = "TIMESTAMP"
 showSqlType SqlBlob = "BLOB"
 showSqlType SqlBool = "BOOLEAN"
+showSqlType (SqlOther t) = T.unpack t
 
 migrate' :: PersistEntity val
          => [EntityDef]
@@ -144,8 +149,8 @@ migrate' allDefs getter val = do
     let (cols, uniqs) = mkColumns allDefs val
     let newSql = mkCreateTable False def (cols, uniqs)
     stmt <- getter "SELECT sql FROM sqlite_master WHERE type='table' AND name=?"
-    oldSql' <- C.runResourceT
-             $ withStmt stmt [PersistText $ unDBName table] C.$$ go
+    oldSql' <- runResourceT
+             $ withStmt stmt [PersistText $ unDBName table] $$ go
     case oldSql' of
         Nothing -> return $ Right [(False, newSql)]
         Just oldSql ->
@@ -171,7 +176,7 @@ getCopyTable :: PersistEntity val
              -> IO [(Bool, Sql)]
 getCopyTable allDefs getter val = do
     stmt <- getter $ pack $ "PRAGMA table_info(" ++ escape' table ++ ")"
-    oldCols' <- C.runResourceT $ withStmt stmt [] C.$$ getCols
+    oldCols' <- runResourceT $ withStmt stmt [] $$ getCols
     let oldCols = map DBName $ filter (/= "id") oldCols' -- need to update for table id attribute ?
     let newCols = map cName cols
     let common = filter (`elem` oldCols) newCols

@@ -3,6 +3,7 @@
 module Database.Persist.Query
   (   PersistQuery (..)
     , selectList
+    , selectKeysList
     , deleteCascadeWhere
 
     , SelectOpt (..)

@@ -16,9 +16,9 @@ import Data.Maybe (mapMaybe)
 import qualified Data.Map as Map
 import Data.List (foldl')
 
-class PersistQuery b m => RunJoin a b m where
+class PersistQuery backend m => RunJoin a backend m where
     type Result a
-    runJoin :: a -> b m (Result a)
+    runJoin :: a -> backend m (Result a)
 
 data SelectOneMany backend one many = SelectOneMany
     { somFilterOne :: [Filter one]
