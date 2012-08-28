@@ -22,6 +22,8 @@ module Database.Persist.MongoDB
     -- * Entity conversion
     , entityToFields
     , toInsertFields
+    , docToEntityEither
+    , docToEntityThrow
     -- * network type
     , HostName
     -- * MongoDB driver types
@@ -130,11 +132,6 @@ runMongoDBPool accessMode action pool =
 runMongoDBPoolDef :: (Trans.MonadIO m, MonadBaseControl IO m) => DB.Action m a -> ConnectionPool -> m a
 runMongoDBPoolDef = runMongoDBPool (DB.ConfirmWrites ["j" DB.=: True])
 
-rightPersistVals :: (PersistEntity val) => EntityDef -> [DB.Field] -> Entity val
-rightPersistVals ent vals = case wrapFromPersistValues ent vals of
-      Left e -> error $ T.unpack e
-      Right v -> v
-
 filterByKey :: (PersistEntity val) => Key DB.Action val -> DB.Document
 filterByKey k = [_id DB.=: keyToOid k]
 
@@ -162,7 +159,7 @@ updateToMongoField (Update field v up) =
                   (Divide, _)   -> throw $ PersistMongoDBUnsupported "divide not supported"
 
 
-uniqSelector :: forall val.  (PersistEntity val) => Unique val DB.Action -> [DB.Field]
+uniqSelector :: forall record.  (PersistEntity record) => Unique record DB.Action -> [DB.Field]
 uniqSelector uniq = zipWith (DB.:=)
   (map (unDBName . snd) $ persistUniqueToFieldNames uniq)
   (map DB.val (persistUniqueToValues uniq))
@@ -170,7 +167,7 @@ uniqSelector uniq = zipWith (DB.:=)
 -- | convert a PersistEntity into document fields.
 -- for inserts only: nulls are ignored so they will be unset in the document.
 -- 'entityToFields' includes nulls
-toInsertFields :: forall val.  (PersistEntity val) => val -> [DB.Field]
+toInsertFields :: forall record.  (PersistEntity record) => record -> [DB.Field]
 toInsertFields record = zipFilter (entityFields entity) (toPersistFields record)
   where
     zipFilter [] _  = []
@@ -182,7 +179,7 @@ toInsertFields record = zipFilter (entityFields entity) (toPersistFields record)
 
 -- | convert a PersistEntity into document fields.
 -- unlike 'toInsertFields', nulls are included.
-entityToFields :: forall val.  (PersistEntity val) => val -> [DB.Field]
+entityToFields :: forall record.  (PersistEntity record) => record -> [DB.Field]
 entityToFields record = zipIt (entityFields entity) (toPersistFields record)
   where
     zipIt [] _  = []
@@ -236,9 +233,9 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
             d <- DB.findOne (queryByKey k t)
             case d of
               Nothing -> return Nothing
-              Just doc ->
-                let Entity _ ent = rightPersistVals t doc
-                in  return $ Just $ ent
+              Just doc -> do
+                Entity _ ent <- fromPersistValuesThrow t doc
+                return $ Just ent
           where
             t = entityDef $ dummyFromKey k
 
@@ -247,13 +244,11 @@ instance MonadThrow m => MonadThrow (DB.Action m) where
 
 instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => PersistUnique DB.Action m where
     getBy uniq = do
-        mdocument <- DB.findOne $
+        mdoc <- DB.findOne $
           (DB.select (uniqSelector uniq) (unDBName $ entityDB t))
-        case mdocument of
-          Nothing -> return Nothing
-          Just document -> case wrapFromPersistValues t document of
-              Left s -> Trans.liftIO . throwIO $ PersistMarshalError $ s
-              Right entity -> return $ Just entity
+        case mdoc of
+            Nothing -> return Nothing
+            Just doc -> fmap Just $ fromPersistValuesThrow t doc
       where
         t = entityDef $ dummyFromUnique uniq
 
@@ -304,8 +299,9 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
                    (keyToOid key) (updateFields upds)
         case result of
           Left e -> err e
-          Right doc -> let Entity _ ent = rightPersistVals t doc
-                      in  return ent
+          Right doc -> do
+            Entity _ ent <- fromPersistValuesThrow t doc
+            return ent
       where
         err msg = Trans.liftIO $ throwIO $ KeyNotFound $ show key ++ msg
         t = entityDef $ dummyFromKey key
@@ -343,21 +339,17 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
             mdoc <- lift $ lift $ DB.next cursor
             case mdoc of
                 Nothing -> return ()
-                Just doc ->
-                    case wrapFromPersistValues t doc of
-                        Left s -> liftIO $ throwIO $ PersistMarshalError $ s
-                        Right entity -> do
-                            yield entity
-                            pull cursor
+                Just doc -> do
+                    entity <- fromPersistValuesThrow t doc
+                    yield entity
+                    pull cursor
         t = entityDef $ dummyFromFilts filts
 
     selectFirst filts opts = do
-        doc <- DB.findOne $ makeQuery filts opts
-        case doc of
+        mdoc <- DB.findOne $ makeQuery filts opts
+        case mdoc of
             Nothing -> return Nothing
-            Just document -> case wrapFromPersistValues t document of
-                Left s -> Trans.liftIO . throwIO $ PersistMarshalError $ s
-                Right entity -> return $ Just entity
+            Just doc -> fmap Just $ fromPersistValuesThrow t doc
       where
         t = entityDef $ dummyFromFilts filts
 
@@ -402,7 +394,7 @@ filtersToSelector filts =
 #endif
     if null filts then [] else concatMap filterToDocument filts
 
-multiFilter :: forall val.  PersistEntity val => String -> [Filter val] -> [DB.Field]
+multiFilter :: forall record.  PersistEntity record => String -> [Filter record] -> [DB.Field]
 multiFilter multi fs = [T.pack multi DB.:= DB.Array (map (DB.Doc . filterToDocument) fs)]
 
 filterToDocument :: PersistEntity val => Filter val -> DB.Document
@@ -436,13 +428,35 @@ filterToDocument f =
     showFilter Eq = error "EQ filter not expected"
     showFilter (BackendSpecificFilter bsf) = throw $ PersistMongoDBError $ T.pack $ "did not expect BackendSpecificFilter " ++ T.unpack bsf
 
-fieldName ::  forall v typ.  (PersistEntity v) => EntityField v typ -> DB.Label
+
+fieldName ::  forall record typ.  (PersistEntity record) => EntityField record typ -> DB.Label
 fieldName = idfix . unDBName . fieldDB . persistFieldDef
   where idfix f = if f == "id" then _id else f
 
 
-wrapFromPersistValues :: (PersistEntity val) => EntityDef -> [DB.Field] -> Either T.Text (Entity val)
-wrapFromPersistValues entDef doc =
+docToEntityEither :: forall record. (PersistEntity record) => DB.Document -> Either T.Text (Entity record)
+docToEntityEither doc = entity
+  where
+    entDef = entityDef (getType entity)
+    entity = eitherFromPersistValues entDef doc
+    getType :: Either err (Entity ent) -> ent
+    getType = error "docToEntityEither/getType: never here"
+
+docToEntityThrow :: forall m record. (Trans.MonadIO m, PersistEntity record) => DB.Document -> m (Entity record)
+docToEntityThrow doc =
+    case docToEntityEither doc of
+        Left s -> Trans.liftIO . throwIO $ PersistMarshalError $ s
+        Right entity -> return entity
+
+
+fromPersistValuesThrow :: (Trans.MonadIO m, PersistEntity record) => EntityDef -> [DB.Field] -> m (Entity record)
+fromPersistValuesThrow entDef doc = 
+    case eitherFromPersistValues entDef doc of
+        Left s -> Trans.liftIO . throwIO $ PersistMarshalError $ s
+        Right entity -> return entity
+
+eitherFromPersistValues :: (PersistEntity record) => EntityDef -> [DB.Field] -> Either T.Text (Entity record)
+eitherFromPersistValues entDef doc =
     -- normally the id is the first field: this is probably best even if worst case is worse
     let mKey = lookup _id castDoc
     in case mKey of

@@ -24,7 +24,8 @@ import Database.Persist
 import Database.Persist.Query.Internal
 
 #ifdef WITH_MONGODB
-import Database.Persist.MongoDB (oidToKey)
+import qualified Database.MongoDB as MongoDB
+import Database.Persist.MongoDB (oidToKey, toInsertFields, entityToFields, docToEntityThrow)
 import Data.Bson (genObjectId)
 import Language.Haskell.TH.Syntax (Type(..))
 
@@ -595,7 +596,21 @@ specs = describe "persistent" $ do
     
 
 
-#ifndef WITH_MONGODB
+#ifdef WITH_MONGODB
+  it "rawMongo - toInsertFields, entityFields, & docToEntityThrow" $ db $ do
+      let p1 = Person "Duder" 0 Nothing
+      let doc = toInsertFields p1
+      MongoDB.ObjId _id <- MongoDB.insert "Person" $ doc
+      let idSelector = "_id" MongoDB.=: _id
+      Entity _ ent1 <- docToEntityThrow $ idSelector:doc
+      liftIO $ p1 @?= ent1
+
+      let p2 = p1 {personColor = Just "blue"}
+      let doc2 = idSelector:entityToFields p2
+      MongoDB.save "Person" doc2
+      Entity _ ent2 <- docToEntityThrow doc2
+      liftIO $ p2 @?= ent2
+#else
   it "rawSql/2+2" $ db $ do
       ret <- rawSql "SELECT 2+2" []
       liftIO $ ret @?= [Single (4::Int)]

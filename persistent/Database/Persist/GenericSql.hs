@@ -535,7 +535,7 @@ instance PersistField a => RawSql (Single a) where
     rawSqlProcessRow _     = Left "RawSql (Single a): wrong number of columns."
 
 instance PersistEntity a => RawSql (Entity a) where
-    rawSqlCols escape = ((+1).length.entityFields &&& process) . entityDef . entityVal
+    rawSqlCols escape = ((+1) . length . entityFields &&& process) . entityDef . entityVal
         where
           process ed = (:[]) $
                        T.intercalate ", " $
