@@ -161,7 +161,7 @@ specs :: Spec
 specs = describe "persistent" $ do
   it "FilterOr []" $ db $ do
       let p = Person "z" 1 Nothing
-      _ <- insert p 
+      _ <- insert p
       ps <- selectList [FilterOr []] [Desc PersonAge]
       assertEmpty ps
 
@@ -197,7 +197,7 @@ specs = describe "persistent" $ do
 
   it "passes the general tests" $ db $ do
       let mic26 = Person "Michael" 26 Nothing
-      micK <- insert mic26 
+      micK <- insert mic26
       results <- selectList [PersonName ==. "Michael"] []
       results @== [(Entity micK mic26)]
 
@@ -593,7 +593,7 @@ specs = describe "persistent" $ do
   it "serializes to JSON" $ do
       toJSON (Person "D" 0 Nothing) @?=
         Object (M.fromList [("color",Null),("name",String "D"),("age",Number 0)])
-    
+
 
 
 #ifdef WITH_MONGODB
