@@ -58,6 +58,7 @@ import Data.Text (Text, pack, unpack, concat)
 import qualified Data.Text as T
 import Web.PathPieces (PathPiece (..))
 import qualified Data.Text.Read
+import Data.Maybe (fromMaybe)
 import Data.Monoid (Monoid, mappend)
 import Database.Persist.EntityDef
 import qualified Data.Conduit as C
@@ -552,6 +553,27 @@ instance PersistEntity a => RawSql (Entity a) where
     rawSqlProcessRow (idCol:ent) = Entity <$> fromPersistValue idCol
                                           <*> fromPersistValues ent
     rawSqlProcessRow _ = Left "RawSql (Entity a): wrong number of columns."
+
+-- | Since 1.0.1.
+instance RawSql a => RawSql (Maybe a) where
+    rawSqlCols e = rawSqlCols e . extractMaybe
+    rawSqlColCountReason = rawSqlColCountReason . extractMaybe
+    rawSqlProcessRow cols
+      | all isNull cols = return Nothing
+      | otherwise       =
+        case rawSqlProcessRow cols of
+          Right v  -> Right (Just v)
+          Left msg -> Left $ "RawSql (Maybe a): not all columns were Null " ++
+                             "but the inner parser has failed.  Its message " ++
+                             "was \"" ++ msg ++ "\".  Did you apply Maybe " ++
+                             "to a tuple, perhaps?  The main use case for " ++
+                             "Maybe is to allow OUTER JOINs to be written, " ++
+                             "in which case 'Maybe (Entity v)' is used."
+      where isNull PersistNull = True
+            isNull _           = False
+
+extractMaybe :: Maybe a -> a
+extractMaybe = fromMaybe (error "Database.Persist.GenericSql.extractMaybe")
 
 instance (RawSql a, RawSql b) => RawSql (a, b) where
     rawSqlCols e x = rawSqlCols e (fst x) # rawSqlCols e (snd x)

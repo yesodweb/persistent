@@ -619,6 +619,10 @@ specs = describe "persistent" $ do
       ret <- rawSql "SELECT ?-?" [PersistInt64 5, PersistInt64 3]
       liftIO $ ret @?= [Single (2::Int)]
 
+  it "rawSql/NULL" $ db $ do
+      ret <- rawSql "SELECT NULL" []
+      liftIO $ ret @?= [Nothing :: Maybe (Single Int)]
+
   it "rawSql/entity" $ db $ do
       let insert' :: (PersistStore backend m, PersistEntity val) => val -> backend m (Key backend val, val)
           insert' v = insert v >>= \k -> return (k, v)
@@ -643,6 +647,14 @@ specs = describe "persistent" $ do
       liftIO $ ret @?= [ (Entity p1k p1, Entity a1k a1)
                        , (Entity p1k p1, Entity a2k a2)
                        , (Entity p2k p2, Entity a3k a3) ]
+      ret2 <- rawSql query [PersistInt64 20]
+      liftIO $ ret2 @?= [ (Just (Entity p1k p1), Just (Entity a1k a1))
+                        , (Just (Entity p1k p1), Just (Entity a2k a2))
+                        , (Just (Entity p2k p2), Just (Entity a3k a3)) ]
+      ret3 <- rawSql query [PersistInt64 20]
+      liftIO $ ret3 @?= [ Just (Entity p1k p1, Entity a1k a1)
+                        , Just (Entity p1k p1, Entity a2k a2)
+                        , Just (Entity p2k p2, Entity a3k a3) ]
 
   it "rawSql/order-proof" $ db $ do
       let p1 = Person "Zacarias" 93 Nothing
@@ -655,6 +667,27 @@ specs = describe "persistent" $ do
       ret2 <- rawSql query []
       liftIO $ ret1 @?= [Entity p1k p1]
       liftIO $ ret2 @?= [Entity (Key $ unKey p1k) (RFO p1)]
+
+  it "rawSql/OUTER JOIN" $ db $ do
+      let insert' :: (PersistStore backend m, PersistEntity val) => val -> backend m (Key backend val, val)
+          insert' v = insert v >>= \k -> return (k, v)
+      (p1k, p1) <- insert' $ Person "Mathias"   23 Nothing
+      (p2k, p2) <- insert' $ Person "Norbert"   44 Nothing
+      (a1k, a1) <- insert' $ Pet p1k "Rodolfo" Cat
+      (a2k, a2) <- insert' $ Pet p1k "Zeno"    Cat
+      escape <- ((. DBName) . escapeName) `fmap` SqlPersist ask
+      let query = T.concat [ "SELECT ??, ?? "
+                           , "FROM ", person
+                           , "LEFT OUTER JOIN ", pet
+                           , " ON ", person, ".", escape "id"
+                           , " = ", pet, ".", escape "ownerId"
+                           , " ORDER BY ", person, ".", escape "name"]
+          person = escape "Person"
+          pet    = escape "Pet"
+      ret <- rawSql query []
+      liftIO $ ret @?= [ (Entity p1k p1, Just (Entity a1k a1))
+                       , (Entity p1k p1, Just (Entity a2k a2))
+                       , (Entity p2k p2, Nothing) ]
 
   it "commit/rollback" (caseCommitRollback >> runConn cleanDB)
 
