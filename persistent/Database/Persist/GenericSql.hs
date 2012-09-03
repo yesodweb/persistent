@@ -24,6 +24,7 @@ module Database.Persist.GenericSql
     , rawSql
     , Entity(..)
     , Single(..)
+    , RawSql
 
     -- * Migrations
     , Migration
