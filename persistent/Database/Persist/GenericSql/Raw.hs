@@ -53,10 +53,14 @@ instance MonadTransControl SqlPersist where
     restoreT = SqlPersist . ReaderT . const . liftM unStReader
 
 instance MonadResource m => MonadResource (SqlPersist m) where
+#if MIN_VERSION_resourcet(0,4,0)
+    liftResourceT = lift . liftResourceT
+#else
     register = lift . register
     release = lift . release
     allocate a = lift . allocate a
     resourceMask = lift . resourceMask
+#endif
 
 class (MonadIO m, MonadLogger m) => MonadSqlPersist m where
     askSqlConn :: m Connection

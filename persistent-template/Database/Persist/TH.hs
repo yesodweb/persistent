@@ -135,8 +135,14 @@ dataTypeDec t =
     DataD [] nameG [KindedTV backend monadTransKind] constrs
     $ map (mkName . unpack) $ entityDerives t
   where
+#if MIN_VERSION_template_haskell(2,8,0)
+    arrowK x y = ArrowT `AppT` x `AppT` y
+    monadKind = StarT `arrowK` StarT
+    monadTransKind = monadKind `arrowK` monadKind
+#else
     monadKind = StarK `ArrowK` StarK
     monadTransKind = monadKind `ArrowK` monadKind
+#endif
     mkCol x (FieldDef n _ ty as) =
         (mkName $ unpack $ recName x $ unHaskellName n,
          NotStrict,
