@@ -39,7 +39,6 @@ test-suite test
                    , text
                    , persistent
                    , bytestring
-                   , HUnit
                    , QuickCheck
 
 source-repository head

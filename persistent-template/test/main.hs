@@ -2,7 +2,6 @@
 {-# LANGUAGE EmptyDataDecls #-}
 import Test.Hspec
 import Test.Hspec.QuickCheck
-import Test.HUnit
 import Data.ByteString.Lazy.Char8 ()
 import Test.QuickCheck.Arbitrary
 import Control.Applicative ((<$>), (<*>))
@@ -47,5 +46,5 @@ main = hspec $ do
         prop "to/from is idempotent" $ \person ->
             decode (encode person) == Just (person :: Person)
         it "decode" $
-            decode "{\"name\":\"Michael\",\"age\":27,\"address\":{\"street\":\"Narkis\",\"city\":\"Maalot\"}}" @?= Just
+            decode "{\"name\":\"Michael\",\"age\":27,\"address\":{\"street\":\"Narkis\",\"city\":\"Maalot\"}}" `shouldBe` Just
                 (Person "Michael" (Just 27) $ Address "Narkis" "Maalot" Nothing)
