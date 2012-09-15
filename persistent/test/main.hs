@@ -1,6 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-import Test.Hspec.Monadic
-import Test.Hspec.HUnit ()
+import Test.Hspec
 import Test.HUnit
 
 import Database.Persist.Quasi
