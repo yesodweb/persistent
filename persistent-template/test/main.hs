@@ -43,7 +43,7 @@ instance Arbitrary (AddressGeneric b) where
     arbitrary = Address <$> arbitraryT <*> arbitraryT <*> arbitrary
 
 main :: IO ()
-main = hspecX $ do
+main = hspec $ do
     describe "JSON serialization" $ do
         prop "to/from is idempotent" $ \person ->
             decode (encode person) == Just (person :: Person)

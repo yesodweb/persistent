@@ -7,7 +7,7 @@ import Database.Persist.Quasi
 import Database.Persist.EntityDef
 
 main :: IO ()
-main = hspecX $ do
+main = hspec $ do
     describe "tokenization" $ do
         it "handles normal words" $
             tokenize " foo   bar  baz" @?=
