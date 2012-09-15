@@ -1,8 +1,7 @@
 {-# LANGUAGE OverloadedStrings, QuasiQuotes, TemplateHaskell, TypeFamilies, GADTs #-}
 {-# LANGUAGE EmptyDataDecls #-}
-import Test.Hspec.Monadic
+import Test.Hspec
 import Test.Hspec.QuickCheck
-import Test.Hspec.HUnit()
 import Test.HUnit
 import Data.ByteString.Lazy.Char8 ()
 import Test.QuickCheck.Arbitrary
