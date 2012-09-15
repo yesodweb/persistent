@@ -1,9 +1,7 @@
 {-# LANGUAGE OverloadedStrings, QuasiQuotes, TemplateHaskell, TypeFamilies, GADTs #-}
 {-# LANGUAGE EmptyDataDecls #-}
-import Test.Hspec.Monadic
+import Test.Hspec
 import Test.Hspec.QuickCheck
-import Test.Hspec.HUnit()
-import Test.HUnit
 import Data.ByteString.Lazy.Char8 ()
 import Test.QuickCheck.Arbitrary
 import Control.Applicative ((<$>), (<*>))
@@ -43,10 +41,10 @@ instance Arbitrary (AddressGeneric b) where
     arbitrary = Address <$> arbitraryT <*> arbitraryT <*> arbitrary
 
 main :: IO ()
-main = hspecX $ do
+main = hspec $ do
     describe "JSON serialization" $ do
         prop "to/from is idempotent" $ \person ->
             decode (encode person) == Just (person :: Person)
         it "decode" $
-            decode "{\"name\":\"Michael\",\"age\":27,\"address\":{\"street\":\"Narkis\",\"city\":\"Maalot\"}}" @?= Just
+            decode "{\"name\":\"Michael\",\"age\":27,\"address\":{\"street\":\"Narkis\",\"city\":\"Maalot\"}}" `shouldBe` Just
                 (Person "Michael" (Just 27) $ Address "Narkis" "Maalot" Nothing)
