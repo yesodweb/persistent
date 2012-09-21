@@ -73,6 +73,7 @@ instance MonadSqlPersist m => MonadSqlPersist (ResourceT m) where
 
 instance MonadLogger m => MonadLogger (SqlPersist m) where
     monadLoggerLog a b c = lift $ monadLoggerLog a b c
+    monadLoggerLogSource a b c = lift . monadLoggerLogSource a b c
 
 withStmt :: (MonadSqlPersist m, MonadResource m)
          => Text
