@@ -32,7 +32,7 @@ import Data.Monoid (Monoid, mappend, mconcat)
 import Database.Persist.EntityDef
 import qualified Data.Conduit as C
 import Language.Haskell.TH.Syntax (Q, Exp)
-import Control.Monad.Logger (logOther)
+import Control.Monad.Logger (logDebugS)
 import Data.Maybe (mapMaybe, listToMaybe)
 
 data Connection = Connection
@@ -194,4 +194,4 @@ tableColumn t s = go $ entityColumns t
 -}
 
 logSQL :: Q Exp
-logSQL = [|\sql_foo params_foo -> $(logOther "SQL") $ T.pack $ show (sql_foo :: Text) ++ " " ++ show (params_foo :: [PersistValue])|]
+logSQL = [|\sql_foo params_foo -> $logDebugS (T.pack "SQL") $ T.pack $ show (sql_foo :: Text) ++ " " ++ show (params_foo :: [PersistValue])|]
