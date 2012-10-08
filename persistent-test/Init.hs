@@ -58,6 +58,8 @@ import Database.Persist.TH (MkPersistSettings(..))
 import Control.Monad (replicateM)
 import qualified Data.ByteString as BS
 
+import Network (PortID (PortNumber))
+
 #else
 import Database.Persist.GenericSql
 import Database.Persist.Sqlite
@@ -115,7 +117,7 @@ persistSettings = MkPersistSettings { mpsBackend = ConT ''Action }
 type BackendMonad = Action
 runConn :: (MonadIO m, MonadBaseControl IO m) => Action m backend -> m ()
 runConn f = do
-  _<-withMongoDBConn "test" "127.0.0.1" Nothing 5 $
+  _<-withMongoDBConn "test" "127.0.0.1" (PortNumber 27017) Nothing 5 $
       runMongoDBPool MongoDB.master f
   return ()
 
