@@ -26,6 +26,7 @@ module Database.Persist.MongoDB
     , docToEntityThrow
     -- * network type
     , HostName
+    , PortID
     -- * MongoDB driver types
     , DB.Action
     , DB.AccessMode(..)
@@ -47,6 +48,7 @@ import Control.Exception (throw, throwIO)
 import qualified Database.MongoDB as DB
 import Database.MongoDB.Query (Database)
 import Control.Applicative (Applicative)
+import Network (PortID (PortNumber))
 import Network.Socket (HostName)
 import Data.Maybe (mapMaybe, fromJust)
 import qualified Data.Text as T
@@ -76,6 +78,10 @@ instance FromJSON NoOrphanNominalDiffTime where
     parseJSON (Number (D x)) = (return . NoOrphanNominalDiffTime . fromRational . toRational) x
     parseJSON _ = fail "couldn't parse diff time"
 
+instance FromJSON PortID where
+    parseJSON (Number (I x)) = (return . PortNumber . fromInteger) x
+    parseJSON _ = fail "couldn't parse port number"
+
 data Connection = Connection DB.Pipe DB.Database
 type ConnectionPool = Pool.Pool Connection
 
@@ -92,35 +98,35 @@ instance PathPiece (Key DB.Action entity) where
 
 
 withMongoDBConn :: (Trans.MonadIO m, Applicative m) =>
-  Database -> HostName -> Maybe MongoAuth -> NominalDiffTime -> (ConnectionPool -> m b) -> m b
-withMongoDBConn dbname hostname mauth connectionIdleTime = withMongoDBPool dbname hostname mauth 1 1 connectionIdleTime
+  Database -> HostName -> PortID -> Maybe MongoAuth -> NominalDiffTime -> (ConnectionPool -> m b) -> m b
+withMongoDBConn dbname hostname port mauth connectionIdleTime = withMongoDBPool dbname hostname port mauth 1 1 connectionIdleTime
 
-createConnection :: Database -> HostName -> Maybe MongoAuth -> IO Connection
-createConnection dbname hostname mAuth = do
-    pipe <- DB.runIOE $ DB.connect (DB.host hostname)
+createConnection :: Database -> HostName -> PortID -> Maybe MongoAuth -> IO Connection
+createConnection dbname hostname port mAuth = do
+    pipe <- DB.runIOE $ DB.connect (DB.Host hostname port)
     _ <- case mAuth of
       Just (MongoAuth user pass) -> DB.access pipe DB.UnconfirmedWrites dbname (DB.auth user pass)
       Nothing -> return undefined
     return $ Connection pipe dbname
 
-createMongoDBPool :: (Trans.MonadIO m, Applicative m) => Database -> HostName
+createMongoDBPool :: (Trans.MonadIO m, Applicative m) => Database -> HostName -> PortID
                   -> Maybe MongoAuth
                   -> Int -- ^ pool size (number of stripes)
                   -> Int -- ^ stripe size (number of connections per stripe)
                   -> NominalDiffTime -- ^ time a connection is left idle before closing
                   -> m ConnectionPool
-createMongoDBPool dbname hostname mAuth connectionPoolSize stripeSize connectionIdleTime = do
+createMongoDBPool dbname hostname port mAuth connectionPoolSize stripeSize connectionIdleTime = do
   Trans.liftIO $ Pool.createPool
-                          (createConnection dbname hostname mAuth)
+                          (createConnection dbname hostname port mAuth)
                           (\(Connection pipe _) -> DB.close pipe)
                           connectionPoolSize
                           connectionIdleTime
                           stripeSize
 
 withMongoDBPool :: (Trans.MonadIO m, Applicative m) =>
-  Database -> HostName -> Maybe MongoAuth -> Int -> Int -> NominalDiffTime -> (ConnectionPool -> m b) -> m b
-withMongoDBPool dbname hostname mauth poolStripes stripeConnections connectionIdleTime connectionReader = do
-  pool <- createMongoDBPool dbname hostname mauth poolStripes stripeConnections connectionIdleTime
+  Database -> HostName -> PortID -> Maybe MongoAuth -> Int -> Int -> NominalDiffTime -> (ConnectionPool -> m b) -> m b
+withMongoDBPool dbname hostname port mauth poolStripes stripeConnections connectionIdleTime connectionReader = do
+  pool <- createMongoDBPool dbname hostname port mauth poolStripes stripeConnections connectionIdleTime
   connectionReader pool
 
 runMongoDBPool :: (Trans.MonadIO m, MonadBaseControl IO m) => DB.AccessMode  -> DB.Action m a -> ConnectionPool -> m a
@@ -577,6 +583,7 @@ data MongoAuth = MongoAuth DB.Username DB.Password
 data MongoConf = MongoConf
     { mgDatabase :: Text
     , mgHost     :: Text
+    , mgPort     :: PortID
     , mgAuth     :: Maybe MongoAuth
     , mgAccessMode :: DB.AccessMode
     , mgPoolStripes :: Int
@@ -590,7 +597,7 @@ instance PersistConfig MongoConf where
 
     createPoolConfig c =
       createMongoDBPool 
-         (mgDatabase c) (T.unpack (mgHost c))
+         (mgDatabase c) (T.unpack (mgHost c)) (mgPort c)
          (mgAuth c)
          (mgPoolStripes c) (mgStripeConnections c) (mgConnectionIdleTime c)
 
@@ -598,6 +605,7 @@ instance PersistConfig MongoConf where
     loadConfig (Object o) = do
         db                 <- o .:  "database"
         host               <- o .:? "host" .!= "127.0.0.1"
+        port               <- o .:? "port" .!= (PortNumber 27017)
         poolStripes        <- o .:? "poolstripes" .!= 1
         stripeConnections  <- o .:  "connections"
         (NoOrphanNominalDiffTime connectionIdleTime) <- o .:? "connectionIdleTime" .!= 20
@@ -619,6 +627,7 @@ instance PersistConfig MongoConf where
         return $ MongoConf {
             mgDatabase = db
           , mgHost = host
+          , mgPort = port
           , mgAuth =
               (case (mUser, mPass) of
                 (Just user, Just pass) -> Just (MongoAuth user pass)

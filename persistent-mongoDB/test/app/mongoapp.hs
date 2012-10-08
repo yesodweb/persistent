@@ -12,6 +12,7 @@ import Database.MongoDB.Connection -- (ConnPool)
 import qualified Database.MongoDB as DB
 import Control.Monad.Context (Context (..))
 import Network.Abstract (ANetwork)
+import Network (PortID (PortNumber))
 import Control.Monad.Trans.Reader
 import Control.Monad.Util
 
@@ -24,7 +25,7 @@ Person
 -- runMongo :: MongoDBReader Database.MongoDB.Connection.Host (GGHandler M M IO) a -> GHandler M M a
 runMongo :: MongoDBReader (GGHandler M M IO) a -> GHandler M M a
 runMongo x = liftIOHandler $ 
-  withMongoDBConn (DB.Database "test") "127.0.0.1" $ runMongoDBConn x DB.safe DB.Master
+  withMongoDBConn (DB.Database "test") "127.0.0.1" (PortNumber 27017) $ runMongoDBConn x DB.safe DB.Master
 
 getConnection :: (ConnPool t, HostName)
 getConnection = undefined
