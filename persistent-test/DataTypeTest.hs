@@ -51,7 +51,7 @@ DataTypeTable no-json
     zonedTime ZonedTime
 |]
 
-cleanDB :: PersistQuery backend m => backend m ()
+cleanDB :: (PersistQuery backend m, PersistEntityBackend DataTypeTable ~ backend) => backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter DataTypeTable])
 

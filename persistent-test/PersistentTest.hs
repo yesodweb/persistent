@@ -134,7 +134,7 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persis
     verkey Text Maybe
     UniqueEmail email
 |]
-cleanDB :: PersistQuery backend m => backend m ()
+cleanDB :: (PersistQuery backend m, PersistEntityBackend Email ~ backend) => backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Person])
   deleteWhere ([] :: [Filter Person1])

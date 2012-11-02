@@ -137,6 +137,7 @@ filterName :: PersistEntity v => Filter v -> DBName
 filterName (Filter f _ _) = fieldDB $ persistFieldDef f
 filterName (FilterAnd _) = error "expected a raw filter, not an And"
 filterName (FilterOr _) = error "expected a raw filter, not an Or"
+filterName (BackendFilter _) = error "expected a raw filter, not a BackendFilter"
 
 infixr 5 ++
 (++) :: Monoid m => m -> m -> m

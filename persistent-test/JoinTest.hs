@@ -44,7 +44,7 @@ share [mkPersist sqlSettings,  mkMigrate "joinMigrate"] [persistUpperCase|
     deriving Show Eq
 |]
 #ifdef WITH_MONGODB
-cleanDB :: PersistQuery backend m => backend m ()
+cleanDB :: (PersistQuery backend m, PersistEntityBackend Entry ~ backend) => backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Author])
   deleteWhere ([] :: [Filter Entry])

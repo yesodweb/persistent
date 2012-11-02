@@ -259,6 +259,7 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
         (a, b) = unzip $ map go fs
         wrapP x = T.concat ["(", x, ")"]
 
+    go (BackendFilter _) = error "BackendFilter not expected"
     go (FilterAnd []) = ("1=1", [])
     go (FilterAnd fs) = combineAND fs
     go (FilterOr []) = ("1=0", [])

@@ -20,6 +20,7 @@ import Test.HUnit (Assertion)
 import qualified Data.Text as T
 import qualified Data.Set as S
 import qualified Data.Map as M
+import Database.Persist.MongoDB
 
 #if WITH_MONGODB
 mkPersist persistSettings [persist|
@@ -56,14 +57,34 @@ share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persist|
     name String
     map (M.Map T.Text T.Text)
     deriving Show Eq Read Ord
+
+
+  User
+    ident T.Text
+    password T.Text Maybe
+    profile Profile
+    deriving Show Eq Read Ord
+
+  Profile
+    firstName T.Text
+    lastName T.Text
+    contact Contact Maybe
+    deriving Show Eq Read Ord
+
+  Contact
+    phone Int
+    email T.Text
+    deriving Show Eq Read Ord
+
 |]
 #ifdef WITH_MONGODB
-cleanDB :: PersistQuery backend m => backend m ()
+cleanDB :: (PersistQuery backend m, PersistEntityBackend HasMapEmbed ~ backend) => backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter HasEmbed])
   deleteWhere ([] :: [Filter HasEmbeds])
   deleteWhere ([] :: [Filter HasListEmbed])
   deleteWhere ([] :: [Filter HasSetEmbed])
+  deleteWhere ([] :: [Filter User])
   deleteWhere ([] :: [Filter HasMapEmbed])
 
 db :: Action IO () -> Assertion
@@ -112,3 +133,23 @@ specs = describe "embedded entities" $ do
       Just res <- selectFirst [HasMapEmbedName ==. "map"] []
       res @== (Entity contK container)
 
+#ifdef WITH_MONGODB
+  it "mongo filters" $ db $ do
+      let usr = User "foo" (Just "pswd") prof
+          prof = Profile "fstN" "lstN" (Just con)
+          con = Contact 123456 "foo@bar.com"
+      uId <- insert usr
+      Just r1 <- selectFirst [UserProfile ->. ProfileFirstName ==: "fstN"] []
+      r1 @== (Entity uId usr)
+      Just r2 <- selectFirst [UserProfile ~>. ProfileContact ?->. ContactEmail ==: "foo@bar.com", UserIdent ==. "foo"] []
+      r2 @== (Entity uId usr)
+
+      let container = HasListEmbed "list" [
+              (HasEmbed "embed" (OnlyName "1"))
+            , (HasEmbed "embed" (OnlyName "2"))
+            ]
+      contK <- insert container
+      Just res <- selectFirst [HasListEmbedList ==~ HasEmbed "embed" (OnlyName "1")] []
+      res @== (Entity contK container)
+      return ()
+#endif

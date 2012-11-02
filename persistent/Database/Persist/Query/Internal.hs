@@ -19,6 +19,9 @@ module Database.Persist.Query.Internal
 
     -- * Exceptions
     , UpdateGetException (..)
+
+    -- * Filters
+    , BackendSpecificFilter
   ) where
 
 import Database.Persist.Store
@@ -52,10 +55,10 @@ class PersistStore backend m => PersistQuery backend m where
         get key >>= maybe (liftBase $ throwIO $ KeyNotFound $ show key) return
 
     -- | Update individual fields on any record matching the given criterion.
-    updateWhere :: PersistEntity val => [Filter val] -> [Update val] -> backend m ()
+    updateWhere :: (PersistEntity val, PersistEntityBackend val ~ backend) => [Filter val] -> [Update val] -> backend m ()
 
     -- | Delete all records matching the given criterion.
-    deleteWhere :: PersistEntity val => [Filter val] -> backend m ()
+    deleteWhere :: (PersistEntity val, PersistEntityBackend val ~ backend) => [Filter val] -> backend m ()
 
     -- | Get all records matching the given criterion in the specified order.
     -- Returns also the identifiers.
@@ -75,13 +78,15 @@ class PersistStore backend m => PersistQuery backend m where
 
 
     -- | Get the 'Key's of all records matching the given criterion.
-    selectKeys :: PersistEntity val
+    selectKeys :: (PersistEntity val, PersistEntityBackend val ~ backend)
                => [Filter val]
                -> [SelectOpt val]
                -> C.Source (C.ResourceT (backend m)) (Key backend val)
 
     -- | The total number of records fulfilling the given criterion.
-    count :: PersistEntity val => [Filter val] -> backend m Int
+    count :: (PersistEntity val, PersistEntityBackend val ~ backend) => [Filter val] -> backend m Int
+
+type family BackendSpecificFilter (b :: (* -> *) -> * -> *) v ::  *
 
 -- | Filters which are available for 'select', 'updateWhere' and
 -- 'deleteWhere'. Each filter constructor specifies the field being
@@ -94,6 +99,7 @@ data Filter v = forall typ. PersistField typ => Filter
     }
     | FilterAnd [Filter v] -- ^ convenient for internal use, not needed for the API
     | FilterOr  [Filter v]
+    | BackendFilter (BackendSpecificFilter (PersistEntityBackend v) v)
 
 
 data SelectOpt v = forall typ. Asc (EntityField v typ)
@@ -135,7 +141,7 @@ limitOffsetOrder opts =
 updateFieldDef :: PersistEntity v => Update v -> FieldDef
 updateFieldDef (Update f _ _) = persistFieldDef f
 
-deleteCascadeWhere :: (DeleteCascade a backend m, PersistQuery backend m)
+deleteCascadeWhere :: (DeleteCascade a backend m, PersistQuery backend m, PersistEntityBackend a ~ backend)
                    => [Filter a] -> backend m ()
 deleteCascadeWhere filts = do
     C.runResourceT $ selectKeys filts [] C.$$ CL.mapM_ (lift . deleteCascade)

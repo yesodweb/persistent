@@ -5,6 +5,7 @@
 
 {-# LANGUAGE UndecidableInstances #-} -- FIXME
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# LANGUAGE GADTs #-}
 module Database.Persist.MongoDB
     (
     -- * using connections
@@ -34,6 +35,9 @@ module Database.Persist.MongoDB
     , (DB.=:)
     -- * Database.Persist
     , module Database.Persist
+    -- * Mongo Filters
+    , (~>.) ,(?~>.), (->.), (?->.)
+    , (==:), (==~)
     ) where
 
 import Database.Persist
@@ -63,6 +67,7 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.Conduit.Pool as Pool
 import Data.Time (NominalDiffTime)
 import Data.Attoparsec.Number
+import Data.Char (toUpper)
 
 #ifdef DEBUG
 import FileLocation (debug)
@@ -375,7 +380,7 @@ orderClause o = case o of
                   _      -> error "orderClause: expected Asc or Desc"
 
 
-makeQuery :: PersistEntity val => [Filter val] -> [SelectOpt val] -> DB.Query
+makeQuery :: (PersistEntity val, PersistEntityBackend val ~ DB.Action) => [Filter val] -> [SelectOpt val] -> DB.Query
 makeQuery filts opts =
     (DB.select (filtersToSelector filts) (unDBName $ entityDB t)) {
       DB.limit = fromIntegral limit
@@ -387,17 +392,17 @@ makeQuery filts opts =
     (limit, offset, orders') = limitOffsetOrder opts
     orders = map orderClause orders'
 
-filtersToSelector :: PersistEntity val => [Filter val] -> DB.Document
+filtersToSelector :: (PersistEntity val, PersistEntityBackend val ~ DB.Action) => [Filter val] -> DB.Document
 filtersToSelector filts = 
 #ifdef DEBUG
   debug $
 #endif
     if null filts then [] else concatMap filterToDocument filts
 
-multiFilter :: forall record.  PersistEntity record => String -> [Filter record] -> [DB.Field]
+multiFilter :: forall record. (PersistEntity record, PersistEntityBackend record ~ DB.Action) => String -> [Filter record] -> [DB.Field]
 multiFilter multi fs = [T.pack multi DB.:= DB.Array (map (DB.Doc . filterToDocument) fs)]
 
-filterToDocument :: PersistEntity val => Filter val -> DB.Document
+filterToDocument :: (PersistEntity val, PersistEntityBackend val ~ DB.Action) => Filter val -> DB.Document
 filterToDocument f =
     case f of
       Filter field v filt -> return $ case filt of
@@ -411,13 +416,8 @@ filterToDocument f =
       -- $and is usually unecessary but makes query construction easier in special cases
       FilterAnd [] -> []
       FilterAnd fs -> multiFilter "$and" fs
+      BackendFilter mf -> mongoFilterToDoc mf
   where
-    toValue :: forall a.  PersistField a => Either a [a] -> DB.Value
-    toValue val =
-      case val of
-        Left v   -> DB.val $ toPersistValue v
-        Right vs -> DB.val $ map toPersistValue vs
-
     showFilter Ne = "$ne"
     showFilter Gt = "$gt"
     showFilter Lt = "$lt"
@@ -428,6 +428,11 @@ filterToDocument f =
     showFilter Eq = error "EQ filter not expected"
     showFilter (BackendSpecificFilter bsf) = throw $ PersistMongoDBError $ T.pack $ "did not expect BackendSpecificFilter " ++ T.unpack bsf
 
+toValue :: forall a.  PersistField a => Either a [a] -> DB.Value
+toValue val =
+    case val of
+      Left v   -> DB.val $ toPersistValue v
+      Right vs -> DB.val $ map toPersistValue vs
 
 fieldName ::  forall record typ.  (PersistEntity record) => EntityField record typ -> DB.Label
 fieldName = idfix . unDBName . fieldDB . persistFieldDef
@@ -639,3 +644,59 @@ instance PersistConfig MongoConf where
             s = T.unpack t
             -}
     loadConfig _ = mzero
+
+type instance BackendSpecificFilter DB.Action v = MongoFilter v
+
+data NestedField val nes  =  forall nes1. PersistEntity nes1 => EntityField val nes1  `MidFlds` NestedField nes1 nes
+                          | forall nes1. PersistEntity nes1 => EntityField val (Maybe nes1) `MidFldsNullable` NestedField nes1 nes
+                          | forall nes1. PersistEntity nes1 => EntityField val nes1 `LastFld` EntityField nes1 nes
+                          | forall nes1. PersistEntity nes1 => EntityField val (Maybe nes1) `LastFldNullable` EntityField nes1 nes
+data MongoFilter val = forall typ. (PersistField typ) =>
+                        NestedFilter {
+                          nestedField :: NestedField val typ
+                        , fieldValue  :: Either typ [typ]
+                        }
+                      | forall typ. PersistField typ =>
+                        MultiKeyFilter {
+                          mulFldKey  :: EntityField val [typ]
+                        , mulFldVal  :: Either typ [typ]
+                        }
+(~>.) :: forall val nes nes1. PersistEntity nes1 => EntityField val nes1 -> NestedField nes1 nes -> NestedField val nes
+(~>.)  = MidFlds
+
+(?~>.) :: forall val nes nes1. PersistEntity nes1 => EntityField val (Maybe nes1) -> NestedField nes1 nes -> NestedField val nes
+(?~>.) = MidFldsNullable
+
+(->.) :: forall val nes nes1. PersistEntity nes1 => EntityField val nes1 -> EntityField nes1 nes -> NestedField val nes
+(->.)  = LastFld
+
+(?->.) :: forall val nes nes1. PersistEntity nes1 => EntityField val (Maybe nes1) -> EntityField nes1 nes -> NestedField val nes
+(?->.) = LastFldNullable
+
+infixr 5 ~>.
+infixr 5 ?~>.
+infixr 6 ->.
+infixr 6 ?->.
+
+infixr 4 ==:
+
+(==:) :: forall v typ. (PersistField typ, PersistEntityBackend v ~ DB.Action) => NestedField v typ -> typ -> Filter v
+nf ==: v = BackendFilter $ NestedFilter {nestedField = nf, fieldValue = (Left v)}
+(==~) :: forall v typ. (PersistField typ, PersistEntityBackend v ~ DB.Action) => EntityField v [typ] -> typ -> Filter v
+fld ==~ val = BackendFilter $ MultiKeyFilter {mulFldKey = fld, mulFldVal = (Left val)}
+
+mongoFilterToDoc :: PersistEntity val => MongoFilter val -> DB.Document
+mongoFilterToDoc (MultiKeyFilter fn v) = return (fieldName fn DB.:= toValue v)
+mongoFilterToDoc (NestedFilter fns v) = return ( (nesFldName fns) DB.:= toValue v)
+    where
+      nesFldName fns' = T.intercalate "." $ nesIdFix . reverse $ nesFldName' fns' []
+      nesFldName' :: forall r1 r2. (PersistEntity r1) => NestedField r1 r2 -> [DB.Label] -> [DB.Label]
+      nesFldName' ( f1 `MidFlds` f2) lbls = nesFldName' f2 (fieldName f1 : lbls)
+      nesFldName' ( f1 `MidFldsNullable` f2) lbls = nesFldName' f2 (fieldName f1:lbls)
+      nesFldName' (nf1 `LastFld` nf2) lbls = fieldName nf2:fieldName nf1:lbls
+      nesFldName' (nf1 `LastFldNullable` nf2) lbls = fieldName nf2:fieldName nf1:lbls
+      nesIdFix [] = []
+      nesIdFix (fst':rst') = fst': (map (joinFN . (T.splitOn "_")) rst')
+      joinFN :: [Text] -> Text
+      joinFN [] = ""
+      joinFN (fst':rst') = fst' `T.append` (T.concat (map (\t -> (toUpper . T.head $ t) `T.cons` (T.tail t)) rst'))
