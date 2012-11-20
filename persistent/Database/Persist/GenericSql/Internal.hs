@@ -15,6 +15,7 @@ module Database.Persist.GenericSql.Internal
     , mkColumns
     , Column (..)
     , logSQL
+    , InsertSqlResult (..)
     ) where
 
 import qualified Data.Map as Map
@@ -35,10 +36,13 @@ import Language.Haskell.TH.Syntax (Q, Exp)
 import Control.Monad.Logger (logDebugS)
 import Data.Maybe (mapMaybe, listToMaybe)
 
+data InsertSqlResult = ISRSingle Text
+                     | ISRInsertGet Text Text
+
 data Connection = Connection
     { prepare :: Text -> IO Statement
-    -- ^ table name, column names, either 1 or 2 statements to run
-    , insertSql :: DBName -> [DBName] -> Either Text (Text, Text)
+    -- ^ table name, column names, id name, either 1 or 2 statements to run
+    , insertSql :: DBName -> [DBName] -> DBName -> InsertSqlResult
     , stmtMap :: IORef (Map.Map Text Statement)
     , close :: IO ()
     , migrateSql :: forall v. PersistEntity v

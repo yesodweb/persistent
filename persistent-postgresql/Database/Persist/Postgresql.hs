@@ -127,15 +127,16 @@ prepare' conn sql = do
         , withStmt = withStmt' conn query
         }
 
-insertSql' :: DBName -> [DBName] -> Either Text (Text, Text)
-insertSql' t cols = Left $ pack $ concat
+insertSql' :: DBName -> [DBName] -> DBName -> InsertSqlResult
+insertSql' t cols id' = ISRSingle $ pack $ concat
     [ "INSERT INTO "
     , T.unpack $ escape t
     , "("
     , intercalate "," $ map (T.unpack . escape) cols
     , ") VALUES("
     , intercalate "," (map (const "?") cols)
-    , ") RETURNING id"
+    , ") RETURNING "
+    , T.unpack $ escape id'
     ]
 
 execute' :: PG.Connection -> PG.Query -> [PersistValue] -> IO ()

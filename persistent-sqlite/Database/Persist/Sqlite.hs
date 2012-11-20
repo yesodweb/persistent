@@ -88,9 +88,9 @@ prepare' conn sql = do
         , withStmt = withStmt' stmt
         }
 
-insertSql' :: DBName -> [DBName] -> Either Text (Text, Text)
-insertSql' t cols =
-    Right (pack ins, sel)
+insertSql' :: DBName -> [DBName] -> DBName -> InsertSqlResult
+insertSql' t cols _ =
+    ISRInsertGet (pack ins) sel
   where
     sel = "SELECT last_insert_rowid()"
     ins = concat

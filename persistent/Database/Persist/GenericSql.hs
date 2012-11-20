@@ -97,16 +97,16 @@ runSqlConn (SqlPersist r) conn = do
 instance (MonadBaseControl IO m, MonadIO m, C.MonadThrow m, C.MonadUnsafeIO m, MonadLogger m) => PersistStore SqlPersist m where
     insert val = do
         conn <- SqlPersist ask
-        let esql = insertSql conn (entityDB t) (map fieldDB $ entityFields t)
+        let esql = insertSql conn (entityDB t) (map fieldDB $ entityFields t) (entityID t)
         i <-
             case esql of
-                Left sql -> C.runResourceT $ R.withStmt sql vals C.$$ do
+                ISRSingle sql -> C.runResourceT $ R.withStmt sql vals C.$$ do
                     x <- CL.head
                     case x of
                         Just [PersistInt64 i] -> return i
                         Nothing -> error $ "SQL insert did not return a result giving the generated ID"
                         Just vals' -> error $ "Invalid result from a SQL insert, got: " P.++ P.show vals'
-                Right (sql1, sql2) -> do
+                ISRInsertGet sql1 sql2 -> do
                     execute' sql1 vals
                     C.runResourceT $ R.withStmt sql2 [] C.$$ do
                         Just [PersistInt64 i] <- CL.head
@@ -124,7 +124,9 @@ instance (MonadBaseControl IO m, MonadIO m, C.MonadThrow m, C.MonadUnsafeIO m, M
                 , escapeName conn (entityDB t)
                 , " SET "
                 , T.intercalate "," (map (go conn . fieldDB) $ entityFields t)
-                , " WHERE id=?"
+                , " WHERE "
+                , escapeName conn $ entityID t
+                , "=?"
                 ]
             vals = map toPersistValue (toPersistFields val) `mappend` [unKey k]
         execute' sql vals
@@ -148,7 +150,9 @@ instance (MonadBaseControl IO m, MonadIO m, C.MonadThrow m, C.MonadUnsafeIO m, M
                 , cols
                 , " FROM "
                 , escapeName conn $ entityDB t
-                , " WHERE id=?"
+                , " WHERE "
+                , escapeName conn $ entityID t
+                , "=?"
                 ]
             vals' = [unKey k]
         C.runResourceT $ R.withStmt sql vals' C.$$ do
@@ -168,7 +172,9 @@ instance (MonadBaseControl IO m, MonadIO m, C.MonadThrow m, C.MonadUnsafeIO m, M
         sql conn = concat
             [ "DELETE FROM "
             , escapeName conn $ entityDB t
-            , " WHERE id=?"
+            , " WHERE "
+            , escapeName conn $ entityID t
+            , "=?"
             ]
 
 insrepHelper :: (MonadIO m, PersistEntity val, MonadLogger m)
