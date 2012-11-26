@@ -30,6 +30,12 @@ import Data.Bson (genObjectId)
 import Language.Haskell.TH.Syntax (Type(..))
 
 #else
+# if MIN_VERSION_monad_control(0, 3, 0)
+import qualified Control.Monad.Trans.Control
+# else
+import qualified Control.Monad.IO.Control
+# endif
+
 import Database.Persist.Store (PersistValue( PersistInt64 ))
 import Database.Persist.TH (mkDeleteCascade)
 import Database.Persist.EntityDef (EntityDef(..), DBName(..))
@@ -60,12 +66,6 @@ import Database.Persist.MySQL()
 
 import Database.Persist.TH (derivePersistField, persistUpperCase)
 import Control.Monad.IO.Class
-
-#if MIN_VERSION_monad_control(0, 3, 0)
-import qualified Control.Monad.Trans.Control
-#else
-import qualified Control.Monad.IO.Control
-#endif
 
 import Data.Text (Text)
 import Web.PathPieces (PathPiece (..))
