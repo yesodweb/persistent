@@ -139,9 +139,9 @@ specs = describe "embedded entities" $ do
           prof = Profile "fstN" "lstN" (Just con)
           con = Contact 123456 "foo@bar.com"
       uId <- insert usr
-      Just r1 <- selectFirst [UserProfile ->. ProfileFirstName ==: "fstN"] []
+      Just r1 <- selectFirst [UserProfile ->. ProfileFirstName `nestEq` "fstN"] []
       r1 @== (Entity uId usr)
-      Just r2 <- selectFirst [UserProfile ~>. ProfileContact ?->. ContactEmail ==: "foo@bar.com", UserIdent ==. "foo"] []
+      Just r2 <- selectFirst [UserProfile ~>. ProfileContact ?->. ContactEmail `nestEq` "foo@bar.com", UserIdent ==. "foo"] []
       r2 @== (Entity uId usr)
 
       let container = HasListEmbed "list" [
@@ -149,7 +149,7 @@ specs = describe "embedded entities" $ do
             , (HasEmbed "embed" (OnlyName "2"))
             ]
       contK <- insert container
-      Just res <- selectFirst [HasListEmbedList ==~ HasEmbed "embed" (OnlyName "1")] []
+      Just res <- selectFirst [HasListEmbedList `multiEq` HasEmbed "embed" (OnlyName "1")] []
       res @== (Entity contK container)
       return ()
 #endif

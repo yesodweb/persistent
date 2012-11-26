@@ -37,7 +37,7 @@ module Database.Persist.MongoDB
     , module Database.Persist
     -- * Mongo Filters
     , (~>.) ,(?~>.), (->.), (?->.)
-    , (==:), (==~)
+    , nestEq, multiEq
     ) where
 
 import Database.Persist
@@ -678,12 +678,15 @@ infixr 5 ?~>.
 infixr 6 ->.
 infixr 6 ?->.
 
-infixr 4 ==:
+infixr 4 `nestEq`
 
-(==:) :: forall v typ. (PersistField typ, PersistEntityBackend v ~ DB.Action) => NestedField v typ -> typ -> Filter v
-nf ==: v = BackendFilter $ NestedFilter {nestedField = nf, fieldValue = (Left v)}
-(==~) :: forall v typ. (PersistField typ, PersistEntityBackend v ~ DB.Action) => EntityField v [typ] -> typ -> Filter v
-fld ==~ val = BackendFilter $ MultiKeyFilter {mulFldKey = fld, mulFldVal = (Left val)}
+-- | use with drill-down operaters ~>, etc
+nestEq :: forall v typ. (PersistField typ, PersistEntityBackend v ~ DB.Action) => NestedField v typ -> typ -> Filter v
+nf `nestEq` v = BackendFilter $ NestedFilter {nestedField = nf, fieldValue = (Left v)}
+
+-- | use to see if an embedded list contains an item
+multiEq :: forall v typ. (PersistField typ, PersistEntityBackend v ~ DB.Action) => EntityField v [typ] -> typ -> Filter v
+fld `multiEq` val = BackendFilter $ MultiKeyFilter {mulFldKey = fld, mulFldVal = (Left val)}
 
 mongoFilterToDoc :: PersistEntity val => MongoFilter val -> DB.Document
 mongoFilterToDoc (MultiKeyFilter fn v) = return (fieldName fn DB.:= toValue v)
