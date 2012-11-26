@@ -142,6 +142,7 @@ data PersistValue = PersistText T.Text
                   | PersistList [PersistValue]
                   | PersistMap [(T.Text, PersistValue)]
                   | PersistObjectId ByteString -- ^ intended especially for MongoDB backend
+                  | PersistSpecific ByteString -- ^ backend specific value
     deriving (Show, Read, Eq, Typeable, Ord)
 
 instance PathPiece PersistValue where
@@ -167,8 +168,9 @@ instance A.ToJSON PersistValue where
     toJSON (PersistDay d) = A.String $ T.cons 'd' $ show d
     toJSON PersistNull = A.Null
     toJSON (PersistList l) = A.Array $ V.fromList $ map A.toJSON l
-    toJSON (PersistMap m) = A.object $ map (second A.toJSON) m
+    toJSON (PersistMap m) = A.object $ ("type", "map") : map (second A.toJSON) m
     toJSON (PersistObjectId o) = A.String $ T.cons 'o' $ TE.decodeUtf8 $ B64.encode o
+    toJSON (PersistSpecific b) = A.String $ T.cons 'x' $ TE.decodeUtf8 $ B64.encode b 
 
 instance A.FromJSON PersistValue where
     parseJSON (A.String t0) =
@@ -183,6 +185,8 @@ instance A.FromJSON PersistValue where
             Just ('d', t) -> fmap PersistDay $ readMay t
             Just ('o', t) -> either (fail "Invalid base64") (return . PersistObjectId)
                            $ B64.decode $ TE.encodeUtf8 t
+            Just ('x', t) -> either (fail "Invalid base64") (return . PersistSpecific)
+                           $ B64.decode $ TE.encodeUtf8 t
             Just (c, _) -> fail $ "Unknown prefix: " `mappend` [c]
       where
         readMay :: (Read a, Monad m) => T.Text -> m a
@@ -195,9 +199,7 @@ instance A.FromJSON PersistValue where
     parseJSON (A.Bool b) = return $ PersistBool b
     parseJSON A.Null = return $ PersistNull
     parseJSON (A.Array a) = fmap PersistList (mapM A.parseJSON $ V.toList a)
-    parseJSON (A.Object o) =
-        fmap PersistMap $ mapM go $ HM.toList o
-      where
+    parseJSON (A.Object o) = fmap PersistMap $ mapM go $ HM.toList o where
         go (k, v) = fmap ((,) k) $ A.parseJSON v
 
 -- | A SQL data type. Naming attempts to reflect the underlying Haskell
@@ -241,6 +243,7 @@ instance PersistField String where
     fromPersistValue (PersistList _) = Left "Cannot convert PersistList to String"
     fromPersistValue (PersistMap _) = Left "Cannot convert PersistMap to String"
     fromPersistValue (PersistObjectId _) = Left "Cannot convert PersistObjectId to String"
+    fromPersistValue (PersistSpecific _) = Left "Cannot convert PersistSpecific to String"
     sqlType _ = SqlString
 #endif
 
@@ -266,6 +269,7 @@ instance PersistField T.Text where
     fromPersistValue (PersistList _) = Left "Cannot convert PersistList to Text"
     fromPersistValue (PersistMap _) = Left "Cannot convert PersistMap to Text"
     fromPersistValue (PersistObjectId _) = Left "Cannot convert PersistObjectId to Text"
+    fromPersistValue (PersistSpecific _) = Left "Cannot convert PersistSpecific to Text"
     sqlType _ = SqlString
 
 instance PersistField Html where
