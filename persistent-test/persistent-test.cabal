@@ -94,6 +94,8 @@ library
                    , vector
                    , unordered-containers
                    , monad-logger
+                   -- actually just a mongoDB dependency
+                   , cereal
 
    if flag(postgresql)
      build-depends:
