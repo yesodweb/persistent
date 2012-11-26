@@ -3,7 +3,7 @@ version:         0.1.0
 license:         BSD3
 license-file:    LICENSE
 author:          Pavel Dvořák <id@dqd.cz>
-maintainer:      Pavel Dvořák <id@dqd.cz>
+maintainer:      Greg Weber <greg@gregweber.info>
 synopsis:        Backend for the persistent library using CouchDB.
 description:     Based on the CouchDB package.
 category:        Database, Yesod
@@ -14,6 +14,11 @@ homepage:        http://www.yesodweb.com/book/persistent
 
 library
     build-depends:   base                  >= 4        && < 5
+                   , enumerator
+                   , pool
+                   , json
+                   , transformers-base
+                   , MonadCatchIO-transformers
                    , transformers          >= 0.2.1    && < 0.3
                    , CouchDB               >= 0.10     && < 0.11
                    , persistent            >= 0.6.3    && < 0.7
@@ -25,5 +30,5 @@ library
                    , data-object           >= 0.3      && < 0.4
                    , neither               >= 0.3      && < 0.4
                    , SHA                   >= 1.5
-    exposed-modules: Database.Persist.Mysql
+    exposed-modules: Database.Persist.CouchDB
     ghc-options:     -Wall

@@ -180,7 +180,7 @@ viewConstraints xs y = "if (" ++ (intercalate " && " $ map ("doc."++) xs) ++ ") 
 
 viewEmit :: [String] -> [String] -> String
 viewEmit [] _ = viewEmit ["_id"] []
-viewEmit xs ys = "emit(" ++ array xs ++ ", " ++ object ys ++ ");"
+viewEmit arr obj = "emit(" ++ array arr ++ ", " ++ object obj ++ ");"
     where array [] = "doc._id"
           array [x] = "doc." ++ x
           array xs = "[" ++ (intercalate ", " $ map ("doc."++) xs) ++ "]"
@@ -197,7 +197,7 @@ uniqueViewName names text = viewName names ++ "_" ++ (showDigest . sha1 $ BL.pac
 
 viewFilters :: (PersistEntity val) => [Filter val] -> String -> String
 viewFilters [] x = x
-viewFilters fs x = "if (" ++ (intercalate " && " $ map fKind fs) ++ ") {" ++ x ++ "}"
+viewFilters filters x = "if (" ++ (intercalate " && " $ map fKind filters) ++ ") {" ++ x ++ "}"
     where fKind (Filter field v NotIn) = "!(" ++ fKind (Filter field v In) ++ ")"
           fKind (Filter field v op) = "doc." ++ (columnName $ persistColumnDef field) ++
                                       fOp op ++ either (encode . showJSON . toPersistValue)
@@ -264,16 +264,16 @@ instance (MonadIO m, MonadBaseControl IO m) => PersistBackend CouchReader m wher
 
     replace = modify $ const . return . entityToJSON
 
-    update k = modify (\u x -> return $ foldr field x u) k
-        where e = entityDef $ dummyFromKey k
-              field f@(Update _ value up) x = case up of
-                                                   Assign -> execute x $ const v
-                                                   Add -> execute x $ op (+) v
-                                                   Subtract -> execute x $ op (-) v
-                                                   Multiply -> execute x $ op (*) v
-                                                   Divide -> execute x $ op (/) v
+    update key = modify (\u x -> return $ foldr field x u) key
+        where -- e = entityDef $ dummyFromKey key
+              field f@(Update _ value up) doc = case up of
+                                                   Assign -> execute doc $ const val
+                                                   Add -> execute doc $ op (+) val
+                                                   Subtract -> execute doc $ op (-) val
+                                                   Multiply -> execute doc $ op (*) val
+                                                   Divide -> execute doc $ op (/) val
                   where name = T.pack $ updateFieldName f
-                        v = toPersistValue value
+                        val = toPersistValue value
                         execute (PersistMap x) g = PersistMap $ map (\(k, v) -> if k == name then (k, g v) else (k, v)) x
                         op o (PersistInt64 x) (PersistInt64 y) = PersistInt64 . truncate $ (fromIntegral y) `o` (fromIntegral x)
                         op o (PersistDouble x) (PersistDouble y) = PersistDouble $ y `o` x
