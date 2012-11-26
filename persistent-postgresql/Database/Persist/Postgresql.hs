@@ -11,6 +11,7 @@ module Database.Persist.Postgresql
     , module Database.Persist.GenericSql
     , ConnectionString
     , PostgresConf (..)
+    , openSimpleConn
     ) where
 
 import Database.Persist hiding (Entity (..))
@@ -102,7 +103,11 @@ withPostgresqlConn = withSqlConn . open'
 
 open' :: ConnectionString -> IO Connection
 open' cstr = do
-    conn <- PG.connectPostgreSQL cstr
+    PG.connectPostgreSQL cstr >>= openSimpleConn
+
+-- | Generate a 'Connection' from a 'PG.Connection'
+openSimpleConn :: PG.Connection -> IO Connection
+openSimpleConn conn = do
     smap <- newIORef $ Map.empty
     return Connection
         { prepare    = prepare' conn
