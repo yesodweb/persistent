@@ -436,16 +436,16 @@ specs = describe "persistent" $ do
       let p26 = Person "Michael2" 26 Nothing
       key25 <- insert p25
       key26 <- insert p26
-      ps1 <- selectList [] []
+      ps1 <- selectList [] [Asc PersonAge]
       ps1 @== [(Entity key25 p25), (Entity key26 p26)]
       -- limit
-      ps2 <- selectList [] [LimitTo 1]
+      ps2 <- selectList [] [Asc PersonAge, LimitTo 1]
       ps2 @== [(Entity key25 p25)]
       -- offset
-      ps3 <- selectList [] [OffsetBy 1]
+      ps3 <- selectList [] [Asc PersonAge, OffsetBy 1]
       ps3 @== [(Entity key26 p26)]
       -- limit & offset
-      ps4 <- selectList [] [LimitTo 1, OffsetBy 1]
+      ps4 <- selectList [] [Asc PersonAge, LimitTo 1, OffsetBy 1]
       ps4 @== [(Entity key26 p26)]
 
       ps5 <- selectList [] [Desc PersonAge]
