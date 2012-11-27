@@ -100,7 +100,7 @@ class PersistStore m => PersistQuery m where
     selectFirst filts opts = selectSource filts ((LimitTo 1):opts) C.$$ CL.head
 
 
-    -- | Get the 'Keys of all records matching the given criterion.
+    -- | Get the 'Key's of all records matching the given criterion.
     selectKeys :: (PersistEntity val, PersistEntityBackend val ~ PersistMonadBackend m)
                => [Filter val]
                -> [SelectOpt val]
