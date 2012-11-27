@@ -39,7 +39,7 @@ library
                    , pool-conduit             >= 0.1.1   && < 0.2
                    , path-pieces              >= 0.1     && < 0.2
                    , aeson                    >= 0.5     && < 0.7
-                   , monad-logger             >= 0.2.2   && < 0.3
+                   , monad-logger             >= 0.2.3   && < 0.3
                    , transformers-base
                    , base64-bytestring
                    , unordered-containers
