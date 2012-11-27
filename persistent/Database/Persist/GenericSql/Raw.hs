@@ -38,6 +38,7 @@ import Data.Conduit
 import Control.Monad.Logger (MonadLogger (..))
 import Data.Monoid (Monoid)
 
+import Control.Monad.Logger (LoggingT)
 import Control.Monad.Trans.Identity ( IdentityT)
 import Control.Monad.Trans.List     ( ListT    )
 import Control.Monad.Trans.Maybe    ( MaybeT   )
@@ -89,6 +90,7 @@ instance (MonadIO m, MonadLogger m) => MonadSqlPersist (SqlPersist m) where
 
 #define GO(T) instance (MonadSqlPersist m) => MonadSqlPersist (T m) where askSqlConn = lift askSqlConn
 #define GOX(X, T) instance (X, MonadSqlPersist m) => MonadSqlPersist (T m) where askSqlConn = lift askSqlConn
+GO(LoggingT)
 GO(IdentityT)
 GO(ListT)
 GO(MaybeT)

@@ -109,6 +109,7 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Monoid (Monoid)
 
 import Data.Conduit (Pipe)
+import Control.Monad.Logger (LoggingT)
 import Control.Monad.Trans.Identity ( IdentityT)
 import Control.Monad.Trans.List     ( ListT    )
 import Control.Monad.Trans.Maybe    ( MaybeT   )
@@ -600,6 +601,7 @@ class MonadIO m => PersistStore m where
 #define GO(T) instance (PersistStore m) => PersistStore (T m) where DEF(T)
 #define GOX(X, T) instance (X, PersistStore m) => PersistStore (T m) where DEF(T)
 
+GO(LoggingT)
 GO(IdentityT)
 GO(ListT)
 GO(MaybeT)
@@ -638,6 +640,7 @@ class PersistStore m => PersistUnique m where
 #define GO(T) instance (PersistUnique m) => PersistUnique (T m) where DEF(T)
 #define GOX(X, T) instance (X, PersistUnique m) => PersistUnique (T m) where DEF(T)
 
+GO(LoggingT)
 GO(IdentityT)
 GO(ListT)
 GO(MaybeT)

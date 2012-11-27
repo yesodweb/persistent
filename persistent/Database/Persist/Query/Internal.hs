@@ -38,6 +38,7 @@ import Control.Monad.Trans.Class (lift)
 import Data.Monoid (Monoid)
 
 import Data.Conduit (Pipe)
+import Control.Monad.Logger (LoggingT)
 import Control.Monad.Trans.Identity ( IdentityT)
 import Control.Monad.Trans.List     ( ListT    )
 import Control.Monad.Trans.Maybe    ( MaybeT   )
@@ -113,6 +114,7 @@ class PersistStore m => PersistQuery m where
 #define GO(T) instance (PersistQuery m) => PersistQuery (T m) where DEF(T)
 #define GOX(X, T) instance (X, PersistQuery m) => PersistQuery (T m) where DEF(T)
 
+GO(LoggingT)
 GO(IdentityT)
 GO(ListT)
 GO(MaybeT)
