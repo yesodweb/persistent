@@ -362,7 +362,7 @@ rollback = do
 =======
 -}
 
-dummyFromUnique :: Unique v b -> v
+dummyFromUnique :: Unique v -> v
 dummyFromUnique _ = error "dummyFromUnique"
 
 #if MIN_VERSION_monad_control(0, 3, 0)

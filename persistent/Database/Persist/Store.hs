@@ -49,7 +49,6 @@ module Database.Persist.Store
     , listToJSON
     , mapToJSON
     , Key'
-    , Unique'
 
       -- * Config
     , PersistConfig (..)
@@ -425,11 +424,6 @@ instance PersistField a => PersistField (Maybe a) where
     sqlType _ = sqlType (error "this is the problem" :: a)
     isNullable _ = True
 
--- | Helper wrapper, equivalent to @Unique val (PersistEntityBackend val)@.
---
--- Since 1.1.0
-type Unique' val = Unique val (PersistEntityBackend val)
-
 -- | Helper wrapper, equivalent to @Key (PersistEntityBackend val) val@.
 --
 -- Since 1.1.0
@@ -445,16 +439,16 @@ class PersistEntity val where
     type PersistEntityBackend val
 
     -- | Unique keys in existence on this entity.
-    data Unique val :: * -> *
+    data Unique val
 
     entityDef :: val -> EntityDef
     toPersistFields :: val -> [SomePersistField]
     fromPersistValues :: [PersistValue] -> Either T.Text val
     halfDefined :: val
 
-    persistUniqueToFieldNames :: Unique val backend -> [(HaskellName, DBName)]
-    persistUniqueToValues :: Unique val backend -> [PersistValue]
-    persistUniqueKeys :: val -> [Unique val backend]
+    persistUniqueToFieldNames :: Unique val -> [(HaskellName, DBName)]
+    persistUniqueToValues :: Unique val -> [PersistValue]
+    persistUniqueKeys :: val -> [Unique val]
 
     persistIdField :: EntityField val (Key (PersistEntityBackend val) val)
 
@@ -627,11 +621,11 @@ GOX(Monoid w, Strict.WriterT w)
 
 class PersistStore m => PersistUnique m where
     -- | Get a record by unique key, if available. Returns also the identifier.
-    getBy :: (PersistEntityBackend val ~ PersistMonadBackend m, PersistEntity val) => Unique' val -> m (Maybe (Entity val))
+    getBy :: (PersistEntityBackend val ~ PersistMonadBackend m, PersistEntity val) => Unique val -> m (Maybe (Entity val))
 
     -- | Delete a specific record by unique key. Does nothing if no record
     -- matches.
-    deleteBy :: (PersistEntityBackend val ~ PersistMonadBackend m, PersistEntity val) => Unique' val -> m ()
+    deleteBy :: (PersistEntityBackend val ~ PersistMonadBackend m, PersistEntity val) => Unique val -> m ()
 
     -- | Like 'insert', but returns 'Nothing' when the record
     -- couldn't be inserted because of a uniqueness constraint.
