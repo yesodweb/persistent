@@ -17,6 +17,8 @@ library
                    , enumerator
                    , pool
                    , json
+                   , aeson
+                   , attoparsec
                    , transformers-base
                    , MonadCatchIO-transformers
                    , transformers          >= 0.2.1    && < 0.3

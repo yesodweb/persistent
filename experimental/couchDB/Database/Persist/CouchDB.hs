@@ -32,23 +32,27 @@ import Control.Applicative (Applicative)
 
 import Text.JSON
 import Data.Char
-import Data.List (intercalate, nub, nubBy)
+import Data.List (intercalate, nub) -- , nubBy)
 import Data.Pool
 import Data.Maybe
 import Data.Digest.Pure.SHA
 -- import Data.Object
 -- import Data.Neither (MEither (..), meither)
-import Data.Enumerator (Stream (..), Step (..), Iteratee (..), returnI, run_, ($$))
+-- import Data.Enumerator (Stream (..), Step (..), Iteratee (..), returnI, run_, ($$))
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as BL
-import qualified Data.Enumerator.List as EL
+-- import qualified Data.Enumerator.List as EL
 import qualified Database.CouchDB as DB
 import qualified Control.Exception.Base as E
+import Data.Aeson (Value (Object, Number), (.:), (.:?), (.!=), FromJSON(..))
+import Data.Time (NominalDiffTime)
+import Data.Attoparsec.Number
 
 type Couch = (DB.CouchConn, DB.DB)
 type ConnectionPool = Pool Couch
+
 
 newtype (CouchReader m a) = CouchReader {unCouchConn :: ReaderT Couch m a}
     deriving (Monad, MonadIO, MonadTrans, MonadCatchIO, Functor, Applicative)
@@ -82,8 +86,7 @@ withCouchDBPool :: (MonadBaseControl IO m, MonadIO m)
     -> Int    -- ^ number of connections to open
     -> (ConnectionPool -> m b) -> m b
 withCouchDBPool db host port = createPool
-    (do unless (DB.isDBString db)
-               (error "Wrong database name.")
+    (do unless (DB.isDBString db) $ error $ "Wrong database name: " ++ db
         conn <- DB.createCouchConn host port
         E.catch (run conn $ DB.createDB db)
                 (\(E.ErrorCall _) -> return ())
@@ -221,6 +224,7 @@ filtersToNames = nub . concatMap f
           f (FilterOr fs) = concatMap f fs
           f (FilterAnd fs) = concatMap f fs
 
+{-
 opts :: [SelectOpt a] -> [(String, JSValue)]
 opts = nubBy (\(x, _) (y, _) -> x == "descending" && x == y) . map o
     -- The Asc and Desc options should be attribute dependent. Now, they just handle reversing of the output.
@@ -228,6 +232,7 @@ opts = nubBy (\(x, _) (y, _) -> x == "descending" && x == y) . map o
           o (Desc _) = ("descending", JSBool True)
           o (OffsetBy x) = ("skip", JSRational False $ fromIntegral x)
           o (LimitTo x) = ("limit", JSRational False $ fromIntegral x)
+-}
 
 designName :: EntityDef -> DB.Doc
 designName entity = DB.doc . (\(x:xs) -> toLower x : xs) $ (T.unpack $ unDBName $ entityDB entity)
@@ -247,6 +252,7 @@ runView conn db design name dict views =
     in liftIO $ E.catch query (\(E.ErrorCall _) -> create >> query)
 
 -- This is not a very effective solution, since it takes the whole input in once. It should be rewritten completely.
+{-
 select :: (PersistEntity val, MonadIO m) => [Filter val] -> [(String, JSValue)]
     -> Step a' (CouchReader m) b -> [String] -> ((DB.Doc, PersistValue) -> a') -> Iteratee a' (CouchReader m) b
 select f o (Continue k) vals process = do
@@ -258,6 +264,7 @@ select f o (Continue k) vals process = do
     (conn, db) <- lift $ CouchReader ask
     x <- runView conn db design name o [DB.ViewMap name $ defaultView t names filters]
     returnI $$ k . Chunks $ map process x
+-}
 
 instance (MonadIO m, MonadBaseControl IO m) => PersistStore CouchReader m where
     insert v = do
@@ -311,7 +318,7 @@ fieldName = unDBName . fieldDB . persistFieldDef
 instance (MonadIO m, MonadBaseControl IO m) => PersistQuery CouchReader m where
     update key = modify (\u x -> return $ foldr field x u) key
         where -- e = entityDef $ dummyFromKey key
-              field upd@(Update updField value up) doc = case up of
+              field (Update updField value up) doc = case up of
                                                    Assign -> execute doc $ const val
                                                    Add -> execute doc $ op (+) val
                                                    Subtract -> execute doc $ op (-) val
@@ -352,33 +359,34 @@ data CouchConf = CouchConf
     , couchPoolSize :: Int
     }
 
-{-
+newtype NoOrphanNominalDiffTime = NoOrphanNominalDiffTime NominalDiffTime
+                                deriving (Show, Eq, Num)
+instance FromJSON NoOrphanNominalDiffTime where
+    parseJSON (Number (I x)) = (return . NoOrphanNominalDiffTime . fromInteger) x
+    parseJSON (Number (D x)) = (return . NoOrphanNominalDiffTime . fromRational . toRational) x
+    parseJSON _ = fail "couldn't parse diff time"
+
 instance PersistConfig CouchConf where
     type PersistConfigBackend CouchConf = CouchReader
     type PersistConfigPool CouchConf = ConnectionPool
-    withPool (CouchConf db host port poolsize) = withCouchDBPool db host port poolsize
+    -- createPoolConfig (CouchConf db host port poolsize) = withCouchDBPool db host port poolsize
     runPool _ = runCouchDBConn
-    loadConfig e' = meither Left Right $ do
-        e <- go $ fromMapping e'
-        db <- go $ lookupScalar "database" e
-        host <- go $ lookupScalar "host" e
-        pool <- (go $ lookupScalar "poolsize" e) >>= safeRead "poolsize"
-        port <- (go $ lookupScalar "port" e) >>= safeRead "port"
+    loadConfig (Object o) = do
+        db   <- o .: "database"
+        host               <- o .:? "host" .!= "127.0.0.1"
+        port               <- o .:? "port" .!= 5984 -- (PortNumber 5984)
+        pool               <- o .:? "poolsize" .!= 1
+        {-
+        poolStripes        <- o .:? "poolstripes" .!= 1
+        stripeConnections  <- o .:  "connections"
+        -- (NoOrphanNominalDiffTime connectionIdleTime) <- o .:? "connectionIdleTime" .!= 20
+        mUser              <- o .:? "user"
+        mPass              <- o .:? "password"
+        -}
 
         return $ CouchConf { couchDatabase = T.unpack db
                            , couchHost = T.unpack host
                            , couchPort = port
                            , couchPoolSize = pool
                            }
-      where
-        go :: MEither ObjectExtractError a -> MEither String a
-        go (MLeft e) = MLeft $ show e
-        go (MRight a) = MRight a
-
-safeRead :: String -> T.Text -> MEither String Int
-safeRead name t = case reads s of
-    (i, _):_ -> MRight i
-    []       -> MLeft $ concat ["Invalid value for ", name, ": ", s]
-  where
-    s = T.unpack t
--}
+    loadConfig _ = mzero
