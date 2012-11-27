@@ -41,7 +41,7 @@ fromPersistValuesId _ = Left "fromPersistValuesId: invalid ID"
 class RunJoin a where
     runJoin :: (C.MonadResource m, MonadLogger m, MonadSqlPersist m) => a -> m (J.Result a)
 
-instance (PersistEntity one, PersistEntity many, Eq (Key' one))
+instance (PersistEntity one, PersistEntity many, Eq (Key one))
     => RunJoin (SelectOneMany one many) where
     runJoin (SelectOneMany oneF oneO manyF manyO eq _getKey isOuter) = do
         conn <- askSqlConn

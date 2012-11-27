@@ -62,7 +62,7 @@ instance Exception UpdateGetException
 class PersistStore m => PersistQuery m where
     -- | Update individual fields on a specific record.
     update :: (PersistEntity val, PersistEntityBackend val ~ PersistMonadBackend m)
-           => Key' val -> [Update val] -> m ()
+           => Key val -> [Update val] -> m ()
 
     -- | Update individual fields on a specific record, and retrieve the
     -- updated value from the database.
@@ -70,7 +70,7 @@ class PersistStore m => PersistQuery m where
     -- Note that this function will throw an exception if the given key is not
     -- found in the database.
     updateGet :: (PersistEntity val, PersistMonadBackend m ~ PersistEntityBackend val)
-              => Key' val -> [Update val] -> m val
+              => Key val -> [Update val] -> m val
     updateGet key ups = do
         update key ups
         get key >>= maybe (liftIO $ throwIO $ KeyNotFound $ show key) return
@@ -99,11 +99,11 @@ class PersistStore m => PersistQuery m where
     selectFirst filts opts = selectSource filts ((LimitTo 1):opts) C.$$ CL.head
 
 
-    -- | Get the 'Key's of all records matching the given criterion.
+    -- | Get the 'Keys of all records matching the given criterion.
     selectKeys :: (PersistEntity val, PersistEntityBackend val ~ PersistMonadBackend m)
                => [Filter val]
                -> [SelectOpt val]
-               -> C.Source m (Key' val)
+               -> C.Source m (Key val)
 
     -- | The total number of records fulfilling the given criterion.
     count :: (PersistEntity val, PersistEntityBackend val ~ PersistMonadBackend m)
@@ -164,7 +164,7 @@ selectList a b = selectSource a b C.$$ CL.consume
 selectKeysList :: (PersistEntity val, PersistQuery m, PersistEntityBackend val ~ PersistMonadBackend m)
                => [Filter val]
                -> [SelectOpt val]
-               -> m [Key' val]
+               -> m [Key val]
 selectKeysList a b = selectKeys a b C.$$ CL.consume
 
 data PersistUpdate = Assign | Add | Subtract | Multiply | Divide -- FIXME need something else here

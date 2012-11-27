@@ -26,17 +26,17 @@ data SelectOneMany one many = SelectOneMany
     , somOrderOne :: [SelectOpt one]
     , somFilterMany :: [Filter many]
     , somOrderMany :: [SelectOpt many]
-    , somFilterKeys :: [Key' one] -> Filter many
-    , somGetKey :: many -> Key' one
+    , somFilterKeys :: [Key one] -> Filter many
+    , somGetKey :: many -> Key one
     , somIncludeNoMatch :: Bool
     }
 
-selectOneMany :: ([Key' one] -> Filter many) -> (many -> Key' one) -> SelectOneMany one many
+selectOneMany :: ([Key one] -> Filter many) -> (many -> Key one) -> SelectOneMany one many
 selectOneMany filts get' = SelectOneMany [] [] [] [] filts get' False
 
 instance ( PersistEntity one
          , PersistEntity many
-         , Ord (Key (PersistEntityBackend one) one)
+         , Ord (Key one)
          , PersistQuery monad
          , PersistMonadBackend monad ~ PersistEntityBackend one
          , PersistEntityBackend one ~ PersistEntityBackend many

@@ -41,14 +41,14 @@ module Database.Persist.Store
     , checkUnique
     , DeleteCascade (..)
     , PersistException (..)
-    , Key (..)
+    , KeyBackend (..)
+    , Key
     , Entity (..)
 
       -- * Helpers
     , getPersistMap
     , listToJSON
     , mapToJSON
-    , Key'
 
       -- * Config
     , PersistConfig (..)
@@ -427,7 +427,7 @@ instance PersistField a => PersistField (Maybe a) where
 -- | Helper wrapper, equivalent to @Key (PersistEntityBackend val) val@.
 --
 -- Since 1.1.0
-type Key' val = Key (PersistEntityBackend val) val
+type Key val = KeyBackend (PersistEntityBackend val) val
 
 -- | A single database entity. For example, if writing a blog application, a
 -- blog entry would be an entry, containing fields such as title and content.
@@ -450,7 +450,7 @@ class PersistEntity val where
     persistUniqueToValues :: Unique val -> [PersistValue]
     persistUniqueKeys :: val -> [Unique val]
 
-    persistIdField :: EntityField val (Key (PersistEntityBackend val) val)
+    persistIdField :: EntityField val (Key val)
 
 instance PersistField a => PersistField [a] where
     toPersistValue = PersistList . map toPersistValue
@@ -518,13 +518,13 @@ instance PersistField SomePersistField where
     fromPersistValue x = fmap SomePersistField (fromPersistValue x :: Either T.Text T.Text)
     sqlType (SomePersistField a) = sqlType a
 
-newtype Key backend entity = Key { unKey :: PersistValue }
+newtype KeyBackend backend entity = Key { unKey :: PersistValue }
     deriving (Show, Read, Eq, Ord, PersistField)
 
-instance A.ToJSON (Key backend entity) where
+instance A.ToJSON (KeyBackend backend entity) where
     toJSON (Key val) = A.toJSON val
 
-instance A.FromJSON (Key backend entity) where
+instance A.FromJSON (KeyBackend backend entity) where
     parseJSON = fmap Key . A.parseJSON
 
 -- | Datatype that represents an entity, with both its key and
@@ -558,7 +558,7 @@ instance A.FromJSON (Key backend entity) where
 -- Entity backend b)@), then you must you use @SELECT ??, ??
 -- WHERE ...@, and so on.
 data Entity entity =
-    Entity { entityKey :: Key (PersistEntityBackend entity) entity
+    Entity { entityKey :: Key entity
            , entityVal :: entity }
     deriving (Eq, Ord, Show, Read)
 
@@ -568,33 +568,33 @@ class MonadIO m => PersistStore m where
     -- | Create a new record in the database, returning an automatically created
     -- key (in SQL an auto-increment id).
     insert :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
-           => val -> m (Key' val)
+           => val -> m (Key val)
 
     -- | Create a new record in the database using the given key.
     insertKey :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
-              => Key' val -> val -> m ()
+              => Key val -> val -> m ()
 
     -- | Put the record in the database with the given key.
     -- Unlike 'replace', if a record with the given key does not
     -- exist then a new record will be inserted.
     repsert :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
-            => Key' val -> val -> m ()
+            => Key val -> val -> m ()
 
     -- | Replace the record in the database with the given
     -- key. Note that the result is undefined if such record does
-    -- not exist, so you must use 'insertKey' or 'repsert' in
+    -- not exist, so you must use 'insertKey or 'repsert' in
     -- these cases.
     replace :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
-            => Key' val -> val -> m ()
+            => Key val -> val -> m ()
 
     -- | Delete a specific record by identifier. Does nothing if record does
     -- not exist.
     delete :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
-           => Key' val -> m ()
+           => Key val -> m ()
 
     -- | Get a record by identifier, if available.
     get :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
-        => Key' val -> m (Maybe val)
+        => Key val -> m (Maybe val)
 
 #define DEF(T) { type PersistMonadBackend (T m) = PersistMonadBackend m; insert = lift . insert; insertKey k = lift . insertKey k; repsert k = lift . repsert k; replace k = lift . replace k; delete = lift . delete; get = lift . get }
 #define GO(T) instance (PersistStore m) => PersistStore (T m) where DEF(T)
@@ -629,7 +629,7 @@ class PersistStore m => PersistUnique m where
 
     -- | Like 'insert', but returns 'Nothing' when the record
     -- couldn't be inserted because of a uniqueness constraint.
-    insertUnique :: (PersistEntityBackend val ~ PersistMonadBackend m, PersistEntity val) => val -> m (Maybe (Key' val))
+    insertUnique :: (PersistEntityBackend val ~ PersistMonadBackend m, PersistEntity val) => val -> m (Maybe (Key val))
     insertUnique datum = do
         isUnique <- checkUnique datum
         if isUnique then Just `liftM` insert datum else return Nothing
@@ -660,9 +660,9 @@ GOX(Monoid w, Strict.WriterT w)
 
 -- | Insert a value, checking for conflicts with any unique constraints.  If a
 -- duplicate exists in the database, it is returned as 'Left'. Otherwise, the
--- new 'Key' is returned as 'Right'.
+-- new 'Key is returned as 'Right'.
 insertBy :: (PersistEntity v, PersistStore m, PersistUnique m, PersistMonadBackend m ~ PersistEntityBackend v)
-          => v -> m (Either (Entity v) (Key' v))
+          => v -> m (Either (Entity v) (Key v))
 insertBy val =
     go $ persistUniqueKeys val
   where
@@ -696,7 +696,7 @@ belongsTo ::
   , PersistEntity ent1
   , PersistEntity ent2
   , PersistMonadBackend m ~ PersistEntityBackend ent2
-  ) => (ent1 -> Maybe (Key' ent2)) -> ent1 -> m (Maybe ent2)
+  ) => (ent1 -> Maybe (Key ent2)) -> ent1 -> m (Maybe ent2)
 belongsTo foreignKeyField model = case foreignKeyField model of
     Nothing -> return Nothing
     Just f -> get f
@@ -707,12 +707,12 @@ belongsToJust ::
   , PersistEntity ent1
   , PersistEntity ent2
   , PersistMonadBackend m ~ PersistEntityBackend ent2)
-  => (ent1 -> Key' ent2) -> ent1 -> m ent2
+  => (ent1 -> Key ent2) -> ent1 -> m ent2
 belongsToJust getForeignKey model = getJust $ getForeignKey model
 
 -- | Same as get, but for a non-null (not Maybe) foreign key
 --   Unsafe unless your database is enforcing that the foreign key is valid
-getJust :: (PersistStore m, PersistEntity val, Show (Key' val), PersistMonadBackend m ~ PersistEntityBackend val) => Key' val -> m val
+getJust :: (PersistStore m, PersistEntity val, Show (Key val), PersistMonadBackend m ~ PersistEntityBackend val) => Key val -> m val
 getJust key = get key >>= maybe
   (liftIO $ E.throwIO $ PersistForeignConstraintUnmet $ show key)
   return
@@ -739,7 +739,7 @@ data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le | In | NotIn
     deriving (Read, Show)
 
 class PersistEntity a => DeleteCascade a where
-    deleteCascade :: (PersistStore m, PersistEntityBackend a ~ PersistMonadBackend m) => Key' a -> m ()
+    deleteCascade :: (PersistStore m, PersistEntityBackend a ~ PersistMonadBackend m) => Key a -> m ()
 
 instance PersistField PersistValue where
     toPersistValue = id

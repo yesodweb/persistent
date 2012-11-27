@@ -204,7 +204,7 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersist m) where
 updatePersistValue :: Update v -> PersistValue
 updatePersistValue (Update _ v _) = toPersistValue v
 
-dummyFromKey :: Key R.SqlBackend v -> v
+dummyFromKey :: KeyBackend R.SqlBackend v -> v
 dummyFromKey _ = error "dummyFromKey"
 
 execute' :: (MonadLogger m, MonadIO m) => Text -> [PersistValue] -> SqlPersist m ()

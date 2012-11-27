@@ -17,7 +17,7 @@ module Database.Persist.GenericSql
     , Statement
     , runSqlConn
     , runSqlPool
-    , Key (..)
+    , Key
 
     -- * Raw SQL queries
     -- $rawSql
@@ -69,7 +69,7 @@ import Control.Monad.Base (liftBase)
 
 type ConnectionPool = Pool Connection
 
-instance PathPiece (Key R.SqlBackend entity) where
+instance PathPiece (KeyBackend R.SqlBackend entity) where
     toPathPiece (Key (PersistInt64 i)) = toPathPiece i
     toPathPiece k = throw $ PersistInvalidField $ "Invalid Key: " ++ show k
     fromPathPiece t =
@@ -181,7 +181,7 @@ instance (C.MonadResource m, MonadLogger m) => PersistStore (SqlPersist m) where
 
 insrepHelper :: (MonadIO m, PersistEntity val, MonadLogger m)
              => Text
-             -> Key R.SqlBackend val
+             -> Key val
              -> val
              -> SqlPersist m ()
 insrepHelper command (Key k) val = do
@@ -249,7 +249,7 @@ instance (C.MonadResource m, MonadLogger m) => PersistUnique (SqlPersist m) wher
         t = entityDef $ dummyFromUnique uniq
         toFieldNames' = map snd . persistUniqueToFieldNames
 
-dummyFromKey :: Key R.SqlBackend v -> v
+dummyFromKey :: KeyBackend R.SqlBackend v -> v
 dummyFromKey _ = error "dummyFromKey"
 
 {- FIXME
