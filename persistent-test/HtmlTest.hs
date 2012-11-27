@@ -21,6 +21,7 @@ import Data.Char (generalCategory, GeneralCategory(..))
 import qualified Data.Text as T
 import System.Random (randomIO, randomRIO, Random)
 import Control.Applicative ((<$>))
+import Control.Monad.Trans.Resource (runResourceT)
 
 import Init
 import Text.Blaze.Html
@@ -33,13 +34,13 @@ HtmlTable
     deriving
 |]
 
-cleanDB :: (PersistQuery backend m, PersistEntityBackend HtmlTable ~ backend) => backend m ()
+cleanDB :: (PersistQuery m, PersistEntityBackend HtmlTable ~ PersistMonadBackend m) => m ()
 cleanDB = do
   deleteWhere ([] :: [Filter HtmlTable])
 
 specs :: Spec
 specs = describe "html" $ do
-    it "works" $ asIO $ runConn $ do
+    it "works" $ asIO $ runResourceT $ runConn $ do
 #ifndef WITH_MONGODB
         _ <- runMigrationSilent htmlMigrate
         -- Ensure reading the data from the database works...

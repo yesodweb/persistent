@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans #-}
+{-# LANGUAGE UndecidableInstances #-} -- FIXME
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -46,6 +47,7 @@ import Database.Persist.Sqlite
 import Control.Exception (SomeException)
 import Control.Monad.Trans.Reader (ask)
 import qualified Data.Text as T
+import qualified Control.Exception.Lifted
 #  if MIN_VERSION_monad_control(0, 3, 0)
 import qualified Control.Exception as E
 #    define CATCH catch'
@@ -82,7 +84,7 @@ data PetType = Cat | Dog
 derivePersistField "PetType"
 
 #ifdef WITH_MONGODB
-mkPersist MkPersistSettings { mpsBackend = ConT ''Action } [persistUpperCase|
+mkPersist MkPersistSettings { mpsBackend = ConT ''MongoBackend } [persistUpperCase|
 #else
 share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persistUpperCase|
 #endif
@@ -134,7 +136,7 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persis
     verkey Text Maybe
     UniqueEmail email
 |]
-cleanDB :: (PersistQuery backend m, PersistEntityBackend Email ~ backend) => backend m ()
+cleanDB :: (PersistQuery m, PersistEntityBackend Email ~ PersistMonadBackend m) => m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Person])
   deleteWhere ([] :: [Filter Person1])
@@ -149,10 +151,10 @@ db :: Action IO () -> Assertion
 db = db' cleanDB
 #endif
 
-petOwner :: PersistStore backend m => PetGeneric backend -> backend m (PersonGeneric backend)
+petOwner :: PersistStore m => PetGeneric (PersistMonadBackend m) -> m (PersonGeneric (PersistMonadBackend m))
 petOwner = belongsToJust petOwnerId
 
-maybeOwnedPetOwner :: PersistStore backend m => MaybeOwnedPetGeneric backend -> backend m (Maybe (PersonGeneric backend))
+maybeOwnedPetOwner :: PersistStore m => MaybeOwnedPetGeneric (PersistMonadBackend m) -> m (Maybe (PersonGeneric (PersistMonadBackend m)))
 maybeOwnedPetOwner = belongsTo maybeOwnedPetOwnerId
 
 
@@ -349,8 +351,8 @@ specs = describe "persistent" $ do
       p3 @== p
 
   prop "toPathPiece - fromPathPiece" $ \piece ->
-      let key1 = Key piece :: (Key BackendMonad Person)
-          key2 = fromJust $ fromPathPiece $ toPathPiece key1 :: (Key BackendMonad Person)
+      let key1 = Key piece :: (KeyBackend BackendMonad Person)
+          key2 = fromJust $ fromPathPiece $ toPathPiece key1 :: (KeyBackend BackendMonad Person)
       in  toPathPiece key1 == toPathPiece key2
 
   it "replace" $ db $ do
@@ -624,7 +626,8 @@ specs = describe "persistent" $ do
       liftIO $ ret @?= [Nothing :: Maybe (Single Int)]
 
   it "rawSql/entity" $ db $ do
-      let insert' :: (PersistStore backend m, PersistEntity val) => val -> backend m (Key backend val, val)
+      let insert' :: (PersistStore m, PersistEntity val, PersistEntityBackend val ~ PersistMonadBackend m)
+                  => val -> m (Key val, val)
           insert' v = insert v >>= \k -> return (k, v)
       (p1k, p1) <- insert' $ Person "Mathias"   23 Nothing
       (p2k, p2) <- insert' $ Person "Norbert"   44 Nothing
@@ -669,7 +672,8 @@ specs = describe "persistent" $ do
       liftIO $ ret2 @?= [Entity (Key $ unKey p1k) (RFO p1)]
 
   it "rawSql/OUTER JOIN" $ db $ do
-      let insert' :: (PersistStore backend m, PersistEntity val) => val -> backend m (Key backend val, val)
+      let insert' :: (PersistStore m, PersistEntity val, PersistEntityBackend val ~ PersistMonadBackend m)
+                  => val -> m (Key val, val)
           insert' v = insert v >>= \k -> return (k, v)
       (p1k, p1) <- insert' $ Person "Mathias"   23 Nothing
       (p2k, p2) <- insert' $ Person "Norbert"   44 Nothing
@@ -689,7 +693,7 @@ specs = describe "persistent" $ do
                        , (Entity p1k p1, Just (Entity a2k a2))
                        , (Entity p2k p2, Nothing) ]
 
-  it "commit/rollback" (caseCommitRollback >> runConn cleanDB)
+  it "commit/rollback" (caseCommitRollback >> runResourceT (runConn cleanDB))
 
   it "afterException" caseAfterException
 
@@ -699,7 +703,7 @@ specs = describe "persistent" $ do
 newtype ReverseFieldOrder a = RFO {unRFO :: a} deriving (Eq, Show)
 instance PersistEntity a => PersistEntity (ReverseFieldOrder a) where
     newtype EntityField (ReverseFieldOrder a) b = EFRFO {unEFRFO :: EntityField a b}
-    newtype Unique      (ReverseFieldOrder a) b = URFO  {unURFO  :: Unique      a b}
+    newtype Unique      (ReverseFieldOrder a)   = URFO  {unURFO  :: Unique      a  }
     persistFieldDef = persistFieldDef . unEFRFO
     entityDef = revFields . entityDef . unRFO
         where
@@ -755,9 +759,9 @@ catch' a handler = Control.Monad.Trans.Control.control $ \runInIO ->
 #endif
 
 caseAfterException :: Assertion
-caseAfterException = withSqlitePool sqlite_database 1 $ runSqlPool $ do
+caseAfterException = runResourceT $ withSqlitePool sqlite_database 1 $ runSqlPool $ do
     _ <- insert $ Person "A" 0 Nothing
-    _ <- (insert (Person "A" 1 Nothing) >> return ()) `CATCH` catcher
+    _ <- (insert (Person "A" 1 Nothing) >> return ()) `Control.Exception.Lifted.catch` catcher
     _ <- insert $ Person "B" 0 Nothing
     return ()
   where
@@ -767,7 +771,7 @@ caseAfterException = withSqlitePool sqlite_database 1 $ runSqlPool $ do
 #endif
 
 -- Test proper polymorphism
-_polymorphic :: PersistQuery backend m => backend m ()
+_polymorphic :: PersistQuery m => m ()
 _polymorphic = do
     ((Entity id' _):_) <- selectList [] [LimitTo 1]
     _ <- selectList [PetOwnerId ==. id'] []

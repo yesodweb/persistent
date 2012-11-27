@@ -34,6 +34,7 @@ import Database.Persist.Quasi
 import Database.Persist.Store
 import Database.Persist.Query.Internal
 import Database.Persist.GenericSql (Migration, SqlPersist, migrate)
+import Database.Persist.GenericSql.Raw (SqlBackend)
 import Database.Persist.Util (nullable)
 import Database.Persist.TH.Library (apE)
 import Language.Haskell.TH.Quote
@@ -112,7 +113,7 @@ data MkPersistSettings = MkPersistSettings
 -- | Use the 'SqlPersist' backend.
 sqlSettings :: MkPersistSettings
 sqlSettings = MkPersistSettings
-    { mpsBackend = ConT ''SqlPersist
+    { mpsBackend = ConT ''SqlBackend
     }
 
 recName :: Text -> Text -> Text
@@ -132,17 +133,9 @@ upperFirst t =
 
 dataTypeDec :: EntityDef -> Dec
 dataTypeDec t =
-    DataD [] nameG [KindedTV backend monadTransKind] constrs
+    DataD [] nameG [PlainTV backend] constrs
     $ map (mkName . unpack) $ entityDerives t
   where
-#if MIN_VERSION_template_haskell(2,8,0)
-    arrowK x y = ArrowT `AppT` x `AppT` y
-    monadKind = StarT `arrowK` StarT
-    monadTransKind = monadKind `arrowK` monadKind
-#else
-    monadKind = StarK `ArrowK` StarK
-    monadTransKind = monadKind `ArrowK` monadKind
-#endif
     mkCol x (FieldDef n _ ty as) =
         (mkName $ unpack $ recName x $ unHaskellName n,
          NotStrict,
@@ -184,13 +177,12 @@ uniqueTypeDec :: EntityDef -> Dec
 uniqueTypeDec t =
     DataInstD [] ''Unique
         [ ConT (mkName $ unpack (unHaskellName (entityHaskell t) ++ suffix))
-          `AppT` VarT backend, VarT backend2
+          `AppT` VarT backend
         ]
             (map (mkUnique backend t) $ entityUniques t)
             []
   where
     backend = mkName "backend"
-    backend2 = mkName "backend2"
 
 mkUnique :: Name -> EntityDef -> UniqueDef -> Con
 mkUnique backend t (UniqueDef (HaskellName constr) _ fields) =
@@ -220,7 +212,7 @@ idType :: Name -> FieldType -> Type
 idType backend typ =
     case stripId typ of
         Just typ' ->
-            ConT ''Key
+            ConT ''KeyBackend
             `AppT` VarT backend
             `AppT` (ConT (mkName $ unpack $ typ' ++ "Generic") `AppT` VarT backend)
         Nothing -> ftToType typ
@@ -396,7 +388,7 @@ mkEntity mps t = do
             ConT (mkName $ unpack $ nameT ++ suffix)
                 `AppT` mpsBackend mps
       , TySynD (mkName $ unpack $ unHaskellName (entityHaskell t) ++ "Id") [] $
-            ConT ''Key `AppT` mpsBackend mps `AppT` ConT (mkName nameS)
+            ConT ''KeyBackend `AppT` mpsBackend mps `AppT` ConT (mkName nameS)
       , InstanceD [] clazz $
         [ uniqueTypeDec t
         , FunD (mkName "entityDef") [Clause [WildP] (NormalB t') []]
@@ -532,8 +524,8 @@ mkDeleteCascade defs = do
     go allDeps EntityDef{entityHaskell = name} = do
         let deps = filter (\x -> depTarget x == unHaskellName name) allDeps
         key <- newName "key"
-        del <- [|delete|]
-        dcw <- [|deleteCascadeWhere|]
+        let del = VarE 'delete
+        let dcw = VarE 'deleteCascadeWhere
         just <- [|Just|]
         filt <- [|Filter|]
         eq <- [|Eq|]
@@ -559,12 +551,11 @@ mkDeleteCascade defs = do
                     [NoBindS $ del `AppE` VarE key]
         return $
             InstanceD
-            [ ClassP ''PersistQuery [VarT $ mkName "backend", VarT $ mkName "m"]
-            , ClassP ''Monad [VarT $ mkName "m"]
+            [ ClassP ''PersistQuery [VarT $ mkName "m"]
+            , EqualP (VarT $ mkName "backend") (ConT ''PersistMonadBackend `AppT` VarT (mkName "m"))
             ]
             (ConT ''DeleteCascade `AppT`
                 (ConT (mkName $ unpack $ unHaskellName name ++ suffix) `AppT` VarT (mkName "backend"))
-                `AppT` VarT (mkName "backend")
                 `AppT` VarT (mkName "m")
                 )
             [ FunD (mkName "deleteCascade")
@@ -768,7 +759,7 @@ mkField et cd = do
     typ =
         case stripId $ fieldType cd of
             Just ft ->
-                 ConT ''Key
+                 ConT ''KeyBackend
                     `AppT` (VarT $ mkName "backend")
                     `AppT`
                         let con = ConT $ mkName $ unpack $ ft ++ suffix

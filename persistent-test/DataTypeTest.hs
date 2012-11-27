@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -26,6 +27,7 @@ import System.Random (randomIO, randomRIO, Random)
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad (when)
 import Data.Word (Word8)
+import Control.Monad.Trans.Resource (runResourceT)
 
 import Init
 
@@ -51,13 +53,13 @@ DataTypeTable no-json
     zonedTime ZonedTime
 |]
 
-cleanDB :: (PersistQuery backend m, PersistEntityBackend DataTypeTable ~ backend) => backend m ()
+cleanDB :: (PersistQuery m, PersistMonadBackend m ~ PersistEntityBackend DataTypeTable) => m ()
 cleanDB = do
   deleteWhere ([] :: [Filter DataTypeTable])
 
 specs :: Spec
 specs = describe "data type specs" $ do
-    it "handles all types" $ asIO $ runConn $ do
+    it "handles all types" $ asIO $ runResourceT $ runConn $ do
 #ifndef WITH_MONGODB
         _ <- runMigrationSilent dataTypeMigrate
         -- Ensure reading the data from the database works...

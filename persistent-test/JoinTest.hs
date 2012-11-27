@@ -61,11 +61,11 @@ specs = describe "joins" $ do
 #endif
 
 
-joinGeneric :: (MonadIO (backend m), PersistQuery backend m) =>
-               (SelectOneMany backend (AuthorGeneric backend) (EntryGeneric backend)
-                -> backend m [(Entity (AuthorGeneric backend), [Entity (EntryGeneric backend)])])
+joinGeneric :: (MonadIO m, PersistQuery m, backend ~ PersistMonadBackend m) =>
+               (SelectOneMany (AuthorGeneric backend) (EntryGeneric backend)
+                -> m [(Entity (AuthorGeneric backend), [Entity (EntryGeneric backend)])])
                 -> Bool
-                -> backend m ()
+                -> m ()
 
 joinGeneric run _ = do
     a <- insert $ Author "a"

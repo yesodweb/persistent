@@ -45,6 +45,7 @@ import Test.QuickCheck
 
 import Database.Persist
 import Database.Persist.Store (PersistValue(..))
+import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 
 #if WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
@@ -62,6 +63,7 @@ import Network (PortID (PortNumber))
 
 #else
 import Database.Persist.GenericSql
+import Database.Persist.GenericSql.Raw (SqlBackend)
 import Database.Persist.Sqlite
 import Data.Text (Text)
 
@@ -114,7 +116,7 @@ assertNotEmpty xs = liftIO $ assertBool "" (not (null xs))
 persistSettings :: MkPersistSettings
 persistSettings = MkPersistSettings { mpsBackend = ConT ''Action }
 
-type BackendMonad = Action
+type BackendMonad = MongoBackend
 runConn :: (MonadIO m, MonadBaseControl IO m) => Action m backend -> m ()
 runConn f = do
   _<-withMongoDBConn "test" "127.0.0.1" (PortNumber 27017) Nothing 5 $
@@ -151,7 +153,7 @@ instance Arbitrary PersistValue where
     arbitrary = PersistObjectId `fmap` arbitrary
 
 #else
-type BackendMonad = SqlPersist
+type BackendMonad = SqlBackend
 sqlite_database :: Text
 sqlite_database = "test/testdb.sqlite3"
 -- sqlite_database = ":memory:"
@@ -171,9 +173,9 @@ runConn f = do
 #endif
     return ()
 
-db :: SqlPersist IO () -> Assertion
+db :: SqlPersist (ResourceT IO) () -> Assertion
 db actions = do
-  runConn $ actions >>= \r -> rollback >> return r
+  runResourceT $ runConn $ actions >>= \r -> rollback >> return r
 
 #if !MIN_VERSION_random(1,0,1)
 instance Random Int32 where

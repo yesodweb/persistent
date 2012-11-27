@@ -20,7 +20,6 @@ import Control.Monad (mzero)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Error (ErrorT(..))
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Aeson
 import Data.ByteString (ByteString)
 import Data.Either (partitionEithers)
@@ -38,7 +37,7 @@ import qualified Data.Text.Encoding as T
 
 import Database.Persist hiding (Entity (..))
 import Database.Persist.Store
-import Database.Persist.GenericSql hiding (Key(..))
+import Database.Persist.GenericSql hiding (Key)
 import Database.Persist.GenericSql.Internal
 import Database.Persist.EntityDef
 

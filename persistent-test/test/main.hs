@@ -15,6 +15,7 @@ import System.Exit
 import Control.Monad (unless, when)
 import Filesystem (isFile, removeFile)
 import Filesystem.Path.CurrentOS (fromText)
+import Control.Monad.Trans.Resource (runResourceT)
 
 
 #ifdef MongoDB
@@ -39,7 +40,7 @@ main = do
   runConn (setup PersistentTest.testMigrate)
 #endif
   r <- hspecB $ PersistentTest.specs
-  (liftIO $ runConn PersistentTest.cleanDB)
+  runResourceT $ runConn PersistentTest.cleanDB
   unless r $ exitWith (toExitCode r)
 
 #ifndef WITH_MONGODB

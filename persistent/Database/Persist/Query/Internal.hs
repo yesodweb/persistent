@@ -187,6 +187,6 @@ limitOffsetOrder opts =
 updateFieldDef :: PersistEntity v => Update v -> FieldDef
 updateFieldDef (Update f _ _) = persistFieldDef f
 
-deleteCascadeWhere :: (DeleteCascade a, PersistQuery m, PersistEntityBackend a ~ PersistMonadBackend m)
+deleteCascadeWhere :: (DeleteCascade a m, PersistQuery m)
                    => [Filter a] -> m ()
 deleteCascadeWhere filts = selectKeys filts [] C.$$ CL.mapM_ deleteCascade

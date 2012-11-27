@@ -16,7 +16,7 @@ module Database.Persist.Sqlite
 import Database.Persist hiding (Entity (..))
 import Database.Persist.Store
 import Database.Persist.EntityDef
-import Database.Persist.GenericSql hiding (Key(..))
+import Database.Persist.GenericSql hiding (Key)
 import Database.Persist.GenericSql.Internal
 
 import qualified Database.Sqlite as Sqlite
@@ -26,7 +26,7 @@ import Data.List (intercalate)
 import Data.IORef
 import qualified Data.Map as Map
 #if MIN_VERSION_monad_control(0, 3, 0)
-import Control.Monad.Trans.Control (MonadBaseControl, control)
+import Control.Monad.Trans.Control (control)
 import qualified Control.Exception as E
 #define MBCIO MonadBaseControl IO
 #else

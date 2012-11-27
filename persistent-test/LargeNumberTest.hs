@@ -12,6 +12,7 @@ module LargeNumberTest where
 import Init
 import Data.Word
 import Test.HUnit (Assertion)
+import Control.Monad.Trans.Resource (runResourceT)
 
 #ifdef WITH_MONGODB
 mkPersist persistSettings [persist|

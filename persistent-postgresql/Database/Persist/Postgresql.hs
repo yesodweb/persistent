@@ -16,7 +16,7 @@ module Database.Persist.Postgresql
 
 import Database.Persist hiding (Entity (..))
 import Database.Persist.Store
-import Database.Persist.GenericSql hiding (Key(..))
+import Database.Persist.GenericSql hiding (Key)
 import Database.Persist.GenericSql.Internal
 import Database.Persist.EntityDef
 
@@ -32,7 +32,6 @@ import qualified Database.PostgreSQL.LibPQ as LibPQ
 
 import Control.Exception (throw)
 import Control.Monad.IO.Class (MonadIO (..))
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.List (intercalate)
 import Data.IORef
 import qualified Data.Map as Map

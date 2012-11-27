@@ -47,7 +47,7 @@ Car
 
 specs :: Spec
 specs = describe "sum types" $ do
-    it "works" $ asIO $ runConn $ do
+    it "works" $ asIO $ C.runResourceT $ runConn $ do
 #ifndef WITH_MONGODB
         _ <- runMigrationSilent sumTypeMigrate
 #endif

@@ -147,6 +147,7 @@ test-suite test
                    , hspec
                    , system-filepath
                    , system-fileio
+                   , resourcet
 
     if flag(mongodb)
         cpp-options: -DWITH_MONGODB -DDEBUG

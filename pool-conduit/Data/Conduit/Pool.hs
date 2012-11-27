@@ -35,6 +35,7 @@ withResourceT pool f = do
     mr <- takeResource pool
     b <- f $ mrValue mr
     mrReuse mr True
+    mrRelease mr
     return b
 
 -- | Take a resource from the pool and register a release action.
