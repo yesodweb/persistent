@@ -17,7 +17,9 @@ module Database.Persist.CouchDB
     ) where
 
 import Database.Persist
-import Database.Persist.Base
+import Database.Persist.EntityDef
+import Database.Persist.Store
+import Database.Persist.Query.Internal
 
 import Control.Monad
 import Control.Monad.Trans.Reader
@@ -33,10 +35,11 @@ import Data.Char
 import Data.List (intercalate, nub, nubBy)
 import Data.Pool
 import Data.Maybe
-import Data.Object
 import Data.Digest.Pure.SHA
-import Data.Neither (MEither (..), meither)
+-- import Data.Object
+-- import Data.Neither (MEither (..), meither)
 import Data.Enumerator (Stream (..), Step (..), Iteratee (..), returnI, run_, ($$))
+import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as BL
@@ -128,7 +131,7 @@ instance JSON PersistValue where
 
 entityToJSON :: (PersistEntity val) => val -> JSValue
 entityToJSON x = JSObject . toJSObject $ zip names values
-    where names = map columnName . entityColumns $ entityDef x
+    where names = map (T.unpack . unDBName . fieldDB) $ entityFields $ entityDef x
           values = map (showJSON . toPersistValue) $ toPersistFields x
 
 uniqueToJSON :: [PersistValue] -> JSValue
@@ -145,10 +148,10 @@ dummyFromUnique _ = error "dummyFromUnique"
 dummyFromFilts :: [Filter v] -> v
 dummyFromFilts _ = error "dummyFromFilts"
 
-wrapFromPersistValues :: (PersistEntity val) => EntityDef -> PersistValue -> Either String val
+wrapFromPersistValues :: (PersistEntity val) => EntityDef -> PersistValue -> Either Text val
 wrapFromPersistValues e doc = fromPersistValues reorder
     where clean (PersistMap x) = filter (\(k, _) -> T.head k /= '_') x
-          reorder = match (map (T.pack . columnName) $ (entityColumns e)) (clean doc) []
+          reorder = match (map (unDBName . fieldDB) $ (entityFields e)) (clean doc) []
               where match [] [] values = values
                     match (c:cs) fields values = let (found, unused) = matchOne fields []
                                                   in match cs unused (values ++ [snd found])
@@ -168,7 +171,7 @@ modify f k v = do
     return ()
 
 defaultView :: EntityDef -> [String] -> String -> String
-defaultView t names extra = viewBody . viewConstraints (map columnName $ entityColumns t)
+defaultView t names extra = viewBody . viewConstraints (map (T.unpack . unDBName . fieldDB) $ entityFields t)
                             $ if null extra then viewEmit names [] else extra
 
 viewBody :: String -> String
@@ -199,7 +202,7 @@ viewFilters :: (PersistEntity val) => [Filter val] -> String -> String
 viewFilters [] x = x
 viewFilters filters x = "if (" ++ (intercalate " && " $ map fKind filters) ++ ") {" ++ x ++ "}"
     where fKind (Filter field v NotIn) = "!(" ++ fKind (Filter field v In) ++ ")"
-          fKind (Filter field v op) = "doc." ++ (columnName $ persistColumnDef field) ++
+          fKind (Filter field v op) = "doc." ++ (T.unpack $ fieldName field) ++
                                       fOp op ++ either (encode . showJSON . toPersistValue)
                                                        (encode . JSArray . map (showJSON . toPersistValue)) v
           fKind (FilterOr fs) = "(" ++ (intercalate " || " $ map fKind fs) ++ ")"
@@ -214,7 +217,7 @@ viewFilters filters x = "if (" ++ (intercalate " && " $ map fKind filters) ++ ")
 
 filtersToNames :: (PersistEntity val) => [Filter val] -> [String]
 filtersToNames = nub . concatMap f
-    where f (Filter field _ _) = [columnName $ persistColumnDef field]
+    where f (Filter field _ _) = [T.unpack $ fieldName field]
           f (FilterOr fs) = concatMap f fs
           f (FilterAnd fs) = concatMap f fs
 
@@ -227,7 +230,7 @@ opts = nubBy (\(x, _) (y, _) -> x == "descending" && x == y) . map o
           o (LimitTo x) = ("limit", JSRational False $ fromIntegral x)
 
 designName :: EntityDef -> DB.Doc
-designName t = DB.doc . (\(x:xs) -> toLower x : xs) $ entityName t
+designName entity = DB.doc . (\(x:xs) -> toLower x : xs) $ (T.unpack $ unDBName $ entityDB entity)
 
 maybeHead :: [a] -> Maybe a
 maybeHead [] = Nothing
@@ -256,7 +259,7 @@ select f o (Continue k) vals process = do
     x <- runView conn db design name o [DB.ViewMap name $ defaultView t names filters]
     returnI $$ k . Chunks $ map process x
 
-instance (MonadIO m, MonadBaseControl IO m) => PersistBackend CouchReader m where
+instance (MonadIO m, MonadBaseControl IO m) => PersistStore CouchReader m where
     insert v = do
         (conn, db) <- CouchReader ask
         (doc, _) <- run conn $ DB.newDoc db (entityToJSON v)
@@ -264,44 +267,22 @@ instance (MonadIO m, MonadBaseControl IO m) => PersistBackend CouchReader m wher
 
     replace = modify $ const . return . entityToJSON
 
-    update key = modify (\u x -> return $ foldr field x u) key
-        where -- e = entityDef $ dummyFromKey key
-              field f@(Update _ value up) doc = case up of
-                                                   Assign -> execute doc $ const val
-                                                   Add -> execute doc $ op (+) val
-                                                   Subtract -> execute doc $ op (-) val
-                                                   Multiply -> execute doc $ op (*) val
-                                                   Divide -> execute doc $ op (/) val
-                  where name = T.pack $ updateFieldName f
-                        val = toPersistValue value
-                        execute (PersistMap x) g = PersistMap $ map (\(k, v) -> if k == name then (k, g v) else (k, v)) x
-                        op o (PersistInt64 x) (PersistInt64 y) = PersistInt64 . truncate $ (fromIntegral y) `o` (fromIntegral x)
-                        op o (PersistDouble x) (PersistDouble y) = PersistDouble $ y `o` x
-
-    updateWhere f u = run_ $ selectKeys f $$ EL.mapM_ (flip update u)
-
     delete k = do
         let doc = keyToDoc k
         (conn, db) <- CouchReader ask
         _ <- run conn $ DB.forceDeleteDoc db doc
         return ()
 
-    deleteBy u = do
-        x <- getBy u
-        when (isJust x)
-             (delete . fst $ fromJust x)
-
-    deleteWhere f = run_ $ selectKeys f $$ EL.mapM_ delete
-
     get k = do
         let doc = keyToDoc k
         (conn, db) <- CouchReader ask
         result <- run conn $ DB.getDoc db doc
-        return $ maybe Nothing (\(_, _, v) -> either (\e -> error $ "Get error: " ++ e) Just $
+        return $ maybe Nothing (\(_, _, v) -> either (\e -> error $ "Get error: " ++ T.unpack e) Just $
                                               wrapFromPersistValues (entityDef $ dummyFromKey k) v) result
 
+instance (MonadIO m, MonadBaseControl IO m) => PersistUnique CouchReader m where
     getBy u = do
-        let names = persistUniqueToFieldNames u
+        let names = map (T.unpack . unDBName . snd) $ persistUniqueToFieldNames u
             values = uniqueToJSON $ persistUniqueToValues u
             t = entityDef $ dummyFromUnique u
             name = viewName names
@@ -313,20 +294,55 @@ instance (MonadIO m, MonadBaseControl IO m) => PersistBackend CouchReader m wher
            then return Nothing
            else do let key = fromJust justKey
                    y <- get key
-                   return $ fmap (\v -> (key, v)) y
+                   return $ fmap (\v -> Entity key v) y
 
-    selectEnum f o k = let t = entityDef $ dummyFromFilts f
-                        in select f (opts o) k (map columnName $ entityColumns t)
+    {-
+    deleteBy u = do
+        mEnt <- getBy u
+        case mEnt of
+          Just (Entity key _) -> delete key
+          Nothing -> return ()
+          -}
+             
+
+fieldName ::  forall record typ.  (PersistEntity record) => EntityField record typ -> Text
+fieldName = unDBName . fieldDB . persistFieldDef
+
+instance (MonadIO m, MonadBaseControl IO m) => PersistQuery CouchReader m where
+    update key = modify (\u x -> return $ foldr field x u) key
+        where -- e = entityDef $ dummyFromKey key
+              field upd@(Update updField value up) doc = case up of
+                                                   Assign -> execute doc $ const val
+                                                   Add -> execute doc $ op (+) val
+                                                   Subtract -> execute doc $ op (-) val
+                                                   Multiply -> execute doc $ op (*) val
+                                                   Divide -> execute doc $ op (/) val
+                  where name = fieldName updField
+                        val = toPersistValue value
+                        execute (PersistMap x) g = PersistMap $ map (\(k, v) -> if k == name then (k, g v) else (k, v)) x
+                        op o (PersistInt64 x) (PersistInt64 y) = PersistInt64 . truncate $ (fromIntegral y) `o` (fromIntegral x)
+                        op o (PersistDouble x) (PersistDouble y) = PersistDouble $ y `o` x
+
+    {-
+    updateWhere f u = run_ $ selectKeys f $$ EL.mapM_ (flip update u)
+
+    deleteWhere f = run_ $ selectKeys f $$ EL.mapM_ delete
+    -}
+
+    {-
+    selectSource f o k = let entity = entityDef $ dummyFromFilts f
+                        in select f (opts o) k (map fieldDB $ entityFields entity)
                                   (\(x, y) -> (docToKey x, either (\e -> error $ "SelectEnum error: " ++ e)
-                                                                  id $ wrapFromPersistValues t y))
+                                                                  id $ wrapFromPersistValues entity y))
+    -}
 
-    selectKeys f k = select f [] k [] (docToKey . fst)
+    -- selectKeys f k = select f [] k [] (docToKey . fst)
 
     -- It is more effective to use a MapReduce view with the _count function, but the Database.CouchDB module
     -- expects the id attribute to be present in the result, which is e.g. {"rows":[{"key":null,"value":10}]}.
     -- For now, it is possible to write a custom function or to catch the exception and parse the count from it,
     -- but that is just plain ugly.
-    count f = run_ $ selectKeys f $$ EL.fold ((flip . const) (+1)) 0
+    -- count f = run_ $ selectKeys f $$ EL.fold ((flip . const) (+1)) 0
 
 -- | Information required to connect to a CouchDB database.
 data CouchConf = CouchConf
@@ -336,6 +352,7 @@ data CouchConf = CouchConf
     , couchPoolSize :: Int
     }
 
+{-
 instance PersistConfig CouchConf where
     type PersistConfigBackend CouchConf = CouchReader
     type PersistConfigPool CouchConf = ConnectionPool
@@ -364,3 +381,4 @@ safeRead name t = case reads s of
     []       -> MLeft $ concat ["Invalid value for ", name, ": ", s]
   where
     s = T.unpack t
+-}
