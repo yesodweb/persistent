@@ -16,7 +16,7 @@ extra-source-files: test/main.hs
 library
     build-depends:   base                     >= 4         && < 5
                    , template-haskell
-                   , persistent               >= 1.0       && < 1.1
+                   , persistent               >= 1.1      && < 1.2
                    , monad-control            >= 0.2       && < 0.4
                    , text                     >= 0.5       && < 1.0
                    , transformers             >= 0.2       && < 0.4
