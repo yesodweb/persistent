@@ -2,6 +2,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE CPP #-}
 module Database.Persist.Query.Internal
   ( -- re-exported as public
       PersistQuery (..)
@@ -32,6 +33,25 @@ import Data.Typeable (Typeable)
 
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
+
+import Control.Monad.Trans.Class (lift)
+import Data.Monoid (Monoid)
+
+import Data.Conduit (Pipe)
+import Control.Monad.Trans.Identity ( IdentityT)
+import Control.Monad.Trans.List     ( ListT    )
+import Control.Monad.Trans.Maybe    ( MaybeT   )
+import Control.Monad.Trans.Error    ( ErrorT, Error   )
+import Control.Monad.Trans.Reader   ( ReaderT  )
+import Control.Monad.Trans.Cont     ( ContT  )
+import Control.Monad.Trans.State    ( StateT   )
+import Control.Monad.Trans.Writer   ( WriterT  )
+import Control.Monad.Trans.RWS      ( RWST     )
+import Control.Monad.Trans.Resource ( ResourceT)
+
+import qualified Control.Monad.Trans.RWS.Strict    as Strict ( RWST   )
+import qualified Control.Monad.Trans.State.Strict  as Strict ( StateT )
+import qualified Control.Monad.Trans.Writer.Strict as Strict ( WriterT )
 
 data UpdateGetException = KeyNotFound String
     deriving Typeable
@@ -88,6 +108,29 @@ class PersistStore m => PersistQuery m where
     -- | The total number of records fulfilling the given criterion.
     count :: (PersistEntity val, PersistEntityBackend val ~ PersistMonadBackend m)
           => [Filter val] -> m Int
+
+#define DEF(T) { update k = lift . update k; updateGet k = lift . updateGet k; updateWhere f = lift . updateWhere f; deleteWhere = lift . deleteWhere; selectSource f = C.transPipe lift . selectSource f; selectFirst f = lift . selectFirst f; selectKeys f = C.transPipe lift . selectKeys f; count = lift . count }
+#define GO(T) instance (PersistQuery m) => PersistQuery (T m) where DEF(T)
+#define GOX(X, T) instance (X, PersistQuery m) => PersistQuery (T m) where DEF(T)
+
+GO(IdentityT)
+GO(ListT)
+GO(MaybeT)
+GOX(Error e, ErrorT e)
+GO(ReaderT r)
+GO(ContT r)
+GO(StateT s)
+GO(ResourceT)
+GO(Pipe l i o u)
+GOX(Monoid w, WriterT w)
+GOX(Monoid w, RWST r w s)
+GOX(Monoid w, Strict.RWST r w s)
+GO(Strict.StateT s)
+GOX(Monoid w, Strict.WriterT w)
+
+#undef DEF
+#undef GO
+#undef GOX
 
 type family BackendSpecificFilter b v
 

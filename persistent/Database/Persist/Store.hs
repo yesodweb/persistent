@@ -119,7 +119,7 @@ import Control.Monad.Trans.Cont     ( ContT  )
 import Control.Monad.Trans.State    ( StateT   )
 import Control.Monad.Trans.Writer   ( WriterT  )
 import Control.Monad.Trans.RWS      ( RWST     )
-import Control.Monad.Trans.Resource ( ResourceT, MonadResource )
+import Control.Monad.Trans.Resource ( ResourceT)
 
 import qualified Control.Monad.Trans.RWS.Strict    as Strict ( RWST   )
 import qualified Control.Monad.Trans.State.Strict  as Strict ( StateT )
@@ -568,33 +568,39 @@ data Entity entity =
            , entityVal :: entity }
     deriving (Eq, Ord, Show, Read)
 
-class MonadResource m => PersistStore m where
+class MonadIO m => PersistStore m where
     type PersistMonadBackend m
 
     -- | Create a new record in the database, returning an automatically created
     -- key (in SQL an auto-increment id).
-    insert :: PersistEntity val => val -> m (Key (PersistMonadBackend m) val)
+    insert :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
+           => val -> m (Key' val)
 
     -- | Create a new record in the database using the given key.
-    insertKey :: PersistEntity val => Key (PersistMonadBackend m) val -> val -> m ()
+    insertKey :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
+              => Key' val -> val -> m ()
 
     -- | Put the record in the database with the given key.
     -- Unlike 'replace', if a record with the given key does not
     -- exist then a new record will be inserted.
-    repsert :: PersistEntity val => Key (PersistMonadBackend m) val -> val -> m ()
+    repsert :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
+            => Key' val -> val -> m ()
 
     -- | Replace the record in the database with the given
     -- key. Note that the result is undefined if such record does
     -- not exist, so you must use 'insertKey' or 'repsert' in
     -- these cases.
-    replace :: PersistEntity val => Key (PersistMonadBackend m) val -> val -> m ()
+    replace :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
+            => Key' val -> val -> m ()
 
     -- | Delete a specific record by identifier. Does nothing if record does
     -- not exist.
-    delete :: PersistEntity val => Key (PersistMonadBackend m) val -> m ()
+    delete :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
+           => Key' val -> m ()
 
     -- | Get a record by identifier, if available.
-    get :: PersistEntity val => Key (PersistMonadBackend m) val -> m (Maybe val)
+    get :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
+        => Key' val -> m (Maybe val)
 
 #define DEF(T) { type PersistMonadBackend (T m) = PersistMonadBackend m; insert = lift . insert; insertKey k = lift . insertKey k; repsert k = lift . repsert k; replace k = lift . replace k; delete = lift . delete; get = lift . get }
 #define GO(T) instance (PersistStore m) => PersistStore (T m) where DEF(T)
@@ -634,6 +640,28 @@ class PersistStore m => PersistUnique m where
         isUnique <- checkUnique datum
         if isUnique then Just `liftM` insert datum else return Nothing
 
+#define DEF(T) { getBy = lift . getBy; deleteBy = lift . deleteBy; insertUnique = lift . insertUnique }
+#define GO(T) instance (PersistUnique m) => PersistUnique (T m) where DEF(T)
+#define GOX(X, T) instance (X, PersistUnique m) => PersistUnique (T m) where DEF(T)
+
+GO(IdentityT)
+GO(ListT)
+GO(MaybeT)
+GOX(Error e, ErrorT e)
+GO(ReaderT r)
+GO(ContT r)
+GO(StateT s)
+GO(ResourceT)
+GO(Pipe l i o u)
+GOX(Monoid w, WriterT w)
+GOX(Monoid w, RWST r w s)
+GOX(Monoid w, Strict.RWST r w s)
+GO(Strict.StateT s)
+GOX(Monoid w, Strict.WriterT w)
+
+#undef DEF
+#undef GO
+#undef GOX
 
 
 -- | Insert a value, checking for conflicts with any unique constraints.  If a
