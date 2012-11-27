@@ -2,6 +2,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Database.Persist.Query.Join
     ( -- * Typeclass
       RunJoin (..)
@@ -16,25 +17,32 @@ import Data.Maybe (mapMaybe)
 import qualified Data.Map as Map
 import Data.List (foldl')
 
-class PersistQuery backend m => RunJoin a backend m where
+class PersistQuery m => RunJoin a m where
     type Result a
-    runJoin :: a -> backend m (Result a)
+    runJoin :: a -> m (Result a)
 
-data SelectOneMany backend one many = SelectOneMany
+data SelectOneMany one many = SelectOneMany
     { somFilterOne :: [Filter one]
     , somOrderOne :: [SelectOpt one]
     , somFilterMany :: [Filter many]
     , somOrderMany :: [SelectOpt many]
-    , somFilterKeys :: [Key backend one] -> Filter many
-    , somGetKey :: many -> Key backend one
+    , somFilterKeys :: [Key' one] -> Filter many
+    , somGetKey :: many -> Key' one
     , somIncludeNoMatch :: Bool
     }
 
-selectOneMany :: ([Key backend one] -> Filter many) -> (many -> Key backend one) -> SelectOneMany backend one many
+selectOneMany :: ([Key' one] -> Filter many) -> (many -> Key' one) -> SelectOneMany one many
 selectOneMany filts get' = SelectOneMany [] [] [] [] filts get' False
-instance (PersistEntity one, PersistEntity many, Ord (Key backend one), PersistQuery backend monad, backend ~ PersistEntityBackend one, backend ~ PersistEntityBackend many)
-    => RunJoin (SelectOneMany backend one many) backend monad where
-    type Result (SelectOneMany backend one many) =
+
+instance ( PersistEntity one
+         , PersistEntity many
+         , Ord (Key (PersistEntityBackend one) one)
+         , PersistQuery monad
+         , PersistMonadBackend monad ~ PersistEntityBackend one
+         , PersistEntityBackend one ~ PersistEntityBackend many
+         )
+    => RunJoin (SelectOneMany one many) monad where
+    type Result (SelectOneMany one many) =
         [((Entity one), [(Entity many)])]
     runJoin (SelectOneMany oneF oneO manyF manyO eq getKey isOuter) = do
         x <- selectList oneF oneO

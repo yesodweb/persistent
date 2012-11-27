@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Database.Persist.Query.Join.Sql
     ( RunJoin (..)
     ) where
@@ -18,8 +19,7 @@ import Data.Maybe (mapMaybe)
 import Data.List (groupBy)
 import Database.Persist.GenericSql
 import Database.Persist.GenericSql.Internal hiding (withStmt)
-import Database.Persist.GenericSql.Raw (withStmt)
-import Control.Monad.Trans.Reader (ask)
+import Database.Persist.GenericSql.Raw (withStmt, MonadSqlPersist, askSqlConn)
 import Data.Function (on)
 import Control.Arrow ((&&&))
 import Data.Text (Text, concat, null)
@@ -28,8 +28,6 @@ import Data.Monoid (Monoid, mappend)
 import qualified Data.Text as T
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
-import Control.Monad.IO.Class (MonadIO)
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Logger (MonadLogger)
 
 fromPersistValuesId :: PersistEntity v => [PersistValue] -> Either Text (Entity v)
@@ -41,13 +39,13 @@ fromPersistValuesId (PersistInt64 i:rest) =
 fromPersistValuesId _ = Left "fromPersistValuesId: invalid ID"
 
 class RunJoin a where
-    runJoin :: (C.MonadThrow m, C.MonadUnsafeIO m, MonadIO m, MonadBaseControl IO m, MonadLogger m) => a -> SqlPersist m (J.Result a)
+    runJoin :: (C.MonadResource m, MonadLogger m, MonadSqlPersist m) => a -> m (J.Result a)
 
-instance (PersistEntity one, PersistEntity many, Eq (Key SqlPersist one))
-    => RunJoin (SelectOneMany SqlPersist one many) where
+instance (PersistEntity one, PersistEntity many, Eq (Key' one))
+    => RunJoin (SelectOneMany one many) where
     runJoin (SelectOneMany oneF oneO manyF manyO eq _getKey isOuter) = do
-        conn <- SqlPersist ask
-        C.runResourceT $ liftM go $ withStmt (sql conn) (getFiltsValues conn oneF ++ getFiltsValues conn manyF) C.$$ loop id
+        conn <- askSqlConn
+        liftM go $ withStmt (sql conn) (getFiltsValues conn oneF ++ getFiltsValues conn manyF) C.$$ loop id
       where
         go :: [(Entity b, Maybe (Entity d))]
            -> [(Entity b, [Entity d])]

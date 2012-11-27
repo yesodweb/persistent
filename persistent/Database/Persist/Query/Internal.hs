@@ -26,8 +26,7 @@ module Database.Persist.Query.Internal
 
 import Database.Persist.Store
 import Database.Persist.EntityDef
-import Control.Monad.Trans.Class (lift)
-import Control.Monad.Base (liftBase)
+import Control.Monad.IO.Class (liftIO)
 import Control.Exception (Exception, throwIO)
 import Data.Typeable (Typeable)
 
@@ -40,53 +39,57 @@ instance Show UpdateGetException where
     show (KeyNotFound key) = "Key not found during updateGet: " ++ key
 instance Exception UpdateGetException
 
-class PersistStore backend m => PersistQuery backend m where
+class PersistStore m => PersistQuery m where
     -- | Update individual fields on a specific record.
-    update :: PersistEntity val => Key backend val -> [Update val] -> backend m ()
+    update :: (PersistEntity val, PersistEntityBackend val ~ PersistMonadBackend m)
+           => Key' val -> [Update val] -> m ()
 
     -- | Update individual fields on a specific record, and retrieve the
     -- updated value from the database.
     --
     -- Note that this function will throw an exception if the given key is not
     -- found in the database.
-    updateGet :: PersistEntity val => Key backend val -> [Update val] -> backend m val
+    updateGet :: (PersistEntity val, PersistMonadBackend m ~ PersistEntityBackend val)
+              => Key' val -> [Update val] -> m val
     updateGet key ups = do
         update key ups
-        get key >>= maybe (liftBase $ throwIO $ KeyNotFound $ show key) return
+        get key >>= maybe (liftIO $ throwIO $ KeyNotFound $ show key) return
 
     -- | Update individual fields on any record matching the given criterion.
-    updateWhere :: (PersistEntity val, PersistEntityBackend val ~ backend) => [Filter val] -> [Update val] -> backend m ()
+    updateWhere :: (PersistEntity val, PersistEntityBackend val ~ PersistMonadBackend m)
+                => [Filter val] -> [Update val] -> m ()
 
     -- | Delete all records matching the given criterion.
-    deleteWhere :: (PersistEntity val, PersistEntityBackend val ~ backend) => [Filter val] -> backend m ()
+    deleteWhere :: (PersistEntity val, PersistEntityBackend val ~ PersistMonadBackend m)
+                => [Filter val] -> m ()
 
     -- | Get all records matching the given criterion in the specified order.
     -- Returns also the identifiers.
     selectSource
-           :: (PersistEntity val, PersistEntityBackend val ~ backend)
+           :: (PersistEntity val, PersistEntityBackend val ~ PersistMonadBackend m)
            => [Filter val]
            -> [SelectOpt val]
-           -> C.Source (C.ResourceT (backend m)) (Entity val)
+           -> C.Source m (Entity val)
 
     -- | get just the first record for the criterion
-    selectFirst :: (PersistEntity val, PersistEntityBackend val ~ backend)
+    selectFirst :: (PersistEntity val, PersistEntityBackend val ~ PersistMonadBackend m)
                 => [Filter val]
                 -> [SelectOpt val]
-                -> backend m (Maybe (Entity val))
-    selectFirst filts opts = C.runResourceT
-        $ selectSource filts ((LimitTo 1):opts) C.$$ CL.head
+                -> m (Maybe (Entity val))
+    selectFirst filts opts = selectSource filts ((LimitTo 1):opts) C.$$ CL.head
 
 
     -- | Get the 'Key's of all records matching the given criterion.
-    selectKeys :: (PersistEntity val, PersistEntityBackend val ~ backend)
+    selectKeys :: (PersistEntity val, PersistEntityBackend val ~ PersistMonadBackend m)
                => [Filter val]
                -> [SelectOpt val]
-               -> C.Source (C.ResourceT (backend m)) (Key backend val)
+               -> C.Source m (Key' val)
 
     -- | The total number of records fulfilling the given criterion.
-    count :: (PersistEntity val, PersistEntityBackend val ~ backend) => [Filter val] -> backend m Int
+    count :: (PersistEntity val, PersistEntityBackend val ~ PersistMonadBackend m)
+          => [Filter val] -> m Int
 
-type family BackendSpecificFilter (b :: (* -> *) -> * -> *) v ::  *
+type family BackendSpecificFilter b v
 
 -- | Filters which are available for 'select', 'updateWhere' and
 -- 'deleteWhere'. Each filter constructor specifies the field being
@@ -108,18 +111,18 @@ data SelectOpt v = forall typ. Asc (EntityField v typ)
                  | LimitTo Int
 
 -- | Call 'selectSource' but return the result as a list.
-selectList :: (PersistEntity val, PersistQuery backend m, PersistEntityBackend val ~ backend)
+selectList :: (PersistEntity val, PersistQuery m, PersistEntityBackend val ~ PersistMonadBackend m)
            => [Filter val]
            -> [SelectOpt val]
-           -> backend m [Entity val]
-selectList a b = C.runResourceT $ selectSource a b C.$$ CL.consume
+           -> m [Entity val]
+selectList a b = selectSource a b C.$$ CL.consume
 
 -- | Call 'selectKeys' but return the result as a list.
-selectKeysList :: (PersistEntity val, PersistQuery b m, PersistEntityBackend val ~ b)
+selectKeysList :: (PersistEntity val, PersistQuery m, PersistEntityBackend val ~ PersistMonadBackend m)
                => [Filter val]
                -> [SelectOpt val]
-               -> b m [Key b val]
-selectKeysList a b = C.runResourceT $ selectKeys a b C.$$ CL.consume
+               -> m [Key' val]
+selectKeysList a b = selectKeys a b C.$$ CL.consume
 
 data PersistUpdate = Assign | Add | Subtract | Multiply | Divide -- FIXME need something else here
     deriving (Read, Show, Enum, Bounded)
@@ -141,7 +144,6 @@ limitOffsetOrder opts =
 updateFieldDef :: PersistEntity v => Update v -> FieldDef
 updateFieldDef (Update f _ _) = persistFieldDef f
 
-deleteCascadeWhere :: (DeleteCascade a backend m, PersistQuery backend m, PersistEntityBackend a ~ backend)
-                   => [Filter a] -> backend m ()
-deleteCascadeWhere filts = do
-    C.runResourceT $ selectKeys filts [] C.$$ CL.mapM_ (lift . deleteCascade)
+deleteCascadeWhere :: (DeleteCascade a, PersistQuery m, PersistEntityBackend a ~ PersistMonadBackend m)
+                   => [Filter a] -> m ()
+deleteCascadeWhere filts = selectKeys filts [] C.$$ CL.mapM_ deleteCascade

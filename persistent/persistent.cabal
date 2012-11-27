@@ -32,14 +32,14 @@ library
                    , time                     >= 1.1.4
                    , text                     >= 0.8
                    , containers               >= 0.2
-                   , conduit                  >= 0.5     && < 0.6
-                   , resourcet                >= 0.3     && < 0.5
+                   , conduit                  >= 0.5.5   && < 0.6
+                   , resourcet                >= 0.4     && < 0.5
                    , monad-control            >= 0.3     && < 0.4
                    , lifted-base              >= 0.1
-                   , pool-conduit             >= 0.1     && < 0.2
+                   , pool-conduit             >= 0.1.1   && < 0.2
                    , path-pieces              >= 0.1     && < 0.2
                    , aeson                    >= 0.5     && < 0.7
-                   , monad-logger             >= 0.2.1   && < 0.3
+                   , monad-logger             >= 0.2.2   && < 0.3
                    , transformers-base
                    , base64-bytestring
                    , unordered-containers

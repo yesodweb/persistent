@@ -65,10 +65,11 @@ import Database.Persist.EntityDef
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import Control.Monad.Logger (MonadLogger)
+import Control.Monad.Base (liftBase)
 
 type ConnectionPool = Pool Connection
 
-instance PathPiece (Key SqlPersist entity) where
+instance PathPiece (Key R.SqlBackend entity) where
     toPathPiece (Key (PersistInt64 i)) = toPathPiece i
     toPathPiece k = throw $ PersistInvalidField $ "Invalid Key: " ++ show k
     fromPathPiece t =
@@ -81,26 +82,27 @@ execute' = R.execute
 
 -- | Get a connection from the pool, run the given action, and then return the
 -- connection to the pool.
-runSqlPool :: (MonadBaseControl IO m, MonadIO m) => SqlPersist m a -> Pool Connection -> m a
+runSqlPool :: MonadBaseControl IO m => SqlPersist m a -> Pool Connection -> m a
 runSqlPool r pconn = withResource pconn $ runSqlConn r
 
-runSqlConn :: (MonadBaseControl IO m, MonadIO m) => SqlPersist m a -> Connection -> m a
+runSqlConn :: MonadBaseControl IO m => SqlPersist m a -> Connection -> m a
 runSqlConn (SqlPersist r) conn = do
     let getter = R.getStmt' conn
-    liftIO $ begin conn getter
+    liftBase $ begin conn getter
     x <- onException
             (runReaderT r conn)
-            (liftIO $ rollbackC conn getter)
-    liftIO $ commitC conn getter
+            (liftBase $ rollbackC conn getter)
+    liftBase $ commitC conn getter
     return x
 
-instance (MonadBaseControl IO m, MonadIO m, C.MonadThrow m, C.MonadUnsafeIO m, MonadLogger m) => PersistStore SqlPersist m where
+instance (C.MonadResource m, MonadLogger m) => PersistStore (SqlPersist m) where
+    type PersistMonadBackend (SqlPersist m) = R.SqlBackend
     insert val = do
         conn <- SqlPersist ask
         let esql = insertSql conn (entityDB t) (map fieldDB $ entityFields t) (entityID t)
         i <-
             case esql of
-                ISRSingle sql -> C.runResourceT $ R.withStmt sql vals C.$$ do
+                ISRSingle sql -> R.withStmt sql vals C.$$ do
                     x <- CL.head
                     case x of
                         Just [PersistInt64 i] -> return i
@@ -108,7 +110,7 @@ instance (MonadBaseControl IO m, MonadIO m, C.MonadThrow m, C.MonadUnsafeIO m, M
                         Just vals' -> error $ "Invalid result from a SQL insert, got: " P.++ P.show vals'
                 ISRInsertGet sql1 sql2 -> do
                     execute' sql1 vals
-                    C.runResourceT $ R.withStmt sql2 [] C.$$ do
+                    R.withStmt sql2 [] C.$$ do
                         Just [PersistInt64 i] <- CL.head
                         return i
         return $ Key $ PersistInt64 i
@@ -155,7 +157,7 @@ instance (MonadBaseControl IO m, MonadIO m, C.MonadThrow m, C.MonadUnsafeIO m, M
                 , "=?"
                 ]
             vals' = [unKey k]
-        C.runResourceT $ R.withStmt sql vals' C.$$ do
+        R.withStmt sql vals' C.$$ do
             res <- CL.head
             case res of
                 Nothing -> return Nothing
@@ -179,7 +181,7 @@ instance (MonadBaseControl IO m, MonadIO m, C.MonadThrow m, C.MonadUnsafeIO m, M
 
 insrepHelper :: (MonadIO m, PersistEntity val, MonadLogger m)
              => Text
-             -> Key SqlPersist val
+             -> Key R.SqlBackend val
              -> val
              -> SqlPersist m ()
 insrepHelper command (Key k) val = do
@@ -201,7 +203,7 @@ insrepHelper command (Key k) val = do
         ]
     vals = k : map toPersistValue (toPersistFields val)
 
-instance (MonadBaseControl IO m, C.MonadUnsafeIO m, MonadIO m, C.MonadThrow m, MonadLogger m) => PersistUnique SqlPersist m where
+instance (C.MonadResource m, MonadLogger m) => PersistUnique (SqlPersist m) where
     deleteBy uniq = do
         conn <- SqlPersist ask
         let sql' = sql conn
@@ -231,7 +233,7 @@ instance (MonadBaseControl IO m, C.MonadUnsafeIO m, MonadIO m, C.MonadThrow m, M
                 , sqlClause conn
                 ]
             vals' = persistUniqueToValues uniq
-        C.runResourceT $ R.withStmt sql vals' C.$$ do
+        R.withStmt sql vals' C.$$ do
             row <- CL.head
             case row of
                 Nothing -> return Nothing
@@ -247,7 +249,7 @@ instance (MonadBaseControl IO m, C.MonadUnsafeIO m, MonadIO m, C.MonadThrow m, M
         t = entityDef $ dummyFromUnique uniq
         toFieldNames' = map snd . persistUniqueToFieldNames
 
-dummyFromKey :: Key SqlPersist v -> v
+dummyFromKey :: Key R.SqlBackend v -> v
 dummyFromKey _ = error "dummyFromKey"
 
 {- FIXME
@@ -468,8 +470,8 @@ newtype Single a = Single {unSingle :: a}
 -- However, most common problems are mitigated by using the
 -- entity selection placeholder @??@, and you shouldn't see any
 -- error at all if you're not using 'Single'.
-rawSql :: (RawSql a, C.MonadUnsafeIO m, C.MonadThrow m, MonadIO m, MonadBaseControl IO m, MonadLogger m) =>
-          Text             -- ^ SQL statement, possibly with placeholders.
+rawSql :: (RawSql a, C.MonadResource m, MonadLogger m)
+       => Text             -- ^ SQL statement, possibly with placeholders.
        -> [PersistValue]   -- ^ Values to fill the placeholders.
        -> SqlPersist m [a]
 rawSql stmt = run
@@ -500,7 +502,7 @@ rawSql stmt = run
       run params = do
         conn <- SqlPersist ask
         let (colCount, colSubsts) = rawSqlCols (escapeName conn) x
-        C.runResourceT $ withStmt' colSubsts params C.$$ firstRow colCount
+        withStmt' colSubsts params C.$$ firstRow colCount
 
       firstRow colCount = do
         mrow <- CL.head

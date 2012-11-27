@@ -7,12 +7,15 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE EmptyDataDecls #-}
 module Database.Persist.GenericSql.Raw
     ( withStmt
     , execute
     , SqlPersist (..)
     , getStmt'
     , getStmt
+    , SqlBackend
+    , MonadSqlPersist (..)
     ) where
 
 import qualified Database.Persist.GenericSql.Internal as I
@@ -33,6 +36,22 @@ import Control.Monad (MonadPlus)
 import Control.Monad.Trans.Resource (MonadResource (..))
 import Data.Conduit
 import Control.Monad.Logger (MonadLogger (..))
+import Data.Monoid (Monoid)
+
+import Control.Monad.Trans.Identity ( IdentityT)
+import Control.Monad.Trans.List     ( ListT    )
+import Control.Monad.Trans.Maybe    ( MaybeT   )
+import Control.Monad.Trans.Error    ( ErrorT, Error)
+import Control.Monad.Trans.Cont     ( ContT  )
+import Control.Monad.Trans.State    ( StateT   )
+import Control.Monad.Trans.Writer   ( WriterT  )
+import Control.Monad.Trans.RWS      ( RWST     )
+
+import qualified Control.Monad.Trans.RWS.Strict    as Strict ( RWST   )
+import qualified Control.Monad.Trans.State.Strict  as Strict ( StateT )
+import qualified Control.Monad.Trans.Writer.Strict as Strict ( WriterT )
+
+data SqlBackend
 
 newtype SqlPersist m a = SqlPersist { unSqlPersist :: ReaderT Connection m a }
     deriving (Monad, MonadIO, MonadTrans, Functor, Applicative, MonadPlus)
@@ -67,9 +86,25 @@ class (MonadIO m, MonadLogger m) => MonadSqlPersist m where
 
 instance (MonadIO m, MonadLogger m) => MonadSqlPersist (SqlPersist m) where
     askSqlConn = SqlPersist ask
-instance MonadSqlPersist m => MonadSqlPersist (ResourceT m) where
-    askSqlConn = lift askSqlConn
--- FIXME add a bunch of MonadSqlPersist instances for all transformers
+
+#define GO(T) instance (MonadSqlPersist m) => MonadSqlPersist (T m) where askSqlConn = lift askSqlConn
+#define GOX(X, T) instance (X, MonadSqlPersist m) => MonadSqlPersist (T m) where askSqlConn = lift askSqlConn
+GO(IdentityT)
+GO(ListT)
+GO(MaybeT)
+GOX(Error e, ErrorT e)
+GO(ReaderT r)
+GO(ContT r)
+GO(StateT s)
+GO(ResourceT)
+GO(Pipe l i o u)
+GOX(Monoid w, WriterT w)
+GOX(Monoid w, RWST r w s)
+GOX(Monoid w, Strict.RWST r w s)
+GO(Strict.StateT s)
+GOX(Monoid w, Strict.WriterT w)
+#undef GO
+#undef GOX
 
 instance MonadLogger m => MonadLogger (SqlPersist m) where
     monadLoggerLog a b c = lift $ monadLoggerLog a b c

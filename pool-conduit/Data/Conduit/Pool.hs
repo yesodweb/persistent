@@ -7,6 +7,7 @@ module Data.Conduit.Pool
     , P.Pool
     , P.createPool
     , P.withResource
+    , withResourceT
     ) where
 
 import qualified Data.Pool as P
@@ -25,6 +26,16 @@ data ManagedResource m a = ManagedResource
     -- ^ Release this resource, either destroying it or returning it to the
     -- pool.
     }
+
+-- | Like 'P.withResource', but uses 'MonadResource' instead of 'MonadBaseControl'.
+--
+-- Since 0.1.1
+withResourceT :: MonadResource m => P.Pool a -> (a -> m b) -> m b
+withResourceT pool f = do
+    mr <- takeResource pool
+    b <- f $ mrValue mr
+    mrReuse mr True
+    return b
 
 -- | Take a resource from the pool and register a release action.
 takeResource :: MonadResource m => P.Pool a -> m (ManagedResource m a)
