@@ -18,6 +18,7 @@ module Database.Persist.MongoDB
     , ConnectionPool
     , Connection
     , MongoConf (..)
+    , MongoBackend
     -- * Key conversion helpers
     , keyToOid
     , oidToKey

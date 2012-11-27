@@ -49,7 +49,7 @@ import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 
 #if WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
-import Database.Persist.MongoDB (Action, withMongoDBConn, runMongoDBPool)
+import Database.Persist.MongoDB (Action, withMongoDBConn, runMongoDBPool, MongoBackend)
 {-
 import Database.Persist.MongoDB (oidToKey)
 import Data.Bson (genObjectId)
@@ -114,7 +114,7 @@ assertNotEmpty xs = liftIO $ assertBool "" (not (null xs))
 
 #ifdef WITH_MONGODB
 persistSettings :: MkPersistSettings
-persistSettings = MkPersistSettings { mpsBackend = ConT ''Action }
+persistSettings = MkPersistSettings { mpsBackend = ConT ''MongoBackend }
 
 type BackendMonad = MongoBackend
 runConn :: (MonadIO m, MonadBaseControl IO m) => Action m backend -> m ()

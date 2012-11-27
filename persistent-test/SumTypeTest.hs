@@ -22,6 +22,7 @@ import Database.Persist.EntityDef
 import Database.Persist.GenericSql.Raw
 import qualified Data.Map as Map
 #endif
+import Control.Monad.Trans.Resource (runResourceT)
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
 #endif
@@ -47,7 +48,7 @@ Car
 
 specs :: Spec
 specs = describe "sum types" $ do
-    it "works" $ asIO $ C.runResourceT $ runConn $ do
+    it "works" $ asIO $ runResourceT $ runConn $ do
 #ifndef WITH_MONGODB
         _ <- runMigrationSilent sumTypeMigrate
 #endif

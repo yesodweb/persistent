@@ -28,7 +28,7 @@ share [mkPersist sqlSettings,  mkMigrate "numberMigrate"] [persist|
     deriving Show Eq
 |]
 #ifdef WITH_MONGODB
-cleanDB :: (PersistQuery backend m, PersistEntityBackend Number ~ backend) => backend m ()
+cleanDB :: (PersistQuery m, PersistEntityBackend Number ~ PersistMonadBackend m) => m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Number])
 db :: Action IO () -> Assertion
