@@ -374,7 +374,7 @@ getAlters (c1, u1) (c2, u2) =
     getAltersU :: [(DBName, [DBName])]
                -> [(DBName, [DBName])]
                -> [AlterTable]
-    getAltersU [] old = map (DropConstraint . fst) old
+    getAltersU [] old = map DropConstraint $ filter (not . isManual) $ map fst old
     getAltersU ((name, cols):news) old =
         case lookup name old of
             Nothing -> AddUniqueConstraint name cols : getAltersU news old
@@ -385,6 +385,9 @@ getAlters (c1, u1) (c2, u2) =
                         else  DropConstraint name
                             : AddUniqueConstraint name cols
                             : getAltersU news old'
+
+    -- Don't drop constraints which were manually added.
+    isManual (DBName x) = "__manual_" `T.isPrefixOf` x
 
 getColumn :: (Text -> IO Statement)
           -> DBName -> [PersistValue]
