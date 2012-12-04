@@ -178,8 +178,9 @@ withStmt' conn query vals =
                   LibPQ.TuplesOk -> return ()
                   _ -> do
                     msg <- LibPQ.resStatus status
+                    mmsg <- LibPQ.resultErrorMessage ret
                     fail $ "Postgresql.withStmt': bad result status " ++
-                           show status ++ " (" ++ show msg ++ ")"
+                           show status ++ " (" ++ (maybe (show msg) (show . (,) msg) mmsg) ++ ")"
 
                 -- Get number and type of columns
                 cols <- LibPQ.nfields ret
