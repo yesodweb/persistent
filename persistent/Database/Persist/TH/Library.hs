@@ -1,5 +1,4 @@
 {-# LANGUAGE CPP #-}
-#include "cabal_macros.h"
 module Database.Persist.TH.Library
     ( apE
     ) where
