@@ -11,16 +11,10 @@ stability:       Stable
 cabal-version:   >= 1.8
 build-type:      Simple
 homepage:        http://www.yesodweb.com/book/persistent
-extra-source-files:
-  test/main.hs
 
 flag nooverlap
     default: False
     description: test out our assumption that OverlappingInstances is just for String
-
-flag blaze_html_0_5
-    description: use blaze-html 0.5 and blaze-markup 0.5
-    default: True
 
 library
     if flag(nooverlap)
