@@ -36,6 +36,9 @@ import Data.Text (Text, unpack, snoc)
 import qualified Data.Text.IO
 import System.IO
 import Control.Monad.Logger (MonadLogger)
+import System.IO.Silently (hSilence)
+import System.IO (stderr)
+import Control.Monad.Trans.Control (liftBaseOp_)
 
 execute' :: (MonadIO m, MonadLogger m) => Text -> [PersistValue] -> SqlPersist m ()
 execute' = R.execute
@@ -88,7 +91,7 @@ runMigration m = runMigration' m False >> return ()
 runMigrationSilent :: (MBCIO m, MonadIO m, MonadLogger m)
                    => Migration (SqlPersist m)
                    -> SqlPersist m [Text]
-runMigrationSilent m = runMigration' m True
+runMigrationSilent m = liftBaseOp_ (hSilence [stderr]) $ runMigration' m True
 
 runMigration'
     :: (MBCIO m, MonadIO m, MonadLogger m)

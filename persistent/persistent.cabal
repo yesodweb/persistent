@@ -48,6 +48,7 @@ library
                    , template-haskell
                    , blaze-html               >= 0.5     && < 0.6
                    , blaze-markup             >= 0.5.1   && < 0.6
+                   , silently
 
     exposed-modules: Database.Persist
                      Database.Persist.EntityDef
