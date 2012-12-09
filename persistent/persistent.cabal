@@ -1,5 +1,5 @@
 name:            persistent
-version:         1.1.0
+version:         1.1.0.1
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -32,22 +32,22 @@ library
                    , time                     >= 1.1.4
                    , text                     >= 0.8
                    , containers               >= 0.2
-                   , conduit                  >= 0.5.5   && < 0.6
-                   , resourcet                >= 0.4     && < 0.5
-                   , monad-control            >= 0.3     && < 0.4
+                   , conduit                  >= 0.5.5
+                   , resourcet                >= 0.4
+                   , monad-control            >= 0.3
                    , lifted-base              >= 0.1
-                   , pool-conduit             >= 0.1.1   && < 0.2
-                   , path-pieces              >= 0.1     && < 0.2
-                   , aeson                    >= 0.5     && < 0.7
-                   , monad-logger             >= 0.2.3   && < 0.3
+                   , pool-conduit             >= 0.1.1
+                   , path-pieces              >= 0.1
+                   , aeson                    >= 0.5
+                   , monad-logger             >= 0.2.3
                    , transformers-base
                    , base64-bytestring
                    , unordered-containers
                    , vector
                    , attoparsec
                    , template-haskell
-                   , blaze-html               >= 0.5     && < 0.6
-                   , blaze-markup             >= 0.5.1   && < 0.6
+                   , blaze-html               >= 0.5
+                   , blaze-markup             >= 0.5.1
                    , silently
 
     exposed-modules: Database.Persist
