@@ -103,6 +103,7 @@ library
                    , cereal
                    , mongoDB       == 1.3.*
                    , bson
+                   , silently
 
 
    if flag(postgresql)
