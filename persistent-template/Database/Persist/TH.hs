@@ -20,6 +20,7 @@ module Database.Persist.TH
     , mpsGeneric
     , mkPersistSettings
     , sqlSettings
+    , sqlOnlySettings
       -- * Various other TH functions
     , mkMigrate
     , mkSave
@@ -127,6 +128,12 @@ mkPersistSettings t = MkPersistSettings
 -- | Use the 'SqlPersist' backend.
 sqlSettings :: MkPersistSettings
 sqlSettings = mkPersistSettings $ ConT ''SqlBackend
+
+-- | Same as 'sqlSettings', but set 'mpsGeneric' to @False@.
+--
+-- Since 1.1.1
+sqlOnlySettings :: MkPersistSettings
+sqlOnlySettings = sqlSettings { mpsGeneric = False }
 
 recName :: Text -> Text -> Text
 recName dt f = lowerFirst dt ++ upperFirst f
