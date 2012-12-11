@@ -84,7 +84,7 @@ data PetType = Cat | Dog
 derivePersistField "PetType"
 
 #ifdef WITH_MONGODB
-mkPersist MkPersistSettings { mpsBackend = ConT ''MongoBackend } [persistUpperCase|
+mkPersist (mkPersistSettings $ ConT ''MongoBackend) [persistUpperCase|
 #else
 share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade sqlSettings] [persistUpperCase|
 #endif

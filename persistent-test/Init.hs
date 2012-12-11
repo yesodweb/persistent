@@ -17,6 +17,7 @@ module Init (
   , db'
   , setupMongo
   , MkPersistSettings (..)
+  , mkPersistSettings
   , persistSettings
   , Action
 #else
@@ -36,7 +37,7 @@ module Init (
 -- re-exports
 import Test.Hspec.Monadic
 import Test.Hspec.HUnit ()
-import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persist)
+import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persist, mkPersistSettings)
 
 -- testing
 import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
@@ -114,7 +115,7 @@ assertNotEmpty xs = liftIO $ assertBool "" (not (null xs))
 
 #ifdef WITH_MONGODB
 persistSettings :: MkPersistSettings
-persistSettings = MkPersistSettings { mpsBackend = ConT ''MongoBackend }
+persistSettings = mkPersistSettings $ ConT ''MongoBackend
 
 type BackendMonad = MongoBackend
 runConn :: (MonadIO m, MonadBaseControl IO m) => Action m backend -> m ()
