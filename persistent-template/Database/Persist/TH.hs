@@ -121,7 +121,7 @@ mkPersistSettings :: Type -- ^ Value for 'mpsBackend'
                   -> MkPersistSettings
 mkPersistSettings t = MkPersistSettings
     { mpsBackend = t
-    , mpsGeneric = False -- FIXME True
+    , mpsGeneric = True -- FIXME switch default to False in the future
     }
 
 -- | Use the 'SqlPersist' backend.
