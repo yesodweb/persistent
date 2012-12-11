@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings, QuasiQuotes, TemplateHaskell, TypeFamilies, GADTs #-}
 {-# LANGUAGE EmptyDataDecls #-}
+{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
 import Test.Hspec
 import Test.Hspec.QuickCheck
 import Data.ByteString.Lazy.Char8 ()
@@ -7,11 +8,12 @@ import Test.QuickCheck.Arbitrary
 import Control.Applicative ((<$>), (<*>))
 
 import Database.Persist
+import Database.Persist.Store (DeleteCascade (..))
 import Database.Persist.TH
 import Data.Text (Text, pack)
 import Data.Aeson
 
-mkPersist sqlSettings [persistUpperCase|
+share [mkPersist sqlSettings { mpsGeneric = False }, mkDeleteCascade sqlSettings { mpsGeneric = False }] [persistUpperCase|
 Person json
     name Text
     age Int Maybe
@@ -22,18 +24,15 @@ Address json
     city Text
     zip Int Maybe
     deriving Show Eq
-|]
-
-mkPersist sqlSettings { mpsGeneric = True } [persistUpperCase|
 NoJson
     foo Text
     deriving Show Eq
 |]
 
 -- ensure no-json works
-instance ToJSON (NoJsonGeneric b) where
+instance ToJSON NoJson where
     toJSON = undefined
-instance FromJSON (NoJsonGeneric b) where
+instance FromJSON NoJson where
     parseJSON = undefined
 
 arbitraryT = pack <$> arbitrary

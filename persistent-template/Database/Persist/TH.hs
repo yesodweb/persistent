@@ -582,18 +582,15 @@ mkDeleteCascade mps defs = do
         let stmts :: [Stmt]
             stmts = map mkStmt deps `mappend`
                     [NoBindS $ del `AppE` VarE key]
+
+        let entityT = genericDataType mps (unHaskellName name) $ VarT $ mkName "backend"
+
         return $
             InstanceD
-            ( ClassP ''PersistQuery [VarT $ mkName "m"]
-            : EqualP (VarT $ mkName "backend") (ConT ''PersistMonadBackend `AppT` VarT (mkName "m"))
-            : (if mpsGeneric mps
-                then []
-                else [EqualP (VarT $ mkName "backend") (mpsBackend mps)])
-            )
-            (ConT ''DeleteCascade `AppT`
-                (genericDataType mps (unHaskellName name) $ VarT $ mkName "backend")
-                `AppT` VarT (mkName "m")
-                )
+            [ ClassP ''PersistQuery [VarT $ mkName "m"]
+            , EqualP (ConT ''PersistEntityBackend `AppT` entityT) (ConT ''PersistMonadBackend `AppT` VarT (mkName "m"))
+            ]
+            (ConT ''DeleteCascade `AppT` entityT `AppT` VarT (mkName "m"))
             [ FunD (mkName "deleteCascade")
                 [Clause [VarP key] (NormalB $ DoE stmts) []]
             ]
