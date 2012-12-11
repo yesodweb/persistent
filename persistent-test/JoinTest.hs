@@ -61,9 +61,9 @@ specs = describe "joins" $ do
 #endif
 
 
-joinGeneric :: (MonadIO m, PersistQuery m, backend ~ PersistMonadBackend m) =>
-               (SelectOneMany (AuthorGeneric backend) (EntryGeneric backend)
-                -> m [(Entity (AuthorGeneric backend), [Entity (EntryGeneric backend)])])
+joinGeneric :: (MonadIO m, PersistQuery m, PersistEntityBackend Author ~ PersistMonadBackend m) =>
+               (SelectOneMany Author Entry
+                -> m [(Entity Author, [Entity Entry])])
                 -> Bool
                 -> m ()
 

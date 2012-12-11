@@ -86,7 +86,7 @@ derivePersistField "PetType"
 #ifdef WITH_MONGODB
 mkPersist MkPersistSettings { mpsBackend = ConT ''MongoBackend } [persistUpperCase|
 #else
-share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade] [persistUpperCase|
+share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade sqlSettings] [persistUpperCase|
 #endif
 
 -- Dedented comment
@@ -151,10 +151,10 @@ db :: Action IO () -> Assertion
 db = db' cleanDB
 #endif
 
-petOwner :: PersistStore m => PetGeneric (PersistMonadBackend m) -> m (PersonGeneric (PersistMonadBackend m))
+--petOwner :: PersistStore m => PetGeneric (PersistMonadBackend m) -> m (PersonGeneric (PersistMonadBackend m))
 petOwner = belongsToJust petOwnerId
 
-maybeOwnedPetOwner :: PersistStore m => MaybeOwnedPetGeneric (PersistMonadBackend m) -> m (Maybe (PersonGeneric (PersistMonadBackend m)))
+--maybeOwnedPetOwner :: PersistStore m => MaybeOwnedPetGeneric (PersistMonadBackend m) -> m (Maybe (PersonGeneric (PersistMonadBackend m)))
 maybeOwnedPetOwner = belongsTo maybeOwnedPetOwnerId
 
 
@@ -771,7 +771,7 @@ caseAfterException = runResourceT $ withSqlitePool sqlite_database 1 $ runSqlPoo
 #endif
 
 -- Test proper polymorphism
-_polymorphic :: PersistQuery m => m ()
+-- _polymorphic :: PersistQuery m => m ()
 _polymorphic = do
     ((Entity id' _):_) <- selectList [] [LimitTo 1]
     _ <- selectList [PetOwnerId ==. id'] []

@@ -22,6 +22,9 @@ Address json
     city Text
     zip Int Maybe
     deriving Show Eq
+|]
+
+mkPersist sqlSettings { mpsGeneric = True } [persistUpperCase|
 NoJson
     foo Text
     deriving Show Eq
@@ -35,9 +38,9 @@ instance FromJSON (NoJsonGeneric b) where
 
 arbitraryT = pack <$> arbitrary
 
-instance Arbitrary (PersonGeneric b) where
+instance Arbitrary Person where
     arbitrary = Person <$> arbitraryT <*> arbitrary <*> arbitrary
-instance Arbitrary (AddressGeneric b) where
+instance Arbitrary Address where
     arbitrary = Address <$> arbitraryT <*> arbitraryT <*> arbitrary
 
 main :: IO ()
