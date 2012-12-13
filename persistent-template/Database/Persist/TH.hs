@@ -212,7 +212,6 @@ mkUnique mps backend t (UniqueDef (HaskellName constr) _ fields) =
           $ map (unHaskellName . fst) fields
 
     go :: (FieldType, Bool) -> (Strict, Type)
-    go (_, True) = error "Error: cannot have nullables in unique"
     go (ft, y) = (NotStrict, pairToType mps backend (ft, y))
 
     lookup3 :: Text -> [FieldDef] -> (FieldType, Bool)

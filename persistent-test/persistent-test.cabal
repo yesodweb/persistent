@@ -42,6 +42,7 @@ library
                      EmbedTest
                      JoinTest
                      LargeNumberTest
+                     UniqueTest
                      MaxLenTest
                      SumTypeTest
                      Init
