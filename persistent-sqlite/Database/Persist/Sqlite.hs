@@ -25,15 +25,8 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Data.List (intercalate)
 import Data.IORef
 import qualified Data.Map as Map
-#if MIN_VERSION_monad_control(0, 3, 0)
 import Control.Monad.Trans.Control (control)
 import qualified Control.Exception as E
-#define MBCIO MonadBaseControl IO
-#else
-import Control.Monad.IO.Control (MonadControlIO)
-import Control.Exception.Control (finally)
-#define MBCIO MonadControlIO
-#endif
 import Data.Text (Text, pack)
 import Control.Monad (mzero)
 import Data.Aeson
@@ -291,7 +284,6 @@ instance PersistConfig SqliteConf where
                    <*> o .: "poolsize"
     loadConfig _ = mzero
 
-#if MIN_VERSION_monad_control(0, 3, 0)
 finally :: MonadBaseControl IO m
         => m a -- ^ computation to run first
         -> m b -- ^ computation to run afterward (even if an exception was raised)
@@ -300,4 +292,3 @@ finally a sequel = control $ \runInIO ->
                      E.finally (runInIO a)
                                (runInIO sequel)
 {-# INLINABLE finally #-}
-#endif
