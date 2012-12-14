@@ -278,6 +278,9 @@ show = pack . P.show
 -- record may appear at most once, but other kinds of records may
 -- appear any number of times.
 --
+-- /NOTE:/ You need to mark any @Checkmark@ fields as @nullable@
+-- (see the following example).
+--
 -- For example, suppose there's a @Location@ entity that
 -- represents where a user has lived:
 --
@@ -285,7 +288,7 @@ show = pack . P.show
 -- Location
 --     user    UserId
 --     name    Text
---     current Checkmark
+--     current Checkmark nullable
 --
 --     UniqueLocation user current
 -- @

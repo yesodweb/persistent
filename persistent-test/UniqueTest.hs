@@ -37,7 +37,7 @@ share [mkPersist sqlSettings,  mkMigrate "uniqueMigrate"] [persist|
   TestCheckmark
     key   String
     value String
-    active Checkmark
+    active Checkmark nullable
     UniqueTestCheckmark key active !force
     deriving Eq Show
 #endif
