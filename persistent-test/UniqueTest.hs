@@ -28,7 +28,7 @@ share [mkPersist sqlSettings,  mkMigrate "uniqueMigrate"] [persist|
   TestNull
     fieldA Int
     fieldB Int Maybe
-    UniqueTestNull fieldA fieldB
+    UniqueTestNull fieldA fieldB !force
     deriving Eq Show
 |]
 #ifdef WITH_MONGODB

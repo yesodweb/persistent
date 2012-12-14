@@ -250,7 +250,7 @@ sqlColumn (Column name isNull typ def _maxLen ref) = concat
     ]
 
 sqlUnique :: UniqueDef -> String
-sqlUnique (UniqueDef _ cname cols) = concat
+sqlUnique (UniqueDef _ cname cols _) = concat
     [ ",CONSTRAINT "
     , T.unpack $ escape cname
     , " UNIQUE ("
