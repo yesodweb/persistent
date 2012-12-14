@@ -176,7 +176,7 @@ runConn f = do
 
 db :: SqlPersist (ResourceT IO) () -> Assertion
 db actions = do
-  runResourceT $ runConn $ actions >>= \r -> rollback >> return r
+  runResourceT $ runConn $ actions >> rollback
 
 #if !MIN_VERSION_random(1,0,1)
 instance Random Int32 where

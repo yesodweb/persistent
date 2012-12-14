@@ -9,6 +9,7 @@ import qualified EmbedTest
 import qualified LargeNumberTest
 import qualified MaxLenTest
 import qualified SumTypeTest
+import qualified UniqueTest
 import Test.Hspec.Monadic (hspec)
 import Init
 import System.Exit
@@ -46,6 +47,7 @@ main = do
 #ifndef WITH_MONGODB
   runConn (setup EmbedTest.embedMigrate)
   runConn (setup LargeNumberTest.numberMigrate)
+  runConn (setup UniqueTest.uniqueMigrate)
   runConn (setup JoinTest.joinMigrate)
   runConn (setup MaxLenTest.maxlenMigrate)
 #endif
@@ -57,5 +59,6 @@ main = do
     JoinTest.specs >>
     EmbedTest.specs >>
     LargeNumberTest.specs >>
+    UniqueTest.specs >>
     MaxLenTest.specs >>
     SumTypeTest.specs

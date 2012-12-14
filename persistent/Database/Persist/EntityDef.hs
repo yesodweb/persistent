@@ -56,6 +56,7 @@ data UniqueDef = UniqueDef
     { uniqueHaskell :: HaskellName
     , uniqueDBName  :: DBName
     , uniqueFields  :: [(HaskellName, DBName)]
+    , uniqueAttrs   :: [Attr]
     }
     deriving (Show, Eq, Read, Ord)
 

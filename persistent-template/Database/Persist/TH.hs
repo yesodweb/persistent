@@ -205,14 +205,16 @@ uniqueTypeDec mps t =
     backend = mkName "backend"
 
 mkUnique :: MkPersistSettings -> Name -> EntityDef -> UniqueDef -> Con
-mkUnique mps backend t (UniqueDef (HaskellName constr) _ fields) =
+mkUnique mps backend t (UniqueDef (HaskellName constr) _ fields attrs) =
     NormalC (mkName $ unpack constr) types
   where
     types = map (go . flip lookup3 (entityFields t))
           $ map (unHaskellName . fst) fields
 
+    force = "!force" `elem` attrs
+
     go :: (FieldType, Bool) -> (Strict, Type)
-    go (_, True) = error "Error: cannot have nullables in unique"
+    go (ft, True) | not force = error nullErrMsg
     go (ft, y) = (NotStrict, pairToType mps backend (ft, y))
 
     lookup3 :: Text -> [FieldDef] -> (FieldType, Bool)
@@ -221,6 +223,16 @@ mkUnique mps backend t (UniqueDef (HaskellName constr) _ fields) =
     lookup3 x ((FieldDef (HaskellName x') _ y z):rest)
         | x == x' = (y, nullable z)
         | otherwise = lookup3 x rest
+
+    nullErrMsg =
+      mconcat [ "Error:  By default we disallow NULLables in an uniqueness "
+              , "constraint.  The semantics of how NULL interacts with those "
+              , "constraints is non-trivial:  two NULL values are not "
+              , "considered equal for the purposes of an uniqueness "
+              , "constraint.  If you understand this feature, it is possible "
+              , "to use it your advantage.    *** Use a \"!force\" attribute "
+              , "on the end of the line that defines your uniqueness "
+              , "constraint in order to disable this check. ***" ]
 
 pairToType :: MkPersistSettings
            -> Name -- ^ backend
@@ -303,7 +315,7 @@ mkToFieldNames pairs = do
     pairs' <- mapM go pairs
     return $ FunD (mkName "persistUniqueToFieldNames") $ degen pairs'
   where
-    go (UniqueDef constr _ names) = do
+    go (UniqueDef constr _ names _) = do
         names' <- lift names
         return $
             Clause
@@ -326,7 +338,7 @@ mkUniqueToValues pairs = do
     return $ FunD (mkName "persistUniqueToValues") $ degen pairs'
   where
     go :: UniqueDef -> Q Clause
-    go (UniqueDef constr _ names) = do
+    go (UniqueDef constr _ names _) = do
         xs <- mapM (const $ newName "x") names
         let pat = ConP (mkName $ unpack $ unHaskellName constr) $ map VarP xs
         tpv <- [|toPersistValue|]
@@ -620,7 +632,7 @@ mkUniqueKeys def = do
         return $ Clause [pat] (NormalB $ ListE pcs) []
 
     go :: [(HaskellName, Name)] -> UniqueDef -> Exp
-    go xs (UniqueDef name _ cols) =
+    go xs (UniqueDef name _ cols _) =
         foldl' (go' xs) (ConE (mkName $ unpack $ unHaskellName name)) (map fst cols)
 
     go' :: [(HaskellName, Name)] -> Exp -> HaskellName -> Exp
@@ -718,7 +730,7 @@ instance Lift EntityDef where
 instance Lift FieldDef where
     lift (FieldDef a b c d) = [|FieldDef $(lift a) $(lift b) $(lift c) $(liftTs d)|]
 instance Lift UniqueDef where
-    lift (UniqueDef a b c) = [|UniqueDef $(lift a) $(lift b) $(lift c)|]
+    lift (UniqueDef a b c d) = [|UniqueDef $(lift a) $(lift b) $(lift c) $(liftTs d)|]
 
 pack' :: String -> Text
 pack' = pack
