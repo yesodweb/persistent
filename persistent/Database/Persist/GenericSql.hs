@@ -19,6 +19,9 @@ module Database.Persist.GenericSql
     , runSqlPool
     , Key
 
+    -- * Useful data types
+    , Checkmark(..)
+
     -- * Raw SQL queries
     -- $rawSql
     , rawSql
@@ -268,6 +271,76 @@ infixr 5 ++
 
 show :: Show a => a -> Text
 show = pack . P.show
+
+
+-- | A 'Checkmark' should be used as a field type whenever a
+-- uniqueness constraint should guarantee that a certain kind of
+-- record may appear at most once, but other kinds of records may
+-- appear any number of times.
+--
+-- /NOTE:/ You need to mark any @Checkmark@ fields as @nullable@
+-- (see the following example).
+--
+-- For example, suppose there's a @Location@ entity that
+-- represents where a user has lived:
+--
+-- @
+-- Location
+--     user    UserId
+--     name    Text
+--     current Checkmark nullable
+--
+--     UniqueLocation user current
+-- @
+--
+-- The @UniqueLocation@ constraint allows any number of
+-- 'Inactive' @Location@s to be @current@.  However, there may be
+-- at most one @current@ @Location@ per user (i.e., either zero
+-- or one per user).
+--
+-- This data type works because of the way that SQL treats
+-- @NULL@able fields within uniqueness constraints.  The SQL
+-- standard says that @NULL@ values should be considered
+-- different, so we represent 'Inactive' as SQL @NULL@, thus
+-- allowing any number of 'Inactive' records.  On the other hand,
+-- we represent 'Active' as @TRUE@, so the uniqueness constraint
+-- will disallow more than one 'Active' record.
+--
+-- /Note:/ There may be DBMSs that do not respect the SQL
+-- standard's treatment of @NULL@ values on uniqueness
+-- constraints, please check if this data type works before
+-- relying on it.
+--
+-- The SQL @BOOLEAN@ type is used because it's the smallest data
+-- type available.  Note that we never use @FALSE@, just @TRUE@
+-- and @NULL@.  Provides the same behavior @Maybe ()@ would if
+-- @()@ was a valid 'PersistField'.
+data Checkmark = Active
+                 -- ^ When used on a uniqueness constraint, there
+                 -- may be at most one 'Active' record.
+               | Inactive
+                 -- ^ When used on a uniqueness constraint, there
+                 -- may be any number of 'Inactive' records.
+    deriving (Eq, Ord, Read, Show, Enum, Bounded)
+
+instance PersistField Checkmark where
+    toPersistValue Active   = PersistBool True
+    toPersistValue Inactive = PersistNull
+    fromPersistValue PersistNull         = Right Inactive
+    fromPersistValue (PersistBool True)  = Right Active
+    fromPersistValue (PersistBool False) =
+      Left "PersistField Checkmark: found unexpected FALSE value"
+    fromPersistValue other =
+      Left $ "PersistField Checkmark: unknown value " ++ show other
+    sqlType    _ = SqlBool
+    isNullable _ = True
+
+instance PathPiece Checkmark where
+    toPathPiece = show
+    fromPathPiece txt =
+      case reads (T.unpack txt) of
+        [(a, "")] -> Just a
+        _         -> Nothing
 
 
 -- $rawSql
