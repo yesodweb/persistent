@@ -248,8 +248,10 @@ takeUniqs ps defs (n:rest)
         = Just $ UniqueDef
             (HaskellName n)
             (DBName $ psToDBName ps n)
-            (map (HaskellName &&& getDBName defs) rest)
+            (map (HaskellName &&& getDBName defs) fields)
+            attrs
   where
+    (fields,attrs) = break ("!" `T.isPrefixOf`) rest
     getDBName [] t = error $ "Unknown column in unique constraint: " ++ show t
     getDBName (d:ds) t
         | fieldHaskell d == HaskellName t = fieldDB d
