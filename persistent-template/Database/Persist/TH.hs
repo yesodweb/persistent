@@ -39,7 +39,7 @@ import Database.Persist.Store
 import Database.Persist.Query.Internal
 import Database.Persist.GenericSql (Migration, SqlPersist, migrate)
 import Database.Persist.GenericSql.Raw (SqlBackend)
-import Database.Persist.Util (nullable)
+import Database.Persist.Util (nullable, IsNullable(..), WhyNullable(..))
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
@@ -174,7 +174,7 @@ dataTypeDec mps t =
 
     sumCon fd@(FieldDef _ _ ty _) = NormalC
         (sumConstrName t fd)
-        [(NotStrict, pairToType mps backend (ty, False))]
+        [(NotStrict, pairToType mps backend (ty, NotNullable))]
 
 sumConstrName :: EntityDef -> FieldDef -> Name
 sumConstrName t (FieldDef n _ _ _) = mkName $ unpack $ concat
@@ -189,7 +189,7 @@ readMay s =
         (x, _):_ -> Just x
         [] -> Nothing
 
-entityUpdates :: EntityDef -> [(HaskellName, FieldType, Bool, PersistUpdate)]
+entityUpdates :: EntityDef -> [(HaskellName, FieldType, IsNullable, PersistUpdate)]
 entityUpdates =
     concatMap go . entityFields
   where
@@ -213,11 +213,11 @@ mkUnique mps backend t (UniqueDef (HaskellName constr) _ fields attrs) =
 
     force = "!force" `elem` attrs
 
-    go :: (FieldType, Bool) -> (Strict, Type)
-    go (ft, True) | not force = error nullErrMsg
+    go :: (FieldType, IsNullable) -> (Strict, Type)
+    go (ft, Nullable _) | not force = error nullErrMsg
     go (ft, y) = (NotStrict, pairToType mps backend (ft, y))
 
-    lookup3 :: Text -> [FieldDef] -> (FieldType, Bool)
+    lookup3 :: Text -> [FieldDef] -> (FieldType, IsNullable)
     lookup3 s [] =
         error $ unpack $ "Column not found: " ++ s ++ " in unique " ++ constr
     lookup3 x ((FieldDef (HaskellName x') _ y z):rest)
@@ -236,10 +236,11 @@ mkUnique mps backend t (UniqueDef (HaskellName constr) _ fields attrs) =
 
 pairToType :: MkPersistSettings
            -> Name -- ^ backend
-           -> (FieldType, Bool) -- ^ True == has Maybe attr
+           -> (FieldType, IsNullable)
            -> Type
-pairToType mps backend (s, False) = idType mps backend s
-pairToType mps backend (s, True) = ConT (mkName "Maybe") `AppT` idType mps backend s
+pairToType mps backend (s, Nullable ByMaybeAttr) =
+  ConT (mkName "Maybe") `AppT` idType mps backend s
+pairToType mps backend (s, _) = idType mps backend s
 
 backendDataType :: MkPersistSettings -> Type
 backendDataType mps
@@ -547,7 +548,7 @@ data Dep = Dep
     { depTarget :: Text
     , depSourceTable :: HaskellName
     , depSourceField :: HaskellName
-    , depSourceNull :: Bool
+    , depSourceNull  :: IsNullable
     }
 
 -- | Generate a 'DeleteCascade' instance for the given @EntityDef@s.
@@ -562,16 +563,15 @@ mkDeleteCascade mps defs = do
       where
         getDeps' :: FieldDef -> [Dep]
         getDeps' (FieldDef name _ ftyp attribs) =
-            let isNull = nullable attribs
-             in case stripId ftyp of
-                    Just f ->
-                         return Dep
-                            { depTarget = f
-                            , depSourceTable = entityHaskell def
-                            , depSourceField = name
-                            , depSourceNull = isNull
-                            }
-                    Nothing -> []
+            case stripId ftyp of
+                Just f ->
+                     return Dep
+                        { depTarget = f
+                        , depSourceTable = entityHaskell def
+                        , depSourceField = name
+                        , depSourceNull  = nullable attribs
+                        }
+                Nothing -> []
     go :: [Dep] -> EntityDef -> Q Dec
     go allDeps EntityDef{entityHaskell = name} = do
         let deps = filter (\x -> depTarget x == unHaskellName name) allDeps
@@ -593,8 +593,8 @@ mkDeleteCascade mps defs = do
               where
                 filtName = unHaskellName (depSourceTable dep) ++
                            upperFirst (unHaskellName $ depSourceField dep)
-                val False = VarE key
-                val True = just `AppE` VarE key
+                val (Nullable ByMaybeAttr) = just `AppE` VarE key
+                val _                      =             VarE key
 
 
 
@@ -805,7 +805,7 @@ mkField mps et cd = do
         , upperFirst $ unHaskellName $ fieldHaskell cd
         ]
     maybeTyp =
-        if nullable $ fieldAttrs cd
+        if nullable (fieldAttrs cd) == Nullable ByMaybeAttr
             then ConT ''Maybe `AppT` typ
             else typ
     typ =
@@ -876,6 +876,6 @@ mkJSON mps def = do
         pulls = map toPull $ entityFields def
         toPull f = InfixE
             (Just $ VarE obj)
-            (if nullable (fieldAttrs f) then dotColonQE else dotColonE)
+            (if nullable (fieldAttrs f) == Nullable ByMaybeAttr then dotColonQE else dotColonE)
             (Just $ AppE packE $ LitE $ StringL $ unpack $ unHaskellName $ fieldHaskell f)
     return [toJSONI, fromJSONI]

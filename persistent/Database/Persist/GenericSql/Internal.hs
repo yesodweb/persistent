@@ -26,7 +26,7 @@ import Data.Conduit.Pool
 import Database.Persist.Store
 import Control.Exception.Lifted (bracket)
 import Control.Monad.Trans.Control (MonadBaseControl)
-import Database.Persist.Util (nullable)
+import Database.Persist.Util (nullable, IsNullable(NotNullable))
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Monoid (Monoid, mappend, mconcat)
@@ -115,7 +115,7 @@ mkColumns allDefs val =
     go fd p =
         Column
             (fieldDB fd)
-            (nullable (fieldAttrs fd) || entitySum t)
+            (nullable (fieldAttrs fd) /= NotNullable || entitySum t)
             (maybe (sqlType p) SqlOther $ listToMaybe $ mapMaybe (T.stripPrefix "sqltype=") $ fieldAttrs fd)
             (def $ fieldAttrs fd)
             (maxLen $ fieldAttrs fd)
