@@ -1,5 +1,5 @@
 name:            persistent-mongoDB
-version:         1.1.0
+version:         1.1.2
 license:         MIT
 license-file:    LICENSE
 author:          Greg Weber <greg@gregweber.info>
@@ -14,7 +14,7 @@ description:     Backend for the persistent library using mongoDB.
 
 library
     build-depends:   base               >= 4 && < 5
-                   , persistent         >= 1.1     && < 1.2
+                   , persistent         >= 1.1.2   && < 1.2
                    , text               >= 0.8
                    , transformers       >= 0.2.1
                    , containers         >= 0.2
