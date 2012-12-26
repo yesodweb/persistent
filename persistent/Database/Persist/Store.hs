@@ -287,6 +287,11 @@ instance PersistField T.Text where
     fromPersistValue (PersistObjectId _) = Left "Cannot convert PersistObjectId to Text"
     sqlType _ = SqlString
 
+instance PersistField TL.Text where
+    toPersistValue = toPersistValue . TL.toStrict
+    fromPersistValue = fmap TL.fromStrict . fromPersistValue
+    sqlType _ = SqlString
+
 instance PersistField Html where
     toPersistValue = PersistText . TL.toStrict . renderHtml
     fromPersistValue = fmap (preEscapedToMarkup :: T.Text -> Html) . fromPersistValue
