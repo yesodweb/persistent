@@ -43,6 +43,7 @@ import Database.Persist.Util (nullable, IsNullable(..), WhyNullable(..))
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
+import Control.Arrow (first)
 import Control.Monad (forM, (<=<), mzero)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.IO.Class (MonadIO)
@@ -52,6 +53,7 @@ import qualified Data.Text.IO as TIO
 import Data.List (foldl')
 import Data.Monoid (mappend, mconcat)
 import qualified Data.Map as M
+import qualified Data.HashMap.Strict as HM
 import Data.Aeson
     ( ToJSON (toJSON), FromJSON (parseJSON), (.=), object
     , Value (Object), (.:), (.:?)
@@ -839,6 +841,7 @@ mkJSON mps def = do
     dotColonQE <- [|(.:?)|]
     objectE <- [|object|]
     obj <- newName "obj"
+    lowerCased <- newName "lowerCased"
     mzeroE <- [|mzero|]
 
     xs <- mapM (newName . unpack . unHaskellName . fieldHaskell)
@@ -864,18 +867,34 @@ mkJSON mps def = do
             (ConT ''FromJSON `AppT` typ)
             [parseJSON']
         parseJSON' = FunD 'parseJSON
-            [ Clause [ConP 'Object [VarP obj]]
-                (NormalB $ foldl'
-                    (\x y -> InfixE (Just x) apE' (Just y))
-                    (pureE `AppE` ConE conName)
-                    pulls
+            [ Clause
+                [ConP 'Object [VarP obj]]
+                (NormalB
+                  (LetE
+                    [ValD
+                      (VarP lowerCased)
+                      (NormalB
+                        (AppE
+                          (VarE 'HM.fromList)
+                          (InfixE
+                            (Just (AppE (VarE 'map) (AppE (VarE 'first) (VarE 'lowerFirst))))
+                            (VarE '($))
+                            (Just (AppE (VarE 'HM.toList) (VarE obj))))))
+                      []
+                    ]
+                    (foldl'
+                      (\x y -> InfixE (Just x) apE' (Just y))
+                      (pureE `AppE` ConE conName)
+                      (pulls lowerCased)
+                    )
+                  )
                 )
                 []
             , Clause [WildP] (NormalB mzeroE) []
             ]
-        pulls = map toPull $ entityFields def
-        toPull f = InfixE
-            (Just $ VarE obj)
+        pulls key = map (toPull key) $ entityFields def
+        toPull key f = InfixE
+            (Just $ VarE key)
             (if nullable (fieldAttrs f) == Nullable ByMaybeAttr then dotColonQE else dotColonE)
             (Just $ AppE packE $ LitE $ StringL $ unpack $ unHaskellName $ fieldHaskell f)
     return [toJSONI, fromJSONI]

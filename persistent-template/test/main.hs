@@ -48,5 +48,5 @@ main = hspec $ do
         prop "to/from is idempotent" $ \person ->
             decode (encode person) == Just (person :: Person)
         it "decode" $
-            decode "{\"name\":\"Michael\",\"age\":27,\"address\":{\"street\":\"Narkis\",\"city\":\"Maalot\"}}" `shouldBe` Just
+            decode "{\"Name\":\"Michael\",\"age\":27,\"address\":{\"street\":\"Narkis\",\"city\":\"Maalot\"}}" `shouldBe` Just
                 (Person "Michael" (Just 27) $ Address "Narkis" "Maalot" Nothing)
