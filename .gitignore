@@ -10,3 +10,4 @@ TAGS
 .virthualenv
 # hsenv does this
 dist_y
+*cabal-dev
