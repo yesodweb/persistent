@@ -32,7 +32,7 @@ import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Writer
 import Control.Monad (liftM, unless)
-import Data.Text (Text, unpack, snoc)
+import Data.Text (Text, unpack, snoc, isPrefixOf, pack)
 import qualified Data.Text.IO
 import System.IO
 import Control.Monad.Logger (MonadLogger)
@@ -101,7 +101,7 @@ runMigration'
 runMigration' m silent = do
     mig <- parseMigration' m
     case unsafeSql mig of
-        []   -> mapM (executeMigrate silent) $ safeSql mig
+        []   -> mapM (executeMigrate silent) $ sortMigrations $ safeSql mig
         errs -> error $ concat
             [ "\n\nDatabase migration: manual intervention required.\n"
             , "The following actions are considered unsafe:\n\n"
@@ -113,13 +113,23 @@ runMigrationUnsafe :: (MBCIO m, MonadIO m, MonadLogger m)
                    -> SqlPersist m ()
 runMigrationUnsafe m = do
     mig <- parseMigration' m
-    mapM_ (executeMigrate False) $ allSql mig
+    mapM_ (executeMigrate False) $ sortMigrations $ allSql mig
 
 executeMigrate :: (MonadIO m, MonadLogger m) => Bool -> Text -> SqlPersist m Text
 executeMigrate silent s = do
     unless silent $ liftIO $ hPutStrLn stderr $ "Migrating: " ++ unpack s
     execute' s []
     return s
+
+-- | Sort the alter DB statements so tables are created before constraints are
+-- added.
+sortMigrations :: [Sql] -> [Sql]
+sortMigrations x =
+    filter isCreate x ++ filter (not . isCreate) x
+  where
+    -- Note the use of lower-case e. This (hack) allows backends to explicitly
+    -- choose to have this special sorting applied.
+    isCreate t = pack "CREATe " `isPrefixOf` t
 
 migrate :: (MonadIO m, MBCIO m, PersistEntity val)
         => [EntityDef]

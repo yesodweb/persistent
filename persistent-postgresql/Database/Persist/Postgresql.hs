@@ -19,6 +19,7 @@ import Database.Persist.Store
 import Database.Persist.GenericSql hiding (Key)
 import Database.Persist.GenericSql.Internal
 import Database.Persist.EntityDef
+import Data.Maybe (mapMaybe)
 
 import qualified Database.PostgreSQL.Simple as PG
 import qualified Database.PostgreSQL.Simple.BuiltinTypes as PG
@@ -280,7 +281,7 @@ migrate' :: PersistEntity val
          -> (Text -> IO Statement)
          -> val
          -> IO (Either [Text] [(Bool, Text)])
-migrate' allDefs getter val = do
+migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
     let name = entityDB $ entityDef val
     old <- getColumns getter $ entityDef val
     case partitionEithers old of
@@ -290,7 +291,8 @@ migrate' allDefs getter val = do
             if null old
                 then do
                     let addTable = AddTable $ concat
-                            [ "CREATE TABLE "
+                            -- Lower case e: see Database.Persistent.GenericSql.Migration
+                            [ "CREATe TABLE "
                             , T.unpack $ escape name
                             , "("
                             , T.unpack $ escape $ entityID $ entityDef val
@@ -298,14 +300,15 @@ migrate' allDefs getter val = do
                             , concatMap (\x -> ',' : showColumn x) $ fst new
                             , ")"
                             ]
-                    let rest = flip concatMap (snd new) $ \(uname, ucols) ->
+                    let uniques = flip concatMap (snd new) $ \(uname, ucols) ->
                             [AlterTable name $ AddUniqueConstraint uname ucols]
-                    return $ Right $ map showAlterDb $ addTable : rest
+                        references = mapMaybe (getAddReference name) $ fst new
+                    return $ Right $ addTable : uniques ++ references
                 else do
                     let (acs, ats) = getAlters new old'
                     let acs' = map (AlterColumn name) acs
                     let ats' = map (AlterTable name) ats
-                    return $ Right $ map showAlterDb $ acs' ++ ats'
+                    return $ Right $ acs' ++ ats'
         (errs, _) -> return $ Left errs
 
 data AlterColumn = Type SqlType | IsNull | NotNull | Add Column | Drop
@@ -468,6 +471,13 @@ findAlters col@(Column name isNull type_ def _maxLen ref) cols =
              in (modRef ++ modDef ++ modNull ++ modType,
                  filter (\c -> cName c /= name) cols)
 
+-- | Get the references to be added to a table for the given column.
+getAddReference :: DBName -> Column -> Maybe AlterDB
+getAddReference table (Column n _nu _t _def _maxLen ref) =
+    case ref of
+        Nothing -> Nothing
+        Just (s, _) -> Just $ AlterColumn table (n, AddReference s)
+
 showColumn :: Column -> String
 showColumn (Column n nu t def _maxLen ref) = concat
     [ T.unpack $ escape n
@@ -478,9 +488,6 @@ showColumn (Column n nu t def _maxLen ref) = concat
     , case def of
         Nothing -> ""
         Just s -> " DEFAULT " ++ T.unpack s
-    , case ref of
-        Nothing -> ""
-        Just (s, _) -> " REFERENCES " ++ T.unpack (escape s)
     ]
 
 showSqlType :: SqlType -> String
