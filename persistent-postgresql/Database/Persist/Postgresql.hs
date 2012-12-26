@@ -639,7 +639,7 @@ instance PersistConfig PostgresConf where
     loadConfig (Object o) = do
         database <- o .: "database"
         host     <- o .: "host"
-        port     <- o .: "port"
+        port     <- o .:? "port" .!= 5432
         user     <- o .: "user"
         password <- o .: "password"
         pool     <- o .: "poolsize"
