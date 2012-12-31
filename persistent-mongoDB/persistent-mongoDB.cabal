@@ -1,5 +1,5 @@
 name:            persistent-mongoDB
-version:         1.1.4
+version:         1.1.5
 license:         MIT
 license-file:    LICENSE
 author:          Greg Weber <greg@gregweber.info>
@@ -10,7 +10,7 @@ stability:       Experimental
 cabal-version:   >= 1.6
 build-type:      Simple
 homepage:        http://www.yesodweb.com/book/persistent
-description:     Backend for the persistent library using mongoDB.
+description:     Backend for the persistent library using mongoDB. The haddocks aren't building on hackage right now, but I put them up at <http://yesodweb.github.com/persistent/persistent-mongoDB/Database-Persist-MongoDB.html>
 
 library
     build-depends:   base               >= 4 && < 5
