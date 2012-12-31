@@ -151,16 +151,14 @@ db :: Action IO () -> Assertion
 db = db' cleanDB
 #endif
 
---petOwner :: PersistStore m => PetGeneric (PersistMonadBackend m) -> m (PersonGeneric (PersistMonadBackend m))
-petOwner = belongsToJust petOwnerId
-
---maybeOwnedPetOwner :: PersistStore m => MaybeOwnedPetGeneric (PersistMonadBackend m) -> m (Maybe (PersonGeneric (PersistMonadBackend m)))
-maybeOwnedPetOwner = belongsTo maybeOwnedPetOwnerId
 
 
 
 specs :: Spec
 specs = describe "persistent" $ do
+  let petOwner = belongsToJust petOwnerId
+  let maybeOwnedPetOwner = belongsTo maybeOwnedPetOwnerId
+
   it "FilterOr []" $ db $ do
       let p = Person "z" 1 Nothing
       _ <- insert p
@@ -771,7 +769,7 @@ caseAfterException = runResourceT $ withSqlitePool sqlite_database 1 $ runSqlPoo
 #endif
 
 -- Test proper polymorphism
--- _polymorphic :: PersistQuery m => m ()
+_polymorphic :: PersistQuery m => m ()
 _polymorphic = do
     ((Entity id' _):_) <- selectList [] [LimitTo 1]
     _ <- selectList [PetOwnerId ==. id'] []
