@@ -214,7 +214,7 @@ mkUnique mps backend t (UniqueDef (HaskellName constr) _ fields attrs) =
     force = "!force" `elem` attrs
 
     go :: (FieldType, IsNullable) -> (Strict, Type)
-    go (ft, Nullable _) | not force = error nullErrMsg
+    go (_, Nullable _) | not force = error nullErrMsg
     go (ft, y) = (NotStrict, pairToType mps backend (ft, y))
 
     lookup3 :: Text -> [FieldDef] -> (FieldType, IsNullable)
