@@ -19,6 +19,11 @@ module Database.Persist.MongoDB
     , Connection
     , MongoConf (..)
     , MongoBackend
+    -- ** using raw MongoDB pipes
+    , PipePool
+    , createMongoDBPipePool
+    , runMongoDBPipePool
+
     -- * Key conversion helpers
     , keyToOid
     , oidToKey
@@ -107,9 +112,12 @@ withMongoDBConn :: (Trans.MonadIO m, Applicative m) =>
   Database -> HostName -> PortID -> Maybe MongoAuth -> NominalDiffTime -> (ConnectionPool -> m b) -> m b
 withMongoDBConn dbname hostname port mauth connectionIdleTime = withMongoDBPool dbname hostname port mauth 1 1 connectionIdleTime
 
+createPipe :: HostName -> PortID -> IO DB.Pipe
+createPipe hostname port = DB.runIOE $ DB.connect (DB.Host hostname port)
+
 createConnection :: Database -> HostName -> PortID -> Maybe MongoAuth -> IO Connection
 createConnection dbname hostname port mAuth = do
-    pipe <- DB.runIOE $ DB.connect (DB.Host hostname port)
+    pipe <- createPipe hostname port
     _ <- case mAuth of
       Just (MongoAuth user pass) -> DB.access pipe DB.UnconfirmedWrites dbname (DB.auth user pass)
       Nothing -> return undefined
@@ -129,11 +137,37 @@ createMongoDBPool dbname hostname port mAuth connectionPoolSize stripeSize conne
                           connectionIdleTime
                           stripeSize
 
+type PipePool = Pool.Pool DB.Pipe
+
+-- | A pool of plain MongoDB pipes.
+-- The database parameter has not yet been applied yet.
+-- This is useful for switching between databases (on the same host and port)
+-- Unlike the normal pool, no authentication is available
+createMongoDBPipePool :: (Trans.MonadIO m, Applicative m) => HostName -> PortID
+                  -> Int -- ^ pool size (number of stripes)
+                  -> Int -- ^ stripe size (number of connections per stripe)
+                  -> NominalDiffTime -- ^ time a connection is left idle before closing
+                  -> m PipePool
+createMongoDBPipePool hostname port connectionPoolSize stripeSize connectionIdleTime = do
+  Trans.liftIO $ Pool.createPool
+                          (createPipe hostname port)
+                          (\pipe -> DB.close pipe)
+                          connectionPoolSize
+                          connectionIdleTime
+                          stripeSize
+
 withMongoDBPool :: (Trans.MonadIO m, Applicative m) =>
   Database -> HostName -> PortID -> Maybe MongoAuth -> Int -> Int -> NominalDiffTime -> (ConnectionPool -> m b) -> m b
 withMongoDBPool dbname hostname port mauth poolStripes stripeConnections connectionIdleTime connectionReader = do
   pool <- createMongoDBPool dbname hostname port mauth poolStripes stripeConnections connectionIdleTime
   connectionReader pool
+
+-- | run a pool created with 'createMongoDBPipePool'
+runMongoDBPipePool :: (Trans.MonadIO m, MonadBaseControl IO m) => DB.AccessMode -> Database -> DB.Action m a -> PipePool -> m a
+runMongoDBPipePool accessMode db action pool =
+  Pool.withResource pool $ \pipe -> do
+    res  <- DB.access pipe accessMode db action
+    either (Trans.liftIO . throwIO . PersistMongoDBError . T.pack . show) return res
 
 runMongoDBPool :: (Trans.MonadIO m, MonadBaseControl IO m) => DB.AccessMode  -> DB.Action m a -> ConnectionPool -> m a
 runMongoDBPool accessMode action pool =
@@ -141,6 +175,8 @@ runMongoDBPool accessMode action pool =
     res  <- DB.access pipe accessMode db action
     either (Trans.liftIO . throwIO . PersistMongoDBError . T.pack . show) return res
 
+
+-- | use default 'AccessMode'
 runMongoDBPoolDef :: (Trans.MonadIO m, MonadBaseControl IO m) => DB.Action m a -> ConnectionPool -> m a
 runMongoDBPoolDef = runMongoDBPool (DB.ConfirmWrites ["j" DB.=: True])
 
