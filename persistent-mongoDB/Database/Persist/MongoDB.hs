@@ -651,7 +651,7 @@ instance PersistConfig MongoConf where
     loadConfig (Object o) = do
         db                 <- o .:  "database"
         host               <- o .:? "host" .!= "127.0.0.1"
-        port               <- o .:? "port" .!= (PortNumber 27017)
+        port               <- o .:? "port" .!= DB.defaultPort
         poolStripes        <- o .:? "poolstripes" .!= 1
         stripeConnections  <- o .:  "connections"
         (NoOrphanNominalDiffTime connectionIdleTime) <- o .:? "connectionIdleTime" .!= 20
