@@ -476,7 +476,7 @@ filterToDocument f =
                      -- Perhaps there is a less hacky way of creating a query that always returns false?
                      ["$not" DB.=: ["$exists" DB.=: _id]]
       FilterOr fs  -> multiFilter "$or" fs
-      -- $and is usually unecessary but makes query construction easier in special cases
+      -- usually $and is unecessary, but it makes query construction easier in special cases
       FilterAnd [] -> []
       FilterAnd fs -> multiFilter "$and" fs
       BackendFilter mf -> mongoFilterToDoc mf
