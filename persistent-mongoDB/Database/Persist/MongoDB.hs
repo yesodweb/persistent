@@ -1,3 +1,13 @@
+-- | Use persistent-mongodb the same way you would use other persistent
+-- libraries and refer to the general persistent documentation.
+-- There are some new MongoDB specific filters under the filters section.
+-- These help extend your query into a nested document.
+--
+-- However, at some point you will find the normal Persistent APIs lacking.
+-- and want lower level-level MongoDB access.
+-- There are functions available to make working with the raw driver
+-- easier: they are under the Entity conversion section.
+-- You should still use the same connection pool that you are using for Persistent. 
 {-# LANGUAGE CPP, PackageImports, OverloadedStrings, ScopedTypeVariables  #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving, MultiParamTypeClasses  #-}
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, FlexibleContexts #-}
@@ -9,8 +19,19 @@
 {-# LANGUAGE GADTs #-}
 module Database.Persist.MongoDB
     (
+    -- * Entity conversion
+      entityToFields
+    , toInsertFields
+    , docToEntityEither
+    , docToEntityThrow
+
+    -- * MongoDB specific Filters
+    -- $filters
+    , (->.), (~>.), (?->.), (?~>.)
+    , nestEq, multiEq
+
     -- * using connections
-      withMongoDBConn
+    , withMongoDBConn
     , withMongoDBPool
     , createMongoDBPool
     , runMongoDBPool
@@ -27,25 +48,20 @@ module Database.Persist.MongoDB
     -- * Key conversion helpers
     , keyToOid
     , oidToKey
-    -- * Entity conversion
-    , entityToFields
-    , toInsertFields
-    , docToEntityEither
-    , docToEntityThrow
+
     -- * network type
     , HostName
     , PortID
+
     -- * MongoDB driver types
     , DB.Action
     , DB.AccessMode(..)
     , DB.master
     , DB.slaveOk
     , (DB.=:)
+
     -- * Database.Persist
     , module Database.Persist
-    -- * Mongo Filters
-    , (~>.) ,(?~>.), (->.), (?->.)
-    , nestEq, multiEq
     ) where
 
 import Database.Persist
@@ -695,6 +711,18 @@ instance PersistConfig MongoConf where
             -}
     loadConfig _ = mzero
 
+
+-- ---------------------------
+-- * MongoDB specific Filters
+
+-- $filters
+--
+-- You can find example usage for all of Persistent in our test cases:
+-- https://github.com/yesodweb/persistent/blob/master/persistent-test/EmbedTest.hs#L144
+--
+-- These filters create a query that reaches deeper into a document with
+-- nested fields.
+
 type instance BackendSpecificFilter MongoBackend v = MongoFilter v
 
 data NestedField val nes  =  forall nes1. PersistEntity nes1 => EntityField val nes1  `MidFlds` NestedField nes1 nes
@@ -711,17 +739,25 @@ data MongoFilter val = forall typ. (PersistField typ) =>
                           mulFldKey  :: EntityField val [typ]
                         , mulFldVal  :: Either typ [typ]
                         }
-(~>.) :: forall val nes nes1. PersistEntity nes1 => EntityField val nes1 -> NestedField nes1 nes -> NestedField val nes
-(~>.)  = MidFlds
 
-(?~>.) :: forall val nes nes1. PersistEntity nes1 => EntityField val (Maybe nes1) -> NestedField nes1 nes -> NestedField val nes
-(?~>.) = MidFldsNullable
-
+-- | Point to a nested field to query. Used for the final level of nesting with `nestEq` or other operators.
 (->.) :: forall val nes nes1. PersistEntity nes1 => EntityField val nes1 -> EntityField nes1 nes -> NestedField val nes
 (->.)  = LastFld
 
+-- | Same as (->.), but Works against a Maybe type
 (?->.) :: forall val nes nes1. PersistEntity nes1 => EntityField val (Maybe nes1) -> EntityField nes1 nes -> NestedField val nes
 (?->.) = LastFldNullable
+
+-- | Point to a nested field to query.
+-- This level of nesting is not the final level.
+-- Use (->.) to point to the final level is 
+(~>.) :: forall val nes nes1. PersistEntity nes1 => EntityField val nes1 -> NestedField nes1 nes -> NestedField val nes
+(~>.)  = MidFlds
+
+-- | Same as (~>.), but Works against a Maybe type
+(?~>.) :: forall val nes nes1. PersistEntity nes1 => EntityField val (Maybe nes1) -> NestedField nes1 nes -> NestedField val nes
+(?~>.) = MidFldsNullable
+
 
 infixr 5 ~>.
 infixr 5 ?~>.
@@ -730,7 +766,8 @@ infixr 6 ?->.
 
 infixr 4 `nestEq`
 
--- | use with drill-down operaters ~>, etc
+-- | The normal Persistent equality test (==.) is not generic enough.
+-- Instead use this with the drill-down operaters (->.) or (?->.)
 nestEq :: forall v typ. (PersistField typ, PersistEntityBackend v ~ MongoBackend) => NestedField v typ -> typ -> Filter v
 nf `nestEq` v = BackendFilter $ NestedFilter {nestedField = nf, fieldValue = (Left v)}
 
