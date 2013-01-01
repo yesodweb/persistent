@@ -11,8 +11,6 @@ module UniqueTest where
 
 import Init
 import Control.Monad (void)
-import Control.Monad.Trans.Resource (runResourceT)
-import Data.Word
 import Test.HUnit (Assertion)
 import Test.Hspec (shouldThrow, anyException)
 #ifndef WITH_MONGODB
@@ -43,7 +41,7 @@ share [mkPersist sqlSettings,  mkMigrate "uniqueMigrate"] [persist|
 #endif
 |]
 #ifdef WITH_MONGODB
-cleanDB :: (PersistQuery m, PersistEntityBackend Number ~ PersistMonadBackend m) => m ()
+cleanDB :: (PersistQuery m, PersistEntityBackend TestNonNull ~ PersistMonadBackend m) => m ()
 cleanDB = do
   deleteWhere ([] :: [Filter TestNonNull])
   deleteWhere ([] :: [Filter TestNull])
