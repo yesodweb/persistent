@@ -106,6 +106,7 @@ tokenize :: Text -> [Token]
 tokenize t
     | T.null t = []
     | "--" `T.isPrefixOf` t = [] -- Comment until the end of the line.
+    | "#" `T.isPrefixOf` t = [] -- Also comment to the end of the line, needed for a CPP bug (#110)
     | T.head t == '"' = quotes (T.tail t) id
     | T.head t == '(' = parens 1 (T.tail t) id
     | isSpace (T.head t) =
