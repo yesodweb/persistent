@@ -23,6 +23,7 @@ import Database.Persist.GenericSql.Internal hiding (execute, withStmt)
 import Database.Persist.Store (PersistValue)
 import Data.IORef
 import Control.Monad.IO.Class
+import Control.Monad.Logger (logDebugS)
 import Control.Monad.Trans.Reader
 import qualified Data.Map as Map
 import Control.Applicative (Applicative)
@@ -31,7 +32,7 @@ import Control.Monad.Base (MonadBase (liftBase))
 import Control.Monad.Trans.Control (MonadBaseControl (..), ComposeSt, defaultLiftBaseWith, defaultRestoreM, MonadTransControl (..))
 import Control.Monad (liftM)
 #define MBCIO MonadBaseControl IO
-import Data.Text (Text)
+import Data.Text (Text, pack)
 import Control.Monad (MonadPlus)
 import Control.Monad.Trans.Resource (MonadResource (..))
 import Data.Conduit
@@ -117,7 +118,7 @@ withStmt :: (MonadSqlPersist m, MonadResource m)
          -> [PersistValue]
          -> Source m [PersistValue]
 withStmt sql vals = do
-    lift $ $logSQL sql vals
+    lift $ $logDebugS (pack "SQL") $ pack $ show sql ++ " " ++ show vals
     conn <- lift askSqlConn
     bracketP
         (getStmt' conn sql)
@@ -126,7 +127,7 @@ withStmt sql vals = do
 
 execute :: MonadSqlPersist m => Text -> [PersistValue] -> m ()
 execute sql vals = do
-    $logSQL sql vals
+    $logDebugS (pack "SQL") $ pack $ show sql ++ " " ++ show vals
     stmt <- getStmt sql
     liftIO $ I.execute stmt vals
     liftIO $ reset stmt
