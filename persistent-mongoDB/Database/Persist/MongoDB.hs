@@ -54,6 +54,7 @@ module Database.Persist.MongoDB
     , PortID
 
     -- * MongoDB driver types
+    , Database
     , DB.Action
     , DB.AccessMode(..)
     , DB.master
