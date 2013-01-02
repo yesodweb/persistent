@@ -626,6 +626,11 @@ GOX(Monoid w, Strict.WriterT w)
 #undef GO
 #undef GOX
 
+-- | Queries against unique keys (other than the id).
+--
+-- Please read the general Persistent documentation to learn how to create
+-- Unique keys.
+-- SQL backends automatically create uniqueness constraints, but for MongoDB you must place a unique index on the field.
 class PersistStore m => PersistUnique m where
     -- | Get a record by unique key, if available. Returns also the identifier.
     getBy :: (PersistEntityBackend val ~ PersistMonadBackend m, PersistEntity val) => Unique val -> m (Maybe (Entity val))
