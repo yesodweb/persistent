@@ -719,7 +719,7 @@ instance PersistConfig MongoConf where
 -- $filters
 --
 -- You can find example usage for all of Persistent in our test cases:
--- https://github.com/yesodweb/persistent/blob/master/persistent-test/EmbedTest.hs#L144
+-- <https://github.com/yesodweb/persistent/blob/master/persistent-test/EmbedTest.hs#L144>
 --
 -- These filters create a query that reaches deeper into a document with
 -- nested fields.
