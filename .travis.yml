@@ -4,4 +4,7 @@ install:
     - cabal install mega-sdist hspec cabal-meta cabal-src
     - cabal-meta install --force-reinstalls
 
-script: mega-sdist --test
+script:
+    - mega-sdist --test
+    - cd persistent-test
+    - cabal install --enable-tests
