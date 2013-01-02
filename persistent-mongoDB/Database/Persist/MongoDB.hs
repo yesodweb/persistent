@@ -8,6 +8,11 @@
 -- There are functions available to make working with the raw driver
 -- easier: they are under the Entity conversion section.
 -- You should still use the same connection pool that you are using for Persistent. 
+--
+-- MongoDB is a schema-less database.
+-- The MongoDB Persistent backend does not help perform migrations.
+-- Unlike SQL backends, uniqueness constraints cannot be created for you.
+-- You must place a unique index on unique fields.
 {-# LANGUAGE CPP, PackageImports, OverloadedStrings, ScopedTypeVariables  #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving, MultiParamTypeClasses  #-}
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, FlexibleContexts #-}
