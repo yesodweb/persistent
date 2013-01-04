@@ -576,6 +576,11 @@ class MonadIO m => PersistStore m where
     insert :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
            => val -> m (Key val)
 
+    -- | Same as 'insert', but doesn't return a @Key@.
+    insert_ :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
+            => val -> m ()
+    insert_ val = insert val >> return ()
+
     -- | Create a new record in the database using the given key.
     insertKey :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
               => Key val -> val -> m ()
