@@ -35,6 +35,9 @@ import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Control.Applicative
 
+import Data.Unique
+import Debug.Trace (traceIO)
+
 createSqlitePool :: MonadIO m => Text -> Int -> m ConnectionPool
 createSqlitePool s = createSqlPool $ open' s
 
@@ -73,12 +76,16 @@ open' s = do
 
 prepare' :: Sqlite.Connection -> Text -> IO Statement
 prepare' conn sql = do
+    label <- hashUnique <$> newUnique
+    let tr :: MonadIO m => String -> m ()
+        tr msg = liftIO $ traceIO $ "Statement " ++ show label ++ ": " ++ msg
+
     stmt <- Sqlite.prepare conn sql
     return Statement
-        { finalize = Sqlite.finalize stmt
-        , reset = Sqlite.reset stmt
-        , execute = execute' stmt
-        , withStmt = withStmt' stmt
+        { finalize = tr "finalize" >> Sqlite.finalize stmt
+        , reset = tr "reset" >> Sqlite.reset stmt
+        , execute = \xs -> tr "execute" >> execute' stmt xs
+        , withStmt = \xs -> tr "withStmt" >> withStmt' stmt xs
         }
 
 insertSql' :: DBName -> [DBName] -> DBName -> InsertSqlResult

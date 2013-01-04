@@ -17,6 +17,11 @@ embedMigrate
 import Init
 import Test.HUnit (Assertion)
 
+import Control.Concurrent
+import Control.Exception as E
+import Debug.Trace (traceIO)
+import System.IO.Unsafe (unsafePerformIO)
+
 import qualified Data.Text as T
 import qualified Data.Set as S
 import qualified Data.Map as M
@@ -106,13 +111,17 @@ specs = describe "embedded entities" $ do
       Just res <- selectFirst [HasEmbedEmbed ==. (OnlyName "2")] []
       res @== (Entity contK container)
 
-  it "Set" $ db $ do
+  let catchTest io = io `E.catch` \ex -> do
+          traceIO $ "catchTest: " ++ show (ex :: SomeException)
+          throwIO ex
+
+  it "Set" $ catchTest $ db $ do
       let container = HasSetEmbed "set" $ S.fromList [
               (HasEmbed "embed" (OnlyName "1"))
             , (HasEmbed "embed" (OnlyName "2"))
             ]
       contK <- insert container
-      Just res <- selectFirst [HasSetEmbedName ==. "set"] []
+      Just res <- selectFirst [HasSetEmbedName ==. throw UserInterrupt] []
       res @== (Entity contK container)
 
   it "List" $ db $ do
