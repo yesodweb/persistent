@@ -8,6 +8,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE EmptyDataDecls #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 module Database.Persist.GenericSql.Raw
     ( withStmt
     , execute
@@ -16,6 +17,7 @@ module Database.Persist.GenericSql.Raw
     , getStmt
     , SqlBackend
     , MonadSqlPersist (..)
+    , StatementAlreadyFinalized (..)
     ) where
 
 import qualified Database.Persist.GenericSql.Internal as I
@@ -30,7 +32,8 @@ import Control.Applicative (Applicative)
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.Base (MonadBase (liftBase))
 import Control.Monad.Trans.Control (MonadBaseControl (..), ComposeSt, defaultLiftBaseWith, defaultRestoreM, MonadTransControl (..))
-import Control.Monad (liftM)
+import Control.Monad (liftM, when)
+import Control.Exception (throwIO, Exception)
 #define MBCIO MonadBaseControl IO
 import Data.Text (Text, pack)
 import Control.Monad (MonadPlus)
@@ -38,6 +41,7 @@ import Control.Monad.Trans.Resource (MonadResource (..))
 import Data.Conduit
 import Control.Monad.Logger (MonadLogger (..))
 import Data.Monoid (Monoid)
+import Data.Typeable (Typeable)
 
 import Control.Monad.Logger (LoggingT)
 import Control.Monad.Trans.Identity ( IdentityT)
@@ -143,6 +147,33 @@ getStmt' conn sql = do
     case Map.lookup sql smap of
         Just stmt -> return stmt
         Nothing -> do
-            stmt <- liftIO $ prepare conn sql
+            stmt' <- liftIO $ prepare conn sql
+            iactive <- liftIO $ newIORef True
+            let stmt = I.Statement
+                    { finalize = do
+                        active <- readIORef iactive
+                        if active
+                            then do
+                                finalize stmt'
+                                writeIORef iactive False
+                            else return ()
+                    , reset = do
+                        active <- readIORef iactive
+                        when active $ reset stmt'
+                    , I.execute = \x -> do
+                        active <- readIORef iactive
+                        if active
+                            then I.execute stmt' x
+                            else throwIO $ StatementAlreadyFinalized sql
+                    , I.withStmt = \x -> do
+                        active <- liftIO $ readIORef iactive
+                        if active
+                            then I.withStmt stmt' x
+                            else liftIO $ throwIO $ StatementAlreadyFinalized sql
+                    }
             liftIO $ writeIORef (stmtMap conn) $ Map.insert sql stmt smap
             return stmt
+
+data StatementAlreadyFinalized = StatementAlreadyFinalized Text
+    deriving (Typeable, Show)
+instance Exception StatementAlreadyFinalized
