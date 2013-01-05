@@ -4,6 +4,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE EmptyDataDecls #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -16,11 +17,18 @@ embedMigrate
 
 import Init
 import Test.HUnit (Assertion)
+import Test.Hspec (shouldThrow)
+import Control.Exception (Exception, throw)
+import Data.Typeable (Typeable)
 
 import qualified Data.Text as T
 import qualified Data.Set as S
 import qualified Data.Map as M
 import Database.Persist.MongoDB
+
+data TestException = TestException
+    deriving (Show, Typeable, Eq)
+instance Exception TestException
 
 #if WITH_MONGODB
 mkPersist persistSettings [persist|
@@ -113,6 +121,15 @@ specs = describe "embedded entities" $ do
             ]
       contK <- insert container
       Just res <- selectFirst [HasSetEmbedName ==. "set"] []
+      res @== (Entity contK container)
+
+  it "exception" $ flip shouldThrow (== TestException) $ db $ do
+      let container = HasSetEmbed "set" $ S.fromList [
+              (HasEmbed "embed" (OnlyName "1"))
+            , (HasEmbed "embed" (OnlyName "2"))
+            ]
+      contK <- insert container
+      Just res <- selectFirst [HasSetEmbedName ==. throw TestException] []
       res @== (Entity contK container)
 
   it "List" $ db $ do
