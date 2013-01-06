@@ -99,6 +99,7 @@ library
                    , vector
                    , unordered-containers
                    , monad-logger >= 0.2.3
+                   , hashable < 1.2
                    -- actually just a mongoDB dependency
                    -- fixes build warning on current build server
                    , cereal
