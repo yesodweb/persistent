@@ -7,4 +7,4 @@ install:
 script:
     - mega-sdist --test
     - cd persistent-test
-    - cabal install --enable-tests
+    - cabal install --enable-tests --force-reinstalls
