@@ -58,7 +58,9 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersist m) where
                 , escapeName conn $ entityDB t
                 , " SET "
                 , T.intercalate "," $ map (go' . go) upds
-                , " WHERE id=?"
+                , " WHERE "
+                , escapeName conn $ entityID t
+                , "=?"
                 ]
         execute' sql $
             map updatePersistValue upds `mappend` [unKey k]
