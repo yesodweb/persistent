@@ -64,6 +64,7 @@ import Control.Applicative
 import Data.Typeable (Typeable)
 import Data.Int (Int8, Int16, Int32, Int64)
 import Data.Word (Word8, Word16, Word32, Word64)
+import Data.Fixed (Fixed, HasResolution, resolution)
 
 import Text.Blaze.Html
 import Text.Blaze.Html.Renderer.Text (renderHtml)
@@ -152,6 +153,7 @@ data PersistValue = PersistText T.Text
                   | PersistByteString ByteString
                   | PersistInt64 Int64
                   | PersistDouble Double
+                  | PersistRational Rational
                   | PersistBool Bool
                   | PersistDay Day
                   | PersistTimeOfDay TimeOfDay
@@ -226,6 +228,7 @@ data SqlType = SqlString
              | SqlInt32
              | SqlInt64
              | SqlReal
+             | SqlNumeric Word32 Word32
              | SqlBool
              | SqlDay
              | SqlTime
@@ -358,6 +361,23 @@ instance PersistField Double where
     fromPersistValue (PersistDouble d) = Right d
     fromPersistValue x = Left $ "Expected Double, received: " ++ show x
     sqlType _ = SqlReal
+
+instance (HasResolution a) => PersistField (Fixed a) where
+  toPersistValue = PersistRational . toRational
+  fromPersistValue (PersistRational r) = Right $ fromRational r
+  fromPersistValue x = Left $ "Expected Rational, received: " ++ show x
+  sqlType a = SqlNumeric long prec
+    where
+      prec = round $ (log $ fromIntegral $ resolution a) / (log 10) --  FIXME: Not very precise nor correct
+      long = prec + 10                                              --  FIXME: Is this enough ?
+
+instance PersistField Rational where
+  toPersistValue = PersistRational
+  fromPersistValue (PersistRational r) = Right r
+  fromPersistValue (PersistDouble d) = Right $ toRational d
+  fromPersistValue x = Left $ "Expected Rational, received: " ++ show x
+  sqlType a = SqlNumeric 20 5   --  FIXME: Ambigous
+
 
 instance PersistField Bool where
     toPersistValue = PersistBool
