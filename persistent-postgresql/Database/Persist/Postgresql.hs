@@ -228,6 +228,7 @@ instance PGTF.ToField P where
     toField (P (PersistByteString bs)) = PGTF.toField (PG.Binary bs)
     toField (P (PersistInt64 i))       = PGTF.toField i
     toField (P (PersistDouble d))      = PGTF.toField d
+    toField (P (PersistRational r))    = PGTF.toField r
     toField (P (PersistBool b))        = PGTF.toField b
     toField (P (PersistDay d))         = PGTF.toField d
     toField (P (PersistTimeOfDay t))   = PGTF.toField t
@@ -268,7 +269,7 @@ getGetter PG.Timestamp             = convertPV (PersistUTCTime . localTimeToUTC 
 getGetter PG.TimestampTZ           = convertPV (PersistZonedTime . ZT)
 getGetter PG.Bit                   = convertPV PersistInt64
 getGetter PG.VarBit                = convertPV PersistInt64
-getGetter PG.Numeric               = convertPV (PersistDouble . fromRational)
+getGetter PG.Numeric               = convertPV PersistRational
 getGetter PG.Void                  = \_ _ -> Ok PersistNull
 getGetter other   = error $ "Postgresql.getGetter: type " ++
                             show other ++ " not supported."

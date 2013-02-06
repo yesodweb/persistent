@@ -181,6 +181,7 @@ instance A.ToJSON PersistValue where
     toJSON (PersistByteString b) = A.String $ T.cons 'b' $ TE.decodeUtf8 $ B64.encode b
     toJSON (PersistInt64 i) = A.Number $ fromIntegral i
     toJSON (PersistDouble d) = A.Number $ AN.D d
+    toJSON (PersistRational r) = A.String $ T.cons 'r' $ show r
     toJSON (PersistBool b) = A.Bool b
     toJSON (PersistTimeOfDay t) = A.String $ T.cons 't' $ show t
     toJSON (PersistUTCTime u) = A.String $ T.cons 'u' $ show u
@@ -202,6 +203,7 @@ instance A.FromJSON PersistValue where
             Just ('u', t) -> fmap PersistUTCTime $ readMay t
             Just ('z', t) -> fmap PersistZonedTime $ readMay t
             Just ('d', t) -> fmap PersistDay $ readMay t
+            Just ('r', t) -> fmap PersistRational $ readMay t
             Just ('o', t) -> either (fail "Invalid base64") (return . PersistObjectId)
                            $ B64.decode $ TE.encodeUtf8 t
             Just (c, _) -> fail $ "Unknown prefix: " `mappend` [c]
@@ -254,6 +256,7 @@ instance PersistField String where
         Right $ T.unpack $ T.decodeUtf8With T.lenientDecode bs
     fromPersistValue (PersistInt64 i) = Right $ Prelude.show i
     fromPersistValue (PersistDouble d) = Right $ Prelude.show d
+    fromPersistValue (PersistRational r) = Right $ Prelude.show r
     fromPersistValue (PersistDay d) = Right $ Prelude.show d
     fromPersistValue (PersistTimeOfDay d) = Right $ Prelude.show d
     fromPersistValue (PersistUTCTime d) = Right $ Prelude.show d
@@ -279,6 +282,7 @@ instance PersistField T.Text where
         Right $ T.decodeUtf8With T.lenientDecode bs
     fromPersistValue (PersistInt64 i) = Right $ show i
     fromPersistValue (PersistDouble d) = Right $ show d
+    fromPersistValue (PersistRational r) = Right $ show r
     fromPersistValue (PersistDay d) = Right $ show d
     fromPersistValue (PersistTimeOfDay d) = Right $ show d
     fromPersistValue (PersistUTCTime d) = Right $ show d
@@ -359,6 +363,7 @@ instance PersistField Word64 where
 instance PersistField Double where
     toPersistValue = PersistDouble
     fromPersistValue (PersistDouble d) = Right d
+    fromPersistValue (PersistRational r) = Right $ fromRational r
     fromPersistValue x = Left $ "Expected Double, received: " ++ show x
     sqlType _ = SqlReal
 
@@ -368,7 +373,7 @@ instance (HasResolution a) => PersistField (Fixed a) where
   fromPersistValue x = Left $ "Expected Rational, received: " ++ show x
   sqlType a = SqlNumeric long prec
     where
-      prec = round $ (log $ fromIntegral $ resolution a) / (log 10) --  FIXME: Not very precise nor correct
+      prec = round $ (log $ fromIntegral $ resolution a) / (log 10) --  FIXME: May lead to problems with big numbers
       long = prec + 10                                              --  FIXME: Is this enough ?
 
 instance PersistField Rational where
