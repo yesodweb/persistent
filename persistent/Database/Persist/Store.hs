@@ -381,7 +381,7 @@ instance PersistField Rational where
   fromPersistValue (PersistRational r) = Right r
   fromPersistValue (PersistDouble d) = Right $ toRational d
   fromPersistValue x = Left $ "Expected Rational, received: " ++ show x
-  sqlType a = SqlNumeric 20 5   --  FIXME: Ambigous
+  sqlType a = SqlNumeric 20 12   --  FIXME: Ambigous, 12 is from Pico which is used to convert Rational to number string
 
 
 instance PersistField Bool where
