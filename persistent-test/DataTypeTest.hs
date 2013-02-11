@@ -28,6 +28,7 @@ import Control.Applicative ((<$>), (<*>))
 import Control.Monad (when)
 import Data.Word (Word8)
 import Control.Monad.Trans.Resource (runResourceT)
+import Data.Fixed (Pico)
 
 import Init
 
@@ -44,6 +45,7 @@ DataTypeTable no-json
     bytesMaxLen ByteString maxlen=100
     int Int
     double Double
+    pico Pico
     bool Bool
 #ifndef WITH_MONGODB
     day Day
@@ -78,6 +80,7 @@ specs = describe "data type specs" $ do
                 check "bytes" dataTypeTableBytes
                 check "bytesMaxLen" dataTypeTableBytesMaxLen
                 check "int" dataTypeTableInt
+                check "pico" dataTypeTablePico
                 check "bool" dataTypeTableBool
 #ifndef WITH_MONGODB
                 check "day" dataTypeTableDay
@@ -97,6 +100,7 @@ randomValue = DataTypeTable
     <*> randomText
     <*> randomBS
     <*> randomBS
+    <*> randomIO
     <*> randomIO
     <*> randomIO
     <*> randomIO

@@ -64,7 +64,7 @@ import Control.Applicative
 import Data.Typeable (Typeable)
 import Data.Int (Int8, Int16, Int32, Int64)
 import Data.Word (Word8, Word16, Word32, Word64)
-import Data.Fixed (Fixed, HasResolution, resolution)
+import Data.Fixed (Fixed, Pico, HasResolution, resolution)
 
 import Text.Blaze.Html
 import Text.Blaze.Html.Renderer.Text (renderHtml)
@@ -370,6 +370,9 @@ instance PersistField Double where
 instance (HasResolution a) => PersistField (Fixed a) where
   toPersistValue = PersistRational . toRational
   fromPersistValue (PersistRational r) = Right $ fromRational r
+  fromPersistValue (PersistText t) = case reads $ T.unpack t of --  NOTE: Sqlite can store rationals just as string
+    [(a, "")] -> Right a
+    _ -> Left $ "Can not read " ++ t ++ " as Fixed"
   fromPersistValue x = Left $ "Expected Rational, received: " ++ show x
   sqlType a = SqlNumeric long prec
     where
@@ -380,8 +383,11 @@ instance PersistField Rational where
   toPersistValue = PersistRational
   fromPersistValue (PersistRational r) = Right r
   fromPersistValue (PersistDouble d) = Right $ toRational d
+  fromPersistValue (PersistText t) = case reads $ T.unpack t of --  NOTE: Sqlite can store rationals just as string
+    [(a, "")] -> Right $ toRational (a :: Pico)
+    _ -> Left $ "Can not read " ++ t ++ " as Rational (Pico in fact)"
   fromPersistValue x = Left $ "Expected Rational, received: " ++ show x
-  sqlType a = SqlNumeric 20 12   --  FIXME: Ambigous, 12 is from Pico which is used to convert Rational to number string
+  sqlType a = SqlNumeric 22 12   --  FIXME: Ambigous, 12 is from Pico which is used to convert Rational to number string
 
 
 instance PersistField Bool where
