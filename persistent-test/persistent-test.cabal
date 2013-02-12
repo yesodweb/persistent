@@ -92,6 +92,7 @@ library
                    , time >= 1.2
                    , random == 1.*
                    , QuickCheck == 2.5.*
+                   , quickcheck-instances >= 0.3
                    , blaze-html >= 0.5 && < 0.6
                    , pool-conduit
                    , transformers-base
