@@ -17,6 +17,8 @@ module Database.Persist.Query.GenericSql
     , selectSourceConn
     , dummyFromFilts
     , orderClause
+    , deleteWhereCount
+    , updateWhereCount
   )
   where
 
@@ -35,6 +37,7 @@ import Control.Monad.Trans.Reader
 
 import Data.Conduit
 import qualified Data.Conduit.List as CL
+import Data.Int (Int64)
 
 import Control.Exception (throwIO)
 import qualified Data.Text as T
@@ -165,43 +168,64 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersist m) where
                     else " OFFSET " ++ show offset
 
     deleteWhere filts = do
-        conn <- SqlPersist ask
-        let t = entityDef $ dummyFromFilts filts
-        let wher = if null filts
-                    then ""
-                    else filterClause False conn filts
-            sql = concat
-                [ "DELETE FROM "
-                , escapeName conn $ entityDB t
-                , wher
-                ]
-        execute' sql $ getFiltsValues conn filts
+        _ <- deleteWhereCount filts
+        return ()
 
-    updateWhere _ [] = return ()
     updateWhere filts upds = do
-        conn <- SqlPersist ask
-        let wher = if null filts
-                    then ""
-                    else filterClause False conn filts
-        let sql = concat
-                [ "UPDATE "
-                , escapeName conn $ entityDB t
-                , " SET "
-                , T.intercalate "," $ map (go' conn . go) upds
-                , wher
-                ]
-        let dat = map updatePersistValue upds `mappend`
-                  getFiltsValues conn filts
-        execute' sql dat
-      where
-        t = entityDef $ dummyFromFilts filts
-        go'' n Assign = n ++ "=?"
-        go'' n Add = concat [n, "=", n, "+?"]
-        go'' n Subtract = concat [n, "=", n, "-?"]
-        go'' n Multiply = concat [n, "=", n, "*?"]
-        go'' n Divide = concat [n, "=", n, "/?"]
-        go' conn (x, pu) = go'' (escapeName conn x) pu
-        go x = (fieldDB $ updateFieldDef x, updateUpdate x)
+        _ <- updateWhereCount filts upds
+        return ()
+
+-- | Same as 'deleteWhere', but returns the number of rows affected.
+--
+-- Since 1.1.5
+deleteWhereCount :: (PersistEntity val, MonadIO m, MonadLogger m)
+                 => [Filter val]
+                 -> SqlPersist m Int64
+deleteWhereCount filts = do
+    conn <- SqlPersist ask
+    let t = entityDef $ dummyFromFilts filts
+    let wher = if null filts
+                then ""
+                else filterClause False conn filts
+        sql = concat
+            [ "DELETE FROM "
+            , escapeName conn $ entityDB t
+            , wher
+            ]
+    R.executeCount sql $ getFiltsValues conn filts
+
+-- | Same as 'updateWhere', but returns the number of rows affected.
+--
+-- Since 1.1.5
+updateWhereCount :: (PersistEntity val, MonadIO m, MonadLogger m)
+                 => [Filter val]
+                 -> [Update val]
+                 -> SqlPersist m Int64
+updateWhereCount _ [] = return 0
+updateWhereCount filts upds = do
+    conn <- SqlPersist ask
+    let wher = if null filts
+                then ""
+                else filterClause False conn filts
+    let sql = concat
+            [ "UPDATE "
+            , escapeName conn $ entityDB t
+            , " SET "
+            , T.intercalate "," $ map (go' conn . go) upds
+            , wher
+            ]
+    let dat = map updatePersistValue upds `mappend`
+              getFiltsValues conn filts
+    R.executeCount sql dat
+  where
+    t = entityDef $ dummyFromFilts filts
+    go'' n Assign = n ++ "=?"
+    go'' n Add = concat [n, "=", n, "+?"]
+    go'' n Subtract = concat [n, "=", n, "-?"]
+    go'' n Multiply = concat [n, "=", n, "*?"]
+    go'' n Divide = concat [n, "=", n, "/?"]
+    go' conn (x, pu) = go'' (escapeName conn x) pu
+    go x = (fieldDB $ updateFieldDef x, updateUpdate x)
 
 updatePersistValue :: Update v -> PersistValue
 updatePersistValue (Update _ v _) = toPersistValue v

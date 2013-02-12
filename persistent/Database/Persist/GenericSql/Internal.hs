@@ -35,6 +35,7 @@ import qualified Data.Conduit as C
 import Language.Haskell.TH.Syntax (Q, Exp)
 import Control.Monad.Logger (logDebugS)
 import Data.Maybe (mapMaybe, listToMaybe)
+import Data.Int (Int64)
 
 data InsertSqlResult = ISRSingle Text
                      | ISRInsertGet Text Text
@@ -59,7 +60,7 @@ data Connection = Connection
 data Statement = Statement
     { finalize :: IO ()
     , reset :: IO ()
-    , execute :: [PersistValue] -> IO ()
+    , execute :: [PersistValue] -> IO Int64
     , withStmt :: forall m. C.MonadResource m
                => [PersistValue]
                -> C.Source m [PersistValue]

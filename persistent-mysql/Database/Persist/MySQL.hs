@@ -40,6 +40,7 @@ import Database.Persist.Store
 import Database.Persist.GenericSql hiding (Key)
 import Database.Persist.GenericSql.Internal
 import Database.Persist.EntityDef
+import Data.Int (Int64)
 
 import qualified Database.MySQL.Simple        as MySQL
 import qualified Database.MySQL.Simple.Param  as MySQL
@@ -140,8 +141,8 @@ insertSql' t cols _ = ISRInsertGet doInsert "SELECT LAST_INSERT_ID()"
 
 
 -- | Execute an statement that doesn't return any results.
-execute' :: MySQL.Connection -> MySQL.Query -> [PersistValue] -> IO ()
-execute' conn query vals = MySQL.execute conn query (map P vals) >> return ()
+execute' :: MySQL.Connection -> MySQL.Query -> [PersistValue] -> IO Int64
+execute' conn query vals = MySQL.execute conn query (map P vals)
 
 
 -- | Execute an statement that does return results.  The results

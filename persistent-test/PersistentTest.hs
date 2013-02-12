@@ -42,6 +42,7 @@ import Database.Persist.TH (mkDeleteCascade)
 import Database.Persist.EntityDef (EntityDef(..), DBName(..))
 import Database.Persist.Store ( DeleteCascade (..) )
 import Database.Persist.GenericSql
+import Database.Persist.Query.GenericSql
 import Database.Persist.GenericSql.Internal (escapeName)
 import Database.Persist.Sqlite
 import Control.Exception (SomeException)
@@ -207,7 +208,12 @@ specs = describe "persistent" $ do
       p28 <- updateGet micK [PersonAge =. 28]
       personAge p28 @== 28
 
+#ifdef WITH_MONGODB
       updateWhere [PersonName ==. "Michael"] [PersonAge =. 29]
+#else
+      uc <- updateWhereCount [PersonName ==. "Michael"] [PersonAge =. 29]
+      uc @== 1
+#endif
       Just mic29 <- get micK
       personAge mic29 @== 29
 

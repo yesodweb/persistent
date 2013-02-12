@@ -12,6 +12,7 @@
 module Database.Persist.GenericSql.Raw
     ( withStmt
     , execute
+    , executeCount
     , SqlPersist (..)
     , getStmt'
     , getStmt
@@ -42,6 +43,7 @@ import Data.Conduit
 import Control.Monad.Logger (MonadLogger (..))
 import Data.Monoid (Monoid)
 import Data.Typeable (Typeable)
+import Data.Int (Int64)
 
 import Control.Monad.Logger (LoggingT)
 import Control.Monad.Trans.Identity ( IdentityT)
@@ -130,11 +132,15 @@ withStmt sql vals = do
         (flip I.withStmt vals)
 
 execute :: MonadSqlPersist m => Text -> [PersistValue] -> m ()
-execute sql vals = do
+execute x y = liftM (const ()) $ executeCount x y
+
+executeCount :: MonadSqlPersist m => Text -> [PersistValue] -> m Int64
+executeCount sql vals = do
     $logDebugS (pack "SQL") $ pack $ show sql ++ " " ++ show vals
     stmt <- getStmt sql
-    liftIO $ I.execute stmt vals
+    res <- liftIO $ I.execute stmt vals
     liftIO $ reset stmt
+    return res
 
 getStmt :: MonadSqlPersist m => Text -> m Statement
 getStmt sql = do

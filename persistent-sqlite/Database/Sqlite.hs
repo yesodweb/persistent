@@ -22,7 +22,8 @@ module Database.Sqlite  (
                          bindText,
                          bind,
                          column,
-                         columns
+                         columns,
+                         changes
                         )
     where
 
@@ -418,3 +419,9 @@ columns :: Statement -> IO [PersistValue]
 columns statement = do
   count <- columnCount statement
   mapM (\i -> column statement i) [0..count-1]
+
+foreign import ccall "sqlite3_changes"
+  changesC :: Connection -> IO Int
+
+changes :: Connection -> IO Int64
+changes = fmap fromIntegral . changesC

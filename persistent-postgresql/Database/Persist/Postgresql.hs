@@ -52,6 +52,7 @@ import Data.Text (Text, pack)
 import Data.Aeson
 import Control.Monad (forM, mzero)
 import System.Environment (getEnvironment)
+import Data.Int (Int64)
 
 
 -- | A @libpq@ connection string.  A simple example of connection
@@ -144,10 +145,8 @@ insertSql' t cols id' = ISRSingle $ pack $ concat
     , T.unpack $ escape id'
     ]
 
-execute' :: PG.Connection -> PG.Query -> [PersistValue] -> IO ()
-execute' conn query vals = do
-    _ <- PG.execute conn query (map P vals)
-    return ()
+execute' :: PG.Connection -> PG.Query -> [PersistValue] -> IO Int64
+execute' conn query vals = PG.execute conn query (map P vals)
 
 withStmt' :: MonadResource m
           => PG.Connection

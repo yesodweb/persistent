@@ -64,6 +64,8 @@ library
                      Database.Persist.TH
 
                      Database.Persist.Sqlite
+                     Database.Persist.Postgresql
+                     Database.Persist.MySQL
                      Database.Sqlite
 
     hs-source-dirs: ., test, persistent, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mysql, persistent-mongoDB, persistent-couchdb
@@ -106,6 +108,10 @@ library
                    , mongoDB       == 1.3.*
                    , bson
                    , silently
+                   , postgresql-libpq
+                   , postgresql-simple
+                   , mysql
+                   , mysql-simple
 
 
    if flag(postgresql)

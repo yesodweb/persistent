@@ -34,6 +34,7 @@ import qualified Data.Text as T
 import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Control.Applicative
+import Data.Int (Int64)
 
 createSqlitePool :: MonadIO m => Text -> Int -> m ConnectionPool
 createSqlitePool s = createSqlPool $ open' s
@@ -67,7 +68,7 @@ open' s = do
   where
     helper t getter = do
         stmt <- getter t
-        execute stmt []
+        _ <- execute stmt []
         reset stmt
     ignoreExceptions = E.handle (\(_ :: E.SomeException) -> return ())
 
@@ -77,7 +78,7 @@ prepare' conn sql = do
     return Statement
         { finalize = Sqlite.finalize stmt
         , reset = Sqlite.reset stmt
-        , execute = execute' stmt
+        , execute = execute' conn stmt
         , withStmt = withStmt' stmt
         }
 
@@ -96,11 +97,11 @@ insertSql' t cols _ =
         , ")"
         ]
 
-execute' :: Sqlite.Statement -> [PersistValue] -> IO ()
-execute' stmt vals = flip finally (liftIO $ Sqlite.reset stmt) $ do
+execute' :: Sqlite.Connection -> Sqlite.Statement -> [PersistValue] -> IO Int64
+execute' conn stmt vals = flip finally (liftIO $ Sqlite.reset stmt) $ do
     Sqlite.bind stmt vals
     Sqlite.Done <- Sqlite.step stmt
-    return ()
+    Sqlite.changes conn
 
 withStmt'
           :: MonadResource m
