@@ -79,6 +79,8 @@ import Data.Aeson
 
 import Data.Conduit
 import qualified Data.Conduit.List as CL
+import Data.Functor.Identity
+import Data.Functor.Constant
 
 data PetType = Cat | Dog
     deriving (Show, Read, Eq)
@@ -159,6 +161,12 @@ specs :: Spec
 specs = describe "persistent" $ do
   let petOwner = belongsToJust petOwnerId
   let maybeOwnedPetOwner = belongsTo maybeOwnedPetOwnerId
+
+  it "fieldLens" $ do
+      let michael = Entity undefined $ Person "Michael" 28 Nothing
+          michaelP1 = Person "Michael" 29 Nothing
+      view michael (fieldLens PersonAge) @?= 28
+      entityVal (set (fieldLens PersonAge) 29 michael) @?= michaelP1
 
   it "FilterOr []" $ db $ do
       let p = Person "z" 1 Nothing
@@ -781,3 +789,14 @@ _polymorphic = do
     _ <- selectList [PetOwnerId ==. id'] []
     _ <- insert $ Pet id' "foo" Cat
     return ()
+
+-- Some lens stuff
+type ASetter s t a b = (a -> Identity b) -> s -> Identity t
+
+set :: ASetter s t a b -> b -> s -> t
+set l b = runIdentity . (l (\_ -> Identity b))
+
+type Getting r s t a b = (a -> Constant r b) -> s -> Constant r t
+
+view :: s -> Getting a s t a b -> a
+view s l = getConstant (l Constant s)

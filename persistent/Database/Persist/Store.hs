@@ -458,6 +458,9 @@ class PersistEntity val where
 
     persistIdField :: EntityField val (Key val)
 
+    fieldLens :: EntityField val field
+              -> (forall f. Functor f => (field -> f field) -> Entity val -> f (Entity val))
+
 instance PersistField a => PersistField [a] where
     toPersistValue = PersistList . map toPersistValue
     fromPersistValue (PersistList l) = fromPersistList l

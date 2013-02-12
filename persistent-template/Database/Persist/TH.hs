@@ -1,6 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-missing-fields #-}
 -- | This module provides utilities for creating backends. Regular users do not
 -- need to use this module.
@@ -414,6 +415,44 @@ mkFromPersistValues t@(EntityDef { entitySum = True }) = do
         clauses <- mkClauses (field : before) after
         return $ clause : clauses
 
+type Lens s t a b = forall f. Functor f => (a -> f b) -> s -> f t
+
+lens :: (s -> a) -> (s -> b -> t) -> Lens s t a b
+lens sa sbt afb s = fmap (sbt s) (afb $ sa s)
+
+mkLensClauses :: EntityDef -> Q [Clause]
+mkLensClauses t = do
+    lens' <- [|lens|]
+    getId <- [|entityKey|]
+    setId <- [|\(Entity _ val) key -> Entity key val|]
+    getVal <- [|entityVal|]
+    dot <- [|(.)|]
+    keyName <- newName "key"
+    valName <- newName "val"
+    xName <- newName "x"
+    let idClause = Clause
+            [ConP (mkName $ unpack $ unHaskellName (entityHaskell t) ++ "Id") []]
+            (NormalB $ lens' `AppE` getId `AppE` setId)
+            []
+    if entitySum t
+        then return [idClause]
+        else return $ idClause : map (toClause lens' getVal dot keyName valName xName) (entityFields t)
+  where
+    toClause lens' getVal dot keyName valName xName f = Clause
+        [ConP (mkName $ unpack $ unHaskellName (entityHaskell t) ++ upperFirst (unHaskellName $ fieldHaskell f)) []]
+        (NormalB $ lens' `AppE` getter `AppE` setter)
+        []
+      where
+        fieldName = mkName $ unpack $ recName (unHaskellName $ entityHaskell t) (unHaskellName $ fieldHaskell f)
+        getter = InfixE (Just $ VarE fieldName) dot (Just getVal)
+        setter = LamE
+            [ ConP 'Entity [VarP keyName, VarP valName]
+            , VarP xName
+            ]
+            $ ConE 'Entity `AppE` VarE keyName `AppE` RecUpdE
+                (VarE valName)
+                [(fieldName, VarE xName)]
+
 mkEntity :: MkPersistSettings -> EntityDef -> Q [Dec]
 mkEntity mps t = do
     t' <- lift t
@@ -438,6 +477,8 @@ mkEntity mps t = do
                 TySynD (mkName nameS) [] $
                     genericDataType mps nameT $ mpsBackend mps
             | otherwise = id
+
+    lensClauses <- mkLensClauses t
 
     return $ addSyn
       [ dataTypeDec mps t
@@ -470,6 +511,7 @@ mkEntity mps t = do
             [genericDataType mps (unHaskellName $ entityHaskell t) $ VarT $ mkName "backend"]
             (backendDataType mps)
         , FunD (mkName "persistIdField") [Clause [] (NormalB $ ConE $ mkName $ unpack $ unHaskellName (entityHaskell t) ++ "Id") []]
+        , FunD (mkName "fieldLens") lensClauses
         ]
       ]
 
