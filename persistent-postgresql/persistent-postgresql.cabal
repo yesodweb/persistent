@@ -14,17 +14,17 @@ homepage:        http://www.yesodweb.com/book/persistent
 
 library
     build-depends:   base                  >= 4        && < 5
-                   , transformers          >= 0.2.1    && < 0.4
+                   , transformers          >= 0.2.1
                    , postgresql-simple     >= 0.2      && < 0.3
                    , postgresql-libpq      >= 0.6.1    && < 0.9
                    , persistent            >= 1.1.5    && < 1.2
                    , containers            >= 0.2
                    , bytestring            >= 0.9
-                   , text                  >= 0.7      && < 0.12
-                   , monad-control         >= 0.2      && < 0.4
+                   , text                  >= 0.7
+                   , monad-control         >= 0.2
                    , time                  >= 1.1
                    , aeson                 >= 0.5
-                   , conduit               >= 0.5.3    && < 0.6
+                   , conduit               >= 0.5.3
     exposed-modules: Database.Persist.Postgresql
     ghc-options:     -Wall
 

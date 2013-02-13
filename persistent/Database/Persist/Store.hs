@@ -108,7 +108,11 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Monoid (Monoid)
 
+#if MIN_VERSION_conduit(1, 0, 0)
+import Data.Conduit.Internal (Pipe, ConduitM)
+#else
 import Data.Conduit (Pipe)
+#endif
 import Control.Monad.Logger (LoggingT)
 import Control.Monad.Trans.Identity ( IdentityT)
 import Control.Monad.Trans.List     ( ListT    )
@@ -624,6 +628,9 @@ GO(ContT r)
 GO(StateT s)
 GO(ResourceT)
 GO(Pipe l i o u)
+#if MIN_VERSION_conduit(1, 0, 0)
+GO(ConduitM i o)
+#endif
 GOX(Monoid w, WriterT w)
 GOX(Monoid w, RWST r w s)
 GOX(Monoid w, Strict.RWST r w s)

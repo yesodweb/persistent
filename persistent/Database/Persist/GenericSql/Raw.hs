@@ -40,6 +40,9 @@ import Data.Text (Text, pack)
 import Control.Monad (MonadPlus)
 import Control.Monad.Trans.Resource (MonadResource (..))
 import Data.Conduit
+#if MIN_VERSION_conduit(1, 0, 0)
+import Data.Conduit.Internal (Pipe, ConduitM)
+#endif
 import Control.Monad.Logger (MonadLogger (..))
 import Data.Monoid (Monoid)
 import Data.Typeable (Typeable)
@@ -107,6 +110,9 @@ GO(ContT r)
 GO(StateT s)
 GO(ResourceT)
 GO(Pipe l i o u)
+#if MIN_VERSION_conduit(1, 0, 0)
+GO(ConduitM i o)
+#endif
 GOX(Monoid w, WriterT w)
 GOX(Monoid w, RWST r w s)
 GOX(Monoid w, Strict.RWST r w s)
@@ -116,8 +122,12 @@ GOX(Monoid w, Strict.WriterT w)
 #undef GOX
 
 instance MonadLogger m => MonadLogger (SqlPersist m) where
+#if MIN_VERSION_monad_logger(0, 3, 0)
+    monadLoggerLog a b c = lift . monadLoggerLog a b c
+#else
     monadLoggerLog a b c = lift $ monadLoggerLog a b c
     monadLoggerLogSource a b c = lift . monadLoggerLogSource a b c
+#endif
 
 withStmt :: (MonadSqlPersist m, MonadResource m)
          => Text
