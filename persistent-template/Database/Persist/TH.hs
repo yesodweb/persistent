@@ -377,6 +377,10 @@ mkHalfDefined constr count' =
             $ foldl AppE (ConE constr)
                     (replicate count' $ VarE $ mkName "undefined")) []]
 
+isNotNull :: PersistValue -> Bool
+isNotNull PersistNull = False
+isNotNull _ = True
+
 mkFromPersistValues :: EntityDef -> Q [Clause]
 mkFromPersistValues t@(EntityDef { entitySum = False }) = do
     nothing <- [|Left $(liftT "Invalid fromPersistValues input")|]
@@ -395,7 +399,7 @@ mkFromPersistValues t@(EntityDef { entitySum = False }) = do
   where
     go ap' x y = InfixE (Just x) ap' (Just y)
 mkFromPersistValues t@(EntityDef { entitySum = True }) = do
-    nothing <- [|Left $(liftT "Invalid fromPersistValues input")|]
+    nothing <- [|Left $(liftT "Invalid fromPersistValues input: sum type with all nulls")|]
     clauses <- mkClauses [] $ entityFields t
     return $ clauses `mappend` [Clause [WildP] (NormalB nothing) []]
   where
@@ -411,7 +415,8 @@ mkFromPersistValues t@(EntityDef { entitySum = True }) = do
             constr = ConE $ sumConstrName t field
         fmap' <- [|fmap|]
         fs <- [|fromPersistValue $(return $ VarE x)|]
-        let clause = Clause [pat] (NormalB $ InfixE (Just constr) fmap' (Just fs)) []
+        let guard' = NormalG $ VarE 'isNotNull `AppE` VarE x
+        let clause = Clause [pat] (GuardedB [(guard', InfixE (Just constr) fmap' (Just fs))]) []
         clauses <- mkClauses (field : before) after
         return $ clause : clauses
 
