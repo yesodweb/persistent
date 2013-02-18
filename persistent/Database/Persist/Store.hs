@@ -12,6 +12,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE RankNTypes #-}
 -- This is to test our assumption that OverlappingInstances is just for String
 #ifndef NO_OVERLAP
 {-# LANGUAGE OverlappingInstances #-}
