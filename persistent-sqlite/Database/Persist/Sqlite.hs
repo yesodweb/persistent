@@ -77,9 +77,9 @@ prepare' conn sql = do
     stmt <- Sqlite.prepare conn sql
     return Statement
         { finalize = Sqlite.finalize stmt
-        , reset = Sqlite.reset stmt
+        , reset = Sqlite.reset conn stmt
         , execute = execute' conn stmt
-        , withStmt = withStmt' stmt
+        , withStmt = withStmt' conn stmt
         }
 
 insertSql' :: DBName -> [DBName] -> DBName -> InsertSqlResult
@@ -98,19 +98,20 @@ insertSql' t cols _ =
         ]
 
 execute' :: Sqlite.Connection -> Sqlite.Statement -> [PersistValue] -> IO Int64
-execute' conn stmt vals = flip finally (liftIO $ Sqlite.reset stmt) $ do
+execute' conn stmt vals = flip finally (liftIO $ Sqlite.reset conn stmt) $ do
     Sqlite.bind stmt vals
     Sqlite.Done <- Sqlite.step stmt
     Sqlite.changes conn
 
 withStmt'
           :: MonadResource m
-          => Sqlite.Statement
+          => Sqlite.Connection
+          -> Sqlite.Statement
           -> [PersistValue]
           -> Source m [PersistValue]
-withStmt' stmt vals = bracketP
+withStmt' conn stmt vals = bracketP
     (Sqlite.bind stmt vals >> return stmt)
-    Sqlite.reset
+    (Sqlite.reset conn)
     (const pull)
   where
     pull = do

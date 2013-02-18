@@ -39,8 +39,10 @@ import Data.Text (Text, pack, unpack)
 import Data.Text.Encoding (encodeUtf8, decodeUtf8With)
 import Data.Text.Encoding.Error (lenientDecode)
 import Data.Monoid (mappend, mconcat)
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 
-newtype Connection = Connection (Ptr ())
+data Connection = Connection !(IORef Bool) Connection'
+newtype Connection' = Connection' (Ptr ())
 newtype Statement = Statement (Ptr ())
 
 data Error = ErrorOK
@@ -126,7 +128,7 @@ decodeColumnType i = Prelude.error $ "decodeColumnType " ++ show i
 foreign import ccall "sqlite3_errmsg"
   errmsgC :: Ptr () -> IO CString
 errmsg :: Connection -> IO Text
-errmsg (Connection database) = do
+errmsg (Connection _ (Connection' database)) = do
   message <- errmsgC database
   byteString <- BS.packCString message
   return $ decodeUtf8With lenientDecode byteString
@@ -158,7 +160,8 @@ openError path' = do
                                case error of
                                  ErrorOK -> do
                                             database' <- peek database
-                                            return $ Left $ Connection database'
+                                            active <- newIORef True
+                                            return $ Left $ Connection active $ Connection' database'
                                  _ -> return $ Right error))
 open :: Text -> IO Connection
 open path = do
@@ -170,7 +173,8 @@ open path = do
 foreign import ccall "sqlite3_close"
   closeC :: Ptr () -> IO Int
 closeError :: Connection -> IO Error
-closeError (Connection database) = do
+closeError (Connection iactive (Connection' database)) = do
+  writeIORef iactive False
   error <- closeC database
   return $ decodeError error
 close :: Connection -> IO ()
@@ -183,7 +187,7 @@ close database = do
 foreign import ccall "sqlite3_prepare_v2"
   prepareC :: Ptr () -> CString -> Int -> Ptr (Ptr ()) -> Ptr (Ptr ()) -> IO Int
 prepareError :: Connection -> Text -> IO (Either Statement Error)
-prepareError (Connection database) text' = do
+prepareError (Connection _ (Connection' database)) text' = do
   BS.useAsCString (encodeUtf8 text')
                   (\text -> do
                      alloca (\statement -> do
@@ -221,12 +225,16 @@ resetError :: Statement -> IO Error
 resetError (Statement statement) = do
   error <- resetC statement
   return $ decodeError error
-reset :: Statement -> IO ()
-reset statement = do
-  error <- resetError statement
-  case error of
-    ErrorOK -> return ()
-    _ -> return () -- FIXME confirm this is correct sqlError Nothing "reset" error
+reset :: Connection -> Statement -> IO ()
+reset (Connection iactive _) statement = do
+  active <- readIORef iactive
+  if active
+      then do
+          error <- resetError statement
+          case error of
+            ErrorOK -> return ()
+            _ -> return () -- FIXME confirm this is correct sqlError Nothing "reset" error
+      else return ()
 
 foreign import ccall "sqlite3_finalize"
   finalizeC :: Ptr () -> IO Int
@@ -421,7 +429,7 @@ columns statement = do
   mapM (\i -> column statement i) [0..count-1]
 
 foreign import ccall "sqlite3_changes"
-  changesC :: Connection -> IO Int
+  changesC :: Connection' -> IO Int
 
 changes :: Connection -> IO Int64
-changes = fmap fromIntegral . changesC
+changes (Connection _ c) = fmap fromIntegral $ changesC c
