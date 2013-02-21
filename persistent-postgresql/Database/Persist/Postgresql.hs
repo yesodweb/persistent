@@ -381,7 +381,7 @@ getAlters (c1, u1) (c2, u2) =
             Nothing -> AddUniqueConstraint name cols : getAltersU news old
             Just ocols ->
                 let old' = filter (\(x, _) -> x /= name) old
-                 in if sort cols == ocols
+                 in if sort cols == sort ocols
                         then getAltersU news old'
                         else  DropConstraint name
                             : AddUniqueConstraint name cols
