@@ -11,6 +11,7 @@ module Database.Persist.Sqlite
     , module Database.Persist
     , module Database.Persist.GenericSql
     , SqliteConf (..)
+    , runSqlite
     ) where
 
 import Database.Persist hiding (Entity (..))
@@ -22,6 +23,7 @@ import Database.Persist.GenericSql.Internal
 import qualified Database.Sqlite as Sqlite
 
 import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.Logger (NoLoggingT, runNoLoggingT)
 import Data.List (intercalate)
 import Data.IORef
 import qualified Data.Map as Map
@@ -71,6 +73,20 @@ open' s = do
         _ <- execute stmt []
         reset stmt
     ignoreExceptions = E.handle (\(_ :: E.SomeException) -> return ())
+
+-- | A convenience helper which creates a new database connection and runs the
+-- given block, handling @MonadResource@ and @MonadLogger@ requirements. Note
+-- that all log messages are discarded.
+--
+-- Since 1.1.4
+runSqlite :: (MonadBaseControl IO m, MonadIO m)
+          => Text -- ^ connection string
+          -> SqlPersist (NoLoggingT (ResourceT m)) a -- ^ database action
+          -> m a
+runSqlite connstr = runResourceT
+                  . runNoLoggingT
+                  . withSqliteConn connstr
+                  . runSqlConn
 
 prepare' :: Sqlite.Connection -> Text -> IO Statement
 prepare' conn sql = do
