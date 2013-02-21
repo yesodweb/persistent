@@ -508,10 +508,15 @@ getAlters :: [EntityDef]
 getAlters allDefs tblName (c1, u1) (c2, u2) =
     (getAltersC c1 c2, getAltersU u1 u2)
   where
-    getAltersC [] old = map (\x -> (cName x, Drop)) old
+    getAltersC [] old = concatMap dropColumn old
     getAltersC (new:news) old =
         let (alters, old') = findAlters allDefs new old
          in alters ++ getAltersC news old'
+
+    dropColumn col =
+      map ((,) (cName col)) $
+        [DropReference n | Just (_, n) <- [cReference col]] ++
+        [Drop]
 
     getAltersU [] old = map (DropUniqueConstraint . fst) old
     getAltersU ((name, cols):news) old =
