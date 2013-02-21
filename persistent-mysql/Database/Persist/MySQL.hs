@@ -264,11 +264,11 @@ migrate' :: PersistEntity val
          -> IO (Either [Text] [(Bool, Text)])
 migrate' connectInfo allDefs getter val = do
     let name = entityDB $ entityDef val
-    old <- getColumns connectInfo getter $ entityDef val
+    (idClmn, old) <- getColumns connectInfo getter $ entityDef val
     let new = second (map udToPair) $ mkColumns allDefs val
-    case (old, partitionEithers old) of
+    case (idClmn, old, partitionEithers old) of
       -- Nothing found, create everything
-      ([], _) -> do
+      ([], [], _) -> do
         let addTable = AddTable $ concat
                 [ "CREATE TABLE "
                 , escapeDBName name
@@ -287,13 +287,13 @@ migrate' connectInfo allDefs getter val = do
               return $ AlterColumn name (cname, addReference allDefs refTblName)
         return $ Right $ map showAlterDb $ addTable : uniques ++ foreigns
       -- No errors and something found, migrate
-      (_, ([], old')) -> do
+      (_, _, ([], old')) -> do
         let (acs, ats) = getAlters allDefs name new $ partitionEithers old'
             acs' = map (AlterColumn name) acs
             ats' = map (AlterTable  name) ats
         return $ Right $ map showAlterDb $ acs' ++ ats'
       -- Errors
-      (_, (errs, _)) -> return $ Left errs
+      (_, _, (errs, _)) -> return $ Left errs
 
 
 -- | Find out the type of a column.
@@ -349,8 +349,22 @@ udToPair ud = (uniqueDBName ud, map snd $ uniqueFields ud)
 getColumns :: MySQL.ConnectInfo
            -> (Text -> IO Statement)
            -> EntityDef
-           -> IO [Either Text (Either Column (DBName, [DBName]))]
+           -> IO ( [Either Text (Either Column (DBName, [DBName]))] -- ID column
+                 , [Either Text (Either Column (DBName, [DBName]))] -- everything else
+                 )
 getColumns connectInfo getter def = do
+    -- Find out ID column.
+    stmtIdClmn <- getter "SELECT COLUMN_NAME, \
+                                 \IS_NULLABLE, \
+                                 \DATA_TYPE, \
+                                 \COLUMN_DEFAULT \
+                          \FROM INFORMATION_SCHEMA.COLUMNS \
+                          \WHERE TABLE_SCHEMA = ? \
+                            \AND TABLE_NAME   = ? \
+                            \AND COLUMN_NAME  = ?"
+    inter1 <- runResourceT $ withStmt stmtIdClmn vals $$ CL.consume
+    ids <- runResourceT $ CL.sourceList inter1 $$ helperClmns -- avoid nested queries
+
     -- Find out all columns.
     stmtClmns <- getter "SELECT COLUMN_NAME, \
                                \IS_NULLABLE, \
@@ -360,8 +374,8 @@ getColumns connectInfo getter def = do
                         \WHERE TABLE_SCHEMA = ? \
                           \AND TABLE_NAME   = ? \
                           \AND COLUMN_NAME <> ?"
-    inter <- runResourceT $ withStmt stmtClmns vals $$ CL.consume
-    cs <- runResourceT $ CL.sourceList inter $$ helperClmns -- avoid nested queries
+    inter2 <- runResourceT $ withStmt stmtClmns vals $$ CL.consume
+    cs <- runResourceT $ CL.sourceList inter2 $$ helperClmns -- avoid nested queries
 
     -- Find out the constraints.
     stmtCntrs <- getter "SELECT CONSTRAINT_NAME, \
@@ -376,7 +390,7 @@ getColumns connectInfo getter def = do
     us <- runResourceT $ withStmt stmtCntrs vals $$ helperCntrs
 
     -- Return both
-    return $ cs ++ us
+    return $ (ids, cs ++ us)
   where
     vals = [ PersistText $ pack $ MySQL.connectDatabase connectInfo
            , PersistText $ unDBName $ entityDB def
