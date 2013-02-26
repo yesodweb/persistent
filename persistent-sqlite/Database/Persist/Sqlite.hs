@@ -116,7 +116,7 @@ insertSql' t cols _ =
 execute' :: Sqlite.Connection -> Sqlite.Statement -> [PersistValue] -> IO Int64
 execute' conn stmt vals = flip finally (liftIO $ Sqlite.reset conn stmt) $ do
     Sqlite.bind stmt vals
-    Sqlite.Done <- Sqlite.step stmt
+    _ <- Sqlite.step stmt
     Sqlite.changes conn
 
 withStmt'
