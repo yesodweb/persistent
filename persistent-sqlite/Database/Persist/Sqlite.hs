@@ -12,6 +12,7 @@ module Database.Persist.Sqlite
     , module Database.Persist.GenericSql
     , SqliteConf (..)
     , runSqlite
+    , wrapConnection
     ) where
 
 import Database.Persist hiding (Entity (..))
@@ -37,6 +38,7 @@ import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Control.Applicative
 import Data.Int (Int64)
+import Control.Monad ((>=>))
 
 createSqlitePool :: MonadIO m => Text -> Int -> m ConnectionPool
 createSqlitePool s = createSqlPool $ open' s
@@ -52,8 +54,13 @@ withSqliteConn :: (MonadBaseControl IO m, MonadIO m)
 withSqliteConn = withSqlConn . open'
 
 open' :: Text -> IO Connection
-open' s = do
-    conn <- Sqlite.open s
+open' = Sqlite.open >=> wrapConnection
+
+-- | Wrap up a raw 'Sqlite.Connection' as a Persistent SQL 'Connection'.
+--
+-- Since 1.1.5
+wrapConnection :: Sqlite.Connection -> IO Connection
+wrapConnection conn = do
     smap <- newIORef $ Map.empty
     return Connection
         { prepare = prepare' conn
