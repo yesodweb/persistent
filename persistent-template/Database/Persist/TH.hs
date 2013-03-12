@@ -440,7 +440,7 @@ mkLensClauses t = do
             (NormalB $ lens' `AppE` getId `AppE` setId)
             []
     if entitySum t
-        then return $ idClause : map (toSumClause lens' getVal dot keyName valName xName) (entityFields t)
+        then return $ idClause : map (toSumClause lens' keyName valName xName) (entityFields t)
         else return $ idClause : map (toClause lens' getVal dot keyName valName xName) (entityFields t)
   where
     toClause lens' getVal dot keyName valName xName f = Clause
@@ -458,12 +458,11 @@ mkLensClauses t = do
                 (VarE valName)
                 [(fieldName, VarE xName)]
 
-    toSumClause lens' getVal dot keyName valName xName f = Clause
+    toSumClause lens' keyName valName xName f = Clause
         [ConP (mkName $ unpack $ unHaskellName (entityHaskell t) ++ upperFirst (unHaskellName $ fieldHaskell f)) []]
         (NormalB $ lens' `AppE` getter `AppE` setter)
         []
       where
-        fieldName = mkName $ unpack $ recName (unHaskellName $ entityHaskell t) (unHaskellName $ fieldHaskell f)
         getter = LamE
             [ ConP 'Entity [WildP, VarP valName]
             ] $ CaseE (VarE valName)
