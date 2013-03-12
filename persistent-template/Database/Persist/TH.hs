@@ -429,11 +429,11 @@ mkLensClauses :: EntityDef -> Q [Clause]
 mkLensClauses t = do
     lens' <- [|lens|]
     getId <- [|entityKey|]
-    setId <- [|\(Entity _ val) key -> Entity key val|]
+    setId <- [|\(Entity _ value) key -> Entity key value|]
     getVal <- [|entityVal|]
     dot <- [|(.)|]
     keyName <- newName "key"
-    valName <- newName "val"
+    valName <- newName "value"
     xName <- newName "x"
     let idClause = Clause
             [ConP (mkName $ unpack $ unHaskellName (entityHaskell t) ++ "Id") []]
