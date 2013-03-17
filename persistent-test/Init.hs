@@ -47,6 +47,7 @@ import Test.QuickCheck
 import Database.Persist
 import Database.Persist.Store (PersistValue(..))
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
+import Control.Monad.Logger
 
 #if WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
@@ -158,8 +159,8 @@ type BackendMonad = SqlBackend
 sqlite_database :: Text
 sqlite_database = "test/testdb.sqlite3"
 -- sqlite_database = ":memory:"
-runConn :: (MonadIO m, MonadBaseControl IO m) => SqlPersist m t -> m ()
-runConn f = do
+runConn :: (MonadIO m, MonadBaseControl IO m) => SqlPersist (NoLoggingT m) t -> m ()
+runConn f = runNoLoggingT $ do
     _<-withSqlitePool sqlite_database 1 $ runSqlPool f
 #if WITH_POSTGRESQL
     _<-withPostgresqlPool "host=localhost port=5432 user=test dbname=test password=test" 1 $ runSqlPool f
@@ -174,7 +175,7 @@ runConn f = do
 #endif
     return ()
 
-db :: SqlPersist (ResourceT IO) () -> Assertion
+db :: SqlPersist (NoLoggingT (ResourceT IO)) () -> Assertion
 db actions = do
   runResourceT $ runConn $ actions >> rollback
 

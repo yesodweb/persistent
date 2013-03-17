@@ -38,6 +38,7 @@ import qualified Control.Monad.IO.Control
 # endif
 
 import Database.Persist.Store (PersistValue( PersistInt64 ))
+import Control.Monad.Logger
 import Database.Persist.TH (mkDeleteCascade)
 import Database.Persist.EntityDef (EntityDef(..), DBName(..))
 import Database.Persist.Store ( DeleteCascade (..) )
@@ -771,7 +772,7 @@ catch' a handler = Control.Monad.Trans.Control.control $ \runInIO ->
 #endif
 
 caseAfterException :: Assertion
-caseAfterException = runResourceT $ withSqlitePool sqlite_database 1 $ runSqlPool $ do
+caseAfterException = runNoLoggingT $ runResourceT $ withSqlitePool sqlite_database 1 $ runSqlPool $ do
     _ <- insert $ Person "A" 0 Nothing
     _ <- (insert (Person "A" 1 Nothing) >> return ()) `Control.Exception.Lifted.catch` catcher
     _ <- insert $ Person "B" 0 Nothing
