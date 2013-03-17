@@ -98,11 +98,21 @@ persistFile = persistFileWith upperCaseSettings
 -- | Create data types and appropriate 'PersistEntity' instances for the given
 -- 'EntityDef's. Works well with the persist quasi-quoter.
 mkPersist :: MkPersistSettings -> [EntityDef] -> Q [Dec]
-mkPersist mps ents = do
+mkPersist mps ents' = do
     x <- fmap mconcat $ mapM (persistFieldFromEntity mps) ents
     y <- fmap mconcat $ mapM (mkEntity mps) ents
     z <- fmap mconcat $ mapM (mkJSON mps) ents
     return $ mconcat [x, y, z]
+  where
+    ents = map fixEntityDef ents'
+
+-- | Implement special preprocessing on EntityDef as necessary for 'mkPersist'.
+-- For example, strip out any fields marked as MigrationOnly.
+fixEntityDef :: EntityDef -> EntityDef
+fixEntityDef ed =
+    ed { entityFields = filter keepField $ entityFields ed }
+  where
+    keepField fd = "MigrationOnly" `notElem` fieldAttrs fd
 
 -- | Settings to be passed to the 'mkPersist' function.
 data MkPersistSettings = MkPersistSettings

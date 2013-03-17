@@ -10,6 +10,7 @@ import qualified LargeNumberTest
 import qualified MaxLenTest
 import qualified SumTypeTest
 import qualified UniqueTest
+import qualified MigrationOnlyTest
 import Test.Hspec.Monadic (hspec)
 import Init
 import System.Exit
@@ -52,13 +53,14 @@ main = do
   runConn (setup MaxLenTest.maxlenMigrate)
 #endif
 
-  hspec $
-    RenameTest.specs >>
-    DataTypeTest.specs >>
-    HtmlTest.specs >>
-    JoinTest.specs >>
-    EmbedTest.specs >>
-    LargeNumberTest.specs >>
-    UniqueTest.specs >>
-    MaxLenTest.specs >>
+  hspec $ do
+    RenameTest.specs
+    DataTypeTest.specs
+    HtmlTest.specs
+    JoinTest.specs
+    EmbedTest.specs
+    LargeNumberTest.specs
+    UniqueTest.specs
+    MaxLenTest.specs
     SumTypeTest.specs
+    MigrationOnlyTest.specs
