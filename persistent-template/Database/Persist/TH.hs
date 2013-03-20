@@ -473,15 +473,15 @@ mkLensClauses t = do
         (NormalB $ lens' `AppE` getter `AppE` setter)
         []
       where
+        emptyMatch = Match WildP (NormalB $ VarE 'error `AppE` LitE (StringL "Tried to use fieldLens on a Sum type")) []
         getter = LamE
             [ ConP 'Entity [WildP, VarP valName]
             ] $ CaseE (VarE valName)
-            [ Match (ConP (sumConstrName t f) [VarP xName]) (NormalB $ VarE xName) []
+            $ Match (ConP (sumConstrName t f) [VarP xName]) (NormalB $ VarE xName) []
 
             -- FIXME It would be nice if the types expressed that the Field is
             -- a sum type and therefore could result in Maybe.
-            , Match WildP (NormalB $ VarE 'error `AppE` LitE (StringL "Tried to use fieldLens on a Sum type")) []
-            ]
+            : if length (entityFields t) > 1 then [emptyMatch] else []
         setter = LamE
             [ ConP 'Entity [VarP keyName, WildP]
             , VarP xName
