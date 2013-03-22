@@ -1,5 +1,5 @@
 name:            persistent
-version:         1.1.5.1
+version:         1.2.0
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -26,14 +26,14 @@ library
                    , time                     >= 1.1.4
                    , text                     >= 0.8
                    , containers               >= 0.2
-                   , conduit                  >= 0.5.5
+                   , conduit                  >= 1.0
                    , resourcet                >= 0.4
                    , monad-control            >= 0.3
                    , lifted-base              >= 0.1
                    , pool-conduit             >= 0.1.1
                    , path-pieces              >= 0.1
                    , aeson                    >= 0.5
-                   , monad-logger             >= 0.2.3
+                   , monad-logger             >= 0.3
                    , transformers-base
                    , base64-bytestring
                    , unordered-containers
@@ -51,7 +51,6 @@ library
                      Database.Persist.GenericSql
                      Database.Persist.GenericSql.Raw
                      Database.Persist.GenericSql.Migration
-                     Database.Persist.TH.Library
                      Database.Persist.Util
                      Database.Persist.Query
                      Database.Persist.Query.Internal
@@ -59,6 +58,18 @@ library
                      Database.Persist.Query.Join
                      Database.Persist.Query.Join.Sql
                      Database.Persist.GenericSql.Internal
+
+                     Database.Persist.Types
+                     Database.Persist.Class.DeleteCascade
+                     Database.Persist.Class.PersistEntity
+                     Database.Persist.Class.PersistQuery
+                     Database.Persist.Class.PersistUnique
+                     Database.Persist.Class.PersistConfig
+                     Database.Persist.Class.PersistField
+                     Database.Persist.Class.PersistStore
+                     Database.Persist.Sql.Types
+                     Database.Persist.Sql.Class
+
 
     ghc-options:     -Wall
 

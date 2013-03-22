@@ -40,9 +40,7 @@ import Data.Text (Text, pack)
 import Control.Monad (MonadPlus)
 import Control.Monad.Trans.Resource (MonadResource (..))
 import Data.Conduit
-#if MIN_VERSION_conduit(1, 0, 0)
 import Data.Conduit.Internal (Pipe, ConduitM)
-#endif
 import Control.Monad.Logger (MonadLogger (..))
 import Data.Monoid (Monoid)
 import Data.Typeable (Typeable)
@@ -61,73 +59,8 @@ import Control.Monad.Trans.RWS      ( RWST     )
 import qualified Control.Monad.Trans.RWS.Strict    as Strict ( RWST   )
 import qualified Control.Monad.Trans.State.Strict  as Strict ( StateT )
 import qualified Control.Monad.Trans.Writer.Strict as Strict ( WriterT )
-
-data SqlBackend
-
-newtype SqlPersist m a = SqlPersist { unSqlPersist :: ReaderT Connection m a }
-    deriving (Monad, MonadIO, MonadTrans, Functor, Applicative, MonadPlus)
-
-instance MonadThrow m => MonadThrow (SqlPersist m) where
-    monadThrow = lift . monadThrow
-
-instance MonadBase backend m => MonadBase backend (SqlPersist m) where
-    liftBase = lift . liftBase
-
-instance MonadBaseControl backend m => MonadBaseControl backend (SqlPersist m) where
-     newtype StM (SqlPersist m) a = StMSP {unStMSP :: ComposeSt SqlPersist m a}
-     liftBaseWith = defaultLiftBaseWith StMSP
-     restoreM     = defaultRestoreM   unStMSP
-instance MonadTransControl SqlPersist where
-    newtype StT SqlPersist a = StReader {unStReader :: a}
-    liftWith f = SqlPersist $ ReaderT $ \r -> f $ \t -> liftM StReader $ runReaderT (unSqlPersist t) r
-    restoreT = SqlPersist . ReaderT . const . liftM unStReader
-
-instance MonadResource m => MonadResource (SqlPersist m) where
-#if MIN_VERSION_resourcet(0,4,0)
-    liftResourceT = lift . liftResourceT
-#else
-    register = lift . register
-    release = lift . release
-    allocate a = lift . allocate a
-    resourceMask = lift . resourceMask
-#endif
-
-class (MonadIO m, MonadLogger m) => MonadSqlPersist m where
-    askSqlConn :: m Connection
-
-instance (MonadIO m, MonadLogger m) => MonadSqlPersist (SqlPersist m) where
-    askSqlConn = SqlPersist ask
-
-#define GO(T) instance (MonadSqlPersist m) => MonadSqlPersist (T m) where askSqlConn = lift askSqlConn
-#define GOX(X, T) instance (X, MonadSqlPersist m) => MonadSqlPersist (T m) where askSqlConn = lift askSqlConn
-GO(LoggingT)
-GO(IdentityT)
-GO(ListT)
-GO(MaybeT)
-GOX(Error e, ErrorT e)
-GO(ReaderT r)
-GO(ContT r)
-GO(StateT s)
-GO(ResourceT)
-GO(Pipe l i o u)
-#if MIN_VERSION_conduit(1, 0, 0)
-GO(ConduitM i o)
-#endif
-GOX(Monoid w, WriterT w)
-GOX(Monoid w, RWST r w s)
-GOX(Monoid w, Strict.RWST r w s)
-GO(Strict.StateT s)
-GOX(Monoid w, Strict.WriterT w)
-#undef GO
-#undef GOX
-
-instance MonadLogger m => MonadLogger (SqlPersist m) where
-#if MIN_VERSION_monad_logger(0, 3, 0)
-    monadLoggerLog a b c = lift . monadLoggerLog a b c
-#else
-    monadLoggerLog a b c = lift $ monadLoggerLog a b c
-    monadLoggerLogSource a b c = lift . monadLoggerLogSource a b c
-#endif
+import Database.Persist.Sql.Types (StatementAlreadyFinalized (..), SqlPersist, SqlBackend)
+import Database.Persist.Sql.Class
 
 withStmt :: (MonadSqlPersist m, MonadResource m)
          => Text
@@ -189,7 +122,3 @@ getStmt' conn sql = do
                     }
             liftIO $ writeIORef (stmtMap conn) $ Map.insert sql stmt smap
             return stmt
-
-data StatementAlreadyFinalized = StatementAlreadyFinalized Text
-    deriving (Typeable, Show)
-instance Exception StatementAlreadyFinalized

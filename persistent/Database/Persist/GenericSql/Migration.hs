@@ -20,13 +20,7 @@ import Database.Persist.EntityDef
 import qualified Database.Persist.GenericSql.Raw as R
 import Database.Persist.Store
 import Database.Persist.GenericSql.Raw (SqlPersist (..))
-#if MIN_VERSION_monad_control(0, 3, 0)
 import Control.Monad.Trans.Control (MonadBaseControl)
-#define MBCIO MonadBaseControl IO
-#else
-import Control.Monad.IO.Control (MonadControlIO)
-#define MBCIO MonadControlIO
-#endif
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader
@@ -39,22 +33,18 @@ import Control.Monad.Logger (MonadLogger)
 import System.IO.Silently (hSilence)
 import System.IO (stderr)
 import Control.Monad.Trans.Control (liftBaseOp_)
+import Database.Persist.Sql.Types
+import Database.Persist.Sql.Class
 
 execute' :: (MonadIO m, MonadLogger m) => Text -> [PersistValue] -> SqlPersist m ()
 execute' = R.execute
 
-type Sql = Text
-
--- Bool indicates if the Sql is safe
-type CautiousMigration = [(Bool, Sql)]
 allSql :: CautiousMigration -> [Sql]
 allSql = map snd
 unsafeSql :: CautiousMigration -> [Sql]
 unsafeSql = allSql . filter fst
 safeSql :: CautiousMigration -> [Sql]
 safeSql = allSql . filter (not . fst)
-
-type Migration m = WriterT [Text] (WriterT CautiousMigration m) ()
 
 parseMigration :: Monad m => Migration m -> m (Either [Text] CautiousMigration)
 parseMigration =
@@ -71,30 +61,30 @@ parseMigration' m = do
       Left errs -> error $ unlines $ map unpack errs
       Right sql -> return sql
 
-printMigration :: (MBCIO m, MonadIO m) => Migration (SqlPersist m) -> SqlPersist m ()
+printMigration :: (MonadBaseControl IO m, MonadIO m) => Migration (SqlPersist m) -> SqlPersist m ()
 printMigration m = do
   mig <- parseMigration' m
   mapM_ (liftIO . Data.Text.IO.putStrLn . flip snoc ';') (allSql mig)
 
-getMigration :: (MBCIO m, MonadIO m) => Migration (SqlPersist m) -> SqlPersist m [Sql]
+getMigration :: (MonadBaseControl IO m, MonadIO m) => Migration (SqlPersist m) -> SqlPersist m [Sql]
 getMigration m = do
   mig <- parseMigration' m
   return $ allSql mig
 
-runMigration :: (MonadIO m, MBCIO m, MonadLogger m)
+runMigration :: (MonadIO m, MonadBaseControl IO m, MonadLogger m)
              => Migration (SqlPersist m)
              -> SqlPersist m ()
 runMigration m = runMigration' m False >> return ()
 
 -- | Same as 'runMigration', but returns a list of the SQL commands executed
 -- instead of printing them to stderr.
-runMigrationSilent :: (MBCIO m, MonadIO m, MonadLogger m)
+runMigrationSilent :: (MonadBaseControl IO m, MonadIO m, MonadLogger m)
                    => Migration (SqlPersist m)
                    -> SqlPersist m [Text]
 runMigrationSilent m = liftBaseOp_ (hSilence [stderr]) $ runMigration' m True
 
 runMigration'
-    :: (MBCIO m, MonadIO m, MonadLogger m)
+    :: (MonadBaseControl IO m, MonadIO m, MonadLogger m)
     => Migration (SqlPersist m)
     -> Bool -- ^ is silent?
     -> SqlPersist m [Text]
@@ -108,7 +98,7 @@ runMigration' m silent = do
             , unlines $ map (\s -> "    " ++ unpack s ++ ";") $ errs
             ]
 
-runMigrationUnsafe :: (MBCIO m, MonadIO m, MonadLogger m)
+runMigrationUnsafe :: (MonadBaseControl IO m, MonadIO m, MonadLogger m)
                    => Migration (SqlPersist m)
                    -> SqlPersist m ()
 runMigrationUnsafe m = do
@@ -131,7 +121,7 @@ sortMigrations x =
     -- choose to have this special sorting applied.
     isCreate t = pack "CREATe " `isPrefixOf` t
 
-migrate :: (MonadIO m, MBCIO m, PersistEntity val)
+migrate :: (MonadIO m, MonadBaseControl IO m, PersistEntity val)
         => [EntityDef]
         -> val
         -> Migration (SqlPersist m)

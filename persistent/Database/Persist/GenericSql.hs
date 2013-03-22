@@ -69,8 +69,9 @@ import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import Control.Monad.Logger (MonadLogger)
 import Control.Monad.Base (liftBase)
-
-type ConnectionPool = Pool Connection
+import Database.Persist.Types
+import Database.Persist.Sql.Types
+import Control.Exception.Lifted (onException)
 
 instance PathPiece (KeyBackend R.SqlBackend entity) where
     toPathPiece (Key (PersistInt64 i)) = toPathPiece i
@@ -258,70 +259,12 @@ dummyFromKey _ = error "dummyFromKey"
 dummyFromUnique :: Unique v -> v
 dummyFromUnique _ = error "dummyFromUnique"
 
-#if MIN_VERSION_monad_control(0, 3, 0)
-onException :: MonadBaseControl IO m => m α -> m β -> m α
-onException m what = control $ \runInIO ->
-                       E.onException (runInIO m)
-                                     (runInIO what)
-#endif
-
 infixr 5 ++
 (++) :: Text -> Text -> Text
 (++) = mappend
 
 show :: Show a => a -> Text
 show = pack . P.show
-
-
--- | A 'Checkmark' should be used as a field type whenever a
--- uniqueness constraint should guarantee that a certain kind of
--- record may appear at most once, but other kinds of records may
--- appear any number of times.
---
--- /NOTE:/ You need to mark any @Checkmark@ fields as @nullable@
--- (see the following example).
---
--- For example, suppose there's a @Location@ entity that
--- represents where a user has lived:
---
--- @
--- Location
---     user    UserId
---     name    Text
---     current Checkmark nullable
---
---     UniqueLocation user current
--- @
---
--- The @UniqueLocation@ constraint allows any number of
--- 'Inactive' @Location@s to be @current@.  However, there may be
--- at most one @current@ @Location@ per user (i.e., either zero
--- or one per user).
---
--- This data type works because of the way that SQL treats
--- @NULL@able fields within uniqueness constraints.  The SQL
--- standard says that @NULL@ values should be considered
--- different, so we represent 'Inactive' as SQL @NULL@, thus
--- allowing any number of 'Inactive' records.  On the other hand,
--- we represent 'Active' as @TRUE@, so the uniqueness constraint
--- will disallow more than one 'Active' record.
---
--- /Note:/ There may be DBMSs that do not respect the SQL
--- standard's treatment of @NULL@ values on uniqueness
--- constraints, please check if this data type works before
--- relying on it.
---
--- The SQL @BOOLEAN@ type is used because it's the smallest data
--- type available.  Note that we never use @FALSE@, just @TRUE@
--- and @NULL@.  Provides the same behavior @Maybe ()@ would if
--- @()@ was a valid 'PersistField'.
-data Checkmark = Active
-                 -- ^ When used on a uniqueness constraint, there
-                 -- may be at most one 'Active' record.
-               | Inactive
-                 -- ^ When used on a uniqueness constraint, there
-                 -- may be any number of 'Inactive' records.
-    deriving (Eq, Ord, Read, Show, Enum, Bounded)
 
 instance PersistField Checkmark where
     toPersistValue Active   = PersistBool True

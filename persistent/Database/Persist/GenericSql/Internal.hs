@@ -36,35 +36,8 @@ import Language.Haskell.TH.Syntax (Q, Exp)
 import Control.Monad.Logger (logDebugS)
 import Data.Maybe (mapMaybe, listToMaybe)
 import Data.Int (Int64)
-
-data InsertSqlResult = ISRSingle Text
-                     | ISRInsertGet Text Text
-
-data Connection = Connection
-    { prepare :: Text -> IO Statement
-    -- ^ table name, column names, id name, either 1 or 2 statements to run
-    , insertSql :: DBName -> [DBName] -> DBName -> InsertSqlResult
-    , stmtMap :: IORef (Map.Map Text Statement)
-    , close :: IO ()
-    , migrateSql :: forall v. PersistEntity v
-                 => [EntityDef]
-                 -> (Text -> IO Statement)
-                 -> v
-                 -> IO (Either [Text] [(Bool, Text)])
-    , begin :: (Text -> IO Statement) -> IO ()
-    , commitC :: (Text -> IO Statement) -> IO ()
-    , rollbackC :: (Text -> IO Statement) -> IO ()
-    , escapeName :: DBName -> Text
-    , noLimit :: Text
-    }
-data Statement = Statement
-    { finalize :: IO ()
-    , reset :: IO ()
-    , execute :: [PersistValue] -> IO Int64
-    , withStmt :: forall m. C.MonadResource m
-               => [PersistValue]
-               -> C.Source m [PersistValue]
-    }
+import Database.Persist.Sql.Types
+import Database.Persist.Sql.Class
 
 withSqlPool :: MonadIO m
             => IO Connection -- ^ create a new connection
@@ -155,48 +128,6 @@ mkColumns allDefs val =
 refName :: DBName -> DBName -> DBName
 refName (DBName table) (DBName column) =
     DBName $ mconcat [table, "_", column, "_fkey"]
-
-data Column = Column
-    { cName      :: DBName
-    , cNull      :: Bool
-    , cType      :: SqlType
-    , cDefault   :: Maybe Text
-    , cMaxLen    :: Maybe Integer
-    , cReference :: (Maybe (DBName, DBName)) -- table name, constraint name
-    }
-    deriving (Eq, Ord, Show)
-
-{- FIXME
-getSqlValue :: [String] -> Maybe String
-getSqlValue (('s':'q':'l':'=':x):_) = Just x
-getSqlValue (_:x) = getSqlValue x
-getSqlValue [] = Nothing
-
-getIdNameValue :: [String] -> Maybe String
-getIdNameValue (('i':'d':'=':x):_) = Just x
-getIdNameValue (_:x) = getIdNameValue x
-getIdNameValue [] = Nothing
--}
-
-{- FIXME
-tableColumns :: EntityDef -> [(RawName, String, [String])]
-tableColumns = map (\a@(ColumnDef _ y z) -> (rawFieldName a, y, z)) . entityColumns
--}
-
-{- FIXME
-getFieldName :: EntityDef -> String -> RawName
-getFieldName t s = rawFieldName $ tableColumn t s
-
-tableColumn :: EntityDef -> String -> ColumnDef
-tableColumn t s | s == id_ = ColumnDef id_ "Int64" []
-  where id_ = unRawName $ rawTableIdName t
-tableColumn t s = go $ entityColumns t
-  where
-    go [] = error $ "Unknown table column: " ++ s
-    go (ColumnDef x y z:rest)
-        | x == s = ColumnDef x y z
-        | otherwise = go rest
--}
 
 logSQL :: Q Exp
 logSQL = [|\sql_foo params_foo -> $logDebugS (T.pack "SQL") $ T.pack $ show (sql_foo :: Text) ++ " " ++ show (params_foo :: [PersistValue])|]

@@ -14,7 +14,6 @@ module Database.Persist
     , belongsTo
     , belongsToJust
     , getByValue
-    , checkUnique
     , selectList
     , deleteCascadeWhere
 
