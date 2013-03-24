@@ -21,6 +21,11 @@ module Database.Persist
     , SelectOpt (..)
     , Filter (..)
 
+    -- * Query functions
+    , selectList
+    , selectKeysList
+    , deleteCascadeWhere
+
     -- * query combinators
     , (=.), (+=.), (-=.), (*=.), (/=.)
     , (==.), (!=.), (<.), (>.), (<=.), (>=.)
@@ -28,13 +33,14 @@ module Database.Persist
     , (||.)
     ) where
 
-import Database.Persist.Query
 import Database.Persist.Types
 import Database.Persist.Class
 import qualified Data.Text as T
 import qualified Control.Exception as E
 import Control.Monad (liftM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import qualified Data.Conduit as C
+import qualified Data.Conduit.List as CL
 
 -- | Insert a value, checking for conflicts with any unique constraints.  If a
 -- duplicate exists in the database, it is returned as 'Left'. Otherwise, the
@@ -94,3 +100,56 @@ getJust :: (PersistStore m, PersistEntity val, Show (Key val), PersistMonadBacke
 getJust key = get key >>= maybe
   (liftIO $ E.throwIO $ PersistForeignConstraintUnmet $ T.pack $ show key)
   return
+
+infixr 3 =., +=., -=., *=., /=.
+(=.), (+=.), (-=.), (*=.), (/=.) :: forall v typ.  PersistField typ => EntityField v typ -> typ -> Update v
+-- | assign a field a value
+f =. a = Update f a Assign
+-- | assign a field by addition (+=)
+f +=. a = Update f a Add
+-- | assign a field by subtraction (-=)
+f -=. a = Update f a Subtract
+-- | assign a field by multiplication (*=)
+f *=. a = Update f a Multiply
+-- | assign a field by division (/=)
+f /=. a = Update f a Divide
+
+infix 4 ==., <., <=., >., >=., !=.
+(==.), (!=.), (<.), (<=.), (>.), (>=.) ::
+  forall v typ.  PersistField typ => EntityField v typ -> typ -> Filter v
+f ==. a  = Filter f (Left a) Eq
+f !=. a = Filter f (Left a) Ne
+f <. a  = Filter f (Left a) Lt
+f <=. a  = Filter f (Left a) Le
+f >. a  = Filter f (Left a) Gt
+f >=. a  = Filter f (Left a) Ge
+
+infix 4 <-., /<-.
+(<-.), (/<-.) :: forall v typ.  PersistField typ => EntityField v typ -> [typ] -> Filter v
+-- | In
+f <-. a = Filter f (Right a) In
+-- | NotIn
+f /<-. a = Filter f (Right a) NotIn
+
+infixl 3 ||.
+(||.) :: forall v. [Filter v] -> [Filter v] -> [Filter v]
+-- | the OR of two lists of filters
+a ||. b = [FilterOr  [FilterAnd a, FilterAnd b]]
+
+-- | Call 'selectSource' but return the result as a list.
+selectList :: (PersistEntity val, PersistQuery m, PersistEntityBackend val ~ PersistMonadBackend m)
+           => [Filter val]
+           -> [SelectOpt val]
+           -> m [Entity val]
+selectList a b = selectSource a b C.$$ CL.consume
+
+-- | Call 'selectKeys' but return the result as a list.
+selectKeysList :: (PersistEntity val, PersistQuery m, PersistEntityBackend val ~ PersistMonadBackend m)
+               => [Filter val]
+               -> [SelectOpt val]
+               -> m [Key val]
+selectKeysList a b = selectKeys a b C.$$ CL.consume
+
+deleteCascadeWhere :: (DeleteCascade a m, PersistQuery m)
+                   => [Filter a] -> m ()
+deleteCascadeWhere filts = selectKeys filts [] C.$$ CL.mapM_ deleteCascade

@@ -49,8 +49,6 @@ library
                      Database.Persist.GenericSql
                      Database.Persist.GenericSql.Raw
                      Database.Persist.GenericSql.Migration
-                     Database.Persist.Query
-                     Database.Persist.Query.Internal
                      Database.Persist.Query.GenericSql
                      Database.Persist.GenericSql.Internal
 

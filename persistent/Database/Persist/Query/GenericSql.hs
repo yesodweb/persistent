@@ -25,7 +25,6 @@ module Database.Persist.Query.GenericSql
 import qualified Prelude
 import Prelude hiding ((++), unlines, concat, show)
 import Data.Text (Text, pack, concat)
-import Database.Persist.Query.Internal
 import Database.Persist.GenericSql
 import Database.Persist.Class
 import Database.Persist.Types
@@ -414,3 +413,14 @@ orderClause includeTable conn o =
             then ((tn ++ ".") ++)
             else id)
         $ escapeName conn $ fieldDB x
+
+updateFieldDef :: PersistEntity v => Update v -> FieldDef
+updateFieldDef (Update f _ _) = persistFieldDef f
+
+limitOffsetOrder :: PersistEntity val => [SelectOpt val] -> (Int, Int, [SelectOpt val])
+limitOffsetOrder opts =
+    foldr go (0, 0, []) opts
+  where
+    go (LimitTo l) (_, b, c) = (l, b ,c)
+    go (OffsetBy o) (a, _, c) = (a, o, c)
+    go x (a, b, c) = (a, b, x : c)
