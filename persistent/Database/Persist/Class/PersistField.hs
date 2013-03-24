@@ -84,8 +84,6 @@ class PersistField a where
     toPersistValue :: a -> PersistValue
     fromPersistValue :: PersistValue -> Either T.Text a
     sqlType :: a -> SqlType
-    isNullable :: a -> Bool
-    isNullable _ = False
 
 #ifndef NO_OVERLAP
 instance PersistField String where
@@ -260,7 +258,6 @@ instance PersistField a => PersistField (Maybe a) where
     fromPersistValue x = fmap Just $ fromPersistValue x
     sqlType (Just a) = sqlType a
     sqlType ma@Nothing = sqlType (Just (error "Database.Persist.Class.PersistField.Maybe") `asTypeOf` ma)
-    isNullable _ = True
 
 instance PersistField a => PersistField [a] where
     toPersistValue = PersistList . map toPersistValue

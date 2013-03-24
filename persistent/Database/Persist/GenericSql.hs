@@ -276,7 +276,6 @@ instance PersistField Checkmark where
     fromPersistValue other =
       Left $ "PersistField Checkmark: unknown value " ++ show other
     sqlType    _ = SqlBool
-    isNullable _ = True
 
 instance PathPiece Checkmark where
     toPathPiece = show
