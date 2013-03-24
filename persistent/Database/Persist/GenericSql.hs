@@ -63,7 +63,6 @@ import Web.PathPieces (PathPiece (..))
 import qualified Data.Text.Read
 import Data.Maybe (fromMaybe)
 import Data.Monoid (Monoid, mappend)
-import Database.Persist.EntityDef
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import Control.Monad.Logger (MonadLogger)

@@ -5,6 +5,7 @@ module Database.Persist.Quasi
     , PersistSettings (..)
     , upperCaseSettings
     , lowerCaseSettings
+    , stripId
 #if TEST
     , Token (..)
     , tokenize
@@ -13,7 +14,7 @@ module Database.Persist.Quasi
     ) where
 
 import Prelude hiding (lines)
-import Database.Persist.EntityDef
+import Database.Persist.Types
 import Data.Char
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
@@ -262,3 +263,7 @@ takeUniqs _ _ _ = Nothing
 takeDerives :: [Text] -> Maybe [Text]
 takeDerives ("deriving":rest) = Just rest
 takeDerives _ = Nothing
+
+stripId :: FieldType -> Maybe Text
+stripId (FTTypeCon Nothing t) = T.stripSuffix "Id" t
+stripId _ = Nothing

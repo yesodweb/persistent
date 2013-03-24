@@ -42,7 +42,6 @@ import Data.Int (Int64)
 
 import Control.Exception (throwIO)
 import qualified Data.Text as T
-import Database.Persist.EntityDef
 import Data.Monoid (Monoid, mappend, mconcat)
 import Control.Monad.Logger (MonadLogger)
 

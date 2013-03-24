@@ -16,7 +16,6 @@ module Database.Persist.GenericSql.Migration
 
 
 import Database.Persist.GenericSql.Internal
-import Database.Persist.EntityDef
 import qualified Database.Persist.GenericSql.Raw as R
 import Database.Persist.GenericSql.Raw (SqlPersist (..))
 import Control.Monad.Trans.Control (MonadBaseControl)

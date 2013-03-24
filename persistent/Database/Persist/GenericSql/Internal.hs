@@ -20,6 +20,7 @@ module Database.Persist.GenericSql.Internal
 
 import Database.Persist.Types
 import Database.Persist.Class
+import Database.Persist.Quasi
 import qualified Data.Map as Map
 import Data.Char (isSpace)
 import Data.IORef
@@ -30,7 +31,6 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Monoid (Monoid, mappend, mconcat)
-import Database.Persist.EntityDef
 import qualified Data.Conduit as C
 import Language.Haskell.TH.Syntax (Q, Exp)
 import Control.Monad.Logger (logDebugS)

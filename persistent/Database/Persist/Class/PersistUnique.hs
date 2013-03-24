@@ -24,7 +24,6 @@ import qualified Data.ByteString.Lazy as L
 
 import qualified Control.Exception as E
 import Control.Monad.Trans.Error (Error (..))
-import Database.Persist.EntityDef
 
 import Data.Bits (bitSize)
 import Control.Monad (liftM, (<=<))

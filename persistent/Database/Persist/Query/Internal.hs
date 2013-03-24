@@ -29,7 +29,6 @@ import Database.Persist.Types
 import Database.Persist.Class
 import Database.Persist.Class.PersistQuery
 import Database.Persist.Class.PersistEntity
-import Database.Persist.EntityDef
 import Control.Monad.IO.Class (liftIO)
 import Control.Exception (Exception, throwIO)
 import Data.Typeable (Typeable)
