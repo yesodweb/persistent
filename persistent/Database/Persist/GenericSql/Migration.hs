@@ -18,7 +18,6 @@ module Database.Persist.GenericSql.Migration
 import Database.Persist.GenericSql.Internal
 import Database.Persist.EntityDef
 import qualified Database.Persist.GenericSql.Raw as R
-import Database.Persist.Store
 import Database.Persist.GenericSql.Raw (SqlPersist (..))
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Class (MonadTrans (..))
@@ -35,6 +34,8 @@ import System.IO (stderr)
 import Control.Monad.Trans.Control (liftBaseOp_)
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Class
+import Database.Persist.Class
+import Database.Persist.Types
 
 execute' :: (MonadIO m, MonadLogger m) => Text -> [PersistValue] -> SqlPersist m ()
 execute' = R.execute

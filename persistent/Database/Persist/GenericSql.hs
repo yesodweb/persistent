@@ -47,7 +47,6 @@ import qualified Prelude as P
 import Prelude hiding ((++), unlines, concat, show)
 import Control.Applicative ((<$>), (<*>))
 import Control.Arrow ((&&&))
-import Database.Persist.Store
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader
 import Data.Conduit.Pool
@@ -70,6 +69,7 @@ import qualified Data.Conduit.List as CL
 import Control.Monad.Logger (MonadLogger)
 import Control.Monad.Base (liftBase)
 import Database.Persist.Types
+import Database.Persist.Class
 import Database.Persist.Sql.Types
 import Control.Exception.Lifted (onException)
 

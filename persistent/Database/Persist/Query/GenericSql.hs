@@ -25,9 +25,10 @@ module Database.Persist.Query.GenericSql
 import qualified Prelude
 import Prelude hiding ((++), unlines, concat, show)
 import Data.Text (Text, pack, concat)
-import Database.Persist.Store
 import Database.Persist.Query.Internal
 import Database.Persist.GenericSql
+import Database.Persist.Class
+import Database.Persist.Types
 import Database.Persist.GenericSql.Internal
 import qualified Database.Persist.GenericSql.Raw as R
 

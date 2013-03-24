@@ -25,8 +25,8 @@ module Database.Persist.Query.Internal
     , BackendSpecificFilter
   ) where
 
-import Database.Persist.Store
 import Database.Persist.Types
+import Database.Persist.Class
 import Database.Persist.Class.PersistQuery
 import Database.Persist.Class.PersistEntity
 import Database.Persist.EntityDef

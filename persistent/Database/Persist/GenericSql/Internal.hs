@@ -19,12 +19,12 @@ module Database.Persist.GenericSql.Internal
     ) where
 
 import Database.Persist.Types
+import Database.Persist.Class
 import qualified Data.Map as Map
 import Data.Char (isSpace)
 import Data.IORef
 import Control.Monad.IO.Class
 import Data.Conduit.Pool
-import Database.Persist.Store
 import Control.Exception.Lifted (bracket)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Text (Text)

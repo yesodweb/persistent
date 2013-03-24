@@ -16,8 +16,9 @@ module Database.Persist.Query
     , (||.)
   ) where
 
-import Database.Persist.Store
 import Database.Persist.Query.Internal
+import Database.Persist.Class
+import Database.Persist.Types
 
 -- import and export the GenericSql instance (orphaned for convenience of modularity)
 import Database.Persist.Query.GenericSql ()

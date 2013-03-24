@@ -23,7 +23,6 @@ module Database.Persist.GenericSql.Raw
 
 import qualified Database.Persist.GenericSql.Internal as I
 import Database.Persist.GenericSql.Internal hiding (execute, withStmt)
-import Database.Persist.Store (PersistValue)
 import Data.IORef
 import Control.Monad.IO.Class
 import Control.Monad.Logger (logDebugS)
@@ -61,6 +60,7 @@ import qualified Control.Monad.Trans.State.Strict  as Strict ( StateT )
 import qualified Control.Monad.Trans.Writer.Strict as Strict ( WriterT )
 import Database.Persist.Sql.Types (StatementAlreadyFinalized (..), SqlPersist, SqlBackend)
 import Database.Persist.Sql.Class
+import Database.Persist.Types
 
 withStmt :: (MonadSqlPersist m, MonadResource m)
          => Text

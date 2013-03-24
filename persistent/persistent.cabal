@@ -46,7 +46,6 @@ library
 
     exposed-modules: Database.Persist
                      Database.Persist.EntityDef
-                     Database.Persist.Store
                      Database.Persist.Quasi
                      Database.Persist.GenericSql
                      Database.Persist.GenericSql.Raw
@@ -57,6 +56,11 @@ library
                      Database.Persist.GenericSql.Internal
 
                      Database.Persist.Types
+                     Database.Persist.Class
+                     Database.Persist.Sql.Types
+                     Database.Persist.Sql.Class
+
+    other-modules:   Database.Persist.Types.Base
                      Database.Persist.Class.DeleteCascade
                      Database.Persist.Class.PersistEntity
                      Database.Persist.Class.PersistQuery
@@ -64,10 +68,6 @@ library
                      Database.Persist.Class.PersistConfig
                      Database.Persist.Class.PersistField
                      Database.Persist.Class.PersistStore
-                     Database.Persist.Sql.Types
-                     Database.Persist.Sql.Class
-
-    other-modules:   Database.Persist.Types.Base
 
     ghc-options:     -Wall
 
