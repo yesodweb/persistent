@@ -81,6 +81,15 @@ test-suite test
                    , hspec >= 1.3
                    , containers
                    , text
+                   , unordered-containers
+                   , time
+                   , bytestring
+                   , vector
+                   , base64-bytestring
+                   , attoparsec
+                   , transformers
+                   , path-pieces
+                   , aeson
 
     cpp-options: -DTEST
 
