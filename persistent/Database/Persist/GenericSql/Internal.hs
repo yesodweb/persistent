@@ -18,6 +18,7 @@ module Database.Persist.GenericSql.Internal
     , InsertSqlResult (..)
     ) where
 
+import Database.Persist.Types
 import qualified Data.Map as Map
 import Data.Char (isSpace)
 import Data.IORef
@@ -26,7 +27,6 @@ import Data.Conduit.Pool
 import Database.Persist.Store
 import Control.Exception.Lifted (bracket)
 import Control.Monad.Trans.Control (MonadBaseControl)
-import Database.Persist.Util (nullable, IsNullable(NotNullable))
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Monoid (Monoid, mappend, mconcat)
@@ -131,3 +131,9 @@ refName (DBName table) (DBName column) =
 
 logSQL :: Q Exp
 logSQL = [|\sql_foo params_foo -> $logDebugS (T.pack "SQL") $ T.pack $ show (sql_foo :: Text) ++ " " ++ show (params_foo :: [PersistValue])|]
+
+nullable :: [Text] -> IsNullable
+nullable s
+    | "Maybe"    `elem` s = Nullable ByMaybeAttr
+    | "nullable" `elem` s = Nullable ByNullableAttr
+    | otherwise = NotNullable
