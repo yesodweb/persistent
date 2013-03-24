@@ -2,31 +2,22 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
 module Database.Persist
-    ( PersistField (..)
-    , PersistEntity (..)
-    , PersistStore (..)
-    , PersistUnique (..)
-    , PersistQuery (..)
-    , KeyBackend (..)
-    , Key
-    , Entity (..)
+    ( module Database.Persist.Class
+    , module Database.Persist.Types
+
+      -- * Store functions
     , insertBy
     , getJust
     , belongsTo
     , belongsToJust
     , getByValue
-    , selectList
-    , deleteCascadeWhere
 
-    , SelectOpt (..)
-    , Filter (..)
-
-    -- * Query functions
+      -- * Query functions
     , selectList
     , selectKeysList
     , deleteCascadeWhere
 
-    -- * query combinators
+      -- * query combinators
     , (=.), (+=.), (-=.), (*=.), (/=.)
     , (==.), (!=.), (<.), (>.), (<=.), (>=.)
     , (<-.), (/<-.)
