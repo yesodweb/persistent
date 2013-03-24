@@ -1,5 +1,6 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Database.Persist.Class.PersistEntity
     ( PersistEntity (..)
     , Update (..)
@@ -13,6 +14,8 @@ module Database.Persist.Class.PersistEntity
 import Database.Persist.Types.Base
 import Database.Persist.Class.PersistField
 import Data.Text (Text)
+import Data.Aeson (ToJSON (..), FromJSON (..), object, (.:), (.=), Value (Object))
+import Control.Applicative ((<$>), (<*>))
 
 -- | A single database entity. For example, if writing a blog application, a
 -- blog entry would be an entry, containing fields such as title and content.
@@ -105,3 +108,14 @@ data Entity entity =
     Entity { entityKey :: Key entity
            , entityVal :: entity }
     deriving (Eq, Ord, Show, Read)
+
+instance ToJSON e => ToJSON (Entity e) where
+    toJSON (Entity k v) = object
+        [ "key" .= k
+        , "value" .= v
+        ]
+instance FromJSON e => FromJSON (Entity e) where
+    parseJSON (Object o) = Entity
+        <$> o .: "key"
+        <*> o .: "value"
+    parseJSON _ = fail "FromJSON Entity: not an object"
