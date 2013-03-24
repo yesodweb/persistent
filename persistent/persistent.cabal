@@ -70,6 +70,7 @@ library
                      Database.Persist.Sql.Types
                      Database.Persist.Sql.Class
 
+    other-modules:   Database.Persist.Types.Base
 
     ghc-options:     -Wall
 
@@ -90,6 +91,11 @@ test-suite test
                    , transformers
                    , path-pieces
                    , aeson
+                   , resourcet
+                   , monad-logger
+                   , conduit
+                   , monad-control
+                   , blaze-html
 
     cpp-options: -DTEST
 

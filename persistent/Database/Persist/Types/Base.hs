@@ -1,7 +1,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-module Database.Persist.Types where
+module Database.Persist.Types.Base where
 
 import qualified Data.Aeson as A
 import Control.Exception (Exception)

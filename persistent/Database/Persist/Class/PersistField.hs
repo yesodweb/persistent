@@ -9,7 +9,7 @@ module Database.Persist.Class.PersistField
     , SomePersistField (..)
     ) where
 
-import Database.Persist.Types
+import Database.Persist.Types.Base
 import Data.Monoid (mappend)
 import Data.Time (Day, TimeOfDay, UTCTime)
 import Data.Time.LocalTime (ZonedTime, zonedTimeToUTC, zonedTimeToLocalTime, zonedTimeZone)
@@ -18,6 +18,7 @@ import Control.Applicative
 import Data.Typeable (Typeable)
 import Data.Int (Int8, Int16, Int32, Int64)
 import Data.Word (Word8, Word16, Word32, Word64)
+import Data.Text (Text)
 
 import Text.Blaze.Html
 import Text.Blaze.Html.Renderer.Text (renderHtml)
@@ -28,7 +29,6 @@ import qualified Data.ByteString.Lazy as L
 
 import qualified Control.Exception as E
 import Control.Monad.Trans.Error (Error (..))
-import Database.Persist.EntityDef
 
 import Data.Bits (bitSize)
 import Control.Monad (liftM, (<=<))
@@ -294,12 +294,6 @@ instance PersistField v => PersistField (M.Map T.Text v) where
     fromPersistValue = fromPersistMap <=< getPersistMap
     sqlType _ = SqlString
 
-data SomePersistField = forall a. PersistField a => SomePersistField a
-instance PersistField SomePersistField where
-    toPersistValue (SomePersistField a) = toPersistValue a
-    fromPersistValue x = fmap SomePersistField (fromPersistValue x :: Either T.Text T.Text)
-    sqlType (SomePersistField a) = sqlType a
-
 instance PersistField PersistValue where
     toPersistValue = id
     fromPersistValue = Right
@@ -331,3 +325,9 @@ getPersistMap (PersistText t)  = getPersistMap (PersistByteString $ TE.encodeUtf
 getPersistMap (PersistByteString bs)
     | Just pairs <- A.decode' (L.fromChunks [bs]) = Right pairs
 getPersistMap x = Left $ T.pack $ "Expected PersistMap, received: " ++ show x
+
+data SomePersistField = forall a. PersistField a => SomePersistField a
+instance PersistField SomePersistField where
+    toPersistValue (SomePersistField a) = toPersistValue a
+    fromPersistValue x = fmap SomePersistField (fromPersistValue x :: Either Text Text)
+    sqlType (SomePersistField a) = sqlType a

@@ -1,9 +1,16 @@
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ExistentialQuantification #-}
-module Database.Persist.Class.PersistEntity where
+{-# LANGUAGE TypeFamilies #-}
+module Database.Persist.Class.PersistEntity
+    ( PersistEntity (..)
+    , Update (..)
+    , SelectOpt (..)
+    , BackendSpecificFilter
+    , Filter (..)
+    , Key
+    , Entity (..)
+    ) where
 
-import Database.Persist.Types
+import Database.Persist.Types.Base
 import Database.Persist.Class.PersistField
 import Data.Text (Text)
 
