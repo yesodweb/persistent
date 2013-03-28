@@ -22,16 +22,29 @@ module Database.Persist
     , (==.), (!=.), (<.), (>.), (<=.), (>=.)
     , (<-.), (/<-.)
     , (||.)
+
+      -- * JSON Utilities
+    , listToJSON
+    , mapToJSON
+    , getPersistMap
+
+      -- * Other utililities
+    , limitOffsetOrder
     ) where
 
 import Database.Persist.Types
 import Database.Persist.Class
+import Database.Persist.Class.PersistField (getPersistMap)
 import qualified Data.Text as T
 import qualified Control.Exception as E
 import Control.Monad (liftM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
+import Data.Text.Lazy (toStrict)
+import Data.Text.Lazy.Builder (toLazyText)
+import Data.Aeson (toJSON)
+import Data.Aeson.Encode (fromValue)
 
 -- | Insert a value, checking for conflicts with any unique constraints.  If a
 -- duplicate exists in the database, it is returned as 'Left'. Otherwise, the
@@ -144,3 +157,17 @@ selectKeysList a b = selectKeys a b C.$$ CL.consume
 deleteCascadeWhere :: (DeleteCascade a m, PersistQuery m)
                    => [Filter a] -> m ()
 deleteCascadeWhere filts = selectKeys filts [] C.$$ CL.mapM_ deleteCascade
+
+listToJSON :: [PersistValue] -> T.Text
+listToJSON = toStrict . toLazyText . fromValue . toJSON
+
+mapToJSON :: [(T.Text, PersistValue)] -> T.Text
+mapToJSON = toStrict . toLazyText . fromValue . toJSON
+
+limitOffsetOrder :: PersistEntity val => [SelectOpt val] -> (Int, Int, [SelectOpt val])
+limitOffsetOrder opts =
+    foldr go (0, 0, []) opts
+  where
+    go (LimitTo l) (_, b, c) = (l, b ,c)
+    go (OffsetBy o) (a, _, c) = (a, o, c)
+    go x (a, b, c) = (a, b, x : c)

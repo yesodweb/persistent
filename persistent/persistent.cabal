@@ -61,6 +61,7 @@ library
                      Database.Persist.Class.PersistStore
 
                      Database.Persist.Sql.Migration
+                     Database.Persist.Sql.Internal
                      Database.Persist.Sql.Types
                      Database.Persist.Sql.Raw
                      Database.Persist.Sql.Run

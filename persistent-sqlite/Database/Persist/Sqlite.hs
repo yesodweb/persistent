@@ -8,18 +8,13 @@ module Database.Persist.Sqlite
     ( withSqlitePool
     , withSqliteConn
     , createSqlitePool
-    , module Database.Persist
-    , module Database.Persist.GenericSql
+    , module Database.Persist.Sql
     , SqliteConf (..)
     , runSqlite
     , wrapConnection
     ) where
 
-import Database.Persist hiding (Entity (..))
-import Database.Persist.Store
-import Database.Persist.EntityDef
-import Database.Persist.GenericSql hiding (Key)
-import Database.Persist.GenericSql.Internal
+import Database.Persist.Sql
 
 import qualified Database.Sqlite as Sqlite
 
@@ -63,22 +58,22 @@ wrapConnection :: Sqlite.Connection -> IO Connection
 wrapConnection conn = do
     smap <- newIORef $ Map.empty
     return Connection
-        { prepare = prepare' conn
-        , stmtMap = smap
-        , insertSql = insertSql'
-        , close = Sqlite.close conn
-        , migrateSql = migrate'
-        , begin = helper "BEGIN"
-        , commitC = helper "COMMIT"
-        , rollbackC = ignoreExceptions . helper "ROLLBACK"
-        , escapeName = escape
-        , noLimit = "LIMIT -1"
+        { connPrepare = prepare' conn
+        , connStmtMap = smap
+        , connInsertSql = insertSql'
+        , connClose = Sqlite.close conn
+        , connMigrateSql = migrate'
+        , connBegin = helper "BEGIN"
+        , connCommit = helper "COMMIT"
+        , connRollback = ignoreExceptions . helper "ROLLBACK"
+        , connEscapeName = escape
+        , connNoLimit = "LIMIT -1"
         }
   where
     helper t getter = do
         stmt <- getter t
-        _ <- execute stmt []
-        reset stmt
+        _ <- stmtExecute stmt []
+        stmtReset stmt
     ignoreExceptions = E.handle (\(_ :: E.SomeException) -> return ())
 
 -- | A convenience helper which creates a new database connection and runs the
@@ -88,7 +83,7 @@ wrapConnection conn = do
 -- Since 1.1.4
 runSqlite :: (MonadBaseControl IO m, MonadIO m)
           => Text -- ^ connection string
-          -> SqlPersist (NoLoggingT (ResourceT m)) a -- ^ database action
+          -> SqlPersistT (NoLoggingT (ResourceT m)) a -- ^ database action
           -> m a
 runSqlite connstr = runResourceT
                   . runNoLoggingT
@@ -99,10 +94,10 @@ prepare' :: Sqlite.Connection -> Text -> IO Statement
 prepare' conn sql = do
     stmt <- Sqlite.prepare conn sql
     return Statement
-        { finalize = Sqlite.finalize stmt
-        , reset = Sqlite.reset conn stmt
-        , execute = execute' conn stmt
-        , withStmt = withStmt' conn stmt
+        { stmtFinalize = Sqlite.finalize stmt
+        , stmtReset = Sqlite.reset conn stmt
+        , stmtExecute = execute' conn stmt
+        , stmtQuery = withStmt' conn stmt
         }
 
 insertSql' :: DBName -> [DBName] -> DBName -> InsertSqlResult
@@ -145,7 +140,8 @@ withStmt' conn stmt vals = bracketP
                 cols <- liftIO $ Sqlite.columns stmt
                 yield cols
                 pull
-showSqlType :: SqlType -> String
+
+showSqlType :: SqlType -> Text
 showSqlType SqlString = "VARCHAR"
 showSqlType SqlInt32 = "INTEGER"
 showSqlType SqlInt64 = "INTEGER"
@@ -156,7 +152,7 @@ showSqlType SqlDayTimeZoned = "TIMESTAMP"
 showSqlType SqlDayTime = "TIMESTAMP"
 showSqlType SqlBlob = "BLOB"
 showSqlType SqlBool = "BOOLEAN"
-showSqlType (SqlOther t) = T.unpack t
+showSqlType (SqlOther t) = t
 
 migrate' :: PersistEntity val
          => [EntityDef]
@@ -168,7 +164,7 @@ migrate' allDefs getter val = do
     let newSql = mkCreateTable False def (cols, uniqs)
     stmt <- getter "SELECT sql FROM sqlite_master WHERE type='table' AND name=?"
     oldSql' <- runResourceT
-             $ withStmt stmt [PersistText $ unDBName table] $$ go
+             $ stmtQuery stmt [PersistText $ unDBName table] $$ go
     case oldSql' of
         Nothing -> return $ Right [(False, newSql)]
         Just oldSql ->
@@ -191,10 +187,10 @@ getCopyTable :: PersistEntity val
              => [EntityDef]
              -> (Text -> IO Statement)
              -> val
-             -> IO [(Bool, Sql)]
+             -> IO [(Bool, Text)]
 getCopyTable allDefs getter val = do
     stmt <- getter $ pack $ "PRAGMA table_info(" ++ escape' table ++ ")"
-    oldCols' <- runResourceT $ withStmt stmt [] $$ getCols
+    oldCols' <- runResourceT $ stmtQuery stmt [] $$ getCols
     let oldCols = map DBName $ filter (/= "id") oldCols' -- need to update for table id attribute ?
     let newCols = map cName cols
     let common = filter (`elem` oldCols) newCols
@@ -245,45 +241,43 @@ getCopyTable allDefs getter val = do
 escape' :: DBName -> String
 escape' = T.unpack . escape
 
-mkCreateTable :: Bool -> EntityDef -> ([Column], [UniqueDef]) -> Sql
-mkCreateTable isTemp entity (cols, uniqs) = pack $ concat
+mkCreateTable :: Bool -> EntityDef -> ([Column], [UniqueDef]) -> Text
+mkCreateTable isTemp entity (cols, uniqs) = T.concat
     [ "CREATE"
     , if isTemp then " TEMP" else ""
     , " TABLE "
-    , T.unpack $ escape $ entityDB entity
+    , escape $ entityDB entity
     , "("
-    , T.unpack $ escape $ entityID entity
+    , escape $ entityID entity
     , " INTEGER PRIMARY KEY"
-    , concatMap sqlColumn cols
-    , concatMap sqlUnique uniqs
+    , T.concat $ map sqlColumn cols
+    , T.concat $ map sqlUnique uniqs
     , ")"
     ]
 
-sqlColumn :: Column -> String
-sqlColumn (Column name isNull typ def _maxLen ref) = concat
+sqlColumn :: Column -> Text
+sqlColumn (Column name isNull typ def _maxLen ref) = T.concat
     [ ","
-    , T.unpack $ escape name
+    , escape name
     , " "
     , showSqlType typ
     , if isNull then " NULL" else " NOT NULL"
     , case def of
         Nothing -> ""
-        Just d -> " DEFAULT " ++ T.unpack d
+        Just d -> " DEFAULT " `T.append` d
     , case ref of
         Nothing -> ""
-        Just (table, _) -> " REFERENCES " ++ T.unpack (escape table)
+        Just (table, _) -> " REFERENCES " `T.append` escape table
     ]
 
-sqlUnique :: UniqueDef -> String
-sqlUnique (UniqueDef _ cname cols _) = concat
+sqlUnique :: UniqueDef -> Text
+sqlUnique (UniqueDef _ cname cols _) = T.concat
     [ ",CONSTRAINT "
-    , T.unpack $ escape cname
+    , escape cname
     , " UNIQUE ("
-    , intercalate "," $ map (T.unpack . escape . snd) cols
+    , T.intercalate "," $ map (escape . snd) cols
     , ")"
     ]
-
-type Sql = Text
 
 escape :: DBName -> Text
 escape (DBName s) =
@@ -300,7 +294,7 @@ data SqliteConf = SqliteConf
     }
 
 instance PersistConfig SqliteConf where
-    type PersistConfigBackend SqliteConf = SqlPersist
+    type PersistConfigBackend SqliteConf = SqlPersistT
     type PersistConfigPool SqliteConf = ConnectionPool
     createPoolConfig (SqliteConf cs size) = createSqlitePool cs size
     runPool _ = runSqlPool

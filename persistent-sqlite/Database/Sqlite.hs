@@ -34,7 +34,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Internal as BSI
 import Foreign
 import Foreign.C
-import Database.Persist.Store (PersistValue (..), listToJSON, mapToJSON, ZT (ZT))
+import Database.Persist (PersistValue (..), listToJSON, mapToJSON, ZT (ZT))
 import Data.Text (Text, pack, unpack)
 import Data.Text.Encoding (encodeUtf8, decodeUtf8With)
 import Data.Text.Encoding.Error (lenientDecode)

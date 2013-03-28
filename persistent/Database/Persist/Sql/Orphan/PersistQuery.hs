@@ -356,13 +356,5 @@ orderClause includeTable conn o =
             else id)
         $ connEscapeName conn $ fieldDB x
 
-limitOffsetOrder :: PersistEntity val => [SelectOpt val] -> (Int, Int, [SelectOpt val])
-limitOffsetOrder opts =
-    foldr go (0, 0, []) opts
-  where
-    go (LimitTo l) (_, b, c) = (l, b ,c)
-    go (OffsetBy o) (a, _, c) = (a, o, c)
-    go x (a, b, c) = (a, b, x : c)
-
 dummyFromKey :: KeyBackend SqlBackend v -> v
 dummyFromKey _ = error "dummyFromKey"

@@ -71,9 +71,6 @@ module Database.Persist.MongoDB
     ) where
 
 import Database.Persist
-import Database.Persist.EntityDef
-import Database.Persist.Store
-import Database.Persist.Query.Internal
 
 import qualified Control.Monad.IO.Class as Trans
 import Control.Exception (throw, throwIO)

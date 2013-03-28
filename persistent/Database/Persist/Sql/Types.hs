@@ -194,21 +194,3 @@ instance PathPiece (KeyBackend SqlBackend entity) where
 -- processing).
 newtype Single a = Single {unSingle :: a}
     deriving (Eq, Ord, Show, Read)
-
-instance PersistField Checkmark where
-    toPersistValue Active   = PersistBool True
-    toPersistValue Inactive = PersistNull
-    fromPersistValue PersistNull         = Right Inactive
-    fromPersistValue (PersistBool True)  = Right Active
-    fromPersistValue (PersistBool False) =
-      Left $ pack "PersistField Checkmark: found unexpected FALSE value"
-    fromPersistValue other =
-      Left $ pack $ "PersistField Checkmark: unknown value " ++ show other
-    sqlType    _ = SqlBool
-
-instance PathPiece Checkmark where
-    toPathPiece = pack . show
-    fromPathPiece txt =
-      case reads (T.unpack txt) of
-        [(a, "")] -> Just a
-        _         -> Nothing

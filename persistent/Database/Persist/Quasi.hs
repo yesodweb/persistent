@@ -6,6 +6,7 @@ module Database.Persist.Quasi
     , upperCaseSettings
     , lowerCaseSettings
     , stripId
+    , nullable
 #if TEST
     , Token (..)
     , tokenize
@@ -267,3 +268,9 @@ takeDerives _ = Nothing
 stripId :: FieldType -> Maybe Text
 stripId (FTTypeCon Nothing t) = T.stripSuffix "Id" t
 stripId _ = Nothing
+
+nullable :: [Text] -> IsNullable
+nullable s
+    | "Maybe"    `elem` s = Nullable ByMaybeAttr
+    | "nullable" `elem` s = Nullable ByNullableAttr
+    | otherwise = NotNullable

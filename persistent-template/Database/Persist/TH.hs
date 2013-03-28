@@ -34,13 +34,9 @@ module Database.Persist.TH
     ) where
 
 import Prelude hiding ((++), take, concat, splitAt)
-import Database.Persist.EntityDef
+import Database.Persist
+import Database.Persist.Sql (Migration, SqlPersistT, migrate, SqlBackend)
 import Database.Persist.Quasi
-import Database.Persist.Store
-import Database.Persist.Query.Internal
-import Database.Persist.GenericSql (Migration, SqlPersist, migrate)
-import Database.Persist.GenericSql.Raw (SqlBackend)
-import Database.Persist.Util (nullable, IsNullable(..), WhyNullable(..))
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
@@ -769,7 +765,7 @@ mkMigrate fun allDefs = do
             [ ClassP ''MonadBaseControl [ConT ''IO, VarT $ mkName "m"]
             , ClassP ''MonadIO [VarT $ mkName "m"]
             ]
-            $ ConT ''Migration `AppT` (ConT ''SqlPersist `AppT` VarT (mkName "m"))
+            $ ConT ''Migration `AppT` (ConT ''SqlPersistT `AppT` VarT (mkName "m"))
     body :: Q Exp
     body =
         case defs of

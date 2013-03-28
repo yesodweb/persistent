@@ -74,6 +74,13 @@ data Checkmark = Active
                  -- may be any number of 'Inactive' records.
     deriving (Eq, Ord, Read, Show, Enum, Bounded)
 
+instance PathPiece Checkmark where
+    toPathPiece = pack . show
+    fromPathPiece txt =
+      case reads (T.unpack txt) of
+        [(a, "")] -> Just a
+        _         -> Nothing
+
 data IsNullable = Nullable !WhyNullable
                 | NotNullable
                   deriving (Eq, Show)

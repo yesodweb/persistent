@@ -6,8 +6,7 @@ module Database.Persist.MySQL
     ( withMySQLPool
     , withMySQLConn
     , createMySQLPool
-    , module Database.Persist
-    , module Database.Persist.GenericSql
+    , module Database.Persist.Sql
     , MySQL.ConnectInfo(..)
     , MySQLBase.SSLInfo(..)
     , MySQL.defaultConnectInfo
@@ -35,11 +34,7 @@ import qualified Data.Map as Map
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 
-import Database.Persist hiding (Entity (..))
-import Database.Persist.Store
-import Database.Persist.GenericSql hiding (Key)
-import Database.Persist.GenericSql.Internal
-import Database.Persist.EntityDef
+import Database.Persist.Sql
 import Data.Int (Int64)
 
 import qualified Database.MySQL.Simple        as MySQL
@@ -98,16 +93,16 @@ open' ci = do
     MySQLBase.autocommit conn False -- disable autocommit!
     smap <- newIORef $ Map.empty
     return Connection
-        { prepare    = prepare' conn
-        , stmtMap    = smap
-        , insertSql  = insertSql'
-        , close      = MySQL.close conn
-        , migrateSql = migrate' ci
-        , begin      = const $ MySQL.execute_ conn "start transaction" >> return ()
-        , commitC    = const $ MySQL.commit   conn
-        , rollbackC  = const $ MySQL.rollback conn
-        , escapeName = pack . escapeDBName
-        , noLimit    = "LIMIT 18446744073709551615"
+        { connPrepare    = prepare' conn
+        , connStmtMap    = smap
+        , connInsertSql  = insertSql'
+        , connClose      = MySQL.close conn
+        , connMigrateSql = migrate' ci
+        , connBegin      = const $ MySQL.execute_ conn "start transaction" >> return ()
+        , connCommit     = const $ MySQL.commit   conn
+        , connRollback   = const $ MySQL.rollback conn
+        , connEscapeName = pack . escapeDBName
+        , connNoLimit    = "LIMIT 18446744073709551615"
         -- This noLimit is suggested by MySQL's own docs, see
         -- <http://dev.mysql.com/doc/refman/5.5/en/select.html>
         }
@@ -118,10 +113,10 @@ prepare' :: MySQL.Connection -> Text -> IO Statement
 prepare' conn sql = do
     let query = MySQL.Query (T.encodeUtf8 sql)
     return Statement
-        { finalize = return ()
-        , reset = return ()
-        , execute = execute' conn query
-        , withStmt = withStmt' conn query
+        { stmtFinalize = return ()
+        , stmtReset    = return ()
+        , stmtExecute  = execute' conn query
+        , stmtQuery    = withStmt' conn query
         }
 
 
@@ -319,11 +314,11 @@ addReference allDefs name = AddReference name id_
                     return (entityID entDef)
 
 data AlterColumn = Change Column
-                 | Add Column
+                 | Add' Column
                  | Drop
                  | Default String
                  | NoDefault
-                 | Update String
+                 | Update' String
                  | AddReference DBName DBName
                  | DropReference DBName
 
@@ -362,7 +357,7 @@ getColumns connectInfo getter def = do
                           \WHERE TABLE_SCHEMA = ? \
                             \AND TABLE_NAME   = ? \
                             \AND COLUMN_NAME  = ?"
-    inter1 <- runResourceT $ withStmt stmtIdClmn vals $$ CL.consume
+    inter1 <- runResourceT $ stmtQuery stmtIdClmn vals $$ CL.consume
     ids <- runResourceT $ CL.sourceList inter1 $$ helperClmns -- avoid nested queries
 
     -- Find out all columns.
@@ -374,7 +369,7 @@ getColumns connectInfo getter def = do
                         \WHERE TABLE_SCHEMA = ? \
                           \AND TABLE_NAME   = ? \
                           \AND COLUMN_NAME <> ?"
-    inter2 <- runResourceT $ withStmt stmtClmns vals $$ CL.consume
+    inter2 <- runResourceT $ stmtQuery stmtClmns vals $$ CL.consume
     cs <- runResourceT $ CL.sourceList inter2 $$ helperClmns -- avoid nested queries
 
     -- Find out the constraints.
@@ -387,7 +382,7 @@ getColumns connectInfo getter def = do
                           \AND REFERENCED_TABLE_SCHEMA IS NULL \
                         \ORDER BY CONSTRAINT_NAME, \
                                  \COLUMN_NAME"
-    us <- runResourceT $ withStmt stmtCntrs vals $$ helperCntrs
+    us <- runResourceT $ stmtQuery stmtCntrs vals $$ helperCntrs
 
     -- Return both
     return $ (ids, cs ++ us)
@@ -453,7 +448,7 @@ getColumn connectInfo getter tname [ PersistByteString cname
                  , PersistText $ unDBName $ tname
                  , PersistByteString cname
                  , PersistText $ pack $ MySQL.connectDatabase connectInfo ]
-      cntrs <- runResourceT $ withStmt stmt vars $$ CL.consume
+      cntrs <- runResourceT $ stmtQuery stmt vars $$ CL.consume
       ref <- case cntrs of
                [] -> return Nothing
                [[PersistByteString tab, PersistByteString ref]] ->
@@ -555,7 +550,7 @@ findAlters :: [EntityDef] -> Column -> [Column] -> ([AlterColumn'], [Column])
 findAlters allDefs col@(Column name isNull type_ def _maxLen ref) cols =
     case filter ((name ==) . cName) cols of
         [] -> ( let cnstr = [addReference allDefs tname | Just (tname, _) <- [ref]]
-                in map ((,) name) (Add col : cnstr)
+                in map ((,) name) (Add' col : cnstr)
               , cols )
         Column _ isNull' type_' def' _maxLen' ref':_ ->
             let -- Foreign key
@@ -662,7 +657,7 @@ showAlter table (oldName, Change (Column n nu t def maxLen _ref)) =
     , " "
     , showColumn (Column n nu t def maxLen Nothing)
     ]
-showAlter table (_, Add col) =
+showAlter table (_, Add' col) =
     concat
     [ "ALTER TABLE "
     , escapeDBName table
@@ -693,7 +688,7 @@ showAlter table (n, NoDefault) =
     , escapeDBName n
     , " DROP DEFAULT"
     ]
-showAlter table (n, Update s) =
+showAlter table (n, Update' s) =
     concat
     [ "UPDATE "
     , escapeDBName table
@@ -753,7 +748,7 @@ data MySQLConf = MySQLConf
 
 
 instance PersistConfig MySQLConf where
-    type PersistConfigBackend MySQLConf = SqlPersist
+    type PersistConfigBackend MySQLConf = SqlPersistT
 
     type PersistConfigPool    MySQLConf = ConnectionPool
 

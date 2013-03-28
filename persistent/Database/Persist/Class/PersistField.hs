@@ -7,6 +7,7 @@
 module Database.Persist.Class.PersistField
     ( PersistField (..)
     , SomePersistField (..)
+    , getPersistMap
     ) where
 
 import Database.Persist.Types.Base
@@ -331,3 +332,14 @@ instance PersistField SomePersistField where
     toPersistValue (SomePersistField a) = toPersistValue a
     fromPersistValue x = fmap SomePersistField (fromPersistValue x :: Either Text Text)
     sqlType (SomePersistField a) = sqlType a
+
+instance PersistField Checkmark where
+    toPersistValue Active   = PersistBool True
+    toPersistValue Inactive = PersistNull
+    fromPersistValue PersistNull         = Right Inactive
+    fromPersistValue (PersistBool True)  = Right Active
+    fromPersistValue (PersistBool False) =
+      Left $ T.pack "PersistField Checkmark: found unexpected FALSE value"
+    fromPersistValue other =
+      Left $ T.pack $ "PersistField Checkmark: unknown value " ++ show other
+    sqlType    _ = SqlBool

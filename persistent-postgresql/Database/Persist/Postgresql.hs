@@ -7,18 +7,13 @@ module Database.Persist.Postgresql
     ( withPostgresqlPool
     , withPostgresqlConn
     , createPostgresqlPool
-    , module Database.Persist
-    , module Database.Persist.GenericSql
+    , module Database.Persist.Sql
     , ConnectionString
     , PostgresConf (..)
     , openSimpleConn
     ) where
 
-import Database.Persist hiding (Entity (..))
-import Database.Persist.Store
-import Database.Persist.GenericSql hiding (Key)
-import Database.Persist.GenericSql.Internal
-import Database.Persist.EntityDef
+import Database.Persist.Sql
 import Data.Maybe (mapMaybe)
 
 import qualified Database.PostgreSQL.Simple as PG
@@ -111,26 +106,26 @@ openSimpleConn :: PG.Connection -> IO Connection
 openSimpleConn conn = do
     smap <- newIORef $ Map.empty
     return Connection
-        { prepare    = prepare' conn
-        , stmtMap    = smap
-        , insertSql  = insertSql'
-        , close      = PG.close conn
-        , migrateSql = migrate'
-        , begin      = const $ PG.begin    conn
-        , commitC    = const $ PG.commit   conn
-        , rollbackC  = const $ PG.rollback conn
-        , escapeName = escape
-        , noLimit    = "LIMIT ALL"
+        { connPrepare    = prepare' conn
+        , connStmtMap    = smap
+        , connInsertSql  = insertSql'
+        , connClose      = PG.close conn
+        , connMigrateSql = migrate'
+        , connBegin      = const $ PG.begin    conn
+        , connCommit     = const $ PG.commit   conn
+        , connRollback   = const $ PG.rollback conn
+        , connEscapeName = escape
+        , connNoLimit    = "LIMIT ALL"
         }
 
 prepare' :: PG.Connection -> Text -> IO Statement
 prepare' conn sql = do
     let query = PG.Query (T.encodeUtf8 sql)
     return Statement
-        { finalize = return ()
-        , reset = return ()
-        , execute = execute' conn query
-        , withStmt = withStmt' conn query
+        { stmtFinalize = return ()
+        , stmtReset = return ()
+        , stmtExecute = execute' conn query
+        , stmtQuery = withStmt' conn query
         }
 
 insertSql' :: DBName -> [DBName] -> DBName -> InsertSqlResult
@@ -310,8 +305,8 @@ migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
                     return $ Right $ acs' ++ ats'
         (errs, _) -> return $ Left errs
 
-data AlterColumn = Type SqlType | IsNull | NotNull | Add Column | Drop
-                 | Default String | NoDefault | Update String
+data AlterColumn = Type SqlType | IsNull | NotNull | Add' Column | Drop
+                 | Default String | NoDefault | Update' String
                  | AddReference DBName | DropReference DBName
 type AlterColumn' = (DBName, AlterColumn)
 
@@ -332,10 +327,10 @@ getColumns getter def = do
             [ PersistText $ unDBName $ entityDB def
             , PersistText $ unDBName $ entityID def
             ]
-    cs <- runResourceT $ withStmt stmt vals $$ helper
+    cs <- runResourceT $ stmtQuery stmt vals $$ helper
     stmt' <- getter
         "SELECT constraint_name, column_name FROM information_schema.constraint_column_usage WHERE table_name=? AND column_name <> ? ORDER BY constraint_name, column_name"
-    us <- runResourceT $ withStmt stmt' vals $$ helperU
+    us <- runResourceT $ stmtQuery stmt' vals $$ helperU
     return $ cs ++ us
   where
     getAll front = do
@@ -414,7 +409,7 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d] =
                 ]
         let ref = refName tname cname
         stmt <- getter sql
-        runResourceT $ withStmt stmt
+        runResourceT $ stmtQuery stmt
                      [ PersistText $ unDBName tname
                      , PersistText $ unDBName ref
                      ] $$ do
@@ -442,7 +437,7 @@ getColumn _ _ x =
 findAlters :: Column -> [Column] -> ([AlterColumn'], [Column])
 findAlters col@(Column name isNull type_ def _maxLen ref) cols =
     case filter (\c -> cName c == name) cols of
-        [] -> ([(name, Add col)], cols)
+        [] -> ([(name, Add' col)], cols)
         Column _ isNull' type_' def' _maxLen' ref':_ ->
             let refDrop Nothing = []
                 refDrop (Just (_, cname)) = [(name, DropReference cname)]
@@ -457,7 +452,7 @@ findAlters col@(Column name isNull type_ def _maxLen ref) cols =
                             (False, True) ->
                                 let up = case def of
                                             Nothing -> id
-                                            Just s -> (:) (name, Update $ T.unpack s)
+                                            Just s -> (:) (name, Update' $ T.unpack s)
                                  in up [(name, NotNull)]
                             _ -> []
                 modType = if type_ == type_' then [] else [(name, Type type_)]
@@ -478,7 +473,7 @@ getAddReference table (Column n _nu _t _def _maxLen ref) =
         Just (s, _) -> Just $ AlterColumn table (n, AddReference s)
 
 showColumn :: Column -> String
-showColumn (Column n nu t def _maxLen ref) = concat
+showColumn (Column n nu t def _maxLen _ref) = concat
     [ T.unpack $ escape n
     , " "
     , showSqlType t
@@ -554,7 +549,7 @@ showAlter table (n, NotNull) =
         , T.unpack $ escape n
         , " SET NOT NULL"
         ]
-showAlter table (_, Add col) =
+showAlter table (_, Add' col) =
     concat
         [ "ALTER TABLE "
         , T.unpack $ escape table
@@ -584,7 +579,7 @@ showAlter table (n, NoDefault) = concat
     , T.unpack $ escape n
     , " DROP DEFAULT"
     ]
-showAlter table (n, Update s) = concat
+showAlter table (n, Update' s) = concat
     [ "UPDATE "
     , T.unpack $ escape table
     , " SET "
@@ -631,7 +626,7 @@ data PostgresConf = PostgresConf
     }
 
 instance PersistConfig PostgresConf where
-    type PersistConfigBackend PostgresConf = SqlPersist
+    type PersistConfigBackend PostgresConf = SqlPersistT
     type PersistConfigPool PostgresConf = ConnectionPool
     createPoolConfig (PostgresConf cs size) = createPostgresqlPool cs size
     runPool _ = runSqlPool
