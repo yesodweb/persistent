@@ -30,7 +30,7 @@ module Database.Persist.TH
 
 import Prelude hiding ((++), take, concat, splitAt)
 import Database.Persist
-import Database.Persist.Sql (Migration, SqlPersistT, migrate, SqlBackend)
+import Database.Persist.Sql (Migration, SqlPersistT, migrate, SqlBackend, PersistFieldSql)
 import Database.Persist.Quasi
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
@@ -81,12 +81,12 @@ persistFileWith ps fp = do
 
 parseSqlType :: PersistSettings -> Text -> Q Exp
 parseSqlType ps s =
-    lift $ map getSqlType defsOrig
+    lift $ map (getSqlType defsOrig) defsOrig
   where
     defsOrig = parse ps s
 
-getSqlType :: EntityDef () -> EntityDef SqlTypeExp
-getSqlType ent =
+getSqlType :: [EntityDef ()] -> EntityDef () -> EntityDef SqlTypeExp
+getSqlType allEntities ent =
     ent
         { entityFields = map go $ entityFields ent
         }
@@ -94,17 +94,31 @@ getSqlType ent =
     go :: FieldDef () -> FieldDef SqlTypeExp
     go field = do
         field
-            { fieldSqlType = SqlTypeExp st
+            { fieldSqlType = final
             }
       where
+        -- In the case of embedding, there won't be any datatype created yet.
+        -- We just use SqlString, as the data will be serialized to JSON.
+        final
+            | isEmbedded (fieldType field) = SqlString'
+            | otherwise = SqlTypeExp st
+
+        isEmbedded (FTTypeCon Just{} _) = False
+        isEmbedded (FTTypeCon Nothing n) =
+            HaskellName n `elem` map entityHaskell allEntities
+        isEmbedded (FTList x) = isEmbedded x
+        isEmbedded (FTApp x y) = isEmbedded x || isEmbedded y
+
         typ = ftToType $ fieldType field
         mtyp = (ConT ''Maybe `AppT` typ)
         typedNothing = SigE (ConE 'Nothing) mtyp
         st = VarE 'sqlType `AppE` typedNothing
 
-newtype SqlTypeExp = SqlTypeExp Exp
+data SqlTypeExp = SqlTypeExp Exp
+                | SqlString'
 instance Lift SqlTypeExp where
     lift (SqlTypeExp e) = return e
+    lift SqlString' = [|SqlString|]
 
 -- | Create data types and appropriate 'PersistEntity' instances for the given
 -- 'EntityDef's. Works well with the persist quasi-quoter.
@@ -391,13 +405,6 @@ mkToValue func = FunD (mkName func) . degen . map go
                    (NormalB $ VarE (mkName "toPersistValue") `AppE` VarE x)
                    []
 
-mkHalfDefined :: Name -> Int -> Dec
-mkHalfDefined constr count' =
-        FunD (mkName "halfDefined")
-            [Clause [] (NormalB
-            $ foldl AppE (ConE constr)
-                    (replicate count' $ VarE 'error `AppE` LitE (StringL "mkHalfDefined"))) []]
-
 isNotNull :: PersistValue -> Bool
 isNotNull PersistNull = False
 isNotNull _ = True
@@ -537,11 +544,6 @@ mkEntity mps t = do
         , FunD (mkName "entityDef") [Clause [WildP] (NormalB t') []]
         , tpf
         , FunD (mkName "fromPersistValues") fpv
-        , mkHalfDefined
-            (if entitySum t
-                then sumConstrName t (head $ entityFields t)
-                else mkName nameS)
-            (if entitySum t then 1 else length $ entityFields t)
         , toFieldNames
         , utv
         , puk
@@ -587,11 +589,13 @@ persistFieldFromEntity mps e = do
     getPersistMap' <- [|getPersistMap|]
     return
         [ persistFieldInstanceD typ
-            [ sqlTypeFunD ss
-            , FunD (mkName "toPersistValue") [ Clause [] (NormalB obj) [] ]
+            [ FunD (mkName "toPersistValue") [ Clause [] (NormalB obj) [] ]
             , FunD (mkName "fromPersistValue")
                 [ Clause [] (NormalB $ InfixE (Just fpv) compose $ Just getPersistMap') []
                 ]
+            ]
+        , persistFieldSqlInstanceD typ
+            [ sqlTypeFunD ss
             ]
         ]
     where
@@ -720,12 +724,16 @@ mkUniqueKeys def = do
          in front `AppE` VarE col'
 
 sqlTypeFunD :: Exp -> Dec
-sqlTypeFunD st = FunD (mkName "sqlType")
+sqlTypeFunD st = FunD 'sqlType
                 [ Clause [WildP] (NormalB st) [] ]
 
 persistFieldInstanceD :: Type -> [Dec] -> Dec
 persistFieldInstanceD typ =
    InstanceD [] (ConT ''PersistField `AppT` typ)
+
+persistFieldSqlInstanceD :: Type -> [Dec] -> Dec
+persistFieldSqlInstanceD typ =
+   InstanceD [] (ConT ''PersistFieldSql `AppT` typ)
 
 -- | Automatically creates a valid 'PersistField' instance for any datatype
 -- that has valid 'Show' and 'Read' instances. Can be very convenient for
@@ -757,7 +765,7 @@ derivePersistField s = do
 -- defined here. One thing to be aware of is dependencies: if you have entities
 -- with foreign references, make sure to place those definitions after the
 -- entities they reference.
-mkMigrate :: String -> [EntityDef a] -> Q [Dec]
+mkMigrate :: Lift a => String -> [EntityDef a] -> Q [Dec]
 mkMigrate fun allDefs = do
     body' <- body
     return
@@ -782,15 +790,16 @@ mkMigrate fun allDefs = do
               defsStmt <- do
                 u <- [|error "mkMigrate.body"|]
                 e <- [|entityDef|]
-                let defsExp = ListE $ map (AppE e . undefinedEntityTH u) defs
+                defs' <- mapM lift defs
+                let defsExp = ListE defs'
                 return $ LetS [ValD (VarP defsName) (NormalB defsExp) []]
               stmts <- mapM (toStmt $ VarE defsName) defs
               return (DoE $ defsStmt : stmts)
-    toStmt :: Exp -> EntityDef a -> Q Stmt
+    toStmt :: Lift a => Exp -> EntityDef a -> Q Stmt
     toStmt defsExp ed = do
-        u <- [|error "mkMigrate.toStmt"|]
+        u <- lift ed
         m <- [|migrate|]
-        return $ NoBindS $ m `AppE` defsExp `AppE` (undefinedEntityTH u ed)
+        return $ NoBindS $ m `AppE` defsExp `AppE` u
     undefinedEntityTH :: Exp -> EntityDef a -> Exp
     undefinedEntityTH u = SigE u . ConT . mkName . unpack . unHaskellName . entityHaskell
 
