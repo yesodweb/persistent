@@ -202,10 +202,10 @@ runMongoDBPoolDef = runMongoDBPool (DB.ConfirmWrites ["j" DB.=: True])
 filterByKey :: (PersistEntity val) => KeyBackend MongoBackend val -> DB.Document
 filterByKey k = [_id DB.=: keyToOid k]
 
-queryByKey :: (PersistEntity val) => KeyBackend MongoBackend val -> EntityDef -> DB.Query 
+queryByKey :: (PersistEntity val) => KeyBackend MongoBackend val -> EntityDef a -> DB.Query 
 queryByKey k entity = (DB.select (filterByKey k) (unDBName $ entityDB entity)) 
 
-selectByKey :: (PersistEntity val) => KeyBackend MongoBackend val -> EntityDef -> DB.Selection 
+selectByKey :: (PersistEntity val) => KeyBackend MongoBackend val -> EntityDef a -> DB.Selection 
 selectByKey k entity = (DB.select (filterByKey k) (unDBName $ entityDB entity))
 
 updateFields :: (PersistEntity val) => [Update val] -> [DB.Field]
@@ -242,7 +242,7 @@ toInsertFields record = zipFilter (entityFields entity) (toPersistFields record)
     zipFilter (e:efields) (p:pfields) = let pv = toPersistValue p in
         if pv == PersistNull then zipFilter efields pfields
           else (toLabel e DB.:= DB.val pv):zipFilter efields pfields
-    entity = entityDef record
+    entity = entityDef $ Just record
 
 -- | convert a PersistEntity into document fields.
 -- unlike 'toInsertFields', nulls are included.
@@ -254,9 +254,9 @@ entityToFields record = zipIt (entityFields entity) (toPersistFields record)
     zipIt (e:efields) (p:pfields) =
       let pv = toPersistValue p
       in  (toLabel e DB.:= DB.val pv):zipIt efields pfields
-    entity = entityDef record
+    entity = entityDef $ Just record
 
-toLabel :: FieldDef -> Text
+toLabel :: FieldDef a -> Text
 toLabel = unDBName . fieldDB
 
 saveWithKey :: forall m record keyEntity. -- (Applicative m, Functor m, MonadBaseControl IO m,
@@ -269,7 +269,7 @@ saveWithKey :: forall m record keyEntity. -- (Applicative m, Functor m, MonadBas
 saveWithKey entToFields dbSave key record =
       dbSave (unDBName $ entityDB entity) ((keyToMongoIdField key):(entToFields record))
     where
-      entity = entityDef record
+      entity = entityDef $ Just record
 
 data MongoBackend
 
@@ -280,7 +280,7 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
         DB.ObjId oid <- DB.insert (unDBName $ entityDB entity) (toInsertFields record)
         return $ oidToKey oid 
       where
-        entity = entityDef record
+        entity = entityDef $ Just record
 
     insertKey k record = saveWithKey toInsertFields DB.insert_ k record
 
@@ -290,7 +290,7 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
         DB.replace (selectByKey k t) (toInsertFields record)
         return ()
       where
-        t = entityDef record
+        t = entityDef $ Just record
 
     delete k =
         DB.deleteOne DB.Select {
@@ -298,7 +298,7 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
         , DB.selector = filterByKey k
         }
       where
-        t = entityDef $ dummyFromKey k
+        t = entityDef $ Just $ dummyFromKey k
 
     get k = do
             d <- DB.findOne (queryByKey k t)
@@ -308,7 +308,7 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
                 Entity _ ent <- fromPersistValuesThrow t doc
                 return $ Just ent
           where
-            t = entityDef $ dummyFromKey k
+            t = entityDef $ Just $ dummyFromKey k
 
 instance MonadThrow m => MonadThrow (DB.Action m) where
     monadThrow = lift . monadThrow
@@ -321,7 +321,7 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
             Nothing -> return Nothing
             Just doc -> fmap Just $ fromPersistValuesThrow t doc
       where
-        t = entityDef $ dummyFromUnique uniq
+        t = entityDef $ Just $ dummyFromUnique uniq
 
     deleteBy uniq =
         DB.delete DB.Select {
@@ -329,7 +329,7 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
         , DB.selector = uniqSelector uniq
         }
       where
-        t = entityDef $ dummyFromUnique uniq
+        t = entityDef $ Just $ dummyFromUnique uniq
 
 _id :: T.Text
 _id = "_id"
@@ -363,7 +363,7 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
            (DB.Select [keyToMongoIdField key] (unDBName $ entityDB t))
            $ updateFields upds
       where
-        t = entityDef $ dummyFromKey key
+        t = entityDef $ Just $ dummyFromKey key
 
     updateGet key upds = do
         result <- findAndModifyOne (unDBName $ entityDB t)
@@ -375,7 +375,7 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
             return ent
       where
         err msg = Trans.liftIO $ throwIO $ KeyNotFound $ show key ++ msg
-        t = entityDef $ dummyFromKey key
+        t = entityDef $ Just $ dummyFromKey key
 
 
     updateWhere _ [] = return ()
@@ -385,7 +385,7 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
         , DB.selector = filtersToSelector filts
         } $ updateFields upds
       where
-        t = entityDef $ dummyFromFilts filts
+        t = entityDef $ Just $ dummyFromFilts filts
 
     deleteWhere filts = do
         DB.delete DB.Select {
@@ -393,14 +393,14 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
         , DB.selector = filtersToSelector filts
         }
       where
-        t = entityDef $ dummyFromFilts filts
+        t = entityDef $ Just $ dummyFromFilts filts
 
     count filts = do
         i <- DB.count query
         return $ fromIntegral i
       where
         query = DB.select (filtersToSelector filts) (unDBName $ entityDB t)
-        t = entityDef $ dummyFromFilts filts
+        t = entityDef $ Just $ dummyFromFilts filts
 
     selectSource filts opts = do
         cursor <- lift $ DB.find $ makeQuery filts opts
@@ -414,7 +414,7 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
                     entity <- fromPersistValuesThrow t doc
                     yield entity
                     pull cursor
-        t = entityDef $ dummyFromFilts filts
+        t = entityDef $ Just $ dummyFromFilts filts
 
     selectFirst filts opts = do
         mdoc <- DB.findOne $ makeQuery filts opts
@@ -422,7 +422,7 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
             Nothing -> return Nothing
             Just doc -> fmap Just $ fromPersistValuesThrow t doc
       where
-        t = entityDef $ dummyFromFilts filts
+        t = entityDef $ Just $ dummyFromFilts filts
 
     selectKeys filts opts = do
         cursor <- lift $ DB.find $ (makeQuery filts opts) {
@@ -454,7 +454,7 @@ makeQuery filts opts =
     , DB.sort  = orders
     }
   where
-    t = entityDef $ dummyFromFilts filts
+    t = entityDef $ Just $ dummyFromFilts filts
     (limit, offset, orders') = limitOffsetOrder opts
     orders = map orderClause orders'
 
@@ -508,7 +508,7 @@ fieldName = idfix . unDBName . fieldDB . persistFieldDef
 docToEntityEither :: forall record. (PersistEntity record) => DB.Document -> Either T.Text (Entity record)
 docToEntityEither doc = entity
   where
-    entDef = entityDef (getType entity)
+    entDef = entityDef $ Just (getType entity)
     entity = eitherFromPersistValues entDef doc
     getType :: Either err (Entity ent) -> ent
     getType = error "docToEntityEither/getType: never here"
@@ -520,13 +520,13 @@ docToEntityThrow doc =
         Right entity -> return entity
 
 
-fromPersistValuesThrow :: (Trans.MonadIO m, PersistEntity record) => EntityDef -> [DB.Field] -> m (Entity record)
+fromPersistValuesThrow :: (Trans.MonadIO m, PersistEntity record) => EntityDef a -> [DB.Field] -> m (Entity record)
 fromPersistValuesThrow entDef doc = 
     case eitherFromPersistValues entDef doc of
         Left s -> Trans.liftIO . throwIO $ PersistMarshalError $ s
         Right entity -> return entity
 
-eitherFromPersistValues :: (PersistEntity record) => EntityDef -> [DB.Field] -> Either T.Text (Entity record)
+eitherFromPersistValues :: (PersistEntity record) => EntityDef a -> [DB.Field] -> Either T.Text (Entity record)
 eitherFromPersistValues entDef doc =
     -- normally the id is the first field: this is probably best even if worst case is worse
     let mKey = lookup _id castDoc

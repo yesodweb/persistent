@@ -25,8 +25,11 @@ setup = setupMongo
 import Database.Persist.Sql (printMigration, runMigrationUnsafe)
 
 setup migration = do
+  liftIO $ putStrLn "setup1"
   printMigration migration
+  liftIO $ putStrLn "setup2"
   runMigrationUnsafe migration
+  liftIO $ putStrLn "setup3"
 #endif
 
 toExitCode :: Bool -> ExitCode

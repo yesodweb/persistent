@@ -204,11 +204,11 @@ updateWhereCount filts upds = do
     go' conn (x, pu) = go'' (connEscapeName conn x) pu
     go x = (fieldDB $ updateFieldDef x, updateUpdate x)
 
-updateFieldDef :: PersistEntity v => Update v -> FieldDef
+updateFieldDef :: PersistEntity v => Update v -> FieldDef SqlType
 updateFieldDef (Update f _ _) = persistFieldDef f
 
-dummyFromFilts :: [Filter v] -> v
-dummyFromFilts _ = error "dummyFromFilts"
+dummyFromFilts :: [Filter v] -> Maybe v
+dummyFromFilts _ = Nothing
 
 getFiltsValues :: forall val.  PersistEntity val => Connection -> [Filter val] -> [PersistValue]
 getFiltsValues conn = snd . filterClauseHelper False False conn OrNullNo
@@ -345,8 +345,8 @@ orderClause includeTable conn o =
         Desc x -> name (persistFieldDef x) <> " DESC"
         _ -> error $ "orderClause: expected Asc or Desc, not limit or offset"
   where
-    dummyFromOrder :: SelectOpt a -> a
-    dummyFromOrder _ = error "orderClause.dummyFromOrder"
+    dummyFromOrder :: SelectOpt a -> Maybe a
+    dummyFromOrder _ = Nothing
 
     tn = connEscapeName conn $ entityDB $ entityDef $ dummyFromOrder o
 
@@ -356,5 +356,5 @@ orderClause includeTable conn o =
             else id)
         $ connEscapeName conn $ fieldDB x
 
-dummyFromKey :: KeyBackend SqlBackend v -> v
-dummyFromKey _ = error "dummyFromKey"
+dummyFromKey :: KeyBackend SqlBackend v -> Maybe v
+dummyFromKey _ = Nothing

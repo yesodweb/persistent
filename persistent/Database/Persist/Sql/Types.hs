@@ -44,10 +44,9 @@ data Connection = Connection
     , connStmtMap :: IORef (Map Text Statement)
     , connClose :: IO ()
     , connMigrateSql
-        :: forall v. PersistEntity v
-        => [EntityDef]
+        :: [EntityDef SqlType]
         -> (Text -> IO Statement)
-        -> v
+        -> EntityDef SqlType
         -> IO (Either [Text] [(Bool, Text)])
     , connBegin :: (Text -> IO Statement) -> IO ()
     , connCommit :: (Text -> IO Statement) -> IO ()
@@ -68,7 +67,8 @@ data Statement = Statement
 data Column = Column
     { cName      :: DBName
     , cNull      :: Bool
-    , cType      :: SqlType
+    , cType      :: FieldType
+    , cSqlType   :: SqlType
     , cDefault   :: Maybe Text
     , cMaxLen    :: Maybe Integer
     , cReference :: (Maybe (DBName, DBName)) -- table name, constraint name

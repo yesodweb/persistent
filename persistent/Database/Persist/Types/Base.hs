@@ -1,4 +1,5 @@
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 module Database.Persist.Types.Base where
@@ -94,18 +95,18 @@ data WhyNullable = ByMaybeAttr
                  | ByNullableAttr
                   deriving (Eq, Show)
 
-data EntityDef = EntityDef
+data EntityDef sqlType = EntityDef
     { entityHaskell :: HaskellName
     , entityDB      :: DBName
     , entityID      :: DBName
     , entityAttrs   :: [Attr]
-    , entityFields  :: [FieldDef]
+    , entityFields  :: [FieldDef sqlType]
     , entityUniques :: [UniqueDef]
     , entityDerives :: [Text]
     , entityExtra   :: Map Text [ExtraLine]
     , entitySum     :: Bool
     }
-    deriving (Show, Eq, Read, Ord)
+    deriving (Show, Eq, Read, Ord, Functor)
 
 type ExtraLine = [Text]
 
@@ -122,13 +123,14 @@ data FieldType
     | FTList FieldType
   deriving (Show, Eq, Read, Ord)
 
-data FieldDef = FieldDef
+data FieldDef sqlType = FieldDef
     { fieldHaskell :: HaskellName
     , fieldDB      :: DBName
     , fieldType    :: FieldType
+    , fieldSqlType :: sqlType
     , fieldAttrs   :: [Attr]
     }
-    deriving (Show, Eq, Read, Ord)
+    deriving (Show, Eq, Read, Ord, Functor)
 
 data UniqueDef = UniqueDef
     { uniqueHaskell :: HaskellName

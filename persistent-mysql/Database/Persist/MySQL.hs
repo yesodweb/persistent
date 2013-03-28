@@ -251,15 +251,15 @@ getGetter other = error $ "MySQL.getGetter: type " ++
 
 -- | Create the migration plan for the given 'PersistEntity'
 -- @val@.
-migrate' :: PersistEntity val
+migrate' :: Show a
          => MySQL.ConnectInfo
-         -> [EntityDef]
+         -> [EntityDef a]
          -> (Text -> IO Statement)
-         -> val
+         -> EntityDef SqlType
          -> IO (Either [Text] [(Bool, Text)])
 migrate' connectInfo allDefs getter val = do
-    let name = entityDB $ entityDef val
-    (idClmn, old) <- getColumns connectInfo getter $ entityDef val
+    let name = entityDB val
+    (idClmn, old) <- getColumns connectInfo getter val
     let new = second (map udToPair) $ mkColumns allDefs val
     case (idClmn, old, partitionEithers old) of
       -- Nothing found, create everything
@@ -268,7 +268,7 @@ migrate' connectInfo allDefs getter val = do
                 [ "CREATE TABLE "
                 , escapeDBName name
                 , "("
-                , escapeDBName $ entityID $ entityDef val
+                , escapeDBName $ entityID val
                 , " BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY"
                 , concatMap (\x -> ',' : showColumn x) $ fst new
                 , ")"
@@ -278,7 +278,7 @@ migrate' connectInfo allDefs getter val = do
                         AddUniqueConstraint uname $
                         map (findTypeOfColumn allDefs name) ucols ]
         let foreigns = do
-              Column cname _ _ _ _ (Just (refTblName, _)) <- fst new
+              Column cname _ _ _ _ _ (Just (refTblName, _)) <- fst new
               return $ AlterColumn name (cname, addReference allDefs refTblName)
         return $ Right $ map showAlterDb $ addTable : uniques ++ foreigns
       -- No errors and something found, migrate
@@ -292,7 +292,7 @@ migrate' connectInfo allDefs getter val = do
 
 
 -- | Find out the type of a column.
-findTypeOfColumn :: [EntityDef] -> DBName -> DBName -> (DBName, FieldType)
+findTypeOfColumn :: Show a => [EntityDef a] -> DBName -> DBName -> (DBName, FieldType)
 findTypeOfColumn allDefs name col =
     maybe (error $ "Could not find type of column " ++
                    show col ++ " on table " ++ show name ++
@@ -304,7 +304,7 @@ findTypeOfColumn allDefs name col =
 
 
 -- | Helper for 'AddRefence' that finds out the 'entityID'.
-addReference :: [EntityDef] -> DBName -> AlterColumn
+addReference :: Show a => [EntityDef a] -> DBName -> AlterColumn
 addReference allDefs name = AddReference name id_
     where
       id_ = maybe (error $ "Could not find ID of entity " ++ show name
@@ -343,7 +343,7 @@ udToPair ud = (uniqueDBName ud, map snd $ uniqueFields ud)
 -- in the database.
 getColumns :: MySQL.ConnectInfo
            -> (Text -> IO Statement)
-           -> EntityDef
+           -> EntityDef a
            -> IO ( [Either Text (Either Column (DBName, [DBName]))] -- ID column
                  , [Either Text (Either Column (DBName, [DBName]))] -- everything else
                  )
@@ -456,7 +456,14 @@ getColumn connectInfo getter tname [ PersistByteString cname
                _ -> fail "MySQL.getColumn/getRef: never here"
 
       -- Okay!
-      return $ Column (DBName $ T.decodeUtf8 cname) (null_ == "YES") type_ default_ Nothing ref -- FIXME: maxLen
+      return Column
+        { cName = DBName $ T.decodeUtf8 cname
+        , cNull = null_ == "YES"
+        , cSqlType = type_
+        , cDefault = default_
+        , cMaxLen = Nothing -- FIXME: maxLen
+        , cReference = ref
+        }
 
 getColumn _ _ _ x =
     return $ Left $ pack $ "Invalid result from INFORMATION_SCHEMA: " ++ show x
@@ -509,7 +516,8 @@ parseType other        = fail $ "MySQL.parseType: type " ++
 
 -- | @getAlters allDefs tblName new old@ finds out what needs to
 -- be changed from @old@ to become @new@.
-getAlters :: [EntityDef]
+getAlters :: Show a
+          => [EntityDef a]
           -> DBName
           -> ([Column], [(DBName, [DBName])])
           -> ([Column], [(DBName, [DBName])])
@@ -546,13 +554,13 @@ getAlters allDefs tblName (c1, u1) (c2, u2) =
 -- | @findAlters newColumn oldColumns@ finds out what needs to be
 -- changed in the columns @oldColumns@ for @newColumn@ to be
 -- supported.
-findAlters :: [EntityDef] -> Column -> [Column] -> ([AlterColumn'], [Column])
-findAlters allDefs col@(Column name isNull type_ def _maxLen ref) cols =
+findAlters :: Show a => [EntityDef a] -> Column -> [Column] -> ([AlterColumn'], [Column])
+findAlters allDefs col@(Column name isNull _ft type_ def _maxLen ref) cols =
     case filter ((name ==) . cName) cols of
         [] -> ( let cnstr = [addReference allDefs tname | Just (tname, _) <- [ref]]
                 in map ((,) name) (Add' col : cnstr)
               , cols )
-        Column _ isNull' type_' def' _maxLen' ref':_ ->
+        Column _ isNull' _ft type_' def' _maxLen' ref':_ ->
             let -- Foreign key
                 refDrop = case (ref == ref', ref') of
                             (False, Just (_, cname)) -> [(name, DropReference cname)]
@@ -578,7 +586,7 @@ findAlters allDefs col@(Column name isNull type_ def _maxLen ref) cols =
 -- | Prints the part of a @CREATE TABLE@ statement about a given
 -- column.
 showColumn :: Column -> String
-showColumn (Column n nu t def maxLen ref) = concat
+showColumn (Column n nu _ft t def maxLen ref) = concat
     [ escapeDBName n
     , " "
     , showSqlType t maxLen
@@ -648,14 +656,14 @@ showAlterTable table (DropUniqueConstraint cname) = concat
 
 -- | Render an action that must be done on a column.
 showAlter :: DBName -> AlterColumn' -> String
-showAlter table (oldName, Change (Column n nu t def maxLen _ref)) =
+showAlter table (oldName, Change (Column n nu ft t def maxLen _ref)) =
     concat
     [ "ALTER TABLE "
     , escapeDBName table
     , " CHANGE "
     , escapeDBName oldName
     , " "
-    , showColumn (Column n nu t def maxLen Nothing)
+    , showColumn (Column n nu ft t def maxLen Nothing)
     ]
 showAlter table (_, Add' col) =
     concat

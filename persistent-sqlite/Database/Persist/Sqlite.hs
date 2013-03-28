@@ -154,27 +154,35 @@ showSqlType SqlBlob = "BLOB"
 showSqlType SqlBool = "BOOLEAN"
 showSqlType (SqlOther t) = t
 
-migrate' :: PersistEntity val
-         => [EntityDef]
+migrate' :: [EntityDef a]
          -> (Text -> IO Statement)
-         -> val
+         -> EntityDef SqlType
          -> IO (Either [Text] [(Bool, Text)])
 migrate' allDefs getter val = do
+    putStrLn "migrate' 1"
     let (cols, uniqs) = mkColumns allDefs val
     let newSql = mkCreateTable False def (cols, uniqs)
     stmt <- getter "SELECT sql FROM sqlite_master WHERE type='table' AND name=?"
+    putStrLn "migrate' 2"
     oldSql' <- runResourceT
              $ stmtQuery stmt [PersistText $ unDBName table] $$ go
+    putStrLn "migrate' 3"
     case oldSql' of
-        Nothing -> return $ Right [(False, newSql)]
-        Just oldSql ->
+        Nothing -> do
+            putStrLn "migrate' 4"
+            print newSql
+            return $ Right [(False, newSql)]
+        Just oldSql -> do
+            putStrLn "migrate' 5"
             if oldSql == newSql
                 then return $ Right []
                 else do
                     sql <- getCopyTable allDefs getter val
+                    putStrLn "printing sql"
+                    print sql
                     return $ Right sql
   where
-    def = entityDef val
+    def = val
     table = entityDB def
     go = do
         x <- CL.head
@@ -183,10 +191,9 @@ migrate' allDefs getter val = do
             Just [PersistText y] -> return $ Just y
             Just y -> error $ "Unexpected result from sqlite_master: " ++ show y
 
-getCopyTable :: PersistEntity val
-             => [EntityDef]
+getCopyTable :: [EntityDef a]
              -> (Text -> IO Statement)
-             -> val
+             -> EntityDef SqlType
              -> IO [(Bool, Text)]
 getCopyTable allDefs getter val = do
     stmt <- getter $ pack $ "PRAGMA table_info(" ++ escape' table ++ ")"
@@ -194,7 +201,7 @@ getCopyTable allDefs getter val = do
     let oldCols = map DBName $ filter (/= "id") oldCols' -- need to update for table id attribute ?
     let newCols = map cName cols
     let common = filter (`elem` oldCols) newCols
-    let id_ = entityID $ entityDef val
+    let id_ = entityID val
     return [ (False, tmpSql)
            , (False, copyToTemp $ id_ : common)
            , (common /= oldCols, pack dropOld)
@@ -203,7 +210,7 @@ getCopyTable allDefs getter val = do
            , (False, pack dropTmp)
            ]
   where
-    def = entityDef val
+    def = val
     getCols = do
         x <- CL.head
         case x of
@@ -241,7 +248,7 @@ getCopyTable allDefs getter val = do
 escape' :: DBName -> String
 escape' = T.unpack . escape
 
-mkCreateTable :: Bool -> EntityDef -> ([Column], [UniqueDef]) -> Text
+mkCreateTable :: Bool -> EntityDef a -> ([Column], [UniqueDef]) -> Text
 mkCreateTable isTemp entity (cols, uniqs) = T.concat
     [ "CREATE"
     , if isTemp then " TEMP" else ""
@@ -256,7 +263,7 @@ mkCreateTable isTemp entity (cols, uniqs) = T.concat
     ]
 
 sqlColumn :: Column -> Text
-sqlColumn (Column name isNull typ def _maxLen ref) = T.concat
+sqlColumn (Column name isNull _ft typ def _maxLen ref) = T.concat
     [ ","
     , escape name
     , " "

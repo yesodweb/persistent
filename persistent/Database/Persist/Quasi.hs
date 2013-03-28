@@ -91,7 +91,7 @@ lowerCaseSettings = PersistSettings
     }
 
 -- | Parses a quasi-quoted syntax into a list of entity definitions.
-parse :: PersistSettings -> Text -> [EntityDef]
+parse :: PersistSettings -> Text -> [EntityDef ()]
 parse ps = parseLines ps
       . removeSpaces
       . filter (not . empty)
@@ -170,7 +170,7 @@ removeSpaces =
     fromToken Spaces{}  = Nothing
 
 -- | Divide lines into blocks and make entity definitions.
-parseLines :: PersistSettings -> [Line] -> [EntityDef]
+parseLines :: PersistSettings -> [Line] -> [EntityDef ()]
 parseLines ps lines =
     toEnts lines
   where
@@ -185,7 +185,7 @@ mkEntityDef :: PersistSettings
             -> Text -- ^ name
             -> [Attr] -- ^ entity attributes
             -> [Line] -- ^ indented lines
-            -> EntityDef
+            -> EntityDef ()
 mkEntityDef ps name entattribs lines =
     EntityDef
         (HaskellName name')
@@ -208,7 +208,7 @@ mkEntityDef ps name entattribs lines =
     uniqs = mapMaybe (takeUniqs ps cols) attribs
     derives = concat $ mapMaybe takeDerives attribs
 
-    cols :: [FieldDef]
+    cols :: [FieldDef ()]
     cols = mapMaybe (takeCols ps) attribs
 
 splitExtras :: [Line] -> ([[Text]], M.Map Text [[Text]])
@@ -222,17 +222,19 @@ splitExtras (Line _ ts:rest) =
     let (x, y) = splitExtras rest
      in (ts:x, y)
 
-takeCols :: PersistSettings -> [Text] -> Maybe FieldDef
+takeCols :: PersistSettings -> [Text] -> Maybe (FieldDef ())
 takeCols _ ("deriving":_) = Nothing
 takeCols ps (n:typ:rest)
     | not (T.null n) && isLower (T.head n) =
         case parseFieldType typ of
             Nothing -> error $ "Invalid field type: " ++ show typ
-            Just ft -> Just $ FieldDef
-                (HaskellName n)
-                (DBName $ getDbName ps n rest)
-                ft
-                rest
+            Just ft -> Just FieldDef
+                { fieldHaskell = HaskellName n
+                , fieldDB = DBName $ getDbName ps n rest
+                , fieldType = ft
+                , fieldSqlType = ()
+                , fieldAttrs = rest
+                }
 takeCols _ _ = Nothing
 
 getDbName :: PersistSettings -> Text -> [Text] -> Text
@@ -243,7 +245,7 @@ getDbName ps n (a:as) =
       Just s  -> s
 
 takeUniqs :: PersistSettings
-          -> [FieldDef]
+          -> [FieldDef a]
           -> [Text]
           -> Maybe UniqueDef
 takeUniqs ps defs (n:rest)

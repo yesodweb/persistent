@@ -1,9 +1,15 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
+#ifndef NO_OVERLAP
+{-# LANGUAGE OverlappingInstances #-}
+#endif
 module Database.Persist.Sql.Class
     ( MonadSqlPersist (..)
     , RawSql (..)
+    , PersistFieldSql (..)
     ) where
 
 import Control.Applicative ((<$>), (<*>))
@@ -36,6 +42,17 @@ import qualified Control.Monad.Trans.Writer.Strict as Strict ( WriterT )
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Class (MonadTrans)
 import Control.Monad.Logger (MonadLogger)
+
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
+import qualified Data.Map as M
+import qualified Data.Set as S
+import Data.Time (ZonedTime, UTCTime, TimeOfDay, Day)
+import Data.Int
+import Data.Word
+import Data.ByteString (ByteString)
+import Text.Blaze.Html (Html)
+import Data.Bits (bitSize)
 
 class (MonadIO m, MonadLogger m) => MonadSqlPersist m where
     askSqlConn :: m Connection
@@ -88,7 +105,7 @@ instance PersistField a => RawSql (Single a) where
     rawSqlProcessRow _     = Left $ pack "RawSql (Single a): wrong number of columns."
 
 instance PersistEntity a => RawSql (Entity a) where
-    rawSqlCols escape = ((+1) . length . entityFields &&& process) . entityDef . entityVal
+    rawSqlCols escape = ((+1) . length . entityFields &&& process) . entityDef . Just . entityVal
         where
           process ed = (:[]) $
                        intercalate ", " $
@@ -221,3 +238,66 @@ to8 ((a,b),(c,d),(e,f),(g,h)) = (a,b,c,d,e,f,g,h)
 
 extractMaybe :: Maybe a -> a
 extractMaybe = fromMaybe (error "Database.Persist.GenericSql.extractMaybe")
+
+class PersistField a => PersistFieldSql a where
+    sqlType :: Monad m => m a -> SqlType
+
+#ifndef NO_OVERLAP
+instance PersistFieldSql String where
+    sqlType _ = SqlString
+#endif
+
+instance PersistFieldSql ByteString where
+    sqlType _ = SqlBlob
+instance PersistFieldSql T.Text where
+    sqlType _ = SqlString
+instance PersistFieldSql TL.Text where
+    sqlType _ = SqlString
+instance PersistFieldSql Html where
+    sqlType _ = SqlString
+instance PersistFieldSql Int where
+    sqlType _
+        | bitSize (0 :: Int) <= 32 = SqlInt32
+        | otherwise = SqlInt64
+instance PersistFieldSql Int8 where
+    sqlType _ = SqlInt32
+instance PersistFieldSql Int16 where
+    sqlType _ = SqlInt32
+instance PersistFieldSql Int32 where
+    sqlType _ = SqlInt32
+instance PersistFieldSql Int64 where
+    sqlType _ = SqlInt64
+instance PersistFieldSql Word where
+    sqlType _ = SqlInt64
+instance PersistFieldSql Word8 where
+    sqlType _ = SqlInt32
+instance PersistFieldSql Word16 where
+    sqlType _ = SqlInt32
+instance PersistFieldSql Word32 where
+    sqlType _ = SqlInt64
+instance PersistFieldSql Word64 where
+    sqlType _ = SqlInt64
+instance PersistFieldSql Double where
+    sqlType _ = SqlReal
+instance PersistFieldSql Bool where
+    sqlType _ = SqlBool
+instance PersistFieldSql Day where
+    sqlType _ = SqlDay
+instance PersistFieldSql TimeOfDay where
+    sqlType _ = SqlTime
+instance PersistFieldSql UTCTime where
+    sqlType _ = SqlDayTime
+instance PersistFieldSql ZonedTime where
+    sqlType _ = SqlDayTimeZoned
+instance PersistFieldSql a => PersistFieldSql [a] where
+    sqlType _ = SqlString
+instance (Ord a, PersistFieldSql a) => PersistFieldSql (S.Set a) where
+    sqlType _ = SqlString
+instance (PersistFieldSql a, PersistFieldSql b) => PersistFieldSql (a,b) where
+    sqlType _ = SqlString
+instance PersistFieldSql v => PersistFieldSql (M.Map T.Text v) where
+    sqlType _ = SqlString
+instance PersistFieldSql PersistValue where
+    sqlType _ = SqlInt64 -- since PersistValue should only be used like this for keys, which in SQL are Int64
+instance PersistFieldSql Checkmark where
+    sqlType    _ = SqlBool

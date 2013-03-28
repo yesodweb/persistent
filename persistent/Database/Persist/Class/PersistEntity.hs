@@ -22,17 +22,16 @@ import Control.Applicative ((<$>), (<*>))
 class PersistEntity val where
     -- | Parameters: val and datatype of the field
     data EntityField val :: * -> *
-    persistFieldDef :: EntityField val typ -> FieldDef
+    persistFieldDef :: EntityField val typ -> FieldDef SqlType
 
     type PersistEntityBackend val
 
     -- | Unique keys in existence on this entity.
     data Unique val
 
-    entityDef :: val -> EntityDef
+    entityDef :: Monad m => m val -> EntityDef SqlType
     toPersistFields :: val -> [SomePersistField]
     fromPersistValues :: [PersistValue] -> Either Text val
-    halfDefined :: val
 
     persistUniqueToFieldNames :: Unique val -> [(HaskellName, DBName)]
     persistUniqueToValues :: Unique val -> [PersistValue]

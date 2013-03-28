@@ -21,7 +21,7 @@ import Data.ByteString.Char8 (ByteString, unpack)
 import Control.Applicative
 import Data.Typeable (Typeable)
 import Data.Int (Int8, Int16, Int32, Int64)
-import Data.Word (Word8, Word16, Word32, Word64)
+import Data.Word (Word, Word8, Word16, Word32, Word64)
 import Data.Text (Text)
 
 import Text.Blaze.Html
@@ -87,7 +87,6 @@ import qualified Control.Monad.Trans.Writer.Strict as Strict ( WriterT )
 class PersistField a where
     toPersistValue :: a -> PersistValue
     fromPersistValue :: PersistValue -> Either T.Text a
-    sqlType :: a -> SqlType
 
 #ifndef NO_OVERLAP
 instance PersistField String where
@@ -106,98 +105,85 @@ instance PersistField String where
     fromPersistValue (PersistList _) = Left $ T.pack "Cannot convert PersistList to String"
     fromPersistValue (PersistMap _) = Left $ T.pack "Cannot convert PersistMap to String"
     fromPersistValue (PersistObjectId _) = Left $ T.pack "Cannot convert PersistObjectId to String"
-    sqlType _ = SqlString
 #endif
 
 instance PersistField ByteString where
     toPersistValue = PersistByteString
     fromPersistValue (PersistByteString bs) = Right bs
     fromPersistValue x = T.encodeUtf8 <$> fromPersistValue x
-    sqlType _ = SqlBlob
 
 instance PersistField T.Text where
     toPersistValue = PersistText
     fromPersistValue = either (Left . T.pack) Right . fromPersistValueText
-    sqlType _ = SqlString
 
 instance PersistField TL.Text where
     toPersistValue = toPersistValue . TL.toStrict
     fromPersistValue = fmap TL.fromStrict . fromPersistValue
-    sqlType _ = SqlString
 
 instance PersistField Html where
     toPersistValue = PersistText . TL.toStrict . renderHtml
     fromPersistValue = fmap (preEscapedToMarkup :: T.Text -> Html) . fromPersistValue
-    sqlType _ = SqlString
 
 instance PersistField Int where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ T.pack $ "Expected Integer, received: " ++ show x
-    sqlType x = case bitSize x of
-                    32 -> SqlInt32
-                    _ -> SqlInt64
 
 instance PersistField Int8 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ T.pack $ "Expected Integer, received: " ++ show x
-    sqlType _ = SqlInt32
 
 instance PersistField Int16 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ T.pack $ "Expected Integer, received: " ++ show x
-    sqlType _ = SqlInt32
 
 instance PersistField Int32 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ T.pack $ "Expected Integer, received: " ++ show x
-    sqlType _ = SqlInt32
 
 instance PersistField Int64 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ T.pack $ "Expected Integer, received: " ++ show x
-    sqlType _ = SqlInt64
+
+instance PersistField Word where
+    toPersistValue = PersistInt64 . fromIntegral
+    fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
+    fromPersistValue x = Left $ T.pack $ "Expected Word, received: " ++ show x
 
 instance PersistField Word8 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ T.pack $ "Expected Word, received: " ++ show x
-    sqlType _ = SqlInt32
 
 instance PersistField Word16 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ T.pack $ "Expected Word, received: " ++ show x
-    sqlType _ = SqlInt32
 
 instance PersistField Word32 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ T.pack $ "Expected Word, received: " ++ show x
-    sqlType _ = SqlInt64
 
 instance PersistField Word64 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ T.pack $ "Expected Word, received: " ++ show x
-    sqlType _ = SqlInt64
 
 instance PersistField Double where
     toPersistValue = PersistDouble
     fromPersistValue (PersistDouble d) = Right d
     fromPersistValue x = Left $ T.pack $ "Expected Double, received: " ++ show x
-    sqlType _ = SqlReal
 
 instance PersistField Bool where
     toPersistValue = PersistBool
     fromPersistValue (PersistBool b) = Right b
     fromPersistValue (PersistInt64 i) = Right $ i /= 0
     fromPersistValue x = Left $ T.pack $ "Expected Bool, received: " ++ show x
-    sqlType _ = SqlBool
 
 instance PersistField Day where
     toPersistValue = PersistDay
@@ -211,7 +197,6 @@ instance PersistField Day where
             (d, _):_ -> Right d
             _ -> Left $ T.pack $ "Expected Day, received " ++ show x
     fromPersistValue x = Left $ T.pack $ "Expected Day, received: " ++ show x
-    sqlType _ = SqlDay
 
 instance PersistField TimeOfDay where
     toPersistValue = PersistTimeOfDay
@@ -225,7 +210,6 @@ instance PersistField TimeOfDay where
             (d, _):_ -> Right d
             _ -> Left $ T.pack $ "Expected TimeOfDay, received " ++ show x
     fromPersistValue x = Left $ T.pack $ "Expected TimeOfDay, received: " ++ show x
-    sqlType _ = SqlTime
 
 instance PersistField UTCTime where
     toPersistValue = PersistUTCTime
@@ -239,7 +223,6 @@ instance PersistField UTCTime where
             (d, _):_ -> Right d
             _ -> Left $ T.pack $ "Expected UTCTime, received " ++ show x
     fromPersistValue x = Left $ T.pack $ "Expected UTCTime, received: " ++ show x
-    sqlType _ = SqlDayTime
 
 instance PersistField ZonedTime where
     toPersistValue = PersistZonedTime . ZT
@@ -253,15 +236,12 @@ instance PersistField ZonedTime where
             (z, _):_ -> Right z
             _ -> Left $ T.pack $ "Expected ZonedTime, received " ++ show x
     fromPersistValue x = Left $ T.pack $ "Expected ZonedTime, received: " ++ show x
-    sqlType _ = SqlDayTimeZoned
 
 instance PersistField a => PersistField (Maybe a) where
     toPersistValue Nothing = PersistNull
     toPersistValue (Just a) = toPersistValue a
     fromPersistValue PersistNull = Right Nothing
     fromPersistValue x = fmap Just $ fromPersistValue x
-    sqlType (Just a) = sqlType a
-    sqlType ma@Nothing = sqlType (Just (error "Database.Persist.Class.PersistField.Maybe") `asTypeOf` ma)
 
 instance PersistField a => PersistField [a] where
     toPersistValue = PersistList . map toPersistValue
@@ -270,7 +250,6 @@ instance PersistField a => PersistField [a] where
     fromPersistValue (PersistByteString bs)
         | Just values <- A.decode' (L.fromChunks [bs]) = fromPersistList values
     fromPersistValue x = Left $ T.pack $ "Expected PersistList, received: " ++ show x
-    sqlType _ = SqlString
 
 instance (Ord a, PersistField a) => PersistField (S.Set a) where
     toPersistValue = PersistList . map toPersistValue . S.toList
@@ -281,7 +260,6 @@ instance (Ord a, PersistField a) => PersistField (S.Set a) where
         | Just values <- A.decode' (L.fromChunks [bs]) =
             either Left (Right . S.fromList) $ fromPersistList values
     fromPersistValue x = Left $ T.pack $ "Expected PersistSet, received: " ++ show x
-    sqlType _ = SqlString
 
 instance (PersistField a, PersistField b) => PersistField (a,b) where
     toPersistValue (x,y) = PersistList [toPersistValue x, toPersistValue y]
@@ -291,17 +269,14 @@ instance (PersistField a, PersistField b) => PersistField (a,b) where
         (Left e, _) -> Left e
         (_, Left e) -> Left e
     fromPersistValue x = Left $ T.pack $ "Expected 2 item PersistList, received: " ++ show x
-    sqlType _ = SqlString
 
 instance PersistField v => PersistField (M.Map T.Text v) where
     toPersistValue = PersistMap . map (\(k,v) -> (k, toPersistValue v)) . M.toList
     fromPersistValue = fromPersistMap <=< getPersistMap
-    sqlType _ = SqlString
 
 instance PersistField PersistValue where
     toPersistValue = id
     fromPersistValue = Right
-    sqlType _ = SqlInt64 -- since PersistValue should only be used like this for keys, which in SQL are Int64
 
 deriving instance PersistField (KeyBackend backend entity)
 
@@ -334,7 +309,6 @@ data SomePersistField = forall a. PersistField a => SomePersistField a
 instance PersistField SomePersistField where
     toPersistValue (SomePersistField a) = toPersistValue a
     fromPersistValue x = fmap SomePersistField (fromPersistValue x :: Either Text Text)
-    sqlType (SomePersistField a) = sqlType a
 
 instance PersistField Checkmark where
     toPersistValue Active   = PersistBool True
@@ -345,4 +319,3 @@ instance PersistField Checkmark where
       Left $ T.pack "PersistField Checkmark: found unexpected FALSE value"
     fromPersistValue other =
       Left $ T.pack $ "PersistField Checkmark: unknown value " ++ show other
-    sqlType    _ = SqlBool

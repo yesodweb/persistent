@@ -14,29 +14,29 @@ import qualified Data.Text as T
 import Data.Monoid (Monoid, mappend, mconcat)
 import Data.Maybe (mapMaybe, listToMaybe)
 import Database.Persist.Sql.Types
+import Database.Persist.Sql.Class
 
 -- | Create the list of columns for the given entity.
-mkColumns :: PersistEntity val => [EntityDef] -> val -> ([Column], [UniqueDef])
-mkColumns allDefs val =
+mkColumns :: [EntityDef a] -> EntityDef SqlType -> ([Column], [UniqueDef])
+mkColumns allDefs t =
     (cols, entityUniques t)
   where
     cols :: [Column]
-    cols = zipWith go (entityFields t)
-         $ toPersistFields
-         $ halfDefined `asTypeOf` val
-
-    t :: EntityDef
-    t = entityDef val
+    cols = map go (entityFields t)
 
     tn :: DBName
     tn = entityDB t
 
-    go :: FieldDef -> SomePersistField -> Column
-    go fd p =
+    go :: FieldDef SqlType -> Column
+    go fd =
         Column
             (fieldDB fd)
             (nullable (fieldAttrs fd) /= NotNullable || entitySum t)
-            (maybe (sqlType p) SqlOther $ listToMaybe $ mapMaybe (T.stripPrefix "sqltype=") $ fieldAttrs fd)
+            (fieldType fd)
+            (maybe
+                (fieldSqlType fd)
+                SqlOther
+                (listToMaybe $ mapMaybe (T.stripPrefix "sqltype=") $ fieldAttrs fd))
             (def $ fieldAttrs fd)
             (maxLen $ fieldAttrs fd)
             (ref (fieldDB fd) (fieldType fd) (fieldAttrs fd))
@@ -75,7 +75,7 @@ refName :: DBName -> DBName -> DBName
 refName (DBName table) (DBName column) =
     DBName $ mconcat [table, "_", column, "_fkey"]
 
-resolveTableName :: [EntityDef] -> HaskellName -> DBName
+resolveTableName :: [EntityDef a] -> HaskellName -> DBName
 resolveTableName [] (HaskellName hn) = error $ "Table not found: " `mappend` T.unpack hn
 resolveTableName (e:es) hn
     | entityHaskell e == hn = entityDB e

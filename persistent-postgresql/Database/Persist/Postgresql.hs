@@ -270,14 +270,13 @@ getGetter other   = error $ "Postgresql.getGetter: type " ++
 unBinary :: PG.Binary a -> a
 unBinary (PG.Binary x) = x
 
-migrate' :: PersistEntity val
-         => [EntityDef]
+migrate' :: [EntityDef a]
          -> (Text -> IO Statement)
-         -> val
+         -> EntityDef SqlType
          -> IO (Either [Text] [(Bool, Text)])
 migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
-    let name = entityDB $ entityDef val
-    old <- getColumns getter $ entityDef val
+    let name = entityDB val
+    old <- getColumns getter val
     case partitionEithers old of
         ([], old'') -> do
             let old' = partitionEithers old''
@@ -289,7 +288,7 @@ migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
                             [ "CREATe TABLE "
                             , T.unpack $ escape name
                             , "("
-                            , T.unpack $ escape $ entityID $ entityDef val
+                            , T.unpack $ escape $ entityID val
                             , " SERIAL PRIMARY KEY UNIQUE"
                             , concatMap (\x -> ',' : showColumn x) $ fst new
                             , ")"
@@ -319,7 +318,7 @@ data AlterDB = AddTable String
 
 -- | Returns all of the columns in the given table currently in the database.
 getColumns :: (Text -> IO Statement)
-           -> EntityDef
+           -> EntityDef a
            -> IO [Either Text (Either Column (DBName, [DBName]))]
 getColumns getter def = do
     stmt <- getter "SELECT column_name,is_nullable,udt_name,column_default FROM information_schema.columns WHERE table_name=? AND column_name <> ?"
@@ -397,7 +396,14 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d] =
                 Right t -> do
                     let cname = DBName x
                     ref <- getRef cname
-                    return $ Right $ Column cname (y == "YES") t d'' Nothing ref
+                    return $ Right Column
+                        { cName = cname
+                        , cNull = y == "YES"
+                        , cSqlType = t
+                        , cDefault = d''
+                        , cMaxLen = Nothing
+                        , cReference = ref
+                        }
   where
     getRef cname = do
         let sql = pack $ concat
@@ -435,10 +441,10 @@ getColumn _ _ x =
     return $ Left $ pack $ "Invalid result from information_schema: " ++ show x
 
 findAlters :: Column -> [Column] -> ([AlterColumn'], [Column])
-findAlters col@(Column name isNull type_ def _maxLen ref) cols =
+findAlters col@(Column name isNull type_ sqltype def _maxLen ref) cols =
     case filter (\c -> cName c == name) cols of
         [] -> ([(name, Add' col)], cols)
-        Column _ isNull' type_' def' _maxLen' ref':_ ->
+        Column _ isNull' type_' sqltype' def' _maxLen' ref':_ ->
             let refDrop Nothing = []
                 refDrop (Just (_, cname)) = [(name, DropReference cname)]
                 refAdd Nothing = []
@@ -455,7 +461,7 @@ findAlters col@(Column name isNull type_ def _maxLen ref) cols =
                                             Just s -> (:) (name, Update' $ T.unpack s)
                                  in up [(name, NotNull)]
                             _ -> []
-                modType = if type_ == type_' then [] else [(name, Type type_)]
+                modType = if sqltype == sqltype' then [] else [(name, Type sqltype)]
                 modDef =
                     if def == def'
                         then []
@@ -467,16 +473,16 @@ findAlters col@(Column name isNull type_ def _maxLen ref) cols =
 
 -- | Get the references to be added to a table for the given column.
 getAddReference :: DBName -> Column -> Maybe AlterDB
-getAddReference table (Column n _nu _t _def _maxLen ref) =
+getAddReference table (Column n _nu _t _ _def _maxLen ref) =
     case ref of
         Nothing -> Nothing
         Just (s, _) -> Just $ AlterColumn table (n, AddReference s)
 
 showColumn :: Column -> String
-showColumn (Column n nu t def _maxLen _ref) = concat
+showColumn (Column n nu t sqlType def _maxLen _ref) = concat
     [ T.unpack $ escape n
     , " "
-    , showSqlType t
+    , showSqlType sqlType
     , " "
     , if nu then "NULL" else "NOT NULL"
     , case def of
