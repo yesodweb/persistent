@@ -1,49 +1,63 @@
-module Database.Persist.Sql.Orphan.PersistUnique where
+{-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+module Database.Persist.Sql.Orphan.PersistUnique () where
 
 import Database.Persist
+import Database.Persist.Sql.Types
+import Database.Persist.Sql.Class
+import Database.Persist.Sql.Raw
+import Database.Persist.Sql.Orphan.PersistStore ()
+import qualified Data.Text as T
+import Data.Monoid ((<>))
+import Control.Monad.Logger
+import qualified Data.Conduit.List as CL
+import Data.Conduit
 
-instance (C.MonadResource m, MonadLogger m) => PersistUnique (SqlPersist m) where
+instance (MonadResource m, MonadLogger m) => PersistUnique (SqlPersistT m) where
     deleteBy uniq = do
-        conn <- SqlPersist ask
+        conn <- askSqlConn
         let sql' = sql conn
             vals = persistUniqueToValues uniq
-        execute' sql' vals
+        rawExecute sql' vals
       where
         t = entityDef $ dummyFromUnique uniq
         go = map snd . persistUniqueToFieldNames
-        go' conn x = escapeName conn x ++ "=?"
-        sql conn = concat
+        go' conn x = connEscapeName conn x <> "=?"
+        sql conn = T.concat
             [ "DELETE FROM "
-            , escapeName conn $ entityDB t
+            , connEscapeName conn $ entityDB t
             , " WHERE "
             , T.intercalate " AND " $ map (go' conn) $ go uniq
             ]
 
     getBy uniq = do
-        conn <- SqlPersist ask
-        let cols = T.intercalate "," $ (escapeName conn $ entityID t)
-                 : map (escapeName conn . fieldDB) (entityFields t)
-        let sql = concat
+        conn <- askSqlConn
+        let cols = T.intercalate "," $ (connEscapeName conn $ entityID t)
+                 : map (connEscapeName conn . fieldDB) (entityFields t)
+        let sql = T.concat
                 [ "SELECT "
                 , cols
                 , " FROM "
-                , escapeName conn $ entityDB t
+                , connEscapeName conn $ entityDB t
                 , " WHERE "
                 , sqlClause conn
                 ]
             vals' = persistUniqueToValues uniq
-        R.withStmt sql vals' C.$$ do
+        rawQuery sql vals' $$ do
             row <- CL.head
             case row of
                 Nothing -> return Nothing
                 Just (PersistInt64 k:vals) ->
                     case fromPersistValues vals of
-                        Left s -> error $ unpack s
+                        Left s -> error $ T.unpack s
                         Right x -> return $ Just (Entity (Key $ PersistInt64 k) x)
                 Just _ -> error "Database.Persist.GenericSql: Bad list in getBy"
       where
         sqlClause conn =
             T.intercalate " AND " $ map (go conn) $ toFieldNames' uniq
-        go conn x = escapeName conn x ++ "=?"
+        go conn x = connEscapeName conn x <> "=?"
         t = entityDef $ dummyFromUnique uniq
         toFieldNames' = map snd . persistUniqueToFieldNames
+
+dummyFromUnique :: Unique v -> v
+dummyFromUnique _ = error "dummyFromUnique"
