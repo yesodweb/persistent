@@ -9,8 +9,8 @@
 module Database.Persist.Sql.Types where
 
 import Control.Exception (Exception)
-import Control.Monad.Trans.Resource (MonadResource (..), MonadThrow (..))
-import Control.Monad.Logger (MonadLogger (..))
+import Control.Monad.Trans.Resource (MonadResource (..), MonadThrow (..), ResourceT)
+import Control.Monad.Logger (MonadLogger (..), NoLoggingT)
 import Control.Monad.Trans.Control
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.IO.Class (MonadIO (..))
@@ -22,41 +22,47 @@ import Control.Monad (MonadPlus (..))
 import Data.Typeable (Typeable)
 import Control.Monad (liftM)
 import Database.Persist.Types
-import Data.Text (Text)
+import Data.Text (Text, pack)
+import qualified Data.Text as T
 import Data.IORef (IORef)
 import Data.Map (Map)
-import Database.Persist.Class.PersistEntity (PersistEntity)
+import Database.Persist
 import Data.Int (Int64)
 import Data.Conduit (Source)
 import Data.Conduit.Pool (Pool)
+import Web.PathPieces
+import Control.Exception (throw)
+import qualified Data.Text.Read
 
 data InsertSqlResult = ISRSingle Text
                      | ISRInsertGet Text Text
 
 data Connection = Connection
-    { prepare :: Text -> IO Statement
-    -- ^ table name, column names, id name, either 1 or 2 statements to run
-    , insertSql :: DBName -> [DBName] -> DBName -> InsertSqlResult
-    , stmtMap :: IORef (Map Text Statement)
-    , close :: IO ()
-    , migrateSql :: forall v. PersistEntity v
-                 => [EntityDef]
-                 -> (Text -> IO Statement)
-                 -> v
-                 -> IO (Either [Text] [(Bool, Text)])
-    , begin :: (Text -> IO Statement) -> IO ()
-    , commitC :: (Text -> IO Statement) -> IO ()
-    , rollbackC :: (Text -> IO Statement) -> IO ()
-    , escapeName :: DBName -> Text
-    , noLimit :: Text
+    { connPrepare :: Text -> IO Statement
+    -- | table name, column names, id name, either 1 or 2 statements to run
+    , connInsertSql :: DBName -> [DBName] -> DBName -> InsertSqlResult
+    , connStmtMap :: IORef (Map Text Statement)
+    , connClose :: IO ()
+    , connMigrateSql
+        :: forall v. PersistEntity v
+        => [EntityDef]
+        -> (Text -> IO Statement)
+        -> v
+        -> IO (Either [Text] [(Bool, Text)])
+    , connBegin :: (Text -> IO Statement) -> IO ()
+    , connCommit :: (Text -> IO Statement) -> IO ()
+    , connRollback :: (Text -> IO Statement) -> IO ()
+    , connEscapeName :: DBName -> Text
+    , connNoLimit :: Text
     }
+
 data Statement = Statement
-    { finalize :: IO ()
-    , reset :: IO ()
-    , execute :: [PersistValue] -> IO Int64
-    , withStmt :: forall m. MonadResource m
-               => [PersistValue]
-               -> Source m [PersistValue]
+    { stmtFinalize :: IO ()
+    , stmtReset :: IO ()
+    , stmtExecute :: [PersistValue] -> IO Int64
+    , stmtQuery :: forall m. MonadResource m
+                => [PersistValue]
+                -> Source m [PersistValue]
     }
 
 data Column = Column
@@ -75,28 +81,33 @@ instance Exception StatementAlreadyFinalized
 
 data SqlBackend
 
-newtype SqlPersist m a = SqlPersist { unSqlPersist :: ReaderT Connection m a }
+newtype SqlPersistT m a = SqlPersistT { unSqlPersistT :: ReaderT Connection m a }
     deriving (Monad, MonadIO, MonadTrans, Functor, Applicative, MonadPlus)
 
-instance MonadThrow m => MonadThrow (SqlPersist m) where
+type SqlPersist = SqlPersistT
+{-# DEPRECATED SqlPersist "Please use SqlPersistT instead" #-}
+
+type SqlPersistM = SqlPersistT (NoLoggingT (ResourceT IO))
+
+instance MonadThrow m => MonadThrow (SqlPersistT m) where
     monadThrow = lift . monadThrow
 
-instance MonadBase backend m => MonadBase backend (SqlPersist m) where
+instance MonadBase backend m => MonadBase backend (SqlPersistT m) where
     liftBase = lift . liftBase
 
-instance MonadBaseControl backend m => MonadBaseControl backend (SqlPersist m) where
-     newtype StM (SqlPersist m) a = StMSP {unStMSP :: ComposeSt SqlPersist m a}
+instance MonadBaseControl backend m => MonadBaseControl backend (SqlPersistT m) where
+     newtype StM (SqlPersistT m) a = StMSP {unStMSP :: ComposeSt SqlPersistT m a}
      liftBaseWith = defaultLiftBaseWith StMSP
      restoreM     = defaultRestoreM   unStMSP
-instance MonadTransControl SqlPersist where
-    newtype StT SqlPersist a = StReader {unStReader :: a}
-    liftWith f = SqlPersist $ ReaderT $ \r -> f $ \t -> liftM StReader $ runReaderT (unSqlPersist t) r
-    restoreT = SqlPersist . ReaderT . const . liftM unStReader
+instance MonadTransControl SqlPersistT where
+    newtype StT SqlPersistT a = StReader {unStReader :: a}
+    liftWith f = SqlPersistT $ ReaderT $ \r -> f $ \t -> liftM StReader $ runReaderT (unSqlPersistT t) r
+    restoreT = SqlPersistT . ReaderT . const . liftM unStReader
 
-instance MonadResource m => MonadResource (SqlPersist m) where
+instance MonadResource m => MonadResource (SqlPersistT m) where
     liftResourceT = lift . liftResourceT
 
-instance MonadLogger m => MonadLogger (SqlPersist m) where
+instance MonadLogger m => MonadLogger (SqlPersistT m) where
     monadLoggerLog a b c = lift . monadLoggerLog a b c
 
 type Sql = Text
@@ -107,3 +118,97 @@ type CautiousMigration = [(Bool, Sql)]
 type Migration m = WriterT [Text] (WriterT CautiousMigration m) ()
 
 type ConnectionPool = Pool Connection
+
+instance PathPiece (KeyBackend SqlBackend entity) where
+    toPathPiece (Key (PersistInt64 i)) = toPathPiece i
+    toPathPiece k = throw $ PersistInvalidField $ pack $ "Invalid Key: " ++ show k
+    fromPathPiece t =
+        case Data.Text.Read.signed Data.Text.Read.decimal t of
+            Right (i, t') | T.null t' -> Just $ Key $ PersistInt64 i
+            _ -> Nothing
+
+
+-- $rawSql
+--
+-- Although it covers most of the useful cases, @persistent@'s
+-- API may not be enough for some of your tasks.  May be you need
+-- some complex @JOIN@ query, or a database-specific command
+-- needs to be issued.
+--
+-- To issue raw SQL queries you could use 'R.withStmt', which
+-- allows you to do anything you need.  However, its API is
+-- /low-level/ and you need to parse each row yourself.  However,
+-- most of your complex queries will have simple results -- some
+-- of your entities and maybe a couple of derived columns.
+--
+-- This is where 'rawSql' comes in.  Like 'R.withStmt', you may
+-- issue /any/ SQL query.  However, it does all the hard work for
+-- you and automatically parses the rows of the result.  It may
+-- return:
+--
+--   * An 'Entity', that which 'selectList' returns.
+--     All of your entity's fields are
+--     automatically parsed.
+--
+--   * A @'Single' a@, which is a single, raw column of type @a@.
+--     You may use a Haskell type (such as in your entity
+--     definitions), for example @Single Text@ or @Single Int@,
+--     or you may get the raw column value with @Single
+--     'PersistValue'@.
+--
+--   * A tuple combining any of these (including other tuples).
+--     Using tuples allows you to return many entities in one
+--     query.
+--
+-- The only difference between issuing SQL queries with 'rawSql'
+-- and using other means is that we have an /entity selection/
+-- /placeholder/, the double question mark @??@.  It /must/ be
+-- used whenever you want to @SELECT@ an 'Entity' from your
+-- query.  Here's a sample SQL query @sampleStmt@ that may be
+-- issued:
+--
+-- @
+-- SELECT ??, ??
+-- FROM \"Person\", \"Likes\", \"Object\"
+-- WHERE \"Person\".id = \"Likes\".\"personId\"
+-- AND \"Object\".id = \"Likes\".\"objectId\"
+-- AND \"Person\".name LIKE ?
+-- @
+--
+-- To use that query, you could say
+--
+-- @
+-- do results <- 'rawSql' sampleStmt [\"%Luke%\"]
+--    forM_ results $
+--      \\( Entity personKey person
+--       , Entity objectKey object
+--       ) -> do ...
+-- @
+--
+-- Note that 'rawSql' knows how to replace the double question
+-- marks @??@ because of the type of the @results@.
+
+
+-- | A single column (see 'rawSql').  Any 'PersistField' may be
+-- used here, including 'PersistValue' (which does not do any
+-- processing).
+newtype Single a = Single {unSingle :: a}
+    deriving (Eq, Ord, Show, Read)
+
+instance PersistField Checkmark where
+    toPersistValue Active   = PersistBool True
+    toPersistValue Inactive = PersistNull
+    fromPersistValue PersistNull         = Right Inactive
+    fromPersistValue (PersistBool True)  = Right Active
+    fromPersistValue (PersistBool False) =
+      Left $ pack "PersistField Checkmark: found unexpected FALSE value"
+    fromPersistValue other =
+      Left $ pack $ "PersistField Checkmark: unknown value " ++ show other
+    sqlType    _ = SqlBool
+
+instance PathPiece Checkmark where
+    toPathPiece = pack . show
+    fromPathPiece txt =
+      case reads (T.unpack txt) of
+        [(a, "")] -> Just a
+        _         -> Nothing

@@ -47,15 +47,12 @@ library
     exposed-modules: Database.Persist
                      Database.Persist.Quasi
                      Database.Persist.GenericSql
-                     Database.Persist.GenericSql.Raw
                      Database.Persist.GenericSql.Migration
                      Database.Persist.Query.GenericSql
-                     Database.Persist.GenericSql.Internal
 
                      Database.Persist.Types
                      Database.Persist.Class
-                     Database.Persist.Sql.Types
-                     Database.Persist.Sql.Class
+                     Database.Persist.Sql
 
     other-modules:   Database.Persist.Types.Base
                      Database.Persist.Class.DeleteCascade
@@ -65,6 +62,14 @@ library
                      Database.Persist.Class.PersistConfig
                      Database.Persist.Class.PersistField
                      Database.Persist.Class.PersistStore
+
+                     Database.Persist.Sql.Types
+                     Database.Persist.Sql.Raw
+                     Database.Persist.Sql.Run
+                     Database.Persist.Sql.Class
+                     Database.Persist.Sql.Orphan.PersistQuery
+                     Database.Persist.Sql.Orphan.PersistStore
+                     Database.Persist.Sql.Orphan.PersistUnique
 
     ghc-options:     -Wall
 

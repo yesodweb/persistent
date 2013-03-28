@@ -1,23 +1,17 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 module Database.Persist.GenericSql.Migration
-  (   Migration
-    , parseMigration
-    , parseMigration'
-    , printMigration
-    , getMigration
-    , runMigration
-    , runMigrationSilent
-    , runMigrationUnsafe
-    , migrate
-    , commit
-    , rollback
+  ( parseMigration
+  , parseMigration'
+  , printMigration
+  , getMigration
+  , runMigration
+  , runMigrationSilent
+  , runMigrationUnsafe
+  , migrate
   ) where
 
 
-import Database.Persist.GenericSql.Internal
-import qualified Database.Persist.GenericSql.Raw as R
-import Database.Persist.GenericSql.Raw (SqlPersist (..))
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.IO.Class
@@ -33,11 +27,12 @@ import System.IO (stderr)
 import Control.Monad.Trans.Control (liftBaseOp_)
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Class
+import Database.Persist.Sql.Raw
 import Database.Persist.Class
 import Database.Persist.Types
 
-execute' :: (MonadIO m, MonadLogger m) => Text -> [PersistValue] -> SqlPersist m ()
-execute' = R.execute
+execute' :: (MonadIO m, MonadLogger m) => Text -> [PersistValue] -> SqlPersist m () -- FIXME remove
+execute' = rawExecute
 
 allSql :: CautiousMigration -> [Sql]
 allSql = map snd
@@ -121,26 +116,27 @@ sortMigrations x =
     -- choose to have this special sorting applied.
     isCreate t = pack "CREATe " `isPrefixOf` t
 
-migrate :: (MonadIO m, MonadBaseControl IO m, PersistEntity val)
+migrate :: (MonadSqlPersist m, PersistEntity val)
         => [EntityDef]
         -> val
-        -> Migration (SqlPersist m)
+        -> Migration m
 migrate allDefs val = do
-    conn <- lift $ lift $ SqlPersist ask
-    let getter = R.getStmt' conn
-    res <- liftIO $ migrateSql conn allDefs getter val
+    conn <- askSqlConn
+    res <- liftIO $ connMigrateSql conn allDefs (getStmtConn conn) val
     either tell (lift . tell) res
 
 -- | Perform a database commit.
-commit :: MonadIO m => SqlPersist m ()
+commit :: (MonadSqlPersist m, MonadIO m) => m ()
 commit = do
-    conn <- SqlPersist ask
-    let getter = R.getStmt' conn
-    liftIO $ commitC conn getter >> begin conn getter
+    conn <- askSqlConn
+    liftIO $ do
+        connCommit conn $ getStmtConn conn
+        connBegin conn $ getStmtConn conn
 
 -- | Perform a database rollback.
-rollback :: MonadIO m => SqlPersist m ()
+rollback :: (MonadSqlPersist m, MonadIO m) => m ()
 rollback = do
-    conn <- SqlPersist ask
-    let getter = R.getStmt' conn
-    liftIO $ rollbackC conn getter >> begin conn getter
+    conn <- askSqlConn
+    liftIO $ do
+        connRollback conn $ getStmtConn conn
+        connBegin conn $ getStmtConn conn
