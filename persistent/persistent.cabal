@@ -46,7 +46,6 @@ library
 
     exposed-modules: Database.Persist
                      Database.Persist.Quasi
-                     Database.Persist.GenericSql.Migration
 
                      Database.Persist.Types
                      Database.Persist.Class
@@ -61,6 +60,7 @@ library
                      Database.Persist.Class.PersistField
                      Database.Persist.Class.PersistStore
 
+                     Database.Persist.Sql.Migration
                      Database.Persist.Sql.Types
                      Database.Persist.Sql.Raw
                      Database.Persist.Sql.Run

@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
-module Database.Persist.GenericSql.Migration
+module Database.Persist.Sql.Migration
   ( parseMigration
   , parseMigration'
   , printMigration
@@ -15,24 +15,18 @@ module Database.Persist.GenericSql.Migration
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.IO.Class
-import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Writer
 import Control.Monad (liftM, unless)
 import Data.Text (Text, unpack, snoc, isPrefixOf, pack)
 import qualified Data.Text.IO
 import System.IO
-import Control.Monad.Logger (MonadLogger)
 import System.IO.Silently (hSilence)
-import System.IO (stderr)
 import Control.Monad.Trans.Control (liftBaseOp_)
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Class
 import Database.Persist.Sql.Raw
 import Database.Persist.Class
 import Database.Persist.Types
-
-execute' :: (MonadIO m, MonadLogger m) => Text -> [PersistValue] -> SqlPersist m () -- FIXME remove
-execute' = rawExecute
 
 allSql :: CautiousMigration -> [Sql]
 allSql = map snd
@@ -56,33 +50,33 @@ parseMigration' m = do
       Left errs -> error $ unlines $ map unpack errs
       Right sql -> return sql
 
-printMigration :: (MonadBaseControl IO m, MonadIO m) => Migration (SqlPersist m) -> SqlPersist m ()
+printMigration :: (MonadBaseControl IO m, MonadIO m) => Migration m -> m ()
 printMigration m = do
   mig <- parseMigration' m
   mapM_ (liftIO . Data.Text.IO.putStrLn . flip snoc ';') (allSql mig)
 
-getMigration :: (MonadBaseControl IO m, MonadIO m) => Migration (SqlPersist m) -> SqlPersist m [Sql]
+getMigration :: (MonadBaseControl IO m, MonadIO m) => Migration m -> m [Sql]
 getMigration m = do
   mig <- parseMigration' m
   return $ allSql mig
 
-runMigration :: (MonadIO m, MonadBaseControl IO m, MonadLogger m)
-             => Migration (SqlPersist m)
-             -> SqlPersist m ()
+runMigration :: MonadSqlPersist m
+             => Migration m
+             -> m ()
 runMigration m = runMigration' m False >> return ()
 
 -- | Same as 'runMigration', but returns a list of the SQL commands executed
 -- instead of printing them to stderr.
-runMigrationSilent :: (MonadBaseControl IO m, MonadIO m, MonadLogger m)
-                   => Migration (SqlPersist m)
-                   -> SqlPersist m [Text]
+runMigrationSilent :: (MonadBaseControl IO m, MonadSqlPersist m)
+                   => Migration m
+                   -> m [Text]
 runMigrationSilent m = liftBaseOp_ (hSilence [stderr]) $ runMigration' m True
 
 runMigration'
-    :: (MonadBaseControl IO m, MonadIO m, MonadLogger m)
-    => Migration (SqlPersist m)
+    :: MonadSqlPersist m
+    => Migration m
     -> Bool -- ^ is silent?
-    -> SqlPersist m [Text]
+    -> m [Text]
 runMigration' m silent = do
     mig <- parseMigration' m
     case unsafeSql mig of
@@ -93,17 +87,17 @@ runMigration' m silent = do
             , unlines $ map (\s -> "    " ++ unpack s ++ ";") $ errs
             ]
 
-runMigrationUnsafe :: (MonadBaseControl IO m, MonadIO m, MonadLogger m)
-                   => Migration (SqlPersist m)
-                   -> SqlPersist m ()
+runMigrationUnsafe :: MonadSqlPersist m
+                   => Migration m
+                   -> m ()
 runMigrationUnsafe m = do
     mig <- parseMigration' m
     mapM_ (executeMigrate False) $ sortMigrations $ allSql mig
 
-executeMigrate :: (MonadIO m, MonadLogger m) => Bool -> Text -> SqlPersist m Text
+executeMigrate :: MonadSqlPersist m => Bool -> Text -> m Text
 executeMigrate silent s = do
     unless silent $ liftIO $ hPutStrLn stderr $ "Migrating: " ++ unpack s
-    execute' s []
+    rawExecute s []
     return s
 
 -- | Sort the alter DB statements so tables are created before constraints are
@@ -124,19 +118,3 @@ migrate allDefs val = do
     conn <- askSqlConn
     res <- liftIO $ connMigrateSql conn allDefs (getStmtConn conn) val
     either tell (lift . tell) res
-
--- | Perform a database commit.
-commit :: (MonadSqlPersist m, MonadIO m) => m ()
-commit = do
-    conn <- askSqlConn
-    liftIO $ do
-        connCommit conn $ getStmtConn conn
-        connBegin conn $ getStmtConn conn
-
--- | Perform a database rollback.
-rollback :: (MonadSqlPersist m, MonadIO m) => m ()
-rollback = do
-    conn <- askSqlConn
-    liftIO $ do
-        connRollback conn $ getStmtConn conn
-        connBegin conn $ getStmtConn conn
