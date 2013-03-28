@@ -56,7 +56,7 @@ specs = describe "rename specs" $ do
             C.runResourceT $ rawQuery "SELECT something_else from ref_table WHERE id=4" [] C.$$ CL.sinkNull
 #endif
     it "extra blocks" $ do
-        entityExtra (entityDef (undefined :: LowerCaseTable)) @?=
+        entityExtra (entityDef (Nothing :: Maybe LowerCaseTable)) @?=
             Map.fromList
                 [ ("ExtraBlock", map T.words ["foo bar", "baz", "bin"])
                 , ("ExtraBlock2", map T.words ["something"])

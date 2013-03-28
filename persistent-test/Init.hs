@@ -30,14 +30,14 @@ module Init (
   , module Database.Persist
   , module Test.Hspec.Monadic
   , liftIO
-  , mkPersist, mkMigrate, share, sqlSettings, persistLowerCase
+  , mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase
   , Int32, Int64
 ) where
 
 -- re-exports
 import Test.Hspec.Monadic
 import Test.Hspec.HUnit ()
-import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, mkPersistSettings)
+import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase, mkPersistSettings)
 
 -- testing
 import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)

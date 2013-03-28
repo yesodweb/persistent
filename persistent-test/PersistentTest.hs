@@ -74,10 +74,8 @@ import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Data.Functor.Identity
 import Data.Functor.Constant
-
-data PetType = Cat | Dog
-    deriving (Show, Read, Eq)
-derivePersistField "PetType"
+import PersistTestPetType
+import Control.Monad (liftM)
 
 #ifdef WITH_MONGODB
 mkPersist (mkPersistSettings $ ConT ''MongoBackend) [persistUpperCase|
@@ -710,12 +708,11 @@ instance PersistEntity a => PersistEntity (ReverseFieldOrder a) where
     newtype EntityField (ReverseFieldOrder a) b = EFRFO {unEFRFO :: EntityField a b}
     newtype Unique      (ReverseFieldOrder a)   = URFO  {unURFO  :: Unique      a  }
     persistFieldDef = persistFieldDef . unEFRFO
-    entityDef = revFields . entityDef . unRFO
+    entityDef = revFields . entityDef . liftM unRFO
         where
           revFields ed = ed { entityFields = reverse (entityFields ed) }
     toPersistFields = reverse . toPersistFields . unRFO
     fromPersistValues = fmap RFO . fromPersistValues . reverse
-    halfDefined = RFO halfDefined
     persistUniqueToFieldNames = reverse . persistUniqueToFieldNames . unURFO
     persistUniqueToValues = reverse . persistUniqueToValues . unURFO
     persistUniqueKeys = map URFO . reverse . persistUniqueKeys . unRFO

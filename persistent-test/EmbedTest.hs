@@ -33,7 +33,7 @@ instance Exception TestException
 #if WITH_MONGODB
 mkPersist persistSettings [persist|
 #else
-share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistLowerCase|
+share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
 #endif
 
   OnlyName

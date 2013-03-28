@@ -52,11 +52,8 @@ parseMigration' m = do
 
 printMigration :: MonadIO m => Migration m -> m ()
 printMigration m = do
-  liftIO $ putStrLn "printMigration1"
   mig <- parseMigration' m
-  liftIO $ putStrLn "printMigration2"
   mapM_ (liftIO . Data.Text.IO.putStrLn . flip snoc ';') (allSql mig)
-  liftIO $ putStrLn "printMigration3"
 
 getMigration :: (MonadBaseControl IO m, MonadIO m) => Migration m -> m [Sql]
 getMigration m = do

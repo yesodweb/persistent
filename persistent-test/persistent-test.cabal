@@ -36,6 +36,7 @@ library
     extra-libraries: sqlite3
 
     exposed-modules: PersistentTest
+                     PersistTestPetType
                      RenameTest
                      DataTypeTest
                      HtmlTest

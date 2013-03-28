@@ -159,27 +159,18 @@ migrate' :: [EntityDef a]
          -> EntityDef SqlType
          -> IO (Either [Text] [(Bool, Text)])
 migrate' allDefs getter val = do
-    putStrLn "migrate' 1"
     let (cols, uniqs) = mkColumns allDefs val
     let newSql = mkCreateTable False def (cols, uniqs)
     stmt <- getter "SELECT sql FROM sqlite_master WHERE type='table' AND name=?"
-    putStrLn "migrate' 2"
     oldSql' <- runResourceT
              $ stmtQuery stmt [PersistText $ unDBName table] $$ go
-    putStrLn "migrate' 3"
     case oldSql' of
-        Nothing -> do
-            putStrLn "migrate' 4"
-            print newSql
-            return $ Right [(False, newSql)]
+        Nothing -> return $ Right [(False, newSql)]
         Just oldSql -> do
-            putStrLn "migrate' 5"
             if oldSql == newSql
                 then return $ Right []
                 else do
                     sql <- getCopyTable allDefs getter val
-                    putStrLn "printing sql"
-                    print sql
                     return $ Right sql
   where
     def = val
