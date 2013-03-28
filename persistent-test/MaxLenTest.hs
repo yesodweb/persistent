@@ -26,7 +26,7 @@ db :: Action IO () -> Assertion
 db = db' (return ())
 mkPersist persistSettings [persist|
 #else
-share [mkPersist sqlSettings,  mkMigrate "maxlenMigrate"] [persist|
+share [mkPersist sqlSettings,  mkMigrate "maxlenMigrate"] [persistLowerCase|
 #endif
   MaxLen
     text1 Text

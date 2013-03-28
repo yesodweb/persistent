@@ -4,6 +4,9 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PatternGuards #-}
+#ifndef NO_OVERLAP
+{-# LANGUAGE OverlappingInstances #-}
+#endif
 module Database.Persist.Class.PersistField
     ( PersistField (..)
     , SomePersistField (..)

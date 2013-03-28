@@ -99,7 +99,7 @@ instance PersistEntity a => RawSql (Entity a) where
           name ed = escape (entityDB ed) <> "."
 
     rawSqlColCountReason a =
-        case fst (rawSqlCols undefined a) of
+        case fst (rawSqlCols (error "RawSql") a) of
           1 -> "one column for an 'Entity' data type without fields"
           n -> show n ++ " columns for an 'Entity' data type"
     rawSqlProcessRow (idCol:ent) = Entity <$> fromPersistValue idCol
@@ -132,9 +132,9 @@ instance (RawSql a, RawSql b) => RawSql (a, b) where
     rawSqlProcessRow =
         let x = getType processRow
             getType :: (z -> Either y x) -> x
-            getType = undefined
+            getType = error "RawSql.getType"
 
-            colCountFst = fst $ rawSqlCols undefined (fst x)
+            colCountFst = fst $ rawSqlCols (error "RawSql.getType2") (fst x)
             processRow row =
                 let (rowFst, rowSnd) = splitAt colCountFst row
                 in (,) <$> rawSqlProcessRow rowFst

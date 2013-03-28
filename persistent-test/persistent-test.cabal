@@ -1,5 +1,5 @@
 name:            persistent-test
-version:         1.1.0
+version:         1.2.0
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -40,28 +40,39 @@ library
                      DataTypeTest
                      HtmlTest
                      EmbedTest
-                     JoinTest
                      LargeNumberTest
                      UniqueTest
                      MaxLenTest
                      SumTypeTest
                      MigrationOnlyTest
                      Init
-                     Database.Persist.EntityDef
+
                      Database.Persist
-                     Database.Persist.Store
                      Database.Persist.Quasi
-                     Database.Persist.GenericSql
-                     Database.Persist.GenericSql.Raw
-                     Database.Persist.GenericSql.Internal
-                     Database.Persist.GenericSql.Migration
-                     Database.Persist.TH.Library
-                     Database.Persist.Util
-                     Database.Persist.Query
-                     Database.Persist.Query.Internal
-                     Database.Persist.Query.GenericSql
-                     Database.Persist.Query.Join
-                     Database.Persist.Query.Join.Sql
+
+                     Database.Persist.Types
+                     Database.Persist.Class
+                     Database.Persist.Sql
+
+                     Database.Persist.Types.Base
+                     Database.Persist.Class.DeleteCascade
+                     Database.Persist.Class.PersistEntity
+                     Database.Persist.Class.PersistQuery
+                     Database.Persist.Class.PersistUnique
+                     Database.Persist.Class.PersistConfig
+                     Database.Persist.Class.PersistField
+                     Database.Persist.Class.PersistStore
+
+                     Database.Persist.Sql.Migration
+                     Database.Persist.Sql.Internal
+                     Database.Persist.Sql.Types
+                     Database.Persist.Sql.Raw
+                     Database.Persist.Sql.Run
+                     Database.Persist.Sql.Class
+                     Database.Persist.Sql.Orphan.PersistQuery
+                     Database.Persist.Sql.Orphan.PersistStore
+                     Database.Persist.Sql.Orphan.PersistUnique
+
                      Database.Persist.TH
 
                      Database.Persist.Sqlite

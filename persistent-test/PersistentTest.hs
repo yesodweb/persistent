@@ -22,7 +22,6 @@ import Test.Hspec.HUnit()
 import Test.Hspec.QuickCheck(prop)
 
 import Database.Persist
-import Database.Persist.Query.Internal
 
 #ifdef WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
@@ -37,17 +36,10 @@ import qualified Control.Monad.Trans.Control
 import qualified Control.Monad.IO.Control
 # endif
 
-import Database.Persist.Store (PersistValue( PersistInt64 ))
 import Control.Monad.Logger
 import Database.Persist.TH (mkDeleteCascade)
-import Database.Persist.EntityDef (EntityDef(..), DBName(..))
-import Database.Persist.Store ( DeleteCascade (..) )
-import Database.Persist.GenericSql
-import Database.Persist.Query.GenericSql
-import Database.Persist.GenericSql.Internal (escapeName)
 import Database.Persist.Sqlite
 import Control.Exception (SomeException)
-import Control.Monad.Trans.Reader (ask)
 import qualified Data.Text as T
 import qualified Control.Exception.Lifted
 #  if MIN_VERSION_monad_control(0, 3, 0)
@@ -650,7 +642,7 @@ specs = describe "persistent" $ do
       (a2k, a2) <- insert' $ Pet p1k "Zeno"    Cat
       (a3k, a3) <- insert' $ Pet p2k "Lhama"   Dog
       (_  , _ ) <- insert' $ Pet p3k "Abacate" Cat
-      escape <- ((. DBName) . escapeName) `fmap` SqlPersist ask
+      escape <- ((. DBName) . connEscapeName) `fmap` askSqlConn
       let query = T.concat [ "SELECT ??, ?? "
                            , "FROM ", escape "Person"
                            , ", ", escape "Pet"
@@ -675,7 +667,7 @@ specs = describe "persistent" $ do
   it "rawSql/order-proof" $ db $ do
       let p1 = Person "Zacarias" 93 Nothing
       p1k <- insert p1
-      escape <- ((. DBName) . escapeName) `fmap` SqlPersist ask
+      escape <- ((. DBName) . connEscapeName) `fmap` askSqlConn
       let query = T.concat [ "SELECT ?? "
                            , "FROM ", escape "Person"
                            ]
@@ -692,7 +684,7 @@ specs = describe "persistent" $ do
       (p2k, p2) <- insert' $ Person "Norbert"   44 Nothing
       (a1k, a1) <- insert' $ Pet p1k "Rodolfo" Cat
       (a2k, a2) <- insert' $ Pet p1k "Zeno"    Cat
-      escape <- ((. DBName) . escapeName) `fmap` SqlPersist ask
+      escape <- ((. DBName) . connEscapeName) `fmap` askSqlConn
       let query = T.concat [ "SELECT ??, ?? "
                            , "FROM ", person
                            , "LEFT OUTER JOIN ", pet
@@ -744,20 +736,20 @@ caseCommitRollback = db $ do
     c1 <- count filt
     c1 @== 3
 
-    commit
+    transactionSave
     c2 <- count filt
     c2 @== 3
 
     _ <- insert p
-    rollback
+    transactionUndo
     c3 <- count filt
     c3 @== 3
 
     _ <- insert p
-    commit
+    transactionSave
     _ <- insert p
     _ <- insert p
-    rollback
+    transactionUndo
     c4 <- count filt
     c4 @== 4
 

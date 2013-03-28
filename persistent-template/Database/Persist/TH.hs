@@ -11,9 +11,6 @@ module Database.Persist.TH
     , persistUpperCase
     , persistLowerCase
     , persistFileWith
-      -- ** Deprecated synonyms
-    , persist
-    , persistFile
       -- * Turn @EntityDef@s into types
     , mkPersist
     , MkPersistSettings
@@ -29,8 +26,6 @@ module Database.Persist.TH
     , share
     , derivePersistField
     , persistFieldFromEntity
-      -- ** Deprecated
-    , share2
     ) where
 
 import Prelude hiding ((++), take, concat, splitAt)
@@ -54,6 +49,7 @@ import Data.Aeson
     , Value (Object), (.:), (.:?)
     )
 import Control.Applicative (pure, (<*>))
+import Control.Monad.Logger (MonadLogger)
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
@@ -61,11 +57,6 @@ persistWith :: PersistSettings -> QuasiQuoter
 persistWith ps = QuasiQuoter
     { quoteExp = lift . parse ps . pack
     }
-
--- | Deprecate synonym for 'persistUpperCase'.
-persist :: QuasiQuoter
-persist = persistUpperCase
-{-# DEPRECATED persist "Please use persistUpperCase instead." #-}
 
 -- | Apply 'persistWith' to 'upperCaseSettings'.
 persistUpperCase :: QuasiQuoter
@@ -86,10 +77,6 @@ persistFileWith ps fp = do
     qRunIO $ SIO.hSetEncoding h SIO.utf8_bom
     s <- qRunIO $ TIO.hGetContents h
     lift $ parse ps s
-
--- | Deprecated function. Equivalent to @persistFileWith upperCaseSettings@.
-persistFile :: FilePath -> Q Exp
-persistFile = persistFileWith upperCaseSettings
 
 -- | Create data types and appropriate 'PersistEntity' instances for the given
 -- 'EntityDef's. Works well with the persist quasi-quoter.
@@ -381,7 +368,7 @@ mkHalfDefined constr count' =
         FunD (mkName "halfDefined")
             [Clause [] (NormalB
             $ foldl AppE (ConE constr)
-                    (replicate count' $ VarE $ mkName "undefined")) []]
+                    (replicate count' $ VarE 'error `AppE` LitE (StringL "mkHalfDefined"))) []]
 
 isNotNull :: PersistValue -> Bool
 isNotNull PersistNull = False
@@ -597,17 +584,6 @@ updateConName name s pu = concat
 share :: [[EntityDef] -> Q [Dec]] -> [EntityDef] -> Q [Dec]
 share fs x = fmap mconcat $ mapM ($ x) fs
 
--- | Deprecated, restricted version of 'share'.
-share2 :: ([EntityDef] -> Q [Dec])
-       -> ([EntityDef] -> Q [Dec])
-       -> [EntityDef]
-       -> Q [Dec]
-share2 f g x = do
-    y <- f x
-    z <- g x
-    return $ y `mappend` z
-{-# DEPRECATED share2 "Use share instead" #-}
-
 -- | Save the @EntityDef@s passed in under the given name.
 mkSave :: String -> [EntityDef] -> Q [Dec]
 mkSave name' defs' = do
@@ -764,6 +740,7 @@ mkMigrate fun allDefs = do
     typ = ForallT [PlainTV $ mkName "m"]
             [ ClassP ''MonadBaseControl [ConT ''IO, VarT $ mkName "m"]
             , ClassP ''MonadIO [VarT $ mkName "m"]
+            , ClassP ''MonadLogger [VarT $ mkName "m"]
             ]
             $ ConT ''Migration `AppT` (ConT ''SqlPersistT `AppT` VarT (mkName "m"))
     body :: Q Exp
@@ -773,7 +750,7 @@ mkMigrate fun allDefs = do
             _  -> do
               defsName <- newName "defs"
               defsStmt <- do
-                u <- [|undefined|]
+                u <- [|error "mkMigrate.body"|]
                 e <- [|entityDef|]
                 let defsExp = ListE $ map (AppE e . undefinedEntityTH u) defs
                 return $ LetS [ValD (VarP defsName) (NormalB defsExp) []]
@@ -781,7 +758,7 @@ mkMigrate fun allDefs = do
               return (DoE $ defsStmt : stmts)
     toStmt :: Exp -> EntityDef -> Q Stmt
     toStmt defsExp ed = do
-        u <- [|undefined|]
+        u <- [|error "mkMigrate.toStmt"|]
         m <- [|migrate|]
         return $ NoBindS $ m `AppE` defsExp `AppE` (undefinedEntityTH u ed)
     undefinedEntityTH :: Exp -> EntityDef -> Exp

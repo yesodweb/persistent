@@ -30,14 +30,14 @@ module Init (
   , module Database.Persist
   , module Test.Hspec.Monadic
   , liftIO
-  , mkPersist, mkMigrate, share, sqlSettings, persist
+  , mkPersist, mkMigrate, share, sqlSettings, persistLowerCase
   , Int32, Int64
 ) where
 
 -- re-exports
 import Test.Hspec.Monadic
 import Test.Hspec.HUnit ()
-import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persist, mkPersistSettings)
+import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, mkPersistSettings)
 
 -- testing
 import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
@@ -45,7 +45,6 @@ import Test.Hspec.HUnit()
 import Test.QuickCheck
 
 import Database.Persist
-import Database.Persist.Store (PersistValue(..))
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import Control.Monad.Logger
 
@@ -64,8 +63,6 @@ import qualified Data.ByteString as BS
 import Network (PortID (PortNumber))
 
 #else
-import Database.Persist.GenericSql
-import Database.Persist.GenericSql.Raw (SqlBackend)
 import Database.Persist.Sqlite
 import Data.Text (Text)
 
@@ -177,7 +174,7 @@ runConn f = runNoLoggingT $ do
 
 db :: SqlPersist (NoLoggingT (ResourceT IO)) () -> Assertion
 db actions = do
-  runResourceT $ runConn $ actions >> rollback
+  runResourceT $ runConn $ actions >> transactionUndo
 
 #if !MIN_VERSION_random(1,0,1)
 instance Random Int32 where

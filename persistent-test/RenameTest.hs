@@ -14,12 +14,9 @@ import Test.Hspec.Monadic
 import Test.Hspec.HUnit ()
 import Test.HUnit
 import Database.Persist.Sqlite
-import Database.Persist.TH
-import Database.Persist.EntityDef
 #ifndef WITH_MONGODB
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
-import Database.Persist.GenericSql.Raw
 #endif
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
@@ -55,8 +52,8 @@ specs = describe "rename specs" $ do
     it "handles lower casing" $ asIO $ do
         runConn $ do
             _ <- runMigrationSilent lowerCaseMigrate
-            C.runResourceT $ withStmt "SELECT full_name from lower_case_table WHERE my_id=5" [] C.$$ CL.sinkNull
-            C.runResourceT $ withStmt "SELECT something_else from ref_table WHERE id=4" [] C.$$ CL.sinkNull
+            C.runResourceT $ rawQuery "SELECT full_name from lower_case_table WHERE my_id=5" [] C.$$ CL.sinkNull
+            C.runResourceT $ rawQuery "SELECT something_else from ref_table WHERE id=4" [] C.$$ CL.sinkNull
 #endif
     it "extra blocks" $ do
         entityExtra (entityDef (undefined :: LowerCaseTable)) @?=

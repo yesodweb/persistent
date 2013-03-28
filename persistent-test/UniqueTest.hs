@@ -14,13 +14,13 @@ import Control.Monad (void)
 import Test.HUnit (Assertion)
 import Test.Hspec (shouldThrow, anyException)
 #ifndef WITH_MONGODB
-import Database.Persist.GenericSql (Checkmark(..))
+import Database.Persist (Checkmark(..))
 #endif
 
 #ifdef WITH_MONGODB
 mkPersist persistSettings [persist|
 #else
-share [mkPersist sqlSettings,  mkMigrate "uniqueMigrate"] [persist|
+share [mkPersist sqlSettings,  mkMigrate "uniqueMigrate"] [persistLowerCase|
 #endif
   TestNonNull
     fieldA Int

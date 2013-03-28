@@ -346,7 +346,7 @@ orderClause includeTable conn o =
         _ -> error $ "orderClause: expected Asc or Desc, not limit or offset"
   where
     dummyFromOrder :: SelectOpt a -> a
-    dummyFromOrder _ = undefined
+    dummyFromOrder _ = error "orderClause.dummyFromOrder"
 
     tn = connEscapeName conn $ entityDB $ entityDef $ dummyFromOrder o
 

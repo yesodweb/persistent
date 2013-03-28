@@ -17,7 +17,7 @@ import Control.Monad.Trans.Resource (runResourceT)
 #ifdef WITH_MONGODB
 mkPersist persistSettings [persist|
 #else
-share [mkPersist sqlSettings,  mkMigrate "numberMigrate"] [persist|
+share [mkPersist sqlSettings,  mkMigrate "numberMigrate"] [persistLowerCase|
 #endif
   Number
     intx Int

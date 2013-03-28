@@ -4,7 +4,6 @@ import qualified PersistentTest
 import qualified RenameTest
 import qualified DataTypeTest
 import qualified HtmlTest
-import qualified JoinTest
 import qualified EmbedTest
 import qualified LargeNumberTest
 import qualified MaxLenTest
@@ -23,7 +22,7 @@ import Control.Monad.Trans.Resource (runResourceT)
 #ifdef MongoDB
 setup = setupMongo
 #else
-import Database.Persist.GenericSql (printMigration, runMigrationUnsafe)
+import Database.Persist.Sql (printMigration, runMigrationUnsafe)
 
 setup migration = do
   printMigration migration
@@ -49,7 +48,6 @@ main = do
   runConn (setup EmbedTest.embedMigrate)
   runConn (setup LargeNumberTest.numberMigrate)
   runConn (setup UniqueTest.uniqueMigrate)
-  runConn (setup JoinTest.joinMigrate)
   runConn (setup MaxLenTest.maxlenMigrate)
 #endif
 
@@ -57,7 +55,6 @@ main = do
     RenameTest.specs
     DataTypeTest.specs
     HtmlTest.specs
-    JoinTest.specs
     EmbedTest.specs
     LargeNumberTest.specs
     UniqueTest.specs

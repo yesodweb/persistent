@@ -108,7 +108,7 @@ rawSql :: (RawSql a, MonadSqlPersist m, MonadResource m)
 rawSql stmt = run
     where
       getType :: (x -> m [a]) -> a
-      getType = undefined
+      getType = error "rawSql.getType"
 
       x = getType run
       process = rawSqlProcessRow
