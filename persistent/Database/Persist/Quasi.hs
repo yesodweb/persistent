@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE PatternGuards #-}
 module Database.Persist.Quasi
     ( parse
     , PersistSettings (..)
@@ -17,7 +18,7 @@ module Database.Persist.Quasi
 import Prelude hiding (lines)
 import Database.Persist.Types
 import Data.Char
-import Data.Maybe (mapMaybe)
+import Data.Maybe (mapMaybe, fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Control.Arrow ((&&&))
@@ -73,12 +74,17 @@ parseFieldType t0 =
             _ -> PSSuccess (front []) t
 
 data PersistSettings = PersistSettings
-    { psToDBName :: Text -> Text
+    { psToDBName :: !(Text -> Text)
+    , psStrictFields :: !Bool
+    -- ^ Whether fields are by default strict. Default value: @True@.
+    --
+    -- Since 1.2
     }
 
 upperCaseSettings :: PersistSettings
 upperCaseSettings = PersistSettings
     { psToDBName = id
+    , psStrictFields = True
     }
 
 lowerCaseSettings :: PersistSettings
@@ -88,6 +94,7 @@ lowerCaseSettings = PersistSettings
                 | isUpper c = T.pack ['_', toLower c]
                 | otherwise = T.singleton c
          in T.dropWhile (== '_') . T.concatMap go
+    , psStrictFields = True
     }
 
 -- | Parses a quasi-quoted syntax into a list of entity definitions.
@@ -224,7 +231,7 @@ splitExtras (Line _ ts:rest) =
 
 takeCols :: PersistSettings -> [Text] -> Maybe (FieldDef ())
 takeCols _ ("deriving":_) = Nothing
-takeCols ps (n:typ:rest)
+takeCols ps (n':typ:rest)
     | not (T.null n) && isLower (T.head n) =
         case parseFieldType typ of
             Nothing -> error $ "Invalid field type: " ++ show typ
@@ -234,7 +241,13 @@ takeCols ps (n:typ:rest)
                 , fieldType = ft
                 , fieldSqlType = ()
                 , fieldAttrs = rest
+                , fieldStrict = fromMaybe (psStrictFields ps) mstrict
                 }
+  where
+    (mstrict, n)
+        | Just x <- T.stripPrefix "!" n' = (Just True, x)
+        | Just x <- T.stripPrefix "~" n' = (Just False, x)
+        | otherwise = (Nothing, n')
 takeCols _ _ = Nothing
 
 getDbName :: PersistSettings -> Text -> [Text] -> Text

@@ -18,6 +18,7 @@
 module PersistentTest where
 
 import Test.HUnit hiding (Test)
+import Test.Hspec.Expectations
 import Test.Hspec.HUnit()
 import Test.Hspec.QuickCheck(prop)
 
@@ -129,6 +130,11 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade sqlSetti
     user UserId Maybe
     verkey Text Maybe
     UniqueEmail email
+
+  Strict
+    !yes Int
+    ~no Int
+    def Int
 |]
 cleanDB :: (PersistQuery m, PersistEntityBackend Email ~ PersistMonadBackend m) => m ()
 cleanDB = do
@@ -699,6 +705,11 @@ specs = describe "persistent" $ do
   it "commit/rollback" (caseCommitRollback >> runResourceT (runConn cleanDB))
 
   it "afterException" caseAfterException
+
+  describe "strictness" $ do
+    it "bang" $ (return $! Strict (error "foo") 5 5) `shouldThrow` anyErrorCall
+    it "tilde" $ (return $! Strict 5 (error "foo") 5 :: IO Strict) >> return ()
+    it "blank" $ (return $! Strict 5 5 (error "foo")) `shouldThrow` anyErrorCall
 
 
 -- | Reverses the order of the fields of an entity.  Used to test

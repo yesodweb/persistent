@@ -96,15 +96,15 @@ data WhyNullable = ByMaybeAttr
                   deriving (Eq, Show)
 
 data EntityDef sqlType = EntityDef
-    { entityHaskell :: HaskellName
-    , entityDB      :: DBName
-    , entityID      :: DBName
-    , entityAttrs   :: [Attr]
-    , entityFields  :: [FieldDef sqlType]
-    , entityUniques :: [UniqueDef]
-    , entityDerives :: [Text]
-    , entityExtra   :: Map Text [ExtraLine]
-    , entitySum     :: Bool
+    { entityHaskell :: !HaskellName
+    , entityDB      :: !DBName
+    , entityID      :: !DBName
+    , entityAttrs   :: ![Attr]
+    , entityFields  :: ![FieldDef sqlType]
+    , entityUniques :: ![UniqueDef]
+    , entityDerives :: ![Text]
+    , entityExtra   :: !(Map Text [ExtraLine])
+    , entitySum     :: !Bool
     }
     deriving (Show, Eq, Read, Ord, Functor)
 
@@ -124,19 +124,20 @@ data FieldType
   deriving (Show, Eq, Read, Ord)
 
 data FieldDef sqlType = FieldDef
-    { fieldHaskell :: HaskellName
-    , fieldDB      :: DBName
-    , fieldType    :: FieldType
-    , fieldSqlType :: sqlType
-    , fieldAttrs   :: [Attr]
+    { fieldHaskell :: !HaskellName
+    , fieldDB      :: !DBName
+    , fieldType    :: !FieldType
+    , fieldSqlType :: !sqlType
+    , fieldAttrs   :: ![Attr]
+    , fieldStrict  :: !Bool
     }
     deriving (Show, Eq, Read, Ord, Functor)
 
 data UniqueDef = UniqueDef
-    { uniqueHaskell :: HaskellName
-    , uniqueDBName  :: DBName
-    , uniqueFields  :: [(HaskellName, DBName)]
-    , uniqueAttrs   :: [Attr]
+    { uniqueHaskell :: !HaskellName
+    , uniqueDBName  :: !DBName
+    , uniqueFields  :: ![(HaskellName, DBName)]
+    , uniqueAttrs   :: ![Attr]
     }
     deriving (Show, Eq, Read, Ord)
 

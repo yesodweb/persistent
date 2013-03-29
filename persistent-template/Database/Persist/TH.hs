@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
@@ -199,10 +200,10 @@ dataTypeDec mps t =
     DataD [] nameFinal paramsFinal constrs
     $ map (mkName . unpack) $ entityDerives t
   where
-    mkCol x (FieldDef n _ ty _ as) =
-        (mkName $ unpack $ recName x $ unHaskellName n,
-         NotStrict,
-         pairToType mps backend (ty, nullable as)
+    mkCol x FieldDef {..} =
+        (mkName $ unpack $ recName x $ unHaskellName fieldHaskell,
+         if fieldStrict then IsStrict else NotStrict,
+         pairToType mps backend (fieldType, nullable fieldAttrs)
         )
     (nameFinal, paramsFinal)
         | mpsGeneric mps = (nameG, [PlainTV backend])
@@ -216,14 +217,14 @@ dataTypeDec mps t =
         | entitySum t = map sumCon $ entityFields t
         | otherwise = [RecC name cols]
 
-    sumCon fd@(FieldDef _ _ ty _ _) = NormalC
+    sumCon fd = NormalC
         (sumConstrName t fd)
-        [(NotStrict, pairToType mps backend (ty, NotNullable))]
+        [(NotStrict, pairToType mps backend (fieldType fd, NotNullable))]
 
 sumConstrName :: EntityDef a -> FieldDef b -> Name
-sumConstrName t (FieldDef n _ _ _ _) = mkName $ unpack $ concat
+sumConstrName t FieldDef {..} = mkName $ unpack $ concat
     [ unHaskellName $ entityHaskell t
-    , upperFirst $ unHaskellName n
+    , upperFirst $ unHaskellName fieldHaskell
     , "Sum"
     ]
 
@@ -237,7 +238,7 @@ entityUpdates :: EntityDef a -> [(HaskellName, FieldType, IsNullable, PersistUpd
 entityUpdates =
     concatMap go . entityFields
   where
-    go (FieldDef x _ y _ as) = map (\a -> (x, y, nullable as, a)) [minBound..maxBound]
+    go FieldDef {..} = map (\a -> (fieldHaskell, fieldType, nullable fieldAttrs, a)) [minBound..maxBound]
 
 uniqueTypeDec :: MkPersistSettings -> EntityDef a -> Dec
 uniqueTypeDec mps t =
@@ -264,8 +265,8 @@ mkUnique mps backend t (UniqueDef (HaskellName constr) _ fields attrs) =
     lookup3 :: Text -> [FieldDef a] -> (FieldType, IsNullable)
     lookup3 s [] =
         error $ unpack $ "Column not found: " ++ s ++ " in unique " ++ constr
-    lookup3 x ((FieldDef (HaskellName x') _ y _ z):rest)
-        | x == x' = (y, nullable z)
+    lookup3 x (FieldDef {..}:rest)
+        | x == unHaskellName fieldHaskell = (fieldType, nullable fieldAttrs)
         | otherwise = lookup3 x rest
 
     nullErrMsg =
@@ -524,6 +525,7 @@ mkEntity mps t = do
         , fieldType = FTTypeCon Nothing $ unHaskellName (entityHaskell t) ++ "Id"
         , fieldSqlType = SqlInt64
         , fieldAttrs = []
+        , fieldStrict = True
         }
         : entityFields t
     toFieldNames <- mkToFieldNames $ entityUniques t
@@ -646,14 +648,14 @@ mkDeleteCascade mps defs = do
         concatMap getDeps' $ entityFields def
       where
         getDeps' :: FieldDef a -> [Dep]
-        getDeps' (FieldDef name _ ftyp _ attribs) =
-            case stripId ftyp of
+        getDeps' FieldDef {..} =
+            case stripId fieldType of
                 Just f ->
                      return Dep
                         { depTarget = f
                         , depSourceTable = entityHaskell def
-                        , depSourceField = name
-                        , depSourceNull  = nullable attribs
+                        , depSourceField = fieldHaskell
+                        , depSourceNull  = nullable fieldAttrs
                         }
                 Nothing -> []
     go :: [Dep] -> EntityDef a -> Q Dec
@@ -706,7 +708,8 @@ mkUniqueKeys def = do
     return $ FunD 'persistUniqueKeys [c]
   where
     clause = do
-        xs <- forM (entityFields def) $ \(FieldDef x _ _ _ _) -> do
+        xs <- forM (entityFields def) $ \fd -> do
+            let x = fieldHaskell fd
             x' <- newName $ '_' : unpack (unHaskellName x)
             return (x, x')
         let pcs = map (go xs) $ entityUniques def
@@ -816,7 +819,7 @@ instance Lift a => Lift (EntityDef a) where
             $(lift i)
             |]
 instance Lift a => Lift (FieldDef a) where
-    lift (FieldDef a b c d e) = [|FieldDef $(lift a) $(lift b) $(lift c) $(lift d) $(liftTs e)|]
+    lift (FieldDef a b c d e f) = [|FieldDef a b c d $(liftTs e) f|]
 instance Lift UniqueDef where
     lift (UniqueDef a b c d) = [|UniqueDef $(lift a) $(lift b) $(lift c) $(liftTs d)|]
 
