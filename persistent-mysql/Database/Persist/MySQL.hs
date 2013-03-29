@@ -278,7 +278,7 @@ migrate' connectInfo allDefs getter val = do
                         AddUniqueConstraint uname $
                         map (findTypeOfColumn allDefs name) ucols ]
         let foreigns = do
-              Column cname _ _ _ _ _ (Just (refTblName, _)) <- fst new
+              Column cname _ _ _ _ (Just (refTblName, _)) <- fst new
               return $ AlterColumn name (cname, addReference allDefs refTblName)
         return $ Right $ map showAlterDb $ addTable : uniques ++ foreigns
       -- No errors and something found, migrate
@@ -555,12 +555,12 @@ getAlters allDefs tblName (c1, u1) (c2, u2) =
 -- changed in the columns @oldColumns@ for @newColumn@ to be
 -- supported.
 findAlters :: Show a => [EntityDef a] -> Column -> [Column] -> ([AlterColumn'], [Column])
-findAlters allDefs col@(Column name isNull _ft type_ def _maxLen ref) cols =
+findAlters allDefs col@(Column name isNull type_ def _maxLen ref) cols =
     case filter ((name ==) . cName) cols of
         [] -> ( let cnstr = [addReference allDefs tname | Just (tname, _) <- [ref]]
                 in map ((,) name) (Add' col : cnstr)
               , cols )
-        Column _ isNull' _ft type_' def' _maxLen' ref':_ ->
+        Column _ isNull' type_' def' _maxLen' ref':_ ->
             let -- Foreign key
                 refDrop = case (ref == ref', ref') of
                             (False, Just (_, cname)) -> [(name, DropReference cname)]
@@ -586,7 +586,7 @@ findAlters allDefs col@(Column name isNull _ft type_ def _maxLen ref) cols =
 -- | Prints the part of a @CREATE TABLE@ statement about a given
 -- column.
 showColumn :: Column -> String
-showColumn (Column n nu _ft t def maxLen ref) = concat
+showColumn (Column n nu t def maxLen ref) = concat
     [ escapeDBName n
     , " "
     , showSqlType t maxLen
@@ -656,14 +656,14 @@ showAlterTable table (DropUniqueConstraint cname) = concat
 
 -- | Render an action that must be done on a column.
 showAlter :: DBName -> AlterColumn' -> String
-showAlter table (oldName, Change (Column n nu ft t def maxLen _ref)) =
+showAlter table (oldName, Change (Column n nu t def maxLen _ref)) =
     concat
     [ "ALTER TABLE "
     , escapeDBName table
     , " CHANGE "
     , escapeDBName oldName
     , " "
-    , showColumn (Column n nu ft t def maxLen Nothing)
+    , showColumn (Column n nu t def maxLen Nothing)
     ]
 showAlter table (_, Add' col) =
     concat

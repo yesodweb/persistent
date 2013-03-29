@@ -26,7 +26,6 @@ import Data.Text (Text, pack)
 import qualified Data.Text as T
 import Data.IORef (IORef)
 import Data.Map (Map)
-import Database.Persist
 import Data.Int (Int64)
 import Data.Conduit (Source)
 import Data.Conduit.Pool (Pool)
@@ -65,13 +64,12 @@ data Statement = Statement
     }
 
 data Column = Column
-    { cName      :: DBName
-    , cNull      :: Bool
-    , cType      :: FieldType
-    , cSqlType   :: SqlType
-    , cDefault   :: Maybe Text
-    , cMaxLen    :: Maybe Integer
-    , cReference :: (Maybe (DBName, DBName)) -- table name, constraint name
+    { cName      :: !DBName
+    , cNull      :: !Bool
+    , cSqlType   :: !SqlType
+    , cDefault   :: !(Maybe Text)
+    , cMaxLen    :: !(Maybe Integer)
+    , cReference :: !(Maybe (DBName, DBName)) -- table name, constraint name
     }
     deriving (Eq, Ord, Show)
 

@@ -32,7 +32,6 @@ mkColumns allDefs t =
         Column
             (fieldDB fd)
             (nullable (fieldAttrs fd) /= NotNullable || entitySum t)
-            (fieldType fd)
             (maybe
                 (fieldSqlType fd)
                 SqlOther
