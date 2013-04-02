@@ -28,7 +28,15 @@ import qualified Data.Text as T
 
 import Init
 
-share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
+share [mkPersist sqlSettings, mkMigrate "migrateAll1"] [persistLowerCase|
+TwoField1 sql=two_field
+    field1 Int
+    field2 T.Text
+    field3 Bool
+    deriving Eq Show
+|]
+
+share [mkPersist sqlSettings, mkMigrate "migrateAll2"] [persistLowerCase|
 TwoField
     field1 Int
     field2 T.Text
@@ -40,7 +48,8 @@ specs :: Spec
 specs = describe "migration only" $ do
     it "works" $ asIO $ runResourceT $ runConn $ do
 #ifndef WITH_MONGODB
-        _ <- runMigrationSilent migrateAll
+        _ <- runMigrationSilent migrateAll1
+        _ <- runMigrationSilent migrateAll2
 #endif
         let tf = TwoField 5 "hello"
         tid <- insert tf
