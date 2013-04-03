@@ -22,6 +22,7 @@ library
                    , transformers             >= 0.2       && < 0.4
                    , containers
                    , aeson
+                   , monad-logger
     exposed-modules: Database.Persist.TH
     ghc-options:     -Wall
     if impl(ghc >= 7.4)
