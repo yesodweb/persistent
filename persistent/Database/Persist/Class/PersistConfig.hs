@@ -1,13 +1,16 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Database.Persist.Class.PersistConfig
     ( PersistConfig (..)
     ) where
 
-import Data.Aeson (Value)
+import Data.Aeson (Value (Object))
 import Data.Aeson.Types (Parser)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Applicative ((<$>))
+import qualified Data.HashMap.Strict as HashMap
 
 -- | Represents a value containing all the configuration options for a specific
 -- backend. This abstraction makes it easier to write code that can easily swap
@@ -33,3 +36,26 @@ class PersistConfig c where
             -> PersistConfigBackend c m a
             -> PersistConfigPool c
             -> m a
+
+instance
+  ( PersistConfig c1
+  , PersistConfig c2
+  , PersistConfigPool c1 ~ PersistConfigPool c2
+  , PersistConfigBackend c1 ~ PersistConfigBackend c2
+  ) => PersistConfig (Either c1 c2) where
+    type PersistConfigBackend (Either c1 c2) = PersistConfigBackend c1
+    type PersistConfigPool (Either c1 c2) = PersistConfigPool c1
+
+    loadConfig (Object o) =
+        case HashMap.lookup "left" o of
+            Just v -> Left <$> loadConfig v
+            Nothing ->
+                case HashMap.lookup "right" o of
+                    Just v -> Right <$> loadConfig v
+                    Nothing -> fail "PersistConfig for Either: need either a left or right"
+    loadConfig _ = fail "PersistConfig for Either: need an object"
+
+    createPoolConfig = either createPoolConfig createPoolConfig
+
+    runPool (Left c) = runPool c
+    runPool (Right c) = runPool c
