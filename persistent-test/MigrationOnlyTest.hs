@@ -32,7 +32,7 @@ share [mkPersist sqlSettings, mkMigrate "migrateAll1"] [persistLowerCase|
 TwoField1 sql=two_field
     field1 Int
     field2 T.Text
-    field3 Bool
+    field3 Bool Maybe
     deriving Eq Show
 |]
 
@@ -55,6 +55,7 @@ specs = describe "migration only" $ do
         tid <- insert tf
         mtf <- get tid
         liftIO $ mtf @?= Just tf
+        deleteWhere ([] :: [Filter TwoField])
 
 asIO :: IO a -> IO a
 asIO = id
