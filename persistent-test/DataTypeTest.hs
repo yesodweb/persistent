@@ -13,7 +13,7 @@ module DataTypeTest (specs) where
 import Test.Hspec.Monadic
 import Test.Hspec.HUnit ()
 import Test.QuickCheck.Arbitrary (Arbitrary, arbitrary)
-import Test.QuickCheck.Gen (Gen(..))
+import Test.QuickCheck.Gen (Gen(..), choose)
 import Test.QuickCheck.Instances ()
 import Database.Persist.Sqlite
 import Database.Persist.TH
@@ -25,7 +25,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as S
-import Data.Time (Day, TimeOfDay (..), UTCTime (..), fromGregorian, ZonedTime (..), LocalTime (..), TimeZone (..))
+import Data.Time (Day, TimeOfDay (..), UTCTime (..), fromGregorian, ZonedTime (..), LocalTime (..), TimeZone (..), minutesToTimeZone)
 import System.Random (randomIO, randomRIO, Random, newStdGen)
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad (when, forM_)
@@ -132,6 +132,14 @@ arbText =
   .  filter (/= '\0')     -- no nulls
   <$> arbitrary
   where forbidden = [NotAssigned, PrivateUse]
+
+arbitraryZT :: Gen ZonedTime
+arbitraryZT = do
+    lt <- arbitrary
+    halfHours <- choose (-23, 23)
+    let minutes = halfHours * 30
+        tz = minutesToTimeZone minutes
+    return $ ZonedTime lt tz
 
 asIO :: IO a -> IO a
 asIO = id
