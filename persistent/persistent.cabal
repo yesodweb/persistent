@@ -30,7 +30,7 @@ library
                    , resourcet                >= 0.4
                    , monad-control            >= 0.3
                    , lifted-base              >= 0.1
-                   , pool-conduit             >= 0.1.1
+                   , pool-conduit             >= 0.1.2
                    , path-pieces              >= 0.1
                    , aeson                    >= 0.5
                    , monad-logger             >= 0.3

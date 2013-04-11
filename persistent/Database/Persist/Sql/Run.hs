@@ -13,11 +13,14 @@ import Control.Monad.IO.Class
 import Control.Exception.Lifted (bracket)
 import Data.IORef (readIORef)
 import qualified Data.Map as Map
+import Control.Exception.Lifted (throwIO)
 
 -- | Get a connection from the pool, run the given action, and then return the
 -- connection to the pool.
 runSqlPool :: MonadBaseControl IO m => SqlPersistT m a -> Pool Connection -> m a
-runSqlPool r pconn = withResource pconn $ runSqlConn r
+runSqlPool r pconn = do
+    mres <- withResourceTimeout 2000000 pconn $ runSqlConn r
+    maybe (throwIO Couldn'tGetSQLConnection) return mres
 
 runSqlConn :: MonadBaseControl IO m => SqlPersistT m a -> Connection -> m a
 runSqlConn (SqlPersistT r) conn = do

@@ -73,9 +73,10 @@ data Column = Column
     }
     deriving (Eq, Ord, Show)
 
-data StatementAlreadyFinalized = StatementAlreadyFinalized Text
+data PersistentSqlException = StatementAlreadyFinalized Text
+                            | Couldn'tGetSQLConnection
     deriving (Typeable, Show)
-instance Exception StatementAlreadyFinalized
+instance Exception PersistentSqlException
 
 data SqlBackend
 
