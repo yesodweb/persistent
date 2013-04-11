@@ -77,13 +77,18 @@ specs = describe "data type specs" $ do
             liftIO $ do
                 let check :: (Eq a, Show a) => String -> (DataTypeTable -> a) -> IO ()
                     check s f = (s, f x) @=? (s, f y)
+                -- Check floating-point near equality
+                let check' :: String -> (DataTypeTable -> Pico) -> IO ()
+                    check' s f
+                        | abs (f x - f y) < 0.000001 = return ()
+                        | otherwise = (s, f x) @=? (s, f y)
                 -- Check individual fields for better error messages
                 check "text" dataTypeTableText
                 check "textMaxLen" dataTypeTableTextMaxLen
                 check "bytes" dataTypeTableBytes
                 check "bytesMaxLen" dataTypeTableBytesMaxLen
                 check "int" dataTypeTableInt
-                check "pico" dataTypeTablePico
+                check' "pico" dataTypeTablePico
                 check "bool" dataTypeTableBool
 #ifndef WITH_MONGODB
                 check "day" dataTypeTableDay

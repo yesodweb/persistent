@@ -190,6 +190,8 @@ instance (HasResolution a) => PersistField (Fixed a) where
   fromPersistValue (PersistText t) = case reads $ T.unpack t of --  NOTE: Sqlite can store rationals just as string
     [(a, "")] -> Right a
     _ -> Left $ "Can not read " <> t <> " as Fixed"
+  fromPersistValue (PersistDouble d) = Right $ realToFrac d
+  fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
   fromPersistValue x = Left $ "Expected Rational, received: " <> T.pack (show x)
 
 instance PersistField Rational where
