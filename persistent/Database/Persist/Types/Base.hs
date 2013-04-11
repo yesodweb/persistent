@@ -270,6 +270,9 @@ data SqlType = SqlString
 newtype KeyBackend backend entity = Key { unKey :: PersistValue }
     deriving (Show, Read, Eq, Ord)
 
+type family KeyEntity key
+type instance KeyEntity (KeyBackend backend entity) = entity
+
 instance A.ToJSON (KeyBackend backend entity) where
     toJSON (Key val) = A.toJSON val
 
