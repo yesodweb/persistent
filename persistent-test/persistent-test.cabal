@@ -109,6 +109,8 @@ library
                    , random >= 1.0
                    , QuickCheck >= 2.5
                    , blaze-html >= 0.5
+                   , quickcheck-instances >= 0.3
+                   , blaze-html >= 0.5 && < 0.6
                    , pool-conduit
                    , transformers-base
                    , attoparsec
@@ -126,6 +128,7 @@ library
                    , postgresql-simple
                    , mysql
                    , mysql-simple
+                   , blaze-builder
 
 
    if flag(postgresql)

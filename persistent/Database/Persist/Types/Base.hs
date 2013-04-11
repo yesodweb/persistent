@@ -24,6 +24,8 @@ import Data.ByteString (ByteString)
 import Data.Time.LocalTime (ZonedTime, zonedTimeToUTC, zonedTimeToLocalTime, zonedTimeZone)
 import Data.Map (Map)
 import qualified Data.HashMap.Strict as HM
+import Data.Fixed (Fixed, Pico, HasResolution, resolution)
+import Data.Word (Word32)
 
 -- | A 'Checkmark' should be used as a field type whenever a
 -- uniqueness constraint should guarantee that a certain kind of
@@ -168,6 +170,7 @@ data PersistValue = PersistText Text
                   | PersistByteString ByteString
                   | PersistInt64 Int64
                   | PersistDouble Double
+                  | PersistRational Rational
                   | PersistBool Bool
                   | PersistDay Day
                   | PersistTimeOfDay TimeOfDay
@@ -196,6 +199,7 @@ fromPersistValueText (PersistByteString bs) =
     Right $ TE.decodeUtf8With lenientDecode bs
 fromPersistValueText (PersistInt64 i) = Right $ T.pack $ show i
 fromPersistValueText (PersistDouble d) = Right $ T.pack $ show d
+fromPersistValueText (PersistRational r) = Right $ T.pack $ show r
 fromPersistValueText (PersistDay d) = Right $ T.pack $ show d
 fromPersistValueText (PersistTimeOfDay d) = Right $ T.pack $ show d
 fromPersistValueText (PersistUTCTime d) = Right $ T.pack $ show d
@@ -211,6 +215,7 @@ instance A.ToJSON PersistValue where
     toJSON (PersistByteString b) = A.String $ T.cons 'b' $ TE.decodeUtf8 $ B64.encode b
     toJSON (PersistInt64 i) = A.Number $ fromIntegral i
     toJSON (PersistDouble d) = A.Number $ AN.D d
+    toJSON (PersistRational r) = A.String $ T.pack $ 'r' : show r
     toJSON (PersistBool b) = A.Bool b
     toJSON (PersistTimeOfDay t) = A.String $ T.pack $ 't' : show t
     toJSON (PersistUTCTime u) = A.String $ T.pack $ 'u' : show u
@@ -232,6 +237,7 @@ instance A.FromJSON PersistValue where
             Just ('u', t) -> fmap PersistUTCTime $ readMay t
             Just ('z', t) -> fmap PersistZonedTime $ readMay t
             Just ('d', t) -> fmap PersistDay $ readMay t
+            Just ('r', t) -> fmap PersistRational $ readMay t
             Just ('o', t) -> either (fail "Invalid base64") (return . PersistObjectId)
                            $ B64.decode $ TE.encodeUtf8 t
             Just (c, _) -> fail $ "Unknown prefix: " ++ [c]
@@ -258,6 +264,7 @@ data SqlType = SqlString
              | SqlInt32
              | SqlInt64
              | SqlReal
+             | SqlNumeric Word32 Word32
              | SqlBool
              | SqlDay
              | SqlTime

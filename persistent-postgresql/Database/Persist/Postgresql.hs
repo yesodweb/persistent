@@ -2,6 +2,8 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+
 -- | A postgresql backend for persistent.
 module Database.Persist.Postgresql
     ( withPostgresqlPool
@@ -15,6 +17,7 @@ module Database.Persist.Postgresql
 
 import Database.Persist.Sql
 import Data.Maybe (mapMaybe)
+import Data.Fixed (Pico)
 
 import qualified Database.PostgreSQL.Simple as PG
 import qualified Database.PostgreSQL.Simple.BuiltinTypes as PG
@@ -42,6 +45,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
+import qualified Blaze.ByteString.Builder.Char8 as BBB
 import Data.Time.LocalTime (localTimeToUTC, utc)
 import Data.Text (Text, pack)
 import Data.Aeson
@@ -217,11 +221,15 @@ withStmt' conn query vals =
 -- | Avoid orphan instances.
 newtype P = P PersistValue
 
+
 instance PGTF.ToField P where
     toField (P (PersistText t))        = PGTF.toField t
     toField (P (PersistByteString bs)) = PGTF.toField (PG.Binary bs)
     toField (P (PersistInt64 i))       = PGTF.toField i
     toField (P (PersistDouble d))      = PGTF.toField d
+    toField (P (PersistRational r))    = PGTF.Plain $
+                                         BBB.fromString $
+                                         show (fromRational r :: Pico) --  FIXME: Too Ambigous, can not select precision without information about field
     toField (P (PersistBool b))        = PGTF.toField b
     toField (P (PersistDay d))         = PGTF.toField d
     toField (P (PersistTimeOfDay t))   = PGTF.toField t
@@ -262,7 +270,7 @@ getGetter PG.Timestamp             = convertPV (PersistUTCTime . localTimeToUTC 
 getGetter PG.TimestampTZ           = convertPV (PersistZonedTime . ZT)
 getGetter PG.Bit                   = convertPV PersistInt64
 getGetter PG.VarBit                = convertPV PersistInt64
-getGetter PG.Numeric               = convertPV (PersistDouble . fromRational)
+getGetter PG.Numeric               = convertPV PersistRational
 getGetter PG.Void                  = \_ _ -> Ok PersistNull
 getGetter other   = error $ "Postgresql.getGetter: type " ++
                             show other ++ " not supported."
@@ -321,7 +329,7 @@ getColumns :: (Text -> IO Statement)
            -> EntityDef a
            -> IO [Either Text (Either Column (DBName, [DBName]))]
 getColumns getter def = do
-    stmt <- getter "SELECT column_name,is_nullable,udt_name,column_default FROM information_schema.columns WHERE table_name=? AND column_name <> ?"
+    stmt <- getter "SELECT column_name,is_nullable,udt_name,column_default,numeric_precision,numeric_scale FROM information_schema.columns WHERE table_name=? AND column_name <> ?"
     let vals =
             [ PersistText $ unDBName $ entityDB def
             , PersistText $ unDBName $ entityID def
@@ -387,7 +395,7 @@ getAlters (c1, u1) (c2, u2) =
 getColumn :: (Text -> IO Statement)
           -> DBName -> [PersistValue]
           -> IO (Either Text Column)
-getColumn getter tname [PersistText x, PersistText y, PersistText z, d] =
+getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, nscl] =
     case d' of
         Left s -> return $ Left s
         Right d'' ->
@@ -436,7 +444,11 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d] =
     getType "float8"      = Right $ SqlReal
     getType "bytea"       = Right $ SqlBlob
     getType "time"        = Right $ SqlTime
+    getType "numeric"     = getNumeric npre nscl
     getType a             = Right $ SqlOther a
+
+    getNumeric (PersistInt64 a) (PersistInt64 b) = Right $ SqlNumeric (fromIntegral a) (fromIntegral b)
+    getNumeric a b = Left $ pack $ "Can not get numeric field precision, got: " ++ show a ++ " and " ++ show b ++ " as precision and scale"
 getColumn _ _ x =
     return $ Left $ pack $ "Invalid result from information_schema: " ++ show x
 
@@ -495,6 +507,7 @@ showSqlType SqlString = "VARCHAR"
 showSqlType SqlInt32 = "INT4"
 showSqlType SqlInt64 = "INT8"
 showSqlType SqlReal = "DOUBLE PRECISION"
+showSqlType (SqlNumeric s prec) = "NUMERIC(" ++ show s ++ "," ++ show prec ++ ")"
 showSqlType SqlDay = "DATE"
 showSqlType SqlTime = "TIME"
 showSqlType SqlDayTime = "TIMESTAMP"

@@ -19,6 +19,7 @@ import Database.Persist.Sql.Types
 import Control.Arrow ((&&&))
 import Data.Text (Text, intercalate, pack)
 import Data.Maybe (fromMaybe)
+import Data.Fixed
 
 import Data.Monoid (Monoid)
 import Control.Monad.Trans.Class (lift)
@@ -301,3 +302,13 @@ instance PersistFieldSql PersistValue where
     sqlType _ = SqlInt64 -- since PersistValue should only be used like this for keys, which in SQL are Int64
 instance PersistFieldSql Checkmark where
     sqlType    _ = SqlBool
+instance (HasResolution a) => PersistFieldSql (Fixed a) where
+    sqlType a =
+        SqlNumeric long prec
+      where
+        prec = round $ (log $ fromIntegral $ resolution n) / (log 10) --  FIXME: May lead to problems with big numbers
+        long = prec + 10                                              --  FIXME: Is this enough ?
+        n = 0
+        mn = return n `asTypeOf` a
+instance PersistFieldSql Rational where
+    sqlType a = SqlNumeric 22 12   --  FIXME: Ambigous, 12 is from Pico which is used to convert Rational to number string

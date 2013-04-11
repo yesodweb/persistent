@@ -877,6 +877,11 @@ instance Lift SqlType where
     lift SqlInt32 = [|SqlInt32|]
     lift SqlInt64 = [|SqlInt64|]
     lift SqlReal = [|SqlReal|]
+    lift (SqlNumeric x y) =
+        [|SqlNumeric (fromInteger x') (fromInteger y')|]
+      where
+        x' = fromIntegral x
+        y' = fromIntegral y
     lift SqlBool = [|SqlBool|]
     lift SqlDay = [|SqlDay|]
     lift SqlTime = [|SqlTime|]

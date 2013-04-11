@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE OverloadedStrings #-}
 #ifndef NO_OVERLAP
 {-# LANGUAGE OverlappingInstances #-}
 #endif
@@ -23,6 +24,8 @@ import Data.Typeable (Typeable)
 import Data.Int (Int8, Int16, Int32, Int64)
 import Data.Word (Word, Word8, Word16, Word32, Word64)
 import Data.Text (Text)
+import Data.Fixed
+import Data.Monoid ((<>))
 
 import Text.Blaze.Html
 import Text.Blaze.Html.Renderer.Text (renderHtml)
@@ -96,6 +99,7 @@ instance PersistField String where
         Right $ T.unpack $ T.decodeUtf8With T.lenientDecode bs
     fromPersistValue (PersistInt64 i) = Right $ Prelude.show i
     fromPersistValue (PersistDouble d) = Right $ Prelude.show d
+    fromPersistValue (PersistRational r) = Right $ Prelude.show r
     fromPersistValue (PersistDay d) = Right $ Prelude.show d
     fromPersistValue (PersistTimeOfDay d) = Right $ Prelude.show d
     fromPersistValue (PersistUTCTime d) = Right $ Prelude.show d
@@ -177,7 +181,25 @@ instance PersistField Word64 where
 instance PersistField Double where
     toPersistValue = PersistDouble
     fromPersistValue (PersistDouble d) = Right d
+    fromPersistValue (PersistRational r) = Right $ fromRational r
     fromPersistValue x = Left $ T.pack $ "Expected Double, received: " ++ show x
+
+instance (HasResolution a) => PersistField (Fixed a) where
+  toPersistValue = PersistRational . toRational
+  fromPersistValue (PersistRational r) = Right $ fromRational r
+  fromPersistValue (PersistText t) = case reads $ T.unpack t of --  NOTE: Sqlite can store rationals just as string
+    [(a, "")] -> Right a
+    _ -> Left $ "Can not read " <> t <> " as Fixed"
+  fromPersistValue x = Left $ "Expected Rational, received: " <> T.pack (show x)
+
+instance PersistField Rational where
+  toPersistValue = PersistRational
+  fromPersistValue (PersistRational r) = Right r
+  fromPersistValue (PersistDouble d) = Right $ toRational d
+  fromPersistValue (PersistText t) = case reads $ T.unpack t of --  NOTE: Sqlite can store rationals just as string
+    [(a, "")] -> Right $ toRational (a :: Pico)
+    _ -> Left $ "Can not read " <> t <> " as Rational (Pico in fact)"
+  fromPersistValue x = Left $ "Expected Rational, received: " <> T.pack (show x)
 
 instance PersistField Bool where
     toPersistValue = PersistBool
