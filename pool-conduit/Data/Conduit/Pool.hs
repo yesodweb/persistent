@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleContexts #-}
 -- | Allocate resources from a pool, guaranteeing resource handling via the
 -- ResourceT transformer.
 module Data.Conduit.Pool
@@ -7,13 +9,18 @@ module Data.Conduit.Pool
     , P.Pool
     , P.createPool
     , P.withResource
+    , withResourceTimeout
     , withResourceT
     ) where
 
 import qualified Data.Pool as P
+import Control.Monad (liftM)
 import Control.Monad.Trans.Resource
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.IORef as I
+import Control.Exception (onException, mask)
+import System.Timeout (timeout)
+import Control.Monad.Trans.Control (control)
 
 -- | The result of taking a resource.
 data ManagedResource m a = ManagedResource
@@ -37,6 +44,34 @@ withResourceT pool f = do
     mrReuse mr True
     mrRelease mr
     return b
+
+-- | Like 'P.withResource', but times out the operation if resource
+-- allocation does not complete within the given timeout period.
+--
+-- Since 0.1.2
+withResourceTimeout ::
+#if MIN_VERSION_monad_control(0,3,0)
+    (MonadBaseControl IO m)
+#else
+    (MonadControlIO m)
+#endif
+  => Int -- ^ Timeout period in microseconds
+  -> P.Pool a
+  -> (a -> m b)
+  -> m (Maybe b)
+{-# SPECIALIZE withResourceTimeout :: Int -> P.Pool a -> (a -> IO b) -> IO (Maybe b) #-}
+withResourceTimeout ms pool act = control $ \runInIO -> mask $ \restore -> do
+    mres <- timeout ms $ P.takeResource pool
+    case mres of
+        Nothing -> runInIO $ return Nothing
+        Just (resource, local) -> do
+            ret <- restore (runInIO (liftM Just $ act resource)) `onException`
+                    P.destroyResource pool local resource
+            P.putResource local resource
+            return ret
+#if __GLASGOW_HASKELL__ >= 700
+{-# INLINABLE withResourceTimeout #-}
+#endif
 
 -- | Take a resource from the pool and register a release action.
 takeResource :: MonadResource m => P.Pool a -> m (ManagedResource m a)
