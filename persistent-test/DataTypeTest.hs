@@ -109,20 +109,20 @@ randomValues = do
 
 instance Arbitrary (DataTypeTableGeneric g) where
   arbitrary = DataTypeTable
-     <$> arbText
-     <*> arbText
-     <*> arbitrary
-     <*> arbitrary
-     <*> arbitrary
+     <$> arbText                -- text
+     <*> arbText                -- textManLen
+     <*> arbitrary              -- bytes
+     <*> arbitrary              -- bytesMaxLen
+     <*> arbitrary              -- int
      <*> arbitrary              -- double
      <*> arbitrary              -- pico
      <*> arbitrary              -- bool
 #ifndef WITH_MONGODB
-     <*> arbitrary
-     <*> arbitrary
+     <*> arbitrary              -- day
+     <*> arbitrary              -- time
 #endif
-     <*> arbitrary
-     <*> arbitrary
+     <*> arbitrary              -- utc
+     <*> arbitraryZT            -- zonedTime
 
 arbText :: Gen Text
 arbText =
