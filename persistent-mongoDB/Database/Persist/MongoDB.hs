@@ -350,11 +350,13 @@ findAndModifyOne coll objectId updates = do
      "query" DB.:= DB.Doc [_id DB.:= DB.ObjId objectId],
      "update" DB.:= DB.Doc updates
    ]
-  return $ case DB.lookup "err" (DB.at "lastErrorObject" result) result of
-    Just e -> Left e
+  return $ case findErr result of
     Nothing -> case DB.lookup "value" result of
       Nothing -> Left "no value field"
       Just doc -> Right doc
+    Just e -> Left e
+    where
+      findErr result = DB.lookup "err" (DB.at "lastErrorObject" result)
 
 instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => PersistQuery (DB.Action m) where
     update _ [] = return ()
