@@ -93,6 +93,7 @@ import Data.Aeson (Value (Object, Number), (.:), (.:?), (.!=), FromJSON(..))
 import Control.Monad (mzero)
 import qualified Data.Conduit.Pool as Pool
 import Data.Time (NominalDiffTime)
+import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Data.Time.Calendar (Day(..))
 import Data.Attoparsec.Number
 import Data.Char (toUpper)
@@ -601,9 +602,12 @@ instance DB.Val PersistValue where
   val (PersistText x)    = DB.String x
   val (PersistDouble x)  = DB.Float x
   val (PersistBool x)    = DB.Bool x
+#ifdef HIGH_PRECISION_DATE
+  val (PersistUTCTime x) = DB.Int64 $ round $ 1000 * 1000 * 1000 * (utcTimeToPOSIXSeconds x)
+#else
   -- this is just millisecond precision: https://jira.mongodb.org/browse/SERVER-1460
-  -- perhaps should store as long
   val (PersistUTCTime x) = DB.UTC x
+#endif
   val (PersistZonedTime (ZT x)) = DB.String $ T.pack $ show x
   val (PersistDay d)     = DB.Int64 $ fromInteger $ toModifiedJulianDay d
   val (PersistNull)      = DB.Null

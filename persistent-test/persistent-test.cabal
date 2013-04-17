@@ -32,6 +32,10 @@ Flag couchdb
    Description: test couchDB. default is to test just sqlite.
    Default: False
 
+Flag high_precision_date
+   Description: for MongoDB use a time storage with nano second precision.
+   Default: False
+
 library
     extra-libraries: sqlite3
 
@@ -164,6 +168,8 @@ library
      cpp-options: -DWITH_COUCHDB -DDEBUG
      exposed-modules:
                      Database.Persist.CouchDB
+   if flag(high_precision_date)
+     cpp-options: -DHIGH_PRECISION_DATE
 
 
 test-suite test

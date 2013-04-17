@@ -17,6 +17,9 @@ module Database.Persist.Class.PersistField
 import Database.Persist.Types.Base
 import Data.Monoid (mappend)
 import Data.Time (Day(..), TimeOfDay, UTCTime)
+#ifdef HIGH_PRECISION_DATE
+import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
+#endif
 import Data.Time.LocalTime (ZonedTime, zonedTimeToUTC, zonedTimeToLocalTime, zonedTimeZone)
 import Data.ByteString.Char8 (ByteString, unpack)
 import Control.Applicative
@@ -239,7 +242,10 @@ instance PersistField TimeOfDay where
 instance PersistField UTCTime where
     toPersistValue = PersistUTCTime
     fromPersistValue (PersistUTCTime d) = Right d
-    fromPersistValue x@(PersistText t) =
+#ifdef HIGH_PRECISION_DATE
+    fromPersistValue (PersistInt64 i)   = Right $ posixSecondsToUTCTime $ (/ (1000 * 1000 * 1000)) $ fromIntegral $ i
+#endif
+    fromPersistValue x@(PersistText t)  =
         case reads $ T.unpack t of
             (d, _):_ -> Right d
             _ -> Left $ T.pack $ "Expected UTCTime, received " ++ show x
@@ -247,6 +253,7 @@ instance PersistField UTCTime where
         case reads $ unpack s of
             (d, _):_ -> Right d
             _ -> Left $ T.pack $ "Expected UTCTime, received " ++ show x
+
     fromPersistValue x = Left $ T.pack $ "Expected UTCTime, received: " ++ show x
 
 instance PersistField ZonedTime where
