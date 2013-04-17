@@ -19,7 +19,6 @@ import Init
 import Data.Text (Text)
 import Data.String (IsString)
 import Data.ByteString (ByteString)
-import Test.HUnit (Assertion)
 
 #ifdef WITH_MONGODB
 db :: Action IO () -> Assertion

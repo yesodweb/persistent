@@ -16,15 +16,15 @@ embedMigrate
 ) where
 
 import Init
-import Test.HUnit (Assertion)
-import Test.Hspec (shouldThrow)
 import Control.Exception (Exception, throw)
 import Data.Typeable (Typeable)
 
 import qualified Data.Text as T
 import qualified Data.Set as S
 import qualified Data.Map as M
+#if WITH_MONGODB
 import Database.Persist.MongoDB
+#endif
 
 data TestException = TestException
     deriving (Show, Typeable, Eq)

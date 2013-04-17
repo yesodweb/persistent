@@ -10,9 +10,6 @@
 {-# LANGUAGE EmptyDataDecls #-}
 module SumTypeTest (specs) where
 
-import Test.Hspec.Monadic
-import Test.Hspec.HUnit ()
-import Test.HUnit
 import Database.Persist.Sqlite
 import Database.Persist.TH
 #ifndef WITH_MONGODB

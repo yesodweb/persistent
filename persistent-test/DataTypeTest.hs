@@ -22,19 +22,17 @@ import Data.Char (generalCategory, GeneralCategory(..))
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.ByteString (ByteString)
-import qualified Data.ByteString as S
-import Data.Time (Day, TimeOfDay (..), UTCTime (..), fromGregorian, ZonedTime (..), LocalTime (..), TimeZone (..), minutesToTimeZone)
-import System.Random (randomIO, randomRIO, Random, newStdGen)
+import Data.Time (Day, UTCTime (..), ZonedTime (..), minutesToTimeZone, TimeOfDay)
+import System.Random (newStdGen)
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad (when, forM_)
-import Data.Word (Word8)
 import Control.Monad.Trans.Resource (runResourceT)
 import Data.Fixed (Pico)
 
 import Init
 
 #ifdef WITH_MONGODB
-mkPersist persistSettings [persistLowerCase|
+mkPersist persistSettings [persistUpperCase|
 #else
 -- Test lower case names
 share [mkPersist sqlSettings, mkMigrate "dataTypeMigrate"] [persistLowerCase|

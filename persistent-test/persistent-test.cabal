@@ -79,7 +79,7 @@ library
                      Database.Persist.Sqlite
                      Database.Sqlite
 
-    hs-source-dirs: ., test, persistent, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mysql, persistent-mongoDB, persistent-couchdb
+    hs-source-dirs: ., test, persistent, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mysql, persistent-couchdb
 
     ghc-options:   -Wall
     -- if impl(ghc >= 7.4)
@@ -152,6 +152,7 @@ library
                    , cereal
                    , bson
 
+     hs-source-dirs: persistent-mongoDB
      cpp-options: -DWITH_MONGODB -DDEBUG
      exposed-modules:
                      Database.Persist.MongoDB

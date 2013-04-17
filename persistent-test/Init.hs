@@ -26,7 +26,6 @@ module Init (
 #endif
 
    -- re-exports
-  , (@?=), (@=?)
   , module Database.Persist
   , module Test.Hspec
   , module Test.Hspec.HUnit
