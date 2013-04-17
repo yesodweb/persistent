@@ -18,8 +18,7 @@
 module PersistentTest where
 
 import Test.HUnit hiding (Test)
-import Test.Hspec.Expectations
-import Test.Hspec.HUnit()
+import Test.Hspec.Expectations ()
 import Test.Hspec.QuickCheck(prop)
 
 import Database.Persist
@@ -31,12 +30,13 @@ import Data.Bson (genObjectId)
 import Language.Haskell.TH.Syntax (Type(..))
 
 #else
-# if MIN_VERSION_monad_control(0, 3, 0)
+#  if MIN_VERSION_monad_control(0, 3, 0)
 import qualified Control.Monad.Trans.Control
-# else
+#  else
 import qualified Control.Monad.IO.Control
-# endif
+#  endif
 
+import Control.Monad (liftM)
 import Control.Monad.Logger
 import Database.Persist.TH (mkDeleteCascade)
 import Database.Persist.Sqlite
@@ -61,7 +61,6 @@ import Database.Persist.MySQL()
 
 #endif
 
-import Database.Persist.TH (derivePersistField, persistUpperCase)
 import Control.Monad.IO.Class
 
 import Data.Text (Text)
@@ -76,7 +75,6 @@ import qualified Data.Conduit.List as CL
 import Data.Functor.Identity
 import Data.Functor.Constant
 import PersistTestPetType
-import Control.Monad (liftM)
 
 #ifdef WITH_MONGODB
 mkPersist (mkPersistSettings $ ConT ''MongoBackend) [persistUpperCase|

@@ -31,7 +31,7 @@ data TestException = TestException
 instance Exception TestException
 
 #if WITH_MONGODB
-mkPersist persistSettings [persist|
+mkPersist persistSettings [persistUpperCase|
 #else
 share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
 #endif

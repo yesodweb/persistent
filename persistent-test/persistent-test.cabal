@@ -77,8 +77,8 @@ library
                      Database.Persist.TH
 
                      Database.Persist.Sqlite
-                     Database.Persist.Postgresql
-                     Database.Persist.MySQL
+                     -- Database.Persist.Postgresql
+                     -- Database.Persist.MySQL
                      Database.Sqlite
 
     hs-source-dirs: ., test, persistent, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mysql, persistent-mongoDB, persistent-couchdb

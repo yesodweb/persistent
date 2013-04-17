@@ -10,7 +10,8 @@ import qualified MaxLenTest
 import qualified SumTypeTest
 import qualified UniqueTest
 import qualified MigrationOnlyTest
-import Test.Hspec.Monadic (hspec)
+import Test.Hspec (hspec)
+import Test.Hspec.Runner
 import Init
 import System.Exit
 import Control.Monad (unless, when)
@@ -40,9 +41,9 @@ main = do
   when sqExists $ removeFile $ fromText sqlite_database
   runConn (setup PersistentTest.testMigrate)
 #endif
-  r <- hspecB $ PersistentTest.specs
+  summary <- hspecWith defaultConfig $ PersistentTest.specs
   runResourceT $ runConn PersistentTest.cleanDB
-  unless r $ exitWith (toExitCode r)
+  unless (summaryFailures summary == 0) $ exitWith (toExitCode False)
 
 #ifndef WITH_MONGODB
   runConn (setup EmbedTest.embedMigrate)

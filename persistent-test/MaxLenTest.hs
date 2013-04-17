@@ -24,7 +24,7 @@ import Test.HUnit (Assertion)
 #ifdef WITH_MONGODB
 db :: Action IO () -> Assertion
 db = db' (return ())
-mkPersist persistSettings [persist|
+mkPersist persistSettings [persistUpperCase|
 #else
 share [mkPersist sqlSettings,  mkMigrate "maxlenMigrate"] [persistLowerCase|
 #endif

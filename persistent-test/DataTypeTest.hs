@@ -10,8 +10,6 @@
 {-# LANGUAGE EmptyDataDecls #-}
 module DataTypeTest (specs) where
 
-import Test.Hspec.Monadic
-import Test.Hspec.HUnit ()
 import Test.QuickCheck.Arbitrary (Arbitrary, arbitrary)
 import Test.QuickCheck.Gen (Gen(..), choose)
 import Test.QuickCheck.Instances ()

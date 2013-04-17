@@ -9,9 +9,6 @@
 {-# LANGUAGE EmptyDataDecls #-}
 module HtmlTest (specs) where
 
-import Test.Hspec.Monadic
-import Test.Hspec.HUnit ()
-import Test.HUnit
 import Database.Persist.Sqlite
 import Database.Persist.TH
 #if WITH_POSTGRESQL

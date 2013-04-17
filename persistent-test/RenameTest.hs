@@ -10,9 +10,6 @@
 {-# LANGUAGE EmptyDataDecls #-}
 module RenameTest (specs) where
 
-import Test.Hspec.Monadic
-import Test.Hspec.HUnit ()
-import Test.HUnit
 import Database.Persist.Sqlite
 #ifndef WITH_MONGODB
 import qualified Data.Conduit as C

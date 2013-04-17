@@ -10,15 +10,13 @@
 module UniqueTest where
 
 import Init
-import Control.Monad (void)
-import Test.HUnit (Assertion)
-import Test.Hspec (shouldThrow, anyException)
 #ifndef WITH_MONGODB
 import Database.Persist (Checkmark(..))
+import Control.Monad (void)
 #endif
 
 #ifdef WITH_MONGODB
-mkPersist persistSettings [persist|
+mkPersist persistSettings [persistUpperCase|
 #else
 share [mkPersist sqlSettings,  mkMigrate "uniqueMigrate"] [persistLowerCase|
 #endif
