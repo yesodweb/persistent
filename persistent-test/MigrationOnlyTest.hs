@@ -25,7 +25,11 @@ import qualified Data.Text as T
 
 import Init
 
+#ifdef WITH_MONGODB
+mkPersist persistSettings [persistUpperCase|
+#else
 share [mkPersist sqlSettings, mkMigrate "migrateAll1"] [persistLowerCase|
+#endif
 TwoField1 sql=two_field
     field1 Int
     field2 T.Text
@@ -33,7 +37,11 @@ TwoField1 sql=two_field
     deriving Eq Show
 |]
 
+#ifdef WITH_MONGODB
+mkPersist persistSettings [persistUpperCase|
+#else
 share [mkPersist sqlSettings, mkMigrate "migrateAll2"] [persistLowerCase|
+#endif
 TwoField
     field1 Int
     field2 T.Text

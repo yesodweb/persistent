@@ -77,8 +77,6 @@ library
                      Database.Persist.TH
 
                      Database.Persist.Sqlite
-                     -- Database.Persist.Postgresql
-                     -- Database.Persist.MySQL
                      Database.Sqlite
 
     hs-source-dirs: ., test, persistent, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mysql, persistent-mongoDB, persistent-couchdb
@@ -121,28 +119,24 @@ library
                    -- actually just a mongoDB dependency
                    -- fixes build warning on current build server
                    , cereal
-                   , mongoDB       >= 1.3
                    , bson
                    , silently
-                   , postgresql-libpq
-                   , postgresql-simple
-                   , mysql
-                   , mysql-simple
                    , blaze-builder
 
 
    if flag(postgresql)
      build-depends:
-                   -- postgresql dependencies
                      postgresql-simple     >= 0.2
                    , postgresql-libpq      >= 0.6
+
+     exposed-modules:
+                     Database.Persist.PostgreSQL
 
      cpp-options: -DWITH_POSTGRESQL
 
 
    if flag(mysql)
      build-depends:
-                   -- MySQL dependencies
                      mysql-simple          >= 0.2.2.3
                    , mysql                 >= 0.1.1.3
 
@@ -154,7 +148,6 @@ library
 
    if flag(mongodb)
      build-depends:
-                   -- mongoDB dependencies
                      mongoDB       == 1.3.*
                    , cereal
                    , bson

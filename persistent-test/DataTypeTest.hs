@@ -46,9 +46,9 @@ DataTypeTable no-json
     bytesMaxLen ByteString maxlen=100
     int Int
     double Double
-    pico Pico
     bool Bool
 #ifndef WITH_MONGODB
+    pico Pico
     day Day
     time TimeOfDay
 #endif
@@ -86,9 +86,9 @@ specs = describe "data type specs" $ do
                 check "bytes" dataTypeTableBytes
                 check "bytesMaxLen" dataTypeTableBytesMaxLen
                 check "int" dataTypeTableInt
-                check' "pico" dataTypeTablePico
                 check "bool" dataTypeTableBool
 #ifndef WITH_MONGODB
+                check' "pico" dataTypeTablePico
                 check "day" dataTypeTableDay
                 check "time" dataTypeTableTime
 #endif
@@ -113,9 +113,9 @@ instance Arbitrary (DataTypeTableGeneric g) where
      <*> arbitrary              -- bytesMaxLen
      <*> arbitrary              -- int
      <*> arbitrary              -- double
-     <*> arbitrary              -- pico
      <*> arbitrary              -- bool
 #ifndef WITH_MONGODB
+     <*> arbitrary              -- pico
      <*> arbitrary              -- day
      <*> arbitrary              -- time
 #endif

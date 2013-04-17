@@ -607,8 +607,9 @@ instance DB.Val PersistValue where
   val (PersistMap  m)    = DB.Doc $ map (\(k, v)-> (DB.=:) k v) m
   val (PersistByteString x) = DB.Bin (DB.Binary x)
   val x@(PersistObjectId _) = DB.ObjId $ persistObjectIdToDbOid x
-  val (PersistDay _)        = throw $ PersistMongoDBUnsupported "only PersistUTCTime currently implemented"
-  val (PersistTimeOfDay _)  = throw $ PersistMongoDBUnsupported "only PersistUTCTime currently implemented"
+  val (PersistDay _)        = throw $ PersistMongoDBUnsupported "PersistDay not implemented for the MongoDB backend. only PersistUTCTime currently implemented"
+  val (PersistTimeOfDay _)  = throw $ PersistMongoDBUnsupported "PersistTimeOfDay not implemented for the MongoDB backend. only PersistUTCTime currently implemented"
+  val (PersistRational _)   = throw $ PersistMongoDBUnsupported "PersistRational not implemented for the MongoDB backend"
   cast' (DB.Float x)  = Just (PersistDouble x)
   cast' (DB.Int32 x)  = Just $ PersistInt64 $ fromIntegral x
   cast' (DB.Int64 x)  = Just $ PersistInt64 x

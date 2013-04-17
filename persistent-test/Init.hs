@@ -146,11 +146,8 @@ db' actions cleanDB = do
   r <- runConn (actions >> cleanDB)
   return r
 
-instance Arbitrary BS.ByteString where
-    arbitrary = BS.pack `fmap` replicateM 12 arbitrary
-
 instance Arbitrary PersistValue where
-    arbitrary = PersistObjectId `fmap` arbitrary
+    arbitrary = PersistObjectId `fmap` BS.pack `fmap` replicateM 12 arbitrary
 
 #else
 type BackendMonad = SqlBackend
