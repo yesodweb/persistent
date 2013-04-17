@@ -93,6 +93,7 @@ import Data.Aeson (Value (Object, Number), (.:), (.:?), (.!=), FromJSON(..))
 import Control.Monad (mzero)
 import qualified Data.Conduit.Pool as Pool
 import Data.Time (NominalDiffTime)
+import Data.Time.Calendar (Day(..))
 import Data.Attoparsec.Number
 import Data.Char (toUpper)
 
@@ -600,14 +601,16 @@ instance DB.Val PersistValue where
   val (PersistText x)    = DB.String x
   val (PersistDouble x)  = DB.Float x
   val (PersistBool x)    = DB.Bool x
+  -- this is just millisecond precision: https://jira.mongodb.org/browse/SERVER-1460
+  -- perhaps should store as long
   val (PersistUTCTime x) = DB.UTC x
   val (PersistZonedTime (ZT x)) = DB.String $ T.pack $ show x
+  val (PersistDay d)     = DB.Int64 $ fromInteger $ toModifiedJulianDay d
   val (PersistNull)      = DB.Null
   val (PersistList l)    = DB.Array $ map DB.val l
   val (PersistMap  m)    = DB.Doc $ map (\(k, v)-> (DB.=:) k v) m
   val (PersistByteString x) = DB.Bin (DB.Binary x)
   val x@(PersistObjectId _) = DB.ObjId $ persistObjectIdToDbOid x
-  val (PersistDay _)        = throw $ PersistMongoDBUnsupported "PersistDay not implemented for the MongoDB backend. only PersistUTCTime currently implemented"
   val (PersistTimeOfDay _)  = throw $ PersistMongoDBUnsupported "PersistTimeOfDay not implemented for the MongoDB backend. only PersistUTCTime currently implemented"
   val (PersistRational _)   = throw $ PersistMongoDBUnsupported "PersistRational not implemented for the MongoDB backend"
   cast' (DB.Float x)  = Just (PersistDouble x)

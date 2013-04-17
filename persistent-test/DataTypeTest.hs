@@ -47,9 +47,9 @@ DataTypeTable no-json
     int Int
     double Double
     bool Bool
+    day Day
 #ifndef WITH_MONGODB
     pico Pico
-    day Day
     time TimeOfDay
 #endif
     utc UTCTime
@@ -87,9 +87,9 @@ specs = describe "data type specs" $ do
                 check "bytesMaxLen" dataTypeTableBytesMaxLen
                 check "int" dataTypeTableInt
                 check "bool" dataTypeTableBool
+                check "day" dataTypeTableDay
 #ifndef WITH_MONGODB
                 check' "pico" dataTypeTablePico
-                check "day" dataTypeTableDay
                 check "time" dataTypeTableTime
 #endif
                 check "utc" dataTypeTableUtc
@@ -114,9 +114,9 @@ instance Arbitrary (DataTypeTableGeneric g) where
      <*> arbitrary              -- int
      <*> arbitrary              -- double
      <*> arbitrary              -- bool
+     <*> arbitrary              -- day
 #ifndef WITH_MONGODB
      <*> arbitrary              -- pico
-     <*> arbitrary              -- day
      <*> arbitrary              -- time
 #endif
      <*> arbitrary              -- utc

@@ -16,7 +16,7 @@ module Database.Persist.Class.PersistField
 
 import Database.Persist.Types.Base
 import Data.Monoid (mappend)
-import Data.Time (Day, TimeOfDay, UTCTime)
+import Data.Time (Day(..), TimeOfDay, UTCTime)
 import Data.Time.LocalTime (ZonedTime, zonedTimeToUTC, zonedTimeToLocalTime, zonedTimeZone)
 import Data.ByteString.Char8 (ByteString, unpack)
 import Control.Applicative
@@ -212,6 +212,7 @@ instance PersistField Bool where
 instance PersistField Day where
     toPersistValue = PersistDay
     fromPersistValue (PersistDay d) = Right d
+    fromPersistValue (PersistInt64 i) = Right $ ModifiedJulianDay $ toInteger i
     fromPersistValue x@(PersistText t) =
         case reads $ T.unpack t of
             (d, _):_ -> Right d
