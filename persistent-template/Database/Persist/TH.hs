@@ -413,8 +413,8 @@ isNotNull _ = True
 
 mkFromPersistValues :: EntityDef a -> Q [Clause]
 mkFromPersistValues t@(EntityDef { entitySum = False }) = do
-    nothing <- [|Left $(liftT "Invalid fromPersistValues input")|]
-    let cons' = ConE $ mkName $ unpack $ unHaskellName $ entityHaskell t
+    nothing <- [|Left $(liftT $ "Invalid fromPersistValues input. Entity: " `mappend` entName)|]
+    let cons' = ConE $ mkName $ unpack $ entName
     xs <- mapM (const $ newName "x") $ entityFields t
     fs <- [|fromPersistValue|]
     let xs' = map (AppE fs . VarE) xs
@@ -427,12 +427,15 @@ mkFromPersistValues t@(EntityDef { entitySum = False }) = do
         , Clause [WildP] (NormalB nothing) []
         ]
   where
+    entName = unHaskellName $ entityHaskell t
     go ap' x y = InfixE (Just x) ap' (Just y)
+
 mkFromPersistValues t@(EntityDef { entitySum = True }) = do
-    nothing <- [|Left $(liftT "Invalid fromPersistValues input: sum type with all nulls")|]
+    nothing <- [|Left $(liftT $ "Invalid fromPersistValues input: sum type with all nulls. Entity: " `mappend` entName)|]
     clauses <- mkClauses [] $ entityFields t
     return $ clauses `mappend` [Clause [WildP] (NormalB nothing) []]
   where
+    entName = unHaskellName $ entityHaskell t
     mkClauses _ [] = return []
     mkClauses before (field:after) = do
         x <- newName "x"
