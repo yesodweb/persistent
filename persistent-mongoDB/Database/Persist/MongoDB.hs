@@ -93,7 +93,9 @@ import Data.Aeson (Value (Object, Number), (.:), (.:?), (.!=), FromJSON(..))
 import Control.Monad (mzero)
 import qualified Data.Conduit.Pool as Pool
 import Data.Time (NominalDiffTime)
+#ifdef HIGH_PRECISION_DATE
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
+#endif
 import Data.Time.Calendar (Day(..))
 import Data.Attoparsec.Number
 import Data.Char (toUpper)
@@ -532,16 +534,31 @@ fromPersistValuesThrow entDef doc =
 
 eitherFromPersistValues :: (PersistEntity record) => EntityDef a -> [DB.Field] -> Either T.Text (Entity record)
 eitherFromPersistValues entDef doc =
-    -- normally the id is the first field: this is probably best even if worst case is worse
-    let mKey = lookup _id castDoc
+    let castDoc = assocListFromDoc doc
+        -- normally _id is the first field
+        mKey = lookup _id castDoc
     in case mKey of
          Nothing -> Left "could not find _id field"
-         Just key -> case fromPersistValues reorder of
+         Just key -> case fromPersistValues (map snd $ orderPersistValues entDef castDoc) of
              Right body -> Right $ Entity (Key key) body
              Left e -> Left e
+
+-- | unlike many SQL databases, MongoDB makes no guarantee of the ordering
+-- of the fields returned in the document.
+-- Ordering might be maintained if persistent were the only user of the db,
+-- but other tools may be using MongoDB.
+--
+-- Persistent creates a Haskell record from a list of PersistValue
+-- But most importantly it puts all PersistValues in the proper order
+orderPersistValues :: EntityDef a -> [(Text, PersistValue)] -> [(Text, PersistValue)]
+orderPersistValues entDef castDoc = reorder
   where
-    castDoc = mapFromDoc doc
-    castColumns = map (unDBName . fieldDB) $ (entityFields entDef)
+    castColumns = map nameAndEmbedded (entityFields entDef)
+    nameAndEmbedded fdef = ((unDBName . fieldDB) fdef, fieldEmbedded fdef)
+
+    -- TODO: the below reasoning should be re-thought now that we are no longer inserting null: searching for a null column will look at every returned field before giving up
+    -- Also, we are now doing the _id lookup at the start.
+    --
     -- we have an alist of fields that need to be the same order as entityColumns
     --
     -- this naive lookup is O(n^2)
@@ -555,12 +572,13 @@ eitherFromPersistValues entDef doc =
     -- * but once we found an item in the alist use a new alist without that item for future lookups
     -- * so for the last query there is only one item left
     --
-    -- TODO: the above should be re-thought now that we are no longer inserting null: searching for a null column will look at every returned field before giving up
-    -- Also, we are now doing the _id lookup at the start.
-    reorder :: [PersistValue] 
+    reorder :: [(Text, PersistValue)] 
     reorder = match castColumns castDoc []
       where
-        match :: [T.Text] -> [(T.Text, PersistValue)] -> [PersistValue] -> [PersistValue]
+        match :: [(Text, Maybe (EntityDef ()) )]
+              -> [(Text, PersistValue)]
+              -> [(Text, PersistValue)]
+              -> [(Text, PersistValue)]
         -- when there are no more Persistent castColumns we are done
         --
         -- allow extra mongoDB fields that persistent does not know about
@@ -568,19 +586,34 @@ eitherFromPersistValues entDef doc =
         -- our own application may set extra fields with the raw driver
         -- TODO: instead use a projection to avoid network overhead
         match [] _ values = values
-        match (c:cs) fields values =
+        match (column:columns) fields values =
           let (found, unused) = matchOne fields []
-          in match cs unused (values ++ [snd found])
+          in match columns unused $ values ++
+                [(fst column, nestedOrder (snd column) (snd found))]
           where
-            matchOne (f:fs) tried =
-              if c == fst f then (f, tried ++ fs) else matchOne fs (f:tried)
-            -- a Nothing will not be inserted into the document as a null
-            -- so if we don't find our column it is a
-            -- this keeps the document size down
-            matchOne [] tried = ((c, PersistNull), tried)
+            nestedOrder (Just ent) (PersistMap m) =
+              PersistMap $ orderPersistValues ent m
+            nestedOrder (Just ent) (PersistList l) =
+              PersistList $ map (nestedOrder (Just ent)) l
+            -- implied: nestedOrder Nothing found = found
+            nestedOrder _ found = found
 
-mapFromDoc :: DB.Document -> [(Text, PersistValue)]
-mapFromDoc = Prelude.map (\f -> ( (DB.label f), (fromJust . DB.cast') (DB.value f) ) )
+            matchOne (field:fs) tried =
+              if fst column == fst field
+                -- snd drops the name now that it has been used to make the match
+                -- persistent will add the field name later
+                then (field, tried ++ fs)
+                else matchOne fs (field:tried)
+            -- if field is not found, assume it was a Nothing
+            --
+            -- a Nothing could be stored as null, but that would take up space.
+            -- instead, we want to store no field at all: that takes less space.
+            -- Also, another ORM may be doing the same
+            -- Also, this adding a Maybe field means no migration required
+            matchOne [] tried = ((fst column, PersistNull), tried)
+
+assocListFromDoc :: DB.Document -> [(Text, PersistValue)]
+assocListFromDoc = Prelude.map (\f -> ( (DB.label f), (fromJust . DB.cast') (DB.value f) ) )
 
 oidToPersistValue :: DB.ObjectId -> PersistValue
 oidToPersistValue =  PersistObjectId . Serialize.encode
@@ -630,7 +663,7 @@ instance DB.Val PersistValue where
   cast' (DB.Md5 (DB.MD5 md5))    = Just $ PersistByteString md5
   cast' (DB.UserDef (DB.UserDefined bs)) = Just $ PersistByteString bs
   cast' (DB.RegEx (DB.Regex us1 us2))    = Just $ PersistByteString $ E.encodeUtf8 $ T.append us1 us2
-  cast' (DB.Doc doc)  = Just $ PersistMap $ mapFromDoc doc
+  cast' (DB.Doc doc)  = Just $ PersistMap $ assocListFromDoc doc
   cast' (DB.Array xs) = Just $ PersistList $ mapMaybe DB.cast' xs
   cast' (DB.ObjId x)  = Just $ oidToPersistValue x 
   cast' (DB.JavaScr _) = throw $ PersistMongoDBUnsupported "cast operation not supported for javascript"
