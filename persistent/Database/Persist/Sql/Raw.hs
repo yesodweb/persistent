@@ -12,7 +12,6 @@ import Control.Exception (throwIO)
 import Control.Monad (when, liftM)
 import Data.Text (Text, pack)
 import Control.Monad.Logger (logDebugS)
-import Data.Conduit (bracketP, Source, MonadResource)
 import Data.Int (Int64)
 import Control.Monad.Trans.Class (lift)
 import qualified Data.Text as T

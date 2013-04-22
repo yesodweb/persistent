@@ -22,7 +22,10 @@ import Data.Char (generalCategory, GeneralCategory(..))
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.ByteString (ByteString)
-import Data.Time (Day, UTCTime (..), ZonedTime (..), minutesToTimeZone, TimeOfDay)
+import Data.Time (Day, UTCTime (..), ZonedTime (..), minutesToTimeZone)
+#ifndef WITH_MONGODB
+import Data.Time (TimeOfDay)
+#endif
 import System.Random (newStdGen)
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad (when, forM_)
