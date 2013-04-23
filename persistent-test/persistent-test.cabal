@@ -155,6 +155,7 @@ library
                      mongoDB       == 1.3.*
                    , cereal
                    , bson
+                   , process
 
      hs-source-dirs: persistent-mongoDB
      cpp-options: -DWITH_MONGODB -DDEBUG
