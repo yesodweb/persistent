@@ -777,7 +777,7 @@ derivePersistField s = do
 -- defined here. One thing to be aware of is dependencies: if you have entities
 -- with foreign references, make sure to place those definitions after the
 -- entities they reference.
-mkMigrate :: Lift a => String -> [EntityDef a] -> Q [Dec]
+mkMigrate :: Lift' a => String -> [EntityDef a] -> Q [Dec]
 mkMigrate fun allDefs = do
     body' <- body
     return
@@ -805,13 +805,13 @@ mkMigrate fun allDefs = do
                 return $ LetS [ValD (VarP defsName) (NormalB defsExp) []]
               stmts <- mapM (toStmt $ VarE defsName) defs
               return (DoE $ defsStmt : stmts)
-    toStmt :: Lift a => Exp -> EntityDef a -> Q Stmt
+    toStmt :: Lift' a => Exp -> EntityDef a -> Q Stmt
     toStmt defsExp ed = do
         u <- lift ed
         m <- [|migrate|]
         return $ NoBindS $ m `AppE` defsExp `AppE` u
 
-instance Lift a => Lift (EntityDef a) where
+instance Lift' a => Lift (EntityDef a) where
     lift (EntityDef a b c d e f g h i) =
         [|EntityDef
             $(lift a)
@@ -824,12 +824,25 @@ instance Lift a => Lift (EntityDef a) where
             $(liftMap h)
             $(lift i)
             |]
-instance Lift a => Lift (FieldDef a) where
-    lift (FieldDef a b c d e f g) = [|FieldDef a b c d $(liftTs e) f g|]
+instance Lift' a => Lift (FieldDef a) where
+    lift (FieldDef a b c d e f g) = [|FieldDef a b c $(lift' d) $(liftTs e) f $(lift' g)|]
 instance Lift UniqueDef where
     lift (UniqueDef a b c d) = [|UniqueDef $(lift a) $(lift b) $(lift c) $(liftTs d)|]
-instance Lift () where
-    lift () = [|()|]
+
+-- | A hack to avoid orphans.
+class Lift' a where
+    lift' :: a -> Q Exp
+instance Lift' SqlType where
+    lift' = lift
+instance Lift' a => Lift' (Maybe a) where
+    lift' Nothing = [|Nothing|]
+    lift' (Just a) = [|Just $(lift' a)|]
+instance Lift' a => Lift' (EntityDef a) where
+    lift' = lift
+instance Lift' () where
+    lift' () = [|()|]
+instance Lift' SqlTypeExp where
+    lift' = lift
 
 pack' :: String -> Text
 pack' = pack
