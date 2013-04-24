@@ -45,6 +45,7 @@ module Database.Persist.MongoDB
     , Connection
     , MongoConf (..)
     , MongoBackend
+    , MongoAuth (..)
     -- ** using raw MongoDB pipes
     , PipePool
     , createMongoDBPipePool
