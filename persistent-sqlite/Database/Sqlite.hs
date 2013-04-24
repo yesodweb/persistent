@@ -34,12 +34,13 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Internal as BSI
 import Foreign
 import Foreign.C
-import Database.Persist.Store (PersistValue (..), listToJSON, mapToJSON, ZT (ZT))
+import Database.Persist (PersistValue (..), listToJSON, mapToJSON, ZT (ZT))
 import Data.Text (Text, pack, unpack)
 import Data.Text.Encoding (encodeUtf8, decodeUtf8With)
 import Data.Text.Encoding.Error (lenientDecode)
 import Data.Monoid (mappend, mconcat)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
+import Data.Fixed (Pico)
 
 data Connection = Connection !(IORef Bool) Connection'
 newtype Connection' = Connection' (Ptr ())
@@ -342,6 +343,7 @@ bind statement sqlData = do
           case datum of
             PersistInt64 int64 -> bindInt64 statement parameterIndex int64
             PersistDouble double -> bindDouble statement parameterIndex double
+            PersistRational rational -> bindText statement parameterIndex $ pack $ show (fromRational rational :: Pico)
             PersistBool b -> bindInt64 statement parameterIndex $
                                 if b then 1 else 0
             PersistText text -> bindText statement parameterIndex text

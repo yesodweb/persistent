@@ -2,24 +2,22 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+
 -- | A postgresql backend for persistent.
 module Database.Persist.Postgresql
     ( withPostgresqlPool
     , withPostgresqlConn
     , createPostgresqlPool
-    , module Database.Persist
-    , module Database.Persist.GenericSql
+    , module Database.Persist.Sql
     , ConnectionString
     , PostgresConf (..)
     , openSimpleConn
     ) where
 
-import Database.Persist hiding (Entity (..))
-import Database.Persist.Store
-import Database.Persist.GenericSql hiding (Key)
-import Database.Persist.GenericSql.Internal
-import Database.Persist.EntityDef
+import Database.Persist.Sql
 import Data.Maybe (mapMaybe)
+import Data.Fixed (Pico)
 
 import qualified Database.PostgreSQL.Simple as PG
 import qualified Database.PostgreSQL.Simple.BuiltinTypes as PG
@@ -47,6 +45,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
+import qualified Blaze.ByteString.Builder.Char8 as BBB
 import Data.Time.LocalTime (localTimeToUTC, utc)
 import Data.Text (Text, pack)
 import Data.Aeson
@@ -111,26 +110,27 @@ openSimpleConn :: PG.Connection -> IO Connection
 openSimpleConn conn = do
     smap <- newIORef $ Map.empty
     return Connection
-        { prepare    = prepare' conn
-        , stmtMap    = smap
-        , insertSql  = insertSql'
-        , close      = PG.close conn
-        , migrateSql = migrate'
-        , begin      = const $ PG.begin    conn
-        , commitC    = const $ PG.commit   conn
-        , rollbackC  = const $ PG.rollback conn
-        , escapeName = escape
-        , noLimit    = "LIMIT ALL"
+        { connPrepare    = prepare' conn
+        , connStmtMap    = smap
+        , connInsertSql  = insertSql'
+        , connClose      = PG.close conn
+        , connMigrateSql = migrate'
+        , connBegin      = const $ PG.begin    conn
+        , connCommit     = const $ PG.commit   conn
+        , connRollback   = const $ PG.rollback conn
+        , connEscapeName = escape
+        , connNoLimit    = "LIMIT ALL"
+        , connRDBMS      = "postgresql"
         }
 
 prepare' :: PG.Connection -> Text -> IO Statement
 prepare' conn sql = do
     let query = PG.Query (T.encodeUtf8 sql)
     return Statement
-        { finalize = return ()
-        , reset = return ()
-        , execute = execute' conn query
-        , withStmt = withStmt' conn query
+        { stmtFinalize = return ()
+        , stmtReset = return ()
+        , stmtExecute = execute' conn query
+        , stmtQuery = withStmt' conn query
         }
 
 insertSql' :: DBName -> [DBName] -> DBName -> InsertSqlResult
@@ -222,11 +222,15 @@ withStmt' conn query vals =
 -- | Avoid orphan instances.
 newtype P = P PersistValue
 
+
 instance PGTF.ToField P where
     toField (P (PersistText t))        = PGTF.toField t
     toField (P (PersistByteString bs)) = PGTF.toField (PG.Binary bs)
     toField (P (PersistInt64 i))       = PGTF.toField i
     toField (P (PersistDouble d))      = PGTF.toField d
+    toField (P (PersistRational r))    = PGTF.Plain $
+                                         BBB.fromString $
+                                         show (fromRational r :: Pico) --  FIXME: Too Ambigous, can not select precision without information about field
     toField (P (PersistBool b))        = PGTF.toField b
     toField (P (PersistDay d))         = PGTF.toField d
     toField (P (PersistTimeOfDay t))   = PGTF.toField t
@@ -267,7 +271,7 @@ getGetter PG.Timestamp             = convertPV (PersistUTCTime . localTimeToUTC 
 getGetter PG.TimestampTZ           = convertPV (PersistZonedTime . ZT)
 getGetter PG.Bit                   = convertPV PersistInt64
 getGetter PG.VarBit                = convertPV PersistInt64
-getGetter PG.Numeric               = convertPV (PersistDouble . fromRational)
+getGetter PG.Numeric               = convertPV PersistRational
 getGetter PG.Void                  = \_ _ -> Ok PersistNull
 getGetter other   = error $ "Postgresql.getGetter: type " ++
                             show other ++ " not supported."
@@ -275,14 +279,13 @@ getGetter other   = error $ "Postgresql.getGetter: type " ++
 unBinary :: PG.Binary a -> a
 unBinary (PG.Binary x) = x
 
-migrate' :: PersistEntity val
-         => [EntityDef]
+migrate' :: [EntityDef a]
          -> (Text -> IO Statement)
-         -> val
+         -> EntityDef SqlType
          -> IO (Either [Text] [(Bool, Text)])
 migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
-    let name = entityDB $ entityDef val
-    old <- getColumns getter $ entityDef val
+    let name = entityDB val
+    old <- getColumns getter val
     case partitionEithers old of
         ([], old'') -> do
             let old' = partitionEithers old''
@@ -294,7 +297,7 @@ migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
                             [ "CREATe TABLE "
                             , T.unpack $ escape name
                             , "("
-                            , T.unpack $ escape $ entityID $ entityDef val
+                            , T.unpack $ escape $ entityID val
                             , " SERIAL PRIMARY KEY UNIQUE"
                             , concatMap (\x -> ',' : showColumn x) $ fst new
                             , ")"
@@ -310,8 +313,8 @@ migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
                     return $ Right $ acs' ++ ats'
         (errs, _) -> return $ Left errs
 
-data AlterColumn = Type SqlType | IsNull | NotNull | Add Column | Drop
-                 | Default String | NoDefault | Update String
+data AlterColumn = Type SqlType | IsNull | NotNull | Add' Column | Drop
+                 | Default String | NoDefault | Update' String
                  | AddReference DBName | DropReference DBName
 type AlterColumn' = (DBName, AlterColumn)
 
@@ -324,18 +327,18 @@ data AlterDB = AddTable String
 
 -- | Returns all of the columns in the given table currently in the database.
 getColumns :: (Text -> IO Statement)
-           -> EntityDef
+           -> EntityDef a
            -> IO [Either Text (Either Column (DBName, [DBName]))]
 getColumns getter def = do
-    stmt <- getter "SELECT column_name,is_nullable,udt_name,column_default FROM information_schema.columns WHERE table_name=? AND column_name <> ?"
+    stmt <- getter "SELECT column_name,is_nullable,udt_name,column_default,numeric_precision,numeric_scale FROM information_schema.columns WHERE table_name=? AND column_name <> ?"
     let vals =
             [ PersistText $ unDBName $ entityDB def
             , PersistText $ unDBName $ entityID def
             ]
-    cs <- runResourceT $ withStmt stmt vals $$ helper
+    cs <- runResourceT $ stmtQuery stmt vals $$ helper
     stmt' <- getter
         "SELECT constraint_name, column_name FROM information_schema.constraint_column_usage WHERE table_name=? AND column_name <> ? ORDER BY constraint_name, column_name"
-    us <- runResourceT $ withStmt stmt' vals $$ helperU
+    us <- runResourceT $ stmtQuery stmt' vals $$ helperU
     return $ cs ++ us
   where
     getAll front = do
@@ -393,7 +396,7 @@ getAlters (c1, u1) (c2, u2) =
 getColumn :: (Text -> IO Statement)
           -> DBName -> [PersistValue]
           -> IO (Either Text Column)
-getColumn getter tname [PersistText x, PersistText y, PersistText z, d] =
+getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, nscl] =
     case d' of
         Left s -> return $ Left s
         Right d'' ->
@@ -402,7 +405,14 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d] =
                 Right t -> do
                     let cname = DBName x
                     ref <- getRef cname
-                    return $ Right $ Column cname (y == "YES") t d'' Nothing ref
+                    return $ Right Column
+                        { cName = cname
+                        , cNull = y == "YES"
+                        , cSqlType = t
+                        , cDefault = d''
+                        , cMaxLen = Nothing
+                        , cReference = ref
+                        }
   where
     getRef cname = do
         let sql = pack $ concat
@@ -414,7 +424,7 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d] =
                 ]
         let ref = refName tname cname
         stmt <- getter sql
-        runResourceT $ withStmt stmt
+        runResourceT $ stmtQuery stmt
                      [ PersistText $ unDBName tname
                      , PersistText $ unDBName ref
                      ] $$ do
@@ -435,15 +445,19 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d] =
     getType "float8"      = Right $ SqlReal
     getType "bytea"       = Right $ SqlBlob
     getType "time"        = Right $ SqlTime
+    getType "numeric"     = getNumeric npre nscl
     getType a             = Right $ SqlOther a
+
+    getNumeric (PersistInt64 a) (PersistInt64 b) = Right $ SqlNumeric (fromIntegral a) (fromIntegral b)
+    getNumeric a b = Left $ pack $ "Can not get numeric field precision, got: " ++ show a ++ " and " ++ show b ++ " as precision and scale"
 getColumn _ _ x =
     return $ Left $ pack $ "Invalid result from information_schema: " ++ show x
 
 findAlters :: Column -> [Column] -> ([AlterColumn'], [Column])
-findAlters col@(Column name isNull type_ def _maxLen ref) cols =
+findAlters col@(Column name isNull sqltype def _maxLen ref) cols =
     case filter (\c -> cName c == name) cols of
-        [] -> ([(name, Add col)], cols)
-        Column _ isNull' type_' def' _maxLen' ref':_ ->
+        [] -> ([(name, Add' col)], cols)
+        Column _ isNull' sqltype' def' _maxLen' ref':_ ->
             let refDrop Nothing = []
                 refDrop (Just (_, cname)) = [(name, DropReference cname)]
                 refAdd Nothing = []
@@ -457,10 +471,10 @@ findAlters col@(Column name isNull type_ def _maxLen ref) cols =
                             (False, True) ->
                                 let up = case def of
                                             Nothing -> id
-                                            Just s -> (:) (name, Update $ T.unpack s)
+                                            Just s -> (:) (name, Update' $ T.unpack s)
                                  in up [(name, NotNull)]
                             _ -> []
-                modType = if type_ == type_' then [] else [(name, Type type_)]
+                modType = if sqltype == sqltype' then [] else [(name, Type sqltype)]
                 modDef =
                     if def == def'
                         then []
@@ -472,16 +486,16 @@ findAlters col@(Column name isNull type_ def _maxLen ref) cols =
 
 -- | Get the references to be added to a table for the given column.
 getAddReference :: DBName -> Column -> Maybe AlterDB
-getAddReference table (Column n _nu _t _def _maxLen ref) =
+getAddReference table (Column n _nu _ _def _maxLen ref) =
     case ref of
         Nothing -> Nothing
         Just (s, _) -> Just $ AlterColumn table (n, AddReference s)
 
 showColumn :: Column -> String
-showColumn (Column n nu t def _maxLen ref) = concat
+showColumn (Column n nu sqlType def _maxLen _ref) = concat
     [ T.unpack $ escape n
     , " "
-    , showSqlType t
+    , showSqlType sqlType
     , " "
     , if nu then "NULL" else "NOT NULL"
     , case def of
@@ -494,6 +508,7 @@ showSqlType SqlString = "VARCHAR"
 showSqlType SqlInt32 = "INT4"
 showSqlType SqlInt64 = "INT8"
 showSqlType SqlReal = "DOUBLE PRECISION"
+showSqlType (SqlNumeric s prec) = "NUMERIC(" ++ show s ++ "," ++ show prec ++ ")"
 showSqlType SqlDay = "DATE"
 showSqlType SqlTime = "TIME"
 showSqlType SqlDayTime = "TIMESTAMP"
@@ -554,7 +569,7 @@ showAlter table (n, NotNull) =
         , T.unpack $ escape n
         , " SET NOT NULL"
         ]
-showAlter table (_, Add col) =
+showAlter table (_, Add' col) =
     concat
         [ "ALTER TABLE "
         , T.unpack $ escape table
@@ -584,7 +599,7 @@ showAlter table (n, NoDefault) = concat
     , T.unpack $ escape n
     , " DROP DEFAULT"
     ]
-showAlter table (n, Update s) = concat
+showAlter table (n, Update' s) = concat
     [ "UPDATE "
     , T.unpack $ escape table
     , " SET "
@@ -631,7 +646,7 @@ data PostgresConf = PostgresConf
     }
 
 instance PersistConfig PostgresConf where
-    type PersistConfigBackend PostgresConf = SqlPersist
+    type PersistConfigBackend PostgresConf = SqlPersistT
     type PersistConfigPool PostgresConf = ConnectionPool
     createPoolConfig (PostgresConf cs size) = createPostgresqlPool cs size
     runPool _ = runSqlPool

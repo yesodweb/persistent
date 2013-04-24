@@ -19,14 +19,13 @@ import Init
 import Data.Text (Text)
 import Data.String (IsString)
 import Data.ByteString (ByteString)
-import Test.HUnit (Assertion)
 
 #ifdef WITH_MONGODB
 db :: Action IO () -> Assertion
 db = db' (return ())
-mkPersist persistSettings [persist|
+mkPersist persistSettings [persistUpperCase|
 #else
-share [mkPersist sqlSettings,  mkMigrate "maxlenMigrate"] [persist|
+share [mkPersist sqlSettings,  mkMigrate "maxlenMigrate"] [persistLowerCase|
 #endif
   MaxLen
     text1 Text

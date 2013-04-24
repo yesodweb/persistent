@@ -16,24 +16,25 @@ embedMigrate
 ) where
 
 import Init
-import Test.HUnit (Assertion)
-import Test.Hspec (shouldThrow)
 import Control.Exception (Exception, throw)
 import Data.Typeable (Typeable)
 
 import qualified Data.Text as T
 import qualified Data.Set as S
 import qualified Data.Map as M
+#if WITH_MONGODB
 import Database.Persist.MongoDB
+import System.Process (readProcess)
+#endif
 
 data TestException = TestException
     deriving (Show, Typeable, Eq)
 instance Exception TestException
 
 #if WITH_MONGODB
-mkPersist persistSettings [persist|
+mkPersist persistSettings [persistUpperCase|
 #else
-share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persist|
+share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
 #endif
 
   OnlyName
@@ -67,6 +68,18 @@ share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persist|
     deriving Show Eq Read Ord
 
 
+  InList
+    one Int
+    two Int
+    deriving Show Eq
+
+  ListEmbed
+    nested [InList]
+    one Int
+    two Int
+    deriving Show Eq
+
+
   User
     ident T.Text
     password T.Text Maybe
@@ -94,6 +107,7 @@ cleanDB = do
   deleteWhere ([] :: [Filter HasSetEmbed])
   deleteWhere ([] :: [Filter User])
   deleteWhere ([] :: [Filter HasMapEmbed])
+  deleteWhere ([] :: [Filter ListEmbed])
 
 db :: Action IO () -> Assertion
 db = db' cleanDB
@@ -169,4 +183,13 @@ specs = describe "embedded entities" $ do
       Just res <- selectFirst [HasListEmbedList `multiEq` HasEmbed "embed" (OnlyName "1")] []
       res @== (Entity contK container)
       return ()
+
+  it "re-orders json inserted from another source" $ db $ do
+    _ <- liftIO $ readProcess "mongoimport" ["-d", "test", "-c", "ListEmbed"] "{ \"nested\": [{ \"one\": 1, \"two\": 2 }, { \"two\": 2, \"one\": 1}], \"two\": 2, \"one\": 1, \"_id\" : { \"$oid\" : \"50184f5a92d7ae0000001e89\" } }"
+    (Entity _ list):[] <- selectList [] []
+    list @== ListEmbed [InList 1 2, InList 1 2] 1 2
+    return ()
 #endif
+    
+
+    

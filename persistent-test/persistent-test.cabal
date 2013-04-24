@@ -1,5 +1,5 @@
 name:            persistent-test
-version:         1.1.0
+version:         1.2.0
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -32,44 +32,58 @@ Flag couchdb
    Description: test couchDB. default is to test just sqlite.
    Default: False
 
+Flag high_precision_date
+   Description: for MongoDB use a time storage with nano second precision.
+   Default: False
+
 library
     extra-libraries: sqlite3
 
     exposed-modules: PersistentTest
+                     PersistTestPetType
                      RenameTest
                      DataTypeTest
                      HtmlTest
                      EmbedTest
-                     JoinTest
                      LargeNumberTest
                      UniqueTest
                      MaxLenTest
                      SumTypeTest
                      MigrationOnlyTest
                      Init
-                     Database.Persist.EntityDef
+
                      Database.Persist
-                     Database.Persist.Store
                      Database.Persist.Quasi
-                     Database.Persist.GenericSql
-                     Database.Persist.GenericSql.Raw
-                     Database.Persist.GenericSql.Internal
-                     Database.Persist.GenericSql.Migration
-                     Database.Persist.TH.Library
-                     Database.Persist.Util
-                     Database.Persist.Query
-                     Database.Persist.Query.Internal
-                     Database.Persist.Query.GenericSql
-                     Database.Persist.Query.Join
-                     Database.Persist.Query.Join.Sql
+
+                     Database.Persist.Types
+                     Database.Persist.Class
+                     Database.Persist.Sql
+
+                     Database.Persist.Types.Base
+                     Database.Persist.Class.DeleteCascade
+                     Database.Persist.Class.PersistEntity
+                     Database.Persist.Class.PersistQuery
+                     Database.Persist.Class.PersistUnique
+                     Database.Persist.Class.PersistConfig
+                     Database.Persist.Class.PersistField
+                     Database.Persist.Class.PersistStore
+
+                     Database.Persist.Sql.Migration
+                     Database.Persist.Sql.Internal
+                     Database.Persist.Sql.Types
+                     Database.Persist.Sql.Raw
+                     Database.Persist.Sql.Run
+                     Database.Persist.Sql.Class
+                     Database.Persist.Sql.Orphan.PersistQuery
+                     Database.Persist.Sql.Orphan.PersistStore
+                     Database.Persist.Sql.Orphan.PersistUnique
+
                      Database.Persist.TH
 
                      Database.Persist.Sqlite
-                     Database.Persist.Postgresql
-                     Database.Persist.MySQL
                      Database.Sqlite
 
-    hs-source-dirs: ., test, persistent, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mysql, persistent-mongoDB, persistent-couchdb
+    hs-source-dirs: ., test, persistent, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mysql, persistent-couchdb
 
     ghc-options:   -Wall
     -- if impl(ghc >= 7.4)
@@ -78,6 +92,7 @@ library
     build-depends:   base                     >= 4       && < 5
                    , HUnit
                    , hspec >= 1.3
+                   , hspec-expectations
                    , file-location >= 0.4
                    , template-haskell
                    , aeson
@@ -96,6 +111,8 @@ library
                    , random >= 1.0
                    , QuickCheck >= 2.5
                    , blaze-html >= 0.5
+                   , quickcheck-instances >= 0.3
+                   , blaze-html >= 0.5 && < 0.6
                    , pool-conduit
                    , transformers-base
                    , attoparsec
@@ -106,30 +123,24 @@ library
                    -- actually just a mongoDB dependency
                    -- fixes build warning on current build server
                    , cereal
-                   , mongoDB       >= 1.3
                    , bson
                    , silently
-                   , postgresql-libpq
-                   , postgresql-simple
-                   , mysql
-                   , mysql-simple
+                   , blaze-builder
 
 
    if flag(postgresql)
      build-depends:
-                   -- postgresql dependencies
                      postgresql-simple     >= 0.2
                    , postgresql-libpq      >= 0.6
 
      exposed-modules:
-                     Database.Persist.Postgresql
+                     Database.Persist.PostgreSQL
 
      cpp-options: -DWITH_POSTGRESQL
 
 
    if flag(mysql)
      build-depends:
-                   -- MySQL dependencies
                      mysql-simple          >= 0.2.2.3
                    , mysql                 >= 0.1.1.3
 
@@ -141,11 +152,12 @@ library
 
    if flag(mongodb)
      build-depends:
-                   -- mongoDB dependencies
                      mongoDB       == 1.3.*
                    , cereal
                    , bson
+                   , process
 
+     hs-source-dirs: persistent-mongoDB
      cpp-options: -DWITH_MONGODB -DDEBUG
      exposed-modules:
                      Database.Persist.MongoDB
@@ -157,6 +169,8 @@ library
      cpp-options: -DWITH_COUCHDB -DDEBUG
      exposed-modules:
                      Database.Persist.CouchDB
+   if flag(high_precision_date)
+     cpp-options: -DHIGH_PRECISION_DATE
 
 
 test-suite test

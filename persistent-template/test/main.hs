@@ -8,7 +8,6 @@ import Test.QuickCheck.Arbitrary
 import Control.Applicative ((<$>), (<*>))
 
 import Database.Persist
-import Database.Persist.Store (DeleteCascade (..))
 import Database.Persist.TH
 import Data.Text (Text, pack)
 import Data.Aeson

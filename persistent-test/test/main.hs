@@ -4,14 +4,14 @@ import qualified PersistentTest
 import qualified RenameTest
 import qualified DataTypeTest
 import qualified HtmlTest
-import qualified JoinTest
 import qualified EmbedTest
 import qualified LargeNumberTest
 import qualified MaxLenTest
 import qualified SumTypeTest
 import qualified UniqueTest
 import qualified MigrationOnlyTest
-import Test.Hspec.Monadic (hspec)
+import Test.Hspec (hspec)
+import Test.Hspec.Runner
 import Init
 import System.Exit
 import Control.Monad (unless, when)
@@ -23,7 +23,7 @@ import Control.Monad.Trans.Resource (runResourceT)
 #ifdef MongoDB
 setup = setupMongo
 #else
-import Database.Persist.GenericSql (printMigration, runMigrationUnsafe)
+import Database.Persist.Sql (printMigration, runMigrationUnsafe)
 
 setup migration = do
   printMigration migration
@@ -41,15 +41,14 @@ main = do
   when sqExists $ removeFile $ fromText sqlite_database
   runConn (setup PersistentTest.testMigrate)
 #endif
-  r <- hspecB $ PersistentTest.specs
+  summary <- hspecWith defaultConfig $ PersistentTest.specs
   runResourceT $ runConn PersistentTest.cleanDB
-  unless r $ exitWith (toExitCode r)
+  unless (summaryFailures summary == 0) $ exitWith (toExitCode False)
 
 #ifndef WITH_MONGODB
   runConn (setup EmbedTest.embedMigrate)
   runConn (setup LargeNumberTest.numberMigrate)
   runConn (setup UniqueTest.uniqueMigrate)
-  runConn (setup JoinTest.joinMigrate)
   runConn (setup MaxLenTest.maxlenMigrate)
 #endif
 
@@ -57,7 +56,6 @@ main = do
     RenameTest.specs
     DataTypeTest.specs
     HtmlTest.specs
-    JoinTest.specs
     EmbedTest.specs
     LargeNumberTest.specs
     UniqueTest.specs

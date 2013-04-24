@@ -11,13 +11,11 @@ module LargeNumberTest where
 
 import Init
 import Data.Word
-import Test.HUnit (Assertion)
-import Control.Monad.Trans.Resource (runResourceT)
 
 #ifdef WITH_MONGODB
-mkPersist persistSettings [persist|
+mkPersist persistSettings [persistUpperCase|
 #else
-share [mkPersist sqlSettings,  mkMigrate "numberMigrate"] [persist|
+share [mkPersist sqlSettings,  mkMigrate "numberMigrate"] [persistLowerCase|
 #endif
   Number
     intx Int
@@ -27,6 +25,7 @@ share [mkPersist sqlSettings,  mkMigrate "numberMigrate"] [persist|
     word64 Word64
     deriving Show Eq
 |]
+
 #ifdef WITH_MONGODB
 cleanDB :: (PersistQuery m, PersistEntityBackend Number ~ PersistMonadBackend m) => m ()
 cleanDB = do

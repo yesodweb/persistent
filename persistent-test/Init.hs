@@ -26,28 +26,25 @@ module Init (
 #endif
 
    -- re-exports
-  , (@?=), (@=?)
   , module Database.Persist
-  , module Test.Hspec.Monadic
+  , module Test.Hspec
+  , module Test.Hspec.HUnit
+  , module Test.HUnit
   , liftIO
-  , mkPersist, mkMigrate, share, sqlSettings, persist
+  , mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase
   , Int32, Int64
 ) where
 
 -- re-exports
-import Test.Hspec.Monadic
-import Test.Hspec.HUnit ()
-import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persist, mkPersistSettings)
+import Test.Hspec
+import Test.Hspec.HUnit
+import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase, mkPersistSettings)
 
 -- testing
 import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
-import Test.Hspec.HUnit()
 import Test.QuickCheck
 
 import Database.Persist
-import Database.Persist.Store (PersistValue(..))
-import Control.Monad.Trans.Resource (ResourceT, runResourceT)
-import Control.Monad.Logger
 
 #if WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
@@ -64,10 +61,10 @@ import qualified Data.ByteString as BS
 import Network (PortID (PortNumber))
 
 #else
-import Database.Persist.GenericSql
-import Database.Persist.GenericSql.Raw (SqlBackend)
 import Database.Persist.Sqlite
 import Data.Text (Text)
+import Control.Monad.Trans.Resource (ResourceT, runResourceT)
+import Control.Monad.Logger
 
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
@@ -148,11 +145,8 @@ db' actions cleanDB = do
   r <- runConn (actions >> cleanDB)
   return r
 
-instance Arbitrary BS.ByteString where
-    arbitrary = BS.pack `fmap` replicateM 12 arbitrary
-
 instance Arbitrary PersistValue where
-    arbitrary = PersistObjectId `fmap` arbitrary
+    arbitrary = PersistObjectId `fmap` BS.pack `fmap` replicateM 12 arbitrary
 
 #else
 type BackendMonad = SqlBackend
@@ -162,22 +156,22 @@ sqlite_database = "test/testdb.sqlite3"
 runConn :: (MonadIO m, MonadBaseControl IO m) => SqlPersist (NoLoggingT m) t -> m ()
 runConn f = runNoLoggingT $ do
     _<-withSqlitePool sqlite_database 1 $ runSqlPool f
-#if WITH_POSTGRESQL
+#  if WITH_POSTGRESQL
     _<-withPostgresqlPool "host=localhost port=5432 user=test dbname=test password=test" 1 $ runSqlPool f
-#endif
-#if WITH_MYSQL
+#  endif
+#  if WITH_MYSQL
     _ <- withMySQLPool defaultConnectInfo
                         { connectHost     = "localhost"
                         , connectUser     = "test"
                         , connectPassword = "test"
                         , connectDatabase = "test"
                         } 1 $ runSqlPool f
-#endif
+#  endif
     return ()
 
 db :: SqlPersist (NoLoggingT (ResourceT IO)) () -> Assertion
 db actions = do
-  runResourceT $ runConn $ actions >> rollback
+  runResourceT $ runConn $ actions >> transactionUndo
 
 #if !MIN_VERSION_random(1,0,1)
 instance Random Int32 where

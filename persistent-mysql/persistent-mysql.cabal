@@ -1,5 +1,5 @@
 name:            persistent-mysql
-version:         1.1.4
+version:         1.2.0
 license:         MIT
 license-file:    LICENSE
 author:          Felipe Lessa <felipe.lessa@gmail.com>, Michael Snoyman
@@ -28,7 +28,7 @@ library
                    , transformers          >= 0.2.1
                    , mysql-simple          >= 0.2.2.3  && < 0.3
                    , mysql                 >= 0.1.1.3  && < 0.2
-                   , persistent            >= 1.1.5    && < 1.2
+                   , persistent            >= 1.2      && < 1.3
                    , containers            >= 0.2
                    , bytestring            >= 0.9
                    , text                  >= 0.11.0.6

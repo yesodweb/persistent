@@ -10,8 +10,9 @@
 {-# LANGUAGE EmptyDataDecls #-}
 module DataTypeTest (specs) where
 
-import Test.Hspec.Monadic
-import Test.Hspec.HUnit ()
+import Test.QuickCheck.Arbitrary (Arbitrary, arbitrary)
+import Test.QuickCheck.Gen (Gen(..), choose)
+import Test.QuickCheck.Instances ()
 import Database.Persist.Sqlite
 import Database.Persist.TH
 #if WITH_POSTGRESQL
@@ -21,18 +22,20 @@ import Data.Char (generalCategory, GeneralCategory(..))
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.ByteString (ByteString)
-import qualified Data.ByteString as S
-import Data.Time (Day, TimeOfDay (..), UTCTime (..), fromGregorian, ZonedTime (..), LocalTime (..), TimeZone (..))
-import System.Random (randomIO, randomRIO, Random)
+import Data.Time (Day, UTCTime (..), ZonedTime (..), minutesToTimeZone)
+#ifndef WITH_MONGODB
+import Data.Time (TimeOfDay)
+#endif
+import System.Random (newStdGen)
 import Control.Applicative ((<$>), (<*>))
-import Control.Monad (when)
-import Data.Word (Word8)
+import Control.Monad (when, forM_)
 import Control.Monad.Trans.Resource (runResourceT)
+import Data.Fixed (Pico)
 
 import Init
 
 #ifdef WITH_MONGODB
-mkPersist persistSettings [persistLowerCase|
+mkPersist persistSettings [persistUpperCase|
 #else
 -- Test lower case names
 share [mkPersist sqlSettings, mkMigrate "dataTypeMigrate"] [persistLowerCase|
@@ -45,8 +48,9 @@ DataTypeTable no-json
     int Int
     double Double
     bool Bool
-#ifndef WITH_MONGODB
     day Day
+#ifndef WITH_MONGODB
+    pico Pico
     time TimeOfDay
 #endif
     utc UTCTime
@@ -65,13 +69,18 @@ specs = describe "data type specs" $ do
         -- Ensure reading the data from the database works...
         _ <- runMigrationSilent dataTypeMigrate
 #endif
-        sequence_ $ replicate 1000 $ do
-            x <- liftIO randomValue
+        rvals <- liftIO randomValues
+        forM_ (take 1000 rvals) $ \x -> do         
             key <- insert x
             Just y <- get key
             liftIO $ do
                 let check :: (Eq a, Show a) => String -> (DataTypeTable -> a) -> IO ()
                     check s f = (s, f x) @=? (s, f y)
+                -- Check floating-point near equality
+                let check' :: String -> (DataTypeTable -> Pico) -> IO ()
+                    check' s f
+                        | abs (f x - f y) < 0.000001 = return ()
+                        | otherwise = (s, f x) @=? (s, f y)
                 -- Check individual fields for better error messages
                 check "text" dataTypeTableText
                 check "textMaxLen" dataTypeTableTextMaxLen
@@ -79,8 +88,9 @@ specs = describe "data type specs" $ do
                 check "bytesMaxLen" dataTypeTableBytesMaxLen
                 check "int" dataTypeTableInt
                 check "bool" dataTypeTableBool
-#ifndef WITH_MONGODB
                 check "day" dataTypeTableDay
+#ifndef WITH_MONGODB
+                check' "pico" dataTypeTablePico
                 check "time" dataTypeTableTime
 #endif
                 check "utc" dataTypeTableUtc
@@ -91,54 +101,47 @@ specs = describe "data type specs" $ do
                 when (abs (dataTypeTableDouble x - dataTypeTableDouble y) > 1e-14) $
                   check "double" dataTypeTableDouble
 
-randomValue :: IO DataTypeTable
-randomValue = DataTypeTable
-    <$> randomText
-    <*> randomText
-    <*> randomBS
-    <*> randomBS
-    <*> randomIO
-    <*> randomIO
-    <*> randomIO
+randomValues :: IO [DataTypeTable]
+randomValues = do
+  g <- newStdGen
+  return $ map ((unGen arbitrary) g) [0..]
+
+instance Arbitrary (DataTypeTableGeneric g) where
+  arbitrary = DataTypeTable
+     <$> arbText                -- text
+     <*> arbText                -- textManLen
+     <*> arbitrary              -- bytes
+     <*> arbitrary              -- bytesMaxLen
+     <*> arbitrary              -- int
+     <*> arbitrary              -- double
+     <*> arbitrary              -- bool
+     <*> arbitrary              -- day
 #ifndef WITH_MONGODB
-    <*> randomDay
-    <*> randomTime
+     <*> arbitrary              -- pico
+     <*> arbitrary              -- time
 #endif
-    <*> randomUTC
-    <*> randomZonedTime
-    where forbidden = [NotAssigned, PrivateUse]
-          randomText =
-               T.pack
-            .  filter ((`notElem` forbidden) . generalCategory)
-            .  filter (<= '\xFFFF') -- only BMP
-            .  filter (/= '\0')     -- no nulls
-           <$> randomIOs
-          randomBS = S.pack . map intToWord8 <$> randomIOs
+     <*> arbitrary              -- utc
+     <*> arbitraryZT            -- zonedTime
+
+arbText :: Gen Text
+arbText =
+     T.pack
+  .  filter ((`notElem` forbidden) . generalCategory)
+  .  filter (<= '\xFFFF') -- only BMP
+  .  filter (/= '\0')     -- no nulls
+  <$> arbitrary
+  where forbidden = [NotAssigned, PrivateUse]
+
+arbitraryZT :: Gen ZonedTime
+arbitraryZT = do
+    lt <- arbitrary
+    halfHours <- choose (-23, 23)
+    let minutes = halfHours * 30
+        tz = minutesToTimeZone minutes
+    return $ ZonedTime lt tz
 
 asIO :: IO a -> IO a
 asIO = id
 
-intToWord8 :: Int -> Word8
-intToWord8 i = fromIntegral $ mod i 256
-
-randomIOs :: Random a => IO [a]
-randomIOs = do
-    len <- randomRIO (0, 20)
-    sequence $ replicate len randomIO
-
-randomDay :: IO Day
-randomDay = fromGregorian <$> randomRIO (1900, 9400) <*> randomIO <*> randomIO
-
-randomUTC :: IO UTCTime
-randomUTC = UTCTime <$> randomDay <*> return 0 -- precision issues
-
-randomZonedTime :: IO ZonedTime
-randomZonedTime = ZonedTime <$> (LocalTime <$> randomDay <*> randomTime) <*> (TimeZone <$> randomRIO (-600, 600) <*> randomIO <*> return "")
-
 instance Eq ZonedTime where
     a == b = show a == show b
-
-randomTime :: IO TimeOfDay
-randomTime = TimeOfDay <$> randomRIO (0, 23)
-                       <*> randomRIO (0, 59)
-                       <*> return 0

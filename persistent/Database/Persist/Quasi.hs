@@ -1,10 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE PatternGuards #-}
 module Database.Persist.Quasi
     ( parse
     , PersistSettings (..)
     , upperCaseSettings
     , lowerCaseSettings
+    , stripId
+    , nullable
 #if TEST
     , Token (..)
     , tokenize
@@ -13,9 +16,9 @@ module Database.Persist.Quasi
     ) where
 
 import Prelude hiding (lines)
-import Database.Persist.EntityDef
+import Database.Persist.Types
 import Data.Char
-import Data.Maybe (mapMaybe)
+import Data.Maybe (mapMaybe, fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Control.Arrow ((&&&))
@@ -71,12 +74,17 @@ parseFieldType t0 =
             _ -> PSSuccess (front []) t
 
 data PersistSettings = PersistSettings
-    { psToDBName :: Text -> Text
+    { psToDBName :: !(Text -> Text)
+    , psStrictFields :: !Bool
+    -- ^ Whether fields are by default strict. Default value: @True@.
+    --
+    -- Since 1.2
     }
 
 upperCaseSettings :: PersistSettings
 upperCaseSettings = PersistSettings
     { psToDBName = id
+    , psStrictFields = True
     }
 
 lowerCaseSettings :: PersistSettings
@@ -86,10 +94,11 @@ lowerCaseSettings = PersistSettings
                 | isUpper c = T.pack ['_', toLower c]
                 | otherwise = T.singleton c
          in T.dropWhile (== '_') . T.concatMap go
+    , psStrictFields = True
     }
 
 -- | Parses a quasi-quoted syntax into a list of entity definitions.
-parse :: PersistSettings -> Text -> [EntityDef]
+parse :: PersistSettings -> Text -> [EntityDef ()]
 parse ps = parseLines ps
       . removeSpaces
       . filter (not . empty)
@@ -168,7 +177,7 @@ removeSpaces =
     fromToken Spaces{}  = Nothing
 
 -- | Divide lines into blocks and make entity definitions.
-parseLines :: PersistSettings -> [Line] -> [EntityDef]
+parseLines :: PersistSettings -> [Line] -> [EntityDef ()]
 parseLines ps lines =
     toEnts lines
   where
@@ -183,7 +192,7 @@ mkEntityDef :: PersistSettings
             -> Text -- ^ name
             -> [Attr] -- ^ entity attributes
             -> [Line] -- ^ indented lines
-            -> EntityDef
+            -> EntityDef ()
 mkEntityDef ps name entattribs lines =
     EntityDef
         (HaskellName name')
@@ -206,7 +215,7 @@ mkEntityDef ps name entattribs lines =
     uniqs = mapMaybe (takeUniqs ps cols) attribs
     derives = concat $ mapMaybe takeDerives attribs
 
-    cols :: [FieldDef]
+    cols :: [FieldDef ()]
     cols = mapMaybe (takeCols ps) attribs
 
 splitExtras :: [Line] -> ([[Text]], M.Map Text [[Text]])
@@ -220,17 +229,26 @@ splitExtras (Line _ ts:rest) =
     let (x, y) = splitExtras rest
      in (ts:x, y)
 
-takeCols :: PersistSettings -> [Text] -> Maybe FieldDef
+takeCols :: PersistSettings -> [Text] -> Maybe (FieldDef ())
 takeCols _ ("deriving":_) = Nothing
-takeCols ps (n:typ:rest)
+takeCols ps (n':typ:rest)
     | not (T.null n) && isLower (T.head n) =
         case parseFieldType typ of
             Nothing -> error $ "Invalid field type: " ++ show typ
-            Just ft -> Just $ FieldDef
-                (HaskellName n)
-                (DBName $ getDbName ps n rest)
-                ft
-                rest
+            Just ft -> Just FieldDef
+                { fieldHaskell = HaskellName n
+                , fieldDB = DBName $ getDbName ps n rest
+                , fieldType = ft
+                , fieldSqlType = ()
+                , fieldAttrs = rest
+                , fieldStrict = fromMaybe (psStrictFields ps) mstrict
+                , fieldEmbedded = Nothing
+                }
+  where
+    (mstrict, n)
+        | Just x <- T.stripPrefix "!" n' = (Just True, x)
+        | Just x <- T.stripPrefix "~" n' = (Just False, x)
+        | otherwise = (Nothing, n')
 takeCols _ _ = Nothing
 
 getDbName :: PersistSettings -> Text -> [Text] -> Text
@@ -241,7 +259,7 @@ getDbName ps n (a:as) =
       Just s  -> s
 
 takeUniqs :: PersistSettings
-          -> [FieldDef]
+          -> [FieldDef a]
           -> [Text]
           -> Maybe UniqueDef
 takeUniqs ps defs (n:rest)
@@ -262,3 +280,13 @@ takeUniqs _ _ _ = Nothing
 takeDerives :: [Text] -> Maybe [Text]
 takeDerives ("deriving":rest) = Just rest
 takeDerives _ = Nothing
+
+stripId :: FieldType -> Maybe Text
+stripId (FTTypeCon Nothing t) = T.stripSuffix "Id" t
+stripId _ = Nothing
+
+nullable :: [Text] -> IsNullable
+nullable s
+    | "Maybe"    `elem` s = Nullable ByMaybeAttr
+    | "nullable" `elem` s = Nullable ByNullableAttr
+    | otherwise = NotNullable

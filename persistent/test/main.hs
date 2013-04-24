@@ -2,7 +2,7 @@
 import Test.Hspec
 
 import Database.Persist.Quasi
-import Database.Persist.EntityDef
+import Database.Persist.Types
 
 main :: IO ()
 main = hspec $ do

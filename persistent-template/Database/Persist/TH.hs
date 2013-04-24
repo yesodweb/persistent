@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
@@ -11,9 +12,6 @@ module Database.Persist.TH
     , persistUpperCase
     , persistLowerCase
     , persistFileWith
-      -- ** Deprecated synonyms
-    , persist
-    , persistFile
       -- * Turn @EntityDef@s into types
     , mkPersist
     , MkPersistSettings
@@ -29,18 +27,12 @@ module Database.Persist.TH
     , share
     , derivePersistField
     , persistFieldFromEntity
-      -- ** Deprecated
-    , share2
     ) where
 
 import Prelude hiding ((++), take, concat, splitAt)
-import Database.Persist.EntityDef
+import Database.Persist
+import Database.Persist.Sql (Migration, SqlPersistT, migrate, SqlBackend, PersistFieldSql)
 import Database.Persist.Quasi
-import Database.Persist.Store
-import Database.Persist.Query.Internal
-import Database.Persist.GenericSql (Migration, SqlPersist, migrate)
-import Database.Persist.GenericSql.Raw (SqlBackend)
-import Database.Persist.Util (nullable, IsNullable(..), WhyNullable(..))
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
@@ -50,7 +42,8 @@ import Control.Monad.IO.Class (MonadIO)
 import qualified System.IO as SIO
 import Data.Text (pack, Text, append, unpack, concat, uncons, cons)
 import qualified Data.Text.IO as TIO
-import Data.List (foldl')
+import Data.List (foldl', find)
+import Data.Maybe (isJust)
 import Data.Monoid (mappend, mconcat)
 import qualified Data.Map as M
 import Data.Aeson
@@ -58,18 +51,15 @@ import Data.Aeson
     , Value (Object), (.:), (.:?)
     )
 import Control.Applicative (pure, (<*>))
+import Control.Monad.Logger (MonadLogger)
+import Database.Persist.Sql (sqlType)
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
 persistWith :: PersistSettings -> QuasiQuoter
 persistWith ps = QuasiQuoter
-    { quoteExp = lift . parse ps . pack
+    { quoteExp = parseSqlType ps . pack
     }
-
--- | Deprecate synonym for 'persistUpperCase'.
-persist :: QuasiQuoter
-persist = persistUpperCase
-{-# DEPRECATED persist "Please use persistUpperCase instead." #-}
 
 -- | Apply 'persistWith' to 'upperCaseSettings'.
 persistUpperCase :: QuasiQuoter
@@ -89,15 +79,61 @@ persistFileWith ps fp = do
     h <- qRunIO $ SIO.openFile fp SIO.ReadMode
     qRunIO $ SIO.hSetEncoding h SIO.utf8_bom
     s <- qRunIO $ TIO.hGetContents h
-    lift $ parse ps s
+    parseSqlType ps s
 
--- | Deprecated function. Equivalent to @persistFileWith upperCaseSettings@.
-persistFile :: FilePath -> Q Exp
-persistFile = persistFileWith upperCaseSettings
+parseSqlType :: PersistSettings -> Text -> Q Exp
+parseSqlType ps s =
+    lift $ map (getSqlType defsOrig) defsOrig
+  where
+    defsOrig = parse ps s
+
+getSqlType :: [EntityDef ()] -> EntityDef () -> EntityDef SqlTypeExp
+getSqlType allEntities ent =
+    ent
+        { entityFields = map go $ entityFields ent
+        }
+  where
+    go :: FieldDef () -> FieldDef SqlTypeExp
+    go field = do
+        field
+            { fieldSqlType = final
+            , fieldEmbedded = mEmbedded (fieldType field)
+            }
+      where
+        -- In the case of embedding, there won't be any datatype created yet.
+        -- We just use SqlString, as the data will be serialized to JSON.
+        final
+            | isJust (mEmbedded (fieldType field)) = SqlString'
+            | isReference = SqlInt64'
+            | otherwise = SqlTypeExp st
+
+        mEmbedded (FTTypeCon Just{} _) = Nothing
+        mEmbedded (FTTypeCon Nothing n) = let name = HaskellName n in
+            find ((name ==) . entityHaskell) allEntities 
+        mEmbedded (FTList x) = mEmbedded x
+        mEmbedded (FTApp x y) = maybe (mEmbedded y) Just (mEmbedded x)
+
+        isReference =
+            case stripId $ fieldType field of
+                Just{} -> True
+                Nothing -> False
+
+        typ = ftToType $ fieldType field
+        mtyp = (ConT ''Maybe `AppT` typ)
+        typedNothing = SigE (ConE 'Nothing) mtyp
+        st = VarE 'sqlType `AppE` typedNothing
+
+data SqlTypeExp = SqlTypeExp Exp
+                | SqlString'
+                | SqlInt64'
+instance Lift SqlTypeExp where
+    lift (SqlTypeExp e) = return e
+    lift SqlString' = [|SqlString|]
+    lift SqlInt64' = [|SqlInt64|]
 
 -- | Create data types and appropriate 'PersistEntity' instances for the given
 -- 'EntityDef's. Works well with the persist quasi-quoter.
-mkPersist :: MkPersistSettings -> [EntityDef] -> Q [Dec]
+mkPersist :: MkPersistSettings -> [EntityDef SqlType] -> Q [Dec]
 mkPersist mps ents' = do
     x <- fmap mconcat $ mapM (persistFieldFromEntity mps) ents
     y <- fmap mconcat $ mapM (mkEntity mps) ents
@@ -108,7 +144,7 @@ mkPersist mps ents' = do
 
 -- | Implement special preprocessing on EntityDef as necessary for 'mkPersist'.
 -- For example, strip out any fields marked as MigrationOnly.
-fixEntityDef :: EntityDef -> EntityDef
+fixEntityDef :: EntityDef a -> EntityDef a
 fixEntityDef ed =
     ed { entityFields = filter keepField $ entityFields ed }
   where
@@ -161,15 +197,15 @@ upperFirst t =
         Just (a, b) -> cons (toUpper a) b
         Nothing -> t
 
-dataTypeDec :: MkPersistSettings -> EntityDef -> Dec
+dataTypeDec :: MkPersistSettings -> EntityDef a -> Dec
 dataTypeDec mps t =
     DataD [] nameFinal paramsFinal constrs
     $ map (mkName . unpack) $ entityDerives t
   where
-    mkCol x (FieldDef n _ ty as) =
-        (mkName $ unpack $ recName x $ unHaskellName n,
-         NotStrict,
-         pairToType mps backend (ty, nullable as)
+    mkCol x FieldDef {..} =
+        (mkName $ unpack $ recName x $ unHaskellName fieldHaskell,
+         if fieldStrict then IsStrict else NotStrict,
+         pairToType mps backend (fieldType, nullable fieldAttrs)
         )
     (nameFinal, paramsFinal)
         | mpsGeneric mps = (nameG, [PlainTV backend])
@@ -183,14 +219,14 @@ dataTypeDec mps t =
         | entitySum t = map sumCon $ entityFields t
         | otherwise = [RecC name cols]
 
-    sumCon fd@(FieldDef _ _ ty _) = NormalC
+    sumCon fd = NormalC
         (sumConstrName t fd)
-        [(NotStrict, pairToType mps backend (ty, NotNullable))]
+        [(NotStrict, pairToType mps backend (fieldType fd, NotNullable))]
 
-sumConstrName :: EntityDef -> FieldDef -> Name
-sumConstrName t (FieldDef n _ _ _) = mkName $ unpack $ concat
+sumConstrName :: EntityDef a -> FieldDef b -> Name
+sumConstrName t FieldDef {..} = mkName $ unpack $ concat
     [ unHaskellName $ entityHaskell t
-    , upperFirst $ unHaskellName n
+    , upperFirst $ unHaskellName fieldHaskell
     , "Sum"
     ]
 
@@ -200,13 +236,13 @@ readMay s =
         (x, _):_ -> Just x
         [] -> Nothing
 
-entityUpdates :: EntityDef -> [(HaskellName, FieldType, IsNullable, PersistUpdate)]
+entityUpdates :: EntityDef a -> [(HaskellName, FieldType, IsNullable, PersistUpdate)]
 entityUpdates =
     concatMap go . entityFields
   where
-    go (FieldDef x _ y as) = map (\a -> (x, y, nullable as, a)) [minBound..maxBound]
+    go FieldDef {..} = map (\a -> (fieldHaskell, fieldType, nullable fieldAttrs, a)) [minBound..maxBound]
 
-uniqueTypeDec :: MkPersistSettings -> EntityDef -> Dec
+uniqueTypeDec :: MkPersistSettings -> EntityDef a -> Dec
 uniqueTypeDec mps t =
     DataInstD [] ''Unique
         [genericDataType mps (unHaskellName $ entityHaskell t) $ VarT backend]
@@ -215,7 +251,7 @@ uniqueTypeDec mps t =
   where
     backend = mkName "backend"
 
-mkUnique :: MkPersistSettings -> Name -> EntityDef -> UniqueDef -> Con
+mkUnique :: MkPersistSettings -> Name -> EntityDef a -> UniqueDef -> Con
 mkUnique mps backend t (UniqueDef (HaskellName constr) _ fields attrs) =
     NormalC (mkName $ unpack constr) types
   where
@@ -228,11 +264,11 @@ mkUnique mps backend t (UniqueDef (HaskellName constr) _ fields attrs) =
     go (_, Nullable _) | not force = error nullErrMsg
     go (ft, y) = (NotStrict, pairToType mps backend (ft, y))
 
-    lookup3 :: Text -> [FieldDef] -> (FieldType, IsNullable)
+    lookup3 :: Text -> [FieldDef a] -> (FieldType, IsNullable)
     lookup3 s [] =
         error $ unpack $ "Column not found: " ++ s ++ " in unique " ++ constr
-    lookup3 x ((FieldDef (HaskellName x') _ y z):rest)
-        | x == x' = (y, nullable z)
+    lookup3 x (FieldDef {..}:rest)
+        | x == unHaskellName fieldHaskell = (fieldType, nullable fieldAttrs)
         | otherwise = lookup3 x rest
 
     nullErrMsg =
@@ -250,7 +286,7 @@ pairToType :: MkPersistSettings
            -> (FieldType, IsNullable)
            -> Type
 pairToType mps backend (s, Nullable ByMaybeAttr) =
-  ConT (mkName "Maybe") `AppT` idType mps backend s
+  ConT ''Maybe `AppT` idType mps backend s
 pairToType mps backend (s, _) = idType mps backend s
 
 backendDataType :: MkPersistSettings -> Type
@@ -281,18 +317,18 @@ idType mps backend typ =
 
 degen :: [Clause] -> [Clause]
 degen [] =
-    let err = VarE (mkName "error") `AppE` LitE (StringL
+    let err = VarE 'error `AppE` LitE (StringL
                 "Degenerate case, should never happen")
      in [Clause [WildP] (NormalB err) []]
 degen x = x
 
-mkToPersistFields :: String -> EntityDef -> Q Dec
+mkToPersistFields :: String -> EntityDef a -> Q Dec
 mkToPersistFields constr ed@EntityDef { entitySum = isSum, entityFields = fields } = do
     clauses <-
         if isSum
             then sequence $ zipWith goSum fields [1..]
             else fmap return go
-    return $ FunD (mkName "toPersistFields") clauses
+    return $ FunD 'toPersistFields clauses
   where
     go :: Q Clause
     go = do
@@ -304,7 +340,7 @@ mkToPersistFields constr ed@EntityDef { entitySum = isSum, entityFields = fields
 
     fieldCount = length fields
 
-    goSum :: FieldDef -> Int -> Q Clause
+    goSum :: FieldDef a -> Int -> Q Clause
     goSum fd idx = do
         let name = sumConstrName ed fd
         enull <- [|SomePersistField PersistNull|]
@@ -325,7 +361,7 @@ mkToPersistFields constr ed@EntityDef { entitySum = isSum, entityFields = fields
 mkToFieldNames :: [UniqueDef] -> Q Dec
 mkToFieldNames pairs = do
     pairs' <- mapM go pairs
-    return $ FunD (mkName "persistUniqueToFieldNames") $ degen pairs'
+    return $ FunD 'persistUniqueToFieldNames $ degen pairs'
   where
     go (UniqueDef constr _ names _) = do
         names' <- lift names
@@ -347,7 +383,7 @@ mkToUpdate name pairs = do
 mkUniqueToValues :: [UniqueDef] -> Q Dec
 mkUniqueToValues pairs = do
     pairs' <- mapM go pairs
-    return $ FunD (mkName "persistUniqueToValues") $ degen pairs'
+    return $ FunD 'persistUniqueToValues $ degen pairs'
   where
     go :: UniqueDef -> Q Clause
     go (UniqueDef constr _ names _) = do
@@ -364,37 +400,23 @@ mkToFieldName func pairs =
     go (constr, name) =
         Clause [RecP (mkName constr) []] (NormalB $ LitE $ StringL name) []
 
-mkToOrder :: [(String, Exp)] -> Dec
-mkToOrder pairs =
-        FunD (mkName "persistOrderToOrder") $ degen $ map go pairs
-  where
-    go (constr, val) =
-        Clause [RecP (mkName constr) []] (NormalB val) []
-
 mkToValue :: String -> [String] -> Dec
 mkToValue func = FunD (mkName func) . degen . map go
   where
     go constr =
         let x = mkName "x"
          in Clause [ConP (mkName constr) [VarP x]]
-                   (NormalB $ VarE (mkName "toPersistValue") `AppE` VarE x)
+                   (NormalB $ VarE 'toPersistValue `AppE` VarE x)
                    []
-
-mkHalfDefined :: Name -> Int -> Dec
-mkHalfDefined constr count' =
-        FunD (mkName "halfDefined")
-            [Clause [] (NormalB
-            $ foldl AppE (ConE constr)
-                    (replicate count' $ VarE $ mkName "undefined")) []]
 
 isNotNull :: PersistValue -> Bool
 isNotNull PersistNull = False
 isNotNull _ = True
 
-mkFromPersistValues :: EntityDef -> Q [Clause]
+mkFromPersistValues :: EntityDef a -> Q [Clause]
 mkFromPersistValues t@(EntityDef { entitySum = False }) = do
-    nothing <- [|Left $(liftT "Invalid fromPersistValues input")|]
-    let cons' = ConE $ mkName $ unpack $ unHaskellName $ entityHaskell t
+    nothing <- [|Left $(liftT $ "Invalid fromPersistValues input. Entity: " `mappend` entName)|]
+    let cons' = ConE $ mkName $ unpack $ entName
     xs <- mapM (const $ newName "x") $ entityFields t
     fs <- [|fromPersistValue|]
     let xs' = map (AppE fs . VarE) xs
@@ -407,12 +429,15 @@ mkFromPersistValues t@(EntityDef { entitySum = False }) = do
         , Clause [WildP] (NormalB nothing) []
         ]
   where
+    entName = unHaskellName $ entityHaskell t
     go ap' x y = InfixE (Just x) ap' (Just y)
+
 mkFromPersistValues t@(EntityDef { entitySum = True }) = do
-    nothing <- [|Left $(liftT "Invalid fromPersistValues input: sum type with all nulls")|]
+    nothing <- [|Left $(liftT $ "Invalid fromPersistValues input: sum type with all nulls. Entity: " `mappend` entName)|]
     clauses <- mkClauses [] $ entityFields t
     return $ clauses `mappend` [Clause [WildP] (NormalB nothing) []]
   where
+    entName = unHaskellName $ entityHaskell t
     mkClauses _ [] = return []
     mkClauses before (field:after) = do
         x <- newName "x"
@@ -435,7 +460,7 @@ type Lens s t a b = forall f. Functor f => (a -> f b) -> s -> f t
 lens :: (s -> a) -> (s -> b -> t) -> Lens s t a b
 lens sa sbt afb s = fmap (sbt s) (afb $ sa s)
 
-mkLensClauses :: EntityDef -> Q [Clause]
+mkLensClauses :: EntityDef a -> Q [Clause]
 mkLensClauses t = do
     lens' <- [|lens|]
     getId <- [|entityKey|]
@@ -488,7 +513,7 @@ mkLensClauses t = do
             ]
             $ ConE 'Entity `AppE` VarE keyName `AppE` (ConE (sumConstrName t f) `AppE` VarE xName)
 
-mkEntity :: MkPersistSettings -> EntityDef -> Q [Dec]
+mkEntity :: MkPersistSettings -> EntityDef SqlType -> Q [Dec]
 mkEntity mps t = do
     t' <- lift t
     let nameT = unHaskellName $ entityHaskell t
@@ -500,10 +525,14 @@ mkEntity mps t = do
     puk <- mkUniqueKeys t
 
     fields <- mapM (mkField mps t) $ FieldDef
-        (HaskellName "Id")
-        (entityID t)
-        (FTTypeCon Nothing $ unHaskellName (entityHaskell t) ++ "Id")
-        []
+        { fieldHaskell = HaskellName "Id"
+        , fieldDB = entityID t
+        , fieldType = FTTypeCon Nothing $ unHaskellName (entityHaskell t) ++ "Id"
+        , fieldSqlType = SqlInt64
+        , fieldEmbedded = Nothing
+        , fieldAttrs = []
+        , fieldStrict = True
+        }
         : entityFields t
     toFieldNames <- mkToFieldNames $ entityUniques t
 
@@ -521,14 +550,9 @@ mkEntity mps t = do
             ConT ''KeyBackend `AppT` mpsBackend mps `AppT` ConT (mkName nameS)
       , InstanceD [] clazz $
         [ uniqueTypeDec mps t
-        , FunD (mkName "entityDef") [Clause [WildP] (NormalB t') []]
+        , FunD 'entityDef [Clause [WildP] (NormalB t') []]
         , tpf
-        , FunD (mkName "fromPersistValues") fpv
-        , mkHalfDefined
-            (if entitySum t
-                then sumConstrName t (head $ entityFields t)
-                else mkName nameS)
-            (if entitySum t then 1 else length $ entityFields t)
+        , FunD 'fromPersistValues fpv
         , toFieldNames
         , utv
         , puk
@@ -540,13 +564,13 @@ mkEntity mps t = do
             ]
             (map fst fields)
             []
-        , FunD (mkName "persistFieldDef") (map snd fields)
+        , FunD 'persistFieldDef (map snd fields)
         , TySynInstD
-            (mkName "PersistEntityBackend")
+            ''PersistEntityBackend
             [genericDataType mps (unHaskellName $ entityHaskell t) $ VarT $ mkName "backend"]
             (backendDataType mps)
-        , FunD (mkName "persistIdField") [Clause [] (NormalB $ ConE $ mkName $ unpack $ unHaskellName (entityHaskell t) ++ "Id") []]
-        , FunD (mkName "fieldLens") lensClauses
+        , FunD 'persistIdField [Clause [] (NormalB $ ConE $ mkName $ unpack $ unHaskellName (entityHaskell t) ++ "Id") []]
+        , FunD 'fieldLens lensClauses
         ]
       ]
 
@@ -560,7 +584,7 @@ mkEntity mps t = do
 --            Right r -> r) o
 --    fromPersistValue x = Left $ "Expected PersistMap, received: " ++ show x
 --    sqlType _ = SqlString
-persistFieldFromEntity :: MkPersistSettings -> EntityDef -> Q [Dec]
+persistFieldFromEntity :: MkPersistSettings -> EntityDef a -> Q [Dec]
 persistFieldFromEntity mps e = do
     ss <- [|SqlString|]
     let columnNames = map (unpack . unHaskellName . fieldHaskell) (entityFields e)
@@ -574,11 +598,13 @@ persistFieldFromEntity mps e = do
     getPersistMap' <- [|getPersistMap|]
     return
         [ persistFieldInstanceD typ
-            [ sqlTypeFunD ss
-            , FunD (mkName "toPersistValue") [ Clause [] (NormalB obj) [] ]
-            , FunD (mkName "fromPersistValue")
+            [ FunD 'toPersistValue [ Clause [] (NormalB obj) [] ]
+            , FunD 'fromPersistValue
                 [ Clause [] (NormalB $ InfixE (Just fpv) compose $ Just getPersistMap') []
                 ]
+            ]
+        , persistFieldSqlInstanceD typ
+            [ sqlTypeFunD ss
             ]
         ]
     where
@@ -598,22 +624,11 @@ updateConName name s pu = concat
 -- This function is useful for cases such as:
 --
 -- >>> share [mkSave "myDefs", mkPersist sqlSettings] [persistLowerCase|...|]
-share :: [[EntityDef] -> Q [Dec]] -> [EntityDef] -> Q [Dec]
+share :: [[EntityDef a] -> Q [Dec]] -> [EntityDef a] -> Q [Dec]
 share fs x = fmap mconcat $ mapM ($ x) fs
 
--- | Deprecated, restricted version of 'share'.
-share2 :: ([EntityDef] -> Q [Dec])
-       -> ([EntityDef] -> Q [Dec])
-       -> [EntityDef]
-       -> Q [Dec]
-share2 f g x = do
-    y <- f x
-    z <- g x
-    return $ y `mappend` z
-{-# DEPRECATED share2 "Use share instead" #-}
-
 -- | Save the @EntityDef@s passed in under the given name.
-mkSave :: String -> [EntityDef] -> Q [Dec]
+mkSave :: String -> [EntityDef SqlType] -> Q [Dec]
 mkSave name' defs' = do
     let name = mkName name'
     defs <- lift defs'
@@ -629,27 +644,27 @@ data Dep = Dep
     }
 
 -- | Generate a 'DeleteCascade' instance for the given @EntityDef@s.
-mkDeleteCascade :: MkPersistSettings -> [EntityDef] -> Q [Dec]
+mkDeleteCascade :: MkPersistSettings -> [EntityDef a] -> Q [Dec]
 mkDeleteCascade mps defs = do
     let deps = concatMap getDeps defs
     mapM (go deps) defs
   where
-    getDeps :: EntityDef -> [Dep]
+    getDeps :: EntityDef a -> [Dep]
     getDeps def =
         concatMap getDeps' $ entityFields def
       where
-        getDeps' :: FieldDef -> [Dep]
-        getDeps' (FieldDef name _ ftyp attribs) =
-            case stripId ftyp of
+        getDeps' :: FieldDef a -> [Dep]
+        getDeps' FieldDef {..} =
+            case stripId fieldType of
                 Just f ->
                      return Dep
                         { depTarget = f
                         , depSourceTable = entityHaskell def
-                        , depSourceField = name
-                        , depSourceNull  = nullable attribs
+                        , depSourceField = fieldHaskell
+                        , depSourceNull  = nullable fieldAttrs
                         }
                 Nothing -> []
-    go :: [Dep] -> EntityDef -> Q Dec
+    go :: [Dep] -> EntityDef a -> Q Dec
     go allDeps EntityDef{entityHaskell = name} = do
         let deps = filter (\x -> depTarget x == unHaskellName name) allDeps
         key <- newName "key"
@@ -687,19 +702,20 @@ mkDeleteCascade mps defs = do
             , EqualP (ConT ''PersistEntityBackend `AppT` entityT) (ConT ''PersistMonadBackend `AppT` VarT (mkName "m"))
             ]
             (ConT ''DeleteCascade `AppT` entityT `AppT` VarT (mkName "m"))
-            [ FunD (mkName "deleteCascade")
+            [ FunD 'deleteCascade
                 [Clause [VarP key] (NormalB $ DoE stmts) []]
             ]
 
-mkUniqueKeys :: EntityDef -> Q Dec
+mkUniqueKeys :: EntityDef a -> Q Dec
 mkUniqueKeys def | entitySum def =
-    return $ FunD (mkName "persistUniqueKeys") [Clause [WildP] (NormalB $ ListE []) []]
+    return $ FunD 'persistUniqueKeys [Clause [WildP] (NormalB $ ListE []) []]
 mkUniqueKeys def = do
     c <- clause
-    return $ FunD (mkName "persistUniqueKeys") [c]
+    return $ FunD 'persistUniqueKeys [c]
   where
     clause = do
-        xs <- forM (entityFields def) $ \(FieldDef x _ _ _) -> do
+        xs <- forM (entityFields def) $ \fd -> do
+            let x = fieldHaskell fd
             x' <- newName $ '_' : unpack (unHaskellName x)
             return (x, x')
         let pcs = map (go xs) $ entityUniques def
@@ -718,12 +734,16 @@ mkUniqueKeys def = do
          in front `AppE` VarE col'
 
 sqlTypeFunD :: Exp -> Dec
-sqlTypeFunD st = FunD (mkName "sqlType")
+sqlTypeFunD st = FunD 'sqlType
                 [ Clause [WildP] (NormalB st) [] ]
 
 persistFieldInstanceD :: Type -> [Dec] -> Dec
 persistFieldInstanceD typ =
    InstanceD [] (ConT ''PersistField `AppT` typ)
+
+persistFieldSqlInstanceD :: Type -> [Dec] -> Dec
+persistFieldSqlInstanceD typ =
+   InstanceD [] (ConT ''PersistFieldSql `AppT` typ)
 
 -- | Automatically creates a valid 'PersistField' instance for any datatype
 -- that has valid 'Show' and 'Read' instances. Can be very convenient for
@@ -738,16 +758,18 @@ derivePersistField s = do
                     Right s' ->
                         case reads $ unpack s' of
                             (x, _):_ -> Right x
-                            [] -> Left $ "Invalid " ++ dt ++ ": " ++ s'|]
+                            [] -> Left $ pack "Invalid " ++ pack dt ++ pack ": " ++ s'|]
     return
         [ persistFieldInstanceD (ConT $ mkName s)
-            [ sqlTypeFunD ss
-            , FunD (mkName "toPersistValue")
+            [ FunD 'toPersistValue
                 [ Clause [] (NormalB tpv) []
                 ]
-            , FunD (mkName "fromPersistValue")
+            , FunD 'fromPersistValue
                 [ Clause [] (NormalB $ fpv `AppE` LitE (StringL s)) []
                 ]
+            ]
+        , persistFieldSqlInstanceD (ConT $ mkName s)
+            [ sqlTypeFunD ss
             ]
         ]
 
@@ -755,7 +777,7 @@ derivePersistField s = do
 -- defined here. One thing to be aware of is dependencies: if you have entities
 -- with foreign references, make sure to place those definitions after the
 -- entities they reference.
-mkMigrate :: String -> [EntityDef] -> Q [Dec]
+mkMigrate :: Lift' a => String -> [EntityDef a] -> Q [Dec]
 mkMigrate fun allDefs = do
     body' <- body
     return
@@ -768,8 +790,9 @@ mkMigrate fun allDefs = do
     typ = ForallT [PlainTV $ mkName "m"]
             [ ClassP ''MonadBaseControl [ConT ''IO, VarT $ mkName "m"]
             , ClassP ''MonadIO [VarT $ mkName "m"]
+            , ClassP ''MonadLogger [VarT $ mkName "m"]
             ]
-            $ ConT ''Migration `AppT` (ConT ''SqlPersist `AppT` VarT (mkName "m"))
+            $ ConT ''Migration `AppT` (ConT ''SqlPersistT `AppT` VarT (mkName "m"))
     body :: Q Exp
     body =
         case defs of
@@ -777,21 +800,18 @@ mkMigrate fun allDefs = do
             _  -> do
               defsName <- newName "defs"
               defsStmt <- do
-                u <- [|undefined|]
-                e <- [|entityDef|]
-                let defsExp = ListE $ map (AppE e . undefinedEntityTH u) defs
+                defs' <- mapM lift defs
+                let defsExp = ListE defs'
                 return $ LetS [ValD (VarP defsName) (NormalB defsExp) []]
               stmts <- mapM (toStmt $ VarE defsName) defs
               return (DoE $ defsStmt : stmts)
-    toStmt :: Exp -> EntityDef -> Q Stmt
+    toStmt :: Lift' a => Exp -> EntityDef a -> Q Stmt
     toStmt defsExp ed = do
-        u <- [|undefined|]
+        u <- lift ed
         m <- [|migrate|]
-        return $ NoBindS $ m `AppE` defsExp `AppE` (undefinedEntityTH u ed)
-    undefinedEntityTH :: Exp -> EntityDef -> Exp
-    undefinedEntityTH u = SigE u . ConT . mkName . unpack . unHaskellName . entityHaskell
+        return $ NoBindS $ m `AppE` defsExp `AppE` u
 
-instance Lift EntityDef where
+instance Lift' a => Lift (EntityDef a) where
     lift (EntityDef a b c d e f g h i) =
         [|EntityDef
             $(lift a)
@@ -804,10 +824,25 @@ instance Lift EntityDef where
             $(liftMap h)
             $(lift i)
             |]
-instance Lift FieldDef where
-    lift (FieldDef a b c d) = [|FieldDef $(lift a) $(lift b) $(lift c) $(liftTs d)|]
+instance Lift' a => Lift (FieldDef a) where
+    lift (FieldDef a b c d e f g) = [|FieldDef a b c $(lift' d) $(liftTs e) f $(lift' g)|]
 instance Lift UniqueDef where
     lift (UniqueDef a b c d) = [|UniqueDef $(lift a) $(lift b) $(lift c) $(liftTs d)|]
+
+-- | A hack to avoid orphans.
+class Lift' a where
+    lift' :: a -> Q Exp
+instance Lift' SqlType where
+    lift' = lift
+instance Lift' a => Lift' (Maybe a) where
+    lift' Nothing = [|Nothing|]
+    lift' (Just a) = [|Just $(lift' a)|]
+instance Lift' a => Lift' (EntityDef a) where
+    lift' = lift
+instance Lift' () where
+    lift' () = [|()|]
+instance Lift' SqlTypeExp where
+    lift' = lift
 
 pack' :: String -> Text
 pack' = pack
@@ -858,13 +893,31 @@ instance Lift PersistUpdate where
     lift Multiply = [|Multiply|]
     lift Divide = [|Divide|]
 
+instance Lift SqlType where
+    lift SqlString = [|SqlString|]
+    lift SqlInt32 = [|SqlInt32|]
+    lift SqlInt64 = [|SqlInt64|]
+    lift SqlReal = [|SqlReal|]
+    lift (SqlNumeric x y) =
+        [|SqlNumeric (fromInteger x') (fromInteger y')|]
+      where
+        x' = fromIntegral x
+        y' = fromIntegral y
+    lift SqlBool = [|SqlBool|]
+    lift SqlDay = [|SqlDay|]
+    lift SqlTime = [|SqlTime|]
+    lift SqlDayTime = [|SqlDayTime|]
+    lift SqlDayTimeZoned = [|SqlDayTimeZoned|]
+    lift SqlBlob = [|SqlBlob|]
+    lift (SqlOther a) = [|SqlOther $(liftT a)|]
+
 -- Ent
 --   fieldName FieldType
 --
 -- forall . typ ~ FieldType => EntFieldName
 --
 -- EntFieldName = FieldDef ....
-mkField :: MkPersistSettings -> EntityDef -> FieldDef -> Q (Con, Clause)
+mkField :: MkPersistSettings -> EntityDef a -> FieldDef SqlType -> Q (Con, Clause)
 mkField mps et cd = do
     let con = ForallC
                 []
@@ -905,7 +958,7 @@ infixr 5 ++
 (++) :: Text -> Text -> Text
 (++) = append
 
-mkJSON :: MkPersistSettings -> EntityDef -> Q [Dec]
+mkJSON :: MkPersistSettings -> EntityDef a -> Q [Dec]
 mkJSON _ def | not ("json" `elem` entityAttrs def) = return []
 mkJSON mps def = do
     pureE <- [|pure|]

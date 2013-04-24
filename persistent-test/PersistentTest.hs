@@ -18,11 +18,10 @@
 module PersistentTest where
 
 import Test.HUnit hiding (Test)
-import Test.Hspec.HUnit()
+import Test.Hspec.Expectations ()
 import Test.Hspec.QuickCheck(prop)
 
 import Database.Persist
-import Database.Persist.Query.Internal
 
 #ifdef WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
@@ -31,23 +30,17 @@ import Data.Bson (genObjectId)
 import Language.Haskell.TH.Syntax (Type(..))
 
 #else
-# if MIN_VERSION_monad_control(0, 3, 0)
+#  if MIN_VERSION_monad_control(0, 3, 0)
 import qualified Control.Monad.Trans.Control
-# else
+#  else
 import qualified Control.Monad.IO.Control
-# endif
+#  endif
 
-import Database.Persist.Store (PersistValue( PersistInt64 ))
+import Control.Monad (liftM)
 import Control.Monad.Logger
 import Database.Persist.TH (mkDeleteCascade)
-import Database.Persist.EntityDef (EntityDef(..), DBName(..))
-import Database.Persist.Store ( DeleteCascade (..) )
-import Database.Persist.GenericSql
-import Database.Persist.Query.GenericSql
-import Database.Persist.GenericSql.Internal (escapeName)
 import Database.Persist.Sqlite
 import Control.Exception (SomeException)
-import Control.Monad.Trans.Reader (ask)
 import qualified Data.Text as T
 import qualified Control.Exception.Lifted
 #  if MIN_VERSION_monad_control(0, 3, 0)
@@ -68,7 +61,6 @@ import Database.Persist.MySQL()
 
 #endif
 
-import Database.Persist.TH (derivePersistField, persistUpperCase)
 import Control.Monad.IO.Class
 
 import Data.Text (Text)
@@ -82,10 +74,7 @@ import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Data.Functor.Identity
 import Data.Functor.Constant
-
-data PetType = Cat | Dog
-    deriving (Show, Read, Eq)
-derivePersistField "PetType"
+import PersistTestPetType
 
 #ifdef WITH_MONGODB
 mkPersist (mkPersistSettings $ ConT ''MongoBackend) [persistUpperCase|
@@ -139,6 +128,11 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade sqlSetti
     user UserId Maybe
     verkey Text Maybe
     UniqueEmail email
+
+  Strict
+    !yes Int
+    ~no Int
+    def Int
 |]
 cleanDB :: (PersistQuery m, PersistEntityBackend Email ~ PersistMonadBackend m) => m ()
 cleanDB = do
@@ -650,7 +644,7 @@ specs = describe "persistent" $ do
       (a2k, a2) <- insert' $ Pet p1k "Zeno"    Cat
       (a3k, a3) <- insert' $ Pet p2k "Lhama"   Dog
       (_  , _ ) <- insert' $ Pet p3k "Abacate" Cat
-      escape <- ((. DBName) . escapeName) `fmap` SqlPersist ask
+      escape <- ((. DBName) . connEscapeName) `fmap` askSqlConn
       let query = T.concat [ "SELECT ??, ?? "
                            , "FROM ", escape "Person"
                            , ", ", escape "Pet"
@@ -675,7 +669,7 @@ specs = describe "persistent" $ do
   it "rawSql/order-proof" $ db $ do
       let p1 = Person "Zacarias" 93 Nothing
       p1k <- insert p1
-      escape <- ((. DBName) . escapeName) `fmap` SqlPersist ask
+      escape <- ((. DBName) . connEscapeName) `fmap` askSqlConn
       let query = T.concat [ "SELECT ?? "
                            , "FROM ", escape "Person"
                            ]
@@ -692,7 +686,7 @@ specs = describe "persistent" $ do
       (p2k, p2) <- insert' $ Person "Norbert"   44 Nothing
       (a1k, a1) <- insert' $ Pet p1k "Rodolfo" Cat
       (a2k, a2) <- insert' $ Pet p1k "Zeno"    Cat
-      escape <- ((. DBName) . escapeName) `fmap` SqlPersist ask
+      escape <- ((. DBName) . connEscapeName) `fmap` askSqlConn
       let query = T.concat [ "SELECT ??, ?? "
                            , "FROM ", person
                            , "LEFT OUTER JOIN ", pet
@@ -710,6 +704,11 @@ specs = describe "persistent" $ do
 
   it "afterException" caseAfterException
 
+  describe "strictness" $ do
+    it "bang" $ (return $! Strict (error "foo") 5 5) `shouldThrow` anyErrorCall
+    it "tilde" $ (return $! Strict 5 (error "foo") 5 :: IO Strict) >> return ()
+    it "blank" $ (return $! Strict 5 5 (error "foo")) `shouldThrow` anyErrorCall
+
 
 -- | Reverses the order of the fields of an entity.  Used to test
 -- @??@ placeholders of 'rawSql'.
@@ -718,12 +717,11 @@ instance PersistEntity a => PersistEntity (ReverseFieldOrder a) where
     newtype EntityField (ReverseFieldOrder a) b = EFRFO {unEFRFO :: EntityField a b}
     newtype Unique      (ReverseFieldOrder a)   = URFO  {unURFO  :: Unique      a  }
     persistFieldDef = persistFieldDef . unEFRFO
-    entityDef = revFields . entityDef . unRFO
+    entityDef = revFields . entityDef . liftM unRFO
         where
           revFields ed = ed { entityFields = reverse (entityFields ed) }
     toPersistFields = reverse . toPersistFields . unRFO
     fromPersistValues = fmap RFO . fromPersistValues . reverse
-    halfDefined = RFO halfDefined
     persistUniqueToFieldNames = reverse . persistUniqueToFieldNames . unURFO
     persistUniqueToValues = reverse . persistUniqueToValues . unURFO
     persistUniqueKeys = map URFO . reverse . persistUniqueKeys . unRFO
@@ -744,20 +742,20 @@ caseCommitRollback = db $ do
     c1 <- count filt
     c1 @== 3
 
-    commit
+    transactionSave
     c2 <- count filt
     c2 @== 3
 
     _ <- insert p
-    rollback
+    transactionUndo
     c3 <- count filt
     c3 @== 3
 
     _ <- insert p
-    commit
+    transactionSave
     _ <- insert p
     _ <- insert p
-    rollback
+    transactionUndo
     c4 <- count filt
     c4 @== 4
 

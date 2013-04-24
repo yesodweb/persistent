@@ -1,60 +1,39 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
-module Database.Persist.GenericSql.Migration
-  (   Migration
-    , parseMigration
-    , parseMigration'
-    , printMigration
-    , getMigration
-    , runMigration
-    , runMigrationSilent
-    , runMigrationUnsafe
-    , migrate
-    , commit
-    , rollback
+module Database.Persist.Sql.Migration
+  ( parseMigration
+  , parseMigration'
+  , printMigration
+  , getMigration
+  , runMigration
+  , runMigrationSilent
+  , runMigrationUnsafe
+  , migrate
   ) where
 
 
-import Database.Persist.GenericSql.Internal
-import Database.Persist.EntityDef
-import qualified Database.Persist.GenericSql.Raw as R
-import Database.Persist.Store
-import Database.Persist.GenericSql.Raw (SqlPersist (..))
-#if MIN_VERSION_monad_control(0, 3, 0)
 import Control.Monad.Trans.Control (MonadBaseControl)
-#define MBCIO MonadBaseControl IO
-#else
-import Control.Monad.IO.Control (MonadControlIO)
-#define MBCIO MonadControlIO
-#endif
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.IO.Class
-import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Writer
 import Control.Monad (liftM, unless)
 import Data.Text (Text, unpack, snoc, isPrefixOf, pack)
 import qualified Data.Text.IO
 import System.IO
-import Control.Monad.Logger (MonadLogger)
 import System.IO.Silently (hSilence)
-import System.IO (stderr)
 import Control.Monad.Trans.Control (liftBaseOp_)
+import Database.Persist.Sql.Types
+import Database.Persist.Sql.Class
+import Database.Persist.Sql.Raw
+import Database.Persist.Class
+import Database.Persist.Types
 
-execute' :: (MonadIO m, MonadLogger m) => Text -> [PersistValue] -> SqlPersist m ()
-execute' = R.execute
-
-type Sql = Text
-
--- Bool indicates if the Sql is safe
-type CautiousMigration = [(Bool, Sql)]
 allSql :: CautiousMigration -> [Sql]
 allSql = map snd
 unsafeSql :: CautiousMigration -> [Sql]
 unsafeSql = allSql . filter fst
 safeSql :: CautiousMigration -> [Sql]
 safeSql = allSql . filter (not . fst)
-
-type Migration m = WriterT [Text] (WriterT CautiousMigration m) ()
 
 parseMigration :: Monad m => Migration m -> m (Either [Text] CautiousMigration)
 parseMigration =
@@ -71,33 +50,33 @@ parseMigration' m = do
       Left errs -> error $ unlines $ map unpack errs
       Right sql -> return sql
 
-printMigration :: (MBCIO m, MonadIO m) => Migration (SqlPersist m) -> SqlPersist m ()
+printMigration :: MonadIO m => Migration m -> m ()
 printMigration m = do
   mig <- parseMigration' m
   mapM_ (liftIO . Data.Text.IO.putStrLn . flip snoc ';') (allSql mig)
 
-getMigration :: (MBCIO m, MonadIO m) => Migration (SqlPersist m) -> SqlPersist m [Sql]
+getMigration :: (MonadBaseControl IO m, MonadIO m) => Migration m -> m [Sql]
 getMigration m = do
   mig <- parseMigration' m
   return $ allSql mig
 
-runMigration :: (MonadIO m, MBCIO m, MonadLogger m)
-             => Migration (SqlPersist m)
-             -> SqlPersist m ()
+runMigration :: MonadSqlPersist m
+             => Migration m
+             -> m ()
 runMigration m = runMigration' m False >> return ()
 
 -- | Same as 'runMigration', but returns a list of the SQL commands executed
 -- instead of printing them to stderr.
-runMigrationSilent :: (MBCIO m, MonadIO m, MonadLogger m)
-                   => Migration (SqlPersist m)
-                   -> SqlPersist m [Text]
+runMigrationSilent :: (MonadBaseControl IO m, MonadSqlPersist m)
+                   => Migration m
+                   -> m [Text]
 runMigrationSilent m = liftBaseOp_ (hSilence [stderr]) $ runMigration' m True
 
 runMigration'
-    :: (MBCIO m, MonadIO m, MonadLogger m)
-    => Migration (SqlPersist m)
+    :: MonadSqlPersist m
+    => Migration m
     -> Bool -- ^ is silent?
-    -> SqlPersist m [Text]
+    -> m [Text]
 runMigration' m silent = do
     mig <- parseMigration' m
     case unsafeSql mig of
@@ -108,17 +87,17 @@ runMigration' m silent = do
             , unlines $ map (\s -> "    " ++ unpack s ++ ";") $ errs
             ]
 
-runMigrationUnsafe :: (MBCIO m, MonadIO m, MonadLogger m)
-                   => Migration (SqlPersist m)
-                   -> SqlPersist m ()
+runMigrationUnsafe :: MonadSqlPersist m
+                   => Migration m
+                   -> m ()
 runMigrationUnsafe m = do
     mig <- parseMigration' m
     mapM_ (executeMigrate False) $ sortMigrations $ allSql mig
 
-executeMigrate :: (MonadIO m, MonadLogger m) => Bool -> Text -> SqlPersist m Text
+executeMigrate :: MonadSqlPersist m => Bool -> Text -> m Text
 executeMigrate silent s = do
     unless silent $ liftIO $ hPutStrLn stderr $ "Migrating: " ++ unpack s
-    execute' s []
+    rawExecute s []
     return s
 
 -- | Sort the alter DB statements so tables are created before constraints are
@@ -131,26 +110,11 @@ sortMigrations x =
     -- choose to have this special sorting applied.
     isCreate t = pack "CREATe " `isPrefixOf` t
 
-migrate :: (MonadIO m, MBCIO m, PersistEntity val)
-        => [EntityDef]
-        -> val
-        -> Migration (SqlPersist m)
+migrate :: MonadSqlPersist m
+        => [EntityDef SqlType]
+        -> EntityDef SqlType
+        -> Migration m
 migrate allDefs val = do
-    conn <- lift $ lift $ SqlPersist ask
-    let getter = R.getStmt' conn
-    res <- liftIO $ migrateSql conn allDefs getter val
+    conn <- askSqlConn
+    res <- liftIO $ connMigrateSql conn allDefs (getStmtConn conn) val
     either tell (lift . tell) res
-
--- | Perform a database commit.
-commit :: MonadIO m => SqlPersist m ()
-commit = do
-    conn <- SqlPersist ask
-    let getter = R.getStmt' conn
-    liftIO $ commitC conn getter >> begin conn getter
-
--- | Perform a database rollback.
-rollback :: MonadIO m => SqlPersist m ()
-rollback = do
-    conn <- SqlPersist ask
-    let getter = R.getStmt' conn
-    liftIO $ rollbackC conn getter >> begin conn getter
