@@ -42,7 +42,8 @@ import Control.Monad.IO.Class (MonadIO)
 import qualified System.IO as SIO
 import Data.Text (pack, Text, append, unpack, concat, uncons, cons)
 import qualified Data.Text.IO as TIO
-import Data.List (foldl')
+import Data.List (foldl', find)
+import Data.Maybe (isJust)
 import Data.Monoid (mappend, mconcat)
 import qualified Data.Map as M
 import Data.Aeson
@@ -96,20 +97,21 @@ getSqlType allEntities ent =
     go field = do
         field
             { fieldSqlType = final
+            , fieldEmbedded = mEmbedded (fieldType field)
             }
       where
         -- In the case of embedding, there won't be any datatype created yet.
         -- We just use SqlString, as the data will be serialized to JSON.
         final
-            | isEmbedded (fieldType field) = SqlString'
+            | isJust (mEmbedded (fieldType field)) = SqlString'
             | isReference = SqlInt64'
             | otherwise = SqlTypeExp st
 
-        isEmbedded (FTTypeCon Just{} _) = False
-        isEmbedded (FTTypeCon Nothing n) =
-            HaskellName n `elem` map entityHaskell allEntities
-        isEmbedded (FTList x) = isEmbedded x
-        isEmbedded (FTApp x y) = isEmbedded x || isEmbedded y
+        mEmbedded (FTTypeCon Just{} _) = Nothing
+        mEmbedded (FTTypeCon Nothing n) = let name = HaskellName n in
+            find ((name ==) . entityHaskell) allEntities 
+        mEmbedded (FTList x) = mEmbedded x
+        mEmbedded (FTApp x y) = maybe (mEmbedded y) Just (mEmbedded x)
 
         isReference =
             case stripId $ fieldType field of
@@ -527,6 +529,7 @@ mkEntity mps t = do
         , fieldDB = entityID t
         , fieldType = FTTypeCon Nothing $ unHaskellName (entityHaskell t) ++ "Id"
         , fieldSqlType = SqlInt64
+        , fieldEmbedded = Nothing
         , fieldAttrs = []
         , fieldStrict = True
         }
@@ -822,9 +825,11 @@ instance Lift a => Lift (EntityDef a) where
             $(lift i)
             |]
 instance Lift a => Lift (FieldDef a) where
-    lift (FieldDef a b c d e f) = [|FieldDef a b c d $(liftTs e) f|]
+    lift (FieldDef a b c d e f g) = [|FieldDef a b c d $(liftTs e) f g|]
 instance Lift UniqueDef where
     lift (UniqueDef a b c d) = [|UniqueDef $(lift a) $(lift b) $(lift c) $(liftTs d)|]
+instance Lift () where
+    lift () = [|()|]
 
 pack' :: String -> Text
 pack' = pack

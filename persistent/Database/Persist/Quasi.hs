@@ -242,6 +242,7 @@ takeCols ps (n':typ:rest)
                 , fieldSqlType = ()
                 , fieldAttrs = rest
                 , fieldStrict = fromMaybe (psStrictFields ps) mstrict
+                , fieldEmbedded = Nothing
                 }
   where
     (mstrict, n)

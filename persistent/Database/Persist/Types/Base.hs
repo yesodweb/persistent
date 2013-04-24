@@ -24,7 +24,6 @@ import Data.ByteString (ByteString)
 import Data.Time.LocalTime (ZonedTime, zonedTimeToUTC, zonedTimeToLocalTime, zonedTimeZone)
 import Data.Map (Map)
 import qualified Data.HashMap.Strict as HM
-import Data.Fixed (Fixed, Pico, HasResolution, resolution)
 import Data.Word (Word32)
 
 -- | A 'Checkmark' should be used as a field type whenever a
@@ -120,18 +119,20 @@ newtype DBName = DBName { unDBName :: Text }
 type Attr = Text
 
 data FieldType
-    = FTTypeCon (Maybe Text) Text -- ^ optional module, name
+    = FTTypeCon (Maybe Text) -- ^ optional module
+                Text         -- ^ name
     | FTApp FieldType FieldType
     | FTList FieldType
   deriving (Show, Eq, Read, Ord)
 
 data FieldDef sqlType = FieldDef
-    { fieldHaskell :: !HaskellName
-    , fieldDB      :: !DBName
-    , fieldType    :: !FieldType
-    , fieldSqlType :: !sqlType
-    , fieldAttrs   :: ![Attr]
-    , fieldStrict  :: !Bool
+    { fieldHaskell  :: !HaskellName -- ^ name of the field
+    , fieldDB       :: !DBName
+    , fieldType     :: !FieldType
+    , fieldSqlType  :: !sqlType
+    , fieldAttrs    :: ![Attr]   -- ^ user annotations for a field
+    , fieldStrict   :: !Bool      -- ^ a strict field in the data type. Default: true
+    , fieldEmbedded :: Maybe (EntityDef ()) -- ^ indicates that the field uses an embedded entity
     }
     deriving (Show, Eq, Read, Ord, Functor)
 
