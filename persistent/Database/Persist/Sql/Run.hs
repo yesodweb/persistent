@@ -35,6 +35,9 @@ runSqlConn (SqlPersistT r) conn = do
 runSqlPersistM :: SqlPersistM a -> Connection -> IO a
 runSqlPersistM x conn = runResourceT $ runNoLoggingT $ runReaderT (unSqlPersistT x) conn
 
+runSqlPersistMPool :: SqlPersistM a -> Pool Connection -> IO a
+runSqlPersistMPool x pool = runResourceT $ runNoLoggingT $ runSqlPool x pool
+
 withSqlPool :: MonadIO m
             => IO Connection -- ^ create a new connection
             -> Int -- ^ connection count
