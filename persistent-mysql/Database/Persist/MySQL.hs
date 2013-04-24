@@ -105,6 +105,7 @@ open' ci = do
         , connNoLimit    = "LIMIT 18446744073709551615"
         -- This noLimit is suggested by MySQL's own docs, see
         -- <http://dev.mysql.com/doc/refman/5.5/en/select.html>
+        , connRDBMS      = "mysql"
         }
 
 -- | Prepare a query.  We don't support prepared statements, but

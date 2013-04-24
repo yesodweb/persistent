@@ -52,6 +52,7 @@ data Connection = Connection
     , connRollback :: (Text -> IO Statement) -> IO ()
     , connEscapeName :: DBName -> Text
     , connNoLimit :: Text
+    , connRDBMS :: Text
     }
 
 data Statement = Statement

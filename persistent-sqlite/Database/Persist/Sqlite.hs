@@ -68,6 +68,7 @@ wrapConnection conn = do
         , connRollback = ignoreExceptions . helper "ROLLBACK"
         , connEscapeName = escape
         , connNoLimit = "LIMIT -1"
+        , connRDBMS = "sqlite"
         }
   where
     helper t getter = do

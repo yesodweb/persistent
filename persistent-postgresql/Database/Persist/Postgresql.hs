@@ -120,6 +120,7 @@ openSimpleConn conn = do
         , connRollback   = const $ PG.rollback conn
         , connEscapeName = escape
         , connNoLimit    = "LIMIT ALL"
+        , connRDBMS      = "postgresql"
         }
 
 prepare' :: PG.Connection -> Text -> IO Statement
