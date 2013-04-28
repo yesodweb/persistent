@@ -134,7 +134,7 @@ library
                    , postgresql-libpq      >= 0.6
 
      exposed-modules:
-                     Database.Persist.PostgreSQL
+                     Database.Persist.Postgresql
 
      cpp-options: -DWITH_POSTGRESQL
 

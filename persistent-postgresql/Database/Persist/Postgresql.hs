@@ -191,8 +191,7 @@ withStmt' conn query vals =
                                       show (let LibPQ.Col i = col in i) ++
                                       " (counting from zero)"
                     Just bt -> return $ getGetter bt $
-                               PG.Field ret col $
-                               PG.builtin2typname bt
+                               PG.Field ret col oid
                 -- Ready to go!
                 rowRef   <- newIORef (LibPQ.Row 0)
                 rowCount <- LibPQ.ntuples ret
@@ -214,7 +213,9 @@ withStmt' conn query vals =
                                 mbs <- LibPQ.getvalue' ret row col
                                 case mbs of
                                   Nothing -> return PersistNull
-                                  Just bs -> bs `seq` case getter mbs of
+                                  Just bs -> do
+                                    ok <- PGFF.runConversion (getter mbs) conn
+                                    bs `seq` case ok of
                                                         Errors (exc:_) -> throw exc
                                                         Errors [] -> error "Got an Errors, but no exceptions"
                                                         Ok v  -> return v
@@ -242,7 +243,7 @@ instance PGTF.ToField P where
     toField (P (PersistObjectId _))    =
         error "Refusing to serialize a PersistObjectId to a PostgreSQL value"
 
-type Getter a = PG.Field -> Maybe ByteString -> Ok a
+type Getter a = PGFF.FieldParser a
 
 convertPV :: PGFF.FromField a => (a -> b) -> Getter b
 convertPV f = (fmap f .) . PGFF.fromField
@@ -272,7 +273,7 @@ getGetter PG.TimestampTZ           = convertPV (PersistZonedTime . ZT)
 getGetter PG.Bit                   = convertPV PersistInt64
 getGetter PG.VarBit                = convertPV PersistInt64
 getGetter PG.Numeric               = convertPV PersistRational
-getGetter PG.Void                  = \_ _ -> Ok PersistNull
+getGetter PG.Void                  = \_ _ -> return PersistNull
 getGetter other   = error $ "Postgresql.getGetter: type " ++
                             show other ++ " not supported."
 
