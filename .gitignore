@@ -11,3 +11,4 @@ TAGS
 # hsenv does this
 dist_y
 /.shelly
+/tarballs/
