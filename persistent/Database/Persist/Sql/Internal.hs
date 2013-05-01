@@ -6,7 +6,6 @@ module Database.Persist.Sql.Internal
     ) where
 
 import Database.Persist.Types
-import Database.Persist.Class
 import Database.Persist.Quasi
 import Data.Char (isSpace)
 import Data.Text (Text)
@@ -14,7 +13,6 @@ import qualified Data.Text as T
 import Data.Monoid (Monoid, mappend, mconcat)
 import Data.Maybe (mapMaybe, listToMaybe)
 import Database.Persist.Sql.Types
-import Database.Persist.Sql.Class
 
 -- | Create the list of columns for the given entity.
 mkColumns :: [EntityDef a] -> EntityDef SqlType -> ([Column], [UniqueDef])

@@ -6,58 +6,13 @@ module Database.Persist.Class.PersistUnique
 
 import qualified Prelude
 import Prelude hiding ((++), show)
-import Data.Monoid (mappend)
-import Data.Time (Day, TimeOfDay, UTCTime)
-import Data.Time.LocalTime (ZonedTime, zonedTimeToUTC, zonedTimeToLocalTime, zonedTimeZone)
-import Data.ByteString.Char8 (ByteString, unpack)
-import Control.Applicative
-import Data.Typeable (Typeable)
-import Data.Int (Int8, Int16, Int32, Int64)
-import Data.Word (Word8, Word16, Word32, Word64)
 
-import Text.Blaze.Html
-import Text.Blaze.Html.Renderer.Text (renderHtml)
-
-import qualified Data.Text as T
-import qualified Data.Text.Lazy as TL
-import qualified Data.ByteString.Lazy as L
-
-import qualified Control.Exception as E
+import Control.Monad (liftM)
 import Control.Monad.Trans.Error (Error (..))
-
-import Data.Bits (bitSize)
-import Control.Monad (liftM, (<=<))
-import Control.Arrow (second)
-
-import qualified Data.Text.Encoding as T
-import qualified Data.Text.Encoding.Error as T
-import Web.PathPieces (PathPiece (..))
-import qualified Data.Text.Read
-
-import Data.Aeson (Value)
-import Data.Aeson.Types (Parser)
-import qualified Data.Aeson as A
-import qualified Data.Attoparsec.Number as AN
-import qualified Data.Vector as V
-
-import qualified Data.Set as S
-import qualified Data.Map as M
-import qualified Data.HashMap.Strict as HM
-
-import qualified Data.Text.Encoding as TE
-import qualified Data.ByteString.Base64 as B64
-
-import Data.Aeson (toJSON)
-import Data.Aeson.Encode (fromValue)
-import Data.Text.Lazy (toStrict)
-import Data.Text.Lazy.Builder (toLazyText)
-
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Monoid (Monoid)
 
-import Data.Conduit.Internal (Pipe, ConduitM)
+import Data.Conduit.Internal (Pipe)
 import Control.Monad.Logger (LoggingT)
 import Control.Monad.Trans.Identity ( IdentityT)
 import Control.Monad.Trans.List     ( ListT    )

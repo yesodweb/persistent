@@ -306,9 +306,9 @@ instance (HasResolution a) => PersistFieldSql (Fixed a) where
     sqlType a =
         SqlNumeric long prec
       where
-        prec = round $ (log $ fromIntegral $ resolution n) / (log 10) --  FIXME: May lead to problems with big numbers
-        long = prec + 10                                              --  FIXME: Is this enough ?
+        prec = round $ (log $ fromIntegral $ resolution n) / (log 10 :: Double) --  FIXME: May lead to problems with big numbers
+        long = prec + 10                                                        --  FIXME: Is this enough ?
         n = 0
-        mn = return n `asTypeOf` a
+        _mn = return n `asTypeOf` a
 instance PersistFieldSql Rational where
-    sqlType a = SqlNumeric 22 12   --  FIXME: Ambigous, 12 is from Pico which is used to convert Rational to number string
+    sqlType _ = SqlNumeric 22 12   --  FIXME: Ambigous, 12 is from Pico which is used to convert Rational to number string
