@@ -119,8 +119,8 @@ newtype DBName = DBName { unDBName :: Text }
 type Attr = Text
 
 data FieldType
-    = FTTypeCon (Maybe Text) -- ^ optional module
-                Text         -- ^ name
+    = FTTypeCon (Maybe Text) Text
+      -- ^ Optional module and name.
     | FTApp FieldType FieldType
     | FTList FieldType
   deriving (Show, Eq, Read, Ord)
