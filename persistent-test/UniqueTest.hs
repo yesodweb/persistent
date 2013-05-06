@@ -11,7 +11,6 @@ module UniqueTest where
 
 import Init
 #ifndef WITH_MONGODB
-import Database.Persist (Checkmark(..))
 import Control.Monad (void)
 #endif
 
@@ -31,8 +30,8 @@ share [mkPersist sqlSettings,  mkMigrate "uniqueMigrate"] [persistLowerCase|
     deriving Eq Show
 #ifndef WITH_MONGODB
   TestCheckmark
-    key   String
-    value String
+    key   Text
+    value Text
     active Checkmark nullable
     UniqueTestCheckmark key active !force
     deriving Eq Show

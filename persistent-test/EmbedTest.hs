@@ -38,32 +38,32 @@ share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
 #endif
 
   OnlyName
-    name String
+    name Text
     deriving Show Eq Read Ord
 
   HasEmbed
-    name String
+    name Text
     embed OnlyName
     deriving Show Eq Read Ord
 
   HasEmbeds
-    name String
+    name Text
     embed OnlyName
     double HasEmbed
     deriving Show Eq Read Ord
 
   HasListEmbed
-    name String
+    name Text
     list [HasEmbed]
     deriving Show Eq Read Ord
 
   HasSetEmbed
-    name String
+    name Text
     set (S.Set HasEmbed)
     deriving Show Eq Read Ord
 
   HasMapEmbed
-    name String
+    name Text
     map (M.Map T.Text T.Text)
     deriving Show Eq Read Ord
 
@@ -81,14 +81,14 @@ share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
 
 
   User
-    ident T.Text
-    password T.Text Maybe
+    ident Text
+    password Text Maybe
     profile Profile
     deriving Show Eq Read Ord
 
   Profile
-    firstName T.Text
-    lastName T.Text
+    firstName Text
+    lastName Text
     contact Contact Maybe
     deriving Show Eq Read Ord
 

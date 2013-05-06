@@ -19,7 +19,6 @@ import Database.Persist.TH
 import Database.Persist.Postgresql
 #endif
 import Data.Char (generalCategory, GeneralCategory(..))
-import Data.Text (Text)
 import qualified Data.Text as T
 import Data.ByteString (ByteString)
 import Data.Time (Day, UTCTime (..), ZonedTime (..), minutesToTimeZone)

@@ -16,7 +16,6 @@ module MaxLenTest (
 ) where
 
 import Init
-import Data.Text (Text)
 import Data.String (IsString)
 import Data.ByteString (ByteString)
 

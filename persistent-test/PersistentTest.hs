@@ -63,7 +63,6 @@ import Database.Persist.MySQL()
 
 import Control.Monad.IO.Class
 
-import Data.Text (Text)
 import Web.PathPieces (PathPiece (..))
 import Data.Maybe (fromJust)
 import qualified Data.HashMap.Lazy as M
@@ -86,23 +85,23 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade sqlSetti
   -- Header-level comment
     -- Indented comment
   Person json
-    name String
+    name Text
     age Int "some ignored -- \" attribute"
-    color String Maybe -- this is a comment sql=foobarbaz
+    color Text Maybe -- this is a comment sql=foobarbaz
     PersonNameKey name -- this is a comment sql=foobarbaz
     deriving Show Eq
   Person1
 -- Dedented comment
   -- Header-level comment
     -- Indented comment
-    name String
+    name Text
     age Int
   PersonMaybeAge
-    name String
+    name Text
     age Int Maybe
   Pet no-json
     ownerId PersonId
-    name String
+    name Text
     deriving Show Eq
 -- Dedented comment
   -- Header-level comment
@@ -110,7 +109,7 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade sqlSetti
     type PetType
   MaybeOwnedPet no-json
     ownerId PersonId Maybe
-    name String
+    name Text
     type PetType
 -- Dedented comment
   -- Header-level comment

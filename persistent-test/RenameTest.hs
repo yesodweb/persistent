@@ -30,7 +30,7 @@ mkPersist persistSettings [persistLowerCase|
 share [mkPersist sqlSettings, mkMigrate "lowerCaseMigrate"] [persistLowerCase|
 #endif
 LowerCaseTable id=my_id
-    fullName String
+    fullName Text
     ExtraBlock
         foo bar
         baz

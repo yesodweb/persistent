@@ -33,12 +33,13 @@ module Init (
   , liftIO
   , mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase
   , Int32, Int64
+  , Text
 ) where
 
 -- re-exports
 import Test.Hspec
 import Test.Hspec.HUnit
-import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase, mkPersistSettings)
+import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase)
 
 -- testing
 import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
@@ -46,15 +47,11 @@ import Test.QuickCheck
 
 import Database.Persist
 
-#if WITH_MONGODB
+#ifdef WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
 import Database.Persist.MongoDB (Action, withMongoDBConn, runMongoDBPool, MongoBackend)
-{-
-import Database.Persist.MongoDB (oidToKey)
-import Data.Bson (genObjectId)
--}
 import Language.Haskell.TH.Syntax (Type(..))
-import Database.Persist.TH (MkPersistSettings(..))
+import Database.Persist.TH (mkPersistSettings, MkPersistSettings(..))
 import Control.Monad (replicateM)
 import qualified Data.ByteString as BS
 
@@ -153,7 +150,7 @@ type BackendMonad = SqlBackend
 sqlite_database :: Text
 sqlite_database = "test/testdb.sqlite3"
 -- sqlite_database = ":memory:"
-runConn :: (MonadIO m, MonadBaseControl IO m) => SqlPersist (NoLoggingT m) t -> m ()
+runConn :: (MonadIO m, MonadBaseControl IO m) => SqlPersistT (NoLoggingT m) t -> m ()
 runConn f = runNoLoggingT $ do
     _<-withSqlitePool sqlite_database 1 $ runSqlPool f
 #  if WITH_POSTGRESQL
@@ -169,7 +166,7 @@ runConn f = runNoLoggingT $ do
 #  endif
     return ()
 
-db :: SqlPersist (NoLoggingT (ResourceT IO)) () -> Assertion
+db :: SqlPersistT (NoLoggingT (ResourceT IO)) () -> Assertion
 db actions = do
   runResourceT $ runConn $ actions >> transactionUndo
 

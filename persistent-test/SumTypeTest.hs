@@ -12,11 +12,6 @@ module SumTypeTest (specs) where
 
 import Database.Persist.Sqlite
 import Database.Persist.TH
-#ifndef WITH_MONGODB
-import qualified Data.Conduit as C
-import qualified Data.Conduit.List as CL
-import qualified Data.Map as Map
-#endif
 import Control.Monad.Trans.Resource (runResourceT)
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql

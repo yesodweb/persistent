@@ -36,6 +36,10 @@ Flag high_precision_date
    Description: for MongoDB use a time storage with nano second precision.
    Default: False
 
+flag nooverlap
+    default: False
+    description: test out our assumption that OverlappingInstances is just for String
+
 library
     extra-libraries: sqlite3
 
@@ -127,6 +131,8 @@ library
                    , silently
                    , blaze-builder
 
+   if flag(nooverlap)
+     cpp-options: -DNO_OVERLAP
 
    if flag(postgresql)
      build-depends:
