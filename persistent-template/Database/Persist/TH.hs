@@ -105,7 +105,18 @@ getSqlType allEntities ent =
         final
             | isJust (mEmbedded (fieldType field)) = SqlString'
             | isReference = SqlInt64'
-            | otherwise = SqlTypeExp st
+            | otherwise =
+                case fieldType field of
+                    -- In the case of lists, we always serialize to a string
+                    -- value (via JSON).
+                    --
+                    -- Normally, this would be determined automatically by
+                    -- SqlTypeExp. However, there's one corner case: if there's
+                    -- a list of entity IDs, the datatype for the ID has not
+                    -- yet been created, so the compiler will fail. This extra
+                    -- clause works around this limitation.
+                    FTList _ -> SqlString'
+                    _ -> SqlTypeExp st
 
         mEmbedded (FTTypeCon Just{} _) = Nothing
         mEmbedded (FTTypeCon Nothing n) = let name = HaskellName n in
