@@ -22,6 +22,7 @@ import Control.Monad.Trans.Error (ErrorT(..))
 import Data.Aeson
 import Data.ByteString (ByteString)
 import Data.Either (partitionEithers)
+import Data.Fixed (Pico)
 import Data.Function (on)
 import Data.IORef
 import Data.List (find, intercalate, sort, groupBy)
@@ -29,6 +30,7 @@ import Data.Text (Text, pack)
 import System.Environment (getEnvironment)
 
 import Data.Conduit
+import qualified Blaze.ByteString.Builder.Char8 as BBB
 import qualified Data.Conduit.List as CL
 import qualified Data.Map as Map
 import qualified Data.Text as T
@@ -195,6 +197,9 @@ instance MySQL.Param P where
     render (P PersistNull)            = MySQL.render MySQL.Null
     render (P (PersistList l))        = MySQL.render $ listToJSON l
     render (P (PersistMap m))         = MySQL.render $ mapToJSON m
+    render (P (PersistRational r))    =
+      MySQL.Plain $ BBB.fromString $ show (fromRational r :: Pico)
+      -- FIXME: Too Ambigous, can not select precision without information about field
     render (P (PersistObjectId _))    =
         error "Refusing to serialize a PersistObjectId to a MySQL value"
 
@@ -606,19 +611,20 @@ showColumn (Column n nu t def maxLen ref) = concat
 showSqlType :: SqlType
             -> Maybe Integer -- ^ @maxlen@
             -> String
-showSqlType SqlBlob    Nothing  = "BLOB"
-showSqlType SqlBlob    (Just i) = "VARBINARY(" ++ show i ++ ")"
-showSqlType SqlBool    _        = "TINYINT(1)"
-showSqlType SqlDay     _        = "DATE"
-showSqlType SqlDayTime _        = "DATETIME"
-showSqlType SqlDayTimeZoned _   = "VARCHAR(50) CHARACTER SET utf8"
-showSqlType SqlInt32   _        = "INT"
-showSqlType SqlInt64   _        = "BIGINT"
-showSqlType SqlReal    _        = "DOUBLE PRECISION"
-showSqlType SqlString  Nothing  = "TEXT CHARACTER SET utf8"
-showSqlType SqlString  (Just i) = "VARCHAR(" ++ show i ++ ") CHARACTER SET utf8"
-showSqlType SqlTime    _        = "TIME"
-showSqlType (SqlOther t) _      = T.unpack t
+showSqlType SqlBlob    Nothing    = "BLOB"
+showSqlType SqlBlob    (Just i)   = "VARBINARY(" ++ show i ++ ")"
+showSqlType SqlBool    _          = "TINYINT(1)"
+showSqlType SqlDay     _          = "DATE"
+showSqlType SqlDayTime _          = "DATETIME"
+showSqlType SqlDayTimeZoned _     = "VARCHAR(50) CHARACTER SET utf8"
+showSqlType SqlInt32   _          = "INT"
+showSqlType SqlInt64   _          = "BIGINT"
+showSqlType SqlReal    _          = "DOUBLE PRECISION"
+showSqlType (SqlNumeric s prec) _ = "NUMERIC(" ++ show s ++ "," ++ show prec ++ ")"
+showSqlType SqlString  Nothing    = "TEXT CHARACTER SET utf8"
+showSqlType SqlString  (Just i)   = "VARCHAR(" ++ show i ++ ") CHARACTER SET utf8"
+showSqlType SqlTime    _          = "TIME"
+showSqlType (SqlOther t) _        = T.unpack t
 
 -- | Render an action that must be done on the database.
 showAlterDb :: AlterDB -> (Bool, Text)
