@@ -162,7 +162,7 @@ migrate' :: [EntityDef a]
          -> IO (Either [Text] [(Bool, Text)])
 migrate' allDefs getter val = do
     let (cols, uniqs) = mkColumns allDefs val
-    let newSql = mkCreateTable False def (cols, uniqs)
+    let newSql = mkCreateTable False def (filter (not . safeToRemove val . cName) cols, uniqs)
     stmt <- getter "SELECT sql FROM sqlite_master WHERE type='table' AND name=?"
     oldSql' <- runResourceT
              $ stmtQuery stmt [PersistText $ unDBName table] $$ go
@@ -184,6 +184,14 @@ migrate' allDefs getter val = do
             Just [PersistText y] -> return $ Just y
             Just y -> error $ "Unexpected result from sqlite_master: " ++ show y
 
+-- | Check if a column name is listed as the "safe to remove" in the entity
+-- list.
+safeToRemove :: EntityDef a -> DBName -> Bool
+safeToRemove def (DBName colName)
+    = any (elem "SafeToRemove" . fieldAttrs)
+    $ filter ((== (DBName colName)) . fieldDB)
+    $ entityFields def
+
 getCopyTable :: [EntityDef a]
              -> (Text -> IO Statement)
              -> EntityDef SqlType
@@ -192,17 +200,18 @@ getCopyTable allDefs getter val = do
     stmt <- getter $ pack $ "PRAGMA table_info(" ++ escape' table ++ ")"
     oldCols' <- runResourceT $ stmtQuery stmt [] $$ getCols
     let oldCols = map DBName $ filter (/= "id") oldCols' -- need to update for table id attribute ?
-    let newCols = map cName cols
+    let newCols = filter (not . safeToRemove def) $ map cName cols
     let common = filter (`elem` oldCols) newCols
     let id_ = entityID val
     return [ (False, tmpSql)
            , (False, copyToTemp $ id_ : common)
-           , (common /= oldCols, pack dropOld)
+           , (common /= filter (not . safeToRemove def) oldCols, pack dropOld)
            , (False, newSql)
            , (False, copyToFinal $ id_ : newCols)
            , (False, pack dropTmp)
            ]
   where
+
     def = val
     getCols = do
         x <- CL.head
@@ -215,8 +224,9 @@ getCopyTable allDefs getter val = do
     table = entityDB def
     tableTmp = DBName $ unDBName table `T.append` "_backup"
     (cols, uniqs) = mkColumns allDefs val
-    newSql = mkCreateTable False def (cols, uniqs)
-    tmpSql = mkCreateTable True def { entityDB = tableTmp } (cols, uniqs)
+    cols' = filter (not . safeToRemove def . cName) cols
+    newSql = mkCreateTable False def (cols', uniqs)
+    tmpSql = mkCreateTable True def { entityDB = tableTmp } (cols', uniqs)
     dropTmp = "DROP TABLE " ++ escape' tableTmp
     dropOld = "DROP TABLE " ++ escape' table
     copyToTemp common = pack $ concat

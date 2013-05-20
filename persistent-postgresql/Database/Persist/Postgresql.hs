@@ -290,7 +290,9 @@ migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
     case partitionEithers old of
         ([], old'') -> do
             let old' = partitionEithers old''
-            let new = second (map udToPair) $ mkColumns allDefs val
+            let new = first (filter $ not . safeToRemove val . cName)
+                    $ second (map udToPair)
+                    $ mkColumns allDefs val
             if null old
                 then do
                     let addTable = AddTable $ concat
@@ -308,13 +310,15 @@ migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
                         references = mapMaybe (getAddReference name) $ fst new
                     return $ Right $ addTable : uniques ++ references
                 else do
-                    let (acs, ats) = getAlters new old'
+                    let (acs, ats) = getAlters val new old'
                     let acs' = map (AlterColumn name) acs
                     let ats' = map (AlterTable name) ats
                     return $ Right $ acs' ++ ats'
         (errs, _) -> return $ Left errs
 
-data AlterColumn = Type SqlType | IsNull | NotNull | Add' Column | Drop
+type SafeToRemove = Bool
+
+data AlterColumn = Type SqlType | IsNull | NotNull | Add' Column | Drop SafeToRemove
                  | Default String | NoDefault | Update' String
                  | AddReference DBName | DropReference DBName
 type AlterColumn' = (DBName, AlterColumn)
@@ -365,13 +369,22 @@ getColumns getter def = do
                 cols <- helper
                 return $ col' : cols
 
-getAlters :: ([Column], [(DBName, [DBName])])
+-- | Check if a column name is listed as the "safe to remove" in the entity
+-- list.
+safeToRemove :: EntityDef a -> DBName -> Bool
+safeToRemove def (DBName colName)
+    = any (elem "SafeToRemove" . fieldAttrs)
+    $ filter ((== (DBName colName)) . fieldDB)
+    $ entityFields def
+
+getAlters :: EntityDef a
+          -> ([Column], [(DBName, [DBName])])
           -> ([Column], [(DBName, [DBName])])
           -> ([AlterColumn'], [AlterTable])
-getAlters (c1, u1) (c2, u2) =
+getAlters def (c1, u1) (c2, u2) =
     (getAltersC c1 c2, getAltersU u1 u2)
   where
-    getAltersC [] old = map (\x -> (cName x, Drop)) old
+    getAltersC [] old = map (\x -> (cName x, Drop $ safeToRemove def $ cName x)) old
     getAltersC (new:news) old =
         let (alters, old') = findAlters new old
          in alters ++ getAltersC news old'
@@ -523,7 +536,7 @@ showAlterDb (AddTable s) = (False, pack s)
 showAlterDb (AlterColumn t (c, ac)) =
     (isUnsafe ac, pack $ showAlter t (c, ac))
   where
-    isUnsafe Drop = True
+    isUnsafe (Drop safeToRemove) = not safeToRemove
     isUnsafe _ = False
 showAlterDb (AlterTable t at) = (False, pack $ showAlterTable t at)
 
@@ -577,7 +590,7 @@ showAlter table (_, Add' col) =
         , " ADD COLUMN "
         , showColumn col
         ]
-showAlter table (n, Drop) =
+showAlter table (n, Drop _) =
     concat
         [ "ALTER TABLE "
         , T.unpack $ escape table

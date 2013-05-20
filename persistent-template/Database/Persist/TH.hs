@@ -159,7 +159,8 @@ fixEntityDef :: EntityDef a -> EntityDef a
 fixEntityDef ed =
     ed { entityFields = filter keepField $ entityFields ed }
   where
-    keepField fd = "MigrationOnly" `notElem` fieldAttrs fd
+    keepField fd = "MigrationOnly" `notElem` fieldAttrs fd &&
+                   "SafeToRemove" `notElem` fieldAttrs fd
 
 -- | Settings to be passed to the 'mkPersist' function.
 data MkPersistSettings = MkPersistSettings
