@@ -151,33 +151,33 @@ withStmt' :: MonadResource m
           -> [PersistValue]
           -> Source m [PersistValue]
 withStmt' conn query vals =
-    bracketP openS closeS pull
+    bracketP createResult MySQLBase.freeResult fetchRows >>= CL.sourceList
   where
-    openS = do
+    createResult = do
       -- Execute the query
-      MySQLBase.query conn =<< MySQL.formatQuery conn query (map P vals)
-      result <- MySQLBase.storeResult conn
+      formatted <- MySQL.formatQuery conn query (map P vals)
+      MySQLBase.query conn formatted
+      MySQLBase.storeResult conn
 
+    fetchRows result = liftIO $ do
       -- Find out the type of the columns
       fields <- MySQLBase.fetchFields result
       let getters = [ maybe PersistNull (getGetter (MySQLBase.fieldType f) f . Just) | f <- fields]
+          convert = use getters
+            where use (g:gs) (col:cols) =
+                    let v  = g col
+                        vs = use gs cols
+                    in v `seq` vs `seq` (v:vs)
+                  use _ _ = []
 
       -- Ready to go!
-      return (result, getters)
-
-    closeS (result, _) = MySQLBase.freeResult result
-
-    pull x = do
-        y <- liftIO $ pullS x
-        case y of
-            Nothing -> return ()
-            Just z -> yield z >> pull x
-
-    pullS (result, getters) = do
-      row <- MySQLBase.fetchRow result
-      case row of
-        [] -> return Nothing -- Do not free the result per sourceIO's docs.
-        _  -> return $ Just $ zipWith ($) getters row
+      let go acc = do
+            row <- MySQLBase.fetchRow result
+            case row of
+              [] -> return (acc [])
+              _  -> let converted = convert row
+                    in converted `seq` go (acc . (converted:))
+      go id
 
 
 -- | @newtype@ around 'PersistValue' that supports the
