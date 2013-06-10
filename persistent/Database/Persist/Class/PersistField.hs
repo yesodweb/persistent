@@ -239,6 +239,9 @@ instance PersistField a => PersistField [a] where
     fromPersistValue (PersistText t) = fromPersistValue (PersistByteString $ TE.encodeUtf8 t)
     fromPersistValue (PersistByteString bs)
         | Just values <- A.decode' (L.fromChunks [bs]) = fromPersistList values
+    -- avoid the need for a migration to fill in empty lists.
+    -- also useful when Persistent is not the only one filling in the data
+    fromPersistValue (PersistNull) = Right []
     fromPersistValue x = Left $ T.pack $ "Expected PersistList, received: " ++ show x
 
 instance (Ord a, PersistField a) => PersistField (S.Set a) where
