@@ -687,7 +687,8 @@ dummyFromUnique _ = error "dummyFromUnique"
 dummyFromFilts :: [Filter v] -> v
 dummyFromFilts _ = error "dummyFromFilts"
 
-data MongoAuth = MongoAuth DB.Username DB.Password
+data MongoAuth = MongoAuth DB.Username DB.Password deriving Show
+
 -- | Information required to connect to a mongo database
 data MongoConf = MongoConf
     { mgDatabase :: Text
@@ -698,7 +699,7 @@ data MongoConf = MongoConf
     , mgPoolStripes :: Int
     , mgStripeConnections :: Int
     , mgConnectionIdleTime :: NominalDiffTime
-    }
+    } deriving Show
 
 instance PersistConfig MongoConf where
     type PersistConfigBackend MongoConf = DB.Action
