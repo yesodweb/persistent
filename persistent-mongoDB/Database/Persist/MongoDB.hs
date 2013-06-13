@@ -100,6 +100,7 @@ import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Data.Time.Calendar (Day(..))
 import Data.Attoparsec.Number
 import Data.Char (toUpper)
+import Data.Monoid (mappend)
 
 #ifdef DEBUG
 import FileLocation (debug)
@@ -530,7 +531,8 @@ docToEntityThrow doc =
 fromPersistValuesThrow :: (Trans.MonadIO m, PersistEntity record) => EntityDef a -> [DB.Field] -> m (Entity record)
 fromPersistValuesThrow entDef doc = 
     case eitherFromPersistValues entDef doc of
-        Left s -> Trans.liftIO . throwIO $ PersistMarshalError $ s
+        Left t -> Trans.liftIO . throwIO $ PersistMarshalError $
+                   unHaskellName (entityHaskell entDef) `mappend` ": " `mappend` t
         Right entity -> return entity
 
 eitherFromPersistValues :: (PersistEntity record) => EntityDef a -> [DB.Field] -> Either T.Text (Entity record)

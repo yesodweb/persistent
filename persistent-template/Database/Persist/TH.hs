@@ -430,8 +430,8 @@ mkFromPersistValues t@(EntityDef { entitySum = False }) = do
     nothing <- [|Left $(liftT $ "Invalid fromPersistValues input. Entity: " `mappend` entName)|]
     let cons' = ConE $ mkName $ unpack $ entName
     xs <- mapM (const $ newName "x") $ entityFields t
-    fs <- [|fromPersistValue|]
-    let xs' = map (AppE fs . VarE) xs
+    mkPersistValues <- mapM (mkPersistValue . unHaskellName . fieldHaskell) $ entityFields t
+    let xs' = map (\(pv, x) -> pv `AppE` VarE x) $ zip mkPersistValues xs
     let pat = ListP $ map VarP xs
     ap' <- [|(<*>)|]
     just <- [|Right|]
@@ -441,6 +441,12 @@ mkFromPersistValues t@(EntityDef { entitySum = False }) = do
         , Clause [WildP] (NormalB nothing) []
         ]
   where
+    mkPersistValue fieldName = [|\persistValue ->
+            case fromPersistValue persistValue of
+                   Right r  -> Right r
+                   Left err -> Left $
+                     "field " `mappend` $(liftT fieldName) `mappend` ": " `mappend` err
+          |]
     entName = unHaskellName $ entityHaskell t
     go ap' x y = InfixE (Just x) ap' (Just y)
 
