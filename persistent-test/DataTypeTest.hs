@@ -91,8 +91,8 @@ specs = describe "data type specs" $ do
 #ifndef WITH_MONGODB
                 check' "pico" dataTypeTablePico
                 check "time" dataTypeTableTime
-#endif
                 check "utc" dataTypeTableUtc
+#endif
                 check "zoned" dataTypeTableZonedTime
 
                 -- Do a special check for Double since it may
