@@ -58,9 +58,10 @@ instance (C.MonadResource m, MonadLogger m) => PersistStore (SqlPersistT m) wher
     insertKey = insrepHelper "INSERT"
 
     repsert key value = do
-        -- FIXME use this for sqlite insrepHelper "REPLACE"
-        delete key
-        insertKey key value
+        mExisting <- get key
+        case mExisting of
+          Nothing -> insertKey key value
+          Just _ -> replace key value
 
     get k = do
         conn <- askSqlConn
