@@ -181,12 +181,13 @@ specs = describe "persistent" $ do
       limitOffsetOrder [Desc PersonAge, LimitTo 2] `eq` (2, 0)
       limitOffsetOrder [LimitTo 2, Desc PersonAge, OffsetBy 3] `eq` (2, 3)
 
-      _ <- insert $ Person "z" 1 Nothing
-      _ <- insert $ Person "y" 2 Nothing
-      _ <- insert $ Person "x" 1 Nothing
-      _ <- insert $ Person "w" 2 Nothing
-      _ <- insert $ Person "v" 1 Nothing
-      _ <- insert $ Person "u" 2 Nothing
+      _ <- insertMany [ Person "z" 1 Nothing
+                     , Person "y" 2 Nothing
+                     , Person "x" 1 Nothing
+                     , Person "w" 2 Nothing
+                     , Person "v" 1 Nothing
+                     , Person "u" 2 Nothing
+                     ]
 
       a <- fmap (map $ personName . entityVal) $ selectList [] [Desc PersonAge, Asc PersonName, OffsetBy 2, LimitTo 3]
       a @== ["y", "v", "x"]
@@ -276,10 +277,11 @@ specs = describe "persistent" $ do
 
   it "and/or" $ db $ do
       deleteWhere ([] :: [Filter Person1])
-      _ <- insert $ Person1 "Michael" 25
-      _ <- insert $ Person1 "Miriam" 25
-      _ <- insert $ Person1 "Michael" 30
-      _ <- insert $ Person1 "Michael" 35
+      _ <- insertMany [ Person1 "Michael" 25
+                     , Person1 "Miriam" 25
+                     , Person1 "Michael" 30
+                     , Person1 "Michael" 35
+                     ]
 
       c10 <- count $ [Person1Name ==. "Michael"] ||. [Person1Name ==. "Miriam", Person1Age ==. 25]
       c10 @== 4
@@ -442,8 +444,7 @@ specs = describe "persistent" $ do
   it "selectList" $ db $ do
       let p25 = Person "Michael" 25 Nothing
       let p26 = Person "Michael2" 26 Nothing
-      key25 <- insert p25
-      key26 <- insert p26
+      [key25, key26] <- insertMany [p25, p26]
       ps1 <- selectList [] [Asc PersonAge]
       ps1 @== [(Entity key25 p25), (Entity key26 p26)]
       -- limit
@@ -465,9 +466,7 @@ specs = describe "persistent" $ do
       let p1 = Person "selectSource1" 1 Nothing
           p2 = Person "selectSource2" 2 Nothing
           p3 = Person "selectSource3" 3 Nothing
-      k1 <- insert p1
-      k2 <- insert p2
-      k3 <- insert p3
+      [k1,k2,k3] <- insertMany [p1, p2, p3]
 
       ps1 <- runResourceT $ selectSource [] [Desc PersonAge] $$ await
       ps1 @== Just (Entity k3 p3)
@@ -501,9 +500,7 @@ specs = describe "persistent" $ do
       let p1 = Person "selectKeys1" 1 Nothing
           p2 = Person "selectKeys2" 2 Nothing
           p3 = Person "selectKeys3" 3 Nothing
-      k1 <- insert p1
-      k2 <- insert p2
-      k3 <- insert p3
+      [k1,k2,k3] <- insertMany [p1, p2, p3]
 
       ps1 <- runResourceT $ selectKeys [] [Desc PersonAge] $$ await
       ps1 @== Just k3

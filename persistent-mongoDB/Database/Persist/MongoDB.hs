@@ -296,6 +296,10 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
         DB.ObjId oid <- DB.insert (collectionName record) (toInsertFields record)
         return $ oidToKey oid 
 
+    insertMany [] = return []
+    insertMany (r:records) = map (\(DB.ObjId oid) -> oidToKey oid) `fmap`
+        DB.insertMany (collectionName r) (map toInsertFields (r:records))
+
     insertKey k record = saveWithKey toInsertFields DB.insert_ k record
 
     repsert   k record = saveWithKey entityToDocument DB.save k record

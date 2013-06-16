@@ -34,6 +34,10 @@ import Database.Persist.Class.PersistEntity
 class MonadIO m => PersistStore m where
     type PersistMonadBackend m
 
+    -- | Get a record by identifier, if available.
+    get :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
+        => Key val -> m (Maybe val)
+
     -- | Create a new record in the database, returning an automatically created
     -- key (in SQL an auto-increment id).
     insert :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
@@ -43,6 +47,13 @@ class MonadIO m => PersistStore m where
     insert_ :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
             => val -> m ()
     insert_ val = insert val >> return ()
+
+    -- | Create multiple records in the database.
+    -- SQL backends currently use the slow default implementation of
+    -- @mapM insert@
+    insertMany :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
+                => [val] -> m [Key val]
+    insertMany = mapM insert
 
     -- | Create a new record in the database using the given key.
     insertKey :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
@@ -65,10 +76,6 @@ class MonadIO m => PersistStore m where
     -- not exist.
     delete :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
            => Key val -> m ()
-
-    -- | Get a record by identifier, if available.
-    get :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
-        => Key val -> m (Maybe val)
 
 #define DEF(T) { type PersistMonadBackend (T m) = PersistMonadBackend m; insert = lift . insert; insertKey k = lift . insertKey k; repsert k = lift . repsert k; replace k = lift . replace k; delete = lift . delete; get = lift . get }
 #define GO(T) instance (PersistStore m) => PersistStore (T m) where DEF(T)
