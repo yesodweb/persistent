@@ -650,7 +650,7 @@ mkSave :: String -> [EntityDef SqlType] -> Q [Dec]
 mkSave name' defs' = do
     let name = mkName name'
     defs <- lift defs'
-    return [ SigD name $ ListT `AppT` ConT ''EntityDef
+    return [ SigD name $ ListT `AppT` (ConT ''EntityDef `AppT` ConT ''SqlType)
            , FunD name [Clause [] (NormalB defs) []]
            ]
 
