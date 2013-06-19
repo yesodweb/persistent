@@ -162,6 +162,7 @@ instance PersistField Rational where
   fromPersistValue (PersistText t) = case reads $ T.unpack t of --  NOTE: Sqlite can store rationals just as string
     [(a, "")] -> Right $ toRational (a :: Pico)
     _ -> Left $ "Can not read " <> t <> " as Rational (Pico in fact)"
+  fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
   fromPersistValue x = Left $ "Expected Rational, received: " <> T.pack (show x)
 
 instance PersistField Bool where
