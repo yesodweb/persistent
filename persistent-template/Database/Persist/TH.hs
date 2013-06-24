@@ -585,8 +585,14 @@ mkEntity mps t = do
         , FunD 'persistFieldDef (map snd fields)
         , TySynInstD
             ''PersistEntityBackend
+#if MIN_VERSION_template_haskell(2,9,0)
+            (TySynEqn
+               [genericDataType mps (unHaskellName $ entityHaskell t) $ VarT $ mkName "backend"]
+               (backendDataType mps))
+#else
             [genericDataType mps (unHaskellName $ entityHaskell t) $ VarT $ mkName "backend"]
             (backendDataType mps)
+#endif
         , FunD 'persistIdField [Clause [] (NormalB $ ConE $ mkName $ unpack $ unHaskellName (entityHaskell t) ++ "Id") []]
         , FunD 'fieldLens lensClauses
         ]
