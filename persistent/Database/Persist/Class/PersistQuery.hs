@@ -2,6 +2,8 @@
 {-# LANGUAGE TypeFamilies #-}
 module Database.Persist.Class.PersistQuery
     ( PersistQuery (..)
+    , selectList
+    , selectKeysList
     ) where
 
 import Control.Exception (throwIO)
@@ -83,6 +85,21 @@ class PersistStore m => PersistQuery m where
     -- | The total number of records fulfilling the given criterion.
     count :: (PersistEntity val, PersistEntityBackend val ~ PersistMonadBackend m)
           => [Filter val] -> m Int
+
+-- | Call 'selectSource' but return the result as a list.
+selectList :: (PersistEntity val, PersistQuery m, PersistEntityBackend val ~ PersistMonadBackend m)
+           => [Filter val]
+           -> [SelectOpt val]
+           -> m [Entity val]
+selectList a b = selectSource a b C.$$ CL.consume
+
+-- | Call 'selectKeys' but return the result as a list.
+selectKeysList :: (PersistEntity val, PersistQuery m, PersistEntityBackend val ~ PersistMonadBackend m)
+               => [Filter val]
+               -> [SelectOpt val]
+               -> m [Key val]
+selectKeysList a b = selectKeys a b C.$$ CL.consume
+
 
 #define DEF(T) { update k = lift . update k; updateGet k = lift . updateGet k; updateWhere f = lift . updateWhere f; deleteWhere = lift . deleteWhere; selectSource f = C.transPipe lift . selectSource f; selectFirst f = lift . selectFirst f; selectKeys f = C.transPipe lift . selectKeys f; count = lift . count }
 #define GO(T) instance (PersistQuery m) => PersistQuery (T m) where DEF(T)
