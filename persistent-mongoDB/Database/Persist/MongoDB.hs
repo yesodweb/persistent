@@ -116,9 +116,12 @@ instance FromJSON NoOrphanNominalDiffTime where
     parseJSON (Number (D x)) = (return . NoOrphanNominalDiffTime . fromRational . toRational) x
     parseJSON _ = fail "couldn't parse diff time"
 
-instance FromJSON PortID where
-    parseJSON (Number (I x)) = (return . PortNumber . fromInteger) x
+newtype NoOrphanPortID = NoOrphanPortID PortID deriving (Show, Eq)
+
+instance FromJSON NoOrphanPortID where
+    parseJSON (Number (I x)) = (return . NoOrphanPortID . PortNumber . fromInteger) x
     parseJSON _ = fail "couldn't parse port number"
+
 
 data Connection = Connection DB.Pipe DB.Database
 type ConnectionPool = Pool.Pool Connection
@@ -718,7 +721,7 @@ instance PersistConfig MongoConf where
     loadConfig (Object o) = do
         db                 <- o .:  "database"
         host               <- o .:? "host" .!= "127.0.0.1"
-        port               <- o .:? "port" .!= DB.defaultPort
+        (NoOrphanPortID port) <- o .:? "port" .!= (NoOrphanPortID DB.defaultPort)
         poolStripes        <- o .:? "poolstripes" .!= 1
         stripeConnections  <- o .:  "connections"
         (NoOrphanNominalDiffTime connectionIdleTime) <- o .:? "connectionIdleTime" .!= 20
