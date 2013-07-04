@@ -20,11 +20,15 @@ import Control.Arrow (second)
 import Data.Time (Day, TimeOfDay, UTCTime)
 import Data.Int (Int64)
 import qualified Data.Text.Read
-import Data.ByteString (ByteString)
+import Data.ByteString (ByteString, foldl')
+import Data.Bits (shiftL, shiftR)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BS8
 import Data.Time.LocalTime (ZonedTime, zonedTimeToUTC, zonedTimeToLocalTime, zonedTimeZone)
 import Data.Map (Map)
 import qualified Data.HashMap.Strict as HM
 import Data.Word (Word32)
+import Numeric (showHex, readHex)
 
 -- | A 'Checkmark' should be used as a field type whenever a
 -- uniqueness constraint should guarantee that a certain kind of
@@ -225,7 +229,22 @@ instance A.ToJSON PersistValue where
     toJSON PersistNull = A.Null
     toJSON (PersistList l) = A.Array $ V.fromList $ map A.toJSON l
     toJSON (PersistMap m) = A.object $ map (second A.toJSON) m
-    toJSON (PersistObjectId o) = A.String $ T.cons 'o' $ TE.decodeUtf8 $ B64.encode o
+    toJSON (PersistObjectId o) =
+      A.toJSON $ showChar 'o' $ showHexLen 8 (bs2i four) $ showHexLen 16 (bs2i eight) ""
+        where
+         (four, eight) = BS8.splitAt 4 o
+
+         -- taken from crypto-api
+         bs2i :: ByteString -> Integer
+         bs2i bs = foldl' (\i b -> (i `shiftL` 8) + fromIntegral b) 0 bs
+         {-# INLINE bs2i #-}
+
+         -- showHex of n padded with leading zeros if necessary to fill d digits
+         -- taken from Data.BSON
+         showHexLen :: (Show n, Integral n) => Int -> n -> ShowS
+         showHexLen d n = showString (replicate (d - sigDigits n) '0') . showHex n  where
+             sigDigits 0 = 1
+             sigDigits n' = truncate (logBase (16 :: Double) $ fromIntegral n') + 1
 
 instance A.FromJSON PersistValue where
     parseJSON (A.String t0) =
@@ -239,15 +258,25 @@ instance A.FromJSON PersistValue where
             Just ('z', t) -> fmap PersistZonedTime $ readMay t
             Just ('d', t) -> fmap PersistDay $ readMay t
             Just ('r', t) -> fmap PersistRational $ readMay t
-            Just ('o', t) -> either (fail "Invalid base64") (return . PersistObjectId)
-                           $ B64.decode $ TE.encodeUtf8 t
+            Just ('o', t) -> maybe (fail "Invalid base64") (return . PersistObjectId) $
+                              fmap (i2bs (8 * 12) . fst) $ headMay $ readHex $ T.unpack t
             Just (c, _) -> fail $ "Unknown prefix: " ++ [c]
       where
+        headMay []    = Nothing
+        headMay (x:_) = Just x
         readMay :: (Read a, Monad m) => T.Text -> m a
         readMay t =
             case reads $ T.unpack t of
                 (x, _):_ -> return x
                 [] -> fail "Could not read"
+
+        -- taken from crypto-api
+        -- |@i2bs bitLen i@ converts @i@ to a 'ByteString' of @bitLen@ bits (must be a multiple of 8).
+        i2bs :: Int -> Integer -> BS.ByteString
+        i2bs l i = BS.unfoldr (\l' -> if l' < 0 then Nothing else Just (fromIntegral (i `shiftR` l'), l' - 8)) (l-8)
+        {-# INLINE i2bs #-}
+
+
     parseJSON (A.Number (AN.I i)) = return $ PersistInt64 $ fromInteger i
     parseJSON (A.Number (AN.D d)) = return $ PersistDouble d
     parseJSON (A.Bool b) = return $ PersistBool b

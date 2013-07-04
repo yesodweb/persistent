@@ -358,7 +358,7 @@ specs = describe "persistent" $ do
       Just p <- get key3
       p3 @== p
 
-  prop "toPathPiece - fromPathPiece" $ \piece ->
+  prop "toPathPiece . fromPathPiece" $ \piece ->
       let key1 = Key piece :: (KeyBackend BackendMonad Person)
           key2 = fromJust $ fromPathPiece $ toPathPiece key1 :: (KeyBackend BackendMonad Person)
       in  toPathPiece key1 == toPathPiece key2
@@ -595,10 +595,15 @@ specs = describe "persistent" $ do
       x <- selectList [PersonId <-. [pid1, pid3]] []
       liftIO $ x @?= [(Entity pid1 p1), (Entity pid3 p3)]
 
-  it "serializes to JSON" $ do
+  describe "toJSON" $ do
+    it "serializes" $ do
       toJSON (Person "D" 0 Nothing) @?=
         Object (M.fromList [("color",Null),("name",String "D"),("age",Number 0)])
 
+    prop "fromJSON . toJSON $ key" $ \(person :: Key Person) ->
+      case (fromJSON . toJSON) person of
+        Success p -> p == person
+        _ -> error "fromJSON"
 
 
 #ifdef WITH_MONGODB

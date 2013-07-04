@@ -145,6 +145,9 @@ db' actions cleanDB = do
 instance Arbitrary PersistValue where
     arbitrary = PersistObjectId `fmap` BS.pack `fmap` replicateM 12 arbitrary
 
+instance Arbitrary (KeyBackend backend entity) where
+  arbitrary = Key `fmap` arbitrary
+
 #else
 type BackendMonad = SqlBackend
 sqlite_database :: Text
