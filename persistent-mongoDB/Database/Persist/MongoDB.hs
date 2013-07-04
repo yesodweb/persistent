@@ -92,7 +92,7 @@ import Web.PathPieces (PathPiece (..))
 import Data.Conduit
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.IO.Class (liftIO)
-import Data.Aeson (Value (Object, Number), (.:), (.:?), (.!=), FromJSON(..), ToJSON(..))
+import Data.Aeson (Value (Object, Number), (.:), (.:?), (.!=), FromJSON(..))
 import Control.Monad (mzero)
 import qualified Data.Conduit.Pool as Pool
 import Data.Time (NominalDiffTime)
@@ -121,9 +121,6 @@ newtype NoOrphanPortID = NoOrphanPortID PortID deriving (Show, Eq)
 instance FromJSON NoOrphanPortID where
     parseJSON (Number (I x)) = (return . NoOrphanPortID . PortNumber . fromInteger) x
     parseJSON _ = fail "couldn't parse port number"
-
-instance ToJSON (KeyBackend MongoBackend entity) where
-    toJSON = toJSON . toPathPiece
 
 
 data Connection = Connection DB.Pipe DB.Database
