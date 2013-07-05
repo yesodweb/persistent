@@ -33,7 +33,7 @@ runSqlConn (SqlPersistT r) conn = do
     return x
 
 runSqlPersistM :: SqlPersistM a -> Connection -> IO a
-runSqlPersistM x conn = runResourceT $ runNoLoggingT $ runReaderT (unSqlPersistT x) conn
+runSqlPersistM x conn = runResourceT $ runNoLoggingT $ runSqlConn x conn
 
 runSqlPersistMPool :: SqlPersistM a -> Pool Connection -> IO a
 runSqlPersistMPool x pool = runResourceT $ runNoLoggingT $ runSqlPool x pool
