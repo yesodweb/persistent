@@ -219,17 +219,17 @@ runMongoDBPool accessMode action pool =
 runMongoDBPoolDef :: (Trans.MonadIO m, MonadBaseControl IO m) => DB.Action m a -> ConnectionPool -> m a
 runMongoDBPoolDef = runMongoDBPool (DB.ConfirmWrites ["j" DB.=: True])
 
-filterByKey :: (Persistrecord record, PersistrecordBackend record ~ MongoBackend)
+filterByKey :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
             => Key record -> DB.Document
 filterByKey k = [_id DB.=: keyToOid k]
 
-queryByKey :: (Persistrecord record, PersistrecordBackend record ~ MongoBackend)
-           => Key record -> recordDef a -> DB.Query
-queryByKey k record = (DB.select (filterByKey k) (unDBName $ recordDB record))
+queryByKey :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
+           => Key record -> EntityDef a -> DB.Query
+queryByKey k record = (DB.select (filterByKey k) (unDBName $ entityDB record))
 
-selectByKey :: (Persistrecord record, PersistrecordBackend record ~ MongoBackend)
-            => Key record -> recordDef a -> DB.Selection
-selectByKey k record = (DB.select (filterByKey k) (unDBName $ recordDB record))
+selectByKey :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
+            => Key record -> EntityDef a -> DB.Selection
+selectByKey k record = (DB.select (filterByKey k) (unDBName $ entityDB record))
 
 updateFields :: (PersistEntity entity) => [Update entity] -> [DB.Field]
 updateFields upds = map updateToMongoField upds 
