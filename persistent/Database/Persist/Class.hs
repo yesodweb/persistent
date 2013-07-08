@@ -1,11 +1,33 @@
 module Database.Persist.Class
-    ( DeleteCascade (..)
-    , PersistEntity (..)
-    , PersistQuery (..)
+    (
+    -- * PersistStore
+      PersistStore (..)
+    , getJust
+    , belongsTo
+    , belongsToJust
+
+    -- * PersistUnique
     , PersistUnique (..)
-    , PersistConfig (..)
+    , getByValue
+    , insertBy
+    , replaceUnique
+
+    -- * PersistQuery
+    , PersistQuery (..)
+    , selectList
+    , selectKeysList
+
+    -- * DeleteCascade
+    , DeleteCascade (..)
+    , deleteCascadeWhere
+
+    -- * PersistEntity
+    , PersistEntity (..)
+    -- * PersistField
     , PersistField (..)
-    , PersistStore (..)
+    -- * PersistConfig
+    , PersistConfig (..)
+
     ) where
 
 import Database.Persist.Class.DeleteCascade
