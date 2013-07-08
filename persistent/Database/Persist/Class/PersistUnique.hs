@@ -39,7 +39,12 @@ import Database.Persist.Class.PersistEntity
 --
 -- Please read the general Persistent documentation to learn how to create
 -- Unique keys.
--- SQL backends automatically create uniqueness constraints, but for MongoDB you must place a unique index on the field.
+-- SQL backends automatically create uniqueness constraints, but for MongoDB you must manually place a unique index on the field.
+--
+-- Some functions in this module (insertUnique, insertBy, and replaceUnique) first query the unique indexes to check for conflicts.
+-- You could instead optimistically attempt to perform the operation (e.g. replace instead of replaceUnique). However,
+-- * there is some fragility to tryting to catch the correct exception and determing the column of failure.
+-- * an exception will automatically abort the current SQL transaction
 class PersistStore m => PersistUnique m where
     -- | Get a record by unique key, if available. Returns also the identifier.
     getBy :: (PersistEntityBackend val ~ PersistMonadBackend m, PersistEntity val) => Unique val -> m (Maybe (Entity val))
@@ -90,10 +95,7 @@ getByValue = checkUniques . persistUniqueKeys
 -- Return Nothing if the replacement was made.
 -- If uniqueness is violated, Return a Just with the Unque violation
 --
--- You could instead just try to perform the replace and catch the exception. However,
--- 
--- * there is some fragility to tryting to catch the correct exception and determing the column of failure.
--- * an exception will automatically abort the current transaction
+-- Since 1.2.2.0
 replaceUnique :: (Eq record, Eq (Unique record), PersistEntityBackend record ~ PersistMonadBackend m, PersistEntity record, PersistStore m, PersistUnique m)
               => Key record -> record -> m (Maybe (Unique record))
 replaceUnique key datumNew = getJust key >>= replaceOriginal
