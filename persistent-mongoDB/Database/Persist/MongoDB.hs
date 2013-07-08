@@ -129,7 +129,12 @@ type ConnectionPool = Pool.Pool Connection
 -- | ToPathPiece is used to convert a key to/from text
 instance PathPiece (KeyBackend MongoBackend entity) where
     toPathPiece = keyToText
-    fromPathPiece = readMayKey
+    fromPathPiece keyText = readMayKey $
+        -- handle a JSON type prefix
+        -- 'o' is a non-hex character, so no confusion here
+        case T.uncons keyText of
+            Just ('o', prefixed) -> prefixed
+            _ -> keyText
 
 keyToText :: KeyBackend MongoBackend entity -> Text
 keyToText (Key pOid@(PersistObjectId _)) = -- T.pack $ show $ Serialize.encode bsonId
