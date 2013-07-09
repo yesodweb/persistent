@@ -43,6 +43,7 @@ main = do
 #endif
   summary <- hspecWith defaultConfig $ PersistentTest.specs
   runResourceT $ runConn PersistentTest.cleanDB
+  runResourceT $ runConn EmbedTest.cleanDB
   unless (summaryFailures summary == 0) $ exitWith (toExitCode False)
 
 #ifndef WITH_MONGODB
