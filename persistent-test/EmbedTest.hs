@@ -9,7 +9,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-module EmbedTest (specs, cleanDB,
+module EmbedTest (specs,
 #ifndef WITH_MONGODB
 embedMigrate
 #endif
@@ -128,7 +128,7 @@ specs = describe "embedded entities" $ do
       Just res <- selectFirst [HasEmbedEmbed ==. (OnlyName "2")] []
       res @== (Entity contK container)
 
-  it "Set" $ db $ do
+  it "Set" $ db $ cleanDB >> do
       let container = HasSetEmbed "set" $ S.fromList [
               (HasEmbed "embed" (OnlyName "1"))
             , (HasEmbed "embed" (OnlyName "2"))
