@@ -80,7 +80,7 @@ share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
     deriving Show Eq
 
 
-  User
+  MongoUser
     ident Text
     password Text Maybe
     profile Profile
@@ -98,17 +98,17 @@ share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
     deriving Show Eq Read Ord
 
 |]
-#ifdef WITH_MONGODB
 cleanDB :: (PersistQuery m, PersistEntityBackend HasMapEmbed ~ PersistMonadBackend m) => m ()
 cleanDB = do
   deleteWhere ([] :: [Filter HasEmbed])
   deleteWhere ([] :: [Filter HasEmbeds])
   deleteWhere ([] :: [Filter HasListEmbed])
   deleteWhere ([] :: [Filter HasSetEmbed])
-  deleteWhere ([] :: [Filter User])
+  deleteWhere ([] :: [Filter MongoUser])
   deleteWhere ([] :: [Filter HasMapEmbed])
   deleteWhere ([] :: [Filter ListEmbed])
 
+#ifdef WITH_MONGODB
 db :: Action IO () -> Assertion
 db = db' cleanDB
 #endif
@@ -128,7 +128,7 @@ specs = describe "embedded entities" $ do
       Just res <- selectFirst [HasEmbedEmbed ==. (OnlyName "2")] []
       res @== (Entity contK container)
 
-  it "Set" $ db $ do
+  it "Set" $ db $ cleanDB >> do
       let container = HasSetEmbed "set" $ S.fromList [
               (HasEmbed "embed" (OnlyName "1"))
             , (HasEmbed "embed" (OnlyName "2"))
@@ -166,7 +166,7 @@ specs = describe "embedded entities" $ do
 
 #ifdef WITH_MONGODB
   it "mongo filters" $ db $ do
-      let usr = User "foo" (Just "pswd") prof
+      let usr = MongoUser "foo" (Just "pswd") prof
           prof = Profile "fstN" "lstN" (Just con)
           con = Contact 123456 "foo@bar.com"
       uId <- insert usr
@@ -190,6 +190,3 @@ specs = describe "embedded entities" $ do
     list @== ListEmbed [InList 1 2, InList 1 2] 1 2
     return ()
 #endif
-    
-
-    
