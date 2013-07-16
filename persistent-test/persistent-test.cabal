@@ -158,7 +158,7 @@ library
 
    if flag(mongodb)
      build-depends:
-                     mongoDB       == 1.3.*
+                     mongoDB       >= 1.4.1
                    , cereal
                    , bson
                    , process

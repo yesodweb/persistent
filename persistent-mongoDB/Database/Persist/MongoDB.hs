@@ -371,26 +371,6 @@ keyToMongoIdField :: (PersistEntity entity, PersistEntityBackend entity ~ MongoB
 keyToMongoIdField k = _id DB.:= (DB.ObjId $ keyToOid k)
 
 
-findAndModifyOne :: (Applicative m, Trans.MonadIO m)
-                 => DB.Collection
-                 -> DB.ObjectId -- ^ _id for query
-                 -> [DB.Field]  -- ^ updates
-                 -> DB.Action m (Either String DB.Document)
-findAndModifyOne coll objectId updates = do
-  result <- DB.runCommand [
-     "findAndModify" DB.:= DB.String coll,
-     "new" DB.:= DB.Bool True, -- return updated document, not original document
-     "query" DB.:= DB.Doc [_id DB.:= DB.ObjId objectId],
-     "update" DB.:= DB.Doc updates
-   ]
-  return $ case findErr result of
-    Nothing -> case DB.lookup "value" result of
-      Nothing -> Left "no value field"
-      Just doc -> Right doc
-    Just e -> Left e
-    where
-      findErr result = DB.lookup "err" =<< (DB.lookup "lastErrorObject" result)
-
 instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => PersistQuery (DB.Action m) where
     update _ [] = return ()
     update key upds =
@@ -399,8 +379,9 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
            $ updateFields upds
 
     updateGet key upds = do
-        result <- findAndModifyOne (unDBName $ entityDB t)
-                   (keyToOid key) (updateFields upds)
+        result <- DB.findAndModify (DB.select [keyToMongoIdField key]
+                     (unDBName $ entityDB t)
+                   ) (updateFields upds)
         case result of
           Left e -> err e
           Right doc -> do
