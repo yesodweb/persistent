@@ -5,6 +5,7 @@ module Database.Persist.Class.PersistUnique
     , getByValue
     , insertBy
     , replaceUnique
+    , checkUnique
     ) where
 
 import qualified Prelude
@@ -107,7 +108,7 @@ replaceUnique key datumNew = getJust key >>= replaceOriginal
           Nothing -> replace key datumNew >> return Nothing
           (Just conflictingKey) -> return $ Just conflictingKey
       where
-        changedKeys = uniqueKeysOriginal \\ uniqueKeysNew
+        changedKeys = uniqueKeysNew \\ uniqueKeysOriginal
         uniqueKeysOriginal = persistUniqueKeys original
 
 -- | Check whether there are any conflicts for unique keys with this entity and
