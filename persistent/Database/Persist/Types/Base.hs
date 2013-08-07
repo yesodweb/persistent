@@ -185,23 +185,23 @@ data PersistValue = PersistText Text
                   | PersistList [PersistValue]
                   | PersistMap [(Text, PersistValue)]
                   | PersistObjectId ByteString -- ^ Intended especially for MongoDB backend
-                  | PersistSpecific Text -- ^ Using 'PersistSpecific' allows you to use types specific to a particular backend
+                  | PersistSpecific ByteString -- ^ Using 'PersistSpecific' allows you to use types specific to a particular backend
 -- For example, below is a simple example of the PostGIS geography type:
 --
 -- @
--- data Geo = Geo Text deriving (Show, Eq)
+-- data Geo = Geo ByteString
 -- 
 -- instance PersistField Geo where
 --   toPersistValue (Geo t) = PersistSpecific t
 -- 
---   fromPersistValue (PersistSpecific t) = Right $ Geo $ Data.Text.concat ["'", t, "'"]
+--   fromPersistValue (PersistSpecific t) = Right $ Geo $ Data.ByteString.concat ["'", t, "'"]
 --   fromPersistValue _ = Left "Geo values must be converted from PersistSpecific"
 -- 
 -- instance PersistFieldSql Geo where
 --   sqlType _ = SqlOther "GEOGRAPHY(POINT,4326)"
 -- 
 -- toPoint :: Double -> Double -> Geo
--- toPoint lat lon = Geo $ Data.Text.concat ["'POINT(", ps $ lon, " ", ps $ lat, ")'"]
+-- toPoint lat lon = Geo $ Data.ByteString.concat ["'POINT(", ps $ lon, " ", ps $ lat, ")'"]
 --   where ps = Data.Text.pack . show
 -- @
 -- 
@@ -257,7 +257,7 @@ instance A.ToJSON PersistValue where
     toJSON PersistNull = A.Null
     toJSON (PersistList l) = A.Array $ V.fromList $ map A.toJSON l
     toJSON (PersistMap m) = A.object $ map (second A.toJSON) m
-    toJSON (PersistSpecific s) = A.String $ T.cons 'p' s
+    toJSON (PersistSpecific b) = A.String $ T.cons 'p' $ TE.decodeUtf8 $ B64.encode b
     toJSON (PersistObjectId o) =
       A.toJSON $ showChar 'o' $ showHexLen 8 (bs2i four) $ showHexLen 16 (bs2i eight) ""
         where
@@ -279,7 +279,8 @@ instance A.FromJSON PersistValue where
     parseJSON (A.String t0) =
         case T.uncons t0 of
             Nothing -> fail "Null string"
-            Just ('p', t) -> return $ PersistSpecific t
+            Just ('p', t) -> either (fail "Invalid base64") (return . PersistSpecific)
+                           $ B64.decode $ TE.encodeUtf8 t
             Just ('s', t) -> return $ PersistText t
             Just ('b', t) -> either (fail "Invalid base64") (return . PersistByteString)
                            $ B64.decode $ TE.encodeUtf8 t

@@ -31,6 +31,7 @@ import System.Environment (getEnvironment)
 
 import Data.Conduit
 import qualified Blaze.ByteString.Builder.Char8 as BBB
+import qualified Blaze.ByteString.Builder.ByteString as BBS
 import qualified Data.Conduit.List as CL
 import qualified Data.Map as Map
 import qualified Data.Text as T
@@ -200,7 +201,7 @@ instance MySQL.Param P where
     render (P (PersistRational r))    =
       MySQL.Plain $ BBB.fromString $ show (fromRational r :: Pico)
       -- FIXME: Too Ambigous, can not select precision without information about field
-    render (P (PersistSpecific s))    = MySQL.Plain $ BBB.fromText s
+    render (P (PersistSpecific s))    = MySQL.Plain $ BBS.fromByteString s
     render (P (PersistObjectId _))    =
         error "Refusing to serialize a PersistObjectId to a MySQL value"
 
@@ -251,7 +252,7 @@ getGetter MySQLBase.Enum       = convertPV PersistText
 -- Conversion using PersistSpecific
 getGetter MySQLBase.Geometry   = \_ m ->
   case m of
-    Just g -> PersistSpecific $ T.decodeUtf8 g
+    Just g -> PersistSpecific g
     Nothing -> error "Unexpected null in database specific value"
 -- Unsupported
 getGetter other = error $ "MySQL.getGetter: type " ++
@@ -518,9 +519,8 @@ parseType "timestamp"  = return SqlDayTime
 parseType "date"       = return SqlDay
 parseType "newdate"    = return SqlDay
 parseType "year"       = return SqlDay
--- Unsupported
-parseType other        = fail $ "MySQL.parseType: type " ++
-                                show other ++ " not supported."
+-- Other
+parseType b            = return $ SqlOther $ T.decodeUtf8 b
 
 
 ----------------------------------------------------------------------

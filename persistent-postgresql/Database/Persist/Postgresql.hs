@@ -46,6 +46,8 @@ import qualified Data.ByteString.Char8 as B8
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Blaze.ByteString.Builder.Char8 as BBB
+import qualified Blaze.ByteString.Builder.ByteString as BBS
+
 import Data.Time.LocalTime (localTimeToUTC, utc)
 import Data.Text (Text, pack)
 import Data.Aeson
@@ -189,7 +191,7 @@ withStmt' conn query vals =
                     Nothing -> return $ \bs->
                       case bs of
                         Nothing -> fail $ "Unexpected null value in backend specific value"
-                        Just a  -> return $ PersistSpecific $ T.decodeUtf8 a
+                        Just a  -> return $ PersistSpecific a
                     Just bt -> return $ getGetter bt $
                                PG.Field ret col oid
                 -- Ready to go!
@@ -240,7 +242,7 @@ instance PGTF.ToField P where
     toField (P PersistNull)            = PGTF.toField PG.Null
     toField (P (PersistList l))        = PGTF.toField $ listToJSON l
     toField (P (PersistMap m))         = PGTF.toField $ mapToJSON m
-    toField (P (PersistSpecific s))    = PGTF.Plain $ BBB.fromText s
+    toField (P (PersistSpecific s))    = PGTF.Plain $ BBS.fromByteString s
     toField (P (PersistObjectId _))    =
         error "Refusing to serialize a PersistObjectId to a PostgreSQL value"
 
