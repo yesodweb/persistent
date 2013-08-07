@@ -355,6 +355,7 @@ bind statement sqlData = do
             PersistZonedTime (ZT d) -> bindText statement parameterIndex $ pack $ show d
             PersistList l -> bindText statement parameterIndex $ listToJSON l
             PersistMap m -> bindText statement parameterIndex $ mapToJSON m
+            PersistSpecific s -> bindText statement parameterIndex s
             PersistObjectId _ -> P.error "Refusing to serialize a PersistObjectId to a SQLite value"
             )
        $ zip [1..] sqlData

@@ -184,9 +184,35 @@ data PersistValue = PersistText Text
                   | PersistNull
                   | PersistList [PersistValue]
                   | PersistMap [(Text, PersistValue)]
-                  | PersistObjectId ByteString -- ^ intended especially for MongoDB backend
-                  | PersistSpecific Text -- ^ type is of a specific backend
+                  | PersistObjectId ByteString -- ^ Intended especially for MongoDB backend
+                  | PersistSpecific Text -- ^ Using 'PersistSpecific' allows you to use types specific to a particular backend
+-- For example, below is a simple example of the PostGIS geography type:
+--
+-- @
+-- data Geo = Geo Text deriving (Show, Eq)
+-- 
+-- instance PersistField Geo where
+--   toPersistValue (Geo t) = PersistSpecific t
+-- 
+--   fromPersistValue (PersistSpecific t) = Right $ Geo $ Data.Text.concat ["'", t, "'"]
+--   fromPersistValue _ = Left "Geo values must be converted from PersistSpecific"
+-- 
+-- instance PersistFieldSql Geo where
+--   sqlType _ = SqlOther "GEOGRAPHY(POINT,4326)"
+-- 
+-- toPoint :: Double -> Double -> Geo
+-- toPoint lat lon = Geo $ Data.Text.concat ["'POINT(", ps $ lon, " ", ps $ lat, ")'"]
+--   where ps = Data.Text.pack . show
+-- @
+-- 
+-- If Foo has a geography field, we can then perform insertions like the following:
+-- 
+-- @
+-- insert $ Foo (toPoint 44 44)
+-- @
+--
     deriving (Show, Read, Eq, Typeable, Ord)
+
 
 instance PathPiece PersistValue where
     fromPathPiece t =

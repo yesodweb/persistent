@@ -200,6 +200,7 @@ instance MySQL.Param P where
     render (P (PersistRational r))    =
       MySQL.Plain $ BBB.fromString $ show (fromRational r :: Pico)
       -- FIXME: Too Ambigous, can not select precision without information about field
+    render (P (PersistSpecific s))    = MySQL.Plain $ BBB.fromText s
     render (P (PersistObjectId _))    =
         error "Refusing to serialize a PersistObjectId to a MySQL value"
 
@@ -247,6 +248,11 @@ getGetter MySQLBase.Null       = \_ _ -> PersistNull
 -- Controversial conversions
 getGetter MySQLBase.Set        = convertPV PersistText
 getGetter MySQLBase.Enum       = convertPV PersistText
+-- Conversion using PersistSpecific
+getGetter MySQLBase.Geometry   = \_ m ->
+  case m of
+    Just g -> PersistSpecific $ T.decodeUtf8 g
+    Nothing -> error "Unexpected null in database specific value"
 -- Unsupported
 getGetter other = error $ "MySQL.getGetter: type " ++
                   show other ++ " not supported."
