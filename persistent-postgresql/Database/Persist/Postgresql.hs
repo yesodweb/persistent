@@ -186,10 +186,10 @@ withStmt' conn query vals =
                 getters <- forM [0..cols-1] $ \col -> do
                   oid <- LibPQ.ftype ret col
                   case PG.oid2builtin oid of
-                    Nothing -> fail $ "Postgresql.withStmt': could not " ++
-                                      "recognize Oid of column " ++
-                                      show (let LibPQ.Col i = col in i) ++
-                                      " (counting from zero)"
+                    Nothing -> return $ \bs->
+                      case bs of
+                        Nothing -> mzero
+                        Just a  -> return $ PersistSpecific $ T.decodeUtf8 a
                     Just bt -> return $ getGetter bt $
                                PG.Field ret col oid
                 -- Ready to go!
@@ -240,6 +240,7 @@ instance PGTF.ToField P where
     toField (P PersistNull)            = PGTF.toField PG.Null
     toField (P (PersistList l))        = PGTF.toField $ listToJSON l
     toField (P (PersistMap m))         = PGTF.toField $ mapToJSON m
+    toField (P (PersistSpecific s))    = PGTF.Plain $ BBB.fromText s
     toField (P (PersistObjectId _))    =
         error "Refusing to serialize a PersistObjectId to a PostgreSQL value"
 
@@ -275,7 +276,7 @@ getGetter PG.VarBit                = convertPV PersistInt64
 getGetter PG.Numeric               = convertPV PersistRational
 getGetter PG.Void                  = \_ _ -> return PersistNull
 getGetter other   = error $ "Postgresql.getGetter: type " ++
-                            show other ++ " not supported."
+                            show other ++ " not supported."                         
 
 unBinary :: PG.Binary a -> a
 unBinary (PG.Binary x) = x

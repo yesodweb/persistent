@@ -185,6 +185,7 @@ data PersistValue = PersistText Text
                   | PersistList [PersistValue]
                   | PersistMap [(Text, PersistValue)]
                   | PersistObjectId ByteString -- ^ intended especially for MongoDB backend
+                  | PersistSpecific Text -- ^ type is of a specific backend
     deriving (Show, Read, Eq, Typeable, Ord)
 
 instance PathPiece PersistValue where
@@ -214,6 +215,7 @@ fromPersistValueText (PersistBool b) = Right $ T.pack $ show b
 fromPersistValueText (PersistList _) = Left "Cannot convert PersistList to Text"
 fromPersistValueText (PersistMap _) = Left "Cannot convert PersistMap to Text"
 fromPersistValueText (PersistObjectId _) = Left "Cannot convert PersistObjectId to Text"
+fromPersistValueText (PersistSpecific _) = Left "Cannot convert PersistSpecific to Text"
 
 instance A.ToJSON PersistValue where
     toJSON (PersistText t) = A.String $ T.cons 's' t
@@ -229,6 +231,7 @@ instance A.ToJSON PersistValue where
     toJSON PersistNull = A.Null
     toJSON (PersistList l) = A.Array $ V.fromList $ map A.toJSON l
     toJSON (PersistMap m) = A.object $ map (second A.toJSON) m
+    toJSON (PersistSpecific s) = A.String $ T.cons 'p' s
     toJSON (PersistObjectId o) =
       A.toJSON $ showChar 'o' $ showHexLen 8 (bs2i four) $ showHexLen 16 (bs2i eight) ""
         where
@@ -250,6 +253,7 @@ instance A.FromJSON PersistValue where
     parseJSON (A.String t0) =
         case T.uncons t0 of
             Nothing -> fail "Null string"
+            Just ('p', t) -> return $ PersistSpecific t
             Just ('s', t) -> return $ PersistText t
             Just ('b', t) -> either (fail "Invalid base64") (return . PersistByteString)
                            $ B64.decode $ TE.encodeUtf8 t
