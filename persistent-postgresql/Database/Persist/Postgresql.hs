@@ -188,7 +188,7 @@ withStmt' conn query vals =
                   case PG.oid2builtin oid of
                     Nothing -> return $ \bs->
                       case bs of
-                        Nothing -> mzero
+                        Nothing -> fail $ "Unexpected null value in backend specific value"
                         Just a  -> return $ PersistSpecific $ T.decodeUtf8 a
                     Just bt -> return $ getGetter bt $
                                PG.Field ret col oid
