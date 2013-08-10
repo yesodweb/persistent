@@ -49,6 +49,7 @@ library
                      DataTypeTest
                      HtmlTest
                      EmbedTest
+                     EntityEmbedTest
                      LargeNumberTest
                      UniqueTest
                      MaxLenTest
