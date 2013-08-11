@@ -14,6 +14,7 @@ import Init
 
 -- because we are using a type alias we need to declare in a separate module
 -- this is used in EmbedTest
+#if WITH_MONGODB
 mkPersist persistSettings [persistUpperCase|
   ARecord
     name Text
@@ -21,3 +22,4 @@ mkPersist persistSettings [persistUpperCase|
 |]
 
 type AnEntity = Entity ARecord
+#endif

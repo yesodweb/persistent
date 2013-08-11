@@ -47,14 +47,14 @@ mkPersist persistSettings [persistUpperCase|
     arrayWithObjectIds [HasObjectId]
     deriving Show Eq Read Ord
 
-#else
-share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
-#endif
-
   HasArrayWithEntities
     hasEntity (Entity ARecord)
     arrayWithEntities [AnEntity]
     deriving Show Eq Read Ord
+
+#else
+share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
+#endif
 
   OnlyName
     name Text
