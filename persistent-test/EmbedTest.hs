@@ -16,7 +16,6 @@ embedMigrate
 ) where
 
 import Init
-import EntityEmbedTest
 import Control.Exception (Exception, throw)
 import Data.Typeable (Typeable)
 
@@ -25,6 +24,7 @@ import qualified Data.Set as S
 import qualified Data.Map as M
 #if WITH_MONGODB
 import Database.Persist.MongoDB
+import EntityEmbedTest
 import System.Process (readProcess)
 #endif
 import System.Environment (getEnvironment)
@@ -47,13 +47,14 @@ mkPersist persistSettings [persistUpperCase|
     arrayWithObjectIds [HasObjectId]
     deriving Show Eq Read Ord
 
-#else
-share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
-#endif
   HasArrayWithEntities
     hasEntity (Entity ARecord)
     arrayWithEntities [AnEntity]
     deriving Show Eq Read Ord
+
+#else
+share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
+#endif
 
   OnlyName
     name Text
@@ -198,6 +199,16 @@ specs = describe "embedded entities" $ do
       Just res <- selectFirst [HasMapEmbedName ==. "map"] []
       res @== (Entity contK container)
 
+#ifdef WITH_MONGODB
+  it "can embed objects with ObjectIds" $ db $ do
+    oid <- liftIO $ genObjectid
+    let hoid   = HasObjectId oid "oid"
+        hasArr = HasArrayWithObjectIds "array" [hoid]
+
+    k <- insert hasArr
+    Just v <- get k
+    v @== hasArr
+
   it "can embed an Entity" $ db $ do
     let foo = ARecord "foo"
         bar = ARecord "bar"
@@ -210,16 +221,6 @@ specs = describe "embedded entities" $ do
     kEnts <- insert hasEnts
     Just retrievedHasEnts <- get kEnts
     retrievedHasEnts @== hasEnts
-
-#ifdef WITH_MONGODB
-  it "can embed objects with ObjectIds" $ db $ do
-    oid <- liftIO $ genObjectid
-    let hoid   = HasObjectId oid "oid"
-        hasArr = HasArrayWithObjectIds "array" [hoid]
-
-    k <- insert hasArr
-    Just v <- get k
-    v @== hasArr
 
   it "mongo filters" $ db $ do
       let usr = User "foo" (Just "pswd") prof

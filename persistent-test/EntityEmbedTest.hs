@@ -16,12 +16,10 @@ import Init
 -- this is used in EmbedTest
 #if WITH_MONGODB
 mkPersist persistSettings [persistUpperCase|
-#else
-share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
-#endif
   ARecord
     name Text
     deriving Show Eq Read Ord
 |]
 
 type AnEntity = Entity ARecord
+#endif
