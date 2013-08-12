@@ -37,6 +37,10 @@ module Database.Persist.MongoDB
     , (->.), (~>.), (?->.), (?~>.)
     , nestEq, multiEq
 
+    -- * MongoDB specific PersistFields
+    , Objectid
+    , genObjectid
+
     -- * using connections
     , withMongoDBConn
     , withMongoDBPool
@@ -74,6 +78,7 @@ module Database.Persist.MongoDB
     ) where
 
 import Database.Persist
+import qualified Database.Persist.Sql as Sql
 
 import qualified Control.Monad.IO.Class as Trans
 import Control.Exception (throw, throwIO)
@@ -93,7 +98,7 @@ import Data.Conduit
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value (Object, Number), (.:), (.:?), (.!=), FromJSON(..))
-import Control.Monad (mzero)
+import Control.Monad (mzero, liftM)
 import qualified Data.Conduit.Pool as Pool
 import Data.Time (NominalDiffTime)
 #ifdef HIGH_PRECISION_DATE
@@ -148,6 +153,26 @@ readMayKey str =
   case (reads $ (T.unpack str)) :: [(DB.ObjectId,String)] of
     (parsed,_):[] -> Just $ Key $ PersistObjectId $ Serialize.encode parsed
     _ -> Nothing
+
+
+-- | wrapper of 'ObjectId'
+-- * avoids an orphan instance
+-- * works around a Persistent naming issue
+newtype Objectid = Objectid { unObjectId :: DB.ObjectId }
+                   deriving (Show, Read, Eq, Ord)
+
+-- | like 'genObjectId', but for 'Objectid'
+genObjectid :: IO Objectid
+genObjectid = Objectid `liftM` DB.genObjectId
+
+instance PersistField Objectid where
+    toPersistValue = oidToPersistValue . unObjectId
+    fromPersistValue oid@(PersistObjectId _) = Right . Objectid $ persistObjectIdToDbOid oid
+    fromPersistValue (PersistByteString bs) = fromPersistValue (PersistObjectId bs)
+    fromPersistValue _ = Left $ T.pack "expected PersistObjectId"
+
+instance Sql.PersistFieldSql Objectid where
+    sqlType _ = Sql.SqlOther "doesn't make much sense for MongoDB"
 
 
 withMongoDBConn :: (Trans.MonadIO m, Applicative m)
@@ -620,7 +645,7 @@ assocListFromDoc :: DB.Document -> [(Text, PersistValue)]
 assocListFromDoc = Prelude.map (\f -> ( (DB.label f), (fromJust . DB.cast') (DB.value f) ) )
 
 oidToPersistValue :: DB.ObjectId -> PersistValue
-oidToPersistValue =  PersistObjectId . Serialize.encode
+oidToPersistValue = PersistObjectId . Serialize.encode
 
 oidToKey :: (PersistEntity entity) => DB.ObjectId -> Key entity
 oidToKey = Key . oidToPersistValue

@@ -15,8 +15,10 @@ module Database.Persist.Class.PersistEntity
 import Database.Persist.Types.Base
 import Database.Persist.Class.PersistField
 import Data.Text (Text)
+import qualified Data.Text as T
 import Data.Aeson (ToJSON (..), FromJSON (..), object, (.:), (.=), Value (Object))
 import Control.Applicative ((<$>), (<*>))
+import Data.Monoid (mappend)
 
 -- | A single database entity. For example, if writing a blog application, a
 -- blog entry would be an entry, containing fields such as title and content.
@@ -74,10 +76,10 @@ data Filter v = forall typ. PersistField typ => Filter
 -- Since 1.1.0
 type Key val = KeyBackend (PersistEntityBackend val) val
 
--- | Datatype that represents an entity, with both its key and
+-- | Datatype that represents an entity, with both its 'Key' and
 -- its Haskell representation.
 --
--- When using the an SQL-based backend (such as SQLite or
+-- When using a SQL-based backend (such as SQLite or
 -- PostgreSQL), an 'Entity' may take any number of columns
 -- depending on how many fields it has. In order to reconstruct
 -- your entity on the Haskell side, @persistent@ needs all of
@@ -119,3 +121,29 @@ instance FromJSON e => FromJSON (Entity e) where
         <$> o .: "key"
         <*> o .: "value"
     parseJSON _ = fail "FromJSON Entity: not an object"
+
+instance PersistField entity => PersistField (Entity entity) where
+    toPersistValue (Entity k v) = case toPersistValue v of
+        (PersistMap alist) -> PersistMap ((idField, toPersistValue k) : alist)
+        _ -> error $ T.unpack $ errMsg "expected PersistMap"
+
+    fromPersistValue (PersistMap alist) = case after of
+        [] -> Left $ errMsg $ "did not find " `mappend` idField `mappend` " field"
+        ("_id", k):afterRest ->
+            case fromPersistValue (PersistMap (before ++ afterRest)) of
+                Right record -> Right $ Entity (Key k) record
+                Left err     -> Left err
+        _ -> Left $ errMsg $ "impossible id field: " `mappend` T.pack (show alist)
+      where
+        (before, after) = break ((== idField) . fst) alist
+
+    fromPersistValue x = Left $
+          errMsg "Expected PersistMap, received: " `mappend` T.pack (show x)
+
+errMsg :: Text -> Text
+errMsg = mappend "PersistField entity fromPersistValue: "
+
+-- | Realistically this is only going to be used for MongoDB,
+-- so lets use MongoDB conventions
+idField :: Text
+idField = "_id"

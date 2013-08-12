@@ -24,10 +24,12 @@ import qualified Data.Set as S
 import qualified Data.Map as M
 #if WITH_MONGODB
 import Database.Persist.MongoDB
+import EntityEmbedTest
 import System.Process (readProcess)
 #endif
 import System.Environment (getEnvironment)
 import Control.Monad.IO.Class
+import Control.Monad (unless)
 
 data TestException = TestException
     deriving (Show, Typeable, Eq)
@@ -35,6 +37,21 @@ instance Exception TestException
 
 #if WITH_MONGODB
 mkPersist persistSettings [persistUpperCase|
+  HasObjectId
+    oid  Objectid
+    name Text
+    deriving Show Eq Read Ord
+
+  HasArrayWithObjectIds
+    name Text
+    arrayWithObjectIds [HasObjectId]
+    deriving Show Eq Read Ord
+
+  HasArrayWithEntities
+    hasEntity (Entity ARecord)
+    arrayWithEntities [AnEntity]
+    deriving Show Eq Read Ord
+
 #else
 share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
 #endif
@@ -110,6 +127,7 @@ cleanDB = do
   deleteWhere ([] :: [Filter User])
   deleteWhere ([] :: [Filter HasMapEmbed])
   deleteWhere ([] :: [Filter ListEmbed])
+  deleteWhere ([] :: [Filter ARecord])
 
 db :: Action IO () -> Assertion
 db = db' cleanDB
@@ -118,7 +136,7 @@ db = db' cleanDB
 unlessM :: MonadIO m => IO Bool -> m () -> m ()
 unlessM predicate body = do
     b <- liftIO predicate
-    if not b then body else return ()
+    unless b body
 
 isTravis :: IO Bool
 isTravis = do
@@ -182,6 +200,28 @@ specs = describe "embedded entities" $ do
       res @== (Entity contK container)
 
 #ifdef WITH_MONGODB
+  it "can embed objects with ObjectIds" $ db $ do
+    oid <- liftIO $ genObjectid
+    let hoid   = HasObjectId oid "oid"
+        hasArr = HasArrayWithObjectIds "array" [hoid]
+
+    k <- insert hasArr
+    Just v <- get k
+    v @== hasArr
+
+  it "can embed an Entity" $ db $ do
+    let foo = ARecord "foo"
+        bar = ARecord "bar"
+    _ <- insertMany [foo, bar]
+    arecords <- selectList ([ARecordName ==. "foo"] ||. [ARecordName ==. "bar"]) []
+    length arecords @== 2
+
+    kfoo <- insert foo
+    let hasEnts = HasArrayWithEntities (Entity kfoo foo) arecords
+    kEnts <- insert hasEnts
+    Just retrievedHasEnts <- get kEnts
+    retrievedHasEnts @== hasEnts
+
   it "mongo filters" $ db $ do
       let usr = User "foo" (Just "pswd") prof
           prof = Profile "fstN" "lstN" (Just con)

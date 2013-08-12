@@ -312,3 +312,8 @@ instance (HasResolution a) => PersistFieldSql (Fixed a) where
         _mn = return n `asTypeOf` a
 instance PersistFieldSql Rational where
     sqlType _ = SqlNumeric 22 12   --  FIXME: Ambigous, 12 is from Pico which is used to convert Rational to number string
+
+-- perhaps a SQL user can figure this sqlType out?
+-- It is really intended for MongoDB though.
+instance PersistField entity => PersistFieldSql (Entity entity) where
+    sqlType _ = SqlOther "embedded entity, hard to type"
