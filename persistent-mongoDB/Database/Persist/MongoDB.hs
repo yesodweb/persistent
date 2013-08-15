@@ -655,7 +655,7 @@ instance DB.Val PersistValue where
   val x@(PersistObjectId _) = DB.ObjId $ persistObjectIdToDbOid x
   val (PersistTimeOfDay _)  = throw $ PersistMongoDBUnsupported "PersistTimeOfDay not implemented for the MongoDB backend. only PersistUTCTime currently implemented"
   val (PersistRational _)   = throw $ PersistMongoDBUnsupported "PersistRational not implemented for the MongoDB backend"
-  val (PersistSpecific _)   = throw $ PersistMongoDBUnsupported "PersistSpecific not implemented for the MongoDB backend"
+  val (PersistDbSpecific _)   = throw $ PersistMongoDBUnsupported "PersistDbSpecific not implemented for the MongoDB backend"
   cast' (DB.Float x)  = Just (PersistDouble x)
   cast' (DB.Int32 x)  = Just $ PersistInt64 $ fromIntegral x
   cast' (DB.Int64 x)  = Just $ PersistInt64 x
