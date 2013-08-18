@@ -675,7 +675,7 @@ mkDeleteCascade mps defs = do
   where
     getDeps :: EntityDef a -> [Dep]
     getDeps def =
-        concatMap getDeps' $ entityFields def
+        concatMap getDeps' $ entityFields $ fixEntityDef def
       where
         getDeps' :: FieldDef a -> [Dep]
         getDeps' FieldDef {..} =

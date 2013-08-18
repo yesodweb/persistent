@@ -7,6 +7,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE EmptyDataDecls #-}
 module MigrationOnlyTest (specs) where
 
@@ -35,13 +37,17 @@ TwoField1 sql=two_field
 #ifdef WITH_MONGODB
 mkPersist persistSettings [persistUpperCase|
 #else
-share [mkPersist sqlSettings, mkMigrate "migrateAll2"] [persistLowerCase|
+share [mkPersist sqlSettings, mkMigrate "migrateAll2", mkDeleteCascade sqlSettings] [persistLowerCase|
 #endif
 TwoField
     field1 Int
     field2 T.Text
     field3 Bool Maybe MigrationOnly
     deriving Eq Show
+
+Referencing
+    field1 Int
+    field2 TwoFieldId MigrationOnly
 |]
 
 specs :: Spec
