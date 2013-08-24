@@ -44,8 +44,10 @@ import Database.Persist.Class.PersistEntity
 --
 -- Some functions in this module (insertUnique, insertBy, and replaceUnique) first query the unique indexes to check for conflicts.
 -- You could instead optimistically attempt to perform the operation (e.g. replace instead of replaceUnique). However,
--- * there is some fragility to tryting to catch the correct exception and determing the column of failure.
--- * an exception will automatically abort the current SQL transaction
+--
+--  * there is some fragility to trying to catch the correct exception and determing the column of failure.
+--
+--  * an exception will automatically abort the current SQL transaction
 class PersistStore m => PersistUnique m where
     -- | Get a record by unique key, if available. Returns also the identifier.
     getBy :: (PersistEntityBackend val ~ PersistMonadBackend m, PersistEntity val) => Unique val -> m (Maybe (Entity val))
@@ -91,10 +93,10 @@ getByValue = checkUniques . persistUniqueKeys
             Just z -> return $ Just z
 
 
--- | attempt to replace the record of the given key with the given new record
--- First query the unique fields to make sure the replacement maintains uniqueness constraints
--- Return Nothing if the replacement was made.
--- If uniqueness is violated, Return a Just with the Unque violation
+-- | Attempt to replace the record of the given key with the given new record.
+-- First query the unique fields to make sure the replacement maintains uniqueness constraints.
+-- Return 'Nothing' if the replacement was made.
+-- If uniqueness is violated, return a 'Just' with the 'Unique' violation
 --
 -- Since 1.2.2.0
 replaceUnique :: (Eq record, Eq (Unique record), PersistEntityBackend record ~ PersistMonadBackend m, PersistEntity record, PersistStore m, PersistUnique m)
