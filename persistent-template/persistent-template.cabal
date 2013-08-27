@@ -1,5 +1,5 @@
 name:            persistent-template
-version:         1.2.0.2
+version:         1.2.0.3
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -20,6 +20,7 @@ library
                    , monad-control            >= 0.2       && < 0.4
                    , text                     >= 0.5       && < 1.0
                    , transformers             >= 0.2       && < 0.4
+                   , th-orphans
                    , containers
                    , aeson
                    , monad-logger
