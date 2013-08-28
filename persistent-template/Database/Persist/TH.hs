@@ -50,9 +50,10 @@ import Data.Aeson
     ( ToJSON (toJSON), FromJSON (parseJSON), (.=), object
     , Value (Object), (.:), (.:?)
     )
-import Control.Applicative (pure, (<*>))
+import Control.Applicative (pure, (<*>), liftA2)
 import Control.Monad.Logger (MonadLogger)
 import Database.Persist.Sql (sqlType)
+import Language.Haskell.TH.Instances ()
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
@@ -87,16 +88,16 @@ parseSqlType ps s =
   where
     defsOrig = parse ps s
 
-getSqlType :: [EntityDef ()] -> EntityDef () -> EntityDef SqlTypeExp
+getSqlType :: [EntityDef ()] -> EntityDef () -> EntityDef DelayedSqlTypeExp
 getSqlType allEntities ent =
     ent
         { entityFields = map go $ entityFields ent
         }
   where
-    go :: FieldDef () -> FieldDef SqlTypeExp
+    go :: FieldDef () -> FieldDef DelayedSqlTypeExp
     go field = do
         field
-            { fieldSqlType = final
+            { fieldSqlType = DSTE final
             , fieldEmbedded = mEmbedded (fieldType field)
             }
       where
@@ -134,6 +135,13 @@ getSqlType allEntities ent =
         typedNothing = SigE (ConE 'Nothing) mtyp
         st = VarE 'sqlType `AppE` typedNothing
 
+
+data DelayedSqlTypeExp = DSTE { unDSTE :: SqlTypeExp }
+instance Lift DelayedSqlTypeExp where
+    lift (DSTE SqlString') = return $ ConE 'SqlString'
+    lift (DSTE SqlInt64') = return $ ConE 'SqlInt64'
+    lift (DSTE (SqlTypeExp e)) = liftA2 AppE (return $ ConE 'SqlTypeExp) (lift e)
+
 data SqlTypeExp = SqlTypeExp Exp
                 | SqlString'
                 | SqlInt64'
@@ -144,7 +152,7 @@ instance Lift SqlTypeExp where
 
 -- | Create data types and appropriate 'PersistEntity' instances for the given
 -- 'EntityDef's. Works well with the persist quasi-quoter.
-mkPersist :: MkPersistSettings -> [EntityDef SqlType] -> Q [Dec]
+mkPersist :: MkPersistSettings -> [EntityDef SqlTypeExp] -> Q [Dec]
 mkPersist mps ents' = do
     x <- fmap mconcat $ mapM (persistFieldFromEntity mps) ents
     y <- fmap mconcat $ mapM (mkEntity mps) ents
@@ -531,7 +539,7 @@ mkLensClauses t = do
             ]
             $ ConE 'Entity `AppE` VarE keyName `AppE` (ConE (sumConstrName t f) `AppE` VarE xName)
 
-mkEntity :: MkPersistSettings -> EntityDef SqlType -> Q [Dec]
+mkEntity :: MkPersistSettings -> EntityDef SqlTypeExp -> Q [Dec]
 mkEntity mps t = do
     t' <- lift t
     let nameT = unHaskellName $ entityHaskell t
@@ -546,7 +554,7 @@ mkEntity mps t = do
         { fieldHaskell = HaskellName "Id"
         , fieldDB = entityID t
         , fieldType = FTTypeCon Nothing $ unHaskellName (entityHaskell t) ++ "Id"
-        , fieldSqlType = SqlInt64
+        , fieldSqlType = SqlInt64'
         , fieldEmbedded = Nothing
         , fieldAttrs = []
         , fieldStrict = True
@@ -867,6 +875,8 @@ instance Lift' () where
     lift' () = [|()|]
 instance Lift' SqlTypeExp where
     lift' = lift
+instance Lift' DelayedSqlTypeExp where
+    lift' = lift
 
 pack' :: String -> Text
 pack' = pack
@@ -941,7 +951,7 @@ instance Lift SqlType where
 -- forall . typ ~ FieldType => EntFieldName
 --
 -- EntFieldName = FieldDef ....
-mkField :: MkPersistSettings -> EntityDef a -> FieldDef SqlType -> Q (Con, Clause)
+mkField :: MkPersistSettings -> EntityDef a -> FieldDef SqlTypeExp -> Q (Con, Clause)
 mkField mps et cd = do
     let con = ForallC
                 []
