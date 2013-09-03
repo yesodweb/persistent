@@ -508,7 +508,7 @@ mkLensClauses t = do
 
 mkEntity :: MkPersistSettings -> EntityDef SqlTypeExp -> Q [Dec]
 mkEntity mps t = do
-    t' <- lift t
+    t' <- liftEntitySqlType t
     let nameT = unHaskellName $ entityHaskell t
     let nameS = unpack nameT
     let clazz = ConT ''PersistEntity `AppT` genericDataType mps (unHaskellName $ entityHaskell t) (VarT $ mkName "backend")
@@ -934,12 +934,15 @@ liftFieldSqlType (FieldDef a b c d e f g) =
         a
         b
         c
-        $(return $ unSqlTypeExp d)
+        ($(liftSqlType d) :: SqlType)
         $(liftTs e)
         f
         $(lift' g)
         :: FieldDef SqlType
         |]
+
+liftSqlType :: SqlTypeExp -> Q Exp
+liftSqlType = return . unSqlTypeExp
 
 -- Ent
 --   fieldName FieldType
