@@ -280,6 +280,31 @@ instance (PersistField a, PersistField b) => PersistField (a,b) where
         (_, Left e) -> Left e
     fromPersistValue x = Left $ T.pack $ "Expected 2 item PersistList, received: " ++ show x
 
+instance (PersistField a, PersistField b, PersistField c)
+         => PersistField (a,b,c) where
+    toPersistValue (x,y,z) =
+        PersistList [toPersistValue x, toPersistValue y, toPersistValue z]
+    fromPersistValue (PersistList (vx:vy:vz:[])) =
+      case (fromPersistValue vx, fromPersistValue vy, fromPersistValue vz) of
+        (Right x, Right y, Right z) -> Right (x, y, z)
+        (Left e, _, _) -> Left e
+        (_, Left e, _) -> Left e
+        (_, _, Left e) -> Left e
+    fromPersistValue x = Left $ T.pack $ "Expected 3 item PersistList, received: " ++ show x
+
+instance (PersistField a, PersistField b, PersistField c, PersistField d)
+         => PersistField (a,b,c,d) where
+    toPersistValue (a,b,c,d) =
+        PersistList [toPersistValue a, toPersistValue b, toPersistValue c, toPersistValue d]
+    fromPersistValue (PersistList (va:vb:vc:vd:[])) =
+      case (fromPersistValue va, fromPersistValue vb, fromPersistValue vc, fromPersistValue vd) of
+        (Right a, Right b, Right c, Right d) -> Right (a, b, c, d)
+        (Left e, _, _, _) -> Left e
+        (_, Left e, _, _) -> Left e
+        (_, _, Left e, _) -> Left e
+        (_, _, _, Left e) -> Left e
+    fromPersistValue x = Left $ T.pack $ "Expected 4 item PersistList, received: " ++ show x
+
 instance PersistField v => PersistField (M.Map T.Text v) where
     toPersistValue = PersistMap . map (\(k,v) -> (k, toPersistValue v)) . M.toList
     fromPersistValue = fromPersistMap <=< getPersistMap
