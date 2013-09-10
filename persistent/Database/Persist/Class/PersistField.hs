@@ -145,6 +145,10 @@ instance PersistField Double where
     fromPersistValue (PersistRational r) = Right $ fromRational r
     fromPersistValue x = Left $ T.pack $ "Expected Double, received: " ++ show x
 
+instance PersistField () where
+    toPersistValue ()  = PersistNull
+    fromPersistValue _ = Right ()
+
 instance (HasResolution a) => PersistField (Fixed a) where
   toPersistValue = PersistRational . toRational
   fromPersistValue (PersistRational r) = Right $ fromRational r
@@ -233,6 +237,18 @@ instance PersistField a => PersistField (Maybe a) where
     toPersistValue (Just a) = toPersistValue a
     fromPersistValue PersistNull = Right Nothing
     fromPersistValue x = fmap Just $ fromPersistValue x
+
+instance (PersistField a, PersistField b) => PersistField (Either a b) where
+    toPersistValue (Left a)  = PersistList [ toPersistValue True
+                                           , toPersistValue a]
+    toPersistValue (Right b) = PersistList [ toPersistValue False
+                                           , toPersistValue b]
+    fromPersistValue (PersistList (m:v:[])) =
+        case fromPersistValue m of
+            Left e -> Left e
+            Right True  -> either Left Left  (fromPersistValue v)
+            Right False -> either Left Right (fromPersistValue v)
+    fromPersistValue x = Left $ T.pack $ "Expected 2 item PersistList, received: " ++ show x
 
 instance PersistField a => PersistField [a] where
     toPersistValue = PersistList . map toPersistValue
