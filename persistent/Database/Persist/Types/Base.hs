@@ -184,8 +184,35 @@ data PersistValue = PersistText Text
                   | PersistNull
                   | PersistList [PersistValue]
                   | PersistMap [(Text, PersistValue)]
-                  | PersistObjectId ByteString -- ^ intended especially for MongoDB backend
+                  | PersistObjectId ByteString -- ^ Intended especially for MongoDB backend
+                  | PersistDbSpecific ByteString -- ^ Using 'PersistDbSpecific' allows you to use types specific to a particular backend
+-- For example, below is a simple example of the PostGIS geography type:
+--
+-- @
+-- data Geo = Geo ByteString
+-- 
+-- instance PersistField Geo where
+--   toPersistValue (Geo t) = PersistDbSpecific t
+-- 
+--   fromPersistValue (PersistDbSpecific t) = Right $ Geo $ Data.ByteString.concat ["'", t, "'"]
+--   fromPersistValue _ = Left "Geo values must be converted from PersistDbSpecific"
+-- 
+-- instance PersistFieldSql Geo where
+--   sqlType _ = SqlOther "GEOGRAPHY(POINT,4326)"
+-- 
+-- toPoint :: Double -> Double -> Geo
+-- toPoint lat lon = Geo $ Data.ByteString.concat ["'POINT(", ps $ lon, " ", ps $ lat, ")'"]
+--   where ps = Data.Text.pack . show
+-- @
+-- 
+-- If Foo has a geography field, we can then perform insertions like the following:
+-- 
+-- @
+-- insert $ Foo (toPoint 44 44)
+-- @
+--
     deriving (Show, Read, Eq, Typeable, Ord)
+
 
 instance PathPiece PersistValue where
     fromPathPiece t =
@@ -214,6 +241,7 @@ fromPersistValueText (PersistBool b) = Right $ T.pack $ show b
 fromPersistValueText (PersistList _) = Left "Cannot convert PersistList to Text"
 fromPersistValueText (PersistMap _) = Left "Cannot convert PersistMap to Text"
 fromPersistValueText (PersistObjectId _) = Left "Cannot convert PersistObjectId to Text"
+fromPersistValueText (PersistDbSpecific _) = Left "Cannot convert PersistDbSpecific to Text"
 
 instance A.ToJSON PersistValue where
     toJSON (PersistText t) = A.String $ T.cons 's' t
@@ -229,6 +257,7 @@ instance A.ToJSON PersistValue where
     toJSON PersistNull = A.Null
     toJSON (PersistList l) = A.Array $ V.fromList $ map A.toJSON l
     toJSON (PersistMap m) = A.object $ map (second A.toJSON) m
+    toJSON (PersistDbSpecific b) = A.String $ T.cons 'p' $ TE.decodeUtf8 $ B64.encode b
     toJSON (PersistObjectId o) =
       A.toJSON $ showChar 'o' $ showHexLen 8 (bs2i four) $ showHexLen 16 (bs2i eight) ""
         where
@@ -250,6 +279,8 @@ instance A.FromJSON PersistValue where
     parseJSON (A.String t0) =
         case T.uncons t0 of
             Nothing -> fail "Null string"
+            Just ('p', t) -> either (fail "Invalid base64") (return . PersistDbSpecific)
+                           $ B64.decode $ TE.encodeUtf8 t
             Just ('s', t) -> return $ PersistText t
             Just ('b', t) -> either (fail "Invalid base64") (return . PersistByteString)
                            $ B64.decode $ TE.encodeUtf8 t
