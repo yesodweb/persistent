@@ -117,7 +117,6 @@ library
                    , QuickCheck >= 2.5
                    , blaze-html >= 0.5
                    , quickcheck-instances >= 0.3
-                   , blaze-html >= 0.5 && < 0.6
                    , pool-conduit
                    , transformers-base
                    , attoparsec
@@ -126,10 +125,6 @@ library
                    , monad-logger >= 0.2.3
                    , hashable
                    , th-orphans
-                   -- actually just a mongoDB dependency
-                   -- fixes build warning on current build server
-                   , cereal
-                   , bson
                    , silently
                    , blaze-builder
 
