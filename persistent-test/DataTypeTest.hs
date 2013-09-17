@@ -97,8 +97,11 @@ specs = describe "data type specs" $ do
 
                 -- Do a special check for Double since it may
                 -- lose precision when serialized.
-                when (abs (dataTypeTableDouble x - dataTypeTableDouble y) > 1e-14) $
+                when (getDoubleDiff (dataTypeTableDouble x)(dataTypeTableDouble y) > 1e-14) $
                   check "double" dataTypeTableDouble
+    where normDouble x = if abs x > 1 then x / 10^(truncate $ logBase 10 (abs x))
+                                      else x
+          getDoubleDiff x y = abs ((normDouble x) - (normDouble y)) :: Double
 
 randomValues :: IO [DataTypeTable]
 randomValues = do
