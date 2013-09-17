@@ -15,21 +15,23 @@ import Test.QuickCheck.Gen (Gen(..), choose)
 import Test.QuickCheck.Instances ()
 import Database.Persist.Sqlite
 import Database.Persist.TH
-#if WITH_POSTGRESQL
+#if defined(WITH_POSTGRESQL)
 import Database.Persist.Postgresql
+#elif defined(WITH_MYSQL)
+import Database.Persist.MySQL
 #endif
 import Data.Char (generalCategory, GeneralCategory(..))
 import qualified Data.Text as T
 import Data.ByteString (ByteString)
-import Data.Time (Day, UTCTime (..), ZonedTime (..), minutesToTimeZone)
-#ifndef WITH_MONGODB
-import Data.Time (TimeOfDay)
-#endif
+import Data.Time (Day, UTCTime (..), ZonedTime (..), minutesToTimeZone, TimeOfDay)
+import Data.Time.Calendar (addDays)
+import Data.Time.Clock (picosecondsToDiffTime)
+import Data.Time.LocalTime
 import System.Random (newStdGen)
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad (when, forM_)
 import Control.Monad.Trans.Resource (runResourceT)
-import Data.Fixed (Pico)
+import Data.Fixed (Pico,Micro)
 
 import Init
 
@@ -69,7 +71,7 @@ specs = describe "data type specs" $ do
         _ <- runMigrationSilent dataTypeMigrate
 #endif
         rvals <- liftIO randomValues
-        forM_ (take 1000 rvals) $ \x -> do         
+        forM_ (take 1000 rvals) $ \x -> do
             key <- insert x
             Just y <- get key
             liftIO $ do
@@ -91,9 +93,16 @@ specs = describe "data type specs" $ do
 #ifndef WITH_MONGODB
                 check' "pico" dataTypeTablePico
                 check "time" dataTypeTableTime
+#endif
+#if !(defined(WITH_MONGODB)) || (defined(WITH_MONGODB) && defined(HIGH_PRECISION_DATE))
                 check "utc" dataTypeTableUtc
 #endif
+#ifndef WITH_POSTGRESQL
+                -- postgres seems to 'convert' the time to the localtimezone
+                -- http://www.postgresql.org/docs/9.2/static/datatype-datetime.html#AEN5739
+                -- so, this test will never pass anyhow
                 check "zoned" dataTypeTableZonedTime
+#endif
 
                 -- Do a special check for Double since it may
                 -- lose precision when serialized.
@@ -120,10 +129,10 @@ instance Arbitrary (DataTypeTableGeneric g) where
      <*> arbitrary              -- day
 #ifndef WITH_MONGODB
      <*> arbitrary              -- pico
-     <*> arbitrary              -- time
+     <*> (truncateTimeOfDay =<< arbitrary) -- time
 #endif
-     <*> arbitrary              -- utc
-     <*> arbitraryZT            -- zonedTime
+     <*> (truncateUTCTime   =<< arbitrary) -- utc
+     <*> (truncateToMicroZonedTime =<< arbitraryZT)  -- zonedTime
 
 arbText :: Gen Text
 arbText =
@@ -136,11 +145,35 @@ arbText =
 
 arbitraryZT :: Gen ZonedTime
 arbitraryZT = do
-    lt <- arbitrary
+    tod <- arbitrary
+    -- this avoids a crash in PostgreSQL, due to a limitation of
+    -- Postgresql-simple. However, the test is still disabled on
+    -- this DB because it 'adapts' the time and timezone.
+    d   <- fmap (addDays 19000) arbitrary
     halfHours <- choose (-23, 23)
     let minutes = halfHours * 30
         tz = minutesToTimeZone minutes
-    return $ ZonedTime lt tz
+    return $ ZonedTime (LocalTime d tod) tz
+
+-- truncate less significant digits
+truncateToMicro :: Pico -> Pico
+truncateToMicro p = let
+  p' = fromRational . toRational $ p  :: Micro
+  in   fromRational . toRational $ p' :: Pico
+
+truncateToMicroZonedTime :: ZonedTime  -> Gen ZonedTime
+truncateToMicroZonedTime (ZonedTime (LocalTime d (TimeOfDay h m s)) tz) = do
+  return $ ZonedTime (LocalTime d (TimeOfDay h m (truncateToMicro s))) tz
+
+truncateTimeOfDay :: TimeOfDay -> Gen TimeOfDay
+truncateTimeOfDay (TimeOfDay h m s) =
+  return $ TimeOfDay h m $ truncateToMicro s
+
+truncateUTCTime :: UTCTime -> Gen UTCTime
+truncateUTCTime (UTCTime d dift) = do
+  let pico = fromRational . toRational $ dift :: Pico
+      picoi= truncate . (*1000000000000) . toRational $ truncateToMicro pico :: Integer
+  return $ UTCTime d $ picosecondsToDiffTime $ picoi
 
 asIO :: IO a -> IO a
 asIO = id
