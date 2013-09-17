@@ -69,7 +69,7 @@ specs = describe "data type specs" $ do
         _ <- runMigrationSilent dataTypeMigrate
 #endif
         rvals <- liftIO randomValues
-        forM_ (take 1000 rvals) $ \x -> do         
+        forM_ (take 1000 rvals) $ \x -> do
             key <- insert x
             Just y <- get key
             liftIO $ do
@@ -91,8 +91,8 @@ specs = describe "data type specs" $ do
 #ifndef WITH_MONGODB
                 check' "pico" dataTypeTablePico
                 check "time" dataTypeTableTime
-                check "utc" dataTypeTableUtc
 #endif
+                check "utc" dataTypeTableUtc
                 check "zoned" dataTypeTableZonedTime
 
                 -- Do a special check for Double since it may
