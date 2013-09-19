@@ -3,6 +3,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
 -- | A postgresql backend for persistent.
 module Database.Persist.Postgresql
@@ -32,6 +33,7 @@ import qualified Database.PostgreSQL.LibPQ as LibPQ
 import Control.Exception (throw)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.List (intercalate)
+import Data.Typeable
 import Data.IORef
 import qualified Data.Map as Map
 import Data.Either (partitionEithers)
@@ -242,9 +244,21 @@ instance PGTF.ToField P where
     toField (P PersistNull)            = PGTF.toField PG.Null
     toField (P (PersistList l))        = PGTF.toField $ listToJSON l
     toField (P (PersistMap m))         = PGTF.toField $ mapToJSON m
-    toField (P (PersistDbSpecific s))    = PGTF.Plain $ BBS.fromByteString s
+    toField (P (PersistDbSpecific s))  = PGTF.toField (Unknown s)
     toField (P (PersistObjectId _))    =
         error "Refusing to serialize a PersistObjectId to a PostgreSQL value"
+
+newtype Unknown = Unknown { unUnknown :: ByteString }
+  deriving (Eq, Show, Read, Ord, Typeable)
+
+instance PGFF.FromField Unknown where
+    fromField f mdata =
+      case mdata of
+        Nothing  -> PGFF.returnError PGFF.UnexpectedNull f ""
+        Just dat -> return (Unknown dat)
+
+instance PGTF.ToField Unknown where
+    toField (Unknown a) = PGTF.Escape a
 
 type Getter a = PGFF.FieldParser a
 
@@ -277,8 +291,9 @@ getGetter PG.Bit                   = convertPV PersistInt64
 getGetter PG.VarBit                = convertPV PersistInt64
 getGetter PG.Numeric               = convertPV PersistRational
 getGetter PG.Void                  = \_ _ -> return PersistNull
+getGetter PG.UUID                  = convertPV (PersistDbSpecific . unUnknown)
 getGetter other   = error $ "Postgresql.getGetter: type " ++
-                            show other ++ " not supported."                         
+                            show other ++ " not supported."
 
 unBinary :: PG.Binary a -> a
 unBinary (PG.Binary x) = x
