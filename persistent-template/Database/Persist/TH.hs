@@ -17,6 +17,7 @@ module Database.Persist.TH
     , MkPersistSettings
     , mpsBackend
     , mpsGeneric
+    , mpsPrefixFields
     , mkPersistSettings
     , sqlSettings
     , sqlOnlySettings
@@ -121,7 +122,7 @@ getSqlType allEntities ent =
 
         mEmbedded (FTTypeCon Just{} _) = Nothing
         mEmbedded (FTTypeCon Nothing n) = let name = HaskellName n in
-            find ((name ==) . entityHaskell) allEntities 
+            find ((name ==) . entityHaskell) allEntities
         mEmbedded (FTList x) = mEmbedded x
         mEmbedded (FTApp x y) = maybe (mEmbedded y) Just (mEmbedded x)
 
@@ -182,6 +183,8 @@ data MkPersistSettings = MkPersistSettings
     -- ^ Create generic types that can be used with multiple backends. Good for
     -- reusable code, but makes error messages harder to understand. Default:
     -- True.
+    , mpsPrefixFields :: Bool
+    -- ^ Prefix field names with the model name. Default: True.
     }
 
 -- | Create an @MkPersistSettings@ with default values.
@@ -190,6 +193,7 @@ mkPersistSettings :: Type -- ^ Value for 'mpsBackend'
 mkPersistSettings t = MkPersistSettings
     { mpsBackend = t
     , mpsGeneric = True -- FIXME switch default to False in the future
+    , mpsPrefixFields = True
     }
 
 -- | Use the 'SqlPersist' backend.
@@ -202,8 +206,10 @@ sqlSettings = mkPersistSettings $ ConT ''SqlBackend
 sqlOnlySettings :: MkPersistSettings
 sqlOnlySettings = sqlSettings { mpsGeneric = False }
 
-recName :: Text -> Text -> Text
-recName dt f = lowerFirst dt ++ upperFirst f
+recName :: MkPersistSettings -> Text -> Text -> Text
+recName mps dt f
+  | mpsPrefixFields mps = lowerFirst dt ++ upperFirst f
+  | otherwise           = lowerFirst f
 
 lowerFirst :: Text -> Text
 lowerFirst t =
@@ -223,7 +229,7 @@ dataTypeDec mps t =
     $ map (mkName . unpack) $ entityDerives t
   where
     mkCol x FieldDef {..} =
-        (mkName $ unpack $ recName x $ unHaskellName fieldHaskell,
+        (mkName $ unpack $ recName mps x $ unHaskellName fieldHaskell,
          if fieldStrict then IsStrict else NotStrict,
          pairToType mps backend (fieldType, nullable fieldAttrs)
         )
@@ -486,8 +492,8 @@ type Lens s t a b = forall f. Functor f => (a -> f b) -> s -> f t
 lens :: (s -> a) -> (s -> b -> t) -> Lens s t a b
 lens sa sbt afb s = fmap (sbt s) (afb $ sa s)
 
-mkLensClauses :: EntityDef a -> Q [Clause]
-mkLensClauses t = do
+mkLensClauses :: MkPersistSettings -> EntityDef a -> Q [Clause]
+mkLensClauses mps t = do
     lens' <- [|lens|]
     getId <- [|entityKey|]
     setId <- [|\(Entity _ value) key -> Entity key value|]
@@ -509,7 +515,7 @@ mkLensClauses t = do
         (NormalB $ lens' `AppE` getter `AppE` setter)
         []
       where
-        fieldName = mkName $ unpack $ recName (unHaskellName $ entityHaskell t) (unHaskellName $ fieldHaskell f)
+        fieldName = mkName $ unpack $ recName mps (unHaskellName $ entityHaskell t) (unHaskellName $ fieldHaskell f)
         getter = InfixE (Just $ VarE fieldName) dot (Just getVal)
         setter = LamE
             [ ConP 'Entity [VarP keyName, VarP valName]
@@ -568,7 +574,7 @@ mkEntity mps t = do
                     genericDataType mps nameT $ mpsBackend mps
             | otherwise = id
 
-    lensClauses <- mkLensClauses t
+    lensClauses <- mkLensClauses mps t
 
     return $ addSyn
       [ dataTypeDec mps t
