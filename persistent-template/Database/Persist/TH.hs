@@ -246,12 +246,14 @@ dataTypeDec mps t =
         | otherwise = [RecC name cols]
 
     sumCon fd = NormalC
-        (sumConstrName t fd)
+        (sumConstrName mps t fd)
         [(NotStrict, pairToType mps backend (fieldType fd, NotNullable))]
 
-sumConstrName :: EntityDef a -> FieldDef b -> Name
-sumConstrName t FieldDef {..} = mkName $ unpack $ concat
-    [ unHaskellName $ entityHaskell t
+sumConstrName :: MkPersistSettings -> EntityDef a -> FieldDef b -> Name
+sumConstrName mps t FieldDef {..} = mkName $ unpack $ concat
+    [ if mpsPrefixFields mps
+        then unHaskellName $ entityHaskell t
+        else ""
     , upperFirst $ unHaskellName fieldHaskell
     , "Sum"
     ]
@@ -348,8 +350,8 @@ degen [] =
      in [Clause [WildP] (NormalB err) []]
 degen x = x
 
-mkToPersistFields :: String -> EntityDef a -> Q Dec
-mkToPersistFields constr ed@EntityDef { entitySum = isSum, entityFields = fields } = do
+mkToPersistFields :: MkPersistSettings -> String -> EntityDef a -> Q Dec
+mkToPersistFields mps constr ed@EntityDef { entitySum = isSum, entityFields = fields } = do
     clauses <-
         if isSum
             then sequence $ zipWith goSum fields [1..]
@@ -368,7 +370,7 @@ mkToPersistFields constr ed@EntityDef { entitySum = isSum, entityFields = fields
 
     goSum :: FieldDef a -> Int -> Q Clause
     goSum fd idx = do
-        let name = sumConstrName ed fd
+        let name = sumConstrName mps ed fd
         enull <- [|SomePersistField PersistNull|]
         let beforeCount = idx - 1
             afterCount = fieldCount - idx
@@ -439,8 +441,8 @@ isNotNull :: PersistValue -> Bool
 isNotNull PersistNull = False
 isNotNull _ = True
 
-mkFromPersistValues :: EntityDef a -> Q [Clause]
-mkFromPersistValues t@(EntityDef { entitySum = False }) = do
+mkFromPersistValues :: MkPersistSettings -> EntityDef a -> Q [Clause]
+mkFromPersistValues mps t@(EntityDef { entitySum = False }) = do
     nothing <- [|Left $(liftT $ "Invalid fromPersistValues input. Entity: " `mappend` entName)|]
     let cons' = ConE $ mkName $ unpack $ entName
     xs <- mapM (const $ newName "x") $ entityFields t
@@ -464,7 +466,7 @@ mkFromPersistValues t@(EntityDef { entitySum = False }) = do
     entName = unHaskellName $ entityHaskell t
     go ap' x y = InfixE (Just x) ap' (Just y)
 
-mkFromPersistValues t@(EntityDef { entitySum = True }) = do
+mkFromPersistValues mps t@(EntityDef { entitySum = True }) = do
     nothing <- [|Left $(liftT $ "Invalid fromPersistValues input: sum type with all nulls. Entity: " `mappend` entName)|]
     clauses <- mkClauses [] $ entityFields t
     return $ clauses `mappend` [Clause [WildP] (NormalB nothing) []]
@@ -479,7 +481,7 @@ mkFromPersistValues t@(EntityDef { entitySum = True }) = do
                 , [VarP x]
                 , map (const null') after
                 ]
-            constr = ConE $ sumConstrName t field
+            constr = ConE $ sumConstrName mps t field
         fmap' <- [|fmap|]
         fs <- [|fromPersistValue $(return $ VarE x)|]
         let guard' = NormalG $ VarE 'isNotNull `AppE` VarE x
@@ -511,7 +513,7 @@ mkLensClauses mps t = do
         else return $ idClause : map (toClause lens' getVal dot keyName valName xName) (entityFields t)
   where
     toClause lens' getVal dot keyName valName xName f = Clause
-        [ConP (mkName $ unpack $ unHaskellName (entityHaskell t) ++ upperFirst (unHaskellName $ fieldHaskell f)) []]
+        [ConP (filterConName mps t f) []]
         (NormalB $ lens' `AppE` getter `AppE` setter)
         []
       where
@@ -526,7 +528,7 @@ mkLensClauses mps t = do
                 [(fieldName, VarE xName)]
 
     toSumClause lens' keyName valName xName f = Clause
-        [ConP (mkName $ unpack $ unHaskellName (entityHaskell t) ++ upperFirst (unHaskellName $ fieldHaskell f)) []]
+        [ConP (filterConName mps t f) []]
         (NormalB $ lens' `AppE` getter `AppE` setter)
         []
       where
@@ -534,7 +536,7 @@ mkLensClauses mps t = do
         getter = LamE
             [ ConP 'Entity [WildP, VarP valName]
             ] $ CaseE (VarE valName)
-            $ Match (ConP (sumConstrName t f) [VarP xName]) (NormalB $ VarE xName) []
+            $ Match (ConP (sumConstrName mps t f) [VarP xName]) (NormalB $ VarE xName) []
 
             -- FIXME It would be nice if the types expressed that the Field is
             -- a sum type and therefore could result in Maybe.
@@ -543,7 +545,7 @@ mkLensClauses mps t = do
             [ ConP 'Entity [VarP keyName, WildP]
             , VarP xName
             ]
-            $ ConE 'Entity `AppE` VarE keyName `AppE` (ConE (sumConstrName t f) `AppE` VarE xName)
+            $ ConE 'Entity `AppE` VarE keyName `AppE` (ConE (sumConstrName mps t f) `AppE` VarE xName)
 
 mkEntity :: MkPersistSettings -> EntityDef SqlTypeExp -> Q [Dec]
 mkEntity mps t = do
@@ -551,8 +553,8 @@ mkEntity mps t = do
     let nameT = unHaskellName $ entityHaskell t
     let nameS = unpack nameT
     let clazz = ConT ''PersistEntity `AppT` genericDataType mps (unHaskellName $ entityHaskell t) (VarT $ mkName "backend")
-    tpf <- mkToPersistFields nameS t
-    fpv <- mkFromPersistValues t
+    tpf <- mkToPersistFields mps nameS t
+    fpv <- mkFromPersistValues mps t
     utv <- mkUniqueToValues $ entityUniques t
     puk <- mkUniqueKeys t
 
@@ -648,15 +650,6 @@ persistFieldFromEntity mps e = do
     where
       entityName = (unpack $ unHaskellName $ entityHaskell e)
 
-updateConName :: Text -> Text -> PersistUpdate -> Text
-updateConName name s pu = concat
-    [ name
-    , upperFirst s
-    , case pu of
-        Assign -> ""
-        _ -> pack $ show pu
-    ]
-
 -- | Apply the given list of functions to the same @EntityDef@s.
 --
 -- This function is useful for cases such as:
@@ -716,13 +709,12 @@ mkDeleteCascade mps defs = do
             mkStmt dep = NoBindS
                 $ dcw `AppE`
                   ListE
-                    [ filt `AppE` ConE (mkName $ unpack filtName)
+                    [ filt `AppE` ConE filtName
                            `AppE` (left `AppE` val (depSourceNull dep))
                            `AppE` eq
                     ]
               where
-                filtName = unHaskellName (depSourceTable dep) ++
-                           upperFirst (unHaskellName $ depSourceField dep)
+                filtName = filterConName' mps (depSourceTable dep) (depSourceField dep)
                 val (Nullable ByMaybeAttr) = just `AppE` VarE key
                 val _                      =             VarE key
 
@@ -970,10 +962,7 @@ mkField mps et cd = do
                 []
     return (con, cla)
   where
-    name = mkName $ unpack $ concat
-        [ unHaskellName $ entityHaskell et
-        , upperFirst $ unHaskellName $ fieldHaskell cd
-        ]
+    name = filterConName mps et cd
     maybeTyp =
         if nullable (fieldAttrs cd) == Nullable ByMaybeAttr
             then ConT ''Maybe `AppT` typ
@@ -987,6 +976,23 @@ mkField mps et cd = do
                                 else mpsBackend mps)
                     `AppT` genericDataType mps ft (VarT $ mkName "backend")
             Nothing -> ftToType $ fieldType cd
+
+filterConName :: MkPersistSettings
+              -> EntityDef sqlType1
+              -> FieldDef sqlType2
+              -> Name
+filterConName mps entity field = filterConName' mps (entityHaskell entity) (fieldHaskell field)
+
+filterConName' :: MkPersistSettings
+               -> HaskellName -- ^ table
+               -> HaskellName -- ^ field
+               -> Name
+filterConName' mps entity field = mkName $ unpack $ concat
+    [ if mpsPrefixFields mps || field == HaskellName "Id"
+        then unHaskellName entity
+        else ""
+    , upperFirst $ unHaskellName field
+    ]
 
 ftToType :: FieldType -> Type
 ftToType (FTTypeCon Nothing t) = ConT $ mkName $ unpack t

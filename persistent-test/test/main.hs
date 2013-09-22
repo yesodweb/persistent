@@ -40,6 +40,7 @@ main = do
   sqExists <- isFile $ fromText sqlite_database
   when sqExists $ removeFile $ fromText sqlite_database
   runConn (setup PersistentTest.testMigrate)
+  runConn (setup PersistentTest.noPrefixMigrate)
 #endif
   summary <- hspecWith defaultConfig $ PersistentTest.specs
   runResourceT $ runConn PersistentTest.cleanDB
@@ -62,3 +63,4 @@ main = do
     MaxLenTest.specs
     SumTypeTest.specs
     MigrationOnlyTest.specs
+    PersistentTest.specs

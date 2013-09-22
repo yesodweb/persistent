@@ -38,7 +38,7 @@ import qualified Control.Monad.IO.Control
 
 import Control.Monad (liftM)
 import Control.Monad.Logger
-import Database.Persist.TH (mkDeleteCascade)
+import Database.Persist.TH (mkDeleteCascade, mpsGeneric, mpsPrefixFields)
 import Database.Persist.Sqlite
 import Control.Exception (SomeException)
 import qualified Data.Text as T
@@ -133,6 +133,23 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade sqlSetti
     ~no Int
     def Int
 |]
+
+#ifndef WITH_MONGODB
+share [mkPersist sqlSettings { mpsPrefixFields = False, mpsGeneric = False }, mkMigrate "noPrefixMigrate"] [persistLowerCase|
+NoPrefix1
+    someFieldName Int
+    deriving Show Eq
+NoPrefix2
+    someOtherFieldName Int
+    unprefixedRef NoPrefix1Id
+    deriving Show Eq
++NoPrefixSum
+    unprefixedLeft Int
+    unprefixedRight String
+    deriving Show Eq
+|]
+#endif
+
 cleanDB :: (PersistQuery m, PersistEntityBackend Email ~ PersistMonadBackend m) => m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Person])
@@ -708,6 +725,27 @@ specs = describe "persistent" $ do
   it "commit/rollback" (caseCommitRollback >> runResourceT (runConn cleanDB))
 
   it "afterException" caseAfterException
+
+#ifndef WITH_MONGODB
+  it "mpsNoPrefix" $ db $ do
+    deleteWhere ([] :: [Filter NoPrefix2])
+    deleteWhere ([] :: [Filter NoPrefix1])
+    np1a <- insert $ NoPrefix1 1
+    update np1a [SomeFieldName =. 2]
+    np1b <- insert $ NoPrefix1 3
+    np2 <- insert $ NoPrefix2 4 np1a
+    update np2 [UnprefixedRef =. np1b, SomeOtherFieldName =. 5]
+
+    mnp1a <- get np1a
+    liftIO $ mnp1a @?= Just (NoPrefix1 2)
+    liftIO $ fmap someFieldName mnp1a @?= Just 2
+    mnp2 <- get np2
+    liftIO $ fmap unprefixedRef mnp2 @?= Just np1b
+    liftIO $ fmap someOtherFieldName mnp2 @?= Just 5
+
+    insert_ $ UnprefixedLeftSum 5
+    insert_ $ UnprefixedRightSum "Hello"
+#endif
 
   describe "strictness" $ do
     it "bang" $ (return $! Strict (error "foo") 5 5) `shouldThrow` anyErrorCall
