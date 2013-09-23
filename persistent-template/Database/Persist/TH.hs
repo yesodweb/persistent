@@ -38,6 +38,7 @@ import Database.Persist.Quasi
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
+import Data.Maybe (isJust)
 import Control.Monad (forM, (<=<), mzero)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.IO.Class (MonadIO)
@@ -98,17 +99,24 @@ getSqlType allEntities ent =
     go :: FieldDef () -> FieldDef SqlTypeExp
     go field = do
         field
-            { fieldSqlType = SqlTypeExp st
+            { fieldSqlType = final
             , fieldEmbedded = mEmbedded (fieldType field)
             }
       where
+        final
+            | isJust (mEmbedded ft) = SqlTypeExp $ ConE 'SqlString
+            | isJust (stripId ft) = SqlTypeExp $ ConE 'SqlInt64
+            | otherwise = SqlTypeExp st
+
         mEmbedded (FTTypeCon Just{} _) = Nothing
         mEmbedded (FTTypeCon Nothing n) = let name = HaskellName n in
             find ((name ==) . entityHaskell) allEntities 
         mEmbedded (FTList x) = mEmbedded x
         mEmbedded (FTApp x y) = maybe (mEmbedded y) Just (mEmbedded x)
 
-        typ = ftToType $ fieldType field
+        ft = fieldType field
+
+        typ = ftToType ft
         mtyp = (ConT ''Maybe `AppT` typ)
         typedNothing = SigE (ConE 'Nothing) mtyp
         st = VarE 'sqlType `AppE` typedNothing
@@ -776,7 +784,7 @@ derivePersistField s = do
 -- defined here. One thing to be aware of is dependencies: if you have entities
 -- with foreign references, make sure to place those definitions after the
 -- entities they reference.
-mkMigrate :: Lift' a => String -> [EntityDef a] -> Q [Dec]
+mkMigrate :: String -> [EntityDef SqlTypeExp] -> Q [Dec]
 mkMigrate fun allDefs = do
     body' <- body
     return
@@ -799,14 +807,14 @@ mkMigrate fun allDefs = do
             _  -> do
               defsName <- newName "defs"
               defsStmt <- do
-                defs' <- mapM lift defs
+                defs' <- mapM liftEntitySqlType defs
                 let defsExp = ListE defs'
                 return $ LetS [ValD (VarP defsName) (NormalB defsExp) []]
               stmts <- mapM (toStmt $ VarE defsName) defs
               return (DoE $ defsStmt : stmts)
-    toStmt :: Lift' a => Exp -> EntityDef a -> Q Stmt
+    toStmt :: Exp -> EntityDef SqlTypeExp -> Q Stmt
     toStmt defsExp ed = do
-        u <- lift ed
+        u <- liftEntitySqlType ed
         m <- [|migrate|]
         return $ NoBindS $ m `AppE` defsExp `AppE` u
 
