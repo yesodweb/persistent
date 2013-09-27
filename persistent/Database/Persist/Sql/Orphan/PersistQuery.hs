@@ -124,15 +124,13 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
         wher conn = if null filts
                     then ""
                     else filterClause False conn filts
-        sql conn = mconcat
+        sql conn = connLimitOffset conn (limit,offset) (not (null orders)) $ mconcat
             [ "SELECT "
             , connEscapeName conn $ entityID t
             , " FROM "
             , connEscapeName conn $ entityDB t
             , wher conn
             , ord conn
-            , lim conn
-            , off
             ]
 
         (limit, offset, orders) = limitOffsetOrder opts
@@ -141,13 +139,6 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
             case map (orderClause False conn) orders of
                 [] -> ""
                 ords -> " ORDER BY " <> T.intercalate "," ords
-        lim conn = case (limit, offset) of
-                (0, 0) -> ""
-                (0, _) -> T.cons ' ' $ connNoLimit conn
-                (_, _) -> " LIMIT " <> T.pack (show limit)
-        off = if offset == 0
-                    then ""
-                    else " OFFSET " <> T.pack (show offset)
 
     deleteWhere filts = do
         _ <- deleteWhereCount filts

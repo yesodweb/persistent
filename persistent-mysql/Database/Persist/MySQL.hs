@@ -109,7 +109,24 @@ open' ci = do
         -- This noLimit is suggested by MySQL's own docs, see
         -- <http://dev.mysql.com/doc/refman/5.5/en/select.html>
         , connRDBMS      = "mysql"
+        , connLimitOffset = decorateSQLWithLimitAndOffset
         }
+        
+decorateSQLWithLimitAndOffset::(Int,Int) -> Bool -> Text -> Text 
+decorateSQLWithLimitAndOffset (limit,offset) _ sql = 
+    let
+        lim conn = case (limit, offset) of
+                (0, 0) -> ""
+                (0, _) -> T.cons ' ' $ "LIMIT 18446744073709551615" conn
+                (_, _) -> " LIMIT " <> T.pack (show limit)
+        off = if offset == 0
+                    then ""
+                    else " OFFSET " <> T.pack (show offset)
+    in mconcat
+            [ sql
+            , lim conn
+            , off
+            ]
 
 -- | Prepare a query.  We don't support prepared statements, but
 -- we'll do some client-side preprocessing here.

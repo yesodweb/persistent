@@ -53,6 +53,7 @@ data Connection = Connection
     , connEscapeName :: DBName -> Text
     , connNoLimit :: Text
     , connRDBMS :: Text
+    , connLimitOffset :: (Int,Int) -> Bool -> Text -> Text
     }
 
 data Statement = Statement

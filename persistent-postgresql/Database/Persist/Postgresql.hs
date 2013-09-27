@@ -125,8 +125,25 @@ openSimpleConn conn = do
         , connEscapeName = escape
         , connNoLimit    = "LIMIT ALL"
         , connRDBMS      = "postgresql"
+        , connLimitOffset = decorateSQLWithLimitAndOffset
         }
 
+decorateSQLWithLimitAndOffset::(Int,Int) -> Bool -> Text -> Text 
+decorateSQLWithLimitAndOffset (limit,offset) _ sql = 
+    let
+        lim conn = case (limit, offset) of
+                (0, 0) -> ""
+                (0, _) -> T.cons ' ' $ "LIMIT ALL" conn
+                (_, _) -> " LIMIT " <> T.pack (show limit)
+        off = if offset == 0
+                    then ""
+                    else " OFFSET " <> T.pack (show offset)
+    in mconcat
+            [ sql
+            , lim conn
+            , off
+            ]
+            
 prepare' :: PG.Connection -> Text -> IO Statement
 prepare' conn sql = do
     let query = PG.Query (T.encodeUtf8 sql)
