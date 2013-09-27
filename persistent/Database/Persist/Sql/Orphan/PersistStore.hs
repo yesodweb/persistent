@@ -14,6 +14,7 @@ import qualified Data.Text as T
 import Data.Text (Text, unpack)
 import Data.Monoid (mappend)
 import Control.Monad.IO.Class
+import Data.ByteString.Char8 (readInt,readInteger)
 
 instance (C.MonadResource m, MonadLogger m) => PersistStore (SqlPersistT m) where
     type PersistMonadBackend (SqlPersistT m) = SqlBackend
@@ -31,8 +32,15 @@ instance (C.MonadResource m, MonadLogger m) => PersistStore (SqlPersistT m) wher
                 ISRInsertGet sql1 sql2 -> do
                     rawExecute sql1 vals
                     rawQuery sql2 [] C.$$ do
-                        Just [PersistInt64 i] <- CL.head
-                        return i
+                        mm <- CL.head
+                        case mm of
+                          Just [PersistInt64 i] -> return i
+                          Just [PersistDouble i] -> return $ truncate i -- oracle
+                          Just [PersistByteString i] -> case readInteger i of -- mssql
+                                                          Just (ret,"") -> return $ fromIntegral ret
+                                                          xs -> error $ "invalid number i["++show i++"] xs[" ++ show xs ++ "]"
+                          Just xs -> error $ "invalid sql2 return xs["++show xs++"] sql2["++show sql2++"] sql1["++show sql1++"]"
+                          Nothing -> error $ "invalid sql2 returned nothing sql2["++show sql2++"] sql1["++show sql1++"]"
         return $ Key $ PersistInt64 i
       where
         t = entityDef $ Just val

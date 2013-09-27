@@ -20,7 +20,7 @@ import Data.Time (Day(..), TimeOfDay, UTCTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 #endif
 import Data.Time.LocalTime (ZonedTime)
-import Data.ByteString.Char8 (ByteString, unpack)
+import Data.ByteString.Char8 (ByteString, unpack, readInt)
 import Control.Applicative
 import Data.Int (Int8, Int16, Int32, Int64)
 import Data.Word (Word, Word8, Word16, Word32, Word64)
@@ -93,27 +93,32 @@ instance PersistField Html where
 instance PersistField Int where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-    fromPersistValue x = Left $ T.pack $ "Expected Integer, received: " ++ show x
+    fromPersistValue (PersistDouble i) = Right $ fromIntegral $ truncate i -- oracle
+    fromPersistValue x = Left $ T.pack $ "int Expected Integer, received: " ++ show x
 
 instance PersistField Int8 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-    fromPersistValue x = Left $ T.pack $ "Expected Integer, received: " ++ show x
+    fromPersistValue (PersistDouble i) = Right $ fromIntegral $ truncate i -- oracle
+    fromPersistValue x = Left $ T.pack $ "int8 Expected Integer, received: " ++ show x
 
 instance PersistField Int16 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-    fromPersistValue x = Left $ T.pack $ "Expected Integer, received: " ++ show x
+    fromPersistValue (PersistDouble i) = Right $ fromIntegral $ truncate i -- oracle
+    fromPersistValue x = Left $ T.pack $ "int16 Expected Integer, received: " ++ show x
 
 instance PersistField Int32 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-    fromPersistValue x = Left $ T.pack $ "Expected Integer, received: " ++ show x
+    fromPersistValue (PersistDouble i) = Right $ fromIntegral $ truncate i -- oracle
+    fromPersistValue x = Left $ T.pack $ "int32 Expected Integer, received: " ++ show x
 
 instance PersistField Int64 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-    fromPersistValue x = Left $ T.pack $ "Expected Integer, received: " ++ show x
+    fromPersistValue (PersistDouble i) = Right $ fromIntegral $ truncate i -- oracle
+    fromPersistValue x = Left $ T.pack $ "int64 Expected Integer, received: " ++ show x
 
 instance PersistField Word where
     toPersistValue = PersistInt64 . fromIntegral
@@ -170,6 +175,10 @@ instance PersistField Bool where
     toPersistValue = PersistBool
     fromPersistValue (PersistBool b) = Right b
     fromPersistValue (PersistInt64 i) = Right $ i /= 0
+    fromPersistValue (PersistByteString i) = case readInt i of 
+                                               Just (0,"") -> Right False
+                                               Just (1,"") -> Right True
+                                               xs -> error $ "PersistField Bool failed parsing PersistByteString xs["++show xs++"] i["++show i++"]"
     fromPersistValue x = Left $ T.pack $ "Expected Bool, received: " ++ show x
 
 instance PersistField Day where
