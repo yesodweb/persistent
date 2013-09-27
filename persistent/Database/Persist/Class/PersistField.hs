@@ -25,6 +25,7 @@ import Control.Applicative
 import Data.Int (Int8, Int16, Int32, Int64)
 import Data.Word (Word, Word8, Word16, Word32, Word64)
 import Data.Text (Text)
+import Data.Text.Read (double)
 import Data.Fixed
 import Data.Monoid ((<>))
 
@@ -159,7 +160,7 @@ instance (HasResolution a) => PersistField (Fixed a) where
     _ -> Left $ "Can not read " <> t <> " as Fixed"
   fromPersistValue (PersistDouble d) = Right $ realToFrac d
   fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-  fromPersistValue x = Left $ "Expected Rational, received: " <> T.pack (show x)
+  fromPersistValue x = Left $ "PersistField Fixed:Expected Rational, received: " <> T.pack (show x)
 
 instance PersistField Rational where
   toPersistValue = PersistRational
@@ -169,7 +170,11 @@ instance PersistField Rational where
     [(a, "")] -> Right $ toRational (a :: Pico)
     _ -> Left $ "Can not read " <> t <> " as Rational (Pico in fact)"
   fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-  fromPersistValue x = Left $ "Expected Rational, received: " <> T.pack (show x)
+  fromPersistValue (PersistByteString bs) = case double $ T.cons '0' $ T.decodeUtf8With T.lenientDecode bs of 
+                                              Right (ret,"") -> Right $ toRational ret
+                                              Right (a,b) -> Left $ "Invalid bytestring[" <> T.pack (show bs) <> "]: expected a double but returned " <> T.pack (show (a,b))
+                                              Left xs -> Left $ "Invalid bytestring[" <> T.pack (show bs) <> "]: expected a double but returned " <> T.pack (show xs)
+  fromPersistValue x = Left $ "PersistField Rational:Expected Rational, received: " <> T.pack (show x)
 
 instance PersistField Bool where
     toPersistValue = PersistBool

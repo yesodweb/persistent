@@ -118,6 +118,7 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
         rawQuery (sql conn) (getFiltsValues conn filts) $= CL.mapM parse
       where
         parse [PersistInt64 i] = return $ Key $ PersistInt64 i
+        parse [PersistDouble d] = return $ Key $ PersistInt64 $ truncate d
         parse y = liftIO $ throwIO $ PersistMarshalError $ "Unexpected in selectKeys: " <> T.pack (show y)
         t = entityDef $ dummyFromFilts filts
         wher conn = if null filts
