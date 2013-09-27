@@ -311,7 +311,7 @@ instance (HasResolution a) => PersistFieldSql (Fixed a) where
         n = 0
         _mn = return n `asTypeOf` a
 instance PersistFieldSql Rational where
-    sqlType _ = SqlNumeric 32 20   --  FIXME: Ambigous, 12 is from Pico which is used to convert Rational to number string
+    sqlType _ = SqlNumeric 32 20   --  need to make this field big enough to handle Rational to Mumber string conversion for ODBC
 
 -- perhaps a SQL user can figure this sqlType out?
 -- It is really intended for MongoDB though.

@@ -80,7 +80,7 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
             case fromPersistValues xs of
                 Left e -> Left e
                 Right xs' -> Right (Entity (Key $ PersistInt64 x) xs')
-        fromPersistValues' (PersistDouble x:xs) = do -- oracle
+        fromPersistValues' (PersistDouble x:xs) = -- oracle returns Double 
             case fromPersistValues xs of
                 Left e -> Left e
                 Right xs' -> Right (Entity (Key $ PersistInt64 (truncate x)) xs') -- convert back to int64
