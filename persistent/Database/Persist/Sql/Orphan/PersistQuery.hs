@@ -4,6 +4,7 @@
 module Database.Persist.Sql.Orphan.PersistQuery
     ( deleteWhereCount
     , updateWhereCount
+    , decorateSQLWithLimitOffset
     ) where
 
 import Database.Persist
@@ -92,25 +93,16 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
             case map (orderClause False conn) orders of
                 [] -> ""
                 ords -> " ORDER BY " <> T.intercalate "," ords
-        lim conn = case (limit, offset) of
-                (0, 0) -> ""
-                (0, _) -> T.cons ' ' $ connNoLimit conn
-                (_, _) -> " LIMIT " <> T.pack (show limit)
-        off = if offset == 0
-                    then ""
-                    else " OFFSET " <> T.pack (show offset)
         cols conn = T.intercalate ","
                   $ (connEscapeName conn $ entityID t)
                   : map (connEscapeName conn . fieldDB) (entityFields t)
-        sql conn = mconcat
+        sql conn = connLimitOffset conn (limit,offset) (not (null orders)) $ mconcat
             [ "SELECT "
             , cols conn
             , " FROM "
             , connEscapeName conn $ entityDB t
             , wher conn
             , ord conn
-            , lim conn
-            , off
             ]
 
     selectKeys filts opts = do
@@ -354,3 +346,20 @@ orderClause includeTable conn o =
 
 dummyFromKey :: KeyBackend SqlBackend v -> Maybe v
 dummyFromKey _ = Nothing
+
+-- | Generates sql for limit and offset for postgres, sqlite and mysql.
+decorateSQLWithLimitOffset::Text -> (Int,Int) -> Bool -> Text -> Text 
+decorateSQLWithLimitOffset nolimit (limit,offset) _ sql = 
+    let
+        lim = case (limit, offset) of
+                (0, 0) -> ""
+                (0, _) -> T.cons ' ' nolimit
+                (_, _) -> " LIMIT " <> T.pack (show limit)
+        off = if offset == 0
+                    then ""
+                    else " OFFSET " <> T.pack (show offset)
+    in mconcat
+            [ sql
+            , lim
+            , off
+            ]            

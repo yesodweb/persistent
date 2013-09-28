@@ -69,6 +69,7 @@ wrapConnection conn = do
         , connEscapeName = escape
         , connNoLimit = "LIMIT -1"
         , connRDBMS = "sqlite"
+        , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
         }
   where
     helper t getter = do
