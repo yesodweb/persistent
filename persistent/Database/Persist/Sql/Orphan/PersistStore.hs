@@ -20,7 +20,7 @@ instance (C.MonadResource m, MonadLogger m) => PersistStore (SqlPersistT m) wher
     type PersistMonadBackend (SqlPersistT m) = SqlBackend
     insert val = do
         conn <- askSqlConn
-        let esql = connInsertSql conn (entityDB t) (map fieldDB $ entityFields t) (entityID t)
+        let esql = connInsertSql conn (entityDB t) (entityFields t) (entityID t) vals
         i <-
             case esql of
                 ISRSingle sql -> rawQuery sql vals C.$$ do

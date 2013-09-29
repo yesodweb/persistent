@@ -39,7 +39,7 @@ data InsertSqlResult = ISRSingle Text
 data Connection = Connection
     { connPrepare :: Text -> IO Statement
     -- | table name, column names, id name, either 1 or 2 statements to run
-    , connInsertSql :: DBName -> [DBName] -> DBName -> InsertSqlResult
+    , connInsertSql :: DBName -> [FieldDef SqlType] -> DBName -> [PersistValue] -> InsertSqlResult
     , connStmtMap :: IORef (Map Text Statement)
     , connClose :: IO ()
     , connMigrateSql

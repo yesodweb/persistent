@@ -126,14 +126,14 @@ prepare' conn sql = do
 
 
 -- | SQL code to be executed when inserting an entity.
-insertSql' :: DBName -> [DBName] -> DBName -> InsertSqlResult
-insertSql' t cols _ = ISRInsertGet doInsert "SELECT LAST_INSERT_ID()"
+insertSql' :: DBName -> [FieldDef SqlType] -> DBName -> [PersistValue] -> InsertSqlResult
+insertSql' t cols _ _ = ISRInsertGet doInsert "SELECT LAST_INSERT_ID()"
     where
       doInsert = pack $ concat
         [ "INSERT INTO "
         , escapeDBName t
         , "("
-        , intercalate "," $ map escapeDBName cols
+        , intercalate "," $ map (escapeDBName . fieldDB) cols
         , ") VALUES("
         , intercalate "," (map (const "?") cols)
         , ")"

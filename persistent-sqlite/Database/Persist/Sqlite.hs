@@ -102,8 +102,8 @@ prepare' conn sql = do
         , stmtQuery = withStmt' conn stmt
         }
 
-insertSql' :: DBName -> [DBName] -> DBName -> InsertSqlResult
-insertSql' t cols _ =
+insertSql' :: DBName -> [FieldDef SqlType] -> DBName -> [PersistValue] -> InsertSqlResult
+insertSql' t cols _ _ =
     ISRInsertGet (pack ins) sel
   where
     sel = "SELECT last_insert_rowid()"
@@ -111,7 +111,7 @@ insertSql' t cols _ =
         [ "INSERT INTO "
         , escape' t
         , "("
-        , intercalate "," $ map escape' cols
+        , intercalate "," $ map (escape' . fieldDB) cols
         , ") VALUES("
         , intercalate "," (map (const "?") cols)
         , ")"
