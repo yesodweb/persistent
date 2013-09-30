@@ -443,6 +443,7 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, ns
                         , cNull = y == "YES"
                         , cSqlType = t
                         , cDefault = d''
+                        , cDefaultConstraintName = Nothing
                         , cMaxLen = Nothing
                         , cReference = ref
                         }

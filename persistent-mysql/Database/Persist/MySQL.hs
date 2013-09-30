@@ -475,6 +475,7 @@ getColumn connectInfo getter tname [ PersistByteString cname
         , cNull = null_ == "YES"
         , cSqlType = type_
         , cDefault = default_
+        , cDefaultConstraintName = Nothing
         , cMaxLen = Nothing -- FIXME: maxLen
         , cReference = ref
         }

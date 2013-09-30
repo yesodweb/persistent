@@ -35,6 +35,7 @@ mkColumns allDefs t =
                 SqlOther
                 (listToMaybe $ mapMaybe (T.stripPrefix "sqltype=") $ fieldAttrs fd))
             (def $ fieldAttrs fd)
+            Nothing
             (maxLen $ fieldAttrs fd)
             (ref (fieldDB fd) (fieldType fd) (fieldAttrs fd))
 
