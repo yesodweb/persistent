@@ -125,6 +125,7 @@ openSimpleConn conn = do
         , connEscapeName = escape
         , connNoLimit    = "LIMIT ALL"
         , connRDBMS      = "postgresql"
+        , connLimitOffset = decorateSQLWithLimitOffset "LIMIT ALL"
         }
 
 prepare' :: PG.Connection -> Text -> IO Statement
@@ -137,12 +138,12 @@ prepare' conn sql = do
         , stmtQuery = withStmt' conn query
         }
 
-insertSql' :: DBName -> [DBName] -> DBName -> InsertSqlResult
-insertSql' t cols id' = ISRSingle $ pack $ concat
+insertSql' :: DBName -> [FieldDef SqlType] -> DBName -> [PersistValue] -> InsertSqlResult
+insertSql' t cols id' _ = ISRSingle $ pack $ concat
     [ "INSERT INTO "
     , T.unpack $ escape t
     , "("
-    , intercalate "," $ map (T.unpack . escape) cols
+    , intercalate "," $ map (T.unpack . escape . fieldDB) cols
     , ") VALUES("
     , intercalate "," (map (const "?") cols)
     , ") RETURNING "
@@ -442,6 +443,7 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, ns
                         , cNull = y == "YES"
                         , cSqlType = t
                         , cDefault = d''
+                        , cDefaultConstraintName = Nothing
                         , cMaxLen = Nothing
                         , cReference = ref
                         }

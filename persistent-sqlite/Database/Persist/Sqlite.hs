@@ -69,6 +69,7 @@ wrapConnection conn = do
         , connEscapeName = escape
         , connNoLimit = "LIMIT -1"
         , connRDBMS = "sqlite"
+        , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
         }
   where
     helper t getter = do
@@ -101,8 +102,8 @@ prepare' conn sql = do
         , stmtQuery = withStmt' conn stmt
         }
 
-insertSql' :: DBName -> [DBName] -> DBName -> InsertSqlResult
-insertSql' t cols _ =
+insertSql' :: DBName -> [FieldDef SqlType] -> DBName -> [PersistValue] -> InsertSqlResult
+insertSql' t cols _ _ =
     ISRInsertGet (pack ins) sel
   where
     sel = "SELECT last_insert_rowid()"
@@ -110,7 +111,7 @@ insertSql' t cols _ =
         [ "INSERT INTO "
         , escape' t
         , "("
-        , intercalate "," $ map escape' cols
+        , intercalate "," $ map (escape' . fieldDB) cols
         , ") VALUES("
         , intercalate "," (map (const "?") cols)
         , ")"
