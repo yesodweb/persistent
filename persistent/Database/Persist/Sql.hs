@@ -15,6 +15,7 @@ module Database.Persist.Sql
     , getStmtConn
       -- * Internal
     , module Database.Persist.Sql.Internal
+    , decorateSQLWithLimitOffset
     ) where
 
 import Database.Persist
@@ -25,7 +26,7 @@ import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Migration
 import Database.Persist.Sql.Internal
 
-import Database.Persist.Sql.Orphan.PersistQuery
+import Database.Persist.Sql.Orphan.PersistQuery 
 import Database.Persist.Sql.Orphan.PersistStore ()
 import Database.Persist.Sql.Orphan.PersistUnique ()
 import Control.Monad.IO.Class

@@ -39,7 +39,7 @@ data InsertSqlResult = ISRSingle Text
 data Connection = Connection
     { connPrepare :: Text -> IO Statement
     -- | table name, column names, id name, either 1 or 2 statements to run
-    , connInsertSql :: DBName -> [DBName] -> DBName -> InsertSqlResult
+    , connInsertSql :: DBName -> [FieldDef SqlType] -> DBName -> [PersistValue] -> InsertSqlResult
     , connStmtMap :: IORef (Map Text Statement)
     , connClose :: IO ()
     , connMigrateSql
@@ -53,6 +53,7 @@ data Connection = Connection
     , connEscapeName :: DBName -> Text
     , connNoLimit :: Text
     , connRDBMS :: Text
+    , connLimitOffset :: (Int,Int) -> Bool -> Text -> Text
     }
 
 data Statement = Statement
@@ -69,6 +70,7 @@ data Column = Column
     , cNull      :: !Bool
     , cSqlType   :: !SqlType
     , cDefault   :: !(Maybe Text)
+    , cDefaultConstraintName   :: !(Maybe DBName)
     , cMaxLen    :: !(Maybe Integer)
     , cReference :: !(Maybe (DBName, DBName)) -- table name, constraint name
     }

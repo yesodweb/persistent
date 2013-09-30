@@ -109,8 +109,9 @@ open' ci = do
         -- This noLimit is suggested by MySQL's own docs, see
         -- <http://dev.mysql.com/doc/refman/5.5/en/select.html>
         , connRDBMS      = "mysql"
+        , connLimitOffset = decorateSQLWithLimitOffset "LIMIT 18446744073709551615"
         }
-
+        
 -- | Prepare a query.  We don't support prepared statements, but
 -- we'll do some client-side preprocessing here.
 prepare' :: MySQL.Connection -> Text -> IO Statement
@@ -125,14 +126,14 @@ prepare' conn sql = do
 
 
 -- | SQL code to be executed when inserting an entity.
-insertSql' :: DBName -> [DBName] -> DBName -> InsertSqlResult
-insertSql' t cols _ = ISRInsertGet doInsert "SELECT LAST_INSERT_ID()"
+insertSql' :: DBName -> [FieldDef SqlType] -> DBName -> [PersistValue] -> InsertSqlResult
+insertSql' t cols _ _ = ISRInsertGet doInsert "SELECT LAST_INSERT_ID()"
     where
       doInsert = pack $ concat
         [ "INSERT INTO "
         , escapeDBName t
         , "("
-        , intercalate "," $ map escapeDBName cols
+        , intercalate "," $ map (escapeDBName . fieldDB) cols
         , ") VALUES("
         , intercalate "," (map (const "?") cols)
         , ")"
@@ -474,6 +475,7 @@ getColumn connectInfo getter tname [ PersistByteString cname
         , cNull = null_ == "YES"
         , cSqlType = type_
         , cDefault = default_
+        , cDefaultConstraintName = Nothing
         , cMaxLen = Nothing -- FIXME: maxLen
         , cReference = ref
         }

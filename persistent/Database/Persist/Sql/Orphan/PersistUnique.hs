@@ -51,7 +51,11 @@ instance (MonadResource m, MonadLogger m) => PersistUnique (SqlPersistT m) where
                     case fromPersistValues vals of
                         Left s -> error $ T.unpack s
                         Right x -> return $ Just (Entity (Key $ PersistInt64 k) x)
-                Just _ -> error "Database.Persist.GenericSql: Bad list in getBy"
+                Just (PersistDouble k:vals) ->   -- oracle
+                    case fromPersistValues vals of
+                        Left s -> error $ T.unpack s
+                        Right x -> return $ Just (Entity (Key $ PersistInt64 $ truncate k) x)
+                Just xs -> error $ "Database.Persist.GenericSql: Bad list in getBy xs="++show xs
       where
         sqlClause conn =
             T.intercalate " AND " $ map (go conn) $ toFieldNames' uniq

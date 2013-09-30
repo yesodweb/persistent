@@ -4,6 +4,7 @@
 module Database.Persist.Sql.Orphan.PersistQuery
     ( deleteWhereCount
     , updateWhereCount
+    , decorateSQLWithLimitOffset
     ) where
 
 import Database.Persist
@@ -80,7 +81,11 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
             case fromPersistValues xs of
                 Left e -> Left e
                 Right xs' -> Right (Entity (Key $ PersistInt64 x) xs')
-        fromPersistValues' _ = Left "error in fromPersistValues'"
+        fromPersistValues' (PersistDouble x:xs) = -- oracle returns Double 
+            case fromPersistValues xs of
+                Left e -> Left e
+                Right xs' -> Right (Entity (Key $ PersistInt64 (truncate x)) xs') -- convert back to int64
+        fromPersistValues' xs = Left $ T.pack ("error in fromPersistValues' xs=" ++ show xs)
         wher conn = if null filts
                     then ""
                     else filterClause False conn filts
@@ -88,25 +93,16 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
             case map (orderClause False conn) orders of
                 [] -> ""
                 ords -> " ORDER BY " <> T.intercalate "," ords
-        lim conn = case (limit, offset) of
-                (0, 0) -> ""
-                (0, _) -> T.cons ' ' $ connNoLimit conn
-                (_, _) -> " LIMIT " <> T.pack (show limit)
-        off = if offset == 0
-                    then ""
-                    else " OFFSET " <> T.pack (show offset)
         cols conn = T.intercalate ","
                   $ (connEscapeName conn $ entityID t)
                   : map (connEscapeName conn . fieldDB) (entityFields t)
-        sql conn = mconcat
+        sql conn = connLimitOffset conn (limit,offset) (not (null orders)) $ mconcat
             [ "SELECT "
             , cols conn
             , " FROM "
             , connEscapeName conn $ entityDB t
             , wher conn
             , ord conn
-            , lim conn
-            , off
             ]
 
     selectKeys filts opts = do
@@ -114,20 +110,19 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
         rawQuery (sql conn) (getFiltsValues conn filts) $= CL.mapM parse
       where
         parse [PersistInt64 i] = return $ Key $ PersistInt64 i
+        parse [PersistDouble d] = return $ Key $ PersistInt64 $ truncate d
         parse y = liftIO $ throwIO $ PersistMarshalError $ "Unexpected in selectKeys: " <> T.pack (show y)
         t = entityDef $ dummyFromFilts filts
         wher conn = if null filts
                     then ""
                     else filterClause False conn filts
-        sql conn = mconcat
+        sql conn = connLimitOffset conn (limit,offset) (not (null orders)) $ mconcat
             [ "SELECT "
             , connEscapeName conn $ entityID t
             , " FROM "
             , connEscapeName conn $ entityDB t
             , wher conn
             , ord conn
-            , lim conn
-            , off
             ]
 
         (limit, offset, orders) = limitOffsetOrder opts
@@ -136,13 +131,6 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
             case map (orderClause False conn) orders of
                 [] -> ""
                 ords -> " ORDER BY " <> T.intercalate "," ords
-        lim conn = case (limit, offset) of
-                (0, 0) -> ""
-                (0, _) -> T.cons ' ' $ connNoLimit conn
-                (_, _) -> " LIMIT " <> T.pack (show limit)
-        off = if offset == 0
-                    then ""
-                    else " OFFSET " <> T.pack (show offset)
 
     deleteWhere filts = do
         _ <- deleteWhereCount filts
@@ -358,3 +346,20 @@ orderClause includeTable conn o =
 
 dummyFromKey :: KeyBackend SqlBackend v -> Maybe v
 dummyFromKey _ = Nothing
+
+-- | Generates sql for limit and offset for postgres, sqlite and mysql.
+decorateSQLWithLimitOffset::Text -> (Int,Int) -> Bool -> Text -> Text 
+decorateSQLWithLimitOffset nolimit (limit,offset) _ sql = 
+    let
+        lim = case (limit, offset) of
+                (0, 0) -> ""
+                (0, _) -> T.cons ' ' nolimit
+                (_, _) -> " LIMIT " <> T.pack (show limit)
+        off = if offset == 0
+                    then ""
+                    else " OFFSET " <> T.pack (show offset)
+    in mconcat
+            [ sql
+            , lim
+            , off
+            ]            
