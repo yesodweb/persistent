@@ -488,10 +488,10 @@ getColumn _ _ x =
     return $ Left $ pack $ "Invalid result from information_schema: " ++ show x
 
 findAlters :: Column -> [Column] -> ([AlterColumn'], [Column])
-findAlters col@(Column name isNull sqltype def _maxLen ref) cols =
+findAlters col@(Column name isNull sqltype def _cn _maxLen ref) cols =
     case filter (\c -> cName c == name) cols of
         [] -> ([(name, Add' col)], cols)
-        Column _ isNull' sqltype' def' _maxLen' ref':_ ->
+        Column _ isNull' sqltype' def' _cn _maxLen' ref':_ ->
             let refDrop Nothing = []
                 refDrop (Just (_, cname)) = [(name, DropReference cname)]
                 refAdd Nothing = []
@@ -520,13 +520,13 @@ findAlters col@(Column name isNull sqltype def _maxLen ref) cols =
 
 -- | Get the references to be added to a table for the given column.
 getAddReference :: DBName -> Column -> Maybe AlterDB
-getAddReference table (Column n _nu _ _def _maxLen ref) =
+getAddReference table (Column n _nu _ _def _cn _maxLen ref) =
     case ref of
         Nothing -> Nothing
         Just (s, _) -> Just $ AlterColumn table (n, AddReference s)
 
 showColumn :: Column -> String
-showColumn (Column n nu sqlType def _maxLen _ref) = concat
+showColumn (Column n nu sqlType def _cn _maxLen _ref) = concat
     [ T.unpack $ escape n
     , " "
     , showSqlType sqlType
