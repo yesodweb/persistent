@@ -267,7 +267,7 @@ mkCreateTable isTemp entity (cols, uniqs) = T.concat
     ]
 
 sqlColumn :: Column -> Text
-sqlColumn (Column name isNull typ def _maxLen ref) = T.concat
+sqlColumn (Column name isNull typ def _cn _maxLen ref) = T.concat
     [ ","
     , escape name
     , " "
