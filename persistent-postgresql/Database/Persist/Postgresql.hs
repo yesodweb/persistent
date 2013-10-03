@@ -38,7 +38,7 @@ import Data.IORef
 import qualified Data.Map as Map
 import Data.Either (partitionEithers)
 import Control.Arrow
-import Data.List (sort, groupBy)
+import Data.List (sort, groupBy, nub)
 import Data.Function (on)
 import Data.Conduit
 import qualified Data.Conduit.List as CL
@@ -303,7 +303,10 @@ migrate' :: [EntityDef a]
          -> (Text -> IO Statement)
          -> EntityDef SqlType
          -> IO (Either [Text] [(Bool, Text)])
-migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
+                             -- We nub because there might be duplicate statements generated
+                             -- such as AlterColumn DropReference and AlterTable DropConstraint
+                             -- for the same reference constraint.
+migrate' allDefs getter val = fmap (fmap $ nub . map showAlterDb) $ do
     let name = entityDB val
     old <- getColumns getter val
     case partitionEithers old of
@@ -361,7 +364,7 @@ getColumns getter def = do
             ]
     cs <- runResourceT $ stmtQuery stmt vals $$ helper
     stmt' <- getter
-        "SELECT constraint_name, column_name FROM information_schema.constraint_column_usage WHERE table_name=? AND column_name <> ? ORDER BY constraint_name, column_name"
+        "SELECT constraint_name, column_name FROM information_schema.key_column_usage WHERE table_name=? AND column_name <> ? ORDER BY constraint_name, column_name"
     us <- runResourceT $ stmtQuery stmt' vals $$ helperU
     return $ cs ++ us
   where
