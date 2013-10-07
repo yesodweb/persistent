@@ -190,23 +190,23 @@ data PersistValue = PersistText Text
 --
 -- @
 -- data Geo = Geo ByteString
--- 
+--
 -- instance PersistField Geo where
 --   toPersistValue (Geo t) = PersistDbSpecific t
--- 
+--
 --   fromPersistValue (PersistDbSpecific t) = Right $ Geo $ Data.ByteString.concat ["'", t, "'"]
 --   fromPersistValue _ = Left "Geo values must be converted from PersistDbSpecific"
--- 
+--
 -- instance PersistFieldSql Geo where
 --   sqlType _ = SqlOther "GEOGRAPHY(POINT,4326)"
--- 
+--
 -- toPoint :: Double -> Double -> Geo
 -- toPoint lat lon = Geo $ Data.ByteString.concat ["'POINT(", ps $ lon, " ", ps $ lat, ")'"]
 --   where ps = Data.Text.pack . show
 -- @
--- 
+--
 -- If Foo has a geography field, we can then perform insertions like the following:
--- 
+--
 -- @
 -- insert $ Foo (toPoint 44 44)
 -- @
@@ -245,7 +245,7 @@ fromPersistValueText (PersistDbSpecific _) = Left "Cannot convert PersistDbSpeci
 
 instance A.ToJSON PersistValue where
     toJSON (PersistText t) = A.String $ T.cons 's' t
-    toJSON (PersistByteString b) = A.String $ T.cons 'b' $ TE.decodeUtf8 $ B64.encode b
+    toJSON (PersistByteString b) = A.String $ T.cons 'x' $ TE.decodeUtf8 $ B64.encode b
     toJSON (PersistInt64 i) = A.Number $ fromIntegral i
     toJSON (PersistDouble d) = A.Number $ AN.D d
     toJSON (PersistRational r) = A.String $ T.pack $ 'r' : show r
@@ -253,13 +253,13 @@ instance A.ToJSON PersistValue where
     toJSON (PersistTimeOfDay t) = A.String $ T.pack $ 't' : show t
     toJSON (PersistUTCTime u) = A.String $ T.pack $ 'u' : show u
     toJSON (PersistZonedTime z) = A.String $ T.pack $ 'z' : show z
-    toJSON (PersistDay d) = A.String $ T.pack $ 'd' : show d
+    toJSON (PersistDay d) = A.String $ T.pack $ 'y' : show d
     toJSON PersistNull = A.Null
     toJSON (PersistList l) = A.Array $ V.fromList $ map A.toJSON l
     toJSON (PersistMap m) = A.object $ map (second A.toJSON) m
     toJSON (PersistDbSpecific b) = A.String $ T.cons 'p' $ TE.decodeUtf8 $ B64.encode b
     toJSON (PersistObjectId o) =
-      A.toJSON $ showChar 'o' $ showHexLen 8 (bs2i four) $ showHexLen 16 (bs2i eight) ""
+      A.toJSON $ showHexLen 8 (bs2i four) $ showHexLen 16 (bs2i eight) ""
         where
          (four, eight) = BS8.splitAt 4 o
 
@@ -282,16 +282,17 @@ instance A.FromJSON PersistValue where
             Just ('p', t) -> either (fail "Invalid base64") (return . PersistDbSpecific)
                            $ B64.decode $ TE.encodeUtf8 t
             Just ('s', t) -> return $ PersistText t
-            Just ('b', t) -> either (fail "Invalid base64") (return . PersistByteString)
+            Just ('x', t) -> either (fail "Invalid base64") (return . PersistByteString)
                            $ B64.decode $ TE.encodeUtf8 t
             Just ('t', t) -> fmap PersistTimeOfDay $ readMay t
             Just ('u', t) -> fmap PersistUTCTime $ readMay t
             Just ('z', t) -> fmap PersistZonedTime $ readMay t
-            Just ('d', t) -> fmap PersistDay $ readMay t
+            Just ('y', t) -> fmap PersistDay $ readMay t
             Just ('r', t) -> fmap PersistRational $ readMay t
             Just ('o', t) -> maybe (fail "Invalid base64") (return . PersistObjectId) $
                               fmap (i2bs (8 * 12) . fst) $ headMay $ readHex $ T.unpack t
-            Just (c, _) -> fail $ "Unknown prefix: " ++ [c]
+            Just _ -> maybe (fail "Invalid base64") (return . PersistObjectId) $
+                              fmap (i2bs (8 * 12) . fst) $ headMay $ readHex $ T.unpack t0
       where
         headMay []    = Nothing
         headMay (x:_) = Just x
