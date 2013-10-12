@@ -12,6 +12,7 @@ import Database.Persist.Sql.Types
 import Database.Persist.Sql.Class
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Orphan.PersistStore ()
+import Database.Persist.Sql.Internal (convertKey)
 import qualified Data.Text as T
 import Data.Text (Text)
 import Data.Monoid (Monoid (..), (<>))
@@ -22,6 +23,7 @@ import Control.Monad.Trans.Class
 import Control.Exception (throwIO)
 import qualified Data.Conduit.List as CL
 import Data.Conduit
+import Data.ByteString.Char8 (readInt, readInteger)
 
 -- orphaned instance for convenience of modularity
 instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
@@ -34,17 +36,20 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
             go'' n Multiply = T.concat [n, "=", n, "*?"]
             go'' n Divide = T.concat [n, "=", n, "/?"]
         let go' (x, pu) = go'' (connEscapeName conn x) pu
+        let composite = "composite" `elem` entityAttrs t
+        let wher = if composite
+                then T.intercalate " AND " $ map (\fld -> connEscapeName conn (fieldDB fld) <> "=? ") $ entityFields t
+                else connEscapeName conn (entityID t) <> "=?"
         let sql = T.concat
                 [ "UPDATE "
                 , connEscapeName conn $ entityDB t
                 , " SET "
                 , T.intercalate "," $ map (go' . go) upds
                 , " WHERE "
-                , connEscapeName conn $ entityID t
-                , "=?"
+                , wher
                 ]
         rawExecute sql $
-            map updatePersistValue upds `mappend` [unKey k]
+            map updatePersistValue upds `mappend` (convertKey composite k)
       where
         t = entityDef $ dummyFromKey k
         go x = (fieldDB $ updateFieldDef x, updateUpdate x)
@@ -60,8 +65,15 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
                 , wher
                 ]
         rawQuery sql (getFiltsValues conn filts) $$ do
-            Just [PersistInt64 i] <- CL.head
-            return $ fromIntegral i
+            mm <- CL.head
+            case mm of
+              Just [PersistInt64 i] -> return $ fromIntegral i
+              Just [PersistDouble i] ->return $ fromIntegral $ truncate i -- gb oracle
+              Just [PersistByteString i] -> case readInteger i of -- gb mssql 
+                                              Just (ret,"") -> return $ fromIntegral ret
+                                              xs -> error $ "invalid number i["++show i++"] xs[" ++ show xs ++ "]"
+              Just xs -> error $ "count:invalid sql  return xs["++show xs++"] sql["++show sql++"]"
+              Nothing -> error $ "count:invalid sql returned nothing sql["++show sql++"]"
       where
         t = entityDef $ dummyFromFilts filts
 
@@ -69,15 +81,21 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
         conn <- lift askSqlConn
         rawQuery (sql conn) (getFiltsValues conn filts) $= CL.mapM parse
       where
+        composite = "composite" `elem` entityAttrs t
         (limit, offset, orders) = limitOffsetOrder opts
 
         parse vals =
+          if composite then -- gb fix me
+            case fromPersistValuesComposite' vals of
+                Left s -> liftIO $ throwIO $ PersistMarshalError s
+                Right row -> return row
+          else 
             case fromPersistValues' vals of
                 Left s -> liftIO $ throwIO $ PersistMarshalError s
                 Right row -> return row
 
         t = entityDef $ dummyFromFilts filts
-        fromPersistValues' (PersistInt64 x:xs) = do
+        fromPersistValues' (PersistInt64 x:xs) = 
             case fromPersistValues xs of
                 Left e -> Left e
                 Right xs' -> Right (Entity (Key $ PersistInt64 x) xs')
@@ -86,6 +104,17 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
                 Left e -> Left e
                 Right xs' -> Right (Entity (Key $ PersistInt64 (truncate x)) xs') -- convert back to int64
         fromPersistValues' xs = Left $ T.pack ("error in fromPersistValues' xs=" ++ show xs)
+
+        fromPersistValuesComposite' xs@(PersistInt64 _:PersistInt64 _:_) = 
+            case fromPersistValues xs of
+                Left e -> Left e
+                Right xs' -> Right (Entity (Key $ PersistManyKeys (map (\(PersistInt64 fk) -> fk) xs)) xs') -- gb fix unsafe
+        fromPersistValuesComposite' xs@(PersistDouble _:PersistDouble _:_) = -- oracle returns Double 
+           case fromPersistValues xs of
+               Left e -> Left e
+               Right xs' -> Right (Entity (Key $ PersistManyKeys (map (\(PersistDouble fk) -> truncate fk) xs)) xs') -- convert back to int64 -- gb fix unsafe
+        fromPersistValuesComposite' xs = Left $ T.pack ("error in fromPersistValues' xs=" ++ show xs)
+
         wher conn = if null filts
                     then ""
                     else filterClause False conn filts
@@ -94,8 +123,8 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
                 [] -> ""
                 ords -> " ORDER BY " <> T.intercalate "," ords
         cols conn = T.intercalate ","
-                  $ (connEscapeName conn $ entityID t)
-                  : map (connEscapeName conn . fieldDB) (entityFields t)
+                  $ ((if composite then [] else [connEscapeName conn $ entityID t]) 
+                  <> map (connEscapeName conn . fieldDB) (entityFields t))
         sql conn = connLimitOffset conn (limit,offset) (not (null orders)) $ mconcat
             [ "SELECT "
             , cols conn
@@ -107,18 +136,26 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
 
     selectKeys filts opts = do
         conn <- lift askSqlConn
-        rawQuery (sql conn) (getFiltsValues conn filts) $= CL.mapM parse
+        rawQuery (sql conn) (getFiltsValues conn filts) $= CL.mapM (parse composite)
       where
+{-
         parse [PersistInt64 i] = return $ Key $ PersistInt64 i
         parse [PersistDouble d] = return $ Key $ PersistInt64 $ truncate d
+        parse [PersistManyKeys fks] = return $ Key $ PersistManyKeys fks
         parse y = liftIO $ throwIO $ PersistMarshalError $ "Unexpected in selectKeys: " <> T.pack (show y)
+-}
         t = entityDef $ dummyFromFilts filts
+        composite = "composite" `elem` entityAttrs t 
+        cols conn = if composite 
+                     then T.intercalate "," $ map (connEscapeName conn . fieldDB) $ entityFields t
+                     else connEscapeName conn $ entityID t
+                      
         wher conn = if null filts
                     then ""
                     else filterClause False conn filts
         sql conn = connLimitOffset conn (limit,offset) (not (null orders)) $ mconcat
             [ "SELECT "
-            , connEscapeName conn $ entityID t
+            , cols conn
             , " FROM "
             , connEscapeName conn $ entityDB t
             , wher conn
@@ -131,6 +168,15 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
             case map (orderClause False conn) orders of
                 [] -> ""
                 ords -> " ORDER BY " <> T.intercalate "," ords
+
+        parse False [PersistInt64 x] = return $ Key $ PersistInt64 x
+        parse False [PersistDouble x] = return $ Key $ PersistInt64 (truncate x) -- oracle returns Double 
+        parse False xs = liftIO $ throwIO $ PersistMarshalError $ "Unexpected in selectKeys False: " <> T.pack (show xs)
+
+        parse True xs@(PersistInt64 _:PersistInt64 _:_) = return $ Key $ PersistManyKeys (map (\(PersistInt64 fk) -> fk) xs) -- gb fix unsafe
+        parse True xs@(PersistDouble _:PersistDouble _:_) = return $ Key $ PersistManyKeys (map (\(PersistDouble fk) -> truncate fk) xs) -- oracle returns Double 
+        parse True xs = liftIO $ throwIO $ PersistMarshalError $ "Unexpected in selectKeys True: " <> T.pack (show xs)
+
 
     deleteWhere filts = do
         _ <- deleteWhereCount filts

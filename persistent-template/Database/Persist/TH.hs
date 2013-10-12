@@ -31,13 +31,14 @@ module Database.Persist.TH
     ) where
 
 import Prelude hiding ((++), take, concat, splitAt)
+import qualified Prelude as P 
 import Database.Persist
 import Database.Persist.Sql (Migration, SqlPersistT, migrate, SqlBackend, PersistFieldSql)
 import Database.Persist.Quasi
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
-import Control.Monad (forM, (<=<), mzero)
+import Control.Monad (forM, forM_, (<=<), mzero, when, unless)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.IO.Class (MonadIO)
 import qualified System.IO as SIO
@@ -141,15 +142,19 @@ data DelayedSqlTypeExp = DSTE { unDSTE :: SqlTypeExp }
 instance Lift DelayedSqlTypeExp where
     lift (DSTE SqlString') = return $ ConE 'SqlString'
     lift (DSTE SqlInt64') = return $ ConE 'SqlInt64'
+    lift (DSTE (SqlManyKeys' e)) = liftA2 AppE (return $ ConE 'SqlManyKeys) (lift e)
     lift (DSTE (SqlTypeExp e)) = liftA2 AppE (return $ ConE 'SqlTypeExp) (lift e)
 
 data SqlTypeExp = SqlTypeExp Exp
                 | SqlString'
                 | SqlInt64'
+                | SqlManyKeys' [DBName]
+
 instance Lift SqlTypeExp where
     lift (SqlTypeExp e) = return e
     lift SqlString' = [|SqlString|]
     lift SqlInt64' = [|SqlInt64|]
+    lift (SqlManyKeys' a) = [|SqlManyKeys a|]
 
 -- | Create data types and appropriate 'PersistEntity' instances for the given
 -- 'EntityDef's. Works well with the persist quasi-quoter.
@@ -158,10 +163,20 @@ mkPersist mps ents' = do
     x <- fmap mconcat $ mapM (persistFieldFromEntity mps) ents
     y <- fmap mconcat $ mapM (mkEntity mps) ents
     z <- fmap mconcat $ mapM (mkJSON mps) ents
+    mapM_ chkcomposite $ filter (\t -> "composite" `elem` entityAttrs t) ents
     return $ mconcat [x, y, z]
   where
     ents = map fixEntityDef ents'
-
+    tables = map (unHaskellName . entityHaskell) ents
+    chkcomposite t = do
+      let fs=filter (not . chkfkey . fieldType) $ entityFields t
+      forM_ fs $ \f -> do
+        error $ "must be all foreign keys in composite table[" P.++ show (unHaskellName $ entityHaskell t) P.++ "] fldname[" P.++ show (unHaskellName $ fieldHaskell f) P.++ "]"
+      when (length (entityFields t)<2) $ error $ "must have at least 2 foreign keys for composite types: table[" P.++ show (unHaskellName $ entityHaskell t) P.++ "] found " P.++ show (length (entityFields t))
+    chkfkey :: FieldType -> Bool
+    chkfkey (FTTypeCon _ fldname) | fldname `elem` map (`append` "Id") tables = True
+    chkfkey _ = False
+                                       
 -- | Implement special preprocessing on EntityDef as necessary for 'mkPersist'.
 -- For example, strip out any fields marked as MigrationOnly.
 fixEntityDef :: EntityDef a -> EntityDef a
@@ -557,15 +572,19 @@ mkEntity mps t = do
     fpv <- mkFromPersistValues mps t
     utv <- mkUniqueToValues $ entityUniques t
     puk <- mkUniqueKeys t
-
+    
+    let composite = "composite" `elem` entityAttrs t 
+    let keys = if composite then map fieldDB (entityFields t) else [] 
+    let tp = if composite then SqlManyKeys' keys else SqlInt64' -- gb fix this:if not composite then keys must be []!!!
     fields <- mapM (mkField mps t) $ FieldDef
         { fieldHaskell = HaskellName "Id"
         , fieldDB = entityID t
         , fieldType = FTTypeCon Nothing $ unHaskellName (entityHaskell t) ++ "Id"
-        , fieldSqlType = SqlInt64'
+        , fieldSqlType = tp
         , fieldEmbedded = Nothing
         , fieldAttrs = []
         , fieldStrict = True
+        , fieldManyDB = keys
         }
         : entityFields t
     toFieldNames <- mkToFieldNames $ entityUniques t
@@ -855,7 +874,7 @@ instance Lift' a => Lift (EntityDef a) where
             $(lift i)
             |]
 instance Lift' a => Lift (FieldDef a) where
-    lift (FieldDef a b c d e f g) = [|FieldDef a b c $(lift' d) $(liftTs e) f $(lift' g)|]
+    lift (FieldDef a b c d e f g h) = [|FieldDef a b c $(lift' d) $(liftTs e) f $(lift' g) h|]
 instance Lift UniqueDef where
     lift (UniqueDef a b c d) = [|UniqueDef $(lift a) $(lift b) $(lift c) $(liftTs d)|]
 
@@ -942,6 +961,7 @@ instance Lift SqlType where
     lift SqlDayTimeZoned = [|SqlDayTimeZoned|]
     lift SqlBlob = [|SqlBlob|]
     lift (SqlOther a) = [|SqlOther $(liftT a)|]
+    lift (SqlManyKeys a) = [|SqlManyKeys a|]
 
 -- Ent
 --   fieldName FieldType

@@ -7,26 +7,28 @@ import Database.Persist
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Class
 import Database.Persist.Sql.Raw
+import Database.Persist.Sql.Internal (convertKey)
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import Control.Monad.Logger
 import qualified Data.Text as T
 import Data.Text (Text, unpack)
-import Data.Monoid (mappend)
+import Data.Monoid (mappend, (<>))
 import Control.Monad.IO.Class
-import Data.ByteString.Char8 (readInt,readInteger)
+import Data.ByteString.Char8 (readInteger)
 
 instance (C.MonadResource m, MonadLogger m) => PersistStore (SqlPersistT m) where
     type PersistMonadBackend (SqlPersistT m) = SqlBackend
     insert val = do
         conn <- askSqlConn
-        let esql = connInsertSql conn (entityDB t) (entityFields t) (entityID t) vals
-        i <-
+        let composite = "composite" `elem` entityAttrs t
+        let esql = connInsertSql conn (entityDB t) (entityFields t) (entityID t) vals composite
+        key <-
             case esql of
                 ISRSingle sql -> rawQuery sql vals C.$$ do
                     x <- CL.head
                     case x of
-                        Just [PersistInt64 i] -> return i
+                        Just [PersistInt64 i] -> return $ Key $ PersistInt64 i
                         Nothing -> error $ "SQL insert did not return a result giving the generated ID"
                         Just vals' -> error $ "Invalid result from a SQL insert, got: " ++ show vals'
                 ISRInsertGet sql1 sql2 -> do
@@ -34,14 +36,17 @@ instance (C.MonadResource m, MonadLogger m) => PersistStore (SqlPersistT m) wher
                     rawQuery sql2 [] C.$$ do
                         mm <- CL.head
                         case mm of
-                          Just [PersistInt64 i] -> return i
-                          Just [PersistDouble i] -> return $ truncate i -- oracle
+                          Just [PersistInt64 i] -> return $ Key $ PersistInt64 i
+                          Just [PersistDouble i] ->return $ Key $ PersistInt64 $ truncate i -- oracle need this!
                           Just [PersistByteString i] -> case readInteger i of -- mssql
-                                                          Just (ret,"") -> return $ fromIntegral ret
+                                                          Just (ret,"") -> return $ Key $ PersistInt64 $ fromIntegral ret
                                                           xs -> error $ "invalid number i["++show i++"] xs[" ++ show xs ++ "]"
                           Just xs -> error $ "invalid sql2 return xs["++show xs++"] sql2["++show sql2++"] sql1["++show sql1++"]"
                           Nothing -> error $ "invalid sql2 returned nothing sql2["++show sql2++"] sql1["++show sql1++"]"
-        return $ Key $ PersistInt64 i
+                ISRManyKeys sql fks -> do
+                    rawExecute sql vals 
+                    return $ Key $ PersistManyKeys fks
+        return key
       where
         t = entityDef $ Just val
         vals = map toPersistValue $ toPersistFields val
@@ -74,19 +79,22 @@ instance (C.MonadResource m, MonadLogger m) => PersistStore (SqlPersistT m) wher
     get k = do
         conn <- askSqlConn
         let t = entityDef $ dummyFromKey k
+        let composite = "composite" `elem` entityAttrs t 
         let cols = T.intercalate ","
                  $ map (connEscapeName conn . fieldDB) $ entityFields t
+        let wher = 
+              if composite
+                then T.intercalate " AND " $ map (\fld -> connEscapeName conn (fieldDB fld) <> "=? ") $ entityFields t
+                else connEscapeName conn (entityID t) <> "=?"
         let sql = T.concat
                 [ "SELECT "
                 , cols
                 , " FROM "
                 , connEscapeName conn $ entityDB t
                 , " WHERE "
-                , connEscapeName conn $ entityID t
-                , "=?"
+                , wher
                 ]
-            vals' = [unKey k]
-        rawQuery sql vals' C.$$ do
+        rawQuery sql (convertKey composite k) C.$$ do
             res <- CL.head
             case res of
                 Nothing -> return Nothing
@@ -97,15 +105,19 @@ instance (C.MonadResource m, MonadLogger m) => PersistStore (SqlPersistT m) wher
 
     delete k = do
         conn <- askSqlConn
-        rawExecute (sql conn) [unKey k]
+        rawExecute (sql conn) (convertKey composite k)
       where
         t = entityDef $ dummyFromKey k
+        composite = "composite" `elem` entityAttrs t 
+        wher conn = 
+              if composite
+                then T.intercalate " AND " $ map (\fld -> connEscapeName conn (fieldDB fld) <> "=? ") $ entityFields t
+                else connEscapeName conn (entityID t) <> "=?"
         sql conn = T.concat
             [ "DELETE FROM "
             , connEscapeName conn $ entityDB t
             , " WHERE "
-            , connEscapeName conn $ entityID t
-            , "=?"
+            , wher conn
             ]
 
 dummyFromKey :: KeyBackend SqlBackend v -> Maybe v

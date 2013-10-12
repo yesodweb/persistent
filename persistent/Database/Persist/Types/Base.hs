@@ -137,6 +137,7 @@ data FieldDef sqlType = FieldDef
     , fieldAttrs    :: ![Attr]   -- ^ user annotations for a field
     , fieldStrict   :: !Bool      -- ^ a strict field in the data type. Default: true
     , fieldEmbedded :: Maybe (EntityDef ()) -- ^ indicates that the field uses an embedded entity
+    , fieldManyDB   :: ![DBName]  -- ^ contains many to many key
     }
     deriving (Show, Eq, Read, Ord, Functor)
 
@@ -186,6 +187,7 @@ data PersistValue = PersistText Text
                   | PersistMap [(Text, PersistValue)]
                   | PersistObjectId ByteString -- ^ Intended especially for MongoDB backend
                   | PersistDbSpecific ByteString -- ^ Using 'PersistDbSpecific' allows you to use types specific to a particular backend
+                  | PersistManyKeys [Int64]
 -- For example, below is a simple example of the PostGIS geography type:
 --
 -- @
@@ -219,7 +221,9 @@ instance PathPiece PersistValue where
         case Data.Text.Read.signed Data.Text.Read.decimal t of
             Right (i, t')
                 | T.null t' -> Just $ PersistInt64 i
-            _ -> Just $ PersistText t
+            _ -> case reads $ T.unpack t of
+                    [(fks, "")] -> Just $ PersistManyKeys fks
+                    _ -> Just $ PersistText t
     toPathPiece x =
         case fromPersistValueText x of
             Left e -> error e
@@ -242,6 +246,7 @@ fromPersistValueText (PersistList _) = Left "Cannot convert PersistList to Text"
 fromPersistValueText (PersistMap _) = Left "Cannot convert PersistMap to Text"
 fromPersistValueText (PersistObjectId _) = Left "Cannot convert PersistObjectId to Text"
 fromPersistValueText (PersistDbSpecific _) = Left "Cannot convert PersistDbSpecific to Text"
+fromPersistValueText (PersistManyKeys p) = Right $ T.pack $ show p
 
 instance A.ToJSON PersistValue where
     toJSON (PersistText t) = A.String $ T.cons 's' t
@@ -258,6 +263,7 @@ instance A.ToJSON PersistValue where
     toJSON (PersistList l) = A.Array $ V.fromList $ map A.toJSON l
     toJSON (PersistMap m) = A.object $ map (second A.toJSON) m
     toJSON (PersistDbSpecific b) = A.String $ T.cons 'p' $ TE.decodeUtf8 $ B64.encode b
+    toJSON (PersistManyKeys fks) = A.String $ T.pack ('q' : show fks) 
     toJSON (PersistObjectId o) =
       A.toJSON $ showChar 'o' $ showHexLen 8 (bs2i four) $ showHexLen 16 (bs2i eight) ""
         where
@@ -291,6 +297,7 @@ instance A.FromJSON PersistValue where
             Just ('r', t) -> fmap PersistRational $ readMay t
             Just ('o', t) -> maybe (fail "Invalid base64") (return . PersistObjectId) $
                               fmap (i2bs (8 * 12) . fst) $ headMay $ readHex $ T.unpack t
+            Just ('q', t) -> fmap PersistManyKeys $ readMay t
             Just (c, _) -> fail $ "Unknown prefix: " ++ [c]
       where
         headMay []    = Nothing
@@ -333,6 +340,7 @@ data SqlType = SqlString
              | SqlDayTimeZoned
              | SqlBlob
              | SqlOther T.Text -- ^ a backend-specific name
+             | SqlManyKeys [DBName]
     deriving (Show, Read, Eq, Typeable, Ord)
 
 newtype KeyBackend backend entity = Key { unKey :: PersistValue }

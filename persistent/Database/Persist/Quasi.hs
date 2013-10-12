@@ -212,7 +212,7 @@ mkEntityDef ps name entattribs lines =
         case T.stripPrefix "id=" t of
             Nothing -> idName ts
             Just s -> s
-    uniqs = mapMaybe (takeUniqs ps cols) attribs
+    uniqs = mapMaybe (takeUniqs ps name' cols) attribs
     derives = concat $ mapMaybe takeDerives attribs
 
     cols :: [FieldDef ()]
@@ -243,6 +243,7 @@ takeCols ps (n':typ:rest)
                 , fieldAttrs = rest
                 , fieldStrict = fromMaybe (psStrictFields ps) mstrict
                 , fieldEmbedded = Nothing
+                , fieldManyDB = []
                 }
   where
     (mstrict, n)
@@ -259,14 +260,15 @@ getDbName ps n (a:as) =
       Just s  -> s
 
 takeUniqs :: PersistSettings
+          -> Text
           -> [FieldDef a]
           -> [Text]
           -> Maybe UniqueDef
-takeUniqs ps defs (n:rest)
+takeUniqs ps tableName defs (n:rest)
     | not (T.null n) && isUpper (T.head n)
         = Just $ UniqueDef
             (HaskellName n)
-            (DBName $ psToDBName ps n)
+            (DBName $ psToDBName ps (tableName `T.append` n))
             (map (HaskellName &&& getDBName defs) fields)
             attrs
   where
@@ -275,7 +277,7 @@ takeUniqs ps defs (n:rest)
     getDBName (d:ds) t
         | fieldHaskell d == HaskellName t = fieldDB d
         | otherwise = getDBName ds t
-takeUniqs _ _ _ = Nothing
+takeUniqs _ _ _ _ = Nothing
 
 takeDerives :: [Text] -> Maybe [Text]
 takeDerives ("deriving":rest) = Just rest
