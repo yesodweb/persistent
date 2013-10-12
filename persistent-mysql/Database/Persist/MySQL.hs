@@ -126,8 +126,23 @@ prepare' conn sql = do
 
 
 -- | SQL code to be executed when inserting an entity.
-insertSql' :: DBName -> [FieldDef SqlType] -> DBName -> [PersistValue] -> InsertSqlResult
-insertSql' t cols _ _ = ISRInsertGet doInsert "SELECT LAST_INSERT_ID()"
+insertSql' :: DBName -> [FieldDef SqlType] -> DBName -> [PersistValue] -> Bool -> InsertSqlResult
+insertSql' t cols id' vals True =
+  let keypair = case vals of
+                  (PersistInt64 _:PersistInt64 _:_) -> map (\(PersistInt64 i) -> i) vals -- gb fix unsafe
+                  _ -> error $ "unexpected vals returned: vals=" ++ show vals
+  in ISRManyKeys sql keypair 
+        where sql = pack $ concat
+                [ "INSERT INTO "
+                , T.unpack $ escape t
+                , "("
+                , intercalate "," $ map (T.unpack . escape . fieldDB) $ filter (\fd -> null $ fieldManyDB fd) cols
+                , ") VALUES("
+                , intercalate "," (map (const "?") cols)
+                , ")"
+                ]
+
+insertSql' t cols _ _ False = ISRInsertGet doInsert "SELECT LAST_INSERT_ID()"
     where
       doInsert = pack $ concat
         [ "INSERT INTO "
@@ -275,16 +290,21 @@ migrate' connectInfo allDefs getter val = do
     let name = entityDB val
     (idClmn, old) <- getColumns connectInfo getter val
     let new = second (map udToPair) $ mkColumns allDefs val
+    let composite = "composite" `elem` entityAttrs val
     case (idClmn, old, partitionEithers old) of
       -- Nothing found, create everything
       ([], [], _) -> do
+        let idtxt = if composite then 
+                      concat [" PRIMARY KEY (", intercalate "," $ map (escapeDBName . fieldDB) $ filter (\fd -> null $ fieldManyDB fd) $ entityFields val, ")"]
+                    else concat [escapeDBName $ entityID val, " BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY"]
+
         let addTable = AddTable $ concat
                 [ "CREATE TABLE "
                 , escapeDBName name
                 , "("
-                , escapeDBName $ entityID val
-                , " BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY"
-                , concatMap (\x -> ',' : showColumn x) $ fst new
+                , idtxt
+                , if null (fst new) then [] else ","
+                , intercalate "," $ map showColumn $ fst new
                 , ")"
                 ]
         let uniques = flip concatMap (snd new) $ \(uname, ucols) ->
