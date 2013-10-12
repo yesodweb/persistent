@@ -134,9 +134,9 @@ insertSql' t cols id' vals True =
   in ISRManyKeys sql keypair 
         where sql = pack $ concat
                 [ "INSERT INTO "
-                , T.unpack $ escape t
+                , escapeDBName t
                 , "("
-                , intercalate "," $ map (T.unpack . escape . fieldDB) $ filter (\fd -> null $ fieldManyDB fd) cols
+                , intercalate "," $ map (escapeDBName . fieldDB) $ filter (\fd -> null $ fieldManyDB fd) cols
                 , ") VALUES("
                 , intercalate "," (map (const "?") cols)
                 , ")"
@@ -413,6 +413,7 @@ getColumns connectInfo getter def = do
                         \WHERE TABLE_SCHEMA = ? \
                           \AND TABLE_NAME   = ? \
                           \AND COLUMN_NAME <> ? \
+                          \AND CONSTRAINT_NAME <> 'PRIMARY' \
                           \AND REFERENCED_TABLE_SCHEMA IS NULL \
                         \ORDER BY CONSTRAINT_NAME, \
                                  \COLUMN_NAME"

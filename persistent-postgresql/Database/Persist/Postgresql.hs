@@ -375,14 +375,35 @@ getColumns :: (Text -> IO Statement)
            -> EntityDef a
            -> IO [Either Text (Either Column (DBName, [DBName]))]
 getColumns getter def = do
-    stmt <- getter "SELECT column_name,is_nullable,udt_name,column_default,numeric_precision,numeric_scale FROM information_schema.columns WHERE table_name=? AND column_name <> ?"
+    let sqlv=concat ["SELECT "
+                          ,"column_name "
+                          ,",is_nullable "
+                          ,",udt_name "
+                          ,",column_default "
+                          ,",numeric_precision "
+                          ,",numeric_scale "
+                          ,"FROM information_schema.columns "
+                          ,"WHERE table_catalog=current_database() "
+                          ,"AND table_schema=current_schema() "
+                          ,"AND table_name=? "
+                          ,"AND column_name <> ?"]
+    stmt <- getter $ pack sqlv
     let vals =
             [ PersistText $ unDBName $ entityDB def
             , PersistText $ unDBName $ entityID def
             ]
     cs <- runResourceT $ stmtQuery stmt vals $$ helper
-    stmt' <- getter
-        "SELECT constraint_name, column_name FROM information_schema.key_column_usage WHERE table_name=? AND column_name <> ? ORDER BY constraint_name, column_name"
+    let sqlc=concat ["SELECT "
+                          ,"constraint_name "
+                          ,",column_name "
+                          ,"FROM information_schema.constraint_column_usage "
+                          ,"WHERE table_catalog=current_database() "
+                          ,"AND table_schema=current_schema() "
+                          ,"AND table_name=? "
+                          ,"AND column_name <> ? "
+                          ,"ORDER BY constraint_name, column_name"]
+
+    stmt' <- getter $ pack sqlc
     us <- runResourceT $ stmtQuery stmt' vals $$ helperU
     return $ cs ++ us
   where
@@ -473,7 +494,9 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, ns
         let sql = pack $ concat
                 [ "SELECT COUNT(*) FROM "
                 , "information_schema.table_constraints "
-                , "WHERE table_name=? "
+                , "WHERE table_catalog=current_database() "
+                , "AND table_schema=current_schema() "
+                , "AND table_name=? "
                 , "AND constraint_type='FOREIGN KEY' "
                 , "AND constraint_name=?"
                 ]
