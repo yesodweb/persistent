@@ -21,6 +21,8 @@ module Database.Persist.TH
     , mkPersistSettings
     , sqlSettings
     , sqlOnlySettings
+    , liftEntitySqlType
+    , liftFieldSqlType
       -- * Various other TH functions
     , mkMigrate
     , mkSave
@@ -37,6 +39,7 @@ import Database.Persist.Quasi
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
+import Data.Maybe (isJust)
 import Control.Monad (forM, (<=<), mzero)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.IO.Class (MonadIO)
@@ -44,14 +47,13 @@ import qualified System.IO as SIO
 import Data.Text (pack, Text, append, unpack, concat, uncons, cons)
 import qualified Data.Text.IO as TIO
 import Data.List (foldl', find)
-import Data.Maybe (isJust)
 import Data.Monoid (mappend, mconcat)
 import qualified Data.Map as M
 import Data.Aeson
     ( ToJSON (toJSON), FromJSON (parseJSON), (.=), object
     , Value (Object), (.:), (.:?)
     )
-import Control.Applicative (pure, (<*>), liftA2)
+import Control.Applicative (pure, (<*>))
 import Control.Monad.Logger (MonadLogger)
 import Database.Persist.Sql (sqlType)
 import Language.Haskell.TH.Instances ()
@@ -89,36 +91,23 @@ parseSqlType ps s =
   where
     defsOrig = parse ps s
 
-getSqlType :: [EntityDef ()] -> EntityDef () -> EntityDef DelayedSqlTypeExp
+getSqlType :: [EntityDef ()] -> EntityDef () -> EntityDef SqlTypeExp
 getSqlType allEntities ent =
     ent
         { entityFields = map go $ entityFields ent
         }
   where
-    go :: FieldDef () -> FieldDef DelayedSqlTypeExp
+    go :: FieldDef () -> FieldDef SqlTypeExp
     go field = do
         field
-            { fieldSqlType = DSTE final
+            { fieldSqlType = final
             , fieldEmbedded = mEmbedded (fieldType field)
             }
       where
-        -- In the case of embedding, there won't be any datatype created yet.
-        -- We just use SqlString, as the data will be serialized to JSON.
         final
-            | isJust (mEmbedded (fieldType field)) = SqlString'
-            | isReference = SqlInt64'
-            | otherwise =
-                case fieldType field of
-                    -- In the case of lists, we always serialize to a string
-                    -- value (via JSON).
-                    --
-                    -- Normally, this would be determined automatically by
-                    -- SqlTypeExp. However, there's one corner case: if there's
-                    -- a list of entity IDs, the datatype for the ID has not
-                    -- yet been created, so the compiler will fail. This extra
-                    -- clause works around this limitation.
-                    FTList _ -> SqlString'
-                    _ -> SqlTypeExp st
+            | isJust (mEmbedded ft) = SqlTypeExp $ ConE 'SqlString
+            | isJust (stripId ft) = SqlTypeExp $ ConE 'SqlInt64
+            | otherwise = SqlTypeExp st
 
         mEmbedded (FTTypeCon Just{} _) = Nothing
         mEmbedded (FTTypeCon Nothing n) = let name = HaskellName n in
@@ -126,30 +115,16 @@ getSqlType allEntities ent =
         mEmbedded (FTList x) = mEmbedded x
         mEmbedded (FTApp x y) = maybe (mEmbedded y) Just (mEmbedded x)
 
-        isReference =
-            case stripId $ fieldType field of
-                Just{} -> True
-                Nothing -> False
+        ft = fieldType field
 
-        typ = ftToType $ fieldType field
+        typ = ftToType ft
         mtyp = (ConT ''Maybe `AppT` typ)
         typedNothing = SigE (ConE 'Nothing) mtyp
         st = VarE 'sqlType `AppE` typedNothing
 
-
-data DelayedSqlTypeExp = DSTE { unDSTE :: SqlTypeExp }
-instance Lift DelayedSqlTypeExp where
-    lift (DSTE SqlString') = return $ ConE 'SqlString'
-    lift (DSTE SqlInt64') = return $ ConE 'SqlInt64'
-    lift (DSTE (SqlTypeExp e)) = liftA2 AppE (return $ ConE 'SqlTypeExp) (lift e)
-
-data SqlTypeExp = SqlTypeExp Exp
-                | SqlString'
-                | SqlInt64'
+newtype SqlTypeExp = SqlTypeExp { unSqlTypeExp :: Exp }
 instance Lift SqlTypeExp where
-    lift (SqlTypeExp e) = return e
-    lift SqlString' = [|SqlString|]
-    lift SqlInt64' = [|SqlInt64|]
+    lift (SqlTypeExp e) = [|SqlTypeExp $(lift e)|]
 
 -- | Create data types and appropriate 'PersistEntity' instances for the given
 -- 'EntityDef's. Works well with the persist quasi-quoter.
@@ -549,7 +524,7 @@ mkLensClauses mps t = do
 
 mkEntity :: MkPersistSettings -> EntityDef SqlTypeExp -> Q [Dec]
 mkEntity mps t = do
-    t' <- lift t
+    t' <- liftEntitySqlType t
     let nameT = unHaskellName $ entityHaskell t
     let nameS = unpack nameT
     let clazz = ConT ''PersistEntity `AppT` genericDataType mps (unHaskellName $ entityHaskell t) (VarT $ mkName "backend")
@@ -562,7 +537,7 @@ mkEntity mps t = do
         { fieldHaskell = HaskellName "Id"
         , fieldDB = entityID t
         , fieldType = FTTypeCon Nothing $ unHaskellName (entityHaskell t) ++ "Id"
-        , fieldSqlType = SqlInt64'
+        , fieldSqlType = SqlTypeExp $ ConE 'SqlInt64
         , fieldEmbedded = Nothing
         , fieldAttrs = []
         , fieldStrict = True
@@ -807,7 +782,7 @@ derivePersistField s = do
 -- defined here. One thing to be aware of is dependencies: if you have entities
 -- with foreign references, make sure to place those definitions after the
 -- entities they reference.
-mkMigrate :: Lift' a => String -> [EntityDef a] -> Q [Dec]
+mkMigrate :: String -> [EntityDef SqlTypeExp] -> Q [Dec]
 mkMigrate fun allDefs = do
     body' <- body
     return
@@ -830,14 +805,14 @@ mkMigrate fun allDefs = do
             _  -> do
               defsName <- newName "defs"
               defsStmt <- do
-                defs' <- mapM lift defs
+                defs' <- mapM liftEntitySqlType defs
                 let defsExp = ListE defs'
                 return $ LetS [ValD (VarP defsName) (NormalB defsExp) []]
               stmts <- mapM (toStmt $ VarE defsName) defs
               return (DoE $ defsStmt : stmts)
-    toStmt :: Lift' a => Exp -> EntityDef a -> Q Stmt
+    toStmt :: Exp -> EntityDef SqlTypeExp -> Q Stmt
     toStmt defsExp ed = do
-        u <- lift ed
+        u <- liftEntitySqlType ed
         m <- [|migrate|]
         return $ NoBindS $ m `AppE` defsExp `AppE` u
 
@@ -872,8 +847,6 @@ instance Lift' a => Lift' (EntityDef a) where
 instance Lift' () where
     lift' () = [|()|]
 instance Lift' SqlTypeExp where
-    lift' = lift
-instance Lift' DelayedSqlTypeExp where
     lift' = lift
 
 pack' :: String -> Text
@@ -943,6 +916,40 @@ instance Lift SqlType where
     lift SqlBlob = [|SqlBlob|]
     lift (SqlOther a) = [|SqlOther $(liftT a)|]
 
+-- | NEEDS COMMENTING
+liftEntitySqlType :: EntityDef SqlTypeExp -> Q Exp
+liftEntitySqlType (EntityDef a b c d e f g h i) = do
+    es <- mapM liftFieldSqlType e
+    [|EntityDef
+        $(lift a)
+        $(lift b)
+        $(lift c)
+        $(liftTs d)
+        $(return $ ListE es)
+        $(lift f)
+        $(liftTs g)
+        $(liftMap h)
+        $(lift i)
+        :: EntityDef SqlType
+        |]
+
+-- | NEEDS COMMENTING
+liftFieldSqlType :: FieldDef SqlTypeExp -> Q Exp
+liftFieldSqlType (FieldDef a b c d e f g) =
+    [|FieldDef
+        a
+        b
+        c
+        ($(liftSqlType d) :: SqlType)
+        $(liftTs e)
+        f
+        $(lift' g)
+        :: FieldDef SqlType
+        |]
+
+liftSqlType :: SqlTypeExp -> Q Exp
+liftSqlType = return . unSqlTypeExp
+
 -- Ent
 --   fieldName FieldType
 --
@@ -955,7 +962,7 @@ mkField mps et cd = do
                 []
                 [EqualP (VarT $ mkName "typ") maybeTyp]
                 $ NormalC name []
-    bod <- lift cd
+    bod <- liftFieldSqlType cd
     let cla = Clause
                 [ConP name []]
                 (NormalB bod)
