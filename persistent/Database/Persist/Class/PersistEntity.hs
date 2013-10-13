@@ -20,64 +20,92 @@ import Data.Aeson (ToJSON (..), FromJSON (..), object, (.:), (.=), Value (Object
 import Control.Applicative ((<$>), (<*>))
 import Data.Monoid (mappend)
 
--- | A single database entity. For example, if writing a blog application, a
--- blog entry would be an entry, containing fields such as title and content.
-class PersistEntity val where
-    -- | Parameters: val and datatype of the field
-    data EntityField val :: * -> *
-    persistFieldDef :: EntityField val typ -> FieldDef SqlType
+-- | Persistent serialized Haskell records to the database.
+-- A Database 'Entity' (A row in SQL, a document in MongoDB, etc)
+-- corresponds to a 'Key' plus a Haskell record.
+--
+-- For every Haskell record type stored in the database there is a corresponding 'PersistEntity' instance.
+-- An instance of PersistEntity contains meta-data for the record.
+-- PersistEntity also helps abstract over different record types.
+-- That way the same query interface can return a 'PersistEntity', with each query returning different types of Haskell records.
+--
+-- Some advanced type system capabilities are used to make this process type-safe.
+-- Persistent users usually don't need to understand the class associated data and functions.
+class PersistEntity record where
+    -- | An 'EntityField' is parameterised by the Haskell record it belongs to
+    -- and the additional type of that field
+    data EntityField record :: * -> *
 
-    type PersistEntityBackend val
+    -- | return meta-data for a given 'EntityField'
+    persistFieldDef :: EntityField record typ -> FieldDef SqlType
 
-    -- | Unique keys in existence on this entity.
-    data Unique val
+    -- | Persistent allows multiple different backends
+    type PersistEntityBackend record
 
-    entityDef :: Monad m => m val -> EntityDef SqlType
-    toPersistFields :: val -> [SomePersistField]
-    fromPersistValues :: [PersistValue] -> Either Text val
+    -- | Unique keys besided the Key
+    data Unique record
 
-    persistUniqueToFieldNames :: Unique val -> [(HaskellName, DBName)]
-    persistUniqueToValues :: Unique val -> [PersistValue]
-    persistUniqueKeys :: val -> [Unique val]
+    -- | retrieve the EntityDef meta-data for the record
+    entityDef :: Monad m => m record -> EntityDef SqlType
 
-    persistIdField :: EntityField val (Key val)
+    -- | Get the database fields of a record
+    toPersistFields :: record -> [SomePersistField]
 
-    fieldLens :: EntityField val field
-              -> (forall f. Functor f => (field -> f field) -> Entity val -> f (Entity val))
+    -- | Convert from database values to a Haskell record
+    fromPersistValues :: [PersistValue] -> Either Text record
 
-data Update v = forall typ. PersistField typ => Update
-    { updateField :: EntityField v typ
+    persistUniqueToFieldNames :: Unique record -> [(HaskellName, DBName)]
+    persistUniqueToValues :: Unique record -> [PersistValue]
+    persistUniqueKeys :: record -> [Unique record]
+
+    persistIdField :: EntityField record (Key record)
+
+    fieldLens :: EntityField record field
+              -> (forall f. Functor f => (field -> f field) -> Entity record -> f (Entity record))
+
+-- | updataing a database entity
+--
+-- Persistent users use combinators to create these
+data Update record = forall typ. PersistField typ => Update
+    { updateField :: EntityField record typ
     , updateValue :: typ
-    , updateUpdate :: PersistUpdate -- FIXME Replace with expr down the road
+    -- FIXME Replace with expr down the road
+    , updateUpdate :: PersistUpdate
     }
 
-data SelectOpt v = forall typ. Asc (EntityField v typ)
-                 | forall typ. Desc (EntityField v typ)
-                 | OffsetBy Int
-                 | LimitTo Int
+-- | query options
+--
+-- Persistent users use these directly
+data SelectOpt record = forall typ. Asc  (EntityField record typ)
+                      | forall typ. Desc (EntityField record typ)
+                      | OffsetBy Int
+                      | LimitTo Int
 
-type family BackendSpecificFilter b v
+type family BackendSpecificFilter backend record
 
 -- | Filters which are available for 'select', 'updateWhere' and
 -- 'deleteWhere'. Each filter constructor specifies the field being
 -- filtered on, the type of comparison applied (equals, not equals, etc)
 -- and the argument for the comparison.
-data Filter v = forall typ. PersistField typ => Filter
-    { filterField  :: EntityField v typ
+--
+-- Persistent users use combinators to create these
+data Filter record = forall typ. PersistField typ => Filter
+    { filterField  :: EntityField record typ
     , filterValue  :: Either typ [typ] -- FIXME
     , filterFilter :: PersistFilter -- FIXME
     }
-    | FilterAnd [Filter v] -- ^ convenient for internal use, not needed for the API
-    | FilterOr  [Filter v]
-    | BackendFilter (BackendSpecificFilter (PersistEntityBackend v) v)
+    | FilterAnd [Filter record] -- ^ convenient for internal use, not needed for the API
+    | FilterOr  [Filter record]
+    | BackendFilter
+          (BackendSpecificFilter (PersistEntityBackend record) record)
 
 -- | Helper wrapper, equivalent to @Key (PersistEntityBackend val) val@.
 --
 -- Since 1.1.0
-type Key val = KeyBackend (PersistEntityBackend val) val
+type Key record = KeyBackend (PersistEntityBackend record) record
 
 -- | Datatype that represents an entity, with both its 'Key' and
--- its Haskell representation.
+-- its Haskell record representation.
 --
 -- When using a SQL-based backend (such as SQLite or
 -- PostgreSQL), an 'Entity' may take any number of columns
@@ -112,9 +140,9 @@ data Entity entity =
     deriving (Eq, Ord, Show, Read)
 
 instance ToJSON e => ToJSON (Entity e) where
-    toJSON (Entity k v) = object
-        [ "key" .= k
-        , "value" .= v
+    toJSON (Entity key value) = object
+        [ "key" .= key
+        , "value" .= value
         ]
 instance FromJSON e => FromJSON (Entity e) where
     parseJSON (Object o) = Entity
@@ -123,8 +151,8 @@ instance FromJSON e => FromJSON (Entity e) where
     parseJSON _ = fail "FromJSON Entity: not an object"
 
 instance PersistField entity => PersistField (Entity entity) where
-    toPersistValue (Entity k v) = case toPersistValue v of
-        (PersistMap alist) -> PersistMap ((idField, toPersistValue k) : alist)
+    toPersistValue (Entity key value) = case toPersistValue value of
+        (PersistMap alist) -> PersistMap ((idField, toPersistValue key) : alist)
         _ -> error $ T.unpack $ errMsg "expected PersistMap"
 
     fromPersistValue (PersistMap alist) = case after of
