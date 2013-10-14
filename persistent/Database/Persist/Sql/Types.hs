@@ -35,7 +35,7 @@ import qualified Data.Text.Read
 
 data InsertSqlResult = ISRSingle Text
                      | ISRInsertGet Text Text
-                     | ISRManyKeys Text [Int64]
+                     | ISRManyKeys Text [PersistValue]
 
 data Connection = Connection
     { connPrepare :: Text -> IO Statement

@@ -81,6 +81,6 @@ resolveTableName (e:es) hn
     | otherwise = resolveTableName es hn
 
 convertKey :: Bool -> KeyBackend t t1 -> [PersistValue]
-convertKey True (Key (PersistManyKeys fks)) = map PersistInt64 fks
+convertKey True (Key (PersistList fks)) = fks
 convertKey False (Key ret@(PersistInt64 _)) = [ret]
 convertKey composite k = error $ "invalid key type " ++ show k ++ " composite=" ++ show composite

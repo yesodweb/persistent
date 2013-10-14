@@ -45,7 +45,7 @@ instance (C.MonadResource m, MonadLogger m) => PersistStore (SqlPersistT m) wher
                           Nothing -> error $ "invalid sql2 returned nothing sql2["++show sql2++"] sql1["++show sql1++"]"
                 ISRManyKeys sql fks -> do
                     rawExecute sql vals 
-                    return $ Key $ PersistManyKeys fks
+                    return $ Key $ PersistList fks
         return key
       where
         t = entityDef $ Just val

@@ -72,7 +72,6 @@ instance PersistField String where
     fromPersistValue (PersistMap _) = Left $ T.pack "Cannot convert PersistMap to String"
     fromPersistValue (PersistDbSpecific _) = Left $ T.pack "Cannot convert PersistDbSpecific to String"
     fromPersistValue (PersistObjectId _) = Left $ T.pack "Cannot convert PersistObjectId to String"
-    fromPersistValue (PersistManyKeys fks) = Left $ T.pack "Cannot convert PersistManyKeys to String " <> T.pack (Prelude.show fks)
 #endif
 
 instance PersistField ByteString where

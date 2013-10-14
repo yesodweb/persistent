@@ -85,7 +85,7 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
         (limit, offset, orders) = limitOffsetOrder opts
 
         parse vals =
-          if composite then -- gb fix me
+          if composite then 
             case fromPersistValuesComposite' vals of
                 Left s -> liftIO $ throwIO $ PersistMarshalError s
                 Right row -> return row
@@ -105,14 +105,19 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
                 Right xs' -> Right (Entity (Key $ PersistInt64 (truncate x)) xs') -- convert back to int64
         fromPersistValues' xs = Left $ T.pack ("error in fromPersistValues' xs=" ++ show xs)
 
-        fromPersistValuesComposite' xs@(PersistInt64 _:PersistInt64 _:_) = 
+        isPersistInt64 (PersistInt64 _)   | True = True
+                                          | otherwise = False
+        isPersistDouble (PersistDouble _) | True = True
+                                          | otherwise = False
+        
+        fromPersistValuesComposite' xs@(PersistInt64 _:PersistInt64 _:_) | all isPersistInt64 xs = 
             case fromPersistValues xs of
                 Left e -> Left e
-                Right xs' -> Right (Entity (Key $ PersistManyKeys (map (\(PersistInt64 fk) -> fk) xs)) xs') -- gb fix unsafe
-        fromPersistValuesComposite' xs@(PersistDouble _:PersistDouble _:_) = -- oracle returns Double 
+                Right xs' -> Right (Entity (Key $ PersistList xs) xs')
+        fromPersistValuesComposite' xs@(PersistDouble _:PersistDouble _:_) | all isPersistDouble xs = -- oracle returns Double 
            case fromPersistValues xs of
                Left e -> Left e
-               Right xs' -> Right (Entity (Key $ PersistManyKeys (map (\(PersistDouble fk) -> truncate fk) xs)) xs') -- convert back to int64 -- gb fix unsafe
+               Right xs' -> Right (Entity (Key $ PersistList (map (\(PersistDouble d) -> PersistInt64 (truncate d)) xs)) xs') -- convert back to int64 -- gb fix unsafe
         fromPersistValuesComposite' xs = Left $ T.pack ("error in fromPersistValues' xs=" ++ show xs)
 
         wher conn = if null filts
@@ -138,12 +143,6 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
         conn <- lift askSqlConn
         rawQuery (sql conn) (getFiltsValues conn filts) $= CL.mapM (parse composite)
       where
-{-
-        parse [PersistInt64 i] = return $ Key $ PersistInt64 i
-        parse [PersistDouble d] = return $ Key $ PersistInt64 $ truncate d
-        parse [PersistManyKeys fks] = return $ Key $ PersistManyKeys fks
-        parse y = liftIO $ throwIO $ PersistMarshalError $ "Unexpected in selectKeys: " <> T.pack (show y)
--}
         t = entityDef $ dummyFromFilts filts
         composite = "composite" `elem` entityAttrs t 
         cols conn = if composite 
@@ -173,8 +172,8 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
         parse False [PersistDouble x] = return $ Key $ PersistInt64 (truncate x) -- oracle returns Double 
         parse False xs = liftIO $ throwIO $ PersistMarshalError $ "Unexpected in selectKeys False: " <> T.pack (show xs)
 
-        parse True xs@(PersistInt64 _:PersistInt64 _:_) = return $ Key $ PersistManyKeys (map (\(PersistInt64 fk) -> fk) xs) -- gb fix unsafe
-        parse True xs@(PersistDouble _:PersistDouble _:_) = return $ Key $ PersistManyKeys (map (\(PersistDouble fk) -> truncate fk) xs) -- oracle returns Double 
+        parse True xs@(PersistInt64 _:PersistInt64 _:_) = return $ Key $ PersistList xs
+        parse True xs@(PersistDouble _:PersistDouble _:_) = return $ Key $ PersistList (map (\(PersistDouble d) -> PersistInt64 $ truncate d) xs) -- oracle returns Double   -- gb fix unsafe
         parse True xs = liftIO $ throwIO $ PersistMarshalError $ "Unexpected in selectKeys True: " <> T.pack (show xs)
 
 
