@@ -317,3 +317,5 @@ instance PersistFieldSql Rational where
 -- It is really intended for MongoDB though.
 instance PersistField entity => PersistFieldSql (Entity entity) where
     sqlType _ = SqlOther "embedded entity, hard to type"
+instance PersistFieldSql (KeyBackend SqlBackend a) where
+    sqlType _ = SqlInt64
