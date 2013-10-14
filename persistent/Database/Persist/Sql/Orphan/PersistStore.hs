@@ -14,7 +14,7 @@ import qualified Data.Text as T
 import Data.Text (Text, unpack)
 import Data.Monoid (mappend)
 import Control.Monad.IO.Class
-import Data.ByteString.Char8 (readInt,readInteger)
+import Data.ByteString.Char8 (readInteger)
 
 instance (C.MonadResource m, MonadLogger m) => PersistStore (SqlPersistT m) where
     type PersistMonadBackend (SqlPersistT m) = SqlBackend

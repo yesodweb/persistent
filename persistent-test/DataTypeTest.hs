@@ -23,7 +23,7 @@ import Database.Persist.MySQL
 import Data.Char (generalCategory, GeneralCategory(..))
 import qualified Data.Text as T
 import Data.ByteString (ByteString)
-import Data.Time (Day, UTCTime (..), ZonedTime (..), minutesToTimeZone, TimeOfDay)
+import Data.Time (Day, UTCTime (..))
 import Data.Time.Calendar (addDays)
 import Data.Time.Clock (picosecondsToDiffTime)
 import Data.Time.LocalTime
@@ -59,11 +59,10 @@ DataTypeTable no-json
 |]
 
 cleanDB :: (PersistQuery m, PersistMonadBackend m ~ PersistEntityBackend DataTypeTable) => m ()
-cleanDB = do
-  deleteWhere ([] :: [Filter DataTypeTable])
+cleanDB = deleteWhere ([] :: [Filter DataTypeTable])
 
 specs :: Spec
-specs = describe "data type specs" $ do
+specs = describe "data type specs" $
     it "handles all types" $ asIO $ runResourceT $ runConn $ do
 #ifndef WITH_MONGODB
         _ <- runMigrationSilent dataTypeMigrate
@@ -108,14 +107,16 @@ specs = describe "data type specs" $ do
                 -- lose precision when serialized.
                 when (getDoubleDiff (dataTypeTableDouble x)(dataTypeTableDouble y) > 1e-14) $
                   check "double" dataTypeTableDouble
-    where normDouble x = if abs x > 1 then x / 10^(truncate $ logBase 10 (abs x))
-                                      else x
-          getDoubleDiff x y = abs ((normDouble x) - (normDouble y)) :: Double
+    where
+      normDouble :: Double -> Double
+      normDouble x | abs x > 1 = x / 10 ^ (truncate (logBase 10 (abs x)) :: Integer)
+                   | otherwise = x
+      getDoubleDiff x y = abs (normDouble x - normDouble y)
 
 randomValues :: IO [DataTypeTable]
 randomValues = do
   g <- newStdGen
-  return $ map ((unGen arbitrary) g) [0..]
+  return $ map (unGen arbitrary g) [0..]
 
 instance Arbitrary (DataTypeTableGeneric g) where
   arbitrary = DataTypeTable
@@ -162,7 +163,7 @@ truncateToMicro p = let
   in   fromRational . toRational $ p' :: Pico
 
 truncateToMicroZonedTime :: ZonedTime  -> Gen ZonedTime
-truncateToMicroZonedTime (ZonedTime (LocalTime d (TimeOfDay h m s)) tz) = do
+truncateToMicroZonedTime (ZonedTime (LocalTime d (TimeOfDay h m s)) tz) =
   return $ ZonedTime (LocalTime d (TimeOfDay h m (truncateToMicro s))) tz
 
 truncateTimeOfDay :: TimeOfDay -> Gen TimeOfDay
@@ -173,7 +174,7 @@ truncateUTCTime :: UTCTime -> Gen UTCTime
 truncateUTCTime (UTCTime d dift) = do
   let pico = fromRational . toRational $ dift :: Pico
       picoi= truncate . (*1000000000000) . toRational $ truncateToMicro pico :: Integer
-  return $ UTCTime d $ picosecondsToDiffTime $ picoi
+  return $ UTCTime d $ picosecondsToDiffTime picoi
 
 asIO :: IO a -> IO a
 asIO = id

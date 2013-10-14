@@ -36,7 +36,7 @@ import qualified Control.Monad.Trans.Control
 import qualified Control.Monad.IO.Control
 #  endif
 
-import Control.Monad (liftM)
+import Control.Monad (liftM, void)
 import Control.Monad.Logger
 import Database.Persist.TH (mkDeleteCascade, mpsGeneric, mpsPrefixFields)
 import Database.Persist.Sqlite
@@ -749,7 +749,7 @@ specs = describe "persistent" $ do
 
   describe "strictness" $ do
     it "bang" $ (return $! Strict (error "foo") 5 5) `shouldThrow` anyErrorCall
-    it "tilde" $ (return $! Strict 5 (error "foo") 5 :: IO Strict) >> return ()
+    it "tilde" $ void (return $! Strict 5 (error "foo") 5 :: IO Strict)
     it "blank" $ (return $! Strict 5 5 (error "foo")) `shouldThrow` anyErrorCall
 
 
@@ -770,6 +770,7 @@ instance PersistEntity a => PersistEntity (ReverseFieldOrder a) where
     persistUniqueKeys = map URFO . reverse . persistUniqueKeys . unRFO
     type PersistEntityBackend (ReverseFieldOrder a) = PersistEntityBackend a
     persistIdField = error "ReverseFieldOrder.persistIdField"
+    fieldLens = error "ReverseFieldOrder.fieldLens"
 
 caseCommitRollback :: Assertion
 caseCommitRollback = db $ do
