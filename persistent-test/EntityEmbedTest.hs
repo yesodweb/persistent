@@ -10,11 +10,12 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 module EntityEmbedTest where
-import Init
 
 -- because we are using a type alias we need to declare in a separate module
 -- this is used in EmbedTest
 #if WITH_MONGODB
+import Init
+
 mkPersist persistSettings [persistUpperCase|
   ARecord
     name Text
