@@ -88,7 +88,7 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade sqlSetti
     name Text
     age Int "some ignored -- \" attribute"
     color Text Maybe -- this is a comment sql=foobarbaz
-    PersonNameKey name -- this is a comment sql=foobarbaz
+    Unique PersonNameKey name -- this is a comment sql=foobarbaz
     deriving Show Eq
   Person1
 -- Dedented comment
@@ -121,12 +121,12 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade sqlSetti
   User
     ident Text
     password Text Maybe
-    UniqueUser ident
+    Unique UniqueUser ident
   Email
     email Text
     user UserId Maybe
     verkey Text Maybe
-    UniqueEmail email
+    Unique UniqueEmail email
 
   Strict
     !yes Int
