@@ -55,6 +55,7 @@ import Data.Aeson
 import Control.Monad (forM, mzero)
 import System.Environment (getEnvironment)
 import Data.Int (Int64)
+import Data.Maybe (isJust)
 
 -- | A @libpq@ connection string.  A simple example of connection
 -- string would be @\"host=localhost port=5432 user=test
@@ -136,29 +137,29 @@ prepare' conn sql = do
         , stmtQuery = withStmt' conn query
         }
         
-insertSql' :: DBName -> [FieldDef SqlType] -> DBName -> [PersistValue] -> Bool -> InsertSqlResult
-insertSql' t cols id' vals True =
-  in ISRManyKeys sql vals
+insertSql' :: EntityDef SqlType -> [PersistValue] -> InsertSqlResult
+insertSql' ent vals =
+  case entityPrimary ent of
+    Just pdef -> 
+     ISRManyKeys sql vals
         where sql = pack $ concat
                 [ "INSERT INTO "
-                , T.unpack $ escape t
+                , T.unpack $ escape $ entityDB ent
                 , "("
-                , intercalate "," $ map (T.unpack . escape . fieldDB) $ filter (\fd -> null $ fieldManyDB fd) cols
+                , intercalate "," $ map (T.unpack . escape . fieldDB) $ entityFields ent
                 , ") VALUES("
-                , intercalate "," (map (const "?") cols)
+                , intercalate "," (map (const "?") $ entityFields ent)
                 , ")"
                 ]
-
-insertSql' t cols id' vals False = 
-  ISRSingle $ pack $ concat
+    Nothing -> ISRSingle $ pack $ concat
     [ "INSERT INTO "
-    , T.unpack $ escape t
+      , T.unpack $ escape $ entityDB ent
     , "("
-    , intercalate "," $ map (T.unpack . escape . fieldDB) cols
+      , intercalate "," $ map (T.unpack . escape . fieldDB) $ entityFields ent
     , ") VALUES("
-    , intercalate "," (map (const "?") cols)
+      , intercalate "," (map (const "?") $ entityFields ent)
     , ") RETURNING "
-    , T.unpack $ escape id'
+      , T.unpack $ escape $ entityID ent
     ]
 
 execute' :: PG.Connection -> PG.Query -> [PersistValue] -> IO Int64
@@ -326,12 +327,11 @@ migrate' allDefs getter val = fmap (fmap $ nub . map showAlterDb) $ do
             let new = first (filter $ not . safeToRemove val . cName)
                     $ second (map udToPair)
                     $ mkColumns allDefs val
-            let composite = "composite" `elem` entityAttrs val
             if null old
                 then do
-                    let idtxt = if composite then 
-                                  concat [" PRIMARY KEY (", intercalate "," $ map (T.unpack . escape . fieldDB) $ filter (\fd -> null $ fieldManyDB fd) $ entityFields val, ")"]
-                                else concat [T.unpack $ escape $ entityID val, " SERIAL PRIMARY KEY UNIQUE"]
+                    let idtxt = case entityPrimary val of
+                                  Just pdef -> concat [" PRIMARY KEY (", intercalate "," $ map (T.unpack . escape . snd) $ primaryFields pdef, ")"]
+                                  Nothing   -> concat [T.unpack $ escape $ entityID val, " SERIAL PRIMARY KEY UNIQUE"]
                     let addTable = AddTable $ concat
                             -- Lower case e: see Database.Persistent.GenericSql.Migration
                             [ "CREATe TABLE "

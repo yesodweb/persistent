@@ -22,6 +22,7 @@ import Control.Monad.Trans.Error (ErrorT(..))
 import Data.Aeson
 import Data.ByteString (ByteString)
 import Data.Either (partitionEithers)
+import Data.Maybe (isJust)
 import Data.Fixed (Pico)
 import Data.Function (on)
 import Data.IORef
@@ -126,28 +127,30 @@ prepare' conn sql = do
 
 
 -- | SQL code to be executed when inserting an entity.
-insertSql' :: DBName -> [FieldDef SqlType] -> DBName -> [PersistValue] -> Bool -> InsertSqlResult
-insertSql' t cols id' vals True =
-  in ISRManyKeys sql vals
+insertSql' :: EntityDef SqlType -> [PersistValue] -> InsertSqlResult
+insertSql' ent vals =
+  case entityPrimary ent of
+    Just pdef -> 
+      ISRManyKeys sql vals
         where sql = pack $ concat
                 [ "INSERT INTO "
-                , escapeDBName t
+                , escapeDBName $ entityDB ent
                 , "("
-                , intercalate "," $ map (escapeDBName . fieldDB) $ filter (\fd -> null $ fieldManyDB fd) cols
+                , intercalate "," $ map (escapeDBName . fieldDB) $ entityFields ent
                 , ") VALUES("
-                , intercalate "," (map (const "?") cols)
+                , intercalate "," (map (const "?") $ entityFields ent)
                 , ")"
                 ]
-
-insertSql' t cols _ _ False = ISRInsertGet doInsert "SELECT LAST_INSERT_ID()"
+    Nothing -> 
+      ISRInsertGet doInsert "SELECT LAST_INSERT_ID()"
     where
       doInsert = pack $ concat
         [ "INSERT INTO "
-        , escapeDBName t
+            , escapeDBName $ entityDB ent
         , "("
-        , intercalate "," $ map (escapeDBName . fieldDB) cols
+            , intercalate "," $ map (escapeDBName . fieldDB) $ entityFields ent
         , ") VALUES("
-        , intercalate "," (map (const "?") cols)
+            , intercalate "," (map (const "?") $ entityFields ent)
         , ")"
         ]
 
@@ -287,13 +290,12 @@ migrate' connectInfo allDefs getter val = do
     let name = entityDB val
     (idClmn, old) <- getColumns connectInfo getter val
     let new = second (map udToPair) $ mkColumns allDefs val
-    let composite = "composite" `elem` entityAttrs val
     case (idClmn, old, partitionEithers old) of
       -- Nothing found, create everything
       ([], [], _) -> do
-        let idtxt = if composite then 
-                      concat [" PRIMARY KEY (", intercalate "," $ map (escapeDBName . fieldDB) $ filter (\fd -> null $ fieldManyDB fd) $ entityFields val, ")"]
-                    else concat [escapeDBName $ entityID val, " BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY"]
+        let idtxt = case entityPrimary val of
+                Just pdef -> concat [" PRIMARY KEY (", intercalate "," $ map (escapeDBName . snd) $ primaryFields pdef, ")"]
+                Nothing   -> concat [escapeDBName $ entityID val, " BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY"]
 
         let addTable = AddTable $ concat
                 [ "CREATE TABLE "

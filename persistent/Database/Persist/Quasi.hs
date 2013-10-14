@@ -18,12 +18,13 @@ module Database.Persist.Quasi
 import Prelude hiding (lines)
 import Database.Persist.Types
 import Data.Char
-import Data.Maybe (mapMaybe, fromMaybe)
+import Data.Maybe (mapMaybe, fromMaybe, maybeToList)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Control.Arrow ((&&&))
 import qualified Data.Map as M
 import Data.List (foldl')
+import Data.Monoid (mappend)
 
 data ParseState a = PSDone | PSFail | PSSuccess a Text
 
@@ -198,7 +199,7 @@ mkEntityDef ps name entattribs lines =
         (HaskellName name')
         (DBName $ getDbName ps name' entattribs)
         (DBName $ idName entattribs)
-        entattribs cols uniqs derives
+        entattribs cols primary uniqs derives
         extras
         isSum
   where
@@ -212,7 +213,13 @@ mkEntityDef ps name entattribs lines =
         case T.stripPrefix "id=" t of
             Nothing -> idName ts
             Just s -> s
-    uniqs = mapMaybe (takeUniqs ps name' cols) attribs
+            
+    (primarys,uniqs) = foldl' (\(a,b) attr -> let (c,d) = takeConstraint ps name' cols attr in (a `mappend` maybeToList c, b `mappend` maybeToList d)) ([],[]) attribs
+    primary = case primarys of 
+                []  -> Nothing 
+                [p] -> Just p
+                _ -> error $ "found more than one primary key in table[" ++ show name' ++ "]"
+                
     derives = concat $ mapMaybe takeDerives attribs
 
     cols :: [FieldDef ()]
@@ -243,7 +250,6 @@ takeCols ps (n':typ:rest)
                 , fieldAttrs = rest
                 , fieldStrict = fromMaybe (psStrictFields ps) mstrict
                 , fieldEmbedded = Nothing
-                , fieldManyDB = []
                 }
   where
     (mstrict, n)
@@ -259,14 +265,42 @@ getDbName ps n (a:as) =
       Nothing -> getDbName ps n as
       Just s  -> s
 
-takeUniqs :: PersistSettings
+takeConstraint :: PersistSettings
           -> Text
           -> [FieldDef a]
           -> [Text]
-          -> Maybe UniqueDef
-takeUniqs ps tableName defs (n:rest)
+          -> (Maybe PrimaryDef, Maybe UniqueDef)
+takeConstraint ps tableName defs (n:rest) | not (T.null n) && isUpper (T.head n) = takeConstraint' 
+    where takeConstraint' 
+            | n == "Unique"  = (Nothing, Just $ takeUniq ps tableName defs rest)
+            | n == "Primary" = (Just $ takePrimary ps defs rest, Nothing)
+            | otherwise      = error $ "unknown keyword[" ++ show n ++ "] expecting 'Unique' or 'Primary'"
+takeConstraint _ _ _ _ = (Nothing, Nothing)
+    
+takePrimary :: PersistSettings
+          -> [FieldDef a]
+          -> [Text]
+          -> PrimaryDef
+takePrimary ps defs pkcols
+        = PrimaryDef
+            (map (HaskellName &&& getDBName defs) pkcols)
+            attrs
+  where
+    (fields,attrs) = break ("!" `T.isPrefixOf`) pkcols
+    getDBName [] t = error $ "Unknown column in primary key constraint: " ++ show t
+    getDBName (d:ds) t
+        | fieldHaskell d == HaskellName t = fieldDB d
+        | otherwise = getDBName ds t
+
+-- Unique UppercaseConstraintName list of lowercasefields    
+takeUniq :: PersistSettings
+          -> Text
+          -> [FieldDef a]
+          -> [Text]
+          -> UniqueDef
+takeUniq ps tableName defs (n:rest)
     | not (T.null n) && isUpper (T.head n)
-        = Just $ UniqueDef
+        = UniqueDef
             (HaskellName n)
             (DBName $ psToDBName ps (tableName `T.append` n))
             (map (HaskellName &&& getDBName defs) fields)
@@ -277,7 +311,7 @@ takeUniqs ps tableName defs (n:rest)
     getDBName (d:ds) t
         | fieldHaskell d == HaskellName t = fieldDB d
         | otherwise = getDBName ds t
-takeUniqs _ _ _ _ = Nothing
+takeUniqs _ tableName _ xs = error $ "invalid unique constraint on table[" ++ show tableName ++ "] expecting an uppercase constraint name xs=" ++ show xs
 
 takeDerives :: [Text] -> Maybe [Text]
 takeDerives ("deriving":rest) = Just rest

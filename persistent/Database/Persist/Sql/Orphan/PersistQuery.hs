@@ -24,6 +24,7 @@ import Control.Exception (throwIO)
 import qualified Data.Conduit.List as CL
 import Data.Conduit
 import Data.ByteString.Char8 (readInt, readInteger)
+import Data.Maybe (isJust)
 
 -- orphaned instance for convenience of modularity
 instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
@@ -36,10 +37,10 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
             go'' n Multiply = T.concat [n, "=", n, "*?"]
             go'' n Divide = T.concat [n, "=", n, "/?"]
         let go' (x, pu) = go'' (connEscapeName conn x) pu
-        let composite = "composite" `elem` entityAttrs t
-        let wher = if composite
-                then T.intercalate " AND " $ map (\fld -> connEscapeName conn (fieldDB fld) <> "=? ") $ entityFields t
-                else connEscapeName conn (entityID t) <> "=?"
+        let composite = isJust $ entityPrimary t
+        let wher = case entityPrimary t of
+                Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (snd fld) <> "=? ") $ primaryFields pdef
+                Nothing   -> connEscapeName conn (entityID t) <> "=?"
         let sql = T.concat
                 [ "UPDATE "
                 , connEscapeName conn $ entityDB t
@@ -81,7 +82,7 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
         conn <- lift askSqlConn
         rawQuery (sql conn) (getFiltsValues conn filts) $= CL.mapM parse
       where
-        composite = "composite" `elem` entityAttrs t
+        composite = isJust $ entityPrimary t
         (limit, offset, orders) = limitOffsetOrder opts
 
         parse vals =
@@ -144,10 +145,10 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
         rawQuery (sql conn) (getFiltsValues conn filts) $= CL.mapM (parse composite)
       where
         t = entityDef $ dummyFromFilts filts
-        composite = "composite" `elem` entityAttrs t 
-        cols conn = if composite 
-                     then T.intercalate "," $ map (connEscapeName conn . fieldDB) $ entityFields t
-                     else connEscapeName conn $ entityID t
+        composite = isJust $ entityPrimary t
+        cols conn = case entityPrimary t of 
+                     Just pdef -> T.intercalate "," $ map (connEscapeName conn . snd) $ primaryFields pdef
+                     Nothing   -> connEscapeName conn $ entityID t
                       
         wher conn = if null filts
                     then ""

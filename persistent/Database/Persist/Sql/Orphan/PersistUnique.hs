@@ -32,8 +32,10 @@ instance (MonadResource m, MonadLogger m) => PersistUnique (SqlPersistT m) where
 
     getBy uniq = do
         conn <- askSqlConn
-        let cols = T.intercalate "," $ (connEscapeName conn $ entityID t)
-                 : map (connEscapeName conn . fieldDB) (entityFields t)
+        let flds = map (connEscapeName conn . fieldDB) (entityFields t)
+        let cols = case entityPrimary t of
+                     Just _ -> T.intercalate "," flds
+                     Nothing -> T.intercalate "," $ (connEscapeName conn $ entityID t) : flds
         let sql = T.concat
                 [ "SELECT "
                 , cols

@@ -102,30 +102,31 @@ prepare' conn sql = do
         , stmtQuery = withStmt' conn stmt
         }
 
-insertSql' :: DBName -> [FieldDef SqlType] -> DBName -> [PersistValue] -> Bool -> InsertSqlResult
-insertSql' t cols _ vals True =
-  in ISRManyKeys sql vals
+insertSql' :: EntityDef SqlType -> [PersistValue] -> InsertSqlResult
+insertSql' ent vals =
+  case entityPrimary ent of
+    Just _ -> 
+      ISRManyKeys sql vals
         where sql = pack $ concat
                 [ "INSERT INTO "
-                , escape' t
+                , escape' $ entityDB ent
                 , "("
-                , intercalate "," $ map (escape' . fieldDB) $ filter (\fd -> null $ fieldManyDB fd) cols
+                , intercalate "," $ map (escape' . fieldDB) $ entityFields ent
                 , ") VALUES("
-                , intercalate "," (map (const "?") cols)
+                , intercalate "," (map (const "?") $ entityFields ent)
                 , ")"
                 ]
-
-insertSql' t cols _ _ _ =
+    Nothing -> 
     ISRInsertGet (pack ins) sel
   where
     sel = "SELECT last_insert_rowid()"
     ins = concat
         [ "INSERT INTO "
-        , escape' t
+              , escape' $ entityDB ent
         , "("
-        , intercalate "," $ map (escape' . fieldDB) cols
+              , intercalate "," $ map (escape' . fieldDB) $ entityFields ent
         , ") VALUES("
-        , intercalate "," (map (const "?") cols)
+              , intercalate "," (map (const "?") $ entityFields ent)
         , ")"
         ]
 
@@ -175,8 +176,7 @@ migrate' :: [EntityDef a]
          -> IO (Either [Text] [(Bool, Text)])
 migrate' allDefs getter val = do
     let (cols, uniqs) = mkColumns allDefs val
-    let composite = "composite" `elem` entityAttrs val
-    let newSql = mkCreateTable False def (filter (not . safeToRemove val . cName) cols, uniqs) composite
+    let newSql = mkCreateTable False def (filter (not . safeToRemove val . cName) cols, uniqs)
     stmt <- getter "SELECT sql FROM sqlite_master WHERE type='table' AND name=?"
     oldSql' <- runResourceT
              $ stmtQuery stmt [PersistText $ unDBName table] $$ go
@@ -239,9 +239,8 @@ getCopyTable allDefs getter val = do
     tableTmp = DBName $ unDBName table `T.append` "_backup"
     (cols, uniqs) = mkColumns allDefs val
     cols' = filter (not . safeToRemove def . cName) cols
-    composite = "composite" `elem` entityAttrs def
-    newSql = mkCreateTable False def (cols', uniqs) composite
-    tmpSql = mkCreateTable True def { entityDB = tableTmp } (cols', uniqs) composite
+    newSql = mkCreateTable False def (cols', uniqs)
+    tmpSql = mkCreateTable True def { entityDB = tableTmp } (cols', uniqs)
     dropTmp = "DROP TABLE " ++ escape' tableTmp
     dropOld = "DROP TABLE " ++ escape' table
     copyToTemp common = pack $ concat
@@ -266,8 +265,11 @@ getCopyTable allDefs getter val = do
 escape' :: DBName -> String
 escape' = T.unpack . escape
 
-mkCreateTable :: Bool -> EntityDef a -> ([Column], [UniqueDef]) -> Bool -> Text
-mkCreateTable isTemp entity (cols, uniqs) True = T.concat
+mkCreateTable :: Bool -> EntityDef a -> ([Column], [UniqueDef]) -> Text
+mkCreateTable isTemp entity (cols, uniqs) = 
+  case entityPrimary entity of 
+    Just pdef -> 
+       T.concat
     [ "CREATE"
     , if isTemp then " TEMP" else ""
     , " TABLE "
@@ -276,11 +278,11 @@ mkCreateTable isTemp entity (cols, uniqs) True = T.concat
     , T.drop 1 $ T.concat $ map sqlColumn cols
     , ", PRIMARY KEY "
     , "("
-    , T.intercalate "," $ map (escape . fieldDB) $ filter (\fd -> null $ fieldManyDB fd) $ entityFields entity
+        , T.intercalate "," $ map (escape . fieldDB) $ entityFields entity
     , ")"
     , ")"
     ]
-mkCreateTable isTemp entity (cols, uniqs) False = T.concat
+    Nothing -> T.concat
     [ "CREATE"
     , if isTemp then " TEMP" else ""
     , " TABLE "

@@ -38,7 +38,7 @@ import Database.Persist.Quasi
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
-import Control.Monad (forM, forM_, (<=<), mzero, when, unless)
+import Control.Monad (forM, (<=<), mzero)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.IO.Class (MonadIO)
 import qualified System.IO as SIO
@@ -163,19 +163,9 @@ mkPersist mps ents' = do
     x <- fmap mconcat $ mapM (persistFieldFromEntity mps) ents
     y <- fmap mconcat $ mapM (mkEntity mps) ents
     z <- fmap mconcat $ mapM (mkJSON mps) ents
-    mapM_ chkcomposite $ filter (\t -> "composite" `elem` entityAttrs t) ents
     return $ mconcat [x, y, z]
   where
     ents = map fixEntityDef ents'
-    tables = map (unHaskellName . entityHaskell) ents
-    chkcomposite t = do
-      let fs=filter (not . chkfkey . fieldType) $ entityFields t
-      forM_ fs $ \f -> do
-        error $ "must be all foreign keys in composite table[" P.++ show (unHaskellName $ entityHaskell t) P.++ "] fldname[" P.++ show (unHaskellName $ fieldHaskell f) P.++ "]"
-      when (length (entityFields t)<2) $ error $ "must have at least 2 foreign keys for composite types: table[" P.++ show (unHaskellName $ entityHaskell t) P.++ "] found " P.++ show (length (entityFields t))
-    chkfkey :: FieldType -> Bool
-    chkfkey (FTTypeCon _ fldname) | fldname `elem` map (`append` "Id") tables = True
-    chkfkey _ = False
                                        
 -- | Implement special preprocessing on EntityDef as necessary for 'mkPersist'.
 -- For example, strip out any fields marked as MigrationOnly.
@@ -573,7 +563,7 @@ mkEntity mps t = do
     utv <- mkUniqueToValues $ entityUniques t
     puk <- mkUniqueKeys t
     
-    let composite = "composite" `elem` entityAttrs t 
+    let composite = isJust $ entityPrimary t 
     let keys = if composite then map fieldDB (entityFields t) else [] 
     let tp = if composite then SqlManyKeys' keys else SqlInt64' -- gb fix this:if not composite then keys must be []!!!
     fields <- mapM (mkField mps t) $ FieldDef
@@ -584,7 +574,6 @@ mkEntity mps t = do
         , fieldEmbedded = Nothing
         , fieldAttrs = []
         , fieldStrict = True
-        , fieldManyDB = keys
         }
         : entityFields t
     toFieldNames <- mkToFieldNames $ entityUniques t
@@ -861,7 +850,7 @@ mkMigrate fun allDefs = do
         return $ NoBindS $ m `AppE` defsExp `AppE` u
 
 instance Lift' a => Lift (EntityDef a) where
-    lift (EntityDef a b c d e f g h i) =
+    lift (EntityDef a b c d e f g h i j) =
         [|EntityDef
             $(lift a)
             $(lift b)
@@ -869,14 +858,17 @@ instance Lift' a => Lift (EntityDef a) where
             $(liftTs d)
             $(lift e)
             $(lift f)
-            $(liftTs g)
-            $(liftMap h)
-            $(lift i)
+            $(lift g)
+            $(liftTs h)
+            $(liftMap i)
+            $(lift j)
             |]
 instance Lift' a => Lift (FieldDef a) where
-    lift (FieldDef a b c d e f g h) = [|FieldDef a b c $(lift' d) $(liftTs e) f $(lift' g) h|]
+    lift (FieldDef a b c d e f g) = [|FieldDef a b c $(lift' d) $(liftTs e) f $(lift' g)|]
 instance Lift UniqueDef where
     lift (UniqueDef a b c d) = [|UniqueDef $(lift a) $(lift b) $(lift c) $(liftTs d)|]
+instance Lift PrimaryDef where
+    lift (PrimaryDef a b) = [|PrimaryDef $(lift a) $(liftTs b)|]
 
 -- | A hack to avoid orphans.
 class Lift' a where

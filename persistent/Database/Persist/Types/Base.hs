@@ -106,6 +106,7 @@ data EntityDef sqlType = EntityDef
     , entityID      :: !DBName
     , entityAttrs   :: ![Attr]
     , entityFields  :: ![FieldDef sqlType]
+    , entityPrimary :: Maybe PrimaryDef
     , entityUniques :: ![UniqueDef]
     , entityDerives :: ![Text]
     , entityExtra   :: !(Map Text [ExtraLine])
@@ -137,7 +138,6 @@ data FieldDef sqlType = FieldDef
     , fieldAttrs    :: ![Attr]   -- ^ user annotations for a field
     , fieldStrict   :: !Bool      -- ^ a strict field in the data type. Default: true
     , fieldEmbedded :: Maybe (EntityDef ()) -- ^ indicates that the field uses an embedded entity
-    , fieldManyDB   :: ![DBName]  -- ^ contains many to many key
     }
     deriving (Show, Eq, Read, Ord, Functor)
 
@@ -146,6 +146,12 @@ data UniqueDef = UniqueDef
     , uniqueDBName  :: !DBName
     , uniqueFields  :: ![(HaskellName, DBName)]
     , uniqueAttrs   :: ![Attr]
+    }
+    deriving (Show, Eq, Read, Ord)
+
+data PrimaryDef = PrimaryDef
+    { primaryFields  :: ![(HaskellName, DBName)]
+    , primaryAttrs   :: ![Attr]
     }
     deriving (Show, Eq, Read, Ord)
 
@@ -294,7 +300,6 @@ instance A.FromJSON PersistValue where
             Just ('r', t) -> fmap PersistRational $ readMay t
             Just ('o', t) -> maybe (fail "Invalid base64") (return . PersistObjectId) $
                               fmap (i2bs (8 * 12) . fst) $ headMay $ readHex $ T.unpack t
-            Just ('q', t) -> fmap PersistList $ readMay t
             Just (c, _) -> fail $ "Unknown prefix: " ++ [c]
       where
         headMay []    = Nothing

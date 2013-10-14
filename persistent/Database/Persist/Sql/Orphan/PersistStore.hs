@@ -16,13 +16,14 @@ import Data.Text (Text, unpack)
 import Data.Monoid (mappend, (<>))
 import Control.Monad.IO.Class
 import Data.ByteString.Char8 (readInteger)
+import Data.Maybe (isJust)
 
 instance (C.MonadResource m, MonadLogger m) => PersistStore (SqlPersistT m) where
     type PersistMonadBackend (SqlPersistT m) = SqlBackend
     insert val = do
         conn <- askSqlConn
-        let composite = "composite" `elem` entityAttrs t
-        let esql = connInsertSql conn (entityDB t) (entityFields t) (entityID t) vals composite
+        let composite = isJust $ entityPrimary t
+        let esql = connInsertSql conn t vals
         key <-
             case esql of
                 ISRSingle sql -> rawQuery sql vals C.$$ do
@@ -79,13 +80,12 @@ instance (C.MonadResource m, MonadLogger m) => PersistStore (SqlPersistT m) wher
     get k = do
         conn <- askSqlConn
         let t = entityDef $ dummyFromKey k
-        let composite = "composite" `elem` entityAttrs t 
+        let composite = isJust $ entityPrimary t
         let cols = T.intercalate ","
                  $ map (connEscapeName conn . fieldDB) $ entityFields t
-        let wher = 
-              if composite
-                then T.intercalate " AND " $ map (\fld -> connEscapeName conn (fieldDB fld) <> "=? ") $ entityFields t
-                else connEscapeName conn (entityID t) <> "=?"
+        let wher = case entityPrimary t of
+                     Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (snd fld) <> "=? ") $ primaryFields pdef
+                     Nothing   -> connEscapeName conn (entityID t) <> "=?"
         let sql = T.concat
                 [ "SELECT "
                 , cols
@@ -108,11 +108,11 @@ instance (C.MonadResource m, MonadLogger m) => PersistStore (SqlPersistT m) wher
         rawExecute (sql conn) (convertKey composite k)
       where
         t = entityDef $ dummyFromKey k
-        composite = "composite" `elem` entityAttrs t 
+        composite = isJust $ entityPrimary t 
         wher conn = 
-              if composite
-                then T.intercalate " AND " $ map (\fld -> connEscapeName conn (fieldDB fld) <> "=? ") $ entityFields t
-                else connEscapeName conn (entityID t) <> "=?"
+              case entityPrimary t of
+                Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (snd fld) <> "=? ") $ primaryFields pdef
+                Nothing   -> connEscapeName conn (entityID t) <> "=?"
         sql conn = T.concat
             [ "DELETE FROM "
             , connEscapeName conn $ entityDB t
