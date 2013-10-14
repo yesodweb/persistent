@@ -9,6 +9,7 @@ embedOrderMigrate
 ) where
 
 import Init
+import Data.Aeson
 import Data.Map hiding (insert)
 
 import Debug.Trace (trace)
@@ -48,7 +49,7 @@ specs = describe "embedded entities" $ do
     Just otherFoo <- get fooId
     foo @== otherFoo
 
-  it "PersistMap serializaion" $ db $ do
+  it "PersistMap PersistValue serializaion" $ db $ do
     let record = fromList [("b","b"),("u","u"),("g","g")] :: Map Text Text
     record @== (fromRight . fromPersistValue . toPersistValue) record
 
@@ -57,9 +58,15 @@ specs = describe "embedded entities" $ do
     {-
     let precord = PersistMap [("b",PersistText "b"),("u",PersistText "u"),("g",PersistText "g")]
     precord ==@ (debug . toPersistValue . debug . (fromRight . fromPersistValue :: PersistValue -> Map Text Text)) precord
+
+    let precord = PersistMap [("b",PersistText "b"),("u",PersistText "u"),("g",PersistText "g")]
+    precord ==@ (fromSuccess . fromJSON . debug . (toJSON :: PersistValue -> Value)) precord
+
+
+fromSuccess :: Result a -> a
+fromSuccess (Success s) = s
+fromSuccess (Error e) = error $ "expected Success, got Error " ++ e
     -}
-
-
 
 fromRight :: Show a => Either a b -> b
 fromRight (Left e) = error $ "expected Right, got Left " ++ show e
