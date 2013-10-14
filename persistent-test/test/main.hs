@@ -5,6 +5,7 @@ import qualified RenameTest
 import qualified DataTypeTest
 import qualified HtmlTest
 import qualified EmbedTest
+import qualified EmbedOrderTest
 import qualified LargeNumberTest
 import qualified MaxLenTest
 import qualified SumTypeTest
@@ -48,6 +49,7 @@ main = do
 
 #ifndef WITH_MONGODB
   runConn (setup EmbedTest.embedMigrate)
+  runConn (setup EmbedOrderTest.embedOrderMigrate)
   runConn (setup LargeNumberTest.numberMigrate)
   runConn (setup UniqueTest.uniqueMigrate)
   runConn (setup MaxLenTest.maxlenMigrate)
@@ -58,6 +60,7 @@ main = do
     DataTypeTest.specs
     HtmlTest.specs
     EmbedTest.specs
+    EmbedOrderTest.specs
     LargeNumberTest.specs
     UniqueTest.specs
     MaxLenTest.specs
