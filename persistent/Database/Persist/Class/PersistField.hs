@@ -93,32 +93,32 @@ instance PersistField Html where
 
 instance PersistField Int where
     toPersistValue = PersistInt64 . fromIntegral
-    fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-    fromPersistValue (PersistDouble i) = Right $ fromIntegral $ truncate i -- oracle
+    fromPersistValue (PersistInt64 i)  = Right $ fromIntegral i
+    fromPersistValue (PersistDouble i) = Right (truncate i :: Int) -- oracle
     fromPersistValue x = Left $ T.pack $ "int Expected Integer, received: " ++ show x
 
 instance PersistField Int8 where
     toPersistValue = PersistInt64 . fromIntegral
-    fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-    fromPersistValue (PersistDouble i) = Right $ fromIntegral $ truncate i -- oracle
+    fromPersistValue (PersistInt64 i)  = Right $ fromIntegral i
+    fromPersistValue (PersistDouble i) = Right (truncate i :: Int8) -- oracle
     fromPersistValue x = Left $ T.pack $ "int8 Expected Integer, received: " ++ show x
 
 instance PersistField Int16 where
     toPersistValue = PersistInt64 . fromIntegral
-    fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-    fromPersistValue (PersistDouble i) = Right $ fromIntegral $ truncate i -- oracle
+    fromPersistValue (PersistInt64 i)  = Right $ fromIntegral i
+    fromPersistValue (PersistDouble i) = Right (truncate i :: Int16) -- oracle
     fromPersistValue x = Left $ T.pack $ "int16 Expected Integer, received: " ++ show x
 
 instance PersistField Int32 where
     toPersistValue = PersistInt64 . fromIntegral
-    fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-    fromPersistValue (PersistDouble i) = Right $ fromIntegral $ truncate i -- oracle
+    fromPersistValue (PersistInt64 i)  = Right $ fromIntegral i
+    fromPersistValue (PersistDouble i) = Right (truncate i :: Int32) -- oracle
     fromPersistValue x = Left $ T.pack $ "int32 Expected Integer, received: " ++ show x
 
 instance PersistField Int64 where
     toPersistValue = PersistInt64 . fromIntegral
-    fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-    fromPersistValue (PersistDouble i) = Right $ fromIntegral $ truncate i -- oracle
+    fromPersistValue (PersistInt64 i)  = Right $ fromIntegral i
+    fromPersistValue (PersistDouble i) = Right (truncate i :: Int64) -- oracle
     fromPersistValue x = Left $ T.pack $ "int64 Expected Integer, received: " ++ show x
 
 instance PersistField Word where
@@ -295,17 +295,15 @@ fromPersistList = mapM fromPersistValue
 fromPersistMap :: PersistField v
                => [(T.Text, PersistValue)]
                -> Either T.Text (M.Map T.Text v)
-fromPersistMap kvs =
-      case (
-        foldl (\eithAssocs (k,v) ->
-              case (eithAssocs, fromPersistValue v) of
-                (Left e, _) -> Left e
-                (_, Left e)   -> Left e
-                (Right assocs, Right v') -> Right ((k,v'):assocs)
-              ) (Right []) kvs
-      ) of
-        Right vs -> Right $ M.fromList vs
-        Left e -> Left e
+fromPersistMap = foldShortLeft fromPersistValue [] where
+    -- a fold that short-circuits on Left.
+    foldShortLeft f = go
+      where
+        go acc [] = Right $ M.fromList acc
+        go acc ((k, v):kvs) =
+          case f v of
+            Left e   -> Left e
+            Right v' -> go ((k,v'):acc) kvs
 
 getPersistMap :: PersistValue -> Either T.Text [(T.Text, PersistValue)]
 getPersistMap (PersistMap kvs) = Right kvs
