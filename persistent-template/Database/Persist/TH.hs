@@ -28,6 +28,8 @@ module Database.Persist.TH
     , share
     , derivePersistField
     , persistFieldFromEntity
+      -- * Internal
+    , pack'
     ) where
 
 import Prelude hiding ((++), take, concat, splitAt)
