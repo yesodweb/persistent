@@ -299,6 +299,22 @@ getGetter other   = error $ "Postgresql.getGetter: type " ++
 unBinary :: PG.Binary a -> a
 unBinary (PG.Binary x) = x
 
+doesTableExist :: (Text -> IO Statement)
+               -> DBName -- ^ table name
+               -> IO Bool
+doesTableExist getter (DBName name) = do
+    stmt <- getter sql
+    runResourceT $ stmtQuery stmt vals $$ start
+  where
+    sql = "SELECT COUNT(*) FROM information_schema.tables WHERE table_name=?"
+    vals = [PersistText name]
+
+    start = await >>= maybe (error "No results when checking doesTableExist") start'
+    start' [PersistInt64 0] = finish False
+    start' [PersistInt64 1] = finish True
+    start' res = error $ "doesTableExist returned unexpected result: " ++ show res
+    finish x = await >>= maybe (return x) (error "Too many rows returned in doesTableExist")
+
 migrate' :: [EntityDef a]
          -> (Text -> IO Statement)
          -> EntityDef SqlType
@@ -315,7 +331,15 @@ migrate' allDefs getter val = fmap (fmap $ nub . map showAlterDb) $ do
             let new = first (filter $ not . safeToRemove val . cName)
                     $ second (map udToPair)
                     $ mkColumns allDefs val
-            if null old
+
+            -- Check for table existence if there are no columns, workaround
+            -- for https://github.com/yesodweb/persistent/issues/152
+            exists <-
+                if null old
+                    then doesTableExist getter name
+                    else return True
+
+            if not exists
                 then do
                     let addTable = AddTable $ concat
                             -- Lower case e: see Database.Persistent.GenericSql.Migration
