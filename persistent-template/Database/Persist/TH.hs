@@ -29,7 +29,8 @@ module Database.Persist.TH
     , derivePersistField
     , persistFieldFromEntity
       -- * Internal
-    , pack'
+    , packPTH
+    , lensPTH
     ) where
 
 import Prelude hiding ((++), take, concat, splitAt)
@@ -485,12 +486,12 @@ mkFromPersistValues mps t@(EntityDef { entitySum = True }) = do
 
 type Lens s t a b = forall f. Functor f => (a -> f b) -> s -> f t
 
-lens :: (s -> a) -> (s -> b -> t) -> Lens s t a b
-lens sa sbt afb s = fmap (sbt s) (afb $ sa s)
+lensPTH :: (s -> a) -> (s -> b -> t) -> Lens s t a b
+lensPTH sa sbt afb s = fmap (sbt s) (afb $ sa s)
 
 mkLensClauses :: MkPersistSettings -> EntityDef a -> Q [Clause]
 mkLensClauses mps t = do
-    lens' <- [|lens|]
+    lens' <- [|lensPTH|]
     getId <- [|entityKey|]
     setId <- [|\(Entity _ value) key -> Entity key value|]
     getVal <- [|entityVal|]
@@ -868,14 +869,14 @@ instance Lift' () where
 instance Lift' SqlTypeExp where
     lift' = lift
 
-pack' :: String -> Text
-pack' = pack
+packPTH :: String -> Text
+packPTH = pack
 #if !MIN_VERSION_text(0, 11, 2)
-{-# NOINLINE pack' #-}
+{-# NOINLINE packPTH #-}
 #endif
 
 liftT :: Text -> Q Exp
-liftT t = [|pack' $(lift (unpack t))|]
+liftT t = [|packPTH $(lift (unpack t))|]
 
 liftTs :: [Text] -> Q Exp
 liftTs = fmap ListE . mapM liftT
