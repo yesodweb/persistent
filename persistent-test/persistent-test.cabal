@@ -125,7 +125,6 @@ library
                    , unordered-containers
                    , monad-logger >= 0.2.3
                    , hashable
-                   , th-orphans
                    -- actually just a mongoDB dependency
                    -- fixes build warning on current build server
                    , cereal
