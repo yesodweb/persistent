@@ -111,15 +111,10 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
         isPersistDouble (PersistDouble _) | True = True
                                           | otherwise = False
         
-        fromPersistValuesComposite' xs@(PersistInt64 _:PersistInt64 _:_) | all isPersistInt64 xs = 
+        fromPersistValuesComposite' xs =
             case fromPersistValues xs of
                 Left e -> Left e
                 Right xs' -> Right (Entity (Key $ PersistList xs) xs')
-        fromPersistValuesComposite' xs@(PersistDouble _:PersistDouble _:_) | all isPersistDouble xs = -- oracle returns Double 
-           case fromPersistValues xs of
-               Left e -> Left e
-               Right xs' -> Right (Entity (Key $ PersistList (map (\(PersistDouble d) -> PersistInt64 (truncate d)) xs)) xs') -- convert back to int64 -- gb fix unsafe
-        fromPersistValuesComposite' xs = Left $ T.pack ("error in fromPersistValues' xs=" ++ show xs)
 
         wher conn = if null filts
                     then ""

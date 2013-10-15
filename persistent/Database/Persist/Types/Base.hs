@@ -342,7 +342,6 @@ data SqlType = SqlString
              | SqlDayTimeZoned
              | SqlBlob
              | SqlOther T.Text -- ^ a backend-specific name
-             | SqlManyKeys [DBName]
     deriving (Show, Read, Eq, Typeable, Ord)
 
 newtype KeyBackend backend entity = Key { unKey :: PersistValue }

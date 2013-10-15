@@ -142,19 +142,16 @@ data DelayedSqlTypeExp = DSTE { unDSTE :: SqlTypeExp }
 instance Lift DelayedSqlTypeExp where
     lift (DSTE SqlString') = return $ ConE 'SqlString'
     lift (DSTE SqlInt64') = return $ ConE 'SqlInt64'
-    lift (DSTE (SqlManyKeys' e)) = liftA2 AppE (return $ ConE 'SqlManyKeys) (lift e)
     lift (DSTE (SqlTypeExp e)) = liftA2 AppE (return $ ConE 'SqlTypeExp) (lift e)
 
 data SqlTypeExp = SqlTypeExp Exp
                 | SqlString'
                 | SqlInt64'
-                | SqlManyKeys' [DBName]
 
 instance Lift SqlTypeExp where
     lift (SqlTypeExp e) = return e
     lift SqlString' = [|SqlString|]
     lift SqlInt64' = [|SqlInt64|]
-    lift (SqlManyKeys' a) = [|SqlManyKeys a|]
 
 -- | Create data types and appropriate 'PersistEntity' instances for the given
 -- 'EntityDef's. Works well with the persist quasi-quoter.
@@ -563,14 +560,11 @@ mkEntity mps t = do
     utv <- mkUniqueToValues $ entityUniques t
     puk <- mkUniqueKeys t
     
-    let composite = isJust $ entityPrimary t 
-    let keys = if composite then map fieldDB (entityFields t) else [] 
-    let tp = if composite then SqlManyKeys' keys else SqlInt64' -- gb fix this:if not composite then keys must be []!!!
     fields <- mapM (mkField mps t) $ FieldDef
         { fieldHaskell = HaskellName "Id"
         , fieldDB = entityID t
         , fieldType = FTTypeCon Nothing $ unHaskellName (entityHaskell t) ++ "Id"
-        , fieldSqlType = tp
+        , fieldSqlType = SqlInt64'
         , fieldEmbedded = Nothing
         , fieldAttrs = []
         , fieldStrict = True
@@ -953,7 +947,6 @@ instance Lift SqlType where
     lift SqlDayTimeZoned = [|SqlDayTimeZoned|]
     lift SqlBlob = [|SqlBlob|]
     lift (SqlOther a) = [|SqlOther $(liftT a)|]
-    lift (SqlManyKeys a) = [|SqlManyKeys a|]
 
 -- Ent
 --   fieldName FieldType
