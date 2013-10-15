@@ -923,8 +923,8 @@ instance Lift SqlType where
     lift (SqlNumeric x y) =
         [|SqlNumeric (fromInteger x') (fromInteger y')|]
       where
-        x' = fromIntegral x
-        y' = fromIntegral y
+        x' = fromIntegral x :: Integer
+        y' = fromIntegral y :: Integer
     lift SqlBool = [|SqlBool|]
     lift SqlDay = [|SqlDay|]
     lift SqlTime = [|SqlTime|]
