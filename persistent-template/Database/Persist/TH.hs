@@ -50,6 +50,7 @@ import Data.List (foldl', find)
 import Data.Maybe (isJust)
 import Data.Monoid (mappend, mconcat)
 import qualified Data.Map as M
+import qualified Data.HashMap.Strict as HM
 import Data.Aeson
     ( ToJSON (toJSON), FromJSON (parseJSON), (.=), object
     , Value (Object), (.:), (.:?)
@@ -613,10 +614,15 @@ mkEntity mps t = do
 --
 -- instance PersistEntity e => PersistField e where
 --    toPersistValue = PersistMap $ zip columNames (map toPersistValue . toPersistFields)
---    fromPersistValue (PersistMap o) = fromPersistValues $ map (\(_,v) ->
---        casefromPersistValue v of
---            Left e -> error e
---            Right r -> r) o
+--    fromPersistValue (PersistMap o) = 
+--        let columns = HM.fromList x
+--        in fromPersistValues $ map (\name ->
+--          case HM.lookup name o of
+--            Just v ->
+--              case fromPersistValue v of
+--                Left e -> error e
+--                Right r -> r
+--            Nothing -> error $ "Missing field: " `mappend` unpack name) columnNames 
 --    fromPersistValue x = Left $ "Expected PersistMap, received: " ++ show x
 --    sqlType _ = SqlString
 persistFieldFromEntity :: MkPersistSettings -> EntityDef a -> Q [Dec]
@@ -624,9 +630,14 @@ persistFieldFromEntity mps e = do
     ss <- [|SqlString|]
     let columnNames = map (unpack . unHaskellName . fieldHaskell) (entityFields e)
     obj <- [|\ent -> PersistMap $ zip (map pack columnNames) (map toPersistValue $ toPersistFields ent)|]
-    fpv <- [|\x -> fromPersistValues $ map (\(_,v) -> case fromPersistValue v of
-                                                      Left e' -> error $ unpack e'
-                                                      Right r -> r) x|]
+    fpv <- [|\x -> let columns = HM.fromList x
+                   in fromPersistValues $ map (\name -> 
+                                                  case HM.lookup name columns of
+                                                      Just v -> 
+                                                          case fromPersistValue v of
+                                                              Left e' -> error $ unpack e'
+                                                              Right r -> r
+                                                      Nothing -> error $ "Missing field: " `mappend` unpack name) (map pack columnNames)|]
     let typ = genericDataType mps (pack entityName) $ VarT $ mkName "backend"
 
     compose <- [|(<=<)|]
