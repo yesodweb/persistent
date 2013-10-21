@@ -95,7 +95,7 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
                 Left s -> liftIO $ throwIO $ PersistMarshalError s
                 Right row -> return row
             Nothing -> 
-            case fromPersistValues' vals of
+              case fromPersistValues' vals of
                 Left s -> liftIO $ throwIO $ PersistMarshalError s
                 Right row -> return row
 

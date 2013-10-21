@@ -780,7 +780,7 @@ specs = describe "persistent" $ do
     insert_ $ UnprefixedLeftSum 5
     insert_ $ UnprefixedRightSum "Hello"
 #endif
-
+  
   describe "composite primary keys" $ do
 
     let p1 = TestParent "a1" "b1" 11 "p1"

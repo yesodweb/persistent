@@ -562,17 +562,17 @@ mkEntity mps t = do
     fkc <- mapM (mkForeignKeysComposite mps t) $ entityForeigns t
     
     fields <- mapM (mkField mps t) $ FieldDef
-        { fieldHaskell = HaskellName "Id"
-        , fieldDB = entityID t
-        , fieldType = FTTypeCon Nothing $ unHaskellName (entityHaskell t) ++ "Id"
-        , fieldSqlType = SqlInt64'
-        , fieldEmbedded = Nothing
-        , fieldAttrs = []
-        , fieldStrict = True
-        }
+                { fieldHaskell = HaskellName "Id"
+                , fieldDB = entityID t
+                , fieldType = FTTypeCon Nothing $ unHaskellName (entityHaskell t) ++ "Id"
+                , fieldSqlType = SqlInt64'
+                , fieldEmbedded = Nothing
+                , fieldAttrs = []
+                , fieldStrict = True
+                }
         : entityFields t
     toFieldNames <- mkToFieldNames $ entityUniques t
-
+    
     let addSyn -- FIXME maybe remove this
             | mpsGeneric mps = (:) $
                 TySynD (mkName nameS) [] $

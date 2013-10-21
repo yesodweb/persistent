@@ -117,18 +117,18 @@ insertSql' ent vals =
                 , ")"
                 ]
     Nothing -> 
-    ISRInsertGet (pack ins) sel
-  where
-    sel = "SELECT last_insert_rowid()"
-    ins = concat
-        [ "INSERT INTO "
+      ISRInsertGet (pack ins) sel
+        where
+          sel = "SELECT last_insert_rowid()"
+          ins = concat
+              [ "INSERT INTO "
               , escape' $ entityDB ent
-        , "("
+              , "("
               , intercalate "," $ map (escape' . fieldDB) $ entityFields ent
-        , ") VALUES("
+              , ") VALUES("
               , intercalate "," (map (const "?") $ entityFields ent)
-        , ")"
-        ]
+              , ")"
+              ]
 
 execute' :: Sqlite.Connection -> Sqlite.Statement -> [PersistValue] -> IO Int64
 execute' conn stmt vals = flip finally (liftIO $ Sqlite.reset conn stmt) $ do
@@ -270,30 +270,30 @@ mkCreateTable isTemp entity (cols, uniqs) =
   case entityPrimary entity of 
     Just pdef -> 
        T.concat
-    [ "CREATE"
-    , if isTemp then " TEMP" else ""
-    , " TABLE "
-    , escape $ entityDB entity
-    , "("
-    , T.drop 1 $ T.concat $ map sqlColumn cols
-    , ", PRIMARY KEY "
-    , "("
+        [ "CREATE"
+        , if isTemp then " TEMP" else ""
+        , " TABLE "
+        , escape $ entityDB entity
+        , "("
+        , T.drop 1 $ T.concat $ map sqlColumn cols
+        , ", PRIMARY KEY "
+        , "("
         , T.intercalate "," $ map (escape . fieldDB) $ entityFields entity
-    , ")"
-    , ")"
-    ]
+        , ")"
+        , ")"
+        ]
     Nothing -> T.concat
-    [ "CREATE"
-    , if isTemp then " TEMP" else ""
-    , " TABLE "
-    , escape $ entityDB entity
-    , "("
-    , escape $ entityID entity
-    , " INTEGER PRIMARY KEY"
-    , T.concat $ map sqlColumn cols
-    , T.concat $ map sqlUnique uniqs
-    , ")"
-    ]
+        [ "CREATE"
+        , if isTemp then " TEMP" else ""
+        , " TABLE "
+        , escape $ entityDB entity
+        , "("
+        , escape $ entityID entity
+        , " INTEGER PRIMARY KEY"
+        , T.concat $ map sqlColumn cols
+        , T.concat $ map sqlUnique uniqs
+        , ")"
+        ]
 
 sqlColumn :: Column -> Text
 sqlColumn (Column name isNull typ def _cn _maxLen ref) = T.concat
