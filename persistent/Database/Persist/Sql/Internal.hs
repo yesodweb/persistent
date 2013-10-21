@@ -16,9 +16,9 @@ import Data.Maybe (mapMaybe, listToMaybe)
 import Database.Persist.Sql.Types
 
 -- | Create the list of columns for the given entity.
-mkColumns :: [EntityDef a] -> EntityDef SqlType -> ([Column], [UniqueDef])
+mkColumns :: [EntityDef a] -> EntityDef SqlType -> ([Column], [UniqueDef], [ForeignDef])
 mkColumns allDefs t =
-    (cols, entityUniques t)
+    (cols, entityUniques t, entityForeigns t)
   where
     cols :: [Column]
     cols = map go (entityFields t)

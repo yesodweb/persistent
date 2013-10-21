@@ -25,6 +25,7 @@ import qualified Data.Conduit.List as CL
 import Data.Conduit
 import Data.ByteString.Char8 (readInt, readInteger)
 import Data.Maybe (isJust)
+import Data.List (transpose, inits, find)
 
 -- orphaned instance for convenience of modularity
 instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
@@ -86,11 +87,14 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
         (limit, offset, orders) = limitOffsetOrder opts
 
         parse vals =
-          if composite then 
-            case fromPersistValuesComposite' vals of
+          case entityPrimary t of
+            Just pdef -> 
+                  let pks = map fst $ primaryFields pdef
+                      keyvals = map snd $ filter (\(a,b) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ entityFields t) vals
+                  in case fromPersistValuesComposite' keyvals vals of
                 Left s -> liftIO $ throwIO $ PersistMarshalError s
                 Right row -> return row
-          else 
+            Nothing -> 
             case fromPersistValues' vals of
                 Left s -> liftIO $ throwIO $ PersistMarshalError s
                 Right row -> return row
@@ -106,15 +110,10 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
                 Right xs' -> Right (Entity (Key $ PersistInt64 (truncate x)) xs') -- convert back to int64
         fromPersistValues' xs = Left $ T.pack ("error in fromPersistValues' xs=" ++ show xs)
 
-        isPersistInt64 (PersistInt64 _)   | True = True
-                                          | otherwise = False
-        isPersistDouble (PersistDouble _) | True = True
-                                          | otherwise = False
-        
-        fromPersistValuesComposite' xs =
+        fromPersistValuesComposite' keyvals xs =
             case fromPersistValues xs of
                 Left e -> Left e
-                Right xs' -> Right (Entity (Key $ PersistList xs) xs')
+                Right xs' -> Right (Entity (Key $ PersistList keyvals) xs')
 
         wher conn = if null filts
                     then ""
@@ -137,10 +136,9 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
 
     selectKeys filts opts = do
         conn <- lift askSqlConn
-        rawQuery (sql conn) (getFiltsValues conn filts) $= CL.mapM (parse composite)
+        rawQuery (sql conn) (getFiltsValues conn filts) $= CL.mapM parse
       where
         t = entityDef $ dummyFromFilts filts
-        composite = isJust $ entityPrimary t
         cols conn = case entityPrimary t of 
                      Just pdef -> T.intercalate "," $ map (connEscapeName conn . snd) $ primaryFields pdef
                      Nothing   -> connEscapeName conn $ entityID t
@@ -164,14 +162,16 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
                 [] -> ""
                 ords -> " ORDER BY " <> T.intercalate "," ords
 
-        parse False [PersistInt64 x] = return $ Key $ PersistInt64 x
-        parse False [PersistDouble x] = return $ Key $ PersistInt64 (truncate x) -- oracle returns Double 
-        parse False xs = liftIO $ throwIO $ PersistMarshalError $ "Unexpected in selectKeys False: " <> T.pack (show xs)
-
-        parse True xs@(PersistInt64 _:PersistInt64 _:_) = return $ Key $ PersistList xs
-        parse True xs@(PersistDouble _:PersistDouble _:_) = return $ Key $ PersistList (map (\(PersistDouble d) -> PersistInt64 $ truncate d) xs) -- oracle returns Double   -- gb fix unsafe
-        parse True xs = liftIO $ throwIO $ PersistMarshalError $ "Unexpected in selectKeys True: " <> T.pack (show xs)
-
+        parse xs = case entityPrimary t of
+                      Nothing -> 
+                        case xs of
+                           [PersistInt64 x] -> return $ Key $ PersistInt64 x
+                           [PersistDouble x] -> return $ Key $ PersistInt64 (truncate x) -- oracle returns Double 
+                           xs -> liftIO $ throwIO $ PersistMarshalError $ "Unexpected in selectKeys False: " <> T.pack (show xs)
+                      Just pdef -> 
+                           let pks = map fst $ primaryFields pdef
+                               keyvals = map snd $ filter (\(a,b) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ entityFields t) xs
+                           in return $ Key $ PersistList keyvals
 
     deleteWhere filts = do
         _ <- deleteWhereCount filts
@@ -271,6 +271,44 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
     go (FilterOr []) = ("1=0", [])
     go (FilterOr fs)  = combine " OR " fs
     go (Filter field value pfilter) =
+        let t = entityDef $ dummyFromFilts [Filter field value pfilter]
+        in if fieldDB (persistFieldDef field) == DBName "id" && isJust (entityPrimary t) then 
+
+            -- need to check the id field in a safer way: entityId? 
+                     let ret = case (entityPrimary t, allVals) of
+                               (Just pdef, (PersistList ys:_)) -> 
+                                  if length (primaryFields pdef) /= length ys 
+                                     then error $ "wrong number of entries in primaryFields vs PersistList allVals=" ++ show allVals
+                                  else
+                                    case (allVals, pfilter, isCompFilter pfilter) of
+                                      ([PersistList xs], Eq, _) -> 
+                                         let sql=T.intercalate " and " (map (\a -> connEscapeName conn (snd a) <> showSqlFilter pfilter <> "? ")  (primaryFields pdef))
+                                         in (wrapSql sql,xs)
+                                      ([PersistList xs], Ne, _) -> 
+                                         let sql=T.intercalate " or " (map (\a -> connEscapeName conn (snd a) <> showSqlFilter pfilter <> "? ")  (primaryFields pdef))
+                                         in (wrapSql sql,xs)
+                                      (_, In, _) -> 
+                                         let xxs = transpose (map fromPersistList allVals)
+                                             sqls=map (\(a,xs) -> connEscapeName conn (snd a) <> showSqlFilter pfilter <> "(" <> T.intercalate "," (replicate (length xs) " ?") <> ") ") (zip (primaryFields pdef) xxs)
+                                         in (wrapSql (T.intercalate " and " (map wrapSql sqls)), concat xxs)
+                                      (_, NotIn, _) -> 
+                                         let xxs = transpose (map fromPersistList allVals)
+                                             sqls=map (\(a,xs) -> connEscapeName conn (snd a) <> showSqlFilter pfilter <> "(" <> T.intercalate "," (replicate (length xs) " ?") <> ") ") (zip (primaryFields pdef) xxs)
+                                         in (wrapSql (T.intercalate " or " (map wrapSql sqls)), concat xxs)
+                                      ([PersistList xs], _, True) -> 
+                                         let zs = tail (inits (primaryFields pdef))
+                                             sql1 = map (\b -> wrapSql (T.intercalate " and " (map (\(i,a) -> sql2 (i==length b) a) (zip [1..] b)))) zs
+                                             sql2 islast a = connEscapeName conn (snd a) <> (if islast then showSqlFilter pfilter else showSqlFilter Eq) <> "? "
+                                             sql = T.intercalate " or " sql1
+                                         in (wrapSql sql, concat (tail (inits xs)))
+                                      (_, BackendSpecificFilter s, _) -> error "unhandled type BackendSpecificFilter for composite/non id primary keys"
+                                      _ -> error $ "unhandled type/filter for composite/non id primary keys pfilter=" ++ show pfilter ++ " persistList="++show allVals
+                               (Just pdef, _) -> error $ "unhandled error for composite/non id primary keys pfilter=" ++ show pfilter ++ " persistList="++show allVals
+                     in ret
+                                       
+                                 
+
+        else 
         case (isNull, pfilter, varCount) of
             (True, Eq, _) -> (name <> " IS NULL", [])
             (True, Ne, _) -> (name <> " IS NOT NULL", [])
@@ -315,8 +353,19 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
                 , qmarks
                 , ")"
                 ], notNullVals)
-            _ -> (name <> showSqlFilter pfilter <> "?" <> orNullSuffix, allVals)
+            other -> (name <> showSqlFilter pfilter <> "?" <> orNullSuffix, allVals) 
+
       where
+        isCompFilter Lt = True
+        isCompFilter Le = True
+        isCompFilter Gt = True
+        isCompFilter Ge = True
+        isCompFilter _ =  False
+        
+        wrapSql sql = "(" <> sql <> ")"
+        fromPersistList (PersistList xs) = xs
+        fromPersistList other = error $ "expected PersistList but found " ++ show other
+        
         filterValueToPersistValues :: forall a.  PersistField a => Either a [a] -> [PersistValue]
         filterValueToPersistValues v = map toPersistValue $ either return id v
 

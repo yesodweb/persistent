@@ -108,6 +108,7 @@ data EntityDef sqlType = EntityDef
     , entityFields  :: ![FieldDef sqlType]
     , entityPrimary :: Maybe PrimaryDef
     , entityUniques :: ![UniqueDef]
+    , entityForeigns:: ![ForeignDef]
     , entityDerives :: ![Text]
     , entityExtra   :: !(Map Text [ExtraLine])
     , entitySum     :: !Bool
@@ -152,6 +153,16 @@ data UniqueDef = UniqueDef
 data PrimaryDef = PrimaryDef
     { primaryFields  :: ![(HaskellName, DBName)]
     , primaryAttrs   :: ![Attr]
+    }
+    deriving (Show, Eq, Read, Ord)
+
+data ForeignDef = ForeignDef
+    { foreignRefTableHaskell       :: !HaskellName
+    , foreignRefTableDBName        :: !DBName
+    , foreignConstraintNameHaskell :: !HaskellName
+    , foreignConstraintNameDBName  :: !DBName
+    , foreignFields                :: ![(HaskellName, DBName, HaskellName, DBName)] -- foreignkey name gb our field plus corresponding other primary field:make this a real adt
+    , foreignAttrs                 :: ![Attr]
     }
     deriving (Show, Eq, Read, Ord)
 

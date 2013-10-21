@@ -559,6 +559,7 @@ mkEntity mps t = do
     fpv <- mkFromPersistValues mps t
     utv <- mkUniqueToValues $ entityUniques t
     puk <- mkUniqueKeys t
+    fkc <- mapM (mkForeignKeysComposite mps t) $ entityForeigns t
     
     fields <- mapM (mkField mps t) $ FieldDef
         { fieldHaskell = HaskellName "Id"
@@ -580,9 +581,9 @@ mkEntity mps t = do
 
     lensClauses <- mkLensClauses mps t
 
-    return $ addSyn
-      [ dataTypeDec mps t
-      , TySynD (mkName $ unpack $ unHaskellName (entityHaskell t) ++ "Id") [] $
+    return $ addSyn $
+       dataTypeDec mps t : mconcat fkc `mappend`
+      ([ TySynD (mkName $ unpack $ unHaskellName (entityHaskell t) ++ "Id") [] $
             ConT ''KeyBackend `AppT` mpsBackend mps `AppT` ConT (mkName nameS)
       , InstanceD [] clazz $
         [ uniqueTypeDec mps t
@@ -614,7 +615,24 @@ mkEntity mps t = do
         , FunD 'persistIdField [Clause [] (NormalB $ ConE $ mkName $ unpack $ unHaskellName (entityHaskell t) ++ "Id") []]
         , FunD 'fieldLens lensClauses
         ]
-      ]
+      ])
+
+mkForeignKeysComposite :: MkPersistSettings -> EntityDef a -> ForeignDef -> Q [Dec]
+mkForeignKeysComposite mps t fdef = do
+   let fieldName f = mkName $ unpack $ recName mps (unHaskellName $ entityHaskell t) (unHaskellName f)
+   let fname=fieldName $ foreignConstraintNameHaskell fdef
+   let reftablename=mkName $ unpack $ unHaskellName $ foreignRefTableHaskell fdef 
+   let tablename=mkName $ unpack $ unHaskellName $ entityHaskell t
+   entName <- newName "entname"
+   
+   let flds = map (\(a,_,_,_) -> VarE (fieldName a)) $ foreignFields fdef
+   let xs = ListE $ map (\a -> AppE (VarE 'toPersistValue) ((AppE a (VarE entName)))) flds
+   let fn = FunD fname [Clause [VarP entName] (NormalB (AppE (ConE 'Key) (AppE (ConE 'PersistList) xs))) []]
+   
+   let t2 = ConT ''KeyBackend `AppT` ConT ''SqlBackend `AppT` ConT reftablename
+   let sig = SigD fname $ (ArrowT `AppT` (ConT tablename)) `AppT` t2
+   return [sig, fn]
+
 
 -- | produce code similar to the following:
 --
@@ -844,7 +862,7 @@ mkMigrate fun allDefs = do
         return $ NoBindS $ m `AppE` defsExp `AppE` u
 
 instance Lift' a => Lift (EntityDef a) where
-    lift (EntityDef a b c d e f g h i j) =
+    lift (EntityDef a b c d e f g h i j k) =
         [|EntityDef
             $(lift a)
             $(lift b)
@@ -853,9 +871,10 @@ instance Lift' a => Lift (EntityDef a) where
             $(lift e)
             $(lift f)
             $(lift g)
-            $(liftTs h)
-            $(liftMap i)
-            $(lift j)
+            $(lift h)
+            $(liftTs i)
+            $(liftMap j)
+            $(lift k)
             |]
 instance Lift' a => Lift (FieldDef a) where
     lift (FieldDef a b c d e f g) = [|FieldDef a b c $(lift' d) $(liftTs e) f $(lift' g)|]
@@ -863,6 +882,8 @@ instance Lift UniqueDef where
     lift (UniqueDef a b c d) = [|UniqueDef $(lift a) $(lift b) $(lift c) $(liftTs d)|]
 instance Lift PrimaryDef where
     lift (PrimaryDef a b) = [|PrimaryDef $(lift a) $(liftTs b)|]
+instance Lift ForeignDef where
+    lift (ForeignDef a b c d e f) = [|ForeignDef $(lift a) $(lift b) $(lift c) $(lift d) $(lift e) $(liftTs f)|]
 
 -- | A hack to avoid orphans.
 class Lift' a where

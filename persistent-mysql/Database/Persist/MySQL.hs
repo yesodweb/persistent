@@ -50,7 +50,6 @@ import qualified Database.MySQL.Base          as MySQLBase
 import qualified Database.MySQL.Base.Types    as MySQLBase
 
 
-
 -- | Create a MySQL connection pool and run the given action.
 -- The pool is properly released after the action finishes using
 -- it.  Note that you should not use the given 'ConnectionPool'
@@ -289,7 +288,8 @@ migrate' :: Show a
 migrate' connectInfo allDefs getter val = do
     let name = entityDB val
     (idClmn, old) <- getColumns connectInfo getter val
-    let new = second (map udToPair) $ mkColumns allDefs val
+    let (newcols, udefs, fdefs) = mkColumns allDefs val
+    let udspair = map udToPair udefs
     case (idClmn, old, partitionEithers old) of
       -- Nothing found, create everything
       ([], [], _) -> do
@@ -298,25 +298,35 @@ migrate' connectInfo allDefs getter val = do
                 Nothing   -> concat [escapeDBName $ entityID val, " BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY"]
 
         let addTable = AddTable $ concat
+                            -- Lower case e: see Database.Persist.Sql.Migration
                 [ "CREATE TABLE "
                 , escapeDBName name
                 , "("
                 , idtxt
-                , if null (fst new) then [] else ","
-                , intercalate "," $ map showColumn $ fst new
+                , if null newcols then [] else ","
+                , intercalate "," $ map showColumn newcols
                 , ")"
                 ]
-        let uniques = flip concatMap (snd new) $ \(uname, ucols) ->
+        let uniques = flip concatMap udspair $ \(uname, ucols) ->
                       [ AlterTable name $
                         AddUniqueConstraint uname $
                         map (findTypeOfColumn allDefs name) ucols ]
         let foreigns = do
-              Column cname _ _ _ _ _ (Just (refTblName, _)) <- fst new
-              return $ AlterColumn name (cname, addReference allDefs refTblName)
-        return $ Right $ map showAlterDb $ addTable : uniques ++ foreigns
+              Column { cName=cname, cReference=Just (refTblName, a) } <- newcols
+                 return $ AlterColumn name (refTblName, addReference allDefs refTblName cname)
+                 
+        let foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\(_,b,_,d) -> (b,d)) (foreignFields fdef)) 
+                                        in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignConstraintNameDBName fdef) childfields parentfields)) fdefs
+              
+        return $ Right $ map showAlterDb $ addTable : uniques ++ foreigns ++ foreignsAlt
       -- No errors and something found, migrate
       (_, _, ([], old')) -> do
-        let (acs, ats) = getAlters allDefs name new $ partitionEithers old'
+        let excludeForeignKeys (xs,ys) = (map (\c -> case cReference c of
+                                                    Just (_,fk) -> case find (\f -> fk == foreignConstraintNameDBName f) fdefs of
+                                                                     Just _ -> c { cReference = Nothing }
+                                                                     Nothing -> c
+                                                    Nothing -> c) xs,ys)
+            (acs, ats) = getAlters allDefs name (newcols, udspair) $ excludeForeignKeys $ partitionEithers old'
             acs' = map (AlterColumn name) acs
             ats' = map (AlterTable  name) ats
         return $ Right $ map showAlterDb $ acs' ++ ats'
@@ -337,13 +347,13 @@ findTypeOfColumn allDefs name col =
 
 
 -- | Helper for 'AddRefence' that finds out the 'entityID'.
-addReference :: Show a => [EntityDef a] -> DBName -> AlterColumn
-addReference allDefs name = AddReference name id_
+addReference :: Show a => [EntityDef a] -> DBName -> DBName -> AlterColumn
+addReference allDefs table cname = AddReference (refName table cname) [cname] [id_] 
     where
-      id_ = maybe (error $ "Could not find ID of entity " ++ show name
+      id_ = maybe (error $ "Could not find ID of entity " ++ show table
                          ++ " (allDefs = " ++ show allDefs ++ ")")
                   id $ do
-                    entDef <- find ((== name) . entityDB) allDefs
+                    entDef <- find ((== table) . entityDB) allDefs
                     return (entityID entDef)
 
 data AlterColumn = Change Column
@@ -352,7 +362,7 @@ data AlterColumn = Change Column
                  | Default String
                  | NoDefault
                  | Update' String
-                 | AddReference DBName DBName
+                 | AddReference DBName [DBName] [DBName]
                  | DropReference DBName
 
 type AlterColumn' = (DBName, AlterColumn)
@@ -367,7 +377,6 @@ data AlterDB = AddTable String
 
 udToPair :: UniqueDef -> (DBName, [DBName])
 udToPair ud = (uniqueDBName ud, map snd $ uniqueFields ud)
-
 
 ----------------------------------------------------------------------
 
@@ -419,7 +428,7 @@ getColumns connectInfo getter def = do
     us <- runResourceT $ stmtQuery stmtCntrs vals $$ helperCntrs
 
     -- Return both
-    return $ (ids, cs ++ us)
+    return (ids, cs ++ us)
   where
     vals = [ PersistText $ pack $ MySQL.connectDatabase connectInfo
            , PersistText $ unDBName $ entityDB def
@@ -470,7 +479,8 @@ getColumn connectInfo getter tname [ PersistByteString cname
 
       -- Foreign key (if any)
       stmt <- lift $ getter "SELECT REFERENCED_TABLE_NAME, \
-                                   \CONSTRAINT_NAME \
+                                   \CONSTRAINT_NAME, \
+                                   \ORDINAL_POSITION \
                             \FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE \
                             \WHERE TABLE_SCHEMA = ? \
                               \AND TABLE_NAME   = ? \
@@ -485,8 +495,8 @@ getColumn connectInfo getter tname [ PersistByteString cname
       cntrs <- runResourceT $ stmtQuery stmt vars $$ CL.consume
       ref <- case cntrs of
                [] -> return Nothing
-               [[PersistByteString tab, PersistByteString ref]] ->
-                   return $ Just (DBName $ T.decodeUtf8 tab, DBName $ T.decodeUtf8 ref)
+               [[PersistByteString tab, PersistByteString ref, PersistInt64 pos]] ->
+                   return $ if pos == 1 then Just (DBName $ T.decodeUtf8 tab, DBName $ T.decodeUtf8 ref) else Nothing
                _ -> fail "MySQL.getColumn/getRef: never here"
 
       -- Okay!
@@ -589,18 +599,18 @@ getAlters allDefs tblName (c1, u1) (c2, u2) =
 -- changed in the columns @oldColumns@ for @newColumn@ to be
 -- supported.
 findAlters :: Show a => [EntityDef a] -> Column -> [Column] -> ([AlterColumn'], [Column])
-findAlters allDefs col@(Column name isNull type_ def _cn _maxLen ref) cols =
+findAlters allDefs col@(Column name isNull type_ def defConstraintName _maxLen ref) cols =
     case filter ((name ==) . cName) cols of
-        [] -> ( let cnstr = [addReference allDefs tname | Just (tname, _) <- [ref]]
+        [] -> ( let cnstr = [addReference allDefs tname name | Just (tname, _) <- [ref]]
                 in map ((,) name) (Add' col : cnstr)
               , cols )
-        Column _ isNull' type_' def' _ _maxLen' ref':_ ->
+        Column _ isNull' type_' def' defConstraintName' _maxLen' ref':_ ->
             let -- Foreign key
                 refDrop = case (ref == ref', ref') of
                             (False, Just (_, cname)) -> [(name, DropReference cname)]
                             _ -> []
                 refAdd  = case (ref == ref', ref) of
-                            (False, Just (tname, _)) -> [(name, addReference allDefs tname)]
+                            (False, Just (tname, cname)) -> [(tname, addReference allDefs tname name)]
                             _ -> []
                 -- Type and nullability
                 modType | type_ == type_' && isNull == isNull' = []
@@ -620,7 +630,7 @@ findAlters allDefs col@(Column name isNull type_ def _cn _maxLen ref) cols =
 -- | Prints the part of a @CREATE TABLE@ statement about a given
 -- column.
 showColumn :: Column -> String
-showColumn (Column n nu t def cn maxLen ref) = concat
+showColumn (Column n nu t def defConstraintName maxLen ref) = concat
     [ escapeDBName n
     , " "
     , showSqlType t maxLen
@@ -691,14 +701,14 @@ showAlterTable table (DropUniqueConstraint cname) = concat
 
 -- | Render an action that must be done on a column.
 showAlter :: DBName -> AlterColumn' -> String
-showAlter table (oldName, Change (Column n nu t def cn maxLen _ref)) =
+showAlter table (oldName, Change (Column n nu t def defConstraintName maxLen _ref)) =
     concat
     [ "ALTER TABLE "
     , escapeDBName table
     , " CHANGE "
     , escapeDBName oldName
     , " "
-    , showColumn (Column n nu t def cn maxLen Nothing)
+    , showColumn (Column n nu t def defConstraintName maxLen Nothing)
     ]
 showAlter table (_, Add' col) =
     concat
@@ -743,17 +753,17 @@ showAlter table (n, Update' s) =
     , escapeDBName n
     , " IS NULL"
     ]
-showAlter table (n, AddReference t2 id2) = concat
+showAlter table (reftable, AddReference fkeyname t2 id2) = concat
     [ "ALTER TABLE "
     , escapeDBName table
     , " ADD CONSTRAINT "
-    , escapeDBName $ refName table n
+    , escapeDBName fkeyname
     , " FOREIGN KEY("
-    , escapeDBName n
+    , intercalate "," $ map escapeDBName t2
     , ") REFERENCES "
-    , escapeDBName t2
+    , escapeDBName reftable
     , "("
-    , escapeDBName id2
+    , intercalate "," $ map escapeDBName id2
     , ")"
     ]
 showAlter table (_, DropReference cname) = concat
@@ -766,7 +776,6 @@ showAlter table (_, DropReference cname) = concat
 refName :: DBName -> DBName -> DBName
 refName (DBName table) (DBName column) =
     DBName $ T.concat [table, "_", column, "_fkey"]
-
 
 ----------------------------------------------------------------------
 

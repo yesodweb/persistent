@@ -175,7 +175,7 @@ migrate' :: [EntityDef a]
          -> EntityDef SqlType
          -> IO (Either [Text] [(Bool, Text)])
 migrate' allDefs getter val = do
-    let (cols, uniqs) = mkColumns allDefs val
+    let (cols, uniqs, _) = mkColumns allDefs val
     let newSql = mkCreateTable False def (filter (not . safeToRemove val . cName) cols, uniqs)
     stmt <- getter "SELECT sql FROM sqlite_master WHERE type='table' AND name=?"
     oldSql' <- runResourceT
@@ -237,7 +237,7 @@ getCopyTable allDefs getter val = do
             Just y -> error $ "Invalid result from PRAGMA table_info: " ++ show y
     table = entityDB def
     tableTmp = DBName $ unDBName table `T.append` "_backup"
-    (cols, uniqs) = mkColumns allDefs val
+    (cols, uniqs, _) = mkColumns allDefs val
     cols' = filter (not . safeToRemove def . cName) cols
     newSql = mkCreateTable False def (cols', uniqs)
     tmpSql = mkCreateTable True def { entityDB = tableTmp } (cols', uniqs)

@@ -17,12 +17,12 @@ import Data.Monoid (mappend, (<>))
 import Control.Monad.IO.Class
 import Data.ByteString.Char8 (readInteger)
 import Data.Maybe (isJust)
+import Data.List (find)
 
 instance (C.MonadResource m, MonadLogger m) => PersistStore (SqlPersistT m) where
     type PersistMonadBackend (SqlPersistT m) = SqlBackend
     insert val = do
         conn <- askSqlConn
-        let composite = isJust $ entityPrimary t
         let esql = connInsertSql conn t vals
         key <-
             case esql of
@@ -44,9 +44,15 @@ instance (C.MonadResource m, MonadLogger m) => PersistStore (SqlPersistT m) wher
                                                           xs -> error $ "invalid number i["++show i++"] xs[" ++ show xs ++ "]"
                           Just xs -> error $ "invalid sql2 return xs["++show xs++"] sql2["++show sql2++"] sql1["++show sql1++"]"
                           Nothing -> error $ "invalid sql2 returned nothing sql2["++show sql2++"] sql1["++show sql1++"]"
-                ISRManyKeys sql fks -> do
+                ISRManyKeys sql fs -> do
                     rawExecute sql vals 
-                    return $ Key $ PersistList fks
+                    case entityPrimary t of
+                       Nothing -> error $ "ISRManyKeys is used when Primary is defined " ++ show sql
+                       Just pdef -> 
+                            let pks = map fst $ primaryFields pdef
+                                keyvals = map snd $ filter (\(a,b) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ entityFields t) fs
+                            in return $ Key $ PersistList keyvals
+
         return key
       where
         t = entityDef $ Just val
