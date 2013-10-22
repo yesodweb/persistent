@@ -350,7 +350,7 @@ migrate' allDefs getter val = fmap (fmap $ nub . map showAlterDb) $ do
                                                     in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignConstraintNameDBName fdef) childfields parentfields)) fdefs
                     return $ Right $ addTable : uniques ++ references ++ foreignsAlt
                 else do
-                    let (acs, ats) = getAlters val (newcols, udspair) old'
+                    let (acs, ats) = getAlters allDefs val (newcols, udspair) old'
                     let acs' = map (AlterColumn name) acs
                     let ats' = map (AlterTable name) ats
                     return $ Right $ acs' ++ ats'
@@ -396,8 +396,7 @@ getColumns getter def = do
     cs <- runResourceT $ stmtQuery stmt vals $$ helper
     let sqlc=concat ["SELECT "
                           ,"c.constraint_name, "
-                          ,"c.column_name, "
-                          ,"c.ordinal_position "
+                          ,"c.column_name "
                           ,"FROM information_schema.key_column_usage c, "
                           ,"information_schema.table_constraints k "
                           ,"WHERE c.table_catalog=current_database() "
@@ -407,6 +406,7 @@ getColumns getter def = do
                           ,"AND c.table_name=? "
                           ,"AND c.table_name=k.table_name "
                           ,"AND c.column_name <> ? "
+                          ,"AND c.ordinal_position=1 "
                           ,"AND c.constraint_name=k.constraint_name "
                           ,"AND k.constraint_type <> 'PRIMARY KEY' "
                           ,"ORDER BY c.constraint_name, c.column_name"]
@@ -420,15 +420,9 @@ getColumns getter def = do
         x <- CL.head
         case x of
             Nothing -> return $ front []
-            Just [PersistText con, PersistText col, PersistInt64 pos] ->
-              case pos of
-                1 -> getAll (front . (:) (con, col))
-                _ -> return $ front []
-            Just [PersistByteString con, PersistByteString col, PersistInt64 pos] -> do
-              case pos of
-                1 -> getAll (front . (:) (T.decodeUtf8 con, T.decodeUtf8 col)) 
-                _ -> return $ front []
-            Just xx -> error ("oops: unexpected datatype returned odbc postgres  xx="++show xx) -- $ getAll front -- FIXME error message?
+            Just [PersistText con, PersistText col] -> getAll (front . (:) (con, col))
+            Just [PersistByteString con, PersistByteString col] -> getAll (front . (:) (T.decodeUtf8 con, T.decodeUtf8 col)) 
+            Just xx -> error $ "oops: unexpected datatype returned odbc postgres  xx="++show xx
     helperU = do
         rows <- getAll id
         return $ map (Right . Right . (DBName . fst . head &&& map (DBName . snd)))
@@ -453,16 +447,17 @@ safeToRemove def (DBName colName)
     $ filter ((== (DBName colName)) . fieldDB)
     $ entityFields def
 
-getAlters :: EntityDef a
+getAlters :: [EntityDef a]
+          -> EntityDef SqlType
           -> ([Column], [(DBName, [DBName])])
           -> ([Column], [(DBName, [DBName])])
           -> ([AlterColumn'], [AlterTable])
-getAlters def (c1, u1) (c2, u2) =
+getAlters defs def (c1, u1) (c2, u2) =
     (getAltersC c1 c2, getAltersU u1 u2)
   where
     getAltersC [] old = map (\x -> (cName x, Drop $ safeToRemove def $ cName x)) old
     getAltersC (new:news) old =
-        let (alters, old') = findAlters (entityDB def) new old
+        let (alters, old') = findAlters defs (entityDB def) new old
          in alters ++ getAltersC news old'
 
     getAltersU :: [(DBName, [DBName])]
@@ -546,16 +541,18 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, ns
 getColumn _ _ x =
     return $ Left $ pack $ "Invalid result from information_schema: " ++ show x
 
-findAlters :: DBName -> Column -> [Column] -> ([AlterColumn'], [Column])
-findAlters tablename col@(Column name isNull sqltype def _cn _maxLen ref) cols =
+findAlters :: [EntityDef a] -> DBName -> Column -> [Column] -> ([AlterColumn'], [Column])
+findAlters defs tablename col@(Column name isNull sqltype def defConstraintName _maxLen ref) cols =
     case filter (\c -> cName c == name) cols of
         [] -> ([(name, Add' col)], cols)
         Column _ isNull' sqltype' def' defConstraintName' _maxLen' ref':_ ->
             let refDrop Nothing = []
                 refDrop (Just (_, cname)) = [(name, DropReference cname)]
                 refAdd Nothing = []
-                refAdd (Just (tname, a)) = [(tname, AddReference a [name] [DBName "id"])]
-                modRef =
+                refAdd (Just (tname, a)) = case find ((==tname) . entityDB) defs of
+                                                Just refdef -> [(tname, AddReference a [name] [entityID refdef])]
+                                                Nothing -> error $ "could not find the entityDef for reftable[" ++ show tname ++ "]"
+                modRef = 
                     if fmap snd ref == fmap snd ref'
                         then []
                         else refDrop ref' ++ refAdd ref
