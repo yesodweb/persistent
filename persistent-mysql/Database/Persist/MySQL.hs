@@ -298,7 +298,7 @@ migrate' connectInfo allDefs getter val = do
 
         let addTable = AddTable $ concat
                             -- Lower case e: see Database.Persist.Sql.Migration
-                [ "CREATE TABLE "
+                [ "CREATe TABLE "
                 , escapeDBName name
                 , "("
                 , idtxt
@@ -311,12 +311,12 @@ migrate' connectInfo allDefs getter val = do
                         AddUniqueConstraint uname $
                         map (findTypeOfColumn allDefs name) ucols ]
         let foreigns = do
-              Column { cName=cname, cReference=Just (refTblName, _) } <- newcols
+              Column { cName=cname, cReference=Just (refTblName, a) } <- newcols
               return $ AlterColumn name (refTblName, addReference allDefs (refName name cname) name cname)
                  
         let foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\(_,b,_,d) -> (b,d)) (foreignFields fdef)) 
                                         in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignConstraintNameDBName fdef) childfields parentfields)) fdefs
-              
+        
         return $ Right $ map showAlterDb $ addTable : uniques ++ foreigns ++ foreignsAlt
       -- No errors and something found, migrate
       (_, _, ([], old')) -> do
@@ -347,7 +347,7 @@ findTypeOfColumn allDefs name col =
 
 -- | Helper for 'AddRefence' that finds out the 'entityID'.
 addReference :: Show a => [EntityDef a] -> DBName -> DBName -> DBName -> AlterColumn
-addReference allDefs table cname = AddReference fkeyname [cname] [id_] 
+addReference allDefs fkeyname reftable cname = AddReference fkeyname [cname] [id_] 
     where
       id_ = maybe (error $ "Could not find ID of entity " ++ show reftable
                          ++ " (allDefs = " ++ show allDefs ++ ")")
@@ -609,7 +609,7 @@ findAlters tblName allDefs col@(Column name isNull type_ def defConstraintName _
                             (False, Just (_, cname)) -> [(name, DropReference cname)]
                             _ -> []
                 refAdd  = case (ref == ref', ref) of
-                            (False, Just (tname, cname)) -> [(tname, trace ("\n\n3333findalters 2 foreigns cname="++show cname++" name="++show name++" tname="++show tname) $ addReference allDefs (refName tblName name) tname name)]
+                            (False, Just (tname, cname)) -> [(tname, addReference allDefs (refName tblName name) tname name)]
                             _ -> []
                 -- Type and nullability
                 modType | type_ == type_' && isNull == isNull' = []

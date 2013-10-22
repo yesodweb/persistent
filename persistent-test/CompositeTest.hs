@@ -125,13 +125,6 @@ specs = describe "composite" $ do
     let p3 = TestParent "a3" "b3" 33 "p3"
     let c1 = TestChild "a1" "b1" 11 "c1"
 
-    it "works" $ asIO $ runResourceT $ runConn $ do
-#ifndef WITH_MONGODB
-      _ <- runMigration compositeMigrate
-      _ <- runMigration compositeMigrate
-#endif
-      return ()    
-      
     it "Insert" $ db $ do
       kp1 <- insert p1
       matchParentK kp1 @== Right ("a1","b1",11)
