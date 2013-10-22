@@ -23,7 +23,7 @@ import Control.Monad.Trans.Class
 import Control.Exception (throwIO)
 import qualified Data.Conduit.List as CL
 import Data.Conduit
-import Data.ByteString.Char8 (readInt, readInteger)
+import Data.ByteString.Char8 (readInteger)
 import Data.Maybe (isJust)
 import Data.List (transpose, inits, find)
 
@@ -70,7 +70,7 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
             mm <- CL.head
             case mm of
               Just [PersistInt64 i] -> return $ fromIntegral i
-              Just [PersistDouble i] ->return $ fromIntegral $ truncate i -- gb oracle
+              Just [PersistDouble i] ->return $ fromIntegral (truncate i :: Int64) -- gb oracle
               Just [PersistByteString i] -> case readInteger i of -- gb mssql 
                                               Just (ret,"") -> return $ fromIntegral ret
                                               xs -> error $ "invalid number i["++show i++"] xs[" ++ show xs ++ "]"
@@ -90,14 +90,14 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
           case entityPrimary t of
             Just pdef -> 
                   let pks = map fst $ primaryFields pdef
-                      keyvals = map snd $ filter (\(a,b) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ entityFields t) vals
+                      keyvals = map snd $ filter (\(a, _) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ entityFields t) vals
                   in case fromPersistValuesComposite' keyvals vals of
-                Left s -> liftIO $ throwIO $ PersistMarshalError s
-                Right row -> return row
+                      Left s -> liftIO $ throwIO $ PersistMarshalError s
+                      Right row -> return row
             Nothing -> 
-              case fromPersistValues' vals of
-                Left s -> liftIO $ throwIO $ PersistMarshalError s
-                Right row -> return row
+                  case fromPersistValues' vals of
+                    Left s -> liftIO $ throwIO $ PersistMarshalError s
+                    Right row -> return row
 
         t = entityDef $ dummyFromFilts filts
         fromPersistValues' (PersistInt64 x:xs) = 
@@ -167,10 +167,10 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
                         case xs of
                            [PersistInt64 x] -> return $ Key $ PersistInt64 x
                            [PersistDouble x] -> return $ Key $ PersistInt64 (truncate x) -- oracle returns Double 
-                           xs -> liftIO $ throwIO $ PersistMarshalError $ "Unexpected in selectKeys False: " <> T.pack (show xs)
+                           _ -> liftIO $ throwIO $ PersistMarshalError $ "Unexpected in selectKeys False: " <> T.pack (show xs)
                       Just pdef -> 
                            let pks = map fst $ primaryFields pdef
-                               keyvals = map snd $ filter (\(a,b) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ entityFields t) xs
+                               keyvals = map snd $ filter (\(a, _) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ entityFields t) xs
                            in return $ Key $ PersistList keyvals
 
     deleteWhere filts = do
@@ -270,90 +270,84 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
     go (FilterAnd fs) = combineAND fs
     go (FilterOr []) = ("1=0", [])
     go (FilterOr fs)  = combine " OR " fs
-    go (Filter field value pfilter) =
+    go (Filter field value pfilter) = 
         let t = entityDef $ dummyFromFilts [Filter field value pfilter]
-        in if fieldDB (persistFieldDef field) == DBName "id" && isJust (entityPrimary t) then 
-
+        in case (fieldDB (persistFieldDef field) == DBName "id", entityPrimary t, allVals) of
             -- need to check the id field in a safer way: entityId? 
-                     let ret = case (entityPrimary t, allVals) of
-                               (Just pdef, (PersistList ys:_)) -> 
-                                  if length (primaryFields pdef) /= length ys 
-                                     then error $ "wrong number of entries in primaryFields vs PersistList allVals=" ++ show allVals
-                                  else
-                                    case (allVals, pfilter, isCompFilter pfilter) of
-                                      ([PersistList xs], Eq, _) -> 
-                                         let sql=T.intercalate " and " (map (\a -> connEscapeName conn (snd a) <> showSqlFilter pfilter <> "? ")  (primaryFields pdef))
-                                         in (wrapSql sql,xs)
-                                      ([PersistList xs], Ne, _) -> 
-                                         let sql=T.intercalate " or " (map (\a -> connEscapeName conn (snd a) <> showSqlFilter pfilter <> "? ")  (primaryFields pdef))
-                                         in (wrapSql sql,xs)
-                                      (_, In, _) -> 
-                                         let xxs = transpose (map fromPersistList allVals)
-                                             sqls=map (\(a,xs) -> connEscapeName conn (snd a) <> showSqlFilter pfilter <> "(" <> T.intercalate "," (replicate (length xs) " ?") <> ") ") (zip (primaryFields pdef) xxs)
-                                         in (wrapSql (T.intercalate " and " (map wrapSql sqls)), concat xxs)
-                                      (_, NotIn, _) -> 
-                                         let xxs = transpose (map fromPersistList allVals)
-                                             sqls=map (\(a,xs) -> connEscapeName conn (snd a) <> showSqlFilter pfilter <> "(" <> T.intercalate "," (replicate (length xs) " ?") <> ") ") (zip (primaryFields pdef) xxs)
-                                         in (wrapSql (T.intercalate " or " (map wrapSql sqls)), concat xxs)
-                                      ([PersistList xs], _, True) -> 
-                                         let zs = tail (inits (primaryFields pdef))
-                                             sql1 = map (\b -> wrapSql (T.intercalate " and " (map (\(i,a) -> sql2 (i==length b) a) (zip [1..] b)))) zs
-                                             sql2 islast a = connEscapeName conn (snd a) <> (if islast then showSqlFilter pfilter else showSqlFilter Eq) <> "? "
-                                             sql = T.intercalate " or " sql1
-                                         in (wrapSql sql, concat (tail (inits xs)))
-                                      (_, BackendSpecificFilter s, _) -> error "unhandled type BackendSpecificFilter for composite/non id primary keys"
-                                      _ -> error $ "unhandled type/filter for composite/non id primary keys pfilter=" ++ show pfilter ++ " persistList="++show allVals
-                               (Just pdef, _) -> error $ "unhandled error for composite/non id primary keys pfilter=" ++ show pfilter ++ " persistList="++show allVals
-                     in ret
-                                       
-                                 
+                 (True, Just pdef, (PersistList ys:_)) -> 
+                    if length (primaryFields pdef) /= length ys 
+                       then error $ "wrong number of entries in primaryFields vs PersistList allVals=" ++ show allVals
+                    else
+                      case (allVals, pfilter, isCompFilter pfilter) of
+                        ([PersistList xs], Eq, _) -> 
+                           let sqlcl=T.intercalate " and " (map (\a -> connEscapeName conn (snd a) <> showSqlFilter pfilter <> "? ")  (primaryFields pdef))
+                           in (wrapSql sqlcl,xs)
+                        ([PersistList xs], Ne, _) -> 
+                           let sqlcl=T.intercalate " or " (map (\a -> connEscapeName conn (snd a) <> showSqlFilter pfilter <> "? ")  (primaryFields pdef))
+                           in (wrapSql sqlcl,xs)
+                        (_, In, _) -> 
+                           let xxs = transpose (map fromPersistList allVals)
+                               sqls=map (\(a,xs) -> connEscapeName conn (snd a) <> showSqlFilter pfilter <> "(" <> T.intercalate "," (replicate (length xs) " ?") <> ") ") (zip (primaryFields pdef) xxs)
+                           in (wrapSql (T.intercalate " and " (map wrapSql sqls)), concat xxs)
+                        (_, NotIn, _) -> 
+                           let xxs = transpose (map fromPersistList allVals)
+                               sqls=map (\(a,xs) -> connEscapeName conn (snd a) <> showSqlFilter pfilter <> "(" <> T.intercalate "," (replicate (length xs) " ?") <> ") ") (zip (primaryFields pdef) xxs)
+                           in (wrapSql (T.intercalate " or " (map wrapSql sqls)), concat xxs)
+                        ([PersistList xs], _, True) -> 
+                           let zs = tail (inits (primaryFields pdef))
+                               sql1 = map (\b -> wrapSql (T.intercalate " and " (map (\(i,a) -> sql2 (i==length b) a) (zip [1..] b)))) zs
+                               sql2 islast a = connEscapeName conn (snd a) <> (if islast then showSqlFilter pfilter else showSqlFilter Eq) <> "? "
+                               sqlcl = T.intercalate " or " sql1
+                           in (wrapSql sqlcl, concat (tail (inits xs)))
+                        (_, BackendSpecificFilter _, _) -> error "unhandled type BackendSpecificFilter for composite/non id primary keys"
+                        _ -> error $ "unhandled type/filter for composite/non id primary keys pfilter=" ++ show pfilter ++ " persistList="++show allVals
+                 (True, Just pdef, _) -> error $ "unhandled error for composite/non id primary keys pfilter=" ++ show pfilter ++ " persistList=" ++ show allVals ++ " pdef=" ++ show pdef
 
-        else 
-        case (isNull, pfilter, varCount) of
-            (True, Eq, _) -> (name <> " IS NULL", [])
-            (True, Ne, _) -> (name <> " IS NOT NULL", [])
-            (False, Ne, _) -> (T.concat
-                [ "("
-                , name
-                , " IS NULL OR "
-                , name
-                , " <> "
-                , qmarks
-                , ")"
-                ], notNullVals)
-            -- We use 1=2 (and below 1=1) to avoid using TRUE and FALSE, since
-            -- not all databases support those words directly.
-            (_, In, 0) -> ("1=2" <> orNullSuffix, [])
-            (False, In, _) -> (name <> " IN " <> qmarks <> orNullSuffix, allVals)
-            (True, In, _) -> (T.concat
-                [ "("
-                , name
-                , " IS NULL OR "
-                , name
-                , " IN "
-                , qmarks
-                , ")"
-                ], notNullVals)
-            (_, NotIn, 0) -> ("1=1", [])
-            (False, NotIn, _) -> (T.concat
-                [ "("
-                , name
-                , " IS NULL OR "
-                , name
-                , " NOT IN "
-                , qmarks
-                , ")"
-                ], notNullVals)
-            (True, NotIn, _) -> (T.concat
-                [ "("
-                , name
-                , " IS NOT NULL AND "
-                , name
-                , " NOT IN "
-                , qmarks
-                , ")"
-                ], notNullVals)
-            other -> (name <> showSqlFilter pfilter <> "?" <> orNullSuffix, allVals) 
+                 _ ->   case (isNull, pfilter, varCount) of
+                            (True, Eq, _) -> (name <> " IS NULL", [])
+                            (True, Ne, _) -> (name <> " IS NOT NULL", [])
+                            (False, Ne, _) -> (T.concat
+                                [ "("
+                                , name
+                                , " IS NULL OR "
+                                , name
+                                , " <> "
+                                , qmarks
+                                , ")"
+                                ], notNullVals)
+                            -- We use 1=2 (and below 1=1) to avoid using TRUE and FALSE, since
+                            -- not all databases support those words directly.
+                            (_, In, 0) -> ("1=2" <> orNullSuffix, [])
+                            (False, In, _) -> (name <> " IN " <> qmarks <> orNullSuffix, allVals)
+                            (True, In, _) -> (T.concat
+                                [ "("
+                                , name
+                                , " IS NULL OR "
+                                , name
+                                , " IN "
+                                , qmarks
+                                , ")"
+                                ], notNullVals)
+                            (_, NotIn, 0) -> ("1=1", [])
+                            (False, NotIn, _) -> (T.concat
+                                [ "("
+                                , name
+                                , " IS NULL OR "
+                                , name
+                                , " NOT IN "
+                                , qmarks
+                                , ")"
+                                ], notNullVals)
+                            (True, NotIn, _) -> (T.concat
+                                [ "("
+                                , name
+                                , " IS NOT NULL AND "
+                                , name
+                                , " NOT IN "
+                                , qmarks
+                                , ")"
+                                ], notNullVals)
+                            _ -> (name <> showSqlFilter pfilter <> "?" <> orNullSuffix, allVals) 
 
       where
         isCompFilter Lt = True
@@ -362,7 +356,7 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
         isCompFilter Ge = True
         isCompFilter _ =  False
         
-        wrapSql sql = "(" <> sql <> ")"
+        wrapSql sqlcl = "(" <> sqlcl <> ")"
         fromPersistList (PersistList xs) = xs
         fromPersistList other = error $ "expected PersistList but found " ++ show other
         

@@ -73,7 +73,6 @@ import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Data.Functor.Identity
 import Data.Functor.Constant
-import Control.Applicative ((<$>),(<*>))
 import PersistTestPetType
 
 #ifdef WITH_MONGODB
@@ -133,34 +132,6 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade sqlSetti
     !yes Int
     ~no Int
     def Int
-
-  TestChild
-      name1 String maxlen=20
-      name2 String maxlen=20
-      age3 Int
-      extra4 String
-      Foreign TestParent fkparent name1 name2 age3
-      deriving Show Eq
-  TestParent
-      name11 String maxlen=20
-      name22 String maxlen=20
-      age33 Int
-      extra44 String
-      Primary name11 name22 age33
-      deriving Show Eq
-  Citizen 
-    name String
-    age Int Maybe
-    deriving Eq Show
-  Address
-    address String
-    country String
-    deriving Eq Show
-  CitizenAddress
-    citizen CitizenId
-    address AddressId
-    Primary citizen address
-    deriving Eq Show
 |]
 
 #ifndef WITH_MONGODB
@@ -188,11 +159,6 @@ cleanDB = do
   deleteWhere ([] :: [Filter NeedsPet])
   deleteWhere ([] :: [Filter User])
   deleteWhere ([] :: [Filter Email])
-  deleteWhere ([] :: [Filter TestChild])
-  deleteWhere ([] :: [Filter TestParent])
-  deleteWhere ([] :: [Filter CitizenAddress])
-  deleteWhere ([] :: [Filter Citizen])
-  deleteWhere ([] :: [Filter Address])
 
 #ifdef WITH_MONGODB
 db :: Action IO () -> Assertion
@@ -781,111 +747,10 @@ specs = describe "persistent" $ do
     insert_ $ UnprefixedRightSum "Hello"
 #endif
   
-  describe "composite primary keys" $ do
-
-    let p1 = TestParent "a1" "b1" 11 "p1"
-    let p2 = TestParent "a2" "b2" 22 "p2"
-    let p3 = TestParent "a3" "b3" 33 "p3"
-    let c1 = TestChild "a1" "b1" 11 "c1"
-  
-    it "Insert" $ db $ do
-      kp1 <- insert p1
-      matchParentK kp1 @== Right ("a1","b1",11)
-      Just p11 <- get kp1
-      p1 @== p11
-      xs <- selectList [TestParentId ==. kp1] []
-      length xs @== 1
-      let [Entity newkp1 newp1] = xs
-      matchParentK kp1 @== matchParentK newkp1
-      p1 @== newp1
-    
-    it "Id field" $ db $ do
-        kp1 <- insert p1
-        kp2 <- insert p2
-        xs <- selectList [TestParentId >=. kp1] []
-        length xs @== 2
-        let [e1@(Entity newkp1 newp1),e2@(Entity newkp2 newp2)] = xs 
-        matchParentK kp1 @== matchParentK newkp1
-        matchParentK kp2 @== matchParentK newkp2
-        p1 @== newp1
-        p2 @== newp2
-
-    it "Filter by Id with 'not equal'" $ db $ do
-        kp1 <- insert p1
-        kp2 <- insert p2
-        xs <- selectList [TestParentId !=. kp1] []
-        length xs @== 1
-        let [Entity newkp2 newp2] = xs 
-        matchParentK kp2 @== matchParentK newkp2
-  
-    it "Filter by Id with 'in'" $ db $ do
-        kp1 <- insert p1
-        kp2 <- insert p2
-        xs <- selectList [TestParentId <-. [kp1,kp2]] []
-        length xs @== 2
-        let [Entity newkp1 newp1,Entity newkp2 newp2] = xs 
-        matchParentK kp1 @== matchParentK newkp1
-        matchParentK kp2 @== matchParentK newkp2
-
-    it "Filter by Id with 'not in'" $ db $ do
-        kp1 <- insert p1
-        kp2 <- insert p2
-        xs <- selectList [TestParentId /<-. [kp1]] []
-        length xs @== 1
-        let [Entity newkp2 newp2] = xs 
-        matchParentK kp2 @== matchParentK newkp2
-  
-    it "Filter by Id with 'not in' with no data" $ db $ do
-        kp1 <- insert p1
-        kp2 <- insert p2
-        xs <- selectList [TestParentId /<-. [kp1,kp2]] []
-        length xs @== 0
-
-    it "Extract Parent Foreign Key from Child value" $ db $ do
-        kp1 <- insert p1
-        kp2 <- insert p2
-        kc1 <- insert c1
-        mc <- get kc1
-        isJust mc @== True
-        Just c11 = mc
-        c1 @== c11
-        testChildFkparent c11 @== kp1
-        
-    it "Validate Key contents" $ db $ do
-        kp1 <- insert p1
-        kp2 <- insert p2
-        kp3 <- insert p3
-        xs <- selectKeysList [] [Asc TestParentName11] 
-        length xs @== 3
-        let [kps1,kps2,kps3] = xs
-        matchParentK kps1 @== Right ("a1","b1",11)
-        matchParentK kps2 @== Right ("a2","b2",22)
-        matchParentK kps3 @== Right ("a3","b3",33)
-
-    it "Delete" $ db $ do
-        kp1 <- insert p1
-        kp2 <- insert p2
-        kp3 <- insert p3
-        _ <- delete kp1
-        r <- get kp1
-        r @== Nothing
-        r <- get kp2
-        isJust r @== True
-
-    it "Update" $ db $ do
-        kp1 <- insert p1
-        _ <- update kp1 [TestParentExtra44 =. "q1"] 
-        newkps1 <- get kps1
-        newkps1 @== Just (TestParent "a1" "b1" 11 "q1")
-    
-  
   describe "strictness" $ do
     it "bang" $ (return $! Strict (error "foo") 5 5) `shouldThrow` anyErrorCall
     it "tilde" $ void (return $! Strict 5 (error "foo") 5 :: IO Strict)
     it "blank" $ (return $! Strict 5 5 (error "foo")) `shouldThrow` anyErrorCall
-
-matchParentK :: Key TestParent -> Either Text (String, String, Int64)
-matchParentK (Key (PersistList [a, b, c]))  = (,,) <$> fromPersistValue a <*> fromPersistValue b <*> fromPersistValue c
 
 -- | Reverses the order of the fields of an entity.  Used to test
 -- @??@ placeholders of 'rawSql'.

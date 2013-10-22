@@ -22,7 +22,6 @@ import Control.Monad.Trans.Error (ErrorT(..))
 import Data.Aeson
 import Data.ByteString (ByteString)
 import Data.Either (partitionEithers)
-import Data.Maybe (isJust)
 import Data.Fixed (Pico)
 import Data.Function (on)
 import Data.IORef
@@ -129,7 +128,7 @@ prepare' conn sql = do
 insertSql' :: EntityDef SqlType -> [PersistValue] -> InsertSqlResult
 insertSql' ent vals =
   case entityPrimary ent of
-    Just pdef -> 
+    Just _ -> 
       ISRManyKeys sql vals
         where sql = pack $ concat
                 [ "INSERT INTO "
@@ -142,16 +141,16 @@ insertSql' ent vals =
                 ]
     Nothing -> 
       ISRInsertGet doInsert "SELECT LAST_INSERT_ID()"
-    where
-      doInsert = pack $ concat
-        [ "INSERT INTO "
+        where
+          doInsert = pack $ concat
+            [ "INSERT INTO "
             , escapeDBName $ entityDB ent
-        , "("
+            , "("
             , intercalate "," $ map (escapeDBName . fieldDB) $ entityFields ent
-        , ") VALUES("
+            , ") VALUES("
             , intercalate "," (map (const "?") $ entityFields ent)
-        , ")"
-        ]
+            , ")"
+            ]
 
 
 -- | Execute an statement that doesn't return any results.
@@ -312,8 +311,8 @@ migrate' connectInfo allDefs getter val = do
                         AddUniqueConstraint uname $
                         map (findTypeOfColumn allDefs name) ucols ]
         let foreigns = do
-              Column { cName=cname, cReference=Just (refTblName, a) } <- newcols
-                 return $ AlterColumn name (refTblName, addReference allDefs refTblName cname)
+              Column { cName=cname, cReference=Just (refTblName, _) } <- newcols
+              return $ AlterColumn name (refTblName, addReference allDefs (refName name cname) name cname)
                  
         let foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\(_,b,_,d) -> (b,d)) (foreignFields fdef)) 
                                         in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignConstraintNameDBName fdef) childfields parentfields)) fdefs
@@ -347,13 +346,13 @@ findTypeOfColumn allDefs name col =
 
 
 -- | Helper for 'AddRefence' that finds out the 'entityID'.
-addReference :: Show a => [EntityDef a] -> DBName -> DBName -> AlterColumn
-addReference allDefs table cname = AddReference (refName table cname) [cname] [id_] 
+addReference :: Show a => [EntityDef a] -> DBName -> DBName -> DBName -> AlterColumn
+addReference allDefs table cname = AddReference fkeyname [cname] [id_] 
     where
-      id_ = maybe (error $ "Could not find ID of entity " ++ show table
+      id_ = maybe (error $ "Could not find ID of entity " ++ show reftable
                          ++ " (allDefs = " ++ show allDefs ++ ")")
                   id $ do
-                    entDef <- find ((== table) . entityDB) allDefs
+                    entDef <- find ((== reftable) . entityDB) allDefs
                     return (entityID entDef)
 
 data AlterColumn = Change Column
@@ -571,7 +570,7 @@ getAlters allDefs tblName (c1, u1) (c2, u2) =
   where
     getAltersC [] old = concatMap dropColumn old
     getAltersC (new:news) old =
-        let (alters, old') = findAlters allDefs new old
+        let (alters, old') = findAlters tblName allDefs new old
          in alters ++ getAltersC news old'
 
     dropColumn col =
@@ -598,10 +597,10 @@ getAlters allDefs tblName (c1, u1) (c2, u2) =
 -- | @findAlters newColumn oldColumns@ finds out what needs to be
 -- changed in the columns @oldColumns@ for @newColumn@ to be
 -- supported.
-findAlters :: Show a => [EntityDef a] -> Column -> [Column] -> ([AlterColumn'], [Column])
-findAlters allDefs col@(Column name isNull type_ def defConstraintName _maxLen ref) cols =
+findAlters :: Show a => DBName -> [EntityDef a] -> Column -> [Column] -> ([AlterColumn'], [Column])
+findAlters tblName allDefs col@(Column name isNull type_ def defConstraintName _maxLen ref) cols =
     case filter ((name ==) . cName) cols of
-        [] -> ( let cnstr = [addReference allDefs tname name | Just (tname, _) <- [ref]]
+        [] -> ( let cnstr = [addReference allDefs (refName tblName name) tname name | Just (tname, b) <- [ref]]
                 in map ((,) name) (Add' col : cnstr)
               , cols )
         Column _ isNull' type_' def' defConstraintName' _maxLen' ref':_ ->
@@ -610,7 +609,7 @@ findAlters allDefs col@(Column name isNull type_ def defConstraintName _maxLen r
                             (False, Just (_, cname)) -> [(name, DropReference cname)]
                             _ -> []
                 refAdd  = case (ref == ref', ref) of
-                            (False, Just (tname, cname)) -> [(tname, addReference allDefs tname name)]
+                            (False, Just (tname, cname)) -> [(tname, trace ("\n\n3333findalters 2 foreigns cname="++show cname++" name="++show name++" tname="++show tname) $ addReference allDefs (refName tblName name) tname name)]
                             _ -> []
                 -- Type and nullability
                 modType | type_ == type_' && isNull == isNull' = []

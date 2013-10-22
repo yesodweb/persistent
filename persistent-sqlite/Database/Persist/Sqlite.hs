@@ -268,7 +268,7 @@ escape' = T.unpack . escape
 mkCreateTable :: Bool -> EntityDef a -> ([Column], [UniqueDef]) -> Text
 mkCreateTable isTemp entity (cols, uniqs) = 
   case entityPrimary entity of 
-    Just pdef -> 
+    Just _ -> 
        T.concat
         [ "CREATE"
         , if isTemp then " TEMP" else ""

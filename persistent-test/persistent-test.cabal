@@ -56,6 +56,7 @@ library
                      MaxLenTest
                      SumTypeTest
                      MigrationOnlyTest
+                     CompositeTest
                      Init
 
                      Database.Persist

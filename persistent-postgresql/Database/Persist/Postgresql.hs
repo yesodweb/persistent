@@ -151,15 +151,15 @@ insertSql' ent vals =
                 , ")"
                 ]
     Nothing -> ISRSingle $ pack $ concat
-    [ "INSERT INTO "
+      [ "INSERT INTO "
       , T.unpack $ escape $ entityDB ent
-    , "("
+      , "("
       , intercalate "," $ map (T.unpack . escape . fieldDB) $ entityFields ent
-    , ") VALUES("
+      , ") VALUES("
       , intercalate "," (map (const "?") $ entityFields ent)
-    , ") RETURNING "
+      , ") RETURNING "
       , T.unpack $ escape $ entityID ent
-    ]
+      ]
 
 execute' :: PG.Connection -> PG.Query -> [PersistValue] -> IO Int64
 execute' conn query vals = PG.execute conn query (map P vals)
@@ -345,7 +345,7 @@ migrate' allDefs getter val = fmap (fmap $ nub . map showAlterDb) $ do
                             ]
                     let uniques = flip concatMap udspair $ \(uname, ucols) ->
                             [AlterTable name $ AddUniqueConstraint uname ucols]
-                        references = mapMaybe (\c@Column { cName=cname, cReference=Just (refTblName, _) } -> getAddReference allDefs refTblName cname c) $ filter (\c -> cReference c /= Nothing) newcols
+                        references = mapMaybe (\c@Column { cName=cname, cReference=Just (refTblName, _) } -> getAddReference allDefs name refTblName cname (cReference c)) $ filter (\c -> cReference c /= Nothing) newcols
                         foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\(_,b,_,d) -> (b,d)) (foreignFields fdef)) 
                                                     in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignConstraintNameDBName fdef) childfields parentfields)) fdefs
                     return $ Right $ addTable : uniques ++ references ++ foreignsAlt
@@ -462,7 +462,7 @@ getAlters def (c1, u1) (c2, u2) =
   where
     getAltersC [] old = map (\x -> (cName x, Drop $ safeToRemove def $ cName x)) old
     getAltersC (new:news) old =
-        let (alters, old') = findAlters new old
+        let (alters, old') = findAlters (entityDB def) new old
          in alters ++ getAltersC news old'
 
     getAltersU :: [(DBName, [DBName])]
@@ -546,15 +546,15 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, ns
 getColumn _ _ x =
     return $ Left $ pack $ "Invalid result from information_schema: " ++ show x
 
-findAlters :: Column -> [Column] -> ([AlterColumn'], [Column])
-findAlters col@(Column name isNull sqltype def _cn _maxLen ref) cols =
+findAlters :: DBName -> Column -> [Column] -> ([AlterColumn'], [Column])
+findAlters tablename col@(Column name isNull sqltype def _cn _maxLen ref) cols =
     case filter (\c -> cName c == name) cols of
         [] -> ([(name, Add' col)], cols)
         Column _ isNull' sqltype' def' defConstraintName' _maxLen' ref':_ ->
             let refDrop Nothing = []
                 refDrop (Just (_, cname)) = [(name, DropReference cname)]
                 refAdd Nothing = []
-                refAdd (Just (tname, _)) = [(name, AddReference (fromJust defConstraintName') [tname] [name])]
+                refAdd (Just (tname, a)) = [(tname, AddReference a [name] [DBName "id"])]
                 modRef =
                     if fmap snd ref == fmap snd ref'
                         then []
@@ -578,15 +578,15 @@ findAlters col@(Column name isNull sqltype def _cn _maxLen ref) cols =
                  filter (\c -> cName c /= name) cols)
 
 -- | Get the references to be added to a table for the given column.
-getAddReference :: [EntityDef a] -> DBName -> DBName -> Column -> Maybe AlterDB
-getAddReference allDefs table cname (Column n _nu _ _def _defConstraintName _maxLen ref) =
+getAddReference :: [EntityDef a] -> DBName -> DBName -> DBName -> Maybe (DBName, DBName) -> Maybe AlterDB
+getAddReference allDefs table reftable cname ref =
     case ref of
         Nothing -> Nothing
         Just (s, z) -> Just $ AlterColumn table (s, AddReference (refName table cname) [cname] [id_])
                           where
-                            id_ = maybe (error $ "Could not find ID of entity " ++ show table)
+                            id_ = maybe (error $ "Could not find ID of entity " ++ show reftable)
                                         id $ do
-                                          entDef <- find ((== table) . entityDB) allDefs
+                                          entDef <- find ((== reftable) . entityDB) allDefs
                                           return (entityID entDef)
                           
 

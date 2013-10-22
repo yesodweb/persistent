@@ -50,7 +50,7 @@ instance (C.MonadResource m, MonadLogger m) => PersistStore (SqlPersistT m) wher
                        Nothing -> error $ "ISRManyKeys is used when Primary is defined " ++ show sql
                        Just pdef -> 
                             let pks = map fst $ primaryFields pdef
-                                keyvals = map snd $ filter (\(a,b) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ entityFields t) fs
+                                keyvals = map snd $ filter (\(a, _) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ entityFields t) fs
                             in return $ Key $ PersistList keyvals
 
         return key

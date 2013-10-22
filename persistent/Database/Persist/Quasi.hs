@@ -184,7 +184,7 @@ parseLines ps lines =
   where
     toEnts (Line indent (name:entattribs) : rest) =
         let (x, y) = span ((> indent) . lineIndent) rest
-         in mkEntityDef ps name entattribs x : toEnts y
+        in  mkEntityDef ps name entattribs x : toEnts y
     toEnts (Line _ []:rest) = toEnts rest
     toEnts [] = []
 
@@ -298,22 +298,21 @@ takeConstraint :: PersistSettings
           -> (Maybe PrimaryDef, Maybe UniqueDef, Maybe ForeignDef)
 takeConstraint ps tableName defs (n:rest) | not (T.null n) && isUpper (T.head n) = takeConstraint' 
     where takeConstraint' 
-            | n == "Primary" = (Just $ takePrimary ps defs rest, Nothing, Nothing)
+            | n == "Primary" = (Just $ takePrimary defs rest, Nothing, Nothing)
             | n == "Unique"  = (Nothing, Just $ takeUniq ps tableName defs rest, Nothing)
             | n == "Foreign" = (Nothing, Nothing, Just $ takeForeign ps tableName defs rest)
             | otherwise      = error $ "unknown keyword[" ++ show n ++ "] expecting 'Unique' or 'Primary'"
 takeConstraint _ _ _ _ = (Nothing, Nothing, Nothing)
     
-takePrimary :: PersistSettings
-          -> [FieldDef a]
-          -> [Text]
-          -> PrimaryDef
-takePrimary ps defs pkcols
+takePrimary :: [FieldDef a]
+            -> [Text]
+            -> PrimaryDef
+takePrimary defs pkcols
         = PrimaryDef
             (map (HaskellName &&& getDBName defs) pkcols)
             attrs
   where
-    (fields,attrs) = break ("!" `T.isPrefixOf`) pkcols
+    (_, attrs) = break ("!" `T.isPrefixOf`) pkcols
     getDBName [] t = error $ "Unknown column in primary key constraint: " ++ show t
     getDBName (d:ds) t
         | nullable (fieldAttrs d) /= NotNullable = error $ "primary key column cannot be nullable: " ++ show t
@@ -339,7 +338,7 @@ takeUniq ps tableName defs (n:rest)
     getDBName (d:ds) t
         | fieldHaskell d == HaskellName t = fieldDB d
         | otherwise = getDBName ds t
-takeUniqs _ tableName _ xs = error $ "invalid unique constraint on table[" ++ show tableName ++ "] expecting an uppercase constraint name xs=" ++ show xs
+takeUniq _ tableName _ xs = error $ "invalid unique constraint on table[" ++ show tableName ++ "] expecting an uppercase constraint name xs=" ++ show xs
 
 takeForeign :: PersistSettings
           -> Text
