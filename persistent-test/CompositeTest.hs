@@ -17,9 +17,7 @@
 {-# LANGUAGE CPP #-}
 module CompositeTest where
 
-import Test.HUnit hiding (Test)
 import Test.Hspec.Expectations ()
-import Test.Hspec.QuickCheck(prop)
 
 import Database.Persist
 
@@ -29,13 +27,7 @@ import qualified Control.Monad.Trans.Control
 import qualified Control.Monad.IO.Control
 #  endif
 
-import Control.Monad (liftM)
-import Control.Monad.Logger
-import Database.Persist.TH (mkDeleteCascade, mpsGeneric, mpsPrefixFields)
-import Database.Persist.Sqlite
-import Control.Exception (SomeException)
-import qualified Data.Text as T
-import qualified Control.Exception.Lifted
+import Database.Persist.TH (mkDeleteCascade)
 #  if MIN_VERSION_monad_control(0, 3, 0)
 import qualified Control.Exception as E
 #    define CATCH catch'
@@ -43,31 +35,11 @@ import qualified Control.Exception as E
 import qualified Control.Exception.Control as Control
 #    define CATCH Control.catch
 #  endif
-import System.Random
 
-#  if WITH_POSTGRESQL
-import Database.Persist.Postgresql
-#endif
-#  if WITH_MYSQL
-import Database.Persist.MySQL()
-#  endif
-
-
-import Control.Monad.IO.Class
-
-import Web.PathPieces (PathPiece (..))
-import Data.Maybe (isJust, fromJust)
-import qualified Data.HashMap.Lazy as M
+import Data.Maybe (isJust)
 import Init
-import Data.Aeson
 
-import Data.Conduit
-import qualified Data.Conduit.List as CL
-import Data.Functor.Identity
-import Data.Functor.Constant
 import Control.Applicative ((<$>),(<*>))
-import Control.Monad.Trans.Resource (runResourceT)
-import Debug.Trace
 
 share [mkPersist sqlSettings,  mkMigrate "compositeMigrate", mkDeleteCascade sqlSettings] [persistLowerCase|
   TestChild
@@ -182,7 +154,7 @@ specs = describe "composite" $ do
 
     it "Extract Parent Foreign Key from Child value" $ db $ do
       kp1 <- insert p1
-      kp2 <- insert p2
+      _ <- insert p2
       kc1 <- insert c1
       mc <- get kc1
       isJust mc @== True
@@ -191,9 +163,9 @@ specs = describe "composite" $ do
       testChildFkparent c11 @== kp1
         
     it "Validate Key contents" $ db $ do
-      kp1 <- insert p1
-      kp2 <- insert p2
-      kp3 <- insert p3
+      _ <- insert p1
+      _ <- insert p2
+      _ <- insert p3
       xs <- selectKeysList [] [Asc TestParentName11] 
       length xs @== 3
       let [kps1,kps2,kps3] = xs
@@ -204,12 +176,12 @@ specs = describe "composite" $ do
     it "Delete" $ db $ do
       kp1 <- insert p1
       kp2 <- insert p2
-      kp3 <- insert p3
+
       _ <- delete kp1
       r <- get kp1
       r @== Nothing
-      r <- get kp2
-      isJust r @== True
+      r1 <- get kp2
+      isJust r1 @== True
 
     it "Update" $ db $ do
       kp1 <- insert p1
@@ -217,13 +189,13 @@ specs = describe "composite" $ do
       newkps1 <- get kp1
       newkps1 @== Just (TestParent "a1" "b1" 11 "q1")
     
-    let c1 = Citizen "mk" (Just 11)
+    let z1 = Citizen "mk" (Just 11)
     let a1 = Address "abc" "usa"     
-    let c2 = Citizen "gb" (Just 22)
+    let z2 = Citizen "gb" (Just 22)
     let a2 = Address "def" "den"
     
     it "Insert Many to Many" $ db $ do
-      kc1 <- insert c1
+      kc1 <- insert z1
       ka1 <- insert a1
       let ca1 = CitizenAddress kc1 ka1
       kca1 <- insert ca1
@@ -234,7 +206,7 @@ specs = describe "composite" $ do
       let Just newca1 = mca
       ca1 @== newca1
 
-      kc2 <- insert c2
+      kc2 <- insert z2
       ka2 <- insert a2
       let ca2 = CitizenAddress kc2 ka2      
       kca2 <- insert ca2
@@ -246,14 +218,21 @@ specs = describe "composite" $ do
       matchCitizenAddressK kca1 @== matchCitizenAddressK newkca1
       ca1 @== newca1
 
+matchK :: PersistField a => KeyBackend backend entity -> Either Text a
 matchK = fromPersistValue . unKey
+
+matchK2 :: (PersistField a1, PersistField a) =>
+                 KeyBackend backend entity
+                 -> KeyBackend backend1 entity1 -> Either Text (a1, a)
 matchK2 k1 k2 = (,) <$> matchK k1 <*> matchK k2
 
 matchParentK :: Key TestParent -> Either Text (String, String, Int64)
 matchParentK (Key (PersistList [a, b, c]))  = (,,) <$> fromPersistValue a <*> fromPersistValue b <*> fromPersistValue c
+matchParentK k = error $ "matchParentK: unexpected value for key " ++ show k
 
 matchCitizenAddressK :: Key CitizenAddress -> Either Text (Int64, Int64)
 matchCitizenAddressK (Key (PersistList [a, b]))  = (,) <$> fromPersistValue a <*> fromPersistValue b
+matchCitizenAddressK k = error $ "matchCitizenAddressK: unexpected value for key " ++ show k
 
 #if MIN_VERSION_monad_control(0, 3, 0)
 catch' :: (Control.Monad.Trans.Control.MonadBaseControl IO m, E.Exception e)
