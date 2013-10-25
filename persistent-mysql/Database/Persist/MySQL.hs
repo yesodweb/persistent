@@ -312,10 +312,10 @@ migrate' connectInfo allDefs getter val = do
                         map (findTypeOfColumn allDefs name) ucols ]
         let foreigns = do
               Column { cName=cname, cReference=Just (refTblName, a) } <- newcols
-              return $ AlterColumn name (refTblName, addReference allDefs (refName name cname) name cname)
+              return $ AlterColumn name (refTblName, addReference allDefs (refName name cname) refTblName cname)
                  
         let foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\(_,b,_,d) -> (b,d)) (foreignFields fdef)) 
-                                        in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignConstraintNameDBName fdef) childfields parentfields)) fdefs
+                                        in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignRefTableDBName fdef) (foreignConstraintNameDBName fdef) childfields parentfields)) fdefs
         
         return $ Right $ map showAlterDb $ addTable : uniques ++ foreigns ++ foreignsAlt
       -- No errors and something found, migrate
@@ -347,7 +347,7 @@ findTypeOfColumn allDefs name col =
 
 -- | Helper for 'AddRefence' that finds out the 'entityID'.
 addReference :: Show a => [EntityDef a] -> DBName -> DBName -> DBName -> AlterColumn
-addReference allDefs fkeyname reftable cname = AddReference fkeyname [cname] [id_] 
+addReference allDefs fkeyname reftable cname = AddReference reftable fkeyname [cname] [id_] 
     where
       id_ = maybe (error $ "Could not find ID of entity " ++ show reftable
                          ++ " (allDefs = " ++ show allDefs ++ ")")
@@ -361,7 +361,7 @@ data AlterColumn = Change Column
                  | Default String
                  | NoDefault
                  | Update' String
-                 | AddReference DBName [DBName] [DBName]
+                 | AddReference DBName DBName [DBName] [DBName]
                  | DropReference DBName
 
 type AlterColumn' = (DBName, AlterColumn)
@@ -600,9 +600,11 @@ getAlters allDefs tblName (c1, u1) (c2, u2) =
 findAlters :: Show a => DBName -> [EntityDef a] -> Column -> [Column] -> ([AlterColumn'], [Column])
 findAlters tblName allDefs col@(Column name isNull type_ def defConstraintName _maxLen ref) cols =
     case filter ((name ==) . cName) cols of
-        [] -> ( let cnstr = [addReference allDefs (refName tblName name) tname name | Just (tname, b) <- [ref]]
-                in map ((,) name) (Add' col : cnstr)
-              , cols )
+    -- new fkey that didnt exist before
+        [] -> case ref of
+               Nothing -> ([],[])
+               Just (tname, b) -> let cnstr = [addReference allDefs (refName tblName name) tname name]
+                                  in (map ((,) tname) (Add' col : cnstr), cols)
         Column _ isNull' type_' def' defConstraintName' _maxLen' ref':_ ->
             let -- Foreign key
                 refDrop = case (ref == ref', ref') of
@@ -752,7 +754,7 @@ showAlter table (n, Update' s) =
     , escapeDBName n
     , " IS NULL"
     ]
-showAlter table (reftable, AddReference fkeyname t2 id2) = concat
+showAlter table (_, AddReference reftable fkeyname t2 id2) = concat
     [ "ALTER TABLE "
     , escapeDBName table
     , " ADD CONSTRAINT "
