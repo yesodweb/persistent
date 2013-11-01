@@ -10,6 +10,8 @@ module Database.Persist.Class.PersistEntity
     , Filter (..)
     , Key
     , Entity (..)
+    , defaultEntityToJSON
+    , defaultEntityFromJSON
     ) where
 
 import Database.Persist.Types.Base
@@ -17,6 +19,7 @@ import Database.Persist.Class.PersistField
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Aeson (ToJSON (..), FromJSON (..), object, (.:), (.=), Value (Object))
+import Data.Aeson.Types (Parser)
 import Control.Applicative ((<$>), (<*>))
 import Data.Monoid (mappend)
 
@@ -139,16 +142,17 @@ data Entity entity =
            , entityVal :: entity }
     deriving (Eq, Ord, Show, Read)
 
-instance ToJSON e => ToJSON (Entity e) where
-    toJSON (Entity key value) = object
-        [ "key" .= key
-        , "value" .= value
-        ]
-instance FromJSON e => FromJSON (Entity e) where
-    parseJSON (Object o) = Entity
-        <$> o .: "key"
-        <*> o .: "value"
-    parseJSON _ = fail "FromJSON Entity: not an object"
+defaultEntityToJSON :: ToJSON e => Entity e -> Value
+defaultEntityToJSON (Entity key value) = object
+    [ "key" .= key
+    , "value" .= value
+    ]
+
+defaultEntityFromJSON :: FromJSON e => Value -> Parser (Entity e)
+defaultEntityFromJSON (Object o) = Entity
+    <$> o .: "key"
+    <*> o .: "value"
+defaultEntityFromJSON _ = fail "FromJSON Entity: not an object"
 
 instance PersistField entity => PersistField (Entity entity) where
     toPersistValue (Entity key value) = case toPersistValue value of
