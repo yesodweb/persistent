@@ -28,9 +28,9 @@ module Database.Persist.Class
     -- * PersistConfig
     , PersistConfig (..)
 
-    -- * Other utilities
-    , defaultEntityToJSON
-    , defaultEntityFromJSON
+    -- * JSON utilities
+    , keyValueEntityToJSON, keyValueEntityFromJSON
+    , entityIdToJSON, entityIdFromJSON
     ) where
 
 import Database.Persist.Class.DeleteCascade

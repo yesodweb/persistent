@@ -10,8 +10,9 @@ module Database.Persist.Class.PersistEntity
     , Filter (..)
     , Key
     , Entity (..)
-    , defaultEntityToJSON
-    , defaultEntityFromJSON
+
+    , keyValueEntityToJSON, keyValueEntityFromJSON
+    , entityIdToJSON, entityIdFromJSON
     ) where
 
 import Database.Persist.Types.Base
@@ -22,6 +23,7 @@ import Data.Aeson (ToJSON (..), FromJSON (..), object, (.:), (.=), Value (Object
 import Data.Aeson.Types (Parser)
 import Control.Applicative ((<$>), (<*>))
 import Data.Monoid (mappend)
+import qualified Data.HashMap.Strict as HM
 
 -- | Persistent serialized Haskell records to the database.
 -- A Database 'Entity' (A row in SQL, a document in MongoDB, etc)
@@ -142,17 +144,62 @@ data Entity entity =
            , entityVal :: entity }
     deriving (Eq, Ord, Show, Read)
 
-defaultEntityToJSON :: ToJSON e => Entity e -> Value
-defaultEntityToJSON (Entity key value) = object
+-- | Predefined @toJSON@. The resulting JSON looks like
+-- @{\"key\": 1, \"value\": {\"name\": ...}}@.
+--
+-- The typical usage is:
+--
+-- @
+--   instance ToJSON User where
+--       toJSON = keyValueEntityToJSON
+-- @
+keyValueEntityToJSON :: ToJSON e => Entity e -> Value
+keyValueEntityToJSON (Entity key value) = object
     [ "key" .= key
     , "value" .= value
     ]
 
-defaultEntityFromJSON :: FromJSON e => Value -> Parser (Entity e)
-defaultEntityFromJSON (Object o) = Entity
+-- | Predefined @parseJSON@. The input JSON looks like
+-- @{\"key\": 1, \"value\": {\"name\": ...}}@.
+--
+-- The typical usage is:
+--
+-- @
+--   instance FromJSON User where
+--       parseJSON = keyValueEntityFromJSON
+-- @
+keyValueEntityFromJSON :: FromJSON e => Value -> Parser (Entity e)
+keyValueEntityFromJSON (Object o) = Entity
     <$> o .: "key"
     <*> o .: "value"
-defaultEntityFromJSON _ = fail "FromJSON Entity: not an object"
+keyValueEntityFromJSON _ = fail "keyValueEntityFromJSON: not an object"
+
+-- | Predefined @toJSON@. The resulting JSON looks like
+-- @{\"id\": 1, \"name\": ...}@.
+--
+-- The typical usage is:
+--
+-- @
+--   instance ToJSON User where
+--       toJSON = entityIdToJSON
+-- @
+entityIdToJSON :: ToJSON e => Entity e -> Value
+entityIdToJSON (Entity key value) = case toJSON value of
+    Object o -> Object $ HM.insert "id" (toJSON key) o
+    x -> x
+
+-- | Predefined @parseJSON@. The input JSON looks like
+-- @{\"id\": 1, \"name\": ...}@.
+--
+-- The typical usage is:
+--
+-- @
+--   instance FromJSON User where
+--       parseJSON = entityIdFromJSON
+-- @
+entityIdFromJSON :: FromJSON e => Value -> Parser (Entity e)
+entityIdFromJSON value@(Object o) = Entity <$> o .: "id" <*> parseJSON value
+entityIdFromJSON _ = fail "entityIdFromJSON: not an object"
 
 instance PersistField entity => PersistField (Entity entity) where
     toPersistValue (Entity key value) = case toPersistValue value of

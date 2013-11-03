@@ -19,6 +19,7 @@ module Database.Persist.TH
     , mpsGeneric
     , mpsPrefixFields
     , mpsEntityJSON
+    , EntityJSON, entityToJSON, entityFromJSON
     , mkPersistSettings
     , sqlSettings
     , sqlOnlySettings
@@ -38,6 +39,7 @@ import Prelude hiding ((++), take, concat, splitAt)
 import Database.Persist
 import Database.Persist.Sql (Migration, SqlPersistT, migrate, SqlBackend, PersistFieldSql)
 import Database.Persist.Quasi
+import Language.Haskell.TH.Lib (varE)
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
@@ -182,9 +184,23 @@ data MkPersistSettings = MkPersistSettings
     -- True.
     , mpsPrefixFields :: Bool
     -- ^ Prefix field names with the model name. Default: True.
-    , mpsEntityJSON :: Bool
-    -- ^ Generate ToJSON/FromJSON instances for each model types. Default:
-    -- True.
+    , mpsEntityJSON :: Maybe EntityJSON
+    -- ^ Generate @ToJSON@/@FromJSON@ instances for each model types. If it's
+    -- @Nothing@, no instances will be generated. Default:
+    --
+    -- @
+    --  Just EntityJSON
+    --      { entityToJSON = 'keyValueEntityToJSON
+    --      , entityFromJSON = 'keyValueEntityFromJSON
+    --      }
+    -- @
+    }
+
+data EntityJSON = EntityJSON
+    { entityToJSON :: Name
+    -- ^ Name of the @toJSON@ implementation for @Entity a@.
+    , entityFromJSON :: Name
+    -- ^ Name of the @fromJSON@ implementation for @Entity a@.
     }
 
 -- | Create an @MkPersistSettings@ with default values.
@@ -194,7 +210,10 @@ mkPersistSettings t = MkPersistSettings
     { mpsBackend = t
     , mpsGeneric = True -- FIXME switch default to False in the future
     , mpsPrefixFields = True
-    , mpsEntityJSON = True
+    , mpsEntityJSON = Just EntityJSON
+        { entityToJSON = 'keyValueEntityToJSON
+        , entityFromJSON = 'keyValueEntityFromJSON
+        }
     }
 
 -- | Use the 'SqlPersist' backend.
@@ -1063,19 +1082,13 @@ mkJSON mps def = do
             (Just $ VarE obj)
             (if nullable (fieldAttrs f) == Nullable ByMaybeAttr then dotColonQE else dotColonE)
             (Just $ AppE packE $ LitE $ StringL $ unpack $ unHaskellName $ fieldHaskell f)
-        toEntityJSONI = InstanceD
-            []
-            (ConT ''ToJSON `AppT`(ConT ''Entity `AppT` typ))
-            [toEntityJSON]
-        toEntityJSON = FunD 'toJSON
-            [Clause [] (NormalB (VarE 'defaultEntityToJSON)) []]
-        fromEntityJSONI = InstanceD
-            []
-            (ConT ''FromJSON `AppT` (ConT ''Entity `AppT` typ))
-            [fromEntityJSON]
-        fromEntityJSON = FunD 'parseJSON
-            [Clause [] (NormalB (VarE 'defaultEntityFromJSON)) []]
-
-    return $ if mpsEntityJSON mps
-        then [toJSONI, fromJSONI, toEntityJSONI, fromEntityJSONI]
-        else [toJSONI, fromJSONI]
+    case mpsEntityJSON mps of
+        Nothing -> return [toJSONI, fromJSONI]
+        Just entityJSON -> do
+            entityJSONIs <- [d|
+                instance ToJSON (Entity $(pure typ)) where
+                    toJSON = $(varE (entityToJSON entityJSON))
+                instance FromJSON (Entity $(pure typ)) where
+                    parseJSON = $(varE (entityFromJSON entityJSON))
+                |]
+            return $ toJSONI : fromJSONI : entityJSONIs
