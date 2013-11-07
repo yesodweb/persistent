@@ -9,6 +9,7 @@ import Control.Applicative ((<$>), (<*>))
 
 import Database.Persist
 import Database.Persist.TH
+import Database.Persist.Types (PersistValue(..))
 import Data.Text (Text, pack)
 import Data.Aeson
 
@@ -49,3 +50,10 @@ main = hspec $ do
         it "decode" $
             decode "{\"name\":\"Michael\",\"age\":27,\"address\":{\"street\":\"Narkis\",\"city\":\"Maalot\"}}" `shouldBe` Just
                 (Person "Michael" (Just 27) $ Address "Narkis" "Maalot" Nothing)
+    describe "JSON serialization for Entity" $ do
+        let key = Key (PersistInt64 0)
+        prop "to/from is idempotent" $ \person ->
+            decode (encode (Entity key person)) == Just (Entity key (person :: Person))
+        it "decode" $
+            decode "{\"key\": 0, \"value\": {\"name\":\"Michael\",\"age\":27,\"address\":{\"street\":\"Narkis\",\"city\":\"Maalot\"}}}" `shouldBe` Just
+                (Entity key (Person "Michael" (Just 27) $ Address "Narkis" "Maalot" Nothing))
