@@ -1,0 +1,61 @@
+name:            persistent-redis
+version:         0.0.3
+license:         BSD3
+license-file:    LICENSE
+author:          Pavel Ryzhov <paul@paulrz.cz>
+synopsis:        Backend for Yesod persistent library using Redis.
+description:     Based on the Redis package.
+category:        Database, Yesod
+stability:       Experimental
+cabal-version:   >= 1.8
+maintainer:      Pavel Ryzhov <paul@paulrz.cz>
+build-type:      Simple
+
+source-repository head
+        type:           git
+        location:       https://github.com/paulrzcz/persistent-redis.git
+
+source-repository this
+        type:           git
+        location:       https://github.com/paulrzcz/persistent-redis.git
+        tag:            0.0.3
+
+library
+    build-depends:   base                  >= 4        && < 5
+                   , hedis                 >= 0.6.0    && < 0.7.0
+                   , bytestring            >= 0.10.0.0 && < 0.11.0.0
+                   , persistent            >= 1.2      && < 1.3
+                   , text                  >= 0.8
+                   , aeson                 >= 0.5
+                   , attoparsec
+                   , mtl                   >= 2.1.2    && < 2.2.0
+                   , transformers          >= 0.3.0.0  && < 0.4.0.0
+                   , monad-control         >= 0.3.2.0  && < 0.3.3.0
+                   , utf8-string           >= 0.3.7    && < 0.4.0
+
+    exposed-modules: Database.Persist.Redis
+
+    other-modules:   Database.Persist.Redis.Config
+                     Database.Persist.Redis.Internal
+                     Database.Persist.Redis.Store
+
+    ghc-options:     -Wall
+
+test-suite  basic
+    type: exitcode-stdio-1.0
+    main-is: tests/basic-test.hs
+    build-depends:   base                  >= 4        && < 5
+                   , hedis                 >= 0.6.0    && < 0.7.0
+                   , persistent            >= 1.2      && < 1.3
+                   , persistent-template   >= 1.2      && < 1.3
+                   , mtl                   >= 2.1.2    && < 2.2.0
+                   , transformers          >= 0.3.0.0  && < 0.4.0.0
+                   , utf8-string           >= 0.3.7    && < 0.4.0
+                   , bytestring            >= 0.10.0.0 && < 0.11.0.0
+                   , text                  >= 0.8
+                   , aeson                 >= 0.5
+                   , attoparsec
+                   , template-haskell
+                   , monad-control         >= 0.3.2.0  && < 0.3.3.0
+                   , utf8-string           >= 0.3.7    && < 0.4.0
+                   , persistent-redis
