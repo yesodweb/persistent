@@ -301,7 +301,7 @@ takeConstraint ps tableName defs (n:rest) | not (T.null n) && isUpper (T.head n)
             | n == "Primary" = (Just $ takePrimary defs rest, Nothing, Nothing)
             | n == "Unique"  = (Nothing, Just $ takeUniq ps tableName defs rest, Nothing)
             | n == "Foreign" = (Nothing, Nothing, Just $ takeForeign ps tableName defs rest)
-            | otherwise      = error $ "unknown keyword[" ++ show n ++ "] expecting 'Unique' or 'Primary'"
+            | otherwise      = (Nothing, Just $ takeUniq ps "" defs (n:rest), Nothing) -- retain compatibility with original unique constraint
 takeConstraint _ _ _ _ = (Nothing, Nothing, Nothing)
     
 takePrimary :: [FieldDef a]

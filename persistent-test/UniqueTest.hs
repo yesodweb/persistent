@@ -21,19 +21,19 @@ share [mkPersist sqlSettings,  mkMigrate "uniqueMigrate"] [persistLowerCase|
 #endif
   TestNonNull
     fieldA Int
-    Unique UniqueTestNonNull fieldA
+    UniqueTestNonNull fieldA
     deriving Eq Show
   TestNull
     fieldA Int
     fieldB Int Maybe
-    Unique UniqueTestNull fieldA fieldB !force
+    UniqueTestNull fieldA fieldB !force
     deriving Eq Show
 #ifndef WITH_MONGODB
   TestCheckmark
     key   Text
     value Text
     active Checkmark nullable
-    Unique UniqueTestCheckmark key active !force
+    UniqueTestCheckmark key active !force
     deriving Eq Show
 #endif
 |]

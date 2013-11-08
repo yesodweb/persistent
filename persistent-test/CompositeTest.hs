@@ -113,7 +113,7 @@ specs = describe "composite" $ do
     it "Id field" $ db $ do
       kp1 <- insert p1
       kp2 <- insert p2
-      xs <- selectList [TestParentId >=. kp1] []
+      xs <- selectList [TestParentId <-. [kp1,kp2]] []
       length xs @== 2
       let [e1@(Entity newkp1 newp1),e2@(Entity newkp2 newp2)] = xs 
       matchParentK kp1 @== matchParentK newkp1

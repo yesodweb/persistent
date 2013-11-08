@@ -40,7 +40,7 @@ LowerCaseTable id=my_id
 RefTable
     someVal Int sql=something_else
     lct LowerCaseTableId
-    Unique UniqueRefTable someVal
+    UniqueRefTable someVal
 |]
 
 specs :: Spec

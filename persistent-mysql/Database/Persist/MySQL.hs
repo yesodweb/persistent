@@ -127,10 +127,7 @@ prepare' conn sql = do
 -- | SQL code to be executed when inserting an entity.
 insertSql' :: EntityDef SqlType -> [PersistValue] -> InsertSqlResult
 insertSql' ent vals =
-  case entityPrimary ent of
-    Just _ -> 
-      ISRManyKeys sql vals
-        where sql = pack $ concat
+  let sql = pack $ concat
                 [ "INSERT INTO "
                 , escapeDBName $ entityDB ent
                 , "("
@@ -139,19 +136,9 @@ insertSql' ent vals =
                 , intercalate "," (map (const "?") $ entityFields ent)
                 , ")"
                 ]
-    Nothing -> 
-      ISRInsertGet doInsert "SELECT LAST_INSERT_ID()"
-        where
-          doInsert = pack $ concat
-            [ "INSERT INTO "
-            , escapeDBName $ entityDB ent
-            , "("
-            , intercalate "," $ map (escapeDBName . fieldDB) $ entityFields ent
-            , ") VALUES("
-            , intercalate "," (map (const "?") $ entityFields ent)
-            , ")"
-            ]
-
+  in case entityPrimary ent of
+       Just _ -> ISRManyKeys sql vals
+       Nothing -> ISRInsertGet sql "SELECT LAST_INSERT_ID()"
 
 -- | Execute an statement that doesn't return any results.
 execute' :: MySQL.Connection -> MySQL.Query -> [PersistValue] -> IO Int64

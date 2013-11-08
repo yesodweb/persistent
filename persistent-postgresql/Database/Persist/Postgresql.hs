@@ -55,7 +55,7 @@ import Control.Monad (forM, mzero)
 import System.Environment (getEnvironment)
 import Data.Int (Int64)
 import Data.Maybe (mapMaybe, fromJust, isJust)
-
+import Data.Monoid ((<>))
 -- | A @libpq@ connection string.  A simple example of connection
 -- string would be @\"host=localhost port=5432 user=test
 -- dbname=test password=test\"@.  Please read libpq's
@@ -138,28 +138,18 @@ prepare' conn sql = do
         
 insertSql' :: EntityDef SqlType -> [PersistValue] -> InsertSqlResult
 insertSql' ent vals =
-  case entityPrimary ent of
-    Just pdef -> 
-     ISRManyKeys sql vals
-        where sql = pack $ concat
+  let sql = T.concat
                 [ "INSERT INTO "
-                , T.unpack $ escape $ entityDB ent
+                , escape $ entityDB ent
                 , "("
-                , intercalate "," $ map (T.unpack . escape . fieldDB) $ entityFields ent
+                , T.intercalate "," $ map (escape . fieldDB) $ entityFields ent
                 , ") VALUES("
-                , intercalate "," (map (const "?") $ entityFields ent)
+                , T.intercalate "," (map (const "?") $ entityFields ent)
                 , ")"
                 ]
-    Nothing -> ISRSingle $ pack $ concat
-      [ "INSERT INTO "
-      , T.unpack $ escape $ entityDB ent
-      , "("
-      , intercalate "," $ map (T.unpack . escape . fieldDB) $ entityFields ent
-      , ") VALUES("
-      , intercalate "," (map (const "?") $ entityFields ent)
-      , ") RETURNING "
-      , T.unpack $ escape $ entityID ent
-      ]
+  in case entityPrimary ent of
+       Just pdef -> ISRManyKeys sql vals
+       Nothing -> ISRSingle (sql <> " RETURNING " <> escape (entityID ent))
 
 execute' :: PG.Connection -> PG.Query -> [PersistValue] -> IO Int64
 execute' conn query vals = PG.execute conn query (map P vals)
@@ -375,7 +365,7 @@ getColumns :: (Text -> IO Statement)
            -> EntityDef a
            -> IO [Either Text (Either Column (DBName, [DBName]))]
 getColumns getter def = do
-    let sqlv=concat ["SELECT "
+    let sqlv=T.concat ["SELECT "
                           ,"column_name "
                           ,",is_nullable "
                           ,",udt_name "
@@ -388,7 +378,7 @@ getColumns getter def = do
                           ,"AND table_name=? "
                           ,"AND column_name <> ?"]
   
-    stmt <- getter $ pack sqlv
+    stmt <- getter sqlv
     let vals =
             [ PersistText $ unDBName $ entityDB def
             , PersistText $ unDBName $ entityID def
@@ -422,7 +412,7 @@ getColumns getter def = do
             Nothing -> return $ front []
             Just [PersistText con, PersistText col] -> getAll (front . (:) (con, col))
             Just [PersistByteString con, PersistByteString col] -> getAll (front . (:) (T.decodeUtf8 con, T.decodeUtf8 col)) 
-            Just xx -> error $ "oops: unexpected datatype returned odbc postgres  xx="++show xx
+            Just o -> error $ "unexpected datatype returned for postgres o="++show o
     helperU = do
         rows <- getAll id
         return $ map (Right . Right . (DBName . fst . head &&& map (DBName . snd)))
