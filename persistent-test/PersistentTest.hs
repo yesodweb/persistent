@@ -746,12 +746,11 @@ specs = describe "persistent" $ do
     insert_ $ UnprefixedLeftSum 5
     insert_ $ UnprefixedRightSum "Hello"
 #endif
-
+  
   describe "strictness" $ do
     it "bang" $ (return $! Strict (error "foo") 5 5) `shouldThrow` anyErrorCall
     it "tilde" $ void (return $! Strict 5 (error "foo") 5 :: IO Strict)
     it "blank" $ (return $! Strict 5 5 (error "foo")) `shouldThrow` anyErrorCall
-
 
 -- | Reverses the order of the fields of an entity.  Used to test
 -- @??@ placeholders of 'rawSql'.

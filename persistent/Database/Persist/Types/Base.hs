@@ -106,7 +106,9 @@ data EntityDef sqlType = EntityDef
     , entityID      :: !DBName
     , entityAttrs   :: ![Attr]
     , entityFields  :: ![FieldDef sqlType]
+    , entityPrimary :: Maybe PrimaryDef
     , entityUniques :: ![UniqueDef]
+    , entityForeigns:: ![ForeignDef]
     , entityDerives :: ![Text]
     , entityExtra   :: !(Map Text [ExtraLine])
     , entitySum     :: !Bool
@@ -145,6 +147,22 @@ data UniqueDef = UniqueDef
     , uniqueDBName  :: !DBName
     , uniqueFields  :: ![(HaskellName, DBName)]
     , uniqueAttrs   :: ![Attr]
+    }
+    deriving (Show, Eq, Read, Ord)
+
+data PrimaryDef = PrimaryDef
+    { primaryFields  :: ![(HaskellName, DBName)]
+    , primaryAttrs   :: ![Attr]
+    }
+    deriving (Show, Eq, Read, Ord)
+
+data ForeignDef = ForeignDef
+    { foreignRefTableHaskell       :: !HaskellName
+    , foreignRefTableDBName        :: !DBName
+    , foreignConstraintNameHaskell :: !HaskellName
+    , foreignConstraintNameDBName  :: !DBName
+    , foreignFields                :: ![(HaskellName, DBName, HaskellName, DBName)] -- foreignkey name gb our field plus corresponding other primary field:make this a real adt
+    , foreignAttrs                 :: ![Attr]
     }
     deriving (Show, Eq, Read, Ord)
 
@@ -219,7 +237,9 @@ instance PathPiece PersistValue where
         case Data.Text.Read.signed Data.Text.Read.decimal t of
             Right (i, t')
                 | T.null t' -> Just $ PersistInt64 i
-            _ -> Just $ PersistText t
+            _ -> case reads $ T.unpack t of
+                    [(fks, "")] -> Just $ PersistList fks
+                    _ -> Just $ PersistText t
     toPathPiece x =
         case fromPersistValueText x of
             Left e -> error e

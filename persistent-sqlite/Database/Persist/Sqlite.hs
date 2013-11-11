@@ -102,20 +102,33 @@ prepare' conn sql = do
         , stmtQuery = withStmt' conn stmt
         }
 
-insertSql' :: DBName -> [FieldDef SqlType] -> DBName -> [PersistValue] -> InsertSqlResult
-insertSql' t cols _ _ =
-    ISRInsertGet (pack ins) sel
-  where
-    sel = "SELECT last_insert_rowid()"
-    ins = concat
-        [ "INSERT INTO "
-        , escape' t
-        , "("
-        , intercalate "," $ map (escape' . fieldDB) cols
-        , ") VALUES("
-        , intercalate "," (map (const "?") cols)
-        , ")"
-        ]
+insertSql' :: EntityDef SqlType -> [PersistValue] -> InsertSqlResult
+insertSql' ent vals =
+  case entityPrimary ent of
+    Just _ -> 
+      ISRManyKeys sql vals
+        where sql = pack $ concat
+                [ "INSERT INTO "
+                , escape' $ entityDB ent
+                , "("
+                , intercalate "," $ map (escape' . fieldDB) $ entityFields ent
+                , ") VALUES("
+                , intercalate "," (map (const "?") $ entityFields ent)
+                , ")"
+                ]
+    Nothing -> 
+      ISRInsertGet (pack ins) sel
+        where
+          sel = "SELECT last_insert_rowid()"
+          ins = concat
+              [ "INSERT INTO "
+              , escape' $ entityDB ent
+              , "("
+              , intercalate "," $ map (escape' . fieldDB) $ entityFields ent
+              , ") VALUES("
+              , intercalate "," (map (const "?") $ entityFields ent)
+              , ")"
+              ]
 
 execute' :: Sqlite.Connection -> Sqlite.Statement -> [PersistValue] -> IO Int64
 execute' conn stmt vals = flip finally (liftIO $ Sqlite.reset conn stmt) $ do
@@ -162,7 +175,7 @@ migrate' :: [EntityDef a]
          -> EntityDef SqlType
          -> IO (Either [Text] [(Bool, Text)])
 migrate' allDefs getter val = do
-    let (cols, uniqs) = mkColumns allDefs val
+    let (cols, uniqs, _) = mkColumns allDefs val
     let newSql = mkCreateTable False def (filter (not . safeToRemove val . cName) cols, uniqs)
     stmt <- getter "SELECT sql FROM sqlite_master WHERE type='table' AND name=?"
     oldSql' <- runResourceT
@@ -224,7 +237,7 @@ getCopyTable allDefs getter val = do
             Just y -> error $ "Invalid result from PRAGMA table_info: " ++ show y
     table = entityDB def
     tableTmp = DBName $ unDBName table `T.append` "_backup"
-    (cols, uniqs) = mkColumns allDefs val
+    (cols, uniqs, _) = mkColumns allDefs val
     cols' = filter (not . safeToRemove def . cName) cols
     newSql = mkCreateTable False def (cols', uniqs)
     tmpSql = mkCreateTable True def { entityDB = tableTmp } (cols', uniqs)
@@ -253,18 +266,34 @@ escape' :: DBName -> String
 escape' = T.unpack . escape
 
 mkCreateTable :: Bool -> EntityDef a -> ([Column], [UniqueDef]) -> Text
-mkCreateTable isTemp entity (cols, uniqs) = T.concat
-    [ "CREATE"
-    , if isTemp then " TEMP" else ""
-    , " TABLE "
-    , escape $ entityDB entity
-    , "("
-    , escape $ entityID entity
-    , " INTEGER PRIMARY KEY"
-    , T.concat $ map sqlColumn cols
-    , T.concat $ map sqlUnique uniqs
-    , ")"
-    ]
+mkCreateTable isTemp entity (cols, uniqs) = 
+  case entityPrimary entity of 
+    Just _ -> 
+       T.concat
+        [ "CREATE"
+        , if isTemp then " TEMP" else ""
+        , " TABLE "
+        , escape $ entityDB entity
+        , "("
+        , T.drop 1 $ T.concat $ map sqlColumn cols
+        , ", PRIMARY KEY "
+        , "("
+        , T.intercalate "," $ map (escape . fieldDB) $ entityFields entity
+        , ")"
+        , ")"
+        ]
+    Nothing -> T.concat
+        [ "CREATE"
+        , if isTemp then " TEMP" else ""
+        , " TABLE "
+        , escape $ entityDB entity
+        , "("
+        , escape $ entityID entity
+        , " INTEGER PRIMARY KEY"
+        , T.concat $ map sqlColumn cols
+        , T.concat $ map sqlUnique uniqs
+        , ")"
+        ]
 
 sqlColumn :: Column -> Text
 sqlColumn (Column name isNull typ def _cn _maxLen ref) = T.concat
