@@ -153,42 +153,40 @@ specs = describe "embedded entities" $ do
             (HasEmbed "embed" (OnlyName "1"))
       contK <- insert container
       Just res <- selectFirst [HasEmbedsName ==. "container"] []
-      res @== (Entity contK container)
+      res @== Entity contK container
 
   it "query for equality of embeded entity" $ db $ do
       let container = HasEmbed "container" (OnlyName "2")
       contK <- insert container
-      Just res <- selectFirst [HasEmbedEmbed ==. (OnlyName "2")] []
-      res @== (Entity contK container)
+      Just res <- selectFirst [HasEmbedEmbed ==. OnlyName "2"] []
+      res @== Entity contK container
 
   it "Set" $ db $ do
-    unlessM isTravis $ do
-      let container = HasSetEmbed "set" $ S.fromList [
-              (HasEmbed "embed" (OnlyName "1"))
-            , (HasEmbed "embed" (OnlyName "2"))
+      let container = HasSetEmbed "set" $ S.fromList
+            [ HasEmbed "embed" (OnlyName "1")
+            , HasEmbed "embed" (OnlyName "2")
             ]
       contK <- insert container
       Just res <- selectFirst [HasSetEmbedName ==. "set"] []
-      res @== (Entity contK container)
+      res @== Entity contK container
 
   it "exception" $ flip shouldThrow (== TestException) $ db $ do
-      let container = HasSetEmbed "set" $ S.fromList [
-              (HasEmbed "embed" (OnlyName "1"))
-            , (HasEmbed "embed" (OnlyName "2"))
+      let container = HasSetEmbed "set" $ S.fromList
+            [ HasEmbed "embed" (OnlyName "1")
+            , HasEmbed "embed" (OnlyName "2")
             ]
       contK <- insert container
       Just res <- selectFirst [HasSetEmbedName ==. throw TestException] []
-      res @== (Entity contK container)
+      res @== Entity contK container
 
   it "List" $ db $ do
-    unlessM isTravis $ do
-          let container = HasListEmbed "list" [
-                  (HasEmbed "embed" (OnlyName "1"))
-                , (HasEmbed "embed" (OnlyName "2"))
-                ]
-          contK <- insert container
-          Just res <- selectFirst [HasListEmbedName ==. "list"] []
-          res @== (Entity contK container)
+      let container = HasListEmbed "list"
+            [ HasEmbed "embed" (OnlyName "1")
+            , HasEmbed "embed" (OnlyName "2")
+            ]
+      contK <- insert container
+      Just res <- selectFirst [HasListEmbedName ==. "list"] []
+      res @== Entity contK container
 
   it "Map" $ db $ do
       let container = HasMapEmbed "map" $ M.fromList [
@@ -197,17 +195,7 @@ specs = describe "embedded entities" $ do
             ]
       contK <- insert container
       Just res <- selectFirst [HasMapEmbedName ==. "map"] []
-      res @== (Entity contK container)
-
-#ifdef WITH_MONGODB
-  it "can embed objects with ObjectIds" $ db $ do
-    oid <- liftIO $ genObjectid
-    let hoid   = HasObjectId oid "oid"
-        hasArr = HasArrayWithObjectIds "array" [hoid]
-
-    k <- insert hasArr
-    Just v <- get k
-    v @== hasArr
+      res @== Entity contK container
 
   it "can embed an Entity" $ db $ do
     let foo = ARecord "foo"
@@ -222,16 +210,27 @@ specs = describe "embedded entities" $ do
     Just retrievedHasEnts <- get kEnts
     retrievedHasEnts @== hasEnts
 
-  it "mongo filters" $ db $ do
+#ifdef WITH_MONGODB
+  it "can embed objects with ObjectIds" $ db $ do
+    oid <- liftIO $ genObjectid
+    let hoid   = HasObjectId oid "oid"
+        hasArr = HasArrayWithObjectIds "array" [hoid]
+
+    k <- insert hasArr
+    Just v <- get k
+    v @== hasArr
+
+  it "mongo single nesting filters" $ db $ do
       let usr = User "foo" (Just "pswd") prof
           prof = Profile "fstN" "lstN" (Just con)
           con = Contact 123456 "foo@bar.com"
       uId <- insert usr
-      Just r1 <- selectFirst [UserProfile ->. ProfileFirstName `nestEq` "fstN"] []
+      Just r1 <- selectFirst [UserProfile &->. ProfileFirstName `nestEq` "fstN"] []
       r1 @== (Entity uId usr)
-      Just r2 <- selectFirst [UserProfile ~>. ProfileContact ?->. ContactEmail `nestEq` "foo@bar.com", UserIdent ==. "foo"] []
+      Just r2 <- selectFirst [UserProfile &~>. ProfileContact ?&->. ContactEmail `nestEq` "foo@bar.com", UserIdent ==. "foo"] []
       r2 @== (Entity uId usr)
 
+  it "mongo embedded array filters" $ db $ do
       let container = HasListEmbed "list" [
               (HasEmbed "embed" (OnlyName "1"))
             , (HasEmbed "embed" (OnlyName "2"))
@@ -239,7 +238,12 @@ specs = describe "embedded entities" $ do
       contK <- insert container
       Just res <- selectFirst [HasListEmbedList `multiEq` HasEmbed "embed" (OnlyName "1")] []
       res @== (Entity contK container)
-      return ()
+
+      Just res2 <- selectFirst [HasListEmbedList ->. HasEmbedName `nestEq` "embed"] []
+      res2 @== (Entity contK container)
+
+      Just res3 <- selectFirst [HasListEmbedList ~>. HasEmbedEmbed &->. OnlyNameName `nestEq` "1"] []
+      res3 @== (Entity contK container)
 
   it "re-orders json inserted from another source" $ db $ do
     _ <- liftIO $ readProcess "mongoimport" ["-d", "test", "-c", "ListEmbed"] "{ \"nested\": [{ \"one\": 1, \"two\": 2 }, { \"two\": 2, \"one\": 1}], \"two\": 2, \"one\": 1, \"_id\" : { \"$oid\" : \"50184f5a92d7ae0000001e89\" } }"
@@ -247,6 +251,3 @@ specs = describe "embedded entities" $ do
     list @== ListEmbed [InList 1 2, InList 1 2] 1 2
     return ()
 #endif
-    
-
-    

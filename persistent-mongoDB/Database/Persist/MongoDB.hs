@@ -34,7 +34,7 @@ module Database.Persist.MongoDB
 
     -- * MongoDB specific Filters
     -- $filters
-    , (->.), (~>.), (?->.), (?~>.)
+    , (->.), (~>.), (?&->.), (?&~>.), (&->.), (&~>.)
     , nestEq, multiEq
 
     -- * MongoDB specific PersistFields
@@ -801,46 +801,64 @@ instance PersistConfig MongoConf where
 -- These filters create a query that reaches deeper into a document with
 -- nested fields.
 
-type instance BackendSpecificFilter MongoBackend v = MongoFilter v
+type instance BackendSpecificFilter MongoBackend record = MongoFilter record
 
-data NestedField val nes  =  forall nes1. PersistEntity nes1 => EntityField val nes1  `MidFlds` NestedField nes1 nes
-                          | forall nes1. PersistEntity nes1 => EntityField val (Maybe nes1) `MidFldsNullable` NestedField nes1 nes
-                          | forall nes1. PersistEntity nes1 => EntityField val nes1 `LastFld` EntityField nes1 nes
-                          | forall nes1. PersistEntity nes1 => EntityField val (Maybe nes1) `LastFldNullable` EntityField nes1 nes
-data MongoFilter val = forall typ. (PersistField typ) =>
+data NestedField record typ
+  = forall emb. PersistEntity emb => EntityField record [emb] `LastEmbFld` EntityField emb typ
+  | forall emb. PersistEntity emb => EntityField record [emb] `MidEmbFld` NestedField emb typ
+  | forall nest. PersistEntity nest => EntityField record nest  `MidNestFlds` NestedField nest typ
+  | forall nest. PersistEntity nest => EntityField record (Maybe nest) `MidNestFldsNullable` NestedField nest typ
+  | forall nest. PersistEntity nest => EntityField record nest `LastNestFld` EntityField nest typ
+  | forall nest. PersistEntity nest => EntityField record (Maybe nest) `LastNestFldNullable` EntityField nest typ
+data MongoFilter record = forall typ. (PersistField typ) =>
                         NestedFilter {
-                          nestedField :: NestedField val typ
+                          nestedField :: NestedField record typ
                         , fieldValue  :: Either typ [typ]
                         }
                       | forall typ. PersistField typ =>
                         MultiKeyFilter {
-                          mulFldKey  :: EntityField val [typ]
+                          mulFldKey  :: EntityField record [typ]
                         , mulFldVal  :: Either typ [typ]
                         }
 
--- | Point to a nested field to query. Used for the final level of nesting with `nestEq` or other operators.
-(->.) :: forall val nes nes1. PersistEntity nes1 => EntityField val nes1 -> EntityField nes1 nes -> NestedField val nes
-(->.)  = LastFld
+-- | Point to an array field with an embedded object and give a deeper query into the embedded object.
+-- Use with 'nestEq'.
+(->.) :: forall record emb typ. PersistEntity emb => EntityField record [emb] -> EntityField emb typ -> NestedField record typ
+(->.)  = LastEmbFld
 
--- | Same as (->.), but Works against a Maybe type
-(?->.) :: forall val nes nes1. PersistEntity nes1 => EntityField val (Maybe nes1) -> EntityField nes1 nes -> NestedField val nes
-(?->.) = LastFldNullable
-
--- | Point to a nested field to query.
+-- | Point to an array field with an embedded object and give a deeper query into the embedded object.
 -- This level of nesting is not the final level.
--- Use (->.) to point to the final level is 
-(~>.) :: forall val nes nes1. PersistEntity nes1 => EntityField val nes1 -> NestedField nes1 nes -> NestedField val nes
-(~>.)  = MidFlds
+-- Use '->.' or '&->.' to point to the final level.
+(~>.) :: forall record typ emb. PersistEntity emb => EntityField record [emb] -> NestedField emb typ -> NestedField record typ
+(~>.)  = MidEmbFld
 
--- | Same as (~>.), but Works against a Maybe type
-(?~>.) :: forall val nes nes1. PersistEntity nes1 => EntityField val (Maybe nes1) -> NestedField nes1 nes -> NestedField val nes
-(?~>.) = MidFldsNullable
+-- | Point to a nested field to query. This field is not an array type.
+-- Use with 'nestEq'.
+(&->.) :: forall record typ nest. PersistEntity nest => EntityField record nest -> EntityField nest typ -> NestedField record typ
+(&->.) = LastNestFld
+
+-- | Same as '&->.', but Works against a Maybe type
+(?&->.) :: forall record typ nest. PersistEntity nest => EntityField record (Maybe nest) -> EntityField nest typ -> NestedField record typ
+(?&->.) = LastNestFldNullable
+
+
+-- | Point to a nested field to query. This field is not an array type.
+-- This level of nesting is not the final level.
+-- Use '->.' or '&>.' to point to the final level.
+(&~>.) :: forall val nes nes1. PersistEntity nes1 => EntityField val nes1 -> NestedField nes1 nes -> NestedField val nes
+(&~>.)  = MidNestFlds
+
+-- | Same as '&~>.', but works against a Maybe type
+(?&~>.) :: forall val nes nes1. PersistEntity nes1 => EntityField val (Maybe nes1) -> NestedField nes1 nes -> NestedField val nes
+(?&~>.) = MidNestFldsNullable
 
 
 infixr 5 ~>.
-infixr 5 ?~>.
+infixr 5 &~>.
+infixr 5 ?&~>.
+infixr 6 &->.
+infixr 6 ?&->.
 infixr 6 ->.
-infixr 6 ?->.
 
 infixr 4 `nestEq`
 
@@ -859,10 +877,12 @@ mongoFilterToDoc (NestedFilter fns v) = return ( (nesFldName fns) DB.:= toValue 
     where
       nesFldName fns' = T.intercalate "." $ nesIdFix . reverse $ nesFldName' fns' []
       nesFldName' :: forall r1 r2. (PersistEntity r1) => NestedField r1 r2 -> [DB.Label] -> [DB.Label]
-      nesFldName' ( f1 `MidFlds` f2) lbls = nesFldName' f2 (fieldName f1 : lbls)
-      nesFldName' ( f1 `MidFldsNullable` f2) lbls = nesFldName' f2 (fieldName f1:lbls)
-      nesFldName' (nf1 `LastFld` nf2) lbls = fieldName nf2:fieldName nf1:lbls
-      nesFldName' (nf1 `LastFldNullable` nf2) lbls = fieldName nf2:fieldName nf1:lbls
+      nesFldName' (nf1 `LastEmbFld` nf2)          lbls = fieldName nf2 : fieldName nf1 : lbls
+      nesFldName' ( f1 `MidEmbFld`  f2)           lbls = nesFldName' f2 (fieldName f1 : lbls)
+      nesFldName' ( f1 `MidNestFlds` f2)          lbls = nesFldName' f2 (fieldName f1 : lbls)
+      nesFldName' ( f1 `MidNestFldsNullable` f2)  lbls = nesFldName' f2 (fieldName f1 : lbls)
+      nesFldName' (nf1 `LastNestFld` nf2)         lbls = fieldName nf2 : fieldName nf1:lbls
+      nesFldName' (nf1 `LastNestFldNullable` nf2) lbls = fieldName nf2 : fieldName nf1:lbls
       nesIdFix [] = []
       nesIdFix (fst':rst') = fst': (map (joinFN . (T.splitOn "_")) rst')
       joinFN :: [Text] -> Text
