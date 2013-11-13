@@ -14,8 +14,8 @@
 -- Unlike SQL backends, uniqueness constraints cannot be created for you.
 -- You must place a unique index on unique fields.
 {-# LANGUAGE CPP, PackageImports, OverloadedStrings, ScopedTypeVariables  #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving, MultiParamTypeClasses  #-}
-{-# LANGUAGE TypeSynonymInstances, FlexibleInstances, FlexibleContexts #-}
+{-# LANGUAGE DeriveDataTypeable, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses, TypeSynonymInstances, FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE RankNTypes, TypeFamilies #-}
 {-# LANGUAGE EmptyDataDecls #-}
 
@@ -108,6 +108,7 @@ import Data.Time.Calendar (Day(..))
 import Data.Attoparsec.Number
 import Data.Char (toUpper)
 import Data.Monoid (mappend)
+import Data.Typeable
 
 #ifdef DEBUG
 import FileLocation (debug)
@@ -330,7 +331,7 @@ saveWithKey :: forall m entity keyEntity.
 saveWithKey entToFields dbSave key record =
       dbSave (collectionName record) ((keyToMongoIdField key):(entToFields record))
 
-data MongoBackend
+data MongoBackend deriving Typeable
 
 instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => PersistStore (DB.Action m) where
     type PersistMonadBackend (DB.Action m) = MongoBackend
