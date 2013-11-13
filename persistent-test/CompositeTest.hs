@@ -19,7 +19,6 @@ module CompositeTest where
 
 import Test.Hspec.Expectations ()
 
-import Database.Persist
 
 #  if MIN_VERSION_monad_control(0, 3, 0)
 import qualified Control.Monad.Trans.Control
@@ -36,10 +35,13 @@ import qualified Control.Exception.Control as Control
 #    define CATCH Control.catch
 #  endif
 
-import Data.Maybe (isJust)
 import Init
+#ifndef WITH_MONGODB
+import Database.Persist
+import Data.Maybe (isJust)
 
 import Control.Applicative ((<$>),(<*>))
+#endif
 
 share [mkPersist sqlSettings,  mkMigrate "compositeMigrate", mkDeleteCascade sqlSettings] [persistLowerCase|
   TestChild
@@ -71,6 +73,9 @@ share [mkPersist sqlSettings,  mkMigrate "compositeMigrate", mkDeleteCascade sql
     deriving Eq Show
 |]
 
+
+#ifdef WITH_MONGODB
+#else
 cleanDB :: (PersistQuery m, PersistEntityBackend TestChild ~ PersistMonadBackend m) => m ()
 cleanDB = do
   deleteWhere ([] :: [Filter TestChild])
@@ -79,18 +84,12 @@ cleanDB = do
   deleteWhere ([] :: [Filter Citizen])
   deleteWhere ([] :: [Filter Address])
 
-#ifdef WITH_MONGODB
 db :: Action IO () -> Assertion
 db = db' cleanDB
-#endif
-
-asIO :: IO a -> IO a
-asIO = id
 
 specs :: Spec
-specs = describe "composite" $ do
-
-  describe "composite primary keys" $ do
+specs = describe "composite" $
+  describe "primary keys" $ do
 
     let p1 = TestParent "a1" "b1" 11 "p1"
     let p2 = TestParent "a2" "b2" 22 "p2"
@@ -189,12 +188,12 @@ specs = describe "composite" $ do
       newkps1 <- get kp1
       newkps1 @== Just (TestParent "a1" "b1" 11 "q1")
     
-    let z1 = Citizen "mk" (Just 11)
-    let a1 = Address "abc" "usa"     
-    let z2 = Citizen "gb" (Just 22)
-    let a2 = Address "def" "den"
-    
     it "Insert Many to Many" $ db $ do
+      let z1 = Citizen "mk" (Just 11)
+      let a1 = Address "abc" "usa"
+      let z2 = Citizen "gb" (Just 22)
+      let a2 = Address "def" "den"
+
       kc1 <- insert z1
       ka1 <- insert a1
       let ca1 = CitizenAddress kc1 ka1
@@ -233,6 +232,7 @@ matchParentK k = error $ "matchParentK: unexpected value for key " ++ show k
 matchCitizenAddressK :: Key CitizenAddress -> Either Text (Int64, Int64)
 matchCitizenAddressK (Key (PersistList [a, b]))  = (,) <$> fromPersistValue a <*> fromPersistValue b
 matchCitizenAddressK k = error $ "matchCitizenAddressK: unexpected value for key " ++ show k
+#endif
 
 #if MIN_VERSION_monad_control(0, 3, 0)
 catch' :: (Control.Monad.Trans.Control.MonadBaseControl IO m, E.Exception e)

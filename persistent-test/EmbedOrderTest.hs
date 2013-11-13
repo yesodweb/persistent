@@ -9,7 +9,6 @@ embedOrderMigrate
 ) where
 
 import Init
-import Data.Aeson
 import Data.Map hiding (insert)
 
 import Debug.Trace (trace)

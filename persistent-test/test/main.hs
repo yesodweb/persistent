@@ -69,4 +69,6 @@ main = do
     SumTypeTest.specs
     MigrationOnlyTest.specs
     PersistentTest.specs
+#ifndef WITH_MONGODB
     CompositeTest.specs
+#endif
