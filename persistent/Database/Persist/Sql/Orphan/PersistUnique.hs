@@ -52,11 +52,11 @@ instance (MonadResource m, MonadLogger m) => PersistUnique (SqlPersistT m) where
                 Just (PersistInt64 k:vals) ->
                     case fromPersistValues vals of
                         Left s -> error $ T.unpack s
-                        Right x -> return $ Just (Entity (Key $ PersistInt64 k) x)
+                        Right x -> return $ Just (Entity (persistValueToPersistKey $ PersistInt64 k) x)
                 Just (PersistDouble k:vals) ->   -- oracle
                     case fromPersistValues vals of
                         Left s -> error $ T.unpack s
-                        Right x -> return $ Just (Entity (Key $ PersistInt64 $ truncate k) x)
+                        Right x -> return $ Just (Entity (persistValueToPersistKey $ PersistInt64 $ truncate k) x)
                 Just xs -> error $ "Database.Persist.GenericSql: Bad list in getBy xs="++show xs
       where
         sqlClause conn =

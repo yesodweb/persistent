@@ -2,7 +2,7 @@
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, UndecidableInstances #-}
 #ifndef NO_OVERLAP
 {-# LANGUAGE OverlappingInstances #-}
 #endif
@@ -105,7 +105,7 @@ instance PersistField a => RawSql (Single a) where
     rawSqlProcessRow [pv]  = Single <$> fromPersistValue pv
     rawSqlProcessRow _     = Left $ pack "RawSql (Single a): wrong number of columns."
 
-instance PersistEntity a => RawSql (Entity a) where
+instance (PersistEntity record, PersistField (Key record)) => RawSql (Entity record) where
     rawSqlCols escape = ((+1) . length . entityFields &&& process) . entityDef . Just . entityVal
         where
           process ed = (:[]) $
@@ -315,7 +315,7 @@ instance PersistFieldSql Rational where
 
 -- perhaps a SQL user can figure this sqlType out?
 -- It is really intended for MongoDB though.
-instance PersistField entity => PersistFieldSql (Entity entity) where
+{-
+instance PersistField record => PersistFieldSql (Entity record) where
     sqlType _ = SqlOther "embedded entity, hard to type"
-instance PersistFieldSql (KeyBackend SqlBackend a) where
-    sqlType _ = SqlInt64
+    -}

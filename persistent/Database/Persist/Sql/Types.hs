@@ -122,14 +122,6 @@ type Migration m = WriterT [Text] (WriterT CautiousMigration m) ()
 
 type ConnectionPool = Pool Connection
 
-instance PathPiece (KeyBackend SqlBackend entity) where
-    toPathPiece (Key (PersistInt64 i)) = toPathPiece i
-    toPathPiece k = throw $ PersistInvalidField $ pack $ "Invalid Key: " ++ show k
-    fromPathPiece t =
-        case Data.Text.Read.signed Data.Text.Read.decimal t of
-            Right (i, t') | T.null t' -> Just $ Key $ PersistInt64 i
-            _ -> Nothing
-
 
 -- $rawSql
 --

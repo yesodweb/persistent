@@ -7,6 +7,7 @@ module Database.Persist.Sql.Internal
     ) where
 
 import Database.Persist.Types
+import Database.Persist.Class.PersistEntity
 import Database.Persist.Quasi
 import Data.Char (isSpace)
 import Data.Text (Text)
@@ -80,7 +81,7 @@ resolveTableName (e:es) hn
     | entityHaskell e == hn = entityDB e
     | otherwise = resolveTableName es hn
 
-convertKey :: Bool -> KeyBackend t t1 -> [PersistValue]
-convertKey True (Key (PersistList fks)) = fks
-convertKey False (Key ret@(PersistInt64 _)) = [ret]
+convertKey :: Bool -> PersistValue -> [PersistValue]
+convertKey True (PersistList fks) = fks
+convertKey False ret@(PersistInt64 _) = [ret]
 convertKey composite k = error $ "invalid key type " ++ show k ++ " composite=" ++ show composite

@@ -622,7 +622,7 @@ mkEntity mps t = do
             []
         , FunD 'persistFieldDef (map snd fields)
         , TySynInstD
-            ''PersistEntityBackend
+            ''EntityBackend
 #if MIN_VERSION_template_haskell(2,9,0)
             (TySynEqn
                [genericDataType mps (unHaskellName $ entityHaskell t) $ VarT $ mkName "backend"]
@@ -778,7 +778,7 @@ mkDeleteCascade mps defs = do
         return $
             InstanceD
             [ ClassP ''PersistQuery [VarT $ mkName "m"]
-            , EqualP (ConT ''PersistEntityBackend `AppT` entityT) (ConT ''PersistMonadBackend `AppT` VarT (mkName "m"))
+            , EqualP (ConT ''EntityBackend `AppT` entityT) (ConT ''MonadBackend `AppT` VarT (mkName "m"))
             ]
             (ConT ''DeleteCascade `AppT` entityT `AppT` VarT (mkName "m"))
             [ FunD 'deleteCascade

@@ -39,65 +39,66 @@ import Database.Persist.Class.PersistEntity
 import Database.Persist.Types
 
 class MonadIO m => PersistStore m where
-    type PersistMonadBackend m
+    type MonadBackend m
 
     -- | Get a record by identifier, if available.
-    get :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
-        => Key val -> m (Maybe val)
+    get :: (Show (Key record), MonadBackend m ~ EntityBackend record, PersistEntity record)
+        => Key record -> m (Maybe record)
 
     -- | Create a new record in the database, returning an automatically created
     -- key (in SQL an auto-increment id).
-    insert :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
-           => val -> m (Key val)
+    insert :: (MonadBackend m ~ EntityBackend record, PersistEntity record)
+           => record -> m (Key record)
 
-    -- | Same as 'insert', but doesn't return a @Key@.
-    insert_ :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
-            => val -> m ()
+    -- | Same as 'insert', but doesn't return a key.
+    insert_ :: (MonadBackend m ~ EntityBackend record, PersistEntity record)
+            => record -> m ()
     insert_ val = insert val >> return ()
 
     -- | Create multiple records in the database.
     -- SQL backends currently use the slow default implementation of
     -- @mapM insert@
-    insertMany :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
-                => [val] -> m [Key val]
+    insertMany :: (MonadBackend m ~ EntityBackend record, PersistEntity record)
+                => [record] -> m [Key record]
     insertMany = mapM insert
 
     -- | Create a new record in the database using the given key.
-    insertKey :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
-              => Key val -> val -> m ()
+    insertKey :: (MonadBackend m ~ EntityBackend record, PersistEntity record)
+              => Key record -> record -> m ()
 
     -- | Put the record in the database with the given key.
     -- Unlike 'replace', if a record with the given key does not
     -- exist then a new record will be inserted.
-    repsert :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
-            => Key val -> val -> m ()
+    repsert :: (MonadBackend m ~ EntityBackend record, PersistEntity record, Show (Key record))
+            => Key record -> record -> m ()
 
     -- | Replace the record in the database with the given
     -- key. Note that the result is undefined if such record does
     -- not exist, so you must use 'insertKey or 'repsert' in
     -- these cases.
-    replace :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
-            => Key val -> val -> m ()
+    replace :: (MonadBackend m ~ EntityBackend record, PersistEntity record)
+            => Key record -> record -> m ()
 
     -- | Delete a specific record by identifier. Does nothing if record does
     -- not exist.
-    delete :: (PersistMonadBackend m ~ PersistEntityBackend val, PersistEntity val)
-           => Key val -> m ()
+    delete :: (MonadBackend m ~ EntityBackend record, PersistEntity record)
+           => Key record -> m ()
 
 -- | Same as get, but for a non-null (not Maybe) foreign key
 --   Unsafe unless your database is enforcing that the foreign key is valid
-getJust :: (PersistStore m, PersistEntity val, Show (Key val), PersistMonadBackend m ~ PersistEntityBackend val) => Key val -> m val
+getJust :: (PersistStore m, PersistEntity record, Show (Key record), MonadBackend m ~ EntityBackend record) => Key record -> m record
 getJust key = get key >>= maybe
-  (liftIO $ throwIO $ PersistForeignConstraintUnmet $ T.pack $ Prelude.show key)
+  (liftIO $ throwIO $ KeyNotFound $ Prelude.show key)
   return
 
 -- | curry this to make a convenience function that loads an associated model
---   > foreign = belongsTo foeignId
+--   > foreign = belongsTo foreignId
 belongsTo ::
   (PersistStore m
   , PersistEntity ent1
   , PersistEntity ent2
-  , PersistMonadBackend m ~ PersistEntityBackend ent2
+  , MonadBackend m ~ EntityBackend ent2
+  , Show (Key ent2)
   ) => (ent1 -> Maybe (Key ent2)) -> ent1 -> m (Maybe ent2)
 belongsTo foreignKeyField model = case foreignKeyField model of
     Nothing -> return Nothing
@@ -108,15 +109,17 @@ belongsToJust ::
   (PersistStore m
   , PersistEntity ent1
   , PersistEntity ent2
-  , PersistMonadBackend m ~ PersistEntityBackend ent2)
+  , MonadBackend m ~ EntityBackend ent2
+  , Show (Key ent2))
   => (ent1 -> Key ent2) -> ent1 -> m ent2
 belongsToJust getForeignKey model = getJust $ getForeignKey model
 
-#define DEF(T) { type PersistMonadBackend (T m) = PersistMonadBackend m; insert = lift . insert; insertKey k = lift . insertKey k; repsert k = lift . repsert k; replace k = lift . replace k; delete = lift . delete; get = lift . get }
-#define GO(T) instance (PersistStore m) => PersistStore (T m) where DEF(T)
+#define DEF(T) { type MonadBackend (T m) = MonadBackend m; insert = lift . insert; insertKey k = lift . insertKey k; repsert k = lift . repsert k; replace k = lift . replace k; delete = lift . delete; get = lift . get }
+#define GO(T)     instance (PersistStore m)    => PersistStore (T m) where DEF(T)
 #define GOX(X, T) instance (X, PersistStore m) => PersistStore (T m) where DEF(T)
 
 GO(LoggingT)
+GO(ResourceT)
 GO(IdentityT)
 GO(ListT)
 GO(MaybeT)
@@ -124,7 +127,6 @@ GOX(Error e, ErrorT e)
 GO(ReaderT r)
 GO(ContT r)
 GO(StateT s)
-GO(ResourceT)
 GO(Pipe l i o u)
 GO(ConduitM i o)
 GOX(Monoid w, WriterT w)
