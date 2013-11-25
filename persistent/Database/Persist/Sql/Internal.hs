@@ -7,7 +7,6 @@ module Database.Persist.Sql.Internal
     ) where
 
 import Database.Persist.Types
-import Database.Persist.Class.PersistEntity
 import Database.Persist.Quasi
 import Data.Char (isSpace)
 import Data.Text (Text)

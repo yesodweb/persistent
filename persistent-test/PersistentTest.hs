@@ -150,7 +150,7 @@ NoPrefix2
 |]
 #endif
 
-cleanDB :: (PersistQuery m, PersistEntityBackend Email ~ PersistMonadBackend m) => m ()
+cleanDB :: (PersistQuery m, EntityBackend Email ~ MonadBackend m) => m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Person])
   deleteWhere ([] :: [Filter Person1])
@@ -376,7 +376,7 @@ specs = describe "persistent" $ do
       p3 @== p
 
   prop "toPathPiece . fromPathPiece" $ \piece ->
-      let key1 = Key piece :: (KeyBackend BackendMonad Person)
+      let key1 = piece :: (KeyBackend BackendMonad Person)
           key2 = fromJust $ fromPathPiece $ toPathPiece key1 :: (KeyBackend BackendMonad Person)
       in  toPathPiece key1 == toPathPiece key2
 

@@ -43,6 +43,8 @@ import Data.Maybe (isJust)
 import Control.Applicative ((<$>),(<*>))
 #endif
 
+#ifdef WITH_MONGODB
+#else
 share [mkPersist sqlSettings,  mkMigrate "compositeMigrate", mkDeleteCascade sqlSettings] [persistLowerCase|
   TestChild
       name1 String maxlen=20
@@ -74,18 +76,15 @@ share [mkPersist sqlSettings,  mkMigrate "compositeMigrate", mkDeleteCascade sql
 |]
 
 
-#ifdef WITH_MONGODB
-#else
-cleanDB :: (PersistQuery m, PersistEntityBackend TestChild ~ PersistMonadBackend m) => m ()
+db :: Action IO () -> Assertion
+db = db' cleanDB
+cleanDB :: (PersistQuery m, EntityBackend TestChild ~ MonadBackend m) => m ()
 cleanDB = do
   deleteWhere ([] :: [Filter TestChild])
   deleteWhere ([] :: [Filter TestParent])
   deleteWhere ([] :: [Filter CitizenAddress])
   deleteWhere ([] :: [Filter Citizen])
   deleteWhere ([] :: [Filter Address])
-
-db :: Action IO () -> Assertion
-db = db' cleanDB
 
 specs :: Spec
 specs = describe "composite" $
@@ -217,21 +216,23 @@ specs = describe "composite" $
       matchCitizenAddressK kca1 @== matchCitizenAddressK newkca1
       ca1 @== newca1
 
-matchK :: PersistField a => KeyBackend backend entity -> Either Text a
-matchK = fromPersistValue . unKey
+matchK :: (PersistEntity record, PersistField a) => KeyBackend backend record -> Either Text a
+matchK = fromPersistValue . persistKeyToPersistValue
 
-matchK2 :: (PersistField a1, PersistField a) =>
-                 KeyBackend backend entity
-                 -> KeyBackend backend1 entity1 -> Either Text (a1, a)
+matchK2 :: (PersistEntity record, PersistEntity record2, PersistField a1, PersistField a)
+        => KeyBackend backend record
+        -> KeyBackend backend1 record2 -> Either Text (a1, a)
 matchK2 k1 k2 = (,) <$> matchK k1 <*> matchK k2
 
 matchParentK :: Key TestParent -> Either Text (String, String, Int64)
-matchParentK (Key (PersistList [a, b, c]))  = (,,) <$> fromPersistValue a <*> fromPersistValue b <*> fromPersistValue c
-matchParentK k = error $ "matchParentK: unexpected value for key " ++ show k
+matchParentK = go . persistKeyToPersistValue where
+    go (PersistList [a, b, c]) = (,,) <$> fromPersistValue a <*> fromPersistValue b <*> fromPersistValue c
+    go k = error $ "matchParentK: unexpected value for key " ++ show k
 
 matchCitizenAddressK :: Key CitizenAddress -> Either Text (Int64, Int64)
-matchCitizenAddressK (Key (PersistList [a, b]))  = (,) <$> fromPersistValue a <*> fromPersistValue b
-matchCitizenAddressK k = error $ "matchCitizenAddressK: unexpected value for key " ++ show k
+matchCitizenAddressK = go . persistKeyToPersistValue where
+    go (PersistList [a, b])  = (,) <$> fromPersistValue a <*> fromPersistValue b
+    go k = error $ "matchCitizenAddressK: unexpected value for key " ++ show k
 #endif
 
 #if MIN_VERSION_monad_control(0, 3, 0)

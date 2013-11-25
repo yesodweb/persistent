@@ -23,22 +23,20 @@ import Data.Aeson (ToJSON (..), FromJSON (..), object, (.:), (.=), Value (Object
 import Data.Aeson.Types (Parser)
 import Control.Applicative ((<$>), (<*>))
 import qualified Data.HashMap.Strict as HM
-{-
 import qualified Data.Text as T
 import Data.Monoid (mappend)
--}
 
--- | Persistent serialized Haskell records to the database.
+-- | Persistent serializes Haskell records to the database.
 -- A Database 'Entity' (A row in SQL, a document in MongoDB, etc)
 -- corresponds to a 'Key' plus a Haskell record.
 --
 -- For every Haskell record type stored in the database there is a corresponding 'PersistEntity' instance.
 -- An instance of PersistEntity contains meta-data for the record.
 -- PersistEntity also helps abstract over different record types.
--- That way the same query interface can return a 'PersistEntity', with each query returning different types of Haskell records.
+-- That means the same query interface can return a 'PersistEntity', with each query returning different types of Haskell records.
 --
 -- Some advanced type system capabilities are used to make this process type-safe.
--- Persistent users usually don't need to understand the class associated data and functions.
+-- Normal usage of the persistent API does not require understanding the class associated data and functions.
 class PersistEntity record where
     -- | An 'EntityField' is parameterised by the Haskell record it belongs to
     -- and the additional type of that field
@@ -75,15 +73,19 @@ class PersistEntity record where
     fieldLens :: EntityField record field
               -> (forall f. Functor f => (field -> f field) -> Entity record -> f (Entity record))
 
-{-
-    instance PersistEntity User where
-      data Key User = UserKey Int64
--}
+instance Eq       (KeyBackend backend record)
+instance Ord      (KeyBackend backend record)
+instance Read     (KeyBackend backend record)
+instance Show     (KeyBackend backend record)
+-- instance FromJSON (KeyBackend backend record)
 
 -- | Helper wrapper, equivalent to @KeyBackend (EntityBackend record) record@.
 --
 -- Since 1.1.0
 type Key record = KeyBackend (EntityBackend record) record
+
+-- deriving instance Eq (KeyBackend backend record)
+-- deriving instance Ord (Key record) - , Read, Show)
 
 instance PersistEntity record => PersistField (KeyBackend backend record) where
     toPersistValue = persistKeyToPersistValue
@@ -156,9 +158,10 @@ data Filter record = forall typ. PersistField typ => Filter
 -- your query returns two entities (i.e. @(Entity backend a,
 -- Entity backend b)@), then you must you use @SELECT ??, ??
 -- WHERE ...@, and so on.
-data Entity entity =
-    Entity { entityKey :: Key entity
-           , entityVal :: entity }
+data Entity record =
+    Entity { entityKey :: Key record
+           , entityVal :: record }
+    deriving (Eq, Ord, Read, Show)
 
 -- | Predefined @toJSON@. The resulting JSON looks like
 -- @{\"key\": 1, \"value\": {\"name\": ...}}@.
@@ -217,8 +220,7 @@ entityIdFromJSON :: (FromJSON e, FromJSON (Key e)) => Value -> Parser (Entity e)
 entityIdFromJSON value@(Object o) = Entity <$> o .: "id" <*> parseJSON value
 entityIdFromJSON _ = fail "entityIdFromJSON: not an object"
 
-{-
-instance PersistField record => PersistField (Entity (EntityBackend record) record) where
+instance (PersistEntity record, PersistField record) => PersistField (Entity record) where
     toPersistValue (Entity key value) = case toPersistValue value of
         (PersistMap alist) -> PersistMap ((idField, toPersistValue key) : alist)
         _ -> error $ T.unpack $ errMsg "expected PersistMap"
@@ -227,7 +229,7 @@ instance PersistField record => PersistField (Entity (EntityBackend record) reco
         [] -> Left $ errMsg $ "did not find " `mappend` idField `mappend` " field"
         ("_id", k):afterRest ->
             case fromPersistValue (PersistMap (before ++ afterRest)) of
-                Right record -> Right $ Entity k record
+                Right record -> Right $ Entity (persistValueToPersistKey k) record
                 Left err     -> Left err
         _ -> Left $ errMsg $ "impossible id field: " `mappend` T.pack (show alist)
       where
@@ -243,4 +245,3 @@ errMsg = mappend "PersistField entity fromPersistValue: "
 -- so lets use MongoDB conventions
 idField :: Text
 idField = "_id"
--}

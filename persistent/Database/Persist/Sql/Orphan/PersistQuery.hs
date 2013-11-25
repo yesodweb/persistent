@@ -8,7 +8,6 @@ module Database.Persist.Sql.Orphan.PersistQuery
     ) where
 
 import Database.Persist
-import Database.Persist.Class.PersistEntity
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Class
 import Database.Persist.Sql.Raw

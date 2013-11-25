@@ -639,17 +639,17 @@ mkEntity mps t = do
 mkForeignKeysComposite :: MkPersistSettings -> EntityDef a -> ForeignDef -> Q [Dec]
 mkForeignKeysComposite mps t fdef = do
    let fieldName f = mkName $ unpack $ recName mps (unHaskellName $ entityHaskell t) (unHaskellName f)
-   let fname=fieldName $ foreignConstraintNameHaskell fdef
-   let reftablename=mkName $ unpack $ unHaskellName $ foreignRefTableHaskell fdef 
-   let tablename=mkName $ unpack $ unHaskellName $ entityHaskell t
+   let fname        = fieldName $ foreignConstraintNameHaskell fdef
+   let reftablename = mkName $ unpack $ unHaskellName $ foreignRefTableHaskell fdef
+   let tablename    = mkName $ unpack $ unHaskellName $ entityHaskell t
    entName <- newName "entname"
    
    let flds = map (\(a,_,_,_) -> VarE (fieldName a)) $ foreignFields fdef
    let xs = ListE $ map (\a -> AppE (VarE 'toPersistValue) ((AppE a (VarE entName)))) flds
-   let fn = FunD fname [Clause [VarP entName] (NormalB (AppE (ConE 'Key) (AppE (ConE 'PersistList) xs))) []]
+   let fn = FunD fname [Clause [VarP entName] (NormalB xs) []]
    
-   let t2 = ConT ''KeyBackend `AppT` ConT ''SqlBackend `AppT` ConT reftablename
-   let sig = SigD fname $ (ArrowT `AppT` (ConT tablename)) `AppT` t2
+   let keybackend = ConT ''KeyBackend `AppT` ConT ''SqlBackend `AppT` ConT reftablename
+   let sig = SigD fname $ (ArrowT `AppT` (ConT tablename)) `AppT` keybackend
    return [sig, fn]
 
 
