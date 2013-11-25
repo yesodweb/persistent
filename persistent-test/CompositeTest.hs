@@ -76,6 +76,7 @@ share [mkPersist sqlSettings,  mkMigrate "compositeMigrate", mkDeleteCascade sql
 |]
 
 
+{-
 db :: Action IO () -> Assertion
 db = db' cleanDB
 cleanDB :: (PersistQuery m, EntityBackend TestChild ~ MonadBackend m) => m ()
@@ -85,6 +86,7 @@ cleanDB = do
   deleteWhere ([] :: [Filter CitizenAddress])
   deleteWhere ([] :: [Filter Citizen])
   deleteWhere ([] :: [Filter Address])
+-}
 
 specs :: Spec
 specs = describe "composite" $

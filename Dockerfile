@@ -7,7 +7,7 @@ RUN apt-get install -y haskell-platform
 RUN cabal update && install Cabal cabal-install
 
 # Postgres
-RUN apt-get install -y postgresql postgresql-contrib
+RUN apt-get install -y postgresql postgresql-contrib libpq-dev
 
 # Sqlite
 RUN apt-get install -y sqlite3 libsqlite3-dev

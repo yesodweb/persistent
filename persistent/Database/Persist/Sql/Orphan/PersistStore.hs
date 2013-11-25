@@ -7,15 +7,12 @@
 module Database.Persist.Sql.Orphan.PersistStore () where
 
 import Database.Persist
-import Database.Persist.Class.PersistEntity
-import Database.Persist.Class.PersistField (fromPersistList)
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Class
 import Database.Persist.Sql.Raw
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import Control.Monad.Logger
-import Control.Exception.Lifted (throwIO)
 import qualified Data.Text as T
 import Data.Text (Text, unpack)
 import Data.Monoid (mappend, (<>))
@@ -23,7 +20,6 @@ import Control.Monad.IO.Class
 import Data.ByteString.Char8 (readInteger)
 import Data.Maybe (isJust)
 import Data.List (find)
-import Data.Int
 
 instance (C.MonadResource m, MonadLogger m) => PersistStore (SqlPersistT m) where
     type MonadBackend (SqlPersistT m) = SqlBackend
@@ -34,7 +30,7 @@ instance (C.MonadResource m, MonadLogger m) => PersistStore (SqlPersistT m) wher
                 x <- rawQuery sql vals C.$$ CL.head
                 return $
                     case x of
-                        Just [p@(PersistInt64 i)] -> persistValueToPersistKey p
+                        Just [p@(PersistInt64 _)] -> persistValueToPersistKey p
                         Nothing -> error "SQL insert did not return a result giving the generated ID"
                         Just vals' -> error $ "Invalid result from a SQL insert, got: " ++ show vals'
 
@@ -43,7 +39,7 @@ instance (C.MonadResource m, MonadLogger m) => PersistStore (SqlPersistT m) wher
                 mm <- rawQuery sql2 [] C.$$ CL.head
                 return $
                     case mm of
-                      Just [p@(PersistInt64 i)] -> persistValueToPersistKey p
+                      Just [p@(PersistInt64 _)] -> persistValueToPersistKey p
                       Just [PersistDouble i]    -> persistValueToPersistKey $ PersistInt64 $ truncate i -- oracle need this!
                       Just [PersistByteString i] -> case readInteger i of -- mssql
                                                       Just (ret,"") -> persistValueToPersistKey $ PersistInt64 $ fromIntegral ret

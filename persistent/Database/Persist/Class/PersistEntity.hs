@@ -77,7 +77,10 @@ instance Eq       (KeyBackend backend record)
 instance Ord      (KeyBackend backend record)
 instance Read     (KeyBackend backend record)
 instance Show     (KeyBackend backend record)
--- instance FromJSON (KeyBackend backend record)
+instance PersistEntity record => ToJSON   (KeyBackend backend record) where
+    toJSON = toJSON . persistKeyToPersistValue
+instance PersistEntity record => FromJSON (KeyBackend backend record) where
+    parseJSON = fmap persistValueToPersistKey . parseJSON
 
 -- | Helper wrapper, equivalent to @KeyBackend (EntityBackend record) record@.
 --

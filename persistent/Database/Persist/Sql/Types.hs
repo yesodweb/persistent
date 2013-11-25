@@ -22,7 +22,7 @@ import Control.Monad (MonadPlus (..))
 import Data.Typeable (Typeable)
 import Control.Monad (liftM)
 import Database.Persist.Types
-import Data.Text (Text, pack)
+import Data.Text (Text)
 import qualified Data.Text as T
 import Data.IORef (IORef)
 import Data.Map (Map)
@@ -30,7 +30,6 @@ import Data.Int (Int64)
 import Data.Conduit (Source)
 import Data.Conduit.Pool (Pool)
 import Web.PathPieces
-import Control.Exception (throw)
 import qualified Data.Text.Read
 import Database.Persist.Class.PersistEntity
 

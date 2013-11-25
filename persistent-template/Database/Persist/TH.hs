@@ -646,7 +646,7 @@ mkForeignKeysComposite mps t fdef = do
    
    let flds = map (\(a,_,_,_) -> VarE (fieldName a)) $ foreignFields fdef
    let xs = ListE $ map (\a -> AppE (VarE 'toPersistValue) ((AppE a (VarE entName)))) flds
-   let fn = FunD fname [Clause [VarP entName] (NormalB xs) []]
+   let fn = FunD fname [Clause [VarP entName] (NormalB (AppE (VarE 'persistValueToPersistKey) (AppE (ConE 'PersistList) xs))) []]
    
    let keybackend = ConT ''KeyBackend `AppT` ConT ''SqlBackend `AppT` ConT reftablename
    let sig = SigD fname $ (ArrowT `AppT` (ConT tablename)) `AppT` keybackend
