@@ -32,6 +32,7 @@ import Data.Conduit.Pool (Pool)
 import Web.PathPieces
 import Control.Exception (throw)
 import qualified Data.Text.Read
+import Database.Persist.Class.PersistEntity
 
 data InsertSqlResult = ISRSingle Text
                      | ISRInsertGet Text Text
@@ -122,6 +123,14 @@ type Migration m = WriterT [Text] (WriterT CautiousMigration m) ()
 
 type ConnectionPool = Pool Connection
 
+-- TODO: handle more key types
+instance PersistEntity (record) => PathPiece (KeyBackend SqlBackend record) where
+    toPathPiece = toPathPiece . persistKeyToPersistValue
+    -- toPathPiece k = throw $ PersistInvalidField $ pack $ "Invalid Key: " ++ show k
+    fromPathPiece t =
+        case Data.Text.Read.signed Data.Text.Read.decimal t of
+            Right (i, t') | T.null t' -> Just $ persistValueToPersistKey $ PersistInt64 i
+            _ -> Nothing
 
 -- $rawSql
 --

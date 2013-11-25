@@ -11,7 +11,6 @@ module Database.Persist.Class.PersistEntity
     , Filter (..)
     , Key
     , Entity (..)
-    -- , KeyBackend
 
     , keyValueEntityToJSON, keyValueEntityFromJSON
     , entityIdToJSON, entityIdFromJSON
@@ -51,9 +50,9 @@ class PersistEntity record where
     -- | Persistent allows multiple different backends
     type EntityBackend record
 
-    data Key record
-    persistValueToPersistKey :: PersistValue -> Key record
-    persistKeyToPersistValue :: Key record -> PersistValue
+    data KeyBackend backend record
+    persistValueToPersistKey :: PersistValue -> KeyBackend backend record
+    persistKeyToPersistValue :: KeyBackend backend record -> PersistValue
 
     -- | retrieve the EntityDef meta-data for the record
     entityDef :: Monad m => m record -> EntityDef SqlType
@@ -79,19 +78,17 @@ class PersistEntity record where
 {-
     instance PersistEntity User where
       data Key User = UserKey Int64
-    type UserKey = KeyType User
 -}
-
--- type Key record = KeyType record
-{-
-data family KeyBackend backend :: * -> *
-data instance KeyBackend SqlBackend Int64
 
 -- | Helper wrapper, equivalent to @KeyBackend (EntityBackend record) record@.
 --
 -- Since 1.1.0
 type Key record = KeyBackend (EntityBackend record) record
--}
+
+instance PersistEntity record => PersistField (KeyBackend backend record) where
+    toPersistValue = persistKeyToPersistValue
+    fromPersistValue = Right . persistValueToPersistKey
+
 
 -- | updataing a database entity
 --

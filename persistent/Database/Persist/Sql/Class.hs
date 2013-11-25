@@ -315,7 +315,5 @@ instance PersistFieldSql Rational where
 
 -- perhaps a SQL user can figure this sqlType out?
 -- It is really intended for MongoDB though.
-{-
-instance PersistField record => PersistFieldSql (Entity record) where
+instance PersistField (Entity record) => PersistFieldSql (Entity record) where
     sqlType _ = SqlOther "embedded entity, hard to type"
-    -}
