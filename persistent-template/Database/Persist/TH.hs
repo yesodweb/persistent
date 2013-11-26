@@ -62,6 +62,7 @@ import Data.Aeson
 import Control.Applicative (pure, (<*>))
 import Control.Monad.Logger (MonadLogger)
 import Database.Persist.Sql (sqlType)
+import Data.Int (Int64)
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
@@ -462,6 +463,27 @@ isNotNull :: PersistValue -> Bool
 isNotNull PersistNull = False
 isNotNull _ = True
 
+--
+-- data instance KeyBackend (EntityBackend (ContactGeneric backend)) (ContactGeneric backend)
+--                = ContactKey !Int64
+mkAssociatedKey :: MkPersistSettings -> EntityDef a -> Q [Dec]
+mkAssociatedKey mps t = do
+  -- keyBackend <- [d| KeyBackend (EntityBackend User) User = UserKey Int64 |]
+  let nameT = unHaskellName $ entityHaskell t
+  let backend = VarT $ mkName "backend"
+  let record = genericDataType mps nameT backend
+  return
+        [
+          DataInstD
+            []
+            ''KeyBackend
+            [ backend
+            , record
+            ]
+            [ NormalC (mkName $ unpack $ nameT `mappend` "Key") [ (IsStrict, ConT ''Int64) ] ]
+            []
+        ]
+
 mkFromPersistValues :: MkPersistSettings -> EntityDef a -> Q [Clause]
 mkFromPersistValues mps t@(EntityDef { entitySum = False }) = do
     nothing <- [|Left $(liftT $ "Invalid fromPersistValues input. Entity: " `mappend` entName)|]
@@ -576,6 +598,7 @@ mkEntity mps t = do
     let clazz = ConT ''PersistEntity `AppT` genericDataType mps (unHaskellName $ entityHaskell t) (VarT $ mkName "backend")
     tpf <- mkToPersistFields mps nameS t
     fpv <- mkFromPersistValues mps t
+    key <- mkAssociatedKey mps t
     utv <- mkUniqueToValues $ entityUniques t
     puk <- mkUniqueKeys t
     fkc <- mapM (mkForeignKeysComposite mps t) $ entityForeigns t
@@ -608,7 +631,8 @@ mkEntity mps t = do
         [ uniqueTypeDec mps t
         , FunD 'entityDef [Clause [WildP] (NormalB t') []]
         , tpf
-        , FunD 'fromPersistValues fpv
+        ] `mappend` key `mappend`
+        [ FunD 'fromPersistValues fpv
         , toFieldNames
         , utv
         , puk

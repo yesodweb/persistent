@@ -115,8 +115,8 @@ share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
     phone Int
     email T.Text
     deriving Show Eq Read Ord
-
 |]
+
 #ifdef WITH_MONGODB
 cleanDB :: (PersistQuery m, EntityBackend HasMapEmbed ~ MonadBackend m) => m ()
 cleanDB = do
