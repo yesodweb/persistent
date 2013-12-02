@@ -13,3 +13,8 @@ TAGS
 dist_y
 /.shelly
 /tarballs/
+
+# mounting into docker
+.bash_history
+.cabal
+.ghc
