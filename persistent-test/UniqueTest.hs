@@ -30,10 +30,10 @@ share [mkPersist sqlSettings,  mkMigrate "uniqueMigrate"] [persistLowerCase|
     deriving Eq Show
 #ifndef WITH_MONGODB
   TestCheckmark
-    key   Text
+    keyed Text
     value Text
     active Checkmark nullable
-    UniqueTestCheckmark key active !force
+    UniqueTestCheckmark keyed active !force
     deriving Eq Show
 #endif
 |]
@@ -78,7 +78,7 @@ specs = describe "uniqueness constraints" $
       (db $ void $ ctx >>= flip update [TestCheckmarkActive =. Active])
       (db $ void $ do
           void ctx
-          updateWhere [TestCheckmarkKey   ==. "name"]
+          updateWhere [TestCheckmarkKeyed ==. "name"]
                       [TestCheckmarkActive =. Inactive]
           ins "name" "Melissa" Active)
 #endif

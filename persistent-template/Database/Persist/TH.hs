@@ -384,8 +384,7 @@ idType :: MkPersistSettings -> FieldType -> Type
 idType mps typ =
     case stripId typ of
         Just typ' ->
-            ConT ''KeyBackend
-            `AppT` backend'
+            ConT ''Key
             `AppT` entityTypeFromName mps typ' backendType
         Nothing -> ftToType typ
   where
@@ -504,7 +503,7 @@ mkAssociatedKey mps t = do
   let recordType = entityType mps t
   return
         [
-          DataInstD [] ''KeyBackend [ backendType, recordType ]
+          DataInstD [] ''Key [ recordType ]
             [ NormalC keyName [ (IsStrict, ConT ''Int64) ] ] []
         -- ,  FunD 'persistValueToPersistKey [ Clause ]
         -- ,  FunD 'persistKeyToPersistValue [ Clause ]
@@ -658,7 +657,7 @@ mkEntity mps t = do
     return $ addSyn $
        dataTypeDec mps t : mconcat fkc `mappend`
       ([ TySynD idName [] $
-            ConT ''KeyBackend `AppT` mpsBackend mps `AppT` ConT (entNameName t)
+            ConT ''Key `AppT` ConT (entNameName t)
       , InstanceD [] clazz $
         [ uniqueTypeDec mps t
         , FunD 'entityDef [Clause [WildP] (NormalB t') []]
@@ -710,7 +709,7 @@ mkForeignKeysComposite mps t fdef = do
    let xs = ListE $ map (\a -> AppE (VarE 'toPersistValue) ((AppE a (VarE eName)))) flds
    let fn = FunD fname [Clause [VarP eName] (NormalB (AppE (VarE 'persistValueToPersistKey) (AppE (ConE 'PersistList) xs))) []]
    
-   let keybackend = ConT ''KeyBackend `AppT` ConT ''SqlBackend `AppT` ConT reftablename
+   let keybackend = ConT ''Key `AppT` ConT reftablename
    let sig = SigD fname $ (ArrowT `AppT` (ConT tablename)) `AppT` keybackend
    return [sig, fn]
 
@@ -1087,10 +1086,7 @@ mkField mps et cd = do
     typ =
         case stripId $ fieldType cd of
             Just ft ->
-                 ConT ''KeyBackend
-                    `AppT` (if mpsGeneric mps
-                                then backendType
-                                else mpsBackend mps)
+                 ConT ''Key
                     `AppT` entityTypeFromName mps ft backendType
             Nothing -> ftToType $ fieldType cd
 

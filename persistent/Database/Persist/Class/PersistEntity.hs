@@ -9,7 +9,7 @@ module Database.Persist.Class.PersistEntity
     , SelectOpt (..)
     , BackendSpecificFilter
     , Filter (..)
-    , Key
+    , KeyBackend
     , Entity (..)
 
     , keyValueEntityToJSON, keyValueEntityFromJSON
@@ -48,9 +48,9 @@ class PersistEntity record where
     -- | Persistent allows multiple different backends
     type EntityBackend record
 
-    data KeyBackend backend record
-    persistValueToPersistKey :: PersistValue -> KeyBackend backend record
-    persistKeyToPersistValue :: KeyBackend backend record -> PersistValue
+    data Key record
+    persistValueToPersistKey :: PersistValue -> Key record
+    persistKeyToPersistValue :: Key record -> PersistValue
 
     -- | retrieve the EntityDef meta-data for the record
     entityDef :: Monad m => m record -> EntityDef SqlType
@@ -73,24 +73,21 @@ class PersistEntity record where
     fieldLens :: EntityField record field
               -> (forall f. Functor f => (field -> f field) -> Entity record -> f (Entity record))
 
-instance Eq       (KeyBackend backend record)
-instance Ord      (KeyBackend backend record)
-instance Read     (KeyBackend backend record)
-instance Show     (KeyBackend backend record)
-instance PersistEntity record => ToJSON   (KeyBackend backend record) where
+instance Eq       (Key record)
+instance Ord      (Key record)
+instance Read     (Key record)
+instance Show     (Key record)
+instance PersistEntity record => ToJSON   (Key record) where
     toJSON = toJSON . persistKeyToPersistValue
-instance PersistEntity record => FromJSON (KeyBackend backend record) where
+instance PersistEntity record => FromJSON (Key record) where
     parseJSON = fmap persistValueToPersistKey . parseJSON
 
--- | Helper wrapper, equivalent to @KeyBackend (EntityBackend record) record@.
---
--- Since 1.1.0
-type Key record = KeyBackend (EntityBackend record) record
+type KeyBackend backend record = Key record
 
 -- deriving instance Eq (KeyBackend backend record)
 -- deriving instance Ord (Key record) - , Read, Show)
 
-instance PersistEntity record => PersistField (KeyBackend backend record) where
+instance PersistEntity record => PersistField (Key record) where
     toPersistValue = persistKeyToPersistValue
     fromPersistValue = Right . persistValueToPersistKey
 

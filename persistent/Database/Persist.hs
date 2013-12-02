@@ -18,6 +18,8 @@ module Database.Persist
 
       -- * Other utililities
     , limitOffsetOrder
+
+    , KeyBackend
     ) where
 
 import Database.Persist.Types

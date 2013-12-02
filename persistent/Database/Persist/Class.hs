@@ -23,6 +23,7 @@ module Database.Persist.Class
 
     -- * PersistEntity
     , PersistEntity (..)
+    , KeyBackend
     -- * PersistField
     , PersistField (..)
     -- * PersistConfig
