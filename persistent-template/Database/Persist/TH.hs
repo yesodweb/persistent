@@ -63,7 +63,6 @@ import Data.Aeson
 import Control.Applicative (pure, (<*>))
 import Control.Monad.Logger (MonadLogger)
 import Database.Persist.Sql (sqlType)
-import Data.Int (Int64)
 
 {-
 readMay :: Read a => String -> Maybe a
@@ -384,7 +383,7 @@ idType :: MkPersistSettings -> FieldType -> Type
 idType mps typ =
     case stripId typ of
         Just typ' ->
-            ConT ''Key
+            ConT ''KeyBackend `AppT` backend'
             `AppT` entityTypeFromName mps typ' backendType
         Nothing -> ftToType typ
   where
@@ -494,22 +493,27 @@ isNotNull _ = True
 
 --
 -- data KeyBackend backend (ContactGeneric backend) = ContactKey !Int64
-mkAssociatedKey :: MkPersistSettings -> EntityDef a -> Q [Dec]
-mkAssociatedKey mps t = do
-  -- keyBackend <- [d| KeyBackend (EntityBackend User) User = UserKey Int64 |]
-  -- let etype = entityType mps t
-  -- eBackend <- [t| EntityBackend $(return etype)|]
+mkAssociatedKey :: MkPersistSettings -> EntityDef a -> Type -> Q [Dec]
+mkAssociatedKey mps t backendKeyType = do
   let keyName    = mkName $ entName t `mappend` "Key"
   let recordType = entityType mps t
+  insideKeyName <- newName "x"
+  fpv <- [| \x -> case fromPersistValue x of
+              Left e' -> error $ unpack e'
+              Right r -> $(return $ ConE keyName) r
+        |]
+  tpv <- [| toPersistValue $(return $ VarE insideKeyName) |]
   return
         [
           DataInstD [] ''Key [ recordType ]
-            [ NormalC keyName [ (IsStrict, ConT ''Int64) ] ] []
-        -- ,  FunD 'persistValueToPersistKey [ Clause ]
-        -- ,  FunD 'persistKeyToPersistValue [ Clause ]
+            [ NormalC keyName [ (IsStrict, backendKeyType) ] ] []
+        ,  FunD 'persistValueToPersistKey [ Clause [] (NormalB fpv) []]
+        ,  FunD 'persistKeyToPersistValue [ Clause
+             [ConP keyName [VarP insideKeyName]]
+             (NormalB tpv)
+             []
+           ]
         ]
-    -- persistValueToPersistKey :: PersistValue -> KeyBackend backend record
-    -- persistKeyToPersistValue :: KeyBackend backend record -> PersistValue
 
 entId :: EntityDef a -> Text
 entId = flip mappend "Id" . entName
@@ -629,7 +633,10 @@ mkEntity mps t = do
     t' <- lift t
     tpf <- mkToPersistFields mps t
     fpv <- mkFromPersistValues mps t
-    key <- mkAssociatedKey mps t
+
+    let backendKeyType = ConT ''BackendKey `AppT` mpsBackend mps
+            -- if mpsGeneric mps then backendType else mpsBackend mps
+    key <- mkAssociatedKey mps t backendKeyType
     utv <- mkUniqueToValues $ entityUniques t
     puk <- mkUniqueKeys t
     fkc <- mapM (mkForeignKeysComposite mps t) $ entityForeigns t
@@ -736,12 +743,12 @@ persistFieldFromEntity mps e = do
     obj <- [|\ent -> PersistMap $ zip (map pack columnNames) (map toPersistValue $ toPersistFields ent)|]
     fpv <- [|\x -> let columns = HM.fromList x
                    in fromPersistValues $ map (\name -> 
-                                                  case HM.lookup name columns of
-                                                      Just v -> 
-                                                          case fromPersistValue v of
-                                                              Left e' -> error $ unpack e'
-                                                              Right r -> r
-                                                      Nothing -> error $ "Missing field: " `mappend` unpack name) (map pack columnNames)|]
+                          case HM.lookup name columns of
+                              Just v -> 
+                                  case fromPersistValue v of
+                                      Left e' -> error $ unpack e'
+                                      Right r -> r
+                              Nothing -> error $ "Missing field: " `mappend` unpack name) (map pack columnNames)|]
     let typ = entityType mps e
 
     compose <- [|(<=<)|]

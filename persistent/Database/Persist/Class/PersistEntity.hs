@@ -10,6 +10,7 @@ module Database.Persist.Class.PersistEntity
     , BackendSpecificFilter
     , Filter (..)
     , KeyBackend
+    , BackendKey
     , Entity (..)
 
     , keyValueEntityToJSON, keyValueEntityFromJSON
@@ -83,6 +84,7 @@ instance PersistEntity record => FromJSON (Key record) where
     parseJSON = fmap persistValueToPersistKey . parseJSON
 
 type KeyBackend backend record = Key record
+type family BackendKey backend
 
 -- deriving instance Eq (KeyBackend backend record)
 -- deriving instance Ord (Key record) - , Read, Show)

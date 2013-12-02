@@ -109,6 +109,7 @@ import Data.Attoparsec.Number
 import Data.Char (toUpper)
 import Data.Monoid (mappend)
 import Data.Typeable
+import Data.ByteString (ByteString)
 
 #ifdef DEBUG
 import FileLocation (debug)
@@ -132,6 +133,8 @@ instance FromJSON NoOrphanPortID where
 data Connection = Connection DB.Pipe DB.Database
 type ConnectionPool = Pool.Pool Connection
 
+type instance BackendKey MongoBackend = ByteString
+{-
 -- | ToPathPiece is used to convert a key to/from text
 instance PersistEntity record => PathPiece (KeyBackend MongoBackend record) where
     toPathPiece = keyToText
@@ -141,6 +144,7 @@ instance PersistEntity record => PathPiece (KeyBackend MongoBackend record) wher
         case T.uncons keyText of
             Just ('o', prefixed) -> prefixed
             _ -> keyText
+-}
 
 keyToText :: PersistEntity record => KeyBackend MongoBackend record -> Text
 keyToText = go . persistKeyToPersistValue

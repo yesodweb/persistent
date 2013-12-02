@@ -758,6 +758,12 @@ newtype ReverseFieldOrder a = RFO {unRFO :: a} deriving (Eq, Show)
 instance PersistEntity a => PersistEntity (ReverseFieldOrder a) where
     newtype EntityField (ReverseFieldOrder a) b = EFRFO {unEFRFO :: EntityField a b}
     newtype Unique      (ReverseFieldOrder a)   = URFO  {unURFO  :: Unique      a  }
+    data Key (ReverseFieldOrder a) = RFOKey Int64
+    persistKeyToPersistValue (RFOKey i) = toPersistValue i
+    persistValueToPersistKey v = case fromPersistValue v of
+        Left e -> error $ T.unpack e
+        Right r -> RFOKey r
+
     persistFieldDef = persistFieldDef . unEFRFO
     entityDef = revFields . entityDef . liftM unRFO
         where
