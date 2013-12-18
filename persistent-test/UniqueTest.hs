@@ -30,15 +30,15 @@ share [mkPersist sqlSettings,  mkMigrate "uniqueMigrate"] [persistLowerCase|
     deriving Eq Show
 #ifndef WITH_MONGODB
   TestCheckmark
-    key   Text
+    keyed Text
     value Text
     active Checkmark nullable
-    UniqueTestCheckmark key active !force
+    UniqueTestCheckmark keyed active !force
     deriving Eq Show
 #endif
 |]
 #ifdef WITH_MONGODB
-cleanDB :: (PersistQuery m, PersistEntityBackend TestNonNull ~ PersistMonadBackend m) => m ()
+cleanDB :: (PersistQuery m, EntityBackend TestNonNull ~ MonadBackend m) => m ()
 cleanDB = do
   deleteWhere ([] :: [Filter TestNonNull])
   deleteWhere ([] :: [Filter TestNull])
@@ -78,7 +78,7 @@ specs = describe "uniqueness constraints" $
       (db $ void $ ctx >>= flip update [TestCheckmarkActive =. Active])
       (db $ void $ do
           void ctx
-          updateWhere [TestCheckmarkKey   ==. "name"]
+          updateWhere [TestCheckmarkKeyed ==. "name"]
                       [TestCheckmarkActive =. Inactive]
           ins "name" "Melissa" Active)
 #endif

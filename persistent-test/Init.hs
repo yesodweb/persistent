@@ -5,6 +5,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 module Init (
   (@/=), (@==), (==@)
   , assertNotEqual
@@ -193,5 +194,5 @@ instance Arbitrary PersistValue where
     arbitrary = PersistInt64 `fmap` choose (0, maxBound)
 #endif
 
-instance Arbitrary (KeyBackend backend entity) where
-  arbitrary = Key `fmap` arbitrary
+instance PersistEntity record => Arbitrary (KeyBackend backend record) where
+  arbitrary = persistValueToPersistKey `fmap` arbitrary

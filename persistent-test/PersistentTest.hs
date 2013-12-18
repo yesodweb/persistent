@@ -150,7 +150,7 @@ NoPrefix2
 |]
 #endif
 
-cleanDB :: (PersistQuery m, PersistEntityBackend Email ~ PersistMonadBackend m) => m ()
+cleanDB :: (PersistQuery m, EntityBackend Email ~ MonadBackend m) => m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Person])
   deleteWhere ([] :: [Filter Person1])
@@ -376,7 +376,7 @@ specs = describe "persistent" $ do
       p3 @== p
 
   prop "toPathPiece . fromPathPiece" $ \piece ->
-      let key1 = Key piece :: (KeyBackend BackendMonad Person)
+      let key1 = piece :: (KeyBackend BackendMonad Person)
           key2 = fromJust $ fromPathPiece $ toPathPiece key1 :: (KeyBackend BackendMonad Person)
       in  toPathPiece key1 == toPathPiece key2
 
@@ -551,7 +551,7 @@ specs = describe "persistent" $ do
       let k = oidToKey oid
 #else
       ki <- liftIO $ randomRIO (0, 10000)
-      let k = Key $ PersistInt64 $ abs ki
+      let k = persistValueToPersistKey $ PersistInt64 $ abs ki
 #endif
       insertKey k $ Person "Key" 26 Nothing
       Just (Entity k2 _) <- selectFirst [PersonName ==. "Key"] []
@@ -563,7 +563,7 @@ specs = describe "persistent" $ do
       let k = oidToKey oid
 #else
       ki <- liftIO $ randomRIO (0, 10000)
-      let k = Key $ PersistInt64 $ abs ki
+      let k = persistValueToPersistKey $ PersistInt64 $ abs ki
 #endif
       Nothing <- selectFirst [PersonName ==. "Repsert"] []
       repsert k $ Person "Repsert" 26 Nothing
@@ -655,8 +655,8 @@ specs = describe "persistent" $ do
       liftIO $ ret @?= [Nothing :: Maybe (Single Int)]
 
   it "rawSql/entity" $ db $ do
-      let insert' :: (PersistStore m, PersistEntity val, PersistEntityBackend val ~ PersistMonadBackend m)
-                  => val -> m (Key val, val)
+      let insert' :: (PersistStore m, PersistEntity record, EntityBackend record ~ MonadBackend m)
+                  => record -> m (Key record, record)
           insert' v = insert v >>= \k -> return (k, v)
       (p1k, p1) <- insert' $ Person "Mathias"   23 Nothing
       (p2k, p2) <- insert' $ Person "Norbert"   44 Nothing
@@ -698,11 +698,11 @@ specs = describe "persistent" $ do
       ret1 <- rawSql query []
       ret2 <- rawSql query []
       liftIO $ ret1 @?= [Entity p1k p1]
-      liftIO $ ret2 @?= [Entity (Key $ unKey p1k) (RFO p1)]
+      liftIO $ ret2 @?= [Entity (persistValueToPersistKey $ persistKeyToPersistValue p1k) (RFO p1)]
 
   it "rawSql/OUTER JOIN" $ db $ do
-      let insert' :: (PersistStore m, PersistEntity val, PersistEntityBackend val ~ PersistMonadBackend m)
-                  => val -> m (Key val, val)
+      let insert' :: (PersistStore m, PersistEntity record, EntityBackend record ~ MonadBackend m)
+                  => record -> m (Key record, record)
           insert' v = insert v >>= \k -> return (k, v)
       (p1k, p1) <- insert' $ Person "Mathias"   23 Nothing
       (p2k, p2) <- insert' $ Person "Norbert"   44 Nothing
@@ -758,6 +758,12 @@ newtype ReverseFieldOrder a = RFO {unRFO :: a} deriving (Eq, Show)
 instance PersistEntity a => PersistEntity (ReverseFieldOrder a) where
     newtype EntityField (ReverseFieldOrder a) b = EFRFO {unEFRFO :: EntityField a b}
     newtype Unique      (ReverseFieldOrder a)   = URFO  {unURFO  :: Unique      a  }
+    data Key (ReverseFieldOrder a) = RFOKey Int64
+    persistKeyToPersistValue (RFOKey i) = toPersistValue i
+    persistValueToPersistKey v = case fromPersistValue v of
+        Left e -> error $ T.unpack e
+        Right r -> RFOKey r
+
     persistFieldDef = persistFieldDef . unEFRFO
     entityDef = revFields . entityDef . liftM unRFO
         where
@@ -767,7 +773,7 @@ instance PersistEntity a => PersistEntity (ReverseFieldOrder a) where
     persistUniqueToFieldNames = reverse . persistUniqueToFieldNames . unURFO
     persistUniqueToValues = reverse . persistUniqueToValues . unURFO
     persistUniqueKeys = map URFO . reverse . persistUniqueKeys . unRFO
-    type PersistEntityBackend (ReverseFieldOrder a) = PersistEntityBackend a
+    type EntityBackend (ReverseFieldOrder a) = EntityBackend a
     persistIdField = error "ReverseFieldOrder.persistIdField"
     fieldLens = error "ReverseFieldOrder.fieldLens"
 

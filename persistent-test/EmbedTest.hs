@@ -115,10 +115,10 @@ share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
     phone Int
     email T.Text
     deriving Show Eq Read Ord
-
 |]
+
 #ifdef WITH_MONGODB
-cleanDB :: (PersistQuery m, PersistEntityBackend HasMapEmbed ~ PersistMonadBackend m) => m ()
+cleanDB :: (PersistQuery m, EntityBackend HasMapEmbed ~ MonadBackend m) => m ()
 cleanDB = do
   deleteWhere ([] :: [Filter HasEmbed])
   deleteWhere ([] :: [Filter HasEmbeds])
@@ -197,6 +197,7 @@ specs = describe "embedded entities" $ do
       Just res <- selectFirst [HasMapEmbedName ==. "map"] []
       res @== Entity contK container
 
+#ifdef WITH_MONGODB
   it "can embed an Entity" $ db $ do
     let foo = ARecord "foo"
         bar = ARecord "bar"
@@ -210,7 +211,6 @@ specs = describe "embedded entities" $ do
     Just retrievedHasEnts <- get kEnts
     retrievedHasEnts @== hasEnts
 
-#ifdef WITH_MONGODB
   it "can embed objects with ObjectIds" $ db $ do
     oid <- liftIO $ genObjectid
     let hoid   = HasObjectId oid "oid"

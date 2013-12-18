@@ -51,7 +51,7 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
                 , wher
                 ]
         rawExecute sql $
-            map updatePersistValue upds `mappend` (convertKey composite k)
+            map updatePersistValue upds `mappend` (convertKey composite $ persistKeyToPersistValue k)
       where
         t = entityDef $ dummyFromKey k
         go x = (fieldDB $ updateFieldDef x, updateUpdate x)
@@ -103,17 +103,17 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
         fromPersistValues' (PersistInt64 x:xs) = 
             case fromPersistValues xs of
                 Left e -> Left e
-                Right xs' -> Right (Entity (Key $ PersistInt64 x) xs')
+                Right xs' -> Right (Entity (persistValueToPersistKey $ PersistInt64 x) xs')
         fromPersistValues' (PersistDouble x:xs) = -- oracle returns Double 
             case fromPersistValues xs of
                 Left e -> Left e
-                Right xs' -> Right (Entity (Key $ PersistInt64 (truncate x)) xs') -- convert back to int64
+                Right xs' -> Right (Entity (persistValueToPersistKey $ PersistInt64 (truncate x)) xs') -- convert back to int64
         fromPersistValues' xs = Left $ T.pack ("error in fromPersistValues' xs=" ++ show xs)
 
         fromPersistValuesComposite' keyvals xs =
             case fromPersistValues xs of
                 Left e -> Left e
-                Right xs' -> Right (Entity (Key $ PersistList keyvals) xs')
+                Right xs' -> Right (Entity (persistValueToPersistKey $ PersistList keyvals) xs')
 
         wher conn = if null filts
                     then ""
@@ -165,13 +165,13 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
         parse xs = case entityPrimary t of
                       Nothing -> 
                         case xs of
-                           [PersistInt64 x] -> return $ Key $ PersistInt64 x
-                           [PersistDouble x] -> return $ Key $ PersistInt64 (truncate x) -- oracle returns Double 
+                           [PersistInt64 x] -> return $ persistValueToPersistKey $ PersistInt64 x
+                           [PersistDouble x] -> return $ persistValueToPersistKey $ PersistInt64 (truncate x) -- oracle returns Double 
                            _ -> liftIO $ throwIO $ PersistMarshalError $ "Unexpected in selectKeys False: " <> T.pack (show xs)
                       Just pdef -> 
                            let pks = map fst $ primaryFields pdef
                                keyvals = map snd $ filter (\(a, _) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ entityFields t) xs
-                           in return $ Key $ PersistList keyvals
+                           in return $ persistValueToPersistKey $ PersistList keyvals
 
     deleteWhere filts = do
         _ <- deleteWhereCount filts

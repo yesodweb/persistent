@@ -50,15 +50,15 @@ import Database.Persist.Class.PersistEntity
 --  * an exception will automatically abort the current SQL transaction
 class PersistStore m => PersistUnique m where
     -- | Get a record by unique key, if available. Returns also the identifier.
-    getBy :: (PersistEntityBackend val ~ PersistMonadBackend m, PersistEntity val) => Unique val -> m (Maybe (Entity val))
+    getBy :: (EntityBackend val ~ MonadBackend m, PersistEntity val) => Unique val -> m (Maybe (Entity val))
 
     -- | Delete a specific record by unique key. Does nothing if no record
     -- matches.
-    deleteBy :: (PersistEntityBackend val ~ PersistMonadBackend m, PersistEntity val) => Unique val -> m ()
+    deleteBy :: (EntityBackend val ~ MonadBackend m, PersistEntity val) => Unique val -> m ()
 
     -- | Like 'insert', but returns 'Nothing' when the record
     -- couldn't be inserted because of a uniqueness constraint.
-    insertUnique :: (PersistEntityBackend val ~ PersistMonadBackend m, PersistEntity val) => val -> m (Maybe (Key val))
+    insertUnique :: (EntityBackend val ~ MonadBackend m, PersistEntity val) => val -> m (Maybe (Key val))
     insertUnique datum = do
         conflict <- checkUnique datum
         case conflict of
@@ -68,7 +68,7 @@ class PersistStore m => PersistUnique m where
 -- | Insert a value, checking for conflicts with any unique constraints.  If a
 -- duplicate exists in the database, it is returned as 'Left'. Otherwise, the
 -- new 'Key is returned as 'Right'.
-insertBy :: (PersistEntity val, PersistUnique m, PersistEntityBackend val ~ PersistMonadBackend m)
+insertBy :: (PersistEntity val, PersistUnique m, EntityBackend val ~ MonadBackend m)
          => val -> m (Either (Entity val) (Key val))
 
 insertBy val = do
@@ -81,7 +81,7 @@ insertBy val = do
 -- of a 'Unique' value. Returns a value matching /one/ of the unique keys. This
 -- function makes the most sense on entities with a single 'Unique'
 -- constructor.
-getByValue :: (PersistEntity value, PersistUnique m, PersistEntityBackend value ~ PersistMonadBackend m)
+getByValue :: (PersistEntity value, PersistUnique m, EntityBackend value ~ MonadBackend m)
            => value -> m (Maybe (Entity value))
 getByValue = checkUniques . persistUniqueKeys
   where
@@ -99,7 +99,7 @@ getByValue = checkUniques . persistUniqueKeys
 -- If uniqueness is violated, return a 'Just' with the 'Unique' violation
 --
 -- Since 1.2.2.0
-replaceUnique :: (Eq record, Eq (Unique record), PersistEntityBackend record ~ PersistMonadBackend m, PersistEntity record, PersistStore m, PersistUnique m)
+replaceUnique :: (Eq record, Eq (Unique record), EntityBackend record ~ MonadBackend m, PersistEntity record, PersistStore m, PersistUnique m, Show (Key record))
               => Key record -> record -> m (Maybe (Unique record))
 replaceUnique key datumNew = getJust key >>= replaceOriginal
   where
@@ -118,11 +118,11 @@ replaceUnique key datumNew = getJust key >>= replaceOriginal
 --
 -- Returns 'Nothing' if the entity would be unique, and could thus safely be inserted.
 -- on a conflict returns the conflicting key
-checkUnique :: (PersistEntityBackend record ~ PersistMonadBackend m, PersistEntity record, PersistUnique m)
+checkUnique :: (EntityBackend record ~ MonadBackend m, PersistEntity record, PersistUnique m)
             => record -> m (Maybe (Unique record))
 checkUnique = checkUniqueKeys . persistUniqueKeys
 
-checkUniqueKeys :: (PersistEntity record, PersistUnique m, PersistEntityBackend record ~ PersistMonadBackend m)
+checkUniqueKeys :: (PersistEntity record, PersistUnique m, EntityBackend record ~ MonadBackend m)
                 => [Unique record] -> m (Maybe (Unique record))
 checkUniqueKeys [] = return Nothing
 checkUniqueKeys (x:xs) = do

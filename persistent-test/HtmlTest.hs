@@ -31,9 +31,8 @@ HtmlTable
     deriving
 |]
 
-cleanDB :: (PersistQuery m, PersistEntityBackend HtmlTable ~ PersistMonadBackend m) => m ()
-cleanDB = do
-  deleteWhere ([] :: [Filter HtmlTable])
+cleanDB :: (PersistQuery m, EntityBackend HtmlTable ~ MonadBackend m) => m ()
+cleanDB = deleteWhere ([] :: [Filter HtmlTable])
 
 specs :: Spec
 specs = describe "html" $ do

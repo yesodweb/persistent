@@ -12,6 +12,7 @@ module Database.Persist.Class.PersistField
     ( PersistField (..)
     , SomePersistField (..)
     , getPersistMap
+    , fromPersistList
     ) where
 
 import Database.Persist.Types.Base
@@ -286,8 +287,6 @@ instance PersistField v => PersistField (M.Map T.Text v) where
 instance PersistField PersistValue where
     toPersistValue = id
     fromPersistValue = Right
-
-deriving instance PersistField (KeyBackend backend entity)
 
 fromPersistList :: PersistField a => [PersistValue] -> Either T.Text [a]
 fromPersistList = mapM fromPersistValue

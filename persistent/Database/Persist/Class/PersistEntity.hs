@@ -2,13 +2,15 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
 module Database.Persist.Class.PersistEntity
     ( PersistEntity (..)
     , Update (..)
     , SelectOpt (..)
     , BackendSpecificFilter
     , Filter (..)
-    , Key
+    , KeyBackend
+    , BackendKey
     , Entity (..)
 
     , keyValueEntityToJSON, keyValueEntityFromJSON
@@ -18,24 +20,24 @@ module Database.Persist.Class.PersistEntity
 import Database.Persist.Types.Base
 import Database.Persist.Class.PersistField
 import Data.Text (Text)
-import qualified Data.Text as T
 import Data.Aeson (ToJSON (..), FromJSON (..), object, (.:), (.=), Value (Object))
 import Data.Aeson.Types (Parser)
 import Control.Applicative ((<$>), (<*>))
-import Data.Monoid (mappend)
 import qualified Data.HashMap.Strict as HM
+import qualified Data.Text as T
+import Data.Monoid (mappend)
 
--- | Persistent serialized Haskell records to the database.
+-- | Persistent serializes Haskell records to the database.
 -- A Database 'Entity' (A row in SQL, a document in MongoDB, etc)
 -- corresponds to a 'Key' plus a Haskell record.
 --
 -- For every Haskell record type stored in the database there is a corresponding 'PersistEntity' instance.
 -- An instance of PersistEntity contains meta-data for the record.
 -- PersistEntity also helps abstract over different record types.
--- That way the same query interface can return a 'PersistEntity', with each query returning different types of Haskell records.
+-- That means the same query interface can return a 'PersistEntity', with each query returning different types of Haskell records.
 --
 -- Some advanced type system capabilities are used to make this process type-safe.
--- Persistent users usually don't need to understand the class associated data and functions.
+-- Normal usage of the persistent API does not require understanding the class associated data and functions.
 class PersistEntity record where
     -- | An 'EntityField' is parameterised by the Haskell record it belongs to
     -- and the additional type of that field
@@ -45,10 +47,11 @@ class PersistEntity record where
     persistFieldDef :: EntityField record typ -> FieldDef SqlType
 
     -- | Persistent allows multiple different backends
-    type PersistEntityBackend record
+    type EntityBackend record
 
-    -- | Unique keys besided the Key
-    data Unique record
+    data Key record
+    persistValueToPersistKey :: PersistValue -> Key record
+    persistKeyToPersistValue :: Key record -> PersistValue
 
     -- | retrieve the EntityDef meta-data for the record
     entityDef :: Monad m => m record -> EntityDef SqlType
@@ -59,6 +62,9 @@ class PersistEntity record where
     -- | Convert from database values to a Haskell record
     fromPersistValues :: [PersistValue] -> Either Text record
 
+    -- | Unique keys besided the Key
+    data Unique record
+
     persistUniqueToFieldNames :: Unique record -> [(HaskellName, DBName)]
     persistUniqueToValues :: Unique record -> [PersistValue]
     persistUniqueKeys :: record -> [Unique record]
@@ -67,6 +73,26 @@ class PersistEntity record where
 
     fieldLens :: EntityField record field
               -> (forall f. Functor f => (field -> f field) -> Entity record -> f (Entity record))
+
+instance Eq       (Key record)
+instance Ord      (Key record)
+instance Read     (Key record)
+instance Show     (Key record)
+instance PersistEntity record => ToJSON   (Key record) where
+    toJSON = toJSON . persistKeyToPersistValue
+instance PersistEntity record => FromJSON (Key record) where
+    parseJSON = fmap persistValueToPersistKey . parseJSON
+
+type KeyBackend backend record = Key record
+type family BackendKey backend
+
+-- deriving instance Eq (KeyBackend backend record)
+-- deriving instance Ord (Key record) - , Read, Show)
+
+instance PersistEntity record => PersistField (Key record) where
+    toPersistValue = persistKeyToPersistValue
+    fromPersistValue = Right . persistValueToPersistKey
+
 
 -- | updataing a database entity
 --
@@ -102,12 +128,7 @@ data Filter record = forall typ. PersistField typ => Filter
     | FilterAnd [Filter record] -- ^ convenient for internal use, not needed for the API
     | FilterOr  [Filter record]
     | BackendFilter
-          (BackendSpecificFilter (PersistEntityBackend record) record)
-
--- | Helper wrapper, equivalent to @Key (PersistEntityBackend val) val@.
---
--- Since 1.1.0
-type Key record = KeyBackend (PersistEntityBackend record) record
+          (BackendSpecificFilter (EntityBackend record) record)
 
 -- | Datatype that represents an entity, with both its 'Key' and
 -- its Haskell record representation.
@@ -139,10 +160,10 @@ type Key record = KeyBackend (PersistEntityBackend record) record
 -- your query returns two entities (i.e. @(Entity backend a,
 -- Entity backend b)@), then you must you use @SELECT ??, ??
 -- WHERE ...@, and so on.
-data Entity entity =
-    Entity { entityKey :: Key entity
-           , entityVal :: entity }
-    deriving (Eq, Ord, Show, Read)
+data Entity record =
+    Entity { entityKey :: Key record
+           , entityVal :: record }
+    deriving (Eq, Ord, Read, Show)
 
 -- | Predefined @toJSON@. The resulting JSON looks like
 -- @{\"key\": 1, \"value\": {\"name\": ...}}@.
@@ -153,7 +174,7 @@ data Entity entity =
 --   instance ToJSON User where
 --       toJSON = keyValueEntityToJSON
 -- @
-keyValueEntityToJSON :: ToJSON e => Entity e -> Value
+keyValueEntityToJSON :: (ToJSON e, ToJSON (Key e)) => Entity e -> Value
 keyValueEntityToJSON (Entity key value) = object
     [ "key" .= key
     , "value" .= value
@@ -168,7 +189,7 @@ keyValueEntityToJSON (Entity key value) = object
 --   instance FromJSON User where
 --       parseJSON = keyValueEntityFromJSON
 -- @
-keyValueEntityFromJSON :: FromJSON e => Value -> Parser (Entity e)
+keyValueEntityFromJSON :: (FromJSON e, FromJSON (Key e)) => Value -> Parser (Entity e)
 keyValueEntityFromJSON (Object o) = Entity
     <$> o .: "key"
     <*> o .: "value"
@@ -183,7 +204,7 @@ keyValueEntityFromJSON _ = fail "keyValueEntityFromJSON: not an object"
 --   instance ToJSON User where
 --       toJSON = entityIdToJSON
 -- @
-entityIdToJSON :: ToJSON e => Entity e -> Value
+entityIdToJSON :: (ToJSON e, ToJSON (Key e)) => Entity e -> Value
 entityIdToJSON (Entity key value) = case toJSON value of
     Object o -> Object $ HM.insert "id" (toJSON key) o
     x -> x
@@ -197,11 +218,11 @@ entityIdToJSON (Entity key value) = case toJSON value of
 --   instance FromJSON User where
 --       parseJSON = entityIdFromJSON
 -- @
-entityIdFromJSON :: FromJSON e => Value -> Parser (Entity e)
+entityIdFromJSON :: (FromJSON e, FromJSON (Key e)) => Value -> Parser (Entity e)
 entityIdFromJSON value@(Object o) = Entity <$> o .: "id" <*> parseJSON value
 entityIdFromJSON _ = fail "entityIdFromJSON: not an object"
 
-instance PersistField entity => PersistField (Entity entity) where
+instance (PersistEntity record, PersistField record) => PersistField (Entity record) where
     toPersistValue (Entity key value) = case toPersistValue value of
         (PersistMap alist) -> PersistMap ((idField, toPersistValue key) : alist)
         _ -> error $ T.unpack $ errMsg "expected PersistMap"
@@ -210,7 +231,7 @@ instance PersistField entity => PersistField (Entity entity) where
         [] -> Left $ errMsg $ "did not find " `mappend` idField `mappend` " field"
         ("_id", k):afterRest ->
             case fromPersistValue (PersistMap (before ++ afterRest)) of
-                Right record -> Right $ Entity (Key k) record
+                Right record -> Right $ Entity (persistValueToPersistKey k) record
                 Left err     -> Left err
         _ -> Left $ errMsg $ "impossible id field: " `mappend` T.pack (show alist)
       where
