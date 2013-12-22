@@ -54,7 +54,7 @@ import Data.Aeson
 import Control.Monad (forM, mzero)
 import System.Environment (getEnvironment)
 import Data.Int (Int64)
-import Data.Maybe (mapMaybe, fromJust, isJust)
+import Data.Maybe (mapMaybe, fromJust, isJust, fromMaybe)
 import Data.Monoid ((<>))
 -- | A @libpq@ connection string.  A simple example of connection
 -- string would be @\"host=localhost port=5432 user=test
@@ -506,7 +506,9 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, ns
                         { cName = cname
                         , cNull = y == "YES"
                         , cSqlType = t
-                        , cDefault = d''
+                        , cDefault = fmap
+                            (\x -> fromMaybe x $ T.stripSuffix "::character varying" x)
+                                     d''
                         , cDefaultConstraintName = Nothing
                         , cMaxLen = Nothing
                         , cReference = ref
