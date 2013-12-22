@@ -16,7 +16,7 @@ module Database.Persist.Postgresql
     ) where
 
 import Database.Persist.Sql
-import Data.Maybe (mapMaybe)
+import Data.Maybe (mapMaybe, fromMaybe)
 import Data.Fixed (Pico)
 
 import qualified Database.PostgreSQL.Simple as PG
@@ -423,7 +423,9 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, ns
                         { cName = cname
                         , cNull = y == "YES"
                         , cSqlType = t
-                        , cDefault = d''
+                        , cDefault = fmap
+                            (\x -> fromMaybe x $ T.stripSuffix "::character varying" x)
+                                     d''
                         , cMaxLen = Nothing
                         , cReference = ref
                         }
