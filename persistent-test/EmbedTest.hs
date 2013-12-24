@@ -24,6 +24,7 @@ import qualified Data.Set as S
 import qualified Data.Map as M
 #if WITH_MONGODB
 import Database.Persist.MongoDB
+import Database.MongoDB (Value(String))
 import EntityEmbedTest
 import System.Process (readProcess)
 #endif
@@ -220,30 +221,49 @@ specs = describe "embedded entities" $ do
     Just v <- get k
     v @== hasArr
 
-  it "mongo single nesting filters" $ db $ do
-      let usr = User "foo" (Just "pswd") prof
-          prof = Profile "fstN" "lstN" (Just con)
-          con = Contact 123456 "foo@bar.com"
-      uId <- insert usr
-      Just r1 <- selectFirst [UserProfile &->. ProfileFirstName `nestEq` "fstN"] []
-      r1 @== (Entity uId usr)
-      Just r2 <- selectFirst [UserProfile &~>. ProfileContact ?&->. ContactEmail `nestEq` "foo@bar.com", UserIdent ==. "foo"] []
-      r2 @== (Entity uId usr)
+  describe "mongoDB filters" $ do
+    it "mongo single nesting filters" $ db $ do
+        let usr = User "foo" (Just "pswd") prof
+            prof = Profile "fstN" "lstN" (Just con)
+            con = Contact 123456 "foo@bar.com"
+        uId <- insert usr
+        Just r1 <- selectFirst [UserProfile &->. ProfileFirstName `nestEq` "fstN"] []
+        r1 @== (Entity uId usr)
+        Just r2 <- selectFirst [UserProfile &~>. ProfileContact ?&->. ContactEmail `nestEq` "foo@bar.com", UserIdent ==. "foo"] []
+        r2 @== (Entity uId usr)
 
-  it "mongo embedded array filters" $ db $ do
-      let container = HasListEmbed "list" [
-              (HasEmbed "embed" (OnlyName "1"))
-            , (HasEmbed "embed" (OnlyName "2"))
-            ]
-      contK <- insert container
-      Just res <- selectFirst [HasListEmbedList `multiEq` HasEmbed "embed" (OnlyName "1")] []
-      res @== (Entity contK container)
+    it "mongo embedded array filters" $ db $ do
+        let container = HasListEmbed "list" [
+                (HasEmbed "embed" (OnlyName "1"))
+              , (HasEmbed "embed" (OnlyName "2"))
+              ]
+        contK <- insert container
+        Just meq <- selectFirst [HasListEmbedList `multiEq` HasEmbed "embed" (OnlyName "1")] []
+        meq @== (Entity contK container)
 
-      Just res2 <- selectFirst [HasListEmbedList ->. HasEmbedName `nestEq` "embed"] []
-      res2 @== (Entity contK container)
+        Just neq1 <- selectFirst [HasListEmbedList ->. HasEmbedName `nestEq` "embed"] []
+        neq1 @== (Entity contK container)
 
-      Just res3 <- selectFirst [HasListEmbedList ~>. HasEmbedEmbed &->. OnlyNameName `nestEq` "1"] []
-      res3 @== (Entity contK container)
+        Just neq2 <- selectFirst [HasListEmbedList ~>. HasEmbedEmbed &->. OnlyNameName `nestEq` "1"] []
+        neq2 @== (Entity contK container)
+
+        Just nbq1 <- selectFirst [HasListEmbedList ->. HasEmbedName `nestBsonEq` String "embed"] []
+        nbq1 @== (Entity contK container)
+
+        Just nbq2 <- selectFirst [HasListEmbedList ~>. HasEmbedEmbed &->. OnlyNameName `nestBsonEq` String "1"] []
+        nbq2 @== (Entity contK container)
+
+
+    it "regexp match" $ db $ do
+        let container = HasListEmbed "list" [
+                (HasEmbed "embed" (OnlyName "abcd"))
+              , (HasEmbed "embed" (OnlyName "efgh"))
+              ]
+        contK <- insert container
+        let mkReg t = (t, "ims")
+        Just res <- selectFirst [HasListEmbedName =~. mkReg "ist"] []
+        res @== (Entity contK container)
+
 
   it "re-orders json inserted from another source" $ db $ do
     _ <- liftIO $ readProcess "mongoimport" ["-d", "test", "-c", "ListEmbed"] "{ \"nested\": [{ \"one\": 1, \"two\": 2 }, { \"two\": 2, \"one\": 1}], \"two\": 2, \"one\": 1, \"_id\" : { \"$oid\" : \"50184f5a92d7ae0000001e89\" } }"

@@ -34,8 +34,11 @@ module Database.Persist.MongoDB
 
     -- * MongoDB specific Filters
     -- $filters
+    , nestEq, multiEq, nestBsonEq, multiBsonEq
+    , (=~.), MongoRegex
     , (->.), (~>.), (?&->.), (?&~>.), (&->.), (&~>.)
-    , nestEq, multiEq
+    -- non-operator forms of filters
+    , NestedField(..)
 
     -- * MongoDB specific PersistFields
     , Objectid
@@ -500,15 +503,10 @@ filtersToSelector filts =
 #endif
     if null filts then [] else concatMap filterToDocument filts
 
-multiFilter :: forall record. (PersistEntity record, PersistEntityBackend record ~ MongoBackend) => String -> [Filter record] -> [DB.Field]
-multiFilter multi fs = [T.pack multi DB.:= DB.Array (map (DB.Doc . filterToDocument) fs)]
-
 filterToDocument :: (PersistEntity val, PersistEntityBackend val ~ MongoBackend) => Filter val -> DB.Document
 filterToDocument f =
     case f of
-      Filter field v filt -> return $ case filt of
-          Eq -> fieldName field DB.:= toValue v
-          _  -> fieldName field DB.=: [(showFilter filt) DB.:= toValue v]
+      Filter field v filt -> return $ filterToBSON (fieldName field) v filt
       FilterOr [] -> -- Michael decided to follow Haskell's semantics, which seems reasonable to me.
                      -- in Haskell an empty or is a False
                      -- Perhaps there is a less hacky way of creating a query that always returns false?
@@ -519,6 +517,18 @@ filterToDocument f =
       FilterAnd fs -> multiFilter "$and" fs
       BackendFilter mf -> mongoFilterToDoc mf
   where
+    multiFilter :: forall record. (PersistEntity record, PersistEntityBackend record ~ MongoBackend) => String -> [Filter record] -> [DB.Field]
+    multiFilter multi fs = [T.pack multi DB.:= DB.Array (map (DB.Doc . filterToDocument) fs)]
+
+filterToBSON :: forall a. ( PersistField a)
+             => Text
+             -> Either a [a]
+             -> PersistFilter
+             -> DB.Field
+filterToBSON fname v filt = case filt of
+    Eq -> fname DB.:= toValue v
+    _  -> fname DB.=: [(showFilter filt) DB.:= toValue v]
+  where
     showFilter Ne = "$ne"
     showFilter Gt = "$gt"
     showFilter Lt = "$lt"
@@ -528,6 +538,35 @@ filterToDocument f =
     showFilter NotIn = "$nin"
     showFilter Eq = error "EQ filter not expected"
     showFilter (BackendSpecificFilter bsf) = throw $ PersistMongoDBError $ T.pack $ "did not expect BackendSpecificFilter " ++ T.unpack bsf
+
+
+mongoFilterToBSON :: forall typ. ( PersistField typ )
+                  => Text
+                  -> MongoFilterOperator typ
+                  -> DB.Document
+mongoFilterToBSON fname filt =
+  case filt of
+    (PersistOperator v op)     -> [filterToBSON fname v op]
+    (MongoFilterOperator bval) -> [fname DB.:= bval]
+
+mongoFilterToDoc :: PersistEntity val => MongoFilter val -> DB.Document
+mongoFilterToDoc (RegExpFilter fn (reg, opts))        = [ fieldName fn  DB.:= DB.RegEx (DB.Regex reg opts)]
+mongoFilterToDoc (MultiKeyFilter fn filt) = mongoFilterToBSON (fieldName fn) filt
+mongoFilterToDoc (NestedFilter fns filt)  = mongoFilterToBSON (nesFldName fns) filt
+    where
+      nesFldName fns' = T.intercalate "." $ nesIdFix . reverse $ nesFldName' fns' []
+      nesFldName' :: forall r1 r2. (PersistEntity r1) => NestedField r1 r2 -> [DB.Label] -> [DB.Label]
+      nesFldName' (nf1 `LastEmbFld` nf2)          lbls = fieldName nf2 : fieldName nf1 : lbls
+      nesFldName' ( f1 `MidEmbFld`  f2)           lbls = nesFldName' f2 (fieldName f1 : lbls)
+      nesFldName' ( f1 `MidNestFlds` f2)          lbls = nesFldName' f2 (fieldName f1 : lbls)
+      nesFldName' ( f1 `MidNestFldsNullable` f2)  lbls = nesFldName' f2 (fieldName f1 : lbls)
+      nesFldName' (nf1 `LastNestFld` nf2)         lbls = fieldName nf2 : fieldName nf1:lbls
+      nesFldName' (nf1 `LastNestFldNullable` nf2) lbls = fieldName nf2 : fieldName nf1:lbls
+      nesIdFix [] = []
+      nesIdFix (fst':rst') = fst': (map (joinFN . (T.splitOn "_")) rst')
+      joinFN :: [Text] -> Text
+      joinFN [] = ""
+      joinFN (fst':rst') = fst' `T.append` (T.concat (map (\t -> (toUpper . T.head $ t) `T.cons` (T.tail t)) rst'))
 
 toValue :: forall a.  PersistField a => Either a [a] -> DB.Value
 toValue val =
@@ -811,16 +850,31 @@ data NestedField record typ
   | forall nest. PersistEntity nest => EntityField record (Maybe nest) `MidNestFldsNullable` NestedField nest typ
   | forall nest. PersistEntity nest => EntityField record nest `LastNestFld` EntityField nest typ
   | forall nest. PersistEntity nest => EntityField record (Maybe nest) `LastNestFldNullable` EntityField nest typ
+
+-- | A MongoRegex represetns a Regular expression.
+-- It is a tuple of the expression and the options for the regular expression, respectively
+-- Options are listed here: <http://docs.mongodb.org/manual/reference/operator/query/regex/>
+-- If you use the same options you may want to define a helper such as @r t = (t, "ims")@
+type MongoRegex = (Text, Text)
+
+-- | Filter using a Regular expression.
+(=~.) :: forall record. (PersistEntity record, PersistEntityBackend record ~ MongoBackend) => EntityField record Text -> MongoRegex -> Filter record
+fld =~. val = BackendFilter $ RegExpFilter fld val
+
+data MongoFilterOperator typ = PersistOperator (Either typ [typ]) PersistFilter
+                             | MongoFilterOperator DB.Value
+
 data MongoFilter record = forall typ. (PersistField typ) =>
                         NestedFilter {
-                          nestedField :: NestedField record typ
-                        , fieldValue  :: Either typ [typ]
+                          nestedField  :: NestedField record typ
+                        , nestedValue  :: MongoFilterOperator typ
                         }
                       | forall typ. PersistField typ =>
                         MultiKeyFilter {
-                          mulFldKey  :: EntityField record [typ]
-                        , mulFldVal  :: Either typ [typ]
+                          multiField  :: EntityField record [typ]
+                        , multiValue  :: MongoFilterOperator typ
                         }
+                      | RegExpFilter (EntityField record Text) MongoRegex
 
 -- | Point to an array field with an embedded object and give a deeper query into the embedded object.
 -- Use with 'nestEq'.
@@ -854,6 +908,7 @@ data MongoFilter record = forall typ. (PersistField typ) =>
 (?&~>.) = MidNestFldsNullable
 
 
+infixr 4 =~.
 infixr 5 ~>.
 infixr 5 &~>.
 infixr 5 ?&~>.
@@ -862,30 +917,48 @@ infixr 6 ?&->.
 infixr 6 ->.
 
 infixr 4 `nestEq`
+infixr 4 `multiEq`
+infixr 4 `nestBsonEq`
+infixr 4 `multiBsonEq`
 
 -- | The normal Persistent equality test (==.) is not generic enough.
 -- Instead use this with the drill-down operaters (->.) or (?->.)
-nestEq :: forall v typ. (PersistField typ, PersistEntityBackend v ~ MongoBackend) => NestedField v typ -> typ -> Filter v
-nf `nestEq` v = BackendFilter $ NestedFilter {nestedField = nf, fieldValue = (Left v)}
+nestEq :: forall record typ.
+       ( PersistField typ
+       , PersistEntityBackend record ~ MongoBackend
+       ) => NestedField record typ -> typ -> Filter record
+nf `nestEq` v = BackendFilter $ NestedFilter
+                    { nestedField = nf
+                    , nestedValue = PersistOperator (Left v) Eq
+                    }
+
+-- | same as `nestEq`, but give a BSON Value
+nestBsonEq :: forall record typ.
+       ( PersistField typ
+       , PersistEntityBackend record ~ MongoBackend
+       ) => NestedField record typ -> DB.Value -> Filter record
+nf `nestBsonEq` val = BackendFilter $ NestedFilter
+                    { nestedField = nf
+                    , nestedValue = MongoFilterOperator val
+                    }
 
 -- | use to see if an embedded list contains an item
-multiEq :: forall v typ. (PersistField typ, PersistEntityBackend v ~ MongoBackend) => EntityField v [typ] -> typ -> Filter v
-fld `multiEq` val = BackendFilter $ MultiKeyFilter {mulFldKey = fld, mulFldVal = (Left val)}
+multiEq :: forall record typ.
+        ( PersistField typ
+        , PersistEntityBackend record ~ MongoBackend
+        ) => EntityField record [typ] -> typ -> Filter record
+fld `multiEq` val = BackendFilter $ MultiKeyFilter
+                      { multiField = fld
+                      , multiValue = PersistOperator (Left val) Eq
+                      }
 
-mongoFilterToDoc :: PersistEntity val => MongoFilter val -> DB.Document
-mongoFilterToDoc (MultiKeyFilter fn v) = return (fieldName fn DB.:= toValue v)
-mongoFilterToDoc (NestedFilter fns v) = return ( (nesFldName fns) DB.:= toValue v)
-    where
-      nesFldName fns' = T.intercalate "." $ nesIdFix . reverse $ nesFldName' fns' []
-      nesFldName' :: forall r1 r2. (PersistEntity r1) => NestedField r1 r2 -> [DB.Label] -> [DB.Label]
-      nesFldName' (nf1 `LastEmbFld` nf2)          lbls = fieldName nf2 : fieldName nf1 : lbls
-      nesFldName' ( f1 `MidEmbFld`  f2)           lbls = nesFldName' f2 (fieldName f1 : lbls)
-      nesFldName' ( f1 `MidNestFlds` f2)          lbls = nesFldName' f2 (fieldName f1 : lbls)
-      nesFldName' ( f1 `MidNestFldsNullable` f2)  lbls = nesFldName' f2 (fieldName f1 : lbls)
-      nesFldName' (nf1 `LastNestFld` nf2)         lbls = fieldName nf2 : fieldName nf1:lbls
-      nesFldName' (nf1 `LastNestFldNullable` nf2) lbls = fieldName nf2 : fieldName nf1:lbls
-      nesIdFix [] = []
-      nesIdFix (fst':rst') = fst': (map (joinFN . (T.splitOn "_")) rst')
-      joinFN :: [Text] -> Text
-      joinFN [] = ""
-      joinFN (fst':rst') = fst' `T.append` (T.concat (map (\t -> (toUpper . T.head $ t) `T.cons` (T.tail t)) rst'))
+-- | same as `multiEq`, but give a BSON Value
+multiBsonEq :: forall record typ.
+        ( PersistField typ
+        , PersistEntityBackend record ~ MongoBackend
+        ) => EntityField record [typ] -> DB.Value -> Filter record
+fld `multiBsonEq` val = BackendFilter $ MultiKeyFilter
+                      { multiField = fld
+                      , multiValue = MongoFilterOperator val
+                      }
+
