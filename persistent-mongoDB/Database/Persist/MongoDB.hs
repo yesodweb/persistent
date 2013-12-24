@@ -160,8 +160,9 @@ readMayKey str =
 
 
 -- | wrapper of 'ObjectId'
--- * avoids an orphan instance
--- * works around a Persistent naming issue
+--
+--   * avoids an orphan instance
+--   * works around a Persistent naming issue
 newtype Objectid = Objectid { unObjectId :: DB.ObjectId }
                    deriving (Show, Read, Eq, Ord)
 
