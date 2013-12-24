@@ -35,7 +35,7 @@ module Database.Persist.MongoDB
     -- * MongoDB specific Filters
     -- $filters
     , nestEq, multiEq, nestBsonEq, multiBsonEq
-    , (=~.), MongoRegex
+    , (=~.), (?=~.), MongoRegex
     , (->.), (~>.), (?&->.), (?&~>.), (&->.), (&~>.)
     -- non-operator forms of filters
     , NestedField(..)
@@ -551,6 +551,7 @@ mongoFilterToBSON fname filt =
     (MongoFilterOperator bval) -> [fname DB.:= bval]
 
 mongoFilterToDoc :: PersistEntity val => MongoFilter val -> DB.Document
+mongoFilterToDoc (RegExpMaybeFilter fn (reg, opts))   = [ fieldName fn  DB.:= DB.RegEx (DB.Regex reg opts)]
 mongoFilterToDoc (RegExpFilter fn (reg, opts))        = [ fieldName fn  DB.:= DB.RegEx (DB.Regex reg opts)]
 mongoFilterToDoc (MultiKeyFilter fn filt) = mongoFilterToBSON (fieldName fn) filt
 mongoFilterToDoc (NestedFilter fns filt)  = mongoFilterToBSON (nesFldName fns) filt
@@ -862,6 +863,10 @@ type MongoRegex = (Text, Text)
 (=~.) :: forall record. (PersistEntity record, PersistEntityBackend record ~ MongoBackend) => EntityField record Text -> MongoRegex -> Filter record
 fld =~. val = BackendFilter $ RegExpFilter fld val
 
+-- | Filter using a Regular expression against a nullable field.
+(?=~.) :: forall record. (PersistEntity record, PersistEntityBackend record ~ MongoBackend) => EntityField record (Maybe Text) -> MongoRegex -> Filter record
+fld ?=~. val = BackendFilter $ RegExpMaybeFilter fld val
+
 data MongoFilterOperator typ = PersistOperator (Either typ [typ]) PersistFilter
                              | MongoFilterOperator DB.Value
 
@@ -876,6 +881,7 @@ data MongoFilter record = forall typ. (PersistField typ) =>
                         , multiValue  :: MongoFilterOperator typ
                         }
                       | RegExpFilter (EntityField record Text) MongoRegex
+                      | RegExpMaybeFilter (EntityField record (Maybe Text)) MongoRegex
 
 -- | Point to an array field with an embedded object and give a deeper query into the embedded object.
 -- Use with 'nestEq'.
@@ -909,6 +915,7 @@ data MongoFilter record = forall typ. (PersistField typ) =>
 (?&~>.) = MidNestFldsNullable
 
 
+infixr 4 ?=~.
 infixr 4 =~.
 infixr 5 ~>.
 infixr 5 &~>.
