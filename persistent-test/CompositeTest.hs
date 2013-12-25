@@ -37,7 +37,6 @@ import qualified Control.Exception.Control as Control
 
 import Init
 #ifndef WITH_MONGODB
-import Database.Persist
 import Data.Maybe (isJust)
 
 import Control.Applicative ((<$>),(<*>))
@@ -75,7 +74,6 @@ share [mkPersist sqlSettings,  mkMigrate "compositeMigrate", mkDeleteCascade sql
 
 
 #ifdef WITH_MONGODB
-#else
 cleanDB :: (PersistQuery m, PersistEntityBackend TestChild ~ PersistMonadBackend m) => m ()
 cleanDB = do
   deleteWhere ([] :: [Filter TestChild])
@@ -86,6 +84,7 @@ cleanDB = do
 
 db :: Action IO () -> Assertion
 db = db' cleanDB
+#else
 
 specs :: Spec
 specs = describe "composite" $
@@ -213,9 +212,9 @@ specs = describe "composite" $
       
       xs <- selectList [CitizenAddressId ==. kca1] []
       length xs @== 1
-      let [Entity newkca1 newca1] = xs
+      let [Entity newkca1 newca2] = xs
       matchCitizenAddressK kca1 @== matchCitizenAddressK newkca1
-      ca1 @== newca1
+      ca1 @== newca2
 
 matchK :: PersistField a => KeyBackend backend entity -> Either Text a
 matchK = fromPersistValue . unKey
