@@ -7,8 +7,7 @@
 {-# LANGUAGE OverlappingInstances #-}
 #endif
 module Database.Persist.Sql.Class
-    ( MonadSqlPersist (..)
-    , RawSql (..)
+    ( RawSql (..)
     , PersistFieldSql (..)
     ) where
 
@@ -54,36 +53,6 @@ import Data.Word
 import Data.ByteString (ByteString)
 import Text.Blaze.Html (Html)
 import Data.Bits (bitSize)
-
-class (MonadIO m, MonadLogger m) => MonadSqlPersist m where
-    askSqlConn :: m Connection
-    default askSqlConn :: (MonadSqlPersist m, MonadTrans t, MonadLogger (t m))
-                       => t m Connection
-    askSqlConn = lift askSqlConn
-
-instance (MonadIO m, MonadLogger m) => MonadSqlPersist (SqlPersistT m) where
-    askSqlConn = SqlPersistT ask
-
-#define GO(T) instance (MonadSqlPersist m) => MonadSqlPersist (T m)
-#define GOX(X, T) instance (X, MonadSqlPersist m) => MonadSqlPersist (T m)
-GO(LoggingT)
-GO(IdentityT)
-GO(ListT)
-GO(MaybeT)
-GOX(Error e, ErrorT e)
-GO(ReaderT r)
-GO(ContT r)
-GO(StateT s)
-GO(ResourceT)
-GO(Pipe l i o u)
-GO(ConduitM i o)
-GOX(Monoid w, WriterT w)
-GOX(Monoid w, RWST r w s)
-GOX(Monoid w, Strict.RWST r w s)
-GO(Strict.StateT s)
-GOX(Monoid w, Strict.WriterT w)
-#undef GO
-#undef GOX
 
 -- | Class for data types that may be retrived from a 'rawSql'
 -- query.

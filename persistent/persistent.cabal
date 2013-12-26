@@ -27,7 +27,7 @@ library
                    , text                     >= 0.8
                    , containers               >= 0.2
                    , conduit                  >= 1.0
-                   , resourcet                >= 0.4
+                   , resourcet                >= 0.4.10
                    , monad-control            >= 0.3
                    , lifted-base              >= 0.1
                    , pool-conduit             >= 0.1.2
@@ -43,6 +43,7 @@ library
                    , blaze-html               >= 0.5
                    , blaze-markup             >= 0.5.1
                    , silently
+                   , mtl
 
     exposed-modules: Database.Persist
                      Database.Persist.Quasi

@@ -19,10 +19,9 @@ import Data.ByteString.Char8 (readInteger)
 import Data.Maybe (isJust)
 import Data.List (find)
 
-instance (C.MonadResource m, MonadLogger m) => PersistStore (SqlPersistT m) where
-    type PersistMonadBackend (SqlPersistT m) = SqlBackend
+instance PersistStore Connection where
     insert val = do
-        conn <- askSqlConn
+        conn <- ask
         let esql = connInsertSql conn t vals
         key <-
             case esql of
@@ -59,7 +58,7 @@ instance (C.MonadResource m, MonadLogger m) => PersistStore (SqlPersistT m) wher
         vals = map toPersistValue $ toPersistFields val
 
     replace k val = do
-        conn <- askSqlConn
+        conn <- ask
         let t = entityDef $ Just val
         let sql = T.concat
                 [ "UPDATE "
@@ -84,7 +83,7 @@ instance (C.MonadResource m, MonadLogger m) => PersistStore (SqlPersistT m) wher
           Just _ -> replace key value
 
     get k = do
-        conn <- askSqlConn
+        conn <- ask
         let t = entityDef $ dummyFromKey k
         let composite = isJust $ entityPrimary t
         let cols = T.intercalate ","
@@ -110,7 +109,7 @@ instance (C.MonadResource m, MonadLogger m) => PersistStore (SqlPersistT m) wher
                         Right v -> return $ Just v
 
     delete k = do
-        conn <- askSqlConn
+        conn <- ask
         rawExecute (sql conn) (convertKey composite k)
       where
         t = entityDef $ dummyFromKey k
@@ -135,7 +134,7 @@ insrepHelper :: (MonadIO m, PersistEntity val, MonadLogger m, MonadSqlPersist m)
              -> val
              -> m ()
 insrepHelper command (Key k) val = do
-    conn <- askSqlConn
+    conn <- ask
     rawExecute (sql conn) vals
   where
     t = entityDef $ Just val

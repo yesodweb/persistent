@@ -12,27 +12,11 @@ import qualified Prelude
 import Prelude hiding ((++), show)
 
 import Control.Monad (liftM)
-import Control.Monad.Trans.Error (Error (..))
-import Control.Monad.Trans.Class (lift)
-import Data.Monoid (Monoid)
 import Data.List ((\\))
 
-import Data.Conduit.Internal (Pipe)
-import Control.Monad.Logger (LoggingT)
-import Control.Monad.Trans.Identity ( IdentityT)
-import Control.Monad.Trans.List     ( ListT    )
-import Control.Monad.Trans.Maybe    ( MaybeT   )
-import Control.Monad.Trans.Error    ( ErrorT   )
 import Control.Monad.Trans.Reader   ( ReaderT  )
-import Control.Monad.Trans.Cont     ( ContT  )
-import Control.Monad.Trans.State    ( StateT   )
-import Control.Monad.Trans.Writer   ( WriterT  )
-import Control.Monad.Trans.RWS      ( RWST     )
-import Control.Monad.Trans.Resource ( ResourceT)
+import Control.Monad.IO.Class (MonadIO)
 
-import qualified Control.Monad.Trans.RWS.Strict    as Strict ( RWST   )
-import qualified Control.Monad.Trans.State.Strict  as Strict ( StateT )
-import qualified Control.Monad.Trans.Writer.Strict as Strict ( WriterT )
 import Database.Persist.Class.PersistStore
 import Database.Persist.Class.PersistEntity
 
@@ -48,17 +32,17 @@ import Database.Persist.Class.PersistEntity
 --  * there is some fragility to trying to catch the correct exception and determing the column of failure.
 --
 --  * an exception will automatically abort the current SQL transaction
-class PersistStore m => PersistUnique m where
+class PersistStore backend => PersistUnique backend where
     -- | Get a record by unique key, if available. Returns also the identifier.
-    getBy :: (PersistEntityBackend val ~ PersistMonadBackend m, PersistEntity val) => Unique val -> m (Maybe (Entity val))
+    getBy :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val) => Unique val -> ReaderT backend m (Maybe (Entity val))
 
     -- | Delete a specific record by unique key. Does nothing if no record
     -- matches.
-    deleteBy :: (PersistEntityBackend val ~ PersistMonadBackend m, PersistEntity val) => Unique val -> m ()
+    deleteBy :: (MonadIO m, PersistEntityBackend val ~ backend, PersistEntity val) => Unique val -> ReaderT backend m ()
 
     -- | Like 'insert', but returns 'Nothing' when the record
     -- couldn't be inserted because of a uniqueness constraint.
-    insertUnique :: (PersistEntityBackend val ~ PersistMonadBackend m, PersistEntity val) => val -> m (Maybe (Key val))
+    insertUnique :: (MonadIO m, PersistEntityBackend val ~ backend, PersistEntity val) => val -> ReaderT backend m (Maybe (Key val))
     insertUnique datum = do
         conflict <- checkUnique datum
         case conflict of
@@ -68,8 +52,8 @@ class PersistStore m => PersistUnique m where
 -- | Insert a value, checking for conflicts with any unique constraints.  If a
 -- duplicate exists in the database, it is returned as 'Left'. Otherwise, the
 -- new 'Key is returned as 'Right'.
-insertBy :: (PersistEntity val, PersistUnique m, PersistEntityBackend val ~ PersistMonadBackend m)
-         => val -> m (Either (Entity val) (Key val))
+insertBy :: (MonadIO m, PersistEntity val, PersistUnique backend, PersistEntityBackend val ~ backend)
+         => val -> ReaderT backend m (Either (Entity val) (Key val))
 
 insertBy val = do
     res <- getByValue val
@@ -81,8 +65,8 @@ insertBy val = do
 -- of a 'Unique' value. Returns a value matching /one/ of the unique keys. This
 -- function makes the most sense on entities with a single 'Unique'
 -- constructor.
-getByValue :: (PersistEntity value, PersistUnique m, PersistEntityBackend value ~ PersistMonadBackend m)
-           => value -> m (Maybe (Entity value))
+getByValue :: (MonadIO m, PersistEntity value, PersistUnique backend, PersistEntityBackend value ~ backend)
+           => value -> ReaderT backend m (Maybe (Entity value))
 getByValue = checkUniques . persistUniqueKeys
   where
     checkUniques [] = return Nothing
@@ -99,8 +83,8 @@ getByValue = checkUniques . persistUniqueKeys
 -- If uniqueness is violated, return a 'Just' with the 'Unique' violation
 --
 -- Since 1.2.2.0
-replaceUnique :: (Eq record, Eq (Unique record), PersistEntityBackend record ~ PersistMonadBackend m, PersistEntity record, PersistStore m, PersistUnique m)
-              => Key record -> record -> m (Maybe (Unique record))
+replaceUnique :: (MonadIO m, Eq record, Eq (Unique record), PersistEntityBackend record ~ backend, PersistEntity record, PersistUnique backend)
+              => Key record -> record -> ReaderT backend m (Maybe (Unique record))
 replaceUnique key datumNew = getJust key >>= replaceOriginal
   where
     uniqueKeysNew = persistUniqueKeys datumNew
@@ -118,39 +102,15 @@ replaceUnique key datumNew = getJust key >>= replaceOriginal
 --
 -- Returns 'Nothing' if the entity would be unique, and could thus safely be inserted.
 -- on a conflict returns the conflicting key
-checkUnique :: (PersistEntityBackend record ~ PersistMonadBackend m, PersistEntity record, PersistUnique m)
-            => record -> m (Maybe (Unique record))
+checkUnique :: (MonadIO m, PersistEntityBackend record ~ backend, PersistEntity record, PersistUnique backend)
+            => record -> ReaderT backend m (Maybe (Unique record))
 checkUnique = checkUniqueKeys . persistUniqueKeys
 
-checkUniqueKeys :: (PersistEntity record, PersistUnique m, PersistEntityBackend record ~ PersistMonadBackend m)
-                => [Unique record] -> m (Maybe (Unique record))
+checkUniqueKeys :: (MonadIO m, PersistEntity record, PersistUnique backend, PersistEntityBackend record ~ backend)
+                => [Unique record] -> ReaderT backend m (Maybe (Unique record))
 checkUniqueKeys [] = return Nothing
 checkUniqueKeys (x:xs) = do
     y <- getBy x
     case y of
         Nothing -> checkUniqueKeys xs
         Just _ -> return (Just x)
-
-#define DEF(T) { getBy = lift . getBy; deleteBy = lift . deleteBy; insertUnique = lift . insertUnique }
-#define GO(T) instance (PersistUnique m) => PersistUnique (T m) where DEF(T)
-#define GOX(X, T) instance (X, PersistUnique m) => PersistUnique (T m) where DEF(T)
-
-GO(LoggingT)
-GO(IdentityT)
-GO(ListT)
-GO(MaybeT)
-GOX(Error e, ErrorT e)
-GO(ReaderT r)
-GO(ContT r)
-GO(StateT s)
-GO(ResourceT)
-GO(Pipe l i o u)
-GOX(Monoid w, WriterT w)
-GOX(Monoid w, RWST r w s)
-GOX(Monoid w, Strict.RWST r w s)
-GO(Strict.StateT s)
-GOX(Monoid w, Strict.WriterT w)
-
-#undef DEF
-#undef GO
-#undef GOX
