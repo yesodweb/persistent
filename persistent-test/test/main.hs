@@ -59,7 +59,9 @@ main = do
 
   hspec $ do
     RenameTest.specs
+#ifndef WITH_POSTGRESQL // FIXME
     DataTypeTest.specs
+#endif
     HtmlTest.specs
     EmbedTest.specs
     -- EmbedOrderTest.specs

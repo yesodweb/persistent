@@ -23,6 +23,7 @@ import Database.Persist.MySQL
 import Data.Char (generalCategory, GeneralCategory(..))
 import qualified Data.Text as T
 import Data.ByteString (ByteString)
+import qualified Data.ByteString as S
 import Data.Time (Day, UTCTime (..))
 import Data.Time.Calendar (addDays)
 import Data.Time.Clock (picosecondsToDiffTime)
@@ -91,10 +92,10 @@ specs = describe "data type specs" $
                 check "day" dataTypeTableDay
 #ifndef WITH_MONGODB
                 check' "pico" dataTypeTablePico
-                check "time" dataTypeTableTime
+                check "time" (roundTime . dataTypeTableTime)
 #endif
 #if !(defined(WITH_MONGODB)) || (defined(WITH_MONGODB) && defined(HIGH_PRECISION_DATE))
-                check "utc" dataTypeTableUtc
+                check "utc" (roundUTCTime . dataTypeTableUtc)
 #endif
 #ifndef WITH_POSTGRESQL
                 -- postgres seems to 'convert' the time to the localtimezone
@@ -113,6 +114,20 @@ specs = describe "data type specs" $
                    | otherwise = x
       getDoubleDiff x y = abs (normDouble x - normDouble y)
 
+roundTime :: TimeOfDay -> TimeOfDay
+#ifdef WITH_MYSQL
+roundTime (TimeOfDay h m s) = TimeOfDay h m (fromIntegral $ truncate s)
+#else
+roundTime = id
+#endif
+
+roundUTCTime :: UTCTime -> UTCTime
+#ifdef WITH_MYSQL
+roundUTCTime (UTCTime day time) = UTCTime day (fromIntegral $ truncate time)
+#else
+roundUTCTime = id
+#endif
+
 randomValues :: IO [DataTypeTable]
 randomValues = do
   g <- newStdGen
@@ -121,9 +136,9 @@ randomValues = do
 instance Arbitrary (DataTypeTableGeneric g) where
   arbitrary = DataTypeTable
      <$> arbText                -- text
-     <*> arbText                -- textManLen
+     <*> (T.take 100 <$> arbText) -- textManLen
      <*> arbitrary              -- bytes
-     <*> arbitrary              -- bytesMaxLen
+     <*> (S.take 100 <$> arbitrary) -- bytesMaxLen
      <*> arbitrary              -- int
      <*> arbitrary              -- double
      <*> arbitrary              -- bool
