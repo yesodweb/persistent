@@ -42,7 +42,15 @@ import Data.Maybe (isJust)
 import Control.Applicative ((<$>),(<*>))
 #endif
 
-share [mkPersist sqlSettings,  mkMigrate "compositeMigrate", mkDeleteCascade sqlSettings] [persistLowerCase|
+#if WITH_MONGODB
+import Language.Haskell.TH.Syntax
+import Database.Persist.MongoDB (MongoBackend)
+#define SETTINGS (mkPersistSettings $ ConT ''MongoBackend)
+#else
+#define SETTINGS sqlSettings
+#endif
+
+share [mkPersist SETTINGS,  mkMigrate "compositeMigrate", mkDeleteCascade SETTINGS] [persistLowerCase|
   TestChild
       name1 String maxlen=20
       name2 String maxlen=20
