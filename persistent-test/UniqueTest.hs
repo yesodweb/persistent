@@ -38,7 +38,7 @@ share [mkPersist sqlSettings,  mkMigrate "uniqueMigrate"] [persistLowerCase|
 #endif
 |]
 #ifdef WITH_MONGODB
-cleanDB :: (PersistQuery m, PersistEntityBackend TestNonNull ~ PersistMonadBackend m) => m ()
+cleanDB :: (MonadIO m, PersistQuery backend, PersistEntityBackend TestNonNull ~ backend) => ReaderT backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter TestNonNull])
   deleteWhere ([] :: [Filter TestNull])

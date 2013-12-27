@@ -119,7 +119,7 @@ share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
 
 |]
 #ifdef WITH_MONGODB
-cleanDB :: (PersistQuery m, PersistEntityBackend HasMapEmbed ~ PersistMonadBackend m) => m ()
+cleanDB :: (PersistQuery backend, PersistEntityBackend HasMapEmbed ~ backend, MonadIO m) => ReaderT backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter HasEmbed])
   deleteWhere ([] :: [Filter HasEmbeds])

@@ -150,7 +150,7 @@ NoPrefix2
 |]
 #endif
 
-cleanDB :: (PersistQuery m, PersistEntityBackend Email ~ PersistMonadBackend m) => m ()
+cleanDB :: (MonadIO m, PersistQuery backend, PersistEntityBackend Email ~ backend) => ReaderT backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Person])
   deleteWhere ([] :: [Filter Person1])
@@ -825,7 +825,7 @@ caseAfterException = runNoLoggingT $ runResourceT $ withSqlitePool sqlite_databa
 #endif
 
 -- Test proper polymorphism
-_polymorphic :: PersistQuery m => m ()
+_polymorphic :: PersistQuery backend => ReaderT backend m ()
 _polymorphic = do
     ((Entity id' _):_) <- selectList [] [LimitTo 1]
     _ <- selectList [PetOwnerId ==. id'] []

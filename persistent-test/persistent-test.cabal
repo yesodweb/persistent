@@ -132,6 +132,8 @@ library
                    , bson
                    , silently
                    , blaze-builder
+                   , mtl
+                   , fast-logger
 
    if flag(nooverlap)
      cpp-options: -DNO_OVERLAP

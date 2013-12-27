@@ -59,7 +59,7 @@ DataTypeTable no-json
     zonedTime ZonedTime
 |]
 
-cleanDB :: (PersistQuery m, PersistMonadBackend m ~ PersistEntityBackend DataTypeTable) => m ()
+cleanDB :: (MonadIO m, PersistQuery backend, backend ~ PersistEntityBackend DataTypeTable) => ReaderT backend m ()
 cleanDB = deleteWhere ([] :: [Filter DataTypeTable])
 
 specs :: Spec

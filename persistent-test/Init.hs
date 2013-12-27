@@ -34,9 +34,11 @@ module Init (
   , mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase
   , Int32, Int64
   , Text
+  , module Control.Monad.Trans.Reader
 ) where
 
 -- re-exports
+import Control.Monad.Trans.Reader
 import Test.Hspec
 import Test.Hspec.HUnit
 import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase)

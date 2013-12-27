@@ -82,7 +82,7 @@ share [mkPersist SETTINGS,  mkMigrate "compositeMigrate", mkDeleteCascade SETTIN
 
 
 #ifdef WITH_MONGODB
-cleanDB :: (PersistQuery m, PersistEntityBackend TestChild ~ PersistMonadBackend m) => m ()
+cleanDB :: (PersistQuery backend, PersistEntityBackend TestChild ~ backend, MonadIO m) => ReaderT backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter TestChild])
   deleteWhere ([] :: [Filter TestParent])
