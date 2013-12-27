@@ -6,16 +6,17 @@ import Database.Persist
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Class
 import Database.Persist.Sql.Raw
-import Database.Persist.Sql.Orphan.PersistStore ()
+import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
 import qualified Data.Text as T
 import Data.Monoid ((<>))
 import Control.Monad.Logger
 import qualified Data.Conduit.List as CL
 import Data.Conduit
+import Control.Monad.Trans.Reader (ask)
 
-instance (MonadResource m, MonadLogger m) => PersistUnique (SqlPersistT m) where
+instance PersistUnique Connection where
     deleteBy uniq = do
-        conn <- askSqlConn
+        conn <- ask
         let sql' = sql conn
             vals = persistUniqueToValues uniq
         rawExecute sql' vals
@@ -31,7 +32,7 @@ instance (MonadResource m, MonadLogger m) => PersistUnique (SqlPersistT m) where
             ]
 
     getBy uniq = do
-        conn <- askSqlConn
+        conn <- ask
         let flds = map (connEscapeName conn . fieldDB) (entityFields t)
         let cols = case entityPrimary t of
                      Just _ -> T.intercalate "," flds
@@ -45,7 +46,7 @@ instance (MonadResource m, MonadLogger m) => PersistUnique (SqlPersistT m) where
                 , sqlClause conn
                 ]
             vals' = persistUniqueToValues uniq
-        rawQuery sql vals' $$ do
+        withRawQuery sql vals' $ do
             row <- CL.head
             case row of
                 Nothing -> return Nothing

@@ -16,6 +16,7 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Writer
+import Control.Monad.Trans.Reader (ReaderT, ask)
 import Control.Monad (liftM, unless)
 import Data.Text (Text, unpack, snoc, isPrefixOf, pack)
 import qualified Data.Text.IO
@@ -34,7 +35,7 @@ unsafeSql = allSql . filter fst
 safeSql :: CautiousMigration -> [Sql]
 safeSql = allSql . filter (not . fst)
 
-parseMigration :: Monad m => Migration m -> m (Either [Text] CautiousMigration)
+parseMigration :: Monad m => Migration m -> ReaderT Connection m (Either [Text] CautiousMigration)
 parseMigration =
     liftM go . runWriterT . execWriterT
   where
@@ -42,40 +43,40 @@ parseMigration =
     go (errs, _) = Left errs
 
 -- like parseMigration, but call error or return the CautiousMigration
-parseMigration' :: Monad m => Migration m -> m (CautiousMigration)
+parseMigration' :: Monad m => Migration m -> ReaderT Connection m (CautiousMigration)
 parseMigration' m = do
   x <- parseMigration m
   case x of
       Left errs -> error $ unlines $ map unpack errs
       Right sql -> return sql
 
-printMigration :: MonadIO m => Migration m -> m ()
+printMigration :: MonadIO m => Migration m -> ReaderT Connection m ()
 printMigration m = do
   mig <- parseMigration' m
   mapM_ (liftIO . Data.Text.IO.putStrLn . flip snoc ';') (allSql mig)
 
-getMigration :: (MonadBaseControl IO m, MonadIO m) => Migration m -> m [Sql]
+getMigration :: (MonadBaseControl IO m, MonadIO m) => Migration m -> ReaderT Connection m [Sql]
 getMigration m = do
   mig <- parseMigration' m
   return $ allSql mig
 
-runMigration :: MonadSqlPersist m
+runMigration :: MonadIO m
              => Migration m
-             -> m ()
+             -> ReaderT Connection m ()
 runMigration m = runMigration' m False >> return ()
 
 -- | Same as 'runMigration', but returns a list of the SQL commands executed
 -- instead of printing them to stderr.
-runMigrationSilent :: (MonadBaseControl IO m, MonadSqlPersist m)
+runMigrationSilent :: (MonadBaseControl IO m, MonadIO m)
                    => Migration m
-                   -> m [Text]
+                   -> ReaderT Connection m [Text]
 runMigrationSilent m = liftBaseOp_ (hSilence [stderr]) $ runMigration' m True
 
 runMigration'
-    :: MonadSqlPersist m
+    :: MonadIO m
     => Migration m
     -> Bool -- ^ is silent?
-    -> m [Text]
+    -> ReaderT Connection m [Text]
 runMigration' m silent = do
     mig <- parseMigration' m
     case unsafeSql mig of
@@ -86,14 +87,14 @@ runMigration' m silent = do
             , unlines $ map (\s -> "    " ++ unpack s ++ ";") $ errs
             ]
 
-runMigrationUnsafe :: MonadSqlPersist m
+runMigrationUnsafe :: MonadIO m
                    => Migration m
-                   -> m ()
+                   -> ReaderT Connection m ()
 runMigrationUnsafe m = do
     mig <- parseMigration' m
     mapM_ (executeMigrate False) $ sortMigrations $ allSql mig
 
-executeMigrate :: MonadSqlPersist m => Bool -> Text -> m Text
+executeMigrate :: MonadIO m => Bool -> Text -> ReaderT Connection m Text
 executeMigrate silent s = do
     unless silent $ liftIO $ hPutStrLn stderr $ "Migrating: " ++ unpack s
     rawExecute s []
@@ -109,11 +110,11 @@ sortMigrations x =
     -- choose to have this special sorting applied.
     isCreate t = pack "CREATe " `isPrefixOf` t
 
-migrate :: MonadSqlPersist m
+migrate :: MonadIO m
         => [EntityDef SqlType]
         -> EntityDef SqlType
         -> Migration m
 migrate allDefs val = do
-    conn <- askSqlConn
+    conn <- lift $ lift ask
     res <- liftIO $ connMigrateSql conn allDefs (getStmtConn conn) val
     either tell (lift . tell) res

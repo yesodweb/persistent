@@ -32,6 +32,9 @@ import Data.Conduit.Pool (Pool)
 import Web.PathPieces
 import Control.Exception (throw)
 import qualified Data.Text.Read
+import Language.Haskell.TH.Syntax (Loc)
+import Control.Monad.Logger (LogSource, LogLevel)
+import System.Log.FastLogger (LogStr)
 
 data InsertSqlResult = ISRSingle Text
                      | ISRInsertGet Text Text
@@ -55,13 +58,15 @@ data Connection = Connection
     , connNoLimit :: Text
     , connRDBMS :: Text
     , connLimitOffset :: (Int,Int) -> Bool -> Text -> Text
+    , connLogFunc :: Loc -> LogSource -> LogLevel -> LogStr -> IO ()
     }
+    deriving Typeable
 
 data Statement = Statement
     { stmtFinalize :: IO ()
     , stmtReset :: IO ()
     , stmtExecute :: [PersistValue] -> IO Int64
-    , stmtQuery :: forall m. MonadResource m
+    , stmtQuery :: forall m. MonadIO m
                 => [PersistValue]
                 -> Source m [PersistValue]
     }
@@ -82,10 +87,9 @@ data PersistentSqlException = StatementAlreadyFinalized Text
     deriving (Typeable, Show)
 instance Exception PersistentSqlException
 
-data SqlBackend
-    deriving Typeable
+type SqlBackend = Connection -- FIXME
 
-newtype SqlPersistT m a = SqlPersistT { unSqlPersistT :: ReaderT Connection m a }
+newtype SqlPersistT m a = SqlPersistT { unSqlPersistT :: ReaderT Connection m a } -- switch to type synonym, rename Connection
     deriving (Monad, MonadIO, MonadTrans, Functor, Applicative, MonadPlus)
 
 type SqlPersist = SqlPersistT
@@ -119,7 +123,7 @@ type Sql = Text
 -- Bool indicates if the Sql is safe
 type CautiousMigration = [(Bool, Sql)]
 
-type Migration m = WriterT [Text] (WriterT CautiousMigration m) ()
+type Migration m = WriterT [Text] (WriterT CautiousMigration (ReaderT Connection m)) ()
 
 type ConnectionPool = Pool Connection
 

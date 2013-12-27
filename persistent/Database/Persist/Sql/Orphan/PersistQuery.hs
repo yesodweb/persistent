@@ -11,7 +11,7 @@ import Database.Persist
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Class
 import Database.Persist.Sql.Raw
-import Database.Persist.Sql.Orphan.PersistStore ()
+import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
 import Database.Persist.Sql.Internal (convertKey)
 import qualified Data.Text as T
 import Data.Text (Text)
@@ -20,6 +20,7 @@ import Data.Int (Int64)
 import Control.Monad.Logger
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
+import Control.Monad.Trans.Reader (ReaderT, ask)
 import Control.Exception (throwIO)
 import qualified Data.Conduit.List as CL
 import Data.Conduit
@@ -28,10 +29,10 @@ import Data.Maybe (isJust)
 import Data.List (transpose, inits, find)
 
 -- orphaned instance for convenience of modularity
-instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
+instance PersistQuery Connection where
     update _ [] = return ()
     update k upds = do
-        conn <- askSqlConn
+        conn <- ask
         let go'' n Assign = n <> "=?"
             go'' n Add = T.concat [n, "=", n, "+?"]
             go'' n Subtract = T.concat [n, "=", n, "-?"]
@@ -57,7 +58,7 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
         go x = (fieldDB $ updateFieldDef x, updateUpdate x)
 
     count filts = do
-        conn <- askSqlConn
+        conn <- ask
         let wher = if null filts
                     then ""
                     else filterClause False conn filts
@@ -66,7 +67,7 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
                 , connEscapeName conn $ entityDB t
                 , wher
                 ]
-        rawQuery sql (getFiltsValues conn filts) $$ do
+        withRawQuery sql (getFiltsValues conn filts) $ do
             mm <- CL.head
             case mm of
               Just [PersistInt64 i] -> return $ fromIntegral i
@@ -79,9 +80,10 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
       where
         t = entityDef $ dummyFromFilts filts
 
-    selectSource filts opts = do
-        conn <- lift askSqlConn
-        rawQuery (sql conn) (getFiltsValues conn filts) $= CL.mapM parse
+    selectSourceRes filts opts = do
+        conn <- ask
+        srcRes <- rawQueryRes (sql conn) (getFiltsValues conn filts)
+        return $ fmap ($= CL.mapM parse) srcRes
       where
         composite = isJust $ entityPrimary t
         (limit, offset, orders) = limitOffsetOrder opts
@@ -134,9 +136,10 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
             , ord conn
             ]
 
-    selectKeys filts opts = do
-        conn <- lift askSqlConn
-        rawQuery (sql conn) (getFiltsValues conn filts) $= CL.mapM parse
+    selectKeysRes filts opts = do
+        conn <- ask
+        srcRes <- rawQueryRes (sql conn) (getFiltsValues conn filts)
+        return $ fmap ($= CL.mapM parse) srcRes
       where
         t = entityDef $ dummyFromFilts filts
         cols conn = case entityPrimary t of 
@@ -184,11 +187,11 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
 -- | Same as 'deleteWhere', but returns the number of rows affected.
 --
 -- Since 1.1.5
-deleteWhereCount :: (PersistEntity val, MonadSqlPersist m)
+deleteWhereCount :: (PersistEntity val, MonadIO m)
                  => [Filter val]
-                 -> m Int64
+                 -> ReaderT Connection m Int64
 deleteWhereCount filts = do
-    conn <- askSqlConn
+    conn <- ask
     let t = entityDef $ dummyFromFilts filts
     let wher = if null filts
                 then ""
@@ -203,13 +206,13 @@ deleteWhereCount filts = do
 -- | Same as 'updateWhere', but returns the number of rows affected.
 --
 -- Since 1.1.5
-updateWhereCount :: (PersistEntity val, MonadSqlPersist m)
+updateWhereCount :: (PersistEntity val, MonadIO m)
                  => [Filter val]
                  -> [Update val]
-                 -> m Int64
+                 -> ReaderT Connection m Int64
 updateWhereCount _ [] = return 0
 updateWhereCount filts upds = do
-    conn <- askSqlConn
+    conn <- ask
     let wher = if null filts
                 then ""
                 else filterClause False conn filts

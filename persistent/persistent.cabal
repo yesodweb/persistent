@@ -44,6 +44,7 @@ library
                    , blaze-markup             >= 0.5.1
                    , silently
                    , mtl
+                   , fast-logger              >= 2.1
 
     exposed-modules: Database.Persist
                      Database.Persist.Quasi

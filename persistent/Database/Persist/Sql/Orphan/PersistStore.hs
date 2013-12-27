@@ -1,7 +1,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-module Database.Persist.Sql.Orphan.PersistStore () where
+module Database.Persist.Sql.Orphan.PersistStore (withRawQuery) where
 
 import Database.Persist
 import Database.Persist.Sql.Types
@@ -18,6 +18,17 @@ import Control.Monad.IO.Class
 import Data.ByteString.Char8 (readInteger)
 import Data.Maybe (isJust)
 import Data.List (find)
+import Control.Monad.Trans.Reader (ReaderT, ask)
+import Control.Monad.Trans.Resource (with)
+
+withRawQuery :: MonadIO m
+             => Text
+             -> [PersistValue]
+             -> C.Sink [PersistValue] IO a
+             -> ReaderT Connection m a
+withRawQuery sql vals sink = do
+    srcRes <- rawQueryRes sql vals
+    liftIO $ with srcRes (C.$$ sink)
 
 instance PersistStore Connection where
     insert val = do
@@ -25,7 +36,7 @@ instance PersistStore Connection where
         let esql = connInsertSql conn t vals
         key <-
             case esql of
-                ISRSingle sql -> rawQuery sql vals C.$$ do
+                ISRSingle sql -> withRawQuery sql vals $ do
                     x <- CL.head
                     case x of
                         Just [PersistInt64 i] -> return $ Key $ PersistInt64 i
@@ -33,7 +44,7 @@ instance PersistStore Connection where
                         Just vals' -> error $ "Invalid result from a SQL insert, got: " ++ show vals'
                 ISRInsertGet sql1 sql2 -> do
                     rawExecute sql1 vals
-                    rawQuery sql2 [] C.$$ do
+                    withRawQuery sql2 [] $ do
                         mm <- CL.head
                         case mm of
                           Just [PersistInt64 i] -> return $ Key $ PersistInt64 i
@@ -99,7 +110,7 @@ instance PersistStore Connection where
                 , " WHERE "
                 , wher
                 ]
-        rawQuery sql (convertKey composite k) C.$$ do
+        withRawQuery sql (convertKey composite k) $ do
             res <- CL.head
             case res of
                 Nothing -> return Nothing
@@ -128,11 +139,11 @@ instance PersistStore Connection where
 dummyFromKey :: KeyBackend SqlBackend v -> Maybe v
 dummyFromKey _ = Nothing
 
-insrepHelper :: (MonadIO m, PersistEntity val, MonadLogger m, MonadSqlPersist m)
+insrepHelper :: (MonadIO m, PersistEntity val)
              => Text
              -> Key val
              -> val
-             -> m ()
+             -> ReaderT Connection m ()
 insrepHelper command (Key k) val = do
     conn <- ask
     rawExecute (sql conn) vals
