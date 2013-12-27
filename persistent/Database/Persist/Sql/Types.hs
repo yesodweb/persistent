@@ -22,6 +22,7 @@ import Control.Monad (MonadPlus (..))
 import Data.Typeable (Typeable)
 import Control.Monad (liftM)
 import Database.Persist.Types
+import Database.Persist.Class (HasPersistBackend (..))
 import Data.Text (Text, pack)
 import qualified Data.Text as T
 import Data.IORef (IORef)
@@ -61,6 +62,8 @@ data Connection = Connection
     , connLogFunc :: Loc -> LogSource -> LogLevel -> LogStr -> IO ()
     }
     deriving Typeable
+instance HasPersistBackend Connection Connection where
+    persistBackend = id
 
 data Statement = Statement
     { stmtFinalize :: IO ()

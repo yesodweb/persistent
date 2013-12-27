@@ -26,6 +26,7 @@ library
                    , time                  >= 1.1
                    , aeson                 >= 0.5
                    , conduit               >= 0.5.3
+                   , resourcet             >= 0.4.10
     exposed-modules: Database.Persist.Postgresql
     ghc-options:     -Wall
 

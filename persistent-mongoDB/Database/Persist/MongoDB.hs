@@ -118,6 +118,9 @@ import Control.Monad.Trans.Reader (ask, runReaderT)
 import FileLocation (debug)
 #endif
 
+instance HasPersistBackend MongoBackend MongoBackend where
+    persistBackend = id
+
 newtype NoOrphanNominalDiffTime = NoOrphanNominalDiffTime NominalDiffTime
                                 deriving (Show, Eq, Num)
 

@@ -52,6 +52,7 @@ import Data.Time.LocalTime (localTimeToUTC, utc)
 import Data.Text (Text, pack)
 import Data.Aeson
 import Control.Monad (forM, mzero)
+import Control.Monad.Trans.Resource (Resource, mkResource, with)
 import System.Environment (getEnvironment)
 import Data.Int (Int64)
 import Data.Maybe (mapMaybe, fromJust, isJust, fromMaybe)
@@ -154,13 +155,13 @@ insertSql' ent vals =
 execute' :: PG.Connection -> PG.Query -> [PersistValue] -> IO Int64
 execute' conn query vals = PG.execute conn query (map P vals)
 
-withStmt' :: MonadResource m
+withStmt' :: MonadIO m
           => PG.Connection
           -> PG.Query
           -> [PersistValue]
-          -> Source m [PersistValue]
+          -> Resource (Source m [PersistValue])
 withStmt' conn query vals =
-    bracketP openS closeS pull
+    pull `fmap` mkResource openS closeS
   where
     openS = do
       -- Construct raw query
@@ -305,7 +306,7 @@ doesTableExist :: (Text -> IO Statement)
                -> IO Bool
 doesTableExist getter (DBName name) = do
     stmt <- getter sql
-    runResourceT $ stmtQuery stmt vals $$ start
+    with (stmtQuery stmt vals) ($$ start)
   where
     sql = "SELECT COUNT(*) FROM information_schema.tables WHERE table_name=?"
     vals = [PersistText name]
@@ -405,7 +406,7 @@ getColumns getter def = do
             [ PersistText $ unDBName $ entityDB def
             , PersistText $ unDBName $ entityID def
             ]
-    cs <- runResourceT $ stmtQuery stmt vals $$ helper
+    cs <- with (stmtQuery stmt vals) ($$ helper)
     let sqlc=concat ["SELECT "
                           ,"c.constraint_name, "
                           ,"c.column_name "
@@ -425,7 +426,7 @@ getColumns getter def = do
 
     stmt' <- getter $ pack sqlc
         
-    us <- runResourceT $ stmtQuery stmt' vals $$ helperU
+    us <- with (stmtQuery stmt' vals) ($$ helperU)
     return $ cs ++ us
   where
     getAll front = do
@@ -526,12 +527,12 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, ns
                 ]
         let ref = refName tname cname
         stmt <- getter sql
-        runResourceT $ stmtQuery stmt
+        with (stmtQuery stmt
                      [ PersistText $ unDBName tname
                      , PersistText $ unDBName ref
-                     ] $$ do
+                     ]) ($$ do
             Just [PersistInt64 i] <- CL.head
-            return $ if i == 0 then Nothing else Just (DBName "", ref)
+            return $ if i == 0 then Nothing else Just (DBName "", ref))
     d' = case d of
             PersistNull   -> Right Nothing
             PersistText t -> Right $ Just t

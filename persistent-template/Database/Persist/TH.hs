@@ -777,10 +777,10 @@ mkDeleteCascade mps defs = do
 
         return $
             InstanceD
-            [ ClassP ''PersistQuery [VarT $ mkName "m"]
-            , EqualP (ConT ''PersistEntityBackend `AppT` entityT) (ConT ''PersistMonadBackend `AppT` VarT (mkName "m"))
+            [ ClassP ''PersistQuery [VarT $ mkName "backend"]
+            , EqualP (ConT ''PersistEntityBackend `AppT` entityT) (VarT $ mkName "backend")
             ]
-            (ConT ''DeleteCascade `AppT` entityT `AppT` VarT (mkName "m"))
+            (ConT ''DeleteCascade `AppT` entityT `AppT` VarT (mkName "backend"))
             [ FunD 'deleteCascade
                 [Clause [VarP key] (NormalB $ DoE stmts) []]
             ]

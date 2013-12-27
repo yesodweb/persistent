@@ -28,6 +28,7 @@ import Data.IORef
 import Data.List (find, intercalate, sort, groupBy)
 import Data.Text (Text, pack)
 import System.Environment (getEnvironment)
+import Control.Monad.Trans.Resource (Resource, mkResource, with)
 
 import Data.Conduit
 import qualified Blaze.ByteString.Builder.Char8 as BBB
@@ -147,13 +148,14 @@ execute' conn query vals = MySQL.execute conn query (map P vals)
 
 -- | Execute an statement that does return results.  The results
 -- are fetched all at once and stored into memory.
-withStmt' :: MonadResource m
+withStmt' :: MonadIO m
           => MySQL.Connection
           -> MySQL.Query
           -> [PersistValue]
-          -> Source m [PersistValue]
-withStmt' conn query vals =
-    bracketP createResult MySQLBase.freeResult fetchRows >>= CL.sourceList
+          -> Resource (Source m [PersistValue])
+withStmt' conn query vals = do
+    result <- mkResource createResult MySQLBase.freeResult
+    return $ fetchRows result >>= CL.sourceList
   where
     createResult = do
       -- Execute the query
@@ -385,7 +387,7 @@ getColumns connectInfo getter def = do
                           \WHERE TABLE_SCHEMA = ? \
                             \AND TABLE_NAME   = ? \
                             \AND COLUMN_NAME  = ?"
-    inter1 <- runResourceT $ stmtQuery stmtIdClmn vals $$ CL.consume
+    inter1 <- with (stmtQuery stmtIdClmn vals) ($$ CL.consume)
     ids <- runResourceT $ CL.sourceList inter1 $$ helperClmns -- avoid nested queries
 
     -- Find out all columns.
@@ -397,7 +399,7 @@ getColumns connectInfo getter def = do
                         \WHERE TABLE_SCHEMA = ? \
                           \AND TABLE_NAME   = ? \
                           \AND COLUMN_NAME <> ?"
-    inter2 <- runResourceT $ stmtQuery stmtClmns vals $$ CL.consume
+    inter2 <- with (stmtQuery stmtClmns vals) ($$ CL.consume)
     cs <- runResourceT $ CL.sourceList inter2 $$ helperClmns -- avoid nested queries
 
     -- Find out the constraints.
@@ -411,7 +413,7 @@ getColumns connectInfo getter def = do
                           \AND REFERENCED_TABLE_SCHEMA IS NULL \
                         \ORDER BY CONSTRAINT_NAME, \
                                  \COLUMN_NAME"
-    us <- runResourceT $ stmtQuery stmtCntrs vals $$ helperCntrs
+    us <- with (stmtQuery stmtCntrs vals) ($$ helperCntrs)
 
     -- Return both
     return (ids, cs ++ us)
@@ -478,7 +480,7 @@ getColumn connectInfo getter tname [ PersistByteString cname
                  , PersistText $ unDBName $ tname
                  , PersistByteString cname
                  , PersistText $ pack $ MySQL.connectDatabase connectInfo ]
-      cntrs <- runResourceT $ stmtQuery stmt vars $$ CL.consume
+      cntrs <- with (stmtQuery stmt vars) ($$ CL.consume)
       ref <- case cntrs of
                [] -> return Nothing
                [[PersistByteString tab, PersistByteString ref, PersistInt64 pos]] ->

@@ -14,6 +14,8 @@ module Database.Persist.Class
 
     -- * PersistQuery
     , PersistQuery (..)
+    , selectSource
+    , selectKeys
     , selectList
     , selectKeysList
 
@@ -27,6 +29,10 @@ module Database.Persist.Class
     , PersistField (..)
     -- * PersistConfig
     , PersistConfig (..)
+
+    -- * Lifting
+    , HasPersistBackend (..)
+    , liftPersist
 
     -- * JSON utilities
     , keyValueEntityToJSON, keyValueEntityFromJSON

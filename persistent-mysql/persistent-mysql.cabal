@@ -36,6 +36,7 @@ library
                    , monad-control         >= 0.2
                    , aeson                 >= 0.5
                    , conduit               >= 0.5.3
+                   , resourcet             >= 0.4.10
     exposed-modules: Database.Persist.MySQL
     ghc-options:     -Wall
 
