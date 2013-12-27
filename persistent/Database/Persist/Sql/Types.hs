@@ -9,7 +9,7 @@
 module Database.Persist.Sql.Types where
 
 import Control.Exception (Exception)
-import Control.Monad.Trans.Resource (MonadResource (..), MonadThrow (..), ResourceT)
+import Control.Monad.Trans.Resource (MonadResource (..), MonadThrow (..), ResourceT, Resource)
 import Control.Monad.Logger (MonadLogger (..), NoLoggingT)
 import Control.Monad.Trans.Control
 import Control.Monad.Trans.Class (MonadTrans (..))
@@ -68,7 +68,7 @@ data Statement = Statement
     , stmtExecute :: [PersistValue] -> IO Int64
     , stmtQuery :: forall m. MonadIO m
                 => [PersistValue]
-                -> Source m [PersistValue]
+                -> Resource (Source m [PersistValue])
     }
 
 data Column = Column

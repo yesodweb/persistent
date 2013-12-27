@@ -42,7 +42,7 @@ rawQueryRes sql vals = do
             getStmtConn conn sql
     return $ do
         stmt <- mkResource make stmtReset
-        return $ stmtQuery stmt vals
+        stmtQuery stmt vals
 
 rawExecute :: MonadIO m => Text -> [PersistValue] -> ReaderT Connection m ()
 rawExecute x y = liftM (const ()) $ rawExecuteCount x y

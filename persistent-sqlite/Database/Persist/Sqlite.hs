@@ -24,6 +24,7 @@ import Data.List (intercalate)
 import Data.IORef
 import qualified Data.Map as Map
 import Control.Monad.Trans.Control (control)
+import Control.Monad.Trans.Resource (Resource, mkResource, with)
 import qualified Control.Exception as E
 import Data.Text (Text, pack)
 import Control.Monad (mzero)
@@ -137,15 +138,16 @@ execute' conn stmt vals = flip finally (liftIO $ Sqlite.reset conn stmt) $ do
     Sqlite.changes conn
 
 withStmt'
-          :: MonadResource m
+          :: MonadIO m
           => Sqlite.Connection
           -> Sqlite.Statement
           -> [PersistValue]
-          -> Source m [PersistValue]
-withStmt' conn stmt vals = bracketP
-    (Sqlite.bind stmt vals >> return stmt)
-    (Sqlite.reset conn)
-    (const pull)
+          -> Resource (Source m [PersistValue])
+withStmt' conn stmt vals = do
+    _ <- mkResource
+        (Sqlite.bind stmt vals >> return stmt)
+        (Sqlite.reset conn)
+    return pull
   where
     pull = do
         x <- liftIO $ Sqlite.step stmt
@@ -178,8 +180,7 @@ migrate' allDefs getter val = do
     let (cols, uniqs, _) = mkColumns allDefs val
     let newSql = mkCreateTable False def (filter (not . safeToRemove val . cName) cols, uniqs)
     stmt <- getter "SELECT sql FROM sqlite_master WHERE type='table' AND name=?"
-    oldSql' <- runResourceT
-             $ stmtQuery stmt [PersistText $ unDBName table] $$ go
+    oldSql' <- with (stmtQuery stmt [PersistText $ unDBName table]) ($$ go)
     case oldSql' of
         Nothing -> return $ Right [(False, newSql)]
         Just oldSql -> do
@@ -212,7 +213,7 @@ getCopyTable :: [EntityDef a]
              -> IO [(Bool, Text)]
 getCopyTable allDefs getter val = do
     stmt <- getter $ pack $ "PRAGMA table_info(" ++ escape' table ++ ")"
-    oldCols' <- runResourceT $ stmtQuery stmt [] $$ getCols
+    oldCols' <- with (stmtQuery stmt []) ($$ getCols)
     let oldCols = map DBName $ filter (/= "id") oldCols' -- need to update for table id attribute ?
     let newCols = filter (not . safeToRemove def) $ map cName cols
     let common = filter (`elem` oldCols) newCols
