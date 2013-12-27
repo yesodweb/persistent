@@ -111,7 +111,8 @@ import Data.Time.Calendar (Day(..))
 import Data.Attoparsec.Number
 import Data.Char (toUpper)
 import Data.Monoid (mappend)
-import Data.Typeable
+import Control.Monad.Trans.Resource (mkResource)
+import Control.Monad.Trans.Reader (ask, runReaderT)
 
 #ifdef DEBUG
 import FileLocation (debug)
@@ -187,7 +188,7 @@ withMongoDBConn :: (Trans.MonadIO m, Applicative m)
 withMongoDBConn dbname hostname port mauth connectionIdleTime = withMongoDBPool dbname hostname port mauth 1 1 connectionIdleTime
 
 createPipe :: HostName -> PortID -> IO DB.Pipe
-createPipe hostname port = DB.runIOE $ DB.connect (DB.Host hostname port)
+createPipe hostname port = DB.connect (DB.Host hostname port)
 
 createConnection :: Database -> HostName -> PortID -> Maybe MongoAuth -> IO Connection
 createConnection dbname hostname port mAuth = do
@@ -239,15 +240,11 @@ withMongoDBPool dbname hostname port mauth poolStripes stripeConnections connect
 -- | run a pool created with 'createMongoDBPipePool'
 runMongoDBPipePool :: (Trans.MonadIO m, MonadBaseControl IO m) => DB.AccessMode -> Database -> DB.Action m a -> PipePool -> m a
 runMongoDBPipePool accessMode db action pool =
-  Pool.withResource pool $ \pipe -> do
-    res  <- DB.access pipe accessMode db action
-    either (Trans.liftIO . throwIO . PersistMongoDBError . T.pack . show) return res
+  Pool.withResource pool $ \pipe -> DB.access pipe accessMode db action
 
 runMongoDBPool :: (Trans.MonadIO m, MonadBaseControl IO m) => DB.AccessMode  -> DB.Action m a -> ConnectionPool -> m a
 runMongoDBPool accessMode action pool =
-  Pool.withResource pool $ \(Connection pipe db) -> do
-    res  <- DB.access pipe accessMode db action
-    either (Trans.liftIO . throwIO . PersistMongoDBError . T.pack . show) return res
+  Pool.withResource pool $ \(Connection pipe db) -> DB.access pipe accessMode db action
 
 
 -- | use default 'AccessMode'
@@ -335,17 +332,15 @@ saveWithKey :: forall m entity keyEntity.
 saveWithKey entToFields dbSave key record =
       dbSave (collectionName record) ((keyToMongoIdField key):(entToFields record))
 
-data MongoBackend deriving Typeable
+type MongoBackend = DB.MongoContext -- FIXME
 
-instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => PersistStore (DB.Action m) where
-    type PersistMonadBackend (DB.Action m) = MongoBackend
-
+instance PersistStore DB.MongoContext where
     insert record = do
         DB.ObjId oid <- DB.insert (collectionName record) (toInsertFields record)
         return $ oidToKey oid 
 
     insertMany [] = return []
-    insertMany (r:records) = map (\(DB.ObjId oid) -> oidToKey oid) `fmap`
+    insertMany (r:records) = map (\(DB.ObjId oid) -> oidToKey oid) `liftM`
         DB.insertMany (collectionName r) (map toInsertFields (r:records))
 
     insertKey k record = saveWithKey toInsertFields DB.insert_ k record
@@ -377,13 +372,13 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
 instance MonadThrow m => MonadThrow (DB.Action m) where
     monadThrow = lift . monadThrow
 
-instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => PersistUnique (DB.Action m) where
+instance PersistUnique DB.MongoContext where
     getBy uniq = do
         mdoc <- DB.findOne $
           DB.select (uniqSelector uniq) (unDBName $ entityDB t)
         case mdoc of
             Nothing -> return Nothing
-            Just doc -> fmap Just $ fromPersistValuesThrow t doc
+            Just doc -> liftM Just $ fromPersistValuesThrow t doc
       where
         t = entityDef $ Just $ dummyFromUnique uniq
 
@@ -401,7 +396,7 @@ keyToMongoIdField :: (PersistEntity entity, PersistEntityBackend entity ~ MongoB
 keyToMongoIdField k = _id DB.:= (DB.ObjId $ keyToOid k)
 
 
-instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => PersistQuery (DB.Action m) where
+instance PersistQuery DB.MongoContext where
     update _ [] = return ()
     update key upds =
         DB.modify 
@@ -442,41 +437,47 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
         query = DB.select (filtersToSelector filts) $
                   collectionName $ dummyFromFilts filts
 
-    selectSource filts opts = do
-        cursor <- lift $ DB.find $ makeQuery filts opts
-        pull cursor
+    selectSourceRes filts opts = do
+        context <- ask
+        let make = do
+            cursor <- liftIO $ runReaderT (DB.find $ makeQuery filts opts) context
+            pull context cursor
+        return $ mkResource (return make) (const $ return ())
       where
-        pull cursor = do
-            mdoc <- lift $ DB.next cursor
+        pull context cursor = do
+            mdoc <- liftIO $ runReaderT (DB.next cursor) context
             case mdoc of
                 Nothing -> return ()
                 Just doc -> do
                     entity <- fromPersistValuesThrow t doc
                     yield entity
-                    pull cursor
+                    pull context cursor
         t = entityDef $ Just $ dummyFromFilts filts
 
     selectFirst filts opts = do
         mdoc <- DB.findOne $ makeQuery filts opts
         case mdoc of
             Nothing -> return Nothing
-            Just doc -> fmap Just $ fromPersistValuesThrow t doc
+            Just doc -> liftM Just $ fromPersistValuesThrow t doc
       where
         t = entityDef $ Just $ dummyFromFilts filts
 
-    selectKeys filts opts = do
-        cursor <- lift $ DB.find $ (makeQuery filts opts) {
-            DB.project = [_id DB.=: (1 :: Int)]
-          }
-        pull cursor
+    selectKeysRes filts opts = do
+        context <- ask
+        let make = do
+                cursor <- liftIO $ flip runReaderT context $ DB.find $ (makeQuery filts opts) {
+                    DB.project = [_id DB.=: (1 :: Int)]
+                  }
+                pull context cursor
+        return $ mkResource (return make) (const $ return ())
       where
-        pull cursor = do
-            mdoc <- lift $ DB.next cursor
+        pull context cursor = do
+            mdoc <- liftIO $ runReaderT (DB.next cursor) context
             case mdoc of
                 Nothing -> return ()
                 Just [_id DB.:= DB.ObjId oid] -> do
                     yield $ oidToKey oid
-                    pull cursor
+                    pull context cursor
                 Just y -> liftIO $ throwIO $ PersistMarshalError $ T.pack $ "Unexpected in selectKeys: " ++ show y
 
 orderClause :: PersistEntity val => SelectOpt val -> DB.Field
