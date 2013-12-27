@@ -3,9 +3,9 @@ version:         0.1.0
 license:         BSD3
 license-file:    LICENSE
 author:          Pavel Ryzhov <paul@paulrz.cz>
-synopsis:        Backend for Yesod persistent library using Redis.
+synopsis:        Backend for persistent library using Redis.
 description:     Based on the Redis package.
-category:        Database, Yesod
+category:        Database
 stability:       Experimental
 cabal-version:   >= 1.8
 maintainer:      Pavel Ryzhov <paul@paulrz.cz>
