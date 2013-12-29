@@ -1,5 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Database.Persist.Sql.Raw where
 
 import Database.Persist
@@ -7,7 +8,7 @@ import Database.Persist.Sql.Types
 import Database.Persist.Sql.Class
 import qualified Data.Map as Map
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Trans.Reader (ReaderT, ask)
+import Control.Monad.Reader (ReaderT, ask, MonadReader)
 import Control.Monad.Trans.Resource (allocateResource, release, Resource, mkResource, with)
 import Data.IORef (writeIORef, readIORef, newIORef)
 import Control.Exception (throwIO)
@@ -19,12 +20,12 @@ import Control.Monad.Trans.Class (lift)
 import qualified Data.Text as T
 import Data.Conduit
 
-rawQuery :: MonadResource m
+rawQuery :: (MonadResource m, MonadReader env m, HasPersistBackend env Connection)
          => Text
          -> [PersistValue]
-         -> Source (ReaderT Connection m) [PersistValue]
+         -> Source m [PersistValue]
 rawQuery sql vals = do
-    srcRes <- lift $ rawQueryRes sql vals
+    srcRes <- liftPersist $ rawQueryRes sql vals
     (releaseKey, src) <- allocateResource srcRes
     src
     release releaseKey

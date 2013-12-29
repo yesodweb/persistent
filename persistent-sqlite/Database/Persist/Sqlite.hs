@@ -19,7 +19,7 @@ import Database.Persist.Sql
 import qualified Database.Sqlite as Sqlite
 
 import Control.Monad.IO.Class (MonadIO (..))
-import Control.Monad.Logger (NoLoggingT, runNoLoggingT)
+import Control.Monad.Logger (NoLoggingT, runNoLoggingT, MonadLogger)
 import Data.List (intercalate)
 import Data.IORef
 import qualified Data.Map as Map
@@ -36,27 +36,27 @@ import Control.Applicative
 import Data.Int (Int64)
 import Control.Monad ((>=>))
 
-createSqlitePool :: MonadIO m => Text -> Int -> m ConnectionPool
+createSqlitePool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m) => Text -> Int -> m ConnectionPool
 createSqlitePool s = createSqlPool $ open' s
 
-withSqlitePool :: (MonadBaseControl IO m, MonadIO m)
+withSqlitePool :: (MonadBaseControl IO m, MonadIO m, MonadLogger m)
                => Text
                -> Int -- ^ number of connections to open
                -> (ConnectionPool -> m a) -> m a
 withSqlitePool s = withSqlPool $ open' s
 
-withSqliteConn :: (MonadBaseControl IO m, MonadIO m)
+withSqliteConn :: (MonadBaseControl IO m, MonadIO m, MonadLogger m)
                => Text -> (Connection -> m a) -> m a
 withSqliteConn = withSqlConn . open'
 
-open' :: Text -> IO Connection
-open' = Sqlite.open >=> wrapConnection
+open' :: Text -> LogFunc -> IO Connection
+open' connStr logFunc = Sqlite.open connStr >>= flip wrapConnection logFunc
 
 -- | Wrap up a raw 'Sqlite.Connection' as a Persistent SQL 'Connection'.
 --
 -- Since 1.1.5
-wrapConnection :: Sqlite.Connection -> IO Connection
-wrapConnection conn = do
+wrapConnection :: Sqlite.Connection -> LogFunc -> IO Connection
+wrapConnection conn logFunc = do
     smap <- newIORef $ Map.empty
     return Connection
         { connPrepare = prepare' conn
@@ -71,6 +71,7 @@ wrapConnection conn = do
         , connNoLimit = "LIMIT -1"
         , connRDBMS = "sqlite"
         , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
+        , connLogFunc = logFunc
         }
   where
     helper t getter = do
@@ -337,7 +338,7 @@ data SqliteConf = SqliteConf
 instance PersistConfig SqliteConf where
     type PersistConfigBackend SqliteConf = SqlPersistT
     type PersistConfigPool SqliteConf = ConnectionPool
-    createPoolConfig (SqliteConf cs size) = createSqlitePool cs size
+    createPoolConfig (SqliteConf cs size) = runNoLoggingT $ createSqlitePool cs size -- FIXME
     runPool _ = runSqlPool
     loadConfig (Object o) =
         SqliteConf <$> o .: "database"

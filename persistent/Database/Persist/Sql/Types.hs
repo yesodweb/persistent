@@ -59,11 +59,13 @@ data Connection = Connection
     , connNoLimit :: Text
     , connRDBMS :: Text
     , connLimitOffset :: (Int,Int) -> Bool -> Text -> Text
-    , connLogFunc :: Loc -> LogSource -> LogLevel -> LogStr -> IO ()
+    , connLogFunc :: LogFunc
     }
     deriving Typeable
 instance HasPersistBackend Connection Connection where
     persistBackend = id
+
+type LogFunc = Loc -> LogSource -> LogLevel -> LogStr -> IO ()
 
 data Statement = Statement
     { stmtFinalize :: IO ()
@@ -92,41 +94,19 @@ instance Exception PersistentSqlException
 
 type SqlBackend = Connection -- FIXME
 
-newtype SqlPersistT m a = SqlPersistT { unSqlPersistT :: ReaderT Connection m a } -- switch to type synonym, rename Connection
-    deriving (Monad, MonadIO, MonadTrans, Functor, Applicative, MonadPlus)
+type SqlPersistT = ReaderT Connection -- FIXME rename connection
 
 type SqlPersist = SqlPersistT
 {-# DEPRECATED SqlPersist "Please use SqlPersistT instead" #-}
 
 type SqlPersistM = SqlPersistT (NoLoggingT (ResourceT IO))
 
-instance MonadThrow m => MonadThrow (SqlPersistT m) where
-    monadThrow = lift . monadThrow
-
-instance MonadBase backend m => MonadBase backend (SqlPersistT m) where
-    liftBase = lift . liftBase
-
-instance MonadBaseControl backend m => MonadBaseControl backend (SqlPersistT m) where
-     newtype StM (SqlPersistT m) a = StMSP {unStMSP :: ComposeSt SqlPersistT m a}
-     liftBaseWith = defaultLiftBaseWith StMSP
-     restoreM     = defaultRestoreM   unStMSP
-instance MonadTransControl SqlPersistT where
-    newtype StT SqlPersistT a = StReader {unStReader :: a}
-    liftWith f = SqlPersistT $ ReaderT $ \r -> f $ \t -> liftM StReader $ runReaderT (unSqlPersistT t) r
-    restoreT = SqlPersistT . ReaderT . const . liftM unStReader
-
-instance MonadResource m => MonadResource (SqlPersistT m) where
-    liftResourceT = lift . liftResourceT
-
-instance MonadLogger m => MonadLogger (SqlPersistT m) where
-    monadLoggerLog a b c = lift . monadLoggerLog a b c
-
 type Sql = Text
 
 -- Bool indicates if the Sql is safe
 type CautiousMigration = [(Bool, Sql)]
 
-type Migration m = WriterT [Text] (WriterT CautiousMigration (ReaderT Connection m)) ()
+type Migration = WriterT [Text] (WriterT CautiousMigration (ReaderT Connection IO)) ()
 
 type ConnectionPool = Pool Connection
 

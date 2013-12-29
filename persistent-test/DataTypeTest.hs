@@ -32,6 +32,7 @@ import System.Random (newStdGen)
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad (when, forM_)
 import Control.Monad.Trans.Resource (runResourceT)
+import Control.Monad.IO.Class (MonadIO)
 import Data.Fixed (Pico,Micro)
 
 import Init

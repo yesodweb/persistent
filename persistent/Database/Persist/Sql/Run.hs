@@ -4,6 +4,7 @@ module Database.Persist.Sql.Run where
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
 import Data.Conduit.Pool
+import Control.Monad.Trans.Control
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Resource
 import Control.Monad.Logger
@@ -23,7 +24,7 @@ runSqlPool r pconn = do
     maybe (throwIO Couldn'tGetSQLConnection) return mres
 
 runSqlConn :: MonadBaseControl IO m => SqlPersistT m a -> Connection -> m a
-runSqlConn (SqlPersistT r) conn = do
+runSqlConn r conn = do
     let getter = getStmtConn conn
     liftBase $ connBegin conn getter
     x <- onException
@@ -38,8 +39,8 @@ runSqlPersistM x conn = runResourceT $ runNoLoggingT $ runSqlConn x conn
 runSqlPersistMPool :: SqlPersistM a -> Pool Connection -> IO a
 runSqlPersistMPool x pool = runResourceT $ runNoLoggingT $ runSqlPool x pool
 
-withSqlPool :: MonadIO m
-            => IO Connection -- ^ create a new connection
+withSqlPool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m)
+            => (LogFunc -> IO Connection) -- ^ create a new connection
             -> Int -- ^ connection count
             -> (Pool Connection -> m a)
             -> m a
@@ -47,15 +48,28 @@ withSqlPool mkConn connCount f = do
     pool <- createSqlPool mkConn connCount
     f pool
 
-createSqlPool :: MonadIO m
-              => IO Connection
+createSqlPool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m)
+              => (LogFunc -> IO Connection)
               -> Int
               -> m (Pool Connection)
-createSqlPool mkConn = liftIO . createPool mkConn close' 1 20
+createSqlPool mkConn size = do
+    logFunc <- askLogFunc
+    liftIO $ createPool (mkConn logFunc) close' 1 20 size
 
-withSqlConn :: (MonadIO m, MonadBaseControl IO m)
-            => IO Connection -> (Connection -> m a) -> m a
-withSqlConn open = bracket (liftIO open) (liftIO . close')
+-- NOTE: This function is a terrible, ugly hack. It would be much better to
+-- just clean up monad-logger.
+askLogFunc :: (MonadBaseControl IO m, MonadLogger m) => m LogFunc
+askLogFunc = do
+    runInBase <- control $ \run -> run $ return run
+    return $ \a b c d -> do
+        _ <- runInBase (monadLoggerLog a b c d)
+        return ()
+
+withSqlConn :: (MonadIO m, MonadBaseControl IO m, MonadLogger m)
+            => (LogFunc -> IO Connection) -> (Connection -> m a) -> m a
+withSqlConn open f = do
+    logFunc <- askLogFunc
+    bracket (liftIO $ open logFunc) (liftIO . close') f
 
 close' :: Connection -> IO ()
 close' conn = do

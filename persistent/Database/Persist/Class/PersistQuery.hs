@@ -14,7 +14,7 @@ import Database.Persist.Types
 
 import Control.Monad.IO.Class (MonadIO, liftIO)
 
-import Control.Monad.Trans.Reader   ( ReaderT  )
+import Control.Monad.Reader   ( ReaderT, MonadReader  )
 
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
@@ -78,23 +78,23 @@ class PersistStore backend => PersistQuery backend where
 -- | Get all records matching the given criterion in the specified order.
 -- Returns also the identifiers.
 selectSource
-       :: (PersistQuery backend, MonadResource m, PersistEntity val, PersistEntityBackend val ~ backend)
+       :: (PersistQuery backend, MonadResource m, PersistEntity val, PersistEntityBackend val ~ backend, MonadReader env m, HasPersistBackend env backend)
        => [Filter val]
        -> [SelectOpt val]
-       -> C.Source (ReaderT backend m) (Entity val)
+       -> C.Source m (Entity val)
 selectSource filts opts = do
-    srcRes <- lift $ selectSourceRes filts opts
+    srcRes <- liftPersist $ selectSourceRes filts opts
     (releaseKey, src) <- allocateResource srcRes
     src
     release releaseKey
 
 -- | Get the 'Key's of all records matching the given criterion.
-selectKeys :: (PersistQuery backend, MonadResource m, PersistEntity val, backend ~ PersistEntityBackend val)
+selectKeys :: (PersistQuery backend, MonadResource m, PersistEntity val, backend ~ PersistEntityBackend val, MonadReader env m, HasPersistBackend env backend)
            => [Filter val]
            -> [SelectOpt val]
-           -> C.Source (ReaderT backend m) (Key val)
+           -> C.Source m (Key val)
 selectKeys filts opts = do
-    srcRes <- lift $ selectKeysRes filts opts
+    srcRes <- liftPersist $ selectKeysRes filts opts
     (releaseKey, src) <- allocateResource srcRes
     src
     release releaseKey

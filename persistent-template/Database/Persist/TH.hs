@@ -866,12 +866,7 @@ mkMigrate fun allDefs = do
   where
     defs = filter isMigrated allDefs
     isMigrated def = not $ "no-migrate" `elem` entityAttrs def
-    typ = ForallT [PlainTV $ mkName "m"]
-            [ ClassP ''MonadBaseControl [ConT ''IO, VarT $ mkName "m"]
-            , ClassP ''MonadIO [VarT $ mkName "m"]
-            , ClassP ''MonadLogger [VarT $ mkName "m"]
-            ]
-            $ ConT ''Migration `AppT` (ConT ''SqlPersistT `AppT` VarT (mkName "m"))
+    typ = ConT ''Migration
     body :: Q Exp
     body =
         case defs of

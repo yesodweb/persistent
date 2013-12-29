@@ -655,8 +655,8 @@ specs = describe "persistent" $ do
       liftIO $ ret @?= [Nothing :: Maybe (Single Int)]
 
   it "rawSql/entity" $ db $ do
-      let insert' :: (PersistStore m, PersistEntity val, PersistEntityBackend val ~ PersistMonadBackend m)
-                  => val -> m (Key val, val)
+      let insert' :: (PersistStore backend, PersistEntity val, PersistEntityBackend val ~ backend, MonadIO m)
+                  => val -> ReaderT backend m (Key val, val)
           insert' v = insert v >>= \k -> return (k, v)
       (p1k, p1) <- insert' $ Person "Mathias"   23 Nothing
       (p2k, p2) <- insert' $ Person "Norbert"   44 Nothing
@@ -666,7 +666,7 @@ specs = describe "persistent" $ do
       (a2k, a2) <- insert' $ Pet p1k "Zeno"    Cat
       (a3k, a3) <- insert' $ Pet p2k "Lhama"   Dog
       (_  , _ ) <- insert' $ Pet p3k "Abacate" Cat
-      escape <- ((. DBName) . connEscapeName) `fmap` askSqlConn
+      escape <- ((. DBName) . connEscapeName) `fmap` ask
       let query = T.concat [ "SELECT ??, ?? "
                            , "FROM ", escape "Person"
                            , ", ", escape "Pet"
@@ -691,7 +691,7 @@ specs = describe "persistent" $ do
   it "rawSql/order-proof" $ db $ do
       let p1 = Person "Zacarias" 93 Nothing
       p1k <- insert p1
-      escape <- ((. DBName) . connEscapeName) `fmap` askSqlConn
+      escape <- ((. DBName) . connEscapeName) `fmap` ask
       let query = T.concat [ "SELECT ?? "
                            , "FROM ", escape "Person"
                            ]
@@ -701,14 +701,14 @@ specs = describe "persistent" $ do
       liftIO $ ret2 @?= [Entity (Key $ unKey p1k) (RFO p1)]
 
   it "rawSql/OUTER JOIN" $ db $ do
-      let insert' :: (PersistStore m, PersistEntity val, PersistEntityBackend val ~ PersistMonadBackend m)
-                  => val -> m (Key val, val)
+      let insert' :: (PersistStore backend, PersistEntity val, PersistEntityBackend val ~ backend, MonadIO m)
+                  => val -> ReaderT backend m (Key val, val)
           insert' v = insert v >>= \k -> return (k, v)
       (p1k, p1) <- insert' $ Person "Mathias"   23 Nothing
       (p2k, p2) <- insert' $ Person "Norbert"   44 Nothing
       (a1k, a1) <- insert' $ Pet p1k "Rodolfo" Cat
       (a2k, a2) <- insert' $ Pet p1k "Zeno"    Cat
-      escape <- ((. DBName) . connEscapeName) `fmap` askSqlConn
+      escape <- ((. DBName) . connEscapeName) `fmap` ask
       let query = T.concat [ "SELECT ??, ?? "
                            , "FROM ", person
                            , "LEFT OUTER JOIN ", pet
@@ -825,7 +825,7 @@ caseAfterException = runNoLoggingT $ runResourceT $ withSqlitePool sqlite_databa
 #endif
 
 -- Test proper polymorphism
-_polymorphic :: PersistQuery backend => ReaderT backend m ()
+_polymorphic :: (MonadIO m, PersistQuery backend) => ReaderT backend m ()
 _polymorphic = do
     ((Entity id' _):_) <- selectList [] [LimitTo 1]
     _ <- selectList [PetOwnerId ==. id'] []
