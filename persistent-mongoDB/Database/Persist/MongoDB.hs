@@ -372,9 +372,6 @@ instance PersistStore DB.MongoContext where
           where
             t = entityDef $ Just $ dummyFromKey k
 
-instance MonadThrow m => MonadThrow (DB.Action m) where
-    monadThrow = lift . monadThrow
-
 instance PersistUnique DB.MongoContext where
     getBy uniq = do
         mdoc <- DB.findOne $

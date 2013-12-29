@@ -13,6 +13,7 @@ module Init (
   , BackendMonad
   , runConn
 
+  , MonadIO
 #ifdef WITH_MONGODB
   , db'
   , setupMongo

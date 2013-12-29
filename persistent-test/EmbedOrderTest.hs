@@ -10,6 +10,7 @@ embedOrderMigrate
 
 import Init
 import Data.Map hiding (insert)
+import Control.Monad.IO.Class
 
 import Debug.Trace (trace)
 debug :: Show s => s -> s
