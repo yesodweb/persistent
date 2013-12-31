@@ -32,11 +32,11 @@ RUN apt-get install -y mysql-server || echo "need to run mysql --configure"
 # sudo docker run -name persistent -v `pwd`:/home/persistent -t -i <image> /bin/bash
 #
 # # switch to the persistent user in the image and its home directory
-# sudo su persistent
+# su persistent
 # cd
 #
 # # install the latest cabal
-# RUN cabal update && install Cabal cabal-install
+# RUN cabal update && cabal install Cabal cabal-install
 # PATH=~/.cabal/bin:$PATH
 # hash -r
 #
