@@ -5,7 +5,8 @@ import Test.Hspec
 import Test.Hspec.QuickCheck
 import Data.ByteString.Lazy.Char8 ()
 import Test.QuickCheck.Arbitrary
-import Control.Applicative ((<$>), (<*>))
+import Control.Applicative ((<$>), (<*>), Const (..))
+import Data.Functor.Identity (Identity (..))
 
 import Database.Persist
 import Database.Persist.TH
@@ -27,6 +28,27 @@ Address json
 NoJson
     foo Text
     deriving Show Eq
+|]
+
+share [mkPersist sqlSettings { mpsGeneric = False, mpsGenerateLenses = True }] [persistLowerCase|
+Lperson json
+    name Text
+    age Int Maybe
+    address Laddress
+    deriving Show Eq
+Laddress json
+    street Text
+    city Text
+    zip Int Maybe
+    deriving Show Eq
+|]
+
+share [mkPersist sqlSettings { mpsGeneric = True , mpsGenerateLenses = True }] [persistLowerCase|
+Foo
+    bar Text Maybe
+    baz BazId
+Baz
+    bin Int
 |]
 
 -- ensure no-json works
@@ -57,3 +79,30 @@ main = hspec $ do
         it "decode" $
             decode "{\"key\": 0, \"value\": {\"name\":\"Michael\",\"age\":27,\"address\":{\"street\":\"Narkis\",\"city\":\"Maalot\"}}}" `shouldBe` Just
                 (Entity key (Person "Michael" (Just 27) $ Address "Narkis" "Maalot" Nothing))
+    it "lens operations" $ do
+        let street1 = "street1"
+            city1 = "city1"
+            city2 = "city2"
+            zip1 = Just 12345
+            address1 = Laddress street1 city1 zip1
+            address2 = Laddress street1 city2 zip1
+            name1 = "name1"
+            age1 = Just 27
+            person1 = Lperson name1 age1 address1
+            person2 = Lperson name1 age1 address2
+        (person1 ^. lpersonAddress) `shouldBe` address1
+        (person1 ^. (lpersonAddress . laddressCity)) `shouldBe` city1
+        (person1 & ((lpersonAddress . laddressCity) .~ city2)) `shouldBe` person2
+
+x & f = f x
+
+(^.) :: s
+     -> ((a -> Const a b) -> (s -> Const a t))
+     -> a
+x ^. lens = getConst $ lens Const x
+
+(.~) :: ((a -> Identity b) -> (s -> Identity t))
+     -> b
+     -> s
+     -> t
+lens .~ val = runIdentity . lens (\_ -> Identity val)

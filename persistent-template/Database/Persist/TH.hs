@@ -19,6 +19,7 @@ module Database.Persist.TH
     , mpsGeneric
     , mpsPrefixFields
     , mpsEntityJSON
+    , mpsGenerateLenses
     , EntityJSON, entityToJSON, entityFromJSON
     , mkPersistSettings
     , sqlSettings
@@ -195,6 +196,12 @@ data MkPersistSettings = MkPersistSettings
     --      , entityFromJSON = 'keyValueEntityFromJSON
     --      }
     -- @
+    , mpsGenerateLenses :: !Bool
+    -- ^ Instead of generating normal field accessors, generator lens-style accessors.
+    --
+    -- Default: False
+    --
+    -- Since 1.3.1
     }
 
 data EntityJSON = EntityJSON
@@ -215,6 +222,7 @@ mkPersistSettings t = MkPersistSettings
         { entityToJSON = 'keyValueEntityToJSON
         , entityFromJSON = 'keyValueEntityFromJSON
         }
+    , mpsGenerateLenses = False
     }
 
 -- | Use the 'SqlPersist' backend.
@@ -227,10 +235,18 @@ sqlSettings = mkPersistSettings $ ConT ''SqlBackend
 sqlOnlySettings :: MkPersistSettings
 sqlOnlySettings = sqlSettings { mpsGeneric = False }
 
-recName :: MkPersistSettings -> Text -> Text -> Text
-recName mps dt f
+recNameNoUnderscore :: MkPersistSettings -> Text -> Text -> Text
+recNameNoUnderscore mps dt f
   | mpsPrefixFields mps = lowerFirst dt ++ upperFirst f
   | otherwise           = lowerFirst f
+
+recName :: MkPersistSettings -> Text -> Text -> Text
+recName mps dt f =
+    addUnderscore $ recNameNoUnderscore mps dt f
+  where
+    addUnderscore
+        | mpsGenerateLenses mps = ("_" ++)
+        | otherwise = id
 
 lowerFirst :: Text -> Text
 lowerFirst t =
@@ -600,6 +616,8 @@ mkEntity mps t = do
 
     lensClauses <- mkLensClauses mps t
 
+    lenses <- mkLenses mps t
+
     return $ addSyn $
        dataTypeDec mps t : mconcat fkc `mappend`
       ([ TySynD (mkName $ unpack $ unHaskellName (entityHaskell t) ++ "Id") [] $
@@ -634,7 +652,57 @@ mkEntity mps t = do
         , FunD 'persistIdField [Clause [] (NormalB $ ConE $ mkName $ unpack $ unHaskellName (entityHaskell t) ++ "Id") []]
         , FunD 'fieldLens lensClauses
         ]
-      ])
+      ] `mappend` lenses)
+
+mkLenses :: MkPersistSettings -> EntityDef a -> Q [Dec]
+mkLenses mps _ | not (mpsGenerateLenses mps) = return []
+mkLenses _ ent | entitySum ent = return []
+mkLenses mps ent = fmap mconcat $ forM (entityFields ent) $ \field -> do
+    let lensName' = recNameNoUnderscore mps (unHaskellName $ entityHaskell ent) (unHaskellName $ fieldHaskell field)
+        lensName = mkName $ unpack lensName'
+        fieldName = mkName $ unpack $ "_" ++ lensName'
+    needleN <- newName "needle"
+    setterN <- newName "setter"
+    fN <- newName "f"
+    aN <- newName "a"
+    yN <- newName "y"
+    let needle = VarE needleN
+        setter = VarE setterN
+        f = VarE fN
+        a = VarE aN
+        y = VarE yN
+        fT = mkName "f"
+        -- FIXME if we want to get really fancy, then: if this field is the
+        -- *only* Id field present, then set backend1 and backend2 to different
+        -- values
+        backend1 = mkName "backend"
+        backend2 = mkName "backend"
+        aT = pairToType mps backend1 (fieldType field, nullable $ fieldAttrs field)
+        bT = pairToType mps backend2 (fieldType field, nullable $ fieldAttrs field)
+        mkST backend = genericDataType mps (unHaskellName $ entityHaskell ent) (VarT backend)
+        sT = mkST backend1
+        tT = mkST backend2
+        t1 `arrow` t2 = ArrowT `AppT` t1 `AppT` t2
+        vars = PlainTV fT
+             : (if mpsGeneric mps then [PlainTV backend1{-, PlainTV backend2-}] else [])
+    return
+        [ SigD lensName $ ForallT vars [ClassP ''Functor [VarT fT]] $
+            (aT `arrow` (VarT fT `AppT` bT)) `arrow`
+            (sT `arrow` (VarT fT `AppT` tT))
+        , FunD lensName $ return $ Clause
+            [VarP fN, VarP aN]
+            (NormalB $ VarE 'fmap
+                `AppE` setter
+                `AppE` (f `AppE` needle))
+            [ FunD needleN [Clause [] (NormalB $ VarE fieldName `AppE` a) []]
+            , FunD setterN $ return $ Clause
+                [VarP yN]
+                (NormalB $ RecUpdE a
+                    [ (fieldName, y)
+                    ])
+                []
+            ]
+        ]
 
 mkForeignKeysComposite :: MkPersistSettings -> EntityDef a -> ForeignDef -> Q [Dec]
 mkForeignKeysComposite mps t fdef = do
