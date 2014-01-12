@@ -1,5 +1,5 @@
 name:            persistent
-version:         1.2.3.2
+version:         1.2.3.3
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -43,6 +43,7 @@ library
                    , blaze-html               >= 0.5
                    , blaze-markup             >= 0.5.1
                    , silently
+                   , scientific
 
     exposed-modules: Database.Persist
                      Database.Persist.Quasi
@@ -94,6 +95,7 @@ test-suite test
                    , conduit
                    , monad-control
                    , blaze-html
+                   , scientific
 
     cpp-options: -DTEST
 

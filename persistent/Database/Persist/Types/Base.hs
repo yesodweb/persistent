@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE ExistentialQuantification #-}
@@ -25,6 +26,9 @@ import Data.Time.LocalTime (ZonedTime, zonedTimeToUTC, zonedTimeToLocalTime, zon
 import Data.Map (Map)
 import qualified Data.HashMap.Strict as HM
 import Data.Word (Word32)
+#if MIN_VERSION_aeson(0, 7, 0)
+import qualified Data.Scientific
+#endif
 
 -- | A 'Checkmark' should be used as a field type whenever a
 -- uniqueness constraint should guarantee that a certain kind of
@@ -215,7 +219,13 @@ instance A.ToJSON PersistValue where
     toJSON (PersistText t) = A.String $ T.cons 's' t
     toJSON (PersistByteString b) = A.String $ T.cons 'b' $ TE.decodeUtf8 $ B64.encode b
     toJSON (PersistInt64 i) = A.Number $ fromIntegral i
-    toJSON (PersistDouble d) = A.Number $ AN.D d
+    toJSON (PersistDouble d) = A.Number $
+#if MIN_VERSION_aeson(0, 7, 0)
+        Data.Scientific.fromFloatDigits
+#else
+        AN.D
+#endif
+        d
     toJSON (PersistRational r) = A.String $ T.pack $ 'r' : show r
     toJSON (PersistBool b) = A.Bool b
     toJSON (PersistTimeOfDay t) = A.String $ T.pack $ 't' : show t
@@ -248,8 +258,16 @@ instance A.FromJSON PersistValue where
             case reads $ T.unpack t of
                 (x, _):_ -> return x
                 [] -> fail "Could not read"
+
+#if MIN_VERSION_aeson(0, 7, 0)
+    parseJSON (A.Number n) = return $
+        if fromInteger (floor n) == n
+            then PersistInt64 $ floor n
+            else PersistDouble $ fromRational $ toRational n
+#else
     parseJSON (A.Number (AN.I i)) = return $ PersistInt64 $ fromInteger i
     parseJSON (A.Number (AN.D d)) = return $ PersistDouble d
+#endif
     parseJSON (A.Bool b) = return $ PersistBool b
     parseJSON A.Null = return $ PersistNull
     parseJSON (A.Array a) = fmap PersistList (mapM A.parseJSON $ V.toList a)
