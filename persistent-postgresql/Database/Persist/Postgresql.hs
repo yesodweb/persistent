@@ -320,10 +320,7 @@ migrate' :: [EntityDef a]
          -> (Text -> IO Statement)
          -> EntityDef SqlType
          -> IO (Either [Text] [(Bool, Text)])
-                             -- We nub because there might be duplicate statements generated
-                             -- such as AlterColumn DropReference and AlterTable DropConstraint
-                             -- for the same reference constraint.
-migrate' allDefs getter val = fmap (fmap $ nub . map showAlterDb) $ do
+migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
     let name = entityDB val
     old <- getColumns getter val
     case partitionEithers old of
@@ -406,25 +403,8 @@ getColumns getter def = do
             , PersistText $ unDBName $ entityID def
             ]
     cs <- runResourceT $ stmtQuery stmt vals $$ helper
-    let sqlc=concat ["SELECT "
-                          ,"c.constraint_name, "
-                          ,"c.column_name "
-                          ,"FROM information_schema.key_column_usage c, "
-                          ,"information_schema.table_constraints k "
-                          ,"WHERE c.table_catalog=current_database() "
-                          ,"AND c.table_catalog=k.table_catalog "
-                          ,"AND c.table_schema=current_schema() "
-                          ,"AND c.table_schema=k.table_schema "
-                          ,"AND c.table_name=? "
-                          ,"AND c.table_name=k.table_name "
-                          ,"AND c.column_name <> ? "
-                          ,"AND c.ordinal_position=1 "
-                          ,"AND c.constraint_name=k.constraint_name "
-                          ,"AND k.constraint_type <> 'PRIMARY KEY' "
-                          ,"ORDER BY c.constraint_name, c.column_name"]
-
-    stmt' <- getter $ pack sqlc
-        
+    stmt' <- getter
+        "SELECT constraint_name, column_name FROM information_schema.constraint_column_usage WHERE table_name=? AND column_name <> ? ORDER BY constraint_name, column_name"
     us <- runResourceT $ stmtQuery stmt' vals $$ helperU
     return $ cs ++ us
   where
