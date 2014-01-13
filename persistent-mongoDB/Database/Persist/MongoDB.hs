@@ -110,6 +110,7 @@ import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Data.Time.Calendar (Day(..))
 import Data.Attoparsec.Number
 import Data.Char (toUpper)
+import Data.Word (Word16)
 import Data.Monoid (mappend)
 import Data.Typeable
 
@@ -121,15 +122,18 @@ newtype NoOrphanNominalDiffTime = NoOrphanNominalDiffTime NominalDiffTime
                                 deriving (Show, Eq, Num)
 
 instance FromJSON NoOrphanNominalDiffTime where
-    parseJSON (Number (I x)) = (return . NoOrphanNominalDiffTime . fromInteger) x
-    parseJSON (Number (D x)) = (return . NoOrphanNominalDiffTime . fromRational . toRational) x
+--    parseJSON (Number x) = (return . NoOrphanNominalDiffTime . fromRational.) x
+    parseJSON (Number x) = (return . NoOrphanNominalDiffTime . fromRational . toRational) x
     parseJSON _ = fail "couldn't parse diff time"
 
 newtype NoOrphanPortID = NoOrphanPortID PortID deriving (Show, Eq)
 
 instance FromJSON NoOrphanPortID where
-    parseJSON (Number (I x)) = (return . NoOrphanPortID . PortNumber . fromInteger) x
+    parseJSON (Number  x) = (return . NoOrphanPortID . PortNumber . fromIntegral ) cnvX
+      where cnvX :: Word16
+            cnvX = floor x -- Maybe floor is wrong here but it makes as much sense as anything else
     parseJSON _ = fail "couldn't parse port number"
+
 
 
 data Connection = Connection DB.Pipe DB.Database
