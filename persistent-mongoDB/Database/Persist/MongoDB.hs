@@ -122,18 +122,31 @@ newtype NoOrphanNominalDiffTime = NoOrphanNominalDiffTime NominalDiffTime
                                 deriving (Show, Eq, Num)
 
 instance FromJSON NoOrphanNominalDiffTime where
---    parseJSON (Number x) = (return . NoOrphanNominalDiffTime . fromRational.) x
+#if MIN_VERSION_aeson(0, 7, 0)    
     parseJSON (Number x) = (return . NoOrphanNominalDiffTime . fromRational . toRational) x
+
+
+#else 
+    parseJSON (Number (I x)) = (return . NoOrphanNominalDiffTime . fromInteger) x
+    parseJSON (Number (D x)) = (return . NoOrphanNominalDiffTime . fromRational . toRational) x
+
+#endif                           
     parseJSON _ = fail "couldn't parse diff time"
 
 newtype NoOrphanPortID = NoOrphanPortID PortID deriving (Show, Eq)
 
+
 instance FromJSON NoOrphanPortID where
+#if MIN_VERSION_aeson(0, 7, 0)  
     parseJSON (Number  x) = (return . NoOrphanPortID . PortNumber . fromIntegral ) cnvX
       where cnvX :: Word16
-            cnvX = floor x -- Maybe floor is wrong here but it makes as much sense as anything else
-    parseJSON _ = fail "couldn't parse port number"
+            cnvX = round x 
 
+#else
+    parseJSON (Number (I x)) = (return . NoOrphanPortID . PortNumber . fromInteger) x
+
+#endif
+    parseJSON _ = fail "couldn't parse port number"
 
 
 data Connection = Connection DB.Pipe DB.Database
