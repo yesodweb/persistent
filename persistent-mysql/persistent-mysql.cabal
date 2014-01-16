@@ -1,5 +1,5 @@
 name:            persistent-mysql
-version:         1.3.0
+version:         2.0.0
 license:         MIT
 license-file:    LICENSE
 author:          Felipe Lessa <felipe.lessa@gmail.com>, Michael Snoyman
@@ -29,7 +29,7 @@ library
                    , mysql-simple          >= 0.2.2.3  && < 0.3
                    , mysql                 >= 0.1.1.3  && < 0.2
                    , blaze-builder
-                   , persistent            >= 1.3      && < 1.4
+                   , persistent            >= 2.0      && < 2.1
                    , containers            >= 0.2
                    , bytestring            >= 0.9
                    , text                  >= 0.11.0.6

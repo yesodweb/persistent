@@ -40,6 +40,7 @@ import Data.List (find, intercalate, sort, groupBy, nub)
 import Data.Function (on)
 import Data.Conduit
 import qualified Data.Conduit.List as CL
+import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as B8
@@ -71,7 +72,7 @@ type ConnectionString = ByteString
 -- finishes using it.  Note that you should not use the given
 -- 'ConnectionPool' outside the action since it may be already
 -- been released.
-withPostgresqlPool :: MonadIO m
+withPostgresqlPool :: (MonadBaseControl IO m, MonadLogger m, MonadIO m)
                    => ConnectionString
                    -- ^ Connection string to the database.
                    -> Int
@@ -88,7 +89,7 @@ withPostgresqlPool ci = withSqlPool $ open' ci
 -- responsability to properly close the connection pool when
 -- unneeded.  Use 'withPostgresqlPool' for an automatic resource
 -- control.
-createPostgresqlPool :: MonadIO m
+createPostgresqlPool :: (MonadIO m, MonadBaseControl IO m, MonadLogger m)
                      => ConnectionString
                      -- ^ Connection string to the database.
                      -> Int
@@ -100,12 +101,12 @@ createPostgresqlPool ci = createSqlPool $ open' ci
 
 -- | Same as 'withPostgresqlPool', but instead of opening a pool
 -- of connections, only one connection is opened.
-withPostgresqlConn :: (MonadIO m, MonadBaseControl IO m)
+withPostgresqlConn :: (MonadIO m, MonadBaseControl IO m, MonadLogger m)
                    => ConnectionString -> (Connection -> m a) -> m a
 withPostgresqlConn = withSqlConn . open'
 
-open' :: ConnectionString -> IO Connection
-open' cstr = do
+open' :: ConnectionString -> LogFunc -> IO Connection
+open' cstr logFunc = do
     PG.connectPostgreSQL cstr >>= openSimpleConn
 
 -- | Generate a 'Connection' from a 'PG.Connection'
@@ -762,7 +763,7 @@ data PostgresConf = PostgresConf
 instance PersistConfig PostgresConf where
     type PersistConfigBackend PostgresConf = SqlPersistT
     type PersistConfigPool PostgresConf = ConnectionPool
-    createPoolConfig (PostgresConf cs size) = createPostgresqlPool cs size
+    createPoolConfig (PostgresConf cs size) = runNoLoggingT $ createPostgresqlPool cs size -- FIXME
     runPool _ = runSqlPool
     loadConfig (Object o) = do
         database <- o .: "database"

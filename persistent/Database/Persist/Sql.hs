@@ -5,6 +5,7 @@ module Database.Persist.Sql
     , module Database.Persist.Sql.Migration
     , module Database.Persist
     , rawQuery
+    , rawQueryRes
     , rawExecute
     , rawExecuteCount
     , rawSql
