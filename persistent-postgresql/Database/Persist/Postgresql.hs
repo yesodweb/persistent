@@ -107,11 +107,11 @@ withPostgresqlConn = withSqlConn . open'
 
 open' :: ConnectionString -> LogFunc -> IO Connection
 open' cstr logFunc = do
-    PG.connectPostgreSQL cstr >>= openSimpleConn
+    PG.connectPostgreSQL cstr >>= openSimpleConn logFunc
 
 -- | Generate a 'Connection' from a 'PG.Connection'
-openSimpleConn :: PG.Connection -> IO Connection
-openSimpleConn conn = do
+openSimpleConn :: LogFunc -> PG.Connection -> IO Connection
+openSimpleConn logFunc conn = do
     smap <- newIORef $ Map.empty
     return Connection
         { connPrepare    = prepare' conn
@@ -126,6 +126,7 @@ openSimpleConn conn = do
         , connNoLimit    = "LIMIT ALL"
         , connRDBMS      = "postgresql"
         , connLimitOffset = decorateSQLWithLimitOffset "LIMIT ALL"
+        , connLogFunc = logFunc
         }
 
 prepare' :: PG.Connection -> Text -> IO Statement
