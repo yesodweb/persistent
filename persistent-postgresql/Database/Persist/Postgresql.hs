@@ -36,7 +36,7 @@ import Data.IORef
 import qualified Data.Map as Map
 import Data.Either (partitionEithers)
 import Control.Arrow
-import Data.List (find, intercalate, sort, groupBy, nub)
+import Data.List (find, intercalate, sort, groupBy)
 import Data.Function (on)
 import Data.Conduit
 import qualified Data.Conduit.List as CL
@@ -320,10 +320,7 @@ migrate' :: [EntityDef a]
          -> (Text -> IO Statement)
          -> EntityDef SqlType
          -> IO (Either [Text] [(Bool, Text)])
-                             -- We nub because there might be duplicate statements generated
-                             -- such as AlterColumn DropReference and AlterTable DropConstraint
-                             -- for the same reference constraint.
-migrate' allDefs getter val = fmap (fmap $ nub . map showAlterDb) $ do
+migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
     let name = entityDB val
     old <- getColumns getter val
     case partitionEithers old of
@@ -420,7 +417,7 @@ getColumns getter def = do
                           ,"AND c.column_name <> ? "
                           ,"AND c.ordinal_position=1 "
                           ,"AND c.constraint_name=k.constraint_name "
-                          ,"AND k.constraint_type <> 'PRIMARY KEY' "
+                          ,"AND NOT k.constraint_type IN ('PRIMARY KEY', 'FOREIGN KEY') "
                           ,"ORDER BY c.constraint_name, c.column_name"]
 
     stmt' <- getter $ pack sqlc
