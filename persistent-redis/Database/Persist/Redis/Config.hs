@@ -4,7 +4,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, UndecidableInstances, DeriveFunctor #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-module Database.Persist.Redis.Config 
+module Database.Persist.Redis.Config
     ( RedisAuth (..)
     , RedisConf (..)
     , R.RedisCtx
@@ -27,7 +27,7 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Applicative (Applicative (..))
 import Control.Monad.Reader(ReaderT(..))
-import Control.Monad.Reader.Class 
+import Control.Monad.Reader.Class
 import qualified Data.ByteString.Char8 as B
 import Data.Attoparsec.Number
 
@@ -35,10 +35,10 @@ newtype RedisAuth =  RedisAuth Text deriving (Eq, Show)
 
 -- | Information required to connect to a Redis server
 data RedisConf = RedisConf {
-    rdHost    :: Text,  -- | Host
-    rdPort    :: R.PortID, -- | Port
-    rdAuth    :: Maybe RedisAuth, -- | Auth info
-    rdMaxConn :: Int -- | Maximum number of connections
+    rdHost    :: Text,  -- ^ Host
+    rdPort    :: R.PortID, -- ^ Port
+    rdAuth    :: Maybe RedisAuth, -- ^ Auth info
+    rdMaxConn :: Int -- ^ Maximum number of connections
 } deriving (Show)
 
 instance FromJSON R.PortID where
@@ -47,7 +47,7 @@ instance FromJSON R.PortID where
 
 instance FromJSON RedisAuth where
     parseJSON (String t) = (return . RedisAuth) t
-    parseJSON _ = fail "couldn't parse auth" 
+    parseJSON _ = fail "couldn't parse auth"
 
 -- | Monad reader transformer keeping Redis connection through out the work
 newtype RedisT m a = RedisT { runRedisT :: ReaderT R.Connection m a }
@@ -55,7 +55,7 @@ newtype RedisT m a = RedisT { runRedisT :: ReaderT R.Connection m a }
 
 -- | Extracts connection from RedisT monad transformer
 thisConnection :: Monad m => RedisT m R.Connection
-thisConnection = RedisT $ ask
+thisConnection = RedisT ask
 
 -- | Run a connection reader function against a Redis configuration
 withRedisConn :: (Monad m, MonadIO m) => RedisConf -> (R.Connection -> m a) -> m a
@@ -86,14 +86,14 @@ instance PersistConfig RedisConf where
     loadConfig _ = mzero
 
     createPoolConfig (RedisConf h p Nothing m) = 
-        R.connect $ 
+        R.connect $
         R.defaultConnectInfo {
             R.connectHost = unpack h,
             R.connectPort = p,
             R.connectMaxConnections = m
         }
     createPoolConfig (RedisConf h p (Just (RedisAuth pwd)) m) = 
-        R.connect $ 
+        R.connect $
         R.defaultConnectInfo {
             R.connectHost = unpack h,
             R.connectPort = p,
@@ -102,4 +102,3 @@ instance PersistConfig RedisConf where
         }
 
     runPool _ = runRedisPool
-
