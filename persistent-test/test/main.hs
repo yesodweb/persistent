@@ -10,6 +10,7 @@ import qualified LargeNumberTest
 import qualified MaxLenTest
 import qualified SumTypeTest
 import qualified UniqueTest
+import qualified MigrationTest
 import qualified MigrationOnlyTest
 import qualified CompositeTest
 import Test.Hspec (hspec)
@@ -55,6 +56,7 @@ main = do
   runConn (setup UniqueTest.uniqueMigrate)
   runConn (setup MaxLenTest.maxlenMigrate)
   runConn (setup CompositeTest.compositeMigrate)
+  runConn (setup MigrationTest.migrationMigrate)
 #endif
 
   hspec $ do
@@ -64,7 +66,7 @@ main = do
 #endif
     HtmlTest.specs
     EmbedTest.specs
-    -- EmbedOrderTest.specs
+    EmbedOrderTest.specs
     LargeNumberTest.specs
     UniqueTest.specs
     MaxLenTest.specs
@@ -73,4 +75,5 @@ main = do
     PersistentTest.specs
 #ifndef WITH_MONGODB
     CompositeTest.specs
+    MigrationTest.specs
 #endif

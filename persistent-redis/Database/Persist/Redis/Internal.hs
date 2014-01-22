@@ -38,6 +38,7 @@ toValue (PersistList x) = U.fromString $ show x
 toValue (PersistMap x) = U.fromString $ show x
 toValue (PersistRational _) = undefined
 toValue (PersistZonedTime _) = undefined
+toValue (PersistDbSpecific _) = undefined
 toValue (PersistObjectId _) = error "PersistObjectId is not supported."
 
 castOne :: SqlType -> String -> PersistValue

@@ -45,6 +45,7 @@ library
                    , silently
                    , mtl
                    , fast-logger              >= 2.1
+                   , scientific
 
     exposed-modules: Database.Persist
                      Database.Persist.Quasi
@@ -96,6 +97,7 @@ test-suite test
                    , conduit
                    , monad-control
                    , blaze-html
+                   , scientific
 
     cpp-options: -DTEST
 

@@ -13,12 +13,7 @@ build-type:      Simple
 
 source-repository head
         type:           git
-        location:       https://github.com/paulrzcz/persistent-redis.git
-
-source-repository this
-        type:           git
-        location:       https://github.com/paulrzcz/persistent-redis.git
-        tag:            0.0.3
+        location:       https://github.com/yesodweb/persistent.git
 
 library
     build-depends:   base                  >= 4        && < 5

@@ -42,6 +42,7 @@ test-suite test
                    , persistent
                    , bytestring
                    , QuickCheck
+                   , transformers
 
 source-repository head
   type:     git

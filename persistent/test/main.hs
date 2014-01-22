@@ -23,10 +23,33 @@ main = hspec $ do
                 , Spaces 2
                 , Token "baz"
                 ]
+        it "handles quotes mid-token" $
+            tokenize "  x=\"foo bar\"  \"baz\"" `shouldBe`
+                [ Spaces 2
+                , Token "x=foo bar"
+                , Spaces 2
+                , Token "baz"
+                ]
+        it "handles escaped quote mid-token" $
+            tokenize "  x=\\\"foo bar\"  \"baz\"" `shouldBe`
+                [ Spaces 2
+                , Token "x=\\\"foo"
+                , Spaces 1
+                , Token "bar\""
+                , Spaces 2
+                , Token "baz"
+                ]
         it "handles unnested parantheses" $
             tokenize "  (foo bar)  (baz)" `shouldBe`
                 [ Spaces 2
                 , Token "foo bar"
+                , Spaces 2
+                , Token "baz"
+                ]
+        it "handles unnested parantheses mid-token" $
+            tokenize "  x=(foo bar)  (baz)" `shouldBe`
+                [ Spaces 2
+                , Token "x=foo bar"
                 , Spaces 2
                 , Token "baz"
                 ]
@@ -37,12 +60,20 @@ main = hspec $ do
                 , Spaces 2
                 , Token "baz"
                 ]
-        it "escaping " $
-            tokenize "  (foo \\(bar)  \"baz\\\"\"" `shouldBe`
+        it "escaping" $
+            tokenize "  (foo \\(bar)  y=\"baz\\\"\"" `shouldBe`
                 [ Spaces 2
                 , Token "foo (bar"
                 , Spaces 2
-                , Token "baz\""
+                , Token "y=baz\""
+                ]
+        it "mid-token quote in later token" $
+            tokenize "foo bar baz=(bin\")" `shouldBe`
+                [ Token "foo"
+                , Spaces 1
+                , Token "bar"
+                , Spaces 1
+                , Token "baz=bin\""
                 ]
     describe "parseFieldType" $ do
         it "simple types" $

@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE ViewPatterns #-}
 module Database.Persist.Quasi
     ( parse
     , PersistSettings (..)
@@ -122,10 +123,23 @@ tokenize t
     | isSpace (T.head t) =
         let (spaces, rest) = T.span isSpace t
          in Spaces (T.length spaces) : tokenize rest
+
+    -- support mid-token quotes and parens
+    | Just (beforeEquals, afterEquals) <- findMidToken t
+    , not (T.any isSpace beforeEquals)
+    , Token next : rest <- tokenize afterEquals =
+        Token (T.concat [beforeEquals, "=", next]) : rest
+
     | otherwise =
         let (token, rest) = T.break isSpace t
          in Token token : tokenize rest
   where
+    findMidToken t' =
+        case T.break (== '=') t' of
+            (x, T.drop 1 -> y)
+                | "\"" `T.isPrefixOf` y || "(" `T.isPrefixOf` y -> Just (x, y)
+            _ -> Nothing
+
     quotes t' front
         | T.null t' = error $ T.unpack $ T.concat $
             "Unterminated quoted string starting with " : front []
