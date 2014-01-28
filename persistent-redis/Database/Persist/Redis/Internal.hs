@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Database.Persist.Redis.Internal
 	( toInsertFields
     , toKeyId
@@ -9,11 +8,12 @@ module Database.Persist.Redis.Internal
     , mkEntity
 	) where
 
+import Control.Arrow((***))
 import Data.Fixed
 import Data.Time
 import Data.Int (Int64)
 import Data.Word (Word8)
-import Control.Monad (liftM, liftM2, liftM3)
+import Control.Monad (liftM, liftM3)
 import Data.Binary (Binary(..), encode, getWord8, Get)
 import qualified Data.Binary as Q
 import Data.Text (Text, unpack)
@@ -33,130 +33,145 @@ toEntityString = unDBName . entityDB . entityDef . Just
 toEntityName :: EntityDef a -> B.ByteString
 toEntityName = U.fromString . unpack . unDBName . entityDB
 
-instance Binary Text where
-    put = put . U.fromString . unpack
+newtype BinText = BinText { unBinText :: Text }
+instance Binary BinText where
+    put = put . U.fromString . unpack . unBinText
     get = do 
         str <- Q.get
-        return $ (T.pack . U.toString) str
+        return $ BinText $ (T.pack . U.toString) str
 
-instance HasResolution a => Binary (Fixed a) where
-    put = put . toRational
+newtype BinPico= BinPico { unBinPico :: Pico } 
+instance Binary BinPico where
+    put = put . toRational . unBinPico
     get = do
         x <- Q.get :: Get Rational
-        return $ fromRational x
+        return $ BinPico (fromRational x)
 
-instance Binary DiffTime where
-    put = put . toRational
+newtype BinDiffTime = BinDiffTime { unBinDiffTime :: DiffTime }
+instance Binary BinDiffTime where
+    put = put . toRational . unBinDiffTime
     get = do
         x <- Q.get :: Get Rational
-        return $ fromRational x
+        return $ BinDiffTime (fromRational x)
 
-instance Binary Day where
-    put (ModifiedJulianDay x) = put x
+newtype BinDay = BinDay { unBinDay :: Day }
+instance Binary BinDay where
+    put (BinDay (ModifiedJulianDay x)) = put x
     get = do
         x <- Q.get :: Get Integer
-        return $ ModifiedJulianDay x
+        return $ BinDay (ModifiedJulianDay x)
 
-instance Binary TimeOfDay where
-    put (TimeOfDay h m s) = do
+newtype BinTimeOfDay = BinTimeOfDay { unBinTimeOfDay :: TimeOfDay }
+instance Binary BinTimeOfDay where
+    put (BinTimeOfDay (TimeOfDay h m s)) = do
         put h
         put m
-        put s
-    get = liftM3 TimeOfDay (Q.get :: Get Int) (Q.get :: Get Int) (Q.get :: Get Pico)
+        put (BinPico s)
+    get = do
+        let s = liftM unBinPico (Q.get :: Get BinPico)
+        let tod = liftM3 TimeOfDay (Q.get :: Get Int) (Q.get :: Get Int) s
+        liftM BinTimeOfDay tod
 
-instance Binary ZT where
-    put (ZT (ZonedTime (LocalTime day timeOfDay) (TimeZone mins summer name))) = do
-        put day
-        put timeOfDay
+newtype BinZT = BinZT { unBinZT :: ZT }
+instance Binary BinZT where
+    put (BinZT (ZT (ZonedTime (LocalTime day timeOfDay) (TimeZone mins summer name)))) = do
+        put (BinDay day)
+        put (BinTimeOfDay timeOfDay)
         put mins
         put summer
         put name
 
     get = do
-        day <- Q.get :: Get Day
-        timeOfDay <- Q.get :: Get TimeOfDay
+        day <- Q.get :: Get BinDay
+        timeOfDay <- Q.get :: Get BinTimeOfDay
         mins <- Q.get :: Get Int
         summer <- Q.get :: Get Bool
         name <- Q.get :: Get String
-        return $ ZT (ZonedTime (LocalTime day timeOfDay) (TimeZone mins summer name))
+        return $ BinZT $ ZT (ZonedTime (LocalTime (unBinDay day) (unBinTimeOfDay timeOfDay)) (TimeZone mins summer name))
 
-instance Binary PersistValue where
-    put (PersistText x) = do
+newtype BinPersistValue = BinPersistValue { unBinPersistValue :: PersistValue }
+instance Binary BinPersistValue where
+    put (BinPersistValue (PersistText x)) = do
         put (1 :: Word8)
         put $ (U.fromString . unpack) x
 
-    put (PersistByteString x) = do
+    put (BinPersistValue (PersistByteString x)) = do
         put (2 :: Word8)
         put x
 
-    put (PersistInt64 x) = do
+    put (BinPersistValue (PersistInt64 x)) = do
         put (3 :: Word8)
         put x
 
-    put (PersistDouble x) = do
+    put (BinPersistValue (PersistDouble x)) = do
         put (4 :: Word8)
         put x
 
-    put (PersistBool x) = do 
+    put (BinPersistValue (PersistBool x)) = do 
         put (5 :: Word8)
         put x
 
-    put (PersistDay day) = do
+    put (BinPersistValue (PersistDay day)) = do
         put (6 :: Word8)
-        put day
+        put (BinDay day)
 
-    put (PersistTimeOfDay tod) = do
+    put (BinPersistValue (PersistTimeOfDay tod)) = do
         put (7 :: Word8)
-        put tod
+        put (BinTimeOfDay tod)
 
-    put (PersistUTCTime (UTCTime day pc)) = do
+    put (BinPersistValue (PersistUTCTime (UTCTime day pc))) = do
         put (8 :: Word8)
-        put day
-        put pc
+        put (BinDay day)
+        put (BinDiffTime pc)
 
-    put (PersistNull) = put (9 :: Word8)
-    put (PersistList x) = do 
+    put (BinPersistValue PersistNull) = put (9 :: Word8)
+    put (BinPersistValue (PersistList x)) = do 
         put (10 :: Word8)
-        put x
+        put (map BinPersistValue x)
 
-    put (PersistMap x) = do
+    put (BinPersistValue (PersistMap x)) = do
         put (11 :: Word8)
-        put x
+        put (map (BinText *** BinPersistValue) x)
 
-    put (PersistRational x) = do
+    put (BinPersistValue (PersistRational x)) = do
         put (12 :: Word8)
         put x
 
-    put (PersistZonedTime x) = do
+    put (BinPersistValue (PersistZonedTime x)) = do
         put (13 :: Word8)
-        put x
+        put (BinZT x)
 
-    put (PersistDbSpecific _) = undefined
-    put (PersistObjectId _) = error "PersistObjectId is not supported."
+    put (BinPersistValue (PersistDbSpecific _)) = undefined
+    put (BinPersistValue (PersistObjectId _)) = error "PersistObjectId is not supported."
 
     get = do
         tag <- getWord8
-        case tag of
-            1 -> liftM PersistText (Q.get :: Get Text)
-            2 -> liftM PersistByteString (Q.get :: Get B.ByteString)
-            3 -> liftM PersistInt64 (Q.get :: Get Int64)
-            4 -> liftM PersistDouble (Q.get :: Get Double)
-            5 -> liftM PersistBool (Q.get :: Get Bool)
-            6 -> liftM PersistDay (Q.get :: Get Day)
-            7 -> liftM PersistTimeOfDay (Q.get :: Get TimeOfDay)
-            8 -> liftM PersistUTCTime $ liftM2 UTCTime (Q.get :: Get Day) (Q.get :: Get DiffTime)
-            9 -> return PersistNull
-            10-> liftM PersistList (Q.get :: Get [PersistValue])
-            11-> liftM PersistMap (Q.get :: Get [(Text, PersistValue)])
-            12-> liftM PersistRational (Q.get :: Get Rational)
-            13-> liftM PersistZonedTime (Q.get :: Get ZT)
-            _ -> fail "Incorrect tag came to Binary deserialization"
+        let pv = case tag of
+                1 -> liftM (PersistText . unBinText) (Q.get :: Get BinText)
+                2 -> liftM PersistByteString (Q.get :: Get B.ByteString)
+                3 -> liftM PersistInt64 (Q.get :: Get Int64)
+                4 -> liftM PersistDouble (Q.get :: Get Double)
+                5 -> liftM PersistBool (Q.get :: Get Bool)
+                6 -> liftM (PersistDay . unBinDay) (Q.get :: Get BinDay)
+                7 -> liftM (PersistTimeOfDay . unBinTimeOfDay) (Q.get :: Get BinTimeOfDay)
+                8 -> do
+                    d <- Q.get :: Get BinDay
+                    dt <- Q.get :: Get BinDiffTime
+                    let utctime = UTCTime (unBinDay d) (unBinDiffTime dt)
+                    return $  PersistUTCTime utctime
+                9 -> return PersistNull
+                10-> liftM (PersistList . map unBinPersistValue) (Q.get :: Get [BinPersistValue])
+                11-> liftM (PersistMap . map (unBinText *** unBinPersistValue)) (Q.get :: Get [(BinText, BinPersistValue)])
+                12-> liftM PersistRational (Q.get :: Get Rational)
+                13-> liftM (PersistZonedTime . unBinZT) (Q.get :: Get BinZT)
+                _ -> fail "Incorrect tag came to Binary deserialization"
+        liftM BinPersistValue pv
 
 toValue :: PersistValue -> B.ByteString
-toValue = L.toStrict . encode
+toValue = L.toStrict . encode . BinPersistValue
 
 castOne :: B.ByteString -> PersistValue
-castOne = Q.decode . L.fromStrict
+castOne = unBinPersistValue . Q.decode . L.fromStrict
 
 redisToPerisistValues :: [(B.ByteString, B.ByteString)] -> [PersistValue]
 redisToPerisistValues = map (castOne . snd)
