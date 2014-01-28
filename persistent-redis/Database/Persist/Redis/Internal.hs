@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Database.Persist.Redis.Internal
 	( toInsertFields
     , toKeyId
@@ -8,11 +9,19 @@ module Database.Persist.Redis.Internal
     , mkEntity
 	) where
 
+import Data.Fixed
+import Data.Time
+import Data.Int (Int64)
+import Data.Word (Word8)
+import Control.Monad (liftM, liftM2, liftM3)
+import Data.Binary (Binary(..), encode, getWord8, Get)
+import qualified Data.Binary as Q
 import Data.Text (Text, unpack)
 import qualified Data.Text as T
 import Database.Persist.Types
 import Database.Persist.Class
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.UTF8 as U
 
 toLabel :: FieldDef a -> B.ByteString
@@ -24,42 +33,137 @@ toEntityString = unDBName . entityDB . entityDef . Just
 toEntityName :: EntityDef a -> B.ByteString
 toEntityName = U.fromString . unpack . unDBName . entityDB
 
+instance Binary Text where
+    put = put . U.fromString . unpack
+    get = do 
+        str <- Q.get
+        return $ (T.pack . U.toString) str
+
+instance HasResolution a => Binary (Fixed a) where
+    put = put . toRational
+    get = do
+        x <- Q.get :: Get Rational
+        return $ fromRational x
+
+instance Binary DiffTime where
+    put = put . toRational
+    get = do
+        x <- Q.get :: Get Rational
+        return $ fromRational x
+
+instance Binary Day where
+    put (ModifiedJulianDay x) = put x
+    get = do
+        x <- Q.get :: Get Integer
+        return $ ModifiedJulianDay x
+
+instance Binary TimeOfDay where
+    put (TimeOfDay h m s) = do
+        put h
+        put m
+        put s
+    get = liftM3 TimeOfDay (Q.get :: Get Int) (Q.get :: Get Int) (Q.get :: Get Pico)
+
+instance Binary ZT where
+    put (ZT (ZonedTime (LocalTime day timeOfDay) (TimeZone mins summer name))) = do
+        put day
+        put timeOfDay
+        put mins
+        put summer
+        put name
+
+    get = do
+        day <- Q.get :: Get Day
+        timeOfDay <- Q.get :: Get TimeOfDay
+        mins <- Q.get :: Get Int
+        summer <- Q.get :: Get Bool
+        name <- Q.get :: Get String
+        return $ ZT (ZonedTime (LocalTime day timeOfDay) (TimeZone mins summer name))
+
+instance Binary PersistValue where
+    put (PersistText x) = do
+        put (1 :: Word8)
+        put $ (U.fromString . unpack) x
+
+    put (PersistByteString x) = do
+        put (2 :: Word8)
+        put x
+
+    put (PersistInt64 x) = do
+        put (3 :: Word8)
+        put x
+
+    put (PersistDouble x) = do
+        put (4 :: Word8)
+        put x
+
+    put (PersistBool x) = do 
+        put (5 :: Word8)
+        put x
+
+    put (PersistDay day) = do
+        put (6 :: Word8)
+        put day
+
+    put (PersistTimeOfDay tod) = do
+        put (7 :: Word8)
+        put tod
+
+    put (PersistUTCTime (UTCTime day pc)) = do
+        put (8 :: Word8)
+        put day
+        put pc
+
+    put (PersistNull) = put (9 :: Word8)
+    put (PersistList x) = do 
+        put (10 :: Word8)
+        put x
+
+    put (PersistMap x) = do
+        put (11 :: Word8)
+        put x
+
+    put (PersistRational x) = do
+        put (12 :: Word8)
+        put x
+
+    put (PersistZonedTime x) = do
+        put (13 :: Word8)
+        put x
+
+    put (PersistDbSpecific _) = undefined
+    put (PersistObjectId _) = error "PersistObjectId is not supported."
+
+    get = do
+        tag <- getWord8
+        case tag of
+            1 -> liftM PersistText (Q.get :: Get Text)
+            2 -> liftM PersistByteString (Q.get :: Get B.ByteString)
+            3 -> liftM PersistInt64 (Q.get :: Get Int64)
+            4 -> liftM PersistDouble (Q.get :: Get Double)
+            5 -> liftM PersistBool (Q.get :: Get Bool)
+            6 -> liftM PersistDay (Q.get :: Get Day)
+            7 -> liftM PersistTimeOfDay (Q.get :: Get TimeOfDay)
+            8 -> liftM PersistUTCTime $ liftM2 UTCTime (Q.get :: Get Day) (Q.get :: Get DiffTime)
+            9 -> return PersistNull
+            10-> liftM PersistList (Q.get :: Get [PersistValue])
+            11-> liftM PersistMap (Q.get :: Get [(Text, PersistValue)])
+            12-> liftM PersistRational (Q.get :: Get Rational)
+            13-> liftM PersistZonedTime (Q.get :: Get ZT)
+            _ -> fail "Incorrect tag came to Binary deserialization"
+
 toValue :: PersistValue -> B.ByteString
-toValue (PersistText x) = U.fromString $ unpack x
-toValue (PersistByteString x) = x
-toValue (PersistInt64 x) = U.fromString $ show x
-toValue (PersistDouble x) = U.fromString $ show x
-toValue (PersistBool x) = U.fromString $ show x
-toValue (PersistDay x) = U.fromString $ show x
-toValue (PersistTimeOfDay x) = U.fromString $ show x
-toValue (PersistUTCTime x) = U.fromString $ show x
-toValue (PersistNull) = U.fromString ""
-toValue (PersistList x) = U.fromString $ show x
-toValue (PersistMap x) = U.fromString $ show x
-toValue (PersistRational _) = undefined
-toValue (PersistZonedTime _) = undefined
-toValue (PersistDbSpecific _) = undefined
-toValue (PersistObjectId _) = error "PersistObjectId is not supported."
+toValue = L.toStrict . encode
 
-castOne :: SqlType -> String -> PersistValue
-castOne SqlString x = PersistText (T.pack x) 
-castOne SqlInt32  x = PersistInt64 (read x)
-castOne SqlInt64  x = PersistInt64 (read x)
-castOne SqlBool   x = PersistBool (read x)
-castOne SqlReal   x = PersistDouble (read x)
-castOne _  _ = error "Unknown type"
+castOne :: B.ByteString -> PersistValue
+castOne = Q.decode . L.fromStrict
 
-redisToPerisistValues :: EntityDef SqlType -> [(B.ByteString, B.ByteString)] -> [PersistValue]
-redisToPerisistValues entDef fields = recast fieldsAndValues
-    where
-        castColumns = map fieldSqlType (entityFields entDef)
-        fieldsAndValues = zip castColumns (map (U.toString . snd) fields)
-        recast :: [(SqlType, String)] -> [PersistValue]
-        recast = map (uncurry castOne)
+redisToPerisistValues :: [(B.ByteString, B.ByteString)] -> [PersistValue]
+redisToPerisistValues = map (castOne . snd)
 
-mkEntity :: (Monad m, PersistEntity val) => Key val -> EntityDef SqlType -> [(B.ByteString, B.ByteString)] -> m (Entity val)
-mkEntity key entDef fields = do
-    let values = redisToPerisistValues entDef fields
+mkEntity :: (Monad m, PersistEntity val) => Key val -> [(B.ByteString, B.ByteString)] -> m (Entity val)
+mkEntity key fields = do
+    let values = redisToPerisistValues fields
     let v = fromPersistValues values
     case v of
         Right body -> return $ Entity key body
