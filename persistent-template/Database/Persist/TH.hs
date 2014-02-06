@@ -739,17 +739,18 @@ mkForeignKeysComposite mps t fdef = do
 persistFieldFromEntity :: MkPersistSettings -> EntityDef a -> Q [Dec]
 persistFieldFromEntity mps e = do
     ss <- [|SqlString|]
-    let columnNames = map (unpack . unHaskellName . fieldHaskell) (entityFields e)
     obj <- [|\ent -> PersistMap $ zip (map pack columnNames) (map toPersistValue $ toPersistFields ent)|]
     fpv <- [|\x -> let columns = HM.fromList x
-                   in fromPersistValues $ map (\name -> 
-                                                  case HM.lookup name columns of
-                                                      Just v -> 
-                                                          case fromPersistValue v of
-                                                              Left e' -> error $ unpack e'
-                                                              Right r -> r
-                                                      Nothing -> error $ "Missing field: " `mappend` unpack name) (map pack columnNames)|]
-    let typ = genericDataType mps (pack entityName) $ VarT $ mkName "backend"
+                    in fromPersistValues $ map
+                         (\(nulled, name) ->
+                            case HM.lookup name columns of
+                                Just v -> case fromPersistValue v of
+                                    Left e' -> error $ unpack e'
+                                    Right r -> r
+                                Nothing -> if nulled then PersistNull
+                                    else error $ "Missing field: " `mappend` unpack name)
+                         (zip maybeColumns $ map pack columnNames)
+          |]
 
     compose <- [|(<=<)|]
     getPersistMap' <- [|getPersistMap|]
@@ -765,7 +766,11 @@ persistFieldFromEntity mps e = do
             ]
         ]
     where
+      typ = genericDataType mps (pack entityName) $ VarT $ mkName "backend"
       entityName = (unpack $ unHaskellName $ entityHaskell e)
+      entFields = entityFields e
+      columnNames  = map (unpack . unHaskellName . fieldHaskell) entFields
+      maybeColumns = map ((== Nullable ByMaybeAttr) . nullable . fieldAttrs) entFields
 
 -- | Apply the given list of functions to the same @EntityDef@s.
 --

@@ -11,7 +11,9 @@
 {-# LANGUAGE EmptyDataDecls #-}
 module MigrationTest where
 
+#ifndef WITH_MONGODB
 import Database.Persist.Sqlite
+#endif
 import Database.Persist.TH
 import qualified Data.Text as T
 
@@ -32,9 +34,10 @@ Source
     field3 Int
     field4 TargetId
 |]
+
+#ifndef WITH_MONGODB
 specs :: Spec
 specs = describe "Migration" $ do
-#ifndef WITH_MONGODB
     it "is idempotent" $ db $ do
       again <- getMigration migrationMigrate
       liftIO $ again @?= []
