@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE RankNTypes, TypeFamilies, GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -29,7 +30,11 @@ import Control.Applicative (Applicative (..))
 import Control.Monad.Reader(ReaderT(..))
 import Control.Monad.Reader.Class
 import qualified Data.ByteString.Char8 as B
+#if MIN_VERSION_aeson(0, 7, 0)
+import Data.Scientific() -- we require only RealFrac instance of Scientific
+#else
 import Data.Attoparsec.Number
+#endif
 
 newtype RedisAuth =  RedisAuth Text deriving (Eq, Show)
 
@@ -42,7 +47,7 @@ data RedisConf = RedisConf {
 } deriving (Show)
 
 instance FromJSON R.PortID where
-    parseJSON (Number (I x)) = (return . R.PortNumber . fromInteger) x
+    parseJSON (Number x) = (return . R.PortNumber . fromInteger . truncate) x
     parseJSON _ = fail "couldn't parse port number"
 
 instance FromJSON RedisAuth where
