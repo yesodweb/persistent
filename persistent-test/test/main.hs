@@ -61,7 +61,7 @@ main = do
 
   hspec $ do
     RenameTest.specs
-#ifndef WITH_POSTGRESQL // FIXME
+#ifndef WITH_POSTGRESQL
     DataTypeTest.specs
 #endif
     HtmlTest.specs
