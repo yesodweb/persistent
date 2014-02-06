@@ -415,7 +415,6 @@ getColumns getter def = do
                           ,"AND c.table_name=? "
                           ,"AND c.table_name=k.table_name "
                           ,"AND c.column_name <> ? "
-                          ,"AND c.ordinal_position=1 "
                           ,"AND c.constraint_name=k.constraint_name "
                           ,"AND NOT k.constraint_type IN ('PRIMARY KEY', 'FOREIGN KEY') "
                           ,"ORDER BY c.constraint_name, c.column_name"]
