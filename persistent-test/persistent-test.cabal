@@ -133,6 +133,7 @@ library
                    , bson
                    , silently
                    , blaze-builder
+                   , scientific
 
    if flag(nooverlap)
      cpp-options: -DNO_OVERLAP
@@ -193,6 +194,7 @@ test-suite test
                    , system-filepath
                    , system-fileio
                    , resourcet
+                   , scientific
 
     if flag(mongodb)
         cpp-options: -DWITH_MONGODB -DDEBUG
