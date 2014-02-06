@@ -25,6 +25,7 @@ share [mkPersist sqlSettings, mkMigrate "migrationMigrate", mkDeleteCascade sqlS
 Target
     field1 Int
     field2 T.Text
+    UniqueTarget field1 field2
     deriving Eq Show
 
 Source
@@ -35,6 +36,10 @@ specs :: Spec
 specs = describe "Migration" $ do
 #ifndef WITH_MONGODB
     it "is idempotent" $ db $ do
+      again <- getMigration migrationMigrate
+      liftIO $ again @?= []
+    it "really is idempotent" $ db $ do
+      runMigration migrationMigrate
       again <- getMigration migrationMigrate
       liftIO $ again @?= []
 #endif
