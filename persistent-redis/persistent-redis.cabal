@@ -58,4 +58,5 @@ test-suite  basic
                    , template-haskell
                    , monad-control         >= 0.3.2.0  && < 0.3.3.0
                    , utf8-string           >= 0.3.7    && < 0.4.0
+                   , scientific
                    , persistent-redis
