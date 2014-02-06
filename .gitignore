@@ -22,8 +22,8 @@ persistent-test/test/testdb.sqlite3
 ## Cabal sandboxing tools
 .virthualenv
 cabal-dev/
-# hsenv did this
-dist_y
+cabal.sandbox.config
+.cabal-sandbox/
 
 ## Docker image ignores
 .bash_history
