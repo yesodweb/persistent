@@ -49,7 +49,7 @@ import qualified Blaze.ByteString.Builder.Char8 as BBB
 import qualified Blaze.ByteString.Builder.ByteString as BBS
 
 import Data.Time.LocalTime (localTimeToUTC, utc)
-import Data.Text (Text, pack)
+import Data.Text (Text)
 import Data.Aeson
 import Control.Monad (forM, mzero)
 import System.Environment (getEnvironment)
@@ -135,7 +135,7 @@ prepare' conn sql = do
         , stmtExecute = execute' conn query
         , stmtQuery = withStmt' conn query
         }
-        
+
 insertSql' :: EntityDef SqlType -> [PersistValue] -> InsertSqlResult
 insertSql' ent vals =
   let sql = T.concat
@@ -339,23 +339,23 @@ migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
             if not exists
                 then do
                     let idtxt = case entityPrimary val of
-                                  Just pdef -> concat [" PRIMARY KEY (", intercalate "," $ map (T.unpack . escape . snd) $ primaryFields pdef, ")"]
-                                  Nothing   -> concat [T.unpack $ escape $ entityID val
+                                  Just pdef -> T.concat [" PRIMARY KEY (", T.intercalate "," $ map (escape . snd) $ primaryFields pdef, ")"]
+                                  Nothing   -> T.concat [escape $ entityID val
                                         , " SERIAL PRIMARY KEY UNIQUE"]
-                    let addTable = AddTable $ concat
+                    let addTable = AddTable $ T.concat
                             -- Lower case e: see Database.Persist.Sql.Migration
                             [ "CREATe TABLE "
-                            , T.unpack $ escape name
+                            , escape name
                             , "("
                             , idtxt
-                            , if null newcols then [] else ","
-                            , intercalate "," $ map showColumn newcols
+                            , if null newcols then "" else ","
+                            , T.intercalate "," $ map showColumn newcols
                             , ")"
                             ]
                     let uniques = flip concatMap udspair $ \(uname, ucols) ->
                             [AlterTable name $ AddUniqueConstraint uname ucols]
                         references = mapMaybe (\c@Column { cName=cname, cReference=Just (refTblName, _) } -> getAddReference allDefs name refTblName cname (cReference c)) $ filter (\c -> cReference c /= Nothing) newcols
-                        foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\(_,b,_,d) -> (b,d)) (foreignFields fdef)) 
+                        foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\(_,b,_,d) -> (b,d)) (foreignFields fdef))
                                                     in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignConstraintNameDBName fdef) childfields parentfields)) fdefs
                     return $ Right $ addTable : uniques ++ references ++ foreignsAlt
                 else do
@@ -368,14 +368,14 @@ migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
 type SafeToRemove = Bool
 
 data AlterColumn = Type SqlType | IsNull | NotNull | Add' Column | Drop SafeToRemove
-                 | Default String | NoDefault | Update' String
+                 | Default Text | NoDefault | Update' Text
                  | AddReference DBName [DBName] [DBName] | DropReference DBName
 type AlterColumn' = (DBName, AlterColumn)
 
 data AlterTable = AddUniqueConstraint DBName [DBName]
                 | DropConstraint DBName
 
-data AlterDB = AddTable String
+data AlterDB = AddTable Text
              | AlterColumn DBName AlterColumn'
              | AlterTable DBName AlterTable
 
@@ -396,14 +396,14 @@ getColumns getter def = do
                           ,"AND table_schema=current_schema() "
                           ,"AND table_name=? "
                           ,"AND column_name <> ?"]
-  
+
     stmt <- getter sqlv
     let vals =
             [ PersistText $ unDBName $ entityDB def
             , PersistText $ unDBName $ entityID def
             ]
     cs <- runResourceT $ stmtQuery stmt vals $$ helper
-    let sqlc=concat ["SELECT "
+    let sqlc = T.concat ["SELECT "
                           ,"c.constraint_name, "
                           ,"c.column_name "
                           ,"FROM information_schema.key_column_usage c, "
@@ -419,8 +419,8 @@ getColumns getter def = do
                           ,"AND NOT k.constraint_type IN ('PRIMARY KEY', 'FOREIGN KEY') "
                           ,"ORDER BY c.constraint_name, c.column_name"]
 
-    stmt' <- getter $ pack sqlc
-        
+    stmt' <- getter sqlc
+
     us <- runResourceT $ stmtQuery stmt' vals $$ helperU
     return $ cs ++ us
   where
@@ -429,7 +429,7 @@ getColumns getter def = do
         case x of
             Nothing -> return $ front []
             Just [PersistText con, PersistText col] -> getAll (front . (:) (con, col))
-            Just [PersistByteString con, PersistByteString col] -> getAll (front . (:) (T.decodeUtf8 con, T.decodeUtf8 col)) 
+            Just [PersistByteString con, PersistByteString col] -> getAll (front . (:) (T.decodeUtf8 con, T.decodeUtf8 col))
             Just o -> error $ "unexpected datatype returned for postgres o="++show o
     helperU = do
         rows <- getAll id
@@ -511,7 +511,7 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, ns
                         }
   where
     getRef cname = do
-        let sql = pack $ concat
+        let sql = T.concat
                 [ "SELECT COUNT(*) FROM "
                 , "information_schema.table_constraints "
                 , "WHERE table_catalog=current_database() "
@@ -531,7 +531,7 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, ns
     d' = case d of
             PersistNull   -> Right Nothing
             PersistText t -> Right $ Just t
-            _ -> Left $ pack $ "Invalid default column: " ++ show d
+            _ -> Left $ T.pack $ "Invalid default column: " ++ show d
     getType "int4"        = Right $ SqlInt32
     getType "int8"        = Right $ SqlInt64
     getType "varchar"     = Right $ SqlString
@@ -547,9 +547,9 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, ns
     getType a             = Right $ SqlOther a
 
     getNumeric (PersistInt64 a) (PersistInt64 b) = Right $ SqlNumeric (fromIntegral a) (fromIntegral b)
-    getNumeric a b = Left $ pack $ "Can not get numeric field precision, got: " ++ show a ++ " and " ++ show b ++ " as precision and scale"
+    getNumeric a b = Left $ T.pack $ "Can not get numeric field precision, got: " ++ show a ++ " and " ++ show b ++ " as precision and scale"
 getColumn _ _ x =
-    return $ Left $ pack $ "Invalid result from information_schema: " ++ show x
+    return $ Left $ T.pack $ "Invalid result from information_schema: " ++ show x
 
 findAlters :: [EntityDef a] -> DBName -> Column -> [Column] -> ([AlterColumn'], [Column])
 findAlters defs tablename col@(Column name isNull sqltype def defConstraintName _maxLen ref) cols =
@@ -562,7 +562,7 @@ findAlters defs tablename col@(Column name isNull sqltype def defConstraintName 
                 refAdd (Just (tname, a)) = case find ((==tname) . entityDB) defs of
                                                 Just refdef -> [(tname, AddReference a [name] [entityID refdef])]
                                                 Nothing -> error $ "could not find the entityDef for reftable[" ++ show tname ++ "]"
-                modRef = 
+                modRef =
                     if fmap snd ref == fmap snd ref'
                         then []
                         else refDrop ref' ++ refAdd ref
@@ -571,7 +571,7 @@ findAlters defs tablename col@(Column name isNull sqltype def defConstraintName 
                             (False, True) ->
                                 let up = case def of
                                             Nothing -> id
-                                            Just s -> (:) (name, Update' $ T.unpack s)
+                                            Just s -> (:) (name, Update' s)
                                  in up [(name, NotNull)]
                             _ -> []
                 modType = if sqltype == sqltype' then [] else [(name, Type sqltype)]
@@ -580,7 +580,7 @@ findAlters defs tablename col@(Column name isNull sqltype def defConstraintName 
                         then []
                         else case def of
                                 Nothing -> [(name, NoDefault)]
-                                Just s -> [(name, Default $ T.unpack s)]
+                                Just s -> [(name, Default s)]
              in (modRef ++ modDef ++ modNull ++ modType,
                  filter (\c -> cName c /= name) cols)
 
@@ -595,145 +595,145 @@ getAddReference allDefs table reftable cname ref =
                                         id $ do
                                           entDef <- find ((== reftable) . entityDB) allDefs
                                           return (entityID entDef)
-                          
 
-showColumn :: Column -> String
-showColumn c@(Column n nu sqlType def defConstraintName _maxLen _ref) = concat
-    [ T.unpack $ escape n
+
+showColumn :: Column -> Text
+showColumn c@(Column n nu sqlType def defConstraintName _maxLen _ref) = T.concat
+    [ escape n
     , " "
     , showSqlType sqlType
     , " "
     , if nu then "NULL" else "NOT NULL"
     , case def of
         Nothing -> ""
-        Just s -> " DEFAULT " ++ T.unpack s
+        Just s -> " DEFAULT " <> s
     ]
 
-showSqlType :: SqlType -> String
+showSqlType :: SqlType -> Text
 showSqlType SqlString = "VARCHAR"
 showSqlType SqlInt32 = "INT4"
 showSqlType SqlInt64 = "INT8"
 showSqlType SqlReal = "DOUBLE PRECISION"
-showSqlType (SqlNumeric s prec) = "NUMERIC(" ++ show s ++ "," ++ show prec ++ ")"
+showSqlType (SqlNumeric s prec) = T.concat [ "NUMERIC(", T.pack (show s), ",", T.pack (show prec), ")" ]
 showSqlType SqlDay = "DATE"
 showSqlType SqlTime = "TIME"
 showSqlType SqlDayTime = "TIMESTAMP"
 showSqlType SqlDayTimeZoned = "TIMESTAMP WITH TIME ZONE"
 showSqlType SqlBlob = "BYTEA"
 showSqlType SqlBool = "BOOLEAN"
-showSqlType (SqlOther t) = T.unpack t
+showSqlType (SqlOther t) = t
 
 showAlterDb :: AlterDB -> (Bool, Text)
-showAlterDb (AddTable s) = (False, pack s)
+showAlterDb (AddTable s) = (False, s)
 showAlterDb (AlterColumn t (c, ac)) =
-    (isUnsafe ac, pack $ showAlter t (c, ac))
+    (isUnsafe ac, showAlter t (c, ac))
   where
-    isUnsafe (Drop safeToRemove) = not safeToRemove
+    isUnsafe (Drop safeRemove) = not safeRemove
     isUnsafe _ = False
-showAlterDb (AlterTable t at) = (False, pack $ showAlterTable t at)
+showAlterDb (AlterTable t at) = (False, showAlterTable t at)
 
-showAlterTable :: DBName -> AlterTable -> String
-showAlterTable table (AddUniqueConstraint cname cols) = concat
+showAlterTable :: DBName -> AlterTable -> Text
+showAlterTable table (AddUniqueConstraint cname cols) = T.concat
     [ "ALTER TABLE "
-    , T.unpack $ escape table
+    , escape table
     , " ADD CONSTRAINT "
-    , T.unpack $ escape cname
+    , escape cname
     , " UNIQUE("
-    , intercalate "," $ map (T.unpack . escape) cols
+    , T.intercalate "," $ map escape cols
     , ")"
     ]
-showAlterTable table (DropConstraint cname) = concat
+showAlterTable table (DropConstraint cname) = T.concat
     [ "ALTER TABLE "
-    , T.unpack $ escape table
+    , escape table
     , " DROP CONSTRAINT "
-    , T.unpack $ escape cname
+    , escape cname
     ]
 
-showAlter :: DBName -> AlterColumn' -> String
+showAlter :: DBName -> AlterColumn' -> Text
 showAlter table (n, Type t) =
-    concat
+    T.concat
         [ "ALTER TABLE "
-        , T.unpack $ escape table
+        , escape table
         , " ALTER COLUMN "
-        , T.unpack $ escape n
+        , escape n
         , " TYPE "
         , showSqlType t
         ]
 showAlter table (n, IsNull) =
-    concat
+    T.concat
         [ "ALTER TABLE "
-        , T.unpack $ escape table
+        , escape table
         , " ALTER COLUMN "
-        , T.unpack $ escape n
+        , escape n
         , " DROP NOT NULL"
         ]
 showAlter table (n, NotNull) =
-    concat
+    T.concat
         [ "ALTER TABLE "
-        , T.unpack $ escape table
+        , escape table
         , " ALTER COLUMN "
-        , T.unpack $ escape n
+        , escape n
         , " SET NOT NULL"
         ]
 showAlter table (_, Add' col) =
-    concat
+    T.concat
         [ "ALTER TABLE "
-        , T.unpack $ escape table
+        , escape table
         , " ADD COLUMN "
         , showColumn col
         ]
 showAlter table (n, Drop _) =
-    concat
+    T.concat
         [ "ALTER TABLE "
-        , T.unpack $ escape table
+        , escape table
         , " DROP COLUMN "
-        , T.unpack $ escape n
+        , escape n
         ]
 showAlter table (n, Default s) =
-    concat
+    T.concat
         [ "ALTER TABLE "
-        , T.unpack $ escape table
+        , escape table
         , " ALTER COLUMN "
-        , T.unpack $ escape n
+        , escape n
         , " SET DEFAULT "
         , s
         ]
-showAlter table (n, NoDefault) = concat
+showAlter table (n, NoDefault) = T.concat
     [ "ALTER TABLE "
-    , T.unpack $ escape table
+    , escape table
     , " ALTER COLUMN "
-    , T.unpack $ escape n
+    , escape n
     , " DROP DEFAULT"
     ]
-showAlter table (n, Update' s) = concat
+showAlter table (n, Update' s) = T.concat
     [ "UPDATE "
-    , T.unpack $ escape table
+    , escape table
     , " SET "
-    , T.unpack $ escape n
+    , escape n
     , "="
     , s
     , " WHERE "
-    , T.unpack $ escape n
+    , escape n
     , " IS NULL"
     ]
-showAlter table (reftable, AddReference fkeyname t2 id2) = concat
+showAlter table (reftable, AddReference fkeyname t2 id2) = T.concat
     [ "ALTER TABLE "
-    , T.unpack $ escape table
+    , escape table
     , " ADD CONSTRAINT "
-    , T.unpack $ escape fkeyname
+    , escape fkeyname
     , " FOREIGN KEY("
-    , T.unpack $ T.intercalate "," $ map escape t2
+    , T.intercalate "," $ map escape t2
     , ") REFERENCES "
-    , T.unpack $ escape reftable
+    , escape reftable
     , "("
-    , T.unpack $ T.intercalate "," $ map escape id2
+    , T.intercalate "," $ map escape id2
     , ")"
     ]
-showAlter table (_, DropReference cname) = concat
+showAlter table (_, DropReference cname) = T.concat
     [ "ALTER TABLE "
-    , T.unpack (escape table)
+    , escape table
     , " DROP CONSTRAINT "
-    , T.unpack $ escape cname
+    , escape cname
     ]
 
 escape :: DBName -> Text
