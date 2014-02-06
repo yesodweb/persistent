@@ -9,3 +9,6 @@ script:
     - mega-sdist --test
     - cd persistent-test
     - cabal install --enable-tests --force-reinstalls
+
+services:
+    - redis-server
