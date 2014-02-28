@@ -10,6 +10,7 @@ stability:       Stable
 cabal-version:   >= 1.6
 build-type:      Simple
 homepage:        http://www.yesodweb.com/book/persistent
+bug-reports:     https://github.com/yesodweb/persistent/issues
 description:
     This package contains a backend for persistent using the
     MySQL database server.  Internally it uses the @mysql-simple@

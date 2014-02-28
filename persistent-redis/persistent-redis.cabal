@@ -10,6 +10,7 @@ stability:       Experimental
 cabal-version:   >= 1.8
 maintainer:      Pavel Ryzhov <paul@paulrz.cz>
 build-type:      Simple
+bug-reports:     https://github.com/yesodweb/persistent/issues
 
 source-repository head
         type:           git
