@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE ViewPatterns #-}
 
 -- | A postgresql backend for persistent.
 module Database.Persist.Postgresql
@@ -551,6 +552,11 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, ns
 getColumn _ _ x =
     return $ Left $ T.pack $ "Invalid result from information_schema: " ++ show x
 
+-- | Intelligent comparison of SQL types, to account for SqlInt32 vs SqlOther integer
+sqlTypeEq :: SqlType -> SqlType -> Bool
+sqlTypeEq x y =
+    T.toCaseFold (showSqlType x) == T.toCaseFold (showSqlType y)
+
 findAlters :: [EntityDef a] -> DBName -> Column -> [Column] -> ([AlterColumn'], [Column])
 findAlters defs tablename col@(Column name isNull sqltype def defConstraintName _maxLen ref) cols =
     case filter (\c -> cName c == name) cols of
@@ -574,7 +580,7 @@ findAlters defs tablename col@(Column name isNull sqltype def defConstraintName 
                                             Just s -> (:) (name, Update' s)
                                  in up [(name, NotNull)]
                             _ -> []
-                modType = if sqltype == sqltype' then [] else [(name, Type sqltype)]
+                modType = if sqlTypeEq sqltype sqltype' then [] else [(name, Type sqltype)]
                 modDef =
                     if def == def'
                         then []
@@ -621,6 +627,10 @@ showSqlType SqlDayTime = "TIMESTAMP"
 showSqlType SqlDayTimeZoned = "TIMESTAMP WITH TIME ZONE"
 showSqlType SqlBlob = "BYTEA"
 showSqlType SqlBool = "BOOLEAN"
+
+-- Added for aliasing issues re: https://github.com/yesodweb/yesod/issues/682
+showSqlType (SqlOther (T.toLower -> "integer")) = "INT4"
+
 showSqlType (SqlOther t) = t
 
 showAlterDb :: AlterDB -> (Bool, Text)
