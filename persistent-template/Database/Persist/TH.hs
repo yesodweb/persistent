@@ -20,7 +20,7 @@ module Database.Persist.TH
     , mpsPrefixFields
     , mpsEntityJSON
     , mpsGenerateLenses
-    , EntityJSON, entityToJSON, entityFromJSON
+    , EntityJSON(..)
     , mkPersistSettings
     , sqlSettings
     , sqlOnlySettings
