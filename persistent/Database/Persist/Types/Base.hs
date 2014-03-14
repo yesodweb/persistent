@@ -12,7 +12,6 @@ import Control.Monad.Trans.Error (Error (..))
 import Data.Typeable (Typeable)
 import Data.Text (Text, pack)
 import qualified Data.Text as T
-import qualified Data.Attoparsec.Number as AN
 import qualified Data.Text.Encoding as TE
 import Data.Text.Encoding.Error (lenientDecode)
 import qualified Data.ByteString.Base64 as B64
