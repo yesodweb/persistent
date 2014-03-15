@@ -12,7 +12,6 @@ import Control.Monad.Trans.Error (Error (..))
 import Data.Typeable (Typeable)
 import Data.Text (Text, pack)
 import qualified Data.Text as T
-import qualified Data.Attoparsec.Number as AN
 import qualified Data.Text.Encoding as TE
 import Data.Text.Encoding.Error (lenientDecode)
 import qualified Data.ByteString.Base64 as B64
@@ -32,6 +31,8 @@ import Data.Word (Word32)
 import Numeric (showHex, readHex)
 #if MIN_VERSION_aeson(0, 7, 0)
 import qualified Data.Scientific
+#else
+import qualified Data.Attoparsec.Number as AN
 #endif
 
 -- | A 'Checkmark' should be used as a field type whenever a
