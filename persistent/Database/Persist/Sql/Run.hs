@@ -3,7 +3,7 @@ module Database.Persist.Sql.Run where
 
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
-import Data.Conduit.Pool
+import Data.Pool
 import Control.Monad.Trans.Control
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Resource
@@ -15,6 +15,9 @@ import Control.Exception.Lifted (bracket)
 import Data.IORef (readIORef)
 import qualified Data.Map as Map
 import Control.Exception.Lifted (throwIO)
+import Control.Exception (mask)
+import Control.Monad (liftM)
+import System.Timeout (timeout)
 
 -- | Get a connection from the pool, run the given action, and then return the
 -- connection to the pool.
@@ -22,6 +25,28 @@ runSqlPool :: MonadBaseControl IO m => SqlPersistT m a -> Pool Connection -> m a
 runSqlPool r pconn = do
     mres <- withResourceTimeout 2000000 pconn $ runSqlConn r
     maybe (throwIO Couldn'tGetSQLConnection) return mres
+
+-- | Like 'withResource', but times out the operation if resource
+-- allocation does not complete within the given timeout period.
+--
+-- Since 2.0.0
+withResourceTimeout ::
+    (MonadBaseControl IO m)
+  => Int -- ^ Timeout period in microseconds
+  -> Pool a
+  -> (a -> m b)
+  -> m (Maybe b)
+{-# SPECIALIZE withResourceTimeout :: Int -> Pool a -> (a -> IO b) -> IO (Maybe b) #-}
+withResourceTimeout ms pool act = control $ \runInIO -> mask $ \restore -> do
+    mres <- timeout ms $ takeResource pool
+    case mres of
+        Nothing -> runInIO $ return Nothing
+        Just (resource, local) -> do
+            ret <- restore (runInIO (liftM Just $ act resource)) `onException`
+                    destroyResource pool local resource
+            putResource local resource
+            return ret
+{-# INLINABLE withResourceTimeout #-}
 
 runSqlConn :: MonadBaseControl IO m => SqlPersistT m a -> Connection -> m a
 runSqlConn r conn = do
