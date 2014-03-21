@@ -28,7 +28,7 @@ import Data.IORef (IORef)
 import Data.Map (Map)
 import Data.Int (Int64)
 import Data.Conduit (Source)
-import Data.Conduit.Pool (Pool)
+import Data.Pool (Pool)
 import Web.PathPieces
 import Control.Exception (throw)
 import qualified Data.Text.Read
