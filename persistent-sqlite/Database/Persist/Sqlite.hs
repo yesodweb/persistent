@@ -34,6 +34,8 @@ import Control.Applicative
 import Data.Int (Int64)
 import Control.Monad ((>=>))
 import Data.Monoid ((<>))
+import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.Trans.Resource (ResourceT, MonadResource, runResourceT)
 
 createSqlitePool :: MonadIO m => Text -> Int -> m ConnectionPool
 createSqlitePool s = createSqlPool $ open' s

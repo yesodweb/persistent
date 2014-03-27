@@ -113,6 +113,8 @@ import Data.Char (toUpper)
 import Data.Word (Word16)
 import Data.Monoid (mappend)
 import Data.Typeable
+import Control.Monad.Trans.Resource (MonadThrow (..))
+import Control.Monad.Trans.Control (MonadBaseControl)
 
 #ifdef DEBUG
 import FileLocation (debug)
@@ -392,7 +394,11 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
             t = entityDef $ Just $ dummyFromKey k
 
 instance MonadThrow m => MonadThrow (DB.Action m) where
+#if MIN_VERSION_resourcet(1,1,0)
+    throwM = lift . throwM
+#else
     monadThrow = lift . monadThrow
+#endif
 
 instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => PersistUnique (DB.Action m) where
     getBy uniq = do

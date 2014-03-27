@@ -18,8 +18,9 @@ import Control.Monad.IO.Class
 import Data.ByteString.Char8 (readInteger)
 import Data.Maybe (isJust)
 import Data.List (find)
+import Control.Monad.Trans.Resource (MonadResource)
 
-instance (C.MonadResource m, MonadLogger m) => PersistStore (SqlPersistT m) where
+instance (MonadResource m, MonadLogger m) => PersistStore (SqlPersistT m) where
     type PersistMonadBackend (SqlPersistT m) = SqlBackend
     insert val = do
         conn <- askSqlConn

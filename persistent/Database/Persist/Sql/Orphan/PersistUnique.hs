@@ -12,6 +12,7 @@ import Data.Monoid ((<>))
 import Control.Monad.Logger
 import qualified Data.Conduit.List as CL
 import Data.Conduit
+import Control.Monad.Trans.Resource (MonadResource)
 
 instance (MonadResource m, MonadLogger m) => PersistUnique (SqlPersistT m) where
     deleteBy uniq = do

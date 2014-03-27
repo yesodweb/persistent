@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -93,8 +94,13 @@ type SqlPersist = SqlPersistT
 
 type SqlPersistM = SqlPersistT (NoLoggingT (ResourceT IO))
 
+#if MIN_VERSION_resourcet(1,1,0)
+instance MonadThrow m => MonadThrow (SqlPersistT m) where
+    throwM = lift . throwM
+#else
 instance MonadThrow m => MonadThrow (SqlPersistT m) where
     monadThrow = lift . monadThrow
+#endif
 
 instance MonadBase backend m => MonadBase backend (SqlPersistT m) where
     liftBase = lift . liftBase

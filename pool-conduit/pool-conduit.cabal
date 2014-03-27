@@ -1,5 +1,5 @@
 name:            pool-conduit
-version:         0.1.2.1
+version:         0.1.2.2
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -18,7 +18,7 @@ library
     build-depends:   base                     >= 4       && < 5
                    , resource-pool            >= 0.2.1   && < 0.3
                    , transformers             >= 0.2.1
-                   , resourcet                >= 0.3     && < 0.5
+                   , resourcet                >= 0.3     && < 1.2
                    , monad-control
 
     exposed-modules: Data.Conduit.Pool

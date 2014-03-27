@@ -19,6 +19,8 @@ module Database.Persist.Postgresql
 
 import Database.Persist.Sql
 import Data.Fixed (Pico)
+import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.Trans.Resource (MonadResource, runResourceT)
 
 import qualified Database.PostgreSQL.Simple as PG
 import qualified Database.PostgreSQL.Simple.BuiltinTypes as PG

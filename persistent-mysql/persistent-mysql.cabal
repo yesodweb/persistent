@@ -1,5 +1,5 @@
 name:            persistent-mysql
-version:         1.3.0.1
+version:         1.3.0.2
 license:         MIT
 license-file:    LICENSE
 author:          Felipe Lessa <felipe.lessa@gmail.com>, Michael Snoyman
@@ -37,6 +37,7 @@ library
                    , monad-control         >= 0.2
                    , aeson                 >= 0.5
                    , conduit               >= 0.5.3
+                   , resourcet
     exposed-modules: Database.Persist.MySQL
     ghc-options:     -Wall
 

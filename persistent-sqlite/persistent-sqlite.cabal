@@ -1,5 +1,5 @@
 name:            persistent-sqlite
-version:         1.3.0.3
+version:         1.3.0.4
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -31,6 +31,7 @@ library
                    , aeson                   >= 0.5
                    , conduit                 >= 0.5.3
                    , monad-logger            >= 0.2.4
+                   , resourcet
     exposed-modules: Database.Sqlite
                      Database.Persist.Sqlite
     ghc-options:     -Wall
