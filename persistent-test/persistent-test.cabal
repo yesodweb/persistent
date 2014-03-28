@@ -48,6 +48,7 @@ library
                      PersistTestPetType
                      RenameTest
                      DataTypeTest
+                     EmptyEntityTest
                      HtmlTest
                      EmbedTest
                      EmbedOrderTest
@@ -135,6 +136,7 @@ library
                    , silently
                    , blaze-builder
                    , scientific
+                   , resource-pool
 
    if flag(nooverlap)
      cpp-options: -DNO_OVERLAP

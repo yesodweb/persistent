@@ -125,11 +125,15 @@ insertSql' ent vals =
           ins = T.concat
               [ "INSERT INTO "
               , escape $ entityDB ent
-              , "("
-              , T.intercalate "," $ map (escape . fieldDB) $ entityFields ent
-              , ") VALUES("
-              , T.intercalate "," (map (const "?") $ entityFields ent)
-              , ")"
+              , if null (entityFields ent)
+                    then " VALUES(null)"
+                    else T.concat
+                      [ "("
+                      , T.intercalate "," $ map (escape . fieldDB) $ entityFields ent
+                      , ") VALUES("
+                      , T.intercalate "," (map (const "?") $ entityFields ent)
+                      , ")"
+                      ]
               ]
 
 execute' :: Sqlite.Connection -> Sqlite.Statement -> [PersistValue] -> IO Int64

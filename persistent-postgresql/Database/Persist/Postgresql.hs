@@ -144,11 +144,15 @@ insertSql' ent vals =
   let sql = T.concat
                 [ "INSERT INTO "
                 , escape $ entityDB ent
-                , "("
-                , T.intercalate "," $ map (escape . fieldDB) $ entityFields ent
-                , ") VALUES("
-                , T.intercalate "," (map (const "?") $ entityFields ent)
-                , ")"
+                , if null (entityFields ent)
+                    then " DEFAULT VALUES"
+                    else T.concat
+                        [ "("
+                        , T.intercalate "," $ map (escape . fieldDB) $ entityFields ent
+                        , ") VALUES("
+                        , T.intercalate "," (map (const "?") $ entityFields ent)
+                        , ")"
+                        ]
                 ]
   in case entityPrimary ent of
        Just pdef -> ISRManyKeys sql vals
