@@ -1,4 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE EmptyDataDecls #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -19,11 +21,9 @@ module Database.Persist.Postgresql
 
 import Database.Persist.Sql
 import Data.Fixed (Pico)
-import Control.Monad.Trans.Control (MonadBaseControl)
-import Control.Monad.Trans.Resource (MonadResource, runResourceT)
 
 import qualified Database.PostgreSQL.Simple as PG
-import qualified Database.PostgreSQL.Simple.BuiltinTypes as PG
+import qualified Database.PostgreSQL.Simple.TypeInfo as PG
 import qualified Database.PostgreSQL.Simple.Internal as PG
 import qualified Database.PostgreSQL.Simple.ToField as PGTF
 import qualified Database.PostgreSQL.Simple.FromField as PGFF
@@ -37,9 +37,10 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Data.Typeable
 import Data.IORef
 import qualified Data.Map as Map
+import Data.Maybe
 import Data.Either (partitionEithers)
 import Control.Arrow
-import Data.List (find, intercalate, sort, groupBy)
+import Data.List (find, sort, groupBy)
 import Data.Function (on)
 import Data.Conduit
 import qualified Data.Conduit.List as CL
@@ -49,7 +50,6 @@ import qualified Data.ByteString.Char8 as B8
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Blaze.ByteString.Builder.Char8 as BBB
-import qualified Blaze.ByteString.Builder.ByteString as BBS
 
 import Data.Time.LocalTime (localTimeToUTC, utc)
 import Data.Text (Text)
@@ -57,7 +57,7 @@ import Data.Aeson
 import Control.Monad (forM, mzero)
 import System.Environment (getEnvironment)
 import Data.Int (Int64)
-import Data.Maybe (mapMaybe, fromJust, isJust, fromMaybe)
+import Data.Maybe (mapMaybe, fromMaybe)
 import Data.Monoid ((<>))
 -- | A @libpq@ connection string.  A simple example of connection
 -- string would be @\"host=localhost port=5432 user=test
@@ -107,13 +107,12 @@ withPostgresqlConn :: (MonadIO m, MonadBaseControl IO m)
 withPostgresqlConn = withSqlConn . open'
 
 open' :: ConnectionString -> IO Connection
-open' cstr = do
-    PG.connectPostgreSQL cstr >>= openSimpleConn
+open' cstr = PG.connectPostgreSQL cstr >>= openSimpleConn
 
 -- | Generate a 'Connection' from a 'PG.Connection'
 openSimpleConn :: PG.Connection -> IO Connection
 openSimpleConn conn = do
-    smap <- newIORef $ Map.empty
+    smap <- newIORef Map.empty
     return Connection
         { connPrepare    = prepare' conn
         , connStmtMap    = smap
@@ -155,7 +154,7 @@ insertSql' ent vals =
                         ]
                 ]
   in case entityPrimary ent of
-       Just pdef -> ISRManyKeys sql vals
+       Just _pdef -> ISRManyKeys sql vals
        Nothing -> ISRSingle (sql <> " RETURNING " <> escape (entityID ent))
 
 execute' :: PG.Connection -> PG.Query -> [PersistValue] -> IO Int64
@@ -174,7 +173,7 @@ withStmt' conn query vals =
       rawquery <- PG.formatQuery conn query (map P vals)
 
       -- Take raw connection
-      PG.withConnection conn $ \rawconn -> do
+      (rt, rr, rc, ids) <- PG.withConnection conn $ \rawconn -> do
             -- Execute query
             mret <- LibPQ.exec rawconn rawquery
             case mret of
@@ -192,23 +191,19 @@ withStmt' conn query vals =
                     msg <- LibPQ.resStatus status
                     mmsg <- LibPQ.resultErrorMessage ret
                     fail $ "Postgresql.withStmt': bad result status " ++
-                           show status ++ " (" ++ (maybe (show msg) (show . (,) msg) mmsg) ++ ")"
+                           show status ++ " (" ++ maybe (show msg) (show . (,) msg) mmsg ++ ")"
 
                 -- Get number and type of columns
                 cols <- LibPQ.nfields ret
-                getters <- forM [0..cols-1] $ \col -> do
-                  oid <- LibPQ.ftype ret col
-                  case PG.oid2builtin oid of
-                    Nothing -> return $ \bs->
-                      case bs of
-                        Nothing -> fail $ "Unexpected null value in backend specific value"
-                        Just a  -> return $ PersistDbSpecific a
-                    Just bt -> return $ getGetter bt $
-                               PG.Field ret col oid
+                oids <- forM [0..cols-1] $ \col -> fmap ((,) col) (LibPQ.ftype ret col)
                 -- Ready to go!
                 rowRef   <- newIORef (LibPQ.Row 0)
                 rowCount <- LibPQ.ntuples ret
-                return (ret, rowRef, rowCount, getters)
+                return (ret, rowRef, rowCount, oids)
+      getters <- forM ids $ \(col, oid) -> do
+          ty <- PG.getTypeInfo conn oid
+          return $ getGetter ty $ PG.Field rt col oid
+      return (rt, rr, rc, getters)
 
     closeS (ret, _, _, _) = LibPQ.unsafeFreeResult ret
 
@@ -275,34 +270,45 @@ convertPV :: PGFF.FromField a => (a -> b) -> Getter b
 convertPV f = (fmap f .) . PGFF.fromField
 
 -- FIXME: check if those are correct and complete.
-getGetter :: PG.BuiltinType -> Getter PersistValue
-getGetter PG.Bool                  = convertPV PersistBool
-getGetter PG.ByteA                 = convertPV (PersistByteString . unBinary)
-getGetter PG.Char                  = convertPV PersistText
-getGetter PG.Name                  = convertPV PersistText
-getGetter PG.Int8                  = convertPV PersistInt64
-getGetter PG.Int2                  = convertPV PersistInt64
-getGetter PG.Int4                  = convertPV PersistInt64
-getGetter PG.Text                  = convertPV PersistText
-getGetter PG.Xml                   = convertPV PersistText
-getGetter PG.Float4                = convertPV PersistDouble
-getGetter PG.Float8                = convertPV PersistDouble
-getGetter PG.AbsTime               = convertPV PersistUTCTime
-getGetter PG.RelTime               = convertPV PersistUTCTime
-getGetter PG.Money                 = convertPV PersistDouble
-getGetter PG.BpChar                = convertPV PersistText
-getGetter PG.VarChar               = convertPV PersistText
-getGetter PG.Date                  = convertPV PersistDay
-getGetter PG.Time                  = convertPV PersistTimeOfDay
-getGetter PG.Timestamp             = convertPV (PersistUTCTime . localTimeToUTC utc)
-getGetter PG.TimestampTZ           = convertPV (PersistZonedTime . ZT)
-getGetter PG.Bit                   = convertPV PersistInt64
-getGetter PG.VarBit                = convertPV PersistInt64
-getGetter PG.Numeric               = convertPV PersistRational
-getGetter PG.Void                  = \_ _ -> return PersistNull
-getGetter PG.UUID                  = convertPV (PersistDbSpecific . unUnknown)
-getGetter other   = error $ "Postgresql.getGetter: type " ++
-                            show other ++ " not supported."
+getGetter :: PG.TypeInfo -> Getter PersistValue
+getGetter ty@(PG.typname -> typ) = case typ of
+    "bool"                            -> convertPV PersistBool
+    "bytea"                           -> convertPV (PersistByteString . unBinary)
+    "char"                            -> convertPV PersistText
+    "name"                            -> convertPV PersistText
+    "int8"                            -> convertPV PersistInt64
+    "int2"                            -> convertPV PersistInt64
+    "int4"                            -> convertPV PersistInt64
+    "text"                            -> convertPV PersistText
+    "xml"                             -> convertPV PersistText
+    "float4"                          -> convertPV PersistDouble
+    "float8"                          -> convertPV PersistDouble
+    "abstime"                         -> convertPV PersistUTCTime
+    "reltime"                         -> convertPV PersistUTCTime
+    "money"                           -> convertPV PersistDouble
+    "bpchar"                          -> convertPV PersistText
+    "varchar"                         -> convertPV PersistText
+    "date"                            -> convertPV PersistDay
+    "time"                            -> convertPV PersistTimeOfDay
+    "timestamp"                       -> convertPV (PersistUTCTime . localTimeToUTC utc)
+    "timestamptz"                     -> convertPV (PersistZonedTime . ZT)
+    "bit"                             -> convertPV PersistInt64
+    "varbit"                          -> convertPV PersistInt64
+    "numeric"                         -> convertPV PersistRational
+    "void"                            -> \_ _ -> return PersistNull
+    "uuid"                            -> convertPV (PersistDbSpecific . unUnknown)
+    "json"                            -> convertPV (PersistByteString . unUnknown)
+    _                             -> error $ "Postgresql.getGetter: type " ++ show ty ++ " not supported."
+
+{- TODO: figure out how to reduce duplication here
+getGetter PG.Array { PG.typelem = elm } = case PG.typname elm of
+    "bool" -> listOf PersistBool
+    "varchar" -> listOf PersistText
+    "json" -> listOf (PersistByteString . unUnknown)
+    ty      -> error $ "Postgresql.getGetter: type " ++ show ty ++ " not supported."
+    where
+        listOf x = convertPV (PersistList . map x . PG.fromPGArray)
+-}
 
 unBinary :: PG.Binary a -> a
 unBinary (PG.Binary x) = x
@@ -361,7 +367,7 @@ migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
                             ]
                     let uniques = flip concatMap udspair $ \(uname, ucols) ->
                             [AlterTable name $ AddUniqueConstraint uname ucols]
-                        references = mapMaybe (\c@Column { cName=cname, cReference=Just (refTblName, _) } -> getAddReference allDefs name refTblName cname (cReference c)) $ filter (\c -> cReference c /= Nothing) newcols
+                        references = mapMaybe (\c@Column { cName=cname, cReference=Just (refTblName, _) } -> getAddReference allDefs name refTblName cname (cReference c)) $ filter (isJust . cReference) newcols
                         foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\(_,b,_,d) -> (b,d)) (foreignFields fdef))
                                                     in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignConstraintNameDBName fdef) childfields parentfields)) fdefs
                     return $ Right $ addTable : uniques ++ references ++ foreignsAlt
@@ -510,7 +516,7 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, ns
                         , cNull = y == "YES"
                         , cSqlType = t
                         , cDefault = fmap
-                            (\x -> fromMaybe x $ T.stripSuffix "::character varying" x)
+                            (\xx -> fromMaybe xx $ T.stripSuffix "::character varying" xx)
                                      d''
                         , cDefaultConstraintName = Nothing
                         , cMaxLen = Nothing
@@ -564,10 +570,10 @@ sqlTypeEq x y =
     T.toCaseFold (showSqlType x) == T.toCaseFold (showSqlType y)
 
 findAlters :: [EntityDef a] -> DBName -> Column -> [Column] -> ([AlterColumn'], [Column])
-findAlters defs tablename col@(Column name isNull sqltype def defConstraintName _maxLen ref) cols =
+findAlters defs _tablename col@(Column name isNull sqltype def _defConstraintName _maxLen ref) cols =
     case filter (\c -> cName c == name) cols of
         [] -> ([(name, Add' col)], cols)
-        Column _ isNull' sqltype' def' defConstraintName' _maxLen' ref':_ ->
+        Column _ isNull' sqltype' def' _defConstraintName' _maxLen' ref':_ ->
             let refDrop Nothing = []
                 refDrop (Just (_, cname)) = [(name, DropReference cname)]
                 refAdd Nothing = []
@@ -601,7 +607,7 @@ getAddReference :: [EntityDef a] -> DBName -> DBName -> DBName -> Maybe (DBName,
 getAddReference allDefs table reftable cname ref =
     case ref of
         Nothing -> Nothing
-        Just (s, z) -> Just $ AlterColumn table (s, AddReference (refName table cname) [cname] [id_])
+        Just (s, _) -> Just $ AlterColumn table (s, AddReference (refName table cname) [cname] [id_])
                           where
                             id_ = maybe (error $ "Could not find ID of entity " ++ show reftable)
                                         id $ do
@@ -610,10 +616,10 @@ getAddReference allDefs table reftable cname ref =
 
 
 showColumn :: Column -> Text
-showColumn c@(Column n nu sqlType def defConstraintName _maxLen _ref) = T.concat
+showColumn (Column n nu sqlType' def _defConstraintName _maxLen _ref) = T.concat
     [ escape n
     , " "
-    , showSqlType sqlType
+    , showSqlType sqlType'
     , " "
     , if nu then "NULL" else "NOT NULL"
     , case def of
