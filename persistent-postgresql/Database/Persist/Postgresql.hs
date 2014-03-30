@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE CPP #-}
@@ -57,7 +56,6 @@ import Data.Aeson
 import Control.Monad (forM, mzero)
 import System.Environment (getEnvironment)
 import Data.Int (Int64)
-import Data.Maybe (mapMaybe, fromMaybe)
 import Data.Monoid ((<>))
 -- | A @libpq@ connection string.  A simple example of connection
 -- string would be @\"host=localhost port=5432 user=test
@@ -465,7 +463,7 @@ getColumns getter def = do
 safeToRemove :: EntityDef a -> DBName -> Bool
 safeToRemove def (DBName colName)
     = any (elem "SafeToRemove" . fieldAttrs)
-    $ filter ((== (DBName colName)) . fieldDB)
+    $ filter ((== DBName colName) . fieldDB)
     $ entityFields def
 
 getAlters :: [EntityDef a]
@@ -545,17 +543,17 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, ns
             PersistNull   -> Right Nothing
             PersistText t -> Right $ Just t
             _ -> Left $ T.pack $ "Invalid default column: " ++ show d
-    getType "int4"        = Right $ SqlInt32
-    getType "int8"        = Right $ SqlInt64
-    getType "varchar"     = Right $ SqlString
-    getType "date"        = Right $ SqlDay
-    getType "bool"        = Right $ SqlBool
-    getType "timestamp"   = Right $ SqlDayTime
-    getType "timestamptz" = Right $ SqlDayTimeZoned
-    getType "float4"      = Right $ SqlReal
-    getType "float8"      = Right $ SqlReal
-    getType "bytea"       = Right $ SqlBlob
-    getType "time"        = Right $ SqlTime
+    getType "int4"        = Right SqlInt32
+    getType "int8"        = Right SqlInt64
+    getType "varchar"     = Right SqlString
+    getType "date"        = Right SqlDay
+    getType "bool"        = Right SqlBool
+    getType "timestamp"   = Right SqlDayTime
+    getType "timestamptz" = Right SqlDayTimeZoned
+    getType "float4"      = Right SqlReal
+    getType "float8"      = Right SqlReal
+    getType "bytea"       = Right SqlBlob
+    getType "time"        = Right SqlTime
     getType "numeric"     = getNumeric npre nscl
     getType a             = Right $ SqlOther a
 
@@ -609,8 +607,8 @@ getAddReference allDefs table reftable cname ref =
         Nothing -> Nothing
         Just (s, _) -> Just $ AlterColumn table (s, AddReference (refName table cname) [cname] [id_])
                           where
-                            id_ = maybe (error $ "Could not find ID of entity " ++ show reftable)
-                                        id $ do
+                            id_ = fromMaybe (error $ "Could not find ID of entity " ++ show reftable)
+                                        $ do
                                           entDef <- find ((== reftable) . entityDB) allDefs
                                           return (entityID entDef)
 
