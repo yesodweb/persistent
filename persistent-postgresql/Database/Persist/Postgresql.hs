@@ -284,7 +284,7 @@ builtinGetters = I.fromList
     , (k PS.float8,      convertPV PersistDouble)
     , (k PS.abstime,     convertPV PersistUTCTime)
     , (k PS.reltime,     convertPV PersistUTCTime)
-    , (k PS.money,       convertPV PersistDouble)
+    , (k PS.money,       convertPV PersistRational)
     , (k PS.bpchar,      convertPV PersistText)
     , (k PS.varchar,     convertPV PersistText)
     , (k PS.date,        convertPV PersistDay)
@@ -296,16 +296,55 @@ builtinGetters = I.fromList
     , (k PS.numeric,     convertPV PersistRational)
     , (k PS.void,        \_ _ -> return PersistNull)
     , (k PS.uuid,        convertPV (PersistDbSpecific . unUnknown))
-    , (k PS.json,        convertPV (PersistByteString . unUnknown)) ]
+    , (k PS.json,        convertPV (PersistByteString . unUnknown))
+
+    -- array types: same order as above
+    , (1000,             listOf PersistBool)
+    , (1001,             listOf (PersistByteString . unBinary))
+    , (1002,             listOf PersistText)
+    , (1003,             listOf PersistText)
+    , (1016,             listOf PersistInt64)
+    , (1005,             listOf PersistInt64)
+    , (1007,             listOf PersistInt64)
+    , (1009,             listOf PersistText)
+    , (143,              listOf PersistText)
+    , (1021,             listOf PersistDouble)
+    , (1022,             listOf PersistDouble)
+    , (1023,             listOf PersistUTCTime)
+    , (1024,             listOf PersistUTCTime)
+    , (791,              listOf PersistRational)
+    , (1014,             listOf PersistText)
+    , (1014,             listOf PersistText)
+    , (1015,             listOf PersistText)
+    , (1182,             listOf PersistDay)
+    , (1183,             listOf PersistTimeOfDay)
+    , (1115,             listOf (PersistUTCTime . localTimeToUTC utc))
+    , (1185,             listOf (PersistZonedTime . ZT))
+    , (1561,             listOf PersistInt64)
+    , (1563,             listOf PersistInt64)
+    , (1231,             listOf PersistRational)
+    -- no array(void) type
+    , (2951,             listOf (PersistDbSpecific . unUnknown))
+    , (199,              listOf (PersistByteString . unUnknown))
+    ]
     where
         k (PGFF.typoid -> i) = PG.oid2int i
+        listOf f = convertPV (PersistList . map f . PG.fromPGArray)
 
 getGetter :: PG.Connection -> PG.Oid -> IO (Getter PersistValue)
 getGetter conn oid = case I.lookup (PG.oid2int oid) builtinGetters of
     Just getter -> return getter
     Nothing -> do
         tyinfo <- PG.getTypeInfo conn oid
-        error $ "Postgresql.getGetter: type " ++ show (PG.typname tyinfo) ++ " not supported."
+        error $ "Postgresql.getGetter: type "
+             ++ explain tyinfo
+             ++ " ("
+             ++ show oid
+             ++ ") not supported."
+    where
+        explain tyinfo = case B8.unpack $ PG.typname tyinfo of
+                        t@('_':ty) -> t ++ " (array of " ++ ty ++ ")"
+                        x -> show x
 
 unBinary :: PG.Binary a -> a
 unBinary (PG.Binary x) = x
