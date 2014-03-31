@@ -314,7 +314,6 @@ builtinGetters = I.fromList
     , (1024,             listOf PersistUTCTime)
     , (791,              listOf PersistRational)
     , (1014,             listOf PersistText)
-    , (1014,             listOf PersistText)
     , (1015,             listOf PersistText)
     , (1182,             listOf PersistDay)
     , (1183,             listOf PersistTimeOfDay)
