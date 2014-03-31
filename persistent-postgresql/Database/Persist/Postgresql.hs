@@ -1,4 +1,6 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DeriveDataTypeable #-}
@@ -20,6 +22,7 @@ import Data.Fixed (Pico)
 
 import qualified Database.PostgreSQL.Simple as PG
 import qualified Database.PostgreSQL.Simple.TypeInfo as PG
+import qualified Database.PostgreSQL.Simple.TypeInfo.Static as PS
 import qualified Database.PostgreSQL.Simple.Internal as PG
 import qualified Database.PostgreSQL.Simple.ToField as PGTF
 import qualified Database.PostgreSQL.Simple.FromField as PGFF
@@ -40,6 +43,8 @@ import Data.List (find, sort, groupBy)
 import Data.Function (on)
 import Data.Conduit
 import qualified Data.Conduit.List as CL
+
+import qualified Data.IntMap as I
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as B8
@@ -196,8 +201,8 @@ withStmt' conn query vals =
                 rowCount <- LibPQ.ntuples ret
                 return (ret, rowRef, rowCount, oids)
       getters <- forM ids $ \(col, oid) -> do
-          ty <- PG.getTypeInfo conn oid
-          return $ getGetter ty $ PG.Field rt col oid
+          getter <- getGetter conn oid
+          return $ getter $ PG.Field rt col oid
       return (rt, rr, rc, getters)
 
     closeS (ret, _, _, _) = LibPQ.unsafeFreeResult ret
@@ -264,46 +269,43 @@ type Getter a = PGFF.FieldParser a
 convertPV :: PGFF.FromField a => (a -> b) -> Getter b
 convertPV f = (fmap f .) . PGFF.fromField
 
--- FIXME: check if those are correct and complete.
-getGetter :: PG.TypeInfo -> Getter PersistValue
-getGetter ty@(PG.typname -> typ) = case typ of
-    "bool"                            -> convertPV PersistBool
-    "bytea"                           -> convertPV (PersistByteString . unBinary)
-    "char"                            -> convertPV PersistText
-    "name"                            -> convertPV PersistText
-    "int8"                            -> convertPV PersistInt64
-    "int2"                            -> convertPV PersistInt64
-    "int4"                            -> convertPV PersistInt64
-    "text"                            -> convertPV PersistText
-    "xml"                             -> convertPV PersistText
-    "float4"                          -> convertPV PersistDouble
-    "float8"                          -> convertPV PersistDouble
-    "abstime"                         -> convertPV PersistUTCTime
-    "reltime"                         -> convertPV PersistUTCTime
-    "money"                           -> convertPV PersistDouble
-    "bpchar"                          -> convertPV PersistText
-    "varchar"                         -> convertPV PersistText
-    "date"                            -> convertPV PersistDay
-    "time"                            -> convertPV PersistTimeOfDay
-    "timestamp"                       -> convertPV (PersistUTCTime . localTimeToUTC utc)
-    "timestamptz"                     -> convertPV (PersistZonedTime . ZT)
-    "bit"                             -> convertPV PersistInt64
-    "varbit"                          -> convertPV PersistInt64
-    "numeric"                         -> convertPV PersistRational
-    "void"                            -> \_ _ -> return PersistNull
-    "uuid"                            -> convertPV (PersistDbSpecific . unUnknown)
-    "json"                            -> convertPV (PersistByteString . unUnknown)
-    _                             -> error $ "Postgresql.getGetter: type " ++ show ty ++ " not supported."
-
-{- TODO: figure out how to reduce duplication here
-getGetter PG.Array { PG.typelem = elm } = case PG.typname elm of
-    "bool" -> listOf PersistBool
-    "varchar" -> listOf PersistText
-    "json" -> listOf (PersistByteString . unUnknown)
-    ty      -> error $ "Postgresql.getGetter: type " ++ show ty ++ " not supported."
+builtinGetters :: I.IntMap (Getter PersistValue)
+builtinGetters = I.fromList
+    [ (k PS.bool,        convertPV PersistBool)
+    , (k PS.bytea,       convertPV (PersistByteString . unBinary))
+    , (k PS.char,        convertPV PersistText)
+    , (k PS.name,        convertPV PersistText)
+    , (k PS.int8,        convertPV PersistInt64)
+    , (k PS.int2,        convertPV PersistInt64)
+    , (k PS.int4,        convertPV PersistInt64)
+    , (k PS.text,        convertPV PersistText)
+    , (k PS.xml,         convertPV PersistText)
+    , (k PS.float4,      convertPV PersistDouble)
+    , (k PS.float8,      convertPV PersistDouble)
+    , (k PS.abstime,     convertPV PersistUTCTime)
+    , (k PS.reltime,     convertPV PersistUTCTime)
+    , (k PS.money,       convertPV PersistDouble)
+    , (k PS.bpchar,      convertPV PersistText)
+    , (k PS.varchar,     convertPV PersistText)
+    , (k PS.date,        convertPV PersistDay)
+    , (k PS.time,        convertPV PersistTimeOfDay)
+    , (k PS.timestamp,   convertPV (PersistUTCTime . localTimeToUTC utc))
+    , (k PS.timestamptz, convertPV (PersistZonedTime . ZT))
+    , (k PS.bit,         convertPV PersistInt64)
+    , (k PS.varbit,      convertPV PersistInt64)
+    , (k PS.numeric,     convertPV PersistRational)
+    , (k PS.void,        \_ _ -> return PersistNull)
+    , (k PS.uuid,        convertPV (PersistDbSpecific . unUnknown))
+    , (k PS.json,        convertPV (PersistByteString . unUnknown)) ]
     where
-        listOf x = convertPV (PersistList . map x . PG.fromPGArray)
--}
+        k (PGFF.typoid -> i) = PG.oid2int i
+
+getGetter :: PG.Connection -> PG.Oid -> IO (Getter PersistValue)
+getGetter conn oid = case I.lookup (PG.oid2int oid) builtinGetters of
+    Just getter -> return getter
+    Nothing -> do
+        tyinfo <- PG.getTypeInfo conn oid
+        error $ "Postgresql.getGetter: type " ++ show (PG.typname tyinfo) ++ " not supported."
 
 unBinary :: PG.Binary a -> a
 unBinary (PG.Binary x) = x
