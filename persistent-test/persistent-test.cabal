@@ -11,6 +11,7 @@ stability:       Stable
 cabal-version:   >= 1.8
 build-type:      Simple
 homepage:        http://www.yesodweb.com/book/persistent
+bug-reports:     https://github.com/yesodweb/persistent/issues
 
 extra-source-files:
   test/main.hs
@@ -47,6 +48,7 @@ library
                      PersistTestPetType
                      RenameTest
                      DataTypeTest
+                     EmptyEntityTest
                      HtmlTest
                      EmbedTest
                      EmbedOrderTest
@@ -135,6 +137,8 @@ library
                    , blaze-builder
                    , mtl
                    , fast-logger
+                   , scientific
+                   , resource-pool
 
    if flag(nooverlap)
      cpp-options: -DNO_OVERLAP
@@ -195,6 +199,7 @@ test-suite test
                    , system-filepath
                    , system-fileio
                    , resourcet
+                   , scientific
 
     if flag(mongodb)
         cpp-options: -DWITH_MONGODB -DDEBUG

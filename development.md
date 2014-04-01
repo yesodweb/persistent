@@ -8,6 +8,13 @@ Use cabal
 
     cabal configure --enable-tests
 
+If you would like to configure tests with a specific backend that can be enabled
+using
+
+    cabal configure -f<backend> --enable-tests
+
+where <backend> is one of mongodb/postgresql/mysql/couchdb.
+
 Now run with
 
     cabal build && dist/build/test/test

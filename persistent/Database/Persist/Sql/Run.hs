@@ -3,8 +3,8 @@ module Database.Persist.Sql.Run where
 
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
-import Data.Pool
 import Control.Monad.Trans.Control
+import Data.Pool as P
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Resource
 import Control.Monad.Logger
@@ -12,6 +12,9 @@ import Control.Monad.Base
 import Control.Exception.Lifted (onException)
 import Control.Monad.IO.Class
 import Control.Exception.Lifted (bracket)
+import Control.Exception (mask)
+import System.Timeout (timeout)
+import Control.Monad.Trans.Control (control)
 import Data.IORef (readIORef)
 import qualified Data.Map as Map
 import Control.Exception.Lifted (throwIO)

@@ -21,6 +21,7 @@ import Control.Monad.Logger
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Reader (ReaderT, ask)
+import Control.Monad.Trans.Resource (MonadResource)
 import Control.Exception (throwIO)
 import qualified Data.Conduit.List as CL
 import Data.Conduit

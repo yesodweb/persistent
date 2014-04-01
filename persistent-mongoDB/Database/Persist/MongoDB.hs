@@ -114,6 +114,9 @@ import Data.Word (Word16)
 import Data.Monoid (mappend)
 import Control.Monad.Trans.Resource (mkResource)
 import Control.Monad.Trans.Reader (ask, runReaderT)
+import Data.Typeable
+import Control.Monad.Trans.Resource (MonadThrow (..))
+import Control.Monad.Trans.Control (MonadBaseControl)
 
 #ifdef DEBUG
 import FileLocation (debug)
@@ -388,6 +391,13 @@ instance PersistStore DB.MongoContext where
                 return $ Just ent
           where
             t = entityDef $ Just $ dummyFromKey k
+
+instance MonadThrow m => MonadThrow (DB.Action m) where
+#if MIN_VERSION_resourcet(1,1,0)
+    throwM = lift . throwM
+#else
+    monadThrow = lift . monadThrow
+#endif
 
 instance PersistUnique DB.MongoContext where
     getBy uniq = do

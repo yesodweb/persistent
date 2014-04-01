@@ -3,6 +3,7 @@
 import qualified PersistentTest
 import qualified RenameTest
 import qualified DataTypeTest
+import qualified EmptyEntityTest
 import qualified HtmlTest
 import qualified EmbedTest
 import qualified EmbedOrderTest
@@ -61,7 +62,7 @@ main = do
 
   hspec $ do
     RenameTest.specs
-#ifndef WITH_POSTGRESQL // FIXME
+#ifndef WITH_POSTGRESQL
     DataTypeTest.specs
 #endif
     HtmlTest.specs
@@ -77,3 +78,4 @@ main = do
     CompositeTest.specs
     MigrationTest.specs
 #endif
+    EmptyEntityTest.specs

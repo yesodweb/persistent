@@ -11,6 +11,7 @@ stability:       Stable
 cabal-version:   >= 1.8
 build-type:      Simple
 homepage:        http://www.yesodweb.com/book/persistent
+bug-reports:     https://github.com/yesodweb/persistent/issues
 
 flag nooverlap
     default: False
@@ -46,6 +47,7 @@ library
                    , mtl
                    , fast-logger              >= 2.1
                    , scientific
+                   , resource-pool
 
     exposed-modules: Database.Persist
                      Database.Persist.Quasi

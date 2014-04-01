@@ -20,6 +20,7 @@ import Data.Maybe (isJust)
 import Data.List (find)
 import Control.Monad.Trans.Reader (ReaderT, ask)
 import Control.Monad.Trans.Resource (with)
+import Control.Monad.Trans.Resource (MonadResource)
 
 withRawQuery :: MonadIO m
              => Text
@@ -99,12 +100,14 @@ instance PersistStore Connection where
         let composite = isJust $ entityPrimary t
         let cols = T.intercalate ","
                  $ map (connEscapeName conn . fieldDB) $ entityFields t
+            noColumns :: Bool
+            noColumns = null $ entityFields t
         let wher = case entityPrimary t of
                      Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (snd fld) <> "=? ") $ primaryFields pdef
                      Nothing   -> connEscapeName conn (entityID t) <> "=?"
         let sql = T.concat
                 [ "SELECT "
-                , cols
+                , if noColumns then "*" else cols
                 , " FROM "
                 , connEscapeName conn $ entityDB t
                 , " WHERE "
@@ -115,7 +118,7 @@ instance PersistStore Connection where
             case res of
                 Nothing -> return Nothing
                 Just vals ->
-                    case fromPersistValues vals of
+                    case fromPersistValues $ if noColumns then [] else vals of
                         Left e -> error $ "get " ++ show (unKey k) ++ ": " ++ unpack e
                         Right v -> return $ Just v
 

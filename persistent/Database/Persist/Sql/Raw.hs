@@ -19,6 +19,7 @@ import Data.Int (Int64)
 import Control.Monad.Trans.Class (lift)
 import qualified Data.Text as T
 import Data.Conduit
+import Control.Monad.Trans.Resource (MonadResource)
 
 rawQuery :: (MonadResource m, MonadReader env m, HasPersistBackend env Connection)
          => Text

@@ -272,12 +272,11 @@ instance (Ord a, PersistField a) => PersistField (S.Set a) where
 
 instance (PersistField a, PersistField b) => PersistField (a,b) where
     toPersistValue (x,y) = PersistList [toPersistValue x, toPersistValue y]
-    fromPersistValue (PersistList (vx:vy:[])) =
-      case (fromPersistValue vx, fromPersistValue vy) of
-        (Right x, Right y) -> Right (x, y)
-        (Left e, _) -> Left e
-        (_, Left e) -> Left e
-    fromPersistValue x = Left $ T.pack $ "Expected 2 item PersistList, received: " ++ show x
+    fromPersistValue v =
+        case fromPersistValue v of
+            Right (x:y:[])  -> (,) <$> fromPersistValue x <*> fromPersistValue y
+            Left e          -> Left e
+            _               -> Left $ T.pack $ "Expected 2 item PersistList, received: " ++ show v
 
 instance PersistField v => PersistField (M.Map T.Text v) where
     toPersistValue = PersistMap . map (\(k,v) -> (k, toPersistValue v)) . M.toList

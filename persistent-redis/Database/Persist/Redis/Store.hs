@@ -18,9 +18,6 @@ import Database.Persist.Redis.Internal
 
 type RedisBackend = R.Connection
 
-dummyFromKey :: KeyBackend RedisBackend v -> v
-dummyFromKey _ = error "dummyFromKey"
-
 toOid :: (PersistEntity val) => Text -> Key val
 toOid = Key . PersistText
 
@@ -79,11 +76,10 @@ instance PersistStore R.Connection where
     delete _ = fail "Wrong key type in delete"
 
     get k@(Key (PersistText key)) = do
-        let t = entityDef $ Just $ dummyFromKey k
         r <- execRedisT $ R.hgetall (toB key)
         if null r
             then return Nothing
             else do
-                Entity _ val <- mkEntity k t r
+                Entity _ val <- mkEntity k r
                 return $ Just val
     get  _ = fail "Wrong key type in get"

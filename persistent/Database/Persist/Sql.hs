@@ -22,7 +22,7 @@ module Database.Persist.Sql
 import Database.Persist
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Class
-import Database.Persist.Sql.Run
+import Database.Persist.Sql.Run hiding (withResourceTimeout)
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Migration
 import Database.Persist.Sql.Internal

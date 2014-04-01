@@ -48,6 +48,8 @@ import qualified Database.MySQL.Simple.Types  as MySQL
 
 import qualified Database.MySQL.Base          as MySQLBase
 import qualified Database.MySQL.Base.Types    as MySQLBase
+import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.Trans.Resource (MonadResource, runResourceT)
 
 
 -- | Create a MySQL connection pool and run the given action.

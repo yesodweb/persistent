@@ -37,6 +37,8 @@ import Data.Fixed (Pico,Micro)
 
 import Init
 
+type Tuple a b = (a, b)
+
 #ifdef WITH_MONGODB
 mkPersist persistSettings [persistUpperCase|
 #else
@@ -47,8 +49,10 @@ DataTypeTable no-json
     text Text
     textMaxLen Text maxlen=100
     bytes ByteString
+    bytesTextTuple (Tuple ByteString Text)
     bytesMaxLen ByteString maxlen=100
     int Int
+    intList [Int]
     double Double
     bool Bool
     day Day
@@ -87,8 +91,10 @@ specs = describe "data type specs" $
                 check "text" dataTypeTableText
                 check "textMaxLen" dataTypeTableTextMaxLen
                 check "bytes" dataTypeTableBytes
+                check "bytesTextTuple" dataTypeTableBytesTextTuple
                 check "bytesMaxLen" dataTypeTableBytesMaxLen
                 check "int" dataTypeTableInt
+                check "intList" dataTypeTableIntList
                 check "bool" dataTypeTableBool
                 check "day" dataTypeTableDay
 #ifndef WITH_MONGODB
@@ -139,8 +145,10 @@ instance Arbitrary (DataTypeTableGeneric g) where
      <$> arbText                -- text
      <*> (T.take 100 <$> arbText) -- textManLen
      <*> arbitrary              -- bytes
+     <*> arbTuple arbitrary arbText -- bytesTextTuple
      <*> (S.take 100 <$> arbitrary) -- bytesMaxLen
      <*> arbitrary              -- int
+     <*> arbitrary              -- intList
      <*> arbitrary              -- double
      <*> arbitrary              -- bool
      <*> arbitrary              -- day
@@ -159,6 +167,9 @@ arbText =
   .  filter (/= '\0')     -- no nulls
   <$> arbitrary
   where forbidden = [NotAssigned, PrivateUse]
+
+arbTuple :: Gen a -> Gen b -> Gen (a, b)
+arbTuple x y = (,) <$> x <*> y
 
 arbitraryZT :: Gen ZonedTime
 arbitraryZT = do

@@ -13,6 +13,7 @@ import Control.Monad.Logger
 import qualified Data.Conduit.List as CL
 import Data.Conduit
 import Control.Monad.Trans.Reader (ask)
+import Control.Monad.Trans.Resource (MonadResource)
 
 instance PersistUnique Connection where
     deleteBy uniq = do
