@@ -18,6 +18,7 @@
 module PersistentTest where
 
 import Test.HUnit hiding (Test)
+import Control.Monad.Trans.Resource (runResourceT)
 import Test.Hspec.Expectations ()
 import Test.Hspec.QuickCheck(prop)
 
