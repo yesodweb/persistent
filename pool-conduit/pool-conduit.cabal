@@ -1,10 +1,10 @@
 name:            pool-conduit
-version:         0.1.2.2
+version:         0.1.2.3
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
 maintainer:      Michael Snoyman <michael@snoyman.com>
-synopsis:        Resource pool allocations via ResourceT.
+synopsis:        Resource pool allocations via ResourceT. (deprecated)
 description:     Allocate resources from a pool, guaranteeing resource handling via the ResourceT transformer.
 category:        Database, Yesod, Conduit
 stability:       Stable
