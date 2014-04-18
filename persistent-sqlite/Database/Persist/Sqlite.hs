@@ -24,7 +24,7 @@ import Data.List (intercalate)
 import Data.IORef
 import qualified Data.Map as Map
 import Control.Monad.Trans.Control (control)
-import Control.Monad.Trans.Resource (Resource, mkResource, with)
+import Data.Acquire (Acquire, mkAcquire, with)
 import qualified Control.Exception as E
 import Data.Text (Text)
 import Control.Monad (mzero)
@@ -150,9 +150,9 @@ withStmt'
           => Sqlite.Connection
           -> Sqlite.Statement
           -> [PersistValue]
-          -> Resource (Source m [PersistValue])
+          -> Acquire (Source m [PersistValue])
 withStmt' conn stmt vals = do
-    _ <- mkResource
+    _ <- mkAcquire
         (Sqlite.bind stmt vals >> return stmt)
         (Sqlite.reset conn)
     return pull
