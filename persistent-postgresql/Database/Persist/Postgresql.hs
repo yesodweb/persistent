@@ -56,7 +56,7 @@ import Data.Time.LocalTime (localTimeToUTC, utc)
 import Data.Text (Text)
 import Data.Aeson
 import Control.Monad (forM, mzero)
-import Control.Monad.Trans.Resource (Resource, mkResource, with)
+import Data.Acquire (Acquire, mkAcquire, with)
 import System.Environment (getEnvironment)
 import Data.Int (Int64)
 import Data.Maybe (mapMaybe, fromJust, isJust, fromMaybe)
@@ -168,9 +168,9 @@ withStmt' :: MonadIO m
           => PG.Connection
           -> PG.Query
           -> [PersistValue]
-          -> Resource (Source m [PersistValue])
+          -> Acquire (Source m [PersistValue])
 withStmt' conn query vals =
-    pull `fmap` mkResource openS closeS
+    pull `fmap` mkAcquire openS closeS
   where
     openS = do
       -- Construct raw query
