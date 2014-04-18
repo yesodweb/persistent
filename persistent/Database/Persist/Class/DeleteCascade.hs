@@ -13,7 +13,7 @@ import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (ReaderT, ask, runReaderT)
-import Control.Monad.Trans.Resource (with)
+import Data.Acquire (with)
 
 class (PersistStore backend, PersistEntity a, backend ~ PersistEntityBackend a) => DeleteCascade a backend where
     deleteCascade :: MonadIO m => Key a -> ReaderT backend m ()

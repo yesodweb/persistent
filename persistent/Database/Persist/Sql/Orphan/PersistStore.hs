@@ -19,7 +19,7 @@ import Data.ByteString.Char8 (readInteger)
 import Data.Maybe (isJust)
 import Data.List (find)
 import Control.Monad.Trans.Reader (ReaderT, ask)
-import Control.Monad.Trans.Resource (with)
+import Data.Acquire (with)
 import Control.Monad.Trans.Resource (MonadResource)
 
 withRawQuery :: MonadIO m

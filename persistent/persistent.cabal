@@ -28,7 +28,7 @@ library
                    , text                     >= 0.8
                    , containers               >= 0.2
                    , conduit                  >= 1.0
-                   , resourcet                >= 0.4.10
+                   , resourcet                >= 1.1
                    , monad-control            >= 0.3
                    , lifted-base              >= 0.1
                    , resource-pool

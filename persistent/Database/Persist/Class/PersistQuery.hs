@@ -21,7 +21,8 @@ import qualified Data.Conduit.List as CL
 import Database.Persist.Class.PersistStore
 import Database.Persist.Class.PersistEntity
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Resource (Resource, MonadResource, allocateResource, release, with)
+import Control.Monad.Trans.Resource (MonadResource, release)
+import Data.Acquire (Acquire, mkAcquire, allocateAcquire, with)
 
 class PersistStore backend => PersistQuery backend where
     -- | Update individual fields on a specific record.
@@ -53,7 +54,7 @@ class PersistStore backend => PersistQuery backend where
            :: (PersistEntity val, PersistEntityBackend val ~ backend, MonadIO m1, MonadIO m2)
            => [Filter val]
            -> [SelectOpt val]
-           -> ReaderT backend m1 (Resource (C.Source m2 (Entity val)))
+           -> ReaderT backend m1 (Acquire (C.Source m2 (Entity val)))
 
     -- | get just the first record for the criterion
     selectFirst :: (MonadIO m, PersistEntity val, backend ~ PersistEntityBackend val)
@@ -69,7 +70,7 @@ class PersistStore backend => PersistQuery backend where
         :: (MonadIO m1, MonadIO m2, PersistEntity val, backend ~ PersistEntityBackend val)
         => [Filter val]
         -> [SelectOpt val]
-        -> ReaderT backend m1 (Resource (C.Source m2 (Key val)))
+        -> ReaderT backend m1 (Acquire (C.Source m2 (Key val)))
 
     -- | The total number of records fulfilling the given criterion.
     count :: (MonadIO m, PersistEntity val, backend ~ PersistEntityBackend val)
@@ -84,7 +85,7 @@ selectSource
        -> C.Source m (Entity val)
 selectSource filts opts = do
     srcRes <- liftPersist $ selectSourceRes filts opts
-    (releaseKey, src) <- allocateResource srcRes
+    (releaseKey, src) <- allocateAcquire srcRes
     src
     release releaseKey
 
@@ -95,7 +96,7 @@ selectKeys :: (PersistQuery backend, MonadResource m, PersistEntity val, backend
            -> C.Source m (Key val)
 selectKeys filts opts = do
     srcRes <- liftPersist $ selectKeysRes filts opts
-    (releaseKey, src) <- allocateResource srcRes
+    (releaseKey, src) <- allocateAcquire srcRes
     src
     release releaseKey
 

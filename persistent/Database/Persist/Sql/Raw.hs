@@ -9,7 +9,8 @@ import Database.Persist.Sql.Class
 import qualified Data.Map as Map
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (ReaderT, ask, MonadReader)
-import Control.Monad.Trans.Resource (allocateResource, release, Resource, mkResource, with)
+import Control.Monad.Trans.Resource (release)
+import Data.Acquire (allocateAcquire, Acquire, mkAcquire, with)
 import Data.IORef (writeIORef, readIORef, newIORef)
 import Control.Exception (throwIO)
 import Control.Monad (when, liftM)
@@ -27,7 +28,7 @@ rawQuery :: (MonadResource m, MonadReader env m, HasPersistBackend env Connectio
          -> Source m [PersistValue]
 rawQuery sql vals = do
     srcRes <- liftPersist $ rawQueryRes sql vals
-    (releaseKey, src) <- allocateResource srcRes
+    (releaseKey, src) <- allocateAcquire srcRes
     src
     release releaseKey
 
@@ -35,7 +36,7 @@ rawQueryRes
     :: (MonadIO m1, MonadIO m2)
     => Text
     -> [PersistValue]
-    -> ReaderT Connection m1 (Resource (Source m2 [PersistValue]))
+    -> ReaderT Connection m1 (Acquire (Source m2 [PersistValue]))
 rawQueryRes sql vals = do
     conn <- ask
     let make = do
@@ -43,7 +44,7 @@ rawQueryRes sql vals = do
                 (connLogFunc conn)
             getStmtConn conn sql
     return $ do
-        stmt <- mkResource make stmtReset
+        stmt <- mkAcquire make stmtReset
         stmtQuery stmt vals
 
 rawExecute :: MonadIO m => Text -> [PersistValue] -> ReaderT Connection m ()
