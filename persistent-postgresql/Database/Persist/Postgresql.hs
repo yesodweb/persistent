@@ -31,6 +31,7 @@ import Database.PostgreSQL.Simple.Ok (Ok (..))
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
+import Control.Monad.Trans.Resource
 import Control.Exception (throw)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Typeable
