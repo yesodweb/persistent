@@ -298,6 +298,7 @@ builtinGetters = I.fromList
     , (k PS.void,        \_ _ -> return PersistNull)
     , (k PS.uuid,        convertPV (PersistDbSpecific . unUnknown))
     , (k PS.json,        convertPV (PersistByteString . unUnknown))
+    , (k PS.unknown,     convertPV (PersistByteString . unUnknown))
 
     -- array types: same order as above
     , (1000,             listOf PersistBool)
@@ -326,6 +327,7 @@ builtinGetters = I.fromList
     -- no array(void) type
     , (2951,             listOf (PersistDbSpecific . unUnknown))
     , (199,              listOf (PersistByteString . unUnknown))
+    -- no array(unknown) either
     ]
     where
         k (PGFF.typoid -> i) = PG.oid2int i
