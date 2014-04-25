@@ -155,7 +155,7 @@ data Connection = Connection DB.Pipe DB.Database
 type ConnectionPool = Pool.Pool Connection
 
 -- | ToPathPiece is used to convert a key to/from text
-instance PathPiece (KeyBackend MongoBackend entity) where
+instance PersistEntity record => PathPiece (KeyBackend MongoBackend record) where
     toPathPiece = keyToText
     fromPathPiece keyText = readMayKey $
         -- handle a JSON type prefix
@@ -164,7 +164,7 @@ instance PathPiece (KeyBackend MongoBackend entity) where
             Just ('o', prefixed) -> prefixed
             _ -> keyText
 
-keyToText :: KeyBackend MongoBackend entity -> Text
+keyToText :: PersistEntity record => KeyBackend MongoBackend record -> Text
 keyToText (Key pOid@(PersistObjectId _)) = -- T.pack $ show $ Serialize.encode bsonId
     let oid = persistObjectIdToDbOid pOid
     in  T.pack $ show oid

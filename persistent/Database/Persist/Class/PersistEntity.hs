@@ -2,6 +2,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE StandaloneDeriving #-}
 module Database.Persist.Class.PersistEntity
     ( PersistEntity (..)
     , Update (..)
@@ -10,6 +11,7 @@ module Database.Persist.Class.PersistEntity
     , Filter (..)
     , Key
     , Entity (..)
+    , tableName
 
     , keyValueEntityToJSON, keyValueEntityFromJSON
     , entityIdToJSON, entityIdFromJSON
@@ -24,6 +26,14 @@ import Data.Aeson.Types (Parser)
 import Control.Applicative ((<$>), (<*>))
 import Data.Monoid (mappend)
 import qualified Data.HashMap.Strict as HM
+import qualified Data.Aeson as A
+import Data.Monoid ((<>))
+
+deriving instance Eq (KeyBackend backend record)
+deriving instance Ord (KeyBackend backend record)
+deriving instance Read (KeyBackend backend record)
+instance PersistEntity record => Show (KeyBackend backend record) where
+    show key@(Key pv) = "Key " <> T.unpack (tableName (recordTypeFromKey key)) <> " " <> show pv
 
 -- | Persistent serialized Haskell records to the database.
 -- A Database 'Entity' (A row in SQL, a document in MongoDB, etc)
@@ -226,3 +236,7 @@ errMsg = mappend "PersistField entity fromPersistValue: "
 -- so lets use MongoDB conventions
 idField :: Text
 idField = "_id"
+
+-- | the database table name for a record
+tableName :: (PersistEntity record) => record -> Text
+tableName = unDBName . entityDB . entityDef . Just
