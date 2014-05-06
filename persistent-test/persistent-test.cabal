@@ -46,6 +46,7 @@ library
 
     exposed-modules: PersistentTest
                      PersistTestPetType
+                     PersistTestPetTypeJSON
                      RenameTest
                      DataTypeTest
                      EmptyEntityTest

@@ -30,6 +30,7 @@ module Database.Persist.TH
     , mkDeleteCascade
     , share
     , derivePersistField
+    , derivePersistFieldJSON
     , persistFieldFromEntity
       -- * Internal
     , packPTH
