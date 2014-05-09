@@ -44,6 +44,14 @@ module Database.Persist.MongoDB
     , Objectid
     , genObjectid
 
+    -- * Key conversion helpers
+    , keyToOid
+    , oidToKey
+    , recordTypeFromKey
+
+    -- * PersistField conversion
+    , fieldName
+
     -- * using connections
     , withMongoDBConn
     , withMongoDBPool
@@ -59,10 +67,6 @@ module Database.Persist.MongoDB
     , PipePool
     , createMongoDBPipePool
     , runMongoDBPipePool
-
-    -- * Key conversion helpers
-    , keyToOid
-    , oidToKey
 
     -- * network type
     , HostName
@@ -119,6 +123,9 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 #ifdef DEBUG
 import FileLocation (debug)
 #endif
+
+recordTypeFromKey :: KeyBackend MongoBackend v -> v
+recordTypeFromKey _ = error "recordTypeFromKey"
 
 newtype NoOrphanNominalDiffTime = NoOrphanNominalDiffTime NominalDiffTime
                                 deriving (Show, Eq, Num)
@@ -290,7 +297,7 @@ updateFields upds = map updateToMongoField upds
 
 updateToMongoField :: (PersistEntity entity) => Update entity -> DB.Field
 updateToMongoField (Update field v up) =
-    opName DB.:= DB.Doc [( (unDBName $ fieldDB $ persistFieldDef field) DB.:= opValue)]
+    opName DB.:= DB.Doc [fieldName field DB.:= opValue]
     where 
       (opName, opValue) =
         case (up, toPersistValue v) of
@@ -379,7 +386,7 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
 
     delete k =
         DB.deleteOne DB.Select {
-          DB.coll = collectionName (dummyFromKey k)
+          DB.coll = collectionName (recordTypeFromKey k)
         , DB.selector = filterByKey k
         }
 
@@ -391,7 +398,7 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
                 Entity _ ent <- fromPersistValuesThrow t doc
                 return $ Just ent
           where
-            t = entityDef $ Just $ dummyFromKey k
+            t = entityDef $ Just $ recordTypeFromKey k
 
 instance MonadThrow m => MonadThrow (DB.Action m) where
 #if MIN_VERSION_resourcet(1,1,0)
@@ -428,7 +435,7 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
     update _ [] = return ()
     update key upds =
         DB.modify 
-           (DB.Select [keyToMongoIdField key] (collectionName $ dummyFromKey key))
+           (DB.Select [keyToMongoIdField key] (collectionName $ recordTypeFromKey key))
            $ updateFields upds
 
     updateGet key upds = do
@@ -442,7 +449,7 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
             return ent
       where
         err msg = Trans.liftIO $ throwIO $ KeyNotFound $ show key ++ msg
-        t = entityDef $ Just $ dummyFromKey key
+        t = entityDef $ Just $ recordTypeFromKey key
 
 
     updateWhere _ [] = return ()
@@ -775,8 +782,6 @@ instance Serialize.Serialize DB.ObjectId where
            w2 <- Serialize.get
            return (DB.Oid w1 w2) 
 
-dummyFromKey :: KeyBackend MongoBackend v -> v
-dummyFromKey _ = error "dummyFromKey"
 dummyFromUnique :: Unique v -> v
 dummyFromUnique _ = error "dummyFromUnique"
 dummyFromFilts :: [Filter v] -> v
