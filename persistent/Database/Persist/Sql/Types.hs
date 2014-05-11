@@ -92,9 +92,11 @@ data SqlBackend
 newtype SqlPersistT m a = SqlPersistT { unSqlPersistT :: ReaderT Connection m a }
     deriving (Monad, MonadIO, MonadTrans, Functor, Applicative, MonadPlus
 #if MIN_VERSION_exceptions(0,6,0)
+#if MIN_VERSION_resourcet(1,1,0)
         , MonadThrow
         , MonadCatch
         , MonadMask
+#endif
 #endif
     )
 
