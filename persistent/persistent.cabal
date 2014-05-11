@@ -1,5 +1,5 @@
 name:            persistent
-version:         1.3.0.6
+version:         1.3.0.7
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -29,6 +29,7 @@ library
                    , containers               >= 0.2
                    , conduit                  >= 1.0
                    , resourcet                >= 0.4
+                   , exceptions
                    , monad-control            >= 0.3
                    , lifted-base              >= 0.1
                    , path-pieces              >= 0.1
