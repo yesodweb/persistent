@@ -52,11 +52,11 @@ ENV HOME /home/persistent
 #
 # # launch databases
 # RUN cd persistent-test/db
-
-# mongod --dbpath=. --smallfiles &
-
+#
+# mongod --dbpath=. --logpath=./mongodb.log --smallfiles --logappend --profile 2 --verbose &
+#
 # redis-server --save "" # port 6379
-
+#
 # mysql_install_db --datadir=/home/persistent/persistent-test/db
 # mysqld_safe --datadir=/home/persistent/persistent-test/db
 
