@@ -48,6 +48,7 @@ library
                    , fast-logger              >= 2.1
                    , scientific
                    , resource-pool
+                   , tagged
 
     exposed-modules: Database.Persist
                      Database.Persist.Quasi

@@ -19,6 +19,7 @@ import Control.Arrow ((&&&))
 import Data.Text (Text, intercalate, pack)
 import Data.Maybe (fromMaybe)
 import Data.Fixed
+import Data.Proxy (Proxy)
 
 import Data.Monoid (Monoid)
 import Control.Monad.Trans.Class (lift)
@@ -210,7 +211,7 @@ extractMaybe :: Maybe a -> a
 extractMaybe = fromMaybe (error "Database.Persist.GenericSql.extractMaybe")
 
 class PersistField a => PersistFieldSql a where
-    sqlType :: Monad m => m a -> SqlType
+    sqlType :: Proxy a -> SqlType
 
 #ifndef NO_OVERLAP
 instance PersistFieldSql String where
