@@ -61,7 +61,7 @@ DataTypeTable no-json
     time TimeOfDay
 #endif
     utc UTCTime
-    zonedTime ZonedTime
+    localTime LocalTime
 |]
 
 cleanDB :: (MonadIO m, PersistQuery backend, backend ~ PersistEntityBackend DataTypeTable) => ReaderT backend m ()
@@ -108,7 +108,7 @@ specs = describe "data type specs" $
                 -- postgres seems to 'convert' the time to the localtimezone
                 -- http://www.postgresql.org/docs/9.2/static/datatype-datetime.html#AEN5739
                 -- so, this test will never pass anyhow
-                check "zoned" dataTypeTableZonedTime
+                check "local" dataTypeTableLocalTime
 #endif
 
                 -- Do a special check for Double since it may
@@ -157,7 +157,7 @@ instance Arbitrary (DataTypeTableGeneric g) where
      <*> (truncateTimeOfDay =<< arbitrary) -- time
 #endif
      <*> (truncateUTCTime   =<< arbitrary) -- utc
-     <*> (truncateToMicroZonedTime =<< arbitraryZT)  -- zonedTime
+     <*> (truncateToMicroLocalTime =<< arbitraryLT)  -- localTime
 
 arbText :: Gen Text
 arbText =
@@ -171,17 +171,14 @@ arbText =
 arbTuple :: Gen a -> Gen b -> Gen (a, b)
 arbTuple x y = (,) <$> x <*> y
 
-arbitraryZT :: Gen ZonedTime
-arbitraryZT = do
+arbitraryLT :: Gen LocalTime
+arbitraryLT = do
     tod <- arbitrary
     -- this avoids a crash in PostgreSQL, due to a limitation of
     -- Postgresql-simple. However, the test is still disabled on
     -- this DB because it 'adapts' the time and timezone.
     d   <- fmap (addDays 19000) arbitrary
-    halfHours <- choose (-23, 23)
-    let minutes = halfHours * 30
-        tz = minutesToTimeZone minutes
-    return $ ZonedTime (LocalTime d tod) tz
+    return $ LocalTime d tod
 
 -- truncate less significant digits
 truncateToMicro :: Pico -> Pico
@@ -189,9 +186,9 @@ truncateToMicro p = let
   p' = fromRational . toRational $ p  :: Micro
   in   fromRational . toRational $ p' :: Pico
 
-truncateToMicroZonedTime :: ZonedTime  -> Gen ZonedTime
-truncateToMicroZonedTime (ZonedTime (LocalTime d (TimeOfDay h m s)) tz) =
-  return $ ZonedTime (LocalTime d (TimeOfDay h m (truncateToMicro s))) tz
+truncateToMicroLocalTime :: LocalTime -> Gen LocalTime
+truncateToMicroLocalTime (LocalTime d (TimeOfDay h m s)) =
+  return $ LocalTime d (TimeOfDay h m (truncateToMicro s))
 
 truncateTimeOfDay :: TimeOfDay -> Gen TimeOfDay
 truncateTimeOfDay (TimeOfDay h m s) =
@@ -205,6 +202,3 @@ truncateUTCTime (UTCTime d dift) = do
 
 asIO :: IO a -> IO a
 asIO = id
-
-instance Eq ZonedTime where
-    a == b = show a == show b

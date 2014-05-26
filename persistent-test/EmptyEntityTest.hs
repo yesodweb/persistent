@@ -25,7 +25,7 @@ share [mkPersist sqlSettings, mkMigrate "dataTypeMigrate"] [persistLowerCase|
 EmptyEntity
 |]
 
-cleanDB :: (PersistQuery m, PersistMonadBackend m ~ PersistEntityBackend EmptyEntity) => m ()
+cleanDB :: MonadIO m => ReaderT Connection m ()
 cleanDB = deleteWhere ([] :: [Filter EmptyEntity])
 
 specs :: Spec
