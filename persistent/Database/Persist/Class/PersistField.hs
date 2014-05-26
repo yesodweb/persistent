@@ -19,7 +19,7 @@ import Data.Time (Day(..), TimeOfDay, UTCTime)
 #ifdef HIGH_PRECISION_DATE
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 #endif
-import Data.Time.LocalTime (ZonedTime)
+import Data.Time.LocalTime (LocalTime)
 import Data.ByteString.Char8 (ByteString, unpack, readInt)
 import Control.Applicative
 import Data.Int (Int8, Int16, Int32, Int64)
@@ -65,7 +65,7 @@ instance PersistField String where
     fromPersistValue (PersistDay d) = Right $ Prelude.show d
     fromPersistValue (PersistTimeOfDay d) = Right $ Prelude.show d
     fromPersistValue (PersistUTCTime d) = Right $ Prelude.show d
-    fromPersistValue (PersistZonedTime (ZT z)) = Right $ Prelude.show z
+    fromPersistValue (PersistLocalTime lt) = Right $ Prelude.show lt
     fromPersistValue PersistNull = Left $ T.pack "Unexpected null"
     fromPersistValue (PersistBool b) = Right $ Prelude.show b
     fromPersistValue (PersistList _) = Left $ T.pack "Cannot convert PersistList to String"
@@ -230,18 +230,18 @@ instance PersistField UTCTime where
 
     fromPersistValue x = Left $ T.pack $ "Expected UTCTime, received: " ++ show x
 
-instance PersistField ZonedTime where
-    toPersistValue = PersistZonedTime . ZT
-    fromPersistValue (PersistZonedTime (ZT z)) = Right z
+instance PersistField LocalTime where
+    toPersistValue = PersistLocalTime
+    fromPersistValue (PersistLocalTime lt) = Right lt
     fromPersistValue x@(PersistText t) =
         case reads $ T.unpack t of
             (z, _):_ -> Right z
-            _ -> Left $ T.pack $ "Expected ZonedTime, received " ++ show x
+            _ -> Left $ T.pack $ "Expected LocalTime, received " ++ show x
     fromPersistValue x@(PersistByteString s) =
         case reads $ unpack s of
             (z, _):_ -> Right z
-            _ -> Left $ T.pack $ "Expected ZonedTime, received " ++ show x
-    fromPersistValue x = Left $ T.pack $ "Expected ZonedTime, received: " ++ show x
+            _ -> Left $ T.pack $ "Expected LocalTime, received " ++ show x
+    fromPersistValue x = Left $ T.pack $ "Expected LocalTime, received: " ++ show x
 
 instance PersistField a => PersistField (Maybe a) where
     toPersistValue Nothing = PersistNull

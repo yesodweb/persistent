@@ -48,7 +48,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Map as M
 import qualified Data.Set as S
-import Data.Time (ZonedTime, UTCTime, TimeOfDay, Day)
+import Data.Time (LocalTime, UTCTime, TimeOfDay, Day)
 import Data.Int
 import Data.Word
 import Data.ByteString (ByteString)
@@ -257,9 +257,9 @@ instance PersistFieldSql Day where
 instance PersistFieldSql TimeOfDay where
     sqlType _ = SqlTime
 instance PersistFieldSql UTCTime where
-    sqlType _ = SqlDayTime
-instance PersistFieldSql ZonedTime where
-    sqlType _ = SqlDayTimeZoned
+    sqlType _ = SqlDayTimeUTC
+instance PersistFieldSql LocalTime where
+    sqlType _ = SqlDayTimeLocal
 instance PersistFieldSql a => PersistFieldSql [a] where
     sqlType _ = SqlString
 instance (Ord a, PersistFieldSql a) => PersistFieldSql (S.Set a) where

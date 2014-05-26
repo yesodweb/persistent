@@ -63,6 +63,7 @@ import Data.Aeson
 import Control.Applicative (pure, (<*>))
 import Control.Monad.Logger (MonadLogger)
 import Database.Persist.Sql (sqlType)
+import Data.Proxy (Proxy (Proxy))
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
@@ -140,8 +141,8 @@ getSqlType allEntities ent =
                 Nothing -> False
 
         typ = ftToType $ fieldType field
-        mtyp = (ConT ''Maybe `AppT` typ)
-        typedNothing = SigE (ConE 'Nothing) mtyp
+        mtyp = (ConT ''Proxy `AppT` typ)
+        typedNothing = SigE (ConE 'Proxy) mtyp
         st = VarE 'sqlType `AppE` typedNothing
 
 data SqlTypeExp = SqlTypeExp Exp
@@ -1059,8 +1060,8 @@ instance Lift SqlType where
     lift SqlBool = [|SqlBool|]
     lift SqlDay = [|SqlDay|]
     lift SqlTime = [|SqlTime|]
-    lift SqlDayTime = [|SqlDayTime|]
-    lift SqlDayTimeZoned = [|SqlDayTimeZoned|]
+    lift SqlDayTimeLocal = [|SqlDayTimeLocal|]
+    lift SqlDayTimeUTC = [|SqlDayTimeUTC|]
     lift SqlBlob = [|SqlBlob|]
     lift (SqlOther a) = [|SqlOther $(liftT a)|]
 

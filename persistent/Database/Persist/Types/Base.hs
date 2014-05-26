@@ -24,7 +24,7 @@ import Data.ByteString (ByteString, foldl')
 import Data.Bits (shiftL, shiftR)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BS8
-import Data.Time.LocalTime (ZonedTime, zonedTimeToUTC, zonedTimeToLocalTime, zonedTimeZone)
+import Data.Time.LocalTime (LocalTime)
 import Data.Map (Map)
 import qualified Data.HashMap.Strict as HM
 import Data.Word (Word32)
@@ -184,14 +184,6 @@ instance Exception PersistException
 instance Error PersistException where
     strMsg = PersistError . pack
 
--- | Avoid orphan instances.
-newtype ZT = ZT ZonedTime deriving (Show, Read, Typeable)
-
-instance Eq ZT where
-    ZT a /= ZT b = zonedTimeToLocalTime a /= zonedTimeToLocalTime b || zonedTimeZone a /= zonedTimeZone b
-instance Ord ZT where
-    ZT a `compare` ZT b = zonedTimeToUTC a `compare` zonedTimeToUTC b
-
 -- | A raw value which can be stored in any backend and can be marshalled to
 -- and from a 'PersistField'.
 data PersistValue = PersistText Text
@@ -203,7 +195,7 @@ data PersistValue = PersistText Text
                   | PersistDay Day
                   | PersistTimeOfDay TimeOfDay
                   | PersistUTCTime UTCTime
-                  | PersistZonedTime ZT
+                  | PersistLocalTime LocalTime
                   | PersistNull
                   | PersistList [PersistValue]
                   | PersistMap [(Text, PersistValue)]
@@ -260,7 +252,7 @@ fromPersistValueText (PersistRational r) = Right $ T.pack $ show r
 fromPersistValueText (PersistDay d) = Right $ T.pack $ show d
 fromPersistValueText (PersistTimeOfDay d) = Right $ T.pack $ show d
 fromPersistValueText (PersistUTCTime d) = Right $ T.pack $ show d
-fromPersistValueText (PersistZonedTime (ZT z)) = Right $ T.pack $ show z
+fromPersistValueText (PersistLocalTime lt) = Right $ T.pack $ show lt
 fromPersistValueText PersistNull = Left "Unexpected null"
 fromPersistValueText (PersistBool b) = Right $ T.pack $ show b
 fromPersistValueText (PersistList _) = Left "Cannot convert PersistList to Text"
@@ -283,7 +275,7 @@ instance A.ToJSON PersistValue where
     toJSON (PersistBool b) = A.Bool b
     toJSON (PersistTimeOfDay t) = A.String $ T.pack $ 't' : show t
     toJSON (PersistUTCTime u) = A.String $ T.pack $ 'u' : show u
-    toJSON (PersistZonedTime z) = A.String $ T.pack $ 'z' : show z
+    toJSON (PersistLocalTime lt) = A.String $ T.pack $ 'l' : show lt
     toJSON (PersistDay d) = A.String $ T.pack $ 'd' : show d
     toJSON PersistNull = A.Null
     toJSON (PersistList l) = A.Array $ V.fromList $ map A.toJSON l
@@ -317,7 +309,7 @@ instance A.FromJSON PersistValue where
                            $ B64.decode $ TE.encodeUtf8 t
             Just ('t', t) -> fmap PersistTimeOfDay $ readMay t
             Just ('u', t) -> fmap PersistUTCTime $ readMay t
-            Just ('z', t) -> fmap PersistZonedTime $ readMay t
+            Just ('l', t) -> fmap PersistLocalTime $ readMay t
             Just ('d', t) -> fmap PersistDay $ readMay t
             Just ('r', t) -> fmap PersistRational $ readMay t
             Just ('o', t) -> maybe (fail "Invalid base64") (return . PersistObjectId) $
@@ -367,8 +359,8 @@ data SqlType = SqlString
              | SqlBool
              | SqlDay
              | SqlTime
-             | SqlDayTime
-             | SqlDayTimeZoned
+             | SqlDayTimeLocal
+             | SqlDayTimeUTC -- ^ FIXME switch back to Zoned
              | SqlBlob
              | SqlOther T.Text -- ^ a backend-specific name
     deriving (Show, Read, Eq, Typeable, Ord)
