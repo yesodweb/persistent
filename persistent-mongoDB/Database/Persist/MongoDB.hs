@@ -112,7 +112,7 @@ import Data.Attoparsec.Number
 import Data.Char (toUpper)
 import Data.Word (Word16)
 import Data.Monoid (mappend)
-import Control.Monad.Trans.Resource (mkResource)
+import Data.Acquire (mkAcquire)
 import Control.Monad.Trans.Reader (ask, runReaderT)
 import Data.Typeable
 import Control.Monad.Trans.Resource (MonadThrow (..))
@@ -469,7 +469,7 @@ instance PersistQuery DB.MongoContext where
         let make = do
             cursor <- liftIO $ runReaderT (DB.find $ makeQuery filts opts) context
             pull context cursor
-        return $ mkResource (return make) (const $ return ())
+        return $ return make
       where
         pull context cursor = do
             mdoc <- liftIO $ runReaderT (DB.next cursor) context
@@ -496,7 +496,7 @@ instance PersistQuery DB.MongoContext where
                     DB.project = [_id DB.=: (1 :: Int)]
                   }
                 pull context cursor
-        return $ mkResource (return make) (const $ return ())
+        return $ return make
       where
         pull context cursor = do
             mdoc <- liftIO $ runReaderT (DB.next cursor) context
