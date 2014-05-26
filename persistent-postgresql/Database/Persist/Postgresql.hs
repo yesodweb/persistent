@@ -377,7 +377,8 @@ migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
 
 type SafeToRemove = Bool
 
-data AlterColumn = Type SqlType | IsNull | NotNull | Add' Column | Drop SafeToRemove
+data AlterColumn = Type SqlType Text
+                 | IsNull | NotNull | Add' Column | Drop SafeToRemove
                  | Default Text | NoDefault | Update' Text
                  | AddReference DBName [DBName] [DBName] | DropReference DBName
 type AlterColumn' = (DBName, AlterColumn)
@@ -589,7 +590,18 @@ findAlters defs tablename col@(Column name isNull sqltype def defConstraintName 
                                             Just s -> (:) (name, Update' s)
                                  in up [(name, NotNull)]
                             _ -> []
-                modType = if sqlTypeEq sqltype sqltype' then [] else [(name, Type sqltype)]
+                modType
+                    | sqlTypeEq sqltype sqltype' = []
+                    -- When converting from Persistent pre-2.0 databases, we
+                    -- need to make sure that TIMESTAMP WITHOUT TIME ZONE is
+                    -- treated as UTC.
+                    | sqltype == SqlDayTimeUTC && sqltype' == SqlDayTimeLocal =
+                        [(name, Type sqltype $ T.concat
+                            [ " USING "
+                            , escape name
+                            , " AT TIME ZONE 'UTC'"
+                            ])]
+                    | otherwise = [(name, Type sqltype "")]
                 modDef =
                     if def == def'
                         then []
@@ -669,7 +681,7 @@ showAlterTable table (DropConstraint cname) = T.concat
     ]
 
 showAlter :: DBName -> AlterColumn' -> Text
-showAlter table (n, Type t) =
+showAlter table (n, Type t extra) =
     T.concat
         [ "ALTER TABLE "
         , escape table
@@ -677,6 +689,7 @@ showAlter table (n, Type t) =
         , escape n
         , " TYPE "
         , showSqlType t
+        , extra
         ]
 showAlter table (n, IsNull) =
     T.concat
