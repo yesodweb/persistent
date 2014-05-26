@@ -16,6 +16,7 @@ module Database.Persist.MySQL
 
 import Control.Arrow
 import Control.Monad (mzero)
+import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Error (ErrorT(..))
@@ -28,7 +29,7 @@ import Data.IORef
 import Data.List (find, intercalate, sort, groupBy)
 import Data.Text (Text, pack)
 import System.Environment (getEnvironment)
-import Control.Monad.Trans.Resource (Resource, mkResource, with)
+import Data.Acquire (Acquire, mkAcquire, with)
 
 import Data.Conduit
 import qualified Blaze.ByteString.Builder.Char8 as BBB
@@ -56,7 +57,7 @@ import Control.Monad.Trans.Resource (MonadResource, runResourceT)
 -- The pool is properly released after the action finishes using
 -- it.  Note that you should not use the given 'ConnectionPool'
 -- outside the action since it may be already been released.
-withMySQLPool :: MonadIO m =>
+withMySQLPool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m) =>
                  MySQL.ConnectInfo
               -- ^ Connection information.
               -> Int
@@ -70,7 +71,7 @@ withMySQLPool ci = withSqlPool $ open' ci
 -- | Create a MySQL connection pool.  Note that it's your
 -- responsability to properly close the connection pool when
 -- unneeded.  Use 'withMySQLPool' for automatic resource control.
-createMySQLPool :: MonadIO m =>
+createMySQLPool :: (MonadBaseControl IO m, MonadIO m, MonadLogger m) =>
                    MySQL.ConnectInfo
                 -- ^ Connection information.
                 -> Int
@@ -81,7 +82,7 @@ createMySQLPool ci = createSqlPool $ open' ci
 
 -- | Same as 'withMySQLPool', but instead of opening a pool
 -- of connections, only one connection is opened.
-withMySQLConn :: (MonadBaseControl IO m, MonadIO m) =>
+withMySQLConn :: (MonadBaseControl IO m, MonadIO m, MonadLogger m) =>
                  MySQL.ConnectInfo
               -- ^ Connection information.
               -> (Connection -> m a)
@@ -92,8 +93,8 @@ withMySQLConn = withSqlConn . open'
 
 -- | Internal function that opens a connection to the MySQL
 -- server.
-open' :: MySQL.ConnectInfo -> IO Connection
-open' ci = do
+open' :: MySQL.ConnectInfo -> LogFunc -> IO Connection
+open' ci logFunc = do
     conn <- MySQL.connect ci
     MySQLBase.autocommit conn False -- disable autocommit!
     smap <- newIORef $ Map.empty
@@ -112,8 +113,9 @@ open' ci = do
         -- <http://dev.mysql.com/doc/refman/5.5/en/select.html>
         , connRDBMS      = "mysql"
         , connLimitOffset = decorateSQLWithLimitOffset "LIMIT 18446744073709551615"
+        , connLogFunc    = logFunc
         }
-        
+
 -- | Prepare a query.  We don't support prepared statements, but
 -- we'll do some client-side preprocessing here.
 prepare' :: MySQL.Connection -> Text -> IO Statement
@@ -154,9 +156,9 @@ withStmt' :: MonadIO m
           => MySQL.Connection
           -> MySQL.Query
           -> [PersistValue]
-          -> Resource (Source m [PersistValue])
+          -> Acquire (Source m [PersistValue])
 withStmt' conn query vals = do
-    result <- mkResource createResult MySQLBase.freeResult
+    result <- mkAcquire createResult MySQLBase.freeResult
     return $ fetchRows result >>= CL.sourceList
   where
     createResult = do
@@ -796,7 +798,7 @@ instance PersistConfig MySQLConf where
 
     type PersistConfigPool    MySQLConf = ConnectionPool
 
-    createPoolConfig (MySQLConf cs size) = createMySQLPool cs size
+    createPoolConfig (MySQLConf cs size) = runNoLoggingT $ createMySQLPool cs size -- FIXME
 
     runPool _ = runSqlPool
 
