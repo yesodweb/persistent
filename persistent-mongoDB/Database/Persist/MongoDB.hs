@@ -741,7 +741,6 @@ instance DB.Val PersistValue where
   -- this is just millisecond precision: https://jira.mongodb.org/browse/SERVER-1460
   val (PersistUTCTime x) = DB.UTC x
 #endif
-  val (PersistLocalTime x) = DB.String $ T.pack $ show x
   val (PersistDay d)     = DB.Int64 $ fromInteger $ toModifiedJulianDay d
   val (PersistNull)      = DB.Null
   val (PersistList l)    = DB.Array $ map DB.val l

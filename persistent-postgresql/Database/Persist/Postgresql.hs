@@ -252,7 +252,6 @@ instance PGTF.ToField P where
     toField (P (PersistDay d))         = PGTF.toField d
     toField (P (PersistTimeOfDay t))   = PGTF.toField t
     toField (P (PersistUTCTime t))     = PGTF.toField t
-    toField (P (PersistLocalTime t))   = PGTF.toField t
     toField (P PersistNull)            = PGTF.toField PG.Null
     toField (P (PersistList l))        = PGTF.toField $ listToJSON l
     toField (P (PersistMap m))         = PGTF.toField $ mapToJSON m
@@ -297,7 +296,7 @@ getGetter PG.BpChar                = convertPV PersistText
 getGetter PG.VarChar               = convertPV PersistText
 getGetter PG.Date                  = convertPV PersistDay
 getGetter PG.Time                  = convertPV PersistTimeOfDay
-getGetter PG.Timestamp             = convertPV PersistLocalTime
+getGetter PG.Timestamp             = convertPV PersistUTCTime -- NOTE: implicit TZ conversion!
 getGetter PG.TimestampTZ           = convertPV PersistUTCTime
 getGetter PG.Bit                   = convertPV PersistInt64
 getGetter PG.VarBit                = convertPV PersistInt64
@@ -548,8 +547,7 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, ns
     getType "varchar"     = Right $ SqlString
     getType "date"        = Right $ SqlDay
     getType "bool"        = Right $ SqlBool
-    getType "timestamp"   = Right $ SqlDayTimeLocal
-    getType "timestamptz" = Right $ SqlDayTimeUTC
+    getType "timestamptz" = Right $ SqlDayTime
     getType "float4"      = Right $ SqlReal
     getType "float8"      = Right $ SqlReal
     getType "bytea"       = Right $ SqlBlob
@@ -595,7 +593,7 @@ findAlters defs tablename col@(Column name isNull sqltype def defConstraintName 
                     -- When converting from Persistent pre-2.0 databases, we
                     -- need to make sure that TIMESTAMP WITHOUT TIME ZONE is
                     -- treated as UTC.
-                    | sqltype == SqlDayTimeUTC && sqltype' == SqlDayTimeLocal =
+                    | sqltype == SqlDayTime && sqltype' == SqlOther "timestamp" =
                         [(name, Type sqltype $ T.concat
                             [ " USING "
                             , escape name
@@ -644,8 +642,7 @@ showSqlType SqlReal = "DOUBLE PRECISION"
 showSqlType (SqlNumeric s prec) = T.concat [ "NUMERIC(", T.pack (show s), ",", T.pack (show prec), ")" ]
 showSqlType SqlDay = "DATE"
 showSqlType SqlTime = "TIME"
-showSqlType SqlDayTimeLocal = "TIMESTAMP WITHOUT TIME ZONE"
-showSqlType SqlDayTimeUTC = "TIMESTAMP WITH TIME ZONE"
+showSqlType SqlDayTime = "TIMESTAMP WITH TIME ZONE"
 showSqlType SqlBlob = "BYTEA"
 showSqlType SqlBool = "BOOLEAN"
 

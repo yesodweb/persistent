@@ -352,7 +352,6 @@ bind statement sqlData = do
             PersistDay d -> bindText statement parameterIndex $ pack $ show d
             PersistTimeOfDay d -> bindText statement parameterIndex $ pack $ show d
             PersistUTCTime d -> bindText statement parameterIndex $ pack $ show d
-            PersistLocalTime lt -> bindText statement parameterIndex $ pack $ show lt
             PersistList l -> bindText statement parameterIndex $ listToJSON l
             PersistMap m -> bindText statement parameterIndex $ mapToJSON m
             PersistDbSpecific s -> bindText statement parameterIndex $ decodeUtf8With lenientDecode s
