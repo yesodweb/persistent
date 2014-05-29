@@ -299,14 +299,19 @@ updateToMongoField :: (PersistEntity entity) => Update entity -> DB.Field
 updateToMongoField (Update field v up) =
     opName DB.:= DB.Doc [fieldName field DB.:= opValue]
     where 
+      inc = "$inc"
+      mul = "$mul"
       (opName, opValue) =
         case (up, toPersistValue v) of
                   (Assign, PersistNull) -> ("$unset", DB.Int64 1)
                   (Assign,a)    -> ("$set", DB.val a)
-                  (Add, a)      -> ("$inc", DB.val a)
-                  (Subtract, PersistInt64 i) -> ("$inc", DB.Int64 (-i))
+                  (Add, a)      -> (inc, DB.val a)
+                  (Subtract, PersistInt64 i) -> (inc, DB.Int64 (-i))
+                  (Multiply, PersistInt64 i) -> (mul, DB.Int64 i)
+                  (Multiply, PersistDouble d) -> (mul, DB.Float d)
                   (Subtract, _) -> error "expected PersistInt64 for a subtraction"
-                  (Multiply, _) -> throw $ PersistMongoDBUnsupported "multiply not supported"
+                  (Multiply, _) -> error "expected PersistInt64 or PersistDouble for a subtraction"
+                  -- Obviously this could be supported for floats by multiplying with 1/x
                   (Divide, _)   -> throw $ PersistMongoDBUnsupported "divide not supported"
 
 
