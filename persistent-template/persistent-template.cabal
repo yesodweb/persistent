@@ -19,8 +19,9 @@ library
                    , template-haskell
                    , persistent               >= 2.0       && < 2.1
                    , monad-control            >= 0.2       && < 0.4
+                   , bytestring               >= 0.9
                    , text                     >= 0.5
-                   , transformers             >= 0.2       && < 0.4
+                   , transformers             >= 0.2       && < 0.5
                    , containers
                    , aeson
                    , monad-logger

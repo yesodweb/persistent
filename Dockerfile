@@ -28,8 +28,15 @@ RUN apt-get install -y mongodb-10gen || echo "upstart error expected"
 # MySQL
 RUN apt-get install -y mysql-server || echo "need to run mysql --configure"
 
-# # when the building step is done, run the given <image>, mounting this directory inside
-# sudo docker run -name persistent -v `pwd`:/home/persistent -t -i <image> /bin/bash
+USER persistent
+ENV HOME /home/persistent
+
+# build the image
+#
+#     sudo docker build -t persistent .
+#
+# run the image with the directory mounted
+#     sudo docker run --name persistent -v `pwd`:/home/persistent -t -i persistent /bin/bash
 #
 # # switch to the persistent user in the image and its home directory
 # su persistent
@@ -45,11 +52,11 @@ RUN apt-get install -y mysql-server || echo "need to run mysql --configure"
 #
 # # launch databases
 # RUN cd persistent-test/db
-
-# mongod --dbpath=. --smallfiles &
-
+#
+# mongod --dbpath=. --logpath=./mongodb.log --smallfiles --logappend --profile 2 --verbose &
+#
 # redis-server --save "" # port 6379
-
+#
 # mysql_install_db --datadir=/home/persistent/persistent-test/db
 # mysqld_safe --datadir=/home/persistent/persistent-test/db
 

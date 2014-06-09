@@ -29,6 +29,7 @@ library
                    , containers               >= 0.2
                    , conduit                  >= 1.0
                    , resourcet                >= 1.1
+                   , exceptions               >= 0.6
                    , monad-control            >= 0.3
                    , lifted-base              >= 0.1
                    , resource-pool

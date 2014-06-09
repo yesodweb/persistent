@@ -12,6 +12,7 @@ module Database.Persist.Sql.Types where
 import Control.Exception (Exception)
 import Control.Monad.Trans.Resource (MonadResource (..), MonadThrow (..), ResourceT)
 import Data.Acquire (Acquire)
+import Control.Monad.Catch (MonadCatch, MonadMask)
 import Control.Monad.Logger (MonadLogger (..), NoLoggingT)
 import Control.Monad.Trans.Control
 import Control.Monad.Trans.Class (MonadTrans (..))

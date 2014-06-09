@@ -13,6 +13,7 @@ module DataTypeTest (specs) where
 import Test.QuickCheck.Arbitrary (Arbitrary, arbitrary)
 import Test.QuickCheck.Gen (Gen(..), choose)
 import Test.QuickCheck.Instances ()
+import Test.QuickCheck.Random (newQCGen)
 import Database.Persist.Sqlite
 import Database.Persist.TH
 #if defined(WITH_POSTGRESQL)
@@ -137,7 +138,7 @@ roundUTCTime = id
 
 randomValues :: IO [DataTypeTable]
 randomValues = do
-  g <- newStdGen
+  g <- newQCGen
   return $ map (unGen arbitrary g) [0..]
 
 instance Arbitrary (DataTypeTableGeneric g) where

@@ -30,6 +30,7 @@ module Database.Persist.TH
     , mkDeleteCascade
     , share
     , derivePersistField
+    , derivePersistFieldJSON
     , persistFieldFromEntity
       -- * Internal
     , packPTH
@@ -50,6 +51,7 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.IO.Class (MonadIO)
 import qualified System.IO as SIO
 import Data.Text (pack, Text, append, unpack, concat, uncons, cons)
+import Data.Text.Encoding (decodeUtf8)
 import qualified Data.Text.IO as TIO
 import Data.List (foldl', find)
 import Data.Maybe (isJust)
@@ -59,7 +61,9 @@ import qualified Data.HashMap.Strict as HM
 import Data.Aeson
     ( ToJSON (toJSON), FromJSON (parseJSON), (.=), object
     , Value (Object), (.:), (.:?)
+    , encode, eitherDecodeStrict'
     )
+import qualified Data.ByteString.Lazy as BL
 import Control.Applicative (pure, (<*>))
 import Control.Monad.Logger (MonadLogger)
 import Database.Persist.Sql (sqlType)
@@ -724,19 +728,21 @@ mkForeignKeysComposite mps t fdef = do
 
 -- | produce code similar to the following:
 --
--- instance PersistEntity e => PersistField e where
---    toPersistValue = PersistMap $ zip columNames (map toPersistValue . toPersistFields)
---    fromPersistValue (PersistMap o) = 
---        let columns = HM.fromList x
---        in fromPersistValues $ map (\name ->
---          case HM.lookup name o of
---            Just v ->
---              case fromPersistValue v of
---                Left e -> error e
---                Right r -> r
---            Nothing -> error $ "Missing field: " `mappend` unpack name) columnNames 
---    fromPersistValue x = Left $ "Expected PersistMap, received: " ++ show x
---    sqlType _ = SqlString
+-- @
+--   instance PersistEntity e => PersistField e where
+--      toPersistValue = PersistMap $ zip columNames (map toPersistValue . toPersistFields)
+--      fromPersistValue (PersistMap o) = 
+--          let columns = HM.fromList x
+--          in fromPersistValues $ map (\name ->
+--            case HM.lookup name o of
+--              Just v ->
+--                case fromPersistValue v of
+--                  Left e -> error e
+--                  Right r -> r
+--              Nothing -> error $ "Missing field: " `mappend` unpack name) columnNames 
+--      fromPersistValue x = Left $ "Expected PersistMap, received: " ++ show x
+--      sqlType _ = SqlString
+-- @
 persistFieldFromEntity :: MkPersistSettings -> EntityDef a -> Q [Dec]
 persistFieldFromEntity mps e = do
     ss <- [|SqlString|]
@@ -912,6 +918,40 @@ derivePersistField s = do
                         case reads $ unpack s' of
                             (x, _):_ -> Right x
                             [] -> Left $ pack "Invalid " ++ pack dt ++ pack ": " ++ s'|]
+    return
+        [ persistFieldInstanceD (ConT $ mkName s)
+            [ FunD 'toPersistValue
+                [ Clause [] (NormalB tpv) []
+                ]
+            , FunD 'fromPersistValue
+                [ Clause [] (NormalB $ fpv `AppE` LitE (StringL s)) []
+                ]
+            ]
+        , persistFieldSqlInstanceD (ConT $ mkName s)
+            [ sqlTypeFunD ss
+            ]
+        ]
+
+-- | Automatically creates a valid 'PersistField' instance for any datatype
+-- that has valid 'ToJSON' and 'FromJSON' instances. For a datatype @T@ it
+-- generates instances similar to these:
+-- 
+-- @
+--    instance PersistField T where
+--        toPersistValue = PersistByteString . L.toStrict . encode
+--        fromPersistValue = (left T.pack) . eitherDecodeStrict' <=< fromPersistValue
+--    instance PersistFieldSql T where
+--        sqlType _ = SqlString
+-- @
+derivePersistFieldJSON :: String -> Q [Dec]
+derivePersistFieldJSON s = do
+    ss <- [|SqlString|]
+    tpv <- [|PersistByteString . BL.toStrict . encode|]
+    fpv <- [|\dt v -> do
+                bs' <- fromPersistValue v
+                case eitherDecodeStrict' bs' of
+                    Left e -> Left $ pack "Invalid " ++ pack dt ++ pack ": " ++ decodeUtf8 bs' ++ pack " (" ++ pack e ++ pack ")"
+                    Right x -> Right x|]
     return
         [ persistFieldInstanceD (ConT $ mkName s)
             [ FunD 'toPersistValue
