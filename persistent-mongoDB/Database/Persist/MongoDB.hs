@@ -26,11 +26,16 @@ module Database.Persist.MongoDB
     (
     -- * Entity conversion
       collectionName
-    , entityToDocument
-    , entityToFields
-    , toInsertFields
     , docToEntityEither
     , docToEntityThrow
+    , entityToDocument
+    , toInsertDoc
+    , updatesToDoc
+    , filtersToDoc
+    , toUniquesDoc
+
+    , toInsertFields
+    , entityToFields
 
     -- * MongoDB specific Filters
     -- $filters
@@ -313,8 +318,8 @@ selectByKey :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend
             => Key record -> EntityDef a -> DB.Selection
 selectByKey k record = (DB.select (filterByKey k) (unDBName $ entityDB record))
 
-updateFields :: (PersistEntity entity) => [Update entity] -> [DB.Field]
-updateFields upds = map updateToMongoField upds 
+updatesToDoc :: (PersistEntity entity) => [Update entity] -> DB.Document
+updatesToDoc upds = map updateToMongoField upds
 
 updateToMongoField :: (PersistEntity entity) => Update entity -> DB.Field
 updateToMongoField (Update field v up) =
@@ -336,16 +341,20 @@ updateToMongoField (Update field v up) =
                   (Divide, _)   -> throw $ PersistMongoDBUnsupported "divide not supported"
 
 
-uniqSelector :: forall record.  (PersistEntity record) => Unique record -> [DB.Field]
-uniqSelector uniq = zipWith (DB.:=)
+toUniquesDoc :: forall record. (PersistEntity record) => Unique record -> [DB.Field]
+toUniquesDoc uniq = zipWith (DB.:=)
   (map (unDBName . snd) $ persistUniqueToFieldNames uniq)
   (map DB.val (persistUniqueToValues uniq))
 
+toInsertFields :: forall record.  (PersistEntity record) => record -> [DB.Field]
+toInsertFields = toInsertDoc
+{-# DEPRECATED toInsertFields "Please use toInsertDoc instead" #-}
+
 -- | convert a PersistEntity into document fields.
 -- for inserts only: nulls are ignored so they will be unset in the document.
--- 'entityToFields' includes nulls
-toInsertFields :: forall record.  (PersistEntity record) => record -> [DB.Field]
-toInsertFields record = zipFilter (entityFields entity) (toPersistFields record)
+-- 'entityToDocument' includes nulls
+toInsertDoc :: forall record.  (PersistEntity record) => record -> DB.Document
+toInsertDoc record = zipFilter (entityFields entity) (toPersistFields record)
   where
     zipFilter [] _  = []
     zipFilter _  [] = []
@@ -358,8 +367,8 @@ collectionName :: (PersistEntity record) => record -> Text
 collectionName = unDBName . entityDB . entityDef . Just
 
 -- | convert a PersistEntity into document fields.
--- unlike 'toInsertFields', nulls are included.
-entityToDocument :: (PersistEntity record) => record -> [DB.Field]
+-- unlike 'toInsertDoc', nulls are included.
+entityToDocument :: (PersistEntity record) => record -> DB.Document
 entityToDocument record = zipIt (entityFields entity) (toPersistFields record)
   where
     zipIt [] _  = []
@@ -400,12 +409,12 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
     insertMany (r:records) = map (\(DB.ObjId oid) -> oidToKey oid) `fmap`
         DB.insertMany (collectionName r) (map toInsertFields (r:records))
 
-    insertKey k record = saveWithKey toInsertFields DB.insert_ k record
+    insertKey k record = saveWithKey toInsertDoc DB.insert_ k record
 
     repsert   k record = saveWithKey entityToDocument DB.save k record
 
     replace k record = do
-        DB.replace (selectByKey k t) (toInsertFields record)
+        DB.replace (selectByKey k t) (entityToDocument record)
         return ()
       where
         t = entityDef $ Just record
@@ -436,7 +445,7 @@ instance MonadThrow m => MonadThrow (DB.Action m) where
 instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => PersistUnique (DB.Action m) where
     getBy uniq = do
         mdoc <- DB.findOne $
-          DB.select (uniqSelector uniq) (unDBName $ entityDB t)
+          DB.select (toUniquesDoc uniq) (unDBName $ entityDB t)
         case mdoc of
             Nothing -> return Nothing
             Just doc -> fmap Just $ fromPersistValuesThrow t doc
@@ -446,7 +455,7 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
     deleteBy uniq =
         DB.delete DB.Select {
           DB.coll = collectionName $ dummyFromUnique uniq
-        , DB.selector = uniqSelector uniq
+        , DB.selector = toUniquesDoc uniq
         }
 
 _id :: T.Text
@@ -462,12 +471,12 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
     update key upds =
         DB.modify 
            (DB.Select [keyToMongoIdField key] (collectionName $ recordTypeFromKey key))
-           $ updateFields upds
+           $ updatesToDoc upds
 
     updateGet key upds = do
         result <- DB.findAndModify (DB.select [keyToMongoIdField key]
                      (unDBName $ entityDB t)
-                   ) (updateFields upds)
+                   ) (updatesToDoc upds)
         case result of
           Left e -> err e
           Right doc -> do
@@ -482,20 +491,20 @@ instance (Applicative m, Functor m, Trans.MonadIO m, MonadBaseControl IO m) => P
     updateWhere filts upds =
         DB.modify DB.Select {
           DB.coll = collectionName $ dummyFromFilts filts
-        , DB.selector = filtersToSelector filts
-        } $ updateFields upds
+        , DB.selector = filtersToDoc filts
+        } $ updatesToDoc upds
 
     deleteWhere filts = do
         DB.delete DB.Select {
           DB.coll = collectionName $ dummyFromFilts filts
-        , DB.selector = filtersToSelector filts
+        , DB.selector = filtersToDoc filts
         }
 
     count filts = do
         i <- DB.count query
         return $ fromIntegral i
       where
-        query = DB.select (filtersToSelector filts) $
+        query = DB.select (filtersToDoc filts) $
                   collectionName $ dummyFromFilts filts
 
     selectSource filts opts = do
@@ -544,7 +553,7 @@ orderClause o = case o of
 
 makeQuery :: (PersistEntity val, PersistEntityBackend val ~ MongoBackend) => [Filter val] -> [SelectOpt val] -> DB.Query
 makeQuery filts opts =
-    (DB.select (filtersToSelector filts) (collectionName $ dummyFromFilts filts)) {
+    (DB.select (filtersToDoc filts) (collectionName $ dummyFromFilts filts)) {
       DB.limit = fromIntegral limit
     , DB.skip  = fromIntegral offset
     , DB.sort  = orders
@@ -553,8 +562,8 @@ makeQuery filts opts =
     (limit, offset, orders') = limitOffsetOrder opts
     orders = map orderClause orders'
 
-filtersToSelector :: (PersistEntity val, PersistEntityBackend val ~ MongoBackend) => [Filter val] -> DB.Document
-filtersToSelector filts = 
+filtersToDoc :: (PersistEntity val, PersistEntityBackend val ~ MongoBackend) => [Filter val] -> DB.Document
+filtersToDoc filts =
 #ifdef DEBUG
   debug $
 #endif

@@ -26,7 +26,7 @@ import Database.Persist
 
 #ifdef WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
-import Database.Persist.MongoDB (oidToKey, toInsertFields, docToEntityThrow, MongoBackend, collectionName, entityToDocument)
+import Database.Persist.MongoDB (oidToKey, toInsertDoc, docToEntityThrow, MongoBackend, collectionName, entityToDocument)
 import Data.Bson (genObjectId)
 import Language.Haskell.TH.Syntax (Type(..))
 
@@ -643,7 +643,7 @@ specs = describe "persistent" $ do
 
     it "toInsertFields, entityFields, & docToEntityThrow" $ db $ do
         let p1 = Person "Duder" 0 Nothing
-        let doc = toInsertFields p1
+        let doc = toInsertDoc p1
         MongoDB.ObjId _id <- MongoDB.insert "Person" $ doc
         let idSelector = "_id" MongoDB.=: _id
         Entity _ ent1 <- docToEntityThrow $ idSelector:doc
