@@ -1,4 +1,8 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ExistentialQuantification #-}
+#if defined(SYN_WORKAROUND)
+{-# LANGUAGE UndecidableInstances #-}
+#endif
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
@@ -107,7 +111,12 @@ data Filter record = forall typ. PersistField typ => Filter
 -- | Helper wrapper, equivalent to @Key (PersistEntityBackend val) val@.
 --
 -- Since 1.1.0
+#if defined(SYN_WORKAROUND)
+type family Key record :: * where
+    Key record = KeyBackend (PersistEntityBackend record) record
+#else
 type Key record = KeyBackend (PersistEntityBackend record) record
+#endif
 
 -- | Datatype that represents an entity, with both its 'Key' and
 -- its Haskell record representation.
