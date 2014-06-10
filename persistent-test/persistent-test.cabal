@@ -106,29 +106,31 @@ library
                    , hspec-expectations
                    , file-location >= 0.4
                    , template-haskell
-                   , aeson
-                   , lifted-base
+                   , aeson                    >= 0.5
+                   , lifted-base              >= 0.1
                    , network
-                   , path-pieces >= 0.1
-                   , text
-                   , transformers
-                   , monad-control
-                   , containers
-                   , bytestring
+                   , path-pieces              >= 0.1
+                   , text                     >= 0.8
+                   , transformers             >= 0.2.1
+                   , monad-control            >= 0.3
+                   , containers               >= 0.2
+                   , bytestring               >= 0.9
                    , base64-bytestring
-                   , conduit >= 0.5.3
-                   , resourcet >= 0.3
-                   , time >= 1.2
+                   , conduit                  >= 1.0
+                   , resourcet                >= 0.4
+                   , exceptions
+                   , time                     >= 1.1.4
                    , random >= 1.0
                    , QuickCheck >= 2.7
-                   , blaze-html >= 0.5
+                   , blaze-html               >= 0.5
+                   , blaze-markup             >= 0.5.1
                    , quickcheck-instances >= 0.3
                    , pool-conduit
                    , transformers-base
                    , attoparsec
                    , vector
                    , unordered-containers
-                   , monad-logger >= 0.2.3
+                   , monad-logger             >= 0.3
                    , hashable
                    -- actually just a mongoDB dependency
                    -- fixes build warning on current build server
