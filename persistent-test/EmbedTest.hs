@@ -266,8 +266,10 @@ specs = describe "embedded entities" $ do
 
 
   it "re-orders json inserted from another source" $ db $ do
-    _ <- liftIO $ readProcess "mongoimport" ["-d", "test", "-c", "ListEmbed"] "{ \"nested\": [{ \"one\": 1, \"two\": 2 }, { \"two\": 2, \"one\": 1}], \"two\": 2, \"one\": 1, \"_id\" : { \"$oid\" : \"50184f5a92d7ae0000001e89\" } }"
-    (Entity _ list):[] <- selectList [] []
-    list @== ListEmbed [InList 1 2, InList 1 2] 1 2
-    return ()
+    let cname = T.unpack $ collectionName (error "ListEmbed" :: ListEmbed)
+    liftIO $ putStrLn =<< readProcess "mongoimport" ["-d", T.unpack dbName, "-c", cname] "{ \"nested\": [{ \"one\": 1, \"two\": 2 }, { \"two\": 2, \"one\": 1}], \"two\": 2, \"one\": 1, \"_id\" : { \"$oid\" : \"50184f5a92d7ae0000001e89\" } }"
+    -- liftIO $ putStrLn =<< readProcess "mongo" ["--eval", "printjson(db." ++ cname ++ ".find().toArray())", T.unpack dbName] ""
+
+    lists <- selectList [] []
+    fmap entityVal lists @== [ListEmbed [InList 1 2, InList 1 2] 1 2]
 #endif

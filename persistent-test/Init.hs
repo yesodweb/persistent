@@ -1,5 +1,4 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -12,6 +11,7 @@ module Init (
   , assertEmpty
   , BackendMonad
   , runConn
+  , dbName
 
 #ifdef WITH_MONGODB
   , db'
@@ -50,13 +50,13 @@ import Data.Text (Text)
 
 #ifdef WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
-import Database.Persist.MongoDB (Action, withMongoDBConn, runMongoDBPool, MongoBackend)
+import Database.Persist.MongoDB (Action, runMongoDBPool, MongoBackend, defaultMongoConf, withConnection, applyDockerEnv)
 import Language.Haskell.TH.Syntax (Type(..))
 import Database.Persist.TH (mkPersistSettings, MkPersistSettings(..))
 import Control.Monad (replicateM)
 import qualified Data.ByteString as BS
 
-import Network (PortID (PortNumber))
+import Control.Monad (void)
 
 #else
 import Database.Persist.Sqlite
@@ -112,29 +112,18 @@ assertNotEmpty xs = liftIO $ assertBool "" (not (null xs))
 persistSettings :: MkPersistSettings
 persistSettings = mkPersistSettings $ ConT ''MongoBackend
 
+dbName :: Text
+dbName = "persistent"
+
 type BackendMonad = MongoBackend
 runConn :: (MonadIO m, MonadBaseControl IO m) => Action m backend -> m ()
 runConn f = do
-  _<-withMongoDBConn "test" "127.0.0.1" (PortNumber 27017) Nothing 5 $
-      runMongoDBPool MongoDB.master f
-  return ()
+  conf <- liftIO $ applyDockerEnv $ defaultMongoConf dbName
+  void $ withConnection conf $ runMongoDBPool MongoDB.master f
 
---setup :: MongoPersist IO ()
+
 setupMongo :: Action IO ()
-setupMongo = do
-  -- TODO: check version
-  -- v <- MongoDB.access MongoDB.pipe MongoDB.slaveOk "admin" $ MongoDB.runCommand1 "buildInfo"
-  v <- MongoDB.serverVersion
-  liftIO $ putStrLn $ "version: " ++ show v
-  if andVersion v then return () else error "mongoDB version not supported: need at least 1.9.1"
-  -- TODO: use dropDatabase
-  _<-MongoDB.dropDatabase "test"
-  return ()
-  where
-    andVersion vresult = case show vresult of
-      '"':'1':'.':n:'.':minor -> let i = ((read [n]) ::Int) in i > 9 || (i == 9 && ((read $ init minor)::Int) >= 1)
-      '"':'2':'.':_ -> True
-      _ -> error "unkown version"
+setupMongo = void $ MongoDB.dropDatabase dbName
 
 
 db' :: Action IO () -> Action IO () -> Assertion

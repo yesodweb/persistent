@@ -53,6 +53,7 @@ module Database.Persist.MongoDB
     , fieldName
 
     -- * using connections
+    , withConnection
     , withMongoDBConn
     , withMongoDBPool
     , createMongoDBPool
@@ -60,9 +61,19 @@ module Database.Persist.MongoDB
     , runMongoDBPoolDef
     , ConnectionPool
     , Connection
-    , MongoConf (..)
     , MongoBackend
     , MongoAuth (..)
+
+    -- * Connection configuration
+    , MongoConf (..)
+    , defaultMongoConf
+    , defaultHost
+    , defaultAccessMode
+    , defaultPoolStripes
+    , defaultConnectionIdleTime
+    , defaultStripeConnections
+    , applyDockerEnv
+
     -- ** using raw MongoDB pipes
     , PipePool
     , createMongoDBPipePool
@@ -112,13 +123,17 @@ import Data.Time (NominalDiffTime)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 #endif
 import Data.Time.Calendar (Day(..))
+#if MIN_VERSION_aeson(0, 7, 0)
+#else
 import Data.Attoparsec.Number
+#endif
 import Data.Char (toUpper)
 import Data.Word (Word16)
 import Data.Monoid (mappend)
 import Data.Typeable
 import Control.Monad.Trans.Resource (MonadThrow (..))
 import Control.Monad.Trans.Control (MonadBaseControl)
+import System.Environment (lookupEnv)
 
 #ifdef DEBUG
 import FileLocation (debug)
@@ -131,7 +146,7 @@ newtype NoOrphanNominalDiffTime = NoOrphanNominalDiffTime NominalDiffTime
                                 deriving (Show, Eq, Num)
 
 instance FromJSON NoOrphanNominalDiffTime where
-#if MIN_VERSION_aeson(0, 7, 0)    
+#if MIN_VERSION_aeson(0, 7, 0)
     parseJSON (Number x) = (return . NoOrphanNominalDiffTime . fromRational . toRational) x
 
 
@@ -205,6 +220,12 @@ instance PersistField Objectid where
 instance Sql.PersistFieldSql Objectid where
     sqlType _ = Sql.SqlOther "doesn't make much sense for MongoDB"
 
+
+withConnection :: (Trans.MonadIO m, Applicative m)
+               => MongoConf
+               -> (ConnectionPool -> m b) -> m b
+withConnection mc =
+  withMongoDBPool (mgDatabase mc) (T.unpack $ mgHost mc) (mgPort mc) (mgAuth mc) (mgPoolStripes mc) (mgStripeConnections mc) (mgConnectionIdleTime mc)
 
 withMongoDBConn :: (Trans.MonadIO m, Applicative m)
                 => Database -> HostName -> PortID
@@ -806,6 +827,28 @@ data MongoConf = MongoConf
     , mgConnectionIdleTime :: NominalDiffTime
     } deriving Show
 
+defaultHost :: Text
+defaultHost = "127.0.0.1"
+defaultAccessMode :: DB.AccessMode
+defaultAccessMode = DB.ConfirmWrites ["j" DB.=: True]
+defaultPoolStripes, defaultStripeConnections :: Int
+defaultPoolStripes = 1
+defaultStripeConnections = 10
+defaultConnectionIdleTime :: NominalDiffTime
+defaultConnectionIdleTime = 20
+
+defaultMongoConf :: Text -> MongoConf
+defaultMongoConf dbName = MongoConf
+  { mgDatabase = dbName
+  , mgHost = defaultHost
+  , mgPort = DB.defaultPort
+  , mgAuth = Nothing
+  , mgAccessMode = defaultAccessMode
+  , mgPoolStripes = defaultPoolStripes
+  , mgStripeConnections = defaultStripeConnections
+  , mgConnectionIdleTime = defaultConnectionIdleTime
+  }
+
 instance PersistConfig MongoConf where
     type PersistConfigBackend MongoConf = DB.Action
     type PersistConfigPool MongoConf = ConnectionPool
@@ -819,14 +862,14 @@ instance PersistConfig MongoConf where
     runPool c = runMongoDBPool (mgAccessMode c)
     loadConfig (Object o) = do
         db                 <- o .:  "database"
-        host               <- o .:? "host" .!= "127.0.0.1"
+        host               <- o .:? "host" .!= defaultHost
         (NoOrphanPortID port) <- o .:? "port" .!= (NoOrphanPortID DB.defaultPort)
-        poolStripes        <- o .:? "poolstripes" .!= 1
-        stripeConnections  <- o .:  "connections"
-        (NoOrphanNominalDiffTime connectionIdleTime) <- o .:? "connectionIdleTime" .!= 20
+        poolStripes        <- o .:? "poolstripes" .!= defaultPoolStripes
+        stripeConnections  <- o .:? "connections" .!= defaultStripeConnections
+        (NoOrphanNominalDiffTime connectionIdleTime) <- o .:? "connectionIdleTime" .!= (NoOrphanNominalDiffTime defaultConnectionIdleTime)
         mUser              <- o .:? "user"
         mPass              <- o .:? "password"
-        accessString       <- o .:? "accessMode" .!= "ConfirmWrites"
+        accessString       <- o .:? "accessMode" .!= T.pack (show defaultAccessMode)
 
         mPoolSize         <- o .:? "poolsize"
         case mPoolSize of
@@ -834,10 +877,10 @@ instance PersistConfig MongoConf where
           Just (_::Int) -> fail "specified deprecated poolsize attribute. Please specify a connections. You can also specify a pools attribute which defaults to 1. Total connections opened to the db are connections * pools"
 
         accessMode <- case accessString of
-               "ReadStaleOk"       -> return DB.ReadStaleOk
-               "UnconfirmedWrites" -> return DB.UnconfirmedWrites
-               "ConfirmWrites"     -> return $ DB.ConfirmWrites ["j" DB.=: True]
-               badAccess -> fail $ "unknown accessMode: " ++ (T.unpack badAccess)
+             "ReadStaleOk"       -> return DB.ReadStaleOk
+             "UnconfirmedWrites" -> return DB.UnconfirmedWrites
+             "ConfirmWrites"     -> return $ defaultAccessMode
+             badAccess -> fail $ "unknown accessMode: " ++ (T.unpack badAccess)
 
         return $ MongoConf {
             mgDatabase = db
@@ -863,6 +906,14 @@ instance PersistConfig MongoConf where
             s = T.unpack t
             -}
     loadConfig _ = mzero
+
+-- | docker integration: change the host to the mongodb link
+applyDockerEnv :: MongoConf -> IO MongoConf
+applyDockerEnv mconf = do
+    mHost <- lookupEnv "MONGODB_PORT_27017_TCP_ADDR"
+    return $ case mHost of
+        Nothing -> mconf
+        Just h -> mconf { mgHost = T.pack h }
 
 
 -- ---------------------------
