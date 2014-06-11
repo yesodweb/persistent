@@ -878,7 +878,7 @@ instance PersistConfig MongoConf where
         (NoOrphanNominalDiffTime connectionIdleTime) <- o .:? "connectionIdleTime" .!= (NoOrphanNominalDiffTime defaultConnectionIdleTime)
         mUser              <- o .:? "user"
         mPass              <- o .:? "password"
-        accessString       <- o .:? "accessMode" .!= T.pack (show defaultAccessMode)
+        accessString       <- o .:? "accessMode" .!= confirmWrites
 
         mPoolSize         <- o .:? "poolsize"
         case mPoolSize of
@@ -888,8 +888,8 @@ instance PersistConfig MongoConf where
         accessMode <- case accessString of
              "ReadStaleOk"       -> return DB.ReadStaleOk
              "UnconfirmedWrites" -> return DB.UnconfirmedWrites
-             "ConfirmWrites"     -> return $ defaultAccessMode
-             badAccess -> fail $ "unknown accessMode: " ++ (T.unpack badAccess)
+             confirmWrites       -> return defaultAccessMode
+             badAccess -> fail $ "unknown accessMode: " ++ T.unpack badAccess
 
         return $ MongoConf {
             mgDatabase = db
@@ -906,6 +906,7 @@ instance PersistConfig MongoConf where
           , mgConnectionIdleTime = connectionIdleTime
           }
       where
+        confirmWrites = "ConfirmWrites"
     {-
         safeRead :: String -> T.Text -> MEither String Int
         safeRead name t = case reads s of
