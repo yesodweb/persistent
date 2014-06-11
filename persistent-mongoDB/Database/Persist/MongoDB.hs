@@ -918,7 +918,7 @@ instance PersistConfig MongoConf where
         NoOrphanNominalDiffTime connectionIdleTime <- o .:? "connectionIdleTime" .!= NoOrphanNominalDiffTime defaultConnectionIdleTime
         mUser              <- o .:? "user"
         mPass              <- o .:? "password"
-        accessString       <- o .:? "accessMode" .!= T.pack (show defaultAccessMode)
+        accessString       <- o .:? "accessMode" .!= confirmWrites
         mRsPrimary         <- o .:? "rsPrimary"
 
         mPoolSize         <- o .:? "poolsize"
@@ -929,7 +929,7 @@ instance PersistConfig MongoConf where
         accessMode <- case accessString of
              "ReadStaleOk"       -> return DB.ReadStaleOk
              "UnconfirmedWrites" -> return DB.UnconfirmedWrites
-             "ConfirmWrites"     -> return defaultAccessMode
+             confirmWrites       -> return defaultAccessMode
              badAccess -> fail $ "unknown accessMode: " ++ T.unpack badAccess
 
         return MongoConf {
@@ -947,6 +947,7 @@ instance PersistConfig MongoConf where
           , mgRsPrimary = toRsPrimary mRsPrimary
           }
       where
+        confirmWrites = "ConfirmWrites"
         toRsPrimary :: Maybe Text -> Maybe DB.ReplicaSetName
         toRsPrimary Nothing = Nothing
         toRsPrimary (Just "False") = Nothing
