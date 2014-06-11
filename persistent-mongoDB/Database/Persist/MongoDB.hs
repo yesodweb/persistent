@@ -248,15 +248,15 @@ createReplicatSet rsSeed dbname mAuth = do
     testAccess pipe dbname mAuth
     return $ Connection pipe dbname
 
-createRsPool :: (Trans.MonadIO m, Applicative m) => Database -> (DB.ReplicaSetName, [DB.Host])
+createRsPool :: (Trans.MonadIO m, Applicative m) => Database -> ReplicaSetConfig
               -> Maybe MongoAuth
               -> Int -- ^ pool size (number of stripes)
               -> Int -- ^ stripe size (number of connections per stripe)
               -> NominalDiffTime -- ^ time a connection is left idle before closing
               -> m ConnectionPool
-createRsPool dbname rsSeed mAuth connectionPoolSize stripeSize connectionIdleTime = do
+createRsPool dbname (ReplicaSetConfig rsName rsHosts) mAuth connectionPoolSize stripeSize connectionIdleTime = do
     Trans.liftIO $ Pool.createPool
-                          (createReplicatSet rsSeed dbname mAuth)
+                          (createReplicatSet (rsName, rsHosts) dbname mAuth)
                           (\(Connection pipe _) -> DB.close pipe)
                           connectionPoolSize
                           connectionIdleTime
@@ -291,12 +291,13 @@ createMongoDBPool dbname hostname port mAuth connectionPoolSize stripeSize conne
 
 
 createMongoPool :: (Trans.MonadIO m, Applicative m) => MongoConf -> m ConnectionPool
-createMongoPool c@MongoConf{mgRsPrimary = Just rsName} =
+createMongoPool c@MongoConf{mgReplicaSetConfig = Just (ReplicaSetConfig rsName hosts)} =
       createRsPool
-         (mgDatabase c) (rsName, [DB.Host (T.unpack $ mgHost c) (mgPort c)])
+         (mgDatabase c)
+         (ReplicaSetConfig rsName ((DB.Host (T.unpack $ mgHost c) (mgPort c)):hosts))
          (mgAuth c)
          (mgPoolStripes c) (mgStripeConnections c) (mgConnectionIdleTime c)
-createMongoPool c@MongoConf{mgRsPrimary = Nothing} =
+createMongoPool c@MongoConf{mgReplicaSetConfig = Nothing} =
       createMongoDBPool
          (mgDatabase c) (T.unpack (mgHost c)) (mgPort c)
          (mgAuth c)
@@ -313,10 +314,10 @@ createMongoDBPipePool :: (Trans.MonadIO m, Applicative m) => HostName -> PortID
                   -> Int -- ^ stripe size (number of connections per stripe)
                   -> NominalDiffTime -- ^ time a connection is left idle before closing
                   -> m PipePool
-createMongoDBPipePool hostname port connectionPoolSize stripeSize connectionIdleTime = do
+createMongoDBPipePool hostname port connectionPoolSize stripeSize connectionIdleTime =
   Trans.liftIO $ Pool.createPool
                           (mkPipe $ DB.Host hostname port)
-                          (\pipe -> DB.close pipe)
+                          DB.close
                           connectionPoolSize
                           connectionIdleTime
                           stripeSize
@@ -876,7 +877,9 @@ data MongoConf = MongoConf
     , mgPoolStripes :: Int
     , mgStripeConnections :: Int
     , mgConnectionIdleTime :: NominalDiffTime
-    , mgRsPrimary :: Maybe DB.ReplicaSetName -- ^ useful to query just a replica set primary
+    -- | YAML fields for this are @rsName@ and @rsSecondaries@
+    -- mgHost is assumed to be the primary
+    , mgReplicaSetConfig :: Maybe ReplicaSetConfig
     } deriving Show
 
 defaultHost :: Text
@@ -899,8 +902,12 @@ defaultMongoConf dbName = MongoConf
   , mgPoolStripes = defaultPoolStripes
   , mgStripeConnections = defaultStripeConnections
   , mgConnectionIdleTime = defaultConnectionIdleTime
-  , mgRsPrimary = Nothing
+  , mgReplicaSetConfig = Nothing
   }
+
+data ReplicaSetConfig = ReplicaSetConfig DB.ReplicaSetName [DB.Host]
+    deriving Show
+
 
 instance PersistConfig MongoConf where
     type PersistConfigBackend MongoConf = DB.Action
@@ -919,7 +926,8 @@ instance PersistConfig MongoConf where
         mUser              <- o .:? "user"
         mPass              <- o .:? "password"
         accessString       <- o .:? "accessMode" .!= confirmWrites
-        mRsPrimary         <- o .:? "rsPrimary"
+        mRsName            <- o .:? "rsName"
+        rsSecondaires      <- o .:? "rsSecondaries" .!= []
 
         mPoolSize         <- o .:? "poolsize"
         case mPoolSize of
@@ -929,8 +937,13 @@ instance PersistConfig MongoConf where
         accessMode <- case accessString of
              "ReadStaleOk"       -> return DB.ReadStaleOk
              "UnconfirmedWrites" -> return DB.UnconfirmedWrites
-             confirmWrites       -> return defaultAccessMode
+             "ConfirmWrites"     -> return defaultAccessMode
              badAccess -> fail $ "unknown accessMode: " ++ T.unpack badAccess
+
+        let rs = case (mRsName, rsSecondaires) of
+                     (Nothing, []) -> Nothing
+                     (Nothing, _) -> error "found rsSecondaries key. Also expected but did not find a rsName key"
+                     (Just rsName, hosts) -> Just $ ReplicaSetConfig rsName $ fmap DB.readHostPort hosts
 
         return MongoConf {
             mgDatabase = db
@@ -944,14 +957,10 @@ instance PersistConfig MongoConf where
           , mgStripeConnections = stripeConnections
           , mgAccessMode = accessMode
           , mgConnectionIdleTime = connectionIdleTime
-          , mgRsPrimary = toRsPrimary mRsPrimary
+          , mgReplicaSetConfig = rs
           }
       where
         confirmWrites = "ConfirmWrites"
-        toRsPrimary :: Maybe Text -> Maybe DB.ReplicaSetName
-        toRsPrimary Nothing = Nothing
-        toRsPrimary (Just "False") = Nothing
-        toRsPrimary rs = rs
     {-
         safeRead :: String -> T.Text -> MEither String Int
         safeRead name t = case reads s of
