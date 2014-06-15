@@ -553,14 +553,23 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, ns
                         { cName = cname
                         , cNull = y == "YES"
                         , cSqlType = t
-                        , cDefault = fmap
-                            (\xx -> fromMaybe xx $ T.stripSuffix "::character varying" xx)
-                                     d''
+                        , cDefault = fmap stripSuffixes d''
                         , cDefaultConstraintName = Nothing
                         , cMaxLen = Nothing
                         , cReference = ref
                         }
   where
+    stripSuffixes t =
+        loop'
+            [ "::character varying"
+            , "::text"
+            ]
+      where
+        loop' [] = t
+        loop' (p:ps) =
+            case T.stripSuffix p t of
+                Nothing -> loop' ps
+                Just t' -> t'
     getRef cname = do
         let sql = T.concat
                 [ "SELECT COUNT(*) FROM "
