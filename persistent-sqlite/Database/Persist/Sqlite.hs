@@ -20,12 +20,11 @@ import qualified Database.Sqlite as Sqlite
 
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Logger (NoLoggingT, runNoLoggingT)
-import Data.List (intercalate)
 import Data.IORef
 import qualified Data.Map as Map
 import Control.Monad.Trans.Control (control)
 import qualified Control.Exception as E
-import Data.Text (Text, pack)
+import Data.Text (Text)
 import Control.Monad (mzero)
 import Data.Aeson
 import qualified Data.Text as T
@@ -34,6 +33,9 @@ import qualified Data.Conduit.List as CL
 import Control.Applicative
 import Data.Int (Int64)
 import Control.Monad ((>=>))
+import Data.Monoid ((<>))
+import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.Trans.Resource (ResourceT, MonadResource, runResourceT)
 
 createSqlitePool :: MonadIO m => Text -> Int -> m ConnectionPool
 createSqlitePool s = createSqlPool $ open' s
@@ -69,6 +71,7 @@ wrapConnection conn = do
         , connEscapeName = escape
         , connNoLimit = "LIMIT -1"
         , connRDBMS = "sqlite"
+        , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
         }
   where
     helper t getter = do
@@ -101,20 +104,37 @@ prepare' conn sql = do
         , stmtQuery = withStmt' conn stmt
         }
 
-insertSql' :: DBName -> [DBName] -> DBName -> InsertSqlResult
-insertSql' t cols _ =
-    ISRInsertGet (pack ins) sel
-  where
-    sel = "SELECT last_insert_rowid()"
-    ins = concat
-        [ "INSERT INTO "
-        , escape' t
-        , "("
-        , intercalate "," $ map escape' cols
-        , ") VALUES("
-        , intercalate "," (map (const "?") cols)
-        , ")"
-        ]
+insertSql' :: EntityDef SqlType -> [PersistValue] -> InsertSqlResult
+insertSql' ent vals =
+  case entityPrimary ent of
+    Just _ ->
+      ISRManyKeys sql vals
+        where sql = T.concat
+                [ "INSERT INTO "
+                , escape $ entityDB ent
+                , "("
+                , T.intercalate "," $ map (escape . fieldDB) $ entityFields ent
+                , ") VALUES("
+                , T.intercalate "," (map (const "?") $ entityFields ent)
+                , ")"
+                ]
+    Nothing ->
+      ISRInsertGet ins sel
+        where
+          sel = "SELECT last_insert_rowid()"
+          ins = T.concat
+              [ "INSERT INTO "
+              , escape $ entityDB ent
+              , if null (entityFields ent)
+                    then " VALUES(null)"
+                    else T.concat
+                      [ "("
+                      , T.intercalate "," $ map (escape . fieldDB) $ entityFields ent
+                      , ") VALUES("
+                      , T.intercalate "," (map (const "?") $ entityFields ent)
+                      , ")"
+                      ]
+              ]
 
 execute' :: Sqlite.Connection -> Sqlite.Statement -> [PersistValue] -> IO Int64
 execute' conn stmt vals = flip finally (liftIO $ Sqlite.reset conn stmt) $ do
@@ -147,7 +167,7 @@ showSqlType SqlString = "VARCHAR"
 showSqlType SqlInt32 = "INTEGER"
 showSqlType SqlInt64 = "INTEGER"
 showSqlType SqlReal = "REAL"
-showSqlType (SqlNumeric precision scale) = pack $ "NUMERIC(" ++ show precision ++ "," ++ show scale ++ ")"
+showSqlType (SqlNumeric precision scale) = T.concat [ "NUMERIC(", T.pack (show precision), ",", T.pack (show scale), ")" ]
 showSqlType SqlDay = "DATE"
 showSqlType SqlTime = "TIME"
 showSqlType SqlDayTimeZoned = "TIMESTAMP"
@@ -161,7 +181,7 @@ migrate' :: [EntityDef a]
          -> EntityDef SqlType
          -> IO (Either [Text] [(Bool, Text)])
 migrate' allDefs getter val = do
-    let (cols, uniqs) = mkColumns allDefs val
+    let (cols, uniqs, _) = mkColumns allDefs val
     let newSql = mkCreateTable False def (filter (not . safeToRemove val . cName) cols, uniqs)
     stmt <- getter "SELECT sql FROM sqlite_master WHERE type='table' AND name=?"
     oldSql' <- runResourceT
@@ -197,7 +217,7 @@ getCopyTable :: [EntityDef a]
              -> EntityDef SqlType
              -> IO [(Bool, Text)]
 getCopyTable allDefs getter val = do
-    stmt <- getter $ pack $ "PRAGMA table_info(" ++ escape' table ++ ")"
+    stmt <- getter $ T.concat [ "PRAGMA table_info(", escape table, ")" ]
     oldCols' <- runResourceT $ stmtQuery stmt [] $$ getCols
     let oldCols = map DBName $ filter (/= "id") oldCols' -- need to update for table id attribute ?
     let newCols = filter (not . safeToRemove def) $ map cName cols
@@ -205,10 +225,10 @@ getCopyTable allDefs getter val = do
     let id_ = entityID val
     return [ (False, tmpSql)
            , (False, copyToTemp $ id_ : common)
-           , (common /= filter (not . safeToRemove def) oldCols, pack dropOld)
+           , (common /= filter (not . safeToRemove def) oldCols, dropOld)
            , (False, newSql)
            , (False, copyToFinal $ id_ : newCols)
-           , (False, pack dropTmp)
+           , (False, dropTmp)
            ]
   where
 
@@ -222,51 +242,64 @@ getCopyTable allDefs getter val = do
                 return $ name : names
             Just y -> error $ "Invalid result from PRAGMA table_info: " ++ show y
     table = entityDB def
-    tableTmp = DBName $ unDBName table `T.append` "_backup"
-    (cols, uniqs) = mkColumns allDefs val
+    tableTmp = DBName $ unDBName table <> "_backup"
+    (cols, uniqs, _) = mkColumns allDefs val
     cols' = filter (not . safeToRemove def . cName) cols
     newSql = mkCreateTable False def (cols', uniqs)
     tmpSql = mkCreateTable True def { entityDB = tableTmp } (cols', uniqs)
-    dropTmp = "DROP TABLE " ++ escape' tableTmp
-    dropOld = "DROP TABLE " ++ escape' table
-    copyToTemp common = pack $ concat
+    dropTmp = "DROP TABLE " <> escape tableTmp
+    dropOld = "DROP TABLE " <> escape table
+    copyToTemp common = T.concat
         [ "INSERT INTO "
-        , escape' tableTmp
+        , escape tableTmp
         , "("
-        , intercalate "," $ map escape' common
+        , T.intercalate "," $ map escape common
         , ") SELECT "
-        , intercalate "," $ map escape' common
+        , T.intercalate "," $ map escape common
         , " FROM "
-        , escape' table
+        , escape table
         ]
-    copyToFinal newCols = pack $ concat
+    copyToFinal newCols = T.concat
         [ "INSERT INTO "
-        , T.unpack $ escape table
+        , escape table
         , " SELECT "
-        , intercalate "," $ map escape' newCols
+        , T.intercalate "," $ map escape newCols
         , " FROM "
-        , escape' tableTmp
+        , escape tableTmp
         ]
-
-escape' :: DBName -> String
-escape' = T.unpack . escape
 
 mkCreateTable :: Bool -> EntityDef a -> ([Column], [UniqueDef]) -> Text
-mkCreateTable isTemp entity (cols, uniqs) = T.concat
-    [ "CREATE"
-    , if isTemp then " TEMP" else ""
-    , " TABLE "
-    , escape $ entityDB entity
-    , "("
-    , escape $ entityID entity
-    , " INTEGER PRIMARY KEY"
-    , T.concat $ map sqlColumn cols
-    , T.concat $ map sqlUnique uniqs
-    , ")"
-    ]
+mkCreateTable isTemp entity (cols, uniqs) =
+  case entityPrimary entity of
+    Just _ ->
+       T.concat
+        [ "CREATE"
+        , if isTemp then " TEMP" else ""
+        , " TABLE "
+        , escape $ entityDB entity
+        , "("
+        , T.drop 1 $ T.concat $ map sqlColumn cols
+        , ", PRIMARY KEY "
+        , "("
+        , T.intercalate "," $ map (escape . fieldDB) $ entityFields entity
+        , ")"
+        , ")"
+        ]
+    Nothing -> T.concat
+        [ "CREATE"
+        , if isTemp then " TEMP" else ""
+        , " TABLE "
+        , escape $ entityDB entity
+        , "("
+        , escape $ entityID entity
+        , " INTEGER PRIMARY KEY"
+        , T.concat $ map sqlColumn cols
+        , T.concat $ map sqlUnique uniqs
+        , ")"
+        ]
 
 sqlColumn :: Column -> Text
-sqlColumn (Column name isNull typ def _maxLen ref) = T.concat
+sqlColumn (Column name isNull typ def _cn _maxLen ref) = T.concat
     [ ","
     , escape name
     , " "
@@ -274,10 +307,10 @@ sqlColumn (Column name isNull typ def _maxLen ref) = T.concat
     , if isNull then " NULL" else " NOT NULL"
     , case def of
         Nothing -> ""
-        Just d -> " DEFAULT " `T.append` d
+        Just d -> " DEFAULT " <> d
     , case ref of
         Nothing -> ""
-        Just (table, _) -> " REFERENCES " `T.append` escape table
+        Just (table, _) -> " REFERENCES " <> escape table
     ]
 
 sqlUnique :: UniqueDef -> Text

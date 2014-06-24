@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -27,7 +28,11 @@ import qualified Data.Text as T
 import Data.Text.Lazy (toStrict)
 import Data.Text.Lazy.Builder (toLazyText)
 import Data.Aeson (toJSON)
+#if MIN_VERSION_aeson(0, 7, 0)
+import Data.Aeson.Encode (encodeToTextBuilder)
+#else
 import Data.Aeson.Encode (fromValue)
+#endif
 
 infixr 3 =., +=., -=., *=., /=.
 (=.), (+=.), (-=.), (*=.), (/=.) :: forall v typ.  PersistField typ => EntityField v typ -> typ -> Update v
@@ -65,10 +70,18 @@ infixl 3 ||.
 a ||. b = [FilterOr  [FilterAnd a, FilterAnd b]]
 
 listToJSON :: [PersistValue] -> T.Text
+#if MIN_VERSION_aeson(0, 7, 0)
+listToJSON = toStrict . toLazyText . encodeToTextBuilder . toJSON
+#else
 listToJSON = toStrict . toLazyText . fromValue . toJSON
+#endif
 
 mapToJSON :: [(T.Text, PersistValue)] -> T.Text
+#if MIN_VERSION_aeson(0, 7, 0)
+mapToJSON = toStrict . toLazyText . encodeToTextBuilder . toJSON
+#else
 mapToJSON = toStrict . toLazyText . fromValue . toJSON
+#endif
 
 limitOffsetOrder :: PersistEntity val => [SelectOpt val] -> (Int, Int, [SelectOpt val])
 limitOffsetOrder opts =

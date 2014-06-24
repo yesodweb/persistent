@@ -18,6 +18,7 @@
 module PersistentTest where
 
 import Test.HUnit hiding (Test)
+import Control.Monad.Trans.Resource (runResourceT)
 import Test.Hspec.Expectations ()
 import Test.Hspec.QuickCheck(prop)
 
@@ -25,7 +26,7 @@ import Database.Persist
 
 #ifdef WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
-import Database.Persist.MongoDB (oidToKey, toInsertFields, docToEntityThrow, MongoBackend, collectionName, entityToDocument)
+import Database.Persist.MongoDB (oidToKey, toInsertDoc, docToEntityThrow, MongoBackend, collectionName, entityToDocument)
 import Data.Bson (genObjectId)
 import Language.Haskell.TH.Syntax (Type(..))
 
@@ -36,9 +37,9 @@ import qualified Control.Monad.Trans.Control
 import qualified Control.Monad.IO.Control
 #  endif
 
-import Control.Monad (liftM)
+import Control.Monad (liftM, void)
 import Control.Monad.Logger
-import Database.Persist.TH (mkDeleteCascade)
+import Database.Persist.TH (mkDeleteCascade, mpsGeneric, mpsPrefixFields)
 import Database.Persist.Sqlite
 import Control.Exception (SomeException)
 import qualified Data.Text as T
@@ -74,6 +75,7 @@ import qualified Data.Conduit.List as CL
 import Data.Functor.Identity
 import Data.Functor.Constant
 import PersistTestPetType
+import PersistTestPetCollarType
 
 #ifdef WITH_MONGODB
 mkPersist (mkPersistSettings $ ConT ''MongoBackend) [persistUpperCase|
@@ -116,6 +118,10 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade sqlSetti
     -- Indented comment
   NeedsPet
     petKey PetId
+  OutdoorPet
+    ownerId PersonId
+    collar PetCollar
+    type PetType
 
   -- From the scaffold
   User
@@ -133,6 +139,23 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade sqlSetti
     ~no Int
     def Int
 |]
+
+#ifndef WITH_MONGODB
+share [mkPersist sqlSettings { mpsPrefixFields = False, mpsGeneric = False }, mkMigrate "noPrefixMigrate"] [persistLowerCase|
+NoPrefix1
+    someFieldName Int
+    deriving Show Eq
+NoPrefix2
+    someOtherFieldName Int
+    unprefixedRef NoPrefix1Id
+    deriving Show Eq
++NoPrefixSum
+    unprefixedLeft Int
+    unprefixedRight String
+    deriving Show Eq
+|]
+#endif
+
 cleanDB :: (PersistQuery m, PersistEntityBackend Email ~ PersistMonadBackend m) => m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Person])
@@ -140,6 +163,7 @@ cleanDB = do
   deleteWhere ([] :: [Filter Pet])
   deleteWhere ([] :: [Filter MaybeOwnedPet])
   deleteWhere ([] :: [Filter NeedsPet])
+  deleteWhere ([] :: [Filter OutdoorPet])
   deleteWhere ([] :: [Filter User])
   deleteWhere ([] :: [Filter Email])
 
@@ -584,6 +608,12 @@ specs = describe "persistent" $ do
       Just dog' <- get dog
       liftIO $ petType dog' @?= Dog
 
+  it "derivePersistFieldJSON" $ db $ do
+      let mittensCollar = PetCollar "Mittens\n1-714-668-9672" True
+      person <- insert $ Person "pet owner" 30 Nothing
+      catKey <- insert $ OutdoorPet person mittensCollar Cat
+      Just (OutdoorPet _ collar' _) <- get catKey
+      liftIO $ collar' @?= mittensCollar
 
   it "idIn" $ db $ do
       let p1 = Person "D" 0 Nothing
@@ -613,7 +643,7 @@ specs = describe "persistent" $ do
 
     it "toInsertFields, entityFields, & docToEntityThrow" $ db $ do
         let p1 = Person "Duder" 0 Nothing
-        let doc = toInsertFields p1
+        let doc = toInsertDoc p1
         MongoDB.ObjId _id <- MongoDB.insert "Person" $ doc
         let idSelector = "_id" MongoDB.=: _id
         Entity _ ent1 <- docToEntityThrow $ idSelector:doc
@@ -709,11 +739,31 @@ specs = describe "persistent" $ do
 
   it "afterException" caseAfterException
 
+#ifndef WITH_MONGODB
+  it "mpsNoPrefix" $ db $ do
+    deleteWhere ([] :: [Filter NoPrefix2])
+    deleteWhere ([] :: [Filter NoPrefix1])
+    np1a <- insert $ NoPrefix1 1
+    update np1a [SomeFieldName =. 2]
+    np1b <- insert $ NoPrefix1 3
+    np2 <- insert $ NoPrefix2 4 np1a
+    update np2 [UnprefixedRef =. np1b, SomeOtherFieldName =. 5]
+
+    mnp1a <- get np1a
+    liftIO $ mnp1a @?= Just (NoPrefix1 2)
+    liftIO $ fmap someFieldName mnp1a @?= Just 2
+    mnp2 <- get np2
+    liftIO $ fmap unprefixedRef mnp2 @?= Just np1b
+    liftIO $ fmap someOtherFieldName mnp2 @?= Just 5
+
+    insert_ $ UnprefixedLeftSum 5
+    insert_ $ UnprefixedRightSum "Hello"
+#endif
+  
   describe "strictness" $ do
     it "bang" $ (return $! Strict (error "foo") 5 5) `shouldThrow` anyErrorCall
-    it "tilde" $ (return $! Strict 5 (error "foo") 5 :: IO Strict) >> return ()
+    it "tilde" $ void (return $! Strict 5 (error "foo") 5 :: IO Strict)
     it "blank" $ (return $! Strict 5 5 (error "foo")) `shouldThrow` anyErrorCall
-
 
 -- | Reverses the order of the fields of an entity.  Used to test
 -- @??@ placeholders of 'rawSql'.
@@ -732,6 +782,7 @@ instance PersistEntity a => PersistEntity (ReverseFieldOrder a) where
     persistUniqueKeys = map URFO . reverse . persistUniqueKeys . unRFO
     type PersistEntityBackend (ReverseFieldOrder a) = PersistEntityBackend a
     persistIdField = error "ReverseFieldOrder.persistIdField"
+    fieldLens = error "ReverseFieldOrder.fieldLens"
 
 caseCommitRollback :: Assertion
 caseCommitRollback = db $ do

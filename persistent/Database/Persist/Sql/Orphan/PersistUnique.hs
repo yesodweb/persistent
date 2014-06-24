@@ -12,6 +12,7 @@ import Data.Monoid ((<>))
 import Control.Monad.Logger
 import qualified Data.Conduit.List as CL
 import Data.Conduit
+import Control.Monad.Trans.Resource (MonadResource)
 
 instance (MonadResource m, MonadLogger m) => PersistUnique (SqlPersistT m) where
     deleteBy uniq = do
@@ -32,8 +33,10 @@ instance (MonadResource m, MonadLogger m) => PersistUnique (SqlPersistT m) where
 
     getBy uniq = do
         conn <- askSqlConn
-        let cols = T.intercalate "," $ (connEscapeName conn $ entityID t)
-                 : map (connEscapeName conn . fieldDB) (entityFields t)
+        let flds = map (connEscapeName conn . fieldDB) (entityFields t)
+        let cols = case entityPrimary t of
+                     Just _ -> T.intercalate "," flds
+                     Nothing -> T.intercalate "," $ (connEscapeName conn $ entityID t) : flds
         let sql = T.concat
                 [ "SELECT "
                 , cols
@@ -51,7 +54,11 @@ instance (MonadResource m, MonadLogger m) => PersistUnique (SqlPersistT m) where
                     case fromPersistValues vals of
                         Left s -> error $ T.unpack s
                         Right x -> return $ Just (Entity (Key $ PersistInt64 k) x)
-                Just _ -> error "Database.Persist.GenericSql: Bad list in getBy"
+                Just (PersistDouble k:vals) ->   -- oracle
+                    case fromPersistValues vals of
+                        Left s -> error $ T.unpack s
+                        Right x -> return $ Just (Entity (Key $ PersistInt64 $ truncate k) x)
+                Just xs -> error $ "Database.Persist.GenericSql: Bad list in getBy xs="++show xs
       where
         sqlClause conn =
             T.intercalate " AND " $ map (go conn) $ toFieldNames' uniq

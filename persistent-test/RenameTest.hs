@@ -12,6 +12,7 @@ module RenameTest (specs) where
 
 import Database.Persist.Sqlite
 #ifndef WITH_MONGODB
+import Control.Monad.Trans.Resource (runResourceT)
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 #endif
@@ -49,8 +50,8 @@ specs = describe "rename specs" $ do
     it "handles lower casing" $ asIO $ do
         runConn $ do
             _ <- runMigrationSilent lowerCaseMigrate
-            C.runResourceT $ rawQuery "SELECT full_name from lower_case_table WHERE my_id=5" [] C.$$ CL.sinkNull
-            C.runResourceT $ rawQuery "SELECT something_else from ref_table WHERE id=4" [] C.$$ CL.sinkNull
+            runResourceT $ rawQuery "SELECT full_name from lower_case_table WHERE my_id=5" [] C.$$ CL.sinkNull
+            runResourceT $ rawQuery "SELECT something_else from ref_table WHERE id=4" [] C.$$ CL.sinkNull
 #endif
     it "extra blocks" $ do
         entityExtra (entityDef (Nothing :: Maybe LowerCaseTable)) @?=

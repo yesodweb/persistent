@@ -1,8 +1,10 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE ViewPatterns #-}
 
 -- | A postgresql backend for persistent.
 module Database.Persist.Postgresql
@@ -16,11 +18,11 @@ module Database.Persist.Postgresql
     ) where
 
 import Database.Persist.Sql
-import Data.Maybe (mapMaybe)
 import Data.Fixed (Pico)
 
 import qualified Database.PostgreSQL.Simple as PG
-import qualified Database.PostgreSQL.Simple.BuiltinTypes as PG
+import qualified Database.PostgreSQL.Simple.TypeInfo as PG
+import qualified Database.PostgreSQL.Simple.TypeInfo.Static as PS
 import qualified Database.PostgreSQL.Simple.Internal as PG
 import qualified Database.PostgreSQL.Simple.ToField as PGTF
 import qualified Database.PostgreSQL.Simple.FromField as PGFF
@@ -29,31 +31,35 @@ import Database.PostgreSQL.Simple.Ok (Ok (..))
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
+import Control.Monad.Trans.Resource
 import Control.Exception (throw)
 import Control.Monad.IO.Class (MonadIO (..))
-import Data.List (intercalate)
+import Data.Typeable
 import Data.IORef
 import qualified Data.Map as Map
+import Data.Maybe
 import Data.Either (partitionEithers)
 import Control.Arrow
-import Data.List (sort, groupBy)
+import Data.List (find, sort, groupBy)
 import Data.Function (on)
 import Data.Conduit
 import qualified Data.Conduit.List as CL
+
+import qualified Data.IntMap as I
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Blaze.ByteString.Builder.Char8 as BBB
+
 import Data.Time.LocalTime (localTimeToUTC, utc)
-import Data.Text (Text, pack)
+import Data.Text (Text)
 import Data.Aeson
 import Control.Monad (forM, mzero)
 import System.Environment (getEnvironment)
 import Data.Int (Int64)
-
-
+import Data.Monoid ((<>))
 -- | A @libpq@ connection string.  A simple example of connection
 -- string would be @\"host=localhost port=5432 user=test
 -- dbname=test password=test\"@.  Please read libpq's
@@ -102,13 +108,12 @@ withPostgresqlConn :: (MonadIO m, MonadBaseControl IO m)
 withPostgresqlConn = withSqlConn . open'
 
 open' :: ConnectionString -> IO Connection
-open' cstr = do
-    PG.connectPostgreSQL cstr >>= openSimpleConn
+open' cstr = PG.connectPostgreSQL cstr >>= openSimpleConn
 
 -- | Generate a 'Connection' from a 'PG.Connection'
 openSimpleConn :: PG.Connection -> IO Connection
 openSimpleConn conn = do
-    smap <- newIORef $ Map.empty
+    smap <- newIORef Map.empty
     return Connection
         { connPrepare    = prepare' conn
         , connStmtMap    = smap
@@ -121,6 +126,7 @@ openSimpleConn conn = do
         , connEscapeName = escape
         , connNoLimit    = "LIMIT ALL"
         , connRDBMS      = "postgresql"
+        , connLimitOffset = decorateSQLWithLimitOffset "LIMIT ALL"
         }
 
 prepare' :: PG.Connection -> Text -> IO Statement
@@ -133,17 +139,24 @@ prepare' conn sql = do
         , stmtQuery = withStmt' conn query
         }
 
-insertSql' :: DBName -> [DBName] -> DBName -> InsertSqlResult
-insertSql' t cols id' = ISRSingle $ pack $ concat
-    [ "INSERT INTO "
-    , T.unpack $ escape t
-    , "("
-    , intercalate "," $ map (T.unpack . escape) cols
-    , ") VALUES("
-    , intercalate "," (map (const "?") cols)
-    , ") RETURNING "
-    , T.unpack $ escape id'
-    ]
+insertSql' :: EntityDef SqlType -> [PersistValue] -> InsertSqlResult
+insertSql' ent vals =
+  let sql = T.concat
+                [ "INSERT INTO "
+                , escape $ entityDB ent
+                , if null (entityFields ent)
+                    then " DEFAULT VALUES"
+                    else T.concat
+                        [ "("
+                        , T.intercalate "," $ map (escape . fieldDB) $ entityFields ent
+                        , ") VALUES("
+                        , T.intercalate "," (map (const "?") $ entityFields ent)
+                        , ")"
+                        ]
+                ]
+  in case entityPrimary ent of
+       Just _pdef -> ISRManyKeys sql vals
+       Nothing -> ISRSingle (sql <> " RETURNING " <> escape (entityID ent))
 
 execute' :: PG.Connection -> PG.Query -> [PersistValue] -> IO Int64
 execute' conn query vals = PG.execute conn query (map P vals)
@@ -161,7 +174,7 @@ withStmt' conn query vals =
       rawquery <- PG.formatQuery conn query (map P vals)
 
       -- Take raw connection
-      PG.withConnection conn $ \rawconn -> do
+      (rt, rr, rc, ids) <- PG.withConnection conn $ \rawconn -> do
             -- Execute query
             mret <- LibPQ.exec rawconn rawquery
             case mret of
@@ -179,23 +192,19 @@ withStmt' conn query vals =
                     msg <- LibPQ.resStatus status
                     mmsg <- LibPQ.resultErrorMessage ret
                     fail $ "Postgresql.withStmt': bad result status " ++
-                           show status ++ " (" ++ (maybe (show msg) (show . (,) msg) mmsg) ++ ")"
+                           show status ++ " (" ++ maybe (show msg) (show . (,) msg) mmsg ++ ")"
 
                 -- Get number and type of columns
                 cols <- LibPQ.nfields ret
-                getters <- forM [0..cols-1] $ \col -> do
-                  oid <- LibPQ.ftype ret col
-                  case PG.oid2builtin oid of
-                    Nothing -> fail $ "Postgresql.withStmt': could not " ++
-                                      "recognize Oid of column " ++
-                                      show (let LibPQ.Col i = col in i) ++
-                                      " (counting from zero)"
-                    Just bt -> return $ getGetter bt $
-                               PG.Field ret col oid
+                oids <- forM [0..cols-1] $ \col -> fmap ((,) col) (LibPQ.ftype ret col)
                 -- Ready to go!
                 rowRef   <- newIORef (LibPQ.Row 0)
                 rowCount <- LibPQ.ntuples ret
-                return (ret, rowRef, rowCount, getters)
+                return (ret, rowRef, rowCount, oids)
+      getters <- forM ids $ \(col, oid) -> do
+          getter <- getGetter conn oid
+          return $ getter $ PG.Field rt col oid
+      return (rt, rr, rc, getters)
 
     closeS (ret, _, _, _) = LibPQ.unsafeFreeResult ret
 
@@ -240,45 +249,123 @@ instance PGTF.ToField P where
     toField (P PersistNull)            = PGTF.toField PG.Null
     toField (P (PersistList l))        = PGTF.toField $ listToJSON l
     toField (P (PersistMap m))         = PGTF.toField $ mapToJSON m
+    toField (P (PersistDbSpecific s))  = PGTF.toField (Unknown s)
     toField (P (PersistObjectId _))    =
         error "Refusing to serialize a PersistObjectId to a PostgreSQL value"
+
+newtype Unknown = Unknown { unUnknown :: ByteString }
+  deriving (Eq, Show, Read, Ord, Typeable)
+
+instance PGFF.FromField Unknown where
+    fromField f mdata =
+      case mdata of
+        Nothing  -> PGFF.returnError PGFF.UnexpectedNull f ""
+        Just dat -> return (Unknown dat)
+
+instance PGTF.ToField Unknown where
+    toField (Unknown a) = PGTF.Escape a
 
 type Getter a = PGFF.FieldParser a
 
 convertPV :: PGFF.FromField a => (a -> b) -> Getter b
 convertPV f = (fmap f .) . PGFF.fromField
 
--- FIXME: check if those are correct and complete.
-getGetter :: PG.BuiltinType -> Getter PersistValue
-getGetter PG.Bool                  = convertPV PersistBool
-getGetter PG.ByteA                 = convertPV (PersistByteString . unBinary)
-getGetter PG.Char                  = convertPV PersistText
-getGetter PG.Name                  = convertPV PersistText
-getGetter PG.Int8                  = convertPV PersistInt64
-getGetter PG.Int2                  = convertPV PersistInt64
-getGetter PG.Int4                  = convertPV PersistInt64
-getGetter PG.Text                  = convertPV PersistText
-getGetter PG.Xml                   = convertPV PersistText
-getGetter PG.Float4                = convertPV PersistDouble
-getGetter PG.Float8                = convertPV PersistDouble
-getGetter PG.AbsTime               = convertPV PersistUTCTime
-getGetter PG.RelTime               = convertPV PersistUTCTime
-getGetter PG.Money                 = convertPV PersistDouble
-getGetter PG.BpChar                = convertPV PersistText
-getGetter PG.VarChar               = convertPV PersistText
-getGetter PG.Date                  = convertPV PersistDay
-getGetter PG.Time                  = convertPV PersistTimeOfDay
-getGetter PG.Timestamp             = convertPV (PersistUTCTime . localTimeToUTC utc)
-getGetter PG.TimestampTZ           = convertPV (PersistZonedTime . ZT)
-getGetter PG.Bit                   = convertPV PersistInt64
-getGetter PG.VarBit                = convertPV PersistInt64
-getGetter PG.Numeric               = convertPV PersistRational
-getGetter PG.Void                  = \_ _ -> return PersistNull
-getGetter other   = error $ "Postgresql.getGetter: type " ++
-                            show other ++ " not supported."
+builtinGetters :: I.IntMap (Getter PersistValue)
+builtinGetters = I.fromList
+    [ (k PS.bool,        convertPV PersistBool)
+    , (k PS.bytea,       convertPV (PersistByteString . unBinary))
+    , (k PS.char,        convertPV PersistText)
+    , (k PS.name,        convertPV PersistText)
+    , (k PS.int8,        convertPV PersistInt64)
+    , (k PS.int2,        convertPV PersistInt64)
+    , (k PS.int4,        convertPV PersistInt64)
+    , (k PS.text,        convertPV PersistText)
+    , (k PS.xml,         convertPV PersistText)
+    , (k PS.float4,      convertPV PersistDouble)
+    , (k PS.float8,      convertPV PersistDouble)
+    , (k PS.abstime,     convertPV PersistUTCTime)
+    , (k PS.reltime,     convertPV PersistUTCTime)
+    , (k PS.money,       convertPV PersistRational)
+    , (k PS.bpchar,      convertPV PersistText)
+    , (k PS.varchar,     convertPV PersistText)
+    , (k PS.date,        convertPV PersistDay)
+    , (k PS.time,        convertPV PersistTimeOfDay)
+    , (k PS.timestamp,   convertPV (PersistUTCTime . localTimeToUTC utc))
+    , (k PS.timestamptz, convertPV (PersistZonedTime . ZT))
+    , (k PS.bit,         convertPV PersistInt64)
+    , (k PS.varbit,      convertPV PersistInt64)
+    , (k PS.numeric,     convertPV PersistRational)
+    , (k PS.void,        \_ _ -> return PersistNull)
+    , (k PS.uuid,        convertPV (PersistDbSpecific . unUnknown))
+    , (k PS.json,        convertPV (PersistByteString . unUnknown))
+    , (k PS.unknown,     convertPV (PersistByteString . unUnknown))
+
+    -- array types: same order as above
+    , (1000,             listOf PersistBool)
+    , (1001,             listOf (PersistByteString . unBinary))
+    , (1002,             listOf PersistText)
+    , (1003,             listOf PersistText)
+    , (1016,             listOf PersistInt64)
+    , (1005,             listOf PersistInt64)
+    , (1007,             listOf PersistInt64)
+    , (1009,             listOf PersistText)
+    , (143,              listOf PersistText)
+    , (1021,             listOf PersistDouble)
+    , (1022,             listOf PersistDouble)
+    , (1023,             listOf PersistUTCTime)
+    , (1024,             listOf PersistUTCTime)
+    , (791,              listOf PersistRational)
+    , (1014,             listOf PersistText)
+    , (1015,             listOf PersistText)
+    , (1182,             listOf PersistDay)
+    , (1183,             listOf PersistTimeOfDay)
+    , (1115,             listOf (PersistUTCTime . localTimeToUTC utc))
+    , (1185,             listOf (PersistZonedTime . ZT))
+    , (1561,             listOf PersistInt64)
+    , (1563,             listOf PersistInt64)
+    , (1231,             listOf PersistRational)
+    -- no array(void) type
+    , (2951,             listOf (PersistDbSpecific . unUnknown))
+    , (199,              listOf (PersistByteString . unUnknown))
+    -- no array(unknown) either
+    ]
+    where
+        k (PGFF.typoid -> i) = PG.oid2int i
+        listOf f = convertPV (PersistList . map f . PG.fromPGArray)
+
+getGetter :: PG.Connection -> PG.Oid -> IO (Getter PersistValue)
+getGetter conn oid = case I.lookup (PG.oid2int oid) builtinGetters of
+    Just getter -> return getter
+    Nothing -> do
+        tyinfo <- PG.getTypeInfo conn oid
+        error $ "Postgresql.getGetter: type "
+             ++ explain tyinfo
+             ++ " ("
+             ++ show oid
+             ++ ") not supported."
+    where
+        explain tyinfo = case B8.unpack $ PG.typname tyinfo of
+                        t@('_':ty) -> t ++ " (array of " ++ ty ++ ")"
+                        x -> show x
 
 unBinary :: PG.Binary a -> a
 unBinary (PG.Binary x) = x
+
+doesTableExist :: (Text -> IO Statement)
+               -> DBName -- ^ table name
+               -> IO Bool
+doesTableExist getter (DBName name) = do
+    stmt <- getter sql
+    runResourceT $ stmtQuery stmt vals $$ start
+  where
+    sql = "SELECT COUNT(*) FROM information_schema.tables WHERE table_name=?"
+    vals = [PersistText name]
+
+    start = await >>= maybe (error "No results when checking doesTableExist") start'
+    start' [PersistInt64 0] = finish False
+    start' [PersistInt64 1] = finish True
+    start' res = error $ "doesTableExist returned unexpected result: " ++ show res
+    finish x = await >>= maybe (return x) (error "Too many rows returned in doesTableExist")
 
 migrate' :: [EntityDef a]
          -> (Text -> IO Statement)
@@ -290,27 +377,40 @@ migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
     case partitionEithers old of
         ([], old'') -> do
             let old' = partitionEithers old''
-            let new = first (filter $ not . safeToRemove val . cName)
-                    $ second (map udToPair)
-                    $ mkColumns allDefs val
-            if null old
+            let (newcols', udefs, fdefs) = mkColumns allDefs val
+            let newcols = filter (not . safeToRemove val . cName) newcols'
+            let udspair = map udToPair udefs
+            -- Check for table existence if there are no columns, workaround
+            -- for https://github.com/yesodweb/persistent/issues/152
+            exists <-
+                if null old
+                    then doesTableExist getter name
+                    else return True
+
+            if not exists
                 then do
-                    let addTable = AddTable $ concat
-                            -- Lower case e: see Database.Persistent.GenericSql.Migration
+                    let idtxt = case entityPrimary val of
+                                  Just pdef -> T.concat [" PRIMARY KEY (", T.intercalate "," $ map (escape . snd) $ primaryFields pdef, ")"]
+                                  Nothing   -> T.concat [escape $ entityID val
+                                        , " SERIAL PRIMARY KEY UNIQUE"]
+                    let addTable = AddTable $ T.concat
+                            -- Lower case e: see Database.Persist.Sql.Migration
                             [ "CREATe TABLE "
-                            , T.unpack $ escape name
+                            , escape name
                             , "("
-                            , T.unpack $ escape $ entityID val
-                            , " SERIAL PRIMARY KEY UNIQUE"
-                            , concatMap (\x -> ',' : showColumn x) $ fst new
+                            , idtxt
+                            , if null newcols then "" else ","
+                            , T.intercalate "," $ map showColumn newcols
                             , ")"
                             ]
-                    let uniques = flip concatMap (snd new) $ \(uname, ucols) ->
+                    let uniques = flip concatMap udspair $ \(uname, ucols) ->
                             [AlterTable name $ AddUniqueConstraint uname ucols]
-                        references = mapMaybe (getAddReference name) $ fst new
-                    return $ Right $ addTable : uniques ++ references
+                        references = mapMaybe (\c@Column { cName=cname, cReference=Just (refTblName, _) } -> getAddReference allDefs name refTblName cname (cReference c)) $ filter (isJust . cReference) newcols
+                        foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\(_,b,_,d) -> (b,d)) (foreignFields fdef))
+                                                    in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignConstraintNameDBName fdef) childfields parentfields)) fdefs
+                    return $ Right $ addTable : uniques ++ references ++ foreignsAlt
                 else do
-                    let (acs, ats) = getAlters val new old'
+                    let (acs, ats) = getAlters allDefs val (newcols, udspair) old'
                     let acs' = map (AlterColumn name) acs
                     let ats' = map (AlterTable name) ats
                     return $ Right $ acs' ++ ats'
@@ -319,14 +419,14 @@ migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
 type SafeToRemove = Bool
 
 data AlterColumn = Type SqlType | IsNull | NotNull | Add' Column | Drop SafeToRemove
-                 | Default String | NoDefault | Update' String
-                 | AddReference DBName | DropReference DBName
+                 | Default Text | NoDefault | Update' Text
+                 | AddReference DBName [DBName] [DBName] | DropReference DBName
 type AlterColumn' = (DBName, AlterColumn)
 
 data AlterTable = AddUniqueConstraint DBName [DBName]
                 | DropConstraint DBName
 
-data AlterDB = AddTable String
+data AlterDB = AddTable Text
              | AlterColumn DBName AlterColumn'
              | AlterTable DBName AlterTable
 
@@ -335,14 +435,43 @@ getColumns :: (Text -> IO Statement)
            -> EntityDef a
            -> IO [Either Text (Either Column (DBName, [DBName]))]
 getColumns getter def = do
-    stmt <- getter "SELECT column_name,is_nullable,udt_name,column_default,numeric_precision,numeric_scale FROM information_schema.columns WHERE table_name=? AND column_name <> ?"
+    let sqlv=T.concat ["SELECT "
+                          ,"column_name "
+                          ,",is_nullable "
+                          ,",udt_name "
+                          ,",column_default "
+                          ,",numeric_precision "
+                          ,",numeric_scale "
+                          ,"FROM information_schema.columns "
+                          ,"WHERE table_catalog=current_database() "
+                          ,"AND table_schema=current_schema() "
+                          ,"AND table_name=? "
+                          ,"AND column_name <> ?"]
+
+    stmt <- getter sqlv
     let vals =
             [ PersistText $ unDBName $ entityDB def
             , PersistText $ unDBName $ entityID def
             ]
     cs <- runResourceT $ stmtQuery stmt vals $$ helper
-    stmt' <- getter
-        "SELECT constraint_name, column_name FROM information_schema.constraint_column_usage WHERE table_name=? AND column_name <> ? ORDER BY constraint_name, column_name"
+    let sqlc = T.concat ["SELECT "
+                          ,"c.constraint_name, "
+                          ,"c.column_name "
+                          ,"FROM information_schema.key_column_usage c, "
+                          ,"information_schema.table_constraints k "
+                          ,"WHERE c.table_catalog=current_database() "
+                          ,"AND c.table_catalog=k.table_catalog "
+                          ,"AND c.table_schema=current_schema() "
+                          ,"AND c.table_schema=k.table_schema "
+                          ,"AND c.table_name=? "
+                          ,"AND c.table_name=k.table_name "
+                          ,"AND c.column_name <> ? "
+                          ,"AND c.constraint_name=k.constraint_name "
+                          ,"AND NOT k.constraint_type IN ('PRIMARY KEY', 'FOREIGN KEY') "
+                          ,"ORDER BY c.constraint_name, c.column_name"]
+
+    stmt' <- getter sqlc
+
     us <- runResourceT $ stmtQuery stmt' vals $$ helperU
     return $ cs ++ us
   where
@@ -350,9 +479,9 @@ getColumns getter def = do
         x <- CL.head
         case x of
             Nothing -> return $ front []
-            Just [PersistText con, PersistText col] ->
-                getAll (front . (:) (con, col))
-            Just _ -> getAll front -- FIXME error message?
+            Just [PersistText con, PersistText col] -> getAll (front . (:) (con, col))
+            Just [PersistByteString con, PersistByteString col] -> getAll (front . (:) (T.decodeUtf8 con, T.decodeUtf8 col))
+            Just o -> error $ "unexpected datatype returned for postgres o="++show o
     helperU = do
         rows <- getAll id
         return $ map (Right . Right . (DBName . fst . head &&& map (DBName . snd)))
@@ -374,19 +503,20 @@ getColumns getter def = do
 safeToRemove :: EntityDef a -> DBName -> Bool
 safeToRemove def (DBName colName)
     = any (elem "SafeToRemove" . fieldAttrs)
-    $ filter ((== (DBName colName)) . fieldDB)
+    $ filter ((== DBName colName) . fieldDB)
     $ entityFields def
 
-getAlters :: EntityDef a
+getAlters :: [EntityDef a]
+          -> EntityDef SqlType
           -> ([Column], [(DBName, [DBName])])
           -> ([Column], [(DBName, [DBName])])
           -> ([AlterColumn'], [AlterTable])
-getAlters def (c1, u1) (c2, u2) =
+getAlters defs def (c1, u1) (c2, u2) =
     (getAltersC c1 c2, getAltersU u1 u2)
   where
     getAltersC [] old = map (\x -> (cName x, Drop $ safeToRemove def $ cName x)) old
     getAltersC (new:news) old =
-        let (alters, old') = findAlters new old
+        let (alters, old') = findAlters defs (entityDB def) new old
          in alters ++ getAltersC news old'
 
     getAltersU :: [(DBName, [DBName])]
@@ -423,16 +553,30 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, ns
                         { cName = cname
                         , cNull = y == "YES"
                         , cSqlType = t
-                        , cDefault = d''
+                        , cDefault = fmap stripSuffixes d''
+                        , cDefaultConstraintName = Nothing
                         , cMaxLen = Nothing
                         , cReference = ref
                         }
   where
+    stripSuffixes t =
+        loop'
+            [ "::character varying"
+            , "::text"
+            ]
+      where
+        loop' [] = t
+        loop' (p:ps) =
+            case T.stripSuffix p t of
+                Nothing -> loop' ps
+                Just t' -> t'
     getRef cname = do
-        let sql = pack $ concat
+        let sql = T.concat
                 [ "SELECT COUNT(*) FROM "
                 , "information_schema.table_constraints "
-                , "WHERE table_name=? "
+                , "WHERE table_catalog=current_database() "
+                , "AND table_schema=current_schema() "
+                , "AND table_name=? "
                 , "AND constraint_type='FOREIGN KEY' "
                 , "AND constraint_name=?"
                 ]
@@ -447,35 +591,42 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, ns
     d' = case d of
             PersistNull   -> Right Nothing
             PersistText t -> Right $ Just t
-            _ -> Left $ pack $ "Invalid default column: " ++ show d
-    getType "int4"        = Right $ SqlInt32
-    getType "int8"        = Right $ SqlInt64
-    getType "varchar"     = Right $ SqlString
-    getType "date"        = Right $ SqlDay
-    getType "bool"        = Right $ SqlBool
-    getType "timestamp"   = Right $ SqlDayTime
-    getType "timestamptz" = Right $ SqlDayTimeZoned
-    getType "float4"      = Right $ SqlReal
-    getType "float8"      = Right $ SqlReal
-    getType "bytea"       = Right $ SqlBlob
-    getType "time"        = Right $ SqlTime
+            _ -> Left $ T.pack $ "Invalid default column: " ++ show d
+    getType "int4"        = Right SqlInt32
+    getType "int8"        = Right SqlInt64
+    getType "varchar"     = Right SqlString
+    getType "date"        = Right SqlDay
+    getType "bool"        = Right SqlBool
+    getType "timestamp"   = Right SqlDayTime
+    getType "timestamptz" = Right SqlDayTimeZoned
+    getType "float4"      = Right SqlReal
+    getType "float8"      = Right SqlReal
+    getType "bytea"       = Right SqlBlob
+    getType "time"        = Right SqlTime
     getType "numeric"     = getNumeric npre nscl
     getType a             = Right $ SqlOther a
 
     getNumeric (PersistInt64 a) (PersistInt64 b) = Right $ SqlNumeric (fromIntegral a) (fromIntegral b)
-    getNumeric a b = Left $ pack $ "Can not get numeric field precision, got: " ++ show a ++ " and " ++ show b ++ " as precision and scale"
+    getNumeric a b = Left $ T.pack $ "Can not get numeric field precision, got: " ++ show a ++ " and " ++ show b ++ " as precision and scale"
 getColumn _ _ x =
-    return $ Left $ pack $ "Invalid result from information_schema: " ++ show x
+    return $ Left $ T.pack $ "Invalid result from information_schema: " ++ show x
 
-findAlters :: Column -> [Column] -> ([AlterColumn'], [Column])
-findAlters col@(Column name isNull sqltype def _maxLen ref) cols =
+-- | Intelligent comparison of SQL types, to account for SqlInt32 vs SqlOther integer
+sqlTypeEq :: SqlType -> SqlType -> Bool
+sqlTypeEq x y =
+    T.toCaseFold (showSqlType x) == T.toCaseFold (showSqlType y)
+
+findAlters :: [EntityDef a] -> DBName -> Column -> [Column] -> ([AlterColumn'], [Column])
+findAlters defs _tablename col@(Column name isNull sqltype def _defConstraintName _maxLen ref) cols =
     case filter (\c -> cName c == name) cols of
         [] -> ([(name, Add' col)], cols)
-        Column _ isNull' sqltype' def' _maxLen' ref':_ ->
+        Column _ isNull' sqltype' def' _defConstraintName' _maxLen' ref':_ ->
             let refDrop Nothing = []
                 refDrop (Just (_, cname)) = [(name, DropReference cname)]
                 refAdd Nothing = []
-                refAdd (Just (tname, _)) = [(name, AddReference tname)]
+                refAdd (Just (tname, a)) = case find ((==tname) . entityDB) defs of
+                                                Just refdef -> [(tname, AddReference a [name] [entityID refdef])]
+                                                Nothing -> error $ "could not find the entityDef for reftable[" ++ show tname ++ "]"
                 modRef =
                     if fmap snd ref == fmap snd ref'
                         then []
@@ -485,160 +636,173 @@ findAlters col@(Column name isNull sqltype def _maxLen ref) cols =
                             (False, True) ->
                                 let up = case def of
                                             Nothing -> id
-                                            Just s -> (:) (name, Update' $ T.unpack s)
+                                            Just s -> (:) (name, Update' s)
                                  in up [(name, NotNull)]
                             _ -> []
-                modType = if sqltype == sqltype' then [] else [(name, Type sqltype)]
+                modType = if sqlTypeEq sqltype sqltype' then [] else [(name, Type sqltype)]
                 modDef =
                     if def == def'
                         then []
                         else case def of
                                 Nothing -> [(name, NoDefault)]
-                                Just s -> [(name, Default $ T.unpack s)]
+                                Just s -> [(name, Default s)]
              in (modRef ++ modDef ++ modNull ++ modType,
                  filter (\c -> cName c /= name) cols)
 
 -- | Get the references to be added to a table for the given column.
-getAddReference :: DBName -> Column -> Maybe AlterDB
-getAddReference table (Column n _nu _ _def _maxLen ref) =
+getAddReference :: [EntityDef a] -> DBName -> DBName -> DBName -> Maybe (DBName, DBName) -> Maybe AlterDB
+getAddReference allDefs table reftable cname ref =
     case ref of
         Nothing -> Nothing
-        Just (s, _) -> Just $ AlterColumn table (n, AddReference s)
+        Just (s, _) -> Just $ AlterColumn table (s, AddReference (refName table cname) [cname] [id_])
+                          where
+                            id_ = fromMaybe (error $ "Could not find ID of entity " ++ show reftable)
+                                        $ do
+                                          entDef <- find ((== reftable) . entityDB) allDefs
+                                          return (entityID entDef)
 
-showColumn :: Column -> String
-showColumn (Column n nu sqlType def _maxLen _ref) = concat
-    [ T.unpack $ escape n
+
+showColumn :: Column -> Text
+showColumn (Column n nu sqlType' def _defConstraintName _maxLen _ref) = T.concat
+    [ escape n
     , " "
-    , showSqlType sqlType
+    , showSqlType sqlType'
     , " "
     , if nu then "NULL" else "NOT NULL"
     , case def of
         Nothing -> ""
-        Just s -> " DEFAULT " ++ T.unpack s
+        Just s -> " DEFAULT " <> s
     ]
 
-showSqlType :: SqlType -> String
+showSqlType :: SqlType -> Text
 showSqlType SqlString = "VARCHAR"
 showSqlType SqlInt32 = "INT4"
 showSqlType SqlInt64 = "INT8"
 showSqlType SqlReal = "DOUBLE PRECISION"
-showSqlType (SqlNumeric s prec) = "NUMERIC(" ++ show s ++ "," ++ show prec ++ ")"
+showSqlType (SqlNumeric s prec) = T.concat [ "NUMERIC(", T.pack (show s), ",", T.pack (show prec), ")" ]
 showSqlType SqlDay = "DATE"
 showSqlType SqlTime = "TIME"
 showSqlType SqlDayTime = "TIMESTAMP"
 showSqlType SqlDayTimeZoned = "TIMESTAMP WITH TIME ZONE"
 showSqlType SqlBlob = "BYTEA"
 showSqlType SqlBool = "BOOLEAN"
-showSqlType (SqlOther t) = T.unpack t
+
+-- Added for aliasing issues re: https://github.com/yesodweb/yesod/issues/682
+showSqlType (SqlOther (T.toLower -> "integer")) = "INT4"
+
+showSqlType (SqlOther t) = t
 
 showAlterDb :: AlterDB -> (Bool, Text)
-showAlterDb (AddTable s) = (False, pack s)
+showAlterDb (AddTable s) = (False, s)
 showAlterDb (AlterColumn t (c, ac)) =
-    (isUnsafe ac, pack $ showAlter t (c, ac))
+    (isUnsafe ac, showAlter t (c, ac))
   where
-    isUnsafe (Drop safeToRemove) = not safeToRemove
+    isUnsafe (Drop safeRemove) = not safeRemove
     isUnsafe _ = False
-showAlterDb (AlterTable t at) = (False, pack $ showAlterTable t at)
+showAlterDb (AlterTable t at) = (False, showAlterTable t at)
 
-showAlterTable :: DBName -> AlterTable -> String
-showAlterTable table (AddUniqueConstraint cname cols) = concat
+showAlterTable :: DBName -> AlterTable -> Text
+showAlterTable table (AddUniqueConstraint cname cols) = T.concat
     [ "ALTER TABLE "
-    , T.unpack $ escape table
+    , escape table
     , " ADD CONSTRAINT "
-    , T.unpack $ escape cname
+    , escape cname
     , " UNIQUE("
-    , intercalate "," $ map (T.unpack . escape) cols
+    , T.intercalate "," $ map escape cols
     , ")"
     ]
-showAlterTable table (DropConstraint cname) = concat
+showAlterTable table (DropConstraint cname) = T.concat
     [ "ALTER TABLE "
-    , T.unpack $ escape table
+    , escape table
     , " DROP CONSTRAINT "
-    , T.unpack $ escape cname
+    , escape cname
     ]
 
-showAlter :: DBName -> AlterColumn' -> String
+showAlter :: DBName -> AlterColumn' -> Text
 showAlter table (n, Type t) =
-    concat
+    T.concat
         [ "ALTER TABLE "
-        , T.unpack $ escape table
+        , escape table
         , " ALTER COLUMN "
-        , T.unpack $ escape n
+        , escape n
         , " TYPE "
         , showSqlType t
         ]
 showAlter table (n, IsNull) =
-    concat
+    T.concat
         [ "ALTER TABLE "
-        , T.unpack $ escape table
+        , escape table
         , " ALTER COLUMN "
-        , T.unpack $ escape n
+        , escape n
         , " DROP NOT NULL"
         ]
 showAlter table (n, NotNull) =
-    concat
+    T.concat
         [ "ALTER TABLE "
-        , T.unpack $ escape table
+        , escape table
         , " ALTER COLUMN "
-        , T.unpack $ escape n
+        , escape n
         , " SET NOT NULL"
         ]
 showAlter table (_, Add' col) =
-    concat
+    T.concat
         [ "ALTER TABLE "
-        , T.unpack $ escape table
+        , escape table
         , " ADD COLUMN "
         , showColumn col
         ]
 showAlter table (n, Drop _) =
-    concat
+    T.concat
         [ "ALTER TABLE "
-        , T.unpack $ escape table
+        , escape table
         , " DROP COLUMN "
-        , T.unpack $ escape n
+        , escape n
         ]
 showAlter table (n, Default s) =
-    concat
+    T.concat
         [ "ALTER TABLE "
-        , T.unpack $ escape table
+        , escape table
         , " ALTER COLUMN "
-        , T.unpack $ escape n
+        , escape n
         , " SET DEFAULT "
         , s
         ]
-showAlter table (n, NoDefault) = concat
+showAlter table (n, NoDefault) = T.concat
     [ "ALTER TABLE "
-    , T.unpack $ escape table
+    , escape table
     , " ALTER COLUMN "
-    , T.unpack $ escape n
+    , escape n
     , " DROP DEFAULT"
     ]
-showAlter table (n, Update' s) = concat
+showAlter table (n, Update' s) = T.concat
     [ "UPDATE "
-    , T.unpack $ escape table
+    , escape table
     , " SET "
-    , T.unpack $ escape n
+    , escape n
     , "="
     , s
     , " WHERE "
-    , T.unpack $ escape n
+    , escape n
     , " IS NULL"
     ]
-showAlter table (n, AddReference t2) = concat
+showAlter table (reftable, AddReference fkeyname t2 id2) = T.concat
     [ "ALTER TABLE "
-    , T.unpack $ escape table
+    , escape table
     , " ADD CONSTRAINT "
-    , T.unpack $ escape $ refName table n
+    , escape fkeyname
     , " FOREIGN KEY("
-    , T.unpack $ escape n
+    , T.intercalate "," $ map escape t2
     , ") REFERENCES "
-    , T.unpack $ escape t2
+    , escape reftable
+    , "("
+    , T.intercalate "," $ map escape id2
+    , ")"
     ]
-showAlter table (_, DropReference cname) = concat
+showAlter table (_, DropReference cname) = T.concat
     [ "ALTER TABLE "
-    , T.unpack (escape table)
+    , escape table
     , " DROP CONSTRAINT "
-    , T.unpack $ escape cname
+    , escape cname
     ]
 
 escape :: DBName -> Text

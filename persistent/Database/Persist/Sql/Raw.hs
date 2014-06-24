@@ -16,6 +16,7 @@ import Data.Int (Int64)
 import Control.Monad.Trans.Class (lift)
 import qualified Data.Text as T
 import Data.Conduit
+import Control.Monad.Trans.Resource (MonadResource)
 
 rawQuery :: (MonadSqlPersist m, MonadResource m)
          => Text

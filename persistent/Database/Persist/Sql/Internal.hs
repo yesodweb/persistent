@@ -3,6 +3,7 @@
 -- | Intended for creating new backends.
 module Database.Persist.Sql.Internal
     ( mkColumns
+    , convertKey
     ) where
 
 import Database.Persist.Types
@@ -15,9 +16,9 @@ import Data.Maybe (mapMaybe, listToMaybe)
 import Database.Persist.Sql.Types
 
 -- | Create the list of columns for the given entity.
-mkColumns :: [EntityDef a] -> EntityDef SqlType -> ([Column], [UniqueDef])
+mkColumns :: [EntityDef a] -> EntityDef SqlType -> ([Column], [UniqueDef], [ForeignDef])
 mkColumns allDefs t =
-    (cols, entityUniques t)
+    (cols, entityUniques t, entityForeigns t)
   where
     cols :: [Column]
     cols = map go (entityFields t)
@@ -35,6 +36,7 @@ mkColumns allDefs t =
                 SqlOther
                 (listToMaybe $ mapMaybe (T.stripPrefix "sqltype=") $ fieldAttrs fd))
             (def $ fieldAttrs fd)
+            Nothing
             (maxLen $ fieldAttrs fd)
             (ref (fieldDB fd) (fieldType fd) (fieldAttrs fd))
 
@@ -77,3 +79,8 @@ resolveTableName [] (HaskellName hn) = error $ "Table not found: " `mappend` T.u
 resolveTableName (e:es) hn
     | entityHaskell e == hn = entityDB e
     | otherwise = resolveTableName es hn
+
+convertKey :: Bool -> KeyBackend t t1 -> [PersistValue]
+convertKey True (Key (PersistList fks)) = fks
+convertKey False (Key ret@(PersistInt64 _)) = [ret]
+convertKey composite k = error $ "invalid key type " ++ show k ++ " composite=" ++ show composite

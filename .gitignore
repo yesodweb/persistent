@@ -1,15 +1,36 @@
+## Haskell build
 dist
-test.db3
-*.swp
-client_session_key.aes
-persistent-test/test/testdb.sqlite3
-cabal-dev/
 *.hi
 *.o
+
+## Editor ignores
 TAGS
 *~
-.virthualenv
-# hsenv does this
-dist_y
-/.shelly
+*.swp
+
+## databases
+test.db3
+persistent-test/test/testdb.sqlite3
+
+# ?
 /tarballs/
+
+# install script error messages
+# maybe should use shellyNoDir ?
+/.shelly
+
+## Cabal sandboxing tools
+.virthualenv
+cabal-dev/
+cabal.sandbox.config
+.cabal-sandbox/
+
+## Docker image ignores
+/.cabal/
+/.ghc/
+/.bash_history
+/.bashrc
+.mongorc.js
+.dbshell
+# can use this for Docker databases
+persistent-test/db/

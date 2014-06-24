@@ -13,25 +13,30 @@ module DataTypeTest (specs) where
 import Test.QuickCheck.Arbitrary (Arbitrary, arbitrary)
 import Test.QuickCheck.Gen (Gen(..), choose)
 import Test.QuickCheck.Instances ()
+import Test.QuickCheck.Random (newQCGen)
 import Database.Persist.Sqlite
 import Database.Persist.TH
-#if WITH_POSTGRESQL
+#if defined(WITH_POSTGRESQL)
 import Database.Persist.Postgresql
+#elif defined(WITH_MYSQL)
+import Database.Persist.MySQL
 #endif
 import Data.Char (generalCategory, GeneralCategory(..))
 import qualified Data.Text as T
 import Data.ByteString (ByteString)
-import Data.Time (Day, UTCTime (..), ZonedTime (..), minutesToTimeZone)
-#ifndef WITH_MONGODB
-import Data.Time (TimeOfDay)
-#endif
-import System.Random (newStdGen)
+import qualified Data.ByteString as S
+import Data.Time (Day, UTCTime (..))
+import Data.Time.Calendar (addDays)
+import Data.Time.Clock (picosecondsToDiffTime)
+import Data.Time.LocalTime
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad (when, forM_)
 import Control.Monad.Trans.Resource (runResourceT)
-import Data.Fixed (Pico)
+import Data.Fixed (Pico,Micro)
 
 import Init
+
+type Tuple a b = (a, b)
 
 #ifdef WITH_MONGODB
 mkPersist persistSettings [persistUpperCase|
@@ -43,8 +48,10 @@ DataTypeTable no-json
     text Text
     textMaxLen Text maxlen=100
     bytes ByteString
+    bytesTextTuple (Tuple ByteString Text)
     bytesMaxLen ByteString maxlen=100
     int Int
+    intList [Int]
     double Double
     bool Bool
     day Day
@@ -57,11 +64,10 @@ DataTypeTable no-json
 |]
 
 cleanDB :: (PersistQuery m, PersistMonadBackend m ~ PersistEntityBackend DataTypeTable) => m ()
-cleanDB = do
-  deleteWhere ([] :: [Filter DataTypeTable])
+cleanDB = deleteWhere ([] :: [Filter DataTypeTable])
 
 specs :: Spec
-specs = describe "data type specs" $ do
+specs = describe "data type specs" $
     it "handles all types" $ asIO $ runResourceT $ runConn $ do
 #ifndef WITH_MONGODB
         _ <- runMigrationSilent dataTypeMigrate
@@ -69,7 +75,7 @@ specs = describe "data type specs" $ do
         _ <- runMigrationSilent dataTypeMigrate
 #endif
         rvals <- liftIO randomValues
-        forM_ (take 1000 rvals) $ \x -> do         
+        forM_ (take 1000 rvals) $ \x -> do
             key <- insert x
             Just y <- get key
             liftIO $ do
@@ -84,43 +90,73 @@ specs = describe "data type specs" $ do
                 check "text" dataTypeTableText
                 check "textMaxLen" dataTypeTableTextMaxLen
                 check "bytes" dataTypeTableBytes
+                check "bytesTextTuple" dataTypeTableBytesTextTuple
                 check "bytesMaxLen" dataTypeTableBytesMaxLen
                 check "int" dataTypeTableInt
+                check "intList" dataTypeTableIntList
                 check "bool" dataTypeTableBool
                 check "day" dataTypeTableDay
 #ifndef WITH_MONGODB
                 check' "pico" dataTypeTablePico
-                check "time" dataTypeTableTime
-                check "utc" dataTypeTableUtc
+                check "time" (roundTime . dataTypeTableTime)
 #endif
+#if !(defined(WITH_MONGODB)) || (defined(WITH_MONGODB) && defined(HIGH_PRECISION_DATE))
+                check "utc" (roundUTCTime . dataTypeTableUtc)
+#endif
+#ifndef WITH_POSTGRESQL
+                -- postgres seems to 'convert' the time to the localtimezone
+                -- http://www.postgresql.org/docs/9.2/static/datatype-datetime.html#AEN5739
+                -- so, this test will never pass anyhow
                 check "zoned" dataTypeTableZonedTime
+#endif
 
                 -- Do a special check for Double since it may
                 -- lose precision when serialized.
-                when (abs (dataTypeTableDouble x - dataTypeTableDouble y) > 1e-14) $
+                when (getDoubleDiff (dataTypeTableDouble x)(dataTypeTableDouble y) > 1e-14) $
                   check "double" dataTypeTableDouble
+    where
+      normDouble :: Double -> Double
+      normDouble x | abs x > 1 = x / 10 ^ (truncate (logBase 10 (abs x)) :: Integer)
+                   | otherwise = x
+      getDoubleDiff x y = abs (normDouble x - normDouble y)
+
+roundTime :: TimeOfDay -> TimeOfDay
+#ifdef WITH_MYSQL
+roundTime (TimeOfDay h m s) = TimeOfDay h m (fromIntegral $ truncate s)
+#else
+roundTime = id
+#endif
+
+roundUTCTime :: UTCTime -> UTCTime
+#ifdef WITH_MYSQL
+roundUTCTime (UTCTime day time) = UTCTime day (fromIntegral $ truncate time)
+#else
+roundUTCTime = id
+#endif
 
 randomValues :: IO [DataTypeTable]
 randomValues = do
-  g <- newStdGen
-  return $ map ((unGen arbitrary) g) [0..]
+  g <- newQCGen
+  return $ map (unGen arbitrary g) [0..]
 
 instance Arbitrary (DataTypeTableGeneric g) where
   arbitrary = DataTypeTable
      <$> arbText                -- text
-     <*> arbText                -- textManLen
+     <*> (T.take 100 <$> arbText) -- textManLen
      <*> arbitrary              -- bytes
-     <*> arbitrary              -- bytesMaxLen
+     <*> arbTuple arbitrary arbText -- bytesTextTuple
+     <*> (S.take 100 <$> arbitrary) -- bytesMaxLen
      <*> arbitrary              -- int
+     <*> arbitrary              -- intList
      <*> arbitrary              -- double
      <*> arbitrary              -- bool
      <*> arbitrary              -- day
 #ifndef WITH_MONGODB
      <*> arbitrary              -- pico
-     <*> arbitrary              -- time
+     <*> (truncateTimeOfDay =<< arbitrary) -- time
 #endif
-     <*> arbitrary              -- utc
-     <*> arbitraryZT            -- zonedTime
+     <*> (truncateUTCTime   =<< arbitrary) -- utc
+     <*> (truncateToMicroZonedTime =<< arbitraryZT)  -- zonedTime
 
 arbText :: Gen Text
 arbText =
@@ -131,13 +167,40 @@ arbText =
   <$> arbitrary
   where forbidden = [NotAssigned, PrivateUse]
 
+arbTuple :: Gen a -> Gen b -> Gen (a, b)
+arbTuple x y = (,) <$> x <*> y
+
 arbitraryZT :: Gen ZonedTime
 arbitraryZT = do
-    lt <- arbitrary
+    tod <- arbitrary
+    -- this avoids a crash in PostgreSQL, due to a limitation of
+    -- Postgresql-simple. However, the test is still disabled on
+    -- this DB because it 'adapts' the time and timezone.
+    d   <- fmap (addDays 19000) arbitrary
     halfHours <- choose (-23, 23)
     let minutes = halfHours * 30
         tz = minutesToTimeZone minutes
-    return $ ZonedTime lt tz
+    return $ ZonedTime (LocalTime d tod) tz
+
+-- truncate less significant digits
+truncateToMicro :: Pico -> Pico
+truncateToMicro p = let
+  p' = fromRational . toRational $ p  :: Micro
+  in   fromRational . toRational $ p' :: Pico
+
+truncateToMicroZonedTime :: ZonedTime  -> Gen ZonedTime
+truncateToMicroZonedTime (ZonedTime (LocalTime d (TimeOfDay h m s)) tz) =
+  return $ ZonedTime (LocalTime d (TimeOfDay h m (truncateToMicro s))) tz
+
+truncateTimeOfDay :: TimeOfDay -> Gen TimeOfDay
+truncateTimeOfDay (TimeOfDay h m s) =
+  return $ TimeOfDay h m $ truncateToMicro s
+
+truncateUTCTime :: UTCTime -> Gen UTCTime
+truncateUTCTime (UTCTime d dift) = do
+  let pico = fromRational . toRational $ dift :: Pico
+      picoi= truncate . (*1000000000000) . toRational $ truncateToMicro pico :: Integer
+  return $ UTCTime d $ picosecondsToDiffTime picoi
 
 asIO :: IO a -> IO a
 asIO = id

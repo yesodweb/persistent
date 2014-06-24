@@ -1,5 +1,5 @@
 name:            persistent-sqlite
-version:         1.2.1
+version:         1.3.0.5
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -8,25 +8,30 @@ synopsis:        Backend for the persistent library using sqlite3.
 description:     This package includes a thin sqlite3 wrapper based on the direct-sqlite package, as well as the entire C library, so there are no system dependencies.
 category:        Database, Yesod
 stability:       Stable
-cabal-version:   >= 1.6
+cabal-version:   >= 1.8
 build-type:      Simple
 homepage:        http://www.yesodweb.com/book/persistent
+bug-reports:     https://github.com/yesodweb/persistent/issues
 
 flag systemlib
   description: Use the system-wide sqlite library
+  default: False
+flag build-sanity-exe
+  description: Build a sanity check test executable
   default: False
 
 library
     build-depends:   base                    >= 4         && < 5
                    , bytestring              >= 0.9.1
                    , transformers            >= 0.2.1
-                   , persistent              >= 1.2       && < 1.3
+                   , persistent              >= 1.3       && < 1.4
                    , monad-control           >= 0.2
                    , containers              >= 0.2
                    , text                    >= 0.7
                    , aeson                   >= 0.5
                    , conduit                 >= 0.5.3
                    , monad-logger            >= 0.2.4
+                   , resourcet
     exposed-modules: Database.Sqlite
                      Database.Persist.Sqlite
     ghc-options:     -Wall
@@ -35,6 +40,18 @@ library
     else
         c-sources:   cbits/sqlite3.c
 
+    if !os(windows)
+        extra-libraries: pthread
+
 source-repository head
   type:     git
   location: git://github.com/yesodweb/persistent.git
+
+executable sanity
+    if flag(build-sanity-exe)
+        buildable: True
+    else
+        buildable: False
+    main-is: sanity.hs
+    hs-source-dirs: test
+    build-depends: base, persistent-sqlite
