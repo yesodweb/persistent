@@ -531,7 +531,7 @@ parseType "varbinary"  = return SqlBlob
 parseType "blob"       = return SqlBlob
 parseType "tinyblob"   = return SqlBlob
 parseType "mediumblob" = return SqlBlob
-parseType "longblob"   = return SqlBlob
+parseType "longblob"   = return $ SqlOther "longblob"
 -- Time-related
 parseType "time"       = return SqlTime
 parseType "datetime"   = return SqlDayTime
@@ -587,14 +587,14 @@ getAlters allDefs tblName (c1, u1) (c2, u2) =
 -- changed in the columns @oldColumns@ for @newColumn@ to be
 -- supported.
 findAlters :: Show a => DBName -> [EntityDef a] -> Column -> [Column] -> ([AlterColumn'], [Column])
-findAlters tblName allDefs col@(Column name isNull type_ def defConstraintName _maxLen ref) cols =
+findAlters tblName allDefs col@(Column name isNull type_ def defConstraintName maxLen ref) cols =
     case filter ((name ==) . cName) cols of
     -- new fkey that didnt exist before
         [] -> case ref of
                Nothing -> ([],[])
                Just (tname, b) -> let cnstr = [addReference allDefs (refName tblName name) tname name]
                                   in (map ((,) tname) (Add' col : cnstr), cols)
-        Column _ isNull' type_' def' defConstraintName' _maxLen' ref':_ ->
+        Column _ isNull' type_' def' defConstraintName' maxLen' ref':_ ->
             let -- Foreign key
                 refDrop = case (ref == ref', ref') of
                             (False, Just (_, cname)) -> [(name, DropReference cname)]
@@ -603,7 +603,7 @@ findAlters tblName allDefs col@(Column name isNull type_ def defConstraintName _
                             (False, Just (tname, cname)) -> [(tname, addReference allDefs (refName tblName name) tname name)]
                             _ -> []
                 -- Type and nullability
-                modType | type_ == type_' && isNull == isNull' = []
+                modType | showSqlType type_ maxLen `ciEquals` showSqlType type_' maxLen' && isNull == isNull' = []
                         | otherwise = [(name, Change col)]
                 -- Default value
                 modDef | def == def' = []
@@ -613,6 +613,8 @@ findAlters tblName allDefs col@(Column name isNull type_ def defConstraintName _
             in ( refDrop ++ modType ++ modDef ++ refAdd
                , filter ((name /=) . cName) cols )
 
+  where
+    ciEquals x y = T.toCaseFold (T.pack x) == T.toCaseFold (T.pack y)
 
 ----------------------------------------------------------------------
 
