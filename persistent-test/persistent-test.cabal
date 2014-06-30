@@ -106,7 +106,7 @@ library
                    , hspec-expectations
                    , file-location >= 0.4
                    , template-haskell
-                   , aeson                    >= 0.5
+                   , aeson                    >= 0.7
                    , lifted-base              >= 0.1
                    , network
                    , path-pieces              >= 0.1
@@ -168,7 +168,7 @@ library
 
    if flag(mongodb)
      build-depends:
-                     mongoDB       >= 1.4.1
+                     mongoDB       >= 1.4.1 && < 2.0
                    , cereal
                    , bson
                    , process

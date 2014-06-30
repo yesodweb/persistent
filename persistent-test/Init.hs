@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -11,9 +12,9 @@ module Init (
   , assertEmpty
   , BackendMonad
   , runConn
-  , dbName
 
 #ifdef WITH_MONGODB
+  , dbName
   , db'
   , setupMongo
   , MkPersistSettings (..)
@@ -50,7 +51,7 @@ import Data.Text (Text)
 
 #ifdef WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
-import Database.Persist.MongoDB (Action, runMongoDBPool, MongoBackend, defaultMongoConf, withConnection, applyDockerEnv)
+import Database.Persist.MongoDB (Action, withMongoPool, runMongoDBPool, MongoBackend, defaultMongoConf, applyDockerEnv)
 import Language.Haskell.TH.Syntax (Type(..))
 import Database.Persist.TH (mkPersistSettings, MkPersistSettings(..))
 import Control.Monad (replicateM)
@@ -118,9 +119,8 @@ dbName = "persistent"
 type BackendMonad = MongoBackend
 runConn :: (MonadIO m, MonadBaseControl IO m) => Action m backend -> m ()
 runConn f = do
-  conf <- liftIO $ applyDockerEnv $ defaultMongoConf dbName
-  void $ withConnection conf $ runMongoDBPool MongoDB.master f
-
+  conf <- liftIO $ applyDockerEnv $ defaultMongoConf dbName -- { mgRsPrimary = Just "replicaset" }
+  void $ withMongoPool conf $ runMongoDBPool MongoDB.master f
 
 setupMongo :: Action IO ()
 setupMongo = void $ MongoDB.dropDatabase dbName

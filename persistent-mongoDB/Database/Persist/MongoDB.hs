@@ -39,7 +39,7 @@ module Database.Persist.MongoDB
 
     -- * MongoDB specific Filters
     -- $filters
-    , nestEq, multiEq, nestBsonEq, multiBsonEq
+    , nestEq, anyEq, multiEq, nestBsonEq, multiBsonEq
     , (=~.), (?=~.), MongoRegex
     , (->.), (~>.), (?&->.), (?&~>.), (&->.), (&~>.)
     -- non-operator forms of filters
@@ -59,6 +59,7 @@ module Database.Persist.MongoDB
 
     -- * using connections
     , withConnection
+    , withMongoPool
     , withMongoDBConn
     , withMongoDBPool
     , createMongoDBPool
@@ -250,15 +251,40 @@ withMongoDBConn :: (Trans.MonadIO m, Applicative m)
                 -> (ConnectionPool -> m b) -> m b
 withMongoDBConn dbname hostname port mauth connectionIdleTime = withMongoDBPool dbname hostname port mauth 1 1 connectionIdleTime
 
-createPipe :: HostName -> PortID -> IO DB.Pipe
-createPipe hostname port = DB.runIOE $ DB.connect (DB.Host hostname port)
+mkPipe :: DB.Host -> IO DB.Pipe
+mkPipe = DB.runIOE . DB.connect
 
-createConnection :: Database -> HostName -> PortID -> Maybe MongoAuth -> IO Connection
-createConnection dbname hostname port mAuth = do
-    pipe <- createPipe hostname port
+createReplicatSet :: (DB.ReplicaSetName, [DB.Host]) -> Database -> Maybe MongoAuth -> IO Connection
+createReplicatSet rsSeed dbname mAuth = do
+    pipe <- DB.runIOE $ DB.openReplicaSet rsSeed >>= DB.primary
+    testAccess pipe dbname mAuth
+    return $ Connection pipe dbname
+
+createRsPool :: (Trans.MonadIO m, Applicative m) => Database -> ReplicaSetConfig
+              -> Maybe MongoAuth
+              -> Int -- ^ pool size (number of stripes)
+              -> Int -- ^ stripe size (number of connections per stripe)
+              -> NominalDiffTime -- ^ time a connection is left idle before closing
+              -> m ConnectionPool
+createRsPool dbname (ReplicaSetConfig rsName rsHosts) mAuth connectionPoolSize stripeSize connectionIdleTime = do
+    Trans.liftIO $ Pool.createPool
+                          (createReplicatSet (rsName, rsHosts) dbname mAuth)
+                          (\(Connection pipe _) -> DB.close pipe)
+                          connectionPoolSize
+                          connectionIdleTime
+                          stripeSize
+
+testAccess :: DB.Pipe -> Database -> Maybe MongoAuth -> IO ()
+testAccess pipe dbname mAuth = do
     _ <- case mAuth of
       Just (MongoAuth user pass) -> DB.access pipe DB.UnconfirmedWrites dbname (DB.auth user pass)
       Nothing -> return undefined
+    return ()
+
+createConnection :: Database -> HostName -> PortID -> Maybe MongoAuth -> IO Connection
+createConnection dbname hostname port mAuth = do
+    pipe <- mkPipe $ DB.Host hostname port
+    testAccess pipe dbname mAuth
     return $ Connection pipe dbname
 
 createMongoDBPool :: (Trans.MonadIO m, Applicative m) => Database -> HostName -> PortID
@@ -275,6 +301,20 @@ createMongoDBPool dbname hostname port mAuth connectionPoolSize stripeSize conne
                           connectionIdleTime
                           stripeSize
 
+
+createMongoPool :: (Trans.MonadIO m, Applicative m) => MongoConf -> m ConnectionPool
+createMongoPool c@MongoConf{mgReplicaSetConfig = Just (ReplicaSetConfig rsName hosts)} =
+      createRsPool
+         (mgDatabase c)
+         (ReplicaSetConfig rsName ((DB.Host (T.unpack $ mgHost c) (mgPort c)):hosts))
+         (mgAuth c)
+         (mgPoolStripes c) (mgStripeConnections c) (mgConnectionIdleTime c)
+createMongoPool c@MongoConf{mgReplicaSetConfig = Nothing} =
+      createMongoDBPool
+         (mgDatabase c) (T.unpack (mgHost c)) (mgPort c)
+         (mgAuth c)
+         (mgPoolStripes c) (mgStripeConnections c) (mgConnectionIdleTime c)
+
 type PipePool = Pool.Pool DB.Pipe
 
 -- | A pool of plain MongoDB pipes.
@@ -286,13 +326,16 @@ createMongoDBPipePool :: (Trans.MonadIO m, Applicative m) => HostName -> PortID
                   -> Int -- ^ stripe size (number of connections per stripe)
                   -> NominalDiffTime -- ^ time a connection is left idle before closing
                   -> m PipePool
-createMongoDBPipePool hostname port connectionPoolSize stripeSize connectionIdleTime = do
+createMongoDBPipePool hostname port connectionPoolSize stripeSize connectionIdleTime =
   Trans.liftIO $ Pool.createPool
-                          (createPipe hostname port)
-                          (\pipe -> DB.close pipe)
+                          (mkPipe $ DB.Host hostname port)
+                          DB.close
                           connectionPoolSize
                           connectionIdleTime
                           stripeSize
+
+withMongoPool :: (Trans.MonadIO m, Applicative m) => MongoConf -> (ConnectionPool -> m b) -> m b
+withMongoPool conf connectionReader = createMongoPool conf >>= connectionReader
 
 withMongoDBPool :: (Trans.MonadIO m, Applicative m) =>
   Database -> HostName -> PortID -> Maybe MongoAuth -> Int -> Int -> NominalDiffTime -> (ConnectionPool -> m b) -> m b
@@ -846,6 +889,9 @@ data MongoConf = MongoConf
     , mgPoolStripes :: Int
     , mgStripeConnections :: Int
     , mgConnectionIdleTime :: NominalDiffTime
+    -- | YAML fields for this are @rsName@ and @rsSecondaries@
+    -- mgHost is assumed to be the primary
+    , mgReplicaSetConfig :: Maybe ReplicaSetConfig
     } deriving Show
 
 defaultHost :: Text
@@ -868,29 +914,32 @@ defaultMongoConf dbName = MongoConf
   , mgPoolStripes = defaultPoolStripes
   , mgStripeConnections = defaultStripeConnections
   , mgConnectionIdleTime = defaultConnectionIdleTime
+  , mgReplicaSetConfig = Nothing
   }
+
+data ReplicaSetConfig = ReplicaSetConfig DB.ReplicaSetName [DB.Host]
+    deriving Show
+
 
 instance PersistConfig MongoConf where
     type PersistConfigBackend MongoConf = DB.Action
     type PersistConfigPool MongoConf = ConnectionPool
 
-    createPoolConfig c =
-      createMongoDBPool 
-         (mgDatabase c) (T.unpack (mgHost c)) (mgPort c)
-         (mgAuth c)
-         (mgPoolStripes c) (mgStripeConnections c) (mgConnectionIdleTime c)
+    createPoolConfig = createMongoPool
 
     runPool c = runMongoDBPool (mgAccessMode c)
     loadConfig (Object o) = do
-        db                 <- o .:  "database"
-        host               <- o .:? "host" .!= defaultHost
-        (NoOrphanPortID port) <- o .:? "port" .!= (NoOrphanPortID DB.defaultPort)
-        poolStripes        <- o .:? "poolstripes" .!= defaultPoolStripes
-        stripeConnections  <- o .:? "connections" .!= defaultStripeConnections
-        (NoOrphanNominalDiffTime connectionIdleTime) <- o .:? "connectionIdleTime" .!= (NoOrphanNominalDiffTime defaultConnectionIdleTime)
+        db                  <- o .:  "database"
+        host                <- o .:? "host" .!= defaultHost
+        NoOrphanPortID port <- o .:? "port" .!= NoOrphanPortID DB.defaultPort
+        poolStripes         <- o .:? "poolstripes" .!= defaultPoolStripes
+        stripeConnections   <- o .:? "connections" .!= defaultStripeConnections
+        NoOrphanNominalDiffTime connectionIdleTime <- o .:? "connectionIdleTime" .!= NoOrphanNominalDiffTime defaultConnectionIdleTime
         mUser              <- o .:? "user"
         mPass              <- o .:? "password"
         accessString       <- o .:? "accessMode" .!= confirmWrites
+        mRsName            <- o .:? "rsName"
+        rsSecondaires      <- o .:? "rsSecondaries" .!= []
 
         mPoolSize         <- o .:? "poolsize"
         case mPoolSize of
@@ -900,22 +949,27 @@ instance PersistConfig MongoConf where
         accessMode <- case accessString of
              "ReadStaleOk"       -> return DB.ReadStaleOk
              "UnconfirmedWrites" -> return DB.UnconfirmedWrites
-             confirmWrites       -> return defaultAccessMode
+             "ConfirmWrites"     -> return defaultAccessMode
              badAccess -> fail $ "unknown accessMode: " ++ T.unpack badAccess
 
-        return $ MongoConf {
+        let rs = case (mRsName, rsSecondaires) of
+                     (Nothing, []) -> Nothing
+                     (Nothing, _) -> error "found rsSecondaries key. Also expected but did not find a rsName key"
+                     (Just rsName, hosts) -> Just $ ReplicaSetConfig rsName $ fmap DB.readHostPort hosts
+
+        return MongoConf {
             mgDatabase = db
           , mgHost = host
           , mgPort = port
           , mgAuth =
-              (case (mUser, mPass) of
+              case (mUser, mPass) of
                 (Just user, Just pass) -> Just (MongoAuth user pass)
                 _ -> Nothing
-              )
           , mgPoolStripes = poolStripes
           , mgStripeConnections = stripeConnections
           , mgAccessMode = accessMode
           , mgConnectionIdleTime = connectionIdleTime
+          , mgReplicaSetConfig = rs
           }
       where
         confirmWrites = "ConfirmWrites"
@@ -1031,12 +1085,18 @@ infixr 6 ?&->.
 infixr 6 ->.
 
 infixr 4 `nestEq`
+infixr 4 `anyEq`
 infixr 4 `multiEq`
 infixr 4 `nestBsonEq`
 infixr 4 `multiBsonEq`
+infixr 4 `anyBsonEq`
 
--- | The normal Persistent equality test (==.) is not generic enough.
--- Instead use this with the drill-down operaters (->.) or (?->.)
+-- | The normal Persistent equality test '==.' is not generic enough.
+-- Instead use this with the drill-down arrow operaters such as '->.'
+--
+-- using this as the only query filter is similar to the following in the mongoDB shell
+--
+-- > db.Collection.find({"object.field": item})
 nestEq :: forall record typ.
        ( PersistField typ
        , PersistEntityBackend record ~ MongoBackend
@@ -1056,22 +1116,43 @@ nf `nestBsonEq` val = BackendFilter $ NestedFilter
                     , nestedValue = MongoFilterOperator val
                     }
 
--- | use to see if an embedded list contains an item
 multiEq :: forall record typ.
         ( PersistField typ
         , PersistEntityBackend record ~ MongoBackend
         ) => EntityField record [typ] -> typ -> Filter record
-fld `multiEq` val = BackendFilter $ MultiKeyFilter
+multiEq = anyEq
+{-# DEPRECATED multiEq "Please use anyEq instead" #-}
+
+-- | Like nestEq, but for an embedded list.
+-- Checks to see if the list contains an item.
+--
+-- In Haskell we need different equality functions for embedded fields that are lists or non-lists to keep things type-safe.
+--
+-- using this as the only query filter is similar to the following in the mongoDB shell
+--
+-- > db.Collection.find({arrayField: arrayItem})
+anyEq :: forall record typ.
+        ( PersistField typ
+        , PersistEntityBackend record ~ MongoBackend
+        ) => EntityField record [typ] -> typ -> Filter record
+fld `anyEq` val = BackendFilter $ MultiKeyFilter
                       { multiField = fld
                       , multiValue = PersistOperator (Left val) Eq
                       }
 
--- | same as `multiEq`, but give a BSON Value
 multiBsonEq :: forall record typ.
         ( PersistField typ
         , PersistEntityBackend record ~ MongoBackend
         ) => EntityField record [typ] -> DB.Value -> Filter record
-fld `multiBsonEq` val = BackendFilter $ MultiKeyFilter
+multiBsonEq = anyBsonEq
+{-# DEPRECATED multiBsonEq "Please use anyBsonEq instead" #-}
+
+-- | same as `anyEq`, but give a BSON Value
+anyBsonEq :: forall record typ.
+        ( PersistField typ
+        , PersistEntityBackend record ~ MongoBackend
+        ) => EntityField record [typ] -> DB.Value -> Filter record
+fld `anyBsonEq` val = BackendFilter $ MultiKeyFilter
                       { multiField = fld
                       , multiValue = MongoFilterOperator val
                       }

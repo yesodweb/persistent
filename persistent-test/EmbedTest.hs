@@ -238,7 +238,7 @@ specs = describe "embedded entities" $ do
               , (HasEmbed "embed" (OnlyName "2"))
               ]
         contK <- insert container
-        Just meq <- selectFirst [HasListEmbedList `multiEq` HasEmbed "embed" (OnlyName "1")] []
+        Just meq <- selectFirst [HasListEmbedList `anyEq` HasEmbed "embed" (OnlyName "1")] []
         meq @== (Entity contK container)
 
         Just neq1 <- selectFirst [HasListEmbedList ->. HasEmbedName `nestEq` "embed"] []
