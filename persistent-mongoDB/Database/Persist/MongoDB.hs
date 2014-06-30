@@ -26,15 +26,20 @@ module Database.Persist.MongoDB
     (
     -- * Entity conversion
       collectionName
-    , entityToDocument
-    , entityToFields
-    , toInsertFields
     , docToEntityEither
     , docToEntityThrow
+    , entityToDocument
+    , toInsertDoc
+    , updatesToDoc
+    , filtersToDoc
+    , toUniquesDoc
+
+    , toInsertFields
+    , entityToFields
 
     -- * MongoDB specific Filters
     -- $filters
-    , nestEq, multiEq, nestBsonEq, multiBsonEq
+    , nestEq, anyEq, multiEq, nestBsonEq, multiBsonEq
     , (=~.), (?=~.), MongoRegex
     , (->.), (~>.), (?&->.), (?&~>.), (&->.), (&~>.)
     -- non-operator forms of filters
@@ -53,6 +58,8 @@ module Database.Persist.MongoDB
     , fieldName
 
     -- * using connections
+    , withConnection
+    , withMongoPool
     , withMongoDBConn
     , withMongoDBPool
     , createMongoDBPool
@@ -60,9 +67,19 @@ module Database.Persist.MongoDB
     , runMongoDBPoolDef
     , ConnectionPool
     , Connection
-    , MongoConf (..)
     , MongoBackend
     , MongoAuth (..)
+
+    -- * Connection configuration
+    , MongoConf (..)
+    , defaultMongoConf
+    , defaultHost
+    , defaultAccessMode
+    , defaultPoolStripes
+    , defaultConnectionIdleTime
+    , defaultStripeConnections
+    , applyDockerEnv
+
     -- ** using raw MongoDB pipes
     , PipePool
     , createMongoDBPipePool
@@ -112,7 +129,10 @@ import Data.Time (NominalDiffTime)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 #endif
 import Data.Time.Calendar (Day(..))
+#if MIN_VERSION_aeson(0, 7, 0)
+#else
 import Data.Attoparsec.Number
+#endif
 import Data.Char (toUpper)
 import Data.Word (Word16)
 import Data.Monoid (mappend)
@@ -121,6 +141,7 @@ import Control.Monad.Trans.Reader (ask, runReaderT)
 import Data.Typeable
 import Control.Monad.Trans.Resource (MonadThrow (..))
 import Control.Monad.Trans.Control (MonadBaseControl)
+import System.Environment (lookupEnv)
 
 #ifdef DEBUG
 import FileLocation (debug)
@@ -136,7 +157,7 @@ newtype NoOrphanNominalDiffTime = NoOrphanNominalDiffTime NominalDiffTime
                                 deriving (Show, Eq, Num)
 
 instance FromJSON NoOrphanNominalDiffTime where
-#if MIN_VERSION_aeson(0, 7, 0)    
+#if MIN_VERSION_aeson(0, 7, 0)
     parseJSON (Number x) = (return . NoOrphanNominalDiffTime . fromRational . toRational) x
 
 
@@ -211,6 +232,12 @@ instance Sql.PersistFieldSql Objectid where
     sqlType _ = Sql.SqlOther "doesn't make much sense for MongoDB"
 
 
+withConnection :: (Trans.MonadIO m, Applicative m)
+               => MongoConf
+               -> (ConnectionPool -> m b) -> m b
+withConnection mc =
+  withMongoDBPool (mgDatabase mc) (T.unpack $ mgHost mc) (mgPort mc) (mgAuth mc) (mgPoolStripes mc) (mgStripeConnections mc) (mgConnectionIdleTime mc)
+
 withMongoDBConn :: (Trans.MonadIO m, Applicative m)
                 => Database -> HostName -> PortID
                 -> Maybe MongoAuth -> NominalDiffTime
@@ -220,12 +247,37 @@ withMongoDBConn dbname hostname port mauth connectionIdleTime = withMongoDBPool 
 createPipe :: HostName -> PortID -> IO DB.Pipe
 createPipe hostname port = DB.connect (DB.Host hostname port)
 
-createConnection :: Database -> HostName -> PortID -> Maybe MongoAuth -> IO Connection
-createConnection dbname hostname port mAuth = do
-    pipe <- createPipe hostname port
+createReplicatSet :: (DB.ReplicaSetName, [DB.Host]) -> Database -> Maybe MongoAuth -> IO Connection
+createReplicatSet rsSeed dbname mAuth = do
+    pipe <- DB.openReplicaSet rsSeed >>= DB.primary
+    testAccess pipe dbname mAuth
+    return $ Connection pipe dbname
+
+createRsPool :: (Trans.MonadIO m, Applicative m) => Database -> ReplicaSetConfig
+              -> Maybe MongoAuth
+              -> Int -- ^ pool size (number of stripes)
+              -> Int -- ^ stripe size (number of connections per stripe)
+              -> NominalDiffTime -- ^ time a connection is left idle before closing
+              -> m ConnectionPool
+createRsPool dbname (ReplicaSetConfig rsName rsHosts) mAuth connectionPoolSize stripeSize connectionIdleTime = do
+    Trans.liftIO $ Pool.createPool
+                          (createReplicatSet (rsName, rsHosts) dbname mAuth)
+                          (\(Connection pipe _) -> DB.close pipe)
+                          connectionPoolSize
+                          connectionIdleTime
+                          stripeSize
+
+testAccess :: DB.Pipe -> Database -> Maybe MongoAuth -> IO ()
+testAccess pipe dbname mAuth = do
     _ <- case mAuth of
       Just (MongoAuth user pass) -> DB.access pipe DB.UnconfirmedWrites dbname (DB.auth user pass)
       Nothing -> return undefined
+    return ()
+
+createConnection :: Database -> HostName -> PortID -> Maybe MongoAuth -> IO Connection
+createConnection dbname hostname port mAuth = do
+    pipe <- createPipe hostname port
+    testAccess pipe dbname mAuth
     return $ Connection pipe dbname
 
 createMongoDBPool :: (Trans.MonadIO m, Applicative m) => Database -> HostName -> PortID
@@ -242,6 +294,20 @@ createMongoDBPool dbname hostname port mAuth connectionPoolSize stripeSize conne
                           connectionIdleTime
                           stripeSize
 
+
+createMongoPool :: (Trans.MonadIO m, Applicative m) => MongoConf -> m ConnectionPool
+createMongoPool c@MongoConf{mgReplicaSetConfig = Just (ReplicaSetConfig rsName hosts)} =
+      createRsPool
+         (mgDatabase c)
+         (ReplicaSetConfig rsName ((DB.Host (T.unpack $ mgHost c) (mgPort c)):hosts))
+         (mgAuth c)
+         (mgPoolStripes c) (mgStripeConnections c) (mgConnectionIdleTime c)
+createMongoPool c@MongoConf{mgReplicaSetConfig = Nothing} =
+      createMongoDBPool
+         (mgDatabase c) (T.unpack (mgHost c)) (mgPort c)
+         (mgAuth c)
+         (mgPoolStripes c) (mgStripeConnections c) (mgConnectionIdleTime c)
+
 type PipePool = Pool.Pool DB.Pipe
 
 -- | A pool of plain MongoDB pipes.
@@ -253,13 +319,16 @@ createMongoDBPipePool :: (Trans.MonadIO m, Applicative m) => HostName -> PortID
                   -> Int -- ^ stripe size (number of connections per stripe)
                   -> NominalDiffTime -- ^ time a connection is left idle before closing
                   -> m PipePool
-createMongoDBPipePool hostname port connectionPoolSize stripeSize connectionIdleTime = do
+createMongoDBPipePool hostname port connectionPoolSize stripeSize connectionIdleTime =
   Trans.liftIO $ Pool.createPool
                           (createPipe hostname port)
-                          (\pipe -> DB.close pipe)
+                          DB.close
                           connectionPoolSize
                           connectionIdleTime
                           stripeSize
+
+withMongoPool :: (Trans.MonadIO m, Applicative m) => MongoConf -> (ConnectionPool -> m b) -> m b
+withMongoPool conf connectionReader = createMongoPool conf >>= connectionReader
 
 withMongoDBPool :: (Trans.MonadIO m, Applicative m) =>
   Database -> HostName -> PortID -> Maybe MongoAuth -> Int -> Int -> NominalDiffTime -> (ConnectionPool -> m b) -> m b
@@ -293,8 +362,8 @@ selectByKey :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend
             => Key record -> EntityDef a -> DB.Selection
 selectByKey k record = (DB.select (filterByKey k) (unDBName $ entityDB record))
 
-updateFields :: (PersistEntity entity) => [Update entity] -> [DB.Field]
-updateFields upds = map updateToMongoField upds 
+updatesToDoc :: (PersistEntity entity) => [Update entity] -> DB.Document
+updatesToDoc upds = map updateToMongoField upds
 
 updateToMongoField :: (PersistEntity entity) => Update entity -> DB.Field
 updateToMongoField (Update field v up) =
@@ -316,16 +385,20 @@ updateToMongoField (Update field v up) =
                   (Divide, _)   -> throw $ PersistMongoDBUnsupported "divide not supported"
 
 
-uniqSelector :: forall record.  (PersistEntity record) => Unique record -> [DB.Field]
-uniqSelector uniq = zipWith (DB.:=)
+toUniquesDoc :: forall record. (PersistEntity record) => Unique record -> [DB.Field]
+toUniquesDoc uniq = zipWith (DB.:=)
   (map (unDBName . snd) $ persistUniqueToFieldNames uniq)
   (map DB.val (persistUniqueToValues uniq))
 
+toInsertFields :: forall record.  (PersistEntity record) => record -> [DB.Field]
+toInsertFields = toInsertDoc
+{-# DEPRECATED toInsertFields "Please use toInsertDoc instead" #-}
+
 -- | convert a PersistEntity into document fields.
 -- for inserts only: nulls are ignored so they will be unset in the document.
--- 'entityToFields' includes nulls
-toInsertFields :: forall record.  (PersistEntity record) => record -> [DB.Field]
-toInsertFields record = zipFilter (entityFields entity) (toPersistFields record)
+-- 'entityToDocument' includes nulls
+toInsertDoc :: forall record.  (PersistEntity record) => record -> DB.Document
+toInsertDoc record = zipFilter (entityFields entity) (toPersistFields record)
   where
     zipFilter [] _  = []
     zipFilter _  [] = []
@@ -338,8 +411,8 @@ collectionName :: (PersistEntity record) => record -> Text
 collectionName = unDBName . entityDB . entityDef . Just
 
 -- | convert a PersistEntity into document fields.
--- unlike 'toInsertFields', nulls are included.
-entityToDocument :: (PersistEntity record) => record -> [DB.Field]
+-- unlike 'toInsertDoc', nulls are included.
+entityToDocument :: (PersistEntity record) => record -> DB.Document
 entityToDocument record = zipIt (entityFields entity) (toPersistFields record)
   where
     zipIt [] _  = []
@@ -378,12 +451,12 @@ instance PersistStore DB.MongoContext where
     insertMany (r:records) = map (\(DB.ObjId oid) -> oidToKey oid) `liftM`
         DB.insertMany (collectionName r) (map toInsertFields (r:records))
 
-    insertKey k record = saveWithKey toInsertFields DB.insert_ k record
+    insertKey k record = saveWithKey toInsertDoc DB.insert_ k record
 
     repsert   k record = saveWithKey entityToDocument DB.save k record
 
     replace k record = do
-        DB.replace (selectByKey k t) (toInsertFields record)
+        DB.replace (selectByKey k t) (entityToDocument record)
         return ()
       where
         t = entityDef $ Just record
@@ -414,7 +487,7 @@ instance MonadThrow m => MonadThrow (DB.Action m) where
 instance PersistUnique DB.MongoContext where
     getBy uniq = do
         mdoc <- DB.findOne $
-          DB.select (uniqSelector uniq) (unDBName $ entityDB t)
+          DB.select (toUniquesDoc uniq) (unDBName $ entityDB t)
         case mdoc of
             Nothing -> return Nothing
             Just doc -> liftM Just $ fromPersistValuesThrow t doc
@@ -424,7 +497,7 @@ instance PersistUnique DB.MongoContext where
     deleteBy uniq =
         DB.delete DB.Select {
           DB.coll = collectionName $ dummyFromUnique uniq
-        , DB.selector = uniqSelector uniq
+        , DB.selector = toUniquesDoc uniq
         }
 
 _id :: T.Text
@@ -440,12 +513,12 @@ instance PersistQuery DB.MongoContext where
     update key upds =
         DB.modify 
            (DB.Select [keyToMongoIdField key] (collectionName $ recordTypeFromKey key))
-           $ updateFields upds
+           $ updatesToDoc upds
 
     updateGet key upds = do
         result <- DB.findAndModify (DB.select [keyToMongoIdField key]
                      (unDBName $ entityDB t)
-                   ) (updateFields upds)
+                   ) (updatesToDoc upds)
         case result of
           Left e -> err e
           Right doc -> do
@@ -460,20 +533,20 @@ instance PersistQuery DB.MongoContext where
     updateWhere filts upds =
         DB.modify DB.Select {
           DB.coll = collectionName $ dummyFromFilts filts
-        , DB.selector = filtersToSelector filts
-        } $ updateFields upds
+        , DB.selector = filtersToDoc filts
+        } $ updatesToDoc upds
 
     deleteWhere filts = do
         DB.delete DB.Select {
           DB.coll = collectionName $ dummyFromFilts filts
-        , DB.selector = filtersToSelector filts
+        , DB.selector = filtersToDoc filts
         }
 
     count filts = do
         i <- DB.count query
         return $ fromIntegral i
       where
-        query = DB.select (filtersToSelector filts) $
+        query = DB.select (filtersToDoc filts) $
                   collectionName $ dummyFromFilts filts
 
     selectSourceRes filts opts = do
@@ -528,7 +601,7 @@ orderClause o = case o of
 
 makeQuery :: (PersistEntity val, PersistEntityBackend val ~ MongoBackend) => [Filter val] -> [SelectOpt val] -> DB.Query
 makeQuery filts opts =
-    (DB.select (filtersToSelector filts) (collectionName $ dummyFromFilts filts)) {
+    (DB.select (filtersToDoc filts) (collectionName $ dummyFromFilts filts)) {
       DB.limit = fromIntegral limit
     , DB.skip  = fromIntegral offset
     , DB.sort  = orders
@@ -537,8 +610,8 @@ makeQuery filts opts =
     (limit, offset, orders') = limitOffsetOrder opts
     orders = map orderClause orders'
 
-filtersToSelector :: (PersistEntity val, PersistEntityBackend val ~ MongoBackend) => [Filter val] -> DB.Document
-filtersToSelector filts = 
+filtersToDoc :: (PersistEntity val, PersistEntityBackend val ~ MongoBackend) => [Filter val] -> DB.Document
+filtersToDoc filts =
 #ifdef DEBUG
   debug $
 #endif
@@ -808,29 +881,57 @@ data MongoConf = MongoConf
     , mgPoolStripes :: Int
     , mgStripeConnections :: Int
     , mgConnectionIdleTime :: NominalDiffTime
+    -- | YAML fields for this are @rsName@ and @rsSecondaries@
+    -- mgHost is assumed to be the primary
+    , mgReplicaSetConfig :: Maybe ReplicaSetConfig
     } deriving Show
+
+defaultHost :: Text
+defaultHost = "127.0.0.1"
+defaultAccessMode :: DB.AccessMode
+defaultAccessMode = DB.ConfirmWrites ["j" DB.=: True]
+defaultPoolStripes, defaultStripeConnections :: Int
+defaultPoolStripes = 1
+defaultStripeConnections = 10
+defaultConnectionIdleTime :: NominalDiffTime
+defaultConnectionIdleTime = 20
+
+defaultMongoConf :: Text -> MongoConf
+defaultMongoConf dbName = MongoConf
+  { mgDatabase = dbName
+  , mgHost = defaultHost
+  , mgPort = DB.defaultPort
+  , mgAuth = Nothing
+  , mgAccessMode = defaultAccessMode
+  , mgPoolStripes = defaultPoolStripes
+  , mgStripeConnections = defaultStripeConnections
+  , mgConnectionIdleTime = defaultConnectionIdleTime
+  , mgReplicaSetConfig = Nothing
+  }
+
+data ReplicaSetConfig = ReplicaSetConfig DB.ReplicaSetName [DB.Host]
+    deriving Show
+
 
 instance PersistConfig MongoConf where
     type PersistConfigBackend MongoConf = DB.Action
     type PersistConfigPool MongoConf = ConnectionPool
 
-    createPoolConfig c =
-      createMongoDBPool 
-         (mgDatabase c) (T.unpack (mgHost c)) (mgPort c)
-         (mgAuth c)
-         (mgPoolStripes c) (mgStripeConnections c) (mgConnectionIdleTime c)
+    createPoolConfig = createMongoPool
 
     runPool c = runMongoDBPool (mgAccessMode c)
     loadConfig (Object o) = do
-        db                 <- o .:  "database"
-        host               <- o .:? "host" .!= "127.0.0.1"
-        (NoOrphanPortID port) <- o .:? "port" .!= (NoOrphanPortID DB.defaultPort)
-        poolStripes        <- o .:? "poolstripes" .!= 1
-        stripeConnections  <- o .:  "connections"
-        (NoOrphanNominalDiffTime connectionIdleTime) <- o .:? "connectionIdleTime" .!= 20
+        db                  <- o .:  "database"
+        host                <- o .:? "host" .!= defaultHost
+        NoOrphanPortID port <- o .:? "port" .!= NoOrphanPortID DB.defaultPort
+        poolStripes         <- o .:? "poolstripes" .!= defaultPoolStripes
+        stripeConnections   <- o .:? "connections" .!= defaultStripeConnections
+        NoOrphanNominalDiffTime connectionIdleTime <- o .:? "connectionIdleTime" .!= NoOrphanNominalDiffTime defaultConnectionIdleTime
         mUser              <- o .:? "user"
         mPass              <- o .:? "password"
-        accessString       <- o .:? "accessMode" .!= "ConfirmWrites"
+        accessString       <- o .:? "accessMode" .!= confirmWrites
+        mRsName            <- o .:? "rsName"
+        rsSecondaires      <- o .:? "rsSecondaries" .!= []
 
         mPoolSize         <- o .:? "poolsize"
         case mPoolSize of
@@ -838,26 +939,32 @@ instance PersistConfig MongoConf where
           Just (_::Int) -> fail "specified deprecated poolsize attribute. Please specify a connections. You can also specify a pools attribute which defaults to 1. Total connections opened to the db are connections * pools"
 
         accessMode <- case accessString of
-               "ReadStaleOk"       -> return DB.ReadStaleOk
-               "UnconfirmedWrites" -> return DB.UnconfirmedWrites
-               "ConfirmWrites"     -> return $ DB.ConfirmWrites ["j" DB.=: True]
-               badAccess -> fail $ "unknown accessMode: " ++ (T.unpack badAccess)
+             "ReadStaleOk"       -> return DB.ReadStaleOk
+             "UnconfirmedWrites" -> return DB.UnconfirmedWrites
+             "ConfirmWrites"     -> return defaultAccessMode
+             badAccess -> fail $ "unknown accessMode: " ++ T.unpack badAccess
 
-        return $ MongoConf {
+        let rs = case (mRsName, rsSecondaires) of
+                     (Nothing, []) -> Nothing
+                     (Nothing, _) -> error "found rsSecondaries key. Also expected but did not find a rsName key"
+                     (Just rsName, hosts) -> Just $ ReplicaSetConfig rsName $ fmap DB.readHostPort hosts
+
+        return MongoConf {
             mgDatabase = db
           , mgHost = host
           , mgPort = port
           , mgAuth =
-              (case (mUser, mPass) of
+              case (mUser, mPass) of
                 (Just user, Just pass) -> Just (MongoAuth user pass)
                 _ -> Nothing
-              )
           , mgPoolStripes = poolStripes
           , mgStripeConnections = stripeConnections
           , mgAccessMode = accessMode
           , mgConnectionIdleTime = connectionIdleTime
+          , mgReplicaSetConfig = rs
           }
       where
+        confirmWrites = "ConfirmWrites"
     {-
         safeRead :: String -> T.Text -> MEither String Int
         safeRead name t = case reads s of
@@ -867,6 +974,14 @@ instance PersistConfig MongoConf where
             s = T.unpack t
             -}
     loadConfig _ = mzero
+
+-- | docker integration: change the host to the mongodb link
+applyDockerEnv :: MongoConf -> IO MongoConf
+applyDockerEnv mconf = do
+    mHost <- lookupEnv "MONGODB_PORT_27017_TCP_ADDR"
+    return $ case mHost of
+        Nothing -> mconf
+        Just h -> mconf { mgHost = T.pack h }
 
 
 -- ---------------------------
@@ -962,12 +1077,18 @@ infixr 6 ?&->.
 infixr 6 ->.
 
 infixr 4 `nestEq`
+infixr 4 `anyEq`
 infixr 4 `multiEq`
 infixr 4 `nestBsonEq`
 infixr 4 `multiBsonEq`
+infixr 4 `anyBsonEq`
 
--- | The normal Persistent equality test (==.) is not generic enough.
--- Instead use this with the drill-down operaters (->.) or (?->.)
+-- | The normal Persistent equality test '==.' is not generic enough.
+-- Instead use this with the drill-down arrow operaters such as '->.'
+--
+-- using this as the only query filter is similar to the following in the mongoDB shell
+--
+-- > db.Collection.find({"object.field": item})
 nestEq :: forall record typ.
        ( PersistField typ
        , PersistEntityBackend record ~ MongoBackend
@@ -987,22 +1108,43 @@ nf `nestBsonEq` val = BackendFilter $ NestedFilter
                     , nestedValue = MongoFilterOperator val
                     }
 
--- | use to see if an embedded list contains an item
 multiEq :: forall record typ.
         ( PersistField typ
         , PersistEntityBackend record ~ MongoBackend
         ) => EntityField record [typ] -> typ -> Filter record
-fld `multiEq` val = BackendFilter $ MultiKeyFilter
+multiEq = anyEq
+{-# DEPRECATED multiEq "Please use anyEq instead" #-}
+
+-- | Like nestEq, but for an embedded list.
+-- Checks to see if the list contains an item.
+--
+-- In Haskell we need different equality functions for embedded fields that are lists or non-lists to keep things type-safe.
+--
+-- using this as the only query filter is similar to the following in the mongoDB shell
+--
+-- > db.Collection.find({arrayField: arrayItem})
+anyEq :: forall record typ.
+        ( PersistField typ
+        , PersistEntityBackend record ~ MongoBackend
+        ) => EntityField record [typ] -> typ -> Filter record
+fld `anyEq` val = BackendFilter $ MultiKeyFilter
                       { multiField = fld
                       , multiValue = PersistOperator (Left val) Eq
                       }
 
--- | same as `multiEq`, but give a BSON Value
 multiBsonEq :: forall record typ.
         ( PersistField typ
         , PersistEntityBackend record ~ MongoBackend
         ) => EntityField record [typ] -> DB.Value -> Filter record
-fld `multiBsonEq` val = BackendFilter $ MultiKeyFilter
+multiBsonEq = anyBsonEq
+{-# DEPRECATED multiBsonEq "Please use anyBsonEq instead" #-}
+
+-- | same as `anyEq`, but give a BSON Value
+anyBsonEq :: forall record typ.
+        ( PersistField typ
+        , PersistEntityBackend record ~ MongoBackend
+        ) => EntityField record [typ] -> DB.Value -> Filter record
+fld `anyBsonEq` val = BackendFilter $ MultiKeyFilter
                       { multiField = fld
                       , multiValue = MongoFilterOperator val
                       }

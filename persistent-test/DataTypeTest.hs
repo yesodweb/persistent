@@ -29,7 +29,6 @@ import Data.Time (Day, UTCTime (..))
 import Data.Time.Calendar (addDays)
 import Data.Time.Clock (picosecondsToDiffTime)
 import Data.Time.LocalTime
-import System.Random (newStdGen)
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad (when, forM_)
 import Control.Monad.Trans.Resource (runResourceT)

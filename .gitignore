@@ -26,8 +26,11 @@ cabal.sandbox.config
 .cabal-sandbox/
 
 ## Docker image ignores
-.bash_history
-.cabal/
-.ghc/
+/.cabal/
+/.ghc/
+/.bash_history
+/.bashrc
+.mongorc.js
+.dbshell
 # can use this for Docker databases
 persistent-test/db/
