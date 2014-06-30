@@ -228,10 +228,10 @@ specs = describe "persistent" $ do
       let mic26 = Person "Michael" 26 Nothing
       micK <- insert mic26
       results <- selectList [PersonName ==. "Michael"] []
-      results @== [(Entity micK mic26)]
+      results @== [Entity micK mic26]
 
       results' <- selectList [PersonAge <. 28] []
-      results' @== [(Entity micK mic26)]
+      results' @== [Entity micK mic26]
 
       p28 <- updateGet micK [PersonAge =. 28]
       personAge p28 @== 28
@@ -248,15 +248,15 @@ specs = describe "persistent" $ do
       let eli = Person "Eliezer" 2 $ Just "blue"
       _ <- insert eli
       pasc <- selectList [] [Asc PersonAge]
-      (map entityVal pasc) @== [eli, mic29]
+      map entityVal pasc @== [eli, mic29]
 
       let abe30 = Person "Abe" 30 $ Just "black"
       _ <- insert abe30
       -- pdesc <- selectList [PersonAge <. 30] [Desc PersonName]
-      (map entityVal pasc) @== [eli, mic29]
+      map entityVal pasc @== [eli, mic29]
 
       abes <- selectList [PersonName ==. "Abe"] []
-      (map entityVal abes) @== [abe30]
+      map entityVal abes @== [abe30]
 
       Just (Entity _ p3) <- getBy $ PersonNameKey "Michael"
       p3 @== mic29
@@ -593,7 +593,7 @@ specs = describe "persistent" $ do
 
   it "retrieves a belongsTo association" $ db $ do
       let p = Person "pet owner" 30 Nothing
-      person <- insert $ p
+      person <- insert p
       let cat = MaybeOwnedPet (Just person) "Mittens" Cat
       p2 <- getJust $ fromJust $ maybeOwnedPetOwnerId cat
       p @== p2
@@ -611,8 +611,8 @@ specs = describe "persistent" $ do
 
   it "derivePersistFieldJSON" $ db $ do
       let mittensCollar = PetCollar "Mittens\n1-714-668-9672" True
-      person <- insert $ Person "pet owner" 30 Nothing
-      catKey <- insert $ OutdoorPet person mittensCollar Cat
+      pkey <- insert $ Person "pet owner" 30 Nothing
+      catKey <- insert $ OutdoorPet pkey mittensCollar Cat
       Just (OutdoorPet _ collar' _) <- get catKey
       liftIO $ collar' @?= mittensCollar
 
@@ -624,10 +624,10 @@ specs = describe "persistent" $ do
       _ <- insert p2
       pid3 <- insert p3
       x <- selectList [PersonId <-. [pid1, pid3]] []
-      liftIO $ x @?= [(Entity pid1 p1), (Entity pid3 p3)]
+      liftIO $ x @?= [Entity pid1 p1, Entity pid3 p3]
 
   describe "toJSON" $ do
-    it "serializes" $ do
+    it "serializes" $
       toJSON (Person "D" 0 Nothing) @?=
         Object (M.fromList [("color",Null),("name",String "D"),("age",Number 0)])
 

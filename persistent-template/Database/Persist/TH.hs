@@ -950,7 +950,7 @@ derivePersistFieldJSON s = do
     fpv <- [|\dt v -> do
                 bs' <- fromPersistValue v
                 case eitherDecodeStrict' bs' of
-                    Left e -> Left $ pack "Invalid " ++ pack dt ++ pack ": " ++ decodeUtf8 bs' ++ pack " (" ++ pack e ++ pack ")"
+                    Left e -> Left $ pack "JSON decoding error for " ++ pack dt ++ pack ": " ++ pack e ++ pack ". On Input: " ++ decodeUtf8 bs'
                     Right x -> Right x|]
     return
         [ persistFieldInstanceD (ConT $ mkName s)

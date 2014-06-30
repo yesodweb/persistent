@@ -141,10 +141,22 @@ import Control.Monad.Trans.Reader (ask, runReaderT)
 import Data.Typeable
 import Control.Monad.Trans.Resource (MonadThrow (..))
 import Control.Monad.Trans.Control (MonadBaseControl)
+
+#if MIN_VERSION_base(4,6,0)
 import System.Environment (lookupEnv)
+#else
+import System.Environment (getEnvironment)
+#endif
 
 #ifdef DEBUG
 import FileLocation (debug)
+#endif
+
+#if !MIN_VERSION_base(4,6,0)
+lookupEnv :: String -> IO (Maybe String)
+lookupEnv key = do
+    env <- getEnvironment
+    return $ lookup key env
 #endif
 
 instance HasPersistBackend MongoBackend MongoBackend where
