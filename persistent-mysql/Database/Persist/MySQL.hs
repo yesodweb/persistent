@@ -588,7 +588,7 @@ findAlters tblName allDefs col@(Column name isNull type_ def defConstraintName m
     case filter ((name ==) . cName) cols of
     -- new fkey that didnt exist before
         [] -> case ref of
-               Nothing -> ([],[])
+               Nothing -> ([(name, Add' col)],[])
                Just (tname, b) -> let cnstr = [addReference allDefs (refName tblName name) tname name]
                                   in (map ((,) tname) (Add' col : cnstr), cols)
         Column _ isNull' type_' def' defConstraintName' maxLen' ref':_ ->
