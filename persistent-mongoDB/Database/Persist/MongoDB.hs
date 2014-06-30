@@ -39,7 +39,7 @@ module Database.Persist.MongoDB
 
     -- * MongoDB specific Filters
     -- $filters
-    , nestEq, multiEq, nestBsonEq, multiBsonEq
+    , nestEq, anyEq, multiEq, nestBsonEq, multiBsonEq
     , (=~.), (?=~.), MongoRegex
     , (->.), (~>.), (?&->.), (?&~>.), (&->.), (&~>.)
     -- non-operator forms of filters
@@ -1073,12 +1073,18 @@ infixr 6 ?&->.
 infixr 6 ->.
 
 infixr 4 `nestEq`
+infixr 4 `anyEq`
 infixr 4 `multiEq`
 infixr 4 `nestBsonEq`
 infixr 4 `multiBsonEq`
+infixr 4 `anyBsonEq`
 
--- | The normal Persistent equality test (==.) is not generic enough.
--- Instead use this with the drill-down operaters (->.) or (?->.)
+-- | The normal Persistent equality test '==.' is not generic enough.
+-- Instead use this with the drill-down arrow operaters such as '->.'
+--
+-- using this as the only query filter is similar to the following in the mongoDB shell
+--
+-- > db.Collection.find({"object.field": item})
 nestEq :: forall record typ.
        ( PersistField typ
        , PersistEntityBackend record ~ MongoBackend
@@ -1098,22 +1104,43 @@ nf `nestBsonEq` val = BackendFilter $ NestedFilter
                     , nestedValue = MongoFilterOperator val
                     }
 
--- | use to see if an embedded list contains an item
 multiEq :: forall record typ.
         ( PersistField typ
         , PersistEntityBackend record ~ MongoBackend
         ) => EntityField record [typ] -> typ -> Filter record
-fld `multiEq` val = BackendFilter $ MultiKeyFilter
+multiEq = anyEq
+{-# DEPRECATED multiEq "Please use anyEq instead" #-}
+
+-- | Like nestEq, but for an embedded list.
+-- Checks to see if the list contains an item.
+--
+-- In Haskell we need different equality functions for embedded fields that are lists or non-lists to keep things type-safe.
+--
+-- using this as the only query filter is similar to the following in the mongoDB shell
+--
+-- > db.Collection.find({arrayField: arrayItem})
+anyEq :: forall record typ.
+        ( PersistField typ
+        , PersistEntityBackend record ~ MongoBackend
+        ) => EntityField record [typ] -> typ -> Filter record
+fld `anyEq` val = BackendFilter $ MultiKeyFilter
                       { multiField = fld
                       , multiValue = PersistOperator (Left val) Eq
                       }
 
--- | same as `multiEq`, but give a BSON Value
 multiBsonEq :: forall record typ.
         ( PersistField typ
         , PersistEntityBackend record ~ MongoBackend
         ) => EntityField record [typ] -> DB.Value -> Filter record
-fld `multiBsonEq` val = BackendFilter $ MultiKeyFilter
+multiBsonEq = anyBsonEq
+{-# DEPRECATED multiBsonEq "Please use anyBsonEq instead" #-}
+
+-- | same as `anyEq`, but give a BSON Value
+anyBsonEq :: forall record typ.
+        ( PersistField typ
+        , PersistEntityBackend record ~ MongoBackend
+        ) => EntityField record [typ] -> DB.Value -> Filter record
+fld `anyBsonEq` val = BackendFilter $ MultiKeyFilter
                       { multiField = fld
                       , multiValue = MongoFilterOperator val
                       }

@@ -12,9 +12,9 @@ module Init (
   , assertEmpty
   , BackendMonad
   , runConn
-  , dbName
 
 #ifdef WITH_MONGODB
+  , dbName
   , db'
   , setupMongo
   , MkPersistSettings (..)
