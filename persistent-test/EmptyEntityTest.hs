@@ -17,6 +17,7 @@ import Control.Monad.Trans.Resource (runResourceT)
 import Init
 
 #ifdef WITH_MONGODB
+import Database.MongoDB (MongoContext)
 mkPersist persistSettings [persistUpperCase|
 #else
 -- Test lower case names
@@ -25,8 +26,10 @@ share [mkPersist sqlSettings, mkMigrate "dataTypeMigrate"] [persistLowerCase|
 EmptyEntity
 |]
 
-cleanDB :: MonadIO m => ReaderT Connection m ()
+#ifdef WITH_MONGODB
+cleanDB :: MonadIO m => ReaderT MongoContext m ()
 cleanDB = deleteWhere ([] :: [Filter EmptyEntity])
+#endif
 
 specs :: Spec
 specs = describe "empty entity" $

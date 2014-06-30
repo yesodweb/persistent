@@ -118,7 +118,7 @@ library
                    , base64-bytestring
                    , conduit                  >= 1.0
                    , resourcet                >= 0.4
-                   , exceptions
+                   , exceptions               >= 0.6
                    , time                     >= 1.1.4
                    , random >= 1.0
                    , QuickCheck >= 2.7
@@ -142,6 +142,7 @@ library
                    , fast-logger
                    , scientific
                    , resource-pool
+                   , tagged
 
    if flag(nooverlap)
      cpp-options: -DNO_OVERLAP
@@ -170,7 +171,7 @@ library
 
    if flag(mongodb)
      build-depends:
-                     mongoDB       >= 1.4.1
+                     mongoDB       >= 2.0
                    , cereal
                    , bson
                    , process
