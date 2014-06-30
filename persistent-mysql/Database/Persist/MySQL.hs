@@ -462,9 +462,6 @@ getColumn connectInfo getter tname [ PersistByteString cname
                         Right t  -> return (Just t)
                     _ -> fail $ "Invalid default column: " ++ show default'
 
-      -- Column type
-      type_ <- parseType type'
-
       -- Foreign key (if any)
       stmt <- lift $ getter "SELECT REFERENCED_TABLE_NAME, \
                                    \CONSTRAINT_NAME, \
@@ -491,7 +488,7 @@ getColumn connectInfo getter tname [ PersistByteString cname
       return Column
         { cName = DBName $ T.decodeUtf8 cname
         , cNull = null_ == "YES"
-        , cSqlType = type_
+        , cSqlType = parseType type'
         , cDefault = default_
         , cDefaultConstraintName = Nothing
         , cMaxLen = Nothing -- FIXME: maxLen
@@ -504,43 +501,43 @@ getColumn _ _ _ x =
 
 -- | Parse the type of column as returned by MySQL's
 -- @INFORMATION_SCHEMA@ tables.
-parseType :: Monad m => ByteString -> m SqlType
-parseType "tinyint"    = return SqlBool
+parseType :: ByteString -> SqlType
+parseType "tinyint"    = SqlBool
 -- Ints
-parseType "int"        = return SqlInt32
-parseType "short"      = return SqlInt32
-parseType "long"       = return SqlInt64
-parseType "longlong"   = return SqlInt64
-parseType "mediumint"  = return SqlInt32
-parseType "bigint"     = return SqlInt64
+parseType "int"        = SqlInt32
+--parseType "short"      = SqlInt32
+--parseType "long"       = SqlInt64
+--parseType "longlong"   = SqlInt64
+--parseType "mediumint"  = SqlInt32
+parseType "bigint"     = SqlInt64
 -- Double
-parseType "float"      = return SqlReal
-parseType "double"     = return SqlReal
-parseType "decimal"    = return SqlReal
-parseType "newdecimal" = return SqlReal
+--parseType "float"      = SqlReal
+parseType "double"     = SqlReal
+--parseType "decimal"    = SqlReal
+--parseType "newdecimal" = SqlReal
 -- Text
-parseType "varchar"    = return SqlString
-parseType "varstring"  = return SqlString
-parseType "string"     = return SqlString
-parseType "text"       = return SqlString
-parseType "tinytext"   = return SqlString
-parseType "mediumtext" = return SqlString
-parseType "longtext"   = return SqlString
+parseType "varchar"    = SqlString
+--parseType "varstring"  = SqlString
+--parseType "string"     = SqlString
+parseType "text"       = SqlString
+--parseType "tinytext"   = SqlString
+--parseType "mediumtext" = SqlString
+--parseType "longtext"   = SqlString
 -- ByteString
-parseType "varbinary"  = return SqlBlob
-parseType "blob"       = return SqlBlob
-parseType "tinyblob"   = return SqlBlob
-parseType "mediumblob" = return SqlBlob
-parseType "longblob"   = return $ SqlOther "longblob"
+parseType "varbinary"  = SqlBlob
+parseType "blob"       = SqlBlob
+--parseType "tinyblob"   = SqlBlob
+--parseType "mediumblob" = SqlBlob
+--parseType "longblob"   = SqlBlob
 -- Time-related
-parseType "time"       = return SqlTime
-parseType "datetime"   = return SqlDayTime
-parseType "timestamp"  = return SqlDayTime
-parseType "date"       = return SqlDay
-parseType "newdate"    = return SqlDay
-parseType "year"       = return SqlDay
+parseType "time"       = SqlTime
+parseType "datetime"   = SqlDayTime
+--parseType "timestamp"  = SqlDayTime
+parseType "date"       = SqlDay
+--parseType "newdate"    = SqlDay
+--parseType "year"       = SqlDay
 -- Other
-parseType b            = return $ SqlOther $ T.decodeUtf8 b
+parseType b            = SqlOther $ T.decodeUtf8 b
 
 
 ----------------------------------------------------------------------
