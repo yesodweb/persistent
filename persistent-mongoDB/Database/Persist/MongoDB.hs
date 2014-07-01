@@ -119,7 +119,6 @@ import qualified Data.Text.Encoding as E
 import qualified Data.Serialize as Serialize
 import Web.PathPieces (PathPiece (..))
 import Data.Conduit
-import Control.Monad.Trans.Class (lift)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value (Object, Number), (.:), (.:?), (.!=), FromJSON(..))
 import Control.Monad (mzero, liftM)
@@ -136,10 +135,7 @@ import Data.Attoparsec.Number
 import Data.Char (toUpper)
 import Data.Word (Word16)
 import Data.Monoid (mappend)
-import Data.Acquire (mkAcquire)
 import Control.Monad.Trans.Reader (ask, runReaderT)
-import Data.Typeable
-import Control.Monad.Trans.Resource (MonadThrow (..))
 import Control.Monad.Trans.Control (MonadBaseControl)
 
 #if MIN_VERSION_base(4,6,0)
@@ -488,13 +484,6 @@ instance PersistStore DB.MongoContext where
                 return $ Just ent
           where
             t = entityDef $ Just $ recordTypeFromKey k
-
-instance MonadThrow m => MonadThrow (DB.Action m) where
-#if MIN_VERSION_resourcet(1,1,0)
-    throwM = lift . throwM
-#else
-    monadThrow = lift . monadThrow
-#endif
 
 instance PersistUnique DB.MongoContext where
     getBy uniq = do
