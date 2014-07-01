@@ -1,4 +1,4 @@
-from juju2013/saucy-base
+from stackbrew/ubuntu:14.04
 maintainer Greg Weber
 
 RUN apt-get install -y adduser
@@ -36,6 +36,7 @@ ENV HOME /home/persistent
 #     sudo docker build -t persistent .
 #
 # run the image with the directory mounted
+#
 #     sudo docker run --name persistent -v `pwd`:/home/persistent -t -i persistent /bin/bash
 #
 # # switch to the persistent user in the image and its home directory

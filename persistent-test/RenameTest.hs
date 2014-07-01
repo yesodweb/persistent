@@ -11,8 +11,8 @@
 module RenameTest (specs) where
 
 import Database.Persist.Sqlite
-import Control.Monad.Trans.Resource (runResourceT)
 #ifndef WITH_MONGODB
+import Control.Monad.Trans.Resource (runResourceT)
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 #endif
