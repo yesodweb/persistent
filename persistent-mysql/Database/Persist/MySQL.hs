@@ -502,6 +502,7 @@ getColumn _ _ _ x =
 -- | Parse the type of column as returned by MySQL's
 -- @INFORMATION_SCHEMA@ tables.
 parseType :: ByteString -> SqlType
+{-
 parseType "tinyint"    = SqlBool
 -- Ints
 parseType "int"        = SqlInt32
@@ -537,6 +538,7 @@ parseType "date"       = SqlDay
 --parseType "newdate"    = SqlDay
 --parseType "year"       = SqlDay
 -- Other
+-}
 parseType b            = SqlOther $ T.decodeUtf8 b
 
 
@@ -600,7 +602,7 @@ findAlters tblName allDefs col@(Column name isNull type_ def defConstraintName m
                             (False, Just (tname, cname)) -> [(tname, addReference allDefs (refName tblName name) tname name)]
                             _ -> []
                 -- Type and nullability
-                modType | showSqlType type_ maxLen `ciEquals` showSqlType type_' maxLen' && isNull == isNull' = []
+                modType | showSqlType type_ maxLen False `ciEquals` showSqlType type_' maxLen' False && isNull == isNull' = []
                         | otherwise = [(name, Change col)]
                 -- Default value
                 modDef | def == def' = []
@@ -622,7 +624,7 @@ showColumn :: Column -> String
 showColumn (Column n nu t def defConstraintName maxLen ref) = concat
     [ escapeDBName n
     , " "
-    , showSqlType t maxLen
+    , showSqlType t maxLen True
     , " "
     , if nu then "NULL" else "NOT NULL"
     , case def of
@@ -637,21 +639,25 @@ showColumn (Column n nu t def defConstraintName maxLen ref) = concat
 -- | Renders an 'SqlType' in MySQL's format.
 showSqlType :: SqlType
             -> Maybe Integer -- ^ @maxlen@
+            -> Bool -- ^ include character set information?
             -> String
-showSqlType SqlBlob    Nothing    = "BLOB"
-showSqlType SqlBlob    (Just i)   = "VARBINARY(" ++ show i ++ ")"
-showSqlType SqlBool    _          = "TINYINT(1)"
-showSqlType SqlDay     _          = "DATE"
-showSqlType SqlDayTime _          = "DATETIME"
-showSqlType SqlDayTimeZoned _     = "VARCHAR(50) CHARACTER SET utf8"
-showSqlType SqlInt32   _          = "INT"
-showSqlType SqlInt64   _          = "BIGINT"
-showSqlType SqlReal    _          = "DOUBLE PRECISION"
-showSqlType (SqlNumeric s prec) _ = "NUMERIC(" ++ show s ++ "," ++ show prec ++ ")"
-showSqlType SqlString  Nothing    = "TEXT CHARACTER SET utf8"
-showSqlType SqlString  (Just i)   = "VARCHAR(" ++ show i ++ ") CHARACTER SET utf8"
-showSqlType SqlTime    _          = "TIME"
-showSqlType (SqlOther t) _        = T.unpack t
+showSqlType SqlBlob    Nothing    _     = "BLOB"
+showSqlType SqlBlob    (Just i)   _     = "VARBINARY(" ++ show i ++ ")"
+showSqlType SqlBool    _          _     = "TINYINT(1)"
+showSqlType SqlDay     _          _     = "DATE"
+showSqlType SqlDayTime _          _     = "DATETIME"
+showSqlType SqlDayTimeZoned _     True  = "VARCHAR(50) CHARACTER SET utf8"
+showSqlType SqlDayTimeZoned _     False = "VARCHAR(50)"
+showSqlType SqlInt32   _          _     = "INT(11)"
+showSqlType SqlInt64   _          _     = "BIGINT"
+showSqlType SqlReal    _          _     = "DOUBLE"
+showSqlType (SqlNumeric s prec) _ _     = "NUMERIC(" ++ show s ++ "," ++ show prec ++ ")"
+showSqlType SqlString  Nothing    True  = "TEXT CHARACTER SET utf8"
+showSqlType SqlString  Nothing    False = "TEXT"
+showSqlType SqlString  (Just i)   True  = "VARCHAR(" ++ show i ++ ") CHARACTER SET utf8"
+showSqlType SqlString  (Just i)   False = "VARCHAR(" ++ show i ++ ")"
+showSqlType SqlTime    _          _     = "TIME"
+showSqlType (SqlOther t) _        _     = T.unpack t
 
 -- | Render an action that must be done on the database.
 showAlterDb :: AlterDB -> (Bool, Text)
