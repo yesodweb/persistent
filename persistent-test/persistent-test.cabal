@@ -140,6 +140,7 @@ library
                    , fast-logger
                    , scientific
                    , resource-pool
+                   , exceptions
 
    if flag(nooverlap)
      cpp-options: -DNO_OVERLAP
