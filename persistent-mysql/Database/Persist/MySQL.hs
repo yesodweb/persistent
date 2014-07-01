@@ -393,7 +393,7 @@ getColumns connectInfo getter def = do
     -- Find out all columns.
     stmtClmns <- getter "SELECT COLUMN_NAME, \
                                \IS_NULLABLE, \
-                               \DATA_TYPE, \
+                               \COLUMN_TYPE, \
                                \COLUMN_DEFAULT \
                         \FROM INFORMATION_SCHEMA.COLUMNS \
                         \WHERE TABLE_SCHEMA = ? \
