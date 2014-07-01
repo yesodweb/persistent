@@ -29,7 +29,6 @@ import EntityEmbedTest
 import System.Process (readProcess)
 #endif
 import System.Environment (getEnvironment)
-import Control.Monad.IO.Class
 import Control.Monad (unless)
 
 data TestException = TestException
