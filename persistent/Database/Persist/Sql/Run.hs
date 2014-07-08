@@ -60,14 +60,13 @@ runSqlPersistM x conn = runResourceT $ runNoLoggingT $ runSqlConn x conn
 runSqlPersistMPool :: SqlPersistM a -> Pool Connection -> IO a
 runSqlPersistMPool x pool = runResourceT $ runNoLoggingT $ runSqlPool x pool
 
-withSqlPool :: MonadIO m
+withSqlPool :: (MonadBaseControl IO m, MonadIO m)
             => IO Connection -- ^ create a new connection
             -> Int -- ^ connection count
             -> (Pool Connection -> m a)
             -> m a
 withSqlPool mkConn connCount f = do
-    pool <- createSqlPool mkConn connCount
-    f pool
+    bracket (createSqlPool mkConn connCount) (liftIO . destroyAllResources) f
 
 createSqlPool :: MonadIO m
               => IO Connection

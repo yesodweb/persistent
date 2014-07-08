@@ -74,7 +74,7 @@ type ConnectionString = ByteString
 -- finishes using it.  Note that you should not use the given
 -- 'ConnectionPool' outside the action since it may be already
 -- been released.
-withPostgresqlPool :: MonadIO m
+withPostgresqlPool :: (MonadIO m, MonadBaseControl IO m)
                    => ConnectionString
                    -- ^ Connection string to the database.
                    -> Int

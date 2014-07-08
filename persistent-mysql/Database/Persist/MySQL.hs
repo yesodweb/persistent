@@ -55,7 +55,7 @@ import Control.Monad.Trans.Resource (MonadResource, runResourceT)
 -- The pool is properly released after the action finishes using
 -- it.  Note that you should not use the given 'ConnectionPool'
 -- outside the action since it may be already been released.
-withMySQLPool :: MonadIO m =>
+withMySQLPool :: (MonadIO m, MonadBaseControl IO m) =>
                  MySQL.ConnectInfo
               -- ^ Connection information.
               -> Int
