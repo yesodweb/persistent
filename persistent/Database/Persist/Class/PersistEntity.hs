@@ -47,7 +47,7 @@ class PersistEntity record where
     -- | Persistent allows multiple different backends
     type PersistEntityBackend record
 
-    -- | Unique keys besided the Key
+    -- | Unique keys besides the Key
     data Unique record
 
     -- | retrieve the EntityDef meta-data for the record
@@ -68,7 +68,7 @@ class PersistEntity record where
     fieldLens :: EntityField record field
               -> (forall f. Functor f => (field -> f field) -> Entity record -> f (Entity record))
 
--- | updataing a database entity
+-- | updating a database entity
 --
 -- Persistent users use combinators to create these
 data Update record = forall typ. PersistField typ => Update
