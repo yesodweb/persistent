@@ -393,7 +393,7 @@ getColumns connectInfo getter def = do
     -- Find out all columns.
     stmtClmns <- getter "SELECT COLUMN_NAME, \
                                \IS_NULLABLE, \
-                               \DATA_TYPE, \
+                               \COLUMN_TYPE, \
                                \COLUMN_DEFAULT \
                         \FROM INFORMATION_SCHEMA.COLUMNS \
                         \WHERE TABLE_SCHEMA = ? \
@@ -462,9 +462,6 @@ getColumn connectInfo getter tname [ PersistByteString cname
                         Right t  -> return (Just t)
                     _ -> fail $ "Invalid default column: " ++ show default'
 
-      -- Column type
-      type_ <- parseType type'
-
       -- Foreign key (if any)
       stmt <- lift $ getter "SELECT REFERENCED_TABLE_NAME, \
                                    \CONSTRAINT_NAME, \
@@ -491,7 +488,7 @@ getColumn connectInfo getter tname [ PersistByteString cname
       return Column
         { cName = DBName $ T.decodeUtf8 cname
         , cNull = null_ == "YES"
-        , cSqlType = type_
+        , cSqlType = parseType type'
         , cDefault = default_
         , cDefaultConstraintName = Nothing
         , cMaxLen = Nothing -- FIXME: maxLen
@@ -504,43 +501,45 @@ getColumn _ _ _ x =
 
 -- | Parse the type of column as returned by MySQL's
 -- @INFORMATION_SCHEMA@ tables.
-parseType :: Monad m => ByteString -> m SqlType
-parseType "tinyint"    = return SqlBool
+parseType :: ByteString -> SqlType
+{-
+parseType "tinyint"    = SqlBool
 -- Ints
-parseType "int"        = return SqlInt32
-parseType "short"      = return SqlInt32
-parseType "long"       = return SqlInt64
-parseType "longlong"   = return SqlInt64
-parseType "mediumint"  = return SqlInt32
-parseType "bigint"     = return SqlInt64
+parseType "int"        = SqlInt32
+--parseType "short"      = SqlInt32
+--parseType "long"       = SqlInt64
+--parseType "longlong"   = SqlInt64
+--parseType "mediumint"  = SqlInt32
+parseType "bigint"     = SqlInt64
 -- Double
-parseType "float"      = return SqlReal
-parseType "double"     = return SqlReal
-parseType "decimal"    = return SqlReal
-parseType "newdecimal" = return SqlReal
+--parseType "float"      = SqlReal
+parseType "double"     = SqlReal
+--parseType "decimal"    = SqlReal
+--parseType "newdecimal" = SqlReal
 -- Text
-parseType "varchar"    = return SqlString
-parseType "varstring"  = return SqlString
-parseType "string"     = return SqlString
-parseType "text"       = return SqlString
-parseType "tinytext"   = return SqlString
-parseType "mediumtext" = return SqlString
-parseType "longtext"   = return SqlString
+parseType "varchar"    = SqlString
+--parseType "varstring"  = SqlString
+--parseType "string"     = SqlString
+parseType "text"       = SqlString
+--parseType "tinytext"   = SqlString
+--parseType "mediumtext" = SqlString
+--parseType "longtext"   = SqlString
 -- ByteString
-parseType "varbinary"  = return SqlBlob
-parseType "blob"       = return SqlBlob
-parseType "tinyblob"   = return SqlBlob
-parseType "mediumblob" = return SqlBlob
-parseType "longblob"   = return SqlBlob
+parseType "varbinary"  = SqlBlob
+parseType "blob"       = SqlBlob
+--parseType "tinyblob"   = SqlBlob
+--parseType "mediumblob" = SqlBlob
+--parseType "longblob"   = SqlBlob
 -- Time-related
-parseType "time"       = return SqlTime
-parseType "datetime"   = return SqlDayTime
-parseType "timestamp"  = return SqlDayTime
-parseType "date"       = return SqlDay
-parseType "newdate"    = return SqlDay
-parseType "year"       = return SqlDay
+parseType "time"       = SqlTime
+parseType "datetime"   = SqlDayTime
+--parseType "timestamp"  = SqlDayTime
+parseType "date"       = SqlDay
+--parseType "newdate"    = SqlDay
+--parseType "year"       = SqlDay
 -- Other
-parseType b            = return $ SqlOther $ T.decodeUtf8 b
+-}
+parseType b            = SqlOther $ T.decodeUtf8 b
 
 
 ----------------------------------------------------------------------
@@ -587,14 +586,14 @@ getAlters allDefs tblName (c1, u1) (c2, u2) =
 -- changed in the columns @oldColumns@ for @newColumn@ to be
 -- supported.
 findAlters :: Show a => DBName -> [EntityDef a] -> Column -> [Column] -> ([AlterColumn'], [Column])
-findAlters tblName allDefs col@(Column name isNull type_ def defConstraintName _maxLen ref) cols =
+findAlters tblName allDefs col@(Column name isNull type_ def defConstraintName maxLen ref) cols =
     case filter ((name ==) . cName) cols of
     -- new fkey that didnt exist before
         [] -> case ref of
-               Nothing -> ([],[])
+               Nothing -> ([(name, Add' col)],[])
                Just (tname, b) -> let cnstr = [addReference allDefs (refName tblName name) tname name]
                                   in (map ((,) tname) (Add' col : cnstr), cols)
-        Column _ isNull' type_' def' defConstraintName' _maxLen' ref':_ ->
+        Column _ isNull' type_' def' defConstraintName' maxLen' ref':_ ->
             let -- Foreign key
                 refDrop = case (ref == ref', ref') of
                             (False, Just (_, cname)) -> [(name, DropReference cname)]
@@ -603,7 +602,7 @@ findAlters tblName allDefs col@(Column name isNull type_ def defConstraintName _
                             (False, Just (tname, cname)) -> [(tname, addReference allDefs (refName tblName name) tname name)]
                             _ -> []
                 -- Type and nullability
-                modType | type_ == type_' && isNull == isNull' = []
+                modType | showSqlType type_ maxLen False `ciEquals` showSqlType type_' maxLen' False && isNull == isNull' = []
                         | otherwise = [(name, Change col)]
                 -- Default value
                 modDef | def == def' = []
@@ -613,6 +612,8 @@ findAlters tblName allDefs col@(Column name isNull type_ def defConstraintName _
             in ( refDrop ++ modType ++ modDef ++ refAdd
                , filter ((name /=) . cName) cols )
 
+  where
+    ciEquals x y = T.toCaseFold (T.pack x) == T.toCaseFold (T.pack y)
 
 ----------------------------------------------------------------------
 
@@ -623,7 +624,7 @@ showColumn :: Column -> String
 showColumn (Column n nu t def defConstraintName maxLen ref) = concat
     [ escapeDBName n
     , " "
-    , showSqlType t maxLen
+    , showSqlType t maxLen True
     , " "
     , if nu then "NULL" else "NOT NULL"
     , case def of
@@ -638,21 +639,25 @@ showColumn (Column n nu t def defConstraintName maxLen ref) = concat
 -- | Renders an 'SqlType' in MySQL's format.
 showSqlType :: SqlType
             -> Maybe Integer -- ^ @maxlen@
+            -> Bool -- ^ include character set information?
             -> String
-showSqlType SqlBlob    Nothing    = "BLOB"
-showSqlType SqlBlob    (Just i)   = "VARBINARY(" ++ show i ++ ")"
-showSqlType SqlBool    _          = "TINYINT(1)"
-showSqlType SqlDay     _          = "DATE"
-showSqlType SqlDayTime _          = "DATETIME"
-showSqlType SqlDayTimeZoned _     = "VARCHAR(50) CHARACTER SET utf8"
-showSqlType SqlInt32   _          = "INT"
-showSqlType SqlInt64   _          = "BIGINT"
-showSqlType SqlReal    _          = "DOUBLE PRECISION"
-showSqlType (SqlNumeric s prec) _ = "NUMERIC(" ++ show s ++ "," ++ show prec ++ ")"
-showSqlType SqlString  Nothing    = "TEXT CHARACTER SET utf8"
-showSqlType SqlString  (Just i)   = "VARCHAR(" ++ show i ++ ") CHARACTER SET utf8"
-showSqlType SqlTime    _          = "TIME"
-showSqlType (SqlOther t) _        = T.unpack t
+showSqlType SqlBlob    Nothing    _     = "BLOB"
+showSqlType SqlBlob    (Just i)   _     = "VARBINARY(" ++ show i ++ ")"
+showSqlType SqlBool    _          _     = "TINYINT(1)"
+showSqlType SqlDay     _          _     = "DATE"
+showSqlType SqlDayTime _          _     = "DATETIME"
+showSqlType SqlDayTimeZoned _     True  = "VARCHAR(50) CHARACTER SET utf8"
+showSqlType SqlDayTimeZoned _     False = "VARCHAR(50)"
+showSqlType SqlInt32   _          _     = "INT(11)"
+showSqlType SqlInt64   _          _     = "BIGINT"
+showSqlType SqlReal    _          _     = "DOUBLE"
+showSqlType (SqlNumeric s prec) _ _     = "NUMERIC(" ++ show s ++ "," ++ show prec ++ ")"
+showSqlType SqlString  Nothing    True  = "TEXT CHARACTER SET utf8"
+showSqlType SqlString  Nothing    False = "TEXT"
+showSqlType SqlString  (Just i)   True  = "VARCHAR(" ++ show i ++ ") CHARACTER SET utf8"
+showSqlType SqlString  (Just i)   False = "VARCHAR(" ++ show i ++ ")"
+showSqlType SqlTime    _          _     = "TIME"
+showSqlType (SqlOther t) _        _     = T.unpack t
 
 -- | Render an action that must be done on the database.
 showAlterDb :: AlterDB -> (Bool, Text)
