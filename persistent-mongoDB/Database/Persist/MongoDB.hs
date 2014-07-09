@@ -625,15 +625,19 @@ filterToDocument f =
       FilterOr [] -> -- Michael decided to follow Haskell's semantics, which seems reasonable to me.
                      -- in Haskell an empty or is a False
                      -- Perhaps there is a less hacky way of creating a query that always returns false?
-                     ["$not" DB.=: ["$exists" DB.=: _id]]
-      FilterOr fs  -> multiFilter "$or" fs
+                     ["$not" DB.=: [existsDollar DB.=: _id]]
+      FilterOr fs  -> multiFilter orDollar fs
       -- usually $and is unecessary, but it makes query construction easier in special cases
       FilterAnd [] -> []
       FilterAnd fs -> multiFilter "$and" fs
       BackendFilter mf -> mongoFilterToDoc mf
   where
-    multiFilter :: forall record. (PersistEntity record, PersistEntityBackend record ~ MongoBackend) => String -> [Filter record] -> [DB.Field]
-    multiFilter multi fs = [T.pack multi DB.:= DB.Array (map (DB.Doc . filterToDocument) fs)]
+    multiFilter :: forall record. (PersistEntity record, PersistEntityBackend record ~ MongoBackend) => Text -> [Filter record] -> [DB.Field]
+    multiFilter multi fs = [multi DB.:= DB.Array (map (DB.Doc . filterToDocument) fs)]
+
+existsDollar, orDollar :: Text
+existsDollar = "$exists"
+orDollar = "$or"
 
 filterToBSON :: forall a. ( PersistField a)
              => Text
@@ -641,9 +645,28 @@ filterToBSON :: forall a. ( PersistField a)
              -> PersistFilter
              -> DB.Field
 filterToBSON fname v filt = case filt of
-    Eq -> fname DB.:= toValue v
-    _  -> fname DB.=: [(showFilter filt) DB.:= toValue v]
+    Eq -> nullEq
+    Ne -> nullNeq
+    _  -> notEquality
   where
+    dbv = toValue v
+    notEquality = fname DB.=: [showFilter filt DB.:= dbv]
+
+    nullEq = case dbv of
+      DB.Null -> orDollar DB.=:
+        [ [fname DB.:= DB.Null]
+        , [fname DB.:= DB.Doc [existsDollar DB.:= DB.Bool False]]
+        ]
+      _ -> fname DB.:= dbv
+
+    nullNeq = case dbv of
+      DB.Null ->
+        fname DB.:= DB.Doc
+          [ showFilter Ne DB.:= DB.Null
+          , existsDollar DB.:= DB.Bool True
+          ]
+      _ -> notEquality
+
     showFilter Ne = "$ne"
     showFilter Gt = "$gt"
     showFilter Lt = "$lt"
