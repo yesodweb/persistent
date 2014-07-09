@@ -39,7 +39,7 @@ module Database.Persist.MongoDB
 
     -- * MongoDB specific Filters
     -- $filters
-    , nestEq, anyEq, multiEq, nestBsonEq, multiBsonEq
+    , nestEq, anyEq, multiEq, nestBsonEq, anyBsonEq, multiBsonEq
     , (=~.), (?=~.), MongoRegex
     , (->.), (~>.), (?&->.), (?&~>.), (&->.), (&~>.)
     -- non-operator forms of filters
