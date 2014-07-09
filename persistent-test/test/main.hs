@@ -46,9 +46,6 @@ main = do
   runConn (setup PersistentTest.testMigrate)
   runConn (setup PersistentTest.noPrefixMigrate)
 #endif
-  summary <- hspecWith defaultConfig $ PersistentTest.specs
-  runResourceT $ runConn PersistentTest.cleanDB
-  unless (summaryFailures summary == 0) $ exitWith (toExitCode False)
 
 #ifndef WITH_MONGODB
   runConn (setup EmbedTest.embedMigrate)
