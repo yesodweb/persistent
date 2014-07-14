@@ -651,7 +651,7 @@ filtersToDoc filts =
 #ifdef DEBUG
   debug $
 #endif
-    if null filts then [] else concatMap filterToDocument filts
+    if null filts then [] else multiFilter andDollar filts
 
 filterToDocument :: (PersistEntity val, PersistEntityBackend val ~ MongoBackend) => Filter val -> DB.Document
 filterToDocument f =
@@ -664,15 +664,16 @@ filterToDocument f =
       FilterOr fs  -> multiFilter orDollar fs
       -- usually $and is unecessary, but it makes query construction easier in special cases
       FilterAnd [] -> []
-      FilterAnd fs -> multiFilter "$and" fs
+      FilterAnd fs -> multiFilter andDollar fs
       BackendFilter mf -> mongoFilterToDoc mf
-  where
-    multiFilter :: forall record. (PersistEntity record, PersistEntityBackend record ~ MongoBackend) => Text -> [Filter record] -> [DB.Field]
-    multiFilter multi fs = [multi DB.:= DB.Array (map (DB.Doc . filterToDocument) fs)]
 
-existsDollar, orDollar :: Text
+multiFilter :: forall record. (PersistEntity record, PersistEntityBackend record ~ MongoBackend) => Text -> [Filter record] -> [DB.Field]
+multiFilter multi fs = [multi DB.:= DB.Array (map (DB.Doc . filterToDocument) fs)]
+
+existsDollar, orDollar, andDollar :: Text
 existsDollar = "$exists"
 orDollar = "$or"
+andDollar = "$and"
 
 filterToBSON :: forall a. ( PersistField a)
              => Text
