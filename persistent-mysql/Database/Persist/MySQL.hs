@@ -502,6 +502,7 @@ getColumn _ _ _ x =
 -- | Parse the type of column as returned by MySQL's
 -- @INFORMATION_SCHEMA@ tables.
 parseType :: ByteString -> SqlType
+parseType "bigint(20)" = SqlInt64
 {-
 parseType "tinyint"    = SqlBool
 -- Ints
