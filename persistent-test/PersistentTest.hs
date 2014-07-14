@@ -101,6 +101,10 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade sqlSetti
   PersonMaybeAge
     name Text
     age Int Maybe
+  PersonMay json
+    name Text Maybe
+    color Text Maybe
+    deriving Show Eq
   Pet no-json
     ownerId PersonId
     name Text
@@ -298,6 +302,15 @@ specs = describe "persistent" $ do
       pnm <- selectList [PersonName !=. "Eliezer"] []
       map entityVal pnm @== [mic]
 
+  it "Double Maybe" $ db $ do
+      let mic = PersonMay (Just "Michael") Nothing
+      _ <- insert mic
+      let eli = PersonMay (Just "Eliezer") (Just "Red")
+      _ <- insert eli
+      pe <- selectList [PersonMayName ==. Nothing, PersonMayColor ==. Nothing] []
+      map entityVal pe @== []
+      pne <- selectList [PersonMayName !=. Nothing, PersonMayColor !=. Nothing] []
+      map entityVal pne @== [eli]
 
   it "and/or" $ db $ do
       deleteWhere ([] :: [Filter Person1])
