@@ -23,6 +23,11 @@ import Control.Monad.Trans.Identity ( IdentityT)
 import Control.Monad.Trans.List     ( ListT    )
 import Control.Monad.Trans.Maybe    ( MaybeT   )
 import Control.Monad.Trans.Error    ( ErrorT   )
+
+#if MIN_VERSION_transformers(0,4,0)
+import Control.Monad.Trans.Except   ( ExceptT  )
+#endif
+
 import Control.Monad.Trans.Reader   ( ReaderT  )
 import Control.Monad.Trans.Cont     ( ContT  )
 import Control.Monad.Trans.State    ( StateT   )
@@ -140,6 +145,11 @@ GO(IdentityT)
 GO(ListT)
 GO(MaybeT)
 GOX(Error e, ErrorT e)
+
+#if MIN_VERSION_transformers(0,4,0)
+GO(ExceptT e)
+#endif
+
 GO(ReaderT r)
 GO(ContT r)
 GO(StateT s)
