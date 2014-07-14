@@ -503,6 +503,7 @@ getColumn _ _ _ x =
 -- @INFORMATION_SCHEMA@ tables.
 parseType :: ByteString -> SqlType
 parseType "bigint(20)" = SqlInt64
+parseType "decimal(32,20)" = SqlNumeric 32 20
 {-
 parseType "tinyint"    = SqlBool
 -- Ints
