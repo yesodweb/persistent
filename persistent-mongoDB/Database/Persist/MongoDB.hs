@@ -45,6 +45,7 @@ module Database.Persist.MongoDB
     , (->.), (~>.), (?&->.), (?&~>.), (&->.), (&~>.)
     -- non-operator forms of filters
     , NestedField(..)
+    , MongoRegexSearchable
 
     -- * MongoDB specific PersistFields
     , Objectid
@@ -723,7 +724,6 @@ mongoFilterToBSON fname filt = case filt of
     (MongoFilterOperator bval) -> [fname DB.:= bval]
 
 mongoFilterToDoc :: PersistEntity val => MongoFilter val -> DB.Document
-mongoFilterToDoc (RegExpMaybeFilter fn (reg, opts))   = [ fieldName fn  DB.:= DB.RegEx (DB.Regex reg opts)]
 mongoFilterToDoc (RegExpFilter fn (reg, opts))        = [ fieldName fn  DB.:= DB.RegEx (DB.Regex reg opts)]
 mongoFilterToDoc (MultiKeyFilter field op) = mongoFilterToBSON (fieldName field) op
 mongoFilterToDoc (NestedFilter   field op) = mongoFilterToBSON (nestedFieldName field) op
@@ -1065,13 +1065,22 @@ data NestedField record typ
 -- If you use the same options you may want to define a helper such as @r t = (t, "ims")@
 type MongoRegex = (Text, Text)
 
+-- | Mark the subset of 'PersistField's that can be searched by a mongoDB regex
+-- Anything stored as PersistText or an array of PersistText would be valid
+class PersistField typ => MongoRegexSearchable typ where
+
+instance MongoRegexSearchable Text
+instance MongoRegexSearchable rs => MongoRegexSearchable (Maybe rs)
+instance MongoRegexSearchable rs => MongoRegexSearchable [rs]
+
 -- | Filter using a Regular expression.
-(=~.) :: forall record. (PersistEntity record, PersistEntityBackend record ~ MongoBackend) => EntityField record Text -> MongoRegex -> Filter record
+(=~.) :: forall record searchable. (MongoRegexSearchable searchable, PersistEntity record, PersistEntityBackend record ~ MongoBackend) => EntityField record searchable -> MongoRegex -> Filter record
 fld =~. val = BackendFilter $ RegExpFilter fld val
 
 -- | Filter using a Regular expression against a nullable field.
 (?=~.) :: forall record. (PersistEntity record, PersistEntityBackend record ~ MongoBackend) => EntityField record (Maybe Text) -> MongoRegex -> Filter record
-fld ?=~. val = BackendFilter $ RegExpMaybeFilter fld val
+fld ?=~. val = BackendFilter $ RegExpFilter fld val
+{-# DEPRECATED (?=~.) "Use =~. instead" #-}
 
 data MongoFilterOperator typ = PersistOperator (Either typ [typ]) PersistFilter
                              | MongoFilterOperator DB.Value
@@ -1086,8 +1095,8 @@ data MongoFilter record = forall typ. (PersistField typ) =>
                           multiField  :: EntityField record [typ]
                         , multiValue  :: MongoFilterOperator typ
                         }
-                      | RegExpFilter (EntityField record Text) MongoRegex
-                      | RegExpMaybeFilter (EntityField record (Maybe Text)) MongoRegex
+                      | forall typ. MongoRegexSearchable typ =>
+                        RegExpFilter (EntityField record typ) MongoRegex
 
 -- | Point to an array field with an embedded object and give a deeper query into the embedded object.
 -- Use with 'nestEq'.
