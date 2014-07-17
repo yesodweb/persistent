@@ -303,6 +303,7 @@ specs = describe "persistent" $ do
       map entityVal pnm @== [mic]
 
   it "Double Maybe" $ db $ do
+      deleteWhere ([] :: [Filter PersonMay])
       let mic = PersonMay (Just "Michael") Nothing
       _ <- insert mic
       let eli = PersonMay (Just "Eliezer") (Just "Red")
