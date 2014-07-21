@@ -1,6 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
+
+-- | Internals for @persistent@'s MySQL backend. Don't use this module unless
+-- you really need to; we make no guarantees about the interface's stability.
+
 module Database.Persist.MySQL.Internal 
   ( withMySQLPool
   , createMySQLPool
