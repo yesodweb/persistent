@@ -1,7 +1,41 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
-module Database.Persist.MySQL.Internal where
+module Database.Persist.MySQL.Internal 
+  ( withMySQLPool
+  , createMySQLPool
+  , withMySQLConn
+  , open'
+  , prepare'
+  , insertSql'
+  , execute'
+  , withStmt'
+  , P(..)
+  , Getter
+  , convertPV
+  , getGetter
+  , migrate'
+  , findTypeOfColumn
+  , addReference
+  , AlterColumn(..)
+  , AlterColumn'
+  , AlterTable(..)
+  , AlterDB(..)
+  , udToPair
+  , getColumns
+  , getColumn
+  , parseType
+  , getAlters
+  , findAlters
+  , showColumn
+  , showSqlType
+  , showAlterDb
+  , showAlterTable
+  , showAlter
+  , refName
+  , escapeDBName
+  , MySQLConf(..)
+  ) where
 
 import Control.Arrow
 import Control.Monad (mzero)
