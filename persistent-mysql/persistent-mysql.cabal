@@ -38,7 +38,8 @@ library
                    , aeson                 >= 0.5
                    , conduit               >= 0.5.3
                    , resourcet
-    exposed-modules: Database.Persist.MySQL
+    exposed-modules:   Database.Persist.MySQL
+                     , Database.Persist.MySQL.Internal
     ghc-options:     -Wall
 
 source-repository head
