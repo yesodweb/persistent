@@ -287,7 +287,7 @@ migrate' connectInfo allDefs getter val = do
 
         let addTable = AddTable $ concat
                             -- Lower case e: see Database.Persist.Sql.Migration
-                [ "CREATe TABLE "
+                [ "CREATE TABLE "
                 , escapeDBName name
                 , "("
                 , idtxt
