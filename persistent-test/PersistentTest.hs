@@ -134,6 +134,12 @@ share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade sqlSetti
     verkey Text Maybe
     UniqueEmail email
 
+  Upsert
+    email Text
+    counter Int
+    UniqueUpsert email
+    deriving Show
+
   Strict
     !yes Int
     ~no Int
@@ -431,13 +437,35 @@ specs = describe "persistent" $ do
       return ()
 
 
-  it "update" $ db $ do
+  it "updateGet" $ db $ do
       let p25 = Person "Michael" 25 Nothing
       key25 <- insert p25
       pBlue28 <- updateGet key25 [PersonAge =. 28, PersonName =. "Updated"]
       pBlue28 @== Person "Updated" 28 Nothing
       pBlue30 <- updateGet key25 [PersonAge +=. 2]
       pBlue30 @== Person "Updated" 30 Nothing
+
+  it "upsert without updates" $ db $ do
+      deleteWhere ([] :: [Filter Upsert])
+      let email = "dude@example.com"
+      Nothing :: Maybe (Entity Upsert) <- getBy $ UniqueUpsert email
+      let counter1 = 0
+      Entity k1 u1 <- upsert (Upsert email counter1) []
+      upsertCounter u1 @== counter1
+      let counter2 = 1
+      Entity k2 u2 <- upsert (Upsert email counter2) []
+      upsertCounter u2 @== counter2
+      k1 @== k2
+
+  it "upsert with updates" $ db $ do
+      deleteWhere ([] :: [Filter Upsert])
+      let email = "dude@example.com"
+      Nothing :: Maybe (Entity Upsert) <- getBy $ UniqueUpsert email
+      let up0 = Upsert email 0
+      Entity _ up1 <- upsert up0 [UpsertCounter +=. 1]
+      upsertCounter up1 @== 1
+      Entity _ up2 <- upsert up1 [UpsertCounter +=. 1]
+      upsertCounter up2 @== 2
 
   it "maybe update" $ db $ do
       let noAge = PersonMaybeAge "Michael" Nothing

@@ -11,7 +11,7 @@
 module DataTypeTest (specs) where
 
 import Test.QuickCheck.Arbitrary (Arbitrary, arbitrary)
-import Test.QuickCheck.Gen (Gen(..), choose)
+import Test.QuickCheck.Gen (Gen(..))
 import Test.QuickCheck.Instances ()
 import Test.QuickCheck.Random (newQCGen)
 import Database.Persist.Sqlite
@@ -26,13 +26,11 @@ import qualified Data.Text as T
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as S
 import Data.Time (Day, UTCTime (..))
-import Data.Time.Calendar (addDays)
 import Data.Time.Clock (picosecondsToDiffTime)
 import Data.Time.LocalTime (TimeOfDay (TimeOfDay))
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad (when, forM_)
 import Control.Monad.Trans.Resource (runResourceT)
-import Control.Monad.IO.Class (MonadIO)
 import Data.Fixed (Pico,Micro)
 
 import Init

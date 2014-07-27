@@ -40,7 +40,7 @@ module Database.Persist.TH
 import Prelude hiding ((++), take, concat, splitAt)
 import qualified Prelude as P 
 import Database.Persist
-import Database.Persist.Sql (Migration, SqlPersistT, migrate, SqlBackend, PersistFieldSql)
+import Database.Persist.Sql (Migration, migrate, SqlBackend, PersistFieldSql)
 import Database.Persist.Quasi
 import Language.Haskell.TH.Lib (varE)
 import Language.Haskell.TH.Quote
@@ -65,7 +65,6 @@ import Data.Aeson
     )
 import qualified Data.ByteString.Lazy as BL
 import Control.Applicative (pure, (<*>))
-import Control.Monad.Logger (MonadLogger)
 import Database.Persist.Sql (sqlType)
 import Data.Proxy (Proxy (Proxy))
 

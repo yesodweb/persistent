@@ -172,7 +172,7 @@ library
 
    if flag(mongodb)
      build-depends:
-                     mongoDB       >= 2.0 && < 3.0
+                     mongoDB            >= 2.0.3 && < 3.0
                    , cereal
                    , bson
                    , process

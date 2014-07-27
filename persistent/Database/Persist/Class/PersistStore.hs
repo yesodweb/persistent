@@ -74,7 +74,7 @@ class PersistStore backend where
     -- @mapM insert@
     insertMany :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
                => [val] -> ReaderT backend m [Key val]
-    insertMany vals = mapM insert vals
+    insertMany = mapM insert
 
     -- | Create a new record in the database using the given key.
     insertKey :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
@@ -97,6 +97,22 @@ class PersistStore backend where
     -- not exist.
     delete :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
            => Key val -> ReaderT backend m ()
+
+    -- | Update individual fields on a specific record.
+    update :: (MonadIO m, PersistEntity val, backend ~ PersistEntityBackend val)
+           => Key val -> [Update val] -> ReaderT backend m ()
+
+    -- | Update individual fields on a specific record, and retrieve the
+    -- updated value from the database.
+    --
+    -- Note that this function will throw an exception if the given key is not
+    -- found in the database.
+    updateGet :: (MonadIO m, PersistEntity val, backend ~ PersistEntityBackend val)
+              => Key val -> [Update val] -> ReaderT backend m val
+    updateGet key ups = do
+        update key ups
+        get key >>= maybe (liftIO $ throwIO $ KeyNotFound $ Prelude.show key) return
+
 
 -- | Same as get, but for a non-null (not Maybe) foreign key
 --   Unsafe unless your database is enforcing that the foreign key is valid

@@ -9,19 +9,14 @@ module Database.Persist.Sql.Orphan.PersistQuery
 
 import Database.Persist
 import Database.Persist.Sql.Types
-import Database.Persist.Sql.Class
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
-import Database.Persist.Sql.Internal (convertKey)
 import qualified Data.Text as T
 import Data.Text (Text)
 import Data.Monoid (Monoid (..), (<>))
 import Data.Int (Int64)
-import Control.Monad.Logger
 import Control.Monad.IO.Class
-import Control.Monad.Trans.Class
 import Control.Monad.Trans.Reader (ReaderT, ask)
-import Control.Monad.Trans.Resource (MonadResource)
 import Control.Exception (throwIO)
 import qualified Data.Conduit.List as CL
 import Data.Conduit
@@ -31,33 +26,6 @@ import Data.List (transpose, inits, find)
 
 -- orphaned instance for convenience of modularity
 instance PersistQuery Connection where
-    update _ [] = return ()
-    update k upds = do
-        conn <- ask
-        let go'' n Assign = n <> "=?"
-            go'' n Add = T.concat [n, "=", n, "+?"]
-            go'' n Subtract = T.concat [n, "=", n, "-?"]
-            go'' n Multiply = T.concat [n, "=", n, "*?"]
-            go'' n Divide = T.concat [n, "=", n, "/?"]
-        let go' (x, pu) = go'' (connEscapeName conn x) pu
-        let composite = isJust $ entityPrimary t
-        let wher = case entityPrimary t of
-                Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (snd fld) <> "=? ") $ primaryFields pdef
-                Nothing   -> connEscapeName conn (entityID t) <> "=?"
-        let sql = T.concat
-                [ "UPDATE "
-                , connEscapeName conn $ entityDB t
-                , " SET "
-                , T.intercalate "," $ map (go' . go) upds
-                , " WHERE "
-                , wher
-                ]
-        rawExecute sql $
-            map updatePersistValue upds `mappend` (convertKey composite k)
-      where
-        t = entityDef $ dummyFromKey k
-        go x = (fieldDB $ updateFieldDef x, updateUpdate x)
-
     count filts = do
         conn <- ask
         let wher = if null filts
@@ -419,7 +387,7 @@ orderClause includeTable conn o =
     case o of
         Asc  x -> name $ persistFieldDef x
         Desc x -> name (persistFieldDef x) <> " DESC"
-        _ -> error $ "orderClause: expected Asc or Desc, not limit or offset"
+        _ -> error "orderClause: expected Asc or Desc, not limit or offset"
   where
     dummyFromOrder :: SelectOpt a -> Maybe a
     dummyFromOrder _ = Nothing
@@ -431,9 +399,6 @@ orderClause includeTable conn o =
             then ((tn <> ".") <>)
             else id)
         $ connEscapeName conn $ fieldDB x
-
-dummyFromKey :: KeyBackend SqlBackend v -> Maybe v
-dummyFromKey _ = Nothing
 
 -- | Generates sql for limit and offset for postgres, sqlite and mysql.
 decorateSQLWithLimitOffset::Text -> (Int,Int) -> Bool -> Text -> Text 

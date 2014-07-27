@@ -20,7 +20,6 @@ import qualified Database.Sqlite as Sqlite
 
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Logger (NoLoggingT, runNoLoggingT, MonadLogger)
-import Data.List (intercalate)
 import Data.IORef
 import qualified Data.Map as Map
 import Control.Monad.Trans.Control (control)
