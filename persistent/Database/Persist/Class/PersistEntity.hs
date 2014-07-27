@@ -5,9 +5,10 @@
 module Database.Persist.Class.PersistEntity
     ( PersistEntity (..)
     , Update (..)
+    , BackendSpecificUpdate
     , SelectOpt (..)
-    , BackendSpecificFilter
     , Filter (..)
+    , BackendSpecificFilter
     , Key
     , Entity (..)
 
@@ -68,6 +69,8 @@ class PersistEntity record where
     fieldLens :: EntityField record field
               -> (forall f. Functor f => (field -> f field) -> Entity record -> f (Entity record))
 
+type family BackendSpecificUpdate backend record
+
 -- | updataing a database entity
 --
 -- Persistent users use combinators to create these
@@ -77,6 +80,8 @@ data Update record = forall typ. PersistField typ => Update
     -- FIXME Replace with expr down the road
     , updateUpdate :: PersistUpdate
     }
+    | BackendUpdate
+          (BackendSpecificUpdate (PersistEntityBackend record) record)
 
 -- | query options
 --

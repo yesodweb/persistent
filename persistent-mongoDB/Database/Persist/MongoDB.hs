@@ -392,6 +392,7 @@ updateToMongoField (Update field v up) =
                   (Multiply, _) -> error "expected PersistInt64 or PersistDouble for a subtraction"
                   -- Obviously this could be supported for floats by multiplying with 1/x
                   (Divide, _)   -> throw $ PersistMongoDBUnsupported "divide not supported"
+updateToMongoField (BackendUpdate _) = error "no backend updates implemented yet"
 
 
 -- | convert a unique key into a MongoDB document

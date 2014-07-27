@@ -207,6 +207,7 @@ updateWhereCount filts upds = do
 
 updateFieldDef :: PersistEntity v => Update v -> FieldDef SqlType
 updateFieldDef (Update f _ _) = persistFieldDef f
+updateFieldDef _ = error "BackendUpdate not implemented"
 
 dummyFromFilts :: [Filter v] -> Maybe v
 dummyFromFilts _ = Nothing
