@@ -717,30 +717,29 @@ mongoFilterToBSON :: forall typ. ( PersistField typ )
                   => Text
                   -> MongoFilterOperator typ
                   -> DB.Document
-mongoFilterToBSON fname filt =
-  case filt of
+mongoFilterToBSON fname filt = case filt of
     (PersistOperator v op)     -> [filterToBSON fname v op]
     (MongoFilterOperator bval) -> [fname DB.:= bval]
 
 mongoFilterToDoc :: PersistEntity val => MongoFilter val -> DB.Document
 mongoFilterToDoc (RegExpMaybeFilter fn (reg, opts))   = [ fieldName fn  DB.:= DB.RegEx (DB.Regex reg opts)]
 mongoFilterToDoc (RegExpFilter fn (reg, opts))        = [ fieldName fn  DB.:= DB.RegEx (DB.Regex reg opts)]
-mongoFilterToDoc (MultiKeyFilter fn filt) = mongoFilterToBSON (fieldName fn) filt
-mongoFilterToDoc (NestedFilter fns filt)  = mongoFilterToBSON (nesFldName fns) filt
-    where
-      nesFldName fns' = T.intercalate "." $ nesIdFix . reverse $ nesFldName' fns' []
-      nesFldName' :: forall r1 r2. (PersistEntity r1) => NestedField r1 r2 -> [DB.Label] -> [DB.Label]
-      nesFldName' (nf1 `LastEmbFld` nf2)          lbls = fieldName nf2 : fieldName nf1 : lbls
-      nesFldName' ( f1 `MidEmbFld`  f2)           lbls = nesFldName' f2 (fieldName f1 : lbls)
-      nesFldName' ( f1 `MidNestFlds` f2)          lbls = nesFldName' f2 (fieldName f1 : lbls)
-      nesFldName' ( f1 `MidNestFldsNullable` f2)  lbls = nesFldName' f2 (fieldName f1 : lbls)
-      nesFldName' (nf1 `LastNestFld` nf2)         lbls = fieldName nf2 : fieldName nf1:lbls
-      nesFldName' (nf1 `LastNestFldNullable` nf2) lbls = fieldName nf2 : fieldName nf1:lbls
-      nesIdFix [] = []
-      nesIdFix (fst':rst') = fst': (map (joinFN . (T.splitOn "_")) rst')
-      joinFN :: [Text] -> Text
-      joinFN [] = ""
-      joinFN (fst':rst') = fst' `T.append` (T.concat (map (\t -> (toUpper . T.head $ t) `T.cons` (T.tail t)) rst'))
+mongoFilterToDoc (MultiKeyFilter field op) = mongoFilterToBSON (fieldName field) op
+mongoFilterToDoc (NestedFilter   field op) = mongoFilterToBSON (nestedFieldName field) op
+  where
+    nestedFieldName = T.intercalate "." . nesIdFix . nesFldName
+    nesFldName :: forall r1 r2. (PersistEntity r1) => NestedField r1 r2 -> [DB.Label]
+    nesFldName (nf1 `LastEmbFld` nf2)          = [fieldName nf1, fieldName nf2]
+    nesFldName ( f1 `MidEmbFld`  f2)           = fieldName f1 : nesFldName f2
+    nesFldName ( f1 `MidNestFlds` f2)          = fieldName f1 : nesFldName f2
+    nesFldName ( f1 `MidNestFldsNullable` f2)  = fieldName f1 : nesFldName f2
+    nesFldName (nf1 `LastNestFld` nf2)         = [fieldName nf1, fieldName nf2]
+    nesFldName (nf1 `LastNestFldNullable` nf2) = [fieldName nf1, fieldName nf2]
+    nesIdFix [] = []
+    nesIdFix (name:rest) = name : map (joinFN . (T.splitOn "_")) rest
+    joinFN :: [Text] -> Text
+    joinFN [] = ""
+    joinFN (name:rest) = name `T.append` (T.concat (map (\t -> (toUpper . T.head $ t) `T.cons` (T.tail t)) rest))
 
 toValue :: forall a.  PersistField a => Either a [a] -> DB.Value
 toValue val =
