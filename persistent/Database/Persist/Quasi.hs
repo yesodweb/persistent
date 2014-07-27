@@ -300,10 +300,7 @@ takeCols _ _ = Nothing
 
 getDbName :: PersistSettings -> Text -> [Text] -> Text
 getDbName ps n [] = psToDBName ps n
-getDbName ps n (a:as) =
-    case T.stripPrefix "sql=" a of
-      Nothing -> getDbName ps n as
-      Just s  -> s
+getDbName ps n (a:as) = fromMaybe (getDbName ps n as) $ T.stripPrefix "sql=" a
 
 takeConstraint :: PersistSettings
           -> Text
