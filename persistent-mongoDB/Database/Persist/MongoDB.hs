@@ -103,6 +103,7 @@ module Database.Persist.MongoDB
 
 import Database.Persist
 import qualified Database.Persist.Sql as Sql
+import Database.Persist.Class.PersistUnique (onlyUnique)
 
 import qualified Control.Monad.IO.Class as Trans
 import Control.Exception (throw, throwIO)
@@ -363,12 +364,12 @@ filterByKey :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend
 filterByKey k = [_id DB.=: keyToOid k]
 
 queryByKey :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
-           => Key record -> EntityDef a -> DB.Query
-queryByKey k record = (DB.select (filterByKey k) (unDBName $ entityDB record))
+           => Key record -> DB.Query
+queryByKey k = DB.select (filterByKey k) (collectionName $ recordTypeFromKey k)
 
 selectByKey :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
-            => Key record -> EntityDef a -> DB.Selection
-selectByKey k record = (DB.select (filterByKey k) (unDBName $ entityDB record))
+            => Key record -> DB.Selection
+selectByKey k = DB.select (filterByKey k) (collectionName $ recordTypeFromKey k)
 
 updatesToDoc :: (PersistEntity entity) => [Update entity] -> DB.Document
 updatesToDoc upds = map updateToMongoField upds
@@ -393,6 +394,7 @@ updateToMongoField (Update field v up) =
                   (Divide, _)   -> throw $ PersistMongoDBUnsupported "divide not supported"
 
 
+-- | convert a unique key into a MongoDB document
 toUniquesDoc :: forall record. (PersistEntity record) => Unique record -> [DB.Field]
 toUniquesDoc uniq = zipWith (DB.:=)
   (map (unDBName . snd) $ persistUniqueToFieldNames uniq)
@@ -464,10 +466,8 @@ instance PersistStore DB.MongoContext where
     repsert   k record = saveWithKey entityToDocument DB.save k record
 
     replace k record = do
-        DB.replace (selectByKey k t) (entityToDocument record)
+        DB.replace (selectByKey k) (entityToDocument record)
         return ()
-      where
-        t = entityDef $ Just record
 
     delete k =
         DB.deleteOne DB.Select {
@@ -476,7 +476,7 @@ instance PersistStore DB.MongoContext where
         }
 
     get k = do
-            d <- DB.findOne (queryByKey k t)
+            d <- DB.findOne (queryByKey k)
             case d of
               Nothing -> return Nothing
               Just doc -> do
@@ -485,21 +485,75 @@ instance PersistStore DB.MongoContext where
           where
             t = entityDef $ Just $ recordTypeFromKey k
 
+    update _ [] = return ()
+    update key upds =
+        DB.modify
+           (DB.Select [keyToMongoIdField key] (collectionName $ recordTypeFromKey key))
+           $ updatesToDoc upds
+
+    updateGet key upds = do
+        result <- DB.findAndModify (DB.select [keyToMongoIdField key]
+                     (collectionName $ recordTypeFromKey key)
+                   ) (updatesToDoc upds)
+        either err instantiate result
+      where
+        instantiate doc = do
+            Entity _ rec <- fromPersistValuesThrow t doc
+            return rec
+        err msg = Trans.liftIO $ throwIO $ KeyNotFound $ show key ++ msg
+        t = entityDef $ Just $ recordTypeFromKey key
+
+
 instance PersistUnique DB.MongoContext where
     getBy uniq = do
         mdoc <- DB.findOne $
-          DB.select (toUniquesDoc uniq) (unDBName $ entityDB t)
+          DB.select (toUniquesDoc uniq) (collectionName rec)
         case mdoc of
             Nothing -> return Nothing
             Just doc -> liftM Just $ fromPersistValuesThrow t doc
       where
-        t = entityDef $ Just $ dummyFromUnique uniq
+        t = entityDef $ Just rec
+        rec = dummyFromUnique uniq
 
     deleteBy uniq =
         DB.delete DB.Select {
           DB.coll = collectionName $ dummyFromUnique uniq
         , DB.selector = toUniquesDoc uniq
         }
+
+    upsert newRecord upds = do
+        uniq <- onlyUnique newRecord
+        let uniqueDoc = toUniquesDoc uniq
+        let uniqKeys = map DB.label uniqueDoc
+        let insDoc = DB.exclude uniqKeys $ toInsertDoc newRecord
+        let selection = DB.select uniqueDoc $ collectionName newRecord
+        if null upds
+          then DB.upsert selection ["$set" DB.=: insDoc]
+          else do
+            DB.upsert selection ["$setOnInsert" DB.=: insDoc]
+            DB.modify selection $ updatesToDoc upds
+        -- because findAndModify $setOnInsert is broken we do a separate get now
+        mdoc <- getBy uniq
+        maybe (err "possible race condition: getBy found Nothing")
+            return mdoc
+      where
+        err = Trans.liftIO . throwIO . UpsertError
+        {-
+        -- cannot use findAndModify
+        -- because $setOnInsert is crippled
+        -- https://jira.mongodb.org/browse/SERVER-2643
+        result <- DB.findAndModifyOpts
+            selection
+            (DB.defFamUpdateOpts ("$setOnInsert" DB.=: insDoc : ["$set" DB.=: insDoc]))
+              { DB.famUpsert = True }
+        either err instantiate result
+      where
+        -- this is only possible when new is False
+        instantiate Nothing = error "upsert: impossible null"
+        instantiate (Just doc) =
+            fromPersistValuesThrow (entityDef $ Just newRecord) doc
+            -}
+   
 
 _id :: T.Text
 _id = "_id"
@@ -510,26 +564,6 @@ keyToMongoIdField k = _id DB.:= (DB.ObjId $ keyToOid k)
 
 
 instance PersistQuery DB.MongoContext where
-    update _ [] = return ()
-    update key upds =
-        DB.modify 
-           (DB.Select [keyToMongoIdField key] (collectionName $ recordTypeFromKey key))
-           $ updatesToDoc upds
-
-    updateGet key upds = do
-        result <- DB.findAndModify (DB.select [keyToMongoIdField key]
-                     (unDBName $ entityDB t)
-                   ) (updatesToDoc upds)
-        case result of
-          Left e -> err e
-          Right doc -> do
-            Entity _ ent <- fromPersistValuesThrow t doc
-            return ent
-      where
-        err msg = Trans.liftIO $ throwIO $ KeyNotFound $ show key ++ msg
-        t = entityDef $ Just $ recordTypeFromKey key
-
-
     updateWhere _ [] = return ()
     updateWhere filts upds =
         DB.modify DB.Select {

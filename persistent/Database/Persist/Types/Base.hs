@@ -375,11 +375,20 @@ data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le | In | NotIn
                    | BackendSpecificFilter T.Text
     deriving (Read, Show)
 
-data UpdateGetException = KeyNotFound String
+data UpdateException = KeyNotFound String
+                     | UpsertError String
     deriving Typeable
-instance Show UpdateGetException where
+instance Show UpdateException where
     show (KeyNotFound key) = "Key not found during updateGet: " ++ key
-instance Exception UpdateGetException
+    show (UpsertError msg) = "Error during upsert: " ++ msg
+instance Exception UpdateException
+
+data OnlyUniqueException = OnlyUniqueException String deriving Typeable
+instance Show OnlyUniqueException where
+    show (OnlyUniqueException uniqueMsg) =
+      "Expected only one unique key, got " ++ uniqueMsg
+instance Exception OnlyUniqueException
+
 
 data PersistUpdate = Assign | Add | Subtract | Multiply | Divide -- FIXME need something else here
     deriving (Read, Show, Enum, Bounded)

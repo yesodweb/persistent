@@ -25,21 +25,6 @@ import Control.Monad.Trans.Resource (MonadResource, release)
 import Data.Acquire (Acquire, mkAcquire, allocateAcquire, with)
 
 class PersistStore backend => PersistQuery backend where
-    -- | Update individual fields on a specific record.
-    update :: (MonadIO m, PersistEntity val, backend ~ PersistEntityBackend val)
-           => Key val -> [Update val] -> ReaderT backend m ()
-
-    -- | Update individual fields on a specific record, and retrieve the
-    -- updated value from the database.
-    --
-    -- Note that this function will throw an exception if the given key is not
-    -- found in the database.
-    updateGet :: (MonadIO m, PersistEntity val, backend ~ PersistEntityBackend val)
-              => Key val -> [Update val] -> ReaderT backend m val
-    updateGet key ups = do
-        update key ups
-        get key >>= maybe (liftIO $ throwIO $ KeyNotFound $ show key) return
-
     -- | Update individual fields on any record matching the given criterion.
     updateWhere :: (MonadIO m, PersistEntity val, backend ~ PersistEntityBackend val)
                 => [Filter val] -> [Update val] -> ReaderT backend m ()

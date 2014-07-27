@@ -6,12 +6,16 @@ module Database.Persist.Class.PersistUnique
     , insertBy
     , replaceUnique
     , checkUnique
+    , onlyUnique
     ) where
 
+import Database.Persist.Types
 import qualified Prelude
-import Prelude hiding ((++), show)
+import Prelude hiding ((++))
 
-import Control.Monad (liftM)
+import Control.Exception (throwIO)
+import Control.Monad (liftM, when)
+import Control.Monad.IO.Class (liftIO)
 import Data.List ((\\))
 
 import Control.Monad.Trans.Reader   ( ReaderT  )
@@ -49,17 +53,50 @@ class PersistStore backend => PersistUnique backend where
           Nothing -> Just `liftM` insert datum
           Just _ -> return Nothing
 
+    -- | update based on a uniquness constraint or insert
+    --
+    -- insert the new record if it does not exist
+    -- update the existing record that matches the uniqueness contraint
+    --
+    -- Throws an exception if there is more than 1 uniqueness contraint
+    upsert :: (MonadIO m, PersistEntityBackend val ~ backend, PersistEntity val)
+           => val          -- ^ new record to insert
+           -> [Update val] -- ^ updates to perform if the record already exists.
+                           -- leaving this empty is the equivalent of performing a 'repsert' on a unique key.
+           -> ReaderT backend m (Entity val) -- ^ the record in the database after the operation
+    upsert record updates = do
+        uniqueKey <- onlyUnique record 
+        mExists <- getBy uniqueKey
+        k <- case mExists of
+            Just (Entity k _) -> do
+              when (null updates) (replace k record)
+              return k
+            Nothing           -> insert record
+        Entity k `liftM` updateGet k updates
+
+
 -- | Insert a value, checking for conflicts with any unique constraints.  If a
 -- duplicate exists in the database, it is returned as 'Left'. Otherwise, the
 -- new 'Key is returned as 'Right'.
 insertBy :: (MonadIO m, PersistEntity val, PersistUnique backend, PersistEntityBackend val ~ backend)
          => val -> ReaderT backend m (Either (Entity val) (Key val))
-
 insertBy val = do
     res <- getByValue val
     case res of
       Nothing -> Right `liftM` insert val
       Just z -> return $ Left z
+
+-- | Return the single unique key for a record
+onlyUnique :: (MonadIO m, PersistEntity val, PersistUnique backend, PersistEntityBackend val ~ backend)
+           => val -> ReaderT backend m (Unique val)
+onlyUnique record = case onlyUniqueEither record of
+    Right u -> return u
+    Left us -> liftIO $ throwIO $ OnlyUniqueException $ show $ length us
+
+onlyUniqueEither :: (PersistEntity val) => val -> Either [Unique val] (Unique val)
+onlyUniqueEither record = case persistUniqueKeys record of
+    (u:[]) -> Right u
+    us     -> Left us
 
 -- | A modification of 'getBy', which takes the 'PersistEntity' itself instead
 -- of a 'Unique' value. Returns a value matching /one/ of the unique keys. This

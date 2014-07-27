@@ -5,12 +5,10 @@ module Database.Persist.Sql.Orphan.PersistStore (withRawQuery) where
 
 import Database.Persist
 import Database.Persist.Sql.Types
-import Database.Persist.Sql.Class
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Internal (convertKey)
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
-import Control.Monad.Logger
 import qualified Data.Text as T
 import Data.Text (Text, unpack)
 import Data.Monoid (mappend, (<>))
@@ -20,7 +18,6 @@ import Data.Maybe (isJust)
 import Data.List (find)
 import Control.Monad.Trans.Reader (ReaderT, ask)
 import Data.Acquire (with)
-import Control.Monad.Trans.Resource (MonadResource)
 
 withRawQuery :: MonadIO m
              => Text
@@ -32,6 +29,33 @@ withRawQuery sql vals sink = do
     liftIO $ with srcRes (C.$$ sink)
 
 instance PersistStore Connection where
+    update _ [] = return ()
+    update k upds = do
+        conn <- ask
+        let go'' n Assign = n <> "=?"
+            go'' n Add = T.concat [n, "=", n, "+?"]
+            go'' n Subtract = T.concat [n, "=", n, "-?"]
+            go'' n Multiply = T.concat [n, "=", n, "*?"]
+            go'' n Divide = T.concat [n, "=", n, "/?"]
+        let go' (x, pu) = go'' (connEscapeName conn x) pu
+        let composite = isJust $ entityPrimary t
+        let wher = case entityPrimary t of
+                Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (snd fld) <> "=? ") $ primaryFields pdef
+                Nothing   -> connEscapeName conn (entityID t) <> "=?"
+        let sql = T.concat
+                [ "UPDATE "
+                , connEscapeName conn $ entityDB t
+                , " SET "
+                , T.intercalate "," $ map (go' . go) upds
+                , " WHERE "
+                , wher
+                ]
+        rawExecute sql $
+            map updatePersistValue upds `mappend` (convertKey composite k)
+      where
+        t = entityDef $ dummyFromKey k
+        go x = (fieldDB $ updateFieldDef x, updateUpdate x)
+
     insert val = do
         conn <- ask
         let esql = connInsertSql conn t vals
@@ -165,3 +189,9 @@ insrepHelper command (Key k) val = do
         , ")"
         ]
     vals = k : map toPersistValue (toPersistFields val)
+
+updateFieldDef :: PersistEntity v => Update v -> FieldDef SqlType
+updateFieldDef (Update f _ _) = persistFieldDef f
+
+updatePersistValue :: Update v -> PersistValue
+updatePersistValue (Update _ v _) = toPersistValue v
