@@ -23,6 +23,7 @@ module Database.Persist.TH
     , EntityJSON(..)
     , mkPersistSettings
     , sqlSettings
+    , sqlOnlySettings
       -- * Various other TH functions
     , mkMigrate
     , mkSave
