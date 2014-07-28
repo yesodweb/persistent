@@ -438,7 +438,7 @@ entityToFields :: (PersistEntity record) => record -> [DB.Field]
 entityToFields = entityToDocument
 {-# DEPRECATED entityToFields "Please use entityToDocument instead" #-}
 
-fieldToLabel :: FieldDef a -> Text
+fieldToLabel :: FieldDef -> Text
 fieldToLabel = unDBName . fieldDB
 
 saveWithKey :: forall m entity keyEntity.
@@ -762,14 +762,14 @@ docToEntityThrow doc =
         Right entity -> return entity
 
 
-fromPersistValuesThrow :: (Trans.MonadIO m, PersistEntity record) => EntityDef a -> [DB.Field] -> m (Entity record)
+fromPersistValuesThrow :: (Trans.MonadIO m, PersistEntity record) => EntityDef -> [DB.Field] -> m (Entity record)
 fromPersistValuesThrow entDef doc = 
     case eitherFromPersistValues entDef doc of
         Left t -> Trans.liftIO . throwIO $ PersistMarshalError $
                    unHaskellName (entityHaskell entDef) `mappend` ": " `mappend` t
         Right entity -> return entity
 
-eitherFromPersistValues :: (PersistEntity record) => EntityDef a -> [DB.Field] -> Either T.Text (Entity record)
+eitherFromPersistValues :: (PersistEntity record) => EntityDef -> [DB.Field] -> Either T.Text (Entity record)
 eitherFromPersistValues entDef doc =
     let castDoc = assocListFromDoc doc
         -- normally _id is the first field
@@ -787,7 +787,7 @@ eitherFromPersistValues entDef doc =
 --
 -- Persistent creates a Haskell record from a list of PersistValue
 -- But most importantly it puts all PersistValues in the proper order
-orderPersistValues :: EntityDef a -> [(Text, PersistValue)] -> [(Text, PersistValue)]
+orderPersistValues :: EntityDef -> [(Text, PersistValue)] -> [(Text, PersistValue)]
 orderPersistValues entDef castDoc = reorder
   where
     castColumns = map nameAndEmbedded (entityFields entDef)
@@ -812,7 +812,7 @@ orderPersistValues entDef castDoc = reorder
     reorder :: [(Text, PersistValue)] 
     reorder = match castColumns castDoc []
       where
-        match :: [(Text, Maybe (EntityDef ()) )]
+        match :: [(Text, Maybe EntityDef)]
               -> [(Text, PersistValue)]
               -> [(Text, PersistValue)]
               -> [(Text, PersistValue)]

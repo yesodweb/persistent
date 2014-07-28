@@ -100,7 +100,7 @@ lowerCaseSettings = PersistSettings
     }
 
 -- | Parses a quasi-quoted syntax into a list of entity definitions.
-parse :: PersistSettings -> Text -> [EntityDef ()]
+parse :: PersistSettings -> Text -> [EntityDef]
 parse ps = parseLines ps
       . removeSpaces
       . filter (not . empty)
@@ -192,7 +192,7 @@ removeSpaces =
     fromToken Spaces{}  = Nothing
 
 -- | Divide lines into blocks and make entity definitions.
-parseLines :: PersistSettings -> [Line] -> [EntityDef ()]
+parseLines :: PersistSettings -> [Line] -> [EntityDef]
 parseLines ps lines =
     fixForeignKeysAll $ toEnts lines
   where
@@ -202,16 +202,16 @@ parseLines ps lines =
     toEnts (Line _ []:rest) = toEnts rest
     toEnts [] = []
 
-fixForeignKeysAll :: [EntityDef ()] -> [EntityDef ()]
+fixForeignKeysAll :: [EntityDef] -> [EntityDef]
 fixForeignKeysAll ents = map fixForeignKeys ents
-  where fixForeignKeys :: EntityDef () -> EntityDef ()
+  where fixForeignKeys :: EntityDef -> EntityDef
         fixForeignKeys ent = ent { entityForeigns = map (fixForeignKey ent) (entityForeigns ent) }
         -- check the count and the sqltypes match and update the foreignFields with the names of the primary columns
-        chktypes :: [FieldDef ()] -> HaskellName -> [FieldDef ()] -> HaskellName -> Bool
+        chktypes :: [FieldDef] -> HaskellName -> [FieldDef] -> HaskellName -> Bool
         chktypes fflds fkey pflds pkey = case (filter ((== fkey) . fieldHaskell) fflds, filter ((== pkey) . fieldHaskell) pflds) of
                                             ([ffld],[pfld]) -> fieldType ffld == fieldType pfld
                                             xs -> error $ "unexpected result "++ show xs
-        fixForeignKey :: EntityDef () -> ForeignDef -> ForeignDef
+        fixForeignKey :: EntityDef -> ForeignDef -> ForeignDef
         fixForeignKey fent fdef = 
            case find ((== foreignRefTableHaskell fdef) . entityHaskell) ents of
              Just pent -> case entityPrimary pent of
@@ -229,7 +229,7 @@ mkEntityDef :: PersistSettings
             -> Text -- ^ name
             -> [Attr] -- ^ entity attributes
             -> [Line] -- ^ indented lines
-            -> EntityDef ()
+            -> EntityDef
 mkEntityDef ps name entattribs lines =
     EntityDef
         (HaskellName name')
@@ -262,7 +262,7 @@ mkEntityDef ps name entattribs lines =
                 
     derives = concat $ mapMaybe takeDerives attribs
 
-    cols :: [FieldDef ()]
+    cols :: [FieldDef]
     cols = mapMaybe (takeCols ps) attribs
 
 splitExtras :: [Line] -> ([[Text]], M.Map Text [[Text]])
@@ -276,7 +276,7 @@ splitExtras (Line _ ts:rest) =
     let (x, y) = splitExtras rest
      in (ts:x, y)
 
-takeCols :: PersistSettings -> [Text] -> Maybe (FieldDef ())
+takeCols :: PersistSettings -> [Text] -> Maybe (FieldDef)
 takeCols _ ("deriving":_) = Nothing
 takeCols ps (n':typ:rest)
     | not (T.null n) && isLower (T.head n) =
@@ -286,7 +286,7 @@ takeCols ps (n':typ:rest)
                 { fieldHaskell = HaskellName n
                 , fieldDB = DBName $ getDbName ps n rest
                 , fieldType = ft
-                , fieldSqlType = ()
+                , fieldSqlType = Nothing
                 , fieldAttrs = rest
                 , fieldStrict = fromMaybe (psStrictFields ps) mstrict
                 , fieldEmbedded = Nothing
@@ -304,7 +304,7 @@ getDbName ps n (a:as) = fromMaybe (getDbName ps n as) $ T.stripPrefix "sql=" a
 
 takeConstraint :: PersistSettings
           -> Text
-          -> [FieldDef a]
+          -> [FieldDef]
           -> [Text]
           -> (Maybe PrimaryDef, Maybe UniqueDef, Maybe ForeignDef)
 takeConstraint ps tableName defs (n:rest) | not (T.null n) && isUpper (T.head n) = takeConstraint' 
@@ -315,7 +315,7 @@ takeConstraint ps tableName defs (n:rest) | not (T.null n) && isUpper (T.head n)
             | otherwise      = (Nothing, Just $ takeUniq ps "" defs (n:rest), Nothing) -- retain compatibility with original unique constraint
 takeConstraint _ _ _ _ = (Nothing, Nothing, Nothing)
     
-takePrimary :: [FieldDef a]
+takePrimary :: [FieldDef]
             -> [Text]
             -> PrimaryDef
 takePrimary defs pkcols
@@ -333,7 +333,7 @@ takePrimary defs pkcols
 -- Unique UppercaseConstraintName list of lowercasefields    
 takeUniq :: PersistSettings
           -> Text
-          -> [FieldDef a]
+          -> [FieldDef]
           -> [Text]
           -> UniqueDef
 takeUniq ps tableName defs (n:rest)
@@ -353,7 +353,7 @@ takeUniq _ tableName _ xs = error $ "invalid unique constraint on table[" ++ sho
 
 takeForeign :: PersistSettings
           -> Text
-          -> [FieldDef a]
+          -> [FieldDef]
           -> [Text]
           -> ForeignDef
 takeForeign ps tableName defs (refTableName:n:rest)

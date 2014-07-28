@@ -104,12 +104,12 @@ data WhyNullable = ByMaybeAttr
                  | ByNullableAttr
                   deriving (Eq, Show)
 
-data EntityDef sqlType = EntityDef
+data EntityDef = EntityDef
     { entityHaskell :: !HaskellName
     , entityDB      :: !DBName
     , entityID      :: !DBName
     , entityAttrs   :: ![Attr]
-    , entityFields  :: ![FieldDef sqlType]
+    , entityFields  :: ![FieldDef]
     , entityPrimary :: Maybe PrimaryDef
     , entityUniques :: ![UniqueDef]
     , entityForeigns:: ![ForeignDef]
@@ -117,7 +117,7 @@ data EntityDef sqlType = EntityDef
     , entityExtra   :: !(Map Text [ExtraLine])
     , entitySum     :: !Bool
     }
-    deriving (Show, Eq, Read, Ord, Functor)
+    deriving (Show, Eq, Read, Ord)
 
 type ExtraLine = [Text]
 
@@ -135,16 +135,16 @@ data FieldType
     | FTList FieldType
   deriving (Show, Eq, Read, Ord)
 
-data FieldDef sqlType = FieldDef
+data FieldDef = FieldDef
     { fieldHaskell  :: !HaskellName -- ^ name of the field
     , fieldDB       :: !DBName
     , fieldType     :: !FieldType
-    , fieldSqlType  :: !sqlType
+    , fieldSqlType  :: !(Maybe SqlType)
     , fieldAttrs    :: ![Attr]   -- ^ user annotations for a field
     , fieldStrict   :: !Bool      -- ^ a strict field in the data type. Default: true
-    , fieldEmbedded :: Maybe (EntityDef ()) -- ^ indicates that the field uses an embedded entity
+    , fieldEmbedded :: Maybe EntityDef -- ^ indicates that the field uses an embedded entity
     }
-    deriving (Show, Eq, Read, Ord, Functor)
+    deriving (Show, Eq, Read, Ord)
 
 data UniqueDef = UniqueDef
     { uniqueHaskell :: !HaskellName

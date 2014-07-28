@@ -112,8 +112,8 @@ sortMigrations x =
     -- choose to have this special sorting applied.
     isCreate t = pack "CREATe " `isPrefixOf` t
 
-migrate :: [EntityDef SqlType]
-        -> EntityDef SqlType
+migrate :: [EntityDef]
+        -> EntityDef
         -> Migration
 migrate allDefs val = do
     conn <- lift $ lift ask

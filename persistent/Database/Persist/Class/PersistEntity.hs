@@ -43,7 +43,7 @@ class PersistEntity record where
     data EntityField record :: * -> *
 
     -- | return meta-data for a given 'EntityField'
-    persistFieldDef :: EntityField record typ -> FieldDef SqlType
+    persistFieldDef :: EntityField record typ -> FieldDef
 
     -- | Persistent allows multiple different backends
     type PersistEntityBackend record
@@ -52,7 +52,7 @@ class PersistEntity record where
     data Unique record
 
     -- | retrieve the EntityDef meta-data for the record
-    entityDef :: Monad m => m record -> EntityDef SqlType
+    entityDef :: Monad m => m record -> EntityDef
 
     -- | Get the database fields of a record
     toPersistFields :: record -> [SomePersistField]

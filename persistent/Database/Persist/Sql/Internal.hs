@@ -12,11 +12,11 @@ import Data.Char (isSpace)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Monoid (Monoid, mappend, mconcat)
-import Data.Maybe (mapMaybe, listToMaybe)
+import Data.Maybe (mapMaybe, listToMaybe, fromMaybe)
 import Database.Persist.Sql.Types
 
 -- | Create the list of columns for the given entity.
-mkColumns :: [EntityDef a] -> EntityDef SqlType -> ([Column], [UniqueDef], [ForeignDef])
+mkColumns :: [EntityDef] -> EntityDef -> ([Column], [UniqueDef], [ForeignDef])
 mkColumns allDefs t =
     (cols, entityUniques t, entityForeigns t)
   where
@@ -26,13 +26,13 @@ mkColumns allDefs t =
     tn :: DBName
     tn = entityDB t
 
-    go :: FieldDef SqlType -> Column
+    go :: FieldDef -> Column
     go fd =
         Column
             (fieldDB fd)
             (nullable (fieldAttrs fd) /= NotNullable || entitySum t)
             (maybe
-                (fieldSqlType fd)
+                (fromMaybe (error "Sql.Internal.mkColumns fieldSqlType") $ fieldSqlType fd)
                 SqlOther
                 (listToMaybe $ mapMaybe (T.stripPrefix "sqltype=") $ fieldAttrs fd))
             (def $ fieldAttrs fd)
@@ -74,7 +74,7 @@ refName :: DBName -> DBName -> DBName
 refName (DBName table) (DBName column) =
     DBName $ mconcat [table, "_", column, "_fkey"]
 
-resolveTableName :: [EntityDef a] -> HaskellName -> DBName
+resolveTableName :: [EntityDef] -> HaskellName -> DBName
 resolveTableName [] (HaskellName hn) = error $ "Table not found: " `mappend` T.unpack hn
 resolveTableName (e:es) hn
     | entityHaskell e == hn = entityDB e

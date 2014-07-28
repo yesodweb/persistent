@@ -47,13 +47,13 @@ data InsertSqlResult = ISRSingle Text
 data Connection = Connection
     { connPrepare :: Text -> IO Statement
     -- | table name, column names, id name, either 1 or 2 statements to run
-    , connInsertSql :: EntityDef SqlType -> [PersistValue] -> InsertSqlResult
+    , connInsertSql :: EntityDef -> [PersistValue] -> InsertSqlResult
     , connStmtMap :: IORef (Map Text Statement)
     , connClose :: IO ()
     , connMigrateSql
-        :: [EntityDef SqlType]
+        :: [EntityDef]
         -> (Text -> IO Statement)
-        -> EntityDef SqlType
+        -> EntityDef
         -> IO (Either [Text] [(Bool, Text)])
     , connBegin :: (Text -> IO Statement) -> IO ()
     , connCommit :: (Text -> IO Statement) -> IO ()
