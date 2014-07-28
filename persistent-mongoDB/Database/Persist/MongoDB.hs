@@ -215,7 +215,7 @@ keyToText k = throw $ PersistInvalidField $ T.pack $ "Invalid Key (expected Pers
 -- | Convert a Text to a Key
 readMayKey :: Text -> Maybe (KeyBackend MongoBackend entity)
 readMayKey str =
-  case (reads $ (T.unpack str)) :: [(DB.ObjectId,String)] of
+  case reads $ T.unpack str :: [(DB.ObjectId,String)] of
     (parsed,_):[] -> Just $ Key $ PersistObjectId $ Serialize.encode parsed
     _ -> Nothing
 

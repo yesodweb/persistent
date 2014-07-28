@@ -41,7 +41,7 @@ type Tuple a b = (a, b)
 mkPersist persistSettings [persistUpperCase|
 #else
 -- Test lower case names
-share [mkPersist sqlSettings, mkMigrate "dataTypeMigrate"] [persistLowerCase|
+share [mkPersist persistSettings, mkMigrate "dataTypeMigrate"] [persistLowerCase|
 #endif
 DataTypeTable no-json
     text Text

@@ -78,9 +78,9 @@ import PersistTestPetType
 import PersistTestPetCollarType
 
 #ifdef WITH_MONGODB
-mkPersist (mkPersistSettings $ ConT ''MongoBackend) [persistUpperCase|
+mkPersist persistSettings [persistUpperCase|
 #else
-share [mkPersist sqlSettings,  mkMigrate "testMigrate", mkDeleteCascade sqlSettings] [persistUpperCase|
+share [mkPersist persistSettings,  mkMigrate "testMigrate", mkDeleteCascade persistSettings] [persistUpperCase|
 #endif
 
 -- Dedented comment
@@ -654,9 +654,11 @@ specs = describe "persistent" $ do
       liftIO $ x @?= [Entity pid1 p1, Entity pid3 p3]
 
   describe "toJSON" $ do
-    it "serializes" $
-      toJSON (Person "D" 0 Nothing) @?=
-        Object (M.fromList [("color",Null),("name",String "D"),("age",Number 0)])
+    it "serializes" $ db $ do
+      let p = Person "D" 0 Nothing
+      k <- insert p
+      liftIO $ toJSON (Entity k p) @?=
+        Object (M.fromList [("id", toJSON k), ("color",Null),("name",String "D"),("age",Number 0)])
 
     prop "fromJSON . toJSON $ key" $ \(person :: Key Person) ->
       case (fromJSON . toJSON) person of
