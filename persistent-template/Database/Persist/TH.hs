@@ -232,6 +232,13 @@ mkPersistSettings t = MkPersistSettings
 sqlSettings :: MkPersistSettings
 sqlSettings = mkPersistSettings $ ConT ''SqlBackend
 
+-- | Same as 'sqlSettings'.
+--
+-- Since 1.1.1
+sqlOnlySettings :: MkPersistSettings
+sqlOnlySettings = sqlSettings
+{-# DEPRECATED sqlOnlySettings "use sqlSettings" #-}
+
 recNameNoUnderscore :: MkPersistSettings -> Text -> Text -> Text
 recNameNoUnderscore mps dt f
   | mpsPrefixFields mps = lowerFirst dt ++ upperFirst f
