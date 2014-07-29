@@ -776,7 +776,7 @@ eitherFromPersistValues entDef doc =
         mKey = lookup _id castDoc
     in case mKey of
          Nothing -> Left "could not find _id field"
-         Just key -> case fromPersistValues (map snd $ orderPersistValues entDef castDoc) of
+         Just key -> case fromPersistValues (map snd $ orderPersistValues (toEmbeddedDef entDef) castDoc) of
              Right body -> Right $ Entity (Key key) body
              Left e -> Left e
 
@@ -787,11 +787,11 @@ eitherFromPersistValues entDef doc =
 --
 -- Persistent creates a Haskell record from a list of PersistValue
 -- But most importantly it puts all PersistValues in the proper order
-orderPersistValues :: EntityDef -> [(Text, PersistValue)] -> [(Text, PersistValue)]
+orderPersistValues :: EmbeddedDef -> [(Text, PersistValue)] -> [(Text, PersistValue)]
 orderPersistValues entDef castDoc = reorder
   where
-    castColumns = map nameAndEmbedded (entityFields entDef)
-    nameAndEmbedded fdef = ((unDBName . fieldDB) fdef, fieldEmbedded fdef)
+    castColumns = map nameAndEmbedded (embeddedFields entDef)
+    nameAndEmbedded fdef = ((unDBName . emFieldDB) fdef, emFieldEmbedded fdef)
 
     -- TODO: the below reasoning should be re-thought now that we are no longer inserting null: searching for a null column will look at every returned field before giving up
     -- Also, we are now doing the _id lookup at the start.
@@ -812,7 +812,7 @@ orderPersistValues entDef castDoc = reorder
     reorder :: [(Text, PersistValue)] 
     reorder = match castColumns castDoc []
       where
-        match :: [(Text, Maybe EntityDef)]
+        match :: [(Text, Maybe EmbeddedDef)]
               -> [(Text, PersistValue)]
               -> [(Text, PersistValue)]
               -> [(Text, PersistValue)]
@@ -828,10 +828,10 @@ orderPersistValues entDef castDoc = reorder
           in match columns unused $ values ++
                 [(fst column, nestedOrder (snd column) (snd found))]
           where
-            nestedOrder (Just ent) (PersistMap m) =
-              PersistMap $ orderPersistValues ent m
-            nestedOrder (Just ent) (PersistList l) =
-              PersistList $ map (nestedOrder (Just ent)) l
+            nestedOrder (Just em) (PersistMap m) =
+              PersistMap $ orderPersistValues em m
+            nestedOrder (Just em) (PersistList l) =
+              PersistList $ map (nestedOrder (Just em)) l
             -- implied: nestedOrder Nothing found = found
             nestedOrder _ found = found
 

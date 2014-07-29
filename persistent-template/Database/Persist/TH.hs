@@ -48,11 +48,11 @@ import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
 import Control.Monad (forM, (<=<), mzero)
 import qualified System.IO as SIO
-import Data.Text (pack, Text, append, unpack, concat, uncons, cons)
+import Data.Text (pack, Text, append, unpack, concat, uncons, cons, stripPrefix)
 import Data.Text.Encoding (decodeUtf8)
 import qualified Data.Text.IO as TIO
-import Data.List (foldl', find)
-import Data.Maybe (isJust)
+import Data.List (foldl')
+import Data.Maybe (isJust, listToMaybe, mapMaybe)
 import Data.Monoid (mappend, mconcat)
 import qualified Data.Map as M
 import qualified Data.HashMap.Strict as HM
@@ -63,14 +63,14 @@ import Data.Aeson
     )
 import qualified Data.ByteString.Lazy as BL
 import Control.Applicative (pure, (<*>))
-import Database.Persist.Sql (sqlType, SqlType(..))
+import Database.Persist.Sql (sqlType)
 import Data.Proxy (Proxy (Proxy))
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
 persistWith :: PersistSettings -> QuasiQuoter
 persistWith ps = QuasiQuoter
-    { quoteExp = parseSqlType ps . pack
+    { quoteExp = parseReferences ps . pack
     }
 
 -- | Apply 'persistWith' to 'upperCaseSettings'.
@@ -91,24 +91,40 @@ persistFileWith ps fp = do
     h <- qRunIO $ SIO.openFile fp SIO.ReadMode
     qRunIO $ SIO.hSetEncoding h SIO.utf8_bom
     s <- qRunIO $ TIO.hGetContents h
-    parseSqlType ps s
+    parseReferences ps s
 
-parseSqlType :: PersistSettings -> Text -> Q Exp
-parseSqlType ps s =
-    lift $ map (getSqlType defsOrig) defsOrig
+-- calls parse to Quasi.parse individual entities in isolation
+-- afterwards, sets references to other entities
+parseReferences :: PersistSettings -> Text -> Q Exp
+parseReferences ps s = lift $
+     map (mkEntityDefSqlTypeExp entityMap) entsWithEmbeds
   where
-    defsOrig = parse ps s
+    -- every EntityDef could reference each-other (as an EmbeddedRef)
+    -- let Haskell tie the knot
+    entityMap = M.fromList $ map (\ent -> (entityHaskell ent, toEmbeddedDef ent)) entsWithEmbeds
+    entsWithEmbeds = map setEmbedEntity rawEnts
+    setEmbedEntity ent = ent
+      { entityFields = map (setEmbedField entityMap) $ entityFields ent
+      }
+    rawEnts = parse ps s
 
--- a lot of hacks to move an Exp through the system without
--- having to dynamically type the fieldType of FielDef
+-- fieldSqlType at parse time can be an Exp
+-- This helps delay setting fieldSqlType until lift time
 data EntityDefSqlTypeExp = EntityDefSqlTypeExp EntityDef [SqlTypeExp]
+                           deriving Show
 
-data SqlTypeExp = SqlTypeExp Exp
+data SqlTypeExp = SqlTypeExp FieldType
                 | SqlType' SqlType
+                deriving Show
 
 instance Lift SqlTypeExp where
-    lift (SqlTypeExp e) = return e
-    lift (SqlType' t)   = lift (Just t)
+    lift (SqlType' t)       = lift t
+    lift (SqlTypeExp ftype) = return st
+      where
+        typ = ftToType ftype
+        mtyp = (ConT ''Proxy `AppT` typ)
+        typedNothing = SigE (ConE 'Proxy) mtyp
+        st = VarE 'sqlType `AppE` typedNothing
 
 data FieldsSqlTypeExp = FieldsSqlTypeExp [FieldDef] [SqlTypeExp]
 
@@ -118,48 +134,70 @@ instance Lift FieldsSqlTypeExp where
 
 data FieldSqlTypeExp = FieldSqlTypeExp FieldDef SqlTypeExp
 instance Lift FieldSqlTypeExp where
-    lift (FieldSqlTypeExp (FieldDef a b c d e f g) sqlTypeExp) =
-      [|FieldDef a b c $(lift sqlTypeExp) $(liftTs e) f $(lift' g)|]
+    lift (FieldSqlTypeExp (FieldDef{..}) sqlTypeExp) =
+      [|FieldDef fieldHaskell fieldDB fieldType $(lift sqlTypeExp) $(liftTs fieldAttrs) fieldStrict fieldReference|]
 
 instance Lift EntityDefSqlTypeExp where
-    lift (EntityDefSqlTypeExp (EntityDef a b c d e f g h i j k) sqlTypeExps) =
+    lift (EntityDefSqlTypeExp (EntityDef{..}) sqlTypeExps) =
         [|EntityDef
-            $(lift a)
-            $(lift b)
-            $(lift c)
-            $(liftTs d)
-            $(lift (FieldsSqlTypeExp e sqlTypeExps))
-            $(lift f)
-            $(lift g)
-            $(lift h)
-            $(liftTs i)
-            $(liftMap j)
-            $(lift k)
+            $(lift entityHaskell)
+            $(lift entityDB)
+            $(lift entityID)
+            $(liftTs entityAttrs)
+            $(lift (FieldsSqlTypeExp entityFields sqlTypeExps))
+            $(lift entityPrimary)
+            $(lift entityUniques)
+            $(lift entityForeigns)
+            $(liftTs entityDerives)
+            $(liftMap entityExtra)
+            $(lift entitySum)
             |]
 
+instance Lift ReferenceDef where
+    lift NoReference = [|NoReference|]
+    lift (ForeignRef name) = [|ForeignRef name|]
+    lift (EmbeddedRef em) = [|EmbeddedRef em|]
 
-getSqlType :: [EntityDef] -> EntityDef -> EntityDefSqlTypeExp
-getSqlType allEntities ent = EntityDefSqlTypeExp ent
-        { entityFields = map go $ entityFields ent
-        } (map final $ entityFields ent)
+instance Lift EmbeddedDef where
+    lift (EmbeddedDef name fields) = [|EmbeddedDef name fields|]
+
+instance Lift EmbeddedFieldDef where
+    lift (EmbeddedFieldDef name em) = [|EmbeddedFieldDef name em|]
+
+type EntityMap = M.Map HaskellName EmbeddedDef
+mEmbedded :: EntityMap -> FieldType -> Maybe EmbeddedDef
+mEmbedded _ (FTTypeCon Just{} _) = Nothing
+mEmbedded ents (FTTypeCon Nothing n) = let name = HaskellName n in
+    M.lookup name ents
+mEmbedded ents (FTList x) = mEmbedded ents x
+mEmbedded ents (FTApp x y) = maybe (mEmbedded ents y) Just (mEmbedded ents x)
+
+setEmbedField :: EntityMap -> FieldDef -> FieldDef
+setEmbedField allEntities field = field
+  { fieldReference = case fieldReference field of
+      NoReference -> case mEmbedded allEntities (fieldType field) of
+          Nothing -> NoReference
+          Just em -> EmbeddedRef em
+      existing@_   -> existing
+  }
+
+mkEntityDefSqlTypeExp :: EntityMap -> EntityDef -> EntityDefSqlTypeExp
+mkEntityDefSqlTypeExp allEntities ent = EntityDefSqlTypeExp ent
+    $ (map getSqlType $ entityFields ent)
   where
-    go :: FieldDef -> FieldDef
-    go field = do
-        field { fieldEmbedded = mEmbedded (fieldType field) }
+    getSqlType field = maybe
+        (defaultSqlTypeExp $ fieldType field)
+        (SqlType' . SqlOther)
+        (listToMaybe $ mapMaybe (stripPrefix "sqltype=") $ fieldAttrs field)
 
-    mEmbedded (FTTypeCon Just{} _) = Nothing
-    mEmbedded (FTTypeCon Nothing n) = let name = HaskellName n in
-        find ((name ==) . entityHaskell) allEntities
-    mEmbedded (FTList x) = mEmbedded x
-    mEmbedded (FTApp x y) = maybe (mEmbedded y) Just (mEmbedded x)
 
     -- In the case of embedding, there won't be any datatype created yet.
     -- We just use SqlString, as the data will be serialized to JSON.
-    final field
-        | isJust (mEmbedded (fieldType field)) = SqlType' SqlString
+    defaultSqlTypeExp ftype
+        | isJust (mEmbedded allEntities ftype) = SqlType' SqlString
         | isReference = SqlType' SqlInt64
         | otherwise =
-            case fieldType field of
+            case ftype of
                 -- In the case of lists, we always serialize to a string
                 -- value (via JSON).
                 --
@@ -169,18 +207,9 @@ getSqlType allEntities ent = EntityDefSqlTypeExp ent
                 -- yet been created, so the compiler will fail. This extra
                 -- clause works around this limitation.
                 FTList _ -> SqlType' SqlString
-                _ -> SqlTypeExp $ st field
-
+                _ -> SqlTypeExp ftype
       where
-        isReference =
-            case stripId $ fieldType field of
-                Just{} -> True
-                Nothing -> False
-
-        typ = ftToType $ fieldType field
-        mtyp = (ConT ''Proxy `AppT` typ)
-        typedNothing = SigE (ConE 'Proxy) mtyp
-        st field = ConE 'Just `AppE` (VarE 'sqlType `AppE` typedNothing)
+        isReference = isJust $ stripId ftype
 
 -- | Create data types and appropriate 'PersistEntity' instances for the given
 -- 'EntityDef's. Works well with the persist quasi-quoter.
@@ -630,8 +659,8 @@ mkEntity mps t = do
         { fieldHaskell = HaskellName "Id"
         , fieldDB = entityID t
         , fieldType = FTTypeCon Nothing $ unHaskellName (entityHaskell t) ++ "Id"
-        , fieldSqlType = Just SqlInt64
-        , fieldEmbedded = Nothing
+        , fieldSqlType = SqlInt64
+        , fieldReference = ForeignRef $ entityHaskell t
         , fieldAttrs = []
         , fieldStrict = True
         }
@@ -1040,7 +1069,7 @@ instance Lift EntityDef where
             $(lift k)
             |]
 instance Lift FieldDef where
-    lift (FieldDef a b c d e f g) = [|FieldDef a b c $(lift' d) $(liftTs e) f $(lift' g)|]
+    lift (FieldDef a b c d e f g) = [|FieldDef a b c $(lift' d) $(liftTs e) f g|]
 instance Lift UniqueDef where
     lift (UniqueDef a b c d) = [|UniqueDef $(lift a) $(lift b) $(lift c) $(liftTs d)|]
 instance Lift PrimaryDef where

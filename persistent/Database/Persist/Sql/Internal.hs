@@ -31,10 +31,7 @@ mkColumns allDefs t =
         Column
             (fieldDB fd)
             (nullable (fieldAttrs fd) /= NotNullable || entitySum t)
-            (maybe
-                (fromMaybe (error "Sql.Internal.mkColumns fieldSqlType") $ fieldSqlType fd)
-                SqlOther
-                (listToMaybe $ mapMaybe (T.stripPrefix "sqltype=") $ fieldAttrs fd))
+            (fieldSqlType fd)
             (def $ fieldAttrs fd)
             Nothing
             (maxLen $ fieldAttrs fd)

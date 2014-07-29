@@ -276,7 +276,7 @@ splitExtras (Line _ ts:rest) =
     let (x, y) = splitExtras rest
      in (ts:x, y)
 
-takeCols :: PersistSettings -> [Text] -> Maybe (FieldDef)
+takeCols :: PersistSettings -> [Text] -> Maybe FieldDef
 takeCols _ ("deriving":_) = Nothing
 takeCols ps (n':typ:rest)
     | not (T.null n) && isLower (T.head n) =
@@ -286,10 +286,10 @@ takeCols ps (n':typ:rest)
                 { fieldHaskell = HaskellName n
                 , fieldDB = DBName $ getDbName ps n rest
                 , fieldType = ft
-                , fieldSqlType = Nothing
+                , fieldSqlType = SqlOther $ "SqlType unset for " `mappend` n
                 , fieldAttrs = rest
                 , fieldStrict = fromMaybe (psStrictFields ps) mstrict
-                , fieldEmbedded = Nothing
+                , fieldReference = NoReference
                 }
   where
     (mstrict, n)
