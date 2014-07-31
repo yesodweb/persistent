@@ -48,7 +48,7 @@ import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
 import Control.Monad (forM, (<=<), mzero)
 import qualified System.IO as SIO
-import Data.Text (pack, Text, append, unpack, concat, uncons, cons, stripPrefix)
+import Data.Text (pack, Text, append, unpack, concat, uncons, cons, stripPrefix, stripSuffix)
 import Data.Text.Encoding (decodeUtf8)
 import qualified Data.Text.IO as TIO
 import Data.List (foldl')
@@ -107,6 +107,17 @@ parseReferences ps s = lift $
       { entityFields = map (setEmbedField entityMap) $ entityFields ent
       }
     rawEnts = parse ps s
+
+
+stripId :: FieldType -> Maybe Text
+stripId (FTTypeCon Nothing t) = stripSuffix "Id" t
+stripId _ = Nothing
+
+foreignReference :: FieldDef -> Maybe HaskellName
+foreignReference field = case fieldReference field of
+    ForeignRef ref -> Just ref
+    _              -> Nothing
+
 
 -- fieldSqlType at parse time can be an Exp
 -- This helps delay setting fieldSqlType until lift time
@@ -176,7 +187,7 @@ setEmbedField :: EntityMap -> FieldDef -> FieldDef
 setEmbedField allEntities field = field
   { fieldReference = case fieldReference field of
       NoReference -> case mEmbedded allEntities (fieldType field) of
-          Nothing -> NoReference
+          Nothing -> maybe NoReference (ForeignRef . HaskellName) $ stripId $ fieldType field
           Just em -> EmbeddedRef em
       existing@_   -> existing
   }
@@ -186,14 +197,14 @@ mkEntityDefSqlTypeExp allEntities ent = EntityDefSqlTypeExp ent
     $ (map getSqlType $ entityFields ent)
   where
     getSqlType field = maybe
-        (defaultSqlTypeExp $ fieldType field)
+        (defaultSqlTypeExp field)
         (SqlType' . SqlOther)
         (listToMaybe $ mapMaybe (stripPrefix "sqltype=") $ fieldAttrs field)
 
 
     -- In the case of embedding, there won't be any datatype created yet.
     -- We just use SqlString, as the data will be serialized to JSON.
-    defaultSqlTypeExp ftype
+    defaultSqlTypeExp field
         | isJust (mEmbedded allEntities ftype) = SqlType' SqlString
         | isReference = SqlType' SqlInt64
         | otherwise =
@@ -209,7 +220,8 @@ mkEntityDefSqlTypeExp allEntities ent = EntityDefSqlTypeExp ent
                 FTList _ -> SqlType' SqlString
                 _ -> SqlTypeExp ftype
       where
-        isReference = isJust $ stripId ftype
+        isReference = maybe False (const True) (foreignReference field) 
+        ftype = fieldType field
 
 -- | Create data types and appropriate 'PersistEntity' instances for the given
 -- 'EntityDef's. Works well with the persist quasi-quoter.
@@ -324,10 +336,10 @@ dataTypeDec mps t =
     DataD [] nameFinal paramsFinal constrs
     $ map (mkName . unpack) $ entityDerives t
   where
-    mkCol x FieldDef {..} =
+    mkCol x fd@FieldDef {..} =
         (mkName $ unpack $ recName mps x $ unHaskellName fieldHaskell,
          if fieldStrict then IsStrict else NotStrict,
-         pairToType mps backend (fieldType, nullable fieldAttrs)
+         pairToType mps backend (fd, nullable fieldAttrs)
         )
     (nameFinal, paramsFinal)
         | mpsGeneric mps = (nameG, [PlainTV backend])
@@ -343,7 +355,7 @@ dataTypeDec mps t =
 
     sumCon fd = NormalC
         (sumConstrName mps t fd)
-        [(NotStrict, pairToType mps backend (fieldType fd, NotNullable))]
+        [(NotStrict, pairToType mps backend (fd, NotNullable))]
 
 sumConstrName :: MkPersistSettings -> EntityDef -> FieldDef -> Name
 sumConstrName mps t FieldDef {..} = mkName $ unpack $ concat
@@ -369,7 +381,7 @@ entityUpdates =
 uniqueTypeDec :: MkPersistSettings -> EntityDef -> Dec
 uniqueTypeDec mps t =
     DataInstD [] ''Unique
-        [genericDataType mps (unHaskellName $ entityHaskell t) $ VarT backend]
+        [genericDataType mps (entityHaskell t) $ VarT backend]
             (map (mkUnique mps backend t) $ entityUniques t)
             []
   where
@@ -384,15 +396,15 @@ mkUnique mps backend t (UniqueDef (HaskellName constr) _ fields attrs) =
 
     force = "!force" `elem` attrs
 
-    go :: (FieldType, IsNullable) -> (Strict, Type)
+    go :: (FieldDef, IsNullable) -> (Strict, Type)
     go (_, Nullable _) | not force = error nullErrMsg
-    go (ft, y) = (NotStrict, pairToType mps backend (ft, y))
+    go (fd, y) = (NotStrict, pairToType mps backend (fd, y))
 
-    lookup3 :: Text -> [FieldDef] -> (FieldType, IsNullable)
+    lookup3 :: Text -> [FieldDef] -> (FieldDef, IsNullable)
     lookup3 s [] =
         error $ unpack $ "Column not found: " ++ s ++ " in unique " ++ constr
-    lookup3 x (FieldDef {..}:rest)
-        | x == unHaskellName fieldHaskell = (fieldType, nullable fieldAttrs)
+    lookup3 x (fd@FieldDef {..}:rest)
+        | x == unHaskellName fieldHaskell = (fd, nullable fieldAttrs)
         | otherwise = lookup3 x rest
 
     nullErrMsg =
@@ -407,11 +419,11 @@ mkUnique mps backend t (UniqueDef (HaskellName constr) _ fields attrs) =
 
 pairToType :: MkPersistSettings
            -> Name -- ^ backend
-           -> (FieldType, IsNullable)
+           -> (FieldDef, IsNullable)
            -> Type
-pairToType mps backend (s, Nullable ByMaybeAttr) =
-  ConT ''Maybe `AppT` idType mps backend s
-pairToType mps backend (s, _) = idType mps backend s
+pairToType mps backend (fd, Nullable ByMaybeAttr) =
+  ConT ''Maybe `AppT` idType mps backend fd
+pairToType mps backend (fd, _) = idType mps backend fd
 
 backendDataType :: MkPersistSettings -> Type
 backendDataType mps
@@ -419,22 +431,23 @@ backendDataType mps
     | otherwise = mpsBackend mps
 
 genericDataType :: MkPersistSettings
-                -> Text -- ^ entity name
+                -> HaskellName -- ^ entity name
                 -> Type -- ^ backend
                 -> Type
-genericDataType mps typ' backend
+genericDataType mps (HaskellName typ') backend
     | mpsGeneric mps = ConT (mkName $ unpack $ typ' ++ "Generic") `AppT` backend
     | otherwise = ConT $ mkName $ unpack typ'
 
-idType :: MkPersistSettings -> Name -> FieldType -> Type
-idType mps backend typ =
-    case stripId typ of
+idType :: MkPersistSettings -> Name -> FieldDef -> Type
+idType mps backend fd =
+    case foreignReference fd of
         Just typ' ->
             ConT ''KeyBackend
             `AppT` backend'
             `AppT` genericDataType mps typ' (VarT backend)
         Nothing -> ftToType typ
   where
+    typ = fieldType fd
     backend'
         | mpsGeneric mps = VarT backend
         | otherwise = mpsBackend mps
@@ -646,31 +659,34 @@ mkLensClauses mps t = do
 mkEntity :: MkPersistSettings -> EntityDef -> Q [Dec]
 mkEntity mps t = do
     t' <- lift t
-    let nameT = unHaskellName $ entityHaskell t
+    let entName = entityHaskell t
+    let nameT = unHaskellName entName
     let nameS = unpack nameT
-    let clazz = ConT ''PersistEntity `AppT` genericDataType mps (unHaskellName $ entityHaskell t) (VarT $ mkName "backend")
+    let clazz = ConT ''PersistEntity `AppT` genericDataType mps entName (VarT $ mkName "backend")
     tpf <- mkToPersistFields mps nameS t
     fpv <- mkFromPersistValues mps t
     utv <- mkUniqueToValues $ entityUniques t
     puk <- mkUniqueKeys t
     fkc <- mapM (mkForeignKeysComposite mps t) $ entityForeigns t
+
+    let primaryField = FieldDef
+          { fieldHaskell = HaskellName "Id"
+          , fieldDB = entityID t
+          , fieldType = FTTypeCon Nothing $ unHaskellName entName ++ "Id"
+          , fieldSqlType = maybe SqlInt64 (const $ SqlOther "Primary Key") $ entityPrimary t
+          -- the primary field is actually a reference to the entity
+          , fieldReference = ForeignRef entName
+          , fieldAttrs = []
+          , fieldStrict = True
+          }
     
-    fields <- mapM (mkField mps t) $ FieldDef
-        { fieldHaskell = HaskellName "Id"
-        , fieldDB = entityID t
-        , fieldType = FTTypeCon Nothing $ unHaskellName (entityHaskell t) ++ "Id"
-        , fieldSqlType = SqlInt64
-        , fieldReference = ForeignRef $ entityHaskell t
-        , fieldAttrs = []
-        , fieldStrict = True
-        }
-        : entityFields t
+    fields <- mapM (mkField mps t) $ primaryField : entityFields t
     toFieldNames <- mkToFieldNames $ entityUniques t
 
     let addSyn -- FIXME maybe remove this
             | mpsGeneric mps = (:) $
                 TySynD (mkName nameS) [] $
-                    genericDataType mps nameT $ mpsBackend mps
+                    genericDataType mps entName $ mpsBackend mps
             | otherwise = id
 
     lensClauses <- mkLensClauses mps t
@@ -679,7 +695,7 @@ mkEntity mps t = do
 
     return $ addSyn $
        dataTypeDec mps t : mconcat fkc `mappend`
-      ([ TySynD (mkName $ unpack $ unHaskellName (entityHaskell t) ++ "Id") [] $
+      ([ TySynD (mkName $ unpack $ unHaskellName entName ++ "Id") [] $
             ConT ''KeyBackend `AppT` mpsBackend mps `AppT` ConT (mkName nameS)
       , InstanceD [] clazz $
         [ uniqueTypeDec mps t
@@ -692,7 +708,7 @@ mkEntity mps t = do
         , DataInstD
             []
             ''EntityField
-            [ genericDataType mps nameT $ VarT $ mkName "backend"
+            [ genericDataType mps entName $ VarT $ mkName "backend"
             , VarT $ mkName "typ"
             ]
             (map fst fields)
@@ -702,13 +718,13 @@ mkEntity mps t = do
             ''PersistEntityBackend
 #if MIN_VERSION_template_haskell(2,9,0)
             (TySynEqn
-               [genericDataType mps (unHaskellName $ entityHaskell t) $ VarT $ mkName "backend"]
+               [genericDataType mps (unHaskellName entName) $ VarT $ mkName "backend"]
                (backendDataType mps))
 #else
-            [genericDataType mps (unHaskellName $ entityHaskell t) $ VarT $ mkName "backend"]
+            [genericDataType mps entName $ VarT $ mkName "backend"]
             (backendDataType mps)
 #endif
-        , FunD 'persistIdField [Clause [] (NormalB $ ConE $ mkName $ unpack $ unHaskellName (entityHaskell t) ++ "Id") []]
+        , FunD 'persistIdField [Clause [] (NormalB $ ConE $ mkName $ unpack $ unHaskellName entName ++ "Id") []]
         , FunD 'fieldLens lensClauses
         ]
       ] `mappend` lenses)
@@ -736,9 +752,9 @@ mkLenses mps ent = fmap mconcat $ forM (entityFields ent) $ \field -> do
         -- values
         backend1 = mkName "backend"
         backend2 = mkName "backend"
-        aT = pairToType mps backend1 (fieldType field, nullable $ fieldAttrs field)
-        bT = pairToType mps backend2 (fieldType field, nullable $ fieldAttrs field)
-        mkST backend = genericDataType mps (unHaskellName $ entityHaskell ent) (VarT backend)
+        aT = pairToType mps backend1 (field, nullable $ fieldAttrs field)
+        bT = pairToType mps backend2 (field, nullable $ fieldAttrs field)
+        mkST backend = genericDataType mps (entityHaskell ent) (VarT backend)
         sT = mkST backend1
         tT = mkST backend2
         t1 `arrow` t2 = ArrowT `AppT` t1 `AppT` t2
@@ -827,8 +843,7 @@ persistFieldFromEntity mps e = do
             ]
         ]
     where
-      typ = genericDataType mps (pack entityName) $ VarT $ mkName "backend"
-      entityName = (unpack $ unHaskellName $ entityHaskell e)
+      typ = genericDataType mps (entityHaskell e) $ VarT $ mkName "backend"
       entFields = entityFields e
       columnNames  = map (unpack . unHaskellName . fieldHaskell) entFields
       maybeColumns = map ((== Nullable ByMaybeAttr) . nullable . fieldAttrs) entFields
@@ -851,7 +866,7 @@ mkSave name' defs' = do
            ]
 
 data Dep = Dep
-    { depTarget :: Text
+    { depTarget :: HaskellName
     , depSourceTable :: HaskellName
     , depSourceField :: HaskellName
     , depSourceNull  :: IsNullable
@@ -868,8 +883,8 @@ mkDeleteCascade mps defs = do
         concatMap getDeps' $ entityFields $ fixEntityDef def
       where
         getDeps' :: FieldDef -> [Dep]
-        getDeps' FieldDef {..} =
-            case stripId fieldType of
+        getDeps' field@FieldDef {..} =
+            case foreignReference field of
                 Just f ->
                      return Dep
                         { depTarget = f
@@ -880,7 +895,7 @@ mkDeleteCascade mps defs = do
                 Nothing -> []
     go :: [Dep] -> EntityDef -> Q Dec
     go allDeps EntityDef{entityHaskell = name} = do
-        let deps = filter (\x -> depTarget x == unHaskellName name) allDeps
+        let deps = filter (\x -> depTarget x == name) allDeps
         key <- newName "key"
         let del = VarE 'delete
         let dcw = VarE 'deleteCascadeWhere
@@ -907,7 +922,7 @@ mkDeleteCascade mps defs = do
             stmts = map mkStmt deps `mappend`
                     [NoBindS $ del `AppE` VarE key]
 
-        let entityT = genericDataType mps (unHaskellName name) $ VarT $ mkName "backend"
+        let entityT = genericDataType mps name $ VarT $ mkName "backend"
 
         return $
             InstanceD
@@ -1183,7 +1198,7 @@ mkField mps et cd = do
             then ConT ''Maybe `AppT` typ
             else typ
     typ =
-        case stripId $ fieldType cd of
+        case foreignReference cd of
             Just ft ->
                  ConT ''KeyBackend
                     `AppT` (if mpsGeneric mps
@@ -1236,7 +1251,7 @@ mkJSON mps def = do
         $ entityFields def
 
     let conName = mkName $ unpack $ unHaskellName $ entityHaskell def
-        typ = genericDataType mps (unHaskellName $ entityHaskell def) $ VarT $ mkName "backend"
+        typ = genericDataType mps (entityHaskell def) $ VarT $ mkName "backend"
         toJSONI = InstanceD
             []
             (ConT ''ToJSON `AppT` typ)

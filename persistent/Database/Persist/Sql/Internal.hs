@@ -35,7 +35,7 @@ mkColumns allDefs t =
             (def $ fieldAttrs fd)
             Nothing
             (maxLen $ fieldAttrs fd)
-            (ref (fieldDB fd) (fieldType fd) (fieldAttrs fd))
+            (ref (fieldDB fd) (fieldReference fd) (fieldAttrs fd))
 
     def :: [Attr] -> Maybe Text
     def [] = Nothing
@@ -54,12 +54,12 @@ mkColumns allDefs t =
         | otherwise = maxLen as
 
     ref :: DBName
-        -> FieldType
+        -> ReferenceDef
         -> [Attr]
         -> Maybe (DBName, DBName) -- table name, constraint name
-    ref c ft []
-        | Just f <- stripId ft =
-            Just (resolveTableName allDefs $ HaskellName f, refName tn c)
+    ref c fe []
+        | ForeignRef f <- fe =
+            Just (resolveTableName allDefs f, refName tn c)
         | otherwise = Nothing
     ref _ _ ("noreference":_) = Nothing
     ref c _ (a:_)

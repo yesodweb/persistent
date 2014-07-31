@@ -7,7 +7,6 @@ module Database.Persist.Quasi
     , PersistSettings (..)
     , upperCaseSettings
     , lowerCaseSettings
-    , stripId
     , nullable
 #if TEST
     , Token (..)
@@ -377,10 +376,6 @@ takeForeign _ tableName _ xs = error $ "invalid foreign key constraint on table[
 takeDerives :: [Text] -> Maybe [Text]
 takeDerives ("deriving":rest) = Just rest
 takeDerives _ = Nothing
-
-stripId :: FieldType -> Maybe Text
-stripId (FTTypeCon Nothing t) = T.stripSuffix "Id" t
-stripId _ = Nothing
 
 nullable :: [Text] -> IsNullable
 nullable s
