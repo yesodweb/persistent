@@ -133,7 +133,6 @@ import Data.Time.Calendar (Day(..))
 #else
 import Data.Attoparsec.Number
 #endif
-import Data.Char (toUpper)
 import Data.Word (Word16)
 import Data.Monoid (mappend)
 import Control.Monad.Trans.Reader (ask, runReaderT)
@@ -215,7 +214,7 @@ keyToText k = throw $ PersistInvalidField $ T.pack $ "Invalid Key (expected Pers
 -- | Convert a Text to a Key
 readMayKey :: Text -> Maybe (KeyBackend MongoBackend entity)
 readMayKey str =
-  case (reads $ (T.unpack str)) :: [(DB.ObjectId,String)] of
+  case filter (null . snd) $ reads $ T.unpack str :: [(DB.ObjectId,String)] of
     (parsed,_):[] -> Just $ Key $ PersistObjectId $ Serialize.encode parsed
     _ -> Nothing
 

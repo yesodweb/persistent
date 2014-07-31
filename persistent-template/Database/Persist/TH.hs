@@ -220,11 +220,11 @@ mkPersistSettings :: Type -- ^ Value for 'mpsBackend'
                   -> MkPersistSettings
 mkPersistSettings t = MkPersistSettings
     { mpsBackend = t
-    , mpsGeneric = True -- FIXME switch default to False in the future
+    , mpsGeneric = False
     , mpsPrefixFields = True
     , mpsEntityJSON = Just EntityJSON
-        { entityToJSON = 'keyValueEntityToJSON
-        , entityFromJSON = 'keyValueEntityFromJSON
+        { entityToJSON = 'entityIdToJSON
+        , entityFromJSON = 'entityIdFromJSON
         }
     , mpsGenerateLenses = False
     }
@@ -233,11 +233,12 @@ mkPersistSettings t = MkPersistSettings
 sqlSettings :: MkPersistSettings
 sqlSettings = mkPersistSettings $ ConT ''SqlBackend
 
--- | Same as 'sqlSettings', but set 'mpsGeneric' to @False@.
+-- | Same as 'sqlSettings'.
 --
 -- Since 1.1.1
 sqlOnlySettings :: MkPersistSettings
-sqlOnlySettings = sqlSettings { mpsGeneric = False }
+sqlOnlySettings = sqlSettings
+{-# DEPRECATED sqlOnlySettings "use sqlSettings" #-}
 
 recNameNoUnderscore :: MkPersistSettings -> Text -> Text -> Text
 recNameNoUnderscore mps dt f
