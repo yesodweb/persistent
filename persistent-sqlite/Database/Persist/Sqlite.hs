@@ -106,7 +106,7 @@ prepare' conn sql = do
         , stmtQuery = withStmt' conn stmt
         }
 
-insertSql' :: EntityDef SqlType -> [PersistValue] -> InsertSqlResult
+insertSql' :: EntityDef -> [PersistValue] -> InsertSqlResult
 insertSql' ent vals =
   case entityPrimary ent of
     Just _ ->
@@ -178,9 +178,9 @@ showSqlType SqlBlob = "BLOB"
 showSqlType SqlBool = "BOOLEAN"
 showSqlType (SqlOther t) = t
 
-migrate' :: [EntityDef a]
+migrate' :: [EntityDef]
          -> (Text -> IO Statement)
-         -> EntityDef SqlType
+         -> EntityDef
          -> IO (Either [Text] [(Bool, Text)])
 migrate' allDefs getter val = do
     let (cols, uniqs, _) = mkColumns allDefs val
@@ -207,15 +207,15 @@ migrate' allDefs getter val = do
 
 -- | Check if a column name is listed as the "safe to remove" in the entity
 -- list.
-safeToRemove :: EntityDef a -> DBName -> Bool
+safeToRemove :: EntityDef -> DBName -> Bool
 safeToRemove def (DBName colName)
     = any (elem "SafeToRemove" . fieldAttrs)
     $ filter ((== (DBName colName)) . fieldDB)
     $ entityFields def
 
-getCopyTable :: [EntityDef a]
+getCopyTable :: [EntityDef]
              -> (Text -> IO Statement)
-             -> EntityDef SqlType
+             -> EntityDef
              -> IO [(Bool, Text)]
 getCopyTable allDefs getter val = do
     stmt <- getter $ T.concat [ "PRAGMA table_info(", escape table, ")" ]
@@ -269,7 +269,7 @@ getCopyTable allDefs getter val = do
         , escape tableTmp
         ]
 
-mkCreateTable :: Bool -> EntityDef a -> ([Column], [UniqueDef]) -> Text
+mkCreateTable :: Bool -> EntityDef -> ([Column], [UniqueDef]) -> Text
 mkCreateTable isTemp entity (cols, uniqs) =
   case entityPrimary entity of
     Just _ ->

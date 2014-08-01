@@ -190,7 +190,7 @@ insrepHelper command (Key k) val = do
         ]
     vals = k : map toPersistValue (toPersistFields val)
 
-updateFieldDef :: PersistEntity v => Update v -> FieldDef SqlType
+updateFieldDef :: PersistEntity v => Update v -> FieldDef
 updateFieldDef (Update f _ _) = persistFieldDef f
 
 updatePersistValue :: Update v -> PersistValue

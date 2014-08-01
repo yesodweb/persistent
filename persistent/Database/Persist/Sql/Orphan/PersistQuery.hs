@@ -205,7 +205,7 @@ updateWhereCount filts upds = do
     go' conn (x, pu) = go'' (connEscapeName conn x) pu
     go x = (fieldDB $ updateFieldDef x, updateUpdate x)
 
-updateFieldDef :: PersistEntity v => Update v -> FieldDef SqlType
+updateFieldDef :: PersistEntity v => Update v -> FieldDef
 updateFieldDef (Update f _ _) = persistFieldDef f
 updateFieldDef _ = error "BackendUpdate not implemented"
 
@@ -371,6 +371,7 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
 
 updatePersistValue :: Update v -> PersistValue
 updatePersistValue (Update _ v _) = toPersistValue v
+updatePersistValue _ = error "BackendUpdate not implemented"
 
 filterClause :: PersistEntity val
              => Bool -- ^ include table name?

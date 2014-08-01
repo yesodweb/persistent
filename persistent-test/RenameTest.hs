@@ -24,6 +24,9 @@ import Control.Monad.Trans.Resource (runResourceT)
 
 import Init
 
+-- persistent used to not allow types with an "Id" suffix
+type TextId = Text
+
 -- Test lower case names
 #if WITH_MONGODB
 mkPersist persistSettings [persistLowerCase|
@@ -41,6 +44,7 @@ LowerCaseTable id=my_id
 RefTable
     someVal Int sql=something_else
     lct LowerCaseTableId
+    text TextId
     UniqueRefTable someVal
 |]
 

@@ -12,11 +12,11 @@ import Data.Char (isSpace)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Monoid (Monoid, mappend, mconcat)
-import Data.Maybe (mapMaybe, listToMaybe)
+import Data.Maybe (mapMaybe, listToMaybe, fromMaybe)
 import Database.Persist.Sql.Types
 
 -- | Create the list of columns for the given entity.
-mkColumns :: [EntityDef a] -> EntityDef SqlType -> ([Column], [UniqueDef], [ForeignDef])
+mkColumns :: [EntityDef] -> EntityDef -> ([Column], [UniqueDef], [ForeignDef])
 mkColumns allDefs t =
     (cols, entityUniques t, entityForeigns t)
   where
@@ -26,19 +26,16 @@ mkColumns allDefs t =
     tn :: DBName
     tn = entityDB t
 
-    go :: FieldDef SqlType -> Column
+    go :: FieldDef -> Column
     go fd =
         Column
             (fieldDB fd)
             (nullable (fieldAttrs fd) /= NotNullable || entitySum t)
-            (maybe
-                (fieldSqlType fd)
-                SqlOther
-                (listToMaybe $ mapMaybe (T.stripPrefix "sqltype=") $ fieldAttrs fd))
+            (fieldSqlType fd)
             (def $ fieldAttrs fd)
             Nothing
             (maxLen $ fieldAttrs fd)
-            (ref (fieldDB fd) (fieldType fd) (fieldAttrs fd))
+            (ref (fieldDB fd) (fieldReference fd) (fieldAttrs fd))
 
     def :: [Attr] -> Maybe Text
     def [] = Nothing
@@ -57,12 +54,12 @@ mkColumns allDefs t =
         | otherwise = maxLen as
 
     ref :: DBName
-        -> FieldType
+        -> ReferenceDef
         -> [Attr]
         -> Maybe (DBName, DBName) -- table name, constraint name
-    ref c ft []
-        | Just f <- stripId ft =
-            Just (resolveTableName allDefs $ HaskellName f, refName tn c)
+    ref c fe []
+        | ForeignRef f <- fe =
+            Just (resolveTableName allDefs f, refName tn c)
         | otherwise = Nothing
     ref _ _ ("noreference":_) = Nothing
     ref c _ (a:_)
@@ -74,7 +71,7 @@ refName :: DBName -> DBName -> DBName
 refName (DBName table) (DBName column) =
     DBName $ mconcat [table, "_", column, "_fkey"]
 
-resolveTableName :: [EntityDef a] -> HaskellName -> DBName
+resolveTableName :: [EntityDef] -> HaskellName -> DBName
 resolveTableName [] (HaskellName hn) = error $ "Table not found: " `mappend` T.unpack hn
 resolveTableName (e:es) hn
     | entityHaskell e == hn = entityDB e

@@ -104,12 +104,12 @@ data WhyNullable = ByMaybeAttr
                  | ByNullableAttr
                   deriving (Eq, Show)
 
-data EntityDef sqlType = EntityDef
+data EntityDef = EntityDef
     { entityHaskell :: !HaskellName
     , entityDB      :: !DBName
     , entityID      :: !DBName
     , entityAttrs   :: ![Attr]
-    , entityFields  :: ![FieldDef sqlType]
+    , entityFields  :: ![FieldDef]
     , entityPrimary :: Maybe PrimaryDef
     , entityUniques :: ![UniqueDef]
     , entityForeigns:: ![ForeignDef]
@@ -117,7 +117,7 @@ data EntityDef sqlType = EntityDef
     , entityExtra   :: !(Map Text [ExtraLine])
     , entitySum     :: !Bool
     }
-    deriving (Show, Eq, Read, Ord, Functor)
+    deriving (Show, Eq, Read, Ord)
 
 type ExtraLine = [Text]
 
@@ -135,16 +135,52 @@ data FieldType
     | FTList FieldType
   deriving (Show, Eq, Read, Ord)
 
-data FieldDef sqlType = FieldDef
-    { fieldHaskell  :: !HaskellName -- ^ name of the field
-    , fieldDB       :: !DBName
-    , fieldType     :: !FieldType
-    , fieldSqlType  :: !sqlType
-    , fieldAttrs    :: ![Attr]   -- ^ user annotations for a field
-    , fieldStrict   :: !Bool      -- ^ a strict field in the data type. Default: true
-    , fieldEmbedded :: Maybe (EntityDef ()) -- ^ indicates that the field uses an embedded entity
+data FieldDef = FieldDef
+    { fieldHaskell   :: !HaskellName -- ^ name of the field
+    , fieldDB        :: !DBName
+    , fieldType      :: !FieldType
+    , fieldSqlType   :: !SqlType
+    , fieldAttrs     :: ![Attr]   -- ^ user annotations for a field
+    , fieldStrict    :: !Bool      -- ^ a strict field in the data type. Default: true
+    , fieldReference :: !ReferenceDef
     }
-    deriving (Show, Eq, Read, Ord, Functor)
+    deriving (Show, Eq, Read, Ord)
+
+data ReferenceDef = ForeignRef !HaskellName
+                  | EmbeddedRef EmbeddedDef
+                  | NoReference
+                  deriving (Show, Eq, Read, Ord)
+
+-- | An EmbeddedDef is the same as an EntityDef
+-- But it is only used for fieldReference
+-- so it only has data needed for embedding
+data EmbeddedDef = EmbeddedDef
+    { embeddedHaskell :: !HaskellName
+    , embeddedFields  :: ![EmbeddedFieldDef]
+    } deriving (Show, Eq, Read, Ord)
+
+-- | An EmbeddedFieldDef is the same as a FieldDef
+-- But it is only used for embeddedFields
+-- so it only has data needed for embedding
+data EmbeddedFieldDef = EmbeddedFieldDef
+    { emFieldDB       :: !DBName
+    , emFieldEmbedded :: Maybe EmbeddedDef
+    }
+    deriving (Show, Eq, Read, Ord)
+
+toEmbeddedDef :: EntityDef -> EmbeddedDef
+toEmbeddedDef ent = EmbeddedDef
+  { embeddedHaskell = entityHaskell ent
+  , embeddedFields = map toEmbeddedFieldDef $ entityFields ent
+  }
+
+toEmbeddedFieldDef :: FieldDef -> EmbeddedFieldDef
+toEmbeddedFieldDef field =
+  EmbeddedFieldDef { emFieldDB       = fieldDB field
+                   , emFieldEmbedded = case fieldReference field of
+                       EmbeddedRef em -> Just em
+                       _ -> Nothing
+                   }
 
 data UniqueDef = UniqueDef
     { uniqueHaskell :: !HaskellName
