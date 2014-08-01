@@ -187,7 +187,11 @@ setEmbedField :: EntityMap -> FieldDef -> FieldDef
 setEmbedField allEntities field = field
   { fieldReference = case fieldReference field of
       NoReference -> case mEmbedded allEntities (fieldType field) of
-          Nothing -> maybe NoReference (ForeignRef . HaskellName) $ stripId $ fieldType field
+          Nothing -> case stripId $ fieldType field of
+              Nothing -> NoReference
+              Just name -> if M.member (HaskellName name) allEntities
+                  then ForeignRef $ HaskellName name
+                  else NoReference
           Just em -> EmbeddedRef em
       existing@_   -> existing
   }
@@ -220,7 +224,7 @@ mkEntityDefSqlTypeExp allEntities ent = EntityDefSqlTypeExp ent
                 FTList _ -> SqlType' SqlString
                 _ -> SqlTypeExp ftype
       where
-        isReference = maybe False (const True) (foreignReference field) 
+        isReference = isJust (foreignReference field)
         ftype = fieldType field
 
 -- | Create data types and appropriate 'PersistEntity' instances for the given
