@@ -39,7 +39,8 @@ module Database.Persist.MongoDB
 
     -- * MongoDB specific Filters
     -- $filters
-    , nestEq, anyEq, multiEq, nestBsonEq, anyBsonEq, multiBsonEq
+    , nestEq, nestNe, nestGe, nestLe, nestIn, nestNotIn
+    , anyEq, multiEq, nestBsonEq, anyBsonEq, multiBsonEq
     , (=~.), (?=~.), MongoRegex
     , (->.), (~>.), (?&->.), (?&~>.), (&->.), (&~>.)
     -- non-operator forms of filters
@@ -1118,6 +1119,12 @@ infixr 6 ?&->.
 infixr 6 ->.
 
 infixr 4 `nestEq`
+infixr 4 `nestNe`
+infixr 4 `nestGe`
+infixr 4 `nestLe`
+infixr 4 `nestIn`
+infixr 4 `nestNotIn`
+
 infixr 4 `anyEq`
 infixr 4 `multiEq`
 infixr 4 `nestBsonEq`
@@ -1130,13 +1137,25 @@ infixr 4 `anyBsonEq`
 -- using this as the only query filter is similar to the following in the mongoDB shell
 --
 -- > db.Collection.find({"object.field": item})
-nestEq :: forall record typ.
+nestEq, nestNe, nestGe, nestLe, nestIn, nestNotIn :: forall record typ.
+    ( PersistField typ , PersistEntityBackend record ~ MongoBackend)
+    => NestedField record typ
+    -> typ
+    -> Filter record
+nestEq = nestedOp Eq
+nestNe = nestedOp Ne
+nestGe = nestedOp Ge
+nestLe = nestedOp Le
+nestIn = nestedOp In
+nestNotIn = nestedOp NotIn
+
+nestedOp :: forall record typ.
        ( PersistField typ
        , PersistEntityBackend record ~ MongoBackend
-       ) => NestedField record typ -> typ -> Filter record
-nf `nestEq` v = BackendFilter $ NestedFilter
+       ) => PersistFilter -> NestedField record typ -> typ -> Filter record
+nestedOp op nf v = BackendFilter $ NestedFilter
                     { nestedField = nf
-                    , nestedValue = PersistOperator (Left v) Eq
+                    , nestedValue = PersistOperator (Left v) op
                     }
 
 -- | same as `nestEq`, but give a BSON Value

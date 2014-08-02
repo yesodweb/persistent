@@ -238,20 +238,24 @@ specs = describe "embedded entities" $ do
               , (HasEmbed "embed" (OnlyName "2"))
               ]
         contK <- insert container
+        let contEnt = Entity contK container
         Just meq <- selectFirst [HasListEmbedList `anyEq` HasEmbed "embed" (OnlyName "1")] []
-        meq @== (Entity contK container)
+        meq @== contEnt
 
         Just neq1 <- selectFirst [HasListEmbedList ->. HasEmbedName `nestEq` "embed"] []
-        neq1 @== (Entity contK container)
+        neq1 @== contEnt
+
+        Just nne1 <- selectFirst [HasListEmbedList ->. HasEmbedName `nestNe` "notEmbed"] []
+        nne1 @== contEnt
 
         Just neq2 <- selectFirst [HasListEmbedList ~>. HasEmbedEmbed &->. OnlyNameName `nestEq` "1"] []
-        neq2 @== (Entity contK container)
+        neq2 @== contEnt
 
         Just nbq1 <- selectFirst [HasListEmbedList ->. HasEmbedName `nestBsonEq` String "embed"] []
-        nbq1 @== (Entity contK container)
+        nbq1 @== contEnt
 
         Just nbq2 <- selectFirst [HasListEmbedList ~>. HasEmbedEmbed &->. OnlyNameName `nestBsonEq` String "1"] []
-        nbq2 @== (Entity contK container)
+        nbq2 @== contEnt
 
 
     it "regexp match" $ db $ do
