@@ -15,11 +15,12 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (ReaderT, ask, runReaderT)
 import Data.Acquire (with)
 
-class (PersistStore backend, PersistEntity a, backend ~ PersistEntityBackend a) => DeleteCascade a backend where
-    deleteCascade :: MonadIO m => Key a -> ReaderT backend m ()
+class (PersistStore backend, PersistEntity record, backend ~ PersistEntityBackend record)
+  => DeleteCascade record backend where
+    deleteCascade :: MonadIO m => Key record -> ReaderT backend m ()
 
-deleteCascadeWhere :: (MonadIO m, DeleteCascade a backend, PersistQuery backend)
-                   => [Filter a] -> ReaderT backend m ()
+deleteCascadeWhere :: (MonadIO m, DeleteCascade record backend, PersistQuery backend)
+                   => [Filter record] -> ReaderT backend m ()
 deleteCascadeWhere filts = do
     srcRes <- selectKeysRes filts []
     conn <- ask

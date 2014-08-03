@@ -71,20 +71,25 @@ instance PersistQuery Connection where
                     Right row -> return row
 
         t = entityDef $ dummyFromFilts filts
-        fromPersistValues' (PersistInt64 x:xs) = 
+
+        fromPersistValues' (kpv:xs) = -- oracle returns Double 
             case fromPersistValues xs of
                 Left e -> Left e
-                Right xs' -> Right (Entity (Key $ PersistInt64 x) xs')
-        fromPersistValues' (PersistDouble x:xs) = -- oracle returns Double 
-            case fromPersistValues xs of
-                Left e -> Left e
-                Right xs' -> Right (Entity (Key $ PersistInt64 (truncate x)) xs') -- convert back to int64
+                Right xs' ->
+                    case keyFromValues [kpv] of
+                        Left _ -> error $ "fromPersistValues': keyFromValues failed on " ++ show kpv
+                        Right k -> Right (Entity k xs')
+
+
         fromPersistValues' xs = Left $ T.pack ("error in fromPersistValues' xs=" ++ show xs)
 
         fromPersistValuesComposite' keyvals xs =
             case fromPersistValues xs of
                 Left e -> Left e
-                Right xs' -> Right (Entity (Key $ PersistList keyvals) xs')
+                Right xs' -> case keyFromValues keyvals of
+                    Left _ -> error "fromPersistValuesComposite': keyFromValues failed"
+                    Right key -> Right (Entity key xs')
+
 
         wher conn = if null filts
                     then ""
@@ -134,16 +139,22 @@ instance PersistQuery Connection where
                 [] -> ""
                 ords -> " ORDER BY " <> T.intercalate "," ords
 
-        parse xs = case entityPrimary t of
+        parse xs = do
+            keyvals <- case entityPrimary t of
                       Nothing -> 
                         case xs of
-                           [PersistInt64 x] -> return $ Key $ PersistInt64 x
-                           [PersistDouble x] -> return $ Key $ PersistInt64 (truncate x) -- oracle returns Double 
+                           [PersistInt64 x] -> return [PersistInt64 x]
+                           [PersistDouble x] -> return [PersistInt64 (truncate x)] -- oracle returns Double 
                            _ -> liftIO $ throwIO $ PersistMarshalError $ "Unexpected in selectKeys False: " <> T.pack (show xs)
                       Just pdef -> 
                            let pks = map fst $ primaryFields pdef
                                keyvals = map snd $ filter (\(a, _) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ entityFields t) xs
-                           in return $ Key $ PersistList keyvals
+                           in return keyvals
+            case keyFromValues keyvals of
+                Right k -> return k
+                Left _ -> error "selectKeysImpl: keyFromValues failed"
+
+
 
     deleteWhere filts = do
         _ <- deleteWhereCount filts

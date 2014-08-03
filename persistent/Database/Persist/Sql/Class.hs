@@ -282,7 +282,5 @@ instance PersistFieldSql Rational where
     sqlType _ = SqlNumeric 32 20   --  need to make this field big enough to handle Rational to Mumber string conversion for ODBC
 
 -- An embedded Entity
-instance PersistField entity => PersistFieldSql (Entity entity) where
+instance (PersistField record, PersistEntity record) => PersistFieldSql (Entity record) where
     sqlType _ = SqlString
-instance PersistFieldSql (KeyBackend SqlBackend a) where
-    sqlType _ = SqlInt64

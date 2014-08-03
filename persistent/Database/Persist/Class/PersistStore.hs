@@ -55,6 +55,11 @@ liftPersist f = do
     liftIO $ runReaderT f (persistBackend env)
 
 class PersistStore backend where
+    data BackendKey backend
+
+    backendKeyToValues :: BackendKey backend -> [PersistValue]
+    backendKeyFromValues :: [PersistValue] -> Either T.Text (BackendKey backend)
+
     -- | Get a record by identifier, if available.
     get :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
         => Key val -> ReaderT backend m (Maybe val)

@@ -2,6 +2,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE FlexibleContexts, StandaloneDeriving, UndecidableInstances #-}
 module Database.Persist.Class.PersistEntity
     ( PersistEntity (..)
     , Update (..)
@@ -9,7 +10,6 @@ module Database.Persist.Class.PersistEntity
     , SelectOpt (..)
     , Filter (..)
     , BackendSpecificFilter
-    , Key
     , Entity (..)
 
     , keyValueEntityToJSON, keyValueEntityFromJSON
@@ -37,35 +37,45 @@ import qualified Data.HashMap.Strict as HM
 --
 -- Some advanced type system capabilities are used to make this process type-safe.
 -- Persistent users usually don't need to understand the class associated data and functions.
-class PersistEntity record where
-    -- | An 'EntityField' is parameterised by the Haskell record it belongs to
-    -- and the additional type of that field
-    data EntityField record :: * -> *
-
-    -- | return meta-data for a given 'EntityField'
-    persistFieldDef :: EntityField record typ -> FieldDef
-
-    -- | Persistent allows multiple different backends
+class ( PersistField (Key record)
+      , Show (Key record), Read (Key record), Eq (Key record), Ord (Key record))
+  => PersistEntity record where
+    -- | Persistent allows multiple different backends (databases)
     type PersistEntityBackend record
 
-    -- | Unique keys besided the Key
-    data Unique record
+    -- | By default, a backend will automatically generate the key
+    -- Instead you can specify a Primary key made up of unique values.
+    data Key record
+    -- | a lower-level key operation
+    keyToValues :: Key record -> [PersistValue]
+    -- | a lower-level key operation
+    keyFromValues :: [PersistValue] -> Either Text (Key record)
+    -- | a meta-operation to retrieve the Key EntityField
+    persistIdField :: EntityField record (Key record)
 
     -- | retrieve the EntityDef meta-data for the record
     entityDef :: Monad m => m record -> EntityDef
 
-    -- | Get the database fields of a record
+    -- | An 'EntityField' is parameterised by the Haskell record it belongs to
+    -- and the additional type of that field
+    data EntityField record :: * -> *
+    -- | return meta-data for a given 'EntityField'
+    persistFieldDef :: EntityField record typ -> FieldDef
+    -- | A meta-operation to get the database fields of a record
     toPersistFields :: record -> [SomePersistField]
-
-    -- | Convert from database values to a Haskell record
+    -- | A lower-level operation to convert from database values to a Haskell record
     fromPersistValues :: [PersistValue] -> Either Text record
 
-    persistUniqueToFieldNames :: Unique record -> [(HaskellName, DBName)]
-    persistUniqueToValues :: Unique record -> [PersistValue]
+    -- | Unique keys besided the Key
+    data Unique record
+    -- | A meta operation to retrieve all the Unique keys
     persistUniqueKeys :: record -> [Unique record]
+    -- | A lower level operation
+    persistUniqueToFieldNames :: Unique record -> [(HaskellName, DBName)]
+    -- | A lower level operation
+    persistUniqueToValues :: Unique record -> [PersistValue]
 
-    persistIdField :: EntityField record (Key record)
-
+    -- | Use a PersistField as a lens
     fieldLens :: EntityField record field
               -> (forall f. Functor f => (field -> f field) -> Entity record -> f (Entity record))
 
@@ -109,11 +119,6 @@ data Filter record = forall typ. PersistField typ => Filter
     | BackendFilter
           (BackendSpecificFilter (PersistEntityBackend record) record)
 
--- | Helper wrapper, equivalent to @Key (PersistEntityBackend val) val@.
---
--- Since 1.1.0
-type Key record = KeyBackend (PersistEntityBackend record) record
-
 -- | Datatype that represents an entity, with both its 'Key' and
 -- its Haskell record representation.
 --
@@ -144,10 +149,14 @@ type Key record = KeyBackend (PersistEntityBackend record) record
 -- your query returns two entities (i.e. @(Entity backend a,
 -- Entity backend b)@), then you must you use @SELECT ??, ??
 -- WHERE ...@, and so on.
-data Entity entity =
-    Entity { entityKey :: Key entity
-           , entityVal :: entity }
-    deriving (Eq, Ord, Show, Read)
+data PersistEntity record => Entity record =
+    Entity { entityKey :: Key record
+           , entityVal :: record }
+
+deriving instance (PersistEntity record, Eq (Key record), Eq record) => Eq (Entity record)
+deriving instance (PersistEntity record, Ord (Key record), Ord record) => Ord (Entity record)
+deriving instance (PersistEntity record, Show (Key record), Show record) => Show (Entity record)
+deriving instance (PersistEntity record, Read (Key record), Read record) => Read (Entity record)
 
 -- | Predefined @toJSON@. The resulting JSON looks like
 -- @{\"key\": 1, \"value\": {\"name\": ...}}@.
@@ -158,7 +167,8 @@ data Entity entity =
 --   instance ToJSON User where
 --       toJSON = keyValueEntityToJSON
 -- @
-keyValueEntityToJSON :: ToJSON e => Entity e -> Value
+keyValueEntityToJSON :: (PersistEntity record, ToJSON record, ToJSON (Key record))
+                     => Entity record -> Value
 keyValueEntityToJSON (Entity key value) = object
     [ "key" .= key
     , "value" .= value
@@ -173,7 +183,8 @@ keyValueEntityToJSON (Entity key value) = object
 --   instance FromJSON User where
 --       parseJSON = keyValueEntityFromJSON
 -- @
-keyValueEntityFromJSON :: FromJSON e => Value -> Parser (Entity e)
+keyValueEntityFromJSON :: (PersistEntity record, FromJSON record, FromJSON (Key record))
+                       => Value -> Parser (Entity record)
 keyValueEntityFromJSON (Object o) = Entity
     <$> o .: "key"
     <*> o .: "value"
@@ -188,7 +199,7 @@ keyValueEntityFromJSON _ = fail "keyValueEntityFromJSON: not an object"
 --   instance ToJSON User where
 --       toJSON = entityIdToJSON
 -- @
-entityIdToJSON :: ToJSON e => Entity e -> Value
+entityIdToJSON :: (PersistEntity record, ToJSON record, ToJSON (Key record)) => Entity record -> Value
 entityIdToJSON (Entity key value) = case toJSON value of
     Object o -> Object $ HM.insert "id" (toJSON key) o
     x -> x
@@ -202,21 +213,22 @@ entityIdToJSON (Entity key value) = case toJSON value of
 --   instance FromJSON User where
 --       parseJSON = entityIdFromJSON
 -- @
-entityIdFromJSON :: FromJSON e => Value -> Parser (Entity e)
+entityIdFromJSON :: (PersistEntity record, FromJSON record, FromJSON (Key record)) => Value -> Parser (Entity record)
 entityIdFromJSON value@(Object o) = Entity <$> o .: "id" <*> parseJSON value
 entityIdFromJSON _ = fail "entityIdFromJSON: not an object"
 
-instance PersistField entity => PersistField (Entity entity) where
+instance (PersistEntity record, PersistField record, PersistField (Key record))
+  => PersistField (Entity record) where
     toPersistValue (Entity key value) = case toPersistValue value of
         (PersistMap alist) -> PersistMap ((idField, toPersistValue key) : alist)
         _ -> error $ T.unpack $ errMsg "expected PersistMap"
 
     fromPersistValue (PersistMap alist) = case after of
         [] -> Left $ errMsg $ "did not find " `mappend` idField `mappend` " field"
-        ("_id", k):afterRest ->
-            case fromPersistValue (PersistMap (before ++ afterRest)) of
-                Right record -> Right $ Entity (Key k) record
-                Left err     -> Left err
+        ("_id", kv):afterRest ->
+            fromPersistValue (PersistMap (before ++ afterRest)) >>= \record ->
+                keyFromValues [kv] >>= \k ->
+                    Right (Entity k record)
         _ -> Left $ errMsg $ "impossible id field: " `mappend` T.pack (show alist)
       where
         (before, after) = break ((== idField) . fst) alist

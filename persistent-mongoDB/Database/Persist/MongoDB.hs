@@ -159,7 +159,7 @@ lookupEnv key = do
 instance HasPersistBackend MongoBackend MongoBackend where
     persistBackend = id
 
-recordTypeFromKey :: KeyBackend MongoBackend v -> v
+recordTypeFromKey :: Key record -> record
 recordTypeFromKey _ = error "recordTypeFromKey"
 
 newtype NoOrphanNominalDiffTime = NoOrphanNominalDiffTime NominalDiffTime
@@ -197,7 +197,7 @@ data Connection = Connection DB.Pipe DB.Database
 type ConnectionPool = Pool.Pool Connection
 
 -- | ToPathPiece is used to convert a key to/from text
-instance PathPiece (KeyBackend MongoBackend entity) where
+instance PathPiece (BackendKey MongoBackend) where
     toPathPiece = keyToText
     fromPathPiece keyText = readMayKey $
         -- handle a JSON type prefix
@@ -206,17 +206,14 @@ instance PathPiece (KeyBackend MongoBackend entity) where
             Just ('o', prefixed) -> prefixed
             _ -> keyText
 
-keyToText :: KeyBackend MongoBackend entity -> Text
-keyToText (Key pOid@(PersistObjectId _)) = -- T.pack $ show $ Serialize.encode bsonId
-    let oid = persistObjectIdToDbOid pOid
-    in  T.pack $ show oid
-keyToText k = throw $ PersistInvalidField $ T.pack $ "Invalid Key (expected PersistObjectId): " ++ show k
+keyToText :: BackendKey MongoBackend -> Text
+keyToText = T.pack . show . unMongoBackendKey
 
 -- | Convert a Text to a Key
-readMayKey :: Text -> Maybe (KeyBackend MongoBackend entity)
+readMayKey :: Text -> Maybe (BackendKey MongoBackend)
 readMayKey str =
   case (reads $ (T.unpack str)) :: [(DB.ObjectId,String)] of
-    (parsed,_):[] -> Just $ Key $ PersistObjectId $ Serialize.encode parsed
+    (parsed,_):[] -> Just $ MongoBackendKey parsed
     _ -> Nothing
 
 
@@ -224,7 +221,7 @@ readMayKey str =
 --
 --   * avoids an orphan instance
 --   * works around a Persistent naming issue
-newtype Objectid = Objectid { unObjectId :: DB.ObjectId }
+newtype Objectid = Objectid { unObjectid :: DB.ObjectId }
                    deriving (Show, Read, Eq, Ord)
 
 -- | like 'genObjectId', but for 'Objectid'
@@ -232,7 +229,7 @@ genObjectid :: IO Objectid
 genObjectid = Objectid `liftM` DB.genObjectId
 
 instance PersistField Objectid where
-    toPersistValue = oidToPersistValue . unObjectId
+    toPersistValue = oidToPersistValue . unObjectid
     fromPersistValue oid@(PersistObjectId _) = Right . Objectid $ persistObjectIdToDbOid oid
     fromPersistValue (PersistByteString bs) = fromPersistValue (PersistObjectId bs)
     fromPersistValue _ = Left $ T.pack "expected PersistObjectId"
@@ -360,16 +357,16 @@ runMongoDBPoolDef :: (Trans.MonadIO m, MonadBaseControl IO m) => DB.Action m a -
 runMongoDBPoolDef = runMongoDBPool (DB.ConfirmWrites ["j" DB.=: True])
 
 filterByKey :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
-            => Key record -> DB.Document
-filterByKey k = [_id DB.=: keyToOid k]
+            => BackendKey MongoBackend -> DB.Document
+filterByKey k = [_id DB.=: unMongoBackendKey k]
 
 queryByKey :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
            => Key record -> DB.Query
-queryByKey k = DB.select (filterByKey k) (collectionName $ recordTypeFromKey k)
+queryByKey k = DB.select (filterByKey k) (collectionNameFromKey k)
 
 selectByKey :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
             => Key record -> DB.Selection
-selectByKey k = DB.select (filterByKey k) (collectionName $ recordTypeFromKey k)
+selectByKey k = DB.select (filterByKey k) (collectionNameFromKey k)
 
 updatesToDoc :: (PersistEntity entity) => [Update entity] -> DB.Document
 updatesToDoc upds = map updateToMongoField upds
@@ -424,14 +421,15 @@ collectionName = unDBName . entityDB . entityDef . Just
 -- | convert a PersistEntity into document fields.
 -- unlike 'toInsertDoc', nulls are included.
 entityToDocument :: (PersistEntity record) => record -> DB.Document
-entityToDocument record = zipIt (entityFields entity) (toPersistFields record)
+entityToDocument record = zipToDoc (entityFields entity) (toPersistFields record)
   where
-    zipIt [] _  = []
-    zipIt _  [] = []
-    zipIt (e:efields) (p:pfields) =
-      let pv = toPersistValue p
-      in  (fieldToLabel e DB.:= DB.val pv):zipIt efields pfields
     entity = entityDef $ Just record
+
+zipToDoc [] _  = []
+zipToDoc _  [] = []
+zipToDoc (e:efields) (p:pfields) =
+  let pv = toPersistValue p
+  in  (fieldToLabel e DB.:= DB.val pv):zipToDoc efields pfields
 
 -- | Deprecated, use the better named entityToDocument
 entityToFields :: (PersistEntity record) => record -> [DB.Field]
@@ -449,17 +447,25 @@ saveWithKey :: forall m entity keyEntity.
             -> entity
             -> DB.Action m ()
 saveWithKey entToFields dbSave key record =
-      dbSave (collectionName record) ((keyToMongoIdField key):(entToFields record))
+      dbSave (collectionName record) ((keyToMongoDoc key) ++ (entToFields record))
 
 type MongoBackend = DB.MongoContext -- FIXME
 
 instance PersistStore DB.MongoContext where
+    newtype BackendKey MongoBackend = MongoBackendKey { unMongoBackendKey :: DB.ObjectId }
+        deriving (Show, Read, Eq, Ord)
+
+    backendKeyToValues (MongoBackendKey oid)   = [oidToPersistValue oid]
+    backendKeyFromValues [poid@(PersistObjectId oid)] =
+        Right $ MongoBackendKey $ persistObjectIdToDbOid poid
+    backendKeyFromValues s = Left $ T.pack $ show s
+
     insert record = do
         DB.ObjId oid <- DB.insert (collectionName record) (toInsertFields record)
-        return $ oidToKey oid 
+        return $ MongoBackendKey oid 
 
     insertMany [] = return []
-    insertMany (r:records) = map (\(DB.ObjId oid) -> oidToKey oid) `liftM`
+    insertMany (r:records) = map (\(DB.ObjId oid) -> MongoBackendKey oid) `liftM`
         DB.insertMany (collectionName r) (map toInsertFields (r:records))
 
     insertKey k record = saveWithKey toInsertDoc DB.insert_ k record
@@ -472,7 +478,7 @@ instance PersistStore DB.MongoContext where
 
     delete k =
         DB.deleteOne DB.Select {
-          DB.coll = collectionName (recordTypeFromKey k)
+          DB.coll = collectionNameFromKey k
         , DB.selector = filterByKey k
         }
 
@@ -484,17 +490,17 @@ instance PersistStore DB.MongoContext where
                 Entity _ ent <- fromPersistValuesThrow t doc
                 return $ Just ent
           where
-            t = entityDef $ Just $ recordTypeFromKey k
+            t = entityDefFromKey
 
     update _ [] = return ()
     update key upds =
         DB.modify
-           (DB.Select [keyToMongoIdField key] (collectionName $ recordTypeFromKey key))
+           (DB.Select (keyToMongoDoc key) (collectionNameFromKey key))
            $ updatesToDoc upds
 
     updateGet key upds = do
-        result <- DB.findAndModify (DB.select [keyToMongoIdField key]
-                     (collectionName $ recordTypeFromKey key)
+        result <- DB.findAndModify (DB.select (keyToMongoDoc key)
+                     (collectionNameFromKey key)
                    ) (updatesToDoc upds)
         either err instantiate result
       where
@@ -502,7 +508,7 @@ instance PersistStore DB.MongoContext where
             Entity _ rec <- fromPersistValuesThrow t doc
             return rec
         err msg = Trans.liftIO $ throwIO $ KeyNotFound $ show key ++ msg
-        t = entityDef $ Just $ recordTypeFromKey key
+        t = entityDefFromKey
 
 
 instance PersistUnique DB.MongoContext where
@@ -559,9 +565,15 @@ instance PersistUnique DB.MongoContext where
 _id :: T.Text
 _id = "_id"
 
-keyToMongoIdField :: (PersistEntity entity, PersistEntityBackend entity ~ MongoBackend)
-                  => Key entity -> DB.Field
-keyToMongoIdField k = _id DB.:= (DB.ObjId $ keyToOid k)
+keyToMongoDoc :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
+                  => Key record -> DB.Doc
+keyToMongoDoc (MongoBackendKey oid) = 
+keyToMongoDoc k = case entityPrimary $ entityDefFromKey k of
+    Nothing   -> _id DB.:= (DB.ObjId oid)
+    Just pdef -> zipToDoc $ T.primaryFields pdef $ keyToValues
+
+entityDefFromKey = entityDef . Just . recordTypeFromKey
+collectionNameFromKey = collecitonName . recordTypeFromKey
 
 
 instance PersistQuery DB.MongoContext where
@@ -624,7 +636,7 @@ instance PersistQuery DB.MongoContext where
             case mdoc of
                 Nothing -> return ()
                 Just [_id DB.:= DB.ObjId oid] -> do
-                    yield $ oidToKey oid
+                    yield $ MongoBackendKey oid
                     pull context cursor
                 Just y -> liftIO $ throwIO $ PersistMarshalError $ T.pack $ "Unexpected in selectKeys: " ++ show y
 
@@ -776,9 +788,9 @@ eitherFromPersistValues entDef doc =
         mKey = lookup _id castDoc
     in case mKey of
          Nothing -> Left "could not find _id field"
-         Just key -> case fromPersistValues (map snd $ orderPersistValues (toEmbeddedDef entDef) castDoc) of
-             Right body -> Right $ Entity (Key key) body
-             Left e -> Left e
+         Just kpv -> fromPersistValues (map snd $ orderPersistValues (toEmbeddedDef entDef) castDoc)
+            >>= \body -> keyFromValues [kpv]
+            >>= \key   -> Right $ Entity key body
 
 -- | unlike many SQL databases, MongoDB makes no guarantee of the ordering
 -- of the fields returned in the document.
@@ -855,8 +867,9 @@ assocListFromDoc = Prelude.map (\f -> ( (DB.label f), (fromJust . DB.cast') (DB.
 oidToPersistValue :: DB.ObjectId -> PersistValue
 oidToPersistValue = PersistObjectId . Serialize.encode
 
-oidToKey :: (PersistEntity entity) => DB.ObjectId -> Key entity
-oidToKey = Key . oidToPersistValue
+oidToKey :: (PersistEntity record) => DB.ObjectId -> BackendKey MongoBackend
+oidToKey = MongoBackendKey
+{-# Deprecated oidToKey "Use MongoBackendKey" #-}
 
 persistObjectIdToDbOid :: PersistValue -> DB.ObjectId
 persistObjectIdToDbOid (PersistObjectId k) = case Serialize.decode k of
@@ -865,8 +878,9 @@ persistObjectIdToDbOid (PersistObjectId k) = case Serialize.decode k of
 persistObjectIdToDbOid _ = throw $ PersistInvalidField "expected PersistObjectId"
 
 keyToOid :: (PersistEntity entity, PersistEntityBackend entity ~ MongoBackend)
-         => Key entity -> DB.ObjectId
-keyToOid (Key k) = persistObjectIdToDbOid k
+         => BackendKey MongoBackend -> DB.ObjectId
+keyToOid = unMongoBackendKey
+{-# Deprecated keyToOid "Use unMongoBackendKey" #-}
 
 instance DB.Val PersistValue where
   val (PersistInt64 x)   = DB.Int64 x

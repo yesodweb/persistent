@@ -14,6 +14,7 @@ import qualified Data.Conduit.List as CL
 import Data.Conduit
 import Control.Monad.Trans.Reader (ask)
 import Control.Monad.Trans.Resource (MonadResource)
+import Data.Monoid
 
 instance PersistUnique Connection where
     deleteBy uniq = do
@@ -51,15 +52,13 @@ instance PersistUnique Connection where
             row <- CL.head
             case row of
                 Nothing -> return Nothing
-                Just (PersistInt64 k:vals) ->
+                Just (kpv:vals) ->
                     case fromPersistValues vals of
                         Left s -> error $ T.unpack s
-                        Right x -> return $ Just (Entity (Key $ PersistInt64 k) x)
-                Just (PersistDouble k:vals) ->   -- oracle
-                    case fromPersistValues vals of
-                        Left s -> error $ T.unpack s
-                        Right x -> return $ Just (Entity (Key $ PersistInt64 $ truncate k) x)
-                Just xs -> error $ "Database.Persist.GenericSql: Bad list in getBy xs="++show xs
+                        Right x ->
+                            case keyFromValues [kpv] of
+                                Right k -> return $ Just (Entity k x)
+                                Left _ -> error $ "getByImpl: keyFromValues failed: " `mappend` show kpv
       where
         sqlClause conn =
             T.intercalate " AND " $ map (go conn) $ toFieldNames' uniq

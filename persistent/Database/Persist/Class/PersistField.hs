@@ -271,8 +271,6 @@ instance PersistField PersistValue where
     toPersistValue = id
     fromPersistValue = Right
 
-deriving instance PersistField (KeyBackend backend entity)
-
 fromPersistList :: PersistField a => [PersistValue] -> Either T.Text [a]
 fromPersistList = mapM fromPersistValue
 
