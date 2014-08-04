@@ -31,11 +31,6 @@ import Data.Bson (genObjectId)
 import Language.Haskell.TH.Syntax (Type(..))
 
 #else
-#  if MIN_VERSION_monad_control(0, 3, 0)
-import qualified Control.Monad.Trans.Control
-#  else
-import qualified Control.Monad.IO.Control
-#  endif
 
 import Control.Monad (liftM, void)
 import Control.Monad.Logger
@@ -43,7 +38,6 @@ import Database.Persist.TH (mkDeleteCascade, mpsGeneric, mpsPrefixFields)
 import Database.Persist.Sqlite
 import Control.Exception (SomeException)
 import qualified Data.Text as T
-import qualified Control.Exception.Lifted
 #  if MIN_VERSION_monad_control(0, 3, 0)
 import qualified Control.Exception as E
 #    define CATCH catch'
@@ -61,6 +55,13 @@ import Database.Persist.MySQL()
 #  endif
 
 #endif
+
+#if MIN_VERSION_monad_control(0, 3, 0)
+import qualified Control.Monad.Trans.Control
+#else
+import qualified Control.Monad.IO.Control
+#endif
+import Control.Exception.Lifted (catch)
 
 import Control.Monad.IO.Class
 
@@ -182,7 +183,12 @@ db :: Action IO () -> Assertion
 db = db' cleanDB
 #endif
 
-
+catchPersistException :: Control.Monad.Trans.Control.MonadBaseControl IO m => m a -> b -> m b
+catchPersistException action errValue = do
+    Left res <-
+      (Right `fmap` action) `catch`
+      (\(_::PersistException) -> return $ Left errValue)
+    return  res
 
 
 specs :: Spec
@@ -199,8 +205,24 @@ specs = describe "persistent" $ do
   it "FilterOr []" $ db $ do
       let p = Person "z" 1 Nothing
       _ <- insert p
-      ps <- selectList [FilterOr []] [Desc PersonAge]
+      let action = selectList [FilterOr []] [Desc PersonAge]
+#ifdef WITH_MONGODB
+      ps <- catchPersistException action []
+#else
+      ps <- action
+#endif
       assertEmpty ps
+
+  it "||. []" $ db $ do
+      let p = Person "z" 1 Nothing
+      _ <- insert p
+      let action = count $ [PersonName ==. "a"] ||. []
+#ifdef WITH_MONGODB
+      c <- catchPersistException action 1
+#else
+      c <- action
+#endif
+      c @== (1::Int)
 
   it "FilterAnd []" $ db $ do
       let p = Person "z" 1 Nothing
@@ -872,7 +894,7 @@ catch' a handler = Control.Monad.Trans.Control.control $ \runInIO ->
 caseAfterException :: Assertion
 caseAfterException = runNoLoggingT $ runResourceT $ withSqlitePool sqlite_database 1 $ runSqlPool $ do
     _ <- insert $ Person "A" 0 Nothing
-    _ <- (insert (Person "A" 1 Nothing) >> return ()) `Control.Exception.Lifted.catch` catcher
+    _ <- (insert (Person "A" 1 Nothing) >> return ()) `catch` catcher
     _ <- insert $ Person "B" 0 Nothing
     return ()
   where
