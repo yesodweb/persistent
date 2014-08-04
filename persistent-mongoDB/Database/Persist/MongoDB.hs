@@ -623,24 +623,42 @@ filtersToDoc filts =
 #ifdef DEBUG
   debug $
 #endif
-    if null filts then [] else multiFilter andDollar filts
+    if null filts then [] else multiFilter AndDollar filts
 
 filterToDocument :: (PersistEntity val, PersistEntityBackend val ~ MongoBackend) => Filter val -> DB.Document
 filterToDocument f =
     case f of
-      Filter field v filt -> return $ filterToBSON (fieldName field) v filt
-      FilterOr [] -> -- Michael decided to follow Haskell's semantics, which seems reasonable to me.
-                     -- in Haskell an empty or is a False
-                     -- Perhaps there is a less hacky way of creating a query that always returns false?
-                     ["$not" DB.=: [existsDollar DB.=: _id]]
-      FilterOr fs  -> multiFilter orDollar fs
-      -- usually $and is unecessary, but it makes query construction easier in special cases
-      FilterAnd [] -> []
-      FilterAnd fs -> multiFilter andDollar fs
+      Filter field v filt -> [filterToBSON (fieldName field) v filt]
       BackendFilter mf -> mongoFilterToDoc mf
+      -- The empty filter case should never occur when the user uses ||.
+      -- An empty filter list will throw an exception in multiFilter
+      --
+      -- The alternative would be to create a query which always returns true
+      -- However, I don't think an end user ever wants that.
+      FilterOr fs  -> multiFilter OrDollar fs
+      -- Ignore an empty filter list instead of throwing an exception.
+      -- $and is necessary in only a few cases, but it makes query construction easier
+      FilterAnd [] -> []
+      FilterAnd fs -> multiFilter AndDollar fs
 
-multiFilter :: forall record. (PersistEntity record, PersistEntityBackend record ~ MongoBackend) => Text -> [Filter record] -> [DB.Field]
-multiFilter multi fs = [multi DB.:= DB.Array (map (DB.Doc . filterToDocument) fs)]
+data MultiFilter = OrDollar | AndDollar deriving Show
+toMultiOp :: MultiFilter -> Text
+toMultiOp OrDollar  = orDollar
+toMultiOp AndDollar = andDollar
+
+multiFilter :: forall record. (PersistEntity record, PersistEntityBackend record ~ MongoBackend) => MultiFilter -> [Filter record] -> [DB.Field]
+multiFilter _ [] = throw $ PersistMongoDBError "An empty list of filters was given"
+multiFilter multi filters =
+  case (multi, filter (not . null) (map filterToDocument filters)) of
+    -- a $or must have at least 2 items
+    (OrDollar,  []) -> orError
+    (AndDollar, []) -> []
+    (OrDollar,    _:[]) -> orError
+    (AndDollar, doc:[]) -> doc
+    (_, doc) -> [toMultiOp multi DB.:= DB.Array (map DB.Doc doc)]
+  where
+    orError = throw $ PersistMongoDBError $
+        "An empty list of filters was given to one side of ||."
 
 existsDollar, orDollar, andDollar :: Text
 existsDollar = "$exists"
