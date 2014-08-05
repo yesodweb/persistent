@@ -105,7 +105,7 @@ module Database.Persist.MongoDB
 
 import Database.Persist
 import qualified Database.Persist.Sql as Sql
-import Database.Persist.Class.PersistUnique (onlyUnique)
+import Database.Persist.Class (onlyUnique)
 
 import qualified Control.Monad.IO.Class as Trans
 import Control.Exception (throw, throwIO)
@@ -413,7 +413,7 @@ toInsertDoc :: forall record.  (PersistEntity record) => record -> DB.Document
 toInsertDoc record = zipFilter (entityFields entDef) (map toPersistValue $ toPersistFields record)
   where
     entDef = entityDef $ Just record
-    zipFilter :: [FieldDef a] -> [PersistValue] -> DB.Document
+    zipFilter :: [FieldDef] -> [PersistValue] -> DB.Document
     zipFilter [] _  = []
     zipFilter _  [] = []
     zipFilter (fd:efields) (pv:pvs) =
@@ -428,7 +428,7 @@ toInsertDoc record = zipFilter (entityFields entDef) (map toPersistValue $ toPer
         isNull _ = False
 
         -- make sure to removed nulls from embedded entities also
-        embeddedVal :: Maybe (EntityDef a) -> PersistValue -> DB.Value
+        embeddedVal :: Maybe EntityDef -> PersistValue -> DB.Value
         embeddedVal (Just emDef) (PersistMap m) = DB.Doc $
           zipFilter (entityFields emDef) $ map snd m
         embeddedVal je@(Just _) (PersistList l) = DB.Array $ map (embeddedVal je) l

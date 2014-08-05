@@ -723,7 +723,7 @@ mkEntity mps t = do
             ''PersistEntityBackend
 #if MIN_VERSION_template_haskell(2,9,0)
             (TySynEqn
-               [genericDataType mps (unHaskellName entName) $ VarT $ mkName "backend"]
+               [genericDataType mps entName $ VarT $ mkName "backend"]
                (backendDataType mps))
 #else
             [genericDataType mps entName $ VarT $ mkName "backend"]

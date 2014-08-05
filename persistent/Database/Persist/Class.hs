@@ -11,6 +11,8 @@ module Database.Persist.Class
     , getByValue
     , insertBy
     , replaceUnique
+    , checkUnique
+    , onlyUnique
 
     -- * PersistQuery
     , PersistQuery (..)
