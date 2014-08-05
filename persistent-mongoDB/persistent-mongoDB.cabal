@@ -27,7 +27,7 @@ library
                    , conduit            >= 0.5.3
                    , resourcet          >= 0.3
                    , mongoDB            >= 2.0.3   && < 3.0
-                   , bson               >= 0.2     && < 0.3
+                   , bson               >= 0.3     && < 0.4
                    , network            >= 2.2.1.7
                    , cereal             >= 0.3.0.0
                    , path-pieces        >= 0.1
