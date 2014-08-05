@@ -306,6 +306,11 @@ instance PersistField Checkmark where
     toPersistValue Inactive = PersistNull
     fromPersistValue PersistNull         = Right Inactive
     fromPersistValue (PersistBool True)  = Right Active
+    fromPersistValue (PersistInt64 1)    = Right Active
+    fromPersistValue (PersistByteString i) = case readInt i of 
+                                               Just (0,"") -> Left $ T.pack "PersistField Checkmark: found unexpected 0 value"
+                                               Just (1,"") -> Right Active
+                                               xs -> Left $ T.pack $ "PersistField Checkmark failed parsing PersistByteString xs["++show xs++"] i["++show i++"]"
     fromPersistValue (PersistBool False) =
       Left $ T.pack "PersistField Checkmark: found unexpected FALSE value"
     fromPersistValue other =
