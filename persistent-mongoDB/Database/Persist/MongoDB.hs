@@ -418,11 +418,17 @@ toInsertDoc record = zipFilter (entityFields entDef) (map toPersistValue $ toPer
     zipFilter [] _  = []
     zipFilter _  [] = []
     zipFilter (fd:efields) (pv:pvs) =
-        if pv == PersistNull then recur else
+        if isNull pv then recur else
           (fieldToLabel fd DB.:= embeddedVal (fieldEmbedded fd) pv):recur
       where
         recur = zipFilter efields pvs
-        -- make sure to removed nulls from an embedded value also
+
+        isNull PersistNull = True
+        isNull (PersistMap m) = null m
+        isNull (PersistList l) = null l
+        isNull _ = False
+
+        -- make sure to removed nulls from embedded entities also
         embeddedVal :: Maybe (EntityDef a) -> PersistValue -> DB.Value
         embeddedVal (Just emDef) (PersistMap m) = DB.Doc $
           zipFilter (entityFields emDef) $ map snd m
