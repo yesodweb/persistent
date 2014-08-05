@@ -61,6 +61,7 @@ import Data.Aeson
     , Value (Object), (.:), (.:?)
     , encode, eitherDecodeStrict'
     )
+import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import Control.Applicative (pure, (<*>))
 import Database.Persist.Sql (sqlType)
@@ -1020,7 +1021,7 @@ derivePersistField s = do
 derivePersistFieldJSON :: String -> Q [Dec]
 derivePersistFieldJSON s = do
     ss <- [|SqlString|]
-    tpv <- [|PersistByteString . BL.toStrict . encode|]
+    tpv <- [|PersistByteString . B.concat . BL.toChunks . encode|]
     fpv <- [|\dt v -> do
                 bs' <- fromPersistValue v
                 case eitherDecodeStrict' bs' of
