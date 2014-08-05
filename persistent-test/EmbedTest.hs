@@ -82,11 +82,15 @@ share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
     set (S.Set HasEmbed)
     deriving Show Eq Read Ord
 
-  HasMapEmbed
+  HasMap
     name Text
     map (M.Map T.Text T.Text)
     deriving Show Eq Read Ord
 
+  EmbedsHasMap
+    name Text Maybe
+    embed HasMap
+    deriving Show Eq Read Ord
 
   InList
     one Int
@@ -119,14 +123,15 @@ share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
 
 |]
 #ifdef WITH_MONGODB
-cleanDB :: (PersistQuery m, PersistEntityBackend HasMapEmbed ~ PersistMonadBackend m) => m ()
+cleanDB :: (PersistQuery m, PersistEntityBackend HasMap ~ PersistMonadBackend m) => m ()
 cleanDB = do
   deleteWhere ([] :: [Filter HasEmbed])
   deleteWhere ([] :: [Filter HasEmbeds])
   deleteWhere ([] :: [Filter HasListEmbed])
   deleteWhere ([] :: [Filter HasSetEmbed])
   deleteWhere ([] :: [Filter User])
-  deleteWhere ([] :: [Filter HasMapEmbed])
+  deleteWhere ([] :: [Filter HasMap])
+  deleteWhere ([] :: [Filter EmbedsHasMap])
   deleteWhere ([] :: [Filter ListEmbed])
   deleteWhere ([] :: [Filter ARecord])
 
@@ -171,6 +176,12 @@ specs = describe "embedded entities" $ do
       Just res <- selectFirst [HasSetEmbedName ==. "set"] []
       res @== Entity contK container
 
+  it "Set empty" $ db $ do
+      let container = HasSetEmbed "set empty" $ S.fromList []
+      contK <- insert container
+      Just res <- selectFirst [HasSetEmbedName ==. "set empty"] []
+      res @== Entity contK container
+
   it "exception" $ flip shouldThrow (== TestException) $ db $ do
       let container = HasSetEmbed "set" $ S.fromList
             [ HasEmbed "embed" (OnlyName "1")
@@ -189,13 +200,40 @@ specs = describe "embedded entities" $ do
       Just res <- selectFirst [HasListEmbedName ==. "list"] []
       res @== Entity contK container
 
+  it "List empty" $ db $ do
+      let container = HasListEmbed "list empty" []
+      contK <- insert container
+      Just res <- selectFirst [HasListEmbedName ==. "list empty"] []
+      res @== Entity contK container
+
   it "Map" $ db $ do
-      let container = HasMapEmbed "map" $ M.fromList [
+      let container = HasMap "2 items" $ M.fromList [
               ("k1","v1")
             , ("k2","v2")
             ]
       contK <- insert container
-      Just res <- selectFirst [HasMapEmbedName ==. "map"] []
+      Just res <- selectFirst [HasMapName ==. "2 items"] []
+      res @== Entity contK container
+
+  it "Map empty" $ db $ do
+      let container = HasMap "empty" $ M.fromList []
+      contK <- insert container
+      Just res <- selectFirst [HasMapName ==. "empty"] []
+      res @== Entity contK container
+
+  it "Embeds a Map" $ db $ do
+      let container = EmbedsHasMap (Just "non-empty map") $ HasMap "2 items" $ M.fromList [
+              ("k1","v1")
+            , ("k2","v2")
+            ]
+      contK <- insert container
+      Just res <- selectFirst [EmbedsHasMapName ==. Just "non-empty map"] []
+      res @== Entity contK container
+
+  it "Embeds a Map empty" $ db $ do
+      let container = EmbedsHasMap (Just "empty map") $ HasMap "empty" $ M.fromList []
+      contK <- insert container
+      Just res <- selectFirst [EmbedsHasMapName ==. (Just "empty map")] []
       res @== Entity contK container
 
 #ifdef WITH_MONGODB
