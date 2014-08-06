@@ -46,9 +46,7 @@ main = do
   runConn (setup PersistentTest.testMigrate)
   runConn (setup PersistentTest.noPrefixMigrate)
 #endif
-  summary <- hspecWith defaultConfig $ PersistentTest.specs
-  runResourceT $ runConn PersistentTest.cleanDB
-  unless (summaryFailures summary == 0) $ exitWith (toExitCode False)
+  runConn PersistentTest.cleanDB
 
 #ifndef WITH_MONGODB
   runConn (setup EmbedTest.embedMigrate)
@@ -61,6 +59,7 @@ main = do
 #endif
 
   hspec $ do
+    PersistentTest.specs
     RenameTest.specs
 #ifndef WITH_POSTGRESQL
     DataTypeTest.specs
