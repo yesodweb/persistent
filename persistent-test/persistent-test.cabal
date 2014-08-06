@@ -138,6 +138,7 @@ library
                    , bson
                    , silently
                    , blaze-builder
+                   , semigroups
                    , scientific
                    , resource-pool
 

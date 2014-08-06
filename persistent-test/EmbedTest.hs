@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -fno-warn-unused-binds #-}
+{-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE CPP #-}
@@ -31,10 +31,23 @@ import System.Process (readProcess)
 import System.Environment (getEnvironment)
 import Control.Monad.IO.Class
 import Control.Monad (unless)
+import Database.Persist.Sql.Class
+import Data.List.NonEmpty hiding (insert, length)
+import Data.Time
 
 data TestException = TestException
     deriving (Show, Typeable, Eq)
 instance Exception TestException
+
+instance PersistFieldSql a => PersistFieldSql (NonEmpty a) where
+    sqlType _ = SqlString
+instance PersistField a => PersistField (NonEmpty a) where
+    toPersistValue = toPersistValue . toList
+    fromPersistValue pv = case fromPersistValue pv of
+        Left e -> Left e
+        Right [] -> Left "PersistField: NonEmpty found unexpected Empty List"
+        Right (l:ls) -> Right (l:|ls)
+
 
 #if WITH_MONGODB
 mkPersist persistSettings [persistUpperCase|
@@ -87,6 +100,10 @@ share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
     map (M.Map T.Text T.Text)
     deriving Show Eq Read Ord
 
+  HasList
+    list [HasListId]
+    deriving Show Eq Read Ord
+
   EmbedsHasMap
     name Text Maybe
     embed HasMap
@@ -121,6 +138,15 @@ share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
     email T.Text
     deriving Show Eq Read Ord
 
+  Account
+    userIds       (NonEmpty (Key User))
+    name          Text Maybe
+    deletedDt     UTCTime Maybe
+    twLeadSalt    Text Maybe         -- Cryptographic salt for Twitter lead gen cards
+    customDomains [Text]             -- we may want to allow multiple cust domains.  use [] instead of maybe
+
+    deriving Show Eq Read Ord
+
 |]
 #ifdef WITH_MONGODB
 cleanDB :: (PersistQuery m, PersistEntityBackend HasMap ~ PersistMonadBackend m) => m ()
@@ -131,9 +157,11 @@ cleanDB = do
   deleteWhere ([] :: [Filter HasSetEmbed])
   deleteWhere ([] :: [Filter User])
   deleteWhere ([] :: [Filter HasMap])
+  deleteWhere ([] :: [Filter HasList])
   deleteWhere ([] :: [Filter EmbedsHasMap])
   deleteWhere ([] :: [Filter ListEmbed])
   deleteWhere ([] :: [Filter ARecord])
+  deleteWhere ([] :: [Filter Account])
 
 db :: Action IO () -> Assertion
 db = db' cleanDB
@@ -191,7 +219,7 @@ specs = describe "embedded entities" $ do
       Just res <- selectFirst [HasSetEmbedName ==. throw TestException] []
       res @== Entity contK container
 
-  it "List" $ db $ do
+  it "ListEmbed" $ db $ do
       let container = HasListEmbed "list"
             [ HasEmbed "embed" (OnlyName "1")
             , HasEmbed "embed" (OnlyName "2")
@@ -200,10 +228,33 @@ specs = describe "embedded entities" $ do
       Just res <- selectFirst [HasListEmbedName ==. "list"] []
       res @== Entity contK container
 
-  it "List empty" $ db $ do
+  it "ListEmbed empty" $ db $ do
       let container = HasListEmbed "list empty" []
       contK <- insert container
       Just res <- selectFirst [HasListEmbedName ==. "list empty"] []
+      res @== Entity contK container
+
+  it "List" $ db $ do
+      k1 <- insert $ HasList []
+      k2 <- insert $ HasList [k1]
+      let container = HasList [k1, k2]
+      contK <- insert container
+      Just res <- selectFirst [HasListList `anyEq` k2] []
+      res @== Entity contK container
+
+  it "List empty" $ db $ do
+      let container = HasList []
+      contK <- insert container
+      Just res <- selectFirst [] []
+      res @== Entity contK container
+
+  it "NonEmpty List wrapper" $ db $ do
+      let con = Contact 123456 "foo@bar.com"
+      let prof = Profile "fstN" "lstN" (Just con)
+      uid <- insert $ User "foo" (Just "pswd") prof
+      let container = Account (uid:|[]) (Just "Account") Nothing Nothing []
+      contK <- insert container
+      Just res <- selectFirst [AccountUserIds ==. (uid:|[])] []
       res @== Entity contK container
 
   it "Map" $ db $ do
