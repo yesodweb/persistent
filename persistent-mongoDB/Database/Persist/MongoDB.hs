@@ -653,7 +653,7 @@ filterToDocument f =
       -- However, I don't think an end user ever wants that.
       FilterOr fs  -> multiFilter OrDollar fs
       -- Ignore an empty filter list instead of throwing an exception.
-      -- $and is necessary in only a few cases, but it makes query construction easier
+      -- \$and is necessary in only a few cases, but it makes query construction easier
       FilterAnd [] -> []
       FilterAnd fs -> multiFilter AndDollar fs
 
