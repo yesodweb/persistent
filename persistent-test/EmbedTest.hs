@@ -232,7 +232,6 @@ specs = describe "embedded entities" $ do
       contK <- insert container
       Just res <- selectFirst [HasListEmbedName ==. "list empty"] []
       res @== Entity contK container
-      res @== Entity contK container
 
   it "List empty" $ db $ do
       let container = HasList []
@@ -286,6 +285,7 @@ specs = describe "embedded entities" $ do
       let container = HasList [k1, k2]
       contK <- insert container
       Just res <- selectFirst [HasListList `anyEq` k2] []
+      res @== Entity contK container
 
   it "can embed an Entity" $ db $ do
     let foo = ARecord "foo"
