@@ -410,15 +410,16 @@ toInsertFields = toInsertDoc
 -- for inserts only: nulls are ignored so they will be unset in the document.
 -- 'entityToDocument' includes nulls
 toInsertDoc :: forall record.  (PersistEntity record) => record -> DB.Document
-toInsertDoc record = zipFilter (entityFields entDef) (map toPersistValue $ toPersistFields record)
+toInsertDoc record = zipFilter (embeddedFields $ toEmbeddedDef entDef)
+    (map toPersistValue $ toPersistFields record)
   where
     entDef = entityDef $ Just record
-    zipFilter :: [FieldDef] -> [PersistValue] -> DB.Document
+    zipFilter :: [EmbeddedFieldDef] -> [PersistValue] -> DB.Document
     zipFilter [] _  = []
     zipFilter _  [] = []
     zipFilter (fd:efields) (pv:pvs) =
         if isNull pv then recur else
-          (fieldToLabel fd DB.:= embeddedVal (fieldEmbedded fd) pv):recur
+          (unDBName (emFieldDB fd) DB.:= embeddedVal (emFieldEmbedded fd) pv):recur
       where
         recur = zipFilter efields pvs
 
@@ -428,9 +429,9 @@ toInsertDoc record = zipFilter (entityFields entDef) (map toPersistValue $ toPer
         isNull _ = False
 
     -- make sure to removed nulls from embedded entities also
-    embeddedVal :: Maybe EntityDef -> PersistValue -> DB.Value
+    embeddedVal :: Maybe EmbeddedDef -> PersistValue -> DB.Value
     embeddedVal (Just emDef) (PersistMap m) = DB.Doc $
-      zipFilter (entityFields emDef) $ map snd m
+      zipFilter (embeddedFields emDef) $ map snd m
     embeddedVal je@(Just _) (PersistList l) = DB.Array $ map (embeddedVal je) l
     embeddedVal _ pv = DB.val pv
 
