@@ -47,10 +47,6 @@ module Database.Persist.MongoDB
     , NestedField(..)
     , MongoRegexSearchable
 
-    -- * MongoDB specific PersistFields
-    , Objectid
-    , genObjectid
-
     -- * Key conversion helpers
     , keyToOid
     , oidToKey
@@ -105,7 +101,6 @@ module Database.Persist.MongoDB
 
 import Database.Persist
 import qualified Database.Persist.Sql as Sql
-import Database.Persist.Class (onlyUnique)
 
 import qualified Control.Monad.IO.Class as Trans
 import Control.Exception (throw, throwIO)
@@ -217,25 +212,16 @@ readMayKey str =
     (parsed,_):[] -> Just $ MongoBackendKey parsed
     _ -> Nothing
 
-
--- | wrapper of 'ObjectId'
---
---   * avoids an orphan instance
---   * works around a Persistent naming issue
-newtype Objectid = Objectid { unObjectid :: DB.ObjectId }
-                   deriving (Show, Read, Eq, Ord)
-
--- | like 'genObjectId', but for 'Objectid'
-genObjectid :: IO Objectid
-genObjectid = Objectid `liftM` DB.genObjectId
-
-instance PersistField Objectid where
-    toPersistValue = oidToPersistValue . unObjectid
-    fromPersistValue oid@(PersistObjectId _) = Right . Objectid $ persistObjectIdToDbOid oid
+instance PersistField DB.ObjectId where
+    toPersistValue = oidToPersistValue
+    fromPersistValue oid@(PersistObjectId _) = Right $ persistObjectIdToDbOid oid
     fromPersistValue (PersistByteString bs) = fromPersistValue (PersistObjectId bs)
     fromPersistValue _ = Left $ T.pack "expected PersistObjectId"
 
-instance Sql.PersistFieldSql Objectid where
+instance Sql.PersistFieldSql DB.ObjectId where
+    sqlType _ = Sql.SqlOther "doesn't make much sense for MongoDB"
+
+instance Sql.PersistFieldSql (BackendKey MongoBackend) where
     sqlType _ = Sql.SqlOther "doesn't make much sense for MongoDB"
 
 
@@ -412,7 +398,8 @@ toInsertDoc record = zipFilter (embeddedFields $ toEmbeddedDef entDef)
     zipFilter _  [] = []
     zipFilter (fd:efields) (pv:pvs) =
         if isNull pv then recur else
-          (unDBName (emFieldDB fd) DB.:= embeddedVal (emFieldEmbedded fd) pv):recur
+          (fieldToLabel fd DB.:= embeddedVal (emFieldEmbedded fd) pv):recur
+
       where
         recur = zipFilter efields pvs
 
@@ -450,8 +437,8 @@ entityToFields :: (PersistEntity record) => record -> [DB.Field]
 entityToFields = entityToDocument
 {-# DEPRECATED entityToFields "Please use entityToDocument instead" #-}
 
-fieldToLabel :: FieldDef -> Text
-fieldToLabel = unDBName . fieldDB
+fieldToLabel :: EmbeddedFieldDef -> Text
+fieldToLabel = unDBName . emFieldDB
 
 saveWithKey :: forall m entity keyEntity.
             (PersistEntity entity, PersistEntity keyEntity, PersistEntityBackend keyEntity ~ MongoBackend)
@@ -479,7 +466,7 @@ keyFrom_id idVal = case cast idVal of
 
 instance PersistStore DB.MongoContext where
     newtype BackendKey MongoBackend = MongoBackendKey { unMongoBackendKey :: DB.ObjectId }
-        deriving (Show, Read, Eq, Ord)
+        deriving (Show, Read, Eq, Ord, PersistField)
 
     backendKeyToValues (MongoBackendKey oid)   = [oidToPersistValue oid]
     backendKeyFromValues [poid@(PersistObjectId _)] =
@@ -854,7 +841,7 @@ orderPersistValues :: EmbeddedDef -> [(Text, PersistValue)] -> [(Text, PersistVa
 orderPersistValues entDef castDoc = reorder
   where
     castColumns = map nameAndEmbedded (embeddedFields entDef)
-    nameAndEmbedded fdef = ((unDBName . emFieldDB) fdef, emFieldEmbedded fdef)
+    nameAndEmbedded fdef = (fieldToLabel fdef, emFieldEmbedded fdef)
 
     -- TODO: the below reasoning should be re-thought now that we are no longer inserting null: searching for a null column will look at every returned field before giving up
     -- Also, we are now doing the _id lookup at the start.
