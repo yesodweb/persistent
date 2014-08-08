@@ -30,6 +30,7 @@ module Database.Persist.TH
     , mkDeleteCascade
     , share
     , derivePersistField
+    , derivePersistFieldSqlTypeOther
     , derivePersistFieldJSON
     , persistFieldFromEntity
       -- * Internal
@@ -899,10 +900,10 @@ persistFieldSqlInstanceD typ =
 
 -- | Automatically creates a valid 'PersistField' instance for any datatype
 -- that has valid 'Show' and 'Read' instances. Can be very convenient for
--- 'Enum' types.
-derivePersistField :: String -> Q [Dec]
-derivePersistField s = do
-    ss <- [|SqlString|]
+-- 'Enum' types. Takes in a 'SqlType' as a 'Q Exp' for the 'PersistFieldSql' instance.
+derivePersistFieldGeneric :: String -> Q Exp -> Q [Dec]
+derivePersistFieldGeneric s t = do
+    st <- t
     tpv <- [|PersistText . pack . show|]
     fpv <- [|\dt v ->
                 case fromPersistValue v of
@@ -921,9 +922,20 @@ derivePersistField s = do
                 ]
             ]
         , persistFieldSqlInstanceD (ConT $ mkName s)
-            [ sqlTypeFunD ss
+            [ sqlTypeFunD st
             ]
         ]
+
+-- | Automatically creates a valid 'PersistField' instance for any datatype
+-- that has valid 'Show' and 'Read' instances. Can be very convenient for
+-- 'Enum' types.
+derivePersistField :: String -> Q [Dec]
+derivePersistField s = derivePersistFieldGeneric s [|SqlString|]
+
+-- | Automatically creates a valid 'PersistField' instance like derivePersistField,
+-- but it uses 'SqlOther' for the 'PersistFieldSql' instance instead of 'SqlString'.
+derivePersistFieldSqlTypeOther :: String -> String -> Q [Dec]
+derivePersistFieldSqlTypeOther s st = derivePersistFieldGeneric s [|SqlOther (pack st)|]
 
 -- | Automatically creates a valid 'PersistField' instance for any datatype
 -- that has valid 'ToJSON' and 'FromJSON' instances. For a datatype @T@ it
