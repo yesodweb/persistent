@@ -224,21 +224,21 @@ specs = describe "composite" $
       matchCitizenAddressK kca1 @== matchCitizenAddressK newkca1
       ca1 @== newca2
 
-matchK :: PersistField a => KeyBackend backend entity -> Either Text a
-matchK = fromPersistValue . unKey
+matchK :: (PersistField a, PersistEntity record) => Key record -> Either Text a
+matchK = (\(pv:[]) -> fromPersistValue pv) . keyToValues
 
-matchK2 :: (PersistField a1, PersistField a) =>
-                 KeyBackend backend entity
-                 -> KeyBackend backend1 entity1 -> Either Text (a1, a)
+matchK2 :: (PersistField a1, PersistField a, PersistEntity record, PersistEntity record2)
+        => Key record -> Key record2
+        -> Either Text (a1, a)
 matchK2 k1 k2 = (,) <$> matchK k1 <*> matchK k2
 
 matchParentK :: Key TestParent -> Either Text (String, String, Int64)
-matchParentK (Key (PersistList [a, b, c]))  = (,,) <$> fromPersistValue a <*> fromPersistValue b <*> fromPersistValue c
-matchParentK k = error $ "matchParentK: unexpected value for key " ++ show k
+matchParentK = (\(a:b:c:[]) -> (,,) <$> fromPersistValue a <*> fromPersistValue b <*> fromPersistValue c)
+             . keyToValues
 
 matchCitizenAddressK :: Key CitizenAddress -> Either Text (Int64, Int64)
-matchCitizenAddressK (Key (PersistList [a, b]))  = (,) <$> fromPersistValue a <*> fromPersistValue b
-matchCitizenAddressK k = error $ "matchCitizenAddressK: unexpected value for key " ++ show k
+matchCitizenAddressK = (\(a:b:[]) -> (,) <$> fromPersistValue a <*> fromPersistValue b)
+                     . keyToValues
 #endif
 
 #if MIN_VERSION_monad_control(0, 3, 0)

@@ -37,6 +37,7 @@ module Init (
   , Int32, Int64
   , Text
   , module Control.Monad.Trans.Reader
+  , module Control.Monad
 ) where
 
 -- re-exports
@@ -77,7 +78,7 @@ import Database.Persist.MySQL
 
 #endif
 
-import Control.Monad (unless)
+import Control.Monad (unless, (>=>))
 import Control.Monad.Trans.Control (MonadBaseControl)
 
 -- Data types
