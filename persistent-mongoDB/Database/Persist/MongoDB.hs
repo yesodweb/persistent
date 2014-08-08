@@ -632,8 +632,8 @@ instance PersistQuery DB.MongoContext where
     selectSourceRes filts opts = do
         context <- ask
         let make = do
-            cursor <- liftIO $ runReaderT (DB.find $ makeQuery filts opts) context
-            pull context cursor
+                cursor <- liftIO $ runReaderT (DB.find $ makeQuery filts opts) context
+                pull context cursor
         return $ return make
       where
         pull context cursor = do
