@@ -133,7 +133,6 @@ import Data.Time.Calendar (Day(..))
 #else
 import Data.Attoparsec.Number
 #endif
-import Data.Char (toUpper)
 import Data.Word (Word16)
 import Data.Monoid (mappend)
 import Control.Monad.Trans.Reader (ask, runReaderT)
@@ -356,17 +355,13 @@ runMongoDBPool accessMode action pool =
 runMongoDBPoolDef :: (Trans.MonadIO m, MonadBaseControl IO m) => DB.Action m a -> ConnectionPool -> m a
 runMongoDBPoolDef = runMongoDBPool (DB.ConfirmWrites ["j" DB.=: True])
 
-filterByKey :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
-            => BackendKey MongoBackend -> DB.Document
-filterByKey k = [_id DB.=: unMongoBackendKey k]
-
 queryByKey :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
            => Key record -> DB.Query
-queryByKey k = DB.select (filterByKey k) (collectionNameFromKey k)
+queryByKey k = DB.select (keyToMongoDoc k) (collectionNameFromKey k)
 
 selectByKey :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
             => Key record -> DB.Selection
-selectByKey k = DB.select (filterByKey k) (collectionNameFromKey k)
+selectByKey k = DB.select (keyToMongoDoc k) (collectionNameFromKey k)
 
 updatesToDoc :: (PersistEntity entity) => [Update entity] -> DB.Document
 updatesToDoc upds = map updateToMongoField upds
@@ -421,15 +416,16 @@ collectionName = unDBName . entityDB . entityDef . Just
 -- | convert a PersistEntity into document fields.
 -- unlike 'toInsertDoc', nulls are included.
 entityToDocument :: (PersistEntity record) => record -> DB.Document
-entityToDocument record = zipToDoc (entityFields entity) (toPersistFields record)
+entityToDocument record = zipToDoc (map fieldDB $ entityFields entity) (toPersistFields record)
   where
     entity = entityDef $ Just record
 
+zipToDoc :: PersistField a => [DBName] -> [a] -> [DB.Field]
 zipToDoc [] _  = []
 zipToDoc _  [] = []
 zipToDoc (e:efields) (p:pfields) =
   let pv = toPersistValue p
-  in  (fieldToLabel e DB.:= DB.val pv):zipToDoc efields pfields
+  in  (unDBName e DB.:= DB.val pv):zipToDoc efields pfields
 
 -- | Deprecated, use the better named entityToDocument
 entityToFields :: (PersistEntity record) => record -> [DB.Field]
@@ -451,21 +447,32 @@ saveWithKey entToFields dbSave key record =
 
 type MongoBackend = DB.MongoContext -- FIXME
 
+keyFrom_idEx :: (Trans.MonadIO m, PersistEntity record) => DB.Value -> m (Key record)
+keyFrom_idEx idVal = case keyFrom_id idVal of
+    Right k  -> return k
+    Left err -> liftIO $ throwIO $ PersistMongoDBError $ "could not convert key: "
+        `mappend` T.pack (show idVal)
+        `mappend` err
+
+keyFrom_id :: (PersistEntity record) => DB.Value -> Either Text (Key record)
+keyFrom_id idVal = case cast idVal of
+    (PersistMap m) -> keyFromValues $ map snd m
+    pv -> keyFromValues [pv]
+
 instance PersistStore DB.MongoContext where
     newtype BackendKey MongoBackend = MongoBackendKey { unMongoBackendKey :: DB.ObjectId }
         deriving (Show, Read, Eq, Ord)
 
     backendKeyToValues (MongoBackendKey oid)   = [oidToPersistValue oid]
-    backendKeyFromValues [poid@(PersistObjectId oid)] =
+    backendKeyFromValues [poid@(PersistObjectId _)] =
         Right $ MongoBackendKey $ persistObjectIdToDbOid poid
     backendKeyFromValues s = Left $ T.pack $ show s
 
     insert record = do
-        DB.ObjId oid <- DB.insert (collectionName record) (toInsertFields record)
-        return $ MongoBackendKey oid 
+        keyFrom_idEx =<< DB.insert (collectionName record) (toInsertFields record)
 
     insertMany [] = return []
-    insertMany (r:records) = map (\(DB.ObjId oid) -> MongoBackendKey oid) `liftM`
+    insertMany (r:records) = mapM keyFrom_idEx =<<
         DB.insertMany (collectionName r) (map toInsertFields (r:records))
 
     insertKey k record = saveWithKey toInsertDoc DB.insert_ k record
@@ -479,7 +486,7 @@ instance PersistStore DB.MongoContext where
     delete k =
         DB.deleteOne DB.Select {
           DB.coll = collectionNameFromKey k
-        , DB.selector = filterByKey k
+        , DB.selector = keyToMongoDoc k
         }
 
     get k = do
@@ -490,7 +497,7 @@ instance PersistStore DB.MongoContext where
                 Entity _ ent <- fromPersistValuesThrow t doc
                 return $ Just ent
           where
-            t = entityDefFromKey
+            t = entityDefFromKey k
 
     update _ [] = return ()
     update key upds =
@@ -508,7 +515,7 @@ instance PersistStore DB.MongoContext where
             Entity _ rec <- fromPersistValuesThrow t doc
             return rec
         err msg = Trans.liftIO $ throwIO $ KeyNotFound $ show key ++ msg
-        t = entityDefFromKey
+        t = entityDefFromKey key
 
 
 instance PersistUnique DB.MongoContext where
@@ -565,15 +572,22 @@ instance PersistUnique DB.MongoContext where
 _id :: T.Text
 _id = "_id"
 
+-- _id is always the primary key in MongoDB
+-- but _id can contain any unique value
 keyToMongoDoc :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
-                  => Key record -> DB.Doc
-keyToMongoDoc (MongoBackendKey oid) = 
+                  => Key record -> DB.Document
 keyToMongoDoc k = case entityPrimary $ entityDefFromKey k of
-    Nothing   -> _id DB.:= (DB.ObjId oid)
-    Just pdef -> zipToDoc $ T.primaryFields pdef $ keyToValues
+    Nothing   -> zipToDoc [DBName _id] values
+    Just pdef -> [_id DB.=: zipToDoc (primaryNames pdef)  values]
+  where
+    primaryNames = map snd . primaryFields
+    values = keyToValues k
 
+entityDefFromKey :: PersistEntity record => Key record => EntityDef
 entityDefFromKey = entityDef . Just . recordTypeFromKey
-collectionNameFromKey = collecitonName . recordTypeFromKey
+
+collectionNameFromKey :: (PersistEntity record) => Key record => Text
+collectionNameFromKey = collectionName . recordTypeFromKey
 
 
 instance PersistQuery DB.MongoContext where
@@ -635,8 +649,9 @@ instance PersistQuery DB.MongoContext where
             mdoc <- liftIO $ runReaderT (DB.next cursor) context
             case mdoc of
                 Nothing -> return ()
-                Just [_id DB.:= DB.ObjId oid] -> do
-                    yield $ MongoBackendKey oid
+                Just [_id DB.:= idVal] -> do
+                    k <- liftIO $ keyFrom_idEx idVal
+                    yield k
                     pull context cursor
                 Just y -> liftIO $ throwIO $ PersistMarshalError $ T.pack $ "Unexpected in selectKeys: " ++ show y
 
@@ -862,7 +877,7 @@ orderPersistValues entDef castDoc = reorder
             matchOne [] tried = ((fst column, PersistNull), tried)
 
 assocListFromDoc :: DB.Document -> [(Text, PersistValue)]
-assocListFromDoc = Prelude.map (\f -> ( (DB.label f), (fromJust . DB.cast') (DB.value f) ) )
+assocListFromDoc = Prelude.map (\f -> ( (DB.label f), cast (DB.value f) ) )
 
 oidToPersistValue :: DB.ObjectId -> PersistValue
 oidToPersistValue = PersistObjectId . Serialize.encode
@@ -922,6 +937,12 @@ instance DB.Val PersistValue where
   cast' (DB.Sym _)     = throw $ PersistMongoDBUnsupported "cast operation not supported for sym"
   cast' (DB.Stamp _)   = throw $ PersistMongoDBUnsupported "cast operation not supported for stamp"
   cast' (DB.MinMax _)  = throw $ PersistMongoDBUnsupported "cast operation not supported for minmax"
+
+cast :: DB.Value -> PersistValue
+-- since we have case analysys this won't ever be Nothing
+-- However, unsupported types do throw an exception in pure code
+-- probably should re-work this to throw in IO
+cast = fromJust . DB.cast'
 
 instance Serialize.Serialize DB.ObjectId where
   put (DB.Oid w1 w2) = do Serialize.put w1

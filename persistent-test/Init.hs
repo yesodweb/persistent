@@ -185,5 +185,5 @@ instance Arbitrary PersistValue where
     arbitrary = PersistInt64 `fmap` choose (0, maxBound)
 #endif
 
-instance Arbitrary (KeyBackend backend entity) where
-  arbitrary = Key `fmap` arbitrary
+-- instance Arbitrary (BackendKey backend) where
+--  arbitrary = backendKeyFromValues `fmap` arbitrary
