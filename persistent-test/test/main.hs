@@ -46,7 +46,6 @@ main = do
   runConn (setup PersistentTest.testMigrate)
   runConn (setup PersistentTest.noPrefixMigrate)
 #endif
-  runConn PersistentTest.cleanDB
 
 #ifndef WITH_MONGODB
   runConn (setup EmbedTest.embedMigrate)
@@ -56,10 +55,13 @@ main = do
   runConn (setup MaxLenTest.maxlenMigrate)
   runConn (setup CompositeTest.compositeMigrate)
   runConn (setup MigrationTest.migrationMigrate)
+
+  summary <- hspecWith defaultConfig PersistentTest.specs
+  runResourceT $ runConn PersistentTest.cleanDB
+  unless (summaryFailures summary == 0) $ exitWith (toExitCode False)
 #endif
 
   hspec $ do
-    PersistentTest.specs
     RenameTest.specs
 #ifndef WITH_POSTGRESQL
     DataTypeTest.specs
@@ -73,8 +75,10 @@ main = do
     SumTypeTest.specs
     MigrationOnlyTest.specs
     PersistentTest.specs
+    EmptyEntityTest.specs
 #ifndef WITH_MONGODB
     CompositeTest.specs
     MigrationTest.specs
+#else
+    PersistentTest.specs
 #endif
-    EmptyEntityTest.specs

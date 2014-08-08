@@ -233,13 +233,6 @@ specs = describe "embedded entities" $ do
       contK <- insert container
       Just res <- selectFirst [HasListEmbedName ==. "list empty"] []
       res @== Entity contK container
-
-  it "List" $ db $ do
-      k1 <- insert $ HasList []
-      k2 <- insert $ HasList [k1]
-      let container = HasList [k1, k2]
-      contK <- insert container
-      Just res <- selectFirst [HasListList `anyEq` k2] []
       res @== Entity contK container
 
   it "List empty" $ db $ do
@@ -288,6 +281,13 @@ specs = describe "embedded entities" $ do
       res @== Entity contK container
 
 #ifdef WITH_MONGODB
+  it "List" $ db $ do
+      k1 <- insert $ HasList []
+      k2 <- insert $ HasList [k1]
+      let container = HasList [k1, k2]
+      contK <- insert container
+      Just res <- selectFirst [HasListList `anyEq` k2] []
+
   it "can embed an Entity" $ db $ do
     let foo = ARecord "foo"
         bar = ARecord "bar"
