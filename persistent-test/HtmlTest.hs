@@ -25,7 +25,7 @@ import Text.Blaze.Html
 import Text.Blaze.Html.Renderer.Text
 
 -- Test lower case names
-share [mkPersist sqlSettings, mkMigrate "htmlMigrate"] [persistLowerCase|
+share [mkPersist persistSettings, mkMigrate "htmlMigrate"] [persistLowerCase|
 HtmlTable
     html Html
     deriving

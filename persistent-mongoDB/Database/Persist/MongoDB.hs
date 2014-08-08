@@ -39,11 +39,13 @@ module Database.Persist.MongoDB
 
     -- * MongoDB specific Filters
     -- $filters
-    , nestEq, anyEq, multiEq, nestBsonEq, multiBsonEq
+    , nestEq, nestNe, nestGe, nestLe, nestIn, nestNotIn
+    , anyEq, multiEq, nestBsonEq, anyBsonEq, multiBsonEq
     , (=~.), (?=~.), MongoRegex
     , (->.), (~>.), (?&->.), (?&~>.), (&->.), (&~>.)
     -- non-operator forms of filters
     , NestedField(..)
+    , MongoRegexSearchable
 
     -- * MongoDB specific PersistFields
     , Objectid
@@ -103,7 +105,7 @@ module Database.Persist.MongoDB
 
 import Database.Persist
 import qualified Database.Persist.Sql as Sql
-import Database.Persist.Class.PersistUnique (onlyUnique)
+import Database.Persist.Class (onlyUnique)
 
 import qualified Control.Monad.IO.Class as Trans
 import Control.Exception (throw, throwIO)
@@ -211,7 +213,7 @@ keyToText = T.pack . show . unMongoBackendKey
 -- | Convert a Text to a Key
 readMayKey :: Text -> Maybe (BackendKey MongoBackend)
 readMayKey str =
-  case (reads $ (T.unpack str)) :: [(DB.ObjectId,String)] of
+  case filter (null . snd) $ reads $ T.unpack str :: [(DB.ObjectId,String)] of
     (parsed,_):[] -> Just $ MongoBackendKey parsed
     _ -> Nothing
 
@@ -401,14 +403,30 @@ toInsertFields = toInsertDoc
 -- for inserts only: nulls are ignored so they will be unset in the document.
 -- 'entityToDocument' includes nulls
 toInsertDoc :: forall record.  (PersistEntity record) => record -> DB.Document
-toInsertDoc record = zipFilter (entityFields entity) (toPersistFields record)
+toInsertDoc record = zipFilter (embeddedFields $ toEmbeddedDef entDef)
+    (map toPersistValue $ toPersistFields record)
   where
+    entDef = entityDef $ Just record
+    zipFilter :: [EmbeddedFieldDef] -> [PersistValue] -> DB.Document
     zipFilter [] _  = []
     zipFilter _  [] = []
-    zipFilter (e:efields) (p:pfields) = let pv = toPersistValue p in
-        if pv == PersistNull then zipFilter efields pfields
-          else (fieldToLabel e DB.:= DB.val pv):zipFilter efields pfields
-    entity = entityDef $ Just record
+    zipFilter (fd:efields) (pv:pvs) =
+        if isNull pv then recur else
+          (unDBName (emFieldDB fd) DB.:= embeddedVal (emFieldEmbedded fd) pv):recur
+      where
+        recur = zipFilter efields pvs
+
+        isNull PersistNull = True
+        isNull (PersistMap m) = null m
+        isNull (PersistList l) = null l
+        isNull _ = False
+
+    -- make sure to removed nulls from embedded entities also
+    embeddedVal :: Maybe EmbeddedDef -> PersistValue -> DB.Value
+    embeddedVal (Just emDef) (PersistMap m) = DB.Doc $
+      zipFilter (embeddedFields emDef) $ map snd m
+    embeddedVal je@(Just _) (PersistList l) = DB.Array $ map (embeddedVal je) l
+    embeddedVal _ pv = DB.val pv
 
 collectionName :: (PersistEntity record) => record -> Text
 collectionName = unDBName . entityDB . entityDef . Just
@@ -678,28 +696,47 @@ filtersToDoc filts =
 #ifdef DEBUG
   debug $
 #endif
-    if null filts then [] else concatMap filterToDocument filts
+    if null filts then [] else multiFilter AndDollar filts
 
 filterToDocument :: (PersistEntity val, PersistEntityBackend val ~ MongoBackend) => Filter val -> DB.Document
 filterToDocument f =
     case f of
-      Filter field v filt -> return $ filterToBSON (fieldName field) v filt
-      FilterOr [] -> -- Michael decided to follow Haskell's semantics, which seems reasonable to me.
-                     -- in Haskell an empty or is a False
-                     -- Perhaps there is a less hacky way of creating a query that always returns false?
-                     ["$not" DB.=: [existsDollar DB.=: _id]]
-      FilterOr fs  -> multiFilter orDollar fs
-      -- usually $and is unecessary, but it makes query construction easier in special cases
-      FilterAnd [] -> []
-      FilterAnd fs -> multiFilter "$and" fs
+      Filter field v filt -> [filterToBSON (fieldName field) v filt]
       BackendFilter mf -> mongoFilterToDoc mf
-  where
-    multiFilter :: forall record. (PersistEntity record, PersistEntityBackend record ~ MongoBackend) => Text -> [Filter record] -> [DB.Field]
-    multiFilter multi fs = [multi DB.:= DB.Array (map (DB.Doc . filterToDocument) fs)]
+      -- The empty filter case should never occur when the user uses ||.
+      -- An empty filter list will throw an exception in multiFilter
+      --
+      -- The alternative would be to create a query which always returns true
+      -- However, I don't think an end user ever wants that.
+      FilterOr fs  -> multiFilter OrDollar fs
+      -- Ignore an empty filter list instead of throwing an exception.
+      -- \$and is necessary in only a few cases, but it makes query construction easier
+      FilterAnd [] -> []
+      FilterAnd fs -> multiFilter AndDollar fs
 
-existsDollar, orDollar :: Text
+data MultiFilter = OrDollar | AndDollar deriving Show
+toMultiOp :: MultiFilter -> Text
+toMultiOp OrDollar  = orDollar
+toMultiOp AndDollar = andDollar
+
+multiFilter :: forall record. (PersistEntity record, PersistEntityBackend record ~ MongoBackend) => MultiFilter -> [Filter record] -> [DB.Field]
+multiFilter _ [] = throw $ PersistMongoDBError "An empty list of filters was given"
+multiFilter multi filters =
+  case (multi, filter (not . null) (map filterToDocument filters)) of
+    -- a $or must have at least 2 items
+    (OrDollar,  []) -> orError
+    (AndDollar, []) -> []
+    (OrDollar,    _:[]) -> orError
+    (AndDollar, doc:[]) -> doc
+    (_, doc) -> [toMultiOp multi DB.:= DB.Array (map DB.Doc doc)]
+  where
+    orError = throw $ PersistMongoDBError $
+        "An empty list of filters was given to one side of ||."
+
+existsDollar, orDollar, andDollar :: Text
 existsDollar = "$exists"
 orDollar = "$or"
+andDollar = "$and"
 
 filterToBSON :: forall a. ( PersistField a)
              => Text
@@ -749,7 +786,6 @@ mongoFilterToBSON fname filt = case filt of
     (MongoFilterOperator bval) -> [fname DB.:= bval]
 
 mongoFilterToDoc :: PersistEntity val => MongoFilter val -> DB.Document
-mongoFilterToDoc (RegExpMaybeFilter fn (reg, opts))   = [ fieldName fn  DB.:= DB.RegEx (DB.Regex reg opts)]
 mongoFilterToDoc (RegExpFilter fn (reg, opts))        = [ fieldName fn  DB.:= DB.RegEx (DB.Regex reg opts)]
 mongoFilterToDoc (MultiKeyFilter field op) = mongoFilterToBSON (fieldName field) op
 mongoFilterToDoc (NestedFilter   field op) = mongoFilterToBSON (nestedFieldName field) op
@@ -1099,13 +1135,22 @@ data NestedField record typ
 -- If you use the same options you may want to define a helper such as @r t = (t, "ims")@
 type MongoRegex = (Text, Text)
 
+-- | Mark the subset of 'PersistField's that can be searched by a mongoDB regex
+-- Anything stored as PersistText or an array of PersistText would be valid
+class PersistField typ => MongoRegexSearchable typ where
+
+instance MongoRegexSearchable Text
+instance MongoRegexSearchable rs => MongoRegexSearchable (Maybe rs)
+instance MongoRegexSearchable rs => MongoRegexSearchable [rs]
+
 -- | Filter using a Regular expression.
-(=~.) :: forall record. (PersistEntity record, PersistEntityBackend record ~ MongoBackend) => EntityField record Text -> MongoRegex -> Filter record
+(=~.) :: forall record searchable. (MongoRegexSearchable searchable, PersistEntity record, PersistEntityBackend record ~ MongoBackend) => EntityField record searchable -> MongoRegex -> Filter record
 fld =~. val = BackendFilter $ RegExpFilter fld val
 
 -- | Filter using a Regular expression against a nullable field.
 (?=~.) :: forall record. (PersistEntity record, PersistEntityBackend record ~ MongoBackend) => EntityField record (Maybe Text) -> MongoRegex -> Filter record
-fld ?=~. val = BackendFilter $ RegExpMaybeFilter fld val
+fld ?=~. val = BackendFilter $ RegExpFilter fld val
+{-# DEPRECATED (?=~.) "Use =~. instead" #-}
 
 data MongoFilterOperator typ = PersistOperator (Either typ [typ]) PersistFilter
                              | MongoFilterOperator DB.Value
@@ -1120,8 +1165,8 @@ data MongoFilter record = forall typ. (PersistField typ) =>
                           multiField  :: EntityField record [typ]
                         , multiValue  :: MongoFilterOperator typ
                         }
-                      | RegExpFilter (EntityField record Text) MongoRegex
-                      | RegExpMaybeFilter (EntityField record (Maybe Text)) MongoRegex
+                      | forall typ. MongoRegexSearchable typ =>
+                        RegExpFilter (EntityField record typ) MongoRegex
 
 -- | Point to an array field with an embedded object and give a deeper query into the embedded object.
 -- Use with 'nestEq'.
@@ -1165,6 +1210,12 @@ infixr 6 ?&->.
 infixr 6 ->.
 
 infixr 4 `nestEq`
+infixr 4 `nestNe`
+infixr 4 `nestGe`
+infixr 4 `nestLe`
+infixr 4 `nestIn`
+infixr 4 `nestNotIn`
+
 infixr 4 `anyEq`
 infixr 4 `multiEq`
 infixr 4 `nestBsonEq`
@@ -1177,13 +1228,25 @@ infixr 4 `anyBsonEq`
 -- using this as the only query filter is similar to the following in the mongoDB shell
 --
 -- > db.Collection.find({"object.field": item})
-nestEq :: forall record typ.
+nestEq, nestNe, nestGe, nestLe, nestIn, nestNotIn :: forall record typ.
+    ( PersistField typ , PersistEntityBackend record ~ MongoBackend)
+    => NestedField record typ
+    -> typ
+    -> Filter record
+nestEq = nestedOp Eq
+nestNe = nestedOp Ne
+nestGe = nestedOp Ge
+nestLe = nestedOp Le
+nestIn = nestedOp In
+nestNotIn = nestedOp NotIn
+
+nestedOp :: forall record typ.
        ( PersistField typ
        , PersistEntityBackend record ~ MongoBackend
-       ) => NestedField record typ -> typ -> Filter record
-nf `nestEq` v = BackendFilter $ NestedFilter
+       ) => PersistFilter -> NestedField record typ -> typ -> Filter record
+nestedOp op nf v = BackendFilter $ NestedFilter
                     { nestedField = nf
-                    , nestedValue = PersistOperator (Left v) Eq
+                    , nestedValue = PersistOperator (Left v) op
                     }
 
 -- | same as `nestEq`, but give a BSON Value

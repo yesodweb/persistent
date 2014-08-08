@@ -61,6 +61,7 @@ import Data.Aeson
     , Value (Object), (.:), (.:?)
     , encode, eitherDecodeStrict'
     )
+import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import Control.Applicative (pure, (<*>))
 import Database.Persist.Sql (sqlType)
@@ -292,11 +293,11 @@ mkPersistSettings :: Type -- ^ Value for 'mpsBackend'
                   -> MkPersistSettings
 mkPersistSettings t = MkPersistSettings
     { mpsBackend = t
-    , mpsGeneric = True -- FIXME switch default to False in the future
+    , mpsGeneric = False
     , mpsPrefixFields = True
     , mpsEntityJSON = Just EntityJSON
-        { entityToJSON = 'keyValueEntityToJSON
-        , entityFromJSON = 'keyValueEntityFromJSON
+        { entityToJSON = 'entityIdToJSON
+        , entityFromJSON = 'entityIdFromJSON
         }
     , mpsGenerateLenses = False
     }
@@ -305,11 +306,12 @@ mkPersistSettings t = MkPersistSettings
 sqlSettings :: MkPersistSettings
 sqlSettings = mkPersistSettings $ ConT ''SqlBackend
 
--- | Same as 'sqlSettings', but set 'mpsGeneric' to @False@.
+-- | Same as 'sqlSettings'.
 --
 -- Since 1.1.1
 sqlOnlySettings :: MkPersistSettings
-sqlOnlySettings = sqlSettings { mpsGeneric = False }
+sqlOnlySettings = sqlSettings
+{-# DEPRECATED sqlOnlySettings "use sqlSettings" #-}
 
 recNameNoUnderscore :: MkPersistSettings -> Text -> Text -> Text
 recNameNoUnderscore mps dt f
@@ -765,7 +767,7 @@ mkEntity mps t = do
             ''PersistEntityBackend
 #if MIN_VERSION_template_haskell(2,9,0)
             (TySynEqn
-               [genericDataType mps (unHaskellName entName) $ VarT $ mkName "backend"]
+               [genericDataType mps entName $ VarT $ mkName "backend"]
                (backendDataType mps))
 #else
             [genericDataType mps entName $ VarT $ mkName "backend"]
@@ -849,14 +851,11 @@ mkForeignKeysComposite mps t fdef = do
 --   instance PersistEntity e => PersistField e where
 --      toPersistValue = PersistMap $ zip columNames (map toPersistValue . toPersistFields)
 --      fromPersistValue (PersistMap o) = 
---          let columns = HM.fromList x
+--          let columns = HM.fromList o
 --          in fromPersistValues $ map (\name ->
---            case HM.lookup name o of
---              Just v ->
---                case fromPersistValue v of
---                  Left e -> error e
---                  Right r -> r
---              Nothing -> error $ "Missing field: " `mappend` unpack name) columnNames 
+--            case HM.lookup name columns of
+--              Just v -> v
+--              Nothing -> PersistNull
 --      fromPersistValue x = Left $ "Expected PersistMap, received: " ++ show x
 --      sqlType _ = SqlString
 -- @
@@ -866,14 +865,11 @@ persistFieldFromEntity mps e = do
     obj <- [|\ent -> PersistMap $ zip (map pack columnNames) (map toPersistValue $ toPersistFields ent)|]
     fpv <- [|\x -> let columns = HM.fromList x
                     in fromPersistValues $ map
-                         (\(nulled, name) ->
-                            case HM.lookup name columns of
-                                Just v -> case fromPersistValue v of
-                                    Left e' -> error $ unpack e'
-                                    Right r -> r
-                                Nothing -> if nulled then PersistNull
-                                    else error $ "Missing field: " `mappend` unpack name)
-                         (zip maybeColumns $ map pack columnNames)
+                         (\(name) ->
+                            case HM.lookup (pack name) columns of
+                                Just v -> v
+                                Nothing -> PersistNull)
+                         $ columnNames
           |]
 
     compose <- [|(<=<)|]
@@ -893,7 +889,6 @@ persistFieldFromEntity mps e = do
       typ = genericDataType mps (entityHaskell e) $ VarT $ mkName "backend"
       entFields = entityFields e
       columnNames  = map (unpack . unHaskellName . fieldHaskell) entFields
-      maybeColumns = map ((== Nullable ByMaybeAttr) . nullable . fieldAttrs) entFields
 
 -- | Apply the given list of functions to the same @EntityDef@s.
 --
@@ -1062,7 +1057,7 @@ derivePersistField s = do
 derivePersistFieldJSON :: String -> Q [Dec]
 derivePersistFieldJSON s = do
     ss <- [|SqlString|]
-    tpv <- [|PersistByteString . BL.toStrict . encode|]
+    tpv <- [|PersistByteString . B.concat . BL.toChunks . encode|]
     fpv <- [|\dt v -> do
                 bs' <- fromPersistValue v
                 case eitherDecodeStrict' bs' of

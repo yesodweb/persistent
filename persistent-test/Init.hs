@@ -14,13 +14,13 @@ module Init (
   , runConn
 
   , MonadIO
+  , persistSettings
 #ifdef WITH_MONGODB
   , dbName
   , db'
   , setupMongo
   , MkPersistSettings (..)
   , mkPersistSettings
-  , persistSettings
   , Action
 #else
   , db
@@ -50,6 +50,7 @@ import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
 import Test.QuickCheck
 
 import Database.Persist
+import Database.Persist.TH (MkPersistSettings(..))
 import Data.Text (Text)
 
 #ifdef WITH_MONGODB
@@ -114,7 +115,7 @@ assertNotEmpty xs = liftIO $ assertBool "" (not (null xs))
 
 #ifdef WITH_MONGODB
 persistSettings :: MkPersistSettings
-persistSettings = mkPersistSettings $ ConT ''MongoBackend
+persistSettings = (mkPersistSettings $ ConT ''MongoBackend) { mpsGeneric = True }
 
 dbName :: Text
 dbName = "persistent"
@@ -138,6 +139,8 @@ instance Arbitrary PersistValue where
     arbitrary = PersistObjectId `fmap` BS.pack `fmap` replicateM 12 arbitrary
 
 #else
+persistSettings :: MkPersistSettings
+persistSettings = sqlSettings { mpsGeneric = True }
 type BackendMonad = SqlBackend
 sqlite_database :: Text
 sqlite_database = "test/testdb.sqlite3"

@@ -142,7 +142,7 @@ prepare' conn sql = do
         , stmtQuery = withStmt' conn query
         }
 
-insertSql' :: EntityDef SqlType -> [PersistValue] -> InsertSqlResult
+insertSql' :: EntityDef -> [PersistValue] -> InsertSqlResult
 insertSql' ent vals =
   let sql = T.concat
                 [ "INSERT INTO "
@@ -369,9 +369,9 @@ doesTableExist getter (DBName name) = do
     start' res = error $ "doesTableExist returned unexpected result: " ++ show res
     finish x = await >>= maybe (return x) (error "Too many rows returned in doesTableExist")
 
-migrate' :: [EntityDef a]
+migrate' :: [EntityDef]
          -> (Text -> IO Statement)
-         -> EntityDef SqlType
+         -> EntityDef
          -> IO (Either [Text] [(Bool, Text)])
 migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
     let name = entityDB val
@@ -435,7 +435,7 @@ data AlterDB = AddTable Text
 
 -- | Returns all of the columns in the given table currently in the database.
 getColumns :: (Text -> IO Statement)
-           -> EntityDef a
+           -> EntityDef
            -> IO [Either Text (Either Column (DBName, [DBName]))]
 getColumns getter def = do
     let sqlv=T.concat ["SELECT "
@@ -503,14 +503,14 @@ getColumns getter def = do
 
 -- | Check if a column name is listed as the "safe to remove" in the entity
 -- list.
-safeToRemove :: EntityDef a -> DBName -> Bool
+safeToRemove :: EntityDef -> DBName -> Bool
 safeToRemove def (DBName colName)
     = any (elem "SafeToRemove" . fieldAttrs)
     $ filter ((== DBName colName) . fieldDB)
     $ entityFields def
 
-getAlters :: [EntityDef a]
-          -> EntityDef SqlType
+getAlters :: [EntityDef]
+          -> EntityDef
           -> ([Column], [(DBName, [DBName])])
           -> ([Column], [(DBName, [DBName])])
           -> ([AlterColumn'], [AlterTable])
@@ -618,7 +618,7 @@ sqlTypeEq :: SqlType -> SqlType -> Bool
 sqlTypeEq x y =
     T.toCaseFold (showSqlType x) == T.toCaseFold (showSqlType y)
 
-findAlters :: [EntityDef a] -> DBName -> Column -> [Column] -> ([AlterColumn'], [Column])
+findAlters :: [EntityDef] -> DBName -> Column -> [Column] -> ([AlterColumn'], [Column])
 findAlters defs _tablename col@(Column name isNull sqltype def _defConstraintName _maxLen ref) cols =
     case filter (\c -> cName c == name) cols of
         [] -> ([(name, Add' col)], cols)
@@ -663,7 +663,7 @@ findAlters defs _tablename col@(Column name isNull sqltype def _defConstraintNam
                  filter (\c -> cName c /= name) cols)
 
 -- | Get the references to be added to a table for the given column.
-getAddReference :: [EntityDef a] -> DBName -> DBName -> DBName -> Maybe (DBName, DBName) -> Maybe AlterDB
+getAddReference :: [EntityDef] -> DBName -> DBName -> DBName -> Maybe (DBName, DBName) -> Maybe AlterDB
 getAddReference allDefs table reftable cname ref =
     case ref of
         Nothing -> Nothing

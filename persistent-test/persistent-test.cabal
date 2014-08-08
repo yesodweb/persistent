@@ -140,6 +140,7 @@ library
                    , blaze-builder
                    , mtl
                    , fast-logger
+                   , semigroups
                    , scientific
                    , resource-pool
                    , exceptions

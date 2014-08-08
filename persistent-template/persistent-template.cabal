@@ -26,6 +26,7 @@ library
                    , aeson                    >= 0.7 && < 0.8
                    , monad-logger
                    , unordered-containers
+                   , tagged
     exposed-modules: Database.Persist.TH
     ghc-options:     -Wall
     if impl(ghc >= 7.4)
