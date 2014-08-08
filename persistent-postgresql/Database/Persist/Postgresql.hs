@@ -341,7 +341,7 @@ getGetter conn oid = case I.lookup (PG.oid2int oid) builtinGetters of
     Just getter -> return getter
     Nothing -> do
         tyinfo <- PG.getTypeInfo conn oid
-        -- If the type in a PostgreSQL Enum
+        -- If the type is a PostgreSQL Enum
         if (PG.typcategory tyinfo == 'E')
             then return $ enumGetter
             else error $ "Postgresql.getGetter: type "
