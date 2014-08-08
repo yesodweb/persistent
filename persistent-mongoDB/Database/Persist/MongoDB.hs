@@ -427,12 +427,12 @@ toInsertDoc record = zipFilter (entityFields entDef) (map toPersistValue $ toPer
         isNull (PersistList l) = null l
         isNull _ = False
 
-        -- make sure to removed nulls from embedded entities also
-        embeddedVal :: Maybe EntityDef -> PersistValue -> DB.Value
-        embeddedVal (Just emDef) (PersistMap m) = DB.Doc $
-          zipFilter (entityFields emDef) $ map snd m
-        embeddedVal je@(Just _) (PersistList l) = DB.Array $ map (embeddedVal je) l
-        embeddedVal _ _ = DB.val pv
+    -- make sure to removed nulls from embedded entities also
+    embeddedVal :: Maybe EntityDef -> PersistValue -> DB.Value
+    embeddedVal (Just emDef) (PersistMap m) = DB.Doc $
+      zipFilter (entityFields emDef) $ map snd m
+    embeddedVal je@(Just _) (PersistList l) = DB.Array $ map (embeddedVal je) l
+    embeddedVal _ pv = DB.val pv
 
 collectionName :: (PersistEntity record) => record -> Text
 collectionName = unDBName . entityDB . entityDef . Just
@@ -681,7 +681,7 @@ filterToDocument f =
       -- However, I don't think an end user ever wants that.
       FilterOr fs  -> multiFilter OrDollar fs
       -- Ignore an empty filter list instead of throwing an exception.
-      -- $and is necessary in only a few cases, but it makes query construction easier
+      -- \$and is necessary in only a few cases, but it makes query construction easier
       FilterAnd [] -> []
       FilterAnd fs -> multiFilter AndDollar fs
 

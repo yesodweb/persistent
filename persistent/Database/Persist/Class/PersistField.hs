@@ -253,6 +253,7 @@ instance (Ord a, PersistField a) => PersistField (S.Set a) where
     fromPersistValue (PersistByteString bs)
         | Just values <- A.decode' (L.fromChunks [bs]) =
             either Left (Right . S.fromList) $ fromPersistList values
+    fromPersistValue PersistNull = Right S.empty
     fromPersistValue x = Left $ T.pack $ "Expected PersistSet, received: " ++ show x
 
 instance (PersistField a, PersistField b) => PersistField (a,b) where
@@ -294,6 +295,7 @@ getPersistMap (PersistMap kvs) = Right kvs
 getPersistMap (PersistText t)  = getPersistMap (PersistByteString $ TE.encodeUtf8 t)
 getPersistMap (PersistByteString bs)
     | Just pairs <- A.decode' (L.fromChunks [bs]) = Right pairs
+getPersistMap PersistNull = Right []
 getPersistMap x = Left $ T.pack $ "Expected PersistMap, received: " ++ show x
 
 data SomePersistField = forall a. PersistField a => SomePersistField a

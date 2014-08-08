@@ -58,6 +58,7 @@ main = do
 #endif
 
   hspec $ do
+    PersistentTest.specs
     RenameTest.specs
 #ifndef WITH_POSTGRESQL
     DataTypeTest.specs
