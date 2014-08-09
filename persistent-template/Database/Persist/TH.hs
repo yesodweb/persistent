@@ -738,12 +738,14 @@ mkEntity mps t = do
     lensClauses <- mkLensClauses mps t
 
     lenses <- mkLenses mps t
+    let instanceConstraint = if not (mpsGeneric mps) then [] else
+          [ClassP ''PersistStore [backendT]]
 
     return $ addSyn $
        dataTypeDec mps t : mconcat fkc `mappend`
       ([ TySynD (mkName $ unpack $ unHaskellName entName ++ "Id") [] $
             ConT ''Key `AppT` ConT (mkName nameS)
-      , InstanceD [] clazz $
+      , InstanceD instanceConstraint clazz $
         [ uniqueTypeDec mps t
         , keyTypeDec
         , keyToValues'
@@ -757,7 +759,7 @@ mkEntity mps t = do
         , DataInstD
             []
             ''EntityField
-            [ genericDataType mps entName $ VarT $ mkName "backend"
+            [ genericDataType mps entName backendT
             , VarT $ mkName "typ"
             ]
             (map fst fields)
@@ -767,16 +769,18 @@ mkEntity mps t = do
             ''PersistEntityBackend
 #if MIN_VERSION_template_haskell(2,9,0)
             (TySynEqn
-               [genericDataType mps entName $ VarT $ mkName "backend"]
+               [genericDataType mps entName backendT]
                (backendDataType mps))
 #else
-            [genericDataType mps entName $ VarT $ mkName "backend"]
+            [genericDataType mps entName backendT]
             (backendDataType mps)
 #endif
         , FunD 'persistIdField [Clause [] (NormalB $ ConE $ mkName $ unpack $ unHaskellName entName ++ "Id") []]
         , FunD 'fieldLens lensClauses
         ]
       ] `mappend` lenses)
+    where
+      backendT = VarT $ mkName "backend"
 
 mkLenses :: MkPersistSettings -> EntityDef -> Q [Dec]
 mkLenses mps _ | not (mpsGenerateLenses mps) = return []
