@@ -388,7 +388,7 @@ entityUpdates =
 uniqueTypeDec :: MkPersistSettings -> EntityDef -> Dec
 uniqueTypeDec mps t =
     DataInstD [] ''Unique
-        [genericDataType mps (entityHaskell t) $ VarT backend]
+        [genericDataType mps (entityHaskell t) backendT]
             (map (mkUnique mps backend t) $ entityUniques t)
             []
   where
@@ -661,18 +661,18 @@ mkLensClauses mps t = do
 
 mkKeyTypeDec :: MkPersistSettings -> EntityDef -> Q Dec -- FIXME support for composite keys
 mkKeyTypeDec mps t = do
-    let baseName = keyString t
-        fieldName = mkName $ "un" `mappend` baseName
-        keyType
+    let fieldName = mkName $ "un" `mappend` keyString t
+        backendKeyType
             | mpsGeneric mps = ConT ''BackendKey `AppT` backendT
             | otherwise      = ConT ''BackendKey `AppT` mpsBackend mps
+        backendKeyVar = (fieldName, NotStrict, backendKeyType)
     return $ NewtypeInstD
         []
         ''Key
         [genericDataType mps (entityHaskell t) backendT]
         (RecC
-            (mkName baseName)
-            [(fieldName, NotStrict, keyType)])
+            (keyName t)
+            [backendKeyVar])
         (if mpsGeneric mps
             then [] -- FIXME
             else [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''PersistField, ''PersistFieldSql])
@@ -709,7 +709,7 @@ mkEntity mps t = do
     let entName = entityHaskell t
     let nameT = unHaskellName entName
     let nameS = unpack nameT
-    let clazz = ConT ''PersistEntity `AppT` genericDataType mps entName (VarT $ mkName "backend")
+    let clazz = ConT ''PersistEntity `AppT` genericDataType mps entName backendT
     tpf <- mkToPersistFields mps nameS t
     fpv <- mkFromPersistValues mps t
     utv <- mkUniqueToValues $ entityUniques t
@@ -838,17 +838,18 @@ mkLenses mps ent = fmap mconcat $ forM (entityFields ent) $ \field -> do
 mkForeignKeysComposite :: MkPersistSettings -> EntityDef -> ForeignDef -> Q [Dec]
 mkForeignKeysComposite mps t fdef = do
    let fieldName f = mkName $ unpack $ recName mps (unHaskellName $ entityHaskell t) (unHaskellName f)
-   let fname=fieldName $ foreignConstraintNameHaskell fdef
-   let reftablename=mkName $ unpack $ unHaskellName $ foreignRefTableHaskell fdef 
-   let tablename=mkName $ unpack $ unHaskellName $ entityHaskell t
+   let fname = fieldName $ foreignConstraintNameHaskell fdef
+   let reftableString = unpack $ unHaskellName $ foreignRefTableHaskell fdef 
+   let reftableKeyName = mkName $ reftableString `mappend` "Key"
+   let tablename = mkName $ unpack $ unHaskellName $ entityHaskell t
    recordName <- newName "record"
    
    let fldsE = map (\(a,_,_,_) -> VarE recordName `AppE` VarE (fieldName a)) $
                  foreignFields fdef
-   let mkKeyE = foldl' AppE (ConE (keyName t)) fldsE
+   let mkKeyE = foldl' AppE (ConE reftableKeyName) fldsE
    let fn = FunD fname [Clause [VarP recordName] (NormalB mkKeyE) []]
    
-   let t2 = ConT ''Key `AppT` ConT reftablename
+   let t2 = ConT ''Key `AppT` ConT (mkName reftableString)
    let sig = SigD fname $ (ArrowT `AppT` (ConT tablename)) `AppT` t2
    return [sig, fn]
 
@@ -894,7 +895,7 @@ persistFieldFromEntity mps e = do
             ]
         ]
     where
-      typ = genericDataType mps (entityHaskell e) $ VarT $ mkName "backend"
+      typ = genericDataType mps (entityHaskell e) backendT
       entFields = entityFields e
       columnNames  = map (unpack . unHaskellName . fieldHaskell) entFields
 
@@ -972,7 +973,7 @@ mkDeleteCascade mps defs = do
             stmts = map mkStmt deps `mappend`
                     [NoBindS $ del `AppE` VarE key]
 
-        let entityT = genericDataType mps name $ VarT $ mkName "backend"
+        let entityT = genericDataType mps name backendT
 
         return $
             InstanceD
@@ -1251,7 +1252,7 @@ mkField mps et cd = do
         case foreignReference cd of
             Just ft ->
                  ConT ''Key
-                    `AppT` genericDataType mps ft (VarT $ mkName "backend")
+                    `AppT` genericDataType mps ft backendT
             Nothing -> ftToType $ fieldType cd
 
 filterConName :: MkPersistSettings
@@ -1298,7 +1299,7 @@ mkJSON mps def = do
         $ entityFields def
 
     let conName = mkName $ unpack $ unHaskellName $ entityHaskell def
-        typ = genericDataType mps (entityHaskell def) $ VarT $ mkName "backend"
+        typ = genericDataType mps (entityHaskell def) backendT
         toJSONI = InstanceD
             []
             (ConT ''ToJSON `AppT` typ)
