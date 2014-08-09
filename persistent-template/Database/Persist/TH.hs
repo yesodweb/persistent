@@ -662,21 +662,23 @@ mkLensClauses mps t = do
 mkKeyTypeDec :: MkPersistSettings -> EntityDef -> Q Dec -- FIXME support for composite keys
 mkKeyTypeDec mps t = do
     let baseName = keyString t
-        conName = mkName baseName
         fieldName = mkName $ "un" `mappend` baseName
         keyType
-            | mpsGeneric mps = ConT ''BackendKey `AppT` VarT (mkName "backend")
+            | mpsGeneric mps = ConT ''BackendKey `AppT` backendT
             | otherwise      = ConT ''BackendKey `AppT` mpsBackend mps
     return $ NewtypeInstD
         []
         ''Key
-        [genericDataType mps (entityHaskell t) (VarT $ mkName "backend")]
+        [genericDataType mps (entityHaskell t) backendT]
         (RecC
-            conName
+            (mkName baseName)
             [(fieldName, NotStrict, keyType)])
         (if mpsGeneric mps
             then [] -- FIXME
             else [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''PersistField, ''PersistFieldSql])
+
+backendT :: Type
+backendT = VarT $ mkName "backend"
 
 keyName :: EntityDef -> Name
 keyName = mkName . keyString
@@ -782,8 +784,6 @@ mkEntity mps t = do
         , FunD 'fieldLens lensClauses
         ]
       ] `mappend` lenses)
-    where
-      backendT = VarT $ mkName "backend"
 
 mkLenses :: MkPersistSettings -> EntityDef -> Q [Dec]
 mkLenses mps _ | not (mpsGenerateLenses mps) = return []
