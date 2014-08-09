@@ -613,7 +613,7 @@ mkLensClauses mps t = do
     setId <- [|\(Entity _ value) key -> Entity key value|]
     getVal <- [|entityVal|]
     dot <- [|(.)|]
-    keyName <- newName "key"
+    keyVar <- newName "key"
     valName <- newName "value"
     xName <- newName "x"
     let idClause = Clause
@@ -621,10 +621,10 @@ mkLensClauses mps t = do
             (NormalB $ lens' `AppE` getId `AppE` setId)
             []
     if entitySum t
-        then return $ idClause : map (toSumClause lens' keyName valName xName) (entityFields t)
-        else return $ idClause : map (toClause lens' getVal dot keyName valName xName) (entityFields t)
+        then return $ idClause : map (toSumClause lens' keyVar valName xName) (entityFields t)
+        else return $ idClause : map (toClause lens' getVal dot keyVar valName xName) (entityFields t)
   where
-    toClause lens' getVal dot keyName valName xName f = Clause
+    toClause lens' getVal dot keyVar valName xName f = Clause
         [ConP (filterConName mps t f) []]
         (NormalB $ lens' `AppE` getter `AppE` setter)
         []
@@ -632,14 +632,14 @@ mkLensClauses mps t = do
         fieldName = mkName $ unpack $ recName mps (unHaskellName $ entityHaskell t) (unHaskellName $ fieldHaskell f)
         getter = InfixE (Just $ VarE fieldName) dot (Just getVal)
         setter = LamE
-            [ ConP 'Entity [VarP keyName, VarP valName]
+            [ ConP 'Entity [VarP keyVar, VarP valName]
             , VarP xName
             ]
-            $ ConE 'Entity `AppE` VarE keyName `AppE` RecUpdE
+            $ ConE 'Entity `AppE` VarE keyVar `AppE` RecUpdE
                 (VarE valName)
                 [(fieldName, VarE xName)]
 
-    toSumClause lens' keyName valName xName f = Clause
+    toSumClause lens' keyVar valName xName f = Clause
         [ConP (filterConName mps t f) []]
         (NormalB $ lens' `AppE` getter `AppE` setter)
         []
@@ -654,16 +654,16 @@ mkLensClauses mps t = do
             -- a sum type and therefore could result in Maybe.
             : if length (entityFields t) > 1 then [emptyMatch] else []
         setter = LamE
-            [ ConP 'Entity [VarP keyName, WildP]
+            [ ConP 'Entity [VarP keyVar, WildP]
             , VarP xName
             ]
-            $ ConE 'Entity `AppE` VarE keyName `AppE` (ConE (sumConstrName mps t f) `AppE` VarE xName)
+            $ ConE 'Entity `AppE` VarE keyVar `AppE` (ConE (sumConstrName mps t f) `AppE` VarE xName)
 
 mkKeyTypeDec :: MkPersistSettings -> EntityDef -> Q Dec -- FIXME support for composite keys
 mkKeyTypeDec mps t = do
-    let baseName = unHaskellName (entityHaskell t) ++ "Key"
-        conName = mkName $ unpack baseName
-        fieldName = mkName $ unpack $ "un" ++ baseName
+    let baseName = keyString t
+        conName = mkName baseName
+        fieldName = mkName $ "un" `mappend` baseName
         keyType
             | mpsGeneric mps = ConT ''BackendKey `AppT` VarT (mkName "backend")
             | otherwise      = ConT ''BackendKey `AppT` mpsBackend mps
@@ -678,10 +678,15 @@ mkKeyTypeDec mps t = do
             then [] -- FIXME
             else [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''PersistField, ''PersistFieldSql])
 
+keyName :: EntityDef -> Name
+keyName = mkName . keyString
+
+keyString :: EntityDef -> String
+keyString t = unpack $ unHaskellName (entityHaskell t) ++ "Key"
+
 mkKeyToValues :: MkPersistSettings -> EntityDef -> Q Dec -- FIXME support for composite keys
 mkKeyToValues mps t = do
-    let baseName = unHaskellName (entityHaskell t) ++ "Key"
-        fieldName = mkName $ unpack $ "un" ++ baseName
+    let fieldName = mkName $ "un" `mappend` keyString t
     e <- [|backendKeyToValues . $(return $ VarE fieldName)|]
     return $ FunD 'keyToValues $ return $ Clause
         []
@@ -690,9 +695,7 @@ mkKeyToValues mps t = do
 
 mkKeyFromValues :: MkPersistSettings -> EntityDef -> Q Dec -- FIXME support for composite keys
 mkKeyFromValues mps t = do
-    let baseName = unHaskellName (entityHaskell t) ++ "Key"
-        conName = mkName $ unpack baseName
-    e <- [|fmap $(return $ ConE conName) . backendKeyFromValues|]
+    e <- [|fmap $(return $ ConE $ keyName t) . backendKeyFromValues|]
     return $ FunD 'keyFromValues $ return $ Clause
         []
         (NormalB e)
@@ -838,11 +841,12 @@ mkForeignKeysComposite mps t fdef = do
    let fname=fieldName $ foreignConstraintNameHaskell fdef
    let reftablename=mkName $ unpack $ unHaskellName $ foreignRefTableHaskell fdef 
    let tablename=mkName $ unpack $ unHaskellName $ entityHaskell t
-   entName <- newName "entname"
+   recordName <- newName "record"
    
-   let flds = map (\(a,_,_,_) -> VarE (fieldName a)) $ foreignFields fdef
-   let xs = ListE $ map (\a -> AppE (VarE 'toPersistValue) ((AppE a (VarE entName)))) flds
-   let fn = FunD fname [Clause [VarP entName] (NormalB (AppE (VarE 'keyFromValues) xs)) []]
+   let fldsE = map (\(a,_,_,_) -> VarE recordName `AppE` VarE (fieldName a)) $
+                 foreignFields fdef
+   let mkKeyE = foldl' AppE (ConE (keyName t)) fldsE
+   let fn = FunD fname [Clause [VarP recordName] (NormalB mkKeyE) []]
    
    let t2 = ConT ''Key `AppT` ConT reftablename
    let sig = SigD fname $ (ArrowT `AppT` (ConT tablename)) `AppT` t2
