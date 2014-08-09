@@ -191,7 +191,7 @@ data UniqueDef = UniqueDef
     deriving (Show, Eq, Read, Ord)
 
 data PrimaryDef = PrimaryDef
-    { primaryFields  :: ![(HaskellName, DBName)]
+    { primaryFields  :: ![FieldDef]
     , primaryAttrs   :: ![Attr]
     }
     deriving (Show, Eq, Read, Ord)

@@ -392,7 +392,7 @@ migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
             if not exists
                 then do
                     let idtxt = case entityPrimary val of
-                                  Just pdef -> T.concat [" PRIMARY KEY (", T.intercalate "," $ map (escape . snd) $ primaryFields pdef, ")"]
+                                  Just pdef -> T.concat [" PRIMARY KEY (", T.intercalate "," $ map (escape . fieldDB) $ primaryFields pdef, ")"]
                                   Nothing   -> T.concat [escape $ entityID val
                                         , " SERIAL PRIMARY KEY UNIQUE"]
                     let addTable = AddTable $ T.concat

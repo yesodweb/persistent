@@ -60,7 +60,7 @@ instance PersistQuery Connection where
         parse vals =
           case entityPrimary t of
             Just pdef -> 
-                  let pks = map fst $ primaryFields pdef
+                  let pks = map fieldHaskell $ primaryFields pdef
                       keyvals = map snd $ filter (\(a, _) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ entityFields t) vals
                   in case fromPersistValuesComposite' keyvals vals of
                       Left s -> liftIO $ throwIO $ PersistMarshalError s
@@ -117,7 +117,7 @@ instance PersistQuery Connection where
       where
         t = entityDef $ dummyFromFilts filts
         cols conn = case entityPrimary t of 
-                     Just pdef -> T.intercalate "," $ map (connEscapeName conn . snd) $ primaryFields pdef
+                     Just pdef -> T.intercalate "," $ map (connEscapeName conn . fieldDB) $ primaryFields pdef
                      Nothing   -> connEscapeName conn $ entityID t
                       
         wher conn = if null filts
@@ -147,7 +147,7 @@ instance PersistQuery Connection where
                            [PersistDouble x] -> return [PersistInt64 (truncate x)] -- oracle returns Double 
                            _ -> liftIO $ throwIO $ PersistMarshalError $ "Unexpected in selectKeys False: " <> T.pack (show xs)
                       Just pdef -> 
-                           let pks = map fst $ primaryFields pdef
+                           let pks = map fieldHaskell $ primaryFields pdef
                                keyvals = map snd $ filter (\(a, _) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ entityFields t) xs
                            in return keyvals
             case keyFromValues keyvals of
@@ -264,23 +264,23 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
                     else
                       case (allVals, pfilter, isCompFilter pfilter) of
                         ([PersistList xs], Eq, _) -> 
-                           let sqlcl=T.intercalate " and " (map (\a -> connEscapeName conn (snd a) <> showSqlFilter pfilter <> "? ")  (primaryFields pdef))
+                           let sqlcl=T.intercalate " and " (map (\a -> connEscapeName conn (fieldDB a) <> showSqlFilter pfilter <> "? ")  (primaryFields pdef))
                            in (wrapSql sqlcl,xs)
                         ([PersistList xs], Ne, _) -> 
-                           let sqlcl=T.intercalate " or " (map (\a -> connEscapeName conn (snd a) <> showSqlFilter pfilter <> "? ")  (primaryFields pdef))
+                           let sqlcl=T.intercalate " or " (map (\a -> connEscapeName conn (fieldDB a) <> showSqlFilter pfilter <> "? ")  (primaryFields pdef))
                            in (wrapSql sqlcl,xs)
                         (_, In, _) -> 
                            let xxs = transpose (map fromPersistList allVals)
-                               sqls=map (\(a,xs) -> connEscapeName conn (snd a) <> showSqlFilter pfilter <> "(" <> T.intercalate "," (replicate (length xs) " ?") <> ") ") (zip (primaryFields pdef) xxs)
+                               sqls=map (\(a,xs) -> connEscapeName conn (fieldDB a) <> showSqlFilter pfilter <> "(" <> T.intercalate "," (replicate (length xs) " ?") <> ") ") (zip (primaryFields pdef) xxs)
                            in (wrapSql (T.intercalate " and " (map wrapSql sqls)), concat xxs)
                         (_, NotIn, _) -> 
                            let xxs = transpose (map fromPersistList allVals)
-                               sqls=map (\(a,xs) -> connEscapeName conn (snd a) <> showSqlFilter pfilter <> "(" <> T.intercalate "," (replicate (length xs) " ?") <> ") ") (zip (primaryFields pdef) xxs)
+                               sqls=map (\(a,xs) -> connEscapeName conn (fieldDB a) <> showSqlFilter pfilter <> "(" <> T.intercalate "," (replicate (length xs) " ?") <> ") ") (zip (primaryFields pdef) xxs)
                            in (wrapSql (T.intercalate " or " (map wrapSql sqls)), concat xxs)
                         ([PersistList xs], _, True) -> 
                            let zs = tail (inits (primaryFields pdef))
                                sql1 = map (\b -> wrapSql (T.intercalate " and " (map (\(i,a) -> sql2 (i==length b) a) (zip [1..] b)))) zs
-                               sql2 islast a = connEscapeName conn (snd a) <> (if islast then showSqlFilter pfilter else showSqlFilter Eq) <> "? "
+                               sql2 islast a = connEscapeName conn (fieldDB a) <> (if islast then showSqlFilter pfilter else showSqlFilter Eq) <> "? "
                                sqlcl = T.intercalate " or " sql1
                            in (wrapSql sqlcl, concat (tail (inits xs)))
                         (_, BackendSpecificFilter _, _) -> error "unhandled type BackendSpecificFilter for composite/non id primary keys"

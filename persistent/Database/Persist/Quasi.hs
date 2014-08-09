@@ -214,13 +214,15 @@ fixForeignKeysAll ents = map fixForeignKeys ents
         fixForeignKey fent fdef = 
            case find ((== foreignRefTableHaskell fdef) . entityHaskell) ents of
              Just pent -> case entityPrimary pent of
-                           Just pdef -> if length (foreignFields fdef) == length (primaryFields pdef) 
-                                         then fdef { foreignFields = zipWith (\(a,b,_,_) (a',b') -> 
-                                                          if chktypes (entityFields fent) a (entityFields pent) a' 
-                                                            then (a,b,a',b') 
-                                                            else error ("type mismatch between foreign key and primary column" ++ show (a,a') ++ " primary ent="++show pent ++ " foreign ent="++show fent)) (foreignFields fdef) (primaryFields pdef) }
-                                         else error $ "found " ++ show (length (foreignFields fdef)) ++ " fkeys and " ++ show (length (primaryFields pdef)) ++ " pkeys: fdef=" ++ show fdef ++ " pdef=" ++ show pdef 
-                           Nothing -> error $ "no explicit primary key fdef="++show fdef++ " fent="++show fent
+                 Just pdef ->
+                     if length (foreignFields fdef) == length (primaryFields pdef)
+                         then fdef { foreignFields = zipWith (\(a,b,_,_) fd ->
+                                       let (a', b') = (fieldHaskell fd, fieldDB fd) in
+                                          if chktypes (entityFields fent) a (entityFields pent) a' 
+                                            then (a,b,a',b')
+                                            else error ("type mismatch between foreign key and primary column" ++ show (a,a') ++ " primary ent="++show pent ++ " foreign ent="++show fent)) (foreignFields fdef) (primaryFields pdef) }
+                         else error $ "found " ++ show (length (foreignFields fdef)) ++ " fkeys and " ++ show (length (primaryFields pdef)) ++ " pkeys: fdef=" ++ show fdef ++ " pdef=" ++ show pdef 
+                 Nothing -> error $ "no explicit primary key fdef="++show fdef++ " fent="++show fent
              Nothing -> error $ "could not find table " ++ show (foreignRefTableHaskell fdef) ++ " fdef=" ++ show fdef ++ " allnames=" ++ show (map (unHaskellName . entityHaskell) ents) ++ "\n\nents=" ++ show ents
 
 -- | Construct an entity definition.
@@ -319,15 +321,15 @@ takePrimary :: [FieldDef]
             -> PrimaryDef
 takePrimary defs pkcols
         = PrimaryDef
-            (map (HaskellName &&& getDBName defs) pkcols)
+            (map (getDef defs) pkcols)
             attrs
   where
     (_, attrs) = break ("!" `T.isPrefixOf`) pkcols
-    getDBName [] t = error $ "Unknown column in primary key constraint: " ++ show t
-    getDBName (d:ds) t
+    getDef [] t = error $ "Unknown column in primary key constraint: " ++ show t
+    getDef (d:ds) t
         | nullable (fieldAttrs d) /= NotNullable = error $ "primary key column cannot be nullable: " ++ show t
-        | fieldHaskell d == HaskellName t = fieldDB d
-        | otherwise = getDBName ds t
+        | fieldHaskell d == HaskellName t = d
+        | otherwise = getDef ds t
 
 -- Unique UppercaseConstraintName list of lowercasefields    
 takeUniq :: PersistSettings

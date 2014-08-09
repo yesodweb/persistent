@@ -434,7 +434,7 @@ pairToType mps backend (fd, _) = idType mps backend fd
 
 backendDataType :: MkPersistSettings -> Type
 backendDataType mps
-    | mpsGeneric mps = VarT $ mkName "backend"
+    | mpsGeneric mps = backendT
     | otherwise = mpsBackend mps
 
 genericDataType :: MkPersistSettings
@@ -661,21 +661,27 @@ mkLensClauses mps t = do
 
 mkKeyTypeDec :: MkPersistSettings -> EntityDef -> Q Dec -- FIXME support for composite keys
 mkKeyTypeDec mps t = do
-    let fieldName = mkName $ "un" `mappend` keyString t
-        backendKeyType
-            | mpsGeneric mps = ConT ''BackendKey `AppT` backendT
-            | otherwise      = ConT ''BackendKey `AppT` mpsBackend mps
-        backendKeyVar = (fieldName, NotStrict, backendKeyType)
     return $ NewtypeInstD
         []
         ''Key
         [genericDataType mps (entityHaskell t) backendT]
         (RecC
             (keyName t)
-            [backendKeyVar])
+            keyFields)
         (if mpsGeneric mps
             then [] -- FIXME
             else [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''PersistField, ''PersistFieldSql])
+  where
+    keyFields = case entityPrimary t of
+      Nothing   -> [backendKeyVar]
+      Just pdef -> map primaryKeyVar $ (primaryFields pdef)
+    primaryKeyVar fd = (mkName $ unpack $ lowerFirst (keyText t) `mappend` (unDBName $ fieldDB fd), NotStrict, ftToType $ fieldType fd)
+
+    backendKeyVar = (unKeyName, NotStrict, backendKeyType)
+    backendKeyType
+        | mpsGeneric mps = ConT ''BackendKey `AppT` backendT
+        | otherwise      = ConT ''BackendKey `AppT` mpsBackend mps
+    unKeyName = mkName $ "un" `mappend` keyString t
 
 backendT :: Type
 backendT = VarT $ mkName "backend"
@@ -684,7 +690,10 @@ keyName :: EntityDef -> Name
 keyName = mkName . keyString
 
 keyString :: EntityDef -> String
-keyString t = unpack $ unHaskellName (entityHaskell t) ++ "Key"
+keyString = unpack . keyText
+
+keyText :: EntityDef -> Text
+keyText t = unHaskellName (entityHaskell t) ++ "Key"
 
 mkKeyToValues :: MkPersistSettings -> EntityDef -> Q Dec -- FIXME support for composite keys
 mkKeyToValues mps t = do

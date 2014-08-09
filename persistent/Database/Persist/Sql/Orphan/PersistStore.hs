@@ -50,7 +50,7 @@ instance PersistStore Connection where
             go'' n Divide = T.concat [n, "=", n, "/?"]
         let go' (x, pu) = go'' (connEscapeName conn x) pu
         let wher = case entityPrimary t of
-                Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (snd fld) <> "=? ") $ primaryFields pdef
+                Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (fieldDB fld) <> "=? ") $ primaryFields pdef
                 Nothing   -> connEscapeName conn (entityID t) <> "=?"
         let sql = T.concat
                 [ "UPDATE "
@@ -102,7 +102,7 @@ instance PersistStore Connection where
                     case entityPrimary t of
                        Nothing -> error $ "ISRManyKeys is used when Primary is defined " ++ show sql
                        Just pdef -> 
-                            let pks = map fst $ primaryFields pdef
+                            let pks = map fieldHaskell $ primaryFields pdef
                                 keyvals = map snd $ filter (\(a, _) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ entityFields t) fs
                             in  case keyFromValues keyvals of
                                     Right k -> return k
@@ -146,7 +146,7 @@ instance PersistStore Connection where
             noColumns :: Bool
             noColumns = null $ entityFields t
         let wher = case entityPrimary t of
-                     Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (snd fld) <> "=? ") $ primaryFields pdef
+                     Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (fieldDB fld) <> "=? ") $ primaryFields pdef
                      Nothing   -> connEscapeName conn (entityID t) <> "=?"
         let sql = T.concat
                 [ "SELECT "
@@ -172,7 +172,7 @@ instance PersistStore Connection where
         t = entityDef $ dummyFromKey k
         wher conn = 
               case entityPrimary t of
-                Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (snd fld) <> "=? ") $ primaryFields pdef
+                Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (fieldDB fld) <> "=? ") $ primaryFields pdef
                 Nothing   -> connEscapeName conn (entityID t) <> "=?"
         sql conn = T.concat
             [ "DELETE FROM "
