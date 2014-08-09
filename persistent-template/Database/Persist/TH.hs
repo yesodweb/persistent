@@ -3,6 +3,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-missing-fields #-}
 -- | This module provides utilities for creating backends. Regular users do not
 -- need to use this module.
@@ -37,7 +38,7 @@ module Database.Persist.TH
     , lensPTH
     ) where
 
-import Prelude hiding ((++), take, concat, splitAt)
+import Prelude hiding ((++), take, concat, splitAt, exp)
 import qualified Prelude as P 
 import Database.Persist
 import Database.Persist.Sql (Migration, migrate, SqlBackend, PersistFieldSql)
@@ -63,7 +64,7 @@ import Data.Aeson
     )
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
-import Control.Applicative (pure, (<*>))
+import Control.Applicative (pure, (<$>), (<*>))
 import Database.Persist.Sql (sqlType)
 import Data.Proxy (Proxy (Proxy))
 import Web.PathPieces (PathPiece)
@@ -659,29 +660,30 @@ mkLensClauses mps t = do
             ]
             $ ConE 'Entity `AppE` VarE keyVar `AppE` (ConE (sumConstrName mps t f) `AppE` VarE xName)
 
-mkKeyTypeDec :: MkPersistSettings -> EntityDef -> Q Dec -- FIXME support for composite keys
+mkKeyTypeDec :: MkPersistSettings -> EntityDef -> Q Dec
 mkKeyTypeDec mps t = do
-    return $ NewtypeInstD
-        []
-        ''Key
-        [genericDataType mps (entityHaskell t) backendT]
-        (RecC
-            (keyName t)
-            keyFields)
-        (if mpsGeneric mps
-            then [] -- FIXME
-            else [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''PersistField, ''PersistFieldSql])
+    let a = []
+        b = ''Key
+        c = [genericDataType mps (entityHaskell t) backendT]
+        d = RecC (keyName t) keyFields
+        e = if mpsGeneric mps || not useNewtype
+              then [''Show, ''Read, ''Eq, ''Ord] -- FIXME
+              else [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''PersistField, ''PersistFieldSql]
+    return $ if useNewtype then NewtypeInstD a b c d e else DataInstD a b c [d] e
   where
+    useNewtype = length keyFields < 2
     keyFields = case entityPrimary t of
       Nothing   -> [backendKeyVar]
       Just pdef -> map primaryKeyVar $ (primaryFields pdef)
-    primaryKeyVar fd = (mkName $ unpack $ lowerFirst (keyText t) `mappend` (unDBName $ fieldDB fd), NotStrict, ftToType $ fieldType fd)
+    primaryKeyVar fd = (keyFieldName t fd, NotStrict, ftToType $ fieldType fd)
 
-    backendKeyVar = (unKeyName, NotStrict, backendKeyType)
+    backendKeyVar = (unKeyName t, NotStrict, backendKeyType)
     backendKeyType
         | mpsGeneric mps = ConT ''BackendKey `AppT` backendT
         | otherwise      = ConT ''BackendKey `AppT` mpsBackend mps
-    unKeyName = mkName $ "un" `mappend` keyString t
+
+unKeyName :: EntityDef -> Name
+unKeyName t = mkName $ "un" `mappend` keyString t
 
 backendT :: Type
 backendT = VarT $ mkName "backend"
@@ -695,22 +697,55 @@ keyString = unpack . keyText
 keyText :: EntityDef -> Text
 keyText t = unHaskellName (entityHaskell t) ++ "Key"
 
-mkKeyToValues :: MkPersistSettings -> EntityDef -> Q Dec -- FIXME support for composite keys
-mkKeyToValues mps t = do
-    let fieldName = mkName $ "un" `mappend` keyString t
-    e <- [|backendKeyToValues . $(return $ VarE fieldName)|]
-    return $ FunD 'keyToValues $ return $ Clause
-        []
-        (NormalB e)
-        []
+keyFieldName :: EntityDef -> FieldDef -> Name
+keyFieldName t fd = mkName $ unpack $ lowerFirst (keyText t) `mappend` (unDBName $ fieldDB fd)
 
-mkKeyFromValues :: MkPersistSettings -> EntityDef -> Q Dec -- FIXME support for composite keys
-mkKeyFromValues mps t = do
-    e <- [|fmap $(return $ ConE $ keyName t) . backendKeyFromValues|]
-    return $ FunD 'keyFromValues $ return $ Clause
-        []
+mkKeyToValues :: MkPersistSettings -> EntityDef -> Q Dec
+mkKeyToValues mps t = do
+    (p, e) <- case entityPrimary t of
+        Nothing  ->
+          ([],) <$> [|backendKeyToValues . $(return $ VarE $ unKeyName t)|]
+        Just pdef ->
+          newName "record" >>= return . toValuesPrimary pdef
+    return $ FunD 'keyToValues $ return $ Clause
+        p
         (NormalB e)
         []
+  where
+    toValuesPrimary pdef recordName =
+      ( [VarP recordName]
+      , ListE $ map (\fd -> VarE 'toPersistValue `AppE` (VarE (keyFieldName t fd) `AppE` VarE recordName)) $ primaryFields pdef
+      )
+
+mkKeyFromValues :: MkPersistSettings -> EntityDef -> Q Dec
+mkKeyFromValues mps t = do
+    (p, e) <- case entityPrimary t of
+        Nothing  -> ([],) <$> [|fmap $(return keyConE) . backendKeyFromValues|]
+        Just pdef -> fromValuesPrimary pdef
+    return $ FunD 'keyFromValues [Clause
+        p
+        (NormalB e)
+        []
+      -- TODO: pattern match failure for keyFromValues primary
+      -- , Clause [VarP ""] (NormalB)
+      -- Left "keyFromValues failed "
+      ]
+  where
+    keyConE = ConE (keyName t)
+    fromValuesPrimary pdef = do
+      x1 <- newName "x1"
+      restNames <- mapM (\i -> newName $ "x" `mappend` show i) [2..len]
+      fmapE <- [|(<$>)|]
+      let keyConApp = UInfixE keyConE fmapE (VarE 'fromPersistValue `AppE` VarE x1)
+      applyE <- [|(<*>)|]
+      let applyFromPersistValue exp name =
+            UInfixE exp applyE (VarE 'fromPersistValue `AppE` VarE name)
+      return $
+        ( [ListP $ map VarP (x1:restNames)]
+        , foldl' (\exp name -> applyFromPersistValue exp name) keyConApp restNames
+        )
+      where
+        len = length $ primaryFields pdef
 
 mkEntity :: MkPersistSettings -> EntityDef -> Q [Dec]
 mkEntity mps t = do
@@ -853,7 +888,7 @@ mkForeignKeysComposite mps t fdef = do
    let tablename = mkName $ unpack $ unHaskellName $ entityHaskell t
    recordName <- newName "record"
    
-   let fldsE = map (\(a,_,_,_) -> VarE recordName `AppE` VarE (fieldName a)) $
+   let fldsE = map (\(a,_,_,_) -> VarE (fieldName a) `AppE` VarE recordName) $
                  foreignFields fdef
    let mkKeyE = foldl' AppE (ConE reftableKeyName) fldsE
    let fn = FunD fname [Clause [VarP recordName] (NormalB mkKeyE) []]
