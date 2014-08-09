@@ -425,8 +425,8 @@ specs = describe "persistent" $ do
       p3 @== p
 
   prop "toPathPiece . fromPathPiece" $ \piece ->
-      let key1 = Key piece :: (KeyBackend BackendMonad Person)
-          key2 = fromJust $ fromPathPiece $ toPathPiece key1 :: (KeyBackend BackendMonad Person)
+      let key1 = piece :: (BackendKey BackendMonad)
+          key2 = fromJust $ fromPathPiece $ toPathPiece key1 :: (BackendKey BackendMonad)
       in  toPathPiece key1 == toPathPiece key2
 
   it "replace" $ db $ do
@@ -631,10 +631,10 @@ specs = describe "persistent" $ do
   it "repsert" $ db $ do
 #ifdef WITH_MONGODB
       oid <- liftIO $ genObjectId
-      let k = oidToKey oid
+      let k = PersonKey $ MongoBackendKey oid
 #else
       ki <- liftIO $ randomRIO (0, 10000)
-      let k = Key $ PersistInt64 $ abs ki
+      let k = PersonKey $ SqlBackendKey $ abs ki
 #endif
       Nothing <- selectFirst [PersonName ==. "Repsert"] []
       repsert k $ Person "Repsert" 26 Nothing

@@ -26,6 +26,7 @@ module Init (
   , db
   , sqlite_database
 #endif
+  , BackendKey(..)
 
    -- re-exports
   , module Database.Persist
@@ -56,7 +57,7 @@ import Data.Text (Text)
 
 #ifdef WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
-import Database.Persist.MongoDB (Action, withMongoPool, runMongoDBPool, MongoBackend, defaultMongoConf, applyDockerEnv)
+import Database.Persist.MongoDB (Action, withMongoPool, runMongoDBPool, MongoBackend, defaultMongoConf, applyDockerEnv, BackendKey(..))
 import Language.Haskell.TH.Syntax (Type(..))
 import Database.Persist.TH (mkPersistSettings, MkPersistSettings(..))
 import Control.Monad (replicateM)

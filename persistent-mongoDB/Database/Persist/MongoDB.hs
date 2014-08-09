@@ -48,6 +48,7 @@ module Database.Persist.MongoDB
     , MongoRegexSearchable
 
     -- * Key conversion helpers
+    , BackendKey(..)
     , keyToOid
     , oidToKey
     , recordTypeFromKey
@@ -905,8 +906,8 @@ assocListFromDoc = Prelude.map (\f -> ( (DB.label f), cast (DB.value f) ) )
 oidToPersistValue :: DB.ObjectId -> PersistValue
 oidToPersistValue = PersistObjectId . Serialize.encode
 
-oidToKey :: (PersistEntity record) => DB.ObjectId -> BackendKey MongoBackend
-oidToKey = MongoBackendKey
+oidToKey :: DB.ObjectId -> BackendKey MongoBackend
+oidToKey oid = MongoBackendKey
 {-# Deprecated oidToKey "Use MongoBackendKey" #-}
 
 persistObjectIdToDbOid :: PersistValue -> DB.ObjectId
