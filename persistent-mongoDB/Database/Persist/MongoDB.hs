@@ -907,7 +907,7 @@ oidToPersistValue :: DB.ObjectId -> PersistValue
 oidToPersistValue = PersistObjectId . Serialize.encode
 
 oidToKey :: DB.ObjectId -> BackendKey MongoBackend
-oidToKey oid = MongoBackendKey
+oidToKey = MongoBackendKey
 {-# Deprecated oidToKey "Use MongoBackendKey" #-}
 
 persistObjectIdToDbOid :: PersistValue -> DB.ObjectId
