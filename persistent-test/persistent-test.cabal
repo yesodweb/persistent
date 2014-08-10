@@ -197,6 +197,7 @@ library
   default-extensions: GeneralizedNewtypeDeriving
                       OverloadedStrings
                       FlexibleInstances
+                      TemplateHaskell
 
 
 test-suite test
@@ -206,7 +207,8 @@ test-suite test
   default-language: Haskell2010
   default-extensions: GeneralizedNewtypeDeriving
                       OverloadedStrings
-                    FlexibleInstances
+                      FlexibleInstances
+                      TemplateHaskell
 
   build-depends:   base >= 4 && < 5
                  , persistent-test
