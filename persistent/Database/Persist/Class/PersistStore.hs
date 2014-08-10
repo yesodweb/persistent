@@ -59,7 +59,10 @@ liftPersist f = do
     env <- ask
     liftIO $ runReaderT f (persistBackend env)
 
-class PersistStore backend where
+class
+  ( Show (BackendKey backend), Read (BackendKey backend)
+  , Eq (BackendKey backend), Ord (BackendKey backend)
+  ) => PersistStore backend where
     data BackendKey backend
 
     backendKeyToValues :: BackendKey backend -> [PersistValue]

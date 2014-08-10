@@ -645,18 +645,33 @@ mkLensClauses mps t = do
             ]
             $ ConE 'Entity `AppE` VarE keyVar `AppE` (ConE (sumConstrName mps t f) `AppE` VarE xName)
 
-mkKeyTypeDec :: MkPersistSettings -> EntityDef -> Q Dec
+
+
+-- | declare the key type and associated instances
+-- a PathPiece instance is only generated for a Key with one field
+mkKeyTypeDec :: MkPersistSettings -> EntityDef -> Q (Dec, [Dec])
 mkKeyTypeDec mps t = do
     let a = []
         b = ''Key
-        c = [genericDataType mps (entityHaskell t) backendT]
+        c = [recordType]
         d = RecC (keyName t) keyFields
-        e = if mpsGeneric mps || not useNewtype
-              then [''Show, ''Read, ''Eq, ''Ord] -- FIXME
-                   -- can write the PersistField
-              else [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''PersistField, ''PersistFieldSql]
-    return $ if useNewtype then NewtypeInstD a b c d e else DataInstD a b c [d] e
+    (instDecs, e) <- if mpsGeneric mps || not useNewtype
+           then do pfDec <- pfInstD
+                   return (pfDec, [''Show, ''Read, ''Eq, ''Ord])
+           else return ([], [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''PersistField, ''PersistFieldSql])
+    let kd = if useNewtype then NewtypeInstD a b c d e else DataInstD a b c [d] e
+    return (kd, instDecs)
   where
+    recordType = genericDataType mps (entityHaskell t) backendT
+    pfInstD = -- FIXME: generate a PersistMap instead of PersistList
+      [d|instance PersistField (Key $(pure recordType)) where
+            toPersistValue = PersistList . keyToValues
+            fromPersistValue (PersistList l) = keyFromValues l
+            fromPersistValue got = error $ "fromPersistValue: expected PersistList, got: " `mappend` show got
+         instance PersistFieldSql (Key $(pure recordType)) where
+            sqlType _ = SqlString
+      |]
+
     useNewtype = length keyFields < 2
     keyFields = case entityPrimary t of
       Nothing   -> [backendKeyVar]
@@ -727,10 +742,10 @@ fromValues t funName conE fields = do
     patternSuccess [] = do
       rightE <- [|Right|]
       return $ normalClause [ListP []] (rightE `AppE` conE)
-    patternSuccess fields = do
+    patternSuccess fieldsNE = do
         x1 <- newName "x1"
-        restNames <- mapM (\i -> newName $ "x" `mappend` show i) [2..length fields]
-        (fpv1:mkPersistValues) <- mapM mkPvFromFd fields
+        restNames <- mapM (\i -> newName $ "x" `mappend` show i) [2..length fieldsNE]
+        (fpv1:mkPersistValues) <- mapM mkPvFromFd fieldsNE
         fmapE <- [|(<$>)|]
         let conApp = infixFromPersistValue fmapE fpv1 conE x1
         applyE <- [|(<*>)|]
@@ -773,7 +788,7 @@ mkEntity mps t = do
     fields <- mapM (mkField mps t) $ primaryField : entityFields t
     toFieldNames <- mkToFieldNames $ entityUniques t
 
-    keyTypeDec <- mkKeyTypeDec mps t
+    (keyTypeDec, keyInstanceDecs) <- mkKeyTypeDec mps t
     keyToValues' <- mkKeyToValues mps t
     keyFromValues' <- mkKeyFromValues mps t
 
@@ -826,7 +841,7 @@ mkEntity mps t = do
         , FunD 'persistIdField [normalClause [] (ConE $ mkName $ unpack $ unHaskellName entName ++ "Id")]
         , FunD 'fieldLens lensClauses
         ]
-      ] `mappend` lenses)
+      ] `mappend` lenses `mappend` keyInstanceDecs)
 
 entityText :: EntityDef -> Text
 entityText = unHaskellName . entityHaskell
