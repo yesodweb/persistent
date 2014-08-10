@@ -1076,13 +1076,14 @@ sqlTypeFunD :: Exp -> Dec
 sqlTypeFunD st = FunD 'sqlType
                 [ normalClause [WildP] st ]
 
+typeInstanceD :: Name -> Type -> [Dec] -> Dec
+typeInstanceD clazz typ = InstanceD [] (ConT clazz `AppT` typ)
+
 persistFieldInstanceD :: Type -> [Dec] -> Dec
-persistFieldInstanceD typ =
-   InstanceD [] (ConT ''PersistField `AppT` typ)
+persistFieldInstanceD = typeInstanceD ''PersistField
 
 persistFieldSqlInstanceD :: Type -> [Dec] -> Dec
-persistFieldSqlInstanceD typ =
-   InstanceD [] (ConT ''PersistFieldSql `AppT` typ)
+persistFieldSqlInstanceD = typeInstanceD ''PersistFieldSql
 
 -- | Automatically creates a valid 'PersistField' instance for any datatype
 -- that has valid 'Show' and 'Read' instances. Can be very convenient for
@@ -1359,10 +1360,7 @@ mkJSON mps def = do
 
     let conName = mkName $ unpack $ unHaskellName $ entityHaskell def
         typ = genericDataType mps (entityHaskell def) backendT
-        toJSONI = InstanceD
-            []
-            (ConT ''ToJSON `AppT` typ)
-            [toJSON']
+        toJSONI = typeInstanceD ''ToJSON typ [toJSON']
         toJSON' = FunD 'toJSON $ return $ normalClause
             [ConP conName $ map VarP xs]
             (objectE `AppE` ListE pairs)
@@ -1371,10 +1369,7 @@ mkJSON mps def = do
             (Just (packE `AppE` LitE (StringL $ unpack $ unHaskellName $ fieldHaskell f)))
             dotEqualE
             (Just $ VarE x)
-        fromJSONI = InstanceD
-            []
-            (ConT ''FromJSON `AppT` typ)
-            [parseJSON']
+        fromJSONI = typeInstanceD ''FromJSON typ [parseJSON']
         parseJSON' = FunD 'parseJSON
             [ normalClause [ConP 'Object [VarP obj]]
                 (foldl'
