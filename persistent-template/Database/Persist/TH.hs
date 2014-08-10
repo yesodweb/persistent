@@ -461,7 +461,7 @@ degen :: [Clause] -> [Clause]
 degen [] =
     let err = VarE 'error `AppE` LitE (StringL
                 "Degenerate case, should never happen")
-     in [Clause [WildP] (NormalB err) []]
+     in [normalClause [WildP] err]
 degen x = x
 
 mkToPersistFields :: MkPersistSettings -> String -> EntityDef -> Q Dec
@@ -478,7 +478,7 @@ mkToPersistFields mps constr ed@EntityDef { entitySum = isSum, entityFields = fi
         let pat = ConP (mkName constr) $ map VarP xs
         sp <- [|SomePersistField|]
         let bod = ListE $ map (AppE sp . VarE) xs
-        return $ Clause [pat] (NormalB bod) []
+        return $ normalClause [pat] bod
 
     fieldCount = length fields
 
@@ -492,12 +492,12 @@ mkToPersistFields mps constr ed@EntityDef { entitySum = isSum, entityFields = fi
             after = replicate afterCount enull
         x <- newName "x"
         sp <- [|SomePersistField|]
-        let body = NormalB $ ListE $ mconcat
+        let body = ListE $ mconcat
                 [ before
                 , [sp `AppE` VarE x]
                 , after
                 ]
-        return $ Clause [ConP name [VarP x]] body []
+        return $ normalClause [ConP name [VarP x]] body
 
 
 mkToFieldNames :: [UniqueDef] -> Q Dec
@@ -508,10 +508,9 @@ mkToFieldNames pairs = do
     go (UniqueDef constr _ names _) = do
         names' <- lift names
         return $
-            Clause
+            normalClause
                 [RecP (mkName $ unpack $ unHaskellName constr) []]
-                (NormalB names')
-                []
+                names'
 
 mkToUpdate :: String -> [(String, PersistUpdate)] -> Q Dec
 mkToUpdate name pairs = do
@@ -520,7 +519,7 @@ mkToUpdate name pairs = do
   where
     go (constr, pu) = do
         pu' <- lift pu
-        return $ Clause [RecP (mkName constr) []] (NormalB pu') []
+        return $ normalClause [RecP (mkName constr) []] pu'
 
 mkUniqueToValues :: [UniqueDef] -> Q Dec
 mkUniqueToValues pairs = do
@@ -533,23 +532,22 @@ mkUniqueToValues pairs = do
         let pat = ConP (mkName $ unpack $ unHaskellName constr) $ map VarP xs
         tpv <- [|toPersistValue|]
         let bod = ListE $ map (AppE tpv . VarE) xs
-        return $ Clause [pat] (NormalB bod) []
+        return $ normalClause [pat] bod
 
 mkToFieldName :: String -> [(String, String)] -> Dec
 mkToFieldName func pairs =
         FunD (mkName func) $ degen $ map go pairs
   where
     go (constr, name) =
-        Clause [RecP (mkName constr) []] (NormalB $ LitE $ StringL name) []
+        normalClause [RecP (mkName constr) []] (LitE $ StringL name)
 
 mkToValue :: String -> [String] -> Dec
 mkToValue func = FunD (mkName func) . degen . map go
   where
     go constr =
         let x = mkName "x"
-         in Clause [ConP (mkName constr) [VarP x]]
-                   (NormalB $ VarE 'toPersistValue `AppE` VarE x)
-                   []
+         in normalClause [ConP (mkName constr) [VarP x]]
+                   (VarE 'toPersistValue `AppE` VarE x)
 
 isNotNull :: PersistValue -> Bool
 isNotNull PersistNull = False
@@ -607,18 +605,16 @@ mkLensClauses mps t = do
     keyVar <- newName "key"
     valName <- newName "value"
     xName <- newName "x"
-    let idClause = Clause
+    let idClause = normalClause
             [ConP (mkName $ unpack $ unHaskellName (entityHaskell t) ++ "Id") []]
-            (NormalB $ lens' `AppE` getId `AppE` setId)
-            []
+            (lens' `AppE` getId `AppE` setId)
     if entitySum t
         then return $ idClause : map (toSumClause lens' keyVar valName xName) (entityFields t)
         else return $ idClause : map (toClause lens' getVal dot keyVar valName xName) (entityFields t)
   where
-    toClause lens' getVal dot keyVar valName xName f = Clause
+    toClause lens' getVal dot keyVar valName xName f = normalClause
         [ConP (filterConName mps t f) []]
-        (NormalB $ lens' `AppE` getter `AppE` setter)
-        []
+        (lens' `AppE` getter `AppE` setter)
       where
         fieldName = mkName $ unpack $ recName mps (entityHaskell t) (fieldHaskell f)
         getter = InfixE (Just $ VarE fieldName) dot (Just getVal)
@@ -630,10 +626,9 @@ mkLensClauses mps t = do
                 (VarE valName)
                 [(fieldName, VarE xName)]
 
-    toSumClause lens' keyVar valName xName f = Clause
+    toSumClause lens' keyVar valName xName f = normalClause
         [ConP (filterConName mps t f) []]
-        (NormalB $ lens' `AppE` getter `AppE` setter)
-        []
+        (lens' `AppE` getter `AppE` setter)
       where
         emptyMatch = Match WildP (NormalB $ VarE 'error `AppE` LitE (StringL "Tried to use fieldLens on a Sum type")) []
         getter = LamE
@@ -803,7 +798,7 @@ mkEntity mps t = do
         , keyTypeDec
         , keyToValues'
         , keyFromValues'
-        , FunD 'entityDef [Clause [WildP] (NormalB t') []]
+        , FunD 'entityDef [normalClause [WildP] t']
         , tpf
         , FunD 'fromPersistValues fpv
         , toFieldNames
@@ -828,7 +823,7 @@ mkEntity mps t = do
             [genericDataType mps entName backendT]
             (backendDataType mps)
 #endif
-        , FunD 'persistIdField [Clause [] (NormalB $ ConE $ mkName $ unpack $ unHaskellName entName ++ "Id") []]
+        , FunD 'persistIdField [normalClause [] (ConE $ mkName $ unpack $ unHaskellName entName ++ "Id")]
         , FunD 'fieldLens lensClauses
         ]
       ] `mappend` lenses)
@@ -876,13 +871,12 @@ mkLenses mps ent = fmap mconcat $ forM (entityFields ent) $ \field -> do
             (NormalB $ VarE 'fmap
                 `AppE` setter
                 `AppE` (f `AppE` needle))
-            [ FunD needleN [Clause [] (NormalB $ VarE fieldName `AppE` a) []]
-            , FunD setterN $ return $ Clause
+            [ FunD needleN [normalClause [] (VarE fieldName `AppE` a)]
+            , FunD setterN $ return $ normalClause
                 [VarP yN]
-                (NormalB $ RecUpdE a
+                (RecUpdE a
                     [ (fieldName, y)
                     ])
-                []
             ]
         ]
 
@@ -898,7 +892,7 @@ mkForeignKeysComposite mps t fdef = do
    let fldsE = map (\(a,_,_,_) -> VarE (fieldName a) `AppE` VarE recordName) $
                  foreignFields fdef
    let mkKeyE = foldl' AppE (ConE reftableKeyName) fldsE
-   let fn = FunD fname [Clause [VarP recordName] (NormalB mkKeyE) []]
+   let fn = FunD fname [normalClause [VarP recordName] mkKeyE]
    
    let t2 = ConT ''Key `AppT` ConT (mkName reftableString)
    let sig = SigD fname $ (ArrowT `AppT` (ConT tablename)) `AppT` t2
@@ -936,9 +930,9 @@ persistFieldFromEntity mps e = do
     getPersistMap' <- [|getPersistMap|]
     return
         [ persistFieldInstanceD typ
-            [ FunD 'toPersistValue [ Clause [] (NormalB obj) [] ]
+            [ FunD 'toPersistValue [ normalClause [] obj ]
             , FunD 'fromPersistValue
-                [ Clause [] (NormalB $ InfixE (Just fpv) compose $ Just getPersistMap') []
+                [ normalClause [] (InfixE (Just fpv) compose $ Just getPersistMap')
                 ]
             ]
         , persistFieldSqlInstanceD typ
@@ -964,7 +958,7 @@ mkSave name' defs' = do
     let name = mkName name'
     defs <- lift defs'
     return [ SigD name $ ListT `AppT` (ConT ''EntityDef `AppT` ConT ''SqlType)
-           , FunD name [Clause [] (NormalB defs) []]
+           , FunD name [normalClause [] defs]
            ]
 
 data Dep = Dep
@@ -1033,12 +1027,12 @@ mkDeleteCascade mps defs = do
             ]
             (ConT ''DeleteCascade `AppT` entityT `AppT` VarT (mkName "backend"))
             [ FunD 'deleteCascade
-                [Clause [VarP key] (NormalB $ DoE stmts) []]
+                [normalClause [VarP key] (DoE stmts)]
             ]
 
 mkUniqueKeys :: EntityDef -> Q Dec
 mkUniqueKeys def | entitySum def =
-    return $ FunD 'persistUniqueKeys [Clause [WildP] (NormalB $ ListE []) []]
+    return $ FunD 'persistUniqueKeys [normalClause [WildP] (ListE [])]
 mkUniqueKeys def = do
     c <- clause
     return $ FunD 'persistUniqueKeys [c]
@@ -1052,7 +1046,7 @@ mkUniqueKeys def = do
         let pat = ConP
                 (mkName $ unpack $ unHaskellName $ entityHaskell def)
                 (map (VarP . snd) xs)
-        return $ Clause [pat] (NormalB $ ListE pcs) []
+        return $ normalClause [pat] (ListE pcs)
 
     go :: [(HaskellName, Name)] -> UniqueDef -> Exp
     go xs (UniqueDef name _ cols _) =
@@ -1065,7 +1059,7 @@ mkUniqueKeys def = do
 
 sqlTypeFunD :: Exp -> Dec
 sqlTypeFunD st = FunD 'sqlType
-                [ Clause [WildP] (NormalB st) [] ]
+                [ normalClause [WildP] st ]
 
 persistFieldInstanceD :: Type -> [Dec] -> Dec
 persistFieldInstanceD typ =
@@ -1092,10 +1086,10 @@ derivePersistField s = do
     return
         [ persistFieldInstanceD (ConT $ mkName s)
             [ FunD 'toPersistValue
-                [ Clause [] (NormalB tpv) []
+                [ normalClause [] tpv
                 ]
             , FunD 'fromPersistValue
-                [ Clause [] (NormalB $ fpv `AppE` LitE (StringL s)) []
+                [ normalClause [] (fpv `AppE` LitE (StringL s))
                 ]
             ]
         , persistFieldSqlInstanceD (ConT $ mkName s)
@@ -1126,10 +1120,10 @@ derivePersistFieldJSON s = do
     return
         [ persistFieldInstanceD (ConT $ mkName s)
             [ FunD 'toPersistValue
-                [ Clause [] (NormalB tpv) []
+                [ normalClause [] tpv
                 ]
             , FunD 'fromPersistValue
-                [ Clause [] (NormalB $ fpv `AppE` LitE (StringL s)) []
+                [ normalClause [] (fpv `AppE` LitE (StringL s))
                 ]
             ]
         , persistFieldSqlInstanceD (ConT $ mkName s)
@@ -1146,7 +1140,7 @@ mkMigrate fun allDefs = do
     body' <- body
     return
         [ SigD (mkName fun) typ
-        , FunD (mkName fun) [Clause [] (NormalB body') []]
+        , FunD (mkName fun) [normalClause [] body']
         ]
   where
     defs = filter isMigrated allDefs
@@ -1288,10 +1282,9 @@ mkField mps et cd = do
                 [EqualP (VarT $ mkName "typ") maybeTyp]
                 $ NormalC name []
     bod <- lift cd
-    let cla = Clause
+    let cla = normalClause
                 [ConP name []]
-                (NormalB bod)
-                []
+                bod
     return (con, cla)
   where
     name = filterConName mps et cd
@@ -1355,10 +1348,9 @@ mkJSON mps def = do
             []
             (ConT ''ToJSON `AppT` typ)
             [toJSON']
-        toJSON' = FunD 'toJSON $ return $ Clause
+        toJSON' = FunD 'toJSON $ return $ normalClause
             [ConP conName $ map VarP xs]
-            (NormalB $ objectE `AppE` ListE pairs)
-            []
+            (objectE `AppE` ListE pairs)
         pairs = zipWith toPair (entityFields def) xs
         toPair f x = InfixE
             (Just (packE `AppE` LitE (StringL $ unpack $ unHaskellName $ fieldHaskell f)))
@@ -1369,14 +1361,13 @@ mkJSON mps def = do
             (ConT ''FromJSON `AppT` typ)
             [parseJSON']
         parseJSON' = FunD 'parseJSON
-            [ Clause [ConP 'Object [VarP obj]]
-                (NormalB $ foldl'
+            [ normalClause [ConP 'Object [VarP obj]]
+                (foldl'
                     (\x y -> InfixE (Just x) apE' (Just y))
                     (pureE `AppE` ConE conName)
                     pulls
                 )
-                []
-            , Clause [WildP] (NormalB mzeroE) []
+            , normalClause [WildP] mzeroE
             ]
         pulls = map toPull $ entityFields def
         toPull f = InfixE
