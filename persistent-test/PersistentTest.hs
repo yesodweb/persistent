@@ -619,7 +619,7 @@ specs = describe "persistent" $ do
   it "insertKey" $ db $ do
 #ifdef WITH_MONGODB
       oid <- liftIO $ genObjectId
-      let k = oidToKey oid
+      let k = PersonKey $ MongoBackendKey oid
 #else
       ki <- liftIO $ randomRIO (0, 10000)
       let k = Key $ PersistInt64 $ abs ki

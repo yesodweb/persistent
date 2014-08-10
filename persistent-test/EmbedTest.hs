@@ -24,6 +24,7 @@ import qualified Data.Set as S
 import qualified Data.Map as M
 #if WITH_MONGODB
 import Database.Persist.MongoDB
+import Database.MongoDB (genObjectId)
 import Database.MongoDB (Value(String))
 import EntityEmbedTest
 import System.Process (readProcess)
@@ -301,7 +302,7 @@ specs = describe "embedded entities" $ do
     retrievedHasEnts @== hasEnts
 
   it "can embed objects with ObjectIds" $ db $ do
-    oid <- liftIO $ genObjectid
+    oid <- liftIO $ genObjectId
     let hoid   = HasObjectId oid "oid"
         hasArr = HasArrayWithObjectIds "array" [hoid]
 

@@ -129,7 +129,7 @@ randomValues = do
   g <- newQCGen
   return $ map (unGen arbitrary g) [0..]
 
-instance Arbitrary (DataTypeTableGeneric g) where
+instance Arbitrary DataTypeTable where
   arbitrary = DataTypeTable
      <$> arbText                -- text
      <*> (T.take 100 <$> arbText) -- textManLen

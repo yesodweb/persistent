@@ -95,6 +95,7 @@ module Database.Persist.MongoDB
     , DB.master
     , DB.slaveOk
     , (DB.=:)
+    , DB.ObjectId
 
     -- * Database.Persist
     , module Database.Persist
