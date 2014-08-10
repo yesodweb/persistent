@@ -586,7 +586,7 @@ keyToMongoDoc k = case entityPrimary $ entityDefFromKey k of
     Nothing   -> zipToDoc [DBName _id] values
     Just pdef -> [_id DB.=: zipToDoc (primaryNames pdef)  values]
   where
-    primaryNames = map snd . primaryFields
+    primaryNames = map fieldDB . primaryFields
     values = keyToValues k
 
 entityDefFromKey :: PersistEntity record => Key record => EntityDef
