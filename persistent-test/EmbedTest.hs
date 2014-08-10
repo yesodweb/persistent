@@ -51,7 +51,7 @@ instance PersistField a => PersistField (NonEmpty a) where
 #if WITH_MONGODB
 mkPersist persistSettings [persistUpperCase|
   HasObjectId
-    oid  Objectid
+    oid  ObjectId
     name Text
     deriving Show Eq Read Ord
 
