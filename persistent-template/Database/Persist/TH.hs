@@ -651,7 +651,8 @@ mkLensClauses mps t = do
 -- a PathPiece instance is only generated for a Key with one field
 mkKeyTypeDec :: MkPersistSettings -> EntityDef -> Q (Dec, [Dec])
 mkKeyTypeDec mps t = do
-    let a = []
+    let a = if not (mpsGeneric mps) then [] else
+              map backendKeyConstraint  [''Show, ''Read, ''Eq, ''Ord]
         b = ''Key
         c = [recordType]
         d = RecC (keyName t) keyFields
@@ -662,6 +663,7 @@ mkKeyTypeDec mps t = do
     let kd = if useNewtype then NewtypeInstD a b c d e else DataInstD a b c [d] e
     return (kd, instDecs)
   where
+    backendKeyConstraint klass = ClassP klass [ConT ''BackendKey `AppT` backendT]
     recordType = genericDataType mps (entityHaskell t) backendT
     pfInstD = -- FIXME: generate a PersistMap instead of PersistList
       [d|instance PersistField (Key $(pure recordType)) where
