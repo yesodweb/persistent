@@ -314,12 +314,13 @@ sqlOnlySettings :: MkPersistSettings
 sqlOnlySettings = sqlSettings
 {-# DEPRECATED sqlOnlySettings "use sqlSettings" #-}
 
-recNameNoUnderscore :: MkPersistSettings -> Text -> Text -> Text
+recNameNoUnderscore :: MkPersistSettings -> HaskellName -> HaskellName -> Text
 recNameNoUnderscore mps dt f
-  | mpsPrefixFields mps = lowerFirst dt ++ upperFirst f
-  | otherwise           = lowerFirst f
+  | mpsPrefixFields mps = lowerFirst (unHaskellName dt) ++ upperFirst ft
+  | otherwise           = lowerFirst ft
+  where ft = unHaskellName f
 
-recName :: MkPersistSettings -> Text -> Text -> Text
+recName :: MkPersistSettings -> HaskellName -> HaskellName -> Text
 recName mps dt f =
     addUnderscore $ recNameNoUnderscore mps dt f
   where
@@ -345,7 +346,7 @@ dataTypeDec mps t =
     $ map (mkName . unpack) $ entityDerives t
   where
     mkCol x fd@FieldDef {..} =
-        (mkName $ unpack $ recName mps x $ unHaskellName fieldHaskell,
+        (mkName $ unpack $ recName mps x fieldHaskell,
          if fieldStrict then IsStrict else NotStrict,
          pairToType mps backend (fd, nullable fieldAttrs)
         )
@@ -354,7 +355,7 @@ dataTypeDec mps t =
         | otherwise = (name, [])
     nameG = mkName $ unpack $ unHaskellName (entityHaskell t) ++ "Generic"
     name = mkName $ unpack $ unHaskellName $ entityHaskell t
-    cols = map (mkCol $ unHaskellName $ entityHaskell t) $ entityFields t
+    cols = map (mkCol $ entityHaskell t) $ entityFields t
     backend = mkName "backend"
 
     constrs
@@ -554,12 +555,19 @@ isNotNull :: PersistValue -> Bool
 isNotNull PersistNull = False
 isNotNull _ = True
 
+mapLeft :: (a -> c) -> Either a b -> Either c b
+mapLeft _ (Right r) = Right r
+mapLeft f (Left l)  = Left (f l)
+
+fieldError :: Text -> Text -> Text
+fieldError fieldName err = "field " `mappend` fieldName `mappend` ": " `mappend` err
+
 mkFromPersistValues :: MkPersistSettings -> EntityDef -> Q [Clause]
 mkFromPersistValues mps t@(EntityDef { entitySum = False }) = do
     nothing <- [|Left $(liftT $ "Invalid fromPersistValues input. Entity: " `mappend` entName)|]
     let cons' = ConE $ mkName $ unpack $ entName
     xs <- mapM (const $ newName "x") $ entityFields t
-    mkPersistValues <- mapM (mkPersistValue . unHaskellName . fieldHaskell) $ entityFields t
+    mkPersistValues <- mapM mkPvFromFd $ entityFields t
     let xs' = map (\(pv, x) -> pv `AppE` VarE x) $ zip mkPersistValues xs
     let pat = ListP $ map VarP xs
     ap' <- [|(<*>)|]
@@ -570,14 +578,10 @@ mkFromPersistValues mps t@(EntityDef { entitySum = False }) = do
         , Clause [WildP] (NormalB nothing) []
         ]
   where
-    mkPersistValue fieldName = [|\persistValue ->
-            case fromPersistValue persistValue of
-                   Right r  -> Right r
-                   Left err -> Left $
-                     "field " `mappend` $(liftT fieldName) `mappend` ": " `mappend` err
-          |]
+    mkPvFromFd = mkPersistValue . unHaskellName . fieldHaskell
+    mkPersistValue fieldName = [|mapLeft (fieldError $(liftT fieldName)) . fromPersistValue|]
     entName = unHaskellName $ entityHaskell t
-    go ap' x y = InfixE (Just x) ap' (Just y)
+    go ap' x y = UInfixE x ap' y
 
 mkFromPersistValues mps t@(EntityDef { entitySum = True }) = do
     nothing <- [|Left $(liftT $ "Invalid fromPersistValues input: sum type with all nulls. Entity: " `mappend` entName)|]
@@ -630,7 +634,7 @@ mkLensClauses mps t = do
         (NormalB $ lens' `AppE` getter `AppE` setter)
         []
       where
-        fieldName = mkName $ unpack $ recName mps (unHaskellName $ entityHaskell t) (unHaskellName $ fieldHaskell f)
+        fieldName = mkName $ unpack $ recName mps (entityHaskell t) (fieldHaskell f)
         getter = InfixE (Just $ VarE fieldName) dot (Just getVal)
         setter = LamE
             [ ConP 'Entity [VarP keyVar, VarP valName]
@@ -668,6 +672,7 @@ mkKeyTypeDec mps t = do
         d = RecC (keyName t) keyFields
         e = if mpsGeneric mps || not useNewtype
               then [''Show, ''Read, ''Eq, ''Ord] -- FIXME
+                   -- can write the PersistField
               else [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''PersistField, ''PersistFieldSql]
     return $ if useNewtype then NewtypeInstD a b c d e else DataInstD a b c [d] e
   where
@@ -719,17 +724,15 @@ mkKeyToValues mps t = do
 
 mkKeyFromValues :: MkPersistSettings -> EntityDef -> Q Dec
 mkKeyFromValues mps t = do
-    (p, e) <- case entityPrimary t of
-        Nothing  -> ([],) <$> [|fmap $(return keyConE) . backendKeyFromValues|]
+    pes <- case entityPrimary t of
+        Nothing  -> do
+          e <- [|fmap $(return keyConE) . backendKeyFromValues|]
+          return [([],e)]
         Just pdef -> fromValuesPrimary pdef
-    return $ FunD 'keyFromValues [Clause
+    return $ FunD 'keyFromValues $ flip map pes $ \(p,e) -> Clause
         p
         (NormalB e)
         []
-      -- TODO: pattern match failure for keyFromValues primary
-      -- , Clause [VarP ""] (NormalB)
-      -- Left "keyFromValues failed "
-      ]
   where
     keyConE = ConE (keyName t)
     fromValuesPrimary pdef = do
@@ -740,10 +743,19 @@ mkKeyFromValues mps t = do
       applyE <- [|(<*>)|]
       let applyFromPersistValue exp name =
             UInfixE exp applyE (VarE 'fromPersistValue `AppE` VarE name)
-      return $
-        ( [ListP $ map VarP (x1:restNames)]
-        , foldl' (\exp name -> applyFromPersistValue exp name) keyConApp restNames
-        )
+
+      x <- newName "x"
+      let et = entityText t
+      patternMatchFailure <-
+        [|Left $ mappend (mappend $(liftT et) "keyFromValues failed for: ") (pack $ show $(return $ VarE x))|]
+      return $ [
+          ( [ListP $ map VarP (x1:restNames)]
+          , foldl' (\exp name -> applyFromPersistValue exp name) keyConApp restNames
+          )
+        , ( [VarP x]
+          , patternMatchFailure
+          )
+        ]
       where
         len = length $ primaryFields pdef
 
@@ -829,11 +841,14 @@ mkEntity mps t = do
         ]
       ] `mappend` lenses)
 
+entityText :: EntityDef -> Text
+entityText = unHaskellName . entityHaskell
+
 mkLenses :: MkPersistSettings -> EntityDef -> Q [Dec]
 mkLenses mps _ | not (mpsGenerateLenses mps) = return []
 mkLenses _ ent | entitySum ent = return []
 mkLenses mps ent = fmap mconcat $ forM (entityFields ent) $ \field -> do
-    let lensName' = recNameNoUnderscore mps (unHaskellName $ entityHaskell ent) (unHaskellName $ fieldHaskell field)
+    let lensName' = recNameNoUnderscore mps (entityHaskell ent) (fieldHaskell field)
         lensName = mkName $ unpack lensName'
         fieldName = mkName $ unpack $ "_" ++ lensName'
     needleN <- newName "needle"
@@ -881,11 +896,11 @@ mkLenses mps ent = fmap mconcat $ forM (entityFields ent) $ \field -> do
 
 mkForeignKeysComposite :: MkPersistSettings -> EntityDef -> ForeignDef -> Q [Dec]
 mkForeignKeysComposite mps t fdef = do
-   let fieldName f = mkName $ unpack $ recName mps (unHaskellName $ entityHaskell t) (unHaskellName f)
+   let fieldName f = mkName $ unpack $ recName mps (entityHaskell t) f
    let fname = fieldName $ foreignConstraintNameHaskell fdef
    let reftableString = unpack $ unHaskellName $ foreignRefTableHaskell fdef 
    let reftableKeyName = mkName $ reftableString `mappend` "Key"
-   let tablename = mkName $ unpack $ unHaskellName $ entityHaskell t
+   let tablename = mkName $ unpack $ entityText t
    recordName <- newName "record"
    
    let fldsE = map (\(a,_,_,_) -> VarE (fieldName a) `AppE` VarE recordName) $
