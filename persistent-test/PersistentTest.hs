@@ -622,7 +622,7 @@ specs = describe "persistent" $ do
       let k = PersonKey $ MongoBackendKey oid
 #else
       ki <- liftIO $ randomRIO (0, 10000)
-      let k = Key $ PersistInt64 $ abs ki
+      let k = PersonKey $ SqlBackendKey $ abs ki
 #endif
       insertKey k $ Person "Key" 26 Nothing
       Just (Entity k2 _) <- selectFirst [PersonName ==. "Key"] []
@@ -777,7 +777,7 @@ specs = describe "persistent" $ do
       ret1 <- rawSql query []
       ret2 <- rawSql query []
       liftIO $ ret1 @?= [Entity p1k p1]
-      liftIO $ ret2 @?= [Entity (Key $ unKey p1k) (RFO p1)]
+      liftIO $ ret2 @?= [Entity (RFOKey $ unPersonKey $ p1k) (RFO p1)]
 
   it "rawSql/OUTER JOIN" $ db $ do
       let insert' :: (PersistStore backend, PersistEntity val, PersistEntityBackend val ~ backend, MonadIO m)
@@ -835,18 +835,26 @@ specs = describe "persistent" $ do
 -- @??@ placeholders of 'rawSql'.
 newtype ReverseFieldOrder a = RFO {unRFO :: a} deriving (Eq, Show)
 instance PersistEntity a => PersistEntity (ReverseFieldOrder a) where
-    newtype EntityField (ReverseFieldOrder a) b = EFRFO {unEFRFO :: EntityField a b}
-    newtype Unique      (ReverseFieldOrder a)   = URFO  {unURFO  :: Unique      a  }
-    persistFieldDef = persistFieldDef . unEFRFO
+    type PersistEntityBackend (ReverseFieldOrder a) = PersistEntityBackend a
+
+    newtype Key (ReverseFieldOrder a) = RFOKey (BackendKey SqlBackend)
+    keyFromValues = fmap RFO . backendKeyFromValues
+    keyToValues   = backendKeyToValues . unRFO
+
     entityDef = revFields . entityDef . liftM unRFO
         where
           revFields ed = ed { entityFields = reverse (entityFields ed) }
+
     toPersistFields = reverse . toPersistFields . unRFO
+    newtype EntityField (ReverseFieldOrder a) b = EFRFO {unEFRFO :: EntityField a b}
+    persistFieldDef = persistFieldDef . unEFRFO
     fromPersistValues = fmap RFO . fromPersistValues . reverse
+
+    newtype Unique      (ReverseFieldOrder a)   = URFO  {unURFO  :: Unique      a  }
     persistUniqueToFieldNames = reverse . persistUniqueToFieldNames . unURFO
     persistUniqueToValues = reverse . persistUniqueToValues . unURFO
     persistUniqueKeys = map URFO . reverse . persistUniqueKeys . unRFO
-    type PersistEntityBackend (ReverseFieldOrder a) = PersistEntityBackend a
+
     persistIdField = error "ReverseFieldOrder.persistIdField"
     fieldLens = error "ReverseFieldOrder.fieldLens"
 

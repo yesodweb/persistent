@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-module Database.Persist.Sql.Orphan.PersistStore (withRawQuery) where
+module Database.Persist.Sql.Orphan.PersistStore (withRawQuery, BackendKey(..)) where
 
 import Database.Persist
 import Database.Persist.Sql.Types

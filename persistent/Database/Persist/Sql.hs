@@ -4,6 +4,7 @@ module Database.Persist.Sql
     , module Database.Persist.Sql.Run
     , module Database.Persist.Sql.Migration
     , module Database.Persist
+    , module Database.Persist.Sql.Orphan.PersistStore
     , rawQuery
     , rawQueryRes
     , rawExecute
@@ -28,7 +29,7 @@ import Database.Persist.Sql.Migration
 import Database.Persist.Sql.Internal
 
 import Database.Persist.Sql.Orphan.PersistQuery 
-import Database.Persist.Sql.Orphan.PersistStore ()
+import Database.Persist.Sql.Orphan.PersistStore
 import Database.Persist.Sql.Orphan.PersistUnique ()
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader (ReaderT, ask)
