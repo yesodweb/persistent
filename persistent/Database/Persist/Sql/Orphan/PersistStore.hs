@@ -21,6 +21,7 @@ import Data.Acquire (with)
 import Data.Int (Int64)
 import Web.PathPieces (PathPiece)
 import Database.Persist.Sql.Class (PersistFieldSql)
+import qualified Data.Aeson as A
 
 withRawQuery :: MonadIO m
              => Text
@@ -33,7 +34,7 @@ withRawQuery sql vals sink = do
 
 instance PersistStore Connection where
     newtype BackendKey SqlBackend = SqlBackendKey { unSqlBackendKey :: Int64 }
-        deriving (Show, Read, Eq, Ord, Num, Integral, PersistField, PersistFieldSql, PathPiece, Real, Enum, Bounded)
+        deriving (Show, Read, Eq, Ord, Num, Integral, PersistField, PersistFieldSql, PathPiece, Real, Enum, Bounded, A.ToJSON, A.FromJSON)
 
     backendKeyToValues (SqlBackendKey i)   = [PersistInt64 i]
     backendKeyFromValues [PersistInt64 i]  = Right $ SqlBackendKey i
