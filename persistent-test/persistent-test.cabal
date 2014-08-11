@@ -135,7 +135,6 @@ library
                    -- actually just a mongoDB dependency
                    -- fixes build warning on current build server
                    , cereal
-                   , bson
                    , silently
                    , blaze-builder
                    , mtl
@@ -175,7 +174,7 @@ library
      build-depends:
                      mongoDB            >= 2.0.3 && < 3.0
                    , cereal
-                   , bson
+                   , bson               >= 0.3.1
                    , process
 
      hs-source-dirs: persistent-mongoDB
