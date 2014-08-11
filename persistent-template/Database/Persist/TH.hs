@@ -67,7 +67,8 @@ import qualified Data.ByteString.Lazy as BL
 import Control.Applicative (pure, (<$>), (<*>))
 import Database.Persist.Sql (sqlType)
 import Data.Proxy (Proxy (Proxy))
-import Web.PathPieces (PathPiece)
+import Web.PathPieces (PathPiece, toPathPiece, fromPathPiece)
+import Control.Arrow (first)
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
@@ -651,16 +652,20 @@ mkLensClauses mps t = do
 -- a PathPiece instance is only generated for a Key with one field
 mkKeyTypeDec :: MkPersistSettings -> EntityDef -> Q (Dec, [Dec])
 mkKeyTypeDec mps t = do
-    let a = if not (mpsGeneric mps) then [] else
-              map backendKeyConstraint  [''Show, ''Read, ''Eq, ''Ord]
-        b = ''Key
+    let b = ''Key
         c = [recordType]
         d = RecC (keyName t) keyFields
-    (instDecs, e) <- if mpsGeneric mps || not useNewtype
-           then do pfDec <- pfInstD
-                   return (pfDec, [''Show, ''Read, ''Eq, ''Ord])
-           else return ([], [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''PersistField, ''PersistFieldSql])
-    let kd = if useNewtype then NewtypeInstD a b c d e else DataInstD a b c [d] e
+    (instDecs, e) <- case () of
+     ()
+      | mpsGeneric mps -> do
+           dec <- genericInstances
+           return (dec, [])
+      | useNewtype ->
+           return ([], [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''PersistField, ''PersistFieldSql])
+      | otherwise -> do
+           pfDec <- pfInstD
+           return (pfDec, [''Show, ''Read, ''Eq, ''Ord])
+    let kd = if useNewtype then NewtypeInstD [] b c d e else DataInstD [] b c [d] e
     return (kd, instDecs)
   where
     backendKeyConstraint klass = ClassP klass [ConT ''BackendKey `AppT` backendT]
@@ -672,6 +677,33 @@ mkKeyTypeDec mps t = do
             fromPersistValue got = error $ "fromPersistValue: expected PersistList, got: " `mappend` show got
          instance PersistFieldSql (Key $(pure recordType)) where
             sqlType _ = SqlString
+      |]
+
+    genericInstances =
+      -- truly unfortunate that TH doesn't support standalone deriving
+      [d|instance Show (BackendKey backend) => Show (Key $(pure recordType)) where
+            showsPrec i = showsPrec i . $(return $ VarE $ unKeyName t)
+         instance Read (BackendKey backend) => Read (Key $(pure recordType)) where
+            readsPrec i = map (first $(return $ ConE $ keyName t)) . readsPrec i
+         instance Eq (BackendKey backend) => Eq (Key $(pure recordType)) where
+            x == y =
+                ($(return $ VarE $ unKeyName t) x) ==
+                ($(return $ VarE $ unKeyName t) y)
+            x /= y =
+                ($(return $ VarE $ unKeyName t) x) ==
+                ($(return $ VarE $ unKeyName t) y)
+         instance Ord (BackendKey backend) => Ord (Key $(pure recordType)) where
+            compare x y = compare
+                ($(return $ VarE $ unKeyName t) x)
+                ($(return $ VarE $ unKeyName t) y)
+         instance PathPiece (BackendKey backend) => PathPiece (Key $(pure recordType)) where
+            toPathPiece = toPathPiece . $(return $ VarE $ unKeyName t)
+            fromPathPiece = fmap $(return $ ConE $ keyName t) . fromPathPiece
+         instance PersistField (BackendKey backend) => PersistField (Key $(pure recordType)) where
+            toPersistValue = toPersistValue . $(return $ VarE $ unKeyName t)
+            fromPersistValue = fmap $(return $ ConE $ keyName t) . fromPersistValue
+         instance PersistFieldSql (BackendKey backend) => PersistFieldSql (Key $(pure recordType)) where
+            sqlType = sqlType . fmap $(return $ VarE $ unKeyName t)
       |]
 
     useNewtype = length keyFields < 2
