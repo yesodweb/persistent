@@ -837,9 +837,9 @@ newtype ReverseFieldOrder a = RFO {unRFO :: a} deriving (Eq, Show)
 instance PersistEntity a => PersistEntity (ReverseFieldOrder a) where
     type PersistEntityBackend (ReverseFieldOrder a) = PersistEntityBackend a
 
-    newtype Key (ReverseFieldOrder a) = RFOKey (BackendKey SqlBackend)
-    keyFromValues = fmap RFO . backendKeyFromValues
-    keyToValues   = backendKeyToValues . unRFO
+    newtype Key (ReverseFieldOrder a) = RFOKey { unRFOKey :: BackendKey SqlBackend } deriving (Show, Read, Eq, Ord, PersistField, PersistFieldSql)
+    keyFromValues = fmap RFOKey . backendKeyFromValues
+    keyToValues   = backendKeyToValues . unRFOKey
 
     entityDef = revFields . entityDef . liftM unRFO
         where

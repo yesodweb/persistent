@@ -37,7 +37,7 @@ import qualified Data.HashMap.Strict as HM
 --
 -- Some advanced type system capabilities are used to make this process type-safe.
 -- Persistent users usually don't need to understand the class associated data and functions.
-class ( PersistField (Key record)
+class ( PersistField (Key record), ToJSON (Key record), FromJSON (Key record)
       , Show (Key record), Read (Key record), Eq (Key record), Ord (Key record))
   => PersistEntity record where
     -- | Persistent allows multiple different backends (databases)

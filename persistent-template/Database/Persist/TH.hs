@@ -62,6 +62,7 @@ import Data.Aeson
     , Value (Object), (.:), (.:?)
     , encode, eitherDecodeStrict'
     )
+import Data.Aeson.TH (deriveJSON, defaultOptions)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import Control.Applicative (pure, (<$>), (<*>))
@@ -607,7 +608,7 @@ mkLensClauses mps t = do
     valName <- newName "value"
     xName <- newName "x"
     let idClause = normalClause
-            [ConP (mkName $ unpack $ unHaskellName (entityHaskell t) ++ "Id") []]
+            [ConP (keyIdName t) []]
             (lens' `AppE` getId `AppE` setId)
     if entitySum t
         then return $ idClause : map (toSumClause lens' keyVar valName xName) (entityFields t)
@@ -654,7 +655,7 @@ mkKeyTypeDec :: MkPersistSettings -> EntityDef -> Q (Dec, [Dec])
 mkKeyTypeDec mps t = do
     let b = ''Key
         c = [recordType]
-        d = RecC (keyName t) keyFields
+        d = RecC (keyConName t) keyFields
     (instDecs, e) <- case () of
      ()
       | mpsGeneric mps -> do
@@ -670,6 +671,19 @@ mkKeyTypeDec mps t = do
   where
     backendKeyConstraint klass = ClassP klass [ConT ''BackendKey `AppT` backendT]
     recordType = genericDataType mps (entityHaskell t) backendT
+    -- FIXME: json instance.
+    -- uncommenting the below gives an error
+    -- I think Template Haskell may be buggy
+    -- for this case of creating a type synonym instance
+    --
+    -- So perhaps we need (Key record) instead of recordId
+    -- I can create the type: ConT ''Key `AppT` recordType
+    -- However, I don't know how to get a name back from a type
+    -- deriveJSON wants a Name
+    --
+    -- another, possibly better option would be to re-use mkJSON
+    -- rather than try to use deriveJSON
+    jsonD = deriveJSON defaultOptions (keyIdName t)
     pfInstD = -- FIXME: generate a PersistMap instead of PersistList
       [d|instance PersistField (Key $(pure recordType)) where
             toPersistValue = PersistList . keyToValues
@@ -684,7 +698,7 @@ mkKeyTypeDec mps t = do
       [d|instance Show (BackendKey backend) => Show (Key $(pure recordType)) where
             showsPrec i = showsPrec i . $(return $ VarE $ unKeyName t)
          instance Read (BackendKey backend) => Read (Key $(pure recordType)) where
-            readsPrec i = map (first $(return $ ConE $ keyName t)) . readsPrec i
+            readsPrec i = map (first $(return $ ConE $ keyConName t)) . readsPrec i
          instance Eq (BackendKey backend) => Eq (Key $(pure recordType)) where
             x == y =
                 ($(return $ VarE $ unKeyName t) x) ==
@@ -698,10 +712,10 @@ mkKeyTypeDec mps t = do
                 ($(return $ VarE $ unKeyName t) y)
          instance PathPiece (BackendKey backend) => PathPiece (Key $(pure recordType)) where
             toPathPiece = toPathPiece . $(return $ VarE $ unKeyName t)
-            fromPathPiece = fmap $(return $ ConE $ keyName t) . fromPathPiece
+            fromPathPiece = fmap $(return $ ConE $ keyConName t) . fromPathPiece
          instance PersistField (BackendKey backend) => PersistField (Key $(pure recordType)) where
             toPersistValue = toPersistValue . $(return $ VarE $ unKeyName t)
-            fromPersistValue = fmap $(return $ ConE $ keyName t) . fromPersistValue
+            fromPersistValue = fmap $(return $ ConE $ keyConName t) . fromPersistValue
          instance PersistFieldSql (BackendKey backend) => PersistFieldSql (Key $(pure recordType)) where
             sqlType = sqlType . fmap $(return $ VarE $ unKeyName t)
       |]
@@ -717,14 +731,20 @@ mkKeyTypeDec mps t = do
         | mpsGeneric mps = ConT ''BackendKey `AppT` backendT
         | otherwise      = ConT ''BackendKey `AppT` mpsBackend mps
 
+keyIdName :: EntityDef -> Name
+keyIdName = mkName . unpack . keyIdText
+
+keyIdText :: EntityDef -> Text
+keyIdText t = (unHaskellName $ entityHaskell t) `mappend` "Id"
+
 unKeyName :: EntityDef -> Name
 unKeyName t = mkName $ "un" `mappend` keyString t
 
 backendT :: Type
 backendT = VarT $ mkName "backend"
 
-keyName :: EntityDef -> Name
-keyName = mkName . keyString
+keyConName :: EntityDef -> Name
+keyConName = mkName . keyString
 
 keyString :: EntityDef -> String
 keyString = unpack . keyText
@@ -762,7 +782,7 @@ mkKeyFromValues mps t = do
             fromValues t "keyFromValues" keyConE (primaryFields pdef)
     return $ FunD 'keyFromValues clauses
   where
-    keyConE = ConE (keyName t)
+    keyConE = ConE (keyConName t)
 
 fromValues :: EntityDef -> Text -> Exp -> [FieldDef] -> Q [Clause]
 fromValues t funName conE fields = do
@@ -811,7 +831,7 @@ mkEntity mps t = do
     let primaryField = FieldDef
           { fieldHaskell = HaskellName "Id"
           , fieldDB = entityID t
-          , fieldType = FTTypeCon Nothing $ unHaskellName entName ++ "Id"
+          , fieldType = FTTypeCon Nothing $ keyIdText t
           , fieldSqlType = maybe SqlInt64 (const $ SqlOther "Primary Key") $ entityPrimary t
           -- the primary field is actually a reference to the entity
           , fieldReference = ForeignRef entName
@@ -840,7 +860,7 @@ mkEntity mps t = do
 
     return $ addSyn $
        dataTypeDec mps t : mconcat fkc `mappend`
-      ([ TySynD (mkName $ unpack $ unHaskellName entName ++ "Id") [] $
+      ([ TySynD (keyIdName t) [] $
             ConT ''Key `AppT` ConT (mkName nameS)
       , InstanceD instanceConstraint clazz $
         [ uniqueTypeDec mps t
@@ -872,10 +892,10 @@ mkEntity mps t = do
             [genericDataType mps entName backendT]
             (backendDataType mps)
 #endif
-        , FunD 'persistIdField [normalClause [] (ConE $ mkName $ unpack $ unHaskellName entName ++ "Id")]
+        , FunD 'persistIdField [normalClause [] (ConE $ keyIdName t)]
         , FunD 'fieldLens lensClauses
         ]
-      ] `mappend` lenses `mappend` keyInstanceDecs)
+      ] `mappend` lenses) `mappend` keyInstanceDecs
 
 entityText :: EntityDef -> Text
 entityText = unHaskellName . entityHaskell

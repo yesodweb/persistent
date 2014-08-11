@@ -48,6 +48,7 @@ import qualified Control.Monad.Trans.Writer.Strict as Strict ( WriterT )
 
 import Database.Persist.Class.PersistEntity
 import Database.Persist.Types
+import qualified Data.Aeson as A
 
 class HasPersistBackend env backend | env -> backend where
     persistBackend :: env -> backend
@@ -62,6 +63,7 @@ liftPersist f = do
 class
   ( Show (BackendKey backend), Read (BackendKey backend)
   , Eq (BackendKey backend), Ord (BackendKey backend)
+  , A.ToJSON (BackendKey backend), A.FromJSON (BackendKey backend)
   ) => PersistStore backend where
     data BackendKey backend
 

@@ -107,6 +107,7 @@ import qualified Database.Persist.Sql as Sql
 import qualified Control.Monad.IO.Class as Trans
 import Control.Exception (throw, throwIO)
 
+import Data.Bson (ObjectId(..))
 import qualified Database.MongoDB as DB
 import Database.MongoDB.Query (Database)
 import Control.Applicative (Applicative)
@@ -115,12 +116,13 @@ import Network.Socket (HostName)
 import Data.Maybe (mapMaybe, fromJust)
 import qualified Data.Text as T
 import Data.Text (Text)
+import qualified Data.ByteString as BS
 import qualified Data.Text.Encoding as E
 import qualified Data.Serialize as Serialize
 import Web.PathPieces (PathPiece (..))
 import Data.Conduit
 import Control.Monad.IO.Class (liftIO)
-import Data.Aeson (Value (Object, Number), (.:), (.:?), (.!=), FromJSON(..))
+import Data.Aeson (Value (Object, Number), (.:), (.:?), (.!=), FromJSON(..), ToJSON(..), withText)
 import Control.Monad (mzero, liftM)
 import qualified Data.Conduit.Pool as Pool
 import Data.Time (NominalDiffTime)
@@ -132,10 +134,12 @@ import Data.Time.Calendar (Day(..))
 #else
 import Data.Attoparsec.Number
 #endif
+import Data.Bits (shiftR)
 import Data.Word (Word16)
 import Data.Monoid (mappend)
 import Control.Monad.Trans.Reader (ask, runReaderT)
 import Control.Monad.Trans.Control (MonadBaseControl)
+import Numeric (readHex)
 
 #if MIN_VERSION_base(4,6,0)
 import System.Environment (lookupEnv)
@@ -465,6 +469,29 @@ keyFrom_id :: (PersistEntity record) => DB.Value -> Either Text (Key record)
 keyFrom_id idVal = case cast idVal of
     (PersistMap m) -> keyFromValues $ map snd m
     pv -> keyFromValues [pv]
+
+-- | It would make sense to define the instance for ObjectId
+-- and then use newtype deriving
+-- however, that would create an orphan instance
+instance ToJSON (BackendKey MongoBackend) where
+    toJSON (MongoBackendKey (Oid x y)) = toJSON $ DB.showHexLen 8 x $ DB.showHexLen 16 y ""
+
+instance FromJSON (BackendKey MongoBackend) where
+    parseJSON = withText "BackendKey MongoBackend" $ \t ->
+        maybe
+          (fail "Invalid base64")
+          (return . MongoBackendKey . persistObjectIdToDbOid . PersistObjectId)
+          $ fmap (i2bs (8 * 12) . fst) $ headMay $ readHex $ T.unpack t
+      where
+        -- should these be exported from Types/Base.hs ?
+        headMay []    = Nothing
+        headMay (x:_) = Just x
+
+        -- taken from crypto-api
+        -- |@i2bs bitLen i@ converts @i@ to a 'ByteString' of @bitLen@ bits (must be a multiple of 8).
+        i2bs :: Int -> Integer -> BS.ByteString
+        i2bs l i = BS.unfoldr (\l' -> if l' < 0 then Nothing else Just (fromIntegral (i `shiftR` l'), l' - 8)) (l-8)
+        {-# INLINE i2bs #-}
 
 instance PersistStore DB.MongoContext where
     newtype BackendKey MongoBackend = MongoBackendKey { unMongoBackendKey :: DB.ObjectId }
