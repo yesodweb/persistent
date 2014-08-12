@@ -71,6 +71,7 @@ import Database.Persist.Sql (sqlType)
 import Data.Proxy (Proxy (Proxy))
 import Web.PathPieces (PathPiece, toPathPiece, fromPathPiece)
 import Control.Arrow (first)
+import GHC.Generics (Generic)
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
@@ -659,32 +660,19 @@ mkKeyTypeDec mps t = do
         d = RecC (keyConName t) keyFields
     (instDecs, e) <- case () of
      ()
+      | not useNewtype -> do
+           pfDec <- pfInstD
+           return (pfDec, [''Show, ''Read, ''Eq, ''Ord, ''Generic])
       | mpsGeneric mps -> do
            dec <- genericInstances
            return (dec, [])
-      | useNewtype ->
-           return ([], [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''PersistField, ''PersistFieldSql])
-      | otherwise -> do
-           pfDec <- pfInstD
-           return (pfDec, [''Show, ''Read, ''Eq, ''Ord])
+      | otherwise ->
+           return ([], [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''PersistField, ''PersistFieldSql, ''ToJSON, ''FromJSON])
     let kd = if useNewtype then NewtypeInstD [] b c d e else DataInstD [] b c [d] e
     return (kd, instDecs)
   where
     backendKeyConstraint klass = ClassP klass [ConT ''BackendKey `AppT` backendT]
     recordType = genericDataType mps (entityHaskell t) backendT
-    -- FIXME: json instance.
-    -- uncommenting the below gives an error
-    -- I think Template Haskell may be buggy
-    -- for this case of creating a type synonym instance
-    --
-    -- So perhaps we need (Key record) instead of recordId
-    -- I can create the type: ConT ''Key `AppT` recordType
-    -- However, I don't know how to get a name back from a type
-    -- deriveJSON wants a Name
-    --
-    -- another, possibly better option would be to re-use mkJSON
-    -- rather than try to use deriveJSON
-    jsonD = deriveJSON defaultOptions (keyIdName t)
     pfInstD = -- FIXME: generate a PersistMap instead of PersistList
       [d|instance PersistField (Key $(pure recordType)) where
             toPersistValue = PersistList . keyToValues
@@ -692,6 +680,8 @@ mkKeyTypeDec mps t = do
             fromPersistValue got = error $ "fromPersistValue: expected PersistList, got: " `mappend` show got
          instance PersistFieldSql (Key $(pure recordType)) where
             sqlType _ = SqlString
+         instance ToJSON (Key $(pure recordType))
+         instance FromJSON (Key $(pure recordType))
       |]
 
     genericInstances =
@@ -719,6 +709,10 @@ mkKeyTypeDec mps t = do
             fromPersistValue = fmap $(return $ ConE $ keyConName t) . fromPersistValue
          instance PersistFieldSql (BackendKey backend) => PersistFieldSql (Key $(pure recordType)) where
             sqlType = sqlType . fmap $(return $ VarE $ unKeyName t)
+         instance ToJSON (BackendKey backend) => ToJSON (Key $(pure recordType)) where
+            toJSON = toJSON . $(return $ VarE $ unKeyName t)
+         instance FromJSON (BackendKey backend) => FromJSON (Key $(pure recordType)) where
+            parseJSON = fmap $(return $ ConE $ keyConName t) . parseJSON
       |]
 
     useNewtype = length keyFields < 2
@@ -999,13 +993,13 @@ persistFieldFromEntity mps e = do
     compose <- [|(<=<)|]
     getPersistMap' <- [|getPersistMap|]
     return
-        [ persistFieldInstanceD typ
+        [ persistFieldInstanceD (mpsGeneric mps) typ
             [ FunD 'toPersistValue [ normalClause [] obj ]
             , FunD 'fromPersistValue
                 [ normalClause [] (InfixE (Just fpv) compose $ Just getPersistMap')
                 ]
             ]
-        , persistFieldSqlInstanceD typ
+        , persistFieldSqlInstanceD (mpsGeneric mps) typ
             [ sqlTypeFunD ss
             ]
         ]
@@ -1131,13 +1125,22 @@ sqlTypeFunD :: Exp -> Dec
 sqlTypeFunD st = FunD 'sqlType
                 [ normalClause [WildP] st ]
 
-typeInstanceD :: Name -> Type -> [Dec] -> Dec
-typeInstanceD clazz typ = InstanceD [] (ConT clazz `AppT` typ)
+typeInstanceD :: Name
+              -> Bool -- ^ include PersistStore backend constraint
+              -> Type -> [Dec] -> Dec
+typeInstanceD clazz hasBackend typ =
+    InstanceD ctx (ConT clazz `AppT` typ)
+  where
+    ctx
+        | hasBackend = [ClassP ''PersistStore [VarT $ mkName "backend"]]
+        | otherwise = []
 
-persistFieldInstanceD :: Type -> [Dec] -> Dec
+persistFieldInstanceD :: Bool -- ^ include PersistStore backend constraint
+                      -> Type -> [Dec] -> Dec
 persistFieldInstanceD = typeInstanceD ''PersistField
 
-persistFieldSqlInstanceD :: Type -> [Dec] -> Dec
+persistFieldSqlInstanceD :: Bool -- ^ include PersistStore backend constraint
+                         -> Type -> [Dec] -> Dec
 persistFieldSqlInstanceD = typeInstanceD ''PersistFieldSql
 
 -- | Automatically creates a valid 'PersistField' instance for any datatype
@@ -1155,7 +1158,7 @@ derivePersistField s = do
                             (x, _):_ -> Right x
                             [] -> Left $ pack "Invalid " ++ pack dt ++ pack ": " ++ s'|]
     return
-        [ persistFieldInstanceD (ConT $ mkName s)
+        [ persistFieldInstanceD False (ConT $ mkName s)
             [ FunD 'toPersistValue
                 [ normalClause [] tpv
                 ]
@@ -1163,7 +1166,7 @@ derivePersistField s = do
                 [ normalClause [] (fpv `AppE` LitE (StringL s))
                 ]
             ]
-        , persistFieldSqlInstanceD (ConT $ mkName s)
+        , persistFieldSqlInstanceD False (ConT $ mkName s)
             [ sqlTypeFunD ss
             ]
         ]
@@ -1189,7 +1192,7 @@ derivePersistFieldJSON s = do
                     Left e -> Left $ pack "JSON decoding error for " ++ pack dt ++ pack ": " ++ pack e ++ pack ". On Input: " ++ decodeUtf8 bs'
                     Right x -> Right x|]
     return
-        [ persistFieldInstanceD (ConT $ mkName s)
+        [ persistFieldInstanceD False (ConT $ mkName s)
             [ FunD 'toPersistValue
                 [ normalClause [] tpv
                 ]
@@ -1197,7 +1200,7 @@ derivePersistFieldJSON s = do
                 [ normalClause [] (fpv `AppE` LitE (StringL s))
                 ]
             ]
-        , persistFieldSqlInstanceD (ConT $ mkName s)
+        , persistFieldSqlInstanceD False (ConT $ mkName s)
             [ sqlTypeFunD ss
             ]
         ]
@@ -1415,7 +1418,7 @@ mkJSON mps def = do
 
     let conName = mkName $ unpack $ unHaskellName $ entityHaskell def
         typ = genericDataType mps (entityHaskell def) backendT
-        toJSONI = typeInstanceD ''ToJSON typ [toJSON']
+        toJSONI = typeInstanceD ''ToJSON (mpsGeneric mps) typ [toJSON']
         toJSON' = FunD 'toJSON $ return $ normalClause
             [ConP conName $ map VarP xs]
             (objectE `AppE` ListE pairs)
@@ -1424,7 +1427,7 @@ mkJSON mps def = do
             (Just (packE `AppE` LitE (StringL $ unpack $ unHaskellName $ fieldHaskell f)))
             dotEqualE
             (Just $ VarE x)
-        fromJSONI = typeInstanceD ''FromJSON typ [parseJSON']
+        fromJSONI = typeInstanceD ''FromJSON (mpsGeneric mps) typ [parseJSON']
         parseJSON' = FunD 'parseJSON
             [ normalClause [ConP 'Object [VarP obj]]
                 (foldl'

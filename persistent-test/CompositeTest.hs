@@ -15,6 +15,7 @@
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveGeneric #-}
 module CompositeTest where
 
 import Test.Hspec.Expectations ()

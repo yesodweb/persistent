@@ -109,7 +109,7 @@ share [mkPersist persistSettings,  mkMigrate "testMigrate", mkDeleteCascade pers
   Pet no-json
     ownerId PersonId
     name Text
-    deriving Show Eq
+    -- deriving Show Eq
 -- Dedented comment
   -- Header-level comment
     -- Indented comment
@@ -150,6 +150,9 @@ share [mkPersist persistSettings,  mkMigrate "testMigrate", mkDeleteCascade pers
     ~no Int
     def Int
 |]
+
+deriving instance Show (BackendKey backend) => Show (PetGeneric backend)
+deriving instance Eq (BackendKey backend) => Eq (PetGeneric backend)
 
 #ifndef WITH_MONGODB
 share [mkPersist sqlSettings { mpsPrefixFields = False, mpsGeneric = False }, mkMigrate "noPrefixMigrate"] [persistLowerCase|
