@@ -427,10 +427,12 @@ specs = describe "persistent" $ do
       Just p <- get key3
       p3 @== p
 
+{- FIXME
   prop "toPathPiece . fromPathPiece" $ \piece ->
       let key1 = piece :: (BackendKey BackendMonad)
           key2 = fromJust $ fromPathPiece $ toPathPiece key1 :: (BackendKey BackendMonad)
       in  toPathPiece key1 == toPathPiece key2
+      -}
 
   it "replace" $ db $ do
       key2 <- insert $ Person "Michael2" 27 Nothing
@@ -699,10 +701,12 @@ specs = describe "persistent" $ do
       liftIO $ toJSON (Entity k p) @?=
         Object (M.fromList [("id", toJSON k), ("color",Null),("name",String "D"),("age",Number 0)])
 
+{- FIXME
     prop "fromJSON . toJSON $ key" $ \(person :: Key Person) ->
       case (fromJSON . toJSON) person of
         Success p -> p == person
         _ -> error "fromJSON"
+        -}
 
 
 #ifdef WITH_MONGODB

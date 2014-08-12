@@ -34,9 +34,6 @@ module Database.Persist.MongoDB
     , filtersToDoc
     , toUniquesDoc
 
-    , toInsertFields
-    , entityToFields
-
     -- * MongoDB specific Filters
     -- $filters
     , nestEq, nestNe, nestGe, nestLe, nestIn, nestNotIn
@@ -387,14 +384,11 @@ toUniquesDoc uniq = zipWith (DB.:=)
   (map (unDBName . snd) $ persistUniqueToFieldNames uniq)
   (map DB.val (persistUniqueToValues uniq))
 
-toInsertFields :: forall record.  (PersistEntity record) => record -> [DB.Field]
-toInsertFields = toInsertDoc
-{-# DEPRECATED toInsertFields "Please use toInsertDoc instead" #-}
-
 -- | convert a PersistEntity into document fields.
 -- for inserts only: nulls are ignored so they will be unset in the document.
 -- 'entityToDocument' includes nulls
-toInsertDoc :: forall record.  (PersistEntity record) => record -> DB.Document
+toInsertDoc :: forall record.  (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
+            => record -> DB.Document
 toInsertDoc record = zipFilter (embeddedFields $ toEmbeddedDef entDef)
     (map toPersistValue $ toPersistFields record)
   where
@@ -421,12 +415,14 @@ toInsertDoc record = zipFilter (embeddedFields $ toEmbeddedDef entDef)
     embeddedVal je@(Just _) (PersistList l) = DB.Array $ map (embeddedVal je) l
     embeddedVal _ pv = DB.val pv
 
-collectionName :: (PersistEntity record) => record -> Text
+collectionName :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
+               => record -> Text
 collectionName = unDBName . entityDB . entityDef . Just
 
 -- | convert a PersistEntity into document fields.
 -- unlike 'toInsertDoc', nulls are included.
-entityToDocument :: (PersistEntity record) => record -> DB.Document
+entityToDocument :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
+                 => record -> DB.Document
 entityToDocument record = zipToDoc (map fieldDB $ entityFields entity) (toPersistFields record)
   where
     entity = entityDef $ Just record
@@ -438,20 +434,15 @@ zipToDoc (e:efields) (p:pfields) =
   let pv = toPersistValue p
   in  (unDBName e DB.:= DB.val pv):zipToDoc efields pfields
 
--- | Deprecated, use the better named entityToDocument
-entityToFields :: (PersistEntity record) => record -> [DB.Field]
-entityToFields = entityToDocument
-{-# DEPRECATED entityToFields "Please use entityToDocument instead" #-}
-
 fieldToLabel :: EmbeddedFieldDef -> Text
 fieldToLabel = unDBName . emFieldDB
 
-saveWithKey :: forall m entity keyEntity.
-            (PersistEntity entity, PersistEntity keyEntity, PersistEntityBackend keyEntity ~ MongoBackend)
-            => (entity -> [DB.Field])
+saveWithKey :: forall m record.
+            (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
+            => (record -> [DB.Field])
             -> (Text -> [DB.Field] -> DB.Action m ())
-            -> Key keyEntity
-            -> entity
+            -> Key record
+            -> record
             -> DB.Action m ()
 saveWithKey entToFields dbSave key record =
       dbSave (collectionName record) ((keyToMongoDoc key) ++ (entToFields record))
@@ -503,11 +494,11 @@ instance PersistStore DB.MongoContext where
     backendKeyFromValues s = Left $ T.pack $ show s
 
     insert record = do
-        keyFrom_idEx =<< DB.insert (collectionName record) (toInsertFields record)
+        keyFrom_idEx =<< DB.insert (collectionName record) (toInsertDoc record)
 
     insertMany [] = return []
     insertMany (r:records) = mapM keyFrom_idEx =<<
-        DB.insertMany (collectionName r) (map toInsertFields (r:records))
+        DB.insertMany (collectionName r) (map toInsertDoc (r:records))
 
     insertKey k record = saveWithKey toInsertDoc DB.insert_ k record
 
@@ -620,7 +611,8 @@ keyToMongoDoc k = case entityPrimary $ entityDefFromKey k of
 entityDefFromKey :: PersistEntity record => Key record => EntityDef
 entityDefFromKey = entityDef . Just . recordTypeFromKey
 
-collectionNameFromKey :: (PersistEntity record) => Key record => Text
+collectionNameFromKey :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
+                      => Key record => Text
 collectionNameFromKey = collectionName . recordTypeFromKey
 
 
@@ -696,7 +688,7 @@ orderClause o = case o of
                   _      -> error "orderClause: expected Asc or Desc"
 
 
-makeQuery :: (PersistEntity val, PersistEntityBackend val ~ MongoBackend) => [Filter val] -> [SelectOpt val] -> DB.Query
+makeQuery :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend) => [Filter record] -> [SelectOpt record] -> DB.Query
 makeQuery filts opts =
     (DB.select (filtersToDoc filts) (collectionName $ dummyFromFilts filts)) {
       DB.limit = fromIntegral limit
@@ -707,7 +699,7 @@ makeQuery filts opts =
     (limit, offset, orders') = limitOffsetOrder opts
     orders = map orderClause orders'
 
-filtersToDoc :: (PersistEntity val, PersistEntityBackend val ~ MongoBackend) => [Filter val] -> DB.Document
+filtersToDoc :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend) => [Filter record] -> DB.Document
 filtersToDoc filts =
 #ifdef DEBUG
   debug $
@@ -834,14 +826,14 @@ docToEntityEither doc = entity
     getType :: Either err (Entity ent) -> ent
     getType = error "docToEntityEither/getType: never here"
 
-docToEntityThrow :: forall m record. (Trans.MonadIO m, PersistEntity record) => DB.Document -> m (Entity record)
+docToEntityThrow :: forall m record. (Trans.MonadIO m, PersistEntity record, PersistEntityBackend record ~ MongoBackend) => DB.Document -> m (Entity record)
 docToEntityThrow doc =
     case docToEntityEither doc of
         Left s -> Trans.liftIO . throwIO $ PersistMarshalError $ s
         Right entity -> return entity
 
 
-fromPersistValuesThrow :: (Trans.MonadIO m, PersistEntity record) => EntityDef -> [DB.Field] -> m (Entity record)
+fromPersistValuesThrow :: (Trans.MonadIO m, PersistEntity record, PersistEntityBackend record ~ MongoBackend) => EntityDef -> [DB.Field] -> m (Entity record)
 fromPersistValuesThrow entDef doc = 
     case eitherFromPersistValues entDef doc of
         Left t -> Trans.liftIO . throwIO $ PersistMarshalError $

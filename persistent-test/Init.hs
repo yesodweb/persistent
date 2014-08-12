@@ -188,5 +188,6 @@ instance Arbitrary PersistValue where
     arbitrary = PersistInt64 `fmap` choose (0, maxBound)
 #endif
 
+-- FIXME
 -- instance Arbitrary (BackendKey backend) where
 --  arbitrary = backendKeyFromValues `fmap` arbitrary
