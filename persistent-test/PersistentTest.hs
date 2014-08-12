@@ -841,7 +841,9 @@ specs = describe "persistent" $ do
 -- | Reverses the order of the fields of an entity.  Used to test
 -- @??@ placeholders of 'rawSql'.
 newtype ReverseFieldOrder a = RFO {unRFO :: a} deriving (Eq, Show)
-instance PersistEntity a => PersistEntity (ReverseFieldOrder a) where
+instance ToJSON (Key (ReverseFieldOrder a))   where toJSON = error "ReverseFieldOrder"
+instance FromJSON (Key (ReverseFieldOrder a)) where parseJSON = error "ReverseFieldOrder"
+instance (PersistEntity a) => PersistEntity (ReverseFieldOrder a) where
     type PersistEntityBackend (ReverseFieldOrder a) = PersistEntityBackend a
 
     newtype Key (ReverseFieldOrder a) = RFOKey { unRFOKey :: BackendKey SqlBackend } deriving (Show, Read, Eq, Ord, PersistField, PersistFieldSql)
