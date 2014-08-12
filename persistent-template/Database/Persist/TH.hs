@@ -63,7 +63,6 @@ import Data.Aeson
     , Value (Object), (.:), (.:?)
     , encode, eitherDecodeStrict'
     )
-import Data.Aeson.TH (deriveJSON, defaultOptions)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import Control.Applicative (pure, (<$>), (<*>))
@@ -1445,7 +1444,14 @@ mkJSON mps def = do
     case mpsEntityJSON mps of
         Nothing -> return [toJSONI, fromJSONI]
         Just entityJSON -> do
-            entityJSONIs <- [d|
+            entityJSONIs <- if mpsGeneric mps
+              then [d|
+                instance PersistStore backend => ToJSON (Entity $(pure typ)) where
+                    toJSON = $(varE (entityToJSON entityJSON))
+                instance PersistStore backend => FromJSON (Entity $(pure typ)) where
+                    parseJSON = $(varE (entityFromJSON entityJSON))
+                |]
+              else [d|
                 instance ToJSON (Entity $(pure typ)) where
                     toJSON = $(varE (entityToJSON entityJSON))
                 instance FromJSON (Entity $(pure typ)) where
