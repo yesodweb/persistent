@@ -236,7 +236,7 @@ specs = describe "persistent" $ do
   it "order of opts is irrelevant" $ db $ do
       let eq (a, b, _) (c, d) = (a, b) @== (c, d)
           limitOffsetOrder' :: [SelectOpt Person] -> (Int, Int, [SelectOpt Person])
-          limitOffsetOrder' = limitOffsetOrder'
+          limitOffsetOrder' = limitOffsetOrder
       limitOffsetOrder' [Desc PersonAge] `eq` (0, 0)
       limitOffsetOrder' [LimitTo 2, Desc PersonAge] `eq` (2, 0)
       limitOffsetOrder' [Desc PersonAge, LimitTo 2] `eq` (2, 0)
