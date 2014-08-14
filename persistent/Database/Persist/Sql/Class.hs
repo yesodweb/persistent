@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -80,7 +81,7 @@ instance PersistField a => RawSql (Single a) where
     rawSqlProcessRow [pv]  = Single <$> fromPersistValue pv
     rawSqlProcessRow _     = Left $ pack "RawSql (Single a): wrong number of columns."
 
-instance PersistEntity a => RawSql (Entity a) where
+instance (PersistEntity a, PersistEntityBackend a ~ SqlBackend) => RawSql (Entity a) where
     rawSqlCols escape = ((+1) . length . entityFields &&& process) . entityDef . Just . entityVal
         where
           process ed = (:[]) $
