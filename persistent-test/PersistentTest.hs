@@ -200,8 +200,8 @@ specs = describe "persistent" $ do
   let maybeOwnedPetOwner = belongsTo maybeOwnedPetOwnerId
 
   it "fieldLens" $ do
-      let michael = Entity undefined $ Person "Michael" 28 Nothing
-          michaelP1 = Person "Michael" 29 Nothing
+      let michael = Entity undefined $ Person "Michael" 28 Nothing :: Entity Person
+          michaelP1 = Person "Michael" 29 Nothing :: Person
       view michael (fieldLens PersonAge) @?= 28
       entityVal (set (fieldLens PersonAge) 29 michael) @?= michaelP1
 
@@ -235,10 +235,12 @@ specs = describe "persistent" $ do
 
   it "order of opts is irrelevant" $ db $ do
       let eq (a, b, _) (c, d) = (a, b) @== (c, d)
-      limitOffsetOrder [Desc PersonAge] `eq` (0, 0)
-      limitOffsetOrder [LimitTo 2, Desc PersonAge] `eq` (2, 0)
-      limitOffsetOrder [Desc PersonAge, LimitTo 2] `eq` (2, 0)
-      limitOffsetOrder [LimitTo 2, Desc PersonAge, OffsetBy 3] `eq` (2, 3)
+          limitOffsetOrder' :: [SelectOpt Person] -> (Int, Int, [SelectOpt Person])
+          limitOffsetOrder' = limitOffsetOrder'
+      limitOffsetOrder' [Desc PersonAge] `eq` (0, 0)
+      limitOffsetOrder' [LimitTo 2, Desc PersonAge] `eq` (2, 0)
+      limitOffsetOrder' [Desc PersonAge, LimitTo 2] `eq` (2, 0)
+      limitOffsetOrder' [LimitTo 2, Desc PersonAge, OffsetBy 3] `eq` (2, 3)
 
       _ <- insertMany [ Person "z" 1 Nothing
                      , Person "y" 2 Nothing
