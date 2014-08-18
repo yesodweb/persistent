@@ -46,6 +46,7 @@ import qualified Data.Set as S
 import qualified Data.Map as M
 
 import qualified Data.Text.Encoding as TE
+import qualified Data.Vector as V
 
 -- | A value which can be marshalled to and from a 'PersistValue'.
 class PersistField a where
@@ -244,6 +245,11 @@ instance PersistField a => PersistField [a] where
     -- also useful when Persistent is not the only one filling in the data
     fromPersistValue (PersistNull) = Right []
     fromPersistValue x = Left $ T.pack $ "Expected PersistList, received: " ++ show x
+
+instance PersistField a => PersistField (V.Vector a) where
+  toPersistValue = toPersistValue . V.toList
+  fromPersistValue = either (\e -> Left ("Vector: " `T.append` e))
+                            (Right . V.fromList) . fromPersistValue
 
 instance (Ord a, PersistField a) => PersistField (S.Set a) where
     toPersistValue = PersistList . map toPersistValue . S.toList

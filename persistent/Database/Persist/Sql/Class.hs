@@ -60,6 +60,7 @@ import Data.Word
 import Data.ByteString (ByteString)
 import Text.Blaze.Html (Html)
 import Data.Bits (bitSize)
+import qualified Data.Vector as V
 
 -- | Class for data types that may be retrived from a 'rawSql'
 -- query.
@@ -266,6 +267,8 @@ instance PersistFieldSql UTCTime where
     sqlType _ = SqlDayTime
 instance PersistFieldSql a => PersistFieldSql [a] where
     sqlType _ = SqlString
+instance PersistFieldSql a => PersistFieldSql (V.Vector a) where
+  sqlType _ = SqlString
 instance (Ord a, PersistFieldSql a) => PersistFieldSql (S.Set a) where
     sqlType _ = SqlString
 instance (PersistFieldSql a, PersistFieldSql b) => PersistFieldSql (a,b) where
