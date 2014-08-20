@@ -12,6 +12,7 @@ module Database.Persist.MySQL
     , MySQL.defaultConnectInfo
     , MySQLBase.defaultSSLInfo
     , MySQLConf(..)
+    , runMySQL
     ) where
 
 import Control.Arrow
@@ -48,7 +49,7 @@ import qualified Database.MySQL.Simple.Types  as MySQL
 import qualified Database.MySQL.Base          as MySQLBase
 import qualified Database.MySQL.Base.Types    as MySQLBase
 import Control.Monad.Trans.Control (MonadBaseControl)
-import Control.Monad.Trans.Resource (MonadResource, runResourceT)
+import Control.Monad.Trans.Resource (MonadResource, runResourceT, ResourceT)
 
 
 -- | Create a MySQL connection pool and run the given action.
@@ -87,6 +88,19 @@ withMySQLConn :: (MonadBaseControl IO m, MonadIO m) =>
               -- ^ Action to be executed that uses the connection.
               -> m a
 withMySQLConn = withSqlConn . open'
+
+
+-- | A convenience helper which creates a new database connection and runs the
+-- given block, handling @MonadResource@ requirements.
+--
+-- Since 1.3.1
+runMySQL :: (MonadBaseControl IO m, MonadIO m)
+          => MySQL.ConnectInfo -- ^ connection info
+          -> SqlPersistT (ResourceT m) a -- ^ database action
+          -> m a
+runMySQL connInfo = runResourceT
+                  . withMySQLConn connInfo
+                  . runSqlConn
 
 
 -- | Internal function that opens a connection to the MySQL
