@@ -333,16 +333,22 @@ builtinGetters = I.fromList
         k (PGFF.typoid -> i) = PG.oid2int i
         listOf f = convertPV (PersistList . map f . PG.fromPGArray)
 
+enumGetter :: Getter PersistValue
+enumGetter = convertPV (PersistText . T.decodeUtf8 . unUnknown)
+
 getGetter :: PG.Connection -> PG.Oid -> IO (Getter PersistValue)
 getGetter conn oid = case I.lookup (PG.oid2int oid) builtinGetters of
     Just getter -> return getter
     Nothing -> do
         tyinfo <- PG.getTypeInfo conn oid
-        error $ "Postgresql.getGetter: type "
-             ++ explain tyinfo
-             ++ " ("
-             ++ show oid
-             ++ ") not supported."
+        -- If the type is a PostgreSQL Enum
+        if (PG.typcategory tyinfo == 'E')
+            then return $ enumGetter
+            else error $ "Postgresql.getGetter: type "
+                     ++ explain tyinfo
+                     ++ " ("
+                     ++ show oid
+                     ++ ") not supported."
     where
         explain tyinfo = case B8.unpack $ PG.typname tyinfo of
                         t@('_':ty) -> t ++ " (array of " ++ ty ++ ")"
