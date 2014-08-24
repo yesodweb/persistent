@@ -26,6 +26,7 @@ import Control.Monad (MonadPlus (..))
 import Data.Typeable (Typeable)
 import Control.Monad (liftM)
 import Database.Persist.Types
+import Database.Persist.Class.PersistEntity
 import Data.Text (Text, pack)
 import qualified Data.Text as T
 import Data.IORef (IORef)
@@ -143,7 +144,7 @@ type Migration m = WriterT [Text] (WriterT CautiousMigration m) ()
 
 type ConnectionPool = Pool Connection
 
-instance PathPiece (KeyBackend SqlBackend entity) where
+instance PersistEntity record => PathPiece (KeyBackend SqlBackend record) where
     toPathPiece (Key (PersistInt64 i)) = toPathPiece i
     toPathPiece k = throw $ PersistInvalidField $ pack $ "Invalid Key: " ++ show k
     fromPathPiece t =

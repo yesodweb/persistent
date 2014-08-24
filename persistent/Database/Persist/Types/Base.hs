@@ -373,8 +373,7 @@ data SqlType = SqlString
              | SqlOther T.Text -- ^ a backend-specific name
     deriving (Show, Read, Eq, Typeable, Ord)
 
-newtype KeyBackend backend entity = Key { unKey :: PersistValue }
-    deriving (Show, Read, Eq, Ord)
+newtype KeyBackend backend record = Key { unKey :: PersistValue }
 
 type family KeyEntity key
 type instance KeyEntity (KeyBackend backend entity) = entity
@@ -384,6 +383,9 @@ instance A.ToJSON (KeyBackend backend entity) where
 
 instance A.FromJSON (KeyBackend backend entity) where
     parseJSON = fmap Key . A.parseJSON
+
+recordTypeFromKey :: KeyBackend b v -> v
+recordTypeFromKey _ = error "recordTypeFromKey"
 
 data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le | In | NotIn
                    | BackendSpecificFilter T.Text
