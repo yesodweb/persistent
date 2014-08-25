@@ -8,8 +8,19 @@ RUN echo "Defaults:persistent !requiretty" >> /etc/sudoers
 RUN apt-get update
 RUN apt-get install -y haskell-platform
 
+# Above installs ghc 7.6 to /usr/bin/
+# Below install ghc 7.8 to /usr/local/bin/
+ADD http://www.haskell.org/ghc/dist/7.8.3/ghc-7.8.3-x86_64-unknown-linux-deb7.tar.xz ghc-7.8.3-x86_64-unknown-linux-deb7.tar.xz
+RUN apt-get install -y xz-utils
+RUN tar xf ghc-7.8.3-x86_64-unknown-linux-deb7.tar.xz
+RUN apt-get install -y g++ make
+RUN cd ghc-7.8.3 && ./configure && make install && cd ..
+RUN rm -fr ghc-7.8.3-x86_64-unknown-linux-deb7.tar.bz2 ghc-7.8.3
+
+
 # Postgres
-RUN apt-get install -y postgresql postgresql-client postgresql-contrib libpq-dev
+# TODO: getting a failure for this now
+# RUN apt-get install -y postgresql postgresql-client postgresql-contrib libpq-dev
 
 # Sqlite
 RUN apt-get install -y sqlite3 libsqlite3-dev
