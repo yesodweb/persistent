@@ -273,10 +273,10 @@ instance PathPiece PersistValue where
                     _ -> Just $ PersistText t
     toPathPiece x =
         case fromPersistValueText x of
-            Left e -> error e
+            Left e -> error $ T.unpack e
             Right y -> y
 
-fromPersistValueText :: PersistValue -> Either String Text
+fromPersistValueText :: PersistValue -> Either Text Text
 fromPersistValueText (PersistText s) = Right s
 fromPersistValueText (PersistByteString bs) =
     Right $ TE.decodeUtf8With lenientDecode bs

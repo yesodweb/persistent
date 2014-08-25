@@ -80,7 +80,7 @@ instance PersistField ByteString where
 
 instance PersistField T.Text where
     toPersistValue = PersistText
-    fromPersistValue = either (Left . T.pack) Right . fromPersistValueText
+    fromPersistValue = fromPersistValueText
 
 instance PersistField TL.Text where
     toPersistValue = toPersistValue . TL.toStrict
