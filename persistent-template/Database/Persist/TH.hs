@@ -378,12 +378,6 @@ sumConstrName mps t FieldDef {..} = mkName $ unpack $ concat
     , "Sum"
     ]
 
-readMay :: Read a => String -> Maybe a
-readMay s =
-    case reads s of
-        (x, _):_ -> Just x
-        [] -> Nothing
-
 entityUpdates :: EntityDef -> [(HaskellName, FieldType, IsNullable, PersistUpdate)]
 entityUpdates =
     concatMap go . entityFields
