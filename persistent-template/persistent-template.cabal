@@ -27,6 +27,7 @@ library
                    , monad-logger
                    , unordered-containers
                    , tagged
+                   , path-pieces
     exposed-modules: Database.Persist.TH
     ghc-options:     -Wall
     if impl(ghc >= 7.4)
