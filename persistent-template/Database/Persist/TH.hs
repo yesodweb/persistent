@@ -685,32 +685,32 @@ mkKeyTypeDec mps t = do
 
     genericInstances =
       -- truly unfortunate that TH doesn't support standalone deriving
-      [d|instance Show (BackendKey backend) => Show (Key $(pure recordType)) where
+      [d|instance Show (BackendKey $(pure backendT)) => Show (Key $(pure recordType)) where
             showsPrec i = showsPrec i . $(return $ VarE $ unKeyName t)
-         instance Read (BackendKey backend) => Read (Key $(pure recordType)) where
+         instance Read (BackendKey $(pure backendT)) => Read (Key $(pure recordType)) where
             readsPrec i = map (first $(return $ ConE $ keyConName t)) . readsPrec i
-         instance Eq (BackendKey backend) => Eq (Key $(pure recordType)) where
+         instance Eq (BackendKey $(pure backendT)) => Eq (Key $(pure recordType)) where
             x == y =
                 ($(return $ VarE $ unKeyName t) x) ==
                 ($(return $ VarE $ unKeyName t) y)
             x /= y =
                 ($(return $ VarE $ unKeyName t) x) ==
                 ($(return $ VarE $ unKeyName t) y)
-         instance Ord (BackendKey backend) => Ord (Key $(pure recordType)) where
+         instance Ord (BackendKey $(pure backendT)) => Ord (Key $(pure recordType)) where
             compare x y = compare
                 ($(return $ VarE $ unKeyName t) x)
                 ($(return $ VarE $ unKeyName t) y)
-         instance PathPiece (BackendKey backend) => PathPiece (Key $(pure recordType)) where
+         instance PathPiece (BackendKey $(pure backendT)) => PathPiece (Key $(pure recordType)) where
             toPathPiece = toPathPiece . $(return $ VarE $ unKeyName t)
             fromPathPiece = fmap $(return $ ConE $ keyConName t) . fromPathPiece
-         instance PersistField (BackendKey backend) => PersistField (Key $(pure recordType)) where
+         instance PersistField (BackendKey $(pure backendT)) => PersistField (Key $(pure recordType)) where
             toPersistValue = toPersistValue . $(return $ VarE $ unKeyName t)
             fromPersistValue = fmap $(return $ ConE $ keyConName t) . fromPersistValue
-         instance PersistFieldSql (BackendKey backend) => PersistFieldSql (Key $(pure recordType)) where
+         instance PersistFieldSql (BackendKey $(pure backendT)) => PersistFieldSql (Key $(pure recordType)) where
             sqlType = sqlType . fmap $(return $ VarE $ unKeyName t)
-         instance ToJSON (BackendKey backend) => ToJSON (Key $(pure recordType)) where
+         instance ToJSON (BackendKey $(pure backendT)) => ToJSON (Key $(pure recordType)) where
             toJSON = toJSON . $(return $ VarE $ unKeyName t)
-         instance FromJSON (BackendKey backend) => FromJSON (Key $(pure recordType)) where
+         instance FromJSON (BackendKey $(pure backendT)) => FromJSON (Key $(pure recordType)) where
             parseJSON = fmap $(return $ ConE $ keyConName t) . parseJSON
       |]
 
