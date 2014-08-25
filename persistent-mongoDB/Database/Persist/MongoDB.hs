@@ -608,11 +608,11 @@ keyToMongoDoc k = case entityPrimary $ entityDefFromKey k of
     primaryNames = map fieldDB . primaryFields
     values = keyToValues k
 
-entityDefFromKey :: PersistEntity record => Key record => EntityDef
+entityDefFromKey :: PersistEntity record => Key record -> EntityDef
 entityDefFromKey = entityDef . Just . recordTypeFromKey
 
 collectionNameFromKey :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
-                      => Key record => Text
+                      => Key record -> Text
 collectionNameFromKey = collectionName . recordTypeFromKey
 
 
@@ -936,8 +936,7 @@ persistObjectIdToDbOid (PersistObjectId k) = case Serialize.decode k of
                   Right o -> o
 persistObjectIdToDbOid _ = throw $ PersistInvalidField "expected PersistObjectId"
 
-keyToOid :: (PersistEntity entity, PersistEntityBackend entity ~ MongoBackend)
-         => BackendKey MongoBackend -> DB.ObjectId
+keyToOid :: BackendKey MongoBackend -> DB.ObjectId
 keyToOid = unMongoBackendKey
 {-# Deprecated keyToOid "Use unMongoBackendKey" #-}
 
