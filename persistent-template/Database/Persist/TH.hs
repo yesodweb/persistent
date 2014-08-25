@@ -56,6 +56,7 @@ import qualified Data.Text.IO as TIO
 import Data.List (foldl')
 import Data.Maybe (isJust, listToMaybe, mapMaybe)
 import Data.Monoid (mappend, mconcat)
+import Text.Read (readPrec, lexP, step, prec, parens, Lexeme(Ident))
 import qualified Data.Map as M
 import qualified Data.HashMap.Strict as HM
 import Data.Aeson
@@ -69,7 +70,6 @@ import Control.Applicative (pure, (<$>), (<*>))
 import Database.Persist.Sql (sqlType)
 import Data.Proxy (Proxy (Proxy))
 import Web.PathPieces (PathPiece, toPathPiece, fromPathPiece)
-import Control.Arrow (first)
 import GHC.Generics (Generic)
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
@@ -677,12 +677,20 @@ mkKeyTypeDec mps t = do
          instance FromJSON (Key $(pure recordType))
       |]
 
+    keyStringL = StringL . keyString
     genericInstances =
       -- truly unfortunate that TH doesn't support standalone deriving
       [d|instance Show (BackendKey $(pure backendT)) => Show (Key $(pure recordType)) where
-            showsPrec i = showsPrec i . $(return $ VarE $ unKeyName t)
+            showsPrec i x = showParen (i > app_prec) $
+              (showString $ $(pure $ LitE $ keyStringL t) `mappend` " ") .
+              showsPrec i ($(return $ VarE $ unKeyName t) x)
+              where app_prec = (10::Int)
          instance Read (BackendKey $(pure backendT)) => Read (Key $(pure recordType)) where
-            readsPrec i = map (first $(return $ ConE $ keyConName t)) . readsPrec i
+            readPrec = parens $ (prec app_prec $ do
+                                  Ident $(pure $ LitP $ keyStringL t) <- lexP
+                                  m <- step readPrec
+                                  return ($(pure $ ConE $ keyConName t) m))
+              where app_prec = (10::Int)
          instance Eq (BackendKey $(pure backendT)) => Eq (Key $(pure recordType)) where
             x == y =
                 ($(return $ VarE $ unKeyName t) x) ==
