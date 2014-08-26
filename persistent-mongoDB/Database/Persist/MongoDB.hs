@@ -491,10 +491,11 @@ instance PersistStore DB.MongoContext where
     backendKeyToValues (MongoBackendKey oid)   = [oidToPersistValue oid]
     backendKeyFromValues [poid@(PersistObjectId _)] =
         Right $ MongoBackendKey $ persistObjectIdToDbOid poid
-    backendKeyFromValues s = Left $ T.pack $ show s
+    backendKeyFromValues s = Left $ "backendKeyFromValues, expected a list with one PersistObjectId, got: "
+        `mappend` (T.pack $ show s)
 
-    insert record = do
-        keyFrom_idEx =<< DB.insert (collectionName record) (toInsertDoc record)
+    insert record = DB.insert (collectionName record) (toInsertDoc record)
+                >>= keyFrom_idEx
 
     insertMany [] = return []
     insertMany (r:records) = mapM keyFrom_idEx =<<
