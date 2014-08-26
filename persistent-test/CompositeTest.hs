@@ -45,9 +45,9 @@ import Control.Applicative ((<$>),(<*>))
 
 
 #if WITH_MONGODB
-mkPersist persistSettings [persistUpperCase|
+mkPersist persistSettings { mpsGeneric = False } [persistUpperCase|
 #else
-share [mkPersist persistSettings, mkMigrate "compositeMigrate", mkDeleteCascade persistSettings] [persistLowerCase|
+share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMigrate", mkDeleteCascade persistSettings] [persistLowerCase|
 #endif
   TestChild
       name1 String maxlen=20

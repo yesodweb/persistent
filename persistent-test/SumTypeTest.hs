@@ -37,6 +37,9 @@ Car
     car CarId
 |]
 
+-- This is needed for mpsGeneric = True
+-- The typical persistent user sets mpsGeneric = False
+-- https://ghc.haskell.org/trac/ghc/ticket/8100
 deriving instance Show (BackendKey backend) => Show (VehicleGeneric backend)
 deriving instance Eq (BackendKey backend) => Eq (VehicleGeneric backend)
 

@@ -13,6 +13,7 @@ module Init (
 
   , MonadIO
   , persistSettings
+  , mpsGeneric
 #ifdef WITH_MONGODB
   , dbName
   , db'
