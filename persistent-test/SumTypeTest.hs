@@ -25,7 +25,7 @@ import Init
 #if WITH_MONGODB
 mkPersist persistSettings [persistLowerCase|
 #else
-share [mkPersist sqlSettings, mkMigrate "sumTypeMigrate"] [persistLowerCase|
+share [mkPersist persistSettings, mkMigrate "sumTypeMigrate"] [persistLowerCase|
 #endif
 Bicycle
     brand T.Text

@@ -33,7 +33,7 @@ import Data.Bson (genObjectId)
 
 import Control.Monad (liftM, void)
 import Control.Monad.Logger
-import Database.Persist.TH (mkDeleteCascade, mpsGeneric, mpsPrefixFields)
+import Database.Persist.TH (mkDeleteCascade, mpsPrefixFields)
 import Database.Persist.Sqlite
 import Control.Exception (SomeException)
 import qualified Data.Text as T
@@ -153,7 +153,6 @@ share [mkPersist persistSettings,  mkMigrate "testMigrate", mkDeleteCascade pers
 deriving instance Show (BackendKey backend) => Show (PetGeneric backend)
 deriving instance Eq (BackendKey backend) => Eq (PetGeneric backend)
 
-#ifndef WITH_MONGODB
 share [mkPersist sqlSettings { mpsPrefixFields = False, mpsGeneric = False }, mkMigrate "noPrefixMigrate"] [persistLowerCase|
 NoPrefix1
     someFieldName Int
@@ -167,7 +166,6 @@ NoPrefix2
     unprefixedRight String
     deriving Show Eq
 |]
-#endif
 
 cleanDB :: (MonadIO m, PersistQuery backend, PersistEntityBackend Email ~ backend) => ReaderT backend m ()
 cleanDB = do

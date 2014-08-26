@@ -44,10 +44,11 @@ import Control.Applicative ((<$>),(<*>))
 #endif
 
 
+-- mpsGeneric = False is due to a bug or at least lack of a feature in mkKeyTypeDec TH.hs
 #if WITH_MONGODB
 mkPersist persistSettings { mpsGeneric = False } [persistUpperCase|
 #else
-share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMigrate", mkDeleteCascade persistSettings] [persistLowerCase|
+share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMigrate", mkDeleteCascade persistSettings { mpsGeneric = False }] [persistLowerCase|
 #endif
   TestChild
       name1 String maxlen=20
