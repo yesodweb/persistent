@@ -55,7 +55,7 @@ import Data.Text (Text, unpack)
 
 #ifdef WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
-import Database.Persist.MongoDB (Action, withMongoPool, runMongoDBPool, MongoBackend, defaultMongoConf, applyDockerEnv, BackendKey(..))
+import Database.Persist.MongoDB (Action, withMongoPool, runMongoDBPool, defaultMongoConf, applyDockerEnv, BackendKey(..))
 import Language.Haskell.TH.Syntax (Type(..))
 import Database.Persist.TH (mkPersistSettings, MkPersistSettings(..))
 import Control.Monad (replicateM)
@@ -115,12 +115,12 @@ assertNotEmpty xs = liftIO $ assertBool "" (not (null xs))
 
 #ifdef WITH_MONGODB
 persistSettings :: MkPersistSettings
-persistSettings = (mkPersistSettings $ ConT ''MongoBackend) { mpsGeneric = True }
+persistSettings = (mkPersistSettings $ ConT ''MongoDB.MongoContext) { mpsGeneric = True }
 
 dbName :: Text
 dbName = "persistent"
 
-type BackendMonad = MongoBackend
+type BackendMonad = MongoDB.MongoContext
 runConn :: (MonadIO m, MonadBaseControl IO m) => Action m backend -> m ()
 runConn f = do
   conf <- liftIO $ applyDockerEnv $ defaultMongoConf dbName -- { mgRsPrimary = Just "replicaset" }

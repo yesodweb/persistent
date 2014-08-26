@@ -45,8 +45,8 @@ import Control.Applicative ((<$>),(<*>))
 
 #if WITH_MONGODB
 import Language.Haskell.TH.Syntax
-import Database.Persist.MongoDB (MongoBackend)
-#define SETTINGS (mkPersistSettings $ ConT ''MongoBackend)
+import Database.MongoDB (MongoContext)
+#define SETTINGS (mkPersistSettings $ ConT ''MongoContext)
 #else
 #define SETTINGS sqlSettings
 #endif

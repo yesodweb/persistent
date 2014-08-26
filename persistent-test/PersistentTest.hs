@@ -26,7 +26,7 @@ import Database.Persist
 
 #ifdef WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
-import Database.Persist.MongoDB (oidToKey, toInsertDoc, docToEntityThrow, MongoBackend, collectionName, entityToDocument)
+import Database.Persist.MongoDB (oidToKey, toInsertDoc, docToEntityThrow, collectionName, entityToDocument)
 import Data.Bson (genObjectId)
 import Language.Haskell.TH.Syntax (Type(..))
 
@@ -624,7 +624,7 @@ specs = describe "persistent" $ do
   it "insertKey" $ db $ do
 #ifdef WITH_MONGODB
       oid <- liftIO $ genObjectId
-      let k = PersonKey $ MongoBackendKey oid
+      let k = PersonKey $ MongoKey oid
 #else
       ki <- liftIO $ randomRIO (0, 10000)
       let k = PersonKey $ SqlBackendKey $ abs ki
@@ -636,7 +636,7 @@ specs = describe "persistent" $ do
   it "repsert" $ db $ do
 #ifdef WITH_MONGODB
       oid <- liftIO $ genObjectId
-      let k = PersonKey $ MongoBackendKey oid
+      let k = PersonKey $ MongoKey oid
 #else
       ki <- liftIO $ randomRIO (0, 10000)
       let k = PersonKey $ SqlBackendKey $ abs ki

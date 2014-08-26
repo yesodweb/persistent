@@ -63,7 +63,6 @@ module Database.Persist.MongoDB
     , runMongoDBPoolDef
     , ConnectionPool
     , Connection
-    , MongoBackend
     , MongoAuth (..)
 
     -- * Connection configuration
@@ -93,6 +92,7 @@ module Database.Persist.MongoDB
     , DB.slaveOk
     , (DB.=:)
     , DB.ObjectId
+    , DB.MongoContext
 
     -- * Database.Persist
     , module Database.Persist
@@ -155,7 +155,7 @@ lookupEnv key = do
     return $ lookup key env
 #endif
 
-instance HasPersistBackend MongoBackend MongoBackend where
+instance HasPersistBackend DB.MongoContext DB.MongoContext where
     persistBackend = id
 
 recordTypeFromKey :: Key record -> record
@@ -196,7 +196,7 @@ data Connection = Connection DB.Pipe DB.Database
 type ConnectionPool = Pool.Pool Connection
 
 -- | ToPathPiece is used to convert a key to/from text
-instance PathPiece (BackendKey MongoBackend) where
+instance PathPiece (BackendKey DB.MongoContext) where
     toPathPiece = keyToText
     fromPathPiece keyText = readMayKey $
         -- handle a JSON type prefix
@@ -205,14 +205,14 @@ instance PathPiece (BackendKey MongoBackend) where
             Just ('o', prefixed) -> prefixed
             _ -> keyText
 
-keyToText :: BackendKey MongoBackend -> Text
-keyToText = T.pack . show . unMongoBackendKey
+keyToText :: BackendKey DB.MongoContext -> Text
+keyToText = T.pack . show . unMongoKey
 
 -- | Convert a Text to a Key
-readMayKey :: Text -> Maybe (BackendKey MongoBackend)
+readMayKey :: Text -> Maybe (BackendKey DB.MongoContext)
 readMayKey str =
   case filter (null . snd) $ reads $ T.unpack str :: [(DB.ObjectId,String)] of
-    (parsed,_):[] -> Just $ MongoBackendKey parsed
+    (parsed,_):[] -> Just $ MongoKey parsed
     _ -> Nothing
 
 instance PersistField DB.ObjectId where
@@ -224,7 +224,7 @@ instance PersistField DB.ObjectId where
 instance Sql.PersistFieldSql DB.ObjectId where
     sqlType _ = Sql.SqlOther "doesn't make much sense for MongoDB"
 
-instance Sql.PersistFieldSql (BackendKey MongoBackend) where
+instance Sql.PersistFieldSql (BackendKey DB.MongoContext) where
     sqlType _ = Sql.SqlOther "doesn't make much sense for MongoDB"
 
 
@@ -346,11 +346,11 @@ runMongoDBPool accessMode action pool =
 runMongoDBPoolDef :: (Trans.MonadIO m, MonadBaseControl IO m) => DB.Action m a -> ConnectionPool -> m a
 runMongoDBPoolDef = runMongoDBPool (DB.ConfirmWrites ["j" DB.=: True])
 
-queryByKey :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
+queryByKey :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
            => Key record -> DB.Query
 queryByKey k = DB.select (keyToMongoDoc k) (collectionNameFromKey k)
 
-selectByKey :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
+selectByKey :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
             => Key record -> DB.Selection
 selectByKey k = DB.select (keyToMongoDoc k) (collectionNameFromKey k)
 
@@ -387,7 +387,7 @@ toUniquesDoc uniq = zipWith (DB.:=)
 -- | convert a PersistEntity into document fields.
 -- for inserts only: nulls are ignored so they will be unset in the document.
 -- 'entityToDocument' includes nulls
-toInsertDoc :: forall record.  (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
+toInsertDoc :: forall record.  (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
             => record -> DB.Document
 toInsertDoc record = zipFilter (embeddedFields $ toEmbeddedDef entDef)
     (map toPersistValue $ toPersistFields record)
@@ -415,13 +415,13 @@ toInsertDoc record = zipFilter (embeddedFields $ toEmbeddedDef entDef)
     embeddedVal je@(Just _) (PersistList l) = DB.Array $ map (embeddedVal je) l
     embeddedVal _ pv = DB.val pv
 
-collectionName :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
+collectionName :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
                => record -> Text
 collectionName = unDBName . entityDB . entityDef . Just
 
 -- | convert a PersistEntity into document fields.
 -- unlike 'toInsertDoc', nulls are included.
-entityToDocument :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
+entityToDocument :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
                  => record -> DB.Document
 entityToDocument record = zipToDoc (map fieldDB $ entityFields entity) (toPersistFields record)
   where
@@ -438,7 +438,7 @@ fieldToLabel :: EmbeddedFieldDef -> Text
 fieldToLabel = unDBName . emFieldDB
 
 saveWithKey :: forall m record.
-            (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
+            (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
             => (record -> [DB.Field])
             -> (Text -> [DB.Field] -> DB.Action m ())
             -> Key record
@@ -446,8 +446,6 @@ saveWithKey :: forall m record.
             -> DB.Action m ()
 saveWithKey entToFields dbSave key record =
       dbSave (collectionName record) ((keyToMongoDoc key) ++ (entToFields record))
-
-type MongoBackend = DB.MongoContext -- FIXME
 
 keyFrom_idEx :: (Trans.MonadIO m, PersistEntity record) => DB.Value -> m (Key record)
 keyFrom_idEx idVal = case keyFrom_id idVal of
@@ -464,14 +462,14 @@ keyFrom_id idVal = case cast idVal of
 -- | It would make sense to define the instance for ObjectId
 -- and then use newtype deriving
 -- however, that would create an orphan instance
-instance ToJSON (BackendKey MongoBackend) where
-    toJSON (MongoBackendKey (Oid x y)) = toJSON $ DB.showHexLen 8 x $ DB.showHexLen 16 y ""
+instance ToJSON (BackendKey DB.MongoContext) where
+    toJSON (MongoKey (Oid x y)) = toJSON $ DB.showHexLen 8 x $ DB.showHexLen 16 y ""
 
-instance FromJSON (BackendKey MongoBackend) where
-    parseJSON = withText "BackendKey MongoBackend" $ \t ->
+instance FromJSON (BackendKey DB.MongoContext) where
+    parseJSON = withText "MongoKey" $ \t ->
         maybe
           (fail "Invalid base64")
-          (return . MongoBackendKey . persistObjectIdToDbOid . PersistObjectId)
+          (return . MongoKey . persistObjectIdToDbOid . PersistObjectId)
           $ fmap (i2bs (8 * 12) . fst) $ headMay $ readHex $ T.unpack t
       where
         -- should these be exported from Types/Base.hs ?
@@ -485,12 +483,12 @@ instance FromJSON (BackendKey MongoBackend) where
         {-# INLINE i2bs #-}
 
 instance PersistStore DB.MongoContext where
-    newtype BackendKey MongoBackend = MongoBackendKey { unMongoBackendKey :: DB.ObjectId }
+    newtype BackendKey DB.MongoContext = MongoKey { unMongoKey :: DB.ObjectId }
         deriving (Show, Read, Eq, Ord, PersistField)
 
-    backendKeyToValues (MongoBackendKey oid)   = [oidToPersistValue oid]
+    backendKeyToValues (MongoKey oid)   = [oidToPersistValue oid]
     backendKeyFromValues [poid@(PersistObjectId _)] =
-        Right $ MongoBackendKey $ persistObjectIdToDbOid poid
+        Right $ MongoKey $ persistObjectIdToDbOid poid
     backendKeyFromValues s = Left $ "backendKeyFromValues, expected a list with one PersistObjectId, got: "
         `mappend` (T.pack $ show s)
 
@@ -600,7 +598,7 @@ _id = "_id"
 
 -- _id is always the primary key in MongoDB
 -- but _id can contain any unique value
-keyToMongoDoc :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
+keyToMongoDoc :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
                   => Key record -> DB.Document
 keyToMongoDoc k = case entityPrimary $ entityDefFromKey k of
     Nothing   -> zipToDoc [DBName _id] values
@@ -612,7 +610,7 @@ keyToMongoDoc k = case entityPrimary $ entityDefFromKey k of
 entityDefFromKey :: PersistEntity record => Key record -> EntityDef
 entityDefFromKey = entityDef . Just . recordTypeFromKey
 
-collectionNameFromKey :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
+collectionNameFromKey :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
                       => Key record -> Text
 collectionNameFromKey = collectionName . recordTypeFromKey
 
@@ -689,7 +687,7 @@ orderClause o = case o of
                   _      -> error "orderClause: expected Asc or Desc"
 
 
-makeQuery :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend) => [Filter record] -> [SelectOpt record] -> DB.Query
+makeQuery :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext) => [Filter record] -> [SelectOpt record] -> DB.Query
 makeQuery filts opts =
     (DB.select (filtersToDoc filts) (collectionName $ dummyFromFilts filts)) {
       DB.limit = fromIntegral limit
@@ -700,14 +698,14 @@ makeQuery filts opts =
     (limit, offset, orders') = limitOffsetOrder opts
     orders = map orderClause orders'
 
-filtersToDoc :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend) => [Filter record] -> DB.Document
+filtersToDoc :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext) => [Filter record] -> DB.Document
 filtersToDoc filts =
 #ifdef DEBUG
   debug $
 #endif
     if null filts then [] else multiFilter AndDollar filts
 
-filterToDocument :: (PersistEntity val, PersistEntityBackend val ~ MongoBackend) => Filter val -> DB.Document
+filterToDocument :: (PersistEntity val, PersistEntityBackend val ~ DB.MongoContext) => Filter val -> DB.Document
 filterToDocument f =
     case f of
       Filter field v filt -> [filterToBSON (fieldName field) v filt]
@@ -728,7 +726,7 @@ toMultiOp :: MultiFilter -> Text
 toMultiOp OrDollar  = orDollar
 toMultiOp AndDollar = andDollar
 
-multiFilter :: forall record. (PersistEntity record, PersistEntityBackend record ~ MongoBackend) => MultiFilter -> [Filter record] -> [DB.Field]
+multiFilter :: forall record. (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext) => MultiFilter -> [Filter record] -> [DB.Field]
 multiFilter _ [] = throw $ PersistMongoDBError "An empty list of filters was given"
 multiFilter multi filters =
   case (multi, filter (not . null) (map filterToDocument filters)) of
@@ -827,14 +825,14 @@ docToEntityEither doc = entity
     getType :: Either err (Entity ent) -> ent
     getType = error "docToEntityEither/getType: never here"
 
-docToEntityThrow :: forall m record. (Trans.MonadIO m, PersistEntity record, PersistEntityBackend record ~ MongoBackend) => DB.Document -> m (Entity record)
+docToEntityThrow :: forall m record. (Trans.MonadIO m, PersistEntity record, PersistEntityBackend record ~ DB.MongoContext) => DB.Document -> m (Entity record)
 docToEntityThrow doc =
     case docToEntityEither doc of
         Left s -> Trans.liftIO . throwIO $ PersistMarshalError $ s
         Right entity -> return entity
 
 
-fromPersistValuesThrow :: (Trans.MonadIO m, PersistEntity record, PersistEntityBackend record ~ MongoBackend) => EntityDef -> [DB.Field] -> m (Entity record)
+fromPersistValuesThrow :: (Trans.MonadIO m, PersistEntity record, PersistEntityBackend record ~ DB.MongoContext) => EntityDef -> [DB.Field] -> m (Entity record)
 fromPersistValuesThrow entDef doc = 
     case eitherFromPersistValues entDef doc of
         Left t -> Trans.liftIO . throwIO $ PersistMarshalError $
@@ -927,9 +925,9 @@ assocListFromDoc = Prelude.map (\f -> ( (DB.label f), cast (DB.value f) ) )
 oidToPersistValue :: DB.ObjectId -> PersistValue
 oidToPersistValue = PersistObjectId . Serialize.encode
 
-oidToKey :: DB.ObjectId -> BackendKey MongoBackend
-oidToKey = MongoBackendKey
-{-# Deprecated oidToKey "Use MongoBackendKey" #-}
+oidToKey :: DB.ObjectId -> BackendKey DB.MongoContext
+oidToKey = MongoKey
+{-# Deprecated oidToKey "Use MongoKey" #-}
 
 persistObjectIdToDbOid :: PersistValue -> DB.ObjectId
 persistObjectIdToDbOid (PersistObjectId k) = case Serialize.decode k of
@@ -937,9 +935,9 @@ persistObjectIdToDbOid (PersistObjectId k) = case Serialize.decode k of
                   Right o -> o
 persistObjectIdToDbOid _ = throw $ PersistInvalidField "expected PersistObjectId"
 
-keyToOid :: BackendKey MongoBackend -> DB.ObjectId
-keyToOid = unMongoBackendKey
-{-# Deprecated keyToOid "Use unMongoBackendKey" #-}
+keyToOid :: BackendKey DB.MongoContext -> DB.ObjectId
+keyToOid = unMongoKey
+{-# Deprecated keyToOid "Use unMongoKey" #-}
 
 instance DB.Val PersistValue where
   val (PersistInt64 x)   = DB.Int64 x
@@ -1127,7 +1125,7 @@ applyDockerEnv mconf = do
 -- These filters create a query that reaches deeper into a document with
 -- nested fields.
 
-type instance BackendSpecificFilter MongoBackend record = MongoFilter record
+type instance BackendSpecificFilter DB.MongoContext record = MongoFilter record
 
 data NestedField record typ
   = forall emb. PersistEntity emb => EntityField record [emb] `LastEmbFld` EntityField emb typ
@@ -1152,11 +1150,11 @@ instance MongoRegexSearchable rs => MongoRegexSearchable (Maybe rs)
 instance MongoRegexSearchable rs => MongoRegexSearchable [rs]
 
 -- | Filter using a Regular expression.
-(=~.) :: forall record searchable. (MongoRegexSearchable searchable, PersistEntity record, PersistEntityBackend record ~ MongoBackend) => EntityField record searchable -> MongoRegex -> Filter record
+(=~.) :: forall record searchable. (MongoRegexSearchable searchable, PersistEntity record, PersistEntityBackend record ~ DB.MongoContext) => EntityField record searchable -> MongoRegex -> Filter record
 fld =~. val = BackendFilter $ RegExpFilter fld val
 
 -- | Filter using a Regular expression against a nullable field.
-(?=~.) :: forall record. (PersistEntity record, PersistEntityBackend record ~ MongoBackend) => EntityField record (Maybe Text) -> MongoRegex -> Filter record
+(?=~.) :: forall record. (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext) => EntityField record (Maybe Text) -> MongoRegex -> Filter record
 fld ?=~. val = BackendFilter $ RegExpFilter fld val
 {-# DEPRECATED (?=~.) "Use =~. instead" #-}
 
@@ -1237,7 +1235,7 @@ infixr 4 `anyBsonEq`
 --
 -- > db.Collection.find({"object.field": item})
 nestEq, nestNe, nestGe, nestLe, nestIn, nestNotIn :: forall record typ.
-    ( PersistField typ , PersistEntityBackend record ~ MongoBackend)
+    ( PersistField typ , PersistEntityBackend record ~ DB.MongoContext)
     => NestedField record typ
     -> typ
     -> Filter record
@@ -1250,7 +1248,7 @@ nestNotIn = nestedOp NotIn
 
 nestedOp :: forall record typ.
        ( PersistField typ
-       , PersistEntityBackend record ~ MongoBackend
+       , PersistEntityBackend record ~ DB.MongoContext
        ) => PersistFilter -> NestedField record typ -> typ -> Filter record
 nestedOp op nf v = BackendFilter $ NestedFilter
                     { nestedField = nf
@@ -1260,7 +1258,7 @@ nestedOp op nf v = BackendFilter $ NestedFilter
 -- | same as `nestEq`, but give a BSON Value
 nestBsonEq :: forall record typ.
        ( PersistField typ
-       , PersistEntityBackend record ~ MongoBackend
+       , PersistEntityBackend record ~ DB.MongoContext
        ) => NestedField record typ -> DB.Value -> Filter record
 nf `nestBsonEq` val = BackendFilter $ NestedFilter
                     { nestedField = nf
@@ -1269,7 +1267,7 @@ nf `nestBsonEq` val = BackendFilter $ NestedFilter
 
 multiEq :: forall record typ.
         ( PersistField typ
-        , PersistEntityBackend record ~ MongoBackend
+        , PersistEntityBackend record ~ DB.MongoContext
         ) => EntityField record [typ] -> typ -> Filter record
 multiEq = anyEq
 {-# DEPRECATED multiEq "Please use anyEq instead" #-}
@@ -1284,7 +1282,7 @@ multiEq = anyEq
 -- > db.Collection.find({arrayField: arrayItem})
 anyEq :: forall record typ.
         ( PersistField typ
-        , PersistEntityBackend record ~ MongoBackend
+        , PersistEntityBackend record ~ DB.MongoContext
         ) => EntityField record [typ] -> typ -> Filter record
 fld `anyEq` val = BackendFilter $ MultiKeyFilter
                       { multiField = fld
@@ -1293,7 +1291,7 @@ fld `anyEq` val = BackendFilter $ MultiKeyFilter
 
 multiBsonEq :: forall record typ.
         ( PersistField typ
-        , PersistEntityBackend record ~ MongoBackend
+        , PersistEntityBackend record ~ DB.MongoContext
         ) => EntityField record [typ] -> DB.Value -> Filter record
 multiBsonEq = anyBsonEq
 {-# DEPRECATED multiBsonEq "Please use anyBsonEq instead" #-}
@@ -1301,7 +1299,7 @@ multiBsonEq = anyBsonEq
 -- | same as `anyEq`, but give a BSON Value
 anyBsonEq :: forall record typ.
         ( PersistField typ
-        , PersistEntityBackend record ~ MongoBackend
+        , PersistEntityBackend record ~ DB.MongoContext
         ) => EntityField record [typ] -> DB.Value -> Filter record
 fld `anyBsonEq` val = BackendFilter $ MultiKeyFilter
                       { multiField = fld
