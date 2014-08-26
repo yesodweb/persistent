@@ -19,7 +19,6 @@
 {-# LANGUAGE RankNTypes, TypeFamilies #-}
 {-# LANGUAGE EmptyDataDecls #-}
 
-{-# LANGUAGE UndecidableInstances #-} -- FIXME
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE GADTs #-}
 module Database.Persist.MongoDB
