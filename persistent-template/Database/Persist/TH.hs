@@ -648,22 +648,25 @@ mkLensClauses mps t = do
 -- a PathPiece instance is only generated for a Key with one field
 mkKeyTypeDec :: MkPersistSettings -> EntityDef -> Q (Dec, [Dec])
 mkKeyTypeDec mps t = do
-    let b = ''Key
-        c = [recordType]
-        d = RecC (keyConName t) keyFields
-    (instDecs, e) <- case () of
-     ()
-      | not useNewtype -> do
-           pfDec <- pfInstD
-           return (pfDec, [''Show, ''Read, ''Eq, ''Ord, ''Generic])
-      | mpsGeneric mps -> do
-           dec <- genericInstances
-           return (dec, [])
-      | otherwise ->
-           return ([], [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''PersistField, ''PersistFieldSql, ''ToJSON, ''FromJSON])
-    let kd = if useNewtype then NewtypeInstD [] b c d e else DataInstD [] b c [d] e
+    (instDecs, i) <-
+      if mpsGeneric mps
+        then if not useNewtype
+               then do pfDec <- pfInstD
+                       return (pfDec, [''Generic])
+               else do dec <- genericInstances
+                       return (dec, [])
+        else if not useNewtype
+               then do pfDec <- pfInstD
+                       return (pfDec, [''Show, ''Read, ''Eq, ''Ord, ''Generic])
+                else return ([], [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''PersistField, ''PersistFieldSql, ''ToJSON, ''FromJSON])
+
+    let kd = if useNewtype
+               then NewtypeInstD [] k [recordType] dec i
+               else DataInstD    [] k [recordType] [dec] i
     return (kd, instDecs)
   where
+    dec = RecC (keyConName t) keyFields
+    k = ''Key
     backendKeyConstraint klass = ClassP klass [ConT ''BackendKey `AppT` backendT]
     recordType = genericDataType mps (entityHaskell t) backendT
     pfInstD = -- FIXME: generate a PersistMap instead of PersistList
@@ -680,6 +683,7 @@ mkKeyTypeDec mps t = do
     keyStringL = StringL . keyString
     genericInstances =
       -- truly unfortunate that TH doesn't support standalone deriving
+      -- https://ghc.haskell.org/trac/ghc/ticket/8100
       [d|instance Show (BackendKey $(pure backendT)) => Show (Key $(pure recordType)) where
             showsPrec i x = showParen (i > app_prec) $
               (showString $ $(pure $ LitE $ keyStringL t) `mappend` " ") .
