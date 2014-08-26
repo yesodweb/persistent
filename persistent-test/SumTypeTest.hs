@@ -3,6 +3,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -33,8 +35,10 @@ Car
 +Vehicle
     bicycle BicycleId
     car CarId
-    deriving Show Eq
 |]
+
+deriving instance Show (BackendKey backend) => Show (VehicleGeneric backend)
+deriving instance Eq (BackendKey backend) => Eq (VehicleGeneric backend)
 
 specs :: Spec
 specs = describe "sum types" $ do
