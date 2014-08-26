@@ -26,9 +26,8 @@ import Database.Persist
 
 #ifdef WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
-import Database.Persist.MongoDB (oidToKey, toInsertDoc, docToEntityThrow, collectionName, entityToDocument)
+import Database.Persist.MongoDB (toInsertDoc, docToEntityThrow, collectionName, entityToDocument)
 import Data.Bson (genObjectId)
-import Language.Haskell.TH.Syntax (Type(..))
 
 #else
 
