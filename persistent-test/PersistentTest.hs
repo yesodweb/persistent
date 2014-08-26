@@ -429,12 +429,10 @@ specs = describe "persistent" $ do
       Just p <- get key3
       p3 @== p
 
-{- FIXME
   prop "toPathPiece . fromPathPiece" $ \piece ->
       let key1 = piece :: (BackendKey BackendMonad)
           key2 = fromJust $ fromPathPiece $ toPathPiece key1 :: (BackendKey BackendMonad)
       in  toPathPiece key1 == toPathPiece key2
-      -}
 
   it "replace" $ db $ do
       key2 <- insert $ Person "Michael2" 27 Nothing

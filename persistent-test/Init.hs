@@ -51,7 +51,7 @@ import Test.QuickCheck
 
 import Database.Persist
 import Database.Persist.TH (MkPersistSettings(..))
-import Data.Text (Text)
+import Data.Text (Text, unpack)
 
 #ifdef WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
@@ -188,6 +188,9 @@ instance Arbitrary PersistValue where
     arbitrary = PersistInt64 `fmap` choose (0, maxBound)
 #endif
 
--- FIXME
--- instance Arbitrary (BackendKey backend) where
---  arbitrary = backendKeyFromValues `fmap` arbitrary
+instance PersistStore backend => Arbitrary (BackendKey backend) where
+  arbitrary = (errorLeft . backendKeyFromValues . (: [])) `fmap` arbitrary
+    where
+      errorLeft x = case x of
+          Left e -> error $ unpack e
+          Right r -> r
