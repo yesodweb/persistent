@@ -148,38 +148,38 @@ data FieldDef = FieldDef
     deriving (Show, Eq, Read, Ord)
 
 data ReferenceDef = ForeignRef !HaskellName
-                  | EmbeddedRef EmbeddedDef
+                  | EmbedRef EmbedEntityDef
                   | NoReference
                   deriving (Show, Eq, Read, Ord)
 
--- | An EmbeddedDef is the same as an EntityDef
+-- | An EmbedEntityDef is the same as an EntityDef
 -- But it is only used for fieldReference
 -- so it only has data needed for embedding
-data EmbeddedDef = EmbeddedDef
+data EmbedEntityDef = EmbedEntityDef
     { embeddedHaskell :: !HaskellName
-    , embeddedFields  :: ![EmbeddedFieldDef]
+    , embeddedFields  :: ![EmbedFieldDef]
     } deriving (Show, Eq, Read, Ord)
 
--- | An EmbeddedFieldDef is the same as a FieldDef
+-- | An EmbedFieldDef is the same as a FieldDef
 -- But it is only used for embeddedFields
 -- so it only has data needed for embedding
-data EmbeddedFieldDef = EmbeddedFieldDef
+data EmbedFieldDef = EmbedFieldDef
     { emFieldDB       :: !DBName
-    , emFieldEmbedded :: Maybe EmbeddedDef
+    , emFieldEmbed :: Maybe EmbedEntityDef
     }
     deriving (Show, Eq, Read, Ord)
 
-toEmbeddedDef :: EntityDef -> EmbeddedDef
-toEmbeddedDef ent = EmbeddedDef
+toEmbedEntityDef :: EntityDef -> EmbedEntityDef
+toEmbedEntityDef ent = EmbedEntityDef
   { embeddedHaskell = entityHaskell ent
-  , embeddedFields = map toEmbeddedFieldDef $ entityFields ent
+  , embeddedFields = map toEmbedFieldDef $ entityFields ent
   }
 
-toEmbeddedFieldDef :: FieldDef -> EmbeddedFieldDef
-toEmbeddedFieldDef field =
-  EmbeddedFieldDef { emFieldDB       = fieldDB field
-                   , emFieldEmbedded = case fieldReference field of
-                       EmbeddedRef em -> Just em
+toEmbedFieldDef :: FieldDef -> EmbedFieldDef
+toEmbedFieldDef field =
+  EmbedFieldDef { emFieldDB       = fieldDB field
+                   , emFieldEmbed = case fieldReference field of
+                       EmbedRef em -> Just em
                        _ -> Nothing
                    }
 

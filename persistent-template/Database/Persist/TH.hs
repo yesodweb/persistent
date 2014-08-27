@@ -105,9 +105,9 @@ parseReferences :: PersistSettings -> Text -> Q Exp
 parseReferences ps s = lift $
      map (mkEntityDefSqlTypeExp entityMap) entsWithEmbeds
   where
-    -- every EntityDef could reference each-other (as an EmbeddedRef)
+    -- every EntityDef could reference each-other (as an EmbedRef)
     -- let Haskell tie the knot
-    entityMap = M.fromList $ map (\ent -> (entityHaskell ent, toEmbeddedDef ent)) entsWithEmbeds
+    entityMap = M.fromList $ map (\ent -> (entityHaskell ent, toEmbedEntityDef ent)) entsWithEmbeds
     entsWithEmbeds = map setEmbedEntity rawEnts
     setEmbedEntity ent = ent
       { entityFields = map (setEmbedField entityMap) $ entityFields ent
@@ -173,16 +173,16 @@ instance Lift EntityDefSqlTypeExp where
 instance Lift ReferenceDef where
     lift NoReference = [|NoReference|]
     lift (ForeignRef name) = [|ForeignRef name|]
-    lift (EmbeddedRef em) = [|EmbeddedRef em|]
+    lift (EmbedRef em) = [|EmbedRef em|]
 
-instance Lift EmbeddedDef where
-    lift (EmbeddedDef name fields) = [|EmbeddedDef name fields|]
+instance Lift EmbedEntityDef where
+    lift (EmbedEntityDef name fields) = [|EmbedEntityDef name fields|]
 
-instance Lift EmbeddedFieldDef where
-    lift (EmbeddedFieldDef name em) = [|EmbeddedFieldDef name em|]
+instance Lift EmbedFieldDef where
+    lift (EmbedFieldDef name em) = [|EmbedFieldDef name em|]
 
-type EntityMap = M.Map HaskellName EmbeddedDef
-mEmbedded :: EntityMap -> FieldType -> Maybe EmbeddedDef
+type EntityMap = M.Map HaskellName EmbedEntityDef
+mEmbedded :: EntityMap -> FieldType -> Maybe EmbedEntityDef
 mEmbedded _ (FTTypeCon Just{} _) = Nothing
 mEmbedded ents (FTTypeCon Nothing n) = let name = HaskellName n in
     M.lookup name ents
@@ -198,7 +198,7 @@ setEmbedField allEntities field = field
               Just name -> if M.member (HaskellName name) allEntities
                   then ForeignRef $ HaskellName name
                   else NoReference
-          Just em -> EmbeddedRef em
+          Just em -> EmbedRef em
       existing@_   -> existing
   }
 

@@ -203,27 +203,39 @@ parseLines ps lines =
 
 fixForeignKeysAll :: [EntityDef] -> [EntityDef]
 fixForeignKeysAll ents = map fixForeignKeys ents
-  where fixForeignKeys :: EntityDef -> EntityDef
-        fixForeignKeys ent = ent { entityForeigns = map (fixForeignKey ent) (entityForeigns ent) }
-        -- check the count and the sqltypes match and update the foreignFields with the names of the primary columns
-        chktypes :: [FieldDef] -> HaskellName -> [FieldDef] -> HaskellName -> Bool
-        chktypes fflds fkey pflds pkey = case (filter ((== fkey) . fieldHaskell) fflds, filter ((== pkey) . fieldHaskell) pflds) of
-                                            ([ffld],[pfld]) -> fieldType ffld == fieldType pfld
-                                            xs -> error $ "unexpected result "++ show xs
-        fixForeignKey :: EntityDef -> ForeignDef -> ForeignDef
-        fixForeignKey fent fdef = 
-           case find ((== foreignRefTableHaskell fdef) . entityHaskell) ents of
-             Just pent -> case entityPrimary pent of
-                 Just pdef ->
-                     if length (foreignFields fdef) == length (primaryFields pdef)
-                         then fdef { foreignFields = zipWith (\(a,b,_,_) fd ->
-                                       let (a', b') = (fieldHaskell fd, fieldDB fd) in
-                                          if chktypes (entityFields fent) a (entityFields pent) a' 
-                                            then (a,b,a',b')
-                                            else error ("type mismatch between foreign key and primary column" ++ show (a,a') ++ " primary ent="++show pent ++ " foreign ent="++show fent)) (foreignFields fdef) (primaryFields pdef) }
-                         else error $ "found " ++ show (length (foreignFields fdef)) ++ " fkeys and " ++ show (length (primaryFields pdef)) ++ " pkeys: fdef=" ++ show fdef ++ " pdef=" ++ show pdef 
-                 Nothing -> error $ "no explicit primary key fdef="++show fdef++ " fent="++show fent
-             Nothing -> error $ "could not find table " ++ show (foreignRefTableHaskell fdef) ++ " fdef=" ++ show fdef ++ " allnames=" ++ show (map (unHaskellName . entityHaskell) ents) ++ "\n\nents=" ++ show ents
+  where
+    fixForeignKeys :: EntityDef -> EntityDef
+    fixForeignKeys ent = ent { entityForeigns = map (fixForeignKey ent) (entityForeigns ent) }
+    -- check the count and the sqltypes match and update the foreignFields with the names of the primary columns
+    chktypes :: [FieldDef] -> HaskellName -> [FieldDef] -> HaskellName -> Bool
+    chktypes fflds fkey pflds pkey = case (filter ((== fkey) . fieldHaskell) fflds, filter ((== pkey) . fieldHaskell) pflds) of
+                                        ([ffld],[pfld]) -> fieldType ffld == fieldType pfld
+                                        xs -> error $ "unexpected result "++ show xs
+    fixForeignKey :: EntityDef -> ForeignDef -> ForeignDef
+    fixForeignKey fent fdef =
+        case find ((== foreignRefTableHaskell fdef) . entityHaskell) ents of
+          Just pent -> case entityPrimary pent of
+             Just pdef ->
+                 if length (foreignFields fdef) == length (primaryFields pdef)
+                   then
+                     fdef { foreignFields = zipWith (toForeignFields pent)
+                              (foreignFields fdef)
+                              (primaryFields pdef) }
+                   else
+                     error $ "found " ++ show (length (foreignFields fdef)) ++ " fkeys and " ++ show (length (primaryFields pdef)) ++ " pkeys: fdef=" ++ show fdef ++ " pdef=" ++ show pdef
+             Nothing ->
+                 error $ "no explicit primary key fdef="++show fdef++ " fent="++show fent
+          Nothing ->
+             error $ "could not find table " ++ show (foreignRefTableHaskell fdef)
+               ++ " fdef=" ++ show fdef ++ " allnames="
+               ++ show (map (unHaskellName . entityHaskell) ents)
+               ++ "\n\nents=" ++ show ents
+      where
+        toForeignFields pent (a,b,_,_) fd =
+           let (a', b') = (fieldHaskell fd, fieldDB fd) in
+              if chktypes (entityFields fent) a (entityFields pent) a'
+                then (a,b,a',b')
+                else error ("type mismatch between foreign key and primary column" ++ show (a,a') ++ " primary ent="++show pent ++ " foreign ent="++show fent)
 
 -- | Construct an entity definition.
 mkEntityDef :: PersistSettings

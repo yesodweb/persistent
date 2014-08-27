@@ -388,16 +388,16 @@ toUniquesDoc uniq = zipWith (DB.:=)
 -- 'entityToDocument' includes nulls
 toInsertDoc :: forall record.  (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
             => record -> DB.Document
-toInsertDoc record = zipFilter (embeddedFields $ toEmbeddedDef entDef)
+toInsertDoc record = zipFilter (embeddedFields $ toEmbedEntityDef entDef)
     (map toPersistValue $ toPersistFields record)
   where
     entDef = entityDef $ Just record
-    zipFilter :: [EmbeddedFieldDef] -> [PersistValue] -> DB.Document
+    zipFilter :: [EmbedFieldDef] -> [PersistValue] -> DB.Document
     zipFilter [] _  = []
     zipFilter _  [] = []
     zipFilter (fd:efields) (pv:pvs) =
         if isNull pv then recur else
-          (fieldToLabel fd DB.:= embeddedVal (emFieldEmbedded fd) pv):recur
+          (fieldToLabel fd DB.:= embeddedVal (emFieldEmbed fd) pv):recur
 
       where
         recur = zipFilter efields pvs
@@ -408,7 +408,7 @@ toInsertDoc record = zipFilter (embeddedFields $ toEmbeddedDef entDef)
         isNull _ = False
 
     -- make sure to removed nulls from embedded entities also
-    embeddedVal :: Maybe EmbeddedDef -> PersistValue -> DB.Value
+    embeddedVal :: Maybe EmbedEntityDef -> PersistValue -> DB.Value
     embeddedVal (Just emDef) (PersistMap m) = DB.Doc $
       zipFilter (embeddedFields emDef) $ map snd m
     embeddedVal je@(Just _) (PersistList l) = DB.Array $ map (embeddedVal je) l
@@ -433,7 +433,7 @@ zipToDoc (e:efields) (p:pfields) =
   let pv = toPersistValue p
   in  (unDBName e DB.:= DB.val pv):zipToDoc efields pfields
 
-fieldToLabel :: EmbeddedFieldDef -> Text
+fieldToLabel :: EmbedFieldDef -> Text
 fieldToLabel = unDBName . emFieldDB
 
 saveWithKey :: forall m record.
@@ -845,7 +845,7 @@ eitherFromPersistValues entDef doc =
         mKey = lookup _id castDoc
     in case mKey of
          Nothing -> Left "could not find _id field"
-         Just kpv -> fromPersistValues (map snd $ orderPersistValues (toEmbeddedDef entDef) castDoc)
+         Just kpv -> fromPersistValues (map snd $ orderPersistValues (toEmbedEntityDef entDef) castDoc)
             >>= \body -> keyFromValues [kpv]
             >>= \key   -> Right $ Entity key body
 
@@ -856,11 +856,11 @@ eitherFromPersistValues entDef doc =
 --
 -- Persistent creates a Haskell record from a list of PersistValue
 -- But most importantly it puts all PersistValues in the proper order
-orderPersistValues :: EmbeddedDef -> [(Text, PersistValue)] -> [(Text, PersistValue)]
+orderPersistValues :: EmbedEntityDef -> [(Text, PersistValue)] -> [(Text, PersistValue)]
 orderPersistValues entDef castDoc = reorder
   where
-    castColumns = map nameAndEmbedded (embeddedFields entDef)
-    nameAndEmbedded fdef = (fieldToLabel fdef, emFieldEmbedded fdef)
+    castColumns = map nameAndEmbed (embeddedFields entDef)
+    nameAndEmbed fdef = (fieldToLabel fdef, emFieldEmbed fdef)
 
     -- TODO: the below reasoning should be re-thought now that we are no longer inserting null: searching for a null column will look at every returned field before giving up
     -- Also, we are now doing the _id lookup at the start.
@@ -881,7 +881,7 @@ orderPersistValues entDef castDoc = reorder
     reorder :: [(Text, PersistValue)] 
     reorder = match castColumns castDoc []
       where
-        match :: [(Text, Maybe EmbeddedDef)]
+        match :: [(Text, Maybe EmbedEntityDef)]
               -> [(Text, PersistValue)]
               -> [(Text, PersistValue)]
               -> [(Text, PersistValue)]
