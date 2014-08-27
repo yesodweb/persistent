@@ -1,5 +1,7 @@
 {-# LANGUAGE OverloadedStrings, QuasiQuotes, TemplateHaskell, TypeFamilies, GADTs #-}
 {-# LANGUAGE EmptyDataDecls #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
 import Test.Hspec
 import Test.Hspec.QuickCheck
@@ -73,11 +75,11 @@ main = hspec $ do
             decode "{\"name\":\"Michael\",\"age\":27,\"address\":{\"street\":\"Narkis\",\"city\":\"Maalot\"}}" `shouldBe` Just
                 (Person "Michael" (Just 27) $ Address "Narkis" "Maalot" Nothing)
     describe "JSON serialization for Entity" $ do
-        let key = Key (PersistInt64 0)
+        let key = PersonKey 0
         prop "to/from is idempotent" $ \person ->
             decode (encode (Entity key person)) == Just (Entity key (person :: Person))
         it "decode" $
-            decode "{\"key\": 0, \"value\": {\"name\":\"Michael\",\"age\":27,\"address\":{\"street\":\"Narkis\",\"city\":\"Maalot\"}}}" `shouldBe` Just
+            decode "{\"id\": 0, \"name\":\"Michael\",\"age\":27,\"address\":{\"street\":\"Narkis\",\"city\":\"Maalot\"}}" `shouldBe` Just
                 (Entity key (Person "Michael" (Just 27) $ Address "Narkis" "Maalot" Nothing))
     it "lens operations" $ do
         let street1 = "street1"
