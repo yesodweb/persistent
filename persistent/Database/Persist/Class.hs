@@ -11,9 +11,13 @@ module Database.Persist.Class
     , getByValue
     , insertBy
     , replaceUnique
+    , checkUnique
+    , onlyUnique
 
     -- * PersistQuery
     , PersistQuery (..)
+    , selectSource
+    , selectKeys
     , selectList
     , selectKeysList
 
@@ -27,6 +31,10 @@ module Database.Persist.Class
     , PersistField (..)
     -- * PersistConfig
     , PersistConfig (..)
+
+    -- * Lifting
+    , HasPersistBackend (..)
+    , liftPersist
 
     -- * JSON utilities
     , keyValueEntityToJSON, keyValueEntityFromJSON

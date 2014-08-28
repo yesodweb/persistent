@@ -55,12 +55,11 @@ instance FromJSON RedisAuth where
     parseJSON _ = fail "couldn't parse auth"
 
 -- | Monad reader transformer keeping Redis connection through out the work
-newtype RedisT m a = RedisT { runRedisT :: ReaderT R.Connection m a }
-    deriving (Monad, MonadIO, MonadTrans, Functor, Applicative, MonadPlus)
+type RedisT = ReaderT R.Connection
 
 -- | Extracts connection from RedisT monad transformer
 thisConnection :: Monad m => RedisT m R.Connection
-thisConnection = RedisT ask
+thisConnection = ask
 
 -- | Run a connection reader function against a Redis configuration
 withRedisConn :: (Monad m, MonadIO m) => RedisConf -> (R.Connection -> m a) -> m a
@@ -69,7 +68,7 @@ withRedisConn conf connectionReader = do
     connectionReader conn
 
 runRedisPool :: RedisT m a -> R.Connection -> m a
-runRedisPool (RedisT r) = runReaderT r
+runRedisPool r = runReaderT r
 
 instance PersistConfig RedisConf where
     type PersistConfigBackend RedisConf = RedisT

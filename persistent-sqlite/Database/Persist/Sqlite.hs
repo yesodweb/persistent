@@ -19,10 +19,11 @@ import Database.Persist.Sql
 import qualified Database.Sqlite as Sqlite
 
 import Control.Monad.IO.Class (MonadIO (..))
-import Control.Monad.Logger (NoLoggingT, runNoLoggingT)
+import Control.Monad.Logger (NoLoggingT, runNoLoggingT, MonadLogger)
 import Data.IORef
 import qualified Data.Map as Map
 import Control.Monad.Trans.Control (control)
+import Data.Acquire (Acquire, mkAcquire, with)
 import qualified Control.Exception as E
 import Data.Text (Text)
 import Control.Monad (mzero)
@@ -37,27 +38,27 @@ import Data.Monoid ((<>))
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Resource (ResourceT, MonadResource, runResourceT)
 
-createSqlitePool :: MonadIO m => Text -> Int -> m ConnectionPool
+createSqlitePool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m) => Text -> Int -> m ConnectionPool
 createSqlitePool s = createSqlPool $ open' s
 
-withSqlitePool :: (MonadBaseControl IO m, MonadIO m)
+withSqlitePool :: (MonadBaseControl IO m, MonadIO m, MonadLogger m)
                => Text
                -> Int -- ^ number of connections to open
                -> (ConnectionPool -> m a) -> m a
 withSqlitePool s = withSqlPool $ open' s
 
-withSqliteConn :: (MonadBaseControl IO m, MonadIO m)
+withSqliteConn :: (MonadBaseControl IO m, MonadIO m, MonadLogger m)
                => Text -> (Connection -> m a) -> m a
 withSqliteConn = withSqlConn . open'
 
-open' :: Text -> IO Connection
-open' = Sqlite.open >=> wrapConnection
+open' :: Text -> LogFunc -> IO Connection
+open' connStr logFunc = Sqlite.open connStr >>= flip wrapConnection logFunc
 
 -- | Wrap up a raw 'Sqlite.Connection' as a Persistent SQL 'Connection'.
 --
 -- Since 1.1.5
-wrapConnection :: Sqlite.Connection -> IO Connection
-wrapConnection conn = do
+wrapConnection :: Sqlite.Connection -> LogFunc -> IO Connection
+wrapConnection conn logFunc = do
     smap <- newIORef $ Map.empty
     return Connection
         { connPrepare = prepare' conn
@@ -72,6 +73,7 @@ wrapConnection conn = do
         , connNoLimit = "LIMIT -1"
         , connRDBMS = "sqlite"
         , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
+        , connLogFunc = logFunc
         }
   where
     helper t getter = do
@@ -104,7 +106,7 @@ prepare' conn sql = do
         , stmtQuery = withStmt' conn stmt
         }
 
-insertSql' :: EntityDef SqlType -> [PersistValue] -> InsertSqlResult
+insertSql' :: EntityDef -> [PersistValue] -> InsertSqlResult
 insertSql' ent vals =
   case entityPrimary ent of
     Just _ ->
@@ -143,15 +145,16 @@ execute' conn stmt vals = flip finally (liftIO $ Sqlite.reset conn stmt) $ do
     Sqlite.changes conn
 
 withStmt'
-          :: MonadResource m
+          :: MonadIO m
           => Sqlite.Connection
           -> Sqlite.Statement
           -> [PersistValue]
-          -> Source m [PersistValue]
-withStmt' conn stmt vals = bracketP
-    (Sqlite.bind stmt vals >> return stmt)
-    (Sqlite.reset conn)
-    (const pull)
+          -> Acquire (Source m [PersistValue])
+withStmt' conn stmt vals = do
+    _ <- mkAcquire
+        (Sqlite.bind stmt vals >> return stmt)
+        (Sqlite.reset conn)
+    return pull
   where
     pull = do
         x <- liftIO $ Sqlite.step stmt
@@ -170,22 +173,20 @@ showSqlType SqlReal = "REAL"
 showSqlType (SqlNumeric precision scale) = T.concat [ "NUMERIC(", T.pack (show precision), ",", T.pack (show scale), ")" ]
 showSqlType SqlDay = "DATE"
 showSqlType SqlTime = "TIME"
-showSqlType SqlDayTimeZoned = "TIMESTAMP"
 showSqlType SqlDayTime = "TIMESTAMP"
 showSqlType SqlBlob = "BLOB"
 showSqlType SqlBool = "BOOLEAN"
 showSqlType (SqlOther t) = t
 
-migrate' :: [EntityDef a]
+migrate' :: [EntityDef]
          -> (Text -> IO Statement)
-         -> EntityDef SqlType
+         -> EntityDef
          -> IO (Either [Text] [(Bool, Text)])
 migrate' allDefs getter val = do
     let (cols, uniqs, _) = mkColumns allDefs val
     let newSql = mkCreateTable False def (filter (not . safeToRemove val . cName) cols, uniqs)
     stmt <- getter "SELECT sql FROM sqlite_master WHERE type='table' AND name=?"
-    oldSql' <- runResourceT
-             $ stmtQuery stmt [PersistText $ unDBName table] $$ go
+    oldSql' <- with (stmtQuery stmt [PersistText $ unDBName table]) ($$ go)
     case oldSql' of
         Nothing -> return $ Right [(False, newSql)]
         Just oldSql -> do
@@ -206,19 +207,19 @@ migrate' allDefs getter val = do
 
 -- | Check if a column name is listed as the "safe to remove" in the entity
 -- list.
-safeToRemove :: EntityDef a -> DBName -> Bool
+safeToRemove :: EntityDef -> DBName -> Bool
 safeToRemove def (DBName colName)
     = any (elem "SafeToRemove" . fieldAttrs)
     $ filter ((== (DBName colName)) . fieldDB)
     $ entityFields def
 
-getCopyTable :: [EntityDef a]
+getCopyTable :: [EntityDef]
              -> (Text -> IO Statement)
-             -> EntityDef SqlType
+             -> EntityDef
              -> IO [(Bool, Text)]
 getCopyTable allDefs getter val = do
     stmt <- getter $ T.concat [ "PRAGMA table_info(", escape table, ")" ]
-    oldCols' <- runResourceT $ stmtQuery stmt [] $$ getCols
+    oldCols' <- with (stmtQuery stmt []) ($$ getCols)
     let oldCols = map DBName $ filter (/= "id") oldCols' -- need to update for table id attribute ?
     let newCols = filter (not . safeToRemove def) $ map cName cols
     let common = filter (`elem` oldCols) newCols
@@ -268,7 +269,7 @@ getCopyTable allDefs getter val = do
         , escape tableTmp
         ]
 
-mkCreateTable :: Bool -> EntityDef a -> ([Column], [UniqueDef]) -> Text
+mkCreateTable :: Bool -> EntityDef -> ([Column], [UniqueDef]) -> Text
 mkCreateTable isTemp entity (cols, uniqs) =
   case entityPrimary entity of
     Just _ ->
@@ -339,7 +340,7 @@ data SqliteConf = SqliteConf
 instance PersistConfig SqliteConf where
     type PersistConfigBackend SqliteConf = SqlPersistT
     type PersistConfigPool SqliteConf = ConnectionPool
-    createPoolConfig (SqliteConf cs size) = createSqlitePool cs size
+    createPoolConfig (SqliteConf cs size) = runNoLoggingT $ createSqlitePool cs size -- FIXME
     runPool _ = runSqlPool
     loadConfig (Object o) =
         SqliteConf <$> o .: "database"

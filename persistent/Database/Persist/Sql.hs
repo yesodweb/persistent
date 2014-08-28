@@ -4,7 +4,9 @@ module Database.Persist.Sql
     , module Database.Persist.Sql.Run
     , module Database.Persist.Sql.Migration
     , module Database.Persist
+    , module Database.Persist.Sql.Orphan.PersistStore
     , rawQuery
+    , rawQueryRes
     , rawExecute
     , rawExecuteCount
     , rawSql
@@ -27,24 +29,25 @@ import Database.Persist.Sql.Migration
 import Database.Persist.Sql.Internal
 
 import Database.Persist.Sql.Orphan.PersistQuery 
-import Database.Persist.Sql.Orphan.PersistStore ()
+import Database.Persist.Sql.Orphan.PersistStore
 import Database.Persist.Sql.Orphan.PersistUnique ()
 import Control.Monad.IO.Class
+import Control.Monad.Trans.Reader (ReaderT, ask)
 
 -- | Commit the current transaction and begin a new one.
 --
 -- Since 1.2.0
-transactionSave :: MonadSqlPersist m => m ()
+transactionSave :: MonadIO m => ReaderT Connection m ()
 transactionSave = do
-    conn <- askSqlConn
+    conn <- ask
     let getter = getStmtConn conn
     liftIO $ connCommit conn getter >> connBegin conn getter
 
 -- | Roll back the current transaction and begin a new one.
 --
 -- Since 1.2.0
-transactionUndo :: MonadSqlPersist m => m ()
+transactionUndo :: MonadIO m => ReaderT Connection m ()
 transactionUndo = do
-    conn <- askSqlConn
+    conn <- ask
     let getter = getStmtConn conn
     liftIO $ connRollback conn getter >> connBegin conn getter

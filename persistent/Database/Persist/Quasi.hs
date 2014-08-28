@@ -7,7 +7,6 @@ module Database.Persist.Quasi
     , PersistSettings (..)
     , upperCaseSettings
     , lowerCaseSettings
-    , stripId
     , nullable
 #if TEST
     , Token (..)
@@ -100,7 +99,7 @@ lowerCaseSettings = PersistSettings
     }
 
 -- | Parses a quasi-quoted syntax into a list of entity definitions.
-parse :: PersistSettings -> Text -> [EntityDef ()]
+parse :: PersistSettings -> Text -> [EntityDef]
 parse ps = parseLines ps
       . removeSpaces
       . filter (not . empty)
@@ -192,7 +191,7 @@ removeSpaces =
     fromToken Spaces{}  = Nothing
 
 -- | Divide lines into blocks and make entity definitions.
-parseLines :: PersistSettings -> [Line] -> [EntityDef ()]
+parseLines :: PersistSettings -> [Line] -> [EntityDef]
 parseLines ps lines =
     fixForeignKeysAll $ toEnts lines
   where
@@ -202,34 +201,48 @@ parseLines ps lines =
     toEnts (Line _ []:rest) = toEnts rest
     toEnts [] = []
 
-fixForeignKeysAll :: [EntityDef ()] -> [EntityDef ()]
+fixForeignKeysAll :: [EntityDef] -> [EntityDef]
 fixForeignKeysAll ents = map fixForeignKeys ents
-  where fixForeignKeys :: EntityDef () -> EntityDef ()
-        fixForeignKeys ent = ent { entityForeigns = map (fixForeignKey ent) (entityForeigns ent) }
-        -- check the count and the sqltypes match and update the foreignFields with the names of the primary columns
-        chktypes :: [FieldDef ()] -> HaskellName -> [FieldDef ()] -> HaskellName -> Bool
-        chktypes fflds fkey pflds pkey = case (filter ((== fkey) . fieldHaskell) fflds, filter ((== pkey) . fieldHaskell) pflds) of
-                                            ([ffld],[pfld]) -> fieldType ffld == fieldType pfld
-                                            xs -> error $ "unexpected result "++ show xs
-        fixForeignKey :: EntityDef () -> ForeignDef -> ForeignDef
-        fixForeignKey fent fdef = 
-           case find ((== foreignRefTableHaskell fdef) . entityHaskell) ents of
-             Just pent -> case entityPrimary pent of
-                           Just pdef -> if length (foreignFields fdef) == length (primaryFields pdef) 
-                                         then fdef { foreignFields = zipWith (\(a,b,_,_) (a',b') -> 
-                                                          if chktypes (entityFields fent) a (entityFields pent) a' 
-                                                            then (a,b,a',b') 
-                                                            else error ("type mismatch between foreign key and primary column" ++ show (a,a') ++ " primary ent="++show pent ++ " foreign ent="++show fent)) (foreignFields fdef) (primaryFields pdef) }
-                                         else error $ "found " ++ show (length (foreignFields fdef)) ++ " fkeys and " ++ show (length (primaryFields pdef)) ++ " pkeys: fdef=" ++ show fdef ++ " pdef=" ++ show pdef 
-                           Nothing -> error $ "no explicit primary key fdef="++show fdef++ " fent="++show fent
-             Nothing -> error $ "could not find table " ++ show (foreignRefTableHaskell fdef) ++ " fdef=" ++ show fdef ++ " allnames=" ++ show (map (unHaskellName . entityHaskell) ents) ++ "\n\nents=" ++ show ents
+  where
+    fixForeignKeys :: EntityDef -> EntityDef
+    fixForeignKeys ent = ent { entityForeigns = map (fixForeignKey ent) (entityForeigns ent) }
+    -- check the count and the sqltypes match and update the foreignFields with the names of the primary columns
+    chktypes :: [FieldDef] -> HaskellName -> [FieldDef] -> HaskellName -> Bool
+    chktypes fflds fkey pflds pkey = case (filter ((== fkey) . fieldHaskell) fflds, filter ((== pkey) . fieldHaskell) pflds) of
+                                        ([ffld],[pfld]) -> fieldType ffld == fieldType pfld
+                                        xs -> error $ "unexpected result "++ show xs
+    fixForeignKey :: EntityDef -> ForeignDef -> ForeignDef
+    fixForeignKey fent fdef =
+        case find ((== foreignRefTableHaskell fdef) . entityHaskell) ents of
+          Just pent -> case entityPrimary pent of
+             Just pdef ->
+                 if length (foreignFields fdef) == length (primaryFields pdef)
+                   then
+                     fdef { foreignFields = zipWith (toForeignFields pent)
+                              (foreignFields fdef)
+                              (primaryFields pdef) }
+                   else
+                     error $ "found " ++ show (length (foreignFields fdef)) ++ " fkeys and " ++ show (length (primaryFields pdef)) ++ " pkeys: fdef=" ++ show fdef ++ " pdef=" ++ show pdef
+             Nothing ->
+                 error $ "no explicit primary key fdef="++show fdef++ " fent="++show fent
+          Nothing ->
+             error $ "could not find table " ++ show (foreignRefTableHaskell fdef)
+               ++ " fdef=" ++ show fdef ++ " allnames="
+               ++ show (map (unHaskellName . entityHaskell) ents)
+               ++ "\n\nents=" ++ show ents
+      where
+        toForeignFields pent (a,b,_,_) fd =
+           let (a', b') = (fieldHaskell fd, fieldDB fd) in
+              if chktypes (entityFields fent) a (entityFields pent) a'
+                then (a,b,a',b')
+                else error ("type mismatch between foreign key and primary column" ++ show (a,a') ++ " primary ent="++show pent ++ " foreign ent="++show fent)
 
 -- | Construct an entity definition.
 mkEntityDef :: PersistSettings
             -> Text -- ^ name
             -> [Attr] -- ^ entity attributes
             -> [Line] -- ^ indented lines
-            -> EntityDef ()
+            -> EntityDef
 mkEntityDef ps name entattribs lines =
     EntityDef
         (HaskellName name')
@@ -262,7 +275,7 @@ mkEntityDef ps name entattribs lines =
                 
     derives = concat $ mapMaybe takeDerives attribs
 
-    cols :: [FieldDef ()]
+    cols :: [FieldDef]
     cols = mapMaybe (takeCols ps) attribs
 
 splitExtras :: [Line] -> ([[Text]], M.Map Text [[Text]])
@@ -276,7 +289,7 @@ splitExtras (Line _ ts:rest) =
     let (x, y) = splitExtras rest
      in (ts:x, y)
 
-takeCols :: PersistSettings -> [Text] -> Maybe (FieldDef ())
+takeCols :: PersistSettings -> [Text] -> Maybe FieldDef
 takeCols _ ("deriving":_) = Nothing
 takeCols ps (n':typ:rest)
     | not (T.null n) && isLower (T.head n) =
@@ -286,10 +299,10 @@ takeCols ps (n':typ:rest)
                 { fieldHaskell = HaskellName n
                 , fieldDB = DBName $ getDbName ps n rest
                 , fieldType = ft
-                , fieldSqlType = ()
+                , fieldSqlType = SqlOther $ "SqlType unset for " `mappend` n
                 , fieldAttrs = rest
                 , fieldStrict = fromMaybe (psStrictFields ps) mstrict
-                , fieldEmbedded = Nothing
+                , fieldReference = NoReference
                 }
   where
     (mstrict, n)
@@ -300,14 +313,11 @@ takeCols _ _ = Nothing
 
 getDbName :: PersistSettings -> Text -> [Text] -> Text
 getDbName ps n [] = psToDBName ps n
-getDbName ps n (a:as) =
-    case T.stripPrefix "sql=" a of
-      Nothing -> getDbName ps n as
-      Just s  -> s
+getDbName ps n (a:as) = fromMaybe (getDbName ps n as) $ T.stripPrefix "sql=" a
 
 takeConstraint :: PersistSettings
           -> Text
-          -> [FieldDef a]
+          -> [FieldDef]
           -> [Text]
           -> (Maybe PrimaryDef, Maybe UniqueDef, Maybe ForeignDef)
 takeConstraint ps tableName defs (n:rest) | not (T.null n) && isUpper (T.head n) = takeConstraint' 
@@ -318,25 +328,25 @@ takeConstraint ps tableName defs (n:rest) | not (T.null n) && isUpper (T.head n)
             | otherwise      = (Nothing, Just $ takeUniq ps "" defs (n:rest), Nothing) -- retain compatibility with original unique constraint
 takeConstraint _ _ _ _ = (Nothing, Nothing, Nothing)
     
-takePrimary :: [FieldDef a]
+takePrimary :: [FieldDef]
             -> [Text]
             -> PrimaryDef
 takePrimary defs pkcols
         = PrimaryDef
-            (map (HaskellName &&& getDBName defs) pkcols)
+            (map (getDef defs) pkcols)
             attrs
   where
     (_, attrs) = break ("!" `T.isPrefixOf`) pkcols
-    getDBName [] t = error $ "Unknown column in primary key constraint: " ++ show t
-    getDBName (d:ds) t
+    getDef [] t = error $ "Unknown column in primary key constraint: " ++ show t
+    getDef (d:ds) t
         | nullable (fieldAttrs d) /= NotNullable = error $ "primary key column cannot be nullable: " ++ show t
-        | fieldHaskell d == HaskellName t = fieldDB d
-        | otherwise = getDBName ds t
+        | fieldHaskell d == HaskellName t = d
+        | otherwise = getDef ds t
 
 -- Unique UppercaseConstraintName list of lowercasefields    
 takeUniq :: PersistSettings
           -> Text
-          -> [FieldDef a]
+          -> [FieldDef]
           -> [Text]
           -> UniqueDef
 takeUniq ps tableName defs (n:rest)
@@ -356,7 +366,7 @@ takeUniq _ tableName _ xs = error $ "invalid unique constraint on table[" ++ sho
 
 takeForeign :: PersistSettings
           -> Text
-          -> [FieldDef a]
+          -> [FieldDef]
           -> [Text]
           -> ForeignDef
 takeForeign ps tableName defs (refTableName:n:rest)
@@ -380,10 +390,6 @@ takeForeign _ tableName _ xs = error $ "invalid foreign key constraint on table[
 takeDerives :: [Text] -> Maybe [Text]
 takeDerives ("deriving":rest) = Just rest
 takeDerives _ = Nothing
-
-stripId :: FieldType -> Maybe Text
-stripId (FTTypeCon Nothing t) = T.stripSuffix "Id" t
-stripId _ = Nothing
 
 nullable :: [Text] -> IsNullable
 nullable s

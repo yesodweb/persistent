@@ -1,7 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -13,18 +11,21 @@ module Init (
   , BackendMonad
   , runConn
 
+  , MonadIO
+  , persistSettings
+  , mpsGeneric
 #ifdef WITH_MONGODB
   , dbName
   , db'
   , setupMongo
   , MkPersistSettings (..)
   , mkPersistSettings
-  , persistSettings
   , Action
 #else
   , db
   , sqlite_database
 #endif
+  , BackendKey(..)
 
    -- re-exports
   , module Database.Persist
@@ -35,9 +36,12 @@ module Init (
   , mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase
   , Int32, Int64
   , Text
+  , module Control.Monad.Trans.Reader
+  , module Control.Monad
 ) where
 
 -- re-exports
+import Control.Monad.Trans.Reader
 import Test.Hspec
 import Test.Hspec.HUnit
 import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase)
@@ -47,11 +51,12 @@ import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
 import Test.QuickCheck
 
 import Database.Persist
-import Data.Text (Text)
+import Database.Persist.TH (MkPersistSettings(..))
+import Data.Text (Text, unpack)
 
 #ifdef WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
-import Database.Persist.MongoDB (Action, withMongoPool, runMongoDBPool, MongoBackend, defaultMongoConf, applyDockerEnv)
+import Database.Persist.MongoDB (Action, withMongoPool, runMongoDBPool, defaultMongoConf, applyDockerEnv, BackendKey(..))
 import Language.Haskell.TH.Syntax (Type(..))
 import Database.Persist.TH (mkPersistSettings, MkPersistSettings(..))
 import Control.Monad (replicateM)
@@ -73,7 +78,7 @@ import Database.Persist.MySQL
 
 #endif
 
-import Control.Monad (unless)
+import Control.Monad (unless, (>=>))
 import Control.Monad.Trans.Control (MonadBaseControl)
 
 -- Data types
@@ -111,12 +116,12 @@ assertNotEmpty xs = liftIO $ assertBool "" (not (null xs))
 
 #ifdef WITH_MONGODB
 persistSettings :: MkPersistSettings
-persistSettings = mkPersistSettings $ ConT ''MongoBackend
+persistSettings = (mkPersistSettings $ ConT ''MongoDB.MongoContext) { mpsGeneric = True }
 
 dbName :: Text
 dbName = "persistent"
 
-type BackendMonad = MongoBackend
+type BackendMonad = MongoDB.MongoContext
 runConn :: (MonadIO m, MonadBaseControl IO m) => Action m backend -> m ()
 runConn f = do
   conf <- liftIO $ applyDockerEnv $ defaultMongoConf dbName -- { mgRsPrimary = Just "replicaset" }
@@ -135,6 +140,8 @@ instance Arbitrary PersistValue where
     arbitrary = PersistObjectId `fmap` BS.pack `fmap` replicateM 12 arbitrary
 
 #else
+persistSettings :: MkPersistSettings
+persistSettings = sqlSettings { mpsGeneric = True }
 type BackendMonad = SqlBackend
 sqlite_database :: Text
 sqlite_database = "test/testdb.sqlite3"
@@ -182,5 +189,9 @@ instance Arbitrary PersistValue where
     arbitrary = PersistInt64 `fmap` choose (0, maxBound)
 #endif
 
-instance Arbitrary (KeyBackend backend entity) where
-  arbitrary = Key `fmap` arbitrary
+instance PersistStore backend => Arbitrary (BackendKey backend) where
+  arbitrary = (errorLeft . backendKeyFromValues . (: [])) `fmap` arbitrary
+    where
+      errorLeft x = case x of
+          Left e -> error $ unpack e
+          Right r -> r

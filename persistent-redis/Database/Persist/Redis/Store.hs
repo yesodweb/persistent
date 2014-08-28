@@ -16,7 +16,7 @@ import Data.Text (Text)
 import Database.Persist.Redis.Config (RedisT(..), thisConnection)
 import Database.Persist.Redis.Internal
 
-data RedisBackend
+type RedisBackend = R.Connection
 
 toOid :: (PersistEntity val) => Text -> Key val
 toOid = Key . PersistText
@@ -42,9 +42,7 @@ execRedisT action = do
         (Right x) -> return x
         (Left x)  -> fail x
 
-instance (Applicative m, Functor m, MonadIO m, MonadBaseControl IO m) => PersistStore (RedisT m) where
-    type PersistMonadBackend (RedisT m) = RedisBackend
-
+instance PersistStore R.Connection where
     insert val = do
         keyId <- execRedisT $ createKey val
         let key    = toOid $ toKeyText val keyId

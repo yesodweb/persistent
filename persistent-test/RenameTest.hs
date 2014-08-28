@@ -12,7 +12,6 @@ module RenameTest (specs) where
 
 import Database.Persist.Sqlite
 #ifndef WITH_MONGODB
-import Control.Monad.Trans.Resource (runResourceT)
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 #endif
@@ -21,8 +20,12 @@ import Database.Persist.Postgresql
 #endif
 import qualified Data.Map as Map
 import qualified Data.Text as T
+import Control.Monad.Trans.Resource (runResourceT)
 
 import Init
+
+-- persistent used to not allow types with an "Id" suffix
+type TextId = Text
 
 -- Test lower case names
 #if WITH_MONGODB
@@ -41,6 +44,7 @@ LowerCaseTable id=my_id
 RefTable
     someVal Int sql=something_else
     lct LowerCaseTableId
+    text TextId
     UniqueRefTable someVal
 |]
 

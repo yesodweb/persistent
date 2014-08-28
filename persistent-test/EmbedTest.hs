@@ -24,12 +24,12 @@ import qualified Data.Set as S
 import qualified Data.Map as M
 #if WITH_MONGODB
 import Database.Persist.MongoDB
+import Database.MongoDB (genObjectId)
 import Database.MongoDB (Value(String))
 import EntityEmbedTest
 import System.Process (readProcess)
 #endif
 import System.Environment (getEnvironment)
-import Control.Monad.IO.Class
 import Control.Monad (unless)
 import Database.Persist.Sql.Class
 import Data.List.NonEmpty hiding (insert, length)
@@ -52,7 +52,7 @@ instance PersistField a => PersistField (NonEmpty a) where
 #if WITH_MONGODB
 mkPersist persistSettings [persistUpperCase|
   HasObjectId
-    oid  Objectid
+    oid  ObjectId
     name Text
     deriving Show Eq Read Ord
 
@@ -149,7 +149,7 @@ share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
 
 |]
 #ifdef WITH_MONGODB
-cleanDB :: (PersistQuery m, PersistEntityBackend HasMap ~ PersistMonadBackend m) => m ()
+cleanDB :: (PersistQuery backend, PersistEntityBackend HasMap ~ backend, MonadIO m) => ReaderT backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter HasEmbed])
   deleteWhere ([] :: [Filter HasEmbeds])
@@ -302,7 +302,7 @@ specs = describe "embedded entities" $ do
     retrievedHasEnts @== hasEnts
 
   it "can embed objects with ObjectIds" $ db $ do
-    oid <- liftIO $ genObjectid
+    oid <- liftIO $ genObjectId
     let hoid   = HasObjectId oid "oid"
         hasArr = HasArrayWithObjectIds "array" [hoid]
 

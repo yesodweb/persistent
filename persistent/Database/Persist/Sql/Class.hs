@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -7,8 +8,7 @@
 {-# LANGUAGE OverlappingInstances #-}
 #endif
 module Database.Persist.Sql.Class
-    ( MonadSqlPersist (..)
-    , RawSql (..)
+    ( RawSql (..)
     , PersistFieldSql (..)
     ) where
 
@@ -20,11 +20,8 @@ import Control.Arrow ((&&&))
 import Data.Text (Text, intercalate, pack)
 import Data.Maybe (fromMaybe)
 import Data.Fixed
+import Data.Proxy (Proxy)
 
-import Data.Monoid (Monoid)
-import Control.Monad.Trans.Class (lift)
-
-import Control.Monad.Logger (LoggingT)
 import Control.Monad.Trans.Identity ( IdentityT)
 import Control.Monad.Trans.List     ( ListT    )
 import Control.Monad.Trans.Maybe    ( MaybeT   )
@@ -34,66 +31,24 @@ import Control.Monad.Trans.Error    ( ErrorT, Error)
 import Control.Monad.Trans.Except   ( ExceptT  )
 #endif
 
-import Control.Monad.Trans.Cont     ( ContT  )
-import Control.Monad.Trans.State    ( StateT   )
-import Control.Monad.Trans.Writer   ( WriterT  )
-import Control.Monad.Trans.RWS      ( RWST     )
 import Control.Monad.Trans.Reader   ( ReaderT, ask  )
 import Control.Monad.Trans.Resource ( ResourceT )
 import Data.Conduit.Internal (Pipe, ConduitM)
 
-import qualified Control.Monad.Trans.RWS.Strict    as Strict ( RWST   )
-import qualified Control.Monad.Trans.State.Strict  as Strict ( StateT )
-import qualified Control.Monad.Trans.Writer.Strict as Strict ( WriterT )
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Class (MonadTrans)
-import Control.Monad.Logger (MonadLogger)
 
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Map as M
 import qualified Data.Set as S
-import Data.Time (ZonedTime, UTCTime, TimeOfDay, Day)
+import Data.Time (UTCTime, TimeOfDay, Day)
 import Data.Int
 import Data.Word
 import Data.ByteString (ByteString)
 import Text.Blaze.Html (Html)
 import Data.Bits (bitSize)
-
-class (MonadIO m, MonadLogger m) => MonadSqlPersist m where
-    askSqlConn :: m Connection
-    default askSqlConn :: (MonadSqlPersist m, MonadTrans t, MonadLogger (t m))
-                       => t m Connection
-    askSqlConn = lift askSqlConn
-
-instance (MonadIO m, MonadLogger m) => MonadSqlPersist (SqlPersistT m) where
-    askSqlConn = SqlPersistT ask
-
-#define GO(T) instance (MonadSqlPersist m) => MonadSqlPersist (T m)
-#define GOX(X, T) instance (X, MonadSqlPersist m) => MonadSqlPersist (T m)
-GO(LoggingT)
-GO(IdentityT)
-GO(ListT)
-GO(MaybeT)
-GOX(Error e, ErrorT e)
-
-#if MIN_VERSION_transformers(0,4,0)
-GO(ExceptT e)
-#endif
-
-GO(ReaderT r)
-GO(ContT r)
-GO(StateT s)
-GO(ResourceT)
-GO(Pipe l i o u)
-GO(ConduitM i o)
-GOX(Monoid w, WriterT w)
-GOX(Monoid w, RWST r w s)
-GOX(Monoid w, Strict.RWST r w s)
-GO(Strict.StateT s)
-GOX(Monoid w, Strict.WriterT w)
-#undef GO
-#undef GOX
+import qualified Data.Vector as V
 
 -- | Class for data types that may be retrived from a 'rawSql'
 -- query.
@@ -115,7 +70,7 @@ instance PersistField a => RawSql (Single a) where
     rawSqlProcessRow [pv]  = Single <$> fromPersistValue pv
     rawSqlProcessRow _     = Left $ pack "RawSql (Single a): wrong number of columns."
 
-instance PersistEntity a => RawSql (Entity a) where
+instance (PersistEntity a, PersistEntityBackend a ~ SqlBackend) => RawSql (Entity a) where
     rawSqlCols escape = ((+1) . length . entityFields &&& process) . entityDef . Just . entityVal
         where
           process ed = (:[]) $
@@ -251,7 +206,7 @@ extractMaybe :: Maybe a -> a
 extractMaybe = fromMaybe (error "Database.Persist.GenericSql.extractMaybe")
 
 class PersistField a => PersistFieldSql a where
-    sqlType :: Monad m => m a -> SqlType
+    sqlType :: Proxy a -> SqlType
 
 #ifndef NO_OVERLAP
 instance PersistFieldSql String where
@@ -298,10 +253,10 @@ instance PersistFieldSql TimeOfDay where
     sqlType _ = SqlTime
 instance PersistFieldSql UTCTime where
     sqlType _ = SqlDayTime
-instance PersistFieldSql ZonedTime where
-    sqlType _ = SqlDayTimeZoned
 instance PersistFieldSql a => PersistFieldSql [a] where
     sqlType _ = SqlString
+instance PersistFieldSql a => PersistFieldSql (V.Vector a) where
+  sqlType _ = SqlString
 instance (Ord a, PersistFieldSql a) => PersistFieldSql (S.Set a) where
     sqlType _ = SqlString
 instance (PersistFieldSql a, PersistFieldSql b) => PersistFieldSql (a,b) where
@@ -323,9 +278,6 @@ instance (HasResolution a) => PersistFieldSql (Fixed a) where
 instance PersistFieldSql Rational where
     sqlType _ = SqlNumeric 32 20   --  need to make this field big enough to handle Rational to Mumber string conversion for ODBC
 
--- perhaps a SQL user can figure this sqlType out?
--- It is really intended for MongoDB though.
-instance PersistField entity => PersistFieldSql (Entity entity) where
-    sqlType _ = SqlOther "embedded entity, hard to type"
-instance PersistFieldSql (KeyBackend SqlBackend a) where
-    sqlType _ = SqlInt64
+-- An embedded Entity
+instance (PersistField record, PersistEntity record) => PersistFieldSql (Entity record) where
+    sqlType _ = SqlString

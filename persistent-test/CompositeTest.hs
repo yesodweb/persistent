@@ -15,6 +15,7 @@
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveGeneric #-}
 module CompositeTest where
 
 import Test.Hspec.Expectations ()
@@ -42,15 +43,13 @@ import Data.Maybe (isJust)
 import Control.Applicative ((<$>),(<*>))
 #endif
 
-#if WITH_MONGODB
-import Language.Haskell.TH.Syntax
-import Database.Persist.MongoDB (MongoBackend)
-#define SETTINGS (mkPersistSettings $ ConT ''MongoBackend)
-#else
-#define SETTINGS sqlSettings
-#endif
 
-share [mkPersist SETTINGS,  mkMigrate "compositeMigrate", mkDeleteCascade SETTINGS] [persistLowerCase|
+-- mpsGeneric = False is due to a bug or at least lack of a feature in mkKeyTypeDec TH.hs
+#if WITH_MONGODB
+mkPersist persistSettings { mpsGeneric = False } [persistUpperCase|
+#else
+share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMigrate", mkDeleteCascade persistSettings { mpsGeneric = False }] [persistLowerCase|
+#endif
   TestChild
       name1 String maxlen=20
       name2 String maxlen=20
@@ -82,7 +81,7 @@ share [mkPersist SETTINGS,  mkMigrate "compositeMigrate", mkDeleteCascade SETTIN
 
 
 #ifdef WITH_MONGODB
-cleanDB :: (PersistQuery m, PersistEntityBackend TestChild ~ PersistMonadBackend m) => m ()
+cleanDB :: (PersistQuery backend, PersistEntityBackend TestChild ~ backend, MonadIO m) => ReaderT backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter TestChild])
   deleteWhere ([] :: [Filter TestParent])
@@ -224,21 +223,21 @@ specs = describe "composite" $
       matchCitizenAddressK kca1 @== matchCitizenAddressK newkca1
       ca1 @== newca2
 
-matchK :: PersistField a => KeyBackend backend entity -> Either Text a
-matchK = fromPersistValue . unKey
+matchK :: (PersistField a, PersistEntity record) => Key record -> Either Text a
+matchK = (\(pv:[]) -> fromPersistValue pv) . keyToValues
 
-matchK2 :: (PersistField a1, PersistField a) =>
-                 KeyBackend backend entity
-                 -> KeyBackend backend1 entity1 -> Either Text (a1, a)
+matchK2 :: (PersistField a1, PersistField a, PersistEntity record, PersistEntity record2)
+        => Key record -> Key record2
+        -> Either Text (a1, a)
 matchK2 k1 k2 = (,) <$> matchK k1 <*> matchK k2
 
 matchParentK :: Key TestParent -> Either Text (String, String, Int64)
-matchParentK (Key (PersistList [a, b, c]))  = (,,) <$> fromPersistValue a <*> fromPersistValue b <*> fromPersistValue c
-matchParentK k = error $ "matchParentK: unexpected value for key " ++ show k
+matchParentK = (\(a:b:c:[]) -> (,,) <$> fromPersistValue a <*> fromPersistValue b <*> fromPersistValue c)
+             . keyToValues
 
 matchCitizenAddressK :: Key CitizenAddress -> Either Text (Int64, Int64)
-matchCitizenAddressK (Key (PersistList [a, b]))  = (,) <$> fromPersistValue a <*> fromPersistValue b
-matchCitizenAddressK k = error $ "matchCitizenAddressK: unexpected value for key " ++ show k
+matchCitizenAddressK = (\(a:b:[]) -> (,) <$> fromPersistValue a <*> fromPersistValue b)
+                     . keyToValues
 #endif
 
 #if MIN_VERSION_monad_control(0, 3, 0)
