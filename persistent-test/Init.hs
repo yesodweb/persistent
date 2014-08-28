@@ -13,12 +13,11 @@ module Init (
 
   , MonadIO
   , persistSettings
-  , mpsGeneric
+  , MkPersistSettings (..)
 #ifdef WITH_MONGODB
   , dbName
   , db'
   , setupMongo
-  , MkPersistSettings (..)
   , mkPersistSettings
   , Action
 #else
@@ -44,21 +43,21 @@ module Init (
 import Control.Monad.Trans.Reader
 import Test.Hspec
 import Test.Hspec.HUnit
-import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase)
+import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase, MkPersistSettings(..))
 
 -- testing
 import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
 import Test.QuickCheck
 
 import Database.Persist
-import Database.Persist.TH (MkPersistSettings(..))
+import Database.Persist.TH ()
 import Data.Text (Text, unpack)
 
 #ifdef WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
 import Database.Persist.MongoDB (Action, withMongoPool, runMongoDBPool, defaultMongoConf, applyDockerEnv, BackendKey(..))
 import Language.Haskell.TH.Syntax (Type(..))
-import Database.Persist.TH (mkPersistSettings, MkPersistSettings(..))
+import Database.Persist.TH (mkPersistSettings)
 import Control.Monad (replicateM)
 import qualified Data.ByteString as BS
 

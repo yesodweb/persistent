@@ -30,7 +30,6 @@ import EntityEmbedTest
 import System.Process (readProcess)
 #endif
 import System.Environment (getEnvironment)
-import Control.Monad (unless)
 import Database.Persist.Sql.Class
 import Data.List.NonEmpty hiding (insert, length)
 import Data.Time

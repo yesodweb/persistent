@@ -27,7 +27,6 @@ import qualified Control.Monad.Trans.Control
 import qualified Control.Monad.IO.Control
 #  endif
 
-import Database.Persist.TH (mkDeleteCascade)
 #  if MIN_VERSION_monad_control(0, 3, 0)
 import qualified Control.Exception as E
 #    define CATCH catch'
@@ -41,6 +40,8 @@ import Init
 import Data.Maybe (isJust)
 
 import Control.Applicative ((<$>),(<*>))
+#else
+import Database.Persist.TH (mkDeleteCascade)
 #endif
 
 
