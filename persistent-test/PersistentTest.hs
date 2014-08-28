@@ -198,13 +198,13 @@ specs = describe "persistent" $ do
       limitOffsetOrder [Desc PersonAge, LimitTo 2] `eq` (2, 0)
       limitOffsetOrder [LimitTo 2, Desc PersonAge, OffsetBy 3] `eq` (2, 3)
 
-      _ <- insertMany [ Person "z" 1 Nothing
-                     , Person "y" 2 Nothing
-                     , Person "x" 1 Nothing
-                     , Person "w" 2 Nothing
-                     , Person "v" 1 Nothing
-                     , Person "u" 2 Nothing
-                     ]
+      insertMany_ [ Person "z" 1 Nothing
+                  , Person "y" 2 Nothing
+                  , Person "x" 1 Nothing
+                  , Person "w" 2 Nothing
+                  , Person "v" 1 Nothing
+                  , Person "u" 2 Nothing
+                  ]
 
       a <- fmap (map $ personName . entityVal) $ selectList [] [Desc PersonAge, Asc PersonName, OffsetBy 2, LimitTo 3]
       a @== ["y", "v", "x"]
@@ -294,11 +294,11 @@ specs = describe "persistent" $ do
 
   it "and/or" $ db $ do
       deleteWhere ([] :: [Filter Person1])
-      _ <- insertMany [ Person1 "Michael" 25
-                     , Person1 "Miriam" 25
-                     , Person1 "Michael" 30
-                     , Person1 "Michael" 35
-                     ]
+      insertMany_ [ Person1 "Michael" 25
+                  , Person1 "Miriam" 25
+                  , Person1 "Michael" 30
+                  , Person1 "Michael" 35
+                  ]
 
       c10 <- count $ [Person1Name ==. "Michael"] ||. [Person1Name ==. "Miriam", Person1Age ==. 25]
       c10 @== 4

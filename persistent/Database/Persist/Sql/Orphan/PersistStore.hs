@@ -69,6 +69,22 @@ instance PersistStore Connection where
         t = entityDef $ Just val
         vals = map toPersistValue $ toPersistFields val
 
+    insertMany_ vals = do
+        conn <- ask
+        let sql = T.concat
+                [ "INSERT INTO "
+                , connEscapeName conn (entityDB t)
+                , "("
+                , T.intercalate "," $ map (connEscapeName conn . fieldDB) $ entityFields t
+                , ") VALUES ("
+                , T.intercalate "),(" $ replicate (length valss) $ T.intercalate "," $ map (const "?") (entityFields t)
+                , ")"
+                ]
+        rawExecute sql (concat valss)
+      where
+        t = entityDef vals
+        valss = map (map toPersistValue . toPersistFields) vals
+
     replace k val = do
         conn <- ask
         let t = entityDef $ Just val
