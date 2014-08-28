@@ -119,7 +119,7 @@ import Web.PathPieces (PathPiece (..))
 import Data.Conduit
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value (Object, Number), (.:), (.:?), (.!=), FromJSON(..), ToJSON(..), withText)
-import Control.Monad (mzero, liftM)
+import Control.Monad (mzero, liftM, (>=>), forM_)
 import qualified Data.Conduit.Pool as Pool
 import Data.Time (NominalDiffTime)
 #ifdef HIGH_PRECISION_DATE
@@ -643,12 +643,11 @@ instance PersistQuery DB.MongoContext where
         return $ return make
       where
         pull context cursor = do
-            mdoc <- liftIO $ runReaderT (DB.next cursor) context
+            mdoc <- liftIO $ runReaderT (DB.nextBatch cursor) context
             case mdoc of
-                Nothing -> return ()
-                Just doc -> do
-                    entity <- fromPersistValuesThrow t doc
-                    yield entity
+                [] -> return ()
+                docs -> do
+                    forM_ docs $ fromPersistValuesThrow t >=> yield
                     pull context cursor
         t = entityDef $ Just $ dummyFromFilts filts
 

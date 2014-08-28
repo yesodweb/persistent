@@ -22,19 +22,6 @@ import Data.Maybe (fromMaybe)
 import Data.Fixed
 import Data.Proxy (Proxy)
 
-import Control.Monad.Trans.Identity ( IdentityT)
-import Control.Monad.Trans.List     ( ListT    )
-import Control.Monad.Trans.Maybe    ( MaybeT   )
-import Control.Monad.Trans.Error    ( ErrorT, Error)
-
-#if MIN_VERSION_transformers(0,4,0)
-import Control.Monad.Trans.Except   ( ExceptT  )
-#endif
-
-import Control.Monad.Trans.Reader   ( ReaderT, ask  )
-import Control.Monad.Trans.Resource ( ResourceT )
-import Data.Conduit.Internal (Pipe, ConduitM)
-
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Class (MonadTrans)
 

@@ -724,7 +724,7 @@ keyFieldName :: EntityDef -> FieldDef -> Name
 keyFieldName t fd = mkName $ unpack $ lowerFirst (keyText t) `mappend` (unDBName $ fieldDB fd)
 
 mkKeyToValues :: MkPersistSettings -> EntityDef -> Q Dec
-mkKeyToValues mps t = do
+mkKeyToValues _mps t = do
     (p, e) <- case entityPrimary t of
         Nothing  ->
           ([],) <$> [|backendKeyToValues . $(return $ VarE $ unKeyName t)|]

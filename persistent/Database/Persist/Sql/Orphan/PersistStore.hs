@@ -215,3 +215,4 @@ updateFieldDef (BackendUpdate {}) = error "updateFieldDef did not expect Backend
 
 updatePersistValue :: Update v -> PersistValue
 updatePersistValue (Update _ v _) = toPersistValue v
+updatePersistValue (BackendUpdate {}) = error "updatePersistValue did not expect BackendUpdate"
