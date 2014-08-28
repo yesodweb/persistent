@@ -73,6 +73,12 @@ class
                => [val] -> ReaderT backend m [Key val]
     insertMany = mapM insert
 
+    -- | Same as 'insertMany', but doesn't return any @Key@s.
+    -- SQL backends use faster implementation for this than is currently
+    -- used by 'insertMany'.
+    insertMany_ :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
+                => [val] -> ReaderT backend m ()
+
     -- | Create a new record in the database using the given key.
     insertKey :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
               => Key val -> val -> ReaderT backend m ()
