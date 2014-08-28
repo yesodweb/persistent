@@ -40,8 +40,8 @@ import Init
 import Data.Maybe (isJust)
 
 import Control.Applicative ((<$>),(<*>))
-#else
 import Database.Persist.TH (mkDeleteCascade)
+#else
 #endif
 
 
