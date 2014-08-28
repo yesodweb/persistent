@@ -24,7 +24,6 @@ import System.IO
 import System.IO.Silently (hSilence)
 import Control.Monad.Trans.Control (liftBaseOp_)
 import Database.Persist.Sql.Types
-import Database.Persist.Sql.Class
 import Database.Persist.Sql.Raw
 import Database.Persist.Types
 

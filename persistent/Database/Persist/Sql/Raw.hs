@@ -17,7 +17,6 @@ import Control.Monad (when, liftM)
 import Data.Text (Text, pack)
 import Control.Monad.Logger (logDebugS, runLoggingT)
 import Data.Int (Int64)
-import Control.Monad.Trans.Class (lift)
 import qualified Data.Text as T
 import Data.Conduit
 import Control.Monad.Trans.Resource (MonadResource)

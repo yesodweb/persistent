@@ -5,7 +5,7 @@ import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
 import Control.Monad.Trans.Control
 import Data.Pool as P
-import Control.Monad.Trans.Reader
+import Control.Monad.Trans.Reader hiding (local)
 import Control.Monad.Trans.Resource
 import Control.Monad.Logger
 import Control.Monad.Base

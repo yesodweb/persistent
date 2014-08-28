@@ -40,7 +40,6 @@ module Database.Persist.TH
     ) where
 
 import Prelude hiding ((++), take, concat, splitAt, exp)
-import qualified Prelude as P 
 import Database.Persist
 import Database.Persist.Sql (Migration, migrate, SqlBackend, PersistFieldSql)
 import Database.Persist.Quasi
@@ -378,12 +377,6 @@ sumConstrName mps t FieldDef {..} = mkName $ unpack $ concat
     , "Sum"
     ]
 
-entityUpdates :: EntityDef -> [(HaskellName, FieldType, IsNullable, PersistUpdate)]
-entityUpdates =
-    concatMap go . entityFields
-  where
-    go FieldDef {..} = map (\a -> (fieldHaskell, fieldType, nullable fieldAttrs, a)) [minBound..maxBound]
-
 uniqueTypeDec :: MkPersistSettings -> EntityDef -> Dec
 uniqueTypeDec mps t =
     DataInstD [] ''Unique
@@ -509,15 +502,6 @@ mkToFieldNames pairs = do
                 [RecP (mkName $ unpack $ unHaskellName constr) []]
                 names'
 
-mkToUpdate :: String -> [(String, PersistUpdate)] -> Q Dec
-mkToUpdate name pairs = do
-    pairs' <- mapM go pairs
-    return $ FunD (mkName name) $ degen pairs'
-  where
-    go (constr, pu) = do
-        pu' <- lift pu
-        return $ normalClause [RecP (mkName constr) []] pu'
-
 mkUniqueToValues :: [UniqueDef] -> Q Dec
 mkUniqueToValues pairs = do
     pairs' <- mapM go pairs
@@ -530,21 +514,6 @@ mkUniqueToValues pairs = do
         tpv <- [|toPersistValue|]
         let bod = ListE $ map (AppE tpv . VarE) xs
         return $ normalClause [pat] bod
-
-mkToFieldName :: String -> [(String, String)] -> Dec
-mkToFieldName func pairs =
-        FunD (mkName func) $ degen $ map go pairs
-  where
-    go (constr, name) =
-        normalClause [RecP (mkName constr) []] (LitE $ StringL name)
-
-mkToValue :: String -> [String] -> Dec
-mkToValue func = FunD (mkName func) . degen . map go
-  where
-    go constr =
-        let x = mkName "x"
-         in normalClause [ConP (mkName constr) [VarP x]]
-                   (VarE 'toPersistValue `AppE` VarE x)
 
 isNotNull :: PersistValue -> Bool
 isNotNull PersistNull = False
@@ -653,8 +622,8 @@ mkKeyTypeDec mps t = do
         then if not useNewtype
                then do pfDec <- pfInstD
                        return (pfDec, [''Generic])
-               else do dec <- genericInstances
-                       return (dec, [])
+               else do gi <- genericInstances
+                       return (gi, [])
         else if not useNewtype
                then do pfDec <- pfInstD
                        return (pfDec, [''Show, ''Read, ''Eq, ''Ord, ''Generic])
@@ -667,7 +636,6 @@ mkKeyTypeDec mps t = do
   where
     dec = RecC (keyConName t) keyFields
     k = ''Key
-    backendKeyConstraint klass = ClassP klass [ConT ''BackendKey `AppT` backendT]
     recordType = genericDataType mps (entityHaskell t) backendT
     pfInstD = -- FIXME: generate a PersistMap instead of PersistList
       [d|instance PersistField (Key $(pure recordType)) where
@@ -773,7 +741,7 @@ normalClause :: [Pat] -> Exp -> Clause
 normalClause p e = Clause p (NormalB e) []
 
 mkKeyFromValues :: MkPersistSettings -> EntityDef -> Q Dec
-mkKeyFromValues mps t = do
+mkKeyFromValues _mps t = do
     clauses <- case entityPrimary t of
         Nothing  -> do
             e <- [|fmap $(return keyConE) . backendKeyFromValues|]
@@ -1464,3 +1432,35 @@ mkJSON mps def = do
                     parseJSON = $(varE (entityFromJSON entityJSON))
                 |]
             return $ toJSONI : fromJSONI : entityJSONIs
+
+-- entityUpdates :: EntityDef -> [(HaskellName, FieldType, IsNullable, PersistUpdate)]
+-- entityUpdates =
+--     concatMap go . entityFields
+--   where
+--     go FieldDef {..} = map (\a -> (fieldHaskell, fieldType, nullable fieldAttrs, a)) [minBound..maxBound]
+
+-- mkToUpdate :: String -> [(String, PersistUpdate)] -> Q Dec
+-- mkToUpdate name pairs = do
+--     pairs' <- mapM go pairs
+--     return $ FunD (mkName name) $ degen pairs'
+--   where
+--     go (constr, pu) = do
+--         pu' <- lift pu
+--         return $ normalClause [RecP (mkName constr) []] pu'
+
+
+-- mkToFieldName :: String -> [(String, String)] -> Dec
+-- mkToFieldName func pairs =
+--         FunD (mkName func) $ degen $ map go pairs
+--   where
+--     go (constr, name) =
+--         normalClause [RecP (mkName constr) []] (LitE $ StringL name)
+
+-- mkToValue :: String -> [String] -> Dec
+-- mkToValue func = FunD (mkName func) . degen . map go
+--   where
+--     go constr =
+--         let x = mkName "x"
+--          in normalClause [ConP (mkName constr) [VarP x]]
+--                    (VarE 'toPersistValue `AppE` VarE x)
+

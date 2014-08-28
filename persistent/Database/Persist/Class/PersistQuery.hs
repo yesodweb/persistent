@@ -8,12 +8,8 @@ module Database.Persist.Class.PersistQuery
     , selectKeysList
     ) where
 
-import Control.Exception (throwIO)
 import Database.Persist.Types
-
-
 import Control.Monad.IO.Class (MonadIO, liftIO)
-
 import Control.Monad.Reader   ( ReaderT, MonadReader  )
 
 import qualified Data.Conduit as C

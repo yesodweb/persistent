@@ -10,34 +10,26 @@
 module Database.Persist.Sql.Types where
 
 import Control.Exception (Exception)
-import Control.Monad.Trans.Resource (MonadResource (..), MonadThrow (..), ResourceT)
+import Control.Monad.Trans.Resource (MonadResource (..), ResourceT)
 import Data.Acquire (Acquire)
-import Control.Monad.Catch (MonadCatch, MonadMask)
-import Control.Monad.Logger (MonadLogger (..), NoLoggingT)
+import Control.Monad.Logger (NoLoggingT)
 import Control.Monad.Trans.Control
-import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Reader (ReaderT (..))
-import Control.Applicative (Applicative (..))
 import Control.Monad.Trans.Writer (WriterT)
-import Control.Monad.Base (MonadBase (..))
-import Control.Monad (MonadPlus (..))
 import Data.Typeable (Typeable)
 import Control.Monad (liftM)
 import Database.Persist.Types
 import Database.Persist.Class (HasPersistBackend (..))
-import Data.Text (Text, pack)
-import qualified Data.Text as T
 import Data.IORef (IORef)
 import Data.Map (Map)
 import Data.Int (Int64)
 import Data.Conduit (Source)
 import Data.Pool (Pool)
-import Control.Exception (throw)
-import qualified Data.Text.Read
 import Language.Haskell.TH.Syntax (Loc)
 import Control.Monad.Logger (LogSource, LogLevel)
 import System.Log.FastLogger (LogStr)
+import Data.Text (Text)
 
 data InsertSqlResult = ISRSingle Text
                      | ISRInsertGet Text Text

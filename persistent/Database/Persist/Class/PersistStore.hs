@@ -18,33 +18,14 @@ import Prelude hiding ((++), show)
 import qualified Data.Text as T
 
 import Control.Monad.Trans.Error (Error (..))
-import Control.Monad.Trans.Class (lift)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Data.Monoid (Monoid)
 import Control.Exception.Lifted (throwIO)
 
 import Data.Conduit.Internal (Pipe, ConduitM)
-import Control.Monad.Logger (LoggingT)
-import Control.Monad.Trans.Identity ( IdentityT)
-import Control.Monad.Trans.List     ( ListT    )
-import Control.Monad.Trans.Maybe    ( MaybeT   )
-import Control.Monad.Trans.Error    ( ErrorT   )
-
-#if MIN_VERSION_transformers(0,4,0)
-import Control.Monad.Trans.Except   ( ExceptT  )
-#endif
 
 import Control.Monad.Trans.Reader   ( ReaderT  )
-import Control.Monad.Trans.Cont     ( ContT  )
-import Control.Monad.Trans.State    ( StateT   )
-import Control.Monad.Trans.Writer   ( WriterT  )
-import Control.Monad.Trans.RWS      ( RWST     )
-import Control.Monad.Trans.Resource ( ResourceT)
 import Control.Monad.Reader (MonadReader (ask), runReaderT)
 
-import qualified Control.Monad.Trans.RWS.Strict    as Strict ( RWST   )
-import qualified Control.Monad.Trans.State.Strict  as Strict ( StateT )
-import qualified Control.Monad.Trans.Writer.Strict as Strict ( WriterT )
 
 import Database.Persist.Class.PersistEntity
 import Database.Persist.Class.PersistField

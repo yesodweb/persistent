@@ -22,10 +22,6 @@ import Data.Maybe (fromMaybe)
 import Data.Fixed
 import Data.Proxy (Proxy)
 
-import Data.Monoid (Monoid)
-import Control.Monad.Trans.Class (lift)
-
-import Control.Monad.Logger (LoggingT)
 import Control.Monad.Trans.Identity ( IdentityT)
 import Control.Monad.Trans.List     ( ListT    )
 import Control.Monad.Trans.Maybe    ( MaybeT   )
@@ -35,20 +31,12 @@ import Control.Monad.Trans.Error    ( ErrorT, Error)
 import Control.Monad.Trans.Except   ( ExceptT  )
 #endif
 
-import Control.Monad.Trans.Cont     ( ContT  )
-import Control.Monad.Trans.State    ( StateT   )
-import Control.Monad.Trans.Writer   ( WriterT  )
-import Control.Monad.Trans.RWS      ( RWST     )
 import Control.Monad.Trans.Reader   ( ReaderT, ask  )
 import Control.Monad.Trans.Resource ( ResourceT )
 import Data.Conduit.Internal (Pipe, ConduitM)
 
-import qualified Control.Monad.Trans.RWS.Strict    as Strict ( RWST   )
-import qualified Control.Monad.Trans.State.Strict  as Strict ( StateT )
-import qualified Control.Monad.Trans.Writer.Strict as Strict ( WriterT )
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Class (MonadTrans)
-import Control.Monad.Logger (MonadLogger)
 
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL

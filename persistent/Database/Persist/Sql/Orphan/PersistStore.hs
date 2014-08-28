@@ -76,7 +76,7 @@ instance PersistStore Connection where
                     x <- CL.head
                     case x of
                         Just [PersistInt64 i] -> case keyFromValues [PersistInt64 i] of
-                            Left err -> error $ "SQL insert: keyFromValues: PersistInt64 " `mappend` show i
+                            Left err -> error $ "SQL insert: keyFromValues: PersistInt64 " `mappend` show i `mappend` " " `mappend` unpack err
                             Right k -> return k
                         Nothing -> error $ "SQL insert did not return a result giving the generated ID"
                         Just vals' -> case keyFromValues vals' of
@@ -211,6 +211,7 @@ insrepHelper command k val = do
 
 updateFieldDef :: PersistEntity v => Update v -> FieldDef
 updateFieldDef (Update f _ _) = persistFieldDef f
+updateFieldDef (BackendUpdate {}) = error "updateFieldDef did not expect BackendUpdate"
 
 updatePersistValue :: Update v -> PersistValue
 updatePersistValue (Update _ v _) = toPersistValue v

@@ -10,8 +10,7 @@ import Database.Persist.Quasi
 import Data.Char (isSpace)
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Monoid (Monoid, mappend, mconcat)
-import Data.Maybe (mapMaybe, listToMaybe, fromMaybe)
+import Data.Monoid (mappend, mconcat)
 import Database.Persist.Sql.Types
 
 -- | Create the list of columns for the given entity.
