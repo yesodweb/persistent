@@ -37,7 +37,7 @@ RUN apt-get update
 RUN apt-get install -y mongodb-10gen || echo "upstart error expected"
 
 # MySQL
-RUN apt-get install -y mysql-server || echo "need to run mysql --configure"
+RUN apt-get install -y pcre mysql-server || echo "need to run mysql --configure"
 
 USER persistent
 ENV HOME /home/persistent
