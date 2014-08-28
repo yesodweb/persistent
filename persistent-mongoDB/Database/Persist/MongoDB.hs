@@ -481,6 +481,8 @@ instance FromJSON (BackendKey DB.MongoContext) where
         i2bs l i = BS.unfoldr (\l' -> if l' < 0 then Nothing else Just (fromIntegral (i `shiftR` l'), l' - 8)) (l-8)
         {-# INLINE i2bs #-}
 
+-- | older versions versions of haddock (like that on hackage) do not show that this defines
+-- @BackendKey DB.MongoContext = MongoKey { unMongoKey :: DB.ObjectId }@
 instance PersistStore DB.MongoContext where
     newtype BackendKey DB.MongoContext = MongoKey { unMongoKey :: DB.ObjectId }
         deriving (Show, Read, Eq, Ord, PersistField)
