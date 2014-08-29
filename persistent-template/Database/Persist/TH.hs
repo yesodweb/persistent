@@ -649,7 +649,10 @@ mkKeyTypeDec mps t = do
       |]
 
     keyStringL = StringL . keyString
-    genericInstances =
+    -- ghc 7.6 cannot parse the left arrow Ident $() <- lexP
+    keyPattern = BindS (ConP 'Ident [LitP $ keyStringL t])
+
+    genericInstances = [|lexP|] >>= \lexPE ->
       -- truly unfortunate that TH doesn't support standalone deriving
       -- https://ghc.haskell.org/trac/ghc/ticket/8100
       [d|instance Show (BackendKey $(pure backendT)) => Show (Key $(pure recordType)) where
@@ -659,7 +662,7 @@ mkKeyTypeDec mps t = do
               where app_prec = (10::Int)
          instance Read (BackendKey $(pure backendT)) => Read (Key $(pure recordType)) where
             readPrec = parens $ (prec app_prec $ do
-                                  Ident $(pure $ LitP $ keyStringL t) <- lexP
+                                  $(pure $ DoE [keyPattern lexPE])
                                   m <- step readPrec
                                   return ($(pure $ ConE $ keyConName t) m))
               where app_prec = (10::Int)
