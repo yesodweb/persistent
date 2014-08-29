@@ -52,18 +52,18 @@ mkPersist persistSettings { mpsGeneric = False } [persistUpperCase|
 share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMigrate", mkDeleteCascade persistSettings { mpsGeneric = False }] [persistLowerCase|
 #endif
   TestChild
-      name1 String maxlen=20
+      name  String maxlen=20
       name2 String maxlen=20
-      age3 Int
+      age Int
       extra4 String
-      Foreign TestParent fkparent name1 name2 age3
+      Foreign TestParent fkparent name name2 age
       deriving Show Eq
   TestParent
-      name11 String maxlen=20
-      name22 String maxlen=20
-      age33 Int
+      name  String maxlen=20
+      name2 String maxlen=20
+      age Int
       extra44 String
-      Primary name11 name22 age33
+      Primary name name2 age
       deriving Show Eq
   Citizen 
     name String
@@ -172,7 +172,7 @@ specs = describe "composite" $
       _ <- insert p1
       _ <- insert p2
       _ <- insert p3
-      xs <- selectKeysList [] [Asc TestParentName11] 
+      xs <- selectKeysList [] [Asc TestParentName]
       length xs @== 3
       let [kps1,kps2,kps3] = xs
       matchParentK kps1 @== Right ("a1","b1",11)
