@@ -1,9 +1,9 @@
 name:            persistent-template
-version:         2.0.0.2
+version:         2.0.0.3
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
-maintainer:      Michael Snoyman <michael@snoyman.com>
+maintainer:      Michael Snoyman <michael@snoyman.com>, Greg Weber <greg@gregweber.info>
 synopsis:        Type-safe, non-relational, multi-backend persistence.
 description:     This library provides just the general interface and helper functions. You must use a specific backend in order to make this useful.
 category:        Database, Yesod

@@ -653,43 +653,41 @@ mkKeyTypeDec mps t = do
     keyPattern = BindS (ConP 'Ident [LitP $ keyStringL t])
 
     genericInstances = [|lexP|] >>= \lexPE ->
-      -- truly unfortunate that TH doesn't support standalone deriving
-      -- https://ghc.haskell.org/trac/ghc/ticket/8100
-      [d|instance Show (BackendKey $(pure backendT)) => Show (Key $(pure recordType)) where
-            showsPrec i x = showParen (i > app_prec) $
-              (showString $ $(pure $ LitE $ keyStringL t) `mappend` " ") .
-              showsPrec i ($(return $ VarE $ unKeyName t) x)
-              where app_prec = (10::Int)
-         instance Read (BackendKey $(pure backendT)) => Read (Key $(pure recordType)) where
-            readPrec = parens $ (prec app_prec $ do
-                                  $(pure $ DoE [keyPattern lexPE])
-                                  m <- step readPrec
-                                  return ($(pure $ ConE $ keyConName t) m))
-              where app_prec = (10::Int)
-         instance Eq (BackendKey $(pure backendT)) => Eq (Key $(pure recordType)) where
-            x == y =
-                ($(return $ VarE $ unKeyName t) x) ==
-                ($(return $ VarE $ unKeyName t) y)
-            x /= y =
-                ($(return $ VarE $ unKeyName t) x) ==
-                ($(return $ VarE $ unKeyName t) y)
-         instance Ord (BackendKey $(pure backendT)) => Ord (Key $(pure recordType)) where
-            compare x y = compare
-                ($(return $ VarE $ unKeyName t) x)
-                ($(return $ VarE $ unKeyName t) y)
-         instance PathPiece (BackendKey $(pure backendT)) => PathPiece (Key $(pure recordType)) where
-            toPathPiece = toPathPiece . $(return $ VarE $ unKeyName t)
-            fromPathPiece = fmap $(return $ ConE $ keyConName t) . fromPathPiece
-         instance PersistField (BackendKey $(pure backendT)) => PersistField (Key $(pure recordType)) where
-            toPersistValue = toPersistValue . $(return $ VarE $ unKeyName t)
-            fromPersistValue = fmap $(return $ ConE $ keyConName t) . fromPersistValue
-         instance PersistFieldSql (BackendKey $(pure backendT)) => PersistFieldSql (Key $(pure recordType)) where
-            sqlType = sqlType . fmap $(return $ VarE $ unKeyName t)
-         instance ToJSON (BackendKey $(pure backendT)) => ToJSON (Key $(pure recordType)) where
-            toJSON = toJSON . $(return $ VarE $ unKeyName t)
-         instance FromJSON (BackendKey $(pure backendT)) => FromJSON (Key $(pure recordType)) where
-            parseJSON = fmap $(return $ ConE $ keyConName t) . parseJSON
-      |]
+      [| step readPrec >>= return . ($(pure $ ConE $ keyConName t) )|] >>= \readE ->
+        -- truly unfortunate that TH doesn't support standalone deriving
+        -- https://ghc.haskell.org/trac/ghc/ticket/8100
+        [d|instance Show (BackendKey $(pure backendT)) => Show (Key $(pure recordType)) where
+              showsPrec i x = showParen (i > app_prec) $
+                (showString $ $(pure $ LitE $ keyStringL t) `mappend` " ") .
+                showsPrec i ($(return $ VarE $ unKeyName t) x)
+                where app_prec = (10::Int)
+           instance Read (BackendKey $(pure backendT)) => Read (Key $(pure recordType)) where
+              readPrec = parens $ (prec app_prec $ $(pure $ DoE [keyPattern lexPE, NoBindS readE]))
+                where app_prec = (10::Int)
+           instance Eq (BackendKey $(pure backendT)) => Eq (Key $(pure recordType)) where
+              x == y =
+                  ($(return $ VarE $ unKeyName t) x) ==
+                  ($(return $ VarE $ unKeyName t) y)
+              x /= y =
+                  ($(return $ VarE $ unKeyName t) x) ==
+                  ($(return $ VarE $ unKeyName t) y)
+           instance Ord (BackendKey $(pure backendT)) => Ord (Key $(pure recordType)) where
+              compare x y = compare
+                  ($(return $ VarE $ unKeyName t) x)
+                  ($(return $ VarE $ unKeyName t) y)
+           instance PathPiece (BackendKey $(pure backendT)) => PathPiece (Key $(pure recordType)) where
+              toPathPiece = toPathPiece . $(return $ VarE $ unKeyName t)
+              fromPathPiece = fmap $(return $ ConE $ keyConName t) . fromPathPiece
+           instance PersistField (BackendKey $(pure backendT)) => PersistField (Key $(pure recordType)) where
+              toPersistValue = toPersistValue . $(return $ VarE $ unKeyName t)
+              fromPersistValue = fmap $(return $ ConE $ keyConName t) . fromPersistValue
+           instance PersistFieldSql (BackendKey $(pure backendT)) => PersistFieldSql (Key $(pure recordType)) where
+              sqlType = sqlType . fmap $(return $ VarE $ unKeyName t)
+           instance ToJSON (BackendKey $(pure backendT)) => ToJSON (Key $(pure recordType)) where
+              toJSON = toJSON . $(return $ VarE $ unKeyName t)
+           instance FromJSON (BackendKey $(pure backendT)) => FromJSON (Key $(pure recordType)) where
+              parseJSON = fmap $(return $ ConE $ keyConName t) . parseJSON
+        |]
 
     useNewtype = length keyFields < 2
     keyFields = case entityPrimary t of
