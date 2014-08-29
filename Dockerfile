@@ -2,7 +2,7 @@ from stackbrew/ubuntu:14.04
 maintainer Greg Weber
 
 RUN apt-get install -y adduser
-RUN adduser --disabled-password --gecos "persistent,666" persistent
+RUN adduser --disabled-password persistent
 RUN echo "Defaults:persistent !requiretty" >> /etc/sudoers
 
 RUN apt-get update
@@ -37,7 +37,12 @@ RUN apt-get update
 RUN apt-get install -y mongodb-10gen || echo "upstart error expected"
 
 # MySQL
-RUN apt-get install -y pcre mysql-server || echo "need to run mysql --configure"
+RUN apt-get install -y libpcre3-dev mysql-server libmysqlclient-dev || echo "need to run mysql --configure"
+
+RUN echo "en_US.UTF-8 UTF-8" >> /var/lib/locales/supported.d/local
+RUN dpkg-reconfigure locales
+RUN update-locale LANG=en_US.UTF-8
+ENV LANG en_US.UTF-8
 
 USER persistent
 ENV HOME /home/persistent
