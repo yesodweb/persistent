@@ -33,7 +33,7 @@ import Data.Bson (genObjectId)
 
 import Control.Monad (liftM, void)
 import Control.Monad.Logger
-import Database.Persist.TH (mkDeleteCascade, mpsPrefixFields)
+import Database.Persist.TH (mkDeleteCascade)
 import Database.Persist.Sqlite
 import Control.Exception (SomeException)
 import qualified Data.Text as T
