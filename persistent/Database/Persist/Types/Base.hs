@@ -197,13 +197,18 @@ data PrimaryDef = PrimaryDef
     }
     deriving (Show, Eq, Read, Ord)
 
+-- | Used instead of FieldDef
+-- to generate a smaller amount of code
+type ForeignFieldDef = (HaskellName, DBName)
+
 data ForeignDef = ForeignDef
     { foreignRefTableHaskell       :: !HaskellName
     , foreignRefTableDBName        :: !DBName
     , foreignConstraintNameHaskell :: !HaskellName
     , foreignConstraintNameDBName  :: !DBName
-    , foreignFields                :: ![(HaskellName, DBName, HaskellName, DBName)] -- foreignkey name gb our field plus corresponding other primary field:make this a real adt
+    , foreignFields                :: ![(ForeignFieldDef, ForeignFieldDef)] -- this entity plus the primary entity
     , foreignAttrs                 :: ![Attr]
+    , foreignNullable              :: Bool
     }
     deriving (Show, Eq, Read, Ord)
 

@@ -419,13 +419,12 @@ maybeIdType :: MkPersistSettings
            -> Maybe Name -- ^ backend
            -> Maybe IsNullable
            -> Type
-maybeIdType mps fd mbackend mnull = if mayNullable then maybeTyp else idtyp
+maybeIdType mps fd mbackend mnull = maybeTyp mayNullable idtyp
   where
     mayNullable = case mnull of
         (Just (Nullable ByMaybeAttr)) -> True
         _ -> maybeNullable fd
     idtyp = idType mps fd mbackend
-    maybeTyp = ConT ''Maybe `AppT` idtyp
 
 backendDataType :: MkPersistSettings -> Type
 backendDataType mps
@@ -552,10 +551,9 @@ mkFromPersistValues mps t@(EntityDef { entitySum = True }) = do
                 , map (const null') after
                 ]
             constr = ConE $ sumConstrName mps t field
-        fmap' <- [|fmap|]
         fs <- [|fromPersistValue $(return $ VarE x)|]
         let guard' = NormalG $ VarE 'isNotNull `AppE` VarE x
-        let clause = Clause [pat] (GuardedB [(guard', InfixE (Just constr) fmap' (Just fs))]) []
+        let clause = Clause [pat] (GuardedB [(guard', InfixE (Just constr) fmapE (Just fs))]) []
         clauses <- mkClauses (field : before) after
         return $ clause : clauses
 
@@ -563,6 +561,9 @@ type Lens s t a b = forall f. Functor f => (a -> f b) -> s -> f t
 
 lensPTH :: (s -> a) -> (s -> b -> t) -> Lens s t a b
 lensPTH sa sbt afb s = fmap (sbt s) (afb $ sa s)
+
+fmapE :: Exp
+fmapE = VarE 'fmap
 
 mkLensClauses :: MkPersistSettings -> EntityDef -> Q [Clause]
 mkLensClauses mps t = do
@@ -775,8 +776,8 @@ fromValues t funName conE fields = do
         x1 <- newName "x1"
         restNames <- mapM (\i -> newName $ "x" `mappend` show i) [2..length fieldsNE]
         (fpv1:mkPersistValues) <- mapM mkPvFromFd fieldsNE
-        fmapE <- [|(<$>)|]
-        let conApp = infixFromPersistValue fmapE fpv1 conE x1
+        app1E <- [|(<$>)|]
+        let conApp = infixFromPersistValue app1E fpv1 conE x1
         applyE <- [|(<*>)|]
         let applyFromPersistValue = infixFromPersistValue applyE
 
@@ -912,7 +913,7 @@ mkLenses mps ent = fmap mconcat $ forM (entityFields ent) $ \field -> do
             (sT `arrow` (VarT fT `AppT` tT))
         , FunD lensName $ return $ Clause
             [VarP fN, VarP aN]
-            (NormalB $ VarE 'fmap
+            (NormalB $ fmapE
                 `AppE` setter
                 `AppE` (f `AppE` needle))
             [ FunD needleN [normalClause [] (VarE fieldName `AppE` a)]
@@ -925,22 +926,30 @@ mkLenses mps ent = fmap mconcat $ forM (entityFields ent) $ \field -> do
         ]
 
 mkForeignKeysComposite :: MkPersistSettings -> EntityDef -> ForeignDef -> Q [Dec]
-mkForeignKeysComposite mps t fdef = do
+mkForeignKeysComposite mps t ForeignDef {..} = do
    let fieldName f = mkName $ unpack $ recName mps (entityHaskell t) f
-   let fname = fieldName $ foreignConstraintNameHaskell fdef
-   let reftableString = unpack $ unHaskellName $ foreignRefTableHaskell fdef 
+   let fname = fieldName foreignConstraintNameHaskell
+   let reftableString = unpack $ unHaskellName $ foreignRefTableHaskell
    let reftableKeyName = mkName $ reftableString `mappend` "Key"
    let tablename = mkName $ unpack $ entityText t
    recordName <- newName "record"
    
-   let fldsE = map (\(a,_,_,_) -> VarE (fieldName a) `AppE` VarE recordName) $
-                 foreignFields fdef
-   let mkKeyE = foldl' AppE (ConE reftableKeyName) fldsE
+   let fldsE = map (\((foreignName, _),_) -> VarE (fieldName $ foreignName)
+                 `AppE` VarE recordName) foreignFields
+   let mkKeyE = foldl' AppE (maybeExp foreignNullable $ ConE reftableKeyName) fldsE
    let fn = FunD fname [normalClause [VarP recordName] mkKeyE]
    
-   let t2 = ConT ''Key `AppT` ConT (mkName reftableString)
+   let t2 = maybeTyp foreignNullable $ ConT ''Key `AppT` ConT (mkName reftableString)
    let sig = SigD fname $ (ArrowT `AppT` (ConT tablename)) `AppT` t2
    return [sig, fn]
+
+maybeExp :: Bool -> Exp -> Exp
+maybeExp may exp | may = fmapE `AppE` exp
+                 | otherwise = exp
+maybeTyp :: Bool -> Type -> Type
+maybeTyp may typ | may = ConT ''Maybe `AppT` typ
+                 | otherwise = typ
+
 
 
 -- | produce code similar to the following:
@@ -1240,7 +1249,7 @@ instance Lift UniqueDef where
 instance Lift PrimaryDef where
     lift (PrimaryDef a b) = [|PrimaryDef $(lift a) $(liftTs b)|]
 instance Lift ForeignDef where
-    lift (ForeignDef a b c d e f) = [|ForeignDef $(lift a) $(lift b) $(lift c) $(lift d) $(lift e) $(liftTs f)|]
+    lift (ForeignDef a b c d e f g) = [|ForeignDef $(lift a) $(lift b) $(lift c) $(lift d) $(lift e) $(liftTs f) $(lift g)|]
 
 -- | A hack to avoid orphans.
 class Lift' a where
