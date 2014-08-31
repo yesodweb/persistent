@@ -65,6 +65,11 @@ share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMig
       extra44 String
       Primary name name2 age
       deriving Show Eq
+  Tree
+      name    Text
+      parent  Text Maybe
+      Primary name
+      Foreign Tree fkparent parent
   Citizen 
     name String
     age Int Maybe
@@ -167,6 +172,17 @@ specs = describe "composite" $
       let Just c11 = mc
       c1 @== c11
       testChildFkparent c11 @== kp1
+
+    it "Tree relationships" $ db $ do
+      kgp@(TreeKey gpt) <- insert $ Tree "grandpa" Nothing
+      kdad@(TreeKey dadt) <- insert $ Tree "dad" $ Just gpt
+      kc <- insert $ Tree "child" $ Just dadt
+      c <- getJust kc
+      treeFkparent c @== Just kdad
+      dad <- getJust kdad
+      treeFkparent dad @== Just kgp
+      gp <- getJust kgp
+      treeFkparent gp @== Nothing
         
     it "Validate Key contents" $ db $ do
       _ <- insert p1
