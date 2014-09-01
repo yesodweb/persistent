@@ -68,8 +68,7 @@ class
 
     -- | Create multiple records in the database.
     --
-    -- If you don't need the inserted @Key@s,
-    -- use 'insertMany_' (which does not show up on hackage)
+    -- If you don't need the inserted @Key@s, use 'insertMany_'
     --
     -- SQL backends currently use the slow default implementation of
     -- @mapM insert@
