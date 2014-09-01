@@ -108,7 +108,8 @@ data WhyNullable = ByMaybeAttr
 data EntityDef = EntityDef
     { entityHaskell :: !HaskellName
     , entityDB      :: !DBName
-    , entityID      :: !DBName
+    , entityIdDB    :: !(Maybe DBName)
+    , entityIdType  :: !(Maybe Text)
     , entityAttrs   :: ![Attr]
     , entityFields  :: ![FieldDef]
     , entityPrimary :: Maybe PrimaryDef

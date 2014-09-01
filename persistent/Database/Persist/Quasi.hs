@@ -25,6 +25,7 @@ import Control.Arrow ((&&&))
 import qualified Data.Map as M
 import Data.List (foldl')
 import Data.Monoid (mappend)
+import Control.Monad (msum)
 
 data ParseState a = PSDone | PSFail | PSSuccess a Text
 
@@ -273,6 +274,12 @@ data UnboundEntityDef = UnboundEntityDef
                         , unboundEntityDef :: EntityDef
                         }
 
+
+lookupKeyVal :: Text -> [Text] -> Maybe Text
+lookupKeyVal key = lookupPrefix $ key `mappend` "="
+lookupPrefix :: Text -> [Text] -> Maybe Text
+lookupPrefix prefix = msum . map (T.stripPrefix prefix)
+
 -- | Construct an entity definition.
 mkEntityDef :: PersistSettings
             -> Text -- ^ name
@@ -283,7 +290,8 @@ mkEntityDef ps name entattribs lines = UnboundEntityDef foreigns $
     EntityDef
         (HaskellName name')
         (DBName $ getDbName ps name' entattribs)
-        (DBName $ idName entattribs)
+        (DBName `fmap` idName)
+        (lookupKeyVal "idType" entattribs)
         entattribs cols primary uniqs [] derives
         extras
         isSum
@@ -293,8 +301,10 @@ mkEntityDef ps name entattribs lines = UnboundEntityDef foreigns $
             Just ('+', x) -> (True, x)
             _ -> (False, name)
     (attribs, extras) = splitExtras lines
-    idName [] = "id"
-    idName (t:ts) = fromMaybe (idName ts) $ T.stripPrefix "id=" t
+
+    attribPrefix = flip lookupPrefix entattribs
+    idName | Just _ <- attribPrefix "id=" = error "id= is deprecated, used idName="
+           | otherwise = attribPrefix "idName="
             
     (primarys, uniqs, foreigns) = foldl' (\(a,b,c) attr -> 
                                     let (a',b',c') = takeConstraint ps name' cols attr 
@@ -364,9 +374,9 @@ takeConstraint _ _ _ _ = (Nothing, Nothing, Nothing)
 takePrimary :: [FieldDef]
             -> [Text]
             -> PrimaryDef
-takePrimary defs pkcols
+takePrimary fields pkcols
         = PrimaryDef
-            (map (getDef defs) pkcols)
+            (map (getDef fields) pkcols)
             attrs
   where
     (_, attrs) = break ("!" `T.isPrefixOf`) pkcols

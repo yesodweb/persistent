@@ -158,7 +158,8 @@ instance Lift EntityDefSqlTypeExp where
         [|EntityDef
             $(lift entityHaskell)
             $(lift entityDB)
-            $(lift entityID)
+            $(lift entityIdDB)
+            $(lift' entityIdType)
             $(lift' entityAttrs)
             $(lift (FieldsSqlTypeExp entityFields sqlTypeExps))
             $(lift entityPrimary)
@@ -813,7 +814,10 @@ mkEntity mps t = do
 
     let primaryField = FieldDef
           { fieldHaskell = HaskellName "Id"
-          , fieldDB = entityID t
+          -- this should be modeled as a Maybe
+          -- but that sucks for non-ID field
+          -- TODO: use a sumtype FieldDef | IdFieldDef
+          , fieldDB = fromMaybe (DBName "") $ entityIdDB t
           , fieldType = FTTypeCon Nothing $ keyIdText t
           , fieldSqlType = maybe SqlInt64 (const $ SqlOther "Primary Key") $ entityPrimary t
           -- the primary field is actually a reference to the entity

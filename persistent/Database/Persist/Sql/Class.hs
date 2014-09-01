@@ -10,6 +10,7 @@
 module Database.Persist.Sql.Class
     ( RawSql (..)
     , PersistFieldSql (..)
+    , defaultIdName, sqlIdName
     ) where
 
 import Control.Applicative ((<$>), (<*>))
@@ -37,6 +38,12 @@ import Text.Blaze.Html (Html)
 import Data.Bits (bitSize)
 import qualified Data.Vector as V
 
+defaultIdName :: Text
+defaultIdName = "id"
+
+sqlIdName :: EntityDef -> DBName
+sqlIdName = fromMaybe (DBName defaultIdName) . entityIdDB
+
 -- | Class for data types that may be retrived from a 'rawSql'
 -- query.
 class RawSql a where
@@ -63,7 +70,7 @@ instance (PersistEntity a, PersistEntityBackend a ~ SqlBackend) => RawSql (Entit
           process ed = (:[]) $
                        intercalate ", " $
                        map ((name ed <>) . escape) $
-                       (entityID ed:) $
+                       (sqlIdName ed :) $
                        map fieldDB $
                        entityFields ed
           name ed = escape (entityDB ed) <> "."

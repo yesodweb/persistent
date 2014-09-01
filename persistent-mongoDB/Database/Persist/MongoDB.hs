@@ -374,7 +374,7 @@ updateToMongoField (Update field v up) =
                   (Multiply, _) -> error "expected PersistInt64 or PersistDouble for a subtraction"
                   -- Obviously this could be supported for floats by multiplying with 1/x
                   (Divide, _)   -> throw $ PersistMongoDBUnsupported "divide not supported"
-updateToMongoField (BackendUpdate _) = error "no backend updates implemented yet"
+updateToMongoField (BackendUpdate {}) = error "no backend updates implemented yet"
 
 
 -- | convert a unique key into a MongoDB document
@@ -807,8 +807,10 @@ toValue val =
       Right vs -> DB.val $ map toPersistValue vs
 
 fieldName ::  forall record typ.  (PersistEntity record) => EntityField record typ -> DB.Label
-fieldName = idfix . unDBName . fieldDB . persistFieldDef
-  where idfix f = if f == "id" then _id else f
+fieldName f | fieldHaskell fd == HaskellName "Id" = _id
+            | otherwise = unDBName $ fieldDB $ fd
+  where
+    fd = persistFieldDef f
 
 
 docToEntityEither :: forall record. (PersistEntity record) => DB.Document -> Either T.Text (Entity record)
