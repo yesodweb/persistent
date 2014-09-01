@@ -735,15 +735,16 @@ mkKeyToValues :: MkPersistSettings -> EntityDef -> Q Dec
 mkKeyToValues _mps t = do
     (p, e) <- case entityPrimary t of
         Nothing  ->
-          ([],) <$> [|backendKeyToValues . $(return $ VarE $ unKeyName t)|]
+          ([],) <$> [|(:[]) . toPersistValue . $(return $ VarE $ unKeyName t)|]
         Just pdef ->
-          newName "record" >>= return . toValuesPrimary pdef
+          return $ toValuesPrimary pdef
     return $ FunD 'keyToValues $ return $ normalClause p e
   where
-    toValuesPrimary pdef recordName =
+    toValuesPrimary pdef =
       ( [VarP recordName]
       , ListE $ map (\fd -> VarE 'toPersistValue `AppE` (VarE (keyFieldName t fd) `AppE` VarE recordName)) $ primaryFields pdef
       )
+    recordName = mkName "record"
 
 normalClause :: [Pat] -> Exp -> Clause
 normalClause p e = Clause p (NormalB e) []
@@ -752,13 +753,19 @@ mkKeyFromValues :: MkPersistSettings -> EntityDef -> Q Dec
 mkKeyFromValues _mps t = do
     clauses <- case entityPrimary t of
         Nothing  -> do
-            e <- [|fmap $(return keyConE) . backendKeyFromValues|]
+            e <- [|fmap $(return keyConE) . fromPersistValue . headNote|]
             return $ [normalClause [] e]
         Just pdef ->
             fromValues t "keyFromValues" keyConE (primaryFields pdef)
     return $ FunD 'keyFromValues clauses
   where
     keyConE = ConE (keyConName t)
+
+headNote :: [PersistValue] -> PersistValue
+headNote (x:[]) = x
+headNote xs = error $ "mkKeyFromValues: expected a list of one element, got: "
+  `mappend` show xs
+
 
 fromValues :: EntityDef -> Text -> Exp -> [FieldDef] -> Q [Clause]
 fromValues t funName conE fields = do

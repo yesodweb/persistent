@@ -36,11 +36,6 @@ instance PersistStore Connection where
     newtype BackendKey SqlBackend = SqlBackendKey { unSqlBackendKey :: Int64 }
         deriving (Show, Read, Eq, Ord, Num, Integral, PersistField, PersistFieldSql, PathPiece, Real, Enum, Bounded, A.ToJSON, A.FromJSON)
 
-    backendKeyToValues (SqlBackendKey i)   = [PersistInt64 i]
-    backendKeyFromValues [PersistInt64 i]  = Right $ SqlBackendKey i
-    backendKeyFromValues [PersistDouble i] = Right $ SqlBackendKey $ truncate i
-    backendKeyFromValues s = Left $ pack $ show s
-
     update _ [] = return ()
     update k upds = do
         conn <- ask

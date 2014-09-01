@@ -189,7 +189,7 @@ instance Arbitrary PersistValue where
 #endif
 
 instance PersistStore backend => Arbitrary (BackendKey backend) where
-  arbitrary = (errorLeft . backendKeyFromValues . (: [])) `fmap` arbitrary
+  arbitrary = (errorLeft . fromPersistValue) `fmap` arbitrary
     where
       errorLeft x = case x of
           Left e -> error $ unpack e

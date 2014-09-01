@@ -487,12 +487,6 @@ instance PersistStore DB.MongoContext where
     newtype BackendKey DB.MongoContext = MongoKey { unMongoKey :: DB.ObjectId }
         deriving (Show, Read, Eq, Ord, PersistField)
 
-    backendKeyToValues (MongoKey oid)   = [oidToPersistValue oid]
-    backendKeyFromValues [poid@(PersistObjectId _)] =
-        Right $ MongoKey $ persistObjectIdToDbOid poid
-    backendKeyFromValues s = Left $ "backendKeyFromValues, expected a list with one PersistObjectId, got: "
-        `mappend` (T.pack $ show s)
-
     insert record = DB.insert (collectionName record) (toInsertDoc record)
                 >>= keyFrom_idEx
 
