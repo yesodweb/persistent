@@ -271,7 +271,7 @@ getCopyTable allDefs getter val = do
 mkCreateTable :: Bool -> EntityDef -> ([Column], [UniqueDef]) -> Text
 mkCreateTable isTemp entity (cols, uniqs) =
   case entityPrimary entity of
-    Just _ ->
+    Just pdef ->
        T.concat
         [ "CREATE"
         , if isTemp then " TEMP" else ""
@@ -281,7 +281,7 @@ mkCreateTable isTemp entity (cols, uniqs) =
         , T.drop 1 $ T.concat $ map sqlColumn cols
         , ", PRIMARY KEY "
         , "("
-        , T.intercalate "," $ map (escape . fieldDB) $ entityFields entity
+        , T.intercalate "," $ map (escape . fieldDB) $ primaryFields pdef
         , ")"
         , ")"
         ]
