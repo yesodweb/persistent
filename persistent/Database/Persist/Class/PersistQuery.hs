@@ -18,7 +18,7 @@ import Database.Persist.Class.PersistStore
 import Database.Persist.Class.PersistEntity
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Resource (MonadResource, release)
-import Data.Acquire (Acquire, mkAcquire, allocateAcquire, with)
+import Data.Acquire (Acquire, allocateAcquire, with)
 
 class PersistStore backend => PersistQuery backend where
     -- | Update individual fields on any record matching the given criterion.

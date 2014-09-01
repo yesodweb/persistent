@@ -397,8 +397,11 @@ takeUniq ps tableName defs (n:rest)
         | otherwise = getDBName ds t
 takeUniq _ tableName _ xs = error $ "invalid unique constraint on table[" ++ show tableName ++ "] expecting an uppercase constraint name xs=" ++ show xs
 
-data UnboundForeignDef = UnboundForeignDef [Text] -- ^ fields in other entity
-                                           ForeignDef
+data UnboundForeignDef = UnboundForeignDef
+                         { unboundFields :: [Text] -- ^ fields in other entity
+                         , unboundForeignDef :: ForeignDef
+                         }
+
 takeForeign :: PersistSettings
           -> Text
           -> [FieldDef]
