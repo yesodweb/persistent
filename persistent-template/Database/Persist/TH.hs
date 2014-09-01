@@ -151,7 +151,7 @@ instance Lift FieldsSqlTypeExp where
 data FieldSqlTypeExp = FieldSqlTypeExp FieldDef SqlTypeExp
 instance Lift FieldSqlTypeExp where
     lift (FieldSqlTypeExp (FieldDef{..}) sqlTypeExp) =
-      [|FieldDef fieldHaskell fieldDB fieldType $(lift sqlTypeExp) $(liftTs fieldAttrs) fieldStrict fieldReference|]
+      [|FieldDef fieldHaskell fieldDB fieldType $(lift sqlTypeExp) $(lift' fieldAttrs) fieldStrict fieldReference|]
 
 instance Lift EntityDefSqlTypeExp where
     lift (EntityDefSqlTypeExp (EntityDef{..}) sqlTypeExps) =
@@ -164,7 +164,7 @@ instance Lift EntityDefSqlTypeExp where
             $(lift entityPrimary)
             $(lift entityUniques)
             $(lift entityForeigns)
-            $(liftTs entityDerives)
+            $(lift' entityDerives)
             $(liftMap entityExtra)
             $(lift entitySum)
             |]
@@ -1235,28 +1235,29 @@ mkMigrate fun allDefs = do
         return $ NoBindS $ m `AppE` defsExp `AppE` u
 
 instance Lift EntityDef where
-    lift (EntityDef a b c d e f g h i j k) =
+    lift EntityDef{..} =
         [|EntityDef
-            $(lift a)
-            $(lift b)
-            $(lift c)
-            $(liftTs d)
-            $(lift e)
-            $(lift f)
-            $(lift g)
-            $(lift h)
-            $(liftTs i)
-            $(liftMap j)
-            $(lift k)
+            $(lift entityHaskell)
+            $(lift entityDB)
+            $(lift entityIdDB)
+            $(lift' entityIdType)
+            $(lift' entityAttrs)
+            $(lift entityFields)
+            $(lift entityPrimary)
+            $(lift entityUniques)
+            $(lift entityForeigns)
+            $(lift' entityDerives)
+            $(lift' entityExtra)
+            $(lift entitySum)
             |]
 instance Lift FieldDef where
-    lift (FieldDef a b c d e f g) = [|FieldDef a b c $(lift' d) $(liftTs e) f g|]
+    lift (FieldDef a b c d e f g) = [|FieldDef a b c $(lift' d) $(lift' e) f g|]
 instance Lift UniqueDef where
-    lift (UniqueDef a b c d) = [|UniqueDef $(lift a) $(lift b) $(lift c) $(liftTs d)|]
+    lift (UniqueDef a b c d) = [|UniqueDef $(lift a) $(lift b) $(lift c) $(lift' d)|]
 instance Lift PrimaryDef where
-    lift (PrimaryDef a b) = [|PrimaryDef $(lift a) $(liftTs b)|]
+    lift (PrimaryDef a b) = [|PrimaryDef $(lift a) $(lift' b)|]
 instance Lift ForeignDef where
-    lift (ForeignDef a b c d e f g) = [|ForeignDef $(lift a) $(lift b) $(lift c) $(lift d) $(lift e) $(liftTs f) $(lift g)|]
+    lift (ForeignDef a b c d e f g) = [|ForeignDef $(lift a) $(lift b) $(lift c) $(lift d) $(lift e) $(lift' f) $(lift g)|]
 
 -- | A hack to avoid orphans.
 class Lift' a where
@@ -1272,6 +1273,13 @@ instance Lift' () where
     lift' () = [|()|]
 instance Lift' SqlTypeExp where
     lift' = lift
+instance Lift' Text where
+    lift' = liftT
+instance Lift' a => Lift' [a] where
+    lift' xs = do { xs' <- mapM lift' xs; return (ListE xs') }
+instance (Lift' k, Lift' v) => Lift' (M.Map k v) where
+    lift' m = [|M.fromList $(fmap ListE $ mapM liftPair $ M.toList m)|]
+
 
 packPTH :: String -> Text
 packPTH = pack
@@ -1282,17 +1290,8 @@ packPTH = pack
 liftT :: Text -> Q Exp
 liftT t = [|packPTH $(lift (unpack t))|]
 
-liftTs :: [Text] -> Q Exp
-liftTs = fmap ListE . mapM liftT
-
-liftTss :: [[Text]] -> Q Exp
-liftTss = fmap ListE . mapM liftTs
-
-liftMap :: M.Map Text [[Text]] -> Q Exp
-liftMap m = [|M.fromList $(fmap ListE $ mapM liftPair $ M.toList m)|]
-
-liftPair :: (Text, [[Text]]) -> Q Exp
-liftPair (t, ts) = [|($(liftT t), $(liftTss ts))|]
+liftPair :: (Lift' k, Lift' v) => (k, v) -> Q Exp
+liftPair (k, v) = [|($(lift' k), $(lift' v))|]
 
 instance Lift HaskellName where
     lift (HaskellName t) = [|HaskellName $(liftT t)|]
