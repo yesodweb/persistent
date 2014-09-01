@@ -3,7 +3,7 @@ version:         2.0.1.1
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
-maintainer:      Michael Snoyman <michael@snoyman.com>
+maintainer:      Michael Snoyman <michael@snoyman.com>, Greg Weber <greg@gregweber.info>
 synopsis:        Type-safe, multi-backend data serialization.
 description:     Type-safe, data serialization. You must use a specific backend in order to make this useful.
 category:        Database, Yesod
