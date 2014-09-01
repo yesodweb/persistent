@@ -23,7 +23,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Control.Arrow ((&&&))
 import qualified Data.Map as M
-import Data.List (foldl',find)
+import Data.List (foldl')
 import Data.Monoid (mappend)
 
 data ParseState a = PSDone | PSFail | PSSuccess a Text
@@ -219,7 +219,7 @@ fixForeignKeysAll unEnts = map fixForeignKeys unEnts
              Just pdef ->
                  if length foreignFieldTexts /= length (primaryFields pdef)
                    then lengthError pdef
-                   else let fds_ffs = zipWith (toForeignFields ent pent)
+                   else let fds_ffs = zipWith (toForeignFields pent)
                                 foreignFieldTexts
                                 (primaryFields pdef)
                         in  fdef { foreignFields = map snd fds_ffs
@@ -241,7 +241,7 @@ fixForeignKeysAll unEnts = map fixForeignKeys unEnts
                    ++ show (map (unHaskellName . fieldHaskell) (fd:fds))
         isNull = (NotNullable /=) . nullable . fieldAttrs
 
-        toForeignFields ent pent fieldText pfd =
+        toForeignFields pent fieldText pfd =
            case chktypes fd haskellField (entityFields pent) pfh of
                Just err -> error err
                Nothing -> (fd, ((haskellField, fieldDB fd), (pfh, pfdb)))
@@ -252,7 +252,7 @@ fixForeignKeysAll unEnts = map fixForeignKeys unEnts
             (pfh, pfdb) = (fieldHaskell pfd, fieldDB pfd)
 
             chktypes :: FieldDef -> HaskellName -> [FieldDef] -> HaskellName -> Maybe String
-            chktypes ffld fkey pflds pkey =
+            chktypes ffld _fkey pflds pkey =
                 if fieldType ffld == fieldType pfld then Nothing
                   else Just $ "fieldType mismatch: " ++ show (fieldType ffld) ++ ", " ++ show (fieldType pfld)
               where
@@ -261,15 +261,15 @@ fixForeignKeysAll unEnts = map fixForeignKeys unEnts
             entName = entityHaskell ent
             getFd [] t = error $ "foreign key constraint for: " ++ show (unHaskellName entName)
                            ++ " unknown column: " ++ show t
-            getFd (fd:fds) t
-                | fieldHaskell fd == t = fd
-                | otherwise = getFd fds t
+            getFd (f:fs) t
+                | fieldHaskell f == t = f
+                | otherwise = getFd fs t
 
         lengthError pdef = error $ "found " ++ show (length foreignFieldTexts) ++ " fkeys and " ++ show (length (primaryFields pdef)) ++ " pkeys: fdef=" ++ show fdef ++ " pdef=" ++ show pdef
 
 
 data UnboundEntityDef = UnboundEntityDef
-                        { unboundForeignDefs :: [UnboundForeignDef]
+                        { _unboundForeignDefs :: [UnboundForeignDef]
                         , unboundEntityDef :: EntityDef
                         }
 
@@ -398,8 +398,8 @@ takeUniq ps tableName defs (n:rest)
 takeUniq _ tableName _ xs = error $ "invalid unique constraint on table[" ++ show tableName ++ "] expecting an uppercase constraint name xs=" ++ show xs
 
 data UnboundForeignDef = UnboundForeignDef
-                         { unboundFields :: [Text] -- ^ fields in other entity
-                         , unboundForeignDef :: ForeignDef
+                         { _unboundFields :: [Text] -- ^ fields in other entity
+                         , _unboundForeignDef :: ForeignDef
                          }
 
 takeForeign :: PersistSettings
@@ -407,7 +407,7 @@ takeForeign :: PersistSettings
           -> [FieldDef]
           -> [Text]
           -> UnboundForeignDef
-takeForeign ps tableName defs (refTableName:n:rest)
+takeForeign ps tableName _defs (refTableName:n:rest)
     | not (T.null n) && isLower (T.head n)
         = UnboundForeignDef fields $ ForeignDef
             (HaskellName refTableName)
