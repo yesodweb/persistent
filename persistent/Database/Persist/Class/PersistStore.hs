@@ -67,6 +67,10 @@ class
     insert_ val = insert val >> return ()
 
     -- | Create multiple records in the database.
+    --
+    -- If you don't need the inserted @Key@s,
+    -- use 'insertMany_' (which does not show up on hackage)
+    --
     -- SQL backends currently use the slow default implementation of
     -- @mapM insert@
     insertMany :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
@@ -74,6 +78,7 @@ class
     insertMany = mapM insert
 
     -- | Same as 'insertMany', but doesn't return any @Key@s.
+    --
     -- SQL backends currently use an efficient implementation for this
     -- unlike 'insertMany'.
     insertMany_ :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
