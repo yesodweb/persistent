@@ -159,13 +159,13 @@ instance Lift EntityDefSqlTypeExp where
             $(lift entityHaskell)
             $(lift entityDB)
             $(lift entityID)
-            $(liftTs entityAttrs)
+            $(lift' entityAttrs)
             $(lift (FieldsSqlTypeExp entityFields sqlTypeExps))
             $(lift entityPrimary)
             $(lift entityUniques)
             $(lift entityForeigns)
             $(lift' entityDerives)
-            $(liftMap entityExtra)
+            $(lift' entityExtra)
             $(lift entitySum)
             |]
 
@@ -1239,8 +1239,7 @@ instance Lift EntityDef where
         [|EntityDef
             $(lift entityHaskell)
             $(lift entityDB)
-            $(lift entityIdDB)
-            $(lift' entityIdType)
+            $(lift entityID)
             $(lift' entityAttrs)
             $(lift entityFields)
             $(lift entityPrimary)
