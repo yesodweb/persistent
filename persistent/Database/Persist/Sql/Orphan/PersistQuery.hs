@@ -215,11 +215,9 @@ updateWhereCount filts upds = do
     go'' n Multiply = mconcat [n, "=", n, "*?"]
     go'' n Divide = mconcat [n, "=", n, "/?"]
     go' conn (x, pu) = go'' (connEscapeName conn x) pu
-    go x = (fieldName $ updateField x, updateUpdate x)
+    go x = (updateField x, updateUpdate x)
 
-    updateField :: forall record typ. PersistEntity record
-                => Update record -> EntityField record typ
-    updateField (Update f _ _) = f
+    updateField (Update f _ _) = fieldName f
     updateField _ = error "BackendUpdate not implemented"
 
 fieldName ::  forall record typ.  (PersistEntity record, PersistEntityBackend record ~ Connection) => EntityField record typ -> DBName
@@ -419,6 +417,8 @@ orderClause includeTable conn o =
 
     tn = connEscapeName conn $ entityDB $ entityDef $ dummyFromOrder o
 
+    name :: (PersistEntityBackend record ~ Connection, PersistEntity record)
+         => EntityField record typ -> Text
     name x =
         (if includeTable
             then ((tn <> ".") <>)
