@@ -42,7 +42,10 @@ defaultIdName :: Text
 defaultIdName = "id"
 
 sqlIdName :: EntityDef -> DBName
-sqlIdName = fromMaybe (DBName defaultIdName) . entityIdDB
+sqlIdName ent =
+    if primaryName /= (DBName "") then primaryName else DBName defaultIdName
+  where
+    primaryName = fieldDB (entityId ent)
 
 -- | Class for data types that may be retrived from a 'rawSql'
 -- query.

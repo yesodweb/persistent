@@ -108,11 +108,10 @@ data WhyNullable = ByMaybeAttr
 data EntityDef = EntityDef
     { entityHaskell :: !HaskellName
     , entityDB      :: !DBName
-    , entityIdDB    :: !(Maybe DBName)
-    , entityIdType  :: !(Maybe Text)
+    , entityId      :: !FieldDef
     , entityAttrs   :: ![Attr]
     , entityFields  :: ![FieldDef]
-    , entityPrimary :: Maybe PrimaryDef
+    , entityPrimary :: !(Maybe CompositeDef)
     , entityUniques :: ![UniqueDef]
     , entityForeigns:: ![ForeignDef]
     , entityDerives :: ![Text]
@@ -192,9 +191,9 @@ data UniqueDef = UniqueDef
     }
     deriving (Show, Eq, Read, Ord)
 
-data PrimaryDef = PrimaryDef
-    { primaryFields  :: ![FieldDef]
-    , primaryAttrs   :: ![Attr]
+data CompositeDef = CompositeDef
+    { compositeFields  :: ![FieldDef]
+    , compositeAttrs   :: ![Attr]
     }
     deriving (Show, Eq, Read, Ord)
 

@@ -279,7 +279,7 @@ mkCreateTable isTemp entity (cols, uniqs) =
         , T.drop 1 $ T.concat $ map sqlColumn cols
         , ", PRIMARY KEY "
         , "("
-        , T.intercalate "," $ map (escape . fieldDB) $ primaryFields pdef
+        , T.intercalate "," $ map (escape . fieldDB) $ compositeFields pdef
         , ")"
         , ")"
         ]

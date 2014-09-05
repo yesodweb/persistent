@@ -687,7 +687,7 @@ mkKeyTypeDec mps t = do
     useNewtype = length keyFields < 2
     keyFields = case entityPrimary t of
       Nothing   -> [backendKeyVar]
-      Just pdef -> map primaryKeyVar $ (primaryFields pdef)
+      Just pdef -> map primaryKeyVar $ (compositeFields pdef)
     primaryKeyVar fd = (keyFieldName t fd, NotStrict, ftToType $ fieldType fd)
 
     backendKeyVar = (unKeyName t, NotStrict, backendKeyType)
@@ -733,7 +733,7 @@ mkKeyToValues _mps t = do
   where
     toValuesPrimary pdef =
       ( [VarP recordName]
-      , ListE $ map (\fd -> VarE 'toPersistValue `AppE` (VarE (keyFieldName t fd) `AppE` VarE recordName)) $ primaryFields pdef
+      , ListE $ map (\fd -> VarE 'toPersistValue `AppE` (VarE (keyFieldName t fd) `AppE` VarE recordName)) $ compositeFields pdef
       )
     recordName = mkName "record"
 
@@ -747,7 +747,7 @@ mkKeyFromValues _mps t = do
             e <- [|fmap $(return keyConE) . fromPersistValue . headNote|]
             return $ [normalClause [] e]
         Just pdef ->
-            fromValues t "keyFromValues" keyConE (primaryFields pdef)
+            fromValues t "keyFromValues" keyConE (compositeFields pdef)
     return $ FunD 'keyFromValues clauses
   where
     keyConE = ConE (keyConName t)
@@ -802,19 +802,7 @@ mkEntity mps t = do
     puk <- mkUniqueKeys t
     fkc <- mapM (mkForeignKeysComposite mps t) $ entityForeigns t
 
-    let primaryField = FieldDef
-          { fieldHaskell = HaskellName "Id"
-          -- this should be modeled as a Maybe
-          -- but that sucks for non-ID field
-          -- TODO: use a sumtype FieldDef | IdFieldDef
-          , fieldDB = fromMaybe (DBName "") $ entityIdDB t
-          , fieldType = FTTypeCon Nothing $ keyIdText t
-          , fieldSqlType = maybe SqlInt64 (const $ SqlOther "Primary Key") $ entityPrimary t
-          -- the primary field is actually a reference to the entity
-          , fieldReference = ForeignRef entName
-          , fieldAttrs = []
-          , fieldStrict = True
-          }
+    let primaryField = entityId t
     
     fields <- mapM (mkField mps t) $ primaryField : entityFields t
     toFieldNames <- mkToFieldNames $ entityUniques t
@@ -1233,8 +1221,7 @@ instance Lift EntityDef where
         [|EntityDef
             entityHaskell
             entityDB
-            entityIdDB
-            entityIdType
+            entityId
             entityAttrs
             entityFields
             entityPrimary
@@ -1248,8 +1235,8 @@ instance Lift FieldDef where
     lift (FieldDef a b c d e f g) = [|FieldDef a b c d e f g|]
 instance Lift UniqueDef where
     lift (UniqueDef a b c d) = [|UniqueDef a b c d|]
-instance Lift PrimaryDef where
-    lift (PrimaryDef a b) = [|PrimaryDef a b|]
+instance Lift CompositeDef where
+    lift (CompositeDef a b) = [|CompositeDef a b|]
 instance Lift ForeignDef where
     lift (ForeignDef a b c d e f g) = [|ForeignDef a b c d e f g|]
 

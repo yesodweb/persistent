@@ -14,7 +14,7 @@ import Data.Text (Text, unpack)
 import Data.Monoid (mappend, (<>))
 import Control.Monad.IO.Class
 import Data.ByteString.Char8 (readInteger)
-import Data.Maybe (isJust, fromMaybe)
+import Data.Maybe (isJust)
 import Data.List (find)
 import Control.Monad.Trans.Reader (ReaderT, ask)
 import Data.Acquire (with)
@@ -46,7 +46,7 @@ instance PersistStore Connection where
             go'' n Divide = T.concat [n, "=", n, "/?"]
         let go' (x, pu) = go'' (connEscapeName conn x) pu
         let wher = case entityPrimary t of
-                Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (fieldDB fld) <> "=? ") $ primaryFields pdef
+                Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (fieldDB fld) <> "=? ") $ compositeFields pdef
                 Nothing   -> connEscapeName conn (sqlIdName t) <> "=?"
         let sql = T.concat
                 [ "UPDATE "
@@ -98,7 +98,7 @@ instance PersistStore Connection where
                     case entityPrimary t of
                        Nothing -> error $ "ISRManyKeys is used when Primary is defined " ++ show sql
                        Just pdef -> 
-                            let pks = map fieldHaskell $ primaryFields pdef
+                            let pks = map fieldHaskell $ compositeFields pdef
                                 keyvals = map snd $ filter (\(a, _) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ entityFields t) fs
                             in  case keyFromValues keyvals of
                                     Right k -> return k
@@ -158,7 +158,7 @@ instance PersistStore Connection where
             noColumns :: Bool
             noColumns = null $ entityFields t
         let wher = case entityPrimary t of
-                     Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (fieldDB fld) <> "=? ") $ primaryFields pdef
+                     Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (fieldDB fld) <> "=? ") $ compositeFields pdef
                      Nothing   -> connEscapeName conn (sqlIdName t) <> "=?"
         let sql = T.concat
                 [ "SELECT "
@@ -184,7 +184,7 @@ instance PersistStore Connection where
         t = entityDef $ dummyFromKey k
         wher conn = 
               case entityPrimary t of
-                Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (fieldDB fld) <> "=? ") $ primaryFields pdef
+                Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (fieldDB fld) <> "=? ") $ compositeFields pdef
                 Nothing   -> connEscapeName conn (sqlIdName t) <> "=?"
         sql conn = T.concat
             [ "DELETE FROM "

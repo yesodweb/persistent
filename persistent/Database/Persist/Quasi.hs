@@ -218,11 +218,11 @@ fixForeignKeysAll unEnts = map fixForeignKeys unEnts
         case M.lookup (foreignRefTableHaskell fdef) entLookup of
           Just pent -> case entityPrimary pent of
              Just pdef ->
-                 if length foreignFieldTexts /= length (primaryFields pdef)
+                 if length foreignFieldTexts /= length (compositeFields pdef)
                    then lengthError pdef
                    else let fds_ffs = zipWith (toForeignFields pent)
                                 foreignFieldTexts
-                                (primaryFields pdef)
+                                (compositeFields pdef)
                         in  fdef { foreignFields = map snd fds_ffs
                                  , foreignNullable = setNull $ map fst fds_ffs
                                  }
@@ -266,7 +266,7 @@ fixForeignKeysAll unEnts = map fixForeignKeys unEnts
                 | fieldHaskell f == t = f
                 | otherwise = getFd fs t
 
-        lengthError pdef = error $ "found " ++ show (length foreignFieldTexts) ++ " fkeys and " ++ show (length (primaryFields pdef)) ++ " pkeys: fdef=" ++ show fdef ++ " pdef=" ++ show pdef
+        lengthError pdef = error $ "found " ++ show (length foreignFieldTexts) ++ " fkeys and " ++ show (length (compositeFields pdef)) ++ " pkeys: fdef=" ++ show fdef ++ " pdef=" ++ show pdef
 
 
 data UnboundEntityDef = UnboundEntityDef
@@ -286,16 +286,22 @@ mkEntityDef :: PersistSettings
             -> [Attr] -- ^ entity attributes
             -> [Line] -- ^ indented lines
             -> UnboundEntityDef
-mkEntityDef ps name entattribs lines = UnboundEntityDef foreigns $
+mkEntityDef ps name entattribs lines =
+  UnboundEntityDef foreigns $
     EntityDef
-        (HaskellName name')
+        entName
         (DBName $ getDbName ps name' entattribs)
-        (DBName `fmap` idName)
-        (lookupKeyVal "idType" entattribs)
-        entattribs cols primary uniqs [] derives
+        autoIdField
+        entattribs
+        cols
+        primaryComposite
+        uniqs
+        []
+        derives
         extras
         isSum
   where
+    entName = HaskellName name'
     (isSum, name') =
         case T.uncons name of
             Just ('+', x) -> (True, x)
@@ -311,15 +317,32 @@ mkEntityDef ps name entattribs lines = UnboundEntityDef foreigns $
                                         squish xs m = xs `mappend` maybeToList m
                                     in (squish a a', squish b b', squish c c')) ([],[],[]) attribs
                                     
-    primary = case primarys of 
-                []  -> Nothing 
-                [p] -> Just p
-                _ -> error $ "found more than one primary key in table[" ++ show name' ++ "]"
+    primaryComposite = case primarys of
+        []  -> Nothing
+        [p] -> Just p
+        _ -> error $ "found more than one primary key in table[" ++ show name' ++ "]"
                 
     derives = concat $ mapMaybe takeDerives attribs
 
     cols :: [FieldDef]
     cols = mapMaybe (takeCols ps) attribs
+
+    -- There are 2 kinds of primary
+    -- 1) composite that contains fields that exist in the record
+    -- 2) contains a single field that is auto-generated and put in the Key
+    autoIdField = FieldDef
+          { fieldHaskell = HaskellName "Id"
+          -- this should be modeled as a Maybe
+          -- but that sucks for non-ID field
+          -- TODO: use a sumtype FieldDef | IdFieldDef
+          , fieldDB = DBName $ fromMaybe "" idName
+          , fieldType = FTTypeCon Nothing $ fromMaybe (name' `mappend` "Id") $ lookupKeyVal "idType" entattribs
+          , fieldSqlType = maybe SqlInt64 (const $ SqlOther "Primary Key") primaryComposite
+          -- the primary field is actually a reference to the entity
+          , fieldReference = ForeignRef entName
+          , fieldAttrs = []
+          , fieldStrict = True
+          }
 
 splitExtras :: [Line] -> ([[Text]], M.Map Text [[Text]])
 splitExtras [] = ([], M.empty)
@@ -362,7 +385,7 @@ takeConstraint :: PersistSettings
           -> Text
           -> [FieldDef]
           -> [Text]
-          -> (Maybe PrimaryDef, Maybe UniqueDef, Maybe UnboundForeignDef)
+          -> (Maybe CompositeDef, Maybe UniqueDef, Maybe UnboundForeignDef)
 takeConstraint ps tableName defs (n:rest) | not (T.null n) && isUpper (T.head n) = takeConstraint' 
     where takeConstraint' 
             | n == "Primary" = (Just $ takePrimary defs rest, Nothing, Nothing)
@@ -373,9 +396,9 @@ takeConstraint _ _ _ _ = (Nothing, Nothing, Nothing)
     
 takePrimary :: [FieldDef]
             -> [Text]
-            -> PrimaryDef
+            -> CompositeDef
 takePrimary fields pkcols
-        = PrimaryDef
+        = CompositeDef
             (map (getDef fields) pkcols)
             attrs
   where
