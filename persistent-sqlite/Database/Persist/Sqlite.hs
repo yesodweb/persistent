@@ -209,20 +209,20 @@ migrate' allDefs getter val = do
 safeToRemove :: EntityDef -> DBName -> Bool
 safeToRemove def (DBName colName)
     = any (elem "SafeToRemove" . fieldAttrs)
-    $ filter ((== (DBName colName)) . fieldDB)
+    $ filter ((== DBName colName) . fieldDB)
     $ entityFields def
 
 getCopyTable :: [EntityDef]
              -> (Text -> IO Statement)
              -> EntityDef
              -> IO [(Bool, Text)]
-getCopyTable allDefs getter val = do
+getCopyTable allDefs getter def = do
     stmt <- getter $ T.concat [ "PRAGMA table_info(", escape table, ")" ]
     oldCols' <- with (stmtQuery stmt []) ($$ getCols)
     let oldCols = map DBName $ filter (/= "id") oldCols' -- need to update for table id attribute ?
     let newCols = filter (not . safeToRemove def) $ map cName cols
     let common = filter (`elem` oldCols) newCols
-    let id_ = entityID val
+    let id_ = sqlIdName def
     return [ (False, tmpSql)
            , (False, copyToTemp $ id_ : common)
            , (common /= filter (not . safeToRemove def) oldCols, dropOld)
@@ -231,8 +231,6 @@ getCopyTable allDefs getter val = do
            , (False, dropTmp)
            ]
   where
-
-    def = val
     getCols = do
         x <- CL.head
         case x of
@@ -243,7 +241,7 @@ getCopyTable allDefs getter val = do
             Just y -> error $ "Invalid result from PRAGMA table_info: " ++ show y
     table = entityDB def
     tableTmp = DBName $ unDBName table <> "_backup"
-    (cols, uniqs, _) = mkColumns allDefs val
+    (cols, uniqs, _) = mkColumns allDefs def
     cols' = filter (not . safeToRemove def . cName) cols
     newSql = mkCreateTable False def (cols', uniqs)
     tmpSql = mkCreateTable True def { entityDB = tableTmp } (cols', uniqs)
@@ -281,7 +279,7 @@ mkCreateTable isTemp entity (cols, uniqs) =
         , T.drop 1 $ T.concat $ map sqlColumn cols
         , ", PRIMARY KEY "
         , "("
-        , T.intercalate "," $ map (escape . fieldDB) $ primaryFields pdef
+        , T.intercalate "," $ map (escape . fieldDB) $ compositeFields pdef
         , ")"
         , ")"
         ]
@@ -291,12 +289,20 @@ mkCreateTable isTemp entity (cols, uniqs) =
         , " TABLE "
         , escape $ entityDB entity
         , "("
-        , escape $ entityID entity
-        , " INTEGER PRIMARY KEY"
+        , escape $ sqlIdName entity
+        , " "
+        , showSqlType $ fieldSqlType $ entityId entity
+        ," PRIMARY KEY"
+        , mayDefault $ defaultAttribute $ fieldAttrs $ entityId entity
         , T.concat $ map sqlColumn cols
         , T.concat $ map sqlUnique uniqs
         , ")"
         ]
+
+mayDefault :: Maybe Text -> Text
+mayDefault def = case def of
+    Nothing -> ""
+    Just d -> " DEFAULT " <> d
 
 sqlColumn :: Column -> Text
 sqlColumn (Column name isNull typ def _cn _maxLen ref) = T.concat
@@ -305,9 +311,7 @@ sqlColumn (Column name isNull typ def _cn _maxLen ref) = T.concat
     , " "
     , showSqlType typ
     , if isNull then " NULL" else " NOT NULL"
-    , case def of
-        Nothing -> ""
-        Just d -> " DEFAULT " <> d
+    , mayDefault def
     , case ref of
         Nothing -> ""
         Just (table, _) -> " REFERENCES " <> escape table

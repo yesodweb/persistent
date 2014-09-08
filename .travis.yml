@@ -8,8 +8,8 @@ install:
 script:
     - mega-sdist --test
     - cd persistent-test
-    - rm -f dist/build/Database/Persist/Sqlite.o
-    - cabal install --enable-tests --force-reinstalls
+    - cabal install -j --only-dep --enable-tests --force-reinstalls
+    - cabal test
 
 services:
     - redis-server

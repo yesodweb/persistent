@@ -108,10 +108,9 @@ data WhyNullable = ByMaybeAttr
 data EntityDef = EntityDef
     { entityHaskell :: !HaskellName
     , entityDB      :: !DBName
-    , entityID      :: !DBName
+    , entityId      :: !FieldDef
     , entityAttrs   :: ![Attr]
     , entityFields  :: ![FieldDef]
-    , entityPrimary :: Maybe PrimaryDef
     , entityUniques :: ![UniqueDef]
     , entityForeigns:: ![ForeignDef]
     , entityDerives :: ![Text]
@@ -119,6 +118,11 @@ data EntityDef = EntityDef
     , entitySum     :: !Bool
     }
     deriving (Show, Eq, Read, Ord)
+
+entityPrimary :: EntityDef -> Maybe CompositeDef
+entityPrimary t = case fieldReference (entityId t) of
+    CompositeRef c -> Just c
+    _ -> Nothing
 
 type ExtraLine = [Text]
 
@@ -141,15 +145,23 @@ data FieldDef = FieldDef
     , fieldDB        :: !DBName
     , fieldType      :: !FieldType
     , fieldSqlType   :: !SqlType
-    , fieldAttrs     :: ![Attr]   -- ^ user annotations for a field
+    , fieldAttrs     :: ![Attr]    -- ^ user annotations for a field
     , fieldStrict    :: !Bool      -- ^ a strict field in the data type. Default: true
     , fieldReference :: !ReferenceDef
     }
     deriving (Show, Eq, Read, Ord)
 
-data ReferenceDef = ForeignRef !HaskellName
+
+-- | There are 3 kinds of references
+-- 1) composite (to fields that exist in the record)
+-- 2) single field
+-- 3) embedded
+--
+-- embedding isn't really a reference
+data ReferenceDef = NoReference
+                  | ForeignRef !HaskellName !FieldType -- ^ A ForeignRef has a late binding to the EntityDef it references via HaskellName and has the Haskell type of the foreign key in the form of FieldType
                   | EmbedRef EmbedEntityDef
-                  | NoReference
+                  | CompositeRef CompositeDef
                   deriving (Show, Eq, Read, Ord)
 
 -- | An EmbedEntityDef is the same as an EntityDef
@@ -191,9 +203,9 @@ data UniqueDef = UniqueDef
     }
     deriving (Show, Eq, Read, Ord)
 
-data PrimaryDef = PrimaryDef
-    { primaryFields  :: ![FieldDef]
-    , primaryAttrs   :: ![Attr]
+data CompositeDef = CompositeDef
+    { compositeFields  :: ![FieldDef]
+    , compositeAttrs   :: ![Attr]
     }
     deriving (Show, Eq, Read, Ord)
 
