@@ -16,8 +16,6 @@ import Database.Persist.Sqlite
 import Database.Persist.TH
 #if defined(WITH_POSTGRESQL)
 import Database.Persist.Postgresql
-#elif defined(WITH_MYSQL)
-import Database.Persist.MySQL
 #endif
 import Data.Char (generalCategory, GeneralCategory(..))
 import qualified Data.Text as T

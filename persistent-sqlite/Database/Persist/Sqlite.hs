@@ -30,12 +30,14 @@ import Control.Monad (mzero)
 import Data.Aeson
 import qualified Data.Text as T
 import Data.Conduit
+import qualified Data.List as L
 import qualified Data.Conduit.List as CL
 import Control.Applicative
 import Data.Int (Int64)
 import Data.Monoid ((<>))
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
+import Data.Maybe (fromMaybe)
 
 createSqlitePool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m) => Text -> Int -> m ConnectionPool
 createSqlitePool s = createSqlPool $ open' s
@@ -290,11 +292,21 @@ mkCreateTable isTemp entity (cols, uniqs) =
         , escape $ entityDB entity
         , "("
         , escape $ sqlIdName entity
-        , " INTEGER PRIMARY KEY"
+        , " "
+        , showSqlType $ fieldSqlType $ entityId entity
+        ," PRIMARY KEY"
+        , mayDefault $ defaultAttribute $ fieldAttrs $ entityId entity
         , T.concat $ map sqlColumn cols
         , T.concat $ map sqlUnique uniqs
         , ")"
         ]
+  where
+    idErrMsg = "Sqlite.hs mkCreateTable: could not find id column: " ++ show cols
+
+mayDefault :: Maybe Text -> Text
+mayDefault def = case def of
+    Nothing -> ""
+    Just d -> " DEFAULT " <> d
 
 sqlColumn :: Column -> Text
 sqlColumn (Column name isNull typ def _cn _maxLen ref) = T.concat
@@ -303,9 +315,7 @@ sqlColumn (Column name isNull typ def _cn _maxLen ref) = T.concat
     , " "
     , showSqlType typ
     , if isNull then " NULL" else " NOT NULL"
-    , case def of
-        Nothing -> ""
-        Just d -> " DEFAULT " <> d
+    , mayDefault def
     , case ref of
         Nothing -> ""
         Just (table, _) -> " REFERENCES " <> escape table

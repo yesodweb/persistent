@@ -3,6 +3,7 @@
 -- | Intended for creating new backends.
 module Database.Persist.Sql.Internal
     ( mkColumns
+    , defaultAttribute
     ) where
 
 import Database.Persist.Types
@@ -12,6 +13,12 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Monoid (mappend, mconcat)
 import Database.Persist.Sql.Types
+
+defaultAttribute :: [Attr] -> Maybe Text
+defaultAttribute [] = Nothing
+defaultAttribute (a:as)
+    | Just d <- T.stripPrefix "default=" a = Just d
+    | otherwise = defaultAttribute as
 
 -- | Create the list of columns for the given entity.
 mkColumns :: [EntityDef] -> EntityDef -> ([Column], [UniqueDef], [ForeignDef])
@@ -30,16 +37,10 @@ mkColumns allDefs t =
             (fieldDB fd)
             (nullable (fieldAttrs fd) /= NotNullable || entitySum t)
             (fieldSqlType fd)
-            (def $ fieldAttrs fd)
+            (defaultAttribute $ fieldAttrs fd)
             Nothing
             (maxLen $ fieldAttrs fd)
             (ref (fieldDB fd) (fieldReference fd) (fieldAttrs fd))
-
-    def :: [Attr] -> Maybe Text
-    def [] = Nothing
-    def (a:as)
-        | Just d <- T.stripPrefix "default=" a = Just d
-        | otherwise = def as
 
     maxLen :: [Attr] -> Maybe Integer
     maxLen [] = Nothing
@@ -56,7 +57,7 @@ mkColumns allDefs t =
         -> [Attr]
         -> Maybe (DBName, DBName) -- table name, constraint name
     ref c fe []
-        | ForeignRef f <- fe =
+        | ForeignRef f _ <- fe =
             Just (resolveTableName allDefs f, refName tn c)
         | otherwise = Nothing
     ref _ _ ("noreference":_) = Nothing

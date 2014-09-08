@@ -123,13 +123,13 @@ stripId _ = Nothing
 
 foreignReference :: FieldDef -> Maybe HaskellName
 foreignReference field = case fieldReference field of
-    ForeignRef ref -> Just ref
+    ForeignRef ref _ -> Just ref
     _              -> Nothing
 
 
 -- fieldSqlType at parse time can be an Exp
 -- This helps delay setting fieldSqlType until lift time
-data EntityDefSqlTypeExp = EntityDefSqlTypeExp EntityDef [SqlTypeExp]
+data EntityDefSqlTypeExp = EntityDefSqlTypeExp EntityDef SqlTypeExp [SqlTypeExp]
                            deriving Show
 
 data SqlTypeExp = SqlTypeExp FieldType
@@ -157,13 +157,17 @@ instance Lift FieldSqlTypeExp where
       [|FieldDef fieldHaskell fieldDB fieldType sqlTypeExp fieldAttrs fieldStrict fieldReference|]
 
 instance Lift EntityDefSqlTypeExp where
-    lift (EntityDefSqlTypeExp ent sqlTypeExps) =
-        [|ent { entityFields = $(lift (FieldsSqlTypeExp (entityFields ent) sqlTypeExps)) } |]
+    lift (EntityDefSqlTypeExp ent sqlTypeExp sqlTypeExps) =
+        [|ent { entityFields = $(lift $ FieldsSqlTypeExp (entityFields ent) sqlTypeExps)
+              , entityId = $(lift $ FieldSqlTypeExp (entityId ent) sqlTypeExp)
+              }
+        |]
 
 instance Lift ReferenceDef where
     lift NoReference = [|NoReference|]
-    lift (ForeignRef name) = [|ForeignRef name|]
+    lift (ForeignRef name ft) = [|ForeignRef name ft|]
     lift (EmbedRef em) = [|EmbedRef em|]
+    lift (CompositeRef cdef) = [|CompositeRef cdef|]
 
 instance Lift EmbedEntityDef where
     lift (EmbedEntityDef name fields) = [|EmbedEntityDef name fields|]
@@ -186,7 +190,10 @@ setEmbedField allEntities field = field
           Nothing -> case stripId $ fieldType field of
               Nothing -> NoReference
               Just name -> if M.member (HaskellName name) allEntities
-                  then ForeignRef $ HaskellName name
+                  then ForeignRef (HaskellName name)
+                                  -- the EmebedEntityDef does not contain FieldType information
+                                  -- but we shouldn't need this anyway
+                                  (FTTypeCon Nothing "Int64")
                   else NoReference
           Just em -> EmbedRef em
       existing@_   -> existing
@@ -194,6 +201,7 @@ setEmbedField allEntities field = field
 
 mkEntityDefSqlTypeExp :: EntityMap -> EntityDef -> EntityDefSqlTypeExp
 mkEntityDefSqlTypeExp allEntities ent = EntityDefSqlTypeExp ent
+    (getSqlType $ entityId ent)
     $ (map getSqlType $ entityFields ent)
   where
     getSqlType field = maybe
@@ -206,21 +214,21 @@ mkEntityDefSqlTypeExp allEntities ent = EntityDefSqlTypeExp ent
     -- We just use SqlString, as the data will be serialized to JSON.
     defaultSqlTypeExp field
         | isJust (mEmbedded allEntities ftype) = SqlType' SqlString
-        | isReference = SqlType' SqlInt64
-        | otherwise =
-            case ftype of
-                -- In the case of lists, we always serialize to a string
-                -- value (via JSON).
-                --
-                -- Normally, this would be determined automatically by
-                -- SqlTypeExp. However, there's one corner case: if there's
-                -- a list of entity IDs, the datatype for the ID has not
-                -- yet been created, so the compiler will fail. This extra
-                -- clause works around this limitation.
-                FTList _ -> SqlType' SqlString
-                _ -> SqlTypeExp ftype
+        | otherwise = case fieldReference field of
+            ForeignRef _ ft  -> SqlTypeExp ft
+            CompositeRef _  -> SqlType' $ SqlOther "Composite Reference"
+            _ -> case ftype of
+                    -- In the case of lists, we always serialize to a string
+                    -- value (via JSON).
+                    --
+                    -- Normally, this would be determined automatically by
+                    -- SqlTypeExp. However, there's one corner case: if there's
+                    -- a list of entity IDs, the datatype for the ID has not
+                    -- yet been created, so the compiler will fail. This extra
+                    -- clause works around this limitation.
+                    FTList _ -> SqlType' SqlString
+                    _ -> SqlTypeExp ftype
       where
-        isReference = isJust (foreignReference field)
         ftype = fieldType field
 
 -- | Create data types and appropriate 'PersistEntity' instances for the given
@@ -433,12 +441,10 @@ genericDataType mps (HaskellName typ') backend
 idType :: MkPersistSettings -> FieldDef -> Maybe Name -> Type
 idType mps fd mbackend =
     case foreignReference fd of
-        Just typ' ->
+        Just typ ->
             ConT ''Key
-            `AppT` genericDataType mps typ' (VarT $ fromMaybe backendName mbackend)
-        Nothing -> ftToType typ
-  where
-    typ = fieldType fd
+            `AppT` genericDataType mps typ (VarT $ fromMaybe backendName mbackend)
+        Nothing -> ftToType $ fieldType fd
 
 degen :: [Clause] -> [Clause]
 degen [] =
@@ -686,11 +692,15 @@ mkKeyTypeDec mps t = do
 
     useNewtype = length keyFields < 2
     keyFields = case entityPrimary t of
-      Nothing   -> [backendKeyVar]
       Just pdef -> map primaryKeyVar $ (compositeFields pdef)
-    primaryKeyVar fd = (keyFieldName t fd, NotStrict, ftToType $ fieldType fd)
+      -- TODO: an ADT for the entityId
+      Nothing   -> if fieldType (entityId t) == FTTypeCon Nothing (keyIdText t)
+        then [idKeyVar backendKeyType]
+        else [idKeyVar $ ftToType $ fieldType $ entityId t]
 
-    backendKeyVar = (unKeyName t, NotStrict, backendKeyType)
+    primaryKeyVar fd = (keyFieldName t fd, NotStrict, ftToType $ fieldType fd)
+    idKeyVar ft = (unKeyName t, NotStrict, ft)
+
     backendKeyType
         | mpsGeneric mps = ConT ''BackendKey `AppT` backendT
         | otherwise      = ConT ''BackendKey `AppT` mpsBackend mps
@@ -720,7 +730,7 @@ keyText :: EntityDef -> Text
 keyText t = unHaskellName (entityHaskell t) ++ "Key"
 
 keyFieldName :: EntityDef -> FieldDef -> Name
-keyFieldName t fd = mkName $ unpack $ lowerFirst (keyText t) `mappend` (unDBName $ fieldDB fd)
+keyFieldName t fd = mkName $ unpack $ lowerFirst (keyText t) `mappend` (unHaskellName $ fieldHaskell fd)
 
 mkKeyToValues :: MkPersistSettings -> EntityDef -> Q Dec
 mkKeyToValues _mps t = do
@@ -792,7 +802,6 @@ fromValues t funName conE fields = do
 mkEntity :: MkPersistSettings -> EntityDef -> Q [Dec]
 mkEntity mps t = do
     t' <- lift t
-    let entName = entityHaskell t
     let nameT = unHaskellName entName
     let nameS = unpack nameT
     let clazz = ConT ''PersistEntity `AppT` genericDataType mps entName backendT
@@ -841,7 +850,7 @@ mkEntity mps t = do
         , DataInstD
             []
             ''EntityField
-            [ genericDataType mps entName backendT
+            [ genDataType
             , VarT $ mkName "typ"
             ]
             (map fst fields)
@@ -851,16 +860,19 @@ mkEntity mps t = do
             ''PersistEntityBackend
 #if MIN_VERSION_template_haskell(2,9,0)
             (TySynEqn
-               [genericDataType mps entName backendT]
+               [genDataType]
                (backendDataType mps))
 #else
-            [genericDataType mps entName backendT]
+            [genDataType]
             (backendDataType mps)
 #endif
         , FunD 'persistIdField [normalClause [] (ConE $ keyIdName t)]
         , FunD 'fieldLens lensClauses
         ]
       ] `mappend` lenses) `mappend` keyInstanceDecs
+  where
+    genDataType = genericDataType mps entName backendT
+    entName = entityHaskell t
 
 entityText :: EntityDef -> Text
 entityText = unHaskellName . entityHaskell
@@ -1023,9 +1035,9 @@ mkDeleteCascade mps defs = do
         getDeps' :: FieldDef -> [Dep]
         getDeps' field@FieldDef {..} =
             case foreignReference field of
-                Just f ->
+                Just name ->
                      return Dep
-                        { depTarget = f
+                        { depTarget = name
                         , depSourceTable = entityHaskell def
                         , depSourceField = fieldHaskell
                         , depSourceNull  = nullable fieldAttrs
@@ -1224,7 +1236,6 @@ instance Lift EntityDef where
             entityId
             entityAttrs
             entityFields
-            entityPrimary
             entityUniques
             entityForeigns
             entityDerives

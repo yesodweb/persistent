@@ -285,7 +285,7 @@ migrate' connectInfo allDefs getter val = do
       ([], [], _) -> do
         let idtxt = case entityPrimary val of
                 Just pdef -> concat [" PRIMARY KEY (", intercalate "," $ map (escapeDBName . fieldDB) $ compositeFields pdef, ")"]
-                Nothing   -> concat [escapeDBName $ entityID val, " BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY"]
+                Nothing   -> concat [escapeDBName $ fieldDB $ entityId val, " BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY"]
 
         let addTable = AddTable $ concat
                             -- Lower case e: see Database.Persist.Sql.Migration
@@ -344,7 +344,7 @@ addReference allDefs fkeyname reftable cname = AddReference reftable fkeyname [c
                          ++ " (allDefs = " ++ show allDefs ++ ")")
                   id $ do
                     entDef <- find ((== reftable) . entityDB) allDefs
-                    return (entityID entDef)
+                    return (fieldDB $ entityId entDef)
 
 data AlterColumn = Change Column
                  | Add' Column
@@ -422,7 +422,7 @@ getColumns connectInfo getter def = do
   where
     vals = [ PersistText $ pack $ MySQL.connectDatabase connectInfo
            , PersistText $ unDBName $ entityDB def
-           , PersistText $ unDBName $ entityID def ]
+           , PersistText $ unDBName $ fieldDB $ entityId def ]
 
     helperClmns = CL.mapM getIt =$ CL.consume
         where

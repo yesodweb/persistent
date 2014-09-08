@@ -25,55 +25,56 @@ import Control.Arrow ((&&&))
 import qualified Data.Map as M
 import Data.List (foldl')
 import Data.Monoid (mappend)
-import Control.Monad (msum)
+import Control.Monad (msum, mplus)
 
-data ParseState a = PSDone | PSFail | PSSuccess a Text
+data ParseState a = PSDone | PSFail String | PSSuccess a Text deriving Show
 
-parseFieldType :: Text -> Maybe FieldType
+parseFieldType :: Text -> Either String FieldType
 parseFieldType t0 =
-    case go t0 of
+    case parseApplyFT t0 of
         PSSuccess ft t'
-            | T.all isSpace t' -> Just ft
-        _ -> Nothing
+            | T.all isSpace t' -> Right ft
+        PSFail err -> Left $ "PSFail " ++ err
+        other -> Left $ show other
   where
-    go t =
+    parseApplyFT t =
         case goMany id t of
             PSSuccess (ft:fts) t' -> PSSuccess (foldl' FTApp ft fts) t'
-            PSSuccess [] _ -> PSFail
-            PSFail -> PSFail
+            PSSuccess [] _ -> PSFail "empty"
+            PSFail err -> PSFail err
             PSDone -> PSDone
-    go1 t =
+
+    parseEnclosed :: Char -> (FieldType -> FieldType) -> Text -> ParseState FieldType
+    parseEnclosed end ftMod t =
+      let (a, b) = T.break (== end) t
+      in case parseApplyFT a of
+          PSSuccess ft t' -> case (T.dropWhile isSpace t', T.uncons b) of
+              ("", Just (c, t'')) | c == end -> PSSuccess (ftMod ft) (t'' `mappend` t')
+              (x, y) -> PSFail $ show (b, x, y)
+          x -> PSFail $ show x
+
+    parse1 t =
         case T.uncons t of
             Nothing -> PSDone
             Just (c, t')
-                | isSpace c -> go1 $ T.dropWhile isSpace t'
-                | c == '(' ->
-                    case go t' of
-                        PSSuccess ft t'' ->
-                            case T.uncons $ T.dropWhile isSpace t'' of
-                                Just (')', t''') -> PSSuccess ft t'''
-                                _ -> PSFail
-                        _ -> PSFail
-                | c == '[' ->
-                    case go t' of
-                        PSSuccess ft t'' ->
-                            case T.uncons $ T.dropWhile isSpace t'' of
-                                Just (']', t''') -> PSSuccess (FTList ft) t'''
-                                _ -> PSFail
-                        _ -> PSFail
+                | isSpace c -> parse1 $ T.dropWhile isSpace t'
+                | c == '(' -> parseEnclosed ')' id t'
+                | c == '[' -> parseEnclosed ']' FTList t'
                 | isUpper c ->
                     let (a, b) = T.break (\x -> isSpace x || x `elem` "()[]") t
                      in PSSuccess (getCon a) b
-                | otherwise -> PSFail
+                | otherwise -> PSFail $ show (c, t')
     getCon t =
         case T.breakOnEnd "." t of
             (_, "") -> FTTypeCon Nothing t
             ("", _) -> FTTypeCon Nothing t
             (a, b) -> FTTypeCon (Just $ T.init a) b
     goMany front t =
-        case go1 t of
+        case parse1 t of
             PSSuccess x t' -> goMany (front . (x:)) t'
-            _ -> PSSuccess (front []) t
+            PSFail err -> PSFail err
+            PSDone -> PSSuccess (front []) t
+            -- _ -> 
 
 data PersistSettings = PersistSettings
     { psToDBName :: !(Text -> Text)
@@ -291,10 +292,9 @@ mkEntityDef ps name entattribs lines =
     EntityDef
         entName
         (DBName $ getDbName ps name' entattribs)
-        autoIdField
+        (setComposite primaryComposite $ fromMaybe autoIdField idField)
         entattribs
         cols
-        primaryComposite
         uniqs
         []
         derives
@@ -308,41 +308,54 @@ mkEntityDef ps name entattribs lines =
             _ -> (False, name)
     (attribs, extras) = splitExtras lines
 
-    attribPrefix = flip lookupPrefix entattribs
-    idName | Just _ <- attribPrefix "id=" = error "id= is deprecated, used idName="
-           | otherwise = attribPrefix "idName="
+    attribPrefix = flip lookupKeyVal entattribs
+    idName | Just _ <- attribPrefix "id" = error "id= is deprecated, ad a field named 'Id' and use sql="
+           | otherwise = Nothing
             
-    (primarys, uniqs, foreigns) = foldl' (\(a,b,c) attr -> 
-                                    let (a',b',c') = takeConstraint ps name' cols attr 
-                                        squish xs m = xs `mappend` maybeToList m
-                                    in (squish a a', squish b b', squish c c')) ([],[],[]) attribs
+    (idField, primaryComposite, uniqs, foreigns) = foldl' (\(mid, mp, us, fs) attr -> 
+        let (i, p, u, f) = takeConstraint ps name' cols attr 
+            squish xs m = xs `mappend` maybeToList m
+        in (just1 mid i, just1 mp p, squish us u, squish fs f)) (Nothing, Nothing, [],[]) attribs
                                     
-    primaryComposite = case primarys of
-        []  -> Nothing
-        [p] -> Just p
-        _ -> error $ "found more than one primary key in table[" ++ show name' ++ "]"
-                
     derives = concat $ mapMaybe takeDerives attribs
 
     cols :: [FieldDef]
-    cols = mapMaybe (takeCols ps) attribs
+    cols = mapMaybe (takeColsEx ps) attribs
 
-    -- There are 2 kinds of primary
-    -- 1) composite that contains fields that exist in the record
-    -- 2) contains a single field that is auto-generated and put in the Key
-    autoIdField = FieldDef
-          { fieldHaskell = HaskellName "Id"
-          -- this should be modeled as a Maybe
-          -- but that sucks for non-ID field
-          -- TODO: use a sumtype FieldDef | IdFieldDef
-          , fieldDB = DBName $ fromMaybe "" idName
-          , fieldType = FTTypeCon Nothing $ fromMaybe (name' `mappend` "Id") $ lookupKeyVal "idType" entattribs
-          , fieldSqlType = maybe SqlInt64 (const $ SqlOther "Primary Key") primaryComposite
-          -- the primary field is actually a reference to the entity
-          , fieldReference = ForeignRef entName
-          , fieldAttrs = []
-          , fieldStrict = True
-          }
+    autoIdField = mkAutoIdField entName (DBName `fmap` idName) idSqlType
+    idSqlType = maybe SqlInt64 (const $ SqlOther "Primary Key") primaryComposite
+
+    setComposite Nothing fd = fd
+    setComposite (Just c) fd = fd { fieldReference = CompositeRef c }
+
+
+just1 :: (Show x) => Maybe x -> Maybe x -> Maybe x
+just1 (Just x) (Just y) = error $ "expected only one of: "
+  `mappend` show x `mappend` " " `mappend` show y
+just1 x y = x `mplus` y
+                
+
+-- There are 2 kinds of primary
+-- 1) composite that contains fields that exist in the record
+-- 2) contains a single field that is auto-generated and put in the Key
+mkAutoIdField :: HaskellName -> Maybe DBName -> SqlType -> FieldDef
+mkAutoIdField entName idName idSqlType = FieldDef
+      { fieldHaskell = HaskellName "Id"
+      -- this should be modeled as a Maybe
+      -- but that sucks for non-ID field
+      -- TODO: use a sumtype FieldDef | IdFieldDef
+      , fieldDB = fromMaybe (DBName "") idName
+      , fieldType = FTTypeCon Nothing $ keyConName $ unHaskellName entName
+      , fieldSqlType = idSqlType
+      -- the primary field is actually a reference to the entity
+      , fieldReference = ForeignRef entName (FTTypeCon Nothing "Int64")
+      , fieldAttrs = []
+      , fieldStrict = True
+      }
+
+keyConName :: Text -> Text
+keyConName entName = entName `mappend` "Id"
+
 
 splitExtras :: [Line] -> ([[Text]], M.Map Text [[Text]])
 splitExtras [] = ([], M.empty)
@@ -355,13 +368,16 @@ splitExtras (Line _ ts:rest) =
     let (x, y) = splitExtras rest
      in (ts:x, y)
 
-takeCols :: PersistSettings -> [Text] -> Maybe FieldDef
-takeCols _ ("deriving":_) = Nothing
-takeCols ps (n':typ:rest)
+takeColsEx :: PersistSettings -> [Text] -> Maybe FieldDef
+takeColsEx = takeCols (\ft perr -> error $ "Invalid field type " ++ show ft ++ " " ++ perr)
+
+takeCols :: (Text -> String -> Maybe FieldDef) -> PersistSettings -> [Text] -> Maybe FieldDef
+takeCols _ _ ("deriving":_) = Nothing
+takeCols onErr ps (n':typ:rest)
     | not (T.null n) && isLower (T.head n) =
         case parseFieldType typ of
-            Nothing -> error $ "Invalid field type: " ++ show typ
-            Just ft -> Just FieldDef
+            Left err -> onErr typ err
+            Right ft -> Just FieldDef
                 { fieldHaskell = HaskellName n
                 , fieldDB = DBName $ getDbName ps n rest
                 , fieldType = ft
@@ -375,7 +391,7 @@ takeCols ps (n':typ:rest)
         | Just x <- T.stripPrefix "!" n' = (Just True, x)
         | Just x <- T.stripPrefix "~" n' = (Just False, x)
         | otherwise = (Nothing, n')
-takeCols _ _ = Nothing
+takeCols _ _ _ = Nothing
 
 getDbName :: PersistSettings -> Text -> [Text] -> Text
 getDbName ps n [] = psToDBName ps n
@@ -385,19 +401,44 @@ takeConstraint :: PersistSettings
           -> Text
           -> [FieldDef]
           -> [Text]
-          -> (Maybe CompositeDef, Maybe UniqueDef, Maybe UnboundForeignDef)
+          -> (Maybe FieldDef, Maybe CompositeDef, Maybe UniqueDef, Maybe UnboundForeignDef)
 takeConstraint ps tableName defs (n:rest) | not (T.null n) && isUpper (T.head n) = takeConstraint' 
-    where takeConstraint' 
-            | n == "Primary" = (Just $ takePrimary defs rest, Nothing, Nothing)
-            | n == "Unique"  = (Nothing, Just $ takeUniq ps tableName defs rest, Nothing)
-            | n == "Foreign" = (Nothing, Nothing, Just $ takeForeign ps tableName defs rest)
-            | otherwise      = (Nothing, Just $ takeUniq ps "" defs (n:rest), Nothing) -- retain compatibility with original unique constraint
-takeConstraint _ _ _ _ = (Nothing, Nothing, Nothing)
+    where
+      takeConstraint' 
+            | n == "Unique"  = (Nothing, Nothing, Just $ takeUniq ps tableName defs rest, Nothing)
+            | n == "Foreign" = (Nothing, Nothing, Nothing, Just $ takeForeign ps tableName defs rest)
+            | n == "Primary" = (Nothing, Just $ takeComposite defs rest, Nothing, Nothing)
+            | n == "Id"      = (Just $ takeId ps tableName (n:rest), Nothing, Nothing, Nothing)
+            | otherwise      = (Nothing, Nothing, Just $ takeUniq ps "" defs (n:rest), Nothing) -- retain compatibility with original unique constraint
+takeConstraint _ _ _ _ = (Nothing, Nothing, Nothing, Nothing)
+
+-- TODO: this is hacky (the double takeCols, the setFieldDef stuff, and setIdName.
+-- need to re-work takeCols function
+takeId :: PersistSettings -> Text -> [Text] -> FieldDef
+takeId ps tableName (n:rest) = fromMaybe (error "takeId: impossible!") $ setFieldDef $
+    takeCols (\_ _ -> addDefaultIdType) ps (field:rest `mappend` setIdName)
+  where
+    field = case T.uncons n of
+      Nothing -> error "takeId: empty field"
+      Just (f, ield) -> toLower f `T.cons` ield
+    addDefaultIdType = takeColsEx ps (field : keyCon : rest `mappend` setIdName)
+    setFieldDef = fmap (\fd ->
+      let refFieldType = if fieldType fd == FTTypeCon Nothing keyCon
+              then FTTypeCon Nothing "Int64"
+              else fieldType fd
+      in fd { fieldReference = ForeignRef (HaskellName tableName) $ refFieldType
+            })
+    keyCon = keyConName tableName
+    -- this will be ignored if there is already an existing sql=
+    -- TODO: I think there is a ! ignore syntax that would screw this up
+    setIdName = ["sql="]
+takeId _ tableName _ = error $ "empty Id field for " `mappend` show tableName
+
     
-takePrimary :: [FieldDef]
-            -> [Text]
-            -> CompositeDef
-takePrimary fields pkcols
+takeComposite :: [FieldDef]
+              -> [Text]
+              -> CompositeDef
+takeComposite fields pkcols
         = CompositeDef
             (map (getDef fields) pkcols)
             attrs
