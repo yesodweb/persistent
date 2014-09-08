@@ -120,7 +120,11 @@ instance PersistStore Connection where
                 , T.intercalate "),(" $ replicate (length valss) $ T.intercalate "," $ map (const "?") (entityFields t)
                 , ")"
                 ]
-        rawExecute sql (concat valss)
+
+        -- SQLite support is only in later versions
+        if connRDBMS conn == "sqlite"
+            then mapM_ insert vals
+            else rawExecute sql (concat valss)
       where
         t = entityDef vals
         valss = map (map toPersistValue . toPersistFields) vals
