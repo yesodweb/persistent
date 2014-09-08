@@ -109,6 +109,7 @@ instance PersistStore Connection where
         t = entityDef $ Just val
         vals = map toPersistValue $ toPersistFields val
 
+    insertMany_ [] = return ()
     insertMany_ vals = do
         conn <- ask
         let sql = T.concat
