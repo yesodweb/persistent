@@ -292,6 +292,9 @@ mkEntityDef ps name entattribs lines =
     EntityDef
         entName
         (DBName $ getDbName ps name' entattribs)
+        -- idField is the user-specified Id
+        -- otherwise useAutoIdField
+        -- but, adjust it if the user specified a Primary
         (setComposite primaryComposite $ fromMaybe autoIdField idField)
         entattribs
         cols
@@ -335,9 +338,6 @@ just1 (Just x) (Just y) = error $ "expected only one of: "
 just1 x y = x `mplus` y
                 
 
--- There are 2 kinds of primary
--- 1) composite that contains fields that exist in the record
--- 2) contains a single field that is auto-generated and put in the Key
 mkAutoIdField :: HaskellName -> Maybe DBName -> SqlType -> FieldDef
 mkAutoIdField entName idName idSqlType = FieldDef
       { fieldHaskell = HaskellName "Id"
