@@ -33,7 +33,7 @@ import Data.Bson (genObjectId)
 
 import Control.Monad (liftM, void)
 import Control.Monad.Logger
-import Database.Persist.TH (mkDeleteCascade)
+import Database.Persist.TH (mkDeleteCascade, mkSave)
 import Database.Persist.Sqlite
 import Control.Exception (SomeException)
 import qualified Data.Text as T
@@ -80,7 +80,7 @@ import PersistTestPetCollarType
 #ifdef WITH_MONGODB
 mkPersist persistSettings [persistUpperCase|
 #else
-share [mkPersist persistSettings,  mkMigrate "testMigrate", mkDeleteCascade persistSettings] [persistUpperCase|
+share [mkPersist persistSettings,  mkMigrate "testMigrate", mkDeleteCascade persistSettings, mkSave "_ignoredSave"] [persistUpperCase|
 #endif
 
 -- Dedented comment
