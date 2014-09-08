@@ -832,6 +832,13 @@ specs = describe "persistent" $ do
 
     insert_ $ UnprefixedLeftSum 5
     insert_ $ UnprefixedRightSum "Hello"
+
+  it "IsSqlKey instance" $ db $ do
+    let p = Person "Alice" 30 Nothing
+    key@(PersonKey (SqlBackendKey i)) <- insert p
+    liftIO $ fromSqlKey key `shouldBe` (i :: Int64)
+    mp <- get $ toSqlKey i
+    liftIO $ mp `shouldBe` Just p
 #endif
   
   describe "strictness" $ do

@@ -41,7 +41,7 @@ module Database.Persist.TH
 
 import Prelude hiding ((++), take, concat, splitAt, exp)
 import Database.Persist
-import Database.Persist.Sql (Migration, migrate, SqlBackend, PersistFieldSql)
+import Database.Persist.Sql (Migration, migrate, SqlBackend, PersistFieldSql, IsSqlKey (..))
 import Database.Persist.Quasi
 import Language.Haskell.TH.Lib (varE)
 import Language.Haskell.TH.Quote
@@ -53,7 +53,7 @@ import Data.Text (pack, Text, append, unpack, concat, uncons, cons, stripPrefix,
 import Data.Text.Encoding (decodeUtf8)
 import qualified Data.Text.IO as TIO
 import Data.List (foldl')
-import Data.Maybe (isJust, listToMaybe, mapMaybe, fromMaybe)
+import Data.Maybe (isJust, listToMaybe, mapMaybe, fromMaybe, isNothing)
 import Data.Monoid (mappend, mconcat)
 import Text.Read (readPrec, lexP, step, prec, parens, Lexeme(Ident))
 import qualified Data.Map as M
@@ -631,7 +631,13 @@ mkKeyTypeDec mps t = do
         else if not useNewtype
                then do pfDec <- pfInstD
                        return (pfDec, [''Show, ''Read, ''Eq, ''Ord, ''Generic])
-                else return ([], [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''PersistField, ''PersistFieldSql, ''ToJSON, ''FromJSON])
+                else do
+                    let addIsSqlKey
+                            | mpsBackend mps == ConT ''SqlBackend &&
+                              isNothing (entityPrimary t) =
+                                (''IsSqlKey :)
+                            | otherwise = id
+                    return ([], addIsSqlKey [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''PersistField, ''PersistFieldSql, ''ToJSON, ''FromJSON])
 
     let kd = if useNewtype
                then NewtypeInstD [] k [recordType] dec i
@@ -691,6 +697,10 @@ mkKeyTypeDec mps t = do
               toJSON = toJSON . $(return $ VarE $ unKeyName t)
            instance FromJSON (BackendKey $(pure backendT)) => FromJSON (Key $(pure recordType)) where
               parseJSON = fmap $(return $ ConE $ keyConName t) . parseJSON
+
+           instance IsSqlKey (BackendKey $(pure backendT)) => IsSqlKey (Key $(pure recordType)) where
+              toSqlKey = $(return $ ConE $ keyConName t) . toSqlKey
+              fromSqlKey = fromSqlKey . $(return $ VarE $ unKeyName t)
         |]
 
     useNewtype = length keyFields < 2

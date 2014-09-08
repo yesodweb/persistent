@@ -7,6 +7,7 @@ module Database.Persist.Sql.Orphan.PersistStore (withRawQuery, BackendKey(..)) w
 import Database.Persist
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
+import Database.Persist.Sql.Class (IsSqlKey (..))
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import qualified Data.Text as T
@@ -31,6 +32,10 @@ withRawQuery :: MonadIO m
 withRawQuery sql vals sink = do
     srcRes <- rawQueryRes sql vals
     liftIO $ with srcRes (C.$$ sink)
+
+instance IsSqlKey (BackendKey SqlBackend) where
+    toSqlKey = SqlBackendKey
+    fromSqlKey = unSqlBackendKey
 
 instance PersistStore Connection where
     newtype BackendKey SqlBackend = SqlBackendKey { unSqlBackendKey :: Int64 }
