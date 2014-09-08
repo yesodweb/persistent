@@ -611,6 +611,10 @@ specs = describe "persistent" $ do
           e4 <- await
           e4 @== Nothing
 
+  it "insertMany_ with no arguments" $ db $ do
+    _ <- insertMany_ ([] :: [Person])
+    rows <- count ([] :: [Filter Person])
+    rows @== 0
 
   it "insertBy" $ db $ do
       Right _ <- insertBy $ Person "name" 1 Nothing
