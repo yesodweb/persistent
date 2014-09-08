@@ -16,13 +16,13 @@ import Data.Time (UTCTime)
 import Web.PathPieces
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
+import Control.Monad.Trans.Resource (runResourceT)
 #endif
 #if WITH_POSTGRESQL
 import Database.Persist.Postgresql
 #endif
 import qualified Data.Map as Map
 import qualified Data.Text as T
-import Control.Monad.Trans.Resource (runResourceT)
 
 import Init
 
