@@ -122,7 +122,13 @@ insertSql' ent vals =
     Nothing ->
       ISRInsertGet ins sel
         where
-          sel = "SELECT last_insert_rowid()"
+          sel = T.concat
+              [ "SELECT "
+              , escape $ sqlIdName ent
+              , " FROM "
+              , escape $ entityDB ent
+              , " WHERE _ROWID_=last_insert_rowid()"
+              ]
           ins = T.concat
               [ "INSERT INTO "
               , escape $ entityDB ent

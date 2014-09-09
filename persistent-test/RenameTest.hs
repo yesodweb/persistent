@@ -12,7 +12,7 @@ module RenameTest (specs) where
 
 import Database.Persist.Sqlite
 #ifndef WITH_MONGODB
-import Data.Time (UTCTime)
+import Data.Time (Day)
 import Web.PathPieces
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
@@ -23,14 +23,14 @@ import Database.Persist.Postgresql
 #endif
 import qualified Data.Map as Map
 import qualified Data.Text as T
+import Data.Aeson
 
 import Init
 
-#ifndef WITH_MONGODB
-instance PathPiece UTCTime where
-    toPathPiece = T.pack . show
-    fromPathPiece = read . T.unpack
-#endif
+instance ToJSON Day where
+    toJSON = error "Day.toJSON"
+instance FromJSON Day where
+    parseJSON = error "Day.parseJSON"
 
 -- persistent used to not allow types with an "Id" suffix
 type TextId = Text
@@ -41,7 +41,7 @@ mkPersist persistSettings [persistUpperCase|
 #else
 share [mkPersist sqlSettings, mkMigrate "lowerCaseMigrate"] [persistLowerCase|
 IdTable
-    Id   UTCTime default=CURRENT_TIME
+    Id   Day default=CURRENT_DATE
     name Text
     deriving Eq Show
 #endif

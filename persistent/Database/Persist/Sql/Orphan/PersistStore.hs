@@ -82,15 +82,24 @@ instance PersistStore Connection where
                     rawExecute sql1 vals
                     withRawQuery sql2 [] $ do
                         mm <- CL.head
-                        i <- case mm of
-                            Just [PersistInt64 i] -> return $ i
-                            Just [PersistDouble i] ->return $ truncate i -- oracle need this!
-                            Just [PersistByteString i] -> case readInteger i of -- mssql
-                                                            Just (ret,"") -> return $ fromIntegral ret
-                                                            xs -> error $ "invalid number i["++show i++"] xs[" ++ show xs ++ "]"
-                            Just xs -> error $ "invalid sql2 return xs["++show xs++"] sql2["++show sql2++"] sql1["++show sql1++"]"
-                            Nothing -> error $ "invalid sql2 returned nothing sql2["++show sql2++"] sql1["++show sql1++"]"
-                        case keyFromValues [PersistInt64 i] of
+                        m <- case mm of
+                            Nothing -> error $ "No results from ISRInsertGet: " ++ show (sql1, sql2)
+                            Just x -> return x
+
+                        -- Workarounds for some funny SQL engines
+                        let m' =
+                                case m of
+                                    [PersistDouble i] -> [PersistInt64 $ truncate i] -- oracle need this!
+                                    [PersistByteString i] -> case readInteger i of -- mssql
+                                                            Just (ret,"") -> [PersistInt64 $ fromIntegral ret]
+                                                            xs -> m
+                                    _ -> m
+                            -- Yes, it's just <|>. Older bases don't have the
+                            -- instance for Either.
+                            onLeft Left{} x = x
+                            onLeft x _ = x
+
+                        case keyFromValues m `onLeft` keyFromValues m' of
                             Right k -> return k
                             Left err -> error $ "ISRInsertGet: keyFromValues failed: " `mappend` unpack err
                 ISRManyKeys sql fs -> do
