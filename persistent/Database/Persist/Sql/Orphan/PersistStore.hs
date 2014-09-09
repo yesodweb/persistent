@@ -22,6 +22,7 @@ import Data.Int (Int64)
 import Web.PathPieces (PathPiece)
 import Database.Persist.Sql.Class (PersistFieldSql, defaultIdName, sqlIdName)
 import qualified Data.Aeson as A
+import Control.Exception.Lifted (throwIO)
 
 withRawQuery :: MonadIO m
              => Text
@@ -82,26 +83,25 @@ instance PersistStore Connection where
                     rawExecute sql1 vals
                     withRawQuery sql2 [] $ do
                         mm <- CL.head
-                        m <- case mm of
-                            Nothing -> error $ "No results from ISRInsertGet: " ++ show (sql1, sql2)
-                            Just x -> return x
+                        let m = maybe
+                                  (Left $ "No results from ISRInsertGet: " `mappend` tshow (sql1, sql2))
+                                  Right mm
 
-                        -- Workarounds for some funny SQL engines
-                        let m' =
-                                case m of
-                                    [PersistDouble i] -> [PersistInt64 $ truncate i] -- oracle need this!
+                        -- TODO: figure out something better for MySQL
+                        let convert x =
+                                case x of
                                     [PersistByteString i] -> case readInteger i of -- mssql
                                                             Just (ret,"") -> [PersistInt64 $ fromIntegral ret]
-                                                            xs -> m
-                                    _ -> m
+                                                            _ -> x
+                                    _ -> x
                             -- Yes, it's just <|>. Older bases don't have the
                             -- instance for Either.
                             onLeft Left{} x = x
                             onLeft x _ = x
 
-                        case keyFromValues m `onLeft` keyFromValues m' of
+                        case m >>= (\x -> keyFromValues x `onLeft` keyFromValues (convert x)) of
                             Right k -> return k
-                            Left err -> error $ "ISRInsertGet: keyFromValues failed: " `mappend` unpack err
+                            Left err -> throw $ "ISRInsertGet: keyFromValues failed: " `mappend` err
                 ISRManyKeys sql fs -> do
                     rawExecute sql vals 
                     case entityPrimary t of
@@ -115,6 +115,9 @@ instance PersistStore Connection where
 
         return key
       where
+        tshow :: Show a => a -> Text
+        tshow = T.pack . show
+        throw = liftIO . throwIO . userError . T.unpack
         t = entityDef $ Just val
         vals = map toPersistValue $ toPersistFields val
 
