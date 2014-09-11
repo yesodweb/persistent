@@ -299,6 +299,11 @@ builtinGetters = I.fromList
     , (k PS.uuid,        convertPV (PersistDbSpecific . unUnknown))
     , (k PS.json,        convertPV (PersistByteString . unUnknown))
     , (k PS.unknown,     convertPV (PersistByteString . unUnknown))
+    -- add Inet and Cidr types
+    , (k PS.inet,        convertPV (PersistDbSpecific . unUnknown))
+    , (k PS.cidr,        convertPV (PersistDbSpecific . unUnknown))
+ 
+
 
     -- array types: same order as above
     , (1000,             listOf PersistBool)
