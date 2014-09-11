@@ -1,5 +1,5 @@
 name:            persistent-template
-version:         2.0.2.1
+version:         2.0.2.2
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -28,6 +28,7 @@ library
                    , unordered-containers
                    , tagged
                    , path-pieces
+                   , ghc-prim
     exposed-modules: Database.Persist.TH
     ghc-options:     -Wall
     if impl(ghc >= 7.4)

@@ -1444,10 +1444,12 @@ mkJSON mps def = do
         Just entityJSON -> do
             entityJSONIs <- if mpsGeneric mps
               then [d|
+#if MIN_VERSION_base(4, 6, 0)
                 instance PersistStore backend => ToJSON (Entity $(pure typ)) where
                     toJSON = $(varE (entityToJSON entityJSON))
                 instance PersistStore backend => FromJSON (Entity $(pure typ)) where
                     parseJSON = $(varE (entityFromJSON entityJSON))
+#endif
                 |]
               else [d|
                 instance ToJSON (Entity $(pure typ)) where
