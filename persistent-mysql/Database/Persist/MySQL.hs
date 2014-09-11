@@ -16,6 +16,7 @@ module Database.Persist.MySQL
 
 import Control.Arrow
 import Control.Monad (mzero)
+import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Error (ErrorT(..))
@@ -28,6 +29,7 @@ import Data.IORef
 import Data.List (find, intercalate, sort, groupBy)
 import Data.Text (Text, pack)
 import System.Environment (getEnvironment)
+import Data.Acquire (Acquire, mkAcquire, with)
 
 import Data.Conduit
 import qualified Blaze.ByteString.Builder.Char8 as BBB
@@ -55,7 +57,7 @@ import Control.Monad.Trans.Resource (MonadResource, runResourceT)
 -- The pool is properly released after the action finishes using
 -- it.  Note that you should not use the given 'ConnectionPool'
 -- outside the action since it may be already been released.
-withMySQLPool :: MonadIO m =>
+withMySQLPool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m) =>
                  MySQL.ConnectInfo
               -- ^ Connection information.
               -> Int
@@ -69,7 +71,7 @@ withMySQLPool ci = withSqlPool $ open' ci
 -- | Create a MySQL connection pool.  Note that it's your
 -- responsability to properly close the connection pool when
 -- unneeded.  Use 'withMySQLPool' for automatic resource control.
-createMySQLPool :: MonadIO m =>
+createMySQLPool :: (MonadBaseControl IO m, MonadIO m, MonadLogger m) =>
                    MySQL.ConnectInfo
                 -- ^ Connection information.
                 -> Int
@@ -80,7 +82,7 @@ createMySQLPool ci = createSqlPool $ open' ci
 
 -- | Same as 'withMySQLPool', but instead of opening a pool
 -- of connections, only one connection is opened.
-withMySQLConn :: (MonadBaseControl IO m, MonadIO m) =>
+withMySQLConn :: (MonadBaseControl IO m, MonadIO m, MonadLogger m) =>
                  MySQL.ConnectInfo
               -- ^ Connection information.
               -> (Connection -> m a)
@@ -91,8 +93,8 @@ withMySQLConn = withSqlConn . open'
 
 -- | Internal function that opens a connection to the MySQL
 -- server.
-open' :: MySQL.ConnectInfo -> IO Connection
-open' ci = do
+open' :: MySQL.ConnectInfo -> LogFunc -> IO Connection
+open' ci logFunc = do
     conn <- MySQL.connect ci
     MySQLBase.autocommit conn False -- disable autocommit!
     smap <- newIORef $ Map.empty
@@ -111,8 +113,9 @@ open' ci = do
         -- <http://dev.mysql.com/doc/refman/5.5/en/select.html>
         , connRDBMS      = "mysql"
         , connLimitOffset = decorateSQLWithLimitOffset "LIMIT 18446744073709551615"
+        , connLogFunc    = logFunc
         }
-        
+
 -- | Prepare a query.  We don't support prepared statements, but
 -- we'll do some client-side preprocessing here.
 prepare' :: MySQL.Connection -> Text -> IO Statement
@@ -127,7 +130,7 @@ prepare' conn sql = do
 
 
 -- | SQL code to be executed when inserting an entity.
-insertSql' :: EntityDef SqlType -> [PersistValue] -> InsertSqlResult
+insertSql' :: EntityDef -> [PersistValue] -> InsertSqlResult
 insertSql' ent vals =
   let sql = pack $ concat
                 [ "INSERT INTO "
@@ -149,13 +152,14 @@ execute' conn query vals = MySQL.execute conn query (map P vals)
 
 -- | Execute an statement that does return results.  The results
 -- are fetched all at once and stored into memory.
-withStmt' :: MonadResource m
+withStmt' :: MonadIO m
           => MySQL.Connection
           -> MySQL.Query
           -> [PersistValue]
-          -> Source m [PersistValue]
-withStmt' conn query vals =
-    bracketP createResult MySQLBase.freeResult fetchRows >>= CL.sourceList
+          -> Acquire (Source m [PersistValue])
+withStmt' conn query vals = do
+    result <- mkAcquire createResult MySQLBase.freeResult
+    return $ fetchRows result >>= CL.sourceList
   where
     createResult = do
       -- Execute the query
@@ -197,7 +201,6 @@ instance MySQL.Param P where
     render (P (PersistDay d))         = MySQL.render d
     render (P (PersistTimeOfDay t))   = MySQL.render t
     render (P (PersistUTCTime t))     = MySQL.render t
-    render (P (PersistZonedTime (ZT t))) = MySQL.render $ show t
     render (P PersistNull)            = MySQL.render MySQL.Null
     render (P (PersistList l))        = MySQL.render $ listToJSON l
     render (P (PersistMap m))         = MySQL.render $ mapToJSON m
@@ -267,11 +270,10 @@ getGetter other = error $ "MySQL.getGetter: type " ++
 
 -- | Create the migration plan for the given 'PersistEntity'
 -- @val@.
-migrate' :: Show a
-         => MySQL.ConnectInfo
-         -> [EntityDef a]
+migrate' :: MySQL.ConnectInfo
+         -> [EntityDef]
          -> (Text -> IO Statement)
-         -> EntityDef SqlType
+         -> EntityDef
          -> IO (Either [Text] [(Bool, Text)])
 migrate' connectInfo allDefs getter val = do
     let name = entityDB val
@@ -282,7 +284,7 @@ migrate' connectInfo allDefs getter val = do
       -- Nothing found, create everything
       ([], [], _) -> do
         let idtxt = case entityPrimary val of
-                Just pdef -> concat [" PRIMARY KEY (", intercalate "," $ map (escapeDBName . snd) $ primaryFields pdef, ")"]
+                Just pdef -> concat [" PRIMARY KEY (", intercalate "," $ map (escapeDBName . fieldDB) $ primaryFields pdef, ")"]
                 Nothing   -> concat [escapeDBName $ entityID val, " BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY"]
 
         let addTable = AddTable $ concat
@@ -303,7 +305,7 @@ migrate' connectInfo allDefs getter val = do
               Column { cName=cname, cReference=Just (refTblName, a) } <- newcols
               return $ AlterColumn name (refTblName, addReference allDefs (refName name cname) refTblName cname)
                  
-        let foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\(_,b,_,d) -> (b,d)) (foreignFields fdef)) 
+        let foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef)) 
                                         in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignRefTableDBName fdef) (foreignConstraintNameDBName fdef) childfields parentfields)) fdefs
         
         return $ Right $ map showAlterDb $ addTable : uniques ++ foreigns ++ foreignsAlt
@@ -323,7 +325,7 @@ migrate' connectInfo allDefs getter val = do
 
 
 -- | Find out the type of a column.
-findTypeOfColumn :: Show a => [EntityDef a] -> DBName -> DBName -> (DBName, FieldType)
+findTypeOfColumn :: [EntityDef] -> DBName -> DBName -> (DBName, FieldType)
 findTypeOfColumn allDefs name col =
     maybe (error $ "Could not find type of column " ++
                    show col ++ " on table " ++ show name ++
@@ -335,7 +337,7 @@ findTypeOfColumn allDefs name col =
 
 
 -- | Helper for 'AddRefence' that finds out the 'entityID'.
-addReference :: Show a => [EntityDef a] -> DBName -> DBName -> DBName -> AlterColumn
+addReference :: [EntityDef] -> DBName -> DBName -> DBName -> AlterColumn
 addReference allDefs fkeyname reftable cname = AddReference reftable fkeyname [cname] [id_] 
     where
       id_ = maybe (error $ "Could not find ID of entity " ++ show reftable
@@ -373,7 +375,7 @@ udToPair ud = (uniqueDBName ud, map snd $ uniqueFields ud)
 -- in the database.
 getColumns :: MySQL.ConnectInfo
            -> (Text -> IO Statement)
-           -> EntityDef a
+           -> EntityDef
            -> IO ( [Either Text (Either Column (DBName, [DBName]))] -- ID column
                  , [Either Text (Either Column (DBName, [DBName]))] -- everything else
                  )
@@ -387,7 +389,7 @@ getColumns connectInfo getter def = do
                           \WHERE TABLE_SCHEMA = ? \
                             \AND TABLE_NAME   = ? \
                             \AND COLUMN_NAME  = ?"
-    inter1 <- runResourceT $ stmtQuery stmtIdClmn vals $$ CL.consume
+    inter1 <- with (stmtQuery stmtIdClmn vals) ($$ CL.consume)
     ids <- runResourceT $ CL.sourceList inter1 $$ helperClmns -- avoid nested queries
 
     -- Find out all columns.
@@ -399,7 +401,7 @@ getColumns connectInfo getter def = do
                         \WHERE TABLE_SCHEMA = ? \
                           \AND TABLE_NAME   = ? \
                           \AND COLUMN_NAME <> ?"
-    inter2 <- runResourceT $ stmtQuery stmtClmns vals $$ CL.consume
+    inter2 <- with (stmtQuery stmtClmns vals) ($$ CL.consume)
     cs <- runResourceT $ CL.sourceList inter2 $$ helperClmns -- avoid nested queries
 
     -- Find out the constraints.
@@ -413,7 +415,7 @@ getColumns connectInfo getter def = do
                           \AND REFERENCED_TABLE_SCHEMA IS NULL \
                         \ORDER BY CONSTRAINT_NAME, \
                                  \COLUMN_NAME"
-    us <- runResourceT $ stmtQuery stmtCntrs vals $$ helperCntrs
+    us <- with (stmtQuery stmtCntrs vals) ($$ helperCntrs)
 
     -- Return both
     return (ids, cs ++ us)
@@ -477,7 +479,7 @@ getColumn connectInfo getter tname [ PersistByteString cname
                  , PersistText $ unDBName $ tname
                  , PersistByteString cname
                  , PersistText $ pack $ MySQL.connectDatabase connectInfo ]
-      cntrs <- runResourceT $ stmtQuery stmt vars $$ CL.consume
+      cntrs <- with (stmtQuery stmt vars) ($$ CL.consume)
       ref <- case cntrs of
                [] -> return Nothing
                [[PersistByteString tab, PersistByteString ref, PersistInt64 pos]] ->
@@ -539,7 +541,6 @@ parseType "datetime"   = SqlDayTime
 parseType "date"       = SqlDay
 --parseType "newdate"    = SqlDay
 --parseType "year"       = SqlDay
--- Other
 -}
 parseType b            = SqlOther $ T.decodeUtf8 b
 
@@ -549,8 +550,7 @@ parseType b            = SqlOther $ T.decodeUtf8 b
 
 -- | @getAlters allDefs tblName new old@ finds out what needs to
 -- be changed from @old@ to become @new@.
-getAlters :: Show a
-          => [EntityDef a]
+getAlters :: [EntityDef]
           -> DBName
           -> ([Column], [(DBName, [DBName])])
           -> ([Column], [(DBName, [DBName])])
@@ -587,7 +587,7 @@ getAlters allDefs tblName (c1, u1) (c2, u2) =
 -- | @findAlters newColumn oldColumns@ finds out what needs to be
 -- changed in the columns @oldColumns@ for @newColumn@ to be
 -- supported.
-findAlters :: Show a => DBName -> [EntityDef a] -> Column -> [Column] -> ([AlterColumn'], [Column])
+findAlters :: DBName -> [EntityDef] -> Column -> [Column] -> ([AlterColumn'], [Column])
 findAlters tblName allDefs col@(Column name isNull type_ def defConstraintName maxLen ref) cols =
     case filter ((name ==) . cName) cols of
     -- new fkey that didnt exist before
@@ -648,8 +648,6 @@ showSqlType SqlBlob    (Just i)   _     = "VARBINARY(" ++ show i ++ ")"
 showSqlType SqlBool    _          _     = "TINYINT(1)"
 showSqlType SqlDay     _          _     = "DATE"
 showSqlType SqlDayTime _          _     = "DATETIME"
-showSqlType SqlDayTimeZoned _     True  = "VARCHAR(50) CHARACTER SET utf8"
-showSqlType SqlDayTimeZoned _     False = "VARCHAR(50)"
 showSqlType SqlInt32   _          _     = "INT(11)"
 showSqlType SqlInt64   _          _     = "BIGINT"
 showSqlType SqlReal    _          _     = "DOUBLE"
@@ -801,7 +799,7 @@ instance PersistConfig MySQLConf where
 
     type PersistConfigPool    MySQLConf = ConnectionPool
 
-    createPoolConfig (MySQLConf cs size) = createMySQLPool cs size
+    createPoolConfig (MySQLConf cs size) = runNoLoggingT $ createMySQLPool cs size -- FIXME
 
     runPool _ = runSqlPool
 

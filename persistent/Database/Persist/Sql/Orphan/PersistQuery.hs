@@ -1,4 +1,5 @@
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Database.Persist.Sql.Orphan.PersistQuery
@@ -9,18 +10,14 @@ module Database.Persist.Sql.Orphan.PersistQuery
 
 import Database.Persist
 import Database.Persist.Sql.Types
-import Database.Persist.Sql.Class
 import Database.Persist.Sql.Raw
-import Database.Persist.Sql.Orphan.PersistStore ()
-import Database.Persist.Sql.Internal (convertKey)
+import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
 import qualified Data.Text as T
 import Data.Text (Text)
 import Data.Monoid (Monoid (..), (<>))
 import Data.Int (Int64)
-import Control.Monad.Logger
 import Control.Monad.IO.Class
-import Control.Monad.Trans.Class
-import Control.Monad.Trans.Resource (MonadResource)
+import Control.Monad.Trans.Reader (ReaderT, ask)
 import Control.Exception (throwIO)
 import qualified Data.Conduit.List as CL
 import Data.Conduit
@@ -29,36 +26,9 @@ import Data.Maybe (isJust)
 import Data.List (transpose, inits, find)
 
 -- orphaned instance for convenience of modularity
-instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
-    update _ [] = return ()
-    update k upds = do
-        conn <- askSqlConn
-        let go'' n Assign = n <> "=?"
-            go'' n Add = T.concat [n, "=", n, "+?"]
-            go'' n Subtract = T.concat [n, "=", n, "-?"]
-            go'' n Multiply = T.concat [n, "=", n, "*?"]
-            go'' n Divide = T.concat [n, "=", n, "/?"]
-        let go' (x, pu) = go'' (connEscapeName conn x) pu
-        let composite = isJust $ entityPrimary t
-        let wher = case entityPrimary t of
-                Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (snd fld) <> "=? ") $ primaryFields pdef
-                Nothing   -> connEscapeName conn (entityID t) <> "=?"
-        let sql = T.concat
-                [ "UPDATE "
-                , connEscapeName conn $ entityDB t
-                , " SET "
-                , T.intercalate "," $ map (go' . go) upds
-                , " WHERE "
-                , wher
-                ]
-        rawExecute sql $
-            map updatePersistValue upds `mappend` (convertKey composite k)
-      where
-        t = entityDef $ dummyFromKey k
-        go x = (fieldDB $ updateFieldDef x, updateUpdate x)
-
+instance PersistQuery Connection where
     count filts = do
-        conn <- askSqlConn
+        conn <- ask
         let wher = if null filts
                     then ""
                     else filterClause False conn filts
@@ -67,7 +37,7 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
                 , connEscapeName conn $ entityDB t
                 , wher
                 ]
-        rawQuery sql (getFiltsValues conn filts) $$ do
+        withRawQuery sql (getFiltsValues conn filts) $ do
             mm <- CL.head
             case mm of
               Just [PersistInt64 i] -> return $ fromIntegral i
@@ -80,9 +50,10 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
       where
         t = entityDef $ dummyFromFilts filts
 
-    selectSource filts opts = do
-        conn <- lift askSqlConn
-        rawQuery (sql conn) (getFiltsValues conn filts) $= CL.mapM parse
+    selectSourceRes filts opts = do
+        conn <- ask
+        srcRes <- rawQueryRes (sql conn) (getFiltsValues conn filts)
+        return $ fmap ($= CL.mapM parse) srcRes
       where
         composite = isJust $ entityPrimary t
         (limit, offset, orders) = limitOffsetOrder opts
@@ -90,7 +61,7 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
         parse vals =
           case entityPrimary t of
             Just pdef -> 
-                  let pks = map fst $ primaryFields pdef
+                  let pks = map fieldHaskell $ primaryFields pdef
                       keyvals = map snd $ filter (\(a, _) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ entityFields t) vals
                   in case fromPersistValuesComposite' keyvals vals of
                       Left s -> liftIO $ throwIO $ PersistMarshalError s
@@ -101,20 +72,25 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
                     Right row -> return row
 
         t = entityDef $ dummyFromFilts filts
-        fromPersistValues' (PersistInt64 x:xs) = 
+
+        fromPersistValues' (kpv:xs) = -- oracle returns Double 
             case fromPersistValues xs of
                 Left e -> Left e
-                Right xs' -> Right (Entity (Key $ PersistInt64 x) xs')
-        fromPersistValues' (PersistDouble x:xs) = -- oracle returns Double 
-            case fromPersistValues xs of
-                Left e -> Left e
-                Right xs' -> Right (Entity (Key $ PersistInt64 (truncate x)) xs') -- convert back to int64
+                Right xs' ->
+                    case keyFromValues [kpv] of
+                        Left _ -> error $ "fromPersistValues': keyFromValues failed on " ++ show kpv
+                        Right k -> Right (Entity k xs')
+
+
         fromPersistValues' xs = Left $ T.pack ("error in fromPersistValues' xs=" ++ show xs)
 
         fromPersistValuesComposite' keyvals xs =
             case fromPersistValues xs of
                 Left e -> Left e
-                Right xs' -> Right (Entity (Key $ PersistList keyvals) xs')
+                Right xs' -> case keyFromValues keyvals of
+                    Left _ -> error "fromPersistValuesComposite': keyFromValues failed"
+                    Right key -> Right (Entity key xs')
+
 
         wher conn = if null filts
                     then ""
@@ -135,13 +111,14 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
             , ord conn
             ]
 
-    selectKeys filts opts = do
-        conn <- lift askSqlConn
-        rawQuery (sql conn) (getFiltsValues conn filts) $= CL.mapM parse
+    selectKeysRes filts opts = do
+        conn <- ask
+        srcRes <- rawQueryRes (sql conn) (getFiltsValues conn filts)
+        return $ fmap ($= CL.mapM parse) srcRes
       where
         t = entityDef $ dummyFromFilts filts
         cols conn = case entityPrimary t of 
-                     Just pdef -> T.intercalate "," $ map (connEscapeName conn . snd) $ primaryFields pdef
+                     Just pdef -> T.intercalate "," $ map (connEscapeName conn . fieldDB) $ primaryFields pdef
                      Nothing   -> connEscapeName conn $ entityID t
                       
         wher conn = if null filts
@@ -163,16 +140,22 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
                 [] -> ""
                 ords -> " ORDER BY " <> T.intercalate "," ords
 
-        parse xs = case entityPrimary t of
+        parse xs = do
+            keyvals <- case entityPrimary t of
                       Nothing -> 
                         case xs of
-                           [PersistInt64 x] -> return $ Key $ PersistInt64 x
-                           [PersistDouble x] -> return $ Key $ PersistInt64 (truncate x) -- oracle returns Double 
+                           [PersistInt64 x] -> return [PersistInt64 x]
+                           [PersistDouble x] -> return [PersistInt64 (truncate x)] -- oracle returns Double 
                            _ -> liftIO $ throwIO $ PersistMarshalError $ "Unexpected in selectKeys False: " <> T.pack (show xs)
                       Just pdef -> 
-                           let pks = map fst $ primaryFields pdef
+                           let pks = map fieldHaskell $ primaryFields pdef
                                keyvals = map snd $ filter (\(a, _) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ entityFields t) xs
-                           in return $ Key $ PersistList keyvals
+                           in return keyvals
+            case keyFromValues keyvals of
+                Right k -> return k
+                Left _ -> error "selectKeysImpl: keyFromValues failed"
+
+
 
     deleteWhere filts = do
         _ <- deleteWhereCount filts
@@ -185,11 +168,11 @@ instance (MonadResource m, MonadLogger m) => PersistQuery (SqlPersistT m) where
 -- | Same as 'deleteWhere', but returns the number of rows affected.
 --
 -- Since 1.1.5
-deleteWhereCount :: (PersistEntity val, MonadSqlPersist m)
+deleteWhereCount :: (PersistEntity val, MonadIO m)
                  => [Filter val]
-                 -> m Int64
+                 -> ReaderT Connection m Int64
 deleteWhereCount filts = do
-    conn <- askSqlConn
+    conn <- ask
     let t = entityDef $ dummyFromFilts filts
     let wher = if null filts
                 then ""
@@ -204,13 +187,13 @@ deleteWhereCount filts = do
 -- | Same as 'updateWhere', but returns the number of rows affected.
 --
 -- Since 1.1.5
-updateWhereCount :: (PersistEntity val, MonadSqlPersist m)
+updateWhereCount :: (PersistEntity val, MonadIO m, SqlBackend ~ PersistEntityBackend val)
                  => [Filter val]
                  -> [Update val]
-                 -> m Int64
+                 -> ReaderT Connection m Int64
 updateWhereCount _ [] = return 0
 updateWhereCount filts upds = do
-    conn <- askSqlConn
+    conn <- ask
     let wher = if null filts
                 then ""
                 else filterClause False conn filts
@@ -234,8 +217,9 @@ updateWhereCount filts upds = do
     go' conn (x, pu) = go'' (connEscapeName conn x) pu
     go x = (fieldDB $ updateFieldDef x, updateUpdate x)
 
-updateFieldDef :: PersistEntity v => Update v -> FieldDef SqlType
+updateFieldDef :: PersistEntity v => Update v -> FieldDef
 updateFieldDef (Update f _ _) = persistFieldDef f
+updateFieldDef _ = error "BackendUpdate not implemented"
 
 dummyFromFilts :: [Filter v] -> Maybe v
 dummyFromFilts _ = Nothing
@@ -281,23 +265,23 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
                     else
                       case (allVals, pfilter, isCompFilter pfilter) of
                         ([PersistList xs], Eq, _) -> 
-                           let sqlcl=T.intercalate " and " (map (\a -> connEscapeName conn (snd a) <> showSqlFilter pfilter <> "? ")  (primaryFields pdef))
+                           let sqlcl=T.intercalate " and " (map (\a -> connEscapeName conn (fieldDB a) <> showSqlFilter pfilter <> "? ")  (primaryFields pdef))
                            in (wrapSql sqlcl,xs)
                         ([PersistList xs], Ne, _) -> 
-                           let sqlcl=T.intercalate " or " (map (\a -> connEscapeName conn (snd a) <> showSqlFilter pfilter <> "? ")  (primaryFields pdef))
+                           let sqlcl=T.intercalate " or " (map (\a -> connEscapeName conn (fieldDB a) <> showSqlFilter pfilter <> "? ")  (primaryFields pdef))
                            in (wrapSql sqlcl,xs)
                         (_, In, _) -> 
                            let xxs = transpose (map fromPersistList allVals)
-                               sqls=map (\(a,xs) -> connEscapeName conn (snd a) <> showSqlFilter pfilter <> "(" <> T.intercalate "," (replicate (length xs) " ?") <> ") ") (zip (primaryFields pdef) xxs)
+                               sqls=map (\(a,xs) -> connEscapeName conn (fieldDB a) <> showSqlFilter pfilter <> "(" <> T.intercalate "," (replicate (length xs) " ?") <> ") ") (zip (primaryFields pdef) xxs)
                            in (wrapSql (T.intercalate " and " (map wrapSql sqls)), concat xxs)
                         (_, NotIn, _) -> 
                            let xxs = transpose (map fromPersistList allVals)
-                               sqls=map (\(a,xs) -> connEscapeName conn (snd a) <> showSqlFilter pfilter <> "(" <> T.intercalate "," (replicate (length xs) " ?") <> ") ") (zip (primaryFields pdef) xxs)
+                               sqls=map (\(a,xs) -> connEscapeName conn (fieldDB a) <> showSqlFilter pfilter <> "(" <> T.intercalate "," (replicate (length xs) " ?") <> ") ") (zip (primaryFields pdef) xxs)
                            in (wrapSql (T.intercalate " or " (map wrapSql sqls)), concat xxs)
                         ([PersistList xs], _, True) -> 
                            let zs = tail (inits (primaryFields pdef))
                                sql1 = map (\b -> wrapSql (T.intercalate " and " (map (\(i,a) -> sql2 (i==length b) a) (zip [1..] b)))) zs
-                               sql2 islast a = connEscapeName conn (snd a) <> (if islast then showSqlFilter pfilter else showSqlFilter Eq) <> "? "
+                               sql2 islast a = connEscapeName conn (fieldDB a) <> (if islast then showSqlFilter pfilter else showSqlFilter Eq) <> "? "
                                sqlcl = T.intercalate " or " sql1
                            in (wrapSql sqlcl, concat (tail (inits xs)))
                         (_, BackendSpecificFilter _, _) -> error "unhandled type BackendSpecificFilter for composite/non id primary keys"
@@ -399,6 +383,7 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
 
 updatePersistValue :: Update v -> PersistValue
 updatePersistValue (Update _ v _) = toPersistValue v
+updatePersistValue _ = error "BackendUpdate not implemented"
 
 filterClause :: PersistEntity val
              => Bool -- ^ include table name?
@@ -416,7 +401,7 @@ orderClause includeTable conn o =
     case o of
         Asc  x -> name $ persistFieldDef x
         Desc x -> name (persistFieldDef x) <> " DESC"
-        _ -> error $ "orderClause: expected Asc or Desc, not limit or offset"
+        _ -> error "orderClause: expected Asc or Desc, not limit or offset"
   where
     dummyFromOrder :: SelectOpt a -> Maybe a
     dummyFromOrder _ = Nothing
@@ -428,9 +413,6 @@ orderClause includeTable conn o =
             then ((tn <> ".") <>)
             else id)
         $ connEscapeName conn $ fieldDB x
-
-dummyFromKey :: KeyBackend SqlBackend v -> Maybe v
-dummyFromKey _ = Nothing
 
 -- | Generates sql for limit and offset for postgres, sqlite and mysql.
 decorateSQLWithLimitOffset::Text -> (Int,Int) -> Bool -> Text -> Text 

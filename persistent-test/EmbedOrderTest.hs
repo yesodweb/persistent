@@ -31,7 +31,7 @@ Bar
 |]
 
 #ifdef WITH_MONGODB
-cleanDB :: (PersistQuery m, PersistEntityBackend Foo ~ PersistMonadBackend m) => m ()
+cleanDB :: (PersistQuery backend, PersistEntityBackend Foo ~ backend, MonadIO m) => ReaderT backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Foo])
   deleteWhere ([] :: [Filter Bar])

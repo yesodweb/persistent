@@ -25,13 +25,13 @@ import Text.Blaze.Html
 import Text.Blaze.Html.Renderer.Text
 
 -- Test lower case names
-share [mkPersist sqlSettings, mkMigrate "htmlMigrate"] [persistLowerCase|
+share [mkPersist persistSettings, mkMigrate "htmlMigrate"] [persistLowerCase|
 HtmlTable
     html Html
     deriving
 |]
 
-cleanDB :: (PersistQuery m, PersistEntityBackend HtmlTable ~ PersistMonadBackend m) => m ()
+cleanDB :: (MonadIO m, PersistQuery backend, PersistEntityBackend HtmlTable ~ backend) => ReaderT backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter HtmlTable])
 

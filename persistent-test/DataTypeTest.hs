@@ -1,9 +1,7 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -11,7 +9,7 @@
 module DataTypeTest (specs) where
 
 import Test.QuickCheck.Arbitrary (Arbitrary, arbitrary)
-import Test.QuickCheck.Gen (Gen(..), choose)
+import Test.QuickCheck.Gen (Gen(..))
 import Test.QuickCheck.Instances ()
 import Test.QuickCheck.Random (newQCGen)
 import Database.Persist.Sqlite
@@ -26,9 +24,8 @@ import qualified Data.Text as T
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as S
 import Data.Time (Day, UTCTime (..))
-import Data.Time.Calendar (addDays)
 import Data.Time.Clock (picosecondsToDiffTime)
-import Data.Time.LocalTime
+import Data.Time.LocalTime (TimeOfDay (TimeOfDay))
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad (when, forM_)
 import Control.Monad.Trans.Resource (runResourceT)
@@ -42,7 +39,7 @@ type Tuple a b = (a, b)
 mkPersist persistSettings [persistUpperCase|
 #else
 -- Test lower case names
-share [mkPersist sqlSettings, mkMigrate "dataTypeMigrate"] [persistLowerCase|
+share [mkPersist persistSettings, mkMigrate "dataTypeMigrate"] [persistLowerCase|
 #endif
 DataTypeTable no-json
     text Text
@@ -60,10 +57,9 @@ DataTypeTable no-json
     time TimeOfDay
 #endif
     utc UTCTime
-    zonedTime ZonedTime
 |]
 
-cleanDB :: (PersistQuery m, PersistMonadBackend m ~ PersistEntityBackend DataTypeTable) => m ()
+cleanDB :: (MonadIO m, PersistQuery backend, backend ~ PersistEntityBackend DataTypeTable) => ReaderT backend m ()
 cleanDB = deleteWhere ([] :: [Filter DataTypeTable])
 
 specs :: Spec
@@ -103,12 +99,6 @@ specs = describe "data type specs" $
 #if !(defined(WITH_MONGODB)) || (defined(WITH_MONGODB) && defined(HIGH_PRECISION_DATE))
                 check "utc" (roundUTCTime . dataTypeTableUtc)
 #endif
-#ifndef WITH_POSTGRESQL
-                -- postgres seems to 'convert' the time to the localtimezone
-                -- http://www.postgresql.org/docs/9.2/static/datatype-datetime.html#AEN5739
-                -- so, this test will never pass anyhow
-                check "zoned" dataTypeTableZonedTime
-#endif
 
                 -- Do a special check for Double since it may
                 -- lose precision when serialized.
@@ -139,7 +129,7 @@ randomValues = do
   g <- newQCGen
   return $ map (unGen arbitrary g) [0..]
 
-instance Arbitrary (DataTypeTableGeneric g) where
+instance Arbitrary DataTypeTable where
   arbitrary = DataTypeTable
      <$> arbText                -- text
      <*> (T.take 100 <$> arbText) -- textManLen
@@ -156,7 +146,6 @@ instance Arbitrary (DataTypeTableGeneric g) where
      <*> (truncateTimeOfDay =<< arbitrary) -- time
 #endif
      <*> (truncateUTCTime   =<< arbitrary) -- utc
-     <*> (truncateToMicroZonedTime =<< arbitraryZT)  -- zonedTime
 
 arbText :: Gen Text
 arbText =
@@ -170,27 +159,11 @@ arbText =
 arbTuple :: Gen a -> Gen b -> Gen (a, b)
 arbTuple x y = (,) <$> x <*> y
 
-arbitraryZT :: Gen ZonedTime
-arbitraryZT = do
-    tod <- arbitrary
-    -- this avoids a crash in PostgreSQL, due to a limitation of
-    -- Postgresql-simple. However, the test is still disabled on
-    -- this DB because it 'adapts' the time and timezone.
-    d   <- fmap (addDays 19000) arbitrary
-    halfHours <- choose (-23, 23)
-    let minutes = halfHours * 30
-        tz = minutesToTimeZone minutes
-    return $ ZonedTime (LocalTime d tod) tz
-
 -- truncate less significant digits
 truncateToMicro :: Pico -> Pico
 truncateToMicro p = let
   p' = fromRational . toRational $ p  :: Micro
   in   fromRational . toRational $ p' :: Pico
-
-truncateToMicroZonedTime :: ZonedTime  -> Gen ZonedTime
-truncateToMicroZonedTime (ZonedTime (LocalTime d (TimeOfDay h m s)) tz) =
-  return $ ZonedTime (LocalTime d (TimeOfDay h m (truncateToMicro s))) tz
 
 truncateTimeOfDay :: TimeOfDay -> Gen TimeOfDay
 truncateTimeOfDay (TimeOfDay h m s) =
@@ -204,6 +177,3 @@ truncateUTCTime (UTCTime d dift) = do
 
 asIO :: IO a -> IO a
 asIO = id
-
-instance Eq ZonedTime where
-    a == b = show a == show b

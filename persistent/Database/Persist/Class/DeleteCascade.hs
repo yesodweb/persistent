@@ -11,10 +11,17 @@ import Database.Persist.Class.PersistEntity
 
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Reader (ReaderT, ask, runReaderT)
+import Data.Acquire (with)
 
-class (PersistStore m, PersistEntity a, PersistEntityBackend a ~ PersistMonadBackend m) => DeleteCascade a m where
-    deleteCascade :: Key a -> m ()
+class (PersistStore backend, PersistEntity record, backend ~ PersistEntityBackend record)
+  => DeleteCascade record backend where
+    deleteCascade :: MonadIO m => Key record -> ReaderT backend m ()
 
-deleteCascadeWhere :: (DeleteCascade a m, PersistQuery m)
-                   => [Filter a] -> m ()
-deleteCascadeWhere filts = selectKeys filts [] C.$$ CL.mapM_ deleteCascade
+deleteCascadeWhere :: (MonadIO m, DeleteCascade record backend, PersistQuery backend)
+                   => [Filter record] -> ReaderT backend m ()
+deleteCascadeWhere filts = do
+    srcRes <- selectKeysRes filts []
+    conn <- ask
+    liftIO $ with srcRes (C.$$ CL.mapM_ (flip runReaderT conn . deleteCascade))

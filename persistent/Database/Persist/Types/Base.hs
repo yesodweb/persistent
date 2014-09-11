@@ -3,6 +3,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Database.Persist.Types.Base where
 
 import qualified Data.Aeson as A
@@ -24,7 +25,6 @@ import Data.ByteString (ByteString, foldl')
 import Data.Bits (shiftL, shiftR)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BS8
-import Data.Time.LocalTime (ZonedTime, zonedTimeToUTC, zonedTimeToLocalTime, zonedTimeZone)
 import Data.Map (Map)
 import qualified Data.HashMap.Strict as HM
 import Data.Word (Word32)
@@ -105,12 +105,12 @@ data WhyNullable = ByMaybeAttr
                  | ByNullableAttr
                   deriving (Eq, Show)
 
-data EntityDef sqlType = EntityDef
+data EntityDef = EntityDef
     { entityHaskell :: !HaskellName
     , entityDB      :: !DBName
     , entityID      :: !DBName
     , entityAttrs   :: ![Attr]
-    , entityFields  :: ![FieldDef sqlType]
+    , entityFields  :: ![FieldDef]
     , entityPrimary :: Maybe PrimaryDef
     , entityUniques :: ![UniqueDef]
     , entityForeigns:: ![ForeignDef]
@@ -118,7 +118,7 @@ data EntityDef sqlType = EntityDef
     , entityExtra   :: !(Map Text [ExtraLine])
     , entitySum     :: !Bool
     }
-    deriving (Show, Eq, Read, Ord, Functor)
+    deriving (Show, Eq, Read, Ord)
 
 type ExtraLine = [Text]
 
@@ -136,16 +136,52 @@ data FieldType
     | FTList FieldType
   deriving (Show, Eq, Read, Ord)
 
-data FieldDef sqlType = FieldDef
-    { fieldHaskell  :: !HaskellName -- ^ name of the field
-    , fieldDB       :: !DBName
-    , fieldType     :: !FieldType
-    , fieldSqlType  :: !sqlType
-    , fieldAttrs    :: ![Attr]   -- ^ user annotations for a field
-    , fieldStrict   :: !Bool      -- ^ a strict field in the data type. Default: true
-    , fieldEmbedded :: Maybe (EntityDef ()) -- ^ indicates that the field uses an embedded entity
+data FieldDef = FieldDef
+    { fieldHaskell   :: !HaskellName -- ^ name of the field
+    , fieldDB        :: !DBName
+    , fieldType      :: !FieldType
+    , fieldSqlType   :: !SqlType
+    , fieldAttrs     :: ![Attr]   -- ^ user annotations for a field
+    , fieldStrict    :: !Bool      -- ^ a strict field in the data type. Default: true
+    , fieldReference :: !ReferenceDef
     }
-    deriving (Show, Eq, Read, Ord, Functor)
+    deriving (Show, Eq, Read, Ord)
+
+data ReferenceDef = ForeignRef !HaskellName
+                  | EmbedRef EmbedEntityDef
+                  | NoReference
+                  deriving (Show, Eq, Read, Ord)
+
+-- | An EmbedEntityDef is the same as an EntityDef
+-- But it is only used for fieldReference
+-- so it only has data needed for embedding
+data EmbedEntityDef = EmbedEntityDef
+    { embeddedHaskell :: !HaskellName
+    , embeddedFields  :: ![EmbedFieldDef]
+    } deriving (Show, Eq, Read, Ord)
+
+-- | An EmbedFieldDef is the same as a FieldDef
+-- But it is only used for embeddedFields
+-- so it only has data needed for embedding
+data EmbedFieldDef = EmbedFieldDef
+    { emFieldDB       :: !DBName
+    , emFieldEmbed :: Maybe EmbedEntityDef
+    }
+    deriving (Show, Eq, Read, Ord)
+
+toEmbedEntityDef :: EntityDef -> EmbedEntityDef
+toEmbedEntityDef ent = EmbedEntityDef
+  { embeddedHaskell = entityHaskell ent
+  , embeddedFields = map toEmbedFieldDef $ entityFields ent
+  }
+
+toEmbedFieldDef :: FieldDef -> EmbedFieldDef
+toEmbedFieldDef field =
+  EmbedFieldDef { emFieldDB       = fieldDB field
+                   , emFieldEmbed = case fieldReference field of
+                       EmbedRef em -> Just em
+                       _ -> Nothing
+                   }
 
 data UniqueDef = UniqueDef
     { uniqueHaskell :: !HaskellName
@@ -156,18 +192,23 @@ data UniqueDef = UniqueDef
     deriving (Show, Eq, Read, Ord)
 
 data PrimaryDef = PrimaryDef
-    { primaryFields  :: ![(HaskellName, DBName)]
+    { primaryFields  :: ![FieldDef]
     , primaryAttrs   :: ![Attr]
     }
     deriving (Show, Eq, Read, Ord)
+
+-- | Used instead of FieldDef
+-- to generate a smaller amount of code
+type ForeignFieldDef = (HaskellName, DBName)
 
 data ForeignDef = ForeignDef
     { foreignRefTableHaskell       :: !HaskellName
     , foreignRefTableDBName        :: !DBName
     , foreignConstraintNameHaskell :: !HaskellName
     , foreignConstraintNameDBName  :: !DBName
-    , foreignFields                :: ![(HaskellName, DBName, HaskellName, DBName)] -- foreignkey name gb our field plus corresponding other primary field:make this a real adt
+    , foreignFields                :: ![(ForeignFieldDef, ForeignFieldDef)] -- this entity plus the primary entity
     , foreignAttrs                 :: ![Attr]
+    , foreignNullable              :: Bool
     }
     deriving (Show, Eq, Read, Ord)
 
@@ -184,14 +225,6 @@ instance Exception PersistException
 instance Error PersistException where
     strMsg = PersistError . pack
 
--- | Avoid orphan instances.
-newtype ZT = ZT ZonedTime deriving (Show, Read, Typeable)
-
-instance Eq ZT where
-    ZT a /= ZT b = zonedTimeToLocalTime a /= zonedTimeToLocalTime b || zonedTimeZone a /= zonedTimeZone b
-instance Ord ZT where
-    ZT a `compare` ZT b = zonedTimeToUTC a `compare` zonedTimeToUTC b
-
 -- | A raw value which can be stored in any backend and can be marshalled to
 -- and from a 'PersistField'.
 data PersistValue = PersistText Text
@@ -203,7 +236,6 @@ data PersistValue = PersistText Text
                   | PersistDay Day
                   | PersistTimeOfDay TimeOfDay
                   | PersistUTCTime UTCTime
-                  | PersistZonedTime ZT
                   | PersistNull
                   | PersistList [PersistValue]
                   | PersistMap [(Text, PersistValue)]
@@ -247,10 +279,10 @@ instance PathPiece PersistValue where
                     _ -> Just $ PersistText t
     toPathPiece x =
         case fromPersistValueText x of
-            Left e -> error e
+            Left e -> error $ T.unpack e
             Right y -> y
 
-fromPersistValueText :: PersistValue -> Either String Text
+fromPersistValueText :: PersistValue -> Either Text Text
 fromPersistValueText (PersistText s) = Right s
 fromPersistValueText (PersistByteString bs) =
     Right $ TE.decodeUtf8With lenientDecode bs
@@ -260,7 +292,6 @@ fromPersistValueText (PersistRational r) = Right $ T.pack $ show r
 fromPersistValueText (PersistDay d) = Right $ T.pack $ show d
 fromPersistValueText (PersistTimeOfDay d) = Right $ T.pack $ show d
 fromPersistValueText (PersistUTCTime d) = Right $ T.pack $ show d
-fromPersistValueText (PersistZonedTime (ZT z)) = Right $ T.pack $ show z
 fromPersistValueText PersistNull = Left "Unexpected null"
 fromPersistValueText (PersistBool b) = Right $ T.pack $ show b
 fromPersistValueText (PersistList _) = Left "Cannot convert PersistList to Text"
@@ -283,7 +314,6 @@ instance A.ToJSON PersistValue where
     toJSON (PersistBool b) = A.Bool b
     toJSON (PersistTimeOfDay t) = A.String $ T.pack $ 't' : show t
     toJSON (PersistUTCTime u) = A.String $ T.pack $ 'u' : show u
-    toJSON (PersistZonedTime z) = A.String $ T.pack $ 'z' : show z
     toJSON (PersistDay d) = A.String $ T.pack $ 'd' : show d
     toJSON PersistNull = A.Null
     toJSON (PersistList l) = A.Array $ V.fromList $ map A.toJSON l
@@ -317,7 +347,6 @@ instance A.FromJSON PersistValue where
                            $ B64.decode $ TE.encodeUtf8 t
             Just ('t', t) -> fmap PersistTimeOfDay $ readMay t
             Just ('u', t) -> fmap PersistUTCTime $ readMay t
-            Just ('z', t) -> fmap PersistZonedTime $ readMay t
             Just ('d', t) -> fmap PersistDay $ readMay t
             Just ('r', t) -> fmap PersistRational $ readMay t
             Just ('o', t) -> maybe (fail "Invalid base64") (return . PersistObjectId) $
@@ -367,33 +396,29 @@ data SqlType = SqlString
              | SqlBool
              | SqlDay
              | SqlTime
-             | SqlDayTime
-             | SqlDayTimeZoned
+             | SqlDayTime -- ^ Always uses UTC timezone
              | SqlBlob
              | SqlOther T.Text -- ^ a backend-specific name
     deriving (Show, Read, Eq, Typeable, Ord)
-
-newtype KeyBackend backend entity = Key { unKey :: PersistValue }
-    deriving (Show, Read, Eq, Ord)
-
-type family KeyEntity key
-type instance KeyEntity (KeyBackend backend entity) = entity
-
-instance A.ToJSON (KeyBackend backend entity) where
-    toJSON (Key val) = A.toJSON val
-
-instance A.FromJSON (KeyBackend backend entity) where
-    parseJSON = fmap Key . A.parseJSON
 
 data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le | In | NotIn
                    | BackendSpecificFilter T.Text
     deriving (Read, Show)
 
-data UpdateGetException = KeyNotFound String
+data UpdateException = KeyNotFound String
+                     | UpsertError String
     deriving Typeable
-instance Show UpdateGetException where
+instance Show UpdateException where
     show (KeyNotFound key) = "Key not found during updateGet: " ++ key
-instance Exception UpdateGetException
+    show (UpsertError msg) = "Error during upsert: " ++ msg
+instance Exception UpdateException
+
+data OnlyUniqueException = OnlyUniqueException String deriving Typeable
+instance Show OnlyUniqueException where
+    show (OnlyUniqueException uniqueMsg) =
+      "Expected only one unique key, got " ++ uniqueMsg
+instance Exception OnlyUniqueException
+
 
 data PersistUpdate = Assign | Add | Subtract | Multiply | Divide -- FIXME need something else here
     deriving (Read, Show, Enum, Bounded)

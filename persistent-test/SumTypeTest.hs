@@ -3,6 +3,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -23,7 +25,7 @@ import Init
 #if WITH_MONGODB
 mkPersist persistSettings [persistLowerCase|
 #else
-share [mkPersist sqlSettings, mkMigrate "sumTypeMigrate"] [persistLowerCase|
+share [mkPersist persistSettings, mkMigrate "sumTypeMigrate"] [persistLowerCase|
 #endif
 Bicycle
     brand T.Text
@@ -33,8 +35,13 @@ Car
 +Vehicle
     bicycle BicycleId
     car CarId
-    deriving Show Eq
 |]
+
+-- This is needed for mpsGeneric = True
+-- The typical persistent user sets mpsGeneric = False
+-- https://ghc.haskell.org/trac/ghc/ticket/8100
+deriving instance Show (BackendKey backend) => Show (VehicleGeneric backend)
+deriving instance Eq (BackendKey backend) => Eq (VehicleGeneric backend)
 
 specs :: Spec
 specs = describe "sum types" $ do

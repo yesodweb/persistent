@@ -19,7 +19,6 @@ import Data.Time (Day(..), TimeOfDay, UTCTime)
 #ifdef HIGH_PRECISION_DATE
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 #endif
-import Data.Time.LocalTime (ZonedTime)
 import Data.ByteString.Char8 (ByteString, unpack, readInt)
 import Control.Applicative
 import Data.Int (Int8, Int16, Int32, Int64)
@@ -47,6 +46,7 @@ import qualified Data.Set as S
 import qualified Data.Map as M
 
 import qualified Data.Text.Encoding as TE
+import qualified Data.Vector as V
 
 -- | A value which can be marshalled to and from a 'PersistValue'.
 class PersistField a where
@@ -65,7 +65,6 @@ instance PersistField String where
     fromPersistValue (PersistDay d) = Right $ Prelude.show d
     fromPersistValue (PersistTimeOfDay d) = Right $ Prelude.show d
     fromPersistValue (PersistUTCTime d) = Right $ Prelude.show d
-    fromPersistValue (PersistZonedTime (ZT z)) = Right $ Prelude.show z
     fromPersistValue PersistNull = Left $ T.pack "Unexpected null"
     fromPersistValue (PersistBool b) = Right $ Prelude.show b
     fromPersistValue (PersistList _) = Left $ T.pack "Cannot convert PersistList to String"
@@ -81,7 +80,7 @@ instance PersistField ByteString where
 
 instance PersistField T.Text where
     toPersistValue = PersistText
-    fromPersistValue = either (Left . T.pack) Right . fromPersistValueText
+    fromPersistValue = fromPersistValueText
 
 instance PersistField TL.Text where
     toPersistValue = toPersistValue . TL.toStrict
@@ -230,19 +229,6 @@ instance PersistField UTCTime where
 
     fromPersistValue x = Left $ T.pack $ "Expected UTCTime, received: " ++ show x
 
-instance PersistField ZonedTime where
-    toPersistValue = PersistZonedTime . ZT
-    fromPersistValue (PersistZonedTime (ZT z)) = Right z
-    fromPersistValue x@(PersistText t) =
-        case reads $ T.unpack t of
-            (z, _):_ -> Right z
-            _ -> Left $ T.pack $ "Expected ZonedTime, received " ++ show x
-    fromPersistValue x@(PersistByteString s) =
-        case reads $ unpack s of
-            (z, _):_ -> Right z
-            _ -> Left $ T.pack $ "Expected ZonedTime, received " ++ show x
-    fromPersistValue x = Left $ T.pack $ "Expected ZonedTime, received: " ++ show x
-
 instance PersistField a => PersistField (Maybe a) where
     toPersistValue Nothing = PersistNull
     toPersistValue (Just a) = toPersistValue a
@@ -259,6 +245,11 @@ instance PersistField a => PersistField [a] where
     -- also useful when Persistent is not the only one filling in the data
     fromPersistValue (PersistNull) = Right []
     fromPersistValue x = Left $ T.pack $ "Expected PersistList, received: " ++ show x
+
+instance PersistField a => PersistField (V.Vector a) where
+  toPersistValue = toPersistValue . V.toList
+  fromPersistValue = either (\e -> Left ("Vector: " `T.append` e))
+                            (Right . V.fromList) . fromPersistValue
 
 instance (Ord a, PersistField a) => PersistField (S.Set a) where
     toPersistValue = PersistList . map toPersistValue . S.toList
@@ -286,8 +277,6 @@ instance PersistField v => PersistField (M.Map T.Text v) where
 instance PersistField PersistValue where
     toPersistValue = id
     fromPersistValue = Right
-
-deriving instance PersistField (KeyBackend backend entity)
 
 fromPersistList :: PersistField a => [PersistValue] -> Either T.Text [a]
 fromPersistList = mapM fromPersistValue

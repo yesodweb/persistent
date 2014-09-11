@@ -299,6 +299,9 @@ builtinGetters = I.fromList
     , (k PS.uuid,        convertPV (PersistDbSpecific . unUnknown))
     , (k PS.json,        convertPV (PersistByteString . unUnknown))
     , (k PS.unknown,     convertPV (PersistByteString . unUnknown))
+    -- add Inet and Cidr types
+    , (k PS.inet,        convertPV (PersistDbSpecific . unUnknown))
+    , (k PS.cidr,        convertPV (PersistDbSpecific . unUnknown))
 
     -- array types: same order as above
     , (1000,             listOf PersistBool)
@@ -553,23 +556,14 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, ns
                         { cName = cname
                         , cNull = y == "YES"
                         , cSqlType = t
-                        , cDefault = fmap stripSuffixes d''
+                        , cDefault = fmap
+                            (\xx -> fromMaybe xx $ T.stripSuffix "::character varying" xx)
+                                     d''
                         , cDefaultConstraintName = Nothing
                         , cMaxLen = Nothing
                         , cReference = ref
                         }
   where
-    stripSuffixes t =
-        loop'
-            [ "::character varying"
-            , "::text"
-            ]
-      where
-        loop' [] = t
-        loop' (p:ps) =
-            case T.stripSuffix p t of
-                Nothing -> loop' ps
-                Just t' -> t'
     getRef cname = do
         let sql = T.concat
                 [ "SELECT COUNT(*) FROM "

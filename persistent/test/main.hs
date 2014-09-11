@@ -101,6 +101,3 @@ main = hspec $ do
                 baz = FTTypeCon Nothing "Baz"
             parseFieldType "Foo [Bar] Baz" `shouldBe` Just (
                 foo `FTApp` bars `FTApp` baz)
-    describe "stripId" $ do
-        it "works" $
-            (parseFieldType "FooId" >>= stripId) `shouldBe` Just "Foo"

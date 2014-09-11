@@ -10,32 +10,26 @@
 module Database.Persist.Sql.Types where
 
 import Control.Exception (Exception)
-import Control.Monad.Trans.Resource (MonadResource (..), MonadThrow (..), ResourceT)
-#if MIN_VERSION_exceptions(0,6,0)
-import Control.Monad.Catch (MonadCatch, MonadMask)
-#endif
-import Control.Monad.Logger (MonadLogger (..), NoLoggingT)
+import Control.Monad.Trans.Resource (MonadResource (..), ResourceT)
+import Data.Acquire (Acquire)
+import Control.Monad.Logger (NoLoggingT)
 import Control.Monad.Trans.Control
-import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Reader (ReaderT (..))
-import Control.Applicative (Applicative (..))
 import Control.Monad.Trans.Writer (WriterT)
-import Control.Monad.Base (MonadBase (..))
-import Control.Monad (MonadPlus (..))
 import Data.Typeable (Typeable)
 import Control.Monad (liftM)
 import Database.Persist.Types
-import Data.Text (Text, pack)
-import qualified Data.Text as T
+import Database.Persist.Class (HasPersistBackend (..))
 import Data.IORef (IORef)
 import Data.Map (Map)
 import Data.Int (Int64)
 import Data.Conduit (Source)
 import Data.Pool (Pool)
-import Web.PathPieces
-import Control.Exception (throw)
-import qualified Data.Text.Read
+import Language.Haskell.TH.Syntax (Loc)
+import Control.Monad.Logger (LogSource, LogLevel)
+import System.Log.FastLogger (LogStr)
+import Data.Text (Text)
 
 data InsertSqlResult = ISRSingle Text
                      | ISRInsertGet Text Text
@@ -44,13 +38,13 @@ data InsertSqlResult = ISRSingle Text
 data Connection = Connection
     { connPrepare :: Text -> IO Statement
     -- | table name, column names, id name, either 1 or 2 statements to run
-    , connInsertSql :: EntityDef SqlType -> [PersistValue] -> InsertSqlResult
+    , connInsertSql :: EntityDef -> [PersistValue] -> InsertSqlResult
     , connStmtMap :: IORef (Map Text Statement)
     , connClose :: IO ()
     , connMigrateSql
-        :: [EntityDef SqlType]
+        :: [EntityDef]
         -> (Text -> IO Statement)
-        -> EntityDef SqlType
+        -> EntityDef
         -> IO (Either [Text] [(Bool, Text)])
     , connBegin :: (Text -> IO Statement) -> IO ()
     , connCommit :: (Text -> IO Statement) -> IO ()
@@ -59,15 +53,21 @@ data Connection = Connection
     , connNoLimit :: Text
     , connRDBMS :: Text
     , connLimitOffset :: (Int,Int) -> Bool -> Text -> Text
+    , connLogFunc :: LogFunc
     }
+    deriving Typeable
+instance HasPersistBackend Connection Connection where
+    persistBackend = id
+
+type LogFunc = Loc -> LogSource -> LogLevel -> LogStr -> IO ()
 
 data Statement = Statement
     { stmtFinalize :: IO ()
     , stmtReset :: IO ()
     , stmtExecute :: [PersistValue] -> IO Int64
-    , stmtQuery :: forall m. MonadResource m
+    , stmtQuery :: forall m. MonadIO m
                 => [PersistValue]
-                -> Source m [PersistValue]
+                -> Acquire (Source m [PersistValue])
     }
 
 data Column = Column
@@ -86,71 +86,23 @@ data PersistentSqlException = StatementAlreadyFinalized Text
     deriving (Typeable, Show)
 instance Exception PersistentSqlException
 
-data SqlBackend
-    deriving Typeable
+type SqlBackend = Connection -- FIXME
 
-newtype SqlPersistT m a = SqlPersistT { unSqlPersistT :: ReaderT Connection m a }
-    deriving (Monad, MonadIO, MonadTrans, Functor, Applicative, MonadPlus
-#if MIN_VERSION_exceptions(0,6,0)
-#if MIN_VERSION_resourcet(1,1,0)
-        , MonadThrow
-        , MonadCatch
-        , MonadMask
-#endif
-#endif
-    )
+type SqlPersistT = ReaderT Connection -- FIXME rename connection
 
 type SqlPersist = SqlPersistT
 {-# DEPRECATED SqlPersist "Please use SqlPersistT instead" #-}
 
 type SqlPersistM = SqlPersistT (NoLoggingT (ResourceT IO))
 
-#if MIN_VERSION_resourcet(1,1,0)
-#if !MIN_VERSION_exceptions(0,6,0)
-instance MonadThrow m => MonadThrow (SqlPersistT m) where
-    throwM = lift . throwM
-#endif
-
-#else
-instance MonadThrow m => MonadThrow (SqlPersistT m) where
-    monadThrow = lift . monadThrow
-#endif
-
-instance MonadBase backend m => MonadBase backend (SqlPersistT m) where
-    liftBase = lift . liftBase
-
-instance MonadBaseControl backend m => MonadBaseControl backend (SqlPersistT m) where
-     newtype StM (SqlPersistT m) a = StMSP {unStMSP :: ComposeSt SqlPersistT m a}
-     liftBaseWith = defaultLiftBaseWith StMSP
-     restoreM     = defaultRestoreM   unStMSP
-instance MonadTransControl SqlPersistT where
-    newtype StT SqlPersistT a = StReader {unStReader :: a}
-    liftWith f = SqlPersistT $ ReaderT $ \r -> f $ \t -> liftM StReader $ runReaderT (unSqlPersistT t) r
-    restoreT = SqlPersistT . ReaderT . const . liftM unStReader
-
-instance MonadResource m => MonadResource (SqlPersistT m) where
-    liftResourceT = lift . liftResourceT
-
-instance MonadLogger m => MonadLogger (SqlPersistT m) where
-    monadLoggerLog a b c = lift . monadLoggerLog a b c
-
 type Sql = Text
 
 -- Bool indicates if the Sql is safe
 type CautiousMigration = [(Bool, Sql)]
 
-type Migration m = WriterT [Text] (WriterT CautiousMigration m) ()
+type Migration = WriterT [Text] (WriterT CautiousMigration (ReaderT Connection IO)) ()
 
 type ConnectionPool = Pool Connection
-
-instance PathPiece (KeyBackend SqlBackend entity) where
-    toPathPiece (Key (PersistInt64 i)) = toPathPiece i
-    toPathPiece k = throw $ PersistInvalidField $ pack $ "Invalid Key: " ++ show k
-    fromPathPiece t =
-        case Data.Text.Read.signed Data.Text.Read.decimal t of
-            Right (i, t') | T.null t' -> Just $ Key $ PersistInt64 i
-            _ -> Nothing
-
 
 -- $rawSql
 --
