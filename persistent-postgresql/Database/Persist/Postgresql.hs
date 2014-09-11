@@ -44,7 +44,6 @@ import Data.List (find, sort, groupBy)
 import Data.Function (on)
 import Data.Conduit
 import qualified Data.Conduit.List as CL
-import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 
 import qualified Data.IntMap as I
 
@@ -58,7 +57,6 @@ import Data.Time.LocalTime (localTimeToUTC, utc)
 import Data.Text (Text)
 import Data.Aeson
 import Control.Monad (forM, mzero)
-import Data.Acquire (Acquire, mkAcquire, with)
 import System.Environment (getEnvironment)
 import Data.Int (Int64)
 import Data.Monoid ((<>))
@@ -76,7 +74,7 @@ type ConnectionString = ByteString
 -- finishes using it.  Note that you should not use the given
 -- 'ConnectionPool' outside the action since it may be already
 -- been released.
-withPostgresqlPool :: (MonadBaseControl IO m, MonadLogger m, MonadIO m)
+withPostgresqlPool :: MonadIO m
                    => ConnectionString
                    -- ^ Connection string to the database.
                    -> Int
@@ -93,7 +91,7 @@ withPostgresqlPool ci = withSqlPool $ open' ci
 -- responsability to properly close the connection pool when
 -- unneeded.  Use 'withPostgresqlPool' for an automatic resource
 -- control.
-createPostgresqlPool :: (MonadIO m, MonadBaseControl IO m, MonadLogger m)
+createPostgresqlPool :: MonadIO m
                      => ConnectionString
                      -- ^ Connection string to the database.
                      -> Int
@@ -105,17 +103,17 @@ createPostgresqlPool ci = createSqlPool $ open' ci
 
 -- | Same as 'withPostgresqlPool', but instead of opening a pool
 -- of connections, only one connection is opened.
-withPostgresqlConn :: (MonadIO m, MonadBaseControl IO m, MonadLogger m)
+withPostgresqlConn :: (MonadIO m, MonadBaseControl IO m)
                    => ConnectionString -> (Connection -> m a) -> m a
 withPostgresqlConn = withSqlConn . open'
 
-open' :: ConnectionString -> LogFunc -> IO Connection
-open' cstr logFunc = PG.connectPostgreSQL cstr >>= openSimpleConn logFunc
+open' :: ConnectionString -> IO Connection
+open' cstr = PG.connectPostgreSQL cstr >>= openSimpleConn
 
 -- | Generate a 'Connection' from a 'PG.Connection'
-openSimpleConn :: LogFunc -> PG.Connection -> IO Connection
-openSimpleConn logFunc conn = do
-    smap <- newIORef $ Map.empty
+openSimpleConn :: PG.Connection -> IO Connection
+openSimpleConn conn = do
+    smap <- newIORef Map.empty
     return Connection
         { connPrepare    = prepare' conn
         , connStmtMap    = smap
@@ -129,7 +127,6 @@ openSimpleConn logFunc conn = do
         , connNoLimit    = "LIMIT ALL"
         , connRDBMS      = "postgresql"
         , connLimitOffset = decorateSQLWithLimitOffset "LIMIT ALL"
-        , connLogFunc = logFunc
         }
 
 prepare' :: PG.Connection -> Text -> IO Statement
@@ -142,7 +139,7 @@ prepare' conn sql = do
         , stmtQuery = withStmt' conn query
         }
 
-insertSql' :: EntityDef -> [PersistValue] -> InsertSqlResult
+insertSql' :: EntityDef SqlType -> [PersistValue] -> InsertSqlResult
 insertSql' ent vals =
   let sql = T.concat
                 [ "INSERT INTO "
@@ -164,13 +161,13 @@ insertSql' ent vals =
 execute' :: PG.Connection -> PG.Query -> [PersistValue] -> IO Int64
 execute' conn query vals = PG.execute conn query (map P vals)
 
-withStmt' :: MonadIO m
+withStmt' :: MonadResource m
           => PG.Connection
           -> PG.Query
           -> [PersistValue]
-          -> Acquire (Source m [PersistValue])
+          -> Source m [PersistValue]
 withStmt' conn query vals =
-    pull `fmap` mkAcquire openS closeS
+    bracketP openS closeS pull
   where
     openS = do
       -- Construct raw query
@@ -248,6 +245,7 @@ instance PGTF.ToField P where
     toField (P (PersistDay d))         = PGTF.toField d
     toField (P (PersistTimeOfDay t))   = PGTF.toField t
     toField (P (PersistUTCTime t))     = PGTF.toField t
+    toField (P (PersistZonedTime (ZT t))) = PGTF.toField t
     toField (P PersistNull)            = PGTF.toField PG.Null
     toField (P (PersistList l))        = PGTF.toField $ listToJSON l
     toField (P (PersistMap m))         = PGTF.toField $ mapToJSON m
@@ -292,8 +290,8 @@ builtinGetters = I.fromList
     , (k PS.varchar,     convertPV PersistText)
     , (k PS.date,        convertPV PersistDay)
     , (k PS.time,        convertPV PersistTimeOfDay)
-    , (k PS.timestamp,   convertPV PersistUTCTime)
-    , (k PS.timestamptz, convertPV PersistUTCTime)
+    , (k PS.timestamp,   convertPV (PersistUTCTime . localTimeToUTC utc))
+    , (k PS.timestamptz, convertPV (PersistZonedTime . ZT))
     , (k PS.bit,         convertPV PersistInt64)
     , (k PS.varbit,      convertPV PersistInt64)
     , (k PS.numeric,     convertPV PersistRational)
@@ -301,6 +299,9 @@ builtinGetters = I.fromList
     , (k PS.uuid,        convertPV (PersistDbSpecific . unUnknown))
     , (k PS.json,        convertPV (PersistByteString . unUnknown))
     , (k PS.unknown,     convertPV (PersistByteString . unUnknown))
+    -- add Inet and Cidr types
+    , (k PS.inet,        convertPV (PersistDbSpecific . unUnknown))
+    , (k PS.cidr,        convertPV (PersistDbSpecific . unUnknown))
 
     -- array types: same order as above
     , (1000,             listOf PersistBool)
@@ -321,8 +322,8 @@ builtinGetters = I.fromList
     , (1015,             listOf PersistText)
     , (1182,             listOf PersistDay)
     , (1183,             listOf PersistTimeOfDay)
-    , (1115,             listOf PersistUTCTime)
-    , (1185,             listOf PersistUTCTime)
+    , (1115,             listOf (PersistUTCTime . localTimeToUTC utc))
+    , (1185,             listOf (PersistZonedTime . ZT))
     , (1561,             listOf PersistInt64)
     , (1563,             listOf PersistInt64)
     , (1231,             listOf PersistRational)
@@ -358,7 +359,7 @@ doesTableExist :: (Text -> IO Statement)
                -> IO Bool
 doesTableExist getter (DBName name) = do
     stmt <- getter sql
-    with (stmtQuery stmt vals) ($$ start)
+    runResourceT $ stmtQuery stmt vals $$ start
   where
     sql = "SELECT COUNT(*) FROM information_schema.tables WHERE table_name=?"
     vals = [PersistText name]
@@ -369,9 +370,9 @@ doesTableExist getter (DBName name) = do
     start' res = error $ "doesTableExist returned unexpected result: " ++ show res
     finish x = await >>= maybe (return x) (error "Too many rows returned in doesTableExist")
 
-migrate' :: [EntityDef]
+migrate' :: [EntityDef a]
          -> (Text -> IO Statement)
-         -> EntityDef
+         -> EntityDef SqlType
          -> IO (Either [Text] [(Bool, Text)])
 migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
     let name = entityDB val
@@ -392,12 +393,12 @@ migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
             if not exists
                 then do
                     let idtxt = case entityPrimary val of
-                                  Just pdef -> T.concat [" PRIMARY KEY (", T.intercalate "," $ map (escape . fieldDB) $ primaryFields pdef, ")"]
+                                  Just pdef -> T.concat [" PRIMARY KEY (", T.intercalate "," $ map (escape . snd) $ primaryFields pdef, ")"]
                                   Nothing   -> T.concat [escape $ entityID val
                                         , " SERIAL PRIMARY KEY UNIQUE"]
                     let addTable = AddTable $ T.concat
                             -- Lower case e: see Database.Persist.Sql.Migration
-                            [ "CREATE TABLE "
+                            [ "CREATe TABLE "
                             , escape name
                             , "("
                             , idtxt
@@ -408,7 +409,7 @@ migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
                     let uniques = flip concatMap udspair $ \(uname, ucols) ->
                             [AlterTable name $ AddUniqueConstraint uname ucols]
                         references = mapMaybe (\c@Column { cName=cname, cReference=Just (refTblName, _) } -> getAddReference allDefs name refTblName cname (cReference c)) $ filter (isJust . cReference) newcols
-                        foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef))
+                        foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\(_,b,_,d) -> (b,d)) (foreignFields fdef))
                                                     in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignConstraintNameDBName fdef) childfields parentfields)) fdefs
                     return $ Right $ addTable : uniques ++ references ++ foreignsAlt
                 else do
@@ -420,8 +421,7 @@ migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
 
 type SafeToRemove = Bool
 
-data AlterColumn = Type SqlType Text
-                 | IsNull | NotNull | Add' Column | Drop SafeToRemove
+data AlterColumn = Type SqlType | IsNull | NotNull | Add' Column | Drop SafeToRemove
                  | Default Text | NoDefault | Update' Text
                  | AddReference DBName [DBName] [DBName] | DropReference DBName
 type AlterColumn' = (DBName, AlterColumn)
@@ -435,7 +435,7 @@ data AlterDB = AddTable Text
 
 -- | Returns all of the columns in the given table currently in the database.
 getColumns :: (Text -> IO Statement)
-           -> EntityDef
+           -> EntityDef a
            -> IO [Either Text (Either Column (DBName, [DBName]))]
 getColumns getter def = do
     let sqlv=T.concat ["SELECT "
@@ -456,7 +456,7 @@ getColumns getter def = do
             [ PersistText $ unDBName $ entityDB def
             , PersistText $ unDBName $ entityID def
             ]
-    cs <- with (stmtQuery stmt vals) ($$ helper)
+    cs <- runResourceT $ stmtQuery stmt vals $$ helper
     let sqlc = T.concat ["SELECT "
                           ,"c.constraint_name, "
                           ,"c.column_name "
@@ -475,7 +475,7 @@ getColumns getter def = do
 
     stmt' <- getter sqlc
 
-    us <- with (stmtQuery stmt' vals) ($$ helperU)
+    us <- runResourceT $ stmtQuery stmt' vals $$ helperU
     return $ cs ++ us
   where
     getAll front = do
@@ -503,14 +503,14 @@ getColumns getter def = do
 
 -- | Check if a column name is listed as the "safe to remove" in the entity
 -- list.
-safeToRemove :: EntityDef -> DBName -> Bool
+safeToRemove :: EntityDef a -> DBName -> Bool
 safeToRemove def (DBName colName)
     = any (elem "SafeToRemove" . fieldAttrs)
     $ filter ((== DBName colName) . fieldDB)
     $ entityFields def
 
-getAlters :: [EntityDef]
-          -> EntityDef
+getAlters :: [EntityDef a]
+          -> EntityDef SqlType
           -> ([Column], [(DBName, [DBName])])
           -> ([Column], [(DBName, [DBName])])
           -> ([AlterColumn'], [AlterTable])
@@ -556,23 +556,14 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, ns
                         { cName = cname
                         , cNull = y == "YES"
                         , cSqlType = t
-                        , cDefault = fmap stripSuffixes d''
+                        , cDefault = fmap
+                            (\xx -> fromMaybe xx $ T.stripSuffix "::character varying" xx)
+                                     d''
                         , cDefaultConstraintName = Nothing
                         , cMaxLen = Nothing
                         , cReference = ref
                         }
   where
-    stripSuffixes t =
-        loop'
-            [ "::character varying"
-            , "::text"
-            ]
-      where
-        loop' [] = t
-        loop' (p:ps) =
-            case T.stripSuffix p t of
-                Nothing -> loop' ps
-                Just t' -> t'
     getRef cname = do
         let sql = T.concat
                 [ "SELECT COUNT(*) FROM "
@@ -585,12 +576,12 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, ns
                 ]
         let ref = refName tname cname
         stmt <- getter sql
-        with (stmtQuery stmt
+        runResourceT $ stmtQuery stmt
                      [ PersistText $ unDBName tname
                      , PersistText $ unDBName ref
-                     ]) ($$ do
+                     ] $$ do
             Just [PersistInt64 i] <- CL.head
-            return $ if i == 0 then Nothing else Just (DBName "", ref))
+            return $ if i == 0 then Nothing else Just (DBName "", ref)
     d' = case d of
             PersistNull   -> Right Nothing
             PersistText t -> Right $ Just t
@@ -600,7 +591,8 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, ns
     getType "varchar"     = Right SqlString
     getType "date"        = Right SqlDay
     getType "bool"        = Right SqlBool
-    getType "timestamptz" = Right SqlDayTime
+    getType "timestamp"   = Right SqlDayTime
+    getType "timestamptz" = Right SqlDayTimeZoned
     getType "float4"      = Right SqlReal
     getType "float8"      = Right SqlReal
     getType "bytea"       = Right SqlBlob
@@ -618,7 +610,7 @@ sqlTypeEq :: SqlType -> SqlType -> Bool
 sqlTypeEq x y =
     T.toCaseFold (showSqlType x) == T.toCaseFold (showSqlType y)
 
-findAlters :: [EntityDef] -> DBName -> Column -> [Column] -> ([AlterColumn'], [Column])
+findAlters :: [EntityDef a] -> DBName -> Column -> [Column] -> ([AlterColumn'], [Column])
 findAlters defs _tablename col@(Column name isNull sqltype def _defConstraintName _maxLen ref) cols =
     case filter (\c -> cName c == name) cols of
         [] -> ([(name, Add' col)], cols)
@@ -641,18 +633,7 @@ findAlters defs _tablename col@(Column name isNull sqltype def _defConstraintNam
                                             Just s -> (:) (name, Update' s)
                                  in up [(name, NotNull)]
                             _ -> []
-                modType
-                    | sqlTypeEq sqltype sqltype' = []
-                    -- When converting from Persistent pre-2.0 databases, we
-                    -- need to make sure that TIMESTAMP WITHOUT TIME ZONE is
-                    -- treated as UTC.
-                    | sqltype == SqlDayTime && sqltype' == SqlOther "timestamp" =
-                        [(name, Type sqltype $ T.concat
-                            [ " USING "
-                            , escape name
-                            , " AT TIME ZONE 'UTC'"
-                            ])]
-                    | otherwise = [(name, Type sqltype "")]
+                modType = if sqlTypeEq sqltype sqltype' then [] else [(name, Type sqltype)]
                 modDef =
                     if def == def'
                         then []
@@ -663,7 +644,7 @@ findAlters defs _tablename col@(Column name isNull sqltype def _defConstraintNam
                  filter (\c -> cName c /= name) cols)
 
 -- | Get the references to be added to a table for the given column.
-getAddReference :: [EntityDef] -> DBName -> DBName -> DBName -> Maybe (DBName, DBName) -> Maybe AlterDB
+getAddReference :: [EntityDef a] -> DBName -> DBName -> DBName -> Maybe (DBName, DBName) -> Maybe AlterDB
 getAddReference allDefs table reftable cname ref =
     case ref of
         Nothing -> Nothing
@@ -695,7 +676,8 @@ showSqlType SqlReal = "DOUBLE PRECISION"
 showSqlType (SqlNumeric s prec) = T.concat [ "NUMERIC(", T.pack (show s), ",", T.pack (show prec), ")" ]
 showSqlType SqlDay = "DATE"
 showSqlType SqlTime = "TIME"
-showSqlType SqlDayTime = "TIMESTAMP WITH TIME ZONE"
+showSqlType SqlDayTime = "TIMESTAMP"
+showSqlType SqlDayTimeZoned = "TIMESTAMP WITH TIME ZONE"
 showSqlType SqlBlob = "BYTEA"
 showSqlType SqlBool = "BOOLEAN"
 
@@ -731,7 +713,7 @@ showAlterTable table (DropConstraint cname) = T.concat
     ]
 
 showAlter :: DBName -> AlterColumn' -> Text
-showAlter table (n, Type t extra) =
+showAlter table (n, Type t) =
     T.concat
         [ "ALTER TABLE "
         , escape table
@@ -739,7 +721,6 @@ showAlter table (n, Type t extra) =
         , escape n
         , " TYPE "
         , showSqlType t
-        , extra
         ]
 showAlter table (n, IsNull) =
     T.concat
@@ -839,7 +820,7 @@ data PostgresConf = PostgresConf
 instance PersistConfig PostgresConf where
     type PersistConfigBackend PostgresConf = SqlPersistT
     type PersistConfigPool PostgresConf = ConnectionPool
-    createPoolConfig (PostgresConf cs size) = runNoLoggingT $ createPostgresqlPool cs size -- FIXME
+    createPoolConfig (PostgresConf cs size) = createPostgresqlPool cs size
     runPool _ = runSqlPool
     loadConfig (Object o) = do
         database <- o .: "database"
