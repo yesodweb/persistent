@@ -955,7 +955,7 @@ data MongoConf = MongoConf
 defaultHost :: Text
 defaultHost = "127.0.0.1"
 defaultAccessMode :: DB.AccessMode
-defaultAccessMode = DB.ConfirmWrites ["j" DB.=: True]
+defaultAccessMode = DB.ConfirmWrites ["w" DB.:= DB.Int32 1]
 defaultPoolStripes, defaultStripeConnections :: Int
 defaultPoolStripes = 1
 defaultStripeConnections = 10
