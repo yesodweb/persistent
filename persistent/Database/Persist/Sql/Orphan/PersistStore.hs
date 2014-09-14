@@ -1,12 +1,14 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Database.Persist.Sql.Orphan.PersistStore (defaultIdName, sqlIdName, withRawQuery, BackendKey(..)) where
 
 import Database.Persist
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
+import Database.Persist.Sql.Class (IsSqlKey (..))
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import qualified Data.Text as T
@@ -32,6 +34,10 @@ withRawQuery :: MonadIO m
 withRawQuery sql vals sink = do
     srcRes <- rawQueryRes sql vals
     liftIO $ with srcRes (C.$$ sink)
+
+instance IsSqlKey (BackendKey SqlBackend) where
+    toSqlKey = SqlBackendKey
+    fromSqlKey = unSqlBackendKey
 
 instance PersistStore Connection where
     newtype BackendKey Connection = SqlBackendKey { unSqlBackendKey :: Int64 }
@@ -121,6 +127,7 @@ instance PersistStore Connection where
         t = entityDef $ Just val
         vals = map toPersistValue $ toPersistFields val
 
+    insertMany_ [] = return ()
     insertMany_ vals = do
         conn <- ask
         let sql = T.concat

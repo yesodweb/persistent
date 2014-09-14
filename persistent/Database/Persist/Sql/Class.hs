@@ -11,6 +11,7 @@ module Database.Persist.Sql.Class
     ( RawSql (..)
     , PersistFieldSql (..)
     , defaultIdName, sqlIdName
+    , IsSqlKey (..)
     ) where
 
 import Control.Applicative ((<$>), (<*>))
@@ -278,3 +279,10 @@ instance PersistFieldSql Rational where
 -- An embedded Entity
 instance (PersistField record, PersistEntity record) => PersistFieldSql (Entity record) where
     sqlType _ = SqlString
+
+-- | A class for all numeric SQL keys, for easy conversion to/from Int64 values.
+--
+-- Since 2.0.2
+class IsSqlKey a where
+    toSqlKey :: Int64 -> a
+    fromSqlKey :: a -> Int64

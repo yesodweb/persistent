@@ -33,7 +33,7 @@ import Data.Bson (genObjectId)
 
 import Control.Monad (liftM, void)
 import Control.Monad.Logger
-import Database.Persist.TH (mkDeleteCascade)
+import Database.Persist.TH (mkDeleteCascade, mkSave)
 import Database.Persist.Sqlite
 import Control.Exception (SomeException)
 import qualified Data.Text as T
@@ -80,7 +80,7 @@ import PersistTestPetCollarType
 #ifdef WITH_MONGODB
 mkPersist persistSettings [persistUpperCase|
 #else
-share [mkPersist persistSettings,  mkMigrate "testMigrate", mkDeleteCascade persistSettings] [persistUpperCase|
+share [mkPersist persistSettings,  mkMigrate "testMigrate", mkDeleteCascade persistSettings, mkSave "_ignoredSave"] [persistUpperCase|
 #endif
 
 -- Dedented comment
@@ -611,6 +611,10 @@ specs = describe "persistent" $ do
           e4 <- await
           e4 @== Nothing
 
+  it "insertMany_ with no arguments" $ db $ do
+    _ <- insertMany_ ([] :: [Person])
+    rows <- count ([] :: [Filter Person])
+    rows @== 0
 
   it "insertBy" $ db $ do
       Right _ <- insertBy $ Person "name" 1 Nothing
@@ -828,6 +832,13 @@ specs = describe "persistent" $ do
 
     insert_ $ UnprefixedLeftSum 5
     insert_ $ UnprefixedRightSum "Hello"
+
+  it "IsSqlKey instance" $ db $ do
+    let p = Person "Alice" 30 Nothing
+    key@(PersonKey (SqlBackendKey i)) <- insert p
+    liftIO $ fromSqlKey key `shouldBe` (i :: Int64)
+    mp <- get $ toSqlKey i
+    liftIO $ mp `shouldBe` Just p
 #endif
   
   describe "strictness" $ do
