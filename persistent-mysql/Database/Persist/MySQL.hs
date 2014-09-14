@@ -336,7 +336,7 @@ findTypeOfColumn allDefs name col =
             return (fieldType fieldDef)
 
 
--- | Helper for 'AddRefence' that finds out the 'entityID'.
+-- | Helper for 'AddRefence' that finds out the 'entityId'.
 addReference :: [EntityDef] -> DBName -> DBName -> DBName -> AlterColumn
 addReference allDefs fkeyname reftable cname = AddReference reftable fkeyname [cname] [id_] 
     where
