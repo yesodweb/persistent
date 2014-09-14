@@ -19,8 +19,7 @@ RUN rm -fr ghc-7.8.3-x86_64-unknown-linux-deb7.tar.bz2 ghc-7.8.3
 
 
 # Postgres
-# TODO: getting a failure for this now
-# RUN apt-get install -y postgresql postgresql-client postgresql-contrib libpq-dev
+RUN apt-get install -y postgresql postgresql-client postgresql-contrib libpq-dev
 
 # Sqlite
 RUN apt-get install -y sqlite3 libsqlite3-dev
