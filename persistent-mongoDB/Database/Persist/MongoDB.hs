@@ -361,7 +361,7 @@ runMongoDBPool accessMode action pool =
 
 -- | use default 'AccessMode'
 runMongoDBPoolDef :: (Trans.MonadIO m, MonadBaseControl IO m) => DB.Action m a -> ConnectionPool -> m a
-runMongoDBPoolDef = runMongoDBPool (DB.ConfirmWrites ["j" DB.=: True])
+runMongoDBPoolDef = runMongoDBPool defaultAccessMode
 
 filterByKey :: (PersistEntity record, PersistEntityBackend record ~ MongoBackend)
             => Key record -> DB.Document
