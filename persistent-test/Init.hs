@@ -8,6 +8,7 @@ module Init (
   , assertNotEqual
   , assertNotEmpty
   , assertEmpty
+  , isTravis
   , BackendMonad
   , runConn
 
@@ -52,6 +53,7 @@ import Test.QuickCheck
 import Database.Persist
 import Database.Persist.TH ()
 import Data.Text (Text, unpack)
+import System.Environment (getEnvironment)
 
 #ifdef WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
@@ -112,6 +114,13 @@ assertEmpty xs    = liftIO $ assertBool "" (null xs)
 
 assertNotEmpty :: (Monad m, MonadIO m) => [a] -> m ()
 assertNotEmpty xs = liftIO $ assertBool "" (not (null xs))
+
+isTravis :: IO Bool
+isTravis = do
+  env <- liftIO getEnvironment
+  return $ case lookup "TRAVIS" env of
+    Just "true" -> True
+    _ -> False
 
 #ifdef WITH_MONGODB
 persistSettings :: MkPersistSettings
