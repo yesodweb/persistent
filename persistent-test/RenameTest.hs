@@ -28,9 +28,7 @@ mkPersist persistSettings [persistUpperCase|
 share [mkPersist sqlSettings, mkMigrate "lowerCaseMigrate"] [persistLowerCase|
 #endif
 IdTable
-#ifndef WITH_MONGODB
     Id   Day default=CURRENT_DATE
-#endif
     name Text
     deriving Eq Show
 LowerCaseTable

@@ -629,11 +629,7 @@ mkKeyTypeDec mps t = do
                then do pfDec <- pfInstD
                        return (pfDec, [''Show, ''Read, ''Eq, ''Ord, ''Generic])
                 else do
-                    let addIsSqlKey
-                            | mpsBackend mps == ConT ''SqlBackend &&
-                              (fieldSqlType (entityId t) `elem` [SqlInt64, SqlInt32])
-                                = (''IsSqlKey :)
-                            | otherwise = id
+                    let addIsSqlKey = if not useSqlKey then id else (''IsSqlKey :)
                     return ([], addIsSqlKey [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''PersistField, ''PersistFieldSql, ''ToJSON, ''FromJSON])
 
     let kd = if useNewtype
@@ -641,6 +637,9 @@ mkKeyTypeDec mps t = do
                else DataInstD    [] k [recordType] [dec] i
     return (kd, instDecs)
   where
+    useSqlKey = mpsBackend mps == ConT ''SqlBackend
+             && (fieldSqlType (entityId t) `elem` [SqlInt64, SqlInt32])
+
     dec = RecC (keyConName t) keyFields
     k = ''Key
     recordType = genericDataType mps (entityHaskell t) backendT
@@ -659,10 +658,10 @@ mkKeyTypeDec mps t = do
     -- ghc 7.6 cannot parse the left arrow Ident $() <- lexP
     keyPattern = BindS (ConP 'Ident [LitP $ keyStringL t])
 
-    genericInstances = [|lexP|] >>= \lexPE ->
-      [| step readPrec >>= return . ($(pure $ ConE $ keyConName t) )|] >>= \readE ->
-        -- truly unfortunate that TH doesn't support standalone deriving
-        -- https://ghc.haskell.org/trac/ghc/ticket/8100
+    -- truly unfortunate that TH doesn't support standalone deriving
+    -- https://ghc.haskell.org/trac/ghc/ticket/8100
+    genericInstances = do
+      instances <- [|lexP|] >>= \lexPE -> [| step readPrec >>= return . ($(pure $ ConE $ keyConName t) )|] >>= \readE ->
         [d|instance Show (BackendKey $(pure backendT)) => Show (Key $(pure recordType)) where
               showsPrec i x = showParen (i > app_prec) $
                 (showString $ $(pure $ LitE $ keyStringL t) `mappend` " ") .
@@ -694,11 +693,14 @@ mkKeyTypeDec mps t = do
               toJSON = toJSON . $(return $ VarE $ unKeyName t)
            instance FromJSON (BackendKey $(pure backendT)) => FromJSON (Key $(pure recordType)) where
               parseJSON = fmap $(return $ ConE $ keyConName t) . parseJSON
-
-           instance IsSqlKey (BackendKey $(pure backendT)) => IsSqlKey (Key $(pure recordType)) where
+        |]
+      if not useSqlKey then return instances else do
+        sqlKeyInst <-
+          [d| instance IsSqlKey (BackendKey $(pure backendT)) => IsSqlKey (Key $(pure recordType)) where
               toSqlKey = $(return $ ConE $ keyConName t) . toSqlKey
               fromSqlKey = fromSqlKey . $(return $ VarE $ unKeyName t)
-        |]
+          |]
+        return $ instances `mappend` sqlKeyInst
 
     useNewtype = length keyFields < 2
     keyFields = case entityPrimary t of
