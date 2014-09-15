@@ -51,19 +51,19 @@ mkPersist persistSettings { mpsGeneric = False } [persistUpperCase|
 #else
 share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMigrate", mkDeleteCascade persistSettings { mpsGeneric = False }] [persistLowerCase|
 #endif
-  TestChild
-      name  String maxlen=20
-      name2 String maxlen=20
-      age Int
-      extra4 String
-      Foreign TestParent fkparent name name2 age
-      deriving Show Eq
   TestParent
       name  String maxlen=20
       name2 String maxlen=20
       age Int
       extra44 String
       Primary name name2 age
+      deriving Show Eq
+  TestChild
+      name  String maxlen=20
+      name2 String maxlen=20
+      age Int
+      extra4 String
+      Foreign TestParent fkparent name name2 age
       deriving Show Eq
   Tree
       name    Text
