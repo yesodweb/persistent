@@ -64,19 +64,14 @@ import qualified Data.HashMap.Strict as HM
 import Data.Aeson
     ( ToJSON (toJSON), FromJSON (parseJSON), (.=), object
     , Value (Object), (.:), (.:?)
-    , encode, eitherDecodeStrict'
+    , eitherDecodeStrict'
     )
-import qualified Data.ByteString as B
-import qualified Data.ByteString.Lazy as BL
 import Control.Applicative (pure, (<$>), (<*>))
 import Database.Persist.Sql (sqlType)
 import Data.Proxy (Proxy (Proxy))
 import Web.PathPieces (PathPiece, toPathPiece, fromPathPiece)
 import GHC.Generics (Generic)
 import Data.Int (Int64)
-import qualified Data.Aeson.Encode
-import Data.Text.Lazy.Builder (toLazyText)
-import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Encoding as TE
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
@@ -1190,7 +1185,7 @@ derivePersistField s = do
 derivePersistFieldJSON :: String -> Q [Dec]
 derivePersistFieldJSON s = do
     ss <- [|SqlString|]
-    tpv <- [|PersistText . TL.toStrict . toLazyText . Data.Aeson.Encode.fromValue . toJSON|]
+    tpv <- [|PersistText . toJsonText|]
     fpv <- [|\dt v -> do
                 text <- fromPersistValue v
                 let bs' = TE.encodeUtf8 text

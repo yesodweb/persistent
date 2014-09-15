@@ -15,6 +15,7 @@ module Database.Persist
       -- * JSON Utilities
     , listToJSON
     , mapToJSON
+    , toJsonText
     , getPersistMap
 
       -- * Other utililities
@@ -27,7 +28,7 @@ import Database.Persist.Class.PersistField (getPersistMap)
 import qualified Data.Text as T
 import Data.Text.Lazy (toStrict)
 import Data.Text.Lazy.Builder (toLazyText)
-import Data.Aeson (toJSON)
+import Data.Aeson (toJSON, ToJSON)
 #if MIN_VERSION_aeson(0, 7, 0)
 import Data.Aeson.Encode (encodeToTextBuilder)
 #else
@@ -70,17 +71,16 @@ infixl 3 ||.
 a ||. b = [FilterOr  [FilterAnd a, FilterAnd b]]
 
 listToJSON :: [PersistValue] -> T.Text
-#if MIN_VERSION_aeson(0, 7, 0)
-listToJSON = toStrict . toLazyText . encodeToTextBuilder . toJSON
-#else
-listToJSON = toStrict . toLazyText . fromValue . toJSON
-#endif
+listToJSON = toJsonText
 
 mapToJSON :: [(T.Text, PersistValue)] -> T.Text
+mapToJSON = toJsonText
+
+toJsonText :: ToJSON j => j -> T.Text
 #if MIN_VERSION_aeson(0, 7, 0)
-mapToJSON = toStrict . toLazyText . encodeToTextBuilder . toJSON
+toJsonText = toStrict . toLazyText . encodeToTextBuilder . toJSON
 #else
-mapToJSON = toStrict . toLazyText . fromValue . toJSON
+toJSonText = toStrict . toLazyText . fromValue . toJSON
 #endif
 
 limitOffsetOrder :: PersistEntity val => [SelectOpt val] -> (Int, Int, [SelectOpt val])
