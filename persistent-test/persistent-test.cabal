@@ -97,6 +97,8 @@ library
     hs-source-dirs: ., test, persistent, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mysql, persistent-couchdb
 
     ghc-options:   -Wall
+    if impl(ghc >= 7.8)
+      ghc-options: -Wall -j
     -- if impl(ghc >= 7.4)
     --   cpp-options: -DGHC_7_4
 
