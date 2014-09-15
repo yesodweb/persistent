@@ -154,7 +154,7 @@ instance Lift FieldsSqlTypeExp where
 data FieldSqlTypeExp = FieldSqlTypeExp FieldDef SqlTypeExp
 instance Lift FieldSqlTypeExp where
     lift (FieldSqlTypeExp (FieldDef{..}) sqlTypeExp) =
-      [|FieldDef fieldHaskell fieldDB fieldType sqlTypeExp fieldAttrs fieldStrict fieldReference|]
+      [|FieldDef fieldHaskell fieldDB fieldType $(lift sqlTypeExp) fieldAttrs fieldStrict fieldReference|]
 
 instance Lift EntityDefSqlTypeExp where
     lift (EntityDefSqlTypeExp ent sqlTypeExp sqlTypeExps) =
