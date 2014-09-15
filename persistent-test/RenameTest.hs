@@ -3,8 +3,8 @@
 module RenameTest (specs) where
 
 import Database.Persist.Sqlite
-#ifndef WITH_MONGODB
 import Data.Time (Day)
+#ifndef WITH_MONGODB
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import Control.Monad.Trans.Resource (runResourceT)
@@ -28,7 +28,9 @@ mkPersist persistSettings [persistUpperCase|
 share [mkPersist sqlSettings, mkMigrate "lowerCaseMigrate"] [persistLowerCase|
 #endif
 IdTable
+#ifndef WITH_MONGODB
     Id   Day default=CURRENT_DATE
+#endif
     name Text
     deriving Eq Show
 LowerCaseTable
@@ -46,6 +48,15 @@ RefTable
     text TextId
     UniqueRefTable someVal
 |]
+#if WITH_MONGODB
+cleanDB :: ReaderT MongoContext IO ()
+cleanDB = do
+  deleteWhere ([] :: [Filter IdTable])
+  deleteWhere ([] :: [Filter LowerCaseTable])
+  deleteWhere ([] :: [Filter RefTable])
+db :: Action IO () -> Assertion
+db = db' cleanDB
+#endif
 
 specs :: Spec
 specs = describe "rename specs" $ do

@@ -3,6 +3,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TemplateHaskell #-}
 module Init (
   (@/=), (@==), (==@)
   , assertNotEqual
@@ -21,6 +22,7 @@ module Init (
   , setupMongo
   , mkPersistSettings
   , Action
+  , MongoDB.MongoContext
 #else
   , db
   , sqlite_database

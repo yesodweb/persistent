@@ -10,7 +10,6 @@ import Control.Monad.Trans.Resource (runResourceT)
 import Init
 
 #ifdef WITH_MONGODB
-import Database.MongoDB (MongoContext)
 mkPersist persistSettings [persistUpperCase|
 #else
 -- Test lower case names
