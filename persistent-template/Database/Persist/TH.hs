@@ -194,7 +194,7 @@ setEmbedField allEntities field = field
                   then ForeignRef (HaskellName name)
                                   -- the EmebedEntityDef does not contain FieldType information
                                   -- but we shouldn't need this anyway
-                                  (FTTypeCon Nothing $ T.pack $ nameBase ''Int64)
+                                  (FTTypeCon Nothing $ pack $ nameBase ''Int64)
                   else NoReference
           Just em -> EmbedRef em
       existing@_   -> existing
