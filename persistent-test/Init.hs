@@ -158,7 +158,8 @@ runConn :: (MonadIO m, MonadBaseControl IO m) => SqlPersistT (NoLoggingT m) t ->
 runConn f = runNoLoggingT $ do
     _<-withSqlitePool sqlite_database 1 $ runSqlPool f
 #  if WITH_POSTGRESQL
-    _ <- if isTravis
+    t <- liftIO isTravis
+    _ <- if t
       then withPostgresqlPool "host=localhost port=5432 user=postgres dbname=persistent" 1 $ runSqlPool f
       else withPostgresqlPool "host=localhost port=5432 user=test dbname=test password=test" 1 $ runSqlPool f
 #  endif
