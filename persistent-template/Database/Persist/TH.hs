@@ -74,6 +74,10 @@ import Data.Proxy (Proxy (Proxy))
 import Web.PathPieces (PathPiece, toPathPiece, fromPathPiece)
 import GHC.Generics (Generic)
 import Data.Int (Int64)
+import qualified Data.Aeson.Encode
+import Data.Text.Lazy.Builder (toLazyText)
+import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Encoding as TE
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
@@ -1186,9 +1190,10 @@ derivePersistField s = do
 derivePersistFieldJSON :: String -> Q [Dec]
 derivePersistFieldJSON s = do
     ss <- [|SqlString|]
-    tpv <- [|PersistByteString . B.concat . BL.toChunks . encode|]
+    tpv <- [|PersistText . TL.toStrict . toLazyText . Data.Aeson.Encode.fromValue . toJSON|]
     fpv <- [|\dt v -> do
-                bs' <- fromPersistValue v
+                text <- fromPersistValue v
+                let bs' = TE.encodeUtf8 text
                 case eitherDecodeStrict' bs' of
                     Left e -> Left $ pack "JSON decoding error for " ++ pack dt ++ pack ": " ++ pack e ++ pack ". On Input: " ++ decodeUtf8 bs'
                     Right x -> Right x|]
