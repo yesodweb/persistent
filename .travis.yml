@@ -4,6 +4,7 @@ install:
     - cabal update
     - cabal install -j hspec cabal-meta cabal-src
     - cabal-meta install -j --only-dep --force-reinstalls
+    - cabal-meta install -j
 
 script:
     - mega-sdist --test
@@ -12,8 +13,6 @@ script:
     - cabal configure -fpostgresql --enable-tests
     - rm -f dist/build/Database/Persist/Sqlite.o
     - cabal test
-    - cd ..
-    - cabal-meta install
 
 addons:
   postgresql: "9.3"
