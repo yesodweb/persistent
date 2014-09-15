@@ -26,11 +26,11 @@ type TextId = Text
 mkPersist persistSettings [persistUpperCase|
 #else
 share [mkPersist sqlSettings, mkMigrate "lowerCaseMigrate"] [persistLowerCase|
+#endif
 IdTable
     Id   Day default=CURRENT_DATE
     name Text
     deriving Eq Show
-#endif
 LowerCaseTable
     Id            sql=my_id
     fullName Text
@@ -55,14 +55,16 @@ specs = describe "rename specs" $ do
             _ <- runMigration lowerCaseMigrate
             runResourceT $ rawQuery "SELECT full_name from lower_case_table WHERE my_id=5" [] C.$$ CL.sinkNull
             runResourceT $ rawQuery "SELECT something_else from ref_table WHERE id=4" [] C.$$ CL.sinkNull
+#endif
 
+#ifndef WITH_POSTGRESQL
     it "user specified id" $ db $ do
       let rec = IdTable "Foo"
       k <- insert rec
       Just rec' <- get k
       rec' @== rec
-        
 #endif
+
     it "extra blocks" $
         entityExtra (entityDef (Nothing :: Maybe LowerCaseTable)) @?=
             Map.fromList
