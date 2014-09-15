@@ -8,10 +8,17 @@ install:
 script:
     - mega-sdist --test
     - cd persistent-test
-    - cabal install -j --only-dep --enable-tests --force-reinstalls
+    - cabal install -j --only-dep -fpostgresql --enable-tests --force-reinstalls
+    - cabal configure -fpostgresql --enable-tests
+    - rm -f dist/build/Database/Persist/Sqlite.o
     - cabal test
     - cd ..
     - cabal-meta install
+
+addons:
+  postgresql: "9.3"
+before_script:
+  - psql -c 'create database test;' -U postgres
 
 #services:
 #    - redis-server
