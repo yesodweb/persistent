@@ -8,9 +8,7 @@ import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery, sqlIdName)
 import qualified Data.Text as T
 import Data.Monoid (mappend)
-import Control.Monad.Logger
 import qualified Data.Conduit.List as CL
-import Data.Conduit
 import Control.Monad.Trans.Reader (ask)
 
 instance PersistUnique Connection where
