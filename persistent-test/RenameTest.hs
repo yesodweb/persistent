@@ -3,15 +3,18 @@
 module RenameTest (specs) where
 
 import Database.Persist.Sqlite
-import Data.Time (Day)
 #ifndef WITH_MONGODB
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import Control.Monad.Trans.Resource (runResourceT)
+import Data.Time (Day)
+#else
+import Data.Time (Day, UTCTime(..), getCurrentTime)
 #endif
 import qualified Data.Map as Map
 import qualified Data.Text as T
 import Data.Aeson
+
 
 import Init
 
@@ -66,12 +69,22 @@ specs = describe "rename specs" $ do
             runResourceT $ rawQuery "SELECT something_else from ref_table WHERE id=4" [] C.$$ CL.sinkNull
 #endif
 
-#ifndef WITH_POSTGRESQL
+#ifdef WITH_MONGODB
+    it "user specified id" $ db $ do
+      let rec = IdTable "Foo"
+      now <- liftIO getCurrentTime
+      let key = IdTableKey $ utctDay now
+      insertKey key rec
+      Just rec' <- get key
+      rec' @== rec
+#else
+#  ifndef WITH_POSTGRESQL
     it "user specified id" $ db $ do
       let rec = IdTable "Foo"
       k <- insert rec
       Just rec' <- get k
       rec' @== rec
+#  endif
 #endif
 
     it "extra blocks" $
