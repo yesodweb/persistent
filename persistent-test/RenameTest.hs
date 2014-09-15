@@ -9,9 +9,6 @@ import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import Control.Monad.Trans.Resource (runResourceT)
 #endif
-#if WITH_POSTGRESQL
-import Database.Persist.Postgresql
-#endif
 import qualified Data.Map as Map
 import qualified Data.Text as T
 import Data.Aeson
@@ -53,8 +50,7 @@ RefTable
 specs :: Spec
 specs = describe "rename specs" $ do
 #ifndef WITH_MONGODB
-    it "handles lower casing" $ asIO $ do
-        print $ entityDef $ Just (undefined :: IdTable)
+    it "handles lower casing" $ asIO $
         runConn $ do
             _ <- runMigration lowerCaseMigrate
             runResourceT $ rawQuery "SELECT full_name from lower_case_table WHERE my_id=5" [] C.$$ CL.sinkNull

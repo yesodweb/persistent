@@ -9,9 +9,6 @@ import Test.QuickCheck.Instances ()
 import Test.QuickCheck.Random (newQCGen)
 import Database.Persist.Sqlite
 import Database.Persist.TH
-#if defined(WITH_POSTGRESQL)
-import Database.Persist.Postgresql
-#endif
 import Data.Char (generalCategory, GeneralCategory(..))
 import qualified Data.Text as T
 import Data.ByteString (ByteString)

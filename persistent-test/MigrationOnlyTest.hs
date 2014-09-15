@@ -6,9 +6,6 @@ module MigrationOnlyTest (specs) where
 import Database.Persist.Sqlite
 import Database.Persist.TH
 import Control.Monad.Trans.Resource (runResourceT)
-#if WITH_POSTGRESQL
-import Database.Persist.Postgresql
-#endif
 import qualified Data.Text as T
 
 import Init
