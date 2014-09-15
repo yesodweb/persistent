@@ -697,8 +697,8 @@ mkKeyTypeDec mps t = do
       if not useSqlKey then return instances else do
         sqlKeyInst <-
           [d| instance IsSqlKey (BackendKey $(pure backendT)) => IsSqlKey (Key $(pure recordType)) where
-              toSqlKey = $(return $ ConE $ keyConName t) . toSqlKey
-              fromSqlKey = fromSqlKey . $(return $ VarE $ unKeyName t)
+                toSqlKey = $(return $ ConE $ keyConName t) . toSqlKey
+                fromSqlKey = fromSqlKey . $(return $ VarE $ unKeyName t)
           |]
         return $ instances `mappend` sqlKeyInst
 
