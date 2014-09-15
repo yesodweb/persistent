@@ -27,8 +27,6 @@ import qualified Data.Map as M
 import Data.List (foldl')
 import Data.Monoid (mappend)
 import Control.Monad (msum, mplus)
-import Data.Int (Int64)
-import Language.Haskell.TH (nameBase)
 
 data ParseState a = PSDone | PSFail String | PSSuccess a Text deriving Show
 
