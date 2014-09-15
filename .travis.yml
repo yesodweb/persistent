@@ -10,6 +10,7 @@ script:
     - cd persistent-test
     - cabal install -j --only-dep --enable-tests --force-reinstalls
     - cabal test
+    - cd ..
     - cabal-meta install
 
 #services:
