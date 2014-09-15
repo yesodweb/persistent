@@ -2,14 +2,15 @@ language: haskell
 
 install:
     - cabal update
-    - cabal install hspec cabal-meta cabal-src
-    - cabal-meta install --force-reinstalls
+    - cabal install -j hspec cabal-meta cabal-src
+    - cabal-meta install --only-dep --force-reinstalls
 
 script:
     - mega-sdist --test
     - cd persistent-test
     - cabal install -j --only-dep --enable-tests --force-reinstalls
     - cabal test
+    - cabal-meta install
 
 services:
     - redis-server
