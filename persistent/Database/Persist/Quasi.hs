@@ -2,6 +2,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE TemplateHaskell #-}
 module Database.Persist.Quasi
     ( parse
     , PersistSettings (..)
@@ -26,6 +27,8 @@ import qualified Data.Map as M
 import Data.List (foldl')
 import Data.Monoid (mappend)
 import Control.Monad (msum, mplus)
+import Data.Int (Int64)
+import Language.Haskell.TH (nameBase)
 
 data ParseState a = PSDone | PSFail String | PSSuccess a Text deriving Show
 
@@ -348,10 +351,13 @@ mkAutoIdField entName idName idSqlType = FieldDef
       , fieldType = FTTypeCon Nothing $ keyConName $ unHaskellName entName
       , fieldSqlType = idSqlType
       -- the primary field is actually a reference to the entity
-      , fieldReference = ForeignRef entName (FTTypeCon Nothing "Int64")
+      , fieldReference = ForeignRef entName (FTTypeCon Nothing int64Text)
       , fieldAttrs = []
       , fieldStrict = True
       }
+
+int64Text :: Text
+int64Text = T.pack $ nameBase ''Int64
 
 keyConName :: Text -> Text
 keyConName entName = entName `mappend` "Id"
@@ -424,7 +430,7 @@ takeId ps tableName (n:rest) = fromMaybe (error "takeId: impossible!") $ setFiel
     addDefaultIdType = takeColsEx ps (field : keyCon : rest `mappend` setIdName)
     setFieldDef = fmap (\fd ->
       let refFieldType = if fieldType fd == FTTypeCon Nothing keyCon
-              then FTTypeCon Nothing "Int64"
+              then FTTypeCon Nothing int64Text
               else fieldType fd
       in fd { fieldReference = ForeignRef (HaskellName tableName) $ refFieldType
             })

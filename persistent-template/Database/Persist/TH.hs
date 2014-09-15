@@ -73,6 +73,7 @@ import Database.Persist.Sql (sqlType)
 import Data.Proxy (Proxy (Proxy))
 import Web.PathPieces (PathPiece, toPathPiece, fromPathPiece)
 import GHC.Generics (Generic)
+import Data.Int (Int64)
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
@@ -193,7 +194,7 @@ setEmbedField allEntities field = field
                   then ForeignRef (HaskellName name)
                                   -- the EmebedEntityDef does not contain FieldType information
                                   -- but we shouldn't need this anyway
-                                  (FTTypeCon Nothing "Int64")
+                                  (FTTypeCon Nothing $ T.pack $ nameBase ''Int64)
                   else NoReference
           Just em -> EmbedRef em
       existing@_   -> existing
