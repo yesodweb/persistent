@@ -8,6 +8,7 @@ module Init (
   , assertNotEqual
   , assertNotEmpty
   , assertEmpty
+  , isTravis
   , BackendMonad
   , runConn
 
@@ -52,6 +53,7 @@ import Test.QuickCheck
 import Database.Persist
 import Database.Persist.TH ()
 import Data.Text (Text, unpack)
+import System.Environment (getEnvironment)
 
 #ifdef WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
@@ -113,6 +115,13 @@ assertEmpty xs    = liftIO $ assertBool "" (null xs)
 assertNotEmpty :: (Monad m, MonadIO m) => [a] -> m ()
 assertNotEmpty xs = liftIO $ assertBool "" (not (null xs))
 
+isTravis :: IO Bool
+isTravis = do
+  env <- liftIO getEnvironment
+  return $ case lookup "TRAVIS" env of
+    Just "true" -> True
+    _ -> False
+
 #ifdef WITH_MONGODB
 persistSettings :: MkPersistSettings
 persistSettings = (mkPersistSettings $ ConT ''MongoDB.MongoContext) { mpsGeneric = True }
@@ -149,7 +158,10 @@ runConn :: (MonadIO m, MonadBaseControl IO m) => SqlPersistT (NoLoggingT m) t ->
 runConn f = runNoLoggingT $ do
     _<-withSqlitePool sqlite_database 1 $ runSqlPool f
 #  if WITH_POSTGRESQL
-    _<-withPostgresqlPool "host=localhost port=5432 user=test dbname=test password=test" 1 $ runSqlPool f
+    t <- liftIO isTravis
+    _ <- if t
+      then withPostgresqlPool "host=localhost port=5432 user=postgres dbname=persistent" 1 $ runSqlPool f
+      else withPostgresqlPool "host=localhost port=5432 user=test dbname=test password=test" 1 $ runSqlPool f
 #  endif
 #  if WITH_MYSQL
     _ <- withMySQLPool defaultConnectInfo

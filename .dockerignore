@@ -1,1 +1,11 @@
+dist/
+/persistent/
+/persistent-template/
+/persistent-mongodb/
+/persistent-postgresql/
+/persistent-redis/
+/persistent-sqlite/
+/persistent-template/
+/experimental/
+/scripts/
 *

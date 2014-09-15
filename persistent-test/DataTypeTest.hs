@@ -1,11 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE EmptyDataDecls #-}
+{-# LANGUAGE QuasiQuotes, TemplateHaskell, CPP, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, EmptyDataDecls, FlexibleInstances, GeneralizedNewtypeDeriving #-}
 module DataTypeTest (specs) where
 
 import Test.QuickCheck.Arbitrary (Arbitrary, arbitrary)
@@ -14,11 +9,6 @@ import Test.QuickCheck.Instances ()
 import Test.QuickCheck.Random (newQCGen)
 import Database.Persist.Sqlite
 import Database.Persist.TH
-#if defined(WITH_POSTGRESQL)
-import Database.Persist.Postgresql
-#elif defined(WITH_MYSQL)
-import Database.Persist.MySQL
-#endif
 import Data.Char (generalCategory, GeneralCategory(..))
 import qualified Data.Text as T
 import Data.ByteString (ByteString)

@@ -2,14 +2,22 @@ language: haskell
 
 install:
     - cabal update
-    - cabal install hspec cabal-meta cabal-src
-    - cabal-meta install --force-reinstalls
+    - cabal install -j hspec cabal-meta cabal-src
+    - cabal-meta install -j --only-dep --force-reinstalls
+    - cabal-meta install -j
 
 script:
     - mega-sdist --test
     - cd persistent-test
+    - cabal install -j --only-dep -fpostgresql --enable-tests --force-reinstalls
+    - cabal configure -fpostgresql --enable-tests
     - rm -f dist/build/Database/Persist/Sqlite.o
-    - cabal install --enable-tests --force-reinstalls
+    - cabal test
 
-services:
-    - redis-server
+addons:
+  postgresql: "9.3"
+before_script:
+  - psql -c 'create database persistent;' -U postgres
+
+#services:
+#    - redis-server

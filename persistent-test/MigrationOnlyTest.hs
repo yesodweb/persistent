@@ -1,23 +1,11 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE OverloadedStrings #-}
-
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE QuasiQuotes, TemplateHaskell, CPP, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, EmptyDataDecls, FlexibleInstances, GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE EmptyDataDecls #-}
 module MigrationOnlyTest (specs) where
 
 import Database.Persist.Sqlite
 import Database.Persist.TH
 import Control.Monad.Trans.Resource (runResourceT)
-#if WITH_POSTGRESQL
-import Database.Persist.Postgresql
-#endif
 import qualified Data.Text as T
 
 import Init

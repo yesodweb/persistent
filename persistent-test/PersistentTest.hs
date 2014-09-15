@@ -46,9 +46,6 @@ import qualified Control.Exception.Control as Control
 #  endif
 import System.Random
 
-#  if WITH_POSTGRESQL
-import Database.Persist.Postgresql
-#endif
 #  if WITH_MYSQL
 import Database.Persist.MySQL()
 #  endif

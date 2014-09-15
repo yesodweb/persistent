@@ -19,8 +19,7 @@ RUN rm -fr ghc-7.8.3-x86_64-unknown-linux-deb7.tar.bz2 ghc-7.8.3
 
 
 # Postgres
-# TODO: getting a failure for this now
-# RUN apt-get install -y postgresql postgresql-client postgresql-contrib libpq-dev
+RUN apt-get install -y postgresql postgresql-client postgresql-contrib libpq-dev
 
 # Sqlite
 RUN apt-get install -y sqlite3 libsqlite3-dev
@@ -77,7 +76,8 @@ ENV HOME /home/persistent
 # mysql_install_db --datadir=/home/persistent/persistent-test/db
 # mysqld_safe --datadir=/home/persistent/persistent-test/db
 
-# TODO: change the directory that is used to to be persistent-test/db
-# su postgres -c '/usr/lib/postgresql/9.1/bin/postgres -D /var/lib/postgresql/9.1/main --config_file=/etc/postgresql/9.1/main/postgresql.conf' &
-# su postgres -c 'createuser -P -d -r -s docker'
-# su postgres -c 'createdb -O docker docker'
+# I would like to run postgres as the persistent user
+# but I am not sure how. The below is for root
+# /usr/lib/postgresql/9.3/bin/postgres --config_file=/etc/postgresql/9.3/main/postgresql.conf
+# su postgres -c 'createuser -P -d -r -s persistent'
+# su postgres -c 'createdb -O persistent persistent'

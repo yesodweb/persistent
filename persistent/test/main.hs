@@ -77,14 +77,14 @@ main = hspec $ do
                 ]
     describe "parseFieldType" $ do
         it "simple types" $
-            parseFieldType "FooBar" `shouldBe` Just (FTTypeCon Nothing "FooBar")
+            parseFieldType "FooBar" `shouldBe` Right (FTTypeCon Nothing "FooBar")
         it "module types" $
-            parseFieldType "Data.Map.FooBar" `shouldBe` Just (FTTypeCon (Just "Data.Map") "FooBar")
+            parseFieldType "Data.Map.FooBar" `shouldBe` Right (FTTypeCon (Just "Data.Map") "FooBar")
         it "application" $
-            parseFieldType "Foo Bar" `shouldBe` Just (
+            parseFieldType "Foo Bar" `shouldBe` Right (
                 FTTypeCon Nothing "Foo" `FTApp` FTTypeCon Nothing "Bar")
         it "application multiple" $
-            parseFieldType "Foo Bar Baz" `shouldBe` Just (
+            parseFieldType "Foo Bar Baz" `shouldBe` Right (
                 (FTTypeCon Nothing "Foo" `FTApp` FTTypeCon Nothing "Bar")
                 `FTApp` FTTypeCon Nothing "Baz"
                 )
@@ -92,12 +92,12 @@ main = hspec $ do
             let foo = FTTypeCon Nothing "Foo"
                 bar = FTTypeCon Nothing "Bar"
                 baz = FTTypeCon Nothing "Baz"
-            parseFieldType "Foo (Bar Baz)" `shouldBe` Just (
+            parseFieldType "Foo (Bar Baz)" `shouldBe` Right (
                 foo `FTApp` (bar `FTApp` baz))
         it "lists" $ do
             let foo = FTTypeCon Nothing "Foo"
                 bar = FTTypeCon Nothing "Bar"
                 bars = FTList bar
                 baz = FTTypeCon Nothing "Baz"
-            parseFieldType "Foo [Bar] Baz" `shouldBe` Just (
+            parseFieldType "Foo [Bar] Baz" `shouldBe` Right (
                 foo `FTApp` bars `FTApp` baz)

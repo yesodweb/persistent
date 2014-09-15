@@ -193,10 +193,6 @@ library
      cpp-options: -DHIGH_PRECISION_DATE
 
   default-language: Haskell2010
-  default-extensions: GeneralizedNewtypeDeriving
-                      OverloadedStrings
-                      FlexibleInstances
-                      TemplateHaskell
 
 
 test-suite test
@@ -204,10 +200,6 @@ test-suite test
   main-is:       main.hs
   hs-source-dirs: test
   default-language: Haskell2010
-  default-extensions: GeneralizedNewtypeDeriving
-                      OverloadedStrings
-                      FlexibleInstances
-                      TemplateHaskell
 
   build-depends:   base >= 4 && < 5
                  , persistent-test

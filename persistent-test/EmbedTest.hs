@@ -1,14 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE QuasiQuotes, TemplateHaskell, CPP, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, EmptyDataDecls, FlexibleInstances, GeneralizedNewtypeDeriving #-}
 module EmbedTest (specs,
 #ifndef WITH_MONGODB
 embedMigrate
@@ -29,7 +21,6 @@ import Database.MongoDB (Value(String))
 import EntityEmbedTest
 import System.Process (readProcess)
 #endif
-import System.Environment (getEnvironment)
 import Database.Persist.Sql.Class
 import Data.List.NonEmpty hiding (insert, length)
 import Data.Time
@@ -170,13 +161,6 @@ unlessM :: MonadIO m => IO Bool -> m () -> m ()
 unlessM predicate body = do
     b <- liftIO predicate
     unless b body
-
-isTravis :: IO Bool
-isTravis = do
-  env <- liftIO getEnvironment
-  return $ case lookup "TRAVIS" env of
-    Just "true" -> True
-    _ -> False
 
 specs :: Spec
 specs = describe "embedded entities" $ do
