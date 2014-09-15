@@ -588,16 +588,17 @@ instance PersistUnique DB.MongoContext where
             -}
    
 
-_id :: T.Text
-_id = "_id"
+-- | It would make more sense to call this _id, but GHC treats leading underscore in special ways
+id_ :: T.Text
+id_ = "_id"
 
 -- _id is always the primary key in MongoDB
 -- but _id can contain any unique value
 keyToMongoDoc :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
                   => Key record -> DB.Document
 keyToMongoDoc k = case entityPrimary $ entityDefFromKey k of
-    Nothing   -> zipToDoc [DBName _id] values
-    Just pdef -> [_id DB.=: zipToDoc (primaryNames pdef)  values]
+    Nothing   -> zipToDoc [DBName id_] values
+    Just pdef -> [id_ DB.=: zipToDoc (primaryNames pdef)  values]
   where
     primaryNames = map fieldDB . compositeFields
     values = keyToValues k
@@ -659,7 +660,7 @@ instance PersistQuery DB.MongoContext where
         context <- ask
         let make = do
                 cursor <- liftIO $ flip runReaderT context $ DB.find $ (makeQuery filts opts) {
-                    DB.project = [_id DB.=: (1 :: Int)]
+                    DB.project = [id_ DB.=: (1 :: Int)]
                   }
                 pull context cursor
         return $ return make
@@ -807,7 +808,7 @@ toValue val =
       Right vs -> DB.val $ map toPersistValue vs
 
 fieldName ::  forall record typ.  (PersistEntity record) => EntityField record typ -> DB.Label
-fieldName f | fieldHaskell fd == HaskellName "Id" = _id
+fieldName f | fieldHaskell fd == HaskellName "Id" = id_
             | otherwise = unDBName $ fieldDB $ fd
   where
     fd = persistFieldDef f
@@ -839,7 +840,7 @@ eitherFromPersistValues :: (PersistEntity record) => EntityDef -> [DB.Field] -> 
 eitherFromPersistValues entDef doc =
     let castDoc = assocListFromDoc doc
         -- normally _id is the first field
-        mKey = lookup _id castDoc
+        mKey = lookup id_ castDoc
     in case mKey of
          Nothing -> Left "could not find _id field"
          Just kpv -> fromPersistValues (map snd $ orderPersistValues (toEmbedEntityDef entDef) castDoc)
