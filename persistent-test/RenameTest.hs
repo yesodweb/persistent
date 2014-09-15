@@ -18,10 +18,8 @@ import Data.Aeson
 
 import Init
 
-instance ToJSON Day where
-    toJSON = error "Day.toJSON"
-instance FromJSON Day where
-    parseJSON = error "Day.parseJSON"
+instance ToJSON Day   where toJSON    = error "Day.toJSON"
+instance FromJSON Day where parseJSON = error "Day.parseJSON"
 
 -- persistent used to not allow types with an "Id" suffix
 type TextId = Text

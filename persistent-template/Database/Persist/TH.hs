@@ -56,7 +56,7 @@ import Data.Text (pack, Text, append, unpack, concat, uncons, cons, stripPrefix,
 import Data.Text.Encoding (decodeUtf8)
 import qualified Data.Text.IO as TIO
 import Data.List (foldl')
-import Data.Maybe (isJust, listToMaybe, mapMaybe, fromMaybe, isNothing)
+import Data.Maybe (isJust, listToMaybe, mapMaybe, fromMaybe)
 import Data.Monoid (mappend, mconcat)
 import Text.Read (readPrec, lexP, step, prec, parens, Lexeme(Ident))
 import qualified Data.Map as M
@@ -631,8 +631,8 @@ mkKeyTypeDec mps t = do
                 else do
                     let addIsSqlKey
                             | mpsBackend mps == ConT ''SqlBackend &&
-                              isNothing (entityPrimary t) =
-                                (''IsSqlKey :)
+                              (fieldSqlType (entityId t) `elem` [SqlInt64, SqlInt32])
+                                = (''IsSqlKey :)
                             | otherwise = id
                     return ([], addIsSqlKey [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''PersistField, ''PersistFieldSql, ''ToJSON, ''FromJSON])
 
