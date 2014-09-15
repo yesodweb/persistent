@@ -102,6 +102,7 @@ import qualified Database.Persist.Sql as Sql
 
 import qualified Control.Monad.IO.Class as Trans
 import Control.Exception (throw, throwIO)
+import Data.Acquire (mkAcquire)
 
 import Data.Bson (ObjectId(..))
 import qualified Database.MongoDB as DB
@@ -632,13 +633,18 @@ instance PersistQuery DB.MongoContext where
         query = DB.select (filtersToDoc filts) $
                   collectionName $ dummyFromFilts filts
 
+    -- | uses cursor options snapshot=True and NoCursorTimeout
     selectSourceRes filts opts = do
         context <- ask
-        let make = do
-                cursor <- liftIO $ runReaderT (DB.find $ makeQuery filts opts) context
-                pull context cursor
-        return $ return make
+        return (pull context `fmap` mkAcquire (open context) (close context))
       where
+        close :: DB.MongoContext -> DB.Cursor -> IO ()
+        close context cursor = runReaderT (DB.closeCursor cursor) context
+        open :: DB.MongoContext -> IO DB.Cursor
+        open = runReaderT (DB.find (makeQuery filts opts)
+                   { DB.snapshot = True
+                   , DB.options = [DB.NoCursorTimeout]
+                   })
         pull context cursor = do
             mdoc <- liftIO $ runReaderT (DB.nextBatch cursor) context
             case mdoc of
