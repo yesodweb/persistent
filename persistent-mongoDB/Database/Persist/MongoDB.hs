@@ -633,7 +633,7 @@ instance PersistQuery DB.MongoContext where
         query = DB.select (filtersToDoc filts) $
                   collectionName $ dummyFromFilts filts
 
-    -- | uses cursor options NoCursorTimeout
+    -- | uses cursor option NoCursorTimeout
     -- If there is no sorting, it will turn the $snapshot option on
     -- and explicitly closes the cursor when done
     selectSourceRes filts opts = do
