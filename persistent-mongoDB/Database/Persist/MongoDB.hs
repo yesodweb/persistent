@@ -344,7 +344,7 @@ runMongoDBPool accessMode action pool =
 
 -- | use default 'AccessMode'
 runMongoDBPoolDef :: (Trans.MonadIO m, MonadBaseControl IO m) => DB.Action m a -> ConnectionPool -> m a
-runMongoDBPoolDef = runMongoDBPool (DB.ConfirmWrites ["j" DB.=: True])
+runMongoDBPoolDef = runMongoDBPool defaultAccessMode
 
 queryByKey :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
            => Key record -> DB.Query
@@ -1022,7 +1022,7 @@ data MongoConf = MongoConf
 defaultHost :: Text
 defaultHost = "127.0.0.1"
 defaultAccessMode :: DB.AccessMode
-defaultAccessMode = DB.ConfirmWrites ["j" DB.=: True]
+defaultAccessMode = DB.ConfirmWrites ["w" DB.:= DB.Int32 1]
 defaultPoolStripes, defaultStripeConnections :: Int
 defaultPoolStripes = 1
 defaultStripeConnections = 10
