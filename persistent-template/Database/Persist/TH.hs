@@ -71,7 +71,6 @@ import Database.Persist.Sql (sqlType)
 import Data.Proxy (Proxy (Proxy))
 import Web.PathPieces (PathPiece, toPathPiece, fromPathPiece)
 import GHC.Generics (Generic)
-import Data.Int (Int64)
 import qualified Data.Text.Encoding as TE
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
@@ -193,7 +192,7 @@ setEmbedField allEntities field = field
                   then ForeignRef (HaskellName name)
                                   -- the EmebedEntityDef does not contain FieldType information
                                   -- but we shouldn't need this anyway
-                                  (FTTypeCon Nothing $ pack $ nameBase ''Int64)
+                                  (FTTypeCon Nothing $ pack $ nameBase ''Int)
                   else NoReference
           Just em -> EmbedRef em
       existing@_   -> existing

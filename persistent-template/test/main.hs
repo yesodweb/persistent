@@ -15,7 +15,6 @@ import Database.Persist.TH
 import Database.Persist.Types (PersistValue(..))
 import Data.Text (Text, pack)
 import Data.Aeson
-import Data.Int (Int64)
 
 share [mkPersist sqlSettings { mpsGeneric = False }, mkDeleteCascade sqlSettings { mpsGeneric = False }] [persistUpperCase|
 Person json
