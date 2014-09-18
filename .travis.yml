@@ -13,11 +13,17 @@ script:
     - cabal configure -fpostgresql --enable-tests
     - rm -f dist/build/Database/Persist/Sqlite.o
     - cabal test
+    - cabal configure -fmysql --enable-tests
+    - cabal test
+    - cabal configure -fmongodb --enable-tests
+    - cabal test
 
 addons:
   postgresql: "9.3"
 before_script:
   - psql -c 'create database persistent;' -U postgres
+  - mysql -e 'create database persistent;'
 
-#services:
-#    - redis-server
+services:
+    - mysql
+    - mongodb
