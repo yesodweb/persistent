@@ -14,6 +14,7 @@ script:
     - rm -f dist/build/Database/Persist/Sqlite.o
     - cabal test
     - cabal configure -fmysql --enable-tests
+    - rm -f dist/build/Database/Persist/Sqlite.o
     - cabal test
     - cabal configure -fmongodb --enable-tests
     - cabal test
