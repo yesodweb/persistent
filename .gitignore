@@ -34,3 +34,7 @@ cabal.sandbox.config
 .dbshell
 # can use this for Docker databases
 persistent-test/db/
+
+# docker image with a mounted file system
+/x86_64-linux-ghc-7.8.3-packages.conf.d/
+/packages/
