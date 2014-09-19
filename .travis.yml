@@ -16,6 +16,8 @@ script:
     - cabal test
     - cabal configure -fmongodb --enable-tests
     - cabal test
+    - cabal configure --enable-tests
+    - cabal test
 
 addons:
   postgresql: "9.3"
