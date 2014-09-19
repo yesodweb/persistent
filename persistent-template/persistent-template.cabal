@@ -1,5 +1,5 @@
 name:            persistent-template
-version:         2.0.3.1
+version:         2.0.4
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -17,7 +17,7 @@ extra-source-files: test/main.hs
 library
     build-depends:   base                     >= 4         && < 5
                    , template-haskell
-                   , persistent               >= 2.0.3     && < 2.1
+                   , persistent               >= 2.0.4     && < 2.1
                    , monad-control            >= 0.2       && < 0.4
                    , bytestring               >= 0.9
                    , text                     >= 0.5
