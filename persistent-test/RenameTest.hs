@@ -76,15 +76,15 @@ specs = describe "rename specs" $ do
       insertKey key rec
       Just rec' <- get key
       rec' @== rec
-#  endif
 
-# ifndef WITH_MONGODB
+#    ifndef WITH_MONGODB
     -- this uses default=
     it "user specified id, default=" $ db $ do
       let rec = IdTable "Foo"
       k <- insert rec
       Just rec' <- get k
       rec' @== rec
+#    endif
 #  endif
 #endif
 
