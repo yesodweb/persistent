@@ -913,6 +913,9 @@ catch' a handler = Control.Monad.Trans.Control.control $ \runInIO ->
                             (\e -> runInIO $ handler e)
 #endif
 
+#ifndef WITH_MYSQL
+#  ifndef WITH_POSTGRESQL
+#    ifndef WITH_MONGODB
 caseAfterException :: Assertion
 caseAfterException = runNoLoggingT $ runResourceT $ withSqlitePool sqlite_database 1 $ runSqlPool $ do
     _ <- insert $ Person "A" 0 Nothing
@@ -922,6 +925,9 @@ caseAfterException = runNoLoggingT $ runResourceT $ withSqlitePool sqlite_databa
   where
     catcher :: Monad m => SomeException -> m ()
     catcher _ = return ()
+#    endif
+#  endif
+#endif
 
 #endif
 
