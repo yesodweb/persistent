@@ -72,7 +72,6 @@ import Data.Proxy (Proxy (Proxy))
 import Web.PathPieces (PathPiece, toPathPiece, fromPathPiece)
 import GHC.Generics (Generic)
 import qualified Data.Text.Encoding as TE
-import Database.Persist.Sql (sqlIdName)
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
@@ -823,10 +822,8 @@ mkEntity mps t = do
     puk <- mkUniqueKeys t
     fkc <- mapM (mkForeignKeysComposite mps t) $ entityForeigns t
 
-    let primaryField = (entityId t)
-            { fieldDB = sqlIdName t
-            }
-
+    let primaryField = entityId t
+    
     fields <- mapM (mkField mps t) $ primaryField : entityFields t
     toFieldNames <- mkToFieldNames $ entityUniques t
 
