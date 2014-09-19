@@ -10,11 +10,10 @@ script:
     - mega-sdist --test
     - cd persistent-test
     - cabal install -j --only-dep -fpostgresql --enable-tests --force-reinstalls
-    - cabal configure -fpostgresql --enable-tests
     - rm -f dist/build/Database/Persist/Sqlite.o
+    - cabal configure -fpostgresql --enable-tests
     - cabal test
     - cabal configure -fmysql --enable-tests
-    - rm -f dist/build/Database/Persist/Sqlite.o
     - cabal test
     - cabal configure -fmongodb --enable-tests
     - cabal test

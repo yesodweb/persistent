@@ -91,8 +91,14 @@ library
 
                      Database.Persist.TH
 
-                     Database.Persist.Sqlite
-                     Database.Sqlite
+    if flag(postgresql)
+      exposed-modules:
+    else
+      if flag(mysql)
+        exposed-modules:
+      else
+        exposed-modules: Database.Persist.Sqlite
+                         Database.Sqlite
 
     hs-source-dirs: ., test, persistent, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mysql, persistent-couchdb
 
