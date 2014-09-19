@@ -83,22 +83,29 @@ data PersistSettings = PersistSettings
     -- ^ Whether fields are by default strict. Default value: @True@.
     --
     -- Since 1.2
+    , psIdName :: !Text
+    -- ^ The name of the id column. Default value: @id@
+    -- The name of the id column can also be changed on a per-model basis
+    -- <https://github.com/yesodweb/persistent/wiki/Persistent-entity-syntax>
+    --
+    -- Since 2.0
     }
 
-upperCaseSettings :: PersistSettings
-upperCaseSettings = PersistSettings
+defaultPersistSettings, upperCaseSettings, lowerCaseSettings :: PersistSettings
+defaultPersistSettings = PersistSettings
     { psToDBName = id
     , psStrictFields = True
+    , psIdName       = "id"
     }
 
-lowerCaseSettings :: PersistSettings
-lowerCaseSettings = PersistSettings
+upperCaseSettings = defaultPersistSettings
+
+lowerCaseSettings = defaultPersistSettings
     { psToDBName =
         let go c
                 | isUpper c = T.pack ['_', toLower c]
                 | otherwise = T.singleton c
          in T.dropWhile (== '_') . T.concatMap go
-    , psStrictFields = True
     }
 
 -- | Parses a quasi-quoted syntax into a list of entity definitions.
@@ -326,7 +333,7 @@ mkEntityDef ps name entattribs lines =
     cols :: [FieldDef]
     cols = mapMaybe (takeColsEx ps) attribs
 
-    autoIdField = mkAutoIdField entName (DBName `fmap` idName) idSqlType
+    autoIdField = mkAutoIdField ps entName (DBName `fmap` idName) idSqlType
     idSqlType = maybe SqlInt64 (const $ SqlOther "Primary Key") primaryComposite
 
     setComposite Nothing fd = fd
@@ -339,13 +346,13 @@ just1 (Just x) (Just y) = error $ "expected only one of: "
 just1 x y = x `mplus` y
                 
 
-mkAutoIdField :: HaskellName -> Maybe DBName -> SqlType -> FieldDef
-mkAutoIdField entName idName idSqlType = FieldDef
+mkAutoIdField :: PersistSettings -> HaskellName -> Maybe DBName -> SqlType -> FieldDef
+mkAutoIdField ps entName idName idSqlType = FieldDef
       { fieldHaskell = HaskellName "Id"
       -- this should be modeled as a Maybe
       -- but that sucks for non-ID field
       -- TODO: use a sumtype FieldDef | IdFieldDef
-      , fieldDB = fromMaybe (DBName "") idName
+      , fieldDB = fromMaybe (DBName $ psIdName ps) idName
       , fieldType = FTTypeCon Nothing $ keyConName $ unHaskellName entName
       , fieldSqlType = idSqlType
       -- the primary field is actually a reference to the entity
@@ -432,7 +439,7 @@ takeId ps tableName (n:rest) = fromMaybe (error "takeId: impossible!") $ setFiel
     keyCon = keyConName tableName
     -- this will be ignored if there is already an existing sql=
     -- TODO: I think there is a ! ignore syntax that would screw this up
-    setIdName = ["sql="]
+    setIdName = ["sql=" `mappend` psIdName ps]
 takeId _ tableName _ = error $ "empty Id field for " `mappend` show tableName
 
     
