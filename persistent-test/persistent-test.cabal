@@ -46,14 +46,15 @@ flag systemlib
   default: False
 
 library
-    if flag(systemlib)
-        extra-libraries: sqlite3
-    else
-        c-sources:   cbits/sqlite3.c
-        cc-options:  -fPIC
+    if !flag(postgresql) && !flag(mysql) && !flag(mongodb)
+      if flag(systemlib)
+          extra-libraries: sqlite3
+      else
+          c-sources:   cbits/sqlite3.c
+          cc-options:  -fPIC
 
-    if !os(windows)
-        extra-libraries: pthread
+      if !os(windows)
+          extra-libraries: pthread
 
     exposed-modules: PersistentTest
                      PersistTestPetType
@@ -102,9 +103,8 @@ library
 
                      Database.Persist.TH
 
-    if !flag(postgresql) && !flag(mysql) && !flag(mongodb)
-      exposed-modules: Database.Persist.Sqlite
-                       Database.Sqlite
+                     Database.Persist.Sqlite
+                     Database.Sqlite
 
     hs-source-dirs: ., test, persistent, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mysql, persistent-couchdb
 
