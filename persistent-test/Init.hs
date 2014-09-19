@@ -173,7 +173,7 @@ runConn f = runNoLoggingT $ do
 #  else
 #    if WITH_MYSQL
     travis <- liftIO isTravis
-    _ <- if travis
+    _ <- if not travis
       then withMySQLPool defaultConnectInfo
                         { connectHost     = "localhost"
                         , connectUser     = "test"
