@@ -3,7 +3,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 module MigrationOnlyTest (specs) where
 
-import Database.Persist.Sqlite
 import Database.Persist.TH
 import Control.Monad.Trans.Resource (runResourceT)
 import qualified Data.Text as T

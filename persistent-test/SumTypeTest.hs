@@ -4,7 +4,6 @@
 {-# LANGUAGE QuasiQuotes, TemplateHaskell, CPP, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, EmptyDataDecls, FlexibleInstances, GeneralizedNewtypeDeriving #-}
 module SumTypeTest (specs) where
 
-import Database.Persist.Sqlite
 import Database.Persist.TH
 import Control.Monad.Trans.Resource (runResourceT)
 import qualified Data.Text as T

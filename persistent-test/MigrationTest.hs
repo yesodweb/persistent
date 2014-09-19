@@ -4,9 +4,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 module MigrationTest where
 
-#ifndef WITH_MONGODB
-import Database.Persist.Sqlite
-#endif
 import Database.Persist.TH
 import qualified Data.Text as T
 

@@ -40,6 +40,9 @@ module Init (
   , Text
   , module Control.Monad.Trans.Reader
   , module Control.Monad
+#ifndef WITH_MONGODB
+  , module Database.Persist.Sql
+#endif
 ) where
 
 -- re-exports
@@ -68,16 +71,20 @@ import qualified Data.ByteString as BS
 import Control.Monad (void)
 
 #else
-import Database.Persist.Sqlite
+import Database.Persist.Sql
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import Control.Monad.Logger
 
-#if WITH_POSTGRESQL
+#  if WITH_POSTGRESQL
 import Database.Persist.Postgresql
-#endif
-#if WITH_MYSQL
+#  else
+#    ifndef WITH_MYSQL
+import Database.Persist.Sqlite
+#    endif
+#  endif
+#  if WITH_MYSQL
 import Database.Persist.MySQL
-#endif
+#  endif
 
 #endif
 

@@ -2,7 +2,6 @@
 {-# LANGUAGE QuasiQuotes, TemplateHaskell, CPP, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, EmptyDataDecls, FlexibleInstances, GeneralizedNewtypeDeriving #-}
 module HtmlTest (specs) where
 
-import Database.Persist.Sqlite
 import Database.Persist.TH
 import Data.Char (generalCategory, GeneralCategory(..))
 import qualified Data.Text as T

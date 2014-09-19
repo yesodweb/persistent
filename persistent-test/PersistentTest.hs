@@ -34,7 +34,6 @@ import Data.Bson (genObjectId)
 import Control.Monad (liftM, void)
 import Control.Monad.Logger
 import Database.Persist.TH (mkDeleteCascade, mkSave)
-import Database.Persist.Sqlite
 import Control.Exception (SomeException)
 import qualified Data.Text as T
 #  if MIN_VERSION_monad_control(0, 3, 0)
