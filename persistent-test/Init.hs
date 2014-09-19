@@ -159,13 +159,14 @@ sqlite_database = "test/testdb.sqlite3"
 runConn :: (MonadIO m, MonadBaseControl IO m) => SqlPersistT (NoLoggingT m) t -> m ()
 runConn f = runNoLoggingT $ do
     _<-withSqlitePool sqlite_database 1 $ runSqlPool f
-    travis <- liftIO isTravis
 #  if WITH_POSTGRESQL
+    travis <- liftIO isTravis
     _ <- if travis
       then withPostgresqlPool "host=localhost port=5432 user=postgres dbname=persistent" 1 $ runSqlPool f
       else withPostgresqlPool "host=localhost port=5432 user=test dbname=test password=test" 1 $ runSqlPool f
 #  endif
 #  if WITH_MYSQL
+    travis <- liftIO isTravis
     _ <- if travis
       then withMySQLPool defaultConnectInfo
                         { connectHost     = "localhost"
