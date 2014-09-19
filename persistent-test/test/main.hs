@@ -45,9 +45,7 @@ main = do
   when sqExists $ removeFile $ fromText sqlite_database
   runConn (setup PersistentTest.testMigrate)
   runConn (setup PersistentTest.noPrefixMigrate)
-#endif
 
-#ifndef WITH_MONGODB
   runConn (setup EmbedTest.embedMigrate)
   runConn (setup EmbedOrderTest.embedOrderMigrate)
   runConn (setup LargeNumberTest.numberMigrate)
@@ -63,9 +61,7 @@ main = do
 
   hspec $ do
     RenameTest.specs
-#ifndef WITH_POSTGRESQL
     DataTypeTest.specs
-#endif
     HtmlTest.specs
     EmbedTest.specs
     EmbedOrderTest.specs
@@ -76,9 +72,7 @@ main = do
     MigrationOnlyTest.specs
     PersistentTest.specs
     EmptyEntityTest.specs
-#ifndef WITH_MONGODB
     CompositeTest.specs
+#ifndef WITH_MONGODB
     MigrationTest.specs
-#else
-    PersistentTest.specs
 #endif

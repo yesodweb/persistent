@@ -36,12 +36,11 @@ import qualified Control.Exception.Control as Control
 #  endif
 
 import Init
-#ifndef WITH_MONGODB
 import Data.Maybe (isJust)
 
 import Control.Applicative ((<$>),(<*>))
+#ifndef WITH_MONGODB
 import Database.Persist.TH (mkDeleteCascade)
-#else
 #endif
 
 
@@ -97,6 +96,9 @@ cleanDB = do
 
 db :: Action IO () -> Assertion
 db = db' cleanDB
+
+specs :: Spec
+specs = return ()
 #else
 
 specs :: Spec
@@ -239,6 +241,7 @@ specs = describe "composite" $
       let [Entity newkca1 newca2] = xs
       matchCitizenAddressK kca1 @== matchCitizenAddressK newkca1
       ca1 @== newca2
+#endif
 
 matchK :: (PersistField a, PersistEntity record) => Key record -> Either Text a
 matchK = (\(pv:[]) -> fromPersistValue pv) . keyToValues
@@ -255,7 +258,6 @@ matchParentK = (\(a:b:c:[]) -> (,,) <$> fromPersistValue a <*> fromPersistValue 
 matchCitizenAddressK :: Key CitizenAddress -> Either Text (Int64, Int64)
 matchCitizenAddressK = (\(a:b:[]) -> (,) <$> fromPersistValue a <*> fromPersistValue b)
                      . keyToValues
-#endif
 
 #if MIN_VERSION_monad_control(0, 3, 0)
 catch' :: (Control.Monad.Trans.Control.MonadBaseControl IO m, E.Exception e)
@@ -266,5 +268,3 @@ catch' a handler = Control.Monad.Trans.Control.control $ \runInIO ->
                     E.catch (runInIO a)
                             (\e -> runInIO $ handler e)
 #endif
-
-
