@@ -52,6 +52,9 @@ library
         c-sources:   cbits/sqlite3.c
         cc-options:  -fPIC
 
+    if !os(windows)
+        extra-libraries: pthread
+
     exposed-modules: PersistentTest
                      PersistTestPetType
                      PersistTestPetCollarType
@@ -99,17 +102,9 @@ library
 
                      Database.Persist.TH
 
-    if flag(postgresql)
-      exposed-modules:
-    else
-      if flag(mysql)
-        exposed-modules:
-      else
-        if flag(mongodb)
-          exposed-modules:
-        else
-          exposed-modules: Database.Persist.Sqlite
-                           Database.Sqlite
+    if !flag(postgresql) && !flag(mysql) && !flag(mongodb)
+      exposed-modules: Database.Persist.Sqlite
+                       Database.Sqlite
 
     hs-source-dirs: ., test, persistent, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mysql, persistent-couchdb
 

@@ -38,7 +38,7 @@ library
     if flag(systemlib)
         extra-libraries: sqlite3
     else
-        c-sources:   cbits/sqlite3.c
+        c-sources:   persistent-sqlite/cbits/sqlite3.c
         cc-options:  -fPIC
 
     if !os(windows)
