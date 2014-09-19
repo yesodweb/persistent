@@ -10,9 +10,9 @@ script:
     - mega-sdist --test
     - cd persistent-test
     - cabal install -j --only-dep  --enable-tests --force-reinstalls
-    - cabal configure -fmysql --enable-tests
-    - cabal test
     - cabal configure -fpostgresql --enable-tests
+    - cabal test
+    - cabal configure -fmysql --enable-tests
     - cabal test
     - cabal configure -fmongodb --enable-tests
     - cabal test
