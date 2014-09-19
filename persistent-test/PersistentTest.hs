@@ -808,7 +808,20 @@ specs = describe "persistent" $ do
 
   it "commit/rollback" (caseCommitRollback >> runResourceT (runConn cleanDB))
 
-  it "afterException" caseAfterException
+#ifndef WITH_MYSQL
+#  ifndef WITH_POSTGRESQL
+#    ifndef WITH_MONGODB
+  it "afterException" $ db $ do
+    let catcher :: Monad m => SomeException -> m ()
+        catcher _ = return ()
+    _ <- insert $ Person "A" 0 Nothing
+    _ <- (insert (Person "A" 1 Nothing) >> return ()) `catch` catcher
+    _ <- insert $ Person "B" 0 Nothing
+    return ()
+#    endif
+#  endif
+#endif
+
 
 #ifndef WITH_MONGODB
   it "mpsNoPrefix" $ db $ do
@@ -911,22 +924,6 @@ catch' :: (Control.Monad.Trans.Control.MonadBaseControl IO m, E.Exception e)
 catch' a handler = Control.Monad.Trans.Control.control $ \runInIO ->
                     E.catch (runInIO a)
                             (\e -> runInIO $ handler e)
-#endif
-
-#ifndef WITH_MYSQL
-#  ifndef WITH_POSTGRESQL
-#    ifndef WITH_MONGODB
-caseAfterException :: Assertion
-caseAfterException = runNoLoggingT $ runResourceT $ withSqlitePool sqlite_database 1 $ runSqlPool $ do
-    _ <- insert $ Person "A" 0 Nothing
-    _ <- (insert (Person "A" 1 Nothing) >> return ()) `catch` catcher
-    _ <- insert $ Person "B" 0 Nothing
-    return ()
-  where
-    catcher :: Monad m => SomeException -> m ()
-    catcher _ = return ()
-#    endif
-#  endif
 #endif
 
 #endif
