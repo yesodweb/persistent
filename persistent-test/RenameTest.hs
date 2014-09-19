@@ -68,6 +68,7 @@ specs = describe "rename specs" $ do
 
 -- also does not work on mysql
 #ifndef WITH_POSTGRESQL
+#  ifndef WITH_MYSQL
     it "user specified id, insertKey, no default=" $ db $ do
       let rec = IdTable "Foo"
       now <- liftIO getCurrentTime
@@ -75,6 +76,7 @@ specs = describe "rename specs" $ do
       insertKey key rec
       Just rec' <- get key
       rec' @== rec
+#  endif
 
 # ifndef WITH_MONGODB
     -- this uses default=
