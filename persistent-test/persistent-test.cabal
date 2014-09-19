@@ -41,8 +41,16 @@ flag nooverlap
     default: False
     description: test out our assumption that OverlappingInstances is just for String
 
+flag systemlib
+  description: Use the system-wide sqlite library
+  default: False
+
 library
-    extra-libraries: sqlite3
+    if flag(systemlib)
+        extra-libraries: sqlite3
+    else
+        c-sources:   cbits/sqlite3.c
+        cc-options:  -fPIC
 
     exposed-modules: PersistentTest
                      PersistTestPetType
@@ -97,8 +105,11 @@ library
       if flag(mysql)
         exposed-modules:
       else
-        exposed-modules: Database.Persist.Sqlite
-                         Database.Sqlite
+        if flag(mongodb)
+          exposed-modules:
+        else
+          exposed-modules: Database.Persist.Sqlite
+                           Database.Sqlite
 
     hs-source-dirs: ., test, persistent, persistent-template, persistent-sqlite, persistent-postgresql, persistent-mysql, persistent-couchdb
 
