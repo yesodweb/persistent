@@ -402,7 +402,7 @@ migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
                                         , " SERIAL PRIMARY KEY UNIQUE"]
                     let addTable = AddTable $ T.concat
                             -- Lower case e: see Database.Persist.Sql.Migration
-                            [ "CREATe TABLE "
+                            [ "CREATe TABLE " -- DO NOT FIX THE CAPITALIZATION!
                             , escape name
                             , "("
                             , idtxt
