@@ -124,7 +124,7 @@ insertSql' ent vals =
         where
           sel = T.concat
               [ "SELECT "
-              , escape $ sqlIdName ent
+              , escape $ fieldDB (entityId ent)
               , " FROM "
               , escape $ entityDB ent
               , " WHERE _ROWID_=last_insert_rowid()"
@@ -228,7 +228,7 @@ getCopyTable allDefs getter def = do
     let oldCols = map DBName $ filter (/= "id") oldCols' -- need to update for table id attribute ?
     let newCols = filter (not . safeToRemove def) $ map cName cols
     let common = filter (`elem` oldCols) newCols
-    let id_ = sqlIdName def
+    let id_ = fieldDB (entityId def)
     return [ (False, tmpSql)
            , (False, copyToTemp $ id_ : common)
            , (common /= filter (not . safeToRemove def) oldCols, dropOld)
@@ -295,7 +295,7 @@ mkCreateTable isTemp entity (cols, uniqs) =
         , " TABLE "
         , escape $ entityDB entity
         , "("
-        , escape $ sqlIdName entity
+        , escape $ fieldDB (entityId entity)
         , " "
         , showSqlType $ fieldSqlType $ entityId entity
         ," PRIMARY KEY"

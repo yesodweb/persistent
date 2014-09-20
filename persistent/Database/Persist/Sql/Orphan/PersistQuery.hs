@@ -11,7 +11,7 @@ module Database.Persist.Sql.Orphan.PersistQuery
 import Database.Persist hiding (updateField)
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
-import Database.Persist.Sql.Orphan.PersistStore (sqlIdName, withRawQuery)
+import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
 import qualified Data.Text as T
 import Data.Text (Text)
 import Data.Monoid (Monoid (..), (<>))
@@ -100,7 +100,7 @@ instance PersistQuery Connection where
                 [] -> ""
                 ords -> " ORDER BY " <> T.intercalate "," ords
         cols conn = T.intercalate ","
-                  $ (if composite then [] else [connEscapeName conn $ sqlIdName t])
+                  $ (if composite then [] else [connEscapeName conn $ fieldDB (entityId t)])
                   <> map (connEscapeName conn . fieldDB) (entityFields t)
         sql conn = connLimitOffset conn (limit,offset) (not (null orders)) $ mconcat
             [ "SELECT "
@@ -119,7 +119,7 @@ instance PersistQuery Connection where
         t = entityDef $ dummyFromFilts filts
         cols conn = case entityPrimary t of 
                      Just pdef -> T.intercalate "," $ map (connEscapeName conn . fieldDB) $ compositeFields pdef
-                     Nothing   -> connEscapeName conn $ sqlIdName t
+                     Nothing   -> connEscapeName conn $ fieldDB (entityId t)
                       
         wher conn = if null filts
                     then ""

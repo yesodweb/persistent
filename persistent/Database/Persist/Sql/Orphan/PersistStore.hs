@@ -3,7 +3,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-module Database.Persist.Sql.Orphan.PersistStore (sqlIdName, withRawQuery, BackendKey(..)) where
+module Database.Persist.Sql.Orphan.PersistStore (withRawQuery, BackendKey(..)) where
 
 import Database.Persist
 import Database.Persist.Sql.Types
@@ -22,7 +22,7 @@ import Control.Monad.Trans.Reader (ReaderT, ask)
 import Data.Acquire (with)
 import Data.Int (Int64)
 import Web.PathPieces (PathPiece)
-import Database.Persist.Sql.Class (PersistFieldSql, sqlIdName)
+import Database.Persist.Sql.Class (PersistFieldSql)
 import qualified Data.Aeson as A
 import Control.Exception.Lifted (throwIO)
 
@@ -54,7 +54,7 @@ instance PersistStore Connection where
         let go' (x, pu) = go'' (connEscapeName conn x) pu
         let wher = case entityPrimary t of
                 Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (fieldDB fld) <> "=? ") $ compositeFields pdef
-                Nothing   -> connEscapeName conn (sqlIdName t) <> "=?"
+                Nothing   -> connEscapeName conn (fieldDB (entityId t)) <> "=?"
         let sql = T.concat
                 [ "UPDATE "
                 , connEscapeName conn $ entityDB t
@@ -157,7 +157,7 @@ instance PersistStore Connection where
                 , " SET "
                 , T.intercalate "," (map (go conn . fieldDB) $ entityFields t)
                 , " WHERE "
-                , connEscapeName conn $ sqlIdName t
+                , connEscapeName conn $ fieldDB (entityId t)
                 , "=?"
                 ]
             vals = map toPersistValue (toPersistFields val) `mappend` keyToValues k
@@ -182,7 +182,7 @@ instance PersistStore Connection where
             noColumns = null $ entityFields t
         let wher = case entityPrimary t of
                      Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (fieldDB fld) <> "=? ") $ compositeFields pdef
-                     Nothing   -> connEscapeName conn (sqlIdName t) <> "=?"
+                     Nothing   -> connEscapeName conn (fieldDB (entityId t)) <> "=?"
         let sql = T.concat
                 [ "SELECT "
                 , if noColumns then "*" else cols
@@ -208,7 +208,7 @@ instance PersistStore Connection where
         wher conn = 
               case entityPrimary t of
                 Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (fieldDB fld) <> "=? ") $ compositeFields pdef
-                Nothing   -> connEscapeName conn (sqlIdName t) <> "=?"
+                Nothing   -> connEscapeName conn (fieldDB (entityId t)) <> "=?"
         sql conn = T.concat
             [ "DELETE FROM "
             , connEscapeName conn $ entityDB t
@@ -236,7 +236,7 @@ insrepHelper command k val = do
         , "("
         , T.intercalate ","
             $ map (connEscapeName conn)
-            $ sqlIdName t : map fieldDB (entityFields t)
+            $ fieldDB (entityId t) : map fieldDB (entityFields t)
         , ") VALUES("
         , T.intercalate "," ("?" : map (const "?") (entityFields t))
         , ")"

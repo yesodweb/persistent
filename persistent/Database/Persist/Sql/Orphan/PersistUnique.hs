@@ -5,7 +5,7 @@ module Database.Persist.Sql.Orphan.PersistUnique () where
 import Database.Persist
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
-import Database.Persist.Sql.Orphan.PersistStore (withRawQuery, sqlIdName)
+import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
 import qualified Data.Text as T
 import Data.Monoid (mappend)
 import qualified Data.Conduit.List as CL
@@ -33,7 +33,7 @@ instance PersistUnique Connection where
         let flds = map (connEscapeName conn . fieldDB) (entityFields t)
         let cols = case entityPrimary t of
                      Just _ -> T.intercalate "," flds
-                     Nothing -> T.intercalate "," $ connEscapeName conn (sqlIdName t) : flds
+                     Nothing -> T.intercalate "," $ connEscapeName conn (fieldDB (entityId t)) : flds
         let sql = T.concat
                 [ "SELECT "
                 , cols

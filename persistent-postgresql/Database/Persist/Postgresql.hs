@@ -159,7 +159,7 @@ insertSql' ent vals =
                 ]
   in case entityPrimary ent of
        Just _pdef -> ISRManyKeys sql vals
-       Nothing -> ISRSingle (sql <> " RETURNING " <> escape (sqlIdName ent))
+       Nothing -> ISRSingle (sql <> " RETURNING " <> escape (fieldDB (entityId ent)))
 
 execute' :: PG.Connection -> PG.Query -> [PersistValue] -> IO Int64
 execute' conn query vals = PG.execute conn query (map P vals)
@@ -398,7 +398,7 @@ migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
                 then do
                     let idtxt = case entityPrimary val of
                                   Just pdef -> T.concat [" PRIMARY KEY (", T.intercalate "," $ map (escape . fieldDB) $ compositeFields pdef, ")"]
-                                  Nothing   -> T.concat [escape $ sqlIdName val
+                                  Nothing   -> T.concat [escape $ fieldDB (entityId val)
                                         , " SERIAL PRIMARY KEY UNIQUE"]
                     let addTable = AddTable $ T.concat
                             -- Lower case e: see Database.Persist.Sql.Migration
@@ -459,7 +459,7 @@ getColumns getter def = do
     stmt <- getter sqlv
     let vals =
             [ PersistText $ unDBName $ entityDB def
-            , PersistText $ unDBName $ sqlIdName def
+            , PersistText $ unDBName $ fieldDB (entityId def)
             ]
     cs <- with (stmtQuery stmt vals) ($$ helper)
     let sqlc = T.concat ["SELECT "
@@ -632,7 +632,7 @@ findAlters defs _tablename col@(Column name isNull sqltype def _defConstraintNam
                 refDrop (Just (_, cname)) = [(name, DropReference cname)]
                 refAdd Nothing = []
                 refAdd (Just (tname, a)) = case find ((==tname) . entityDB) defs of
-                                                Just refdef -> [(tname, AddReference a [name] [sqlIdName refdef])]
+                                                Just refdef -> [(tname, AddReference a [name] [fieldDB (entityId refdef)])]
                                                 Nothing -> error $ "could not find the entityDef for reftable[" ++ show tname ++ "]"
                 modRef =
                     if fmap snd ref == fmap snd ref'
@@ -677,7 +677,7 @@ getAddReference allDefs table reftable cname ref =
                             id_ = fromMaybe (error $ "Could not find ID of entity " ++ show reftable)
                                         $ do
                                           entDef <- find ((== reftable) . entityDB) allDefs
-                                          return (sqlIdName entDef)
+                                          return (fieldDB (entityId entDef))
 
 
 showColumn :: Column -> Text
