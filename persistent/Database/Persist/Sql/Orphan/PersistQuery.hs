@@ -11,7 +11,7 @@ module Database.Persist.Sql.Orphan.PersistQuery
 import Database.Persist hiding (updateField)
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
-import Database.Persist.Sql.Orphan.PersistStore (defaultIdName, sqlIdName, withRawQuery)
+import Database.Persist.Sql.Orphan.PersistStore (sqlIdName, withRawQuery)
 import qualified Data.Text as T
 import Data.Text (Text)
 import Data.Monoid (Monoid (..), (<>))
@@ -221,11 +221,7 @@ updateWhereCount filts upds = do
     updateField _ = error "BackendUpdate not implemented"
 
 fieldName ::  forall record typ.  (PersistEntity record, PersistEntityBackend record ~ Connection) => EntityField record typ -> DBName
-fieldName f | isIdField f && dbName == DBName "" = DBName defaultIdName
-            | otherwise = dbName
-  where
-    dbName = fieldDB fd
-    fd = persistFieldDef f
+fieldName f = fieldDB $ persistFieldDef f
 
 isIdField ::  forall record typ.  (PersistEntity record) => EntityField record typ -> Bool
 isIdField f = fieldHaskell (persistFieldDef f) == HaskellName "Id"

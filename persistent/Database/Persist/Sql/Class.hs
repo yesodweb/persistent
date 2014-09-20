@@ -10,7 +10,7 @@
 module Database.Persist.Sql.Class
     ( RawSql (..)
     , PersistFieldSql (..)
-    , defaultIdName, sqlIdName
+    , sqlIdName
     , IsSqlKey (..)
     ) where
 
@@ -39,14 +39,8 @@ import Text.Blaze.Html (Html)
 import Data.Bits (bitSize)
 import qualified Data.Vector as V
 
-defaultIdName :: Text
-defaultIdName = "id"
-
 sqlIdName :: EntityDef -> DBName
-sqlIdName ent =
-    if primaryName /= (DBName "") then primaryName else DBName defaultIdName
-  where
-    primaryName = fieldDB (entityId ent)
+sqlIdName ent = fieldDB (entityId ent)
 
 -- | Class for data types that may be retrived from a 'rawSql'
 -- query.

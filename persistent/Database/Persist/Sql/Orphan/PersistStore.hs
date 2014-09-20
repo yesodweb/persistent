@@ -3,7 +3,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-module Database.Persist.Sql.Orphan.PersistStore (defaultIdName, sqlIdName, withRawQuery, BackendKey(..)) where
+module Database.Persist.Sql.Orphan.PersistStore (sqlIdName, withRawQuery, BackendKey(..)) where
 
 import Database.Persist
 import Database.Persist.Sql.Types
@@ -22,7 +22,7 @@ import Control.Monad.Trans.Reader (ReaderT, ask)
 import Data.Acquire (with)
 import Data.Int (Int64)
 import Web.PathPieces (PathPiece)
-import Database.Persist.Sql.Class (PersistFieldSql, defaultIdName, sqlIdName)
+import Database.Persist.Sql.Class (PersistFieldSql, sqlIdName)
 import qualified Data.Aeson as A
 import Control.Exception.Lifted (throwIO)
 
