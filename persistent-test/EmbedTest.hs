@@ -340,6 +340,7 @@ specs = describe "embedded entities" $ do
         res @== (Entity contK container)
 
 
+  describe "mongoDB updates" $ do
     it "mongo single nesting updates" $ db $ do
         let usr = User "foo" (Just "pswd") prof
             prof = Profile "fstN" "lstN" (Just con)
