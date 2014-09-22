@@ -4,9 +4,10 @@ module Database.Persist.Types
     ( module Database.Persist.Types.Base
     , SomePersistField (..)
     , Update (..)
+    , BackendSpecificUpdate
     , SelectOpt (..)
-    , BackendSpecificFilter
     , Filter (..)
+    , BackendSpecificFilter
     , Key
     , Entity (..)
     ) where

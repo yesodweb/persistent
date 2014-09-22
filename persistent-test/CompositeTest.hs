@@ -36,10 +36,10 @@ import qualified Control.Exception.Control as Control
 #  endif
 
 import Init
-import Data.Maybe (isJust)
 
 import Control.Applicative ((<$>),(<*>))
 #ifndef WITH_MONGODB
+import Data.Maybe (isJust)
 import Database.Persist.TH (mkDeleteCascade)
 #endif
 

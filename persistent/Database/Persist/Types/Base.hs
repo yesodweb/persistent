@@ -432,5 +432,6 @@ instance Show OnlyUniqueException where
 instance Exception OnlyUniqueException
 
 
-data PersistUpdate = Assign | Add | Subtract | Multiply | Divide -- FIXME need something else here
-    deriving (Read, Show, Enum, Bounded)
+data PersistUpdate = Assign | Add | Subtract | Multiply | Divide
+                   | BackendSpecificUpdate T.Text
+    deriving (Read, Show)

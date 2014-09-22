@@ -1316,6 +1316,7 @@ instance Lift PersistUpdate where
     lift Subtract = [|Subtract|]
     lift Multiply = [|Multiply|]
     lift Divide = [|Divide|]
+    lift (BackendSpecificUpdate x) = [|BackendSpecificUpdate x|]
 
 instance Lift SqlType where
     lift SqlString = [|SqlString|]

@@ -329,7 +329,6 @@ specs = describe "embedded entities" $ do
         Just nbq2 <- selectFirst [HasListEmbedList ~>. HasEmbedEmbed &->. OnlyNameName `nestBsonEq` String "1"] []
         nbq2 @== contEnt
 
-
     it "regexp match" $ db $ do
         let container = HasListEmbed "list" [
                 (HasEmbed "embed" (OnlyName "abcd"))
@@ -339,6 +338,33 @@ specs = describe "embedded entities" $ do
         let mkReg t = (t, "ims")
         Just res <- selectFirst [HasListEmbedName =~. mkReg "ist"] []
         res @== (Entity contK container)
+
+
+    it "mongo single nesting updates" $ db $ do
+        let usr = User "foo" (Just "pswd") prof
+            prof = Profile "fstN" "lstN" (Just con)
+            con = Contact 123456 "foo@bar.com"
+        uid <- insert usr
+        let newName = "fstN2"
+        usr1 <- updateGet uid [UserProfile &->. ProfileFirstName `nestSet` newName]
+        (profileFirstName $ userProfile usr1) @== newName
+
+        let newEmail = "foo@example.com"
+        let newIdent = "bar"
+        usr2 <- updateGet uid [UserProfile &~>. ProfileContact ?&->. ContactEmail `nestSet` newEmail, UserIdent =. newIdent]
+        (userIdent usr2) @== newIdent
+        (fmap contactEmail . profileContact . userProfile $ usr2) @== Just newEmail
+
+
+    it "mongo embedded array updates" $ db $ do
+        let container = HasListEmbed "list" [
+                (HasEmbed "embed" (OnlyName "1"))
+              , (HasEmbed "embed" (OnlyName "2"))
+              ]
+        contk <- insert container
+        let contEnt = Entity contk container
+        pushed <- updateGet contk [HasListEmbedList `push` HasEmbed "embed" (OnlyName "3")]
+        (Prelude.map (onlyNameName . hasEmbedEmbed) $ hasListEmbedList pushed) @== ["1","2","3"]
 
 
   it "re-orders json inserted from another source" $ db $ do
