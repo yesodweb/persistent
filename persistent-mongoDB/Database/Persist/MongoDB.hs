@@ -33,15 +33,22 @@ module Database.Persist.MongoDB
     , filtersToDoc
     , toUniquesDoc
 
-    -- * MongoDB specific Filters
+    -- * MongoDB specific queries
+    -- $nested
+    , (->.), (~>.), (?&->.), (?&~>.), (&->.), (&~>.)
+    -- ** Filters
     -- $filters
     , nestEq, nestNe, nestGe, nestLe, nestIn, nestNotIn
-    , anyEq, multiEq, nestBsonEq, anyBsonEq, multiBsonEq
-    , (=~.), (?=~.), MongoRegex
-    , (->.), (~>.), (?&->.), (?&~>.), (&->.), (&~>.)
+    , anyEq, nestBsonEq, anyBsonEq, multiBsonEq
+    , (=~.)
     -- non-operator forms of filters
     , NestedField(..)
     , MongoRegexSearchable
+    , MongoRegex
+
+    -- ** Updates
+    -- $updates
+    , nestSet, nestInc, nestDec, nestMul, push
 
     -- * Key conversion helpers
     , BackendKey(..)
@@ -354,28 +361,39 @@ selectByKey :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoCont
             => Key record -> DB.Selection
 selectByKey k = DB.select (keyToMongoDoc k) (collectionNameFromKey k)
 
-updatesToDoc :: (PersistEntity entity) => [Update entity] -> DB.Document
+updatesToDoc :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
+             => [Update record] -> DB.Document
 updatesToDoc upds = map updateToMongoField upds
 
-updateToMongoField :: (PersistEntity entity) => Update entity -> DB.Field
-updateToMongoField (Update field v up) =
-    opName DB.:= DB.Doc [fieldName field DB.:= opValue]
-    where 
-      inc = "$inc"
-      mul = "$mul"
-      (opName, opValue) =
-        case (up, toPersistValue v) of
-                  (Assign, PersistNull) -> ("$unset", DB.Int64 1)
-                  (Assign,a)    -> ("$set", DB.val a)
-                  (Add, a)      -> (inc, DB.val a)
-                  (Subtract, PersistInt64 i) -> (inc, DB.Int64 (-i))
-                  (Multiply, PersistInt64 i) -> (mul, DB.Int64 i)
-                  (Multiply, PersistDouble d) -> (mul, DB.Float d)
-                  (Subtract, _) -> error "expected PersistInt64 for a subtraction"
-                  (Multiply, _) -> error "expected PersistInt64 or PersistDouble for a subtraction"
-                  -- Obviously this could be supported for floats by multiplying with 1/x
-                  (Divide, _)   -> throw $ PersistMongoDBUnsupported "divide not supported"
-updateToMongoField (BackendUpdate {}) = error "no backend updates implemented yet"
+updateToBson :: forall a. ( PersistField a)
+             => Text
+             -> a
+             -> PersistUpdate
+             -> DB.Field
+updateToBson fname v up =
+    opName DB.:= DB.Doc [fname DB.:= opValue]
+  where
+    inc = "$inc"
+    mul = "$mul"
+    (opName, opValue) = case (up, toPersistValue v) of
+        (Assign, PersistNull) -> ("$unset", DB.Int64 1)
+        (Assign,a)    -> ("$set", DB.val a)
+        (Add, a)      -> (inc, DB.val a)
+        (Subtract, PersistInt64 i) -> (inc, DB.Int64 (-i))
+        (Multiply, PersistInt64 i) -> (mul, DB.Int64 i)
+        (Multiply, PersistDouble d) -> (mul, DB.Float d)
+        (Subtract, _) -> error "expected PersistInt64 for a subtraction"
+        (Multiply, _) -> error "expected PersistInt64 or PersistDouble for a subtraction"
+        -- Obviously this could be supported for floats by multiplying with 1/x
+        (Divide, _)   -> throw $ PersistMongoDBUnsupported "divide not supported"
+        (BackendSpecificUpdate op, x) -> case op of
+            "$push" -> ("$push", DB.val x)
+            bsup    -> throw $ PersistMongoDBError $ T.pack $ "did not expect BackendSpecificUpdate " ++ T.unpack bsup
+
+updateToMongoField :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
+                   => Update record -> DB.Field
+updateToMongoField (Update field v up) = updateToBson (fieldName field) v up
+updateToMongoField (BackendUpdate up)  = mongoUpdateToDoc up
 
 
 -- | convert a unique key into a MongoDB document
@@ -790,20 +808,33 @@ filterToBSON fname v filt = case filt of
     showFilter (BackendSpecificFilter bsf) = throw $ PersistMongoDBError $ T.pack $ "did not expect BackendSpecificFilter " ++ T.unpack bsf
 
 
-mongoFilterToBSON :: forall typ. ( PersistField typ )
+mongoFilterToBSON :: forall typ. PersistField typ
                   => Text
                   -> MongoFilterOperator typ
                   -> DB.Document
 mongoFilterToBSON fname filt = case filt of
-    (PersistOperator v op)     -> [filterToBSON fname v op]
-    (MongoFilterOperator bval) -> [fname DB.:= bval]
+    (PersistFilterOperator v op) -> [filterToBSON fname v op]
+    (MongoFilterOperator bval)   -> [fname DB.:= bval]
 
-mongoFilterToDoc :: PersistEntity val => MongoFilter val -> DB.Document
-mongoFilterToDoc (RegExpFilter fn (reg, opts))        = [ fieldName fn  DB.:= DB.RegEx (DB.Regex reg opts)]
-mongoFilterToDoc (MultiKeyFilter field op) = mongoFilterToBSON (fieldName field) op
+mongoUpdateToBson :: forall typ. PersistField typ
+                  => Text
+                  -> MongoUpdateOperator typ
+                  -> DB.Field
+mongoUpdateToBson fname upd = case upd of
+    (PersistUpdateOperator v op) -> updateToBson fname v op
+
+mongoUpdateToDoc :: PersistEntity record => MongoUpdate record -> DB.Field
+mongoUpdateToDoc (NestedUpdate   field op) = mongoUpdateToBson (nestedFieldName field) op
+mongoUpdateToDoc (ArrayUpdate field op)    = mongoUpdateToBson (fieldName field) op
+
+mongoFilterToDoc :: PersistEntity record => MongoFilter record -> DB.Document
 mongoFilterToDoc (NestedFilter   field op) = mongoFilterToBSON (nestedFieldName field) op
+mongoFilterToDoc (ArrayFilter field op) = mongoFilterToBSON (fieldName field) op
+mongoFilterToDoc (RegExpFilter fn (reg, opts)) = [ fieldName fn  DB.:= DB.RegEx (DB.Regex reg opts)]
+
+nestedFieldName :: forall record typ. PersistEntity record => NestedField record typ -> Text
+nestedFieldName = T.intercalate "." . nesFldName
   where
-    nestedFieldName = T.intercalate "." . nesFldName
     nesFldName :: forall r1 r2. (PersistEntity r1) => NestedField r1 r2 -> [DB.Label]
     nesFldName (nf1 `LastEmbFld` nf2)          = [fieldName nf1, fieldName nf2]
     nesFldName ( f1 `MidEmbFld`  f2)           = fieldName f1 : nesFldName f2
@@ -823,7 +854,6 @@ fieldName f | fieldHaskell fd == HaskellName "Id" = id_
             | otherwise = unDBName $ fieldDB $ fd
   where
     fd = persistFieldDef f
-
 
 docToEntityEither :: forall record. (PersistEntity record) => DB.Document -> Either T.Text (Entity record)
 docToEntityEither doc = entity
@@ -1134,10 +1164,11 @@ applyDockerEnv mconf = do
 -- nested fields.
 
 type instance BackendSpecificFilter DB.MongoContext record = MongoFilter record
+type instance BackendSpecificUpdate DB.MongoContext record = MongoUpdate record
 
 data NestedField record typ
-  = forall emb. PersistEntity emb => EntityField record [emb] `LastEmbFld` EntityField emb typ
-  | forall emb. PersistEntity emb => EntityField record [emb] `MidEmbFld` NestedField emb typ
+  = forall emb.  PersistEntity emb =>  EntityField record [emb] `LastEmbFld` EntityField emb typ
+  | forall emb.  PersistEntity emb =>  EntityField record [emb] `MidEmbFld` NestedField emb typ
   | forall nest. PersistEntity nest => EntityField record nest  `MidNestFlds` NestedField nest typ
   | forall nest. PersistEntity nest => EntityField record (Maybe nest) `MidNestFldsNullable` NestedField nest typ
   | forall nest. PersistEntity nest => EntityField record nest `LastNestFld` EntityField nest typ
@@ -1161,26 +1192,34 @@ instance MongoRegexSearchable rs => MongoRegexSearchable [rs]
 (=~.) :: forall record searchable. (MongoRegexSearchable searchable, PersistEntity record, PersistEntityBackend record ~ DB.MongoContext) => EntityField record searchable -> MongoRegex -> Filter record
 fld =~. val = BackendFilter $ RegExpFilter fld val
 
--- | Filter using a Regular expression against a nullable field.
-(?=~.) :: forall record. (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext) => EntityField record (Maybe Text) -> MongoRegex -> Filter record
-fld ?=~. val = BackendFilter $ RegExpFilter fld val
-{-# DEPRECATED (?=~.) "Use =~. instead" #-}
-
-data MongoFilterOperator typ = PersistOperator (Either typ [typ]) PersistFilter
+data MongoFilterOperator typ = PersistFilterOperator (Either typ [typ]) PersistFilter
                              | MongoFilterOperator DB.Value
 
-data MongoFilter record = forall typ. (PersistField typ) =>
-                        NestedFilter {
-                          nestedField  :: NestedField record typ
-                        , nestedValue  :: MongoFilterOperator typ
-                        }
-                      | forall typ. PersistField typ =>
-                        MultiKeyFilter {
-                          multiField  :: EntityField record [typ]
-                        , multiValue  :: MongoFilterOperator typ
-                        }
-                      | forall typ. MongoRegexSearchable typ =>
-                        RegExpFilter (EntityField record typ) MongoRegex
+data MongoUpdateOperator typ = PersistUpdateOperator typ PersistUpdate
+
+data MongoFilter record =
+        forall typ. PersistField typ =>
+          NestedFilter
+            (NestedField record typ)
+            (MongoFilterOperator typ)
+      | forall typ. PersistField typ =>
+          ArrayFilter
+            (EntityField record [typ])
+            (MongoFilterOperator typ)
+      | forall typ. MongoRegexSearchable typ =>
+          RegExpFilter
+            (EntityField record typ)
+            MongoRegex
+
+data MongoUpdate record =
+        forall typ. PersistField typ =>
+          NestedUpdate
+            (NestedField record typ)
+            (MongoUpdateOperator typ)
+      | forall typ. PersistField typ =>
+          ArrayUpdate
+            (EntityField record [typ])
+            (MongoUpdateOperator typ)
 
 -- | Point to an array field with an embedded object and give a deeper query into the embedded object.
 -- Use with 'nestEq'.
@@ -1214,7 +1253,6 @@ data MongoFilter record = forall typ. (PersistField typ) =>
 (?&~>.) = MidNestFldsNullable
 
 
-infixr 4 ?=~.
 infixr 4 =~.
 infixr 5 ~>.
 infixr 5 &~>.
@@ -1231,10 +1269,12 @@ infixr 4 `nestIn`
 infixr 4 `nestNotIn`
 
 infixr 4 `anyEq`
-infixr 4 `multiEq`
 infixr 4 `nestBsonEq`
 infixr 4 `multiBsonEq`
 infixr 4 `anyBsonEq`
+
+infixr 4 `nestSet`
+infixr 4 `push`
 
 -- | The normal Persistent equality test '==.' is not generic enough.
 -- Instead use this with the drill-down arrow operaters such as '->.'
@@ -1247,38 +1287,27 @@ nestEq, nestNe, nestGe, nestLe, nestIn, nestNotIn :: forall record typ.
     => NestedField record typ
     -> typ
     -> Filter record
-nestEq = nestedOp Eq
-nestNe = nestedOp Ne
-nestGe = nestedOp Ge
-nestLe = nestedOp Le
-nestIn = nestedOp In
-nestNotIn = nestedOp NotIn
+nestEq = nestedFilterOp Eq
+nestNe = nestedFilterOp Ne
+nestGe = nestedFilterOp Ge
+nestLe = nestedFilterOp Le
+nestIn = nestedFilterOp In
+nestNotIn = nestedFilterOp NotIn
 
-nestedOp :: forall record typ.
+nestedFilterOp :: forall record typ.
        ( PersistField typ
        , PersistEntityBackend record ~ DB.MongoContext
        ) => PersistFilter -> NestedField record typ -> typ -> Filter record
-nestedOp op nf v = BackendFilter $ NestedFilter
-                    { nestedField = nf
-                    , nestedValue = PersistOperator (Left v) op
-                    }
+nestedFilterOp op nf v = BackendFilter $
+   NestedFilter nf $ PersistFilterOperator (Left v) op
 
 -- | same as `nestEq`, but give a BSON Value
 nestBsonEq :: forall record typ.
        ( PersistField typ
        , PersistEntityBackend record ~ DB.MongoContext
        ) => NestedField record typ -> DB.Value -> Filter record
-nf `nestBsonEq` val = BackendFilter $ NestedFilter
-                    { nestedField = nf
-                    , nestedValue = MongoFilterOperator val
-                    }
-
-multiEq :: forall record typ.
-        ( PersistField typ
-        , PersistEntityBackend record ~ DB.MongoContext
-        ) => EntityField record [typ] -> typ -> Filter record
-multiEq = anyEq
-{-# DEPRECATED multiEq "Please use anyEq instead" #-}
+nf `nestBsonEq` val = BackendFilter $
+    NestedFilter nf $ MongoFilterOperator val
 
 -- | Like nestEq, but for an embedded list.
 -- Checks to see if the list contains an item.
@@ -1292,10 +1321,8 @@ anyEq :: forall record typ.
         ( PersistField typ
         , PersistEntityBackend record ~ DB.MongoContext
         ) => EntityField record [typ] -> typ -> Filter record
-fld `anyEq` val = BackendFilter $ MultiKeyFilter
-                      { multiField = fld
-                      , multiValue = PersistOperator (Left val) Eq
-                      }
+fld `anyEq` val = BackendFilter $
+    ArrayFilter fld $ PersistFilterOperator (Left val) Eq
 
 multiBsonEq :: forall record typ.
         ( PersistField typ
@@ -1309,8 +1336,29 @@ anyBsonEq :: forall record typ.
         ( PersistField typ
         , PersistEntityBackend record ~ DB.MongoContext
         ) => EntityField record [typ] -> DB.Value -> Filter record
-fld `anyBsonEq` val = BackendFilter $ MultiKeyFilter
-                      { multiField = fld
-                      , multiValue = MongoFilterOperator val
-                      }
+fld `anyBsonEq` val = BackendFilter $
+    ArrayFilter fld $ MongoFilterOperator val
 
+nestSet, nestInc, nestDec, nestMul :: forall record typ.
+    ( PersistField typ , PersistEntityBackend record ~ DB.MongoContext)
+    => NestedField record typ
+    -> typ
+    -> Update record
+nestSet = nestedUpdateOp Assign
+nestInc = nestedUpdateOp Add
+nestDec = nestedUpdateOp Subtract
+nestMul = nestedUpdateOp Multiply
+
+push :: forall record typ.
+        ( PersistField typ
+        , PersistEntityBackend record ~ DB.MongoContext
+        ) => EntityField record [typ] -> typ -> Update record
+fld `push` val = BackendUpdate $
+    ArrayUpdate fld $ PersistUpdateOperator val (BackendSpecificUpdate "$push")
+
+nestedUpdateOp :: forall record typ.
+       ( PersistField typ
+       , PersistEntityBackend record ~ DB.MongoContext
+       ) => PersistUpdate -> NestedField record typ -> typ -> Update record
+nestedUpdateOp op nf v = BackendUpdate $
+   NestedUpdate nf $ PersistUpdateOperator v op

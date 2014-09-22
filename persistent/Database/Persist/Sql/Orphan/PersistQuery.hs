@@ -214,6 +214,7 @@ updateWhereCount filts upds = do
     go'' n Subtract = mconcat [n, "=", n, "-?"]
     go'' n Multiply = mconcat [n, "=", n, "*?"]
     go'' n Divide = mconcat [n, "=", n, "/?"]
+    go'' _ (BackendSpecificUpdate up) = error $ T.unpack $ "BackendSpecificUpdate" `mappend` up `mappend` "not supported"
     go' conn (x, pu) = go'' (connEscapeName conn x) pu
     go x = (updateField x, updateUpdate x)
 
