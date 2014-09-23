@@ -156,8 +156,6 @@ data FieldDef = FieldDef
 -- 1) composite (to fields that exist in the record)
 -- 2) single field
 -- 3) embedded
---
--- embedding isn't really a reference
 data ReferenceDef = NoReference
                   | ForeignRef !HaskellName !FieldType -- ^ A ForeignRef has a late binding to the EntityDef it references via HaskellName and has the Haskell type of the foreign key in the form of FieldType
                   | EmbedRef EmbedEntityDef
