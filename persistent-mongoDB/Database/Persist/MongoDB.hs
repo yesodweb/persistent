@@ -48,7 +48,7 @@ module Database.Persist.MongoDB
 
     -- ** Updates
     -- $updates
-    , nestSet, nestInc, nestDec, nestMul, push
+    , nestSet, nestInc, nestDec, nestMul, push, pull, addToSet
 
     -- * Key conversion helpers
     , BackendKey(..)
@@ -387,7 +387,9 @@ updateToBson fname v up =
         -- Obviously this could be supported for floats by multiplying with 1/x
         (Divide, _)   -> throw $ PersistMongoDBUnsupported "divide not supported"
         (BackendSpecificUpdate op, x) -> case op of
-            "$push" -> ("$push", DB.val x)
+            "$push"     -> ("$push",     DB.val x)
+            "$pull"     -> ("$pull",     DB.val x)
+            "$addToSet" -> ("$addToSet", DB.val x)
             bsup    -> throw $ PersistMongoDBError $ T.pack $ "did not expect BackendSpecificUpdate " ++ T.unpack bsup
 
 updateToMongoField :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
@@ -656,7 +658,7 @@ instance PersistQuery DB.MongoContext where
     -- and explicitly closes the cursor when done
     selectSourceRes filts opts = do
         context <- ask
-        return (pull context `fmap` mkAcquire (open context) (close context))
+        return (pullCursor context `fmap` mkAcquire (open context) (close context))
       where
         close :: DB.MongoContext -> DB.Cursor -> IO ()
         close context cursor = runReaderT (DB.closeCursor cursor) context
@@ -666,13 +668,13 @@ instance PersistQuery DB.MongoContext where
                    { DB.snapshot = noSort
                    , DB.options = [DB.NoCursorTimeout]
                    })
-        pull context cursor = do
+        pullCursor context cursor = do
             mdoc <- liftIO $ runReaderT (DB.nextBatch cursor) context
             case mdoc of
                 [] -> return ()
                 docs -> do
                     forM_ docs $ fromPersistValuesThrow t >=> yield
-                    pull context cursor
+                    pullCursor context cursor
         t = entityDef $ Just $ dummyFromFilts filts
         (_, _, orders) = limitOffsetOrder opts
         noSort = null orders
@@ -691,17 +693,17 @@ instance PersistQuery DB.MongoContext where
                 cursor <- liftIO $ flip runReaderT context $ DB.find $ (makeQuery filts opts) {
                     DB.project = [id_ DB.=: (1 :: Int)]
                   }
-                pull context cursor
+                pullCursor context cursor
         return $ return make
       where
-        pull context cursor = do
+        pullCursor context cursor = do
             mdoc <- liftIO $ runReaderT (DB.next cursor) context
             case mdoc of
                 Nothing -> return ()
                 Just [_id DB.:= idVal] -> do
                     k <- liftIO $ keyFrom_idEx idVal
                     yield k
-                    pull context cursor
+                    pullCursor context cursor
                 Just y -> liftIO $ throwIO $ PersistMarshalError $ T.pack $ "Unexpected in selectKeys: " ++ show y
 
 orderClause :: PersistEntity val => SelectOpt val -> DB.Field
@@ -1275,6 +1277,8 @@ infixr 4 `anyBsonEq`
 
 infixr 4 `nestSet`
 infixr 4 `push`
+infixr 4 `pull`
+infixr 4 `addToSet`
 
 -- | The normal Persistent equality test '==.' is not generic enough.
 -- Instead use this with the drill-down arrow operaters such as '->.'
@@ -1349,12 +1353,16 @@ nestInc = nestedUpdateOp Add
 nestDec = nestedUpdateOp Subtract
 nestMul = nestedUpdateOp Multiply
 
-push :: forall record typ.
+push, pull, addToSet :: forall record typ.
         ( PersistField typ
         , PersistEntityBackend record ~ DB.MongoContext
         ) => EntityField record [typ] -> typ -> Update record
 fld `push` val = BackendUpdate $
     ArrayUpdate fld $ PersistUpdateOperator val (BackendSpecificUpdate "$push")
+fld `pull` val = BackendUpdate $
+    ArrayUpdate fld $ PersistUpdateOperator val (BackendSpecificUpdate "$pull")
+fld `addToSet` val = BackendUpdate $
+    ArrayUpdate fld $ PersistUpdateOperator val (BackendSpecificUpdate "$addToSet")
 
 nestedUpdateOp :: forall record typ.
        ( PersistField typ

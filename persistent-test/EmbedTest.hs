@@ -364,8 +364,19 @@ specs = describe "embedded entities" $ do
               ]
         contk <- insert container
         let contEnt = Entity contk container
+
         pushed <- updateGet contk [HasListEmbedList `push` HasEmbed "embed" (OnlyName "3")]
         (Prelude.map (onlyNameName . hasEmbedEmbed) $ hasListEmbedList pushed) @== ["1","2","3"]
+
+        -- same, don't add anything
+        addedToSet <- updateGet contk [HasListEmbedList `addToSet` HasEmbed "embed" (OnlyName "3")]
+        (Prelude.map (onlyNameName . hasEmbedEmbed) $ hasListEmbedList addedToSet) @== ["1","2","3"]
+        pulled <- updateGet contk [HasListEmbedList `pull` HasEmbed "embed" (OnlyName "3")]
+        (Prelude.map (onlyNameName . hasEmbedEmbed) $ hasListEmbedList pulled) @== ["1","2"]
+
+        -- now it is new
+        addedToSet2 <- updateGet contk [HasListEmbedList `addToSet` HasEmbed "embed" (OnlyName "3")]
+        (Prelude.map (onlyNameName . hasEmbedEmbed) $ hasListEmbedList addedToSet2) @== ["1","2","3"]
 
 
   it "re-orders json inserted from another source" $ db $ do
