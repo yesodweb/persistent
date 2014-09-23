@@ -110,6 +110,7 @@ import qualified Database.Persist.Sql as Sql
 import qualified Control.Monad.IO.Class as Trans
 import Control.Exception (throw, throwIO)
 import Data.Acquire (mkAcquire)
+import qualified Data.Traversable as Traversable
 
 import Data.Bson (ObjectId(..))
 import qualified Database.MongoDB as DB
@@ -679,11 +680,8 @@ instance PersistQuery DB.MongoContext where
         (_, _, orders) = limitOffsetOrder opts
         noSort = null orders
 
-    selectFirst filts opts = do
-        mdoc <- DB.findOne $ makeQuery filts opts
-        case mdoc of
-            Nothing -> return Nothing
-            Just doc -> liftM Just $ fromPersistValuesThrow t doc
+    selectFirst filts opts = DB.findOne (makeQuery filts opts)
+                         >>= Traversable.mapM (fromPersistValuesThrow t)
       where
         t = entityDef $ Just $ dummyFromFilts filts
 
