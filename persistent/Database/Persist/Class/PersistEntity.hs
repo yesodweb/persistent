@@ -149,7 +149,7 @@ data Filter record = forall typ. PersistField typ => Filter
 -- your query returns two entities (i.e. @(Entity backend a,
 -- Entity backend b)@), then you must you use @SELECT ??, ??
 -- WHERE ...@, and so on.
-data PersistEntity record => Entity record =
+data Entity record =
     Entity { entityKey :: Key record
            , entityVal :: record }
 
