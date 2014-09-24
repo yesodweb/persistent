@@ -80,7 +80,7 @@ toJsonText :: ToJSON j => j -> T.Text
 #if MIN_VERSION_aeson(0, 7, 0)
 toJsonText = toStrict . toLazyText . encodeToTextBuilder . toJSON
 #else
-toJSonText = toStrict . toLazyText . fromValue . toJSON
+toJsonText = toStrict . toLazyText . fromValue . toJSON
 #endif
 
 limitOffsetOrder :: PersistEntity val => [SelectOpt val] -> (Int, Int, [SelectOpt val])
