@@ -2,13 +2,19 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DefaultSignatures #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-module Database.Persist.Sql.Orphan.PersistStore (withRawQuery, BackendKey(..)) where
+module Database.Persist.Sql.Orphan.PersistStore
+  ( withRawQuery
+  , BackendKey(..)
+  , toSqlKey
+  , fromSqlKey
+  ) where
 
 import Database.Persist
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
-import Database.Persist.Sql.Class (IsSqlKey (..))
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import qualified Data.Text as T
@@ -35,9 +41,11 @@ withRawQuery sql vals sink = do
     srcRes <- rawQueryRes sql vals
     liftIO $ with srcRes (C.$$ sink)
 
-instance IsSqlKey (BackendKey SqlBackend) where
-    toSqlKey = SqlBackendKey
-    fromSqlKey = unSqlBackendKey
+toSqlKey :: ToBackendKey SqlBackend record => Int64 -> Key record
+toSqlKey = fromBackendKey . SqlBackendKey
+
+fromSqlKey :: ToBackendKey SqlBackend record => Key record -> Int64
+fromSqlKey = unSqlBackendKey . toBackendKey
 
 instance PersistStore Connection where
     newtype BackendKey Connection = SqlBackendKey { unSqlBackendKey :: Int64 }

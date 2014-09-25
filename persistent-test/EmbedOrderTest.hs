@@ -1,7 +1,7 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds #-}
 {-# LANGUAGE CPP, ScopedTypeVariables, FlexibleInstances #-}
 {-# LANGUAGE QuasiQuotes, TypeFamilies, GeneralizedNewtypeDeriving, TemplateHaskell,
-             OverloadedStrings, GADTs, FlexibleContexts, EmptyDataDecls #-}
+             OverloadedStrings, GADTs, FlexibleContexts, EmptyDataDecls, MultiParamTypeClasses #-}
 module EmbedOrderTest (specs,
 #ifndef WITH_MONGODB
 embedOrderMigrate

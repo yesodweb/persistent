@@ -149,7 +149,13 @@ share [mkPersist persistSettings,  mkMigrate "testMigrate", mkDeleteCascade pers
 deriving instance Show (BackendKey backend) => Show (PetGeneric backend)
 deriving instance Eq (BackendKey backend) => Eq (PetGeneric backend)
 
-share [mkPersist sqlSettings { mpsPrefixFields = False, mpsGeneric = False }, mkMigrate "noPrefixMigrate"] [persistLowerCase|
+share [mkPersist persistSettings { mpsPrefixFields = False, mpsGeneric = False }
+#ifdef WITH_MONGODB
+      ] [persistUpperCase|
+#else
+      , mkMigrate "noPrefixMigrate"
+      ] [persistLowerCase|
+#endif
 NoPrefix1
     someFieldName Int
     deriving Show Eq
