@@ -378,6 +378,12 @@ specs = describe "embedded entities" $ do
         addedToSet2 <- updateGet contk [HasListEmbedList `addToSet` HasEmbed "embed" (OnlyName "3")]
         (Prelude.map (onlyNameName . hasEmbedEmbed) $ hasListEmbedList addedToSet2) @== ["1","2","3"]
 
+        allPulled <- updateGet contk [HasListEmbedList `pullAll`
+          [ HasEmbed "embed" (OnlyName "3")
+          , HasEmbed "embed" (OnlyName "2")
+          ] ]
+        (Prelude.map (onlyNameName . hasEmbedEmbed) $ hasListEmbedList allPulled) @== ["1"]
+
 
   it "re-orders json inserted from another source" $ db $ do
     let cname = T.unpack $ collectionName (error "ListEmbed" :: ListEmbed)

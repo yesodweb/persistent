@@ -48,7 +48,7 @@ module Database.Persist.MongoDB
 
     -- ** Updates
     -- $updates
-    , nestSet, nestInc, nestDec, nestMul, push, pull, addToSet
+    , nestSet, nestInc, nestDec, nestMul, push, pull, pullAll, addToSet
 
     -- * Key conversion helpers
     , BackendKey(..)
@@ -366,9 +366,8 @@ updatesToDoc :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoCon
              => [Update record] -> DB.Document
 updatesToDoc upds = map updateToMongoField upds
 
-updateToBson :: forall a. ( PersistField a)
-             => Text
-             -> a
+updateToBson :: Text
+             -> PersistValue
              -> PersistUpdate
              -> DB.Field
 updateToBson fname v up =
@@ -376,7 +375,7 @@ updateToBson fname v up =
   where
     inc = "$inc"
     mul = "$mul"
-    (opName, opValue) = case (up, toPersistValue v) of
+    (opName, opValue) = case (up, v) of
         (Assign, PersistNull) -> ("$unset", DB.Int64 1)
         (Assign,a)    -> ("$set", DB.val a)
         (Add, a)      -> (inc, DB.val a)
@@ -387,6 +386,9 @@ updateToBson fname v up =
         (Multiply, _) -> error "expected PersistInt64 or PersistDouble for a subtraction"
         -- Obviously this could be supported for floats by multiplying with 1/x
         (Divide, _)   -> throw $ PersistMongoDBUnsupported "divide not supported"
+        (BackendSpecificUpdate op, x@(PersistList _)) -> case op of
+            "$pullAll"  -> ("$pullAll",  DB.val x)
+            bsup    -> throw $ PersistMongoDBError $ T.pack $ "did not expect BackendSpecificUpdate " ++ T.unpack bsup
         (BackendSpecificUpdate op, x) -> case op of
             "$push"     -> ("$push",     DB.val x)
             "$pull"     -> ("$pull",     DB.val x)
@@ -395,7 +397,7 @@ updateToBson fname v up =
 
 updateToMongoField :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
                    => Update record -> DB.Field
-updateToMongoField (Update field v up) = updateToBson (fieldName field) v up
+updateToMongoField (Update field v up) = updateToBson (fieldName field) (toPersistValue v) up
 updateToMongoField (BackendUpdate up)  = mongoUpdateToDoc up
 
 
@@ -821,7 +823,8 @@ mongoUpdateToBson :: forall typ. PersistField typ
                   -> MongoUpdateOperator typ
                   -> DB.Field
 mongoUpdateToBson fname upd = case upd of
-    (PersistUpdateOperator v op) -> updateToBson fname v op
+    (PersistUpdateOperator (Left v) op)  -> updateToBson fname (toPersistValue v) op
+    (PersistUpdateOperator (Right v) op) -> updateToBson fname (PersistList $ map toPersistValue v) op
 
 mongoUpdateToDoc :: PersistEntity record => MongoUpdate record -> DB.Field
 mongoUpdateToDoc (NestedUpdate   field op) = mongoUpdateToBson (nestedFieldName field) op
@@ -1195,7 +1198,7 @@ fld =~. val = BackendFilter $ RegExpFilter fld val
 data MongoFilterOperator typ = PersistFilterOperator (Either typ [typ]) PersistFilter
                              | MongoFilterOperator DB.Value
 
-data MongoUpdateOperator typ = PersistUpdateOperator typ PersistUpdate
+data MongoUpdateOperator typ = PersistUpdateOperator (Either typ [typ]) PersistUpdate
 
 data MongoFilter record =
         forall typ. PersistField typ =>
@@ -1276,6 +1279,7 @@ infixr 4 `anyBsonEq`
 infixr 4 `nestSet`
 infixr 4 `push`
 infixr 4 `pull`
+infixr 4 `pullAll`
 infixr 4 `addToSet`
 
 -- | The normal Persistent equality test '==.' is not generic enough.
@@ -1355,16 +1359,26 @@ push, pull, addToSet :: forall record typ.
         ( PersistField typ
         , PersistEntityBackend record ~ DB.MongoContext
         ) => EntityField record [typ] -> typ -> Update record
-fld `push` val = BackendUpdate $
-    ArrayUpdate fld $ PersistUpdateOperator val (BackendSpecificUpdate "$push")
-fld `pull` val = BackendUpdate $
-    ArrayUpdate fld $ PersistUpdateOperator val (BackendSpecificUpdate "$pull")
-fld `addToSet` val = BackendUpdate $
-    ArrayUpdate fld $ PersistUpdateOperator val (BackendSpecificUpdate "$addToSet")
+fld `push`     val = backendArrayOperation "$push"     fld val
+fld `pull`     val = backendArrayOperation "$pull"     fld val
+fld `addToSet` val = backendArrayOperation "$addToSet" fld val
+
+backendArrayOperation :: forall record typ. (PersistField typ, BackendSpecificUpdate (PersistEntityBackend record) record ~ MongoUpdate record)
+                      => Text -> EntityField record [typ] -> typ
+                      -> Update record
+backendArrayOperation name fld val = BackendUpdate $
+    ArrayUpdate fld $ PersistUpdateOperator (Left val) (BackendSpecificUpdate name)
+
+pullAll :: forall record typ.
+        ( PersistField typ
+        , PersistEntityBackend record ~ DB.MongoContext
+        ) => EntityField record [typ] -> [typ] -> Update record
+fld `pullAll` val = BackendUpdate $
+    ArrayUpdate fld $ PersistUpdateOperator (Right val) (BackendSpecificUpdate "$pullAll")
 
 nestedUpdateOp :: forall record typ.
        ( PersistField typ
        , PersistEntityBackend record ~ DB.MongoContext
        ) => PersistUpdate -> NestedField record typ -> typ -> Update record
 nestedUpdateOp op nf v = BackendUpdate $
-   NestedUpdate nf $ PersistUpdateOperator v op
+   NestedUpdate nf $ PersistUpdateOperator (Left v) op
