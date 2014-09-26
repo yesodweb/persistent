@@ -966,9 +966,8 @@ assocListFromDoc = Prelude.map (\f -> ( (DB.label f), cast (DB.value f) ) )
 oidToPersistValue :: DB.ObjectId -> PersistValue
 oidToPersistValue = PersistObjectId . Serialize.encode
 
-oidToKey :: DB.ObjectId -> BackendKey DB.MongoContext
-oidToKey = MongoKey
-{-# Deprecated oidToKey "Use MongoKey" #-}
+oidToKey :: (ToBackendKey DB.MongoContext record) => DB.ObjectId -> Key record
+oidToKey = fromBackendKey . MongoKey
 
 persistObjectIdToDbOid :: PersistValue -> DB.ObjectId
 persistObjectIdToDbOid (PersistObjectId k) = case Serialize.decode k of
@@ -976,9 +975,8 @@ persistObjectIdToDbOid (PersistObjectId k) = case Serialize.decode k of
                   Right o -> o
 persistObjectIdToDbOid _ = throw $ PersistInvalidField "expected PersistObjectId"
 
-keyToOid :: BackendKey DB.MongoContext -> DB.ObjectId
-keyToOid = unMongoKey
-{-# Deprecated keyToOid "Use unMongoKey" #-}
+keyToOid :: ToBackendKey DB.MongoContext record => Key record -> DB.ObjectId
+keyToOid = unMongoKey . toBackendKey
 
 instance DB.Val PersistValue where
   val (PersistInt64 x)   = DB.Int64 x

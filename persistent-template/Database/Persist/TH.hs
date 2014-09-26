@@ -4,7 +4,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TupleSections #-}
-{-# LANGUAGE FlexibleContexts, FlexibleInstances, UndecidableInstances #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-missing-fields #-}
 -- overlapping instances is for automatic lifting
 -- while avoiding an orphan of Lift for Text
@@ -44,7 +45,7 @@ module Database.Persist.TH
 
 import Prelude hiding ((++), take, concat, splitAt, exp)
 import Database.Persist
-import Database.Persist.Sql (Migration, migrate, SqlBackend, PersistFieldSql, IsSqlKey (..))
+import Database.Persist.Sql (Migration, migrate, SqlBackend, PersistFieldSql)
 import Database.Persist.Quasi
 import Language.Haskell.TH.Lib (varE)
 import Language.Haskell.TH.Quote
@@ -622,23 +623,24 @@ mkKeyTypeDec mps t = do
         then if not useNewtype
                then do pfDec <- pfInstD
                        return (pfDec, [''Generic])
-               else do gi <- genericInstances
+               else do gi <- genericNewtypeInstances
                        return (gi, [])
         else if not useNewtype
                then do pfDec <- pfInstD
                        return (pfDec, [''Show, ''Read, ''Eq, ''Ord, ''Generic])
                 else do
-                    let addIsSqlKey = if not useSqlKey then id else (''IsSqlKey :)
-                    return ([], addIsSqlKey [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''PersistField, ''PersistFieldSql, ''ToJSON, ''FromJSON])
+                    let allInstances = [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''PersistField, ''PersistFieldSql, ''ToJSON, ''FromJSON]
+                    if customKeyType
+                      then return ([], allInstances)
+                      else do
+                        bi <- backendKeyI
+                        return (bi, allInstances)
 
     let kd = if useNewtype
                then NewtypeInstD [] k [recordType] dec i
                else DataInstD    [] k [recordType] [dec] i
     return (kd, instDecs)
   where
-    useSqlKey = mpsBackend mps == ConT ''SqlBackend
-             && (fieldSqlType (entityId t) `elem` [SqlInt64, SqlInt32])
-
     dec = RecC (keyConName t) keyFields
     k = ''Key
     recordType = genericDataType mps (entityHaskell t) backendT
@@ -657,57 +659,68 @@ mkKeyTypeDec mps t = do
     -- ghc 7.6 cannot parse the left arrow Ident $() <- lexP
     keyPattern = BindS (ConP 'Ident [LitP $ keyStringL t])
 
+    backendKeyGenericI =
+        [d| instance PersistStore $(pure backendT) =>
+              ToBackendKey $(pure backendT) $(pure recordType) where
+                toBackendKey   = $(return $ VarE $ unKeyName t)
+                fromBackendKey = $(return $ ConE $ keyConName t)
+        |]
+    backendKeyI = let bdt = backendDataType mps in
+        [d| instance ToBackendKey $(pure bdt) $(pure recordType) where
+                toBackendKey   = $(return $ VarE $ unKeyName t)
+                fromBackendKey = $(return $ ConE $ keyConName t)
+        |]
+
     -- truly unfortunate that TH doesn't support standalone deriving
     -- https://ghc.haskell.org/trac/ghc/ticket/8100
-    genericInstances = do
-      instances <- [|lexP|] >>= \lexPE -> [| step readPrec >>= return . ($(pure $ ConE $ keyConName t) )|] >>= \readE ->
-        [d|instance Show (BackendKey $(pure backendT)) => Show (Key $(pure recordType)) where
+    genericNewtypeInstances = do
+      instances <- [|lexP|] >>= \lexPE -> [| step readPrec >>= return . ($(pure $ ConE $ keyConName t) )|] >>= \readE -> do
+        alwaysInstances <-
+          [d|instance Show (BackendKey $(pure backendT)) => Show (Key $(pure recordType)) where
               showsPrec i x = showParen (i > app_prec) $
                 (showString $ $(pure $ LitE $ keyStringL t) `mappend` " ") .
                 showsPrec i ($(return $ VarE $ unKeyName t) x)
                 where app_prec = (10::Int)
-           instance Read (BackendKey $(pure backendT)) => Read (Key $(pure recordType)) where
-              readPrec = parens $ (prec app_prec $ $(pure $ DoE [keyPattern lexPE, NoBindS readE]))
-                where app_prec = (10::Int)
-           instance Eq (BackendKey $(pure backendT)) => Eq (Key $(pure recordType)) where
-              x == y =
-                  ($(return $ VarE $ unKeyName t) x) ==
-                  ($(return $ VarE $ unKeyName t) y)
-              x /= y =
-                  ($(return $ VarE $ unKeyName t) x) ==
-                  ($(return $ VarE $ unKeyName t) y)
-           instance Ord (BackendKey $(pure backendT)) => Ord (Key $(pure recordType)) where
-              compare x y = compare
-                  ($(return $ VarE $ unKeyName t) x)
-                  ($(return $ VarE $ unKeyName t) y)
-           instance PathPiece (BackendKey $(pure backendT)) => PathPiece (Key $(pure recordType)) where
-              toPathPiece = toPathPiece . $(return $ VarE $ unKeyName t)
-              fromPathPiece = fmap $(return $ ConE $ keyConName t) . fromPathPiece
-           instance PersistField (BackendKey $(pure backendT)) => PersistField (Key $(pure recordType)) where
-              toPersistValue = toPersistValue . $(return $ VarE $ unKeyName t)
-              fromPersistValue = fmap $(return $ ConE $ keyConName t) . fromPersistValue
-           instance PersistFieldSql (BackendKey $(pure backendT)) => PersistFieldSql (Key $(pure recordType)) where
-              sqlType = sqlType . fmap $(return $ VarE $ unKeyName t)
-           instance ToJSON (BackendKey $(pure backendT)) => ToJSON (Key $(pure recordType)) where
-              toJSON = toJSON . $(return $ VarE $ unKeyName t)
-           instance FromJSON (BackendKey $(pure backendT)) => FromJSON (Key $(pure recordType)) where
-              parseJSON = fmap $(return $ ConE $ keyConName t) . parseJSON
-        |]
-      if not useSqlKey then return instances else do
-        sqlKeyInst <-
-          [d| instance IsSqlKey (BackendKey $(pure backendT)) => IsSqlKey (Key $(pure recordType)) where
-                toSqlKey = $(return $ ConE $ keyConName t) . toSqlKey
-                fromSqlKey = fromSqlKey . $(return $ VarE $ unKeyName t)
-          |]
-        return $ instances `mappend` sqlKeyInst
+             instance Read (BackendKey $(pure backendT)) => Read (Key $(pure recordType)) where
+                readPrec = parens $ (prec app_prec $ $(pure $ DoE [keyPattern lexPE, NoBindS readE]))
+                  where app_prec = (10::Int)
+             instance Eq (BackendKey $(pure backendT)) => Eq (Key $(pure recordType)) where
+                x == y =
+                    ($(return $ VarE $ unKeyName t) x) ==
+                    ($(return $ VarE $ unKeyName t) y)
+                x /= y =
+                    ($(return $ VarE $ unKeyName t) x) ==
+                    ($(return $ VarE $ unKeyName t) y)
+             instance Ord (BackendKey $(pure backendT)) => Ord (Key $(pure recordType)) where
+                compare x y = compare
+                    ($(return $ VarE $ unKeyName t) x)
+                    ($(return $ VarE $ unKeyName t) y)
+             instance PathPiece (BackendKey $(pure backendT)) => PathPiece (Key $(pure recordType)) where
+                toPathPiece = toPathPiece . $(return $ VarE $ unKeyName t)
+                fromPathPiece = fmap $(return $ ConE $ keyConName t) . fromPathPiece
+             instance PersistField (BackendKey $(pure backendT)) => PersistField (Key $(pure recordType)) where
+                toPersistValue = toPersistValue . $(return $ VarE $ unKeyName t)
+                fromPersistValue = fmap $(return $ ConE $ keyConName t) . fromPersistValue
+             instance PersistFieldSql (BackendKey $(pure backendT)) => PersistFieldSql (Key $(pure recordType)) where
+                sqlType = sqlType . fmap $(return $ VarE $ unKeyName t)
+             instance ToJSON (BackendKey $(pure backendT)) => ToJSON (Key $(pure recordType)) where
+                toJSON = toJSON . $(return $ VarE $ unKeyName t)
+             instance FromJSON (BackendKey $(pure backendT)) => FromJSON (Key $(pure recordType)) where
+                parseJSON = fmap $(return $ ConE $ keyConName t) . parseJSON
+              |]
+
+        if customKeyType then return alwaysInstances
+          else fmap (alwaysInstances `mappend`) backendKeyGenericI
+      return instances
 
     useNewtype = length keyFields < 2
+    defaultIdType = fieldType (entityId t) == FTTypeCon Nothing (keyIdText t)
     keyFields = case entityPrimary t of
       Just pdef -> map primaryKeyVar $ (compositeFields pdef)
-      -- TODO: an ADT for the entityId
-      Nothing   -> if fieldType (entityId t) == FTTypeCon Nothing (keyIdText t)
+      Nothing   -> if defaultIdType
         then [idKeyVar backendKeyType]
         else [idKeyVar $ ftToType $ fieldType $ entityId t]
+    customKeyType = not defaultIdType || not useNewtype || isJust (entityPrimary t)
 
     primaryKeyVar fd = (keyFieldName t fd, NotStrict, ftToType $ fieldType fd)
     idKeyVar ft = (unKeyName t, NotStrict, ft)

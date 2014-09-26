@@ -10,6 +10,7 @@ module Database.Persist.Class.PersistStore
     , getJust
     , belongsTo
     , belongsToJust
+    , ToBackendKey(..)
     ) where
 
 import qualified Prelude
@@ -41,6 +42,21 @@ liftPersist :: (MonadReader env m, HasPersistBackend env backend, MonadIO m)
 liftPersist f = do
     env <- ask
     liftIO $ runReaderT f (persistBackend env)
+
+-- | ToBackendKey converts a 'PersistEntity' 'Key' into a 'BackendKey'
+-- This can be used by each backend to convert between a 'Key' and a plain Haskell type.
+-- For Sql, that is done with 'toSqlKey' and 'fromSqlKey'.
+--
+-- By default, a 'PersistEntity' uses the default 'BackendKey' for its Key
+-- and is an instance of ToBackendKey
+--
+-- A 'Key' that instead uses a custom type will not be an instance of 'ToBackendKey'
+class ( PersistEntity record
+      , PersistEntityBackend record ~ backend
+      , PersistStore backend
+      ) => ToBackendKey backend record where
+    toBackendKey   :: Key record -> BackendKey backend
+    fromBackendKey :: BackendKey backend -> Key record
 
 class
   ( Show (BackendKey backend), Read (BackendKey backend)
