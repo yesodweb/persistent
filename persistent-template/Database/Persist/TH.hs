@@ -720,7 +720,7 @@ mkKeyTypeDec mps t = do
       Nothing   -> if defaultIdType
         then [idKeyVar backendKeyType]
         else [idKeyVar $ ftToType $ fieldType $ entityId t]
-    customKeyType = not defaultIdType || not useNewtype
+    customKeyType = not defaultIdType || not useNewtype || isJust (entityPrimary t)
 
     primaryKeyVar fd = (keyFieldName t fd, NotStrict, ftToType $ fieldType fd)
     idKeyVar ft = (unKeyName t, NotStrict, ft)
