@@ -43,8 +43,14 @@ liftPersist f = do
     env <- ask
     liftIO $ runReaderT f (persistBackend env)
 
--- | By default, a 'PersistEntity' uses the default 'BackendKey' for its Key
+-- | ToBackendKey converts a 'PersistEntity' 'Key' into a 'BackendKey'
+-- This can be used by each backend to convert between a 'Key' and a plain Haskell type.
+-- For Sql, that is done with 'toSqlKey' and 'fromSqlKey'.
+--
+-- By default, a 'PersistEntity' uses the default 'BackendKey' for its Key
 -- and is an instance of ToBackendKey
+--
+-- A 'Key' that instead uses a custom type will not be an instance of 'ToBackendKey'
 class ( PersistEntity record
       , PersistEntityBackend record ~ backend
       , PersistStore backend
