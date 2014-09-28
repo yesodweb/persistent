@@ -880,16 +880,23 @@ fromPersistValuesThrow entDef doc =
                    unHaskellName (entityHaskell entDef) `mappend` ": " `mappend` t
         Right entity -> return entity
 
+mapLeft :: (a -> c) -> Either a b -> Either c b
+mapLeft _ (Right r) = Right r
+mapLeft f (Left l)  = Left (f l)
+
 eitherFromPersistValues :: (PersistEntity record) => EntityDef -> [DB.Field] -> Either T.Text (Entity record)
-eitherFromPersistValues entDef doc =
-    let castDoc = assocListFromDoc doc
-        -- normally _id is the first field
-        mKey = lookup id_ castDoc
-    in case mKey of
-         Nothing -> Left "could not find _id field"
-         Just kpv -> fromPersistValues (map snd $ orderPersistValues (toEmbedEntityDef entDef) castDoc)
-            >>= \body -> keyFromValues [kpv]
-            >>= \key   -> Right $ Entity key body
+eitherFromPersistValues entDef doc = case mKey of
+   Nothing  -> addDetail $ Left $ "could not find _id field: "
+   Just kpv -> do
+      body <- addDetail (fromPersistValues (map snd $ orderPersistValues (toEmbedEntityDef entDef) castDoc))
+      key <- keyFromValues [kpv]
+      return $ Entity key body
+  where
+    addDetail :: Either Text a -> Either Text a
+    addDetail = mapLeft (\msg -> msg `mappend` " for doc: " `mappend` T.pack (show doc))
+    castDoc = assocListFromDoc doc
+    -- normally _id is the first field
+    mKey = lookup id_ castDoc
 
 -- | unlike many SQL databases, MongoDB makes no guarantee of the ordering
 -- of the fields returned in the document.
