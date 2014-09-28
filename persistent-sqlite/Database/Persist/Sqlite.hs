@@ -47,19 +47,19 @@ withSqlitePool :: (MonadBaseControl IO m, MonadIO m, MonadLogger m)
 withSqlitePool s = withSqlPool $ open' s
 
 withSqliteConn :: (MonadBaseControl IO m, MonadIO m, MonadLogger m)
-               => Text -> (Connection -> m a) -> m a
+               => Text -> (SqlBackend -> m a) -> m a
 withSqliteConn = withSqlConn . open'
 
-open' :: Text -> LogFunc -> IO Connection
+open' :: Text -> LogFunc -> IO SqlBackend
 open' connStr logFunc = Sqlite.open connStr >>= flip wrapConnection logFunc
 
 -- | Wrap up a raw 'Sqlite.Connection' as a Persistent SQL 'Connection'.
 --
 -- Since 1.1.5
-wrapConnection :: Sqlite.Connection -> LogFunc -> IO Connection
+wrapConnection :: Sqlite.Connection -> LogFunc -> IO SqlBackend
 wrapConnection conn logFunc = do
     smap <- newIORef $ Map.empty
-    return Connection
+    return SqlBackend
         { connPrepare = prepare' conn
         , connStmtMap = smap
         , connInsertSql = insertSql'

@@ -54,7 +54,6 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Blaze.ByteString.Builder.Char8 as BBB
 
-import Data.Time.LocalTime (localTimeToUTC, utc)
 import Data.Text (Text)
 import Data.Aeson
 import Control.Monad (forM, mzero)
@@ -106,17 +105,17 @@ createPostgresqlPool ci = createSqlPool $ open' ci
 -- | Same as 'withPostgresqlPool', but instead of opening a pool
 -- of connections, only one connection is opened.
 withPostgresqlConn :: (MonadIO m, MonadBaseControl IO m, MonadLogger m)
-                   => ConnectionString -> (Connection -> m a) -> m a
+                   => ConnectionString -> (SqlBackend -> m a) -> m a
 withPostgresqlConn = withSqlConn . open'
 
-open' :: ConnectionString -> LogFunc -> IO Connection
+open' :: ConnectionString -> LogFunc -> IO SqlBackend
 open' cstr logFunc = PG.connectPostgreSQL cstr >>= openSimpleConn logFunc
 
 -- | Generate a 'Connection' from a 'PG.Connection'
-openSimpleConn :: LogFunc -> PG.Connection -> IO Connection
+openSimpleConn :: LogFunc -> PG.Connection -> IO SqlBackend
 openSimpleConn logFunc conn = do
     smap <- newIORef $ Map.empty
-    return Connection
+    return SqlBackend
         { connPrepare    = prepare' conn
         , connStmtMap    = smap
         , connInsertSql  = insertSql'

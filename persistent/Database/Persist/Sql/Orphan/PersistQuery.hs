@@ -26,7 +26,7 @@ import Data.Maybe (isJust)
 import Data.List (transpose, inits, find)
 
 -- orphaned instance for convenience of modularity
-instance PersistQuery Connection where
+instance PersistQuery SqlBackend where
     count filts = do
         conn <- ask
         let wher = if null filts
@@ -168,9 +168,9 @@ instance PersistQuery Connection where
 -- | Same as 'deleteWhere', but returns the number of rows affected.
 --
 -- Since 1.1.5
-deleteWhereCount :: (PersistEntity val, MonadIO m, PersistEntityBackend val ~ Connection)
+deleteWhereCount :: (PersistEntity val, MonadIO m, PersistEntityBackend val ~ SqlBackend)
                  => [Filter val]
-                 -> ReaderT Connection m Int64
+                 -> ReaderT SqlBackend m Int64
 deleteWhereCount filts = do
     conn <- ask
     let t = entityDef $ dummyFromFilts filts
@@ -187,10 +187,10 @@ deleteWhereCount filts = do
 -- | Same as 'updateWhere', but returns the number of rows affected.
 --
 -- Since 1.1.5
-updateWhereCount :: (PersistEntity val, MonadIO m, Connection ~ PersistEntityBackend val)
+updateWhereCount :: (PersistEntity val, MonadIO m, SqlBackend ~ PersistEntityBackend val)
                  => [Filter val]
                  -> [Update val]
-                 -> ReaderT Connection m Int64
+                 -> ReaderT SqlBackend m Int64
 updateWhereCount _ [] = return 0
 updateWhereCount filts upds = do
     conn <- ask
@@ -221,7 +221,7 @@ updateWhereCount filts upds = do
     updateField (Update f _ _) = fieldName f
     updateField _ = error "BackendUpdate not implemented"
 
-fieldName ::  forall record typ.  (PersistEntity record, PersistEntityBackend record ~ Connection) => EntityField record typ -> DBName
+fieldName ::  forall record typ.  (PersistEntity record, PersistEntityBackend record ~ SqlBackend) => EntityField record typ -> DBName
 fieldName f = fieldDB $ persistFieldDef f
 
 isIdField ::  forall record typ.  (PersistEntity record) => EntityField record typ -> Bool
@@ -230,16 +230,16 @@ isIdField f = fieldHaskell (persistFieldDef f) == HaskellName "Id"
 dummyFromFilts :: [Filter v] -> Maybe v
 dummyFromFilts _ = Nothing
 
-getFiltsValues :: forall val. (PersistEntity val, PersistEntityBackend val ~ Connection)
-               => Connection -> [Filter val] -> [PersistValue]
+getFiltsValues :: forall val. (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
+               => SqlBackend -> [Filter val] -> [PersistValue]
 getFiltsValues conn = snd . filterClauseHelper False False conn OrNullNo
 
 data OrNull = OrNullYes | OrNullNo
 
-filterClauseHelper :: (PersistEntity val, PersistEntityBackend val ~ Connection)
+filterClauseHelper :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
              => Bool -- ^ include table name?
              -> Bool -- ^ include WHERE?
-             -> Connection
+             -> SqlBackend
              -> OrNull
              -> [Filter val]
              -> (Text, [PersistValue])
@@ -391,16 +391,16 @@ updatePersistValue :: Update v -> PersistValue
 updatePersistValue (Update _ v _) = toPersistValue v
 updatePersistValue _ = error "BackendUpdate not implemented"
 
-filterClause :: (PersistEntity val, PersistEntityBackend val ~ Connection)
+filterClause :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
              => Bool -- ^ include table name?
-             -> Connection
+             -> SqlBackend
              -> [Filter val]
              -> Text
 filterClause b c = fst . filterClauseHelper b True c OrNullNo
 
-orderClause :: (PersistEntity val, PersistEntityBackend val ~ Connection)
+orderClause :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
             => Bool -- ^ include the table name
-            -> Connection
+            -> SqlBackend
             -> SelectOpt val
             -> Text
 orderClause includeTable conn o =
@@ -414,7 +414,7 @@ orderClause includeTable conn o =
 
     tn = connEscapeName conn $ entityDB $ entityDef $ dummyFromOrder o
 
-    name :: (PersistEntityBackend record ~ Connection, PersistEntity record)
+    name :: (PersistEntityBackend record ~ SqlBackend, PersistEntity record)
          => EntityField record typ -> Text
     name x =
         (if includeTable

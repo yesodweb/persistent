@@ -35,7 +35,11 @@ data InsertSqlResult = ISRSingle Text
                      | ISRInsertGet Text Text
                      | ISRManyKeys Text [PersistValue]
 
-data Connection = Connection
+-- | Deprecated synonym for @SqlBackend@.
+type Connection = SqlBackend
+{-# DEPRECATED Connection "Please use SqlBackend instead" #-}
+
+data SqlBackend = SqlBackend
     { connPrepare :: Text -> IO Statement
     -- | table name, column names, id name, either 1 or 2 statements to run
     , connInsertSql :: EntityDef -> [PersistValue] -> InsertSqlResult
@@ -56,7 +60,7 @@ data Connection = Connection
     , connLogFunc :: LogFunc
     }
     deriving Typeable
-instance HasPersistBackend Connection Connection where
+instance HasPersistBackend SqlBackend SqlBackend where
     persistBackend = id
 
 type LogFunc = Loc -> LogSource -> LogLevel -> LogStr -> IO ()
@@ -86,9 +90,7 @@ data PersistentSqlException = StatementAlreadyFinalized Text
     deriving (Typeable, Show)
 instance Exception PersistentSqlException
 
-type SqlBackend = Connection -- FIXME
-
-type SqlPersistT = ReaderT Connection -- FIXME rename connection
+type SqlPersistT = ReaderT SqlBackend
 
 type SqlPersist = SqlPersistT
 {-# DEPRECATED SqlPersist "Please use SqlPersistT instead" #-}
@@ -100,9 +102,9 @@ type Sql = Text
 -- Bool indicates if the Sql is safe
 type CautiousMigration = [(Bool, Sql)]
 
-type Migration = WriterT [Text] (WriterT CautiousMigration (ReaderT Connection IO)) ()
+type Migration = WriterT [Text] (WriterT CautiousMigration (ReaderT SqlBackend IO)) ()
 
-type ConnectionPool = Pool Connection
+type ConnectionPool = Pool SqlBackend
 
 -- $rawSql
 --

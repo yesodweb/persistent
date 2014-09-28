@@ -11,7 +11,7 @@ import Data.Monoid (mappend)
 import qualified Data.Conduit.List as CL
 import Control.Monad.Trans.Reader (ask)
 
-instance PersistUnique Connection where
+instance PersistUnique SqlBackend where
     deleteBy uniq = do
         conn <- ask
         let sql' = sql conn
