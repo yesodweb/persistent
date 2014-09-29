@@ -56,7 +56,7 @@ module Database.Persist.MongoDB
     , oidToKey
     , recordTypeFromKey
     , readMayObjectId
-    , readMayKey
+    , readMayMongoKey
     , keyToText
 
     -- * PersistField conversion
@@ -209,7 +209,7 @@ type ConnectionPool = Pool.Pool Connection
 -- | ToPathPiece is used to convert a key to/from text
 instance PathPiece (BackendKey DB.MongoContext) where
     toPathPiece = keyToText
-    fromPathPiece keyText = readMayKey $
+    fromPathPiece keyText = readMayMongoKey $
         -- handle a JSON type prefix
         -- 'o' is a non-hex character, so no confusion here
         case T.uncons keyText of
@@ -220,8 +220,8 @@ keyToText :: BackendKey DB.MongoContext -> Text
 keyToText = T.pack . show . unMongoKey
 
 -- | Convert a Text to a Key
-readMayKey :: Text -> Maybe (BackendKey DB.MongoContext)
-readMayKey = fmap MongoKey . readMayObjectId
+readMayMongoKey :: Text -> Maybe (BackendKey DB.MongoContext)
+readMayMongoKey = fmap MongoKey . readMayObjectId
 
 readMayObjectId :: Text -> Maybe DB.ObjectId
 readMayObjectId str =
