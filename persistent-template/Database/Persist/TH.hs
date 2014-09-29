@@ -641,6 +641,8 @@ mkKeyTypeDec mps t = do
                else DataInstD    [] k [recordType] [dec] i
     return (kd, instDecs)
   where
+    keyConE = keyConExp t
+    unKeyE = unKeyExp t
     dec = RecC (keyConName t) keyFields
     k = ''Key
     recordType = genericDataType mps (entityHaskell t) backendT
@@ -662,51 +664,51 @@ mkKeyTypeDec mps t = do
     backendKeyGenericI =
         [d| instance PersistStore $(pure backendT) =>
               ToBackendKey $(pure backendT) $(pure recordType) where
-                toBackendKey   = $(return $ VarE $ unKeyName t)
-                fromBackendKey = $(return $ ConE $ keyConName t)
+                toBackendKey   = $(return unKeyE)
+                fromBackendKey = $(return keyConE)
         |]
     backendKeyI = let bdt = backendDataType mps in
         [d| instance ToBackendKey $(pure bdt) $(pure recordType) where
-                toBackendKey   = $(return $ VarE $ unKeyName t)
-                fromBackendKey = $(return $ ConE $ keyConName t)
+                toBackendKey   = $(return unKeyE)
+                fromBackendKey = $(return keyConE)
         |]
 
     -- truly unfortunate that TH doesn't support standalone deriving
     -- https://ghc.haskell.org/trac/ghc/ticket/8100
     genericNewtypeInstances = do
-      instances <- [|lexP|] >>= \lexPE -> [| step readPrec >>= return . ($(pure $ ConE $ keyConName t) )|] >>= \readE -> do
+      instances <- [|lexP|] >>= \lexPE -> [| step readPrec >>= return . ($(pure keyConE) )|] >>= \readE -> do
         alwaysInstances <-
           [d|instance Show (BackendKey $(pure backendT)) => Show (Key $(pure recordType)) where
               showsPrec i x = showParen (i > app_prec) $
                 (showString $ $(pure $ LitE $ keyStringL t) `mappend` " ") .
-                showsPrec i ($(return $ VarE $ unKeyName t) x)
+                showsPrec i ($(return unKeyE) x)
                 where app_prec = (10::Int)
              instance Read (BackendKey $(pure backendT)) => Read (Key $(pure recordType)) where
                 readPrec = parens $ (prec app_prec $ $(pure $ DoE [keyPattern lexPE, NoBindS readE]))
                   where app_prec = (10::Int)
              instance Eq (BackendKey $(pure backendT)) => Eq (Key $(pure recordType)) where
                 x == y =
-                    ($(return $ VarE $ unKeyName t) x) ==
-                    ($(return $ VarE $ unKeyName t) y)
+                    ($(return unKeyE) x) ==
+                    ($(return unKeyE) y)
                 x /= y =
-                    ($(return $ VarE $ unKeyName t) x) ==
-                    ($(return $ VarE $ unKeyName t) y)
+                    ($(return unKeyE) x) ==
+                    ($(return unKeyE) y)
              instance Ord (BackendKey $(pure backendT)) => Ord (Key $(pure recordType)) where
                 compare x y = compare
-                    ($(return $ VarE $ unKeyName t) x)
-                    ($(return $ VarE $ unKeyName t) y)
+                    ($(return unKeyE) x)
+                    ($(return unKeyE) y)
              instance PathPiece (BackendKey $(pure backendT)) => PathPiece (Key $(pure recordType)) where
-                toPathPiece = toPathPiece . $(return $ VarE $ unKeyName t)
-                fromPathPiece = fmap $(return $ ConE $ keyConName t) . fromPathPiece
+                toPathPiece = toPathPiece . $(return unKeyE)
+                fromPathPiece = fmap $(return keyConE) . fromPathPiece
              instance PersistField (BackendKey $(pure backendT)) => PersistField (Key $(pure recordType)) where
-                toPersistValue = toPersistValue . $(return $ VarE $ unKeyName t)
-                fromPersistValue = fmap $(return $ ConE $ keyConName t) . fromPersistValue
+                toPersistValue = toPersistValue . $(return unKeyE)
+                fromPersistValue = fmap $(return keyConE) . fromPersistValue
              instance PersistFieldSql (BackendKey $(pure backendT)) => PersistFieldSql (Key $(pure recordType)) where
-                sqlType = sqlType . fmap $(return $ VarE $ unKeyName t)
+                sqlType = sqlType . fmap $(return unKeyE)
              instance ToJSON (BackendKey $(pure backendT)) => ToJSON (Key $(pure recordType)) where
-                toJSON = toJSON . $(return $ VarE $ unKeyName t)
+                toJSON = toJSON . $(return unKeyE)
              instance FromJSON (BackendKey $(pure backendT)) => FromJSON (Key $(pure recordType)) where
-                parseJSON = fmap $(return $ ConE $ keyConName t) . parseJSON
+                parseJSON = fmap $(return keyConE) . parseJSON
               |]
 
         if customKeyType then return alwaysInstances
@@ -738,6 +740,9 @@ keyIdText t = (unHaskellName $ entityHaskell t) `mappend` "Id"
 unKeyName :: EntityDef -> Name
 unKeyName t = mkName $ "un" `mappend` keyString t
 
+unKeyExp :: EntityDef -> Exp
+unKeyExp = VarE . unKeyName
+
 backendT :: Type
 backendT = VarT backendName
 
@@ -746,6 +751,9 @@ backendName = mkName "backend"
 
 keyConName :: EntityDef -> Name
 keyConName = mkName . keyString
+
+keyConExp :: EntityDef -> Exp
+keyConExp = ConE . keyConName
 
 keyString :: EntityDef -> String
 keyString = unpack . keyText
@@ -760,7 +768,7 @@ mkKeyToValues :: MkPersistSettings -> EntityDef -> Q Dec
 mkKeyToValues _mps t = do
     (p, e) <- case entityPrimary t of
         Nothing  ->
-          ([],) <$> [|(:[]) . toPersistValue . $(return $ VarE $ unKeyName t)|]
+          ([],) <$> [|(:[]) . toPersistValue . $(return $ unKeyExp t)|]
         Just pdef ->
           return $ toValuesPrimary pdef
     return $ FunD 'keyToValues $ return $ normalClause p e
@@ -778,13 +786,13 @@ mkKeyFromValues :: MkPersistSettings -> EntityDef -> Q Dec
 mkKeyFromValues _mps t = do
     clauses <- case entityPrimary t of
         Nothing  -> do
-            e <- [|fmap $(return keyConE) . fromPersistValue . headNote|]
+            e <- [|fmap $(return $ keyConE) . fromPersistValue . headNote|]
             return $ [normalClause [] e]
         Just pdef ->
             fromValues t "keyFromValues" keyConE (compositeFields pdef)
     return $ FunD 'keyFromValues clauses
   where
-    keyConE = ConE (keyConName t)
+    keyConE = keyConExp t
 
 headNote :: [PersistValue] -> PersistValue
 headNote (x:[]) = x
