@@ -750,7 +750,10 @@ backendName :: Name
 backendName = mkName "backend"
 
 keyConName :: EntityDef -> Name
-keyConName = mkName . keyString
+keyConName t = mkName $ resolveConflict $ keyString t
+  where
+    resolveConflict kn = if conflict then kn `mappend` "'" else kn
+    conflict = any ((== HaskellName "key") . fieldHaskell) $ entityFields t
 
 keyConExp :: EntityDef -> Exp
 keyConExp = ConE . keyConName

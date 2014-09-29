@@ -19,6 +19,7 @@ instance ToJSON Day   where toJSON    = error "Day.toJSON"
 instance FromJSON Day where parseJSON = error "Day.parseJSON"
 
 -- persistent used to not allow types with an "Id" suffix
+-- this verifies that the issue is fixed
 type TextId = Text
 
 -- Test lower case names
@@ -27,6 +28,10 @@ mkPersist persistSettings [persistUpperCase|
 #else
 share [mkPersist sqlSettings, mkMigrate "lowerCaseMigrate"] [persistLowerCase|
 #endif
+-- This just tests that a field can be named "key"
+KeyTable
+    key Text
+    deriving Eq Show
 IdTable
     Id   Day default=CURRENT_DATE
     name Text
