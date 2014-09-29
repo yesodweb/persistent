@@ -36,7 +36,7 @@ withRawQuery :: MonadIO m
              => Text
              -> [PersistValue]
              -> C.Sink [PersistValue] IO a
-             -> ReaderT Connection m a
+             -> ReaderT SqlBackend m a
 withRawQuery sql vals sink = do
     srcRes <- rawQueryRes sql vals
     liftIO $ with srcRes (C.$$ sink)
@@ -47,8 +47,8 @@ toSqlKey = fromBackendKey . SqlBackendKey
 fromSqlKey :: ToBackendKey SqlBackend record => Key record -> Int64
 fromSqlKey = unSqlBackendKey . toBackendKey
 
-instance PersistStore Connection where
-    newtype BackendKey Connection = SqlBackendKey { unSqlBackendKey :: Int64 }
+instance PersistStore SqlBackend where
+    newtype BackendKey SqlBackend = SqlBackendKey { unSqlBackendKey :: Int64 }
         deriving (Show, Read, Eq, Ord, Num, Integral, PersistField, PersistFieldSql, PathPiece, Real, Enum, Bounded, A.ToJSON, A.FromJSON)
 
     update _ [] = return ()
@@ -232,7 +232,7 @@ insrepHelper :: (MonadIO m, PersistEntity val)
              => Text
              -> Key val
              -> val
-             -> ReaderT Connection m ()
+             -> ReaderT SqlBackend m ()
 insrepHelper command k val = do
     conn <- ask
     rawExecute (sql conn) vals
