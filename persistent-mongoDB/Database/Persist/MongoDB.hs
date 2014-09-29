@@ -55,6 +55,9 @@ module Database.Persist.MongoDB
     , keyToOid
     , oidToKey
     , recordTypeFromKey
+    , readMayObjectId
+    , readMayKey
+    , keyToText
 
     -- * PersistField conversion
     , fieldName
@@ -218,9 +221,12 @@ keyToText = T.pack . show . unMongoKey
 
 -- | Convert a Text to a Key
 readMayKey :: Text -> Maybe (BackendKey DB.MongoContext)
-readMayKey str =
+readMayKey = fmap MongoKey . readMayObjectId
+
+readMayObjectId :: Text -> Maybe DB.ObjectId
+readMayObjectId str =
   case filter (null . snd) $ reads $ T.unpack str :: [(DB.ObjectId,String)] of
-    (parsed,_):[] -> Just $ MongoKey parsed
+    (parsed,_):[] -> Just parsed
     _ -> Nothing
 
 instance PersistField DB.ObjectId where
