@@ -29,8 +29,12 @@ import Data.Text (unpack, Text)
 -- | Queries against 'Unique' keys (other than the id 'Key').
 --
 -- Please read the general Persistent documentation to learn how to create
--- Unique keys.
--- SQL backends automatically create uniqueness constraints, but for MongoDB you must manually place a unique index on the field.
+-- 'Unique' keys.
+--
+-- Using this with an Entity without a Unique key leads to undefined behavior.
+-- A few of these functions require a *single* 'Unique', so using an Entity with multiple 'Unique's is also undefined. In these cases persistent's goal is to throw an exception as soon as possible, but persistent is still transitioning to that.
+--
+-- SQL backends automatically create uniqueness constraints, but for MongoDB you must manually place a unique index on a field to have a uniqueness constraint.
 --
 -- Some functions in this module (insertUnique, insertBy, and replaceUnique) first query the unique indexes to check for conflicts.
 -- You could instead optimistically attempt to perform the operation (e.g. replace instead of replaceUnique). However,
