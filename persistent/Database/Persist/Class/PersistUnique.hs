@@ -23,8 +23,10 @@ import Control.Monad.IO.Class (MonadIO)
 
 import Database.Persist.Class.PersistStore
 import Database.Persist.Class.PersistEntity
+import Data.Monoid (mappend)
+import Data.Text (unpack, Text)
 
--- | Queries against unique keys (other than the id).
+-- | Queries against 'Unique' keys (other than the id 'Key').
 --
 -- Please read the general Persistent documentation to learn how to create
 -- Unique keys.
@@ -91,7 +93,7 @@ onlyUnique :: (MonadIO m, PersistEntity val, PersistUnique backend, PersistEntit
            => val -> ReaderT backend m (Unique val)
 onlyUnique record = case onlyUniqueEither record of
     Right u -> return u
-    Left us -> liftIO $ throwIO $ OnlyUniqueException $ show $ length us
+    Left us -> requireUniques record us >>= liftIO . throwIO . OnlyUniqueException . show . length
 
 onlyUniqueEither :: (PersistEntity val) => val -> Either [Unique val] (Unique val)
 onlyUniqueEither record = case persistUniqueKeys record of
@@ -99,12 +101,12 @@ onlyUniqueEither record = case persistUniqueKeys record of
     us     -> Left us
 
 -- | A modification of 'getBy', which takes the 'PersistEntity' itself instead
--- of a 'Unique' value. Returns a value matching /one/ of the unique keys. This
+-- of a 'Unique' record. Returns a record matching /one/ of the unique keys. This
 -- function makes the most sense on entities with a single 'Unique'
 -- constructor.
-getByValue :: (MonadIO m, PersistEntity value, PersistUnique backend, PersistEntityBackend value ~ backend)
-           => value -> ReaderT backend m (Maybe (Entity value))
-getByValue = checkUniques . persistUniqueKeys
+getByValue :: (MonadIO m, PersistEntity record, PersistUnique backend, PersistEntityBackend record ~ backend)
+           => record -> ReaderT backend m (Maybe (Entity record))
+getByValue record = checkUniques =<< requireUniques record (persistUniqueKeys record)
   where
     checkUniques [] = return Nothing
     checkUniques (x:xs) = do
@@ -113,6 +115,15 @@ getByValue = checkUniques . persistUniqueKeys
             Nothing -> checkUniques xs
             Just z -> return $ Just z
 
+requireUniques :: (MonadIO m, PersistEntity record) => record -> [Unique record] -> m [Unique record]
+requireUniques record [] = liftIO $ throwIO $ userError errorMsg
+  where
+    errorMsg = "getByValue: " `mappend` unpack (recordName record) `mappend` " does not have any Unique"
+requireUniques _ xs = return xs
+
+-- TODO: expose this to users
+recordName :: (PersistEntity record) => record -> Text
+recordName = unHaskellName . entityHaskell . entityDef . Just
 
 -- | Attempt to replace the record of the given key with the given new record.
 -- First query the unique fields to make sure the replacement maintains uniqueness constraints.
