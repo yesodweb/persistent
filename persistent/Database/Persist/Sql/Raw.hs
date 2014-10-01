@@ -21,7 +21,7 @@ import qualified Data.Text as T
 import Data.Conduit
 import Control.Monad.Trans.Resource (MonadResource)
 
-rawQuery :: (MonadResource m, MonadReader env m, HasPersistBackend env Connection)
+rawQuery :: (MonadResource m, MonadReader env m, HasPersistBackend env SqlBackend)
          => Text
          -> [PersistValue]
          -> Source m [PersistValue]
@@ -35,7 +35,7 @@ rawQueryRes
     :: (MonadIO m1, MonadIO m2)
     => Text
     -> [PersistValue]
-    -> ReaderT Connection m1 (Acquire (Source m2 [PersistValue]))
+    -> ReaderT SqlBackend m1 (Acquire (Source m2 [PersistValue]))
 rawQueryRes sql vals = do
     conn <- ask
     let make = do
@@ -46,10 +46,10 @@ rawQueryRes sql vals = do
         stmt <- mkAcquire make stmtReset
         stmtQuery stmt vals
 
-rawExecute :: MonadIO m => Text -> [PersistValue] -> ReaderT Connection m ()
+rawExecute :: MonadIO m => Text -> [PersistValue] -> ReaderT SqlBackend m ()
 rawExecute x y = liftM (const ()) $ rawExecuteCount x y
 
-rawExecuteCount :: MonadIO m => Text -> [PersistValue] -> ReaderT Connection m Int64
+rawExecuteCount :: MonadIO m => Text -> [PersistValue] -> ReaderT SqlBackend m Int64
 rawExecuteCount sql vals = do
     conn <- ask
     runLoggingT ($logDebugS (pack "SQL") $ pack $ show sql ++ " " ++ show vals)
@@ -59,12 +59,12 @@ rawExecuteCount sql vals = do
     liftIO $ stmtReset stmt
     return res
 
-getStmt :: MonadIO m => Text -> ReaderT Connection m Statement
+getStmt :: MonadIO m => Text -> ReaderT SqlBackend m Statement
 getStmt sql = do
     conn <- ask
     liftIO $ getStmtConn conn sql
 
-getStmtConn :: Connection -> Text -> IO Statement
+getStmtConn :: SqlBackend -> Text -> IO Statement
 getStmtConn conn sql = do
     smap <- liftIO $ readIORef $ connStmtMap conn
     case Map.lookup sql smap of
@@ -122,7 +122,7 @@ getStmtConn conn sql = do
 rawSql :: (RawSql a, MonadIO m)
        => Text             -- ^ SQL statement, possibly with placeholders.
        -> [PersistValue]   -- ^ Values to fill the placeholders.
-       -> ReaderT Connection m [a]
+       -> ReaderT SqlBackend m [a]
 rawSql stmt = run
     where
       getType :: (x -> m [a]) -> a

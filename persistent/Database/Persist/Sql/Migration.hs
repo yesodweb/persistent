@@ -34,7 +34,7 @@ unsafeSql = allSql . filter fst
 safeSql :: CautiousMigration -> [Sql]
 safeSql = allSql . filter (not . fst)
 
-parseMigration :: MonadIO m => Migration -> ReaderT Connection m (Either [Text] CautiousMigration)
+parseMigration :: MonadIO m => Migration -> ReaderT SqlBackend m (Either [Text] CautiousMigration)
 parseMigration =
     liftIOReader . liftM go . runWriterT . execWriterT
   where
@@ -44,40 +44,40 @@ parseMigration =
     liftIOReader (ReaderT m) = ReaderT $ liftIO . m
 
 -- like parseMigration, but call error or return the CautiousMigration
-parseMigration' :: MonadIO m => Migration -> ReaderT Connection m (CautiousMigration)
+parseMigration' :: MonadIO m => Migration -> ReaderT SqlBackend m (CautiousMigration)
 parseMigration' m = do
   x <- parseMigration m
   case x of
       Left errs -> error $ unlines $ map unpack errs
       Right sql -> return sql
 
-printMigration :: MonadIO m => Migration -> ReaderT Connection m ()
+printMigration :: MonadIO m => Migration -> ReaderT SqlBackend m ()
 printMigration m = do
   mig <- parseMigration' m
   mapM_ (liftIO . Data.Text.IO.putStrLn . flip snoc ';') (allSql mig)
 
-getMigration :: (MonadBaseControl IO m, MonadIO m) => Migration -> ReaderT Connection m [Sql]
+getMigration :: (MonadBaseControl IO m, MonadIO m) => Migration -> ReaderT SqlBackend m [Sql]
 getMigration m = do
   mig <- parseMigration' m
   return $ allSql mig
 
 runMigration :: MonadIO m
              => Migration
-             -> ReaderT Connection m ()
+             -> ReaderT SqlBackend m ()
 runMigration m = runMigration' m False >> return ()
 
 -- | Same as 'runMigration', but returns a list of the SQL commands executed
 -- instead of printing them to stderr.
 runMigrationSilent :: (MonadBaseControl IO m, MonadIO m)
                    => Migration
-                   -> ReaderT Connection m [Text]
+                   -> ReaderT SqlBackend m [Text]
 runMigrationSilent m = liftBaseOp_ (hSilence [stderr]) $ runMigration' m True
 
 runMigration'
     :: MonadIO m
     => Migration
     -> Bool -- ^ is silent?
-    -> ReaderT Connection m [Text]
+    -> ReaderT SqlBackend m [Text]
 runMigration' m silent = do
     mig <- parseMigration' m
     case unsafeSql mig of
@@ -90,12 +90,12 @@ runMigration' m silent = do
 
 runMigrationUnsafe :: MonadIO m
                    => Migration
-                   -> ReaderT Connection m ()
+                   -> ReaderT SqlBackend m ()
 runMigrationUnsafe m = do
     mig <- parseMigration' m
     mapM_ (executeMigrate False) $ sortMigrations $ allSql mig
 
-executeMigrate :: MonadIO m => Bool -> Text -> ReaderT Connection m Text
+executeMigrate :: MonadIO m => Bool -> Text -> ReaderT SqlBackend m Text
 executeMigrate silent s = do
     unless silent $ liftIO $ hPutStrLn stderr $ "Migrating: " ++ unpack s
     rawExecute s []
