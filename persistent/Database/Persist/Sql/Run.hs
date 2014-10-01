@@ -24,7 +24,7 @@ import System.Timeout (timeout)
 
 -- | Get a connection from the pool, run the given action, and then return the
 -- connection to the pool.
-runSqlPool :: MonadBaseControl IO m => SqlPersistT m a -> Pool Connection -> m a
+runSqlPool :: MonadBaseControl IO m => SqlPersistT m a -> Pool SqlBackend -> m a
 runSqlPool r pconn = do
     mres <- withResourceTimeout 2000000 pconn $ runSqlConn r
     maybe (throwIO Couldn'tGetSQLConnection) return mres
@@ -51,7 +51,7 @@ withResourceTimeout ms pool act = control $ \runInIO -> mask $ \restore -> do
             return ret
 {-# INLINABLE withResourceTimeout #-}
 
-runSqlConn :: MonadBaseControl IO m => SqlPersistT m a -> Connection -> m a
+runSqlConn :: MonadBaseControl IO m => SqlPersistT m a -> SqlBackend -> m a
 runSqlConn r conn = do
     let getter = getStmtConn conn
     liftBase $ connBegin conn getter
@@ -61,25 +61,25 @@ runSqlConn r conn = do
     liftBase $ connCommit conn getter
     return x
 
-runSqlPersistM :: SqlPersistM a -> Connection -> IO a
+runSqlPersistM :: SqlPersistM a -> SqlBackend -> IO a
 runSqlPersistM x conn = runResourceT $ runNoLoggingT $ runSqlConn x conn
 
-runSqlPersistMPool :: SqlPersistM a -> Pool Connection -> IO a
+runSqlPersistMPool :: SqlPersistM a -> Pool SqlBackend -> IO a
 runSqlPersistMPool x pool = runResourceT $ runNoLoggingT $ runSqlPool x pool
 
 withSqlPool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m)
-            => (LogFunc -> IO Connection) -- ^ create a new connection
+            => (LogFunc -> IO SqlBackend) -- ^ create a new connection
             -> Int -- ^ connection count
-            -> (Pool Connection -> m a)
+            -> (Pool SqlBackend -> m a)
             -> m a
 withSqlPool mkConn connCount f = do
     pool <- createSqlPool mkConn connCount
     f pool
 
 createSqlPool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m)
-              => (LogFunc -> IO Connection)
+              => (LogFunc -> IO SqlBackend)
               -> Int
-              -> m (Pool Connection)
+              -> m (Pool SqlBackend)
 createSqlPool mkConn size = do
     logFunc <- askLogFunc
     liftIO $ createPool (mkConn logFunc) close' 1 20 size
@@ -94,12 +94,12 @@ askLogFunc = do
         return ()
 
 withSqlConn :: (MonadIO m, MonadBaseControl IO m, MonadLogger m)
-            => (LogFunc -> IO Connection) -> (Connection -> m a) -> m a
+            => (LogFunc -> IO SqlBackend) -> (SqlBackend -> m a) -> m a
 withSqlConn open f = do
     logFunc <- askLogFunc
     bracket (liftIO $ open logFunc) (liftIO . close') f
 
-close' :: Connection -> IO ()
+close' :: SqlBackend -> IO ()
 close' conn = do
     readIORef (connStmtMap conn) >>= mapM_ stmtFinalize . Map.elems
     connClose conn
