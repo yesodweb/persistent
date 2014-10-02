@@ -334,6 +334,8 @@ builtinGetters = I.fromList
     , (2951,             listOf (PersistDbSpecific . unUnknown))
     , (199,              listOf (PersistByteString . unUnknown))
     -- no array(unknown) either
+    -- postgis geometry
+    , (16392,            convertPV (PersistDbSpecific . unUnknown))
     ]
     where
         k (PGFF.typoid -> i) = PG.oid2int i
