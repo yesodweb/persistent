@@ -31,6 +31,7 @@ import Prelude hiding (error)
 import qualified Prelude as P
 import qualified Prelude
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Unsafe as BSU
 import qualified Data.ByteString.Internal as BSI
 import Foreign
 import Foreign.C
@@ -250,16 +251,26 @@ finalize statement = do
     ErrorOK -> return ()
     _ -> return () -- sqlError Nothing "finalize" error
 
+-- Taken from: https://github.com/IreneKnapp/direct-sqlite/blob/master/Database/SQLite3/Direct.hs
+-- | Like 'unsafeUseAsCStringLen', but if the string is empty,
+-- never pass the callback a null pointer.
+unsafeUseAsCStringLenNoNull
+    :: BS.ByteString
+    -> (CString -> Int -> IO a)
+    -> IO a
+unsafeUseAsCStringLenNoNull bs cb
+    | BS.null bs = cb (intPtrToPtr 1) 0
+    | otherwise = BSU.unsafeUseAsCStringLen bs $ \(ptr, len) ->
+        cb ptr (fromIntegral len)
+
 foreign import ccall "sqlite3_bind_blob"
   bindBlobC :: Ptr () -> Int -> Ptr () -> Int -> Ptr () -> IO Int
 bindBlobError :: Statement -> Int -> BS.ByteString -> IO Error
-bindBlobError (Statement statement) parameterIndex byteString = do
-  size <- return $ BS.length byteString
-  BS.useAsCString byteString
-                  (\dataC -> do
-                     error <- bindBlobC statement parameterIndex (castPtr dataC) size
+bindBlobError (Statement statement) parameterIndex byteString =
+  unsafeUseAsCStringLenNoNull byteString $ \dataC size -> do
+    error <- bindBlobC statement parameterIndex (castPtr dataC) size
                                         (intPtrToPtr (-1))
-                     return $ decodeError error)
+    return $ decodeError error
 bindBlob :: Statement -> Int -> BS.ByteString -> IO ()
 bindBlob statement parameterIndex byteString = do
   error <- bindBlobError statement parameterIndex byteString
@@ -322,14 +333,10 @@ bindNull statement parameterIndex = do
 foreign import ccall "sqlite3_bind_text"
   bindTextC :: Ptr () -> Int -> CString -> Int -> Ptr () -> IO Int
 bindTextError :: Statement -> Int -> Text -> IO Error
-bindTextError (Statement statement) parameterIndex text = do
-  let byteString = encodeUtf8 text
-  size <- return $ BS.length byteString
-  BS.useAsCString byteString
-                  (\dataC -> do
-                     error <- bindTextC statement parameterIndex dataC size
-                                        (intPtrToPtr (-1))
-                     return $ decodeError error)
+bindTextError (Statement statement) parameterIndex text =
+  unsafeUseAsCStringLenNoNull (encodeUtf8 text) $ \dataC size -> do
+    error <- bindTextC statement parameterIndex dataC size (intPtrToPtr (-1))
+    return $ decodeError error
 bindText :: Statement -> Int -> Text -> IO ()
 bindText statement parameterIndex text = do
   error <- bindTextError statement parameterIndex text
