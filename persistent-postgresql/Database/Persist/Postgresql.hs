@@ -334,9 +334,6 @@ builtinGetters = I.fromList
     , (2951,             listOf (PersistDbSpecific . unUnknown))
     , (199,              listOf (PersistByteString . unUnknown))
     -- no array(unknown) either
-    -- postgis geometry
-    , (16392,            convertPV (PersistDbSpecific . unUnknown))
-    , (16393,            convertPV (PersistDbSpecific . unUnknown))
     ]
     where
         k (PGFF.typoid -> i) = PG.oid2int i
@@ -345,17 +342,7 @@ builtinGetters = I.fromList
 getGetter :: PG.Connection -> PG.Oid -> IO (Getter PersistValue)
 getGetter conn oid = case I.lookup (PG.oid2int oid) builtinGetters of
     Just getter -> return getter
-    Nothing -> do
-        tyinfo <- PG.getTypeInfo conn oid
-        error $ "Postgresql.getGetter: type "
-             ++ explain tyinfo
-             ++ " ("
-             ++ show oid
-             ++ ") not supported."
-    where
-        explain tyinfo = case B8.unpack $ PG.typname tyinfo of
-                        t@('_':ty) -> t ++ " (array of " ++ ty ++ ")"
-                        x -> show x
+    Nothing     -> return $ convertPV (PersistDbSpecific . unUnknown)
 
 unBinary :: PG.Binary a -> a
 unBinary (PG.Binary x) = x
