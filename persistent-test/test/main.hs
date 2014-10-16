@@ -54,7 +54,7 @@ main = do
   runConn (setup CompositeTest.compositeMigrate)
   runConn (setup MigrationTest.migrationMigrate)
 
-  summary <- hspecWith defaultConfig PersistentTest.specs
+  summary <- hspecWithResult defaultConfig PersistentTest.specs
   runResourceT $ runConn PersistentTest.cleanDB
   unless (summaryFailures summary == 0) $ exitWith (toExitCode False)
 #endif
