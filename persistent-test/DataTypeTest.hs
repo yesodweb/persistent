@@ -17,7 +17,6 @@ import Data.Time.Clock (picosecondsToDiffTime)
 import Data.Time.LocalTime (TimeOfDay (TimeOfDay))
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad (when, forM_)
-import Control.Monad.Trans.Resource (runResourceT)
 import Data.Fixed (Pico,Micro)
 
 import Init
@@ -53,7 +52,7 @@ cleanDB = deleteWhere ([] :: [Filter DataTypeTable])
 
 specs :: Spec
 specs = describe "data type specs" $
-    it "handles all types" $ asIO $ runResourceT $ runConn $ do
+    it "handles all types" $ asIO $ runConn $ do
 #ifndef WITH_MONGODB
         _ <- runMigrationSilent dataTypeMigrate
         -- Ensure reading the data from the database works...

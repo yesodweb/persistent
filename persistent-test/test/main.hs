@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 import qualified PersistentTest
 import qualified RenameTest
@@ -22,6 +23,7 @@ import Control.Monad (unless, when)
 import Filesystem (isFile, removeFile)
 import Filesystem.Path.CurrentOS (fromText)
 import Control.Monad.Trans.Resource (runResourceT)
+import Control.Exception (handle, IOException)
 
 
 #ifdef MongoDB
@@ -41,22 +43,22 @@ toExitCode False = ExitFailure 1
 main :: IO ()
 main = do
 #ifndef WITH_MONGODB
-  sqExists <- isFile $ fromText sqlite_database
-  when sqExists $ removeFile $ fromText sqlite_database
-  runConn (setup PersistentTest.testMigrate)
-  runConn (setup PersistentTest.noPrefixMigrate)
+  handle (\(_ :: IOException) -> return ())
+    $ removeFile $ fromText sqlite_database
 
-  runConn (setup EmbedTest.embedMigrate)
-  runConn (setup EmbedOrderTest.embedOrderMigrate)
-  runConn (setup LargeNumberTest.numberMigrate)
-  runConn (setup UniqueTest.uniqueMigrate)
-  runConn (setup MaxLenTest.maxlenMigrate)
-  runConn (setup CompositeTest.compositeMigrate)
-  runConn (setup MigrationTest.migrationMigrate)
-
-  summary <- hspecWithResult defaultConfig PersistentTest.specs
-  runResourceT $ runConn PersistentTest.cleanDB
-  unless (summaryFailures summary == 0) $ exitWith (toExitCode False)
+  runConn $ do
+    mapM_ setup
+      [ PersistentTest.testMigrate
+      , PersistentTest.noPrefixMigrate
+      , EmbedTest.embedMigrate
+      , EmbedOrderTest.embedOrderMigrate
+      , LargeNumberTest.numberMigrate
+      , UniqueTest.uniqueMigrate
+      , MaxLenTest.maxlenMigrate
+      , CompositeTest.compositeMigrate
+      , MigrationTest.migrationMigrate
+      ]
+    PersistentTest.cleanDB
 #endif
 
   hspec $ do
@@ -73,6 +75,8 @@ main = do
     PersistentTest.specs
     EmptyEntityTest.specs
     CompositeTest.specs
+
 #ifndef WITH_MONGODB
     MigrationTest.specs
+    PersistentTest.specs
 #endif
