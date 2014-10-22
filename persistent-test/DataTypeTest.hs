@@ -12,7 +12,7 @@ import Data.Char (generalCategory, GeneralCategory(..))
 import qualified Data.Text as T
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as S
-import Data.Time (Day, UTCTime (..))
+import Data.Time (Day, UTCTime (..), fromGregorian)
 import Data.Time.Clock (picosecondsToDiffTime)
 import Data.Time.LocalTime (TimeOfDay (TimeOfDay))
 import Control.Applicative ((<$>), (<*>))
@@ -161,7 +161,9 @@ truncateUTCTime :: UTCTime -> Gen UTCTime
 truncateUTCTime (UTCTime d dift) = do
   let pico = fromRational . toRational $ dift :: Pico
       picoi= truncate . (*1000000000000) . toRational $ truncateToMicro pico :: Integer
-  return $ UTCTime d $ picosecondsToDiffTime picoi
+      -- https://github.com/lpsmith/postgresql-simple/issues/123
+      d' = max d $ fromGregorian 1950 1 1
+  return $ UTCTime d' $ picosecondsToDiffTime picoi
 
 asIO :: IO a -> IO a
 asIO = id
