@@ -809,14 +809,16 @@ instance PersistConfig MySQLConf where
         database <- o .: "database"
         host     <- o .: "host"
         port     <- o .: "port"
-        path     <- o .: "path"
+        path     <- o .:? "path"
         user     <- o .: "user"
         password <- o .: "password"
         pool     <- o .: "poolsize"
         let ci = MySQL.defaultConnectInfo
                    { MySQL.connectHost     = host
                    , MySQL.connectPort     = port
-                   , MySQL.connectPath     = path
+                   , MySQL.connectPath     = case path of
+                         Just p  -> p
+                         Nothing -> ""
                    , MySQL.connectUser     = user
                    , MySQL.connectPassword = password
                    , MySQL.connectDatabase = database
