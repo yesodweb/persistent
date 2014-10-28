@@ -160,14 +160,17 @@ instance PersistStore SqlBackend where
     replace k val = do
         conn <- ask
         let t = entityDef $ Just val
+        let w = entityDef $ dummyFromKey k
+        let wher = case entityPrimary w of
+                     Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (fieldDB fld) <> "=? ") $ compositeFields pdef
+                     Nothing   -> connEscapeName conn (fieldDB (entityId t)) <> "=?"
         let sql = T.concat
                 [ "UPDATE "
                 , connEscapeName conn (entityDB t)
                 , " SET "
                 , T.intercalate "," (map (go conn . fieldDB) $ entityFields t)
                 , " WHERE "
-                , connEscapeName conn $ fieldDB (entityId t)
-                , "=?"
+                , wher
                 ]
             vals = map toPersistValue (toPersistFields val) `mappend` keyToValues k
         rawExecute sql vals
