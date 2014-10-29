@@ -818,7 +818,7 @@ instance PersistConfig MySQLConf where
                    , MySQL.connectPort     = port
                    , MySQL.connectPath     = case path of
                          Just p  -> p
-                         Nothing -> ""
+                         Nothing -> MySQL.connectPath MySQL.defaultConnectInfo
                    , MySQL.connectUser     = user
                    , MySQL.connectPassword = password
                    , MySQL.connectDatabase = database
