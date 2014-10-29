@@ -47,6 +47,12 @@ toSqlKey = fromBackendKey . SqlBackendKey
 fromSqlKey :: ToBackendKey SqlBackend record => Key record -> Int64
 fromSqlKey = unSqlBackendKey . toBackendKey
 
+whereStmtForKey conn k =
+  case entityPrimary t of
+    Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (fieldDB fld) <> "=? ") $ compositeFields pdef
+    Nothing   -> connEscapeName conn (fieldDB (entityId t)) <> "=?"
+  where t = entityDef $ dummyFromKey k
+
 instance PersistStore SqlBackend where
     newtype BackendKey SqlBackend = SqlBackendKey { unSqlBackendKey :: Int64 }
         deriving (Show, Read, Eq, Ord, Num, Integral, PersistField, PersistFieldSql, PathPiece, Real, Enum, Bounded, A.ToJSON, A.FromJSON)
@@ -61,9 +67,7 @@ instance PersistStore SqlBackend where
             go'' n Divide = T.concat [n, "=", n, "/?"]
             go'' _ (BackendSpecificUpdate up) = error $ T.unpack $ "BackendSpecificUpdate" `mappend` up `mappend` "not supported"
         let go' (x, pu) = go'' (connEscapeName conn x) pu
-        let wher = case entityPrimary t of
-                Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (fieldDB fld) <> "=? ") $ compositeFields pdef
-                Nothing   -> connEscapeName conn (fieldDB (entityId t)) <> "=?"
+        let wher = whereStmtForKey conn k
         let sql = T.concat
                 [ "UPDATE "
                 , connEscapeName conn $ entityDB t
@@ -160,14 +164,14 @@ instance PersistStore SqlBackend where
     replace k val = do
         conn <- ask
         let t = entityDef $ Just val
+        let wher = whereStmtForKey conn k
         let sql = T.concat
                 [ "UPDATE "
                 , connEscapeName conn (entityDB t)
                 , " SET "
                 , T.intercalate "," (map (go conn . fieldDB) $ entityFields t)
                 , " WHERE "
-                , connEscapeName conn $ fieldDB (entityId t)
-                , "=?"
+                , wher
                 ]
             vals = map toPersistValue (toPersistFields val) `mappend` keyToValues k
         rawExecute sql vals
@@ -189,9 +193,7 @@ instance PersistStore SqlBackend where
                  $ map (connEscapeName conn . fieldDB) $ entityFields t
             noColumns :: Bool
             noColumns = null $ entityFields t
-        let wher = case entityPrimary t of
-                     Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (fieldDB fld) <> "=? ") $ compositeFields pdef
-                     Nothing   -> connEscapeName conn (fieldDB (entityId t)) <> "=?"
+        let wher = whereStmtForKey conn k
         let sql = T.concat
                 [ "SELECT "
                 , if noColumns then "*" else cols
@@ -214,10 +216,7 @@ instance PersistStore SqlBackend where
         rawExecute (sql conn) (keyToValues k)
       where
         t = entityDef $ dummyFromKey k
-        wher conn = 
-              case entityPrimary t of
-                Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (fieldDB fld) <> "=? ") $ compositeFields pdef
-                Nothing   -> connEscapeName conn (fieldDB (entityId t)) <> "=?"
+        wher conn = whereStmtForKey conn k
         sql conn = T.concat
             [ "DELETE FROM "
             , connEscapeName conn $ entityDB t

@@ -110,7 +110,9 @@ specs = describe "composite" $
     let p1 = TestParent "a1" "b1" 11 "p1"
     let p2 = TestParent "a2" "b2" 22 "p2"
     let p3 = TestParent "a3" "b3" 33 "p3"
+    let p1' = TestParent "a1" "b1" 11 "p1'"
     let c1 = TestChild "a1" "b1" 11 "c1"
+    let c1' = TestChild "a1" "b1" 11 "c1'"
 
     it "Insert" $ db $ do
       kp1 <- insert p1
@@ -216,6 +218,20 @@ specs = describe "composite" $
       _ <- update kp1 [TestParentExtra44 =. "q1"] 
       newkps1 <- get kp1
       newkps1 @== Just (TestParent "a1" "b1" 11 "q1")
+
+    it "Replace Parent" $ db $ do
+      kp1 <- insert p1
+      _ <- replace kp1 p1'
+      newp1 <- get kp1
+      newp1 @== Just p1'
+
+    it "Replace Child" $ db $ do
+      -- c1 FKs p1
+      _ <- insert p1
+      kc1 <- insert c1
+      _ <- replace kc1 c1'
+      newc1 <- get kc1
+      newc1 @== Just c1'
     
     it "Insert Many to Many" $ db $ do
       let z1 = Citizen "mk" (Just 11)
