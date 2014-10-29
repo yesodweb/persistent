@@ -226,6 +226,8 @@ specs = describe "composite" $
       newp1 @== Just p1'
 
     it "Replace Child" $ db $ do
+      -- c1 FKs p1
+      _ <- insert p1
       kc1 <- insert c1
       _ <- replace kc1 c1'
       newc1 <- get kc1
