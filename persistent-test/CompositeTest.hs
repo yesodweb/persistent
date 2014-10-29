@@ -112,7 +112,7 @@ specs = describe "composite" $
     let p3 = TestParent "a3" "b3" 33 "p3"
     let p1' = TestParent "a1" "b1" 11 "p1'"
     let c1 = TestChild "a1" "b1" 11 "c1"
-    let c2 = TestChild "a2" "b2" 22 "c2"
+    let c1' = TestChild "a1" "b1" 11 "c1'"
 
     it "Insert" $ db $ do
       kp1 <- insert p1
@@ -227,9 +227,9 @@ specs = describe "composite" $
 
     it "Replace Child" $ db $ do
       kc1 <- insert c1
-      _ <- replace kc1 c2
+      _ <- replace kc1 c1'
       newc1 <- get kc1
-      newc1 @== Just c2
+      newc1 @== Just c1'
     
     it "Insert Many to Many" $ db $ do
       let z1 = Citizen "mk" (Just 11)
