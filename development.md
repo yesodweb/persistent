@@ -35,10 +35,7 @@ You can develop just against your preferred backend and the community should hel
 However, we have a Dockerfile that you can use to install all the databases.
 
     sudo docker build -t persistent .
-
-To run this you need to fill in the brackets on this step:
-
-    sudo docker run -v `pwd`:/home/persistent -t -i persistent /bin/bash
+    sudo docker run --name persistent -v `pwd`:/home/haskell -t -i persistent /bin/bash
 
 This only works on Linux, but you can use Linux on Mac or Windows through Virtualbox.
 

@@ -29,16 +29,13 @@ RUN sudo apt-get install -y locales && \
     sudo update-locale LANG="en_US.UTF-8 UTF-8"
 ENV LANG C.UTF-8
 
-USER persistent
-ENV HOME /home/persistent
-
 # build the image
 #
 #     sudo docker build -t persistent .
 #
 # run the image with the directory mounted
 #
-#     sudo docker run --name persistent -v `pwd`:/home/persistent -t -i persistent /bin/bash
+#     sudo docker run --name persistent -v `pwd`:/home/haskell -t -i persistent /bin/bash
 #
 # # switch to the persistent user in the image and its home directory
 # su persistent
