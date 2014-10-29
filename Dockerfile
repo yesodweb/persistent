@@ -1,47 +1,33 @@
-from stackbrew/ubuntu:14.04
-maintainer Greg Weber
+FROM zsol/haskell-platform-2014.2.0.0
+MAINTAINER Greg Weber
 
-RUN apt-get install -y adduser
-RUN adduser --disabled-password persistent
-RUN echo "Defaults:persistent !requiretty" >> /etc/sudoers
-
-RUN apt-get update
-RUN apt-get install -y haskell-platform
-
-# Above installs ghc 7.6 to /usr/bin/
-# Below install ghc 7.8 to /usr/local/bin/
-ADD http://www.haskell.org/ghc/dist/7.8.3/ghc-7.8.3-x86_64-unknown-linux-deb7.tar.xz ghc-7.8.3-x86_64-unknown-linux-deb7.tar.xz
-RUN apt-get install -y xz-utils
-RUN tar xf ghc-7.8.3-x86_64-unknown-linux-deb7.tar.xz
-RUN apt-get install -y g++ make
-RUN cd ghc-7.8.3 && ./configure && make install && cd ..
-RUN rm -fr ghc-7.8.3-x86_64-unknown-linux-deb7.tar.bz2 ghc-7.8.3
-
+RUN sudo apt-get update
 
 # Postgres
-RUN apt-get install -y postgresql postgresql-client postgresql-contrib libpq-dev
+RUN sudo apt-get install -y postgresql postgresql-client postgresql-contrib libpq-dev
 
 # Sqlite
-RUN apt-get install -y sqlite3 libsqlite3-dev
+RUN sudo apt-get install -y sqlite3 libsqlite3-dev
 
 # Redis
-RUN apt-get install -y redis-server
+RUN sudo apt-get install -y redis-server
 
 # MongoDB
-RUN apt-key adv --keyserver keyserver.ubuntu.com --recv 7F0CEB10
-RUN echo "deb http://downloads-distro.mongodb.org/repo/ubuntu-upstart dist 10gen" >> /etc/apt/sources.list.d/10gen.list
-RUN mkdir -p /data/db
-
-RUN apt-get update
-RUN apt-get install -y mongodb-10gen || echo "upstart error expected"
+RUN sudo apt-key adv --keyserver keyserver.ubuntu.com --recv 7F0CEB10 && \
+    sudo sh -c 'echo "deb http://downloads-distro.mongodb.org/repo/ubuntu-upstart dist 10gen" >> /etc/apt/sources.list.d/10gen.list' && \
+    sudo mkdir -p /data/db && \
+    sudo apt-get install -y mongodb-10gen || echo "upstart error expected"
 
 # MySQL
 RUN apt-get install -y libpcre3-dev mysql-server libmysqlclient-dev || echo "need to run mysql --configure"
 
-RUN echo "en_US.UTF-8 UTF-8" >> /var/lib/locales/supported.d/local
-RUN dpkg-reconfigure locales
-RUN update-locale LANG=en_US.UTF-8
-ENV LANG en_US.UTF-8
+ENV PATH .cabal-sandbox/bin:.cabal/bin:$PATH:./
+RUN sudo apt-get install -y locales && \
+    sudo mkdir -p /var/lib/locales/supported.d && \
+    sudo sh -c 'echo "en_US.UTF-8 UTF-8" >> /var/lib/locales/supported.d/local' && \
+    sudo dpkg-reconfigure locales && \
+    sudo update-locale LANG="en_US.UTF-8 UTF-8"
+ENV LANG C.UTF-8
 
 USER persistent
 ENV HOME /home/persistent

@@ -34,11 +34,11 @@ You can develop just against your preferred backend and the community should hel
 
 However, we have a Dockerfile that you can use to install all the databases.
 
-    sudo docker build .
+    sudo docker build -t persistent .
 
 To run this you need to fill in the brackets on this step:
 
-    sudo docker run -v <absolute-path-to-persisten>:/home/persistent -t -i <image-hash-from-docker-build> /bin/bash
+    sudo docker run -v `pwd`:/home/persistent -t -i persistent /bin/bash
 
 This only works on Linux, but you can use Linux on Mac or Windows through Virtualbox.
 
@@ -47,5 +47,6 @@ For example:
 
     mongod --smallfiles &
 
-Docker does not support upstart since it is designed to run a single process, in this case /bin/bash which you can launch other processes with.
-In the future we can setup Angel to run all the databases.
+Docker does not support upstart so just because you install a database does not mean it will be running. You must launch each one in the background.
+
+If someone can contribute information on how to run persistent or MySQL that would be appreciated.
