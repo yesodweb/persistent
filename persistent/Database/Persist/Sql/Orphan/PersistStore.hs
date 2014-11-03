@@ -47,6 +47,7 @@ toSqlKey = fromBackendKey . SqlBackendKey
 fromSqlKey :: ToBackendKey SqlBackend record => Key record -> Int64
 fromSqlKey = unSqlBackendKey . toBackendKey
 
+whereStmtForKey :: PersistEntity record => SqlBackend -> Key record -> Text
 whereStmtForKey conn k =
   case entityPrimary t of
     Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (fieldDB fld) <> "=? ") $ compositeFields pdef
