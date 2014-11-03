@@ -83,7 +83,7 @@ class
     --
     -- If you don't need the inserted @Key@s, use 'insertMany_'
     --
-    -- SQL backends currently use the slow default implementation of
+    -- Some backends use the slow default implementation of
     -- @mapM insert@
     insertMany :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
                => [val] -> ReaderT backend m [Key val]
@@ -96,6 +96,17 @@ class
     insertMany_ :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
                 => [val] -> ReaderT backend m ()
     insertMany_ x = insertMany x >> return ()
+
+    -- | Same as 'insertMany_', but takes an 'Entity' instead of just a record
+    --
+    -- Useful when migrating data from one entity to another
+    -- and want to preserve ids
+    --
+    -- Some backends use the slow default implementation of
+    -- @mapM insertKey@
+    insertEntityMany :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
+                     => [Entity val] -> ReaderT backend m ()
+    insertEntityMany = mapM_ (\(Entity k record) -> insertKey k record)
 
     -- | Create a new record in the database using the given key.
     insertKey :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)

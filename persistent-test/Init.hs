@@ -28,6 +28,7 @@ module Init (
   , sqlite_database
 #endif
   , BackendKey(..)
+  , generateKey
 
    -- re-exports
   , module Database.Persist
@@ -65,7 +66,7 @@ import qualified Database.MongoDB as MongoDB
 import Database.Persist.MongoDB (Action, withMongoPool, runMongoDBPool, defaultMongoConf, applyDockerEnv, BackendKey(..))
 import Language.Haskell.TH.Syntax (Type(..))
 import Database.Persist.TH (mkPersistSettings)
-import Control.Monad (replicateM)
+import Control.Monad (replicateM, liftM)
 import qualified Data.ByteString as BS
 
 import Control.Monad (void)
@@ -225,3 +226,11 @@ instance PersistStore backend => Arbitrary (BackendKey backend) where
       errorLeft x = case x of
           Left e -> error $ unpack e
           Right r -> r
+
+#ifdef WITH_MONGODB
+generateKey :: IO (BackendKey MongoDB.MongoContext)
+generateKey = MongoKey `liftM` MongoDB.genObjectId
+#else
+generateKey :: IO (BackendKey SqlBackend)
+generateKey = SqlBackendKey . abs `liftM` (randomRIO (0, 10000))
+#endif

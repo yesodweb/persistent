@@ -28,7 +28,10 @@ module Database.Persist.MongoDB
     , docToEntityEither
     , docToEntityThrow
     , entityToDocument
+    , recordToDocument
+    , documentFromEntity
     , toInsertDoc
+    , entityToInsertDoc
     , updatesToDoc
     , filtersToDoc
     , toUniquesDoc
@@ -444,17 +447,31 @@ toInsertDoc record = zipFilter (embeddedFields $ toEmbedEntityDef entDef)
     embeddedVal je@(Just _) (PersistList l) = DB.Array $ map (embeddedVal je) l
     embeddedVal _ pv = DB.val pv
 
+entityToInsertDoc :: forall record.  (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
+                  => Entity record -> DB.Document
+entityToInsertDoc (Entity key record) = keyToMongoDoc key ++ toInsertDoc record
+
 collectionName :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
                => record -> Text
 collectionName = unDBName . entityDB . entityDef . Just
 
 -- | convert a PersistEntity into document fields.
 -- unlike 'toInsertDoc', nulls are included.
-entityToDocument :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
+recordToDocument :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
                  => record -> DB.Document
-entityToDocument record = zipToDoc (map fieldDB $ entityFields entity) (toPersistFields record)
+recordToDocument record = zipToDoc (map fieldDB $ entityFields entity) (toPersistFields record)
   where
     entity = entityDef $ Just record
+
+entityToDocument :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
+                 => record -> DB.Document
+entityToDocument = recordToDocument
+{-# DEPRECATED entityToDocument "use recordToDocument" #-}
+
+documentFromEntity :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
+                   => Entity record -> DB.Document
+documentFromEntity (Entity key record) =
+    keyToMongoDoc key ++ entityToDocument record
 
 zipToDoc :: PersistField a => [DBName] -> [a] -> [DB.Field]
 zipToDoc [] _  = []
@@ -465,16 +482,6 @@ zipToDoc (e:efields) (p:pfields) =
 
 fieldToLabel :: EmbedFieldDef -> Text
 fieldToLabel = unDBName . emFieldDB
-
-saveWithKey :: forall m record.
-            (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
-            => (record -> [DB.Field])
-            -> (Text -> [DB.Field] -> DB.Action m ())
-            -> Key record
-            -> record
-            -> DB.Action m ()
-saveWithKey entToFields dbSave key record =
-      dbSave (collectionName record) ((keyToMongoDoc key) ++ (entToFields record))
 
 keyFrom_idEx :: (Trans.MonadIO m, PersistEntity record) => DB.Value -> m (Key record)
 keyFrom_idEx idVal = case keyFrom_id idVal of
@@ -521,15 +528,21 @@ instance PersistStore DB.MongoContext where
                 >>= keyFrom_idEx
 
     insertMany [] = return []
-    insertMany (r:records) = mapM keyFrom_idEx =<<
-        DB.insertMany (collectionName r) (map toInsertDoc (r:records))
+    insertMany records@(r:_) = mapM keyFrom_idEx =<<
+        DB.insertMany (collectionName r) (map toInsertDoc records)
 
-    insertKey k record = saveWithKey toInsertDoc DB.insert_ k record
+    insertEntityMany [] = return ()
+    insertEntityMany ents@(Entity _ r : _) =
+        DB.insertMany_ (collectionName r) (map entityToInsertDoc ents)
 
-    repsert   k record = saveWithKey entityToDocument DB.save k record
+    insertKey k record = DB.insert_ (collectionName record) $
+                         entityToInsertDoc (Entity k record)
+
+    repsert   k record = DB.save (collectionName record) $
+                         documentFromEntity (Entity k record)
 
     replace k record = do
-        DB.replace (selectByKey k) (entityToDocument record)
+        DB.replace (selectByKey k) (recordToDocument record)
         return ()
 
     delete k =
