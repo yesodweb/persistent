@@ -27,7 +27,6 @@ import Database.Persist
 #ifdef WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
 import Database.Persist.MongoDB (toInsertDoc, docToEntityThrow, collectionName, recordToDocument)
-import Data.Bson (genObjectId)
 
 #else
 
@@ -642,25 +641,13 @@ specs = describe "persistent" $ do
       return ()
 
   it "insertKey" $ db $ do
-#ifdef WITH_MONGODB
-      oid <- liftIO $ genObjectId
-      let k = PersonKey $ MongoKey oid
-#else
-      ki <- liftIO $ randomRIO (0, 10000)
-      let k = PersonKey $ SqlBackendKey $ abs ki
-#endif
+      k <- liftIO (PersonKey `fmap` generateKey)
       insertKey k $ Person "Key" 26 Nothing
       Just (Entity k2 _) <- selectFirst [PersonName ==. "Key"] []
       k2 @== k
 
   it "repsert" $ db $ do
-#ifdef WITH_MONGODB
-      oid <- liftIO $ genObjectId
-      let k = PersonKey $ MongoKey oid
-#else
-      ki <- liftIO $ randomRIO (0, 10000)
-      let k = PersonKey $ SqlBackendKey $ abs ki
-#endif
+      k <- liftIO (PersonKey `fmap` generateKey)
       Nothing <- selectFirst [PersonName ==. "Repsert"] []
       repsert k $ Person "Repsert" 26 Nothing
       Just (Entity k2 _) <- selectFirst [PersonName ==. "Repsert"] []
