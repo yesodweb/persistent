@@ -623,11 +623,11 @@ specs = describe "persistent" $ do
 
   it "insertEntityMany" $ db $ do
     id1:id2:id3:id4:id5:[] <- liftIO $ replicateM 5 (PersonKey `fmap` generateKey)
-    let p1 = Entity id1 $ Person "insertEntityMany" 1 Nothing
-        p2 = Entity id2 $ Person "insertEntityMany" 2 Nothing
-        p3 = Entity id3 $ Person "insertEntityMany" 3 Nothing
-        p4 = Entity id4 $ Person "insertEntityMany" 3 Nothing
-        p5 = Entity id5 $ Person "insertEntityMany" 3 Nothing
+    let p1 = Entity id1 $ Person "insertEntityMany1" 1 Nothing
+        p2 = Entity id2 $ Person "insertEntityMany2" 2 Nothing
+        p3 = Entity id3 $ Person "insertEntityMany3" 3 Nothing
+        p4 = Entity id4 $ Person "insertEntityMany4" 3 Nothing
+        p5 = Entity id5 $ Person "insertEntityMany5" 3 Nothing
     insertEntityMany [p1,p2,p3,p4,p5]
     rows <- count ([] :: [Filter Person])
     rows @== 5
