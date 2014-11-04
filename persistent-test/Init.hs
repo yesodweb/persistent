@@ -28,6 +28,7 @@ module Init (
   , sqlite_database
 #endif
   , BackendKey(..)
+  , generateKey
 
    -- re-exports
   , module Database.Persist
@@ -65,12 +66,12 @@ import qualified Database.MongoDB as MongoDB
 import Database.Persist.MongoDB (Action, withMongoPool, runMongoDBPool, defaultMongoConf, applyDockerEnv, BackendKey(..))
 import Language.Haskell.TH.Syntax (Type(..))
 import Database.Persist.TH (mkPersistSettings)
-import Control.Monad (replicateM)
 import qualified Data.ByteString as BS
 
-import Control.Monad (void)
+import Control.Monad (void, replicateM, liftM)
 
 #else
+import Control.Monad (liftM)
 import Database.Persist.Sql
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import Control.Monad.Logger
@@ -85,7 +86,8 @@ import Database.Persist.Sqlite
 #  if WITH_MYSQL
 import Database.Persist.MySQL
 #  endif
-
+import Data.IORef (newIORef, IORef, writeIORef, readIORef)
+import System.IO.Unsafe (unsafePerformIO)
 #endif
 
 import Control.Monad (unless, (>=>))
@@ -95,9 +97,6 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Int (Int32, Int64)
 
 import Control.Monad.IO.Class
-#if !MIN_VERSION_random(1,0,1)
-import System.Random
-#endif
 
 (@/=), (@==), (==@) :: (Eq a, Show a, MonadIO m) => a -> a -> m ()
 infix 1 @/= --, /=@
@@ -225,3 +224,18 @@ instance PersistStore backend => Arbitrary (BackendKey backend) where
       errorLeft x = case x of
           Left e -> error $ unpack e
           Right r -> r
+
+#ifdef WITH_MONGODB
+generateKey :: IO (BackendKey MongoDB.MongoContext)
+generateKey = MongoKey `liftM` MongoDB.genObjectId
+#else
+keyCounter :: IORef Int64
+keyCounter = unsafePerformIO $ newIORef 1
+{-# NOINLINE keyCounter #-}
+
+generateKey :: IO (BackendKey SqlBackend)
+generateKey = do
+    i <- readIORef keyCounter
+    writeIORef keyCounter (i + 1)
+    return $ SqlBackendKey $ i
+#endif

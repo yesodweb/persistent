@@ -26,13 +26,11 @@ import Database.Persist
 
 #ifdef WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
-import Database.Persist.MongoDB (toInsertDoc, docToEntityThrow, collectionName, entityToDocument)
-import Data.Bson (genObjectId)
+import Database.Persist.MongoDB (toInsertDoc, docToEntityThrow, collectionName, recordToDocument)
 
 #else
 
-import Control.Monad (liftM, void)
-import Control.Monad.Logger
+import Control.Monad (void, replicateM)
 import Database.Persist.TH (mkDeleteCascade, mkSave)
 import Control.Exception (SomeException)
 import qualified Data.Text as T
@@ -43,7 +41,6 @@ import qualified Control.Exception as E
 import qualified Control.Exception.Control as Control
 #    define CATCH Control.catch
 #  endif
-import System.Random
 
 #  if WITH_MYSQL
 import Database.Persist.MySQL()
@@ -617,6 +614,23 @@ specs = describe "persistent" $ do
     _ <- insertMany_ ([] :: [Person])
     rows <- count ([] :: [Filter Person])
     rows @== 0
+    _ <- insertMany ([] :: [Person])
+    rows2 <- count ([] :: [Filter Person])
+    rows2 @== 0
+    _ <- insertEntityMany ([] :: [Entity Person])
+    rows3 <- count ([] :: [Filter Person])
+    rows3 @== 0
+
+  it "insertEntityMany" $ db $ do
+    id1:id2:id3:id4:id5:[] <- liftIO $ replicateM 5 (PersonKey `fmap` generateKey)
+    let p1 = Entity id1 $ Person "insertEntityMany1" 1 Nothing
+        p2 = Entity id2 $ Person "insertEntityMany2" 2 Nothing
+        p3 = Entity id3 $ Person "insertEntityMany3" 3 Nothing
+        p4 = Entity id4 $ Person "insertEntityMany4" 3 Nothing
+        p5 = Entity id5 $ Person "insertEntityMany5" 3 Nothing
+    insertEntityMany [p1,p2,p3,p4,p5]
+    rows <- count ([] :: [Filter Person])
+    rows @== 5
 
   it "insertBy" $ db $ do
       Right _ <- insertBy $ Person "name" 1 Nothing
@@ -625,25 +639,13 @@ specs = describe "persistent" $ do
       return ()
 
   it "insertKey" $ db $ do
-#ifdef WITH_MONGODB
-      oid <- liftIO $ genObjectId
-      let k = PersonKey $ MongoKey oid
-#else
-      ki <- liftIO $ randomRIO (0, 10000)
-      let k = PersonKey $ SqlBackendKey $ abs ki
-#endif
+      k <- liftIO (PersonKey `fmap` generateKey)
       insertKey k $ Person "Key" 26 Nothing
       Just (Entity k2 _) <- selectFirst [PersonName ==. "Key"] []
       k2 @== k
 
   it "repsert" $ db $ do
-#ifdef WITH_MONGODB
-      oid <- liftIO $ genObjectId
-      let k = PersonKey $ MongoKey oid
-#else
-      ki <- liftIO $ randomRIO (0, 10000)
-      let k = PersonKey $ SqlBackendKey $ abs ki
-#endif
+      k <- liftIO (PersonKey `fmap` generateKey)
       Nothing <- selectFirst [PersonName ==. "Repsert"] []
       repsert k $ Person "Repsert" 26 Nothing
       Just (Entity k2 _) <- selectFirst [PersonName ==. "Repsert"] []
@@ -726,7 +728,7 @@ specs = describe "persistent" $ do
         liftIO $ p1 @?= ent1
 
         let p2 = p1 {personColor = Just "blue"}
-        let doc2 = idSelector:entityToDocument p2
+        let doc2 = idSelector:recordToDocument p2
         MongoDB.save "Person" doc2
         Entity _ ent2 <- docToEntityThrow doc2
         liftIO $ p2 @?= ent2
