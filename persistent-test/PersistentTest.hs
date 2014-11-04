@@ -30,8 +30,7 @@ import Database.Persist.MongoDB (toInsertDoc, docToEntityThrow, collectionName, 
 
 #else
 
-import Control.Monad (liftM, void)
-import Control.Monad.Logger
+import Control.Monad (void, replicateM)
 import Database.Persist.TH (mkDeleteCascade, mkSave)
 import Control.Exception (SomeException)
 import qualified Data.Text as T
@@ -42,7 +41,6 @@ import qualified Control.Exception as E
 import qualified Control.Exception.Control as Control
 #    define CATCH Control.catch
 #  endif
-import System.Random
 
 #  if WITH_MYSQL
 import Database.Persist.MySQL()
