@@ -380,7 +380,13 @@ updateToBson :: Text
              -> Either PersistUpdate MongoUpdateOperation
              -> DB.Field
 updateToBson fname v up =
+#ifdef DEBUG
+  debug (
+#endif
     opName DB.:= DB.Doc [fname DB.:= opValue]
+#ifdef DEBUG
+    )
+#endif
   where
     inc = "$inc"
     mul = "$mul"
@@ -399,7 +405,9 @@ updateToBson fname v up =
         (BackendSpecificUpdate bsup, _) -> throw $ PersistMongoDBError $
           T.pack $ "did not expect BackendSpecificUpdate " ++ T.unpack bsup
       Right mup -> case mup of
-        MongoEach op  -> (opToText op, DB.Doc ["$each" DB.:= DB.val v])
+        MongoEach op  -> case op of
+           MongoPull -> ("$pullAll", DB.val v)
+           _         -> (opToText op, DB.Doc ["$each" DB.:= DB.val v])
         MongoSimple x -> (opToText x, DB.val v)
 
 
@@ -1417,6 +1425,8 @@ backendArrayOperation op fld val = BackendUpdate $
 -- | equivalent to $each
 --
 -- > eachOp push field []
+--
+-- @eachOp pull@ will get translated to @$pullAll@
 eachOp :: forall record typ.
        ( PersistField typ, PersistEntityBackend record ~ DB.MongoContext)
        => (EntityField record [typ] -> typ -> Update record)
@@ -1436,7 +1446,6 @@ pullAll :: forall record typ.
         , PersistEntityBackend record ~ DB.MongoContext
         ) => EntityField record [typ] -> [typ] -> Update record
 fld `pullAll` val = eachOp pull fld val
-{-# DEPRECATED pullAll "use eachOp pull" #-}
 
 
 nestedUpdateOp :: forall record typ.
