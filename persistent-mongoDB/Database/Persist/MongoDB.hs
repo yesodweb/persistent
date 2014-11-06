@@ -51,7 +51,7 @@ module Database.Persist.MongoDB
 
     -- ** Updates
     -- $updates
-    , nestSet, nestInc, nestDec, nestMul, push, pull, pullAll, addToSet
+    , nestSet, nestInc, nestDec, nestMul, push, pull, pullAll, addToSet, eachOp
 
     -- * Key conversion helpers
     , BackendKey(..)
@@ -377,7 +377,7 @@ updatesToDoc upds = map updateToMongoField upds
 
 updateToBson :: Text
              -> PersistValue
-             -> Either PersistUpdate MongoUpdateOperator
+             -> Either PersistUpdate MongoUpdateOperation
              -> DB.Field
 updateToBson fname v up =
     opName DB.:= DB.Doc [fname DB.:= opValue]
@@ -398,7 +398,12 @@ updateToBson fname v up =
         (Divide, _)   -> throw $ PersistMongoDBUnsupported "divide not supported"
         (BackendSpecificUpdate bsup, _) -> throw $ PersistMongoDBError $
           T.pack $ "did not expect BackendSpecificUpdate " ++ T.unpack bsup
-      Right mup -> (opToText mup, DB.val v)
+      Right mup -> case mup of
+        MongoEach op  -> (opToText op, DB.Doc ["$each" DB.:= DB.val v])
+        MongoSimple x -> (opToText x, DB.val v)
+
+
+
 
 updateToMongoField :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
                    => Update record -> DB.Field
@@ -1218,19 +1223,25 @@ fld =~. val = BackendFilter $ RegExpFilter fld val
 data MongoFilterOperator typ = PersistFilterOperator (Either typ [typ]) PersistFilter
                              | MongoFilterOperator DB.Value
 
-data UpdateValueOp typ = UpdateValueOp (Either typ [typ]) (Either PersistUpdate MongoUpdateOperator)
-      deriving Show
+data UpdateValueOp typ =
+  UpdateValueOp
+    (Either typ [typ])
+    (Either PersistUpdate MongoUpdateOperation)
+    deriving Show
+
+data MongoUpdateOperation = MongoEach   MongoUpdateOperator
+                          | MongoSimple MongoUpdateOperator
+                          deriving Show
 data MongoUpdateOperator = MongoPush
                          | MongoPull
-                         | MongoPullAll
                          | MongoAddToSet
                          deriving Show
 
 opToText :: MongoUpdateOperator -> Text
 opToText MongoPush     = "$push"
 opToText MongoPull     = "$pull"
-opToText MongoPullAll  = "$pullAll"
 opToText MongoAddToSet = "$addToSet"
+
 
 data MongoFilter record =
         forall typ. PersistField typ =>
@@ -1401,14 +1412,32 @@ backendArrayOperation ::
   => MongoUpdateOperator -> EntityField record [typ] -> typ
   -> Update record
 backendArrayOperation op fld val = BackendUpdate $
-    ArrayUpdate fld $ UpdateValueOp (Left val) (Right op)
+    ArrayUpdate fld $ UpdateValueOp (Left val) (Right $ MongoSimple op)
+
+-- | equivalent to $each
+--
+-- > eachOp push field []
+eachOp :: forall record typ.
+       ( PersistField typ, PersistEntityBackend record ~ DB.MongoContext)
+       => (EntityField record [typ] -> typ -> Update record)
+       -> EntityField record [typ] -> [typ]
+       -> Update record
+eachOp haskellOp fld val = case haskellOp fld (error "eachOp: undefined") of
+    BackendUpdate (ArrayUpdate _ (UpdateValueOp (Left _) (Right (MongoSimple op)))) -> each op
+    BackendUpdate (ArrayUpdate{})  -> error "eachOp: unexpected ArrayUpdate"
+    BackendUpdate (NestedUpdate{}) -> error "eachOp: did not expect NestedUpdate"
+    Update{} -> error "eachOp: did not expect Update"
+  where
+    each op = BackendUpdate $ ArrayUpdate fld $
+      UpdateValueOp (Right val) (Right $ MongoEach op)
 
 pullAll :: forall record typ.
         ( PersistField typ
         , PersistEntityBackend record ~ DB.MongoContext
         ) => EntityField record [typ] -> [typ] -> Update record
-fld `pullAll` val = BackendUpdate $
-    ArrayUpdate fld $ UpdateValueOp (Right val) (Right MongoPullAll)
+fld `pullAll` val = eachOp pull fld val
+{-# DEPRECATED pullAll "use eachOp pull" #-}
+
 
 nestedUpdateOp :: forall record typ.
        ( PersistField typ
