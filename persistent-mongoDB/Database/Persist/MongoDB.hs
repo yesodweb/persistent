@@ -42,7 +42,7 @@ module Database.Persist.MongoDB
     -- ** Filters
     -- $filters
     , nestEq, nestNe, nestGe, nestLe, nestIn, nestNotIn
-    , anyEq, nestBsonEq, anyBsonEq, multiBsonEq
+    , anyEq, nestAnyEq, nestBsonEq, anyBsonEq, multiBsonEq
     , (=~.)
     -- non-operator forms of filters
     , NestedField(..)
@@ -861,6 +861,7 @@ mongoUpdateToDoc (ArrayUpdate field op)    = mongoUpdateToBson (fieldName field)
 mongoFilterToDoc :: PersistEntity record => MongoFilter record -> DB.Document
 mongoFilterToDoc (NestedFilter   field op) = mongoFilterToBSON (nestedFieldName field) op
 mongoFilterToDoc (ArrayFilter field op) = mongoFilterToBSON (fieldName field) op
+mongoFilterToDoc (NestedArrayFilter field op) = mongoFilterToBSON (nestedFieldName field) op
 mongoFilterToDoc (RegExpFilter fn (reg, opts)) = [ fieldName fn  DB.:= DB.RegEx (DB.Regex reg opts)]
 
 nestedFieldName :: forall record typ. PersistEntity record => NestedField record typ -> Text
@@ -1260,6 +1261,10 @@ data MongoFilter record =
           ArrayFilter
             (EntityField record [typ])
             (MongoFilterOperator typ)
+      | forall typ. PersistField typ =>
+          NestedArrayFilter
+            (NestedField record [typ])
+            (MongoFilterOperator typ)
       | forall typ. MongoRegexSearchable typ =>
           RegExpFilter
             (EntityField record typ)
@@ -1323,6 +1328,7 @@ infixr 4 `nestIn`
 infixr 4 `nestNotIn`
 
 infixr 4 `anyEq`
+infixr 4 `nestAnyEq`
 infixr 4 `nestBsonEq`
 infixr 4 `multiBsonEq`
 infixr 4 `anyBsonEq`
@@ -1366,7 +1372,7 @@ nestBsonEq :: forall record typ.
 nf `nestBsonEq` val = BackendFilter $
     NestedFilter nf $ MongoFilterOperator val
 
--- | Like nestEq, but for an embedded list.
+-- | Like '(==.)' but for an embedded list.
 -- Checks to see if the list contains an item.
 --
 -- In Haskell we need different equality functions for embedded fields that are lists or non-lists to keep things type-safe.
@@ -1380,6 +1386,15 @@ anyEq :: forall record typ.
         ) => EntityField record [typ] -> typ -> Filter record
 fld `anyEq` val = BackendFilter $
     ArrayFilter fld $ PersistFilterOperator (Left val) Eq
+
+-- | Like nestEq, but for an embedded list.
+-- Checks to see if the nested list contains an item.
+nestAnyEq :: forall record typ.
+        ( PersistField typ
+        , PersistEntityBackend record ~ DB.MongoContext
+        ) => NestedField record [typ] -> typ -> Filter record
+fld `nestAnyEq` val = BackendFilter $
+    NestedArrayFilter fld $ PersistFilterOperator (Left val) Eq
 
 multiBsonEq :: forall record typ.
         ( PersistField typ
