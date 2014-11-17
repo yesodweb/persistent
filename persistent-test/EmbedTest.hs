@@ -23,7 +23,6 @@ import System.Process (readProcess)
 #endif
 import Database.Persist.Sql.Class
 import Data.List.NonEmpty hiding (insert, length)
-import Data.Time
 
 data TestException = TestException
     deriving (Show, Typeable, Eq)
@@ -110,7 +109,6 @@ share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
     two Int
     deriving Show Eq
 
-
   User
     ident Text
     password Text Maybe
@@ -131,12 +129,17 @@ share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
   Account
     userIds       (NonEmpty (Key User))
     name          Text Maybe
-    deletedDt     UTCTime Maybe
-    twLeadSalt    Text Maybe         -- Cryptographic salt for Twitter lead gen cards
     customDomains [Text]             -- we may want to allow multiple cust domains.  use [] instead of maybe
 
     deriving Show Eq Read Ord
 
+  HasNestedList
+    list [IntList]
+    deriving Show Eq
+
+  IntList
+    ints [Int]
+    deriving Show Eq
 |]
 #ifdef WITH_MONGODB
 cleanDB :: (PersistQuery backend, PersistEntityBackend HasMap ~ backend, MonadIO m) => ReaderT backend m ()
@@ -152,6 +155,7 @@ cleanDB = do
   deleteWhere ([] :: [Filter ListEmbed])
   deleteWhere ([] :: [Filter ARecord])
   deleteWhere ([] :: [Filter Account])
+  deleteWhere ([] :: [Filter HasNestedList])
 
 db :: Action IO () -> Assertion
 db = db' cleanDB
@@ -227,7 +231,7 @@ specs = describe "embedded entities" $ do
       let con = Contact 123456 "foo@bar.com"
       let prof = Profile "fstN" "lstN" (Just con)
       uid <- insert $ User "foo" (Just "pswd") prof
-      let container = Account (uid:|[]) (Just "Account") Nothing Nothing []
+      let container = Account (uid:|[]) (Just "Account") []
       contK <- insert container
       Just res <- selectFirst [AccountUserIds ==. (uid:|[])] []
       res @== Entity contK container
@@ -339,6 +343,13 @@ specs = describe "embedded entities" $ do
         Just res <- selectFirst [HasListEmbedName =~. mkReg "ist"] []
         res @== (Entity contK container)
 
+    it "nested anyEq" $ db $ do
+        let top = HasNestedList [IntList [1,2]]
+        k <- insert top
+        Nothing  <- selectFirst [HasNestedListList ->. IntListInts `nestEq` ([]::[Int])] []
+        Nothing  <- selectFirst [HasNestedListList ->. IntListInts `nestAnyEq` 3] []
+        Just res <- selectFirst [HasNestedListList ->. IntListInts `nestAnyEq` 2] []
+        res @== (Entity k top)
 
   describe "mongoDB updates" $ do
     it "mongo single nesting updates" $ db $ do
