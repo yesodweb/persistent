@@ -33,7 +33,6 @@ module Init (
    -- re-exports
   , module Database.Persist
   , module Test.Hspec
-  , module Test.Hspec.HUnit
   , module Test.HUnit
   , liftIO
   , mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase
@@ -49,7 +48,6 @@ module Init (
 -- re-exports
 import Control.Monad.Trans.Reader
 import Test.Hspec
-import Test.Hspec.HUnit
 import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase, MkPersistSettings(..))
 
 -- testing
