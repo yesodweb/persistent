@@ -849,12 +849,8 @@ data PostgresConf = PostgresConf
       -- ^ How many connections should be held on the connection pool.
     }
 
-instance PersistConfig PostgresConf where
-    type PersistConfigBackend PostgresConf = SqlPersistT
-    type PersistConfigPool PostgresConf = ConnectionPool
-    createPoolConfig (PostgresConf cs size) = runNoLoggingT $ createPostgresqlPool cs size -- FIXME
-    runPool _ = runSqlPool
-    loadConfig (Object o) = do
+instance FromJSON PostgresConf where
+    parseJSON = withObject "PostgresConf" $ \o -> do
         database <- o .: "database"
         host     <- o .: "host"
         port     <- o .:? "port" .!= 5432
@@ -870,7 +866,12 @@ instance PersistConfig PostgresConf where
                    }
             cstr = PG.postgreSQLConnectionString ci
         return $ PostgresConf cstr pool
-    loadConfig _ = mzero
+instance PersistConfig PostgresConf where
+    type PersistConfigBackend PostgresConf = SqlPersistT
+    type PersistConfigPool PostgresConf = ConnectionPool
+    createPoolConfig (PostgresConf cs size) = runNoLoggingT $ createPostgresqlPool cs size -- FIXME
+    runPool _ = runSqlPool
+    loadConfig = parseJSON
 
     applyEnv c0 = do
         env <- getEnvironment
