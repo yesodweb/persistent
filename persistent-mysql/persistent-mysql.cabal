@@ -1,5 +1,5 @@
 name:            persistent-mysql
-version:         2.1.1
+version:         2.1.2
 license:         MIT
 license-file:    LICENSE
 author:          Felipe Lessa <felipe.lessa@gmail.com>, Michael Snoyman
@@ -23,6 +23,7 @@ description:
     .
     * This package does not support statements inside other
       statements.
+extra-source-files: ChangeLog.md
 
 library
     build-depends:   base                  >= 4        && < 5

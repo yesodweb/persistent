@@ -133,8 +133,8 @@ import qualified Data.Serialize as Serialize
 import Web.PathPieces (PathPiece (..))
 import Data.Conduit
 import Control.Monad.IO.Class (liftIO)
-import Data.Aeson (Value (Object, Number), (.:), (.:?), (.!=), FromJSON(..), ToJSON(..), withText)
-import Control.Monad (mzero, liftM, (>=>), forM_)
+import Data.Aeson (Value (Number), (.:), (.:?), (.!=), FromJSON(..), ToJSON(..), withText, withObject)
+import Control.Monad (liftM, (>=>), forM_)
 import qualified Data.Conduit.Pool as Pool
 import Data.Time (NominalDiffTime)
 #ifdef HIGH_PRECISION_DATE
@@ -1117,15 +1117,8 @@ defaultMongoConf dbName = MongoConf
 data ReplicaSetConfig = ReplicaSetConfig DB.ReplicaSetName [DB.Host]
     deriving Show
 
-
-instance PersistConfig MongoConf where
-    type PersistConfigBackend MongoConf = DB.Action
-    type PersistConfigPool MongoConf = ConnectionPool
-
-    createPoolConfig = createMongoPool
-
-    runPool c = runMongoDBPool (mgAccessMode c)
-    loadConfig (Object o) = do
+instance FromJSON MongoConf where
+    parseJSON = withObject "MongoConf" $ \o ->do
         db                  <- o .:  "database"
         host                <- o .:? "host" .!= defaultHost
         NoOrphanPortID port <- o .:? "port" .!= NoOrphanPortID DB.defaultPort
@@ -1170,15 +1163,15 @@ instance PersistConfig MongoConf where
           }
       where
         confirmWrites = "ConfirmWrites"
-    {-
-        safeRead :: String -> T.Text -> MEither String Int
-        safeRead name t = case reads s of
-            (i, _):_ -> MRight i
-            []       -> MLeft $ concat ["Invalid value for ", name, ": ", s]
-          where
-            s = T.unpack t
-            -}
-    loadConfig _ = mzero
+
+instance PersistConfig MongoConf where
+    type PersistConfigBackend MongoConf = DB.Action
+    type PersistConfigPool MongoConf = ConnectionPool
+
+    createPoolConfig = createMongoPool
+
+    runPool c = runMongoDBPool (mgAccessMode c)
+    loadConfig = parseJSON
 
 -- | docker integration: change the host to the mongodb link
 applyDockerEnv :: MongoConf -> IO MongoConf

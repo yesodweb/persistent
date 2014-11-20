@@ -15,7 +15,6 @@ module Database.Persist.MySQL
     ) where
 
 import Control.Arrow
-import Control.Monad (mzero)
 import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (lift)
@@ -793,17 +792,8 @@ data MySQLConf = MySQLConf
       -- ^ How many connections should be held on the connection pool.
     }
 
-
-instance PersistConfig MySQLConf where
-    type PersistConfigBackend MySQLConf = SqlPersistT
-
-    type PersistConfigPool    MySQLConf = ConnectionPool
-
-    createPoolConfig (MySQLConf cs size) = runNoLoggingT $ createMySQLPool cs size -- FIXME
-
-    runPool _ = runSqlPool
-
-    loadConfig (Object o) = do
+instance FromJSON MySQLConf where
+    parseJSON = withObject "MySQLConf" $ \o -> do
         database <- o .: "database"
         host     <- o .: "host"
         port     <- o .: "port"
@@ -822,7 +812,17 @@ instance PersistConfig MySQLConf where
                    , MySQL.connectDatabase = database
                    }
         return $ MySQLConf ci pool
-    loadConfig _ = mzero
+
+instance PersistConfig MySQLConf where
+    type PersistConfigBackend MySQLConf = SqlPersistT
+
+    type PersistConfigPool    MySQLConf = ConnectionPool
+
+    createPoolConfig (MySQLConf cs size) = runNoLoggingT $ createMySQLPool cs size -- FIXME
+
+    runPool _ = runSqlPool
+
+    loadConfig = parseJSON
 
     applyEnv conf = do
         env <- getEnvironment

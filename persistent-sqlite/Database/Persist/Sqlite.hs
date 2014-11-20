@@ -26,7 +26,6 @@ import Control.Monad.Trans.Control (control)
 import Data.Acquire (Acquire, mkAcquire, with)
 import qualified Control.Exception as E
 import Data.Text (Text)
-import Control.Monad (mzero)
 import Data.Aeson
 import qualified Data.Text as T
 import Data.Conduit
@@ -346,15 +345,16 @@ data SqliteConf = SqliteConf
     , sqlPoolSize :: Int
     }
 
+instance FromJSON SqliteConf where
+    parseJSON = withObject "SqliteConf" $ \o -> SqliteConf
+        <$> o .: "database"
+        <*> o .: "poolsize"
 instance PersistConfig SqliteConf where
     type PersistConfigBackend SqliteConf = SqlPersistT
     type PersistConfigPool SqliteConf = ConnectionPool
     createPoolConfig (SqliteConf cs size) = runNoLoggingT $ createSqlitePool cs size -- FIXME
     runPool _ = runSqlPool
-    loadConfig (Object o) =
-        SqliteConf <$> o .: "database"
-                   <*> o .: "poolsize"
-    loadConfig _ = mzero
+    loadConfig = parseJSON
 
 finally :: MonadBaseControl IO m
         => m a -- ^ computation to run first
