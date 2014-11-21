@@ -758,13 +758,15 @@ specs = describe "persistent" $ do
       (a3k, a3) <- insert' $ Pet p2k "Lhama"   Dog
       (_  , _ ) <- insert' $ Pet p3k "Abacate" Cat
       escape <- ((. DBName) . connEscapeName) `fmap` ask
+      person <- getTableName (error "rawSql Person" :: Person)
+      name   <- getFieldName PersonName
       let query = T.concat [ "SELECT ??, ?? "
-                           , "FROM ", escape "Person"
+                           , "FROM ", person
                            , ", ", escape "Pet"
-                           , " WHERE ", escape "Person", ".", escape "age", " >= ? "
+                           , " WHERE ", person, ".", escape "age", " >= ? "
                            , "AND ", escape "Pet", ".", escape "ownerId", " = "
-                                   , escape "Person", ".", escape "id"
-                           , " ORDER BY ", escape "Person", ".", escape "name"
+                                   , person, ".", escape "id"
+                           , " ORDER BY ", person, ".", name
                            ]
       ret <- rawSql query [PersistInt64 20]
       liftIO $ ret @?= [ (Entity p1k p1, Entity a1k a1)
