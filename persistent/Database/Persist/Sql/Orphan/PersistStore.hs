@@ -4,12 +4,17 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE Rank2Types #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Database.Persist.Sql.Orphan.PersistStore
   ( withRawQuery
   , BackendKey(..)
   , toSqlKey
   , fromSqlKey
+  , getFieldName
+  , getTableName
+  , tableDBName
+  , fieldDBName
   ) where
 
 import Database.Persist
@@ -54,6 +59,48 @@ whereStmtForKey conn k =
     Nothing   -> connEscapeName conn (fieldDB (entityId t)) <> "=?"
   where t = entityDef $ dummyFromKey k
 
+
+-- | get the SQL string for the table that a PeristEntity represents
+-- Useful for raw SQL queries
+--
+-- Your backend may provide a more convenient tableName function
+-- which does not operate in a Monad
+getTableName :: forall record m.
+             ( PersistEntity record
+             , PersistEntityBackend record ~ SqlBackend
+             , Monad m
+             ) => record -> ReaderT SqlBackend m Text
+getTableName rec = do
+    conn <- ask
+    return $ connEscapeName conn $ tableDBName rec
+
+-- | useful for a backend to implement tableName by adding escaping
+tableDBName :: forall record.
+            ( PersistEntity record
+            , PersistEntityBackend record ~ SqlBackend
+            ) => record -> DBName
+tableDBName rec = entityDB $ entityDef (Just rec)
+
+-- | get the SQL string for the field that an EntityField represents
+-- Useful for raw SQL queries
+--
+-- Your backend may provide a more convenient fieldName function
+-- which does not operate in a Monad
+getFieldName :: forall record typ m.
+             ( PersistEntity record
+             , PersistEntityBackend record ~ SqlBackend
+             , Monad m
+             )
+             => EntityField record typ -> ReaderT SqlBackend m Text
+getFieldName rec = do
+    conn <- ask
+    return $ connEscapeName conn $ fieldDBName rec
+
+-- | useful for a backend to implement fieldName by adding escaping
+fieldDBName :: forall record typ. (PersistEntity record) => EntityField record typ -> DBName
+fieldDBName = fieldDB . persistFieldDef
+
+
 instance PersistStore SqlBackend where
     newtype BackendKey SqlBackend = SqlBackendKey { unSqlBackendKey :: Int64 }
         deriving (Show, Read, Eq, Ord, Num, Integral, PersistField, PersistFieldSql, PathPiece, Real, Enum, Bounded, A.ToJSON, A.FromJSON)
@@ -71,7 +118,7 @@ instance PersistStore SqlBackend where
         let wher = whereStmtForKey conn k
         let sql = T.concat
                 [ "UPDATE "
-                , connEscapeName conn $ entityDB t
+                , connEscapeName conn $ tableDBName $ recordTypeFromKey k
                 , " SET "
                 , T.intercalate "," $ map (go' . go) upds
                 , " WHERE "
@@ -80,7 +127,6 @@ instance PersistStore SqlBackend where
         rawExecute sql $
             map updatePersistValue upds `mappend` keyToValues k
       where
-        t = entityDef $ dummyFromKey k
         go x = (fieldDB $ updateFieldDef x, updateUpdate x)
 
     insert val = do
@@ -216,17 +262,19 @@ instance PersistStore SqlBackend where
         conn <- ask
         rawExecute (sql conn) (keyToValues k)
       where
-        t = entityDef $ dummyFromKey k
         wher conn = whereStmtForKey conn k
         sql conn = T.concat
             [ "DELETE FROM "
-            , connEscapeName conn $ entityDB t
+            , connEscapeName conn $ tableDBName $ recordTypeFromKey k
             , " WHERE "
             , wher conn
             ]
 
-dummyFromKey :: Key v -> Maybe v
-dummyFromKey _ = Nothing
+dummyFromKey :: Key record -> Maybe record
+dummyFromKey = Just . recordTypeFromKey
+
+recordTypeFromKey :: Key record -> record
+recordTypeFromKey _ = error "dummyFromKey"
 
 insrepHelper :: (MonadIO m, PersistEntity val)
              => Text

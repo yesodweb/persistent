@@ -5,6 +5,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE Rank2Types #-}
 
 -- | A postgresql backend for persistent.
 module Database.Persist.Postgresql
@@ -15,6 +16,8 @@ module Database.Persist.Postgresql
     , ConnectionString
     , PostgresConf (..)
     , openSimpleConn
+    , tableName
+    , fieldName
     ) where
 
 import Database.Persist.Sql
@@ -830,6 +833,22 @@ showAlter table (_, DropReference cname) = T.concat
     , " DROP CONSTRAINT "
     , escape cname
     ]
+
+-- | get the SQL string for the table that a PeristEntity represents
+-- Useful for raw SQL queries
+tableName :: forall record.
+          ( PersistEntity record
+          , PersistEntityBackend record ~ SqlBackend
+          ) => record -> Text
+tableName = escape . tableDBName
+
+-- | get the SQL string for the field that an EntityField represents
+-- Useful for raw SQL queries
+fieldName :: forall record typ.
+          ( PersistEntity record
+          , PersistEntityBackend record ~ SqlBackend
+          ) => EntityField record typ -> Text
+fieldName = escape . fieldDBName
 
 escape :: DBName -> Text
 escape (DBName s) =
