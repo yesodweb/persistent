@@ -5,7 +5,7 @@ module EntityEmbedTest where
 
 -- because we are using a type alias we need to declare in a separate module
 -- this is used in EmbedTest
-#if WITH_MONGODB
+#if WITH_NOSQL
 import Init
 
 mkPersist persistSettings [persistUpperCase|

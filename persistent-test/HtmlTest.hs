@@ -27,7 +27,7 @@ cleanDB = do
 specs :: Spec
 specs = describe "html" $ do
     it "works" $ asIO $ runResourceT $ runConn $ do
-#ifndef WITH_MONGODB
+#ifndef WITH_NOSQL
         _ <- runMigrationSilent htmlMigrate
         -- Ensure reading the data from the database works...
         _ <- runMigrationSilent htmlMigrate

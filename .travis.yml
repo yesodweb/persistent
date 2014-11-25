@@ -1,6 +1,9 @@
 language: haskell
 
 install:
+    - sudo add-apt-repository -y ppa:yandex-sysmon/zookeeper-3.4
+    - sudo apt-get update
+    - sudo apt-get install libzookeeper-mt-dev zookeeperd
     - cabal update
     - cabal install -j hspec cabal-meta cabal-src
     - cabal-meta install -j --only-dep --force-reinstalls
@@ -13,12 +16,20 @@ script:
     - "cabal configure -fmysql --enable-tests      && cabal test"
     - "cabal configure -fpostgresql --enable-tests && cabal test"
     - "cabal configure -fmongodb --enable-tests    && cabal test"
+    - "cabal configure -fzookeeper --enable-tests  && cabal test"
 
 addons:
   postgresql: "9.3"
 before_script:
   - psql -c 'create database persistent;' -U postgres
   - mysql -e 'create database persistent;'
+  - sudo mkdir -p /var/log/zookeeper
+  - sudo chmod -R 777 /var/log/zookeeper
+  - sudo chmod 666 /etc/zookeeper/conf/zoo.cfg
+  - echo maxClientCnxns=128 >> /etc/zookeeper/conf/zoo.cfg
+  - sudo service zookeeper restart
+  - sleep 10
+  - /usr/share/zookeeper/bin/zkCli.sh create /persistent null
 
 services:
     - mysql

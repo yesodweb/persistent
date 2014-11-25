@@ -3,7 +3,7 @@
 {-# LANGUAGE QuasiQuotes, TypeFamilies, GeneralizedNewtypeDeriving, TemplateHaskell,
              OverloadedStrings, GADTs, FlexibleContexts, EmptyDataDecls, MultiParamTypeClasses #-}
 module EmbedOrderTest (specs,
-#ifndef WITH_MONGODB
+#ifndef WITH_NOSQL
 embedOrderMigrate
 #endif
 ) where
@@ -15,7 +15,7 @@ import Debug.Trace (trace)
 debug :: Show s => s -> s
 debug x = trace (show x) x
 
-#if WITH_MONGODB
+#if WITH_NOSQL
 mkPersist persistSettings [persistUpperCase|
 #else
 share [mkPersist sqlSettings, mkMigrate "embedOrderMigrate"] [persistUpperCase|
@@ -30,7 +30,7 @@ Bar
     deriving Eq Show
 |]
 
-#ifdef WITH_MONGODB
+#ifdef WITH_NOSQL
 cleanDB :: (PersistQuery backend, PersistEntityBackend Foo ~ backend, MonadIO m) => ReaderT backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Foo])

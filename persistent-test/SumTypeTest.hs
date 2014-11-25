@@ -10,7 +10,7 @@ import qualified Data.Text as T
 
 import Init
 
-#if WITH_MONGODB
+#if WITH_NOSQL
 mkPersist persistSettings [persistLowerCase|
 #else
 share [mkPersist persistSettings, mkMigrate "sumTypeMigrate"] [persistLowerCase|
@@ -34,7 +34,7 @@ deriving instance Eq (BackendKey backend) => Eq (VehicleGeneric backend)
 specs :: Spec
 specs = describe "sum types" $
     it "works" $ asIO $ runResourceT $ runConn $ do
-#ifndef WITH_MONGODB
+#ifndef WITH_NOSQL
         _ <- runMigrationSilent sumTypeMigrate
 #endif
         car1 <- insert $ Car "Ford" "Thunderbird"

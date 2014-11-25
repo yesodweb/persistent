@@ -17,6 +17,10 @@ extra-source-files:
   test/main.hs
   test/from-cabal
 
+Flag zookeeper
+   Description: test only Zookeeper.  default is to test just sqlite.
+   Default: False
+
 Flag mongodb
    Description: test only MongoDB.  default is to test just sqlite.
    Default: False
@@ -149,7 +153,7 @@ library
    if flag(nooverlap)
      cpp-options: -DNO_OVERLAP
 
-   if !flag(postgresql) && !flag(mysql) && !flag(mongodb)
+   if !flag(postgresql) && !flag(mysql) && !flag(mongodb) && !flag(zookeeper)
       exposed-modules: Database.Persist.Sqlite
                        Database.Sqlite
 
@@ -193,15 +197,33 @@ library
                    , process
 
      hs-source-dirs: persistent-mongoDB
-     cpp-options: -DWITH_MONGODB -DDEBUG
+     cpp-options: -DWITH_NOSQL -DWITH_MONGODB -DDEBUG
      exposed-modules:
                      Database.Persist.MongoDB
 
+   if flag(zookeeper)
+     build-depends:
+                     hzk                >= 2.1.0
+                   , binary
+                   , utf8-string           >= 0.3.7    && < 0.4.0
+                   , process
+
+     hs-source-dirs: persistent-zookeeper
+     cpp-options: -DWITH_NOSQL -DWITH_ZOOKEEPER -DDEBUG
+     exposed-modules:
+                     Database.Persist.Zookeeper
+     other-modules:  Database.Persist.Zookeeper.Config
+                     Database.Persist.Zookeeper.Internal
+                     Database.Persist.Zookeeper.Store
+                     Database.Persist.Zookeeper.Unique
+                     Database.Persist.Zookeeper.Query
+                     Database.Persist.Zookeeper.ZooUtil
+                     Database.Persist.Zookeeper.Binary
 
    if flag(couchdb)
      build-depends: CouchDB               >= 1.2
 
-     cpp-options: -DWITH_COUCHDB -DDEBUG
+     cpp-options: -DWITH_NOSQL -DWITH_COUCHDB -DDEBUG
      exposed-modules:
                      Database.Persist.CouchDB
    if flag(high_precision_date)
@@ -224,8 +246,10 @@ test-suite test
                  , resourcet
                  , scientific
 
+  if flag(zookeeper)
+      cpp-options: -DWITH_NOSQL -DWITH_ZOOKEEPER -DDEBUG
   if flag(mongodb)
-      cpp-options: -DWITH_MONGODB -DDEBUG
+      cpp-options: -DWITH_NOSQL -DWITH_MONGODB -DDEBUG
   if flag(postgresql)
       cpp-options: -DWITH_POSTGRESQL
   if flag(mysql)

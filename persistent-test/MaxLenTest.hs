@@ -3,7 +3,7 @@
 
 module MaxLenTest (
   specs
-#ifndef WITH_MONGODB
+#ifndef WITH_NOSQL
   , maxlenMigrate
 #endif
 ) where
@@ -12,7 +12,7 @@ import Init
 import Data.String (IsString)
 import Data.ByteString (ByteString)
 
-#ifdef WITH_MONGODB
+#ifdef WITH_NOSQL
 db :: Action IO () -> Assertion
 db = db' (return ())
 mkPersist persistSettings [persistUpperCase|

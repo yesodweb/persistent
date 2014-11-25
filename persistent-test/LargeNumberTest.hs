@@ -4,7 +4,7 @@ module LargeNumberTest where
 import Init
 import Data.Word
 
-#ifdef WITH_MONGODB
+#ifdef WITH_NOSQL
 mkPersist persistSettings [persistUpperCase|
 #else
 share [mkPersist sqlSettings,  mkMigrate "numberMigrate"] [persistLowerCase|
@@ -18,7 +18,7 @@ share [mkPersist sqlSettings,  mkMigrate "numberMigrate"] [persistLowerCase|
     deriving Show Eq
 |]
 
-#ifdef WITH_MONGODB
+#ifdef WITH_NOSQL
 cleanDB :: (MonadIO m, PersistQuery backend, PersistEntityBackend Number ~ backend) => ReaderT backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Number])
