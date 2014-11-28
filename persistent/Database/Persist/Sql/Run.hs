@@ -86,6 +86,10 @@ createSqlPool mkConn size = do
 
 -- NOTE: This function is a terrible, ugly hack. It would be much better to
 -- just clean up monad-logger.
+--
+-- FIXME: in a future release, switch over to the new askLoggerIO function
+-- added in monad-logger 0.3.10. That function was not available at the time
+-- this code was written.
 askLogFunc :: (MonadBaseControl IO m, MonadLogger m) => m LogFunc
 askLogFunc = do
     runInBase <- control $ \run -> run $ return run
