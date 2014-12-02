@@ -10,6 +10,8 @@ module Database.Sqlite  (
                          SqliteException(..),
                          StepResult(Row,
                                     Done),
+                         Config(ConfigLogFn),
+                         LogFunction,
                          open,
                          close,
                          prepare,
@@ -25,7 +27,10 @@ module Database.Sqlite  (
                          bind,
                          column,
                          columns,
-                         changes
+                         changes,
+                         mkLogFunction,
+                         freeLogFunction,
+                         config
                         )
     where
 
@@ -473,3 +478,43 @@ foreign import ccall "sqlite3_changes"
 
 changes :: Connection -> IO Int64
 changes (Connection _ c) = fmap fromIntegral $ changesC c
+
+-- | Log function callback. Arguments are error code and log message.
+type RawLogFunction = Ptr () -> Int -> CString -> IO ()
+
+foreign import ccall "wrapper"
+  mkRawLogFunction :: RawLogFunction -> IO (FunPtr RawLogFunction)
+
+newtype LogFunction = LogFunction (FunPtr RawLogFunction)
+
+-- | Wraps a given function to a 'LogFunction' to be further used with 'ConfigLogFn'.
+-- First argument of given function will take error code, second - log message.
+-- Returned value should be released with 'freeLogFunction' when no longer required.
+mkLogFunction :: (Int -> String -> IO ()) -> IO LogFunction
+mkLogFunction fn = fmap LogFunction . mkRawLogFunction $ \_ errCode cmsg -> do
+  msg <- peekCString cmsg
+  fn errCode msg
+
+-- | Releases a native FunPtr for the 'LogFunction'.
+freeLogFunction :: LogFunction -> IO ()
+freeLogFunction (LogFunction fn) = freeHaskellFunPtr fn
+
+-- | Configuration option for SQLite to be used together with the 'config' function.
+data Config
+  -- | A function to be used for logging
+  = ConfigLogFn LogFunction
+
+foreign import ccall "persistent_sqlite_set_log"
+  set_logC :: FunPtr RawLogFunction -> Ptr () -> IO Int
+
+-- | Sets SQLite global configuration parameter. See SQLite documentation for the <https://www.sqlite.org/c3ref/config.html sqlite3_config> function.
+-- In short, this must be called prior to any other SQLite function if you want the call to succeed.
+config :: Config -> IO ()
+config c = case c of
+  ConfigLogFn (LogFunction rawLogFn) -> do
+    e <- fmap decodeError $ set_logC rawLogFn nullPtr
+    case e of
+      ErrorOK -> return ()
+      _ -> sqlError Nothing "sqlite3_config" e
+
+

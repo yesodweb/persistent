@@ -44,6 +44,9 @@ library
         c-sources:   cbits/sqlite3.c
         cc-options:  -fPIC
 
+    include-dirs: cbits
+    c-sources: cbits/config.c
+
     if !os(windows)
         extra-libraries: pthread
 
