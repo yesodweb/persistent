@@ -38,14 +38,14 @@ import qualified Control.Exception.Control as Control
 import Init
 
 import Control.Applicative ((<$>),(<*>))
-#ifndef WITH_MONGODB
+#ifndef WITH_NOSQL
 import Data.Maybe (isJust)
 import Database.Persist.TH (mkDeleteCascade)
 #endif
 
 
 -- mpsGeneric = False is due to a bug or at least lack of a feature in mkKeyTypeDec TH.hs
-#if WITH_MONGODB
+#if WITH_NOSQL
 mkPersist persistSettings { mpsGeneric = False } [persistUpperCase|
 #else
 share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMigrate", mkDeleteCascade persistSettings { mpsGeneric = False }] [persistLowerCase|
@@ -87,7 +87,7 @@ share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMig
 |]
 
 
-#ifdef WITH_MONGODB
+#ifdef WITH_NOSQL
 cleanDB :: (PersistQuery backend, PersistEntityBackend TestChild ~ backend, MonadIO m) => ReaderT backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter TestChild])

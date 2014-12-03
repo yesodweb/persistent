@@ -26,8 +26,7 @@ import Control.Monad.Trans.Resource (runResourceT)
 import Control.Exception (handle, IOException)
 
 
-#ifdef MongoDB
-setup = setupMongo
+#ifdef WITH_NOSQL
 #else
 import Database.Persist.Sql (printMigration, runMigrationUnsafe)
 
@@ -42,7 +41,7 @@ toExitCode False = ExitFailure 1
 
 main :: IO ()
 main = do
-#ifndef WITH_MONGODB
+#ifndef WITH_NOSQL
   handle (\(_ :: IOException) -> return ())
     $ removeFile $ fromText sqlite_database
 
@@ -76,7 +75,7 @@ main = do
     EmptyEntityTest.specs
     CompositeTest.specs
 
-#ifndef WITH_MONGODB
+#ifndef WITH_NOSQL
     MigrationTest.specs
     PersistentTest.specs
 #endif

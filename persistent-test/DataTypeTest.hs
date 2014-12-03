@@ -23,7 +23,7 @@ import Init
 
 type Tuple a b = (a, b)
 
-#ifdef WITH_MONGODB
+#ifdef WITH_NOSQL
 mkPersist persistSettings [persistUpperCase|
 #else
 -- Test lower case names
@@ -40,7 +40,7 @@ DataTypeTable no-json
     double Double
     bool Bool
     day Day
-#ifndef WITH_MONGODB
+#ifndef WITH_NOSQL
     pico Pico
     time TimeOfDay
 #endif
@@ -53,7 +53,7 @@ cleanDB = deleteWhere ([] :: [Filter DataTypeTable])
 specs :: Spec
 specs = describe "data type specs" $
     it "handles all types" $ asIO $ runConn $ do
-#ifndef WITH_MONGODB
+#ifndef WITH_NOSQL
         _ <- runMigrationSilent dataTypeMigrate
         -- Ensure reading the data from the database works...
         _ <- runMigrationSilent dataTypeMigrate
@@ -80,11 +80,11 @@ specs = describe "data type specs" $
                 check "intList" dataTypeTableIntList
                 check "bool" dataTypeTableBool
                 check "day" dataTypeTableDay
-#ifndef WITH_MONGODB
+#ifndef WITH_NOSQL
                 check' "pico" dataTypeTablePico
                 check "time" (roundTime . dataTypeTableTime)
 #endif
-#if !(defined(WITH_MONGODB)) || (defined(WITH_MONGODB) && defined(HIGH_PRECISION_DATE))
+#if !(defined(WITH_NOSQL)) || (defined(WITH_NOSQL) && defined(HIGH_PRECISION_DATE))
                 check "utc" (roundUTCTime . dataTypeTableUtc)
 #endif
 
@@ -129,7 +129,7 @@ instance Arbitrary DataTypeTable where
      <*> arbitrary              -- double
      <*> arbitrary              -- bool
      <*> arbitrary              -- day
-#ifndef WITH_MONGODB
+#ifndef WITH_NOSQL
      <*> arbitrary              -- pico
      <*> (truncateTimeOfDay =<< arbitrary) -- time
 #endif

@@ -9,7 +9,7 @@ import qualified Data.Text as T
 
 import Init
 
-#ifdef WITH_MONGODB
+#ifdef WITH_NOSQL
 mkPersist persistSettings [persistUpperCase|
 #else
 share [mkPersist sqlSettings, mkMigrate "migrationMigrate", mkDeleteCascade sqlSettings] [persistLowerCase|
@@ -25,7 +25,7 @@ Source
     field4 TargetId
 |]
 
-#ifndef WITH_MONGODB
+#ifndef WITH_NOSQL
 specs :: Spec
 specs = describe "Migration" $ do
     it "is idempotent" $ db $ do

@@ -7,5 +7,6 @@ pkgs=( ./pool-conduit
        ./persistent-postgresql
        ./persistent-mysql
        ./persistent-mongoDB
+       ./persistent-zookeeper
      )
 

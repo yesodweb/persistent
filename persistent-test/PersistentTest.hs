@@ -24,9 +24,11 @@ import Test.Hspec.QuickCheck(prop)
 
 import Database.Persist
 
+#ifdef WITH_NOSQL
 #ifdef WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
 import Database.Persist.MongoDB (toInsertDoc, docToEntityThrow, collectionName, recordToDocument)
+#endif
 
 #else
 
@@ -70,7 +72,7 @@ import Data.Functor.Constant
 import PersistTestPetType
 import PersistTestPetCollarType
 
-#ifdef WITH_MONGODB
+#ifdef WITH_NOSQL
 mkPersist persistSettings [persistUpperCase|
 #else
 share [mkPersist persistSettings,  mkMigrate "testMigrate", mkDeleteCascade persistSettings, mkSave "_ignoredSave"] [persistUpperCase|
@@ -147,7 +149,7 @@ deriving instance Show (BackendKey backend) => Show (PetGeneric backend)
 deriving instance Eq (BackendKey backend) => Eq (PetGeneric backend)
 
 share [mkPersist persistSettings { mpsPrefixFields = False, mpsGeneric = False }
-#ifdef WITH_MONGODB
+#ifdef WITH_NOSQL
       ] [persistUpperCase|
 #else
       , mkMigrate "noPrefixMigrate"
@@ -177,7 +179,7 @@ cleanDB = do
   deleteWhere ([] :: [Filter User])
   deleteWhere ([] :: [Filter Email])
 
-#ifdef WITH_MONGODB
+#ifdef WITH_NOSQL
 db :: Action IO () -> Assertion
 db = db' cleanDB
 #endif
@@ -268,7 +270,7 @@ specs = describe "persistent" $ do
       p28 <- updateGet micK [PersonAge =. 28]
       personAge p28 @== 28
 
-#ifdef WITH_MONGODB
+#ifdef WITH_NOSQL
       updateWhere [PersonName ==. "Michael"] [PersonAge =. 29]
 #else
       uc <- updateWhereCount [PersonName ==. "Michael"] [PersonAge =. 29]
@@ -302,7 +304,11 @@ specs = describe "persistent" $ do
       delete micK
       Nothing <- get micK
       return ()
-
+#ifdef WITH_ZOOKEEPER
+      -- zookeeper backend does not support idfield
+      -- zookeeper's key is node-name.
+      -- When uniq-key exists, zookeeper's key becomes encoded uniq-key.
+#else
   it "persistIdField" $ db $ do
       let p = Person "foo" 100 (Just "blue")
           q = Person "bar" 101 Nothing
@@ -314,6 +320,7 @@ specs = describe "persistent" $ do
 
       mq <- selectFirst [persistIdField ==. qk] []
       fmap entityVal mq @== Just q
+#endif
 
   it "!=." $ db $ do
       deleteWhere ([] :: [Filter Person])
@@ -425,10 +432,19 @@ specs = describe "persistent" $ do
       Just p <- get key3
       p3 @== p
 
+#ifdef WITH_ZOOKEEPER
+  it "toPathPiece . fromPathPiece" $  do
+  --  Below quickcheck causes error of "Cannot convert PersistObjectId to Text."
+  --  Currently, ZooKey does not support PersistObjectId.
+      let key1 = ZooKey "hogehogekey" :: (BackendKey BackendMonad)
+          key2 = fromJust $ fromPathPiece $ toPathPiece key1 :: (BackendKey BackendMonad)
+      toPathPiece key1 `shouldBe` toPathPiece key2
+#else
   prop "toPathPiece . fromPathPiece" $ \piece ->
       let key1 = piece :: (BackendKey BackendMonad)
           key2 = fromJust $ fromPathPiece $ toPathPiece key1 :: (BackendKey BackendMonad)
       in  toPathPiece key1 == toPathPiece key2
+#endif
 
   it "replace" $ db $ do
       key2 <- insert $ Person "Michael2" 27 Nothing
@@ -509,7 +525,7 @@ specs = describe "persistent" $ do
       keyNoAge <- insert noAge
       noAge2 <- updateGet keyNoAge [PersonMaybeAgeAge +=. Just 2]
       -- the correct answer is very debatable
-#ifdef WITH_MONGODB
+#ifdef WITH_NOSQL
       personMaybeAgeAge noAge2 @== Just 2
 #else
       personMaybeAgeAge noAge2 @== Nothing
@@ -689,6 +705,11 @@ specs = describe "persistent" $ do
       Just (OutdoorPet _ collar' _) <- get catKey
       liftIO $ collar' @?= mittensCollar
 
+#ifdef WITH_ZOOKEEPER
+      -- zookeeper backend does not support idfield
+      -- zookeeper's key is node-name.
+      -- When uniq-key exists, zookeeper's key becomes encoded uniq-key.
+#else
   it "idIn" $ db $ do
       let p1 = Person "D" 0 Nothing
           p2 = Person "E" 1 Nothing
@@ -698,6 +719,7 @@ specs = describe "persistent" $ do
       pid3 <- insert p3
       x <- selectList [PersonId <-. [pid1, pid3]] []
       liftIO $ x @?= [Entity pid1 p1, Entity pid3 p3]
+#endif
 
   describe "toJSON" $ do
     it "serializes" $ db $ do
@@ -714,6 +736,7 @@ specs = describe "persistent" $ do
         -}
 
 
+#ifdef WITH_NOSQL
 #ifdef WITH_MONGODB
   describe "raw MongoDB helpers" $ do
     it "collectionName" $ do
@@ -732,6 +755,7 @@ specs = describe "persistent" $ do
         MongoDB.save "Person" doc2
         Entity _ ent2 <- docToEntityThrow doc2
         liftIO $ p2 @?= ent2
+#endif
 #else
   it "rawSql/2+2" $ db $ do
       ret <- rawSql "SELECT 2+2" []
@@ -819,7 +843,7 @@ specs = describe "persistent" $ do
 
 #ifndef WITH_MYSQL
 #  ifndef WITH_POSTGRESQL
-#    ifndef WITH_MONGODB
+#    ifndef WITH_NOSQL
   it "afterException" $ db $ do
     let catcher :: Monad m => SomeException -> m ()
         catcher _ = return ()
@@ -832,7 +856,7 @@ specs = describe "persistent" $ do
 #endif
 
 
-#ifndef WITH_MONGODB
+#ifndef WITH_NOSQL
   it "mpsNoPrefix" $ db $ do
     deleteWhere ([] :: [Filter NoPrefix2])
     deleteWhere ([] :: [Filter NoPrefix1])

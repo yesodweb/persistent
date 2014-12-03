@@ -9,7 +9,7 @@ import qualified Data.Text as T
 
 import Init
 
-#ifdef WITH_MONGODB
+#ifdef WITH_NOSQL
 mkPersist persistSettings [persistUpperCase|
 #else
 share [mkPersist sqlSettings, mkMigrate "migrateAll1"] [persistLowerCase|
@@ -21,7 +21,7 @@ TwoField1 sql=two_field
     deriving Eq Show
 |]
 
-#ifdef WITH_MONGODB
+#ifdef WITH_NOSQL
 mkPersist persistSettings [persistUpperCase|
 #else
 share [mkPersist sqlSettings, mkMigrate "migrateAll2", mkDeleteCascade sqlSettings] [persistLowerCase|
@@ -40,7 +40,7 @@ Referencing
 specs :: Spec
 specs = describe "migration only" $ do
     it "works" $ asIO $ runResourceT $ runConn $ do
-#ifndef WITH_MONGODB
+#ifndef WITH_NOSQL
         _ <- runMigrationSilent migrateAll1
         _ <- runMigrationSilent migrateAll2
 #endif

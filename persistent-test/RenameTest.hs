@@ -2,7 +2,7 @@
 {-# LANGUAGE QuasiQuotes, TemplateHaskell, CPP, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, EmptyDataDecls, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses #-}
 module RenameTest (specs) where
 
-#ifndef WITH_MONGODB
+#ifndef WITH_NOSQL
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import Control.Monad.Trans.Resource (runResourceT)
@@ -23,7 +23,7 @@ instance FromJSON Day where parseJSON = error "Day.parseJSON"
 type TextId = Text
 
 -- Test lower case names
-#if WITH_MONGODB
+#if WITH_NOSQL
 mkPersist persistSettings [persistUpperCase|
 #else
 share [mkPersist sqlSettings, mkMigrate "lowerCaseMigrate"] [persistLowerCase|
@@ -51,8 +51,8 @@ RefTable
     text TextId
     UniqueRefTable someVal
 |]
-#if WITH_MONGODB
-cleanDB :: ReaderT MongoContext IO ()
+#if WITH_NOSQL
+cleanDB :: ReaderT Context IO ()
 cleanDB = do
   deleteWhere ([] :: [Filter IdTable])
   deleteWhere ([] :: [Filter LowerCaseTable])
@@ -63,7 +63,7 @@ db = db' cleanDB
 
 specs :: Spec
 specs = describe "rename specs" $ do
-#ifndef WITH_MONGODB
+#ifndef WITH_NOSQL
     it "handles lower casing" $ asIO $
         runConn $ do
             _ <- runMigration lowerCaseMigrate
@@ -82,7 +82,7 @@ specs = describe "rename specs" $ do
       Just rec' <- get key
       rec' @== rec
 
-#    ifndef WITH_MONGODB
+#    ifndef WITH_NOSQL
     -- this uses default=
     it "user specified id, default=" $ db $ do
       let rec = IdTable "Foo"

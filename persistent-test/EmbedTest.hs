@@ -2,7 +2,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE QuasiQuotes, TemplateHaskell, CPP, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, EmptyDataDecls, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses #-}
 module EmbedTest (specs,
-#ifndef WITH_MONGODB
+#ifndef WITH_NOSQL
 embedMigrate
 #endif
 ) where
@@ -14,10 +14,12 @@ import Data.Typeable (Typeable)
 import qualified Data.Text as T
 import qualified Data.Set as S
 import qualified Data.Map as M
-#if WITH_MONGODB
+#if WITH_NOSQL
+#ifdef WITH_MONGODB
 import Database.Persist.MongoDB
 import Database.MongoDB (genObjectId)
 import Database.MongoDB (Value(String))
+#endif
 import EntityEmbedTest
 import System.Process (readProcess)
 #endif
@@ -38,8 +40,9 @@ instance PersistField a => PersistField (NonEmpty a) where
         Right (l:ls) -> Right (l:|ls)
 
 
-#if WITH_MONGODB
+#if WITH_NOSQL
 mkPersist persistSettings [persistUpperCase|
+#ifdef WITH_MONGODB
   HasObjectId
     oid  ObjectId
     name Text
@@ -54,6 +57,7 @@ mkPersist persistSettings [persistUpperCase|
     hasEntity (Entity ARecord)
     arrayWithEntities [AnEntity]
     deriving Show Eq Read Ord
+#endif
 
 #else
 share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
@@ -141,7 +145,7 @@ share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
     ints [Int]
     deriving Show Eq
 |]
-#ifdef WITH_MONGODB
+#ifdef WITH_NOSQL
 cleanDB :: (PersistQuery backend, PersistEntityBackend HasMap ~ backend, MonadIO m) => ReaderT backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter HasEmbed])
@@ -266,6 +270,7 @@ specs = describe "embedded entities" $ do
       Just res <- selectFirst [EmbedsHasMapName ==. (Just "empty map")] []
       res @== Entity contK container
 
+#ifdef WITH_NOSQL
 #ifdef WITH_MONGODB
   it "List" $ db $ do
       k1 <- insert $ HasList []
@@ -408,4 +413,5 @@ specs = describe "embedded entities" $ do
 
     lists <- selectList [] []
     fmap entityVal lists @== [ListEmbed [InList 1 2, InList 1 2] 1 2]
+#endif
 #endif

@@ -2,11 +2,11 @@
 module UniqueTest where
 
 import Init
-#ifndef WITH_MONGODB
+#ifndef WITH_NOSQL
 import Control.Monad (void)
 #endif
 
-#ifdef WITH_MONGODB
+#ifdef WITH_NOSQL
 mkPersist persistSettings [persistUpperCase|
 #else
 share [mkPersist sqlSettings,  mkMigrate "uniqueMigrate"] [persistLowerCase|
@@ -20,7 +20,7 @@ share [mkPersist sqlSettings,  mkMigrate "uniqueMigrate"] [persistLowerCase|
     fieldB Int Maybe
     UniqueTestNull fieldA fieldB !force
     deriving Eq Show
-#ifndef WITH_MONGODB
+#ifndef WITH_NOSQL
   TestCheckmark
     name   Text
     value  Text
@@ -29,7 +29,7 @@ share [mkPersist sqlSettings,  mkMigrate "uniqueMigrate"] [persistLowerCase|
     deriving Eq Show
 #endif
 |]
-#ifdef WITH_MONGODB
+#ifdef WITH_NOSQL
 cleanDB :: (MonadIO m, PersistQuery backend, PersistEntityBackend TestNonNull ~ backend) => ReaderT backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter TestNonNull])
@@ -41,7 +41,7 @@ db = db' cleanDB
 
 specs :: Spec
 specs = describe "uniqueness constraints" $
-#ifdef WITH_MONGODB
+#ifdef WITH_NOSQL
   return ()
 #else
   do
