@@ -1,5 +1,5 @@
 name:            persistent-redis
-version:         0.3.0
+version:         0.3.1
 license:         BSD3
 license-file:    LICENSE
 author:          Pavel Ryzhov <paul@paulrz.cz>
@@ -38,6 +38,9 @@ library
     other-modules:   Database.Persist.Redis.Config
                      Database.Persist.Redis.Internal
                      Database.Persist.Redis.Store
+                     Database.Persist.Redis.Parser
+                     Database.Persist.Redis.Update
+                     Database.Persist.Redis.Exception
 
     ghc-options:     -Wall
 

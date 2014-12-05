@@ -13,10 +13,10 @@ import Database.Persist
 import Control.Monad.IO.Class (MonadIO (..))
 import qualified Database.Persist.Sql as Sql
 import qualified Database.Redis as R
-import qualified Data.ByteString as B
 import Data.Text (Text, pack)
 import Database.Persist.Redis.Config (RedisT, thisConnection)
 import Database.Persist.Redis.Internal
+import Database.Persist.Redis.Update
 import Web.PathPieces (PathPiece (..))
 
 import Data.Aeson(FromJSON(..), ToJSON(..))
@@ -86,17 +86,16 @@ instance PersistStore R.Connection where
                 Entity _ val <- mkEntity k r
                 return $ Just val
 
-    update _   []   = return ()
-    update key upds = do
-        let fields = updatesToFields upds
-        _ <- execRedisT $ R.hmset (unKey key) fields
-        return ()
-
-updatesToFields :: PersistEntity val => [Update val] -> [(B.ByteString, B.ByteString)]
-updatesToFields = map updateToOneField
-    where
-        updateToOneField (Update field v up) = undefined
-        updateToOneField (BackendUpdate up)  = undefined
+    update _ [] = return ()
+    update k upds = do
+        r <- execRedisT $ R.hgetall (unKey k)
+        if null r
+            then fail "No such key exists!"
+            else do
+                v <- mkEntity k r
+                let (Entity _ val) = cmdUpdate v upds
+                insertKey k val
+        return()
 
 instance PathPiece (BackendKey RedisBackend) where
     toPathPiece (RedisKey txt) = txt

@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, QuasiQuotes, OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell, QuasiQuotes #-}
 {-# LANGUAGE TypeFamilies, EmptyDataDecls, GADTs #-}
 {-# LANGUAGE TypeSynonymInstances, MultiParamTypeClasses, GeneralizedNewtypeDeriving #-}
 module Main where
@@ -36,10 +36,10 @@ mkKey s = case keyFromValues [PersistText s] of
 main :: IO ()
 main = 
     withRedisConn redisConf $ runRedisPool $ do
-        liftIO $ print "Inserting..."
+        _ <- liftIO $ print "Inserting..."
         s <- insert $ Person "Test" 12
-        liftIO $ ("Received the key" ++ (show s))
-        key <- mkKey "person_test"
+        _ <- liftIO $ print ("Received the key" ++ show s)
+        key <- mkKey (pack "person_test")
         insertKey key $ Person "Test2" 45
         repsert s (Person "Test3" 55)
         g <- get key :: RedisT IO (Maybe Person)
