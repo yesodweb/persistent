@@ -1,25 +1,27 @@
 {-# LANGUAGE FlexibleContexts, UndecidableInstances #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE EmptyDataDecls #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Database.Persist.Redis.Store 
-    ( RedisBackend
-    , execRedisT
+    ( execRedisT
+    , RedisBackend
     )where
 
 import Database.Persist
-import Control.Applicative (Applicative)
 import Control.Monad.IO.Class (MonadIO (..))
-import Control.Monad.Trans.Control (MonadBaseControl)
+import qualified Database.Persist.Sql as Sql
 import qualified Database.Redis as R
-import Data.Text (Text)
-import Database.Persist.Redis.Config (RedisT(..), thisConnection)
+import qualified Data.ByteString as B
+import Data.Text (Text, pack)
+import Database.Persist.Redis.Config (RedisT, thisConnection)
 import Database.Persist.Redis.Internal
+import Web.PathPieces (PathPiece (..))
+
+import Data.Aeson(FromJSON(..), ToJSON(..))
 
 type RedisBackend = R.Connection
-
-toOid :: (PersistEntity val) => Text -> Key val
-toOid = Key . PersistText
 
 -- | Fetches a next key from <object>_id record
 createKey :: (R.RedisCtx m f, PersistEntity val) => val -> m (f Integer)
@@ -43,43 +45,64 @@ execRedisT action = do
         (Left x)  -> fail x
 
 instance PersistStore R.Connection where
+    newtype BackendKey R.Connection = RedisKey Text
+        deriving (Show, Read, Eq, Ord, PersistField, FromJSON, ToJSON)
+
     insert val = do
         keyId <- execRedisT $ createKey val
-        let key    = toOid $ toKeyText val keyId
+        let textKey = toKeyText val keyId
+        key <- toKey textKey
         _ <- insertKey key val
         return key
 
-    insertKey (Key (PersistText key)) val = do
+    insertKey k val = do
         let fields = toInsertFields val
         -- Inserts a hash map into <object>_<id> record
-        _ <- execRedisT $ R.hmset (toB key) fields
+        _ <- execRedisT $ R.hmset (unKey k) fields
         return ()
-    insertKey _ _ = fail "Wrong key type in insertKey"
 
-    repsert k@(Key (PersistText key)) val = do
-        _ <- execRedisT $ R.del [toB key]
+    repsert k val = do
+        _ <- execRedisT $ R.del [unKey k]
         insertKey k val
         return ()
-    repsert _ _ = fail "Wrong key type in repsert"
 
     replace k val = do
         delete k
         insertKey k val
         return ()
 
-    delete (Key (PersistText key)) = do
-        r <- execRedisT $ R.del [toB key]
+    delete k = do
+        r <- execRedisT $ R.del [unKey k]
         case r of
             0 -> fail "there is no such key!"
             1 -> return ()
             _ -> fail "there are a lot of such keys!"
-    delete _ = fail "Wrong key type in delete"
 
-    get k@(Key (PersistText key)) = do
-        r <- execRedisT $ R.hgetall (toB key)
+    get k = do
+        r <- execRedisT $ R.hgetall (unKey k)
         if null r
             then return Nothing
             else do
                 Entity _ val <- mkEntity k r
                 return $ Just val
-    get  _ = fail "Wrong key type in get"
+
+    update _   []   = return ()
+    update key upds = do
+        let fields = updatesToFields upds
+        _ <- execRedisT $ R.hmset (unKey key) fields
+        return ()
+
+updatesToFields :: PersistEntity val => [Update val] -> [(B.ByteString, B.ByteString)]
+updatesToFields = map updateToOneField
+    where
+        updateToOneField (Update field v up) = undefined
+        updateToOneField (BackendUpdate up)  = undefined
+
+instance PathPiece (BackendKey RedisBackend) where
+    toPathPiece (RedisKey txt) = txt
+    fromPathPiece txt = Just $ RedisKey txt 
+-- some checking that entity exists and it is in format of entityname_id is omitted
+
+instance Sql.PersistFieldSql (BackendKey RedisBackend) where
+    sqlType _ = Sql.SqlOther (pack "doesn't make much sense for Redis backend")
+

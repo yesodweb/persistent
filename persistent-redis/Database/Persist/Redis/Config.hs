@@ -12,7 +12,7 @@ module Database.Persist.Redis.Config
     , R.Redis
     , R.Connection
     , R.PortID (..)
-    , RedisT (..)
+    , RedisT
     , runRedisPool
     , withRedisConn
     , thisConnection
@@ -25,8 +25,8 @@ import Data.Text (Text, unpack, pack)
 import Data.Aeson (Value (Object, Number, String), (.:?), (.!=), FromJSON(..))
 import Control.Monad (mzero, MonadPlus(..))
 import Control.Monad.IO.Class (MonadIO (..))
-import Control.Monad.Trans.Class (MonadTrans (..))
-import Control.Applicative (Applicative (..))
+-- import Control.Monad.Trans.Class (MonadTrans (..))
+-- import Control.Applicative (Applicative (..))
 import Control.Monad.Reader(ReaderT(..))
 import Control.Monad.Reader.Class
 import qualified Data.ByteString.Char8 as B

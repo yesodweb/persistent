@@ -6,6 +6,8 @@ module Database.Persist.Redis.Internal
     , toKeyText
     , toB
     , mkEntity
+    , unKey
+    , toKey
 	) where
 
 import Control.Arrow((***))
@@ -24,13 +26,13 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.UTF8 as U
 
-toLabel :: FieldDef a -> B.ByteString
+toLabel :: FieldDef -> B.ByteString
 toLabel = U.fromString . unpack . unDBName . fieldDB
 
 toEntityString :: PersistEntity val => val -> Text
 toEntityString = unDBName . entityDB . entityDef . Just
 
-toEntityName :: EntityDef a -> B.ByteString
+toEntityName :: EntityDef -> B.ByteString
 toEntityName = U.fromString . unpack . unDBName . entityDB
 
 newtype BinText = BinText { unBinText :: Text }
@@ -72,6 +74,7 @@ instance Binary BinTimeOfDay where
         let tod = liftM3 TimeOfDay (Q.get :: Get Int) (Q.get :: Get Int) s
         liftM BinTimeOfDay tod
 
+{-  
 newtype BinZT = BinZT { unBinZT :: ZT }
 instance Binary BinZT where
     put (BinZT (ZT (ZonedTime (LocalTime day timeOfDay) (TimeZone mins summer name)))) = do
@@ -88,7 +91,7 @@ instance Binary BinZT where
         summer <- Q.get :: Get Bool
         name <- Q.get :: Get String
         return $ BinZT $ ZT (ZonedTime (LocalTime (unBinDay day) (unBinTimeOfDay timeOfDay)) (TimeZone mins summer name))
-
+-}
 newtype BinPersistValue = BinPersistValue { unBinPersistValue :: PersistValue }
 instance Binary BinPersistValue where
     put (BinPersistValue (PersistText x)) = do
@@ -137,10 +140,6 @@ instance Binary BinPersistValue where
         put (12 :: Word8)
         put x
 
-    put (BinPersistValue (PersistZonedTime x)) = do
-        put (13 :: Word8)
-        put (BinZT x)
-
     put (BinPersistValue (PersistDbSpecific _)) = undefined
     put (BinPersistValue (PersistObjectId _)) = error "PersistObjectId is not supported."
 
@@ -163,8 +162,8 @@ instance Binary BinPersistValue where
                 10-> liftM (PersistList . map unBinPersistValue) (Q.get :: Get [BinPersistValue])
                 11-> liftM (PersistMap . map (unBinText *** unBinPersistValue)) (Q.get :: Get [(BinText, BinPersistValue)])
                 12-> liftM PersistRational (Q.get :: Get Rational)
-                13-> liftM (PersistZonedTime . unBinZT) (Q.get :: Get BinZT)
-                _ -> fail "Incorrect tag came to Binary deserialization"
+--                13-> liftM (PersistZonedTime . unBinZT) (Q.get :: Get BinZT)
+                z -> fail ("Incorrect tag " ++ show z ++ " came to Binary deserialization")
         liftM BinPersistValue pv
 
 toValue :: PersistValue -> B.ByteString
@@ -185,7 +184,7 @@ mkEntity key fields = do
         Left a -> fail (unpack a)
 
 
-zipAndConvert :: PersistField t => [FieldDef a] -> [t] -> [(B.ByteString, B.ByteString)]
+zipAndConvert :: PersistField t => [FieldDef] -> [t] -> [(B.ByteString, B.ByteString)]
 zipAndConvert [] _ = []
 zipAndConvert _ [] = []
 zipAndConvert (e:efields) (p:pfields) = 
@@ -221,3 +220,13 @@ idBs = U.fromString "id"
 -- | Construct an id key, that is incremented for access
 toKeyId :: PersistEntity val => val -> B.ByteString
 toKeyId val = B.append (toObjectPrefix val) idBs
+
+unKey :: (PersistEntity val) => Key val -> B.ByteString
+unKey = toValue . head . keyToValues
+
+toKey :: (Monad m, PersistEntity val) => Text -> m (Key val)
+toKey x = case q of 
+        Right z -> return z
+        Left a -> fail (unpack a)
+    where
+        q  = keyFromValues [PersistText x]
