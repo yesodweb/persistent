@@ -1,5 +1,6 @@
 {-# LANGUAGE ForeignFunctionInterface, DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP #-}
 -- | A port of the direct-sqlite package for dealing directly with
 -- 'PersistValue's.
 module Database.Sqlite  (
@@ -42,6 +43,13 @@ import Data.Text.Encoding.Error (lenientDecode)
 import Data.Monoid (mappend, mconcat)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Fixed (Pico)
+import Data.Time (formatTime, UTCTime)
+
+#if MIN_VERSION_time(1,5,0)
+import Data.Time (defaultTimeLocale)
+#else
+import System.Locale (defaultTimeLocale)
+#endif
 
 data Connection = Connection !(IORef Bool) Connection'
 newtype Connection' = Connection' (Ptr ())
@@ -358,7 +366,7 @@ bind statement sqlData = do
             PersistNull -> bindNull statement parameterIndex
             PersistDay d -> bindText statement parameterIndex $ pack $ show d
             PersistTimeOfDay d -> bindText statement parameterIndex $ pack $ show d
-            PersistUTCTime d -> bindText statement parameterIndex $ pack $ show d
+            PersistUTCTime d -> bindText statement parameterIndex $ pack $ format8601 d
             PersistList l -> bindText statement parameterIndex $ listToJSON l
             PersistMap m -> bindText statement parameterIndex $ mapToJSON m
             PersistDbSpecific s -> bindText statement parameterIndex $ decodeUtf8With lenientDecode s
@@ -366,6 +374,9 @@ bind statement sqlData = do
             )
        $ zip [1..] sqlData
   return ()
+
+format8601 :: UTCTime -> String
+format8601 = formatTime defaultTimeLocale "%FT%T%Q"
 
 foreign import ccall "sqlite3_column_type"
   columnTypeC :: Ptr () -> Int -> IO Int

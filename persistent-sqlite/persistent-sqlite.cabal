@@ -1,5 +1,5 @@
 name:            persistent-sqlite
-version:         2.1.1
+version:         2.1.1.1
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -33,6 +33,8 @@ library
                    , conduit                 >= 0.5.3
                    , monad-logger            >= 0.2.4
                    , resourcet               >= 1.1
+                   , time
+                   , old-locale
     exposed-modules: Database.Sqlite
                      Database.Persist.Sqlite
     ghc-options:     -Wall
@@ -48,6 +50,19 @@ library
 source-repository head
   type:     git
   location: git://github.com/yesodweb/persistent.git
+
+
+test-suite test
+  type:           exitcode-stdio-1.0
+  main-is:        Spec.hs
+  hs-source-dirs: test
+  build-depends:  base
+                , hspec
+                , persistent
+                , persistent-sqlite
+                , persistent-template
+                , time
+                , transformers
 
 executable sanity
     if flag(build-sanity-exe)
