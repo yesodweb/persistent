@@ -30,8 +30,8 @@ One can always fall back to using the raw database driver or other lower-level o
 Install the Haskell Platform first. Clone this repo and run:
 
     cabal update
-    git submodule update --init
-    ./scripts/install
+    cabal install cabal-meta cabal-src
+    cabal-meta install
 
 # Developing persistent
 
