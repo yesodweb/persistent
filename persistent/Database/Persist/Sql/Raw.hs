@@ -46,10 +46,19 @@ rawQueryRes sql vals = do
         stmt <- mkAcquire make stmtReset
         stmtQuery stmt vals
 
-rawExecute :: MonadIO m => Text -> [PersistValue] -> ReaderT SqlBackend m ()
+-- | Execute a raw SQL statement
+rawExecute :: MonadIO m
+           => Text            -- ^ SQL statement, possibly with placeholders.
+           -> [PersistValue]  -- ^ Values to fill the placeholders.
+           -> ReaderT SqlBackend m ()
 rawExecute x y = liftM (const ()) $ rawExecuteCount x y
 
-rawExecuteCount :: MonadIO m => Text -> [PersistValue] -> ReaderT SqlBackend m Int64
+-- | Execute a raw SQL statement and return the number of
+-- rows it has modified.
+rawExecuteCount :: MonadIO m
+                => Text            -- ^ SQL statement, possibly with placeholders.
+                -> [PersistValue]  -- ^ Values to fill the placeholders.
+                -> ReaderT SqlBackend m Int64
 rawExecuteCount sql vals = do
     conn <- ask
     runLoggingT ($logDebugS (pack "SQL") $ pack $ show sql ++ " " ++ show vals)
