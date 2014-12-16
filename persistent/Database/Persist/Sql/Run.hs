@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Database.Persist.Sql.Run where
 
 import Database.Persist.Sql.Types
@@ -15,7 +16,7 @@ import Control.Exception.Lifted (bracket)
 import Control.Exception (mask)
 import System.Timeout (timeout)
 import Control.Monad.Trans.Control (control)
-import Data.IORef (readIORef)
+import Data.IORef (readIORef, writeIORef, newIORef)
 import qualified Data.Map as Map
 import Control.Exception.Lifted (throwIO)
 import Control.Exception (mask)
@@ -33,8 +34,8 @@ runSqlPool r pconn = do
 -- allocation does not complete within the given timeout period.
 --
 -- Since 2.0.0
-withResourceTimeout ::
-    (MonadBaseControl IO m)
+withResourceTimeout
+  :: forall a m b.  (MonadBaseControl IO m)
   => Int -- ^ Timeout period in microseconds
   -> Pool a
   -> (a -> m b)
@@ -43,7 +44,7 @@ withResourceTimeout ::
 withResourceTimeout ms pool act = control $ \runInIO -> mask $ \restore -> do
     mres <- timeout ms $ takeResource pool
     case mres of
-        Nothing -> runInIO $ return Nothing
+        Nothing -> runInIO $ return (Nothing :: Maybe b)
         Just (resource, local) -> do
             ret <- restore (runInIO (liftM Just $ act resource)) `onException`
                     destroyResource pool local resource
@@ -90,9 +91,11 @@ createSqlPool mkConn size = do
 -- FIXME: in a future release, switch over to the new askLoggerIO function
 -- added in monad-logger 0.3.10. That function was not available at the time
 -- this code was written.
-askLogFunc :: (MonadBaseControl IO m, MonadLogger m) => m LogFunc
+askLogFunc :: forall m. (MonadBaseControl IO m, MonadLogger m) => m LogFunc
 askLogFunc = do
-    runInBase <- control $ \run -> run $ return run
+    ref <- liftBase $ newIORef undefined
+    liftBaseWith $ \run -> writeIORef ref run
+    runInBase <- liftBase $ readIORef ref
     return $ \a b c d -> do
         _ <- runInBase (monadLoggerLog a b c d)
         return ()

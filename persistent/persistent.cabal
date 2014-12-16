@@ -1,17 +1,18 @@
 name:            persistent
-version:         2.1.1
+version:         2.1.1.1
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
 maintainer:      Michael Snoyman <michael@snoyman.com>, Greg Weber <greg@gregweber.info>
 synopsis:        Type-safe, multi-backend data serialization.
-description:     Type-safe, data serialization. You must use a specific backend in order to make this useful.
+description:     Hackage documentation generation is not reliable. For up to date documentation, please see: <http://www.stackage.org/package/persistent>.
 category:        Database, Yesod
 stability:       Stable
 cabal-version:   >= 1.8
 build-type:      Simple
 homepage:        http://www.yesodweb.com/book/persistent
 bug-reports:     https://github.com/yesodweb/persistent/issues
+extra-source-files: ChangeLog.md README.md
 
 flag nooverlap
     default: False
