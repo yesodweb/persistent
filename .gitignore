@@ -13,11 +13,11 @@ test.db3
 persistent-test/test/testdb.sqlite3
 
 # ?
-/tarballs/
+tarballs/
 
 # install script error messages
 # maybe should use shellyNoDir ?
-/.shelly
+.shelly/
 
 ## Cabal sandboxing tools
 .virthualenv
