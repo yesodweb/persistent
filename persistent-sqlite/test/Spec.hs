@@ -28,3 +28,9 @@ main = hspec $ do
         insert . Test $ read "2014-11-30 05:15:25.123"
         [Single x] <- rawSql "select strftime('%s%f',time) from test" []
         liftIO $ x `shouldBe` Just ("141732452525.123" :: String)
+    it "issue #339" $ asIO $ runSqlite ":memory:" $ do
+        runMigration migrateAll
+        now <- liftIO getCurrentTime
+        tid <- insert $ Test now
+        Just (Test now') <- get tid
+        liftIO $ now' `shouldBe` now

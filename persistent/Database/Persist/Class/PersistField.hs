@@ -15,7 +15,7 @@ module Database.Persist.Class.PersistField
     ) where
 
 import Database.Persist.Types.Base
-import Data.Time (Day(..), TimeOfDay, UTCTime)
+import Data.Time (Day(..), TimeOfDay, UTCTime, parseTime)
 #ifdef HIGH_PRECISION_DATE
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 #endif
@@ -47,6 +47,12 @@ import qualified Data.Map as M
 
 import qualified Data.Text.Encoding as TE
 import qualified Data.Vector as V
+
+#if MIN_VERSION_time(1,5,0)
+import Data.Time (defaultTimeLocale)
+#else
+import System.Locale (defaultTimeLocale)
+#endif
 
 -- | A value which can be marshalled to and from a 'PersistValue'.
 class PersistField a where
@@ -221,7 +227,12 @@ instance PersistField UTCTime where
     fromPersistValue x@(PersistText t)  =
         case reads $ T.unpack t of
             (d, _):_ -> Right d
-            _ -> Left $ T.pack $ "Expected UTCTime, received " ++ show x
+            _ ->
+                case parse8601 $ T.unpack t of
+                    Nothing -> Left $ T.pack $ "Expected UTCTime, received " ++ show x
+                    Just x -> Right x
+      where
+        parse8601 = parseTime defaultTimeLocale "%FT%T%Q"
     fromPersistValue x@(PersistByteString s) =
         case reads $ unpack s of
             (d, _):_ -> Right d
