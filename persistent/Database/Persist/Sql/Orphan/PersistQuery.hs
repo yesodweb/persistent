@@ -9,6 +9,7 @@ module Database.Persist.Sql.Orphan.PersistQuery
     ) where
 
 import Database.Persist hiding (updateField)
+import Database.Persist.Sql.Util (entityColumnNames, parseEntityValues)
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
@@ -55,43 +56,12 @@ instance PersistQuery SqlBackend where
         srcRes <- rawQueryRes (sql conn) (getFiltsValues conn filts)
         return $ fmap ($= CL.mapM parse) srcRes
       where
-        composite = isJust $ entityPrimary t
         (limit, offset, orders) = limitOffsetOrder opts
 
-        parse vals =
-          case entityPrimary t of
-            Just pdef -> 
-                  let pks = map fieldHaskell $ compositeFields pdef
-                      keyvals = map snd $ filter (\(a, _) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ entityFields t) vals
-                  in case fromPersistValuesComposite' keyvals vals of
-                      Left s -> liftIO $ throwIO $ PersistMarshalError s
-                      Right row -> return row
-            Nothing -> 
-                  case fromPersistValues' vals of
-                    Left s -> liftIO $ throwIO $ PersistMarshalError s
-                    Right row -> return row
-
+        parse vals = case parseEntityValues t vals of
+                       Left s -> liftIO $ throwIO $ PersistMarshalError s
+                       Right row -> return row
         t = entityDef $ dummyFromFilts filts
-
-        fromPersistValues' (kpv:xs) = -- oracle returns Double 
-            case fromPersistValues xs of
-                Left e -> Left e
-                Right xs' ->
-                    case keyFromValues [kpv] of
-                        Left _ -> error $ "fromPersistValues': keyFromValues failed on " ++ show kpv
-                        Right k -> Right (Entity k xs')
-
-
-        fromPersistValues' xs = Left $ T.pack ("error in fromPersistValues' xs=" ++ show xs)
-
-        fromPersistValuesComposite' keyvals xs =
-            case fromPersistValues xs of
-                Left e -> Left e
-                Right xs' -> case keyFromValues keyvals of
-                    Left _ -> error "fromPersistValuesComposite': keyFromValues failed"
-                    Right key -> Right (Entity key xs')
-
-
         wher conn = if null filts
                     then ""
                     else filterClause False conn filts
@@ -99,9 +69,7 @@ instance PersistQuery SqlBackend where
             case map (orderClause False conn) orders of
                 [] -> ""
                 ords -> " ORDER BY " <> T.intercalate "," ords
-        cols conn = T.intercalate ","
-                  $ (if composite then [] else [connEscapeName conn $ fieldDB (entityId t)])
-                  <> map (connEscapeName conn . fieldDB) (entityFields t)
+        cols = T.intercalate ", " . entityColumnNames t
         sql conn = connLimitOffset conn (limit,offset) (not (null orders)) $ mconcat
             [ "SELECT "
             , cols conn
@@ -121,6 +89,7 @@ instance PersistQuery SqlBackend where
                      Just pdef -> T.intercalate "," $ map (connEscapeName conn . fieldDB) $ compositeFields pdef
                      Nothing   -> connEscapeName conn $ fieldDB (entityId t)
                       
+
         wher conn = if null filts
                     then ""
                     else filterClause False conn filts
