@@ -91,6 +91,7 @@ test-suite test
                    , text
                    , unordered-containers
                    , time
+                   , old-locale
                    , bytestring
                    , vector
                    , base64-bytestring
