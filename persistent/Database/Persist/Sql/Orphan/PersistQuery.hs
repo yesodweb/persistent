@@ -9,7 +9,8 @@ module Database.Persist.Sql.Orphan.PersistQuery
     ) where
 
 import Database.Persist hiding (updateField)
-import Database.Persist.Sql.Util (entityColumnNames, parseEntityValues)
+import Database.Persist.Sql.Util (
+  entityColumnNames, parseEntityValues, isIdField)
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
@@ -192,9 +193,6 @@ updateWhereCount filts upds = do
 
 fieldName ::  forall record typ.  (PersistEntity record, PersistEntityBackend record ~ SqlBackend) => EntityField record typ -> DBName
 fieldName f = fieldDB $ persistFieldDef f
-
-isIdField ::  forall record typ.  (PersistEntity record) => EntityField record typ -> Bool
-isIdField f = fieldHaskell (persistFieldDef f) == HaskellName "Id"
 
 dummyFromFilts :: [Filter v] -> Maybe v
 dummyFromFilts _ = Nothing

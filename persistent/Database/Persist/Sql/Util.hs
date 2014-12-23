@@ -1,17 +1,20 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Database.Persist.Sql.Util (
     parseEntityValues
   , entityColumnNames
   , entityColumnCount
+  , isIdField
+  , hasCompositeKey
 ) where
 
 import Data.Maybe (isJust)
 import Data.Monoid ((<>))
 import Data.Text (Text, pack)
 import Database.Persist (
-    Entity(Entity), EntityDef
+    Entity(Entity), EntityDef, EntityField, HaskellName(HaskellName)
   , PersistEntity, PersistValue, PersistException(PersistMarshalError)
   , keyFromValues, fromPersistValues, fieldDB, entityId, entityPrimary
-  , entityFields, fieldHaskell, compositeFields)
+  , entityFields, fieldHaskell, compositeFields, persistFieldDef)
 import Database.Persist.Sql.Types (Sql, SqlBackend, connEscapeName)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Exception (throwIO)
@@ -58,4 +61,7 @@ parseEntityValues t vals =
                 Left _ -> error "fromPersistValuesComposite': keyFromValues failed"
                 Right key -> Right (Entity key xs')
 
+
+isIdField :: PersistEntity record => EntityField record typ -> Bool
+isIdField f = fieldHaskell (persistFieldDef f) == HaskellName "Id"
 
