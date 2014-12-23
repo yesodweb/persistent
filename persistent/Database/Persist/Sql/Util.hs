@@ -6,7 +6,6 @@ module Database.Persist.Sql.Util (
 
 import Data.Maybe (isJust)
 import Data.Monoid ((<>))
-import Data.List (find)
 import Data.Text (Text, pack)
 import Database.Persist (
     Entity(Entity), EntityDef
@@ -36,7 +35,8 @@ parseEntityValues t vals =
     case entityPrimary t of
       Just pdef -> 
             let pks = map fieldHaskell $ compositeFields pdef
-                keyvals = map snd $ filter (\(a, _) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ entityFields t) vals
+                keyvals = map snd . filter ((`elem` pks) . fst)
+                        $ zip (map fieldHaskell $ entityFields t) vals
             in fromPersistValuesComposite' keyvals vals
       Nothing -> fromPersistValues' vals
   where
