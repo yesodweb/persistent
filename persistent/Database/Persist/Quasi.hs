@@ -62,7 +62,7 @@ parseFieldType t0 =
                 | c == '(' -> parseEnclosed ')' id t'
                 | c == '[' -> parseEnclosed ']' FTList t'
                 | isUpper c ->
-                    let (a, b) = T.break (\x -> isSpace x || x `elem` "()[]") t
+                    let (a, b) = T.break (\x -> isSpace x || x `elem` ("()[]"::String)) t
                      in PSSuccess (getCon a) b
                 | otherwise -> PSFail $ show (c, t')
     getCon t =
@@ -156,7 +156,7 @@ tokenize t
         | T.head t' == '\\' && T.length t' > 1 =
             quotes (T.drop 2 t') (front . (T.take 1 (T.drop 1 t'):))
         | otherwise =
-            let (x, y) = T.break (`elem` "\\\"") t'
+            let (x, y) = T.break (`elem` ['\\','\"']) t'
              in quotes y (front . (x:))
     parens count t' front
         | T.null t' = error $ T.unpack $ T.concat $
@@ -170,7 +170,7 @@ tokenize t
         | T.head t' == '\\' && T.length t' > 1 =
             parens count (T.drop 2 t') (front . (T.take 1 (T.drop 1 t'):))
         | otherwise =
-            let (x, y) = T.break (`elem` "\\()") t'
+            let (x, y) = T.break (`elem` ['\\','(',')']) t'
              in parens count y (front . (x:))
 
 -- | A string of tokens is empty when it has only spaces.  There
