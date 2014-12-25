@@ -865,7 +865,7 @@ mkEntity mps t = do
 
     lenses <- mkLenses mps t
     let instanceConstraint = if not (mpsGeneric mps) then [] else
-          [ClassP ''PersistStore [backendT]]
+          [mkClassP ''PersistStore [backendT]]
 
     return $ addSyn $
        dataTypeDec mps t : mconcat fkc `mappend`
@@ -944,7 +944,7 @@ mkLenses mps ent = fmap mconcat $ forM (entityFields ent) $ \field -> do
         vars = PlainTV fT
              : (if mpsGeneric mps then [PlainTV backend1{-, PlainTV backend2-}] else [])
     return
-        [ SigD lensName $ ForallT vars [ClassP ''Functor [VarT fT]] $
+        [ SigD lensName $ ForallT vars [mkClassP ''Functor [VarT fT]] $
             (aT `arrow` (VarT fT `AppT` bT)) `arrow`
             (sT `arrow` (VarT fT `AppT` tT))
         , FunD lensName $ return $ Clause
@@ -1111,8 +1111,8 @@ mkDeleteCascade mps defs = do
 
         return $
             InstanceD
-            [ ClassP ''PersistQuery [backendT]
-            , EqualP (ConT ''PersistEntityBackend `AppT` entityT) backendT
+            [ mkClassP ''PersistQuery [backendT]
+            , mkEqualP (ConT ''PersistEntityBackend `AppT` entityT) backendT
             ]
             (ConT ''DeleteCascade `AppT` entityT `AppT` backendT)
             [ FunD 'deleteCascade
@@ -1157,7 +1157,7 @@ typeInstanceD clazz hasBackend typ =
     InstanceD ctx (ConT clazz `AppT` typ)
   where
     ctx
-        | hasBackend = [ClassP ''PersistStore [backendT]]
+        | hasBackend = [mkClassP ''PersistStore [backendT]]
         | otherwise = []
 
 persistFieldInstanceD :: Bool -- ^ include PersistStore backend constraint
@@ -1369,7 +1369,7 @@ mkField :: MkPersistSettings -> EntityDef -> FieldDef -> Q (Con, Clause)
 mkField mps et cd = do
     let con = ForallC
                 []
-                [EqualP (VarT $ mkName "typ") $ maybeIdType mps cd Nothing Nothing]
+                [mkEqualP (VarT $ mkName "typ") $ maybeIdType mps cd Nothing Nothing]
                 $ NormalC name []
     bod <- lift cd
     let cla = normalClause
@@ -1470,6 +1470,20 @@ mkJSON mps def = do
                     parseJSON = $(varE (entityFromJSON entityJSON))
                 |]
             return $ toJSONI : fromJSONI : entityJSONIs
+
+mkClassP :: Name -> [Type] -> Pred
+#if MIN_VERSION_template_haskell(2,10,0)
+mkClassP cla tys = foldl AppT (ConT cla) tys
+#else
+mkClassP = ClassP
+#endif
+
+mkEqualP :: Type -> Type -> Pred
+#if MIN_VERSION_template_haskell(2,10,0)
+mkEqualP tleft tright = foldl AppT EqualityT [tleft, tright]
+#else
+mkEqualP = EqualP
+#endif
 
 -- entityUpdates :: EntityDef -> [(HaskellName, FieldType, IsNullable, PersistUpdate)]
 -- entityUpdates =
