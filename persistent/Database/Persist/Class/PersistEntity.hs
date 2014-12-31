@@ -66,7 +66,7 @@ class ( PersistField (Key record), ToJSON (Key record), FromJSON (Key record)
     -- | A lower-level operation to convert from database values to a Haskell record
     fromPersistValues :: [PersistValue] -> Either Text record
 
-    -- | Unique keys besided the Key
+    -- | Unique keys besides the Key
     data Unique record
     -- | A meta operation to retrieve all the Unique keys
     persistUniqueKeys :: record -> [Unique record]
@@ -81,7 +81,7 @@ class ( PersistField (Key record), ToJSON (Key record), FromJSON (Key record)
 
 type family BackendSpecificUpdate backend record
 
--- | updataing a database entity
+-- | Updating a database entity
 --
 -- Persistent users use combinators to create these
 data Update record = forall typ. PersistField typ => Update
