@@ -68,7 +68,7 @@ withMySQLPool ci = withSqlPool $ open' ci
 
 
 -- | Create a MySQL connection pool.  Note that it's your
--- responsability to properly close the connection pool when
+-- responsibility to properly close the connection pool when
 -- unneeded.  Use 'withMySQLPool' for automatic resource control.
 createMySQLPool :: (MonadBaseControl IO m, MonadIO m, MonadLogger m) =>
                    MySQL.ConnectInfo
