@@ -92,7 +92,7 @@ withPostgresqlPool ci = withSqlPool $ open' ci
 
 
 -- | Create a PostgreSQL connection pool.  Note that it's your
--- responsability to properly close the connection pool when
+-- responsibility to properly close the connection pool when
 -- unneeded.  Use 'withPostgresqlPool' for an automatic resource
 -- control.
 createPostgresqlPool :: (MonadIO m, MonadBaseControl IO m, MonadLogger m)
