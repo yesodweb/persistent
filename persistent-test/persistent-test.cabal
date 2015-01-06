@@ -130,7 +130,6 @@ library
                    , blaze-html               >= 0.5
                    , blaze-markup             >= 0.5.1
                    , quickcheck-instances >= 0.3
-                   , pool-conduit
                    , transformers-base
                    , attoparsec
                    , vector
@@ -149,6 +148,7 @@ library
                    , resource-pool
                    , exceptions
                    , tagged
+                   , old-locale
 
    if flag(nooverlap)
      cpp-options: -DNO_OVERLAP
