@@ -135,7 +135,7 @@ import Data.Conduit
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value (Number), (.:), (.:?), (.!=), FromJSON(..), ToJSON(..), withText, withObject)
 import Control.Monad (liftM, (>=>), forM_)
-import qualified Data.Conduit.Pool as Pool
+import qualified Data.Pool as Pool
 import Data.Time (NominalDiffTime)
 #ifdef HIGH_PRECISION_DATE
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)

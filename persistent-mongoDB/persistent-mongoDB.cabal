@@ -35,9 +35,9 @@ library
                    , monad-control      >= 0.3
                    , aeson              >= 0.5
                    , attoparsec
-                   , pool-conduit       >= 0.1
                    , time
                    , bytestring
+                   , resource-pool      < 0.3
 
     exposed-modules: Database.Persist.MongoDB
     ghc-options:     -Wall
