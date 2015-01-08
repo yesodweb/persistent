@@ -302,11 +302,12 @@ builtinGetters = I.fromList
     , (k PS.void,        \_ _ -> return PersistNull)
     , (k PS.uuid,        convertPV (PersistDbSpecific . unUnknown))
     , (k PS.json,        convertPV (PersistByteString . unUnknown))
+    , (k PS.jsonb,       convertPV (PersistByteString . unUnknown))
     , (k PS.unknown,     convertPV (PersistByteString . unUnknown))
     -- add Inet and Cidr types
     , (k PS.inet,        convertPV (PersistDbSpecific . unUnknown))
     , (k PS.cidr,        convertPV (PersistDbSpecific . unUnknown))
- 
+
 
 
     -- array types: same order as above
@@ -336,6 +337,7 @@ builtinGetters = I.fromList
     -- no array(void) type
     , (2951,             listOf (PersistDbSpecific . unUnknown))
     , (199,              listOf (PersistByteString . unUnknown))
+    , (3807,             listOf (PersistByteString . unUnknown))
     -- no array(unknown) either
     ]
     where
