@@ -1204,7 +1204,7 @@ data NestedField record typ
   | forall nest. PersistEntity nest => EntityField record nest `LastNestFld` EntityField nest typ
   | forall nest. PersistEntity nest => EntityField record (Maybe nest) `LastNestFldNullable` EntityField nest typ
 
--- | A MongoRegex represetns a Regular expression.
+-- | A MongoRegex represents a Regular expression.
 -- It is a tuple of the expression and the options for the regular expression, respectively
 -- Options are listed here: <http://docs.mongodb.org/manual/reference/operator/query/regex/>
 -- If you use the same options you may want to define a helper such as @r t = (t, "ims")@
