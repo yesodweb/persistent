@@ -59,7 +59,7 @@ import qualified Blaze.ByteString.Builder.Char8 as BBB
 
 import Data.Text (Text)
 import Data.Aeson
-import Control.Monad (forM, mzero)
+import Control.Monad (forM)
 import Data.Acquire (Acquire, mkAcquire, with)
 import System.Environment (getEnvironment)
 import Data.Int (Int64)
@@ -193,11 +193,7 @@ withStmt' conn query vals =
                 status <- LibPQ.resultStatus ret
                 case status of
                   LibPQ.TuplesOk -> return ()
-                  _ -> do
-                    msg <- LibPQ.resStatus status
-                    mmsg <- LibPQ.resultErrorMessage ret
-                    fail $ "Postgresql.withStmt': bad result status " ++
-                           show status ++ " (" ++ maybe (show msg) (show . (,) msg) mmsg ++ ")"
+                  _ -> PG.throwResultError "Postgresql.withStmt': bad result status " ret status
 
                 -- Get number and type of columns
                 cols <- LibPQ.nfields ret
