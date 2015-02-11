@@ -164,7 +164,7 @@ deriving instance (PersistEntity record, Read (Key record), Read record) => Read
 -- The typical usage is:
 --
 -- @
---   instance ToJSON User where
+--   instance ToJSON (Entity User) where
 --       toJSON = keyValueEntityToJSON
 -- @
 keyValueEntityToJSON :: (PersistEntity record, ToJSON record, ToJSON (Key record))
@@ -180,7 +180,7 @@ keyValueEntityToJSON (Entity key value) = object
 -- The typical usage is:
 --
 -- @
---   instance FromJSON User where
+--   instance FromJSON (Entity User) where
 --       parseJSON = keyValueEntityFromJSON
 -- @
 keyValueEntityFromJSON :: (PersistEntity record, FromJSON record, FromJSON (Key record))
@@ -196,7 +196,7 @@ keyValueEntityFromJSON _ = fail "keyValueEntityFromJSON: not an object"
 -- The typical usage is:
 --
 -- @
---   instance ToJSON User where
+--   instance ToJSON (Entity User) where
 --       toJSON = entityIdToJSON
 -- @
 entityIdToJSON :: (PersistEntity record, ToJSON record, ToJSON (Key record)) => Entity record -> Value
@@ -210,7 +210,7 @@ entityIdToJSON (Entity key value) = case toJSON value of
 -- The typical usage is:
 --
 -- @
---   instance FromJSON User where
+--   instance FromJSON (Entity User) where
 --       parseJSON = entityIdFromJSON
 -- @
 entityIdFromJSON :: (PersistEntity record, FromJSON record, FromJSON (Key record)) => Value -> Parser (Entity record)
