@@ -251,7 +251,7 @@ instance PGTF.ToField P where
     toField (P (PersistTimeOfDay t))   = PGTF.toField t
     toField (P (PersistUTCTime t))     = PGTF.toField t
     toField (P PersistNull)            = PGTF.toField PG.Null
-    toField (P (PersistList l))        = PGTF.toField $ listToJSON l
+    toField (P (PersistList l))        = PGTF.toField $ PG.PGArray (map (PGTF.toField . P) l)
     toField (P (PersistMap m))         = PGTF.toField $ mapToJSON m
     toField (P (PersistDbSpecific s))  = PGTF.toField (Unknown s)
     toField (P (PersistObjectId _))    =
