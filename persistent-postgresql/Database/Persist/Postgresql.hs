@@ -119,19 +119,20 @@ openSimpleConn :: LogFunc -> PG.Connection -> IO SqlBackend
 openSimpleConn logFunc conn = do
     smap <- newIORef $ Map.empty
     return SqlBackend
-        { connPrepare    = prepare' conn
-        , connStmtMap    = smap
-        , connInsertSql  = insertSql'
-        , connClose      = PG.close conn
-        , connMigrateSql = migrate'
-        , connBegin      = const $ PG.begin    conn
-        , connCommit     = const $ PG.commit   conn
-        , connRollback   = const $ PG.rollback conn
-        , connEscapeName = escape
-        , connNoLimit    = "LIMIT ALL"
-        , connRDBMS      = "postgresql"
-        , connLimitOffset = decorateSQLWithLimitOffset "LIMIT ALL"
-        , connLogFunc = logFunc
+        { connPrepare       = prepare' conn
+        , connStmtMap       = smap
+        , connInsertSql     = insertSql'
+        , connInsertManySql = insertManySql'
+        , connClose         = PG.close conn
+        , connMigrateSql    = migrate'
+        , connBegin         = const $ PG.begin    conn
+        , connCommit        = const $ PG.commit   conn
+        , connRollback      = const $ PG.rollback conn
+        , connEscapeName    = escape
+        , connNoLimit       = "LIMIT ALL"
+        , connRDBMS         = "postgresql"
+        , connLimitOffset   = decorateSQLWithLimitOffset "LIMIT ALL"
+        , connLogFunc       = logFunc
         }
 
 prepare' :: PG.Connection -> Text -> IO Statement
@@ -162,6 +163,29 @@ insertSql' ent vals =
   in case entityPrimary ent of
        Just _pdef -> ISRManyKeys sql vals
        Nothing -> ISRSingle (sql <> " RETURNING " <> escape (fieldDB (entityId ent)))
+
+-- !!! WIP
+-- NB: Postgres returns command tag in form "INSERT oid count" on successful insert
+-- TODO: rename vals to rows or something
+insertManySql' :: EntityDef -> [[PersistValue]] -> InsertSqlResult
+insertManySql' ent vals =
+  let sql = T.concat
+                [ "INSERT INTO "
+                , escape $ entityDB ent
+                , if null (entityFields ent)
+                    then " DEFAULT VALUES"
+                    else T.concat
+                        [ "("
+                        , T.intercalate "," $ map (escape . fieldDB) $ entityFields ent
+                        , ") VALUES("
+                        , T.intercalate "," (map (const "?") $ entityFields ent)
+                        , ")"
+                        ]
+                ]
+  in case entityPrimary ent of
+       Just _pdef -> ISRManyKeys sql vals
+       Nothing -> ISRSingle (sql <> " RETURNING " <> escape (fieldDB (entityId ent)))
+
 
 execute' :: PG.Connection -> PG.Query -> [PersistValue] -> IO Int64
 execute' conn query vals = PG.execute conn query (map P vals)
