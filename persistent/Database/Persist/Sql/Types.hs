@@ -43,6 +43,7 @@ data SqlBackend = SqlBackend
     { connPrepare :: Text -> IO Statement
     -- | table name, column names, id name, either 1 or 2 statements to run
     , connInsertSql :: EntityDef -> [PersistValue] -> InsertSqlResult
+    , connInsertManySql :: EntityDef -> [[PersistValue]] -> InsertSqlResult
     , connStmtMap :: IORef (Map Text Statement)
     , connClose :: IO ()
     , connMigrateSql

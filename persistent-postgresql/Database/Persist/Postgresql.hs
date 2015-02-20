@@ -59,7 +59,7 @@ import qualified Blaze.ByteString.Builder.Char8 as BBB
 
 import Data.Text (Text)
 import Data.Aeson
-import Control.Monad (forM, mzero)
+import Control.Monad (forM)
 import Data.Acquire (Acquire, mkAcquire, with)
 import System.Environment (getEnvironment)
 import Data.Int (Int64)
@@ -155,7 +155,7 @@ insertSql' ent vals =
                     else T.concat
                         [ "("
                         , T.intercalate "," $ map (escape . fieldDB) $ entityFields ent
-                        , ") VALUES("
+                        , ") VALUES ("
                         , T.intercalate "," (map (const "?") $ entityFields ent)
                         , ")"
                         ]
@@ -164,11 +164,14 @@ insertSql' ent vals =
        Just _pdef -> ISRManyKeys sql vals
        Nothing -> ISRSingle (sql <> " RETURNING " <> escape (fieldDB (entityId ent)))
 
--- !!! WIP
+generateParameterizedValues :: Int -> Int -> Text
+generateParameterizedValues numFields numRows =
+  T.intercalate "," (replicate numRows genOneRow)
+  where genOneRow = T.concat ["(" , T.intercalate "," (replicate numFields "?") , ")"]
+
 -- NB: Postgres returns command tag in form "INSERT oid count" on successful insert
--- TODO: rename vals to rows or something
 insertManySql' :: EntityDef -> [[PersistValue]] -> InsertSqlResult
-insertManySql' ent vals =
+insertManySql' ent valRows =
   let sql = T.concat
                 [ "INSERT INTO "
                 , escape $ entityDB ent
@@ -177,15 +180,11 @@ insertManySql' ent vals =
                     else T.concat
                         [ "("
                         , T.intercalate "," $ map (escape . fieldDB) $ entityFields ent
-                        , ") VALUES("
-                        , T.intercalate "," (map (const "?") $ entityFields ent)
-                        , ")"
+                        , ") VALUES "
+                        , generateParameterizedValues (length $ entityFields ent) (length valRows)
                         ]
                 ]
-  in case entityPrimary ent of
-       Just _pdef -> ISRManyKeys sql vals
-       Nothing -> ISRSingle (sql <> " RETURNING " <> escape (fieldDB (entityId ent)))
-
+  in ISRManyKeys sql $ concat valRows
 
 execute' :: PG.Connection -> PG.Query -> [PersistValue] -> IO Int64
 execute' conn query vals = PG.execute conn query (map P vals)
