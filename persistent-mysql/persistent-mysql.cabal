@@ -40,7 +40,6 @@ library
                    , conduit               >= 0.5.3
                    , resourcet             >= 0.4.10
                    , monad-logger
-                   , safe
     exposed-modules: Database.Persist.MySQL
     ghc-options:     -Wall
 

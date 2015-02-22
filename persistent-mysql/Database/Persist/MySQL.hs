@@ -27,10 +27,9 @@ import Data.Function (on)
 import Data.IORef
 import Data.List (find, intercalate, sort, groupBy)
 import Data.Text (Text, pack)
+import Text.Read (readMaybe)
 import System.Environment (getEnvironment)
 import Data.Acquire (Acquire, mkAcquire, with)
-
-import Safe (readMay)
 
 import Data.Conduit
 import qualified Blaze.ByteString.Builder.Char8 as BBB
@@ -341,7 +340,7 @@ findTypeOfColumn allDefs name col =
             fieldDef <- find ((== col)  . fieldDB) (entityFields entDef)
             return (fieldType fieldDef)
 
--- | Find out the maxlen of a column
+-- | Find out the maxlen of a column (default to 200)
 findMaxLenOfColumn :: [EntityDef] -> DBName -> DBName -> (DBName, Integer)
 findMaxLenOfColumn allDefs name col =
    maybe (col, 200)
@@ -349,7 +348,7 @@ findMaxLenOfColumn allDefs name col =
            entDef     <- find ((== name) . entityDB) allDefs
            fieldDef   <- find ((== col) . fieldDB) (entityFields entDef)
            maxLenAttr <- find ((T.isPrefixOf "maxlen=") . T.toLower) (fieldAttrs fieldDef)
-           Safe.readMay . T.unpack $ T.drop 7 maxLenAttr
+           readMaybe . T.unpack . T.drop 7 $ maxLenAttr
 
 -- | Helper for 'AddRefence' that finds out the 'entityId'.
 addReference :: [EntityDef] -> DBName -> DBName -> DBName -> AlterColumn
