@@ -39,7 +39,7 @@ rawQueryRes
 rawQueryRes sql vals = do
     conn <- ask
     let make = do
-            runLoggingT ($logDebugS (pack "SQL") $ pack $ show sql ++ " " ++ show vals)
+            runLoggingT ($logDebugS (pack "SQL") $ T.append sql $ pack $ "; " ++ show vals)
                 (connLogFunc conn)
             getStmtConn conn sql
     return $ do
@@ -61,7 +61,7 @@ rawExecuteCount :: MonadIO m
                 -> ReaderT SqlBackend m Int64
 rawExecuteCount sql vals = do
     conn <- ask
-    runLoggingT ($logDebugS (pack "SQL") $ pack $ show sql ++ " " ++ show vals)
+    runLoggingT ($logDebugS (pack "SQL") $ T.append sql $ pack $ "; " ++ show vals)
         (connLogFunc conn)
     stmt <- getStmt sql
     res <- liftIO $ stmtExecute stmt vals
