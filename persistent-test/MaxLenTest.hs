@@ -26,6 +26,12 @@ share [mkPersist sqlSettings,  mkMigrate "maxlenMigrate"] [persistLowerCase|
     bs2 ByteString maxlen=3
     str1 String
     str2 String maxlen=3
+    MLText1 text1
+    MLText2 text2
+    MLBs1 bs1
+    MLBs2 bs2
+    MLStr1 str1
+    MLStr2 str2
     deriving Show Eq
 |]
 

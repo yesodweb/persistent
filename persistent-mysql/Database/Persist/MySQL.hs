@@ -27,6 +27,7 @@ import Data.Function (on)
 import Data.IORef
 import Data.List (find, intercalate, sort, groupBy)
 import Data.Text (Text, pack)
+import Text.Read (readMaybe)
 import System.Environment (getEnvironment)
 import Data.Acquire (Acquire, mkAcquire, with)
 
@@ -299,7 +300,7 @@ migrate' connectInfo allDefs getter val = do
         let uniques = flip concatMap udspair $ \(uname, ucols) ->
                       [ AlterTable name $
                         AddUniqueConstraint uname $
-                        map (findTypeOfColumn allDefs name) ucols ]
+                        map (findTypeAndMaxLen name) ucols ]
         let foreigns = do
               Column { cName=cname, cReference=Just (refTblName, a) } <- newcols
               return $ AlterColumn name (refTblName, addReference allDefs (refName name cname) refTblName cname)
@@ -322,6 +323,11 @@ migrate' connectInfo allDefs getter val = do
       -- Errors
       (_, _, (errs, _)) -> return $ Left errs
 
+      where
+        findTypeAndMaxLen tblName col = let (col', ty) = findTypeOfColumn allDefs tblName col
+                                            (_, ml) = findMaxLenOfColumn allDefs tblName col
+                                         in (col', ty, ml)
+
 
 -- | Find out the type of a column.
 findTypeOfColumn :: [EntityDef] -> DBName -> DBName -> (DBName, FieldType)
@@ -334,6 +340,15 @@ findTypeOfColumn allDefs name col =
             fieldDef <- find ((== col)  . fieldDB) (entityFields entDef)
             return (fieldType fieldDef)
 
+-- | Find out the maxlen of a column (default to 200)
+findMaxLenOfColumn :: [EntityDef] -> DBName -> DBName -> (DBName, Integer)
+findMaxLenOfColumn allDefs name col =
+   maybe (col, 200)
+         ((,) col) $ do
+           entDef     <- find ((== name) . entityDB) allDefs
+           fieldDef   <- find ((== col) . fieldDB) (entityFields entDef)
+           maxLenAttr <- find ((T.isPrefixOf "maxlen=") . T.toLower) (fieldAttrs fieldDef)
+           readMaybe . T.unpack . T.drop 7 $ maxLenAttr
 
 -- | Helper for 'AddRefence' that finds out the 'entityId'.
 addReference :: [EntityDef] -> DBName -> DBName -> DBName -> AlterColumn
@@ -356,7 +371,7 @@ data AlterColumn = Change Column
 
 type AlterColumn' = (DBName, AlterColumn)
 
-data AlterTable = AddUniqueConstraint DBName [(DBName, FieldType)]
+data AlterTable = AddUniqueConstraint DBName [(DBName, FieldType, Integer)]
                 | DropUniqueConstraint DBName
 
 data AlterDB = AddTable String
@@ -571,16 +586,18 @@ getAlters allDefs tblName (c1, u1) (c2, u2) =
     getAltersU ((name, cols):news) old =
         case lookup name old of
             Nothing ->
-                AddUniqueConstraint name (map findType cols) : getAltersU news old
+                AddUniqueConstraint name (map findTypeAndMaxLen cols) : getAltersU news old
             Just ocols ->
                 let old' = filter (\(x, _) -> x /= name) old
                  in if sort cols == ocols
                         then getAltersU news old'
                         else  DropUniqueConstraint name
-                            : AddUniqueConstraint name (map findType cols)
+                            : AddUniqueConstraint name (map findTypeAndMaxLen cols)
                             : getAltersU news old'
         where
-          findType = findTypeOfColumn allDefs tblName
+          findTypeAndMaxLen col = let (col', ty) = findTypeOfColumn allDefs tblName col
+                                      (_, ml) = findMaxLenOfColumn allDefs tblName col
+                                   in (col', ty, ml)
 
 
 -- | @findAlters newColumn oldColumns@ finds out what needs to be
@@ -681,10 +698,10 @@ showAlterTable table (AddUniqueConstraint cname cols) = concat
     , ")"
     ]
     where
-      escapeDBName' (name, (FTTypeCon _ "Text"      )) = escapeDBName name ++ "(200)"
-      escapeDBName' (name, (FTTypeCon _ "String"    )) = escapeDBName name ++ "(200)"
-      escapeDBName' (name, (FTTypeCon _ "ByteString")) = escapeDBName name ++ "(200)"
-      escapeDBName' (name, _                       ) = escapeDBName name
+      escapeDBName' (name, (FTTypeCon _ "Text"      ), maxlen) = escapeDBName name ++ "(" ++ show maxlen ++ ")"
+      escapeDBName' (name, (FTTypeCon _ "String"    ), maxlen) = escapeDBName name ++ "(" ++ show maxlen ++ ")"
+      escapeDBName' (name, (FTTypeCon _ "ByteString"), maxlen) = escapeDBName name ++ "(" ++ show maxlen ++ ")"
+      escapeDBName' (name, _                         , _) = escapeDBName name
 showAlterTable table (DropUniqueConstraint cname) = concat
     [ "ALTER TABLE "
     , escapeDBName table
