@@ -15,7 +15,7 @@ import Data.IORef (writeIORef, readIORef, newIORef)
 import Control.Exception (throwIO)
 import Control.Monad (when, liftM)
 import Data.Text (Text, pack)
-import Control.Monad.Logger (logDebugS, runLoggingT)
+import Control.Monad.Logger (logDebugNS, runLoggingT)
 import Data.Int (Int64)
 import qualified Data.Text as T
 import Data.Conduit
@@ -39,7 +39,7 @@ rawQueryRes
 rawQueryRes sql vals = do
     conn <- ask
     let make = do
-            runLoggingT ($logDebugS (pack "SQL") $ T.append sql $ pack $ "; " ++ show vals)
+            runLoggingT (logDebugNS (pack "SQL") $ T.append sql $ pack $ "; " ++ show vals)
                 (connLogFunc conn)
             getStmtConn conn sql
     return $ do
@@ -61,7 +61,7 @@ rawExecuteCount :: MonadIO m
                 -> ReaderT SqlBackend m Int64
 rawExecuteCount sql vals = do
     conn <- ask
-    runLoggingT ($logDebugS (pack "SQL") $ T.append sql $ pack $ "; " ++ show vals)
+    runLoggingT (logDebugNS (pack "SQL") $ T.append sql $ pack $ "; " ++ show vals)
         (connLogFunc conn)
     stmt <- getStmt sql
     res <- liftIO $ stmtExecute stmt vals
