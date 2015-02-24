@@ -15,6 +15,7 @@ import qualified Data.ByteString as S
 import Data.Time (Day, UTCTime (..), fromGregorian)
 import Data.Time.Clock (picosecondsToDiffTime)
 import Data.Time.LocalTime (TimeOfDay (TimeOfDay))
+import Data.IntMap (IntMap)
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad (when, forM_)
 import Data.Fixed (Pico,Micro)
@@ -37,6 +38,7 @@ DataTypeTable no-json
     bytesMaxLen ByteString maxlen=100
     int Int
     intList [Int]
+    intMap (IntMap Int)
     double Double
     bool Bool
     day Day
@@ -78,6 +80,7 @@ specs = describe "data type specs" $
                 check "bytesMaxLen" dataTypeTableBytesMaxLen
                 check "int" dataTypeTableInt
                 check "intList" dataTypeTableIntList
+                check "intMap" dataTypeTableIntMap
                 check "bool" dataTypeTableBool
                 check "day" dataTypeTableDay
 #ifndef WITH_NOSQL
@@ -126,6 +129,7 @@ instance Arbitrary DataTypeTable where
      <*> (S.take 100 <$> arbitrary) -- bytesMaxLen
      <*> arbitrary              -- int
      <*> arbitrary              -- intList
+     <*> arbitrary              -- intMap
      <*> arbitrary              -- double
      <*> arbitrary              -- bool
      <*> arbitrary              -- day

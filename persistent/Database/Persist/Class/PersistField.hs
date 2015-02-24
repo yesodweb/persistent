@@ -44,6 +44,7 @@ import qualified Data.Aeson as A
 
 import qualified Data.Set as S
 import qualified Data.Map as M
+import qualified Data.IntMap as IM
 
 import qualified Data.Text.Encoding as TE
 import qualified Data.Vector as V
@@ -280,6 +281,10 @@ instance (PersistField a, PersistField b) => PersistField (a,b) where
             Right (x:y:[])  -> (,) <$> fromPersistValue x <*> fromPersistValue y
             Left e          -> Left e
             _               -> Left $ T.pack $ "Expected 2 item PersistList, received: " ++ show v
+
+instance PersistField v => PersistField (IM.IntMap v) where
+    toPersistValue = toPersistValue . IM.toList
+    fromPersistValue = (fmap IM.fromList) . fromPersistValue
 
 instance PersistField v => PersistField (M.Map T.Text v) where
     toPersistValue = PersistMap . map (\(k,v) -> (k, toPersistValue v)) . M.toList

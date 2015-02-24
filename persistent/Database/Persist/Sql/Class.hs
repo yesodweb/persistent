@@ -28,6 +28,7 @@ import Control.Monad.Trans.Class (MonadTrans)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Map as M
+import qualified Data.IntMap as IM
 import qualified Data.Set as S
 import Data.Time (UTCTime, TimeOfDay, Day)
 import Data.Int
@@ -247,6 +248,8 @@ instance PersistFieldSql a => PersistFieldSql (V.Vector a) where
 instance (Ord a, PersistFieldSql a) => PersistFieldSql (S.Set a) where
     sqlType _ = SqlString
 instance (PersistFieldSql a, PersistFieldSql b) => PersistFieldSql (a,b) where
+    sqlType _ = SqlString
+instance PersistFieldSql v => PersistFieldSql (IM.IntMap v) where
     sqlType _ = SqlString
 instance PersistFieldSql v => PersistFieldSql (M.Map T.Text v) where
     sqlType _ = SqlString
