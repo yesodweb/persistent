@@ -1,3 +1,7 @@
+## 2.1.2
+
+* Turn on write-ahead log [#363](https://github.com/yesodweb/persistent/issues/363)
+
 ## 2.1.1.1
 
 Fix rendering of `UTCTime` to match SQLite requirements (see [issue

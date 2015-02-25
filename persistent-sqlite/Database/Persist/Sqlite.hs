@@ -57,6 +57,13 @@ open' connStr logFunc = Sqlite.open connStr >>= flip wrapConnection logFunc
 -- Since 1.1.5
 wrapConnection :: Sqlite.Connection -> LogFunc -> IO SqlBackend
 wrapConnection conn logFunc = do
+    -- Turn on the write-ahead log by default
+    -- https://github.com/yesodweb/persistent/issues/363
+    turnOnWal <- Sqlite.prepare conn "PRAGMA journal_mode=WAL;"
+    _ <- Sqlite.step turnOnWal
+    Sqlite.reset conn turnOnWal
+    Sqlite.finalize turnOnWal
+
     smap <- newIORef $ Map.empty
     return SqlBackend
         { connPrepare = prepare' conn
