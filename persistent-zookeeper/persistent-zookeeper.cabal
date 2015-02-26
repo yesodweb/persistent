@@ -16,7 +16,7 @@ source-repository head
         location:       https://github.com/junjihashimoto/persistent.git
 
 library
-    build-depends:   base                  >= 4        && < 5
+    build-depends:   base                  >= 4.6        && < 5
                    , bytestring            >= 0.10.0.0 && < 0.11.0.0
                    , persistent            >= 2.1
                    , persistent-template
@@ -57,7 +57,7 @@ library
 test-suite  basic
     type: exitcode-stdio-1.0
     main-is: tests/basic-test.hs
-    build-depends:   base                  >= 4        && < 5
+    build-depends:   base                  >= 4.6        && < 5
                    , persistent            >= 2.1
                    , persistent-template
                    , mtl

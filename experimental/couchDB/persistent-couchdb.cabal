@@ -14,7 +14,7 @@ homepage:        http://www.yesodweb.com/book/persistent
 bug-reports:     https://github.com/yesodweb/persistent/issues
 
 library
-    build-depends:   base                  >= 4        && < 5
+    build-depends:   base                  >= 4.6        && < 5
                    , enumerator
                    , pool
                    , json
