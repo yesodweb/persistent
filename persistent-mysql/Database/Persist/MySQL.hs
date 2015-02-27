@@ -85,7 +85,7 @@ createMySQLPool ci = createSqlPool $ open' ci
 withMySQLConn :: (MonadBaseControl IO m, MonadIO m, MonadLogger m) =>
                  MySQL.ConnectInfo
               -- ^ Connection information.
-              -> (Connection -> m a)
+              -> (SqlBackend -> m a)
               -- ^ Action to be executed that uses the connection.
               -> m a
 withMySQLConn = withSqlConn . open'
