@@ -1,5 +1,5 @@
 name:            persistent
-version:         2.1.1.6
+version:         2.1.1.7
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -59,6 +59,7 @@ library
                      Database.Persist.Types
                      Database.Persist.Class
                      Database.Persist.Sql
+                     Database.Persist.Sql.Util
 
     other-modules:   Database.Persist.Types.Base
                      Database.Persist.Class.DeleteCascade
