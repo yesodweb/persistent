@@ -77,7 +77,9 @@ specs = describe "rename specs" $ do
 #ifndef WITH_POSTGRESQL
 #  ifndef WITH_MYSQL
     it "user specified id, insertKey, no default=" $ db $ do
-      let rec = IdTable "Foo" Nothing
+      let rec2 = IdTable "Foo2" Nothing
+      let rec1 = IdTable "Foo1" rec2
+      let rec  = IdTable "Foo" $ Just rec1
       now <- liftIO getCurrentTime
       let key = IdTableKey $ utctDay now
       insertKey key rec
