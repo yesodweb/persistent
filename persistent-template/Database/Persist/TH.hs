@@ -112,7 +112,7 @@ parseReferences ps s = lift $
     entityMap = M.fromList $ map (\ent -> (entityHaskell ent, toEmbedEntityDef ent)) entsWithEmbeds
     entsWithEmbeds = map setEmbedEntity rawEnts
     setEmbedEntity ent = ent
-      { entityFields = map (setEmbedField entityMap) $ entityFields ent
+      { entityFields = map (setEmbedField (entityHaskell ent) entityMap) $ entityFields ent
       }
     rawEnts = parse ps s
 
@@ -168,6 +168,7 @@ instance Lift ReferenceDef where
     lift (ForeignRef name ft) = [|ForeignRef name ft|]
     lift (EmbedRef em) = [|EmbedRef em|]
     lift (CompositeRef cdef) = [|CompositeRef cdef|]
+    lift SelfReference = [|SelfReference|]
 
 instance Lift EmbedEntityDef where
     lift (EmbedEntityDef name fields) = [|EmbedEntityDef name fields|]
@@ -183,19 +184,20 @@ mEmbedded ents (FTTypeCon Nothing n) = let name = HaskellName n in
 mEmbedded ents (FTList x) = mEmbedded ents x
 mEmbedded ents (FTApp x y) = maybe (mEmbedded ents y) Just (mEmbedded ents x)
 
-setEmbedField :: EntityMap -> FieldDef -> FieldDef
-setEmbedField allEntities field = field
+setEmbedField :: HaskellName -> EntityMap -> FieldDef -> FieldDef
+setEmbedField entName allEntities field = field
   { fieldReference = case fieldReference field of
-      NoReference -> case mEmbedded allEntities (fieldType field) of
-          Nothing -> case stripId $ fieldType field of
-              Nothing -> NoReference
-              Just name -> if M.member (HaskellName name) allEntities
-                  then ForeignRef (HaskellName name)
-                                  -- the EmebedEntityDef does not contain FieldType information
-                                  -- but we shouldn't need this anyway
-                                  (FTTypeCon Nothing $ pack $ nameBase ''Int)
-                  else NoReference
-          Just em -> EmbedRef em
+      NoReference ->
+        case mEmbedded allEntities (fieldType field) of
+            Nothing -> case stripId $ fieldType field of
+                Nothing -> NoReference
+                Just name -> if M.member (HaskellName name) allEntities
+                    then ForeignRef (HaskellName name)
+                                    -- the EmebedEntityDef does not contain FieldType information
+                                    -- but we shouldn't need this anyway
+                                    (FTTypeCon Nothing $ pack $ nameBase ''Int)
+                    else NoReference
+            Just em -> if embeddedHaskell em == entName then SelfReference else EmbedRef em
       existing@_   -> existing
   }
 

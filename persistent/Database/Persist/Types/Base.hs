@@ -160,6 +160,7 @@ data ReferenceDef = NoReference
                   | ForeignRef !HaskellName !FieldType -- ^ A ForeignRef has a late binding to the EntityDef it references via HaskellName and has the Haskell type of the foreign key in the form of FieldType
                   | EmbedRef EmbedEntityDef
                   | CompositeRef CompositeDef
+                  | SelfReference
                   deriving (Show, Eq, Read, Ord)
 
 -- | An EmbedEntityDef is the same as an EntityDef
