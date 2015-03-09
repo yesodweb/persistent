@@ -350,7 +350,7 @@ escape (DBName s) =
 data SqliteConf = SqliteConf
     { sqlDatabase :: Text
     , sqlPoolSize :: Int
-    }
+    } deriving Show
 
 instance FromJSON SqliteConf where
     parseJSON = withObject "SqliteConf" $ \o -> SqliteConf

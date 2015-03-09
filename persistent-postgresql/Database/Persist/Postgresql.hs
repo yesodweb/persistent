@@ -868,7 +868,7 @@ data PostgresConf = PostgresConf
       -- ^ The connection string.
     , pgPoolSize :: Int
       -- ^ How many connections should be held on the connection pool.
-    }
+    } deriving Show
 
 instance FromJSON PostgresConf where
     parseJSON = withObject "PostgresConf" $ \o -> do

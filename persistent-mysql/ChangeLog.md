@@ -1,3 +1,7 @@
+## Master
+
+Added a `Show` instance for `MySQLConf`.
+
 ## 2.1.2.1
 
 Documentation typo fix
