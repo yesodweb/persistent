@@ -807,7 +807,7 @@ data MySQLConf = MySQLConf
       -- ^ The connection information.
     , myPoolSize :: Int
       -- ^ How many connections should be held on the connection pool.
-    }
+    } deriving Show
 
 instance FromJSON MySQLConf where
     parseJSON = withObject "MySQLConf" $ \o -> do

@@ -1,3 +1,7 @@
+## Master
+
+Added a `Show` instance for `PostgresConf`.
+
 ## 2.1.2.1
 
 Documentation typo fix
