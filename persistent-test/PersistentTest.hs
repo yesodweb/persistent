@@ -660,6 +660,11 @@ specs = describe "persistent" $ do
       Just (Entity k2 _) <- selectFirst [PersonName ==. "Key"] []
       k2 @== k
 
+  it "insertEntity" $ db $ do
+      Entity k p <- insertEntity $ Person "name" 1 Nothing
+      Just p2 <- get k
+      p2 @== p
+
   it "repsert" $ db $ do
       k <- liftIO (PersonKey `fmap` generateKey)
       Nothing <- selectFirst [PersonName ==. "Repsert"] []

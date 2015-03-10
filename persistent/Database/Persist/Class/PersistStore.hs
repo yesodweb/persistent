@@ -10,6 +10,7 @@ module Database.Persist.Class.PersistStore
     , getJust
     , belongsTo
     , belongsToJust
+    , insertEntity
     , ToBackendKey(..)
     ) where
 
@@ -182,3 +183,14 @@ belongsToJust ::
   )
   => (ent1 -> Key ent2) -> ent1 -> ReaderT backend m ent2
 belongsToJust getForeignKey model = getJust $ getForeignKey model
+
+-- | like @insert@, but returns the complete @Entity@
+insertEntity ::
+    ( PersistStore backend
+    , PersistEntity e
+    , backend ~ PersistEntityBackend e
+    , MonadIO m
+    ) => e -> ReaderT backend m (Entity e)
+insertEntity e = do
+    eid <- insert e
+    return $ Entity eid e

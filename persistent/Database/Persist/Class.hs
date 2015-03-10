@@ -6,6 +6,7 @@ module Database.Persist.Class
     , getJust
     , belongsTo
     , belongsToJust
+    , insertEntity
 
     -- * PersistUnique
     , PersistUnique (..)
