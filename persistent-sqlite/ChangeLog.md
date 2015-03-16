@@ -5,6 +5,7 @@ Added a `Show` instance for `SqliteConf`.
 ## 2.1.2
 
 * Turn on write-ahead log [#363](https://github.com/yesodweb/persistent/issues/363)
+    * Prepending `WAL=off ` to your connection string will recover the previous behavior.
 
 ## 2.1.1.1
 

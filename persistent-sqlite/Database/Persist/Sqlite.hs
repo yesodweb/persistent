@@ -3,7 +3,12 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE PatternGuards #-}
 -- | A sqlite backend for persistent.
+--
+-- Note: If you prepend @WAL=off @ to your connection string, it will disable
+-- the write-ahead log. For more information, see
+-- <https://github.com/yesodweb/persistent/issues/363>.
 module Database.Persist.Sqlite
     ( withSqlitePool
     , withSqliteConn
@@ -35,6 +40,7 @@ import Data.Int (Int64)
 import Data.Monoid ((<>))
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
+import Control.Monad (when)
 
 createSqlitePool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m) => Text -> Int -> m ConnectionPool
 createSqlitePool s = createSqlPool $ open' s
@@ -50,19 +56,35 @@ withSqliteConn :: (MonadBaseControl IO m, MonadIO m, MonadLogger m)
 withSqliteConn = withSqlConn . open'
 
 open' :: Text -> LogFunc -> IO SqlBackend
-open' connStr logFunc = Sqlite.open connStr >>= flip wrapConnection logFunc
+open' connStr logFunc = do
+    let (connStr', enableWal) = case () of
+          ()
+            | Just cs <- T.stripPrefix "WAL=on "  connStr -> (cs, True)
+            | Just cs <- T.stripPrefix "WAL=off " connStr -> (cs, False)
+            | otherwise                                   -> (connStr, True)
+
+    conn <- Sqlite.open connStr'
+    wrapConnectionWal enableWal conn logFunc
 
 -- | Wrap up a raw 'Sqlite.Connection' as a Persistent SQL 'Connection'.
 --
 -- Since 1.1.5
 wrapConnection :: Sqlite.Connection -> LogFunc -> IO SqlBackend
-wrapConnection conn logFunc = do
-    -- Turn on the write-ahead log by default
-    -- https://github.com/yesodweb/persistent/issues/363
-    turnOnWal <- Sqlite.prepare conn "PRAGMA journal_mode=WAL;"
-    _ <- Sqlite.step turnOnWal
-    Sqlite.reset conn turnOnWal
-    Sqlite.finalize turnOnWal
+wrapConnection = wrapConnectionWal True
+
+-- | Allow control of WAL settings when wrapping
+wrapConnectionWal :: Bool -- ^ enable WAL?
+                  -> Sqlite.Connection
+                  -> LogFunc
+                  -> IO SqlBackend
+wrapConnectionWal enableWal conn logFunc = do
+    when enableWal $ do
+        -- Turn on the write-ahead log
+        -- https://github.com/yesodweb/persistent/issues/363
+        turnOnWal <- Sqlite.prepare conn "PRAGMA journal_mode=WAL;"
+        _ <- Sqlite.step turnOnWal
+        Sqlite.reset conn turnOnWal
+        Sqlite.finalize turnOnWal
 
     smap <- newIORef $ Map.empty
     return SqlBackend
