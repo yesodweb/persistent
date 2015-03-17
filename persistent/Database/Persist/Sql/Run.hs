@@ -25,10 +25,12 @@ import System.Timeout (timeout)
 
 -- | Get a connection from the pool, run the given action, and then return the
 -- connection to the pool.
+--
+-- Note: This function previously timed out after 2 seconds, but this behavior
+-- was buggy and caused more problems than it solved. Since version 2.1.2, it
+-- performs no timeout checks.
 runSqlPool :: MonadBaseControl IO m => SqlPersistT m a -> Pool SqlBackend -> m a
-runSqlPool r pconn = do
-    mres <- withResourceTimeout 2000000 pconn $ runSqlConn r
-    maybe (throwIO Couldn'tGetSQLConnection) return mres
+runSqlPool r pconn = withResource pconn $ runSqlConn r
 
 -- | Like 'withResource', but times out the operation if resource
 -- allocation does not complete within the given timeout period.

@@ -1,6 +1,7 @@
-## 2.1.1.8
+## 2.1.2
 
 * Error with `Double`s without a decimal part [#378](https://github.com/yesodweb/persistent/issues/378)
+* `runSqlPool` does not perform timeout checks.
 
 ## 2.1.1.6
 
