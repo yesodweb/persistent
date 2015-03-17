@@ -1,3 +1,7 @@
+## 2.1.1.8
+
+* Error with `Double`s without a decimal part [#378](https://github.com/yesodweb/persistent/issues/378)
+
 ## 2.1.1.6
 
 * One extra feature for #939: use `logDebugN` instead

@@ -156,6 +156,7 @@ instance PersistField Double where
     toPersistValue = PersistDouble
     fromPersistValue (PersistDouble d) = Right d
     fromPersistValue (PersistRational r) = Right $ fromRational r
+    fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ T.pack $ "Expected Double, received: " ++ show x
 
 instance (HasResolution a) => PersistField (Fixed a) where
