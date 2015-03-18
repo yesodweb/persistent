@@ -12,6 +12,7 @@ module Database.Persist.Postgresql
     ( withPostgresqlPool
     , withPostgresqlConn
     , createPostgresqlPool
+    , createPostgresqlPoolModified
     , module Database.Persist.Sql
     , ConnectionString
     , PostgresConf (..)
@@ -88,7 +89,7 @@ withPostgresqlPool :: (MonadBaseControl IO m, MonadLogger m, MonadIO m)
                    -- ^ Action to be executed that uses the
                    -- connection pool.
                    -> m a
-withPostgresqlPool ci = withSqlPool $ open' ci
+withPostgresqlPool ci = withSqlPool $ open' (const $ return ()) ci
 
 
 -- | Create a PostgreSQL connection pool.  Note that it's your
@@ -102,17 +103,37 @@ createPostgresqlPool :: (MonadIO m, MonadBaseControl IO m, MonadLogger m)
                      -- ^ Number of connections to be kept open
                      -- in the pool.
                      -> m ConnectionPool
-createPostgresqlPool ci = createSqlPool $ open' ci
+createPostgresqlPool = createPostgresqlPoolModified (const $ return ())
 
+-- | Same as 'createPostgresqlPool', but additionally takes a callback function
+-- for some connection-specific tweaking to be performed after connection
+-- creation. This could be used, for example, to change the schema. For more
+-- information, see:
+--
+-- <https://groups.google.com/d/msg/yesodweb/qUXrEN_swEo/O0pFwqwQIdcJ>
+--
+-- Since 2.1.3
+createPostgresqlPoolModified
+    :: (MonadIO m, MonadBaseControl IO m, MonadLogger m)
+    => (PG.Connection -> IO ()) -- ^ action to perform after connection is created
+    -> ConnectionString -- ^ Connection string to the database.
+    -> Int -- ^ Number of connections to be kept open in the pool.
+    -> m ConnectionPool
+createPostgresqlPoolModified modConn ci = createSqlPool $ open' modConn ci
 
 -- | Same as 'withPostgresqlPool', but instead of opening a pool
 -- of connections, only one connection is opened.
 withPostgresqlConn :: (MonadIO m, MonadBaseControl IO m, MonadLogger m)
                    => ConnectionString -> (SqlBackend -> m a) -> m a
-withPostgresqlConn = withSqlConn . open'
+withPostgresqlConn = withSqlConn . open' (const $ return ())
 
-open' :: ConnectionString -> LogFunc -> IO SqlBackend
-open' cstr logFunc = PG.connectPostgreSQL cstr >>= openSimpleConn logFunc
+open' :: (PG.Connection -> IO ())
+      -> ConnectionString -> LogFunc -> IO SqlBackend
+open' modConn cstr logFunc = do
+    conn <- PG.connectPostgreSQL cstr
+    modConn conn
+    openSimpleConn logFunc conn
+
 
 -- | Generate a 'Connection' from a 'PG.Connection'
 openSimpleConn :: LogFunc -> PG.Connection -> IO SqlBackend
