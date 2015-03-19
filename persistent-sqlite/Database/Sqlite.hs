@@ -7,6 +7,7 @@ module Database.Sqlite  (
                          Connection,
                          Statement,
                          Error(..),
+                         SqliteException(..),
                          StepResult(Row,
                                     Done),
                          open,
@@ -36,6 +37,7 @@ import qualified Data.ByteString.Unsafe as BSU
 import qualified Data.ByteString.Internal as BSI
 import Foreign
 import Foreign.C
+import Control.Exception (Exception, throwIO)
 import Database.Persist (PersistValue (..), listToJSON, mapToJSON)
 import Data.Text (Text, pack, unpack)
 import Data.Text.Encoding (encodeUtf8, decodeUtf8With)
@@ -44,6 +46,7 @@ import Data.Monoid (mappend, mconcat)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Fixed (Pico)
 import Data.Time (formatTime, UTCTime)
+import Data.Typeable (Typeable)
 
 #if MIN_VERSION_time(1,5,0)
 import Data.Time (defaultTimeLocale)
@@ -54,6 +57,25 @@ import System.Locale (defaultTimeLocale)
 data Connection = Connection !(IORef Bool) Connection'
 newtype Connection' = Connection' (Ptr ())
 newtype Statement = Statement (Ptr ())
+
+-- | A custom exception type to make it easier to catch exceptions.
+--
+-- Since 2.1.3
+data SqliteException = SqliteException
+    { seError        :: !Error
+    , seFunctionName :: !Text
+    , seDetails      :: !Text
+    }
+    deriving (Typeable)
+instance Show SqliteException where
+    show (SqliteException error functionName details) = unpack $ mconcat
+        ["SQLite3 returned "
+        , pack $ show error
+        , " while attempting to perform "
+        , functionName
+        , details
+        ]
+instance Exception SqliteException
 
 data Error = ErrorOK
            | ErrorError
@@ -150,13 +172,11 @@ sqlError maybeConnection functionName error = do
                  details <- errmsg database
                  return $ ": " `mappend` details
                Nothing -> return "."
-  fail $ unpack $ mconcat
-    ["SQLite3 returned "
-    , pack $ show error
-    , " while attempting to perform "
-    , functionName
-    , details
-    ]
+  throwIO SqliteException
+    { seError = error
+    , seFunctionName = functionName
+    , seDetails = details
+    }
 
 foreign import ccall "sqlite3_open"
   openC :: CString -> Ptr (Ptr ()) -> IO Int

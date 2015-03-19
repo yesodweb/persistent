@@ -1,6 +1,7 @@
-## Master
+## 2.1.3
 
-Added a `Show` instance for `SqliteConf`.
+* Added a `Show` instance for `SqliteConf`.
+* Use `SqliteException` instead of calling `fail` [#364](https://github.com/yesodweb/persistent/issues/364)
 
 ## 2.1.2
 
