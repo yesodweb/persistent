@@ -42,7 +42,10 @@ library
         extra-libraries: sqlite3
     else
         c-sources:   cbits/sqlite3.c
+        include-dirs: cbits
         cc-options:  -fPIC
+
+    c-sources: cbits/config.c
 
     if !os(windows)
         extra-libraries: pthread
