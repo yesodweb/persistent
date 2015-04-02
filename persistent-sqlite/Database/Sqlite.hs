@@ -480,11 +480,15 @@ changes :: Connection -> IO Int64
 changes (Connection _ c) = fmap fromIntegral $ changesC c
 
 -- | Log function callback. Arguments are error code and log message.
+--
+-- Since 2.1.4
 type RawLogFunction = Ptr () -> Int -> CString -> IO ()
 
 foreign import ccall "wrapper"
   mkRawLogFunction :: RawLogFunction -> IO (FunPtr RawLogFunction)
 
+-- |
+-- Since 2.1.4
 newtype LogFunction = LogFunction (FunPtr RawLogFunction)
 
 -- | Wraps a given function to a 'LogFunction' to be further used with 'ConfigLogFn'.
@@ -496,10 +500,14 @@ mkLogFunction fn = fmap LogFunction . mkRawLogFunction $ \_ errCode cmsg -> do
   fn errCode msg
 
 -- | Releases a native FunPtr for the 'LogFunction'.
+--
+-- Since 2.1.4
 freeLogFunction :: LogFunction -> IO ()
 freeLogFunction (LogFunction fn) = freeHaskellFunPtr fn
 
 -- | Configuration option for SQLite to be used together with the 'config' function.
+--
+-- Since 2.1.4
 data Config
   -- | A function to be used for logging
   = ConfigLogFn LogFunction
@@ -509,6 +517,8 @@ foreign import ccall "persistent_sqlite_set_log"
 
 -- | Sets SQLite global configuration parameter. See SQLite documentation for the <https://www.sqlite.org/c3ref/config.html sqlite3_config> function.
 -- In short, this must be called prior to any other SQLite function if you want the call to succeed.
+--
+-- Since 2.1.4
 config :: Config -> IO ()
 config c = case c of
   ConfigLogFn (LogFunction rawLogFn) -> do

@@ -1,3 +1,7 @@
+## 2.1.4
+
+* Add log support to persistent-sqlite [#381](https://github.com/yesodweb/persistent/pull/381)
+
 ## 2.1.3
 
 * Added a `Show` instance for `SqliteConf`.
