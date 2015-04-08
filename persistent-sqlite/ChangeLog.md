@@ -1,3 +1,7 @@
+## 2.1.4.1
+
+* Add missing source files [#382](https://github.com/yesodweb/persistent/issues/382)
+
 ## 2.1.4
 
 * Add log support to persistent-sqlite [#381](https://github.com/yesodweb/persistent/pull/381)

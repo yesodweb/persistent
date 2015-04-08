@@ -1,5 +1,5 @@
 name:            persistent-sqlite
-version:         2.1.4
+version:         2.1.4.1
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -12,7 +12,7 @@ cabal-version:   >= 1.8
 build-type:      Simple
 homepage:        http://www.yesodweb.com/book/persistent
 bug-reports:     https://github.com/yesodweb/persistent/issues
-extra-source-files: ChangeLog.md
+extra-source-files: ChangeLog.md cbits/*.c cbits/*.h
 
 flag systemlib
   description: Use the system-wide sqlite library
