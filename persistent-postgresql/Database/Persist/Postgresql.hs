@@ -320,13 +320,9 @@ builtinGetters = I.fromList
     , (k PS.varbit,      convertPV PersistInt64)
     , (k PS.numeric,     convertPV PersistRational)
     , (k PS.void,        \_ _ -> return PersistNull)
-    , (k PS.uuid,        convertPV (PersistDbSpecific . unUnknown))
     , (k PS.json,        convertPV (PersistByteString . unUnknown))
     , (k PS.jsonb,       convertPV (PersistByteString . unUnknown))
     , (k PS.unknown,     convertPV (PersistByteString . unUnknown))
-    -- add Inet and Cidr types
-    , (k PS.inet,        convertPV (PersistDbSpecific . unUnknown))
-    , (k PS.cidr,        convertPV (PersistDbSpecific . unUnknown))
 
 
 
