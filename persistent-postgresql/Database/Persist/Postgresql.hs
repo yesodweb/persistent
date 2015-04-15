@@ -227,9 +227,8 @@ withStmt' conn query vals =
                 rowRef   <- newIORef (LibPQ.Row 0)
                 rowCount <- LibPQ.ntuples ret
                 return (ret, rowRef, rowCount, oids)
-      getters <- forM ids $ \(col, oid) -> do
-          getter <- getGetter conn oid
-          return $ getter $ PG.Field rt col oid
+      let getters
+            = map (\(col, oid) -> getGetter conn oid $ PG.Field rt col oid) ids
       return (rt, rr, rc, getters)
 
     closeS (ret, _, _, _) = LibPQ.unsafeFreeResult ret
@@ -365,29 +364,10 @@ builtinGetters = I.fromList
         k (PGFF.typoid -> i) = PG.oid2int i
         listOf f = convertPV (PersistList . map f . PG.fromPGArray)
 
-builtinExtensionGetters :: Map.Map ByteString (Getter PersistValue)
-builtinExtensionGetters = Map.fromList
-    [ ("geometry",      convertPV (PersistDbSpecific . unUnknown))
-    , ("geography",     convertPV (PersistDbSpecific . unUnknown))
-    ]
-
-
-getGetter :: PG.Connection -> PG.Oid -> IO (Getter PersistValue)
-getGetter conn oid = case I.lookup (PG.oid2int oid) builtinGetters of
-    Just getter -> return getter
-    Nothing -> do
-        tyinfo <- PG.getTypeInfo conn oid
-        case Map.lookup (PG.typname tyinfo) builtinExtensionGetters of
-          Just getter -> return getter
-          Nothing -> error $ "Postgresql.getGetter: type "
-                          ++ explain tyinfo
-                          ++ " ("
-                          ++ show oid
-                          ++ ") not supported."
-    where
-        explain tyinfo = case B8.unpack $ PG.typname tyinfo of
-                        t@('_':ty) -> t ++ " (array of " ++ ty ++ ")"
-                        x -> show x
+getGetter :: PG.Connection -> PG.Oid -> Getter PersistValue
+getGetter conn oid
+  = fromMaybe defaultGetter $ I.lookup (PG.oid2int oid) builtinGetters
+  where defaultGetter = convertPV (PersistDbSpecific . unUnknown)
 
 unBinary :: PG.Binary a -> a
 unBinary (PG.Binary x) = x
