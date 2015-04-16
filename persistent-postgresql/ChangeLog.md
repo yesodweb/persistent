@@ -1,3 +1,7 @@
+## 2.1.4
+
+* Treat unknown extension types as PersistDbSpecific values [#385](https://github.com/yesodweb/persistent/pull/385)
+
 ## 2.1.3
 
 * Added a `Show` instance for `PostgresConf`.
