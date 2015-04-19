@@ -96,6 +96,7 @@ data IsNullable = Nullable !WhyNullable
                 | NotNullable
                   deriving (Eq, Show)
 
+
 -- | The reason why a field is 'nullable' is very important.  A
 -- field that is nullable because of a @Maybe@ tag will have its
 -- type changed from @A@ to @Maybe A@.  OTOH, a field that is
@@ -157,10 +158,12 @@ data FieldDef = FieldDef
 -- 2) single field
 -- 3) embedded
 data ReferenceDef = NoReference
-                  | ForeignRef !HaskellName !FieldType -- ^ A ForeignRef has a late binding to the EntityDef it references via HaskellName and has the Haskell type of the foreign key in the form of FieldType
+                  | ForeignRef !HaskellName !FieldType
+                    -- ^ A ForeignRef has a late binding to the EntityDef it references via HaskellName and has the Haskell type of the foreign key in the form of FieldType
                   | EmbedRef EmbedEntityDef
                   | CompositeRef CompositeDef
                   | SelfReference
+                    -- ^ A SelfReference stops an immediate cycle which causes non-termination at compile-time (issue #311).
                   deriving (Show, Eq, Read, Ord)
 
 -- | An EmbedEntityDef is the same as an EntityDef
@@ -177,22 +180,31 @@ data EmbedEntityDef = EmbedEntityDef
 data EmbedFieldDef = EmbedFieldDef
     { emFieldDB       :: !DBName
     , emFieldEmbed :: Maybe EmbedEntityDef
+    , emFieldCycle :: Maybe HaskellName
+    -- ^ 'emFieldEmbed' can create a cycle (issue #311)
+    -- when a cycle is detected, 'emFieldEmbed' will be Nothing
+    -- and 'emFieldCycle' will be Just
     }
     deriving (Show, Eq, Read, Ord)
 
 toEmbedEntityDef :: EntityDef -> EmbedEntityDef
-toEmbedEntityDef ent = EmbedEntityDef
-  { embeddedHaskell = entityHaskell ent
-  , embeddedFields = map toEmbedFieldDef $ entityFields ent
-  }
-
-toEmbedFieldDef :: FieldDef -> EmbedFieldDef
-toEmbedFieldDef field =
-  EmbedFieldDef { emFieldDB       = fieldDB field
-                   , emFieldEmbed = case fieldReference field of
-                       EmbedRef em -> Just em
-                       _ -> Nothing
-                   }
+toEmbedEntityDef ent = embDef
+  where
+    embDef = EmbedEntityDef
+      { embeddedHaskell = entityHaskell ent
+      , embeddedFields = map toEmbedFieldDef $ entityFields ent
+      }
+    toEmbedFieldDef :: FieldDef -> EmbedFieldDef
+    toEmbedFieldDef field =
+      EmbedFieldDef { emFieldDB       = fieldDB field
+                    , emFieldEmbed = case fieldReference field of
+                        EmbedRef em -> Just em
+                        SelfReference -> Just embDef
+                        _ -> Nothing
+                    , emFieldCycle = case fieldReference field of
+                        SelfReference -> Just $ entityHaskell ent
+                        _ -> Nothing
+                    }
 
 data UniqueDef = UniqueDef
     { uniqueHaskell :: !HaskellName

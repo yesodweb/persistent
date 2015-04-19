@@ -105,7 +105,7 @@ persistFileWith ps fp = do
 -- afterwards, sets references to other entities
 parseReferences :: PersistSettings -> Text -> Q Exp
 parseReferences ps s = lift $
-     map (mkEntityDefSqlTypeExp entityMap) entsWithEmbeds
+     map (mkEntityDefSqlTypeExp entityMap . breakCycleEnt) entsWithEmbeds
   where
     -- every EntityDef could reference each-other (as an EmbedRef)
     -- let Haskell tie the knot
@@ -115,6 +115,33 @@ parseReferences ps s = lift $
       { entityFields = map (setEmbedField (entityHaskell ent) entityMap) $ entityFields ent
       }
     rawEnts = parse ps s
+
+    -- self references are already broken
+    -- look at every emFieldEmbed to see if it refers to an already seen HaskellName
+    -- so start with entityHaskell ent and accumulate embeddedHaskell em
+    breakCycleEnt entDef =
+      let entName = entityHaskell entDef
+      in  entDef { entityFields = map (breakCycleField entName) $ entityFields entDef }
+
+    breakCycleField entName f@(FieldDef { fieldReference = EmbedRef em }) =
+      f { fieldReference = EmbedRef $ breakCycleEmbed [entName] em }
+    breakCycleField _ f = f
+
+    breakCycleEmbed ancestors em =
+        em { embeddedFields = map (breakCycleEmField $ emName : ancestors)
+                                  (embeddedFields em)
+           }
+      where
+        emName = embeddedHaskell em
+
+    breakCycleEmField ancestors emf = case embeddedHaskell <$> membed of
+        Nothing -> emf
+        Just embName -> if embName `elem` ancestors
+          then emf { emFieldEmbed = Nothing, emFieldCycle = Just embName }
+          else emf { emFieldEmbed = breakCycleEmbed ancestors <$> membed }
+      where
+        membed = emFieldEmbed emf
+
 
 
 stripId :: FieldType -> Maybe Text
@@ -168,13 +195,13 @@ instance Lift ReferenceDef where
     lift (ForeignRef name ft) = [|ForeignRef name ft|]
     lift (EmbedRef em) = [|EmbedRef em|]
     lift (CompositeRef cdef) = [|CompositeRef cdef|]
-    lift SelfReference = [|SelfReference|]
+    lift (SelfReference) = [|SelfReference|]
 
 instance Lift EmbedEntityDef where
     lift (EmbedEntityDef name fields) = [|EmbedEntityDef name fields|]
 
 instance Lift EmbedFieldDef where
-    lift (EmbedFieldDef name em) = [|EmbedFieldDef name em|]
+    lift (EmbedFieldDef name em cyc) = [|EmbedFieldDef name em cyc|]
 
 type EntityMap = M.Map HaskellName EmbedEntityDef
 mEmbedded :: EntityMap -> FieldType -> Maybe EmbedEntityDef
@@ -197,7 +224,11 @@ setEmbedField entName allEntities field = field
                                     -- but we shouldn't need this anyway
                                     (FTTypeCon Nothing $ pack $ nameBase ''Int)
                     else NoReference
-            Just em -> if embeddedHaskell em == entName then SelfReference else EmbedRef em
+            Just em -> if embeddedHaskell em /= entName
+              then EmbedRef em
+              else if maybeNullable field
+                     then SelfReference
+                     else error $ unpack $ unHaskellName entName `mappend` ": a self reference must be a Maybe"
       existing@_   -> existing
   }
 

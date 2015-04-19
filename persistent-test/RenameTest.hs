@@ -36,6 +36,7 @@ IdTable
     Id   Day default=CURRENT_DATE
     name Text
     -- This was added to test the ability to break a cycle
+    -- getting rid of the Maybe should be a compilation failure
     keyTableEmbed IdTable Maybe
     deriving Eq Show
 LowerCaseTable
@@ -78,7 +79,7 @@ specs = describe "rename specs" $ do
 #  ifndef WITH_MYSQL
     it "user specified id, insertKey, no default=" $ db $ do
       let rec2 = IdTable "Foo2" Nothing
-      let rec1 = IdTable "Foo1" rec2
+      let rec1 = IdTable "Foo1" $ Just rec2
       let rec  = IdTable "Foo" $ Just rec1
       now <- liftIO getCurrentTime
       let key = IdTableKey $ utctDay now
