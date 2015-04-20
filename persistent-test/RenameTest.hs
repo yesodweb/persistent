@@ -35,6 +35,9 @@ KeyTable
 IdTable
     Id   Day default=CURRENT_DATE
     name Text
+    -- This was added to test the ability to break a cycle
+    -- getting rid of the Maybe should be a compilation failure
+    keyTableEmbed IdTable Maybe
     deriving Eq Show
 LowerCaseTable
     Id            sql=my_id
@@ -75,7 +78,9 @@ specs = describe "rename specs" $ do
 #ifndef WITH_POSTGRESQL
 #  ifndef WITH_MYSQL
     it "user specified id, insertKey, no default=" $ db $ do
-      let rec = IdTable "Foo"
+      let rec2 = IdTable "Foo2" Nothing
+      let rec1 = IdTable "Foo1" $ Just rec2
+      let rec  = IdTable "Foo" $ Just rec1
       now <- liftIO getCurrentTime
       let key = IdTableKey $ utctDay now
       insertKey key rec
@@ -85,7 +90,7 @@ specs = describe "rename specs" $ do
 #    ifndef WITH_NOSQL
     -- this uses default=
     it "user specified id, default=" $ db $ do
-      let rec = IdTable "Foo"
+      let rec = IdTable "Foo" Nothing
       k <- insert rec
       Just rec' <- get k
       rec' @== rec
