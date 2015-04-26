@@ -1,10 +1,10 @@
 # build the image
 #
-#     sudo docker build -t persistent .
+#     docker build -t persistent .
 #
 # run the image with the directory mounted
 #
-#     sudo docker run --name persistent --link mongodb:mongodb -v `pwd`:/home/haskell -t -i persistent /bin/bash
+#     docker run --name persistent --link mongodb:mongodb -v `pwd`:/home/haskell -t -i persistent /bin/bash
 #
 # Note the above usage of a link
 # For databases besides sqlite, you should find a docker containter and link it
