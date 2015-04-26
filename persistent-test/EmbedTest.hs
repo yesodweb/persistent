@@ -144,6 +144,12 @@ share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
   IntList
     ints [Int]
     deriving Show Eq
+
+  -- We would like to be able to use OnlyNameId
+  -- But (Key OnlyName) works
+  MapIdValue
+    map (M.Map T.Text (Key OnlyName))
+    deriving Show Eq Read Ord
 |]
 #ifdef WITH_NOSQL
 cleanDB :: (PersistQuery backend, PersistEntityBackend HasMap ~ backend, MonadIO m) => ReaderT backend m ()
@@ -269,6 +275,14 @@ specs = describe "embedded entities" $ do
       contK <- insert container
       Just res <- selectFirst [EmbedsHasMapName ==. (Just "empty map")] []
       res @== Entity contK container
+
+  it "Embeds a Map with ids as values" $ db $ do
+      onId <- insert $ OnlyName "nombre"
+      onId2 <- insert $ OnlyName "nombre2"
+      let midValue = MapIdValue $ M.fromList [("foo", onId),("bar",onId2)]
+      mK <- insert midValue
+      Just mv <- get mK
+      mv @== midValue
 
 #ifdef WITH_NOSQL
 #ifdef WITH_MONGODB
