@@ -211,9 +211,13 @@ mEmbedded _ (FTTypeCon Just{} _) = Left Nothing
 mEmbedded ents (FTTypeCon Nothing n) = let name = HaskellName n in
     maybe (Left Nothing) Right $ M.lookup name ents
 mEmbedded ents (FTList x) = mEmbedded ents x
-mEmbedded ents (FTApp x y) = if x == FTTypeCon Nothing "Key"
-  then Left $ Just FTKeyCon
-  else mEmbedded ents y
+mEmbedded ents (FTApp x y) =
+  -- Key convets an Record to a RecordId
+  -- special casing this is obviously a hack
+  -- This problem may not be solvable with the current QuasiQuoted approach though
+  if x == FTTypeCon Nothing "Key"
+    then Left $ Just FTKeyCon
+    else mEmbedded ents y
 
 setEmbedField :: HaskellName -> EntityMap -> FieldDef -> FieldDef
 setEmbedField entName allEntities field = field
