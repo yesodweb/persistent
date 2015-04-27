@@ -685,7 +685,7 @@ mkKeyTypeDec mps t = do
   where
     keyConE = keyConExp t
     unKeyE = unKeyExp t
-    dec = RecC (keyConName t) keyFields
+    dec = RecC (keyConName t) (keyFields mps t)
     k = ''Key
     recordType = genericDataType mps (entityHaskell t) backendT
     pfInstD = -- FIXME: generate a PersistMap instead of PersistList
@@ -757,21 +757,9 @@ mkKeyTypeDec mps t = do
           else fmap (alwaysInstances `mappend`) backendKeyGenericI
       return instances
 
-    useNewtype = length keyFields < 2
-    defaultIdType = fieldType (entityId t) == FTTypeCon Nothing (keyIdText t)
-    keyFields = case entityPrimary t of
-      Just pdef -> map primaryKeyVar $ (compositeFields pdef)
-      Nothing   -> if defaultIdType
-        then [idKeyVar backendKeyType]
-        else [idKeyVar $ ftToType $ fieldType $ entityId t]
-    customKeyType = not defaultIdType || not useNewtype || isJust (entityPrimary t)
+    useNewtype = pkNewtype mps t
+    customKeyType = not (defaultIdType t) || not useNewtype || isJust (entityPrimary t)
 
-    primaryKeyVar fd = (keyFieldName t fd, NotStrict, ftToType $ fieldType fd)
-    idKeyVar ft = (unKeyName t, NotStrict, ft)
-
-    backendKeyType
-        | mpsGeneric mps = ConT ''BackendKey `AppT` backendT
-        | otherwise      = ConT ''BackendKey `AppT` mpsBackend mps
 
 keyIdName :: EntityDef -> Name
 keyIdName = mkName . unpack . keyIdText
@@ -806,11 +794,36 @@ keyString = unpack . keyText
 keyText :: EntityDef -> Text
 keyText t = unHaskellName (entityHaskell t) ++ "Key"
 
-keyFieldName :: EntityDef -> FieldDef -> Name
-keyFieldName t fd = mkName $ unpack $ lowerFirst (keyText t) `mappend` (unHaskellName $ fieldHaskell fd)
+pkNewtype :: MkPersistSettings -> EntityDef -> Bool
+pkNewtype mps t = length (keyFields mps t) < 2
+
+defaultIdType :: EntityDef -> Bool
+defaultIdType t = fieldType (entityId t) == FTTypeCon Nothing (keyIdText t)
+
+keyFields :: MkPersistSettings -> EntityDef -> [(Name, Strict, Type)]
+keyFields mps t = case entityPrimary t of
+  Just pdef -> map primaryKeyVar $ (compositeFields pdef)
+  Nothing   -> if defaultIdType t
+    then [idKeyVar backendKeyType]
+    else [idKeyVar $ ftToType $ fieldType $ entityId t]
+  where
+    backendKeyType
+        | mpsGeneric mps = ConT ''BackendKey `AppT` backendT
+        | otherwise      = ConT ''BackendKey `AppT` mpsBackend mps
+    idKeyVar ft = (unKeyName t, NotStrict, ft)
+    primaryKeyVar fd = ( keyFieldName mps t fd
+                       , NotStrict
+                       , ftToType $ fieldType fd
+                       )
+
+keyFieldName :: MkPersistSettings -> EntityDef -> FieldDef -> Name
+keyFieldName mps t fd
+  | pkNewtype mps t = unKeyName t
+  | otherwise = mkName $ unpack
+    $ lowerFirst (keyText t) `mappend` (unHaskellName $ fieldHaskell fd)
 
 mkKeyToValues :: MkPersistSettings -> EntityDef -> Q Dec
-mkKeyToValues _mps t = do
+mkKeyToValues mps t = do
     (p, e) <- case entityPrimary t of
         Nothing  ->
           ([],) <$> [|(:[]) . toPersistValue . $(return $ unKeyExp t)|]
@@ -820,7 +833,7 @@ mkKeyToValues _mps t = do
   where
     toValuesPrimary pdef =
       ( [VarP recordName]
-      , ListE $ map (\fd -> VarE 'toPersistValue `AppE` (VarE (keyFieldName t fd) `AppE` VarE recordName)) $ compositeFields pdef
+      , ListE $ map (\fd -> VarE 'toPersistValue `AppE` (VarE (keyFieldName mps t fd) `AppE` VarE recordName)) $ compositeFields pdef
       )
     recordName = mkName "record"
 
@@ -881,7 +894,7 @@ mkEntity mps t = do
     t' <- lift t
     let nameT = unHaskellName entName
     let nameS = unpack nameT
-    let clazz = ConT ''PersistEntity `AppT` genericDataType mps entName backendT
+    let clazz = ConT ''PersistEntity `AppT` genDataType
     tpf <- mkToPersistFields mps nameS t
     fpv <- mkFromPersistValues mps t
     utv <- mkUniqueToValues $ entityUniques t
