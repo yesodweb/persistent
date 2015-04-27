@@ -2,10 +2,13 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Database.Persist.Sql.Orphan.PersistUnique () where
 
+import Control.Exception (throwIO)
+import Control.Monad.IO.Class (liftIO)
 import Database.Persist
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
+import Database.Persist.Sql.Util (dbColumns, parseEntityValues)
 import qualified Data.Text as T
 import Data.Monoid (mappend)
 import qualified Data.Conduit.List as CL
@@ -30,31 +33,23 @@ instance PersistUnique SqlBackend where
 
     getBy uniq = do
         conn <- ask
-        let flds = map (connEscapeName conn . fieldDB) (entityFields t)
-        let cols = case entityPrimary t of
-                     Just _ -> T.intercalate "," flds
-                     Nothing -> T.intercalate "," $ connEscapeName conn (fieldDB (entityId t)) : flds
         let sql = T.concat
                 [ "SELECT "
-                , cols
+                , T.intercalate "," $ dbColumns conn t
                 , " FROM "
                 , connEscapeName conn $ entityDB t
                 , " WHERE "
                 , sqlClause conn
                 ]
-            vals' = persistUniqueToValues uniq
-        withRawQuery sql vals' $ do
+            uvals = persistUniqueToValues uniq
+        withRawQuery sql uvals $ do
             row <- CL.head
             case row of
                 Nothing -> return Nothing
                 Just [] -> error "getBy: empty row"
-                Just (kpv:vals) ->
-                    case fromPersistValues vals of
-                        Left s -> error $ T.unpack s
-                        Right x ->
-                            case keyFromValues [kpv] of
-                                Right k -> return $ Just (Entity k x)
-                                Left _ -> error $ "getBy: keyFromValues failed: " `mappend` show kpv
+                Just vals -> case parseEntityValues t vals of
+                    Left err -> liftIO $ throwIO $ PersistMarshalError err
+                    Right r -> return $ Just r
       where
         sqlClause conn =
             T.intercalate " AND " $ map (go conn) $ toFieldNames' uniq

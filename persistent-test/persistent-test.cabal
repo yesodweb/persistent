@@ -67,6 +67,7 @@ library
                      SumTypeTest
                      MigrationOnlyTest
                      MigrationTest
+                     PersistUniqueTest
                      CompositeTest
                      Init
 

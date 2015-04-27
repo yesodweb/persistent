@@ -71,6 +71,7 @@ share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMig
       Primary name
       Foreign Tree fkparent parent
 #endif
+
   Citizen 
     name String
     age Int Maybe

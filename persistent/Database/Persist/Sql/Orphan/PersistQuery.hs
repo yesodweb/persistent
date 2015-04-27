@@ -14,6 +14,7 @@ import Database.Persist.Sql.Util (
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
+import Database.Persist.Sql.Util (dbIdColumns)
 import qualified Data.Text as T
 import Data.Text (Text)
 import Data.Monoid (Monoid (..), (<>))
@@ -86,9 +87,7 @@ instance PersistQuery SqlBackend where
         return $ fmap ($= CL.mapM parse) srcRes
       where
         t = entityDef $ dummyFromFilts filts
-        cols conn = case entityPrimary t of 
-                     Just pdef -> T.intercalate "," $ map (connEscapeName conn . fieldDB) $ compositeFields pdef
-                     Nothing   -> connEscapeName conn $ fieldDB (entityId t)
+        cols conn = T.intercalate "," $ dbIdColumns conn t
                       
 
         wher conn = if null filts
