@@ -204,19 +204,27 @@ instance Lift EmbedFieldDef where
     lift (EmbedFieldDef name em cyc) = [|EmbedFieldDef name em cyc|]
 
 type EntityMap = M.Map HaskellName EmbedEntityDef
-mEmbedded :: EntityMap -> FieldType -> Maybe EmbedEntityDef
-mEmbedded _ (FTTypeCon Just{} _) = Nothing
+
+data FTTypeConDescr = FTKeyCon
+mEmbedded :: EntityMap -> FieldType -> Either (Maybe FTTypeConDescr) EmbedEntityDef
+mEmbedded _ (FTTypeCon Just{} _) = Left Nothing
 mEmbedded ents (FTTypeCon Nothing n) = let name = HaskellName n in
-    M.lookup name ents
+    maybe (Left Nothing) Right $ M.lookup name ents
 mEmbedded ents (FTList x) = mEmbedded ents x
-mEmbedded ents (FTApp x y) = maybe (mEmbedded ents y) Just (mEmbedded ents x)
+mEmbedded ents (FTApp x y) =
+  -- Key convets an Record to a RecordId
+  -- special casing this is obviously a hack
+  -- This problem may not be solvable with the current QuasiQuoted approach though
+  if x == FTTypeCon Nothing "Key"
+    then Left $ Just FTKeyCon
+    else mEmbedded ents y
 
 setEmbedField :: HaskellName -> EntityMap -> FieldDef -> FieldDef
 setEmbedField entName allEntities field = field
   { fieldReference = case fieldReference field of
       NoReference ->
         case mEmbedded allEntities (fieldType field) of
-            Nothing -> case stripId $ fieldType field of
+            Left _ -> case stripId $ fieldType field of
                 Nothing -> NoReference
                 Just name -> if M.member (HaskellName name) allEntities
                     then ForeignRef (HaskellName name)
@@ -224,7 +232,7 @@ setEmbedField entName allEntities field = field
                                     -- but we shouldn't need this anyway
                                     (FTTypeCon Nothing $ pack $ nameBase ''Int)
                     else NoReference
-            Just em -> if embeddedHaskell em /= entName
+            Right em -> if embeddedHaskell em /= entName
               then EmbedRef em
               else if maybeNullable field
                      then SelfReference
@@ -245,9 +253,10 @@ mkEntityDefSqlTypeExp allEntities ent = EntityDefSqlTypeExp ent
 
     -- In the case of embedding, there won't be any datatype created yet.
     -- We just use SqlString, as the data will be serialized to JSON.
-    defaultSqlTypeExp field
-        | isJust (mEmbedded allEntities ftype) = SqlType' SqlString
-        | otherwise = case fieldReference field of
+    defaultSqlTypeExp field = case mEmbedded allEntities ftype of
+        Right _ -> SqlType' SqlString
+        Left (Just FTKeyCon) -> SqlType' SqlString
+        Left Nothing -> case fieldReference field of
             ForeignRef _ ft  -> SqlTypeExp ft
             CompositeRef _  -> SqlType' $ SqlOther "Composite Reference"
             _ -> case ftype of
