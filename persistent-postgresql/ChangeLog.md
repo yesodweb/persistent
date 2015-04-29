@@ -1,3 +1,7 @@
+## 2.1.5
+
+* Allow timestamp value in database to be serialized (presumes UTC timezone) [Yesod #391](https://github.com/yesodweb/persistent/issues/391)
+
 ## 2.1.4
 
 * Treat unknown extension types as PersistDbSpecific values [#385](https://github.com/yesodweb/persistent/pull/385)
