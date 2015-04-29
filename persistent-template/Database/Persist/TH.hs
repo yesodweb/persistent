@@ -105,16 +105,43 @@ persistFileWith ps fp = do
 -- afterwards, sets references to other entities
 parseReferences :: PersistSettings -> Text -> Q Exp
 parseReferences ps s = lift $
-     map (mkEntityDefSqlTypeExp entityMap) entsWithEmbeds
+     map (mkEntityDefSqlTypeExp entityMap . breakCycleEnt) entsWithEmbeds
   where
     -- every EntityDef could reference each-other (as an EmbedRef)
     -- let Haskell tie the knot
     entityMap = M.fromList $ map (\ent -> (entityHaskell ent, toEmbedEntityDef ent)) entsWithEmbeds
     entsWithEmbeds = map setEmbedEntity rawEnts
     setEmbedEntity ent = ent
-      { entityFields = map (setEmbedField entityMap) $ entityFields ent
+      { entityFields = map (setEmbedField (entityHaskell ent) entityMap) $ entityFields ent
       }
     rawEnts = parse ps s
+
+    -- self references are already broken
+    -- look at every emFieldEmbed to see if it refers to an already seen HaskellName
+    -- so start with entityHaskell ent and accumulate embeddedHaskell em
+    breakCycleEnt entDef =
+      let entName = entityHaskell entDef
+      in  entDef { entityFields = map (breakCycleField entName) $ entityFields entDef }
+
+    breakCycleField entName f@(FieldDef { fieldReference = EmbedRef em }) =
+      f { fieldReference = EmbedRef $ breakCycleEmbed [entName] em }
+    breakCycleField _ f = f
+
+    breakCycleEmbed ancestors em =
+        em { embeddedFields = map (breakCycleEmField $ emName : ancestors)
+                                  (embeddedFields em)
+           }
+      where
+        emName = embeddedHaskell em
+
+    breakCycleEmField ancestors emf = case embeddedHaskell <$> membed of
+        Nothing -> emf
+        Just embName -> if embName `elem` ancestors
+          then emf { emFieldEmbed = Nothing, emFieldCycle = Just embName }
+          else emf { emFieldEmbed = breakCycleEmbed ancestors <$> membed }
+      where
+        membed = emFieldEmbed emf
+
 
 
 stripId :: FieldType -> Maybe Text
@@ -168,34 +195,48 @@ instance Lift ReferenceDef where
     lift (ForeignRef name ft) = [|ForeignRef name ft|]
     lift (EmbedRef em) = [|EmbedRef em|]
     lift (CompositeRef cdef) = [|CompositeRef cdef|]
+    lift (SelfReference) = [|SelfReference|]
 
 instance Lift EmbedEntityDef where
     lift (EmbedEntityDef name fields) = [|EmbedEntityDef name fields|]
 
 instance Lift EmbedFieldDef where
-    lift (EmbedFieldDef name em) = [|EmbedFieldDef name em|]
+    lift (EmbedFieldDef name em cyc) = [|EmbedFieldDef name em cyc|]
 
 type EntityMap = M.Map HaskellName EmbedEntityDef
-mEmbedded :: EntityMap -> FieldType -> Maybe EmbedEntityDef
-mEmbedded _ (FTTypeCon Just{} _) = Nothing
-mEmbedded ents (FTTypeCon Nothing n) = let name = HaskellName n in
-    M.lookup name ents
-mEmbedded ents (FTList x) = mEmbedded ents x
-mEmbedded ents (FTApp x y) = maybe (mEmbedded ents y) Just (mEmbedded ents x)
 
-setEmbedField :: EntityMap -> FieldDef -> FieldDef
-setEmbedField allEntities field = field
+data FTTypeConDescr = FTKeyCon
+mEmbedded :: EntityMap -> FieldType -> Either (Maybe FTTypeConDescr) EmbedEntityDef
+mEmbedded _ (FTTypeCon Just{} _) = Left Nothing
+mEmbedded ents (FTTypeCon Nothing n) = let name = HaskellName n in
+    maybe (Left Nothing) Right $ M.lookup name ents
+mEmbedded ents (FTList x) = mEmbedded ents x
+mEmbedded ents (FTApp x y) =
+  -- Key convets an Record to a RecordId
+  -- special casing this is obviously a hack
+  -- This problem may not be solvable with the current QuasiQuoted approach though
+  if x == FTTypeCon Nothing "Key"
+    then Left $ Just FTKeyCon
+    else mEmbedded ents y
+
+setEmbedField :: HaskellName -> EntityMap -> FieldDef -> FieldDef
+setEmbedField entName allEntities field = field
   { fieldReference = case fieldReference field of
-      NoReference -> case mEmbedded allEntities (fieldType field) of
-          Nothing -> case stripId $ fieldType field of
-              Nothing -> NoReference
-              Just name -> if M.member (HaskellName name) allEntities
-                  then ForeignRef (HaskellName name)
-                                  -- the EmebedEntityDef does not contain FieldType information
-                                  -- but we shouldn't need this anyway
-                                  (FTTypeCon Nothing $ pack $ nameBase ''Int)
-                  else NoReference
-          Just em -> EmbedRef em
+      NoReference ->
+        case mEmbedded allEntities (fieldType field) of
+            Left _ -> case stripId $ fieldType field of
+                Nothing -> NoReference
+                Just name -> if M.member (HaskellName name) allEntities
+                    then ForeignRef (HaskellName name)
+                                    -- the EmebedEntityDef does not contain FieldType information
+                                    -- but we shouldn't need this anyway
+                                    (FTTypeCon Nothing $ pack $ nameBase ''Int)
+                    else NoReference
+            Right em -> if embeddedHaskell em /= entName
+              then EmbedRef em
+              else if maybeNullable field
+                     then SelfReference
+                     else error $ unpack $ unHaskellName entName `mappend` ": a self reference must be a Maybe"
       existing@_   -> existing
   }
 
@@ -212,9 +253,10 @@ mkEntityDefSqlTypeExp allEntities ent = EntityDefSqlTypeExp ent
 
     -- In the case of embedding, there won't be any datatype created yet.
     -- We just use SqlString, as the data will be serialized to JSON.
-    defaultSqlTypeExp field
-        | isJust (mEmbedded allEntities ftype) = SqlType' SqlString
-        | otherwise = case fieldReference field of
+    defaultSqlTypeExp field = case mEmbedded allEntities ftype of
+        Right _ -> SqlType' SqlString
+        Left (Just FTKeyCon) -> SqlType' SqlString
+        Left Nothing -> case fieldReference field of
             ForeignRef _ ft  -> SqlTypeExp ft
             CompositeRef _  -> SqlType' $ SqlOther "Composite Reference"
             _ -> case ftype of

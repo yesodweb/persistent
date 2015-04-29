@@ -1,10 +1,10 @@
 # build the image
 #
-#     sudo docker build -t persistent .
+#     docker build -t persistent .
 #
 # run the image with the directory mounted
 #
-#     sudo docker run --name persistent --link mongodb:mongodb -v `pwd`:/home/haskell -t -i persistent /bin/bash
+#     docker run --name persistent --link mongodb:mongodb -v `pwd`:/home/haskell -t -i persistent /bin/bash
 #
 # Note the above usage of a link
 # For databases besides sqlite, you should find a docker containter and link it
@@ -13,24 +13,28 @@
 # Once in the image you should install persistent dependencies (sandbox is optional)
 # RUN cd persistent-test && cabal sandbox init && cabal install --only-dep
 
-FROM zsol/haskell-platform-2014.2.0.0
+FROM haskell:7.10
 MAINTAINER Greg Weber
 
-RUN sudo apt-get update
+RUN apt-get update && apt-get install sudo && \
+    # Sqlite
+    apt-get install -y sqlite3 libsqlite3-dev && \
 
-# Sqlite
-RUN sudo apt-get install -y sqlite3 libsqlite3-dev
+    # Postgres
+    apt-get install -y postgresql-client libpq-dev && \
 
-# Postgres
-RUN sudo apt-get install -y postgresql-client libpq-dev
+    # MySQL
+    apt-get install -y libpcre3-dev libmysqlclient-dev && \
 
-# MySQL 
-RUN sudo apt-get install -y libpcre3-dev libmysqlclient-dev
+    apt-get clean
+
+ENV LC_ALL   C.UTF-8
+ENV LANGUAGE C.UTF-8
+
+RUN useradd -m -d /home/haskell -s /bin/bash haskell
+RUN mkdir -p /etc/sudoers.d && echo "haskell ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/haskell && chmod 0440 /etc/sudoers.d/haskell
+ENV HOME /home/haskell
+WORKDIR /home/haskell
+USER haskell
 
 ENV PATH .cabal-sandbox/bin:.cabal/bin:$PATH:./
-RUN sudo apt-get install -y locales && \
-    sudo mkdir -p /var/lib/locales/supported.d && \
-    sudo sh -c 'echo "en_US.UTF-8 UTF-8" >> /var/lib/locales/supported.d/local' && \
-    sudo dpkg-reconfigure locales && \
-    sudo update-locale LANG="en_US.UTF-8 UTF-8"
-ENV LANG C.UTF-8

@@ -10,6 +10,7 @@ import qualified EmbedTest
 import qualified EmbedOrderTest
 import qualified LargeNumberTest
 import qualified MaxLenTest
+import qualified Recursive
 import qualified SumTypeTest
 import qualified UniqueTest
 import qualified MigrationTest
@@ -54,6 +55,7 @@ main = do
       , LargeNumberTest.numberMigrate
       , UniqueTest.uniqueMigrate
       , MaxLenTest.maxlenMigrate
+      , Recursive.recursiveMigrate
       , CompositeTest.compositeMigrate
       , MigrationTest.migrationMigrate
       ]
@@ -69,6 +71,7 @@ main = do
     LargeNumberTest.specs
     UniqueTest.specs
     MaxLenTest.specs
+    Recursive.specs
     SumTypeTest.specs
     MigrationOnlyTest.specs
     PersistentTest.specs
