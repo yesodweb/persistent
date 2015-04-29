@@ -65,6 +65,8 @@ import Data.Acquire (Acquire, mkAcquire, with)
 import System.Environment (getEnvironment)
 import Data.Int (Int64)
 import Data.Monoid ((<>))
+import Data.Time (utc, localTimeToUTC)
+
 -- | A @libpq@ connection string.  A simple example of connection
 -- string would be @\"host=localhost port=5432 user=test
 -- dbname=test password=test\"@.  Please read libpq's
@@ -314,7 +316,7 @@ builtinGetters = I.fromList
     , (k PS.varchar,     convertPV PersistText)
     , (k PS.date,        convertPV PersistDay)
     , (k PS.time,        convertPV PersistTimeOfDay)
-    , (k PS.timestamp,   convertPV PersistUTCTime)
+    , (k PS.timestamp,   convertPV (PersistUTCTime. localTimeToUTC utc))
     , (k PS.timestamptz, convertPV PersistUTCTime)
     , (k PS.bit,         convertPV PersistInt64)
     , (k PS.varbit,      convertPV PersistInt64)
