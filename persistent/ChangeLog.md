@@ -1,3 +1,11 @@
+## 2.1.4
+
+* Fix getBy with a primary key. #342
+
+## 2.1.3
+
+* Break self-referencing cycles in the entity declarations
+
 ## 2.1.2
 
 * Error with `Double`s without a decimal part [#378](https://github.com/yesodweb/persistent/issues/378)
