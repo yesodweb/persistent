@@ -5,6 +5,8 @@ module Database.Persist.Sql.Util (
   , entityColumnCount
   , isIdField
   , hasCompositeKey
+  , dbIdColumns
+  , dbColumns
 ) where
 
 import Data.Maybe (isJust)
@@ -31,6 +33,19 @@ entityColumnCount e = length (entityFields e)
 
 hasCompositeKey :: EntityDef -> Bool
 hasCompositeKey = isJust . entityPrimary
+
+dbIdColumns :: SqlBackend -> EntityDef -> [Text]
+dbIdColumns conn t = case entityPrimary t of
+    Just pdef -> map (connEscapeName conn . fieldDB) $ compositeFields pdef
+    Nothing   -> [connEscapeName conn $ fieldDB (entityId t)]
+
+dbColumns :: SqlBackend -> EntityDef -> [Text]
+dbColumns conn t = case entityPrimary t of
+    Just _  -> flds      
+    Nothing -> escapeDB (entityId t) : flds
+  where
+    escapeDB = connEscapeName conn . fieldDB
+    flds = map escapeDB (entityFields t)
 
 parseEntityValues :: PersistEntity record
                   => EntityDef -> [PersistValue] -> Either Text (Entity record)
@@ -64,4 +79,3 @@ parseEntityValues t vals =
 
 isIdField :: PersistEntity record => EntityField record typ -> Bool
 isIdField f = fieldHaskell (persistFieldDef f) == HaskellName "Id"
-

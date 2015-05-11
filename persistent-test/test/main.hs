@@ -15,6 +15,7 @@ import qualified SumTypeTest
 import qualified UniqueTest
 import qualified MigrationTest
 import qualified MigrationOnlyTest
+import qualified PersistUniqueTest
 import qualified CompositeTest
 import Test.Hspec (hspec)
 import Test.Hspec.Runner
@@ -58,6 +59,7 @@ main = do
       , Recursive.recursiveMigrate
       , CompositeTest.compositeMigrate
       , MigrationTest.migrationMigrate
+      , PersistUniqueTest.migration
       ]
     PersistentTest.cleanDB
 #endif
@@ -77,6 +79,7 @@ main = do
     PersistentTest.specs
     EmptyEntityTest.specs
     CompositeTest.specs
+    PersistUniqueTest.specs
 
 #ifndef WITH_NOSQL
     MigrationTest.specs
