@@ -178,7 +178,7 @@ library
      exposed-modules:
                      Database.Persist.Postgresql
 
-     cpp-options: -DWITH_POSTGRESQL
+     cpp-options: -DWITH_POSTGRESQL -DDEBUG
 
 
    if flag(mysql)

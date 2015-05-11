@@ -87,6 +87,7 @@ import Control.Monad (liftM)
 import Database.Persist.Sql
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import Control.Monad.Logger
+import System.Log.FastLogger (fromLogStr)
 
 #  if WITH_POSTGRESQL
 import Database.Persist.Postgresql
@@ -210,8 +211,12 @@ type BackendMonad = SqlBackend
 sqlite_database :: Text
 sqlite_database = "test/testdb.sqlite3"
 -- sqlite_database = ":memory:"
-runConn :: (MonadIO m, MonadBaseControl IO m) => SqlPersistT (NoLoggingT m) t -> m ()
-runConn f = runNoLoggingT $ do
+runConn :: (MonadIO m, MonadBaseControl IO m) => SqlPersistT (LoggingT m) t -> m ()
+#ifdef DEBUG
+runConn f = flip runLoggingT (\_ _ _ s -> print $ fromLogStr s) $ do
+#else
+runConn f = flip runLoggingT (\_ _ _ s -> return ()) $ do
+#endif
 #  if WITH_POSTGRESQL
     travis <- liftIO isTravis
     _ <- if travis
@@ -241,7 +246,7 @@ runConn f = runNoLoggingT $ do
 #  endif
     return ()
 
-db :: SqlPersistT (NoLoggingT (ResourceT IO)) () -> Assertion
+db :: SqlPersistT (LoggingT (ResourceT IO)) () -> Assertion
 db actions = do
   runResourceT $ runConn $ actions >> transactionUndo
 
