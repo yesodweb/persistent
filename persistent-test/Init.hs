@@ -54,10 +54,12 @@ import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLow
 import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
 import Test.QuickCheck
 
+import Control.Applicative ((<$>))
 import Database.Persist
 import Database.Persist.TH ()
 import Data.Text (Text, unpack)
 import Data.Maybe (fromMaybe)
+import Data.Monoid (mappend)
 import System.Environment (getEnvironment)
 import qualified Data.ByteString as BS
 
