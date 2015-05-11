@@ -57,12 +57,13 @@ import Test.QuickCheck
 import Database.Persist
 import Database.Persist.TH ()
 import Data.Text (Text, unpack)
+import Data.Maybe (fromMaybe)
 import System.Environment (getEnvironment)
+import qualified Data.ByteString as BS
 
 #ifdef WITH_NOSQL
 import Language.Haskell.TH.Syntax (Type(..))
 import Database.Persist.TH (mkPersistSettings)
-import qualified Data.ByteString as BS
 
 import Control.Monad (void, replicateM, liftM)
 
@@ -155,6 +156,13 @@ isTravis = do
     Just "true" -> True
     _ -> False
 
+dockerPg :: IO (Maybe BS.ByteString)
+dockerPg = do
+  env <- liftIO getEnvironment
+  return $ case lookup "POSTGRES_NAME" env of
+    Just n -> Just "postgres" -- /persistent/postgres
+    _ -> Nothing
+
 #ifdef WITH_NOSQL
 persistSettings :: MkPersistSettings
 persistSettings = (mkPersistSettings $ ConT ''Context) { mpsGeneric = True }
@@ -206,7 +214,9 @@ runConn f = runNoLoggingT $ do
     travis <- liftIO isTravis
     _ <- if travis
       then withPostgresqlPool "host=localhost port=5432 user=postgres dbname=persistent" 1 $ runSqlPool f
-      else withPostgresqlPool "host=localhost port=5432 user=test dbname=test password=test" 1 $ runSqlPool f
+      else do
+        host <- fromMaybe "localhost" <$> liftIO dockerPg
+        withPostgresqlPool ("host=" `mappend` host `mappend` " port=5432 user=postgres dbname=test") 1 $ runSqlPool f
 #  else
 #    if WITH_MYSQL
     travis <- liftIO isTravis
