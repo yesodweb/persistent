@@ -17,7 +17,7 @@ share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "migration"] 
       bar Int
       Primary foo
       UniqueBar bar
-      deriving Show
+      deriving Eq Show
 |]
 #ifdef WITH_NOSQL
 cleanDB :: (MonadIO m, PersistQuery backend, PersistEntityBackend Fo ~ backend) => ReaderT backend m ()
@@ -34,9 +34,9 @@ specs = describe "custom primary key" $ do
   return ()
 #else
   it "getBy" $ db $ do
-    k <- insert $ Fo 3 5
-    test <- get k -- works
-    liftIO $ print test
-    _ <- getBy (UniqueBar 5) -- exception
-    return ()
+    let b = 5
+    k <- insert $ Fo 3 b
+    Just vk <- get k
+    Just vu <- getBy (UniqueBar b)
+    vu @== Entity k vk
 #endif
