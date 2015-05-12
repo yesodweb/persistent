@@ -6,8 +6,10 @@ module RenameTest (specs) where
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import Control.Monad.Trans.Resource (runResourceT)
+#else
+import Data.Time (getCurrentTime)
 #endif
-import Data.Time (Day, UTCTime(..), getCurrentTime)
+import Data.Time (Day, UTCTime(..))
 import qualified Data.Map as Map
 import qualified Data.Text as T
 import Data.Aeson

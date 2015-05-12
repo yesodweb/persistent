@@ -70,6 +70,7 @@ library
                      PersistUniqueTest
                      CompositeTest
                      Init
+                     PrimaryTest
 
                      Database.Persist
                      Database.Persist.Quasi

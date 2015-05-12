@@ -2,9 +2,6 @@
 module PersistUniqueTest where
 
 import Init
-#ifndef WITH_NOSQL
-import Control.Monad (void)
-#endif
 
 -- mpsGeneric = False is due to a bug or at least lack of a feature in mkKeyTypeDec TH.hs
 #if WITH_NOSQL
