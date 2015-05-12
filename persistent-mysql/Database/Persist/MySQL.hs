@@ -20,6 +20,7 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Error (ErrorT(..))
 import Data.Aeson
+import Data.Aeson.Types (modifyFailure)
 import Data.ByteString (ByteString)
 import Data.Either (partitionEithers)
 import Data.Fixed (Pico)
@@ -810,7 +811,8 @@ data MySQLConf = MySQLConf
     } deriving Show
 
 instance FromJSON MySQLConf where
-    parseJSON = withObject "MySQLConf" $ \o -> do
+    parseJSON v = modifyFailure ("Persistent: error loadomg MySQL conf: " ++) $
+      flip (withObject "MySQLConf") v $ \o -> do
         database <- o .: "database"
         host     <- o .: "host"
         port     <- o .: "port"

@@ -32,6 +32,7 @@ import Data.Acquire (Acquire, mkAcquire, with)
 import qualified Control.Exception as E
 import Data.Text (Text)
 import Data.Aeson
+import Data.Aeson.Types (modifyFailure)
 import qualified Data.Text as T
 import Data.Conduit
 import qualified Data.Conduit.List as CL
@@ -375,7 +376,8 @@ data SqliteConf = SqliteConf
     } deriving Show
 
 instance FromJSON SqliteConf where
-    parseJSON = withObject "SqliteConf" $ \o -> SqliteConf
+    parseJSON v = modifyFailure ("Persistent: error loadomg Sqlite conf: " ++) $
+      flip (withObject "SqliteConf") v $ \o -> SqliteConf
         <$> o .: "database"
         <*> o .: "poolsize"
 instance PersistConfig SqliteConf where

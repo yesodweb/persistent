@@ -134,6 +134,7 @@ import Web.PathPieces (PathPiece (..))
 import Data.Conduit
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value (Number), (.:), (.:?), (.!=), FromJSON(..), ToJSON(..), withText, withObject)
+import Data.Aeson.Types (modifyFailure)
 import Control.Monad (liftM, (>=>), forM_)
 import qualified Data.Pool as Pool
 import Data.Time (NominalDiffTime)
@@ -1118,7 +1119,8 @@ data ReplicaSetConfig = ReplicaSetConfig DB.ReplicaSetName [DB.Host]
     deriving Show
 
 instance FromJSON MongoConf where
-    parseJSON = withObject "MongoConf" $ \o ->do
+    parseJSON v = modifyFailure ("Persistent: error loadomg MongoDB conf: " ++) $
+      flip (withObject "MongoConf") v $ \o ->do
         db                  <- o .:  "database"
         host                <- o .:? "host" .!= defaultHost
         NoOrphanPortID port <- o .:? "port" .!= NoOrphanPortID DB.defaultPort

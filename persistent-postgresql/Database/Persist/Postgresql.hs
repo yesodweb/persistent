@@ -60,6 +60,7 @@ import qualified Blaze.ByteString.Builder.Char8 as BBB
 
 import Data.Text (Text)
 import Data.Aeson
+import Data.Aeson.Types (modifyFailure)
 import Control.Monad (forM, mzero)
 import Data.Acquire (Acquire, mkAcquire, with)
 import System.Environment (getEnvironment)
@@ -870,7 +871,8 @@ data PostgresConf = PostgresConf
     } deriving Show
 
 instance FromJSON PostgresConf where
-    parseJSON = withObject "PostgresConf" $ \o -> do
+    parseJSON v = modifyFailure ("Persistent: error loadomg PostgreSQL conf: " ++) $
+      flip (withObject "PostgresConf") v $ \o -> do
         database <- o .: "database"
         host     <- o .: "host"
         port     <- o .:? "port" .!= 5432
