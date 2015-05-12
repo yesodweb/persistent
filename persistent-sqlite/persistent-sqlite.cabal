@@ -1,5 +1,5 @@
 name:            persistent-sqlite
-version:         2.1.4.1
+version:         2.1.4.2
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -29,7 +29,7 @@ library
                    , monad-control           >= 0.2
                    , containers              >= 0.2
                    , text                    >= 0.7
-                   , aeson                   >= 0.5
+                   , aeson                   >= 0.6.2
                    , conduit                 >= 0.5.3
                    , monad-logger            >= 0.2.4
                    , resourcet               >= 1.1
