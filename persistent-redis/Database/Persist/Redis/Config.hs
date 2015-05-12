@@ -48,11 +48,11 @@ data RedisConf = RedisConf {
 
 instance FromJSON R.PortID where
     parseJSON (Number x) = (return . R.PortNumber . fromInteger . truncate) x
-    parseJSON _ = fail "couldn't parse port number"
+    parseJSON _ = fail "persistent Redis: couldn't parse port number"
 
 instance FromJSON RedisAuth where
     parseJSON (String t) = (return . RedisAuth) t
-    parseJSON _ = fail "couldn't parse auth"
+    parseJSON _ = fail "persistent ResisAuth: couldn't parse auth"
 
 -- | Monad reader transformer keeping Redis connection through out the work
 type RedisT = ReaderT R.Connection

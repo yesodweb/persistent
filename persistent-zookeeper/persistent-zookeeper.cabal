@@ -22,7 +22,7 @@ library
                    , persistent-template
                    , template-haskell
                    , text                  >= 0.8
-                   , aeson                 >= 0.5
+                   , aeson                 >= 0.6.2
                    , time                  >= 1.4      && < 1.5
                    , attoparsec
                    , mtl
@@ -65,7 +65,7 @@ test-suite  basic
                    , transformers-base
                    , bytestring            >= 0.10.0.0 && < 0.11.0.0
                    , text                  >= 0.8
-                   , aeson                 >= 0.5
+                   , aeson                 >= 0.6.2
                    , binary                >= 0.7      && < 0.8
                    , time                  >= 1.4      && < 1.5
                    , attoparsec

@@ -39,10 +39,11 @@ instance A.ToJSON (BackendKey Z.Zookeeper) where
     toJSON (ZooKey key) = A.toJSON $ "z" <> key
 
 instance A.FromJSON (BackendKey Z.Zookeeper) where
-    parseJSON = A.withText "ZooKey" $ \t ->
-      case T.uncons t of
-        Just ('z', prefixed) -> return $ ZooKey prefixed
-        _ -> (fail "Invalid json for zookey")
+    parseJSON v = modifyFailure ("Persistent: error loadomg Zookeeper conf: " ++) $
+      flip (A.withText "ZooKey") v $ \t ->
+        case T.uncons t of
+          Just ('z', prefixed) -> return $ ZooKey prefixed
+          _ -> (fail "Invalid json for zookey")
 
 
 deleteRecursive :: (Monad m, MonadIO m) => String -> Action m ()
