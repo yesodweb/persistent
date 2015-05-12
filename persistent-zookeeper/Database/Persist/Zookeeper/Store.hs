@@ -21,6 +21,7 @@ import Database.Persist.Zookeeper.ZooUtil
 import Control.Monad
 import Control.Monad.Reader
 import qualified Data.Aeson as A
+import qualified Data.Aeson.Types as A
 
 import Web.PathPieces (PathPiece (..))
 
@@ -39,7 +40,7 @@ instance A.ToJSON (BackendKey Z.Zookeeper) where
     toJSON (ZooKey key) = A.toJSON $ "z" <> key
 
 instance A.FromJSON (BackendKey Z.Zookeeper) where
-    parseJSON v = modifyFailure ("Persistent: error loadomg Zookeeper conf: " ++) $
+    parseJSON v = A.modifyFailure ("Persistent: error loadomg Zookeeper conf: " ++) $
       flip (A.withText "ZooKey") v $ \t ->
         case T.uncons t of
           Just ('z', prefixed) -> return $ ZooKey prefixed
