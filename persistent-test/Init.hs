@@ -54,12 +54,9 @@ import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLow
 import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
 import Test.QuickCheck
 
-import Control.Applicative ((<$>))
 import Database.Persist
 import Database.Persist.TH ()
 import Data.Text (Text, unpack)
-import Data.Maybe (fromMaybe)
-import Data.Monoid (mappend)
 import System.Environment (getEnvironment)
 import qualified Data.ByteString as BS
 
@@ -89,14 +86,17 @@ import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import Control.Monad.Logger
 import System.Log.FastLogger (fromLogStr)
 
-#  if WITH_POSTGRESQL
+#  ifdef WITH_POSTGRESQL
+import Control.Applicative ((<$>))
 import Database.Persist.Postgresql
+import Data.Maybe (fromMaybe)
+import Data.Monoid ((<>))
 #  else
 #    ifndef WITH_MYSQL
 import Database.Persist.Sqlite
 #    endif
 #  endif
-#  if WITH_MYSQL
+#  ifdef WITH_MYSQL
 import Database.Persist.MySQL
 #  endif
 import Data.IORef (newIORef, IORef, writeIORef, readIORef)
@@ -159,12 +159,14 @@ isTravis = do
     Just "true" -> True
     _ -> False
 
+#ifdef WITH_POSTGRESQL
 dockerPg :: IO (Maybe BS.ByteString)
 dockerPg = do
   env <- liftIO getEnvironment
   return $ case lookup "POSTGRES_NAME" env of
-    Just n -> Just "postgres" -- /persistent/postgres
+    Just _name -> Just "postgres" -- /persistent/postgres
     _ -> Nothing
+#endif
 
 #ifdef WITH_NOSQL
 persistSettings :: MkPersistSettings
@@ -217,15 +219,15 @@ runConn f = flip runLoggingT (\_ _ _ s -> print $ fromLogStr s) $ do
 #else
 runConn f = flip runLoggingT (\_ _ _ s -> return ()) $ do
 #endif
-#  if WITH_POSTGRESQL
+#  ifdef WITH_POSTGRESQL
     travis <- liftIO isTravis
     _ <- if travis
       then withPostgresqlPool "host=localhost port=5432 user=postgres dbname=persistent" 1 $ runSqlPool f
       else do
         host <- fromMaybe "localhost" <$> liftIO dockerPg
-        withPostgresqlPool ("host=" `mappend` host `mappend` " port=5432 user=postgres dbname=test") 1 $ runSqlPool f
+        withPostgresqlPool ("host=" <> host <> " port=5432 user=postgres dbname=test") 1 $ runSqlPool f
 #  else
-#    if WITH_MYSQL
+#    ifdef WITH_MYSQL
     travis <- liftIO isTravis
     _ <- if not travis
       then withMySQLPool defaultConnectInfo
