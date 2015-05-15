@@ -14,6 +14,12 @@ share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "migration"] 
     Primary name
   Bar
     quux FooId
+
+  Trees sql=trees
+    name String
+    parent String Maybe
+    Primary name
+    Foreign Trees fkparent parent
 |]
 #ifdef WITH_NOSQL
 cleanDB :: (MonadIO m, PersistQuery backend, PersistEntityBackend Foo ~ backend) => ReaderT backend m ()
