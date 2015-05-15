@@ -1,3 +1,8 @@
+## 2.1.5
+
+Add `dbIdColumnsEsc` to Sql.Utils.
+Used in persistent-postgresql 2.1.5.2
+
 ## 2.1.4
 
 * Fix getBy with a primary key. #342

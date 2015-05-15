@@ -1,3 +1,7 @@
+## 2.1.5.2
+
+Support foreign key references to composite primary keys #389
+
 ## 2.1.5
 
 * Allow timestamp value in database to be serialized (presumes UTC timezone) [Yesod #391](https://github.com/yesodweb/persistent/issues/391)
