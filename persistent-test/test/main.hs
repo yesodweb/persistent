@@ -61,9 +61,9 @@ main = do
       , CompositeTest.compositeMigrate
       , MigrationTest.migrationMigrate
       , PersistUniqueTest.migration
-#ifndef WITH_MYSQL
+#  ifndef WITH_MYSQL
       , PrimaryTest.migration
-#endif
+#  endif
       ]
     PersistentTest.cleanDB
 #endif
@@ -88,5 +88,4 @@ main = do
 
 #ifndef WITH_NOSQL
     MigrationTest.specs
-    PersistentTest.specs
 #endif
