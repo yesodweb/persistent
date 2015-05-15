@@ -1,5 +1,5 @@
 {-# LANGUAGE QuasiQuotes, TemplateHaskell, CPP, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, EmptyDataDecls, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses #-}
-module PersistUniqueTest where
+module PrimaryTest where
 
 import Init
 
@@ -9,31 +9,33 @@ mkPersist persistSettings { mpsGeneric = False } [persistUpperCase|
 #else
 share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "migration"] [persistLowerCase|
 #endif
-  Fo
-      foo Int
-      bar Int
-      Primary foo
-      UniqueBar bar
-      deriving Eq Show
+  Foo
+    name String
+    Primary name
+  Bar
+    quux FooId
 |]
 #ifdef WITH_NOSQL
-cleanDB :: (MonadIO m, PersistQuery backend, PersistEntityBackend Fo ~ backend) => ReaderT backend m ()
+cleanDB :: (MonadIO m, PersistQuery backend, PersistEntityBackend Foo ~ backend) => ReaderT backend m ()
 cleanDB = do
-  deleteWhere ([] :: [Filter Fo])
+  deleteWhere ([] :: [Filter Foo])
+  deleteWhere ([] :: [Filter Bar])
 
 db :: Action IO () -> Assertion
 db = db' cleanDB
 #endif
 
 specs :: Spec
-specs = describe "custom primary key" $ do
+specs = describe "primary key reference" $ do
 #ifdef WITH_NOSQL
   return ()
 #else
-  it "getBy" $ db $ do
-    let b = 5
-    k <- insert $ Fo 3 b
-    Just vk <- get k
-    Just vu <- getBy (UniqueBar b)
-    vu @== Entity k vk
+#  ifdef WITH_MYSQL
+  return ()
+#  else
+  it "insert a primary reference" $ db $ do
+    kf <- insert $ Foo "name"
+    kb <- insert $ Bar kf
+    return ()
+#  endif
 #endif

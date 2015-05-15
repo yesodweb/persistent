@@ -17,6 +17,7 @@ import qualified MigrationTest
 import qualified MigrationOnlyTest
 import qualified PersistUniqueTest
 import qualified CompositeTest
+import qualified PrimaryTest
 import Test.Hspec (hspec)
 import Test.Hspec.Runner
 import Init
@@ -60,6 +61,9 @@ main = do
       , CompositeTest.compositeMigrate
       , MigrationTest.migrationMigrate
       , PersistUniqueTest.migration
+#ifndef WITH_MYSQL
+      , PrimaryTest.migration
+#endif
       ]
     PersistentTest.cleanDB
 #endif
@@ -80,6 +84,7 @@ main = do
     EmptyEntityTest.specs
     CompositeTest.specs
     PersistUniqueTest.specs
+    PrimaryTest.specs
 
 #ifndef WITH_NOSQL
     MigrationTest.specs

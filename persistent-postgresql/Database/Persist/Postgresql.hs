@@ -22,6 +22,7 @@ module Database.Persist.Postgresql
     ) where
 
 import Database.Persist.Sql
+import Database.Persist.Sql.Util (dbIdColumnsEsc)
 import Data.Fixed (Pico)
 
 import qualified Database.PostgreSQL.Simple as PG
@@ -61,7 +62,7 @@ import qualified Blaze.ByteString.Builder.Char8 as BBB
 import Data.Text (Text)
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
-import Control.Monad (forM, mzero)
+import Control.Monad (forM)
 import Data.Acquire (Acquire, mkAcquire, with)
 import System.Environment (getEnvironment)
 import Data.Int (Int64)
@@ -364,7 +365,7 @@ builtinGetters = I.fromList
         listOf f = convertPV (PersistList . map f . PG.fromPGArray)
 
 getGetter :: PG.Connection -> PG.Oid -> Getter PersistValue
-getGetter conn oid
+getGetter _conn oid
   = fromMaybe defaultGetter $ I.lookup (PG.oid2int oid) builtinGetters
   where defaultGetter = convertPV (PersistDbSpecific . unUnknown)
 
@@ -427,7 +428,7 @@ migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
                             [AlterTable name $ AddUniqueConstraint uname ucols]
                         references = mapMaybe (\c@Column { cName=cname, cReference=Just (refTblName, _) } -> getAddReference allDefs name refTblName cname (cReference c)) $ filter (isJust . cReference) newcols
                         foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef))
-                                                    in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignConstraintNameDBName fdef) childfields parentfields)) fdefs
+                                                    in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignConstraintNameDBName fdef) childfields (map escape parentfields))) fdefs
                     return $ Right $ addTable : uniques ++ references ++ foreignsAlt
                 else do
                     let (acs, ats) = getAlters allDefs val (newcols, udspair) old'
@@ -441,7 +442,7 @@ type SafeToRemove = Bool
 data AlterColumn = Type SqlType Text
                  | IsNull | NotNull | Add' Column | Drop SafeToRemove
                  | Default Text | NoDefault | Update' Text
-                 | AddReference DBName [DBName] [DBName] | DropReference DBName
+                 | AddReference DBName [DBName] [Text] | DropReference DBName
 type AlterColumn' = (DBName, AlterColumn)
 
 data AlterTable = AddUniqueConstraint DBName [DBName]
@@ -644,9 +645,10 @@ findAlters defs _tablename col@(Column name isNull sqltype def _defConstraintNam
             let refDrop Nothing = []
                 refDrop (Just (_, cname)) = [(name, DropReference cname)]
                 refAdd Nothing = []
-                refAdd (Just (tname, a)) = case find ((==tname) . entityDB) defs of
-                                                Just refdef -> [(tname, AddReference a [name] [fieldDB (entityId refdef)])]
-                                                Nothing -> error $ "could not find the entityDef for reftable[" ++ show tname ++ "]"
+                refAdd (Just (tname, a)) =
+                    case find ((==tname) . entityDB) defs of
+                        Just refdef -> [(tname, AddReference a [name] (dbIdColumnsEsc escape refdef))]
+                        Nothing -> error $ "could not find the entityDef for reftable[" ++ show tname ++ "]"
                 modRef =
                     if fmap snd ref == fmap snd ref'
                         then []
@@ -685,12 +687,12 @@ getAddReference :: [EntityDef] -> DBName -> DBName -> DBName -> Maybe (DBName, D
 getAddReference allDefs table reftable cname ref =
     case ref of
         Nothing -> Nothing
-        Just (s, _) -> Just $ AlterColumn table (s, AddReference (refName table cname) [cname] [id_])
+        Just (s, _) -> Just $ AlterColumn table (s, AddReference (refName table cname) [cname] id_)
                           where
                             id_ = fromMaybe (error $ "Could not find ID of entity " ++ show reftable)
                                         $ do
                                           entDef <- find ((== reftable) . entityDB) allDefs
-                                          return (fieldDB (entityId entDef))
+                                          return $ dbIdColumnsEsc escape entDef
 
 
 showColumn :: Column -> Text
@@ -826,7 +828,7 @@ showAlter table (reftable, AddReference fkeyname t2 id2) = T.concat
     , ") REFERENCES "
     , escape reftable
     , "("
-    , T.intercalate "," $ map escape id2
+    , T.intercalate "," id2
     , ")"
     ]
 showAlter table (_, DropReference cname) = T.concat

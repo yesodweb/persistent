@@ -6,6 +6,7 @@ module Database.Persist.Sql.Util (
   , isIdField
   , hasCompositeKey
   , dbIdColumns
+  , dbIdColumnsEsc
   , dbColumns
 ) where
 
@@ -16,7 +17,8 @@ import Database.Persist (
     Entity(Entity), EntityDef, EntityField, HaskellName(HaskellName)
   , PersistEntity, PersistValue, PersistException(PersistMarshalError)
   , keyFromValues, fromPersistValues, fieldDB, entityId, entityPrimary
-  , entityFields, fieldHaskell, compositeFields, persistFieldDef)
+  , entityFields, fieldHaskell, compositeFields, persistFieldDef
+  , DBName)
 import Database.Persist.Sql.Types (Sql, SqlBackend, connEscapeName)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Exception (throwIO)
@@ -35,9 +37,12 @@ hasCompositeKey :: EntityDef -> Bool
 hasCompositeKey = isJust . entityPrimary
 
 dbIdColumns :: SqlBackend -> EntityDef -> [Text]
-dbIdColumns conn t = case entityPrimary t of
-    Just pdef -> map (connEscapeName conn . fieldDB) $ compositeFields pdef
-    Nothing   -> [connEscapeName conn $ fieldDB (entityId t)]
+dbIdColumns conn = dbIdColumnsEsc (connEscapeName conn)
+
+dbIdColumnsEsc :: (DBName -> Text) -> EntityDef -> [Text]
+dbIdColumnsEsc esc t = case entityPrimary t of
+    Just pdef -> map (esc . fieldDB) $ compositeFields pdef
+    Nothing   -> [esc $ fieldDB (entityId t)]
 
 dbColumns :: SqlBackend -> EntityDef -> [Text]
 dbColumns conn t = case entityPrimary t of
