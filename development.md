@@ -34,8 +34,9 @@ You can develop just against your preferred backend and the community should hel
 
 However, we have a Dockerfile that you can use to install all the databases.
 
-    sudo docker build -t persistent .
-    sudo docker run --name persistent -v `pwd`:/home/haskell -t -i persistent /bin/bash
+    docker build -t persistent .
+    docker run -d --name postgres postgres:9.3.5
+    docker run --link postgres:postgres --name persistent -v `pwd`:/home/haskell -t -i persistent /bin/bash
 
 This only works on Linux, but you can use Linux on Mac or Windows through Virtualbox.
 
