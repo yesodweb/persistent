@@ -1,12 +1,13 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans #-}
 {-# LANGUAGE QuasiQuotes, TemplateHaskell, CPP, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, EmptyDataDecls, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses #-}
-module RenameTest (specs) where
+module RenameTest where
 
 #ifndef WITH_NOSQL
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import Control.Monad.Trans.Resource (runResourceT)
-#else
+#endif
+#ifndef WITH_MYSQL
 import Data.Time (getCurrentTime)
 #endif
 import Data.Time (Day, UTCTime(..))
@@ -28,7 +29,7 @@ type TextId = Text
 #if WITH_NOSQL
 mkPersist persistSettings [persistUpperCase|
 #else
-share [mkPersist sqlSettings, mkMigrate "lowerCaseMigrate"] [persistLowerCase|
+share [mkPersist sqlSettings, mkMigrate "migration"] [persistLowerCase|
 #endif
 -- This just tests that a field can be named "key"
 KeyTable
@@ -71,14 +72,11 @@ specs = describe "rename specs" $ do
 #ifndef WITH_NOSQL
     it "handles lower casing" $ asIO $
         runConn $ do
-            _ <- runMigration lowerCaseMigrate
             runResourceT $ rawQuery "SELECT full_name from lower_case_table WHERE my_id=5" [] C.$$ CL.sinkNull
             runResourceT $ rawQuery "SELECT something_else from ref_table WHERE id=4" [] C.$$ CL.sinkNull
 #endif
 
--- also does not work on mysql
-#ifndef WITH_POSTGRESQL
-#  ifndef WITH_MYSQL
+#ifndef WITH_MYSQL
     it "user specified id, insertKey, no default=" $ db $ do
       let rec2 = IdTable "Foo2" Nothing
       let rec1 = IdTable "Foo1" $ Just rec2
@@ -89,14 +87,13 @@ specs = describe "rename specs" $ do
       Just rec' <- get key
       rec' @== rec
 
-#    ifndef WITH_NOSQL
+#  ifndef WITH_NOSQL
     -- this uses default=
     it "user specified id, default=" $ db $ do
       let rec = IdTable "Foo" Nothing
       k <- insert rec
       Just rec' <- get k
       rec' @== rec
-#    endif
 #  endif
 #endif
 

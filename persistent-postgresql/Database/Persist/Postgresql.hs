@@ -392,50 +392,76 @@ migrate' :: [EntityDef]
          -> (Text -> IO Statement)
          -> EntityDef
          -> IO (Either [Text] [(Bool, Text)])
-migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
-    let name = entityDB val
-    old <- getColumns getter val
+migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
+    old <- getColumns getter entity
     case partitionEithers old of
         ([], old'') -> do
-            let old' = partitionEithers old''
-            let (newcols', udefs, fdefs) = mkColumns allDefs val
-            let newcols = filter (not . safeToRemove val . cName) newcols'
-            let udspair = map udToPair udefs
-            -- Check for table existence if there are no columns, workaround
-            -- for https://github.com/yesodweb/persistent/issues/152
             exists <-
                 if null old
                     then doesTableExist getter name
                     else return True
-
-            if not exists
-                then do
-                    let idtxt = case entityPrimary val of
-                                  Just pdef -> T.concat [" PRIMARY KEY (", T.intercalate "," $ map (escape . fieldDB) $ compositeFields pdef, ")"]
-                                  Nothing   -> T.concat [escape $ fieldDB (entityId val)
-                                        , " SERIAL PRIMARY KEY UNIQUE"]
-                    let addTable = AddTable $ T.concat
-                            -- Lower case e: see Database.Persist.Sql.Migration
-                            [ "CREATe TABLE " -- DO NOT FIX THE CAPITALIZATION!
-                            , escape name
-                            , "("
-                            , idtxt
-                            , if null newcols then "" else ","
-                            , T.intercalate "," $ map showColumn newcols
-                            , ")"
-                            ]
-                    let uniques = flip concatMap udspair $ \(uname, ucols) ->
-                            [AlterTable name $ AddUniqueConstraint uname ucols]
-                        references = mapMaybe (\c@Column { cName=cname, cReference=Just (refTblName, _) } -> getAddReference allDefs name refTblName cname (cReference c)) $ filter (isJust . cReference) newcols
-                        foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef))
-                                                    in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignConstraintNameDBName fdef) childfields (map escape parentfields))) fdefs
-                    return $ Right $ addTable : uniques ++ references ++ foreignsAlt
-                else do
-                    let (acs, ats) = getAlters allDefs val (newcols, udspair) old'
-                    let acs' = map (AlterColumn name) acs
-                    let ats' = map (AlterTable name) ats
-                    return $ Right $ acs' ++ ats'
+            return $ Right $ migrationText exists old''
         (errs, _) -> return $ Left errs
+  where
+    name = entityDB entity
+    migrationText exists old'' =
+        if not exists
+            then createText newcols fdefs udspair
+            else let (acs, ats) = getAlters allDefs entity (newcols, udspair) old'
+                     acs' = map (AlterColumn name) acs
+                     ats' = map (AlterTable name) ats
+                 in  acs' ++ ats'
+       where
+         old' = partitionEithers old''
+         (newcols', udefs, fdefs) = mkColumns allDefs entity
+         newcols = filter (not . safeToRemove entity . cName) newcols'
+         udspair = map udToPair udefs
+            -- Check for table existence if there are no columns, workaround
+            -- for https://github.com/yesodweb/persistent/issues/152
+
+    createText newcols fdefs udspair =
+        addTable : uniques ++ references ++ foreignsAlt
+      where
+        addTable = AddTable $ T.concat
+                -- Lower case e: see Database.Persist.Sql.Migration
+                [ "CREATe TABLE " -- DO NOT FIX THE CAPITALIZATION!
+                , escape name
+                , "("
+                , idtxt
+                , if null newcols then "" else ","
+                , T.intercalate "," $ map showColumn newcols
+                , ")"
+                ]
+        uniques = flip concatMap udspair $ \(uname, ucols) ->
+                [AlterTable name $ AddUniqueConstraint uname ucols]
+        references = mapMaybe (\c@Column { cName=cname, cReference=Just (refTblName, _) } ->
+            getAddReference allDefs name refTblName cname (cReference c))
+                   $ filter (isJust . cReference) newcols
+        foreignsAlt = flip map fdefs (\fdef ->
+            let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef))
+            in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignConstraintNameDBName fdef) childfields (map escape parentfields)))
+
+    idtxt = case entityPrimary entity of
+                Just pdef -> T.concat [" PRIMARY KEY (", T.intercalate "," $ map (escape . fieldDB) $ compositeFields pdef, ")"]
+                Nothing   ->
+                    let defText = defaultAttribute $ fieldAttrs $ entityId entity
+                        sType = fieldSqlType $ entityId entity
+                    in  T.concat
+                            [ escape $ fieldDB (entityId entity)
+                            , maySerial sType defText
+                            , " PRIMARY KEY UNIQUE"
+                            , mayDefault defText
+                            ]
+
+
+maySerial :: SqlType -> Maybe Text -> Text
+maySerial SqlInt64 Nothing = " SERIAL "
+maySerial sType _ = " " <> showSqlType sType
+
+mayDefault :: Maybe Text -> Text
+mayDefault def = case def of
+    Nothing -> ""
+    Just d -> " DEFAULT " <> d
 
 type SafeToRemove = Bool
 

@@ -61,6 +61,7 @@ main = do
       , CompositeTest.compositeMigrate
       , MigrationTest.migrationMigrate
       , PersistUniqueTest.migration
+      , RenameTest.migration
 #  ifndef WITH_MYSQL
       , PrimaryTest.migration
 #  endif

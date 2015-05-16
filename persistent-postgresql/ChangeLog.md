@@ -1,3 +1,7 @@
+## 2.1.5.3
+
+Migrations for custom primary keys
+
 ## 2.1.5.2
 
 Support foreign key references to composite primary keys #389
