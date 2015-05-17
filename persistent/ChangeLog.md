@@ -1,3 +1,7 @@
+## 2.1.6
+
+add showMigration function
+
 ## 2.1.5
 
 Add `dbIdColumnsEsc` to Sql.Utils.
