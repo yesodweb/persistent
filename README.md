@@ -11,7 +11,8 @@ Persistent's goal is to catch every possible error at compile-time, and it comes
 
 # Backend agnostic
 
-Supports PostgreSql, Sqlite, MySQL, MongoDB, and Redis.
+Supports PostgreSql, Sqlite, MongoDB, Redis, and ZooKeeper.
+The MySQL backend is in need of a maintainer. Currently there are issues with migrations and support for composite and primary keys is lacking.
 
 Persistent is designed to be adaptable to any datastore, and to allow multiple datastores to be used simultaneously.
 The serialization layer should be adaptable to any datastore.
