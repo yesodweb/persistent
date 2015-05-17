@@ -4,6 +4,7 @@ module Database.Persist.Sql.Migration
   ( parseMigration
   , parseMigration'
   , printMigration
+  , showMigration
   , getMigration
   , runMigration
   , runMigrationSilent
@@ -52,11 +53,13 @@ parseMigration' m = do
       Right sql -> return sql
 
 printMigration :: MonadIO m => Migration -> ReaderT SqlBackend m ()
-printMigration m = do
-  mig <- parseMigration' m
-  mapM_ (liftIO . Data.Text.IO.putStrLn . flip snoc ';') (allSql mig)
+printMigration m = showMigration m
+               >>= mapM_ (liftIO . Data.Text.IO.putStrLn)
 
-getMigration :: (MonadBaseControl IO m, MonadIO m) => Migration -> ReaderT SqlBackend m [Sql]
+showMigration :: MonadIO m => Migration -> ReaderT SqlBackend m [Text]
+showMigration m = map (flip snoc ';') `liftM` getMigration m
+
+getMigration :: MonadIO m => Migration -> ReaderT SqlBackend m [Sql]
 getMigration m = do
   mig <- parseMigration' m
   return $ allSql mig
