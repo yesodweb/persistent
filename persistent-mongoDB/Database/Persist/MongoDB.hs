@@ -43,6 +43,7 @@ module Database.Persist.MongoDB
     -- $filters
     , nestEq, nestNe, nestGe, nestLe, nestIn, nestNotIn
     , anyEq, nestAnyEq, nestBsonEq, anyBsonEq, multiBsonEq
+    , inList, ninList
     , (=~.)
     -- non-operator forms of filters
     , NestedField(..)
@@ -152,6 +153,7 @@ import Data.Monoid (mappend)
 import Control.Monad.Trans.Reader (ask, runReaderT)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Numeric (readHex)
+import Unsafe.Coerce (unsafeCoerce)
 
 #if MIN_VERSION_base(4,6,0)
 import System.Environment (lookupEnv)
@@ -1464,3 +1466,13 @@ nestedUpdateOp :: forall record typ.
        ) => PersistUpdate -> NestedField record typ -> typ -> Update record
 nestedUpdateOp op nf v = BackendUpdate $
    NestedUpdate nf $ UpdateValueOp (Left v) (Left op)
+
+-- | Intersection of lists: if any value in the field is found in the list.
+inList :: PersistField typ => EntityField v [typ] -> [typ] -> Filter v
+f `inList` a = Filter (unsafeCoerce f) (Right a) In
+infix 4 `inList`
+
+-- | No intersection of lists: if no value in the field is found in the list.
+ninList :: PersistField typ => EntityField v [typ] -> [typ] -> Filter v
+f `ninList` a = Filter (unsafeCoerce f) (Right a) In
+infix 4 `ninList`
