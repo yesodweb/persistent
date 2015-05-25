@@ -50,7 +50,6 @@ library
                    , mtl
                    , fast-logger              >= 2.1
                    , scientific
-                   , resource-pool
                    , tagged
 
     exposed-modules: Database.Persist
@@ -106,6 +105,12 @@ test-suite test
                    , monad-control
                    , blaze-html
                    , scientific
+                   , tagged
+                   , fast-logger              >= 2.1
+                   , lifted-base              >= 0.1
+                   , mtl
+                   , template-haskell
+                   , resource-pool
 
     cpp-options: -DTEST
 
