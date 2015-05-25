@@ -10,6 +10,7 @@
 module Database.Persist.Sql.Class
     ( RawSql (..)
     , PersistFieldSql (..)
+    , platformSqlIntType
     ) where
 
 import Control.Applicative ((<$>), (<*>))
@@ -201,6 +202,11 @@ instance PersistFieldSql String where
     sqlType _ = SqlString
 #endif
 
+platformSqlIntType :: SqlType
+platformSqlIntType
+        | bitSize (0 :: Int) <= 32 = SqlInt32
+        | otherwise = SqlInt64
+
 instance PersistFieldSql ByteString where
     sqlType _ = SqlBlob
 instance PersistFieldSql T.Text where
@@ -210,9 +216,7 @@ instance PersistFieldSql TL.Text where
 instance PersistFieldSql Html where
     sqlType _ = SqlString
 instance PersistFieldSql Int where
-    sqlType _
-        | bitSize (0 :: Int) <= 32 = SqlInt32
-        | otherwise = SqlInt64
+    sqlType _ = platformSqlIntType
 instance PersistFieldSql Int8 where
     sqlType _ = SqlInt32
 instance PersistFieldSql Int16 where
