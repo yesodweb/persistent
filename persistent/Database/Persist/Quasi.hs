@@ -356,7 +356,7 @@ mkAutoIdField ps entName idName idSqlType = FieldDef
       , fieldType = FTTypeCon Nothing $ keyConName $ unHaskellName entName
       , fieldSqlType = idSqlType
       -- the primary field is actually a reference to the entity
-      , fieldReference = ForeignRef entName (FTTypeCon Nothing "Int")
+      , fieldReference = ForeignRef entName (FTTypeCon Nothing "Int64")
       , fieldAttrs = []
       , fieldStrict = True
       }

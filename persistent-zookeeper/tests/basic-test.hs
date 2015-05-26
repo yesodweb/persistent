@@ -10,6 +10,7 @@ import Database.Persist.Zookeeper
 import Database.Persist.Zookeeper.Internal
 import Database.Persist.TH
 import Language.Haskell.TH.Syntax ()
+import Data.Int (Int64)
 import Data.Maybe
 import Data.Pool ()
 import Test.Hspec

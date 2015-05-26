@@ -9,6 +9,7 @@
 
 import Control.Monad.IO.Class  (liftIO)
 import Data.Time
+import Data.Int (Int64)
 import Database.Persist.Sqlite
 import Database.Persist.TH
 import Test.Hspec
