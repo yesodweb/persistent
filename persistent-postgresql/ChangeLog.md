@@ -1,3 +1,7 @@
+## 2.1.6
+
+* Postgresql exceptions [#353](https://github.com/yesodweb/persistent/issues/353)
+
 ## 2.1.5.3
 
 Migrations for custom primary keys
