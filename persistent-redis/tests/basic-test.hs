@@ -10,6 +10,7 @@ import Database.Persist.TH
 import Language.Haskell.TH.Syntax
 import Control.Monad.IO.Class (liftIO)
 import Data.Text (Text, pack, unpack)
+import Data.Int (Int64)
 
 let redisSettings = mkPersistSettings (ConT ''RedisBackend)
  in share [mkPersist redisSettings] [persistLowerCase| 

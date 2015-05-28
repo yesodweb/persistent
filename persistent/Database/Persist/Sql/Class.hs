@@ -211,7 +211,8 @@ instance PersistFieldSql Html where
     sqlType _ = SqlString
 instance PersistFieldSql Int where
     sqlType _
-        | bitSize (0 :: Int) <= 32 = SqlInt32
+        | bitSize (0 :: Int) < 64 = error
+            "PersistFieldSql: Int not supported for 32 bit machines. Use Int32 or Int64 instead"
         | otherwise = SqlInt64
 instance PersistFieldSql Int8 where
     sqlType _ = SqlInt32
