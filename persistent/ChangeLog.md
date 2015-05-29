@@ -1,6 +1,10 @@
 ## 2.1.6
 
-add showMigration function
+Important! If persistent-template is not upgraded to 2.1.3.3
+you might need to make sure `Int64` is in scope for your model declarations.
+
+* add showMigration function
+* explicitly use Int64 for foreign key references
 
 ## 2.1.5
 
