@@ -56,6 +56,7 @@ import qualified System.IO as SIO
 import Data.Text (pack, Text, append, unpack, concat, uncons, cons, stripPrefix, stripSuffix)
 import Data.Text.Encoding (decodeUtf8)
 import qualified Data.Text.IO as TIO
+import Data.Int (Int64)
 import Data.List (foldl')
 import Data.Maybe (isJust, listToMaybe, mapMaybe, fromMaybe)
 import Data.Monoid (mappend, mconcat)
@@ -232,8 +233,8 @@ setEmbedField entName allEntities field = field
                 Just name -> case M.lookup (HaskellName name) allEntities of
                     Nothing -> NoReference
                     Just x -> ForeignRef (HaskellName name)
-                                    -- This will get corrected in mkEntityDefSqlTypeExp
-                                    (FTTypeCon Nothing $ pack $ nameBase ''Int)
+                                    -- This can get corrected in mkEntityDefSqlTypeExp
+                                    (FTTypeCon (Just "Data.Int") "Int64")
             Right em -> if embeddedHaskell em /= entName
               then EmbedRef em
               else if maybeNullable field
@@ -261,7 +262,7 @@ mkEntityDefSqlTypeExp emEntities entMap ent = EntityDefSqlTypeExp ent
         Left Nothing -> case fieldReference field of
             ForeignRef refName ft  -> case M.lookup refName entMap of
                 Nothing  -> SqlTypeExp ft
-                -- A ForeignRef is blindly set to an Int in setEmbedField
+                -- A ForeignRef is blindly set to an Int64 in setEmbedField
                 -- correct that now
                 Just ent -> case entityPrimary ent of
                     Nothing -> SqlTypeExp ft
@@ -1467,6 +1468,9 @@ filterConName' mps entity field = mkName $ unpack $ concat
 
 ftToType :: FieldType -> Type
 ftToType (FTTypeCon Nothing t) = ConT $ mkName $ unpack t
+-- This type is generated from the Quasi-Quoter.
+-- Adding this special case avoids users needing to import Data.Int
+ftToType (FTTypeCon (Just "Data.Int") "Int64") = ConT ''Int64
 ftToType (FTTypeCon (Just m) t) = ConT $ mkName $ unpack $ concat [m, ".", t]
 ftToType (FTApp x y) = ftToType x `AppT` ftToType y
 ftToType (FTList x) = ListT `AppT` ftToType x

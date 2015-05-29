@@ -356,10 +356,13 @@ mkAutoIdField ps entName idName idSqlType = FieldDef
       , fieldType = FTTypeCon Nothing $ keyConName $ unHaskellName entName
       , fieldSqlType = idSqlType
       -- the primary field is actually a reference to the entity
-      , fieldReference = ForeignRef entName (FTTypeCon Nothing "Int")
+      , fieldReference = ForeignRef entName  defaultReferenceTypeCon
       , fieldAttrs = []
       , fieldStrict = True
       }
+
+defaultReferenceTypeCon :: FieldType
+defaultReferenceTypeCon = FTTypeCon (Just "Data.Int") "Int64"
 
 keyConName :: Text -> Text
 keyConName entName = entName `mappend` "Id"
@@ -432,7 +435,7 @@ takeId ps tableName (n:rest) = fromMaybe (error "takeId: impossible!") $ setFiel
     addDefaultIdType = takeColsEx ps (field : keyCon : rest `mappend` setIdName)
     setFieldDef = fmap (\fd ->
       let refFieldType = if fieldType fd == FTTypeCon Nothing keyCon
-              then FTTypeCon Nothing "Int"
+              then defaultReferenceTypeCon
               else fieldType fd
       in fd { fieldReference = ForeignRef (HaskellName tableName) $ refFieldType
             })
