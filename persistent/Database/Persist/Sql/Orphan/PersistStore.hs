@@ -187,6 +187,23 @@ instance PersistStore SqlBackend where
         t = entityDef $ Just val
         vals = map toPersistValue $ toPersistFields val
 
+    insertMany [] = return []
+    insertMany vals = do
+        conn <- ask
+
+        case connInsertManySql conn of
+            Nothing -> mapM insert vals
+            Just insertManyFn -> do
+                case insertManyFn ent valss of
+                    ISRSingle sql -> do
+                        ids <- rawSql sql (concat valss)
+                        return $ map unSingle ids
+                    _ -> error "ISRSingle is expected from the connInsertManySql function"
+                where
+                    ent = entityDef vals
+                    valss = map (map toPersistValue . toPersistFields) vals
+
+
     insertMany_ [] = return ()
     insertMany_ vals = do
         conn <- ask
