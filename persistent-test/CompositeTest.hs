@@ -262,6 +262,14 @@ specs = describe "composite" $
       let [Entity newkca1 newca2] = xs
       matchCitizenAddressK kca1 @== matchCitizenAddressK newkca1
       ca1 @== newca2
+    it "insertMany" $ db $ do
+      [kp1, kp2] <- insertMany [p1, p2]
+      newp1 <- get kp1
+      newp1 @== Just p1
+
+      newp2 <- get kp2
+      newp2 @== Just p2
+      
 #endif
 
 matchK :: (PersistField a, PersistEntity record) => Key record -> Either Text a

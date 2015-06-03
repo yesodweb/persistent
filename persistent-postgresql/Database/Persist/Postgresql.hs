@@ -200,7 +200,7 @@ insertManySql' ent valss =
                 , ") VALUES ("
                 , T.intercalate "),(" $ replicate (length valss) $ T.intercalate "," $ map (const "?") (entityFields ent)
                 , ") RETURNING "
-                , escape $ fieldDB $ entityId ent
+                , T.intercalate ", " $ dbIdColumnsEsc escape ent
                 ]
   in ISRSingle sql
 
