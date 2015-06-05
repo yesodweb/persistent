@@ -195,9 +195,7 @@ instance PersistStore SqlBackend where
             Nothing -> mapM insert vals
             Just insertManyFn -> do
                 case insertManyFn ent valss of
-                    ISRSingle sql -> do
-                        ids <- rawSql sql (concat valss)
-                        return $ map unSingle ids
+                    ISRSingle sql -> rawSql sql (concat valss)
                     _ -> error "ISRSingle is expected from the connInsertManySql function"
                 where
                     ent = entityDef vals
