@@ -215,7 +215,7 @@ instance PersistStore SqlBackend where
                 , ")"
                 ]
 
-        -- SQLite support is only in later versions
+        -- SQLite only supports multi-row inserts in 3.7.11+ (see https://www.sqlite.org/releaselog/3_7_11.html).
         if connRDBMS conn == "sqlite"
             then mapM_ insert vals
             else rawExecute sql (concat valss)
