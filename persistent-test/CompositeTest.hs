@@ -269,6 +269,10 @@ specs = describe "composite" $
 
       newp2 <- get kp2
       newp2 @== Just p2
+    it "rawSql instance" $ db $ do
+      key <- insert p1
+      keyFromRaw <- rawSql "SELECT name, name2, age FROM test_parent LIMIT 1" []
+      [key] @== keyFromRaw
       
 #endif
 
