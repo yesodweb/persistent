@@ -19,7 +19,7 @@ library
                    , transformers          >= 0.2.1
                    , postgresql-simple     >= 0.4.0    && < 0.5
                    , postgresql-libpq      >= 0.6.1    && < 0.10
-                   , persistent            >= 2.2      && < 3
+                   , persistent            >= 2.1.7    && < 3
                    , containers            >= 0.2
                    , bytestring            >= 0.9
                    , text                  >= 0.7
