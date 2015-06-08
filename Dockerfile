@@ -16,7 +16,9 @@
 FROM haskell:7.10
 MAINTAINER Greg Weber
 
-RUN apt-get update && apt-get install sudo && \
+RUN apt-get update && \
+    # development tools
+    apt-get install sudo ca-certificates && \
     # Sqlite
     apt-get install -y sqlite3 libsqlite3-dev && \
 
