@@ -43,5 +43,9 @@ specs = describe "primary key reference" $ do
     kf <- insert $ Foo "name"
     kb <- insert $ Bar kf
     return ()
+  it "uses RawSql for a Primary key" $ db $ do
+    key <- insert $ Foo "name"
+    keyFromRaw <- rawSql "SELECT name FROM foo LIMIT 1" []
+    [key] @== keyFromRaw
 #  endif
 #endif

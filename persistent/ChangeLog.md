@@ -1,3 +1,7 @@
+## 2.1.7
+
+* Add a `RawSql` instance for `Key`. This allows selecting primary keys using functions like `rawSql`. [#407](https://github.com/yesodweb/persistent/pull/407)
+
 ## 2.1.6
 
 Important! If persistent-template is not upgraded to 2.1.3.3

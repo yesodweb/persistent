@@ -80,31 +80,38 @@ class
             => val -> ReaderT backend m ()
     insert_ val = insert val >> return ()
 
-    -- | Create multiple records in the database.
+    -- | Create multiple records in the database and return their 'Key's.
     --
-    -- If you don't need the inserted @Key@s, use 'insertMany_'
+    -- If you don't need the inserted 'Key's, use 'insertMany_'.
     --
-    -- Some backends use the slow default implementation of
-    -- @mapM insert@
+    -- The MongoDB and PostgreSQL backends insert all records and
+    -- retrieve their keys in one database query.
+    --
+    -- The SQLite and MySQL backends use the slow, default implementation of
+    -- @mapM insert@.
     insertMany :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
                => [val] -> ReaderT backend m [Key val]
     insertMany = mapM insert
 
-    -- | Same as 'insertMany', but doesn't return any @Key@s.
+    -- | Same as 'insertMany', but doesn't return any 'Key's.
     --
-    -- SQL backends currently use an efficient implementation for this
-    -- unlike 'insertMany'.
+    -- The MongoDB, PostgreSQL, and MySQL backends insert all records in
+    -- one database query.
+    --
+    -- The SQLite backend inserts rows one-by-one.
     insertMany_ :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
                 => [val] -> ReaderT backend m ()
     insertMany_ x = insertMany x >> return ()
 
-    -- | Same as 'insertMany_', but takes an 'Entity' instead of just a record
+    -- | Same as 'insertMany_', but takes an 'Entity' instead of just a record.
     --
     -- Useful when migrating data from one entity to another
-    -- and want to preserve ids
+    -- and want to preserve ids.
     --
-    -- Some backends use the slow default implementation of
-    -- @mapM insertKey@
+    -- The MongoDB backend inserts all the entities in one database query.
+    --
+    -- The SQL backends use the slow, default implementation of
+    -- @mapM_ insertKey@.
     insertEntityMany :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
                      => [Entity val] -> ReaderT backend m ()
     insertEntityMany = mapM_ (\(Entity k record) -> insertKey k record)

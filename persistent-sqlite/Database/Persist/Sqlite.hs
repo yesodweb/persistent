@@ -92,6 +92,7 @@ wrapConnectionWal enableWal conn logFunc = do
         { connPrepare = prepare' conn
         , connStmtMap = smap
         , connInsertSql = insertSql'
+        , connInsertManySql = Nothing
         , connClose = Sqlite.close conn
         , connMigrateSql = migrate'
         , connBegin = helper "BEGIN"
