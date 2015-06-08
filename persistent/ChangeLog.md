@@ -1,6 +1,7 @@
 ## 2.2
 
 * Add a `RawSql` instance for `Key`. This allows selecting primary keys using functions like `rawSql`. [#407](https://github.com/yesodweb/persistent/pull/407)
+* SqlBackend support for an optimized `insertMany`
 
 ## 2.1.6
 

@@ -1,4 +1,4 @@
-## 2.1.6.1
+## 2.2
 
 * Optimize the `insertMany` function to insert all rows and retrieve their keys in one SQL query. [#407](https://github.com/yesodweb/persistent/pull/407)
 

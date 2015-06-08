@@ -1,3 +1,7 @@
+## 2.2
+
+Update to persistent 2.2
+
 ## 2.1.4.1
 
 * Add missing source files [#382](https://github.com/yesodweb/persistent/issues/382)

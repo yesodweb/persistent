@@ -1,6 +1,10 @@
-## Master
+## 2.2
 
-Added a `Show` instance for `MySQLConf`.
+* Update to persistent 2.2
+
+## 2.1.3
+
+* Added a `Show` instance for `MySQLConf`.
 
 ## 2.1.2.1
 
