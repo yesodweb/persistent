@@ -812,7 +812,7 @@ data MySQLConf = MySQLConf
     } deriving Show
 
 instance FromJSON MySQLConf where
-    parseJSON v = modifyFailure ("Persistent: error loadomg MySQL conf: " ++) $
+    parseJSON v = modifyFailure ("Persistent: error loading MySQL conf: " ++) $
       flip (withObject "MySQLConf") v $ \o -> do
         database <- o .: "database"
         host     <- o .: "host"

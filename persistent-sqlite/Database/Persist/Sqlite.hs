@@ -377,7 +377,7 @@ data SqliteConf = SqliteConf
     } deriving Show
 
 instance FromJSON SqliteConf where
-    parseJSON v = modifyFailure ("Persistent: error loadomg Sqlite conf: " ++) $
+    parseJSON v = modifyFailure ("Persistent: error loading Sqlite conf: " ++) $
       flip (withObject "SqliteConf") v $ \o -> SqliteConf
         <$> o .: "database"
         <*> o .: "poolsize"
