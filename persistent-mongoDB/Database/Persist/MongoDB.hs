@@ -1121,7 +1121,7 @@ data ReplicaSetConfig = ReplicaSetConfig DB.ReplicaSetName [DB.Host]
     deriving Show
 
 instance FromJSON MongoConf where
-    parseJSON v = modifyFailure ("Persistent: error loadomg MongoDB conf: " ++) $
+    parseJSON v = modifyFailure ("Persistent: error loading MongoDB conf: " ++) $
       flip (withObject "MongoConf") v $ \o ->do
         db                  <- o .:  "database"
         host                <- o .:? "host" .!= defaultHost

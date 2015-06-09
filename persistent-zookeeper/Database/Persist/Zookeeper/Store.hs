@@ -40,7 +40,7 @@ instance A.ToJSON (BackendKey Z.Zookeeper) where
     toJSON (ZooKey key) = A.toJSON $ "z" <> key
 
 instance A.FromJSON (BackendKey Z.Zookeeper) where
-    parseJSON v = A.modifyFailure ("Persistent: error loadomg Zookeeper conf: " ++) $
+    parseJSON v = A.modifyFailure ("Persistent: error loading Zookeeper conf: " ++) $
       flip (A.withText "ZooKey") v $ \t ->
         case T.uncons t of
           Just ('z', prefixed) -> return $ ZooKey prefixed
