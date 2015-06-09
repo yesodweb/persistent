@@ -911,7 +911,7 @@ data PostgresConf = PostgresConf
     } deriving Show
 
 instance FromJSON PostgresConf where
-    parseJSON v = modifyFailure ("Persistent: error loadomg PostgreSQL conf: " ++) $
+    parseJSON v = modifyFailure ("Persistent: error loading PostgreSQL conf: " ++) $
       flip (withObject "PostgresConf") v $ \o -> do
         database <- o .: "database"
         host     <- o .: "host"
