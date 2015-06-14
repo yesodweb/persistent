@@ -2,6 +2,7 @@
 dist
 *.hi
 *.o
+.stack-work/
 
 ## Editor ignores
 TAGS
@@ -27,11 +28,13 @@ cabal.sandbox.config
 
 ## Docker image ignores
 /.cabal/
+/.stackage/
 /.ghc/
 /.bash_history
 /.bashrc
 .mongorc.js
 .dbshell
+crane.yml
 # can use this for Docker databases
 persistent-test/db/
 
