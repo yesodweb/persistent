@@ -757,6 +757,9 @@ showSqlType SqlDayTime = "TIMESTAMP WITH TIME ZONE"
 showSqlType SqlBlob = "BYTEA"
 showSqlType SqlBool = "BOOLEAN"
 
+showSqlType SqlArray = "VARCHAR" -- serialized to JSON
+showSqlType SqlMap = "VARCHAR"   -- serialized to JSOn
+
 -- Added for aliasing issues re: https://github.com/yesodweb/yesod/issues/682
 showSqlType (SqlOther (T.toLower -> "integer")) = "INT4"
 

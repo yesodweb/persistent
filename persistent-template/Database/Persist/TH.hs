@@ -210,24 +210,26 @@ type EmbedEntityMap = M.Map HaskellName EmbedEntityDef
 type EntityMap = M.Map HaskellName EntityDef
 
 data FTTypeConDescr = FTKeyCon deriving Show
-mEmbedded :: EmbedEntityMap -> FieldType -> Either (Maybe FTTypeConDescr) EmbedEntityDef
-mEmbedded _ (FTTypeCon Just{} _) = Left Nothing
-mEmbedded ents (FTTypeCon Nothing n) = let name = HaskellName n in
-    maybe (Left Nothing) Right $ M.lookup name ents
-mEmbedded ents (FTList x) = mEmbedded ents x
-mEmbedded ents (FTApp x y) =
-  -- Key convets an Record to a RecordId
-  -- special casing this is obviously a hack
-  -- This problem may not be solvable with the current QuasiQuoted approach though
-  if x == FTTypeCon Nothing "Key"
-    then Left $ Just FTKeyCon
-    else mEmbedded ents y
+eEmbedded :: EmbedEntityMap -> FieldType -> Either (Maybe FTTypeConDescr) (Bool, EmbedEntityDef)
+eEmbedded ents ft = em False ft
+  where
+    em _ (FTTypeCon Just{} _) = Left Nothing
+    em isList (FTTypeCon Nothing n) = let name = HaskellName n in
+        maybe (Left Nothing) (Right . (isList,)) $ M.lookup name ents
+    em _ (FTList x) = em True x
+    em isList (FTApp x y) =
+      -- Key convets an Record to a RecordId
+      -- special casing this is obviously a hack
+      -- This problem may not be solvable with the current QuasiQuoted approach though
+      if x == FTTypeCon Nothing "Key"
+        then Left $ Just FTKeyCon
+        else em isList y
 
 setEmbedField :: HaskellName -> EmbedEntityMap -> FieldDef -> FieldDef
 setEmbedField entName allEntities field = field
   { fieldReference = case fieldReference field of
       NoReference ->
-        case mEmbedded allEntities (fieldType field) of
+        case eEmbedded allEntities (fieldType field) of
             Left _ -> case stripId $ fieldType field of
                 Nothing -> NoReference
                 Just name -> case M.lookup (HaskellName name) allEntities of
@@ -235,7 +237,7 @@ setEmbedField entName allEntities field = field
                     Just x -> ForeignRef (HaskellName name)
                                     -- This can get corrected in mkEntityDefSqlTypeExp
                                     (FTTypeCon (Just "Data.Int") "Int64")
-            Right em -> if embeddedHaskell em /= entName
+            Right (_, em) -> if embeddedHaskell em /= entName
               then EmbedRef em
               else if maybeNullable field
                      then SelfReference
@@ -255,9 +257,8 @@ mkEntityDefSqlTypeExp emEntities entMap ent = EntityDefSqlTypeExp ent
 
 
     -- In the case of embedding, there won't be any datatype created yet.
-    -- We just use SqlString, as the data will be serialized to JSON.
-    defaultSqlTypeExp field = case mEmbedded emEntities ftype of
-        Right _ -> SqlType' SqlString
+    defaultSqlTypeExp field = case eEmbedded emEntities ftype of
+        Right (isList, _) -> SqlType' $ if isList then SqlArray else SqlMap
         Left (Just FTKeyCon) -> SqlType' SqlString
         Left Nothing -> case fieldReference field of
             ForeignRef refName ft  -> case M.lookup refName entMap of
@@ -914,7 +915,7 @@ mkEntity mps t = do
     fkc <- mapM (mkForeignKeysComposite mps t) $ entityForeigns t
 
     let primaryField = entityId t
-    
+
     fields <- mapM (mkField mps t) $ primaryField : entityFields t
     toFieldNames <- mkToFieldNames $ entityUniques t
 
@@ -1036,12 +1037,12 @@ mkForeignKeysComposite mps t ForeignDef {..} = do
    let reftableKeyName = mkName $ reftableString `mappend` "Key"
    let tablename = mkName $ unpack $ entityText t
    recordName <- newName "record"
-   
+
    let fldsE = map (\((foreignName, _),_) -> VarE (fieldName $ foreignName)
                  `AppE` VarE recordName) foreignFields
    let mkKeyE = foldl' AppE (maybeExp foreignNullable $ ConE reftableKeyName) fldsE
    let fn = FunD fname [normalClause [VarP recordName] mkKeyE]
-   
+
    let t2 = maybeTyp foreignNullable $ ConT ''Key `AppT` ConT (mkName reftableString)
    let sig = SigD fname $ (ArrowT `AppT` (ConT tablename)) `AppT` t2
    return [sig, fn]
@@ -1060,7 +1061,7 @@ maybeTyp may typ | may = ConT ''Maybe `AppT` typ
 -- @
 --   instance PersistEntity e => PersistField e where
 --      toPersistValue = PersistMap $ zip columNames (map toPersistValue . toPersistFields)
---      fromPersistValue (PersistMap o) = 
+--      fromPersistValue (PersistMap o) =
 --          let columns = HM.fromList o
 --          in fromPersistValues $ map (\name ->
 --            case HM.lookup name columns of
@@ -1071,7 +1072,7 @@ maybeTyp may typ | may = ConT ''Maybe `AppT` typ
 -- @
 persistFieldFromEntity :: MkPersistSettings -> EntityDef -> Q [Dec]
 persistFieldFromEntity mps e = do
-    ss <- [|SqlString|]
+    ss <- [|SqlMap|]
     obj <- [|\ent -> PersistMap $ zip (map pack columnNames) (map toPersistValue $ toPersistFields ent)|]
     fpv <- [|\x -> let columns = HM.fromList x
                     in fromPersistValues $ map
@@ -1266,7 +1267,7 @@ derivePersistField s = do
 -- | Automatically creates a valid 'PersistField' instance for any datatype
 -- that has valid 'ToJSON' and 'FromJSON' instances. For a datatype @T@ it
 -- generates instances similar to these:
--- 
+--
 -- @
 --    instance PersistField T where
 --        toPersistValue = PersistByteString . L.toStrict . encode
@@ -1424,6 +1425,8 @@ instance Lift SqlType where
     lift SqlTime = [|SqlTime|]
     lift SqlDayTime = [|SqlDayTime|]
     lift SqlBlob = [|SqlBlob|]
+    lift SqlArray = [|SqlArray|]
+    lift SqlMap = [|SqlMap|]
     lift (SqlOther a) = [|SqlOther a|]
 
 -- Ent

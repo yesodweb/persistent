@@ -211,6 +211,8 @@ showSqlType SqlTime = "TIME"
 showSqlType SqlDayTime = "TIMESTAMP"
 showSqlType SqlBlob = "BLOB"
 showSqlType SqlBool = "BOOLEAN"
+showSqlType SqlArray = "VARCHAR" -- serialized to JSON
+showSqlType SqlMap = "VARCHAR" -- serialized to JSON
 showSqlType (SqlOther t) = t
 
 migrate' :: [EntityDef]
