@@ -5,7 +5,7 @@ A Haskell datastore. Datastores are often referred to as "ORM"s. While 'O' tradi
     avoidance of boilerplate serialization
 
 In addition , the ORM concept is a way to make what is usually an un-typed driver type-safe.
-In dynamic languages rather than compile time errors, safety comes from creating specific dynamic errors rather than sending non-sense queries to the database.
+In dynamic languages rather than compile time errors, safety comes from creating specific dynamic errors rather than sending nonsense queries to the database.
 
 Persistent's goal is to catch every possible error at compile-time, and it comes close to that.
 
