@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -159,7 +160,9 @@ deriving instance (PersistEntity record, Eq (Key record), Eq record) => Eq (Enti
 deriving instance (PersistEntity record, Ord (Key record), Ord record) => Ord (Entity record)
 deriving instance (PersistEntity record, Show (Key record), Show record) => Show (Entity record)
 deriving instance (PersistEntity record, Read (Key record), Read record) => Read (Entity record)
+#if MIN_VERSION_base(4,7,0)
 deriving instance Typeable Entity
+#endif
 
 -- | Predefined @toJSON@. The resulting JSON looks like
 -- @{\"key\": 1, \"value\": {\"name\": ...}}@.
