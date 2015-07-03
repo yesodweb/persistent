@@ -2,6 +2,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts, StandaloneDeriving, UndecidableInstances #-}
 module Database.Persist.Class.PersistEntity
     ( PersistEntity (..)
@@ -25,6 +26,7 @@ import Data.Aeson.Types (Parser)
 import Control.Applicative ((<$>), (<*>))
 import Data.Monoid (mappend)
 import qualified Data.HashMap.Strict as HM
+import Data.Typeable (Typeable)
 
 -- | Persistent serialized Haskell records to the database.
 -- A Database 'Entity' (A row in SQL, a document in MongoDB, etc)
@@ -157,6 +159,7 @@ deriving instance (PersistEntity record, Eq (Key record), Eq record) => Eq (Enti
 deriving instance (PersistEntity record, Ord (Key record), Ord record) => Ord (Entity record)
 deriving instance (PersistEntity record, Show (Key record), Show record) => Show (Entity record)
 deriving instance (PersistEntity record, Read (Key record), Read record) => Read (Entity record)
+deriving instance Typeable Entity
 
 -- | Predefined @toJSON@. The resulting JSON looks like
 -- @{\"key\": 1, \"value\": {\"name\": ...}}@.
