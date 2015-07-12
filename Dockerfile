@@ -13,12 +13,12 @@
 # Once in the image you should install persistent dependencies (sandbox is optional)
 # RUN cd persistent-test && cabal sandbox init && cabal install --only-dep
 
-FROM haskell:7.10
+FROM haskell-stack:7.8
 MAINTAINER Greg Weber
 
 RUN apt-get update && \
     # development tools
-    apt-get install sudo ca-certificates && \
+    apt-get install -y sudo ca-certificates && \
     # Sqlite
     apt-get install -y sqlite3 libsqlite3-dev && \
 
