@@ -64,7 +64,12 @@ open' connStr logFunc = do
             | Just cs <- T.stripPrefix "WAL=off " connStr -> (cs, False)
             | otherwise                                   -> (connStr, True)
 
-    conn <- Sqlite.open connStr'
+    let (connStr'', readOnly) = case () of
+          ()
+            | Just cs <- T.stripPrefix "READONLY " connStr'  -> (cs, True)
+            | Just cs <- T.stripPrefix "READWRITE " connStr' -> (cs, False)
+            | otherwise                                      -> (connStr', False)
+    conn <- Sqlite.open connStr'' readOnly
     wrapConnectionWal enableWal conn logFunc
 
 -- | Wrap up a raw 'Sqlite.Connection' as a Persistent SQL 'Connection'.

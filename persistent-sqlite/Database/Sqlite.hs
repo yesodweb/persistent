@@ -183,24 +183,28 @@ sqlError maybeConnection functionName error = do
     , seDetails = details
     }
 
-foreign import ccall "sqlite3_open"
-  openC :: CString -> Ptr (Ptr ()) -> IO Int
-openError :: Text -> IO (Either Connection Error)
-openError path' = do
+foreign import ccall "sqlite3_open_v2"
+  openC :: CString -> Ptr (Ptr ()) -> Int -> CString -> IO Int
+openError :: Text -> Bool -> IO (Either Connection Error)
+openError path' readOnlyFlag = do
+  -- https://www.sqlite.org/c3ref/open.html
+  -- 1 = SQLITE_OPEN_READONLY
+  -- 6 = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE (behavior of sqlite3_open)
+  let flag = if readOnlyFlag then 1 else 6
   BS.useAsCString (encodeUtf8 path')
                   (\path -> do
-                     alloca (\database -> do
-                               error' <- openC path database
-                               error <- return $ decodeError error'
-                               case error of
-                                 ErrorOK -> do
-                                            database' <- peek database
-                                            active <- newIORef True
-                                            return $ Left $ Connection active $ Connection' database'
-                                 _ -> return $ Right error))
-open :: Text -> IO Connection
-open path = do
-  databaseOrError <- openError path
+                      alloca (\database -> do
+                                error' <- openC path database flag nullPtr
+                                error <- return $ decodeError error'
+                                case error of
+                                  ErrorOK -> do
+                                             database' <- peek database
+                                             active <- newIORef True
+                                             return $ Left $ Connection active $ Connection' database'
+                                  _ -> return $ Right error))
+open :: Text -> Bool -> IO Connection
+open path readOnlyFlag = do
+  databaseOrError <- openError path readOnlyFlag
   case databaseOrError of
     Left database -> return database
     Right error -> sqlError Nothing ("open " `mappend` (pack $ show path)) error
