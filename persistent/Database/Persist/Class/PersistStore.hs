@@ -95,10 +95,8 @@ class
 
     -- | Same as 'insertMany', but doesn't return any 'Key's.
     --
-    -- The MongoDB, PostgreSQL, and MySQL backends insert all records in
+    -- The MongoDB, PostgreSQL, SQLite and MySQL backends insert all records in
     -- one database query.
-    --
-    -- The SQLite backend inserts rows one-by-one.
     insertMany_ :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
                 => [val] -> ReaderT backend m ()
     insertMany_ x = insertMany x >> return ()
