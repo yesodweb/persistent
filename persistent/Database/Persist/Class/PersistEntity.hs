@@ -259,6 +259,16 @@ idField = "_id"
 
 -- | Convenience function for getting a free 'PersistField' instance
 --   from a type with JSON instances.
+--
+--
+-- Example usage in combination with`fromPersistValueJSON`:
+--
+-- @
+-- instance PersistField MyData where
+--   fromPersistValue = fromPersistValueJSON
+--   toPersistValue = toPersistValueJSON
+-- @
+--
 toPersistValueJSON :: ToJSON a => a -> PersistValue
 toPersistValueJSON = PersistText . LT.toStrict . TB.toLazyText . encodeToTextBuilder . toJSON
 
@@ -266,6 +276,16 @@ toPersistValueJSON = PersistText . LT.toStrict . TB.toLazyText . encodeToTextBui
 --   from a type with JSON instances. The JSON parser used will accept
 --   JSON values other that object and arrays. So, if your instance
 --   serializes the data to a JSON string, this will still work.
+--
+--
+-- Example usage in combination with`toPersistValueJSON`:
+--
+-- @
+-- instance PersistField MyData where
+--   fromPersistValue = fromPersistValueJSON
+--   toPersistValue = toPersistValueJSON
+-- @
+--
 fromPersistValueJSON :: FromJSON a => PersistValue -> Either Text a
 fromPersistValueJSON z = case z of
   PersistByteString bs -> mapLeft (T.append "Could not parse the JSON (was a PersistByteString): ") 
