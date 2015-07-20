@@ -41,6 +41,7 @@ module Database.Persist.Class
     -- * JSON utilities
     , keyValueEntityToJSON, keyValueEntityFromJSON
     , entityIdToJSON, entityIdFromJSON
+    , toPersistValueJSON, fromPersistValueJSON
     ) where
 
 import Database.Persist.Class.DeleteCascade

@@ -16,14 +16,21 @@ module Database.Persist.Class.PersistEntity
 
     , keyValueEntityToJSON, keyValueEntityFromJSON
     , entityIdToJSON, entityIdFromJSON
+    , toPersistValueJSON, fromPersistValueJSON
     ) where
 
 import Database.Persist.Types.Base
 import Database.Persist.Class.PersistField
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Aeson (ToJSON (..), FromJSON (..), object, (.:), (.=), Value (Object))
-import Data.Aeson.Types (Parser)
+import qualified Data.Text.Encoding as TE
+import qualified Data.Text.Lazy as LT
+import qualified Data.Text.Lazy.Builder as TB
+import Data.Aeson (ToJSON (..), FromJSON (..), fromJSON, object, (.:), (.=), Value (Object))
+import qualified Data.Aeson.Parser as AP
+import Data.Aeson.Types (Parser,Result(Error,Success))
+import Data.Aeson.Encode (encodeToTextBuilder)
+import Data.Attoparsec.ByteString (parseOnly)
 import Control.Applicative ((<$>), (<*>))
 import Data.Monoid (mappend)
 import qualified Data.HashMap.Strict as HM
@@ -249,3 +256,48 @@ errMsg = mappend "PersistField entity fromPersistValue: "
 -- so lets use MongoDB conventions
 idField :: Text
 idField = "_id"
+
+-- | Convenience function for getting a free 'PersistField' instance
+--   from a type with JSON instances.
+--
+--
+-- Example usage in combination with`fromPersistValueJSON`:
+--
+-- @
+-- instance PersistField MyData where
+--   fromPersistValue = fromPersistValueJSON
+--   toPersistValue = toPersistValueJSON
+-- @
+--
+toPersistValueJSON :: ToJSON a => a -> PersistValue
+toPersistValueJSON = PersistText . LT.toStrict . TB.toLazyText . encodeToTextBuilder . toJSON
+
+-- | Convenience function for getting a free 'PersistField' instance
+--   from a type with JSON instances. The JSON parser used will accept
+--   JSON values other that object and arrays. So, if your instance
+--   serializes the data to a JSON string, this will still work.
+--
+--
+-- Example usage in combination with`toPersistValueJSON`:
+--
+-- @
+-- instance PersistField MyData where
+--   fromPersistValue = fromPersistValueJSON
+--   toPersistValue = toPersistValueJSON
+-- @
+--
+fromPersistValueJSON :: FromJSON a => PersistValue -> Either Text a
+fromPersistValueJSON z = case z of
+  PersistByteString bs -> mapLeft (T.append "Could not parse the JSON (was a PersistByteString): ") 
+                        $ parseGo bs
+  PersistText t -> mapLeft (T.append "Could not parse the JSON (was PersistText): ")
+                 $ parseGo (TE.encodeUtf8 t)
+  a -> Left $ T.append "Expected PersistByteString, received: " (T.pack (show a))
+  where parseGo bs = mapLeft T.pack $ case parseOnly AP.value bs of
+          Left err -> Left err
+          Right v -> case fromJSON v of
+            Error err -> Left err
+            Success a -> Right a
+        mapLeft _ (Right a) = Right a
+        mapLeft f (Left b)  = Left (f b)
+
