@@ -10,17 +10,11 @@ module Database.Persist.Class.PersistUnique
     ) where
 
 import Database.Persist.Types
-import qualified Prelude
-import Prelude hiding ((++))
-
 import Control.Exception (throwIO)
 import Control.Monad (liftM, when)
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.IO.Class (liftIO, MonadIO)
 import Data.List ((\\))
-
-import Control.Monad.Trans.Reader   ( ReaderT  )
-import Control.Monad.IO.Class (MonadIO)
-
+import Control.Monad.Trans.Reader (ReaderT)
 import Database.Persist.Class.PersistStore
 import Database.Persist.Class.PersistEntity
 import Data.Monoid (mappend)
