@@ -1,4 +1,3 @@
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
 module Database.Persist.Sql.Raw where
@@ -9,7 +8,6 @@ import Database.Persist.Sql.Class
 import qualified Data.Map as Map
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (ReaderT, ask, MonadReader)
-import Control.Monad.Trans.Resource (release)
 import Data.Acquire (allocateAcquire, Acquire, mkAcquire, with)
 import Data.IORef (writeIORef, readIORef, newIORef)
 import Control.Exception (throwIO)
@@ -19,7 +17,7 @@ import Control.Monad.Logger (logDebugNS, runLoggingT)
 import Data.Int (Int64)
 import qualified Data.Text as T
 import Data.Conduit
-import Control.Monad.Trans.Resource (MonadResource)
+import Control.Monad.Trans.Resource (MonadResource,release)
 
 rawQuery :: (MonadResource m, MonadReader env m, HasPersistBackend env SqlBackend)
          => Text
