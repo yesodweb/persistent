@@ -1,7 +1,5 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE TypeFamilies, FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 module Database.Persist.Class.PersistStore
     ( HasPersistBackend (..)
@@ -14,21 +12,11 @@ module Database.Persist.Class.PersistStore
     , ToBackendKey(..)
     ) where
 
-import qualified Prelude
-import Prelude hiding ((++), show)
-
 import qualified Data.Text as T
-
-import Control.Monad.Trans.Error (Error (..))
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Exception.Lifted (throwIO)
-
-import Data.Conduit.Internal (Pipe, ConduitM)
-
-import Control.Monad.Trans.Reader   ( ReaderT  )
+import Control.Monad.Trans.Reader (ReaderT)
 import Control.Monad.Reader (MonadReader (ask), runReaderT)
-
-
 import Database.Persist.Class.PersistEntity
 import Database.Persist.Class.PersistField
 import Database.Persist.Types
@@ -149,7 +137,7 @@ class
               => Key val -> [Update val] -> ReaderT backend m val
     updateGet key ups = do
         update key ups
-        get key >>= maybe (liftIO $ throwIO $ KeyNotFound $ Prelude.show key) return
+        get key >>= maybe (liftIO $ throwIO $ KeyNotFound $ show key) return
 
 
 -- | Same as get, but for a non-null (not Maybe) foreign key
@@ -161,7 +149,7 @@ getJust :: ( PersistStore backend
            , MonadIO m
            ) => Key val -> ReaderT backend m val
 getJust key = get key >>= maybe
-  (liftIO $ throwIO $ PersistForeignConstraintUnmet $ T.pack $ Prelude.show key)
+  (liftIO $ throwIO $ PersistForeignConstraintUnmet $ T.pack $ show key)
   return
 
 -- | curry this to make a convenience function that loads an associated model
