@@ -120,7 +120,7 @@ library
                    , network
                    , path-pieces              >= 0.1
                    , text                     >= 0.8
-                   , transformers             >= 0.2.1
+                   , transformers             >= 0.4.0
                    , monad-control            >= 0.3
                    , containers               >= 0.2
                    , bytestring               >= 0.9
