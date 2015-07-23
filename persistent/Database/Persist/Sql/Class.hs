@@ -21,10 +21,6 @@ import Data.Text (Text, intercalate, pack)
 import Data.Maybe (fromMaybe)
 import Data.Fixed
 import Data.Proxy (Proxy)
-
-import Control.Monad.IO.Class (MonadIO)
-import Control.Monad.Trans.Class (MonadTrans)
-
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Map as M

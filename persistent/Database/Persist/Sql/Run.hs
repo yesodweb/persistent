@@ -10,18 +10,13 @@ import Control.Monad.Trans.Reader hiding (local)
 import Control.Monad.Trans.Resource
 import Control.Monad.Logger
 import Control.Monad.Base
-import Control.Exception.Lifted (onException)
+import Control.Exception.Lifted (onException, bracket)
 import Control.Monad.IO.Class
-import Control.Exception.Lifted (bracket)
 import Control.Exception (mask)
 import System.Timeout (timeout)
-import Control.Monad.Trans.Control (control)
 import Data.IORef (readIORef, writeIORef, newIORef)
 import qualified Data.Map as Map
-import Control.Exception.Lifted (throwIO)
-import Control.Exception (mask)
 import Control.Monad (liftM)
-import System.Timeout (timeout)
 
 -- | Get a connection from the pool, run the given action, and then return the
 -- connection to the pool.
