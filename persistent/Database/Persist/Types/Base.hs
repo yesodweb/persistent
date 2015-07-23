@@ -6,7 +6,6 @@ module Database.Persist.Types.Base where
 import qualified Data.Aeson as A
 import Control.Exception (Exception)
 import Web.PathPieces (PathPiece (..))
-import Control.Monad.Trans.Error (Error (..))
 import Data.Typeable (Typeable)
 import Data.Text (Text, pack)
 import qualified Data.Text as T
@@ -242,8 +241,6 @@ data PersistException
     deriving (Show, Typeable)
 
 instance Exception PersistException
-instance Error PersistException where
-    strMsg = PersistError . pack
 
 -- | A raw value which can be stored in any backend and can be marshalled to
 -- and from a 'PersistField'.

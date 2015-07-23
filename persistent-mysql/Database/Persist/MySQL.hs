@@ -18,7 +18,7 @@ import Control.Arrow
 import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Error (ErrorT(..))
+import Control.Monad.Trans.Except (ExceptT(..))
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import Data.ByteString (ByteString)
@@ -467,7 +467,7 @@ getColumn connectInfo getter tname [ PersistByteString cname
                                    , PersistByteString type'
                                    , default'] =
     fmap (either (Left . pack) Right) $
-    runErrorT $ do
+    runExceptT $ do
       -- Default value
       default_ <- case default' of
                     PersistNull   -> return Nothing
