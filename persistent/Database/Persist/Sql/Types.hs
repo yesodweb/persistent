@@ -10,15 +10,13 @@
 module Database.Persist.Sql.Types where
 
 import Control.Exception (Exception)
-import Control.Monad.Trans.Resource (MonadResource (..), ResourceT)
+import Control.Monad.Trans.Resource (ResourceT)
 import Data.Acquire (Acquire)
 import Control.Monad.Logger (NoLoggingT)
-import Control.Monad.Trans.Control
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Reader (ReaderT (..))
 import Control.Monad.Trans.Writer (WriterT)
 import Data.Typeable (Typeable)
-import Control.Monad (liftM)
 import Database.Persist.Types
 import Database.Persist.Class (HasPersistBackend (..))
 import Data.IORef (IORef)
