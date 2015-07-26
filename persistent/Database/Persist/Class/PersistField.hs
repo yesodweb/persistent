@@ -1,8 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE OverloadedStrings #-}
 #ifndef NO_OVERLAP
@@ -15,7 +13,7 @@ module Database.Persist.Class.PersistField
     ) where
 
 import Database.Persist.Types.Base
-import Data.Time (Day(..), TimeOfDay, UTCTime, parseTime)
+import Data.Time (Day(..), TimeOfDay, UTCTime, parseTimeM)
 #ifdef HIGH_PRECISION_DATE
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 #endif
@@ -232,9 +230,9 @@ instance PersistField UTCTime where
             _ ->
                 case parse8601 $ T.unpack t of
                     Nothing -> Left $ T.pack $ "Expected UTCTime, received " ++ show x
-                    Just x -> Right x
+                    Just y -> Right y
       where
-        parse8601 = parseTime defaultTimeLocale "%FT%T%Q"
+        parse8601 = parseTimeM True defaultTimeLocale "%FT%T%Q"
     fromPersistValue x@(PersistByteString s) =
         case reads $ unpack s of
             (d, _):_ -> Right d

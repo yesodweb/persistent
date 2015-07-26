@@ -15,13 +15,11 @@ import Data.Monoid ((<>))
 import Data.Text (Text, pack)
 import Database.Persist (
     Entity(Entity), EntityDef, EntityField, HaskellName(HaskellName)
-  , PersistEntity, PersistValue, PersistException(PersistMarshalError)
+  , PersistEntity, PersistValue
   , keyFromValues, fromPersistValues, fieldDB, entityId, entityPrimary
   , entityFields, fieldHaskell, compositeFields, persistFieldDef
   , DBName)
 import Database.Persist.Sql.Types (Sql, SqlBackend, connEscapeName)
-import Control.Monad.IO.Class (MonadIO(liftIO))
-import Control.Exception (throwIO)
 
 entityColumnNames :: EntityDef -> SqlBackend -> [Sql]
 entityColumnNames ent conn =

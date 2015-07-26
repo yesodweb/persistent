@@ -16,7 +16,6 @@ import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import Database.Persist.Class.PersistStore
 import Database.Persist.Class.PersistEntity
-import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Resource (MonadResource, release)
 import Data.Acquire (Acquire, allocateAcquire, with)
 
