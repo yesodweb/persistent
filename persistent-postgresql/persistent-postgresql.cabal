@@ -25,7 +25,7 @@ library
                    , text                  >= 0.7
                    , monad-control         >= 0.2
                    , blaze-builder
-                   , time                  >= 1.1
+                   , time                  >= 1.5
                    , aeson                 >= 0.6.2
                    , conduit               >= 0.5.3
                    , resourcet             >= 1.1

@@ -128,7 +128,7 @@ library
                    , conduit                  >= 1.0
                    , resourcet                >= 0.4
                    , exceptions               >= 0.6
-                   , time                     >= 1.1.4
+                   , time                     >= 1.5
                    , random >= 1.0
                    , QuickCheck >= 2.7
                    , blaze-html               >= 0.5

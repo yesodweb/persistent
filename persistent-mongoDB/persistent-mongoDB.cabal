@@ -35,7 +35,7 @@ library
                    , monad-control      >= 0.3
                    , aeson              >= 0.6.2
                    , attoparsec
-                   , time
+                   , time               >= 1.5
                    , bytestring
                    , resource-pool      < 0.3
 

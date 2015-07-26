@@ -90,7 +90,7 @@ test-suite test
                    , containers
                    , text
                    , unordered-containers
-                   , time
+                   , time >= 1.5
                    , old-locale
                    , bytestring
                    , vector

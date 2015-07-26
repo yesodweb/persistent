@@ -33,7 +33,7 @@ library
                    , conduit                 >= 0.5.3
                    , monad-logger            >= 0.2.4
                    , resourcet               >= 1.1
-                   , time
+                   , time                    >= 1.5o
                    , old-locale
     exposed-modules: Database.Sqlite
                      Database.Persist.Sqlite
@@ -64,7 +64,7 @@ test-suite test
                 , persistent
                 , persistent-sqlite
                 , persistent-template
-                , time
+                , time >= 1.5
                 , transformers
 
 executable sanity
