@@ -19,6 +19,7 @@ module Database.Persist.Postgresql
     , openSimpleConn
     , tableName
     , fieldName
+    , mockMigration
     ) where
 
 import Database.Persist.Sql
@@ -57,12 +58,15 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
+import qualified Data.Text.IO as T
 import qualified Blaze.ByteString.Builder.Char8 as BBB
 
 import Data.Text (Text)
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import Control.Monad (forM)
+import Control.Monad.Trans.Reader (runReaderT)
+import Control.Monad.Trans.Writer (runWriterT)
 import Data.Acquire (Acquire, mkAcquire, with)
 import System.Environment (getEnvironment)
 import Data.Int (Int64)
@@ -1007,3 +1011,33 @@ mockMigrate allDefs _ entity = fmap (fmap $ map showAlterDb) $ do
         foreignsAlt = flip map fdefs (\fdef ->
             let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef))
             in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignConstraintNameDBName fdef) childfields (map escape parentfields)))
+
+-- | Mock a migration even when the database is not present.
+-- This function performs the same functionality of 'printMigration'
+-- with the difference that an actualy database isn't needed for it.
+mockMigration :: Migration -> IO ()
+mockMigration mig = do
+  smap <- newIORef $ Map.empty
+  let sqlbackend = SqlBackend { connPrepare = \_ -> do
+                                             return Statement
+                                                        { stmtFinalize = return ()
+                                                        , stmtReset = return ()
+                                                        , stmtExecute = undefined
+                                                        , stmtQuery = \_ -> return $ return ()
+                                                        },
+                             connInsertManySql = Nothing,
+                             connInsertSql = undefined,
+                             connStmtMap = smap,
+                             connClose = undefined,
+                             connMigrateSql = mockMigrate,
+                             connBegin = undefined,
+                             connCommit = undefined,
+                             connRollback = undefined,
+                             connEscapeName = escape,
+                             connNoLimit = undefined,
+                             connRDBMS = undefined,
+                             connLimitOffset = undefined,
+                             connLogFunc = undefined}
+      result = runReaderT $ runWriterT $ runWriterT mig 
+  resp <- result sqlbackend
+  mapM_ T.putStrLn $ map snd $ snd resp
