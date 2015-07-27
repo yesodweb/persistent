@@ -970,3 +970,40 @@ refName (DBName table) (DBName column) =
 
 udToPair :: UniqueDef -> (DBName, [DBName])
 udToPair ud = (uniqueDBName ud, map snd $ uniqueFields ud)
+
+mockMigrate :: [EntityDef]
+         -> (Text -> IO Statement)
+         -> EntityDef
+         -> IO (Either [Text] [(Bool, Text)])
+mockMigrate allDefs _ entity = fmap (fmap $ map showAlterDb) $ do
+    case partitionEithers [] of
+        ([], old'') -> return $ Right $ migrationText False old''
+        (errs, _) -> return $ Left errs
+  where
+    name = entityDB entity
+    migrationText exists old'' =
+        if not exists
+            then createText newcols fdefs udspair
+            else let (acs, ats) = getAlters allDefs entity (newcols, udspair) old'
+                     acs' = map (AlterColumn name) acs
+                     ats' = map (AlterTable name) ats
+                 in  acs' ++ ats'
+       where
+         old' = partitionEithers old''
+         (newcols', udefs, fdefs) = mkColumns allDefs entity
+         newcols = filter (not . safeToRemove entity . cName) newcols'
+         udspair = map udToPair udefs
+            -- Check for table existence if there are no columns, workaround
+            -- for https://github.com/yesodweb/persistent/issues/152
+
+    createText newcols fdefs udspair =
+        (addTable name newcols entity) : uniques ++ references ++ foreignsAlt
+      where
+        uniques = flip concatMap udspair $ \(uname, ucols) ->
+                [AlterTable name $ AddUniqueConstraint uname ucols]
+        references = mapMaybe (\c@Column { cName=cname, cReference=Just (refTblName, _) } ->
+            getAddReference allDefs name refTblName cname (cReference c))
+                   $ filter (isJust . cReference) newcols
+        foreignsAlt = flip map fdefs (\fdef ->
+            let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef))
+            in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignConstraintNameDBName fdef) childfields (map escape parentfields)))
