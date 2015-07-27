@@ -432,18 +432,8 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
             -- for https://github.com/yesodweb/persistent/issues/152
 
     createText newcols fdefs udspair =
-        addTable : uniques ++ references ++ foreignsAlt
+        (addTable name newcols entity) : uniques ++ references ++ foreignsAlt
       where
-        addTable = AddTable $ T.concat
-                -- Lower case e: see Database.Persist.Sql.Migration
-                [ "CREATe TABLE " -- DO NOT FIX THE CAPITALIZATION!
-                , escape name
-                , "("
-                , idtxt
-                , if null newcols then "" else ","
-                , T.intercalate "," $ map showColumn newcols
-                , ")"
-                ]
         uniques = flip concatMap udspair $ \(uname, ucols) ->
                 [AlterTable name $ AddUniqueConstraint uname ucols]
         references = mapMaybe (\c@Column { cName=cname, cReference=Just (refTblName, _) } ->
@@ -453,7 +443,19 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
             let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef))
             in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignConstraintNameDBName fdef) childfields (map escape parentfields)))
 
-    idtxt = case entityPrimary entity of
+addTable :: DBName -> [Column] -> EntityDef -> AlterDB
+addTable name cols entity = AddTable $ T.concat
+                        -- Lower case e: see Database.Persist.Sql.Migration
+                        [ "CREATe TABLE " -- DO NOT FIX THE CAPITALIZATION!
+                        , escape name
+                        , "("
+                        , idtxt
+                        , if null cols then "" else ","
+                        , T.intercalate "," $ map showColumn cols
+                        , ")"
+                        ]
+    where
+      idtxt = case entityPrimary entity of
                 Just pdef -> T.concat [" PRIMARY KEY (", T.intercalate "," $ map (escape . fieldDB) $ compositeFields pdef, ")"]
                 Nothing   ->
                     let defText = defaultAttribute $ fieldAttrs $ entityId entity
@@ -464,7 +466,6 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
                             , " PRIMARY KEY UNIQUE"
                             , mayDefault defText
                             ]
-
 
 maySerial :: SqlType -> Maybe Text -> Text
 maySerial SqlInt64 Nothing = " SERIAL "
