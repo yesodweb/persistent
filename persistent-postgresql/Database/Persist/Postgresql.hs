@@ -19,6 +19,7 @@ module Database.Persist.Postgresql
     , openSimpleConn
     , tableName
     , fieldName
+    , mockMigration
     ) where
 
 import Database.Persist.Sql
@@ -57,12 +58,15 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
+import qualified Data.Text.IO as T
 import qualified Blaze.ByteString.Builder.Char8 as BBB
 
 import Data.Text (Text)
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import Control.Monad (forM)
+import Control.Monad.Trans.Reader (runReaderT)
+import Control.Monad.Trans.Writer (runWriterT)
 import Data.Acquire (Acquire, mkAcquire, with)
 import System.Environment (getEnvironment)
 import Data.Int (Int64)
@@ -432,18 +436,8 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
             -- for https://github.com/yesodweb/persistent/issues/152
 
     createText newcols fdefs udspair =
-        addTable : uniques ++ references ++ foreignsAlt
+        (addTable name newcols entity) : uniques ++ references ++ foreignsAlt
       where
-        addTable = AddTable $ T.concat
-                -- Lower case e: see Database.Persist.Sql.Migration
-                [ "CREATe TABLE " -- DO NOT FIX THE CAPITALIZATION!
-                , escape name
-                , "("
-                , idtxt
-                , if null newcols then "" else ","
-                , T.intercalate "," $ map showColumn newcols
-                , ")"
-                ]
         uniques = flip concatMap udspair $ \(uname, ucols) ->
                 [AlterTable name $ AddUniqueConstraint uname ucols]
         references = mapMaybe (\c@Column { cName=cname, cReference=Just (refTblName, _) } ->
@@ -453,7 +447,19 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
             let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef))
             in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignConstraintNameDBName fdef) childfields (map escape parentfields)))
 
-    idtxt = case entityPrimary entity of
+addTable :: DBName -> [Column] -> EntityDef -> AlterDB
+addTable name cols entity = AddTable $ T.concat
+                        -- Lower case e: see Database.Persist.Sql.Migration
+                        [ "CREATe TABLE " -- DO NOT FIX THE CAPITALIZATION!
+                        , escape name
+                        , "("
+                        , idtxt
+                        , if null cols then "" else ","
+                        , T.intercalate "," $ map showColumn cols
+                        , ")"
+                        ]
+    where
+      idtxt = case entityPrimary entity of
                 Just pdef -> T.concat [" PRIMARY KEY (", T.intercalate "," $ map (escape . fieldDB) $ compositeFields pdef, ")"]
                 Nothing   ->
                     let defText = defaultAttribute $ fieldAttrs $ entityId entity
@@ -464,7 +470,6 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
                             , " PRIMARY KEY UNIQUE"
                             , mayDefault defText
                             ]
-
 
 maySerial :: SqlType -> Maybe Text -> Text
 maySerial SqlInt64 Nothing = " SERIAL "
@@ -969,3 +974,70 @@ refName (DBName table) (DBName column) =
 
 udToPair :: UniqueDef -> (DBName, [DBName])
 udToPair ud = (uniqueDBName ud, map snd $ uniqueFields ud)
+
+mockMigrate :: [EntityDef]
+         -> (Text -> IO Statement)
+         -> EntityDef
+         -> IO (Either [Text] [(Bool, Text)])
+mockMigrate allDefs _ entity = fmap (fmap $ map showAlterDb) $ do
+    case partitionEithers [] of
+        ([], old'') -> return $ Right $ migrationText False old''
+        (errs, _) -> return $ Left errs
+  where
+    name = entityDB entity
+    migrationText exists old'' =
+        if not exists
+            then createText newcols fdefs udspair
+            else let (acs, ats) = getAlters allDefs entity (newcols, udspair) old'
+                     acs' = map (AlterColumn name) acs
+                     ats' = map (AlterTable name) ats
+                 in  acs' ++ ats'
+       where
+         old' = partitionEithers old''
+         (newcols', udefs, fdefs) = mkColumns allDefs entity
+         newcols = filter (not . safeToRemove entity . cName) newcols'
+         udspair = map udToPair udefs
+            -- Check for table existence if there are no columns, workaround
+            -- for https://github.com/yesodweb/persistent/issues/152
+
+    createText newcols fdefs udspair =
+        (addTable name newcols entity) : uniques ++ references ++ foreignsAlt
+      where
+        uniques = flip concatMap udspair $ \(uname, ucols) ->
+                [AlterTable name $ AddUniqueConstraint uname ucols]
+        references = mapMaybe (\c@Column { cName=cname, cReference=Just (refTblName, _) } ->
+            getAddReference allDefs name refTblName cname (cReference c))
+                   $ filter (isJust . cReference) newcols
+        foreignsAlt = flip map fdefs (\fdef ->
+            let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef))
+            in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignConstraintNameDBName fdef) childfields (map escape parentfields)))
+
+-- | Mock a migration even when the database is not present.
+-- This function performs the same functionality of 'printMigration'
+-- with the difference that an actualy database isn't needed for it.
+mockMigration :: Migration -> IO ()
+mockMigration mig = do
+  smap <- newIORef $ Map.empty
+  let sqlbackend = SqlBackend { connPrepare = \_ -> do
+                                             return Statement
+                                                        { stmtFinalize = return ()
+                                                        , stmtReset = return ()
+                                                        , stmtExecute = undefined
+                                                        , stmtQuery = \_ -> return $ return ()
+                                                        },
+                             connInsertManySql = Nothing,
+                             connInsertSql = undefined,
+                             connStmtMap = smap,
+                             connClose = undefined,
+                             connMigrateSql = mockMigrate,
+                             connBegin = undefined,
+                             connCommit = undefined,
+                             connRollback = undefined,
+                             connEscapeName = escape,
+                             connNoLimit = undefined,
+                             connRDBMS = undefined,
+                             connLimitOffset = undefined,
+                             connLogFunc = undefined}
+      result = runReaderT $ runWriterT $ runWriterT mig 
+  resp <- result sqlbackend
+  mapM_ T.putStrLn $ map snd $ snd resp
