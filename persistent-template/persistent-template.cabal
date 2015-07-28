@@ -21,7 +21,7 @@ library
                    , monad-control            >= 0.2       && < 1.1
                    , bytestring               >= 0.9
                    , text                     >= 0.5
-                   , transformers             >= 0.2       && < 0.5
+                   , transformers             >= 0.4       && < 0.5
                    , containers
                    , aeson                    >= 0.7       && < 0.10
                    , monad-logger

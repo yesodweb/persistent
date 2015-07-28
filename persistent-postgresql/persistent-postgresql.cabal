@@ -16,7 +16,7 @@ extra-source-files: ChangeLog.md
 
 library
     build-depends:   base                  >= 4.6        && < 5
-                   , transformers          >= 0.2.1
+                   , transformers          >= 0.4.0
                    , postgresql-simple     >= 0.4.0    && < 0.5
                    , postgresql-libpq      >= 0.6.1    && < 0.10
                    , persistent            >= 2.2      && < 3
