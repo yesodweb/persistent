@@ -3,8 +3,8 @@ module Database.Persist.Zookeeper.Internal
        where
 
 import Control.Monad.IO.Class (MonadIO (..))
-import Data.Monoid
-import Data.Maybe
+import Data.Monoid ((<>))
+import Data.Maybe (fromJust)
 import qualified Data.Aeson as A
 import qualified Data.Text as T
 import Database.Persist.Types
