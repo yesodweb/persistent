@@ -12,6 +12,7 @@ module Database.Persist.MySQL
     , MySQL.defaultConnectInfo
     , MySQLBase.defaultSSLInfo
     , MySQLConf(..)
+    , mockMigration
     ) where
 
 import Control.Arrow
@@ -19,6 +20,8 @@ import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Error (ErrorT(..))
+import Control.Monad.Trans.Reader (runReaderT)
+import Control.Monad.Trans.Writer (runWriterT)
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import Data.ByteString (ByteString)
@@ -28,6 +31,7 @@ import Data.Function (on)
 import Data.IORef
 import Data.List (find, intercalate, sort, groupBy)
 import Data.Text (Text, pack)
+import qualified Data.Text.IO as T
 import Text.Read (readMaybe)
 import System.Environment (getEnvironment)
 import Data.Acquire (Acquire, mkAcquire, with)
@@ -938,6 +942,6 @@ mockMigration mig = do
                              connRDBMS = undefined,
                              connLimitOffset = undefined,
                              connLogFunc = undefined}
-      result = runReaderT $ runWriterT $ runWriterT mig 
+      result = runReaderT . runWriterT . runWriterT $ mig 
   resp <- result sqlbackend
   mapM_ T.putStrLn $ map snd $ snd resp
