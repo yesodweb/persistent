@@ -34,7 +34,7 @@ library
                    , exceptions               >= 0.6
                    , monad-control            >= 0.3
                    , lifted-base              >= 0.1
-                   , resource-pool
+                   , resource-pool            >= 0.2.2.0
                    , path-pieces              >= 0.1
                    , aeson                    >= 0.5
                    , monad-logger             >= 0.3
