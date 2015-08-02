@@ -245,17 +245,17 @@ instance PersistFieldSql TimeOfDay where
 instance PersistFieldSql UTCTime where
     sqlType _ = SqlDayTime
 instance PersistFieldSql a => PersistFieldSql [a] where
-    sqlType _ = SqlString
+    sqlType _ = SqlArray
 instance PersistFieldSql a => PersistFieldSql (V.Vector a) where
-  sqlType _ = SqlString
+  sqlType _ = SqlArray
 instance (Ord a, PersistFieldSql a) => PersistFieldSql (S.Set a) where
-    sqlType _ = SqlString
+    sqlType _ = SqlArray
 instance (PersistFieldSql a, PersistFieldSql b) => PersistFieldSql (a,b) where
-    sqlType _ = SqlString
+    sqlType _ = SqlArray
 instance PersistFieldSql v => PersistFieldSql (IM.IntMap v) where
-    sqlType _ = SqlString
+    sqlType _ = SqlMap
 instance PersistFieldSql v => PersistFieldSql (M.Map T.Text v) where
-    sqlType _ = SqlString
+    sqlType _ = SqlMap
 instance PersistFieldSql PersistValue where
     sqlType _ = SqlInt64 -- since PersistValue should only be used like this for keys, which in SQL are Int64
 instance PersistFieldSql Checkmark where
@@ -273,4 +273,4 @@ instance PersistFieldSql Rational where
 
 -- An embedded Entity
 instance (PersistField record, PersistEntity record) => PersistFieldSql (Entity record) where
-    sqlType _ = SqlString
+    sqlType _ = SqlMap

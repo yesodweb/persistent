@@ -306,10 +306,10 @@ migrate' connectInfo allDefs getter val = do
         let foreigns = do
               Column { cName=cname, cReference=Just (refTblName, a) } <- newcols
               return $ AlterColumn name (refTblName, addReference allDefs (refName name cname) refTblName cname)
-                 
-        let foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef)) 
+
+        let foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef))
                                         in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignRefTableDBName fdef) (foreignConstraintNameDBName fdef) childfields parentfields)) fdefs
-        
+
         return $ Right $ map showAlterDb $ addTable : uniques ++ foreigns ++ foreignsAlt
       -- No errors and something found, migrate
       (_, _, ([], old')) -> do
@@ -354,7 +354,7 @@ findMaxLenOfColumn allDefs name col =
 
 -- | Helper for 'AddRefence' that finds out the 'entityId'.
 addReference :: [EntityDef] -> DBName -> DBName -> DBName -> AlterColumn
-addReference allDefs fkeyname reftable cname = AddReference reftable fkeyname [cname] [id_] 
+addReference allDefs fkeyname reftable cname = AddReference reftable fkeyname [cname] [id_]
     where
       id_ = maybe (error $ "Could not find ID of entity " ++ show reftable
                          ++ " (allDefs = " ++ show allDefs ++ ")")
@@ -675,6 +675,8 @@ showSqlType SqlString  Nothing    False = "TEXT"
 showSqlType SqlString  (Just i)   True  = "VARCHAR(" ++ show i ++ ") CHARACTER SET utf8"
 showSqlType SqlString  (Just i)   False = "VARCHAR(" ++ show i ++ ")"
 showSqlType SqlTime    _          _     = "TIME"
+showSqlType SqlMap     _          _     = "TEXT" -- serialized to JSON
+showSqlType SqlArray   _          _     = "TEXT" -- serialized to JSON
 showSqlType (SqlOther t) _        _     = T.unpack t
 
 -- | Render an action that must be done on the database.
