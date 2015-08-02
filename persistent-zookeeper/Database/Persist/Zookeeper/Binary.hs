@@ -5,8 +5,8 @@ module Database.Persist.Zookeeper.Binary(
 ) where
 
 import Control.Arrow((***))
-import Data.Fixed
-import Data.Time
+import Data.Fixed (Pico)
+import Data.Time 
 import Data.Int (Int64)
 import Data.Word (Word8)
 import Control.Monad (liftM, liftM3)
