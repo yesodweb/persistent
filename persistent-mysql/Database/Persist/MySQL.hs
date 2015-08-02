@@ -867,3 +867,77 @@ instance PersistConfig MySQLConf where
                          , MySQL.connectDatabase = maybeEnv database "DATABASE"
                          }
           }
+
+mockMigrate :: MySQL.ConnectInfo
+         -> [EntityDef]
+         -> (Text -> IO Statement)
+         -> EntityDef
+         -> IO (Either [Text] [(Bool, Text)])
+mockMigrate connectInfo allDefs getter val = do
+    let name = entityDB val
+    let (newcols, udefs, fdefs) = mkColumns allDefs val
+    let udspair = map udToPair udefs
+    case ([], [], partitionEithers []) of
+      -- Nothing found, create everything
+      ([], [], _) -> do
+        let uniques = flip concatMap udspair $ \(uname, ucols) ->
+                      [ AlterTable name $
+                        AddUniqueConstraint uname $
+                        map (findTypeAndMaxLen name) ucols ]
+        let foreigns = do
+              Column { cName=cname, cReference=Just (refTblName, a) } <- newcols
+              return $ AlterColumn name (refTblName, addReference allDefs (refName name cname) refTblName cname)
+                 
+        let foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef)) 
+                                        in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignRefTableDBName fdef) (foreignConstraintNameDBName fdef) childfields parentfields)) fdefs
+        
+        return $ Right $ map showAlterDb $ (addTable newcols val): uniques ++ foreigns ++ foreignsAlt
+      -- No errors and something found, migrate
+      (_, _, ([], old')) -> do
+        let excludeForeignKeys (xs,ys) = (map (\c -> case cReference c of
+                                                    Just (_,fk) -> case find (\f -> fk == foreignConstraintNameDBName f) fdefs of
+                                                                     Just _ -> c { cReference = Nothing }
+                                                                     Nothing -> c
+                                                    Nothing -> c) xs,ys)
+            (acs, ats) = getAlters allDefs name (newcols, udspair) $ excludeForeignKeys $ partitionEithers old'
+            acs' = map (AlterColumn name) acs
+            ats' = map (AlterTable  name) ats
+        return $ Right $ map showAlterDb $ acs' ++ ats'
+      -- Errors
+      (_, _, (errs, _)) -> return $ Left errs
+
+      where
+        findTypeAndMaxLen tblName col = let (col', ty) = findTypeOfColumn allDefs tblName col
+                                            (_, ml) = findMaxLenOfColumn allDefs tblName col
+                                         in (col', ty, ml)
+
+
+-- | Mock a migration even when the database is not present.
+-- This function will mock the migration for a database even when 
+-- the actual database isn't already present in the system.
+mockMigration :: Migration -> IO ()
+mockMigration mig = do
+  smap <- newIORef $ Map.empty
+  let sqlbackend = SqlBackend { connPrepare = \_ -> do
+                                             return Statement
+                                                        { stmtFinalize = return ()
+                                                        , stmtReset = return ()
+                                                        , stmtExecute = undefined
+                                                        , stmtQuery = \_ -> return $ return ()
+                                                        },
+                             connInsertManySql = Nothing,
+                             connInsertSql = undefined,
+                             connStmtMap = smap,
+                             connClose = undefined,
+                             connMigrateSql = mockMigrate undefined,
+                             connBegin = undefined,
+                             connCommit = undefined,
+                             connRollback = undefined,
+                             connEscapeName = undefined,
+                             connNoLimit = undefined,
+                             connRDBMS = undefined,
+                             connLimitOffset = undefined,
+                             connLogFunc = undefined}
+      result = runReaderT $ runWriterT $ runWriterT mig 
+  resp <- result sqlbackend
+  mapM_ T.putStrLn $ map snd $ snd resp
