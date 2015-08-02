@@ -8,7 +8,7 @@ module Database.Persist.Zookeeper.Query
        where
 
 import Database.Persist
-import Data.Monoid
+import Data.Monoid ((<>))
 import qualified Data.List as L
 import Control.Monad
 import Control.Monad.IO.Class (MonadIO (..))
@@ -19,9 +19,9 @@ import Database.Persist.Zookeeper.Config
 import Database.Persist.Zookeeper.Internal
 import Database.Persist.Zookeeper.Store ()
 import Database.Persist.Zookeeper.ZooUtil
-import Data.Conduit
+import Data.Conduit (yield, await, ($$))
 import qualified Data.Conduit.List as CL
-import Data.Acquire
+import Data.Acquire (with)
 
 instance PersistQuery Z.Zookeeper where
   updateWhere filterList valList = do
