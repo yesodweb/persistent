@@ -24,16 +24,14 @@ import Database.Persist.TH
 import Language.Haskell.TH
 import qualified Database.Zookeeper as Z
 import qualified Database.Zookeeper.Pool as Z
-import Data.Pool
+import Data.Pool (Pool, withResource)
 import Data.Aeson
-import Control.Monad ()
-import Control.Monad.IO.Class
-import Control.Monad.Trans.Control
+import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Reader
 import Data.Scientific() -- we require only RealFrac instance of Scientific
-import Data.Time
-import Control.Exception
-import Control.Concurrent
+import Data.Time (NominalDiffTime)
+import Control.Exception (throwIO)
+import Control.Concurrent (threadDelay)
 
 -- | Information required to connect to a Zookeeper server
 data ZookeeperConf = ZookeeperConf {
