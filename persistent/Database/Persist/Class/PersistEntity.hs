@@ -314,7 +314,7 @@ fromPersistValueJSON z = case z of
 --
 -- @
 -- data SeverityLevel = Low | Medium | Critical | High
---   deriving (Enum, Boundud)
+--   deriving (Enum, Bounded)
 -- instance PersistField SeverityLevel where
 --   fromPersistValue = fromPersistValueEnum
 --   toPersistValue = toPersistValueEnum
@@ -330,7 +330,7 @@ toPersistValueEnum = toPersistValue . fromEnum
 --
 -- @
 -- data SeverityLevel = Low | Medium | Critical | High
---   deriving (Enum, Boundud)
+--   deriving (Enum, Bounded)
 -- instance PersistField SeverityLevel where
 --   fromPersistValue = fromPersistValueEnum
 --   toPersistValue = toPersistValueEnum
