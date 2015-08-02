@@ -12,6 +12,7 @@ module Database.Persist.MySQL
     , MySQL.defaultConnectInfo
     , MySQLBase.defaultSSLInfo
     , MySQLConf(..)
+    , mockMigration
     ) where
 
 import Control.Arrow
@@ -19,6 +20,8 @@ import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Error (ErrorT(..))
+import Control.Monad.Trans.Reader (runReaderT)
+import Control.Monad.Trans.Writer (runWriterT)
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import Data.ByteString (ByteString)
@@ -28,6 +31,7 @@ import Data.Function (on)
 import Data.IORef
 import Data.List (find, intercalate, sort, groupBy)
 import Data.Text (Text, pack)
+import qualified Data.Text.IO as T
 import Text.Read (readMaybe)
 import System.Environment (getEnvironment)
 import Data.Acquire (Acquire, mkAcquire, with)
@@ -285,20 +289,6 @@ migrate' connectInfo allDefs getter val = do
     case (idClmn, old, partitionEithers old) of
       -- Nothing found, create everything
       ([], [], _) -> do
-        let idtxt = case entityPrimary val of
-                Just pdef -> concat [" PRIMARY KEY (", intercalate "," $ map (escapeDBName . fieldDB) $ compositeFields pdef, ")"]
-                Nothing   -> concat [escapeDBName $ fieldDB $ entityId val, " BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY"]
-
-        let addTable = AddTable $ concat
-                            -- Lower case e: see Database.Persist.Sql.Migration
-                [ "CREATe TABLE "
-                , escapeDBName name
-                , "("
-                , idtxt
-                , if null newcols then [] else ","
-                , intercalate "," $ map showColumn newcols
-                , ")"
-                ]
         let uniques = flip concatMap udspair $ \(uname, ucols) ->
                       [ AlterTable name $
                         AddUniqueConstraint uname $
@@ -310,7 +300,7 @@ migrate' connectInfo allDefs getter val = do
         let foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef)) 
                                         in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignRefTableDBName fdef) (foreignConstraintNameDBName fdef) childfields parentfields)) fdefs
         
-        return $ Right $ map showAlterDb $ addTable : uniques ++ foreigns ++ foreignsAlt
+        return $ Right $ map showAlterDb $ (addTable newcols val): uniques ++ foreigns ++ foreignsAlt
       -- No errors and something found, migrate
       (_, _, ([], old')) -> do
         let excludeForeignKeys (xs,ys) = (map (\c -> case cReference c of
@@ -330,6 +320,21 @@ migrate' connectInfo allDefs getter val = do
                                             (_, ml) = findMaxLenOfColumn allDefs tblName col
                                          in (col', ty, ml)
 
+addTable cols entity = AddTable $ concat
+           -- Lower case e: see Database.Persist.Sql.Migration
+           [ "CREATe TABLE "
+           , escapeDBName name
+           , "("
+           , idtxt
+           , if null cols then [] else ","
+           , intercalate "," $ map showColumn cols
+           , ")"
+           ]
+    where
+      name = entityDB entity
+      idtxt = case entityPrimary entity of
+                Just pdef -> concat [" PRIMARY KEY (", intercalate "," $ map (escapeDBName . fieldDB) $ compositeFields pdef, ")"]
+                Nothing   -> concat [escapeDBName $ fieldDB $ entityId entity, " BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY"]
 
 -- | Find out the type of a column.
 findTypeOfColumn :: [EntityDef] -> DBName -> DBName -> (DBName, FieldType)
@@ -866,3 +871,77 @@ instance PersistConfig MySQLConf where
                          , MySQL.connectDatabase = maybeEnv database "DATABASE"
                          }
           }
+
+mockMigrate :: MySQL.ConnectInfo
+         -> [EntityDef]
+         -> (Text -> IO Statement)
+         -> EntityDef
+         -> IO (Either [Text] [(Bool, Text)])
+mockMigrate connectInfo allDefs getter val = do
+    let name = entityDB val
+    let (newcols, udefs, fdefs) = mkColumns allDefs val
+    let udspair = map udToPair udefs
+    case ([], [], partitionEithers []) of
+      -- Nothing found, create everything
+      ([], [], _) -> do
+        let uniques = flip concatMap udspair $ \(uname, ucols) ->
+                      [ AlterTable name $
+                        AddUniqueConstraint uname $
+                        map (findTypeAndMaxLen name) ucols ]
+        let foreigns = do
+              Column { cName=cname, cReference=Just (refTblName, a) } <- newcols
+              return $ AlterColumn name (refTblName, addReference allDefs (refName name cname) refTblName cname)
+                 
+        let foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef)) 
+                                        in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignRefTableDBName fdef) (foreignConstraintNameDBName fdef) childfields parentfields)) fdefs
+        
+        return $ Right $ map showAlterDb $ (addTable newcols val): uniques ++ foreigns ++ foreignsAlt
+      -- No errors and something found, migrate
+      (_, _, ([], old')) -> do
+        let excludeForeignKeys (xs,ys) = (map (\c -> case cReference c of
+                                                    Just (_,fk) -> case find (\f -> fk == foreignConstraintNameDBName f) fdefs of
+                                                                     Just _ -> c { cReference = Nothing }
+                                                                     Nothing -> c
+                                                    Nothing -> c) xs,ys)
+            (acs, ats) = getAlters allDefs name (newcols, udspair) $ excludeForeignKeys $ partitionEithers old'
+            acs' = map (AlterColumn name) acs
+            ats' = map (AlterTable  name) ats
+        return $ Right $ map showAlterDb $ acs' ++ ats'
+      -- Errors
+      (_, _, (errs, _)) -> return $ Left errs
+
+      where
+        findTypeAndMaxLen tblName col = let (col', ty) = findTypeOfColumn allDefs tblName col
+                                            (_, ml) = findMaxLenOfColumn allDefs tblName col
+                                         in (col', ty, ml)
+
+
+-- | Mock a migration even when the database is not present.
+-- This function will mock the migration for a database even when 
+-- the actual database isn't already present in the system.
+mockMigration :: Migration -> IO ()
+mockMigration mig = do
+  smap <- newIORef $ Map.empty
+  let sqlbackend = SqlBackend { connPrepare = \_ -> do
+                                             return Statement
+                                                        { stmtFinalize = return ()
+                                                        , stmtReset = return ()
+                                                        , stmtExecute = undefined
+                                                        , stmtQuery = \_ -> return $ return ()
+                                                        },
+                             connInsertManySql = Nothing,
+                             connInsertSql = undefined,
+                             connStmtMap = smap,
+                             connClose = undefined,
+                             connMigrateSql = mockMigrate undefined,
+                             connBegin = undefined,
+                             connCommit = undefined,
+                             connRollback = undefined,
+                             connEscapeName = undefined,
+                             connNoLimit = undefined,
+                             connRDBMS = undefined,
+                             connLimitOffset = undefined,
+                             connLogFunc = undefined}
+      result = runReaderT . runWriterT . runWriterT $ mig 
+  resp <- result sqlbackend
+  mapM_ T.putStrLn $ map snd $ snd resp
