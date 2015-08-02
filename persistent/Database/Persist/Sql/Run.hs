@@ -71,8 +71,7 @@ withSqlPool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m)
             -> (Pool SqlBackend -> m a)
             -> m a
 withSqlPool mkConn connCount f = do
-    pool <- createSqlPool mkConn connCount
-    f pool
+    bracket (createSqlPool mkConn connCount) (liftIO . destroyAllResources) f
 
 createSqlPool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m)
               => (LogFunc -> IO SqlBackend)
