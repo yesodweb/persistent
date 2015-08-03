@@ -16,7 +16,9 @@ module Database.Persist.Class.PersistEntity
 
     , keyValueEntityToJSON, keyValueEntityFromJSON
     , entityIdToJSON, entityIdFromJSON
+      -- * PersistField based on other typeclasses
     , toPersistValueJSON, fromPersistValueJSON
+    , toPersistValueEnum, fromPersistValueEnum
     ) where
 
 import Database.Persist.Types.Base
@@ -300,4 +302,44 @@ fromPersistValueJSON z = case z of
             Success a -> Right a
         mapLeft _ (Right a) = Right a
         mapLeft f (Left b)  = Left (f b)
+
+-- | Convenience function for getting a free 'PersistField' instance
+-- from a type with an 'Enum' instance. The function 'derivePersistField'
+-- from the persistent-template package should generally be preferred.
+-- However, if you want to ensure that an @ORDER BY@ clause that uses 
+-- your field will order rows by the data constructor order, this is 
+-- a better choice.
+-- 
+-- Example usage in combination with `fromPersistValueEnum`:
+--
+-- @
+-- data SeverityLevel = Low | Medium | Critical | High
+--   deriving (Enum, Bounded)
+-- instance PersistField SeverityLevel where
+--   fromPersistValue = fromPersistValueEnum
+--   toPersistValue = toPersistValueEnum
+-- @
+toPersistValueEnum :: Enum a => a -> PersistValue
+toPersistValueEnum = toPersistValue . fromEnum
+
+-- | Convenience function for getting a free 'PersistField' instance
+-- from a type with an 'Enum' instance. This function also requires
+-- a `Bounded` instance to improve the reporting of errors.
+--
+-- Example usage in combination with `toPersistValueEnum`:
+--
+-- @
+-- data SeverityLevel = Low | Medium | Critical | High
+--   deriving (Enum, Bounded)
+-- instance PersistField SeverityLevel where
+--   fromPersistValue = fromPersistValueEnum
+--   toPersistValue = toPersistValueEnum
+-- @
+fromPersistValueEnum :: (Enum a, Bounded a) => PersistValue -> Either Text a
+fromPersistValueEnum v = fromPersistValue v >>= go
+  where go i = let res = toEnum i in
+               if i >= fromEnum (asTypeOf minBound res) && i <= fromEnum (asTypeOf maxBound res)
+                 then Right res
+                 else Left ("The number " `mappend` T.pack (show i) `mappend` " was out of the "
+                  `mappend` "allowed bounds for an enum type")
 
