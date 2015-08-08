@@ -40,6 +40,7 @@ import qualified Database.PostgreSQL.LibPQ as LibPQ
 import Control.Monad.Trans.Resource
 import Control.Exception (throw)
 import Control.Monad.IO.Class (MonadIO (..))
+import Data.Data
 import Data.Typeable
 import Data.IORef
 import qualified Data.Map as Map
@@ -913,7 +914,7 @@ data PostgresConf = PostgresConf
       -- ^ The connection string.
     , pgPoolSize :: Int
       -- ^ How many connections should be held on the connection pool.
-    } deriving Show
+    } deriving (Show, Read, Data, Typeable)
 
 instance FromJSON PostgresConf where
     parseJSON v = modifyFailure ("Persistent: error loading PostgreSQL conf: " ++) $
@@ -1038,6 +1039,6 @@ mockMigration mig = do
                              connRDBMS = undefined,
                              connLimitOffset = undefined,
                              connLogFunc = undefined}
-      result = runReaderT $ runWriterT $ runWriterT mig 
+      result = runReaderT $ runWriterT $ runWriterT mig
   resp <- result sqlbackend
   mapM_ T.putStrLn $ map snd $ snd resp
