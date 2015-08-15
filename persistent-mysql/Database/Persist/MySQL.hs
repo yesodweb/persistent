@@ -176,7 +176,7 @@ withStmt' conn query vals = do
     fetchRows result = liftIO $ do
       -- Find out the type of the columns
       fields <- MySQLBase.fetchFields result
-      let getters = [ maybe PersistNull (getGetter (MySQLBase.fieldType f) f . Just) | f <- fields]
+      let getters = [ maybe PersistNull (getGetter f f . Just) | f <- fields]
           convert = use getters
             where use (g:gs) (col:cols) =
                     let v  = g col
@@ -228,47 +228,67 @@ convertPV f = (f .) . MySQL.convert
 
 -- | Get the corresponding @'Getter' 'PersistValue'@ depending on
 -- the type of the column.
-getGetter :: MySQLBase.Type -> Getter PersistValue
--- Bool
-getGetter MySQLBase.Tiny       = convertPV PersistBool
--- Int64
-getGetter MySQLBase.Int24      = convertPV PersistInt64
-getGetter MySQLBase.Short      = convertPV PersistInt64
-getGetter MySQLBase.Long       = convertPV PersistInt64
-getGetter MySQLBase.LongLong   = convertPV PersistInt64
--- Double
-getGetter MySQLBase.Float      = convertPV PersistDouble
-getGetter MySQLBase.Double     = convertPV PersistDouble
-getGetter MySQLBase.Decimal    = convertPV PersistDouble
-getGetter MySQLBase.NewDecimal = convertPV PersistDouble
--- ByteString and Text
-getGetter MySQLBase.VarChar    = convertPV PersistByteString
-getGetter MySQLBase.VarString  = convertPV PersistByteString
-getGetter MySQLBase.String     = convertPV PersistByteString
-getGetter MySQLBase.Blob       = convertPV PersistByteString
-getGetter MySQLBase.TinyBlob   = convertPV PersistByteString
-getGetter MySQLBase.MediumBlob = convertPV PersistByteString
-getGetter MySQLBase.LongBlob   = convertPV PersistByteString
--- Time-related
-getGetter MySQLBase.Time       = convertPV PersistTimeOfDay
-getGetter MySQLBase.DateTime   = convertPV PersistUTCTime
-getGetter MySQLBase.Timestamp  = convertPV PersistUTCTime
-getGetter MySQLBase.Date       = convertPV PersistDay
-getGetter MySQLBase.NewDate    = convertPV PersistDay
-getGetter MySQLBase.Year       = convertPV PersistDay
--- Null
-getGetter MySQLBase.Null       = \_ _ -> PersistNull
--- Controversial conversions
-getGetter MySQLBase.Set        = convertPV PersistText
-getGetter MySQLBase.Enum       = convertPV PersistText
--- Conversion using PersistDbSpecific
-getGetter MySQLBase.Geometry   = \_ m ->
-  case m of
-    Just g -> PersistDbSpecific g
-    Nothing -> error "Unexpected null in database specific value"
--- Unsupported
-getGetter other = error $ "MySQL.getGetter: type " ++
-                  show other ++ " not supported."
+getGetter :: MySQLBase.Field -> Getter PersistValue
+getGetter field = go (MySQLBase.fieldType field) (MySQLBase.fieldCharSet field)
+  where
+    -- Bool
+    go MySQLBase.Tiny       _  = convertPV PersistBool
+    -- Int64
+    go MySQLBase.Int24      _  = convertPV PersistInt64
+    go MySQLBase.Short      _  = convertPV PersistInt64
+    go MySQLBase.Long       _  = convertPV PersistInt64
+    go MySQLBase.LongLong   _  = convertPV PersistInt64
+    -- Double
+    go MySQLBase.Float      _  = convertPV PersistDouble
+    go MySQLBase.Double     _  = convertPV PersistDouble
+    go MySQLBase.Decimal    _  = convertPV PersistDouble
+    go MySQLBase.NewDecimal _  = convertPV PersistDouble
+
+    -- ByteString and Text
+
+    -- The MySQL C client (and by extension the Haskell mysql package) doesn't distinguish between binary and non-binary string data at the type level.
+    -- (e.g. both BLOB and TEXT have the MySQLBase.Blob type).
+    -- Instead, the character set distinguishes them. Binary data uses character set number 63.
+    -- See https://dev.mysql.com/doc/refman/5.6/en/c-api-data-structures.html (Search for "63")
+    go MySQLBase.VarChar    63 = convertPV PersistByteString
+    go MySQLBase.VarString  63 = convertPV PersistByteString
+    go MySQLBase.String     63 = convertPV PersistByteString
+
+    go MySQLBase.VarChar    _  = convertPV PersistText
+    go MySQLBase.VarString  _  = convertPV PersistText
+    go MySQLBase.String     _  = convertPV PersistText
+    
+    go MySQLBase.Blob       63 = convertPV PersistByteString
+    go MySQLBase.TinyBlob   63 = convertPV PersistByteString
+    go MySQLBase.MediumBlob 63 = convertPV PersistByteString
+    go MySQLBase.LongBlob   63 = convertPV PersistByteString
+
+    go MySQLBase.Blob       _  = convertPV PersistText
+    go MySQLBase.TinyBlob   _  = convertPV PersistText
+    go MySQLBase.MediumBlob _  = convertPV PersistText
+    go MySQLBase.LongBlob   _  = convertPV PersistText
+
+    -- Time-related
+    go MySQLBase.Time       _  = convertPV PersistTimeOfDay
+    go MySQLBase.DateTime   _  = convertPV PersistUTCTime
+    go MySQLBase.Timestamp  _  = convertPV PersistUTCTime
+    go MySQLBase.Date       _  = convertPV PersistDay
+    go MySQLBase.NewDate    _  = convertPV PersistDay
+    go MySQLBase.Year       _  = convertPV PersistDay
+    -- Null
+    go MySQLBase.Null       _  = \_ _ -> PersistNull
+    -- Controversial conversions
+    go MySQLBase.Set        _  = convertPV PersistText
+    go MySQLBase.Enum       _  = convertPV PersistText
+    -- Conversion using PersistDbSpecific
+    go MySQLBase.Geometry   _  = \_ m ->
+      case m of
+        Just g -> PersistDbSpecific g
+        Nothing -> error "Unexpected null in database specific value"
+    -- Unsupported
+    go other _ = error $ "MySQL.getGetter: type " ++
+                      show other ++ " not supported."
+
 
 
 ----------------------------------------------------------------------
@@ -453,9 +473,8 @@ getColumns connectInfo getter def = do
                   getColumn connectInfo getter (entityDB def)
 
     helperCntrs = do
-      let check [ PersistByteString cntrName
-                , PersistByteString clmnName] = return ( T.decodeUtf8 cntrName
-                                                       , T.decodeUtf8 clmnName )
+      let check [ PersistText cntrName
+                , PersistText clmnName] = return ( cntrName, clmnName )
           check other = fail $ "helperCntrs: unexpected " ++ show other
       rows <- mapM check =<< CL.consume
       return $ map (Right . Right . (DBName . fst . head &&& map (DBName . snd)))
@@ -468,9 +487,9 @@ getColumn :: MySQL.ConnectInfo
           -> DBName
           -> [PersistValue]
           -> IO (Either Text Column)
-getColumn connectInfo getter tname [ PersistByteString cname
-                                   , PersistByteString null_
-                                   , PersistByteString type'
+getColumn connectInfo getter tname [ PersistText cname
+                                   , PersistText null_
+                                   , PersistText type'
                                    , default'] =
     fmap (either (Left . pack) Right) $
     runErrorT $ do
@@ -499,18 +518,18 @@ getColumn connectInfo getter tname [ PersistByteString cname
                                      \COLUMN_NAME"
       let vars = [ PersistText $ pack $ MySQL.connectDatabase connectInfo
                  , PersistText $ unDBName $ tname
-                 , PersistByteString cname
+                 , PersistText cname
                  , PersistText $ pack $ MySQL.connectDatabase connectInfo ]
       cntrs <- with (stmtQuery stmt vars) ($$ CL.consume)
       ref <- case cntrs of
                [] -> return Nothing
-               [[PersistByteString tab, PersistByteString ref, PersistInt64 pos]] ->
-                   return $ if pos == 1 then Just (DBName $ T.decodeUtf8 tab, DBName $ T.decodeUtf8 ref) else Nothing
+               [[PersistText tab, PersistText ref, PersistInt64 pos]] ->
+                   return $ if pos == 1 then Just (DBName tab, DBName ref) else Nothing
                _ -> fail "MySQL.getColumn/getRef: never here"
 
       -- Okay!
       return Column
-        { cName = DBName $ T.decodeUtf8 cname
+        { cName = DBName $ cname
         , cNull = null_ == "YES"
         , cSqlType = parseType type'
         , cDefault = default_
@@ -525,7 +544,7 @@ getColumn _ _ _ x =
 
 -- | Parse the type of column as returned by MySQL's
 -- @INFORMATION_SCHEMA@ tables.
-parseType :: ByteString -> SqlType
+parseType :: Text -> SqlType
 parseType "bigint(20)" = SqlInt64
 parseType "decimal(32,20)" = SqlNumeric 32 20
 {-
@@ -564,7 +583,7 @@ parseType "date"       = SqlDay
 --parseType "newdate"    = SqlDay
 --parseType "year"       = SqlDay
 -}
-parseType b            = SqlOther $ T.decodeUtf8 b
+parseType b            = SqlOther b
 
 
 ----------------------------------------------------------------------
