@@ -320,6 +320,7 @@ migrate' connectInfo allDefs getter val = do
                                             (_, ml) = findMaxLenOfColumn allDefs tblName col
                                          in (col', ty, ml)
 
+addTable :: [Column] -> EntityDef -> AlterDB
 addTable cols entity = AddTable $ concat
            -- Lower case e: see Database.Persist.Sql.Migration
            [ "CREATe TABLE "
