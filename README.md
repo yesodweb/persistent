@@ -1,5 +1,7 @@
 ## Learn more: http://yesodweb.com/book/persistent
 
+[![Build Status](https://travis-ci.org/yesodweb/persistent.svg?branch=master)](https://travis-ci.org/yesodweb/persistent)
+
 A Haskell datastore. Datastores are often referred to as "ORM"s. While 'O' traditionally means object, the concept can be generalized as:
 
     avoidance of boilerplate serialization
