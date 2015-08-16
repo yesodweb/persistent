@@ -55,7 +55,7 @@ import qualified Database.MySQL.Simple.Types  as MySQL
 import qualified Database.MySQL.Base          as MySQLBase
 import qualified Database.MySQL.Base.Types    as MySQLBase
 import Control.Monad.Trans.Control (MonadBaseControl)
-import Control.Monad.Trans.Resource (MonadResource, runResourceT)
+import Control.Monad.Trans.Resource (runResourceT)
 
 
 -- | Create a MySQL connection pool and run the given action.
@@ -98,7 +98,7 @@ withMySQLConn = withSqlConn . open'
 
 -- | Internal function that opens a connection to the MySQL
 -- server.
-open' :: MySQL.ConnectInfo -> LogFunc -> IO Connection
+open' :: MySQL.ConnectInfo -> LogFunc -> IO SqlBackend
 open' ci logFunc = do
     conn <- MySQL.connect ci
     MySQLBase.autocommit conn False -- disable autocommit!
@@ -294,7 +294,7 @@ migrate' connectInfo allDefs getter val = do
                         AddUniqueConstraint uname $
                         map (findTypeAndMaxLen name) ucols ]
         let foreigns = do
-              Column { cName=cname, cReference=Just (refTblName, a) } <- newcols
+              Column { cName=cname, cReference=Just (refTblName, _a) } <- newcols
               return $ AlterColumn name (refTblName, addReference allDefs (refName name cname) refTblName cname)
                  
         let foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef)) 
@@ -612,20 +612,20 @@ getAlters allDefs tblName (c1, u1) (c2, u2) =
 -- changed in the columns @oldColumns@ for @newColumn@ to be
 -- supported.
 findAlters :: DBName -> [EntityDef] -> Column -> [Column] -> ([AlterColumn'], [Column])
-findAlters tblName allDefs col@(Column name isNull type_ def defConstraintName maxLen ref) cols =
+findAlters tblName allDefs col@(Column name isNull type_ def _defConstraintName maxLen ref) cols =
     case filter ((name ==) . cName) cols of
     -- new fkey that didnt exist before
         [] -> case ref of
                Nothing -> ([(name, Add' col)],[])
-               Just (tname, b) -> let cnstr = [addReference allDefs (refName tblName name) tname name]
+               Just (tname, _b) -> let cnstr = [addReference allDefs (refName tblName name) tname name]
                                   in (map ((,) tname) (Add' col : cnstr), cols)
-        Column _ isNull' type_' def' defConstraintName' maxLen' ref':_ ->
+        Column _ isNull' type_' def' _defConstraintName' maxLen' ref':_ ->
             let -- Foreign key
                 refDrop = case (ref == ref', ref') of
                             (False, Just (_, cname)) -> [(name, DropReference cname)]
                             _ -> []
                 refAdd  = case (ref == ref', ref) of
-                            (False, Just (tname, cname)) -> [(tname, addReference allDefs (refName tblName name) tname name)]
+                            (False, Just (tname, _cname)) -> [(tname, addReference allDefs (refName tblName name) tname name)]
                             _ -> []
                 -- Type and nullability
                 modType | showSqlType type_ maxLen False `ciEquals` showSqlType type_' maxLen' False && isNull == isNull' = []
@@ -647,7 +647,7 @@ findAlters tblName allDefs col@(Column name isNull type_ def defConstraintName m
 -- | Prints the part of a @CREATE TABLE@ statement about a given
 -- column.
 showColumn :: Column -> String
-showColumn (Column n nu t def defConstraintName maxLen ref) = concat
+showColumn (Column n nu t def _defConstraintName maxLen ref) = concat
     [ escapeDBName n
     , " "
     , showSqlType t maxLen True
@@ -878,7 +878,7 @@ mockMigrate :: MySQL.ConnectInfo
          -> (Text -> IO Statement)
          -> EntityDef
          -> IO (Either [Text] [(Bool, Text)])
-mockMigrate connectInfo allDefs getter val = do
+mockMigrate _connectInfo allDefs _getter val = do
     let name = entityDB val
     let (newcols, udefs, fdefs) = mkColumns allDefs val
     let udspair = map udToPair udefs
@@ -890,7 +890,7 @@ mockMigrate connectInfo allDefs getter val = do
                         AddUniqueConstraint uname $
                         map (findTypeAndMaxLen name) ucols ]
         let foreigns = do
-              Column { cName=cname, cReference=Just (refTblName, a) } <- newcols
+              Column { cName=cname, cReference=Just (refTblName, _a) } <- newcols
               return $ AlterColumn name (refTblName, addReference allDefs (refName name cname) refTblName cname)
                  
         let foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef)) 
