@@ -437,7 +437,7 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
             -- for https://github.com/yesodweb/persistent/issues/152
 
     createText newcols fdefs udspair =
-        (addTable name newcols entity) : uniques ++ references ++ foreignsAlt
+        (addTable newcols entity) : uniques ++ references ++ foreignsAlt
       where
         uniques = flip concatMap udspair $ \(uname, ucols) ->
                 [AlterTable name $ AddUniqueConstraint uname ucols]
@@ -448,18 +448,19 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
             let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef))
             in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignConstraintNameDBName fdef) childfields (map escape parentfields)))
 
-addTable :: DBName -> [Column] -> EntityDef -> AlterDB
-addTable name cols entity = AddTable $ T.concat
-                        -- Lower case e: see Database.Persist.Sql.Migration
-                        [ "CREATe TABLE " -- DO NOT FIX THE CAPITALIZATION!
-                        , escape name
-                        , "("
-                        , idtxt
-                        , if null cols then "" else ","
-                        , T.intercalate "," $ map showColumn cols
-                        , ")"
-                        ]
+addTable :: [Column] -> EntityDef -> AlterDB
+addTable cols entity = AddTable $ T.concat
+                       -- Lower case e: see Database.Persist.Sql.Migration
+                       [ "CREATe TABLE " -- DO NOT FIX THE CAPITALIZATION!
+                       , escape name
+                       , "("
+                       , idtxt
+                       , if null cols then "" else ","
+                       , T.intercalate "," $ map showColumn cols
+                       , ")"
+                       ]
     where
+      name = entityDB entity
       idtxt = case entityPrimary entity of
                 Just pdef -> T.concat [" PRIMARY KEY (", T.intercalate "," $ map (escape . fieldDB) $ compositeFields pdef, ")"]
                 Nothing   ->
@@ -1002,7 +1003,7 @@ mockMigrate allDefs _ entity = fmap (fmap $ map showAlterDb) $ do
             -- for https://github.com/yesodweb/persistent/issues/152
 
     createText newcols fdefs udspair =
-        (addTable name newcols entity) : uniques ++ references ++ foreignsAlt
+        (addTable newcols entity) : uniques ++ references ++ foreignsAlt
       where
         uniques = flip concatMap udspair $ \(uname, ucols) ->
                 [AlterTable name $ AddUniqueConstraint uname ucols]
