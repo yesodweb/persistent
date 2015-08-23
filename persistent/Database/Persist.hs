@@ -67,7 +67,12 @@ f /<-. a = Filter f (Right a) NotIn
 
 infixl 3 ||.
 (||.) :: forall v. [Filter v] -> [Filter v] -> [Filter v]
--- | the OR of two lists of filters
+-- | the OR of two lists of filters. For example: 
+-- | selectList([PersonAge >. 25, PersonAge <. 30] ||. [PersonIncome >. 15000, PersonIncome <. 25000]) []
+-- | will filter records where a person's age is between (25 and 30) OR a person's income is between (15,000 and 25000). 
+-- | If you are looking for an &&. operator to do (A AND B AND (C OR D)) you can use the ++ operator instead as there is no &&. For example: 
+-- | selectList([PersonAge >. 25, PersonAge <. 30] ++ ([PersonCategory ==. 1] ||.  [PersonCategory ==. 5])) []
+-- | will filter records where a person's age is between (25 and 30) AND (person's category is either 1 or 5)  
 a ||. b = [FilterOr  [FilterAnd a, FilterAnd b]]
 
 listToJSON :: [PersistValue] -> T.Text
