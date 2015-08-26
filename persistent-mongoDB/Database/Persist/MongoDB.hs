@@ -518,7 +518,7 @@ instance FromJSON (BackendKey DB.MongoContext) where
         maybe
           (fail "Invalid base64")
           (return . MongoKey . persistObjectIdToDbOid . PersistObjectId)
-          $ fmap (i2bs (8 * 12) . fst) $ headMay $ readHex $ T.unpack t
+          $ fmap (i2bs (8 * 12) . fst) $ headMay $ readHex $ T.unpack $ stripO t
       where
         -- should these be exported from Types/Base.hs ?
         headMay []    = Nothing
@@ -529,6 +529,12 @@ instance FromJSON (BackendKey DB.MongoContext) where
         i2bs :: Int -> Integer -> BS.ByteString
         i2bs l i = BS.unfoldr (\l' -> if l' < 0 then Nothing else Just (fromIntegral (i `shiftR` l'), l' - 8)) (l-8)
         {-# INLINE i2bs #-}
+        
+        -- | Knock the leading 'o' off if necessary
+        stripO :: Text -> Text
+        stripO text = case (T.uncons text) of
+                        Just ('o', rest) -> rest
+                        _ -> text
 
 -- | older versions versions of haddock (like that on hackage) do not show that this defines
 -- @BackendKey DB.MongoContext = MongoKey { unMongoKey :: DB.ObjectId }@
