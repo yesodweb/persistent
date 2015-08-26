@@ -511,7 +511,7 @@ keyFrom_id idVal = case cast idVal of
 -- and then use newtype deriving
 -- however, that would create an orphan instance
 instance ToJSON (BackendKey DB.MongoContext) where
-    toJSON (MongoKey (Oid x y)) = toJSON $ DB.showHexLen 8 x $ DB.showHexLen 16 y ""
+    toJSON (MongoKey (Oid x y)) = toJSON $ showChar 'o' . DB.showHexLen 8 x $ DB.showHexLen 16 y ""
 
 instance FromJSON (BackendKey DB.MongoContext) where
     parseJSON = withText "MongoKey" $ \t ->
