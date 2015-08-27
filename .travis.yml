@@ -29,6 +29,8 @@ script:
     - mega-sdist --test
     - cd persistent-test
     - cabal install -j --only-dep  --enable-tests --force-reinstalls
+    # Starting with cabal-install 1.22, --enable-tests doesn't run the tests
+    - cabal test
     - "cabal configure -fmysql --enable-tests      && cabal test"
     - "cabal configure -fpostgresql --enable-tests && cabal test"
     - "cabal configure -fmongodb --enable-tests    && cabal test"
