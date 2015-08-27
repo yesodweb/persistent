@@ -166,6 +166,7 @@ library
       else
           c-sources:   cbits/sqlite3.c
           cc-options:  -fPIC
+      c-sources: cbits/config.c
 
       if !os(windows)
           extra-libraries: pthread
