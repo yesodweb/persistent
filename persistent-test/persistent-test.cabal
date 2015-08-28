@@ -20,34 +20,42 @@ extra-source-files:
 Flag zookeeper
    Description: test only Zookeeper.  default is to test just sqlite.
    Default: False
+   manual: True
 
 Flag mongodb
    Description: test only MongoDB.  default is to test just sqlite.
    Default: False
+   manual: True
 
 Flag postgresql
    Description: test postgresql. default is to test just sqlite.
    Default: False
+   manual: True
 
 Flag mysql
    Description: test MySQL. default is to test just sqlite.
    Default: False
+   manual: True
 
 Flag couchdb
    Description: test couchDB. default is to test just sqlite.
    Default: False
+   manual: True
 
 Flag high_precision_date
    Description: for MongoDB use a time storage with nano second precision.
    Default: False
+   manual: True
 
 flag nooverlap
     default: False
     description: test out our assumption that OverlappingInstances is just for String
+    manual: True
 
 flag systemlib
   description: Use the system-wide sqlite library
   default: False
+  manual: True
 
 library
     exposed-modules: PersistentTest
