@@ -17,6 +17,11 @@ extra-source-files:
   test/main.hs
   test/from-cabal
 
+Flag sqlite
+   Description: use sqlite. This is just present for consistency, and is not used
+   Default: False
+   manual: True
+
 Flag zookeeper
    Description: test only Zookeeper.  default is to test just sqlite.
    Default: False
