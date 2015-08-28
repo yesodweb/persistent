@@ -20,10 +20,10 @@ mkPersist persistSettings [persistUpperCase|
 #else
 share [mkPersist sqlSettings, mkMigrate "embedOrderMigrate"] [persistUpperCase|
 #endif
-Foo
+Foo sql=foo_embed_order
     bars [Bar]
     deriving Eq Show
-Bar
+Bar sql=bar_embed_order
     b String
     u String
     g String
