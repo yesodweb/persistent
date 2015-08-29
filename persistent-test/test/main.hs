@@ -18,6 +18,7 @@ import qualified MigrationOnlyTest
 import qualified PersistUniqueTest
 import qualified CompositeTest
 import qualified PrimaryTest
+import qualified CustomPersistFieldTest
 import Test.Hspec (hspec)
 import Test.Hspec.Runner
 import Init
@@ -62,6 +63,7 @@ main = do
       , MigrationTest.migrationMigrate
       , PersistUniqueTest.migration
       , RenameTest.migration
+      , CustomPersistFieldTest.customFieldMigrate
 #  ifndef WITH_MYSQL
       , PrimaryTest.migration
 #  endif
@@ -86,6 +88,7 @@ main = do
     CompositeTest.specs
     PersistUniqueTest.specs
     PrimaryTest.specs
+    CustomPersistFieldTest.specs
 
 #ifndef WITH_NOSQL
     MigrationTest.specs
