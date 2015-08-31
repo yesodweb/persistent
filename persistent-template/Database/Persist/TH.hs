@@ -216,7 +216,7 @@ mEmbedded ents (FTTypeCon Nothing n) = let name = HaskellName n in
     maybe (Left Nothing) Right $ M.lookup name ents
 mEmbedded ents (FTList x) = mEmbedded ents x
 mEmbedded ents (FTApp x y) =
-  -- Key convets an Record to a RecordId
+  -- Key converts an Record to a RecordId
   -- special casing this is obviously a hack
   -- This problem may not be solvable with the current QuasiQuoted approach though
   if x == FTTypeCon Nothing "Key"
