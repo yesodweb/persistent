@@ -4,6 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 #ifndef NO_OVERLAP
 {-# LANGUAGE OverlappingInstances #-}
 #endif
@@ -61,32 +62,30 @@ instance (PersistEntity a, PersistEntityBackend a ~ SqlBackend) => RawSql (Key a
                              ++ " columns"
   rawSqlProcessRow         = keyFromValues
 
-instance (PersistEntity a, PersistEntityBackend a ~ SqlBackend) => RawSql (Entity a) where
-    rawSqlCols escape e = (length sqlFields, [intercalate ", " sqlFields])
+instance (PersistEntity record, PersistEntityBackend record ~ SqlBackend)
+         => RawSql (Entity record) where
+    rawSqlCols escape ent = (length sqlFields, [intercalate ", " sqlFields])
         where
           sqlFields = map (((name <> ".") <>) . escape)
               $ map fieldDB
               $ keyFields eDef ++ entityFields eDef
           name = escape (entityDB eDef)
-          eDef = entityDef $ Just (entityVal e)
+          eDef = entityDef $ Just (entityVal ent)
     rawSqlColCountReason a =
         case fst (rawSqlCols (error "RawSql") a) of
           1 -> "one column for an 'Entity' data type without fields"
           n -> show n ++ " columns for an 'Entity' data type"
     rawSqlProcessRow =
-        let x = getType processRow
-            getType :: (z -> Either y x) -> x
-            getType = error "RawSql.getType"
-            nKeyFields = length (keyFields $ entityDef $ Just $ entityVal x)
+        let nKeyFields = length $ keyFields $ entityDef (Nothing :: Maybe record)
             processRow row = case splitAt nKeyFields row of
                 (rowKey, rowVal) -> Entity <$> keyFromValues rowKey
                                            <*> fromPersistValues rowVal
         in processRow
 
 keyFields :: EntityDef -> [FieldDef]
-keyFields ed = case entityId ed of
-    FieldDef{fieldReference=CompositeRef(CompositeDef{compositeFields=idFs})} -> idFs
-    idF -> [idF]
+keyFields ent = case entityPrimary ent of
+    Nothing   -> [entityId ent]
+    Just pdef -> compositeFields pdef
 
 -- | Since 1.0.1.
 instance RawSql a => RawSql (Maybe a) where
