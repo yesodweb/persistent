@@ -68,19 +68,19 @@ instance (PersistEntity record, PersistEntityBackend record ~ SqlBackend)
         where
           sqlFields = map (((name <> ".") <>) . escape)
               $ map fieldDB
-              $ entityKeyFields eDef ++ entityFields eDef
-          name = escape (entityDB eDef)
-          eDef = entityDef $ Just (entityVal ent)
+              $ entityKeyFields entDef ++ entityFields entDef
+          name = escape (entityDB entDef)
+          entDef = entityDef (Nothing :: Maybe record)
     rawSqlColCountReason a =
         case fst (rawSqlCols (error "RawSql") a) of
           1 -> "one column for an 'Entity' data type without fields"
           n -> show n ++ " columns for an 'Entity' data type"
-    rawSqlProcessRow =
-        let nKeyFields = length $ entityKeyFields $ entityDef (Nothing :: Maybe record)
-            processRow row = case splitAt nKeyFields row of
-                (rowKey, rowVal) -> Entity <$> keyFromValues rowKey
-                                           <*> fromPersistValues rowVal
-        in processRow
+    rawSqlProcessRow row = case splitAt nKeyFields row of
+      (rowKey, rowVal) -> Entity <$> keyFromValues rowKey
+                                 <*> fromPersistValues rowVal
+      where
+        nKeyFields = length $ entityKeyFields entDef
+        entDef = entityDef (Nothing :: Maybe record)
 
 -- | Since 1.0.1.
 instance RawSql a => RawSql (Maybe a) where
