@@ -1,6 +1,6 @@
 ## 2.3
 
-* Distinguish between binary and non-binary strings in MySQL [451](https://github.com/yesodweb/persistent/pull/451)
+* Distinguish between binary and non-binary strings in MySQL [#451](https://github.com/yesodweb/persistent/pull/451)
 	* Previously all string columns (VARCHAR, TEXT, etc.) were being returned from Persistent as `PersistByteString`s (i.e. as binary data). Persistent now checks character set information to determine if the value should be returned as `PersistText` or `PersistByteString`. 
 	* This is a **breaking change** if your code is relying on a `PersistByteString` being returned for string-like MySQL values; persistent-mysql itself had several runtime errors that needed to be fixed because of this patch. High-level code dealing purely with `PersistEntities` should be unaffected.
 
