@@ -62,23 +62,31 @@ instance (PersistEntity a, PersistEntityBackend a ~ SqlBackend) => RawSql (Key a
   rawSqlProcessRow         = keyFromValues
 
 instance (PersistEntity a, PersistEntityBackend a ~ SqlBackend) => RawSql (Entity a) where
-    rawSqlCols escape = ((+1) . length . entityFields &&& process) . entityDef . Just . entityVal
+    rawSqlCols escape e = (length sqlFields, [intercalate ", " sqlFields])
         where
-          process ed = (:[]) $
-                       intercalate ", " $
-                       map ((name ed <>) . escape) $
-                       (fieldDB (entityId ed) :) $
-                       map fieldDB $
-                       entityFields ed
-          name ed = escape (entityDB ed) <> "."
-
+          sqlFields = map (((name <> ".") <>) . escape)
+              $ map fieldDB
+              $ keyFields eDef ++ entityFields eDef
+          name = escape (entityDB eDef)
+          eDef = entityDef $ Just (entityVal e)
     rawSqlColCountReason a =
         case fst (rawSqlCols (error "RawSql") a) of
           1 -> "one column for an 'Entity' data type without fields"
           n -> show n ++ " columns for an 'Entity' data type"
-    rawSqlProcessRow (idCol:ent) = Entity <$> fromPersistValue idCol
-                                          <*> fromPersistValues ent
-    rawSqlProcessRow _ = Left "RawSql (Entity a): wrong number of columns."
+    rawSqlProcessRow =
+        let x = getType processRow
+            getType :: (z -> Either y x) -> x
+            getType = error "RawSql.getType"
+            nKeyFields = length (keyFields $ entityDef $ Just $ entityVal x)
+            processRow row = case splitAt nKeyFields row of
+                (rowKey, rowVal) -> Entity <$> keyFromValues rowKey
+                                           <*> fromPersistValues rowVal
+        in processRow
+
+keyFields :: EntityDef -> [FieldDef]
+keyFields ed = case entityId ed of
+    FieldDef{fieldReference=CompositeRef(CompositeDef{compositeFields=idFs})} -> idFs
+    idF -> [idF]
 
 -- | Since 1.0.1.
 instance RawSql a => RawSql (Maybe a) where
