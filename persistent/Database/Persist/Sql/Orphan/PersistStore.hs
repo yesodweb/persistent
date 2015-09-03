@@ -20,6 +20,7 @@ module Database.Persist.Sql.Orphan.PersistStore
 import Database.Persist
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
+import Database.Persist.Sql.Util (dbIdColumns)
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import qualified Data.Text as T
@@ -54,10 +55,11 @@ fromSqlKey = unSqlBackendKey . toBackendKey
 
 whereStmtForKey :: PersistEntity record => SqlBackend -> Key record -> Text
 whereStmtForKey conn k =
-  case entityPrimary t of
-    Just pdef -> T.intercalate " AND " $ map (\fld -> connEscapeName conn (fieldDB fld) <> "=? ") $ compositeFields pdef
-    Nothing   -> connEscapeName conn (fieldDB (entityId t)) <> "=?"
-  where t = entityDef $ dummyFromKey k
+    T.intercalate " AND "
+  $ map (<> "=? ")
+  $ dbIdColumns conn entDef
+  where
+    entDef = entityDef $ dummyFromKey k
 
 
 -- | get the SQL string for the table that a PeristEntity represents
@@ -169,10 +171,10 @@ instance PersistStore SqlBackend where
                             Right k -> return k
                             Left err -> throw $ "ISRInsertGet: keyFromValues failed: " `mappend` err
                 ISRManyKeys sql fs -> do
-                    rawExecute sql vals 
+                    rawExecute sql vals
                     case entityPrimary t of
                        Nothing -> error $ "ISRManyKeys is used when Primary is defined " ++ show sql
-                       Just pdef -> 
+                       Just pdef ->
                             let pks = map fieldHaskell $ compositeFields pdef
                                 keyvals = map snd $ filter (\(a, _) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ entityFields t) fs
                             in  case keyFromValues keyvals of

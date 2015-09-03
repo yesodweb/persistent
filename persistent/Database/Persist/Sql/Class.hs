@@ -4,6 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 #ifndef NO_OVERLAP
 {-# LANGUAGE OverlappingInstances #-}
 #endif
@@ -61,24 +62,25 @@ instance (PersistEntity a, PersistEntityBackend a ~ SqlBackend) => RawSql (Key a
                              ++ " columns"
   rawSqlProcessRow         = keyFromValues
 
-instance (PersistEntity a, PersistEntityBackend a ~ SqlBackend) => RawSql (Entity a) where
-    rawSqlCols escape = ((+1) . length . entityFields &&& process) . entityDef . Just . entityVal
+instance (PersistEntity record, PersistEntityBackend record ~ SqlBackend)
+         => RawSql (Entity record) where
+    rawSqlCols escape ent = (length sqlFields, [intercalate ", " sqlFields])
         where
-          process ed = (:[]) $
-                       intercalate ", " $
-                       map ((name ed <>) . escape) $
-                       (fieldDB (entityId ed) :) $
-                       map fieldDB $
-                       entityFields ed
-          name ed = escape (entityDB ed) <> "."
-
+          sqlFields = map (((name <> ".") <>) . escape)
+              $ map fieldDB
+              $ entityKeyFields entDef ++ entityFields entDef
+          name = escape (entityDB entDef)
+          entDef = entityDef (Nothing :: Maybe record)
     rawSqlColCountReason a =
         case fst (rawSqlCols (error "RawSql") a) of
           1 -> "one column for an 'Entity' data type without fields"
           n -> show n ++ " columns for an 'Entity' data type"
-    rawSqlProcessRow (idCol:ent) = Entity <$> fromPersistValue idCol
-                                          <*> fromPersistValues ent
-    rawSqlProcessRow _ = Left "RawSql (Entity a): wrong number of columns."
+    rawSqlProcessRow row = case splitAt nKeyFields row of
+      (rowKey, rowVal) -> Entity <$> keyFromValues rowKey
+                                 <*> fromPersistValues rowVal
+      where
+        nKeyFields = length $ entityKeyFields entDef
+        entDef = entityDef (Nothing :: Maybe record)
 
 -- | Since 1.0.1.
 instance RawSql a => RawSql (Maybe a) where

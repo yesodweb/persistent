@@ -269,11 +269,15 @@ specs = describe "composite" $
 
       newp2 <- get kp2
       newp2 @== Just p2
-    it "rawSql instance" $ db $ do
+    it "RawSql Key instance" $ db $ do
       key <- insert p1
       keyFromRaw <- rawSql "SELECT name, name2, age FROM test_parent LIMIT 1" []
       [key] @== keyFromRaw
-      
+    it "RawSql Entity instance" $ db $ do
+      key <- insert p1
+      newp1 <- rawSql "SELECT ?? FROM test_parent LIMIT 1" []
+      [Entity key p1] @== newp1
+
 #endif
 
 matchK :: (PersistField a, PersistEntity record) => Key record -> Either Text a

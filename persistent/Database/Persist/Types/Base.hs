@@ -122,6 +122,11 @@ entityPrimary t = case fieldReference (entityId t) of
     CompositeRef c -> Just c
     _ -> Nothing
 
+entityKeyFields :: EntityDef -> [FieldDef]
+entityKeyFields ent = case entityPrimary ent of
+    Nothing   -> [entityId ent]
+    Just pdef -> compositeFields pdef
+
 type ExtraLine = [Text]
 
 newtype HaskellName = HaskellName { unHaskellName :: Text }
@@ -265,23 +270,23 @@ data PersistValue = PersistText Text
 --
 -- @
 -- data Geo = Geo ByteString
--- 
+--
 -- instance PersistField Geo where
 --   toPersistValue (Geo t) = PersistDbSpecific t
--- 
+--
 --   fromPersistValue (PersistDbSpecific t) = Right $ Geo $ Data.ByteString.concat ["'", t, "'"]
 --   fromPersistValue _ = Left "Geo values must be converted from PersistDbSpecific"
--- 
+--
 -- instance PersistFieldSql Geo where
 --   sqlType _ = SqlOther "GEOGRAPHY(POINT,4326)"
--- 
+--
 -- toPoint :: Double -> Double -> Geo
 -- toPoint lat lon = Geo $ Data.ByteString.concat ["'POINT(", ps $ lon, " ", ps $ lat, ")'"]
 --   where ps = Data.Text.pack . show
 -- @
--- 
+--
 -- If Foo has a geography field, we can then perform insertions like the following:
--- 
+--
 -- @
 -- insert $ Foo (toPoint 44 44)
 -- @
