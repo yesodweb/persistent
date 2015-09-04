@@ -14,6 +14,7 @@ module Database.Persist.Class.PersistEntity
     , BackendSpecificFilter
     , Entity (..)
 
+    , entityValues
     , keyValueEntityToJSON, keyValueEntityFromJSON
     , entityIdToJSON, entityIdFromJSON
       -- * PersistField based on other typeclasses
@@ -37,6 +38,7 @@ import Control.Applicative ((<$>), (<*>))
 import Data.Monoid (mappend)
 import qualified Data.HashMap.Strict as HM
 import Data.Typeable (Typeable)
+import Data.Maybe (isJust)
 
 -- | Persistent serialized Haskell records to the database.
 -- A Database 'Entity' (A row in SQL, a document in MongoDB, etc)
@@ -173,6 +175,17 @@ deriving instance (PersistEntity record, Read (Key record), Read record) => Read
 deriving instance Typeable Entity
 #endif
 
+entityValues :: PersistEntity record => Entity record -> [PersistValue]
+entityValues (Entity k record) =
+  if isJust (entityPrimary ent)
+    then
+      -- TODO: check against the key
+      map toPersistValue (toPersistFields record)
+    else
+      keyToValues k ++ map toPersistValue (toPersistFields record)
+  where
+    ent = entityDef $ Just record
+
 -- | Predefined @toJSON@. The resulting JSON looks like
 -- @{\"key\": 1, \"value\": {\"name\": ...}}@.
 --
@@ -290,7 +303,7 @@ toPersistValueJSON = PersistText . LT.toStrict . TB.toLazyText . encodeToTextBui
 --
 fromPersistValueJSON :: FromJSON a => PersistValue -> Either Text a
 fromPersistValueJSON z = case z of
-  PersistByteString bs -> mapLeft (T.append "Could not parse the JSON (was a PersistByteString): ") 
+  PersistByteString bs -> mapLeft (T.append "Could not parse the JSON (was a PersistByteString): ")
                         $ parseGo bs
   PersistText t -> mapLeft (T.append "Could not parse the JSON (was PersistText): ")
                  $ parseGo (TE.encodeUtf8 t)
@@ -306,10 +319,10 @@ fromPersistValueJSON z = case z of
 -- | Convenience function for getting a free 'PersistField' instance
 -- from a type with an 'Enum' instance. The function 'derivePersistField'
 -- from the persistent-template package should generally be preferred.
--- However, if you want to ensure that an @ORDER BY@ clause that uses 
--- your field will order rows by the data constructor order, this is 
+-- However, if you want to ensure that an @ORDER BY@ clause that uses
+-- your field will order rows by the data constructor order, this is
 -- a better choice.
--- 
+--
 -- Example usage in combination with `fromPersistValueEnum`:
 --
 -- @

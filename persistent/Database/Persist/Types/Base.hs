@@ -127,6 +127,13 @@ entityKeyFields ent = case entityPrimary ent of
     Nothing   -> [entityId ent]
     Just pdef -> compositeFields pdef
 
+keyAndEntityFields :: EntityDef -> [FieldDef]
+keyAndEntityFields ent =
+  case entityPrimary ent of
+    Nothing -> entityId ent : entityFields ent
+    Just _  -> entityFields ent
+
+
 type ExtraLine = [Text]
 
 newtype HaskellName = HaskellName { unHaskellName :: Text }

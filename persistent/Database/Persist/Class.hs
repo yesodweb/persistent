@@ -33,6 +33,7 @@ module Database.Persist.Class
     , PersistField (..)
     -- * PersistConfig
     , PersistConfig (..)
+    , entityValues
 
     -- * Lifting
     , HasPersistBackend (..)

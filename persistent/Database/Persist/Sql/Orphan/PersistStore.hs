@@ -20,7 +20,7 @@ module Database.Persist.Sql.Orphan.PersistStore
 import Database.Persist
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
-import Database.Persist.Sql.Util (dbIdColumns)
+import Database.Persist.Sql.Util (dbIdColumns, keyAndEntityColumnNames)
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import qualified Data.Text as T
@@ -294,24 +294,23 @@ insrepHelper :: (MonadIO m, PersistEntity val)
              -> Key val
              -> val
              -> ReaderT SqlBackend m ()
-insrepHelper command k val = do
+insrepHelper command k record = do
     conn <- ask
-    rawExecute (sql conn) vals
+    let columnNames = keyAndEntityColumnNames entDef conn
+    rawExecute (sql conn columnNames) vals
   where
-    t = entityDef $ Just val
-    sql conn = T.concat
+    entDef = entityDef $ Just record
+    sql conn columnNames = T.concat
         [ command
         , " INTO "
-        , connEscapeName conn (entityDB t)
+        , connEscapeName conn (entityDB entDef)
         , "("
-        , T.intercalate ","
-            $ map (connEscapeName conn)
-            $ fieldDB (entityId t) : map fieldDB (entityFields t)
+        , T.intercalate "," columnNames
         , ") VALUES("
-        , T.intercalate "," ("?" : map (const "?") (entityFields t))
+        , T.intercalate "," (map (const "?") columnNames)
         , ")"
         ]
-    vals = keyToValues k ++ map toPersistValue (toPersistFields val)
+    vals = entityValues (Entity k record)
 
 updateFieldDef :: PersistEntity v => Update v -> FieldDef
 updateFieldDef (Update f _ _) = persistFieldDef f

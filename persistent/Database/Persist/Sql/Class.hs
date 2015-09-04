@@ -68,6 +68,8 @@ instance (PersistEntity record, PersistEntityBackend record ~ SqlBackend)
         where
           sqlFields = map (((name <> ".") <>) . escape)
               $ map fieldDB
+              -- Hacky for a composite key because
+              -- it selects the same field multiple times
               $ entityKeyFields entDef ++ entityFields entDef
           name = escape (entityDB entDef)
           entDef = entityDef (Nothing :: Maybe record)
