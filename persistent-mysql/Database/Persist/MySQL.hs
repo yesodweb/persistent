@@ -378,15 +378,15 @@ findMaxLenOfColumn allDefs name col =
            maxLenAttr <- find ((T.isPrefixOf "maxlen=") . T.toLower) (fieldAttrs fieldDef)
            readMaybe . T.unpack . T.drop 7 $ maxLenAttr
 
--- | Helper for 'AddRefence' that finds out the 'entityId'.
+-- | Helper for 'AddReference' that finds out the which primary key columns to reference.
 addReference :: [EntityDef] -> DBName -> DBName -> DBName -> AlterColumn
-addReference allDefs fkeyname reftable cname = AddReference reftable fkeyname [cname] [id_] 
+addReference allDefs fkeyname reftable cname = AddReference reftable fkeyname [cname] referencedColumns
     where
-      id_ = maybe (error $ "Could not find ID of entity " ++ show reftable
-                         ++ " (allDefs = " ++ show allDefs ++ ")")
-                  id $ do
-                    entDef <- find ((== reftable) . entityDB) allDefs
-                    return (fieldDB $ entityId entDef)
+      referencedColumns = maybe (error $ "Could not find ID of entity " ++ show reftable
+                                  ++ " (allDefs = " ++ show allDefs ++ ")")
+                                id $ do
+                                  entDef <- find ((== reftable) . entityDB) allDefs
+                                  return $ map fieldDB $ entityKeyFields entDef
 
 data AlterColumn = Change Column
                  | Add' Column
@@ -394,7 +394,12 @@ data AlterColumn = Change Column
                  | Default String
                  | NoDefault
                  | Update' String
-                 | AddReference DBName DBName [DBName] [DBName]
+                 -- | See the definition of the 'showAlter' function to see how these fields are used.
+                 | AddReference
+                    DBName -- ^ Referenced table
+                    DBName -- ^ Foreign key name
+                    [DBName] -- ^ Referencing columns
+                    [DBName] -- ^ Referenced columns
                  | DropReference DBName
 
 type AlterColumn' = (DBName, AlterColumn)

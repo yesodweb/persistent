@@ -19,6 +19,7 @@ import qualified PersistUniqueTest
 import qualified CompositeTest
 import qualified PrimaryTest
 import qualified CustomPersistFieldTest
+import qualified CustomPrimaryKeyReferenceTest
 import Test.Hspec (hspec)
 import Test.Hspec.Runner
 import Init
@@ -67,6 +68,7 @@ main = do
 #  ifndef WITH_MYSQL
       , PrimaryTest.migration
 #  endif
+      , CustomPrimaryKeyReferenceTest.migration
       ]
     PersistentTest.cleanDB
 #endif
@@ -89,6 +91,7 @@ main = do
     PersistUniqueTest.specs
     PrimaryTest.specs
     CustomPersistFieldTest.specs
+    CustomPrimaryKeyReferenceTest.specs
 
 #ifndef WITH_NOSQL
     MigrationTest.specs

@@ -86,6 +86,7 @@ library
                      PrimaryTest
                      CustomPersistField
                      CustomPersistFieldTest
+                     CustomPrimaryKeyReferenceTest
 
                      Database.Persist
                      Database.Persist.Quasi
