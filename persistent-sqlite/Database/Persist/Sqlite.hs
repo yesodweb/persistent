@@ -34,6 +34,7 @@ import Data.Text (Text)
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
 import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Control.Applicative
@@ -42,6 +43,8 @@ import Data.Monoid ((<>))
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import Control.Monad (when)
+import Control.Monad.Trans.Reader (runReaderT)
+import Control.Monad.Trans.Writer (runWriterT)
 
 createSqlitePool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m) => Text -> Int -> m ConnectionPool
 createSqlitePool s = createSqlPool $ open' s
