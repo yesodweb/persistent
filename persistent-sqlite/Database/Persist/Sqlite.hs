@@ -17,6 +17,7 @@ module Database.Persist.Sqlite
     , SqliteConf (..)
     , runSqlite
     , wrapConnection
+    , mockMigration
     ) where
 
 import Database.Persist.Sql
