@@ -17,6 +17,7 @@ module Database.Persist.Sqlite
     , SqliteConf (..)
     , runSqlite
     , wrapConnection
+    , mockMigration
     ) where
 
 import Database.Persist.Sql
@@ -34,6 +35,7 @@ import Data.Text (Text)
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
 import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Control.Applicative
@@ -42,6 +44,8 @@ import Data.Monoid ((<>))
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import Control.Monad (when)
+import Control.Monad.Trans.Reader (runReaderT)
+import Control.Monad.Trans.Writer (runWriterT)
 
 createSqlitePool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m) => Text -> Int -> m ConnectionPool
 createSqlitePool s = createSqlPool $ open' s
@@ -239,6 +243,44 @@ migrate' allDefs getter val = do
             Nothing -> return Nothing
             Just [PersistText y] -> return $ Just y
             Just y -> error $ "Unexpected result from sqlite_master: " ++ show y
+
+-- | Mock a migration even when the database is not present.
+-- This function performs the same functionality of 'printMigration'
+-- with the difference that an actualy database isn't needed for it.
+mockMigration :: Migration -> IO ()
+mockMigration mig = do
+  smap <- newIORef $ Map.empty
+  let sqlbackend = SqlBackend
+                   { connPrepare = \_ -> do
+                                     return Statement
+                                                { stmtFinalize = return ()
+                                                , stmtReset = return ()
+                                                , stmtExecute = undefined
+                                                , stmtQuery = \_ -> return $ return ()
+                                                }
+                   , connStmtMap = smap
+                   , connInsertSql = insertSql'
+                   , connInsertManySql = Nothing
+                   , connClose = undefined
+                   , connMigrateSql = migrate'
+                   , connBegin = helper "BEGIN"
+                   , connCommit = helper "COMMIT"
+                   , connRollback = ignoreExceptions . helper "ROLLBACK"
+                   , connEscapeName = escape
+                   , connNoLimit = "LIMIT -1"
+                   , connRDBMS = "sqlite"
+                   , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
+                   , connLogFunc = undefined
+                   }
+      result = runReaderT . runWriterT . runWriterT $ mig
+  resp <- result sqlbackend
+  mapM_ TIO.putStrLn $ map snd $ snd resp
+    where
+      helper t getter = do
+                      stmt <- getter t
+                      _ <- stmtExecute stmt []
+                      stmtReset stmt
+      ignoreExceptions = E.handle (\(_ :: E.SomeException) -> return ())
 
 -- | Check if a column name is listed as the "safe to remove" in the entity
 -- list.
