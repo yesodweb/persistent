@@ -895,6 +895,7 @@ specs = describe "persistent" $ do
     it "tilde" $ void (return $! Strict 5 (error "foo") 5 :: IO Strict)
     it "blank" $ (return $! Strict 5 5 (error "foo")) `shouldThrow` anyErrorCall
 
+#ifdef WITH_POSTGRESQL
   describe "rawSql/array_agg" $ do
     let runArrayAggTest dbField expected = db $ do
           void $ insertMany
@@ -911,6 +912,7 @@ specs = describe "persistent" $ do
 
     it "works for [Text]"       $ runArrayAggTest "ident"    ["a", "c", "e", "g" :: Text]
     it "works for [Maybe Text]" $ runArrayAggTest "password" [Nothing, Just "b", Just "d", Just "h" :: Maybe Text]
+#endif
 
 -- | Reverses the order of the fields of an entity.  Used to test
 -- @??@ placeholders of 'rawSql'.
