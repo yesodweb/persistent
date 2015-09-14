@@ -267,7 +267,12 @@ withStmt' conn query vals =
            else fmap Just $ forM (zip getters [0..]) $ \(getter, col) -> do
                                 mbs <- LibPQ.getvalue' ret row col
                                 case mbs of
-                                  Nothing -> return PersistNull
+                                  Nothing ->
+                                    -- getvalue' verified that the value is NULL.
+                                    -- However, that does not mean that there are
+                                    -- no NULL values inside the value (e.g., if
+                                    -- we're dealing with an array of optional values).
+                                    return PersistNull
                                   Just bs -> do
                                     ok <- PGFF.runConversion (getter mbs) conn
                                     bs `seq` case ok of
@@ -304,7 +309,7 @@ newtype Unknown = Unknown { unUnknown :: ByteString }
 instance PGFF.FromField Unknown where
     fromField f mdata =
       case mdata of
-        Nothing  -> PGFF.returnError PGFF.UnexpectedNull f ""
+        Nothing  -> PGFF.returnError PGFF.UnexpectedNull f "Database.Persist.Postgresql/PGFF.FromField Unknown"
         Just dat -> return (Unknown dat)
 
 instance PGTF.ToField Unknown where
@@ -345,9 +350,8 @@ builtinGetters = I.fromList
     , (k PS.jsonb,       convertPV (PersistByteString . unUnknown))
     , (k PS.unknown,     convertPV (PersistByteString . unUnknown))
 
-
-
-    -- array types: same order as above
+    -- Array types: same order as above.
+    -- The OIDs were taken from pg_type.
     , (1000,             listOf PersistBool)
     , (1001,             listOf (PersistByteString . unBinary))
     , (1002,             listOf PersistText)
@@ -379,7 +383,13 @@ builtinGetters = I.fromList
     ]
     where
         k (PGFF.typoid -> i) = PG.oid2int i
-        listOf f = convertPV (PersistList . map f . PG.fromPGArray)
+        -- A @listOf f@ will use a @PGArray (Maybe T)@ to convert
+        -- the values to Haskell-land.  The @Maybe@ is important
+        -- because the usual way of checking NULLs
+        -- (c.f. withStmt') won't check for NULL inside
+        -- arrays---or any other compound structure for that matter.
+        listOf f = convertPV (PersistList . map (nullable f) . PG.fromPGArray)
+          where nullable = maybe PersistNull
 
 getGetter :: PG.Connection -> PG.Oid -> Getter PersistValue
 getGetter _conn oid

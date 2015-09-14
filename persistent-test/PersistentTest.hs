@@ -33,6 +33,7 @@ import Database.Persist.MongoDB (toInsertDoc, docToEntityThrow, collectionName, 
 #else
 
 import Control.Monad (void, replicateM)
+import Data.List (sort)
 import Database.Persist.TH (mkDeleteCascade, mkSave)
 import Control.Exception (SomeException)
 import qualified Data.Text as T
@@ -123,15 +124,15 @@ share [mkPersist persistSettings,  mkMigrate "testMigrate", mkDeleteCascade pers
     type PetType
 
   -- From the scaffold
-  User
+  UserPT
     ident Text
     password Text Maybe
-    UniqueUser ident
-  Email
+    UniqueUserPT ident
+  EmailPT
     email Text
-    user UserId Maybe
+    user UserPTId Maybe
     verkey Text Maybe
-    UniqueEmail email
+    UniqueEmailPT email
 
   Upsert
     email Text
@@ -168,7 +169,7 @@ NoPrefix2
     deriving Show Eq
 |]
 
-cleanDB :: (MonadIO m, PersistQuery backend, PersistEntityBackend Email ~ backend) => ReaderT backend m ()
+cleanDB :: (MonadIO m, PersistQuery backend, PersistEntityBackend EmailPT ~ backend) => ReaderT backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Person])
   deleteWhere ([] :: [Filter Person1])
@@ -176,8 +177,8 @@ cleanDB = do
   deleteWhere ([] :: [Filter MaybeOwnedPet])
   deleteWhere ([] :: [Filter NeedsPet])
   deleteWhere ([] :: [Filter OutdoorPet])
-  deleteWhere ([] :: [Filter User])
-  deleteWhere ([] :: [Filter Email])
+  deleteWhere ([] :: [Filter UserPT])
+  deleteWhere ([] :: [Filter EmailPT])
 
 #ifdef WITH_NOSQL
 db :: Action IO () -> Assertion
@@ -888,11 +889,30 @@ specs = describe "persistent" $ do
     mp <- get $ toSqlKey i
     liftIO $ mp `shouldBe` Just p
 #endif
-  
+
   describe "strictness" $ do
     it "bang" $ (return $! Strict (error "foo") 5 5) `shouldThrow` anyErrorCall
     it "tilde" $ void (return $! Strict 5 (error "foo") 5 :: IO Strict)
     it "blank" $ (return $! Strict 5 5 (error "foo")) `shouldThrow` anyErrorCall
+
+#ifdef WITH_POSTGRESQL
+  describe "rawSql/array_agg" $ do
+    let runArrayAggTest dbField expected = db $ do
+          void $ insertMany
+            [ UserPT "a" $ Just "b"
+            , UserPT "c" $ Just "d"
+            , UserPT "e"   Nothing
+            , UserPT "g" $ Just "h" ]
+          escape <- ((. DBName) . connEscapeName) `fmap` ask
+          let query = T.concat [ "SELECT array_agg(", escape dbField, ") "
+                               , "FROM ", escape "UserPT"
+                               ]
+          [Single xs] <- rawSql query []
+          liftIO $ sort xs @?= expected
+
+    it "works for [Text]"       $ runArrayAggTest "ident"    ["a", "c", "e", "g" :: Text]
+    it "works for [Maybe Text]" $ runArrayAggTest "password" [Nothing, Just "b", Just "d", Just "h" :: Maybe Text]
+#endif
 
 -- | Reverses the order of the fields of an entity.  Used to test
 -- @??@ placeholders of 'rawSql'.
