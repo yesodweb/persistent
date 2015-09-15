@@ -23,7 +23,7 @@ library
                    , text                     >= 0.5
                    , transformers             >= 0.2       && < 0.5
                    , containers
-                   , aeson                    >= 0.7       && < 0.10
+                   , aeson                    >= 0.7       && < 0.11
                    , monad-logger
                    , unordered-containers
                    , tagged
