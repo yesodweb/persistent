@@ -81,13 +81,13 @@ runMigration'
     -> ReaderT SqlBackend m [Text]
 runMigration' m silent = do
     mig <- parseMigration' m
-    case filter fst mig of
-        [] -> mapM (executeMigrate silent) $ sortMigrations $ safeSql mig
-        _  -> error $ concat
-            [ "\n\nDatabase migration: manual intervention required.\n"
-            , "The unsafe actions are prefixed by '***' below:\n\n"
-            , unlines $ map displayMigration mig
-            ]
+    if any fst mig
+        then error $ concat
+                 [ "\n\nDatabase migration: manual intervention required.\n"
+                 , "The unsafe actions are prefixed by '***' below:\n\n"
+                 , unlines $ map displayMigration mig
+                 ]
+        else mapM (executeMigrate silent) $ sortMigrations $ safeSql mig
   where
     displayMigration :: (Bool, Sql) -> String
     displayMigration (True,  s) = "*** " ++ unpack s ++ ";"
