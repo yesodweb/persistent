@@ -30,8 +30,6 @@ import Database.Persist.Types
 
 allSql :: CautiousMigration -> [Sql]
 allSql = map snd
-unsafeSql :: CautiousMigration -> [Sql]
-unsafeSql = allSql . filter fst
 safeSql :: CautiousMigration -> [Sql]
 safeSql = allSql . filter (not . fst)
 
@@ -83,13 +81,17 @@ runMigration'
     -> ReaderT SqlBackend m [Text]
 runMigration' m silent = do
     mig <- parseMigration' m
-    case unsafeSql mig of
-        []   -> mapM (executeMigrate silent) $ sortMigrations $ safeSql mig
-        errs -> error $ concat
+    case filter fst mig of
+        [] -> mapM (executeMigrate silent) $ sortMigrations $ safeSql mig
+        _  -> error $ concat
             [ "\n\nDatabase migration: manual intervention required.\n"
-            , "The following actions are considered unsafe:\n\n"
-            , unlines $ map (\s -> "    " ++ unpack s ++ ";") $ errs
+            , "The unsafe actions are prefixed by '***' below:\n\n"
+            , unlines $ map displayMigration mig
             ]
+  where
+    displayMigration :: (Bool, Sql) -> String
+    displayMigration (True,  s) = "*** " ++ unpack s ++ ";"
+    displayMigration (False, s) = "    " ++ unpack s ++ ";"
 
 runMigrationUnsafe :: MonadIO m
                    => Migration
