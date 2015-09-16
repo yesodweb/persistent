@@ -1,3 +1,15 @@
+## 2.2.1
+
+* Fix treatment of `NULL`s inside arrays.  For example, now you
+  can use `array_agg` on a nullable column.
+
+* New derived instances for `PostgresConf`: `Read`, `Data` and `Typeable`.
+
+* New `mockMigration` function.  Works like `printMigration` but
+  doesn't need a database connection.
+
+* Fix typo on error message of the `FromJSON` instance of `PostgresConf`.
+
 ## 2.2
 
 * Optimize the `insertMany` function to insert all rows and retrieve their keys in one SQL query. [#407](https://github.com/yesodweb/persistent/pull/407)
