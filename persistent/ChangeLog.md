@@ -1,3 +1,5 @@
+* Migration failure message with context
+
 ## 2.2
 
 * Add a `RawSql` instance for `Key`. This allows selecting primary keys using functions like `rawSql`. [#407](https://github.com/yesodweb/persistent/pull/407)
