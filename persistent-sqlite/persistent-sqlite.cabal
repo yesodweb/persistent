@@ -74,4 +74,4 @@ executable sanity
         buildable: False
     main-is: sanity.hs
     hs-source-dirs: test
-    build-depends: base, persistent-sqlite
+    build-depends: base, persistent-sqlite, monad-logger
