@@ -1,4 +1,7 @@
+## 2.2.1
+
 * Migration failure message with context
+* Fix insertKey for composite keys
 
 ## 2.2
 
