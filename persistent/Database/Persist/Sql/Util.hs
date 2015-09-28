@@ -2,6 +2,7 @@
 module Database.Persist.Sql.Util (
     parseEntityValues
   , entityColumnNames
+  , keyAndEntityColumnNames
   , entityColumnCount
   , isIdField
   , hasCompositeKey
@@ -18,6 +19,7 @@ import Database.Persist (
   , PersistEntity, PersistValue
   , keyFromValues, fromPersistValues, fieldDB, entityId, entityPrimary
   , entityFields, entityKeyFields, fieldHaskell, compositeFields, persistFieldDef
+  , keyAndEntityFields
   , DBName)
 import Database.Persist.Sql.Types (Sql, SqlBackend, connEscapeName)
 
@@ -26,6 +28,9 @@ entityColumnNames ent conn =
      (if hasCompositeKey ent
       then [] else [connEscapeName conn $ fieldDB (entityId ent)])
   <> map (connEscapeName conn . fieldDB) (entityFields ent)
+
+keyAndEntityColumnNames :: EntityDef -> SqlBackend -> [Sql]
+keyAndEntityColumnNames ent conn = map (connEscapeName conn . fieldDB) (keyAndEntityFields ent)
 
 entityColumnCount :: EntityDef -> Int
 entityColumnCount e = length (entityFields e)

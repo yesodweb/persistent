@@ -72,7 +72,7 @@ share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMig
       Foreign Tree fkparent parent
 #endif
 
-  Citizen 
+  Citizen
     name String
     age Int Maybe
     deriving Eq Show
@@ -115,6 +115,15 @@ specs = describe "composite" $
     let c1 = TestChild "a1" "b1" 11 "c1"
     let c1' = TestChild "a1" "b1" 11 "c1'"
 
+    it "insertWithKey" $ db $ do
+      kp1 <- insert p1
+      delete kp1
+      insertKey kp1 p2
+
+    it "repsert" $ db $ do
+      kp1 <- insert p1
+      repsert kp1 p2
+
     it "Insert" $ db $ do
       kp1 <- insert p1
       matchParentK kp1 @== Right ("a1","b1",11)
@@ -127,13 +136,13 @@ specs = describe "composite" $
       let [Entity newkp1 newp1] = xs
       matchParentK kp1 @== matchParentK newkp1
       p1 @== newp1
-    
+
     it "Id field" $ db $ do
       kp1 <- insert p1
       kp2 <- insert p2
       xs <- selectList [TestParentId <-. [kp1,kp2]] []
       length xs @== 2
-      let [e1@(Entity newkp1 newp1),e2@(Entity newkp2 newp2)] = xs 
+      let [e1@(Entity newkp1 newp1),e2@(Entity newkp2 newp2)] = xs
       matchParentK kp1 @== matchParentK newkp1
       matchParentK kp2 @== matchParentK newkp2
       p1 @== newp1
@@ -144,15 +153,15 @@ specs = describe "composite" $
       kp2 <- insert p2
       xs <- selectList [TestParentId !=. kp1] []
       length xs @== 1
-      let [Entity newkp2 newp2] = xs 
+      let [Entity newkp2 newp2] = xs
       matchParentK kp2 @== matchParentK newkp2
-  
+
     it "Filter by Id with 'in'" $ db $ do
       kp1 <- insert p1
       kp2 <- insert p2
       xs <- selectList [TestParentId <-. [kp1,kp2]] []
       length xs @== 2
-      let [Entity newkp1 newp1,Entity newkp2 newp2] = xs 
+      let [Entity newkp1 newp1,Entity newkp2 newp2] = xs
       matchParentK kp1 @== matchParentK newkp1
       matchParentK kp2 @== matchParentK newkp2
 
@@ -161,9 +170,9 @@ specs = describe "composite" $
       kp2 <- insert p2
       xs <- selectList [TestParentId /<-. [kp1]] []
       length xs @== 1
-      let [Entity newkp2 newp2] = xs 
+      let [Entity newkp2 newp2] = xs
       matchParentK kp2 @== matchParentK newkp2
-  
+
     it "Filter by Id with 'not in' with no data" $ db $ do
       kp1 <- insert p1
       kp2 <- insert p2
@@ -192,7 +201,7 @@ specs = describe "composite" $
       gp <- getJust kgp
       treeFkparent gp @== Nothing
 #endif
-        
+
     it "Validate Key contents" $ db $ do
       _ <- insert p1
       _ <- insert p2
@@ -216,7 +225,7 @@ specs = describe "composite" $
 
     it "Update" $ db $ do
       kp1 <- insert p1
-      _ <- update kp1 [TestParentExtra44 =. "q1"] 
+      _ <- update kp1 [TestParentExtra44 =. "q1"]
       newkps1 <- get kp1
       newkps1 @== Just (TestParent "a1" "b1" 11 "q1")
 
@@ -233,7 +242,7 @@ specs = describe "composite" $
       _ <- replace kc1 c1'
       newc1 <- get kc1
       newc1 @== Just c1'
-    
+
     it "Insert Many to Many" $ db $ do
       let z1 = Citizen "mk" (Just 11)
       let a1 = Address "abc" "usa"
@@ -253,10 +262,10 @@ specs = describe "composite" $
 
       kc2 <- insert z2
       ka2 <- insert a2
-      let ca2 = CitizenAddress kc2 ka2      
+      let ca2 = CitizenAddress kc2 ka2
       kca2 <- insert ca2
       matchCitizenAddressK kca2 @== matchK2 kc2 ka2
-      
+
       xs <- selectList [CitizenAddressId ==. kca1] []
       length xs @== 1
       let [Entity newkca1 newca2] = xs
