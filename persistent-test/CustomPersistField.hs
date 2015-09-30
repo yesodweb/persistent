@@ -9,7 +9,6 @@ import Data.Text (pack)
 import qualified Data.Text.Lazy as TL
 import Data.Text.Lazy (toStrict, fromStrict)
 import Data.String (IsString)
-import Database.Persist.Sql
 
 newtype Markdown = Markdown TL.Text
   deriving (Eq, Ord, IsString, Show)

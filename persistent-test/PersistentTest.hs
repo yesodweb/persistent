@@ -195,9 +195,6 @@ catchPersistException action errValue = do
 
 specs :: Spec
 specs = describe "persistent" $ do
-  let petOwner = belongsToJust petOwnerId
-  let maybeOwnedPetOwner = belongsTo maybeOwnedPetOwnerId
-
   it "fieldLens" $ do
       let michael = Entity undefined $ Person "Michael" 28 Nothing :: Entity Person
           michaelP1 = Person "Michael" 29 Nothing :: Person
@@ -207,22 +204,20 @@ specs = describe "persistent" $ do
   it "FilterOr []" $ db $ do
       let p = Person "z" 1 Nothing
       _ <- insert p
-      let action = selectList [FilterOr []] [Desc PersonAge]
 #ifdef WITH_MONGODB
-      ps <- catchPersistException action []
+      ps <- catchPersistException (selectList [FilterOr []] [Desc PersonAge]) []
 #else
-      ps <- action
+      ps <- (selectList [FilterOr []] [Desc PersonAge])
 #endif
       assertEmpty ps
 
   it "||. []" $ db $ do
       let p = Person "z" 1 Nothing
       _ <- insert p
-      let action = count $ [PersonName ==. "a"] ||. []
 #ifdef WITH_MONGODB
-      c <- catchPersistException action 1
+      c <- catchPersistException (count $ [PersonName ==. "a"] ||. []) 1
 #else
-      c <- action
+      c <- (count $ [PersonName ==. "a"] ||. [])
 #endif
       c @== (1::Int)
 
@@ -683,7 +678,7 @@ specs = describe "persistent" $ do
       let cat = Pet person "Mittens" Cat
       p2 <- getJust $ petOwnerId cat
       p @== p2
-      p3 <- petOwner cat
+      p3 <- belongsToJust petOwnerId $ cat
       p @== p3
 
   it "retrieves a belongsTo association" $ db $ do
@@ -692,7 +687,7 @@ specs = describe "persistent" $ do
       let cat = MaybeOwnedPet (Just person) "Mittens" Cat
       p2 <- getJust $ fromJust $ maybeOwnedPetOwnerId cat
       p @== p2
-      Just p4 <- maybeOwnedPetOwner cat
+      Just p4 <- belongsTo maybeOwnedPetOwnerId $ cat
       p @== p4
 
   it "derivePersistField" $ db $ do

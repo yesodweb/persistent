@@ -132,6 +132,7 @@ library
                    , file-location >= 0.4
                    , template-haskell
                    , aeson                    >= 0.7
+                   , aeson-extra              >= 0.2
                    , lifted-base              >= 0.1
                    , network
                    , path-pieces              >= 0.1

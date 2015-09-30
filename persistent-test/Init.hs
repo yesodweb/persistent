@@ -42,6 +42,8 @@ module Init (
   , module Control.Monad
 #ifndef WITH_NOSQL
   , module Database.Persist.Sql
+#else
+  , PersistFieldSql(..)
 #endif
 ) where
 
@@ -63,6 +65,7 @@ import qualified Data.ByteString as BS
 #ifdef WITH_NOSQL
 import Language.Haskell.TH.Syntax (Type(..))
 import Database.Persist.TH (mkPersistSettings)
+import Database.Persist.Sql (PersistFieldSql(..))
 
 import Control.Monad (void, replicateM, liftM)
 

@@ -40,8 +40,8 @@ specs = describe "primary key reference" $ do
   return ()
 #  else
   it "insert a primary reference" $ db $ do
-    kf <- insert $ Foo "name"
-    kb <- insert $ Bar kf
+    kf  <- insert $ Foo "name"
+    _kb <- insert $ Bar kf
     return ()
   it "uses RawSql for a Primary key" $ db $ do
     key <- insert $ Foo "name"

@@ -23,7 +23,6 @@ import Database.MongoDB (Value(String))
 import EntityEmbedTest
 import System.Process (readProcess)
 #endif
-import Database.Persist.Sql.Class
 import Data.List.NonEmpty hiding (insert, length)
 
 data TestException = TestException
