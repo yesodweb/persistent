@@ -7,10 +7,7 @@ import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import Control.Monad.Trans.Resource (runResourceT)
 #endif
-#ifndef WITH_MYSQL
-import Data.Time (getCurrentTime)
-#endif
-import Data.Time (Day, UTCTime(..))
+import Data.Time (getCurrentTime, Day, UTCTime(..))
 import qualified Data.Map as Map
 import qualified Data.Text as T
 import Data.Aeson
@@ -76,7 +73,6 @@ specs = describe "rename specs" $ do
             runResourceT $ rawQuery "SELECT something_else from ref_table WHERE id=4" [] C.$$ CL.sinkNull
 #endif
 
-#ifndef WITH_MYSQL
     it "user specified id, insertKey, no default=" $ db $ do
       let rec2 = IdTable "Foo2" Nothing
       let rec1 = IdTable "Foo1" $ Just rec2
@@ -86,7 +82,10 @@ specs = describe "rename specs" $ do
       insertKey key rec
       Just rec' <- get key
       rec' @== rec
+      (Entity key' _):_ <- selectList ([] :: [Filter IdTable]) []
+      key' @== key
 
+#ifndef WITH_MYSQL
 #  ifndef WITH_NOSQL
     -- this uses default=
     it "user specified id, default=" $ db $ do

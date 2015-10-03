@@ -22,6 +22,7 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Error (ErrorT(..))
 import Control.Monad.Trans.Reader (runReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
+import Data.Monoid ((<>))
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import Data.ByteString (ByteString)
@@ -355,7 +356,20 @@ addTable cols entity = AddTable $ concat
       name = entityDB entity
       idtxt = case entityPrimary entity of
                 Just pdef -> concat [" PRIMARY KEY (", intercalate "," $ map (escapeDBName . fieldDB) $ compositeFields pdef, ")"]
-                Nothing   -> concat [escapeDBName $ fieldDB $ entityId entity, " BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY"]
+                Nothing ->
+                  let defText = defaultAttribute $ fieldAttrs $ entityId entity
+                      sType = fieldSqlType $ entityId entity
+                      autoIncrementText = case (sType, defText) of
+                        (SqlInt64, Nothing) -> " AUTO_INCREMENT"
+                        _ -> ""
+                      maxlen = findMaxLenOfField (entityId entity)
+                  in concat
+                         [ escapeDBName $ fieldDB $ entityId entity
+                         , " " <> showSqlType sType maxlen False
+                         , " NOT NULL"
+                         , autoIncrementText
+                         , " PRIMARY KEY"
+                         ]
 
 -- | Find out the type of a column.
 findTypeOfColumn :: [EntityDef] -> DBName -> DBName -> (DBName, FieldType)
@@ -375,8 +389,13 @@ findMaxLenOfColumn allDefs name col =
          ((,) col) $ do
            entDef     <- find ((== name) . entityDB) allDefs
            fieldDef   <- find ((== col) . fieldDB) (entityFields entDef)
-           maxLenAttr <- find ((T.isPrefixOf "maxlen=") . T.toLower) (fieldAttrs fieldDef)
-           readMaybe . T.unpack . T.drop 7 $ maxLenAttr
+           findMaxLenOfField fieldDef
+
+-- | Find out the maxlen of a field
+findMaxLenOfField :: FieldDef -> Maybe Integer
+findMaxLenOfField fieldDef = do
+    maxLenAttr <- find ((T.isPrefixOf "maxlen=") . T.toLower) (fieldAttrs fieldDef)
+    readMaybe . T.unpack . T.drop 7 $ maxLenAttr
 
 -- | Helper for 'AddReference' that finds out the which primary key columns to reference.
 addReference :: [EntityDef] -> DBName -> DBName -> DBName -> AlterColumn
