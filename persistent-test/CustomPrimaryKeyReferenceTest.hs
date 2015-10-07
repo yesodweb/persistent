@@ -42,12 +42,11 @@ specs = describe "custom primary key reference" $ do
 #else
 
   let tweet = Tweet {tweetTweetId = 1, tweetStatusText = "Hello!"}
-  
+
   it "can insert a Tweet" $ db $ do
     tweetId <- insert tweet
     let url = TweetUrl {tweetUrlTweetId = tweetId, tweetUrlTweetUrl = "http://google.com", tweetUrlFinalUrl = Just "http://example.com"}
-    u <- insert url
-    return ()
+    insert_ url
 
   return ()
 

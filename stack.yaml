@@ -1,4 +1,4 @@
-resolver: lts-2.17
+resolver: lts-3.4
 packages:
   - ./persistent
   - ./persistent-template
@@ -9,3 +9,8 @@ packages:
   #- ./persistent-postgresql
   #- ./persistent-redis
   #- ./persistent-zookeeper
+
+extra-deps:
+  - aeson-extra-0.2.0.0
+  - aeson-0.10.0.0
+  - attoparsec-0.13.0.1

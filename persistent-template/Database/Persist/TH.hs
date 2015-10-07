@@ -63,7 +63,7 @@ import Data.Monoid (mappend, mconcat)
 import Text.Read (readPrec, lexP, step, prec, parens, Lexeme(Ident))
 import qualified Data.Map as M
 import qualified Data.HashMap.Strict as HM
-import Data.Aeson
+import Data.Aeson.Compat
     ( ToJSON (toJSON), FromJSON (parseJSON), (.=), object
     , Value (Object), (.:), (.:?)
     , eitherDecodeStrict'
@@ -914,7 +914,7 @@ mkEntity mps t = do
     fkc <- mapM (mkForeignKeysComposite mps t) $ entityForeigns t
 
     let primaryField = entityId t
-    
+
     fields <- mapM (mkField mps t) $ primaryField : entityFields t
     toFieldNames <- mkToFieldNames $ entityUniques t
 
@@ -1036,12 +1036,12 @@ mkForeignKeysComposite mps t ForeignDef {..} = do
    let reftableKeyName = mkName $ reftableString `mappend` "Key"
    let tablename = mkName $ unpack $ entityText t
    recordName <- newName "record"
-   
+
    let fldsE = map (\((foreignName, _),_) -> VarE (fieldName $ foreignName)
                  `AppE` VarE recordName) foreignFields
    let mkKeyE = foldl' AppE (maybeExp foreignNullable $ ConE reftableKeyName) fldsE
    let fn = FunD fname [normalClause [VarP recordName] mkKeyE]
-   
+
    let t2 = maybeTyp foreignNullable $ ConT ''Key `AppT` ConT (mkName reftableString)
    let sig = SigD fname $ (ArrowT `AppT` (ConT tablename)) `AppT` t2
    return [sig, fn]
@@ -1060,7 +1060,7 @@ maybeTyp may typ | may = ConT ''Maybe `AppT` typ
 -- @
 --   instance PersistEntity e => PersistField e where
 --      toPersistValue = PersistMap $ zip columNames (map toPersistValue . toPersistFields)
---      fromPersistValue (PersistMap o) = 
+--      fromPersistValue (PersistMap o) =
 --          let columns = HM.fromList o
 --          in fromPersistValues $ map (\name ->
 --            case HM.lookup name columns of
@@ -1266,7 +1266,7 @@ derivePersistField s = do
 -- | Automatically creates a valid 'PersistField' instance for any datatype
 -- that has valid 'ToJSON' and 'FromJSON' instances. For a datatype @T@ it
 -- generates instances similar to these:
--- 
+--
 -- @
 --    instance PersistField T where
 --        toPersistValue = PersistByteString . L.toStrict . encode
