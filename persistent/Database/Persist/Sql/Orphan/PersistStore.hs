@@ -34,6 +34,7 @@ import Control.Monad.Trans.Reader (ReaderT, ask)
 import Data.Acquire (with)
 import Data.Int (Int64)
 import Web.PathPieces (PathPiece)
+import Web.HttpApiData (ToHttpApiData, FromHttpApiData)
 import Database.Persist.Sql.Class (PersistFieldSql)
 import qualified Data.Aeson as A
 import Control.Exception.Lifted (throwIO)
@@ -105,7 +106,7 @@ fieldDBName = fieldDB . persistFieldDef
 
 instance PersistStore SqlBackend where
     newtype BackendKey SqlBackend = SqlBackendKey { unSqlBackendKey :: Int64 }
-        deriving (Show, Read, Eq, Ord, Num, Integral, PersistField, PersistFieldSql, PathPiece, Real, Enum, Bounded, A.ToJSON, A.FromJSON)
+        deriving (Show, Read, Eq, Ord, Num, Integral, PersistField, PersistFieldSql, PathPiece, ToHttpApiData, FromHttpApiData, Real, Enum, Bounded, A.ToJSON, A.FromJSON)
 
     update _ [] = return ()
     update k upds = do

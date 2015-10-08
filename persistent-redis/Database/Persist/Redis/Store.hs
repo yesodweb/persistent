@@ -17,7 +17,8 @@ import Data.Text (Text, pack)
 import Database.Persist.Redis.Config (RedisT, thisConnection)
 import Database.Persist.Redis.Internal
 import Database.Persist.Redis.Update
-import Web.PathPieces (PathPiece (..))
+import Web.PathPieces (PathPiece)
+import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData (..))
 
 import Data.Aeson(FromJSON(..), ToJSON(..))
 
@@ -97,10 +98,14 @@ instance PersistStore R.Connection where
                 insertKey k val
         return()
 
-instance PathPiece (BackendKey RedisBackend) where
-    toPathPiece (RedisKey txt) = txt
-    fromPathPiece txt = Just $ RedisKey txt 
+instance ToHttpApiData (BackendKey RedisBackend) where
+    toUrlPiece (RedisKey txt) = txt
+
+instance FromHttpApiData (BackendKey RedisBackend) where
+    parseUrlPiece = return . RedisKey
 -- some checking that entity exists and it is in format of entityname_id is omitted
+
+instance PathPiece (BackendKey RedisBackend)
 
 instance Sql.PersistFieldSql (BackendKey RedisBackend) where
     sqlType _ = Sql.SqlOther (pack "doesn't make much sense for Redis backend")

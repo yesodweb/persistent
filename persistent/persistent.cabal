@@ -36,6 +36,7 @@ library
                    , lifted-base              >= 0.1
                    , resource-pool            >= 0.2.2.0
                    , path-pieces              >= 0.1
+                   , http-api-data
                    , aeson                    >= 0.5
                    , monad-logger             >= 0.3
                    , transformers-base
@@ -98,6 +99,7 @@ test-suite test
                    , attoparsec
                    , transformers
                    , path-pieces
+                   , http-api-data
                    , aeson
                    , resourcet
                    , monad-logger

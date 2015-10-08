@@ -5,7 +5,9 @@ module Database.Persist.Types.Base where
 
 import qualified Data.Aeson as A
 import Control.Exception (Exception)
-import Web.PathPieces (PathPiece (..))
+import Web.PathPieces (PathPiece)
+import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData (..))
+import Web.HttpApiData.Internal (parseBoundedCaseInsensitiveTextData, showTextData, readEitherTextData)
 import Control.Monad.Trans.Error (Error (..))
 import Data.Typeable (Typeable)
 import Data.Text (Text, pack)
@@ -82,12 +84,13 @@ data Checkmark = Active
                  -- may be any number of 'Inactive' records.
     deriving (Eq, Ord, Read, Show, Enum, Bounded)
 
-instance PathPiece Checkmark where
-    toPathPiece = pack . show
-    fromPathPiece txt =
-      case reads (T.unpack txt) of
-        [(a, "")] -> Just a
-        _         -> Nothing
+instance ToHttpApiData Checkmark where
+    toUrlPiece = showTextData
+
+instance FromHttpApiData Checkmark where
+    parseUrlPiece = parseBoundedCaseInsensitiveTextData
+
+instance PathPiece Checkmark
 
 data IsNullable = Nullable !WhyNullable
                 | NotNullable
@@ -301,18 +304,23 @@ data PersistValue = PersistText Text
     deriving (Show, Read, Eq, Typeable, Ord)
 
 
-instance PathPiece PersistValue where
-    fromPathPiece t =
-        case Data.Text.Read.signed Data.Text.Read.decimal t of
-            Right (i, t')
-                | T.null t' -> Just $ PersistInt64 i
-            _ -> case reads $ T.unpack t of
-                    [(fks, "")] -> Just $ PersistList fks
-                    _ -> Just $ PersistText t
-    toPathPiece x =
-        case fromPersistValueText x of
-            Left e -> error $ T.unpack e
+instance ToHttpApiData PersistValue where
+    toUrlPiece val =
+        case fromPersistValueText val of
+            Left  e -> error $ T.unpack e
             Right y -> y
+
+instance FromHttpApiData PersistValue where
+    parseUrlPiece input =
+          PersistInt64 <$> parseUrlPiece input
+      <!> PersistList  <$> readEitherTextData input
+      <!> PersistText  <$> return input
+      where
+        infixl 3 <!>
+        Left _ <!> y = y
+        x      <!> _ = x
+
+instance PathPiece PersistValue
 
 fromPersistValueText :: PersistValue -> Either Text Text
 fromPersistValueText (PersistText s) = Right s

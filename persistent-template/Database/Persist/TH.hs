@@ -71,7 +71,8 @@ import Data.Aeson.Compat
 import Control.Applicative (pure, (<$>), (<*>))
 import Database.Persist.Sql (sqlType)
 import Data.Proxy (Proxy (Proxy))
-import Web.PathPieces (PathPiece, toPathPiece, fromPathPiece)
+import Web.PathPieces (PathPiece)
+import Web.HttpApiData (ToHttpApiData(..), FromHttpApiData(..))
 import GHC.Generics (Generic)
 import qualified Data.Text.Encoding as TE
 
@@ -669,7 +670,7 @@ mkLensClauses mps t = do
 
 
 -- | declare the key type and associated instances
--- a PathPiece instance is only generated for a Key with one field
+-- @'PathPiece'@, @'ToHttpApiData'@ and @'FromHttpApiData'@ instances are only generated for a Key with one field
 mkKeyTypeDec :: MkPersistSettings -> EntityDef -> Q (Dec, [Dec])
 mkKeyTypeDec mps t = do
     (instDecs, i) <-
@@ -683,7 +684,7 @@ mkKeyTypeDec mps t = do
                then do pfDec <- pfInstD
                        return (pfDec, [''Show, ''Read, ''Eq, ''Ord, ''Generic])
                 else do
-                    let allInstances = [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''PersistField, ''PersistFieldSql, ''ToJSON, ''FromJSON]
+                    let allInstances = [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''ToHttpApiData, ''FromHttpApiData, ''PersistField, ''PersistFieldSql, ''ToJSON, ''FromJSON]
                     if customKeyType
                       then return ([], allInstances)
                       else do
@@ -751,9 +752,11 @@ mkKeyTypeDec mps t = do
                 compare x y = compare
                     ($(return unKeyE) x)
                     ($(return unKeyE) y)
-             instance PathPiece (BackendKey $(pure backendT)) => PathPiece (Key $(pure recordType)) where
-                toPathPiece = toPathPiece . $(return unKeyE)
-                fromPathPiece = fmap $(return keyConE) . fromPathPiece
+             instance ToHttpApiData (BackendKey $(pure backendT)) => ToHttpApiData (Key $(pure recordType)) where
+                toUrlPiece = toUrlPiece . $(return unKeyE)
+             instance FromHttpApiData (BackendKey $(pure backendT)) => FromHttpApiData(Key $(pure recordType)) where
+                parseUrlPiece = fmap $(return keyConE) . parseUrlPiece
+             instance PathPiece (BackendKey $(pure backendT)) => PathPiece (Key $(pure recordType))
              instance PersistField (BackendKey $(pure backendT)) => PersistField (Key $(pure recordType)) where
                 toPersistValue = toPersistValue . $(return unKeyE)
                 fromPersistValue = fmap $(return keyConE) . fromPersistValue
