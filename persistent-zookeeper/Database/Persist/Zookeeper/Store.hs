@@ -23,8 +23,9 @@ import Control.Monad.Reader
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Types as A
 
-import Web.PathPieces (PathPiece)
+import Web.PathPieces (PathPiece(..))
 import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData (..))
+import Web.HttpApiData.Internal (parseUrlPieceMaybe)
 
 instance ToHttpApiData (BackendKey Z.Zookeeper) where
     toUrlPiece key = "z" <> unZooKey key
@@ -33,7 +34,9 @@ instance FromHttpApiData (BackendKey Z.Zookeeper) where
     parseUrlPiece input = ZooKey <$> parseUrlPieceWithPrefix "z" input
 
 -- | ToPathPiece is used to convert a key to/from text
-instance PathPiece (BackendKey Z.Zookeeper)
+instance PathPiece (BackendKey Z.Zookeeper) where
+  toPathPiece   = toUrlPiece
+  fromPathPiece = parseUrlPieceMaybe
 
 instance Sql.PersistFieldSql (BackendKey Z.Zookeeper) where
     sqlType _ = Sql.SqlOther "doesn't make much sense for Zookeeper"

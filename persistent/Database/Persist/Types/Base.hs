@@ -5,9 +5,9 @@ module Database.Persist.Types.Base where
 
 import qualified Data.Aeson as A
 import Control.Exception (Exception)
-import Web.PathPieces (PathPiece)
+import Web.PathPieces (PathPiece(..))
 import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData (..))
-import Web.HttpApiData.Internal (parseBoundedCaseInsensitiveTextData, showTextData, readEitherTextData)
+import Web.HttpApiData.Internal (parseBoundedCaseInsensitiveTextData, showTextData, readEitherTextData, parseUrlPieceMaybe)
 import Control.Monad.Trans.Error (Error (..))
 import Data.Typeable (Typeable)
 import Data.Text (Text, pack)
@@ -320,7 +320,9 @@ instance FromHttpApiData PersistValue where
         Left _ <!> y = y
         x      <!> _ = x
 
-instance PathPiece PersistValue
+instance PathPiece PersistValue where
+  toPathPiece   = toUrlPiece
+  fromPathPiece = parseUrlPieceMaybe
 
 fromPersistValueText :: PersistValue -> Either Text Text
 fromPersistValueText (PersistText s) = Right s

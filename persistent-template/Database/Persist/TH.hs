@@ -71,8 +71,9 @@ import Data.Aeson.Compat
 import Control.Applicative (pure, (<$>), (<*>))
 import Database.Persist.Sql (sqlType)
 import Data.Proxy (Proxy (Proxy))
-import Web.PathPieces (PathPiece)
+import Web.PathPieces (PathPiece(..))
 import Web.HttpApiData (ToHttpApiData(..), FromHttpApiData(..))
+import Web.HttpApiData.Internal (parseUrlPieceMaybe)
 import GHC.Generics (Generic)
 import qualified Data.Text.Encoding as TE
 
@@ -756,7 +757,9 @@ mkKeyTypeDec mps t = do
                 toUrlPiece = toUrlPiece . $(return unKeyE)
              instance FromHttpApiData (BackendKey $(pure backendT)) => FromHttpApiData(Key $(pure recordType)) where
                 parseUrlPiece = fmap $(return keyConE) . parseUrlPiece
-             instance PathPiece (BackendKey $(pure backendT)) => PathPiece (Key $(pure recordType))
+             instance PathPiece (BackendKey $(pure backendT)) => PathPiece (Key $(pure recordType)) where
+                toPathPiece = toPathPiece . $(return unKeyE)
+                fromPathPiece = fmap $(return keyConE) . fromPathPiece
              instance PersistField (BackendKey $(pure backendT)) => PersistField (Key $(pure recordType)) where
                 toPersistValue = toPersistValue . $(return unKeyE)
                 fromPersistValue = fmap $(return keyConE) . fromPersistValue

@@ -131,9 +131,9 @@ import Data.Text (Text)
 import qualified Data.ByteString as BS
 import qualified Data.Text.Encoding as E
 import qualified Data.Serialize as Serialize
-import Web.PathPieces (PathPiece)
+import Web.PathPieces (PathPiece(..))
 import Web.HttpApiData (ToHttpApiData(..), FromHttpApiData(..))
-import Web.HttpApiData.Internal (parseUrlPieceWithPrefix, readEitherTextData)
+import Web.HttpApiData.Internal (parseUrlPieceWithPrefix, readEitherTextData, parseUrlPieceMaybe)
 import Data.Conduit
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value (Number), (.:), (.:?), (.!=), FromJSON(..), ToJSON(..), withText, withObject)
@@ -227,7 +227,9 @@ instance FromHttpApiData (BackendKey DB.MongoContext) where
         x      <!> _ = x
 
 -- | ToPathPiece is used to convert a key to/from text
-instance PathPiece (BackendKey DB.MongoContext)
+instance PathPiece (BackendKey DB.MongoContext) where
+  toPathPiece   = toUrlPiece
+  fromPathPiece = parseUrlPieceMaybe
 
 keyToText :: BackendKey DB.MongoContext -> Text
 keyToText = T.pack . show . unMongoKey
