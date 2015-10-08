@@ -415,10 +415,10 @@ data AlterColumn = Change Column
                  | Update' String
                  -- | See the definition of the 'showAlter' function to see how these fields are used.
                  | AddReference
-                    DBName -- ^ Referenced table
-                    DBName -- ^ Foreign key name
-                    [DBName] -- ^ Referencing columns
-                    [DBName] -- ^ Referenced columns
+                    DBName -- Referenced table
+                    DBName -- Foreign key name
+                    [DBName] -- Referencing columns
+                    [DBName] -- Referenced columns
                  | DropReference DBName
 
 type AlterColumn' = (DBName, AlterColumn)
