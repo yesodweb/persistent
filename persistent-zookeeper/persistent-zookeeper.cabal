@@ -78,6 +78,7 @@ test-suite  basic
                    , hzk                   >= 2.1
                    , resource-pool
                    , path-pieces
+                   , http-api-data
                    , base64-bytestring
                    , hspec
                    , conduit
