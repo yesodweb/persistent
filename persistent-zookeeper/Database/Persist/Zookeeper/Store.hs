@@ -25,7 +25,7 @@ import qualified Data.Aeson.Types as A
 
 import Web.PathPieces (PathPiece(..))
 import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData (..))
-import Web.HttpApiData.Internal (parseUrlPieceMaybe)
+import Web.HttpApiData.Internal (parseUrlPieceMaybe, parseUrlPieceWithPrefix)
 
 instance ToHttpApiData (BackendKey Z.Zookeeper) where
     toUrlPiece key = "z" <> unZooKey key
