@@ -197,6 +197,12 @@ matrix:
   - env: GHCVER=7.8.4 CABALVER=1.18 BACKEND=zookeeper
   - env: GHCVER=7.10.2 CABALVER=1.22 BACKEND=zookeeper
 
+  # 7.6.3. Probably aeson-extra needs to loosen a lower bounds
+  - env: GHCVER=7.6.3 CABALVER=1.18 BACKEND=none
+  - env: GHCVER=7.6.3 CABALVER=1.18 BACKEND=mongodb
+  - env: GHCVER=7.6.3 CABALVER=1.18 BACKEND=postgresql
+  - env: GHCVER=7.6.3 CABALVER=1.18 BACKEND=mysql
+
 before_install:
 - travis_retry /opt/cabal/$CABALVER/bin/cabal update
 
