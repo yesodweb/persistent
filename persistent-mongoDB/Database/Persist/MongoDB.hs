@@ -122,7 +122,7 @@ import qualified Data.Traversable as Traversable
 import Data.Bson (ObjectId(..))
 import qualified Database.MongoDB as DB
 import Database.MongoDB.Query (Database)
-import Control.Applicative (Applicative)
+import Control.Applicative (Applicative, (<$>))
 import Network (PortID (PortNumber))
 import Network.Socket (HostName)
 import Data.Maybe (mapMaybe, fromJust)

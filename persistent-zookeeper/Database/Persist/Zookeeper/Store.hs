@@ -10,6 +10,8 @@ module Database.Persist.Zookeeper.Store (
 , BackendKey(..)
 )where
 
+import Control.Applicative ((<$>))
+
 import Database.Persist
 import qualified Database.Persist.Sql as Sql
 import qualified Database.Zookeeper as Z

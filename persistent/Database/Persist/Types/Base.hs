@@ -17,6 +17,7 @@ import Data.Text.Encoding.Error (lenientDecode)
 import qualified Data.ByteString.Base64 as B64
 import qualified Data.Vector as V
 import Control.Arrow (second)
+import Control.Applicative ((<$>))
 import Data.Time (Day, TimeOfDay, UTCTime)
 import Data.Int (Int64)
 import qualified Data.Text.Read
