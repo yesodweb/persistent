@@ -35,7 +35,7 @@ library
                    , hzk                   >= 2.1
                    , resource-pool
                    , path-pieces
-                   , http-api-data
+                   , http-api-data            >= 0.1       && < 0.2
                    , template-haskell
                    , base64-bytestring
                    , conduit
@@ -78,7 +78,7 @@ test-suite  basic
                    , hzk                   >= 2.1
                    , resource-pool
                    , path-pieces
-                   , http-api-data
+                   , http-api-data            >= 0.1       && < 0.2
                    , base64-bytestring
                    , hspec
                    , conduit
