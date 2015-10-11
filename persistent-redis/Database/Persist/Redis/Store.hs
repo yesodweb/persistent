@@ -18,8 +18,7 @@ import Database.Persist.Redis.Config (RedisT, thisConnection)
 import Database.Persist.Redis.Internal
 import Database.Persist.Redis.Update
 import Web.PathPieces (PathPiece(..))
-import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData (..))
-import Web.HttpApiData.Internal (parseUrlPieceMaybe)
+import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData (..), parseUrlPieceMaybe)
 
 import Data.Aeson(FromJSON(..), ToJSON(..))
 

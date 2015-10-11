@@ -132,8 +132,7 @@ import qualified Data.ByteString as BS
 import qualified Data.Text.Encoding as E
 import qualified Data.Serialize as Serialize
 import Web.PathPieces (PathPiece(..))
-import Web.HttpApiData (ToHttpApiData(..), FromHttpApiData(..))
-import Web.HttpApiData.Internal (parseUrlPieceWithPrefix, readEitherTextData, parseUrlPieceMaybe)
+import Web.HttpApiData (ToHttpApiData(..), FromHttpApiData(..), parseUrlPieceMaybe, parseUrlPieceWithPrefix, readTextData)
 import Data.Conduit
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value (Number), (.:), (.:?), (.!=), FromJSON(..), ToJSON(..), withText, withObject)
@@ -220,7 +219,7 @@ instance ToHttpApiData (BackendKey DB.MongoContext) where
 instance FromHttpApiData (BackendKey DB.MongoContext) where
     parseUrlPiece input = do
       s <- parseUrlPieceWithPrefix "o" input <!> return input
-      MongoKey <$> readEitherTextData s
+      MongoKey <$> readTextData s
       where
         infixl 3 <!>
         Left _ <!> y = y

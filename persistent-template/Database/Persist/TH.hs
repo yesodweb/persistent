@@ -72,8 +72,7 @@ import Control.Applicative (pure, (<$>), (<*>))
 import Database.Persist.Sql (sqlType)
 import Data.Proxy (Proxy (Proxy))
 import Web.PathPieces (PathPiece(..))
-import Web.HttpApiData (ToHttpApiData(..), FromHttpApiData(..))
-import Web.HttpApiData.Internal (parseUrlPieceMaybe)
+import Web.HttpApiData (ToHttpApiData(..), FromHttpApiData(..), parseUrlPieceMaybe)
 import GHC.Generics (Generic)
 import qualified Data.Text.Encoding as TE
 

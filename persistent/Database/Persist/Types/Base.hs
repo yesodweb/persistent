@@ -6,8 +6,7 @@ module Database.Persist.Types.Base where
 import qualified Data.Aeson as A
 import Control.Exception (Exception)
 import Web.PathPieces (PathPiece(..))
-import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData (..))
-import Web.HttpApiData.Internal (parseBoundedCaseInsensitiveTextData, showTextData, readEitherTextData, parseUrlPieceMaybe)
+import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData (..), parseUrlPieceMaybe, showTextData, readTextData, parseBoundedTextData)
 import Control.Monad.Trans.Error (Error (..))
 import Data.Typeable (Typeable)
 import Data.Text (Text, pack)
@@ -89,7 +88,7 @@ instance ToHttpApiData Checkmark where
     toUrlPiece = showTextData
 
 instance FromHttpApiData Checkmark where
-    parseUrlPiece = parseBoundedCaseInsensitiveTextData
+    parseUrlPiece = parseBoundedTextData
 
 instance PathPiece Checkmark
 
@@ -314,7 +313,7 @@ instance ToHttpApiData PersistValue where
 instance FromHttpApiData PersistValue where
     parseUrlPiece input =
           PersistInt64 <$> parseUrlPiece input
-      <!> PersistList  <$> readEitherTextData input
+      <!> PersistList  <$> readTextData input
       <!> PersistText  <$> return input
       where
         infixl 3 <!>

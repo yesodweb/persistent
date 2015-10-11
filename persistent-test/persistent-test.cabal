@@ -136,7 +136,7 @@ library
                    , lifted-base              >= 0.1
                    , network
                    , path-pieces              >= 0.1
-                   , http-api-data            >= 0.1       && < 0.2
+                   , http-api-data            >= 0.2       && < 0.3
                    , text                     >= 0.8
                    , transformers             >= 0.2.1
                    , monad-control            >= 0.3
