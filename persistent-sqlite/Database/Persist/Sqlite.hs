@@ -47,9 +47,17 @@ import Control.Monad (when)
 import Control.Monad.Trans.Reader (runReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
 
+-- | Create a pool of SQLite connections.
+--
+-- Note that this should not be used with the @:memory:@ connection string, as
+-- the pool will regularly remove connections, destroying your database.
+-- Instead, use 'withSqliteConn'.
 createSqlitePool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m) => Text -> Int -> m ConnectionPool
 createSqlitePool s = createSqlPool $ open' s
 
+-- | Run the given action with a connection pool.
+--
+-- Like 'createSqlitePool', this should not be used with @:memory:@.
 withSqlitePool :: (MonadBaseControl IO m, MonadIO m, MonadLogger m)
                => Text
                -> Int -- ^ number of connections to open
