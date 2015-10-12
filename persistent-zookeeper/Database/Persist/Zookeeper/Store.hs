@@ -10,6 +10,8 @@ module Database.Persist.Zookeeper.Store (
 , BackendKey(..)
 )where
 
+import Control.Applicative ((<$>))
+
 import Database.Persist
 import qualified Database.Persist.Sql as Sql
 import qualified Database.Zookeeper as Z
@@ -23,15 +25,19 @@ import Control.Monad.Reader
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Types as A
 
-import Web.PathPieces (PathPiece (..))
+import Web.PathPieces (PathPiece(..))
+import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData (..), parseUrlPieceMaybe, parseUrlPieceWithPrefix)
+
+instance ToHttpApiData (BackendKey Z.Zookeeper) where
+    toUrlPiece key = "z" <> unZooKey key
+
+instance FromHttpApiData (BackendKey Z.Zookeeper) where
+    parseUrlPiece input = ZooKey <$> parseUrlPieceWithPrefix "z" input
 
 -- | ToPathPiece is used to convert a key to/from text
 instance PathPiece (BackendKey Z.Zookeeper) where
-    toPathPiece key = "z" <> (unZooKey key)
-    fromPathPiece keyText =
-      case T.uncons keyText of
-        Just ('z', prefixed) -> Just $ ZooKey prefixed
-        _ -> mzero
+  toPathPiece   = toUrlPiece
+  fromPathPiece = parseUrlPieceMaybe
 
 instance Sql.PersistFieldSql (BackendKey Z.Zookeeper) where
     sqlType _ = Sql.SqlOther "doesn't make much sense for Zookeeper"

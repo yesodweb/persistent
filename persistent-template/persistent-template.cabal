@@ -29,6 +29,7 @@ library
                    , unordered-containers
                    , tagged
                    , path-pieces
+                   , http-api-data            >= 0.2       && < 0.3
                    , ghc-prim
     exposed-modules: Database.Persist.TH
     ghc-options:     -Wall

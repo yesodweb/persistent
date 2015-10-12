@@ -122,7 +122,7 @@ import qualified Data.Traversable as Traversable
 import Data.Bson (ObjectId(..))
 import qualified Database.MongoDB as DB
 import Database.MongoDB.Query (Database)
-import Control.Applicative (Applicative)
+import Control.Applicative (Applicative, (<$>))
 import Network (PortID (PortNumber))
 import Network.Socket (HostName)
 import Data.Maybe (mapMaybe, fromJust)
@@ -131,7 +131,8 @@ import Data.Text (Text)
 import qualified Data.ByteString as BS
 import qualified Data.Text.Encoding as E
 import qualified Data.Serialize as Serialize
-import Web.PathPieces (PathPiece (..))
+import Web.PathPieces (PathPiece(..))
+import Web.HttpApiData (ToHttpApiData(..), FromHttpApiData(..), parseUrlPieceMaybe, parseUrlPieceWithPrefix, readTextData)
 import Data.Conduit
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value (Number), (.:), (.:?), (.!=), FromJSON(..), ToJSON(..), withText, withObject)
@@ -212,15 +213,22 @@ instance FromJSON NoOrphanPortID where
 data Connection = Connection DB.Pipe DB.Database
 type ConnectionPool = Pool.Pool Connection
 
+instance ToHttpApiData (BackendKey DB.MongoContext) where
+    toUrlPiece = keyToText
+
+instance FromHttpApiData (BackendKey DB.MongoContext) where
+    parseUrlPiece input = do
+      s <- parseUrlPieceWithPrefix "o" input <!> return input
+      MongoKey <$> readTextData s
+      where
+        infixl 3 <!>
+        Left _ <!> y = y
+        x      <!> _ = x
+
 -- | ToPathPiece is used to convert a key to/from text
 instance PathPiece (BackendKey DB.MongoContext) where
-    toPathPiece = keyToText
-    fromPathPiece keyText = readMayMongoKey $
-        -- handle a JSON type prefix
-        -- 'o' is a non-hex character, so no confusion here
-        case T.uncons keyText of
-            Just ('o', prefixed) -> prefixed
-            _ -> keyText
+  toPathPiece   = toUrlPiece
+  fromPathPiece = parseUrlPieceMaybe
 
 keyToText :: BackendKey DB.MongoContext -> Text
 keyToText = T.pack . show . unMongoKey
