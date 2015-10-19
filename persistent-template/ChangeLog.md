@@ -1,3 +1,7 @@
+## 2.1.4
+
+support http-api-data for url serialization
+
 ## 2.1.3.3
 
 By default explicitly use Int64 for foreign key references.

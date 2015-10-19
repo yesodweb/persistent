@@ -1,5 +1,5 @@
 name:            persistent-zookeeper
-version:         0.2.0
+version:         0.2.1
 license:         BSD3
 license-file:    LICENSE
 author:          Junji Hashimoto <junji.hashimoto@gree.net>

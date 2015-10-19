@@ -1,3 +1,7 @@
+## 2.2.2
+
+* support http-api-data for url serialization
+
 ## 2.2.1
 
 * Migration failure message with context
