@@ -101,7 +101,7 @@ share [mkPersist persistSettings,  mkMigrate "testMigrate", mkDeleteCascade pers
     name Text Maybe
     color Text Maybe
     deriving Show Eq
-  Pet no-json
+  Pet
     ownerId PersonId
     name Text
     -- deriving Show Eq
@@ -109,7 +109,7 @@ share [mkPersist persistSettings,  mkMigrate "testMigrate", mkDeleteCascade pers
   -- Header-level comment
     -- Indented comment
     type PetType
-  MaybeOwnedPet no-json
+  MaybeOwnedPet
     ownerId PersonId Maybe
     name Text
     type PetType

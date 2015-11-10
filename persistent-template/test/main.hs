@@ -53,12 +53,6 @@ Baz
     bin Int
 |]
 
--- ensure no-json works
-instance ToJSON NoJson where
-    toJSON = undefined
-instance FromJSON NoJson where
-    parseJSON = undefined
-
 arbitraryT = pack <$> arbitrary
 
 instance Arbitrary Person where
