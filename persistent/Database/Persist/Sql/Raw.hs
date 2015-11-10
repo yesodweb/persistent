@@ -126,6 +126,80 @@ getStmtConn conn sql = do
 -- However, most common problems are mitigated by using the
 -- entity selection placeholder @??@, and you shouldn't see any
 -- error at all if you're not using 'Single'.
+--
+-- Some example of 'rawSql' based on this schema:
+--
+-- @
+-- share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
+-- Person
+--     name String
+--     age Int Maybe
+--     deriving Show
+-- BlogPost
+--     title String
+--     authorId PersonId
+--     deriving Show
+-- |]
+-- @
+-- 
+-- Examples based on the above schema:
+-- 
+-- @ 
+-- getPerson :: MonadIO m => ReaderT SqlBackend m [Entity Person]
+-- getPerson = rawSql "select ?? from person where name=?" [PersistText "john"]
+-- 
+-- getAge :: MonadIO m => ReaderT SqlBackend m [Single Int]
+-- getAge = rawSql "select person.age from person where name=?" [PersistText "john"]
+-- 
+-- getAgeName :: MonadIO m => ReaderT SqlBackend m [(Single Int, Single Text)]
+-- getAgeName = rawSql "select person.age, person.name from person where name=?" [PersistText "john"]
+-- 
+-- getPersonBlog :: MonadIO m => ReaderT SqlBackend m [(Entity Person, Entity BlogPost)]
+-- getPersonBlog = rawSql "select ??,?? from person,blog_post where person.id = blog_post.author_id" []
+-- @
+--
+-- Minimal working program for PostgreSQL backend based on the above concepts:
+--
+-- > {-# LANGUAGE EmptyDataDecls             #-}
+-- > {-# LANGUAGE FlexibleContexts           #-}
+-- > {-# LANGUAGE GADTs                      #-}
+-- > {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+-- > {-# LANGUAGE MultiParamTypeClasses      #-}
+-- > {-# LANGUAGE OverloadedStrings          #-}
+-- > {-# LANGUAGE QuasiQuotes                #-}
+-- > {-# LANGUAGE TemplateHaskell            #-}
+-- > {-# LANGUAGE TypeFamilies               #-}
+-- > 
+-- > import           Control.Monad.IO.Class  (liftIO)
+-- > import           Control.Monad.Logger    (runStderrLoggingT)
+-- > import           Database.Persist
+-- > import           Control.Monad.Reader
+-- > import           Data.Text
+-- > import           Database.Persist.Sql
+-- > import           Database.Persist.Postgresql
+-- > import           Database.Persist.TH
+-- > 
+-- > share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
+-- > Person
+-- >     name String
+-- >     age Int Maybe
+-- >     deriving Show
+-- > |]
+-- > 
+-- > conn = "host=localhost dbname=new_db user=postgres password=postgres port=5432"
+-- > 
+-- > getPerson :: MonadIO m => ReaderT SqlBackend m [Entity Person]
+-- > getPerson = rawSql "select ?? from person where name=?" [PersistText "sibi"]
+-- > 
+-- > liftSqlPersistMPool y x = liftIO (runSqlPersistMPool y x)
+-- > 
+-- > main :: IO ()
+-- > main = runStderrLoggingT $ withPostgresqlPool conn 10 $ liftSqlPersistMPool $ do
+-- >          runMigration migrateAll
+-- >          xs <- getPerson
+-- >          liftIO (print xs)
+-- > 
+
 rawSql :: (RawSql a, MonadIO m)
        => Text             -- ^ SQL statement, possibly with placeholders.
        -> [PersistValue]   -- ^ Values to fill the placeholders.
