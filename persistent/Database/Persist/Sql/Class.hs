@@ -17,7 +17,6 @@ import Control.Applicative ((<$>), (<*>))
 import Database.Persist
 import Data.Monoid ((<>))
 import Database.Persist.Sql.Types
-import Control.Arrow ((&&&))
 import Data.Text (Text, intercalate, pack)
 import Data.Maybe (fromMaybe)
 import Data.Fixed
