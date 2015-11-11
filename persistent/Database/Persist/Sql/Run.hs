@@ -65,6 +65,9 @@ runSqlPersistM x conn = runResourceT $ runNoLoggingT $ runSqlConn x conn
 runSqlPersistMPool :: SqlPersistM a -> Pool SqlBackend -> IO a
 runSqlPersistMPool x pool = runResourceT $ runNoLoggingT $ runSqlPool x pool
 
+liftSqlPersistMPool :: MonadIO m => SqlPersistM a -> Pool SqlBackend -> m a
+liftSqlPersistMPool x pool = liftIO (runSqlPersistMPool x pool)
+
 withSqlPool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m)
             => (LogFunc -> IO SqlBackend) -- ^ create a new connection
             -> Int -- ^ connection count
