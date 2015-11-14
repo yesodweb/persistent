@@ -107,24 +107,36 @@ instance PersistField Int8 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i)  = Right $ fromIntegral i
     fromPersistValue (PersistDouble i) = Right (truncate i :: Int8) -- oracle
+    fromPersistValue (PersistByteString bs) = case readInt bs of  -- oracle
+                                               Just (i,"") -> Right $ fromIntegral i
+                                               xs -> error $ "PersistField Int8 failed parsing PersistByteString xs["++show xs++"] i["++show bs++"]"
     fromPersistValue x = Left $ T.pack $ "int8 Expected Integer, received: " ++ show x
 
 instance PersistField Int16 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i)  = Right $ fromIntegral i
     fromPersistValue (PersistDouble i) = Right (truncate i :: Int16) -- oracle
+    fromPersistValue (PersistByteString bs) = case readInt bs of  -- oracle
+                                               Just (i,"") -> Right $ fromIntegral i
+                                               xs -> error $ "PersistField Int16 failed parsing PersistByteString xs["++show xs++"] i["++show bs++"]"
     fromPersistValue x = Left $ T.pack $ "int16 Expected Integer, received: " ++ show x
 
 instance PersistField Int32 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i)  = Right $ fromIntegral i
     fromPersistValue (PersistDouble i) = Right (truncate i :: Int32) -- oracle
+    fromPersistValue (PersistByteString bs) = case readInt bs of  -- oracle
+                                               Just (i,"") -> Right $ fromIntegral i
+                                               xs -> error $ "PersistField Int32 failed parsing PersistByteString xs["++show xs++"] i["++show bs++"]"
     fromPersistValue x = Left $ T.pack $ "int32 Expected Integer, received: " ++ show x
 
 instance PersistField Int64 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i)  = Right $ fromIntegral i
     fromPersistValue (PersistDouble i) = Right (truncate i :: Int64) -- oracle
+    fromPersistValue (PersistByteString bs) = case readInt bs of  -- oracle
+                                               Just (i,"") -> Right $ fromIntegral i
+                                               xs -> error $ "PersistField Int64 failed parsing PersistByteString xs["++show xs++"] i["++show bs++"]"
     fromPersistValue x = Left $ T.pack $ "int64 Expected Integer, received: " ++ show x
 
 instance PersistField Word where
