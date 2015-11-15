@@ -1,3 +1,8 @@
+## 2.2.1.1
+
+Query pg_catalog instead of information_schema for metadata.
+This helps with permission issues as reported in issue #501
+
 ## 2.2.1
 
 * Fix treatment of `NULL`s inside arrays.  For example, now you
