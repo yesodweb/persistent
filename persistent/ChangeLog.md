@@ -1,3 +1,12 @@
+## 2.2.3
+
+* PersistField instance for Natural
+* better oracle support in odbc
+
+## 2.2.2
+
+* Add liftSqlPersistMPool function
+
 ## 2.2.1
 
 * Migration failure message with context
