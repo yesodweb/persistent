@@ -55,6 +55,10 @@ import Data.Time (defaultTimeLocale)
 import System.Locale (defaultTimeLocale)
 #endif
 
+#if MIN_VERSION_base(4,8,0)
+import Numeric.Natural (Natural)
+#endif
+
 -- | A value which can be marshalled to and from a 'PersistValue'.
 class PersistField a where
     toPersistValue :: a -> PersistValue
@@ -189,7 +193,7 @@ instance PersistField Rational where
     [(a, "")] -> Right $ toRational (a :: Pico)
     _ -> Left $ "Can not read " <> t <> " as Rational (Pico in fact)"
   fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-  fromPersistValue (PersistByteString bs) = case double $ T.cons '0' $ T.decodeUtf8With T.lenientDecode bs of 
+  fromPersistValue (PersistByteString bs) = case double $ T.cons '0' $ T.decodeUtf8With T.lenientDecode bs of
                                               Right (ret,"") -> Right $ toRational ret
                                               Right (a,b) -> Left $ "Invalid bytestring[" <> T.pack (show bs) <> "]: expected a double but returned " <> T.pack (show (a,b))
                                               Left xs -> Left $ "Invalid bytestring[" <> T.pack (show bs) <> "]: expected a double but returned " <> T.pack (show xs)
@@ -199,7 +203,7 @@ instance PersistField Bool where
     toPersistValue = PersistBool
     fromPersistValue (PersistBool b) = Right b
     fromPersistValue (PersistInt64 i) = Right $ i /= 0
-    fromPersistValue (PersistByteString i) = case readInt i of 
+    fromPersistValue (PersistByteString i) = case readInt i of
                                                Just (0,"") -> Right False
                                                Just (1,"") -> Right True
                                                xs -> error $ "PersistField Bool failed parsing PersistByteString xs["++show xs++"] i["++show i++"]"
@@ -253,6 +257,12 @@ instance PersistField UTCTime where
             _ -> Left $ T.pack $ "Expected UTCTime, received " ++ show x
 
     fromPersistValue x = Left $ T.pack $ "Expected UTCTime, received: " ++ show x
+
+#if MIN_VERSION_base(4,8,0)
+instance PersistField Natural where
+  toPersistValue = (toPersistValue :: Int64 -> PersistValue) . fromIntegral
+  fromPersistValue x = fromIntegral <$> (fromPersistValue x :: Either Text Int64)
+#endif
 
 instance PersistField a => PersistField (Maybe a) where
     toPersistValue Nothing = PersistNull
@@ -342,7 +352,7 @@ instance PersistField Checkmark where
     fromPersistValue PersistNull         = Right Inactive
     fromPersistValue (PersistBool True)  = Right Active
     fromPersistValue (PersistInt64 1)    = Right Active
-    fromPersistValue (PersistByteString i) = case readInt i of 
+    fromPersistValue (PersistByteString i) = case readInt i of
                                                Just (0,"") -> Left $ T.pack "PersistField Checkmark: found unexpected 0 value"
                                                Just (1,"") -> Right Active
                                                xs -> Left $ T.pack $ "PersistField Checkmark failed parsing PersistByteString xs["++show xs++"] i["++show i++"]"
