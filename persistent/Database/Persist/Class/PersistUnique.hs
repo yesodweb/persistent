@@ -86,6 +86,17 @@ insertBy val = do
       Nothing -> Right `liftM` insert val
       Just z -> return $ Left z
 
+-- | Insert a value, checking for conflicts with any unique constraints. If a
+-- duplicate exists in the database, it is left untouched. The key of the
+-- existing or new entry is returned
+insertOrGet :: (MonadIO m, PersistEntity val, PersistUnique backend, PersistEntityBackend val ~ backend)
+            => val -> ReaderT backend m (Key val)
+insertOrGet val = do
+    res <- getByValue val
+    case res of
+        Nothing -> insert val
+        Just (Entity key _) -> return key
+
 -- | Return the single unique key for a record
 onlyUnique :: (MonadIO m, PersistEntity val, PersistUnique backend, PersistEntityBackend val ~ backend)
            => val -> ReaderT backend m (Unique val)
