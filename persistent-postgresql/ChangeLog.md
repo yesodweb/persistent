@@ -1,3 +1,7 @@
+## 2.2.1.2
+
+* Allow postgresql-simple 0.5
+
 ## 2.2.1.1
 
 Query pg_catalog instead of information_schema for metadata.
