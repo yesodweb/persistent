@@ -1,4 +1,4 @@
-resolver: lts-3.4
+resolver: lts-3.14
 packages:
   - ./persistent
   - ./persistent-template
