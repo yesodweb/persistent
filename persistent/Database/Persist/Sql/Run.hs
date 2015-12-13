@@ -50,13 +50,13 @@ withResourceTimeout ms pool act = control $ \runInIO -> mask $ \restore -> do
 {-# INLINABLE withResourceTimeout #-}
 
 runSqlConn :: MonadBaseControl IO m => SqlPersistT m a -> SqlBackend -> m a
-runSqlConn r conn = do
+runSqlConn r conn = control $ \runInIO -> mask $ \restore -> do
     let getter = getStmtConn conn
-    liftBase $ connBegin conn getter
+    restore $ connBegin conn getter
     x <- onException
-            (runReaderT r conn)
-            (liftBase $ connRollback conn getter)
-    liftBase $ connCommit conn getter
+            (restore $ runInIO $ runReaderT r conn)
+            (restore $ connRollback conn getter)
+    restore $ connCommit conn getter
     return x
 
 runSqlPersistM :: SqlPersistM a -> SqlBackend -> IO a

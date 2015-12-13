@@ -1,3 +1,7 @@
+## 2.2.4
+
+* Workaround for side-exiting transformers in `runSqlConn` [#516](https://github.com/yesodweb/persistent/issues/516)
+
 ## 2.2.3
 
 * PersistField instance for Natural
