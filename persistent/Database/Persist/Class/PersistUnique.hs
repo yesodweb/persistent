@@ -25,17 +25,25 @@ import Data.Text (unpack, Text)
 -- Please read the general Persistent documentation to learn how to create
 -- 'Unique' keys.
 --
--- Using this with an Entity without a Unique key leads to undefined behavior.
--- A few of these functions require a *single* 'Unique', so using an Entity with multiple 'Unique's is also undefined. In these cases persistent's goal is to throw an exception as soon as possible, but persistent is still transitioning to that.
+-- Using this with an Entity without a Unique key leads to undefined
+-- behavior.  A few of these functions require a /single/ 'Unique', so using
+-- an Entity with multiple 'Unique's is also undefined. In these cases
+-- persistent's goal is to throw an exception as soon as possible, but
+-- persistent is still transitioning to that.
 --
--- SQL backends automatically create uniqueness constraints, but for MongoDB you must manually place a unique index on a field to have a uniqueness constraint.
+-- SQL backends automatically create uniqueness constraints, but for MongoDB
+-- you must manually place a unique index on a field to have a uniqueness
+-- constraint.
 --
--- Some functions in this module (insertUnique, insertBy, and replaceUnique) first query the unique indexes to check for conflicts.
--- You could instead optimistically attempt to perform the operation (e.g. replace instead of replaceUnique). However,
+-- Some functions in this module ('insertUnique', 'insertBy', and
+-- 'replaceUnique') first query the unique indexes to check for
+-- conflicts. You could instead optimistically attempt to perform the
+-- operation (e.g. 'replace' instead of 'replaceUnique'). However,
 --
---  * there is some fragility to trying to catch the correct exception and determing the column of failure.
+--  * there is some fragility to trying to catch the correct exception and
+--  determing the column of failure;
 --
---  * an exception will automatically abort the current SQL transaction
+--  * an exception will automatically abort the current SQL transaction.
 class PersistStore backend => PersistUnique backend where
     -- | Get a record by unique key, if available. Returns also the identifier.
     getBy :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val) => Unique val -> ReaderT backend m (Maybe (Entity val))
@@ -53,19 +61,22 @@ class PersistStore backend => PersistUnique backend where
           Nothing -> Just `liftM` insert datum
           Just _ -> return Nothing
 
-    -- | update based on a uniquness constraint or insert
+    -- | Update based on a uniqueness constraint or insert:
     --
-    -- insert the new record if it does not exist
-    -- update the existing record that matches the uniqueness contraint
+    -- * insert the new record if it does not exist;
+    -- * update the existing record that matches the uniqueness contraint.
     --
-    -- Throws an exception if there is more than 1 uniqueness contraint
+    -- Throws an exception if there is more than 1 uniqueness contraint.
     upsert :: (MonadIO m, PersistEntityBackend val ~ backend, PersistEntity val)
            => val          -- ^ new record to insert
-           -> [Update val] -- ^ updates to perform if the record already exists.
-                           -- leaving this empty is the equivalent of performing a 'repsert' on a unique key.
-           -> ReaderT backend m (Entity val) -- ^ the record in the database after the operation
+           -> [Update val]
+           -- ^ updates to perform if the record already exists (leaving
+           -- this empty is the equivalent of performing a 'repsert' on a
+           -- unique key)
+           -> ReaderT backend m (Entity val)
+           -- ^ the record in the database after the operation
     upsert record updates = do
-        uniqueKey <- onlyUnique record 
+        uniqueKey <- onlyUnique record
         mExists <- getBy uniqueKey
         k <- case mExists of
             Just (Entity k _) -> do
@@ -86,7 +97,7 @@ insertBy val = do
       Nothing -> Right `liftM` insert val
       Just z -> return $ Left z
 
--- | Return the single unique key for a record
+-- | Return the single unique key for a record.
 onlyUnique :: (MonadIO m, PersistEntity val, PersistUnique backend, PersistEntityBackend val ~ backend)
            => val -> ReaderT backend m (Unique val)
 onlyUnique record = case onlyUniqueEither record of
@@ -95,8 +106,8 @@ onlyUnique record = case onlyUniqueEither record of
 
 onlyUniqueEither :: (PersistEntity val) => val -> Either [Unique val] (Unique val)
 onlyUniqueEither record = case persistUniqueKeys record of
-    (u:[]) -> Right u
-    us     -> Left us
+    [u] -> Right u
+    us  -> Left us
 
 -- | A modification of 'getBy', which takes the 'PersistEntity' itself instead
 -- of a 'Unique' record. Returns a record matching /one/ of the unique keys. This
@@ -124,7 +135,9 @@ recordName :: (PersistEntity record) => record -> Text
 recordName = unHaskellName . entityHaskell . entityDef . Just
 
 -- | Attempt to replace the record of the given key with the given new record.
--- First query the unique fields to make sure the replacement maintains uniqueness constraints.
+-- First query the unique fields to make sure the replacement maintains
+-- uniqueness constraints.
+--
 -- Return 'Nothing' if the replacement was made.
 -- If uniqueness is violated, return a 'Just' with the 'Unique' violation
 --

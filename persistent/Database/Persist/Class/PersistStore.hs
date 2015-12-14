@@ -32,14 +32,15 @@ liftPersist f = do
     env <- ask
     liftIO $ runReaderT f (persistBackend env)
 
--- | ToBackendKey converts a 'PersistEntity' 'Key' into a 'BackendKey'
--- This can be used by each backend to convert between a 'Key' and a plain Haskell type.
--- For Sql, that is done with 'toSqlKey' and 'fromSqlKey'.
+-- | 'ToBackendKey' converts a 'PersistEntity' 'Key' into a 'BackendKey'
+-- This can be used by each backend to convert between a 'Key' and a plain
+-- Haskell type. For Sql, that is done with 'toSqlKey' and 'fromSqlKey'.
 --
 -- By default, a 'PersistEntity' uses the default 'BackendKey' for its Key
 -- and is an instance of ToBackendKey
 --
--- A 'Key' that instead uses a custom type will not be an instance of 'ToBackendKey'
+-- A 'Key' that instead uses a custom type will not be an instance of
+-- 'ToBackendKey'.
 class ( PersistEntity record
       , PersistEntityBackend record ~ backend
       , PersistStore backend
@@ -141,7 +142,7 @@ class
 
 
 -- | Same as get, but for a non-null (not Maybe) foreign key
---   Unsafe unless your database is enforcing that the foreign key is valid
+-- Unsafe unless your database is enforcing that the foreign key is valid.
 getJust :: ( PersistStore backend
            , PersistEntity val
            , Show (Key val)
@@ -152,7 +153,7 @@ getJust key = get key >>= maybe
   (liftIO $ throwIO $ PersistForeignConstraintUnmet $ T.pack $ show key)
   return
 
--- | curry this to make a convenience function that loads an associated model
+-- | Curry this to make a convenience function that loads an associated model.
 --
 -- > foreign = belongsTo foerignId
 belongsTo ::
@@ -166,7 +167,7 @@ belongsTo foreignKeyField model = case foreignKeyField model of
     Nothing -> return Nothing
     Just f -> get f
 
--- | same as belongsTo, but uses @getJust@ and therefore is similarly unsafe
+-- | Same as 'belongsTo', but uses @getJust@ and therefore is similarly unsafe.
 belongsToJust ::
   ( PersistStore backend
   , PersistEntity ent1
@@ -177,7 +178,7 @@ belongsToJust ::
   => (ent1 -> Key ent2) -> ent1 -> ReaderT backend m ent2
 belongsToJust getForeignKey model = getJust $ getForeignKey model
 
--- | like @insert@, but returns the complete @Entity@
+-- | Like @insert@, but returns the complete @Entity@.
 insertEntity ::
     ( PersistStore backend
     , PersistEntity e

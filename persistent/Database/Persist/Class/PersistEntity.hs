@@ -44,60 +44,63 @@ import Data.Maybe (isJust)
 -- A Database 'Entity' (A row in SQL, a document in MongoDB, etc)
 -- corresponds to a 'Key' plus a Haskell record.
 --
--- For every Haskell record type stored in the database there is a corresponding 'PersistEntity' instance.
--- An instance of PersistEntity contains meta-data for the record.
--- PersistEntity also helps abstract over different record types.
--- That way the same query interface can return a 'PersistEntity', with each query returning different types of Haskell records.
+-- For every Haskell record type stored in the database there is a
+-- corresponding 'PersistEntity' instance. An instance of PersistEntity
+-- contains meta-data for the record.  PersistEntity also helps abstract
+-- over different record types. That way the same query interface can return
+-- a 'PersistEntity', with each query returning different types of Haskell
+-- records.
 --
--- Some advanced type system capabilities are used to make this process type-safe.
--- Persistent users usually don't need to understand the class associated data and functions.
+-- Some advanced type system capabilities are used to make this process
+-- type-safe. Persistent users usually don't need to understand the class
+-- associated data and functions.
 class ( PersistField (Key record), ToJSON (Key record), FromJSON (Key record)
       , Show (Key record), Read (Key record), Eq (Key record), Ord (Key record))
   => PersistEntity record where
-    -- | Persistent allows multiple different backends (databases)
+    -- | Persistent allows multiple different backends (databases).
     type PersistEntityBackend record
 
     -- | By default, a backend will automatically generate the key
     -- Instead you can specify a Primary key made up of unique values.
     data Key record
-    -- | a lower-level key operation
+    -- | A lower-level key operation.
     keyToValues :: Key record -> [PersistValue]
-    -- | a lower-level key operation
+    -- | A lower-level key operation.
     keyFromValues :: [PersistValue] -> Either Text (Key record)
-    -- | a meta-operation to retrieve the Key EntityField
+    -- | A meta-operation to retrieve the 'Key' 'EntityField'.
     persistIdField :: EntityField record (Key record)
 
-    -- | retrieve the EntityDef meta-data for the record
+    -- | Retrieve the 'EntityDef' meta-data for the record.
     entityDef :: Monad m => m record -> EntityDef
 
     -- | An 'EntityField' is parameterised by the Haskell record it belongs to
-    -- and the additional type of that field
+    -- and the additional type of that field.
     data EntityField record :: * -> *
-    -- | return meta-data for a given 'EntityField'
+    -- | Return meta-data for a given 'EntityField'.
     persistFieldDef :: EntityField record typ -> FieldDef
-    -- | A meta-operation to get the database fields of a record
+    -- | A meta-operation to get the database fields of a record.
     toPersistFields :: record -> [SomePersistField]
-    -- | A lower-level operation to convert from database values to a Haskell record
+    -- | A lower-level operation to convert from database values to a Haskell record.
     fromPersistValues :: [PersistValue] -> Either Text record
 
-    -- | Unique keys besides the Key
+    -- | Unique keys besides the 'Key'.
     data Unique record
-    -- | A meta operation to retrieve all the Unique keys
+    -- | A meta operation to retrieve all the 'Unique' keys.
     persistUniqueKeys :: record -> [Unique record]
-    -- | A lower level operation
+    -- | A lower level operation.
     persistUniqueToFieldNames :: Unique record -> [(HaskellName, DBName)]
-    -- | A lower level operation
+    -- | A lower level operation.
     persistUniqueToValues :: Unique record -> [PersistValue]
 
-    -- | Use a PersistField as a lens
+    -- | Use a 'PersistField' as a lens.
     fieldLens :: EntityField record field
               -> (forall f. Functor f => (field -> f field) -> Entity record -> f (Entity record))
 
 type family BackendSpecificUpdate backend record
 
--- | Updating a database entity
+-- | Updating a database entity.
 --
--- Persistent users use combinators to create these
+-- Persistent users use combinators to create these.
 data Update record = forall typ. PersistField typ => Update
     { updateField :: EntityField record typ
     , updateValue :: typ
@@ -107,9 +110,9 @@ data Update record = forall typ. PersistField typ => Update
     | BackendUpdate
           (BackendSpecificUpdate (PersistEntityBackend record) record)
 
--- | query options
+-- | Query options.
 --
--- Persistent users use these directly
+-- Persistent users use these directly.
 data SelectOpt record = forall typ. Asc  (EntityField record typ)
                       | forall typ. Desc (EntityField record typ)
                       | OffsetBy Int
@@ -122,7 +125,7 @@ type family BackendSpecificFilter backend record
 -- filtered on, the type of comparison applied (equals, not equals, etc)
 -- and the argument for the comparison.
 --
--- Persistent users use combinators to create these
+-- Persistent users use combinators to create these.
 data Filter record = forall typ. PersistField typ => Filter
     { filterField  :: EntityField record typ
     , filterValue  :: Either typ [typ] -- FIXME
@@ -175,6 +178,7 @@ deriving instance (PersistEntity record, Read (Key record), Read record) => Read
 deriving instance Typeable Entity
 #endif
 
+-- | Get list of values corresponding to given entity.
 entityValues :: PersistEntity record => Entity record -> [PersistValue]
 entityValues (Entity k record) =
   if isJust (entityPrimary ent)
@@ -187,13 +191,13 @@ entityValues (Entity k record) =
     ent = entityDef $ Just record
 
 -- | Predefined @toJSON@. The resulting JSON looks like
--- @{\"key\": 1, \"value\": {\"name\": ...}}@.
+-- @{"key": 1, "value": {"name": ...}}@.
 --
 -- The typical usage is:
 --
 -- @
---   instance ToJSON (Entity User) where
---       toJSON = keyValueEntityToJSON
+-- instance ToJSON (Entity User) where
+--     toJSON = keyValueEntityToJSON
 -- @
 keyValueEntityToJSON :: (PersistEntity record, ToJSON record, ToJSON (Key record))
                      => Entity record -> Value
@@ -203,13 +207,13 @@ keyValueEntityToJSON (Entity key value) = object
     ]
 
 -- | Predefined @parseJSON@. The input JSON looks like
--- @{\"key\": 1, \"value\": {\"name\": ...}}@.
+-- @{"key": 1, "value": {"name": ...}}@.
 --
 -- The typical usage is:
 --
 -- @
---   instance FromJSON (Entity User) where
---       parseJSON = keyValueEntityFromJSON
+-- instance FromJSON (Entity User) where
+--     parseJSON = keyValueEntityFromJSON
 -- @
 keyValueEntityFromJSON :: (PersistEntity record, FromJSON record, FromJSON (Key record))
                        => Value -> Parser (Entity record)
@@ -219,13 +223,13 @@ keyValueEntityFromJSON (Object o) = Entity
 keyValueEntityFromJSON _ = fail "keyValueEntityFromJSON: not an object"
 
 -- | Predefined @toJSON@. The resulting JSON looks like
--- @{\"id\": 1, \"name\": ...}@.
+-- @{"id": 1, "name": ...}@.
 --
 -- The typical usage is:
 --
 -- @
---   instance ToJSON (Entity User) where
---       toJSON = entityIdToJSON
+-- instance ToJSON (Entity User) where
+--     toJSON = entityIdToJSON
 -- @
 entityIdToJSON :: (PersistEntity record, ToJSON record, ToJSON (Key record)) => Entity record -> Value
 entityIdToJSON (Entity key value) = case toJSON value of
@@ -233,13 +237,13 @@ entityIdToJSON (Entity key value) = case toJSON value of
     x -> x
 
 -- | Predefined @parseJSON@. The input JSON looks like
--- @{\"id\": 1, \"name\": ...}@.
+-- @{"id": 1, "name": ...}@.
 --
 -- The typical usage is:
 --
 -- @
---   instance FromJSON (Entity User) where
---       parseJSON = entityIdFromJSON
+-- instance FromJSON (Entity User) where
+--     parseJSON = entityIdFromJSON
 -- @
 entityIdFromJSON :: (PersistEntity record, FromJSON record, FromJSON (Key record)) => Value -> Parser (Entity record)
 entityIdFromJSON value@(Object o) = Entity <$> o .: "id" <*> parseJSON value
@@ -273,34 +277,32 @@ idField :: Text
 idField = "_id"
 
 -- | Convenience function for getting a free 'PersistField' instance
---   from a type with JSON instances.
+-- from a type with JSON instances.
 --
 --
--- Example usage in combination with`fromPersistValueJSON`:
+-- Example usage in combination with 'fromPersistValueJSON':
 --
 -- @
 -- instance PersistField MyData where
 --   fromPersistValue = fromPersistValueJSON
 --   toPersistValue = toPersistValueJSON
 -- @
---
 toPersistValueJSON :: ToJSON a => a -> PersistValue
 toPersistValueJSON = PersistText . LT.toStrict . TB.toLazyText . encodeToTextBuilder . toJSON
 
 -- | Convenience function for getting a free 'PersistField' instance
---   from a type with JSON instances. The JSON parser used will accept
---   JSON values other that object and arrays. So, if your instance
---   serializes the data to a JSON string, this will still work.
+-- from a type with JSON instances. The JSON parser used will accept JSON
+-- values other that object and arrays. So, if your instance serializes the
+-- data to a JSON string, this will still work.
 --
 --
--- Example usage in combination with`toPersistValueJSON`:
+-- Example usage in combination with 'toPersistValueJSON':
 --
 -- @
 -- instance PersistField MyData where
 --   fromPersistValue = fromPersistValueJSON
 --   toPersistValue = toPersistValueJSON
 -- @
---
 fromPersistValueJSON :: FromJSON a => PersistValue -> Either Text a
 fromPersistValueJSON z = case z of
   PersistByteString bs -> mapLeft (T.append "Could not parse the JSON (was a PersistByteString): ")
@@ -323,7 +325,7 @@ fromPersistValueJSON z = case z of
 -- your field will order rows by the data constructor order, this is
 -- a better choice.
 --
--- Example usage in combination with `fromPersistValueEnum`:
+-- Example usage in combination with 'fromPersistValueEnum':
 --
 -- @
 -- data SeverityLevel = Low | Medium | Critical | High
@@ -339,7 +341,7 @@ toPersistValueEnum = toPersistValue . fromEnum
 -- from a type with an 'Enum' instance. This function also requires
 -- a `Bounded` instance to improve the reporting of errors.
 --
--- Example usage in combination with `toPersistValueEnum`:
+-- Example usage in combination with 'toPersistValueEnum':
 --
 -- @
 -- data SeverityLevel = Low | Medium | Critical | High
@@ -355,4 +357,3 @@ fromPersistValueEnum v = fromPersistValue v >>= go
                  then Right res
                  else Left ("The number " `mappend` T.pack (show i) `mappend` " was out of the "
                   `mappend` "allowed bounds for an enum type")
-

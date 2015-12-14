@@ -1,6 +1,6 @@
-# running persistent tests
+# Running persistent tests
 
-all tests are ran from the persistent-test directory
+All tests are ran from the persistent-test directory
 
     cd persistent-test
 

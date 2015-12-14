@@ -6,11 +6,11 @@ module Database.Persist
     ( module Database.Persist.Class
     , module Database.Persist.Types
 
-      -- * query combinators
+      -- * Query update combinators
     , (=.), (+=.), (-=.), (*=.), (/=.)
-    , (==.), (!=.), (<.), (>.), (<=.), (>=.)
-    , (<-.), (/<-.)
-    , (||.)
+
+      -- * Query filter combinators
+    , (==.), (!=.), (<.), (>.), (<=.), (>=.), (<-.), (/<-.), (||.)
 
       -- * JSON Utilities
     , listToJSON
@@ -18,7 +18,7 @@ module Database.Persist
     , toJsonText
     , getPersistMap
 
-      -- * Other utililities
+      -- * Other utilities
     , limitOffsetOrder
     ) where
 
@@ -36,51 +36,97 @@ import Data.Aeson.Encode (fromValue)
 #endif
 
 infixr 3 =., +=., -=., *=., /=.
-(=.), (+=.), (-=.), (*=.), (/=.) :: forall v typ.  PersistField typ => EntityField v typ -> typ -> Update v
--- | assign a field a value
+(=.), (+=.), (-=.), (*=.), (/=.) ::
+  forall v typ.  PersistField typ => EntityField v typ -> typ -> Update v
+
+-- | Assign a field a value.
 f =. a = Update f a Assign
--- | assign a field by addition (+=)
+
+-- | Assign a field by addition (@+=@).
 f +=. a = Update f a Add
--- | assign a field by subtraction (-=)
+
+-- | Assign a field by subtraction (@-=@).
 f -=. a = Update f a Subtract
--- | assign a field by multiplication (*=)
+
+-- | Assign a field by multiplication (@*=@).
 f *=. a = Update f a Multiply
--- | assign a field by division (/=)
+
+-- | Assign a field by division (@/=@).
 f /=. a = Update f a Divide
 
 infix 4 ==., <., <=., >., >=., !=.
 (==.), (!=.), (<.), (<=.), (>.), (>=.) ::
   forall v typ.  PersistField typ => EntityField v typ -> typ -> Filter v
+
+-- | Check for equality.
 f ==. a  = Filter f (Left a) Eq
+
+-- | Non-equality check.
 f !=. a = Filter f (Left a) Ne
+
+-- | Less-than check.
 f <. a  = Filter f (Left a) Lt
+
+-- | Less-than or equal check.
 f <=. a  = Filter f (Left a) Le
+
+-- | Greater-than check.
 f >. a  = Filter f (Left a) Gt
+
+-- | Greater-than or equal check.
 f >=. a  = Filter f (Left a) Ge
 
 infix 4 <-., /<-.
 (<-.), (/<-.) :: forall v typ.  PersistField typ => EntityField v typ -> [typ] -> Filter v
--- | In
+
+-- | Check if value is in given list.
 f <-. a = Filter f (Right a) In
--- | NotIn
+
+-- | Check if value is not in given list.
 f /<-. a = Filter f (Right a) NotIn
 
 infixl 3 ||.
 (||.) :: forall v. [Filter v] -> [Filter v] -> [Filter v]
--- | the OR of two lists of filters. For example: 
--- selectList([PersonAge >. 25, PersonAge <. 30] ||. [PersonIncome >. 15000, PersonIncome <. 25000]) []
--- will filter records where a person's age is between (25 and 30) OR a person's income is between (15,000 and 25000). 
--- If you are looking for an &&. operator to do (A AND B AND (C OR D)) you can use the ++ operator instead as there is no &&. For example: 
--- selectList([PersonAge >. 25, PersonAge <. 30] ++ ([PersonCategory ==. 1] ||.  [PersonCategory ==. 5])) []
--- will filter records where a person's age is between (25 and 30) AND (person's category is either 1 or 5)  
+
+-- | The OR of two lists of filters. For example:
+--
+-- > selectList
+-- >     ([ PersonAge >. 25
+-- >      , PersonAge <. 30 ] ||.
+-- >      [ PersonIncome >. 15000
+-- >      , PersonIncome <. 25000 ])
+-- >     []
+--
+-- will filter records where a person's age is between 25 and 30 /or/ a
+-- person's income is between (15000 and 25000).
+--
+-- If you are looking for an @(&&.)@ operator to do @(A AND B AND (C OR D))@
+-- you can use the @(++)@ operator instead as there is no @(&&.)@. For
+-- example:
+--
+-- > selectList
+-- >     ([ PersonAge >. 25
+-- >      , PersonAge <. 30 ] ++
+-- >     ([PersonCategory ==. 1] ||.
+-- >      [PersonCategory ==. 5]))
+-- >     []
+--
+-- will filter records where a person's age is between 25 and 30 /and/
+-- (person's category is either 1 or 5).
 a ||. b = [FilterOr  [FilterAnd a, FilterAnd b]]
 
+-- | Convert list of 'PersistValue's into textual representation of JSON
+-- object. This is a type-constrained synonym for 'toJsonText'.
 listToJSON :: [PersistValue] -> T.Text
 listToJSON = toJsonText
 
+-- | Convert map (list of tuples) into textual representation of JSON
+-- object. This is a type-constrained synonym for 'toJsonText'.
 mapToJSON :: [(T.Text, PersistValue)] -> T.Text
 mapToJSON = toJsonText
 
+-- | A more general way to convert instances of `ToJSON` type class to
+-- strict text 'T.Text'.
 toJsonText :: ToJSON j => j -> T.Text
 #if MIN_VERSION_aeson(0, 7, 0)
 toJsonText = toStrict . toLazyText . encodeToTextBuilder . toJSON
@@ -88,7 +134,10 @@ toJsonText = toStrict . toLazyText . encodeToTextBuilder . toJSON
 toJsonText = toStrict . toLazyText . fromValue . toJSON
 #endif
 
-limitOffsetOrder :: PersistEntity val => [SelectOpt val] -> (Int, Int, [SelectOpt val])
+-- | FIXME What's this exactly?
+limitOffsetOrder :: PersistEntity val
+  => [SelectOpt val]
+  -> (Int, Int, [SelectOpt val])
 limitOffsetOrder opts =
     foldr go (0, 0, []) opts
   where
