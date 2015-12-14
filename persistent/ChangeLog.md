@@ -1,3 +1,7 @@
+## 2.2.4.1
+
+* Documentation updates [#515](https://github.com/yesodweb/persistent/pull/515)
+
 ## 2.2.4
 
 * Workaround for side-exiting transformers in `runSqlConn` [#516](https://github.com/yesodweb/persistent/issues/516)
