@@ -144,6 +144,14 @@ newtype HaskellName = HaskellName { unHaskellName :: Text }
 newtype DBName = DBName { unDBName :: Text }
     deriving (Show, Eq, Read, Ord)
 
+-- | This special-cases "type_" and strips out its underscore. When
+-- used for JSON serialization and deserialization, it works around
+-- <https://github.com/yesodweb/persistent/issues/412>
+unHaskellNameForJSON :: HaskellName -> Text
+unHaskellNameForJSON = fixTypeUnderscore . unHaskellName
+  where fixTypeUnderscore "type_" = "type"
+        fixTypeUnderscore name = name
+
 type Attr = Text
 
 data FieldType

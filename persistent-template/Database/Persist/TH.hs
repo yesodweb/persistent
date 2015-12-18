@@ -1534,7 +1534,7 @@ mkJSON mps def = do
             (objectE `AppE` ListE pairs)
         pairs = zipWith toPair (entityFields def) xs
         toPair f x = InfixE
-            (Just (packE `AppE` LitE (StringL $ unpack $ unHaskellName $ fieldHaskell f)))
+            (Just (packE `AppE` LitE (StringL $ unpack $ unHaskellNameForJSON $ fieldHaskell f)))
             dotEqualE
             (Just $ VarE x)
         fromJSONI = typeInstanceD ''FromJSON (mpsGeneric mps) typ [parseJSON']
@@ -1551,7 +1551,7 @@ mkJSON mps def = do
         toPull f = InfixE
             (Just $ VarE obj)
             (if maybeNullable f then dotColonQE else dotColonE)
-            (Just $ AppE packE $ LitE $ StringL $ unpack $ unHaskellName $ fieldHaskell f)
+            (Just $ AppE packE $ LitE $ StringL $ unpack $ unHaskellNameForJSON $ fieldHaskell f)
     case mpsEntityJSON mps of
         Nothing -> return [toJSONI, fromJSONI]
         Just entityJSON -> do
