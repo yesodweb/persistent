@@ -43,7 +43,8 @@ library
     else
         c-sources:   cbits/sqlite3.c
         include-dirs: cbits
-        cc-options:  -fPIC
+        cc-options:  -fPIC -DSQLITE_HAS_CODEC
+        extra-libraries: crypto
 
     c-sources: cbits/config.c
 

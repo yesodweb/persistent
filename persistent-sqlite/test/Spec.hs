@@ -34,3 +34,10 @@ main = hspec $ do
         tid <- insert $ Test now
         Just (Test now') <- get tid
         liftIO $ now' `shouldBe` now
+    it "issue #332" $ asIO $ runSqlite ":memory:" $ do
+        rawExecute "PRAGMA key = 'passphrase'" []
+        runMigration migrateAll
+        now <- liftIO getCurrentTime
+        tid <- insert $ Test now
+        Just (Test now') <- get tid
+        liftIO $ now' `shouldBe` now
