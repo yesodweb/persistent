@@ -11,7 +11,7 @@ packages:
   #- ./persistent-zookeeper
 
 extra-deps:
-  - aeson-extra-0.2.1.0
+  - aeson-compat-0.3.0.0
   - aeson-0.10.0.0
   - attoparsec-0.13.0.1
   - http-api-data-0.2
