@@ -43,7 +43,7 @@ library
     else
         c-sources:   cbits/sqlite3.c
         include-dirs: cbits
-        cc-options:  -fPIC
+        cc-options:  -fPIC -std=c99
 
     c-sources: cbits/config.c
 
