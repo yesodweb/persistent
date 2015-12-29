@@ -488,7 +488,7 @@ addTable cols entity = AddTable $ T.concat
                             ]
 
 maySerial :: SqlType -> Maybe Text -> Text
-maySerial SqlInt64 Nothing = " SERIAL "
+maySerial SqlInt64 Nothing = " SERIAL8 "
 maySerial sType _ = " " <> showSqlType sType
 
 mayDefault :: Maybe Text -> Text
