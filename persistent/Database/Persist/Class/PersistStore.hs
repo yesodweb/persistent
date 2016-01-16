@@ -155,7 +155,7 @@ getJust key = get key >>= maybe
 
 -- | Curry this to make a convenience function that loads an associated model.
 --
--- > foreign = belongsTo foerignId
+-- > foreign = belongsTo foreignId
 belongsTo ::
   ( PersistStore backend
   , PersistEntity ent1
