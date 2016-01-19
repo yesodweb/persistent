@@ -1,3 +1,7 @@
+## 2.2.2
+
+* Postgresql primary key is Int4, not Int8 [#519](https://github.com/yesodweb/persistent/issues/519)
+
 ## 2.2.1.2
 
 * Allow postgresql-simple 0.5
