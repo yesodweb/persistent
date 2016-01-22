@@ -376,7 +376,7 @@ runMongoDBPoolDef = runMongoDBPool defaultAccessMode
 
 queryByKey :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
            => Key record -> DB.Query
-queryByKey k = DB.select (keyToMongoDoc k) (collectionNameFromKey k)
+queryByKey k = (DB.select (keyToMongoDoc k) (collectionNameFromKey k)) {DB.project = projectionFromKey k}
 
 selectByKey :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
             => Key record -> DB.Selection
@@ -588,9 +588,7 @@ instance PersistStore DB.MongoContext where
            $ updatesToDoc upds
 
     updateGet key upds = do
-        result <- DB.findAndModify (DB.select (keyToMongoDoc key)
-                     (collectionNameFromKey key)
-                   ) (updatesToDoc upds)
+        result <- DB.findAndModify (queryByKey key) (updatesToDoc upds)
         either err instantiate result
       where
         instantiate doc = do
@@ -603,7 +601,7 @@ instance PersistStore DB.MongoContext where
 instance PersistUnique DB.MongoContext where
     getBy uniq = do
         mdoc <- DB.findOne $
-          DB.select (toUniquesDoc uniq) (collectionName rec)
+          (DB.select (toUniquesDoc uniq) (collectionName rec)) {DB.project = projectionFromRecord rec}
         case mdoc of
             Nothing -> return Nothing
             Just doc -> liftM Just $ fromPersistValuesThrow t doc
@@ -672,6 +670,19 @@ entityDefFromKey = entityDef . Just . recordTypeFromKey
 collectionNameFromKey :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
                       => Key record -> Text
 collectionNameFromKey = collectionName . recordTypeFromKey
+
+projectionFromEntityDef :: EntityDef -> DB.Projector
+projectionFromEntityDef eDef =
+  map toField (entityFields eDef)
+  where
+    toField :: FieldDef -> DB.Field
+    toField fDef = (unDBName (fieldDB fDef)) DB.=: (1 :: Int)
+
+projectionFromKey :: PersistEntity record => Key record -> DB.Projector
+projectionFromKey = projectionFromEntityDef . entityDefFromKey
+
+projectionFromRecord :: PersistEntity record => record -> DB.Projector
+projectionFromRecord = projectionFromEntityDef . entityDef . Just
 
 
 instance PersistQuery DB.MongoContext where
@@ -758,6 +769,7 @@ makeQuery filts opts =
       DB.limit = fromIntegral limit
     , DB.skip  = fromIntegral offset
     , DB.sort  = orders
+    , DB.project = projectionFromRecord (dummyFromFilts filts)
     }
   where
     (limit, offset, orders') = limitOffsetOrder opts
