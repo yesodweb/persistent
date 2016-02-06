@@ -29,7 +29,7 @@ import Data.Maybe (isJust)
 import Data.List (transpose, inits, find)
 
 -- orphaned instance for convenience of modularity
-instance PersistQuery SqlBackend where
+instance PersistQueryRead SqlBackend where
     count filts = do
         conn <- ask
         let wher = if null filts
@@ -124,7 +124,7 @@ instance PersistQuery SqlBackend where
                 Right k -> return k
                 Left _ -> error "selectKeysImpl: keyFromValues failed"
 
-
+instance PersistQueryWrite SqlBackend where
 
     deleteWhere filts = do
         _ <- deleteWhereCount filts

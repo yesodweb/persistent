@@ -104,10 +104,11 @@ fieldDBName :: forall record typ. (PersistEntity record) => EntityField record t
 fieldDBName = fieldDB . persistFieldDef
 
 
-instance PersistStore SqlBackend where
+instance PersistCore SqlBackend where
     newtype BackendKey SqlBackend = SqlBackendKey { unSqlBackendKey :: Int64 }
         deriving (Show, Read, Eq, Ord, Num, Integral, PersistField, PersistFieldSql, PathPiece, ToHttpApiData, FromHttpApiData, Real, Enum, Bounded, A.ToJSON, A.FromJSON)
 
+instance PersistStoreWrite SqlBackend where
     update _ [] = return ()
     update k upds = do
         conn <- ask
@@ -247,6 +248,19 @@ instance PersistStore SqlBackend where
           Nothing -> insertKey key value
           Just _ -> replace key value
 
+    delete k = do
+        conn <- ask
+        rawExecute (sql conn) (keyToValues k)
+      where
+        wher conn = whereStmtForKey conn k
+        sql conn = T.concat
+            [ "DELETE FROM "
+            , connEscapeName conn $ tableDBName $ recordTypeFromKey k
+            , " WHERE "
+            , wher conn
+            ]
+
+instance PersistStoreRead SqlBackend where
     get k = do
         conn <- ask
         let t = entityDef $ dummyFromKey k
@@ -271,18 +285,6 @@ instance PersistStore SqlBackend where
                     case fromPersistValues $ if noColumns then [] else vals of
                         Left e -> error $ "get " ++ show k ++ ": " ++ unpack e
                         Right v -> return $ Just v
-
-    delete k = do
-        conn <- ask
-        rawExecute (sql conn) (keyToValues k)
-      where
-        wher conn = whereStmtForKey conn k
-        sql conn = T.concat
-            [ "DELETE FROM "
-            , connEscapeName conn $ tableDBName $ recordTypeFromKey k
-            , " WHERE "
-            , wher conn
-            ]
 
 dummyFromKey :: Key record -> Maybe record
 dummyFromKey = Just . recordTypeFromKey

@@ -1,7 +1,9 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ConstraintKinds #-}
 module Database.Persist.Class.PersistQuery
-    ( PersistQuery (..)
+    ( PersistQueryRead (..)
+    , PersistQueryWrite (..)
     , selectSource
     , selectKeys
     , selectList
@@ -20,15 +22,7 @@ import Control.Monad.Trans.Resource (MonadResource, release)
 import Data.Acquire (Acquire, allocateAcquire, with)
 
 -- | Backends supporting conditional operations.
-class PersistStore backend => PersistQuery backend where
-    -- | Update individual fields on any record matching the given criterion.
-    updateWhere :: (MonadIO m, PersistEntity val, backend ~ PersistEntityBackend val)
-                => [Filter val] -> [Update val] -> ReaderT backend m ()
-
-    -- | Delete all records matching the given criterion.
-    deleteWhere :: (MonadIO m, PersistEntity val, backend ~ PersistEntityBackend val)
-                => [Filter val] -> ReaderT backend m ()
-
+class (PersistCore backend, PersistStoreRead backend) => PersistQueryRead backend where
     -- | Get all records matching the given criterion in the specified order.
     -- Returns also the identifiers.
     selectSourceRes
@@ -57,10 +51,19 @@ class PersistStore backend => PersistQuery backend where
     count :: (MonadIO m, PersistEntity val, backend ~ PersistEntityBackend val)
           => [Filter val] -> ReaderT backend m Int
 
+class (PersistQueryRead backend, PersistStoreWrite backend) => PersistQueryWrite backend where
+    -- | Update individual fields on any record matching the given criterion.
+    updateWhere :: (MonadIO m, PersistEntity val, backend ~ PersistEntityBackend val)
+                => [Filter val] -> [Update val] -> ReaderT backend m ()
+
+    -- | Delete all records matching the given criterion.
+    deleteWhere :: (MonadIO m, PersistEntity val, backend ~ PersistEntityBackend val)
+                => [Filter val] -> ReaderT backend m ()
+
 -- | Get all records matching the given criterion in the specified order.
 -- Returns also the identifiers.
 selectSource
-       :: (PersistQuery backend, MonadResource m, PersistEntity val, PersistEntityBackend val ~ backend, MonadReader env m, HasPersistBackend env backend)
+       :: (PersistQueryRead backend, MonadResource m, PersistEntity val, PersistEntityBackend val ~ backend, MonadReader env m, HasPersistBackend env backend)
        => [Filter val]
        -> [SelectOpt val]
        -> C.Source m (Entity val)
@@ -71,7 +74,7 @@ selectSource filts opts = do
     release releaseKey
 
 -- | Get the 'Key's of all records matching the given criterion.
-selectKeys :: (PersistQuery backend, MonadResource m, PersistEntity val, backend ~ PersistEntityBackend val, MonadReader env m, HasPersistBackend env backend)
+selectKeys :: (PersistQueryRead backend, MonadResource m, PersistEntity val, backend ~ PersistEntityBackend val, MonadReader env m, HasPersistBackend env backend)
            => [Filter val]
            -> [SelectOpt val]
            -> C.Source m (Key val)
@@ -82,7 +85,7 @@ selectKeys filts opts = do
     release releaseKey
 
 -- | Call 'selectSource' but return the result as a list.
-selectList :: (MonadIO m, PersistEntity val, PersistQuery backend, PersistEntityBackend val ~ backend)
+selectList :: (MonadIO m, PersistEntity val, PersistQueryRead backend, PersistEntityBackend val ~ backend)
            => [Filter val]
            -> [SelectOpt val]
            -> ReaderT backend m [Entity val]
@@ -91,7 +94,7 @@ selectList filts opts = do
     liftIO $ with srcRes (C.$$ CL.consume)
 
 -- | Call 'selectKeys' but return the result as a list.
-selectKeysList :: (MonadIO m, PersistEntity val, PersistQuery backend, PersistEntityBackend val ~ backend)
+selectKeysList :: (MonadIO m, PersistEntity val, PersistQueryRead backend, PersistEntityBackend val ~ backend)
                => [Filter val]
                -> [SelectOpt val]
                -> ReaderT backend m [Key val]

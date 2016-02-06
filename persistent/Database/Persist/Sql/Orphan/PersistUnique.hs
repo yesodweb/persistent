@@ -14,7 +14,7 @@ import Data.Monoid (mappend)
 import qualified Data.Conduit.List as CL
 import Control.Monad.Trans.Reader (ask)
 
-instance PersistUnique SqlBackend where
+instance PersistUniqueWrite SqlBackend where
     deleteBy uniq = do
         conn <- ask
         let sql' = sql conn
@@ -31,6 +31,7 @@ instance PersistUnique SqlBackend where
             , T.intercalate " AND " $ map (go' conn) $ go uniq
             ]
 
+instance PersistUniqueRead SqlBackend where
     getBy uniq = do
         conn <- ask
         let sql = T.concat

@@ -540,10 +540,11 @@ instance FromJSON (BackendKey DB.MongoContext) where
 
 -- | older versions versions of haddock (like that on hackage) do not show that this defines
 -- @BackendKey DB.MongoContext = MongoKey { unMongoKey :: DB.ObjectId }@
-instance PersistStore DB.MongoContext where
+instance PersistCore DB.MongoContext where
     newtype BackendKey DB.MongoContext = MongoKey { unMongoKey :: DB.ObjectId }
         deriving (Show, Read, Eq, Ord, PersistField)
 
+instance PersistStoreWrite DB.MongoContext where
     insert record = DB.insert (collectionName record) (toInsertDoc record)
                 >>= keyFrom_idEx
 
@@ -571,16 +572,6 @@ instance PersistStore DB.MongoContext where
         , DB.selector = keyToMongoDoc k
         }
 
-    get k = do
-            d <- DB.findOne (queryByKey k)
-            case d of
-              Nothing -> return Nothing
-              Just doc -> do
-                Entity _ ent <- fromPersistValuesThrow t doc
-                return $ Just ent
-          where
-            t = entityDefFromKey k
-
     update _ [] = return ()
     update key upds =
         DB.modify
@@ -599,8 +590,18 @@ instance PersistStore DB.MongoContext where
         err msg = Trans.liftIO $ throwIO $ KeyNotFound $ show key ++ msg
         t = entityDefFromKey key
 
+instance PersistStoreRead DB.MongoContext where
+    get k = do
+            d <- DB.findOne (queryByKey k)
+            case d of
+              Nothing -> return Nothing
+              Just doc -> do
+                Entity _ ent <- fromPersistValuesThrow t doc
+                return $ Just ent
+          where
+            t = entityDefFromKey k
 
-instance PersistUnique DB.MongoContext where
+instance PersistUniqueRead DB.MongoContext where
     getBy uniq = do
         mdoc <- DB.findOne $
           DB.select (toUniquesDoc uniq) (collectionName rec)
@@ -611,6 +612,7 @@ instance PersistUnique DB.MongoContext where
         t = entityDef $ Just rec
         rec = dummyFromUnique uniq
 
+instance PersistUniqueWrite DB.MongoContext where
     deleteBy uniq =
         DB.delete DB.Select {
           DB.coll = collectionName $ dummyFromUnique uniq
@@ -674,7 +676,7 @@ collectionNameFromKey :: (PersistEntity record, PersistEntityBackend record ~ DB
 collectionNameFromKey = collectionName . recordTypeFromKey
 
 
-instance PersistQuery DB.MongoContext where
+instance PersistQueryWrite DB.MongoContext where
     updateWhere _ [] = return ()
     updateWhere filts upds =
         DB.modify DB.Select {
@@ -688,6 +690,7 @@ instance PersistQuery DB.MongoContext where
         , DB.selector = filtersToDoc filts
         }
 
+instance PersistQueryRead DB.MongoContext where
     count filts = do
         i <- DB.count query
         return $ fromIntegral i

@@ -1,10 +1,13 @@
 {-# LANGUAGE TypeFamilies, FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE ConstraintKinds #-}
 module Database.Persist.Class.PersistStore
     ( HasPersistBackend (..)
     , liftPersist
-    , PersistStore (..)
+    , PersistCore (..)
+    , PersistStoreRead (..)
+    , PersistStoreWrite (..)
     , getJust
     , belongsTo
     , belongsToJust
@@ -43,21 +46,30 @@ liftPersist f = do
 -- 'ToBackendKey'.
 class ( PersistEntity record
       , PersistEntityBackend record ~ backend
-      , PersistStore backend
+      , PersistCore backend
       ) => ToBackendKey backend record where
     toBackendKey   :: Key record -> BackendKey backend
     fromBackendKey :: BackendKey backend -> Key record
 
+class PersistCore backend where
+    data BackendKey backend
+
 class
   ( Show (BackendKey backend), Read (BackendKey backend)
   , Eq (BackendKey backend), Ord (BackendKey backend)
+  , PersistCore backend
   , PersistField (BackendKey backend), A.ToJSON (BackendKey backend), A.FromJSON (BackendKey backend)
-  ) => PersistStore backend where
-    data BackendKey backend
-
+  ) => PersistStoreRead backend where
     -- | Get a record by identifier, if available.
     get :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
         => Key val -> ReaderT backend m (Maybe val)
+
+class
+  ( Show (BackendKey backend), Read (BackendKey backend)
+  , Eq (BackendKey backend), Ord (BackendKey backend)
+  , PersistStoreRead backend
+  , PersistField (BackendKey backend), A.ToJSON (BackendKey backend), A.FromJSON (BackendKey backend)
+  ) => PersistStoreWrite backend where
 
     -- | Create a new record in the database, returning an automatically created
     -- key (in SQL an auto-increment id).
@@ -143,7 +155,7 @@ class
 
 -- | Same as get, but for a non-null (not Maybe) foreign key
 -- Unsafe unless your database is enforcing that the foreign key is valid.
-getJust :: ( PersistStore backend
+getJust :: ( PersistStoreRead backend
            , PersistEntity val
            , Show (Key val)
            , backend ~ PersistEntityBackend val
@@ -157,7 +169,7 @@ getJust key = get key >>= maybe
 --
 -- > foreign = belongsTo foreignId
 belongsTo ::
-  ( PersistStore backend
+  ( PersistStoreRead backend
   , PersistEntity ent1
   , PersistEntity ent2
   , backend ~ PersistEntityBackend ent2
@@ -169,7 +181,7 @@ belongsTo foreignKeyField model = case foreignKeyField model of
 
 -- | Same as 'belongsTo', but uses @getJust@ and therefore is similarly unsafe.
 belongsToJust ::
-  ( PersistStore backend
+  ( PersistStoreRead backend
   , PersistEntity ent1
   , PersistEntity ent2
   , backend ~ PersistEntityBackend ent2
@@ -180,7 +192,7 @@ belongsToJust getForeignKey model = getJust $ getForeignKey model
 
 -- | Like @insert@, but returns the complete @Entity@.
 insertEntity ::
-    ( PersistStore backend
+    ( PersistStoreWrite backend
     , PersistEntity e
     , backend ~ PersistEntityBackend e
     , MonadIO m
