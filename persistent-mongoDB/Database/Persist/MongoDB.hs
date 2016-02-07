@@ -173,7 +173,8 @@ lookupEnv key = do
     return $ lookup key env
 #endif
 
-instance HasPersistBackend DB.MongoContext DB.MongoContext where
+instance HasPersistBackend DB.MongoContext where
+    type BaseBackend DB.MongoContext = DB.MongoContext
     persistBackend = id
 
 recordTypeFromKey :: Key record -> record
