@@ -4,6 +4,7 @@
 {-# LANGUAGE ConstraintKinds #-}
 module Database.Persist.Class.PersistStore
     ( HasPersistBackend (..)
+    , IsPersistBackend (..)
     , liftPersist
     , PersistCore (..)
     , PersistStoreRead (..)
@@ -25,12 +26,15 @@ import Database.Persist.Class.PersistField
 import Database.Persist.Types
 import qualified Data.Aeson as A
 
-class HasPersistBackend env backend | env -> backend where
-    persistBackend :: env -> backend
+class HasPersistBackend backend where
+    persistBackend :: backend -> BaseBackend backend
+    type BaseBackend backend
+class (HasPersistBackend backend) => IsPersistBackend backend where
+    mkPersistBackend :: BaseBackend backend -> backend
 
-liftPersist :: (MonadReader env m, HasPersistBackend env backend, MonadIO m)
-            => ReaderT backend IO a
-            -> m a
+liftPersist
+    :: (MonadIO m, MonadReader backend m, HasPersistBackend backend)
+    => ReaderT (BaseBackend backend) IO b -> m b
 liftPersist f = do
     env <- ask
     liftIO $ runReaderT f (persistBackend env)

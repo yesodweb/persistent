@@ -46,6 +46,7 @@ module Database.Persist.Class
 
     -- * Lifting
     , HasPersistBackend (..)
+    , IsPersistBackend ()
     , liftPersist
 
     -- * JSON utilities
