@@ -30,7 +30,7 @@ import Control.Monad.IO.Class
 import Data.ByteString.Char8 (readInteger)
 import Data.Maybe (isJust)
 import Data.List (find)
-import Control.Monad.Trans.Reader (ReaderT, ask)
+import Control.Monad.Trans.Reader (ReaderT, ask, withReaderT)
 import Data.Acquire (with)
 import Data.Int (Int64)
 import Web.PathPieces (PathPiece)
@@ -78,9 +78,10 @@ getTableName rec = do
     return $ connEscapeName conn $ tableDBName rec
 
 -- | useful for a backend to implement tableName by adding escaping
-tableDBName :: forall record.
+tableDBName ::
             ( PersistEntity record
-            , PersistEntityBackend record ~ SqlBackend
+            , PersistEntityBackend record ~ backend
+            , HasPersistBackend backend
             ) => record -> DBName
 tableDBName rec = entityDB $ entityDef (Just rec)
 
@@ -106,6 +107,12 @@ fieldDBName = fieldDB . persistFieldDef
 
 instance PersistCore SqlBackend where
     newtype BackendKey SqlBackend = SqlBackendKey { unSqlBackendKey :: Int64 }
+        deriving (Show, Read, Eq, Ord, Num, Integral, PersistField, PersistFieldSql, PathPiece, ToHttpApiData, FromHttpApiData, Real, Enum, Bounded, A.ToJSON, A.FromJSON)
+instance PersistCore SqlReadBackend where
+    newtype BackendKey SqlReadBackend = SqlReadBackendKey { unSqlReadBackendKey :: Int64 }
+        deriving (Show, Read, Eq, Ord, Num, Integral, PersistField, PersistFieldSql, PathPiece, ToHttpApiData, FromHttpApiData, Real, Enum, Bounded, A.ToJSON, A.FromJSON)
+instance PersistCore SqlWriteBackend where
+    newtype BackendKey SqlWriteBackend = SqlWriteBackendKey { unSqlWriteBackendKey :: Int64 }
         deriving (Show, Read, Eq, Ord, Num, Integral, PersistField, PersistFieldSql, PathPiece, ToHttpApiData, FromHttpApiData, Real, Enum, Bounded, A.ToJSON, A.FromJSON)
 
 instance PersistStoreWrite SqlBackend where
@@ -259,6 +266,16 @@ instance PersistStoreWrite SqlBackend where
             , " WHERE "
             , wher conn
             ]
+instance PersistStoreWrite SqlWriteBackend where
+    insert v = withReaderT persistBackend $ insert v
+    insertMany vs = withReaderT persistBackend $ insertMany vs
+    insertMany_ vs = withReaderT persistBackend $ insertMany_ vs
+    insertKey k v = withReaderT persistBackend $ insertKey k v
+    repsert k v = withReaderT persistBackend $ repsert k v
+    replace k v = withReaderT persistBackend $ replace k v
+    delete k = withReaderT persistBackend $ delete k
+    update k upds = withReaderT persistBackend $ update k upds
+
 
 instance PersistStoreRead SqlBackend where
     get k = do
@@ -285,6 +302,10 @@ instance PersistStoreRead SqlBackend where
                     case fromPersistValues $ if noColumns then [] else vals of
                         Left e -> error $ "get " ++ show k ++ ": " ++ unpack e
                         Right v -> return $ Just v
+instance PersistStoreRead SqlReadBackend where
+    get k = withReaderT persistBackend $ get k
+instance PersistStoreRead SqlWriteBackend where
+    get k = withReaderT persistBackend $ get k
 
 dummyFromKey :: Key record -> Maybe record
 dummyFromKey = Just . recordTypeFromKey

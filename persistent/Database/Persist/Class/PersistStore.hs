@@ -65,7 +65,7 @@ class
   , PersistField (BackendKey backend), A.ToJSON (BackendKey backend), A.FromJSON (BackendKey backend)
   ) => PersistStoreRead backend where
     -- | Get a record by identifier, if available.
-    get :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
+    get :: (MonadIO m, BaseBackend backend ~ PersistEntityBackend val, PersistEntity val)
         => Key val -> ReaderT backend m (Maybe val)
 
 class
@@ -77,11 +77,11 @@ class
 
     -- | Create a new record in the database, returning an automatically created
     -- key (in SQL an auto-increment id).
-    insert :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
+    insert :: (MonadIO m, (BaseBackend backend) ~ PersistEntityBackend val, PersistEntity val)
            => val -> ReaderT backend m (Key val)
 
     -- | Same as 'insert', but doesn't return a @Key@.
-    insert_ :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
+    insert_ :: (MonadIO m, (BaseBackend backend) ~ PersistEntityBackend val, PersistEntity val)
             => val -> ReaderT backend m ()
     insert_ val = insert val >> return ()
 
@@ -94,7 +94,7 @@ class
     --
     -- The SQLite and MySQL backends use the slow, default implementation of
     -- @mapM insert@.
-    insertMany :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
+    insertMany :: (MonadIO m, (BaseBackend backend) ~ PersistEntityBackend val, PersistEntity val)
                => [val] -> ReaderT backend m [Key val]
     insertMany = mapM insert
 
@@ -102,7 +102,7 @@ class
     --
     -- The MongoDB, PostgreSQL, SQLite and MySQL backends insert all records in
     -- one database query.
-    insertMany_ :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
+    insertMany_ :: (MonadIO m, BaseBackend backend ~ PersistEntityBackend val, PersistEntity val)
                 => [val] -> ReaderT backend m ()
     insertMany_ x = insertMany x >> return ()
 
@@ -115,34 +115,34 @@ class
     --
     -- The SQL backends use the slow, default implementation of
     -- @mapM_ insertKey@.
-    insertEntityMany :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
+    insertEntityMany :: (MonadIO m, BaseBackend backend ~ PersistEntityBackend val, PersistEntity val)
                      => [Entity val] -> ReaderT backend m ()
     insertEntityMany = mapM_ (\(Entity k record) -> insertKey k record)
 
     -- | Create a new record in the database using the given key.
-    insertKey :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
+    insertKey :: (MonadIO m, BaseBackend backend ~ PersistEntityBackend val, PersistEntity val)
               => Key val -> val -> ReaderT backend m ()
 
     -- | Put the record in the database with the given key.
     -- Unlike 'replace', if a record with the given key does not
     -- exist then a new record will be inserted.
-    repsert :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
+    repsert :: (MonadIO m, BaseBackend backend ~ PersistEntityBackend val, PersistEntity val)
             => Key val -> val -> ReaderT backend m ()
 
     -- | Replace the record in the database with the given
     -- key. Note that the result is undefined if such record does
     -- not exist, so you must use 'insertKey or 'repsert' in
     -- these cases.
-    replace :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
+    replace :: (MonadIO m, BaseBackend backend ~ PersistEntityBackend val, PersistEntity val)
             => Key val -> val -> ReaderT backend m ()
 
     -- | Delete a specific record by identifier. Does nothing if record does
     -- not exist.
-    delete :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
+    delete :: (MonadIO m, BaseBackend backend ~ PersistEntityBackend val, PersistEntity val)
            => Key val -> ReaderT backend m ()
 
     -- | Update individual fields on a specific record.
-    update :: (MonadIO m, PersistEntity val, backend ~ PersistEntityBackend val)
+    update :: (MonadIO m, PersistEntity val, BaseBackend backend ~ PersistEntityBackend val)
            => Key val -> [Update val] -> ReaderT backend m ()
 
     -- | Update individual fields on a specific record, and retrieve the
@@ -150,7 +150,7 @@ class
     --
     -- Note that this function will throw an exception if the given key is not
     -- found in the database.
-    updateGet :: (MonadIO m, PersistEntity val, backend ~ PersistEntityBackend val)
+    updateGet :: (MonadIO m, PersistEntity val, BaseBackend backend ~ PersistEntityBackend val)
               => Key val -> [Update val] -> ReaderT backend m val
     updateGet key ups = do
         update key ups
@@ -162,7 +162,7 @@ class
 getJust :: ( PersistStoreRead backend
            , PersistEntity val
            , Show (Key val)
-           , backend ~ PersistEntityBackend val
+           , BaseBackend backend ~ PersistEntityBackend val
            , MonadIO m
            ) => Key val -> ReaderT backend m val
 getJust key = get key >>= maybe
@@ -176,7 +176,7 @@ belongsTo ::
   ( PersistStoreRead backend
   , PersistEntity ent1
   , PersistEntity ent2
-  , backend ~ PersistEntityBackend ent2
+  , BaseBackend backend ~ PersistEntityBackend ent2
   , MonadIO m
   ) => (ent1 -> Maybe (Key ent2)) -> ent1 -> ReaderT backend m (Maybe ent2)
 belongsTo foreignKeyField model = case foreignKeyField model of
@@ -188,7 +188,7 @@ belongsToJust ::
   ( PersistStoreRead backend
   , PersistEntity ent1
   , PersistEntity ent2
-  , backend ~ PersistEntityBackend ent2
+  , BaseBackend backend ~ PersistEntityBackend ent2
   , MonadIO m
   )
   => (ent1 -> Key ent2) -> ent1 -> ReaderT backend m ent2
@@ -198,7 +198,7 @@ belongsToJust getForeignKey model = getJust $ getForeignKey model
 insertEntity ::
     ( PersistStoreWrite backend
     , PersistEntity e
-    , backend ~ PersistEntityBackend e
+    , BaseBackend backend ~ PersistEntityBackend e
     , MonadIO m
     ) => e -> ReaderT backend m (Entity e)
 insertEntity e = do

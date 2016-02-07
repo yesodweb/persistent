@@ -20,7 +20,7 @@ import Data.Text (Text)
 import Data.Monoid (Monoid (..), (<>))
 import Data.Int (Int64)
 import Control.Monad.IO.Class
-import Control.Monad.Trans.Reader (ReaderT, ask)
+import Control.Monad.Trans.Reader (ReaderT, ask, withReaderT)
 import Control.Exception (throwIO)
 import qualified Data.Conduit.List as CL
 import Data.Conduit
@@ -123,6 +123,14 @@ instance PersistQueryRead SqlBackend where
             case keyFromValues keyvals of
                 Right k -> return k
                 Left _ -> error "selectKeysImpl: keyFromValues failed"
+instance PersistQueryRead SqlReadBackend where
+    count filts = withReaderT persistBackend $ count filts
+    selectSourceRes filts opts = withReaderT persistBackend $ selectSourceRes filts opts
+    selectKeysRes filts opts = withReaderT persistBackend $ selectKeysRes filts opts
+instance PersistQueryRead SqlWriteBackend where
+    count filts = withReaderT persistBackend $ count filts
+    selectSourceRes filts opts = withReaderT persistBackend $ selectSourceRes filts opts
+    selectKeysRes filts opts = withReaderT persistBackend $ selectKeysRes filts opts
 
 instance PersistQueryWrite SqlBackend where
 
@@ -133,6 +141,9 @@ instance PersistQueryWrite SqlBackend where
     updateWhere filts upds = do
         _ <- updateWhereCount filts upds
         return ()
+instance PersistQueryWrite SqlWriteBackend where
+    deleteWhere filts = withReaderT persistBackend $ deleteWhere filts
+    updateWhere filts upds = withReaderT persistBackend $ updateWhere filts upds
 
 -- | Same as 'deleteWhere', but returns the number of rows affected.
 --
