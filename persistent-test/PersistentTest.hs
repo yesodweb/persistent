@@ -771,7 +771,7 @@ specs = describe "persistent" $ do
       liftIO $ ret @?= [Nothing :: Maybe (Single Int)]
 
   it "rawSql/entity" $ db $ do
-      let insert' :: (PersistStore backend, PersistEntity val, PersistEntityBackend val ~ backend, MonadIO m)
+      let insert' :: (PersistStore backend, PersistEntity val, PersistEntityBackend val ~ BaseBackend backend, MonadIO m)
                   => val -> ReaderT backend m (Key val, val)
           insert' v = insert v >>= \k -> return (k, v)
       (p1k, p1) <- insert' $ Person "Mathias"   23 Nothing
@@ -819,7 +819,7 @@ specs = describe "persistent" $ do
       liftIO $ ret2 @?= [Entity (RFOKey $ unPersonKey $ p1k) (RFO p1)]
 
   it "rawSql/OUTER JOIN" $ db $ do
-      let insert' :: (PersistStore backend, PersistEntity val, PersistEntityBackend val ~ backend, MonadIO m)
+      let insert' :: (PersistStore backend, PersistEntity val, PersistEntityBackend val ~ BaseBackend backend, MonadIO m)
                   => val -> ReaderT backend m (Key val, val)
           insert' v = insert v >>= \k -> return (k, v)
       (p1k, p1) <- insert' $ Person "Mathias"   23 Nothing
