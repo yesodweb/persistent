@@ -68,21 +68,19 @@ whereStmtForKey conn k =
 --
 -- Your backend may provide a more convenient tableName function
 -- which does not operate in a Monad
-getTableName :: forall record m.
+getTableName :: forall record m backend.
              ( PersistEntity record
-             , PersistEntityBackend record ~ SqlBackend
+             , PersistEntityBackend record ~ BaseBackend backend
+             , HasPersistBackend backend
+             , BaseBackend backend ~ SqlBackend
              , Monad m
-             ) => record -> ReaderT SqlBackend m Text
-getTableName rec = do
+             ) => record -> ReaderT backend m Text
+getTableName rec = withReaderT persistBackend $ do
     conn <- ask
     return $ connEscapeName conn $ tableDBName rec
 
 -- | useful for a backend to implement tableName by adding escaping
-tableDBName ::
-            ( PersistEntity record
-            , PersistEntityBackend record ~ backend
-            , HasPersistBackend backend
-            ) => record -> DBName
+tableDBName :: ( PersistEntity record) => record -> DBName
 tableDBName rec = entityDB $ entityDef (Just rec)
 
 -- | get the SQL string for the field that an EntityField represents
@@ -90,13 +88,15 @@ tableDBName rec = entityDB $ entityDef (Just rec)
 --
 -- Your backend may provide a more convenient fieldName function
 -- which does not operate in a Monad
-getFieldName :: forall record typ m.
+getFieldName :: forall record typ m backend.
              ( PersistEntity record
-             , PersistEntityBackend record ~ SqlBackend
+             , PersistEntityBackend record ~ BaseBackend backend
+             , BaseBackend backend ~ SqlBackend
+             , HasPersistBackend backend
              , Monad m
              )
-             => EntityField record typ -> ReaderT SqlBackend m Text
-getFieldName rec = do
+             => EntityField record typ -> ReaderT backend m Text
+getFieldName rec = withReaderT persistBackend $ do
     conn <- ask
     return $ connEscapeName conn $ fieldDBName rec
 
