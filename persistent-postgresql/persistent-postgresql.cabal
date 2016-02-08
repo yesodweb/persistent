@@ -30,6 +30,7 @@ library
                    , conduit               >= 0.5.3
                    , resourcet             >= 1.1
                    , monad-logger          >= 0.3.4
+                   , resource-pool
     exposed-modules: Database.Persist.Postgresql
     ghc-options:     -Wall
 
