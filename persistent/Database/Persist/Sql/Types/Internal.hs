@@ -7,6 +7,9 @@ module Database.Persist.Sql.Types.Internal
     , IsPersistBackend (..)
     , SqlReadBackend (unReadSqlBackend)
     , SqlWriteBackend (unWriteSqlBackend)
+    , readToUnknown
+    , readToWrite
+    , writeToUnknown
     , LogFunc
     , InsertSqlResult (..)
     , Statement (..)
@@ -15,6 +18,8 @@ module Database.Persist.Sql.Types.Internal
 
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Logger (LogSource, LogLevel)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Reader (ReaderT, runReaderT, ask)
 import Data.Acquire (Acquire)
 import Data.Conduit (Source)
 import Data.Int (Int64)
@@ -84,3 +89,18 @@ instance HasPersistBackend SqlWriteBackend where
     persistBackend = unWriteSqlBackend
 instance IsPersistBackend SqlWriteBackend where
     mkPersistBackend = SqlWriteBackend
+
+writeToUnknown :: Monad m => ReaderT SqlWriteBackend m a -> ReaderT SqlBackend m a
+writeToUnknown ma = do
+  unknown <- ask
+  lift . runReaderT ma $ SqlWriteBackend unknown
+
+readToWrite :: Monad m => ReaderT SqlReadBackend m a -> ReaderT SqlWriteBackend m a
+readToWrite ma = do
+  write <- ask
+  lift . runReaderT ma . SqlReadBackend $ unWriteSqlBackend write
+
+readToUnknown :: Monad m => ReaderT SqlReadBackend m a -> ReaderT SqlBackend m a
+readToUnknown ma = do
+  unknown <- ask
+  lift . runReaderT ma $ SqlReadBackend unknown

@@ -12,6 +12,7 @@ module Database.Persist.Sql.Types
     ( module Database.Persist.Sql.Types
     , SqlBackend (..), SqlReadBackend (..), SqlWriteBackend (..)
     , Statement (..), LogFunc, InsertSqlResult (..)
+    , readToUnknown, readToWrite, writeToUnknown
     ) where
 
 import Control.Exception (Exception)
