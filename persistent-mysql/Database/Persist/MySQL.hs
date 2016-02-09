@@ -231,7 +231,7 @@ convertPV f = (f .) . MySQL.convert
 -- the type of the column.
 getGetter :: MySQLBase.Field -> Getter PersistValue
 getGetter field = go (MySQLBase.fieldType field) 
-                        (MySQLBase.fieldMaxLength field)
+                        (MySQLBase.fieldLength field)
                             (MySQLBase.fieldCharSet field)
   where
     -- Bool
