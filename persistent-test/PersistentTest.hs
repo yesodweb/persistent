@@ -814,7 +814,7 @@ specs = describe "persistent" $ do
                            , "FROM ", escape "Person"
                            ]
       ret1 <- rawSql query []
-      ret2 <- rawSql query []
+      ret2 <- rawSql query [] :: MonadIO m => SqlPersistT m [Entity (ReverseFieldOrder Person)]
       liftIO $ ret1 @?= [Entity p1k p1]
       liftIO $ ret2 @?= [Entity (RFOKey $ unPersonKey $ p1k) (RFO p1)]
 
@@ -982,7 +982,7 @@ catch' a handler = Control.Monad.Trans.Control.control $ \runInIO ->
 #endif
 
 -- Test proper polymorphism
-_polymorphic :: (MonadIO m, PersistQuery backend) => ReaderT backend m ()
+_polymorphic :: (MonadIO m, PersistQuery backend, BaseBackend backend ~ PersistEntityBackend Pet) => ReaderT backend m ()
 _polymorphic = do
     ((Entity id' _):_) <- selectList [] [LimitTo 1]
     _ <- selectList [PetOwnerId ==. id'] []

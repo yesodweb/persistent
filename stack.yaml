@@ -12,6 +12,9 @@ packages:
 
 extra-deps:
   - aeson-compat-0.3.0.0
+  - aeson-extra-0.3.1.0
+  - recursion-schemes-4.1.2
   - aeson-0.10.0.0
   - attoparsec-0.13.0.1
   - http-api-data-0.2
+  - time-parsers-0.1.0.0

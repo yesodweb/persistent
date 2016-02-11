@@ -47,7 +47,8 @@ data ZookeeperConf = ZookeeperConf {
 type Connection = Pool Z.Zookeeper
 type Action = ReaderT Z.Zookeeper
 
-instance HasPersistBackend Z.Zookeeper Z.Zookeeper where
+instance HasPersistBackend Z.Zookeeper where
+  type BaseBackend Z.Zookeeper = Z.Zookeeper
   persistBackend = id
 
 execZookeeper :: (Read a,Show a,Monad m, MonadIO m) => (Z.Zookeeper -> IO (Either Z.ZKError a)) -> Action m a

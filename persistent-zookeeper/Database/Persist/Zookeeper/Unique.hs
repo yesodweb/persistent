@@ -13,7 +13,7 @@ import Database.Persist.Zookeeper.Internal
 import Database.Persist.Zookeeper.Store()
 
 
-instance PersistUnique Z.Zookeeper where
+instance PersistUniqueRead Z.Zookeeper where
     getBy uniqVal = do
       let key = uniqkey2key uniqVal
       val <- get key
@@ -21,6 +21,7 @@ instance PersistUnique Z.Zookeeper where
         Nothing -> return Nothing
         Just v -> return $ Just $ Entity key v
 
+instance PersistUniqueWrite Z.Zookeeper where
     deleteBy uniqVal = do
       let key = uniqkey2key uniqVal
       delete key
