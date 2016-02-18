@@ -6,7 +6,7 @@ module Database.Persist
     ( module Database.Persist.Class
     , module Database.Persist.Types
 
-    -- * #dataset# Reference Schema & Dataset
+    -- * Reference Schema & Dataset
     -- |
     --
     -- All the combinators present here will be explained based on this schema:
@@ -18,8 +18,7 @@ module Database.Persist
     -- >     deriving Show
     -- > |]
     --
-    -- and this dataset. From here on we will call this as dataset-1
-    -- #foobar#
+    -- and this dataset. The examples below will refer to this as dataset-1.
     --
     -- > +-----+-----+-----+
     -- > |id   |name |age  |
@@ -64,7 +63,7 @@ infixr 3 =., +=., -=., *=., /=.
 
 -- | Assign a field a value.
 --
--- Example usage:
+-- === __Example usage__
 --
 -- @
 -- updateAge :: MonadIO m => ReaderT SqlBackend m ()
