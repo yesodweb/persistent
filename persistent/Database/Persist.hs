@@ -70,7 +70,7 @@ infixr 3 =., +=., -=., *=., /=.
 -- updateAge = updateWhere [UserName ==. \"SPJ\" ] [UserAge =. 45]
 -- @
 --
--- Similar to `updateWhere` you can use other functions present in the module "Database.Persist.Class". Note that the first attribute of `updateWhere` is [`Filter` val] and second attribute is [`Update` val]. By comparing this with the type of `==.` and `=.`, you can see that they match up in the above usage.
+-- Similar to `updateWhere` which is shown in the above example you can use other functions present in the module "Database.Persist.Class". Note that the first parameter of `updateWhere` is [`Filter` val] and second parameter is [`Update` val]. By comparing this with the type of `==.` and `=.`, you can see that they match up in the above usage.
 --
 -- The above query when applied on "dataset-1", will produce this:
 -- 
