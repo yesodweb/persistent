@@ -206,7 +206,7 @@ matrix:
 before_install:
 - travis_retry /opt/cabal/$CABALVER/bin/cabal update
 
-script: travis/run.sh
+script: travis_wait travis/run.sh
 
 cache:
   directories:
