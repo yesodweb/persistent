@@ -6,7 +6,29 @@ module Database.Persist
     ( module Database.Persist.Class
     , module Database.Persist.Types
 
-      -- * Query update combinators
+    -- * Reference Schema & Dataset
+    -- |
+    --
+    -- All the combinators present here will be explained based on this schema:
+    --
+    -- > share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
+    -- > User
+    -- >     name String
+    -- >     age Int
+    -- >     deriving Show
+    -- > |]
+    --
+    -- and this dataset. The examples below will refer to this as dataset-1.
+    --
+    -- > +-----+-----+-----+
+    -- > |id   |name |age  |
+    -- > +-----+-----+-----+
+    -- > |1    |SPJ  |40   |
+    -- > +-----+-----+-----+
+    -- > |2    |Simon|41   |
+    -- > +-----+-----+-----+
+
+    -- * Query update combinators
     , (=.), (+=.), (-=.), (*=.), (/=.)
 
       -- * Query filter combinators
@@ -40,6 +62,26 @@ infixr 3 =., +=., -=., *=., /=.
   forall v typ.  PersistField typ => EntityField v typ -> typ -> Update v
 
 -- | Assign a field a value.
+--
+-- === __Example usage__
+--
+-- @
+-- updateAge :: MonadIO m => ReaderT SqlBackend m ()
+-- updateAge = updateWhere [UserName ==. \"SPJ\" ] [UserAge =. 45]
+-- @
+--
+-- Similar to `updateWhere` which is shown in the above example you can use other functions present in the module "Database.Persist.Class". Note that the first parameter of `updateWhere` is [`Filter` val] and second parameter is [`Update` val]. By comparing this with the type of `==.` and `=.`, you can see that they match up in the above usage.
+--
+-- The above query when applied on "dataset-1", will produce this:
+-- 
+-- > +-----+-----+-----+
+-- > |id   |name |age  |
+-- > +-----+-----+-----+
+-- > |1    |SPJ  |45   |
+-- > +-----+-----+-----+
+-- > |2    |Simon|41   |
+-- > +-----+-----+-----+
+
 f =. a = Update f a Assign
 
 -- | Assign a field by addition (@+=@).
