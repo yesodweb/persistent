@@ -43,6 +43,6 @@ else
     # Make sure we get regular output sent to Travis to avoid it canceling our
     # builds
     cabal configure --enable-tests -f$BACKEND
-    cabal build
+    cabal build --verbose=3
     cabal test
 fi
