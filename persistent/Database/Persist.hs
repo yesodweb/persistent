@@ -20,6 +20,8 @@ module Database.Persist
     --
     -- and this dataset. The examples below will refer to this as dataset-1.
     --
+    -- #dataset#
+    --
     -- > +-----+-----+-----+
     -- > |id   |name |age  |
     -- > +-----+-----+-----+
@@ -72,15 +74,15 @@ infixr 3 =., +=., -=., *=., /=.
 --
 -- Similar to `updateWhere` which is shown in the above example you can use other functions present in the module "Database.Persist.Class". Note that the first parameter of `updateWhere` is [`Filter` val] and second parameter is [`Update` val]. By comparing this with the type of `==.` and `=.`, you can see that they match up in the above usage.
 --
--- The above query when applied on "dataset-1", will produce this:
+-- The above query when applied on <#dataset dataset-1>, will produce this:
 -- 
--- > +-----+-----+-----+
--- > |id   |name |age  |
--- > +-----+-----+-----+
--- > |1    |SPJ  |45   |
--- > +-----+-----+-----+
--- > |2    |Simon|41   |
--- > +-----+-----+-----+
+-- > +-----+-----+--------+
+-- > |id   |name |age     |
+-- > +-----+-----+--------+
+-- > |1    |SPJ  |40 -> 45|
+-- > +-----+-----+--------+
+-- > |2    |Simon|41      |
+-- > +-----+-----+--------+
 
 f =. a = Update f a Assign
 
@@ -95,13 +97,13 @@ f =. a = Update f a Assign
 --
 -- The above query when applied on "dataset-1", will produce this:
 --
--- > +-----+-----+-----+
--- > |id   |name |age  |
--- > +-----+-----+-----+
--- > |1    |SPJ  |41   |
--- > +-----+-----+-----+
--- > |2    |Simon|41   |
--- > +-----+-----+-----+
+-- > +-----+-----+---------+
+-- > |id   |name |age      |
+-- > +-----+-----+---------+
+-- > |1    |SPJ  |40 -> 41 |
+-- > +-----+-----+---------+
+-- > |2    |Simon|41       |
+-- > +-----+-----+---------+
 
 
 f +=. a = Update f a Add
@@ -117,13 +119,13 @@ f +=. a = Update f a Add
 --
 -- The above query when applied on "dataset-1", will produce this:
 --
--- > +-----+-----+-----+
--- > |id   |name |age  |
--- > +-----+-----+-----+
--- > |1    |SPJ  |39   |
--- > +-----+-----+-----+
--- > |2    |Simon|41   |
--- > +-----+-----+-----+
+-- > +-----+-----+---------+
+-- > |id   |name |age      |
+-- > +-----+-----+---------+
+-- > |1    |SPJ  |40 -> 39 |
+-- > +-----+-----+---------+
+-- > |2    |Simon|41       |
+-- > +-----+-----+---------+
 
 f -=. a = Update f a Subtract
 
@@ -138,13 +140,13 @@ f -=. a = Update f a Subtract
 --
 -- The above query when applied on "dataset-1", will produce this:
 --
--- > +-----+-----+-----+
--- > |id   |name |age  |
--- > +-----+-----+-----+
--- > |1    |SPJ  |80   |
--- > +-----+-----+-----+
--- > |2    |Simon|41   |
--- > +-----+-----+-----+
+-- > +-----+-----+--------+
+-- > |id   |name |age     |
+-- > +-----+-----+--------+
+-- > |1    |SPJ  |40 -> 80|
+-- > +-----+-----+--------+
+-- > |2    |Simon|41      |
+-- > +-----+-----+--------+
 
 
 f *=. a = Update f a Multiply
@@ -160,13 +162,13 @@ f *=. a = Update f a Multiply
 --
 -- The above query when applied on "dataset-1", will produce this:
 --
--- > +-----+-----+-----+
--- > |id   |name |age  |
--- > +-----+-----+-----+
--- > |1    |SPJ  |20   |
--- > +-----+-----+-----+
--- > |2    |Simon|41   |
--- > +-----+-----+-----+
+-- > +-----+-----+---------+
+-- > |id   |name |age      |
+-- > +-----+-----+---------+
+-- > |1    |SPJ  |40 -> 20 |
+-- > +-----+-----+---------+
+-- > |2    |Simon|41       |
+-- > +-----+-----+---------+
 
 f /=. a = Update f a Divide
 
