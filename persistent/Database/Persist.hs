@@ -20,6 +20,8 @@ module Database.Persist
     --
     -- and this dataset. The examples below will refer to this as dataset-1.
     --
+    -- #dataset#
+    --
     -- > +-----+-----+-----+
     -- > |id   |name |age  |
     -- > +-----+-----+-----+
@@ -72,28 +74,102 @@ infixr 3 =., +=., -=., *=., /=.
 --
 -- Similar to `updateWhere` which is shown in the above example you can use other functions present in the module "Database.Persist.Class". Note that the first parameter of `updateWhere` is [`Filter` val] and second parameter is [`Update` val]. By comparing this with the type of `==.` and `=.`, you can see that they match up in the above usage.
 --
--- The above query when applied on "dataset-1", will produce this:
+-- The above query when applied on <#dataset dataset-1>, will produce this:
 -- 
--- > +-----+-----+-----+
--- > |id   |name |age  |
--- > +-----+-----+-----+
--- > |1    |SPJ  |45   |
--- > +-----+-----+-----+
--- > |2    |Simon|41   |
--- > +-----+-----+-----+
+-- > +-----+-----+--------+
+-- > |id   |name |age     |
+-- > +-----+-----+--------+
+-- > |1    |SPJ  |40 -> 45|
+-- > +-----+-----+--------+
+-- > |2    |Simon|41      |
+-- > +-----+-----+--------+
 
 f =. a = Update f a Assign
 
 -- | Assign a field by addition (@+=@).
+--
+-- === __Example usage__
+--
+-- @
+-- addAge :: MonadIO m => ReaderT SqlBackend m ()
+-- addAge = updateWhere [UserName ==. \"SPJ\" ] [UserAge +=. 1]
+-- @
+--
+-- The above query when applied on <#dataset dataset-1>, will produce this:
+--
+-- > +-----+-----+---------+
+-- > |id   |name |age      |
+-- > +-----+-----+---------+
+-- > |1    |SPJ  |40 -> 41 |
+-- > +-----+-----+---------+
+-- > |2    |Simon|41       |
+-- > +-----+-----+---------+
+
+
 f +=. a = Update f a Add
 
 -- | Assign a field by subtraction (@-=@).
+--
+-- === __Example usage__
+--
+-- @
+-- subtractAge :: MonadIO m => ReaderT SqlBackend m ()
+-- subtractAge = updateWhere [UserName ==. \"SPJ\" ] [UserAge -=. 1]
+-- @
+--
+-- The above query when applied on <#dataset dataset-1>, will produce this:
+--
+-- > +-----+-----+---------+
+-- > |id   |name |age      |
+-- > +-----+-----+---------+
+-- > |1    |SPJ  |40 -> 39 |
+-- > +-----+-----+---------+
+-- > |2    |Simon|41       |
+-- > +-----+-----+---------+
+
 f -=. a = Update f a Subtract
 
 -- | Assign a field by multiplication (@*=@).
+--
+-- === __Example usage__
+--
+-- @
+-- multiplyAge :: MonadIO m => ReaderT SqlBackend m ()
+-- multiplyAge = updateWhere [UserName ==. \"SPJ\" ] [UserAge *=. 2]
+-- @
+--
+-- The above query when applied on <#dataset dataset-1>, will produce this:
+--
+-- > +-----+-----+--------+
+-- > |id   |name |age     |
+-- > +-----+-----+--------+
+-- > |1    |SPJ  |40 -> 80|
+-- > +-----+-----+--------+
+-- > |2    |Simon|41      |
+-- > +-----+-----+--------+
+
+
 f *=. a = Update f a Multiply
 
 -- | Assign a field by division (@/=@).
+--
+-- === __Example usage__
+--
+-- @
+-- divideAge :: MonadIO m => ReaderT SqlBackend m ()
+-- divideAge = updateWhere [UserName ==. \"SPJ\" ] [UserAge /=. 2]
+-- @
+--
+-- The above query when applied on <#dataset dataset-1>, will produce this:
+--
+-- > +-----+-----+---------+
+-- > |id   |name |age      |
+-- > +-----+-----+---------+
+-- > |1    |SPJ  |40 -> 20 |
+-- > +-----+-----+---------+
+-- > |2    |Simon|41       |
+-- > +-----+-----+---------+
+
 f /=. a = Update f a Divide
 
 infix 4 ==., <., <=., >., >=., !=.
@@ -101,30 +177,174 @@ infix 4 ==., <., <=., >., >=., !=.
   forall v typ.  PersistField typ => EntityField v typ -> typ -> Filter v
 
 -- | Check for equality.
+--
+-- === __Example usage__
+--
+-- @
+-- selectSPJ :: MonadIO m => ReaderT SqlBackend m [Entity User]
+-- selectSPJ = selectList [UserName ==. \"SPJ\" ] []
+-- @
+--
+-- The above query when applied on <#dataset dataset-1>, will produce this:
+--
+-- > +-----+-----+-----+
+-- > |id   |name |age  |
+-- > +-----+-----+-----+
+-- > |1    |SPJ  |40   |
+-- > +-----+-----+-----+
+
 f ==. a  = Filter f (Left a) Eq
 
 -- | Non-equality check.
+--
+-- === __Example usage__
+--
+-- @
+-- selectSimon :: MonadIO m => ReaderT SqlBackend m [Entity User]
+-- selectSimon = selectList [UserName !=. \"SPJ\" ] []
+-- @
+--
+-- The above query when applied on <#dataset dataset-1>, will produce this:
+--
+-- > +-----+-----+-----+
+-- > |id   |name |age  |
+-- > +-----+-----+-----+
+-- > |2    |Simon|41   |
+-- > +-----+-----+-----+
+
 f !=. a = Filter f (Left a) Ne
 
 -- | Less-than check.
+--
+-- === __Example usage__
+--
+-- @
+-- selectLessAge :: MonadIO m => ReaderT SqlBackend m [Entity User]
+-- selectLessAge = selectList [UserAge <. 41 ] []
+-- @
+--
+-- The above query when applied on <#dataset dataset-1>, will produce this:
+--
+-- > +-----+-----+-----+
+-- > |id   |name |age  |
+-- > +-----+-----+-----+
+-- > |1    |SPJ  |40   |
+-- > +-----+-----+-----+
+
 f <. a  = Filter f (Left a) Lt
 
 -- | Less-than or equal check.
+--
+-- === __Example usage__
+--
+-- @
+-- selectLessEqualAge :: MonadIO m => ReaderT SqlBackend m [Entity User]
+-- selectLessEqualAge = selectList [UserAge <=. 40 ] []
+-- @
+--
+-- The above query when applied on <#dataset dataset-1>, will produce this:
+--
+-- > +-----+-----+-----+
+-- > |id   |name |age  |
+-- > +-----+-----+-----+
+-- > |1    |SPJ  |40   |
+-- > +-----+-----+-----+
+
 f <=. a  = Filter f (Left a) Le
 
 -- | Greater-than check.
+--
+-- === __Example usage__
+--
+-- @
+-- selectGreaterAge :: MonadIO m => ReaderT SqlBackend m [Entity User]
+-- selectGreaterAge = selectList [UserAge >. 40 ] []
+-- @
+--
+-- The above query when applied on <#dataset dataset-1>, will produce this:
+--
+-- > +-----+-----+-----+
+-- > |id   |name |age  |
+-- > +-----+-----+-----+
+-- > |2    |Simon|41   |
+-- > +-----+-----+-----+
+
 f >. a  = Filter f (Left a) Gt
 
 -- | Greater-than or equal check.
+--
+-- === __Example usage__
+--
+-- @
+-- selectGreaterEqualAge :: MonadIO m => ReaderT SqlBackend m [Entity User]
+-- selectGreaterEqualAge = selectList [UserAge >=. 41 ] []
+-- @
+--
+-- The above query when applied on <#dataset dataset-1>, will produce this:
+--
+-- > +-----+-----+-----+
+-- > |id   |name |age  |
+-- > +-----+-----+-----+
+-- > |2    |Simon|41   |
+-- > +-----+-----+-----+
+
 f >=. a  = Filter f (Left a) Ge
 
 infix 4 <-., /<-.
 (<-.), (/<-.) :: forall v typ.  PersistField typ => EntityField v typ -> [typ] -> Filter v
 
 -- | Check if value is in given list.
+--
+-- === __Example usage__
+--
+-- @
+-- selectUsers :: MonadIO m => ReaderT SqlBackend m [Entity User]
+-- selectUsers = selectList [UserAge <-. [40, 41]] []
+-- @
+--
+-- The above query when applied on <#dataset dataset-1>, will produce this:
+--
+-- > +-----+-----+-----+
+-- > |id   |name |age  |
+-- > +-----+-----+-----+
+-- > |1    |SPJ  |40   |
+-- > +-----+-----+-----+
+-- > |2    |Simon|41   |
+-- > +-----+-----+-----+
+--
+--
+-- @
+-- selectSPJ :: MonadIO m => ReaderT SqlBackend m [Entity User]
+-- selectSPJ = selectList [UserAge <-. [40]] []
+-- @
+--
+-- The above query when applied on <#dataset dataset-1>, will produce this:
+--
+-- > +-----+-----+-----+
+-- > |id   |name |age  |
+-- > +-----+-----+-----+
+-- > |1    |SPJ  |40   |
+-- > +-----+-----+-----+
+
 f <-. a = Filter f (Right a) In
 
 -- | Check if value is not in given list.
+--
+-- === __Example usage__
+--
+-- @
+-- selectSimon :: MonadIO m => ReaderT SqlBackend m [Entity User]
+-- selectSimon = selectList [UserAge /<-. [40]] []
+-- @
+--
+-- The above query when applied on <#dataset dataset-1>, will produce this:
+--
+-- > +-----+-----+-----+
+-- > |id   |name |age  |
+-- > +-----+-----+-----+
+-- > |2    |Simon|41   |
+-- > +-----+-----+-----+
+
 f /<-. a = Filter f (Right a) NotIn
 
 infixl 3 ||.
