@@ -95,7 +95,7 @@ f =. a = Update f a Assign
 -- addAge = updateWhere [UserName ==. \"SPJ\" ] [UserAge +=. 1]
 -- @
 --
--- The above query when applied on "dataset-1", will produce this:
+-- The above query when applied on <#dataset dataset-1>, will produce this:
 --
 -- > +-----+-----+---------+
 -- > |id   |name |age      |
@@ -117,7 +117,7 @@ f +=. a = Update f a Add
 -- subtractAge = updateWhere [UserName ==. \"SPJ\" ] [UserAge -=. 1]
 -- @
 --
--- The above query when applied on "dataset-1", will produce this:
+-- The above query when applied on <#dataset dataset-1>, will produce this:
 --
 -- > +-----+-----+---------+
 -- > |id   |name |age      |
@@ -138,7 +138,7 @@ f -=. a = Update f a Subtract
 -- multiplyAge = updateWhere [UserName ==. \"SPJ\" ] [UserAge *=. 2]
 -- @
 --
--- The above query when applied on "dataset-1", will produce this:
+-- The above query when applied on <#dataset dataset-1>, will produce this:
 --
 -- > +-----+-----+--------+
 -- > |id   |name |age     |
@@ -160,7 +160,7 @@ f *=. a = Update f a Multiply
 -- divideAge = updateWhere [UserName ==. \"SPJ\" ] [UserAge /=. 2]
 -- @
 --
--- The above query when applied on "dataset-1", will produce this:
+-- The above query when applied on <#dataset dataset-1>, will produce this:
 --
 -- > +-----+-----+---------+
 -- > |id   |name |age      |
@@ -185,7 +185,7 @@ infix 4 ==., <., <=., >., >=., !=.
 -- selectSPJ = selectList [UserName ==. \"SPJ\" ] []
 -- @
 --
--- The above query when applied on "dataset-1", will produce this:
+-- The above query when applied on <#dataset dataset-1>, will produce this:
 --
 -- > +-----+-----+-----+
 -- > |id   |name |age  |
@@ -204,7 +204,7 @@ f ==. a  = Filter f (Left a) Eq
 -- selectSimon = selectList [UserName !=. \"SPJ\" ] []
 -- @
 --
--- The above query when applied on "dataset-1", will produce this:
+-- The above query when applied on <#dataset dataset-1>, will produce this:
 --
 -- > +-----+-----+-----+
 -- > |id   |name |age  |
@@ -223,7 +223,7 @@ f !=. a = Filter f (Left a) Ne
 -- selectLessAge = selectList [UserAge <. 41 ] []
 -- @
 --
--- The above query when applied on "dataset-1", will produce this:
+-- The above query when applied on <#dataset dataset-1>, will produce this:
 --
 -- > +-----+-----+-----+
 -- > |id   |name |age  |
@@ -242,7 +242,7 @@ f <. a  = Filter f (Left a) Lt
 -- selectLessEqualAge = selectList [UserAge <=. 40 ] []
 -- @
 --
--- The above query when applied on "dataset-1", will produce this:
+-- The above query when applied on <#dataset dataset-1>, will produce this:
 --
 -- > +-----+-----+-----+
 -- > |id   |name |age  |
@@ -261,7 +261,7 @@ f <=. a  = Filter f (Left a) Le
 -- selectGreaterAge = selectList [UserAge >. 40 ] []
 -- @
 --
--- The above query when applied on "dataset-1", will produce this:
+-- The above query when applied on <#dataset dataset-1>, will produce this:
 --
 -- > +-----+-----+-----+
 -- > |id   |name |age  |
@@ -280,7 +280,7 @@ f >. a  = Filter f (Left a) Gt
 -- selectGreaterEqualAge = selectList [UserAge >=. 41 ] []
 -- @
 --
--- The above query when applied on "dataset-1", will produce this:
+-- The above query when applied on <#dataset dataset-1>, will produce this:
 --
 -- > +-----+-----+-----+
 -- > |id   |name |age  |
@@ -302,7 +302,7 @@ infix 4 <-., /<-.
 -- selectUsers = selectList [UserAge <-. [40, 41]] []
 -- @
 --
--- The above query when applied on "dataset-1", will produce this:
+-- The above query when applied on <#dataset dataset-1>, will produce this:
 --
 -- > +-----+-----+-----+
 -- > |id   |name |age  |
@@ -318,7 +318,7 @@ infix 4 <-., /<-.
 -- selectSPJ = selectList [UserAge <-. [40]] []
 -- @
 --
--- The above query when applied on "dataset-1", will produce this:
+-- The above query when applied on <#dataset dataset-1>, will produce this:
 --
 -- > +-----+-----+-----+
 -- > |id   |name |age  |
@@ -337,7 +337,7 @@ f <-. a = Filter f (Right a) In
 -- selectSimon = selectList [UserAge /<-. [40]] []
 -- @
 --
--- The above query when applied on "dataset-1", will produce this:
+-- The above query when applied on <#dataset dataset-1>, will produce this:
 --
 -- > +-----+-----+-----+
 -- > |id   |name |age  |
