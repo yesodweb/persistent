@@ -60,6 +60,9 @@ else
     cd persistent-test
     cabal install --force-reinstalls --only-dependencies --enable-tests -f$BACKEND
     cabal configure --enable-tests -f$BACKEND
+
+    (while sleep 60; do echo Do not kill me yet!; done) &
     cabal build
+
     cabal test
 fi
