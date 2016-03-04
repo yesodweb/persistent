@@ -13,10 +13,30 @@ else
     TEST=--run-tests
 fi
 
+install() {
+    cd $1
+    cabal install --force-reinstall
+    cd ..
+}
+
 if [ "$BACKEND" = "none" ]
 then
     cabal install --force-reinstalls $TEST $(cat sources.txt)
 else
+
+    for p in $(ghc-pkg list persistent\* --simple-output); do
+        ghc-pkg unregister $p --force || true;
+    done
+    install persistent
+    install persistent-template
+
+    if [ "$BACKEND" = "mongodb" ]
+    then
+        install persistent-mongoDB
+    else
+        install persistent-$BACKEND
+    fi
+
     if [ "$BACKEND" = "postgresql" ]
     then
         psql -c 'create database persistent;' -U postgres
@@ -39,9 +59,6 @@ else
 
     cd persistent-test
     cabal install --force-reinstalls --only-dependencies --enable-tests -f$BACKEND
-
-    # Make sure we get regular output sent to Travis to avoid it canceling our
-    # builds
     cabal configure --enable-tests -f$BACKEND
     cabal build
     cabal test

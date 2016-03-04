@@ -94,10 +94,9 @@ import Control.Applicative ((<$>))
 import Database.Persist.Postgresql
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
-#  else
-#    ifndef WITH_MYSQL
+#  endif
+#  ifdef WITH_SQLITE
 import Database.Persist.Sqlite
-#    endif
 #  endif
 #  ifdef WITH_MYSQL
 import Database.Persist.MySQL
