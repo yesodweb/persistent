@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans #-}
+{-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans -v2 #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE QuasiQuotes, TemplateHaskell, CPP, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, EmptyDataDecls, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses #-}
 module EmbedTest (specs,
