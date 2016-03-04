@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans #-}
+{-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans -O0 #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE QuasiQuotes, TemplateHaskell, CPP, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, EmptyDataDecls, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses #-}
 module EmbedTest (specs,
@@ -41,7 +41,7 @@ instance PersistField a => PersistField (NonEmpty a) where
 
 #if WITH_NOSQL
 mkPersist persistSettings [persistUpperCase|
-#ifdef WITH_MONGODB
+#  ifdef WITH_MONGODB
   HasObjectId
     oid  ObjectId
     name Text
@@ -56,7 +56,7 @@ mkPersist persistSettings [persistUpperCase|
     hasEntity (Entity ARecord)
     arrayWithEntities [AnEntity]
     deriving Show Eq Read Ord
-#endif
+#  endif
 
 #else
 share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
