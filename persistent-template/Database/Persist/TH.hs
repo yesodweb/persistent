@@ -45,7 +45,7 @@ module Database.Persist.TH
 
 import Prelude hiding ((++), take, concat, splitAt, exp)
 import Database.Persist
-import Database.Persist.Class (HasPersistBackend(..))
+import Database.Persist.Class (HasPersistBackend(..), BaseBackend)
 import Database.Persist.Sql (Migration, migrate, SqlBackend, PersistFieldSql)
 import Database.Persist.Quasi
 import Language.Haskell.TH.Lib (varE)
