@@ -1,15 +1,22 @@
+{-# LANGUAGE ConstraintKinds #-}
+
 module Database.Persist.Class
     ( ToBackendKey (..)
 
     -- * PersistStore
-    , PersistStore (..)
+    , PersistCore (..)
+    , PersistStore
+    , PersistStoreRead (..)
+    , PersistStoreWrite (..)
     , getJust
     , belongsTo
     , belongsToJust
     , insertEntity
 
     -- * PersistUnique
-    , PersistUnique (..)
+    , PersistUnique
+    , PersistUniqueRead (..)
+    , PersistUniqueWrite (..)
     , getByValue
     , insertBy
     , replaceUnique
@@ -17,7 +24,9 @@ module Database.Persist.Class
     , onlyUnique
 
     -- * PersistQuery
-    , PersistQuery (..)
+    , PersistQuery
+    , PersistQueryRead (..)
+    , PersistQueryWrite (..)
     , selectSource
     , selectKeys
     , selectList
@@ -37,6 +46,7 @@ module Database.Persist.Class
 
     -- * Lifting
     , HasPersistBackend (..)
+    , IsPersistBackend ()
     , liftPersist
 
     -- * JSON utilities
@@ -52,3 +62,7 @@ import Database.Persist.Class.PersistUnique
 import Database.Persist.Class.PersistConfig
 import Database.Persist.Class.PersistField
 import Database.Persist.Class.PersistStore
+
+type PersistUnique a = PersistUniqueWrite a
+type PersistQuery a = PersistQueryWrite a
+type PersistStore a = PersistStoreWrite a

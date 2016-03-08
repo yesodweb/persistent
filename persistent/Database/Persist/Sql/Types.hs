@@ -3,11 +3,17 @@
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-module Database.Persist.Sql.Types where
+module Database.Persist.Sql.Types
+    ( module Database.Persist.Sql.Types
+    , SqlBackend (..), SqlReadBackend (..), SqlWriteBackend (..)
+    , Statement (..), LogFunc, InsertSqlResult (..)
+    , readToUnknown, readToWrite, writeToUnknown
+    ) where
 
 import Control.Exception (Exception)
 import Control.Monad.Trans.Resource (ResourceT)
@@ -18,7 +24,7 @@ import Control.Monad.Trans.Reader (ReaderT (..))
 import Control.Monad.Trans.Writer (WriterT)
 import Data.Typeable (Typeable)
 import Database.Persist.Types
-import Database.Persist.Class (HasPersistBackend (..))
+import Database.Persist.Sql.Types.Internal
 import Data.IORef (IORef)
 import Data.Map (Map)
 import Data.Int (Int64)
@@ -29,49 +35,9 @@ import Control.Monad.Logger (LogSource, LogLevel)
 import System.Log.FastLogger (LogStr)
 import Data.Text (Text)
 
-data InsertSqlResult = ISRSingle Text
-                     | ISRInsertGet Text Text
-                     | ISRManyKeys Text [PersistValue]
-
 -- | Deprecated synonym for @SqlBackend@.
 type Connection = SqlBackend
 {-# DEPRECATED Connection "Please use SqlBackend instead" #-}
-
-data SqlBackend = SqlBackend
-    { connPrepare :: Text -> IO Statement
-    -- | table name, column names, id name, either 1 or 2 statements to run
-    , connInsertSql :: EntityDef -> [PersistValue] -> InsertSqlResult
-    , connInsertManySql :: Maybe (EntityDef -> [[PersistValue]] -> InsertSqlResult) -- ^ SQL for inserting many rows and returning their primary keys, for backends that support this functioanlity. If 'Nothing', rows will be inserted one-at-a-time using 'connInsertSql'.
-    , connStmtMap :: IORef (Map Text Statement)
-    , connClose :: IO ()
-    , connMigrateSql
-        :: [EntityDef]
-        -> (Text -> IO Statement)
-        -> EntityDef
-        -> IO (Either [Text] [(Bool, Text)])
-    , connBegin :: (Text -> IO Statement) -> IO ()
-    , connCommit :: (Text -> IO Statement) -> IO ()
-    , connRollback :: (Text -> IO Statement) -> IO ()
-    , connEscapeName :: DBName -> Text
-    , connNoLimit :: Text
-    , connRDBMS :: Text
-    , connLimitOffset :: (Int,Int) -> Bool -> Text -> Text
-    , connLogFunc :: LogFunc
-    }
-    deriving Typeable
-instance HasPersistBackend SqlBackend SqlBackend where
-    persistBackend = id
-
-type LogFunc = Loc -> LogSource -> LogLevel -> LogStr -> IO ()
-
-data Statement = Statement
-    { stmtFinalize :: IO ()
-    , stmtReset :: IO ()
-    , stmtExecute :: [PersistValue] -> IO Int64
-    , stmtQuery :: forall m. MonadIO m
-                => [PersistValue]
-                -> Acquire (Source m [PersistValue])
-    }
 
 data Column = Column
     { cName      :: !DBName

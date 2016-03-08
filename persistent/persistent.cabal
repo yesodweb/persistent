@@ -60,6 +60,7 @@ library
                      Database.Persist.Class
                      Database.Persist.Sql
                      Database.Persist.Sql.Util
+                     Database.Persist.Sql.Types.Internal
 
     other-modules:   Database.Persist.Types.Base
                      Database.Persist.Class.DeleteCascade

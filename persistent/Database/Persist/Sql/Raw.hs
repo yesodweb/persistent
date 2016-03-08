@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeFamilies #-}
 module Database.Persist.Sql.Raw where
 
 import Database.Persist
@@ -19,7 +20,7 @@ import qualified Data.Text as T
 import Data.Conduit
 import Control.Monad.Trans.Resource (MonadResource,release)
 
-rawQuery :: (MonadResource m, MonadReader env m, HasPersistBackend env SqlBackend)
+rawQuery :: (MonadResource m, MonadReader env m, HasPersistBackend env, BaseBackend env ~ SqlBackend)
          => Text
          -> [PersistValue]
          -> Source m [PersistValue]

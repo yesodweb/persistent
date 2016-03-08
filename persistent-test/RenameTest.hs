@@ -17,7 +17,6 @@ import Init
 import Data.Aeson.Types
 #else
 instance ToJSON Day   where toJSON    = error "Day.toJSON"
-instance FromJSON Day where parseJSON = error "Day.parseJSON"
 #endif
 
 -- persistent used to not allow types with an "Id" suffix
