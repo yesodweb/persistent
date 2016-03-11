@@ -1,0 +1,25 @@
+language: haskell-multi-ghc
+
+env:
+  - GHCVER=7.6.3 CABALVER=1.18
+  - GHCVER=7.6.3 CABALVER=1.18 CABALCONFIG=aeson-0.7.0.6.cabal.config
+  - GHCVER=7.8.4 CABALVER=1.18
+  - GHCVER=7.8.4 CABALVER=1.18 CABALCONFIG=aeson-0.7.0.6.cabal.config
+  - GHCVER=7.8.4 CABALVER=1.18 STACKAGESNAPSHOT=lts-2.22
+  - GHCVER=7.10.2 CABALVER=1.22
+  - GHCVER=7.10.2 CABALVER=1.22 STACKAGESNAPSHOT=lts-3.6
+  - GHCVER=7.10.3 CABALVER=1.22
+  - GHCVER=7.10.3 CABALVER=1.22 STACKAGESNAPSHOT=lts-4.2
+  - GHCVER=7.10.3 CABALVER=1.22 STACKAGESNAPSHOT=lts-5.2
+  - GHCVER=7.10.3 CABALVER=1.22 CABALCONFIG=time-1.6.cabal.config NOTESTS=YES
+  - GHCVER=8.0.1 CABALVER=1.24
+  - GHCVER=head CABALVER=1.22
+
+matrix:
+  fast_finish: true
+  allow_failures:
+    - env: GHCVER=head CABALVER=1.22
+
+branches:
+  only:
+    - master

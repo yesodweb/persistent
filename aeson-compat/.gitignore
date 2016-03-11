@@ -1,0 +1,6 @@
+dist/
+.stack-work/
+.cabal-sandbox
+cabal.sandbox.config
+src/highlight.js
+src/style.css
