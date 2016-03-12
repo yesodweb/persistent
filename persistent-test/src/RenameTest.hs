@@ -10,14 +10,8 @@ import Control.Monad.Trans.Resource (runResourceT)
 import Data.Time (getCurrentTime, Day, UTCTime(..))
 import qualified Data.Map as Map
 import qualified Data.Text as T
-import Data.Aeson
+import Data.Aeson.Compat
 import Init
-
-#if MIN_VERSION_aeson(0,10,0)
-import Data.Aeson.Types
-#else
-instance ToJSON Day   where toJSON    = error "Day.toJSON"
-#endif
 
 -- persistent used to not allow types with an "Id" suffix
 -- this verifies that the issue is fixed
