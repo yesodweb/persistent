@@ -133,7 +133,6 @@ library
                    , template-haskell
                    , aeson                    >= 0.7
                    , aeson-compat
-                   , aeson-extra              >= 0.2
                    , lifted-base              >= 0.1
                    , network
                    , path-pieces              >= 0.1
