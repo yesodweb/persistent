@@ -443,6 +443,13 @@ hasPrivilege getter (DBName name) = do
     dbPrivileges xs = map getPersistText $ filter isPersistText $ concat xs
     checkPrivilege xs = length (dbPrivileges xs `intersect` minPrivileges) >= length minPrivileges
 
+exitOnInsufficientPrivilege :: (Text -> IO Statement) -> EntityDef -> IO ()
+exitOnInsufficientPrivilege getter entity = do
+  privilege <- hasPrivilege getter name                               
+  when (not privilege) (error "Exiting: You have insufficient privilege for migration.")
+  where 
+    name = entityDB entity
+      
 migrate' :: [EntityDef]
          -> (Text -> IO Statement)
          -> EntityDef
