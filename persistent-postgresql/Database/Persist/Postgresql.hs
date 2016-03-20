@@ -419,6 +419,30 @@ doesTableExist getter (DBName name) = do
     start' res = error $ "doesTableExist returned unexpected result: " ++ show res
     finish x = await >>= maybe (return x) (error "Too many rows returned in doesTableExist")
 
+hasPrivilege :: (Text -> IO Statement) -> DBName -> IO Bool
+hasPrivilege getter (DBName name) = do
+    stmt <- getter sql
+    with (stmtQuery stmt vals) ($$ start)
+  where
+    sql = "SELECT grantee, privilege_type FROM information_schema.role_table_grants "
+          <> "WHERE table_name = ? AND grantee = CURRENT_USER"
+    vals = [PersistText name]
+
+    isPersistText :: PersistValue -> Bool
+    isPersistText (PersistText _) = True
+    isPersistText _ = False
+                      
+    getPersistText :: PersistValue -> Text
+    getPersistText (PersistText x) = x
+    getPersistText _ = error "hasPrivilege: Unexpected return value"
+
+    minPrivileges = ["INSERT", "SELECT", "UPDATE", "DELETE", "TRUNCATE", 
+                     "REFERENCES"]
+    start = CL.consume >>= finish
+    finish xs = return (checkPrivilege xs)
+    dbPrivileges xs = map getPersistText $ filter isPersistText $ concat xs
+    checkPrivilege xs = length (dbPrivileges xs `intersect` minPrivileges) >= length minPrivileges
+
 migrate' :: [EntityDef]
          -> (Text -> IO Statement)
          -> EntityDef
