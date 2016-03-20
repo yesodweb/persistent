@@ -48,11 +48,12 @@ import qualified Data.Map as Map
 import Data.Maybe
 import Data.Either (partitionEithers)
 import Control.Arrow
-import Data.List (find, sort, groupBy)
+import Data.List (find, sort, groupBy, intersect)
 import Data.Function (on)
 import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Control.Monad.Logger (MonadLogger, runNoLoggingT)
+import Control.Monad (when)
 
 import qualified Data.IntMap as I
 
@@ -454,7 +455,7 @@ migrate' :: [EntityDef]
          -> (Text -> IO Statement)
          -> EntityDef
          -> IO (Either [Text] [(Bool, Text)])
-migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
+migrate' allDefs getter entity =  exitOnInsufficientPrivilege getter entity >> (fmap (map showAlterDb) <$> do
     old <- getColumns getter entity
     case partitionEithers old of
         ([], old'') -> do
@@ -463,7 +464,7 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
                     then doesTableExist getter name
                     else return True
             return $ Right $ migrationText exists old''
-        (errs, _) -> return $ Left errs
+        (errs, _) -> return $ Left errs)
   where
     name = entityDB entity
     migrationText exists old'' =
