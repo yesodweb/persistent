@@ -28,7 +28,6 @@ else
         ghc-pkg unregister $p --force || true;
     done
     install persistent
-    install aeson-compat
     install persistent-template
 
     if [ "$BACKEND" = "mongodb" ]
