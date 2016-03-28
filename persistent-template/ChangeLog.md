@@ -1,3 +1,8 @@
+## 2.1.6
+
+* aeson 0.11
+* transformers 0.5
+
 ## 2.1.3.3
 
 By default explicitly use Int64 for foreign key references.
