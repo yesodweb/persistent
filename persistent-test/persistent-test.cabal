@@ -96,7 +96,7 @@ library
                    , file-location >= 0.4
                    , template-haskell
                    , aeson                    >= 0.7
-                   , aeson-compat
+                   , aeson-compat             >= 0.3.2.0   && < 0.4
                    , aeson-extra              >= 0.3
                    , lifted-base              >= 0.1
                    , network

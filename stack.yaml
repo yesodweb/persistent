@@ -11,7 +11,7 @@ packages:
   # - ./persistent-zookeeper
 
 extra-deps:
-  - aeson-compat-0.3.0.0
+  - aeson-compat-0.3.2.0
   - aeson-extra-0.3.1.0
   - recursion-schemes-4.1.2
   - aeson-0.10.0.0
