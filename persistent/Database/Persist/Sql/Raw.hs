@@ -31,12 +31,12 @@ rawQuery sql vals = do
     release releaseKey
 
 rawQueryRes
-    :: (MonadIO m1, MonadIO m2)
+    :: (MonadIO m1, MonadIO m2, IsPersistBackend env, BaseBackend env ~ SqlBackend)
     => Text
     -> [PersistValue]
-    -> ReaderT SqlBackend m1 (Acquire (Source m2 [PersistValue]))
+    -> ReaderT env m1 (Acquire (Source m2 [PersistValue]))
 rawQueryRes sql vals = do
-    conn <- ask
+    conn <- persistBackend <$> ask
     let make = do
             runLoggingT (logDebugNS (pack "SQL") $ T.append sql $ pack $ "; " ++ show vals)
                 (connLogFunc conn)
@@ -54,12 +54,12 @@ rawExecute x y = liftM (const ()) $ rawExecuteCount x y
 
 -- | Execute a raw SQL statement and return the number of
 -- rows it has modified.
-rawExecuteCount :: MonadIO m
+rawExecuteCount :: (MonadIO m, IsPersistBackend backend, BaseBackend backend ~ SqlBackend)
                 => Text            -- ^ SQL statement, possibly with placeholders.
                 -> [PersistValue]  -- ^ Values to fill the placeholders.
-                -> ReaderT SqlBackend m Int64
+                -> ReaderT backend m Int64
 rawExecuteCount sql vals = do
-    conn <- ask
+    conn <- persistBackend <$> ask
     runLoggingT (logDebugNS (pack "SQL") $ T.append sql $ pack $ "; " ++ show vals)
         (connLogFunc conn)
     stmt <- getStmt sql
@@ -67,9 +67,11 @@ rawExecuteCount sql vals = do
     liftIO $ stmtReset stmt
     return res
 
-getStmt :: MonadIO m => Text -> ReaderT SqlBackend m Statement
+getStmt
+  :: (MonadIO m, IsPersistBackend backend, BaseBackend backend ~ SqlBackend)
+  => Text -> ReaderT backend m Statement
 getStmt sql = do
-    conn <- ask
+    conn <- persistBackend <$> ask
     liftIO $ getStmtConn conn sql
 
 getStmtConn :: SqlBackend -> Text -> IO Statement
