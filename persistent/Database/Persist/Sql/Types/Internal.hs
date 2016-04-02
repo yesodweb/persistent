@@ -1,3 +1,4 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -15,6 +16,11 @@ module Database.Persist.Sql.Types.Internal
     , InsertSqlResult (..)
     , Statement (..)
     , SqlBackend (..)
+    , CanWrite
+    , ReadSqlBackend
+    , WriteSqlBackend
+    , SqlReadT
+    , SqlWriteT
     ) where
 
 import Control.Monad.IO.Class (MonadIO (..))
@@ -28,7 +34,12 @@ import Data.IORef (IORef)
 import Data.Map (Map)
 import Data.Text (Text)
 import Data.Typeable (Typeable)
-import Database.Persist.Class (HasPersistBackend (..))
+import Database.Persist.Class
+  ( HasPersistBackend (..)
+  , PersistQueryRead, PersistQueryWrite
+  , PersistStoreRead, PersistStoreWrite
+  , PersistUniqueRead, PersistUniqueWrite
+  )
 import Database.Persist.Class.PersistStore (IsPersistBackend (..))
 import Database.Persist.Types
 import Language.Haskell.TH.Syntax (Loc)
@@ -84,6 +95,10 @@ instance HasPersistBackend SqlReadBackend where
 instance IsPersistBackend SqlReadBackend where
     mkPersistBackend = SqlReadBackend
 
+class CanWrite backend
+instance CanWrite SqlWriteBackend
+instance CanWrite SqlBackend
+
 newtype SqlWriteBackend = SqlWriteBackend { unWriteSqlBackend :: SqlBackend } deriving Typeable
 instance HasPersistBackend SqlWriteBackend where
     type BaseBackend SqlWriteBackend = SqlBackend
@@ -105,3 +120,14 @@ readToUnknown :: Monad m => ReaderT SqlReadBackend m a -> ReaderT SqlBackend m a
 readToUnknown ma = do
   unknown <- ask
   lift . runReaderT ma $ SqlReadBackend unknown
+
+type ReadSqlBackend backend =
+  ( BaseBackend backend ~ SqlBackend, IsPersistBackend backend
+  , PersistQueryRead backend, PersistStoreRead backend, PersistUniqueRead backend
+  )
+type WriteSqlBackend backend =
+  ( ReadSqlBackend backend, CanWrite backend
+  , PersistQueryWrite backend, PersistStoreWrite backend, PersistUniqueWrite backend
+  )
+type SqlReadT m a = forall backend. (ReadSqlBackend backend) => ReaderT backend m a
+type SqlWriteT m a = forall backend. (WriteSqlBackend backend) => ReaderT backend m a

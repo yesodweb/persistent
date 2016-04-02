@@ -10,9 +10,10 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 module Database.Persist.Sql.Types
     ( module Database.Persist.Sql.Types
-    , SqlBackend (..), SqlReadBackend (..), SqlWriteBackend (..)
+    , SqlBackend (..), SqlReadBackend (..), SqlWriteBackend (..), CanWrite
     , Statement (..), LogFunc, InsertSqlResult (..)
     , readToUnknown, readToWrite, writeToUnknown
+    , ReadSqlBackend, WriteSqlBackend, SqlReadT, SqlWriteT
     ) where
 
 import Control.Exception (Exception)
