@@ -38,7 +38,7 @@ rawQueryRes
     -> [PersistValue]
     -> ReaderT env m1 (Acquire (Source m2 [PersistValue]))
 rawQueryRes sql vals = do
-    conn <- persistBackend <$> ask
+    conn <- persistBackend `liftM` ask
     let make = do
             runLoggingT (logDebugNS (pack "SQL") $ T.append sql $ pack $ "; " ++ show vals)
                 (connLogFunc conn)
@@ -61,7 +61,7 @@ rawExecuteCount :: (MonadIO m, IsSqlBackend backend)
                 -> [PersistValue]  -- ^ Values to fill the placeholders.
                 -> ReaderT backend m Int64
 rawExecuteCount sql vals = do
-    conn <- persistBackend <$> ask
+    conn <- persistBackend `liftM` ask
     runLoggingT (logDebugNS (pack "SQL") $ T.append sql $ pack $ "; " ++ show vals)
         (connLogFunc conn)
     stmt <- getStmt sql
@@ -73,7 +73,7 @@ getStmt
   :: (MonadIO m, IsSqlBackend backend)
   => Text -> ReaderT backend m Statement
 getStmt sql = do
-    conn <- persistBackend <$> ask
+    conn <- persistBackend `liftM` ask
     liftIO $ getStmtConn conn sql
 
 getStmtConn :: SqlBackend -> Text -> IO Statement
