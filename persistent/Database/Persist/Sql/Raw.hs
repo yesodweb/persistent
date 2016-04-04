@@ -10,6 +10,7 @@ import qualified Data.Map as Map
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (ReaderT, ask, MonadReader)
 import Data.Acquire (allocateAcquire, Acquire, mkAcquire, with)
+import Data.Functor ((<$>))
 import Data.IORef (writeIORef, readIORef, newIORef)
 import Control.Exception (throwIO)
 import Control.Monad (when, liftM)
