@@ -1,3 +1,4 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -64,7 +65,7 @@ import Control.Monad.Trans.Resource (runResourceT)
 -- The pool is properly released after the action finishes using
 -- it.  Note that you should not use the given 'ConnectionPool'
 -- outside the action since it may be already been released.
-withMySQLPool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m, IsPersistBackend backend, BaseBackend backend ~ SqlBackend)
+withMySQLPool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m, IsSqlBackend backend)
               => MySQL.ConnectInfo
               -- ^ Connection information.
               -> Int
@@ -78,7 +79,7 @@ withMySQLPool ci = withSqlPool $ open' ci
 -- | Create a MySQL connection pool.  Note that it's your
 -- responsibility to properly close the connection pool when
 -- unneeded.  Use 'withMySQLPool' for automatic resource control.
-createMySQLPool :: (MonadBaseControl IO m, MonadIO m, MonadLogger m, IsPersistBackend backend, BaseBackend backend ~ SqlBackend)
+createMySQLPool :: (MonadBaseControl IO m, MonadIO m, MonadLogger m, IsSqlBackend backend)
                 => MySQL.ConnectInfo
                 -- ^ Connection information.
                 -> Int
@@ -89,7 +90,7 @@ createMySQLPool ci = createSqlPool $ open' ci
 
 -- | Same as 'withMySQLPool', but instead of opening a pool
 -- of connections, only one connection is opened.
-withMySQLConn :: (MonadBaseControl IO m, MonadIO m, MonadLogger m, IsPersistBackend backend, BaseBackend backend ~ SqlBackend)
+withMySQLConn :: (MonadBaseControl IO m, MonadIO m, MonadLogger m, IsSqlBackend backend)
               => MySQL.ConnectInfo
               -- ^ Connection information.
               -> (backend -> m a)
@@ -100,7 +101,7 @@ withMySQLConn = withSqlConn . open'
 
 -- | Internal function that opens a connection to the MySQL
 -- server.
-open' :: (IsPersistBackend backend, BaseBackend backend ~ SqlBackend) => MySQL.ConnectInfo -> LogFunc -> IO backend
+open' :: (IsSqlBackend backend) => MySQL.ConnectInfo -> LogFunc -> IO backend
 open' ci logFunc = do
     conn <- MySQL.connect ci
     MySQLBase.autocommit conn False -- disable autocommit!

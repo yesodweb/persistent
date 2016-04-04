@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
@@ -91,7 +92,7 @@ type ConnectionString = ByteString
 -- finishes using it.  Note that you should not use the given
 -- 'ConnectionPool' outside the action since it may be already
 -- been released.
-withPostgresqlPool :: (MonadBaseControl IO m, MonadLogger m, MonadIO m, IsPersistBackend backend, BaseBackend backend ~ SqlBackend)
+withPostgresqlPool :: (MonadBaseControl IO m, MonadLogger m, MonadIO m, IsSqlBackend backend)
                    => ConnectionString
                    -- ^ Connection string to the database.
                    -> Int
@@ -108,7 +109,7 @@ withPostgresqlPool ci = withSqlPool $ open' (const $ return ()) ci
 -- responsibility to properly close the connection pool when
 -- unneeded.  Use 'withPostgresqlPool' for an automatic resource
 -- control.
-createPostgresqlPool :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsPersistBackend backend, BaseBackend backend ~ SqlBackend)
+createPostgresqlPool :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsSqlBackend backend)
                      => ConnectionString
                      -- ^ Connection string to the database.
                      -> Int
@@ -126,7 +127,7 @@ createPostgresqlPool = createPostgresqlPoolModified (const $ return ())
 --
 -- Since 2.1.3
 createPostgresqlPoolModified
-    :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsPersistBackend backend, BaseBackend backend ~ SqlBackend)
+    :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsSqlBackend backend)
     => (PG.Connection -> IO ()) -- ^ action to perform after connection is created
     -> ConnectionString -- ^ Connection string to the database.
     -> Int -- ^ Number of connections to be kept open in the pool.
@@ -135,12 +136,12 @@ createPostgresqlPoolModified modConn ci = createSqlPool $ open' modConn ci
 
 -- | Same as 'withPostgresqlPool', but instead of opening a pool
 -- of connections, only one connection is opened.
-withPostgresqlConn :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsPersistBackend backend, BaseBackend backend ~ SqlBackend)
+withPostgresqlConn :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsSqlBackend backend)
                    => ConnectionString -> (backend -> m a) -> m a
 withPostgresqlConn = withSqlConn . open' (const $ return ())
 
 open'
-    :: (IsPersistBackend backend, BaseBackend backend ~ SqlBackend)
+    :: (IsSqlBackend backend)
     => (PG.Connection -> IO ()) -> ConnectionString -> LogFunc -> IO backend
 open' modConn cstr logFunc = do
     conn <- PG.connectPostgreSQL cstr
@@ -149,7 +150,7 @@ open' modConn cstr logFunc = do
 
 
 -- | Generate a 'Connection' from a 'PG.Connection'
-openSimpleConn :: (IsPersistBackend backend, BaseBackend backend ~ SqlBackend) => LogFunc -> PG.Connection -> IO backend
+openSimpleConn :: (IsSqlBackend backend) => LogFunc -> PG.Connection -> IO backend
 openSimpleConn logFunc conn = do
     smap <- newIORef $ Map.empty
     return . mkPersistBackend $ SqlBackend

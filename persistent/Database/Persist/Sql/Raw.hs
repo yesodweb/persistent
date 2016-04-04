@@ -1,3 +1,4 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -55,7 +56,7 @@ rawExecute x y = liftM (const ()) $ rawExecuteCount x y
 
 -- | Execute a raw SQL statement and return the number of
 -- rows it has modified.
-rawExecuteCount :: (MonadIO m, IsPersistBackend backend, BaseBackend backend ~ SqlBackend)
+rawExecuteCount :: (MonadIO m, IsSqlBackend backend)
                 => Text            -- ^ SQL statement, possibly with placeholders.
                 -> [PersistValue]  -- ^ Values to fill the placeholders.
                 -> ReaderT backend m Int64
@@ -69,7 +70,7 @@ rawExecuteCount sql vals = do
     return res
 
 getStmt
-  :: (MonadIO m, IsPersistBackend backend, BaseBackend backend ~ SqlBackend)
+  :: (MonadIO m, IsSqlBackend backend)
   => Text -> ReaderT backend m Statement
 getStmt sql = do
     conn <- persistBackend <$> ask

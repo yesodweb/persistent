@@ -21,6 +21,7 @@ module Database.Persist.Sql.Types.Internal
     , WriteSqlBackend
     , SqlReadT
     , SqlWriteT
+    , IsSqlBackend
     ) where
 
 import Control.Monad.IO.Class (MonadIO (..))
@@ -122,7 +123,7 @@ readToUnknown ma = do
   lift . runReaderT ma $ SqlReadBackend unknown
 
 type ReadSqlBackend backend =
-  ( BaseBackend backend ~ SqlBackend, IsPersistBackend backend
+  ( IsSqlBackend backend
   , PersistQueryRead backend, PersistStoreRead backend, PersistUniqueRead backend
   )
 type WriteSqlBackend backend =
@@ -131,3 +132,4 @@ type WriteSqlBackend backend =
   )
 type SqlReadT m a = forall backend. (ReadSqlBackend backend) => ReaderT backend m a
 type SqlWriteT m a = forall backend. (WriteSqlBackend backend) => ReaderT backend m a
+type IsSqlBackend backend = (IsPersistBackend backend, BaseBackend backend ~ SqlBackend)

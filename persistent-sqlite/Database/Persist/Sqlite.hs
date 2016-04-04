@@ -1,3 +1,4 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE CPP #-}
@@ -54,24 +55,24 @@ import Control.Monad.Trans.Writer (runWriterT)
 -- Note that this should not be used with the @:memory:@ connection string, as
 -- the pool will regularly remove connections, destroying your database.
 -- Instead, use 'withSqliteConn'.
-createSqlitePool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m, IsPersistBackend backend, BaseBackend backend ~ SqlBackend)
+createSqlitePool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m, IsSqlBackend backend)
                  => Text -> Int -> m (Pool backend)
 createSqlitePool s = createSqlPool $ open' s
 
 -- | Run the given action with a connection pool.
 --
 -- Like 'createSqlitePool', this should not be used with @:memory:@.
-withSqlitePool :: (MonadBaseControl IO m, MonadIO m, MonadLogger m, IsPersistBackend backend, BaseBackend backend ~ SqlBackend)
+withSqlitePool :: (MonadBaseControl IO m, MonadIO m, MonadLogger m, IsSqlBackend backend)
                => Text
                -> Int -- ^ number of connections to open
                -> (Pool backend -> m a) -> m a
 withSqlitePool s = withSqlPool $ open' s
 
-withSqliteConn :: (MonadBaseControl IO m, MonadIO m, MonadLogger m, IsPersistBackend backend, BaseBackend backend ~ SqlBackend)
+withSqliteConn :: (MonadBaseControl IO m, MonadIO m, MonadLogger m, IsSqlBackend backend)
                => Text -> (backend -> m a) -> m a
 withSqliteConn = withSqlConn . open'
 
-open' :: (IsPersistBackend backend, BaseBackend backend ~ SqlBackend) => Text -> LogFunc -> IO backend
+open' :: (IsSqlBackend backend) => Text -> LogFunc -> IO backend
 open' connStr logFunc = do
     let (connStr', enableWal) = case () of
           ()
@@ -85,11 +86,11 @@ open' connStr logFunc = do
 -- | Wrap up a raw 'Sqlite.Connection' as a Persistent SQL 'Connection'.
 --
 -- Since 1.1.5
-wrapConnection :: (IsPersistBackend backend, BaseBackend backend ~ SqlBackend) => Sqlite.Connection -> LogFunc -> IO backend
+wrapConnection :: (IsSqlBackend backend) => Sqlite.Connection -> LogFunc -> IO backend
 wrapConnection = wrapConnectionWal True
 
 -- | Allow control of WAL settings when wrapping
-wrapConnectionWal :: (IsPersistBackend backend, BaseBackend backend ~ SqlBackend)
+wrapConnectionWal :: (IsSqlBackend backend)
                   => Bool -- ^ enable WAL?
                   -> Sqlite.Connection
                   -> LogFunc
@@ -132,7 +133,7 @@ wrapConnectionWal enableWal conn logFunc = do
 -- that all log messages are discarded.
 --
 -- Since 1.1.4
-runSqlite :: (MonadBaseControl IO m, MonadIO m, IsPersistBackend backend, BaseBackend backend ~ SqlBackend)
+runSqlite :: (MonadBaseControl IO m, MonadIO m, IsSqlBackend backend)
           => Text -- ^ connection string
           -> ReaderT backend (NoLoggingT (ResourceT m)) a -- ^ database action
           -> m a

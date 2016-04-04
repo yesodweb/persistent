@@ -1,3 +1,4 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE EmptyDataDecls #-}
@@ -13,7 +14,7 @@ module Database.Persist.Sql.Types
     , SqlBackend (..), SqlReadBackend (..), SqlWriteBackend (..), CanWrite
     , Statement (..), LogFunc, InsertSqlResult (..)
     , readToUnknown, readToWrite, writeToUnknown
-    , ReadSqlBackend, WriteSqlBackend, SqlReadT, SqlWriteT
+    , ReadSqlBackend, WriteSqlBackend, SqlReadT, SqlWriteT, IsSqlBackend
     ) where
 
 import Control.Exception (Exception)
