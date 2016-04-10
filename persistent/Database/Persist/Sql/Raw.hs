@@ -33,7 +33,7 @@ rawQuery sql vals = do
     release releaseKey
 
 rawQueryRes
-    :: (MonadIO m1, MonadIO m2, IsPersistBackend env, BaseBackend env ~ SqlBackend)
+    :: (MonadIO m1, MonadIO m2, IsSqlBackend env)
     => Text
     -> [PersistValue]
     -> ReaderT env m1 (Acquire (Source m2 [PersistValue]))

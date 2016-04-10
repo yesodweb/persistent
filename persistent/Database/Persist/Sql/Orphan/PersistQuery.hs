@@ -146,7 +146,7 @@ instance PersistQueryWrite SqlWriteBackend where
 -- | Same as 'deleteWhere', but returns the number of rows affected.
 --
 -- Since 1.1.5
-deleteWhereCount :: (PersistEntity val, MonadIO m, PersistEntityBackend val ~ BaseBackend backend, BaseBackend backend ~ SqlBackend, HasPersistBackend backend)
+deleteWhereCount :: (PersistEntity val, MonadIO m, PersistEntityBackend val ~ SqlBackend, IsSqlBackend backend)
                  => [Filter val]
                  -> ReaderT backend m Int64
 deleteWhereCount filts = withReaderT persistBackend $ do
@@ -165,7 +165,7 @@ deleteWhereCount filts = withReaderT persistBackend $ do
 -- | Same as 'updateWhere', but returns the number of rows affected.
 --
 -- Since 1.1.5
-updateWhereCount :: (PersistEntity val, MonadIO m, BaseBackend backend ~ PersistEntityBackend val, BaseBackend backend ~ SqlBackend, HasPersistBackend backend)
+updateWhereCount :: (PersistEntity val, MonadIO m, SqlBackend ~ PersistEntityBackend val, IsSqlBackend backend)
                  => [Filter val]
                  -> [Update val]
                  -> ReaderT backend m Int64

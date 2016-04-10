@@ -70,9 +70,8 @@ whereStmtForKey conn k =
 -- which does not operate in a Monad
 getTableName :: forall record m backend.
              ( PersistEntity record
-             , PersistEntityBackend record ~ BaseBackend backend
-             , HasPersistBackend backend
-             , BaseBackend backend ~ SqlBackend
+             , PersistEntityBackend record ~ SqlBackend
+             , IsSqlBackend backend
              , Monad m
              ) => record -> ReaderT backend m Text
 getTableName rec = withReaderT persistBackend $ do
@@ -80,7 +79,7 @@ getTableName rec = withReaderT persistBackend $ do
     return $ connEscapeName conn $ tableDBName rec
 
 -- | useful for a backend to implement tableName by adding escaping
-tableDBName :: ( PersistEntity record) => record -> DBName
+tableDBName :: (PersistEntity record) => record -> DBName
 tableDBName rec = entityDB $ entityDef (Just rec)
 
 -- | get the SQL string for the field that an EntityField represents
@@ -90,9 +89,8 @@ tableDBName rec = entityDB $ entityDef (Just rec)
 -- which does not operate in a Monad
 getFieldName :: forall record typ m backend.
              ( PersistEntity record
-             , PersistEntityBackend record ~ BaseBackend backend
-             , BaseBackend backend ~ SqlBackend
-             , HasPersistBackend backend
+             , PersistEntityBackend record ~ SqlBackend
+             , IsSqlBackend backend
              , Monad m
              )
              => EntityField record typ -> ReaderT backend m Text

@@ -27,7 +27,7 @@ import Control.Monad (liftM)
 -- was buggy and caused more problems than it solved. Since version 2.1.2, it
 -- performs no timeout checks.
 runSqlPool
-    :: (MonadBaseControl IO m, HasPersistBackend backend, BaseBackend backend ~ SqlBackend)
+    :: (MonadBaseControl IO m, IsSqlBackend backend)
     => ReaderT backend m a -> Pool backend -> m a
 runSqlPool r pconn = withResource pconn $ runSqlConn r
 
@@ -53,9 +53,7 @@ withResourceTimeout ms pool act = control $ \runInIO -> mask $ \restore -> do
             return ret
 {-# INLINABLE withResourceTimeout #-}
 
-runSqlConn
-    :: (HasPersistBackend backend, BaseBackend backend ~ SqlBackend)
-    => MonadBaseControl IO m => ReaderT backend m a -> backend -> m a
+runSqlConn :: (MonadBaseControl IO m, IsSqlBackend backend) => ReaderT backend m a -> backend -> m a
 runSqlConn r conn = control $ \runInIO -> mask $ \restore -> do
     let conn' = persistBackend conn
         getter = getStmtConn conn'
@@ -67,31 +65,31 @@ runSqlConn r conn = control $ \runInIO -> mask $ \restore -> do
     return x
 
 runSqlPersistM
-    :: (HasPersistBackend backend, BaseBackend backend ~ SqlBackend)
+    :: (IsSqlBackend backend)
     => ReaderT backend (NoLoggingT (ResourceT IO)) a -> backend -> IO a
 runSqlPersistM x conn = runResourceT $ runNoLoggingT $ runSqlConn x conn
 
 runSqlPersistMPool
-    :: (HasPersistBackend backend, BaseBackend backend ~ SqlBackend)
+    :: (IsSqlBackend backend)
     => ReaderT backend (NoLoggingT (ResourceT IO)) a -> Pool backend -> IO a
 runSqlPersistMPool x pool = runResourceT $ runNoLoggingT $ runSqlPool x pool
 
 liftSqlPersistMPool
-    :: (MonadIO m, HasPersistBackend backend, BaseBackend backend ~ SqlBackend)
+    :: (MonadIO m, IsSqlBackend backend)
     => ReaderT backend (NoLoggingT (ResourceT IO)) a -> Pool backend -> m a
 liftSqlPersistMPool x pool = liftIO (runSqlPersistMPool x pool)
 
 withSqlPool
-    :: (MonadIO m, MonadLogger m, MonadBaseControl IO m, HasPersistBackend backend, BaseBackend backend ~ SqlBackend)
+    :: (MonadIO m, MonadLogger m, MonadBaseControl IO m, IsSqlBackend backend)
     => (LogFunc -> IO backend) -- ^ create a new connection
     -> Int -- ^ connection count
     -> (Pool backend -> m a)
     -> m a
-withSqlPool mkConn connCount f = do
+withSqlPool mkConn connCount f =
     bracket (createSqlPool mkConn connCount) (liftIO . destroyAllResources) f
 
 createSqlPool
-    :: (MonadIO m, MonadLogger m, MonadBaseControl IO m, HasPersistBackend backend, BaseBackend backend ~ SqlBackend)
+    :: (MonadIO m, MonadLogger m, MonadBaseControl IO m, IsSqlBackend backend)
     => (LogFunc -> IO backend)
     -> Int
     -> m (Pool backend)
@@ -115,13 +113,13 @@ askLogFunc = do
         return ()
 
 withSqlConn
-    :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, HasPersistBackend backend, BaseBackend backend ~ SqlBackend)
+    :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsSqlBackend backend)
     => (LogFunc -> IO backend) -> (backend -> m a) -> m a
 withSqlConn open f = do
     logFunc <- askLogFunc
     bracket (liftIO $ open logFunc) (liftIO . close') f
 
-close' :: (HasPersistBackend backend, BaseBackend backend ~ SqlBackend) => backend -> IO ()
+close' :: (IsSqlBackend backend) => backend -> IO ()
 close' conn = do
     readIORef (connStmtMap $ persistBackend conn) >>= mapM_ stmtFinalize . Map.elems
     connClose $ persistBackend conn

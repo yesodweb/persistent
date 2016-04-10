@@ -61,7 +61,7 @@ instance PersistField a => RawSql (Single a) where
     rawSqlProcessRow _     = Left $ pack "RawSql (Single a): wrong number of columns."
 
 instance
-    (PersistEntity a, PersistEntityBackend a ~ backend, HasPersistBackend backend) =>
+    (PersistEntity a, PersistEntityBackend a ~ backend, IsPersistBackend backend) =>
     RawSql (Key a) where
     rawSqlCols _ key         = (length $ keyToValues key, [])
     rawSqlColCountReason key = "The primary key is composed of "
@@ -70,7 +70,7 @@ instance
     rawSqlProcessRow         = keyFromValues
 
 instance
-    (PersistEntity record, PersistEntityBackend record ~ backend, HasPersistBackend backend) =>
+    (PersistEntity record, PersistEntityBackend record ~ backend, IsPersistBackend backend) =>
     RawSql (Entity record) where
     rawSqlCols escape ent = (length sqlFields, [intercalate ", " sqlFields])
         where

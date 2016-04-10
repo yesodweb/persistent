@@ -7,8 +7,8 @@
 module Database.Persist.Sql.Types.Internal
     ( HasPersistBackend (..)
     , IsPersistBackend (..)
-    , SqlReadBackend (unReadSqlBackend)
-    , SqlWriteBackend (unWriteSqlBackend)
+    , SqlReadBackend (unSqlReadBackend)
+    , SqlWriteBackend (unSqlWriteBackend)
     , readToUnknown
     , readToWrite
     , writeToUnknown
@@ -16,9 +16,8 @@ module Database.Persist.Sql.Types.Internal
     , InsertSqlResult (..)
     , Statement (..)
     , SqlBackend (..)
-    , CanWrite
-    , ReadSqlBackend
-    , WriteSqlBackend
+    , SqlBackendCanRead
+    , SqlBackendCanWrite
     , SqlReadT
     , SqlWriteT
     , IsSqlBackend
@@ -89,47 +88,53 @@ instance HasPersistBackend SqlBackend where
 instance IsPersistBackend SqlBackend where
     mkPersistBackend = id
 
-newtype SqlReadBackend = SqlReadBackend { unReadSqlBackend :: SqlBackend } deriving Typeable
+-- | An SQL backend which can only handle read queries
+newtype SqlReadBackend = SqlReadBackend { unSqlReadBackend :: SqlBackend } deriving Typeable
 instance HasPersistBackend SqlReadBackend where
     type BaseBackend SqlReadBackend = SqlBackend
-    persistBackend = unReadSqlBackend
+    persistBackend = unSqlReadBackend
 instance IsPersistBackend SqlReadBackend where
     mkPersistBackend = SqlReadBackend
 
-class CanWrite backend
-instance CanWrite SqlWriteBackend
-instance CanWrite SqlBackend
-
-newtype SqlWriteBackend = SqlWriteBackend { unWriteSqlBackend :: SqlBackend } deriving Typeable
+-- | An SQL backend which can handle read or write queries
+newtype SqlWriteBackend = SqlWriteBackend { unSqlWriteBackend :: SqlBackend } deriving Typeable
 instance HasPersistBackend SqlWriteBackend where
     type BaseBackend SqlWriteBackend = SqlBackend
-    persistBackend = unWriteSqlBackend
+    persistBackend = unSqlWriteBackend
 instance IsPersistBackend SqlWriteBackend where
     mkPersistBackend = SqlWriteBackend
 
+-- | Useful for running a write query against an untagged backend with unknown capabilities.
 writeToUnknown :: Monad m => ReaderT SqlWriteBackend m a -> ReaderT SqlBackend m a
 writeToUnknown ma = do
   unknown <- ask
   lift . runReaderT ma $ SqlWriteBackend unknown
 
+-- | Useful for running a read query against a backend with read and write capabilities.
 readToWrite :: Monad m => ReaderT SqlReadBackend m a -> ReaderT SqlWriteBackend m a
 readToWrite ma = do
   write <- ask
-  lift . runReaderT ma . SqlReadBackend $ unWriteSqlBackend write
+  lift . runReaderT ma . SqlReadBackend $ unSqlWriteBackend write
 
+-- | Useful for running a read query against a backend with unknown capabilities.
 readToUnknown :: Monad m => ReaderT SqlReadBackend m a -> ReaderT SqlBackend m a
 readToUnknown ma = do
   unknown <- ask
   lift . runReaderT ma $ SqlReadBackend unknown
 
-type ReadSqlBackend backend =
+-- | A constraint synonym which witnesses that a backend is SQL and can run read queries.
+type SqlBackendCanRead backend =
   ( IsSqlBackend backend
   , PersistQueryRead backend, PersistStoreRead backend, PersistUniqueRead backend
   )
-type WriteSqlBackend backend =
-  ( ReadSqlBackend backend, CanWrite backend
+-- | A constraint synonym which witnesses that a backend is SQL and can run read and write queries.
+type SqlBackendCanWrite backend =
+  ( SqlBackendCanRead backend
   , PersistQueryWrite backend, PersistStoreWrite backend, PersistUniqueWrite backend
   )
-type SqlReadT m a = forall backend. (ReadSqlBackend backend) => ReaderT backend m a
-type SqlWriteT m a = forall backend. (WriteSqlBackend backend) => ReaderT backend m a
+-- | Like @SqlPersistT@ but compatible with any SQL backend which can handle read queries.
+type SqlReadT m a = forall backend. (SqlBackendCanRead backend) => ReaderT backend m a
+-- | Like @SqlPersistT@ but compatible with any SQL backend which can handle read and write queries.
+type SqlWriteT m a = forall backend. (SqlBackendCanWrite backend) => ReaderT backend m a
+-- | A backend which is a wrapper around @SqlBackend@.
 type IsSqlBackend backend = (IsPersistBackend backend, BaseBackend backend ~ SqlBackend)
