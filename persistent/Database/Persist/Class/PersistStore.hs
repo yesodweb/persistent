@@ -26,10 +26,22 @@ import Database.Persist.Class.PersistField
 import Database.Persist.Types
 import qualified Data.Aeson as A
 
+-- | Class which allows the plucking of a @BaseBackend backend@ from some larger type.
+-- For example,
+-- @
+-- instance HasPersistBackend (SqlReadBackend, Int) where
+--   type BaseBackend (SqlReadBackend, Int) = SqlBackend
+--   persistBackend = unSqlReadBackend . fst
+-- @
 class HasPersistBackend backend where
-    persistBackend :: backend -> BaseBackend backend
     type BaseBackend backend
+    persistBackend :: backend -> BaseBackend backend
+-- | Class which witnesses that @backend@ is essentially the same as @BaseBackend backend@.
+-- That is, they're isomorphic and @backend@ is just some wrapper over @BaseBackend backend@.
 class (HasPersistBackend backend) => IsPersistBackend backend where
+    -- | This function is how we actually construct and tag a backend as having read or write capabilities.
+    -- It should be used carefully and only when actually constructing a @backend@. Careless use allows us
+    -- to accidentally run a write query against a read-only database.
     mkPersistBackend :: BaseBackend backend -> backend
 
 liftPersist

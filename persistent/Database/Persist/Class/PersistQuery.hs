@@ -22,7 +22,7 @@ import Database.Persist.Class.PersistEntity
 import Control.Monad.Trans.Resource (MonadResource, release)
 import Data.Acquire (Acquire, allocateAcquire, with)
 
--- | Backends supporting conditional operations.
+-- | Backends supporting conditional read operations.
 class (PersistCore backend, PersistStoreRead backend) => PersistQueryRead backend where
     -- | Get all records matching the given criterion in the specified order.
     -- Returns also the identifiers.
@@ -52,6 +52,7 @@ class (PersistCore backend, PersistStoreRead backend) => PersistQueryRead backen
     count :: (MonadIO m, PersistEntity val, BaseBackend backend ~ PersistEntityBackend val)
           => [Filter val] -> ReaderT backend m Int
 
+-- | Backends supporting conditional write operations
 class (PersistQueryRead backend, PersistStoreWrite backend) => PersistQueryWrite backend where
     -- | Update individual fields on any record matching the given criterion.
     updateWhere :: (MonadIO m, PersistEntity val, BaseBackend backend ~ PersistEntityBackend val)

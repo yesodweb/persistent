@@ -36,7 +36,11 @@ import Data.Text (unpack, Text)
 -- you must manually place a unique index on a field to have a uniqueness
 -- constraint.
 --
--- Some functions in this module ('insertUnique', 'insertBy', and
+class (PersistCore backend, PersistStoreRead backend) => PersistUniqueRead backend where
+    -- | Get a record by unique key, if available. Returns also the identifier.
+    getBy :: (MonadIO m, BaseBackend backend ~ PersistEntityBackend val, PersistEntity val) => Unique val -> ReaderT backend m (Maybe (Entity val))
+
+-- | Some functions in this module ('insertUnique', 'insertBy', and
 -- 'replaceUnique') first query the unique indexes to check for
 -- conflicts. You could instead optimistically attempt to perform the
 -- operation (e.g. 'replace' instead of 'replaceUnique'). However,
@@ -45,10 +49,6 @@ import Data.Text (unpack, Text)
 --  determing the column of failure;
 --
 --  * an exception will automatically abort the current SQL transaction.
-class (PersistCore backend, PersistStoreRead backend) => PersistUniqueRead backend where
-    -- | Get a record by unique key, if available. Returns also the identifier.
-    getBy :: (MonadIO m, BaseBackend backend ~ PersistEntityBackend val, PersistEntity val) => Unique val -> ReaderT backend m (Maybe (Entity val))
-
 class (PersistUniqueRead backend, PersistStoreWrite backend) => PersistUniqueWrite backend where
 
     -- | Delete a specific record by unique key. Does nothing if no record
