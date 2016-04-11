@@ -1,3 +1,4 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE CPP #-}
@@ -21,6 +22,7 @@ module Database.Persist.Sqlite
     ) where
 
 import Database.Persist.Sql
+import Database.Persist.Sql.Types.Internal (mkPersistBackend)
 
 import qualified Database.Sqlite as Sqlite
 
@@ -41,10 +43,11 @@ import qualified Data.Conduit.List as CL
 import Control.Applicative
 import Data.Int (Int64)
 import Data.Monoid ((<>))
+import Data.Pool (Pool)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import Control.Monad (when)
-import Control.Monad.Trans.Reader (runReaderT)
+import Control.Monad.Trans.Reader (ReaderT, runReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
 
 -- | Create a pool of SQLite connections.
@@ -52,23 +55,24 @@ import Control.Monad.Trans.Writer (runWriterT)
 -- Note that this should not be used with the @:memory:@ connection string, as
 -- the pool will regularly remove connections, destroying your database.
 -- Instead, use 'withSqliteConn'.
-createSqlitePool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m) => Text -> Int -> m ConnectionPool
+createSqlitePool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m, IsSqlBackend backend)
+                 => Text -> Int -> m (Pool backend)
 createSqlitePool s = createSqlPool $ open' s
 
 -- | Run the given action with a connection pool.
 --
 -- Like 'createSqlitePool', this should not be used with @:memory:@.
-withSqlitePool :: (MonadBaseControl IO m, MonadIO m, MonadLogger m)
+withSqlitePool :: (MonadBaseControl IO m, MonadIO m, MonadLogger m, IsSqlBackend backend)
                => Text
                -> Int -- ^ number of connections to open
-               -> (ConnectionPool -> m a) -> m a
+               -> (Pool backend -> m a) -> m a
 withSqlitePool s = withSqlPool $ open' s
 
-withSqliteConn :: (MonadBaseControl IO m, MonadIO m, MonadLogger m)
-               => Text -> (SqlBackend -> m a) -> m a
+withSqliteConn :: (MonadBaseControl IO m, MonadIO m, MonadLogger m, IsSqlBackend backend)
+               => Text -> (backend -> m a) -> m a
 withSqliteConn = withSqlConn . open'
 
-open' :: Text -> LogFunc -> IO SqlBackend
+open' :: (IsSqlBackend backend) => Text -> LogFunc -> IO backend
 open' connStr logFunc = do
     let (connStr', enableWal) = case () of
           ()
@@ -82,14 +86,15 @@ open' connStr logFunc = do
 -- | Wrap up a raw 'Sqlite.Connection' as a Persistent SQL 'Connection'.
 --
 -- Since 1.1.5
-wrapConnection :: Sqlite.Connection -> LogFunc -> IO SqlBackend
+wrapConnection :: (IsSqlBackend backend) => Sqlite.Connection -> LogFunc -> IO backend
 wrapConnection = wrapConnectionWal True
 
 -- | Allow control of WAL settings when wrapping
-wrapConnectionWal :: Bool -- ^ enable WAL?
+wrapConnectionWal :: (IsSqlBackend backend)
+                  => Bool -- ^ enable WAL?
                   -> Sqlite.Connection
                   -> LogFunc
-                  -> IO SqlBackend
+                  -> IO backend
 wrapConnectionWal enableWal conn logFunc = do
     when enableWal $ do
         -- Turn on the write-ahead log
@@ -100,7 +105,7 @@ wrapConnectionWal enableWal conn logFunc = do
         Sqlite.finalize turnOnWal
 
     smap <- newIORef $ Map.empty
-    return SqlBackend
+    return . mkPersistBackend $ SqlBackend
         { connPrepare = prepare' conn
         , connStmtMap = smap
         , connInsertSql = insertSql'
@@ -128,9 +133,9 @@ wrapConnectionWal enableWal conn logFunc = do
 -- that all log messages are discarded.
 --
 -- Since 1.1.4
-runSqlite :: (MonadBaseControl IO m, MonadIO m)
+runSqlite :: (MonadBaseControl IO m, MonadIO m, IsSqlBackend backend)
           => Text -- ^ connection string
-          -> SqlPersistT (NoLoggingT (ResourceT m)) a -- ^ database action
+          -> ReaderT backend (NoLoggingT (ResourceT m)) a -- ^ database action
           -> m a
 runSqlite connstr = runResourceT
                   . runNoLoggingT

@@ -1,15 +1,23 @@
+{-# LANGUAGE ConstraintKinds #-}
+
 module Database.Persist.Class
     ( ToBackendKey (..)
 
     -- * PersistStore
-    , PersistStore (..)
+    , PersistCore (..)
+    , PersistStore
+    , PersistStoreRead (..)
+    , PersistStoreWrite (..)
+    , BaseBackend(..)
     , getJust
     , belongsTo
     , belongsToJust
     , insertEntity
 
     -- * PersistUnique
-    , PersistUnique (..)
+    , PersistUnique
+    , PersistUniqueRead (..)
+    , PersistUniqueWrite (..)
     , getByValue
     , insertBy
     , replaceUnique
@@ -17,7 +25,9 @@ module Database.Persist.Class
     , onlyUnique
 
     -- * PersistQuery
-    , PersistQuery (..)
+    , PersistQuery
+    , PersistQueryRead (..)
+    , PersistQueryWrite (..)
     , selectSource
     , selectKeys
     , selectList
@@ -37,6 +47,7 @@ module Database.Persist.Class
 
     -- * Lifting
     , HasPersistBackend (..)
+    , IsPersistBackend ()
     , liftPersist
 
     -- * JSON utilities
@@ -52,3 +63,13 @@ import Database.Persist.Class.PersistUnique
 import Database.Persist.Class.PersistConfig
 import Database.Persist.Class.PersistField
 import Database.Persist.Class.PersistStore
+
+-- | This type synonym provides backward compatibility with `persistent` prior to the read-write split.
+-- It signifies the assumption that, by default, a backend can write as well as read.
+type PersistUnique a = PersistUniqueWrite a
+-- | This type synonym provides backward compatibility with `persistent` prior to the read-write split.
+-- It signifies the assumption that, by default, a backend can write as well as read.
+type PersistQuery a = PersistQueryWrite a
+-- | This type synonym provides backward compatibility with `persistent` prior to the read-write split.
+-- It signifies the assumption that, by default, a backend can write as well as read.
+type PersistStore a = PersistStoreWrite a

@@ -45,6 +45,7 @@ module Database.Persist.TH
 
 import Prelude hiding ((++), take, concat, splitAt, exp)
 import Database.Persist
+import Database.Persist.Class (HasPersistBackend(..), BaseBackend)
 import Database.Persist.Sql (Migration, migrate, SqlBackend, PersistFieldSql)
 import Database.Persist.Quasi
 import Language.Haskell.TH.Lib (varE)
@@ -1184,7 +1185,7 @@ mkDeleteCascade mps defs = do
         return $
             InstanceD
             [ mkClassP ''PersistQuery [backendT]
-            , mkEqualP (ConT ''PersistEntityBackend `AppT` entityT) backendT
+            , mkEqualP (ConT ''PersistEntityBackend `AppT` entityT) (ConT ''BaseBackend `AppT` backendT)
             ]
             (ConT ''DeleteCascade `AppT` entityT `AppT` backendT)
             [ FunD 'deleteCascade
@@ -1590,4 +1591,3 @@ mkEqualP = EqualP
 --         let x = mkName "x"
 --          in normalClause [ConP (mkName constr) [VarP x]]
 --                    (VarE 'toPersistValue `AppE` VarE x)
-

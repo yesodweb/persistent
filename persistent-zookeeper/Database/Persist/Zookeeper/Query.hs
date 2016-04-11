@@ -23,7 +23,7 @@ import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Data.Acquire
 
-instance PersistQuery Z.Zookeeper where
+instance PersistQueryWrite Z.Zookeeper where
   updateWhere filterList valList = do
     stat <- ask
     srcRes <- selectKeysRes filterList []
@@ -60,6 +60,7 @@ instance PersistQuery Z.Zookeeper where
               then delete key
               else return ()
 
+instance PersistQueryRead Z.Zookeeper where
   selectSourceRes filterList opt = do
     stat <- ask
     (str::[String]) <- liftIO $ flip runReaderT stat $ do
@@ -215,7 +216,7 @@ sortIdx asc keys = concat $ map (sortIdx' asc) keys
 fstIdx :: Ord a => [[(String,a)]] -> [[String]]
 fstIdx keys = flip map keys $ \ks -> flip map ks $ \k -> fst k
 
-selectOptParser' :: (PersistStore backend, MonadIO m, PersistEntity val, backend ~ PersistEntityBackend val)
+selectOptParser' :: (PersistStore backend, MonadIO m, PersistEntity val, BaseBackend backend ~ PersistEntityBackend val)
                  => [[String]]
                  -> [SelectOpt val]
                  -> ReaderT backend m [[String]]
@@ -244,7 +245,7 @@ selectOptParser' keys (Desc field:xs) = do
         Just v -> return $ (k,fieldval field v)
   selectOptParser' (fstIdx $ sortIdx False keysWithVal) xs
 
-selectOptParser :: (PersistStore backend, MonadIO m, PersistEntity val, backend ~ PersistEntityBackend val)
+selectOptParser :: (PersistStore backend, MonadIO m, PersistEntity val, BaseBackend backend ~ PersistEntityBackend val)
                  => [String]
                  -> [SelectOpt val]
                  -> ReaderT backend m [String]

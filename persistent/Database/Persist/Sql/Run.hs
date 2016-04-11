@@ -1,7 +1,10 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 module Database.Persist.Sql.Run where
 
+import Database.Persist.Class.PersistStore
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
 import Control.Monad.Trans.Control
@@ -24,7 +27,9 @@ import Control.Monad (liftM)
 -- Note: This function previously timed out after 2 seconds, but this behavior
 -- was buggy and caused more problems than it solved. Since version 2.1.2, it
 -- performs no timeout checks.
-runSqlPool :: MonadBaseControl IO m => SqlPersistT m a -> Pool SqlBackend -> m a
+runSqlPool
+    :: (MonadBaseControl IO m, IsSqlBackend backend)
+    => ReaderT backend m a -> Pool backend -> m a
 runSqlPool r pconn = withResource pconn $ runSqlConn r
 
 -- | Like 'withResource', but times out the operation if resource
@@ -49,37 +54,46 @@ withResourceTimeout ms pool act = control $ \runInIO -> mask $ \restore -> do
             return ret
 {-# INLINABLE withResourceTimeout #-}
 
-runSqlConn :: MonadBaseControl IO m => SqlPersistT m a -> SqlBackend -> m a
+runSqlConn :: (MonadBaseControl IO m, IsSqlBackend backend) => ReaderT backend m a -> backend -> m a
 runSqlConn r conn = control $ \runInIO -> mask $ \restore -> do
-    let getter = getStmtConn conn
-    restore $ connBegin conn getter
+    let conn' = persistBackend conn
+        getter = getStmtConn conn'
+    restore $ connBegin conn' getter
     x <- onException
             (restore $ runInIO $ runReaderT r conn)
-            (restore $ connRollback conn getter)
-    restore $ connCommit conn getter
+            (restore $ connRollback conn' getter)
+    restore $ connCommit conn' getter
     return x
 
-runSqlPersistM :: SqlPersistM a -> SqlBackend -> IO a
+runSqlPersistM
+    :: (IsSqlBackend backend)
+    => ReaderT backend (NoLoggingT (ResourceT IO)) a -> backend -> IO a
 runSqlPersistM x conn = runResourceT $ runNoLoggingT $ runSqlConn x conn
 
-runSqlPersistMPool :: SqlPersistM a -> Pool SqlBackend -> IO a
+runSqlPersistMPool
+    :: (IsSqlBackend backend)
+    => ReaderT backend (NoLoggingT (ResourceT IO)) a -> Pool backend -> IO a
 runSqlPersistMPool x pool = runResourceT $ runNoLoggingT $ runSqlPool x pool
 
-liftSqlPersistMPool :: MonadIO m => SqlPersistM a -> Pool SqlBackend -> m a
+liftSqlPersistMPool
+    :: (MonadIO m, IsSqlBackend backend)
+    => ReaderT backend (NoLoggingT (ResourceT IO)) a -> Pool backend -> m a
 liftSqlPersistMPool x pool = liftIO (runSqlPersistMPool x pool)
 
-withSqlPool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m)
-            => (LogFunc -> IO SqlBackend) -- ^ create a new connection
-            -> Int -- ^ connection count
-            -> (Pool SqlBackend -> m a)
-            -> m a
-withSqlPool mkConn connCount f = do
+withSqlPool
+    :: (MonadIO m, MonadLogger m, MonadBaseControl IO m, IsSqlBackend backend)
+    => (LogFunc -> IO backend) -- ^ create a new connection
+    -> Int -- ^ connection count
+    -> (Pool backend -> m a)
+    -> m a
+withSqlPool mkConn connCount f =
     bracket (createSqlPool mkConn connCount) (liftIO . destroyAllResources) f
 
-createSqlPool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m)
-              => (LogFunc -> IO SqlBackend)
-              -> Int
-              -> m (Pool SqlBackend)
+createSqlPool
+    :: (MonadIO m, MonadLogger m, MonadBaseControl IO m, IsSqlBackend backend)
+    => (LogFunc -> IO backend)
+    -> Int
+    -> m (Pool backend)
 createSqlPool mkConn size = do
     logFunc <- askLogFunc
     liftIO $ createPool (mkConn logFunc) close' 1 20 size
@@ -99,13 +113,14 @@ askLogFunc = do
         _ <- runInBase (monadLoggerLog a b c d)
         return ()
 
-withSqlConn :: (MonadIO m, MonadBaseControl IO m, MonadLogger m)
-            => (LogFunc -> IO SqlBackend) -> (SqlBackend -> m a) -> m a
+withSqlConn
+    :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsSqlBackend backend)
+    => (LogFunc -> IO backend) -> (backend -> m a) -> m a
 withSqlConn open f = do
     logFunc <- askLogFunc
     bracket (liftIO $ open logFunc) (liftIO . close') f
 
-close' :: SqlBackend -> IO ()
+close' :: (IsSqlBackend backend) => backend -> IO ()
 close' conn = do
-    readIORef (connStmtMap conn) >>= mapM_ stmtFinalize . Map.elems
-    connClose conn
+    readIORef (connStmtMap $ persistBackend conn) >>= mapM_ stmtFinalize . Map.elems
+    connClose $ persistBackend conn

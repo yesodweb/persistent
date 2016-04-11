@@ -1,9 +1,12 @@
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Database.Persist.Sql.Orphan.PersistUnique () where
 
 import Control.Exception (throwIO)
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.IO.Class (liftIO, MonadIO)
+import Control.Monad.Trans.Reader (ReaderT)
 import Database.Persist
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
@@ -12,9 +15,9 @@ import Database.Persist.Sql.Util (dbColumns, parseEntityValues)
 import qualified Data.Text as T
 import Data.Monoid (mappend)
 import qualified Data.Conduit.List as CL
-import Control.Monad.Trans.Reader (ask)
+import Control.Monad.Trans.Reader (ask, withReaderT)
 
-instance PersistUnique SqlBackend where
+instance PersistUniqueWrite SqlBackend where
     deleteBy uniq = do
         conn <- ask
         let sql' = sql conn
@@ -30,7 +33,10 @@ instance PersistUnique SqlBackend where
             , " WHERE "
             , T.intercalate " AND " $ map (go' conn) $ go uniq
             ]
+instance PersistUniqueWrite SqlWriteBackend where
+    deleteBy uniq = withReaderT persistBackend $ deleteBy uniq
 
+instance PersistUniqueRead SqlBackend where
     getBy uniq = do
         conn <- ask
         let sql = T.concat
@@ -56,6 +62,10 @@ instance PersistUnique SqlBackend where
         go conn x = connEscapeName conn x `mappend` "=?"
         t = entityDef $ dummyFromUnique uniq
         toFieldNames' = map snd . persistUniqueToFieldNames
+instance PersistUniqueRead SqlReadBackend where
+    getBy uniq = withReaderT persistBackend $ getBy uniq
+instance PersistUniqueRead SqlWriteBackend where
+    getBy uniq = withReaderT persistBackend $ getBy uniq
 
 dummyFromUnique :: Unique v -> Maybe v
 dummyFromUnique _ = Nothing

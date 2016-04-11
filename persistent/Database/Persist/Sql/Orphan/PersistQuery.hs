@@ -1,3 +1,4 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -20,7 +21,7 @@ import Data.Text (Text)
 import Data.Monoid (Monoid (..), (<>))
 import Data.Int (Int64)
 import Control.Monad.IO.Class
-import Control.Monad.Trans.Reader (ReaderT, ask)
+import Control.Monad.Trans.Reader (ReaderT, ask, withReaderT)
 import Control.Exception (throwIO)
 import qualified Data.Conduit.List as CL
 import Data.Conduit
@@ -29,7 +30,7 @@ import Data.Maybe (isJust)
 import Data.List (transpose, inits, find)
 
 -- orphaned instance for convenience of modularity
-instance PersistQuery SqlBackend where
+instance PersistQueryRead SqlBackend where
     count filts = do
         conn <- ask
         let wher = if null filts
@@ -123,24 +124,33 @@ instance PersistQuery SqlBackend where
             case keyFromValues keyvals of
                 Right k -> return k
                 Left _ -> error "selectKeysImpl: keyFromValues failed"
+instance PersistQueryRead SqlReadBackend where
+    count filts = withReaderT persistBackend $ count filts
+    selectSourceRes filts opts = withReaderT persistBackend $ selectSourceRes filts opts
+    selectKeysRes filts opts = withReaderT persistBackend $ selectKeysRes filts opts
+instance PersistQueryRead SqlWriteBackend where
+    count filts = withReaderT persistBackend $ count filts
+    selectSourceRes filts opts = withReaderT persistBackend $ selectSourceRes filts opts
+    selectKeysRes filts opts = withReaderT persistBackend $ selectKeysRes filts opts
 
-
-
+instance PersistQueryWrite SqlBackend where
     deleteWhere filts = do
         _ <- deleteWhereCount filts
         return ()
-
     updateWhere filts upds = do
         _ <- updateWhereCount filts upds
         return ()
+instance PersistQueryWrite SqlWriteBackend where
+    deleteWhere filts = withReaderT persistBackend $ deleteWhere filts
+    updateWhere filts upds = withReaderT persistBackend $ updateWhere filts upds
 
 -- | Same as 'deleteWhere', but returns the number of rows affected.
 --
 -- Since 1.1.5
-deleteWhereCount :: (PersistEntity val, MonadIO m, PersistEntityBackend val ~ SqlBackend)
+deleteWhereCount :: (PersistEntity val, MonadIO m, PersistEntityBackend val ~ SqlBackend, IsSqlBackend backend)
                  => [Filter val]
-                 -> ReaderT SqlBackend m Int64
-deleteWhereCount filts = do
+                 -> ReaderT backend m Int64
+deleteWhereCount filts = withReaderT persistBackend $ do
     conn <- ask
     let t = entityDef $ dummyFromFilts filts
     let wher = if null filts
@@ -156,12 +166,12 @@ deleteWhereCount filts = do
 -- | Same as 'updateWhere', but returns the number of rows affected.
 --
 -- Since 1.1.5
-updateWhereCount :: (PersistEntity val, MonadIO m, SqlBackend ~ PersistEntityBackend val)
+updateWhereCount :: (PersistEntity val, MonadIO m, SqlBackend ~ PersistEntityBackend val, IsSqlBackend backend)
                  => [Filter val]
                  -> [Update val]
-                 -> ReaderT SqlBackend m Int64
+                 -> ReaderT backend m Int64
 updateWhereCount _ [] = return 0
-updateWhereCount filts upds = do
+updateWhereCount filts upds = withReaderT persistBackend $ do
     conn <- ask
     let wher = if null filts
                 then ""

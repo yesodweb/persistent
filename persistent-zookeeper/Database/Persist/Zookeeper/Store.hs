@@ -57,9 +57,11 @@ deleteRecursive :: (Monad m, MonadIO m) => String -> Action m ()
 deleteRecursive dir = execZookeeper $ \zk -> zDeleteRecursive zk dir
 
 
-instance PersistStore Z.Zookeeper where
+instance PersistCore Z.Zookeeper where
     newtype BackendKey Z.Zookeeper = ZooKey { unZooKey :: T.Text }
         deriving (Show, Read, Eq, Ord, PersistField)
+
+instance PersistStoreWrite Z.Zookeeper where
 
     insert val = do
       mUniqVal <- val2uniqkey val
@@ -105,6 +107,17 @@ instance PersistStore Z.Zookeeper where
         return $ Right ()
       return ()
 
+    update key valList = do
+      va <- get key
+      case va of
+        Nothing -> return ()
+        Just v ->
+          case updateEntity v valList of
+            Right v' ->
+              replace key v'
+            Left v' -> error $ show v'
+
+instance PersistStoreRead Z.Zookeeper where
     get key = do
       r <- execZookeeper $ \zk -> do
         let dir = key2path key
@@ -119,13 +132,3 @@ instance PersistStore Z.Zookeeper where
           return (bin2entity str)
         (Right (Nothing,_stat)) -> do
           fail $ "data is nothing"
-
-    update key valList = do
-      va <- get key
-      case va of
-        Nothing -> return ()
-        Just v ->
-          case updateEntity v valList of
-            Right v' ->
-              replace key v'
-            Left v' -> error $ show v'

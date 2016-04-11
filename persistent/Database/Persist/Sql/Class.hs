@@ -4,7 +4,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE UndecidableInstances #-}
 #ifndef NO_OVERLAP
 {-# LANGUAGE OverlappingInstances #-}
 #endif
@@ -58,15 +60,18 @@ instance PersistField a => RawSql (Single a) where
     rawSqlProcessRow [pv]  = Single <$> fromPersistValue pv
     rawSqlProcessRow _     = Left $ pack "RawSql (Single a): wrong number of columns."
 
-instance (PersistEntity a, PersistEntityBackend a ~ SqlBackend) => RawSql (Key a) where
-  rawSqlCols _ key         = (length $ keyToValues key, [])
-  rawSqlColCountReason key = "The primary key is composed of "
-                             ++ (show $ length $ keyToValues key)
-                             ++ " columns"
-  rawSqlProcessRow         = keyFromValues
+instance
+    (PersistEntity a, PersistEntityBackend a ~ backend, IsPersistBackend backend) =>
+    RawSql (Key a) where
+    rawSqlCols _ key         = (length $ keyToValues key, [])
+    rawSqlColCountReason key = "The primary key is composed of "
+                               ++ (show $ length $ keyToValues key)
+                               ++ " columns"
+    rawSqlProcessRow         = keyFromValues
 
-instance (PersistEntity record, PersistEntityBackend record ~ SqlBackend)
-         => RawSql (Entity record) where
+instance
+    (PersistEntity record, PersistEntityBackend record ~ backend, IsPersistBackend backend) =>
+    RawSql (Entity record) where
     rawSqlCols escape ent = (length sqlFields, [intercalate ", " sqlFields])
         where
           sqlFields = map (((name <> ".") <>) . escape)

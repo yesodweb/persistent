@@ -1,3 +1,4 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -30,7 +31,7 @@ import Control.Monad.IO.Class
 import Data.ByteString.Char8 (readInteger)
 import Data.Maybe (isJust)
 import Data.List (find)
-import Control.Monad.Trans.Reader (ReaderT, ask)
+import Control.Monad.Trans.Reader (ReaderT, ask, withReaderT)
 import Data.Acquire (with)
 import Data.Int (Int64)
 import Web.PathPieces (PathPiece)
@@ -68,20 +69,18 @@ whereStmtForKey conn k =
 --
 -- Your backend may provide a more convenient tableName function
 -- which does not operate in a Monad
-getTableName :: forall record m.
+getTableName :: forall record m backend.
              ( PersistEntity record
              , PersistEntityBackend record ~ SqlBackend
+             , IsSqlBackend backend
              , Monad m
-             ) => record -> ReaderT SqlBackend m Text
-getTableName rec = do
+             ) => record -> ReaderT backend m Text
+getTableName rec = withReaderT persistBackend $ do
     conn <- ask
     return $ connEscapeName conn $ tableDBName rec
 
 -- | useful for a backend to implement tableName by adding escaping
-tableDBName :: forall record.
-            ( PersistEntity record
-            , PersistEntityBackend record ~ SqlBackend
-            ) => record -> DBName
+tableDBName :: (PersistEntity record) => record -> DBName
 tableDBName rec = entityDB $ entityDef (Just rec)
 
 -- | get the SQL string for the field that an EntityField represents
@@ -89,13 +88,14 @@ tableDBName rec = entityDB $ entityDef (Just rec)
 --
 -- Your backend may provide a more convenient fieldName function
 -- which does not operate in a Monad
-getFieldName :: forall record typ m.
+getFieldName :: forall record typ m backend.
              ( PersistEntity record
              , PersistEntityBackend record ~ SqlBackend
+             , IsSqlBackend backend
              , Monad m
              )
-             => EntityField record typ -> ReaderT SqlBackend m Text
-getFieldName rec = do
+             => EntityField record typ -> ReaderT backend m Text
+getFieldName rec = withReaderT persistBackend $ do
     conn <- ask
     return $ connEscapeName conn $ fieldDBName rec
 
@@ -104,10 +104,17 @@ fieldDBName :: forall record typ. (PersistEntity record) => EntityField record t
 fieldDBName = fieldDB . persistFieldDef
 
 
-instance PersistStore SqlBackend where
+instance PersistCore SqlBackend where
     newtype BackendKey SqlBackend = SqlBackendKey { unSqlBackendKey :: Int64 }
         deriving (Show, Read, Eq, Ord, Num, Integral, PersistField, PersistFieldSql, PathPiece, ToHttpApiData, FromHttpApiData, Real, Enum, Bounded, A.ToJSON, A.FromJSON)
+instance PersistCore SqlReadBackend where
+    newtype BackendKey SqlReadBackend = SqlReadBackendKey { unSqlReadBackendKey :: Int64 }
+        deriving (Show, Read, Eq, Ord, Num, Integral, PersistField, PersistFieldSql, PathPiece, ToHttpApiData, FromHttpApiData, Real, Enum, Bounded, A.ToJSON, A.FromJSON)
+instance PersistCore SqlWriteBackend where
+    newtype BackendKey SqlWriteBackend = SqlWriteBackendKey { unSqlWriteBackendKey :: Int64 }
+        deriving (Show, Read, Eq, Ord, Num, Integral, PersistField, PersistFieldSql, PathPiece, ToHttpApiData, FromHttpApiData, Real, Enum, Bounded, A.ToJSON, A.FromJSON)
 
+instance PersistStoreWrite SqlBackend where
     update _ [] = return ()
     update k upds = do
         conn <- ask
@@ -247,6 +254,29 @@ instance PersistStore SqlBackend where
           Nothing -> insertKey key value
           Just _ -> replace key value
 
+    delete k = do
+        conn <- ask
+        rawExecute (sql conn) (keyToValues k)
+      where
+        wher conn = whereStmtForKey conn k
+        sql conn = T.concat
+            [ "DELETE FROM "
+            , connEscapeName conn $ tableDBName $ recordTypeFromKey k
+            , " WHERE "
+            , wher conn
+            ]
+instance PersistStoreWrite SqlWriteBackend where
+    insert v = withReaderT persistBackend $ insert v
+    insertMany vs = withReaderT persistBackend $ insertMany vs
+    insertMany_ vs = withReaderT persistBackend $ insertMany_ vs
+    insertKey k v = withReaderT persistBackend $ insertKey k v
+    repsert k v = withReaderT persistBackend $ repsert k v
+    replace k v = withReaderT persistBackend $ replace k v
+    delete k = withReaderT persistBackend $ delete k
+    update k upds = withReaderT persistBackend $ update k upds
+
+
+instance PersistStoreRead SqlBackend where
     get k = do
         conn <- ask
         let t = entityDef $ dummyFromKey k
@@ -271,18 +301,10 @@ instance PersistStore SqlBackend where
                     case fromPersistValues $ if noColumns then [] else vals of
                         Left e -> error $ "get " ++ show k ++ ": " ++ unpack e
                         Right v -> return $ Just v
-
-    delete k = do
-        conn <- ask
-        rawExecute (sql conn) (keyToValues k)
-      where
-        wher conn = whereStmtForKey conn k
-        sql conn = T.concat
-            [ "DELETE FROM "
-            , connEscapeName conn $ tableDBName $ recordTypeFromKey k
-            , " WHERE "
-            , wher conn
-            ]
+instance PersistStoreRead SqlReadBackend where
+    get k = withReaderT persistBackend $ get k
+instance PersistStoreRead SqlWriteBackend where
+    get k = withReaderT persistBackend $ get k
 
 dummyFromKey :: Key record -> Maybe record
 dummyFromKey = Just . recordTypeFromKey

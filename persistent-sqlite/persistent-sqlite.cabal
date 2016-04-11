@@ -35,6 +35,7 @@ library
                    , resourcet               >= 1.1
                    , time
                    , old-locale
+                   , resource-pool
     exposed-modules: Database.Sqlite
                      Database.Persist.Sqlite
     ghc-options:     -Wall
