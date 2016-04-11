@@ -7,7 +7,7 @@
 -- and want lower level-level MongoDB access.
 -- There are functions available to make working with the raw driver
 -- easier: they are under the Entity conversion section.
--- You should still use the same connection pool that you are using for Persistent. 
+-- You should still use the same connection pool that you are using for Persistent.
 --
 -- MongoDB is a schema-less database.
 -- The MongoDB Persistent backend does not help perform migrations.
@@ -188,21 +188,21 @@ instance FromJSON NoOrphanNominalDiffTime where
     parseJSON (Number x) = (return . NoOrphanNominalDiffTime . fromRational . toRational) x
 
 
-#else 
+#else
     parseJSON (Number (I x)) = (return . NoOrphanNominalDiffTime . fromInteger) x
     parseJSON (Number (D x)) = (return . NoOrphanNominalDiffTime . fromRational . toRational) x
 
-#endif                           
+#endif
     parseJSON _ = fail "couldn't parse diff time"
 
 newtype NoOrphanPortID = NoOrphanPortID PortID deriving (Show, Eq)
 
 
 instance FromJSON NoOrphanPortID where
-#if MIN_VERSION_aeson(0, 7, 0)  
+#if MIN_VERSION_aeson(0, 7, 0)
     parseJSON (Number  x) = (return . NoOrphanPortID . PortNumber . fromIntegral ) cnvX
       where cnvX :: Word16
-            cnvX = round x 
+            cnvX = round x
 
 #else
     parseJSON (Number (I x)) = (return . NoOrphanPortID . PortNumber . fromInteger) x
@@ -650,7 +650,7 @@ instance PersistUniqueWrite DB.MongoContext where
         instantiate (Just doc) =
             fromPersistValuesThrow (entityDef $ Just newRecord) doc
             -}
-   
+
 
 -- | It would make more sense to call this _id, but GHC treats leading underscore in special ways
 id_ :: T.Text
@@ -930,7 +930,7 @@ docToEntityThrow doc =
 
 
 fromPersistValuesThrow :: (Trans.MonadIO m, PersistEntity record, PersistEntityBackend record ~ DB.MongoContext) => EntityDef -> [DB.Field] -> m (Entity record)
-fromPersistValuesThrow entDef doc = 
+fromPersistValuesThrow entDef doc =
     case eitherFromPersistValues entDef doc of
         Left t -> Trans.liftIO . throwIO $ PersistMarshalError $
                    unHaskellName (entityHaskell entDef) `mappend` ": " `mappend` t
@@ -976,14 +976,14 @@ orderPersistValues entDef castDoc = reorder
     -- reorder = map (fromJust . (flip Prelude.lookup $ castDoc)) castColumns
     --
     -- this is O(n * log(n))
-    -- reorder =  map (\c -> (M.fromList castDoc) M.! c) castColumns 
+    -- reorder =  map (\c -> (M.fromList castDoc) M.! c) castColumns
     --
     -- and finally, this is O(n * log(n))
     -- * do an alist lookup for each column
     -- * but once we found an item in the alist use a new alist without that item for future lookups
     -- * so for the last query there is only one item left
     --
-    reorder :: [(Text, PersistValue)] 
+    reorder :: [(Text, PersistValue)]
     reorder = match castColumns castDoc []
       where
         match :: [(Text, Maybe EmbedEntityDef)]
@@ -1076,7 +1076,7 @@ instance DB.Val PersistValue where
   cast' (DB.RegEx (DB.Regex us1 us2))    = Just $ PersistByteString $ E.encodeUtf8 $ T.append us1 us2
   cast' (DB.Doc doc)  = Just $ PersistMap $ assocListFromDoc doc
   cast' (DB.Array xs) = Just $ PersistList $ mapMaybe DB.cast' xs
-  cast' (DB.ObjId x)  = Just $ oidToPersistValue x 
+  cast' (DB.ObjId x)  = Just $ oidToPersistValue x
   cast' (DB.JavaScr _) = throw $ PersistMongoDBUnsupported "cast operation not supported for javascript"
   cast' (DB.Sym _)     = throw $ PersistMongoDBUnsupported "cast operation not supported for sym"
   cast' (DB.Stamp _)   = throw $ PersistMongoDBUnsupported "cast operation not supported for stamp"
@@ -1094,7 +1094,7 @@ instance Serialize.Serialize DB.ObjectId where
 
   get = do w1 <- Serialize.get
            w2 <- Serialize.get
-           return (DB.Oid w1 w2) 
+           return (DB.Oid w1 w2)
 
 dummyFromUnique :: Unique v -> v
 dummyFromUnique _ = error "dummyFromUnique"
