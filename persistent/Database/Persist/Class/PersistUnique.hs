@@ -92,8 +92,8 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) => PersistUniqueWri
 -- | Insert a value, checking for conflicts with any unique constraints.  If a
 -- duplicate exists in the database, it is returned as 'Left'. Otherwise, the
 -- new 'Key is returned as 'Right'.
-insertBy :: (MonadIO m, PersistEntity val, PersistUniqueWrite backend, PersistEntityBackend val ~ BaseBackend backend)
-         => val -> ReaderT backend m (Either (Entity val) (Key val))
+insertBy :: (MonadIO m, PersistEntity record, PersistUniqueWrite backend, PersistEntityBackend record ~ BaseBackend backend)
+         => record -> ReaderT backend m (Either (Entity record) (Key record))
 insertBy val = do
     res <- getByValue val
     case res of
@@ -103,8 +103,8 @@ insertBy val = do
 -- | Insert a value, checking for conflicts with any unique constraints. If a
 -- duplicate exists in the database, it is left untouched. The key of the
 -- existing or new entry is returned
-insertOrGet :: (MonadIO m, PersistEntity val, PersistUniqueWrite backend, PersistEntityBackend val ~ backend)
-            => val -> ReaderT backend m (Key val)
+insertOrGet :: (MonadIO m, PersistEntity record, PersistUniqueWrite backend, PersistEntityBackend record ~ BaseBackend backend)
+            => record -> ReaderT backend m (Key record)
 insertOrGet val = do
     res <- getByValue val
     case res of
