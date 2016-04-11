@@ -2,6 +2,9 @@
 
 * aeson 0.11
 * transformers 0.5
+## 2.1.4
+
+support http-api-data for url serialization
 
 ## 2.1.3.3
 

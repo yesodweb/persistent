@@ -14,6 +14,7 @@
 ## 2.2.2
 
 * Add liftSqlPersistMPool function
+* support http-api-data for url serialization
 
 ## 2.2.1
 
