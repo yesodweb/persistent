@@ -232,20 +232,23 @@ convertPV f = (f .) . MySQL.convert
 -- | Get the corresponding @'Getter' 'PersistValue'@ depending on
 -- the type of the column.
 getGetter :: MySQLBase.Field -> Getter PersistValue
-getGetter field = go (MySQLBase.fieldType field) (MySQLBase.fieldCharSet field)
+getGetter field = go (MySQLBase.fieldType field) 
+                        (MySQLBase.fieldLength field)
+                            (MySQLBase.fieldCharSet field)
   where
     -- Bool
-    go MySQLBase.Tiny       _  = convertPV PersistBool
+    go MySQLBase.Tiny       1 _ = convertPV PersistBool
+    go MySQLBase.Tiny       _ _ = convertPV PersistInt64
     -- Int64
-    go MySQLBase.Int24      _  = convertPV PersistInt64
-    go MySQLBase.Short      _  = convertPV PersistInt64
-    go MySQLBase.Long       _  = convertPV PersistInt64
-    go MySQLBase.LongLong   _  = convertPV PersistInt64
+    go MySQLBase.Int24      _ _ = convertPV PersistInt64
+    go MySQLBase.Short      _ _ = convertPV PersistInt64
+    go MySQLBase.Long       _ _ = convertPV PersistInt64
+    go MySQLBase.LongLong   _ _ = convertPV PersistInt64
     -- Double
-    go MySQLBase.Float      _  = convertPV PersistDouble
-    go MySQLBase.Double     _  = convertPV PersistDouble
-    go MySQLBase.Decimal    _  = convertPV PersistDouble
-    go MySQLBase.NewDecimal _  = convertPV PersistDouble
+    go MySQLBase.Float      _ _ = convertPV PersistDouble
+    go MySQLBase.Double     _ _ = convertPV PersistDouble
+    go MySQLBase.Decimal    _ _ = convertPV PersistDouble
+    go MySQLBase.NewDecimal _ _ = convertPV PersistDouble
 
     -- ByteString and Text
 
@@ -253,43 +256,43 @@ getGetter field = go (MySQLBase.fieldType field) (MySQLBase.fieldCharSet field)
     -- (e.g. both BLOB and TEXT have the MySQLBase.Blob type).
     -- Instead, the character set distinguishes them. Binary data uses character set number 63.
     -- See https://dev.mysql.com/doc/refman/5.6/en/c-api-data-structures.html (Search for "63")
-    go MySQLBase.VarChar    63 = convertPV PersistByteString
-    go MySQLBase.VarString  63 = convertPV PersistByteString
-    go MySQLBase.String     63 = convertPV PersistByteString
+    go MySQLBase.VarChar    _ 63 = convertPV PersistByteString
+    go MySQLBase.VarString  _ 63 = convertPV PersistByteString
+    go MySQLBase.String     _ 63 = convertPV PersistByteString
 
-    go MySQLBase.VarChar    _  = convertPV PersistText
-    go MySQLBase.VarString  _  = convertPV PersistText
-    go MySQLBase.String     _  = convertPV PersistText
+    go MySQLBase.VarChar    _ _  = convertPV PersistText
+    go MySQLBase.VarString  _ _  = convertPV PersistText
+    go MySQLBase.String     _ _  = convertPV PersistText
     
-    go MySQLBase.Blob       63 = convertPV PersistByteString
-    go MySQLBase.TinyBlob   63 = convertPV PersistByteString
-    go MySQLBase.MediumBlob 63 = convertPV PersistByteString
-    go MySQLBase.LongBlob   63 = convertPV PersistByteString
+    go MySQLBase.Blob       _ 63 = convertPV PersistByteString
+    go MySQLBase.TinyBlob   _ 63 = convertPV PersistByteString
+    go MySQLBase.MediumBlob _ 63 = convertPV PersistByteString
+    go MySQLBase.LongBlob   _ 63 = convertPV PersistByteString
 
-    go MySQLBase.Blob       _  = convertPV PersistText
-    go MySQLBase.TinyBlob   _  = convertPV PersistText
-    go MySQLBase.MediumBlob _  = convertPV PersistText
-    go MySQLBase.LongBlob   _  = convertPV PersistText
+    go MySQLBase.Blob       _ _  = convertPV PersistText
+    go MySQLBase.TinyBlob   _ _  = convertPV PersistText
+    go MySQLBase.MediumBlob _ _  = convertPV PersistText
+    go MySQLBase.LongBlob   _ _  = convertPV PersistText
 
     -- Time-related
-    go MySQLBase.Time       _  = convertPV PersistTimeOfDay
-    go MySQLBase.DateTime   _  = convertPV PersistUTCTime
-    go MySQLBase.Timestamp  _  = convertPV PersistUTCTime
-    go MySQLBase.Date       _  = convertPV PersistDay
-    go MySQLBase.NewDate    _  = convertPV PersistDay
-    go MySQLBase.Year       _  = convertPV PersistDay
+    go MySQLBase.Time       _ _  = convertPV PersistTimeOfDay
+    go MySQLBase.DateTime   _ _  = convertPV PersistUTCTime
+    go MySQLBase.Timestamp  _ _  = convertPV PersistUTCTime
+    go MySQLBase.Date       _ _  = convertPV PersistDay
+    go MySQLBase.NewDate    _ _  = convertPV PersistDay
+    go MySQLBase.Year       _ _  = convertPV PersistDay
     -- Null
-    go MySQLBase.Null       _  = \_ _ -> PersistNull
+    go MySQLBase.Null       _ _  = \_ _ -> PersistNull
     -- Controversial conversions
-    go MySQLBase.Set        _  = convertPV PersistText
-    go MySQLBase.Enum       _  = convertPV PersistText
+    go MySQLBase.Set        _ _  = convertPV PersistText
+    go MySQLBase.Enum       _ _  = convertPV PersistText
     -- Conversion using PersistDbSpecific
-    go MySQLBase.Geometry   _  = \_ m ->
+    go MySQLBase.Geometry   _ _  = \_ m ->
       case m of
         Just g -> PersistDbSpecific g
         Nothing -> error "Unexpected null in database specific value"
     -- Unsupported
-    go other _ = error $ "MySQL.getGetter: type " ++
+    go other _ _ = error $ "MySQL.getGetter: type " ++
                       show other ++ " not supported."
 
 
