@@ -1,3 +1,7 @@
+## 2.2.2
+
+* Upgrade to SQLite 3.12.1 [#551](https://github.com/yesodweb/persistent/issues/551)
+
 ## 2.2.1
 
 * Upgrade to SQLite 3.8.11.1 [#444](https://github.com/yesodweb/persistent/pull/444)
