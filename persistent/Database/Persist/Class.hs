@@ -64,12 +64,15 @@ import Database.Persist.Class.PersistConfig
 import Database.Persist.Class.PersistField
 import Database.Persist.Class.PersistStore
 
--- | This type synonym provides backward compatibility with `persistent` prior to the read-write split.
+
+-- | A backwards-compatible alias for those that don't care about distinguishing between read and write queries.
 -- It signifies the assumption that, by default, a backend can write as well as read.
 type PersistUnique a = PersistUniqueWrite a
--- | This type synonym provides backward compatibility with `persistent` prior to the read-write split.
+
+-- | A backwards-compatible alias for those that don't care about distinguishing between read and write queries.
 -- It signifies the assumption that, by default, a backend can write as well as read.
 type PersistQuery a = PersistQueryWrite a
--- | This type synonym provides backward compatibility with `persistent` prior to the read-write split.
+
+-- | A backwards-compatible alias for those that don't care about distinguishing between read and write queries.
 -- It signifies the assumption that, by default, a backend can write as well as read.
 type PersistStore a = PersistStoreWrite a
