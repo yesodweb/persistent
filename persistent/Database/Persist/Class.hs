@@ -9,6 +9,7 @@ module Database.Persist.Class
     , PersistStoreRead (..)
     , PersistStoreWrite (..)
     , BaseBackend(..)
+    , PersistRecordBackend
     , getJust
     , belongsTo
     , belongsToJust

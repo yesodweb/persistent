@@ -5,6 +5,7 @@
 module Database.Persist.Class.PersistStore
     ( HasPersistBackend (..)
     , IsPersistBackend (..)
+    , PersistRecordBackend
     , liftPersist
     , PersistCore (..)
     , PersistStoreRead (..)
@@ -44,6 +45,9 @@ class (HasPersistBackend backend) => IsPersistBackend backend where
     -- to accidentally run a write query against a read-only database.
     mkPersistBackend :: BaseBackend backend -> backend
 
+-- | A convenient alias for common type signatures
+type PersistRecordBackend record backend = (PersistEntity record, PersistEntityBackend record ~ BaseBackend backend)
+
 liftPersist
     :: (MonadIO m, MonadReader backend m, HasPersistBackend backend)
     => ReaderT (BaseBackend backend) IO b -> m b
@@ -77,8 +81,8 @@ class
   , PersistField (BackendKey backend), A.ToJSON (BackendKey backend), A.FromJSON (BackendKey backend)
   ) => PersistStoreRead backend where
     -- | Get a record by identifier, if available.
-    get :: (MonadIO m, BaseBackend backend ~ PersistEntityBackend val, PersistEntity val)
-        => Key val -> ReaderT backend m (Maybe val)
+    get :: (MonadIO m, PersistRecordBackend record backend)
+        => Key record -> ReaderT backend m (Maybe record)
 
 class
   ( Show (BackendKey backend), Read (BackendKey backend)
@@ -89,13 +93,13 @@ class
 
     -- | Create a new record in the database, returning an automatically created
     -- key (in SQL an auto-increment id).
-    insert :: (MonadIO m, (BaseBackend backend) ~ PersistEntityBackend val, PersistEntity val)
-           => val -> ReaderT backend m (Key val)
+    insert :: (MonadIO m, PersistRecordBackend record backend)
+           => record -> ReaderT backend m (Key record)
 
     -- | Same as 'insert', but doesn't return a @Key@.
-    insert_ :: (MonadIO m, (BaseBackend backend) ~ PersistEntityBackend val, PersistEntity val)
-            => val -> ReaderT backend m ()
-    insert_ val = insert val >> return ()
+    insert_ :: (MonadIO m, PersistRecordBackend record backend)
+            => record -> ReaderT backend m ()
+    insert_ record = insert record >> return ()
 
     -- | Create multiple records in the database and return their 'Key's.
     --
