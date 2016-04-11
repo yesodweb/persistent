@@ -103,7 +103,7 @@ insertBy val = do
 -- | Insert a value, checking for conflicts with any unique constraints. If a
 -- duplicate exists in the database, it is left untouched. The key of the
 -- existing or new entry is returned
-insertOrGet :: (MonadIO m, PersistEntity val, PersistUnique backend, PersistEntityBackend val ~ backend)
+insertOrGet :: (MonadIO m, PersistEntity val, PersistUniqueWrite backend, PersistEntityBackend val ~ backend)
             => val -> ReaderT backend m (Key val)
 insertOrGet val = do
     res <- getByValue val
