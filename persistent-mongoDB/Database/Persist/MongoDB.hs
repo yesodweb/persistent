@@ -995,7 +995,6 @@ orderPersistValues entDef castDoc = reorder
         -- allow extra mongoDB fields that persistent does not know about
         -- another application may use fields we don't care about
         -- our own application may set extra fields with the raw driver
-        -- TODO: instead use a projection to avoid network overhead
         match [] _ values = values
         match (column:columns) fields values =
           let (found, unused) = matchOne fields []
