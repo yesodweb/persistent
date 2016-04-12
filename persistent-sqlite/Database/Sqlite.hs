@@ -43,7 +43,9 @@ import qualified Data.ByteString.Internal as BSI
 import Foreign
 import Foreign.C
 import Control.Exception (Exception, throwIO)
+import Control.Applicative ((<$>))
 import Database.Persist (PersistValue (..), listToJSON, mapToJSON)
+import Data.Bits ((.|.))
 import Data.Text (Text, pack, unpack)
 import Data.Text.Encoding (encodeUtf8, decodeUtf8With)
 import Data.Text.Encoding.Error (lenientDecode)
@@ -187,21 +189,22 @@ foreign import ccall "sqlite3_open_v2"
   openC :: CString -> Ptr (Ptr ()) -> Int -> CString -> IO Int
 openError :: Text -> Bool -> IO (Either Connection Error)
 openError path' readOnlyFlag = do
-  -- https://www.sqlite.org/c3ref/open.html
-  -- 1 = SQLITE_OPEN_READONLY
-  -- 6 = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE (behavior of sqlite3_open)
-  let flag = if readOnlyFlag then 1 else 6
-  BS.useAsCString (encodeUtf8 path')
-                  (\path -> do
-                      alloca (\database -> do
-                                error' <- openC path database flag nullPtr
-                                error <- return $ decodeError error'
-                                case error of
-                                  ErrorOK -> do
-                                             database' <- peek database
-                                             active <- newIORef True
-                                             return $ Left $ Connection active $ Connection' database'
-                                  _ -> return $ Right error))
+    let flag = if readOnlyFlag
+            then sqliteFlagReadOnly
+            else sqliteFlagReadWrite .|. sqliteFlagCreate
+    BS.useAsCString (encodeUtf8 path') $ \path -> alloca $ \database -> do
+        err <- decodeError <$> openC path database flag nullPtr
+        case err of
+            ErrorOK -> do database' <- peek database
+                          active <- newIORef True
+                          return $ Left $ Connection active $ Connection' database'
+            _ -> return $ Right err
+  where
+    -- for all sqlite flags, check out https://www.sqlite.org/c3ref/open.html
+    sqliteFlagReadOnly  = 1
+    sqliteFlagReadWrite = 2
+    sqliteFlagCreate    = 4
+
 open :: Text -> Bool -> IO Connection
 open path readOnlyFlag = do
   databaseOrError <- openError path readOnlyFlag
