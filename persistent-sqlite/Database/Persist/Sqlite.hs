@@ -58,21 +58,14 @@ withSqliteConn = withSqlConn . open'
 
 open' :: Text -> LogFunc -> IO SqlBackend
 open' connStr logFunc = do
-    let (connStr', readOnly) = removeFirst "READONLY " connStr
-    let (connStr'', enableWal) = case () of
+    let (connStr', enableWal) = case () of
           ()
-            | Just cs <- T.stripPrefix "WAL=on "  connStr' -> (cs, True)
-            | Just cs <- T.stripPrefix "WAL=off " connStr' -> (cs, False)
-            | otherwise                                    -> (connStr', True)
+            | Just cs <- T.stripPrefix "WAL=on "  connStr -> (cs, True)
+            | Just cs <- T.stripPrefix "WAL=off " connStr -> (cs, False)
+            | otherwise                                   -> (connStr, True)
 
-    conn <- Sqlite.open connStr'' readOnly
+    conn <- Sqlite.open connStr'
     wrapConnectionWal enableWal conn logFunc
-  where
-    removeFirst :: Text -> Text -> (Text, Bool)
-    removeFirst sub str = case T.splitOn sub str of
-        [_]    -> (str, False)
-        _:strs -> (T.intercalate sub strs, True)
-        []     -> (str, False) -- impossible case, splitOn never returns []
 
 -- | Wrap up a raw 'Sqlite.Connection' as a Persistent SQL 'Connection'.
 --

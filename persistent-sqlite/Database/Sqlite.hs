@@ -187,11 +187,9 @@ sqlError maybeConnection functionName error = do
 
 foreign import ccall "sqlite3_open_v2"
   openC :: CString -> Ptr (Ptr ()) -> Int -> CString -> IO Int
-openError :: Text -> Bool -> IO (Either Connection Error)
-openError path' readOnlyFlag = do
-    let flag = if readOnlyFlag
-            then sqliteFlagReadOnly
-            else sqliteFlagReadWrite .|. sqliteFlagCreate
+openError :: Text -> IO (Either Connection Error)
+openError path' = do
+    let flag = sqliteFlagReadWrite .|. sqliteFlagCreate .|. sqliteFlagUri
     BS.useAsCString (encodeUtf8 path') $ \path -> alloca $ \database -> do
         err <- decodeError <$> openC path database flag nullPtr
         case err of
@@ -201,13 +199,13 @@ openError path' readOnlyFlag = do
             _ -> return $ Right err
   where
     -- for all sqlite flags, check out https://www.sqlite.org/c3ref/open.html
-    sqliteFlagReadOnly  = 1
-    sqliteFlagReadWrite = 2
-    sqliteFlagCreate    = 4
+    sqliteFlagReadWrite = 0x2
+    sqliteFlagCreate    = 0x4
+    sqliteFlagUri       = 0x40
 
-open :: Text -> Bool -> IO Connection
-open path readOnlyFlag = do
-  databaseOrError <- openError path readOnlyFlag
+open :: Text -> IO Connection
+open path = do
+  databaseOrError <- openError path
   case databaseOrError of
     Left database -> return database
     Right error -> sqlError Nothing ("open " `mappend` (pack $ show path)) error
