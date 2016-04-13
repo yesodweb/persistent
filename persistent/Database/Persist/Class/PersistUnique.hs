@@ -38,7 +38,7 @@ import Data.Text (unpack, Text)
 --
 class (PersistCore backend, PersistStoreRead backend) => PersistUniqueRead backend where
     -- | Get a record by unique key, if available. Returns also the identifier.
-    getBy :: (MonadIO m, BaseBackend backend ~ PersistEntityBackend val, PersistEntity val) => Unique val -> ReaderT backend m (Maybe (Entity val))
+    getBy :: (MonadIO m, PersistRecordBackend record backend) => Unique record -> ReaderT backend m (Maybe (Entity record))
 
 -- | Some functions in this module ('insertUnique', 'insertBy', and
 -- 'replaceUnique') first query the unique indexes to check for
@@ -53,11 +53,11 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) => PersistUniqueWri
 
     -- | Delete a specific record by unique key. Does nothing if no record
     -- matches.
-    deleteBy :: (MonadIO m, PersistEntityBackend val ~ BaseBackend backend, PersistEntity val) => Unique val -> ReaderT backend m ()
+    deleteBy :: (MonadIO m, PersistRecordBackend record backend) => Unique record -> ReaderT backend m ()
 
     -- | Like 'insert', but returns 'Nothing' when the record
     -- couldn't be inserted because of a uniqueness constraint.
-    insertUnique :: (MonadIO m, PersistEntityBackend val ~ BaseBackend backend, PersistEntity val) => val -> ReaderT backend m (Maybe (Key val))
+    insertUnique :: (MonadIO m, PersistRecordBackend record backend) => record -> ReaderT backend m (Maybe (Key record))
     insertUnique datum = do
         conflict <- checkUnique datum
         case conflict of
@@ -70,13 +70,13 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) => PersistUniqueWri
     -- * update the existing record that matches the uniqueness contraint.
     --
     -- Throws an exception if there is more than 1 uniqueness contraint.
-    upsert :: (MonadIO m, PersistEntityBackend val ~ BaseBackend backend, PersistEntity val)
-           => val          -- ^ new record to insert
-           -> [Update val]
+    upsert :: (MonadIO m, PersistRecordBackend record backend)
+           => record          -- ^ new record to insert
+           -> [Update record]
            -- ^ updates to perform if the record already exists (leaving
            -- this empty is the equivalent of performing a 'repsert' on a
            -- unique key)
-           -> ReaderT backend m (Entity val)
+           -> ReaderT backend m (Entity record)
            -- ^ the record in the database after the operation
     upsert record updates = do
         uniqueKey <- onlyUnique record
@@ -112,13 +112,13 @@ insertOrGet val = do
         Just (Entity key _) -> return key
 
 -- | Return the single unique key for a record.
-onlyUnique :: (MonadIO m, PersistEntity val, PersistUniqueWrite backend, PersistEntityBackend val ~ BaseBackend backend)
-           => val -> ReaderT backend m (Unique val)
+onlyUnique :: (MonadIO m, PersistUniqueWrite backend, PersistRecordBackend record backend)
+           => record -> ReaderT backend m (Unique record)
 onlyUnique record = case onlyUniqueEither record of
     Right u -> return u
     Left us -> requireUniques record us >>= liftIO . throwIO . OnlyUniqueException . show . length
 
-onlyUniqueEither :: (PersistEntity val) => val -> Either [Unique val] (Unique val)
+onlyUniqueEither :: (PersistEntity record) => record -> Either [Unique record] (Unique record)
 onlyUniqueEither record = case persistUniqueKeys record of
     [u] -> Right u
     us  -> Left us
@@ -127,7 +127,7 @@ onlyUniqueEither record = case persistUniqueKeys record of
 -- of a 'Unique' record. Returns a record matching /one/ of the unique keys. This
 -- function makes the most sense on entities with a single 'Unique'
 -- constructor.
-getByValue :: (MonadIO m, PersistEntity record, PersistUniqueRead backend, PersistEntityBackend record ~ BaseBackend backend)
+getByValue :: (MonadIO m, PersistUniqueRead backend, PersistRecordBackend record backend)
            => record -> ReaderT backend m (Maybe (Entity record))
 getByValue record = checkUniques =<< requireUniques record (persistUniqueKeys record)
   where
@@ -156,7 +156,7 @@ recordName = unHaskellName . entityHaskell . entityDef . Just
 -- If uniqueness is violated, return a 'Just' with the 'Unique' violation
 --
 -- Since 1.2.2.0
-replaceUnique :: (MonadIO m, Eq record, Eq (Unique record), PersistEntityBackend record ~ BaseBackend backend, PersistEntity record, PersistUniqueWrite backend)
+replaceUnique :: (MonadIO m, Eq record, Eq (Unique record), PersistRecordBackend record backend, PersistUniqueWrite backend)
               => Key record -> record -> ReaderT backend m (Maybe (Unique record))
 replaceUnique key datumNew = getJust key >>= replaceOriginal
   where
@@ -175,11 +175,11 @@ replaceUnique key datumNew = getJust key >>= replaceOriginal
 --
 -- Returns 'Nothing' if the entity would be unique, and could thus safely be inserted.
 -- on a conflict returns the conflicting key
-checkUnique :: (MonadIO m, PersistEntityBackend record ~ BaseBackend backend, PersistEntity record, PersistUniqueRead backend)
+checkUnique :: (MonadIO m, PersistRecordBackend record backend, PersistUniqueRead backend)
             => record -> ReaderT backend m (Maybe (Unique record))
 checkUnique = checkUniqueKeys . persistUniqueKeys
 
-checkUniqueKeys :: (MonadIO m, PersistEntity record, PersistUniqueRead backend, PersistEntityBackend record ~ BaseBackend backend)
+checkUniqueKeys :: (MonadIO m, PersistEntity record, PersistUniqueRead backend, PersistRecordBackend record backend)
                 => [Unique record] -> ReaderT backend m (Maybe (Unique record))
 checkUniqueKeys [] = return Nothing
 checkUniqueKeys (x:xs) = do
