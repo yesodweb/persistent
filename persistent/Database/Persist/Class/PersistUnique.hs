@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE TypeFamilies, FlexibleContexts #-}
+{-# LANGUAGE TypeFamilies, FlexibleContexts, ConstraintKinds #-}
 module Database.Persist.Class.PersistUnique
     ( PersistUniqueRead (..)
     , PersistUniqueWrite (..)
