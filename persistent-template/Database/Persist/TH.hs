@@ -48,7 +48,11 @@ import Database.Persist
 import Database.Persist.Class (HasPersistBackend(..), BaseBackend)
 import Database.Persist.Sql (Migration, migrate, SqlBackend, PersistFieldSql)
 import Database.Persist.Quasi
-import Language.Haskell.TH.Lib (varE)
+import Language.Haskell.TH.Lib (
+#if MIN_VERSION_template_haskell(2,11,0)
+    conT,
+#endif
+    varE)
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
@@ -397,14 +401,21 @@ upperFirst t =
         Just (a, b) -> cons (toUpper a) b
         Nothing -> t
 
-dataTypeDec :: MkPersistSettings -> EntityDef -> Dec
-dataTypeDec mps t =
-    DataD [] nameFinal paramsFinal constrs
-    $ map (mkName . unpack) $ entityDerives t
+dataTypeDec :: MkPersistSettings -> EntityDef -> Q Dec
+dataTypeDec mps t = do
+    let names = map (mkName . unpack) $ entityDerives t
+#if MIN_VERSION_template_haskell(2,11,0)
+    DataD [] nameFinal paramsFinal
+                Nothing
+                constrs
+                <$> mapM conT names
+#else
+    return $ DataD [] nameFinal paramsFinal constrs names
+#endif
   where
     mkCol x fd@FieldDef {..} =
         (mkName $ unpack $ recName mps x fieldHaskell,
-         if fieldStrict then IsStrict else NotStrict,
+         if fieldStrict then isStrict else notStrict,
          maybeIdType mps fd Nothing Nothing
         )
     (nameFinal, paramsFinal)
@@ -421,7 +432,7 @@ dataTypeDec mps t =
 
     sumCon fd = NormalC
         (sumConstrName mps t fd)
-        [(NotStrict, maybeIdType mps fd Nothing Nothing)]
+        [(notStrict, maybeIdType mps fd Nothing Nothing)]
 
 sumConstrName :: MkPersistSettings -> EntityDef -> FieldDef -> Name
 sumConstrName mps t FieldDef {..} = mkName $ unpack $ concat
@@ -436,6 +447,9 @@ uniqueTypeDec :: MkPersistSettings -> EntityDef -> Dec
 uniqueTypeDec mps t =
     DataInstD [] ''Unique
         [genericDataType mps (entityHaskell t) backendT]
+#if MIN_VERSION_template_haskell(2,11,0)
+            Nothing
+#endif
             (map (mkUnique mps t) $ entityUniques t)
             []
 
@@ -450,7 +464,7 @@ mkUnique mps t (UniqueDef (HaskellName constr) _ fields attrs) =
 
     go :: (FieldDef, IsNullable) -> (Strict, Type)
     go (_, Nullable _) | not force = error nullErrMsg
-    go (fd, y) = (NotStrict, maybeIdType mps fd Nothing (Just y))
+    go (fd, y) = (notStrict, maybeIdType mps fd Nothing (Just y))
 
     lookup3 :: Text -> [FieldDef] -> (FieldDef, IsNullable)
     lookup3 s [] =
@@ -692,9 +706,16 @@ mkKeyTypeDec mps t = do
                         bi <- backendKeyI
                         return (bi, allInstances)
 
+#if MIN_VERSION_template_haskell(2,11,0)
+    cxti <- mapM conT i
+    let kd = if useNewtype
+               then NewtypeInstD [] k [recordType] Nothing dec cxti
+               else DataInstD    [] k [recordType] Nothing [dec] cxti
+#else
     let kd = if useNewtype
                then NewtypeInstD [] k [recordType] dec i
                else DataInstD    [] k [recordType] [dec] i
+#endif
     return (kd, instDecs)
   where
     keyConE = keyConExp t
@@ -828,9 +849,9 @@ keyFields mps t = case entityPrimary t of
     backendKeyType
         | mpsGeneric mps = ConT ''BackendKey `AppT` backendT
         | otherwise      = ConT ''BackendKey `AppT` mpsBackend mps
-    idKeyVar ft = (unKeyName t, NotStrict, ft)
+    idKeyVar ft = (unKeyName t, notStrict, ft)
     primaryKeyVar fd = ( keyFieldName mps t fd
-                       , NotStrict
+                       , notStrict
                        , ftToType $ fieldType fd
                        )
 
@@ -940,8 +961,9 @@ mkEntity mps t = do
     let instanceConstraint = if not (mpsGeneric mps) then [] else
           [mkClassP ''PersistStore [backendT]]
 
+    dtd <- dataTypeDec mps t
     return $ addSyn $
-       dataTypeDec mps t : mconcat fkc `mappend`
+       dtd : mconcat fkc `mappend`
       ([ TySynD (keyIdName t) [] $
             ConT ''Key `AppT` ConT (mkName nameS)
       , InstanceD instanceConstraint clazz $
@@ -961,6 +983,9 @@ mkEntity mps t = do
             [ genDataType
             , VarT $ mkName "typ"
             ]
+#if MIN_VERSION_template_haskell(2,11,0)
+            Nothing
+#endif
             (map fst fields)
             []
         , FunD 'persistFieldDef (map snd fields)
@@ -1560,6 +1585,21 @@ mkEqualP tleft tright = foldl AppT EqualityT [tleft, tright]
 #else
 mkEqualP = EqualP
 #endif
+
+#if MIN_VERSION_template_haskell(2,11,0)
+notStrict :: Bang
+notStrict = Bang NoSourceUnpackedness NoSourceStrictness
+
+isStrict :: Bang
+isStrict = Bang NoSourceUnpackedness SourceStrict
+#else
+notStrict :: Strict
+notStrict = NotStrict
+
+isStrict :: Strict
+isStrict = IsStrict
+#endif
+
 
 -- entityUpdates :: EntityDef -> [(HaskellName, FieldType, IsNullable, PersistUpdate)]
 -- entityUpdates =
