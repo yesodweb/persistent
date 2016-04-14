@@ -1,3 +1,7 @@
+## 2.5
+
+* read/write typeclass split
+
 ## 2.1.6
 
 * aeson 0.11
