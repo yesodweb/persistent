@@ -1,3 +1,7 @@
+## 2.5
+
+* changes for read/write typeclass split
+
 ## 2.1.4
 
 * support http-api-data for url serialization

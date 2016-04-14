@@ -1,3 +1,7 @@
+## 2.5
+
+* changes for read/write typeclass split
+
 ## 2.2.2
 
 * Upgrade to SQLite 3.12.1 [#551](https://github.com/yesodweb/persistent/issues/551)

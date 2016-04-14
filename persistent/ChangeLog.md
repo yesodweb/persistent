@@ -1,3 +1,8 @@
+## 2.5
+
+* read/write typeclass split
+* add insertOrGet convenience function to PersistUnique
+
 ## 2.2.4.1
 
 * Documentation updates [#515](https://github.com/yesodweb/persistent/pull/515)

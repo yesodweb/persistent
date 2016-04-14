@@ -1,3 +1,7 @@
+## 2.5
+
+* changes for read/write typeclass split
+
 ## 2.3.0.1
 
 Support usign default= for changing the id field type
