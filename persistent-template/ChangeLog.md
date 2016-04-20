@@ -1,3 +1,7 @@
+## 2.1.7
+
+* Support for GHC 8 [#556](https://github.com/yesodweb/persistent/issues/556)
+
 ## 2.1.6
 
 * aeson 0.11
