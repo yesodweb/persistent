@@ -1,3 +1,7 @@
+## 2.5.0.1
+
+* workaround TH bug in GHC 7.10
+
 ## 2.5
 
 * read/write typeclass split

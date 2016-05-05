@@ -81,6 +81,14 @@ import Web.HttpApiData (ToHttpApiData(..), FromHttpApiData(..), parseUrlPieceMay
 import GHC.Generics (Generic)
 import qualified Data.Text.Encoding as TE
 
+-- | This special-cases "type_" and strips out its underscore. When
+-- used for JSON serialization and deserialization, it works around
+-- <https://github.com/yesodweb/persistent/issues/412>
+unHaskellNameForJSON :: HaskellName -> Text
+unHaskellNameForJSON = fixTypeUnderscore . unHaskellName
+  where fixTypeUnderscore "type_" = "type"
+        fixTypeUnderscore name = name
+
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
 persistWith :: PersistSettings -> QuasiQuoter
