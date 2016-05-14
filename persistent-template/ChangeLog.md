@@ -1,3 +1,7 @@
+## 2.5.1.2
+
+* fix a bad Eq instance /= definition for Key when mpsGenetric=True
+
 ## 2.5.0.1
 
 * workaround TH bug in GHC 7.10
