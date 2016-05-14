@@ -775,9 +775,6 @@ mkKeyTypeDec mps t = do
                 x == y =
                     ($(return unKeyE) x) ==
                     ($(return unKeyE) y)
-                x /= y =
-                    ($(return unKeyE) x) ==
-                    ($(return unKeyE) y)
              instance Ord (BackendKey $(pure backendT)) => Ord (Key $(pure recordType)) where
                 compare x y = compare
                     ($(return unKeyE) x)
