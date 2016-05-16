@@ -46,7 +46,9 @@ library
         include-dirs: cbits
         cc-options:  -fPIC -std=c99
 
-    c-sources: cbits/config.c
+    c-sources: 
+        cbits/config.c
+        cbits/fix.c
 
     if !os(windows)
         extra-libraries: pthread
