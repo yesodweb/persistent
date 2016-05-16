@@ -1,3 +1,7 @@
+## 2.5.0.1
+
+* Reapply workaround for https://ghc.haskell.org/trac/ghc/ticket/7072 [#561](https://github.com/yesodweb/persistent/pull/561)
+
 ## 2.5
 
 * changes for read/write typeclass split
