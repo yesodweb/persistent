@@ -86,7 +86,7 @@ import qualified Data.Text.Encoding as TE
 -- <https://github.com/yesodweb/persistent/issues/412>
 unHaskellNameForJSON :: HaskellName -> Text
 unHaskellNameForJSON = fixTypeUnderscore . unHaskellName
-  where fixTypeUnderscore "type_" = "type"
+  where fixTypeUnderscore "type" = "type_"
         fixTypeUnderscore name = name
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
@@ -1528,7 +1528,7 @@ mkJSON mps def = do
     obj <- newName "obj"
     mzeroE <- [|mzero|]
 
-    xs <- mapM (newName . unpack . unHaskellName . fieldHaskell)
+    xs <- mapM (newName . unpack . unHaskellNameForJSON . fieldHaskell)
         $ entityFields def
 
     let conName = mkName $ unpack $ unHaskellName $ entityHaskell def
@@ -1539,7 +1539,7 @@ mkJSON mps def = do
             (objectE `AppE` ListE pairs)
         pairs = zipWith toPair (entityFields def) xs
         toPair f x = InfixE
-            (Just (packE `AppE` LitE (StringL $ unpack $ unHaskellNameForJSON $ fieldHaskell f)))
+            (Just (packE `AppE` LitE (StringL $ unpack $ unHaskellName $ fieldHaskell f)))
             dotEqualE
             (Just $ VarE x)
         fromJSONI = typeInstanceD ''FromJSON (mpsGeneric mps) typ [parseJSON']
@@ -1556,7 +1556,7 @@ mkJSON mps def = do
         toPull f = InfixE
             (Just $ VarE obj)
             (if maybeNullable f then dotColonQE else dotColonE)
-            (Just $ AppE packE $ LitE $ StringL $ unpack $ unHaskellNameForJSON $ fieldHaskell f)
+            (Just $ AppE packE $ LitE $ StringL $ unpack $ unHaskellName $ fieldHaskell f)
     case mpsEntityJSON mps of
         Nothing -> return [toJSONI, fromJSONI]
         Just entityJSON -> do
