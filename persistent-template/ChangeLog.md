@@ -1,3 +1,7 @@
+## 2.5.1.3
+
+* fix GHC 7.8 bug when a field name is "type"
+
 ## 2.5.1.2
 
 * fix a bad Eq instance /= definition for Key when mpsGenetric=True
