@@ -1,5 +1,7 @@
 ## Learn more: http://yesodweb.com/book/persistent
 
+[![Join the chat at https://gitter.im/yesodweb/persistent](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/yesodweb/persistent?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 [![Build Status](https://travis-ci.org/yesodweb/persistent.svg?branch=master)](https://travis-ci.org/yesodweb/persistent)
 
 A Haskell datastore. Datastores are often referred to as "ORM"s. While 'O' traditionally means object, the concept can be generalized as:
@@ -13,7 +15,7 @@ Persistent's goal is to catch every possible error at compile-time, and it comes
 
 # Backend agnostic
 
-Supports PostgreSql, Sqlite, MongoDB, Redis, and ZooKeeper.
+Supports PostgreSql, Sqlite, MongoDB, Redis, ZooKeeper, and many other databases via [persistent-odbc](https://github.com/gbwey/persistent-odbc).
 The MySQL backend is in need of a maintainer. Currently there are issues with migrations and support for composite and primary keys is lacking.
 
 Persistent is designed to be adaptable to any datastore, and to allow multiple datastores to be used simultaneously.
@@ -30,11 +32,9 @@ One can always fall back to using the raw database driver or other lower-level o
 
 ## Install from source
 
-Install the Haskell Platform first. Clone this repo and run:
+clone the repo and run
 
-    cabal update
-    cabal install cabal-meta cabal-src
-    cabal-meta install
+    stack build
 
 # Developing persistent
 

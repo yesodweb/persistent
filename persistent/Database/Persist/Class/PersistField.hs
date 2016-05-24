@@ -1,8 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE OverloadedStrings #-}
 #ifndef NO_OVERLAP
@@ -14,6 +12,7 @@ module Database.Persist.Class.PersistField
     , getPersistMap
     ) where
 
+import Control.Arrow (second)
 import Database.Persist.Types.Base
 import Data.Time (Day(..), TimeOfDay, UTCTime, parseTime)
 #ifdef HIGH_PRECISION_DATE
@@ -53,6 +52,12 @@ import qualified Data.Vector as V
 import Data.Time (defaultTimeLocale)
 #else
 import System.Locale (defaultTimeLocale)
+#endif
+
+#if MIN_VERSION_base(4,8,0)
+import Numeric.Natural (Natural)
+#else
+import Control.Applicative ((<$>))
 #endif
 
 -- | A value which can be marshalled to and from a 'PersistValue'.
@@ -107,24 +112,36 @@ instance PersistField Int8 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i)  = Right $ fromIntegral i
     fromPersistValue (PersistDouble i) = Right (truncate i :: Int8) -- oracle
+    fromPersistValue (PersistByteString bs) = case readInt bs of  -- oracle
+                                               Just (i,"") -> Right $ fromIntegral i
+                                               xs -> error $ "PersistField Int8 failed parsing PersistByteString xs["++show xs++"] i["++show bs++"]"
     fromPersistValue x = Left $ T.pack $ "int8 Expected Integer, received: " ++ show x
 
 instance PersistField Int16 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i)  = Right $ fromIntegral i
     fromPersistValue (PersistDouble i) = Right (truncate i :: Int16) -- oracle
+    fromPersistValue (PersistByteString bs) = case readInt bs of  -- oracle
+                                               Just (i,"") -> Right $ fromIntegral i
+                                               xs -> error $ "PersistField Int16 failed parsing PersistByteString xs["++show xs++"] i["++show bs++"]"
     fromPersistValue x = Left $ T.pack $ "int16 Expected Integer, received: " ++ show x
 
 instance PersistField Int32 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i)  = Right $ fromIntegral i
     fromPersistValue (PersistDouble i) = Right (truncate i :: Int32) -- oracle
+    fromPersistValue (PersistByteString bs) = case readInt bs of  -- oracle
+                                               Just (i,"") -> Right $ fromIntegral i
+                                               xs -> error $ "PersistField Int32 failed parsing PersistByteString xs["++show xs++"] i["++show bs++"]"
     fromPersistValue x = Left $ T.pack $ "int32 Expected Integer, received: " ++ show x
 
 instance PersistField Int64 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i)  = Right $ fromIntegral i
     fromPersistValue (PersistDouble i) = Right (truncate i :: Int64) -- oracle
+    fromPersistValue (PersistByteString bs) = case readInt bs of  -- oracle
+                                               Just (i,"") -> Right $ fromIntegral i
+                                               xs -> error $ "PersistField Int64 failed parsing PersistByteString xs["++show xs++"] i["++show bs++"]"
     fromPersistValue x = Left $ T.pack $ "int64 Expected Integer, received: " ++ show x
 
 instance PersistField Word where
@@ -160,34 +177,34 @@ instance PersistField Double where
     fromPersistValue x = Left $ T.pack $ "Expected Double, received: " ++ show x
 
 instance (HasResolution a) => PersistField (Fixed a) where
-  toPersistValue = PersistRational . toRational
-  fromPersistValue (PersistRational r) = Right $ fromRational r
-  fromPersistValue (PersistText t) = case reads $ T.unpack t of --  NOTE: Sqlite can store rationals just as string
-    [(a, "")] -> Right a
-    _ -> Left $ "Can not read " <> t <> " as Fixed"
-  fromPersistValue (PersistDouble d) = Right $ realToFrac d
-  fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-  fromPersistValue x = Left $ "PersistField Fixed:Expected Rational, received: " <> T.pack (show x)
+    toPersistValue = PersistRational . toRational
+    fromPersistValue (PersistRational r) = Right $ fromRational r
+    fromPersistValue (PersistText t) = case reads $ T.unpack t of --  NOTE: Sqlite can store rationals just as string
+      [(a, "")] -> Right a
+      _ -> Left $ "Can not read " <> t <> " as Fixed"
+    fromPersistValue (PersistDouble d) = Right $ realToFrac d
+    fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
+    fromPersistValue x = Left $ "PersistField Fixed:Expected Rational, received: " <> T.pack (show x)
 
 instance PersistField Rational where
-  toPersistValue = PersistRational
-  fromPersistValue (PersistRational r) = Right r
-  fromPersistValue (PersistDouble d) = Right $ toRational d
-  fromPersistValue (PersistText t) = case reads $ T.unpack t of --  NOTE: Sqlite can store rationals just as string
-    [(a, "")] -> Right $ toRational (a :: Pico)
-    _ -> Left $ "Can not read " <> t <> " as Rational (Pico in fact)"
-  fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-  fromPersistValue (PersistByteString bs) = case double $ T.cons '0' $ T.decodeUtf8With T.lenientDecode bs of 
-                                              Right (ret,"") -> Right $ toRational ret
-                                              Right (a,b) -> Left $ "Invalid bytestring[" <> T.pack (show bs) <> "]: expected a double but returned " <> T.pack (show (a,b))
-                                              Left xs -> Left $ "Invalid bytestring[" <> T.pack (show bs) <> "]: expected a double but returned " <> T.pack (show xs)
-  fromPersistValue x = Left $ "PersistField Rational:Expected Rational, received: " <> T.pack (show x)
+    toPersistValue = PersistRational
+    fromPersistValue (PersistRational r) = Right r
+    fromPersistValue (PersistDouble d) = Right $ toRational d
+    fromPersistValue (PersistText t) = case reads $ T.unpack t of --  NOTE: Sqlite can store rationals just as string
+      [(a, "")] -> Right $ toRational (a :: Pico)
+      _ -> Left $ "Can not read " <> t <> " as Rational (Pico in fact)"
+    fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
+    fromPersistValue (PersistByteString bs) = case double $ T.cons '0' $ T.decodeUtf8With T.lenientDecode bs of
+                                                Right (ret,"") -> Right $ toRational ret
+                                                Right (a,b) -> Left $ "Invalid bytestring[" <> T.pack (show bs) <> "]: expected a double but returned " <> T.pack (show (a,b))
+                                                Left xs -> Left $ "Invalid bytestring[" <> T.pack (show bs) <> "]: expected a double but returned " <> T.pack (show xs)
+    fromPersistValue x = Left $ "PersistField Rational:Expected Rational, received: " <> T.pack (show x)
 
 instance PersistField Bool where
     toPersistValue = PersistBool
     fromPersistValue (PersistBool b) = Right b
     fromPersistValue (PersistInt64 i) = Right $ i /= 0
-    fromPersistValue (PersistByteString i) = case readInt i of 
+    fromPersistValue (PersistByteString i) = case readInt i of
                                                Just (0,"") -> Right False
                                                Just (1,"") -> Right True
                                                xs -> error $ "PersistField Bool failed parsing PersistByteString xs["++show xs++"] i["++show i++"]"
@@ -242,14 +259,20 @@ instance PersistField UTCTime where
 
     fromPersistValue x = Left $ T.pack $ "Expected UTCTime, received: " ++ show x
 
+#if MIN_VERSION_base(4,8,0)
+instance PersistField Natural where
+  toPersistValue = (toPersistValue :: Int64 -> PersistValue) . fromIntegral
+  fromPersistValue x = fromIntegral <$> (fromPersistValue x :: Either Text Int64)
+#endif
+
 instance PersistField a => PersistField (Maybe a) where
     toPersistValue Nothing = PersistNull
     toPersistValue (Just a) = toPersistValue a
     fromPersistValue PersistNull = Right Nothing
-    fromPersistValue x = fmap Just $ fromPersistValue x
+    fromPersistValue x = Just <$> fromPersistValue x
 
 instance PersistField a => PersistField [a] where
-    toPersistValue = PersistList . map toPersistValue
+    toPersistValue = PersistList . fmap toPersistValue
     fromPersistValue (PersistList l) = fromPersistList l
     fromPersistValue (PersistText t) = fromPersistValue (PersistByteString $ TE.encodeUtf8 t)
     fromPersistValue (PersistByteString bs)
@@ -265,13 +288,13 @@ instance PersistField a => PersistField (V.Vector a) where
                             (Right . V.fromList) . fromPersistValue
 
 instance (Ord a, PersistField a) => PersistField (S.Set a) where
-    toPersistValue = PersistList . map toPersistValue . S.toList
+    toPersistValue = PersistList . fmap toPersistValue . S.toList
     fromPersistValue (PersistList list) =
-      either Left (Right . S.fromList) $ fromPersistList list
+      S.fromList <$> fromPersistList list
     fromPersistValue (PersistText t) = fromPersistValue (PersistByteString $ TE.encodeUtf8 t)
     fromPersistValue (PersistByteString bs)
         | Just values <- A.decode' (L.fromChunks [bs]) =
-            either Left (Right . S.fromList) $ fromPersistList values
+            S.fromList <$> fromPersistList values
     fromPersistValue PersistNull = Right S.empty
     fromPersistValue x = Left $ T.pack $ "Expected PersistSet, received: " ++ show x
 
@@ -279,16 +302,16 @@ instance (PersistField a, PersistField b) => PersistField (a,b) where
     toPersistValue (x,y) = PersistList [toPersistValue x, toPersistValue y]
     fromPersistValue v =
         case fromPersistValue v of
-            Right (x:y:[])  -> (,) <$> fromPersistValue x <*> fromPersistValue y
-            Left e          -> Left e
-            _               -> Left $ T.pack $ "Expected 2 item PersistList, received: " ++ show v
+            Right [x,y]  -> (,) <$> fromPersistValue x <*> fromPersistValue y
+            Left e       -> Left e
+            _            -> Left $ T.pack $ "Expected 2 item PersistList, received: " ++ show v
 
 instance PersistField v => PersistField (IM.IntMap v) where
     toPersistValue = toPersistValue . IM.toList
-    fromPersistValue = (fmap IM.fromList) . fromPersistValue
+    fromPersistValue = fmap IM.fromList . fromPersistValue
 
 instance PersistField v => PersistField (M.Map T.Text v) where
-    toPersistValue = PersistMap . map (\(k,v) -> (k, toPersistValue v)) . M.toList
+    toPersistValue = PersistMap . fmap (second toPersistValue) . M.toList
     fromPersistValue = fromPersistMap <=< getPersistMap
 
 instance PersistField PersistValue where
@@ -311,6 +334,7 @@ fromPersistMap = foldShortLeft fromPersistValue [] where
             Left e   -> Left e
             Right v' -> go ((k,v'):acc) kvs
 
+-- | FIXME Add documentation to that.
 getPersistMap :: PersistValue -> Either T.Text [(T.Text, PersistValue)]
 getPersistMap (PersistMap kvs) = Right kvs
 getPersistMap (PersistText t)  = getPersistMap (PersistByteString $ TE.encodeUtf8 t)
@@ -330,7 +354,7 @@ instance PersistField Checkmark where
     fromPersistValue PersistNull         = Right Inactive
     fromPersistValue (PersistBool True)  = Right Active
     fromPersistValue (PersistInt64 1)    = Right Active
-    fromPersistValue (PersistByteString i) = case readInt i of 
+    fromPersistValue (PersistByteString i) = case readInt i of
                                                Just (0,"") -> Left $ T.pack "PersistField Checkmark: found unexpected 0 value"
                                                Just (1,"") -> Right Active
                                                xs -> Left $ T.pack $ "PersistField Checkmark failed parsing PersistByteString xs["++show xs++"] i["++show i++"]"

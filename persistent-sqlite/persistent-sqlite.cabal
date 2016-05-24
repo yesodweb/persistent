@@ -1,5 +1,5 @@
 name:            persistent-sqlite
-version:         2.2.1
+version:         2.5.0.1
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -25,7 +25,7 @@ library
     build-depends:   base                    >= 4.6         && < 5
                    , bytestring              >= 0.9.1
                    , transformers            >= 0.2.1
-                   , persistent              >= 2.2         && < 3
+                   , persistent              >= 2.5         && < 3
                    , monad-control           >= 0.2
                    , containers              >= 0.2
                    , text                    >= 0.7
@@ -35,6 +35,7 @@ library
                    , resourcet               >= 1.1
                    , time
                    , old-locale
+                   , resource-pool
     exposed-modules: Database.Sqlite
                      Database.Persist.Sqlite
     ghc-options:     -Wall
@@ -43,7 +44,7 @@ library
     else
         c-sources:   cbits/sqlite3.c
         include-dirs: cbits
-        cc-options:  -fPIC
+        cc-options:  -fPIC -std=c99
 
     c-sources: cbits/config.c
 
@@ -74,4 +75,4 @@ executable sanity
         buildable: False
     main-is: sanity.hs
     hs-source-dirs: test
-    build-depends: base, persistent-sqlite
+    build-depends: base, persistent-sqlite, monad-logger

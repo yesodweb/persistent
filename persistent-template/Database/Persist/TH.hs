@@ -45,9 +45,14 @@ module Database.Persist.TH
 
 import Prelude hiding ((++), take, concat, splitAt, exp)
 import Database.Persist
+import Database.Persist.Class (HasPersistBackend(..), BaseBackend)
 import Database.Persist.Sql (Migration, migrate, SqlBackend, PersistFieldSql)
 import Database.Persist.Quasi
-import Language.Haskell.TH.Lib (varE)
+import Language.Haskell.TH.Lib (
+#if MIN_VERSION_template_haskell(2,11,0)
+    conT,
+#endif
+    varE)
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
@@ -63,7 +68,7 @@ import Data.Monoid (mappend, mconcat)
 import Text.Read (readPrec, lexP, step, prec, parens, Lexeme(Ident))
 import qualified Data.Map as M
 import qualified Data.HashMap.Strict as HM
-import Data.Aeson
+import Data.Aeson.Compat
     ( ToJSON (toJSON), FromJSON (parseJSON), (.=), object
     , Value (Object), (.:), (.:?)
     , eitherDecodeStrict'
@@ -71,9 +76,18 @@ import Data.Aeson
 import Control.Applicative (pure, (<$>), (<*>))
 import Database.Persist.Sql (sqlType)
 import Data.Proxy (Proxy (Proxy))
-import Web.PathPieces (PathPiece, toPathPiece, fromPathPiece)
+import Web.PathPieces (PathPiece(..))
+import Web.HttpApiData (ToHttpApiData(..), FromHttpApiData(..), parseUrlPieceMaybe)
 import GHC.Generics (Generic)
 import qualified Data.Text.Encoding as TE
+
+-- | This special-cases "type_" and strips out its underscore. When
+-- used for JSON serialization and deserialization, it works around
+-- <https://github.com/yesodweb/persistent/issues/412>
+unHaskellNameForJSON :: HaskellName -> Text
+unHaskellNameForJSON = fixTypeUnderscore . unHaskellName
+  where fixTypeUnderscore "type" = "type_"
+        fixTypeUnderscore name = name
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
@@ -216,7 +230,7 @@ mEmbedded ents (FTTypeCon Nothing n) = let name = HaskellName n in
     maybe (Left Nothing) Right $ M.lookup name ents
 mEmbedded ents (FTList x) = mEmbedded ents x
 mEmbedded ents (FTApp x y) =
-  -- Key convets an Record to a RecordId
+  -- Key converts an Record to a RecordId
   -- special casing this is obviously a hack
   -- This problem may not be solvable with the current QuasiQuoted approach though
   if x == FTTypeCon Nothing "Key"
@@ -395,14 +409,21 @@ upperFirst t =
         Just (a, b) -> cons (toUpper a) b
         Nothing -> t
 
-dataTypeDec :: MkPersistSettings -> EntityDef -> Dec
-dataTypeDec mps t =
-    DataD [] nameFinal paramsFinal constrs
-    $ map (mkName . unpack) $ entityDerives t
+dataTypeDec :: MkPersistSettings -> EntityDef -> Q Dec
+dataTypeDec mps t = do
+    let names = map (mkName . unpack) $ entityDerives t
+#if MIN_VERSION_template_haskell(2,11,0)
+    DataD [] nameFinal paramsFinal
+                Nothing
+                constrs
+                <$> mapM conT names
+#else
+    return $ DataD [] nameFinal paramsFinal constrs names
+#endif
   where
     mkCol x fd@FieldDef {..} =
         (mkName $ unpack $ recName mps x fieldHaskell,
-         if fieldStrict then IsStrict else NotStrict,
+         if fieldStrict then isStrict else notStrict,
          maybeIdType mps fd Nothing Nothing
         )
     (nameFinal, paramsFinal)
@@ -419,7 +440,7 @@ dataTypeDec mps t =
 
     sumCon fd = NormalC
         (sumConstrName mps t fd)
-        [(NotStrict, maybeIdType mps fd Nothing Nothing)]
+        [(notStrict, maybeIdType mps fd Nothing Nothing)]
 
 sumConstrName :: MkPersistSettings -> EntityDef -> FieldDef -> Name
 sumConstrName mps t FieldDef {..} = mkName $ unpack $ concat
@@ -434,6 +455,9 @@ uniqueTypeDec :: MkPersistSettings -> EntityDef -> Dec
 uniqueTypeDec mps t =
     DataInstD [] ''Unique
         [genericDataType mps (entityHaskell t) backendT]
+#if MIN_VERSION_template_haskell(2,11,0)
+            Nothing
+#endif
             (map (mkUnique mps t) $ entityUniques t)
             []
 
@@ -448,7 +472,7 @@ mkUnique mps t (UniqueDef (HaskellName constr) _ fields attrs) =
 
     go :: (FieldDef, IsNullable) -> (Strict, Type)
     go (_, Nullable _) | not force = error nullErrMsg
-    go (fd, y) = (NotStrict, maybeIdType mps fd Nothing (Just y))
+    go (fd, y) = (notStrict, maybeIdType mps fd Nothing (Just y))
 
     lookup3 :: Text -> [FieldDef] -> (FieldDef, IsNullable)
     lookup3 s [] =
@@ -669,7 +693,7 @@ mkLensClauses mps t = do
 
 
 -- | declare the key type and associated instances
--- a PathPiece instance is only generated for a Key with one field
+-- @'PathPiece'@, @'ToHttpApiData'@ and @'FromHttpApiData'@ instances are only generated for a Key with one field
 mkKeyTypeDec :: MkPersistSettings -> EntityDef -> Q (Dec, [Dec])
 mkKeyTypeDec mps t = do
     (instDecs, i) <-
@@ -683,16 +707,23 @@ mkKeyTypeDec mps t = do
                then do pfDec <- pfInstD
                        return (pfDec, [''Show, ''Read, ''Eq, ''Ord, ''Generic])
                 else do
-                    let allInstances = [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''PersistField, ''PersistFieldSql, ''ToJSON, ''FromJSON]
+                    let allInstances = [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''ToHttpApiData, ''FromHttpApiData, ''PersistField, ''PersistFieldSql, ''ToJSON, ''FromJSON]
                     if customKeyType
                       then return ([], allInstances)
                       else do
                         bi <- backendKeyI
                         return (bi, allInstances)
 
+#if MIN_VERSION_template_haskell(2,11,0)
+    cxti <- mapM conT i
+    let kd = if useNewtype
+               then NewtypeInstD [] k [recordType] Nothing dec cxti
+               else DataInstD    [] k [recordType] Nothing [dec] cxti
+#else
     let kd = if useNewtype
                then NewtypeInstD [] k [recordType] dec i
                else DataInstD    [] k [recordType] [dec] i
+#endif
     return (kd, instDecs)
   where
     keyConE = keyConExp t
@@ -744,13 +775,14 @@ mkKeyTypeDec mps t = do
                 x == y =
                     ($(return unKeyE) x) ==
                     ($(return unKeyE) y)
-                x /= y =
-                    ($(return unKeyE) x) ==
-                    ($(return unKeyE) y)
              instance Ord (BackendKey $(pure backendT)) => Ord (Key $(pure recordType)) where
                 compare x y = compare
                     ($(return unKeyE) x)
                     ($(return unKeyE) y)
+             instance ToHttpApiData (BackendKey $(pure backendT)) => ToHttpApiData (Key $(pure recordType)) where
+                toUrlPiece = toUrlPiece . $(return unKeyE)
+             instance FromHttpApiData (BackendKey $(pure backendT)) => FromHttpApiData(Key $(pure recordType)) where
+                parseUrlPiece = fmap $(return keyConE) . parseUrlPiece
              instance PathPiece (BackendKey $(pure backendT)) => PathPiece (Key $(pure recordType)) where
                 toPathPiece = toPathPiece . $(return unKeyE)
                 fromPathPiece = fmap $(return keyConE) . fromPathPiece
@@ -822,9 +854,9 @@ keyFields mps t = case entityPrimary t of
     backendKeyType
         | mpsGeneric mps = ConT ''BackendKey `AppT` backendT
         | otherwise      = ConT ''BackendKey `AppT` mpsBackend mps
-    idKeyVar ft = (unKeyName t, NotStrict, ft)
+    idKeyVar ft = (unKeyName t, notStrict, ft)
     primaryKeyVar fd = ( keyFieldName mps t fd
-                       , NotStrict
+                       , notStrict
                        , ftToType $ fieldType fd
                        )
 
@@ -914,7 +946,7 @@ mkEntity mps t = do
     fkc <- mapM (mkForeignKeysComposite mps t) $ entityForeigns t
 
     let primaryField = entityId t
-    
+
     fields <- mapM (mkField mps t) $ primaryField : entityFields t
     toFieldNames <- mkToFieldNames $ entityUniques t
 
@@ -934,11 +966,12 @@ mkEntity mps t = do
     let instanceConstraint = if not (mpsGeneric mps) then [] else
           [mkClassP ''PersistStore [backendT]]
 
+    dtd <- dataTypeDec mps t
     return $ addSyn $
-       dataTypeDec mps t : mconcat fkc `mappend`
+       dtd : mconcat fkc `mappend`
       ([ TySynD (keyIdName t) [] $
             ConT ''Key `AppT` ConT (mkName nameS)
-      , InstanceD instanceConstraint clazz $
+      , instanceD instanceConstraint clazz $
         [ uniqueTypeDec mps t
         , keyTypeDec
         , keyToValues'
@@ -955,6 +988,9 @@ mkEntity mps t = do
             [ genDataType
             , VarT $ mkName "typ"
             ]
+#if MIN_VERSION_template_haskell(2,11,0)
+            Nothing
+#endif
             (map fst fields)
             []
         , FunD 'persistFieldDef (map snd fields)
@@ -1036,12 +1072,12 @@ mkForeignKeysComposite mps t ForeignDef {..} = do
    let reftableKeyName = mkName $ reftableString `mappend` "Key"
    let tablename = mkName $ unpack $ entityText t
    recordName <- newName "record"
-   
+
    let fldsE = map (\((foreignName, _),_) -> VarE (fieldName $ foreignName)
                  `AppE` VarE recordName) foreignFields
    let mkKeyE = foldl' AppE (maybeExp foreignNullable $ ConE reftableKeyName) fldsE
    let fn = FunD fname [normalClause [VarP recordName] mkKeyE]
-   
+
    let t2 = maybeTyp foreignNullable $ ConT ''Key `AppT` ConT (mkName reftableString)
    let sig = SigD fname $ (ArrowT `AppT` (ConT tablename)) `AppT` t2
    return [sig, fn]
@@ -1060,7 +1096,7 @@ maybeTyp may typ | may = ConT ''Maybe `AppT` typ
 -- @
 --   instance PersistEntity e => PersistField e where
 --      toPersistValue = PersistMap $ zip columNames (map toPersistValue . toPersistFields)
---      fromPersistValue (PersistMap o) = 
+--      fromPersistValue (PersistMap o) =
 --          let columns = HM.fromList o
 --          in fromPersistValues $ map (\name ->
 --            case HM.lookup name columns of
@@ -1177,9 +1213,9 @@ mkDeleteCascade mps defs = do
         let entityT = genericDataType mps name backendT
 
         return $
-            InstanceD
+            instanceD
             [ mkClassP ''PersistQuery [backendT]
-            , mkEqualP (ConT ''PersistEntityBackend `AppT` entityT) backendT
+            , mkEqualP (ConT ''PersistEntityBackend `AppT` entityT) (ConT ''BaseBackend `AppT` backendT)
             ]
             (ConT ''DeleteCascade `AppT` entityT `AppT` backendT)
             [ FunD 'deleteCascade
@@ -1221,7 +1257,7 @@ typeInstanceD :: Name
               -> Bool -- ^ include PersistStore backend constraint
               -> Type -> [Dec] -> Dec
 typeInstanceD clazz hasBackend typ =
-    InstanceD ctx (ConT clazz `AppT` typ)
+    instanceD ctx (ConT clazz `AppT` typ)
   where
     ctx
         | hasBackend = [mkClassP ''PersistStore [backendT]]
@@ -1266,7 +1302,7 @@ derivePersistField s = do
 -- | Automatically creates a valid 'PersistField' instance for any datatype
 -- that has valid 'ToJSON' and 'FromJSON' instances. For a datatype @T@ it
 -- generates instances similar to these:
--- 
+--
 -- @
 --    instance PersistField T where
 --        toPersistValue = PersistByteString . L.toStrict . encode
@@ -1492,7 +1528,7 @@ mkJSON mps def = do
     obj <- newName "obj"
     mzeroE <- [|mzero|]
 
-    xs <- mapM (newName . unpack . unHaskellName . fieldHaskell)
+    xs <- mapM (newName . unpack . unHaskellNameForJSON . fieldHaskell)
         $ entityFields def
 
     let conName = mkName $ unpack $ unHaskellName $ entityHaskell def
@@ -1555,6 +1591,27 @@ mkEqualP tleft tright = foldl AppT EqualityT [tleft, tright]
 mkEqualP = EqualP
 #endif
 
+#if MIN_VERSION_template_haskell(2,11,0)
+notStrict :: Bang
+notStrict = Bang NoSourceUnpackedness NoSourceStrictness
+
+isStrict :: Bang
+isStrict = Bang NoSourceUnpackedness SourceStrict
+#else
+notStrict :: Strict
+notStrict = NotStrict
+
+isStrict :: Strict
+isStrict = IsStrict
+#endif
+
+instanceD :: Cxt -> Type -> [Dec] -> Dec
+#if MIN_VERSION_template_haskell(2,11,0)
+instanceD = InstanceD Nothing
+#else
+instanceD = InstanceD
+#endif
+
 -- entityUpdates :: EntityDef -> [(HaskellName, FieldType, IsNullable, PersistUpdate)]
 -- entityUpdates =
 --     concatMap go . entityFields
@@ -1585,4 +1642,3 @@ mkEqualP = EqualP
 --         let x = mkName "x"
 --          in normalClause [ConP (mkName constr) [VarP x]]
 --                    (VarE 'toPersistValue `AppE` VarE x)
-

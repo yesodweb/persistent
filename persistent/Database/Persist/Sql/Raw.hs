@@ -1,5 +1,7 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeFamilies #-}
 module Database.Persist.Sql.Raw where
 
 import Database.Persist
@@ -9,6 +11,7 @@ import qualified Data.Map as Map
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (ReaderT, ask, MonadReader)
 import Data.Acquire (allocateAcquire, Acquire, mkAcquire, with)
+import Data.Functor ((<$>))
 import Data.IORef (writeIORef, readIORef, newIORef)
 import Control.Exception (throwIO)
 import Control.Monad (when, liftM)
@@ -19,7 +22,7 @@ import qualified Data.Text as T
 import Data.Conduit
 import Control.Monad.Trans.Resource (MonadResource,release)
 
-rawQuery :: (MonadResource m, MonadReader env m, HasPersistBackend env SqlBackend)
+rawQuery :: (MonadResource m, MonadReader env m, HasPersistBackend env, BaseBackend env ~ SqlBackend)
          => Text
          -> [PersistValue]
          -> Source m [PersistValue]
@@ -30,12 +33,12 @@ rawQuery sql vals = do
     release releaseKey
 
 rawQueryRes
-    :: (MonadIO m1, MonadIO m2)
+    :: (MonadIO m1, MonadIO m2, IsSqlBackend env)
     => Text
     -> [PersistValue]
-    -> ReaderT SqlBackend m1 (Acquire (Source m2 [PersistValue]))
+    -> ReaderT env m1 (Acquire (Source m2 [PersistValue]))
 rawQueryRes sql vals = do
-    conn <- ask
+    conn <- persistBackend `liftM` ask
     let make = do
             runLoggingT (logDebugNS (pack "SQL") $ T.append sql $ pack $ "; " ++ show vals)
                 (connLogFunc conn)
@@ -53,12 +56,12 @@ rawExecute x y = liftM (const ()) $ rawExecuteCount x y
 
 -- | Execute a raw SQL statement and return the number of
 -- rows it has modified.
-rawExecuteCount :: MonadIO m
+rawExecuteCount :: (MonadIO m, IsSqlBackend backend)
                 => Text            -- ^ SQL statement, possibly with placeholders.
                 -> [PersistValue]  -- ^ Values to fill the placeholders.
-                -> ReaderT SqlBackend m Int64
+                -> ReaderT backend m Int64
 rawExecuteCount sql vals = do
-    conn <- ask
+    conn <- persistBackend `liftM` ask
     runLoggingT (logDebugNS (pack "SQL") $ T.append sql $ pack $ "; " ++ show vals)
         (connLogFunc conn)
     stmt <- getStmt sql
@@ -66,9 +69,11 @@ rawExecuteCount sql vals = do
     liftIO $ stmtReset stmt
     return res
 
-getStmt :: MonadIO m => Text -> ReaderT SqlBackend m Statement
+getStmt
+  :: (MonadIO m, IsSqlBackend backend)
+  => Text -> ReaderT backend m Statement
 getStmt sql = do
-    conn <- ask
+    conn <- persistBackend `liftM` ask
     liftIO $ getStmtConn conn sql
 
 getStmtConn :: SqlBackend -> Text -> IO Statement
@@ -126,6 +131,80 @@ getStmtConn conn sql = do
 -- However, most common problems are mitigated by using the
 -- entity selection placeholder @??@, and you shouldn't see any
 -- error at all if you're not using 'Single'.
+--
+-- Some example of 'rawSql' based on this schema:
+--
+-- @
+-- share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
+-- Person
+--     name String
+--     age Int Maybe
+--     deriving Show
+-- BlogPost
+--     title String
+--     authorId PersonId
+--     deriving Show
+-- |]
+-- @
+-- 
+-- Examples based on the above schema:
+-- 
+-- @ 
+-- getPerson :: MonadIO m => ReaderT SqlBackend m [Entity Person]
+-- getPerson = rawSql "select ?? from person where name=?" [PersistText "john"]
+-- 
+-- getAge :: MonadIO m => ReaderT SqlBackend m [Single Int]
+-- getAge = rawSql "select person.age from person where name=?" [PersistText "john"]
+-- 
+-- getAgeName :: MonadIO m => ReaderT SqlBackend m [(Single Int, Single Text)]
+-- getAgeName = rawSql "select person.age, person.name from person where name=?" [PersistText "john"]
+-- 
+-- getPersonBlog :: MonadIO m => ReaderT SqlBackend m [(Entity Person, Entity BlogPost)]
+-- getPersonBlog = rawSql "select ??,?? from person,blog_post where person.id = blog_post.author_id" []
+-- @
+--
+-- Minimal working program for PostgreSQL backend based on the above concepts:
+--
+-- > {-# LANGUAGE EmptyDataDecls             #-}
+-- > {-# LANGUAGE FlexibleContexts           #-}
+-- > {-# LANGUAGE GADTs                      #-}
+-- > {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+-- > {-# LANGUAGE MultiParamTypeClasses      #-}
+-- > {-# LANGUAGE OverloadedStrings          #-}
+-- > {-# LANGUAGE QuasiQuotes                #-}
+-- > {-# LANGUAGE TemplateHaskell            #-}
+-- > {-# LANGUAGE TypeFamilies               #-}
+-- > 
+-- > import           Control.Monad.IO.Class  (liftIO)
+-- > import           Control.Monad.Logger    (runStderrLoggingT)
+-- > import           Database.Persist
+-- > import           Control.Monad.Reader
+-- > import           Data.Text
+-- > import           Database.Persist.Sql
+-- > import           Database.Persist.Postgresql
+-- > import           Database.Persist.TH
+-- > 
+-- > share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
+-- > Person
+-- >     name String
+-- >     age Int Maybe
+-- >     deriving Show
+-- > |]
+-- > 
+-- > conn = "host=localhost dbname=new_db user=postgres password=postgres port=5432"
+-- > 
+-- > getPerson :: MonadIO m => ReaderT SqlBackend m [Entity Person]
+-- > getPerson = rawSql "select ?? from person where name=?" [PersistText "sibi"]
+-- > 
+-- > liftSqlPersistMPool y x = liftIO (runSqlPersistMPool y x)
+-- > 
+-- > main :: IO ()
+-- > main = runStderrLoggingT $ withPostgresqlPool conn 10 $ liftSqlPersistMPool $ do
+-- >          runMigration migrateAll
+-- >          xs <- getPerson
+-- >          liftIO (print xs)
+-- > 
+
 rawSql :: (RawSql a, MonadIO m)
        => Text             -- ^ SQL statement, possibly with placeholders.
        -> [PersistValue]   -- ^ Values to fill the placeholders.

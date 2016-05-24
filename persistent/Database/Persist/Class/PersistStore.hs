@@ -1,10 +1,15 @@
 {-# LANGUAGE TypeFamilies, FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE ConstraintKinds #-}
 module Database.Persist.Class.PersistStore
     ( HasPersistBackend (..)
+    , IsPersistBackend (..)
+    , PersistRecordBackend
     , liftPersist
-    , PersistStore (..)
+    , PersistCore (..)
+    , PersistStoreRead (..)
+    , PersistStoreWrite (..)
     , getJust
     , belongsTo
     , belongsToJust
@@ -22,51 +27,79 @@ import Database.Persist.Class.PersistField
 import Database.Persist.Types
 import qualified Data.Aeson as A
 
-class HasPersistBackend env backend | env -> backend where
-    persistBackend :: env -> backend
+-- | Class which allows the plucking of a @BaseBackend backend@ from some larger type.
+-- For example,
+-- @
+-- instance HasPersistBackend (SqlReadBackend, Int) where
+--   type BaseBackend (SqlReadBackend, Int) = SqlBackend
+--   persistBackend = unSqlReadBackend . fst
+-- @
+class HasPersistBackend backend where
+    type BaseBackend backend
+    persistBackend :: backend -> BaseBackend backend
+-- | Class which witnesses that @backend@ is essentially the same as @BaseBackend backend@.
+-- That is, they're isomorphic and @backend@ is just some wrapper over @BaseBackend backend@.
+class (HasPersistBackend backend) => IsPersistBackend backend where
+    -- | This function is how we actually construct and tag a backend as having read or write capabilities.
+    -- It should be used carefully and only when actually constructing a @backend@. Careless use allows us
+    -- to accidentally run a write query against a read-only database.
+    mkPersistBackend :: BaseBackend backend -> backend
 
-liftPersist :: (MonadReader env m, HasPersistBackend env backend, MonadIO m)
-            => ReaderT backend IO a
-            -> m a
+-- | A convenient alias for common type signatures
+type PersistRecordBackend record backend = (PersistEntity record, PersistEntityBackend record ~ BaseBackend backend)
+
+liftPersist
+    :: (MonadIO m, MonadReader backend m, HasPersistBackend backend)
+    => ReaderT (BaseBackend backend) IO b -> m b
 liftPersist f = do
     env <- ask
     liftIO $ runReaderT f (persistBackend env)
 
--- | ToBackendKey converts a 'PersistEntity' 'Key' into a 'BackendKey'
--- This can be used by each backend to convert between a 'Key' and a plain Haskell type.
--- For Sql, that is done with 'toSqlKey' and 'fromSqlKey'.
+-- | 'ToBackendKey' converts a 'PersistEntity' 'Key' into a 'BackendKey'
+-- This can be used by each backend to convert between a 'Key' and a plain
+-- Haskell type. For Sql, that is done with 'toSqlKey' and 'fromSqlKey'.
 --
 -- By default, a 'PersistEntity' uses the default 'BackendKey' for its Key
 -- and is an instance of ToBackendKey
 --
--- A 'Key' that instead uses a custom type will not be an instance of 'ToBackendKey'
+-- A 'Key' that instead uses a custom type will not be an instance of
+-- 'ToBackendKey'.
 class ( PersistEntity record
       , PersistEntityBackend record ~ backend
-      , PersistStore backend
+      , PersistCore backend
       ) => ToBackendKey backend record where
     toBackendKey   :: Key record -> BackendKey backend
     fromBackendKey :: BackendKey backend -> Key record
 
+class PersistCore backend where
+    data BackendKey backend
+
 class
   ( Show (BackendKey backend), Read (BackendKey backend)
   , Eq (BackendKey backend), Ord (BackendKey backend)
+  , PersistCore backend
   , PersistField (BackendKey backend), A.ToJSON (BackendKey backend), A.FromJSON (BackendKey backend)
-  ) => PersistStore backend where
-    data BackendKey backend
-
+  ) => PersistStoreRead backend where
     -- | Get a record by identifier, if available.
-    get :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
-        => Key val -> ReaderT backend m (Maybe val)
+    get :: (MonadIO m, PersistRecordBackend record backend)
+        => Key record -> ReaderT backend m (Maybe record)
+
+class
+  ( Show (BackendKey backend), Read (BackendKey backend)
+  , Eq (BackendKey backend), Ord (BackendKey backend)
+  , PersistStoreRead backend
+  , PersistField (BackendKey backend), A.ToJSON (BackendKey backend), A.FromJSON (BackendKey backend)
+  ) => PersistStoreWrite backend where
 
     -- | Create a new record in the database, returning an automatically created
     -- key (in SQL an auto-increment id).
-    insert :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
-           => val -> ReaderT backend m (Key val)
+    insert :: (MonadIO m, PersistRecordBackend record backend)
+           => record -> ReaderT backend m (Key record)
 
     -- | Same as 'insert', but doesn't return a @Key@.
-    insert_ :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
-            => val -> ReaderT backend m ()
-    insert_ val = insert val >> return ()
+    insert_ :: (MonadIO m, PersistRecordBackend record backend)
+            => record -> ReaderT backend m ()
+    insert_ record = insert record >> return ()
 
     -- | Create multiple records in the database and return their 'Key's.
     --
@@ -77,16 +110,16 @@ class
     --
     -- The SQLite and MySQL backends use the slow, default implementation of
     -- @mapM insert@.
-    insertMany :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
-               => [val] -> ReaderT backend m [Key val]
+    insertMany :: (MonadIO m, PersistRecordBackend record backend)
+               => [record] -> ReaderT backend m [Key record]
     insertMany = mapM insert
 
     -- | Same as 'insertMany', but doesn't return any 'Key's.
     --
     -- The MongoDB, PostgreSQL, SQLite and MySQL backends insert all records in
     -- one database query.
-    insertMany_ :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
-                => [val] -> ReaderT backend m ()
+    insertMany_ :: (MonadIO m, PersistRecordBackend record backend)
+                => [record] -> ReaderT backend m ()
     insertMany_ x = insertMany x >> return ()
 
     -- | Same as 'insertMany_', but takes an 'Entity' instead of just a record.
@@ -98,90 +131,86 @@ class
     --
     -- The SQL backends use the slow, default implementation of
     -- @mapM_ insertKey@.
-    insertEntityMany :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
-                     => [Entity val] -> ReaderT backend m ()
+    insertEntityMany :: (MonadIO m, PersistRecordBackend record backend)
+                     => [Entity record] -> ReaderT backend m ()
     insertEntityMany = mapM_ (\(Entity k record) -> insertKey k record)
 
     -- | Create a new record in the database using the given key.
-    insertKey :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
-              => Key val -> val -> ReaderT backend m ()
+    insertKey :: (MonadIO m, PersistRecordBackend record backend)
+              => Key record -> record -> ReaderT backend m ()
 
     -- | Put the record in the database with the given key.
     -- Unlike 'replace', if a record with the given key does not
     -- exist then a new record will be inserted.
-    repsert :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
-            => Key val -> val -> ReaderT backend m ()
+    repsert :: (MonadIO m, PersistRecordBackend record backend)
+            => Key record -> record -> ReaderT backend m ()
 
     -- | Replace the record in the database with the given
     -- key. Note that the result is undefined if such record does
     -- not exist, so you must use 'insertKey or 'repsert' in
     -- these cases.
-    replace :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
-            => Key val -> val -> ReaderT backend m ()
+    replace :: (MonadIO m, PersistRecordBackend record backend)
+            => Key record -> record -> ReaderT backend m ()
 
     -- | Delete a specific record by identifier. Does nothing if record does
     -- not exist.
-    delete :: (MonadIO m, backend ~ PersistEntityBackend val, PersistEntity val)
-           => Key val -> ReaderT backend m ()
+    delete :: (MonadIO m, PersistRecordBackend record backend)
+           => Key record -> ReaderT backend m ()
 
     -- | Update individual fields on a specific record.
-    update :: (MonadIO m, PersistEntity val, backend ~ PersistEntityBackend val)
-           => Key val -> [Update val] -> ReaderT backend m ()
+    update :: (MonadIO m, PersistRecordBackend record backend)
+           => Key record -> [Update record] -> ReaderT backend m ()
 
     -- | Update individual fields on a specific record, and retrieve the
     -- updated value from the database.
     --
     -- Note that this function will throw an exception if the given key is not
     -- found in the database.
-    updateGet :: (MonadIO m, PersistEntity val, backend ~ PersistEntityBackend val)
-              => Key val -> [Update val] -> ReaderT backend m val
+    updateGet :: (MonadIO m, PersistRecordBackend record backend)
+              => Key record -> [Update record] -> ReaderT backend m record
     updateGet key ups = do
         update key ups
         get key >>= maybe (liftIO $ throwIO $ KeyNotFound $ show key) return
 
 
 -- | Same as get, but for a non-null (not Maybe) foreign key
---   Unsafe unless your database is enforcing that the foreign key is valid
-getJust :: ( PersistStore backend
-           , PersistEntity val
-           , Show (Key val)
-           , backend ~ PersistEntityBackend val
+-- Unsafe unless your database is enforcing that the foreign key is valid.
+getJust :: ( PersistStoreRead backend
+           , Show (Key record)
+           , PersistRecordBackend record backend
            , MonadIO m
-           ) => Key val -> ReaderT backend m val
+           ) => Key record -> ReaderT backend m record
 getJust key = get key >>= maybe
   (liftIO $ throwIO $ PersistForeignConstraintUnmet $ T.pack $ show key)
   return
 
--- | curry this to make a convenience function that loads an associated model
+-- | Curry this to make a convenience function that loads an associated model.
 --
--- > foreign = belongsTo foerignId
+-- > foreign = belongsTo foreignId
 belongsTo ::
-  ( PersistStore backend
+  ( PersistStoreRead backend
   , PersistEntity ent1
-  , PersistEntity ent2
-  , backend ~ PersistEntityBackend ent2
+  , PersistRecordBackend ent2 backend
   , MonadIO m
   ) => (ent1 -> Maybe (Key ent2)) -> ent1 -> ReaderT backend m (Maybe ent2)
 belongsTo foreignKeyField model = case foreignKeyField model of
     Nothing -> return Nothing
     Just f -> get f
 
--- | same as belongsTo, but uses @getJust@ and therefore is similarly unsafe
+-- | Same as 'belongsTo', but uses @getJust@ and therefore is similarly unsafe.
 belongsToJust ::
-  ( PersistStore backend
+  ( PersistStoreRead backend
   , PersistEntity ent1
-  , PersistEntity ent2
-  , backend ~ PersistEntityBackend ent2
+  , PersistRecordBackend ent2 backend
   , MonadIO m
   )
   => (ent1 -> Key ent2) -> ent1 -> ReaderT backend m ent2
 belongsToJust getForeignKey model = getJust $ getForeignKey model
 
--- | like @insert@, but returns the complete @Entity@
+-- | Like @insert@, but returns the complete @Entity@.
 insertEntity ::
-    ( PersistStore backend
-    , PersistEntity e
-    , backend ~ PersistEntityBackend e
+    ( PersistStoreWrite backend
+    , PersistRecordBackend e backend
     , MonadIO m
     ) => e -> ReaderT backend m (Entity e)
 insertEntity e = do

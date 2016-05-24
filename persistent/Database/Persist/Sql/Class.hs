@@ -4,6 +4,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE UndecidableInstances #-}
 #ifndef NO_OVERLAP
 {-# LANGUAGE OverlappingInstances #-}
 #endif
@@ -16,7 +19,6 @@ import Control.Applicative ((<$>), (<*>))
 import Database.Persist
 import Data.Monoid ((<>))
 import Database.Persist.Sql.Types
-import Control.Arrow ((&&&))
 import Data.Text (Text, intercalate, pack)
 import Data.Maybe (fromMaybe)
 import Data.Fixed
@@ -33,6 +35,10 @@ import Data.ByteString (ByteString)
 import Text.Blaze.Html (Html)
 import Data.Bits (bitSize)
 import qualified Data.Vector as V
+
+#if MIN_VERSION_base(4,8,0)
+import Numeric.Natural (Natural)
+#endif
 
 -- | Class for data types that may be retrived from a 'rawSql'
 -- query.
@@ -54,31 +60,37 @@ instance PersistField a => RawSql (Single a) where
     rawSqlProcessRow [pv]  = Single <$> fromPersistValue pv
     rawSqlProcessRow _     = Left $ pack "RawSql (Single a): wrong number of columns."
 
-instance (PersistEntity a, PersistEntityBackend a ~ SqlBackend) => RawSql (Key a) where
-  rawSqlCols _ key         = (length $ keyToValues key, [])
-  rawSqlColCountReason key = "The primary key is composed of "
-                             ++ (show $ length $ keyToValues key)
-                             ++ " columns"
-  rawSqlProcessRow         = keyFromValues
+instance
+    (PersistEntity a, PersistEntityBackend a ~ backend, IsPersistBackend backend) =>
+    RawSql (Key a) where
+    rawSqlCols _ key         = (length $ keyToValues key, [])
+    rawSqlColCountReason key = "The primary key is composed of "
+                               ++ (show $ length $ keyToValues key)
+                               ++ " columns"
+    rawSqlProcessRow         = keyFromValues
 
-instance (PersistEntity a, PersistEntityBackend a ~ SqlBackend) => RawSql (Entity a) where
-    rawSqlCols escape = ((+1) . length . entityFields &&& process) . entityDef . Just . entityVal
+instance
+    (PersistEntity record, PersistEntityBackend record ~ backend, IsPersistBackend backend) =>
+    RawSql (Entity record) where
+    rawSqlCols escape ent = (length sqlFields, [intercalate ", " sqlFields])
         where
-          process ed = (:[]) $
-                       intercalate ", " $
-                       map ((name ed <>) . escape) $
-                       (fieldDB (entityId ed) :) $
-                       map fieldDB $
-                       entityFields ed
-          name ed = escape (entityDB ed) <> "."
-
+          sqlFields = map (((name <> ".") <>) . escape)
+              $ map fieldDB
+              -- Hacky for a composite key because
+              -- it selects the same field multiple times
+              $ entityKeyFields entDef ++ entityFields entDef
+          name = escape (entityDB entDef)
+          entDef = entityDef (Nothing :: Maybe record)
     rawSqlColCountReason a =
         case fst (rawSqlCols (error "RawSql") a) of
           1 -> "one column for an 'Entity' data type without fields"
           n -> show n ++ " columns for an 'Entity' data type"
-    rawSqlProcessRow (idCol:ent) = Entity <$> fromPersistValue idCol
-                                          <*> fromPersistValues ent
-    rawSqlProcessRow _ = Left "RawSql (Entity a): wrong number of columns."
+    rawSqlProcessRow row = case splitAt nKeyFields row of
+      (rowKey, rowVal) -> Entity <$> keyFromValues rowKey
+                                 <*> fromPersistValues rowVal
+      where
+        nKeyFields = length $ entityKeyFields entDef
+        entDef = entityDef (Nothing :: Maybe record)
 
 -- | Since 1.0.1.
 instance RawSql a => RawSql (Maybe a) where
@@ -270,6 +282,11 @@ instance (HasResolution a) => PersistFieldSql (Fixed a) where
         _mn = return n `asTypeOf` a
 instance PersistFieldSql Rational where
     sqlType _ = SqlNumeric 32 20   --  need to make this field big enough to handle Rational to Mumber string conversion for ODBC
+
+#if MIN_VERSION_base(4,8,0)
+instance PersistFieldSql Natural where
+  sqlType _ = SqlInt64
+#endif
 
 -- An embedded Entity
 instance (PersistField record, PersistEntity record) => PersistFieldSql (Entity record) where

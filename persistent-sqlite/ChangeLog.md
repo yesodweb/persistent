@@ -1,3 +1,15 @@
+## 2.5.0.1
+
+* Reapply workaround for https://ghc.haskell.org/trac/ghc/ticket/7072 [#561](https://github.com/yesodweb/persistent/pull/561)
+
+## 2.5
+
+* changes for read/write typeclass split
+
+## 2.2.2
+
+* Upgrade to SQLite 3.12.1 [#551](https://github.com/yesodweb/persistent/issues/551)
+
 ## 2.2.1
 
 * Upgrade to SQLite 3.8.11.1 [#444](https://github.com/yesodweb/persistent/pull/444)

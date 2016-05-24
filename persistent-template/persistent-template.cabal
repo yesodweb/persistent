@@ -1,5 +1,5 @@
 name:            persistent-template
-version:         2.1.3.4
+version:         2.5.1.3
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -17,17 +17,19 @@ extra-source-files: test/main.hs ChangeLog.md README.md
 library
     build-depends:   base                     >= 4.6         && < 5
                    , template-haskell
-                   , persistent               >= 2.1.3     && < 3
+                   , persistent               >= 2.5       && < 3
                    , monad-control            >= 0.2       && < 1.1
                    , bytestring               >= 0.9
                    , text                     >= 0.5
-                   , transformers             >= 0.2       && < 0.5
+                   , transformers             >= 0.2       && < 0.6
                    , containers
-                   , aeson                    >= 0.7       && < 0.10
+                   , aeson                    >= 0.7       && < 0.12
+                   , aeson-compat             >= 0.3.2.0   && < 0.4
                    , monad-logger
                    , unordered-containers
                    , tagged
                    , path-pieces
+                   , http-api-data            >= 0.2       && < 0.3
                    , ghc-prim
     exposed-modules: Database.Persist.TH
     ghc-options:     -Wall

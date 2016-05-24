@@ -5,7 +5,8 @@ module Database.Persist.Types.Base where
 
 import qualified Data.Aeson as A
 import Control.Exception (Exception)
-import Web.PathPieces (PathPiece (..))
+import Web.PathPieces (PathPiece(..))
+import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData (..), parseUrlPieceMaybe, showTextData, readTextData, parseBoundedTextData)
 import Control.Monad.Trans.Error (Error (..))
 import Data.Typeable (Typeable)
 import Data.Text (Text, pack)
@@ -15,6 +16,7 @@ import Data.Text.Encoding.Error (lenientDecode)
 import qualified Data.ByteString.Base64 as B64
 import qualified Data.Vector as V
 import Control.Arrow (second)
+import Control.Applicative ((<$>))
 import Data.Time (Day, TimeOfDay, UTCTime)
 import Data.Int (Int64)
 import qualified Data.Text.Read
@@ -82,12 +84,13 @@ data Checkmark = Active
                  -- may be any number of 'Inactive' records.
     deriving (Eq, Ord, Read, Show, Enum, Bounded)
 
-instance PathPiece Checkmark where
-    toPathPiece = pack . show
-    fromPathPiece txt =
-      case reads (T.unpack txt) of
-        [(a, "")] -> Just a
-        _         -> Nothing
+instance ToHttpApiData Checkmark where
+    toUrlPiece = showTextData
+
+instance FromHttpApiData Checkmark where
+    parseUrlPiece = parseBoundedTextData
+
+instance PathPiece Checkmark
 
 data IsNullable = Nullable !WhyNullable
                 | NotNullable
@@ -121,6 +124,18 @@ entityPrimary :: EntityDef -> Maybe CompositeDef
 entityPrimary t = case fieldReference (entityId t) of
     CompositeRef c -> Just c
     _ -> Nothing
+
+entityKeyFields :: EntityDef -> [FieldDef]
+entityKeyFields ent = case entityPrimary ent of
+    Nothing   -> [entityId ent]
+    Just pdef -> compositeFields pdef
+
+keyAndEntityFields :: EntityDef -> [FieldDef]
+keyAndEntityFields ent =
+  case entityPrimary ent of
+    Nothing -> entityId ent : entityFields ent
+    Just _  -> entityFields ent
+
 
 type ExtraLine = [Text]
 
@@ -265,23 +280,23 @@ data PersistValue = PersistText Text
 --
 -- @
 -- data Geo = Geo ByteString
--- 
+--
 -- instance PersistField Geo where
 --   toPersistValue (Geo t) = PersistDbSpecific t
--- 
+--
 --   fromPersistValue (PersistDbSpecific t) = Right $ Geo $ Data.ByteString.concat ["'", t, "'"]
 --   fromPersistValue _ = Left "Geo values must be converted from PersistDbSpecific"
--- 
+--
 -- instance PersistFieldSql Geo where
 --   sqlType _ = SqlOther "GEOGRAPHY(POINT,4326)"
--- 
+--
 -- toPoint :: Double -> Double -> Geo
 -- toPoint lat lon = Geo $ Data.ByteString.concat ["'POINT(", ps $ lon, " ", ps $ lat, ")'"]
 --   where ps = Data.Text.pack . show
 -- @
--- 
+--
 -- If Foo has a geography field, we can then perform insertions like the following:
--- 
+--
 -- @
 -- insert $ Foo (toPoint 44 44)
 -- @
@@ -289,18 +304,25 @@ data PersistValue = PersistText Text
     deriving (Show, Read, Eq, Typeable, Ord)
 
 
-instance PathPiece PersistValue where
-    fromPathPiece t =
-        case Data.Text.Read.signed Data.Text.Read.decimal t of
-            Right (i, t')
-                | T.null t' -> Just $ PersistInt64 i
-            _ -> case reads $ T.unpack t of
-                    [(fks, "")] -> Just $ PersistList fks
-                    _ -> Just $ PersistText t
-    toPathPiece x =
-        case fromPersistValueText x of
-            Left e -> error $ T.unpack e
+instance ToHttpApiData PersistValue where
+    toUrlPiece val =
+        case fromPersistValueText val of
+            Left  e -> error $ T.unpack e
             Right y -> y
+
+instance FromHttpApiData PersistValue where
+    parseUrlPiece input =
+          PersistInt64 <$> parseUrlPiece input
+      <!> PersistList  <$> readTextData input
+      <!> PersistText  <$> return input
+      where
+        infixl 3 <!>
+        Left _ <!> y = y
+        x      <!> _ = x
+
+instance PathPiece PersistValue where
+  toPathPiece   = toUrlPiece
+  fromPathPiece = parseUrlPieceMaybe
 
 fromPersistValueText :: PersistValue -> Either Text Text
 fromPersistValueText (PersistText s) = Right s

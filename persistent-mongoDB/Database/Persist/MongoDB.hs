@@ -7,7 +7,7 @@
 -- and want lower level-level MongoDB access.
 -- There are functions available to make working with the raw driver
 -- easier: they are under the Entity conversion section.
--- You should still use the same connection pool that you are using for Persistent. 
+-- You should still use the same connection pool that you are using for Persistent.
 --
 -- MongoDB is a schema-less database.
 -- The MongoDB Persistent backend does not help perform migrations.
@@ -122,7 +122,7 @@ import qualified Data.Traversable as Traversable
 import Data.Bson (ObjectId(..))
 import qualified Database.MongoDB as DB
 import Database.MongoDB.Query (Database)
-import Control.Applicative (Applicative)
+import Control.Applicative (Applicative, (<$>))
 import Network (PortID (PortNumber))
 import Network.Socket (HostName)
 import Data.Maybe (mapMaybe, fromJust)
@@ -131,7 +131,8 @@ import Data.Text (Text)
 import qualified Data.ByteString as BS
 import qualified Data.Text.Encoding as E
 import qualified Data.Serialize as Serialize
-import Web.PathPieces (PathPiece (..))
+import Web.PathPieces (PathPiece(..))
+import Web.HttpApiData (ToHttpApiData(..), FromHttpApiData(..), parseUrlPieceMaybe, parseUrlPieceWithPrefix, readTextData)
 import Data.Conduit
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value (Number), (.:), (.:?), (.!=), FromJSON(..), ToJSON(..), withText, withObject)
@@ -172,7 +173,8 @@ lookupEnv key = do
     return $ lookup key env
 #endif
 
-instance HasPersistBackend DB.MongoContext DB.MongoContext where
+instance HasPersistBackend DB.MongoContext where
+    type BaseBackend DB.MongoContext = DB.MongoContext
     persistBackend = id
 
 recordTypeFromKey :: Key record -> record
@@ -186,21 +188,21 @@ instance FromJSON NoOrphanNominalDiffTime where
     parseJSON (Number x) = (return . NoOrphanNominalDiffTime . fromRational . toRational) x
 
 
-#else 
+#else
     parseJSON (Number (I x)) = (return . NoOrphanNominalDiffTime . fromInteger) x
     parseJSON (Number (D x)) = (return . NoOrphanNominalDiffTime . fromRational . toRational) x
 
-#endif                           
+#endif
     parseJSON _ = fail "couldn't parse diff time"
 
 newtype NoOrphanPortID = NoOrphanPortID PortID deriving (Show, Eq)
 
 
 instance FromJSON NoOrphanPortID where
-#if MIN_VERSION_aeson(0, 7, 0)  
+#if MIN_VERSION_aeson(0, 7, 0)
     parseJSON (Number  x) = (return . NoOrphanPortID . PortNumber . fromIntegral ) cnvX
       where cnvX :: Word16
-            cnvX = round x 
+            cnvX = round x
 
 #else
     parseJSON (Number (I x)) = (return . NoOrphanPortID . PortNumber . fromInteger) x
@@ -212,15 +214,22 @@ instance FromJSON NoOrphanPortID where
 data Connection = Connection DB.Pipe DB.Database
 type ConnectionPool = Pool.Pool Connection
 
+instance ToHttpApiData (BackendKey DB.MongoContext) where
+    toUrlPiece = keyToText
+
+instance FromHttpApiData (BackendKey DB.MongoContext) where
+    parseUrlPiece input = do
+      s <- parseUrlPieceWithPrefix "o" input <!> return input
+      MongoKey <$> readTextData s
+      where
+        infixl 3 <!>
+        Left _ <!> y = y
+        x      <!> _ = x
+
 -- | ToPathPiece is used to convert a key to/from text
 instance PathPiece (BackendKey DB.MongoContext) where
-    toPathPiece = keyToText
-    fromPathPiece keyText = readMayMongoKey $
-        -- handle a JSON type prefix
-        -- 'o' is a non-hex character, so no confusion here
-        case T.uncons keyText of
-            Just ('o', prefixed) -> prefixed
-            _ -> keyText
+  toPathPiece   = toUrlPiece
+  fromPathPiece = parseUrlPieceMaybe
 
 keyToText :: BackendKey DB.MongoContext -> Text
 keyToText = T.pack . show . unMongoKey
@@ -368,7 +377,7 @@ runMongoDBPoolDef = runMongoDBPool defaultAccessMode
 
 queryByKey :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
            => Key record -> DB.Query
-queryByKey k = DB.select (keyToMongoDoc k) (collectionNameFromKey k)
+queryByKey k = (DB.select (keyToMongoDoc k) (collectionNameFromKey k)) {DB.project = projectionFromKey k}
 
 selectByKey :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
             => Key record -> DB.Selection
@@ -538,10 +547,11 @@ instance FromJSON (BackendKey DB.MongoContext) where
 
 -- | older versions versions of haddock (like that on hackage) do not show that this defines
 -- @BackendKey DB.MongoContext = MongoKey { unMongoKey :: DB.ObjectId }@
-instance PersistStore DB.MongoContext where
+instance PersistCore DB.MongoContext where
     newtype BackendKey DB.MongoContext = MongoKey { unMongoKey :: DB.ObjectId }
         deriving (Show, Read, Eq, Ord, PersistField)
 
+instance PersistStoreWrite DB.MongoContext where
     insert record = DB.insert (collectionName record) (toInsertDoc record)
                 >>= keyFrom_idEx
 
@@ -569,6 +579,23 @@ instance PersistStore DB.MongoContext where
         , DB.selector = keyToMongoDoc k
         }
 
+    update _ [] = return ()
+    update key upds =
+        DB.modify
+           (DB.Select (keyToMongoDoc key) (collectionNameFromKey key))
+           $ updatesToDoc upds
+
+    updateGet key upds = do
+        result <- DB.findAndModify (queryByKey key) (updatesToDoc upds)
+        either err instantiate result
+      where
+        instantiate doc = do
+            Entity _ rec <- fromPersistValuesThrow t doc
+            return rec
+        err msg = Trans.liftIO $ throwIO $ KeyNotFound $ show key ++ msg
+        t = entityDefFromKey key
+
+instance PersistStoreRead DB.MongoContext where
     get k = do
             d <- DB.findOne (queryByKey k)
             case d of
@@ -579,29 +606,10 @@ instance PersistStore DB.MongoContext where
           where
             t = entityDefFromKey k
 
-    update _ [] = return ()
-    update key upds =
-        DB.modify
-           (DB.Select (keyToMongoDoc key) (collectionNameFromKey key))
-           $ updatesToDoc upds
-
-    updateGet key upds = do
-        result <- DB.findAndModify (DB.select (keyToMongoDoc key)
-                     (collectionNameFromKey key)
-                   ) (updatesToDoc upds)
-        either err instantiate result
-      where
-        instantiate doc = do
-            Entity _ rec <- fromPersistValuesThrow t doc
-            return rec
-        err msg = Trans.liftIO $ throwIO $ KeyNotFound $ show key ++ msg
-        t = entityDefFromKey key
-
-
-instance PersistUnique DB.MongoContext where
+instance PersistUniqueRead DB.MongoContext where
     getBy uniq = do
         mdoc <- DB.findOne $
-          DB.select (toUniquesDoc uniq) (collectionName rec)
+          (DB.select (toUniquesDoc uniq) (collectionName rec)) {DB.project = projectionFromRecord rec}
         case mdoc of
             Nothing -> return Nothing
             Just doc -> liftM Just $ fromPersistValuesThrow t doc
@@ -609,6 +617,7 @@ instance PersistUnique DB.MongoContext where
         t = entityDef $ Just rec
         rec = dummyFromUnique uniq
 
+instance PersistUniqueWrite DB.MongoContext where
     deleteBy uniq =
         DB.delete DB.Select {
           DB.coll = collectionName $ dummyFromUnique uniq
@@ -647,7 +656,7 @@ instance PersistUnique DB.MongoContext where
         instantiate (Just doc) =
             fromPersistValuesThrow (entityDef $ Just newRecord) doc
             -}
-   
+
 
 -- | It would make more sense to call this _id, but GHC treats leading underscore in special ways
 id_ :: T.Text
@@ -671,8 +680,21 @@ collectionNameFromKey :: (PersistEntity record, PersistEntityBackend record ~ DB
                       => Key record -> Text
 collectionNameFromKey = collectionName . recordTypeFromKey
 
+projectionFromEntityDef :: EntityDef -> DB.Projector
+projectionFromEntityDef eDef =
+  map toField (entityFields eDef)
+  where
+    toField :: FieldDef -> DB.Field
+    toField fDef = (unDBName (fieldDB fDef)) DB.=: (1 :: Int)
 
-instance PersistQuery DB.MongoContext where
+projectionFromKey :: PersistEntity record => Key record -> DB.Projector
+projectionFromKey = projectionFromEntityDef . entityDefFromKey
+
+projectionFromRecord :: PersistEntity record => record -> DB.Projector
+projectionFromRecord = projectionFromEntityDef . entityDef . Just
+
+
+instance PersistQueryWrite DB.MongoContext where
     updateWhere _ [] = return ()
     updateWhere filts upds =
         DB.modify DB.Select {
@@ -686,6 +708,7 @@ instance PersistQuery DB.MongoContext where
         , DB.selector = filtersToDoc filts
         }
 
+instance PersistQueryRead DB.MongoContext where
     count filts = do
         i <- DB.count query
         return $ fromIntegral i
@@ -756,6 +779,7 @@ makeQuery filts opts =
       DB.limit = fromIntegral limit
     , DB.skip  = fromIntegral offset
     , DB.sort  = orders
+    , DB.project = projectionFromRecord (dummyFromFilts filts)
     }
   where
     (limit, offset, orders') = limitOffsetOrder opts
@@ -912,7 +936,7 @@ docToEntityThrow doc =
 
 
 fromPersistValuesThrow :: (Trans.MonadIO m, PersistEntity record, PersistEntityBackend record ~ DB.MongoContext) => EntityDef -> [DB.Field] -> m (Entity record)
-fromPersistValuesThrow entDef doc = 
+fromPersistValuesThrow entDef doc =
     case eitherFromPersistValues entDef doc of
         Left t -> Trans.liftIO . throwIO $ PersistMarshalError $
                    unHaskellName (entityHaskell entDef) `mappend` ": " `mappend` t
@@ -958,14 +982,14 @@ orderPersistValues entDef castDoc = reorder
     -- reorder = map (fromJust . (flip Prelude.lookup $ castDoc)) castColumns
     --
     -- this is O(n * log(n))
-    -- reorder =  map (\c -> (M.fromList castDoc) M.! c) castColumns 
+    -- reorder =  map (\c -> (M.fromList castDoc) M.! c) castColumns
     --
     -- and finally, this is O(n * log(n))
     -- * do an alist lookup for each column
     -- * but once we found an item in the alist use a new alist without that item for future lookups
     -- * so for the last query there is only one item left
     --
-    reorder :: [(Text, PersistValue)] 
+    reorder :: [(Text, PersistValue)]
     reorder = match castColumns castDoc []
       where
         match :: [(Text, Maybe EmbedEntityDef)]
@@ -977,7 +1001,6 @@ orderPersistValues entDef castDoc = reorder
         -- allow extra mongoDB fields that persistent does not know about
         -- another application may use fields we don't care about
         -- our own application may set extra fields with the raw driver
-        -- TODO: instead use a projection to avoid network overhead
         match [] _ values = values
         match (column:columns) fields values =
           let (found, unused) = matchOne fields []
@@ -1058,7 +1081,7 @@ instance DB.Val PersistValue where
   cast' (DB.RegEx (DB.Regex us1 us2))    = Just $ PersistByteString $ E.encodeUtf8 $ T.append us1 us2
   cast' (DB.Doc doc)  = Just $ PersistMap $ assocListFromDoc doc
   cast' (DB.Array xs) = Just $ PersistList $ mapMaybe DB.cast' xs
-  cast' (DB.ObjId x)  = Just $ oidToPersistValue x 
+  cast' (DB.ObjId x)  = Just $ oidToPersistValue x
   cast' (DB.JavaScr _) = throw $ PersistMongoDBUnsupported "cast operation not supported for javascript"
   cast' (DB.Sym _)     = throw $ PersistMongoDBUnsupported "cast operation not supported for sym"
   cast' (DB.Stamp _)   = throw $ PersistMongoDBUnsupported "cast operation not supported for stamp"
@@ -1076,7 +1099,7 @@ instance Serialize.Serialize DB.ObjectId where
 
   get = do w1 <- Serialize.get
            w2 <- Serialize.get
-           return (DB.Oid w1 w2) 
+           return (DB.Oid w1 w2)
 
 dummyFromUnique :: Unique v -> v
 dummyFromUnique _ = error "dummyFromUnique"

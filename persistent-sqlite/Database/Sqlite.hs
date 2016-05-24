@@ -43,7 +43,9 @@ import qualified Data.ByteString.Internal as BSI
 import Foreign
 import Foreign.C
 import Control.Exception (Exception, throwIO)
+import Control.Applicative ((<$>))
 import Database.Persist (PersistValue (..), listToJSON, mapToJSON)
+import Data.Bits ((.|.))
 import Data.Text (Text, pack, unpack)
 import Data.Text.Encoding (encodeUtf8, decodeUtf8With)
 import Data.Text.Encoding.Error (lenientDecode)
@@ -183,21 +185,24 @@ sqlError maybeConnection functionName error = do
     , seDetails = details
     }
 
-foreign import ccall "sqlite3_open"
-  openC :: CString -> Ptr (Ptr ()) -> IO Int
+foreign import ccall "sqlite3_open_v2"
+  openC :: CString -> Ptr (Ptr ()) -> Int -> CString -> IO Int
 openError :: Text -> IO (Either Connection Error)
 openError path' = do
-  BS.useAsCString (encodeUtf8 path')
-                  (\path -> do
-                     alloca (\database -> do
-                               error' <- openC path database
-                               error <- return $ decodeError error'
-                               case error of
-                                 ErrorOK -> do
-                                            database' <- peek database
-                                            active <- newIORef True
-                                            return $ Left $ Connection active $ Connection' database'
-                                 _ -> return $ Right error))
+    let flag = sqliteFlagReadWrite .|. sqliteFlagCreate .|. sqliteFlagUri
+    BS.useAsCString (encodeUtf8 path') $ \path -> alloca $ \database -> do
+        err <- decodeError <$> openC path database flag nullPtr
+        case err of
+            ErrorOK -> do database' <- peek database
+                          active <- newIORef True
+                          return $ Left $ Connection active $ Connection' database'
+            _ -> return $ Right err
+  where
+    -- for all sqlite flags, check out https://www.sqlite.org/c3ref/open.html
+    sqliteFlagReadWrite = 0x2
+    sqliteFlagCreate    = 0x4
+    sqliteFlagUri       = 0x40
+
 open :: Text -> IO Connection
 open path = do
   databaseOrError <- openError path

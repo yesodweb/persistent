@@ -1,3 +1,4 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -22,6 +23,7 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Error (ErrorT(..))
 import Control.Monad.Trans.Reader (runReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
+import Data.Monoid ((<>))
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import Data.ByteString (ByteString)
@@ -30,6 +32,7 @@ import Data.Fixed (Pico)
 import Data.Function (on)
 import Data.IORef
 import Data.List (find, intercalate, sort, groupBy)
+import Data.Pool (Pool)
 import Data.Text (Text, pack)
 import qualified Data.Text.IO as T
 import Text.Read (readMaybe)
@@ -45,6 +48,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 
 import Database.Persist.Sql
+import Database.Persist.Sql.Types.Internal (mkPersistBackend)
 import Data.Int (Int64)
 
 import qualified Database.MySQL.Simple        as MySQL
@@ -57,17 +61,16 @@ import qualified Database.MySQL.Base.Types    as MySQLBase
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Resource (runResourceT)
 
-
 -- | Create a MySQL connection pool and run the given action.
 -- The pool is properly released after the action finishes using
 -- it.  Note that you should not use the given 'ConnectionPool'
 -- outside the action since it may be already been released.
-withMySQLPool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m) =>
-                 MySQL.ConnectInfo
+withMySQLPool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m, IsSqlBackend backend)
+              => MySQL.ConnectInfo
               -- ^ Connection information.
               -> Int
               -- ^ Number of connections to be kept open in the pool.
-              -> (ConnectionPool -> m a)
+              -> (Pool backend -> m a)
               -- ^ Action to be executed that uses the connection pool.
               -> m a
 withMySQLPool ci = withSqlPool $ open' ci
@@ -76,21 +79,21 @@ withMySQLPool ci = withSqlPool $ open' ci
 -- | Create a MySQL connection pool.  Note that it's your
 -- responsibility to properly close the connection pool when
 -- unneeded.  Use 'withMySQLPool' for automatic resource control.
-createMySQLPool :: (MonadBaseControl IO m, MonadIO m, MonadLogger m) =>
-                   MySQL.ConnectInfo
+createMySQLPool :: (MonadBaseControl IO m, MonadIO m, MonadLogger m, IsSqlBackend backend)
+                => MySQL.ConnectInfo
                 -- ^ Connection information.
                 -> Int
                 -- ^ Number of connections to be kept open in the pool.
-                -> m ConnectionPool
+                -> m (Pool backend)
 createMySQLPool ci = createSqlPool $ open' ci
 
 
 -- | Same as 'withMySQLPool', but instead of opening a pool
 -- of connections, only one connection is opened.
-withMySQLConn :: (MonadBaseControl IO m, MonadIO m, MonadLogger m) =>
-                 MySQL.ConnectInfo
+withMySQLConn :: (MonadBaseControl IO m, MonadIO m, MonadLogger m, IsSqlBackend backend)
+              => MySQL.ConnectInfo
               -- ^ Connection information.
-              -> (SqlBackend -> m a)
+              -> (backend -> m a)
               -- ^ Action to be executed that uses the connection.
               -> m a
 withMySQLConn = withSqlConn . open'
@@ -98,12 +101,12 @@ withMySQLConn = withSqlConn . open'
 
 -- | Internal function that opens a connection to the MySQL
 -- server.
-open' :: MySQL.ConnectInfo -> LogFunc -> IO SqlBackend
+open' :: (IsSqlBackend backend) => MySQL.ConnectInfo -> LogFunc -> IO backend
 open' ci logFunc = do
     conn <- MySQL.connect ci
     MySQLBase.autocommit conn False -- disable autocommit!
     smap <- newIORef $ Map.empty
-    return SqlBackend
+    return . mkPersistBackend $ SqlBackend
         { connPrepare    = prepare' conn
         , connStmtMap    = smap
         , connInsertSql  = insertSql'
@@ -176,7 +179,7 @@ withStmt' conn query vals = do
     fetchRows result = liftIO $ do
       -- Find out the type of the columns
       fields <- MySQLBase.fetchFields result
-      let getters = [ maybe PersistNull (getGetter (MySQLBase.fieldType f) f . Just) | f <- fields]
+      let getters = [ maybe PersistNull (getGetter f f . Just) | f <- fields]
           convert = use getters
             where use (g:gs) (col:cols) =
                     let v  = g col
@@ -228,47 +231,70 @@ convertPV f = (f .) . MySQL.convert
 
 -- | Get the corresponding @'Getter' 'PersistValue'@ depending on
 -- the type of the column.
-getGetter :: MySQLBase.Type -> Getter PersistValue
--- Bool
-getGetter MySQLBase.Tiny       = convertPV PersistBool
--- Int64
-getGetter MySQLBase.Int24      = convertPV PersistInt64
-getGetter MySQLBase.Short      = convertPV PersistInt64
-getGetter MySQLBase.Long       = convertPV PersistInt64
-getGetter MySQLBase.LongLong   = convertPV PersistInt64
--- Double
-getGetter MySQLBase.Float      = convertPV PersistDouble
-getGetter MySQLBase.Double     = convertPV PersistDouble
-getGetter MySQLBase.Decimal    = convertPV PersistDouble
-getGetter MySQLBase.NewDecimal = convertPV PersistDouble
--- ByteString and Text
-getGetter MySQLBase.VarChar    = convertPV PersistByteString
-getGetter MySQLBase.VarString  = convertPV PersistByteString
-getGetter MySQLBase.String     = convertPV PersistByteString
-getGetter MySQLBase.Blob       = convertPV PersistByteString
-getGetter MySQLBase.TinyBlob   = convertPV PersistByteString
-getGetter MySQLBase.MediumBlob = convertPV PersistByteString
-getGetter MySQLBase.LongBlob   = convertPV PersistByteString
--- Time-related
-getGetter MySQLBase.Time       = convertPV PersistTimeOfDay
-getGetter MySQLBase.DateTime   = convertPV PersistUTCTime
-getGetter MySQLBase.Timestamp  = convertPV PersistUTCTime
-getGetter MySQLBase.Date       = convertPV PersistDay
-getGetter MySQLBase.NewDate    = convertPV PersistDay
-getGetter MySQLBase.Year       = convertPV PersistDay
--- Null
-getGetter MySQLBase.Null       = \_ _ -> PersistNull
--- Controversial conversions
-getGetter MySQLBase.Set        = convertPV PersistText
-getGetter MySQLBase.Enum       = convertPV PersistText
--- Conversion using PersistDbSpecific
-getGetter MySQLBase.Geometry   = \_ m ->
-  case m of
-    Just g -> PersistDbSpecific g
-    Nothing -> error "Unexpected null in database specific value"
--- Unsupported
-getGetter other = error $ "MySQL.getGetter: type " ++
-                  show other ++ " not supported."
+getGetter :: MySQLBase.Field -> Getter PersistValue
+getGetter field = go (MySQLBase.fieldType field) 
+                        (MySQLBase.fieldLength field)
+                            (MySQLBase.fieldCharSet field)
+  where
+    -- Bool
+    go MySQLBase.Tiny       1 _ = convertPV PersistBool
+    go MySQLBase.Tiny       _ _ = convertPV PersistInt64
+    -- Int64
+    go MySQLBase.Int24      _ _ = convertPV PersistInt64
+    go MySQLBase.Short      _ _ = convertPV PersistInt64
+    go MySQLBase.Long       _ _ = convertPV PersistInt64
+    go MySQLBase.LongLong   _ _ = convertPV PersistInt64
+    -- Double
+    go MySQLBase.Float      _ _ = convertPV PersistDouble
+    go MySQLBase.Double     _ _ = convertPV PersistDouble
+    go MySQLBase.Decimal    _ _ = convertPV PersistDouble
+    go MySQLBase.NewDecimal _ _ = convertPV PersistDouble
+
+    -- ByteString and Text
+
+    -- The MySQL C client (and by extension the Haskell mysql package) doesn't distinguish between binary and non-binary string data at the type level.
+    -- (e.g. both BLOB and TEXT have the MySQLBase.Blob type).
+    -- Instead, the character set distinguishes them. Binary data uses character set number 63.
+    -- See https://dev.mysql.com/doc/refman/5.6/en/c-api-data-structures.html (Search for "63")
+    go MySQLBase.VarChar    _ 63 = convertPV PersistByteString
+    go MySQLBase.VarString  _ 63 = convertPV PersistByteString
+    go MySQLBase.String     _ 63 = convertPV PersistByteString
+
+    go MySQLBase.VarChar    _ _  = convertPV PersistText
+    go MySQLBase.VarString  _ _  = convertPV PersistText
+    go MySQLBase.String     _ _  = convertPV PersistText
+    
+    go MySQLBase.Blob       _ 63 = convertPV PersistByteString
+    go MySQLBase.TinyBlob   _ 63 = convertPV PersistByteString
+    go MySQLBase.MediumBlob _ 63 = convertPV PersistByteString
+    go MySQLBase.LongBlob   _ 63 = convertPV PersistByteString
+
+    go MySQLBase.Blob       _ _  = convertPV PersistText
+    go MySQLBase.TinyBlob   _ _  = convertPV PersistText
+    go MySQLBase.MediumBlob _ _  = convertPV PersistText
+    go MySQLBase.LongBlob   _ _  = convertPV PersistText
+
+    -- Time-related
+    go MySQLBase.Time       _ _  = convertPV PersistTimeOfDay
+    go MySQLBase.DateTime   _ _  = convertPV PersistUTCTime
+    go MySQLBase.Timestamp  _ _  = convertPV PersistUTCTime
+    go MySQLBase.Date       _ _  = convertPV PersistDay
+    go MySQLBase.NewDate    _ _  = convertPV PersistDay
+    go MySQLBase.Year       _ _  = convertPV PersistDay
+    -- Null
+    go MySQLBase.Null       _ _  = \_ _ -> PersistNull
+    -- Controversial conversions
+    go MySQLBase.Set        _ _  = convertPV PersistText
+    go MySQLBase.Enum       _ _  = convertPV PersistText
+    -- Conversion using PersistDbSpecific
+    go MySQLBase.Geometry   _ _  = \_ m ->
+      case m of
+        Just g -> PersistDbSpecific g
+        Nothing -> error "Unexpected null in database specific value"
+    -- Unsupported
+    go other _ _ = error $ "MySQL.getGetter: type " ++
+                      show other ++ " not supported."
+
 
 
 ----------------------------------------------------------------------
@@ -335,7 +361,20 @@ addTable cols entity = AddTable $ concat
       name = entityDB entity
       idtxt = case entityPrimary entity of
                 Just pdef -> concat [" PRIMARY KEY (", intercalate "," $ map (escapeDBName . fieldDB) $ compositeFields pdef, ")"]
-                Nothing   -> concat [escapeDBName $ fieldDB $ entityId entity, " BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY"]
+                Nothing ->
+                  let defText = defaultAttribute $ fieldAttrs $ entityId entity
+                      sType = fieldSqlType $ entityId entity
+                      autoIncrementText = case (sType, defText) of
+                        (SqlInt64, Nothing) -> " AUTO_INCREMENT"
+                        _ -> ""
+                      maxlen = findMaxLenOfField (entityId entity)
+                  in concat
+                         [ escapeDBName $ fieldDB $ entityId entity
+                         , " " <> showSqlType sType maxlen False
+                         , " NOT NULL"
+                         , autoIncrementText
+                         , " PRIMARY KEY"
+                         ]
 
 -- | Find out the type of a column.
 findTypeOfColumn :: [EntityDef] -> DBName -> DBName -> (DBName, FieldType)
@@ -355,18 +394,23 @@ findMaxLenOfColumn allDefs name col =
          ((,) col) $ do
            entDef     <- find ((== name) . entityDB) allDefs
            fieldDef   <- find ((== col) . fieldDB) (entityFields entDef)
-           maxLenAttr <- find ((T.isPrefixOf "maxlen=") . T.toLower) (fieldAttrs fieldDef)
-           readMaybe . T.unpack . T.drop 7 $ maxLenAttr
+           findMaxLenOfField fieldDef
 
--- | Helper for 'AddRefence' that finds out the 'entityId'.
+-- | Find out the maxlen of a field
+findMaxLenOfField :: FieldDef -> Maybe Integer
+findMaxLenOfField fieldDef = do
+    maxLenAttr <- find ((T.isPrefixOf "maxlen=") . T.toLower) (fieldAttrs fieldDef)
+    readMaybe . T.unpack . T.drop 7 $ maxLenAttr
+
+-- | Helper for 'AddReference' that finds out the which primary key columns to reference.
 addReference :: [EntityDef] -> DBName -> DBName -> DBName -> AlterColumn
-addReference allDefs fkeyname reftable cname = AddReference reftable fkeyname [cname] [id_] 
+addReference allDefs fkeyname reftable cname = AddReference reftable fkeyname [cname] referencedColumns
     where
-      id_ = maybe (error $ "Could not find ID of entity " ++ show reftable
-                         ++ " (allDefs = " ++ show allDefs ++ ")")
-                  id $ do
-                    entDef <- find ((== reftable) . entityDB) allDefs
-                    return (fieldDB $ entityId entDef)
+      referencedColumns = maybe (error $ "Could not find ID of entity " ++ show reftable
+                                  ++ " (allDefs = " ++ show allDefs ++ ")")
+                                id $ do
+                                  entDef <- find ((== reftable) . entityDB) allDefs
+                                  return $ map fieldDB $ entityKeyFields entDef
 
 data AlterColumn = Change Column
                  | Add' Column
@@ -374,7 +418,12 @@ data AlterColumn = Change Column
                  | Default String
                  | NoDefault
                  | Update' String
-                 | AddReference DBName DBName [DBName] [DBName]
+                 -- | See the definition of the 'showAlter' function to see how these fields are used.
+                 | AddReference
+                    DBName -- Referenced table
+                    DBName -- Foreign key name
+                    [DBName] -- Referencing columns
+                    [DBName] -- Referenced columns
                  | DropReference DBName
 
 type AlterColumn' = (DBName, AlterColumn)
@@ -453,9 +502,8 @@ getColumns connectInfo getter def = do
                   getColumn connectInfo getter (entityDB def)
 
     helperCntrs = do
-      let check [ PersistByteString cntrName
-                , PersistByteString clmnName] = return ( T.decodeUtf8 cntrName
-                                                       , T.decodeUtf8 clmnName )
+      let check [ PersistText cntrName
+                , PersistText clmnName] = return ( cntrName, clmnName )
           check other = fail $ "helperCntrs: unexpected " ++ show other
       rows <- mapM check =<< CL.consume
       return $ map (Right . Right . (DBName . fst . head &&& map (DBName . snd)))
@@ -468,9 +516,9 @@ getColumn :: MySQL.ConnectInfo
           -> DBName
           -> [PersistValue]
           -> IO (Either Text Column)
-getColumn connectInfo getter tname [ PersistByteString cname
-                                   , PersistByteString null_
-                                   , PersistByteString type'
+getColumn connectInfo getter tname [ PersistText cname
+                                   , PersistText null_
+                                   , PersistText type'
                                    , default'] =
     fmap (either (Left . pack) Right) $
     runErrorT $ do
@@ -499,18 +547,18 @@ getColumn connectInfo getter tname [ PersistByteString cname
                                      \COLUMN_NAME"
       let vars = [ PersistText $ pack $ MySQL.connectDatabase connectInfo
                  , PersistText $ unDBName $ tname
-                 , PersistByteString cname
+                 , PersistText cname
                  , PersistText $ pack $ MySQL.connectDatabase connectInfo ]
       cntrs <- with (stmtQuery stmt vars) ($$ CL.consume)
       ref <- case cntrs of
                [] -> return Nothing
-               [[PersistByteString tab, PersistByteString ref, PersistInt64 pos]] ->
-                   return $ if pos == 1 then Just (DBName $ T.decodeUtf8 tab, DBName $ T.decodeUtf8 ref) else Nothing
+               [[PersistText tab, PersistText ref, PersistInt64 pos]] ->
+                   return $ if pos == 1 then Just (DBName tab, DBName ref) else Nothing
                _ -> fail "MySQL.getColumn/getRef: never here"
 
       -- Okay!
       return Column
-        { cName = DBName $ T.decodeUtf8 cname
+        { cName = DBName $ cname
         , cNull = null_ == "YES"
         , cSqlType = parseType type'
         , cDefault = default_
@@ -525,7 +573,7 @@ getColumn _ _ _ x =
 
 -- | Parse the type of column as returned by MySQL's
 -- @INFORMATION_SCHEMA@ tables.
-parseType :: ByteString -> SqlType
+parseType :: Text -> SqlType
 parseType "bigint(20)" = SqlInt64
 parseType "decimal(32,20)" = SqlNumeric 32 20
 {-
@@ -564,7 +612,7 @@ parseType "date"       = SqlDay
 --parseType "newdate"    = SqlDay
 --parseType "year"       = SqlDay
 -}
-parseType b            = SqlOther $ T.decodeUtf8 b
+parseType b            = SqlOther b
 
 
 ----------------------------------------------------------------------

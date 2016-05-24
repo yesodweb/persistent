@@ -10,6 +10,8 @@ module Database.Persist.Zookeeper.Store (
 , BackendKey(..)
 )where
 
+import Control.Applicative ((<$>))
+
 import Database.Persist
 import qualified Database.Persist.Sql as Sql
 import qualified Database.Zookeeper as Z
@@ -23,15 +25,19 @@ import Control.Monad.Reader
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Types as A
 
-import Web.PathPieces (PathPiece (..))
+import Web.PathPieces (PathPiece(..))
+import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData (..), parseUrlPieceMaybe, parseUrlPieceWithPrefix)
+
+instance ToHttpApiData (BackendKey Z.Zookeeper) where
+    toUrlPiece key = "z" <> unZooKey key
+
+instance FromHttpApiData (BackendKey Z.Zookeeper) where
+    parseUrlPiece input = ZooKey <$> parseUrlPieceWithPrefix "z" input
 
 -- | ToPathPiece is used to convert a key to/from text
 instance PathPiece (BackendKey Z.Zookeeper) where
-    toPathPiece key = "z" <> (unZooKey key)
-    fromPathPiece keyText =
-      case T.uncons keyText of
-        Just ('z', prefixed) -> Just $ ZooKey prefixed
-        _ -> mzero
+  toPathPiece   = toUrlPiece
+  fromPathPiece = parseUrlPieceMaybe
 
 instance Sql.PersistFieldSql (BackendKey Z.Zookeeper) where
     sqlType _ = Sql.SqlOther "doesn't make much sense for Zookeeper"
@@ -51,9 +57,11 @@ deleteRecursive :: (Monad m, MonadIO m) => String -> Action m ()
 deleteRecursive dir = execZookeeper $ \zk -> zDeleteRecursive zk dir
 
 
-instance PersistStore Z.Zookeeper where
+instance PersistCore Z.Zookeeper where
     newtype BackendKey Z.Zookeeper = ZooKey { unZooKey :: T.Text }
         deriving (Show, Read, Eq, Ord, PersistField)
+
+instance PersistStoreWrite Z.Zookeeper where
 
     insert val = do
       mUniqVal <- val2uniqkey val
@@ -99,6 +107,17 @@ instance PersistStore Z.Zookeeper where
         return $ Right ()
       return ()
 
+    update key valList = do
+      va <- get key
+      case va of
+        Nothing -> return ()
+        Just v ->
+          case updateEntity v valList of
+            Right v' ->
+              replace key v'
+            Left v' -> error $ show v'
+
+instance PersistStoreRead Z.Zookeeper where
     get key = do
       r <- execZookeeper $ \zk -> do
         let dir = key2path key
@@ -113,13 +132,3 @@ instance PersistStore Z.Zookeeper where
           return (bin2entity str)
         (Right (Nothing,_stat)) -> do
           fail $ "data is nothing"
-
-    update key valList = do
-      va <- get key
-      case va of
-        Nothing -> return ()
-        Just v ->
-          case updateEntity v valList of
-            Right v' ->
-              replace key v'
-            Left v' -> error $ show v'

@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
@@ -24,6 +26,7 @@ module Database.Persist.Postgresql
 
 import Database.Persist.Sql
 import Database.Persist.Sql.Util (dbIdColumnsEsc)
+import Database.Persist.Sql.Types.Internal (mkPersistBackend)
 import Data.Fixed (Pico)
 
 import qualified Database.PostgreSQL.Simple as PG
@@ -72,6 +75,7 @@ import Data.Acquire (Acquire, mkAcquire, with)
 import System.Environment (getEnvironment)
 import Data.Int (Int64)
 import Data.Monoid ((<>))
+import Data.Pool (Pool)
 import Data.Time (utc, localTimeToUTC)
 
 -- | A @libpq@ connection string.  A simple example of connection
@@ -88,13 +92,13 @@ type ConnectionString = ByteString
 -- finishes using it.  Note that you should not use the given
 -- 'ConnectionPool' outside the action since it may be already
 -- been released.
-withPostgresqlPool :: (MonadBaseControl IO m, MonadLogger m, MonadIO m)
+withPostgresqlPool :: (MonadBaseControl IO m, MonadLogger m, MonadIO m, IsSqlBackend backend)
                    => ConnectionString
                    -- ^ Connection string to the database.
                    -> Int
                    -- ^ Number of connections to be kept open in
                    -- the pool.
-                   -> (ConnectionPool -> m a)
+                   -> (Pool backend -> m a)
                    -- ^ Action to be executed that uses the
                    -- connection pool.
                    -> m a
@@ -105,13 +109,13 @@ withPostgresqlPool ci = withSqlPool $ open' (const $ return ()) ci
 -- responsibility to properly close the connection pool when
 -- unneeded.  Use 'withPostgresqlPool' for an automatic resource
 -- control.
-createPostgresqlPool :: (MonadIO m, MonadBaseControl IO m, MonadLogger m)
+createPostgresqlPool :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsSqlBackend backend)
                      => ConnectionString
                      -- ^ Connection string to the database.
                      -> Int
                      -- ^ Number of connections to be kept open
                      -- in the pool.
-                     -> m ConnectionPool
+                     -> m (Pool backend)
 createPostgresqlPool = createPostgresqlPoolModified (const $ return ())
 
 -- | Same as 'createPostgresqlPool', but additionally takes a callback function
@@ -123,21 +127,22 @@ createPostgresqlPool = createPostgresqlPoolModified (const $ return ())
 --
 -- Since 2.1.3
 createPostgresqlPoolModified
-    :: (MonadIO m, MonadBaseControl IO m, MonadLogger m)
+    :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsSqlBackend backend)
     => (PG.Connection -> IO ()) -- ^ action to perform after connection is created
     -> ConnectionString -- ^ Connection string to the database.
     -> Int -- ^ Number of connections to be kept open in the pool.
-    -> m ConnectionPool
+    -> m (Pool backend)
 createPostgresqlPoolModified modConn ci = createSqlPool $ open' modConn ci
 
 -- | Same as 'withPostgresqlPool', but instead of opening a pool
 -- of connections, only one connection is opened.
-withPostgresqlConn :: (MonadIO m, MonadBaseControl IO m, MonadLogger m)
-                   => ConnectionString -> (SqlBackend -> m a) -> m a
+withPostgresqlConn :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsSqlBackend backend)
+                   => ConnectionString -> (backend -> m a) -> m a
 withPostgresqlConn = withSqlConn . open' (const $ return ())
 
-open' :: (PG.Connection -> IO ())
-      -> ConnectionString -> LogFunc -> IO SqlBackend
+open'
+    :: (IsSqlBackend backend)
+    => (PG.Connection -> IO ()) -> ConnectionString -> LogFunc -> IO backend
 open' modConn cstr logFunc = do
     conn <- PG.connectPostgreSQL cstr
     modConn conn
@@ -145,10 +150,10 @@ open' modConn cstr logFunc = do
 
 
 -- | Generate a 'Connection' from a 'PG.Connection'
-openSimpleConn :: LogFunc -> PG.Connection -> IO SqlBackend
+openSimpleConn :: (IsSqlBackend backend) => LogFunc -> PG.Connection -> IO backend
 openSimpleConn logFunc conn = do
     smap <- newIORef $ Map.empty
-    return SqlBackend
+    return . mkPersistBackend $ SqlBackend
         { connPrepare    = prepare' conn
         , connStmtMap    = smap
         , connInsertSql  = insertSql'
@@ -267,7 +272,12 @@ withStmt' conn query vals =
            else fmap Just $ forM (zip getters [0..]) $ \(getter, col) -> do
                                 mbs <- LibPQ.getvalue' ret row col
                                 case mbs of
-                                  Nothing -> return PersistNull
+                                  Nothing ->
+                                    -- getvalue' verified that the value is NULL.
+                                    -- However, that does not mean that there are
+                                    -- no NULL values inside the value (e.g., if
+                                    -- we're dealing with an array of optional values).
+                                    return PersistNull
                                   Just bs -> do
                                     ok <- PGFF.runConversion (getter mbs) conn
                                     bs `seq` case ok of
@@ -304,7 +314,7 @@ newtype Unknown = Unknown { unUnknown :: ByteString }
 instance PGFF.FromField Unknown where
     fromField f mdata =
       case mdata of
-        Nothing  -> PGFF.returnError PGFF.UnexpectedNull f ""
+        Nothing  -> PGFF.returnError PGFF.UnexpectedNull f "Database.Persist.Postgresql/PGFF.FromField Unknown"
         Just dat -> return (Unknown dat)
 
 instance PGTF.ToField Unknown where
@@ -328,8 +338,10 @@ builtinGetters = I.fromList
     , (k PS.xml,         convertPV PersistText)
     , (k PS.float4,      convertPV PersistDouble)
     , (k PS.float8,      convertPV PersistDouble)
+#if !MIN_VERSION_postgresql_simple(0,5,0)
     , (k PS.abstime,     convertPV PersistUTCTime)
     , (k PS.reltime,     convertPV PersistUTCTime)
+#endif
     , (k PS.money,       convertPV PersistRational)
     , (k PS.bpchar,      convertPV PersistText)
     , (k PS.varchar,     convertPV PersistText)
@@ -345,9 +357,8 @@ builtinGetters = I.fromList
     , (k PS.jsonb,       convertPV (PersistByteString . unUnknown))
     , (k PS.unknown,     convertPV (PersistByteString . unUnknown))
 
-
-
-    -- array types: same order as above
+    -- Array types: same order as above.
+    -- The OIDs were taken from pg_type.
     , (1000,             listOf PersistBool)
     , (1001,             listOf (PersistByteString . unBinary))
     , (1002,             listOf PersistText)
@@ -379,7 +390,13 @@ builtinGetters = I.fromList
     ]
     where
         k (PGFF.typoid -> i) = PG.oid2int i
-        listOf f = convertPV (PersistList . map f . PG.fromPGArray)
+        -- A @listOf f@ will use a @PGArray (Maybe T)@ to convert
+        -- the values to Haskell-land.  The @Maybe@ is important
+        -- because the usual way of checking NULLs
+        -- (c.f. withStmt') won't check for NULL inside
+        -- arrays---or any other compound structure for that matter.
+        listOf f = convertPV (PersistList . map (nullable f) . PG.fromPGArray)
+          where nullable = maybe PersistNull
 
 getGetter :: PG.Connection -> PG.Oid -> Getter PersistValue
 getGetter _conn oid
@@ -396,7 +413,8 @@ doesTableExist getter (DBName name) = do
     stmt <- getter sql
     with (stmtQuery stmt vals) ($$ start)
   where
-    sql = "SELECT COUNT(*) FROM information_schema.tables WHERE table_name=?"
+    sql = "SELECT COUNT(*) FROM pg_catalog.pg_tables WHERE schemaname != 'pg_catalog'"
+          <> " AND schemaname != 'information_schema' AND tablename=?"
     vals = [PersistText name]
 
     start = await >>= maybe (error "No results when checking doesTableExist") start'
@@ -474,7 +492,7 @@ addTable cols entity = AddTable $ T.concat
                             ]
 
 maySerial :: SqlType -> Maybe Text -> Text
-maySerial SqlInt64 Nothing = " SERIAL "
+maySerial SqlInt64 Nothing = " SERIAL8 "
 maySerial sType _ = " " <> showSqlType sType
 
 mayDefault :: Maybe Text -> Text
@@ -885,18 +903,12 @@ showAlter table (_, DropReference cname) = T.concat
 
 -- | get the SQL string for the table that a PeristEntity represents
 -- Useful for raw SQL queries
-tableName :: forall record.
-          ( PersistEntity record
-          , PersistEntityBackend record ~ SqlBackend
-          ) => record -> Text
+tableName :: (PersistEntity record) => record -> Text
 tableName = escape . tableDBName
 
 -- | get the SQL string for the field that an EntityField represents
 -- Useful for raw SQL queries
-fieldName :: forall record typ.
-          ( PersistEntity record
-          , PersistEntityBackend record ~ SqlBackend
-          ) => EntityField record typ -> Text
+fieldName :: (PersistEntity record) => EntityField record typ -> Text
 fieldName = escape . fieldDBName
 
 escape :: DBName -> Text
