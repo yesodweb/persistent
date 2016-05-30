@@ -8,10 +8,14 @@
 {-# LANGUAGE TypeFamilies               #-}
 
 import Control.Monad.IO.Class  (liftIO)
+import qualified Data.Text as T
 import Data.Time
 import Database.Persist.Sqlite
 import Database.Persist.TH
+import qualified Database.Sqlite as Sqlite
 import Test.Hspec
+import System.IO (hClose)
+import System.IO.Temp (withSystemTempFile)
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
 Test
@@ -34,3 +38,8 @@ main = hspec $ do
         tid <- insert $ Test now
         Just (Test now') <- get tid
         liftIO $ now' `shouldBe` now
+    it "issue #564" $ asIO $ withSystemTempFile "test564.sqlite3"$ \fp h -> do
+        hClose h
+        conn <- Sqlite.open (T.pack fp)
+        Sqlite.close conn
+        return ()
