@@ -21,16 +21,6 @@ matrix:
         packages:
         - ghc-7.6.3
         - cabal-install-1.18
-  - env: GHCVER=7.6.3 CABALVER=1.18 BACKEND=zookeeper
-    addons:
-      apt:
-        sources:
-        - hvr-ghc
-        packages:
-        - ghc-7.6.3
-        - cabal-install-1.18
-        - libzookeeper-mt-dev
-        - zookeeperd
   - env: GHCVER=7.6.3 CABALVER=1.18 BACKEND=mongodb
     addons:
       apt:
@@ -79,16 +69,6 @@ matrix:
         packages:
         - ghc-7.8.4
         - cabal-install-1.18
-  - env: GHCVER=7.8.4 CABALVER=1.18 BACKEND=zookeeper
-    addons:
-      apt:
-        sources:
-        - hvr-ghc
-        packages:
-        - ghc-7.8.4
-        - cabal-install-1.18
-        - libzookeeper-mt-dev
-        - zookeeperd
   - env: GHCVER=7.8.4 CABALVER=1.18 BACKEND=mongodb
     addons:
       apt:
@@ -137,16 +117,6 @@ matrix:
         packages:
         - ghc-7.10.2
         - cabal-install-1.22
-  - env: GHCVER=7.10.2 CABALVER=1.22 BACKEND=zookeeper
-    addons:
-      apt:
-        sources:
-        - hvr-ghc
-        packages:
-        - ghc-7.10.2
-        - cabal-install-1.22
-        - libzookeeper-mt-dev
-        - zookeeperd
   - env: GHCVER=7.10.2 CABALVER=1.22 BACKEND=mongodb
     addons:
       apt:
@@ -193,9 +163,6 @@ matrix:
 
   # See: https://github.com/yesodweb/persistent/issues/460
   - env: GHCVER=7.6.3 CABALVER=1.18 BACKEND=sqlite
-  - env: GHCVER=7.6.3 CABALVER=1.18 BACKEND=zookeeper
-  - env: GHCVER=7.8.4 CABALVER=1.18 BACKEND=zookeeper
-  - env: GHCVER=7.10.2 CABALVER=1.22 BACKEND=zookeeper
 
   # 7.6.3. Probably aeson-extra needs to loosen a lower bounds
   - env: GHCVER=7.6.3 CABALVER=1.18 BACKEND=none
@@ -212,3 +179,11 @@ cache:
   directories:
   - $HOME/.cabal
   - $HOME/.ghc
+
+
+# zookeeper doesn't seem to work any more
+# matrix:
+#  - env: GHCVER=X CABALVER=Y BACKEND=zookeeper
+#        packages:
+#        - libzookeeper-mt-dev
+#        - zookeeperd
