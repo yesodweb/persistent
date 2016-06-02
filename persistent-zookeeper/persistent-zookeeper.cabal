@@ -17,7 +17,7 @@ source-repository head
 
 library
     build-depends:   base                  >= 4.6        && < 5
-                   , bytestring            >= 0.10.0.0 && < 0.11.0.0
+                   , bytestring            >= 0.10.0.0
                    , persistent            >= 2.1
                    , persistent-template
                    , template-haskell
@@ -29,8 +29,8 @@ library
                    , transformers
                    , transformers-base
                    , monad-control
-                   , utf8-string           >= 0.3.7    && < 0.4.0
-                   , binary                >= 0.7      && < 0.8
+                   , utf8-string           >= 0.3.7
+                   , binary                >= 0.7
                    , scientific
                    , hzk                   >= 2.1
                    , resource-pool
@@ -64,15 +64,15 @@ test-suite  basic
                    , mtl
                    , transformers
                    , transformers-base
-                   , bytestring            >= 0.10.0.0 && < 0.11.0.0
+                   , bytestring            >= 0.10.0.0
                    , text                  >= 0.8
                    , aeson                 >= 0.6.2
-                   , binary                >= 0.7      && < 0.8
+                   , binary                >= 0.7
                    , time                  
                    , attoparsec
                    , template-haskell
                    , monad-control
-                   , utf8-string           >= 0.3.7    && < 0.4.0
+                   , utf8-string           >= 0.3.7
                    , persistent-zookeeper
                    , scientific
                    , hzk                   >= 2.1

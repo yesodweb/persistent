@@ -1,3 +1,7 @@
+# Building
+
+    stack build
+
 # Running persistent tests
 
 All tests are ran from the persistent-test directory
@@ -13,19 +17,11 @@ using
 
     cabal configure -f<backend> --enable-tests
 
-where <backend> is one of mongodb/postgresql/mysql/couchdb.
+where <backend> is mongodb, postgresql, mysql, etc.
 
 Now run with
 
     cabal build && dist/build/test/test
-
-
-# Backends
-
-By default the sqlite backend is tested.
-To test other backends, you can give a flag described in persisten-test.
-
-    cabal configure -fmongodb --enable-tests
 
 
 ## Installing backends
@@ -40,11 +36,10 @@ However, we have a Dockerfile that you can use to install all the databases.
 
 This only works on Linux, but you can use Linux on Mac or Windows through Virtualbox.
 
-After building you still need to start up the databases in the background (other than sqlite) that you are testing.
+Docker does not support upstart so just because you install a database does not mean it will be running. You must launch each one in the background.
 For example:
 
     mongod --smallfiles &
 
-Docker does not support upstart so just because you install a database does not mean it will be running. You must launch each one in the background.
 
-If someone can contribute information on how to run persistent or MySQL that would be appreciated.
+If someone can contribute information on how to run persistent or MySQL in docker that would be appreciated.
