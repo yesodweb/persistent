@@ -29,8 +29,8 @@ extra-source-files: ChangeLog.md
 library
     build-depends:   base                  >= 4.6        && < 5
                    , transformers          >= 0.2.1
-                   , mysql-simple          >= 0.2.2.3  && < 0.3
-                   , mysql                 >= 0.1.1.3  && < 0.2
+                   , mysql-simple          >= 0.2.2.3
+                   , mysql                 >= 0.1.1.3
                    , blaze-builder
                    , persistent            >= 2.5      && < 3
                    , containers            >= 0.2
