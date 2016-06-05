@@ -20,7 +20,7 @@ library
     build-depends:   base                  >= 4.6        && < 5
                    , hedis                 >= 0.6.0   
                    , bytestring            >= 0.10.0.0 && < 0.11.0.0
-                   , persistent            >= 2.1      && < 3
+                   , persistent            >= 2.5      && < 3
                    , text                  >= 1.2.0.0
                    , aeson                 >= 0.8
                    , time                  >= 1.4      && < 1.6
