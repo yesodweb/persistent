@@ -45,10 +45,20 @@ execRedisT action = do
         (Right x) -> return x
         (Left x)  -> fail x
 
-instance PersistStore R.Connection where
+instance PersistCore R.Connection where
     newtype BackendKey R.Connection = RedisKey Text
         deriving (Show, Read, Eq, Ord, PersistField, FromJSON, ToJSON)
 
+instance PersistStoreRead R.Connection where
+    get k = do
+        r <- execRedisT $ R.hgetall (unKey k)
+        if null r
+            then return Nothing
+            else do
+                Entity _ val <- mkEntity k r
+                return $ Just val
+
+instance PersistStoreWrite R.Connection where
     insert val = do
         keyId <- execRedisT $ createKey val
         let textKey = toKeyText val keyId
@@ -78,14 +88,6 @@ instance PersistStore R.Connection where
             0 -> fail "there is no such key!"
             1 -> return ()
             _ -> fail "there are a lot of such keys!"
-
-    get k = do
-        r <- execRedisT $ R.hgetall (unKey k)
-        if null r
-            then return Nothing
-            else do
-                Entity _ val <- mkEntity k r
-                return $ Just val
 
     update _ [] = return ()
     update k upds = do

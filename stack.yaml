@@ -7,7 +7,7 @@ packages:
   - ./persistent-mongoDB
   - ./persistent-mysql
   - ./persistent-postgresql
-  # - ./persistent-redis
+  - ./persistent-redis
   # - ./persistent-zookeeper
 
 extra-deps:
