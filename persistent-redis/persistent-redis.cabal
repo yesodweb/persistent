@@ -18,7 +18,7 @@ source-repository head
 
 library
     build-depends:   base                  >= 4.6        && < 5
-                   , hedis                 >= 0.6.0   
+                   , hedis                 >= 0.6.0
                    , bytestring            >= 0.10.0.0 && < 0.11.0.0
                    , persistent            >= 2.5      && < 3
                    , text                  >= 1.2.0.0
@@ -27,9 +27,9 @@ library
                    , attoparsec            >= 0.12.0.0
                    , mtl                   >= 2.2.0    && < 2.3
                    , transformers          >= 0.4.0.0  && < 0.6.0.0
-                   , monad-control         >= 0.3.2.0
-                   , utf8-string           >= 0.3.7   
-                   , binary                >= 0.7      && < 0.8
+                   , monad-control         >= 0.3.2.0  && < 1.2.0.0
+                   , utf8-string           >= 0.3.7    && < 1.1.0
+                   , binary                >= 0.7      && < 0.9
                    , scientific            >= 0.3.1    && < 0.4
                    , path-pieces           >= 0.1
                    , http-api-data
