@@ -1,10 +1,9 @@
 {-# LANGUAGE FlexibleContexts, UndecidableInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-module Database.Persist.Redis.Store 
+module Database.Persist.Redis.Store
     ( execRedisT
     , RedisBackend
     )where
@@ -44,6 +43,10 @@ execRedisT action = do
     case r of
         (Right x) -> return x
         (Left x)  -> fail x
+
+instance HasPersistBackend R.Connection where
+  type BaseBackend R.Connection = R.Connection
+  persistBackend = id
 
 instance PersistCore R.Connection where
     newtype BackendKey R.Connection = RedisKey Text
@@ -113,4 +116,3 @@ instance PathPiece (BackendKey RedisBackend) where
 
 instance Sql.PersistFieldSql (BackendKey RedisBackend) where
     sqlType _ = Sql.SqlOther (pack "doesn't make much sense for Redis backend")
-
