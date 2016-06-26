@@ -16,8 +16,26 @@ import qualified Data.Text as T
 import Data.Monoid (mappend)
 import qualified Data.Conduit.List as CL
 import Control.Monad.Trans.Reader (ask, withReaderT)
+import Control.Monad (when, liftM)
+
+defaultUpsert record updates = do
+  uniqueKey <- onlyUnique record
+  mExists <- getBy uniqueKey
+  k <- case mExists of
+         Just (Entity k _) -> do
+                      when (null updates) (replace k record)
+                      return k
+         Nothing           -> insert record
+  Entity k `liftM` updateGet k updates
+
+x = Just 3
 
 instance PersistUniqueWrite SqlBackend where
+
+    upsert record updates = case x of
+        Nothing -> defaultUpsert record updates
+        (Just 3) -> undefined
+
     deleteBy uniq = do
         conn <- ask
         let sql' = sql conn
