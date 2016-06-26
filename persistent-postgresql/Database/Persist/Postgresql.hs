@@ -214,6 +214,46 @@ insertManySql' ent valss =
                 ]
   in ISRSingle sql
 
+upsertSql' :: (MonadIO m, PersistRecordBackend record backend) 
+              => EntityDef 
+              -> [PersistValue] 
+              -> [Update record] 
+              -> Sql
+upsertSql' ent vals upds = T.concat 
+                         [ "INSERT INTO "
+                         , escape (entityDB ent)
+                         , "("
+                         , T.intercalate "," $ map (escape . fieldDB ) $ entityFields ent
+                         , ") VALUES ("
+                         , T.intercalate "," (map (const "?") $ entityFields ent)
+                         , ")"
+                         , "on conflict ("
+                         , T.intercalate "," uniqueFields
+                         , ") do update set ("
+                         , T.intercalate "," updateFields
+                         , " ) = ("
+                         , T.intercalate "," $ map (go' conn . go) upds
+                         , ") where "
+                         , escape (entityDB ent)
+                         , "." <> (head uniqueFields) <> " = 1"
+                         ]
+
+    where
+      dat = map updatePersistValue upds
+      
+      updateFields = map (\x -> escape $ fieldDB $ persistFieldDef $ fst $ go x) upds
+      uniqueFields = map (escape . uniqueDBName) $ entityUniques ent
+      conn = undefined
+             
+      go'' n Assign = n <> "=?"
+      go'' n Add = mconcat [n, "=", n, "+?"]
+      go'' n Subtract = mconcat [n, "=", n, "-?"]
+      go'' n Multiply = mconcat [n, "=", n, "*?"]
+      go'' n Divide = mconcat [n, "=", n, "/?"]
+      go'' _ (BackendSpecificUpdate up) = error $ T.unpack $ "BackendSpecificUpdate" `mappend` up `mappend` "not supported"
+      go' conn (x, pu) = go'' (connEscapeName conn x) pu
+      go x = (updateField x, updateUpdate x)
+
 execute' :: PG.Connection -> PG.Query -> [PersistValue] -> IO Int64
 execute' conn query vals = PG.execute conn query (map P vals)
 
