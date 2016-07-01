@@ -27,6 +27,7 @@ module Database.Persist.Postgresql
 import Database.Persist.Sql
 import Database.Persist.Sql.Util (dbIdColumnsEsc)
 import Database.Persist.Sql.Types.Internal (mkPersistBackend)
+import Database.Persist.Class
 import Data.Fixed (Pico)
 
 import qualified Database.PostgreSQL.Simple as PG
@@ -199,6 +200,26 @@ insertSql' ent vals =
        Just _pdef -> ISRManyKeys sql vals
        Nothing -> ISRSingle (sql <> " RETURNING " <> escape (fieldDB (entityId ent)))
 
+upsertSql' :: EntityDef -> [PersistValue] -> Text -> Text
+upsertSql' ent vals updateVal = T.concat
+                                [ "insert into "
+                                , escape (entityDB ent)
+                                , "("
+                                , T.intercalate "," $ map (escape . fieldDB) $ entityFields ent
+                                , ") VALUES ("
+                                , T.intercalate "," $ map (const "?") (entityFields ent)
+                                , ") on conflict ("
+                                , T.intercalate "," $ map (\x -> unDBName $ uniqueDBName x) (entityUniques ent)
+                                , ") do update set "
+                                , updateVal
+                                , " where "
+                                , wher
+                      ]
+    where
+      wher = T.intercalate " AND " $ map singleCondition $ entityUniques ent
+      singleCondition :: UniqueDef ->  Text
+      singleCondition udef = escape (entityDB ent) <> "." <> (unDBName $ uniqueDBName udef) <> " =?"
+
 -- | SQL for inserting multiple rows at once and returning their primary keys.
 insertManySql' :: EntityDef -> [[PersistValue]] -> InsertSqlResult
 insertManySql' ent valss =
@@ -214,45 +235,50 @@ insertManySql' ent valss =
                 ]
   in ISRSingle sql
 
-upsertSql' :: (MonadIO m, PersistRecordBackend record backend) 
-              => EntityDef 
-              -> [PersistValue] 
-              -> [Update record] 
-              -> Sql
-upsertSql' ent vals upds = T.concat 
-                         [ "INSERT INTO "
-                         , escape (entityDB ent)
-                         , "("
-                         , T.intercalate "," $ map (escape . fieldDB ) $ entityFields ent
-                         , ") VALUES ("
-                         , T.intercalate "," (map (const "?") $ entityFields ent)
-                         , ")"
-                         , "on conflict ("
-                         , T.intercalate "," uniqueFields
-                         , ") do update set ("
-                         , T.intercalate "," updateFields
-                         , " ) = ("
-                         , T.intercalate "," $ map (go' conn . go) upds
-                         , ") where "
-                         , escape (entityDB ent)
-                         , "." <> (head uniqueFields) <> " = 1"
-                         ]
+-- upsertSql' :: EntityDef  -> [PersistValue] -> [Update record] -> Sql
+-- upsertSql' ent vals upds = T.concat 
+--                          [ "INSERT INTO "
+--                          , escape (entityDB ent)
+--                          , "("
+--                          , T.intercalate "," $ map (escape . fieldDB ) $ entityFields ent
+--                          , ") VALUES ("
+--                          , T.intercalate "," (map (const "?") $ entityFields ent)
+--                          , ") on conflict ("
+--                          , T.intercalate "," uniqueFields
+--                          , ") do update set ("
+--                          , T.intercalate "," updateFields
+--                          , " ) = ("
+--                          , T.intercalate "," $ map (go' conn . go) upds
+--                          , ") where "
+--                          , escape (entityDB ent)
+--                          , "udndef."
+--                          ]
 
-    where
-      dat = map updatePersistValue upds
+--     where
+--       dat = map updatePersistValue upds
       
-      updateFields = map (\x -> escape $ fieldDB $ persistFieldDef $ fst $ go x) upds
-      uniqueFields = map (escape . uniqueDBName) $ entityUniques ent
-      conn = undefined
+--       updateFields = map (\x -> escape $ fieldDB $ persistFieldDef $ getPersistField x) upds
+--       uniqueFields = map (escape . uniqueDBName) $ entityUniques ent
+--       conn = undefined
+
+--       go x = (fieldDB $ updateFieldDef x, updateUpdate x)
              
-      go'' n Assign = n <> "=?"
-      go'' n Add = mconcat [n, "=", n, "+?"]
-      go'' n Subtract = mconcat [n, "=", n, "-?"]
-      go'' n Multiply = mconcat [n, "=", n, "*?"]
-      go'' n Divide = mconcat [n, "=", n, "/?"]
-      go'' _ (BackendSpecificUpdate up) = error $ T.unpack $ "BackendSpecificUpdate" `mappend` up `mappend` "not supported"
-      go' conn (x, pu) = go'' (connEscapeName conn x) pu
-      go x = (updateField x, updateUpdate x)
+--       go'' n Assign = n <> "=?"
+--       go'' n Add = mconcat [n, "=", n, "+?"]
+--       go'' n Subtract = mconcat [n, "=", n, "-?"]
+--       go'' n Multiply = mconcat [n, "=", n, "*?"]
+--       go'' n Divide = mconcat [n, "=", n, "/?"]
+--       go'' _ (BackendSpecificUpdate up) = error $ T.unpack $ "BackendSpecificUpdate" `mappend` up `mappend` "not supported"
+
+--       go' (x, pu) = go'' (connEscapeName conn x) pu
+
+-- getPersistField :: Update v -> Text
+-- getPersistField (Update _ v _) = v
+-- getPersistField (BackendUpdate {}) = error "getPersistField did not expect BackendUpdate"
+
+-- updatePersistValue :: Update v -> PersistValue
+-- updatePersistValue (Update _ v _) = toPersistValue v
+-- updatePersistValue (BackendUpdate {}) = error "updatePersistValue did not expect BackendUpdate"
 
 execute' :: PG.Connection -> PG.Query -> [PersistValue] -> IO Int64
 execute' conn query vals = PG.execute conn query (map P vals)
