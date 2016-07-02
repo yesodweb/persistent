@@ -10,10 +10,10 @@ import Control.Monad.Trans.Reader (ReaderT)
 import Database.Persist
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
-import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
+import Database.Persist.Sql.Orphan.PersistStore (withRawQuery, updateFieldDef, updatePersistValue)
 import Database.Persist.Sql.Util (dbColumns, parseEntityValues)
 import qualified Data.Text as T
-import Data.Monoid (mappend)
+import Data.Monoid (mappend, (<>))
 import qualified Data.Conduit.List as CL
 import Control.Monad.Trans.Reader (ask, withReaderT)
 import Control.Monad (when, liftM)
@@ -28,13 +28,34 @@ defaultUpsert record updates = do
          Nothing           -> insert record
   Entity k `liftM` updateGet k updates
 
-x = Just 3
-
 instance PersistUniqueWrite SqlBackend where
 
-    upsert record updates = case x of
+    upsert record updates = do
+      conn <- ask
+      case connUpsertSql conn of
+        Just upsertSql -> case updates of
+                            [] -> defaultUpsert record updates
+                            xs -> do
+                                let upds = T.intercalate "," $ map (go' . go) updates
+                                    sql = upsertSql t vals upds
+                                    vals = (map toPersistValue $ toPersistFields record) ++ (map updatePersistValue updates) ++ unqs
+                                           
+                                    go'' n Assign = n <> "=?"
+                                    go'' n Add = T.concat [n, "=", n, "+?"]
+                                    go'' n Subtract = T.concat [n, "=", n, "-?"]
+                                    go'' n Multiply = T.concat [n, "=", n, "*?"]
+                                    go'' n Divide = T.concat [n, "=", n, "/?"]
+                                    go'' _ (BackendSpecificUpdate up) = error $ T.unpack $ "BackendSpecificUpdate" `mappend` up `mappend` "not supported"
+                                              
+                                    go' (x, pu) = go'' (connEscapeName conn x) pu
+                                    go x = (fieldDB $ updateFieldDef x, updateUpdate x)
+
+                                x <- rawSql sql vals
+                                return $ head x
         Nothing -> defaultUpsert record updates
-        (Just 3) -> undefined
+        where
+          t = entityDef $ Just record
+          unqs = concat $ map (persistUniqueToValues) (persistUniqueKeys record)
 
     deleteBy uniq = do
         conn <- ask
