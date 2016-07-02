@@ -140,6 +140,15 @@ share [mkPersist persistSettings,  mkMigrate "testMigrate", mkDeleteCascade pers
     UniqueUpsert email
     deriving Show
 
+  UpsertBy
+    email Text
+    city Text
+    state Text
+    counter Int
+    UniqueUpsertBy email
+    UniqueUpsertByCityState city state
+    deriving Show
+
   Strict
     !yes Int
     ~no Int
@@ -515,6 +524,33 @@ specs = describe "persistent" $ do
       upsertCounter up1 @== 1
       Entity _ up2 <- upsert up1 [UpsertCounter +=. 1]
       upsertCounter up2 @== 2
+
+  it "upsertBy without updates" $ db $ do
+      deleteWhere ([] :: [Filter UpsertBy])
+      let email = "dude@example.com"
+          city = "Boston"
+          state = "Massachussets"
+      Nothing :: Maybe (Entity UpsertBy) <- getBy $ UniqueUpsertBy email
+      let counter1 = 0
+          unique = UniqueUpsertBy email
+      Entity k1 u1 <- upsertBy unique (UpsertBy email city state counter1) []
+      upsertByCounter u1 @== counter1
+      let counter2 = 1
+      Entity k2 u2 <- upsertBy unique (UpsertBy email city state counter2) []
+      upsertByCounter u2 @== counter2
+      k1 @== k2
+
+  it "upsertBy with updates" $ db $ do
+      deleteWhere ([] :: [Filter UpsertBy])
+      let email = "dude@example.com"
+          city = "Boston"
+          state = "Massachussets"
+      Nothing :: Maybe (Entity UpsertBy) <- getBy $ UniqueUpsertBy email
+      let up0 = UpsertBy email city state 0
+      Entity _ up1 <- upsertBy (UniqueUpsertBy email) up0 [UpsertByCounter +=. 1]
+      upsertByCounter up1 @== 1
+      Entity _ up2 <- upsertBy (UniqueUpsertBy email) up1 [UpsertByCounter +=. 1]
+      upsertByCounter up2 @== 2
 
   it "maybe update" $ db $ do
       let noAge = PersonMaybeAge "Michael" Nothing
