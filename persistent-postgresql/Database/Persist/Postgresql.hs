@@ -27,7 +27,6 @@ module Database.Persist.Postgresql
 import Database.Persist.Sql
 import Database.Persist.Sql.Util (dbIdColumnsEsc)
 import Database.Persist.Sql.Types.Internal (mkPersistBackend)
-import Database.Persist.Class
 import Data.Fixed (Pico)
 
 import qualified Database.PostgreSQL.Simple as PG
@@ -159,6 +158,7 @@ openSimpleConn logFunc conn = do
         , connStmtMap    = smap
         , connInsertSql  = insertSql'
         , connInsertManySql = Just insertManySql'
+        , connUpsertSql = Just upsertSql'
         , connClose      = PG.close conn
         , connMigrateSql = migrate'
         , connBegin      = const $ PG.begin    conn
@@ -209,16 +209,17 @@ upsertSql' ent vals updateVal = T.concat
                                 , ") VALUES ("
                                 , T.intercalate "," $ map (const "?") (entityFields ent)
                                 , ") on conflict ("
-                                , T.intercalate "," $ map (\x -> unDBName $ uniqueDBName x) (entityUniques ent)
+                                , T.intercalate "," $ concat $ map (\x -> map escape (map snd $ uniqueFields x)) (entityUniques ent)
                                 , ") do update set "
                                 , updateVal
                                 , " where "
                                 , wher
+                                , " returning ??"
                       ]
     where
       wher = T.intercalate " AND " $ map singleCondition $ entityUniques ent
       singleCondition :: UniqueDef ->  Text
-      singleCondition udef = escape (entityDB ent) <> "." <> (unDBName $ uniqueDBName udef) <> " =?"
+      singleCondition udef = escape (entityDB ent) <> "." <> T.concat (map escape (map snd $ uniqueFields udef)) <> " =?"
 
 -- | SQL for inserting multiple rows at once and returning their primary keys.
 insertManySql' :: EntityDef -> [[PersistValue]] -> InsertSqlResult
