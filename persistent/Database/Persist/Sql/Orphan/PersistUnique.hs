@@ -10,7 +10,7 @@ import Control.Monad.Trans.Reader (ReaderT)
 import Database.Persist
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
-import Database.Persist.Sql.Orphan.PersistStore (withRawQuery, updateFieldDef, updatePersistValue)
+import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
 import Database.Persist.Sql.Util (dbColumns, parseEntityValues)
 import qualified Data.Text as T
 import Data.Monoid (mappend, (<>))
@@ -108,3 +108,12 @@ instance PersistUniqueRead SqlWriteBackend where
 
 dummyFromUnique :: Unique v -> Maybe v
 dummyFromUnique _ = Nothing
+
+
+updateFieldDef :: PersistEntity v => Update v -> FieldDef
+updateFieldDef (Update f _ _) = persistFieldDef f
+updateFieldDef (BackendUpdate {}) = error "updateFieldDef did not expect BackendUpdate"
+
+updatePersistValue :: Update v -> PersistValue
+updatePersistValue (Update _ v _) = toPersistValue v
+updatePersistValue (BackendUpdate {}) = error "updatePersistValue did not expect BackendUpdate"
