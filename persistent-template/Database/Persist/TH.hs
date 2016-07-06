@@ -304,11 +304,12 @@ mkEntityDefSqlTypeExp emEntities entMap ent = EntityDefSqlTypeExp ent
 mkPersist :: MkPersistSettings -> [EntityDef] -> Q [Dec]
 mkPersist mps ents' = do
     x <- fmap mconcat $ mapM (persistFieldFromEntity mps) ents
-    y <- fmap mconcat $ mapM (mkEntity mps) ents
+    y <- fmap mconcat $ mapM (mkEntity entMap mps) ents
     z <- fmap mconcat $ mapM (mkJSON mps) ents
     return $ mconcat [x, y, z]
   where
     ents = map fixEntityDef ents'
+    entMap = M.fromList $ map (\ent -> (entityHaskell ent, ent)) ents
 
 -- | Implement special preprocessing on EntityDef as necessary for 'mkPersist'.
 -- For example, strip out any fields marked as MigrationOnly.
@@ -933,9 +934,9 @@ fromValues t funName conE fields = do
           mkPersistValue fieldName = [|mapLeft (fieldError fieldName) . fromPersistValue|]
 
 
-mkEntity :: MkPersistSettings -> EntityDef -> Q [Dec]
-mkEntity mps t = do
-    t' <- lift t
+mkEntity :: EntityMap -> MkPersistSettings -> EntityDef -> Q [Dec]
+mkEntity entMap mps t = do
+    t' <- liftAndFixKeys entMap t
     let nameT = unHaskellName entName
     let nameS = unpack nameT
     let clazz = ConT ''PersistEntity `AppT` genDataType
@@ -1349,6 +1350,7 @@ mkMigrate fun allDefs = do
     defs = filter isMigrated allDefs
     isMigrated def = not $ "no-migrate" `elem` entityAttrs def
     typ = ConT ''Migration
+    entMap = M.fromList $ map (\ent -> (entityHaskell ent, ent)) allDefs
     body :: Q Exp
     body =
         case defs of
@@ -1356,16 +1358,45 @@ mkMigrate fun allDefs = do
             _  -> do
               defsName <- newName "defs"
               defsStmt <- do
-                defs' <- mapM lift defs
+                defs' <- mapM (liftAndFixKeys entMap) defs
                 let defsExp = ListE defs'
                 return $ LetS [ValD (VarP defsName) (NormalB defsExp) []]
               stmts <- mapM (toStmt $ VarE defsName) defs
               return (DoE $ defsStmt : stmts)
     toStmt :: Exp -> EntityDef -> Q Stmt
     toStmt defsExp ed = do
-        u <- lift ed
+        u <- liftAndFixKeys entMap ed
         m <- [|migrate|]
         return $ NoBindS $ m `AppE` defsExp `AppE` u
+
+liftAndFixKeys :: EntityMap -> EntityDef -> Q Exp
+liftAndFixKeys entMap EntityDef{..} =
+  [|EntityDef
+      entityHaskell
+      entityDB
+      entityId
+      entityAttrs
+      $(ListE <$> mapM (liftAndFixKey entMap) entityFields)
+      entityUniques
+      entityForeigns
+      entityDerives
+      entityExtra
+      entitySum
+   |]
+
+liftAndFixKey :: EntityMap -> FieldDef -> Q Exp
+liftAndFixKey entMap (FieldDef a b c sqlTyp e f fieldRef) =
+  [|FieldDef a b c $(sqlTyp') e f fieldRef'|]
+  where
+    (fieldRef', sqlTyp') = fromMaybe (fieldRef, lift sqlTyp) $
+      case fieldRef of
+        ForeignRef refName ft -> case M.lookup refName entMap of
+          Nothing -> Nothing
+          Just ent ->
+            case fieldReference $ entityId ent of
+              fr@(ForeignRef _Name ft) -> Just (fr, lift $ SqlTypeExp ft)
+              _ -> Nothing
+        _ -> Nothing
 
 instance Lift EntityDef where
     lift EntityDef{..} =
