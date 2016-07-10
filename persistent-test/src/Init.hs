@@ -58,6 +58,7 @@ import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLow
 import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
 import Test.QuickCheck
 
+import qualified Data.ByteString as BS
 import Database.Persist
 import Database.Persist.TH ()
 import Data.Text (Text, unpack)
@@ -91,7 +92,6 @@ import Control.Monad.Logger
 import System.Log.FastLogger (fromLogStr)
 
 #  ifdef WITH_POSTGRESQL
-import qualified Data.ByteString as BS
 import Database.Persist.Postgresql
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
