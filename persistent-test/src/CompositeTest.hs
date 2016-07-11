@@ -85,6 +85,13 @@ share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMig
     address AddressId
     Primary citizen address
     deriving Eq Show
+
+  PrimaryCompositeWithOtherNullableFields
+    foo String
+    bar String
+    baz String Maybe
+    Primary foo bar
+    deriving Eq Show
 |]
 
 
