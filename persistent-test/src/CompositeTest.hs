@@ -87,8 +87,8 @@ share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMig
     deriving Eq Show
 
   PrimaryCompositeWithOtherNullableFields
-    foo String
-    bar String
+    foo String       maxlen=20
+    bar String       maxlen=20
     baz String Maybe
     Primary foo bar
     deriving Eq Show
