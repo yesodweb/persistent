@@ -215,11 +215,15 @@ upsertSql' ent vals updateVal = T.concat
                                 , " where "
                                 , wher
                                 , " returning ??"
-                      ]
+                                ]
     where
       wher = T.intercalate " AND " $ map singleCondition $ entityUniques ent
-      singleCondition :: UniqueDef ->  Text
-      singleCondition udef = escape (entityDB ent) <> "." <> T.concat (map escape (map snd $ uniqueFields udef)) <> " =?"
+
+      singleCondition :: UniqueDef -> Text
+      singleCondition udef = T.intercalate " AND " (map singleClause $ map snd (uniqueFields udef))
+
+      singleClause :: DBName -> Text
+      singleClause field = escape (entityDB ent) <> "." <> (escape field) <> " =?"
 
 -- | SQL for inserting multiple rows at once and returning their primary keys.
 insertManySql' :: EntityDef -> [[PersistValue]] -> InsertSqlResult
