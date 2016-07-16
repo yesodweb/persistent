@@ -456,8 +456,10 @@ takeComposite fields pkcols
     (_, attrs) = break ("!" `T.isPrefixOf`) pkcols
     getDef [] t = error $ "Unknown column in primary key constraint: " ++ show t
     getDef (d:ds) t
-        | nullable (fieldAttrs d) /= NotNullable = error $ "primary key column cannot be nullable: " ++ show t
-        | fieldHaskell d == HaskellName t = d
+        | fieldHaskell d == HaskellName t =
+            if nullable (fieldAttrs d) /= NotNullable
+                then error $ "primary key column cannot be nullable: " ++ show t
+                else d
         | otherwise = getDef ds t
 
 -- Unique UppercaseConstraintName list of lowercasefields    

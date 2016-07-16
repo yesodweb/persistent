@@ -79,6 +79,29 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) => PersistUniqueWri
            -> ReaderT backend m (Entity record)
            -- ^ the record in the database after the operation
 
+    -- | Update based on a given uniqueness constraint or insert:
+    --
+    -- * insert the new record if it does not exist;
+    -- * update the existing record that matches the given uniqueness contraint.
+    upsertBy :: (MonadIO m, PersistRecordBackend record backend)
+            => Unique record -- ^ uniqueness constraint to find by
+            -> record          -- ^ new record to insert
+            -> [Update record]
+            -- ^ updates to perform if the record already exists (leaving
+            -- this empty is the equivalent of performing a 'repsert' on a
+            -- unique key)
+            -> ReaderT backend m (Entity record)
+            -- ^ the record in the database after the operation
+    upsertBy uniqueKey record updates = do
+        mExists <- getBy uniqueKey
+        k <- case mExists of
+            Just (Entity k _) -> do
+              when (null updates) (replace k record)
+              return k
+            Nothing           -> insert record
+        Entity k `liftM` updateGet k updates
+
+
 -- | Insert a value, checking for conflicts with any unique constraints.  If a
 -- duplicate exists in the database, it is returned as 'Left'. Otherwise, the
 -- new 'Key is returned as 'Right'.
