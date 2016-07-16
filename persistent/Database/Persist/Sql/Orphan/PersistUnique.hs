@@ -32,13 +32,14 @@ instance PersistUniqueWrite SqlBackend where
 
     upsert record updates = do
       conn <- ask
+      uniqueKey <- onlyUnique record
       case connUpsertSql conn of
         Just upsertSql -> case updates of
                             [] -> defaultUpsert record updates
                             xs -> do
                                 let upds = T.intercalate "," $ map (go' . go) updates
                                     sql = upsertSql t vals upds
-                                    vals = (map toPersistValue $ toPersistFields record) ++ (map updatePersistValue updates) ++ unqs
+                                    vals = (map toPersistValue $ toPersistFields record) ++ (map updatePersistValue updates) ++ (unqs uniqueKey)
                                            
                                     go'' n Assign = n <> "=?"
                                     go'' n Add = T.concat [n, "=", n, "+?"]
@@ -55,7 +56,7 @@ instance PersistUniqueWrite SqlBackend where
         Nothing -> defaultUpsert record updates
         where
           t = entityDef $ Just record
-          unqs = concat $ map (persistUniqueToValues) (persistUniqueKeys record)
+          unqs uniqueKey = concat $ map (persistUniqueToValues) [uniqueKey]
 
     deleteBy uniq = do
         conn <- ask
