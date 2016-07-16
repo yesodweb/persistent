@@ -10,14 +10,11 @@ import Test.QuickCheck.Random (newQCGen)
 import Database.Persist.TH
 import Data.Char (generalCategory, GeneralCategory(..))
 import qualified Data.Text as T
-import Data.ByteString (ByteString)
-import qualified Data.ByteString as S
+import qualified Data.ByteString as BS
 import Data.Time (Day, UTCTime (..), fromGregorian)
 import Data.Time.Clock (picosecondsToDiffTime)
 import Data.Time.LocalTime (TimeOfDay (TimeOfDay))
 import Data.IntMap (IntMap)
-import Control.Applicative ((<$>), (<*>))
-import Control.Monad (when, forM_)
 import Data.Fixed (Pico,Micro)
 
 import Init
@@ -126,7 +123,7 @@ instance Arbitrary DataTypeTable where
      <*> (T.take 100 <$> arbText) -- textManLen
      <*> arbitrary              -- bytes
      <*> arbTuple arbitrary arbText -- bytesTextTuple
-     <*> (S.take 100 <$> arbitrary) -- bytesMaxLen
+     <*> (BS.take 100 <$> arbitrary) -- bytesMaxLen
      <*> arbitrary              -- int
      <*> arbitrary              -- intList
      <*> arbitrary              -- intMap

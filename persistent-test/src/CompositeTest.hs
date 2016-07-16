@@ -37,7 +37,6 @@ import qualified Control.Exception.Control as Control
 
 import Init
 
-import Control.Applicative ((<$>),(<*>))
 #ifndef WITH_NOSQL
 import Data.Maybe (isJust)
 import Database.Persist.TH (mkDeleteCascade)

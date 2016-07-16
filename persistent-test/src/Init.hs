@@ -31,7 +31,7 @@ module Init (
   , generateKey
 
    -- re-exports
-  , (<$>)
+  , (<$>), (<*>)
   , module Database.Persist
   , module Test.Hspec
   , module Test.HUnit
@@ -46,10 +46,12 @@ module Init (
 #else
   , PersistFieldSql(..)
 #endif
+  , ByteString
 ) where
 
 -- re-exports
-import Control.Applicative ((<$>))
+import Control.Applicative ((<$>), (<*>))
+import Control.Monad (void, replicateM, liftM, when, forM_)
 import Control.Monad.Trans.Reader
 import Test.Hspec
 import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase, MkPersistSettings(..))
@@ -58,6 +60,7 @@ import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLow
 import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
 import Test.QuickCheck
 
+import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Database.Persist
 import Database.Persist.TH ()
@@ -68,8 +71,6 @@ import System.Environment (getEnvironment)
 import Language.Haskell.TH.Syntax (Type(..))
 import Database.Persist.TH (mkPersistSettings)
 import Database.Persist.Sql (PersistFieldSql(..))
-
-import Control.Monad (void, replicateM, liftM)
 
 #  ifdef WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
@@ -85,7 +86,6 @@ import qualified Data.Text as T
 #  endif
 
 #else
-import Control.Monad (liftM)
 import Database.Persist.Sql
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import Control.Monad.Logger

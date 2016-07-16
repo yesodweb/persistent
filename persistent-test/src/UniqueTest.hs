@@ -2,9 +2,6 @@
 module UniqueTest where
 
 import Init
-#ifndef WITH_NOSQL
-import Control.Monad (void)
-#endif
 
 #ifdef WITH_NOSQL
 mkPersist persistSettings [persistUpperCase|

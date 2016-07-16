@@ -32,8 +32,6 @@ import Database.Persist.MongoDB (toInsertDoc, docToEntityThrow, collectionName, 
 
 #else
 
-import Control.Monad (void, replicateM)
-import Data.List (sort)
 import Database.Persist.TH (mkDeleteCascade, mkSave)
 import Control.Exception (SomeException)
 import qualified Data.Text as T
@@ -45,6 +43,9 @@ import qualified Control.Exception.Control as Control
 #    define CATCH Control.catch
 #  endif
 
+#  ifdef WITH_POSTGRESQL
+import Data.List (sort)
+#  endif
 #  if WITH_MYSQL
 import Database.Persist.MySQL()
 #  endif
