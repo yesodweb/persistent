@@ -162,6 +162,13 @@ isTravis = do
     Just "true" -> True
     _ -> False
 
+debugOn :: Bool
+#ifdef DEBUG
+debugOn = True
+#else
+debugOn = False
+#endif
+
 #ifdef WITH_POSTGRESQL
 dockerPg :: IO (Maybe BS.ByteString)
 dockerPg = do
@@ -217,13 +224,12 @@ sqlite_database :: Text
 sqlite_database = "test/testdb.sqlite3"
 -- sqlite_database = ":memory:"
 runConn :: (MonadIO m, MonadBaseControl IO m) => SqlPersistT (LoggingT m) t -> m ()
-#ifdef DEBUG
-runConn f = flip runLoggingT (\_ _ _ s -> print $ fromLogStr s) $ do
-#else
-runConn f = flip runLoggingT (\_ _ _ s -> return ()) $ do
-#endif
+runConn f = do
+  travis <- liftIO isTravis
+  let debugPrint = not travis && debugOn
+  let printDebug = if debugPrint then print . fromLogStr else void . return
+  flip runLoggingT (\_ _ _ s -> printDebug s) $ do
 #  ifdef WITH_POSTGRESQL
-    travis <- liftIO isTravis
     _ <- if travis
       then withPostgresqlPool "host=localhost port=5432 user=postgres dbname=persistent" 1 $ runSqlPool f
       else do
@@ -231,7 +237,6 @@ runConn f = flip runLoggingT (\_ _ _ s -> return ()) $ do
         withPostgresqlPool ("host=" <> host <> " port=5432 user=postgres dbname=test") 1 $ runSqlPool f
 #  else
 #    ifdef WITH_MYSQL
-    travis <- liftIO isTravis
     _ <- if not travis
       then withMySQLPool defaultConnectInfo
                         { connectHost     = "localhost"
