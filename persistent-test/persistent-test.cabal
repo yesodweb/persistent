@@ -82,8 +82,6 @@ library
     ghc-options:   -Wall
     if impl(ghc >= 7.8)
       ghc-options: -Wall -j
-    -- if impl(ghc >= 7.4)
-    --   cpp-options: -DGHC_7_4
 
     build-depends:   base                     >= 4.6       && < 5
 

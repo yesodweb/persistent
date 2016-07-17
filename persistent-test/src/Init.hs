@@ -31,7 +31,7 @@ module Init (
   , generateKey
 
    -- re-exports
-  , (<$>)
+  , (<$>), (<*>)
   , module Database.Persist
   , module Test.Hspec
   , module Test.HUnit
@@ -46,10 +46,12 @@ module Init (
 #else
   , PersistFieldSql(..)
 #endif
+  , ByteString
 ) where
 
 -- re-exports
-import Control.Applicative ((<$>))
+import Control.Applicative ((<$>), (<*>))
+import Control.Monad (void, replicateM, liftM, when, forM_)
 import Control.Monad.Trans.Reader
 import Test.Hspec
 import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase, MkPersistSettings(..))
@@ -58,6 +60,7 @@ import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLow
 import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
 import Test.QuickCheck
 
+import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Database.Persist
 import Database.Persist.TH ()
@@ -68,8 +71,6 @@ import System.Environment (getEnvironment)
 import Language.Haskell.TH.Syntax (Type(..))
 import Database.Persist.TH (mkPersistSettings)
 import Database.Persist.Sql (PersistFieldSql(..))
-
-import Control.Monad (void, replicateM, liftM)
 
 #  ifdef WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
@@ -85,7 +86,6 @@ import qualified Data.Text as T
 #  endif
 
 #else
-import Control.Monad (liftM)
 import Database.Persist.Sql
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import Control.Monad.Logger
@@ -162,6 +162,13 @@ isTravis = do
     Just "true" -> True
     _ -> False
 
+debugOn :: Bool
+#ifdef DEBUG
+debugOn = True
+#else
+debugOn = False
+#endif
+
 #ifdef WITH_POSTGRESQL
 dockerPg :: IO (Maybe BS.ByteString)
 dockerPg = do
@@ -217,13 +224,12 @@ sqlite_database :: Text
 sqlite_database = "test/testdb.sqlite3"
 -- sqlite_database = ":memory:"
 runConn :: (MonadIO m, MonadBaseControl IO m) => SqlPersistT (LoggingT m) t -> m ()
-#ifdef DEBUG
-runConn f = flip runLoggingT (\_ _ _ s -> print $ fromLogStr s) $ do
-#else
-runConn f = flip runLoggingT (\_ _ _ s -> return ()) $ do
-#endif
+runConn f = do
+  travis <- liftIO isTravis
+  let debugPrint = not travis && debugOn
+  let printDebug = if debugPrint then print . fromLogStr else void . return
+  flip runLoggingT (\_ _ _ s -> printDebug s) $ do
 #  ifdef WITH_POSTGRESQL
-    travis <- liftIO isTravis
     _ <- if travis
       then withPostgresqlPool "host=localhost port=5432 user=postgres dbname=persistent" 1 $ runSqlPool f
       else do
@@ -231,7 +237,6 @@ runConn f = flip runLoggingT (\_ _ _ s -> return ()) $ do
         withPostgresqlPool ("host=" <> host <> " port=5432 user=postgres dbname=test") 1 $ runSqlPool f
 #  else
 #    ifdef WITH_MYSQL
-    travis <- liftIO isTravis
     _ <- if not travis
       then withMySQLPool defaultConnectInfo
                         { connectHost     = "localhost"

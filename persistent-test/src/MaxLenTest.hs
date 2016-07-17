@@ -10,7 +10,6 @@ module MaxLenTest (
 
 import Init
 import Data.String (IsString)
-import Data.ByteString (ByteString)
 
 #ifdef WITH_NOSQL
 db :: Action IO () -> Assertion
