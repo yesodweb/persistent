@@ -18,15 +18,12 @@ import qualified Data.Conduit.List as CL
 import Control.Monad.Trans.Reader (ask, withReaderT)
 import Control.Monad (when, liftM)
 
+defaultUpsert :: (MonadIO m, PersistEntity record, PersistUniqueWrite backend
+                 , PersistEntityBackend record ~ BaseBackend backend) 
+                => record -> [Update record] -> ReaderT backend m (Entity record)
 defaultUpsert record updates = do
   uniqueKey <- onlyUnique record
-  mExists <- getBy uniqueKey
-  k <- case mExists of
-         Just (Entity k _) -> do
-                      when (null updates) (replace k record)
-                      return k
-         Nothing           -> insert record
-  Entity k `liftM` updateGet k updates
+  upsertBy uniqueKey record updates
 
 instance PersistUniqueWrite SqlBackend where
 
@@ -38,7 +35,7 @@ instance PersistUniqueWrite SqlBackend where
                             [] -> defaultUpsert record updates
                             xs -> do
                                 let upds = T.intercalate "," $ map (go' . go) updates
-                                    sql = upsertSql t vals upds
+                                    sql = upsertSql t upds
                                     vals = (map toPersistValue $ toPersistFields record) ++ (map updatePersistValue updates) ++ (unqs uniqueKey)
                                            
                                     go'' n Assign = n <> "=?"

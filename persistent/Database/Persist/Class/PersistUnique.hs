@@ -78,6 +78,9 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) => PersistUniqueWri
            -- unique key)
            -> ReaderT backend m (Entity record)
            -- ^ the record in the database after the operation
+    upsert record updates = do
+        uniqueKey <- onlyUnique record
+        upsertBy uniqueKey record updates
 
     -- | Update based on a given uniqueness constraint or insert:
     --

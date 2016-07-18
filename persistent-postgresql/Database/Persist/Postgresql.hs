@@ -8,6 +8,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
 -- | A postgresql backend for persistent.
 module Database.Persist.Postgresql
@@ -44,7 +45,7 @@ import Control.Monad.Trans.Resource
 import Control.Exception (throw)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Data
-import Data.Typeable
+import Data.Typeable (Typeable)
 import Data.IORef
 import qualified Data.Map as Map
 import Data.Maybe
@@ -61,6 +62,7 @@ import qualified Data.IntMap as I
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.Text as T
+import Data.Text.Read (rational)
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.IO as T
 import qualified Blaze.ByteString.Builder.Char8 as BBB
@@ -77,6 +79,7 @@ import Data.Int (Int64)
 import Data.Monoid ((<>))
 import Data.Pool (Pool)
 import Data.Time (utc, localTimeToUTC)
+import Control.Exception (Exception, throwIO)
 
 -- | A @libpq@ connection string.  A simple example of connection
 -- string would be @\"host=localhost port=5432 user=test
@@ -86,6 +89,14 @@ import Data.Time (utc, localTimeToUTC)
 -- for more details on how to create such strings.
 type ConnectionString = ByteString
 
+-- | PostgresServerVersionError exception. This is thrown when persistent
+-- is unable to find the version of the postgreSQL server.
+data PostgresServerVersionError = PostgresServerVersionError String deriving Typeable
+
+instance Show PostgresServerVersionError where
+    show (PostgresServerVersionError uniqueMsg) =
+      "Unexpected PostgreSQL server version, got " <> uniqueMsg
+instance Exception PostgresServerVersionError
 
 -- | Create a PostgreSQL connection pool and run the given
 -- action.  The pool is properly released after the action
@@ -148,17 +159,38 @@ open' modConn cstr logFunc = do
     modConn conn
     openSimpleConn logFunc conn
 
+-- | Gets the PostgreSQL server version
+getServerVersion :: PG.Connection -> IO (Maybe Double)
+getServerVersion conn = do
+  [PG.Only version] <- PG.query_ conn "show server_version";
+  let version' = rational version
+  --- λ> rational "9.8.3"
+  --- Right (9.8,".3")
+  --- λ> rational "9.8.3.5"
+  --- Right (9.8,".3.5")
+  case version' of
+    Right (a,_) -> return $ Just a
+    Left err -> throwIO $ PostgresServerVersionError err
+
+-- | Choose upsert sql generation function based on postgresql version.
+-- PostgreSQL version >= 9.5 supports native upsert feature,
+-- so depending upon that we have to choose how the sql query is generated.
+upsertFunction :: Double -> Maybe (EntityDef -> Text -> Text)
+upsertFunction version = if (version >= 9.5)
+                         then Just upsertSql'
+                         else Nothing
 
 -- | Generate a 'Connection' from a 'PG.Connection'
 openSimpleConn :: (IsSqlBackend backend) => LogFunc -> PG.Connection -> IO backend
 openSimpleConn logFunc conn = do
     smap <- newIORef $ Map.empty
+    serverVersion <- getServerVersion conn
     return . mkPersistBackend $ SqlBackend
         { connPrepare    = prepare' conn
         , connStmtMap    = smap
         , connInsertSql  = insertSql'
         , connInsertManySql = Just insertManySql'
-        , connUpsertSql = Just upsertSql'
+        , connUpsertSql = maybe Nothing upsertFunction serverVersion
         , connClose      = PG.close conn
         , connMigrateSql = migrate'
         , connBegin      = const $ PG.begin    conn
@@ -200,22 +232,23 @@ insertSql' ent vals =
        Just _pdef -> ISRManyKeys sql vals
        Nothing -> ISRSingle (sql <> " RETURNING " <> escape (fieldDB (entityId ent)))
 
-upsertSql' :: EntityDef -> [PersistValue] -> Text -> Text
-upsertSql' ent vals updateVal = T.concat
-                                [ "insert into "
-                                , escape (entityDB ent)
-                                , "("
-                                , T.intercalate "," $ map (escape . fieldDB) $ entityFields ent
-                                , ") VALUES ("
-                                , T.intercalate "," $ map (const "?") (entityFields ent)
-                                , ") on conflict ("
-                                , T.intercalate "," $ concat $ map (\x -> map escape (map snd $ uniqueFields x)) (entityUniques ent)
-                                , ") do update set "
-                                , updateVal
-                                , " where "
-                                , wher
-                                , " returning ??"
-                                ]
+
+upsertSql' :: EntityDef -> Text -> Text
+upsertSql' ent updateVal = T.concat
+                           [ "INSERT INTO "
+                           , escape (entityDB ent)
+                           , "("
+                           , T.intercalate "," $ map (escape . fieldDB) $ entityFields ent
+                           , ") VALUES ("
+                           , T.intercalate "," $ map (const "?") (entityFields ent)
+                           , ") ON CONFLICT ("
+                           , T.intercalate "," $ concat $ map (\x -> map escape (map snd $ uniqueFields x)) (entityUniques ent)
+                           , ") DO UPDATE SET "
+                           , updateVal
+                           , " WHERE "
+                           , wher
+                           , " RETURNING ??"
+                           ]
     where
       wher = T.intercalate " AND " $ map singleCondition $ entityUniques ent
 
@@ -239,51 +272,6 @@ insertManySql' ent valss =
                 , T.intercalate ", " $ dbIdColumnsEsc escape ent
                 ]
   in ISRSingle sql
-
--- upsertSql' :: EntityDef  -> [PersistValue] -> [Update record] -> Sql
--- upsertSql' ent vals upds = T.concat 
---                          [ "INSERT INTO "
---                          , escape (entityDB ent)
---                          , "("
---                          , T.intercalate "," $ map (escape . fieldDB ) $ entityFields ent
---                          , ") VALUES ("
---                          , T.intercalate "," (map (const "?") $ entityFields ent)
---                          , ") on conflict ("
---                          , T.intercalate "," uniqueFields
---                          , ") do update set ("
---                          , T.intercalate "," updateFields
---                          , " ) = ("
---                          , T.intercalate "," $ map (go' conn . go) upds
---                          , ") where "
---                          , escape (entityDB ent)
---                          , "udndef."
---                          ]
-
---     where
---       dat = map updatePersistValue upds
-      
---       updateFields = map (\x -> escape $ fieldDB $ persistFieldDef $ getPersistField x) upds
---       uniqueFields = map (escape . uniqueDBName) $ entityUniques ent
---       conn = undefined
-
---       go x = (fieldDB $ updateFieldDef x, updateUpdate x)
-             
---       go'' n Assign = n <> "=?"
---       go'' n Add = mconcat [n, "=", n, "+?"]
---       go'' n Subtract = mconcat [n, "=", n, "-?"]
---       go'' n Multiply = mconcat [n, "=", n, "*?"]
---       go'' n Divide = mconcat [n, "=", n, "/?"]
---       go'' _ (BackendSpecificUpdate up) = error $ T.unpack $ "BackendSpecificUpdate" `mappend` up `mappend` "not supported"
-
---       go' (x, pu) = go'' (connEscapeName conn x) pu
-
--- getPersistField :: Update v -> Text
--- getPersistField (Update _ v _) = v
--- getPersistField (BackendUpdate {}) = error "getPersistField did not expect BackendUpdate"
-
--- updatePersistValue :: Update v -> PersistValue
--- updatePersistValue (Update _ v _) = toPersistValue v
--- updatePersistValue (BackendUpdate {}) = error "updatePersistValue did not expect BackendUpdate"
 
 execute' :: PG.Connection -> PG.Query -> [PersistValue] -> IO Int64
 execute' conn query vals = PG.execute conn query (map P vals)
@@ -1112,6 +1100,7 @@ mockMigration mig = do
                                                         },
                              connInsertManySql = Nothing,
                              connInsertSql = undefined,
+                             connUpsertSql = Nothing,
                              connStmtMap = smap,
                              connClose = undefined,
                              connMigrateSql = mockMigrate,
