@@ -4,7 +4,7 @@ For testing specific package:
 
     stack test persistent-sqlite
 
-For appropriate backend specific flag:
+For appropriate backend specific testing using the package `persistent-test`:
 
     stack test persistent-test --flag persistent-test:<backend>
 
