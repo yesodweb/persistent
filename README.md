@@ -32,10 +32,10 @@ One can always fall back to using the raw database driver or other lower-level o
 
 ## Install from source
 
-clone the repo and run
+Clone the repo and run
 
     stack build
 
 # Developing persistent
 
-see development.md
+See [development.md](https://github.com/yesodweb/persistent/blob/master/development.md).
