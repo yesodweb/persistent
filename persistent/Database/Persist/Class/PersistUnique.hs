@@ -18,6 +18,7 @@ import Data.List ((\\))
 import Control.Monad.Trans.Reader (ReaderT)
 import Database.Persist.Class.PersistStore
 import Database.Persist.Class.PersistEntity
+import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Monoid (mappend)
 import Data.Text (unpack, Text)
 
@@ -53,7 +54,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) => PersistUniqueWri
 
     -- | Delete a specific record by unique key. Does nothing if no record
     -- matches.
-    deleteBy :: (MonadIO m, PersistRecordBackend record backend) => Unique record -> ReaderT backend m ()
+    deleteBy :: (MonadIO m, MonadBaseControl IO m, PersistRecordBackend record backend) => Unique record -> ReaderT backend m ()
 
     -- | Like 'insert', but returns 'Nothing' when the record
     -- couldn't be inserted because of a uniqueness constraint.
@@ -70,7 +71,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) => PersistUniqueWri
     -- * update the existing record that matches the uniqueness contraint.
     --
     -- Throws an exception if there is more than 1 uniqueness contraint.
-    upsert :: (MonadIO m, PersistRecordBackend record backend)
+    upsert :: (MonadIO m, MonadBaseControl IO m, PersistRecordBackend record backend)
            => record          -- ^ new record to insert
            -> [Update record]
            -- ^ updates to perform if the record already exists (leaving
@@ -86,7 +87,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) => PersistUniqueWri
     --
     -- * insert the new record if it does not exist;
     -- * update the existing record that matches the given uniqueness contraint.
-    upsertBy :: (MonadIO m, PersistRecordBackend record backend)
+    upsertBy :: (MonadIO m, MonadBaseControl IO m, PersistRecordBackend record backend)
             => Unique record -- ^ uniqueness constraint to find by
             -> record          -- ^ new record to insert
             -> [Update record]
@@ -172,7 +173,7 @@ recordName = unHaskellName . entityHaskell . entityDef . Just
 -- If uniqueness is violated, return a 'Just' with the 'Unique' violation
 --
 -- Since 1.2.2.0
-replaceUnique :: (MonadIO m, Eq record, Eq (Unique record), PersistRecordBackend record backend, PersistUniqueWrite backend)
+replaceUnique :: (MonadIO m, MonadBaseControl IO m, Eq record, Eq (Unique record), PersistRecordBackend record backend, PersistUniqueWrite backend)
               => Key record -> record -> ReaderT backend m (Maybe (Unique record))
 replaceUnique key datumNew = getJust key >>= replaceOriginal
   where

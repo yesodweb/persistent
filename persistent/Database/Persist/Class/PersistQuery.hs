@@ -20,6 +20,7 @@ import qualified Data.Conduit.List as CL
 import Database.Persist.Class.PersistStore
 import Database.Persist.Class.PersistEntity
 import Control.Monad.Trans.Resource (MonadResource, release)
+import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Acquire (Acquire, allocateAcquire, with)
 
 -- | Backends supporting conditional read operations.
@@ -55,11 +56,11 @@ class (PersistCore backend, PersistStoreRead backend) => PersistQueryRead backen
 -- | Backends supporting conditional write operations
 class (PersistQueryRead backend, PersistStoreWrite backend) => PersistQueryWrite backend where
     -- | Update individual fields on any record matching the given criterion.
-    updateWhere :: (MonadIO m, PersistRecordBackend record backend)
+    updateWhere :: (MonadIO m, MonadBaseControl IO m, PersistRecordBackend record backend)
                 => [Filter record] -> [Update record] -> ReaderT backend m ()
 
     -- | Delete all records matching the given criterion.
-    deleteWhere :: (MonadIO m, PersistRecordBackend record backend)
+    deleteWhere :: (MonadIO m, MonadBaseControl IO m, PersistRecordBackend record backend)
                 => [Filter record] -> ReaderT backend m ()
 
 -- | Get all records matching the given criterion in the specified order.
