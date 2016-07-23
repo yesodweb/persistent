@@ -10,8 +10,9 @@ embedOrderMigrate
 
 import Init
 import Data.Map hiding (insert)
-
+import Control.Monad.Trans.Control (MonadBaseControl)
 import Debug.Trace (trace)
+
 debug :: Show s => s -> s
 debug x = trace (show x) x
 
@@ -31,7 +32,7 @@ Bar sql=bar_embed_order
 |]
 
 #ifdef WITH_NOSQL
-cleanDB :: (PersistQuery backend, PersistEntityBackend Foo ~ backend, MonadIO m) => ReaderT backend m ()
+cleanDB :: (PersistQuery backend, MonadBaseControl IO m, PersistEntityBackend Foo ~ backend, MonadIO m) => ReaderT backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Foo])
   deleteWhere ([] :: [Filter Bar])

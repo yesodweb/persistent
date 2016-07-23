@@ -6,7 +6,7 @@ module EmptyEntityTest (specs) where
 import Database.Persist.Sql
 import Database.Persist.TH
 import Control.Monad.Trans.Resource (runResourceT)
-
+import Control.Monad.Trans.Control (MonadBaseControl)
 import Init
 
 #ifdef WITH_NOSQL
@@ -19,7 +19,7 @@ EmptyEntity
 |]
 
 #ifdef WITH_NOSQL
-cleanDB :: MonadIO m => ReaderT Context m ()
+cleanDB :: (MonadIO m, MonadBaseControl IO m) => ReaderT Context m ()
 cleanDB = deleteWhere ([] :: [Filter EmptyEntity])
 #endif
 

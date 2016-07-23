@@ -94,8 +94,7 @@ library
                    , file-location >= 0.4
                    , template-haskell
                    , aeson                    >= 0.7
-                   , aeson-compat             >= 0.3.2.0   && < 0.4
-                   , aeson-extra              >= 0.3
+                   , aeson-compat             >= 0.3.5.1   && < 0.4
                    , lifted-base              >= 0.1
                    , network
                    , path-pieces              >= 0.1
@@ -156,7 +155,7 @@ library
 
    if flag(mongodb)
      build-depends:  persistent-mongoDB
-                   , mongoDB            >= 2.0.4 && < 3.0
+                   , mongoDB            >= 2.1.0   && < 3.0
                    , cereal
                    , bson               >= 0.3.1
                    , process

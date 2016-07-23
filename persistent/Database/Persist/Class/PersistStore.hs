@@ -23,6 +23,7 @@ import Control.Exception.Lifted (throwIO)
 import Control.Monad.Trans.Reader (ReaderT)
 import Control.Monad.Reader (MonadReader (ask), runReaderT)
 import Database.Persist.Class.PersistEntity
+import Control.Monad.Trans.Control (MonadBaseControl)
 import Database.Persist.Class.PersistField
 import Database.Persist.Types
 import qualified Data.Aeson as A
@@ -142,23 +143,23 @@ class
     -- | Put the record in the database with the given key.
     -- Unlike 'replace', if a record with the given key does not
     -- exist then a new record will be inserted.
-    repsert :: (MonadIO m, PersistRecordBackend record backend)
+    repsert :: (MonadIO m, MonadBaseControl IO m, PersistRecordBackend record backend)
             => Key record -> record -> ReaderT backend m ()
 
     -- | Replace the record in the database with the given
     -- key. Note that the result is undefined if such record does
     -- not exist, so you must use 'insertKey or 'repsert' in
     -- these cases.
-    replace :: (MonadIO m, PersistRecordBackend record backend)
+    replace :: (MonadIO m, MonadBaseControl IO m, PersistRecordBackend record backend)
             => Key record -> record -> ReaderT backend m ()
 
     -- | Delete a specific record by identifier. Does nothing if record does
     -- not exist.
-    delete :: (MonadIO m, PersistRecordBackend record backend)
+    delete :: (MonadIO m, MonadBaseControl IO m, PersistRecordBackend record backend)
            => Key record -> ReaderT backend m ()
 
     -- | Update individual fields on a specific record.
-    update :: (MonadIO m, PersistRecordBackend record backend)
+    update :: (MonadIO m, MonadBaseControl IO m, PersistRecordBackend record backend)
            => Key record -> [Update record] -> ReaderT backend m ()
 
     -- | Update individual fields on a specific record, and retrieve the
@@ -166,7 +167,7 @@ class
     --
     -- Note that this function will throw an exception if the given key is not
     -- found in the database.
-    updateGet :: (MonadIO m, PersistRecordBackend record backend)
+    updateGet :: (MonadIO m, MonadBaseControl IO m, PersistRecordBackend record backend)
               => Key record -> [Update record] -> ReaderT backend m record
     updateGet key ups = do
         update key ups

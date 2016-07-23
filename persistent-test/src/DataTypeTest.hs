@@ -16,7 +16,7 @@ import Data.Time.Clock (picosecondsToDiffTime)
 import Data.Time.LocalTime (TimeOfDay (TimeOfDay))
 import Data.IntMap (IntMap)
 import Data.Fixed (Pico,Micro)
-
+import Control.Monad.Trans.Control (MonadBaseControl)
 import Init
 
 type Tuple a b = (a, b)
@@ -46,7 +46,7 @@ DataTypeTable no-json
     utc UTCTime
 |]
 
-cleanDB :: (MonadIO m, PersistQuery backend, backend ~ PersistEntityBackend DataTypeTable) => ReaderT backend m ()
+cleanDB :: (MonadIO m, MonadBaseControl IO m, PersistQuery backend, backend ~ PersistEntityBackend DataTypeTable) => ReaderT backend m ()
 cleanDB = deleteWhere ([] :: [Filter DataTypeTable])
 
 specs :: Spec

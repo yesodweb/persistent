@@ -1,5 +1,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Database.Persist.Class.DeleteCascade
     ( DeleteCascade (..)
     , deleteCascadeWhere
@@ -8,7 +9,7 @@ module Database.Persist.Class.DeleteCascade
 import Database.Persist.Class.PersistStore
 import Database.Persist.Class.PersistQuery
 import Database.Persist.Class.PersistEntity
-
+import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -23,10 +24,10 @@ class (PersistStoreWrite backend, PersistEntity record, BaseBackend backend ~ Pe
 
     -- | Perform cascade-deletion of single database
     -- entry.
-    deleteCascade :: MonadIO m => Key record -> ReaderT backend m ()
+    deleteCascade :: (MonadIO m, MonadBaseControl IO m) => Key record -> ReaderT backend m ()
 
 -- | Cascade-deletion of entries satisfying given filters.
-deleteCascadeWhere :: (MonadIO m, DeleteCascade record backend, PersistQueryWrite backend)
+deleteCascadeWhere :: (MonadIO m, MonadBaseControl IO m, DeleteCascade record backend, PersistQueryWrite backend)
                    => [Filter record] -> ReaderT backend m ()
 deleteCascadeWhere filts = do
     srcRes <- selectKeysRes filts []

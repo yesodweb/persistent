@@ -24,6 +24,7 @@ import EntityEmbedTest
 import System.Process (readProcess)
 #endif
 import Data.List.NonEmpty hiding (insert, length)
+import Control.Monad.Trans.Control (MonadBaseControl)
 
 data TestException = TestException
     deriving (Show, Typeable, Eq)
@@ -151,7 +152,7 @@ share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
     deriving Show Eq Read Ord
 |]
 #ifdef WITH_NOSQL
-cleanDB :: (PersistQuery backend, PersistEntityBackend HasMap ~ backend, MonadIO m) => ReaderT backend m ()
+cleanDB :: (PersistQuery backend, MonadBaseControl IO m, PersistEntityBackend HasMap ~ backend, MonadIO m) => ReaderT backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter HasEmbed])
   deleteWhere ([] :: [Filter HasEmbeds])

@@ -24,7 +24,7 @@ library
                    , transformers             >= 0.2       && < 0.6
                    , containers
                    , aeson                    >= 0.7       && < 0.12
-                   , aeson-compat             >= 0.3.2.0   && < 0.4
+                   , aeson-compat             >= 0.3.5.1   && < 0.4
                    , monad-logger
                    , unordered-containers
                    , tagged
