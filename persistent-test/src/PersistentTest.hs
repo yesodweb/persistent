@@ -21,7 +21,7 @@ import Test.HUnit hiding (Test)
 import Control.Monad.Trans.Resource (runResourceT)
 import Test.Hspec.Expectations ()
 import Test.Hspec.QuickCheck(prop)
-
+import Control.Monad.Trans.Control (MonadBaseControl)
 import Database.Persist
 
 #ifdef WITH_NOSQL
@@ -179,7 +179,7 @@ NoPrefix2
     deriving Show Eq
 |]
 
-cleanDB :: (MonadIO m, PersistQuery backend, PersistEntityBackend EmailPT ~ backend) => ReaderT backend m ()
+cleanDB :: (MonadIO m, MonadBaseControl IO m, PersistQuery backend, PersistEntityBackend EmailPT ~ backend) => ReaderT backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Person])
   deleteWhere ([] :: [Filter Person1])

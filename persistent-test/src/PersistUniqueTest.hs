@@ -1,6 +1,6 @@
 {-# LANGUAGE QuasiQuotes, TemplateHaskell, CPP, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, EmptyDataDecls, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses #-}
 module PersistUniqueTest where
-
+import Control.Monad.Trans.Control (MonadBaseControl)
 import Init
 
 -- mpsGeneric = False is due to a bug or at least lack of a feature in mkKeyTypeDec TH.hs
@@ -17,7 +17,7 @@ share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "migration"] 
       deriving Eq Show
 |]
 #ifdef WITH_NOSQL
-cleanDB :: (MonadIO m, PersistQuery backend, PersistEntityBackend Fo ~ backend) => ReaderT backend m ()
+cleanDB :: (MonadIO m, MonadBaseControl IO m, PersistQuery backend, PersistEntityBackend Fo ~ backend) => ReaderT backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Fo])
 

@@ -3,6 +3,7 @@ module LargeNumberTest where
 
 import Init
 import Data.Word
+import Control.Monad.Trans.Control (MonadBaseControl)
 
 #ifdef WITH_NOSQL
 mkPersist persistSettings [persistUpperCase|
@@ -19,7 +20,7 @@ share [mkPersist sqlSettings,  mkMigrate "numberMigrate"] [persistLowerCase|
 |]
 
 #ifdef WITH_NOSQL
-cleanDB :: (MonadIO m, PersistQuery backend, PersistEntityBackend Number ~ backend) => ReaderT backend m ()
+cleanDB :: (MonadIO m, MonadBaseControl IO m, PersistQuery backend, PersistEntityBackend Number ~ backend) => ReaderT backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Number])
 db :: Action IO () -> Assertion

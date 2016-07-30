@@ -2,7 +2,7 @@
 module PrimaryTest where
 
 import Init
-
+import Control.Monad.Trans.Control (MonadBaseControl)
 -- mpsGeneric = False is due to a bug or at least lack of a feature in mkKeyTypeDec TH.hs
 #if WITH_NOSQL
 mkPersist persistSettings { mpsGeneric = False } [persistUpperCase|
@@ -22,7 +22,7 @@ share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "migration"] 
     Foreign Trees fkparent parent
 |]
 #ifdef WITH_NOSQL
-cleanDB :: (MonadIO m, PersistQuery backend, PersistEntityBackend Foo ~ backend) => ReaderT backend m ()
+cleanDB :: (MonadIO m, MonadBaseControl IO m, PersistQuery backend, PersistEntityBackend Foo ~ backend) => ReaderT backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Foo])
   deleteWhere ([] :: [Filter Bar])

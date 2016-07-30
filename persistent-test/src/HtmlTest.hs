@@ -7,7 +7,7 @@ import Data.Char (generalCategory, GeneralCategory(..))
 import qualified Data.Text as T
 import System.Random (randomIO, randomRIO, Random)
 import Control.Monad.Trans.Resource (runResourceT)
-
+import Control.Monad.Trans.Control (MonadBaseControl)
 import Init
 import Text.Blaze.Html
 import Text.Blaze.Html.Renderer.Text
@@ -19,7 +19,7 @@ HtmlTable
     deriving
 |]
 
-cleanDB :: (MonadIO m, PersistQuery backend, PersistEntityBackend HtmlTable ~ backend) => ReaderT backend m ()
+cleanDB :: (MonadIO m, MonadBaseControl IO m, PersistQuery backend, PersistEntityBackend HtmlTable ~ backend) => ReaderT backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter HtmlTable])
 

@@ -23,6 +23,7 @@ import Test.Hspec.Expectations ()
 
 #  if MIN_VERSION_monad_control(0, 3, 0)
 import qualified Control.Monad.Trans.Control
+import Control.Monad.Trans.Control (MonadBaseControl)
 #  else
 import qualified Control.Monad.IO.Control
 #  endif
@@ -95,7 +96,7 @@ share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMig
 
 
 #ifdef WITH_NOSQL
-cleanDB :: (PersistQuery backend, PersistEntityBackend TestChild ~ backend, MonadIO m) => ReaderT backend m ()
+cleanDB :: (PersistQuery backend, MonadBaseControl IO m, PersistEntityBackend TestChild ~ backend, MonadIO m) => ReaderT backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter TestChild])
   deleteWhere ([] :: [Filter TestParent])
