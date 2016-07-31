@@ -20,15 +20,7 @@ module CompositeTest where
 
 import Test.Hspec.Expectations ()
 import qualified Control.Monad.Trans.Control
-
-#  if MIN_VERSION_monad_control(0, 3, 0)
 import qualified Control.Exception as E
-#    define CATCH catch'
-#  else
-import qualified Control.Exception.Control as Control
-#    define CATCH Control.catch
-#  endif
-
 import Init
 
 #ifndef WITH_NOSQL

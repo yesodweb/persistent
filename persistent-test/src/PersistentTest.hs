@@ -35,13 +35,7 @@ import Database.Persist.MongoDB (toInsertDoc, docToEntityThrow, collectionName, 
 import Database.Persist.TH (mkDeleteCascade, mkSave)
 import Control.Exception (SomeException)
 import qualified Data.Text as T
-#  if MIN_VERSION_monad_control(0, 3, 0)
 import qualified Control.Exception as E
-#    define CATCH catch'
-#  else
-import qualified Control.Exception.Control as Control
-#    define CATCH Control.catch
-#  endif
 
 #  ifdef WITH_POSTGRESQL
 import Data.List (sort)
