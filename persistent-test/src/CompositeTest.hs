@@ -19,13 +19,7 @@
 module CompositeTest where
 
 import Test.Hspec.Expectations ()
-
-
-#  if MIN_VERSION_monad_control(0, 3, 0)
 import qualified Control.Monad.Trans.Control
-#  else
-import qualified Control.Monad.IO.Control
-#  endif
 
 #  if MIN_VERSION_monad_control(0, 3, 0)
 import qualified Control.Exception as E
@@ -311,7 +305,6 @@ matchCitizenAddressK :: Key CitizenAddress -> Either Text (Int64, Int64)
 matchCitizenAddressK = (\(a:b:[]) -> (,) <$> fromPersistValue a <*> fromPersistValue b)
                      . keyToValues
 
-#if MIN_VERSION_monad_control(0, 3, 0)
 catch' :: (Control.Monad.Trans.Control.MonadBaseControl IO m, E.Exception e)
        => m a       -- ^ The computation to run
        -> (e -> m a) -- ^ Handler to invoke if an exception is raised
@@ -319,4 +312,3 @@ catch' :: (Control.Monad.Trans.Control.MonadBaseControl IO m, E.Exception e)
 catch' a handler = Control.Monad.Trans.Control.control $ \runInIO ->
                     E.catch (runInIO a)
                             (\e -> runInIO $ handler e)
-#endif

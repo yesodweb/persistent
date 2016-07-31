@@ -84,10 +84,8 @@ library
       ghc-options: -Wall -j
 
     build-depends:   base                     >= 4.6       && < 5
-
                    , persistent
                    , persistent-template
-
                    , HUnit
                    , hspec >= 1.12.1
                    , hspec-expectations

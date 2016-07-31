@@ -52,11 +52,7 @@ import Database.Persist.MySQL()
 
 #endif
 
-#if MIN_VERSION_monad_control(0, 3, 0)
 import qualified Control.Monad.Trans.Control
-#else
-import qualified Control.Monad.IO.Control
-#endif
 import Control.Exception.Lifted (catch)
 
 import Control.Monad.IO.Class
@@ -1006,7 +1002,6 @@ caseCommitRollback = db $ do
     c4 <- count filt
     c4 @== 4
 
-#if MIN_VERSION_monad_control(0, 3, 0)
 catch' :: (Control.Monad.Trans.Control.MonadBaseControl IO m, E.Exception e)
        => m a       -- ^ The computation to run
        -> (e -> m a) -- ^ Handler to invoke if an exception is raised
@@ -1014,7 +1009,6 @@ catch' :: (Control.Monad.Trans.Control.MonadBaseControl IO m, E.Exception e)
 catch' a handler = Control.Monad.Trans.Control.control $ \runInIO ->
                     E.catch (runInIO a)
                             (\e -> runInIO $ handler e)
-#endif
 
 #endif
 
