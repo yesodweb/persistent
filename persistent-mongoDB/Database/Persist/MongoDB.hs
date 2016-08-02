@@ -173,6 +173,12 @@ lookupEnv key = do
     return $ lookup key env
 #endif
 
+-- | Helper function to deal with MonadBaseControl constraints
+runMongo :: Trans.MonadIO m => DB.Action IO a -> DB.Action m a
+runMongo action = do
+    env <- ask
+    liftIO (runReaderT action env)
+
 instance HasPersistBackend DB.MongoContext where
     type BaseBackend DB.MongoContext = DB.MongoContext
     persistBackend = id
@@ -560,22 +566,23 @@ instance PersistStoreWrite DB.MongoContext where
     insertKey k record = DB.insert_ (collectionName record) $
                          entityToInsertDoc (Entity k record)
 
-    repsert   k record = DB.save (collectionName record) $
+    repsert   k record = runMongo $
+                         DB.save (collectionName record) $
                          documentFromEntity (Entity k record)
 
-    replace k record = do
+    replace k record = runMongo $ do
         DB.replace (selectByKey k) (recordToDocument record)
         return ()
 
     delete k =
-        DB.deleteOne DB.Select {
+        runMongo $ DB.deleteOne DB.Select {
           DB.coll = collectionNameFromKey k
         , DB.selector = keyToMongoDoc k
         }
 
     update _ [] = return ()
     update key upds =
-        DB.modify
+        runMongo $ DB.modify
            (DB.Select (keyToMongoDoc key) (collectionNameFromKey key))
            $ updatesToDoc upds
 
@@ -613,7 +620,7 @@ instance PersistUniqueRead DB.MongoContext where
 
 instance PersistUniqueWrite DB.MongoContext where
     deleteBy uniq =
-        DB.delete DB.Select {
+        runMongo $ DB.delete DB.Select {
           DB.coll = collectionName $ dummyFromUnique uniq
         , DB.selector = toUniquesDoc uniq
         }
@@ -628,8 +635,8 @@ instance PersistUniqueWrite DB.MongoContext where
         let insDoc = DB.exclude uniqKeys $ toInsertDoc newRecord
         let selection = DB.select uniqueDoc $ collectionName newRecord
         if null upds
-          then DB.upsert selection ["$set" DB.=: insDoc]
-          else do
+          then runMongo $ DB.upsert selection ["$set" DB.=: insDoc]
+          else runMongo $ do
             DB.upsert selection ["$setOnInsert" DB.=: insDoc]
             DB.modify selection $ updatesToDoc upds
         -- because findAndModify $setOnInsert is broken we do a separate get now
@@ -690,17 +697,16 @@ projectionFromKey = projectionFromEntityDef . entityDefFromKey
 projectionFromRecord :: PersistEntity record => record -> DB.Projector
 projectionFromRecord = projectionFromEntityDef . entityDef . Just
 
-
 instance PersistQueryWrite DB.MongoContext where
     updateWhere _ [] = return ()
     updateWhere filts upds =
-        DB.modify DB.Select {
+        runMongo $ DB.modify DB.Select {
           DB.coll = collectionName $ dummyFromFilts filts
         , DB.selector = filtersToDoc filts
         } $ updatesToDoc upds
 
-    deleteWhere filts = do
-        DB.delete DB.Select {
+    deleteWhere filts =
+        runMongo $ DB.delete DB.Select {
           DB.coll = collectionName $ dummyFromFilts filts
         , DB.selector = filtersToDoc filts
         }
