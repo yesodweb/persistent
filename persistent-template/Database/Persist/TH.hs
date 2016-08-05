@@ -253,7 +253,10 @@ setEmbedField entName allEntities field = field
               then EmbedRef em
               else if maybeNullable field
                      then SelfReference
-                     else error $ unpack $ unHaskellName entName `mappend` ": a self reference must be a Maybe"
+                     else case fieldType field of
+                       FTList _ -> SelfReference
+                       _ -> error $ unpack $ unHaskellName entName
+                           `mappend` ": a self reference must be a Maybe"
       existing@_   -> existing
   }
 
