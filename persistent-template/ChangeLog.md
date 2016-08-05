@@ -1,3 +1,7 @@
+## 2.5.1.6
+
+Allow non-null self-references in a list
+
 ## 2.5.1.4
 
 * Allow composite Primary keys for tables that contain nullable fields.
