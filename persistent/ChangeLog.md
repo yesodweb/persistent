@@ -1,3 +1,7 @@
+## 2.6
+
+* Add `connUpsertSql` type for providing native upsert sql support.
+
 ## 2.5
 
 * read/write typeclass split

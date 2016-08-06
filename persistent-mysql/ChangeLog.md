@@ -1,3 +1,7 @@
+## 2.6
+
+* Changes for `connUpsertSql` support.
+
 ## 2.5
 
 * changes for read/write typeclass split
