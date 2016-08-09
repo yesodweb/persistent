@@ -84,10 +84,8 @@ library
       ghc-options: -Wall -j
 
     build-depends:   base                     >= 4.6       && < 5
-
                    , persistent
                    , persistent-template
-
                    , HUnit
                    , hspec >= 1.12.1
                    , hspec-expectations
@@ -95,7 +93,6 @@ library
                    , template-haskell
                    , aeson                    >= 0.7
                    , aeson-compat             >= 0.3.2.0   && < 0.4
-                   , aeson-extra              >= 0.3
                    , lifted-base              >= 0.1
                    , network
                    , path-pieces              >= 0.1
