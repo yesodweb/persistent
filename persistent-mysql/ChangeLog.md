@@ -1,6 +1,8 @@
 ## 2.6
 
-* Changes for `connUpsertSql` support.
+Compatibility for backend-specific upsert functionality.
+A lucky contributor could add upsert to the MySQL backend now, i.e.:
+INSERT ... ON DUPICATE ...
 
 ## 2.5
 

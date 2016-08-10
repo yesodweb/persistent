@@ -1,6 +1,6 @@
 ## 2.6
 
-* Add `connUpsertSql` type for providing native upsert sql support.
+* Add `connUpsertSql` type for providing backend-specific upsert sql support.
 
 ## 2.5
 
