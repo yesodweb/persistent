@@ -7,7 +7,7 @@ maintainer:      Greg Weber <greg@gregweber.info>
 synopsis:        Backend for the persistent library using mongoDB.
 category:        Database
 stability:       Experimental
-cabal-version:   >= 1.6
+cabal-version:   >= 1.8
 build-type:      Simple
 homepage:        http://www.yesodweb.com/book/persistent
 bug-reports:     https://github.com/yesodweb/persistent/issues
