@@ -33,7 +33,7 @@ matrix:
     - mongodb
   - env: GHCVER=7.6.3 CABALVER=1.18 BACKEND=postgresql
     addons:
-      postgresql: "9.3"
+      postgresql: "9.4"
       apt:
         sources:
         - hvr-ghc
@@ -81,7 +81,7 @@ matrix:
     - mongodb
   - env: GHCVER=7.8.4 CABALVER=1.18 BACKEND=postgresql
     addons:
-      postgresql: "9.3"
+      postgresql: "9.4"
       apt:
         sources:
         - hvr-ghc
@@ -129,7 +129,7 @@ matrix:
     - mongodb
   - env: GHCVER=7.10.2 CABALVER=1.22 BACKEND=postgresql
     addons:
-      postgresql: "9.3"
+      postgresql: "9.4"
       apt:
         sources:
         - hvr-ghc
