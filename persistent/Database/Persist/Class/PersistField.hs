@@ -176,6 +176,10 @@ instance PersistField Double where
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ T.pack $ "Expected Double, received: " ++ show x
 
+instance PersistField () where
+    toPersistValue ()  = PersistNull
+    fromPersistValue _ = Right ()
+
 instance (HasResolution a) => PersistField (Fixed a) where
     toPersistValue = PersistRational . toRational
     fromPersistValue (PersistRational r) = Right $ fromRational r
@@ -271,6 +275,18 @@ instance PersistField a => PersistField (Maybe a) where
     fromPersistValue PersistNull = Right Nothing
     fromPersistValue x = Just <$> fromPersistValue x
 
+instance (PersistField a, PersistField b) => PersistField (Either a b) where
+    toPersistValue (Left a)  = PersistList [ toPersistValue True
+                                           , toPersistValue a]
+    toPersistValue (Right b) = PersistList [ toPersistValue False
+                                           , toPersistValue b]
+    fromPersistValue (PersistList (m:v:[])) =
+        case fromPersistValue m of
+            Left e -> Left e
+            Right True  -> either Left Left  (fromPersistValue v)
+            Right False -> either Left Right (fromPersistValue v)
+    fromPersistValue x = Left $ T.pack $ "Expected 2 item PersistList, received: " ++ show x
+
 instance PersistField a => PersistField [a] where
     toPersistValue = PersistList . fmap toPersistValue
     fromPersistValue (PersistList l) = fromPersistList l
@@ -309,6 +325,31 @@ instance (PersistField a, PersistField b) => PersistField (a,b) where
 instance PersistField v => PersistField (IM.IntMap v) where
     toPersistValue = toPersistValue . IM.toList
     fromPersistValue = fmap IM.fromList . fromPersistValue
+
+instance (PersistField a, PersistField b, PersistField c)
+         => PersistField (a,b,c) where
+    toPersistValue (x,y,z) =
+        PersistList [toPersistValue x, toPersistValue y, toPersistValue z]
+    fromPersistValue (PersistList (vx:vy:vz:[])) =
+      case (fromPersistValue vx, fromPersistValue vy, fromPersistValue vz) of
+        (Right x, Right y, Right z) -> Right (x, y, z)
+        (Left e, _, _) -> Left e
+        (_, Left e, _) -> Left e
+        (_, _, Left e) -> Left e
+    fromPersistValue x = Left $ T.pack $ "Expected 3 item PersistList, received: " ++ show x
+
+instance (PersistField a, PersistField b, PersistField c, PersistField d)
+         => PersistField (a,b,c,d) where
+    toPersistValue (a,b,c,d) =
+        PersistList [toPersistValue a, toPersistValue b, toPersistValue c, toPersistValue d]
+    fromPersistValue (PersistList (va:vb:vc:vd:[])) =
+      case (fromPersistValue va, fromPersistValue vb, fromPersistValue vc, fromPersistValue vd) of
+        (Right a, Right b, Right c, Right d) -> Right (a, b, c, d)
+        (Left e, _, _, _) -> Left e
+        (_, Left e, _, _) -> Left e
+        (_, _, Left e, _) -> Left e
+        (_, _, _, Left e) -> Left e
+    fromPersistValue x = Left $ T.pack $ "Expected 4 item PersistList, received: " ++ show x
 
 instance PersistField v => PersistField (M.Map T.Text v) where
     toPersistValue = PersistMap . fmap (second toPersistValue) . M.toList
