@@ -100,7 +100,7 @@ test-suite test
                    , attoparsec
                    , transformers
                    , path-pieces
-                   , http-api-data            >= 0.2       && < 0.3
+                   , http-api-data            >= 0.2       && < 0.4
                    , aeson
                    , resourcet
                    , monad-logger
