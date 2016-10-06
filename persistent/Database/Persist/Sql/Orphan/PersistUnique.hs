@@ -1,7 +1,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# OPTIONS_GHC -fno-warn-orphans  #-}
+{-# OPTIONS_GHC -fno-warn-orphans       #-}
 
 module Database.Persist.Sql.Orphan.PersistUnique
   ()
@@ -31,6 +31,13 @@ defaultUpsert record updates = do
     uniqueKey <- onlyUnique record
     upsertBy uniqueKey record updates
 
+escape :: DBName -> T.Text
+escape (DBName s) = T.pack $ '"' : go (T.unpack s) ++ "\""
+  where
+    go "" = ""
+    go ('"':xs) = "\"\"" ++ go xs
+    go (x:xs) = x : go xs
+
 instance PersistUniqueWrite SqlBackend where
     upsert record updates = do
         conn <- ask
@@ -46,10 +53,29 @@ instance PersistUniqueWrite SqlBackend where
                                 (map toPersistValue $ toPersistFields record) ++
                                 (map updatePersistValue updates) ++
                                 (unqs uniqueKey)
-                            go'' n Assign = n <> "=?"
-                            go'' n Add = T.concat [n, "=", n, "+?"]
-                            go'' n Subtract = T.concat [n, "=", n, "-?"]
-                            go'' n Multiply = T.concat [n, "=", n, "*?"]
+                            go'' n Assign =
+                                escape (entityDB t) <> "." <> n <> "=?"
+                            go'' n Add =
+                                T.concat
+                                    [ n
+                                    , "="
+                                    , escape (entityDB t) <> "."
+                                    , n
+                                    , "+?"]
+                            go'' n Subtract =
+                                T.concat
+                                    [ n
+                                    , "="
+                                    , escape (entityDB t) <> "."
+                                    , n
+                                    , "-?"]
+                            go'' n Multiply =
+                                T.concat
+                                    [ n
+                                    , "="
+                                    , escape (entityDB t) <> "."
+                                    , n
+                                    , "*?"]
                             go'' n Divide = T.concat [n, "=", n, "/?"]
                             go'' _ (BackendSpecificUpdate up) =
                                 error $
