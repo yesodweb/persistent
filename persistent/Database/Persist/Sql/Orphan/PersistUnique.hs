@@ -1,7 +1,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# OPTIONS_GHC -fno-warn-orphans       #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Database.Persist.Sql.Orphan.PersistUnique
   ()
@@ -46,7 +46,7 @@ instance PersistUniqueWrite SqlBackend where
             Just upsertSql ->
                 case updates of
                     [] -> defaultUpsert record updates
-                    xs -> do
+                    _ -> do
                         let upds = T.intercalate "," $ map (go' . go) updates
                             sql = upsertSql t upds
                             vals =
@@ -76,7 +76,13 @@ instance PersistUniqueWrite SqlBackend where
                                     , escape (entityDB t) <> "."
                                     , n
                                     , "*?"]
-                            go'' n Divide = T.concat [n, "=", n, "/?"]
+                            go'' n Divide =
+                                T.concat
+                                    [ n
+                                    , "="
+                                    , escape (entityDB t) <> "."
+                                    , n
+                                    , "/?"]
                             go'' _ (BackendSpecificUpdate up) =
                                 error $
                                 T.unpack $
