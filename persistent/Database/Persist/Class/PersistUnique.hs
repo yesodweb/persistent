@@ -108,7 +108,8 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
         mrecord <- getBy uniqueKey
         maybe (insertEntity record) (`updateGetEntity` updates) mrecord
       where
-        updateGetEntity (Entity k _) = fmap (Entity k) . updateGet k
+        updateGetEntity (Entity k _) upds =
+            (Entity k) `liftM` (updateGet k upds)
 
 -- | Insert a value, checking for conflicts with any unique constraints.  If a
 -- duplicate exists in the database, it is returned as 'Left'. Otherwise, the
