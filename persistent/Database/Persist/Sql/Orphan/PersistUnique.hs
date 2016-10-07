@@ -1,7 +1,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_GHC -fno-warn-orphans  #-}
 
 module Database.Persist.Sql.Orphan.PersistUnique
   ()
@@ -32,11 +32,11 @@ defaultUpsert record updates = do
     upsertBy uniqueKey record updates
 
 escape :: DBName -> T.Text
-escape (DBName s) = T.pack $ '"' : go (T.unpack s) ++ "\""
+escape (DBName s) = T.pack $ '"' : escapeQuote (T.unpack s) ++ "\""
   where
-    go "" = ""
-    go ('"':xs) = "\"\"" ++ go xs
-    go (x:xs) = x : go xs
+    escapeQuote "" = ""
+    escapeQuote ('"':xs) = "\"\"" ++ escapeQuote xs
+    escapeQuote (x:xs) = x : escapeQuote xs
 
 instance PersistUniqueWrite SqlBackend where
     upsert record updates = do
