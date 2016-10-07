@@ -106,13 +106,14 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- ^ the record in the database after the operation
     upsertBy uniqueKey record updates = do
         mExists <- getBy uniqueKey
-        k <-
-            case mExists of
-                Just (Entity k _) -> do
-                    when (null updates) (replace k record)
-                    return k
-                Nothing -> insert record
-        Entity k `liftM` updateGet k updates
+        case mExists of
+            Just ent@(Entity k _) ->
+                if (null updates)
+                    then return ent
+                    else Entity k `liftM` updateGet k updates
+            Nothing -> do
+                ikey <- insert record
+                Entity ikey `liftM` getJust ikey
 
 -- | Insert a value, checking for conflicts with any unique constraints.  If a
 -- duplicate exists in the database, it is returned as 'Left'. Otherwise, the
