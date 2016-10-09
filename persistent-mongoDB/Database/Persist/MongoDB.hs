@@ -624,18 +624,17 @@ instance PersistUniqueWrite DB.MongoContext where
 
     upsertBy uniq newRecord upds = do
         let uniqueDoc = toUniquesDoc uniq
-        let uniqKeys = map DB.label uniqueDoc
-        let insDoc = DB.exclude uniqKeys $ toInsertDoc newRecord
         let selection = DB.select uniqueDoc $ collectionName newRecord
-        if null upds
-          then DB.upsert selection ["$set" DB.=: insDoc]
-          else do
-            DB.upsert selection ["$setOnInsert" DB.=: insDoc]
-            DB.modify selection $ updatesToDoc upds
-        -- because findAndModify $setOnInsert is broken we do a separate get now
         mdoc <- getBy uniq
-        maybe (err "possible race condition: getBy found Nothing")
-            return mdoc
+        case mdoc of
+          Nothing -> insert_ newRecord
+          Just _ -> if null upds
+                    then return ()
+                    else DB.modify selection $ updatesToDoc upds
+        newMdoc <- getBy uniq
+        case newMdoc of
+          Nothing -> err "possible race condition: getBy found Nothing"
+          Just doc -> return doc
       where
         err = Trans.liftIO . throwIO . UpsertError
         {-
