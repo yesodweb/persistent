@@ -11,6 +11,7 @@ module Database.Persist.Class
     , BaseBackend(..)
     , PersistRecordBackend
     , getJust
+    , getEntity
     , belongsTo
     , belongsToJust
     , insertEntity

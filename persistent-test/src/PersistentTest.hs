@@ -688,6 +688,12 @@ specs = describe "persistent" $ do
       Just p2 <- get k
       p2 @== p
 
+  it "getEntity" $ db $ do
+      Entity k p <- insertEntity $ Person "name" 1 Nothing
+      Just (Entity k2 p2) <- getEntity k
+      p @== p2
+      k @== k2
+
   it "repsert" $ db $ do
       k <- liftIO (PersonKey `fmap` generateKey)
       Nothing <- selectFirst [PersonName ==. "Repsert"] []

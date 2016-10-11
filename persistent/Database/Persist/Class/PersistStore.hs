@@ -10,6 +10,7 @@ module Database.Persist.Class.PersistStore
     , PersistCore (..)
     , PersistStoreRead (..)
     , PersistStoreWrite (..)
+    , getEntity
     , getJust
     , belongsTo
     , belongsToJust
@@ -216,3 +217,13 @@ insertEntity ::
 insertEntity e = do
     eid <- insert e
     return $ Entity eid e
+
+-- | Like @get@, but returns the complete @Entity@.
+getEntity ::
+    ( PersistStoreWrite backend
+    , PersistRecordBackend e backend
+    , MonadIO m
+    ) => Key e -> ReaderT backend m (Maybe (Entity e))
+getEntity key = do
+    maybeModel <- get key
+    return $ fmap (key `Entity`) maybeModel
