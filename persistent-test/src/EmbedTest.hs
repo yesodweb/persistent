@@ -149,6 +149,19 @@ share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
   MapIdValue
     map (M.Map T.Text (Key OnlyName))
     deriving Show Eq Read Ord
+
+
+  -- Self refrences are only allowed as a nullable type:
+  -- a Maybe or a List
+  SelfList
+    reference [SelfList]
+
+  SelfMaybe
+    reference SelfMaybe Maybe
+
+  -- This failes
+  -- SelfDirect
+  --  reference SelfDirect
 |]
 #ifdef WITH_NOSQL
 cleanDB :: (PersistQuery backend, PersistEntityBackend HasMap ~ backend, MonadIO m) => ReaderT backend m ()

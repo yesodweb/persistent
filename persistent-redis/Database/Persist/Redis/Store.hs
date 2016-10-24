@@ -1,10 +1,9 @@
 {-# LANGUAGE FlexibleContexts, UndecidableInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-module Database.Persist.Redis.Store 
+module Database.Persist.Redis.Store
     ( execRedisT
     , RedisBackend
     )where
@@ -45,10 +44,24 @@ execRedisT action = do
         (Right x) -> return x
         (Left x)  -> fail x
 
-instance PersistStore R.Connection where
+instance HasPersistBackend R.Connection where
+  type BaseBackend R.Connection = R.Connection
+  persistBackend = id
+
+instance PersistCore R.Connection where
     newtype BackendKey R.Connection = RedisKey Text
         deriving (Show, Read, Eq, Ord, PersistField, FromJSON, ToJSON)
 
+instance PersistStoreRead R.Connection where
+    get k = do
+        r <- execRedisT $ R.hgetall (unKey k)
+        if null r
+            then return Nothing
+            else do
+                Entity _ val <- mkEntity k r
+                return $ Just val
+
+instance PersistStoreWrite R.Connection where
     insert val = do
         keyId <- execRedisT $ createKey val
         let textKey = toKeyText val keyId
@@ -79,14 +92,6 @@ instance PersistStore R.Connection where
             1 -> return ()
             _ -> fail "there are a lot of such keys!"
 
-    get k = do
-        r <- execRedisT $ R.hgetall (unKey k)
-        if null r
-            then return Nothing
-            else do
-                Entity _ val <- mkEntity k r
-                return $ Just val
-
     update _ [] = return ()
     update k upds = do
         r <- execRedisT $ R.hgetall (unKey k)
@@ -111,4 +116,3 @@ instance PathPiece (BackendKey RedisBackend) where
 
 instance Sql.PersistFieldSql (BackendKey RedisBackend) where
     sqlType _ = Sql.SqlOther (pack "doesn't make much sense for Redis backend")
-

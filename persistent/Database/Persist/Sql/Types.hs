@@ -80,16 +80,8 @@ type ConnectionPool = Pool SqlBackend
 -- some complex @JOIN@ query, or a database-specific command
 -- needs to be issued.
 --
--- To issue raw SQL queries you could use 'R.withStmt', which
--- allows you to do anything you need.  However, its API is
--- /low-level/ and you need to parse each row yourself.  However,
--- most of your complex queries will have simple results -- some
--- of your entities and maybe a couple of derived columns.
---
--- This is where 'rawSql' comes in.  Like 'R.withStmt', you may
--- issue /any/ SQL query.  However, it does all the hard work for
--- you and automatically parses the rows of the result.  It may
--- return:
+-- To issue raw SQL queries, use 'rawSql'. It does all the hard work of
+-- automatically parsing the rows of the result.  It may return:
 --
 --   * An 'Entity', that which 'selectList' returns.
 --     All of your entity's fields are

@@ -1,5 +1,5 @@
 name:            persistent-sqlite
-version:         2.5.0.1
+version:         2.6
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -25,7 +25,7 @@ library
     build-depends:   base                    >= 4.6         && < 5
                    , bytestring              >= 0.9.1
                    , transformers            >= 0.2.1
-                   , persistent              >= 2.5         && < 3
+                   , persistent              >= 2.6         && < 3
                    , monad-control           >= 0.2
                    , containers              >= 0.2
                    , text                    >= 0.7
@@ -65,6 +65,8 @@ test-suite test
                 , persistent
                 , persistent-sqlite
                 , persistent-template
+                , temporary
+                , text
                 , time
                 , transformers
 

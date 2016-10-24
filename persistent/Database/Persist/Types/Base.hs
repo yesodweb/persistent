@@ -218,8 +218,20 @@ toEmbedEntityDef ent = embDef
                         _ -> Nothing
                     }
 
+-- Type for storing the Uniqueness constraint in the Schema.
+-- Assume you have the following schema with a uniqueness
+-- constraint:
+-- Person
+--   name String
+--   age Int
+--   UniqueAge age
+--
+-- This will be represented as:
+-- UniqueDef (HaskellName (packPTH "UniqueAge"))
+-- (DBName (packPTH "unique_age")) [(HaskellName (packPTH "age"), DBName (packPTH "age"))] []
+--
 data UniqueDef = UniqueDef
-    { uniqueHaskell :: !HaskellName
+    { uniqueHaskell :: !HaskellName 
     , uniqueDBName  :: !DBName
     , uniqueFields  :: ![(HaskellName, DBName)]
     , uniqueAttrs   :: ![Attr]

@@ -6,7 +6,6 @@ import Database.Persist.TH
 import Data.Char (generalCategory, GeneralCategory(..))
 import qualified Data.Text as T
 import System.Random (randomIO, randomRIO, Random)
-import Control.Applicative ((<$>))
 import Control.Monad.Trans.Resource (runResourceT)
 
 import Init

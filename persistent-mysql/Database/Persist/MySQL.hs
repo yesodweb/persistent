@@ -111,6 +111,7 @@ open' ci logFunc = do
         , connStmtMap    = smap
         , connInsertSql  = insertSql'
         , connInsertManySql = Nothing
+        , connUpsertSql = Nothing
         , connClose      = MySQL.close conn
         , connMigrateSql = migrate' ci
         , connBegin      = const $ MySQL.execute_ conn "start transaction" >> return ()

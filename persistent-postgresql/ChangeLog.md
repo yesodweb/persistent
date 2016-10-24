@@ -1,3 +1,7 @@
+## 2.6
+
+* Atomic upsert support for postgreSQL backend
+
 ## 2.5
 
 * changes for read/write typeclass split

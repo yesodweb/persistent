@@ -626,6 +626,9 @@ instance PersistUniqueWrite DB.MongoContext where
 
     upsert newRecord upds = do
         uniq <- onlyUnique newRecord
+        upsertBy uniq newRecord upds
+
+    upsertBy uniq newRecord upds = do
         let uniqueDoc = toUniquesDoc uniq
         let uniqKeys = map DB.label uniqueDoc
         let insDoc = DB.exclude uniqKeys $ toInsertDoc newRecord

@@ -10,7 +10,6 @@ import Control.Monad.Trans.Resource (runResourceT)
 import Data.Time (getCurrentTime, Day, UTCTime(..))
 import qualified Data.Map as Map
 import qualified Data.Text as T
-import Data.Aeson.Compat
 import Init
 
 -- persistent used to not allow types with an "Id" suffix
@@ -27,6 +26,7 @@ share [mkPersist sqlSettings, mkMigrate "migration"] [persistLowerCase|
 KeyTable
     key Text
     deriving Eq Show
+
 IdTable
     Id   Day default=CURRENT_DATE
     name Text
@@ -34,6 +34,7 @@ IdTable
     -- getting rid of the Maybe should be a compilation failure
     keyTableEmbed IdTable Maybe
     deriving Eq Show
+
 LowerCaseTable
     Id            sql=my_id
     fullName Text
@@ -43,11 +44,16 @@ LowerCaseTable
         bin
     ExtraBlock2
         something
+
 RefTable
     someVal Int sql=something_else
     lct LowerCaseTableId
     text TextId
     UniqueRefTable someVal
+
+-- Test a reference to a non-int Id
+ForeignIdTable
+    idId IdTableId
 |]
 #if WITH_NOSQL
 cleanDB :: ReaderT Context IO ()

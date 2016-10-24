@@ -32,30 +32,21 @@ import Database.Persist.MongoDB (toInsertDoc, docToEntityThrow, collectionName, 
 
 #else
 
-import Control.Monad (void, replicateM)
-import Data.List (sort)
 import Database.Persist.TH (mkDeleteCascade, mkSave)
 import Control.Exception (SomeException)
 import qualified Data.Text as T
-#  if MIN_VERSION_monad_control(0, 3, 0)
 import qualified Control.Exception as E
-#    define CATCH catch'
-#  else
-import qualified Control.Exception.Control as Control
-#    define CATCH Control.catch
-#  endif
 
+#  ifdef WITH_POSTGRESQL
+import Data.List (sort)
+#  endif
 #  if WITH_MYSQL
 import Database.Persist.MySQL()
 #  endif
 
 #endif
 
-#if MIN_VERSION_monad_control(0, 3, 0)
 import qualified Control.Monad.Trans.Control
-#else
-import qualified Control.Monad.IO.Control
-#endif
 import Control.Exception.Lifted (catch)
 
 import Control.Monad.IO.Class
@@ -138,6 +129,15 @@ share [mkPersist persistSettings,  mkMigrate "testMigrate", mkDeleteCascade pers
     email Text
     counter Int
     UniqueUpsert email
+    deriving Show
+
+  UpsertBy
+    email Text
+    city Text
+    state Text
+    counter Int
+    UniqueUpsertBy email
+    UniqueUpsertByCityState city state
     deriving Show
 
   Strict
@@ -516,6 +516,33 @@ specs = describe "persistent" $ do
       Entity _ up2 <- upsert up1 [UpsertCounter +=. 1]
       upsertCounter up2 @== 2
 
+  it "upsertBy without updates" $ db $ do
+      deleteWhere ([] :: [Filter UpsertBy])
+      let email = "dude@example.com"
+          city = "Boston"
+          state = "Massachussets"
+      Nothing :: Maybe (Entity UpsertBy) <- getBy $ UniqueUpsertBy email
+      let counter1 = 0
+          unique = UniqueUpsertBy email
+      Entity k1 u1 <- upsertBy unique (UpsertBy email city state counter1) []
+      upsertByCounter u1 @== counter1
+      let counter2 = 1
+      Entity k2 u2 <- upsertBy unique (UpsertBy email city state counter2) []
+      upsertByCounter u2 @== counter2
+      k1 @== k2
+
+  it "upsertBy with updates" $ db $ do
+      deleteWhere ([] :: [Filter UpsertBy])
+      let email = "dude@example.com"
+          city = "Boston"
+          state = "Massachussets"
+      Nothing :: Maybe (Entity UpsertBy) <- getBy $ UniqueUpsertBy email
+      let up0 = UpsertBy email city state 0
+      Entity _ up1 <- upsertBy (UniqueUpsertBy email) up0 [UpsertByCounter +=. 1]
+      upsertByCounter up1 @== 1
+      Entity _ up2 <- upsertBy (UniqueUpsertBy email) up1 [UpsertByCounter +=. 1]
+      upsertByCounter up2 @== 2
+
   it "maybe update" $ db $ do
       let noAge = PersonMaybeAge "Michael" Nothing
       keyNoAge <- insert noAge
@@ -660,6 +687,12 @@ specs = describe "persistent" $ do
       Entity k p <- insertEntity $ Person "name" 1 Nothing
       Just p2 <- get k
       p2 @== p
+
+  it "getEntity" $ db $ do
+      Entity k p <- insertEntity $ Person "name" 1 Nothing
+      Just (Entity k2 p2) <- getEntity k
+      p @== p2
+      k @== k2
 
   it "repsert" $ db $ do
       k <- liftIO (PersonKey `fmap` generateKey)
@@ -969,7 +1002,6 @@ caseCommitRollback = db $ do
     c4 <- count filt
     c4 @== 4
 
-#if MIN_VERSION_monad_control(0, 3, 0)
 catch' :: (Control.Monad.Trans.Control.MonadBaseControl IO m, E.Exception e)
        => m a       -- ^ The computation to run
        -> (e -> m a) -- ^ Handler to invoke if an exception is raised
@@ -977,7 +1009,6 @@ catch' :: (Control.Monad.Trans.Control.MonadBaseControl IO m, E.Exception e)
 catch' a handler = Control.Monad.Trans.Control.control $ \runInIO ->
                     E.catch (runInIO a)
                             (\e -> runInIO $ handler e)
-#endif
 
 #endif
 

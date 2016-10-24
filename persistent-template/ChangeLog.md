@@ -1,3 +1,12 @@
+## 2.5.1.6
+
+Allow non-null self-references in a list
+
+## 2.5.1.4
+
+* Allow composite Primary keys for tables that contain nullable fields.
+* Support foreign keys to non-integer ids
+
 ## 2.5.1.3
 
 * fix GHC 7.8 bug when a field name is "type"

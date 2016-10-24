@@ -1,13 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Database.Persist.Redis.Internal
-	( toKey
+    ( toKey
     , unKey
     , mkEntity
     , toKeyId
     , toKeyText
     , toInsertFields
     , toB
-	) where
+    ) where
 
 import Data.Text (Text, unpack)
 import qualified Data.Text as T

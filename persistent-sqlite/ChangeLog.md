@@ -1,3 +1,15 @@
+## 2.6
+
+Compatibility for backend-specific upsert functionality.
+A lucky contributor could try to add upsert to the sqlite backend now.
+It would definitely be tricky though because sqlite does not really have this
+feature.
+http://stackoverflow.com/questions/418898/sqlite-upsert-not-insert-or-replace/4330694#4330694
+
+## 2.5.0.2
+
+* Fix lstat workaround for https://ghc.haskell.org/trac/ghc/ticket/7072 on Mac OS X [#564](https://github.com/yesodweb/persistent/pull/564)
+
 ## 2.5.0.1
 
 * Reapply workaround for https://ghc.haskell.org/trac/ghc/ticket/7072 [#561](https://github.com/yesodweb/persistent/pull/561)
