@@ -1,5 +1,5 @@
 name:            persistent-test
-version:         2.0.0
+version:         2.0.0.1
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -147,7 +147,7 @@ library
 
    if flag(mysql)
      build-depends:  persistent-mysql
-                   , mysql-simple          >= 0.2.2.3  && < 0.3
+                   , mysql-simple          >= 0.2.2.3  && < 0.4
                    , mysql                 >= 0.1.1.3  && < 0.2
      cpp-options: -DWITH_MYSQL
 
