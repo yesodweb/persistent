@@ -137,7 +137,7 @@ import Data.Conduit
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value (Number), (.:), (.:?), (.!=), FromJSON(..), ToJSON(..), withText, withObject)
 import Data.Aeson.Types (modifyFailure)
-import Control.Monad (liftM, (>=>), forM_)
+import Control.Monad (liftM, (>=>), forM_, unless)
 import qualified Data.Pool as Pool
 import Data.Time (NominalDiffTime)
 #ifdef HIGH_PRECISION_DATE
@@ -623,19 +623,18 @@ instance PersistUniqueWrite DB.MongoContext where
         upsertBy uniq newRecord upds
 
     upsertBy uniq newRecord upds = do
-        let uniqueDoc = toUniquesDoc uniq
-        let uniqKeys = map DB.label uniqueDoc
-        let insDoc = DB.exclude uniqKeys $ toInsertDoc newRecord
-        let selection = DB.select uniqueDoc $ collectionName newRecord
-        if null upds
-          then DB.upsert selection ["$set" DB.=: insDoc]
-          else do
-            DB.upsert selection ["$setOnInsert" DB.=: insDoc]
-            DB.modify selection $ updatesToDoc upds
-        -- because findAndModify $setOnInsert is broken we do a separate get now
+        let uniqueDoc = toUniquesDoc uniq :: [DB.Field]
+        let uniqKeys = map DB.label uniqueDoc :: [DB.Label]   
+        let insDoc = DB.exclude uniqKeys $ toInsertDoc newRecord :: DB.Document
+        let selection = DB.select uniqueDoc $ collectionName newRecord :: DB.Selection
         mdoc <- getBy uniq
-        maybe (err "possible race condition: getBy found Nothing")
-            return mdoc
+        case mdoc of
+          Nothing -> unless (null upds) (DB.upsert selection ["$setOnInsert" DB.=: insDoc])
+          Just _ -> unless (null upds) (DB.modify selection $ DB.exclude uniqKeys $ updatesToDoc upds)
+        newMdoc <- getBy uniq
+        case newMdoc of
+          Nothing -> err "possible race condition: getBy found Nothing"
+          Just doc -> return doc
       where
         err = Trans.liftIO . throwIO . UpsertError
         {-
