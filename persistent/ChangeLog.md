@@ -1,3 +1,7 @@
+## 2.6.x
+
+* Fix edge case for `\<-. [Nothing]`
+
 ## 2.6
 
 * Add `connUpsertSql` type for providing backend-specific upsert sql support.
