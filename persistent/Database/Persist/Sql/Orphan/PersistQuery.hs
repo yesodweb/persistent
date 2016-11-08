@@ -273,7 +273,7 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
                  (True, Just pdef, _) ->
                      error $ "unhandled error for composite/non id primary keys filter=" ++ show pfilter ++ " persistList=" ++ show allVals ++ " pdef=" ++ show pdef
 
-                 _ ->   case (isNull, pfilter, varCount) of
+                 _ ->   case (isNull, pfilter, length notNullVals) of
                             (True, Eq, _) -> (name <> " IS NULL", [])
                             (True, Ne, _) -> (name <> " IS NOT NULL", [])
                             (False, Ne, _) -> (T.concat
@@ -298,7 +298,8 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
                                 , qmarks
                                 , ")"
                                 ], notNullVals)
-                            (_, NotIn, 0) -> ("1=1", [])
+                            (False, NotIn, 0) -> ("1=1", [])
+                            (True, NotIn, 0) -> (name <> " IS NOT NULL", [])
                             (False, NotIn, _) -> (T.concat
                                 [ "("
                                 , name
@@ -353,9 +354,6 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
                     Right x ->
                         let x' = filter (/= PersistNull) $ map toPersistValue x
                          in "(" <> T.intercalate "," (map (const "?") x') <> ")"
-        varCount = case value of
-                    Left _ -> 1
-                    Right x -> length x
         showSqlFilter Eq = "="
         showSqlFilter Ne = "<>"
         showSqlFilter Gt = ">"
