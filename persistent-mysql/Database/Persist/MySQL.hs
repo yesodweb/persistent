@@ -35,6 +35,7 @@ import Data.List (find, intercalate, sort, groupBy)
 import Data.Pool (Pool)
 import Data.Text (Text, pack)
 import qualified Data.Text.IO as T
+import Data.Word (Word32)
 import Text.Read (readMaybe)
 import System.Environment (getEnvironment)
 import Data.Acquire (Acquire, mkAcquire, with)
@@ -467,7 +468,11 @@ getColumns connectInfo getter def = do
     -- Find out all columns.
     stmtClmns <- getter "SELECT COLUMN_NAME, \
                                \IS_NULLABLE, \
+                               \DATA_TYPE, \
                                \COLUMN_TYPE, \
+                               \CHARACTER_MAXIMUM_LENGTH, \
+                               \NUMERIC_PRECISION, \
+                               \NUMERIC_SCALE, \
                                \COLUMN_DEFAULT \
                         \FROM INFORMATION_SCHEMA.COLUMNS \
                         \WHERE TABLE_SCHEMA = ? \
@@ -519,7 +524,11 @@ getColumn :: MySQL.ConnectInfo
           -> IO (Either Text Column)
 getColumn connectInfo getter tname [ PersistText cname
                                    , PersistText null_
-                                   , PersistText type'
+                                   , PersistText dataType
+                                   , PersistText colType
+                                   , colMaxLen
+                                   , colPrecision
+                                   , colScale
                                    , default'] =
     fmap (either (Left . pack) Right) $
     runErrorT $ do
@@ -557,63 +566,65 @@ getColumn connectInfo getter tname [ PersistText cname
                    return $ if pos == 1 then Just (DBName tab, DBName ref) else Nothing
                _ -> fail "MySQL.getColumn/getRef: never here"
 
+      let colMaxLen' = case colMaxLen of
+            PersistInt64 l -> Just (fromIntegral l)
+            _ -> Nothing
+          ci = ColumnInfo
+            { ciColumnType = colType
+            , ciMaxLength = colMaxLen'
+            , ciNumericPrecision = colPrecision
+            , ciNumericScale = colScale
+            }
+      (typ, maxLen) <- parseColumnType dataType ci
       -- Okay!
       return Column
         { cName = DBName $ cname
         , cNull = null_ == "YES"
-        , cSqlType = parseType type'
+        , cSqlType = typ
         , cDefault = default_
         , cDefaultConstraintName = Nothing
-        , cMaxLen = Nothing -- FIXME: maxLen
+        , cMaxLen = maxLen
         , cReference = ref
         }
 
 getColumn _ _ _ x =
     return $ Left $ pack $ "Invalid result from INFORMATION_SCHEMA: " ++ show x
 
+-- | Extra column information from MySQL schema
+data ColumnInfo = ColumnInfo
+  { ciColumnType :: Text
+  , ciMaxLength :: Maybe Integer
+  , ciNumericPrecision :: PersistValue
+  , ciNumericScale :: PersistValue
+  }
 
 -- | Parse the type of column as returned by MySQL's
 -- @INFORMATION_SCHEMA@ tables.
-parseType :: Text -> SqlType
-parseType "bigint(20)" = SqlInt64
-parseType "decimal(32,20)" = SqlNumeric 32 20
-{-
-parseType "tinyint"    = SqlBool
+parseColumnType :: Monad m => Text -> ColumnInfo -> m (SqlType, Maybe Integer)
 -- Ints
-parseType "int"        = SqlInt32
---parseType "short"      = SqlInt32
---parseType "long"       = SqlInt64
---parseType "longlong"   = SqlInt64
---parseType "mediumint"  = SqlInt32
-parseType "bigint"     = SqlInt64
+parseColumnType "tinyint" ci | ciColumnType ci == "tinyint(1)" = return (SqlBool, Nothing)
+parseColumnType "int" ci | ciColumnType ci == "int(11)"        = return (SqlInt32, Nothing)
+parseColumnType "bigint" ci | ciColumnType ci == "bigint(20)"  = return (SqlInt64, Nothing)
 -- Double
---parseType "float"      = SqlReal
-parseType "double"     = SqlReal
---parseType "decimal"    = SqlReal
---parseType "newdecimal" = SqlReal
+parseColumnType "double" _                                     = return (SqlReal, Nothing)
+parseColumnType "decimal" ci                                   =
+  case (ciNumericPrecision ci, ciNumericScale ci) of
+    (PersistInt64 p, PersistInt64 s) ->
+      return (SqlNumeric (fromIntegral p) (fromIntegral s), Nothing)
+    _ ->
+      fail "missing DECIMAL precision in DB schema"
 -- Text
-parseType "varchar"    = SqlString
---parseType "varstring"  = SqlString
---parseType "string"     = SqlString
-parseType "text"       = SqlString
---parseType "tinytext"   = SqlString
---parseType "mediumtext" = SqlString
---parseType "longtext"   = SqlString
+parseColumnType "varchar" ci                                   = return (SqlString, ciMaxLength ci)
+parseColumnType "text" _                                       = return (SqlString, Nothing)
 -- ByteString
-parseType "varbinary"  = SqlBlob
-parseType "blob"       = SqlBlob
---parseType "tinyblob"   = SqlBlob
---parseType "mediumblob" = SqlBlob
---parseType "longblob"   = SqlBlob
+parseColumnType "varbinary" ci                                 = return (SqlBlob, ciMaxLength ci)
+parseColumnType "blob" _                                       = return (SqlBlob, Nothing)
 -- Time-related
-parseType "time"       = SqlTime
-parseType "datetime"   = SqlDayTime
---parseType "timestamp"  = SqlDayTime
-parseType "date"       = SqlDay
---parseType "newdate"    = SqlDay
---parseType "year"       = SqlDay
--}
-parseType b            = SqlOther b
+parseColumnType "time" _                                       = return (SqlTime, Nothing)
+parseColumnType "datetime" _                                   = return (SqlDayTime, Nothing)
+parseColumnType "date" _                                       = return (SqlDay, Nothing)
+
+parseColumnType _ ci                                           = return (SqlOther (ciColumnType ci), Nothing)
 
 
 ----------------------------------------------------------------------
