@@ -35,7 +35,6 @@ import Data.List (find, intercalate, sort, groupBy)
 import Data.Pool (Pool)
 import Data.Text (Text, pack)
 import qualified Data.Text.IO as T
-import Data.Word (Word32)
 import Text.Read (readMaybe)
 import System.Environment (getEnvironment)
 import Data.Acquire (Acquire, mkAcquire, with)
