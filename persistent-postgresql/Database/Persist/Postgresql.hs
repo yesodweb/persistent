@@ -201,6 +201,7 @@ openSimpleConn logFunc conn = do
         , connRDBMS      = "postgresql"
         , connLimitOffset = decorateSQLWithLimitOffset "LIMIT ALL"
         , connLogFunc = logFunc
+        , connMaxParams = Nothing
         }
 
 prepare' :: PG.Connection -> Text -> IO Statement
@@ -1111,7 +1112,8 @@ mockMigration mig = do
                              connNoLimit = undefined,
                              connRDBMS = undefined,
                              connLimitOffset = undefined,
-                             connLogFunc = undefined}
+                             connLogFunc = undefined,
+                             connMaxParams = Nothing}
       result = runReaderT $ runWriterT $ runWriterT mig
   resp <- result sqlbackend
   mapM_ T.putStrLn $ map snd $ snd resp

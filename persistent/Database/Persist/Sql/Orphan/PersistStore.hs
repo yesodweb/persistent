@@ -39,6 +39,7 @@ import Web.HttpApiData (ToHttpApiData, FromHttpApiData)
 import Database.Persist.Sql.Class (PersistFieldSql)
 import qualified Data.Aeson as A
 import Control.Exception.Lifted (throwIO)
+import Data.List.Split
 
 withRawQuery :: MonadIO m
              => Text
@@ -212,22 +213,29 @@ instance PersistStoreWrite SqlBackend where
                     valss = map (map toPersistValue . toPersistFields) vals
 
 
+
     insertMany_ [] = return ()
-    insertMany_ vals = do
-        conn <- ask
-        let sql = T.concat
-                [ "INSERT INTO "
-                , connEscapeName conn (entityDB t)
-                , "("
-                , T.intercalate "," $ map (connEscapeName conn . fieldDB) $ entityFields t
-                , ") VALUES ("
-                , T.intercalate "),(" $ replicate (length valss) $ T.intercalate "," $ map (const "?") (entityFields t)
-                , ")"
-                ]
-        rawExecute sql (concat valss)
+    insertMany_ vals = do conn <- ask
+                          case connMaxParams conn of
+                            Nothing -> insertMany_' vals
+                            Just maxParams -> let chunkSize = maxParams `div` length (entityFields t) in
+                                                mapM_ insertMany_' (chunksOf chunkSize vals)
       where
+        insertMany_' vals = do
+          conn <- ask
+          let valss = map (map toPersistValue . toPersistFields) vals
+          let sql = T.concat
+                  [ "INSERT INTO "
+                  , connEscapeName conn (entityDB t)
+                  , "("
+                  , T.intercalate "," $ map (connEscapeName conn . fieldDB) $ entityFields t
+                  , ") VALUES ("
+                  , T.intercalate "),(" $ replicate (length valss) $ T.intercalate "," $ map (const "?") (entityFields t)
+                  , ")"
+                  ]
+          rawExecute sql (concat valss)
+
         t = entityDef vals
-        valss = map (map toPersistValue . toPersistFields) vals
 
     replace k val = do
         conn <- ask
