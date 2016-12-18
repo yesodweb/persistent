@@ -39,7 +39,6 @@ import Web.HttpApiData (ToHttpApiData, FromHttpApiData)
 import Database.Persist.Sql.Class (PersistFieldSql)
 import qualified Data.Aeson as A
 import Control.Exception.Lifted (throwIO)
-import Data.List.Split
 
 withRawQuery :: MonadIO m
              => Text
@@ -236,6 +235,9 @@ instance PersistStoreWrite SqlBackend where
           rawExecute sql (concat valss)
 
         t = entityDef vals
+        -- Implement this here to avoid depending on the split package
+        chunksOf _ [] = []
+        chunksOf size xs = let (chunk, rest) = splitAt size xs in chunk : chunksOf size rest
 
     replace k val = do
         conn <- ask

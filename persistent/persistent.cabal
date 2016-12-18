@@ -52,7 +52,6 @@ library
                    , fast-logger              >= 2.1
                    , scientific
                    , tagged
-                   , split
 
     exposed-modules: Database.Persist
                      Database.Persist.Quasi
