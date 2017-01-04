@@ -416,7 +416,12 @@ upperFirst t =
 dataTypeDec :: MkPersistSettings -> EntityDef -> Q Dec
 dataTypeDec mps t = do
     let names = map (mkName . unpack) $ entityDerives t
-#if MIN_VERSION_template_haskell(2,11,0)
+#if MIN_VERSION_template_haskell(2,12,0)
+    DataD [] nameFinal paramsFinal
+                Nothing
+                constrs
+                <$> fmap (pure . DerivClause Nothing) (mapM conT names)
+#elif MIN_VERSION_template_haskell(2,11,0)
     DataD [] nameFinal paramsFinal
                 Nothing
                 constrs
@@ -718,7 +723,12 @@ mkKeyTypeDec mps t = do
                         bi <- backendKeyI
                         return (bi, allInstances)
 
-#if MIN_VERSION_template_haskell(2,11,0)
+#if MIN_VERSION_template_haskell(2,12,0)
+    cxti <- mapM conT i
+    let kd = if useNewtype
+               then NewtypeInstD [] k [recordType] Nothing dec [DerivClause Nothing cxti]
+               else DataInstD    [] k [recordType] Nothing [dec] [DerivClause Nothing cxti]
+#elif MIN_VERSION_template_haskell(2,11,0)
     cxti <- mapM conT i
     let kd = if useNewtype
                then NewtypeInstD [] k [recordType] Nothing dec cxti
