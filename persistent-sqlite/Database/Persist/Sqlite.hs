@@ -4,20 +4,21 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE TemplateHaskell #-}
 -- | A sqlite backend for persistent.
---
--- Note: If you prepend @WAL=off @ to your connection string, it will disable
--- the write-ahead log. For more information, see
--- <https://github.com/yesodweb/persistent/issues/363>.
 module Database.Persist.Sqlite
     ( withSqlitePool
     , withSqliteConn
     , createSqlitePool
     , module Database.Persist.Sql
     , SqliteConf (..)
+    , SqliteConnectionInfo
+    , mkSqliteConnectionInfo
+    , sqlConnectionStr
+    , walEnabled
     , runSqlite
     , wrapConnection
+    , wrapConnection'
     , mockMigration
     ) where
 
@@ -49,6 +50,7 @@ import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import Control.Monad (when)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
+import Lens.Micro.TH (makeLenses)
 
 -- | Create a pool of SQLite connections.
 --
@@ -56,47 +58,41 @@ import Control.Monad.Trans.Writer (runWriterT)
 -- the pool will regularly remove connections, destroying your database.
 -- Instead, use 'withSqliteConn'.
 createSqlitePool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m, IsSqlBackend backend)
-                 => Text -> Int -> m (Pool backend)
-createSqlitePool s = createSqlPool $ open' s
+                 => SqliteConnectionInfo -> Int -> m (Pool backend)
+createSqlitePool connInfo = createSqlPool $ open' connInfo
 
 -- | Run the given action with a connection pool.
 --
 -- Like 'createSqlitePool', this should not be used with @:memory:@.
 withSqlitePool :: (MonadBaseControl IO m, MonadIO m, MonadLogger m, IsSqlBackend backend)
-               => Text
+               => SqliteConnectionInfo
                -> Int -- ^ number of connections to open
                -> (Pool backend -> m a) -> m a
-withSqlitePool s = withSqlPool $ open' s
+withSqlitePool connInfo = withSqlPool $ open' connInfo
 
 withSqliteConn :: (MonadBaseControl IO m, MonadIO m, MonadLogger m, IsSqlBackend backend)
-               => Text -> (backend -> m a) -> m a
+               => SqliteConnectionInfo -> (backend -> m a) -> m a
 withSqliteConn = withSqlConn . open'
 
-open' :: (IsSqlBackend backend) => Text -> LogFunc -> IO backend
-open' connStr logFunc = do
-    let (connStr', enableWal) = case () of
-          ()
-            | Just cs <- T.stripPrefix "WAL=on "  connStr -> (cs, True)
-            | Just cs <- T.stripPrefix "WAL=off " connStr -> (cs, False)
-            | otherwise                                   -> (connStr, True)
-
-    conn <- Sqlite.open connStr'
-    wrapConnectionWal enableWal conn logFunc
+open' :: (IsSqlBackend backend) => SqliteConnectionInfo -> LogFunc -> IO backend
+open' connInfo logFunc = do
+    conn <- Sqlite.open $ _sqlConnectionStr connInfo
+    wrapConnection' connInfo conn logFunc
 
 -- | Wrap up a raw 'Sqlite.Connection' as a Persistent SQL 'Connection'.
 --
 -- Since 1.1.5
 wrapConnection :: (IsSqlBackend backend) => Sqlite.Connection -> LogFunc -> IO backend
-wrapConnection = wrapConnectionWal True
+wrapConnection = wrapConnection' (mkSqliteConnectionInfo "")
 
--- | Allow control of WAL settings when wrapping
-wrapConnectionWal :: (IsSqlBackend backend)
-                  => Bool -- ^ enable WAL?
+-- | Wrap up a raw 'Sqlite.Connection' as a Persistent SQL 'Connection', allowing full control over WAL and FK constraints.
+wrapConnection' :: (IsSqlBackend backend)
+                  => SqliteConnectionInfo
                   -> Sqlite.Connection
                   -> LogFunc
                   -> IO backend
-wrapConnectionWal enableWal conn logFunc = do
-    when enableWal $ do
+wrapConnection' connInfo conn logFunc = do
+    when (_walEnabled connInfo) $ do
         -- Turn on the write-ahead log
         -- https://github.com/yesodweb/persistent/issues/363
         turnOnWal <- Sqlite.prepare conn "PRAGMA journal_mode=WAL;"
@@ -135,7 +131,7 @@ wrapConnectionWal enableWal conn logFunc = do
 --
 -- Since 1.1.4
 runSqlite :: (MonadBaseControl IO m, MonadIO m, IsSqlBackend backend)
-          => Text -- ^ connection string
+          => SqliteConnectionInfo
           -> ReaderT backend (NoLoggingT (ResourceT m)) a -- ^ database action
           -> m a
 runSqlite connstr = runResourceT
@@ -426,9 +422,9 @@ escape (DBName s) =
     go '"' = "\"\""
     go c = T.singleton c
 
--- | Information required to connect to a sqlite database
+-- | Information required to setup a connection pool.
 data SqliteConf = SqliteConf
-    { sqlDatabase :: Text
+    { sqlConnInfo :: SqliteConnectionInfo
     , sqlPoolSize :: Int
     } deriving Show
 
@@ -452,3 +448,19 @@ finally a sequel = control $ \runInIO ->
                      E.finally (runInIO a)
                                (runInIO sequel)
 {-# INLINABLE finally #-}
+-- | Creates a SqliteConnectionInfo from a connection string, with the default settings.
+mkSqliteConnectionInfo :: Text -> SqliteConnectionInfo
+mkSqliteConnectionInfo fp = SqliteConnectionInfo fp True
+
+-- | Information required to connect to a sqlite database. We export lenses instead of fields to avoid being limited to the current implementation.
+data SqliteConnectionInfo = SqliteConnectionInfo
+    { _sqlConnectionStr :: Text -- ^ connection string for the database. Use @:memory:@ for an in-memory database.
+    , _walEnabled :: Bool -- ^ if the write-ahead log is enabled - see https://github.com/yesodweb/persistent/issues/363.
+    } deriving Show
+makeLenses ''SqliteConnectionInfo
+
+instance FromJSON SqliteConnectionInfo where
+    parseJSON v = modifyFailure ("Persistent: error loading SqliteConnectionInfo: " ++) $
+      flip (withObject "SqliteConnectionInfo") v $ \o -> SqliteConnectionInfo
+        <$> o .: "connectionString"
+        <*> o .: "walEnabled"

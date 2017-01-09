@@ -1,3 +1,7 @@
+## 2.6.1.0
+
+* Removed the behaviour of toggling write-ahead log (WAL) based on a prefix in the connection string, in favour of using a record.
+
 ## 2.6
 
 Compatibility for backend-specific upsert functionality.

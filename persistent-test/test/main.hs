@@ -48,7 +48,7 @@ main :: IO ()
 main = do
 #ifndef WITH_NOSQL
   handle (\(_ :: IOException) -> return ())
-    $ removeFile $ fromText sqlite_database
+    $ removeFile $ fromText sqlite_database_file
 
   runConn $ do
     mapM_ setup

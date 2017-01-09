@@ -21,6 +21,7 @@ extra-deps:
   - base-compat-0.9.1
   - scientific-0.3.4.9
   - semigroups-0.18.2
+  - microlens-th-0.4.1.1
 
 flags:
   semigroups:
