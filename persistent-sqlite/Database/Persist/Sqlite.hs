@@ -16,6 +16,7 @@ module Database.Persist.Sqlite
     , mkSqliteConnectionInfo
     , sqlConnectionStr
     , walEnabled
+    , fkEnabled
     , runSqlite
     , wrapConnection
     , wrapConnection'
@@ -99,6 +100,14 @@ wrapConnection' connInfo conn logFunc = do
         _ <- Sqlite.step turnOnWal
         Sqlite.reset conn turnOnWal
         Sqlite.finalize turnOnWal
+
+    when (_fkEnabled connInfo) $ do
+        -- Turn on foreign key constraints
+        -- https://github.com/yesodweb/persistent/issues/646
+        turnOnFK <- Sqlite.prepare conn "PRAGMA foreign_keys = on;"
+        _ <- Sqlite.step turnOnFK
+        Sqlite.reset conn turnOnFK
+        Sqlite.finalize turnOnFK
 
     smap <- newIORef $ Map.empty
     return . mkPersistBackend $ SqlBackend
@@ -450,12 +459,13 @@ finally a sequel = control $ \runInIO ->
 {-# INLINABLE finally #-}
 -- | Creates a SqliteConnectionInfo from a connection string, with the default settings.
 mkSqliteConnectionInfo :: Text -> SqliteConnectionInfo
-mkSqliteConnectionInfo fp = SqliteConnectionInfo fp True
+mkSqliteConnectionInfo fp = SqliteConnectionInfo fp True True
 
 -- | Information required to connect to a sqlite database. We export lenses instead of fields to avoid being limited to the current implementation.
 data SqliteConnectionInfo = SqliteConnectionInfo
     { _sqlConnectionStr :: Text -- ^ connection string for the database. Use @:memory:@ for an in-memory database.
     , _walEnabled :: Bool -- ^ if the write-ahead log is enabled - see https://github.com/yesodweb/persistent/issues/363.
+    , _fkEnabled :: Bool -- ^ if foreign-key constraints are enabled.
     } deriving Show
 makeLenses ''SqliteConnectionInfo
 
@@ -464,3 +474,4 @@ instance FromJSON SqliteConnectionInfo where
       flip (withObject "SqliteConnectionInfo") v $ \o -> SqliteConnectionInfo
         <$> o .: "connectionString"
         <*> o .: "walEnabled"
+        <*> o .: "fkEnabled"
