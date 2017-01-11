@@ -17,6 +17,7 @@ module Database.Persist.Quasi
 
 import Prelude hiding (lines)
 import Database.Persist.Types
+import Database.Persist.Sql.Class (platformSqlIntType)
 import Data.Char
 import Data.Maybe (mapMaybe, fromMaybe, maybeToList)
 import Data.Text (Text)
@@ -333,7 +334,7 @@ mkEntityDef ps name entattribs lines =
     cols = mapMaybe (takeColsEx ps) attribs
 
     autoIdField = mkAutoIdField ps entName (DBName `fmap` idName) idSqlType
-    idSqlType = maybe SqlInt64 (const $ SqlOther "Primary Key") primaryComposite
+    idSqlType = maybe platformSqlIntType (const $ SqlOther "Primary Key") primaryComposite
 
     setComposite Nothing fd = fd
     setComposite (Just c) fd = fd { fieldReference = CompositeRef c }
