@@ -47,8 +47,10 @@ toExitCode False = ExitFailure 1
 main :: IO ()
 main = do
 #ifndef WITH_NOSQL
+#  ifdef WITH_SQLITE
   handle (\(_ :: IOException) -> return ())
     $ removeFile $ fromText sqlite_database_file
+#  endif
 
   runConn $ do
     mapM_ setup
