@@ -27,12 +27,12 @@ asIO = id
 
 main :: IO ()
 main = hspec $ do
-    it "issue #328" $ asIO $ runSqlite ":memory:" $ do
+    it "issue #328" $ asIO $ runSqlite (mkSqliteConnectionInfo ":memory:") $ do
         runMigration migrateAll
         insert . Test $ read "2014-11-30 05:15:25.123"
         [Single x] <- rawSql "select strftime('%s%f',time) from test" []
         liftIO $ x `shouldBe` Just ("141732452525.123" :: String)
-    it "issue #339" $ asIO $ runSqlite ":memory:" $ do
+    it "issue #339" $ asIO $ runSqlite (mkSqliteConnectionInfo ":memory:") $ do
         runMigration migrateAll
         now <- liftIO getCurrentTime
         tid <- insert $ Test now

@@ -26,6 +26,7 @@ module Init (
 #else
   , db
   , sqlite_database
+  , sqlite_database_file
 #endif
   , BackendKey(..)
   , generateKey
@@ -220,9 +221,17 @@ instance Arbitrary PersistValue where
 persistSettings :: MkPersistSettings
 persistSettings = sqlSettings { mpsGeneric = True }
 type BackendMonad = SqlBackend
-sqlite_database :: Text
-sqlite_database = "test/testdb.sqlite3"
--- sqlite_database = ":memory:"
+#  ifdef WITH_SQLITE
+sqlite_database_file :: Text
+sqlite_database_file = "test/testdb.sqlite3"
+sqlite_database :: SqliteConnectionInfo
+sqlite_database = mkSqliteConnectionInfo sqlite_database_file
+#  else
+sqlite_database_file :: Text
+sqlite_database_file = error "Sqlite tests disabled"
+sqlite_database :: ()
+sqlite_database = error "Sqlite tests disabled"
+#  endif
 runConn :: (MonadIO m, MonadBaseControl IO m) => SqlPersistT (LoggingT m) t -> m ()
 runConn f = do
   travis <- liftIO isTravis
