@@ -58,7 +58,7 @@ else
     fi
 
     cd persistent-test
-    cabal install --max-backjumps --reorder-goals --force-reinstalls --only-dependencies --enable-tests -f$BACKEND
+    cabal install --max-backjumps=-1 --reorder-goals --force-reinstalls --only-dependencies --enable-tests -f$BACKEND
     cabal configure --enable-tests -f$BACKEND
 
     (while sleep 60; do echo Do not kill me yet!; done) &
