@@ -1,3 +1,7 @@
+## 2.6.0.1
+
+* Ensure connection is closed if wrapConnectionWal fails
+
 ## 2.6
 
 Compatibility for backend-specific upsert functionality.
