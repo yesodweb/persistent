@@ -15,13 +15,13 @@ fi
 
 install() {
     cd $1
-    cabal install --force-reinstall
+    cabal install --force-reinstall --max-backjumps=-1 --reorder-goals
     cd ..
 }
 
 if [ "$BACKEND" = "none" ]
 then
-    cabal install --force-reinstalls $TEST $(cat sources.txt)
+    cabal install --max-backjumps=-1 --reorder-goals --force-reinstalls $TEST $(cat sources.txt)
 else
 
     for p in $(ghc-pkg list persistent\* --simple-output); do
@@ -58,7 +58,7 @@ else
     fi
 
     cd persistent-test
-    cabal install --force-reinstalls --only-dependencies --enable-tests -f$BACKEND
+    cabal install --max-backjumps --reorder-goals --force-reinstalls --only-dependencies --enable-tests -f$BACKEND
     cabal configure --enable-tests -f$BACKEND
 
     (while sleep 60; do echo Do not kill me yet!; done) &
