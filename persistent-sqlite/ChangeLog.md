@@ -1,3 +1,7 @@
+## 2.2.1.1
+
+* Ensure connection is closed if wrapConnectionWal fails
+
 ## 2.2.1
 
 * Upgrade to SQLite 3.8.11.1 [#444](https://github.com/yesodweb/persistent/pull/444)

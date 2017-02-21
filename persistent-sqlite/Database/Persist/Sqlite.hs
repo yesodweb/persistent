@@ -77,7 +77,7 @@ open' connStr logFunc = do
             | otherwise                                   -> (connStr, True)
 
     conn <- Sqlite.open connStr'
-    wrapConnectionWal enableWal conn logFunc
+    wrapConnectionWal enableWal conn logFunc `E.onException` Sqlite.close conn
 
 -- | Wrap up a raw 'Sqlite.Connection' as a Persistent SQL 'Connection'.
 --
