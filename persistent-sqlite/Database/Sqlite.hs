@@ -538,7 +538,7 @@ config c = case c of
 
 -- | Return type of the 'status' function
 --
--- Since 2.6.0.2
+-- Since 2.6.1
 data SqliteStatus = SqliteStatus
   { sqliteStatusCurrent   :: Maybe Int
   -- ^ The current value of the parameter. Some parameters do not record current value.
@@ -546,6 +546,9 @@ data SqliteStatus = SqliteStatus
   -- ^ The highest recorded value. Some parameters do not record the highest value.
   } deriving (Eq, Show)
 
+-- | Run-time status parameter that can be returned by 'status' function.
+--
+-- Since 2.6.1
 data SqliteStatusVerb
   -- | This parameter is the current amount of memory checked out using sqlite3_malloc(),
   -- either directly or indirectly. The figure includes calls made to sqlite3_malloc()
@@ -597,6 +600,9 @@ data SqliteStatusVerb
   -- checked out.
   | SqliteStatusMallocCount
 
+-- Internal function to convert status parameter to a triple of its integral
+-- constant and two bools indicating if native sqlite3_status function actually
+-- modifies values at pCurrent and pHighwater pointers.
 statusVerbInfo :: SqliteStatusVerb -> (CInt, Bool, Bool)
 statusVerbInfo v = case v of
   SqliteStatusMemoryUsed -> (0, True, True)
@@ -612,6 +618,13 @@ statusVerbInfo v = case v of
 foreign import ccall "sqlite3_status"
   statusC :: CInt -> Ptr CInt -> Ptr CInt -> CInt -> IO Int
 
+-- | Retrieves runtime status information about the performance of SQLite,
+-- and optionally resets various highwater marks. The first argument is a
+-- status parameter to measure, the second is reset flag. If reset flag is
+-- True then the highest recorded value is reset after being returned from
+-- this function.
+--
+-- Since 2.6.1
 status :: SqliteStatusVerb -> Bool -> IO SqliteStatus
 status verb reset = alloca $ \pCurrent -> alloca $ \pHighwater -> do
   let (code, hasCurrent, hasHighwater) = statusVerbInfo verb
@@ -631,6 +644,6 @@ foreign import ccall "persistent_sqlite3_soft_heap_limit64"
 -- the current size of the soft heap limit can be determined by invoking
 -- this function with a negative argument.
 --
--- Since 2.6.0.2
+-- Since 2.6.1
 softHeapLimit :: Int64 -> IO Int64
 softHeapLimit x = fromIntegral <$> softHeapLimit64C (CLLong x)

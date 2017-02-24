@@ -1,4 +1,4 @@
-## 2.6.0.2
+## 2.6.1
 
 * Added functions to monitor (status) and control (softHeapLimit) process-wide SQLite memory usage.
 
