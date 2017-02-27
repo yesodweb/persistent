@@ -630,9 +630,10 @@ status verb reset = alloca $ \pCurrent -> alloca $ \pHighwater -> do
   let (code, hasCurrent, hasHighwater) = statusVerbInfo verb
   e <- decodeError <$> statusC code pCurrent pHighwater (if reset then 1 else 0)
   case e of
-    ErrorOK -> SqliteStatus
-      <$> (if hasCurrent then Just . fromIntegral <$> peek pCurrent else pure Nothing)
-      <*> (if hasHighwater then Just . fromIntegral <$> peek pHighwater else pure Nothing)
+    ErrorOK -> do
+      current <- if hasCurrent then Just . fromIntegral <$> peek pCurrent else return Nothing
+      highwater <- if hasHighwater then Just . fromIntegral <$> peek pHighwater else return Nothing
+      return $ SqliteStatus current highwater
     _ -> sqlError Nothing "sqlite3_status" e
 
 foreign import ccall "sqlite3_soft_heap_limit64"
