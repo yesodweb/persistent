@@ -635,7 +635,7 @@ status verb reset = alloca $ \pCurrent -> alloca $ \pHighwater -> do
       <*> (if hasHighwater then Just . fromIntegral <$> peek pHighwater else pure Nothing)
     _ -> sqlError Nothing "sqlite3_status" e
 
-foreign import ccall "persistent_sqlite3_soft_heap_limit64"
+foreign import ccall "sqlite3_soft_heap_limit64"
   softHeapLimit64C :: CLLong -> IO CLLong
 
 -- | Sets and/or queries the soft limit on the amount of heap memory that may be
