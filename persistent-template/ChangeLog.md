@@ -1,3 +1,8 @@
+## 2.5.2
+
+* Fix incorrect `ToJSON`/`FromJSON` instance generation for generic
+  backends
+
 ## 2.5.1.6
 
 Allow non-null self-references in a list
