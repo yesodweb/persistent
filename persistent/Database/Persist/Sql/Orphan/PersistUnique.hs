@@ -16,7 +16,6 @@ import qualified Data.Text as T
 import Data.Monoid (mappend, (<>))
 import qualified Data.Conduit.List as CL
 import Control.Monad.Trans.Reader (ask, withReaderT)
-import Control.Monad (when, liftM)
 
 defaultUpsert :: (MonadIO m, PersistEntity record, PersistUniqueWrite backend
                  , PersistEntityBackend record ~ BaseBackend backend) 
@@ -33,7 +32,7 @@ instance PersistUniqueWrite SqlBackend where
       case connUpsertSql conn of
         Just upsertSql -> case updates of
                             [] -> defaultUpsert record updates
-                            xs -> do
+                            _:_ -> do
                                 let upds = T.intercalate "," $ map (go' . go) updates
                                     sql = upsertSql t upds
                                     vals = (map toPersistValue $ toPersistFields record) ++ (map updatePersistValue updates) ++ (unqs uniqueKey)
@@ -43,7 +42,7 @@ instance PersistUniqueWrite SqlBackend where
                                     go'' n Subtract = T.concat [n, "=", n, "-?"]
                                     go'' n Multiply = T.concat [n, "=", n, "*?"]
                                     go'' n Divide = T.concat [n, "=", n, "/?"]
-                                    go'' _ (BackendSpecificUpdate up) = error $ T.unpack $ "BackendSpecificUpdate" `mappend` up `mappend` "not supported"
+                                    go'' _ (BackendSpecificUpdate up) = error $ T.unpack $ "BackendSpecificUpdate" `Data.Monoid.mappend` up `mappend` "not supported"
                                               
                                     go' (x, pu) = go'' (connEscapeName conn x) pu
                                     go x = (fieldDB $ updateFieldDef x, updateUpdate x)

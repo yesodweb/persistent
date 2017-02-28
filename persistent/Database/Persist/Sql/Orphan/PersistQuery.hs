@@ -183,7 +183,7 @@ updateWhereCount filts upds = withReaderT persistBackend $ do
             , T.intercalate "," $ map (go' conn . go) upds
             , wher
             ]
-    let dat = map updatePersistValue upds `mappend`
+    let dat = map updatePersistValue upds `Data.Monoid.mappend`
               getFiltsValues conn filts
     rawExecuteCount sql dat
   where

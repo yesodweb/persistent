@@ -123,7 +123,7 @@ instance PersistStoreWrite SqlBackend where
             go'' n Subtract = T.concat [n, "=", n, "-?"]
             go'' n Multiply = T.concat [n, "=", n, "*?"]
             go'' n Divide = T.concat [n, "=", n, "/?"]
-            go'' _ (BackendSpecificUpdate up) = error $ T.unpack $ "BackendSpecificUpdate" `mappend` up `mappend` "not supported"
+            go'' _ (BackendSpecificUpdate up) = error $ T.unpack $ "BackendSpecificUpdate" `Data.Monoid.mappend` up `mappend` "not supported"
         let go' (x, pu) = go'' (connEscapeName conn x) pu
         let wher = whereStmtForKey conn k
         let sql = T.concat

@@ -19,22 +19,13 @@ module Database.Persist.Sql.Types
 
 import Control.Exception (Exception)
 import Control.Monad.Trans.Resource (ResourceT)
-import Data.Acquire (Acquire)
 import Control.Monad.Logger (NoLoggingT)
-import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Reader (ReaderT (..))
 import Control.Monad.Trans.Writer (WriterT)
 import Data.Typeable (Typeable)
 import Database.Persist.Types
 import Database.Persist.Sql.Types.Internal
-import Data.IORef (IORef)
-import Data.Map (Map)
-import Data.Int (Int64)
-import Data.Conduit (Source)
 import Data.Pool (Pool)
-import Language.Haskell.TH.Syntax (Loc)
-import Control.Monad.Logger (LogSource, LogLevel)
-import System.Log.FastLogger (LogStr)
 import Data.Text (Text)
 
 -- | Deprecated synonym for @SqlBackend@.

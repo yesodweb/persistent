@@ -49,7 +49,7 @@ parseFieldType t0 =
       let (a, b) = T.break (== end) t
       in case parseApplyFT a of
           PSSuccess ft t' -> case (T.dropWhile isSpace t', T.uncons b) of
-              ("", Just (c, t'')) | c == end -> PSSuccess (ftMod ft) (t'' `mappend` t')
+              ("", Just (c, t'')) | c == end -> PSSuccess (ftMod ft) (t'' `Data.Monoid.mappend` t')
               (x, y) -> PSFail $ show (b, x, y)
           x -> PSFail $ show x
 

@@ -53,7 +53,9 @@ import qualified Data.Text as T
 import Data.Text.Lazy (toStrict)
 import Data.Text.Lazy.Builder (toLazyText)
 import Data.Aeson (toJSON, ToJSON)
-#if MIN_VERSION_aeson(0, 7, 0)
+#if MIN_VERSION_aeson(1, 0, 0)
+import Data.Aeson.Text (encodeToTextBuilder)
+#elif MIN_VERSION_aeson(0, 7, 0)
 import Data.Aeson.Encode (encodeToTextBuilder)
 #else
 import Data.Aeson.Encode (fromValue)

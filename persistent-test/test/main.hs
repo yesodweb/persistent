@@ -13,36 +13,30 @@ import qualified MaxLenTest
 import qualified Recursive
 import qualified SumTypeTest
 import qualified UniqueTest
-import qualified MigrationTest
 import qualified MigrationOnlyTest
 import qualified PersistUniqueTest
 import qualified CompositeTest
 import qualified PrimaryTest
 import qualified CustomPersistFieldTest
 import qualified CustomPrimaryKeyReferenceTest
-import Test.Hspec (hspec)
-import Test.Hspec.Runner
 import Init
-import System.Exit
-import Control.Monad (unless, when)
-import Filesystem (isFile, removeFile)
+
+#ifndef WITH_NOSQL
+import qualified MigrationTest
+import Filesystem (removeFile)
 import Filesystem.Path.CurrentOS (fromText)
-import Control.Monad.Trans.Resource (runResourceT)
 import Control.Exception (handle, IOException)
+#endif
 
 
 #ifdef WITH_NOSQL
 #else
-import Database.Persist.Sql (printMigration, runMigrationUnsafe)
 
+setup :: MonadIO m => Migration -> ReaderT SqlBackend m ()
 setup migration = do
   printMigration migration
   runMigrationUnsafe migration
 #endif
-
-toExitCode :: Bool -> ExitCode
-toExitCode True  = ExitSuccess
-toExitCode False = ExitFailure 1
 
 main :: IO ()
 main = do
