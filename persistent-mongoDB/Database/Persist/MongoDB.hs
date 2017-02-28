@@ -122,7 +122,6 @@ import qualified Data.Traversable as Traversable
 import Data.Bson (ObjectId(..))
 import qualified Database.MongoDB as DB
 import Database.MongoDB.Query (Database)
-import Control.Applicative (Applicative, (<$>))
 import Network (PortID (PortNumber))
 import Network.Socket (HostName)
 import Data.Maybe (mapMaybe, fromJust)
@@ -150,7 +149,6 @@ import Data.Attoparsec.Number
 #endif
 import Data.Bits (shiftR)
 import Data.Word (Word16)
-import Data.Monoid (mappend)
 import Control.Monad.Trans.Reader (ask, runReaderT)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Numeric (readHex)
@@ -546,19 +544,18 @@ instance PersistCore DB.MongoContext where
         deriving (Show, Read, Eq, Ord, PersistField)
 
 instance PersistStoreWrite DB.MongoContext where
-    insert record = DB.insert (collectionName record) (toInsertDoc record)
+    insert record = DB.insert (collectionName record) (recordToDocument record)
                 >>= keyFrom_idEx
 
     insertMany [] = return []
     insertMany records@(r:_) = mapM keyFrom_idEx =<<
-        DB.insertMany (collectionName r) (map toInsertDoc records)
+        DB.insertMany (collectionName r) (map recordToDocument records)
 
     insertEntityMany [] = return ()
     insertEntityMany ents@(Entity _ r : _) =
-        DB.insertMany_ (collectionName r) (map entityToInsertDoc ents)
+        DB.insertMany_ (collectionName r) (map documentFromEntity ents)
 
-    insertKey k record = DB.insert_ (collectionName record) $
-                         entityToInsertDoc (Entity k record)
+    insertKey = repsert
 
     repsert   k record = DB.save (collectionName record) $
                          documentFromEntity (Entity k record)
@@ -625,7 +622,7 @@ instance PersistUniqueWrite DB.MongoContext where
     upsertBy uniq newRecord upds = do
         let uniqueDoc = toUniquesDoc uniq
         let uniqKeys = map DB.label uniqueDoc
-        let insDoc = DB.exclude uniqKeys $ toInsertDoc newRecord
+        let insDoc = DB.exclude uniqKeys $ recordToDocument newRecord
         let selection = DB.select uniqueDoc $ collectionName newRecord
         if null upds
           then DB.upsert selection ["$set" DB.=: insDoc]
