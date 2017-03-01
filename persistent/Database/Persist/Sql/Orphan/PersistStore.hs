@@ -212,22 +212,32 @@ instance PersistStoreWrite SqlBackend where
                     valss = map (map toPersistValue . toPersistFields) vals
 
 
+
     insertMany_ [] = return ()
-    insertMany_ vals = do
-        conn <- ask
-        let sql = T.concat
-                [ "INSERT INTO "
-                , connEscapeName conn (entityDB t)
-                , "("
-                , T.intercalate "," $ map (connEscapeName conn . fieldDB) $ entityFields t
-                , ") VALUES ("
-                , T.intercalate "),(" $ replicate (length valss) $ T.intercalate "," $ map (const "?") (entityFields t)
-                , ")"
-                ]
-        rawExecute sql (concat valss)
+    insertMany_ vals0 = do conn <- ask
+                           case connMaxParams conn of
+                            Nothing -> insertMany_' vals0
+                            Just maxParams -> let chunkSize = maxParams `div` length (entityFields t) in
+                                                mapM_ insertMany_' (chunksOf chunkSize vals0)
       where
-        t = entityDef vals
-        valss = map (map toPersistValue . toPersistFields) vals
+        insertMany_' vals = do
+          conn <- ask
+          let valss = map (map toPersistValue . toPersistFields) vals
+          let sql = T.concat
+                  [ "INSERT INTO "
+                  , connEscapeName conn (entityDB t)
+                  , "("
+                  , T.intercalate "," $ map (connEscapeName conn . fieldDB) $ entityFields t
+                  , ") VALUES ("
+                  , T.intercalate "),(" $ replicate (length valss) $ T.intercalate "," $ map (const "?") (entityFields t)
+                  , ")"
+                  ]
+          rawExecute sql (concat valss)
+
+        t = entityDef vals0
+        -- Implement this here to avoid depending on the split package
+        chunksOf _ [] = []
+        chunksOf size xs = let (chunk, rest) = splitAt size xs in chunk : chunksOf size rest
 
     replace k val = do
         conn <- ask

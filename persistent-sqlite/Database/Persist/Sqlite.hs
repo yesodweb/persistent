@@ -121,6 +121,7 @@ wrapConnectionWal enableWal conn logFunc = do
         , connRDBMS = "sqlite"
         , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
         , connLogFunc = logFunc
+        , connMaxParams = Just 999
         }
   where
     helper t getter = do
@@ -286,6 +287,7 @@ mockMigration mig = do
                    , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
                    , connLogFunc = undefined
                    , connUpsertSql = undefined
+                   , connMaxParams = Just 999
                    }
       result = runReaderT . runWriterT . runWriterT $ mig
   resp <- result sqlbackend
