@@ -1,6 +1,7 @@
-## 2.6.x
+## 2.6.1
 
 * Fix edge case for `\<-. [Nothing]`
+* Introduce `connMaxParams`
 
 ## 2.6
 

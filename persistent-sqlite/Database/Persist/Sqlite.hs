@@ -287,6 +287,7 @@ mockMigration mig = do
                    , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
                    , connLogFunc = undefined
                    , connUpsertSql = undefined
+                   , connMaxParams = Just 999
                    }
       result = runReaderT . runWriterT . runWriterT $ mig
   resp <- result sqlbackend
