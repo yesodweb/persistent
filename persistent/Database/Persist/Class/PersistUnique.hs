@@ -119,9 +119,9 @@ insertBy val = do
 -- | Insert a value, checking for conflicts with any unique constraints. If a
 -- duplicate exists in the database, it is left untouched. The key of the
 -- existing or new entry is returned
-insertOrGet :: (MonadIO m, PersistUniqueWrite backend, PersistRecordBackend record backend)
+_insertOrGet :: (MonadIO m, PersistUniqueWrite backend, PersistRecordBackend record backend)
             => record -> ReaderT backend m (Key record)
-insertOrGet val = do
+_insertOrGet val = do
     res <- getByValue val
     case res of
         Nothing -> insert val
@@ -157,7 +157,7 @@ getByValue record = checkUniques =<< requireUniques record (persistUniqueKeys re
 requireUniques :: (MonadIO m, PersistEntity record) => record -> [Unique record] -> m [Unique record]
 requireUniques record [] = liftIO $ throwIO $ userError errorMsg
   where
-    errorMsg = "getByValue: " `mappend` unpack (recordName record) `mappend` " does not have any Unique"
+    errorMsg = "getByValue: " `Data.Monoid.mappend` unpack (recordName record) `mappend` " does not have any Unique"
 requireUniques _ xs = return xs
 
 -- TODO: expose this to users

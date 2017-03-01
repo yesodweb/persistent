@@ -68,10 +68,10 @@ mkColumns allDefs t =
 
 refName :: DBName -> DBName -> DBName
 refName (DBName table) (DBName column) =
-    DBName $ mconcat [table, "_", column, "_fkey"]
+    DBName $ Data.Monoid.mconcat [table, "_", column, "_fkey"]
 
 resolveTableName :: [EntityDef] -> HaskellName -> DBName
-resolveTableName [] (HaskellName hn) = error $ "Table not found: " `mappend` T.unpack hn
+resolveTableName [] (HaskellName hn) = error $ "Table not found: " `Data.Monoid.mappend` T.unpack hn
 resolveTableName (e:es) hn
     | entityHaskell e == hn = entityDB e
     | otherwise = resolveTableName es hn

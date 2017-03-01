@@ -31,7 +31,7 @@ module Init (
   , generateKey
 
    -- re-exports
-  , (<$>), (<*>)
+  , (A.<$>), (A.<*>)
   , module Database.Persist
   , module Test.Hspec
   , module Test.HUnit
@@ -46,11 +46,13 @@ module Init (
 #else
   , PersistFieldSql(..)
 #endif
-  , ByteString
+  , BS.ByteString
+  , SomeException
 ) where
 
 -- re-exports
-import Control.Applicative ((<$>), (<*>))
+import Control.Applicative as A ((<$>), (<*>))
+import Control.Exception (SomeException)
 import Control.Monad (void, replicateM, liftM, when, forM_)
 import Control.Monad.Trans.Reader
 import Test.Hspec
@@ -60,7 +62,6 @@ import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLow
 import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
 import Test.QuickCheck
 
-import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Database.Persist
 import Database.Persist.TH ()
@@ -162,11 +163,11 @@ isTravis = do
     Just "true" -> True
     _ -> False
 
-debugOn :: Bool
+_debugOn :: Bool
 #ifdef DEBUG
-debugOn = True
+_debugOn = True
 #else
-debugOn = False
+_debugOn = False
 #endif
 
 #ifdef WITH_POSTGRESQL
@@ -226,14 +227,14 @@ sqlite_database = "test/testdb.sqlite3"
 runConn :: (MonadIO m, MonadBaseControl IO m) => SqlPersistT (LoggingT m) t -> m ()
 runConn f = do
   travis <- liftIO isTravis
-  let debugPrint = not travis && debugOn
+  let debugPrint = not travis && _debugOn
   let printDebug = if debugPrint then print . fromLogStr else void . return
   flip runLoggingT (\_ _ _ s -> printDebug s) $ do
 #  ifdef WITH_POSTGRESQL
     _ <- if travis
       then withPostgresqlPool "host=localhost port=5432 user=postgres dbname=persistent" 1 $ runSqlPool f
       else do
-        host <- fromMaybe "localhost" <$> liftIO dockerPg
+        host <- fromMaybe "localhost" A.<$> liftIO dockerPg
         withPostgresqlPool ("host=" <> host <> " port=5432 user=postgres dbname=test") 1 $ runSqlPool f
 #  else
 #    ifdef WITH_MYSQL

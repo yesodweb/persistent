@@ -31,7 +31,6 @@ import Database.Persist.Sql.Types.Internal (mkPersistBackend)
 import Data.Fixed (Pico)
 
 import qualified Database.PostgreSQL.Simple as PG
-import qualified Database.PostgreSQL.Simple.TypeInfo as PG
 import qualified Database.PostgreSQL.Simple.TypeInfo.Static as PS
 import qualified Database.PostgreSQL.Simple.Internal as PG
 import qualified Database.PostgreSQL.Simple.ToField as PGTF
@@ -91,7 +90,7 @@ type ConnectionString = ByteString
 
 -- | PostgresServerVersionError exception. This is thrown when persistent
 -- is unable to find the version of the postgreSQL server.
-data PostgresServerVersionError = PostgresServerVersionError String deriving Typeable
+data PostgresServerVersionError = PostgresServerVersionError String deriving Data.Typeable.Typeable
 
 instance Show PostgresServerVersionError where
     show (PostgresServerVersionError uniqueMsg) =

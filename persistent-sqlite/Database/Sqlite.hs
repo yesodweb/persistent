@@ -47,9 +47,8 @@ import qualified Data.ByteString.Internal as BSI
 import Foreign
 import Foreign.C
 import Control.Exception (Exception, throwIO)
-import Control.Applicative ((<$>))
+import Control.Applicative as A ((<$>))
 import Database.Persist (PersistValue (..), listToJSON, mapToJSON)
-import Data.Bits ((.|.))
 import Data.Text (Text, pack, unpack)
 import Data.Text.Encoding (encodeUtf8, decodeUtf8With)
 import Data.Text.Encoding.Error (lenientDecode)
@@ -79,7 +78,7 @@ data SqliteException = SqliteException
     }
     deriving (Typeable)
 instance Show SqliteException where
-    show (SqliteException error functionName details) = unpack $ mconcat
+    show (SqliteException error functionName details) = unpack $ Data.Monoid.mconcat
         ["SQLite3 returned "
         , pack $ show error
         , " while attempting to perform "
@@ -181,7 +180,7 @@ sqlError maybeConnection functionName error = do
   details <- case maybeConnection of
                Just database -> do
                  details <- errmsg database
-                 return $ ": " `mappend` details
+                 return $ ": " `Data.Monoid.mappend` details
                Nothing -> return "."
   throwIO SqliteException
     { seError = error
@@ -195,7 +194,7 @@ openError :: Text -> IO (Either Connection Error)
 openError path' = do
     let flag = sqliteFlagReadWrite .|. sqliteFlagCreate .|. sqliteFlagUri
     BS.useAsCString (encodeUtf8 path') $ \path -> alloca $ \database -> do
-        err <- decodeError <$> openC path database flag nullPtr
+        err <- decodeError A.<$> openC path database flag nullPtr
         case err of
             ErrorOK -> do database' <- peek database
                           active <- newIORef True
@@ -626,9 +625,9 @@ foreign import ccall "sqlite3_status"
 --
 -- Since 2.6.1
 status :: SqliteStatusVerb -> Bool -> IO SqliteStatus
-status verb reset = alloca $ \pCurrent -> alloca $ \pHighwater -> do
+status verb reset' = alloca $ \pCurrent -> alloca $ \pHighwater -> do
   let (code, hasCurrent, hasHighwater) = statusVerbInfo verb
-  e <- decodeError <$> statusC code pCurrent pHighwater (if reset then 1 else 0)
+  e <- decodeError <$> statusC code pCurrent pHighwater (if reset' then 1 else 0)
   case e of
     ErrorOK -> do
       current <- if hasCurrent then Just . fromIntegral <$> peek pCurrent else return Nothing

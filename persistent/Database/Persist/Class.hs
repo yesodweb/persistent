@@ -8,7 +8,6 @@ module Database.Persist.Class
     , PersistStore
     , PersistStoreRead (..)
     , PersistStoreWrite (..)
-    , BaseBackend(..)
     , PersistRecordBackend
     , getJust
     , getEntity

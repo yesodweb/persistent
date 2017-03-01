@@ -33,7 +33,6 @@ import Database.Persist.MongoDB (toInsertDoc, docToEntityThrow, collectionName, 
 #else
 
 import Database.Persist.TH (mkDeleteCascade, mkSave)
-import Control.Exception (SomeException)
 import qualified Data.Text as T
 import qualified Control.Exception as E
 
@@ -762,20 +761,20 @@ specs = describe "persistent" $ do
       insert_ p1
       insert_ p2
       insert_ p3
-      x <- fmap entityVal `fmap` selectList [PersonName <-. ["D"]] []
-      liftIO $ x @?= [p1]
-      x <- fmap entityVal `fmap` selectList [PersonName /<-. ["D"]] []
-      liftIO $ x @?= [p2, p3]
+      x1 <- fmap entityVal `fmap` selectList [PersonName <-. ["D"]] []
+      liftIO $ x1 @?= [p1]
+      x2 <- fmap entityVal `fmap` selectList [PersonName /<-. ["D"]] []
+      liftIO $ x2 @?= [p2, p3]
 
-      x <- fmap entityVal `fmap` selectList [PersonColor <-. [Just "blue"]] []
-      liftIO $ x @?= [p3]
-      x <- fmap entityVal `fmap` selectList [PersonColor /<-. [Just "blue"]] []
-      liftIO $ x @?= [p1, p2]
+      x3 <- fmap entityVal `fmap` selectList [PersonColor <-. [Just "blue"]] []
+      liftIO $ x3 @?= [p3]
+      x4 <- fmap entityVal `fmap` selectList [PersonColor /<-. [Just "blue"]] []
+      liftIO $ x4 @?= [p1, p2]
 
-      x <- fmap entityVal `fmap` selectList [PersonColor <-. [Nothing, Just "blue"]] []
-      liftIO $ x @?= [p1, p2, p3]
-      x <- fmap entityVal `fmap` selectList [PersonColor /<-. [Nothing]] []
-      liftIO $ x @?= [p3]
+      x5 <- fmap entityVal `fmap` selectList [PersonColor <-. [Nothing, Just "blue"]] []
+      liftIO $ x5 @?= [p1, p2, p3]
+      x6 <- fmap entityVal `fmap` selectList [PersonColor /<-. [Nothing]] []
+      liftIO $ x6 @?= [p3]
 
   describe "toJSON" $ do
     it "serializes" $ db $ do

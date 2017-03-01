@@ -3,16 +3,21 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
+module Main
+  (
+  -- avoid unused ident warnings
+    module Main
+  ) where
 import Test.Hspec
 import Test.Hspec.QuickCheck
 import Data.ByteString.Lazy.Char8 ()
 import Test.QuickCheck.Arbitrary
-import Control.Applicative ((<$>), (<*>), Const (..))
+import Test.QuickCheck.Gen (Gen)
+import Control.Applicative as A ((<$>), (<*>), Const (..))
 import Data.Functor.Identity (Identity (..))
 
 import Database.Persist
 import Database.Persist.TH
-import Database.Persist.Types (PersistValue(..))
 import Data.Text (Text, pack)
 import Data.Aeson
 
@@ -53,10 +58,11 @@ Baz
     bin Int
 |]
 
-arbitraryT = pack <$> arbitrary
+arbitraryT :: Gen Text
+arbitraryT = pack A.<$> arbitrary
 
 instance Arbitrary Person where
-    arbitrary = Person <$> arbitraryT <*> arbitrary <*> arbitrary
+    arbitrary = Person <$> arbitraryT A.<*> arbitrary <*> arbitrary
 instance Arbitrary Address where
     arbitrary = Address <$> arbitraryT <*> arbitraryT <*> arbitrary
 
@@ -90,6 +96,7 @@ main = hspec $ do
         (person1 ^. (lpersonAddress . laddressCity)) `shouldBe` city1
         (person1 & ((lpersonAddress . laddressCity) .~ city2)) `shouldBe` person2
 
+(&) :: a -> (a -> b) -> b
 x & f = f x
 
 (^.) :: s
