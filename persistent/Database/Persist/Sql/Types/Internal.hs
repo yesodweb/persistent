@@ -81,6 +81,7 @@ data SqlBackend = SqlBackend
     , connRDBMS :: Text
     , connLimitOffset :: (Int,Int) -> Bool -> Text -> Text
     , connLogFunc :: LogFunc
+    , connMaxParams :: Maybe Int -- ^ Some databases (probably only Sqlite) have a limit on how many question-mark parameters may be used in a statement
     }
     deriving Typeable
 instance HasPersistBackend SqlBackend where

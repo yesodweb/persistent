@@ -124,6 +124,7 @@ open' ci logFunc = do
         , connRDBMS      = "mysql"
         , connLimitOffset = decorateSQLWithLimitOffset "LIMIT 18446744073709551615"
         , connLogFunc    = logFunc
+        , connMaxParams = Nothing
         }
 
 -- | Prepare a query.  We don't support prepared statements, but
@@ -1004,7 +1005,8 @@ mockMigration mig = do
                              connRDBMS = undefined,
                              connLimitOffset = undefined,
                              connLogFunc = undefined,
-                             connUpsertSql = undefined}
+                             connUpsertSql = undefined,
+                             connMaxParams = Nothing}
       result = runReaderT . runWriterT . runWriterT $ mig 
   resp <- result sqlbackend
   mapM_ T.putStrLn $ map snd $ snd resp
