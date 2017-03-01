@@ -456,7 +456,7 @@ getColumns connectInfo getter def = do
     stmtIdClmn <- getter "SELECT COLUMN_NAME, \
                                  \IS_NULLABLE, \
                                  \DATA_TYPE, \
-                                 \COLUMN_DEFAULT \
+                                 \IF(IS_NULLABLE='YES', COALESCE(COLUMN_DEFAULT, 'NULL'), COLUMN_DEFAULT) \
                           \FROM INFORMATION_SCHEMA.COLUMNS \
                           \WHERE TABLE_SCHEMA = ? \
                             \AND TABLE_NAME   = ? \
@@ -472,7 +472,7 @@ getColumns connectInfo getter def = do
                                \CHARACTER_MAXIMUM_LENGTH, \
                                \NUMERIC_PRECISION, \
                                \NUMERIC_SCALE, \
-                               \COLUMN_DEFAULT \
+                               \IF(IS_NULLABLE='YES', COALESCE(COLUMN_DEFAULT, 'NULL'), COLUMN_DEFAULT) \
                         \FROM INFORMATION_SCHEMA.COLUMNS \
                         \WHERE TABLE_SCHEMA = ? \
                           \AND TABLE_NAME   = ? \
