@@ -67,3 +67,11 @@ test-suite  basic
                    , scientific
                    , http-api-data
                    , persistent-redis
+
+    other-modules:   Database.Persist.Redis
+                     Database.Persist.Redis.Config
+                     Database.Persist.Redis.Internal
+                     Database.Persist.Redis.Store
+                     Database.Persist.Redis.Parser
+                     Database.Persist.Redis.Update
+                     Database.Persist.Redis.Exception

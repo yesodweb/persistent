@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -fno-warn-deprecations #-} -- usage of Error typeclass
 module Database.Persist.Types.Base where
 
 import qualified Data.Aeson as A
@@ -16,10 +17,9 @@ import Data.Text.Encoding.Error (lenientDecode)
 import qualified Data.ByteString.Base64 as B64
 import qualified Data.Vector as V
 import Control.Arrow (second)
-import Control.Applicative ((<$>))
+import Control.Applicative as A ((<$>))
 import Data.Time (Day, TimeOfDay, UTCTime)
 import Data.Int (Int64)
-import qualified Data.Text.Read
 import Data.ByteString (ByteString, foldl')
 import Data.Bits (shiftL, shiftR)
 import qualified Data.ByteString as BS
@@ -90,7 +90,13 @@ instance ToHttpApiData Checkmark where
 instance FromHttpApiData Checkmark where
     parseUrlPiece = parseBoundedTextData
 
-instance PathPiece Checkmark
+instance PathPiece Checkmark where
+  toPathPiece Active = "active"
+  toPathPiece Inactive = "inactive"
+
+  fromPathPiece "active" = Just Active
+  fromPathPiece "inactive" = Just Inactive
+  fromPathPiece _ = Nothing
 
 data IsNullable = Nullable !WhyNullable
                 | NotNullable
@@ -324,9 +330,9 @@ instance ToHttpApiData PersistValue where
 
 instance FromHttpApiData PersistValue where
     parseUrlPiece input =
-          PersistInt64 <$> parseUrlPiece input
-      <!> PersistList  <$> readTextData input
-      <!> PersistText  <$> return input
+          PersistInt64 A.<$> parseUrlPiece input
+      <!> PersistList  A.<$> readTextData input
+      <!> PersistText  A.<$> return input
       where
         infixl 3 <!>
         Left _ <!> y = y

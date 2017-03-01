@@ -32,9 +32,13 @@ import qualified Data.Text.Lazy.Builder as TB
 import Data.Aeson (ToJSON (..), FromJSON (..), fromJSON, object, (.:), (.=), Value (Object))
 import qualified Data.Aeson.Parser as AP
 import Data.Aeson.Types (Parser,Result(Error,Success))
+#if MIN_VERSION_aeson(1,0,0)
+import Data.Aeson.Text (encodeToTextBuilder)
+#else
 import Data.Aeson.Encode (encodeToTextBuilder)
+#endif
 import Data.Attoparsec.ByteString (parseOnly)
-import Control.Applicative ((<$>), (<*>))
+import Control.Applicative as A ((<$>), (<*>))
 import Data.Monoid (mappend)
 import qualified Data.HashMap.Strict as HM
 import Data.Typeable (Typeable)
@@ -218,8 +222,8 @@ keyValueEntityToJSON (Entity key value) = object
 keyValueEntityFromJSON :: (PersistEntity record, FromJSON record, FromJSON (Key record))
                        => Value -> Parser (Entity record)
 keyValueEntityFromJSON (Object o) = Entity
-    <$> o .: "key"
-    <*> o .: "value"
+    A.<$> o .: "key"
+    A.<*> o .: "value"
 keyValueEntityFromJSON _ = fail "keyValueEntityFromJSON: not an object"
 
 -- | Predefined @toJSON@. The resulting JSON looks like
@@ -256,7 +260,7 @@ instance (PersistEntity record, PersistField record, PersistField (Key record))
         _ -> error $ T.unpack $ errMsg "expected PersistMap"
 
     fromPersistValue (PersistMap alist) = case after of
-        [] -> Left $ errMsg $ "did not find " `mappend` idField `mappend` " field"
+        [] -> Left $ errMsg $ "did not find " `Data.Monoid.mappend` idField `mappend` " field"
         ("_id", kv):afterRest ->
             fromPersistValue (PersistMap (before ++ afterRest)) >>= \record ->
                 keyFromValues [kv] >>= \k ->

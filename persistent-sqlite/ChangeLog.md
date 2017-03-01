@@ -1,7 +1,15 @@
-## 2.6.1.0
+## 2.6.2.0
 
 * Removed the behaviour of toggling write-ahead log (WAL) based on a prefix in the connection string, in favour of using a record.
 * Turned on foreign key constraints [#646](https://github.com/yesodweb/persistent/issues/646)
+
+## 2.6.1
+
+* Added functions to monitor (status) and control (softHeapLimit) process-wide SQLite memory usage.
+
+## 2.6.0.1
+
+* Ensure connection is closed if wrapConnectionWal fails
 
 ## 2.6
 

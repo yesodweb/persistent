@@ -42,7 +42,7 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import Data.Conduit
 import qualified Data.Conduit.List as CL
-import Control.Applicative
+import Control.Applicative as A
 import Data.Int (Int64)
 import Data.Monoid ((<>))
 import Data.Pool (Pool)
@@ -78,7 +78,7 @@ withSqliteConn = withSqlConn . open'
 open' :: (IsSqlBackend backend) => SqliteConnectionInfo -> LogFunc -> IO backend
 open' connInfo logFunc = do
     conn <- Sqlite.open $ _sqlConnectionStr connInfo
-    wrapConnection' connInfo conn logFunc
+    wrapConnection' connInfo conn logFunc `E.onException` Sqlite.close conn
 
 -- | Wrap up a raw 'Sqlite.Connection' as a Persistent SQL 'Connection'.
 --
@@ -126,6 +126,7 @@ wrapConnection' connInfo conn logFunc = do
         , connRDBMS = "sqlite"
         , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
         , connLogFunc = logFunc
+        , connMaxParams = Just 999
         }
   where
     helper t getter = do
@@ -290,6 +291,8 @@ mockMigration mig = do
                    , connRDBMS = "sqlite"
                    , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
                    , connLogFunc = undefined
+                   , connUpsertSql = undefined
+                   , connMaxParams = Just 999
                    }
       result = runReaderT . runWriterT . runWriterT $ mig
   resp <- result sqlbackend
@@ -440,8 +443,8 @@ data SqliteConf = SqliteConf
 instance FromJSON SqliteConf where
     parseJSON v = modifyFailure ("Persistent: error loading Sqlite conf: " ++) $
       flip (withObject "SqliteConf") v $ \o -> SqliteConf
-        <$> o .: "database"
-        <*> o .: "poolsize"
+        A.<$> o .: "database"
+        A.<*> o .: "poolsize"
 instance PersistConfig SqliteConf where
     type PersistConfigBackend SqliteConf = SqlPersistT
     type PersistConfigPool SqliteConf = ConnectionPool

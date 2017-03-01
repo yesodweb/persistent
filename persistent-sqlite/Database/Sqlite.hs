@@ -12,6 +12,8 @@ module Database.Sqlite  (
                                     Done),
                          Config(ConfigLogFn),
                          LogFunction,
+                         SqliteStatus (..),
+                         SqliteStatusVerb (..),
                          open,
                          close,
                          prepare,
@@ -30,7 +32,9 @@ module Database.Sqlite  (
                          changes,
                          mkLogFunction,
                          freeLogFunction,
-                         config
+                         config,
+                         status,
+                         softHeapLimit
                         )
     where
 
@@ -43,9 +47,8 @@ import qualified Data.ByteString.Internal as BSI
 import Foreign
 import Foreign.C
 import Control.Exception (Exception, throwIO)
-import Control.Applicative ((<$>))
+import Control.Applicative as A ((<$>))
 import Database.Persist (PersistValue (..), listToJSON, mapToJSON)
-import Data.Bits ((.|.))
 import Data.Text (Text, pack, unpack)
 import Data.Text.Encoding (encodeUtf8, decodeUtf8With)
 import Data.Text.Encoding.Error (lenientDecode)
@@ -75,7 +78,7 @@ data SqliteException = SqliteException
     }
     deriving (Typeable)
 instance Show SqliteException where
-    show (SqliteException error functionName details) = unpack $ mconcat
+    show (SqliteException error functionName details) = unpack $ Data.Monoid.mconcat
         ["SQLite3 returned "
         , pack $ show error
         , " while attempting to perform "
@@ -177,7 +180,7 @@ sqlError maybeConnection functionName error = do
   details <- case maybeConnection of
                Just database -> do
                  details <- errmsg database
-                 return $ ": " `mappend` details
+                 return $ ": " `Data.Monoid.mappend` details
                Nothing -> return "."
   throwIO SqliteException
     { seError = error
@@ -191,7 +194,7 @@ openError :: Text -> IO (Either Connection Error)
 openError path' = do
     let flag = sqliteFlagReadWrite .|. sqliteFlagCreate .|. sqliteFlagUri
     BS.useAsCString (encodeUtf8 path') $ \path -> alloca $ \database -> do
-        err <- decodeError <$> openC path database flag nullPtr
+        err <- decodeError A.<$> openC path database flag nullPtr
         case err of
             ErrorOK -> do database' <- peek database
                           active <- newIORef True
@@ -532,4 +535,115 @@ config c = case c of
       ErrorOK -> return ()
       _ -> sqlError Nothing "sqlite3_config" e
 
+-- | Return type of the 'status' function
+--
+-- Since 2.6.1
+data SqliteStatus = SqliteStatus
+  { sqliteStatusCurrent   :: Maybe Int
+  -- ^ The current value of the parameter. Some parameters do not record current value.
+  , sqliteStatusHighwater :: Maybe Int
+  -- ^ The highest recorded value. Some parameters do not record the highest value.
+  } deriving (Eq, Show)
 
+-- | Run-time status parameter that can be returned by 'status' function.
+--
+-- Since 2.6.1
+data SqliteStatusVerb
+  -- | This parameter is the current amount of memory checked out using sqlite3_malloc(),
+  -- either directly or indirectly. The figure includes calls made to sqlite3_malloc()
+  -- by the application and internal memory usage by the SQLite library. Scratch memory
+  -- controlled by SQLITE_CONFIG_SCRATCH and auxiliary page-cache memory controlled by
+  -- SQLITE_CONFIG_PAGECACHE is not included in this parameter. The amount returned is
+  -- the sum of the allocation sizes as reported by the xSize method in sqlite3_mem_methods.
+  = SqliteStatusMemoryUsed
+  -- | This parameter returns the number of pages used out of the pagecache memory
+  -- allocator that was configured using SQLITE_CONFIG_PAGECACHE. The value returned
+  -- is in pages, not in bytes.
+  | SqliteStatusPagecacheUsed
+  -- | This parameter returns the number of bytes of page cache allocation which
+  -- could not be satisfied by the SQLITE_CONFIG_PAGECACHE buffer and where forced
+  -- to overflow to sqlite3_malloc(). The returned value includes allocations that
+  -- overflowed because they where too large (they were larger than the "sz"
+  -- parameter to SQLITE_CONFIG_PAGECACHE) and allocations that overflowed because
+  -- no space was left in the page cache.
+  | SqliteStatusPagecacheOverflow
+  -- | This parameter returns the number of allocations used out of the scratch
+  -- memory allocator configured using SQLITE_CONFIG_SCRATCH. The value returned
+  -- is in allocations, not in bytes. Since a single thread may only have one
+  -- scratch allocation outstanding at time, this parameter also reports the
+  -- number of threads using scratch memory at the same time.
+  | SqliteStatusScratchUsed
+  -- | This parameter returns the number of bytes of scratch memory allocation
+  -- which could not be satisfied by the SQLITE_CONFIG_SCRATCH buffer and where
+  -- forced to overflow to sqlite3_malloc(). The values returned include overflows
+  -- because the requested allocation was too larger (that is, because the requested
+  -- allocation was larger than the "sz" parameter to SQLITE_CONFIG_SCRATCH) and
+  -- because no scratch buffer slots were available.
+  | SqliteStatusScratchOverflow
+  -- | This parameter records the largest memory allocation request handed to
+  -- sqlite3_malloc() or sqlite3_realloc() (or their internal equivalents). Only
+  -- the value returned in 'sqliteStatusHighwater' field of 'SqliteStatus' record
+  -- is of interest. The value written into the 'sqliteStatusCurrent' field is Nothing.
+  | SqliteStatusMallocSize
+  -- | This parameter records the largest memory allocation request handed to
+  -- pagecache memory allocator. Only the value returned in the 'sqliteStatusHighwater'
+  -- field of 'SqliteStatus' record is of interest. The value written into the
+  -- 'sqliteStatusCurrent' field is Nothing.
+  | SqliteStatusPagecacheSize
+  -- | This parameter records the largest memory allocation request handed to
+  -- scratch memory allocator. Only the value returned in the 'sqliteStatusHighwater'
+  -- field of 'SqliteStatus' record is of interest. The value written into the
+  -- 'sqliteStatusCurrent' field is Nothing.
+  | SqliteStatusScratchSize
+  -- | This parameter records the number of separate memory allocations currently
+  -- checked out.
+  | SqliteStatusMallocCount
+
+-- Internal function to convert status parameter to a triple of its integral
+-- constant and two bools indicating if native sqlite3_status function actually
+-- modifies values at pCurrent and pHighwater pointers.
+statusVerbInfo :: SqliteStatusVerb -> (CInt, Bool, Bool)
+statusVerbInfo v = case v of
+  SqliteStatusMemoryUsed -> (0, True, True)
+  SqliteStatusPagecacheUsed -> (1, True, True)
+  SqliteStatusPagecacheOverflow -> (2, True, True)
+  SqliteStatusScratchUsed -> (3, True, True)
+  SqliteStatusScratchOverflow -> (4, True, True)
+  SqliteStatusMallocSize -> (5, False, True)
+  SqliteStatusPagecacheSize -> (7, False, True)
+  SqliteStatusScratchSize -> (8, False, True)
+  SqliteStatusMallocCount -> (9, True, True)
+
+foreign import ccall "sqlite3_status"
+  statusC :: CInt -> Ptr CInt -> Ptr CInt -> CInt -> IO Int
+
+-- | Retrieves runtime status information about the performance of SQLite,
+-- and optionally resets various highwater marks. The first argument is a
+-- status parameter to measure, the second is reset flag. If reset flag is
+-- True then the highest recorded value is reset after being returned from
+-- this function.
+--
+-- Since 2.6.1
+status :: SqliteStatusVerb -> Bool -> IO SqliteStatus
+status verb reset' = alloca $ \pCurrent -> alloca $ \pHighwater -> do
+  let (code, hasCurrent, hasHighwater) = statusVerbInfo verb
+  e <- decodeError <$> statusC code pCurrent pHighwater (if reset' then 1 else 0)
+  case e of
+    ErrorOK -> do
+      current <- if hasCurrent then Just . fromIntegral <$> peek pCurrent else return Nothing
+      highwater <- if hasHighwater then Just . fromIntegral <$> peek pHighwater else return Nothing
+      return $ SqliteStatus current highwater
+    _ -> sqlError Nothing "sqlite3_status" e
+
+foreign import ccall "sqlite3_soft_heap_limit64"
+  softHeapLimit64C :: CLLong -> IO CLLong
+
+-- | Sets and/or queries the soft limit on the amount of heap memory that may be
+-- allocated by SQLite. If the argument is zero then the soft heap limit is disabled.
+-- If the argument is negative then no change is made to the soft heap limit. Hence,
+-- the current size of the soft heap limit can be determined by invoking
+-- this function with a negative argument.
+--
+-- Since 2.6.1
+softHeapLimit :: Int64 -> IO Int64
+softHeapLimit x = fromIntegral <$> softHeapLimit64C (CLLong x)
