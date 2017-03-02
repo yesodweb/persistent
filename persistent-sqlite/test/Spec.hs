@@ -48,6 +48,6 @@ main = hspec $ do
         conn <- Sqlite.open (T.pack fp)
         Sqlite.close conn
         return ()
-    it "issue #527" $ asIO $ runSqlite ":memory:" $ do
+    it "issue #527" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
         runMigration migrateAll
         insertMany_ $ replicate 1000 (Test $ read "2014-11-30 05:15:25.123")
