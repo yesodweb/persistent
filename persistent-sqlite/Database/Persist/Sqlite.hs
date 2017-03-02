@@ -69,7 +69,6 @@ import Lens.Micro.TH (makeLenses)
 createSqlitePool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m, IsSqlBackend backend)
                  => Text -> Int -> m (Pool backend)
 createSqlitePool = createSqlitePoolFromInfo . conStringToInfo
-{-# DEPRECATED createSqlitePool "Use createSqlitePoolFromInfo" #-}
 
 -- | Create a pool of SQLite connections.
 --
@@ -88,7 +87,6 @@ withSqlitePool :: (MonadBaseControl IO m, MonadIO m, MonadLogger m, IsSqlBackend
                -> Int -- ^ number of connections to open
                -> (Pool backend -> m a) -> m a
 withSqlitePool connInfo = withSqlPool . open' $ conStringToInfo connInfo
-{-# DEPRECATED withSqlitePool "Use withSqlitePoolInfo" #-}
 
 -- | Run the given action with a connection pool.
 --
@@ -102,7 +100,6 @@ withSqlitePoolInfo connInfo = withSqlPool $ open' connInfo
 withSqliteConn :: (MonadBaseControl IO m, MonadIO m, MonadLogger m, IsSqlBackend backend)
                => Text -> (backend -> m a) -> m a
 withSqliteConn = withSqliteConnInfo . conStringToInfo
-{-# DEPRECATED withSqliteConn "Use withSqliteConnInfo" #-}
 
 withSqliteConnInfo :: (MonadBaseControl IO m, MonadIO m, MonadLogger m, IsSqlBackend backend)
                    => SqliteConnectionInfo -> (backend -> m a) -> m a
@@ -181,7 +178,6 @@ runSqlite connstr = runResourceT
                   . runNoLoggingT
                   . withSqliteConn connstr
                   . runSqlConn
-{-# DEPRECATED runSqlite "Use runSqliteInfo" #-}
 
 -- | A convenience helper which creates a new database connection and runs the
 -- given block, handling @MonadResource@ and @MonadLogger@ requirements. Note
