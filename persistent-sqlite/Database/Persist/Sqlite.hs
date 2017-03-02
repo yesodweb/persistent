@@ -25,6 +25,7 @@ module Database.Persist.Sqlite
     , walEnabled
     , fkEnabled
     , runSqlite
+    , runSqliteInfo
     , wrapConnection
     , wrapConnectionInfo
     , mockMigration
