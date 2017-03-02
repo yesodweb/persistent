@@ -1,4 +1,4 @@
-## 2.6.2.0
+## 2.6.1.1
 
 * Removed the behaviour of toggling write-ahead log (WAL) based on a prefix in the connection string, in favour of using a record.
 * Turned on foreign key constraints [#646](https://github.com/yesodweb/persistent/issues/646)

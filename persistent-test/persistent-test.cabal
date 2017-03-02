@@ -135,7 +135,7 @@ library
      cpp-options: -DNO_OVERLAP
 
    if !flag(postgresql) && !flag(mysql) && !flag(mongodb) && !flag(zookeeper)
-      build-depends: persistent-sqlite     >= 2.6.2.0
+      build-depends: persistent-sqlite     >= 2.6.1.1
      cpp-options: -DWITH_SQLITE -DDEBUG
 
    if flag(postgresql)
