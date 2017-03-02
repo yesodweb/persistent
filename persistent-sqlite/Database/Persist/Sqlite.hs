@@ -51,6 +51,7 @@ import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import Data.Conduit
 import qualified Data.Conduit.List as CL
+import qualified Data.HashMap.Lazy as HashMap
 import Data.Int (Int64)
 import Data.IORef
 import qualified Data.Map as Map
@@ -480,19 +481,29 @@ escape (DBName s) =
 
 -- | Information required to setup a connection pool.
 data SqliteConf = SqliteConf
+    { sqlDatabase :: Text
+    , sqlPoolSize :: Int
+    }
+    | SqliteConfInfo
     { sqlConnInfo :: SqliteConnectionInfo
     , sqlPoolSize :: Int
     } deriving Show
 
 instance FromJSON SqliteConf where
-    parseJSON v = modifyFailure ("Persistent: error loading Sqlite conf: " ++) $
-      flip (withObject "SqliteConf") v $ \o -> SqliteConf
-        A.<$> o .: "database"
-        A.<*> o .: "poolsize"
+    parseJSON v = modifyFailure ("Persistent: error loading Sqlite conf: " ++) $ flip (withObject "SqliteConf") v parser where
+        parser o = if HashMap.member "database" o
+                      then SqliteConf
+                            A.<$> o .: "database"
+                            A.<*> o .: "poolsize"
+                      else SqliteConfInfo
+                            A.<$> o .: "connInfo"
+                            A.<*> o .: "poolsize"
+
 instance PersistConfig SqliteConf where
     type PersistConfigBackend SqliteConf = SqlPersistT
     type PersistConfigPool SqliteConf = ConnectionPool
-    createPoolConfig (SqliteConf cs size) = runNoLoggingT $ createSqlitePoolFromInfo cs size -- FIXME
+    createPoolConfig (SqliteConf cs size) = runNoLoggingT $ createSqlitePoolFromInfo (conStringToInfo cs) size -- FIXME
+    createPoolConfig (SqliteConfInfo info size) = runNoLoggingT $ createSqlitePoolFromInfo info size -- FIXME
     runPool _ = runSqlPool
     loadConfig = parseJSON
 

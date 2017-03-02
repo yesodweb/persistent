@@ -37,6 +37,7 @@ library
                    , time
                    , old-locale
                    , resource-pool
+                   , unordered-containers
     exposed-modules: Database.Sqlite
                      Database.Persist.Sqlite
     ghc-options:     -Wall
