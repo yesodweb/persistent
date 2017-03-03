@@ -26,6 +26,7 @@ module Init (
 #else
   , db
   , sqlite_database
+  , sqlite_database_file
 #endif
   , BackendKey(..)
   , generateKey
@@ -55,23 +56,23 @@ import Control.Applicative as A ((<$>), (<*>))
 import Control.Exception (SomeException)
 import Control.Monad (void, replicateM, liftM, when, forM_)
 import Control.Monad.Trans.Reader
-import Test.Hspec
 import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase, MkPersistSettings(..))
+import Test.Hspec
 
 -- testing
 import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
 import Test.QuickCheck
 
 import qualified Data.ByteString as BS
+import Data.Text (Text, unpack)
 import Database.Persist
 import Database.Persist.TH ()
-import Data.Text (Text, unpack)
 import System.Environment (getEnvironment)
 
 #ifdef WITH_NOSQL
-import Language.Haskell.TH.Syntax (Type(..))
-import Database.Persist.TH (mkPersistSettings)
 import Database.Persist.Sql (PersistFieldSql(..))
+import Database.Persist.TH (mkPersistSettings)
+import Language.Haskell.TH.Syntax (Type(..))
 
 #  ifdef WITH_MONGODB
 import qualified Database.MongoDB as MongoDB
@@ -79,23 +80,23 @@ import Database.Persist.MongoDB (Action, withMongoPool, runMongoDBPool, defaultM
 #  endif
 
 #  ifdef WITH_ZOOKEEPER
-import qualified Database.Zookeeper as Z
-import Database.Persist.Zookeeper (Action, withZookeeperPool, runZookeeperPool, ZookeeperConf(..), defaultZookeeperConf, BackendKey(..), deleteRecursive)
 import Data.IORef (newIORef, IORef, writeIORef, readIORef)
-import System.IO.Unsafe (unsafePerformIO)
 import qualified Data.Text as T
+import Database.Persist.Zookeeper (Action, withZookeeperPool, runZookeeperPool, ZookeeperConf(..), defaultZookeeperConf, BackendKey(..), deleteRecursive)
+import qualified Database.Zookeeper as Z
+import System.IO.Unsafe (unsafePerformIO)
 #  endif
 
 #else
-import Database.Persist.Sql
-import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import Control.Monad.Logger
+import Control.Monad.Trans.Resource (ResourceT, runResourceT)
+import Database.Persist.Sql
 import System.Log.FastLogger (fromLogStr)
 
 #  ifdef WITH_POSTGRESQL
-import Database.Persist.Postgresql
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
+import Database.Persist.Postgresql
 #  endif
 #  ifdef WITH_SQLITE
 import Database.Persist.Sqlite
@@ -221,9 +222,17 @@ instance Arbitrary PersistValue where
 persistSettings :: MkPersistSettings
 persistSettings = sqlSettings { mpsGeneric = True }
 type BackendMonad = SqlBackend
-sqlite_database :: Text
-sqlite_database = "test/testdb.sqlite3"
--- sqlite_database = ":memory:"
+#  ifdef WITH_SQLITE
+sqlite_database_file :: Text
+sqlite_database_file = "test/testdb.sqlite3"
+sqlite_database :: SqliteConnectionInfo
+sqlite_database = mkSqliteConnectionInfo sqlite_database_file
+#  else
+sqlite_database_file :: Text
+sqlite_database_file = error "Sqlite tests disabled"
+sqlite_database :: ()
+sqlite_database = error "Sqlite tests disabled"
+#  endif
 runConn :: (MonadIO m, MonadBaseControl IO m) => SqlPersistT (LoggingT m) t -> m ()
 runConn f = do
   travis <- liftIO isTravis
@@ -252,7 +261,7 @@ runConn f = do
                         , connectDatabase = "persistent"
                         } 1 $ runSqlPool f
 #    else
-    _<-withSqlitePool sqlite_database 1 $ runSqlPool f
+    _<-withSqlitePoolInfo sqlite_database 1 $ runSqlPool f
 #    endif
 #  endif
     return ()

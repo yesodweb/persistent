@@ -1,3 +1,8 @@
+## 2.6.2
+
+* Turned on foreign key constraints [#646](https://github.com/yesodweb/persistent/issues/646)
+* Added new `SqliteConnectionInfo`-based API
+
 ## 2.6.1
 
 * Added functions to monitor (status) and control (softHeapLimit) process-wide SQLite memory usage.

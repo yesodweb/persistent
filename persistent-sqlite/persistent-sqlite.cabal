@@ -1,5 +1,5 @@
 name:            persistent-sqlite
-version:         2.6.1
+version:         2.6.2
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -32,10 +32,12 @@ library
                    , aeson                   >= 0.6.2
                    , conduit                 >= 0.5.3
                    , monad-logger            >= 0.2.4
+                   , microlens-th            >= 0.4.1.1
                    , resourcet               >= 1.1
                    , time
                    , old-locale
                    , resource-pool
+                   , unordered-containers
     exposed-modules: Database.Sqlite
                      Database.Persist.Sqlite
     ghc-options:     -Wall

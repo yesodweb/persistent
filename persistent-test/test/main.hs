@@ -1,31 +1,33 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-import qualified PersistentTest
-import qualified RenameTest
-import qualified DataTypeTest
-import qualified EmptyEntityTest
-import qualified HtmlTest
-import qualified EmbedTest
-import qualified EmbedOrderTest
-import qualified LargeNumberTest
-import qualified MaxLenTest
-import qualified Recursive
-import qualified SumTypeTest
-import qualified UniqueTest
-import qualified MigrationOnlyTest
-import qualified PersistUniqueTest
 import qualified CompositeTest
-import qualified PrimaryTest
 import qualified CustomPersistFieldTest
 import qualified CustomPrimaryKeyReferenceTest
+import qualified DataTypeTest
+import qualified EmbedOrderTest
+import qualified EmbedTest
+import qualified EmptyEntityTest
+import qualified HtmlTest
 import Init
+import qualified LargeNumberTest
+import qualified MaxLenTest
+import qualified MigrationOnlyTest
+import qualified PersistentTest
+import qualified PersistUniqueTest
+import qualified PrimaryTest
+import qualified Recursive
+import qualified RenameTest
+import qualified SumTypeTest
+import qualified UniqueTest
 
 #ifndef WITH_NOSQL
-import qualified MigrationTest
+#  ifdef WITH_SQLITE
+import Control.Exception (handle, IOException)
 import Filesystem (removeFile)
 import Filesystem.Path.CurrentOS (fromText)
-import Control.Exception (handle, IOException)
+import qualified MigrationTest
+#  endif
 #endif
 
 
@@ -41,8 +43,10 @@ setup migration = do
 main :: IO ()
 main = do
 #ifndef WITH_NOSQL
+#  ifdef WITH_SQLITE
   handle (\(_ :: IOException) -> return ())
-    $ removeFile $ fromText sqlite_database
+    $ removeFile $ fromText sqlite_database_file
+#  endif
 
   runConn $ do
     mapM_ setup
@@ -55,7 +59,9 @@ main = do
       , MaxLenTest.maxlenMigrate
       , Recursive.recursiveMigrate
       , CompositeTest.compositeMigrate
+#  ifdef WITH_SQLITE
       , MigrationTest.migrationMigrate
+#  endif
       , PersistUniqueTest.migration
       , RenameTest.migration
       , CustomPersistFieldTest.customFieldMigrate
@@ -87,6 +93,6 @@ main = do
     CustomPersistFieldTest.specs
     CustomPrimaryKeyReferenceTest.specs
 
-#ifndef WITH_NOSQL
+#ifdef WITH_SQLITE
     MigrationTest.specs
 #endif
