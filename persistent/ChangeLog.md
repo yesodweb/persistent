@@ -2,6 +2,8 @@
 
 * Fix edge case for `\<-. [Nothing]`
 * Introduce `connMaxParams`
+* Add 'getJustEntity' and 'insertRecord' convenience function
+* Minor Haddock improvment
 
 ## 2.6
 
