@@ -176,7 +176,7 @@ class
         get key >>= maybe (liftIO $ throwIO $ KeyNotFound $ show key) return
 
 
--- | Same as get, but for a non-null (not Maybe) foreign key
+-- | Same as 'get', but for a non-null (not Maybe) foreign key
 -- Unsafe unless your database is enforcing that the foreign key is valid.
 getJust :: ( PersistStoreRead backend
            , Show (Key record)
