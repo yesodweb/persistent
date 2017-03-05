@@ -12,9 +12,11 @@ module Database.Persist.Class.PersistStore
     , PersistStoreWrite (..)
     , getEntity
     , getJust
+    , getJustEntity
     , belongsTo
     , belongsToJust
     , insertEntity
+    , insertRecord
     , ToBackendKey(..)
     ) where
 
@@ -185,6 +187,22 @@ getJust key = get key >>= maybe
   (liftIO $ throwIO $ PersistForeignConstraintUnmet $ T.pack $ show key)
   return
 
+-- | Same as 'getJust', but returns an 'Entity' instead of just the record.
+-- @since 2.6.1
+getJustEntity
+  :: (PersistEntityBackend record ~ BaseBackend backend
+     ,MonadIO m
+     ,PersistEntity record
+     ,PersistStoreRead backend)
+  => Key record -> ReaderT backend m (Entity record)
+getJustEntity key = do
+  record <- getJust key
+  return $
+    Entity
+    { entityKey = key
+    , entityVal = record
+    }
+
 -- | Curry this to make a convenience function that loads an associated model.
 --
 -- > foreign = belongsTo foreignId
@@ -227,3 +245,16 @@ getEntity ::
 getEntity key = do
     maybeModel <- get key
     return $ fmap (key `Entity`) maybeModel
+
+-- | Like 'insertEntity' but just returns the record instead of 'Entity'.
+-- @since 2.6.1
+insertRecord
+  :: (PersistEntityBackend record ~ BaseBackend backend
+     ,PersistEntity record
+     ,MonadIO m
+     ,PersistStoreWrite backend)
+  => record -> ReaderT backend m record
+insertRecord record = do
+  insert_ record
+  return $ record
+
