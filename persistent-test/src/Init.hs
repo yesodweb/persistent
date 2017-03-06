@@ -137,7 +137,7 @@ infix 1 @/= --, /=@
 actual @/= expected = liftIO $ assertNotEqual "" expected actual
 
 infix 1 @==, ==@
-expected @== actual = liftIO $ expected @?= actual
+actual @== expected = liftIO $ actual @?= expected
 expected ==@ actual = liftIO $ expected @=? actual
 
 {-

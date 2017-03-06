@@ -58,6 +58,7 @@ import Data.Aeson
 
 import Data.Conduit
 import qualified Data.Conduit.List as CL
+import Data.Function (on)
 import Data.Functor.Identity
 import Data.Functor.Constant
 import PersistTestPetType
@@ -126,18 +127,18 @@ share [mkPersist persistSettings,  mkMigrate "testMigrate", mkDeleteCascade pers
 
   Upsert
     email Text
-    counter Int
+    attr Text
+    extra Text
     UniqueUpsert email
-    deriving Show
+    deriving Eq Show
 
   UpsertBy
     email Text
     city Text
-    state Text
-    counter Int
+    attr Text
     UniqueUpsertBy email
-    UniqueUpsertByCityState city state
-    deriving Show
+    UniqueUpsertByCity city
+    deriving Eq Show
 
   Strict
     !yes Int
@@ -493,54 +494,67 @@ specs = describe "persistent" $ do
       pBlue30 <- updateGet key25 [PersonAge +=. 2]
       pBlue30 @== Person "Updated" 30 Nothing
 
-  it "upsert without updates" $ db $ do
-      deleteWhere ([] :: [Filter Upsert])
-      let email = "dude@example.com"
-      Nothing :: Maybe (Entity Upsert) <- getBy $ UniqueUpsert email
-      let counter1 = 0
-      Entity k1 u1 <- upsert (Upsert email counter1) []
-      upsertCounter u1 @== counter1
-      let counter2 = 1
-      Entity k2 u2 <- upsert (Upsert email counter2) []
-      upsertCounter u2 @== counter2
-      k1 @== k2
+  describe "upsert" $ do
+    it "adds a new row with no updates" $ db $ do
+        Entity _ u <- upsert (Upsert "a" "new" "") [UpsertAttr =. "update"]
+        c <- count ([] :: [Filter Upsert])
+        c @== 1
+        upsertAttr u @== "new"
+    it "keeps the existing row" $ db $ do
+        initial <- insertEntity (Upsert "a" "initial" "")
+        update' <- upsert (Upsert "a" "update" "") []
+        update' @== initial
+    it "updates an existing row" $ db $ do
+        initial <- insertEntity (Upsert "a" "initial" "extra")
+        update' <-
+            upsert (Upsert "a" "wow" "such unused") [UpsertAttr =. "update"]
+        ((==@) `on` entityKey) initial update'
+        upsertAttr (entityVal update') @== "update"
+        upsertExtra (entityVal update') @== "extra"
 
-  it "upsert with updates" $ db $ do
-      deleteWhere ([] :: [Filter Upsert])
-      let email = "dude@example.com"
-      Nothing :: Maybe (Entity Upsert) <- getBy $ UniqueUpsert email
-      let up0 = Upsert email 0
-      Entity _ up1 <- upsert up0 [UpsertCounter +=. 1]
-      upsertCounter up1 @== 1
-      Entity _ up2 <- upsert up1 [UpsertCounter +=. 1]
-      upsertCounter up2 @== 2
-
-  it "upsertBy without updates" $ db $ do
-      deleteWhere ([] :: [Filter UpsertBy])
-      let email = "dude@example.com"
-          city = "Boston"
-          state = "Massachussets"
-      Nothing :: Maybe (Entity UpsertBy) <- getBy $ UniqueUpsertBy email
-      let counter1 = 0
-          unique = UniqueUpsertBy email
-      Entity k1 u1 <- upsertBy unique (UpsertBy email city state counter1) []
-      upsertByCounter u1 @== counter1
-      let counter2 = 1
-      Entity k2 u2 <- upsertBy unique (UpsertBy email city state counter2) []
-      upsertByCounter u2 @== counter2
-      k1 @== k2
-
-  it "upsertBy with updates" $ db $ do
-      deleteWhere ([] :: [Filter UpsertBy])
-      let email = "dude@example.com"
-          city = "Boston"
-          state = "Massachussets"
-      Nothing :: Maybe (Entity UpsertBy) <- getBy $ UniqueUpsertBy email
-      let up0 = UpsertBy email city state 0
-      Entity _ up1 <- upsertBy (UniqueUpsertBy email) up0 [UpsertByCounter +=. 1]
-      upsertByCounter up1 @== 1
-      Entity _ up2 <- upsertBy (UniqueUpsertBy email) up1 [UpsertByCounter +=. 1]
-      upsertByCounter up2 @== 2
+  describe "upsertBy" $ do
+    let uniqueEmail = UniqueUpsertBy "a"
+        uniqueCity = UniqueUpsertByCity "Boston"
+    it "adds a new row with no updates" $ db $ do
+        Entity _ u <-
+            upsertBy
+                uniqueEmail
+                (UpsertBy "a" "Boston" "new")
+                [UpsertByAttr =. "update"]
+        c <- count ([] :: [Filter UpsertBy])
+        c @== 1
+        upsertByAttr u @== "new"
+    it "keeps the existing row" $ db $ do
+        initial <- insertEntity (UpsertBy "a" "Boston" "initial")
+        update' <- upsertBy uniqueEmail (UpsertBy "a" "Boston" "update") []
+        update' @== initial
+    it "updates an existing row" $ db $ do
+        initial <- insertEntity (UpsertBy "a" "Boston" "initial")
+        update' <-
+            upsertBy
+                uniqueEmail
+                (UpsertBy "a" "wow" "such unused")
+                [UpsertByAttr =. "update"]
+        ((==@) `on` entityKey) initial update'
+        upsertByAttr (entityVal update') @== "update"
+        upsertByCity (entityVal update') @== "Boston"
+    it "updates by the appropriate constraint" $ db $ do
+        initBoston <- insertEntity (UpsertBy "bos" "Boston" "bos init")
+        initKrum <- insertEntity (UpsertBy "krum" "Krum" "krum init")
+        updBoston <-
+            upsertBy
+                (UniqueUpsertBy "bos")
+                (UpsertBy "bos" "Krum" "unused")
+                [UpsertByAttr =. "bos update"]
+        updKrum <-
+            upsertBy
+                (UniqueUpsertByCity "Krum")
+                (UpsertBy "bos" "Krum" "unused")
+                [UpsertByAttr =. "krum update"]
+        ((==@) `on` entityKey) initBoston updBoston
+        ((==@) `on` entityKey) initKrum updKrum
+        entityVal updBoston @== UpsertBy "bos" "Boston" "bos update"
+        entityVal updKrum @== UpsertBy "krum" "Krum" "krum update"
 
   it "maybe update" $ db $ do
       let noAge = PersonMaybeAge "Michael" Nothing
