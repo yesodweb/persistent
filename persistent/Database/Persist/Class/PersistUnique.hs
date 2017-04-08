@@ -13,7 +13,7 @@ module Database.Persist.Class.PersistUnique
 
 import Database.Persist.Types
 import Control.Exception (throwIO)
-import Control.Monad (liftM, when)
+import Control.Monad (liftM)
 import Control.Monad.IO.Class (liftIO, MonadIO)
 import Data.List ((\\))
 import Control.Monad.Trans.Reader (ReaderT)
