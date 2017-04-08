@@ -502,16 +502,32 @@ specs = describe "persistent" $ do
         c @== 1
         upsertAttr u @== "new"
     it "keeps the existing row" $ db $ do
+#ifdef WITH_MONGODB
+        initial <- insertEntity (Upsert "foo" "initial" "")
+        update' <- upsert (Upsert "foo" "update" "") []
+        update' @== initial      
+#else
         initial <- insertEntity (Upsert "a" "initial" "")
         update' <- upsert (Upsert "a" "update" "") []
         update' @== initial
+#endif                        
     it "updates an existing row" $ db $ do
+#ifdef WITH_MONGODB
+        initial <- insertEntity (Upsert "cow" "initial" "extra")
+        update' <-
+            upsert (Upsert "cow" "wow" "such unused") [UpsertAttr =. "update"]
+        ((==@) `on` entityKey) initial update'
+        upsertAttr (entityVal update') @== "update"
+        upsertExtra (entityVal update') @== "extra"
+#else
         initial <- insertEntity (Upsert "a" "initial" "extra")
         update' <-
             upsert (Upsert "a" "wow" "such unused") [UpsertAttr =. "update"]
         ((==@) `on` entityKey) initial update'
         upsertAttr (entityVal update') @== "update"
         upsertExtra (entityVal update') @== "extra"
+#endif
+
 
   describe "upsertBy" $ do
     let uniqueEmail = UniqueUpsertBy "a"
@@ -526,10 +542,27 @@ specs = describe "persistent" $ do
         c @== 1
         upsertByAttr u @== "new"
     it "keeps the existing row" $ db $ do
+#ifdef WITH_MONGODB
+        initial <- insertEntity (UpsertBy "foo" "Chennai" "initial")
+        update' <- upsertBy (UniqueUpsertBy "foo") (UpsertBy "foo" "Chennai" "update") []
+        update' @== initial
+#else
         initial <- insertEntity (UpsertBy "a" "Boston" "initial")
         update' <- upsertBy uniqueEmail (UpsertBy "a" "Boston" "update") []
         update' @== initial
+#endif
     it "updates an existing row" $ db $ do
+#ifdef WITH_MONGODB
+        initial <- insertEntity (UpsertBy "ko" "Kumbakonam" "initial")
+        update' <-
+            upsertBy
+                (UniqueUpsertBy "ko")
+                (UpsertBy "ko" "Bangalore" "such unused")
+                [UpsertByAttr =. "update"]
+        ((==@) `on` entityKey) initial update'
+        upsertByAttr (entityVal update') @== "update"
+        upsertByCity (entityVal update') @== "Kumbakonam"
+#else
         initial <- insertEntity (UpsertBy "a" "Boston" "initial")
         update' <-
             upsertBy
@@ -539,6 +572,7 @@ specs = describe "persistent" $ do
         ((==@) `on` entityKey) initial update'
         upsertByAttr (entityVal update') @== "update"
         upsertByCity (entityVal update') @== "Boston"
+#endif
     it "updates by the appropriate constraint" $ db $ do
         initBoston <- insertEntity (UpsertBy "bos" "Boston" "bos init")
         initKrum <- insertEntity (UpsertBy "krum" "Krum" "krum init")
