@@ -19,7 +19,6 @@ import qualified Data.Text as T
 import Data.Monoid (mappend, (<>))
 import qualified Data.Conduit.List as CL
 import Control.Monad.Trans.Reader (ask, withReaderT)
-import Control.Monad (when, liftM)
 
 defaultUpsert
     :: (MonadIO m
@@ -40,62 +39,33 @@ escape (DBName s) = T.pack $ '"' : escapeQuote (T.unpack s) ++ "\""
 
 instance PersistUniqueWrite SqlBackend where
     upsert record updates = do
-        conn <- ask
-        uniqueKey <- onlyUnique record
-        case connUpsertSql conn of
-            Just upsertSql ->
-                case updates of
-                    [] -> defaultUpsert record updates
-                    _ -> do
-                        let upds = T.intercalate "," $ map (go' . go) updates
-                            sql = upsertSql t upds
-                            vals =
-                                (map toPersistValue $ toPersistFields record) ++
-                                (map updatePersistValue updates) ++
-                                (unqs uniqueKey)
-                            go'' n Assign =
-                                escape (entityDB t) <> "." <> n <> "=?"
-                            go'' n Add =
-                                T.concat
-                                    [ n
-                                    , "="
-                                    , escape (entityDB t) <> "."
-                                    , n
-                                    , "+?"]
-                            go'' n Subtract =
-                                T.concat
-                                    [ n
-                                    , "="
-                                    , escape (entityDB t) <> "."
-                                    , n
-                                    , "-?"]
-                            go'' n Multiply =
-                                T.concat
-                                    [ n
-                                    , "="
-                                    , escape (entityDB t) <> "."
-                                    , n
-                                    , "*?"]
-                            go'' n Divide =
-                                T.concat
-                                    [ n
-                                    , "="
-                                    , escape (entityDB t) <> "."
-                                    , n
-                                    , "/?"]
-                            go'' _ (BackendSpecificUpdate up) =
-                                error $
-                                T.unpack $
-                                "BackendSpecificUpdate" `mappend` up `mappend`
-                                "not supported"
-                            go' (x,pu) = go'' (connEscapeName conn x) pu
-                            go x = (fieldDB $ updateFieldDef x, updateUpdate x)
-                        x <- rawSql sql vals
-                        return $ head x
-            Nothing -> defaultUpsert record updates
-      where
-        t = entityDef $ Just record
-        unqs uniqueKey = concat $ map (persistUniqueToValues) [uniqueKey]
+      conn <- ask
+      uniqueKey <- onlyUnique record
+      case connUpsertSql conn of
+        Just upsertSql -> case updates of
+                            [] -> defaultUpsert record updates
+                            _:_ -> do
+                                let upds = T.intercalate "," $ map (go' . go) updates
+                                    sql = upsertSql t upds
+                                    vals = (map toPersistValue $ toPersistFields record) ++ (map updatePersistValue updates) ++ (unqs uniqueKey)
+                                           
+                                    go'' n Assign = n <> "=?"
+                                    go'' n Add = T.concat [n, "=", n, "+?"]
+                                    go'' n Subtract = T.concat [n, "=", n, "-?"]
+                                    go'' n Multiply = T.concat [n, "=", n, "*?"]
+                                    go'' n Divide = T.concat [n, "=", n, "/?"]
+                                    go'' _ (BackendSpecificUpdate up) = error $ T.unpack $ "BackendSpecificUpdate" `Data.Monoid.mappend` up `mappend` "not supported"
+                                              
+                                    go' (x, pu) = go'' (connEscapeName conn x) pu
+                                    go x = (fieldDB $ updateFieldDef x, updateUpdate x)
+
+                                x <- rawSql sql vals
+                                return $ head x
+        Nothing -> defaultUpsert record updates
+        where
+          t = entityDef $ Just record
+          unqs uniqueKey = concat $ map (persistUniqueToValues) [uniqueKey]
+
     deleteBy uniq = do
         conn <- ask
         let sql' = sql conn

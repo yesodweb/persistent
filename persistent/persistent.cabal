@@ -1,5 +1,5 @@
 name:            persistent
-version:         2.6
+version:         2.6.1
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -22,7 +22,7 @@ library
     if flag(nooverlap)
         cpp-options: -DNO_OVERLAP
 
-    build-depends:   base                     >= 4.6       && < 5
+    build-depends:   base                     >= 4.7       && < 5
                    , bytestring               >= 0.9
                    , transformers             >= 0.2.1
                    , time                     >= 1.1.4
@@ -116,6 +116,12 @@ test-suite test
                    , resource-pool
 
     cpp-options: -DTEST
+
+    other-modules:   Database.Persist.Class.PersistEntity
+                     Database.Persist.Class.PersistField
+                     Database.Persist.Quasi
+                     Database.Persist.Types
+                     Database.Persist.Types.Base
 
 source-repository head
   type:     git

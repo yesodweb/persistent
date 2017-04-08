@@ -1,3 +1,10 @@
+## 2.6.1
+
+* Fix edge case for `\<-. [Nothing]`
+* Introduce `connMaxParams`
+* Add 'getJustEntity' and 'insertRecord' convenience function
+* Minor Haddock improvment
+
 ## 2.6
 
 * Add `connUpsertSql` type for providing backend-specific upsert sql support.

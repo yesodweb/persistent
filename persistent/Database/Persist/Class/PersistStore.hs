@@ -10,10 +10,13 @@ module Database.Persist.Class.PersistStore
     , PersistCore (..)
     , PersistStoreRead (..)
     , PersistStoreWrite (..)
+    , getEntity
     , getJust
+    , getJustEntity
     , belongsTo
     , belongsToJust
     , insertEntity
+    , insertRecord
     , ToBackendKey(..)
     ) where
 
@@ -173,7 +176,7 @@ class
         get key >>= maybe (liftIO $ throwIO $ KeyNotFound $ show key) return
 
 
--- | Same as get, but for a non-null (not Maybe) foreign key
+-- | Same as 'get', but for a non-null (not Maybe) foreign key
 -- Unsafe unless your database is enforcing that the foreign key is valid.
 getJust :: ( PersistStoreRead backend
            , Show (Key record)
@@ -183,6 +186,22 @@ getJust :: ( PersistStoreRead backend
 getJust key = get key >>= maybe
   (liftIO $ throwIO $ PersistForeignConstraintUnmet $ T.pack $ show key)
   return
+
+-- | Same as 'getJust', but returns an 'Entity' instead of just the record.
+-- @since 2.6.1
+getJustEntity
+  :: (PersistEntityBackend record ~ BaseBackend backend
+     ,MonadIO m
+     ,PersistEntity record
+     ,PersistStoreRead backend)
+  => Key record -> ReaderT backend m (Entity record)
+getJustEntity key = do
+  record <- getJust key
+  return $
+    Entity
+    { entityKey = key
+    , entityVal = record
+    }
 
 -- | Curry this to make a convenience function that loads an associated model.
 --
@@ -216,3 +235,26 @@ insertEntity ::
 insertEntity e = do
     eid <- insert e
     return $ Entity eid e
+
+-- | Like @get@, but returns the complete @Entity@.
+getEntity ::
+    ( PersistStoreWrite backend
+    , PersistRecordBackend e backend
+    , MonadIO m
+    ) => Key e -> ReaderT backend m (Maybe (Entity e))
+getEntity key = do
+    maybeModel <- get key
+    return $ fmap (key `Entity`) maybeModel
+
+-- | Like 'insertEntity' but just returns the record instead of 'Entity'.
+-- @since 2.6.1
+insertRecord
+  :: (PersistEntityBackend record ~ BaseBackend backend
+     ,PersistEntity record
+     ,MonadIO m
+     ,PersistStoreWrite backend)
+  => record -> ReaderT backend m record
+insertRecord record = do
+  insert_ record
+  return $ record
+

@@ -8,12 +8,14 @@ module Database.Persist.Class
     , PersistStore
     , PersistStoreRead (..)
     , PersistStoreWrite (..)
-    , BaseBackend(..)
     , PersistRecordBackend
     , getJust
+    , getJustEntity
+    , getEntity
     , belongsTo
     , belongsToJust
     , insertEntity
+    , insertRecord
 
     -- * PersistUnique
     , PersistUnique

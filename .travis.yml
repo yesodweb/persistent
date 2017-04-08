@@ -1,184 +1,51 @@
 sudo: false
-language: c
+language: generic
+
+addons:
+  apt:
+    packages:
+    - libgmp-dev
+    - cabal-install-1.24
+    sources:
+    - hvr-ghc
+  postgresql: "9.4"
+
+services:
+- mongodb
+- mysql
+- redis-server
 
 matrix:
   include:
-  - env: GHCVER=7.6.3 CABALVER=1.18 BACKEND=none
-    addons:
-      apt:
-        sources:
-        - hvr-ghc
-        packages:
-        - ghc-7.6.3
-        - cabal-install-1.18
-        - libzookeeper-mt-dev
-        - zookeeperd
-  - env: GHCVER=7.6.3 CABALVER=1.18 BACKEND=sqlite
-    addons:
-      apt:
-        sources:
-        - hvr-ghc
-        packages:
-        - ghc-7.6.3
-        - cabal-install-1.18
-  - env: GHCVER=7.6.3 CABALVER=1.18 BACKEND=mongodb
-    addons:
-      apt:
-        sources:
-        - hvr-ghc
-        packages:
-        - ghc-7.6.3
-        - cabal-install-1.18
-    services:
-    - mongodb
-  - env: GHCVER=7.6.3 CABALVER=1.18 BACKEND=postgresql
-    addons:
-      postgresql: "9.4"
-      apt:
-        sources:
-        - hvr-ghc
-        packages:
-        - ghc-7.6.3
-        - cabal-install-1.18
-  - env: GHCVER=7.6.3 CABALVER=1.18 BACKEND=mysql
-    addons:
-      apt:
-        sources:
-        - hvr-ghc
-        packages:
-        - ghc-7.6.3
-        - cabal-install-1.18
-    services:
-    - mysql
+  - env: ARGS="--resolver lts-2" BACKEND=none
+  - env: ARGS="--resolver lts-2" BACKEND=sqlite
+  - env: ARGS="--resolver lts-2" BACKEND=mongodb
+  - env: ARGS="--resolver lts-2" BACKEND=postgresql
+  - env: ARGS="--resolver lts-2" BACKEND=mysql
 
-  - env: GHCVER=7.8.4 CABALVER=1.18 BACKEND=none
-    addons:
-      apt:
-        sources:
-        - hvr-ghc
-        packages:
-        - ghc-7.8.4
-        - cabal-install-1.18
-        - libzookeeper-mt-dev
-        - zookeeperd
-  - env: GHCVER=7.8.4 CABALVER=1.18 BACKEND=sqlite
-    addons:
-      apt:
-        sources:
-        - hvr-ghc
-        packages:
-        - ghc-7.8.4
-        - cabal-install-1.18
-  - env: GHCVER=7.8.4 CABALVER=1.18 BACKEND=mongodb
-    addons:
-      apt:
-        sources:
-        - hvr-ghc
-        packages:
-        - ghc-7.8.4
-        - cabal-install-1.18
-    services:
-    - mongodb
-  - env: GHCVER=7.8.4 CABALVER=1.18 BACKEND=postgresql
-    addons:
-      postgresql: "9.4"
-      apt:
-        sources:
-        - hvr-ghc
-        packages:
-        - ghc-7.8.4
-        - cabal-install-1.18
-  - env: GHCVER=7.8.4 CABALVER=1.18 BACKEND=mysql
-    addons:
-      apt:
-        sources:
-        - hvr-ghc
-        packages:
-        - ghc-7.8.4
-        - cabal-install-1.18
-    services:
-    - mysql
+  - env: ARGS="--resolver lts-6" BACKEND=none
+  - env: ARGS="--resolver lts-6" BACKEND=sqlite
+  - env: ARGS="--resolver lts-6" BACKEND=mongodb
+  - env: ARGS="--resolver lts-6" BACKEND=postgresql
+  - env: ARGS="--resolver lts-6" BACKEND=mysql
 
-  - env: GHCVER=7.10.2 CABALVER=1.22 BACKEND=none
-    addons:
-      apt:
-        sources:
-        - hvr-ghc
-        packages:
-        - ghc-7.10.2
-        - cabal-install-1.22
-        - libzookeeper-mt-dev
-        - zookeeperd
-  - env: GHCVER=7.10.2 CABALVER=1.22 BACKEND=sqlite
-    addons:
-      apt:
-        sources:
-        - hvr-ghc
-        packages:
-        - ghc-7.10.2
-        - cabal-install-1.22
-  - env: GHCVER=7.10.2 CABALVER=1.22 BACKEND=mongodb
-    addons:
-      apt:
-        sources:
-        - hvr-ghc
-        packages:
-        - ghc-7.10.2
-        - cabal-install-1.22
-    services:
-    - mongodb
-  - env: GHCVER=7.10.2 CABALVER=1.22 BACKEND=postgresql
-    addons:
-      postgresql: "9.4"
-      apt:
-        sources:
-        - hvr-ghc
-        packages:
-        - ghc-7.10.2
-        - cabal-install-1.22
-  - env: GHCVER=7.10.2 CABALVER=1.22 BACKEND=mysql
-    addons:
-      apt:
-        sources:
-        - hvr-ghc
-        packages:
-        - ghc-7.10.2
-        - cabal-install-1.22
-    services:
-    - mysql
-
-  - env: GHCVER=head CABALVER=head BACKEND=none
-    addons:
-      apt:
-        sources:
-        - hvr-ghc
-        packages:
-        - ghc-head
-        - cabal-install-head
-        - libzookeeper-mt-dev
-        - zookeeperd
-
-  allow_failures:
-  - env: GHCVER=head CABALVER=head BACKEND=none
-
-  # See: https://github.com/yesodweb/persistent/issues/460
-  - env: GHCVER=7.6.3 CABALVER=1.18 BACKEND=sqlite
-
-  # 7.6.3. Probably aeson-extra needs to loosen a lower bounds
-  - env: GHCVER=7.6.3 CABALVER=1.18 BACKEND=none
-  - env: GHCVER=7.6.3 CABALVER=1.18 BACKEND=mongodb
-  - env: GHCVER=7.6.3 CABALVER=1.18 BACKEND=postgresql
-  - env: GHCVER=7.6.3 CABALVER=1.18 BACKEND=mysql
+  - env: ARGS="" BACKEND=none
+  - env: ARGS="" BACKEND=sqlite
+  - env: ARGS="" BACKEND=mongodb
+  - env: ARGS="" BACKEND=postgresql
+  - env: ARGS="" BACKEND=mysql
 
 before_install:
-- travis_retry /opt/cabal/$CABALVER/bin/cabal update
+# Download and unpack the stack executable
+- mkdir -p ~/.local/bin
+- export PATH=$HOME/.local/bin:/opt/cabal/1.24/bin:$PATH
+- travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
 
 script: travis/run.sh
 
 cache:
   directories:
-  - $HOME/.cabal
-  - $HOME/.ghc
+  - $HOME/.stack
 
 
 # zookeeper doesn't seem to work any more
