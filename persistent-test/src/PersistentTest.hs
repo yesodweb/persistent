@@ -129,6 +129,7 @@ share [mkPersist persistSettings,  mkMigrate "testMigrate", mkDeleteCascade pers
     email Text
     attr Text
     extra Text
+    age Int      
     UniqueUpsert email
     deriving Eq Show
 
@@ -496,37 +497,52 @@ specs = describe "persistent" $ do
 
   describe "upsert" $ do
     it "adds a new row with no updates" $ db $ do
-        Entity _ u <- upsert (Upsert "a" "new" "") [UpsertAttr =. "update"]
+        Entity _ u <- upsert (Upsert "a" "new" "" 2) [UpsertAttr =. "update"]
         c <- count ([] :: [Filter Upsert])
         c @== 1
         upsertAttr u @== "new"
     it "keeps the existing row" $ db $ do
 #ifdef WITH_MONGODB
-        initial <- insertEntity (Upsert "foo" "initial" "")
-        update' <- upsert (Upsert "foo" "update" "") []
+        initial <- insertEntity (Upsert "foo" "initial" "" 2)
+        update' <- upsert (Upsert "foo" "update" "" 3) []
         update' @== initial      
 #else
-        initial <- insertEntity (Upsert "a" "initial" "")
-        update' <- upsert (Upsert "a" "update" "") []
+        initial <- insertEntity (Upsert "a" "initial" "" 1)
+        update' <- upsert (Upsert "a" "update" "" 2) []
         update' @== initial
 #endif                        
-    it "updates an existing row" $ db $ do
+    it "updates an existing row - assignment" $ db $ do
 #ifdef WITH_MONGODB
-        initial <- insertEntity (Upsert "cow" "initial" "extra")
+        initial <- insertEntity (Upsert "cow" "initial" "extra" 1)
         update' <-
-            upsert (Upsert "cow" "wow" "such unused") [UpsertAttr =. "update"]
+            upsert (Upsert "cow" "wow" "such unused" 2) [UpsertAttr =. "update"]
         ((==@) `on` entityKey) initial update'
         upsertAttr (entityVal update') @== "update"
         upsertExtra (entityVal update') @== "extra"
 #else
-        initial <- insertEntity (Upsert "a" "initial" "extra")
+        initial <- insertEntity (Upsert "a" "initial" "extra" 1)
         update' <-
-            upsert (Upsert "a" "wow" "such unused") [UpsertAttr =. "update"]
+            upsert (Upsert "a" "wow" "such unused" 2) [UpsertAttr =. "update"]
         ((==@) `on` entityKey) initial update'
         upsertAttr (entityVal update') @== "update"
         upsertExtra (entityVal update') @== "extra"
 #endif
-
+    it "updates existing row - addition " $ db $ do
+#ifdef WITH_MONGODB
+        initial <- insertEntity (Upsert "a1" "initial" "extra" 2)
+        update' <-
+            upsert (Upsert "a1" "wow" "such unused" 2) [UpsertAge +=. 3]
+        ((==@) `on` entityKey) initial update'
+        upsertAge (entityVal update') @== 5
+        upsertExtra (entityVal update') @== "extra"
+#else
+        initial <- insertEntity (Upsert "a" "initial" "extra" 2)
+        update' <-
+            upsert (Upsert "a" "wow" "such unused" 2) [UpsertAge +=. 3]
+        ((==@) `on` entityKey) initial update'
+        upsertAge (entityVal update') @== 5
+        upsertExtra (entityVal update') @== "extra"
+#endif
 
   describe "upsertBy" $ do
     let uniqueEmail = UniqueUpsertBy "a"
