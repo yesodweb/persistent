@@ -30,13 +30,6 @@ defaultUpsert record updates = do
     uniqueKey <- onlyUnique record
     upsertBy uniqueKey record updates
 
-escape :: DBName -> T.Text
-escape (DBName s) = T.pack $ '"' : escapeQuote (T.unpack s) ++ "\""
-  where
-    escapeQuote "" = ""
-    escapeQuote ('"':xs) = "\"\"" ++ escapeQuote xs
-    escapeQuote (x:xs) = x : escapeQuote xs
-
 instance PersistUniqueWrite SqlBackend where
     upsert record updates = do
       conn <- ask
