@@ -1,1 +1,1 @@
-*.hs linguist-language=Haskell
+**/*.hs linguist-language=Haskell
