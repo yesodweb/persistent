@@ -1,1 +1,1 @@
-**/*.hs linguist-language=Haskell
+persistent-sqlite/cbits/* linguist-vendored
