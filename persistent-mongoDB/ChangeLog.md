@@ -1,3 +1,7 @@
+## 2.6
+
+# Fix upsert behavior [#613](https://github.com/yesodweb/persistent/issues/613)
+
 ## 2.5
 
 * changes for read/write typeclass split

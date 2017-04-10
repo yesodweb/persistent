@@ -73,19 +73,16 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- | Update based on a uniqueness constraint or insert:
     --
     -- * insert the new record if it does not exist;
-    -- * update the existing record that matches the uniqueness contraint.
+    -- * If the record exists (matched via it's uniqueness constraint), then update the existing record with the parameters which is passed on as list to the function.
     --
     -- Throws an exception if there is more than 1 uniqueness contraint.
     upsert
         :: (MonadIO m, PersistRecordBackend record backend)
         => record          -- ^ new record to insert
-        -> [Update record]
-        ->
-           -- ^ updates to perform if the record already exists (leaving
-           -- this empty is the equivalent of performing a 'repsert' on a
-           -- unique key)
-           ReaderT backend m (Entity record)
-    -- ^ the record in the database after the operation
+        -> [Update record]  -- ^ updates to perform if the record already exists (leaving
+                            -- this empty is the equivalent of performing a 'repsert' on a
+                            -- unique key)
+        -> ReaderT backend m (Entity record) -- ^ the record in the database after the operation
     upsert record updates = do
         uniqueKey <- onlyUnique record
         upsertBy uniqueKey record updates
@@ -95,15 +92,12 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- * update the existing record that matches the given uniqueness contraint.
     upsertBy
         :: (MonadIO m, PersistRecordBackend record backend)
-        => Unique record -- ^ uniqueness constraint to find by
+        => Unique record   -- ^ uniqueness constraint to find by
         -> record          -- ^ new record to insert
-        -> [Update record]
-        ->
-           -- ^ updates to perform if the record already exists (leaving
-           -- this empty is the equivalent of performing a 'repsert' on a
-           -- unique key)
-           ReaderT backend m (Entity record)
-    -- ^ the record in the database after the operation
+        -> [Update record] -- ^ updates to perform if the record already exists (leaving
+                           -- this empty is the equivalent of performing a 'repsert' on a
+                           -- unique key)
+        -> ReaderT backend m (Entity record) -- ^ the record in the database after the operation
     upsertBy uniqueKey record updates = do
         mrecord <- getBy uniqueKey
         maybe (insertEntity record) (`updateGetEntity` updates) mrecord
