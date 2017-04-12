@@ -158,38 +158,16 @@ open' modConn cstr logFunc = do
     modConn conn
     openSimpleConn logFunc conn
 
--- | Gets the PostgreSQL server version
-getServerVersion :: PG.Connection -> IO (Maybe Double)
-getServerVersion conn = do
-  [PG.Only version] <- PG.query_ conn "show server_version";
-  let version' = rational version
-  --- λ> rational "9.8.3"
-  --- Right (9.8,".3")
-  --- λ> rational "9.8.3.5"
-  --- Right (9.8,".3.5")
-  case version' of
-    Right (a,_) -> return $ Just a
-    Left err -> throwIO $ PostgresServerVersionError err
-
--- | Choose upsert sql generation function based on postgresql version.
--- PostgreSQL version >= 9.5 supports native upsert feature,
--- so depending upon that we have to choose how the sql query is generated.
-upsertFunction :: Double -> Maybe (EntityDef -> Text -> Text)
-upsertFunction version = if (version >= 9.5)
-                         then Just upsertSql'
-                         else Nothing
-
 -- | Generate a 'Connection' from a 'PG.Connection'
 openSimpleConn :: (IsSqlBackend backend) => LogFunc -> PG.Connection -> IO backend
 openSimpleConn logFunc conn = do
     smap <- newIORef $ Map.empty
-    serverVersion <- getServerVersion conn
     return . mkPersistBackend $ SqlBackend
         { connPrepare    = prepare' conn
         , connStmtMap    = smap
         , connInsertSql  = insertSql'
         , connInsertManySql = Just insertManySql'
-        , connUpsertSql = maybe Nothing upsertFunction serverVersion
+        , connUpsertSql  = Nothing
         , connClose      = PG.close conn
         , connMigrateSql = migrate'
         , connBegin      = const $ PG.begin    conn
