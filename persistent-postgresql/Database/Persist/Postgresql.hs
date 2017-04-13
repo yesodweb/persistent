@@ -16,6 +16,7 @@ module Database.Persist.Postgresql
     , withPostgresqlConn
     , createPostgresqlPool
     , createPostgresqlPoolModified
+    , createPostgresqlPoolModifiedWithVersion
     , module Database.Persist.Sql
     , ConnectionString
     , PostgresConf (..)
@@ -112,7 +113,7 @@ withPostgresqlPool :: (MonadBaseControl IO m, MonadLogger m, MonadIO m, IsSqlBac
                    -- ^ Action to be executed that uses the
                    -- connection pool.
                    -> m a
-withPostgresqlPool ci = withSqlPool $ open' (const $ return ()) ci
+withPostgresqlPool ci = withSqlPool $ open' (const $ return ()) getServerVersion ci
 
 
 -- | Create a PostgreSQL connection pool.  Note that it's your
@@ -142,32 +143,67 @@ createPostgresqlPoolModified
     -> ConnectionString -- ^ Connection string to the database.
     -> Int -- ^ Number of connections to be kept open in the pool.
     -> m (Pool backend)
-createPostgresqlPoolModified modConn ci = createSqlPool $ open' modConn ci
+createPostgresqlPoolModified = createPostgresqlPoolModifiedWithVersion getServerVersion
+
+createPostgresqlPoolModifiedWithVersion
+    :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsSqlBackend backend)
+    => (PG.Connection -> IO (Maybe Double)) -- ^ action to perform to get the server version
+    -> (PG.Connection -> IO ()) -- ^ action to perform after connection is created
+    -> ConnectionString -- ^ Connection string to the database.
+    -> Int -- ^ Number of connections to be kept open in the pool.
+    -> m (Pool backend)
+createPostgresqlPoolModifiedWithVersion getVer modConn ci =
+  createSqlPool $ open' modConn getVer ci
 
 -- | Same as 'withPostgresqlPool', but instead of opening a pool
 -- of connections, only one connection is opened.
 withPostgresqlConn :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsSqlBackend backend)
                    => ConnectionString -> (backend -> m a) -> m a
-withPostgresqlConn = withSqlConn . open' (const $ return ())
+withPostgresqlConn = withSqlConn . open' (const $ return ()) getServerVersion
 
 open'
     :: (IsSqlBackend backend)
-    => (PG.Connection -> IO ()) -> ConnectionString -> LogFunc -> IO backend
-open' modConn cstr logFunc = do
+    => (PG.Connection -> IO ())
+    -> (PG.Connection -> IO (Maybe Double))
+    -> ConnectionString -> LogFunc -> IO backend
+open' modConn getVer cstr logFunc = do
     conn <- PG.connectPostgreSQL cstr
     modConn conn
-    openSimpleConn logFunc conn
+    ver <- getVer conn
+    openSimpleConn logFunc ver conn
+
+-- | Gets the PostgreSQL server version
+getServerVersion :: PG.Connection -> IO (Maybe Double)
+getServerVersion conn = do
+  [PG.Only version] <- PG.query_ conn "show server_version";
+  let version' = rational version
+  --- λ> rational "9.8.3"
+  --- Right (9.8,".3")
+  --- λ> rational "9.8.3.5"
+  --- Right (9.8,".3.5")
+  case version' of
+    Right (a,_) -> return $ Just a
+    Left err -> throwIO $ PostgresServerVersionError err
+
+-- | Choose upsert sql generation function based on postgresql version.
+-- PostgreSQL version >= 9.5 supports native upsert feature,
+-- so depending upon that we have to choose how the sql query is generated.
+upsertFunction :: Double -> Maybe (EntityDef -> Text -> Text)
+upsertFunction version = if (version >= 9.5)
+                         then Just upsertSql'
+                         else Nothing
+
 
 -- | Generate a 'Connection' from a 'PG.Connection'
-openSimpleConn :: (IsSqlBackend backend) => LogFunc -> PG.Connection -> IO backend
-openSimpleConn logFunc conn = do
+openSimpleConn :: (IsSqlBackend backend) => LogFunc -> Maybe Double -> PG.Connection -> IO backend
+openSimpleConn logFunc serverVersion conn = do
     smap <- newIORef $ Map.empty
     return . mkPersistBackend $ SqlBackend
         { connPrepare    = prepare' conn
         , connStmtMap    = smap
         , connInsertSql  = insertSql'
         , connInsertManySql = Just insertManySql'
-        , connUpsertSql  = Nothing
+        , connUpsertSql  = maybe Nothing upsertFunction serverVersion
         , connClose      = PG.close conn
         , connMigrateSql = migrate'
         , connBegin      = const $ PG.begin    conn
