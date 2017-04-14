@@ -170,7 +170,8 @@ open' modConn getVer cstr logFunc = do
     conn <- PG.connectPostgreSQL cstr
     modConn conn
     ver <- getVer conn
-    openSimpleConn logFunc ver conn
+    smap <- newIORef $ Map.empty
+    return $ createBackend logFunc ver smap conn
 
 -- | Gets the PostgreSQL server version
 getServerVersion :: PG.Connection -> IO (Maybe Double)
@@ -195,10 +196,16 @@ upsertFunction version = if (version >= 9.5)
 
 
 -- | Generate a 'Connection' from a 'PG.Connection'
-openSimpleConn :: (IsSqlBackend backend) => LogFunc -> Maybe Double -> PG.Connection -> IO backend
-openSimpleConn logFunc serverVersion conn = do
+openSimpleConn :: (IsSqlBackend backend) => LogFunc -> PG.Connection -> IO backend
+openSimpleConn logFunc conn = do
     smap <- newIORef $ Map.empty
-    return . mkPersistBackend $ SqlBackend
+    serverVersion <- getServerVersion conn
+    return $ createBackend logFunc serverVersion smap conn
+
+createBackend :: IsSqlBackend backend => LogFunc -> Maybe Double
+              -> IORef (Map.Map Text Statement) -> PG.Connection -> backend
+createBackend logFunc serverVersion smap conn = do
+    mkPersistBackend $ SqlBackend
         { connPrepare    = prepare' conn
         , connStmtMap    = smap
         , connInsertSql  = insertSql'
