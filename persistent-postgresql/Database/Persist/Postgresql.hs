@@ -136,7 +136,7 @@ createPostgresqlPool = createPostgresqlPoolModified (const $ return ())
 --
 -- <https://groups.google.com/d/msg/yesodweb/qUXrEN_swEo/O0pFwqwQIdcJ>
 --
--- Since 2.1.3
+-- @since 2.1.3
 createPostgresqlPoolModified
     :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsSqlBackend backend)
     => (PG.Connection -> IO ()) -- ^ action to perform after connection is created
@@ -149,7 +149,7 @@ createPostgresqlPoolModified = createPostgresqlPoolModifiedWithVersion getServer
 -- the server version (to workaround an Amazon Redshift bug) and connection-specific tweaking
 -- (to change the schema).
 --
--- Since 2.6.2
+-- @since 2.6.2
 createPostgresqlPoolModifiedWithVersion
     :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsSqlBackend backend)
     => (PG.Connection -> IO (Maybe Double)) -- ^ action to perform to get the server version
