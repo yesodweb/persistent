@@ -145,6 +145,11 @@ createPostgresqlPoolModified
     -> m (Pool backend)
 createPostgresqlPoolModified = createPostgresqlPoolModifiedWithVersion getServerVersion
 
+-- | Same as other similarly-named functions in this module, but takes callbacks for obtaining
+-- the server version (to workaround an Amazon Redshift bug) and connection-specific tweaking
+-- (to change the schema).
+--
+-- Since 2.6.2
 createPostgresqlPoolModifiedWithVersion
     :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsSqlBackend backend)
     => (PG.Connection -> IO (Maybe Double)) -- ^ action to perform to get the server version
@@ -202,6 +207,8 @@ openSimpleConn logFunc conn = do
     serverVersion <- getServerVersion conn
     return $ createBackend logFunc serverVersion smap conn
 
+-- | Create the backend given a logging function, server version, mutable statement cell,
+-- and connection
 createBackend :: IsSqlBackend backend => LogFunc -> Maybe Double
               -> IORef (Map.Map Text Statement) -> PG.Connection -> backend
 createBackend logFunc serverVersion smap conn = do
