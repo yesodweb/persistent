@@ -1,6 +1,7 @@
-## 2.6
+## 2.6.0
 
-# Fix upsert behavior [#613](https://github.com/yesodweb/persistent/issues/613)
+* Fix upsert behavior [#613](https://github.com/yesodweb/persistent/issues/613)
+* Relax bounds for http-api-data
 
 ## 2.5
 
