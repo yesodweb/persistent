@@ -51,11 +51,12 @@ import qualified Data.Map as Map
 import Data.Maybe
 import Data.Either (partitionEithers)
 import Control.Arrow
-import Data.List (find, sort, groupBy)
+import Data.List (find, sort, groupBy, intersect)
 import Data.Function (on)
 import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Control.Monad.Logger (MonadLogger, runNoLoggingT)
+import Control.Monad (when)
 
 import qualified Data.IntMap as I
 
@@ -510,11 +511,42 @@ doesTableExist getter (DBName name) = do
     start' res = error $ "doesTableExist returned unexpected result: " ++ show res
     finish x = await >>= maybe (return x) (error "Too many rows returned in doesTableExist")
 
+hasPrivilege :: (Text -> IO Statement) -> DBName -> IO Bool
+hasPrivilege getter (DBName name) = do
+    stmt <- getter sql
+    with (stmtQuery stmt vals) ($$ start)
+  where
+    sql = "SELECT grantee, privilege_type FROM information_schema.role_table_grants "
+          <> "WHERE table_name = ? AND grantee = CURRENT_USER"
+    vals = [PersistText name]
+
+    isPersistText :: PersistValue -> Bool
+    isPersistText (PersistText _) = True
+    isPersistText _ = False
+                      
+    getPersistText :: PersistValue -> Text
+    getPersistText (PersistText x) = x
+    getPersistText _ = error "hasPrivilege: Unexpected return value"
+
+    minPrivileges = ["INSERT", "SELECT", "UPDATE", "DELETE", "TRUNCATE", 
+                     "REFERENCES"]
+    start = CL.consume >>= finish
+    finish xs = return (checkPrivilege xs)
+    dbPrivileges xs = map getPersistText $ filter isPersistText $ concat xs
+    checkPrivilege xs = length (dbPrivileges xs `intersect` minPrivileges) >= length minPrivileges
+
+exitOnInsufficientPrivilege :: (Text -> IO Statement) -> EntityDef -> IO ()
+exitOnInsufficientPrivilege getter entity = do
+  privilege <- hasPrivilege getter name                               
+  when (not privilege) (error "Exiting: You have insufficient privilege for migration.")
+  where 
+    name = entityDB entity
+      
 migrate' :: [EntityDef]
          -> (Text -> IO Statement)
          -> EntityDef
          -> IO (Either [Text] [(Bool, Text)])
-migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
+migrate' allDefs getter entity =  exitOnInsufficientPrivilege getter entity >> (fmap (map showAlterDb) <$> do
     old <- getColumns getter entity
     case partitionEithers old of
         ([], old'') -> do
@@ -523,7 +555,7 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
                     then doesTableExist getter name
                     else return True
             return $ Right $ migrationText exists old''
-        (errs, _) -> return $ Left errs
+        (errs, _) -> return $ Left errs)
   where
     name = entityDB entity
     migrationText exists old'' =
