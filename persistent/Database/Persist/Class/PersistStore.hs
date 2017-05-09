@@ -238,7 +238,7 @@ insertEntity e = do
 
 -- | Like @get@, but returns the complete @Entity@.
 getEntity ::
-    ( PersistStoreWrite backend
+    ( PersistStoreRead backend
     , PersistRecordBackend e backend
     , MonadIO m
     ) => Key e -> ReaderT backend m (Maybe (Entity e))
