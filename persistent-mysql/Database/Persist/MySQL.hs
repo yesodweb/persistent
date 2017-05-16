@@ -457,7 +457,7 @@ getColumns connectInfo getter def = do
     stmtIdClmn <- getter "SELECT COLUMN_NAME, \
                                  \IS_NULLABLE, \
                                  \DATA_TYPE, \
-                                 \IF(IS_NULLABLE='YES', COALESCE(COLUMN_DEFAULT, 'NULL'), COLUMN_DEFAULT) \
+                                 \COLUMN_DEFAULT \
                           \FROM INFORMATION_SCHEMA.COLUMNS \
                           \WHERE TABLE_SCHEMA = ? \
                             \AND TABLE_NAME   = ? \
@@ -473,7 +473,7 @@ getColumns connectInfo getter def = do
                                \CHARACTER_MAXIMUM_LENGTH, \
                                \NUMERIC_PRECISION, \
                                \NUMERIC_SCALE, \
-                               \IF(IS_NULLABLE='YES', COALESCE(COLUMN_DEFAULT, 'NULL'), COLUMN_DEFAULT) \
+                               \COLUMN_DEFAULT \
                         \FROM INFORMATION_SCHEMA.COLUMNS \
                         \WHERE TABLE_SCHEMA = ? \
                           \AND TABLE_NAME   = ? \
@@ -691,10 +691,12 @@ findAlters tblName allDefs col@(Column name isNull type_ def _defConstraintName 
                 modType | showSqlType type_ maxLen False `ciEquals` showSqlType type_' maxLen' False && isNull == isNull' = []
                         | otherwise = [(name, Change col)]
                 -- Default value
+                -- Avoid DEFAULT NULL, since it is always unnecessary, and is an error for text/blob fields
                 modDef | def == def' = []
                        | otherwise   = case def of
                                          Nothing -> [(name, NoDefault)]
-                                         Just s -> [(name, Default $ T.unpack s)]
+                                         Just s -> if T.toUpper s == "NULL" then []
+                                                   else [(name, Default $ T.unpack s)]
             in ( refDrop ++ modType ++ modDef ++ refAdd
                , filter ((name /=) . cName) cols )
 
@@ -715,7 +717,9 @@ showColumn (Column n nu t def _defConstraintName maxLen ref) = concat
     , if nu then "NULL" else "NOT NULL"
     , case def of
         Nothing -> ""
-        Just s -> " DEFAULT " ++ T.unpack s
+        Just s -> -- Avoid DEFAULT NULL, since it is always unnecessary, and is an error for text/blob fields
+                  if T.toUpper s == "NULL" then ""
+                  else " DEFAULT " ++ T.unpack s
     , case ref of
         Nothing -> ""
         Just (s, _) -> " REFERENCES " ++ escapeDBName s
