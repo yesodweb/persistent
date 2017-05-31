@@ -20,7 +20,7 @@ import Control.Arrow
 import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Error (ErrorT(..))
+import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (runReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
 import Data.Monoid ((<>))
@@ -35,7 +35,6 @@ import Data.List (find, intercalate, sort, groupBy)
 import Data.Pool (Pool)
 import Data.Text (Text, pack)
 import qualified Data.Text.IO as T
-import Data.Word (Word32)
 import Text.Read (readMaybe)
 import System.Environment (getEnvironment)
 import Data.Acquire (Acquire, mkAcquire, with)
@@ -125,6 +124,7 @@ open' ci logFunc = do
         , connRDBMS      = "mysql"
         , connLimitOffset = decorateSQLWithLimitOffset "LIMIT 18446744073709551615"
         , connLogFunc    = logFunc
+        , connMaxParams = Nothing
         }
 
 -- | Prepare a query.  We don't support prepared statements, but
@@ -531,7 +531,7 @@ getColumn connectInfo getter tname [ PersistText cname
                                    , colScale
                                    , default'] =
     fmap (either (Left . pack) Right) $
-    runErrorT $ do
+    runExceptT $ do
       -- Default value
       default_ <- case default' of
                     PersistNull   -> return Nothing
@@ -691,10 +691,12 @@ findAlters tblName allDefs col@(Column name isNull type_ def _defConstraintName 
                 modType | showSqlType type_ maxLen False `ciEquals` showSqlType type_' maxLen' False && isNull == isNull' = []
                         | otherwise = [(name, Change col)]
                 -- Default value
+                -- Avoid DEFAULT NULL, since it is always unnecessary, and is an error for text/blob fields
                 modDef | def == def' = []
                        | otherwise   = case def of
                                          Nothing -> [(name, NoDefault)]
-                                         Just s -> [(name, Default $ T.unpack s)]
+                                         Just s -> if T.toUpper s == "NULL" then []
+                                                   else [(name, Default $ T.unpack s)]
             in ( refDrop ++ modType ++ modDef ++ refAdd
                , filter ((name /=) . cName) cols )
 
@@ -715,7 +717,9 @@ showColumn (Column n nu t def _defConstraintName maxLen ref) = concat
     , if nu then "NULL" else "NOT NULL"
     , case def of
         Nothing -> ""
-        Just s -> " DEFAULT " ++ T.unpack s
+        Just s -> -- Avoid DEFAULT NULL, since it is always unnecessary, and is an error for text/blob fields
+                  if T.toUpper s == "NULL" then ""
+                  else " DEFAULT " ++ T.unpack s
     , case ref of
         Nothing -> ""
         Just (s, _) -> " REFERENCES " ++ escapeDBName s
@@ -942,9 +946,9 @@ mockMigrate _connectInfo allDefs _getter val = do
     let name = entityDB val
     let (newcols, udefs, fdefs) = mkColumns allDefs val
     let udspair = map udToPair udefs
-    case ([], [], partitionEithers []) of
+    case () of
       -- Nothing found, create everything
-      ([], [], _) -> do
+      () -> do
         let uniques = flip concatMap udspair $ \(uname, ucols) ->
                       [ AlterTable name $
                         AddUniqueConstraint uname $
@@ -952,11 +956,12 @@ mockMigrate _connectInfo allDefs _getter val = do
         let foreigns = do
               Column { cName=cname, cReference=Just (refTblName, _a) } <- newcols
               return $ AlterColumn name (refTblName, addReference allDefs (refName name cname) refTblName cname)
-                 
-        let foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef)) 
+
+        let foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef))
                                         in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignRefTableDBName fdef) (foreignConstraintNameDBName fdef) childfields parentfields)) fdefs
-        
+
         return $ Right $ map showAlterDb $ (addTable newcols val): uniques ++ foreigns ++ foreignsAlt
+    {- FIXME redundant, why is this here? The whole case expression is weird
       -- No errors and something found, migrate
       (_, _, ([], old')) -> do
         let excludeForeignKeys (xs,ys) = (map (\c -> case cReference c of
@@ -970,6 +975,7 @@ mockMigrate _connectInfo allDefs _getter val = do
         return $ Right $ map showAlterDb $ acs' ++ ats'
       -- Errors
       (_, _, (errs, _)) -> return $ Left errs
+    -}
 
       where
         findTypeAndMaxLen tblName col = let (col', ty) = findTypeOfColumn allDefs tblName col
@@ -1002,7 +1008,9 @@ mockMigration mig = do
                              connNoLimit = undefined,
                              connRDBMS = undefined,
                              connLimitOffset = undefined,
-                             connLogFunc = undefined}
+                             connLogFunc = undefined,
+                             connUpsertSql = undefined,
+                             connMaxParams = Nothing}
       result = runReaderT . runWriterT . runWriterT $ mig 
   resp <- result sqlbackend
   mapM_ T.putStrLn $ map snd $ snd resp

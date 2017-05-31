@@ -3,9 +3,11 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE OverloadedStrings #-}
-#ifndef NO_OVERLAP
+
+#if !MIN_VERSION_base(4,8,0)
 {-# LANGUAGE OverlappingInstances #-}
 #endif
+
 module Database.Persist.Class.PersistField
     ( PersistField (..)
     , SomePersistField (..)
@@ -14,12 +16,17 @@ module Database.Persist.Class.PersistField
 
 import Control.Arrow (second)
 import Database.Persist.Types.Base
-import Data.Time (Day(..), TimeOfDay, UTCTime, parseTime)
+import Data.Time (Day(..), TimeOfDay, UTCTime,
+#if MIN_VERSION_time(1,5,0)
+    parseTimeM)
+#else
+    parseTime)
+#endif
 #ifdef HIGH_PRECISION_DATE
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 #endif
 import Data.ByteString.Char8 (ByteString, unpack, readInt)
-import Control.Applicative
+import Control.Applicative as A
 import Data.Int (Int8, Int16, Int32, Int64)
 import Data.Word (Word, Word8, Word16, Word32, Word64)
 import Data.Text (Text)
@@ -56,8 +63,6 @@ import System.Locale (defaultTimeLocale)
 
 #if MIN_VERSION_base(4,8,0)
 import Numeric.Natural (Natural)
-#else
-import Control.Applicative ((<$>))
 #endif
 
 -- | A value which can be marshalled to and from a 'PersistValue'.
@@ -66,7 +71,11 @@ class PersistField a where
     fromPersistValue :: PersistValue -> Either T.Text a
 
 #ifndef NO_OVERLAP
-instance PersistField String where
+#if MIN_VERSION_base(4,8,0)
+instance {-# OVERLAPPING #-} PersistField [Char] where
+#else
+instance PersistField [Char] where
+#endif
     toPersistValue = PersistText . T.pack
     fromPersistValue (PersistText s) = Right $ T.unpack s
     fromPersistValue (PersistByteString bs) =
@@ -88,7 +97,7 @@ instance PersistField String where
 instance PersistField ByteString where
     toPersistValue = PersistByteString
     fromPersistValue (PersistByteString bs) = Right bs
-    fromPersistValue x = T.encodeUtf8 <$> fromPersistValue x
+    fromPersistValue x = T.encodeUtf8 A.<$> fromPersistValue x
 
 instance PersistField T.Text where
     toPersistValue = PersistText
@@ -144,7 +153,7 @@ instance PersistField Int64 where
                                                xs -> error $ "PersistField Int64 failed parsing PersistByteString xs["++show xs++"] i["++show bs++"]"
     fromPersistValue x = Left $ T.pack $ "int64 Expected Integer, received: " ++ show x
 
-instance PersistField Word where
+instance PersistField Data.Word.Word where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ T.pack $ "Expected Word, received: " ++ show x
@@ -249,9 +258,13 @@ instance PersistField UTCTime where
             _ ->
                 case parse8601 $ T.unpack t of
                     Nothing -> Left $ T.pack $ "Expected UTCTime, received " ++ show x
-                    Just x -> Right x
+                    Just x' -> Right x'
       where
+#if MIN_VERSION_time(1,5,0)
+        parse8601 = parseTimeM True defaultTimeLocale "%FT%T%Q"
+#else
         parse8601 = parseTime defaultTimeLocale "%FT%T%Q"
+#endif
     fromPersistValue x@(PersistByteString s) =
         case reads $ unpack s of
             (d, _):_ -> Right d
@@ -271,7 +284,11 @@ instance PersistField a => PersistField (Maybe a) where
     fromPersistValue PersistNull = Right Nothing
     fromPersistValue x = Just <$> fromPersistValue x
 
+#if MIN_VERSION_base(4,8,0)
+instance {-# OVERLAPPABLE #-} PersistField a => PersistField [a] where
+#else
 instance PersistField a => PersistField [a] where
+#endif
     toPersistValue = PersistList . fmap toPersistValue
     fromPersistValue (PersistList l) = fromPersistList l
     fromPersistValue (PersistText t) = fromPersistValue (PersistByteString $ TE.encodeUtf8 t)

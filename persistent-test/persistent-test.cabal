@@ -89,14 +89,13 @@ library
                    , HUnit
                    , hspec >= 1.12.1
                    , hspec-expectations
-                   , file-location >= 0.4
                    , template-haskell
                    , aeson                    >= 0.7
                    , aeson-compat             >= 0.3.2.0   && < 0.4
                    , lifted-base              >= 0.1
                    , network
                    , path-pieces              >= 0.1
-                   , http-api-data            >= 0.2       && < 0.3
+                   , http-api-data            >= 0.2
                    , text                     >= 0.8
                    , transformers             >= 0.2.1
                    , monad-control            >= 0.3
@@ -136,7 +135,7 @@ library
      cpp-options: -DNO_OVERLAP
 
    if !flag(postgresql) && !flag(mysql) && !flag(mongodb) && !flag(zookeeper)
-      build-depends: persistent-sqlite
+      build-depends: persistent-sqlite     >= 2.6.1.1
      cpp-options: -DWITH_SQLITE -DDEBUG
 
    if flag(postgresql)
@@ -173,8 +172,7 @@ library
   default-language: Haskell2010
 
 
-test-suite test
-  type:          exitcode-stdio-1.0
+executable persistent-test
   main-is:       main.hs
   hs-source-dirs: test
   default-language: Haskell2010
