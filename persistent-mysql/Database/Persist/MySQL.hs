@@ -1006,3 +1006,119 @@ mockMigration mig = do
       result = runReaderT . runWriterT . runWriterT $ mig 
   resp <- result sqlbackend
   mapM_ T.putStrLn $ map snd $ snd resp
+
+-- | MySQL specific 'upsert'. This will prevent multiple queries, when one will
+-- do.
+insertOnDuplicateKeyUpdate
+    :: ( PersistEntityBackend record ~ BaseBackend backend
+       , PersistEntity record
+       , MonadIO m
+       , PersistStore backend
+       , backend ~ SqlBackend
+       )
+    => record
+    -> [Update record]
+    -> ReaderT backend m ()
+insertOnDuplicateKeyUpdate record =
+  bulkInsertOnDuplicateKeyUpdate [record] []
+
+-- | This wraps values of an Entity's 'EntityField', making them have the same
+-- type. This allows them to be put in lists.
+data SomeField record where
+    SomeField :: EntityField record typ -> SomeField record
+
+-- | Do a bulk insert on the given records in the first parameter. In the event
+-- that a key conflicts with a record currently in the database, the second and
+-- third parameters determine what will happen.
+--
+-- The second parameter is a list of fields to copy from the original value.
+-- This allows you to specify that, when a collision occurs, you'll just update
+-- the value in the database with the field values that you inserted.
+--
+-- The third parameter is a list of updates to perform that are independent of
+-- the value that is provided. You can use this to increment a counter value.
+-- These updates only occur if the original record is present in the database.
+bulkInsertOnDuplicateKeyUpdate
+    :: forall record m backend.
+       ( PersistEntityBackend record ~ BaseBackend backend
+       , backend ~ SqlBackend
+       , PersistEntity record
+       , MonadIO m
+       , PersistStore backend
+       )
+    => [record] -- ^ A list of the records you want to insert, or update
+    -> [SomeField record] -- ^ A list of the fields you want to copy over.
+    -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
+    -> ReaderT backend m ()
+bulkInsertOnDuplicateKeyUpdate [] _ _ = pure ()
+bulkInsertOnDuplicateKeyUpdate records [] [] = insertMany_ records
+bulkInsertOnDuplicateKeyUpdate records fieldValues updates =
+  uncurry rawExecute $ mkBulkInsertQuery records fieldValues updates
+
+-- | This creates the query for 'bulkInsertOnDuplicateKeyUpdate'. It will give
+-- garbage results if you don't provide a list of either fields to copy or
+-- fields to update.
+mkBulkInsertQuery
+    :: forall record m backend.
+    ( PersistEntityBackend record ~ BaseBackend backend
+    , backend ~ SqlBackend
+    , PersistEntity record
+    , PersistStore backend
+    )
+    => [record] -- ^ A list of the records you want to insert, or update
+    -> [SomeField record] -- ^ A list of the fields you want to copy over.
+    -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
+    -> (Text, [PersistValue])
+mkBulkInsertQuery records fieldValues updates =
+    (q, recordValues <> updsValues)
+  where
+    fieldDefs = map (\case SomeField rec -> persistFieldDef rec) fieldValues
+    updateFieldNames = map (escapeDBName . fieldDB) fieldDefs
+    entityDef' = entityDef (Nothing :: Maybe record)
+    entityAttrs = entityFields entityDef'
+    entityFieldNames = map (escapeDBName . fieldDB) entityAttrs
+    tableName = escapeDBName . entityDB $ entityDef'
+    recordValues = concatMap (map toPersistValue . toPersistFields) records
+    recordPlaceholders = commaSeparated $ map (parenWrapped . commaSeparated . makePlaceholders . toPersistFields) records
+    fieldSets = map (\n -> mconcat [n, "=VALUES(", n, ")"]) updateFieldNames
+    upds = map mkUpdateText updates
+    updsValues = map (\Update{..} -> toPersistValue updateValue) updates
+    q = mconcat
+        [ "INSERT INTO "
+        , tableName
+        , " ("
+        , commaSeparated entityFieldNames
+        , ") "
+        , " VALUES "
+        , recordPlaceholders
+        , " ON DUPLICATE KEY UPDATE SET "
+        , commaSeparated (fieldSets <> upds)
+        ]
+
+makePlaceholders :: [a] -> [Text]
+makePlaceholders = map (const "?")
+
+-- | Vendored from @persistent@.
+mkUpdateText :: PersistEntity record => Update record -> Text
+mkUpdateText x =
+  case updateUpdate x of
+    Assign -> n <> "=?"
+    Add -> mconcat [n, "=", n, "+?"]
+    Subtract -> mconcat [n, "=", n, "-?"]
+    Multiply -> mconcat [n, "=", n, "*?"]
+    Divide -> mconcat [n, "=", n, "/?"]
+    BackendSpecificUpdate up ->
+      error . unpack $ "BackendSpecificUpdate" <> up <> "not supported"
+  where
+    n = escapeDBName . fieldDB . updateFieldDef $ x
+
+commaSeparated :: [Text] -> Text
+commaSeparated = T.intercalate ", "
+
+parenWrapped :: Text -> Text
+parenWrapped = ("(" <>) . (<> ")")
+
+-- | Gets the 'FieldDef' for an 'Update'. Vendored from @persistent@.
+updateFieldDef :: PersistEntity v => Update v -> FieldDef
+updateFieldDef (Update f _ _) = persistFieldDef f
+updateFieldDef BackendUpdate {} = error "updateFieldDef did not expect BackendUpdate"
