@@ -1023,22 +1023,22 @@ mockMigration mig = do
 -- | MySQL specific 'upsert'. This will prevent multiple queries, when one will
 -- do.
 insertOnDuplicateKeyUpdate
-    :: ( PersistEntityBackend record ~ BaseBackend backend
-       , PersistEntity record
-       , MonadIO m
-       , PersistStore backend
-       , backend ~ SqlBackend
-       )
-    => record
-    -> [Update record]
-    -> SqlPersistT m ()
+  :: ( PersistEntityBackend record ~ BaseBackend backend
+     , PersistEntity record
+     , MonadIO m
+     , PersistStore backend
+     , backend ~ SqlBackend
+     )
+  => record
+  -> [Update record]
+  -> SqlPersistT m ()
 insertOnDuplicateKeyUpdate record =
   bulkInsertOnDuplicateKeyUpdate [record] []
 
 -- | This wraps values of an Entity's 'EntityField', making them have the same
 -- type. This allows them to be put in lists.
 data SomeField record where
-    SomeField :: EntityField record typ -> SomeField record
+  SomeField :: EntityField record typ -> SomeField record
 
 -- | Do a bulk insert on the given records in the first parameter. In the event
 -- that a key conflicts with a record currently in the database, the second and
@@ -1052,16 +1052,16 @@ data SomeField record where
 -- the value that is provided. You can use this to increment a counter value.
 -- These updates only occur if the original record is present in the database.
 bulkInsertOnDuplicateKeyUpdate
-    :: ( PersistEntityBackend record ~ BaseBackend backend
-       , backend ~ SqlBackend
-       , PersistEntity record
-       , MonadIO m
-       , PersistStore backend
-       )
-    => [record] -- ^ A list of the records you want to insert, or update
-    -> [SomeField record] -- ^ A list of the fields you want to copy over.
-    -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
-    -> SqlPersistT m ()
+  :: ( PersistEntityBackend record ~ BaseBackend backend
+     , backend ~ SqlBackend
+     , PersistEntity record
+     , MonadIO m
+     , PersistStore backend
+     )
+  => [record] -- ^ A list of the records you want to insert, or update
+  -> [SomeField record] -- ^ A list of the fields you want to copy over.
+  -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
+  -> SqlPersistT m ()
 bulkInsertOnDuplicateKeyUpdate [] _ _ = pure ()
 bulkInsertOnDuplicateKeyUpdate records [] [] = insertMany_ records
 bulkInsertOnDuplicateKeyUpdate records fieldValues updates =
