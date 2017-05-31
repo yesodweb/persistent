@@ -1052,11 +1052,9 @@ data SomeField record where
 -- the value that is provided. You can use this to increment a counter value.
 -- These updates only occur if the original record is present in the database.
 bulkInsertOnDuplicateKeyUpdate
-  :: ( PersistEntityBackend record ~ BaseBackend backend
-     , backend ~ SqlBackend
+  :: ( PersistEntityBackend record ~ SqlBackend
      , PersistEntity record
      , MonadIO m
-     , PersistStore backend
      )
   => [record] -- ^ A list of the records you want to insert, or update
   -> [SomeField record] -- ^ A list of the fields you want to copy over.
@@ -1071,11 +1069,7 @@ bulkInsertOnDuplicateKeyUpdate records fieldValues updates =
 -- garbage results if you don't provide a list of either fields to copy or
 -- fields to update.
 mkBulkInsertQuery
-    :: ( PersistEntityBackend record ~ BaseBackend backend
-    , backend ~ SqlBackend
-    , PersistEntity record
-    , PersistStore backend
-    )
+    :: (PersistEntityBackend record ~ SqlBackend, PersistEntity record)
     => [record] -- ^ A list of the records you want to insert, or update
     -> [SomeField record] -- ^ A list of the fields you want to copy over.
     -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
