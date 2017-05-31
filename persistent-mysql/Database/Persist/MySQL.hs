@@ -1,4 +1,5 @@
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -14,6 +15,9 @@ module Database.Persist.MySQL
     , MySQLBase.defaultSSLInfo
     , MySQLConf(..)
     , mockMigration
+    , insertOnDuplicateKeyUpdate
+    , bulkInsertOnDuplicateKeyUpdate
+    , SomeField(..)
     ) where
 
 import Control.Arrow
@@ -720,6 +724,7 @@ showColumn (Column n nu t def _defConstraintName maxLen ref) = concat
         Just s -> -- Avoid DEFAULT NULL, since it is always unnecessary, and is an error for text/blob fields
                   if T.toUpper s == "NULL" then ""
                   else " DEFAULT " ++ T.unpack s
+                  {-# LANGUAGE GADTs #-}
     , case ref of
         Nothing -> ""
         Just (s, _) -> " REFERENCES " ++ escapeDBName s
@@ -1026,7 +1031,7 @@ insertOnDuplicateKeyUpdate
        )
     => record
     -> [Update record]
-    -> ReaderT backend m ()
+    -> SqlPersistT m ()
 insertOnDuplicateKeyUpdate record =
   bulkInsertOnDuplicateKeyUpdate [record] []
 
@@ -1047,8 +1052,7 @@ data SomeField record where
 -- the value that is provided. You can use this to increment a counter value.
 -- These updates only occur if the original record is present in the database.
 bulkInsertOnDuplicateKeyUpdate
-    :: forall record m backend.
-       ( PersistEntityBackend record ~ BaseBackend backend
+    :: ( PersistEntityBackend record ~ BaseBackend backend
        , backend ~ SqlBackend
        , PersistEntity record
        , MonadIO m
@@ -1057,7 +1061,7 @@ bulkInsertOnDuplicateKeyUpdate
     => [record] -- ^ A list of the records you want to insert, or update
     -> [SomeField record] -- ^ A list of the fields you want to copy over.
     -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
-    -> ReaderT backend m ()
+    -> SqlPersistT m ()
 bulkInsertOnDuplicateKeyUpdate [] _ _ = pure ()
 bulkInsertOnDuplicateKeyUpdate records [] [] = insertMany_ records
 bulkInsertOnDuplicateKeyUpdate records fieldValues updates =
@@ -1067,8 +1071,7 @@ bulkInsertOnDuplicateKeyUpdate records fieldValues updates =
 -- garbage results if you don't provide a list of either fields to copy or
 -- fields to update.
 mkBulkInsertQuery
-    :: forall record m backend.
-    ( PersistEntityBackend record ~ BaseBackend backend
+    :: ( PersistEntityBackend record ~ BaseBackend backend
     , backend ~ SqlBackend
     , PersistEntity record
     , PersistStore backend
@@ -1080,17 +1083,16 @@ mkBulkInsertQuery
 mkBulkInsertQuery records fieldValues updates =
     (q, recordValues <> updsValues)
   where
-    fieldDefs = map (\case SomeField rec -> persistFieldDef rec) fieldValues
-    updateFieldNames = map (escapeDBName . fieldDB) fieldDefs
-    entityDef' = entityDef (Nothing :: Maybe record)
-    entityAttrs = entityFields entityDef'
-    entityFieldNames = map (escapeDBName . fieldDB) entityAttrs
-    tableName = escapeDBName . entityDB $ entityDef'
+    fieldDefs = map (\x -> case x of SomeField rec -> persistFieldDef rec) fieldValues
+    updateFieldNames = map (T.pack . escapeDBName . fieldDB) fieldDefs
+    entityDef' = entityDef records
+    entityFieldNames = map (T.pack . escapeDBName . fieldDB) (entityFields entityDef')
+    tableName = T.pack . escapeDBName . entityDB $ entityDef'
     recordValues = concatMap (map toPersistValue . toPersistFields) records
-    recordPlaceholders = commaSeparated $ map (parenWrapped . commaSeparated . makePlaceholders . toPersistFields) records
+    recordPlaceholders = commaSeparated $ map (parenWrapped . commaSeparated . map (const "?") . toPersistFields) records
     fieldSets = map (\n -> mconcat [n, "=VALUES(", n, ")"]) updateFieldNames
     upds = map mkUpdateText updates
-    updsValues = map (\Update{..} -> toPersistValue updateValue) updates
+    updsValues = map (\(Update _ val _) -> toPersistValue val) updates
     q = mconcat
         [ "INSERT INTO "
         , tableName
@@ -1103,9 +1105,6 @@ mkBulkInsertQuery records fieldValues updates =
         , commaSeparated (fieldSets <> upds)
         ]
 
-makePlaceholders :: [a] -> [Text]
-makePlaceholders = map (const "?")
-
 -- | Vendored from @persistent@.
 mkUpdateText :: PersistEntity record => Update record -> Text
 mkUpdateText x =
@@ -1116,9 +1115,9 @@ mkUpdateText x =
     Multiply -> mconcat [n, "=", n, "*?"]
     Divide -> mconcat [n, "=", n, "/?"]
     BackendSpecificUpdate up ->
-      error . unpack $ "BackendSpecificUpdate" <> up <> "not supported"
+      error . T.unpack $ "BackendSpecificUpdate" <> up <> "not supported"
   where
-    n = escapeDBName . fieldDB . updateFieldDef $ x
+    n = T.pack . escapeDBName . fieldDB . updateFieldDef $ x
 
 commaSeparated :: [Text] -> Text
 commaSeparated = T.intercalate ", "
