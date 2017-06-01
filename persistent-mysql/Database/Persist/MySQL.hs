@@ -1095,7 +1095,7 @@ mkBulkInsertQuery records fieldValues updates =
         , ") "
         , " VALUES "
         , recordPlaceholders
-        , " ON DUPLICATE KEY UPDATE SET "
+        , " ON DUPLICATE KEY UPDATE "
         , commaSeparated (fieldSets <> upds)
         ]
 
