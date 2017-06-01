@@ -1084,10 +1084,10 @@ mkBulkInsertQuery records fieldValues updates =
     tableName = T.pack . escapeDBName . entityDB $ entityDef'
     recordValues = concatMap (map toPersistValue . toPersistFields) records
     recordPlaceholders = commaSeparated $ map (parenWrapped . commaSeparated . map (const "?") . toPersistFields) records
-    fieldSets = map (\n -> mconcat [n, "=VALUES(", n, ")"]) updateFieldNames
+    fieldSets = map (\n -> T.concat [n, "=VALUES(", n, ")"]) updateFieldNames
     upds = map mkUpdateText updates
     updsValues = map (\(Update _ val _) -> toPersistValue val) updates
-    q = mconcat
+    q = T.concat
         [ "INSERT INTO "
         , tableName
         , " ("
@@ -1104,10 +1104,10 @@ mkUpdateText :: PersistEntity record => Update record -> Text
 mkUpdateText x =
   case updateUpdate x of
     Assign -> n <> "=?"
-    Add -> mconcat [n, "=", n, "+?"]
-    Subtract -> mconcat [n, "=", n, "-?"]
-    Multiply -> mconcat [n, "=", n, "*?"]
-    Divide -> mconcat [n, "=", n, "/?"]
+    Add -> T.concat [n, "=", n, "+?"]
+    Subtract -> T.concat [n, "=", n, "-?"]
+    Multiply -> T.concat [n, "=", n, "*?"]
+    Divide -> T.concat [n, "=", n, "/?"]
     BackendSpecificUpdate up ->
       error . T.unpack $ "BackendSpecificUpdate" <> up <> "not supported"
   where
