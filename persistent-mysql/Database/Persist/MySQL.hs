@@ -1060,7 +1060,7 @@ bulkInsertOnDuplicateKeyUpdate
   -> [SomeField record] -- ^ A list of the fields you want to copy over.
   -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
   -> SqlPersistT m ()
-bulkInsertOnDuplicateKeyUpdate [] _ _ = pure ()
+bulkInsertOnDuplicateKeyUpdate [] _ _ = return ()
 bulkInsertOnDuplicateKeyUpdate records [] [] = insertMany_ records
 bulkInsertOnDuplicateKeyUpdate records fieldValues updates =
   uncurry rawExecute $ mkBulkInsertQuery records fieldValues updates
