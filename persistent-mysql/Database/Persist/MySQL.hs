@@ -16,7 +16,7 @@ module Database.Persist.MySQL
     , MySQLConf(..)
     , mockMigration
     , insertOnDuplicateKeyUpdate
-    , bulkInsertOnDuplicateKeyUpdate
+    , insertManyOnDuplicateKeyUpdate
     , SomeField(..)
     ) where
 
@@ -1033,7 +1033,7 @@ insertOnDuplicateKeyUpdate
   -> [Update record]
   -> SqlPersistT m ()
 insertOnDuplicateKeyUpdate record =
-  bulkInsertOnDuplicateKeyUpdate [record] []
+  insertManyOnDuplicateKeyUpdate [record] []
 
 -- | This wraps values of an Entity's 'EntityField', making them have the same
 -- type. This allows them to be put in lists.
@@ -1051,7 +1051,7 @@ data SomeField record where
 -- The third parameter is a list of updates to perform that are independent of
 -- the value that is provided. You can use this to increment a counter value.
 -- These updates only occur if the original record is present in the database.
-bulkInsertOnDuplicateKeyUpdate
+insertManyOnDuplicateKeyUpdate
   :: ( PersistEntityBackend record ~ SqlBackend
      , PersistEntity record
      , MonadIO m
@@ -1060,9 +1060,9 @@ bulkInsertOnDuplicateKeyUpdate
   -> [SomeField record] -- ^ A list of the fields you want to copy over.
   -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
   -> SqlPersistT m ()
-bulkInsertOnDuplicateKeyUpdate [] _ _ = return ()
-bulkInsertOnDuplicateKeyUpdate records [] [] = insertMany_ records
-bulkInsertOnDuplicateKeyUpdate records fieldValues updates =
+insertManyOnDuplicateKeyUpdate [] _ _ = return ()
+insertManyOnDuplicateKeyUpdate records [] [] = insertMany_ records
+insertManyOnDuplicateKeyUpdate records fieldValues updates =
   uncurry rawExecute $ mkBulkInsertQuery records fieldValues updates
 
 -- | This creates the query for 'bulkInsertOnDuplicateKeyUpdate'. It will give
