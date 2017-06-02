@@ -724,7 +724,6 @@ showColumn (Column n nu t def _defConstraintName maxLen ref) = concat
         Just s -> -- Avoid DEFAULT NULL, since it is always unnecessary, and is an error for text/blob fields
                   if T.toUpper s == "NULL" then ""
                   else " DEFAULT " ++ T.unpack s
-                  {-# LANGUAGE GADTs #-}
     , case ref of
         Nothing -> ""
         Just (s, _) -> " REFERENCES " ++ escapeDBName s
@@ -1109,7 +1108,7 @@ mkUpdateText x =
     Multiply -> T.concat [n, "=", n, "*?"]
     Divide -> T.concat [n, "=", n, "/?"]
     BackendSpecificUpdate up ->
-      error . T.unpack $ "BackendSpecificUpdate" <> up <> "not supported"
+      error . T.unpack $ "BackendSpecificUpdate " <> up <> " not supported"
   where
     n = T.pack . escapeDBName . fieldDB . updateFieldDef $ x
 
@@ -1117,7 +1116,7 @@ commaSeparated :: [Text] -> Text
 commaSeparated = T.intercalate ", "
 
 parenWrapped :: Text -> Text
-parenWrapped = ("(" <>) . (<> ")")
+parenWrapped t = T.concat ["(", t, ")"]
 
 -- | Gets the 'FieldDef' for an 'Update'. Vendored from @persistent@.
 updateFieldDef :: PersistEntity v => Update v -> FieldDef
