@@ -351,7 +351,7 @@ migrate' connectInfo allDefs getter val = do
 addTable :: [Column] -> EntityDef -> AlterDB
 addTable cols entity = AddTable $ concat
            -- Lower case e: see Database.Persist.Sql.Migration
-           [ "CREATe TABLE "
+           [ "CREATE TABLE "
            , escapeDBName name
            , "("
            , idtxt
