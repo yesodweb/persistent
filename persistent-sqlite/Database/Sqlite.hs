@@ -254,13 +254,13 @@ stepError :: Statement -> IO Error
 stepError (Statement statement) = do
   error <- stepC statement
   return $ decodeError error
-step :: Statement -> IO StepResult
-step statement = do
+step :: Connection -> Statement -> IO StepResult
+step database statement = do
   error <- stepError statement
   case error of
     ErrorRow -> return Row
     ErrorDone -> return Done
-    _ -> sqlError Nothing "step" error
+    _ -> sqlError (Just database) "step" error
 
 foreign import ccall "sqlite3_reset"
   resetC :: Ptr () -> IO Int
