@@ -13,7 +13,9 @@
 -- | A postgresql backend for persistent.
 module Database.Persist.Postgresql
     ( withPostgresqlPool
+    , withPostgresqlPoolWithVersion
     , withPostgresqlConn
+    , withPostgresqlConnWithVersion
     , createPostgresqlPool
     , createPostgresqlPoolModified
     , createPostgresqlPoolModifiedWithVersion
@@ -113,8 +115,25 @@ withPostgresqlPool :: (MonadBaseControl IO m, MonadLogger m, MonadIO m, IsSqlBac
                    -- ^ Action to be executed that uses the
                    -- connection pool.
                    -> m a
-withPostgresqlPool ci = withSqlPool $ open' (const $ return ()) getServerVersion ci
+withPostgresqlPool ci = withPostgresqlPoolWithVersion getServerVersion ci
 
+-- | Same as 'withPostgresPool', but takes a callback for obtaining
+-- the server version (to workaround an Amazon Redshift bug).
+--
+-- @since 2.6.2
+withPostgresqlPoolWithVersion :: (MonadBaseControl IO m, MonadLogger m, MonadIO m, IsSqlBackend backend)
+                              => (PG.Connection -> IO (Maybe Double)) 
+                              -- ^ action to perform to get the server version
+                              -> ConnectionString
+                              -- ^ Connection string to the database.
+                              -> Int
+                              -- ^ Number of connections to be kept open in
+                              -- the pool.
+                              -> (Pool backend -> m a)
+                              -- ^ Action to be executed that uses the
+                              -- connection pool.
+                              -> m a
+withPostgresqlPoolWithVersion getVer ci = withSqlPool $ open' (const $ return ()) getVer ci
 
 -- | Create a PostgreSQL connection pool.  Note that it's your
 -- responsibility to properly close the connection pool when
@@ -164,8 +183,19 @@ createPostgresqlPoolModifiedWithVersion getVer modConn ci =
 -- of connections, only one connection is opened.
 withPostgresqlConn :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsSqlBackend backend)
                    => ConnectionString -> (backend -> m a) -> m a
-withPostgresqlConn = withSqlConn . open' (const $ return ()) getServerVersion
+withPostgresqlConn = withPostgresqlConnWithVersion getServerVersion
 
+-- | Same as 'withPostgresqlConn', but takes a callback for obtaining
+-- the server version (to workaround an Amazon Redshift bug).
+--
+-- @since 2.6.2
+withPostgresqlConnWithVersion :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsSqlBackend backend)
+                              => (PG.Connection -> IO (Maybe Double))
+                              -> ConnectionString 
+                              -> (backend -> m a)
+                              -> m a
+withPostgresqlConnWithVersion getVer = withSqlConn . open' (const $ return ()) getVer
+                              
 open'
     :: (IsSqlBackend backend)
     => (PG.Connection -> IO ())
