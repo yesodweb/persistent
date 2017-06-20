@@ -13,7 +13,9 @@
 -- | A postgresql backend for persistent.
 module Database.Persist.Postgresql
     ( withPostgresqlPool
+    , withPostgresqlPoolWithVersion
     , withPostgresqlConn
+    , withPostgresqlConnWithVersion
     , createPostgresqlPool
     , createPostgresqlPoolModified
     , createPostgresqlPoolModifiedWithVersion
