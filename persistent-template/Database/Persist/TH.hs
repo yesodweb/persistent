@@ -337,7 +337,7 @@ data MkPersistSettings = MkPersistSettings
     , mpsGeneric :: Bool
     -- ^ Create generic types that can be used with multiple backends. Good for
     -- reusable code, but makes error messages harder to understand. Default:
-    -- True.
+    -- False.
     , mpsPrefixFields :: Bool
     -- ^ Prefix field names with the model name. Default: True.
     , mpsEntityJSON :: Maybe EntityJSON
