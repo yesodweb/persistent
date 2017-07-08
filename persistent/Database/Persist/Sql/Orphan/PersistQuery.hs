@@ -116,14 +116,14 @@ instance PersistQueryRead SqlBackend where
                         case xs of
                            [PersistInt64 x] -> return [PersistInt64 x]
                            [PersistDouble x] -> return [PersistInt64 (truncate x)] -- oracle returns Double
-                           _ -> liftIO $ throwIO $ PersistMarshalError $ "Unexpected in selectKeys False: " <> T.pack (show xs)
+                           _ -> return xs
                       Just pdef ->
                            let pks = map fieldHaskell $ compositeFields pdef
                                keyvals = map snd $ filter (\(a, _) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ entityFields t) xs
                            in return keyvals
             case keyFromValues keyvals of
                 Right k -> return k
-                Left _ -> error "selectKeysImpl: keyFromValues failed"
+                Left err -> error $ "selectKeysImpl: keyFromValues failed" <> show err
 instance PersistQueryRead SqlReadBackend where
     count filts = withReaderT persistBackend $ count filts
     selectSourceRes filts opts = withReaderT persistBackend $ selectSourceRes filts opts
