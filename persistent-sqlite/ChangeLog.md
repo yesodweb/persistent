@@ -1,3 +1,7 @@
+## 2.6.2.1
+
+* Update `sqlite` cbit sources to 3.19.3 from 3.12.1
+
 ## 2.6.2
 
 * Turned on foreign key constraints [#646](https://github.com/yesodweb/persistent/issues/646)
