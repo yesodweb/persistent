@@ -9,7 +9,7 @@ import Data.Aeson (Value (Object))
 import Data.Aeson.Types (Parser)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
-import Control.Applicative ((<$>))
+import Control.Applicative as A ((<$>))
 import qualified Data.HashMap.Strict as HashMap
 
 -- | Represents a value containing all the configuration options for a specific
@@ -48,7 +48,7 @@ instance
 
     loadConfig (Object o) =
         case HashMap.lookup "left" o of
-            Just v -> Left <$> loadConfig v
+            Just v -> Left A.<$> loadConfig v
             Nothing ->
                 case HashMap.lookup "right" o of
                     Just v -> Right <$> loadConfig v

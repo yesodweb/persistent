@@ -1,3 +1,8 @@
+## 2.6.1
+
+* Match changes in persistent
+* Clean up warnings
+
 ## 2.6
 
 * Atomic upsert support for postgreSQL backend

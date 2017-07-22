@@ -116,14 +116,14 @@ instance PersistQueryRead SqlBackend where
                         case xs of
                            [PersistInt64 x] -> return [PersistInt64 x]
                            [PersistDouble x] -> return [PersistInt64 (truncate x)] -- oracle returns Double
-                           _ -> liftIO $ throwIO $ PersistMarshalError $ "Unexpected in selectKeys False: " <> T.pack (show xs)
+                           _ -> return xs
                       Just pdef ->
                            let pks = map fieldHaskell $ compositeFields pdef
                                keyvals = map snd $ filter (\(a, _) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ entityFields t) xs
                            in return keyvals
             case keyFromValues keyvals of
                 Right k -> return k
-                Left _ -> error "selectKeysImpl: keyFromValues failed"
+                Left err -> error $ "selectKeysImpl: keyFromValues failed" <> show err
 instance PersistQueryRead SqlReadBackend where
     count filts = withReaderT persistBackend $ count filts
     selectSourceRes filts opts = withReaderT persistBackend $ selectSourceRes filts opts
@@ -183,7 +183,7 @@ updateWhereCount filts upds = withReaderT persistBackend $ do
             , T.intercalate "," $ map (go' conn . go) upds
             , wher
             ]
-    let dat = map updatePersistValue upds `mappend`
+    let dat = map updatePersistValue upds `Data.Monoid.mappend`
               getFiltsValues conn filts
     rawExecuteCount sql dat
   where
@@ -273,7 +273,7 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
                  (True, Just pdef, _) ->
                      error $ "unhandled error for composite/non id primary keys filter=" ++ show pfilter ++ " persistList=" ++ show allVals ++ " pdef=" ++ show pdef
 
-                 _ ->   case (isNull, pfilter, varCount) of
+                 _ ->   case (isNull, pfilter, length notNullVals) of
                             (True, Eq, _) -> (name <> " IS NULL", [])
                             (True, Ne, _) -> (name <> " IS NOT NULL", [])
                             (False, Ne, _) -> (T.concat
@@ -298,7 +298,8 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
                                 , qmarks
                                 , ")"
                                 ], notNullVals)
-                            (_, NotIn, 0) -> ("1=1", [])
+                            (False, NotIn, 0) -> ("1=1", [])
+                            (True, NotIn, 0) -> (name <> " IS NOT NULL", [])
                             (False, NotIn, _) -> (T.concat
                                 [ "("
                                 , name
@@ -353,9 +354,6 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
                     Right x ->
                         let x' = filter (/= PersistNull) $ map toPersistValue x
                          in "(" <> T.intercalate "," (map (const "?") x') <> ")"
-        varCount = case value of
-                    Left _ -> 1
-                    Right x -> length x
         showSqlFilter Eq = "="
         showSqlFilter Ne = "<>"
         showSqlFilter Gt = ">"

@@ -100,14 +100,14 @@ specs = describe "data type specs" $
 
 roundTime :: TimeOfDay -> TimeOfDay
 #ifdef WITH_MYSQL
-roundTime (TimeOfDay h m s) = TimeOfDay h m (fromIntegral $ truncate s)
+roundTime (TimeOfDay h m s) = TimeOfDay h m (fromIntegral (truncate s :: Integer))
 #else
 roundTime = id
 #endif
 
 roundUTCTime :: UTCTime -> UTCTime
 #ifdef WITH_MYSQL
-roundUTCTime (UTCTime day time) = UTCTime day (fromIntegral $ truncate time)
+roundUTCTime (UTCTime day time) = UTCTime day (fromIntegral (truncate time :: Integer))
 #else
 roundUTCTime = id
 #endif

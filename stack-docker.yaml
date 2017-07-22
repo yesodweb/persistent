@@ -18,6 +18,7 @@ extra-deps:
   - attoparsec-0.13.0.1
   - http-api-data-0.2
   - time-parsers-0.1.0.0
+  - microlens-th-0.4.1.1
 
 docker:
   enable: true

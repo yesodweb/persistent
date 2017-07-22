@@ -13,9 +13,12 @@
 -- | A postgresql backend for persistent.
 module Database.Persist.Postgresql
     ( withPostgresqlPool
+    , withPostgresqlPoolWithVersion
     , withPostgresqlConn
+    , withPostgresqlConnWithVersion
     , createPostgresqlPool
     , createPostgresqlPoolModified
+    , createPostgresqlPoolModifiedWithVersion
     , module Database.Persist.Sql
     , ConnectionString
     , PostgresConf (..)
@@ -31,7 +34,6 @@ import Database.Persist.Sql.Types.Internal (mkPersistBackend)
 import Data.Fixed (Pico)
 
 import qualified Database.PostgreSQL.Simple as PG
-import qualified Database.PostgreSQL.Simple.TypeInfo as PG
 import qualified Database.PostgreSQL.Simple.TypeInfo.Static as PS
 import qualified Database.PostgreSQL.Simple.Internal as PG
 import qualified Database.PostgreSQL.Simple.ToField as PGTF
@@ -91,7 +93,7 @@ type ConnectionString = ByteString
 
 -- | PostgresServerVersionError exception. This is thrown when persistent
 -- is unable to find the version of the postgreSQL server.
-data PostgresServerVersionError = PostgresServerVersionError String deriving Typeable
+data PostgresServerVersionError = PostgresServerVersionError String deriving Data.Typeable.Typeable
 
 instance Show PostgresServerVersionError where
     show (PostgresServerVersionError uniqueMsg) =
@@ -113,8 +115,25 @@ withPostgresqlPool :: (MonadBaseControl IO m, MonadLogger m, MonadIO m, IsSqlBac
                    -- ^ Action to be executed that uses the
                    -- connection pool.
                    -> m a
-withPostgresqlPool ci = withSqlPool $ open' (const $ return ()) ci
+withPostgresqlPool ci = withPostgresqlPoolWithVersion getServerVersion ci
 
+-- | Same as 'withPostgresPool', but takes a callback for obtaining
+-- the server version (to workaround an Amazon Redshift bug).
+--
+-- @since 2.6.2
+withPostgresqlPoolWithVersion :: (MonadBaseControl IO m, MonadLogger m, MonadIO m, IsSqlBackend backend)
+                              => (PG.Connection -> IO (Maybe Double)) 
+                              -- ^ action to perform to get the server version
+                              -> ConnectionString
+                              -- ^ Connection string to the database.
+                              -> Int
+                              -- ^ Number of connections to be kept open in
+                              -- the pool.
+                              -> (Pool backend -> m a)
+                              -- ^ Action to be executed that uses the
+                              -- connection pool.
+                              -> m a
+withPostgresqlPoolWithVersion getVer ci = withSqlPool $ open' (const $ return ()) getVer ci
 
 -- | Create a PostgreSQL connection pool.  Note that it's your
 -- responsibility to properly close the connection pool when
@@ -136,28 +155,58 @@ createPostgresqlPool = createPostgresqlPoolModified (const $ return ())
 --
 -- <https://groups.google.com/d/msg/yesodweb/qUXrEN_swEo/O0pFwqwQIdcJ>
 --
--- Since 2.1.3
+-- @since 2.1.3
 createPostgresqlPoolModified
     :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsSqlBackend backend)
     => (PG.Connection -> IO ()) -- ^ action to perform after connection is created
     -> ConnectionString -- ^ Connection string to the database.
     -> Int -- ^ Number of connections to be kept open in the pool.
     -> m (Pool backend)
-createPostgresqlPoolModified modConn ci = createSqlPool $ open' modConn ci
+createPostgresqlPoolModified = createPostgresqlPoolModifiedWithVersion getServerVersion
+
+-- | Same as other similarly-named functions in this module, but takes callbacks for obtaining
+-- the server version (to workaround an Amazon Redshift bug) and connection-specific tweaking
+-- (to change the schema).
+--
+-- @since 2.6.2
+createPostgresqlPoolModifiedWithVersion
+    :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsSqlBackend backend)
+    => (PG.Connection -> IO (Maybe Double)) -- ^ action to perform to get the server version
+    -> (PG.Connection -> IO ()) -- ^ action to perform after connection is created
+    -> ConnectionString -- ^ Connection string to the database.
+    -> Int -- ^ Number of connections to be kept open in the pool.
+    -> m (Pool backend)
+createPostgresqlPoolModifiedWithVersion getVer modConn ci =
+  createSqlPool $ open' modConn getVer ci
 
 -- | Same as 'withPostgresqlPool', but instead of opening a pool
 -- of connections, only one connection is opened.
 withPostgresqlConn :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsSqlBackend backend)
                    => ConnectionString -> (backend -> m a) -> m a
-withPostgresqlConn = withSqlConn . open' (const $ return ())
+withPostgresqlConn = withPostgresqlConnWithVersion getServerVersion
 
+-- | Same as 'withPostgresqlConn', but takes a callback for obtaining
+-- the server version (to workaround an Amazon Redshift bug).
+--
+-- @since 2.6.2
+withPostgresqlConnWithVersion :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsSqlBackend backend)
+                              => (PG.Connection -> IO (Maybe Double))
+                              -> ConnectionString 
+                              -> (backend -> m a)
+                              -> m a
+withPostgresqlConnWithVersion getVer = withSqlConn . open' (const $ return ()) getVer
+                              
 open'
     :: (IsSqlBackend backend)
-    => (PG.Connection -> IO ()) -> ConnectionString -> LogFunc -> IO backend
-open' modConn cstr logFunc = do
+    => (PG.Connection -> IO ())
+    -> (PG.Connection -> IO (Maybe Double))
+    -> ConnectionString -> LogFunc -> IO backend
+open' modConn getVer cstr logFunc = do
     conn <- PG.connectPostgreSQL cstr
     modConn conn
-    openSimpleConn logFunc conn
+    ver <- getVer conn
+    smap <- newIORef $ Map.empty
+    return $ createBackend logFunc ver smap conn
 
 -- | Gets the PostgreSQL server version
 getServerVersion :: PG.Connection -> IO (Maybe Double)
@@ -180,17 +229,25 @@ upsertFunction version = if (version >= 9.5)
                          then Just upsertSql'
                          else Nothing
 
+
 -- | Generate a 'Connection' from a 'PG.Connection'
 openSimpleConn :: (IsSqlBackend backend) => LogFunc -> PG.Connection -> IO backend
 openSimpleConn logFunc conn = do
     smap <- newIORef $ Map.empty
     serverVersion <- getServerVersion conn
-    return . mkPersistBackend $ SqlBackend
+    return $ createBackend logFunc serverVersion smap conn
+
+-- | Create the backend given a logging function, server version, mutable statement cell,
+-- and connection
+createBackend :: IsSqlBackend backend => LogFunc -> Maybe Double
+              -> IORef (Map.Map Text Statement) -> PG.Connection -> backend
+createBackend logFunc serverVersion smap conn = do
+    mkPersistBackend $ SqlBackend
         { connPrepare    = prepare' conn
         , connStmtMap    = smap
         , connInsertSql  = insertSql'
         , connInsertManySql = Just insertManySql'
-        , connUpsertSql = maybe Nothing upsertFunction serverVersion
+        , connUpsertSql  = maybe Nothing upsertFunction serverVersion
         , connClose      = PG.close conn
         , connMigrateSql = migrate'
         , connBegin      = const $ PG.begin    conn
@@ -201,6 +258,7 @@ openSimpleConn logFunc conn = do
         , connRDBMS      = "postgresql"
         , connLimitOffset = decorateSQLWithLimitOffset "LIMIT ALL"
         , connLogFunc = logFunc
+        , connMaxParams = Nothing
         }
 
 prepare' :: PG.Connection -> Text -> IO Statement
@@ -1111,7 +1169,8 @@ mockMigration mig = do
                              connNoLimit = undefined,
                              connRDBMS = undefined,
                              connLimitOffset = undefined,
-                             connLogFunc = undefined}
+                             connLogFunc = undefined,
+                             connMaxParams = Nothing}
       result = runReaderT $ runWriterT $ runWriterT mig
   resp <- result sqlbackend
   mapM_ T.putStrLn $ map snd $ snd resp

@@ -1,3 +1,16 @@
+## 2.7.0
+
+* Fix upsert behavior [#613](https://github.com/yesodweb/persistent/issues/613)
+* Atomic upsert query fixed for arithmatic operations [#662](https://github.com/yesodweb/persistent/issues/662)
+* Haddock and test coverage improved for upsert
+
+## 2.6.1
+
+* Fix edge case for `\<-. [Nothing]`
+* Introduce `connMaxParams`
+* Add 'getJustEntity' and 'insertRecord' convenience function
+* Minor Haddock improvment
+
 ## 2.6
 
 * Add `connUpsertSql` type for providing backend-specific upsert sql support.

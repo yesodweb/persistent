@@ -122,7 +122,7 @@ import qualified Data.Traversable as Traversable
 import Data.Bson (ObjectId(..))
 import qualified Database.MongoDB as DB
 import Database.MongoDB.Query (Database)
-import Control.Applicative (Applicative, (<$>))
+import Control.Applicative as A (Applicative, (<$>))
 import Network (PortID (PortNumber))
 import Network.Socket (HostName)
 import Data.Maybe (mapMaybe, fromJust)
@@ -137,7 +137,7 @@ import Data.Conduit
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value (Number), (.:), (.:?), (.!=), FromJSON(..), ToJSON(..), withText, withObject)
 import Data.Aeson.Types (modifyFailure)
-import Control.Monad (liftM, (>=>), forM_)
+import Control.Monad (liftM, (>=>), forM_, unless)
 import qualified Data.Pool as Pool
 import Data.Time (NominalDiffTime)
 #ifdef HIGH_PRECISION_DATE
@@ -220,7 +220,7 @@ instance ToHttpApiData (BackendKey DB.MongoContext) where
 instance FromHttpApiData (BackendKey DB.MongoContext) where
     parseUrlPiece input = do
       s <- parseUrlPieceWithPrefix "o" input <!> return input
-      MongoKey <$> readTextData s
+      MongoKey A.<$> readTextData s
       where
         infixl 3 <!>
         Left _ <!> y = y
@@ -257,7 +257,7 @@ instance Sql.PersistFieldSql (BackendKey DB.MongoContext) where
     sqlType _ = Sql.SqlOther "doesn't make much sense for MongoDB"
 
 
-withConnection :: (Trans.MonadIO m, Applicative m)
+withConnection :: (Trans.MonadIO m, A.Applicative m)
                => MongoConf
                -> (ConnectionPool -> m b) -> m b
 withConnection mc =
@@ -508,7 +508,7 @@ keyFrom_idEx :: (Trans.MonadIO m, PersistEntity record) => DB.Value -> m (Key re
 keyFrom_idEx idVal = case keyFrom_id idVal of
     Right k  -> return k
     Left err -> liftIO $ throwIO $ PersistMongoDBError $ "could not convert key: "
-        `mappend` T.pack (show idVal)
+        `Data.Monoid.mappend` T.pack (show idVal)
         `mappend` err
 
 keyFrom_id :: (PersistEntity record) => DB.Value -> Either Text (Key record)
@@ -628,20 +628,29 @@ instance PersistUniqueWrite DB.MongoContext where
         uniq <- onlyUnique newRecord
         upsertBy uniq newRecord upds
 
+-- -        let uniqKeys = map DB.label uniqueDoc
+-- -        let insDoc = DB.exclude uniqKeys $ toInsertDoc newRecord
+--          let selection = DB.select uniqueDoc $ collectionName newRecord
+-- -        if null upds
+-- -          then DB.upsert selection ["$set" DB.=: insDoc]
+-- -          else do
+-- -            DB.upsert selection ["$setOnInsert" DB.=: insDoc]
+-- -            DB.modify selection $ updatesToDoc upds
+-- -        -- because findAndModify $setOnInsert is broken we do a separate get now
+
     upsertBy uniq newRecord upds = do
-        let uniqueDoc = toUniquesDoc uniq
-        let uniqKeys = map DB.label uniqueDoc
-        let insDoc = DB.exclude uniqKeys $ toInsertDoc newRecord
-        let selection = DB.select uniqueDoc $ collectionName newRecord
-        if null upds
-          then DB.upsert selection ["$set" DB.=: insDoc]
-          else do
-            DB.upsert selection ["$setOnInsert" DB.=: insDoc]
-            DB.modify selection $ updatesToDoc upds
-        -- because findAndModify $setOnInsert is broken we do a separate get now
+        let uniqueDoc = toUniquesDoc uniq :: [DB.Field]
+        let uniqKeys = map DB.label uniqueDoc :: [DB.Label]   
+        let insDoc = DB.exclude uniqKeys $ toInsertDoc newRecord :: DB.Document
+        let selection = DB.select uniqueDoc $ collectionName newRecord :: DB.Selection
         mdoc <- getBy uniq
-        maybe (err "possible race condition: getBy found Nothing")
-            return mdoc
+        case mdoc of
+          Nothing -> unless (null upds) (DB.upsert selection ["$setOnInsert" DB.=: insDoc])
+          Just _ -> unless (null upds) (DB.modify selection $ DB.exclude uniqKeys $ updatesToDoc upds)
+        newMdoc <- getBy uniq
+        case newMdoc of
+          Nothing -> err "possible race condition: getBy found Nothing"
+          Just doc -> return doc
       where
         err = Trans.liftIO . throwIO . UpsertError
         {-

@@ -33,7 +33,6 @@ import Database.Persist.MongoDB (toInsertDoc, docToEntityThrow, collectionName, 
 #else
 
 import Database.Persist.TH (mkDeleteCascade, mkSave)
-import Control.Exception (SomeException)
 import qualified Data.Text as T
 import qualified Control.Exception as E
 
@@ -59,6 +58,7 @@ import Data.Aeson
 
 import Data.Conduit
 import qualified Data.Conduit.List as CL
+import Data.Function (on)
 import Data.Functor.Identity
 import Data.Functor.Constant
 import PersistTestPetType
@@ -127,18 +127,19 @@ share [mkPersist persistSettings,  mkMigrate "testMigrate", mkDeleteCascade pers
 
   Upsert
     email Text
-    counter Int
+    attr Text
+    extra Text
+    age Int      
     UniqueUpsert email
-    deriving Show
+    deriving Eq Show
 
   UpsertBy
     email Text
     city Text
-    state Text
-    counter Int
+    attr Text
     UniqueUpsertBy email
-    UniqueUpsertByCityState city state
-    deriving Show
+    UniqueUpsertByCity city
+    deriving Eq Show
 
   Strict
     !yes Int
@@ -494,54 +495,116 @@ specs = describe "persistent" $ do
       pBlue30 <- updateGet key25 [PersonAge +=. 2]
       pBlue30 @== Person "Updated" 30 Nothing
 
-  it "upsert without updates" $ db $ do
-      deleteWhere ([] :: [Filter Upsert])
-      let email = "dude@example.com"
-      Nothing :: Maybe (Entity Upsert) <- getBy $ UniqueUpsert email
-      let counter1 = 0
-      Entity k1 u1 <- upsert (Upsert email counter1) []
-      upsertCounter u1 @== counter1
-      let counter2 = 1
-      Entity k2 u2 <- upsert (Upsert email counter2) []
-      upsertCounter u2 @== counter2
-      k1 @== k2
+  describe "upsert" $ do
+    it "adds a new row with no updates" $ db $ do
+        Entity _ u <- upsert (Upsert "a" "new" "" 2) [UpsertAttr =. "update"]
+        c <- count ([] :: [Filter Upsert])
+        c @== 1
+        upsertAttr u @== "new"
+    it "keeps the existing row" $ db $ do
+#ifdef WITH_MONGODB
+        initial <- insertEntity (Upsert "foo" "initial" "" 2)
+        update' <- upsert (Upsert "foo" "update" "" 3) []
+        update' @== initial      
+#else
+        initial <- insertEntity (Upsert "a" "initial" "" 1)
+        update' <- upsert (Upsert "a" "update" "" 2) []
+        update' @== initial
+#endif                        
+    it "updates an existing row - assignment" $ db $ do
+#ifdef WITH_MONGODB
+        initial <- insertEntity (Upsert "cow" "initial" "extra" 1)
+        update' <-
+            upsert (Upsert "cow" "wow" "such unused" 2) [UpsertAttr =. "update"]
+        ((==@) `on` entityKey) initial update'
+        upsertAttr (entityVal update') @== "update"
+        upsertExtra (entityVal update') @== "extra"
+#else
+        initial <- insertEntity (Upsert "a" "initial" "extra" 1)
+        update' <-
+            upsert (Upsert "a" "wow" "such unused" 2) [UpsertAttr =. "update"]
+        ((==@) `on` entityKey) initial update'
+        upsertAttr (entityVal update') @== "update"
+        upsertExtra (entityVal update') @== "extra"
+#endif
+    it "updates existing row - addition " $ db $ do
+#ifdef WITH_MONGODB
+        initial <- insertEntity (Upsert "a1" "initial" "extra" 2)
+        update' <-
+            upsert (Upsert "a1" "wow" "such unused" 2) [UpsertAge +=. 3]
+        ((==@) `on` entityKey) initial update'
+        upsertAge (entityVal update') @== 5
+        upsertExtra (entityVal update') @== "extra"
+#else
+        initial <- insertEntity (Upsert "a" "initial" "extra" 2)
+        update' <-
+            upsert (Upsert "a" "wow" "such unused" 2) [UpsertAge +=. 3]
+        ((==@) `on` entityKey) initial update'
+        upsertAge (entityVal update') @== 5
+        upsertExtra (entityVal update') @== "extra"
+#endif
 
-  it "upsert with updates" $ db $ do
-      deleteWhere ([] :: [Filter Upsert])
-      let email = "dude@example.com"
-      Nothing :: Maybe (Entity Upsert) <- getBy $ UniqueUpsert email
-      let up0 = Upsert email 0
-      Entity _ up1 <- upsert up0 [UpsertCounter +=. 1]
-      upsertCounter up1 @== 1
-      Entity _ up2 <- upsert up1 [UpsertCounter +=. 1]
-      upsertCounter up2 @== 2
-
-  it "upsertBy without updates" $ db $ do
-      deleteWhere ([] :: [Filter UpsertBy])
-      let email = "dude@example.com"
-          city = "Boston"
-          state = "Massachussets"
-      Nothing :: Maybe (Entity UpsertBy) <- getBy $ UniqueUpsertBy email
-      let counter1 = 0
-          unique = UniqueUpsertBy email
-      Entity k1 u1 <- upsertBy unique (UpsertBy email city state counter1) []
-      upsertByCounter u1 @== counter1
-      let counter2 = 1
-      Entity k2 u2 <- upsertBy unique (UpsertBy email city state counter2) []
-      upsertByCounter u2 @== counter2
-      k1 @== k2
-
-  it "upsertBy with updates" $ db $ do
-      deleteWhere ([] :: [Filter UpsertBy])
-      let email = "dude@example.com"
-          city = "Boston"
-          state = "Massachussets"
-      Nothing :: Maybe (Entity UpsertBy) <- getBy $ UniqueUpsertBy email
-      let up0 = UpsertBy email city state 0
-      Entity _ up1 <- upsertBy (UniqueUpsertBy email) up0 [UpsertByCounter +=. 1]
-      upsertByCounter up1 @== 1
-      Entity _ up2 <- upsertBy (UniqueUpsertBy email) up1 [UpsertByCounter +=. 1]
-      upsertByCounter up2 @== 2
+  describe "upsertBy" $ do
+    let uniqueEmail = UniqueUpsertBy "a"
+        uniqueCity = UniqueUpsertByCity "Boston"
+    it "adds a new row with no updates" $ db $ do
+        Entity _ u <-
+            upsertBy
+                uniqueEmail
+                (UpsertBy "a" "Boston" "new")
+                [UpsertByAttr =. "update"]
+        c <- count ([] :: [Filter UpsertBy])
+        c @== 1
+        upsertByAttr u @== "new"
+    it "keeps the existing row" $ db $ do
+#ifdef WITH_MONGODB
+        initial <- insertEntity (UpsertBy "foo" "Chennai" "initial")
+        update' <- upsertBy (UniqueUpsertBy "foo") (UpsertBy "foo" "Chennai" "update") []
+        update' @== initial
+#else
+        initial <- insertEntity (UpsertBy "a" "Boston" "initial")
+        update' <- upsertBy uniqueEmail (UpsertBy "a" "Boston" "update") []
+        update' @== initial
+#endif
+    it "updates an existing row" $ db $ do
+#ifdef WITH_MONGODB
+        initial <- insertEntity (UpsertBy "ko" "Kumbakonam" "initial")
+        update' <-
+            upsertBy
+                (UniqueUpsertBy "ko")
+                (UpsertBy "ko" "Bangalore" "such unused")
+                [UpsertByAttr =. "update"]
+        ((==@) `on` entityKey) initial update'
+        upsertByAttr (entityVal update') @== "update"
+        upsertByCity (entityVal update') @== "Kumbakonam"
+#else
+        initial <- insertEntity (UpsertBy "a" "Boston" "initial")
+        update' <-
+            upsertBy
+                uniqueEmail
+                (UpsertBy "a" "wow" "such unused")
+                [UpsertByAttr =. "update"]
+        ((==@) `on` entityKey) initial update'
+        upsertByAttr (entityVal update') @== "update"
+        upsertByCity (entityVal update') @== "Boston"
+#endif
+    it "updates by the appropriate constraint" $ db $ do
+        initBoston <- insertEntity (UpsertBy "bos" "Boston" "bos init")
+        initKrum <- insertEntity (UpsertBy "krum" "Krum" "krum init")
+        updBoston <-
+            upsertBy
+                (UniqueUpsertBy "bos")
+                (UpsertBy "bos" "Krum" "unused")
+                [UpsertByAttr =. "bos update"]
+        updKrum <-
+            upsertBy
+                (UniqueUpsertByCity "Krum")
+                (UpsertBy "bos" "Krum" "unused")
+                [UpsertByAttr =. "krum update"]
+        ((==@) `on` entityKey) initBoston updBoston
+        ((==@) `on` entityKey) initKrum updKrum
+        entityVal updBoston @== UpsertBy "bos" "Boston" "bos update"
+        entityVal updKrum @== UpsertBy "krum" "Krum" "krum update"
 
   it "maybe update" $ db $ do
       let noAge = PersonMaybeAge "Michael" Nothing
@@ -688,11 +751,23 @@ specs = describe "persistent" $ do
       Just p2 <- get k
       p2 @== p
 
+  it "insertRecord" $ db $ do
+      let record = Person "name" 1 Nothing
+      record' <- insertRecord record 
+      record' @== record
+
   it "getEntity" $ db $ do
       Entity k p <- insertEntity $ Person "name" 1 Nothing
       Just (Entity k2 p2) <- getEntity k
       p @== p2
       k @== k2
+
+  it "getJustEntity" $ db $ do
+      let p1 = Person "name" 1 Nothing
+      k1 <- insert p1
+      Entity k2 p2 <- getJustEntity k1
+      p1 @== p2
+      k1 @== k2
 
   it "repsert" $ db $ do
       k <- liftIO (PersonKey `fmap` generateKey)
@@ -754,6 +829,28 @@ specs = describe "persistent" $ do
       x <- selectList [PersonId <-. [pid1, pid3]] []
       liftIO $ x @?= [Entity pid1 p1, Entity pid3 p3]
 #endif
+
+  it "In" $ db $ do
+      let p1 = Person "D" 0 Nothing
+          p2 = Person "E" 1 Nothing
+          p3 = Person "F" 2 (Just "blue")
+      insert_ p1
+      insert_ p2
+      insert_ p3
+      x1 <- fmap entityVal `fmap` selectList [PersonName <-. ["D"]] []
+      liftIO $ x1 @?= [p1]
+      x2 <- fmap entityVal `fmap` selectList [PersonName /<-. ["D"]] []
+      liftIO $ x2 @?= [p2, p3]
+
+      x3 <- fmap entityVal `fmap` selectList [PersonColor <-. [Just "blue"]] []
+      liftIO $ x3 @?= [p3]
+      x4 <- fmap entityVal `fmap` selectList [PersonColor /<-. [Just "blue"]] []
+      liftIO $ x4 @?= [p1, p2]
+
+      x5 <- fmap entityVal `fmap` selectList [PersonColor <-. [Nothing, Just "blue"]] []
+      liftIO $ x5 @?= [p1, p2, p3]
+      x6 <- fmap entityVal `fmap` selectList [PersonColor /<-. [Nothing]] []
+      liftIO $ x6 @?= [p3]
 
   describe "toJSON" $ do
     it "serializes" $ db $ do
