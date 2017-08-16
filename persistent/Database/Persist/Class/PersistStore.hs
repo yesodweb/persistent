@@ -188,6 +188,7 @@ getJust key = get key >>= maybe
   return
 
 -- | Same as 'getJust', but returns an 'Entity' instead of just the record.
+--
 -- @since 2.6.1
 getJustEntity
   :: (PersistEntityBackend record ~ BaseBackend backend
@@ -247,6 +248,7 @@ getEntity key = do
     return $ fmap (key `Entity`) maybeModel
 
 -- | Like 'insertEntity' but just returns the record instead of 'Entity'.
+--
 -- @since 2.6.1
 insertRecord
   :: (PersistEntityBackend record ~ BaseBackend backend
@@ -257,4 +259,3 @@ insertRecord
 insertRecord record = do
   insert_ record
   return $ record
-
