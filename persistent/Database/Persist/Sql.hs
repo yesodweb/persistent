@@ -36,7 +36,7 @@ import Control.Monad.Trans.Reader (ReaderT, ask)
 
 -- | Commit the current transaction and begin a new one.
 --
--- Since 1.2.0
+-- @since 1.2.0
 transactionSave :: MonadIO m => ReaderT SqlBackend m ()
 transactionSave = do
     conn <- ask
@@ -45,7 +45,7 @@ transactionSave = do
 
 -- | Roll back the current transaction and begin a new one.
 --
--- Since 1.2.0
+-- @since 1.2.0
 transactionUndo :: MonadIO m => ReaderT SqlBackend m ()
 transactionUndo = do
     conn <- ask

@@ -35,7 +35,7 @@ runSqlPool r pconn = withResource pconn $ runSqlConn r
 -- | Like 'withResource', but times out the operation if resource
 -- allocation does not complete within the given timeout period.
 --
--- Since 2.0.0
+-- @since 2.0.0
 withResourceTimeout
   :: forall a m b.  (MonadBaseControl IO m)
   => Int -- ^ Timeout period in microseconds

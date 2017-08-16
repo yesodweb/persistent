@@ -81,13 +81,13 @@ data PersistSettings = PersistSettings
     , psStrictFields :: !Bool
     -- ^ Whether fields are by default strict. Default value: @True@.
     --
-    -- Since 1.2
+    -- @since 1.2
     , psIdName :: !Text
     -- ^ The name of the id column. Default value: @id@
     -- The name of the id column can also be changed on a per-model basis
     -- <https://github.com/yesodweb/persistent/wiki/Persistent-entity-syntax>
     --
-    -- Since 2.0
+    -- @since 2.0
     }
 
 defaultPersistSettings, upperCaseSettings, lowerCaseSettings :: PersistSettings

@@ -118,7 +118,7 @@ open' connInfo logFunc = do
 
 -- | Wrap up a raw 'Sqlite.Connection' as a Persistent SQL 'Connection'.
 --
--- Since 1.1.5
+-- @since 1.1.5
 wrapConnection :: (IsSqlBackend backend) => Sqlite.Connection -> LogFunc -> IO backend
 wrapConnection = wrapConnectionInfo (mkSqliteConnectionInfo "")
 
@@ -178,7 +178,7 @@ wrapConnectionInfo connInfo conn logFunc = do
 -- given block, handling @MonadResource@ and @MonadLogger@ requirements. Note
 -- that all log messages are discarded.
 --
--- Since 1.1.4
+-- @since 1.1.4
 runSqlite :: (MonadBaseControl IO m, MonadIO m, IsSqlBackend backend)
           => Text -- ^ connection string
           -> ReaderT backend (NoLoggingT (ResourceT m)) a -- ^ database action

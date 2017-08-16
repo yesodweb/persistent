@@ -355,7 +355,7 @@ data MkPersistSettings = MkPersistSettings
     --
     -- Default: False
     --
-    -- Since 1.3.1
+    -- @since 1.3.1
     }
 
 data EntityJSON = EntityJSON
@@ -385,7 +385,7 @@ sqlSettings = mkPersistSettings $ ConT ''SqlBackend
 
 -- | Same as 'sqlSettings'.
 --
--- Since 1.1.1
+-- @since 1.1.1
 sqlOnlySettings :: MkPersistSettings
 sqlOnlySettings = sqlSettings
 {-# DEPRECATED sqlOnlySettings "use sqlSettings" #-}
