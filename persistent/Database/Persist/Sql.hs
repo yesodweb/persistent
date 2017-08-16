@@ -28,7 +28,7 @@ import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Migration
 import Database.Persist.Sql.Internal
 
-import Database.Persist.Sql.Orphan.PersistQuery 
+import Database.Persist.Sql.Orphan.PersistQuery
 import Database.Persist.Sql.Orphan.PersistStore
 import Database.Persist.Sql.Orphan.PersistUnique ()
 import Control.Monad.IO.Class
