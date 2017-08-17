@@ -95,7 +95,7 @@ instance
         nKeyFields = length $ entityKeyFields entDef
         entDef = entityDef (Nothing :: Maybe record)
 
--- | Since 1.0.1.
+-- | @since 1.0.1
 instance RawSql a => RawSql (Maybe a) where
     rawSqlCols e = rawSqlCols e . extractMaybe
     rawSqlColCountReason = rawSqlColCountReason . extractMaybe

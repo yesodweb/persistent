@@ -70,7 +70,7 @@ newtype Statement = Statement (Ptr ())
 
 -- | A custom exception type to make it easier to catch exceptions.
 --
--- Since 2.1.3
+-- @since 2.1.3
 data SqliteException = SqliteException
     { seError        :: !Error
     , seFunctionName :: !Text
@@ -489,14 +489,14 @@ changes (Connection _ c) = fmap fromIntegral $ changesC c
 
 -- | Log function callback. Arguments are error code and log message.
 --
--- Since 2.1.4
+-- @since 2.1.4
 type RawLogFunction = Ptr () -> Int -> CString -> IO ()
 
 foreign import ccall "wrapper"
   mkRawLogFunction :: RawLogFunction -> IO (FunPtr RawLogFunction)
 
 -- |
--- Since 2.1.4
+-- @since 2.1.4
 newtype LogFunction = LogFunction (FunPtr RawLogFunction)
 
 -- | Wraps a given function to a 'LogFunction' to be further used with 'ConfigLogFn'.
@@ -509,13 +509,13 @@ mkLogFunction fn = fmap LogFunction . mkRawLogFunction $ \_ errCode cmsg -> do
 
 -- | Releases a native FunPtr for the 'LogFunction'.
 --
--- Since 2.1.4
+-- @since 2.1.4
 freeLogFunction :: LogFunction -> IO ()
 freeLogFunction (LogFunction fn) = freeHaskellFunPtr fn
 
 -- | Configuration option for SQLite to be used together with the 'config' function.
 --
--- Since 2.1.4
+-- @since 2.1.4
 data Config
   -- | A function to be used for logging
   = ConfigLogFn LogFunction
@@ -526,7 +526,7 @@ foreign import ccall "persistent_sqlite_set_log"
 -- | Sets SQLite global configuration parameter. See SQLite documentation for the <https://www.sqlite.org/c3ref/config.html sqlite3_config> function.
 -- In short, this must be called prior to any other SQLite function if you want the call to succeed.
 --
--- Since 2.1.4
+-- @since 2.1.4
 config :: Config -> IO ()
 config c = case c of
   ConfigLogFn (LogFunction rawLogFn) -> do
@@ -537,7 +537,7 @@ config c = case c of
 
 -- | Return type of the 'status' function
 --
--- Since 2.6.1
+-- @since 2.6.1
 data SqliteStatus = SqliteStatus
   { sqliteStatusCurrent   :: Maybe Int
   -- ^ The current value of the parameter. Some parameters do not record current value.
@@ -547,7 +547,7 @@ data SqliteStatus = SqliteStatus
 
 -- | Run-time status parameter that can be returned by 'status' function.
 --
--- Since 2.6.1
+-- @since 2.6.1
 data SqliteStatusVerb
   -- | This parameter is the current amount of memory checked out using sqlite3_malloc(),
   -- either directly or indirectly. The figure includes calls made to sqlite3_malloc()
@@ -623,7 +623,7 @@ foreign import ccall "sqlite3_status"
 -- True then the highest recorded value is reset after being returned from
 -- this function.
 --
--- Since 2.6.1
+-- @since 2.6.1
 status :: SqliteStatusVerb -> Bool -> IO SqliteStatus
 status verb reset' = alloca $ \pCurrent -> alloca $ \pHighwater -> do
   let (code, hasCurrent, hasHighwater) = statusVerbInfo verb
@@ -644,6 +644,6 @@ foreign import ccall "sqlite3_soft_heap_limit64"
 -- the current size of the soft heap limit can be determined by invoking
 -- this function with a negative argument.
 --
--- Since 2.6.1
+-- @since 2.6.1
 softHeapLimit :: Int64 -> IO Int64
 softHeapLimit x = fromIntegral <$> softHeapLimit64C (CLLong x)

@@ -192,7 +192,7 @@ recordName = unHaskellName . entityHaskell . entityDef . Just
 -- Return 'Nothing' if the replacement was made.
 -- If uniqueness is violated, return a 'Just' with the 'Unique' violation
 --
--- Since 1.2.2.0
+-- @since 1.2.2.0
 replaceUnique
     :: (MonadIO m
        ,Eq record
