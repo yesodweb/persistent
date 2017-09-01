@@ -18,6 +18,8 @@ module Database.Persist.MySQL
     , insertOnDuplicateKeyUpdate
     , insertManyOnDuplicateKeyUpdate
     , SomeField(..)
+    , copyUnlessNull
+    , copyUnlessEmpty
     ) where
 
 import Control.Arrow
@@ -27,11 +29,11 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (runReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
+import Data.Either (partitionEithers)
 import Data.Monoid ((<>))
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import Data.ByteString (ByteString)
-import Data.Either (partitionEithers)
 import Data.Fixed (Pico)
 import Data.Function (on)
 import Data.IORef
@@ -1034,10 +1036,25 @@ insertOnDuplicateKeyUpdate
 insertOnDuplicateKeyUpdate record =
   insertManyOnDuplicateKeyUpdate [record] []
 
--- | This wraps values of an Entity's 'EntityField', making them have the same
--- type. This allows them to be put in lists.
+-- | This type is used to determine how to update rows using MySQL's
+-- @INSERT ON DUPLICATE KEY UPDATE@ functionality, exposed via
+-- 'insertManyOnDuplicateKeyUpdate' in the library.
 data SomeField record where
   SomeField :: EntityField record typ -> SomeField record
+  -- ^ Copy the field directly from the record.
+  CopyUnlessEq :: PersistField typ => EntityField record typ -> typ -> SomeField record
+  -- ^ Only copy the field if it is not equal to the provided value.
+
+-- | Copy the field into the database only if the value in the
+-- corresponding record is non-@NULL@.
+copyUnlessNull :: PersistField typ => EntityField record (Maybe typ) -> SomeField record
+copyUnlessNull field = CopyUnlessEq field Nothing
+
+-- | Copy the field into the database only if the value in the
+-- corresponding record is non-empty, where "empty" means the Monoid
+-- definition for 'mempty'. Useful for 'Text', 'String', 'ByteString', etc.
+copyUnlessEmpty :: (Monoid typ, PersistField typ) => EntityField record typ -> SomeField record
+copyUnlessEmpty field = CopyUnlessEq field mempty
 
 -- | Do a bulk insert on the given records in the first parameter. In the event
 -- that a key conflicts with a record currently in the database, the second and
@@ -1074,15 +1091,30 @@ mkBulkInsertQuery
     -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
     -> (Text, [PersistValue])
 mkBulkInsertQuery records fieldValues updates =
-    (q, recordValues <> updsValues)
+    (q, recordValues <> updsValues <> copyUnlessValues)
   where
-    fieldDefs = map (\x -> case x of SomeField rec -> persistFieldDef rec) fieldValues
-    updateFieldNames = map (T.pack . escapeDBName . fieldDB) fieldDefs
+    mfieldDef x = case x of
+        SomeField rec -> Right (fieldDbToText (persistFieldDef rec))
+        CopyUnlessEq rec val -> Left (fieldDbToText (persistFieldDef rec), toPersistValue val)
+    (fieldsToMaybeCopy, updateFieldNames) = partitionEithers $ map mfieldDef fieldValues
+    fieldDbToText = T.pack . escapeDBName . fieldDB
     entityDef' = entityDef records
-    entityFieldNames = map (T.pack . escapeDBName . fieldDB) (entityFields entityDef')
+    entityFieldNames = map fieldDbToText (entityFields entityDef')
     tableName = T.pack . escapeDBName . entityDB $ entityDef'
+    copyUnlessValues = map snd fieldsToMaybeCopy
     recordValues = concatMap (map toPersistValue . toPersistFields) records
     recordPlaceholders = commaSeparated $ map (parenWrapped . commaSeparated . map (const "?") . toPersistFields) records
+    mkCondFieldSet n _ = T.concat 
+        [ n
+        , "=COALESCE("
+        ,   "NULLIF("
+        ,     "VALUES(", n, ")"
+        ,     "?"
+        ,   "),"
+        ,   n
+        , ")"
+        ]
+    condFieldSets = map (uncurry mkCondFieldSet) fieldsToMaybeCopy
     fieldSets = map (\n -> T.concat [n, "=VALUES(", n, ")"]) updateFieldNames
     upds = map mkUpdateText updates
     updsValues = map (\(Update _ val _) -> toPersistValue val) updates
@@ -1095,7 +1127,7 @@ mkBulkInsertQuery records fieldValues updates =
         , " VALUES "
         , recordPlaceholders
         , " ON DUPLICATE KEY UPDATE "
-        , commaSeparated (fieldSets <> upds)
+        , commaSeparated (fieldSets <> upds <> condFieldSets)
         ]
 
 -- | Vendored from @persistent@.
