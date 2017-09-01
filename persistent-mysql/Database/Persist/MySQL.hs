@@ -34,11 +34,11 @@ import Data.Monoid ((<>))
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import Data.ByteString (ByteString)
-import Data.Either (partitionEithers)
 import Data.Fixed (Pico)
 import Data.Function (on)
 import Data.IORef
 import Data.List (find, intercalate, sort, groupBy)
+import Data.Monoid (Monoid(..))
 import Data.Pool (Pool)
 import Data.Text (Text, pack)
 import qualified Data.Text.IO as T
