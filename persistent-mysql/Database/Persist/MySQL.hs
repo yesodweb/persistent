@@ -30,7 +30,7 @@ import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (runReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
 import Data.Either (partitionEithers)
-import Data.Monoid ((<>))
+import Data.Monoid ((<>), Monoid(..))
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import Data.ByteString (ByteString)
@@ -38,7 +38,6 @@ import Data.Fixed (Pico)
 import Data.Function (on)
 import Data.IORef
 import Data.List (find, intercalate, sort, groupBy)
-import Data.Monoid (Monoid(..))
 import Data.Pool (Pool)
 import Data.Text (Text, pack)
 import qualified Data.Text.IO as T
