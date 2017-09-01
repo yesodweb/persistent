@@ -34,6 +34,7 @@ import Data.Monoid ((<>))
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import Data.ByteString (ByteString)
+import Data.Either (partitionEithers)
 import Data.Fixed (Pico)
 import Data.Function (on)
 import Data.IORef
@@ -1108,7 +1109,7 @@ mkBulkInsertQuery records fieldValues updates =
         [ n
         , "=COALESCE("
         ,   "NULLIF("
-        ,     "VALUES(", n, ")"
+        ,     "VALUES(", n, "),"
         ,     "?"
         ,   "),"
         ,   n
