@@ -67,6 +67,8 @@ import qualified Database.MySQL.Base.Types    as MySQLBase
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Resource (runResourceT)
 
+import Prelude
+
 -- | Create a MySQL connection pool and run the given action.
 -- The pool is properly released after the action finishes using
 -- it.  Note that you should not use the given 'ConnectionPool'
@@ -1044,15 +1046,23 @@ data SomeField record where
   -- ^ Copy the field directly from the record.
   CopyUnlessEq :: PersistField typ => EntityField record typ -> typ -> SomeField record
   -- ^ Only copy the field if it is not equal to the provided value.
+  -- /Since 2.6.2/
 
 -- | Copy the field into the database only if the value in the
 -- corresponding record is non-@NULL@.
+--
+-- /since 2.6.2/
 copyUnlessNull :: PersistField typ => EntityField record (Maybe typ) -> SomeField record
 copyUnlessNull field = CopyUnlessEq field Nothing
 
 -- | Copy the field into the database only if the value in the
 -- corresponding record is non-empty, where "empty" means the Monoid
 -- definition for 'mempty'. Useful for 'Text', 'String', 'ByteString', etc.
+--
+-- The resulting 'SomeField' type is useful for the
+-- 'insertManyOnDuplicateKeyUpdate' function.
+--
+-- /since 2.6.2/
 copyUnlessEmpty :: (Monoid typ, PersistField typ) => EntityField record typ -> SomeField record
 copyUnlessEmpty field = CopyUnlessEq field mempty
 
@@ -1061,19 +1071,96 @@ copyUnlessEmpty field = CopyUnlessEq field mempty
 -- third parameters determine what will happen.
 --
 -- The second parameter is a list of fields to copy from the original value.
--- This allows you to specify that, when a collision occurs, you'll just update
--- the value in the database with the field values that you inserted.
+-- This allows you to specify which fields to copy from the record you're trying 
+-- to insert into the database to the preexisting row.
 --
 -- The third parameter is a list of updates to perform that are independent of
 -- the value that is provided. You can use this to increment a counter value.
 -- These updates only occur if the original record is present in the database.
+--
+-- === __More details on 'SomeField' usage__
+--
+-- The @['SomeField']@ parameter allows you to specify which fields (and
+-- under which conditions) will be copied from the inserted rows. For
+-- a brief example, consider the following data model and existing data set:
+--
+-- @
+-- Item
+--   name        Text
+--   description Text
+--   price       Double Maybe
+--   quantity    Int Maybe
+--
+--   Primary name
+-- @
+-- 
+-- > items:
+-- > +------+-------------+-------+----------+
+-- > | name | description | price | quantity |
+-- > +------+-------------+-------+----------+
+-- > | foo  | very good   |       |    3     |
+-- > | bar  |             |  3.99 |          |
+-- > +------+-------------+-------+----------+
+--
+-- This record type has a single natural key on @itemName@. Let's suppose
+-- that we download a CSV of new items to store into the database. Here's
+-- our CSV:
+--
+-- > name,description,price,quantity
+-- > foo,,2.50,6
+-- > bar,even better,,5
+-- > yes,wow,,
+--
+-- We parse that into a list of Haskell records:
+--
+-- @ 
+-- records = 
+--   [ Item { itemName = "foo", itemDescription = ""
+--          , itemPrice = Just 2.50, itemQuantity = Just 6
+--          }
+--   , Item "bar" "even better" Nothing (Just 5)
+--   , Item "yes" "wow" Nothing Nothing
+--   ]
+-- @
+--
+-- The new CSV data is partial. It only includes __updates__ from the
+-- upstream vendor. Our CSV library parses the missing description field as
+-- an empty string. We don't want to override the existing description. So
+-- we can use the 'copyUnlessEmpty' function to say: "Don't update when the
+-- value is empty."
+--
+-- Likewise, the new row for @bar@ includes a quantity, but no price. We do
+-- not want to overwrite the existing price in the database with a @NULL@
+-- value. So we can use 'copyUnlessNull' to only copy the existing values
+-- in.
+--
+-- The final code looks like this: 
+-- @
+-- 'insertManyOnDuplicateKeyUpdate' records 
+--   [ 'copyUnlessEmpty' ItemDescription 
+--   , 'copyUnlessNull' ItemPrice
+--   , 'copyUnlessNull' ItemQuantity
+--   ]
+--   []
+-- @
+--
+-- Once we run that code on the datahase, the new data set looks like this:
+--
+-- > items:
+-- > +------+-------------+-------+----------+
+-- > | name | description | price | quantity |
+-- > +------+-------------+-------+----------+
+-- > | foo  | very good   |  2.50 |    6     |
+-- > | bar  | even better |  3.99 |    5     |
+-- > | yes  | wow         |       |          |
+-- > +------+-------------+-------+----------+
 insertManyOnDuplicateKeyUpdate
   :: ( PersistEntityBackend record ~ SqlBackend
      , PersistEntity record
      , MonadIO m
      )
   => [record] -- ^ A list of the records you want to insert, or update
-  -> [SomeField record] -- ^ A list of the fields you want to copy over.
+  -> [SomeField record] -- ^ A list of updates to perform based on the record being inserted.
   -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
   -> SqlPersistT m ()
 insertManyOnDuplicateKeyUpdate [] _ _ = return ()
