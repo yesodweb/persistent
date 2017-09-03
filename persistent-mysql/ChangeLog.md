@@ -1,6 +1,6 @@
 ## 2.6.2
 
-* Extend the `SomeField` constructor to allow `insertManyOnDuplicateKeyUpdate` to conditionally copy values.
+* Extend the `SomeField` type to allow `insertManyOnDuplicateKeyUpdate` to conditionally copy values.
 
 ## 2.6.1
 
