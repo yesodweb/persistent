@@ -30,7 +30,8 @@ import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (runReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
 import Data.Either (partitionEithers)
-import Data.Monoid ((<>), Monoid(..))
+import Data.Monoid ((<>))
+import qualified Data.Monoid as Monoid
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import Data.ByteString (ByteString)
@@ -1063,8 +1064,8 @@ copyUnlessNull field = CopyUnlessEq field Nothing
 -- 'insertManyOnDuplicateKeyUpdate' function.
 --
 -- /since 2.6.2/
-copyUnlessEmpty :: (Monoid typ, PersistField typ) => EntityField record typ -> SomeField record
-copyUnlessEmpty field = CopyUnlessEq field mempty
+copyUnlessEmpty :: (Monoid.Monoid typ, PersistField typ) => EntityField record typ -> SomeField record
+copyUnlessEmpty field = CopyUnlessEq field Monoid.mempty
 
 -- | Do a bulk insert on the given records in the first parameter. In the event
 -- that a key conflicts with a record currently in the database, the second and
