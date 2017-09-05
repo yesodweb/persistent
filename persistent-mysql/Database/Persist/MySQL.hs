@@ -1047,12 +1047,12 @@ data SomeField record where
   -- ^ Copy the field directly from the record.
   CopyUnlessEq :: PersistField typ => EntityField record typ -> typ -> SomeField record
   -- ^ Only copy the field if it is not equal to the provided value.
-  -- /Since 2.6.2/
+  -- @since 2.6.2
 
 -- | Copy the field into the database only if the value in the
 -- corresponding record is non-@NULL@.
 --
--- /since 2.6.2/
+-- @since  2.6.2
 copyUnlessNull :: PersistField typ => EntityField record (Maybe typ) -> SomeField record
 copyUnlessNull field = CopyUnlessEq field Nothing
 
@@ -1063,7 +1063,7 @@ copyUnlessNull field = CopyUnlessEq field Nothing
 -- The resulting 'SomeField' type is useful for the
 -- 'insertManyOnDuplicateKeyUpdate' function.
 --
--- /since 2.6.2/
+-- @since  2.6.2
 copyUnlessEmpty :: (Monoid.Monoid typ, PersistField typ) => EntityField record typ -> SomeField record
 copyUnlessEmpty field = CopyUnlessEq field Monoid.mempty
 

@@ -19,6 +19,7 @@ import qualified PrimaryTest
 import qualified Recursive
 import qualified RenameTest
 import qualified SumTypeTest
+import qualified InsertDuplicateUpdate
 import qualified UniqueTest
 
 #ifndef WITH_NOSQL
@@ -53,6 +54,7 @@ main = do
       [ PersistentTest.testMigrate
       , PersistentTest.noPrefixMigrate
       , EmbedTest.embedMigrate
+      , InsertDuplicateUpdate.duplicateMigrate
       , EmbedOrderTest.embedOrderMigrate
       , LargeNumberTest.numberMigrate
       , UniqueTest.uniqueMigrate
@@ -92,6 +94,7 @@ main = do
     PrimaryTest.specs
     CustomPersistFieldTest.specs
     CustomPrimaryKeyReferenceTest.specs
+    InsertDuplicateUpdate.specs
 
 #ifdef WITH_SQLITE
     MigrationTest.specs
