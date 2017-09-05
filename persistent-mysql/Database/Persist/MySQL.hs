@@ -17,9 +17,10 @@ module Database.Persist.MySQL
     , mockMigration
     , insertOnDuplicateKeyUpdate
     , insertManyOnDuplicateKeyUpdate
-    , SomeField(..)
+    , SomeField(SomeField)
     , copyUnlessNull
     , copyUnlessEmpty
+    , copyUnlessEq
     ) where
 
 import Control.Arrow
@@ -1066,6 +1067,17 @@ copyUnlessNull field = CopyUnlessEq field Nothing
 -- @since  2.6.2
 copyUnlessEmpty :: (Monoid.Monoid typ, PersistField typ) => EntityField record typ -> SomeField record
 copyUnlessEmpty field = CopyUnlessEq field Monoid.mempty
+
+-- | Copy the field into the database only if the field is not equal to the
+-- provided value. This is useful to avoid copying weird nullary data into
+-- the database.
+--
+-- The resulting 'SomeField' type is useful for the
+-- 'insertManyOnDuplicateKeyUpdate' function.
+--
+-- @since  2.6.2
+copyUnlessEq :: PersistField typ => EntityField record typ -> typ -> SomeField record
+copyUnlessEq = CopyUnlessEq
 
 -- | Do a bulk insert on the given records in the first parameter. In the event
 -- that a key conflicts with a record currently in the database, the second and

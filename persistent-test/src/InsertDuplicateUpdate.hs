@@ -1,11 +1,21 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans -O0 #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE QuasiQuotes, TemplateHaskell, CPP, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, EmptyDataDecls, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses #-}
+{-# LANGUAGE CPP                        #-}
+{-# LANGUAGE DeriveDataTypeable         #-}
+{-# LANGUAGE EmptyDataDecls             #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GADTs                      #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE QuasiQuotes                #-}
+{-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE TypeFamilies               #-}
 
 module InsertDuplicateUpdate where
 
-import Init
-import Data.List (sort)
+import           Data.List (sort)
+import           Init
 
 share [mkPersist sqlSettings, mkMigrate "duplicateMigrate"] [persistUpperCase|
   Item
@@ -16,7 +26,7 @@ share [mkPersist sqlSettings, mkMigrate "duplicateMigrate"] [persistUpperCase|
 
      Primary name
      deriving Eq Show Ord
-    
+
 |]
 
 #ifdef WITH_MYSQL
@@ -36,7 +46,7 @@ specs = describe "DuplicateKeyUpdate" $ do
       deleteWhere ([] :: [Filter Item])
       let newDescription = "I am a new description"
       _ <- insert item1
-      insertOnDuplicateKeyUpdate 
+      insertOnDuplicateKeyUpdate
         (Item "item1" "i am a description" (Just 1) (Just 2))
         [ItemDescription =. newDescription]
       Just item <- get (ItemKey "item1")
@@ -47,7 +57,7 @@ specs = describe "DuplicateKeyUpdate" $ do
       deleteWhere ([] :: [Filter Item])
       insertMany_ items
       let newItem = Item "item3" "fresh" Nothing Nothing
-      insertManyOnDuplicateKeyUpdate 
+      insertManyOnDuplicateKeyUpdate
         (newItem : items)
         [SomeField ItemDescription]
         []
@@ -56,7 +66,7 @@ specs = describe "DuplicateKeyUpdate" $ do
     it "updates existing records" $ db $ do
       deleteWhere ([] :: [Filter Item])
       insertMany_ items
-      insertManyOnDuplicateKeyUpdate 
+      insertManyOnDuplicateKeyUpdate
         items
         []
         [ItemQuantity +=. 1]
@@ -67,7 +77,7 @@ specs = describe "DuplicateKeyUpdate" $ do
           postUpdate = map (\i -> i { itemPrice = fmap (*2) (itemPrice i) }) items
       insertManyOnDuplicateKeyUpdate
         newItems
-        [ CopyUnlessEq ItemQuantity (Just 0)
+        [ copyUnlessEq ItemQuantity (Just 0)
         , SomeField ItemPrice
         ]
         []
