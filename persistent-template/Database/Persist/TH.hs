@@ -42,10 +42,10 @@ module Database.Persist.TH
     , derivePersistField
     , derivePersistFieldJSON
     , persistFieldFromEntity
-    , parseReferences
       -- * Internal
     , packPTH
     , lensPTH
+    , parseReferences
     ) where
 
 import Prelude hiding ((++), take, concat, splitAt, exp)
