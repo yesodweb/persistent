@@ -42,6 +42,7 @@ module Database.Persist.TH
     , derivePersistField
     , derivePersistFieldJSON
     , persistFieldFromEntity
+    , parseReferences
       -- * Internal
     , packPTH
     , lensPTH
