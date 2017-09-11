@@ -122,6 +122,7 @@ persistFileWith ps fp = do
 
 -- calls parse to Quasi.parse individual entities in isolation
 -- afterwards, sets references to other entities
+-- | @since 2.5.3
 parseReferences :: PersistSettings -> Text -> Q Exp
 parseReferences ps s = lift $
      map (mkEntityDefSqlTypeExp embedEntityMap entMap) noCycleEnts

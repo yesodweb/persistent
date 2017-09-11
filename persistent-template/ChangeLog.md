@@ -1,3 +1,7 @@
+## 2.5.3
+
+* Exposed `parseReferences` to allow custom QuasiQuoters
+
 ## 2.5.2
 
 * Fix incorrect `ToJSON`/`FromJSON` instance generation for generic
