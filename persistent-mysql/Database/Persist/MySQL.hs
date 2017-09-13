@@ -69,7 +69,7 @@ import Control.Monad.Trans.Resource (runResourceT)
 -- The pool is properly released after the action finishes using
 -- it.  Note that you should not use the given 'ConnectionPool'
 -- outside the action since it may be already been released.
-withMySQLPool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m, IsSqlBackend backend)
+withMySQLPool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m, IsSqlBackend backend db)
               => MySQL.ConnectInfo
               -- ^ Connection information.
               -> Int
@@ -83,7 +83,7 @@ withMySQLPool ci = withSqlPool $ open' ci
 -- | Create a MySQL connection pool.  Note that it's your
 -- responsibility to properly close the connection pool when
 -- unneeded.  Use 'withMySQLPool' for automatic resource control.
-createMySQLPool :: (MonadBaseControl IO m, MonadIO m, MonadLogger m, IsSqlBackend backend)
+createMySQLPool :: (MonadBaseControl IO m, MonadIO m, MonadLogger m, IsSqlBackend backend db)
                 => MySQL.ConnectInfo
                 -- ^ Connection information.
                 -> Int
@@ -94,7 +94,7 @@ createMySQLPool ci = createSqlPool $ open' ci
 
 -- | Same as 'withMySQLPool', but instead of opening a pool
 -- of connections, only one connection is opened.
-withMySQLConn :: (MonadBaseControl IO m, MonadIO m, MonadLogger m, IsSqlBackend backend)
+withMySQLConn :: (MonadBaseControl IO m, MonadIO m, MonadLogger m, IsSqlBackend backend db)
               => MySQL.ConnectInfo
               -- ^ Connection information.
               -> (backend -> m a)
@@ -105,7 +105,7 @@ withMySQLConn = withSqlConn . open'
 
 -- | Internal function that opens a connection to the MySQL
 -- server.
-open' :: (IsSqlBackend backend) => MySQL.ConnectInfo -> LogFunc -> IO backend
+open' :: (IsSqlBackend backend db) => MySQL.ConnectInfo -> LogFunc -> IO backend
 open' ci logFunc = do
     conn <- MySQL.connect ci
     MySQLBase.autocommit conn False -- disable autocommit!
@@ -1030,7 +1030,7 @@ insertOnDuplicateKeyUpdate
      , PersistEntity record
      , MonadIO m
      , PersistStore backend
-     , backend ~ SqlBackend
+     , backend ~ SqlBackend db
      )
   => record
   -> [Update record]
@@ -1055,7 +1055,7 @@ data SomeField record where
 -- the value that is provided. You can use this to increment a counter value.
 -- These updates only occur if the original record is present in the database.
 insertManyOnDuplicateKeyUpdate
-  :: ( PersistEntityBackend record ~ SqlBackend
+  :: ( PersistEntityBackend record ~ SqlBackend db
      , PersistEntity record
      , MonadIO m
      )
@@ -1072,7 +1072,7 @@ insertManyOnDuplicateKeyUpdate records fieldValues updates =
 -- garbage results if you don't provide a list of either fields to copy or
 -- fields to update.
 mkBulkInsertQuery
-    :: (PersistEntityBackend record ~ SqlBackend, PersistEntity record)
+    :: (PersistEntityBackend record ~ SqlBackend db, PersistEntity record)
     => [record] -- ^ A list of the records you want to insert, or update
     -> [SomeField record] -- ^ A list of the fields you want to copy over.
     -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
