@@ -23,13 +23,13 @@ import Database.Persist (
   , DBName)
 import Database.Persist.Sql.Types (Sql, SqlBackend, connEscapeName)
 
-entityColumnNames :: EntityDef -> SqlBackend -> [Sql]
+entityColumnNames :: EntityDef -> SqlBackend db -> [Sql]
 entityColumnNames ent conn =
      (if hasCompositeKey ent
       then [] else [connEscapeName conn $ fieldDB (entityId ent)])
   <> map (connEscapeName conn . fieldDB) (entityFields ent)
 
-keyAndEntityColumnNames :: EntityDef -> SqlBackend -> [Sql]
+keyAndEntityColumnNames :: EntityDef -> SqlBackend db -> [Sql]
 keyAndEntityColumnNames ent conn = map (connEscapeName conn . fieldDB) (keyAndEntityFields ent)
 
 entityColumnCount :: EntityDef -> Int
@@ -39,13 +39,13 @@ entityColumnCount e = length (entityFields e)
 hasCompositeKey :: EntityDef -> Bool
 hasCompositeKey = isJust . entityPrimary
 
-dbIdColumns :: SqlBackend -> EntityDef -> [Text]
+dbIdColumns :: SqlBackend db -> EntityDef -> [Text]
 dbIdColumns conn = dbIdColumnsEsc (connEscapeName conn)
 
 dbIdColumnsEsc :: (DBName -> Text) -> EntityDef -> [Text]
 dbIdColumnsEsc esc t = map (esc . fieldDB) $ entityKeyFields t
 
-dbColumns :: SqlBackend -> EntityDef -> [Text]
+dbColumns :: SqlBackend db -> EntityDef -> [Text]
 dbColumns conn t = case entityPrimary t of
     Just _  -> flds
     Nothing -> escapeDB (entityId t) : flds

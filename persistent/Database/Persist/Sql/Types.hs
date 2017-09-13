@@ -48,7 +48,7 @@ data PersistentSqlException = StatementAlreadyFinalized Text
     deriving (Typeable, Show)
 instance Exception PersistentSqlException
 
-type SqlPersistT = ReaderT SqlBackend
+type SqlPersistT = forall db. ReaderT (SqlBackend db)
 
 type SqlPersist = SqlPersistT
 {-# DEPRECATED SqlPersist "Please use SqlPersistT instead" #-}
@@ -60,9 +60,9 @@ type Sql = Text
 -- Bool indicates if the Sql is safe
 type CautiousMigration = [(Bool, Sql)]
 
-type Migration = WriterT [Text] (WriterT CautiousMigration (ReaderT SqlBackend IO)) ()
+type Migration db = WriterT [Text] (WriterT CautiousMigration (ReaderT (SqlBackend db) IO)) ()
 
-type ConnectionPool = Pool SqlBackend
+type ConnectionPool db = Pool (SqlBackend db)
 
 -- $rawSql
 --

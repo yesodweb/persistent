@@ -30,7 +30,7 @@ import Data.Maybe (isJust)
 import Data.List (transpose, inits, find)
 
 -- orphaned instance for convenience of modularity
-instance PersistQueryRead SqlBackend where
+instance PersistQueryRead (SqlBackend db) where
     count filts = do
         conn <- ask
         let wher = if null filts
@@ -124,30 +124,30 @@ instance PersistQueryRead SqlBackend where
             case keyFromValues keyvals of
                 Right k -> return k
                 Left err -> error $ "selectKeysImpl: keyFromValues failed" <> show err
-instance PersistQueryRead SqlReadBackend where
+instance PersistQueryRead (SqlReadBackend db) where
     count filts = withReaderT persistBackend $ count filts
     selectSourceRes filts opts = withReaderT persistBackend $ selectSourceRes filts opts
     selectKeysRes filts opts = withReaderT persistBackend $ selectKeysRes filts opts
-instance PersistQueryRead SqlWriteBackend where
+instance PersistQueryRead (SqlWriteBackend db) where
     count filts = withReaderT persistBackend $ count filts
     selectSourceRes filts opts = withReaderT persistBackend $ selectSourceRes filts opts
     selectKeysRes filts opts = withReaderT persistBackend $ selectKeysRes filts opts
 
-instance PersistQueryWrite SqlBackend where
+instance PersistQueryWrite (SqlBackend db) where
     deleteWhere filts = do
         _ <- deleteWhereCount filts
         return ()
     updateWhere filts upds = do
         _ <- updateWhereCount filts upds
         return ()
-instance PersistQueryWrite SqlWriteBackend where
+instance PersistQueryWrite (SqlWriteBackend db) where
     deleteWhere filts = withReaderT persistBackend $ deleteWhere filts
     updateWhere filts upds = withReaderT persistBackend $ updateWhere filts upds
 
 -- | Same as 'deleteWhere', but returns the number of rows affected.
 --
 -- @since 1.1.5
-deleteWhereCount :: (PersistEntity val, MonadIO m, PersistEntityBackend val ~ SqlBackend, IsSqlBackend backend)
+deleteWhereCount :: (PersistEntity val, MonadIO m, PersistEntityBackend val ~ SqlBackend db, IsSqlBackend backend db)
                  => [Filter val]
                  -> ReaderT backend m Int64
 deleteWhereCount filts = withReaderT persistBackend $ do
@@ -166,7 +166,7 @@ deleteWhereCount filts = withReaderT persistBackend $ do
 -- | Same as 'updateWhere', but returns the number of rows affected.
 --
 -- @since 1.1.5
-updateWhereCount :: (PersistEntity val, MonadIO m, SqlBackend ~ PersistEntityBackend val, IsSqlBackend backend)
+updateWhereCount :: (PersistEntity val, MonadIO m, SqlBackend db ~ PersistEntityBackend val, IsSqlBackend backend db)
                  => [Filter val]
                  -> [Update val]
                  -> ReaderT backend m Int64
@@ -200,22 +200,22 @@ updateWhereCount filts upds = withReaderT persistBackend $ do
     updateField (Update f _ _) = fieldName f
     updateField _ = error "BackendUpdate not implemented"
 
-fieldName ::  forall record typ.  (PersistEntity record, PersistEntityBackend record ~ SqlBackend) => EntityField record typ -> DBName
+fieldName ::  forall record typ db.  (PersistEntity record, PersistEntityBackend record ~ SqlBackend db) => EntityField record typ -> DBName
 fieldName f = fieldDB $ persistFieldDef f
 
 dummyFromFilts :: [Filter v] -> Maybe v
 dummyFromFilts _ = Nothing
 
-getFiltsValues :: forall val. (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
-               => SqlBackend -> [Filter val] -> [PersistValue]
+getFiltsValues :: forall val db. (PersistEntity val, PersistEntityBackend val ~ SqlBackend db)
+               => SqlBackend db -> [Filter val] -> [PersistValue]
 getFiltsValues conn = snd . filterClauseHelper False False conn OrNullNo
 
 data OrNull = OrNullYes | OrNullNo
 
-filterClauseHelper :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
+filterClauseHelper :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend db)
              => Bool -- ^ include table name?
              -> Bool -- ^ include WHERE?
-             -> SqlBackend
+             -> SqlBackend db
              -> OrNull
              -> [Filter val]
              -> (Text, [PersistValue])
@@ -368,16 +368,16 @@ updatePersistValue :: Update v -> PersistValue
 updatePersistValue (Update _ v _) = toPersistValue v
 updatePersistValue _ = error "BackendUpdate not implemented"
 
-filterClause :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
+filterClause :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend db)
              => Bool -- ^ include table name?
-             -> SqlBackend
+             -> SqlBackend db
              -> [Filter val]
              -> Text
 filterClause b c = fst . filterClauseHelper b True c OrNullNo
 
-orderClause :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
+orderClause :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend db)
             => Bool -- ^ include the table name
-            -> SqlBackend
+            -> SqlBackend db
             -> SelectOpt val
             -> Text
 orderClause includeTable conn o =
@@ -391,7 +391,7 @@ orderClause includeTable conn o =
 
     tn = connEscapeName conn $ entityDB $ entityDef $ dummyFromOrder o
 
-    name :: (PersistEntityBackend record ~ SqlBackend, PersistEntity record)
+    name :: (PersistEntityBackend record ~ SqlBackend db, PersistEntity record)
          => EntityField record typ -> Text
     name x =
         (if includeTable

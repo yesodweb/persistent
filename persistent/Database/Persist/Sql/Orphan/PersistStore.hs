@@ -44,18 +44,20 @@ withRawQuery :: MonadIO m
              => Text
              -> [PersistValue]
              -> C.Sink [PersistValue] IO a
-             -> ReaderT SqlBackend m a
+             -> ReaderT (SqlBackend db) m a
 withRawQuery sql vals sink = do
     srcRes <- rawQueryRes sql vals
     liftIO $ with srcRes (C.$$ sink)
 
-toSqlKey :: ToBackendKey SqlBackend record => Int64 -> Key record
+toSqlKey :: ToBackendKey (SqlBackend db) record => Int64 -> Key record
 toSqlKey = fromBackendKey . SqlBackendKey
 
-fromSqlKey :: ToBackendKey SqlBackend record => Key record -> Int64
+fromSqlKey :: ToBackendKey (SqlBackend db) record => Key record -> Int64
 fromSqlKey = unSqlBackendKey . toBackendKey
 
-whereStmtForKey :: PersistEntity record => SqlBackend -> Key record -> Text
+whereStmtForKey 
+    :: (PersistEntity record, PersistEntityBackend record ~ SqlBackend db) 
+    => SqlBackend db -> Key record -> Text
 whereStmtForKey conn k =
     T.intercalate " AND "
   $ map (<> "=? ")
@@ -69,10 +71,10 @@ whereStmtForKey conn k =
 --
 -- Your backend may provide a more convenient tableName function
 -- which does not operate in a Monad
-getTableName :: forall record m backend.
+getTableName :: forall record m backend db.
              ( PersistEntity record
-             , PersistEntityBackend record ~ SqlBackend
-             , IsSqlBackend backend
+             , PersistEntityBackend record ~ SqlBackend db
+             , IsSqlBackend backend db
              , Monad m
              ) => record -> ReaderT backend m Text
 getTableName rec = withReaderT persistBackend $ do
@@ -88,10 +90,10 @@ tableDBName rec = entityDB $ entityDef (Just rec)
 --
 -- Your backend may provide a more convenient fieldName function
 -- which does not operate in a Monad
-getFieldName :: forall record typ m backend.
+getFieldName :: forall record typ m backend db.
              ( PersistEntity record
-             , PersistEntityBackend record ~ SqlBackend
-             , IsSqlBackend backend
+             , PersistEntityBackend record ~ SqlBackend db
+             , IsSqlBackend backend db
              , Monad m
              )
              => EntityField record typ -> ReaderT backend m Text
@@ -104,17 +106,17 @@ fieldDBName :: forall record typ. (PersistEntity record) => EntityField record t
 fieldDBName = fieldDB . persistFieldDef
 
 
-instance PersistCore SqlBackend where
-    newtype BackendKey SqlBackend = SqlBackendKey { unSqlBackendKey :: Int64 }
+instance PersistCore (SqlBackend db) where
+    newtype BackendKey (SqlBackend db) = SqlBackendKey { unSqlBackendKey :: Int64 }
         deriving (Show, Read, Eq, Ord, Num, Integral, PersistField, PersistFieldSql, PathPiece, ToHttpApiData, FromHttpApiData, Real, Enum, Bounded, A.ToJSON, A.FromJSON)
-instance PersistCore SqlReadBackend where
-    newtype BackendKey SqlReadBackend = SqlReadBackendKey { unSqlReadBackendKey :: Int64 }
+instance PersistCore (SqlReadBackend db) where
+    newtype BackendKey (SqlReadBackend db) = SqlReadBackendKey { unSqlReadBackendKey :: Int64 }
         deriving (Show, Read, Eq, Ord, Num, Integral, PersistField, PersistFieldSql, PathPiece, ToHttpApiData, FromHttpApiData, Real, Enum, Bounded, A.ToJSON, A.FromJSON)
-instance PersistCore SqlWriteBackend where
-    newtype BackendKey SqlWriteBackend = SqlWriteBackendKey { unSqlWriteBackendKey :: Int64 }
+instance PersistCore (SqlWriteBackend db) where
+    newtype BackendKey (SqlWriteBackend db) = SqlWriteBackendKey { unSqlWriteBackendKey :: Int64 }
         deriving (Show, Read, Eq, Ord, Num, Integral, PersistField, PersistFieldSql, PathPiece, ToHttpApiData, FromHttpApiData, Real, Enum, Bounded, A.ToJSON, A.FromJSON)
 
-instance PersistStoreWrite SqlBackend where
+instance PersistStoreWrite (SqlBackend db) where
     update _ [] = return ()
     update k upds = do
         conn <- ask
@@ -275,7 +277,7 @@ instance PersistStoreWrite SqlBackend where
             , " WHERE "
             , wher conn
             ]
-instance PersistStoreWrite SqlWriteBackend where
+instance PersistStoreWrite (SqlWriteBackend db) where
     insert v = withReaderT persistBackend $ insert v
     insertMany vs = withReaderT persistBackend $ insertMany vs
     insertMany_ vs = withReaderT persistBackend $ insertMany_ vs
@@ -286,7 +288,7 @@ instance PersistStoreWrite SqlWriteBackend where
     update k upds = withReaderT persistBackend $ update k upds
 
 
-instance PersistStoreRead SqlBackend where
+instance PersistStoreRead (SqlBackend db) where
     get k = do
         conn <- ask
         let t = entityDef $ dummyFromKey k
@@ -311,9 +313,9 @@ instance PersistStoreRead SqlBackend where
                     case fromPersistValues $ if noColumns then [] else vals of
                         Left e -> error $ "get " ++ show k ++ ": " ++ unpack e
                         Right v -> return $ Just v
-instance PersistStoreRead SqlReadBackend where
+instance PersistStoreRead (SqlReadBackend db) where
     get k = withReaderT persistBackend $ get k
-instance PersistStoreRead SqlWriteBackend where
+instance PersistStoreRead (SqlWriteBackend db) where
     get k = withReaderT persistBackend $ get k
 
 dummyFromKey :: Key record -> Maybe record
@@ -326,7 +328,7 @@ insrepHelper :: (MonadIO m, PersistEntity val)
              => Text
              -> Key val
              -> val
-             -> ReaderT SqlBackend m ()
+             -> ReaderT (SqlBackend db) m ()
 insrepHelper command k record = do
     conn <- ask
     let columnNames = keyAndEntityColumnNames entDef conn

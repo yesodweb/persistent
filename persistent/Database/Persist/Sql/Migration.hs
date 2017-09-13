@@ -35,7 +35,7 @@ safeSql = allSql . filter (not . fst)
 
 -- | Given a 'Migration', this parses it and returns either a list of
 -- errors associated with the migration or a list of migrations to do.
-parseMigration :: MonadIO m => Migration -> ReaderT SqlBackend m (Either [Text] CautiousMigration)
+parseMigration :: MonadIO m => Migration db -> ReaderT (SqlBackend db) m (Either [Text] CautiousMigration)
 parseMigration =
     liftIOReader . liftM go . runWriterT . execWriterT
   where
@@ -46,7 +46,7 @@ parseMigration =
 
 -- | Like 'parseMigration', but instead of returning the value in an
 -- 'Either' value, it calls 'error' on the error values.
-parseMigration' :: MonadIO m => Migration -> ReaderT SqlBackend m (CautiousMigration)
+parseMigration' :: MonadIO m => Migration db -> ReaderT (SqlBackend db) m (CautiousMigration)
 parseMigration' m = do
   x <- parseMigration m
   case x of
@@ -54,18 +54,18 @@ parseMigration' m = do
       Right sql -> return sql
 
 -- | Prints a migration.
-printMigration :: MonadIO m => Migration -> ReaderT SqlBackend m ()
+printMigration :: MonadIO m => Migration db -> ReaderT (SqlBackend db) m ()
 printMigration m = showMigration m
                >>= mapM_ (liftIO . Data.Text.IO.putStrLn)
 
 -- | Convert a 'Migration' to a list of 'Text' values corresponding to their
 -- 'Sql' statements.
-showMigration :: MonadIO m => Migration -> ReaderT SqlBackend m [Text]
+showMigration :: MonadIO m => Migration db -> ReaderT (SqlBackend db) m [Text]
 showMigration m = map (flip snoc ';') `liftM` getMigration m
 
 -- | Return all of the 'Sql' values associated with the given migration.
 -- Calls 'error' if there's a parse error on any migration.
-getMigration :: MonadIO m => Migration -> ReaderT SqlBackend m [Sql]
+getMigration :: MonadIO m => Migration db -> ReaderT (SqlBackend db) m [Sql]
 getMigration m = do
   mig <- parseMigration' m
   return $ allSql mig
@@ -73,15 +73,15 @@ getMigration m = do
 -- | Runs a migration. If the migration fails to parse or if any of the
 -- migrations are unsafe, then this calls 'error' to halt the program.
 runMigration :: MonadIO m
-             => Migration
-             -> ReaderT SqlBackend m ()
+             => Migration db
+             -> ReaderT (SqlBackend db) m ()
 runMigration m = runMigration' m False >> return ()
 
 -- | Same as 'runMigration', but returns a list of the SQL commands executed
 -- instead of printing them to stderr.
 runMigrationSilent :: (MonadBaseControl IO m, MonadIO m)
-                   => Migration
-                   -> ReaderT SqlBackend m [Text]
+                   => Migration db
+                   -> ReaderT (SqlBackend db) m [Text]
 runMigrationSilent m = liftBaseOp_ (hSilence [stderr]) $ runMigration' m True
 
 -- | Run the given migration against the database. If the migration fails
@@ -89,9 +89,9 @@ runMigrationSilent m = liftBaseOp_ (hSilence [stderr]) $ runMigration' m True
 -- runtime. This returns a list of the migrations that were executed.
 runMigration'
     :: MonadIO m
-    => Migration
+    => Migration db
     -> Bool -- ^ is silent?
-    -> ReaderT SqlBackend m [Text]
+    -> ReaderT (SqlBackend db) m [Text]
 runMigration' m silent = do
     mig <- parseMigration' m
     if any fst mig
@@ -109,13 +109,13 @@ runMigration' m silent = do
 -- | Like 'runMigration', but this will perform the unsafe database
 -- migrations instead of erroring out.
 runMigrationUnsafe :: MonadIO m
-                   => Migration
-                   -> ReaderT SqlBackend m ()
+                   => Migration db
+                   -> ReaderT (SqlBackend db) m ()
 runMigrationUnsafe m = do
     mig <- parseMigration' m
     mapM_ (executeMigrate False) $ sortMigrations $ allSql mig
 
-executeMigrate :: MonadIO m => Bool -> Text -> ReaderT SqlBackend m Text
+executeMigrate :: MonadIO m => Bool -> Text -> ReaderT (SqlBackend db) m Text
 executeMigrate silent s = do
     unless silent $ liftIO $ hPutStrLn stderr $ "Migrating: " ++ unpack s
     rawExecute s []
@@ -136,7 +136,7 @@ sortMigrations x =
 -- with the new one.
 migrate :: [EntityDef]
         -> EntityDef
-        -> Migration
+        -> Migration db
 migrate allDefs val = do
     conn <- lift $ lift ask
     res <- liftIO $ connMigrateSql conn allDefs (getStmtConn conn) val

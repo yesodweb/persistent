@@ -60,7 +60,7 @@ data Statement = Statement
                 -> Acquire (Source m [PersistValue])
     }
 
-data SqlBackend = SqlBackend
+data SqlBackend db = SqlBackend
     { connPrepare :: Text -> IO Statement
     -- | table name, column names, id name, either 1 or 2 statements to run
     , connInsertSql :: EntityDef -> [PersistValue] -> InsertSqlResult
@@ -88,59 +88,59 @@ data SqlBackend = SqlBackend
     -- @since 2.6.1
     }
     deriving Typeable
-instance HasPersistBackend SqlBackend where
-    type BaseBackend SqlBackend = SqlBackend
+instance HasPersistBackend (SqlBackend db) where
+    type BaseBackend (SqlBackend db) = SqlBackend db
     persistBackend = id
-instance IsPersistBackend SqlBackend where
+instance IsPersistBackend (SqlBackend db) where
     mkPersistBackend = id
 
 -- | An SQL backend which can only handle read queries
-newtype SqlReadBackend = SqlReadBackend { unSqlReadBackend :: SqlBackend } deriving Typeable
-instance HasPersistBackend SqlReadBackend where
-    type BaseBackend SqlReadBackend = SqlBackend
+newtype SqlReadBackend db = SqlReadBackend { unSqlReadBackend :: SqlBackend db } deriving Typeable
+instance HasPersistBackend (SqlReadBackend db) where
+    type BaseBackend (SqlReadBackend db) = SqlBackend db
     persistBackend = unSqlReadBackend
-instance IsPersistBackend SqlReadBackend where
+instance IsPersistBackend (SqlReadBackend db) where
     mkPersistBackend = SqlReadBackend
 
 -- | An SQL backend which can handle read or write queries
-newtype SqlWriteBackend = SqlWriteBackend { unSqlWriteBackend :: SqlBackend } deriving Typeable
-instance HasPersistBackend SqlWriteBackend where
-    type BaseBackend SqlWriteBackend = SqlBackend
+newtype SqlWriteBackend db = SqlWriteBackend { unSqlWriteBackend :: SqlBackend db } deriving Typeable
+instance HasPersistBackend (SqlWriteBackend db) where
+    type BaseBackend (SqlWriteBackend db) = SqlBackend db
     persistBackend = unSqlWriteBackend
-instance IsPersistBackend SqlWriteBackend where
+instance IsPersistBackend (SqlWriteBackend db) where
     mkPersistBackend = SqlWriteBackend
 
 -- | Useful for running a write query against an untagged backend with unknown capabilities.
-writeToUnknown :: Monad m => ReaderT SqlWriteBackend m a -> ReaderT SqlBackend m a
+writeToUnknown :: Monad m => ReaderT (SqlWriteBackend db) m a -> ReaderT (SqlBackend db) m a
 writeToUnknown ma = do
   unknown <- ask
   lift . runReaderT ma $ SqlWriteBackend unknown
 
 -- | Useful for running a read query against a backend with read and write capabilities.
-readToWrite :: Monad m => ReaderT SqlReadBackend m a -> ReaderT SqlWriteBackend m a
+readToWrite :: Monad m => ReaderT (SqlReadBackend db) m a -> ReaderT (SqlWriteBackend db) m a
 readToWrite ma = do
   write <- ask
   lift . runReaderT ma . SqlReadBackend $ unSqlWriteBackend write
 
 -- | Useful for running a read query against a backend with unknown capabilities.
-readToUnknown :: Monad m => ReaderT SqlReadBackend m a -> ReaderT SqlBackend m a
+readToUnknown :: Monad m => ReaderT (SqlReadBackend db) m a -> ReaderT (SqlBackend db) m a
 readToUnknown ma = do
   unknown <- ask
   lift . runReaderT ma $ SqlReadBackend unknown
 
 -- | A constraint synonym which witnesses that a backend is SQL and can run read queries.
-type SqlBackendCanRead backend =
-  ( IsSqlBackend backend
+type SqlBackendCanRead backend db =
+  ( IsSqlBackend backend db
   , PersistQueryRead backend, PersistStoreRead backend, PersistUniqueRead backend
   )
 -- | A constraint synonym which witnesses that a backend is SQL and can run read and write queries.
-type SqlBackendCanWrite backend =
-  ( SqlBackendCanRead backend
+type SqlBackendCanWrite backend db =
+  ( SqlBackendCanRead backend db
   , PersistQueryWrite backend, PersistStoreWrite backend, PersistUniqueWrite backend
   )
 -- | Like @SqlPersistT@ but compatible with any SQL backend which can handle read queries.
-type SqlReadT m a = forall backend. (SqlBackendCanRead backend) => ReaderT backend m a
+type SqlReadT m a = forall backend db. (SqlBackendCanRead backend db) => ReaderT backend m a
 -- | Like @SqlPersistT@ but compatible with any SQL backend which can handle read and write queries.
-type SqlWriteT m a = forall backend. (SqlBackendCanWrite backend) => ReaderT backend m a
+type SqlWriteT m a = forall backend db. (SqlBackendCanWrite backend db) => ReaderT backend m a
 -- | A backend which is a wrapper around @SqlBackend@.
-type IsSqlBackend backend = (IsPersistBackend backend, BaseBackend backend ~ SqlBackend)
+type IsSqlBackend backend db = (IsPersistBackend backend, BaseBackend backend ~ SqlBackend db)
