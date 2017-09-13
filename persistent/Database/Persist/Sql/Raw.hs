@@ -21,7 +21,7 @@ import qualified Data.Text as T
 import Data.Conduit
 import Control.Monad.Trans.Resource (MonadResource,release)
 
-rawQuery :: (MonadResource m, MonadReader env m, HasPersistBackend env, BaseBackend env ~ SqlBackend)
+rawQuery :: (MonadResource m, MonadReader env m, HasPersistBackend env, BaseBackend env ~ SqlBackend db)
          => Text
          -> [PersistValue]
          -> Source m [PersistValue]
@@ -32,7 +32,7 @@ rawQuery sql vals = do
     release releaseKey
 
 rawQueryRes
-    :: (MonadIO m1, MonadIO m2, IsSqlBackend env)
+    :: (MonadIO m1, MonadIO m2, IsSqlBackend env db)
     => Text
     -> [PersistValue]
     -> ReaderT env m1 (Acquire (Source m2 [PersistValue]))
@@ -50,12 +50,12 @@ rawQueryRes sql vals = do
 rawExecute :: MonadIO m
            => Text            -- ^ SQL statement, possibly with placeholders.
            -> [PersistValue]  -- ^ Values to fill the placeholders.
-           -> ReaderT SqlBackend m ()
+           -> ReaderT (SqlBackend db) m ()
 rawExecute x y = liftM (const ()) $ rawExecuteCount x y
 
 -- | Execute a raw SQL statement and return the number of
 -- rows it has modified.
-rawExecuteCount :: (MonadIO m, IsSqlBackend backend)
+rawExecuteCount :: (MonadIO m, IsSqlBackend backend db)
                 => Text            -- ^ SQL statement, possibly with placeholders.
                 -> [PersistValue]  -- ^ Values to fill the placeholders.
                 -> ReaderT backend m Int64
@@ -69,13 +69,13 @@ rawExecuteCount sql vals = do
     return res
 
 getStmt
-  :: (MonadIO m, IsSqlBackend backend)
+  :: (MonadIO m, IsSqlBackend backend db)
   => Text -> ReaderT backend m Statement
 getStmt sql = do
     conn <- persistBackend `liftM` ask
     liftIO $ getStmtConn conn sql
 
-getStmtConn :: SqlBackend -> Text -> IO Statement
+getStmtConn :: SqlBackend db -> Text -> IO Statement
 getStmtConn conn sql = do
     smap <- liftIO $ readIORef $ connStmtMap conn
     case Map.lookup sql smap of
@@ -207,7 +207,7 @@ getStmtConn conn sql = do
 rawSql :: (RawSql a, MonadIO m)
        => Text             -- ^ SQL statement, possibly with placeholders.
        -> [PersistValue]   -- ^ Values to fill the placeholders.
-       -> ReaderT SqlBackend m [a]
+       -> ReaderT (SqlBackend db) m [a]
 rawSql stmt = run
     where
       getType :: (x -> m [a]) -> a

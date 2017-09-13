@@ -37,7 +37,7 @@ escape (DBName s) = T.pack $ '"' : escapeQuote (T.unpack s) ++ "\""
     escapeQuote ('"':xs) = "\"\"" ++ escapeQuote xs
     escapeQuote (x:xs) = x : escapeQuote xs
 
-instance PersistUniqueWrite SqlBackend where
+instance PersistUniqueWrite (SqlBackend db) where
     upsert record updates = do
       conn <- ask
       uniqueKey <- onlyUnique record
@@ -82,10 +82,10 @@ instance PersistUniqueWrite SqlBackend where
                 , " WHERE "
                 , T.intercalate " AND " $ map (go' conn) $ go uniq]
 
-instance PersistUniqueWrite SqlWriteBackend where
+instance PersistUniqueWrite (SqlWriteBackend db) where
     deleteBy uniq = withReaderT persistBackend $ deleteBy uniq
 
-instance PersistUniqueRead SqlBackend where
+instance PersistUniqueRead (SqlBackend db) where
     getBy uniq = do
         conn <- ask
         let sql =
@@ -114,10 +114,10 @@ instance PersistUniqueRead SqlBackend where
         t = entityDef $ dummyFromUnique uniq
         toFieldNames' = map snd . persistUniqueToFieldNames
 
-instance PersistUniqueRead SqlReadBackend where
+instance PersistUniqueRead (SqlReadBackend db) where
     getBy uniq = withReaderT persistBackend $ getBy uniq
 
-instance PersistUniqueRead SqlWriteBackend where
+instance PersistUniqueRead (SqlWriteBackend db) where
     getBy uniq = withReaderT persistBackend $ getBy uniq
 
 dummyFromUnique :: Unique v -> Maybe v
