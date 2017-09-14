@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -25,7 +26,7 @@ import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (runExceptT)
-import Control.Monad.Trans.Reader (runReaderT, ReaderT)
+import Control.Monad.Trans.Reader (runReaderT, ReaderT, withReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
 import Data.Monoid ((<>))
 import Data.Aeson
@@ -1026,15 +1027,15 @@ mockMigration mig = do
 -- | MySQL specific 'upsert'. This will prevent multiple queries, when one will
 -- do.
 insertOnDuplicateKeyUpdate
-  :: ( PersistEntityBackend record ~ BaseBackend backend
+  :: ( backend ~ PersistEntityBackend record
      , PersistEntity record
      , MonadIO m
      , PersistStore backend
-     , backend ~ SqlBackend
+     , BackendCompatible SqlBackend backend 
      )
   => record
   -> [Update record]
-  -> ReaderT SqlBackend m ()
+  -> ReaderT backend m ()
 insertOnDuplicateKeyUpdate record =
   insertManyOnDuplicateKeyUpdate [record] []
 
@@ -1055,24 +1056,51 @@ data SomeField record where
 -- the value that is provided. You can use this to increment a counter value.
 -- These updates only occur if the original record is present in the database.
 insertManyOnDuplicateKeyUpdate
-  :: ( PersistEntityBackend record ~ SqlBackend
-     , PersistEntity record
-     , MonadIO m
-     )
+  :: forall record backend m. 
+  ( backend ~ PersistEntityBackend record
+  , BackendCompatible SqlBackend backend
+  , PersistEntity record
+  , MonadIO m
+  )
   => [record] -- ^ A list of the records you want to insert, or update
   -> [SomeField record] -- ^ A list of the fields you want to copy over.
   -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
-  -> SqlPersistT m ()
+  -> ReaderT backend m ()
 insertManyOnDuplicateKeyUpdate [] _ _ = return ()
-insertManyOnDuplicateKeyUpdate records [] [] = insertMany_ records
+insertManyOnDuplicateKeyUpdate records [] [] = 
+    withReaderT projectBackend 
+    . uncurry rawExecute 
+    $ mkInsertIgnoreQuery records
 insertManyOnDuplicateKeyUpdate records fieldValues updates =
-  uncurry rawExecute $ mkBulkInsertQuery records fieldValues updates
+    withReaderT projectBackend 
+    . uncurry rawExecute 
+    $ mkBulkInsertQuery records fieldValues updates
+
+-- | This makes a special query that inserts the given rows into the
+-- database without performing any updates. If there are duplicate keys,
+-- then it just ignores that.
+mkInsertIgnoreQuery :: PersistEntity record => [record] -> (Text, [PersistValue])
+mkInsertIgnoreQuery records = (q, concat vals)
+  where
+    entityDef' = entityDef records
+    tableName = T.pack . escapeDBName . entityDB $ entityDef'
+    vals = map (map toPersistValue . toPersistFields) records
+    entityFieldNames = map (T.pack . escapeDBName . fieldDB) (entityFields entityDef')
+    recordPlaceholders = commaSeparated $ map (parenWrapped . commaSeparated . map (const "?") . toPersistFields) records
+    q = T.concat
+        [ "INSERT IGNORE INTO "
+        , tableName
+        , " ("
+        , commaSeparated entityFieldNames
+        , ")"
+        , recordPlaceholders
+        ]
 
 -- | This creates the query for 'bulkInsertOnDuplicateKeyUpdate'. It will give
 -- garbage results if you don't provide a list of either fields to copy or
 -- fields to update.
 mkBulkInsertQuery
-    :: (PersistEntityBackend record ~ SqlBackend, PersistEntity record)
+    :: PersistEntity record 
     => [record] -- ^ A list of the records you want to insert, or update
     -> [SomeField record] -- ^ A list of the fields you want to copy over.
     -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
