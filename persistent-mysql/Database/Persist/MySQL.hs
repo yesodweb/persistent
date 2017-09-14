@@ -25,7 +25,7 @@ import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (runExceptT)
-import Control.Monad.Trans.Reader (runReaderT)
+import Control.Monad.Trans.Reader (runReaderT, ReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
 import Data.Monoid ((<>))
 import Data.Aeson
@@ -1034,7 +1034,7 @@ insertOnDuplicateKeyUpdate
      )
   => record
   -> [Update record]
-  -> SqlPersistT m ()
+  -> ReaderT SqlBackend m ()
 insertOnDuplicateKeyUpdate record =
   insertManyOnDuplicateKeyUpdate [record] []
 

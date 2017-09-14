@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -39,6 +40,7 @@ import Web.HttpApiData (ToHttpApiData, FromHttpApiData)
 import Database.Persist.Sql.Class (PersistFieldSql)
 import qualified Data.Aeson as A
 import Control.Exception.Lifted (throwIO)
+import Database.Persist.Class (BackendCompatible(..))
 
 withRawQuery :: MonadIO m
              => Text
@@ -113,6 +115,15 @@ instance PersistCore SqlReadBackend where
 instance PersistCore SqlWriteBackend where
     newtype BackendKey SqlWriteBackend = SqlWriteBackendKey { unSqlWriteBackendKey :: Int64 }
         deriving (Show, Read, Eq, Ord, Num, Integral, PersistField, PersistFieldSql, PathPiece, ToHttpApiData, FromHttpApiData, Real, Enum, Bounded, A.ToJSON, A.FromJSON)
+
+instance BackendCompatible SqlBackend SqlBackend where
+    projectBackend = id
+
+instance BackendCompatible SqlBackend SqlReadBackend where
+    projectBackend = unSqlReadBackend
+
+instance BackendCompatible SqlBackend SqlWriteBackend where
+    projectBackend = unSqlWriteBackend
 
 instance PersistStoreWrite SqlBackend where
     update _ [] = return ()

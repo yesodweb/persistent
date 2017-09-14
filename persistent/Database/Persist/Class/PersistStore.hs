@@ -18,6 +18,7 @@ module Database.Persist.Class.PersistStore
     , insertEntity
     , insertRecord
     , ToBackendKey(..)
+    , BackendCompatible(..)
     ) where
 
 import qualified Data.Text as T
@@ -47,6 +48,14 @@ class (HasPersistBackend backend) => IsPersistBackend backend where
     -- It should be used carefully and only when actually constructing a @backend@. Careless use allows us
     -- to accidentally run a write query against a read-only database.
     mkPersistBackend :: BaseBackend backend -> backend
+
+-- | This class witnesses that two backend are compatible, and that you can
+-- convert from the @sub@ backend into the @sup@ backend. This is similar
+-- to the 'HasPersistBackend' and 'IsPersistBackend' classes, but where you
+-- don't want to fix the type associated with the 'PersistEntityBackend' of
+-- a record.
+class BackendCompatible sup sub where
+    projectBackend :: sub -> sup
 
 -- | A convenient alias for common type signatures
 type PersistRecordBackend record backend = (PersistEntity record, PersistEntityBackend record ~ BaseBackend backend)
