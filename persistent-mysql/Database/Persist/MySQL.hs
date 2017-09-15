@@ -1026,12 +1026,7 @@ mockMigration mig = do
 -- | MySQL specific 'upsert'. This will prevent multiple queries, when one will
 -- do.
 insertOnDuplicateKeyUpdate
-  :: ( PersistEntityBackend record ~ BaseBackend backend
-     , PersistEntity record
-     , MonadIO m
-     , PersistStore backend
-     , backend ~ SqlBackend
-     )
+  :: (PersistEntity record , MonadIO m)
   => record
   -> [Update record]
   -> SqlPersistT m ()
@@ -1055,8 +1050,7 @@ data SomeField record where
 -- the value that is provided. You can use this to increment a counter value.
 -- These updates only occur if the original record is present in the database.
 insertManyOnDuplicateKeyUpdate
-  :: ( PersistEntityBackend record ~ SqlBackend
-     , PersistEntity record
+  :: ( PersistEntity record
      , MonadIO m
      )
   => [record] -- ^ A list of the records you want to insert, or update
@@ -1064,15 +1058,36 @@ insertManyOnDuplicateKeyUpdate
   -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
   -> SqlPersistT m ()
 insertManyOnDuplicateKeyUpdate [] _ _ = return ()
-insertManyOnDuplicateKeyUpdate records [] [] = insertMany_ records
+insertManyOnDuplicateKeyUpdate records [] [] =
+  uncurry rawExecute $ mkInsertIgnoreQuery records
 insertManyOnDuplicateKeyUpdate records fieldValues updates =
   uncurry rawExecute $ mkBulkInsertQuery records fieldValues updates
+
+-- | This makes a special query that inserts the given rows into the
+-- database without performing any updates. If there are duplicate keys,
+-- then it just ignores that.
+mkInsertIgnoreQuery :: PersistEntity record => [record] -> (Text, [PersistValue])
+mkInsertIgnoreQuery records = (q, concat vals)
+  where
+    entityDef' = entityDef records
+    tableName = T.pack . escapeDBName . entityDB $ entityDef'
+    vals = map (map toPersistValue . toPersistFields) records
+    entityFieldNames = map (T.pack . escapeDBName . fieldDB) (entityFields entityDef')
+    recordPlaceholders = commaSeparated $ map (parenWrapped . commaSeparated . map (const "?") . toPersistFields) records
+    q = T.concat
+        [ "INSERT IGNORE INTO "
+        , tableName
+        , " ("
+        , commaSeparated entityFieldNames
+        , ")"
+        , recordPlaceholders
+        ]
 
 -- | This creates the query for 'bulkInsertOnDuplicateKeyUpdate'. It will give
 -- garbage results if you don't provide a list of either fields to copy or
 -- fields to update.
 mkBulkInsertQuery
-    :: (PersistEntityBackend record ~ SqlBackend, PersistEntity record)
+    :: PersistEntity record
     => [record] -- ^ A list of the records you want to insert, or update
     -> [SomeField record] -- ^ A list of the fields you want to copy over.
     -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
