@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -152,4 +153,4 @@ type SqlReadT m a = forall backend. (SqlBackendCanRead backend) => ReaderT backe
 -- | Like @SqlPersistT@ but compatible with any SQL backend which can handle read and write queries.
 type SqlWriteT m a = forall backend. (SqlBackendCanWrite backend) => ReaderT backend m a
 -- | A backend which is a wrapper around @SqlBackend@.
-type IsSqlBackend backend = (IsPersistBackend backend, BaseBackend backend ~ SqlBackend)
+type IsSqlBackend backend = (IsPersistBackend backend, BackendCompatible SqlBackend backend)

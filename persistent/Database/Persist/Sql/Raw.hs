@@ -62,7 +62,7 @@ rawExecuteCount :: (MonadIO m, IsSqlBackend backend)
                 -> [PersistValue]  -- ^ Values to fill the placeholders.
                 -> ReaderT backend m Int64
 rawExecuteCount sql vals = do
-    conn <- persistBackend `liftM` ask
+    conn <- projectBackend `liftM` ask
     runLoggingT (logDebugNS (pack "SQL") $ T.append sql $ pack $ "; " ++ show vals)
         (connLogFunc conn)
     stmt <- getStmt sql
@@ -74,7 +74,7 @@ getStmt
   :: (MonadIO m, IsSqlBackend backend)
   => Text -> ReaderT backend m Statement
 getStmt sql = do
-    conn <- persistBackend `liftM` ask
+    conn <- projectBackend `liftM` ask
     liftIO $ getStmtConn conn sql
 
 getStmtConn :: SqlBackend -> Text -> IO Statement

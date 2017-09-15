@@ -77,7 +77,7 @@ getTableName :: forall record m backend.
              , IsSqlBackend backend
              , Monad m
              ) => record -> ReaderT backend m Text
-getTableName rec = withReaderT persistBackend $ do
+getTableName rec = withReaderT projectBackend $ do
     conn <- ask
     return $ connEscapeName conn $ tableDBName rec
 
@@ -97,7 +97,7 @@ getFieldName :: forall record typ m backend.
              , Monad m
              )
              => EntityField record typ -> ReaderT backend m Text
-getFieldName rec = withReaderT persistBackend $ do
+getFieldName rec = withReaderT projectBackend $ do
     conn <- ask
     return $ connEscapeName conn $ fieldDBName rec
 

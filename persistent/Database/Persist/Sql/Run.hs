@@ -56,7 +56,7 @@ withResourceTimeout ms pool act = control $ \runInIO -> mask $ \restore -> do
 
 runSqlConn :: (MonadBaseControl IO m, IsSqlBackend backend) => ReaderT backend m a -> backend -> m a
 runSqlConn r conn = control $ \runInIO -> mask $ \restore -> do
-    let conn' = persistBackend conn
+    let conn' = projectBackend conn
         getter = getStmtConn conn'
     restore $ connBegin conn' getter
     x <- onException
@@ -122,5 +122,5 @@ withSqlConn open f = do
 
 close' :: (IsSqlBackend backend) => backend -> IO ()
 close' conn = do
-    readIORef (connStmtMap $ persistBackend conn) >>= mapM_ stmtFinalize . Map.elems
-    connClose $ persistBackend conn
+    readIORef (connStmtMap $ projectBackend conn) >>= mapM_ stmtFinalize . Map.elems
+    connClose $ projectBackend conn
