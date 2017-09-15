@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -94,6 +95,9 @@ instance HasPersistBackend SqlBackend where
 instance IsPersistBackend SqlBackend where
     mkPersistBackend = id
 
+instance BackendCompatible SqlBackend SqlBackend where
+    projectBackend = id
+
 -- | An SQL backend which can only handle read queries
 newtype SqlReadBackend = SqlReadBackend { unSqlReadBackend :: SqlBackend } deriving Typeable
 instance HasPersistBackend SqlReadBackend where
@@ -102,6 +106,9 @@ instance HasPersistBackend SqlReadBackend where
 instance IsPersistBackend SqlReadBackend where
     mkPersistBackend = SqlReadBackend
 
+instance BackendCompatible SqlBackend SqlReadBackend where
+    projectBackend = unSqlReadBackend
+
 -- | An SQL backend which can handle read or write queries
 newtype SqlWriteBackend = SqlWriteBackend { unSqlWriteBackend :: SqlBackend } deriving Typeable
 instance HasPersistBackend SqlWriteBackend where
@@ -109,6 +116,9 @@ instance HasPersistBackend SqlWriteBackend where
     persistBackend = unSqlWriteBackend
 instance IsPersistBackend SqlWriteBackend where
     mkPersistBackend = SqlWriteBackend
+
+instance BackendCompatible SqlBackend SqlWriteBackend where
+    projectBackend = unSqlWriteBackend
 
 -- | Useful for running a write query against an untagged backend with unknown capabilities.
 writeToUnknown :: Monad m => ReaderT SqlWriteBackend m a -> ReaderT SqlBackend m a
@@ -143,4 +153,4 @@ type SqlReadT m a = forall backend. (SqlBackendCanRead backend) => ReaderT backe
 -- | Like @SqlPersistT@ but compatible with any SQL backend which can handle read and write queries.
 type SqlWriteT m a = forall backend. (SqlBackendCanWrite backend) => ReaderT backend m a
 -- | A backend which is a wrapper around @SqlBackend@.
-type IsSqlBackend backend = (IsPersistBackend backend, BaseBackend backend ~ SqlBackend)
+type IsSqlBackend backend = (IsPersistBackend backend, BackendCompatible SqlBackend backend)

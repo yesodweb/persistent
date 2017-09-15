@@ -24,7 +24,7 @@ defaultUpsert
     :: (MonadIO m
        ,PersistEntity record
        ,PersistUniqueWrite backend
-       ,PersistEntityBackend record ~ BaseBackend backend)
+       ,PersistRecordBackend record backend)
     => record -> [Update record] -> ReaderT backend m (Entity record)
 defaultUpsert record updates = do
     uniqueKey <- onlyUnique record
@@ -83,7 +83,7 @@ instance PersistUniqueWrite SqlBackend where
                 , T.intercalate " AND " $ map (go' conn) $ go uniq]
 
 instance PersistUniqueWrite SqlWriteBackend where
-    deleteBy uniq = withReaderT persistBackend $ deleteBy uniq
+    deleteBy uniq = withReaderT projectBackend $ deleteBy uniq
 
 instance PersistUniqueRead SqlBackend where
     getBy uniq = do
@@ -115,10 +115,10 @@ instance PersistUniqueRead SqlBackend where
         toFieldNames' = map snd . persistUniqueToFieldNames
 
 instance PersistUniqueRead SqlReadBackend where
-    getBy uniq = withReaderT persistBackend $ getBy uniq
+    getBy uniq = withReaderT projectBackend $ getBy uniq
 
 instance PersistUniqueRead SqlWriteBackend where
-    getBy uniq = withReaderT persistBackend $ getBy uniq
+    getBy uniq = withReaderT projectBackend $ getBy uniq
 
 dummyFromUnique :: Unique v -> Maybe v
 dummyFromUnique _ = Nothing

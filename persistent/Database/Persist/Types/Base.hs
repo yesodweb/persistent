@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -33,6 +34,14 @@ import qualified Data.Scientific
 #else
 import qualified Data.Attoparsec.Number as AN
 #endif
+
+-- | This class witnesses that two backend are compatible, and that you can
+-- convert from the @sub@ backend into the @sup@ backend. This is similar
+-- to the 'HasPersistBackend' and 'IsPersistBackend' classes, but where you
+-- don't want to fix the type associated with the 'PersistEntityBackend' of
+-- a record.
+class BackendCompatible sup sub where
+    projectBackend :: sub -> sup
 
 -- | A 'Checkmark' should be used as a field type whenever a
 -- uniqueness constraint should guarantee that a certain kind of

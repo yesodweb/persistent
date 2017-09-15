@@ -1,3 +1,5 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -9,6 +11,7 @@ module Database.Persist.Sql.Orphan.PersistQuery
     , decorateSQLWithLimitOffset
     ) where
 
+import Control.Monad (liftM)
 import Database.Persist hiding (updateField)
 import Database.Persist.Sql.Util (
   entityColumnNames, parseEntityValues, isIdField)
@@ -125,13 +128,13 @@ instance PersistQueryRead SqlBackend where
                 Right k -> return k
                 Left err -> error $ "selectKeysImpl: keyFromValues failed" <> show err
 instance PersistQueryRead SqlReadBackend where
-    count filts = withReaderT persistBackend $ count filts
-    selectSourceRes filts opts = withReaderT persistBackend $ selectSourceRes filts opts
-    selectKeysRes filts opts = withReaderT persistBackend $ selectKeysRes filts opts
+    count filts = withReaderT projectBackend $ count filts
+    selectSourceRes filts opts = withReaderT projectBackend $ selectSourceRes filts opts
+    selectKeysRes filts opts = withReaderT projectBackend $ selectKeysRes filts opts
 instance PersistQueryRead SqlWriteBackend where
-    count filts = withReaderT persistBackend $ count filts
-    selectSourceRes filts opts = withReaderT persistBackend $ selectSourceRes filts opts
-    selectKeysRes filts opts = withReaderT persistBackend $ selectKeysRes filts opts
+    count filts = withReaderT projectBackend $ count filts
+    selectSourceRes filts opts = withReaderT projectBackend $ selectSourceRes filts opts
+    selectKeysRes filts opts = withReaderT projectBackend $ selectKeysRes filts opts
 
 instance PersistQueryWrite SqlBackend where
     deleteWhere filts = do
@@ -141,8 +144,8 @@ instance PersistQueryWrite SqlBackend where
         _ <- updateWhereCount filts upds
         return ()
 instance PersistQueryWrite SqlWriteBackend where
-    deleteWhere filts = withReaderT persistBackend $ deleteWhere filts
-    updateWhere filts upds = withReaderT persistBackend $ updateWhere filts upds
+    deleteWhere filts = withReaderT projectBackend $ deleteWhere filts
+    updateWhere filts upds = withReaderT projectBackend $ updateWhere filts upds
 
 -- | Same as 'deleteWhere', but returns the number of rows affected.
 --
@@ -150,7 +153,7 @@ instance PersistQueryWrite SqlWriteBackend where
 deleteWhereCount :: (PersistEntity val, MonadIO m, PersistEntityBackend val ~ SqlBackend, IsSqlBackend backend)
                  => [Filter val]
                  -> ReaderT backend m Int64
-deleteWhereCount filts = withReaderT persistBackend $ do
+deleteWhereCount filts = withReaderT projectBackend $ do
     conn <- ask
     let t = entityDef $ dummyFromFilts filts
     let wher = if null filts
@@ -166,13 +169,21 @@ deleteWhereCount filts = withReaderT persistBackend $ do
 -- | Same as 'updateWhere', but returns the number of rows affected.
 --
 -- @since 1.1.5
-updateWhereCount :: (PersistEntity val, MonadIO m, SqlBackend ~ PersistEntityBackend val, IsSqlBackend backend)
-                 => [Filter val]
-                 -> [Update val]
-                 -> ReaderT backend m Int64
+updateWhereCount 
+    :: forall backend val m
+    . ( backend ~ PersistEntityBackend val
+      , PersistEntity val
+      , MonadIO m
+      -- , BackendCompatible SqlBackend backend
+      , IsSqlBackend backend
+      )
+    => [Filter val]
+    -> [Update val]
+    -> ReaderT backend m Int64
 updateWhereCount _ [] = return 0
-updateWhereCount filts upds = withReaderT persistBackend $ do
-    conn <- ask
+updateWhereCount filts upds = do
+    conn <- projectBackend `liftM` ask
+    connGen <- ask
     let wher = if null filts
                 then ""
                 else filterClause False conn filts
@@ -194,25 +205,28 @@ updateWhereCount filts upds = withReaderT persistBackend $ do
     go'' n Multiply = mconcat [n, "=", n, "*?"]
     go'' n Divide = mconcat [n, "=", n, "/?"]
     go'' _ (BackendSpecificUpdate up) = error $ T.unpack $ "BackendSpecificUpdate" `mappend` up `mappend` "not supported"
-    go' conn (x, pu) = go'' (connEscapeName conn x) pu
+    go' :: SqlBackend -> (DBName, PersistUpdate) -> Text
+    go' conn (x, pu) = go'' (connEscapeName (projectBackend conn) x) pu
+    go :: Update val -> (DBName, PersistUpdate)
     go x = (updateField x, updateUpdate x)
 
+    updateField :: Update val -> DBName
     updateField (Update f _ _) = fieldName f
     updateField _ = error "BackendUpdate not implemented"
 
-fieldName ::  forall record typ.  (PersistEntity record, PersistEntityBackend record ~ SqlBackend) => EntityField record typ -> DBName
+fieldName :: forall record typ. (PersistEntity record, BackendCompatible SqlBackend (PersistEntityBackend record)) => EntityField record typ -> DBName
 fieldName f = fieldDB $ persistFieldDef f
 
 dummyFromFilts :: [Filter v] -> Maybe v
 dummyFromFilts _ = Nothing
 
-getFiltsValues :: forall val. (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
+getFiltsValues :: forall val. (PersistEntity val, BackendCompatible SqlBackend (PersistEntityBackend val))
                => SqlBackend -> [Filter val] -> [PersistValue]
 getFiltsValues conn = snd . filterClauseHelper False False conn OrNullNo
 
 data OrNull = OrNullYes | OrNullNo
 
-filterClauseHelper :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
+filterClauseHelper :: (backend ~ PersistEntityBackend val, PersistEntity val, BackendCompatible SqlBackend (PersistEntityBackend val))
              => Bool -- ^ include table name?
              -> Bool -- ^ include WHERE?
              -> SqlBackend
@@ -368,14 +382,17 @@ updatePersistValue :: Update v -> PersistValue
 updatePersistValue (Update _ v _) = toPersistValue v
 updatePersistValue _ = error "BackendUpdate not implemented"
 
-filterClause :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
+filterClause :: ( backend ~ PersistEntityBackend val
+                , BackendCompatible SqlBackend backend
+                , PersistEntity val
+                , PersistEntityBackend val ~ backend)
              => Bool -- ^ include table name?
              -> SqlBackend
              -> [Filter val]
              -> Text
 filterClause b c = fst . filterClauseHelper b True c OrNullNo
 
-orderClause :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
+orderClause :: (backend ~ PersistEntityBackend val, PersistEntity val, BackendCompatible SqlBackend (PersistEntityBackend val))
             => Bool -- ^ include the table name
             -> SqlBackend
             -> SelectOpt val
@@ -391,7 +408,7 @@ orderClause includeTable conn o =
 
     tn = connEscapeName conn $ entityDB $ entityDef $ dummyFromOrder o
 
-    name :: (PersistEntityBackend record ~ SqlBackend, PersistEntity record)
+    name :: (BackendCompatible SqlBackend (PersistEntityBackend record), PersistEntity record)
          => EntityField record typ -> Text
     name x =
         (if includeTable

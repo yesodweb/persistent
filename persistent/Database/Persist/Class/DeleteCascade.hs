@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
 module Database.Persist.Class.DeleteCascade
@@ -18,7 +19,7 @@ import Data.Acquire (with)
 -- | For combinations of backends and entities that support
 -- cascade-deletion. “Cascade-deletion” means that entries that depend on
 -- other entries to be deleted will be deleted as well.
-class (PersistStoreWrite backend, PersistEntity record, BaseBackend backend ~ PersistEntityBackend record)
+class (PersistStoreWrite backend, PersistRecordBackend record backend)
   => DeleteCascade record backend where
 
     -- | Perform cascade-deletion of single database

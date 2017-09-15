@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies, FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
@@ -18,6 +19,7 @@ module Database.Persist.Class.PersistStore
     , insertEntity
     , insertRecord
     , ToBackendKey(..)
+    , BackendCompatible(..)
     ) where
 
 import qualified Data.Text as T
@@ -49,14 +51,19 @@ class (HasPersistBackend backend) => IsPersistBackend backend where
     mkPersistBackend :: BaseBackend backend -> backend
 
 -- | A convenient alias for common type signatures
-type PersistRecordBackend record backend = (PersistEntity record, PersistEntityBackend record ~ BaseBackend backend)
+type PersistRecordBackend record backend = 
+        ( PersistEntity record
+        , PersistEntityBackend record ~ backend
+        , BackendCompatible backend (PersistEntityBackend record)
+        -- , BackendCompatible (BaseBackend backend) backend
+        )
 
 liftPersist
-    :: (MonadIO m, MonadReader backend m, HasPersistBackend backend)
-    => ReaderT (BaseBackend backend) IO b -> m b
+    :: (BackendCompatible sup backend, MonadIO m, MonadReader backend m, HasPersistBackend backend)
+    => ReaderT sup IO b -> m b
 liftPersist f = do
     env <- ask
-    liftIO $ runReaderT f (persistBackend env)
+    liftIO $ runReaderT f (projectBackend env)
 
 -- | 'ToBackendKey' converts a 'PersistEntity' 'Key' into a 'BackendKey'
 -- This can be used by each backend to convert between a 'Key' and a plain
@@ -113,7 +120,7 @@ class
     --
     -- The SQLite and MySQL backends use the slow, default implementation of
     -- @mapM insert@.
-    insertMany :: (MonadIO m, PersistRecordBackend record backend)
+    insertMany :: (MonadIO m, BackendCompatible backend (BaseBackend backend), PersistRecordBackend record backend)
                => [record] -> ReaderT backend m [Key record]
     insertMany = mapM insert
 
@@ -121,7 +128,7 @@ class
     --
     -- The MongoDB, PostgreSQL, SQLite and MySQL backends insert all records in
     -- one database query.
-    insertMany_ :: (MonadIO m, PersistRecordBackend record backend)
+    insertMany_ :: (MonadIO m, PersistRecordBackend record backend, BackendCompatible backend (BaseBackend backend))
                 => [record] -> ReaderT backend m ()
     insertMany_ x = insertMany x >> return ()
 
@@ -191,9 +198,8 @@ getJust key = get key >>= maybe
 --
 -- @since 2.6.1
 getJustEntity
-  :: (PersistEntityBackend record ~ BaseBackend backend
+  :: (PersistRecordBackend record backend
      ,MonadIO m
-     ,PersistEntity record
      ,PersistStoreRead backend)
   => Key record -> ReaderT backend m (Entity record)
 getJustEntity key = do
@@ -251,7 +257,7 @@ getEntity key = do
 --
 -- @since 2.6.1
 insertRecord
-  :: (PersistEntityBackend record ~ BaseBackend backend
+  :: (PersistRecordBackend record backend
      ,PersistEntity record
      ,MonadIO m
      ,PersistStoreWrite backend)
