@@ -1031,7 +1031,7 @@ insertOnDuplicateKeyUpdate
      , PersistEntity record
      , MonadIO m
      , PersistStore backend
-     , BackendCompatible SqlBackend backend 
+     , BackendCompatible SqlBackend backend
      )
   => record
   -> [Update record]
@@ -1056,24 +1056,24 @@ data SomeField record where
 -- the value that is provided. You can use this to increment a counter value.
 -- These updates only occur if the original record is present in the database.
 insertManyOnDuplicateKeyUpdate
-  :: forall record backend m. 
-  ( backend ~ PersistEntityBackend record
-  , BackendCompatible SqlBackend backend
-  , PersistEntity record
-  , MonadIO m
-  )
-  => [record] -- ^ A list of the records you want to insert, or update
-  -> [SomeField record] -- ^ A list of the fields you want to copy over.
-  -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
-  -> ReaderT backend m ()
+    :: forall record backend m.
+    ( backend ~ PersistEntityBackend record
+    , BackendCompatible SqlBackend backend
+    , PersistEntity record
+    , MonadIO m
+    )
+    => [record] -- ^ A list of the records you want to insert, or update
+    -> [SomeField record] -- ^ A list of the fields you want to copy over.
+    -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
+    -> ReaderT backend m ()
 insertManyOnDuplicateKeyUpdate [] _ _ = return ()
-insertManyOnDuplicateKeyUpdate records [] [] = 
-    withReaderT projectBackend 
-    . uncurry rawExecute 
+insertManyOnDuplicateKeyUpdate records [] [] =
+    withReaderT projectBackend
+    . uncurry rawExecute
     $ mkInsertIgnoreQuery records
 insertManyOnDuplicateKeyUpdate records fieldValues updates =
-    withReaderT projectBackend 
-    . uncurry rawExecute 
+    withReaderT projectBackend
+    . uncurry rawExecute
     $ mkBulkInsertQuery records fieldValues updates
 
 -- | This makes a special query that inserts the given rows into the
