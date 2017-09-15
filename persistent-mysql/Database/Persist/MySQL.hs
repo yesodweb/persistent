@@ -1026,7 +1026,7 @@ mockMigration mig = do
 -- | MySQL specific 'upsert'. This will prevent multiple queries, when one will
 -- do.
 insertOnDuplicateKeyUpdate
-  :: (PersistEntity record , MonadIO m)
+  :: (PersistEntity record, MonadIO m)
   => record
   -> [Update record]
   -> SqlPersistT m ()
