@@ -14,7 +14,6 @@
 
 module InsertDuplicateUpdate where
 
-import           Data.List (sort)
 import           Init
 
 share [mkPersist sqlSettings, mkMigrate "duplicateMigrate"] [persistUpperCase|
@@ -84,8 +83,8 @@ specs = describe "DuplicateKeyUpdate" $ do
       dbItems <- sort . fmap entityVal <$> selectList [] []
       dbItems @== sort postUpdate
 #else
-spec :: Spec
-spec = describe "DuplicateKeyUpdate" $ do
+specs :: Spec
+specs = describe "DuplicateKeyUpdate" $ do
   it "Is only supported on MySQL currently." $ do
     True `shouldBe` True
 #endif
