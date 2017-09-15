@@ -15,10 +15,13 @@
 module InsertDuplicateUpdate where
 
 import           Init
+#ifdef WITH_MYSQL
+import Database.Persist.MySQL
+import Data.List (sort)
 
 share [mkPersist sqlSettings, mkMigrate "duplicateMigrate"] [persistUpperCase|
   Item
-     name        Text
+     name        Text sqltype=varchar(80)
      description Text
      price       Double Maybe
      quantity    Int Maybe
@@ -28,7 +31,6 @@ share [mkPersist sqlSettings, mkMigrate "duplicateMigrate"] [persistUpperCase|
 
 |]
 
-#ifdef WITH_MYSQL
 specs :: Spec
 specs = describe "DuplicateKeyUpdate" $ do
   let item1 = Item "item1" "" (Just 3) Nothing
@@ -46,10 +48,10 @@ specs = describe "DuplicateKeyUpdate" $ do
       let newDescription = "I am a new description"
       _ <- insert item1
       insertOnDuplicateKeyUpdate
-        (Item "item1" "i am a description" (Just 1) (Just 2))
+        (Item "item1" "i am inserted description" (Just 1) (Just 2))
         [ItemDescription =. newDescription]
       Just item <- get (ItemKey "item1")
-      item @== Item "item1" newDescription Nothing Nothing
+      item @== item1 { itemDescription = newDescription }
 
   describe "insertManyOnDuplicateKeyUpdate" $ do
     it "inserts fresh records" $ db $ do
@@ -68,7 +70,7 @@ specs = describe "DuplicateKeyUpdate" $ do
       insertManyOnDuplicateKeyUpdate
         items
         []
-        [ItemQuantity +=. 1]
+        [ItemQuantity +=. Just 1]
     it "only copies passing values" $ db $ do
       deleteWhere ([] :: [Filter Item])
       insertMany_ items
