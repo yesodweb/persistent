@@ -1032,6 +1032,8 @@ insertOnDuplicateKeyUpdate
      , MonadIO m
      , PersistStore backend
      , BackendCompatible SqlBackend backend 
+     , BaseBackend backend ~ backend
+     , BackendCompatible backend backend
      )
   => record
   -> [Update record]
@@ -1058,7 +1060,10 @@ data SomeField record where
 insertManyOnDuplicateKeyUpdate
   :: forall record backend m. 
   ( backend ~ PersistEntityBackend record
-  , BackendCompatible SqlBackend backend
+  , BaseBackend backend ~ backend
+  , PersistStoreWrite backend
+  , BackendCompatible backend backend
+  , BackendCompatible SqlBackend (BaseBackend backend)
   , PersistEntity record
   , MonadIO m
   )
@@ -1067,10 +1072,10 @@ insertManyOnDuplicateKeyUpdate
   -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
   -> ReaderT backend m ()
 insertManyOnDuplicateKeyUpdate [] _ _ = return ()
-insertManyOnDuplicateKeyUpdate records [] [] = 
-    withReaderT projectBackend 
-    . uncurry rawExecute 
-    $ mkInsertIgnoreQuery records
+insertManyOnDuplicateKeyUpdate records [] [] = insertMany_ records
+ --   withReaderT projectBackend 
+ --   . uncurry rawExecute 
+ --   $ mkInsertIgnoreQuery records
 insertManyOnDuplicateKeyUpdate records fieldValues updates =
     withReaderT projectBackend 
     . uncurry rawExecute 

@@ -1,3 +1,5 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -21,7 +23,7 @@ import qualified Data.Text as T
 import Data.Conduit
 import Control.Monad.Trans.Resource (MonadResource,release)
 
-rawQuery :: (MonadResource m, MonadReader env m, HasPersistBackend env, BaseBackend env ~ SqlBackend)
+rawQuery :: (MonadResource m, MonadReader env m, HasPersistBackend env, BackendCompatible SqlBackend env)
          => Text
          -> [PersistValue]
          -> Source m [PersistValue]
@@ -32,12 +34,12 @@ rawQuery sql vals = do
     release releaseKey
 
 rawQueryRes
-    :: (MonadIO m1, MonadIO m2, IsSqlBackend env)
+    :: forall m1 m2. (MonadIO m1, MonadIO m2) --, BackendCompatible SqlBackend env)
     => Text
     -> [PersistValue]
-    -> ReaderT env m1 (Acquire (Source m2 [PersistValue]))
+    -> ReaderT SqlBackend m1 (Acquire (Source m2 [PersistValue]))
 rawQueryRes sql vals = do
-    conn <- persistBackend `liftM` ask
+    conn <- (id) `liftM` ask
     let make = do
             runLoggingT (logDebugNS (pack "SQL") $ T.append sql $ pack $ "; " ++ show vals)
                 (connLogFunc conn)

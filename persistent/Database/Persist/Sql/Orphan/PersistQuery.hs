@@ -125,13 +125,13 @@ instance PersistQueryRead SqlBackend where
                 Right k -> return k
                 Left err -> error $ "selectKeysImpl: keyFromValues failed" <> show err
 instance PersistQueryRead SqlReadBackend where
-    count filts = withReaderT persistBackend $ count filts
-    selectSourceRes filts opts = withReaderT persistBackend $ selectSourceRes filts opts
-    selectKeysRes filts opts = withReaderT persistBackend $ selectKeysRes filts opts
+    count filts = withReaderT projectBackend $ count filts
+    selectSourceRes filts opts = withReaderT projectBackend $ selectSourceRes filts opts
+    selectKeysRes filts opts = withReaderT projectBackend $ selectKeysRes filts opts
 instance PersistQueryRead SqlWriteBackend where
-    count filts = withReaderT persistBackend $ count filts
-    selectSourceRes filts opts = withReaderT persistBackend $ selectSourceRes filts opts
-    selectKeysRes filts opts = withReaderT persistBackend $ selectKeysRes filts opts
+    count filts = withReaderT projectBackend $ count filts
+    selectSourceRes filts opts = withReaderT projectBackend $ selectSourceRes filts opts
+    selectKeysRes filts opts = withReaderT projectBackend $ selectKeysRes filts opts
 
 instance PersistQueryWrite SqlBackend where
     deleteWhere filts = do
@@ -141,8 +141,8 @@ instance PersistQueryWrite SqlBackend where
         _ <- updateWhereCount filts upds
         return ()
 instance PersistQueryWrite SqlWriteBackend where
-    deleteWhere filts = withReaderT persistBackend $ deleteWhere filts
-    updateWhere filts upds = withReaderT persistBackend $ updateWhere filts upds
+    deleteWhere filts = withReaderT projectBackend $ deleteWhere filts
+    updateWhere filts upds = withReaderT projectBackend $ updateWhere filts upds
 
 -- | Same as 'deleteWhere', but returns the number of rows affected.
 --

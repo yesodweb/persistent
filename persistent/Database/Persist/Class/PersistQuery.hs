@@ -65,7 +65,14 @@ class (PersistQueryRead backend, PersistStoreWrite backend) => PersistQueryWrite
 -- | Get all records matching the given criterion in the specified order.
 -- Returns also the identifiers.
 selectSource
-       :: (PersistQueryRead (BaseBackend backend), MonadResource m, PersistEntity record, PersistEntityBackend record ~ BaseBackend (BaseBackend backend), MonadReader backend m, HasPersistBackend backend)
+       :: ( PersistQueryRead (backend)
+          , MonadResource m
+          , PersistRecordBackend record backend
+          , MonadReader backend m
+          , HasPersistBackend backend
+          , BaseBackend backend ~ BaseBackend (BaseBackend backend)
+          , PersistQueryRead (BaseBackend (BaseBackend backend))
+          )
        => [Filter record]
        -> [SelectOpt record]
        -> C.Source m (Entity record)
@@ -76,10 +83,16 @@ selectSource filts opts = do
     release releaseKey
 
 -- | Get the 'Key's of all records matching the given criterion.
-selectKeys :: (PersistQueryRead (BaseBackend backend), MonadResource m, PersistEntity record, BaseBackend (BaseBackend backend) ~ PersistEntityBackend record, MonadReader backend m, HasPersistBackend backend)
-           => [Filter record]
-           -> [SelectOpt record]
-           -> C.Source m (Key record)
+selectKeys 
+    :: ( PersistQueryRead (backend)
+       , MonadResource m
+       , PersistRecordBackend record backend
+       , MonadReader backend m
+       , HasPersistBackend backend
+       )
+    => [Filter record]
+    -> [SelectOpt record]
+    -> C.Source m (Key record)
 selectKeys filts opts = do
     srcRes <- liftPersist $ selectKeysRes filts opts
     (releaseKey, src) <- allocateAcquire srcRes

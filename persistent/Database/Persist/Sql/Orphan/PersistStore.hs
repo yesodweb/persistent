@@ -116,15 +116,6 @@ instance PersistCore SqlWriteBackend where
     newtype BackendKey SqlWriteBackend = SqlWriteBackendKey { unSqlWriteBackendKey :: Int64 }
         deriving (Show, Read, Eq, Ord, Num, Integral, PersistField, PersistFieldSql, PathPiece, ToHttpApiData, FromHttpApiData, Real, Enum, Bounded, A.ToJSON, A.FromJSON)
 
-instance BackendCompatible SqlBackend SqlBackend where
-    projectBackend = id
-
-instance BackendCompatible SqlBackend SqlReadBackend where
-    projectBackend = unSqlReadBackend
-
-instance BackendCompatible SqlBackend SqlWriteBackend where
-    projectBackend = unSqlWriteBackend
-
 instance PersistStoreWrite SqlBackend where
     update _ [] = return ()
     update k upds = do
@@ -287,14 +278,14 @@ instance PersistStoreWrite SqlBackend where
             , wher conn
             ]
 instance PersistStoreWrite SqlWriteBackend where
-    insert v = withReaderT persistBackend $ insert v
-    insertMany vs = withReaderT persistBackend $ insertMany vs
-    insertMany_ vs = withReaderT persistBackend $ insertMany_ vs
-    insertKey k v = withReaderT persistBackend $ insertKey k v
-    repsert k v = withReaderT persistBackend $ repsert k v
-    replace k v = withReaderT persistBackend $ replace k v
-    delete k = withReaderT persistBackend $ delete k
-    update k upds = withReaderT persistBackend $ update k upds
+    insert v = withReaderT projectBackend $ insert v
+    insertMany vs = withReaderT projectBackend $ insertMany vs
+    insertMany_ vs = withReaderT projectBackend $ insertMany_ vs
+    insertKey k v = withReaderT projectBackend $ insertKey k v
+    repsert k v = withReaderT projectBackend $ repsert k v
+    replace k v = withReaderT projectBackend $ replace k v
+    delete k = withReaderT projectBackend $ delete k
+    update k upds = withReaderT projectBackend $ update k upds
 
 
 instance PersistStoreRead SqlBackend where
@@ -323,9 +314,9 @@ instance PersistStoreRead SqlBackend where
                         Left e -> error $ "get " ++ show k ++ ": " ++ unpack e
                         Right v -> return $ Just v
 instance PersistStoreRead SqlReadBackend where
-    get k = withReaderT persistBackend $ get k
+    get k = withReaderT projectBackend $ get k
 instance PersistStoreRead SqlWriteBackend where
-    get k = withReaderT persistBackend $ get k
+    get k = withReaderT projectBackend $ get k
 
 dummyFromKey :: Key record -> Maybe record
 dummyFromKey = Just . recordTypeFromKey
