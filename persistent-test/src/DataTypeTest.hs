@@ -100,7 +100,7 @@ specs = describe "data type specs" $
 
 roundTime :: TimeOfDay -> TimeOfDay
 #ifdef WITH_MYSQL
-roundTime (TimeOfDay h m s) = TimeOfDay h m (fromIntegral (round s :: Integer))
+roundTime (TimeOfDay h m s) = TimeOfDay h m (fromIntegral (truncate s :: Integer))
 #else
 roundTime = id
 #endif
@@ -132,7 +132,7 @@ instance Arbitrary DataTypeTable where
      <*> arbitrary              -- day
 #ifndef WITH_NOSQL
      <*> arbitrary              -- pico
-     <*> (fmap truncateTimeOfDay arbitrary) -- time
+     <*> (truncateTimeOfDay =<< arbitrary) -- time
 #endif
      <*> (truncateUTCTime   =<< arbitrary) -- utc
 
@@ -154,9 +154,9 @@ truncateToMicro p = let
   p' = fromRational . toRational $ p  :: Micro
   in   fromRational . toRational $ p' :: Pico
 
-truncateTimeOfDay :: TimeOfDay -> TimeOfDay
+truncateTimeOfDay :: TimeOfDay -> Gen TimeOfDay
 truncateTimeOfDay (TimeOfDay h m s) =
-  TimeOfDay h m $ truncateToMicro s
+  return $ TimeOfDay h m $ truncateToMicro s
 
 truncateUTCTime :: UTCTime -> Gen UTCTime
 truncateUTCTime (UTCTime d dift) = do
