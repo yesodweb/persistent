@@ -82,7 +82,7 @@ specs = describe "data type specs" $
                 check "day" dataTypeTableDay
 #ifndef WITH_NOSQL
                 check' "pico" dataTypeTablePico
-                check "time" (truncateTimeOfDay . dataTypeTableTime)
+                check "time" (roundTime . dataTypeTableTime)
 #endif
 #if !(defined(WITH_NOSQL)) || (defined(WITH_NOSQL) && defined(HIGH_PRECISION_DATE))
                 check "utc" (roundUTCTime . dataTypeTableUtc)
@@ -100,7 +100,7 @@ specs = describe "data type specs" $
 
 roundTime :: TimeOfDay -> TimeOfDay
 #ifdef WITH_MYSQL
-roundTime (TimeOfDay h m s) = TimeOfDay h m (fromIntegral (truncate s :: Integer))
+roundTime (TimeOfDay h m s) = TimeOfDay h m (fromIntegral (round s :: Integer))
 #else
 roundTime = id
 #endif
