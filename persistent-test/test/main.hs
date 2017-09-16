@@ -69,7 +69,8 @@ main = do
       , CustomPersistFieldTest.customFieldMigrate
 #  ifndef WITH_MYSQL
       , PrimaryTest.migration
-#  else
+#  endif
+#  ifdef WITH_MYSQL
       , InsertDuplicateUpdate.duplicateMigrate
 #  endif
       , CustomPrimaryKeyReferenceTest.migration
