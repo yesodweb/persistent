@@ -54,7 +54,6 @@ main = do
       [ PersistentTest.testMigrate
       , PersistentTest.noPrefixMigrate
       , EmbedTest.embedMigrate
-      , InsertDuplicateUpdate.duplicateMigrate
       , EmbedOrderTest.embedOrderMigrate
       , LargeNumberTest.numberMigrate
       , UniqueTest.uniqueMigrate
