@@ -82,7 +82,7 @@ specs = describe "data type specs" $
                 check "day" dataTypeTableDay
 #ifndef WITH_NOSQL
                 check' "pico" dataTypeTablePico
-                check "time" (roundTime . dataTypeTableTime)
+                check "time" (truncateTimeOfDay . dataTypeTableTime)
 #endif
 #if !(defined(WITH_NOSQL)) || (defined(WITH_NOSQL) && defined(HIGH_PRECISION_DATE))
                 check "utc" (roundUTCTime . dataTypeTableUtc)
@@ -132,7 +132,7 @@ instance Arbitrary DataTypeTable where
      <*> arbitrary              -- day
 #ifndef WITH_NOSQL
      <*> arbitrary              -- pico
-     <*> (truncateTimeOfDay =<< arbitrary) -- time
+     <*> (fmap truncateTimeOfDay arbitrary) -- time
 #endif
      <*> (truncateUTCTime   =<< arbitrary) -- utc
 
@@ -154,9 +154,9 @@ truncateToMicro p = let
   p' = fromRational . toRational $ p  :: Micro
   in   fromRational . toRational $ p' :: Pico
 
-truncateTimeOfDay :: TimeOfDay -> Gen TimeOfDay
+truncateTimeOfDay :: TimeOfDay -> TimeOfDay
 truncateTimeOfDay (TimeOfDay h m s) =
-  return $ TimeOfDay h m $ truncateToMicro s
+  TimeOfDay h m $ truncateToMicro s
 
 truncateUTCTime :: UTCTime -> Gen UTCTime
 truncateUTCTime (UTCTime d dift) = do
