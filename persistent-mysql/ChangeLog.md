@@ -1,3 +1,7 @@
+## 2.6.2
+
+* Extend the `SomeField` type to allow `insertManyOnDuplicateKeyUpdate` to conditionally copy values.
+
 ## 2.6.1
 
 * Add functions `insertOnDuplicateKeyUpdate`, `insertManyOnDuplicateKeyUpdate` to `Database.Persist.MySQL` module.

@@ -76,6 +76,7 @@ library
                      CustomPersistField
                      CustomPersistFieldTest
                      CustomPrimaryKeyReferenceTest
+                     InsertDuplicateUpdate
 
     hs-source-dirs: src, test
 
