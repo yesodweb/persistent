@@ -44,6 +44,14 @@ DataTypeTable no-json
     time TimeOfDay
 #endif
     utc UTCTime
+#if defined(WITH_MYSQL) && !(defined(OLD_MYSQL))
+    -- For MySQL, provide extra tests for time fields with fractional seconds,
+    -- since the default (used above) is to have no fractional part.  This
+    -- requires the server version to be at least 5.6.4, and should be switched
+    -- off for older servers by defining OLD_MYSQL.
+    timeFrac TimeOfDay sqltype=TIME(6)
+    utcFrac UTCTime sqltype=DATETIME(6)
+#endif
 |]
 
 cleanDB :: (MonadIO m, PersistQuery backend, backend ~ PersistEntityBackend DataTypeTable) => ReaderT backend m ()
@@ -87,6 +95,10 @@ specs = describe "data type specs" $
 #if !(defined(WITH_NOSQL)) || (defined(WITH_NOSQL) && defined(HIGH_PRECISION_DATE))
                 check "utc" (roundUTCTime . dataTypeTableUtc)
 #endif
+#if defined(WITH_MYSQL) && !(defined(OLD_MYSQL))
+                check "timeFrac" (dataTypeTableTimeFrac)
+                check "utcFrac" (dataTypeTableUtcFrac)
+#endif
 
                 -- Do a special check for Double since it may
                 -- lose precision when serialized.
@@ -98,16 +110,26 @@ specs = describe "data type specs" $
                    | otherwise = x
       getDoubleDiff x y = abs (normDouble x - normDouble y)
 
+roundFn :: RealFrac a => a -> Integer
+#ifdef OLD_MYSQL
+-- At version 5.6.4, MySQL changed the method used to round values for
+-- date/time types - this is the same version which added support for
+-- fractional seconds in the storage type.
+roundFn = truncate
+#else
+roundFn = round
+#endif
+
 roundTime :: TimeOfDay -> TimeOfDay
 #ifdef WITH_MYSQL
-roundTime (TimeOfDay h m s) = TimeOfDay h m (fromIntegral (truncate s :: Integer))
+roundTime (TimeOfDay h m s) = TimeOfDay h m (fromIntegral (roundFn s))
 #else
 roundTime = id
 #endif
 
 roundUTCTime :: UTCTime -> UTCTime
 #ifdef WITH_MYSQL
-roundUTCTime (UTCTime day time) = UTCTime day (fromIntegral (truncate time :: Integer))
+roundUTCTime (UTCTime day time) = UTCTime day (fromIntegral (roundFn time))
 #else
 roundUTCTime = id
 #endif
@@ -135,6 +157,10 @@ instance Arbitrary DataTypeTable where
      <*> (truncateTimeOfDay =<< arbitrary) -- time
 #endif
      <*> (truncateUTCTime   =<< arbitrary) -- utc
+#if defined(WITH_MYSQL) && !(defined(OLD_MYSQL))
+     <*> (truncateTimeOfDay =<< arbitrary) -- timeFrac
+     <*> (truncateUTCTime   =<< arbitrary) -- utcFrac
+#endif
 
 arbText :: Gen Text
 arbText =
