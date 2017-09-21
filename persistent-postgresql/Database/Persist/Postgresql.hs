@@ -917,6 +917,7 @@ showSqlType SqlTime = "TIME"
 showSqlType SqlDayTime = "TIMESTAMP WITH TIME ZONE"
 showSqlType SqlBlob = "BYTEA"
 showSqlType SqlBool = "BOOLEAN"
+showSqlType (SqlEnum t) = t
 
 -- Added for aliasing issues re: https://github.com/yesodweb/yesod/issues/682
 showSqlType (SqlOther (T.toLower -> "integer")) = "INT4"

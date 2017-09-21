@@ -760,6 +760,7 @@ showSqlType SqlString  Nothing    False = "TEXT"
 showSqlType SqlString  (Just i)   True  = "VARCHAR(" ++ show i ++ ") CHARACTER SET utf8"
 showSqlType SqlString  (Just i)   False = "VARCHAR(" ++ show i ++ ")"
 showSqlType SqlTime    _          _     = "TIME"
+showSqlType (SqlEnum t)  _        _     = T.unpack t
 showSqlType (SqlOther t) _        _     = T.unpack t
 
 -- | Render an action that must be done on the database.

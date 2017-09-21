@@ -1329,7 +1329,7 @@ derivePersistField s = derivePersistFieldGeneric s [|SqlString|]
 -- | Automatically creates a valid 'PersistField' instance like derivePersistField,
 -- but it uses 'SqlOther' for the 'PersistFieldSql' instance instead of 'SqlString'.
 derivePersistFieldSqlTypeOther :: String -> String -> Q [Dec]
-derivePersistFieldSqlTypeOther s st = derivePersistFieldGeneric s [|SqlOther (pack st)|]
+derivePersistFieldSqlTypeOther s st = derivePersistFieldGeneric s [|SqlEnum (pack st)|]
 
 -- | Automatically creates a valid 'PersistField' instance for any datatype
 -- that has valid 'ToJSON' and 'FromJSON' instances. For a datatype @T@ it
@@ -1526,6 +1526,7 @@ instance Lift SqlType where
     lift SqlTime = [|SqlTime|]
     lift SqlDayTime = [|SqlDayTime|]
     lift SqlBlob = [|SqlBlob|]
+    lift (SqlEnum a) = [|SqlEnum a|]
     lift (SqlOther a) = [|SqlOther a|]
 
 -- Ent
