@@ -103,6 +103,7 @@ import Database.Persist.Sqlite
 #  endif
 #  ifdef WITH_MYSQL
 import Database.Persist.MySQL
+import qualified Database.MySQL.Base as MySQL
 #  endif
 import Data.IORef (newIORef, IORef, writeIORef, readIORef)
 import System.IO.Unsafe (unsafePerformIO)
@@ -247,14 +248,24 @@ runConn f = do
         withPostgresqlPool ("host=" <> host <> " port=5432 user=postgres dbname=test") 1 $ runSqlPool f
 #  else
 #    ifdef WITH_MYSQL
+    -- Since version 5.7.5, MySQL adds a mode value `STRICT_TRANS_TABLES`
+    -- which can cause an exception in MaxLenTest, depending on the server
+    -- configuration.  Persistent tests do not need any of the modes which are
+    -- set by default, so it is simplest to clear `sql_mode` for the session.
+    let baseConnectInfo =
+            defaultConnectInfo {
+                connectOptions =
+                    connectOptions defaultConnectInfo
+                    ++ [MySQL.InitCommand "SET SESSION sql_mode = '';\0"]
+            }
     _ <- if not travis
-      then withMySQLPool defaultConnectInfo
+      then withMySQLPool baseConnectInfo
                         { connectHost     = "localhost"
                         , connectUser     = "test"
                         , connectPassword = "test"
                         , connectDatabase = "test"
                         } 1 $ runSqlPool f
-      else withMySQLPool defaultConnectInfo
+      else withMySQLPool baseConnectInfo
                         { connectHost     = "localhost"
                         , connectUser     = "travis"
                         , connectPassword = ""
