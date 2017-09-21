@@ -1058,30 +1058,8 @@ insertManyOnDuplicateKeyUpdate
   -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
   -> SqlPersistT m ()
 insertManyOnDuplicateKeyUpdate [] _ _ = return ()
-insertManyOnDuplicateKeyUpdate records [] [] =
-  uncurry rawExecute $ mkInsertIgnoreQuery records
 insertManyOnDuplicateKeyUpdate records fieldValues updates =
   uncurry rawExecute $ mkBulkInsertQuery records fieldValues updates
-
--- | This makes a special query that inserts the given rows into the
--- database without performing any updates. If there are duplicate keys,
--- then it just ignores that.
-mkInsertIgnoreQuery :: PersistEntity record => [record] -> (Text, [PersistValue])
-mkInsertIgnoreQuery records = (q, concat vals)
-  where
-    entityDef' = entityDef records
-    tableName = T.pack . escapeDBName . entityDB $ entityDef'
-    vals = map (map toPersistValue . toPersistFields) records
-    entityFieldNames = map (T.pack . escapeDBName . fieldDB) (entityFields entityDef')
-    recordPlaceholders = commaSeparated $ map (parenWrapped . commaSeparated . map (const "?") . toPersistFields) records
-    q = T.concat
-        [ "INSERT IGNORE INTO "
-        , tableName
-        , " ("
-        , commaSeparated entityFieldNames
-        , ")"
-        , recordPlaceholders
-        ]
 
 -- | This creates the query for 'bulkInsertOnDuplicateKeyUpdate'. It will give
 -- garbage results if you don't provide a list of either fields to copy or
@@ -1099,12 +1077,18 @@ mkBulkInsertQuery records fieldValues updates =
     updateFieldNames = map (T.pack . escapeDBName . fieldDB) fieldDefs
     entityDef' = entityDef records
     entityFieldNames = map (T.pack . escapeDBName . fieldDB) (entityFields entityDef')
+    firstField = case entityFieldNames of
+        [] -> error "The entity you're trying to insert does not have any fields."
+        (field:_) -> field
     tableName = T.pack . escapeDBName . entityDB $ entityDef'
     recordValues = concatMap (map toPersistValue . toPersistFields) records
     recordPlaceholders = commaSeparated $ map (parenWrapped . commaSeparated . map (const "?") . toPersistFields) records
     fieldSets = map (\n -> T.concat [n, "=VALUES(", n, ")"]) updateFieldNames
     upds = map mkUpdateText updates
     updsValues = map (\(Update _ val _) -> toPersistValue val) updates
+    updateText = case fieldSets <> upds of
+        [] -> T.concat [firstField, "=", firstField]
+        xs -> commaSeparated xs
     q = T.concat
         [ "INSERT INTO "
         , tableName
@@ -1114,7 +1098,7 @@ mkBulkInsertQuery records fieldValues updates =
         , " VALUES "
         , recordPlaceholders
         , " ON DUPLICATE KEY UPDATE "
-        , commaSeparated (fieldSets <> upds)
+        , updateText
         ]
 
 -- | Vendored from @persistent@.
