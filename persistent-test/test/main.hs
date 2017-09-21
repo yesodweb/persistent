@@ -19,6 +19,7 @@ import qualified PrimaryTest
 import qualified Recursive
 import qualified RenameTest
 import qualified SumTypeTest
+import qualified InsertDuplicateUpdate
 import qualified UniqueTest
 
 #ifndef WITH_NOSQL
@@ -68,6 +69,9 @@ main = do
 #  ifndef WITH_MYSQL
       , PrimaryTest.migration
 #  endif
+#  ifdef WITH_MYSQL
+      , InsertDuplicateUpdate.duplicateMigrate
+#  endif
       , CustomPrimaryKeyReferenceTest.migration
       ]
     PersistentTest.cleanDB
@@ -92,6 +96,7 @@ main = do
     PrimaryTest.specs
     CustomPersistFieldTest.specs
     CustomPrimaryKeyReferenceTest.specs
+    InsertDuplicateUpdate.specs
 
 #ifdef WITH_SQLITE
     MigrationTest.specs

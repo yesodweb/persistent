@@ -1,3 +1,9 @@
+## 2.6.2
+
+* Extend the `SomeField` type to allow `insertManyOnDuplicateKeyUpdate` to conditionally copy values.
+* Depend on `mysql-simple >= 0.4.3` to fix encoding and decoding of date/time values with fractional seconds (when a column is specified using something like `sqltype=TIME(6)`).  See also [#705](https://github.com/yesodweb/persistent/issues/705)
+* Fix behavior of `insertManyOnDuplicateKeyUpdate` to ignore duplicate key exceptions when no updates specified.
+
 ## 2.6.1
 
 * Add functions `insertOnDuplicateKeyUpdate`, `insertManyOnDuplicateKeyUpdate` to `Database.Persist.MySQL` module.
