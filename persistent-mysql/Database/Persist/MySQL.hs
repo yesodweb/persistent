@@ -1032,12 +1032,7 @@ mockMigration mig = do
 -- | MySQL specific 'upsert'. This will prevent multiple queries, when one will
 -- do.
 insertOnDuplicateKeyUpdate
-  :: ( PersistEntityBackend record ~ BaseBackend backend
-     , PersistEntity record
-     , MonadIO m
-     , PersistStore backend
-     , backend ~ SqlBackend
-     )
+  :: (PersistEntity record, MonadIO m)
   => record
   -> [Update record]
   -> SqlPersistT m ()
@@ -1172,8 +1167,7 @@ copyUnlessEq = CopyUnlessEq
 -- > | yes  | wow         |       |          |
 -- > +------+-------------+-------+----------+
 insertManyOnDuplicateKeyUpdate
-  :: ( PersistEntityBackend record ~ SqlBackend
-     , PersistEntity record
+  :: ( PersistEntity record
      , MonadIO m
      )
   => [record] -- ^ A list of the records you want to insert, or update
@@ -1181,7 +1175,6 @@ insertManyOnDuplicateKeyUpdate
   -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
   -> SqlPersistT m ()
 insertManyOnDuplicateKeyUpdate [] _ _ = return ()
-insertManyOnDuplicateKeyUpdate records [] [] = insertMany_ records
 insertManyOnDuplicateKeyUpdate records fieldValues updates =
   uncurry rawExecute $ mkBulkInsertQuery records fieldValues updates
 
@@ -1189,7 +1182,7 @@ insertManyOnDuplicateKeyUpdate records fieldValues updates =
 -- garbage results if you don't provide a list of either fields to copy or
 -- fields to update.
 mkBulkInsertQuery
-    :: (PersistEntityBackend record ~ SqlBackend, PersistEntity record)
+    :: PersistEntity record
     => [record] -- ^ A list of the records you want to insert, or update
     -> [SomeField record] -- ^ A list of the fields you want to copy over.
     -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
@@ -1203,6 +1196,9 @@ mkBulkInsertQuery records fieldValues updates =
     (fieldsToMaybeCopy, updateFieldNames) = partitionEithers $ map mfieldDef fieldValues
     fieldDbToText = T.pack . escapeDBName . fieldDB
     entityDef' = entityDef records
+    firstField = case entityFieldNames of
+        [] -> error "The entity you're trying to insert does not have any fields."
+        (field:_) -> field
     entityFieldNames = map fieldDbToText (entityFields entityDef')
     tableName = T.pack . escapeDBName . entityDB $ entityDef'
     copyUnlessValues = map snd fieldsToMaybeCopy
@@ -1222,6 +1218,9 @@ mkBulkInsertQuery records fieldValues updates =
     fieldSets = map (\n -> T.concat [n, "=VALUES(", n, ")"]) updateFieldNames
     upds = map mkUpdateText updates
     updsValues = map (\(Update _ val _) -> toPersistValue val) updates
+    updateText = case fieldSets <> upds <> condFieldSets of
+        [] -> T.concat [firstField, "=", firstField]
+        xs -> commaSeparated xs
     q = T.concat
         [ "INSERT INTO "
         , tableName
@@ -1231,7 +1230,7 @@ mkBulkInsertQuery records fieldValues updates =
         , " VALUES "
         , recordPlaceholders
         , " ON DUPLICATE KEY UPDATE "
-        , commaSeparated (fieldSets <> upds <> condFieldSets)
+        , updateText
         ]
 
 -- | Vendored from @persistent@.

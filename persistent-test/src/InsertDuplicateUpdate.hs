@@ -84,6 +84,17 @@ specs = describe "DuplicateKeyUpdate" $ do
         []
       dbItems <- sort . fmap entityVal <$> selectList [] []
       dbItems @== sort postUpdate
+    it "inserts without modifying existing records if no updates specified" $ db $ do
+      let newItem = Item "item3" "hi friends!" Nothing Nothing
+      deleteWhere ([] :: [Filter Item])
+      insertMany_ items
+      insertManyOnDuplicateKeyUpdate
+        (newItem : items)
+        []
+        []
+      dbItems <- sort . fmap entityVal <$> selectList [] []
+      dbItems @== sort (newItem : items)
+
 #else
 specs :: Spec
 specs = describe "DuplicateKeyUpdate" $ do
