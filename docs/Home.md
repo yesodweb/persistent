@@ -2,8 +2,8 @@ Get started with Persistent at: http://www.yesodweb.com/book/persistent
 
 ## Wiki
 
-* [Entity Syntax](https://github.com/yesodweb/persistent/wiki/Persistent-entity-syntax)
-* [Database Configuration](https://github.com/yesodweb/persistent/wiki/Database-Configuration)
+* [Entity Syntax](./Persistent-entity-syntax.md)
+* [Database Configuration](./Database-Configuration.md)
 
 ## External Documentation
 
