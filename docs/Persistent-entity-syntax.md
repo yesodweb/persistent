@@ -79,8 +79,8 @@ Person json
 Requires `{-# LANGUAGE FlexibleInstances #-}`
 
 Customizable by using mpsEntityJSON
-* http://hackage.haskell.org/package/persistent-template-2.1.4/docs/Database-Persist-TH.html#v:EntityJSON
-* http://hackage.haskell.org/package/persistent-2.2.2/docs/Database-Persist-Class.html#v:keyValueEntityToJSON
+* http://hackage.haskell.org/package/persistent-template/docs/Database-Persist-TH.html#v:EntityJSON
+* http://hackage.haskell.org/package/persistent/docs/Database-Persist-Class.html#v:keyValueEntityToJSON
 
 ## Changing table/collection name
 
