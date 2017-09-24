@@ -24,7 +24,7 @@ Note that strict mode causes slight changes in behavior; see the MySQL docs link
 
 ### Enable foreign key constraints
 
-Foreign key checks are not enabled by default in SQLite. [This wiki page](https://github.com/yesodweb/yesod/wiki/Activate-foreign-key-checking-in-Sqlite) explains how to enable foreign key checks when using Persistent/Yesod.
+Foreign key checks are not enabled by default in SQLite. [This wiki page](https://github.com/yesodweb/yesod-cookbook/blob/master/cookbook/Activate-foreign-key-checking-in-Sqlite.md) explains how to enable foreign key checks when using Persistent/Yesod.
 
 ### URI Filenames
 
