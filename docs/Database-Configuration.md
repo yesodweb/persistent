@@ -1,3 +1,5 @@
+# Database Configuration
+
 Database configuration may change the semantics of your database in important ways; this page lists options likely to affect Persistent users.
 
 ## MySQL
