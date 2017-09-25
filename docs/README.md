@@ -1,0 +1,32 @@
+Get started with Persistent at: http://www.yesodweb.com/book/persistent
+
+## Wiki
+
+* [Entity Syntax](./Persistent-entity-syntax.md)
+* [Database Configuration](./Database-Configuration.md)
+
+## External Documentation
+
+* [School of Haskell documentation](https://www.fpcomplete.com/school/advanced-haskell/persistent-in-detail)
+* [uuid example](http://michaelxavier.net/posts/2015-04-14-Adding-a-UUID-Column-to-a-Persistent-Table.html)
+
+## persistent libraries
+
+* [Triggers for SQL](https://github.com/jcristovao/migrationplus)
+* [ODBC](https://github.com/gbwey/persistent-odbc)
+* [Zookeeper](https://hackage.haskell.org/package/persistent-zookeeper)
+
+## Persistent with MongoDB
+
+Some code snippets:
+
+[Basic MongoDB connection and queries](https://github.com/yesodweb/yesod/wiki/Rawmongo)
+
+[Non scaffolded MongoDB app](https://github.com/yesodweb/yesod/wiki/Non-scaffolded-MongoDB-App)
+
+[Scaffolded without Foundation](https://github.com/yesodweb/yesod/wiki/Using-Database.Persist.runPool-without-Foundation)
+
+[Using the raw MongoDB driver](https://github.com/yesodweb/yesod/wiki/Raw-Mongo)
+
+
+Head to the [API docs](http://yesodweb.github.io/persistent/persistent-mongoDB/Database-Persist-MongoDB.html)  for more detail
