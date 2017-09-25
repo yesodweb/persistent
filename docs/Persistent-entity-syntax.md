@@ -16,7 +16,7 @@ Day        |  DATE                |  DATE             | NumberLong    |  DATE
 TimeOfDay  |  TIME                |  TIME             | *Unsupported* |  TIME
 UTCTime\*  |  TIMESTAMP           |  DATETIME         | Date          |  TIMESTAMP
 
-\* Support for `ZonedTime` was dropped in persistent 2.0. `UTCTime` can be used with `timestamp without timezone` and `timestamp with timezone` in PostgreSQL. See also [the section below about timezone support](#Times with timezones).
+\* Support for `ZonedTime` was dropped in persistent 2.0. `UTCTime` can be used with `timestamp without timezone` and `timestamp with timezone` in PostgreSQL. See also [the section below about timezone support](#times-with-timezones).
 
 ## Compatibility tables
 
