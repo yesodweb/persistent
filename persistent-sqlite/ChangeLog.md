@@ -1,3 +1,7 @@
+## 2.6.3
+
+* Add 'use-pkgconfig' flag to use pkg-config to find system SQLite library.
+
 ## 2.6.2.1
 
 * Update `sqlite` cbit sources to 3.19.3 from 3.12.1
