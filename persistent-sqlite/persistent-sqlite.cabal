@@ -1,5 +1,5 @@
 name:            persistent-sqlite
-version:         2.6.2.1
+version:         2.6.3
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -16,6 +16,9 @@ extra-source-files: ChangeLog.md cbits/*.c cbits/*.h
 
 flag systemlib
   description: Use the system-wide sqlite library
+  default: False
+flag use-pkgconfig
+  description: Use pkg-config to find system sqlite library
   default: False
 flag build-sanity-exe
   description: Build a sanity check test executable
@@ -42,7 +45,10 @@ library
                      Database.Persist.Sqlite
     ghc-options:     -Wall
     if flag(systemlib)
-        extra-libraries: sqlite3
+        if flag(use-pkgconfig)
+            pkgconfig-depends: sqlite3
+        else
+            extra-libraries: sqlite3
     else
         c-sources:   cbits/sqlite3.c
         include-dirs: cbits
