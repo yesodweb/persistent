@@ -892,12 +892,24 @@ specs = describe "persistent" $ do
       ret <- rawSql "SELECT 2+2" []
       liftIO $ ret @?= [Single (4::Int)]
 
+  it "sqlQQ/?-?" $ db $ do
+      ret <- [sqlQQ| SELECT #{2 :: Int}+#{2 :: Int} |]
+      liftIO $ ret @?= [Single (4::Int)]
+
   it "rawSql/?-?" $ db $ do
       ret <- rawSql "SELECT ?-?" [PersistInt64 5, PersistInt64 3]
       liftIO $ ret @?= [Single (2::Int)]
 
+  it "sqlQQ/?-?" $ db $ do
+      ret <- [sqlQQ| SELECT #{5 :: Int}-#{3 :: Int} |]
+      liftIO $ ret @?= [Single (2::Int)]
+
   it "rawSql/NULL" $ db $ do
       ret <- rawSql "SELECT NULL" []
+      liftIO $ ret @?= [Nothing :: Maybe (Single Int)]
+
+  it "sqlQQ/NULL" $ db $ do
+      ret <- [sqlQQ| SELECT NULL |]
       liftIO $ ret @?= [Nothing :: Maybe (Single Int)]
 
   it "rawSql/entity" $ db $ do
