@@ -34,15 +34,8 @@ parseStr a ['\\']       = parseStr ('\\':a) []
 parseStr a ('#':'{':xs) = Literal (reverse a) : parseHaskell [] xs
 parseStr a (x:xs)       = parseStr (x:a) xs
 
-makeExpr :: [StringPart] -> TH.ExpQ
-makeExpr s = TH.appE [| uncurry Raw.rawSql . first pack |] (go s)
-    where
-    go [] = [| (mempty, []) |]
-    go (Literal a:xs)   = TH.appE [| first (a ++) |] (go xs)
-    go (AntiQuote a:xs) = TH.appE [| first ("?" ++) . second (toPersistValue $(reify a) :) |] (go xs)
-
-makeExpr' :: [StringPart] -> TH.ExpQ
-makeExpr' s = TH.appE [| uncurry Raw.rawExecute . first pack |] (go s)
+makeExpr :: TH.Q TH.Exp -> [StringPart] -> TH.ExpQ
+makeExpr n s = TH.appE (TH.appE [| flip (.) (first pack) |] (TH.appE [| uncurry |] n)) (go s)
     where
     go [] = [| (mempty, []) |]
     go (Literal a:xs)   = TH.appE [| first (a ++) |] (go xs)
@@ -56,14 +49,14 @@ reify s =
 
 sqlQQ :: QuasiQuoter
 sqlQQ = QuasiQuoter
-    (makeExpr . parseStr [] . filter (/= '\r'))
+    (makeExpr [| Raw.rawSql |] . parseStr [] . filter (/= '\r'))
     (error "Cannot use qc as a pattern")
     (error "Cannot use qc as a type")
     (error "Cannot use qc as a dec")
 
 executeQQ :: QuasiQuoter
 executeQQ = QuasiQuoter
-    (makeExpr' . parseStr [] . filter (/= '\r'))
+    (makeExpr [| Raw.executeSql |] . parseStr [] . filter (/= '\r'))
     (error "Cannot use qc as a pattern")
     (error "Cannot use qc as a type")
     (error "Cannot use qc as a dec")
