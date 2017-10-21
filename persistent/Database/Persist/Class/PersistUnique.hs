@@ -6,6 +6,7 @@ module Database.Persist.Class.PersistUnique
   ,PersistUniqueWrite(..)
   ,getByValue
   ,insertBy
+  ,insertUniqueEntity
   ,replaceUnique
   ,checkUnique
   ,onlyUnique)
@@ -129,6 +130,15 @@ _insertOrGet val = do
     case res of
         Nothing -> insert val
         Just (Entity key _) -> return key
+
+-- | Like 'insertEntity', but returns 'Nothing' when the record
+-- couldn't be inserted because of a uniqueness constraint.
+insertUniqueEntity
+    :: (MonadIO m
+       ,PersistRecordBackend record backend
+       ,PersistUniqueWrite backend)
+    => record -> ReaderT backend m (Maybe (Entity record))
+insertUniqueEntity datum = fmap (\key -> Entity key datum) <$> insertUnique datum
 
 -- | Return the single unique key for a record.
 onlyUnique
