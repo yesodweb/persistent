@@ -138,7 +138,8 @@ insertUniqueEntity
        ,PersistRecordBackend record backend
        ,PersistUniqueWrite backend)
     => record -> ReaderT backend m (Maybe (Entity record))
-insertUniqueEntity datum = fmap (\key -> Entity key datum) <$> insertUnique datum
+insertUniqueEntity datum =
+  fmap (\key -> Entity key datum) `liftM` insertUnique datum
 
 -- | Return the single unique key for a record.
 onlyUnique
