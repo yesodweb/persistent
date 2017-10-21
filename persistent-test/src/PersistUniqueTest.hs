@@ -36,4 +36,9 @@ specs = describe "custom primary key" $ do
     Just vk <- get k
     Just vu <- getBy (UniqueBar b)
     vu @== Entity k vk
+  it "insertUniqueEntity" $ db $ do
+    let fo = Fo 3 5
+    Just (Entity _ insertedFoValue) <- insertUniqueEntity fo
+    Nothing <- insertUniqueEntity fo
+    fo @== insertedFoValue
 #endif
