@@ -1,3 +1,7 @@
+## 2.7.1
+
+* Added an `insertUniqueEntity` function [#718](https://github.com/yesodweb/persistent/pull/718)
+
 ## 2.7.0
 
 * Fix upsert behavior [#613](https://github.com/yesodweb/persistent/issues/613)

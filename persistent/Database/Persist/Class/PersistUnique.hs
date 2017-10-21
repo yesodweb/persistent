@@ -133,6 +133,8 @@ _insertOrGet val = do
 
 -- | Like 'insertEntity', but returns 'Nothing' when the record
 -- couldn't be inserted because of a uniqueness constraint.
+--
+-- @since 2.7.1
 insertUniqueEntity
     :: (MonadIO m
        ,PersistRecordBackend record backend
