@@ -40,7 +40,7 @@ import Web.HttpApiData (ToHttpApiData, FromHttpApiData)
 import Database.Persist.Sql.Class (PersistFieldSql)
 import qualified Data.Aeson as A
 import Control.Exception.Lifted (throwIO)
-import Database.Persist.Class (BackendCompatible(..))
+import Database.Persist.Class ()
 
 withRawQuery :: MonadIO m
              => Text
