@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_GHC -fno-warn-unused-imports #-}
 {-# LANGUAGE QuasiQuotes, TemplateHaskell, CPP, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, EmptyDataDecls, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses #-}
 module DataTypeTest (specs) where
 
@@ -11,9 +12,9 @@ import Database.Persist.TH
 import Data.Char (generalCategory, GeneralCategory(..))
 import qualified Data.Text as T
 import qualified Data.ByteString as BS
-import Data.Time (Day, UTCTime (..), fromGregorian)
-import Data.Time.Clock (picosecondsToDiffTime)
-import Data.Time.LocalTime (TimeOfDay (TimeOfDay))
+import Data.Time (Day, UTCTime (..), fromGregorian, picosecondsToDiffTime,
+                  TimeOfDay (TimeOfDay), timeToTimeOfDay, timeOfDayToTime)
+import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds, posixSecondsToUTCTime)
 import Data.IntMap (IntMap)
 import Data.Fixed (Pico,Micro)
 
@@ -122,14 +123,15 @@ roundFn = round
 
 roundTime :: TimeOfDay -> TimeOfDay
 #ifdef WITH_MYSQL
-roundTime (TimeOfDay h m s) = TimeOfDay h m (fromIntegral (roundFn s))
+roundTime t = timeToTimeOfDay $ fromIntegral $ roundFn $ timeOfDayToTime t
 #else
 roundTime = id
 #endif
 
 roundUTCTime :: UTCTime -> UTCTime
 #ifdef WITH_MYSQL
-roundUTCTime (UTCTime day time) = UTCTime day (fromIntegral (roundFn time))
+roundUTCTime t =
+    posixSecondsToUTCTime $ fromIntegral $ roundFn $ utcTimeToPOSIXSeconds t
 #else
 roundUTCTime = id
 #endif
