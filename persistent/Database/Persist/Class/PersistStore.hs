@@ -88,6 +88,8 @@ class (HasPersistBackend backend) => IsPersistBackend backend where
 -- asdf' :: 'BackendCompatible' SqlBackend backend => ReaderT backend m ()
 -- asdf' = withReaderT 'projectBackend' asdf
 -- @
+--
+-- @since 2.7.1
 class BackendCompatible sup sub where
     projectBackend :: sub -> sup
 
