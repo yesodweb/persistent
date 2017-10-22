@@ -1,6 +1,7 @@
 ## 2.7.1
 
 * Added an `insertUniqueEntity` function [#718](https://github.com/yesodweb/persistent/pull/718)
+* Added `BackendCompatible` class [#701](https://github.com/yesodweb/persistent/pull/701)
 
 ## 2.7.0
 
