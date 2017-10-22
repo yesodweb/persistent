@@ -54,6 +54,40 @@ class (HasPersistBackend backend) => IsPersistBackend backend where
 -- to the 'HasPersistBackend' and 'IsPersistBackend' classes, but where you
 -- don't want to fix the type associated with the 'PersistEntityBackend' of
 -- a record.
+--
+-- Generally speaking, where you might have:
+--
+-- @
+-- foo ::
+--   ( 'PersistEntity' record
+--   , 'PeristEntityBackend' record ~ 'BaseBackend' backend
+--   , 'IsSqlBackend' backend
+--   )
+-- @
+--
+-- this can be replaced with:
+--
+-- @
+-- foo ::
+--   ( 'PersistEntity' record,
+--   , 'PersistEntityBackend' record ~ backend
+--   , 'BackendCompatible' 'SqlBackend' backend
+--   )
+-- @
+--
+-- This works for 'SqlReadBackend' because of the @instance 'BackendCompatible' 'SqlBackend' 'SqlReadBackend'@, without needing to go through the 'BaseBackend' type family.
+--
+-- Likewise, functions that are currently hardcoded to use 'SqlBackend' can be generalized:
+--
+-- @
+-- -- before:
+-- asdf :: 'ReaderT' 'SqlBackend' m ()
+-- asdf = pure ()
+--
+-- -- after:
+-- asdf' :: 'BackendCompatible' SqlBackend backend => ReaderT backend m ()
+-- asdf' = withReaderT 'projectBackend' asdf
+-- @
 class BackendCompatible sup sub where
     projectBackend :: sub -> sup
 
