@@ -18,6 +18,7 @@ module Database.Persist.Class.PersistStore
     , insertEntity
     , insertRecord
     , ToBackendKey(..)
+    , BackendCompatible(..)
     ) where
 
 import qualified Data.Text as T
@@ -47,6 +48,48 @@ class (HasPersistBackend backend) => IsPersistBackend backend where
     -- It should be used carefully and only when actually constructing a @backend@. Careless use allows us
     -- to accidentally run a write query against a read-only database.
     mkPersistBackend :: BaseBackend backend -> backend
+
+-- | This class witnesses that two backend are compatible, and that you can
+-- convert from the @sub@ backend into the @sup@ backend. This is similar
+-- to the 'HasPersistBackend' and 'IsPersistBackend' classes, but where you
+-- don't want to fix the type associated with the 'PersistEntityBackend' of
+-- a record.
+--
+-- Generally speaking, where you might have:
+--
+-- @
+-- foo ::
+--   ( 'PersistEntity' record
+--   , 'PeristEntityBackend' record ~ 'BaseBackend' backend
+--   , 'IsSqlBackend' backend
+--   )
+-- @
+--
+-- this can be replaced with:
+--
+-- @
+-- foo ::
+--   ( 'PersistEntity' record,
+--   , 'PersistEntityBackend' record ~ backend
+--   , 'BackendCompatible' 'SqlBackend' backend
+--   )
+-- @
+--
+-- This works for 'SqlReadBackend' because of the @instance 'BackendCompatible' 'SqlBackend' 'SqlReadBackend'@, without needing to go through the 'BaseBackend' type family.
+--
+-- Likewise, functions that are currently hardcoded to use 'SqlBackend' can be generalized:
+--
+-- @
+-- -- before:
+-- asdf :: 'ReaderT' 'SqlBackend' m ()
+-- asdf = pure ()
+--
+-- -- after:
+-- asdf' :: 'BackendCompatible' SqlBackend backend => ReaderT backend m ()
+-- asdf' = withReaderT 'projectBackend' asdf
+-- @
+class BackendCompatible sup sub where
+    projectBackend :: sub -> sup
 
 -- | A convenient alias for common type signatures
 type PersistRecordBackend record backend = (PersistEntity record, PersistEntityBackend record ~ BaseBackend backend)
