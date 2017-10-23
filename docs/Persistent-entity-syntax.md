@@ -18,7 +18,7 @@ UTCTime\*  |  TIMESTAMP           |  DATETIME\*\*     | Date          |  TIMESTA
 
 \* Support for `ZonedTime` was dropped in persistent 2.0. `UTCTime` can be used with `timestamp without timezone` and `timestamp with timezone` in PostgreSQL. See also [the section below about timezone support](#times-with-timezones).
 
-\*\* The default resolution for `TIME` and `DATETIME` in MySQL is one second.  As of MySQL version 5.6.4, and persistent-mysql-2.6.2, fractional seconds are handled correctly if you declare an explicit precision by using [`sqltype`](#sqltype), for example appending `sqltype=TIME(6)` to a `TimeOfDay` field definition will give microsecond resolution.
+\*\* The default resolution for `TIME` and `DATETIME` in MySQL is one second.  As of MySQL version 5.6.4, and persistent-mysql-2.6.2, fractional seconds are handled correctly if you declare an explicit precision by using [`sqltype`](#sqltype).  For example, appending `sqltype=TIME(6)` to a `TimeOfDay` field definition will give microsecond resolution.
 
 ## Compatibility tables
 
