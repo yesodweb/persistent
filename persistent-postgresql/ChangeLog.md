@@ -1,3 +1,7 @@
+## 2.6.2
+
+* Expose new functions: `withPostgresqlPoolWithVersion`, `withPostgresqlConnWithVersion` and `createPostgresqlPoolModifiedWithVersion`.
+
 ## 2.6.1
 
 * Match changes in persistent
