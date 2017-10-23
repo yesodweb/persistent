@@ -13,10 +13,12 @@ Double     |  DOUBLE PRECISION    |  DOUBLE           | Double        |  REAL
 Rational   |  NUMERIC(22, 12)     |  DECIMAL(32,20)   | *Unsupported* |  NUMERIC(32,20)
 Bool       |  BOOLEAN             |  TINYINT(1)       | Boolean       |  BOOLEAN
 Day        |  DATE                |  DATE             | NumberLong    |  DATE
-TimeOfDay  |  TIME                |  TIME             | *Unsupported* |  TIME
-UTCTime\*  |  TIMESTAMP           |  DATETIME         | Date          |  TIMESTAMP
+TimeOfDay  |  TIME                |  TIME\*\*         | *Unsupported* |  TIME
+UTCTime\*  |  TIMESTAMP           |  DATETIME\*\*     | Date          |  TIMESTAMP
 
 \* Support for `ZonedTime` was dropped in persistent 2.0. `UTCTime` can be used with `timestamp without timezone` and `timestamp with timezone` in PostgreSQL. See also [the section below about timezone support](#times-with-timezones).
+
+\*\* The default resolution for `TIME` and `DATETIME` in MySQL is one second.  As of MySQL version 5.6.4, and persistent-mysql-2.6.2, fractional seconds are handled correctly if you declare an explicit precision by using [`sqltype`](#sqltype).  For example, appending `sqltype=TIME(6)` to a `TimeOfDay` field definition will give microsecond resolution.
 
 ## Compatibility tables
 
