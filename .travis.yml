@@ -46,6 +46,7 @@ script: travis/run.sh
 cache:
   directories:
   - $HOME/.stack
+  - .stack-work
 
 
 # zookeeper doesn't seem to work any more
