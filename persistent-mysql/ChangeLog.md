@@ -1,3 +1,7 @@
+## 2.6.2.1
+
+* Fix haddock documentation [#725](https://github.com/yesodweb/persistent/pull/725)
+
 ## 2.6.2
 
 * Extend the `SomeField` type to allow `insertManyOnDuplicateKeyUpdate` to conditionally copy values.
