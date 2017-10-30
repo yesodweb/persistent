@@ -356,7 +356,7 @@ withStmt' conn query vals =
     where
         closeS _= return ()
         openS  = PG.fold conn query (map P vals) CL.sourceNull processRow
-        processRow s row = return $ s >> yield (pVal <$> row)
+        processRow s row = return $ s >> yield (map pVal row)
 
 -- | Avoid orphan instances.
 newtype P = P { pVal :: PersistValue }
@@ -383,7 +383,7 @@ instance PGTF.ToField P where
 
 instance PGFF.FromField P where
     fromField _ Nothing = return . P $ PersistNull
-    fromField f mdata   = P <$> (getGetter (PGFF.typeOid f) f mdata)
+    fromField f mdata   = P `fmap` (getGetter (PGFF.typeOid f) f mdata)
 
 newtype Unknown = Unknown { unUnknown :: ByteString }
   deriving (Eq, Show, Read, Ord, Typeable)
