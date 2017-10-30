@@ -1,9 +1,64 @@
+{-|
+Module: module Database.Persist.Sql.Raw.QQ
+Description: QuasiQuoters for performing raw sql queries
+
+This module exports convenient QuasiQuoters to perform raw SQL queries.
+All QuasiQuoters follow them same pattern and are analogous to the similar named
+functions exported from 'Database.Persist.Sql.Raw'. Neither the quoted
+function's behaviour nor it's return value is altered during the translation and
+all documentation provided with these functions holds.
+
+The QuasiQuoters in this module perform a simple substitution on the query text,
+where interpolated values of the form @#{foo}@ are replaced with a single
+question mark ('?') and collected into a list. The targeted function is then
+applied to the modified query text as well as a list of all found values.
+Please note that it is not required to call 'toPersistValue' on each
+interpolated value, as this conversion is done automatically.
+
+Here is a small example:
+
+@
+   let lft = 10 :: Int
+       rgt = 20 :: Int
+       width = 50 :: Int
+   in [sqlQQ|
+           DELETE FROM category WHERE lft BETWEEN #{lft} AND #{rgt};
+           UPDATE category SET rgt = rgt - #{width} WHERE rgt > #{rgt};
+           UPDATE category SET lft = lft - #{width} WHERE lft > #{rgt};
+           |]
+@
+
+This directly translates to this:
+
+@
+   let lft = 10 :: Int
+       rgt = 20 :: Int
+       width = 50 :: Int
+   in rawSql (
+        "DELETE FROM category WHERE lft BETWEEN ? AND ?;"  <>
+        "UPDATE category SET rgt = rgt - ? WHERE rgt > ?;" <>
+        "UPDATE category SET lft = lft - ? WHERE lft > ?;"
+        ) [ toPersistValue lft
+          , toPersistValue rgt
+          , toPersistValue width
+          , toPersistValue rgt
+          , toPersistValue width
+          , toPersistValue rgt
+          ]
+@
+
+-}
+
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Database.Persist.Sql.Raw.QQ (
-      sqlQQ
+      -- * Sql QuasiQuoters
+      queryQQ
+    , queryResQQ
+    , sqlQQ
     , executeQQ
+    , executeCountQQ
     ) where
 
 import Control.Arrow (first, second)
@@ -13,7 +68,7 @@ import Language.Haskell.TH.Quote
 import Language.Haskell.Meta.Parse
 
 import Database.Persist.Class (toPersistValue)
-import qualified Database.Persist.Sql.Raw as Raw
+import Database.Persist.Sql.Raw (rawSql, rawQuery, rawQueryRes, rawExecute, rawExecuteCount)
 
 data StringPart
   = Literal String
@@ -35,7 +90,7 @@ parseStr a ('#':'{':xs) = Literal (reverse a) : parseHaskell [] xs
 parseStr a (x:xs)       = parseStr (x:a) xs
 
 makeExpr :: TH.Q TH.Exp -> [StringPart] -> TH.ExpQ
-makeExpr n s = TH.appE (TH.appE [| flip (.) (first pack) |] (TH.appE [| uncurry |] n)) (go s)
+makeExpr f s = TH.appE [| uncurry $(f) . first pack |] (go s)
     where
     go [] = [| (mempty, []) |]
     go (Literal a:xs)   = TH.appE [| first (a ++) |] (go xs)
@@ -47,16 +102,34 @@ reify s =
         Left e -> TH.reportError e >> [| mempty |]
         Right v -> return v
 
-sqlQQ :: QuasiQuoter
-sqlQQ = QuasiQuoter
-    (makeExpr [| Raw.rawSql |] . parseStr [] . filter (/= '\r'))
+makeQQ :: TH.Q TH.Exp -> QuasiQuoter
+makeQQ x = QuasiQuoter
+    (makeExpr x . parseStr [])
     (error "Cannot use qc as a pattern")
     (error "Cannot use qc as a type")
     (error "Cannot use qc as a dec")
 
+-- | Analoguous to 'Database.Persist.Sql.Raw.rawSql'
+-- @since 2.7.2
+sqlQQ :: QuasiQuoter
+sqlQQ = makeQQ [| rawSql |]
+
+-- | Analoguous to 'Database.Persist.Sql.Raw.rawExecute'
+-- @since 2.7.2
 executeQQ :: QuasiQuoter
-executeQQ = QuasiQuoter
-    (makeExpr [| Raw.executeSql |] . parseStr [] . filter (/= '\r'))
-    (error "Cannot use qc as a pattern")
-    (error "Cannot use qc as a type")
-    (error "Cannot use qc as a dec")
+executeQQ = makeQQ [| rawExecute |]
+
+-- | Analoguous to 'Database.Persist.Sql.Raw.rawExecuteCount'
+-- @since 2.7.2
+executeCountQQ :: QuasiQuoter
+executeCountQQ = makeQQ [| rawExecuteCount |]
+
+-- | Analoguous to 'Database.Persist.Sql.Raw.rawQuery'
+-- @since 2.7.2
+queryQQ :: QuasiQuoter
+queryQQ = makeQQ [| rawQuery |]
+
+-- | Analoguous to 'Database.Persist.Sql.Raw.rawQueryRes'
+-- @since 2.7.2
+queryResQQ :: QuasiQuoter
+queryResQQ = makeQQ [| rawQueryRes |]
