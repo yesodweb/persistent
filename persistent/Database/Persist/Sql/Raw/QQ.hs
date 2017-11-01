@@ -51,6 +51,7 @@ This directly translates to this:
 
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -fno-warn-unused-imports #-}
 
 module Database.Persist.Sql.Raw.QQ (
       -- * Sql QuasiQuoters
@@ -63,6 +64,7 @@ module Database.Persist.Sql.Raw.QQ (
 
 import Control.Arrow (first, second)
 import Data.Text (pack)
+import Data.Monoid (mempty)
 import qualified Language.Haskell.TH as TH
 import Language.Haskell.TH.Quote
 import Language.Haskell.Meta.Parse
