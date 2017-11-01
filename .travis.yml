@@ -41,7 +41,13 @@ before_install:
 - export PATH=$HOME/.local/bin:/opt/cabal/1.24/bin:$PATH
 - travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
 
-script: travis/run.sh
+# *TEMPORARY* A proposed change #717 uses haskell-src-meta, which requires
+# `happy` to build haskell-src-exts.  This fails in lts-2.  Revert to the
+# commented out line if #717 is not merged, or when testing lts-2 is dropped.
+# script: travis/run.sh
+script:
+- if [[ $ARGS =~ lts-2 ]]; then stack $ARGS install happy; fi
+- travis/run.sh
 
 cache:
   directories:
