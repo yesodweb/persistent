@@ -17,40 +17,49 @@ interpolated value, as this conversion is done automatically.
 
 Here is a small example:
 
+Given this model
+
 @
-   let lft = 10 :: Int
-       rgt = 20 :: Int
-       width = 50 :: Int
-   in [sqlQQ|
-           DELETE FROM category WHERE lft BETWEEN #{lft} AND #{rgt};
-           UPDATE category SET rgt = rgt - #{width} WHERE rgt > #{rgt};
-           UPDATE category SET lft = lft - #{width} WHERE lft > #{rgt};
-           |]
+Category
+  rgt Int
+  lft Int
+@
+
+@
+let lft = 10 :: Int
+    rgt = 20 :: Int
+    width = rgt - lft
+in [sqlQQ|
+        DELETE FROM ^{Category} WHERE @{CategoryLft} BETWEEN #{lft} AND #{rgt};
+        UPDATE category SET @{CategoryRgt} = @{CategoryRgt} - #{width} WHERE @{CategoryRgt} > #{rgt};
+        UPDATE category SET @{CategoryLft} = @{CategoryLft} - #{width} WHERE @{CategoryLft} > #{rgt};
+        |]
 @
 
 This directly translates to this:
 
 @
-   let lft = 10 :: Int
-       rgt = 20 :: Int
-       width = 50 :: Int
-   in rawSql (
-        "DELETE FROM category WHERE lft BETWEEN ? AND ?;"  <>
-        "UPDATE category SET rgt = rgt - ? WHERE rgt > ?;" <>
-        "UPDATE category SET lft = lft - ? WHERE lft > ?;"
-        ) [ toPersistValue lft
-          , toPersistValue rgt
-          , toPersistValue width
-          , toPersistValue rgt
-          , toPersistValue width
-          , toPersistValue rgt
-          ]
+let lft = 10 :: Int
+    rgt = 20 :: Int
+    width = rgt - lft
+in rawSql (
+    "DELETE FROM "category" WHERE "lft" BETWEEN ? AND ?;"  <>
+    "UPDATE "category" SET "rgt" = "rgt" - ? WHERE "rgt" > ?;" <>
+    "UPDATE "category" SET "lft" = "lft" - ? WHERE "lft" > ?;"
+    ) [ toPersistValue lft
+      , toPersistValue rgt
+      , toPersistValue width
+      , toPersistValue rgt
+      , toPersistValue width
+      , toPersistValue rgt
+      ]
 @
 
 -}
 
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
 
 module Database.Persist.Sql.Raw.QQ (
@@ -62,8 +71,12 @@ module Database.Persist.Sql.Raw.QQ (
     , executeCountQQ
     ) where
 
+import Prelude hiding (fail)
 import Control.Arrow (first, second)
-import Data.Text (pack)
+import Control.Monad.Reader (ask)
+import Control.Monad.Fail (fail)
+import Data.Text (pack, unpack)
+import Data.Maybe (Maybe(..))
 import Data.Monoid (mempty)
 import qualified Language.Haskell.TH as TH
 import Language.Haskell.TH.Quote
@@ -71,35 +84,66 @@ import Language.Haskell.Meta.Parse
 
 import Database.Persist.Class (toPersistValue)
 import Database.Persist.Sql.Raw (rawSql, rawQuery, rawQueryRes, rawExecute, rawExecuteCount)
+import Database.Persist.Sql.Types (connEscapeName)
 
-data StringPart
+data Token
   = Literal String
-  | AntiQuote String
+  | Value String
+  | TableName String
+  | ColumnName String
   deriving Show
 
-parseHaskell :: String -> String -> [StringPart]
-parseHaskell a []          = [Literal (reverse a)]
-parseHaskell a ('\\':x:xs) = parseHaskell (x:a) xs
-parseHaskell a ['\\']      = parseHaskell ('\\':a) []
-parseHaskell a ('}':xs)    = AntiQuote (reverse a) : parseStr [] xs
-parseHaskell a (x:xs)      = parseHaskell (x:a) xs
+parseHaskell :: (String -> Token) -> String -> String -> [Token]
+parseHaskell cons = go
+    where
+    go a []          = [Literal (reverse a)]
+    go a ('\\':x:xs) = go (x:a) xs
+    go a ['\\']      = go ('\\':a) []
+    go a ('}':xs)    = cons (reverse a) : parseStr [] xs
+    go a (x:xs)      = go (x:a) xs
 
-parseStr :: String -> String -> [StringPart]
+parseStr :: String -> String -> [Token]
 parseStr a []           = [Literal (reverse a)]
 parseStr a ('\\':x:xs)  = parseStr (x:a) xs
 parseStr a ['\\']       = parseStr ('\\':a) []
-parseStr a ('#':'{':xs) = Literal (reverse a) : parseHaskell [] xs
+parseStr a ('#':'{':xs) = Literal (reverse a) : parseHaskell Value      [] xs
+parseStr a ('^':'{':xs) = Literal (reverse a) : parseHaskell TableName  [] xs
+parseStr a ('@':'{':xs) = Literal (reverse a) : parseHaskell ColumnName [] xs
 parseStr a (x:xs)       = parseStr (x:a) xs
 
-makeExpr :: TH.Q TH.Exp -> [StringPart] -> TH.ExpQ
-makeExpr f s = TH.appE [| uncurry $(f) . first pack |] (go s)
-    where
-    go [] = [| (mempty, []) |]
-    go (Literal a:xs)   = TH.appE [| first (a ++) |] (go xs)
-    go (AntiQuote a:xs) = TH.appE [| first ("?" ++) . second (toPersistValue $(reify a) :) |] (go xs)
+makeExpr :: TH.Q TH.Exp -> [Token] -> TH.ExpQ
+makeExpr fun toks = do
+    escNm <- TH.newName "escape"
+    TH.infixE (Just [| fmap connEscapeName ask |]) [| (>>=) |] $
+        Just $
+            TH.lamE [ TH.varP escNm ] $ mkBody escNm
 
-reify :: String -> TH.Q TH.Exp
-reify s =
+    where
+    mkBody escNm = TH.appE [| uncurry $(fun) . first pack |] (go toks)
+        where
+        go [] = [| (mempty, []) |]
+        go (Literal a:xs) = TH.appE [| first (a ++) |] (go xs)
+        go (Value a:xs) = TH.appE [| first ("?" ++) . second (toPersistValue $(reifyExp a) :) |] (go xs)
+        go (ColumnName a:xs) =
+            TH.appE
+                (TH.appE [| first . (++) . unpack |]
+                    (TH.appE (TH.varE escNm) [| fieldDB $ persistFieldDef $ $(reifyExp a) |]))
+                (go xs)
+        go (TableName a:xs) = do
+            name <- TH.lookupTypeName a >>= \case
+                    Just t  -> pure t
+                    Nothing -> fail $ "Type not in scope: " ++ show a
+            TH.appE
+                (TH.appE [| first . (++) . unpack |]
+                    (TH.appE (TH.varE escNm) $
+                        (TH.appE
+                            [| entityDB . entityDef |]
+                            (TH.sigE [| Nothing |] $
+                                TH.appT (TH.conT ''Maybe) (TH.conT name)))))
+                (go xs)
+
+reifyExp :: String -> TH.Q TH.Exp
+reifyExp s =
     case parseExp s of
         Left e -> TH.reportError e >> [| mempty |]
         Right v -> return v

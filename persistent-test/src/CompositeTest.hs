@@ -276,8 +276,12 @@ specs = describe "composite" $
       [key] @== keyFromRaw
     it "RawSql Entity instance" $ db $ do
       key <- insert p1
+
       newp1 <- rawSql "SELECT ?? FROM test_parent LIMIT 1" []
       [Entity key p1] @== newp1
+
+      newp1' <- [sqlQQ| SELECT ?? FROM ^{TestParent} |]
+      [Entity key p1] @== newp1'
 
 #endif
 
