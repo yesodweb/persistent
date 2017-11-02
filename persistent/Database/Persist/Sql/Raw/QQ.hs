@@ -1,26 +1,22 @@
 {-|
+@since 2.7.2
+
 Module: module Database.Persist.Sql.Raw.QQ
 Description: QuasiQuoters for performing raw sql queries
 
 This module exports convenient QuasiQuoters to perform raw SQL queries.
 All QuasiQuoters follow them same pattern and are analogous to the similar named
 functions exported from 'Database.Persist.Sql.Raw'. Neither the quoted
-function's behaviour nor it's return value is altered during the translation and
-all documentation provided with these functions holds.
+function's behaviour, nor it's return value is altered during the translation
+and all documentation provided with it holds.
 
 The QuasiQuoters in this module perform a simple substitution on the query text,
-where interpolated values of the form @#{foo}@ are replaced with a single
-question mark ('?') and collected into a list. The targeted function is then
-applied to the modified query text as well as a list of all found values.
-Please note that it is not required to call 'toPersistValue' on each
-interpolated value, as this conversion is done automatically.
-
-Further, a type's table name can be safely inserted using @^{TableName}@ and
-columns can be referenced using the @\@{ColumnName}@ notation.
+that allows value substitutions, table name substitutions as well as column name
+substitutions.
 
 Here is a small example:
 
-Given this model
+Given the following simple model:
 
 @
 Category
@@ -28,40 +24,22 @@ Category
   lft Int
 @
 
-We can now execute this raw query, @^{TableName}@ looks up the table's name and
-escapes it, @\@{ColumnName}@ looks up the column's name and properly escapes it
-and @#{value}@ inserts the value via the usual parameter substitution mechanism.
+We can now execute this raw query:
 
 @
 let lft = 10 :: Int
     rgt = 20 :: Int
     width = rgt - lft
-in [sqlQQ|
-        DELETE FROM ^{Category} WHERE @{CategoryLft} BETWEEN #{lft} AND #{rgt};
-        UPDATE category SET @{CategoryRgt} = @{CategoryRgt} - #{width} WHERE @{CategoryRgt} > #{rgt};
-        UPDATE category SET @{CategoryLft} = @{CategoryLft} - #{width} WHERE @{CategoryLft} > #{rgt};
-        |]
+ in [sqlQQ|
+      DELETE FROM ^{Category} WHERE @{CategoryLft} BETWEEN #{lft} AND #{rgt};
+      UPDATE category SET @{CategoryRgt} = @{CategoryRgt} - #{width} WHERE @{CategoryRgt} > #{rgt};
+      UPDATE category SET @{CategoryLft} = @{CategoryLft} - #{width} WHERE @{CategoryLft} > #{rgt};
+    |]
 @
 
-This directly translates to this:
-
-@
-let lft = 10 :: Int
-    rgt = 20 :: Int
-    width = rgt - lft
-in rawSql (
-    "DELETE FROM "category" WHERE "lft" BETWEEN ? AND ?;"  <>
-    "UPDATE "category" SET "rgt" = "rgt" - ? WHERE "rgt" > ?;" <>
-    "UPDATE "category" SET "lft" = "lft" - ? WHERE "lft" > ?;"
-    ) [ toPersistValue lft
-      , toPersistValue rgt
-      , toPersistValue width
-      , toPersistValue rgt
-      , toPersistValue width
-      , toPersistValue rgt
-      ]
-@
-
+@^{TableName}@ looks up the table's name and escapes it, @\@{ColumnName}@ looks
+up the column's name and properly escapes it and @#{value}@ inserts the value
+via the usual parameter substitution mechanism.
 -}
 
 {-# LANGUAGE LambdaCase #-}
@@ -83,7 +61,7 @@ import Control.Arrow (first, second)
 import Control.Monad.Reader (ask)
 import Control.Monad.Fail (fail)
 import Data.Text (pack, unpack)
-import Data.Maybe (Maybe(..))
+import Data.Maybe (fromMaybe, Maybe(..))
 import Data.Monoid (mempty)
 import qualified Language.Haskell.TH as TH
 import Language.Haskell.TH.Quote
@@ -120,15 +98,22 @@ parseStr a (x:xs)       = parseStr (x:a) xs
 
 makeExpr :: TH.Q TH.Exp -> [Token] -> TH.ExpQ
 makeExpr fun toks = do
-    escNm <- TH.newName "escape"
+    mEscNm <- if any requiresEsc toks
+                then Just <$> TH.newName "escape"
+                else pure Nothing
     TH.infixE (Just [| fmap connEscapeName ask |]) [| (>>=) |] $
         Just $
-            TH.lamE [ TH.varP escNm ] $ mkBody escNm
+            TH.lamE [ maybe TH.wildP TH.varP mEscNm ] $ mkBody (fromMaybe 'id mEscNm)
 
     where
+    requiresEsc (Literal _) = False
+    requiresEsc (Value _) = False
+    requiresEsc (TableName _) = True
+    requiresEsc (ColumnName _) = True
+
     mkBody escNm = TH.appE [| uncurry $(fun) . first pack |] (go toks)
         where
-        go [] = [| (mempty, []) |]
+        go [] = [| (mempty, mempty) |]
         go (Literal a:xs) = TH.appE [| first (a ++) |] (go xs)
         go (Value a:xs) = TH.appE [| first ("?" ++) . second (toPersistValue $(reifyExp a) :) |] (go xs)
         go (ColumnName a:xs) =
