@@ -15,6 +15,9 @@ applied to the modified query text as well as a list of all found values.
 Please note that it is not required to call 'toPersistValue' on each
 interpolated value, as this conversion is done automatically.
 
+Further, a type's table name can be safely inserted using @^{TableName}@ and
+columns can be referenced using the @\@{ColumnName}@ notation.
+
 Here is a small example:
 
 Given this model
@@ -24,6 +27,10 @@ Category
   rgt Int
   lft Int
 @
+
+We can now execute this raw query, @^{TableName}@ looks up the table's name and
+escapes it, @\@{ColumnName}@ looks up the column's name and properly escapes it
+and @#{value}@ inserts the value via the usual parameter substitution mechanism.
 
 @
 let lft = 10 :: Int
