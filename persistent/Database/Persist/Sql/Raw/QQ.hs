@@ -62,7 +62,7 @@ import Control.Monad.Reader (ask)
 import Control.Monad.Fail (fail)
 import Data.Text (pack, unpack)
 import Data.Maybe (fromMaybe, Maybe(..))
-import Data.Monoid (mempty)
+import Data.Monoid (mempty, (<>))
 import qualified Language.Haskell.TH as TH
 import Language.Haskell.TH.Quote
 import Language.Haskell.Meta.Parse
@@ -96,43 +96,50 @@ parseStr a ('^':'{':xs) = Literal (reverse a) : parseHaskell TableName  [] xs
 parseStr a ('@':'{':xs) = Literal (reverse a) : parseHaskell ColumnName [] xs
 parseStr a (x:xs)       = parseStr (x:a) xs
 
-makeExpr :: TH.Q TH.Exp -> [Token] -> TH.ExpQ
+makeExpr :: TH.ExpQ -> [Token] -> TH.ExpQ
 makeExpr fun toks = do
-    mEscNm <- if any requiresEsc toks
-                then Just <$> TH.newName "escape"
-                else pure Nothing
-    TH.infixE (Just [| fmap connEscapeName ask |]) [| (>>=) |] $
-        Just $
-            TH.lamE [ maybe TH.wildP TH.varP mEscNm ] $ mkBody (fromMaybe 'id mEscNm)
+    TH.infixE
+        (Just [| uncurry $(fun) |])
+        ([| (=<<) |])
+        (Just $ go toks)
 
     where
-    requiresEsc (Literal _) = False
-    requiresEsc (Value _) = False
-    requiresEsc (TableName _) = True
-    requiresEsc (ColumnName _) = True
-
-    mkBody escNm = TH.appE [| uncurry $(fun) . first pack |] (go toks)
-        where
-        go [] = [| (mempty, mempty) |]
-        go (Literal a:xs) = TH.appE [| first (a ++) |] (go xs)
-        go (Value a:xs) = TH.appE [| first ("?" ++) . second (toPersistValue $(reifyExp a) :) |] (go xs)
-        go (ColumnName a:xs) =
-            TH.appE
-                (TH.appE [| first . (++) . unpack |]
-                    (TH.appE (TH.varE escNm) [| fieldDB $ persistFieldDef $ $(reifyExp a) |]))
-                (go xs)
-        go (TableName a:xs) = do
-            name <- TH.lookupTypeName a >>= \case
-                    Just t  -> pure t
-                    Nothing -> fail $ "Type not in scope: " ++ show a
-            TH.appE
-                (TH.appE [| first . (++) . unpack |]
-                    (TH.appE (TH.varE escNm) $
-                        (TH.appE
-                            [| entityDB . entityDef |]
-                            (TH.sigE [| Nothing |] $
-                                TH.appT (TH.conT ''Maybe) (TH.conT name)))))
-                (go xs)
+    go :: [Token] -> TH.ExpQ
+    go [] = [| pure (mempty, mempty) |]
+    go (Literal a:xs) =
+        TH.appE
+            [| fmap $ first (pack a <>) |]
+            (go xs)
+    go (Value a:xs) =
+        TH.appE
+            [| fmap $ first ("?" <>) . second (toPersistValue $(reifyExp a) :) |]
+            (go xs)
+    go (ColumnName a:xs) = do
+        colN <- TH.newName "field"
+        TH.infixE
+            (Just [| getFieldName $(reifyExp a) |])
+            [| (>>=) |]
+            (Just $ TH.lamE [ TH.varP colN ] $
+                TH.appE
+                    [| fmap $ first ($(TH.varE colN) <>) |]
+                    (go xs))
+    go (TableName a:xs) = do
+        typeN <- TH.lookupTypeName a >>= \case
+                Just t  -> pure t
+                Nothing -> fail $ "Type not in scope: " ++ show a
+        tableN <- TH.newName "field"
+        TH.infixE
+            (Just $
+                TH.appE
+                    [| getTableName |]
+                    (TH.sigE
+                        [| error "record" |] $
+                        (TH.conT typeN)))
+            [| (>>=) |]
+            (Just $ TH.lamE [ TH.varP tableN ] $
+                TH.appE
+                    [| fmap $ first ($(TH.varE tableN) <>) |]
+                    (go xs))
 
 reifyExp :: String -> TH.Q TH.Exp
 reifyExp s =
