@@ -1186,8 +1186,7 @@ insertManyOnDuplicateKeyUpdate
     -> ReaderT backend m ()
 insertManyOnDuplicateKeyUpdate [] _ _ = return ()
 insertManyOnDuplicateKeyUpdate records fieldValues updates =
-    withReaderT projectBackend
-    . uncurry rawExecute
+    uncurry rawExecute
     $ mkBulkInsertQuery records fieldValues updates
 
 -- | This creates the query for 'bulkInsertOnDuplicateKeyUpdate'. If you
