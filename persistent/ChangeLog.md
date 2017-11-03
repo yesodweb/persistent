@@ -1,6 +1,6 @@
 ## 2.7.2
 
-- Many of the functions have been generalized using the `BackendCompatible` class.
+- Many of the functions have been generalized using the `BackendCompatible` class. [#723](https://github.com/yesodweb/persistent/pull/723)
 
 ## 2.7.1
 
