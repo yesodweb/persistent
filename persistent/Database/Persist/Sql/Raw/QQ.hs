@@ -127,7 +127,7 @@ makeExpr fun toks = do
         typeN <- TH.lookupTypeName a >>= \case
                 Just t  -> pure t
                 Nothing -> fail $ "Type not in scope: " ++ show a
-        tableN <- TH.newName "field"
+        tableN <- TH.newName "table"
         TH.infixE
             (Just $
                 TH.appE
