@@ -105,7 +105,7 @@ makeExpr fun toks = do
 
     where
     go :: [Token] -> TH.ExpQ
-    go [] = [| pure (mempty, mempty) |]
+    go [] = [| return (mempty, mempty) |]
     go (Literal a:xs) =
         TH.appE
             [| fmap $ first (pack a <>) |]
@@ -125,7 +125,7 @@ makeExpr fun toks = do
                     (go xs))
     go (TableName a:xs) = do
         typeN <- TH.lookupTypeName a >>= \case
-                Just t  -> pure t
+                Just t  -> return t
                 Nothing -> fail $ "Type not in scope: " ++ show a
         tableN <- TH.newName "table"
         TH.infixE
