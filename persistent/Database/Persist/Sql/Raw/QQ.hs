@@ -70,6 +70,7 @@ import Language.Haskell.Meta.Parse
 import Database.Persist.Class (toPersistValue)
 import Database.Persist.Sql.Raw (rawSql, rawQuery, rawQueryRes, rawExecute, rawExecuteCount)
 import Database.Persist.Sql.Types (connEscapeName)
+import Database.Persist.Sql.Orphan.PersistStore (getFieldName, getTableName)
 
 data Token
   = Literal String
