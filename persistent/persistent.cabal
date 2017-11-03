@@ -46,7 +46,6 @@ library
                    , attoparsec
                    , template-haskell
                    , haskell-src-meta
-                   , fail
                    , blaze-html               >= 0.5
                    , blaze-markup             >= 0.5.1
                    , silently

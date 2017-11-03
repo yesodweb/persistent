@@ -56,10 +56,9 @@ module Database.Persist.Sql.Raw.QQ (
     , executeCountQQ
     ) where
 
-import Prelude hiding (fail)
+import Prelude
 import Control.Arrow (first, second)
 import Control.Monad.Reader (ask)
-import Control.Monad.Fail (fail)
 import Data.Text (pack, unpack)
 import Data.Maybe (fromMaybe, Maybe(..))
 import Data.Monoid (mempty, (<>))
