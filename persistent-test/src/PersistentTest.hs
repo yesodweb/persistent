@@ -1000,7 +1000,11 @@ specs = describe "persistent" $ do
       (a3k, a3) <- insert' $ Pet p2k "Lhama"   Dog
       (_  , _ ) <- insert' $ Pet p3k "Abacate" Cat
 
-      let runQuery (age :: Int) =
+      let runQuery
+            :: (RawSql a, Functor m, MonadIO m)
+            => Int
+            -> ReaderT SqlBackend m [a]
+          runQuery age =
             [sqlQQ|
                 SELECT ??, ??
                 FROM
@@ -1027,9 +1031,13 @@ specs = describe "persistent" $ do
   it "sqlQQ/order-proof" $ db $ do
       let p1 = Person "Zacarias" 93 Nothing
       p1k <- insert p1
-      let runQuery = [sqlQQ| SELECT ?? FROM ^{Person} |]
+
+      let runQuery
+            :: (RawSql a, Functor m, MonadIO m)
+            => ReaderT SqlBackend m [a]
+          runQuery = [sqlQQ| SELECT ?? FROM ^{Person} |]
       ret1 <- runQuery
-      ret2 <- runQuery :: MonadIO m => SqlPersistT m [Entity (ReverseFieldOrder Person)]
+      ret2 <- runQuery :: (MonadIO m, Functor m) => SqlPersistT m [Entity (ReverseFieldOrder Person)]
       liftIO $ ret1 @?= [Entity p1k p1]
       liftIO $ ret2 @?= [Entity (RFOKey $ unPersonKey $ p1k) (RFO p1)]
 
