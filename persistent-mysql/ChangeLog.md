@@ -1,3 +1,7 @@
+## 2.6.2.2
+
+* Fix ambiguous type errors introduced by `persistent-2.7.2` [#723](https://github.com/yesodweb/persistent/pull/723)
+
 ## 2.6.2.1
 
 * Fix haddock documentation [#725](https://github.com/yesodweb/persistent/pull/725)
