@@ -1,6 +1,7 @@
 ## 2.7.2
 
-- Many of the functions have been generalized using the `BackendCompatible` class. [#723](https://github.com/yesodweb/persistent/pull/723)
+* Many of the functions have been generalized using the `BackendCompatible` class. [#723](https://github.com/yesodweb/persistent/pull/723)
+* Add raw sql quasi quoters [#717](https://github.com/yesodweb/persistent/pull/717)
 
 ## 2.7.1
 
