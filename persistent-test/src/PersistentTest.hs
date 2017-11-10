@@ -892,12 +892,24 @@ specs = describe "persistent" $ do
       ret <- rawSql "SELECT 2+2" []
       liftIO $ ret @?= [Single (4::Int)]
 
+  it "sqlQQ/?-?" $ db $ do
+      ret <- [sqlQQ| SELECT #{2 :: Int}+#{2 :: Int} |]
+      liftIO $ ret @?= [Single (4::Int)]
+
   it "rawSql/?-?" $ db $ do
       ret <- rawSql "SELECT ?-?" [PersistInt64 5, PersistInt64 3]
       liftIO $ ret @?= [Single (2::Int)]
 
+  it "sqlQQ/?-?" $ db $ do
+      ret <- [sqlQQ| SELECT #{5 :: Int}-#{3 :: Int} |]
+      liftIO $ ret @?= [Single (2::Int)]
+
   it "rawSql/NULL" $ db $ do
       ret <- rawSql "SELECT NULL" []
+      liftIO $ ret @?= [Nothing :: Maybe (Single Int)]
+
+  it "sqlQQ/NULL" $ db $ do
+      ret <- [sqlQQ| SELECT NULL |]
       liftIO $ ret @?= [Nothing :: Maybe (Single Int)]
 
   it "rawSql/entity" $ db $ do
@@ -966,6 +978,84 @@ specs = describe "persistent" $ do
           person = escape "Person"
           pet    = escape "Pet"
       ret <- rawSql query []
+      liftIO $ ret @?= [ (Entity p1k p1, Just (Entity a1k a1))
+                       , (Entity p1k p1, Just (Entity a2k a2))
+                       , (Entity p2k p2, Nothing) ]
+
+  it "sqlQQ/entity" $ db $ do
+      let insert'
+            :: PersistStore backend
+            => PersistEntity val
+            => PersistEntityBackend val ~ BaseBackend backend
+            => MonadIO m
+            => val
+            -> ReaderT backend m (Key val, val)
+          insert' v = insert v >>= \k -> return (k, v)
+      (p1k, p1) <- insert' $ Person "Mathias"   23 Nothing
+      (p2k, p2) <- insert' $ Person "Norbert"   44 Nothing
+      (p3k, _ ) <- insert' $ Person "Cassandra" 19 Nothing
+      (_  , _ ) <- insert' $ Person "Thiago"    19 Nothing
+      (a1k, a1) <- insert' $ Pet p1k "Rodolfo" Cat
+      (a2k, a2) <- insert' $ Pet p1k "Zeno"    Cat
+      (a3k, a3) <- insert' $ Pet p2k "Lhama"   Dog
+      (_  , _ ) <- insert' $ Pet p3k "Abacate" Cat
+
+      let runQuery
+            :: (RawSql a, Functor m, MonadIO m)
+            => Int
+            -> ReaderT SqlBackend m [a]
+          runQuery age =
+            [sqlQQ|
+                SELECT ??, ??
+                FROM
+                  ^{Person},
+                  ^{Pet}
+                WHERE ^{Person}.@{PersonAge} >= #{age}
+                    AND ^{Pet}.@{PetOwnerId} = ^{Person}.@{PersonId}
+                    ORDER BY ^{Person}.@{PersonName}
+            |]
+
+      ret <- runQuery 20
+      liftIO $ ret @?= [ (Entity p1k p1, Entity a1k a1)
+                       , (Entity p1k p1, Entity a2k a2)
+                       , (Entity p2k p2, Entity a3k a3) ]
+      ret2 <- runQuery 20
+      liftIO $ ret2 @?= [ (Just (Entity p1k p1), Just (Entity a1k a1))
+                        , (Just (Entity p1k p1), Just (Entity a2k a2))
+                        , (Just (Entity p2k p2), Just (Entity a3k a3)) ]
+      ret3 <- runQuery 20
+      liftIO $ ret3 @?= [ Just (Entity p1k p1, Entity a1k a1)
+                        , Just (Entity p1k p1, Entity a2k a2)
+                        , Just (Entity p2k p2, Entity a3k a3) ]
+
+  it "sqlQQ/order-proof" $ db $ do
+      let p1 = Person "Zacarias" 93 Nothing
+      p1k <- insert p1
+
+      let runQuery
+            :: (RawSql a, Functor m, MonadIO m)
+            => ReaderT SqlBackend m [a]
+          runQuery = [sqlQQ| SELECT ?? FROM ^{Person} |]
+      ret1 <- runQuery
+      ret2 <- runQuery :: (MonadIO m, Functor m) => SqlPersistT m [Entity (ReverseFieldOrder Person)]
+      liftIO $ ret1 @?= [Entity p1k p1]
+      liftIO $ ret2 @?= [Entity (RFOKey $ unPersonKey $ p1k) (RFO p1)]
+
+  it "sqlQQ/OUTER JOIN" $ db $ do
+      let insert' :: (PersistStore backend, PersistEntity val, PersistEntityBackend val ~ BaseBackend backend, MonadIO m)
+                  => val -> ReaderT backend m (Key val, val)
+          insert' v = insert v >>= \k -> return (k, v)
+      (p1k, p1) <- insert' $ Person "Mathias"   23 Nothing
+      (p2k, p2) <- insert' $ Person "Norbert"   44 Nothing
+      (a1k, a1) <- insert' $ Pet p1k "Rodolfo" Cat
+      (a2k, a2) <- insert' $ Pet p1k "Zeno"    Cat
+      ret <- [sqlQQ|
+        SELECT ??, ??
+        FROM ^{Person}
+        LEFT OUTER JOIN ^{Pet}
+            ON ^{Person}.@{PersonId} = ^{Pet}.@{PetOwnerId}
+        ORDER BY ^{Person}.@{PersonName}
+      |]
       liftIO $ ret @?= [ (Entity p1k p1, Just (Entity a1k a1))
                        , (Entity p1k p1, Just (Entity a2k a2))
                        , (Entity p2k p2, Nothing) ]

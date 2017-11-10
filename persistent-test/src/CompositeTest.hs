@@ -274,10 +274,25 @@ specs = describe "composite" $
       key <- insert p1
       keyFromRaw <- rawSql "SELECT name, name2, age FROM test_parent LIMIT 1" []
       [key] @== keyFromRaw
+
+    it "RawSql Key instance with sqlQQ" $ db $ do
+      key <- insert p1
+      keyFromRaw' <- [sqlQQ|
+          SELECT @{TestParentName}, @{TestParentName2}, @{TestParentAge}
+            FROM ^{TestParent}
+            LIMIT 1
+      |]
+      [key] @== keyFromRaw'
+
     it "RawSql Entity instance" $ db $ do
       key <- insert p1
       newp1 <- rawSql "SELECT ?? FROM test_parent LIMIT 1" []
       [Entity key p1] @== newp1
+
+    it "RawSql Entity instance with sqlQQ" $ db $ do
+      key <- insert p1
+      newp1' <- [sqlQQ| SELECT ?? FROM ^{TestParent} |]
+      [Entity key p1] @== newp1'
 
 #endif
 
