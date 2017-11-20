@@ -30,6 +30,10 @@ import Database.Persist.Class.PersistEntity
 import Database.Persist.Class.PersistField
 import Database.Persist.Types
 import qualified Data.Aeson as A
+import qualified Data.Map as Map
+import Data.Map (Map)
+import Data.Monoid (mempty)
+import qualified Data.Maybe as Maybe
 
 -- | Class which allows the plucking of a @BaseBackend backend@ from some larger type.
 -- For example,
@@ -132,6 +136,17 @@ class
     get :: (MonadIO m, PersistRecordBackend record backend)
         => Key record -> ReaderT backend m (Maybe record)
 
+    -- | Get many records by their respective identifiers, if available.
+    getMany
+        :: (MonadIO m, PersistRecordBackend record backend)
+        => [Key record] -> ReaderT backend m (Map (Key record) record)
+    getMany [] = pure mempty
+    getMany ks = do
+        vs <- mapM get ks
+        let kvs   = zip ks vs
+        let kvs'  = (fmap Maybe.fromJust) `fmap` filter (\(_,v) -> Maybe.isJust v) kvs
+        return $ Map.fromList kvs'
+
 class
   ( Show (BackendKey backend), Read (BackendKey backend)
   , Eq (BackendKey backend), Ord (BackendKey backend)
@@ -192,6 +207,20 @@ class
     -- exist then a new record will be inserted.
     repsert :: (MonadIO m, PersistRecordBackend record backend)
             => Key record -> record -> ReaderT backend m ()
+
+    -- | Put many entities into the database.
+    --
+    -- Batch version of 'repsert' for SQL backends.
+    --
+    -- Useful when migrating data from one entity to another
+    -- and want to preserve ids.
+    --
+    -- Differs from @insertEntityMany@ by gracefully skipping
+    -- pre-existing records matching key(s).
+    repsertMany
+        :: (MonadIO m, PersistRecordBackend record backend)
+        => [(Key record, record)] -> ReaderT backend m ()
+    repsertMany = mapM_ (uncurry repsert)
 
     -- | Replace the record in the database with the given
     -- key. Note that the result is undefined if such record does
