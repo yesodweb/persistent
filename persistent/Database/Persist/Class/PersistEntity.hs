@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -43,6 +44,7 @@ import Data.Monoid (mappend)
 import qualified Data.HashMap.Strict as HM
 import Data.Typeable (Typeable)
 import Data.Maybe (isJust)
+import GHC.Generics
 
 -- | Persistent serialized Haskell records to the database.
 -- A Database 'Entity' (A row in SQL, a document in MongoDB, etc)
@@ -170,10 +172,11 @@ data Filter record = forall typ. PersistField typ => Filter
 -- your query returns two entities (i.e. @(Entity backend a,
 -- Entity backend b)@), then you must you use @SELECT ??, ??
 -- WHERE ...@, and so on.
-data Entity record = PersistEntity record =>
+data Entity record =
     Entity { entityKey :: Key record
            , entityVal :: record }
 
+deriving instance (PersistEntity record, Generic (Key record), Generic record) => Generic (Entity record)
 deriving instance (PersistEntity record, Eq (Key record), Eq record) => Eq (Entity record)
 deriving instance (PersistEntity record, Ord (Key record), Ord record) => Ord (Entity record)
 deriving instance (PersistEntity record, Show (Key record), Show record) => Show (Entity record)
