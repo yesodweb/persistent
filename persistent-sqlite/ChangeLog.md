@@ -1,3 +1,7 @@
+## 2.6.3.1
+
+* Fix migration to avoid creating foreign-key constraints in temporary tables [#736](https://github.com/yesodweb/persistent/pull/736)
+
 ## 2.6.3
 
 * Add 'use-pkgconfig' flag to use pkg-config to find system SQLite library.

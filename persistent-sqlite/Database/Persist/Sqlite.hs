@@ -429,7 +429,7 @@ mkCreateTable isTemp entity (cols, uniqs) =
         , " TABLE "
         , escape $ entityDB entity
         , "("
-        , T.drop 1 $ T.concat $ map sqlColumn cols
+        , T.drop 1 $ T.concat $ map (sqlColumn isTemp) cols
         , ", PRIMARY KEY "
         , "("
         , T.intercalate "," $ map (escape . fieldDB) $ compositeFields pdef
@@ -447,7 +447,7 @@ mkCreateTable isTemp entity (cols, uniqs) =
         , showSqlType $ fieldSqlType $ entityId entity
         ," PRIMARY KEY"
         , mayDefault $ defaultAttribute $ fieldAttrs $ entityId entity
-        , T.concat $ map sqlColumn cols
+        , T.concat $ map (sqlColumn isTemp) cols
         , T.concat $ map sqlUnique uniqs
         , ")"
         ]
@@ -457,8 +457,8 @@ mayDefault def = case def of
     Nothing -> ""
     Just d -> " DEFAULT " <> d
 
-sqlColumn :: Column -> Text
-sqlColumn (Column name isNull typ def _cn _maxLen ref) = T.concat
+sqlColumn :: Bool -> Column -> Text
+sqlColumn noRef (Column name isNull typ def _cn _maxLen ref) = T.concat
     [ ","
     , escape name
     , " "
@@ -467,7 +467,7 @@ sqlColumn (Column name isNull typ def _cn _maxLen ref) = T.concat
     , mayDefault def
     , case ref of
         Nothing -> ""
-        Just (table, _) -> " REFERENCES " <> escape table
+        Just (table, _) -> if noRef then "" else " REFERENCES " <> escape table
     ]
 
 sqlUnique :: UniqueDef -> Text
