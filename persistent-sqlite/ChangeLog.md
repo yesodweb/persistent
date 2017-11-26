@@ -1,3 +1,7 @@
+## 2.6.3.2
+
+* Provide more detailed error messages when using the `step` function [#730](https://github.com/yesodweb/persistent/pull/730)
+
 ## 2.6.3.1
 
 * Fix migration to avoid creating foreign-key constraints in temporary tables [#736](https://github.com/yesodweb/persistent/pull/736)
