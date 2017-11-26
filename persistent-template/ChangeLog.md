@@ -1,3 +1,7 @@
+## 2.5.3.1
+
+* Slight improvement to the error message when a Persistent field can't be parsed from database results
+
 ## 2.5.3
 
 * Exposed `parseReferences` to allow custom QuasiQuoters
