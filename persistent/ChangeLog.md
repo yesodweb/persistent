@@ -1,3 +1,8 @@
+## 2.7.3.1
+ 
+ * Improve error messages when failing to parse database results into Persistent records.
+ * A handful of `fromPersistField` implementations called `error` instead of returning a `Left Text`. All of the implementations were changed to return `Left`.
+
 ## 2.7.3 
 
 * Reverts [#723](https://github.com/yesodweb/persistent/pull/723), which generalized functions using the `BackendCompatible` class. These changes were an accidental breaking change.

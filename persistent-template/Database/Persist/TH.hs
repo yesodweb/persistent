@@ -615,7 +615,7 @@ mapLeft _ (Right r) = Right r
 mapLeft f (Left l)  = Left (f l)
 
 fieldError :: Text -> Text -> Text
-fieldError fieldName err = "field " `mappend` fieldName `mappend` ": " `mappend` err
+fieldError fieldName err = "Couldn't parse field `" `mappend` fieldName `mappend` "` from database results: " `mappend` err
 
 mkFromPersistValues :: MkPersistSettings -> EntityDef -> Q [Clause]
 mkFromPersistValues _ t@(EntityDef { entitySum = False }) =
