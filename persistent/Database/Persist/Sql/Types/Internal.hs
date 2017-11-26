@@ -68,6 +68,19 @@ data SqlBackend = SqlBackend
     , connInsertSql :: EntityDef -> [PersistValue] -> InsertSqlResult
     , connInsertManySql :: Maybe (EntityDef -> [[PersistValue]] -> InsertSqlResult) -- ^ SQL for inserting many rows and returning their primary keys, for backends that support this functioanlity. If 'Nothing', rows will be inserted one-at-a-time using 'connInsertSql'.
     , connUpsertSql :: Maybe (EntityDef -> Text -> Text)
+    -- ^ Some databases support performing UPSERT _and_ RETURN entity
+    -- in a single call.
+    --
+    -- This field when set will be used to generate the UPSERT+RETURN sql given
+    -- * an entity (definition)
+    -- * updates to be run on unique key(s) collision
+    --
+    -- When left as 'Nothing', we find the unique key from entity def before
+    -- * trying to fetch an entity by said key
+    -- * perform an update when result found, else issue an insert
+    -- * return new entity from db
+    --
+    -- @since 2.6
     , connStmtMap :: IORef (Map Text Statement)
     , connClose :: IO ()
     , connMigrateSql
