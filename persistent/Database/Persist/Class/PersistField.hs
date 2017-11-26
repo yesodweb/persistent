@@ -163,7 +163,7 @@ extraInputError :: (Show result)
                 -> result -- ^ Integer result
                 -> ByteString -- ^  Extra bytestring
                 -> Text -- ^ Error message
-extraInputError haskellType original result extra = mconcat
+extraInputError haskellType original result extra = T.concat
     [ "Parsed "
     , TE.decodeUtf8 original
     , " into Haskell type `"
@@ -177,7 +177,7 @@ extraInputError haskellType original result extra = mconcat
 intParseError :: Text -- ^ Haskell type
               -> ByteString -- ^ Original bytestring
               -> Text -- ^ Error message
-intParseError haskellType original = mconcat
+intParseError haskellType original = T.concat
     [ "Failed to parse Haskell type `"
     , haskellType
     , " from "
