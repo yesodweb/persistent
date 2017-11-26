@@ -190,10 +190,8 @@ class
     -- Useful when migrating data from one entity to another
     -- and want to preserve ids.
     --
-    -- The MongoDB backend inserts all the entities in one database query.
-    --
-    -- The SQL backends use the slow, default implementation of
-    -- @mapM_ insertKey@.
+    -- The MongoDB, PostgreSQL, SQLite and MySQL backends insert all records in
+    -- one database query.
     insertEntityMany :: (MonadIO m, PersistRecordBackend record backend)
                      => [Entity record] -> ReaderT backend m ()
     insertEntityMany = mapM_ (\(Entity k record) -> insertKey k record)
