@@ -6,7 +6,7 @@ For testing specific package:
 
 For appropriate backend specific testing using the package `persistent-test`:
 
-    stack test persistent-test --flag persistent-test:<backend>
+    stack test persistent-test --flag persistent-test:<backend> --exec persistent-test
 
 where <backend> is one of mongodb/postgresql/mysql/couchdb.
 
