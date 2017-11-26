@@ -21,6 +21,9 @@ import qualified RenameTest
 import qualified SumTypeTest
 import qualified InsertDuplicateUpdate
 import qualified UniqueTest
+-- #if defined(WITH_POSTGRESQL) || defined(WITH_MYSQL)
+import qualified MigrationColumnLengthTest
+-- #endif
 
 #ifndef WITH_NOSQL
 #  ifdef WITH_SQLITE
@@ -73,6 +76,7 @@ main = do
       , InsertDuplicateUpdate.duplicateMigrate
 #  endif
       , CustomPrimaryKeyReferenceTest.migration
+      , MigrationColumnLengthTest.migration
       ]
     PersistentTest.cleanDB
 #endif
@@ -97,6 +101,7 @@ main = do
     CustomPersistFieldTest.specs
     CustomPrimaryKeyReferenceTest.specs
     InsertDuplicateUpdate.specs
+    MigrationColumnLengthTest.specs
 
 #ifdef WITH_SQLITE
     MigrationTest.specs
