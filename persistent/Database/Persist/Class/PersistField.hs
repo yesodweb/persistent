@@ -29,7 +29,7 @@ import Data.ByteString.Char8 (ByteString, unpack, readInt)
 import Control.Applicative as A
 import Data.Int (Int8, Int16, Int32, Int64)
 import Data.Word (Word, Word8, Word16, Word32, Word64)
-import Data.Text (Text, replace)
+import Data.Text (Text)
 import Data.Text.Read (double)
 import Data.Fixed
 import Data.Monoid ((<>))
@@ -43,9 +43,6 @@ import qualified Data.ByteString.Lazy as L
 
 import Control.Monad ((<=<))
 
-import qualified Data.Text.Encoding as T
-import qualified Data.Text.Encoding.Error as T
-
 import qualified Data.Aeson as A
 
 import qualified Data.Set as S
@@ -53,6 +50,7 @@ import qualified Data.Map as M
 import qualified Data.IntMap as IM
 
 import qualified Data.Text.Encoding as TE
+import qualified Data.Text.Encoding.Error as TERR
 import qualified Data.Vector as V
 
 #if MIN_VERSION_time(1,5,0)
@@ -79,7 +77,7 @@ instance PersistField [Char] where
     toPersistValue = PersistText . T.pack
     fromPersistValue (PersistText s) = Right $ T.unpack s
     fromPersistValue (PersistByteString bs) =
-        Right $ T.unpack $ T.decodeUtf8With T.lenientDecode bs
+        Right $ T.unpack $ TE.decodeUtf8With TERR.lenientDecode bs
     fromPersistValue (PersistInt64 i) = Right $ Prelude.show i
     fromPersistValue (PersistDouble d) = Right $ Prelude.show d
     fromPersistValue (PersistRational r) = Right $ Prelude.show r
@@ -97,7 +95,7 @@ instance PersistField [Char] where
 instance PersistField ByteString where
     toPersistValue = PersistByteString
     fromPersistValue (PersistByteString bs) = Right bs
-    fromPersistValue x = T.encodeUtf8 A.<$> fromPersistValue x
+    fromPersistValue x = TE.encodeUtf8 A.<$> fromPersistValue x
 
 instance PersistField T.Text where
     toPersistValue = PersistText
@@ -234,7 +232,7 @@ instance PersistField Rational where
       [(a, "")] -> Right $ toRational (a :: Pico)
       _ -> Left $ "Can not read " <> t <> " as Rational (Pico in fact)"
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-    fromPersistValue (PersistByteString bs) = case double $ T.cons '0' $ T.decodeUtf8With T.lenientDecode bs of
+    fromPersistValue (PersistByteString bs) = case double $ T.cons '0' $ TE.decodeUtf8With TERR.lenientDecode bs of
                                                 Right (ret,"") -> Right $ toRational ret
                                                 Right (a,b) -> Left $ "Invalid bytestring[" <> T.pack (show bs) <> "]: expected a double but returned " <> T.pack (show (a,b))
                                                 Left xs -> Left $ "Invalid bytestring[" <> T.pack (show bs) <> "]: expected a double but returned " <> T.pack (show xs)
@@ -307,7 +305,7 @@ instance PersistField UTCTime where
 instance PersistField Natural where
   toPersistValue = (toPersistValue :: Int64 -> PersistValue) . fromIntegral
   fromPersistValue x = case (fromPersistValue x :: Either Text Int64) of
-    Left err -> Left $ replace "Int64" "Natural" err
+    Left err -> Left $ T.replace "Int64" "Natural" err
     Right int -> Right $ fromIntegral int -- TODO use bimap?
 #endif
 
