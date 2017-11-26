@@ -14,9 +14,8 @@ import Database.Persist
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
-import Database.Persist.Sql.Util (dbColumns, parseEntityValues)
+import Database.Persist.Sql.Util (dbColumns, parseEntityValues, updatePersistValue, mkUpdateText)
 import qualified Data.Text as T
-import Data.Monoid (mappend, (<>))
 import qualified Data.Conduit.List as CL
 import Control.Monad.Trans.Reader (ask, withReaderT)
 
@@ -30,13 +29,6 @@ defaultUpsert record updates = do
     uniqueKey <- onlyUnique record
     upsertBy uniqueKey record updates
 
-escape :: DBName -> T.Text
-escape (DBName s) = T.pack $ '"' : escapeQuote (T.unpack s) ++ "\""
-  where
-    escapeQuote "" = ""
-    escapeQuote ('"':xs) = "\"\"" ++ escapeQuote xs
-    escapeQuote (x:xs) = x : escapeQuote xs
-
 instance PersistUniqueWrite SqlBackend where
     upsert record updates = do
       conn <- ask
@@ -45,19 +37,9 @@ instance PersistUniqueWrite SqlBackend where
         Just upsertSql -> case updates of
                             [] -> defaultUpsert record updates
                             _:_ -> do
-                                let upds = T.intercalate "," $ map (go' . go) updates
+                                let upds = T.intercalate "," $ map (mkUpdateText conn) updates
                                     sql = upsertSql t upds
                                     vals = (map toPersistValue $ toPersistFields record) ++ (map updatePersistValue updates) ++ (unqs uniqueKey)
-                                           
-                                    go'' n Assign = n <> "=?"
-                                    go'' n Add = T.concat [n, "=", escape (entityDB t) <> ".", n, "+?"]
-                                    go'' n Subtract = T.concat [n, "=", escape (entityDB t) <> ".", n, "-?"]
-                                    go'' n Multiply = T.concat [n, "=", escape (entityDB t) <> ".", n, "*?"]
-                                    go'' n Divide = T.concat [n, "=", escape (entityDB t) <> ".", n, "/?"]
-                                    go'' _ (BackendSpecificUpdate up) = error $ T.unpack $ "BackendSpecificUpdate" `Data.Monoid.mappend` up `mappend` "not supported"
-                                              
-                                    go' (x, pu) = go'' (connEscapeName conn x) pu
-                                    go x = (fieldDB $ updateFieldDef x, updateUpdate x)
 
                                 x <- rawSql sql vals
                                 return $ head x
@@ -122,15 +104,3 @@ instance PersistUniqueRead SqlWriteBackend where
 
 dummyFromUnique :: Unique v -> Maybe v
 dummyFromUnique _ = Nothing
-
-updateFieldDef
-    :: PersistEntity v
-    => Update v -> FieldDef
-updateFieldDef (Update f _ _) = persistFieldDef f
-updateFieldDef (BackendUpdate{}) =
-    error "updateFieldDef did not expect BackendUpdate"
-
-updatePersistValue :: Update v -> PersistValue
-updatePersistValue (Update _ v _) = toPersistValue v
-updatePersistValue (BackendUpdate{}) =
-    error "updatePersistValue did not expect BackendUpdate"

@@ -22,7 +22,9 @@ module Database.Persist.Sql.Orphan.PersistStore
 import Database.Persist
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
-import Database.Persist.Sql.Util (dbIdColumns, keyAndEntityColumnNames, parseEntityValues, entityColumnNames)
+import Database.Persist.Sql.Util (
+    dbIdColumns, keyAndEntityColumnNames, parseEntityValues, entityColumnNames
+  , updatePersistValue, mkUpdateText, commaSeparated)
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import qualified Data.Text as T
@@ -134,26 +136,17 @@ instance PersistStoreWrite SqlBackend where
     update _ [] = return ()
     update k upds = do
         conn <- ask
-        let go'' n Assign = n <> "=?"
-            go'' n Add = T.concat [n, "=", n, "+?"]
-            go'' n Subtract = T.concat [n, "=", n, "-?"]
-            go'' n Multiply = T.concat [n, "=", n, "*?"]
-            go'' n Divide = T.concat [n, "=", n, "/?"]
-            go'' _ (BackendSpecificUpdate up) = error $ T.unpack $ "BackendSpecificUpdate" `Data.Monoid.mappend` up `mappend` "not supported"
-        let go' (x, pu) = go'' (connEscapeName conn x) pu
         let wher = whereStmtForKey conn k
         let sql = T.concat
                 [ "UPDATE "
                 , connEscapeName conn $ tableDBName $ recordTypeFromKey k
                 , " SET "
-                , T.intercalate "," $ map (go' . go) upds
+                , T.intercalate "," $ map (mkUpdateText conn) upds
                 , " WHERE "
                 , wher
                 ]
         rawExecute sql $
             map updatePersistValue upds `mappend` keyToValues k
-      where
-        go x = (fieldDB $ updateFieldDef x, updateUpdate x)
 
     insert val = do
         conn <- ask
@@ -317,7 +310,7 @@ instance PersistStoreRead SqlBackend where
     getMany ks@(k:_)= do
         conn <- ask
         let t = entityDef . dummyFromKey $ k
-        let cols = T.intercalate ", " . entityColumnNames t
+        let cols = commaSeparated . entityColumnNames t
         let wher = whereStmtForKeys conn ks
         let sql = T.concat
                 [ "SELECT "
@@ -370,14 +363,6 @@ insrepHelper command es = do
         , ")"
         ]
     vals = foldMap entityValues es
-
-updateFieldDef :: PersistEntity v => Update v -> FieldDef
-updateFieldDef (Update f _ _) = persistFieldDef f
-updateFieldDef (BackendUpdate {}) = error "updateFieldDef did not expect BackendUpdate"
-
-updatePersistValue :: Update v -> PersistValue
-updatePersistValue (Update _ v _) = toPersistValue v
-updatePersistValue (BackendUpdate {}) = error "updatePersistValue did not expect BackendUpdate"
 
 runChunked
     :: (Monad m)

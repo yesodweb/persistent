@@ -29,7 +29,7 @@ module Database.Persist.Postgresql
     ) where
 
 import Database.Persist.Sql
-import Database.Persist.Sql.Util (dbIdColumnsEsc)
+import Database.Persist.Sql.Util (dbIdColumnsEsc, commaSeparated)
 import Database.Persist.Sql.Types.Internal (mkPersistBackend)
 import Data.Fixed (Pico)
 
@@ -122,7 +122,7 @@ withPostgresqlPool ci = withPostgresqlPoolWithVersion getServerVersion ci
 --
 -- @since 2.6.2
 withPostgresqlPoolWithVersion :: (MonadBaseControl IO m, MonadLogger m, MonadIO m, IsSqlBackend backend)
-                              => (PG.Connection -> IO (Maybe Double)) 
+                              => (PG.Connection -> IO (Maybe Double))
                               -- ^ action to perform to get the server version
                               -> ConnectionString
                               -- ^ Connection string to the database.
@@ -191,11 +191,11 @@ withPostgresqlConn = withPostgresqlConnWithVersion getServerVersion
 -- @since 2.6.2
 withPostgresqlConnWithVersion :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsSqlBackend backend)
                               => (PG.Connection -> IO (Maybe Double))
-                              -> ConnectionString 
+                              -> ConnectionString
                               -> (backend -> m a)
                               -> m a
 withPostgresqlConnWithVersion getVer = withSqlConn . open' (const $ return ()) getVer
-                              
+
 open'
     :: (IsSqlBackend backend)
     => (PG.Connection -> IO ())
@@ -327,7 +327,7 @@ insertManySql' ent valss =
                 , ") VALUES ("
                 , T.intercalate "),(" $ replicate (length valss) $ T.intercalate "," $ map (const "?") (entityFields ent)
                 , ") RETURNING "
-                , T.intercalate ", " $ dbIdColumnsEsc escape ent
+                , commaSeparated $ dbIdColumnsEsc escape ent
                 ]
   in ISRSingle sql
 

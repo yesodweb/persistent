@@ -11,7 +11,8 @@ module Database.Persist.Sql.Orphan.PersistQuery
 
 import Database.Persist hiding (updateField)
 import Database.Persist.Sql.Util (
-  entityColumnNames, parseEntityValues, isIdField)
+    entityColumnNames, parseEntityValues, isIdField, updatePersistValue
+  , mkUpdateText, commaSeparated)
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
@@ -72,7 +73,7 @@ instance PersistQueryRead SqlBackend where
             case map (orderClause False conn) orders of
                 [] -> ""
                 ords -> " ORDER BY " <> T.intercalate "," ords
-        cols = T.intercalate ", " . entityColumnNames t
+        cols = commaSeparated . entityColumnNames t
         sql conn = connLimitOffset conn (limit,offset) (not (null orders)) $ mconcat
             [ "SELECT "
             , cols conn
@@ -180,7 +181,7 @@ updateWhereCount filts upds = withReaderT persistBackend $ do
             [ "UPDATE "
             , connEscapeName conn $ entityDB t
             , " SET "
-            , T.intercalate "," $ map (go' conn . go) upds
+            , T.intercalate "," $ map (mkUpdateText conn) upds
             , wher
             ]
     let dat = map updatePersistValue upds `Data.Monoid.mappend`
@@ -188,17 +189,6 @@ updateWhereCount filts upds = withReaderT persistBackend $ do
     rawExecuteCount sql dat
   where
     t = entityDef $ dummyFromFilts filts
-    go'' n Assign = n <> "=?"
-    go'' n Add = mconcat [n, "=", n, "+?"]
-    go'' n Subtract = mconcat [n, "=", n, "-?"]
-    go'' n Multiply = mconcat [n, "=", n, "*?"]
-    go'' n Divide = mconcat [n, "=", n, "/?"]
-    go'' _ (BackendSpecificUpdate up) = error $ T.unpack $ "BackendSpecificUpdate" `mappend` up `mappend` "not supported"
-    go' conn (x, pu) = go'' (connEscapeName conn x) pu
-    go x = (updateField x, updateUpdate x)
-
-    updateField (Update f _ _) = fieldName f
-    updateField _ = error "BackendUpdate not implemented"
 
 fieldName ::  forall record typ.  (PersistEntity record, PersistEntityBackend record ~ SqlBackend) => EntityField record typ -> DBName
 fieldName f = fieldDB $ persistFieldDef f
@@ -363,10 +353,6 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
         showSqlFilter In = " IN "
         showSqlFilter NotIn = " NOT IN "
         showSqlFilter (BackendSpecificFilter s) = s
-
-updatePersistValue :: Update v -> PersistValue
-updatePersistValue (Update _ v _) = toPersistValue v
-updatePersistValue _ = error "BackendUpdate not implemented"
 
 filterClause :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
              => Bool -- ^ include table name?

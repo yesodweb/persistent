@@ -9,18 +9,24 @@ module Database.Persist.Sql.Util (
   , dbIdColumns
   , dbIdColumnsEsc
   , dbColumns
+  , updateFieldDef
+  , updatePersistValue
+  , mkUpdateText
+  , commaSeparated
 ) where
 
 import Data.Maybe (isJust)
 import Data.Monoid ((<>))
+import qualified Data.Text as T
 import Data.Text (Text, pack)
 import Database.Persist (
     Entity(Entity), EntityDef, EntityField, HaskellName(HaskellName)
   , PersistEntity, PersistValue
   , keyFromValues, fromPersistValues, fieldDB, entityId, entityPrimary
   , entityFields, entityKeyFields, fieldHaskell, compositeFields, persistFieldDef
-  , keyAndEntityFields
-  , DBName)
+  , keyAndEntityFields, toPersistValue, DBName, Update(..), PersistUpdate(..)
+  , FieldDef
+  )
 import Database.Persist.Sql.Types (Sql, SqlBackend, connEscapeName)
 
 entityColumnNames :: EntityDef -> SqlBackend -> [Sql]
@@ -85,3 +91,29 @@ parseEntityValues t vals =
 
 isIdField :: PersistEntity record => EntityField record typ -> Bool
 isIdField f = fieldHaskell (persistFieldDef f) == HaskellName "Id"
+
+-- | Gets the 'FieldDef' for an 'Update'.
+updateFieldDef :: PersistEntity v => Update v -> FieldDef
+updateFieldDef (Update f _ _) = persistFieldDef f
+updateFieldDef BackendUpdate {} = error "updateFieldDef: did not expect BackendUpdate"
+
+updatePersistValue :: Update v -> PersistValue
+updatePersistValue (Update _ v _) = toPersistValue v
+updatePersistValue (BackendUpdate{}) =
+    error "updatePersistValue: did not expect BackendUpdate"
+
+commaSeparated :: [Text] -> Text
+commaSeparated = T.intercalate ", "
+
+mkUpdateText :: PersistEntity record => SqlBackend -> Update record -> Text
+mkUpdateText conn x =
+  case updateUpdate x of
+    Assign -> n <> "=?"
+    Add -> T.concat [n, "=", n, "+?"]
+    Subtract -> T.concat [n, "=", n, "-?"]
+    Multiply -> T.concat [n, "=", n, "*?"]
+    Divide -> T.concat [n, "=", n, "/?"]
+    BackendSpecificUpdate up ->
+      error . T.unpack $ "mkUpdateText: BackendSpecificUpdate " <> up <> " not supported"
+  where
+    n = connEscapeName conn . fieldDB . updateFieldDef $ x
