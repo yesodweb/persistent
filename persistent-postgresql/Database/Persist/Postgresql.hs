@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -26,6 +27,7 @@ module Database.Persist.Postgresql
     , tableName
     , fieldName
     , mockMigration
+    , migrateEnableExtension
     ) where
 
 import Database.Persist.Sql
@@ -74,7 +76,7 @@ import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import Control.Monad (forM)
 import Control.Monad.Trans.Reader (runReaderT)
-import Control.Monad.Trans.Writer (runWriterT)
+import Control.Monad.Trans.Writer (WriterT(..), runWriterT)
 import Data.Acquire (Acquire, mkAcquire, with)
 import System.Environment (getEnvironment)
 import Data.Int (Int64)
@@ -1178,3 +1180,13 @@ mockMigration mig = do
       result = runReaderT $ runWriterT $ runWriterT mig
   resp <- result sqlbackend
   mapM_ T.putStrLn $ map snd $ snd resp
+
+-- | Enable a Postgres extension. See https://www.postgresql.org/docs/10/static/contrib.html
+-- for a list.
+migrateEnableExtension :: Text -> Migration
+migrateEnableExtension extName = WriterT $ WriterT $ do
+  res :: [Single Int] <-
+    rawSql "SELECT COUNT(*) FROM pg_catalog.pg_extension WHERE extname = ?" [PersistText extName]
+  if res == [Single 0]
+    then return (((), []) , [(False, "CREATe EXTENSION \"" <> extName <> "\"")])
+    else return (((), []), [])
