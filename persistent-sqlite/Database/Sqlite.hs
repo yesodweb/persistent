@@ -18,6 +18,7 @@ module Database.Sqlite  (
                          close,
                          prepare,
                          step,
+                         stepConn,
                          reset,
                          finalize,
                          bindBlob,
@@ -254,8 +255,21 @@ stepError :: Statement -> IO Error
 stepError (Statement statement) = do
   error <- stepC statement
   return $ decodeError error
-step :: Connection -> Statement -> IO StepResult
-step database statement = do
+
+-- | Execute a database statement. It's recommended to use 'stepConn' instead, because it gives better error messages.
+step :: Statement -> IO StepResult
+step statement = do
+  error <- stepError statement
+  case error of
+    ErrorRow -> return Row
+    ErrorDone -> return Done
+    _ -> sqlError Nothing "step" error
+
+-- | Execute a database statement. This function uses the 'Connection' passed to it to give better error messages than 'step'.
+--
+-- @since 2.6.4
+stepConn :: Connection -> Statement -> IO StepResult
+stepConn database statement = do
   error <- stepError statement
   case error of
     ErrorRow -> return Row

@@ -136,7 +136,7 @@ wrapConnectionInfo connInfo conn logFunc = do
         -- Turn on the write-ahead log
         -- https://github.com/yesodweb/persistent/issues/363
         turnOnWal <- Sqlite.prepare conn "PRAGMA journal_mode=WAL;"
-        _ <- Sqlite.step conn turnOnWal
+        _ <- Sqlite.stepConn conn turnOnWal
         Sqlite.reset conn turnOnWal
         Sqlite.finalize turnOnWal
 
@@ -144,7 +144,7 @@ wrapConnectionInfo connInfo conn logFunc = do
         -- Turn on foreign key constraints
         -- https://github.com/yesodweb/persistent/issues/646
         turnOnFK <- Sqlite.prepare conn "PRAGMA foreign_keys = on;"
-        _ <- Sqlite.step conn turnOnFK
+        _ <- Sqlite.stepConn conn turnOnFK
         Sqlite.reset conn turnOnFK
         Sqlite.finalize turnOnFK
 
@@ -253,7 +253,7 @@ insertSql' ent vals =
 execute' :: Sqlite.Connection -> Sqlite.Statement -> [PersistValue] -> IO Int64
 execute' conn stmt vals = flip finally (liftIO $ Sqlite.reset conn stmt) $ do
     Sqlite.bind stmt vals
-    _ <- Sqlite.step conn stmt
+    _ <- Sqlite.stepConn conn stmt
     Sqlite.changes conn
 
 withStmt'
@@ -269,7 +269,7 @@ withStmt' conn stmt vals = do
     return pull
   where
     pull = do
-        x <- liftIO $ Sqlite.step conn stmt
+        x <- liftIO $ Sqlite.stepConn conn stmt
         case x of
             Sqlite.Done -> return ()
             Sqlite.Row -> do
