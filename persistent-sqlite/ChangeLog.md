@@ -1,3 +1,8 @@
+## 2.6.5
+
+* Exports the record update functions for `SqliteConnectionInfo`
+	* These were previously only available as lenses.
+
 ## 2.6.4
 
 * Adds a new function `stepConn`, which uses an additional parameter to give more detailed error messages [#750](https://github.com/yesodweb/persistent/pull/750)

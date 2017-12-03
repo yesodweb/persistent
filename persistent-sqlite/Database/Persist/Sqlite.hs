@@ -24,6 +24,9 @@ module Database.Persist.Sqlite
     , sqlConnectionStr
     , walEnabled
     , fkEnabled
+    , _sqlConnectionStr
+    , _walEnabled
+    , _fkEnabled
     , runSqlite
     , runSqliteInfo
     , wrapConnection
@@ -539,15 +542,22 @@ conStringToInfo connStr = SqliteConnectionInfo connStr' enableWal True where
             | Just cs <- T.stripPrefix "WAL=off " connStr -> (cs, False)
             | otherwise                                   -> (connStr, True)
 
--- | Information required to connect to a sqlite database. We export
--- lenses instead of fields to avoid being limited to the current
--- implementation.
+-- | Information required to connect to a sqlite database. The fields are available both as lenses and as standard record updaters, but the record updaters were not added until 2.6.5.
+--
+-- ==== __Examples__
+--
+-- > :set -XOverloadedStrings
+-- > mkSqliteConnectionInfo ":memory:" { _walEnabled = False, _fkEnabled = False }
+--
+-- > :set -XOverloadedStrings
+-- > import Lens.Micro
+-- > (fkEnabled .~ False) $ (walEnabled .~ False) (mkSqliteConnectionInfo ":memory:")
 --
 -- @since 2.6.2
 data SqliteConnectionInfo = SqliteConnectionInfo
-    { _sqlConnectionStr :: Text -- ^ connection string for the database. Use @:memory:@ for an in-memory database.
-    , _walEnabled :: Bool -- ^ if the write-ahead log is enabled - see https://github.com/yesodweb/persistent/issues/363.
-    , _fkEnabled :: Bool -- ^ if foreign-key constraints are enabled.
+    { _sqlConnectionStr :: Text -- ^ Connection string for the database. Use @:memory:@ for an in-memory database. Since: 2.6.5.
+    , _walEnabled :: Bool -- ^ If the <http://www.sqlite.org/wal.html write-ahead log> is enabled. Default: True. Since: 2.6.5.
+    , _fkEnabled :: Bool -- ^ If <https://sqlite.org/foreignkeys.html foreign-key constraints> are enabled. Default: True. Since: 2.6.5.
     } deriving Show
 makeLenses ''SqliteConnectionInfo
 
