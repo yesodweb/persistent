@@ -8,7 +8,7 @@ For appropriate backend specific testing using the package `persistent-test`:
 
     stack test persistent-test --flag persistent-test:<backend> --exec persistent-test
 
-where <backend> is one of mongodb/postgresql/mysql/couchdb.
+where <backend> is one liste in the cabal file
 
 # Running persistent tests using Cabal
 
@@ -59,7 +59,6 @@ For example:
 
 Docker does not support upstart so just because you install a database does not mean it will be running. You must launch each one in the background.
 
-If someone can contribute information on how to run persistent or MySQL that would be appreciated.
 
 # Updating Sqlite C Source in the repo
 

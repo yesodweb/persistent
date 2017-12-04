@@ -1,10 +1,6 @@
-# build the image
+# See installing backends in development.md
 #
-#     docker build -t persistent .
-#
-# run the image with the directory mounted
-#
-#     docker run --name persistent --link mongodb:mongodb -v ~/.stack:/home/haskell/.stack -v `pwd`:/home/haskell/proj -t -i persistent /bin/bash
+#     docker run --name persistent -v ~/.stack:/home/haskell/.stack -v `pwd`:/home/haskell/proj -t -i persistent /bin/bash
 #
 # Note the above usage of a link
 # For databases besides sqlite, you should find a docker containter and link it
@@ -13,20 +9,17 @@
 # Once in the image you should install persistent dependencies (sandbox is optional)
 # RUN cd persistent-test && cabal sandbox init && cabal install --only-dep
 
-FROM haskell-stack:7.8
+FROM haskell:8.2
 MAINTAINER Greg Weber
 
 RUN apt-get update && \
     # development tools
     apt-get install -y sudo ca-certificates && \
-    # Sqlite
+
     apt-get install -y sqlite3 libsqlite3-dev && \
-
-    # Postgres
     apt-get install -y postgresql-client libpq-dev && \
-
-    # MySQL
     apt-get install -y libpcre3-dev libmysqlclient-dev && \
+    apt-get install -y mongodb && \
 
     apt-get clean
 
