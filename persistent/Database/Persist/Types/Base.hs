@@ -357,7 +357,7 @@ fromPersistValueText (PersistBool b) = Right $ T.pack $ show b
 fromPersistValueText (PersistList _) = Left "Cannot convert PersistList to Text"
 fromPersistValueText (PersistMap _) = Left "Cannot convert PersistMap to Text"
 fromPersistValueText (PersistObjectId _) = Left "Cannot convert PersistObjectId to Text"
-fromPersistValueText (PersistDbSpecific _) = Left "Cannot convert PersistDbSpecific to Text"
+fromPersistValueText (PersistDbSpecific _) = Left "Cannot convert PersistDbSpecific to Text. See the documentation of PersistDbSpecific for an example of using a custom database type with Persistent."
 
 instance A.ToJSON PersistValue where
     toJSON (PersistText t) = A.String $ T.cons 's' t

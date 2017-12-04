@@ -1,3 +1,7 @@
+## 2.7.2.1
+
+* Recommend the `PersistDbSpecific` docs if someone gets an error about converting from `PersistDbSpecific`
+
 ## 2.7.2
 
 * Many of the functions have been generalized using the `BackendCompatible` class. [#723](https://github.com/yesodweb/persistent/pull/723)
