@@ -18,7 +18,10 @@ Idempotency
     field1 Int
     field2 T.Text sqltype=varchar(5)
     field3 T.Text sqltype=mediumtext
-    field4 Double sqltype=double(6,5)
+    field4 T.Text sqltype=longtext
+    field5 T.Text sqltype=mediumblob
+    field6 T.Text sqltype=longblob
+    field7 Double sqltype=double(6,5)
 |]
 
 
