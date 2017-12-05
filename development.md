@@ -42,22 +42,16 @@ To test other backends, you can give a flag described in persisten-test.
 
 ## Installing backends
 
-You can develop just against your preferred backend and the community should help sort out issues with others.
+For an easy install we recommend running a database from a docker container.
+Lets develop easy entry points for testing a database using a command runner.
 
-However, we have a Dockerfile that you can use to install all the databases.
+    just --list
+    just test-mongo
 
-    docker build -t persistent .
-    docker run -d --name postgres postgres:9.3.5
-    docker run --link postgres:postgres --name persistent -v `pwd`:/home/haskell -t -i persistent /bin/bash
-
-This only works on Linux, but you can use Linux on Mac or Windows through Virtualbox.
-
-After building you still need to start up the databases in the background (other than sqlite) that you are testing.
-For example:
-
-    mongod --smallfiles &
-
-Docker does not support upstart so just because you install a database does not mean it will be running. You must launch each one in the background.
+[Installing just is easy](https://github.com/casey/just/releases).
+Or you can look in `./bin/` for the commands it will call and run them directly
+Or
+Lets develop a docker-compose file for running different databases.
 
 
 # Updating Sqlite C Source in the repo
