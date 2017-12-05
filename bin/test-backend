@@ -23,9 +23,22 @@ function exit_msg() {
 
 case "$1" in
     mongo|mongodb)
-        docker run --name persistent-mongo -d --rm -it -p 27017:27017 mongo --smallfiles
-        trap "docker rm -f persistent-mongo" EXIT
+        docker-compose run --rm -d mongo
+        sleep 2
+        function finish() {
+            docker rm -f persistent_mongo_run_1
+        }
+        trap finish EXIT
         stack test persistent-test --flag persistent-test:mongodb --exec persistent-test
+        ;;
+    postgresql|postgres)
+        docker-compose run --rm -d postgres
+        sleep 2
+        function finish() {
+            docker rm -f persistent_postgres_run_1
+        }
+        trap finish EXIT
+        stack test persistent-test --flag persistent-test:postgresql --exec persistent-test
         ;;
     *)
         exit_msg "don't yet know how to test: $1, please teach me!"
