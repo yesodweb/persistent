@@ -627,13 +627,9 @@ parseColumnType "decimal" ci                                   =
 -- Text
 parseColumnType "varchar" ci                                   = return (SqlString, ciMaxLength ci)
 parseColumnType "text" _                                       = return (SqlString, Nothing)
-parseColumnType "mediumtext" _                                 = return (SqlString, Nothing)
-parseColumnType "longtext" _                                   = return (SqlString, Nothing)
 -- ByteString
 parseColumnType "varbinary" ci                                 = return (SqlBlob, ciMaxLength ci)
 parseColumnType "blob" _                                       = return (SqlBlob, Nothing)
-parseColumnType "mediumblob" _                                 = return (SqlBlob, Nothing)
-parseColumnType "longblob" _                                   = return (SqlBlob, Nothing)
 -- Time-related
 parseColumnType "time" _                                       = return (SqlTime, Nothing)
 parseColumnType "datetime" _                                   = return (SqlDayTime, Nothing)
