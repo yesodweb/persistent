@@ -1,4 +1,4 @@
-resolver: lts-8.2
+resolver: lts-9.17
 packages:
   - ./persistent
   - ./persistent-template
@@ -11,4 +11,4 @@ packages:
 
 docker:
   enable: true
-  image: fpco/stack-build:lts-8.2
+  image: fpco/stack-build:lts-9.17

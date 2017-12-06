@@ -35,7 +35,10 @@ case "$1" in
         docker-compose run --rm -d postgres
         sleep 2
         function finish() {
-            docker rm -f persistent_postgres_run_1
+            docker rm -f persistent_postgres_run_1 || {
+                echo "startup failure"
+                exit 1
+            }
         }
         trap finish EXIT
         stack test persistent-test --flag persistent-test:postgresql --exec persistent-test
