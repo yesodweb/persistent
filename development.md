@@ -8,7 +8,7 @@ For appropriate backend specific testing using the package `persistent-test`:
 
     stack test persistent-test --flag persistent-test:<backend> --exec persistent-test
 
-where <backend> is one liste in the cabal file
+where <backend> is one listed in the cabal file
 
 # Running persistent tests using Cabal
 
