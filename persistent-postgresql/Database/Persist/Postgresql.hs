@@ -230,7 +230,7 @@ upsertFunction version = if (version >= 9.5)
                          else Nothing
 
 
--- | Generate a 'Connection' from a 'PG.Connection'
+-- | Generate a 'SqlBackend' from a 'PG.Connection'
 openSimpleConn :: (IsSqlBackend backend) => LogFunc -> PG.Connection -> IO backend
 openSimpleConn logFunc conn = do
     smap <- newIORef $ Map.empty
