@@ -1,0 +1,20 @@
+version: '3.4'
+services:
+  postgres:
+    image: postgres:9.5
+    ports:
+      - "5432:5432"
+    network_mode: "host"
+    environment:
+      - "POSTGRES_USER=postgres"
+      - "POSTGRES_DB=test"
+      - "POSTGRES_PASSWORD=password"
+    #volumes:
+    #  - ./postgres_data/persistent/data:/var/lib/postgresql/data
+
+  mongo:
+    command: ["--smallfiles"]
+    image: mongo:3.4
+    ports:
+      - "27017:27017"
+    network_mode: "host"
