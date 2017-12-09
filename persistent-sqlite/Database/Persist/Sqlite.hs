@@ -319,7 +319,7 @@ migrate' allDefs getter val = do
 
 -- | Mock a migration even when the database is not present.
 -- This function performs the same functionality of 'printMigration'
--- with the difference that an actualy database isn't needed for it.
+-- with the difference that an actual database isn't needed for it.
 mockMigration :: Migration -> IO ()
 mockMigration mig = do
   smap <- newIORef $ Map.empty
