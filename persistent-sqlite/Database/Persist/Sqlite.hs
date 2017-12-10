@@ -136,7 +136,7 @@ wrapConnectionInfo connInfo conn logFunc = do
         -- Turn on the write-ahead log
         -- https://github.com/yesodweb/persistent/issues/363
         turnOnWal <- Sqlite.prepare conn "PRAGMA journal_mode=WAL;"
-        _ <- Sqlite.step turnOnWal
+        _ <- Sqlite.stepConn conn turnOnWal
         Sqlite.reset conn turnOnWal
         Sqlite.finalize turnOnWal
 
@@ -144,7 +144,7 @@ wrapConnectionInfo connInfo conn logFunc = do
         -- Turn on foreign key constraints
         -- https://github.com/yesodweb/persistent/issues/646
         turnOnFK <- Sqlite.prepare conn "PRAGMA foreign_keys = on;"
-        _ <- Sqlite.step turnOnFK
+        _ <- Sqlite.stepConn conn turnOnFK
         Sqlite.reset conn turnOnFK
         Sqlite.finalize turnOnFK
 
@@ -254,7 +254,7 @@ insertSql' ent vals =
 execute' :: Sqlite.Connection -> Sqlite.Statement -> [PersistValue] -> IO Int64
 execute' conn stmt vals = flip finally (liftIO $ Sqlite.reset conn stmt) $ do
     Sqlite.bind stmt vals
-    _ <- Sqlite.step stmt
+    _ <- Sqlite.stepConn conn stmt
     Sqlite.changes conn
 
 withStmt'
@@ -270,7 +270,7 @@ withStmt' conn stmt vals = do
     return pull
   where
     pull = do
-        x <- liftIO $ Sqlite.step stmt
+        x <- liftIO $ Sqlite.stepConn conn stmt
         case x of
             Sqlite.Done -> return ()
             Sqlite.Row -> do
@@ -320,7 +320,7 @@ migrate' allDefs getter val = do
 
 -- | Mock a migration even when the database is not present.
 -- This function performs the same functionality of 'printMigration'
--- with the difference that an actualy database isn't needed for it.
+-- with the difference that an actual database isn't needed for it.
 mockMigration :: Migration -> IO ()
 mockMigration mig = do
   smap <- newIORef $ Map.empty
@@ -431,7 +431,7 @@ mkCreateTable isTemp entity (cols, uniqs) =
         , " TABLE "
         , escape $ entityDB entity
         , "("
-        , T.drop 1 $ T.concat $ map sqlColumn cols
+        , T.drop 1 $ T.concat $ map (sqlColumn isTemp) cols
         , ", PRIMARY KEY "
         , "("
         , T.intercalate "," $ map (escape . fieldDB) $ compositeFields pdef
@@ -449,7 +449,7 @@ mkCreateTable isTemp entity (cols, uniqs) =
         , showSqlType $ fieldSqlType $ entityId entity
         ," PRIMARY KEY"
         , mayDefault $ defaultAttribute $ fieldAttrs $ entityId entity
-        , T.concat $ map sqlColumn cols
+        , T.concat $ map (sqlColumn isTemp) cols
         , T.concat $ map sqlUnique uniqs
         , ")"
         ]
@@ -459,8 +459,8 @@ mayDefault def = case def of
     Nothing -> ""
     Just d -> " DEFAULT " <> d
 
-sqlColumn :: Column -> Text
-sqlColumn (Column name isNull typ def _cn _maxLen ref) = T.concat
+sqlColumn :: Bool -> Column -> Text
+sqlColumn noRef (Column name isNull typ def _cn _maxLen ref) = T.concat
     [ ","
     , escape name
     , " "
@@ -469,7 +469,7 @@ sqlColumn (Column name isNull typ def _cn _maxLen ref) = T.concat
     , mayDefault def
     , case ref of
         Nothing -> ""
-        Just (table, _) -> " REFERENCES " <> escape table
+        Just (table, _) -> if noRef then "" else " REFERENCES " <> escape table
     ]
 
 sqlUnique :: UniqueDef -> Text

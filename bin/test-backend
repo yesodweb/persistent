@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -eu
+set -o pipefail
+
+function command_help() {
+  echo "\
+    $0 [-h|--help] IMAGE:TAG
+  "
+}
+
+function error_msg() {
+  echo ""
+  echo "ERROR: $*"
+  echo ""
+}
+
+function exit_msg() {
+  error_msg "$@"
+  command_help
+  echo ""
+  exit 1
+}
+
+case "$1" in
+    mongo|mongodb)
+        docker-compose run --rm -d mongo
+        sleep 2
+        function finish() {
+            docker rm -f persistent_mongo_run_1
+        }
+        trap finish EXIT
+        stack test persistent-test --flag persistent-test:mongodb --exec persistent-test
+        ;;
+    postgresql|postgres)
+        docker-compose run --rm -d postgres
+        sleep 2
+        function finish() {
+            docker rm -f persistent_postgres_run_1 || {
+                echo "startup failure"
+                exit 1
+            }
+        }
+        trap finish EXIT
+        stack test persistent-test --flag persistent-test:postgresql --exec persistent-test
+        ;;
+    *)
+        exit_msg "don't yet know how to test: $1, please teach me!"
+        ;;
+esac

@@ -5,7 +5,7 @@ Module: module Database.Persist.Sql.Raw.QQ
 Description: QuasiQuoters for performing raw sql queries
 
 This module exports convenient QuasiQuoters to perform raw SQL queries.
-All QuasiQuoters follow them same pattern and are analogous to the similar named
+All QuasiQuoters follow the same pattern and are analogous to the similar named
 functions exported from 'Database.Persist.Sql.Raw'. Neither the quoted
 function's behaviour, nor it's return value is altered during the translation
 and all documentation provided with it holds.
@@ -13,33 +13,6 @@ and all documentation provided with it holds.
 The QuasiQuoters in this module perform a simple substitution on the query text,
 that allows value substitutions, table name substitutions as well as column name
 substitutions.
-
-Here is a small example:
-
-Given the following simple model:
-
-@
-Category
-  rgt Int
-  lft Int
-@
-
-We can now execute this raw query:
-
-@
-let lft = 10 :: Int
-    rgt = 20 :: Int
-    width = rgt - lft
- in [sqlQQ|
-      DELETE FROM ^{Category} WHERE @{CategoryLft} BETWEEN #{lft} AND #{rgt};
-      UPDATE category SET @{CategoryRgt} = @{CategoryRgt} - #{width} WHERE @{CategoryRgt} > #{rgt};
-      UPDATE category SET @{CategoryLft} = @{CategoryLft} - #{width} WHERE @{CategoryLft} > #{rgt};
-    |]
-@
-
-@^{TableName}@ looks up the table's name and escapes it, @\@{ColumnName}@ looks
-up the column's name and properly escapes it and @#{value}@ inserts the value
-via the usual parameter substitution mechanism.
 -}
 
 {-# LANGUAGE LambdaCase #-}
@@ -154,27 +127,70 @@ makeQQ x = QuasiQuoter
     (error "Cannot use qc as a type")
     (error "Cannot use qc as a dec")
 
--- | Analoguous to 'Database.Persist.Sql.Raw.rawSql'
+-- | QuasiQuoter for performing raw sql queries, analoguous to
+-- 'Database.Persist.Sql.Raw.rawSql'
+--
+-- This and the following are convenient QuasiQuoters to perform raw SQL
+-- queries.  They each follow the same pattern and are analogous to
+-- the similarly named @raw@ functions.  Neither the quoted function's
+-- behaviour, nor it's return value is altered during the translation and
+-- all documentation provided with it holds.
+--
+-- These QuasiQuoters perform a simple substitution on the query text, that
+-- allows value substitutions, table name substitutions as well as column name
+-- substitutions.
+--
+-- Here is a small example:
+--
+-- Given the following simple model:
+--
+-- @
+-- Category
+--   rgt Int
+--   lft Int
+-- @
+--
+-- We can now execute this raw query:
+--
+-- @
+-- let lft = 10 :: Int
+--     rgt = 20 :: Int
+--     width = rgt - lft
+--  in [sqlQQ|
+--       DELETE FROM ^{Category} WHERE @{CategoryLft} BETWEEN #{lft} AND #{rgt};
+--       UPDATE category SET @{CategoryRgt} = @{CategoryRgt} - #{width} WHERE @{CategoryRgt} > #{rgt};
+--       UPDATE category SET @{CategoryLft} = @{CategoryLft} - #{width} WHERE @{CategoryLft} > #{rgt};
+--     |]
+-- @
+--
+-- @^{TableName}@ looks up the table's name and escapes it, @\@{ColumnName}@
+-- looks up the column's name and properly escapes it and @#{value}@ inserts
+-- the value via the usual parameter substitution mechanism.
+--
 -- @since 2.7.2
 sqlQQ :: QuasiQuoter
 sqlQQ = makeQQ [| rawSql |]
 
 -- | Analoguous to 'Database.Persist.Sql.Raw.rawExecute'
+--
 -- @since 2.7.2
 executeQQ :: QuasiQuoter
 executeQQ = makeQQ [| rawExecute |]
 
 -- | Analoguous to 'Database.Persist.Sql.Raw.rawExecuteCount'
+--
 -- @since 2.7.2
 executeCountQQ :: QuasiQuoter
 executeCountQQ = makeQQ [| rawExecuteCount |]
 
 -- | Analoguous to 'Database.Persist.Sql.Raw.rawQuery'
+--
 -- @since 2.7.2
 queryQQ :: QuasiQuoter
 queryQQ = makeQQ [| rawQuery |]
 
 -- | Analoguous to 'Database.Persist.Sql.Raw.rawQueryRes'
+--
 -- @since 2.7.2
 queryResQQ :: QuasiQuoter
 queryResQQ = makeQQ [| rawQueryRes |]

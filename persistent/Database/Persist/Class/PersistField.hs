@@ -90,7 +90,7 @@ instance PersistField [Char] where
     fromPersistValue (PersistBool b) = Right $ Prelude.show b
     fromPersistValue (PersistList _) = Left $ T.pack "Cannot convert PersistList to String"
     fromPersistValue (PersistMap _) = Left $ T.pack "Cannot convert PersistMap to String"
-    fromPersistValue (PersistDbSpecific _) = Left $ T.pack "Cannot convert PersistDbSpecific to String"
+    fromPersistValue (PersistDbSpecific _) = Left $ T.pack "Cannot convert PersistDbSpecific to String. See the documentation of PersistDbSpecific for an example of using a custom database type with Persistent."
     fromPersistValue (PersistObjectId _) = Left $ T.pack "Cannot convert PersistObjectId to String"
 #endif
 

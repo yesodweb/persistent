@@ -46,7 +46,7 @@ before_install:
 # commented out line if #717 is not merged, or when testing lts-2 is dropped.
 # script: travis/run.sh
 script:
-- if [[ $ARGS =~ lts-2 ]]; then stack $ARGS install happy; fi
+- if [[ $ARGS =~ lts-2 ]]; then stack $ARGS --install-ghc install happy; fi
 - travis/run.sh
 
 cache:

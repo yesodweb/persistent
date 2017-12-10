@@ -1,3 +1,17 @@
+## 2.6.4
+
+* Adds a new function `stepConn`, which uses an additional parameter to give more detailed error messages [#750](https://github.com/yesodweb/persistent/pull/750)
+* Restores the previous function signature of `step`, which was accidentally changed in 2.6.3.2
+
+## 2.6.3.2
+
+* This release accidentally broke API, and is deprecated on Hackage.
+* Provide more detailed error messages when using the `step` function [#730](https://github.com/yesodweb/persistent/pull/730)
+
+## 2.6.3.1
+
+* Fix migration to avoid creating foreign-key constraints in temporary tables [#736](https://github.com/yesodweb/persistent/pull/736)
+
 ## 2.6.3
 
 * Add 'use-pkgconfig' flag to use pkg-config to find system SQLite library.

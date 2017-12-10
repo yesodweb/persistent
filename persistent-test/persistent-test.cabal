@@ -187,6 +187,8 @@ executable persistent-test
                  , resourcet
                  , scientific
 
+  if !flag(postgresql) && !flag(mysql) && !flag(mongodb) && !flag(zookeeper)
+      cpp-options: -DWITH_SQLITE -DDEBUG
   if flag(zookeeper)
       cpp-options: -DWITH_NOSQL -DWITH_ZOOKEEPER -DDEBUG
   if flag(mongodb)
