@@ -72,7 +72,7 @@ data SqlBackend = SqlBackend
     -- in a single call.
     --
     -- This field when set will be used to generate the UPSERT+RETURN sql given
-    -- * an entity (definition)
+    -- * an entity definition
     -- * updates to be run on unique key(s) collision
     --
     -- When left as 'Nothing', we find the unique key from entity def before
@@ -81,6 +81,18 @@ data SqlBackend = SqlBackend
     -- * return new entity from db
     --
     -- @since 2.6
+    , connPutManySql :: Maybe (EntityDef -> Int -> Text)
+    -- ^ Some databases support performing bulk UPSERT, specifically
+    -- "insert or replace many records" in a single call.
+    --
+    -- This field when set, given
+    -- * an entity definition
+    -- * number of records to be inserted
+    -- should produce a PUT MANY sql with placeholders for records
+    --
+    -- When left as 'Nothing', we default to using 'defaultPutMany'.
+    --
+    -- @since 2.8
     , connStmtMap :: IORef (Map Text Statement)
     , connClose :: IO ()
     , connMigrateSql

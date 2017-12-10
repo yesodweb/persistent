@@ -57,8 +57,8 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 
 import Database.Persist.Sql
-import Database.Persist.Sql.Util (mkUpdateText, updateFieldDef, commaSeparated)
 import Database.Persist.Sql.Types.Internal (mkPersistBackend)
+import Database.Persist.Sql.Util (commaSeparated, mkUpdateText', parenWrapped)
 import Data.Int (Int64)
 
 import qualified Database.MySQL.Simple        as MySQL
@@ -124,6 +124,7 @@ open' ci logFunc = do
         , connInsertSql  = insertSql'
         , connInsertManySql = Nothing
         , connUpsertSql = Nothing
+        , connPutManySql = Just putManySql
         , connClose      = MySQL.close conn
         , connMigrateSql = migrate' ci
         , connBegin      = const $ MySQL.execute_ conn "start transaction" >> return ()
@@ -1026,6 +1027,7 @@ mockMigration mig = do
                              connLimitOffset = undefined,
                              connLogFunc = undefined,
                              connUpsertSql = undefined,
+                             connPutManySql = undefined,
                              connMaxParams = Nothing}
       result = runReaderT . runWriterT . runWriterT $ mig
   resp <- result sqlbackend
@@ -1188,7 +1190,7 @@ insertManyOnDuplicateKeyUpdate
 insertManyOnDuplicateKeyUpdate [] _ _ = return ()
 insertManyOnDuplicateKeyUpdate records fieldValues updates =
     uncurry rawExecute
-    $ mkBulkInsertQuery records fieldValues updates
+        $ mkBulkInsertQuery records fieldValues updates
 
 -- | This creates the query for 'bulkInsertOnDuplicateKeyUpdate'. If you
 -- provide an empty list of updates to perform, then it will generate
@@ -1229,7 +1231,7 @@ mkBulkInsertQuery records fieldValues updates =
         ]
     condFieldSets = map (uncurry mkCondFieldSet) fieldsToMaybeCopy
     fieldSets = map (\n -> T.concat [n, "=VALUES(", n, ")"]) updateFieldNames
-    upds = map mkUpdateText updates
+    upds = map (mkUpdateText' (pack . escapeDBName)) updates
     updsValues = map (\(Update _ val _) -> toPersistValue val) updates
     updateText = case fieldSets <> upds <> condFieldSets of
         [] -> T.concat [firstField, "=", firstField]
@@ -1246,6 +1248,26 @@ mkBulkInsertQuery records fieldValues updates =
         , updateText
         ]
 
-parenWrapped :: Text -> Text
-parenWrapped t = T.concat ["(", t, ")"]
-
+putManySql :: EntityDef -> Int -> Text
+putManySql entityDef' numRecords
+  | numRecords > 0 = q
+  | otherwise = error "putManySql: numRecords MUST be greater than 0!"
+  where
+    tableName = T.pack . escapeDBName . entityDB $ entityDef'
+    fieldDbToText = T.pack . escapeDBName . fieldDB
+    entityFieldNames = map fieldDbToText (entityFields entityDef')
+    recordPlaceholders= parenWrapped . commaSeparated
+                      $ map (const "?") (entityFields entityDef')
+    mkAssignment n = T.concat [n, "=VALUES(", n, ")"]
+    fieldSets = map (mkAssignment . fieldDbToText) (entityFields entityDef')
+    q = T.concat
+        [ "INSERT INTO "
+        , tableName
+        , " ("
+        , commaSeparated entityFieldNames
+        , ") "
+        , " VALUES "
+        , commaSeparated (replicate numRecords recordPlaceholders)
+        , " ON DUPLICATE KEY UPDATE "
+        , commaSeparated fieldSets
+        ]

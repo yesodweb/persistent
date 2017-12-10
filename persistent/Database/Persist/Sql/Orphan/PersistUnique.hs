@@ -11,6 +11,7 @@ import Control.Exception (throwIO)
 import Control.Monad.IO.Class (liftIO, MonadIO)
 import Control.Monad.Trans.Reader (ReaderT)
 import Database.Persist
+import Database.Persist.Class (defaultPutMany)
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
@@ -64,8 +65,19 @@ instance PersistUniqueWrite SqlBackend where
                 , " WHERE "
                 , T.intercalate " AND " $ map (go' conn) $ go uniq]
 
+    putMany [] = return ()
+    putMany rs = do
+        conn <- ask
+        let ent = entityDef rs
+        let nr  = length rs
+        let toVals r = (map toPersistValue $ toPersistFields r)
+        case connPutManySql conn of
+            (Just mkSql) -> rawExecute (mkSql ent nr) (concat (map toVals rs))
+            Nothing -> defaultPutMany rs
+
 instance PersistUniqueWrite SqlWriteBackend where
     deleteBy uniq = withReaderT persistBackend $ deleteBy uniq
+    upsert rs us = withReaderT persistBackend $ upsert rs us
 
 instance PersistUniqueRead SqlBackend where
     getBy uniq = do

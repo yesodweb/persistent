@@ -27,6 +27,7 @@ module Database.Persist.Class
     , replaceUnique
     , checkUnique
     , onlyUnique
+    , defaultPutMany
 
     -- * PersistQuery
     , PersistQuery

@@ -12,7 +12,9 @@ module Database.Persist.Sql.Util (
   , updateFieldDef
   , updatePersistValue
   , mkUpdateText
+  , mkUpdateText'
   , commaSeparated
+  , parenWrapped
 ) where
 
 import Data.Maybe (isJust)
@@ -106,7 +108,10 @@ commaSeparated :: [Text] -> Text
 commaSeparated = T.intercalate ", "
 
 mkUpdateText :: PersistEntity record => SqlBackend -> Update record -> Text
-mkUpdateText conn x =
+mkUpdateText conn = mkUpdateText' (connEscapeName conn)
+
+mkUpdateText' :: PersistEntity record => (DBName -> Text) -> Update record -> Text
+mkUpdateText' escapeName x =
   case updateUpdate x of
     Assign -> n <> "=?"
     Add -> T.concat [n, "=", n, "+?"]
@@ -116,4 +121,7 @@ mkUpdateText conn x =
     BackendSpecificUpdate up ->
       error . T.unpack $ "mkUpdateText: BackendSpecificUpdate " <> up <> " not supported"
   where
-    n = connEscapeName conn . fieldDB . updateFieldDef $ x
+    n = escapeName . fieldDB . updateFieldDef $ x
+
+parenWrapped :: Text -> Text
+parenWrapped t = T.concat ["(", t, ")"]

@@ -29,7 +29,7 @@ module Database.Persist.Postgresql
     ) where
 
 import Database.Persist.Sql
-import Database.Persist.Sql.Util (dbIdColumnsEsc, commaSeparated)
+import Database.Persist.Sql.Util (dbIdColumnsEsc, commaSeparated, parenWrapped)
 import Database.Persist.Sql.Types.Internal (mkPersistBackend)
 import Data.Fixed (Pico)
 
@@ -224,9 +224,10 @@ getServerVersion conn = do
 -- | Choose upsert sql generation function based on postgresql version.
 -- PostgreSQL version >= 9.5 supports native upsert feature,
 -- so depending upon that we have to choose how the sql query is generated.
-upsertFunction :: Double -> Maybe (EntityDef -> Text -> Text)
-upsertFunction version = if (version >= 9.5)
-                         then Just upsertSql'
+-- upsertFunction :: Double -> Maybe (EntityDef -> Text -> Text)
+upsertFunction :: a -> Double -> Maybe a
+upsertFunction f version = if (version >= 9.5)
+                         then Just f
                          else Nothing
 
 
@@ -247,7 +248,8 @@ createBackend logFunc serverVersion smap conn = do
         , connStmtMap    = smap
         , connInsertSql  = insertSql'
         , connInsertManySql = Just insertManySql'
-        , connUpsertSql  = maybe Nothing upsertFunction serverVersion
+        , connUpsertSql  = serverVersion >>= upsertFunction upsertSql'
+        , connPutManySql = serverVersion >>= upsertFunction putManySql
         , connClose      = PG.close conn
         , connMigrateSql = migrate'
         , connBegin      = const $ PG.begin    conn
@@ -1159,6 +1161,7 @@ mockMigration mig = do
                              connInsertManySql = Nothing,
                              connInsertSql = undefined,
                              connUpsertSql = Nothing,
+                             connPutManySql = Nothing,
                              connStmtMap = smap,
                              connClose = undefined,
                              connMigrateSql = mockMigrate,
@@ -1174,3 +1177,30 @@ mockMigration mig = do
       result = runReaderT $ runWriterT $ runWriterT mig
   resp <- result sqlbackend
   mapM_ T.putStrLn $ map snd $ snd resp
+
+putManySql :: EntityDef -> Int -> Text
+putManySql entityDef' numRecords
+  | numRecords > 0 = q
+  | otherwise = error "putManySql: numRecords MUST be greater than 0!"
+  where
+    tableName' = escape . entityDB $ entityDef'
+    fieldDbToText = escape . fieldDB
+    entityFieldNames = map fieldDbToText (entityFields entityDef')
+    recordPlaceholders= parenWrapped . commaSeparated
+                      $ map (const "?") (entityFields entityDef')
+    mkAssignment n = T.concat [n, "=EXCLUDED.", n]
+    fieldSets = map (mkAssignment . fieldDbToText) (entityFields entityDef')
+    uniqueFields' = concat $ map (\x -> map escape (map snd $ uniqueFields x)) (entityUniques entityDef')
+    q = T.concat
+        [ "INSERT INTO "
+        , tableName'
+        , " ("
+        , commaSeparated entityFieldNames
+        , ") "
+        , " VALUES "
+        , commaSeparated (replicate numRecords recordPlaceholders)
+        , "  ON CONFLICT ("
+        , commaSeparated uniqueFields'
+        , ") DO UPDATE SET "
+        , commaSeparated fieldSets
+        ]

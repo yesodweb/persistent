@@ -9,7 +9,9 @@ module Database.Persist.Class.PersistUnique
   ,insertUniqueEntity
   ,replaceUnique
   ,checkUnique
-  ,onlyUnique)
+  ,onlyUnique
+  ,defaultPutMany
+  )
   where
 
 import Database.Persist.Types
@@ -22,6 +24,7 @@ import Database.Persist.Class.PersistStore
 import Database.Persist.Class.PersistEntity
 import Data.Monoid (mappend)
 import Data.Text (unpack, Text)
+import Data.Maybe (catMaybes)
 
 -- | Queries against 'Unique' keys (other than the id 'Key').
 --
@@ -105,6 +108,16 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
       where
         updateGetEntity (Entity k _) upds =
             (Entity k) `liftM` (updateGet k upds)
+
+    -- | Put many records into db
+    --
+    -- * insert new records that do not exist (or violate any unique constraints)
+    -- * replace existing records (matching any unique constraint)
+    putMany
+        :: (MonadIO m, PersistRecordBackend record backend, Eq record)
+        => [record]             -- ^ A list of the records you want to insert or replace.
+        -> ReaderT backend m ()
+    putMany = defaultPutMany
 
 -- | Insert a value, checking for conflicts with any unique constraints.  If a
 -- duplicate exists in the database, it is returned as 'Left'. Otherwise, the
@@ -249,3 +262,43 @@ checkUniqueKeys (x:xs) = do
     case y of
         Nothing -> checkUniqueKeys xs
         Just _ -> return (Just x)
+
+-- | The slow but generic 'putMany' implemetation for any 'PersistUniqueRead'.
+-- * Lookup corresponding entities (if any) for each record using 'getByValue'
+-- * For pre-existing records, issue a 'replace' for each old key and new record
+-- * For new records, issue a bulk 'insertMany_'
+defaultPutMany
+    ::( PersistEntityBackend record ~ BaseBackend backend
+      , PersistEntity record
+      , MonadIO m
+      , Eq record
+      , PersistStoreWrite backend
+      , PersistUniqueRead backend
+      )
+    => [record]
+    -> ReaderT backend m ()
+defaultPutMany [] = return ()
+defaultPutMany rs = do
+    -- lookup record(s) by their unique key
+    mEsOld <- mapM getByValue rs
+
+    -- find pre-existing entities and corresponding (incoming) records
+    let merge (Just x) y = Just (x, y)
+        merge _        _ = Nothing
+    let mEsOldAndRs = zipWith merge mEsOld rs
+    let esOldAndRs = catMaybes mEsOldAndRs
+
+    -- determine records to insert
+    let esOld = fmap fst esOldAndRs
+    let rsOld = fmap entityVal esOld
+    let rsNew = rs \\ rsOld
+
+    -- determine records to update
+    let rsUpd = fmap snd esOldAndRs
+    let ksOld = fmap entityKey esOld
+    let krs   = zip ksOld rsUpd
+
+    -- insert `new` records
+    insertMany_ rsNew
+    -- replace existing records
+    mapM_ (uncurry replace) krs
