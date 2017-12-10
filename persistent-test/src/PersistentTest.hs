@@ -505,23 +505,23 @@ specs = describe "persistent" $ do
         Just (Entity _ v2) <- getBy $ UniqueUpsert "putMany2"
         Just (Entity _ v3) <- getBy $ UniqueUpsert "putMany3"
         [v1,v2,v3] @== vals
-    -- it "handles conflicts by replacing old keys with new records" $ db $ do
-    --     let mkUpsert1 e = Upsert e "new" "" 1
-    --     let mkUpsert2 e = Upsert e "new" "" 2
-    --     let vals = map mkUpsert2 ["putMany4", "putMany5", "putMany6", "putMany7"]
-    --     Entity k1 _ <- insertEntity $ mkUpsert1 "putMany4"
-    --     Entity k2 _ <- insertEntity $ mkUpsert1 "putMany5"
-    --     _ <- putMany vals
-    --     Just e1 <- getBy $ UniqueUpsert "putMany4"
-    --     Just e2 <- getBy $ UniqueUpsert "putMany5"
-    --     Just e3@(Entity k3 _) <- getBy $ UniqueUpsert "putMany6"
-    --     Just e4@(Entity k4 _) <- getBy $ UniqueUpsert "putMany7"
+    it "handles conflicts by replacing old keys with new records" $ db $ do
+        let mkUpsert1 e = Upsert e "new" "" 1
+        let mkUpsert2 e = Upsert e "new" "" 2
+        let vals = map mkUpsert2 ["putMany4", "putMany5", "putMany6", "putMany7"]
+        Entity k1 _ <- insertEntity $ mkUpsert1 "putMany4"
+        Entity k2 _ <- insertEntity $ mkUpsert1 "putMany5"
+        _ <- putMany vals
+        Just e1 <- getBy $ UniqueUpsert "putMany4"
+        Just e2 <- getBy $ UniqueUpsert "putMany5"
+        Just e3@(Entity k3 _) <- getBy $ UniqueUpsert "putMany6"
+        Just e4@(Entity k4 _) <- getBy $ UniqueUpsert "putMany7"
 
-    --     [e1,e2,e3,e4] @== [(Entity k1 $ mkUpsert2 "putMany4")
-    --                       ,(Entity k2 $ mkUpsert2 "putMany5")
-    --                       ,(Entity k3 $ mkUpsert2 "putMany6")
-    --                       ,(Entity k4 $ mkUpsert2 "putMany7")
-    --                       ]
+        [e1,e2,e3,e4] @== [(Entity k1 $ mkUpsert2 "putMany4")
+                          ,(Entity k2 $ mkUpsert2 "putMany5")
+                          ,(Entity k3 $ mkUpsert2 "putMany6")
+                          ,(Entity k4 $ mkUpsert2 "putMany7")
+                          ]
 
   describe "upsert" $ do
     it "adds a new row with no updates" $ db $ do

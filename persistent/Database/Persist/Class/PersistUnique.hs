@@ -18,7 +18,8 @@ import Database.Persist.Types
 import Control.Exception (throwIO)
 import Control.Monad (liftM)
 import Control.Monad.IO.Class (liftIO, MonadIO)
-import Data.List ((\\))
+import Data.List ((\\), deleteFirstsBy)
+import Data.Function (on)
 import Control.Monad.Trans.Reader (ReaderT)
 import Database.Persist.Class.PersistStore
 import Database.Persist.Class.PersistEntity
@@ -114,7 +115,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- * insert new records that do not exist (or violate any unique constraints)
     -- * replace existing records (matching any unique constraint)
     putMany
-        :: (MonadIO m, PersistRecordBackend record backend, Eq record)
+        :: (MonadIO m, PersistRecordBackend record backend)
         => [record]             -- ^ A list of the records you want to insert or replace.
         -> ReaderT backend m ()
     putMany = defaultPutMany
@@ -271,7 +272,6 @@ defaultPutMany
     ::( PersistEntityBackend record ~ BaseBackend backend
       , PersistEntity record
       , MonadIO m
-      , Eq record
       , PersistStoreWrite backend
       , PersistUniqueRead backend
       )
@@ -291,7 +291,8 @@ defaultPutMany rs = do
     -- determine records to insert
     let esOld = fmap fst esOldAndRs
     let rsOld = fmap entityVal esOld
-    let rsNew = rs \\ rsOld
+    let uniqueVals r = concat $ map persistUniqueToValues $ persistUniqueKeys r
+    let rsNew = deleteFirstsBy ((==) `on` uniqueVals) rs rsOld
 
     -- determine records to update
     let rsUpd = fmap snd esOldAndRs
