@@ -306,7 +306,7 @@ instance PersistStoreRead SqlBackend where
     get k = Map.lookup k `fmap` getMany [k]
 
     -- inspired by Database.Persist.Sql.Orphan.PersistQuery.selectSourceRes
-    getMany []      = pure mempty
+    getMany []      = return mempty
     getMany ks@(k:_)= do
         conn <- ask
         let t = entityDef . dummyFromKey $ k
@@ -345,7 +345,7 @@ insrepHelper :: (MonadIO m, PersistEntity val)
              => Text
              -> [Entity val]
              -> ReaderT SqlBackend m ()
-insrepHelper _       []  = pure ()
+insrepHelper _       []  = return ()
 insrepHelper command es = do
     conn <- ask
     let columnNames = keyAndEntityColumnNames entDef conn
@@ -370,7 +370,7 @@ runChunked
     -> ([a] -> ReaderT SqlBackend m ())
     -> [a]
     -> ReaderT SqlBackend m ()
-runChunked _ _ []     = pure ()
+runChunked _ _ []     = return ()
 runChunked width m xs = do
     conn <- ask
     case connMaxParams conn of

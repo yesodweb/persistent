@@ -140,7 +140,7 @@ class
     getMany
         :: (MonadIO m, PersistRecordBackend record backend)
         => [Key record] -> ReaderT backend m (Map (Key record) record)
-    getMany [] = pure mempty
+    getMany [] = return mempty
     getMany ks = do
         vs <- mapM get ks
         let kvs   = zip ks vs
