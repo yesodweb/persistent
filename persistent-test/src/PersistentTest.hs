@@ -511,7 +511,7 @@ specs = describe "persistent" $ do
         let vals = map mkUpsert2 ["putMany4", "putMany5", "putMany6", "putMany7"]
         Entity k1 _ <- insertEntity $ mkUpsert1 "putMany4"
         Entity k2 _ <- insertEntity $ mkUpsert1 "putMany5"
-        _ <- putMany vals
+        _ <- putMany $ [mkUpsert1 "putMany4"] ++ vals
         Just e1 <- getBy $ UniqueUpsert "putMany4"
         Just e2 <- getBy $ UniqueUpsert "putMany5"
         Just e3@(Entity k3 _) <- getBy $ UniqueUpsert "putMany6"

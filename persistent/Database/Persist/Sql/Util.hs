@@ -108,16 +108,16 @@ commaSeparated :: [Text] -> Text
 commaSeparated = T.intercalate ", "
 
 mkUpdateText :: PersistEntity record => SqlBackend -> Update record -> Text
-mkUpdateText conn = mkUpdateText' (connEscapeName conn)
+mkUpdateText conn = mkUpdateText' (connEscapeName conn) id
 
-mkUpdateText' :: PersistEntity record => (DBName -> Text) -> Update record -> Text
-mkUpdateText' escapeName x =
+mkUpdateText' :: PersistEntity record => (DBName -> Text) -> (Text -> Text) -> Update record -> Text
+mkUpdateText' escapeName refColumn x =
   case updateUpdate x of
     Assign -> n <> "=?"
-    Add -> T.concat [n, "=", n, "+?"]
-    Subtract -> T.concat [n, "=", n, "-?"]
-    Multiply -> T.concat [n, "=", n, "*?"]
-    Divide -> T.concat [n, "=", n, "/?"]
+    Add -> T.concat [n, "=", refColumn n, "+?"]
+    Subtract -> T.concat [n, "=", refColumn n, "-?"]
+    Multiply -> T.concat [n, "=", refColumn n, "*?"]
+    Divide -> T.concat [n, "=", refColumn n, "/?"]
     BackendSpecificUpdate up ->
       error . T.unpack $ "mkUpdateText: BackendSpecificUpdate " <> up <> " not supported"
   where

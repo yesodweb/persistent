@@ -11,6 +11,7 @@ module Database.Persist.Class.PersistUnique
   ,checkUnique
   ,onlyUnique
   ,defaultPutMany
+  ,recordEssence
   )
   where
 
@@ -18,7 +19,7 @@ import Database.Persist.Types
 import Control.Exception (throwIO)
 import Control.Monad (liftM)
 import Control.Monad.IO.Class (liftIO, MonadIO)
-import Data.List ((\\), deleteFirstsBy)
+import Data.List ((\\), deleteFirstsBy, nubBy)
 import Data.Function (on)
 import Control.Monad.Trans.Reader (ReaderT)
 import Database.Persist.Class.PersistStore
@@ -277,8 +278,10 @@ defaultPutMany
       )
     => [record]
     -> ReaderT backend m ()
-defaultPutMany [] = return ()
-defaultPutMany rs = do
+defaultPutMany []   = return ()
+defaultPutMany rsD  = do
+    let rs = nubBy ((==) `on` recordEssence) (reverse rsD)
+
     -- lookup record(s) by their unique key
     mEsOld <- mapM getByValue rs
 
@@ -291,8 +294,7 @@ defaultPutMany rs = do
     -- determine records to insert
     let esOld = fmap fst esOldAndRs
     let rsOld = fmap entityVal esOld
-    let uniqueVals r = concat $ map persistUniqueToValues $ persistUniqueKeys r
-    let rsNew = deleteFirstsBy ((==) `on` uniqueVals) rs rsOld
+    let rsNew = deleteFirstsBy ((==) `on` recordEssence) rs rsOld
 
     -- determine records to update
     let rsUpd = fmap snd esOldAndRs
@@ -303,3 +305,8 @@ defaultPutMany rs = do
     insertMany_ rsNew
     -- replace existing records
     mapM_ (uncurry replace) krs
+
+-- | The _essence_ of a unique record.
+-- useful for comaparing records in haskell land for uniqueness equality.
+recordEssence :: PersistEntity record => record -> [PersistValue]
+recordEssence r = concat $ map persistUniqueToValues $ persistUniqueKeys r

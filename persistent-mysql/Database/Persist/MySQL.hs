@@ -1231,7 +1231,7 @@ mkBulkInsertQuery records fieldValues updates =
         ]
     condFieldSets = map (uncurry mkCondFieldSet) fieldsToMaybeCopy
     fieldSets = map (\n -> T.concat [n, "=VALUES(", n, ")"]) updateFieldNames
-    upds = map (mkUpdateText' (pack . escapeDBName)) updates
+    upds = map (mkUpdateText' (pack . escapeDBName) id) updates
     updsValues = map (\(Update _ val _) -> toPersistValue val) updates
     updateText = case fieldSets <> upds <> condFieldSets of
         [] -> T.concat [firstField, "=", firstField]

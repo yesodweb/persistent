@@ -11,14 +11,16 @@ import Control.Exception (throwIO)
 import Control.Monad.IO.Class (liftIO, MonadIO)
 import Control.Monad.Trans.Reader (ReaderT)
 import Database.Persist
-import Database.Persist.Class (defaultPutMany)
+import Database.Persist.Class.PersistUnique (defaultPutMany, recordEssence)
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
-import Database.Persist.Sql.Util (dbColumns, parseEntityValues, updatePersistValue, mkUpdateText)
+import Database.Persist.Sql.Util (dbColumns, parseEntityValues, updatePersistValue, mkUpdateText')
 import qualified Data.Text as T
 import qualified Data.Conduit.List as CL
 import Control.Monad.Trans.Reader (ask, withReaderT)
+import Data.List (nubBy, reverse)
+import Data.Function (on)
 
 defaultUpsert
     :: (MonadIO m
@@ -33,12 +35,15 @@ defaultUpsert record updates = do
 instance PersistUniqueWrite SqlBackend where
     upsert record updates = do
       conn <- ask
+      let escape = connEscapeName conn
+      let refCol n = T.concat [escape (entityDB t), ".", n]
+      let mkUpdateText = mkUpdateText' escape refCol
       uniqueKey <- onlyUnique record
       case connUpsertSql conn of
         Just upsertSql -> case updates of
                             [] -> defaultUpsert record updates
                             _:_ -> do
-                                let upds = T.intercalate "," $ map (mkUpdateText conn) updates
+                                let upds = T.intercalate "," $ map mkUpdateText updates
                                     sql = upsertSql t upds
                                     vals = (map toPersistValue $ toPersistFields record) ++ (map updatePersistValue updates) ++ (unqs uniqueKey)
 
@@ -66,8 +71,9 @@ instance PersistUniqueWrite SqlBackend where
                 , T.intercalate " AND " $ map (go' conn) $ go uniq]
 
     putMany [] = return ()
-    putMany rs = do
+    putMany rsD = do
         conn <- ask
+        let rs = nubBy ((==) `on` recordEssence) (reverse rsD)
         let ent = entityDef rs
         let nr  = length rs
         let toVals r = (map toPersistValue $ toPersistFields r)
@@ -78,6 +84,7 @@ instance PersistUniqueWrite SqlBackend where
 instance PersistUniqueWrite SqlWriteBackend where
     deleteBy uniq = withReaderT persistBackend $ deleteBy uniq
     upsert rs us = withReaderT persistBackend $ upsert rs us
+    putMany rs = withReaderT persistBackend $ putMany rs
 
 instance PersistUniqueRead SqlBackend where
     getBy uniq = do

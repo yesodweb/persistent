@@ -303,7 +303,9 @@ instance PersistStoreWrite SqlWriteBackend where
     repsertMany krs = withReaderT persistBackend $ repsertMany krs
 
 instance PersistStoreRead SqlBackend where
-    get k = Map.lookup k `fmap` getMany [k]
+    get k = do
+        mEs <- getMany [k]
+        return $ Map.lookup k mEs
 
     -- inspired by Database.Persist.Sql.Orphan.PersistQuery.selectSourceRes
     getMany []      = return mempty

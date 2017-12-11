@@ -22,7 +22,9 @@ import Test.Hspec.Expectations ()
 import qualified Control.Monad.Trans.Control
 import qualified Control.Exception as E
 import Init
+#ifndef WITH_NOSQL
 import qualified Data.Map as Map
+#endif
 
 #ifndef WITH_NOSQL
 import Data.Maybe (isJust)

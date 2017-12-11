@@ -32,7 +32,6 @@ import Database.Persist.Types
 import qualified Data.Aeson as A
 import qualified Data.Map as Map
 import Data.Map (Map)
-import Data.Monoid (mempty)
 import qualified Data.Maybe as Maybe
 
 -- | Class which allows the plucking of a @BaseBackend backend@ from some larger type.
@@ -140,7 +139,7 @@ class
     getMany
         :: (MonadIO m, PersistRecordBackend record backend)
         => [Key record] -> ReaderT backend m (Map (Key record) record)
-    getMany [] = return mempty
+    getMany [] = return Map.empty
     getMany ks = do
         vs <- mapM get ks
         let kvs   = zip ks vs
