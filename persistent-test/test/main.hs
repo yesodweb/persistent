@@ -31,6 +31,10 @@ import qualified MigrationTest
 #  endif
 #endif
 
+#ifdef WITH_MYSQL
+import qualified MigrationIdempotencyTest
+#endif
+
 
 #ifdef WITH_NOSQL
 #else
@@ -71,6 +75,7 @@ main = do
 #  endif
 #  ifdef WITH_MYSQL
       , InsertDuplicateUpdate.duplicateMigrate
+      , MigrationIdempotencyTest.migration
 #  endif
       , CustomPrimaryKeyReferenceTest.migration
       ]
@@ -100,4 +105,7 @@ main = do
 
 #ifdef WITH_SQLITE
     MigrationTest.specs
+#endif
+#ifdef WITH_MYSQL
+    MigrationIdempotencyTest.specs
 #endif

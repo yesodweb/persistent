@@ -617,7 +617,7 @@ parseColumnType "tinyint" ci | ciColumnType ci == "tinyint(1)" = return (SqlBool
 parseColumnType "int" ci | ciColumnType ci == "int(11)"        = return (SqlInt32, Nothing)
 parseColumnType "bigint" ci | ciColumnType ci == "bigint(20)"  = return (SqlInt64, Nothing)
 -- Double
-parseColumnType "double" _                                     = return (SqlReal, Nothing)
+parseColumnType x@("double") ci | ciColumnType ci == x         = return (SqlReal, Nothing)
 parseColumnType "decimal" ci                                   =
   case (ciNumericPrecision ci, ciNumericScale ci) of
     (PersistInt64 p, PersistInt64 s) ->
@@ -627,13 +627,9 @@ parseColumnType "decimal" ci                                   =
 -- Text
 parseColumnType "varchar" ci                                   = return (SqlString, ciMaxLength ci)
 parseColumnType "text" _                                       = return (SqlString, Nothing)
-parseColumnType "mediumtext" _                                 = return (SqlString, Nothing)
-parseColumnType "longtext" _                                   = return (SqlString, Nothing)
 -- ByteString
 parseColumnType "varbinary" ci                                 = return (SqlBlob, ciMaxLength ci)
 parseColumnType "blob" _                                       = return (SqlBlob, Nothing)
-parseColumnType "mediumblob" _                                 = return (SqlBlob, Nothing)
-parseColumnType "longblob" _                                   = return (SqlBlob, Nothing)
 -- Time-related
 parseColumnType "time" _                                       = return (SqlTime, Nothing)
 parseColumnType "datetime" _                                   = return (SqlDayTime, Nothing)
