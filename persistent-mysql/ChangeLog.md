@@ -1,4 +1,12 @@
-## 2.6.2.2
+## Unreleased
+
+* Fix duplicate migrations when using `mediumtext`, `longtext`, `mediumblob`, `longblob`, and `double`s using a custom precision. [#754](https://github.com/yesodweb/persistent/pull/754)
+
+-- This can be released as a minor change on the next update. Currently persistent-mysql can't be released because 2.6.2.2 depends on persistent-2.7.2 being released.
+
+## 2.6.2.2 [UNRELEASED ON HACKAGE]
+
+-- This version depends on persistent 2.7.2, which introduced breaking changes and is deprecated on hackage.
 
 * Fix ambiguous type errors introduced by `persistent-2.7.2` [#723](https://github.com/yesodweb/persistent/pull/723)
 
