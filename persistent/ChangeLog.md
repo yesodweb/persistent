@@ -1,9 +1,11 @@
-## 2.7.2.1
+## 2.8
 
+* Re-releases 2.7.2 as a major version bump
 * Recommend the `PersistDbSpecific` docs if someone gets an error about converting from `PersistDbSpecific`
 
-## 2.7.2
+## 2.7.2 [DEPRECATED]
 
+* This version accidentally introduced a breaking change and is deprecated.
 * Many of the functions have been generalized using the `BackendCompatible` class. [#723](https://github.com/yesodweb/persistent/pull/723)
 * Add raw sql quasi quoters [#717](https://github.com/yesodweb/persistent/pull/717)
 
