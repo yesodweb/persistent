@@ -24,7 +24,7 @@ module Database.Persist.MySQL
 #if MIN_VERSION_base(4,7,0)
     , HandleUpdateCollision
     , pattern SomeField
-#elif MIN_VERSION_BASE(4,9,0)
+#elif MIN_VERSION_base(4,9,0)
     , HandleUpdateCollision(SomeField)
 #endif
     , SomeField
