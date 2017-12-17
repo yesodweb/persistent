@@ -16,9 +16,10 @@ module Database.Persist.MySQL
     , MySQLBase.defaultSSLInfo
     , MySQLConf(..)
     , mockMigration
+     -- * @ON DUPLICATE KEY UPDATE@ Functionality
     , insertOnDuplicateKeyUpdate
     , insertManyOnDuplicateKeyUpdate
-    , HandleUpdateCollision(HandleUpdateCollision)
+    , HandleUpdateCollision
     , copyUnlessNull
     , copyUnlessEmpty
     , copyUnlessEq
@@ -1026,8 +1027,10 @@ mockMigration mig = do
   resp <- result sqlbackend
   mapM_ T.putStrLn $ map snd $ snd resp
 
--- | MySQL specific 'upsert'. This will prevent multiple queries, when one will
--- do.
+-- | MySQL specific 'upsert_'. This will prevent multiple queries, when one will
+-- do. The record will be inserted into the database. In the event that the
+-- record already exists in the database, the record will have the
+-- relevant updates performed.
 insertOnDuplicateKeyUpdate
   :: ( backend ~ PersistEntityBackend record
      , PersistEntity record
@@ -1042,15 +1045,27 @@ insertOnDuplicateKeyUpdate record =
   insertManyOnDuplicateKeyUpdate [record] []
 
 -- | This type is used to determine how to update rows using MySQL's
--- @INSERT ON DUPLICATE KEY UPDATE@ functionality, exposed via
--- 'insertManyOnDuplicateKeyUpdate' in the library.
+-- @INSERT ... ON DUPLICATE KEY UPDATE@ functionality, exposed via
+-- 'insertManyOnDuplicateKeyUpdate' in this library.
 --
--- @since 2.6.2
+-- @since 3.0.0
 data HandleUpdateCollision record where
   -- | Copy the field directly from the record.
   CopyField :: EntityField record typ -> HandleUpdateCollision record
   -- | Only copy the field if it is not equal to the provided value.
   CopyUnlessEq :: PersistField typ => EntityField record typ -> typ -> HandleUpdateCollision record
+
+-- | An alias for 'HandleUpdateCollision'. The type previously was only
+-- used to copy a single value, but was expanded to be handle more complex
+-- queries.
+--
+-- @since 2.6.2
+type SomeField = HandleUpdateCollision
+{-# DEPRECATED SomeField "The type SomeField was renamed to HandleUpdateCollision. Please migrate to that name." }
+
+pattern SomeField :: EntityField record typ -> SomeField record
+pattern SomeField x = CopyField x
+{-# DEPRECATED SomeField "The constructor SomeField is deprecated. Use the function copyField instead."}
 
 -- | Copy the field into the database only if the value in the
 -- corresponding record is non-@NULL@.

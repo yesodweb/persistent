@@ -8,3 +8,7 @@ packages:
   - ./persistent-mysql
   - ./persistent-postgresql
   - ./persistent-redis
+
+
+extra-deps:
+- mysql-simple-0.4.4
