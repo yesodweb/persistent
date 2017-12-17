@@ -1,4 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE GADTs #-}
@@ -20,7 +21,13 @@ module Database.Persist.MySQL
      -- * @ON DUPLICATE KEY UPDATE@ Functionality
     , insertOnDuplicateKeyUpdate
     , insertManyOnDuplicateKeyUpdate
+#if MIN_VERSION_base(4,7,0)
+    , HandleUpdateCollision
+    , pattern SomeField
+#elif MIN_VERSION_BASE(4,9,0)
     , HandleUpdateCollision(SomeField)
+#endif
+    , SomeField
     , copyField
     , copyUnlessNull
     , copyUnlessEmpty
@@ -468,44 +475,50 @@ getColumns :: MySQL.ConnectInfo
                  )
 getColumns connectInfo getter def = do
     -- Find out ID column.
-    stmtIdClmn <- getter "SELECT COLUMN_NAME, \
-                                 \IS_NULLABLE, \
-                                 \DATA_TYPE, \
-                                 \COLUMN_DEFAULT \
-                          \FROM INFORMATION_SCHEMA.COLUMNS \
-                          \WHERE TABLE_SCHEMA = ? \
-                            \AND TABLE_NAME   = ? \
-                            \AND COLUMN_NAME  = ?"
+    stmtIdClmn <- getter $ T.concat
+      [ "SELECT COLUMN_NAME, " 
+      ,   "IS_NULLABLE, "
+      ,   "DATA_TYPE, "
+      ,   "COLUMN_DEFAULT "
+      , "FROM INFORMATION_SCHEMA.COLUMNS "
+      , "WHERE TABLE_SCHEMA = ? "
+      ,   "AND TABLE_NAME   = ? "
+      ,   "AND COLUMN_NAME  = ?"
+      ]
     inter1 <- with (stmtQuery stmtIdClmn vals) ($$ CL.consume)
     ids <- runResourceT $ CL.sourceList inter1 $$ helperClmns -- avoid nested queries
 
     -- Find out all columns.
-    stmtClmns <- getter "SELECT COLUMN_NAME, \
-                               \IS_NULLABLE, \
-                               \DATA_TYPE, \
-                               \COLUMN_TYPE, \
-                               \CHARACTER_MAXIMUM_LENGTH, \
-                               \NUMERIC_PRECISION, \
-                               \NUMERIC_SCALE, \
-                               \COLUMN_DEFAULT \
-                        \FROM INFORMATION_SCHEMA.COLUMNS \
-                        \WHERE TABLE_SCHEMA = ? \
-                          \AND TABLE_NAME   = ? \
-                          \AND COLUMN_NAME <> ?"
+    stmtClmns <- getter $ T.concat 
+      [ "SELECT COLUMN_NAME, "
+      ,   "IS_NULLABLE, "
+      ,   "DATA_TYPE, "
+      ,   "COLUMN_TYPE, "
+      ,   "CHARACTER_MAXIMUM_LENGTH, "
+      ,   "NUMERIC_PRECISION, "
+      ,   "NUMERIC_SCALE, "
+      ,   "COLUMN_DEFAULT "
+      , "FROM INFORMATION_SCHEMA.COLUMNS "
+      , "WHERE TABLE_SCHEMA = ? "
+      ,   "AND TABLE_NAME   = ? "
+      ,   "AND COLUMN_NAME <> ?"
+      ]
     inter2 <- with (stmtQuery stmtClmns vals) ($$ CL.consume)
     cs <- runResourceT $ CL.sourceList inter2 $$ helperClmns -- avoid nested queries
 
     -- Find out the constraints.
-    stmtCntrs <- getter "SELECT CONSTRAINT_NAME, \
-                               \COLUMN_NAME \
-                        \FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE \
-                        \WHERE TABLE_SCHEMA = ? \
-                          \AND TABLE_NAME   = ? \
-                          \AND COLUMN_NAME <> ? \
-                          \AND CONSTRAINT_NAME <> 'PRIMARY' \
-                          \AND REFERENCED_TABLE_SCHEMA IS NULL \
-                        \ORDER BY CONSTRAINT_NAME, \
-                                 \COLUMN_NAME"
+    stmtCntrs <- getter $ T.concat 
+      [ "SELECT CONSTRAINT_NAME, "
+      ,   "COLUMN_NAME "
+      , "FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE "
+      , "WHERE TABLE_SCHEMA = ? "
+      ,   "AND TABLE_NAME   = ? "
+      ,   "AND COLUMN_NAME <> ? "
+      ,   "AND CONSTRAINT_NAME <> 'PRIMARY' "
+      ,   "AND REFERENCED_TABLE_SCHEMA IS NULL "
+      , "ORDER BY CONSTRAINT_NAME, "
+      ,   "COLUMN_NAME"
+      ]
     us <- with (stmtQuery stmtCntrs vals) ($$ helperCntrs)
 
     -- Return both
@@ -559,16 +572,18 @@ getColumn connectInfo getter tname [ PersistText cname
                     _ -> fail $ "Invalid default column: " ++ show default'
 
       -- Foreign key (if any)
-      stmt <- lift $ getter "SELECT REFERENCED_TABLE_NAME, \
-                                   \CONSTRAINT_NAME, \
-                                   \ORDINAL_POSITION \
-                            \FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE \
-                            \WHERE TABLE_SCHEMA = ? \
-                              \AND TABLE_NAME   = ? \
-                              \AND COLUMN_NAME  = ? \
-                              \AND REFERENCED_TABLE_SCHEMA = ? \
-                            \ORDER BY CONSTRAINT_NAME, \
-                                     \COLUMN_NAME"
+      stmt <- lift . getter $ T.concat 
+        [ "SELECT REFERENCED_TABLE_NAME, "
+        ,   "CONSTRAINT_NAME, "
+        ,   "ORDINAL_POSITION "
+        , "FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE "
+        , "WHERE TABLE_SCHEMA = ? "
+        ,   "AND TABLE_NAME   = ? "
+        ,   "AND COLUMN_NAME  = ? "
+        ,   "AND REFERENCED_TABLE_SCHEMA = ? "
+        , "ORDER BY CONSTRAINT_NAME, "
+        ,   "COLUMN_NAME"
+        ]
       let vars = [ PersistText $ pack $ MySQL.connectDatabase connectInfo
                  , PersistText $ unDBName $ tname
                  , PersistText cname
@@ -1064,7 +1079,9 @@ data HandleUpdateCollision record where
 -- @since 2.6.2
 type SomeField = HandleUpdateCollision
 
+#if MIN_VERSION_base(4,8,0)
 pattern SomeField :: EntityField record typ -> SomeField record
+#endif
 pattern SomeField x = CopyField x
 {-# DEPRECATED SomeField "The type SomeField is deprecated. Use the type HandleUpdateCollision instead, and use the function copyField instead of the data constructor." #-}
 
