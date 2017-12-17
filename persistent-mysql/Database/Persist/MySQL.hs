@@ -18,7 +18,7 @@ module Database.Persist.MySQL
     , mockMigration
     , insertOnDuplicateKeyUpdate
     , insertManyOnDuplicateKeyUpdate
-    , SomeField(SomeField)
+    , HandleUpdateCollision(HandleUpdateCollision)
     , copyUnlessNull
     , copyUnlessEmpty
     , copyUnlessEq
@@ -1046,40 +1046,46 @@ insertOnDuplicateKeyUpdate record =
 -- 'insertManyOnDuplicateKeyUpdate' in the library.
 --
 -- @since 2.6.2
-data SomeField record where
+data HandleUpdateCollision record where
   -- | Copy the field directly from the record.
-  SomeField :: EntityField record typ -> SomeField record
+  CopyField :: EntityField record typ -> HandleUpdateCollision record
   -- | Only copy the field if it is not equal to the provided value.
-  CopyUnlessEq :: PersistField typ => EntityField record typ -> typ -> SomeField record
+  CopyUnlessEq :: PersistField typ => EntityField record typ -> typ -> HandleUpdateCollision record
 
 -- | Copy the field into the database only if the value in the
 -- corresponding record is non-@NULL@.
 --
 -- @since  2.6.2
-copyUnlessNull :: PersistField typ => EntityField record (Maybe typ) -> SomeField record
+copyUnlessNull :: PersistField typ => EntityField record (Maybe typ) -> HandleUpdateCollision record
 copyUnlessNull field = CopyUnlessEq field Nothing
 
 -- | Copy the field into the database only if the value in the
 -- corresponding record is non-empty, where "empty" means the Monoid
 -- definition for 'mempty'. Useful for 'Text', 'String', 'ByteString', etc.
 --
--- The resulting 'SomeField' type is useful for the
+-- The resulting 'HandleUpdateCollision' type is useful for the
 -- 'insertManyOnDuplicateKeyUpdate' function.
 --
 -- @since  2.6.2
-copyUnlessEmpty :: (Monoid.Monoid typ, PersistField typ) => EntityField record typ -> SomeField record
+copyUnlessEmpty :: (Monoid.Monoid typ, PersistField typ) => EntityField record typ -> HandleUpdateCollision record
 copyUnlessEmpty field = CopyUnlessEq field Monoid.mempty
 
 -- | Copy the field into the database only if the field is not equal to the
 -- provided value. This is useful to avoid copying weird nullary data into
 -- the database.
 --
--- The resulting 'SomeField' type is useful for the
+-- The resulting 'HandleUpdateCollision' type is useful for the
 -- 'insertManyOnDuplicateKeyUpdate' function.
 --
 -- @since  2.6.2
-copyUnlessEq :: PersistField typ => EntityField record typ -> typ -> SomeField record
+copyUnlessEq :: PersistField typ => EntityField record typ -> typ -> HandleUpdateCollision record
 copyUnlessEq = CopyUnlessEq
+
+-- | Copy the field directly from the record.
+--
+-- @since 3.0
+copyField :: PersistField typ => EntityField record typ -> typ -> HandleUpdateCollision record
+copyField = CopyField
 
 -- | Do a bulk insert on the given records in the first parameter. In the event
 -- that a key conflicts with a record currently in the database, the second and
@@ -1093,9 +1099,9 @@ copyUnlessEq = CopyUnlessEq
 -- the value that is provided. You can use this to increment a counter value.
 -- These updates only occur if the original record is present in the database.
 --
--- === __More details on 'SomeField' usage__
+-- === __More details on 'HandleUpdateCollision' usage__
 --
--- The @['SomeField']@ parameter allows you to specify which fields (and
+-- The @['HandleUpdateCollision']@ parameter allows you to specify which fields (and
 -- under which conditions) will be copied from the inserted rows. For
 -- a brief example, consider the following data model and existing data set:
 --
@@ -1177,7 +1183,7 @@ insertManyOnDuplicateKeyUpdate
     , MonadIO m
     )
     => [record] -- ^ A list of the records you want to insert, or update
-    -> [SomeField record] -- ^ A list of the fields you want to copy over.
+    -> [HandleUpdateCollision record] -- ^ A list of the fields you want to copy over.
     -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
     -> ReaderT backend m ()
 insertManyOnDuplicateKeyUpdate [] _ _ = return ()
@@ -1192,14 +1198,14 @@ insertManyOnDuplicateKeyUpdate records fieldValues updates =
 mkBulkInsertQuery
     :: PersistEntity record
     => [record] -- ^ A list of the records you want to insert, or update
-    -> [SomeField record] -- ^ A list of the fields you want to copy over.
+    -> [HandleUpdateCollision record] -- ^ A list of the fields you want to copy over.
     -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
     -> (Text, [PersistValue])
 mkBulkInsertQuery records fieldValues updates =
     (q, recordValues <> updsValues <> copyUnlessValues)
   where
     mfieldDef x = case x of
-        SomeField rec -> Right (fieldDbToText (persistFieldDef rec))
+        HandleUpdateCollision rec -> Right (fieldDbToText (persistFieldDef rec))
         CopyUnlessEq rec val -> Left (fieldDbToText (persistFieldDef rec), toPersistValue val)
     (fieldsToMaybeCopy, updateFieldNames) = partitionEithers $ map mfieldDef fieldValues
     fieldDbToText = T.pack . escapeDBName . fieldDB
