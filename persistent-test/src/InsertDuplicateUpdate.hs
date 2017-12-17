@@ -60,7 +60,7 @@ specs = describe "DuplicateKeyUpdate" $ do
       let newItem = Item "item3" "fresh" Nothing Nothing
       insertManyOnDuplicateKeyUpdate
         (newItem : items)
-        [SomeField ItemDescription]
+        [copyField ItemDescription]
         []
       dbItems <- map entityVal <$> selectList [] []
       sort dbItems @== sort (newItem : items)
@@ -79,7 +79,7 @@ specs = describe "DuplicateKeyUpdate" $ do
       insertManyOnDuplicateKeyUpdate
         newItems
         [ copyUnlessEq ItemQuantity (Just 0)
-        , SomeField ItemPrice
+        , copyField ItemPrice
         ]
         []
       dbItems <- sort . fmap entityVal <$> selectList [] []

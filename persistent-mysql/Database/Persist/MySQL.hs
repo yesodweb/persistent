@@ -1,4 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -19,7 +20,8 @@ module Database.Persist.MySQL
      -- * @ON DUPLICATE KEY UPDATE@ Functionality
     , insertOnDuplicateKeyUpdate
     , insertManyOnDuplicateKeyUpdate
-    , HandleUpdateCollision
+    , HandleUpdateCollision(SomeField)
+    , copyField
     , copyUnlessNull
     , copyUnlessEmpty
     , copyUnlessEq
@@ -1061,11 +1063,10 @@ data HandleUpdateCollision record where
 --
 -- @since 2.6.2
 type SomeField = HandleUpdateCollision
-{-# DEPRECATED SomeField "The type SomeField was renamed to HandleUpdateCollision. Please migrate to that name." }
 
 pattern SomeField :: EntityField record typ -> SomeField record
 pattern SomeField x = CopyField x
-{-# DEPRECATED SomeField "The constructor SomeField is deprecated. Use the function copyField instead."}
+{-# DEPRECATED SomeField "The type SomeField is deprecated. Use the type HandleUpdateCollision instead, and use the function copyField instead of the data constructor." #-}
 
 -- | Copy the field into the database only if the value in the
 -- corresponding record is non-@NULL@.
@@ -1099,7 +1100,7 @@ copyUnlessEq = CopyUnlessEq
 -- | Copy the field directly from the record.
 --
 -- @since 3.0
-copyField :: PersistField typ => EntityField record typ -> typ -> HandleUpdateCollision record
+copyField :: PersistField typ => EntityField record typ -> HandleUpdateCollision record
 copyField = CopyField
 
 -- | Do a bulk insert on the given records in the first parameter. In the event
@@ -1220,7 +1221,7 @@ mkBulkInsertQuery records fieldValues updates =
     (q, recordValues <> updsValues <> copyUnlessValues)
   where
     mfieldDef x = case x of
-        HandleUpdateCollision rec -> Right (fieldDbToText (persistFieldDef rec))
+        CopyField rec -> Right (fieldDbToText (persistFieldDef rec))
         CopyUnlessEq rec val -> Left (fieldDbToText (persistFieldDef rec), toPersistValue val)
     (fieldsToMaybeCopy, updateFieldNames) = partitionEithers $ map mfieldDef fieldValues
     fieldDbToText = T.pack . escapeDBName . fieldDB
