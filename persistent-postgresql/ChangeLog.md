@@ -1,3 +1,7 @@
+## 2.6.2.1
+
+* Fix bug where, if a custom column width was set, the field would be migrated every time [#742](https://github.com/yesodweb/persistent/pull/742)
+
 ## 2.6.2
 
 * Expose new functions: `withPostgresqlPoolWithVersion`, `withPostgresqlConnWithVersion` and `createPostgresqlPoolModifiedWithVersion`.

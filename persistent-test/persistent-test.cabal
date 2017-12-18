@@ -78,6 +78,7 @@ library
                      CustomPersistFieldTest
                      CustomPrimaryKeyReferenceTest
                      InsertDuplicateUpdate
+                     MigrationColumnLengthTest
 
     hs-source-dirs: src, test
 
