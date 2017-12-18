@@ -801,6 +801,7 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, ns
     getType "int4"        = Right SqlInt32
     getType "int8"        = Right SqlInt64
     getType "varchar"     = Right SqlString
+    getType "text"        = Right SqlString
     getType "date"        = Right SqlDay
     getType "bool"        = Right SqlBool
     getType "timestamptz" = Right SqlDayTime

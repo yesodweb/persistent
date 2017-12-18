@@ -1,0 +1,50 @@
+{-# OPTIONS_GHC -fno-warn-unused-binds #-}
+{-# LANGUAGE QuasiQuotes, TemplateHaskell, CPP, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, EmptyDataDecls, FlexibleInstances, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+module EquivalentTypeTest (specs) where
+
+import Database.Persist.TH
+import Control.Monad.Trans.Resource (runResourceT)
+import qualified Data.Text as T
+
+import Init
+
+#ifdef WITH_NOSQL
+mkPersist persistSettings [persistUpperCase|
+#else
+share [mkPersist sqlSettings, mkMigrate "migrateAll1"] [persistLowerCase|
+#endif
+EquivalentType sql=equivalent_types
+    field1 Int
+#ifdef WITH_POSTGRESQL
+    field2 T.Text sqltype=text
+#endif
+    deriving Eq Show
+|]
+
+#ifdef WITH_NOSQL
+mkPersist persistSettings [persistUpperCase|
+#else
+share [mkPersist sqlSettings, mkMigrate "migrateAll2"] [persistLowerCase|
+#endif
+EquivalentType2 sql=equivalent_types
+    field1 Int
+#ifdef WITH_POSTGRESQL
+    field2 T.Text
+#endif
+    deriving Eq Show
+|]
+
+specs :: Spec
+specs = describe "doesn't migrate equivalent types" $ do
+    it "works" $ asIO $ runResourceT $ runConn $ do
+#ifndef WITH_NOSQL
+        _ <- runMigrationSilent migrateAll1
+        xs <- getMigration migrateAll2
+#else
+        let xs = []
+#endif
+        liftIO $ xs @?= []
+
+asIO :: IO a -> IO a
+asIO = id
