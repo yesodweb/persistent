@@ -51,10 +51,11 @@ specs = describe "doesn't migrate equivalent types" $ do
 #ifndef WITH_NOSQL
         _ <- runMigrationSilent migrateAll1
         xs <- getMigration migrateAll2
-#else
-        let xs = []
-#endif
         liftIO $ xs @?= []
+#else
+        return ()
+#endif
+        
 
 asIO :: IO a -> IO a
 asIO = id
