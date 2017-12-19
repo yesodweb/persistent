@@ -619,7 +619,7 @@ mayDefault def = case def of
 
 type SafeToRemove = Bool
 
-data AlterColumn = Type SqlType Text
+data AlterColumn = ChangeType SqlType Text
                  | IsNull | NotNull | Add' Column | Drop SafeToRemove
                  | Default Text | NoDefault | Update' Text
                  | AddReference DBName [DBName] [Text] | DropReference DBName
@@ -640,7 +640,7 @@ getColumns getter def = do
     let sqlv=T.concat ["SELECT "
                           ,"column_name "
                           ,",is_nullable "
-                          ,",udt_name "
+                          ,",COALESCE(domain_name, udt_name)" -- See DOMAINS below
                           ,",column_default "
                           ,",numeric_precision "
                           ,",numeric_scale "
@@ -650,6 +650,12 @@ getColumns getter def = do
                           ,"AND table_schema=current_schema() "
                           ,"AND table_name=? "
                           ,"AND column_name <> ?"]
+
+-- DOMAINS Postgres supports the concept of domains, which are data types with optional constraints.
+-- An app might make an "email" domain over the varchar type, with a CHECK that the emails are valid
+-- In this case the generated SQL should use the domain name: ALTER TABLE users ALTER COLUMN foo TYPE email
+-- This code exists to use the domain name (email), instead of the underlying type (varchar).
+-- This is tested in EquivalentTypeTest.hs
 
     stmt <- getter sqlv
     let vals =
@@ -852,12 +858,12 @@ findAlters defs _tablename col@(Column name isNull sqltype def _defConstraintNam
                     -- need to make sure that TIMESTAMP WITHOUT TIME ZONE is
                     -- treated as UTC.
                     | sqltype == SqlDayTime && sqltype' == SqlOther "timestamp" =
-                        [(name, Type sqltype $ T.concat
+                        [(name, ChangeType sqltype $ T.concat
                             [ " USING "
                             , escape name
                             , " AT TIME ZONE 'UTC'"
                             ])]
-                    | otherwise = [(name, Type sqltype "")]
+                    | otherwise = [(name, ChangeType sqltype "")]
                 modDef =
                     if def == def'
                         then []
@@ -936,7 +942,7 @@ showAlterTable table (DropConstraint cname) = T.concat
     ]
 
 showAlter :: DBName -> AlterColumn' -> Text
-showAlter table (n, Type t extra) =
+showAlter table (n, ChangeType t extra) =
     T.concat
         [ "ALTER TABLE "
         , escape table

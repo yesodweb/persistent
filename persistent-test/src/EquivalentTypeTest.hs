@@ -18,6 +18,7 @@ EquivalentType sql=equivalent_types
     field1 Int
 #ifdef WITH_POSTGRESQL
     field2 T.Text sqltype=text
+    field3 T.Text sqltype=us_postal_code
 #endif
     deriving Eq Show
 |]
@@ -31,6 +32,7 @@ EquivalentType2 sql=equivalent_types
     field1 Int
 #ifdef WITH_POSTGRESQL
     field2 T.Text
+    field3 T.Text sqltype=us_postal_code
 #endif
     deriving Eq Show
 |]
@@ -38,6 +40,12 @@ EquivalentType2 sql=equivalent_types
 specs :: Spec
 specs = describe "doesn't migrate equivalent types" $ do
     it "works" $ asIO $ runResourceT $ runConn $ do
+
+#ifdef WITH_POSTGRESQL
+        _ <- rawExecute "DROP DOMAIN IF EXISTS us_postal_code" []
+        _ <- rawExecute "CREATE DOMAIN us_postal_code AS TEXT CHECK(VALUE ~ '^\\d{5}$')" []
+#endif
+
 #ifndef WITH_NOSQL
         _ <- runMigrationSilent migrateAll1
         xs <- getMigration migrateAll2
