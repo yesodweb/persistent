@@ -5,7 +5,9 @@ module EquivalentTypeTest (specs) where
 
 import Database.Persist.TH
 import Control.Monad.Trans.Resource (runResourceT)
+#ifdef WITH_POSTGRESQL
 import qualified Data.Text as T
+#endif
 
 import Init
 
