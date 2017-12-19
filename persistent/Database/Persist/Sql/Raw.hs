@@ -47,20 +47,20 @@ rawQueryRes sql vals = do
         stmtQuery stmt vals
 
 -- | Execute a raw SQL statement
-rawExecute :: (MonadIO m, BackendCompatible SqlBackend backend)
+rawExecute :: MonadIO m
            => Text            -- ^ SQL statement, possibly with placeholders.
            -> [PersistValue]  -- ^ Values to fill the placeholders.
-           -> ReaderT backend m ()
+           -> ReaderT SqlBackend m ()
 rawExecute x y = liftM (const ()) $ rawExecuteCount x y
 
 -- | Execute a raw SQL statement and return the number of
 -- rows it has modified.
-rawExecuteCount :: (MonadIO m, BackendCompatible SqlBackend backend)
+rawExecuteCount :: (MonadIO m, IsSqlBackend backend)
                 => Text            -- ^ SQL statement, possibly with placeholders.
                 -> [PersistValue]  -- ^ Values to fill the placeholders.
                 -> ReaderT backend m Int64
 rawExecuteCount sql vals = do
-    conn <- projectBackend `liftM` ask
+    conn <- persistBackend `liftM` ask
     runLoggingT (logDebugNS (pack "SQL") $ T.append sql $ pack $ "; " ++ show vals)
         (connLogFunc conn)
     stmt <- getStmt sql
@@ -69,10 +69,10 @@ rawExecuteCount sql vals = do
     return res
 
 getStmt
-  :: (MonadIO m, BackendCompatible SqlBackend backend)
+  :: (MonadIO m, IsSqlBackend backend)
   => Text -> ReaderT backend m Statement
 getStmt sql = do
-    conn <- projectBackend `liftM` ask
+    conn <- persistBackend `liftM` ask
     liftIO $ getStmtConn conn sql
 
 getStmtConn :: SqlBackend -> Text -> IO Statement

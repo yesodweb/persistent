@@ -1,10 +1,13 @@
-## 2.7.2.1
+## 2.7.3 
 
+* Reverts [#723](https://github.com/yesodweb/persistent/pull/723), which generalized functions using the `BackendCompatible` class. These changes were an accidental breaking change.
 * Recommend the `PersistDbSpecific` docs if someone gets an error about converting from `PersistDbSpecific`
 
-## 2.7.2
+## 2.7.2 [DEPRECATED ON HACKAGE]
 
 * Many of the functions have been generalized using the `BackendCompatible` class. [#723](https://github.com/yesodweb/persistent/pull/723)
+	* This change was an accidental breaking change and was reverted in 2.7.3.
+	* These change will be released in a future version of Persistent with a major version bump.
 * Add raw sql quasi quoters [#717](https://github.com/yesodweb/persistent/pull/717)
 
 ## 2.7.1
