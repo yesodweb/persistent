@@ -39,7 +39,7 @@ import Web.PathPieces (PathPiece)
 import Web.HttpApiData (ToHttpApiData, FromHttpApiData)
 import Database.Persist.Sql.Class (PersistFieldSql)
 import qualified Data.Aeson as A
-import Control.Exception.Lifted (throwIO)
+import Control.Exception (throwIO)
 import Database.Persist.Class ()
 
 withRawQuery :: MonadIO m

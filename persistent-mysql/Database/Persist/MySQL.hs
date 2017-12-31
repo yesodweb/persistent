@@ -67,7 +67,7 @@ import qualified Database.MySQL.Simple.Types  as MySQL
 
 import qualified Database.MySQL.Base          as MySQLBase
 import qualified Database.MySQL.Base.Types    as MySQLBase
-import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Trans.Resource (runResourceT)
 
 import Prelude
@@ -76,7 +76,7 @@ import Prelude
 -- The pool is properly released after the action finishes using
 -- it.  Note that you should not use the given 'ConnectionPool'
 -- outside the action since it may be already been released.
-withMySQLPool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m, IsSqlBackend backend)
+withMySQLPool :: (MonadLogger m, MonadUnliftIO m, IsSqlBackend backend)
               => MySQL.ConnectInfo
               -- ^ Connection information.
               -> Int
@@ -90,7 +90,7 @@ withMySQLPool ci = withSqlPool $ open' ci
 -- | Create a MySQL connection pool.  Note that it's your
 -- responsibility to properly close the connection pool when
 -- unneeded.  Use 'withMySQLPool' for automatic resource control.
-createMySQLPool :: (MonadBaseControl IO m, MonadIO m, MonadLogger m, IsSqlBackend backend)
+createMySQLPool :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
                 => MySQL.ConnectInfo
                 -- ^ Connection information.
                 -> Int
@@ -101,7 +101,7 @@ createMySQLPool ci = createSqlPool $ open' ci
 
 -- | Same as 'withMySQLPool', but instead of opening a pool
 -- of connections, only one connection is opened.
-withMySQLConn :: (MonadBaseControl IO m, MonadIO m, MonadLogger m, IsSqlBackend backend)
+withMySQLConn :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
               => MySQL.ConnectInfo
               -- ^ Connection information.
               -> (backend -> m a)
@@ -570,7 +570,7 @@ getColumn connectInfo getter tname [ PersistText cname
                  , PersistText $ unDBName $ tname
                  , PersistText cname
                  , PersistText $ pack $ MySQL.connectDatabase connectInfo ]
-      cntrs <- with (stmtQuery stmt vars) ($$ CL.consume)
+      cntrs <- liftIO $ with (stmtQuery stmt vars) ($$ CL.consume)
       ref <- case cntrs of
                [] -> return Nothing
                [[PersistText tab, PersistText ref, PersistInt64 pos]] ->

@@ -13,9 +13,8 @@ module Database.Persist.Sql.Migration
   ) where
 
 
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Class (MonadTrans (..))
-import Control.Monad.IO.Class
+import Control.Monad.IO.Unlift
 import Control.Monad.Trans.Writer
 import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Control.Monad (liftM, unless)
@@ -23,7 +22,6 @@ import Data.Text (Text, unpack, snoc, isPrefixOf, pack)
 import qualified Data.Text.IO
 import System.IO
 import System.IO.Silently (hSilence)
-import Control.Monad.Trans.Control (liftBaseOp_)
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
 import Database.Persist.Types
@@ -79,10 +77,11 @@ runMigration m = runMigration' m False >> return ()
 
 -- | Same as 'runMigration', but returns a list of the SQL commands executed
 -- instead of printing them to stderr.
-runMigrationSilent :: (MonadBaseControl IO m, MonadIO m)
+runMigrationSilent :: (MonadUnliftIO m, MonadIO m)
                    => Migration
                    -> ReaderT SqlBackend m [Text]
-runMigrationSilent m = liftBaseOp_ (hSilence [stderr]) $ runMigration' m True
+runMigrationSilent m = withRunInIO $ \run ->
+  hSilence [stderr] $ run $ runMigration' m True
 
 -- | Run the given migration against the database. If the migration fails
 -- to parse, or there are any unsafe migrations, then this will error at

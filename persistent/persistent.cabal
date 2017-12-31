@@ -31,15 +31,11 @@ library
                    , containers               >= 0.2
                    , conduit                  >= 1.0
                    , resourcet                >= 1.1
-                   , exceptions               >= 0.6
-                   , monad-control            >= 0.3
-                   , lifted-base              >= 0.1
                    , resource-pool            >= 0.2.2.0
                    , path-pieces              >= 0.1
                    , http-api-data            >= 0.2       && < 0.4
                    , aeson                    >= 0.5
                    , monad-logger             >= 0.3
-                   , transformers-base
                    , base64-bytestring
                    , unordered-containers
                    , vector
@@ -53,6 +49,7 @@ library
                    , fast-logger              >= 2.1
                    , scientific
                    , tagged
+                   , unliftio-core
 
     exposed-modules: Database.Persist
                      Database.Persist.Quasi
@@ -112,7 +109,6 @@ test-suite test
                    , scientific
                    , tagged
                    , fast-logger              >= 2.1
-                   , lifted-base              >= 0.1
                    , mtl
                    , template-haskell
                    , resource-pool

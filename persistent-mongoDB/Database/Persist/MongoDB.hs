@@ -152,7 +152,7 @@ import Data.Bits (shiftR)
 import Data.Word (Word16)
 import Data.Monoid (mappend)
 import Control.Monad.Trans.Reader (ask, runReaderT)
-import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.IO.Unlift (MonadUnliftIO, withRunInIO)
 import Numeric (readHex)
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -362,17 +362,21 @@ withMongoDBPool dbname hostname port mauth poolStripes stripeConnections connect
   connectionReader pool
 
 -- | run a pool created with 'createMongoDBPipePool'
-runMongoDBPipePool :: (Trans.MonadIO m, MonadBaseControl IO m) => DB.AccessMode -> Database -> DB.Action m a -> PipePool -> m a
+runMongoDBPipePool :: MonadUnliftIO m => DB.AccessMode -> Database -> DB.Action m a -> PipePool -> m a
 runMongoDBPipePool accessMode db action pool =
-  Pool.withResource pool $ \pipe -> DB.access pipe accessMode db action
+  withRunInIO $ \run ->
+  Pool.withResource pool $ \pipe ->
+  run $ DB.access pipe accessMode db action
 
-runMongoDBPool :: (Trans.MonadIO m, MonadBaseControl IO m) => DB.AccessMode  -> DB.Action m a -> ConnectionPool -> m a
+runMongoDBPool :: MonadUnliftIO m => DB.AccessMode  -> DB.Action m a -> ConnectionPool -> m a
 runMongoDBPool accessMode action pool =
-  Pool.withResource pool $ \(Connection pipe db) -> DB.access pipe accessMode db action
+  withRunInIO $ \run ->
+  Pool.withResource pool $ \(Connection pipe db) ->
+  run $ DB.access pipe accessMode db action
 
 
 -- | use default 'AccessMode'
-runMongoDBPoolDef :: (Trans.MonadIO m, MonadBaseControl IO m) => DB.Action m a -> ConnectionPool -> m a
+runMongoDBPoolDef :: MonadUnliftIO m => DB.Action m a -> ConnectionPool -> m a
 runMongoDBPoolDef = runMongoDBPool defaultAccessMode
 
 queryByKey :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)

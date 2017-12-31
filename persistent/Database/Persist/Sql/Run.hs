@@ -7,14 +7,12 @@ module Database.Persist.Sql.Run where
 import Database.Persist.Class.PersistStore
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
-import Control.Monad.Trans.Control
 import Data.Pool as P
 import Control.Monad.Trans.Reader hiding (local)
 import Control.Monad.Trans.Resource
 import Control.Monad.Logger
-import Control.Monad.Base
-import Control.Exception.Lifted (onException, bracket)
-import Control.Monad.IO.Class
+import Control.Exception (onException, bracket)
+import Control.Monad.IO.Unlift
 import Control.Exception (mask)
 import System.Timeout (timeout)
 import Data.IORef (readIORef, writeIORef, newIORef)
@@ -28,22 +26,22 @@ import Control.Monad (liftM)
 -- was buggy and caused more problems than it solved. Since version 2.1.2, it
 -- performs no timeout checks.
 runSqlPool
-    :: (MonadBaseControl IO m, IsSqlBackend backend)
+    :: (MonadUnliftIO m, IsSqlBackend backend)
     => ReaderT backend m a -> Pool backend -> m a
-runSqlPool r pconn = withResource pconn $ runSqlConn r
+runSqlPool r pconn = withRunInIO $ \run -> withResource pconn $ run . runSqlConn r
 
 -- | Like 'withResource', but times out the operation if resource
 -- allocation does not complete within the given timeout period.
 --
 -- @since 2.0.0
 withResourceTimeout
-  :: forall a m b.  (MonadBaseControl IO m)
+  :: forall a m b.  (MonadUnliftIO m)
   => Int -- ^ Timeout period in microseconds
   -> Pool a
   -> (a -> m b)
   -> m (Maybe b)
 {-# SPECIALIZE withResourceTimeout :: Int -> Pool a -> (a -> IO b) -> IO (Maybe b) #-}
-withResourceTimeout ms pool act = control $ \runInIO -> mask $ \restore -> do
+withResourceTimeout ms pool act = withRunInIO $ \runInIO -> mask $ \restore -> do
     mres <- timeout ms $ takeResource pool
     case mres of
         Nothing -> runInIO $ return (Nothing :: Maybe b)
@@ -54,8 +52,8 @@ withResourceTimeout ms pool act = control $ \runInIO -> mask $ \restore -> do
             return ret
 {-# INLINABLE withResourceTimeout #-}
 
-runSqlConn :: (MonadBaseControl IO m, IsSqlBackend backend) => ReaderT backend m a -> backend -> m a
-runSqlConn r conn = control $ \runInIO -> mask $ \restore -> do
+runSqlConn :: (MonadUnliftIO m, IsSqlBackend backend) => ReaderT backend m a -> backend -> m a
+runSqlConn r conn = withRunInIO $ \runInIO -> mask $ \restore -> do
     let conn' = persistBackend conn
         getter = getStmtConn conn'
     restore $ connBegin conn' getter
@@ -81,16 +79,18 @@ liftSqlPersistMPool
 liftSqlPersistMPool x pool = liftIO (runSqlPersistMPool x pool)
 
 withSqlPool
-    :: (MonadIO m, MonadLogger m, MonadBaseControl IO m, IsSqlBackend backend)
+    :: (MonadLogger m, MonadUnliftIO m, IsSqlBackend backend)
     => (LogFunc -> IO backend) -- ^ create a new connection
     -> Int -- ^ connection count
     -> (Pool backend -> m a)
     -> m a
-withSqlPool mkConn connCount f =
-    bracket (createSqlPool mkConn connCount) (liftIO . destroyAllResources) f
+withSqlPool mkConn connCount f = withUnliftIO $ \u -> bracket
+    (unliftIO u $ createSqlPool mkConn connCount)
+    destroyAllResources
+    (unliftIO u . f)
 
 createSqlPool
-    :: (MonadIO m, MonadLogger m, MonadBaseControl IO m, IsSqlBackend backend)
+    :: (MonadLogger m, MonadUnliftIO m, IsSqlBackend backend)
     => (LogFunc -> IO backend)
     -> Int
     -> m (Pool backend)
@@ -104,21 +104,19 @@ createSqlPool mkConn size = do
 -- FIXME: in a future release, switch over to the new askLoggerIO function
 -- added in monad-logger 0.3.10. That function was not available at the time
 -- this code was written.
-askLogFunc :: forall m. (MonadBaseControl IO m, MonadLogger m) => m LogFunc
-askLogFunc = do
-    ref <- liftBase $ newIORef undefined
-    liftBaseWith $ \run -> writeIORef ref run
-    runInBase <- liftBase $ readIORef ref
-    return $ \a b c d -> do
-        _ <- runInBase (monadLoggerLog a b c d)
-        return ()
+askLogFunc :: forall m. (MonadUnliftIO m, MonadLogger m) => m LogFunc
+askLogFunc = withRunInIO $ \run ->
+    return $ \a b c d -> run (monadLoggerLog a b c d)
 
 withSqlConn
-    :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsSqlBackend backend)
+    :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
     => (LogFunc -> IO backend) -> (backend -> m a) -> m a
 withSqlConn open f = do
     logFunc <- askLogFunc
-    bracket (liftIO $ open logFunc) (liftIO . close') f
+    withRunInIO $ \run -> bracket
+      (open logFunc)
+      close'
+      (run . f)
 
 close' :: (IsSqlBackend backend) => backend -> IO ()
 close' conn = do

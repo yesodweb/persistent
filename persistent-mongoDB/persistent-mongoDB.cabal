@@ -33,12 +33,12 @@ library
                    , cereal             >= 0.3.0.0
                    , path-pieces        >= 0.1
                    , http-api-data      >= 0.2       && < 0.4
-                   , monad-control      >= 0.3
                    , aeson              >= 0.6.2
                    , attoparsec
                    , time
                    , bytestring
                    , resource-pool      < 0.3
+                   , unliftio-core
 
     exposed-modules: Database.Persist.MongoDB
     ghc-options:     -Wall

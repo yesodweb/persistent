@@ -23,7 +23,7 @@ library
                    , containers            >= 0.2
                    , bytestring            >= 0.9
                    , text                  >= 0.7
-                   , monad-control         >= 0.2
+                   , unliftio-core
                    , blaze-builder
                    , time                  >= 1.1
                    , aeson                 >= 0.6.2

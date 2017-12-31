@@ -101,7 +101,8 @@ library
                    , http-api-data            >= 0.2
                    , text                     >= 0.8
                    , transformers             >= 0.2.1
-                   , monad-control            >= 0.3
+                   , unliftio-core
+                   , unliftio
                    , containers               >= 0.2
                    , bytestring               >= 0.9
                    , base64-bytestring
