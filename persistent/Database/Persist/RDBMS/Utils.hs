@@ -33,8 +33,6 @@ module Database.Persist.RDBMS.Utils
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Reader
 import Database.Persist
-import Database.Persist.Sql (rawExecute, SqlBackend)
-import Data.Monoid ((<>))
 
 -- | Deletes all rows in a database. Issues \"DELETE FROM table_name\" command to the database.
 --
@@ -43,10 +41,20 @@ import Data.Monoid ((<>))
 -- deleteUserRows = deleteAllRows (undefined :: User)
 -- @
 --
+-- deleteAllRows
+--   :: (MonadIO m, PersistEntity record)
+--   => record -> ReaderT SqlBackend m ()
 deleteAllRows
-  :: (MonadIO m, PersistEntity record)
-  => record -> ReaderT SqlBackend m ()
-deleteAllRows entity = rawExecute ("delete from " <> tbName) []
+  :: (PersistEntityBackend record ~ BaseBackend backend
+     ,PersistEntity record
+     ,PersistQueryWrite backend
+     ,MonadIO m)
+  => record -> ReaderT backend m ()
+deleteAllRows entity = deleteWhere filts
   where
-    tbName = unDBName $ entityDB $ entityDef ent
+    filts = dummyFromFilts ent
     ent = Just entity
+
+dummyFromFilts :: Maybe v -> [Filter v]
+dummyFromFilts (Just _) = []
+dummyFromFilts Nothing = []
