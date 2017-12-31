@@ -34,7 +34,7 @@ import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Reader
 import Database.Persist
 
--- | Deletes all rows in a database. Issues \"DELETE FROM table_name\" command to the database.
+-- | Drops an existing table in a database. Issues \"DELETE FROM table_name\" command to the database.
 --
 -- @
 -- deleteUserRows :: MonadIO m => ReaderT SqlBackend m ()
