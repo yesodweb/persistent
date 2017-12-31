@@ -27,7 +27,7 @@
 -- > +-----+-----+-----+
 --
 module Database.Persist.RDBMS.Utils
-  ( deleteAllRows
+  ( dropTable
   ) where
 
 import Control.Monad.IO.Class (MonadIO)
@@ -38,19 +38,19 @@ import Database.Persist
 --
 -- @
 -- deleteUserRows :: MonadIO m => ReaderT SqlBackend m ()
--- deleteUserRows = deleteAllRows (undefined :: User)
+-- deleteUserRows = dropTable (undefined :: User)
 -- @
 --
--- deleteAllRows
+-- dropTable
 --   :: (MonadIO m, PersistEntity record)
 --   => record -> ReaderT SqlBackend m ()
-deleteAllRows
+dropTable
   :: (PersistEntityBackend record ~ BaseBackend backend
      ,PersistEntity record
      ,PersistQueryWrite backend
      ,MonadIO m)
   => record -> ReaderT backend m ()
-deleteAllRows entity = deleteWhere filts
+dropTable entity = deleteWhere filts
   where
     filts = dummyFromFilts ent
     ent = Just entity
