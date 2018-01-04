@@ -646,6 +646,7 @@ getColumns getter def = do
                           ,",column_default "
                           ,",numeric_precision "
                           ,",numeric_scale "
+                          ,",character_maximum_length "
                           ,"FROM information_schema.columns "
                           ,"WHERE table_catalog=current_database() "
                           ,"AND table_schema=current_schema() "
@@ -744,24 +745,27 @@ getAlters defs def (c1, u1) (c2, u2) =
 getColumn :: (Text -> IO Statement)
           -> DBName -> [PersistValue]
           -> IO (Either Text Column)
-getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, nscl] =
+getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, nscl, maxlen] =
     case d' of
         Left s -> return $ Left s
         Right d'' ->
-            case getType z of
-                Left s -> return $ Left s
-                Right t -> do
-                    let cname = DBName x
-                    ref <- getRef cname
-                    return $ Right Column
-                        { cName = cname
-                        , cNull = y == "YES"
-                        , cSqlType = t
-                        , cDefault = fmap stripSuffixes d''
-                        , cDefaultConstraintName = Nothing
-                        , cMaxLen = Nothing
-                        , cReference = ref
-                        }
+            let typeStr = case maxlen of
+                            PersistInt64 n -> T.concat [z, "(", T.pack (show n), ")"]
+                            _              -> z
+             in case getType typeStr of
+                  Left s -> return $ Left s
+                  Right t -> do
+                      let cname = DBName x
+                      ref <- getRef cname
+                      return $ Right Column
+                          { cName = cname
+                          , cNull = y == "YES"
+                          , cSqlType = t
+                          , cDefault = fmap stripSuffixes d''
+                          , cDefaultConstraintName = Nothing
+                          , cMaxLen = Nothing
+                          , cReference = ref
+                          }
   where
     stripSuffixes t =
         loop'

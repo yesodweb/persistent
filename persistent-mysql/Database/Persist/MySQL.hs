@@ -29,7 +29,7 @@ import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (runExceptT)
-import Control.Monad.Trans.Reader (runReaderT, ReaderT)
+import Control.Monad.Trans.Reader (runReaderT, ReaderT, withReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
 import Data.Either (partitionEithers)
 import Data.Monoid ((<>))
@@ -619,7 +619,7 @@ parseColumnType "tinyint" ci | ciColumnType ci == "tinyint(1)" = return (SqlBool
 parseColumnType "int" ci | ciColumnType ci == "int(11)"        = return (SqlInt32, Nothing)
 parseColumnType "bigint" ci | ciColumnType ci == "bigint(20)"  = return (SqlInt64, Nothing)
 -- Double
-parseColumnType "double" _                                     = return (SqlReal, Nothing)
+parseColumnType x@("double") ci | ciColumnType ci == x         = return (SqlReal, Nothing)
 parseColumnType "decimal" ci                                   =
   case (ciNumericPrecision ci, ciNumericScale ci) of
     (PersistInt64 p, PersistInt64 s) ->
@@ -629,13 +629,9 @@ parseColumnType "decimal" ci                                   =
 -- Text
 parseColumnType "varchar" ci                                   = return (SqlString, ciMaxLength ci)
 parseColumnType "text" _                                       = return (SqlString, Nothing)
-parseColumnType "mediumtext" _                                 = return (SqlString, Nothing)
-parseColumnType "longtext" _                                   = return (SqlString, Nothing)
 -- ByteString
 parseColumnType "varbinary" ci                                 = return (SqlBlob, ciMaxLength ci)
 parseColumnType "blob" _                                       = return (SqlBlob, Nothing)
-parseColumnType "mediumblob" _                                 = return (SqlBlob, Nothing)
-parseColumnType "longblob" _                                   = return (SqlBlob, Nothing)
 -- Time-related
 parseColumnType "time" _                                       = return (SqlTime, Nothing)
 parseColumnType "datetime" _                                   = return (SqlDayTime, Nothing)
@@ -1189,8 +1185,9 @@ insertManyOnDuplicateKeyUpdate
     -> ReaderT backend m ()
 insertManyOnDuplicateKeyUpdate [] _ _ = return ()
 insertManyOnDuplicateKeyUpdate records fieldValues updates =
-    uncurry rawExecute
-        $ mkBulkInsertQuery records fieldValues updates
+    withReaderT projectBackend
+    . uncurry rawExecute
+    $ mkBulkInsertQuery records fieldValues updates
 
 -- | This creates the query for 'bulkInsertOnDuplicateKeyUpdate'. If you
 -- provide an empty list of updates to perform, then it will generate

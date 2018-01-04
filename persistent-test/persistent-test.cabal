@@ -69,6 +69,7 @@ library
                      SumTypeTest
                      MigrationOnlyTest
                      MigrationTest
+                     MigrationIdempotencyTest
                      PersistUniqueTest
                      CompositeTest
                      Init
@@ -77,6 +78,7 @@ library
                      CustomPersistFieldTest
                      CustomPrimaryKeyReferenceTest
                      InsertDuplicateUpdate
+                     MigrationColumnLengthTest
 
     hs-source-dirs: src, test
 

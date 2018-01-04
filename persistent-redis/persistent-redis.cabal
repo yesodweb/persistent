@@ -1,5 +1,5 @@
 name:            persistent-redis
-version:         2.5.2
+version:         2.5.2.1
 license:         BSD3
 license-file:    LICENSE
 author:          Pavel Ryzhov <paul@paulrz.cz>
@@ -23,7 +23,7 @@ library
                    , persistent            >= 2.5      && < 3.0
                    , text                  >= 1.2.0.0
                    , aeson                 >= 0.8
-                   , time                  >= 1.4      && < 1.7
+                   , time                  >= 1.4      && < 1.9
                    , attoparsec            >= 0.12.0.0
                    , mtl                   >= 2.2.0    && < 2.3
                    , transformers          >= 0.4.0.0  && < 0.6.0.0

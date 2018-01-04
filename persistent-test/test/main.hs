@@ -21,6 +21,9 @@ import qualified RenameTest
 import qualified SumTypeTest
 import qualified InsertDuplicateUpdate
 import qualified UniqueTest
+-- #if defined(WITH_POSTGRESQL) || defined(WITH_MYSQL)
+import qualified MigrationColumnLengthTest
+-- #endif
 
 #ifndef WITH_NOSQL
 #  ifdef WITH_SQLITE
@@ -29,6 +32,10 @@ import Filesystem (removeFile)
 import Filesystem.Path.CurrentOS (fromText)
 import qualified MigrationTest
 #  endif
+#endif
+
+#ifdef WITH_MYSQL
+import qualified MigrationIdempotencyTest
 #endif
 
 
@@ -71,8 +78,10 @@ main = do
 #  endif
 #  ifdef WITH_MYSQL
       , InsertDuplicateUpdate.duplicateMigrate
+      , MigrationIdempotencyTest.migration
 #  endif
       , CustomPrimaryKeyReferenceTest.migration
+      , MigrationColumnLengthTest.migration
       ]
     PersistentTest.cleanDB
 #endif
@@ -97,7 +106,11 @@ main = do
     CustomPersistFieldTest.specs
     CustomPrimaryKeyReferenceTest.specs
     InsertDuplicateUpdate.specs
+    MigrationColumnLengthTest.specs
 
 #ifdef WITH_SQLITE
     MigrationTest.specs
+#endif
+#ifdef WITH_MYSQL
+    MigrationIdempotencyTest.specs
 #endif

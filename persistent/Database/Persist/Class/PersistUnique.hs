@@ -81,7 +81,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- * insert the new record if it does not exist;
     -- * If the record exists (matched via it's uniqueness constraint), then update the existing record with the parameters which is passed on as list to the function.
     --
-    -- Throws an exception if there is more than 1 uniqueness contraint.
+    -- Throws an exception if there is more than 1 uniqueness constraint.
     upsert
         :: (MonadIO m, PersistRecordBackend record backend)
         => record          -- ^ new record to insert
@@ -95,7 +95,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- | Update based on a given uniqueness constraint or insert:
     --
     -- * insert the new record if it does not exist;
-    -- * update the existing record that matches the given uniqueness contraint.
+    -- * update the existing record that matches the given uniqueness constraint.
     upsertBy
         :: (MonadIO m, PersistRecordBackend record backend)
         => Unique record   -- ^ uniqueness constraint to find by
