@@ -505,6 +505,9 @@ specs = describe "persistent" $ do
         Just (Entity _ v2) <- getBy $ UniqueUpsert "putMany2"
         Just (Entity _ v3) <- getBy $ UniqueUpsert "putMany3"
         [v1,v2,v3] @== vals
+        deleteBy $ UniqueUpsert "putMany1"
+        deleteBy $ UniqueUpsert "putMany2"
+        deleteBy $ UniqueUpsert "putMany3"
     it "handles conflicts by replacing old keys with new records" $ db $ do
         let mkUpsert1 e = Upsert e "new" "" 1
         let mkUpsert2 e = Upsert e "new" "" 2
@@ -522,6 +525,10 @@ specs = describe "persistent" $ do
                           ,(Entity k3 $ mkUpsert2 "putMany6")
                           ,(Entity k4 $ mkUpsert2 "putMany7")
                           ]
+        deleteBy $ UniqueUpsert "putMany4"
+        deleteBy $ UniqueUpsert "putMany5"
+        deleteBy $ UniqueUpsert "putMany6"
+        deleteBy $ UniqueUpsert "putMany7"
 
   describe "upsert" $ do
     it "adds a new row with no updates" $ db $ do
