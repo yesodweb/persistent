@@ -27,30 +27,26 @@
 -- > +-----+-----+-----+
 --
 module Database.Persist.RDBMS.Utils
-  ( dropTable
+  ( deleteTable
   ) where
 
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Reader
 import Database.Persist
 
--- | Drops an existing table in a database. Issues \"DELETE FROM table_name\" command to the database.
+-- | Removes all the rows in the existing table. Issues \"DELETE FROM table_name\" command to the database.
 --
 -- @
 -- deleteUserRows :: MonadIO m => ReaderT SqlBackend m ()
--- deleteUserRows = dropTable (undefined :: User)
+-- deleteUserRows = deleteTable (undefined :: User)
 -- @
---
--- dropTable
---   :: (MonadIO m, PersistEntity record)
---   => record -> ReaderT SqlBackend m ()
-dropTable
+deleteTable
   :: (PersistEntityBackend record ~ BaseBackend backend
      ,PersistEntity record
      ,PersistQueryWrite backend
      ,MonadIO m)
   => record -> ReaderT backend m ()
-dropTable entity = deleteWhere filts
+deleteTable entity = deleteWhere filts
   where
     filts = dummyFromFilts ent
     ent = Just entity
