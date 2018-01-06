@@ -8,6 +8,8 @@
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE Rank2Types #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_GHC -fno-warn-unused-imports #-}
+
 module Database.Persist.Sql.Orphan.PersistStore
   ( withRawQuery
   , BackendKey(..)
