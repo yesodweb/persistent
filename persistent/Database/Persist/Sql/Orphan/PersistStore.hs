@@ -29,7 +29,7 @@ import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import qualified Data.Text as T
 import Data.Text (Text, unpack)
-import Data.Monoid ((<>))
+import Data.Monoid (mappend, (<>))
 import Control.Monad.IO.Class
 import Data.ByteString.Char8 (readInteger)
 import Data.Maybe (isJust)
@@ -44,6 +44,7 @@ import qualified Data.Aeson as A
 import Control.Exception.Lifted (throwIO)
 import Database.Persist.Class ()
 import qualified Data.Map as Map
+import qualified Data.Foldable as Foldable
 
 withRawQuery :: MonadIO m
              => Text
@@ -324,7 +325,7 @@ instance PersistStoreRead SqlBackend where
                 = case parseEntityValues t vals of
                     Left s -> liftIO $ throwIO $ PersistMarshalError s
                     Right row -> return row
-        withRawQuery sql (foldMap keyToValues ks) $ do
+        withRawQuery sql (Foldable.foldMap keyToValues ks) $ do
             es <- CL.mapM parse C.=$= CL.consume
             return $ Map.fromList $ fmap (\e -> (entityKey e, entityVal e)) es
 
@@ -362,7 +363,7 @@ insrepHelper command es = do
         , T.intercalate "),(" $ replicate (length es) $ T.intercalate "," $ map (const "?") columnNames
         , ")"
         ]
-    vals = foldMap entityValues es
+    vals = Foldable.foldMap entityValues es
 
 runChunked
     :: (Monad m)
