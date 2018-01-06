@@ -29,7 +29,7 @@ import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import qualified Data.Text as T
 import Data.Text (Text, unpack)
-import Data.Monoid (mappend, (<>))
+import Data.Monoid ((<>))
 import Control.Monad.IO.Class
 import Data.ByteString.Char8 (readInteger)
 import Data.Maybe (isJust)
