@@ -17,6 +17,7 @@ import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
 import Database.Persist.Sql.Util (dbColumns, parseEntityValues, updatePersistValue, mkUpdateText')
 import qualified Data.Text as T
+import Data.Monoid (mappend)
 import qualified Data.Conduit.List as CL
 import Control.Monad.Trans.Reader (ask, withReaderT)
 import Data.List (nubBy, reverse)

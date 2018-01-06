@@ -44,8 +44,6 @@ import qualified Data.Aeson as A
 import Control.Exception.Lifted (throwIO)
 import Database.Persist.Class ()
 import qualified Data.Map as Map
-import Data.Monoid (mempty)
-import Data.Foldable (foldMap)
 
 withRawQuery :: MonadIO m
              => Text
@@ -308,7 +306,7 @@ instance PersistStoreRead SqlBackend where
         return $ Map.lookup k mEs
 
     -- inspired by Database.Persist.Sql.Orphan.PersistQuery.selectSourceRes
-    getMany []      = return mempty
+    getMany []      = return Map.empty
     getMany ks@(k:_)= do
         conn <- ask
         let t = entityDef . dummyFromKey $ k
