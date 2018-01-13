@@ -12,7 +12,7 @@ import Control.Exception (throwIO)
 import Control.Monad.IO.Class (liftIO, MonadIO)
 import Control.Monad.Trans.Reader (ReaderT)
 import Database.Persist
-import Database.Persist.Class.PersistUnique (defaultPutMany, recordEssence)
+import Database.Persist.Class.PersistUnique (defaultPutMany, persistUniqueKeyValues)
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
@@ -75,7 +75,7 @@ instance PersistUniqueWrite SqlBackend where
     putMany [] = return ()
     putMany rsD = do
         conn <- ask
-        let rs = nubBy ((==) `on` recordEssence) (reverse rsD)
+        let rs = nubBy ((==) `on` persistUniqueKeyValues) (reverse rsD)
         let ent = entityDef rs
         let nr  = length rs
         let toVals r = (map toPersistValue $ toPersistFields r)
