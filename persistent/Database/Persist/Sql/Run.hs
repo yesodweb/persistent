@@ -15,7 +15,7 @@ import Control.Exception (onException, bracket)
 import Control.Monad.IO.Unlift
 import Control.Exception (mask)
 import System.Timeout (timeout)
-import Data.IORef (readIORef, writeIORef, newIORef)
+import Data.IORef (readIORef)
 import qualified Data.Map as Map
 import Control.Monad (liftM)
 

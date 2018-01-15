@@ -28,7 +28,7 @@ import Control.Monad.Logger (LogSource, LogLevel)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, ask)
 import Data.Acquire (Acquire)
-import Data.Conduit (Source)
+import Data.Conduit (ConduitM)
 import Data.Int (Int64)
 import Data.IORef (IORef)
 import Data.Map (Map)
@@ -57,7 +57,7 @@ data Statement = Statement
     , stmtExecute :: [PersistValue] -> IO Int64
     , stmtQuery :: forall m. MonadIO m
                 => [PersistValue]
-                -> Acquire (Source m [PersistValue])
+                -> Acquire (ConduitM () [PersistValue] m ())
     }
 
 data SqlBackend = SqlBackend

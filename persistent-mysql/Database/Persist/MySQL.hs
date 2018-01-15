@@ -68,7 +68,6 @@ import qualified Database.MySQL.Simple.Types  as MySQL
 import qualified Database.MySQL.Base          as MySQLBase
 import qualified Database.MySQL.Base.Types    as MySQLBase
 import Control.Monad.IO.Unlift (MonadUnliftIO)
-import Control.Monad.Trans.Resource (runResourceT)
 
 import Prelude
 
@@ -178,7 +177,7 @@ withStmt' :: MonadIO m
           => MySQL.Connection
           -> MySQL.Query
           -> [PersistValue]
-          -> Acquire (Source m [PersistValue])
+          -> Acquire (ConduitM () [PersistValue] m ())
 withStmt' conn query vals = do
     result <- mkAcquire createResult MySQLBase.freeResult
     return $ fetchRows result >>= CL.sourceList
@@ -473,8 +472,8 @@ getColumns connectInfo getter def = do
                           \WHERE TABLE_SCHEMA = ? \
                             \AND TABLE_NAME   = ? \
                             \AND COLUMN_NAME  = ?"
-    inter1 <- with (stmtQuery stmtIdClmn vals) ($$ CL.consume)
-    ids <- runResourceT $ CL.sourceList inter1 $$ helperClmns -- avoid nested queries
+    inter1 <- with (stmtQuery stmtIdClmn vals) (\src -> runConduit $ src .| CL.consume)
+    ids <- runConduitRes $ CL.sourceList inter1 .| helperClmns -- avoid nested queries
 
     -- Find out all columns.
     stmtClmns <- getter "SELECT COLUMN_NAME, \
@@ -489,8 +488,8 @@ getColumns connectInfo getter def = do
                         \WHERE TABLE_SCHEMA = ? \
                           \AND TABLE_NAME   = ? \
                           \AND COLUMN_NAME <> ?"
-    inter2 <- with (stmtQuery stmtClmns vals) ($$ CL.consume)
-    cs <- runResourceT $ CL.sourceList inter2 $$ helperClmns -- avoid nested queries
+    inter2 <- with (stmtQuery stmtClmns vals) (\src -> runConduit $ src .| CL.consume)
+    cs <- runConduitRes $ CL.sourceList inter2 .| helperClmns -- avoid nested queries
 
     -- Find out the constraints.
     stmtCntrs <- getter "SELECT CONSTRAINT_NAME, \
@@ -503,7 +502,7 @@ getColumns connectInfo getter def = do
                           \AND REFERENCED_TABLE_SCHEMA IS NULL \
                         \ORDER BY CONSTRAINT_NAME, \
                                  \COLUMN_NAME"
-    us <- with (stmtQuery stmtCntrs vals) ($$ helperCntrs)
+    us <- with (stmtQuery stmtCntrs vals) (\src -> runConduit $ src .| helperCntrs)
 
     -- Return both
     return (ids, cs ++ us)
@@ -512,7 +511,7 @@ getColumns connectInfo getter def = do
            , PersistText $ unDBName $ entityDB def
            , PersistText $ unDBName $ fieldDB $ entityId def ]
 
-    helperClmns = CL.mapM getIt =$ CL.consume
+    helperClmns = CL.mapM getIt .| CL.consume
         where
           getIt = fmap (either Left (Right . Left)) .
                   liftIO .
@@ -570,7 +569,7 @@ getColumn connectInfo getter tname [ PersistText cname
                  , PersistText $ unDBName $ tname
                  , PersistText cname
                  , PersistText $ pack $ MySQL.connectDatabase connectInfo ]
-      cntrs <- liftIO $ with (stmtQuery stmt vars) ($$ CL.consume)
+      cntrs <- liftIO $ with (stmtQuery stmt vars) (\src -> runConduit $ src .| CL.consume)
       ref <- case cntrs of
                [] -> return Nothing
                [[PersistText tab, PersistText ref, PersistInt64 pos]] ->

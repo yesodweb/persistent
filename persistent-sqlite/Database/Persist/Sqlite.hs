@@ -259,7 +259,7 @@ withStmt'
           => Sqlite.Connection
           -> Sqlite.Statement
           -> [PersistValue]
-          -> Acquire (Source m [PersistValue])
+          -> Acquire (ConduitM () [PersistValue] m ())
 withStmt' conn stmt vals = do
     _ <- mkAcquire
         (Sqlite.bind stmt vals >> return stmt)
@@ -296,7 +296,8 @@ migrate' allDefs getter val = do
     let (cols, uniqs, _) = mkColumns allDefs val
     let newSql = mkCreateTable False def (filter (not . safeToRemove val . cName) cols, uniqs)
     stmt <- getter "SELECT sql FROM sqlite_master WHERE type='table' AND name=?"
-    oldSql' <- with (stmtQuery stmt [PersistText $ unDBName table]) ($$ go)
+    oldSql' <- with (stmtQuery stmt [PersistText $ unDBName table])
+      (\src -> runConduit $ src .| go)
     case oldSql' of
         Nothing -> return $ Right [(False, newSql)]
         Just oldSql -> do
@@ -369,7 +370,7 @@ getCopyTable :: [EntityDef]
              -> IO [(Bool, Text)]
 getCopyTable allDefs getter def = do
     stmt <- getter $ T.concat [ "PRAGMA table_info(", escape table, ")" ]
-    oldCols' <- with (stmtQuery stmt []) ($$ getCols)
+    oldCols' <- with (stmtQuery stmt []) (\src -> runConduit $ src .| getCols)
     let oldCols = map DBName $ filter (/= "id") oldCols' -- need to update for table id attribute ?
     let newCols = filter (not . safeToRemove def) $ map cName cols
     let common = filter (`elem` oldCols) newCols

@@ -29,7 +29,7 @@ library
                    , old-locale
                    , text                     >= 0.8
                    , containers               >= 0.2
-                   , conduit                  >= 1.0
+                   , conduit                  >= 1.2.8
                    , resourcet                >= 1.1
                    , resource-pool            >= 0.2.2.0
                    , path-pieces              >= 0.1

@@ -27,7 +27,7 @@ library
                    , blaze-builder
                    , time                  >= 1.1
                    , aeson                 >= 0.6.2
-                   , conduit               >= 0.5.3
+                   , conduit               >= 1.2.8
                    , resourcet             >= 1.1
                    , monad-logger          >= 0.3.4
                    , resource-pool

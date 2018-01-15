@@ -9,7 +9,7 @@ import Database.Persist.Class.PersistStore
 import Database.Persist.Class.PersistQuery
 import Database.Persist.Class.PersistEntity
 
-import qualified Data.Conduit as C
+import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (ReaderT, ask, runReaderT)
@@ -31,4 +31,4 @@ deleteCascadeWhere :: (MonadIO m, DeleteCascade record backend, PersistQueryWrit
 deleteCascadeWhere filts = do
     srcRes <- selectKeysRes filts []
     conn <- ask
-    liftIO $ with srcRes (C.$$ CL.mapM_ (flip runReaderT conn . deleteCascade))
+    liftIO $ with srcRes (\src -> runConduit $ src .| CL.mapM_ (flip runReaderT conn . deleteCascade))

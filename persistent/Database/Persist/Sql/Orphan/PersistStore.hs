@@ -23,7 +23,7 @@ import Database.Persist
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Util (dbIdColumns, keyAndEntityColumnNames)
-import qualified Data.Conduit as C
+import Data.Conduit
 import qualified Data.Conduit.List as CL
 import qualified Data.Text as T
 import Data.Text (Text, unpack)
@@ -45,11 +45,11 @@ import Database.Persist.Class ()
 withRawQuery :: MonadIO m
              => Text
              -> [PersistValue]
-             -> C.Sink [PersistValue] IO a
+             -> ConduitT [PersistValue] Void IO a
              -> ReaderT SqlBackend m a
 withRawQuery sql vals sink = do
     srcRes <- rawQueryRes sql vals
-    liftIO $ with srcRes (C.$$ sink)
+    liftIO $ with srcRes (\src -> runConduit $ src .| sink)
 
 toSqlKey :: ToBackendKey SqlBackend record => Int64 -> Key record
 toSqlKey = fromBackendKey . SqlBackendKey

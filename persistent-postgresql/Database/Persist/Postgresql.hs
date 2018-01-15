@@ -338,7 +338,7 @@ withStmt' :: MonadIO m
           => PG.Connection
           -> PG.Query
           -> [PersistValue]
-          -> Acquire (Source m [PersistValue])
+          -> Acquire (ConduitM () [PersistValue] m ())
 withStmt' conn query vals =
     pull `fmap` mkAcquire openS closeS
   where
@@ -528,7 +528,7 @@ doesTableExist :: (Text -> IO Statement)
                -> IO Bool
 doesTableExist getter (DBName name) = do
     stmt <- getter sql
-    with (stmtQuery stmt vals) ($$ start)
+    with (stmtQuery stmt vals) (\src -> runConduit $ src .| start)
   where
     sql = "SELECT COUNT(*) FROM pg_catalog.pg_tables WHERE schemaname != 'pg_catalog'"
           <> " AND schemaname != 'information_schema' AND tablename=?"
@@ -656,7 +656,7 @@ getColumns getter def = do
             [ PersistText $ unDBName $ entityDB def
             , PersistText $ unDBName $ fieldDB (entityId def)
             ]
-    cs <- with (stmtQuery stmt vals) ($$ helper)
+    cs <- with (stmtQuery stmt vals) (\src -> runConduit $ src .| helper)
     let sqlc = T.concat ["SELECT "
                           ,"c.constraint_name, "
                           ,"c.column_name "
@@ -675,7 +675,7 @@ getColumns getter def = do
 
     stmt' <- getter sqlc
 
-    us <- with (stmtQuery stmt' vals) ($$ helperU)
+    us <- with (stmtQuery stmt' vals) (\src -> runConduit $ src .| helperU)
     return $ cs ++ us
   where
     getAll front = do
@@ -791,7 +791,7 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, ns
         with (stmtQuery stmt
                      [ PersistText $ unDBName tname
                      , PersistText $ unDBName ref
-                     ]) ($$ do
+                     ]) (\src -> runConduit $ src .| do
             Just [PersistInt64 i] <- CL.head
             return $ if i == 0 then Nothing else Just (DBName "", ref))
     d' = case d of

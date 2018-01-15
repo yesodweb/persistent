@@ -33,7 +33,7 @@ library
                    , containers              >= 0.2
                    , text                    >= 0.7
                    , aeson                   >= 0.6.2
-                   , conduit                 >= 0.5.3
+                   , conduit                 >= 1.2.8
                    , monad-logger            >= 0.2.4
                    , microlens-th            >= 0.4.1.1
                    , resourcet               >= 1.1

@@ -57,7 +57,7 @@ instance PersistQueryRead SqlBackend where
     selectSourceRes filts opts = do
         conn <- ask
         srcRes <- rawQueryRes (sql conn) (getFiltsValues conn filts)
-        return $ fmap ($= CL.mapM parse) srcRes
+        return $ fmap (.| CL.mapM parse) srcRes
       where
         (limit, offset, orders) = limitOffsetOrder opts
 
@@ -85,7 +85,7 @@ instance PersistQueryRead SqlBackend where
     selectKeysRes filts opts = do
         conn <- ask
         srcRes <- rawQueryRes (sql conn) (getFiltsValues conn filts)
-        return $ fmap ($= CL.mapM parse) srcRes
+        return $ fmap (.| CL.mapM parse) srcRes
       where
         t = entityDef $ dummyFromFilts filts
         cols conn = T.intercalate "," $ dbIdColumns conn t
