@@ -8,3 +8,5 @@ packages:
   - ./persistent-mysql
   - ./persistent-postgresql
   - ./persistent-redis
+extra-deps:
+- monad-logger-0.3.28
