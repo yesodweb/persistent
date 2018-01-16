@@ -79,6 +79,7 @@ library
                      CustomPrimaryKeyReferenceTest
                      InsertDuplicateUpdate
                      MigrationColumnLengthTest
+                     EquivalentTypeTest
 
     hs-source-dirs: src, test
 

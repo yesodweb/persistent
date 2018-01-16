@@ -225,7 +225,7 @@ persistSettings = sqlSettings { mpsGeneric = True }
 type BackendMonad = SqlBackend
 #  ifdef WITH_SQLITE
 sqlite_database_file :: Text
-sqlite_database_file = "test/testdb.sqlite3"
+sqlite_database_file = "testdb.sqlite3"
 sqlite_database :: SqliteConnectionInfo
 sqlite_database = mkSqliteConnectionInfo sqlite_database_file
 #  else

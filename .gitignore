@@ -11,7 +11,7 @@ TAGS
 
 ## databases
 test.db3
-persistent-test/test/testdb.sqlite3
+*.sqlite3
 
 # ?
 tarballs/
@@ -41,3 +41,6 @@ persistent-test/db/
 # docker image with a mounted file system
 /x86_64-linux-ghc-7.8.3-packages.conf.d/
 /packages/
+
+# macOS
+.DS_Store
