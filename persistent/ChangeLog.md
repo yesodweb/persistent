@@ -1,6 +1,7 @@
 ## 2.8.0
 
 * Switch from `MonadBaseControl` to `MonadUnliftIO`
+* Reapplies [#723](https://github.com/yesodweb/persistent/pull/723), which was reverted in version 2.7.3.
 
 ## 2.7.3
 

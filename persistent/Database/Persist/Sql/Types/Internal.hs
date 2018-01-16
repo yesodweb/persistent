@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -39,6 +40,7 @@ import Database.Persist.Class
   , PersistQueryRead, PersistQueryWrite
   , PersistStoreRead, PersistStoreWrite
   , PersistUniqueRead, PersistUniqueWrite
+  , BackendCompatible(..)
   )
 import Database.Persist.Class.PersistStore (IsPersistBackend (..))
 import Database.Persist.Types
@@ -130,7 +132,7 @@ readToUnknown ma = do
 
 -- | A constraint synonym which witnesses that a backend is SQL and can run read queries.
 type SqlBackendCanRead backend =
-  ( IsSqlBackend backend
+  ( BackendCompatible SqlBackend backend
   , PersistQueryRead backend, PersistStoreRead backend, PersistUniqueRead backend
   )
 -- | A constraint synonym which witnesses that a backend is SQL and can run read and write queries.

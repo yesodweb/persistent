@@ -39,7 +39,7 @@ import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (runExceptT)
-import Control.Monad.Trans.Reader (runReaderT, ReaderT, withReaderT)
+import Control.Monad.Trans.Reader (runReaderT, ReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
 import Data.Either (partitionEithers)
 import Data.Monoid ((<>))
@@ -1220,8 +1220,7 @@ insertManyOnDuplicateKeyUpdate
     -> ReaderT backend m ()
 insertManyOnDuplicateKeyUpdate [] _ _ = return ()
 insertManyOnDuplicateKeyUpdate records fieldValues updates =
-    withReaderT projectBackend
-    . uncurry rawExecute
+    uncurry rawExecute
     $ mkBulkInsertQuery records fieldValues updates
 
 -- | This creates the query for 'bulkInsertOnDuplicateKeyUpdate'. If you

@@ -25,6 +25,7 @@ import System.IO.Silently (hSilence)
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
 import Database.Persist.Types
+import Database.Persist.Sql.Orphan.PersistStore()
 
 allSql :: CautiousMigration -> [Sql]
 allSql = map snd
