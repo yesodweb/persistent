@@ -1,4 +1,8 @@
-## 2.7.3 
+## 2.8.0
+
+* Switch from `MonadBaseControl` to `MonadUnliftIO`
+
+## 2.7.3
 
 * Reverts [#723](https://github.com/yesodweb/persistent/pull/723), which generalized functions using the `BackendCompatible` class. These changes were an accidental breaking change.
 * Recommend the `PersistDbSpecific` docs if someone gets an error about converting from `PersistDbSpecific`
