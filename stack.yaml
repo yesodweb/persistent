@@ -10,3 +10,4 @@ packages:
   - ./persistent-redis
 extra-deps:
 - monad-logger-0.3.28
+- mysql-simple-0.4.4
