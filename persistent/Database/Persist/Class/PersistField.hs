@@ -43,9 +43,6 @@ import qualified Data.ByteString.Lazy as L
 
 import Control.Monad ((<=<))
 
-import qualified Data.Text.Encoding as T
-import qualified Data.Text.Encoding.Error as T
-
 import qualified Data.Aeson as A
 
 import qualified Data.Set as S
@@ -53,6 +50,7 @@ import qualified Data.Map as M
 import qualified Data.IntMap as IM
 
 import qualified Data.Text.Encoding as TE
+import qualified Data.Text.Encoding.Error as TERR
 import qualified Data.Vector as V
 
 #if MIN_VERSION_time(1,5,0)
@@ -79,7 +77,7 @@ instance PersistField [Char] where
     toPersistValue = PersistText . T.pack
     fromPersistValue (PersistText s) = Right $ T.unpack s
     fromPersistValue (PersistByteString bs) =
-        Right $ T.unpack $ T.decodeUtf8With T.lenientDecode bs
+        Right $ T.unpack $ TE.decodeUtf8With TERR.lenientDecode bs
     fromPersistValue (PersistInt64 i) = Right $ Prelude.show i
     fromPersistValue (PersistDouble d) = Right $ Prelude.show d
     fromPersistValue (PersistRational r) = Right $ Prelude.show r
@@ -97,7 +95,7 @@ instance PersistField [Char] where
 instance PersistField ByteString where
     toPersistValue = PersistByteString
     fromPersistValue (PersistByteString bs) = Right bs
-    fromPersistValue x = T.encodeUtf8 A.<$> fromPersistValue x
+    fromPersistValue x = TE.encodeUtf8 A.<$> fromPersistValue x
 
 instance PersistField T.Text where
     toPersistValue = PersistText
@@ -115,7 +113,7 @@ instance PersistField Int where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i)  = Right $ fromIntegral i
     fromPersistValue (PersistDouble i) = Right (truncate i :: Int) -- oracle
-    fromPersistValue x = Left $ T.pack $ "int Expected Integer, received: " ++ show x
+    fromPersistValue x = Left $ fromPersistValueError "Int" "integer" x
 
 instance PersistField Int8 where
     toPersistValue = PersistInt64 . fromIntegral
@@ -123,8 +121,9 @@ instance PersistField Int8 where
     fromPersistValue (PersistDouble i) = Right (truncate i :: Int8) -- oracle
     fromPersistValue (PersistByteString bs) = case readInt bs of  -- oracle
                                                Just (i,"") -> Right $ fromIntegral i
-                                               xs -> error $ "PersistField Int8 failed parsing PersistByteString xs["++show xs++"] i["++show bs++"]"
-    fromPersistValue x = Left $ T.pack $ "int8 Expected Integer, received: " ++ show x
+                                               Just (i,extra) -> Left $ extraInputError "Int64" bs i extra
+                                               Nothing -> Left $ intParseError "Int64" bs
+    fromPersistValue x = Left $ fromPersistValueError "Int8" "integer" x
 
 instance PersistField Int16 where
     toPersistValue = PersistInt64 . fromIntegral
@@ -132,8 +131,9 @@ instance PersistField Int16 where
     fromPersistValue (PersistDouble i) = Right (truncate i :: Int16) -- oracle
     fromPersistValue (PersistByteString bs) = case readInt bs of  -- oracle
                                                Just (i,"") -> Right $ fromIntegral i
-                                               xs -> error $ "PersistField Int16 failed parsing PersistByteString xs["++show xs++"] i["++show bs++"]"
-    fromPersistValue x = Left $ T.pack $ "int16 Expected Integer, received: " ++ show x
+                                               Just (i,extra) -> Left $ extraInputError "Int64" bs i extra
+                                               Nothing -> Left $ intParseError "Int64" bs
+    fromPersistValue x = Left $ fromPersistValueError "Int16" "integer" x
 
 instance PersistField Int32 where
     toPersistValue = PersistInt64 . fromIntegral
@@ -141,8 +141,9 @@ instance PersistField Int32 where
     fromPersistValue (PersistDouble i) = Right (truncate i :: Int32) -- oracle
     fromPersistValue (PersistByteString bs) = case readInt bs of  -- oracle
                                                Just (i,"") -> Right $ fromIntegral i
-                                               xs -> error $ "PersistField Int32 failed parsing PersistByteString xs["++show xs++"] i["++show bs++"]"
-    fromPersistValue x = Left $ T.pack $ "int32 Expected Integer, received: " ++ show x
+                                               Just (i,extra) -> Left $ extraInputError "Int64" bs i extra
+                                               Nothing -> Left $ intParseError "Int64" bs
+    fromPersistValue x = Left $ fromPersistValueError "Int32" "integer" x
 
 instance PersistField Int64 where
     toPersistValue = PersistInt64 . fromIntegral
@@ -150,40 +151,68 @@ instance PersistField Int64 where
     fromPersistValue (PersistDouble i) = Right (truncate i :: Int64) -- oracle
     fromPersistValue (PersistByteString bs) = case readInt bs of  -- oracle
                                                Just (i,"") -> Right $ fromIntegral i
-                                               xs -> error $ "PersistField Int64 failed parsing PersistByteString xs["++show xs++"] i["++show bs++"]"
-    fromPersistValue x = Left $ T.pack $ "int64 Expected Integer, received: " ++ show x
+                                               Just (i,extra) -> Left $ extraInputError "Int64" bs i extra
+                                               Nothing -> Left $ intParseError "Int64" bs
+    fromPersistValue x = Left $ fromPersistValueError "Int64" "integer" x
+
+extraInputError :: (Show result)
+                => Text -- ^ Haskell type
+                -> ByteString -- ^ Original bytestring
+                -> result -- ^ Integer result
+                -> ByteString -- ^  Extra bytestring
+                -> Text -- ^ Error message
+extraInputError haskellType original result extra = T.concat
+    [ "Parsed "
+    , TE.decodeUtf8 original
+    , " into Haskell type `"
+    , haskellType
+    , "` with value"
+    , T.pack $ show result
+    , "but had extra input: "
+    , TE.decodeUtf8 extra
+    ]
+
+intParseError :: Text -- ^ Haskell type
+              -> ByteString -- ^ Original bytestring
+              -> Text -- ^ Error message
+intParseError haskellType original = T.concat
+    [ "Failed to parse Haskell type `"
+    , haskellType
+    , " from "
+    , TE.decodeUtf8 original
+    ]
 
 instance PersistField Data.Word.Word where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-    fromPersistValue x = Left $ T.pack $ "Expected Word, received: " ++ show x
+    fromPersistValue x = Left $ fromPersistValueError "Word" "integer" x
 
 instance PersistField Word8 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-    fromPersistValue x = Left $ T.pack $ "Expected Word, received: " ++ show x
+    fromPersistValue x = Left $ fromPersistValueError "Word8" "integer" x
 
 instance PersistField Word16 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-    fromPersistValue x = Left $ T.pack $ "Expected Word, received: " ++ show x
+    fromPersistValue x = Left $ fromPersistValueError "Word16" "integer" x
 
 instance PersistField Word32 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-    fromPersistValue x = Left $ T.pack $ "Expected Word, received: " ++ show x
+    fromPersistValue x = Left $ fromPersistValueError "Word32" "integer" x
 
 instance PersistField Word64 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-    fromPersistValue x = Left $ T.pack $ "Expected Word, received: " ++ show x
+    fromPersistValue x = Left $ fromPersistValueError "Word64" "integer" x
 
 instance PersistField Double where
     toPersistValue = PersistDouble
     fromPersistValue (PersistDouble d) = Right d
     fromPersistValue (PersistRational r) = Right $ fromRational r
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-    fromPersistValue x = Left $ T.pack $ "Expected Double, received: " ++ show x
+    fromPersistValue x = Left $ fromPersistValueError "Double" "double, rational, or integer" x
 
 instance (HasResolution a) => PersistField (Fixed a) where
     toPersistValue = PersistRational . toRational
@@ -193,7 +222,7 @@ instance (HasResolution a) => PersistField (Fixed a) where
       _ -> Left $ "Can not read " <> t <> " as Fixed"
     fromPersistValue (PersistDouble d) = Right $ realToFrac d
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-    fromPersistValue x = Left $ "PersistField Fixed:Expected Rational, received: " <> T.pack (show x)
+    fromPersistValue x = Left $ fromPersistValueError "Fixed" "rational, string, double, or integer" x
 
 instance PersistField Rational where
     toPersistValue = PersistRational
@@ -203,11 +232,11 @@ instance PersistField Rational where
       [(a, "")] -> Right $ toRational (a :: Pico)
       _ -> Left $ "Can not read " <> t <> " as Rational (Pico in fact)"
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
-    fromPersistValue (PersistByteString bs) = case double $ T.cons '0' $ T.decodeUtf8With T.lenientDecode bs of
+    fromPersistValue (PersistByteString bs) = case double $ T.cons '0' $ TE.decodeUtf8With TERR.lenientDecode bs of
                                                 Right (ret,"") -> Right $ toRational ret
                                                 Right (a,b) -> Left $ "Invalid bytestring[" <> T.pack (show bs) <> "]: expected a double but returned " <> T.pack (show (a,b))
                                                 Left xs -> Left $ "Invalid bytestring[" <> T.pack (show bs) <> "]: expected a double but returned " <> T.pack (show xs)
-    fromPersistValue x = Left $ "PersistField Rational:Expected Rational, received: " <> T.pack (show x)
+    fromPersistValue x = Left $ fromPersistValueError "Rational" "rational, double, string, integer, or bytestring" x
 
 instance PersistField Bool where
     toPersistValue = PersistBool
@@ -216,8 +245,8 @@ instance PersistField Bool where
     fromPersistValue (PersistByteString i) = case readInt i of
                                                Just (0,"") -> Right False
                                                Just (1,"") -> Right True
-                                               xs -> error $ "PersistField Bool failed parsing PersistByteString xs["++show xs++"] i["++show i++"]"
-    fromPersistValue x = Left $ T.pack $ "Expected Bool, received: " ++ show x
+                                               xs -> Left $ T.pack $ "Failed to parse Haskell type `Bool` from PersistByteString. Original value:" ++ show i ++ ". Parsed by `readInt` as " ++ (show xs) ++ ". Expected '1'."
+    fromPersistValue x = Left $ fromPersistValueError "Bool" "boolean, integer, or bytestring of '1' or '0'" x
 
 instance PersistField Day where
     toPersistValue = PersistDay
@@ -226,12 +255,12 @@ instance PersistField Day where
     fromPersistValue x@(PersistText t) =
         case reads $ T.unpack t of
             (d, _):_ -> Right d
-            _ -> Left $ T.pack $ "Expected Day, received " ++ show x
+            _ -> Left $ fromPersistValueParseError "Day" x
     fromPersistValue x@(PersistByteString s) =
         case reads $ unpack s of
             (d, _):_ -> Right d
-            _ -> Left $ T.pack $ "Expected Day, received " ++ show x
-    fromPersistValue x = Left $ T.pack $ "Expected Day, received: " ++ show x
+            _ -> Left $ fromPersistValueParseError "Day" x
+    fromPersistValue x = Left $ fromPersistValueError "Day" "day, integer, string or bytestring" x
 
 instance PersistField TimeOfDay where
     toPersistValue = PersistTimeOfDay
@@ -239,12 +268,12 @@ instance PersistField TimeOfDay where
     fromPersistValue x@(PersistText t) =
         case reads $ T.unpack t of
             (d, _):_ -> Right d
-            _ -> Left $ T.pack $ "Expected TimeOfDay, received " ++ show x
+            _ -> Left $ fromPersistValueParseError "TimeOfDay" x
     fromPersistValue x@(PersistByteString s) =
         case reads $ unpack s of
             (d, _):_ -> Right d
-            _ -> Left $ T.pack $ "Expected TimeOfDay, received " ++ show x
-    fromPersistValue x = Left $ T.pack $ "Expected TimeOfDay, received: " ++ show x
+            _ -> Left $ fromPersistValueParseError "TimeOfDay" x
+    fromPersistValue x = Left $ fromPersistValueError "TimeOfDay" "time, string, or bytestring" x
 
 instance PersistField UTCTime where
     toPersistValue = PersistUTCTime
@@ -257,7 +286,7 @@ instance PersistField UTCTime where
             (d, _):_ -> Right d
             _ ->
                 case parse8601 $ T.unpack t of
-                    Nothing -> Left $ T.pack $ "Expected UTCTime, received " ++ show x
+                    Nothing -> Left $ fromPersistValueParseError "UTCTime" x
                     Just x' -> Right x'
       where
 #if MIN_VERSION_time(1,5,0)
@@ -268,14 +297,16 @@ instance PersistField UTCTime where
     fromPersistValue x@(PersistByteString s) =
         case reads $ unpack s of
             (d, _):_ -> Right d
-            _ -> Left $ T.pack $ "Expected UTCTime, received " ++ show x
+            _ -> Left $ fromPersistValueParseError "UTCTime" x
 
-    fromPersistValue x = Left $ T.pack $ "Expected UTCTime, received: " ++ show x
+    fromPersistValue x = Left $ fromPersistValueError "UTCTime" "time, integer, string, or bytestring" x
 
 #if MIN_VERSION_base(4,8,0)
 instance PersistField Natural where
   toPersistValue = (toPersistValue :: Int64 -> PersistValue) . fromIntegral
-  fromPersistValue x = fromIntegral <$> (fromPersistValue x :: Either Text Int64)
+  fromPersistValue x = case (fromPersistValue x :: Either Text Int64) of
+    Left err -> Left $ T.replace "Int64" "Natural" err
+    Right int -> Right $ fromIntegral int -- TODO use bimap?
 #endif
 
 instance PersistField a => PersistField (Maybe a) where
@@ -297,11 +328,11 @@ instance PersistField a => PersistField [a] where
     -- avoid the need for a migration to fill in empty lists.
     -- also useful when Persistent is not the only one filling in the data
     fromPersistValue (PersistNull) = Right []
-    fromPersistValue x = Left $ T.pack $ "Expected PersistList, received: " ++ show x
+    fromPersistValue x = Left $ fromPersistValueError "List" "list, string, bytestring or null" x
 
 instance PersistField a => PersistField (V.Vector a) where
   toPersistValue = toPersistValue . V.toList
-  fromPersistValue = either (\e -> Left ("Vector: " `T.append` e))
+  fromPersistValue = either (\e -> Left ("Failed to parse Haskell type `Vector`: " `T.append` e))
                             (Right . V.fromList) . fromPersistValue
 
 instance (Ord a, PersistField a) => PersistField (S.Set a) where
@@ -313,7 +344,7 @@ instance (Ord a, PersistField a) => PersistField (S.Set a) where
         | Just values <- A.decode' (L.fromChunks [bs]) =
             S.fromList <$> fromPersistList values
     fromPersistValue PersistNull = Right S.empty
-    fromPersistValue x = Left $ T.pack $ "Expected PersistSet, received: " ++ show x
+    fromPersistValue x = Left $ fromPersistValueError "Set" "list, string, bytestring or null" x
 
 instance (PersistField a, PersistField b) => PersistField (a,b) where
     toPersistValue (x,y) = PersistList [toPersistValue x, toPersistValue y]
@@ -358,7 +389,7 @@ getPersistMap (PersistText t)  = getPersistMap (PersistByteString $ TE.encodeUtf
 getPersistMap (PersistByteString bs)
     | Just pairs <- A.decode' (L.fromChunks [bs]) = Right pairs
 getPersistMap PersistNull = Right []
-getPersistMap x = Left $ T.pack $ "Expected PersistMap, received: " ++ show x
+getPersistMap x = Left $ fromPersistValueError "[(Text, PersistValue)]" "map, string, bytestring or null" x
 
 data SomePersistField = forall a. PersistField a => SomePersistField a
 instance PersistField SomePersistField where
@@ -372,10 +403,36 @@ instance PersistField Checkmark where
     fromPersistValue (PersistBool True)  = Right Active
     fromPersistValue (PersistInt64 1)    = Right Active
     fromPersistValue (PersistByteString i) = case readInt i of
-                                               Just (0,"") -> Left $ T.pack "PersistField Checkmark: found unexpected 0 value"
+                                               Just (0,"") -> Left "Failed to parse Haskell type `Checkmark`: found `0`, expected `1` or NULL"
                                                Just (1,"") -> Right Active
-                                               xs -> Left $ T.pack $ "PersistField Checkmark failed parsing PersistByteString xs["++show xs++"] i["++show i++"]"
+                                               xs -> Left $ T.pack $ "Failed to parse Haskell type `Checkmark` from PersistByteString. Original value:" ++ show i ++ ". Parsed by `readInt` as " ++ (show xs) ++ ". Expected '1'."
     fromPersistValue (PersistBool False) =
       Left $ T.pack "PersistField Checkmark: found unexpected FALSE value"
     fromPersistValue other =
-      Left $ T.pack $ "PersistField Checkmark: unknown value " ++ show other
+      Left $ fromPersistValueError "Checkmark" "boolean, integer, bytestring or null" other
+
+
+fromPersistValueError :: Text -- ^ Haskell type, should match Haskell name exactly, e.g. "Int64"
+                      -> Text -- ^ Database type(s), should appear different from Haskell name, e.g. "integer" or "INT", not "Int".
+                      -> PersistValue -- ^ Incorrect value
+                      -> Text -- ^ Error message
+fromPersistValueError haskellType databaseType received = T.concat
+    [ "Failed to parse Haskell type `"
+    , haskellType
+    , "`; expected "
+    , databaseType
+    , " from database, but received: "
+    , T.pack (show received)
+    , ". Potential solution: Check that your database schema matches your Persistent model definitions."
+    ]
+
+fromPersistValueParseError :: (Show a)
+                           => Text -- ^ Haskell type, should match Haskell name exactly, e.g. "Int64"
+                           -> a -- ^ Received value
+                           -> Text -- ^ Error message
+fromPersistValueParseError haskellType received = T.concat
+    [ "Failed to parse Haskell type `"
+    , haskellType
+    , "`, but received "
+    , T.pack (show received)
+    ]
