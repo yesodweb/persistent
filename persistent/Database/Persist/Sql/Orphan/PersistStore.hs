@@ -162,7 +162,7 @@ instance PersistStoreWrite SqlBackend where
                             Right k -> return k
                         Nothing -> error $ "SQL insert did not return a result giving the generated ID"
                         Just vals' -> case keyFromValues vals' of
-                            Left _ -> error $ "Invalid result from a SQL insert, got: " ++ show vals'
+                            Left e -> error $ "Invalid result from a SQL insert, got: " ++ show vals' ++ ". Error was: " ++ unpack e
                             Right k -> return k
 
                 ISRInsertGet sql1 sql2 -> do
