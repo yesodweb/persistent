@@ -2,6 +2,10 @@
 
 * Added new function `migrateEnableExtension`, to enable Postgres extensions in migrations.
 
+## 2.6.2.2
+
+* Because `text` and `varchar` are synonyms in Postgresql, don't attempt to migrate between them. [#762](https://github.com/yesodweb/persistent/pull/762)
+
 ## 2.6.2.1
 
 * Fix bug where, if a custom column width was set, the field would be migrated every time [#742](https://github.com/yesodweb/persistent/pull/742)
