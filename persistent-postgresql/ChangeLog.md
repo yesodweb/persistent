@@ -2,6 +2,10 @@
 
 * Switch from `MonadBaseControl` to `MonadUnliftIO`
 
+## 2.6.3
+
+* Added new function `migrateEnableExtension`, to enable Postgres extensions in migrations.
+
 ## 2.6.2.2
 
 * Because `text` and `varchar` are synonyms in Postgresql, don't attempt to migrate between them. [#762](https://github.com/yesodweb/persistent/pull/762)

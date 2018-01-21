@@ -320,7 +320,7 @@ instance PersistStoreRead SqlBackend where
                 Nothing -> return Nothing
                 Just vals ->
                     case fromPersistValues $ if noColumns then [] else vals of
-                        Left e -> error $ "get " ++ show k ++ ": " ++ unpack e
+                        Left e -> error $ "Error when calling `get` with key: " ++ show k ++ ". Failed to create `" ++ (unpack (unHaskellName $ entityHaskell t)) ++  "` because of error: " ++ unpack e ++ " Potential solution: If your field is using a custom PersistField instance, check that it's correct."
                         Right v -> return $ Just v
 instance PersistStoreRead SqlReadBackend where
     get k = withReaderT persistBackend $ get k
