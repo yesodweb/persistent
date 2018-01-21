@@ -11,3 +11,15 @@ packages:
 extra-deps:
 - monad-logger-0.3.28
 - mysql-simple-0.4.4
+
+- mono-traversable-1.0.8.1
+- unliftio-0.2.4.0
+- unliftio-core-0.1.1.0
+- async-2.1.1.1
+- typed-process-0.2.1.0
+- git: https://github.com/snoyberg/conduit
+  commit: 7f75bfca8d479e1737861a75437a288af662a3cf
+  subdirs:
+  - conduit
+  - conduit-extra
+  - resourcet
