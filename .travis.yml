@@ -48,7 +48,3 @@ cache:
 #        packages:
 #        - libzookeeper-mt-dev
 #        - zookeeperd
-
-after_failure:
-- cat ~/.cabal/logs/*log
-
