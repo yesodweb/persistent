@@ -35,7 +35,6 @@ import Database.Persist.MongoDB (toInsertDoc, docToEntityThrow, collectionName, 
 
 import Database.Persist.TH (mkDeleteCascade, mkSave)
 import qualified Data.Text as T
-import qualified Control.Exception as E
 
 #  ifdef WITH_POSTGRESQL
 import Data.List (sort)

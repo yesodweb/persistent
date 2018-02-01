@@ -175,15 +175,13 @@ data Filter record = forall typ. PersistField typ => Filter
 data Entity record =
     Entity { entityKey :: Key record
            , entityVal :: record }
+    deriving Typeable
 
-deriving instance (PersistEntity record, Generic (Key record), Generic record) => Generic (Entity record)
-deriving instance (PersistEntity record, Eq (Key record), Eq record) => Eq (Entity record)
-deriving instance (PersistEntity record, Ord (Key record), Ord record) => Ord (Entity record)
-deriving instance (PersistEntity record, Show (Key record), Show record) => Show (Entity record)
-deriving instance (PersistEntity record, Read (Key record), Read record) => Read (Entity record)
-#if MIN_VERSION_base(4,7,0)
-deriving instance Typeable Entity
-#endif
+deriving instance (Generic (Key record), Generic record) => Generic (Entity record)
+deriving instance (Eq (Key record), Eq record) => Eq (Entity record)
+deriving instance (Ord (Key record), Ord record) => Ord (Entity record)
+deriving instance (Show (Key record), Show record) => Show (Entity record)
+deriving instance (Read (Key record), Read record) => Read (Entity record)
 
 -- | Get list of values corresponding to given entity.
 entityValues :: PersistEntity record => Entity record -> [PersistValue]
