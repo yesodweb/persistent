@@ -45,9 +45,8 @@ import Database.PostgreSQL.Simple.Ok (Ok (..))
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
-import Control.Monad.Trans.Resource
 import Control.Exception (throw)
-import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.IO.Unlift (MonadIO (..), MonadUnliftIO)
 import Data.Data
 import Data.Typeable (Typeable)
 import Data.IORef
@@ -107,7 +106,7 @@ instance Exception PostgresServerVersionError
 -- finishes using it.  Note that you should not use the given
 -- 'ConnectionPool' outside the action since it may be already
 -- been released.
-withPostgresqlPool :: (MonadBaseControl IO m, MonadLogger m, MonadIO m, IsSqlBackend backend)
+withPostgresqlPool :: (MonadLogger m, MonadUnliftIO m, IsSqlBackend backend)
                    => ConnectionString
                    -- ^ Connection string to the database.
                    -> Int
@@ -123,7 +122,7 @@ withPostgresqlPool ci = withPostgresqlPoolWithVersion getServerVersion ci
 -- the server version (to workaround an Amazon Redshift bug).
 --
 -- @since 2.6.2
-withPostgresqlPoolWithVersion :: (MonadBaseControl IO m, MonadLogger m, MonadIO m, IsSqlBackend backend)
+withPostgresqlPoolWithVersion :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
                               => (PG.Connection -> IO (Maybe Double)) 
                               -- ^ action to perform to get the server version
                               -> ConnectionString
@@ -141,7 +140,7 @@ withPostgresqlPoolWithVersion getVer ci = withSqlPool $ open' (const $ return ()
 -- responsibility to properly close the connection pool when
 -- unneeded.  Use 'withPostgresqlPool' for an automatic resource
 -- control.
-createPostgresqlPool :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsSqlBackend backend)
+createPostgresqlPool :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
                      => ConnectionString
                      -- ^ Connection string to the database.
                      -> Int
@@ -159,7 +158,7 @@ createPostgresqlPool = createPostgresqlPoolModified (const $ return ())
 --
 -- @since 2.1.3
 createPostgresqlPoolModified
-    :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsSqlBackend backend)
+    :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
     => (PG.Connection -> IO ()) -- ^ action to perform after connection is created
     -> ConnectionString -- ^ Connection string to the database.
     -> Int -- ^ Number of connections to be kept open in the pool.
@@ -172,7 +171,7 @@ createPostgresqlPoolModified = createPostgresqlPoolModifiedWithVersion getServer
 --
 -- @since 2.6.2
 createPostgresqlPoolModifiedWithVersion
-    :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsSqlBackend backend)
+    :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
     => (PG.Connection -> IO (Maybe Double)) -- ^ action to perform to get the server version
     -> (PG.Connection -> IO ()) -- ^ action to perform after connection is created
     -> ConnectionString -- ^ Connection string to the database.
@@ -183,7 +182,7 @@ createPostgresqlPoolModifiedWithVersion getVer modConn ci =
 
 -- | Same as 'withPostgresqlPool', but instead of opening a pool
 -- of connections, only one connection is opened.
-withPostgresqlConn :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsSqlBackend backend)
+withPostgresqlConn :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
                    => ConnectionString -> (backend -> m a) -> m a
 withPostgresqlConn = withPostgresqlConnWithVersion getServerVersion
 
@@ -191,13 +190,13 @@ withPostgresqlConn = withPostgresqlConnWithVersion getServerVersion
 -- the server version (to workaround an Amazon Redshift bug).
 --
 -- @since 2.6.2
-withPostgresqlConnWithVersion :: (MonadIO m, MonadBaseControl IO m, MonadLogger m, IsSqlBackend backend)
+withPostgresqlConnWithVersion :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
                               => (PG.Connection -> IO (Maybe Double))
-                              -> ConnectionString 
+                              -> ConnectionString
                               -> (backend -> m a)
                               -> m a
 withPostgresqlConnWithVersion getVer = withSqlConn . open' (const $ return ()) getVer
-                              
+
 open'
     :: (IsSqlBackend backend)
     => (PG.Connection -> IO ())
@@ -340,7 +339,7 @@ withStmt' :: MonadIO m
           => PG.Connection
           -> PG.Query
           -> [PersistValue]
-          -> Acquire (Source m [PersistValue])
+          -> Acquire (ConduitM () [PersistValue] m ())
 withStmt' conn query vals =
     pull `fmap` mkAcquire openS closeS
   where
@@ -530,7 +529,7 @@ doesTableExist :: (Text -> IO Statement)
                -> IO Bool
 doesTableExist getter (DBName name) = do
     stmt <- getter sql
-    with (stmtQuery stmt vals) ($$ start)
+    with (stmtQuery stmt vals) (\src -> runConduit $ src .| start)
   where
     sql = "SELECT COUNT(*) FROM pg_catalog.pg_tables WHERE schemaname != 'pg_catalog'"
           <> " AND schemaname != 'information_schema' AND tablename=?"
@@ -664,7 +663,7 @@ getColumns getter def = do
             [ PersistText $ unDBName $ entityDB def
             , PersistText $ unDBName $ fieldDB (entityId def)
             ]
-    cs <- with (stmtQuery stmt vals) ($$ helper)
+    cs <- with (stmtQuery stmt vals) (\src -> runConduit $ src .| helper)
     let sqlc = T.concat ["SELECT "
                           ,"c.constraint_name, "
                           ,"c.column_name "
@@ -683,7 +682,7 @@ getColumns getter def = do
 
     stmt' <- getter sqlc
 
-    us <- with (stmtQuery stmt' vals) ($$ helperU)
+    us <- with (stmtQuery stmt' vals) (\src -> runConduit $ src .| helperU)
     return $ cs ++ us
   where
     getAll front = do
@@ -799,7 +798,7 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, ns
         with (stmtQuery stmt
                      [ PersistText $ unDBName tname
                      , PersistText $ unDBName ref
-                     ]) ($$ do
+                     ]) (\src -> runConduit $ src .| do
             Just [PersistInt64 i] <- CL.head
             return $ if i == 0 then Nothing else Just (DBName "", ref))
     d' = case d of

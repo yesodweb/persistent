@@ -1,3 +1,7 @@
+## 2.8.0
+
+* Switch from `MonadBaseControl` to `MonadUnliftIO`
+
 ## 2.6.3
 
 * Added new function `migrateEnableExtension`, to enable Postgres extensions in migrations.

@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -28,7 +29,7 @@ import Control.Monad.Logger (LogSource, LogLevel)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, ask)
 import Data.Acquire (Acquire)
-import Data.Conduit (Source)
+import Data.Conduit (ConduitM)
 import Data.Int (Int64)
 import Data.IORef (IORef)
 import Data.Map (Map)
@@ -39,6 +40,7 @@ import Database.Persist.Class
   , PersistQueryRead, PersistQueryWrite
   , PersistStoreRead, PersistStoreWrite
   , PersistUniqueRead, PersistUniqueWrite
+  , BackendCompatible(..)
   )
 import Database.Persist.Class.PersistStore (IsPersistBackend (..))
 import Database.Persist.Types
@@ -57,7 +59,7 @@ data Statement = Statement
     , stmtExecute :: [PersistValue] -> IO Int64
     , stmtQuery :: forall m. MonadIO m
                 => [PersistValue]
-                -> Acquire (Source m [PersistValue])
+                -> Acquire (ConduitM () [PersistValue] m ())
     }
 
 data SqlBackend = SqlBackend
@@ -130,7 +132,7 @@ readToUnknown ma = do
 
 -- | A constraint synonym which witnesses that a backend is SQL and can run read queries.
 type SqlBackendCanRead backend =
-  ( IsSqlBackend backend
+  ( BackendCompatible SqlBackend backend
   , PersistQueryRead backend, PersistStoreRead backend, PersistUniqueRead backend
   )
 -- | A constraint synonym which witnesses that a backend is SQL and can run read and write queries.

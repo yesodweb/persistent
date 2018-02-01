@@ -24,7 +24,7 @@ import Control.Monad.Trans.Resource (MonadResource,release)
 rawQuery :: (MonadResource m, MonadReader env m, HasPersistBackend env, BaseBackend env ~ SqlBackend)
          => Text
          -> [PersistValue]
-         -> Source m [PersistValue]
+         -> ConduitM () [PersistValue] m ()
 rawQuery sql vals = do
     srcRes <- liftPersist $ rawQueryRes sql vals
     (releaseKey, src) <- allocateAcquire srcRes
@@ -35,7 +35,7 @@ rawQueryRes
     :: (MonadIO m1, MonadIO m2, IsSqlBackend env)
     => Text
     -> [PersistValue]
-    -> ReaderT env m1 (Acquire (Source m2 [PersistValue]))
+    -> ReaderT env m1 (Acquire (ConduitM () [PersistValue] m2 ()))
 rawQueryRes sql vals = do
     conn <- persistBackend `liftM` ask
     let make = do
@@ -47,20 +47,20 @@ rawQueryRes sql vals = do
         stmtQuery stmt vals
 
 -- | Execute a raw SQL statement
-rawExecute :: MonadIO m
+rawExecute :: (MonadIO m, BackendCompatible SqlBackend backend)
            => Text            -- ^ SQL statement, possibly with placeholders.
            -> [PersistValue]  -- ^ Values to fill the placeholders.
-           -> ReaderT SqlBackend m ()
+           -> ReaderT backend m ()
 rawExecute x y = liftM (const ()) $ rawExecuteCount x y
 
 -- | Execute a raw SQL statement and return the number of
 -- rows it has modified.
-rawExecuteCount :: (MonadIO m, IsSqlBackend backend)
+rawExecuteCount :: (MonadIO m, BackendCompatible SqlBackend backend)
                 => Text            -- ^ SQL statement, possibly with placeholders.
                 -> [PersistValue]  -- ^ Values to fill the placeholders.
                 -> ReaderT backend m Int64
 rawExecuteCount sql vals = do
-    conn <- persistBackend `liftM` ask
+    conn <- projectBackend `liftM` ask
     runLoggingT (logDebugNS (pack "SQL") $ T.append sql $ pack $ "; " ++ show vals)
         (connLogFunc conn)
     stmt <- getStmt sql
@@ -69,10 +69,10 @@ rawExecuteCount sql vals = do
     return res
 
 getStmt
-  :: (MonadIO m, IsSqlBackend backend)
+  :: (MonadIO m, BackendCompatible SqlBackend backend)
   => Text -> ReaderT backend m Statement
 getStmt sql = do
-    conn <- persistBackend `liftM` ask
+    conn <- projectBackend `liftM` ask
     liftIO $ getStmtConn conn sql
 
 getStmtConn :: SqlBackend -> Text -> IO Statement
@@ -218,7 +218,7 @@ rawSql stmt = run
 
       withStmt' colSubsts params sink = do
             srcRes <- rawQueryRes sql params
-            liftIO $ with srcRes ($$ sink)
+            liftIO $ with srcRes (\src -> runConduit $ src .| sink)
           where
             sql = T.concat $ makeSubsts colSubsts $ T.splitOn placeholder stmt
             placeholder = "??"

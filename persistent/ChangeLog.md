@@ -1,3 +1,8 @@
+## 2.8.0
+
+* Switch from `MonadBaseControl` to `MonadUnliftIO`
+* Reapplies [#723](https://github.com/yesodweb/persistent/pull/723), which was reverted in version 2.7.3.
+
 ## 2.7.3.1
  
  * Improve error messages when failing to parse database results into Persistent records. [#741](https://github.com/yesodweb/persistent/pull/741)

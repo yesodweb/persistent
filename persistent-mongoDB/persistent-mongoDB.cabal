@@ -1,5 +1,5 @@
 name:            persistent-mongoDB
-version:         2.6.0
+version:         2.8.0
 license:         MIT
 license-file:    LICENSE
 author:          Greg Weber <greg@gregweber.info>
@@ -19,8 +19,8 @@ Flag high_precision_date
    Default: False
 
 library
-    build-depends:   base               >= 4.6 && < 5
-                   , persistent         >= 2.5   && < 3
+    build-depends:   base               >= 4.8 && < 5
+                   , persistent         >= 2.8   && < 3
                    , text               >= 0.8
                    , transformers       >= 0.2.1
                    , containers         >= 0.2
@@ -33,12 +33,12 @@ library
                    , cereal             >= 0.3.0.0
                    , path-pieces        >= 0.1
                    , http-api-data      >= 0.2       && < 0.4
-                   , monad-control      >= 0.3
                    , aeson              >= 0.6.2
                    , attoparsec
                    , time
                    , bytestring
                    , resource-pool      < 0.3
+                   , unliftio-core
 
     exposed-modules: Database.Persist.MongoDB
     ghc-options:     -Wall

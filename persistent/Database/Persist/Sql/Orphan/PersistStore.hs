@@ -23,7 +23,7 @@ import Database.Persist
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Util (dbIdColumns, keyAndEntityColumnNames)
-import qualified Data.Conduit as C
+import Data.Conduit
 import qualified Data.Conduit.List as CL
 import qualified Data.Text as T
 import Data.Text (Text, unpack)
@@ -32,6 +32,7 @@ import Control.Monad.IO.Class
 import Data.ByteString.Char8 (readInteger)
 import Data.Maybe (isJust)
 import Data.List (find)
+import Data.Void (Void)
 import Control.Monad.Trans.Reader (ReaderT, ask, withReaderT)
 import Data.Acquire (with)
 import Data.Int (Int64)
@@ -39,17 +40,17 @@ import Web.PathPieces (PathPiece)
 import Web.HttpApiData (ToHttpApiData, FromHttpApiData)
 import Database.Persist.Sql.Class (PersistFieldSql)
 import qualified Data.Aeson as A
-import Control.Exception.Lifted (throwIO)
+import Control.Exception (throwIO)
 import Database.Persist.Class ()
 
 withRawQuery :: MonadIO m
              => Text
              -> [PersistValue]
-             -> C.Sink [PersistValue] IO a
+             -> ConduitM [PersistValue] Void IO a
              -> ReaderT SqlBackend m a
 withRawQuery sql vals sink = do
     srcRes <- rawQueryRes sql vals
-    liftIO $ with srcRes (C.$$ sink)
+    liftIO $ with srcRes (\src -> runConduit $ src .| sink)
 
 toSqlKey :: ToBackendKey SqlBackend record => Int64 -> Key record
 toSqlKey = fromBackendKey . SqlBackendKey

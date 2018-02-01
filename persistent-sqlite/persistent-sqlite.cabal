@@ -1,5 +1,5 @@
 name:            persistent-sqlite
-version:         2.6.4
+version:         2.8.0
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -25,15 +25,15 @@ flag build-sanity-exe
   default: False
 
 library
-    build-depends:   base                    >= 4.6         && < 5
+    build-depends:   base                    >= 4.8         && < 5
                    , bytestring              >= 0.9.1
                    , transformers            >= 0.2.1
-                   , persistent              >= 2.6.1       && < 3
-                   , monad-control           >= 0.2
+                   , persistent              >= 2.8.0       && < 3
+                   , unliftio-core
                    , containers              >= 0.2
                    , text                    >= 0.7
                    , aeson                   >= 0.6.2
-                   , conduit                 >= 0.5.3
+                   , conduit                 >= 1.2.8
                    , monad-logger            >= 0.2.4
                    , microlens-th            >= 0.4.1.1
                    , resourcet               >= 1.1

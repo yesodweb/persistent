@@ -1,3 +1,7 @@
+## 2.8.0
+
+* Switch from `MonadBaseControl` to `MonadUnliftIO`
+
 ## 2.6.4
 
 * Adds a new function `stepConn`, which uses an additional parameter to give more detailed error messages [#750](https://github.com/yesodweb/persistent/pull/750)

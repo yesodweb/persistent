@@ -23,7 +23,7 @@ module Database.Persist.Class.PersistStore
 
 import qualified Data.Text as T
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Exception.Lifted (throwIO)
+import Control.Exception (throwIO)
 import Control.Monad.Trans.Reader (ReaderT)
 import Control.Monad.Reader (MonadReader (ask), runReaderT)
 import Database.Persist.Class.PersistEntity
