@@ -45,7 +45,6 @@ import Database.PostgreSQL.Simple.Ok (Ok (..))
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
-import Control.Monad.Trans.Resource
 import Control.Exception (throw)
 import Control.Monad.IO.Unlift (MonadIO (..), MonadUnliftIO)
 import Data.Data
