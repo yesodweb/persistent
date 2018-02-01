@@ -30,7 +30,7 @@ library
                    , text                     >= 0.8
                    , containers               >= 0.2
                    , conduit                  >= 1.2.8
-                   , resourcet                >= 1.1
+                   , resourcet                >= 1.1.10
                    , resource-pool            >= 0.2.2.0
                    , path-pieces              >= 0.1
                    , http-api-data            >= 0.2       && < 0.4
