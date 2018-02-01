@@ -15,7 +15,7 @@ bug-reports:     https://github.com/yesodweb/persistent/issues
 extra-source-files: ChangeLog.md
 
 library
-    build-depends:   base                  >= 4.6        && < 5
+    build-depends:   base                  >= 4.8        && < 5
                    , transformers          >= 0.2.1
                    , postgresql-simple     >= 0.4.0    && < 0.6
                    , postgresql-libpq      >= 0.6.1    && < 0.10

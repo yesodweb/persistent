@@ -42,7 +42,7 @@ import Control.Monad (when)
 import Control.Monad.IO.Unlift (MonadIO (..), MonadUnliftIO, withUnliftIO, unliftIO)
 import Control.Monad.Logger (NoLoggingT, runNoLoggingT, MonadLogger)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT)
-import Control.Monad.Trans.Resource (ResourceT, runResourceT)
+import UnliftIO.Resource (ResourceT, runResourceT)
 import Control.Monad.Trans.Writer (runWriterT)
 import Data.Acquire (Acquire, mkAcquire, with)
 import Data.Aeson

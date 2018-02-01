@@ -1,4 +1,4 @@
-resolver: lts-8.2
+resolver: lts-10.4
 packages:
   - ./persistent
   - ./persistent-template
@@ -9,7 +9,7 @@ packages:
   - ./persistent-postgresql
   - ./persistent-redis
 extra-deps:
-- monad-logger-0.3.28
+- monad-logger-0.3.28.1
 - mysql-simple-0.4.4
 
 - mono-traversable-1.0.8.1

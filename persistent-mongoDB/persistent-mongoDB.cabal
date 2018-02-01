@@ -19,7 +19,7 @@ Flag high_precision_date
    Default: False
 
 library
-    build-depends:   base               >= 4.6 && < 5
+    build-depends:   base               >= 4.8 && < 5
                    , persistent         >= 2.8   && < 3
                    , text               >= 0.8
                    , transformers       >= 0.2.1

@@ -32,6 +32,7 @@ import Control.Monad.IO.Class
 import Data.ByteString.Char8 (readInteger)
 import Data.Maybe (isJust)
 import Data.List (find)
+import Data.Void (Void)
 import Control.Monad.Trans.Reader (ReaderT, ask, withReaderT)
 import Data.Acquire (with)
 import Data.Int (Int64)
@@ -45,7 +46,7 @@ import Database.Persist.Class ()
 withRawQuery :: MonadIO m
              => Text
              -> [PersistValue]
-             -> ConduitT [PersistValue] Void IO a
+             -> ConduitM [PersistValue] Void IO a
              -> ReaderT SqlBackend m a
 withRawQuery sql vals sink = do
     srcRes <- rawQueryRes sql vals
