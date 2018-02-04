@@ -5,9 +5,6 @@ addons:
   apt:
     packages:
     - libgmp-dev
-    - cabal-install-1.24
-    sources:
-    - hvr-ghc
   postgresql: "9.6"
 
 services:
@@ -17,37 +14,28 @@ services:
 
 matrix:
   include:
-  - env: ARGS="--resolver lts-2" BACKEND=none
-  - env: ARGS="--resolver lts-2" BACKEND=sqlite
-  - env: ARGS="--resolver lts-2" BACKEND=mongodb
-  - env: ARGS="--resolver lts-2" BACKEND=postgresql
-  - env: ARGS="--resolver lts-2" BACKEND=mysql
-
   - env: ARGS="--resolver lts-6" BACKEND=none
-  - env: ARGS="--resolver lts-6" BACKEND=sqlite
-  - env: ARGS="--resolver lts-6" BACKEND=mongodb
-  - env: ARGS="--resolver lts-6" BACKEND=postgresql
-  - env: ARGS="--resolver lts-6" BACKEND=mysql
+  - env: ARGS="--resolver lts-7" BACKEND=none
+  - env: ARGS="--resolver lts-9" BACKEND=none
+  - env: ARGS="--resolver lts-10" BACKEND=none
 
-  - env: ARGS="" BACKEND=none
-  - env: ARGS="" BACKEND=sqlite
-  - env: ARGS="" BACKEND=mongodb
-  - env: ARGS="" BACKEND=postgresql
-  - env: ARGS="" BACKEND=mysql
+  - env: ARGS="--resolver lts-9" BACKEND=sqlite
+  - env: ARGS="--resolver lts-9" BACKEND=mongodb
+  - env: ARGS="--resolver lts-9" BACKEND=postgresql
+  - env: ARGS="--resolver lts-9" BACKEND=mysql
+
+  - env: ARGS="--resolver lts-10" BACKEND=sqlite
+  - env: ARGS="--resolver lts-10" BACKEND=mongodb
+  - env: ARGS="--resolver lts-10" BACKEND=postgresql
+  - env: ARGS="--resolver lts-10" BACKEND=mysql
 
 before_install:
 # Download and unpack the stack executable
 - mkdir -p ~/.local/bin
-- export PATH=$HOME/.local/bin:/opt/cabal/1.24/bin:$PATH
+- export PATH=$HOME/.local/bin:$PATH
 - travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
 
-# *TEMPORARY* A proposed change #717 uses haskell-src-meta, which requires
-# `happy` to build haskell-src-exts.  This fails in lts-2.  Revert to the
-# commented out line if #717 is not merged, or when testing lts-2 is dropped.
-# script: travis/run.sh
-script:
-- if [[ $ARGS =~ lts-2 ]]; then stack $ARGS --install-ghc install happy; fi
-- travis/run.sh
+script: travis/run.sh
 
 cache:
   directories:
@@ -60,7 +48,3 @@ cache:
 #        packages:
 #        - libzookeeper-mt-dev
 #        - zookeeperd
-
-after_failure:
-- cat ~/.cabal/logs/*log
-

@@ -15,7 +15,7 @@ import Database.Persist.Types
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader   (ReaderT, MonadReader)
 
-import qualified Data.Conduit as C
+import Data.Conduit (ConduitM, (.|), await, runConduit)
 import qualified Data.Conduit.List as CL
 import Database.Persist.Class.PersistStore
 import Database.Persist.Class.PersistEntity
@@ -30,7 +30,7 @@ class (PersistCore backend, PersistStoreRead backend) => PersistQueryRead backen
            :: (PersistRecordBackend record backend, MonadIO m1, MonadIO m2)
            => [Filter record]
            -> [SelectOpt record]
-           -> ReaderT backend m1 (Acquire (C.Source m2 (Entity record)))
+           -> ReaderT backend m1 (Acquire (ConduitM () (Entity record) m2 ()))
 
     -- | Get just the first record for the criterion.
     selectFirst :: (MonadIO m, PersistRecordBackend record backend)
@@ -39,14 +39,14 @@ class (PersistCore backend, PersistStoreRead backend) => PersistQueryRead backen
                 -> ReaderT backend m (Maybe (Entity record))
     selectFirst filts opts = do
         srcRes <- selectSourceRes filts (LimitTo 1 : opts)
-        liftIO $ with srcRes (C.$$ CL.head)
+        liftIO $ with srcRes (\src -> runConduit $ src .| await)
 
     -- | Get the 'Key's of all records matching the given criterion.
     selectKeysRes
         :: (MonadIO m1, MonadIO m2, PersistRecordBackend record backend)
         => [Filter record]
         -> [SelectOpt record]
-        -> ReaderT backend m1 (Acquire (C.Source m2 (Key record)))
+        -> ReaderT backend m1 (Acquire (ConduitM () (Key record) m2 ()))
 
     -- | The total number of records fulfilling the given criterion.
     count :: (MonadIO m, PersistRecordBackend record backend)
@@ -68,7 +68,7 @@ selectSource
        :: (PersistQueryRead (BaseBackend backend), MonadResource m, PersistEntity record, PersistEntityBackend record ~ BaseBackend (BaseBackend backend), MonadReader backend m, HasPersistBackend backend)
        => [Filter record]
        -> [SelectOpt record]
-       -> C.Source m (Entity record)
+       -> ConduitM () (Entity record) m ()
 selectSource filts opts = do
     srcRes <- liftPersist $ selectSourceRes filts opts
     (releaseKey, src) <- allocateAcquire srcRes
@@ -79,7 +79,7 @@ selectSource filts opts = do
 selectKeys :: (PersistQueryRead (BaseBackend backend), MonadResource m, PersistEntity record, BaseBackend (BaseBackend backend) ~ PersistEntityBackend record, MonadReader backend m, HasPersistBackend backend)
            => [Filter record]
            -> [SelectOpt record]
-           -> C.Source m (Key record)
+           -> ConduitM () (Key record) m ()
 selectKeys filts opts = do
     srcRes <- liftPersist $ selectKeysRes filts opts
     (releaseKey, src) <- allocateAcquire srcRes
@@ -93,7 +93,7 @@ selectList :: (MonadIO m, PersistQueryRead backend, PersistRecordBackend record 
            -> ReaderT backend m [Entity record]
 selectList filts opts = do
     srcRes <- selectSourceRes filts opts
-    liftIO $ with srcRes (C.$$ CL.consume)
+    liftIO $ with srcRes (\src -> runConduit $ src .| CL.consume)
 
 -- | Call 'selectKeys' but return the result as a list.
 selectKeysList :: (MonadIO m, PersistQueryRead backend, PersistRecordBackend record backend)
@@ -102,4 +102,4 @@ selectKeysList :: (MonadIO m, PersistQueryRead backend, PersistRecordBackend rec
                -> ReaderT backend m [Key record]
 selectKeysList filts opts = do
     srcRes <- selectKeysRes filts opts
-    liftIO $ with srcRes (C.$$ CL.consume)
+    liftIO $ with srcRes (\src -> runConduit $ src .| CL.consume)

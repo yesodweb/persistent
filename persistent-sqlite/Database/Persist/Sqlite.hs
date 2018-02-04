@@ -39,12 +39,10 @@ import qualified Database.Sqlite as Sqlite
 import Control.Applicative as A
 import qualified Control.Exception as E
 import Control.Monad (when)
-import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.IO.Unlift (MonadIO (..), MonadUnliftIO, withUnliftIO, unliftIO)
 import Control.Monad.Logger (NoLoggingT, runNoLoggingT, MonadLogger)
-import Control.Monad.Trans.Control (control)
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT)
-import Control.Monad.Trans.Resource (ResourceT, runResourceT)
+import UnliftIO.Resource (ResourceT, runResourceT)
 import Control.Monad.Trans.Writer (runWriterT)
 import Data.Acquire (Acquire, mkAcquire, with)
 import Data.Aeson
@@ -67,7 +65,7 @@ import Lens.Micro.TH (makeLenses)
 -- Note that this should not be used with the @:memory:@ connection string, as
 -- the pool will regularly remove connections, destroying your database.
 -- Instead, use 'withSqliteConn'.
-createSqlitePool :: (MonadIO m, MonadLogger m, MonadBaseControl IO m, IsSqlBackend backend)
+createSqlitePool :: (MonadLogger m, MonadUnliftIO m, IsSqlBackend backend)
                  => Text -> Int -> m (Pool backend)
 createSqlitePool = createSqlitePoolFromInfo . conStringToInfo
 
@@ -78,14 +76,14 @@ createSqlitePool = createSqlitePoolFromInfo . conStringToInfo
 -- Instead, use 'withSqliteConn'.
 --
 -- @since 2.6.2
-createSqlitePoolFromInfo :: (MonadIO m, MonadLogger m, MonadBaseControl IO m, IsSqlBackend backend)
+createSqlitePoolFromInfo :: (MonadLogger m, MonadUnliftIO m, IsSqlBackend backend)
                          => SqliteConnectionInfo -> Int -> m (Pool backend)
 createSqlitePoolFromInfo connInfo = createSqlPool $ open' connInfo
 
 -- | Run the given action with a connection pool.
 --
 -- Like 'createSqlitePool', this should not be used with @:memory:@.
-withSqlitePool :: (MonadBaseControl IO m, MonadIO m, MonadLogger m, IsSqlBackend backend)
+withSqlitePool :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
                => Text
                -> Int -- ^ number of connections to open
                -> (Pool backend -> m a) -> m a
@@ -96,18 +94,18 @@ withSqlitePool connInfo = withSqlPool . open' $ conStringToInfo connInfo
 -- Like 'createSqlitePool', this should not be used with @:memory:@.
 --
 -- @since 2.6.2
-withSqlitePoolInfo :: (MonadBaseControl IO m, MonadIO m, MonadLogger m, IsSqlBackend backend)
+withSqlitePoolInfo :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
                => SqliteConnectionInfo
                -> Int -- ^ number of connections to open
                -> (Pool backend -> m a) -> m a
 withSqlitePoolInfo connInfo = withSqlPool $ open' connInfo
 
-withSqliteConn :: (MonadBaseControl IO m, MonadIO m, MonadLogger m, IsSqlBackend backend)
+withSqliteConn :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
                => Text -> (backend -> m a) -> m a
 withSqliteConn = withSqliteConnInfo . conStringToInfo
 
 -- | @since 2.6.2
-withSqliteConnInfo :: (MonadBaseControl IO m, MonadIO m, MonadLogger m, IsSqlBackend backend)
+withSqliteConnInfo :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
                    => SqliteConnectionInfo -> (backend -> m a) -> m a
 withSqliteConnInfo = withSqlConn . open'
 
@@ -180,7 +178,7 @@ wrapConnectionInfo connInfo conn logFunc = do
 -- that all log messages are discarded.
 --
 -- @since 1.1.4
-runSqlite :: (MonadBaseControl IO m, MonadIO m, IsSqlBackend backend)
+runSqlite :: (MonadUnliftIO m, IsSqlBackend backend)
           => Text -- ^ connection string
           -> ReaderT backend (NoLoggingT (ResourceT m)) a -- ^ database action
           -> m a
@@ -194,7 +192,7 @@ runSqlite connstr = runResourceT
 -- that all log messages are discarded.
 --
 -- @since 2.6.2
-runSqliteInfo :: (MonadBaseControl IO m, MonadIO m, IsSqlBackend backend)
+runSqliteInfo :: (MonadUnliftIO m, IsSqlBackend backend)
               => SqliteConnectionInfo
               -> ReaderT backend (NoLoggingT (ResourceT m)) a -- ^ database action
               -> m a
@@ -262,7 +260,7 @@ withStmt'
           => Sqlite.Connection
           -> Sqlite.Statement
           -> [PersistValue]
-          -> Acquire (Source m [PersistValue])
+          -> Acquire (ConduitM () [PersistValue] m ())
 withStmt' conn stmt vals = do
     _ <- mkAcquire
         (Sqlite.bind stmt vals >> return stmt)
@@ -299,7 +297,8 @@ migrate' allDefs getter val = do
     let (cols, uniqs, _) = mkColumns allDefs val
     let newSql = mkCreateTable False def (filter (not . safeToRemove val . cName) cols, uniqs)
     stmt <- getter "SELECT sql FROM sqlite_master WHERE type='table' AND name=?"
-    oldSql' <- with (stmtQuery stmt [PersistText $ unDBName table]) ($$ go)
+    oldSql' <- with (stmtQuery stmt [PersistText $ unDBName table])
+      (\src -> runConduit $ src .| go)
     case oldSql' of
         Nothing -> return $ Right [(False, newSql)]
         Just oldSql -> do
@@ -373,7 +372,7 @@ getCopyTable :: [EntityDef]
              -> IO [(Bool, Text)]
 getCopyTable allDefs getter def = do
     stmt <- getter $ T.concat [ "PRAGMA table_info(", escape table, ")" ]
-    oldCols' <- with (stmtQuery stmt []) ($$ getCols)
+    oldCols' <- with (stmtQuery stmt []) (\src -> runConduit $ src .| getCols)
     let oldCols = map DBName $ filter (/= "id") oldCols' -- need to update for table id attribute ?
     let newCols = filter (not . safeToRemove def) $ map cName cols
     let common = filter (`elem` oldCols) newCols
@@ -517,13 +516,13 @@ instance PersistConfig SqliteConf where
     runPool _ = runSqlPool
     loadConfig = parseJSON
 
-finally :: MonadBaseControl IO m
+finally :: MonadUnliftIO m
         => m a -- ^ computation to run first
         -> m b -- ^ computation to run afterward (even if an exception was raised)
         -> m a
-finally a sequel = control $ \runInIO ->
-                     E.finally (runInIO a)
-                               (runInIO sequel)
+finally a sequel = withUnliftIO $ \u ->
+                     E.finally (unliftIO u a)
+                               (unliftIO u sequel)
 {-# INLINABLE finally #-}
 -- | Creates a SqliteConnectionInfo from a connection string, with the
 -- default settings.

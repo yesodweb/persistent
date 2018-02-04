@@ -1,8 +1,12 @@
-## Unreleased
+## 2.8.0 (Unreleased)
 
+* Switch from `MonadBaseControl` to `MonadUnliftIO`
 * Fix duplicate migrations when using `mediumtext`, `longtext`, `mediumblob`, `longblob`, and `double`s using a custom precision. [#754](https://github.com/yesodweb/persistent/pull/754)
 
 -- This can be released as a minor change on the next update. Currently persistent-mysql can't be released because 2.6.2.2 depends on persistent-2.7.2 being released.
+
+* The `SomeField` type was renamed to `HandleUpdateCollision` and deprecated. Please migrate to using `HandleUpdateCollision`.
+* The `SomeField` constructor was deprecated, and a temporary pattern synonym introduced. Please migrate to using `copyField`.
 
 ## 2.6.2.2 [UNRELEASED ON HACKAGE]
 

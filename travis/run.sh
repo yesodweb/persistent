@@ -2,13 +2,19 @@
 
 set -euxo pipefail
 
-ARGS="$ARGS --no-terminal --install-ghc"
-stack $ARGS solver --update-config
-
 if [ "$BACKEND" = "none" ]
 then
     PACKAGES=$(stack --install-ghc query locals | grep '^ *path' | sed 's@^ *path:@@' | grep -v 'persistent-test' )
-    exec stack $ARGS test --pedantic $PACKAGES
+
+    PEDANTIC="--pedantic"
+    # Turn off pedantic for lts-7, due to the sometimes invalid
+    # redundant constraint warnings.
+    if [ "$ARGS" = "--resolver lts-7" ]
+    then
+        PEDANTIC=""
+    fi
+
+    exec stack $ARGS --no-terminal test $PEDANTIC $PACKAGES
 else
     if [ "$BACKEND" = "postgresql" ]
     then
@@ -19,5 +25,5 @@ else
     fi
 
     cd persistent-test
-    exec stack $ARGS test --pedantic --fast persistent-test --flag persistent-test:$BACKEND --exec persistent-test
+    exec stack $ARGS --no-terminal test --pedantic --fast persistent-test --flag persistent-test:$BACKEND --exec persistent-test
 fi

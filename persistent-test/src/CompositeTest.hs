@@ -19,8 +19,6 @@
 module CompositeTest where
 
 import Test.Hspec.Expectations ()
-import qualified Control.Monad.Trans.Control
-import qualified Control.Exception as E
 import Init
 #ifndef WITH_NOSQL
 import qualified Data.Map as Map
@@ -311,11 +309,3 @@ matchParentK = (\(a:b:c:[]) -> (,,) <$> fromPersistValue a <*> fromPersistValue 
 matchCitizenAddressK :: Key CitizenAddress -> Either Text (Int64, Int64)
 matchCitizenAddressK = (\(a:b:[]) -> (,) <$> fromPersistValue a <*> fromPersistValue b)
                      . keyToValues
-
-catch' :: (Control.Monad.Trans.Control.MonadBaseControl IO m, E.Exception e)
-       => m a       -- ^ The computation to run
-       -> (e -> m a) -- ^ Handler to invoke if an exception is raised
-       -> m a
-catch' a handler = Control.Monad.Trans.Control.control $ \runInIO ->
-                    E.catch (runInIO a)
-                            (\e -> runInIO $ handler e)

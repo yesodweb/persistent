@@ -21,6 +21,7 @@ import Test.HUnit hiding (Test)
 import Control.Monad.Trans.Resource (runResourceT)
 import Test.Hspec.Expectations ()
 import Test.Hspec.QuickCheck(prop)
+import UnliftIO (MonadUnliftIO, catch)
 
 import Database.Persist
 
@@ -34,7 +35,6 @@ import Database.Persist.MongoDB (toInsertDoc, docToEntityThrow, collectionName, 
 
 import Database.Persist.TH (mkDeleteCascade, mkSave)
 import qualified Data.Text as T
-import qualified Control.Exception as E
 
 #  ifdef WITH_POSTGRESQL
 import Data.List (sort)
@@ -44,9 +44,6 @@ import Database.Persist.MySQL()
 #  endif
 
 #endif
-
-import qualified Control.Monad.Trans.Control
-import Control.Exception.Lifted (catch)
 
 import Control.Monad.IO.Class
 
@@ -186,7 +183,7 @@ db :: Action IO () -> Assertion
 db = db' cleanDB
 #endif
 
-catchPersistException :: Control.Monad.Trans.Control.MonadBaseControl IO m => m a -> b -> m b
+catchPersistException :: MonadUnliftIO m => m a -> b -> m b
 catchPersistException action errValue = do
     Left res <-
       (Right `fmap` action) `catch`
@@ -1223,14 +1220,6 @@ caseCommitRollback = db $ do
     transactionUndo
     c4 <- count filt
     c4 @== 4
-
-catch' :: (Control.Monad.Trans.Control.MonadBaseControl IO m, E.Exception e)
-       => m a       -- ^ The computation to run
-       -> (e -> m a) -- ^ Handler to invoke if an exception is raised
-       -> m a
-catch' a handler = Control.Monad.Trans.Control.control $ \runInIO ->
-                    E.catch (runInIO a)
-                            (\e -> runInIO $ handler e)
 
 #endif
 
