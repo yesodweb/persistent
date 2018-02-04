@@ -1,8 +1,8 @@
-## 2.8.1 (Unreleased)
+## 2.8.1
 
-* Implemented `connPutManySql` to utilize batched `putMany`.
+* Implemented `connPutManySql` to utilize batched `putMany`. [#770](https://github.com/yesodweb/persistent/pull/770)
 
-## 2.8.0 (Unreleased)
+## 2.8.0
 
 * Switch from `MonadBaseControl` to `MonadUnliftIO`
 * Fix duplicate migrations when using `mediumtext`, `longtext`, `mediumblob`, `longblob`, and `double`s using a custom precision. [#754](https://github.com/yesodweb/persistent/pull/754)

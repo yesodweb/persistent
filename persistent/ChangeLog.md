@@ -7,6 +7,7 @@
 	* Added `getMany` and `repsertMany` for batched `get` and `repsert`.
 	* Added `putMany` with a default/slow implementation. SqlBackend's that support native UPSERT should override this for batching enhancements.
 	* Updated `insertEntityMany` to replace slow looped usage with batched execution.
+* See [#770](https://github.com/yesodweb/persistent/pull/770)
 
 ## 2.8.0
 
