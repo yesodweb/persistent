@@ -115,6 +115,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     --
     -- * insert new records that do not exist (or violate any unique constraints)
     -- * replace existing records (matching any unique constraint)
+    -- @since 2.8.1
     putMany
         :: (MonadIO m, PersistRecordBackend record backend)
         => [record]             -- ^ A list of the records you want to insert or replace.

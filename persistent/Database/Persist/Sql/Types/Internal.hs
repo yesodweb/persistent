@@ -92,7 +92,7 @@ data SqlBackend = SqlBackend
     --
     -- When left as 'Nothing', we default to using 'defaultPutMany'.
     --
-    -- @since 2.8
+    -- @since 2.8.1
     , connStmtMap :: IORef (Map Text Statement)
     , connClose :: IO ()
     , connMigrateSql
