@@ -30,6 +30,9 @@ import Database.Persist.Class.PersistEntity
 import Database.Persist.Class.PersistField
 import Database.Persist.Types
 import qualified Data.Aeson as A
+import qualified Data.Map as Map
+import Data.Map (Map)
+import qualified Data.Maybe as Maybe
 
 -- | Class which allows the plucking of a @BaseBackend backend@ from some larger type.
 -- For example,
@@ -132,6 +135,18 @@ class
     get :: (MonadIO m, PersistRecordBackend record backend)
         => Key record -> ReaderT backend m (Maybe record)
 
+    -- | Get many records by their respective identifiers, if available.
+    -- @since 2.8.1
+    getMany
+        :: (MonadIO m, PersistRecordBackend record backend)
+        => [Key record] -> ReaderT backend m (Map (Key record) record)
+    getMany [] = return Map.empty
+    getMany ks = do
+        vs <- mapM get ks
+        let kvs   = zip ks vs
+        let kvs'  = (fmap Maybe.fromJust) `fmap` filter (\(_,v) -> Maybe.isJust v) kvs
+        return $ Map.fromList kvs'
+
 class
   ( Show (BackendKey backend), Read (BackendKey backend)
   , Eq (BackendKey backend), Ord (BackendKey backend)
@@ -175,10 +190,8 @@ class
     -- Useful when migrating data from one entity to another
     -- and want to preserve ids.
     --
-    -- The MongoDB backend inserts all the entities in one database query.
-    --
-    -- The SQL backends use the slow, default implementation of
-    -- @mapM_ insertKey@.
+    -- The MongoDB, PostgreSQL, SQLite and MySQL backends insert all records in
+    -- one database query.
     insertEntityMany :: (MonadIO m, PersistRecordBackend record backend)
                      => [Entity record] -> ReaderT backend m ()
     insertEntityMany = mapM_ (\(Entity k record) -> insertKey k record)
@@ -192,6 +205,21 @@ class
     -- exist then a new record will be inserted.
     repsert :: (MonadIO m, PersistRecordBackend record backend)
             => Key record -> record -> ReaderT backend m ()
+
+    -- | Put many entities into the database.
+    --
+    -- Batch version of 'repsert' for SQL backends.
+    --
+    -- Useful when migrating data from one entity to another
+    -- and want to preserve ids.
+    --
+    -- Differs from @insertEntityMany@ by gracefully skipping
+    -- pre-existing records matching key(s).
+    -- @since 2.8.1
+    repsertMany
+        :: (MonadIO m, PersistRecordBackend record backend)
+        => [(Key record, record)] -> ReaderT backend m ()
+    repsertMany = mapM_ (uncurry repsert)
 
     -- | Replace the record in the database with the given
     -- key. Note that the result is undefined if such record does

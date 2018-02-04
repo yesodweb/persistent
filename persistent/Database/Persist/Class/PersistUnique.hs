@@ -9,19 +9,24 @@ module Database.Persist.Class.PersistUnique
   ,insertUniqueEntity
   ,replaceUnique
   ,checkUnique
-  ,onlyUnique)
+  ,onlyUnique
+  ,defaultPutMany
+  ,persistUniqueKeyValues
+  )
   where
 
 import Database.Persist.Types
 import Control.Exception (throwIO)
 import Control.Monad (liftM)
 import Control.Monad.IO.Class (liftIO, MonadIO)
-import Data.List ((\\))
+import Data.List ((\\), deleteFirstsBy, nubBy)
+import Data.Function (on)
 import Control.Monad.Trans.Reader (ReaderT)
 import Database.Persist.Class.PersistStore
 import Database.Persist.Class.PersistEntity
 import Data.Monoid (mappend)
 import Data.Text (unpack, Text)
+import Data.Maybe (catMaybes)
 
 -- | Queries against 'Unique' keys (other than the id 'Key').
 --
@@ -105,6 +110,17 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
       where
         updateGetEntity (Entity k _) upds =
             (Entity k) `liftM` (updateGet k upds)
+
+    -- | Put many records into db
+    --
+    -- * insert new records that do not exist (or violate any unique constraints)
+    -- * replace existing records (matching any unique constraint)
+    -- @since 2.8.1
+    putMany
+        :: (MonadIO m, PersistRecordBackend record backend)
+        => [record]             -- ^ A list of the records you want to insert or replace.
+        -> ReaderT backend m ()
+    putMany = defaultPutMany
 
 -- | Insert a value, checking for conflicts with any unique constraints.  If a
 -- duplicate exists in the database, it is returned as 'Left'. Otherwise, the
@@ -249,3 +265,49 @@ checkUniqueKeys (x:xs) = do
     case y of
         Nothing -> checkUniqueKeys xs
         Just _ -> return (Just x)
+
+-- | The slow but generic 'putMany' implemetation for any 'PersistUniqueRead'.
+-- * Lookup corresponding entities (if any) for each record using 'getByValue'
+-- * For pre-existing records, issue a 'replace' for each old key and new record
+-- * For new records, issue a bulk 'insertMany_'
+defaultPutMany
+    ::( PersistEntityBackend record ~ BaseBackend backend
+      , PersistEntity record
+      , MonadIO m
+      , PersistStoreWrite backend
+      , PersistUniqueRead backend
+      )
+    => [record]
+    -> ReaderT backend m ()
+defaultPutMany []   = return ()
+defaultPutMany rsD  = do
+    let rs = nubBy ((==) `on` persistUniqueKeyValues) (reverse rsD)
+
+    -- lookup record(s) by their unique key
+    mEsOld <- mapM getByValue rs
+
+    -- find pre-existing entities and corresponding (incoming) records
+    let merge (Just x) y = Just (x, y)
+        merge _        _ = Nothing
+    let mEsOldAndRs = zipWith merge mEsOld rs
+    let esOldAndRs = catMaybes mEsOldAndRs
+
+    -- determine records to insert
+    let esOld = fmap fst esOldAndRs
+    let rsOld = fmap entityVal esOld
+    let rsNew = deleteFirstsBy ((==) `on` persistUniqueKeyValues) rs rsOld
+
+    -- determine records to update
+    let rsUpd = fmap snd esOldAndRs
+    let ksOld = fmap entityKey esOld
+    let krs   = zip ksOld rsUpd
+
+    -- insert `new` records
+    insertMany_ rsNew
+    -- replace existing records
+    mapM_ (uncurry replace) krs
+
+-- | The _essence_ of a unique record.
+-- useful for comaparing records in haskell land for uniqueness equality.
+persistUniqueKeyValues :: PersistEntity record => record -> [PersistValue]
+persistUniqueKeyValues r = concat $ map persistUniqueToValues $ persistUniqueKeys r

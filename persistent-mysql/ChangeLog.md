@@ -1,3 +1,7 @@
+## 2.8.1 (Unreleased)
+
+* Implemented `connPutManySql` to utilize batched `putMany`.
+
 ## 2.8.0 (Unreleased)
 
 * Switch from `MonadBaseControl` to `MonadUnliftIO`

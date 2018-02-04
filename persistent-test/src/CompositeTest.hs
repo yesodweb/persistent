@@ -20,6 +20,9 @@ module CompositeTest where
 
 import Test.Hspec.Expectations ()
 import Init
+#ifndef WITH_NOSQL
+import qualified Data.Map as Map
+#endif
 
 #ifndef WITH_NOSQL
 import Data.Maybe (isJust)
@@ -263,11 +266,8 @@ specs = describe "composite" $
       ca1 @== newca2
     it "insertMany" $ db $ do
       [kp1, kp2] <- insertMany [p1, p2]
-      newp1 <- get kp1
-      newp1 @== Just p1
-
-      newp2 <- get kp2
-      newp2 @== Just p2
+      rs <- getMany [kp1, kp2]
+      rs @== Map.fromList [(kp1, p1), (kp2, p2)]
     it "RawSql Key instance" $ db $ do
       key <- insert p1
       keyFromRaw <- rawSql "SELECT name, name2, age FROM test_parent LIMIT 1" []

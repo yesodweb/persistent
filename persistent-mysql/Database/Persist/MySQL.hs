@@ -68,6 +68,7 @@ import qualified Data.Text.Encoding as T
 
 import Database.Persist.Sql
 import Database.Persist.Sql.Types.Internal (mkPersistBackend)
+import Database.Persist.Sql.Util (commaSeparated, mkUpdateText', parenWrapped)
 import Data.Int (Int64)
 
 import qualified Database.MySQL.Simple        as MySQL
@@ -132,6 +133,7 @@ open' ci logFunc = do
         , connInsertSql  = insertSql'
         , connInsertManySql = Nothing
         , connUpsertSql = Nothing
+        , connPutManySql = Just putManySql
         , connClose      = MySQL.close conn
         , connMigrateSql = migrate' ci
         , connBegin      = const $ MySQL.execute_ conn "start transaction" >> return ()
@@ -254,7 +256,7 @@ convertPV f = (f .) . MySQL.convert
 -- | Get the corresponding @'Getter' 'PersistValue'@ depending on
 -- the type of the column.
 getGetter :: MySQLBase.Field -> Getter PersistValue
-getGetter field = go (MySQLBase.fieldType field) 
+getGetter field = go (MySQLBase.fieldType field)
                         (MySQLBase.fieldLength field)
                             (MySQLBase.fieldCharSet field)
   where
@@ -285,7 +287,7 @@ getGetter field = go (MySQLBase.fieldType field)
     go MySQLBase.VarChar    _ _  = convertPV PersistText
     go MySQLBase.VarString  _ _  = convertPV PersistText
     go MySQLBase.String     _ _  = convertPV PersistText
-    
+
     go MySQLBase.Blob       _ 63 = convertPV PersistByteString
     go MySQLBase.TinyBlob   _ 63 = convertPV PersistByteString
     go MySQLBase.MediumBlob _ 63 = convertPV PersistByteString
@@ -344,10 +346,10 @@ migrate' connectInfo allDefs getter val = do
         let foreigns = do
               Column { cName=cname, cReference=Just (refTblName, _a) } <- newcols
               return $ AlterColumn name (refTblName, addReference allDefs (refName name cname) refTblName cname)
-                 
-        let foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef)) 
+
+        let foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef))
                                         in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignRefTableDBName fdef) (foreignConstraintNameDBName fdef) childfields parentfields)) fdefs
-        
+
         return $ Right $ map showAlterDb $ (addTable newcols val): uniques ++ foreigns ++ foreignsAlt
       -- No errors and something found, migrate
       (_, _, ([], old')) -> do
@@ -1012,7 +1014,7 @@ mockMigrate _connectInfo allDefs _getter val = do
 
 
 -- | Mock a migration even when the database is not present.
--- This function will mock the migration for a database even when 
+-- This function will mock the migration for a database even when
 -- the actual database isn't already present in the system.
 mockMigration :: Migration -> IO ()
 mockMigration mig = do
@@ -1038,8 +1040,9 @@ mockMigration mig = do
                              connLimitOffset = undefined,
                              connLogFunc = undefined,
                              connUpsertSql = undefined,
+                             connPutManySql = undefined,
                              connMaxParams = Nothing}
-      result = runReaderT . runWriterT . runWriterT $ mig 
+      result = runReaderT . runWriterT . runWriterT $ mig
   resp <- result sqlbackend
   mapM_ T.putStrLn $ map snd $ snd resp
 
@@ -1124,7 +1127,7 @@ copyField = CopyField
 -- third parameters determine what will happen.
 --
 -- The second parameter is a list of fields to copy from the original value.
--- This allows you to specify which fields to copy from the record you're trying 
+-- This allows you to specify which fields to copy from the record you're trying
 -- to insert into the database to the preexisting row.
 --
 -- The third parameter is a list of updates to perform that are independent of
@@ -1146,7 +1149,7 @@ copyField = CopyField
 --
 --   Primary name
 -- @
--- 
+--
 -- > items:
 -- > +------+-------------+-------+----------+
 -- > | name | description | price | quantity |
@@ -1166,8 +1169,8 @@ copyField = CopyField
 --
 -- We parse that into a list of Haskell records:
 --
--- @ 
--- records = 
+-- @
+-- records =
 --   [ Item { itemName = "foo", itemDescription = ""
 --          , itemPrice = Just 2.50, itemQuantity = Just 6
 --          }
@@ -1187,10 +1190,10 @@ copyField = CopyField
 -- value. So we can use 'copyUnlessNull' to only copy the existing values
 -- in.
 --
--- The final code looks like this: 
+-- The final code looks like this:
 -- @
--- 'insertManyOnDuplicateKeyUpdate' records 
---   [ 'copyUnlessEmpty' ItemDescription 
+-- 'insertManyOnDuplicateKeyUpdate' records
+--   [ 'copyUnlessEmpty' ItemDescription
 --   , 'copyUnlessNull' ItemPrice
 --   , 'copyUnlessNull' ItemQuantity
 --   ]
@@ -1250,7 +1253,7 @@ mkBulkInsertQuery records fieldValues updates =
     copyUnlessValues = map snd fieldsToMaybeCopy
     recordValues = concatMap (map toPersistValue . toPersistFields) records
     recordPlaceholders = commaSeparated $ map (parenWrapped . commaSeparated . map (const "?") . toPersistFields) records
-    mkCondFieldSet n _ = T.concat 
+    mkCondFieldSet n _ = T.concat
         [ n
         , "=COALESCE("
         ,   "NULLIF("
@@ -1262,7 +1265,7 @@ mkBulkInsertQuery records fieldValues updates =
         ]
     condFieldSets = map (uncurry mkCondFieldSet) fieldsToMaybeCopy
     fieldSets = map (\n -> T.concat [n, "=VALUES(", n, ")"]) updateFieldNames
-    upds = map mkUpdateText updates
+    upds = map (mkUpdateText' (pack . escapeDBName) id) updates
     updsValues = map (\(Update _ val _) -> toPersistValue val) updates
     updateText = case fieldSets <> upds <> condFieldSets of
         [] -> T.concat [firstField, "=", firstField]
@@ -1279,27 +1282,26 @@ mkBulkInsertQuery records fieldValues updates =
         , updateText
         ]
 
--- | Vendored from @persistent@.
-mkUpdateText :: PersistEntity record => Update record -> Text
-mkUpdateText x =
-  case updateUpdate x of
-    Assign -> n <> "=?"
-    Add -> T.concat [n, "=", n, "+?"]
-    Subtract -> T.concat [n, "=", n, "-?"]
-    Multiply -> T.concat [n, "=", n, "*?"]
-    Divide -> T.concat [n, "=", n, "/?"]
-    BackendSpecificUpdate up ->
-      error . T.unpack $ "BackendSpecificUpdate " <> up <> " not supported"
+putManySql :: EntityDef -> Int -> Text
+putManySql entityDef' numRecords
+  | numRecords > 0 = q
+  | otherwise = error "putManySql: numRecords MUST be greater than 0!"
   where
-    n = T.pack . escapeDBName . fieldDB . updateFieldDef $ x
-
-commaSeparated :: [Text] -> Text
-commaSeparated = T.intercalate ", "
-
-parenWrapped :: Text -> Text
-parenWrapped t = T.concat ["(", t, ")"]
-
--- | Gets the 'FieldDef' for an 'Update'. Vendored from @persistent@.
-updateFieldDef :: PersistEntity v => Update v -> FieldDef
-updateFieldDef (Update f _ _) = persistFieldDef f
-updateFieldDef BackendUpdate {} = error "updateFieldDef did not expect BackendUpdate"
+    tableName = T.pack . escapeDBName . entityDB $ entityDef'
+    fieldDbToText = T.pack . escapeDBName . fieldDB
+    entityFieldNames = map fieldDbToText (entityFields entityDef')
+    recordPlaceholders= parenWrapped . commaSeparated
+                      $ map (const "?") (entityFields entityDef')
+    mkAssignment n = T.concat [n, "=VALUES(", n, ")"]
+    fieldSets = map (mkAssignment . fieldDbToText) (entityFields entityDef')
+    q = T.concat
+        [ "INSERT INTO "
+        , tableName
+        , " ("
+        , commaSeparated entityFieldNames
+        , ") "
+        , " VALUES "
+        , commaSeparated (replicate numRecords recordPlaceholders)
+        , " ON DUPLICATE KEY UPDATE "
+        , commaSeparated fieldSets
+        ]
