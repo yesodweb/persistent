@@ -752,21 +752,21 @@ getAlters defs def (c1, u1) (c2, u2) =
 getColumn :: (Text -> IO Statement)
           -> DBName -> [PersistValue]
           -> IO (Either Text Column)
-getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, nscl, maxlen] =
+getColumn getter tableName' [PersistText columnName, PersistText isNullable, PersistText typeName, defaultValue, numericPrecision, numericScale, maxlen] =
     case d' of
         Left s -> return $ Left s
         Right d'' ->
             let typeStr = case maxlen of
-                            PersistInt64 n -> T.concat [z, "(", T.pack (show n), ")"]
-                            _              -> z
+                            PersistInt64 n -> T.concat [typeName, "(", T.pack (show n), ")"]
+                            _              -> typeName
              in case getType typeStr of
                   Left s -> return $ Left s
                   Right t -> do
-                      let cname = DBName x
+                      let cname = DBName columnName
                       ref <- getRef cname
                       return $ Right Column
                           { cName = cname
-                          , cNull = y == "YES"
+                          , cNull = isNullable == "YES"
                           , cSqlType = t
                           , cDefault = fmap stripSuffixes d''
                           , cDefaultConstraintName = Nothing
@@ -795,18 +795,18 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, ns
                 , "AND constraint_type='FOREIGN KEY' "
                 , "AND constraint_name=?"
                 ]
-        let ref = refName tname cname
+        let ref = refName tableName' cname
         stmt <- getter sql
         with (stmtQuery stmt
-                     [ PersistText $ unDBName tname
+                     [ PersistText $ unDBName tableName'
                      , PersistText $ unDBName ref
                      ]) (\src -> runConduit $ src .| do
             Just [PersistInt64 i] <- CL.head
             return $ if i == 0 then Nothing else Just (DBName "", ref))
-    d' = case d of
+    d' = case defaultValue of
             PersistNull   -> Right Nothing
             PersistText t -> Right $ Just t
-            _ -> Left $ T.pack $ "Invalid default column: " ++ show d
+            _ -> Left $ T.pack $ "Invalid default column: " ++ show defaultValue
     getType "int4"        = Right SqlInt32
     getType "int8"        = Right SqlInt64
     getType "varchar"     = Right SqlString
@@ -818,13 +818,34 @@ getColumn getter tname [PersistText x, PersistText y, PersistText z, d, npre, ns
     getType "float8"      = Right SqlReal
     getType "bytea"       = Right SqlBlob
     getType "time"        = Right SqlTime
-    getType "numeric"     = getNumeric npre nscl
+    getType "numeric"     = getNumeric numericPrecision numericScale
     getType a             = Right $ SqlOther a
 
     getNumeric (PersistInt64 a) (PersistInt64 b) = Right $ SqlNumeric (fromIntegral a) (fromIntegral b)
-    getNumeric a b = Left $ T.pack $ "Can not get numeric field precision, got: " ++ show a ++ " and " ++ show b ++ " as precision and scale"
-getColumn _ _ x =
-    return $ Left $ T.pack $ "Invalid result from information_schema: " ++ show x
+    getNumeric PersistNull PersistNull = Left $ T.concat
+      [ "No precision and scale were specified for the column: "
+      , columnName
+      , " in table: "
+      , unDBName tableName'
+      , ". Postgres defaults to a maximum scale of 147,455 and precision of 16383,"
+      , " which is probably not what you intended."
+      , " Specify the values as numeric(total_digits, digits_after_decimal_place)."
+      ]
+    getNumeric a b = Left $ T.concat
+      [ "Can not get numeric field precision for the column: "
+      , columnName
+      , " in table: "
+      , unDBName tableName'
+      , ". Expected an integer for both precision and scale, "
+      , "got: "
+      , T.pack $ show a
+      , " and "
+      , T.pack $ show b
+      , ", respectively."
+      , " Specify the values as numeric(total_digits, digits_after_decimal_place)."
+      ]
+getColumn _ _ columnName =
+    return $ Left $ T.pack $ "Invalid result from information_schema: " ++ show columnName
 
 -- | Intelligent comparison of SQL types, to account for SqlInt32 vs SqlOther integer
 sqlTypeEq :: SqlType -> SqlType -> Bool
