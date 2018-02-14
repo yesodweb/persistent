@@ -119,7 +119,7 @@ For MongoDB currently one always needs to create the key on the application side
     Id String sqltype=varchar(3) sql=code
 ```
 
-Composite key (using multiple columns) can also be defined using `Primary` (see [Primary and Foreign keys](## Primary and Foreign Keys). 
+Composite key (using multiple columns) can also be defined using `Primary` (see [Primary and Foreign Keys](#primary-and-foreign-keys)). 
     
 
 ## Primary and Foreign keys
