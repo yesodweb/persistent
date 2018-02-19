@@ -85,9 +85,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     upsert
         :: (MonadIO m, PersistRecordBackend record backend)
         => record          -- ^ new record to insert
-        -> [Update record]  -- ^ updates to perform if the record already exists (leaving
-                            -- this empty is the equivalent of performing a 'repsert' on a
-                            -- unique key)
+        -> [Update record]  -- ^ updates to perform if the record already exists
         -> ReaderT backend m (Entity record) -- ^ the record in the database after the operation
     upsert record updates = do
         uniqueKey <- onlyUnique record
@@ -100,9 +98,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
         :: (MonadIO m, PersistRecordBackend record backend)
         => Unique record   -- ^ uniqueness constraint to find by
         -> record          -- ^ new record to insert
-        -> [Update record] -- ^ updates to perform if the record already exists (leaving
-                           -- this empty is the equivalent of performing a 'repsert' on a
-                           -- unique key)
+        -> [Update record] -- ^ updates to perform if the record already exists
         -> ReaderT backend m (Entity record) -- ^ the record in the database after the operation
     upsertBy uniqueKey record updates = do
         mrecord <- getBy uniqueKey
