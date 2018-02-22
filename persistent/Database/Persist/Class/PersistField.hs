@@ -63,7 +63,52 @@ import System.Locale (defaultTimeLocale)
 import Numeric.Natural (Natural)
 #endif
 
--- | A value which can be marshalled to and from a 'PersistValue'.
+-- | This class teaches Persistent how to take a custom type and marshal it to and from a 'PersistValue', allowing it to be stored in a database.
+--
+-- ==== __Examples__
+--
+-- ===== Simple Newtype
+--
+-- You can use @newtype@ to add more type safety/readability to a basis type like 'ByteString'. In these cases, just derive 'PersistField' and @PersistFieldSql@:
+--
+-- @
+-- {-\# LANGUAGE GeneralizedNewtypeDeriving #-}
+--
+-- newtype HashedPassword = HashedPassword 'ByteString'
+--   deriving (Eq, Show, 'PersistField', PersistFieldSql)
+-- @
+--
+-- ===== Smart Constructor Newtype
+--
+-- In this example, we create a 'PersistField' instance for a newtype following the "Smart Constructor" pattern.
+--
+-- @
+-- {-\# LANGUAGE GeneralizedNewtypeDeriving #-}
+-- import qualified "Data.Text" as T
+-- import qualified "Data.Char" as C
+--
+-- -- | An American Social Security Number
+-- newtype SSN = SSN 'Text'
+--  deriving (Eq, Show, PersistFieldSql)
+--
+-- mkSSN :: 'Text' -> 'Either' 'Text' SSN
+-- mkSSN t = if (T.length t == 9) && (T.all C.isDigit t)
+--  then 'Right' $ SSN t
+--  else 'Left' $ "Invalid SSN: " <> t
+--
+-- instance 'PersistField' SSN where
+--   'toPersistValue' (SSN t) = 'PersistText' t
+--   'fromPersistValue' ('PersistText' t) = mkSSN t
+--   -- Handle cases where the database does not give us PersistText
+--   'fromPersistValue' x = 'Left' $ "File.hs: When trying to deserialize an SSN: expected PersistText, received: " <> T.pack (show x)
+-- @
+--
+-- Tips:
+--
+-- * This file contain dozens of 'PersistField' instances you can look at for examples.
+-- * Typically custom 'PersistField' instances will only accept a single 'PersistValue' constructor in 'fromPersistValue'. 
+-- * Internal 'PersistField' instances accept a wide variety of 'PersistValue's to accomodate e.g. storing booleans as integers, booleans or strings.
+-- * If you're making a custom instance and using a SQL database, you'll also need @PersistFieldSql@ to specify the type of the database column.
 class PersistField a where
     toPersistValue :: a -> PersistValue
     fromPersistValue :: PersistValue -> Either T.Text a
