@@ -1,3 +1,11 @@
+## 2.8.1.2
+
+* Add flag to enable full-text search extensions (enabled by default)
+* Add flag to enable URI filename support (enabled by default)
+* Add flag to enable using usleep (enabled by default)
+  - Enabling usleep allows sqlite to use a finer granularity when sleeping (reduces time between locks)
+* Add flag to enable json1 extension (enabled by default)
+
 ## 2.8.1.1
 
 * Update the vendored SQLite C library from 3.19.3 to 3.22.0. See [the SQLite changelog](https://sqlite.org/changes.html) for details.
