@@ -64,6 +64,7 @@ import Data.Char (toLower, toUpper)
 import Control.Monad (forM, (<=<), mzero)
 import qualified System.IO as SIO
 import Data.Text (pack, Text, append, unpack, concat, uncons, cons, stripPrefix, stripSuffix)
+import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
 import qualified Data.Text.IO as TIO
 import Data.Int (Int64)
@@ -127,7 +128,7 @@ persistManyFileWith ps fps = do
     mapM_ qAddDependentFile fps
 #endif
     ss <- mapM getS fps
-    let s = mconcat ss
+    let s = T.intercalate "\n" ss -- be tolerant of the user forgetting to put a line-break at EOF.
     parseReferences ps s
   where
     getS fp = do
