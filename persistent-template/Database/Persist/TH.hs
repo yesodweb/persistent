@@ -22,6 +22,7 @@ module Database.Persist.TH
     , persistUpperCase
     , persistLowerCase
     , persistFileWith
+    , persistManyFileWith
       -- * Turn @EntityDef@s into types
     , mkPersist
     , MkPersistSettings
@@ -111,14 +112,29 @@ persistLowerCase = persistWith lowerCaseSettings
 -- | Same as 'persistWith', but uses an external file instead of a
 -- quasiquotation.
 persistFileWith :: PersistSettings -> FilePath -> Q Exp
-persistFileWith ps fp = do
+persistFileWith ps fp = persistManyFileWith ps [fp]
+
+-- | Same as 'persistWith', but uses several external files instead of a
+-- quasiquotation.
+--
+-- See <https://github.com/yesodweb/persistent/issues/778 persistent#778> for
+-- more info on how this can be exploited for improving (re)compilation times.
+--
+-- @since 2.5.4
+persistManyFileWith :: PersistSettings -> [FilePath] -> Q Exp
+persistManyFileWith ps fps = do
 #ifdef GHC_7_4
-    qAddDependentFile fp
+    mapM_ qAddDependentFile fps
 #endif
-    h <- qRunIO $ SIO.openFile fp SIO.ReadMode
-    qRunIO $ SIO.hSetEncoding h SIO.utf8_bom
-    s <- qRunIO $ TIO.hGetContents h
+    ss <- mapM getS fps
+    let s = mconcat ss
     parseReferences ps s
+  where
+    getS fp = do
+      h <- qRunIO $ SIO.openFile fp SIO.ReadMode
+      qRunIO $ SIO.hSetEncoding h SIO.utf8_bom
+      s <- qRunIO $ TIO.hGetContents h
+      return s
 
 -- calls parse to Quasi.parse individual entities in isolation
 -- afterwards, sets references to other entities

@@ -1,3 +1,7 @@
+## 2.5.4
+
+* [persistent#778](https://github.com/yesodweb/persistent/issues/778): Add `persistManyFileWith`.
+
 ## 2.5.3.1
 
 * Slight improvement to the error message when a Persistent field can't be parsed from database results
