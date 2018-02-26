@@ -203,6 +203,105 @@ class
     -- | Put the record in the database with the given key.
     -- Unlike 'replace', if a record with the given key does not
     -- exist then a new record will be inserted.
+    --
+    -- === __Example usage__
+    -- Assume that we have the following data type:
+    --
+    -- @
+    -- data Person = Person
+    --     { personName :: Text
+    --     , personAge  :: Int
+    --     }
+    -- @
+    --
+    -- and the entity:
+    --
+    -- @
+    -- mkPersist sqlSettings [persistLowerCase|
+    -- Person
+    --     name String
+    --     age Int
+    --     deriving Show
+    -- |]
+    -- @
+    --
+    -- and the dataset below:
+    --
+    -- > +-----+-----+--------+
+    -- > |id   |name |age     |
+    -- > +-----+-----+--------+
+    -- > |1    |A    |10      |
+    -- > +-----+-----+--------+
+    -- > |2    |B    |20      |
+    -- > +-----+-----+--------+
+    -- > |3    |C    |30      |
+    -- > +-----+-----+--------+
+    --
+    -- First, we insert Person D:
+    --
+    -- @
+    -- dId <- insert $ Person "D" $ Just 40
+    -- @
+    --
+    -- > +-----+-----+--------+
+    -- > |id   |name |age     |
+    -- > +-----+-----+--------+
+    -- > |1    |A    |10      |
+    -- > +-----+-----+--------+
+    -- > |2    |B    |20      |
+    -- > +-----+-----+--------+
+    -- > |3    |C    |30      |
+    -- > +-----+-----+--------+
+    --   |4    |D    |40      |
+    -- > +-----+-----+--------+
+    --
+    -- @
+    -- repsert dId  (Person "X" 999)
+    -- @
+    --
+    -- The dataset is now:
+    --
+    -- > +-----+------+---------+
+    -- > |id   |name  |age      |
+    -- > +-----+------+---------+
+    -- > |1    |A     |10       |
+    -- > +-----+------+---------+
+    -- > |2    |B     |20       |
+    -- > +-----+------+---------+
+    -- > |3    |C     |30       |
+    -- > +-----+------+---------+
+    --   |4    |D -> X|40 -> 999|
+    -- > +-----+------+---------+
+    --
+    -- 'repsert' inserts the given record if the key
+    -- doesn't exist. For example, with the dataset below:
+    --
+    -- > +-----+-----+--------+
+    -- > |id   |name |age     |
+    -- > +-----+-----+--------+
+    -- > |1    |A    |10      |
+    -- > +-----+-----+--------+
+    -- > |2    |B    |20      |
+    -- > +-----+-----+--------+
+    -- > |3    |C    |30      |
+    -- > +-----+-----+--------+
+    --
+    -- The following code will insert Person X
+    --
+    -- @
+    -- repsert dId  (Person "X" 999)
+    -- @
+    --
+    -- > +-----+-----+--------+
+    -- > |1    |A    |10      |
+    -- > +-----+-----+--------+
+    -- > |2    |B    |20      |
+    -- > +-----+-----+--------+
+    -- > |3    |C    |30      |
+    -- > +-----+-----+--------+
+    --   |4    |X    |999     |
+    -- > +-----+-----+--------+
+    --
     repsert :: (MonadIO m, PersistRecordBackend record backend)
             => Key record -> record -> ReaderT backend m ()
 

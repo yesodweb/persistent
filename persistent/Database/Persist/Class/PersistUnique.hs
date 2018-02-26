@@ -82,7 +82,74 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- * If the record exists (matched via it's uniqueness constraint), then update the existing record with the parameters which is passed on as list to the function.
     --
     -- Throws an exception if there is more than 1 uniqueness constraint.
-    upsert
+    --
+    -- === __Example usage__
+    -- Assume that we have the following data type:
+    --
+    -- @
+    -- data Person = Person
+    --     { personName :: Text
+    --     , personAge  :: Int
+    --     }
+    -- @
+    --
+    -- and the entity:
+    --
+    -- @
+    -- mkPersist sqlSettings [persistLowerCase|
+    -- Person
+    --     name String
+    --     age Int
+    --     deriving Show
+    -- |]
+    -- @
+    --
+    -- and the dataset below:
+    --
+    -- > +-----+-----+--------+
+    -- > |id   |name |age     |
+    -- > +-----+-----+--------+
+    -- > |1    |A    |10      |
+    -- > +-----+-----+--------+
+    -- > |2    |B    |20      |
+    -- > +-----+-----+--------+
+    -- > |3    |C    |30      |
+    -- > +-----+-----+--------+
+    --
+    -- @
+    -- upsert (Person "A" 50) [PersonAge =. 15]
+    -- @
+    --
+    -- The above code will alter the dataset to:
+    --
+    -- > +-----+-----+--------+
+    -- > |id   |name |age     |
+    -- > +-----+-----+--------+
+    -- > |1    |A    |10 -> 15|
+    -- > +-----+-----+--------+
+    -- > |2    |B    |20      |
+    -- > +-----+-----+--------+
+    -- > |3    |C    |30      |
+    -- > +-----+-----+--------+
+    --
+    -- @
+    -- upsert (Person "X" 999) [PersonAge =. 15]
+    -- @
+    --
+    -- This code will alter that to:
+    --
+    -- > +-----+-----+--------+
+    -- > |id   |name |age     |
+    -- > +-----+-----+--------+
+    -- > |1    |A    |10      |
+    -- > +-----+-----+--------+
+    -- > |2    |B    |20      |
+    -- > +-----+-----+--------+
+    -- > |3    |C    |30      |
+    -- > +-----+-----+--------+
+    -- > |4    |X    |999     |
+    -- > +-----+-----+--------+
+    upsert 
         :: (MonadIO m, PersistRecordBackend record backend)
         => record          -- ^ new record to insert
         -> [Update record]  -- ^ updates to perform if the record already exists
@@ -94,6 +161,73 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     --
     -- * insert the new record if it does not exist;
     -- * update the existing record that matches the given uniqueness constraint.
+    --
+    -- === __Example usage__
+    -- Assume that we have the following data type:
+    --
+    -- @
+    -- data Person = Person
+    --     { personName :: Text
+    --     , personAge  :: Int
+    --     }
+    -- @
+    --
+    -- and the entity:
+    --
+    -- @
+    -- mkPersist sqlSettings [persistLowerCase|
+    -- Person
+    --     name String
+    --     age Int
+    --     PersonName name
+    --     deriving Show
+    -- |]
+    -- @
+    --
+    -- and the dataset below:
+    --
+    -- > +-----+-----+--------+
+    -- > |id   |name |age     |
+    -- > +-----+-----+--------+
+    -- > |1    |A    |10      |
+    -- > +-----+-----+--------+
+    -- > |2    |B    |20      |
+    -- > +-----+-----+--------+
+    -- > |3    |C    |30      |
+    -- > +-----+-----+--------+
+    --
+    -- @
+    -- upsertBy (PersonName "A") (Person "X" 999) [PersonAge =. 15]
+    -- @
+    --
+    -- The above code will alter the dataset to:
+    -- > +-----+-----+--------+
+    -- > |id   |name |age     |
+    -- > +-----+-----+--------+
+    -- > |1    |A    |10 -> 15|
+    -- > +-----+-----+--------+
+    -- > |2    |B    |20      |
+    -- > +-----+-----+--------+
+    -- > |3    |C    |30      |
+    -- > +-----+-----+--------+
+    --
+    -- @
+    -- upsertBy (PersonName "D") (Person "X" 999) [PersonAge =. 15]
+    -- @
+    --
+    -- The above code will alter the dataset to:
+    --
+    -- > +-----+-----+--------+
+    -- > |id   |name |age     |
+    -- > +-----+-----+--------+
+    -- > |1    |A    |10      |
+    -- > +-----+-----+--------+
+    -- > |2    |B    |20      |
+    -- > +-----+-----+--------+
+    -- > |3    |C    |30      |
+    -- > +-----+-----+--------+
+    -- > |4    |X    |999     |
+    -- > +-----+-----+--------+
     upsertBy
         :: (MonadIO m, PersistRecordBackend record backend)
         => Unique record   -- ^ uniqueness constraint to find by
