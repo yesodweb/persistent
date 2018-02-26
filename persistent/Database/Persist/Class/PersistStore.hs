@@ -136,6 +136,7 @@ class
         => Key record -> ReaderT backend m (Maybe record)
 
     -- | Get many records by their respective identifiers, if available.
+    --
     -- @since 2.8.1
     getMany
         :: (MonadIO m, PersistRecordBackend record backend)
