@@ -52,14 +52,3 @@ Lets develop easy entry points for testing a database using a command runner.
 Or you can look in `./bin/` for the commands it will call and run them directly
 Or
 Lets develop a docker-compose file for running different databases.
-
-
-# Updating Sqlite C Source in the repo
-
-Usually some patches are applied on top of the official sqlite C
-source. This section tries to document the patch to make future
-updates easier:
-
-* [Workaround for stat64 bug](https://github.com/yesodweb/persistent/commit/0df11d70e936389ca6ed15afb227f6224ad16f22)
-
-* [Workaround for stat64 bug on OSX](https://github.com/yesodweb/persistent/commit/d5836ed5eb76ce6a340442bdfc231895a23c29dc)

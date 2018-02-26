@@ -1,3 +1,7 @@
+## 2.8.1.1
+
+* Update `sqlite` cbit sources to 3.22.0 from 3.19.3
+
 ## 2.8.1
 
 * Updated `SqlBackend` definition to set `connPutManySql`. [#770](https://github.com/yesodweb/persistent/pull/770)
