@@ -1,6 +1,6 @@
 ## 2.8.1.1
 
-* Update `sqlite` cbit sources to 3.22.0 from 3.19.3
+* Update the vendored SQLite C library from 3.19.3 to 3.22.0. See [the SQLite changelog](https://sqlite.org/changes.html) for details.
 
 ## 2.8.1
 
@@ -30,7 +30,7 @@
 
 ## 2.6.2.1
 
-* Update `sqlite` cbit sources to 3.19.3 from 3.12.1
+* Update the vendored SQLite C library from 3.12.1 to 3.19.3. See [the SQLite changelog](https://sqlite.org/changes.html) for details.
 
 ## 2.6.2
 
