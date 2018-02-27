@@ -23,17 +23,17 @@ flag use-pkgconfig
 flag build-sanity-exe
   description: Build a sanity check test executable
   default: False
-flag fulltextsearch
-  description: Enable full-text search
+flag full-text-search
+  description: Enable full-text search in the vendored SQLite library; has no effect if a system SQLite library is used.
   default: True
-flag urifilenames
-  description: Enable URI filenames
+flag uri-filenames
+  description: Enable URI filenames in the vendored SQLite library; has no effect if a system SQLite library is used.
   default: True
-flag haveusleep
-  description: Enable use of usleep
+flag have-usleep
+  description: Enable usleep in the vendored SQLite library; has no effect if a system SQLite library is used.
   default: True
 flag json1
-  description: Enable json1 extension
+  description: Enable json1 in the vendored SQLite library; has no effect if a system SQLite library is used.
   default: True
 
 library
@@ -65,14 +65,14 @@ library
         c-sources:   cbits/sqlite3.c
         include-dirs: cbits
         cc-options:  -fPIC -std=c99
-    if flag(fulltextsearch)
+    if flag(full-text-search)
       cc-options: -DSQLITE_ENABLE_FTS3
                   -DSQLITE_ENABLE_FTS3_PARENTHESIS
                   -DSQLITE_ENABLE_FTS4
                   -DSQLITE_ENABLE_FTS5
-    if flag(urifilenames)
+    if flag(uri-filenames)
       cc-options: -DSQLITE_USE_URI
-    if flag(haveusleep)
+    if flag(have-usleep)
        cc-options: -DHAVE_USLEEP
     if flag(json1)
       cc-options: -DSQLITE_ENABLE_JSON1
