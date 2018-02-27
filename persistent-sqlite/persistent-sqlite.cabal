@@ -1,5 +1,5 @@
 name:            persistent-sqlite
-version:         2.8.1.1
+version:         2.8.1.2
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -23,6 +23,18 @@ flag use-pkgconfig
 flag build-sanity-exe
   description: Build a sanity check test executable
   default: False
+flag fulltextsearch
+  description: Enable full-text search
+  default: True
+flag urifilenames
+  description: Enable URI filenames
+  default: True
+flag haveusleep
+  description: Enable use of usleep
+  default: True
+flag json1
+  description: Enable json1 extension
+  default: True
 
 library
     build-depends:   base                    >= 4.8         && < 5
@@ -53,6 +65,17 @@ library
         c-sources:   cbits/sqlite3.c
         include-dirs: cbits
         cc-options:  -fPIC -std=c99
+    if flag(fulltextsearch)
+      cc-options: -DSQLITE_ENABLE_FTS3
+                  -DSQLITE_ENABLE_FTS3_PARENTHESIS
+                  -DSQLITE_ENABLE_FTS4
+                  -DSQLITE_ENABLE_FTS5
+    if flag(urifilenames)
+      cc-options: -DSQLITE_USE_URI
+    if flag(haveusleep)
+       cc-options: -DHAVE_USLEEP
+    if flag(json1)
+      cc-options: -DSQLITE_ENABLE_JSON1
 
     c-sources: cbits/config.c
 
