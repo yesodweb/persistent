@@ -115,11 +115,45 @@ persistLowerCase = persistWith lowerCaseSettings
 persistFileWith :: PersistSettings -> FilePath -> Q Exp
 persistFileWith ps fp = persistManyFileWith ps [fp]
 
--- | Same as 'persistWith', but uses several external files instead of a
--- quasiquotation.
+-- | Same as 'persistFileWith', but uses several external files instead of
+-- one. Splitting your Persistent definitions into multiple modules can 
+-- potentially dramatically speed up compile times.
 --
--- See <https://github.com/yesodweb/persistent/issues/778 persistent#778> for
--- more info on how this can be exploited for improving (re)compilation times.
+-- ==== __Examples__
+--
+-- Split your Persistent definitions into multiple files (@models1@, @models2@), 
+-- then create a new module for each new file and run 'mkPersist' there:
+--
+-- @
+-- -- Model1.hs
+-- 'share'
+--     ['mkPersist' 'sqlSettings']
+--     $('persistFileWith' 'lowerCaseSettings' "models1")
+-- @
+-- @
+-- -- Model2.hs
+-- 'share'
+--     ['mkPersist' 'sqlSettings']
+--     $('persistFileWith' 'lowerCaseSettings' "models2")
+-- @
+--
+-- Use 'persistManyFileWith' to create your migrations:
+--
+-- @
+-- -- Migrate.hs
+-- 'share'
+--     ['mkMigrate' "migrateAll"]
+--     $('persistManyFileWith' 'lowerCaseSettings' ["models1","models2"]) 
+-- @
+--
+-- Tip: To get the same import behavior as if you were declaring all your models in
+-- one file, import your new files @as Name@ into another file, then export @module Name@.
+--
+-- This approach may be used in the future to reduce memory usage during compilation, 
+-- but so far we've only seen mild reductions.
+--
+-- See <https://github.com/yesodweb/persistent/issues/778 persistent#778> and
+-- <https://github.com/yesodweb/persistent/pull/791 persistent#791> for more details.
 --
 -- @since 2.5.4
 persistManyFileWith :: PersistSettings -> [FilePath] -> Q Exp
