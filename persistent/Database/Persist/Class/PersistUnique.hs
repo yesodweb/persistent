@@ -84,40 +84,11 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- Throws an exception if there is more than 1 uniqueness constraint.
     --
     -- === __Example usage__
-    -- Assume that we have the following data type:
+    --
+    -- First, we try to explain 'upsert' using the schema 1.
     --
     -- @
-    -- data Person = Person
-    --     { personName :: Text
-    --     , personAge  :: Int
-    --     }
-    -- @
-    --
-    -- and the entity:
-    --
-    -- @
-    -- mkPersist sqlSettings [persistLowerCase|
-    -- Person
-    --     name String
-    --     age Int
-    --     deriving Show
-    -- |]
-    -- @
-    --
-    -- and the dataset below:
-    --
-    -- > +-----+-----+--------+
-    -- > |id   |name |age     |
-    -- > +-----+-----+--------+
-    -- > |1    |A    |10      |
-    -- > +-----+-----+--------+
-    -- > |2    |B    |20      |
-    -- > +-----+-----+--------+
-    -- > |3    |C    |30      |
-    -- > +-----+-----+--------+
-    --
-    -- @
-    -- upsert (Person "A" 50) [PersonAge =. 15]
+    -- upsert (User \"SPJ\" 999) [UserAge +=. 15]
     -- @
     --
     -- The above code will alter the dataset to:
@@ -125,15 +96,13 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- > +-----+-----+--------+
     -- > |id   |name |age     |
     -- > +-----+-----+--------+
-    -- > |1    |A    |10 -> 15|
+    -- > |1    |SPJ  |40 -> 55|
     -- > +-----+-----+--------+
-    -- > |2    |B    |20      |
-    -- > +-----+-----+--------+
-    -- > |3    |C    |30      |
+    -- > |2    |Simon|41      |
     -- > +-----+-----+--------+
     --
     -- @
-    -- upsert (Person "X" 999) [PersonAge =. 15]
+    -- upsert (User \"X\" 999) [UserAge +=. 15]
     -- @
     --
     -- This code will alter that to:
@@ -141,14 +110,21 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- > +-----+-----+--------+
     -- > |id   |name |age     |
     -- > +-----+-----+--------+
-    -- > |1    |A    |10      |
+    -- > |1    |SPJ  |40      |
     -- > +-----+-----+--------+
-    -- > |2    |B    |20      |
+    -- > |2    |Simon|41      |
     -- > +-----+-----+--------+
-    -- > |3    |C    |30      |
+    -- > |3    |X    |999     |
     -- > +-----+-----+--------+
-    -- > |4    |X    |999     |
-    -- > +-----+-----+--------+
+    --
+    -- Next, what if the schema has two uniqueness constraints?
+    -- Let's check it out using the schema 2:
+    --
+    -- @
+    -- upsert (User \"SPJ\" 999) [UserAge +=. 15]
+    -- @
+    --
+    -- Then, it throws an error message something like \"Expected only one unique key, got \"
     upsert 
         :: (MonadIO m, PersistRecordBackend record backend)
         => record          -- ^ new record to insert
@@ -163,56 +139,11 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- * update the existing record that matches the given uniqueness constraint.
     --
     -- === __Example usage__
-    -- Assume that we have the following data type:
+    --
+    -- We try to explain 'upsertBy' using the schema 2.
     --
     -- @
-    -- data Person = Person
-    --     { personName :: Text
-    --     , personAge  :: Int
-    --     }
-    -- @
-    --
-    -- and the entity:
-    --
-    -- @
-    -- mkPersist sqlSettings [persistLowerCase|
-    -- Person
-    --     name String
-    --     age Int
-    --     PersonName name
-    --     deriving Show
-    -- |]
-    -- @
-    --
-    -- and the dataset below:
-    --
-    -- > +-----+-----+--------+
-    -- > |id   |name |age     |
-    -- > +-----+-----+--------+
-    -- > |1    |A    |10      |
-    -- > +-----+-----+--------+
-    -- > |2    |B    |20      |
-    -- > +-----+-----+--------+
-    -- > |3    |C    |30      |
-    -- > +-----+-----+--------+
-    --
-    -- @
-    -- upsertBy (PersonName "A") (Person "X" 999) [PersonAge =. 15]
-    -- @
-    --
-    -- The above code will alter the dataset to:
-    -- > +-----+-----+--------+
-    -- > |id   |name |age     |
-    -- > +-----+-----+--------+
-    -- > |1    |A    |10 -> 15|
-    -- > +-----+-----+--------+
-    -- > |2    |B    |20      |
-    -- > +-----+-----+--------+
-    -- > |3    |C    |30      |
-    -- > +-----+-----+--------+
-    --
-    -- @
-    -- upsertBy (PersonName "D") (Person "X" 999) [PersonAge =. 15]
+    -- upsertBy (UniqueUserName \"SPJ\") (Person \"X\" 999) [PersonAge +=. 15]
     -- @
     --
     -- The above code will alter the dataset to:
@@ -220,14 +151,40 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- > +-----+-----+--------+
     -- > |id   |name |age     |
     -- > +-----+-----+--------+
-    -- > |1    |A    |10      |
+    -- > |1    |SPJ  |40 -> 55|
     -- > +-----+-----+--------+
-    -- > |2    |B    |20      |
+    -- > |2    |Simon|41      |
     -- > +-----+-----+--------+
-    -- > |3    |C    |30      |
-    -- > +-----+-----+--------+
-    -- > |4    |X    |999     |
-    -- > +-----+-----+--------+
+    --
+    -- @
+    -- upsertBy (UniqueUserAge \"41\") (User \"X\" 999) [UserName =. \"Philip\"]
+    -- @
+    --
+    -- The above code will alter the dataset to:
+    --
+    -- > +-----+---------------+--------+
+    -- > |id   |name           |age     |
+    -- > +-----+---------------+--------+
+    -- > |1    |SPJ            |40 -> 55|
+    -- > +-----+---------------+--------+
+    -- > |2    |Simon -> Philip|41      |
+    -- > +-----+---------------+--------+
+    --
+    -- @
+    -- upsertBy (UniqueUserName \"D\") (User \"X\" 999) [UserAge +=. 15]
+    -- @
+    --
+    -- The above code will alter the dataset to:
+    --
+    -- > +-----+-----+-----+
+    -- > |id   |name |age  |
+    -- > +-----+-----+-----+
+    -- > |1    |SPJ  |40   |
+    -- > +-----+-----+-----+
+    -- > |2    |Simon|41   |
+    -- > +-----+-----+-----+
+    -- > |3    |X    |999  |
+    -- > +-----+-----+-----+
     upsertBy
         :: (MonadIO m, PersistRecordBackend record backend)
         => Unique record   -- ^ uniqueness constraint to find by
