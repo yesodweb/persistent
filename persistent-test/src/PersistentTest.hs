@@ -138,6 +138,14 @@ share [mkPersist persistSettings,  mkMigrate "testMigrate", mkDeleteCascade pers
     UniqueUpsertByCity city
     deriving Eq Show
 
+  RepsertUniqueBy
+    email Text
+    city Text
+    attr Text
+    UniqueRepsertBy email
+    UniqueRepsertByCity city
+    deriving Eq Show
+
   Strict
     !yes Int
     ~no Int
@@ -883,6 +891,55 @@ specs = describe "persistent" $ do
       liftIO $ x5 @?= [p1, p2, p3]
       x6 <- fmap entityVal `fmap` selectList [PersonColor /<-. [Nothing]] []
       liftIO $ x6 @?= [p3]
+
+  describe "repsertUniqueBy" $ do
+    let uniqueEmail = UniqueRepsertBy "a"
+        uniqueCity = UniqueRepsertByCity "Boston"
+    it "adds a new row with no replaces" $ db $ do
+        repsertUniqueBy
+            uniqueEmail
+            (RepsertUniqueBy "a" "Boston" "new")
+        replace' <- getBy uniqueEmail
+        c <- count ([] :: [Filter RepsertUniqueBy])
+        c @== 1
+        (repsertUniqueByAttr . entityVal <$> replace') @== Just "new"
+    it "replaces an existing row" $ db $ do
+#ifdef WITH_MONGODB
+        initial <- insertEntity (RepsertUniqueBy "ko" "Kumbakonam" "initial")
+        repsertUniqueBy
+            (UniqueRepsertBy "ko")
+            (UniqueRepsertBy "ko" "Nagoya" "replace")
+        replace' <- getBy $ UniqueRepsertBy "ko"
+        ((==@) `on` entityKey) (Just initial) replace'
+        (repsertUniqueByAttr . entityVal <$> replace') @== Just "replace"
+        (repsertUniqueByCity . entityVal <$> replace') @== Just "Nagoya"
+        (repsertUniqueByEmail . entityVal <$> replace') @== Just "a"
+#else
+        initial <- insertEntity (RepsertUniqueBy "a" "Boston" "initial")
+        repsertUniqueBy
+            uniqueEmail
+            (RepsertUniqueBy "a" "foo" "replace")
+        replace' <- getBy uniqueEmail
+        ((==@) `on` (entityKey<$>)) (Just initial) replace'
+        (repsertUniqueByAttr . entityVal <$> replace') @== Just "replace"
+        (repsertUniqueByCity . entityVal <$> replace') @== Just "foo"
+        (repsertUniqueByEmail . entityVal <$> replace') @== Just "a"
+#endif
+    it "replaces by the appropriate constraint" $ db $ do
+        initBoston <- insertEntity (RepsertUniqueBy "bos" "Boston" "bos init")
+        initKrum <- insertEntity (RepsertUniqueBy "krum" "Krum" "krum init")
+        repsertUniqueBy
+            (UniqueRepsertBy "bos")
+            (RepsertUniqueBy "nag" "Nagoya" "replace")
+        repsertUniqueBy
+            (UniqueRepsertByCity "Krum")
+            (RepsertUniqueBy "tok" "Tokyo" "replace")
+        repBoston <- getBy (UniqueRepsertBy "nag")
+        repKrum <- getBy (UniqueRepsertByCity "Tokyo")
+        ((==@) `on` (entityKey<$>)) (Just initBoston) repBoston
+        ((==@) `on` (entityKey<$>)) (Just initKrum) repKrum
+        (entityVal <$> repBoston) @== (Just $ RepsertUniqueBy "nag" "Nagoya" "replace")
+        (entityVal <$> repKrum) @== (Just $ RepsertUniqueBy "tok" "Tokyo" "replace")
 
   describe "toJSON" $ do
     it "serializes" $ db $ do
