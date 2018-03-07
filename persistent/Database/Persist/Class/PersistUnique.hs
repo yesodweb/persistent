@@ -203,7 +203,9 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- * insert the new record if it does not exist;
     -- * replace the existing record that matches the given uniqueness constraint.
     repsertUniqueBy :: (PersistEntityBackend record ~ BaseBackend backend, PersistEntity record, MonadIO m)
-                    => Unique record -> record -> ReaderT backend m ()
+                    => Unique record -- ^ uniqueness constraint to find by
+                    -> record        -- ^ new record to insert
+                    -> ReaderT backend m ()
     repsertUniqueBy uniqueKey record = do
         mrecord <- getBy uniqueKey
         maybe (insert_ record) (flip replace record . entityKey) mrecord
