@@ -198,6 +198,18 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
         updateGetEntity (Entity k _) upds =
             (Entity k) `liftM` (updateGet k upds)
 
+    -- | Replace based on a uniqueness constraint or insert:
+    --
+    -- * insert the new record if it does not exist;
+    -- * If the record exists (matched via it's uniqueness constraint), then replace the existing record with the given record.
+    repsertUnique
+        :: (MonadIO m, PersistRecordBackend record backend)
+        => record -- ^ new record to insert
+        -> ReaderT backend m ()
+    repsertUnique record = do
+        uniqueKey <- onlyUnique record
+        repsertUniqueBy uniqueKey record
+
     -- | Replace based on a given uniqueness constraint or insert:
     --
     -- * insert the new record if it does not exist;
