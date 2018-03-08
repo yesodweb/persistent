@@ -1,3 +1,10 @@
+## 2.8.2
+
+Added module `Database.Persist.Postgres.JSON` [#793](https://github.com/yesodweb/persistent/pull/793)
+
+* `PersistField` and `PersistFieldSql` instances for `Data.Aeson.Value`
+* Filter operators `(@>.)` and `(<@.)` to filter on JSON values
+
 ## 2.8.1.1
 
 * Added a more detailed error message when a `numeric` column's scale and precision can't be parsed. [#781](https://github.com/yesodweb/persistent/pull/781)
