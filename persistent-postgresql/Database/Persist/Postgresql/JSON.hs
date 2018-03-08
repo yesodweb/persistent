@@ -1,5 +1,7 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE OverloadedStrings #-}
+
+-- | Filter operators for JSON values added to PostgreSQL 9.4
 module Database.Persist.Postgresql.JSON
   ( (@>.)
   , (<@.)
@@ -22,68 +24,83 @@ infix 4 @>., <@.
 -- on the right hand side in the JSON value on the left
 -- hand side.
 --
+-- === __Objects__
+--
 -- Any empty Object matches any object
+--
 -- @
--- {"a":1,"b":false} @> {} --> True
+-- {"a":1,"b":false} \@> {} == True
 -- @
 --
 -- Any key-value will be matched top-level
+--
 -- @
--- {"a":1,"b":{"c:true"}} @> {"a":1}         --> True
--- {"a":1,"b":{"c:true"}} @> {"b":1}         --> False
--- {"a":1,"b":{"c:true"}} @> {"b":{}}        --> True
--- {"a":1,"b":{"c:true"}} @> {"c":true}      --> False
--- {"a":1,"b":{"c:true"}} @> {"b":{c":true}} --> True
+-- {"a":1,"b":{"c:true"}} \@> {"a":1}         == True
+-- {"a":1,"b":{"c:true"}} \@> {"b":1}         == False
+-- {"a":1,"b":{"c:true"}} \@> {"b":{}}        == True
+-- {"a":1,"b":{"c:true"}} \@> {"c":true}      == False
+-- {"a":1,"b":{"c:true"}} \@> {"b":{c":true}} == True
 -- @
 --
+-- === __Arrays__
+--
 -- Any empty Array matches any array
+--
 -- @
--- [1,2,"hi",false,null] @> [] --> True
+-- [1,2,"hi",false,null] \@> [] == True
 -- @
 --
 -- Any array has to be a sub-set
+--
 -- @
--- [1,2,"hi",false,null] @> [1]                   --> True
--- [1,2,"hi",false,null] @> [null,"hi"]           --> True
--- [1,2,"hi",false,null] @> ["hi",true]           --> False
--- [1,2,"hi",false,null] @> ["hi",2,null,false,1] --> True
--- [1,2,"hi",false,null] @> [3,2,"hi"]            --> False
+-- [1,2,"hi",false,null] \@> [1]                   == True
+-- [1,2,"hi",false,null] \@> [null,"hi"]           == True
+-- [1,2,"hi",false,null] \@> ["hi",true]           == False
+-- [1,2,"hi",false,null] \@> ["hi",2,null,false,1] == True
+-- [1,2,"hi",false,null] \@> [3,2,"hi"]            == False
 -- @
 --
--- For any other JSON values the `(@>.)` operator
+-- === __Other values__
+--
+-- For any other JSON values the `(\@>.)` operator
 -- functions like an equivalence operator.
+--
 -- @
--- "hello" @> "hello" --> True
--- "hello" @> "Hello" --> False
--- "hello" @> "h"     --> False
--- "hello" @> {"a":1} --> False
--- "hello" @> []      --> False
+-- "hello" \@> "hello" == True
+-- "hello" \@> "Hello" == False
+-- "hello" \@> "h"     == False
+-- "hello" \@> {"a":1} == False
+-- "hello" \@> []      == False
 --
--- 5       @> 5       --> True
--- 5       @> 5.00    --> True
--- 5       @> 1       --> False
--- 5       @> 7       --> False
--- 12345   @> 1234    --> False
--- 12345   @> 2345    --> False
--- 12345   @> "12345" --> False
--- 12345   @> [1,2,3,4,5] --> False
+-- 5       \@> 5       == True
+-- 5       \@> 5.00    == True
+-- 5       \@> 1       == False
+-- 5       \@> 7       == False
+-- 12345   \@> 1234    == False
+-- 12345   \@> 2345    == False
+-- 12345   \@> "12345" == False
+-- 12345   \@> [1,2,3,4,5] == False
 --
--- true    @> true    --> True
--- true    @> false   --> False
--- false   @> true    --> False
--- true    @> "true"  --> False
+-- true    \@> true    == True
+-- true    \@> false   == False
+-- false   \@> true    == False
+-- true    \@> "true"  == False
 --
--- null    @> null    --> True
--- null    @> 23      --> False
--- null    @> "null"  --> False
--- null    @> {}      --> False
+-- null    \@> null    == True
+-- null    \@> 23      == False
+-- null    \@> "null"  == False
+-- null    \@> {}      == False
 -- @
+--
+-- @since 2.8.2
 (@>.) :: EntityField record Value -> Value -> Filter record
 (@>.) field val = Filter field (Left val) $ BackendSpecificFilter " @> "
 
--- | Same as `(<@.)` except the inclusion check is reversed.
+-- | Same as (`@>.`) except the inclusion check is reversed.
 -- i.e. is the JSON value on the left hand side included
 -- in the JSON value of the right hand side.
+--
+-- @since 2.8.2
 (<@.) :: EntityField record Value -> Value -> Filter record
 (<@.) field val = Filter field (Left val) $ BackendSpecificFilter " <@ "
 
@@ -110,7 +127,7 @@ fromPersistValueJsonB (PersistByteString bs) =
     case eitherDecodeStrict bs of
       Left str -> Left $ fromPersistValueParseError "FromJSON" bs $ T.pack str
       Right v -> Right v
-fromPersistValueJsonB x = Left $ fromPersistValueError "FromJSON" "string or bytestring" x
+fromPersistValueJsonB x = Left $ fromPersistValueError "FromJSON" "string or bytea" x
 
 -- Constraints on the type are not necessary.
 sqlTypeJsonB :: (ToJSON a, FromJSON a) => Proxy a -> SqlType
