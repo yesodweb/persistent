@@ -22,6 +22,7 @@ module Database.Persist.TH
     , persistUpperCase
     , persistLowerCase
     , persistFileWith
+    , persistManyFileWith
       -- * Turn @EntityDef@s into types
     , mkPersist
     , MkPersistSettings
@@ -63,6 +64,7 @@ import Data.Char (toLower, toUpper)
 import Control.Monad (forM, (<=<), mzero)
 import qualified System.IO as SIO
 import Data.Text (pack, Text, append, unpack, concat, uncons, cons, stripPrefix, stripSuffix)
+import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
 import qualified Data.Text.IO as TIO
 import Data.Int (Int64)
@@ -111,14 +113,63 @@ persistLowerCase = persistWith lowerCaseSettings
 -- | Same as 'persistWith', but uses an external file instead of a
 -- quasiquotation.
 persistFileWith :: PersistSettings -> FilePath -> Q Exp
-persistFileWith ps fp = do
+persistFileWith ps fp = persistManyFileWith ps [fp]
+
+-- | Same as 'persistFileWith', but uses several external files instead of
+-- one. Splitting your Persistent definitions into multiple modules can 
+-- potentially dramatically speed up compile times.
+--
+-- ==== __Examples__
+--
+-- Split your Persistent definitions into multiple files (@models1@, @models2@), 
+-- then create a new module for each new file and run 'mkPersist' there:
+--
+-- @
+-- -- Model1.hs
+-- 'share'
+--     ['mkPersist' 'sqlSettings']
+--     $('persistFileWith' 'lowerCaseSettings' "models1")
+-- @
+-- @
+-- -- Model2.hs
+-- 'share'
+--     ['mkPersist' 'sqlSettings']
+--     $('persistFileWith' 'lowerCaseSettings' "models2")
+-- @
+--
+-- Use 'persistManyFileWith' to create your migrations:
+--
+-- @
+-- -- Migrate.hs
+-- 'share'
+--     ['mkMigrate' "migrateAll"]
+--     $('persistManyFileWith' 'lowerCaseSettings' ["models1","models2"]) 
+-- @
+--
+-- Tip: To get the same import behavior as if you were declaring all your models in
+-- one file, import your new files @as Name@ into another file, then export @module Name@.
+--
+-- This approach may be used in the future to reduce memory usage during compilation, 
+-- but so far we've only seen mild reductions.
+--
+-- See <https://github.com/yesodweb/persistent/issues/778 persistent#778> and
+-- <https://github.com/yesodweb/persistent/pull/791 persistent#791> for more details.
+--
+-- @since 2.5.4
+persistManyFileWith :: PersistSettings -> [FilePath] -> Q Exp
+persistManyFileWith ps fps = do
 #ifdef GHC_7_4
-    qAddDependentFile fp
+    mapM_ qAddDependentFile fps
 #endif
-    h <- qRunIO $ SIO.openFile fp SIO.ReadMode
-    qRunIO $ SIO.hSetEncoding h SIO.utf8_bom
-    s <- qRunIO $ TIO.hGetContents h
+    ss <- mapM getS fps
+    let s = T.intercalate "\n" ss -- be tolerant of the user forgetting to put a line-break at EOF.
     parseReferences ps s
+  where
+    getS fp = do
+      h <- qRunIO $ SIO.openFile fp SIO.ReadMode
+      qRunIO $ SIO.hSetEncoding h SIO.utf8_bom
+      s <- qRunIO $ TIO.hGetContents h
+      return s
 
 -- calls parse to Quasi.parse individual entities in isolation
 -- afterwards, sets references to other entities
