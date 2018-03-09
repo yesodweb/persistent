@@ -88,7 +88,7 @@ import Control.Exception (Exception, throwIO)
 -- string would be @\"host=localhost port=5432 user=test
 -- dbname=test password=test\"@.  Please read libpq's
 -- documentation at
--- <http://www.postgresql.org/docs/9.1/static/libpq-connect.html>
+-- <https://www.postgresql.org/docs/current/static/libpq-connect.html>
 -- for more details on how to create such strings.
 type ConnectionString = ByteString
 
@@ -104,8 +104,8 @@ instance Exception PostgresServerVersionError
 -- | Create a PostgreSQL connection pool and run the given
 -- action.  The pool is properly released after the action
 -- finishes using it.  Note that you should not use the given
--- 'ConnectionPool' outside the action since it may be already
--- been released.
+-- 'ConnectionPool' outside the action since it may already
+-- have been released.
 withPostgresqlPool :: (MonadLogger m, MonadUnliftIO m, IsSqlBackend backend)
                    => ConnectionString
                    -- ^ Connection string to the database.
@@ -119,12 +119,12 @@ withPostgresqlPool :: (MonadLogger m, MonadUnliftIO m, IsSqlBackend backend)
 withPostgresqlPool ci = withPostgresqlPoolWithVersion getServerVersion ci
 
 -- | Same as 'withPostgresPool', but takes a callback for obtaining
--- the server version (to workaround an Amazon Redshift bug).
+-- the server version (to work around an Amazon Redshift bug).
 --
 -- @since 2.6.2
 withPostgresqlPoolWithVersion :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
                               => (PG.Connection -> IO (Maybe Double))
-                              -- ^ action to perform to get the server version
+                              -- ^ Action to perform to get the server version.
                               -> ConnectionString
                               -- ^ Connection string to the database.
                               -> Int
@@ -159,21 +159,21 @@ createPostgresqlPool = createPostgresqlPoolModified (const $ return ())
 -- @since 2.1.3
 createPostgresqlPoolModified
     :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
-    => (PG.Connection -> IO ()) -- ^ action to perform after connection is created
+    => (PG.Connection -> IO ()) -- ^ Action to perform after connection is created.
     -> ConnectionString -- ^ Connection string to the database.
     -> Int -- ^ Number of connections to be kept open in the pool.
     -> m (Pool backend)
 createPostgresqlPoolModified = createPostgresqlPoolModifiedWithVersion getServerVersion
 
 -- | Same as other similarly-named functions in this module, but takes callbacks for obtaining
--- the server version (to workaround an Amazon Redshift bug) and connection-specific tweaking
+-- the server version (to work around an Amazon Redshift bug) and connection-specific tweaking
 -- (to change the schema).
 --
 -- @since 2.6.2
 createPostgresqlPoolModifiedWithVersion
     :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
-    => (PG.Connection -> IO (Maybe Double)) -- ^ action to perform to get the server version
-    -> (PG.Connection -> IO ()) -- ^ action to perform after connection is created
+    => (PG.Connection -> IO (Maybe Double)) -- ^ Action to perform to get the server version.
+    -> (PG.Connection -> IO ()) -- ^ Action to perform after connection is created.
     -> ConnectionString -- ^ Connection string to the database.
     -> Int -- ^ Number of connections to be kept open in the pool.
     -> m (Pool backend)
@@ -187,7 +187,7 @@ withPostgresqlConn :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
 withPostgresqlConn = withPostgresqlConnWithVersion getServerVersion
 
 -- | Same as 'withPostgresqlConn', but takes a callback for obtaining
--- the server version (to workaround an Amazon Redshift bug).
+-- the server version (to work around an Amazon Redshift bug).
 --
 -- @since 2.6.2
 withPostgresqlConnWithVersion :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
@@ -232,7 +232,7 @@ upsertFunction f version = if (version >= 9.5)
                          else Nothing
 
 
--- | Generate a 'SqlBackend' from a 'PG.Connection'
+-- | Generate a 'SqlBackend' from a 'PG.Connection'.
 openSimpleConn :: (IsSqlBackend backend) => LogFunc -> PG.Connection -> IO backend
 openSimpleConn logFunc conn = do
     smap <- newIORef $ Map.empty
@@ -240,7 +240,7 @@ openSimpleConn logFunc conn = do
     return $ createBackend logFunc serverVersion smap conn
 
 -- | Create the backend given a logging function, server version, mutable statement cell,
--- and connection
+-- and connection.
 createBackend :: IsSqlBackend backend => LogFunc -> Maybe Double
               -> IORef (Map.Map Text Statement) -> PG.Connection -> backend
 createBackend logFunc serverVersion smap conn = do
@@ -1053,13 +1053,13 @@ showAlter table (_, DropReference cname) = T.concat
     , escape cname
     ]
 
--- | get the SQL string for the table that a PeristEntity represents
--- Useful for raw SQL queries
+-- | Get the SQL string for the table that a PeristEntity represents.
+-- Useful for raw SQL queries.
 tableName :: (PersistEntity record) => record -> Text
 tableName = escape . tableDBName
 
--- | get the SQL string for the field that an EntityField represents
--- Useful for raw SQL queries
+-- | Get the SQL string for the field that an EntityField represents.
+-- Useful for raw SQL queries.
 fieldName :: (PersistEntity record) => EntityField record typ -> Text
 fieldName = escape . fieldDBName
 
@@ -1078,7 +1078,7 @@ data PostgresConf = PostgresConf
     { pgConnStr  :: ConnectionString
       -- ^ The connection string.
     , pgPoolSize :: Int
-      -- ^ How many connections should be held on the connection pool.
+      -- ^ How many connections should be held in the connection pool.
     } deriving (Show, Read, Data, Typeable)
 
 instance FromJSON PostgresConf where
@@ -1180,7 +1180,7 @@ mockMigrate allDefs _ entity = fmap (fmap $ map showAlterDb) $ do
 
 -- | Mock a migration even when the database is not present.
 -- This function performs the same functionality of 'printMigration'
--- with the difference that an actualy database isn't needed for it.
+-- with the difference that an actual database is not needed.
 mockMigration :: Migration -> IO ()
 mockMigration mig = do
   smap <- newIORef $ Map.empty
@@ -1238,7 +1238,7 @@ putManySql entityDef' numRecords
         , commaSeparated fieldSets
         ]
 
--- | Enable a Postgres extension. See https://www.postgresql.org/docs/10/static/contrib.html
+-- | Enable a Postgres extension. See https://www.postgresql.org/docs/current/static/contrib.html
 -- for a list.
 migrateEnableExtension :: Text -> Migration
 migrateEnableExtension extName = WriterT $ WriterT $ do
