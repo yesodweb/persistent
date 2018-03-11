@@ -1,4 +1,14 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, QuasiQuotes, TemplateHaskell, CPP, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, FlexibleInstances, EmptyDataDecls, MultiParamTypeClasses #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE EmptyDataDecls #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- This module is used for CustomPersistFieldTest; the TH GHC stage restriction requires it to be here.
 -- The code is taken from the Yesod.Text.Markdown package; see https://github.com/yesodweb/persistent/issues/448
