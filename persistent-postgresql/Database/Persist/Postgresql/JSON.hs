@@ -26,38 +26,70 @@ infix 4 @>., <@.
 --
 -- === __Objects__
 --
--- Any empty Object matches any object
+-- An empty Object matches any object
 --
 -- @
+-- {}                \@> {} == True
 -- {"a":1,"b":false} \@> {} == True
 -- @
 --
 -- Any key-value will be matched top-level
 --
 -- @
--- {"a":1,"b":{"c:true"}} \@> {"a":1}         == True
--- {"a":1,"b":{"c:true"}} \@> {"b":1}         == False
--- {"a":1,"b":{"c:true"}} \@> {"b":{}}        == True
--- {"a":1,"b":{"c:true"}} \@> {"c":true}      == False
--- {"a":1,"b":{"c:true"}} \@> {"b":{c":true}} == True
+-- {"a":1,"b":{"c":true"}} \@> {"a":1}         == True
+-- {"a":1,"b":{"c":true"}} \@> {"b":1}         == False
+-- {"a":1,"b":{"c":true"}} \@> {"b":{}}        == True
+-- {"a":1,"b":{"c":true"}} \@> {"c":true}      == False
+-- {"a":1,"b":{"c":true"}} \@> {"b":{c":true}} == True
 -- @
 --
 -- === __Arrays__
 --
--- Any empty Array matches any array
+-- An empty Array matches any array
 --
 -- @
+-- []                    \@> [] == True
 -- [1,2,"hi",false,null] \@> [] == True
 -- @
 --
--- Any array has to be a sub-set
+-- Any array has to be a sub-set.
+-- Any object or array will also be compared as being a subset of.
 --
 -- @
--- [1,2,"hi",false,null] \@> [1]                   == True
--- [1,2,"hi",false,null] \@> [null,"hi"]           == True
--- [1,2,"hi",false,null] \@> ["hi",true]           == False
--- [1,2,"hi",false,null] \@> ["hi",2,null,false,1] == True
--- [1,2,"hi",false,null] \@> [3,2,"hi"]            == False
+-- [1,2,"hi",false,null] \@> [1]                       == True
+-- [1,2,"hi",false,null] \@> [null,"hi"]               == True
+-- [1,2,"hi",false,null] \@> ["hi",true]               == False
+-- [1,2,"hi",false,null] \@> ["hi",2,null,false,1]     == True
+-- [1,2,"hi",false,null] \@> [1,2,"hi",false,null,{}]  == False
+-- @
+--
+-- Arrays and objects inside arrays match the same way they'd
+-- be matched as being on their own.
+--
+-- @
+-- [1,"hi",[false,3],{"a":[null]}] \@> [{}]            == True
+-- [1,"hi",[false,3],{"a":[null]}] \@> [{"a":[]}]      == True
+-- [1,"hi",[false,3],{"a":[null]}] \@> [{"b":[null]}]  == False
+-- [1,"hi",[false,3],{"a":[null]}] \@> [[]]            == True
+-- [1,"hi",[false,3],{"a":[null]}] \@> [[3]]           == True
+-- [1,"hi",[false,3],{"a":[null]}] \@> [[true,3]]      == False
+-- @
+--
+-- A regular value has to be a member
+--
+-- @
+-- [1,2,"hi",false,null] \@> 1      == True
+-- [1,2,"hi",false,null] \@> 5      == False
+-- [1,2,"hi",false,null] \@> "hi"   == True
+-- [1,2,"hi",false,null] \@> false  == True
+-- [1,2,"hi",false,null] \@> "2"    == False
+-- @
+--
+-- An object will never match with an array
+--
+-- @
+-- [1,2,"hi",[false,3],{"a":null}] \@> {}          == False
+-- [1,2,"hi",[false,3],{"a":null}] \@> {"a":null}  == False
 -- @
 --
 -- === __Other values__
@@ -66,11 +98,11 @@ infix 4 @>., <@.
 -- functions like an equivalence operator.
 --
 -- @
--- "hello" \@> "hello" == True
--- "hello" \@> "Hello" == False
--- "hello" \@> "h"     == False
--- "hello" \@> {"a":1} == False
--- "hello" \@> []      == False
+-- "hello" \@> "hello"     == True
+-- "hello" \@> "Hello"     == False
+-- "hello" \@> "h"         == False
+-- "hello" \@> {"hello":1} == False
+-- "hello" \@> ["hello"]   == False
 --
 -- 5       \@> 5       == True
 -- 5       \@> 5.00    == True
