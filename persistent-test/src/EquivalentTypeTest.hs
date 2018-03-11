@@ -1,10 +1,20 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds #-}
-{-# LANGUAGE QuasiQuotes, TemplateHaskell, CPP, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, EmptyDataDecls, FlexibleInstances, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE EmptyDataDecls #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
+
 module EquivalentTypeTest (specs) where
 
-import Database.Persist.TH
 import Control.Monad.Trans.Resource (runResourceT)
+import Database.Persist.TH
 #ifdef WITH_POSTGRESQL
 import qualified Data.Text as T
 #endif
@@ -44,7 +54,7 @@ specs = describe "doesn't migrate equivalent types" $ do
     it "works" $ asIO $ runResourceT $ runConn $ do
 
 #ifdef WITH_POSTGRESQL
-        _ <- rawExecute "DROP DOMAIN IF EXISTS us_postal_code" []
+        _ <- rawExecute "DROP DOMAIN IF EXISTS us_postal_code CASCADE" []
         _ <- rawExecute "CREATE DOMAIN us_postal_code AS TEXT CHECK(VALUE ~ '^\\d{5}$')" []
 #endif
 
@@ -55,7 +65,7 @@ specs = describe "doesn't migrate equivalent types" $ do
 #else
         return ()
 #endif
-        
+
 
 asIO :: IO a -> IO a
 asIO = id
