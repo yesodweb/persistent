@@ -138,6 +138,14 @@ share [mkPersist persistSettings,  mkMigrate "testMigrate", mkDeleteCascade pers
     UniqueUpsertByCity city
     deriving Eq Show
 
+  RepsertUnique
+    email Text
+    attr Text
+    extra Text
+    age Int
+    UniqueRepsert email
+    deriving Eq Show
+
   RepsertUniqueBy
     email Text
     city Text
@@ -891,6 +899,30 @@ specs = describe "persistent" $ do
       liftIO $ x5 @?= [p1, p2, p3]
       x6 <- fmap entityVal `fmap` selectList [PersonColor /<-. [Nothing]] []
       liftIO $ x6 @?= [p3]
+
+  describe "repsertUnique" $ do
+    it "adds a new row with no replaces" $ db $ do
+        repsertUnique (RepsertUnique "a" "new" "" 2)
+        replace' <- getBy (UniqueRepsert "a")
+        c <- count ([] :: [Filter RepsertUnique])
+        c @== 1
+        repsertUniqueAttr . entityVal <$> replace' @== Just "new"
+    it "replaces an existing row" $ db $ do
+#ifdef WITH_MONGODB
+        initial <- insertEntity (RepsertUnique "cow" "initial" "extra" 1)
+        repsertUnique (RepsertUnique "cow" "replace" "such unused" 2)
+        replace' <- getBy (UniqueRepsert "cow")
+        ((==@) `on` (entityKey<$>)) (Just initial) replace'
+        repsertUniqueAttr . entityVal <$> replace' @== Just "replace"
+        repsertUniqueExtra . entityVal <$> replace' @== Just "such unused"
+#else
+        initial <- insertEntity (RepsertUnique "a" "initial" "extra" 1)
+        repsertUnique (RepsertUnique "a" "replace" "such unused" 2)
+        replace' <- getBy (UniqueRepsert "a")
+        ((==@) `on` (entityKey<$>)) (Just initial) replace'
+        repsertUniqueAttr . entityVal <$> replace' @== Just "replace"
+        repsertUniqueExtra . entityVal <$> replace' @== Just "such unused"
+#endif
 
   describe "repsertUniqueBy" $ do
     let uniqueEmail = UniqueRepsertBy "a"
