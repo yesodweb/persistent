@@ -210,6 +210,21 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
         uniqueKey <- onlyUnique record
         repsertUniqueBy uniqueKey record
 
+    -- | Put many entities into the database.
+    --
+    -- Batch version of 'repsertUnique' for SQL backends.
+    --
+    -- Useful when migrating data from one entity to another
+    -- and want to preserve ids.
+    --
+    -- Differs from @insertEntityMany@ by gracefully skipping
+    -- pre-existing records matching single uniqueness constraint.
+    repsertUniqueMany
+        :: (MonadIO m, PersistRecordBackend record backend)
+        => [record] -- ^ new records to insert
+        -> ReaderT backend m ()
+    repsertUniqueMany = mapM_ repsertUnique
+
     -- | Replace based on a given uniqueness constraint or insert:
     --
     -- * insert the new record if it does not exist;
@@ -221,6 +236,21 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     repsertUniqueBy uniqueKey record = do
         mrecord <- getBy uniqueKey
         maybe (insert_ record) (flip replace record . entityKey) mrecord
+
+    -- | Put many entities into the database.
+    --
+    -- Batch version of 'repsert' for SQL backends.
+    --
+    -- Useful when migrating data from one entity to another
+    -- and want to preserve ids.
+    --
+    -- Differs from @insertEntityMany@ by gracefully skipping
+    -- pre-existing records matching given uniqueness constraint.
+    repsertUniqueManyBy :: (PersistEntityBackend record ~ BaseBackend backend, PersistEntity record, MonadIO m)
+                    => Unique record -- ^ uniqueness constraint to find by
+                    -> [record]        -- ^ new records to insert
+                    -> ReaderT backend m ()
+    repsertUniqueManyBy uniqueKey = mapM_ (repsertUniqueBy uniqueKey)
 
     -- | Put many records into db
     --
