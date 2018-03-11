@@ -1,5 +1,5 @@
 name:            persistent-test
-version:         2.0.0.3
+version:         2.0.1.0
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -148,6 +148,8 @@ library
                    , postgresql-simple
                    , postgresql-libpq
      cpp-options: -DWITH_POSTGRESQL -DDEBUG
+     exposed-modules: JSONTest
+
 
    if flag(mysql)
      build-depends:  persistent-mysql

@@ -1,22 +1,40 @@
-{-# OPTIONS_GHC -fno-warn-unused-binds #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_GHC -fno-warn-unused-binds #-}
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
-{-# LANGUAGE QuasiQuotes, TemplateHaskell, CPP, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, EmptyDataDecls, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE EmptyDataDecls #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
+
 module DataTypeTest (specs) where
 
-import Test.QuickCheck.Arbitrary (Arbitrary, arbitrary)
-import Test.QuickCheck.Gen (Gen(..))
-import Test.QuickCheck.Instances ()
-import Test.QuickCheck.Random (newQCGen)
 import Database.Persist.TH
+#ifdef WITH_POSTGRESQL
+import Data.Aeson (Value(..))
+import Database.Persist.Postgresql.JSON
+import qualified Data.HashMap.Strict as HM
+#endif
 import Data.Char (generalCategory, GeneralCategory(..))
-import qualified Data.Text as T
 import qualified Data.ByteString as BS
+import Data.Fixed (Pico,Micro)
+import Data.IntMap (IntMap)
+import qualified Data.Text as T
 import Data.Time (Day, UTCTime (..), fromGregorian, picosecondsToDiffTime,
                   TimeOfDay (TimeOfDay), timeToTimeOfDay, timeOfDayToTime)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds, posixSecondsToUTCTime)
-import Data.IntMap (IntMap)
-import Data.Fixed (Pico,Micro)
+import Test.QuickCheck.Arbitrary (Arbitrary, Arbitrary1, Arbitrary2, arbitrary, liftArbitrary, liftArbitrary2)
+import Test.QuickCheck.Gen (Gen(..), frequency, getSize, resize)
+import Test.QuickCheck.Instances ()
+import Test.QuickCheck.Random (newQCGen)
 
 import Init
 
@@ -53,6 +71,9 @@ DataTypeTable no-json
     timeFrac TimeOfDay sqltype=TIME(6)
     utcFrac UTCTime sqltype=DATETIME(6)
 #endif
+#ifdef WITH_POSTGRESQL
+    jsonb Value
+#endif
 |]
 
 cleanDB :: (MonadIO m, PersistQuery backend, backend ~ PersistEntityBackend DataTypeTable) => ReaderT backend m ()
@@ -61,13 +82,15 @@ cleanDB = deleteWhere ([] :: [Filter DataTypeTable])
 specs :: Spec
 specs = describe "data type specs" $
     it "handles all types" $ asIO $ runConn $ do
+
 #ifndef WITH_NOSQL
         _ <- runMigrationSilent dataTypeMigrate
         -- Ensure reading the data from the database works...
         _ <- runMigrationSilent dataTypeMigrate
 #endif
-        rvals <- liftIO randomValues
-        forM_ (take 1000 rvals) $ \x -> do
+        cleanDB
+        rvals <- liftIO $ randomValues 1000
+        forM_ rvals $ \x -> do
             key <- insert x
             Just y <- get key
             liftIO $ do
@@ -99,6 +122,9 @@ specs = describe "data type specs" $
 #if defined(WITH_MYSQL) && !(defined(OLD_MYSQL))
                 check "timeFrac" (dataTypeTableTimeFrac)
                 check "utcFrac" (dataTypeTableUtcFrac)
+#endif
+#ifdef WITH_POSTGRESQL
+                check "jsonb" dataTypeTableJsonb
 #endif
 
                 -- Do a special check for Double since it may
@@ -136,17 +162,17 @@ roundUTCTime t =
 roundUTCTime = id
 #endif
 
-randomValues :: IO [DataTypeTable]
-randomValues = do
-  g <- newQCGen
-  return $ map (unGen arbitrary g) [0..]
+randomValues :: Int -> IO [DataTypeTable]
+randomValues i = do
+  gs <- replicateM i newQCGen
+  return $ zipWith (unGen arbitrary) gs [0..]
 
 instance Arbitrary DataTypeTable where
   arbitrary = DataTypeTable
      <$> arbText                -- text
      <*> (T.take 100 <$> arbText) -- textManLen
      <*> arbitrary              -- bytes
-     <*> arbTuple arbitrary arbText -- bytesTextTuple
+     <*> liftArbitrary arbText  -- bytesTextTuple
      <*> (BS.take 100 <$> arbitrary) -- bytesMaxLen
      <*> arbitrary              -- int
      <*> arbitrary              -- intList
@@ -163,6 +189,30 @@ instance Arbitrary DataTypeTable where
      <*> (truncateTimeOfDay =<< arbitrary) -- timeFrac
      <*> (truncateUTCTime   =<< arbitrary) -- utcFrac
 #endif
+#ifdef WITH_POSTGRESQL
+     <*> arbitrary              -- value
+#endif
+
+#ifdef WITH_POSTGRESQL
+instance Arbitrary Value where
+  arbitrary = frequency [ (1, pure Null)
+                        , (1, Bool <$> arbitrary)
+                        , (2, Number <$> arbitrary)
+                        , (2, String <$> arbText)
+                        , (3, Array <$> limitIt 4 arbitrary)
+                        , (3, Object <$> arbObject)
+                        ]
+    where limitIt i x = do
+            n <- getSize
+            let m = if n > i then i else n
+            resize m x
+          arbObject = limitIt 4 -- Recursion can make execution divergent
+                    $ fmap HM.fromList -- HashMap -> [(,)]
+                    . liftArbitrary -- [(,)] -> (,)
+                    . liftArbitrary2 arbText -- (,) -> Text and Value
+                    $ limitIt 4 arbitrary -- Again, precaution against divergent recursion.
+#endif
+
 
 arbText :: Gen Text
 arbText =
@@ -170,11 +220,9 @@ arbText =
   .  filter ((`notElem` forbidden) . generalCategory)
   .  filter (<= '\xFFFF') -- only BMP
   .  filter (/= '\0')     -- no nulls
+  .  T.unpack
   <$> arbitrary
   where forbidden = [NotAssigned, PrivateUse]
-
-arbTuple :: Gen a -> Gen b -> Gen (a, b)
-arbTuple x y = (,) <$> x <*> y
 
 -- truncate less significant digits
 truncateToMicro :: Pico -> Pico
