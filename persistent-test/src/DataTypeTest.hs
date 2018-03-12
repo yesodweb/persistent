@@ -17,6 +17,7 @@
 
 module DataTypeTest (specs) where
 
+import Control.Applicative (liftA2)
 import Database.Persist.TH
 #ifdef WITH_POSTGRESQL
 import Data.Aeson (Value(..))
@@ -31,8 +32,8 @@ import qualified Data.Text as T
 import Data.Time (Day, UTCTime (..), fromGregorian, picosecondsToDiffTime,
                   TimeOfDay (TimeOfDay), timeToTimeOfDay, timeOfDayToTime)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds, posixSecondsToUTCTime)
-import Test.QuickCheck.Arbitrary (Arbitrary, Arbitrary1, Arbitrary2, arbitrary, liftArbitrary, liftArbitrary2)
-import Test.QuickCheck.Gen (Gen(..), frequency, getSize, resize)
+import Test.QuickCheck.Arbitrary (Arbitrary, arbitrary)
+import Test.QuickCheck.Gen (Gen(..), frequency, listOf, sized, resize)
 import Test.QuickCheck.Instances ()
 import Test.QuickCheck.Random (newQCGen)
 
@@ -170,10 +171,10 @@ randomValues i = do
 instance Arbitrary DataTypeTable where
   arbitrary = DataTypeTable
      <$> arbText                -- text
-     <*> (T.take 100 <$> arbText) -- textManLen
+     <*> (T.take 100 <$> arbText)          -- textManLen
      <*> arbitrary              -- bytes
-     <*> liftArbitrary arbText  -- bytesTextTuple
-     <*> (BS.take 100 <$> arbitrary) -- bytesMaxLen
+     <*> liftA2 (,) arbitrary arbText      -- bytesTextTuple
+     <*> (BS.take 100 <$> arbitrary)       -- bytesMaxLen
      <*> arbitrary              -- int
      <*> arbitrary              -- intList
      <*> arbitrary              -- intMap
@@ -202,14 +203,13 @@ instance Arbitrary Value where
                         , (3, Array <$> limitIt 4 arbitrary)
                         , (3, Object <$> arbObject)
                         ]
-    where limitIt i x = do
-            n <- getSize
+    where limitIt i x = sized $ \n -> do
             let m = if n > i then i else n
             resize m x
           arbObject = limitIt 4 -- Recursion can make execution divergent
                     $ fmap HM.fromList -- HashMap -> [(,)]
-                    . liftArbitrary -- [(,)] -> (,)
-                    . liftArbitrary2 arbText -- (,) -> Text and Value
+                    . listOf -- [(,)] -> (,)
+                    . liftA2 (,) arbText -- (,) -> Text and Value
                     $ limitIt 4 arbitrary -- Again, precaution against divergent recursion.
 #endif
 
