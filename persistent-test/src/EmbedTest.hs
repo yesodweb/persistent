@@ -1,6 +1,16 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans -O0 #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE QuasiQuotes, TemplateHaskell, CPP, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, EmptyDataDecls, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses #-}
+{-# LANGUAGE EmptyDataDecls #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
 module EmbedTest (specs,
 #ifndef WITH_NOSQL
 embedMigrate
@@ -285,7 +295,7 @@ specs = describe "embedded entities" $ do
   it "Embeds a Map empty" $ db $ do
       let container = EmbedsHasMap (Just "empty map") $ HasMap "empty" $ M.fromList []
       contK <- insert container
-      Just res <- selectFirst [EmbedsHasMapName ==. (Just "empty map")] []
+      Just res <- selectFirst [EmbedsHasMapName ==. Just "empty map"] []
       res @== Entity contK container
 
   it "Embeds a Map with ids as values" $ db $ do

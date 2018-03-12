@@ -29,4 +29,4 @@ specs = describe "Migration" $ do
       again <- getMigration migration
       liftIO $ again @?= []
 #endif
-    
+

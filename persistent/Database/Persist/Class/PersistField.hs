@@ -26,7 +26,6 @@ import Data.Time (Day(..), TimeOfDay, UTCTime,
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 #endif
 import Data.ByteString.Char8 (ByteString, unpack, readInt)
-import Control.Applicative as A
 import Data.Int (Int8, Int16, Int32, Int64)
 import Data.Word (Word, Word8, Word16, Word32, Word64)
 import Data.Text (Text)
@@ -140,7 +139,7 @@ instance PersistField [Char] where
 instance PersistField ByteString where
     toPersistValue = PersistByteString
     fromPersistValue (PersistByteString bs) = Right bs
-    fromPersistValue x = TE.encodeUtf8 A.<$> fromPersistValue x
+    fromPersistValue x = TE.encodeUtf8 <$> fromPersistValue x
 
 instance PersistField T.Text where
     toPersistValue = PersistText
