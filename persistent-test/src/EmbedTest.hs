@@ -33,7 +33,7 @@ import Database.MongoDB (Value(String))
 import EntityEmbedTest
 import System.Process (readProcess)
 #endif
-import Data.List.NonEmpty hiding (insert)
+import Data.List.NonEmpty hiding (insert, length)
 
 data TestException = TestException
     deriving (Show, Typeable, Eq)
