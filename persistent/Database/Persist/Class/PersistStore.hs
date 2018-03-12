@@ -208,9 +208,7 @@ class
     --
     -- First, we insert Philip:
     --
-    -- @
-    -- philipId <- insert $ User \"Philip\" $ Just 42
-    -- @
+    -- > philipId <- insert $ User "Philip" $ Just 42
     --
     -- > +-----+------+-----+
     -- > |id   |name  |age  |
@@ -222,9 +220,7 @@ class
     -- > |3    |Philip|42   |
     -- > +-----+------+-----+
     --
-    -- @
-    -- repsert philipId (User \"Haskell\" 55)
-    -- @
+    -- > repsert philipId (User "Haskell" 55)
     --
     -- The dataset is now:
     --
@@ -241,9 +237,7 @@ class
     -- 'repsert' inserts the given record if the key
     -- doesn't exist. For example, with the first dataset, the following code will insert the user X
     --
-    -- @
-    -- repsert unknownId  (User \"X\" 999)
-    -- @
+    -- > repsert unknownId  (User "X" 999)
     --
     -- > +-----+------+-----+
     -- > |id   |name  |age  |

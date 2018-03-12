@@ -87,9 +87,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     --
     -- First, we try to explain 'upsert' using the schema 1.
     --
-    -- @
-    -- upsert (User \"SPJ\" 999) [UserAge +=. 15]
-    -- @
+    -- > upsert (User "SPJ" 999) [UserAge +=. 15]
     --
     -- The above code will alter the dataset to:
     --
@@ -101,9 +99,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- > |2    |Simon|41      |
     -- > +-----+-----+--------+
     --
-    -- @
-    -- upsert (User \"X\" 999) [UserAge +=. 15]
-    -- @
+    -- > upsert (User "X" 999) [UserAge +=. 15]
     --
     -- This code will alter that to:
     --
@@ -120,9 +116,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- Next, what if the schema has two uniqueness constraints?
     -- Let's check it out using the schema 2:
     --
-    -- @
-    -- upsert (User \"SPJ\" 999) [UserAge +=. 15]
-    -- @
+    -- > upsert (User "SPJ" 999) [UserAge +=. 15]
     --
     -- Then, it throws an error message something like \"Expected only one unique key, got \"
     upsert 
@@ -142,9 +136,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     --
     -- We try to explain 'upsertBy' using the schema 2.
     --
-    -- @
-    -- upsertBy (UniqueUserName \"SPJ\") (Person \"X\" 999) [PersonAge +=. 15]
-    -- @
+    -- > upsertBy (UniqueUserName "SPJ") (Person "X" 999) [PersonAge +=. 15]
     --
     -- The above code will alter the dataset to:
     --
@@ -156,9 +148,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- > |2    |Simon|41      |
     -- > +-----+-----+--------+
     --
-    -- @
-    -- upsertBy (UniqueUserAge \"41\") (User \"X\" 999) [UserName =. \"Philip\"]
-    -- @
+    -- > upsertBy (UniqueUserAge "41") (User "X" 999) [UserName =. \"Philip\"]
     --
     -- The above code will alter the dataset to:
     --
@@ -170,9 +160,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- > |2    |Simon -> Philip|41      |
     -- > +-----+---------------+--------+
     --
-    -- @
-    -- upsertBy (UniqueUserName \"D\") (User \"X\" 999) [UserAge +=. 15]
-    -- @
+    -- > upsertBy (UniqueUserName "D") (User "X" 999) [UserAge +=. 15]
     --
     -- The above code will alter the dataset to:
     --
