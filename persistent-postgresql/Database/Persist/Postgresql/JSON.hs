@@ -99,7 +99,7 @@ infix 4 @>., <@.
 --
 -- @
 -- "hello" \@> "hello"     == True
--- "hello" \@> "Hello"     == False
+-- "hello" \@> \"Hello"     == False
 -- "hello" \@> "h"         == False
 -- "hello" \@> {"hello":1} == False
 -- "hello" \@> ["hello"]   == False
@@ -128,7 +128,7 @@ infix 4 @>., <@.
 (@>.) :: EntityField record Value -> Value -> Filter record
 (@>.) field val = Filter field (Left val) $ BackendSpecificFilter " @> "
 
--- | Same as (`@>.`) except the inclusion check is reversed.
+-- | Same as '@>.' except the inclusion check is reversed.
 -- i.e. is the JSON value on the left hand side included
 -- in the JSON value of the right hand side.
 --
