@@ -2,11 +2,13 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE GADTs #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Database.Persist.Sql.Orphan.PersistQuery
     ( deleteWhereCount
     , updateWhereCount
     , decorateSQLWithLimitOffset
+    , (~~.), (~~*.), (!~~.), (!~~*.)
     ) where
 
 import Database.Persist hiding (updateField)
@@ -27,6 +29,7 @@ import Control.Exception (throwIO)
 import qualified Data.Conduit.List as CL
 import Data.Conduit
 import Data.ByteString.Char8 (readInteger)
+import qualified Data.ByteString as BS
 import Data.Maybe (isJust)
 import Data.List (transpose, inits, find)
 
@@ -202,12 +205,12 @@ getFiltsValues conn = snd . filterClauseHelper False False conn OrNullNo
 
 data OrNull = OrNullYes | OrNullNo
 
-filterClauseHelper :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
+filterClauseHelper :: (PersistEntity record, PersistEntityBackend record ~ SqlBackend)
              => Bool -- ^ include table name?
              -> Bool -- ^ include WHERE?
              -> SqlBackend
              -> OrNull
-             -> [Filter val]
+             -> [Filter record]
              -> (Text, [PersistValue])
 filterClauseHelper includeTable includeWhere conn orNull filters =
     (if not (T.null sql) && includeWhere
@@ -217,19 +220,41 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
     (sql, vals) = combineAND filters
     combineAND = combine " AND "
 
+    filterValueToPersistValues :: forall a.  PersistField a => Either a [a] -> [PersistValue]
+    filterValueToPersistValues v = map toPersistValue $ either return id v
+
     combine s fs =
         (T.intercalate s $ map wrapP a, mconcat b)
       where
         (a, b) = unzip $ map go fs
         wrapP x = T.concat ["(", x, ")"]
 
-    go (BackendFilter _) = error "BackendFilter not expected"
     go (FilterAnd []) = ("1=1", [])
     go (FilterAnd fs) = combineAND fs
     go (FilterOr []) = ("1=0", [])
     go (FilterOr fs)  = combine " OR " fs
-    go (Filter field value pfilter) =
-        let t = entityDef $ dummyFromFilts [Filter field value pfilter]
+    go (BackendFilter filt) = case filt of
+        LikeFilter fld val     ->
+            ((if includeTable then ((tn <> ".") <>) else id)
+             (connEscapeName conn $ fieldName fld) <> " " <> "LIKE" <> " ?", [PersistText val])
+        ILikeFilter fld val     ->
+            ((if includeTable then ((tn <> ".") <>) else id)
+             (connEscapeName conn $ fieldName fld) <> " " <> "ILIKE" <> " ?", [PersistText val])
+        NotLikeFilter fld val     ->
+            ((if includeTable then ((tn <> ".") <>) else id)
+             (connEscapeName conn $ fieldName fld) <> " " <> "NOT LIKE" <> " ?", [PersistText val])
+        NotILikeFilter fld val     ->
+            ((if includeTable then ((tn <> ".") <>) else id)
+             (connEscapeName conn $ fieldName fld) <> " " <> "NOT ILIKE" <> " ?", [PersistText val])
+      where
+        tn = connEscapeName conn $ entityDB
+           $ entityDef $ dummyFromBackendFilter filt
+
+        dummyFromBackendFilter :: SqlLikeFilter record -> Maybe record
+        dummyFromBackendFilter _ = Nothing
+
+    go filterArg@(Filter field value pfilter) =
+        let t = entityDef $ dummyFromFilts [filterArg]
         in case (isIdField field, entityPrimary t, allVals) of
                  (True, Just pdef, PersistList ys:_) ->
                     if length (compositeFields pdef) /= length ys
@@ -309,7 +334,6 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
                                 , ")"
                                 ], notNullVals)
                             _ -> (name <> showSqlFilter pfilter <> "?" <> orNullSuffix, allVals)
-
       where
         isCompFilter Lt = True
         isCompFilter Le = True
@@ -320,9 +344,6 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
         wrapSql sqlcl = "(" <> sqlcl <> ")"
         fromPersistList (PersistList xs) = xs
         fromPersistList other = error $ "expected PersistList but found " ++ show other
-
-        filterValueToPersistValues :: forall a.  PersistField a => Either a [a] -> [PersistValue]
-        filterValueToPersistValues v = map toPersistValue $ either return id v
 
         orNullSuffix =
             case orNull of
@@ -401,3 +422,42 @@ decorateSQLWithLimitOffset nolimit (limit,offset) _ sql =
             , lim
             , off
             ]
+
+
+-- | Mark the subset of 'PersistField's that can be searched by a LIKE query
+-- Anything stored as PersistText or PersistByteStrirng
+class PersistField typ => SqlLikeSearchable typ where
+
+instance SqlLikeSearchable Text
+instance SqlLikeSearchable BS.ByteString
+instance SqlLikeSearchable rs => SqlLikeSearchable (Maybe rs)
+
+-- | Filter using LIKE, ILIKE, and its negations
+-- Note that a LIKE query such as 'prefix-%' (wildcard suffix only) is able to use standard indexes
+-- to match the prefix portion.
+(~~.), (~~*.), (!~~.), (!~~*.)
+    :: forall record searchable. (SqlLikeSearchable searchable, PersistEntity record, PersistEntityBackend record ~ SqlBackend)
+    => EntityField record searchable -> Text -> Filter record
+fld ~~. val = BackendFilter $ LikeFilter fld val
+fld ~~*. val = BackendFilter $ ILikeFilter fld val
+fld !~~. val = BackendFilter $ NotLikeFilter fld val
+fld !~~*. val = BackendFilter $ NotILikeFilter fld val
+
+type instance BackendSpecificFilter SqlBackend record = SqlLikeFilter record
+data SqlLikeFilter record =
+        forall typ. PersistField typ =>
+          LikeFilter
+            (EntityField record typ)
+            Text
+      | forall typ. PersistField typ =>
+          NotLikeFilter
+            (EntityField record typ)
+            Text
+      | forall typ. PersistField typ =>
+          ILikeFilter
+            (EntityField record typ)
+            Text
+      | forall typ. PersistField typ =>
+          NotILikeFilter
+            (EntityField record typ)
+            Text
