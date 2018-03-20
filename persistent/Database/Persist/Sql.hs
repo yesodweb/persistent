@@ -12,6 +12,7 @@ module Database.Persist.Sql
     , rawSql
     , deleteWhereCount
     , updateWhereCount
+    , (~~.), (~~*.), (!~~.), (!~~*.)
     , transactionSave
     , transactionUndo
     , getStmtConn
