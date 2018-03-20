@@ -35,7 +35,7 @@ library
                    , path-pieces              >= 0.1
                    , http-api-data            >= 0.2       && < 0.4
                    , aeson                    >= 0.5
-                   , monad-logger             >= 0.3.28
+                   , monad-logger             >= 0.3.22
                    , base64-bytestring
                    , unordered-containers
                    , vector
