@@ -14,6 +14,7 @@ module Database.Persist.Sql
     , executeQQ
     , deleteWhereCount
     , updateWhereCount
+    , (~~.), (~~*.), (!~~.), (!~~*.)
     , transactionSave
     , transactionUndo
     , getStmtConn

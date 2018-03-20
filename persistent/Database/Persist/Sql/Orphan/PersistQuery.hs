@@ -7,6 +7,7 @@ module Database.Persist.Sql.Orphan.PersistQuery
     ( deleteWhereCount
     , updateWhereCount
     , decorateSQLWithLimitOffset
+    , (~~.), (~~*.), (!~~.), (!~~*.)
     ) where
 
 import Database.Persist hiding (updateField)
@@ -202,12 +203,12 @@ getFiltsValues conn = snd . filterClauseHelper False False conn OrNullNo
 
 data OrNull = OrNullYes | OrNullNo
 
-filterClauseHelper :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
+filterClauseHelper :: (PersistEntity record, PersistEntityBackend record ~ SqlBackend)
              => Bool -- ^ include table name?
              -> Bool -- ^ include WHERE?
              -> SqlBackend
              -> OrNull
-             -> [Filter val]
+             -> [Filter record]
              -> (Text, [PersistValue])
 filterClauseHelper includeTable includeWhere conn orNull filters =
     (if not (T.null sql) && includeWhere
@@ -217,19 +218,22 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
     (sql, vals) = combineAND filters
     combineAND = combine " AND "
 
+    filterValueToPersistValues :: forall a.  PersistField a => Either a [a] -> [PersistValue]
+    filterValueToPersistValues v = map toPersistValue $ either return id v
+
     combine s fs =
         (T.intercalate s $ map wrapP a, mconcat b)
       where
         (a, b) = unzip $ map go fs
         wrapP x = T.concat ["(", x, ")"]
 
-    go (BackendFilter _) = error "BackendFilter not expected"
     go (FilterAnd []) = ("1=1", [])
     go (FilterAnd fs) = combineAND fs
     go (FilterOr []) = ("1=0", [])
     go (FilterOr fs)  = combine " OR " fs
-    go (Filter field value pfilter) =
-        let t = entityDef $ dummyFromFilts [Filter field value pfilter]
+    go (BackendFilter _) = error "BackendFilter not expected"
+    go filterArg@(Filter field value pfilter) =
+        let t = entityDef $ dummyFromFilts [filterArg]
         in case (isIdField field, entityPrimary t, allVals) of
                  (True, Just pdef, PersistList ys:_) ->
                     if length (compositeFields pdef) /= length ys
@@ -309,7 +313,6 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
                                 , ")"
                                 ], notNullVals)
                             _ -> (name <> showSqlFilter pfilter <> "?" <> orNullSuffix, allVals)
-
       where
         isCompFilter Lt = True
         isCompFilter Le = True
@@ -320,9 +323,6 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
         wrapSql sqlcl = "(" <> sqlcl <> ")"
         fromPersistList (PersistList xs) = xs
         fromPersistList other = error $ "expected PersistList but found " ++ show other
-
-        filterValueToPersistValues :: forall a.  PersistField a => Either a [a] -> [PersistValue]
-        filterValueToPersistValues v = map toPersistValue $ either return id v
 
         orNullSuffix =
             case orNull of
@@ -401,3 +401,15 @@ decorateSQLWithLimitOffset nolimit (limit,offset) _ sql =
             , lim
             , off
             ]
+
+
+-- | Filter using LIKE, ILIKE, and its negations
+-- Note that a LIKE query such as 'prefix-%' (wildcard suffix only)
+-- is able to use standard indexes to match the prefix portion.
+(~~.), (~~*.), (!~~.), (!~~*.)
+    :: forall record. (PersistEntity record, PersistEntityBackend record ~ SqlBackend)
+    => EntityField record Text -> Text -> Filter record
+field ~~. value   = Filter field (Left value) $ BackendSpecificFilter "LIKE"
+field ~~*. value  = Filter field (Left value) $ BackendSpecificFilter "ILIKE"
+field !~~. value  = Filter field (Left value) $ BackendSpecificFilter "NOT LIKE"
+field !~~*. value = Filter field (Left value) $ BackendSpecificFilter "NOT ILIKE"
