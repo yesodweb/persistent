@@ -138,7 +138,7 @@ insertBy val = do
         Just z -> return $ Left z
 
 -- | It is `repsert` that checking on a given uniqueness constraint.
--- if a record exist by unique, then `replace`, else `insert`
+-- if a record exist by unique, then `replace`, else `insert`.
 -- `repsertBy` corresponds to `repsert` so that `upsertBy` corresponds to `upsert`.
 -- This function differs from upsertBy only by specifying records as arguments,
 -- so you do not have to arrange fields to update.
