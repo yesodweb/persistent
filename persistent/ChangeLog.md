@@ -1,6 +1,7 @@
 ## 2.8.2
 
 * add `repsertBy`
+* See [#804](https://github.com/yesodweb/persistent/pull/804)
 
 ## 2.8.1
 
