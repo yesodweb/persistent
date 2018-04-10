@@ -23,6 +23,7 @@ module Database.Persist.Class
     , PersistUniqueWrite (..)
     , getByValue
     , insertBy
+    , repsertBy
     , insertUniqueEntity
     , replaceUnique
     , checkUnique

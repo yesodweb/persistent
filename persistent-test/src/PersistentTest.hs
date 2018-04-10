@@ -770,6 +770,14 @@ specs = describe "persistent" $ do
       Right _ <- insertBy $ Person "name2" 1 Nothing
       return ()
 
+  it "repsertBy" $ db $ do
+      k0 <- repsertBy $ Person "name0" 0 Nothing
+      k1 <- repsertBy $ Person "name1" 0 Nothing
+      k2 <- repsertBy $ Person "name0" 0 Nothing
+      k0 @/= k1
+      k0 @== k2
+      k1 @/= k2
+
   it "insertKey" $ db $ do
       k <- liftIO (PersonKey `fmap` generateKey)
       insertKey k $ Person "Key" 26 Nothing

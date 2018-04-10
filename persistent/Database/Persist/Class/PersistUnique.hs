@@ -6,6 +6,7 @@ module Database.Persist.Class.PersistUnique
   ,PersistUniqueWrite(..)
   ,getByValue
   ,insertBy
+  ,repsertBy
   ,insertUniqueEntity
   ,replaceUnique
   ,checkUnique
@@ -135,6 +136,26 @@ insertBy val = do
     case res of
         Nothing -> Right `liftM` insert val
         Just z -> return $ Left z
+
+-- | It is `repsert` that checking on a given uniqueness constraint.
+-- if a record exist by unique, then `replace`, else `insert`
+-- `repsertBy` corresponds to `repsert` so that `upsertBy` corresponds to `upsert`.
+-- This function differs from upsertBy only by specifying records as arguments,
+-- so you do not have to arrange fields to update.
+--
+-- @since 2.8.2
+repsertBy
+    :: ( MonadIO m
+       , PersistUniqueWrite backend
+       , PersistRecordBackend record backend
+       )
+    => record                         -- ^ new record to `replace` or `insert`.
+    -> ReaderT backend m (Key record) -- ^ new id by `insert` or id already present.
+repsertBy record = do
+    me <- getByValue record
+    case me of
+        Nothing             -> insert record
+        Just (Entity key _) -> replace key record >> return key
 
 -- | Insert a value, checking for conflicts with any unique constraints. If a
 -- duplicate exists in the database, it is left untouched. The key of the

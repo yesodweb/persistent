@@ -1,3 +1,7 @@
+## 2.8.2
+
+* add `repsertBy`
+
 ## 2.8.1
 
 * DRY-ed up and exposed several util functions in `Database.Persist.Sql.Util`.
