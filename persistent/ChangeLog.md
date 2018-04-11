@@ -1,3 +1,7 @@
+## 2.8.2
+
+* Added support for `sql=` to the unique constraints quasi-quoter so that users can specify the database names of the constraints.
+
 ## 2.8.1
 
 * DRY-ed up and exposed several util functions in `Database.Persist.Sql.Util`.
