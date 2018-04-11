@@ -462,7 +462,10 @@ takeComposite fields pkcols
                 else d
         | otherwise = getDef ds t
 
--- Unique UppercaseConstraintName list of lowercasefields
+-- Unique UppercaseConstraintName list of lowercasefields terminated
+-- by ! or sql= such that a unique constraint can look like:
+-- `UniqueTestNull fieldA fieldB sql=ConstraintNameInDatabase !force`
+-- Here using sql= sets the name of the constraint.
 takeUniq :: PersistSettings
          -> Text
          -> [FieldDef]
