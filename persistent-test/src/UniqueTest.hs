@@ -20,12 +20,12 @@ share [mkPersist sqlSettings,  mkMigrate "uniqueMigrate"] [persistLowerCase|
 #endif
   TestNonNull
     fieldA Int
-    UniqueTestNonNull fieldA
+    UniqueTestNonNull fieldA sql=UniqueTestNonNull !force
     deriving Eq Show
   TestNull
     fieldA Int
     fieldB Int Maybe
-    UniqueTestNull fieldA fieldB !force
+    UniqueTestNull fieldA fieldB sql=UniqueTestNonNullSqlName !force
     deriving Eq Show
 #ifndef WITH_NOSQL
   TestCheckmark

@@ -119,8 +119,18 @@ For MongoDB currently one always needs to create the key on the application side
     Id String sqltype=varchar(3) sql=code
 ```
 
-Composite key (using multiple columns) can also be defined using `Primary` (see [Primary and Foreign Keys](#primary-and-foreign-keys)). 
-    
+Composite key (using multiple columns) can also be defined using `Primary` (see [Primary and Foreign Keys](#primary-and-foreign-keys)).
+
+`sql=` also works for setting the names of unique indexes.
+
+```
+Person
+  name Text
+  phone Text
+  UniquePersonPhone phone sql=UniqPerPhone
+```
+
+This makes a unique index requiring `phone` to be unique across `Person` rows. Ordinarily Persistent will generate a snake-case index name from the capitalized name provided such that `UniquePersonPhone` becomes `unique_person_phone`. However, we provided a `sql=` so the index name in the database will instead be `UniqPerPhone`. Keep in mind `sql=` and `!` attrs must come after the list of fields in front of the index name in the quasi-quoter.
 
 ## Primary and Foreign keys
 
