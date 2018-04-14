@@ -1,7 +1,11 @@
-## 2.8.2
+## 2.8.3
 
 * add `repsertBy`
 * See [#804](https://github.com/yesodweb/persistent/pull/804)
+
+## 2.8.2
+
+* Added support for `sql=` to the unique constraints quasi-quoter so that users can specify the database names of the constraints.
 
 ## 2.8.1
 

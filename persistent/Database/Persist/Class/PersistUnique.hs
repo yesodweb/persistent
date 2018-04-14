@@ -143,7 +143,7 @@ insertBy val = do
 -- This function differs from upsertBy only by specifying records as arguments,
 -- so you do not have to arrange fields to update.
 --
--- @since 2.8.2
+-- @since 2.8.3
 repsertBy
     :: ( MonadIO m
        , PersistUniqueWrite backend

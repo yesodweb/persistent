@@ -23,7 +23,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Control.Arrow ((&&&))
 import qualified Data.Map as M
-import Data.List (foldl')
+import Data.List (find, foldl')
 import Data.Monoid (mappend)
 import Control.Monad (msum, mplus)
 
@@ -462,26 +462,56 @@ takeComposite fields pkcols
                 else d
         | otherwise = getDef ds t
 
--- Unique UppercaseConstraintName list of lowercasefields
+-- Unique UppercaseConstraintName list of lowercasefields terminated
+-- by ! or sql= such that a unique constraint can look like:
+-- `UniqueTestNull fieldA fieldB sql=ConstraintNameInDatabase !force`
+-- Here using sql= sets the name of the constraint.
 takeUniq :: PersistSettings
-          -> Text
-          -> [FieldDef]
-          -> [Text]
-          -> UniqueDef
+         -> Text
+         -> [FieldDef]
+         -> [Text]
+         -> UniqueDef
 takeUniq ps tableName defs (n:rest)
     | not (T.null n) && isUpper (T.head n)
         = UniqueDef
             (HaskellName n)
-            (DBName $ psToDBName ps (tableName `T.append` n))
+            dbName
             (map (HaskellName &&& getDBName defs) fields)
             attrs
   where
-    (fields,attrs) = break ("!" `T.isPrefixOf`) rest
-    getDBName [] t = error $ "Unknown column in unique constraint: " ++ show t
+    isAttr a =
+      "!" `T.isPrefixOf` a
+    isSqlName a =
+      "sql=" `T.isPrefixOf` a
+    isNonField a =
+       isAttr a
+      || isSqlName a
+    (fields, nonFields) =
+      break isNonField rest
+    attrs = filter isAttr nonFields
+    usualDbName =
+      DBName $ psToDBName ps (tableName `T.append` n)
+    sqlName :: Maybe DBName
+    sqlName =
+      case find isSqlName nonFields of
+        Nothing ->
+          Nothing
+        (Just t) ->
+          case drop 1 $ T.splitOn "=" t of
+            (x : _) -> Just (DBName x)
+            _ -> Nothing
+    dbName = fromMaybe usualDbName sqlName
+    getDBName [] t =
+      error $ "Unknown column in unique constraint: " ++ show t
+              ++ " " ++ show defs ++ show n ++ " " ++ show attrs
     getDBName (d:ds) t
         | fieldHaskell d == HaskellName t = fieldDB d
         | otherwise = getDBName ds t
-takeUniq _ tableName _ xs = error $ "invalid unique constraint on table[" ++ show tableName ++ "] expecting an uppercase constraint name xs=" ++ show xs
+takeUniq _ tableName _ xs =
+  error $ "invalid unique constraint on table["
+          ++ show tableName
+          ++ "] expecting an uppercase constraint name xs="
+          ++ show xs
 
 data UnboundForeignDef = UnboundForeignDef
                          { _unboundFields :: [Text] -- ^ fields in other entity
