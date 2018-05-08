@@ -1,15 +1,15 @@
 # Building with Backends
 
 With all required backends installed, `stack build` can build all packages
-listed in `stack.yaml` and is equivalent to;
+listed in `stack.yaml` and is equivalent to:
 
 ```
 > stack build persistent persistent-template persistent-sqlite persistent-test
 persistent-mongoDB persistent-mysql persistent-postgresql persistent-redis
 ```
 
-To build when missing backends, such as mysql and postgres shown here, drop the
-targets not installed:
+If backends such as mysql and postgres are not installed then the default build
+will fail as will builds for packages for those backends alone:
 
 ```
 > stack build persistent-mysql
@@ -23,7 +23,11 @@ targets not installed:
     Process exited with code: ExitFailure 1
     Configuring postgresql-libpq-0.9.4.0...
     setup: The program 'pg_config' is required but it could not be found.
-    
+```
+
+To build all other packages, drop the failing package names as targets:
+
+```
 > stack build persistent persistent-template persistent-sqlite persistent-test
 persistent-mongoDB persistent-redis
 ...
