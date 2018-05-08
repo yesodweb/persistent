@@ -32,10 +32,7 @@ One can always fall back to using the raw database driver or other lower-level o
 
 ## Install from source
 
-Clone the repo and run
-
-    stack build
-
-# Developing persistent
-
-See [development.md](https://github.com/yesodweb/persistent/blob/master/development.md).
+Clone the repo and run `stack build` to build all targets. Persistent
+supports many backends. If you have only some of these installed the
+[development](development.md) docs show how to build against a subset of
+targets.
