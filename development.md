@@ -8,7 +8,7 @@ listed in `stack.yaml` and is equivalent to;
 persistent-mongoDB persistent-mysql persistent-postgresql persistent-redis
 ```
 
-I can build a subset of targets excluding those with backends not installed:
+To build a subset of targets excluding those with backends not installed:
 
 ```
 > stack build persistent-mysql
