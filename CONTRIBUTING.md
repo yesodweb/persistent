@@ -17,7 +17,7 @@ packages:
 - '/path/to/this/repo/persistent-postgresql'
 ```
 
-Additional information can be found in `development.md`.
+Additional information can be found in [development.md](development.md).
 
 ## Coding Guidelines
 
