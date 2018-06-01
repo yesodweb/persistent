@@ -67,7 +67,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 
 import Database.Persist.Sql
-import Database.Persist.Sql.Types.Internal (mkPersistBackend)
+import Database.Persist.Sql.Types.Internal (mkPersistBackend, makeIsolationLevelStatement)
 import Database.Persist.Sql.Util (commaSeparated, mkUpdateText', parenWrapped)
 import Data.Int (Int64)
 
@@ -139,6 +139,7 @@ open' ci logFunc = do
         , connBegin      = const $ MySQL.execute_ conn "start transaction" >> return ()
         , connCommit     = const $ MySQL.commit   conn
         , connRollback   = const $ MySQL.rollback conn
+        , connSetIsolationLevel = \i -> MySQL.execute_ conn (makeIsolationLevelStatement i) >> return ()
         , connEscapeName = pack . escapeDBName
         , connNoLimit    = "LIMIT 18446744073709551615"
         -- This noLimit is suggested by MySQL's own docs, see
@@ -573,7 +574,7 @@ getColumn connectInfo getter tname [ PersistText cname
                     _ -> fail $ "Invalid default column: " ++ show default'
 
       -- Foreign key (if any)
-      stmt <- lift . getter $ T.concat 
+      stmt <- lift . getter $ T.concat
         [ "SELECT REFERENCED_TABLE_NAME, "
         ,   "CONSTRAINT_NAME, "
         ,   "ORDINAL_POSITION "
@@ -1034,6 +1035,7 @@ mockMigration mig = do
                              connBegin = undefined,
                              connCommit = undefined,
                              connRollback = undefined,
+                             connSetIsolationLevel = undefined,
                              connEscapeName = undefined,
                              connNoLimit = undefined,
                              connRDBMS = undefined,

@@ -16,6 +16,8 @@ module Database.Persist.Sql
     , updateWhereCount
     , transactionSave
     , transactionUndo
+    , IsolationLevel (..)
+    , setIsolationLevel
     , getStmtConn
       -- * Internal
     , module Database.Persist.Sql.Internal
@@ -24,6 +26,7 @@ module Database.Persist.Sql
 
 import Database.Persist
 import Database.Persist.Sql.Types
+import Database.Persist.Sql.Types.Internal (IsolationLevel (..))
 import Database.Persist.Sql.Class
 import Database.Persist.Sql.Run hiding (withResourceTimeout)
 import Database.Persist.Sql.Raw
@@ -54,3 +57,8 @@ transactionUndo = do
     conn <- ask
     let getter = getStmtConn conn
     liftIO $ connRollback conn getter >> connBegin conn getter
+
+setIsolationLevel :: MonadIO m => IsolationLevel -> ReaderT SqlBackend m ()
+setIsolationLevel i = do
+    conn <- ask
+    liftIO $ connSetIsolationLevel conn i

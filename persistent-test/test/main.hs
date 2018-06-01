@@ -23,6 +23,7 @@ import qualified InsertDuplicateUpdate
 import qualified UniqueTest
 import qualified MigrationColumnLengthTest
 import qualified EquivalentTypeTest
+import qualified TransactionLevelTest
 
 #ifndef WITH_NOSQL
 #  ifdef WITH_SQLITE
@@ -84,6 +85,7 @@ main = do
 #  endif
       , CustomPrimaryKeyReferenceTest.migration
       , MigrationColumnLengthTest.migration
+      , TransactionLevelTest.migration
       ]
     PersistentTest.cleanDB
 #endif
@@ -110,6 +112,7 @@ main = do
     InsertDuplicateUpdate.specs
     MigrationColumnLengthTest.specs
     EquivalentTypeTest.specs
+    TransactionLevelTest.specs
 
 #ifdef WITH_SQLITE
     MigrationTest.specs

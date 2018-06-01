@@ -32,7 +32,7 @@ module Database.Persist.Postgresql
 
 import Database.Persist.Sql
 import Database.Persist.Sql.Util (dbIdColumnsEsc, commaSeparated, parenWrapped)
-import Database.Persist.Sql.Types.Internal (mkPersistBackend)
+import Database.Persist.Sql.Types.Internal (mkPersistBackend, makeIsolationLevelStatement)
 import Data.Fixed (Pico)
 
 import qualified Database.PostgreSQL.Simple as PG
@@ -256,6 +256,7 @@ createBackend logFunc serverVersion smap conn = do
         , connBegin      = const $ PG.begin    conn
         , connCommit     = const $ PG.commit   conn
         , connRollback   = const $ PG.rollback conn
+        , connSetIsolationLevel = \i -> PG.execute_ conn (makeIsolationLevelStatement i) >> return ()
         , connEscapeName = escape
         , connNoLimit    = "LIMIT ALL"
         , connRDBMS      = "postgresql"
@@ -1201,6 +1202,7 @@ mockMigration mig = do
                              connBegin = undefined,
                              connCommit = undefined,
                              connRollback = undefined,
+                             connSetIsolationLevel = undefined,
                              connEscapeName = escape,
                              connNoLimit = undefined,
                              connRDBMS = undefined,

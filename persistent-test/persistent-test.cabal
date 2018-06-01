@@ -80,6 +80,7 @@ library
                      InsertDuplicateUpdate
                      MigrationColumnLengthTest
                      EquivalentTypeTest
+                     TransactionLevelTest
 
     hs-source-dirs: src, test
 
