@@ -1,3 +1,7 @@
+## 2.9.1
+
+* Added support for SQL isolation levels to via SqlBackend. [#812]
+
 ## 2.8.2
 
 * Added support for `sql=` to the unique constraints quasi-quoter so that users can specify the database names of the constraints.

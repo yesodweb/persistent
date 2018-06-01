@@ -1,3 +1,7 @@
+## 2.9.1
+
+* Added support for SQL isolation levels to via SqlBackend. [#812] SQLite technically only supports Serializable.
+
 ## 2.8.1.2
 
 * Add flag to enable full-text search extensions (enabled by default)

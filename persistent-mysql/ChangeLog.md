@@ -1,3 +1,7 @@
+## 2.9.1
+
+* Added support for SQL isolation levels to via SqlBackend. [#812]
+
 ## 2.8.1
 
 * Implemented `connPutManySql` to utilize batched `putMany`. [#770](https://github.com/yesodweb/persistent/pull/770)

@@ -1,3 +1,7 @@
+## 2.9.1
+
+* Added support for SQL isolation levels to via SqlBackend. [#812]
+
 ## 2.8.2
 
 Added module `Database.Persist.Postgres.JSON` [#793](https://github.com/yesodweb/persistent/pull/793)
