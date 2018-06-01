@@ -58,6 +58,12 @@ transactionUndo = do
     let getter = getStmtConn conn
     liftIO $ connRollback conn getter >> connBegin conn getter
 
+-- | Specify the isolation level for the current transaction.
+-- Behavior depends on the backend, but for most backends,
+-- 'setIsolationLevel' must be called as the first command in
+-- the transaction.
+--
+-- @since 2.9.1
 setIsolationLevel :: MonadIO m => IsolationLevel -> ReaderT SqlBackend m ()
 setIsolationLevel i = do
     conn <- ask

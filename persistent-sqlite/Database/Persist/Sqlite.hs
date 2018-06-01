@@ -32,7 +32,7 @@ module Database.Persist.Sqlite
     ) where
 
 import Database.Persist.Sql
-import Database.Persist.Sql.Types.Internal (mkPersistBackend)
+import Database.Persist.Sql.Types.Internal (mkPersistBackend, IsolationLevel (..))
 
 import qualified Database.Sqlite as Sqlite
 
@@ -159,7 +159,9 @@ wrapConnectionInfo connInfo conn logFunc = do
         , connBegin = helper "BEGIN"
         , connCommit = helper "COMMIT"
         , connRollback = ignoreExceptions . helper "ROLLBACK"
-        , connSetIsolationLevel = \_ -> return ()
+        , connSetIsolationLevel = \i -> case i of
+            Serializable -> return ()
+            other -> error ("SQLite only supports Serializable transactions. Attempted to use " ++ show other)
         , connEscapeName = escape
         , connNoLimit = "LIMIT -1"
         , connRDBMS = "sqlite"

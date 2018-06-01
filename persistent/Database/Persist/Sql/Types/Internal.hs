@@ -67,6 +67,8 @@ data Statement = Statement
                 -> Acquire (ConduitM () [PersistValue] m ())
     }
 
+-- | Please refer to the documentation for the database in question for a full
+-- overview of the semantics of the varying isloation levels
 data IsolationLevel = ReadUncommitted
                     | ReadCommitted
                     | RepeatableRead
