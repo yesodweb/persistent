@@ -16,7 +16,6 @@ module TransactionLevelTest where
 
 import           Init
 #ifndef WITH_NOSQL
-import Data.List (sort)
 
 share [mkPersist sqlSettings, mkMigrate "migration"] [persistUpperCase|
   Wombat
@@ -35,7 +34,7 @@ specs = describe "IsolationLevel" $ do
     it (show il ++ " works") $ db $ do
       setIsolationLevel il
       deleteWhere ([] :: [Filter Wombat])
-      insert item
+      _ <- insert item
       Just item' <- get (WombatKey "uno")
       item' @== item
 #else
