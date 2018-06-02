@@ -136,10 +136,13 @@ open' ci logFunc = do
         , connPutManySql = Just putManySql
         , connClose      = MySQL.close conn
         , connMigrateSql = migrate' ci
-        , connBegin      = const $ MySQL.execute_ conn "start transaction" >> return ()
+        , connBegin      = \_ mIsolation ->
+          let stmtF = case mIsolation of
+                Nothing -> id
+                Just i -> ((makeIsolationLevelStatement i <> "; ") <>)
+          in MySQL.execute_ conn (stmtF "start transaction") >> return ()
         , connCommit     = const $ MySQL.commit   conn
         , connRollback   = const $ MySQL.rollback conn
-        , connSetIsolationLevel = \i -> MySQL.execute_ conn (makeIsolationLevelStatement i) >> return ()
         , connEscapeName = pack . escapeDBName
         , connNoLimit    = "LIMIT 18446744073709551615"
         -- This noLimit is suggested by MySQL's own docs, see
@@ -1035,7 +1038,6 @@ mockMigration mig = do
                              connBegin = undefined,
                              connCommit = undefined,
                              connRollback = undefined,
-                             connSetIsolationLevel = undefined,
                              connEscapeName = undefined,
                              connNoLimit = undefined,
                              connRDBMS = undefined,

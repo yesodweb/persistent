@@ -156,12 +156,9 @@ wrapConnectionInfo connInfo conn logFunc = do
         , connInsertManySql = Nothing
         , connClose = Sqlite.close conn
         , connMigrateSql = migrate'
-        , connBegin = helper "BEGIN"
+        , connBegin = \f _ -> helper "BEGIN" f
         , connCommit = helper "COMMIT"
         , connRollback = ignoreExceptions . helper "ROLLBACK"
-        , connSetIsolationLevel = \i -> case i of
-            Serializable -> return ()
-            other -> error ("SQLite only supports Serializable transactions. Attempted to use " ++ show other)
         , connEscapeName = escape
         , connNoLimit = "LIMIT -1"
         , connRDBMS = "sqlite"
@@ -339,10 +336,9 @@ mockMigration mig = do
                    , connInsertManySql = Nothing
                    , connClose = undefined
                    , connMigrateSql = migrate'
-                   , connBegin = helper "BEGIN"
+                   , connBegin = \f _ -> helper "BEGIN" f
                    , connCommit = helper "COMMIT"
                    , connRollback = ignoreExceptions . helper "ROLLBACK"
-                   , connSetIsolationLevel = undefined
                    , connEscapeName = escape
                    , connNoLimit = "LIMIT -1"
                    , connRDBMS = "sqlite"

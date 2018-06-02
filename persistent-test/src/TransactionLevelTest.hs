@@ -32,7 +32,7 @@ specs = describe "IsolationLevel" $ do
       isolationLevels = [minBound..maxBound]
   forM_ isolationLevels $ \il -> describe "insertOnDuplicateKeyUpdate" $ do
     it (show il ++ " works") $ db $ do
-      setIsolationLevel il
+      transactionUndoWithIsolation il
       deleteWhere ([] :: [Filter Wombat])
       _ <- insert item
       Just item' <- get (WombatKey "uno")

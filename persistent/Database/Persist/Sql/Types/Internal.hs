@@ -120,10 +120,9 @@ data SqlBackend = SqlBackend
         -> (Text -> IO Statement)
         -> EntityDef
         -> IO (Either [Text] [(Bool, Text)])
-    , connBegin :: (Text -> IO Statement) -> IO ()
+    , connBegin :: (Text -> IO Statement) -> Maybe IsolationLevel -> IO ()
     , connCommit :: (Text -> IO Statement) -> IO ()
     , connRollback :: (Text -> IO Statement) -> IO ()
-    , connSetIsolationLevel :: IsolationLevel -> IO ()
     , connEscapeName :: DBName -> Text
     , connNoLimit :: Text
     , connRDBMS :: Text

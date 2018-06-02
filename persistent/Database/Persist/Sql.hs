@@ -15,9 +15,10 @@ module Database.Persist.Sql
     , deleteWhereCount
     , updateWhereCount
     , transactionSave
+    , transactionSaveWithIsolation
     , transactionUndo
+    , transactionUndoWithIsolation
     , IsolationLevel (..)
-    , setIsolationLevel
     , getStmtConn
       -- * Internal
     , module Database.Persist.Sql.Internal
@@ -47,7 +48,16 @@ transactionSave :: MonadIO m => ReaderT SqlBackend m ()
 transactionSave = do
     conn <- ask
     let getter = getStmtConn conn
-    liftIO $ connCommit conn getter >> connBegin conn getter
+    liftIO $ connCommit conn getter >> connBegin conn getter Nothing
+
+-- | Commit the current transaction and begin a new one with the specified isolation level.
+--
+-- @since 2.9.1
+transactionSaveWithIsolation :: MonadIO m => IsolationLevel -> ReaderT SqlBackend m ()
+transactionSaveWithIsolation isolation = do
+    conn <- ask
+    let getter = getStmtConn conn
+    liftIO $ connCommit conn getter >> connBegin conn getter (Just isolation)
 
 -- | Roll back the current transaction and begin a new one.
 --
@@ -56,15 +66,13 @@ transactionUndo :: MonadIO m => ReaderT SqlBackend m ()
 transactionUndo = do
     conn <- ask
     let getter = getStmtConn conn
-    liftIO $ connRollback conn getter >> connBegin conn getter
+    liftIO $ connRollback conn getter >> connBegin conn getter Nothing
 
--- | Specify the isolation level for the current transaction.
--- Behavior depends on the backend, but for most backends,
--- 'setIsolationLevel' must be called as the first command in
--- the transaction.
+-- | Roll back the current transaction and begin a new one with the specified isolation level.
 --
 -- @since 2.9.1
-setIsolationLevel :: MonadIO m => IsolationLevel -> ReaderT SqlBackend m ()
-setIsolationLevel i = do
+transactionUndoWithIsolation :: MonadIO m => IsolationLevel -> ReaderT SqlBackend m ()
+transactionUndoWithIsolation isolation = do
     conn <- ask
-    liftIO $ connSetIsolationLevel conn i
+    let getter = getStmtConn conn
+    liftIO $ connRollback conn getter >> connBegin conn getter (Just isolation)
