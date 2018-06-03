@@ -32,7 +32,7 @@ module Database.Persist.Postgresql
 
 import Database.Persist.Sql
 import Database.Persist.Sql.Util (dbIdColumnsEsc, commaSeparated, parenWrapped)
-import Database.Persist.Sql.Types.Internal (mkPersistBackend, makeIsolationLevelStatement)
+import Database.Persist.Sql.Types.Internal (mkPersistBackend)
 import Data.Fixed (Pico)
 
 import qualified Database.PostgreSQL.Simple as PG
@@ -258,6 +258,7 @@ createBackend logFunc serverVersion smap conn = do
               Nothing -> PG.begin conn
               Just iso -> PG.beginLevel (case iso of
                   ReadUncommitted -> PG.ReadCommitted -- PG Upgrades uncommitted reads to committed anyways
+                  ReadCommitted -> PG.ReadCommitted
                   RepeatableRead -> PG.RepeatableRead
                   Serializable -> PG.Serializable) conn
         , connCommit     = const $ PG.commit   conn

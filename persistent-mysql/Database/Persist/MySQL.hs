@@ -35,6 +35,7 @@ module Database.Persist.MySQL
     ) where
 
 import Control.Arrow
+import Control.Monad
 import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (lift)
@@ -136,11 +137,9 @@ open' ci logFunc = do
         , connPutManySql = Just putManySql
         , connClose      = MySQL.close conn
         , connMigrateSql = migrate' ci
-        , connBegin      = \_ mIsolation ->
-          let stmtF = case mIsolation of
-                Nothing -> id
-                Just i -> ((makeIsolationLevelStatement i <> "; ") <>)
-          in MySQL.execute_ conn (stmtF "start transaction") >> return ()
+        , connBegin      = \_ mIsolation -> do
+            forM_ mIsolation $ \iso -> MySQL.execute_ conn (makeIsolationLevelStatement iso)
+            MySQL.execute_ conn "start transaction" >> return ()
         , connCommit     = const $ MySQL.commit   conn
         , connRollback   = const $ MySQL.rollback conn
         , connEscapeName = pack . escapeDBName
