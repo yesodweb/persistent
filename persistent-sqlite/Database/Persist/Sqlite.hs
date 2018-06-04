@@ -32,7 +32,7 @@ module Database.Persist.Sqlite
     ) where
 
 import Database.Persist.Sql
-import Database.Persist.Sql.Types.Internal (mkPersistBackend, IsolationLevel (..))
+import Database.Persist.Sql.Types.Internal (mkPersistBackend)
 
 import qualified Database.Sqlite as Sqlite
 
