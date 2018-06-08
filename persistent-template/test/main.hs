@@ -50,14 +50,6 @@ Laddress json
     deriving Show Eq
 |]
 
-share [mkPersist sqlSettings { mpsGeneric = True , mpsGenerateLenses = True }] [persistLowerCase|
-Foo
-    bar Text Maybe
-    baz BazId
-Baz
-    bin Int
-|]
-
 arbitraryT :: Gen Text
 arbitraryT = pack A.<$> arbitrary
 
