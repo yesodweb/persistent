@@ -4,6 +4,29 @@ module Database.Persist.Class
     ( ToBackendKey (..)
 
     -- * PersistStore
+    -- |
+    --
+    -- All the examples present here will be explained based on this schema:
+    --
+    -- > share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
+    -- > User
+    -- >     name String
+    -- >     age Int
+    -- >     deriving Show
+    -- > |]
+    --
+    -- and this dataset. The examples below will refer to this as dataset-1.
+    --
+    -- #dataset#
+    --
+    -- > +-----+-----+-----+
+    -- > |id   |name |age  |
+    -- > +-----+-----+-----+
+    -- > |1    |SPJ  |40   |
+    -- > +-----+-----+-----+
+    -- > |2    |Simon|41   |
+    -- > +-----+-----+-----+
+
     , PersistCore (..)
     , PersistStore
     , PersistStoreRead (..)
@@ -18,6 +41,44 @@ module Database.Persist.Class
     , insertRecord
 
     -- * PersistUnique
+    -- |
+    --
+    -- All the examples present here will be explained based on these two schemas:
+    --
+    -- = Schema 1
+    -- This schema has single unique constraint.
+    --
+    -- > share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
+    -- > User
+    -- >     name String
+    -- >     age Int
+    -- >     UniqueUserName name
+    -- >     deriving Show
+    -- > |]
+    --
+    -- = Schema 2
+    -- This schema has two unique constraints.
+    --
+    -- > share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
+    -- > User
+    -- >     name String
+    -- >     age Int
+    -- >     UniqueUserName name
+    -- >     UniqueUserAge age
+    -- >     deriving Show
+    -- > |]
+    --
+    -- = dataset
+    -- and this dataset. The examples below will refer to this as dataset-1.
+    --
+    -- > +-----+-----+-----+
+    -- > |id   |name |age  |
+    -- > +-----+-----+-----+
+    -- > |1    |SPJ  |40   |
+    -- > +-----+-----+-----+
+    -- > |2    |Simon|41   |
+    -- > +-----+-----+-----+
+
     , PersistUnique
     , PersistUniqueRead (..)
     , PersistUniqueWrite (..)

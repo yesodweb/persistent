@@ -135,6 +135,22 @@ share [mkPersist persistSettings,  mkMigrate "testMigrate", mkDeleteCascade pers
     UniqueUpsertByCity city
     deriving Eq Show
 
+  RepsertUnique
+    email Text
+    attr Text
+    extra Text
+    age Int
+    UniqueRepsert email
+    deriving Eq Show
+
+  RepsertUniqueBy
+    email Text
+    city Text
+    attr Text
+    UniqueRepsertBy email
+    UniqueRepsertByCity city
+    deriving Eq Show
+
   Strict
     !yes Int
     ~no Int
