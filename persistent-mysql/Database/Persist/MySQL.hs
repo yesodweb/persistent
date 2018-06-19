@@ -35,6 +35,7 @@ module Database.Persist.MySQL
     ) where
 
 import Control.Arrow
+import Control.Monad
 import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (lift)
@@ -67,7 +68,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 
 import Database.Persist.Sql
-import Database.Persist.Sql.Types.Internal (mkPersistBackend)
+import Database.Persist.Sql.Types.Internal (mkPersistBackend, makeIsolationLevelStatement)
 import Database.Persist.Sql.Util (commaSeparated, mkUpdateText', parenWrapped)
 import Data.Int (Int64)
 
@@ -136,7 +137,9 @@ open' ci logFunc = do
         , connPutManySql = Just putManySql
         , connClose      = MySQL.close conn
         , connMigrateSql = migrate' ci
-        , connBegin      = const $ MySQL.execute_ conn "start transaction" >> return ()
+        , connBegin      = \_ mIsolation -> do
+            forM_ mIsolation $ \iso -> MySQL.execute_ conn (makeIsolationLevelStatement iso)
+            MySQL.execute_ conn "start transaction" >> return ()
         , connCommit     = const $ MySQL.commit   conn
         , connRollback   = const $ MySQL.rollback conn
         , connEscapeName = pack . escapeDBName
@@ -573,7 +576,7 @@ getColumn connectInfo getter tname [ PersistText cname
                     _ -> fail $ "Invalid default column: " ++ show default'
 
       -- Foreign key (if any)
-      stmt <- lift . getter $ T.concat 
+      stmt <- lift . getter $ T.concat
         [ "SELECT REFERENCED_TABLE_NAME, "
         ,   "CONSTRAINT_NAME, "
         ,   "ORDINAL_POSITION "

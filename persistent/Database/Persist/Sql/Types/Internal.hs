@@ -4,6 +4,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Database.Persist.Sql.Types.Internal
     ( HasPersistBackend (..)
@@ -16,6 +17,8 @@ module Database.Persist.Sql.Types.Internal
     , LogFunc
     , InsertSqlResult (..)
     , Statement (..)
+    , IsolationLevel (..)
+    , makeIsolationLevelStatement
     , SqlBackend (..)
     , SqlBackendCanRead
     , SqlBackendCanWrite
@@ -33,6 +36,8 @@ import Data.Conduit (ConduitM)
 import Data.Int (Int64)
 import Data.IORef (IORef)
 import Data.Map (Map)
+import Data.Monoid ((<>))
+import Data.String (IsString)
 import Data.Text (Text)
 import Data.Typeable (Typeable)
 import Database.Persist.Class
@@ -61,6 +66,21 @@ data Statement = Statement
                 => [PersistValue]
                 -> Acquire (ConduitM () [PersistValue] m ())
     }
+
+-- | Please refer to the documentation for the database in question for a full
+-- overview of the semantics of the varying isloation levels
+data IsolationLevel = ReadUncommitted
+                    | ReadCommitted
+                    | RepeatableRead
+                    | Serializable
+                    deriving (Show, Eq, Enum, Ord, Bounded)
+
+makeIsolationLevelStatement :: (Monoid s, IsString s) => IsolationLevel -> s
+makeIsolationLevelStatement l = "SET TRANSACTION ISOLATION LEVEL " <> case l of
+    ReadUncommitted -> "READ UNCOMMITTED"
+    ReadCommitted -> "READ COMMITTED"
+    RepeatableRead -> "REPEATABLE READ"
+    Serializable -> "SERIALIZABLE"
 
 data SqlBackend = SqlBackend
     { connPrepare :: Text -> IO Statement
@@ -100,7 +120,7 @@ data SqlBackend = SqlBackend
         -> (Text -> IO Statement)
         -> EntityDef
         -> IO (Either [Text] [(Bool, Text)])
-    , connBegin :: (Text -> IO Statement) -> IO ()
+    , connBegin :: (Text -> IO Statement) -> Maybe IsolationLevel -> IO ()
     , connCommit :: (Text -> IO Statement) -> IO ()
     , connRollback :: (Text -> IO Statement) -> IO ()
     , connEscapeName :: DBName -> Text

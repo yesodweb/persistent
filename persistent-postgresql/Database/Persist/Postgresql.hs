@@ -40,6 +40,7 @@ import qualified Database.PostgreSQL.Simple.TypeInfo.Static as PS
 import qualified Database.PostgreSQL.Simple.Internal as PG
 import qualified Database.PostgreSQL.Simple.ToField as PGTF
 import qualified Database.PostgreSQL.Simple.FromField as PGFF
+import qualified Database.PostgreSQL.Simple.Transaction as PG
 import qualified Database.PostgreSQL.Simple.Types as PG
 import Database.PostgreSQL.Simple.Ok (Ok (..))
 
@@ -253,7 +254,13 @@ createBackend logFunc serverVersion smap conn = do
         , connPutManySql = serverVersion >>= upsertFunction putManySql
         , connClose      = PG.close conn
         , connMigrateSql = migrate'
-        , connBegin      = const $ PG.begin    conn
+        , connBegin      = \_ mIsolation -> case mIsolation of
+              Nothing -> PG.begin conn
+              Just iso -> PG.beginLevel (case iso of
+                  ReadUncommitted -> PG.ReadCommitted -- PG Upgrades uncommitted reads to committed anyways
+                  ReadCommitted -> PG.ReadCommitted
+                  RepeatableRead -> PG.RepeatableRead
+                  Serializable -> PG.Serializable) conn
         , connCommit     = const $ PG.commit   conn
         , connRollback   = const $ PG.rollback conn
         , connEscapeName = escape

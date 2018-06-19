@@ -6,6 +6,7 @@ module Database.Persist.Sql.Run where
 
 import Database.Persist.Class.PersistStore
 import Database.Persist.Sql.Types
+import Database.Persist.Sql.Types.Internal (IsolationLevel)
 import Database.Persist.Sql.Raw
 import Data.Pool as P
 import Control.Monad.Trans.Reader hiding (local)
@@ -29,6 +30,14 @@ runSqlPool
     :: (MonadUnliftIO m, IsSqlBackend backend)
     => ReaderT backend m a -> Pool backend -> m a
 runSqlPool r pconn = withRunInIO $ \run -> withResource pconn $ run . runSqlConn r
+
+-- | Like 'runSqlPool', but supports specifying an isolation level.
+--
+-- @since 2.9.1
+runSqlPoolWithIsolation
+    :: (MonadUnliftIO m, IsSqlBackend backend)
+    => ReaderT backend m a -> Pool backend -> IsolationLevel -> m a
+runSqlPoolWithIsolation r pconn i = withRunInIO $ \run -> withResource pconn $ run . (\conn -> runSqlConnWithIsolation r conn i)
 
 -- | Like 'withResource', but times out the operation if resource
 -- allocation does not complete within the given timeout period.
@@ -56,7 +65,21 @@ runSqlConn :: (MonadUnliftIO m, IsSqlBackend backend) => ReaderT backend m a -> 
 runSqlConn r conn = withRunInIO $ \runInIO -> mask $ \restore -> do
     let conn' = persistBackend conn
         getter = getStmtConn conn'
-    restore $ connBegin conn' getter
+    restore $ connBegin conn' getter Nothing
+    x <- onException
+            (restore $ runInIO $ runReaderT r conn)
+            (restore $ connRollback conn' getter)
+    restore $ connCommit conn' getter
+    return x
+
+-- | Like 'runSqlConn', but supports specifying an isolation level.
+--
+-- @since 2.9.1
+runSqlConnWithIsolation :: (MonadUnliftIO m, IsSqlBackend backend) => ReaderT backend m a -> backend -> IsolationLevel -> m a
+runSqlConnWithIsolation r conn isolation = withRunInIO $ \runInIO -> mask $ \restore -> do
+    let conn' = persistBackend conn
+        getter = getStmtConn conn'
+    restore $ connBegin conn' getter $ Just isolation
     x <- onException
             (restore $ runInIO $ runReaderT r conn)
             (restore $ connRollback conn' getter)
