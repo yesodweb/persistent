@@ -204,6 +204,53 @@ class
     -- | Put the record in the database with the given key.
     -- Unlike 'replace', if a record with the given key does not
     -- exist then a new record will be inserted.
+    --
+    -- === __Example usage__
+    --
+    -- We try to explain 'upsertBy' using schema-1 and dataset-1.
+    --
+    -- First, we insert Philip to dataset-1:
+    --
+    -- > philipId <- insert $ User "Philip" $ Just 42
+    --
+    -- > +-----+------+-----+
+    -- > |id   |name  |age  |
+    -- > +-----+------+-----+
+    -- > |1    |SPJ   |40   |
+    -- > +-----+------+-----+
+    -- > |2    |Simon |41   |
+    -- > +-----+------+-----+
+    -- > |3    |Philip|42   |
+    -- > +-----+------+-----+
+    --
+    -- This code will replace Philip's record with Haskell's one:
+    --
+    -- > repsert philipId (User "Haskell" 55)
+    --
+    -- > +-----+-----------------+--------+
+    -- > |id   |name             |age     |
+    -- > +-----+-----------------+--------+
+    -- > |1    |SPJ              |40      |
+    -- > +-----+-----------------+--------+
+    -- > |2    |Simon            |41      |
+    -- > +-----+-----------------+--------+
+    -- > |3    |Philip -> Haskell|42 -> 55|
+    -- > +-----+-----------------+--------+
+    --
+    -- 'repsert' inserts the given record if the key
+    -- doesn't exist. For example, with dataset-1, the following code will insert the user X:
+    --
+    -- > repsert unknownId (User "X" 999)
+    --
+    -- > +-----+------+-----+
+    -- > |id   |name  |age  |
+    -- > +-----+------+-----+
+    -- > |1    |SPJ   |40   |
+    -- > +-----+------+-----+
+    -- > |2    |Simon |41   |
+    -- > +-----+------+-----+
+    -- > |3    |X     |999  |
+    -- > +-----+------+-----+
     repsert :: (MonadIO m, PersistRecordBackend record backend)
             => Key record -> record -> ReaderT backend m ()
 
