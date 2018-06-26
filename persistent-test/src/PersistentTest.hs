@@ -50,6 +50,7 @@ import Database.Persist.MongoDB (toInsertDoc, docToEntityThrow, collectionName, 
 
 import Database.Persist.TH (mkDeleteCascade, mkSave)
 import qualified Data.Text as T
+import Data.List.NonEmpty (NonEmpty (..))
 
 #  ifdef WITH_POSTGRESQL
 import Data.List (sort)
@@ -1143,6 +1144,24 @@ specs = describe "persistent" $ do
       liftIO $ ret @?= [ (Entity p1k p1, Just (Entity a1k a1))
                        , (Entity p1k p1, Just (Entity a2k a2))
                        , (Entity p2k p2, Nothing) ]
+
+  it "sqlQQ/values syntax" $ db $ do
+      let insert' :: (PersistStore backend, PersistEntity val, PersistEntityBackend val ~ BaseBackend backend, MonadIO m)
+                  => val -> ReaderT backend m (Key val, val)
+          insert' v = insert v >>= \k -> return (k, v)
+      (p1k, p1) <- insert' $ Person "Mathias"   23 (Just "red")
+      (_  , _ ) <- insert' $ Person "Norbert"   44 (Just "green")
+      (p3k, p3) <- insert' $ Person "Cassandra" 19 (Just "blue")
+      (_  , _ ) <- insert' $ Person "Thiago"    19 (Just "yellow")
+      let
+        colors = Just "blue" :| Just "red" : [] :: NonEmpty (Maybe Text)
+      ret <- [sqlQQ|
+        SELECT ??
+        FROM ^{Person}
+        WHERE ^{Person}.@{PersonColor} IN %{colors}
+      |]
+      liftIO $ ret @?= [ (Entity p1k p1)
+                       , (Entity p3k p3) ]
 
   it "commit/rollback" (caseCommitRollback >> runResourceT (runConn cleanDB))
 

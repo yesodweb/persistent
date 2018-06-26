@@ -138,6 +138,10 @@ library
                    , tagged
                    , old-locale
 
+   if impl(ghc < 8)
+     build-depends:
+       semigroups
+
    if flag(nooverlap)
      cpp-options: -DNO_OVERLAP
 

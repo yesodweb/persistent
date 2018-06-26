@@ -20,6 +20,10 @@ dependencies:
 - text
 - mtl
 
+when:
+  - condition: impl(ghc < 8)
+    dependencies: semigroups
+
 library:
   ghc-options: -Wall
   source-dirs: src
