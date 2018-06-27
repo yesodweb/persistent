@@ -287,6 +287,7 @@ showSqlType SqlTime = "TIME"
 showSqlType SqlDayTime = "TIMESTAMP"
 showSqlType SqlBlob = "BLOB"
 showSqlType SqlBool = "BOOLEAN"
+showSqlType (SqlEnum t) = t
 showSqlType (SqlOther t) = t
 
 migrate' :: [EntityDef]

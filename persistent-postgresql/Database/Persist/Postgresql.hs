@@ -36,6 +36,7 @@ import Database.Persist.Sql.Types.Internal (mkPersistBackend)
 import Data.Fixed (Pico)
 
 import qualified Database.PostgreSQL.Simple as PG
+import qualified Database.PostgreSQL.Simple.TypeInfo as PGT
 import qualified Database.PostgreSQL.Simple.TypeInfo.Static as PS
 import qualified Database.PostgreSQL.Simple.Internal as PG
 import qualified Database.PostgreSQL.Simple.ToField as PGTF
@@ -380,8 +381,11 @@ withStmt' conn query vals =
                 rowRef   <- newIORef (LibPQ.Row 0)
                 rowCount <- LibPQ.ntuples ret
                 return (ret, rowRef, rowCount, oids)
-      let getters
-            = map (\(col, oid) -> getGetter conn oid $ PG.Field rt col oid) ids
+      getters <-
+        mapM (\(col, oid) -> do
+               getter <- getGetter conn oid
+               return $ getter $ PG.Field rt col oid
+             ) ids
       return (rt, rr, rc, getters)
 
     closeS (ret, _, _, _) = LibPQ.unsafeFreeResult ret
@@ -525,10 +529,25 @@ builtinGetters = I.fromList
         listOf f = convertPV (PersistList . map (nullable f) . PG.fromPGArray)
           where nullable = maybe PersistNull
 
-getGetter :: PG.Connection -> PG.Oid -> Getter PersistValue
-getGetter _conn oid
-  = fromMaybe defaultGetter $ I.lookup (PG.oid2int oid) builtinGetters
+enumGetter :: Getter PersistValue
+enumGetter = convertPV (PersistText . T.decodeUtf8 . unUnknown)
+
+getGetter :: PG.Connection -> PG.Oid -> IO (Getter PersistValue)
+getGetter conn oid
+  = fmap (fromMaybe defaultGetter) $
+      checkEnumGetter $ I.lookup (PG.oid2int oid) builtinGetters
   where defaultGetter = convertPV (PersistDbSpecific . unUnknown)
+        checkEnumGetter :: Maybe (Getter PersistValue)
+                        -> IO (Maybe (Getter PersistValue))
+        checkEnumGetter maybeGetter =
+          case maybeGetter of
+            Just _ -> return maybeGetter
+            Nothing -> do
+              tyinfo <- PGT.getTypeInfo conn oid
+              return $ if PGT.typcategory tyinfo == 'E'
+                       then Just enumGetter
+                       else Nothing
+
 
 unBinary :: PG.Binary a -> a
 unBinary (PG.Binary x) = x
@@ -940,6 +959,7 @@ showSqlType SqlTime = "TIME"
 showSqlType SqlDayTime = "TIMESTAMP WITH TIME ZONE"
 showSqlType SqlBlob = "BYTEA"
 showSqlType SqlBool = "BOOLEAN"
+showSqlType (SqlEnum t) = t
 
 -- Added for aliasing issues re: https://github.com/yesodweb/yesod/issues/682
 showSqlType (SqlOther (T.toLower -> "integer")) = "INT4"

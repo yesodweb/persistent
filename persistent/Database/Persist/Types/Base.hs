@@ -458,6 +458,7 @@ data SqlType = SqlString
              | SqlTime
              | SqlDayTime -- ^ Always uses UTC timezone
              | SqlBlob
+             | SqlEnum T.Text
              | SqlOther T.Text -- ^ a backend-specific name
     deriving (Show, Read, Eq, Typeable, Ord)
 
