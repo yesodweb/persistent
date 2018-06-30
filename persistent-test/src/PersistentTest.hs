@@ -573,6 +573,15 @@ specs = describe "persistent" $ do
         upsertAge (entityVal update') @== 5
         upsertExtra (entityVal update') @== "extra"
 #endif
+    it "leaving this empty is the equivalent of performing a repsert on a unique key" $ db $ do
+        Entity key _ <- insertEntity (Upsert "foo" "initial" "" 2)
+        repsert' <- do
+          repsert key (Upsert "foo" "update" "" 3)
+          getJustEntity key
+        deleteWhere ([] :: [Filter Upsert])
+        _ <- insertEntity (Upsert "foo" "initial" "" 2)
+        upsert' <- upsert (Upsert "foo" "update" "" 3) []
+        upsert' @== repsert'
 
   describe "upsertBy" $ do
     let uniqueEmail = UniqueUpsertBy "a"
