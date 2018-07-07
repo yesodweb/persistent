@@ -157,10 +157,42 @@ class
 
     -- | Create a new record in the database, returning an automatically created
     -- key (in SQL an auto-increment id).
+    --
+    -- === __Example usage__
+    --
+    -- Using schema-1 and dataset-1, let's insert a new user 'John':
+    --
+    -- > johnId <- insert $ User "John" 30
+    --
+    -- > +-----+------+-----+
+    -- > |id   |name  |age  |
+    -- > +-----+------+-----+
+    -- > |1    |SPJ   |40   |
+    -- > +-----+------+-----+
+    -- > |2    |Simon |41   |
+    -- > +-----+------+-----+
+    -- > |3    |John  |30   |
+    -- > +-----+------+-----+
     insert :: (MonadIO m, PersistRecordBackend record backend)
            => record -> ReaderT backend m (Key record)
 
     -- | Same as 'insert', but doesn't return a @Key@.
+    --
+    -- === __Example usage__
+    --
+    -- Insertion with schema-1 and dataset-1:
+    --
+    -- > insert_ $ User "John" 30
+    --
+    -- > +-----+------+-----+
+    -- > |id   |name  |age  |
+    -- > +-----+------+-----+
+    -- > |1    |SPJ   |40   |
+    -- > +-----+------+-----+
+    -- > |2    |Simon |41   |
+    -- > +-----+------+-----+
+    -- > |3    |John  |30   |
+    -- > +-----+------+-----+
     insert_ :: (MonadIO m, PersistRecordBackend record backend)
             => record -> ReaderT backend m ()
     insert_ record = insert record >> return ()
@@ -174,6 +206,26 @@ class
     --
     -- The SQLite and MySQL backends use the slow, default implementation of
     -- @mapM insert@.
+    --
+    -- === __Example usage__
+    --
+    -- With schema-1 and dataset-1:
+    --
+    -- > keys <- insertMany [User "John" 30, User "Nick" 32, User "Jane" 20]
+    --
+    -- > +-----+------+-----+
+    -- > |id   |name  |age  |
+    -- > +-----+------+-----+
+    -- > |1    |SPJ   |40   |
+    -- > +-----+------+-----+
+    -- > |2    |Simon |41   |
+    -- > +-----+------+-----+
+    -- > |3    |John  |30   |
+    -- > +-----+------+-----+
+    -- > |4    |Nick  |32   |
+    -- > +-----+------+-----+
+    -- > |5    |Jane  |20   |
+    -- > +-----+------+-----+
     insertMany :: (MonadIO m, PersistRecordBackend record backend)
                => [record] -> ReaderT backend m [Key record]
     insertMany = mapM insert
@@ -182,6 +234,24 @@ class
     --
     -- The MongoDB, PostgreSQL, SQLite and MySQL backends insert all records in
     -- one database query.
+    --
+    -- === __Example usage__
+    --
+    -- > insertMany_ [User "John" 30, User "Nick" 32, User "Jane" 20]
+    --
+    -- > +-----+------+-----+
+    -- > |id   |name  |age  |
+    -- > +-----+------+-----+
+    -- > |1    |SPJ   |40   |
+    -- > +-----+------+-----+
+    -- > |2    |Simon |41   |
+    -- > +-----+------+-----+
+    -- > |3    |John  |30   |
+    -- > +-----+------+-----+
+    -- > |4    |Nick  |32   |
+    -- > +-----+------+-----+
+    -- > |5    |Jane  |20   |
+    -- > +-----+------+-----+
     insertMany_ :: (MonadIO m, PersistRecordBackend record backend)
                 => [record] -> ReaderT backend m ()
     insertMany_ x = insertMany x >> return ()
@@ -193,11 +263,44 @@ class
     --
     -- The MongoDB, PostgreSQL, SQLite and MySQL backends insert all records in
     -- one database query.
+    --
+    -- === __Example usage__
+    --
+    -- > let erecords = [ Entity { entityKey = UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 3}}
+    -- >                         , entityVal = User {userName = "Snake", userAge = 38}}
+    -- >                , Entity { entityKey = UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 4}}
+    -- >                         , entityVal = User {userName = "Eva", userAge = 38}}]
+    -- > insertEntityMany erecords
+    --
+    -- > +-----+------+-----+
+    -- > |id   |name  |age  |
+    -- > +-----+------+-----+
+    -- > |1    |SPJ   |40   |
+    -- > +-----+------+-----+
+    -- > |2    |Simon |41   |
+    -- > +-----+------+-----+
+    -- > |3    |Snake |38   |
+    -- > +-----+------+-----+
+    -- > |4    |Eva   |38   |
+    -- > +-----+------+-----+
     insertEntityMany :: (MonadIO m, PersistRecordBackend record backend)
                      => [Entity record] -> ReaderT backend m ()
     insertEntityMany = mapM_ (\(Entity k record) -> insertKey k record)
 
     -- | Create a new record in the database using the given key.
+    --
+    -- === __Example usage__
+    --
+    -- > insertKey (UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 3}}) $ User "Alice" 20
+    -- > +-----+------+-----+
+    -- > |id   |name  |age  |
+    -- > +-----+------+-----+
+    -- > |1    |SPJ   |40   |
+    -- > +-----+------+-----+
+    -- > |2    |Simon |41   |
+    -- > +-----+------+-----+
+    -- > |3    |Alice |20   |
+    -- > +-----+------+-----+
     insertKey :: (MonadIO m, PersistRecordBackend record backend)
               => Key record -> record -> ReaderT backend m ()
 
@@ -225,7 +328,7 @@ class
     --
     -- This code will replace Philip's record with Haskell's one:
     --
-    -- > repsert philipId (User "Haskell" 55)
+    -- > repsert philipId $ User "Haskell" 55
     --
     -- > +-----+-----------------+--------+
     -- > |id   |name             |age     |
@@ -240,7 +343,7 @@ class
     -- 'repsert' inserts the given record if the key
     -- doesn't exist. For example, with dataset-1, the following code will insert the user X:
     --
-    -- > repsert unknownId (User "X" 999)
+    -- > repsert unknownId $ User "X" 999
     --
     -- > +-----+------+-----+
     -- > |id   |name  |age  |
@@ -264,6 +367,22 @@ class
     -- Differs from @insertEntityMany@ by gracefully skipping
     -- pre-existing records matching key(s).
     -- @since 2.8.1
+    --
+    -- === __Example usage__
+    --
+    -- With schema-1 and dataset-1:
+    --
+    -- > repsertMany [(spjId, User "Alice" 10), (simonId, User "BobId" 20), (unknownId, User "Mr. X" 999)]
+    --
+    -- > +-----+------+-----+
+    -- > |id   |name  |age  |
+    -- > +-----+------+-----+
+    -- > |1    |SPJ   |40   |
+    -- > +-----+------+-----+
+    -- > |2    |Simon |41   |
+    -- > +-----+------+-----+
+    -- > |999  |Mr. X |999  |
+    -- > +-----+------+-----+
     repsertMany
         :: (MonadIO m, PersistRecordBackend record backend)
         => [(Key record, record)] -> ReaderT backend m ()
@@ -271,17 +390,65 @@ class
 
     -- | Replace the record in the database with the given
     -- key. Note that the result is undefined if such record does
-    -- not exist, so you must use 'insertKey or 'repsert' in
+    -- not exist, so you must use 'insertKey' or 'repsert' in
     -- these cases.
+    --
+    -- === __Example usage__
+    --
+    -- With schama-1 and dataset-1:
+    --
+    -- > replace spjId $ User "Mike" 45
+    --
+    -- > +-----+------+-----+
+    -- > |id   |name  |age  |
+    -- > +-----+------+-----+
+    -- > |1    |Mike  |45   |
+    -- > +-----+------+-----+
+    -- > |2    |Simon |41   |
+    -- > +-----+------+-----+
+    -- > |3    |John  |42   |
+    -- > +-----+------+-----+
     replace :: (MonadIO m, PersistRecordBackend record backend)
             => Key record -> record -> ReaderT backend m ()
 
     -- | Delete a specific record by identifier. Does nothing if record does
     -- not exist.
+    --
+    -- === __Example usage__
+    --
+    -- With schema-1 and dataset-1:
+    --
+    -- > spjId <- head <$> selectKeysList ([] :: [Filter User]) []
+    -- > delete spjId
+    --
+    -- > +-----+------+-----+
+    -- > |id   |name  |age  |
+    -- > +-----+------+-----+
+    -- > |2    |Simon |41   |
+    -- > +-----+------+-----+
+    -- > |3    |John  |42   |
+    -- > +-----+------+-----+
     delete :: (MonadIO m, PersistRecordBackend record backend)
            => Key record -> ReaderT backend m ()
 
     -- | Update individual fields on a specific record.
+    --
+    -- === __Example usage__
+    --
+    -- With schema-1 and dataset-1:
+    --
+    -- > simId <- head <$> selectKeysList ([] :: [Filter User]) []
+    -- > update simId [UserAge +=. 100]
+    --
+    -- > +-----+------+-----+
+    -- > |id   |name  |age  |
+    -- > +-----+------+-----+
+    -- > |1    |SPJ   |140  |
+    -- > +-----+------+-----+
+    -- > |2    |Simon |41   |
+    -- > +-----+------+-----+
+    -- > |3    |John  |42   |
+    -- > +-----+------+-----+
     update :: (MonadIO m, PersistRecordBackend record backend)
            => Key record -> [Update record] -> ReaderT backend m ()
 
@@ -290,6 +457,20 @@ class
     --
     -- Note that this function will throw an exception if the given key is not
     -- found in the database.
+    --
+    -- === __Example usage__
+    --
+    -- With schema-1 and dataset-1:
+    --
+    -- record <- updateGet spjId [UserAge +=. 100]
+    --
+    -- > +-----+------+-----+
+    -- > |id   |name  |age  |
+    -- > +-----+------+-----+
+    -- > |1    |SPJ   |140  |
+    -- > +-----+------+-----+
+    -- > |2    |Simon |41   |
+    -- > +-----+------+-----+
     updateGet :: (MonadIO m, PersistRecordBackend record backend)
               => Key record -> [Update record] -> ReaderT backend m record
     updateGet key ups = do
