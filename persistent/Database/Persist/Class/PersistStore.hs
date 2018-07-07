@@ -211,7 +211,7 @@ class
     --
     -- First, we insert Philip to dataset-1:
     --
-    -- > philipId <- insert $ User "Philip" $ Just 42
+    -- > philipId <- insert $ User "Philip" 42
     --
     -- > +-----+------+-----+
     -- > |id   |name  |age  |
