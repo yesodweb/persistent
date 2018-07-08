@@ -157,7 +157,7 @@ class
     --
     -- Now, records is something like:
     --
-    -- > fromList [(UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 1}},User {userName = "SPJ", userAge = 40}),(UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 2}},User {userName = "Simon", userAge = 42})]
+    -- > fromList [(UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 1}},User {userName = "SPJ", userAge = 40}),(UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 2}},User {userName = "Simon", userAge = 41})]
     getMany
         :: (MonadIO m, PersistRecordBackend record backend)
         => [Key record] -> ReaderT backend m (Map (Key record) record)
@@ -426,8 +426,6 @@ class
     -- > +-----+------+-----+
     -- > |2    |Simon |41   |
     -- > +-----+------+-----+
-    -- > |3    |John  |42   |
-    -- > +-----+------+-----+
     replace :: (MonadIO m, PersistRecordBackend record backend)
             => Key record -> record -> ReaderT backend m ()
 
@@ -446,8 +444,6 @@ class
     -- > +-----+------+-----+
     -- > |2    |Simon |41   |
     -- > +-----+------+-----+
-    -- > |3    |John  |42   |
-    -- > +-----+------+-----+
     delete :: (MonadIO m, PersistRecordBackend record backend)
            => Key record -> ReaderT backend m ()
 
@@ -457,8 +453,8 @@ class
     --
     -- With schema-1 and dataset-1:
     --
-    -- > simId <- head <$> selectKeysList ([] :: [Filter User]) []
-    -- > update simId [UserAge +=. 100]
+    -- > spjId <- head <$> selectKeysList ([] :: [Filter User]) []
+    -- > update spjId [UserAge +=. 100]
     --
     -- > +-----+------+-----+
     -- > |id   |name  |age  |
@@ -466,8 +462,6 @@ class
     -- > |1    |SPJ   |140  |
     -- > +-----+------+-----+
     -- > |2    |Simon |41   |
-    -- > +-----+------+-----+
-    -- > |3    |John  |42   |
     -- > +-----+------+-----+
     update :: (MonadIO m, PersistRecordBackend record backend)
            => Key record -> [Update record] -> ReaderT backend m ()
