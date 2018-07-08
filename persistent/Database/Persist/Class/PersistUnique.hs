@@ -46,6 +46,16 @@ import Data.Maybe (catMaybes)
 class (PersistCore backend, PersistStoreRead backend) =>
       PersistUniqueRead backend  where
     -- | Get a record by unique key, if available. Returns also the identifier.
+    --
+    -- === __Example usage__
+    --
+    -- With schema-1 and dataset-1:
+    --
+    -- > mspjEnt <- getBy $ UniqueUserName "SPJ"
+    --
+    -- Returned value would look like this:
+    --
+    -- > Just (Entity {entityKey = UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 1}}, entityVal = User {userName = "SPJ", userAge = 40}})
     getBy
         :: (MonadIO m, PersistRecordBackend record backend)
         => Unique record -> ReaderT backend m (Maybe (Entity record))
