@@ -132,12 +132,32 @@ class
   , PersistField (BackendKey backend), A.ToJSON (BackendKey backend), A.FromJSON (BackendKey backend)
   ) => PersistStoreRead backend where
     -- | Get a record by identifier, if available.
+    --
+    -- === __Example usage__
+    --
+    -- With schema-1 and dataset-1
+    --
+    -- > spj <- get spjId
+    --
+    -- @spj@ is like the following:
+    --
+    -- > Just (User {userName = "SPJ", userAge = 40})
     get :: (MonadIO m, PersistRecordBackend record backend)
         => Key record -> ReaderT backend m (Maybe record)
 
     -- | Get many records by their respective identifiers, if available.
     --
     -- @since 2.8.1
+    --
+    -- === __Example usage__
+    --
+    -- With schema-1 and dataset-1:
+    --
+    -- > records <- getMany keys
+    --
+    -- Now, records is something like:
+    --
+    -- > fromList [(UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 1}},User {userName = "SPJ", userAge = 40}),(UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 2}},User {userName = "Simon", userAge = 42})]
     getMany
         :: (MonadIO m, PersistRecordBackend record backend)
         => [Key record] -> ReaderT backend m (Map (Key record) record)
