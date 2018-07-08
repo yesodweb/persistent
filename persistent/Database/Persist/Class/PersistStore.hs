@@ -500,6 +500,19 @@ class
 
 -- | Same as 'get', but for a non-null (not Maybe) foreign key.
 -- Unsafe unless your database is enforcing that the foreign key is valid.
+--
+-- === __Example usage__
+--
+-- With schema-1 and dataset-1:
+--
+-- > spj <- getJust spjId
+-- > mrx <- getJust unknownId
+--
+-- The former is something like:
+--
+-- > User "SPJ" 40
+--
+-- The latter just throws an error.
 getJust :: ( PersistStoreRead backend
            , Show (Key record)
            , PersistRecordBackend record backend
@@ -512,6 +525,16 @@ getJust key = get key >>= maybe
 -- | Same as 'getJust', but returns an 'Entity' instead of just the record.
 --
 -- @since 2.6.1
+--
+-- === __Example usage__
+--
+-- With schema-1 and dataset-1:
+--
+-- > spjEnt <- getJustEntity spjId
+--
+-- @spjEnt@ is:
+--
+-- > Entity {entityKey = UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 1}}, entityVal = User {userName = "SPJ", userAge = 40}
 getJustEntity
   :: (PersistEntityBackend record ~ BaseBackend backend
      ,MonadIO m
@@ -550,6 +573,24 @@ belongsToJust ::
 belongsToJust getForeignKey model = getJust $ getForeignKey model
 
 -- | Like @insert@, but returns the complete @Entity@.
+--
+-- === __Example usage__
+--
+-- With schema-1 and dataset-1:
+--
+-- > carEnt <- insertEntity $ User "Carol" 29
+--
+-- > +-----+------+-----+
+-- > |id   |name  |age  |
+-- > +-----+------+-----+
+-- > |1    |SPJ   |40   |
+-- > +-----+------+-----+
+-- > |2    |Simon |41   |
+-- > +-----+------+-----+
+-- > |3    |Carol |29   |
+-- > +-----+------+-----+
+--
+-- @carEnt@ is the entity of Carol.
 insertEntity ::
     ( PersistStoreWrite backend
     , PersistRecordBackend e backend
@@ -560,6 +601,16 @@ insertEntity e = do
     return $ Entity eid e
 
 -- | Like @get@, but returns the complete @Entity@.
+--
+-- === __Example usage__
+--
+-- With schema-1 and dataset-1:
+--
+-- > mspjEnt <- getEntity spjId
+--
+-- @mspjEnt@ is:
+--
+-- > Just (Entity {entityKey = UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 1}}, entityVal = User {userName = "SPJ", userAge = 40}})
 getEntity ::
     ( PersistStoreRead backend
     , PersistRecordBackend e backend
@@ -572,6 +623,22 @@ getEntity key = do
 -- | Like 'insertEntity' but just returns the record instead of 'Entity'.
 --
 -- @since 2.6.1
+--
+-- === __Example usage__
+--
+-- With schema-1 and dataset-1:
+--
+-- >>> daveRec <- insertRecord $ User "Dave" 50
+--
+-- > +-----+------+-----+
+-- > |id   |name  |age  |
+-- > +-----+------+-----+
+-- > |1    |SPJ   |40   |
+-- > +-----+------+-----+
+-- > |2    |Simon |41   |
+-- > +-----+------+-----+
+-- > |3    |Dave  |50   |
+-- > +-----+------+-----+
 insertRecord
   :: (PersistEntityBackend record ~ BaseBackend backend
      ,PersistEntity record
