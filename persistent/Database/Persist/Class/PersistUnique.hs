@@ -73,11 +73,44 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
       PersistUniqueWrite backend  where
     -- | Delete a specific record by unique key. Does nothing if no record
     -- matches.
+    --
+    -- === __Example usage__
+    --
+    -- With schema-1 and dataset-1:
+    --
+    -- > deleteBy UniqueUserName "SPJ"
+    --
+    -- will alter dataset-1 to:
+    --
+    -- > +-----+------+-----+
+    -- > |id   |name  |age  |
+    -- > +-----+------+-----+
+    -- > |2    |Simon |41   |
+    -- > +-----+------+-----+
     deleteBy
         :: (MonadIO m, PersistRecordBackend record backend)
         => Unique record -> ReaderT backend m ()
     -- | Like 'insert', but returns 'Nothing' when the record
     -- couldn't be inserted because of a uniqueness constraint.
+    --
+    -- === __Example usage__
+    --
+    -- With schema-1 and dataset-1, we try to insert the following two records:
+    --
+    -- > mLinusId <- insertUnique $ User "Linus" 48
+    -- > mSpjId   <- insertUnique $ User "SPJ" 90
+    --
+    -- Linus's record was inserted to dataset-1, while SPJ wasn't because SPJ already exists in dataset-1. dataset-1 now looks like:
+    --
+    -- > +-----+------+-----+
+    -- > |id   |name  |age  |
+    -- > +-----+------+-----+
+    -- > |1    |SPJ   |40   |
+    -- > +-----+------+-----+
+    -- > |2    |Simon |41   |
+    -- > +-----+------+-----+
+    -- > |3    |Linus |48   |
+    -- > +-----+------+-----+
     insertUnique
         :: (MonadIO m, PersistRecordBackend record backend)
         => record -> ReaderT backend m (Maybe (Key record))
@@ -210,6 +243,22 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
 -- | Insert a value, checking for conflicts with any unique constraints.  If a
 -- duplicate exists in the database, it is returned as 'Left'. Otherwise, the
 -- new 'Key is returned as 'Right'.
+--
+-- === __Example usage__
+--
+-- With schema-2 and dataset-1, we have following lines of code:
+--
+-- > er1 <- insertBy $ User "SPJ" 20
+-- > er2 <- insertBy $ User "XXX" 41
+-- > er3 <- insertBy $ User "SPJ" 40
+-- > ek1 <- insertBy $ User "XXX" 100
+--
+-- Each value should be:
+--
+-- > Left (Entity {entityKey = UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 1}}, entityVal = User {userName = "SPJ", userAge = 40}})
+-- > Left (Entity {entityKey = UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 2}}, entityVal = User {userName = "Simon", userAge = 41}})
+-- > Left (Entity {entityKey = UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 1}}, entityVal = User {userName = "SPJ", userAge = 40}})
+-- > Right (UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 4}})
 insertBy
     :: (MonadIO m
        ,PersistUniqueWrite backend
@@ -236,6 +285,19 @@ _insertOrGet val = do
 -- couldn't be inserted because of a uniqueness constraint.
 --
 -- @since 2.7.1
+--
+-- === __Example usage__
+--
+-- We use schema-2 and dataset-1 here.
+--
+-- Following values would be 'Nothing':
+--
+-- > mEnt1 <- insertUniqueEntity $ User "SPJ" 50
+-- > mEnt2 <- insertUniqueEntity $ User "XXX" 40
+--
+-- This would be 'Just' because there's no such matching uniqueness constraints of the given record:
+--
+-- > mEnt3 <- insertUniqueEntity $ User "Alex" 45
 insertUniqueEntity
     :: (MonadIO m
        ,PersistRecordBackend record backend
@@ -245,6 +307,14 @@ insertUniqueEntity datum =
   fmap (\key -> Entity key datum) `liftM` insertUnique datum
 
 -- | Return the single unique key for a record.
+--
+-- === __Example usage__
+--
+-- We use shcema-1 and dataset-1 here.
+--
+-- Following value would be Simon's uniqueness constraint
+--
+-- > mSimonConst <- onlyUnique $ User "Simon" 99
 onlyUnique
     :: (MonadIO m
        ,PersistUniqueWrite backend
@@ -269,6 +339,16 @@ onlyUniqueEither record =
 -- of a 'Unique' record. Returns a record matching /one/ of the unique keys. This
 -- function makes the most sense on entities with a single 'Unique'
 -- constructor.
+--
+-- === __Example usage__
+--
+-- With schema-1 and dataset-1:
+--
+-- > mSpjEnt <- getByValue $ User "SPJ" 9
+--
+-- It's like:
+--
+-- > Just (Entity {entityKey = UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 1}}, entityVal = User {userName = "SPJ", userAge = 40}})
 getByValue
     :: (MonadIO m
        ,PersistUniqueRead backend
@@ -331,6 +411,18 @@ replaceUnique key datumNew = getJust key >>= replaceOriginal
 --
 -- Returns 'Nothing' if the entity would be unique, and could thus safely be inserted.
 -- on a conflict returns the conflicting key
+--
+-- === __Example usage__
+--
+-- We use schema-1 and dataset-1 here.
+--
+-- This would be 'Nothing':
+--
+-- > mConst <- checkUnique $ User "Alan" 70
+--
+-- While this would be 'Just' because SPJ already exists:
+--
+-- > mConst <- checkUnique $ User "SPJ" 60
 checkUnique
     :: (MonadIO m
        ,PersistRecordBackend record backend
