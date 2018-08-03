@@ -49,13 +49,20 @@ class (PersistCore backend, PersistStoreRead backend) =>
     --
     -- === __Example usage__
     --
-    -- With schema-1 and dataset-1:
+    -- With <#schema-persist-unique-1 schema-1> and <#dataset-persist-unique-1 dataset-1>:
     --
-    -- > mspjEnt <- getBy $ UniqueUserName "SPJ"
+    -- > getBySpjName :: MonadIO m  => ReaderT SqlBackend m (Maybe (Entity User))
+    -- > getBySpjName = getBy $ UniqueUserName "SPJ"
     --
-    -- Returned value would look like this:
+    -- > mSpjEnt <- getBySpjName
     --
-    -- > Just (Entity {entityKey = UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 1}}, entityVal = User {userName = "SPJ", userAge = 40}})
+    -- The above query when applied on <#dataset-persist-unique-1 dataset-1>, will get this entity:
+    --
+    -- > +----+------+-----+
+    -- > | id | name | age |
+    -- > +----+------+-----+
+    -- > |  1 | SPJ  |  40 |
+    -- > +----+------+-----+
     getBy
         :: (MonadIO m, PersistRecordBackend record backend)
         => Unique record -> ReaderT backend m (Maybe (Entity record))
@@ -76,11 +83,12 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     --
     -- === __Example usage__
     --
-    -- With schema-1 and dataset-1:
+    -- With <#schema-persist-unique-1 schema-1> and <#dataset-persist-unique-1 dataset-1>,
     --
-    -- > deleteBy UniqueUserName "SPJ"
+    -- > deleteBySpjName :: MonadIO m => ReaderT SqlBackend m ()
+    -- > deleteBySpjName = deleteBy UniqueUserName "SPJ"
     --
-    -- will alter dataset-1 to:
+    -- The above query when applied on <#dataset-persist-unique-1 dataset-1>, will produce this:
     --
     -- > +-----+------+-----+
     -- > |id   |name  |age  |
@@ -95,12 +103,10 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     --
     -- === __Example usage__
     --
-    -- With schema-1 and dataset-1, we try to insert the following two records:
+    -- With <#schema-persist-unique-1 schema-1> and <#dataset-persist-unique-1 dataset-1>, we try to insert the following two records:
     --
-    -- > mLinusId <- insertUnique $ User "Linus" 48
-    -- > mSpjId   <- insertUnique $ User "SPJ" 90
-    --
-    -- Linus's record was inserted to dataset-1, while SPJ wasn't because SPJ already exists in dataset-1. dataset-1 now looks like:
+    -- > linusId <- insertUnique $ User "Linus" 48
+    -- > spjId   <- insertUnique $ User "SPJ" 90
     --
     -- > +-----+------+-----+
     -- > |id   |name  |age  |
@@ -111,6 +117,8 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- > +-----+------+-----+
     -- > |3    |Linus |48   |
     -- > +-----+------+-----+
+    --
+    -- Linus's record was inserted to <#dataset-persist-unique-1 dataset-1>, while SPJ wasn't because SPJ already exists in <#dataset-persist-unique-1 dataset-1>.
     insertUnique
         :: (MonadIO m, PersistRecordBackend record backend)
         => record -> ReaderT backend m (Maybe (Key record))
@@ -128,11 +136,14 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     --
     -- === __Example usage__
     --
-    -- First, we try to explain 'upsert' using schema-1 and dataset-1.
+    -- First, we try to explain 'upsert' using <#schema-persist-unique-1 schema-1> and <#dataset-persist-unique-1 dataset-1>.
     --
-    -- > upsert (User "SPJ" 999) [UserAge +=. 15]
+    -- > upsertSpj :: MonadIO m => [Update User] -> ReaderT SqlBackend m (Maybe (Entity User))
+    -- > upsertSpj updates = upsert (User "SPJ" 999) upadtes
     --
-    -- The above code will alter dataset-1 to:
+    -- > mSpjEnt <- upsertSpj [UserAge +=. 15]
+    --
+    -- The above query when applied on <#dataset-persist-unique-1 dataset-1>, will produce this:
     --
     -- > +-----+-----+--------+
     -- > |id   |name |age     |
@@ -142,9 +153,12 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- > |2    |Simon|41      |
     -- > +-----+-----+--------+
     --
-    -- > upsert (User "X" 999) [UserAge +=. 15]
+    -- > upsertX :: MonadIO m => [Update User] -> ReaderT SqlBackend m (Maybe (Entity User))
+    -- > upsertX updates = upsert (User "X" 999) upadtes
     --
-    -- This code will alter dataset-1 to:
+    -- > mXEnt <- upsertX [UserAge +=. 15]
+    --
+    -- The above query when applied on <#dataset-persist-unique-1 dataset-1>, will produce this:
     --
     -- > +-----+-----+--------+
     -- > |id   |name |age     |
@@ -157,9 +171,9 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- > +-----+-----+--------+
     --
     -- Next, what if the schema has two uniqueness constraints?
-    -- Let's check it out using schema-2:
+    -- Let's check it out using <#schema-persist-unique-2 schema-2>:
     --
-    -- > upsert (User "SPJ" 999) [UserAge +=. 15]
+    -- > mSpjEnt <- upsertSpj [UserAge +=. 15]
     --
     -- Then, it throws an error message something like "Expected only one unique key, got"
     upsert
@@ -177,11 +191,14 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     --
     -- === __Example usage__
     --
-    -- We try to explain 'upsertBy' using schema-2 and dataset-1.
+    -- We try to explain 'upsertBy' using <#schema-persist-unique-2 schema-2> and <#dataset-persist-unique-1 dataset-1>.
     --
-    -- > upsertBy (UniqueUserName "SPJ") (Person "X" 999) [PersonAge +=. 15]
+    -- > upsertBySpjName :: MonadIO m => User -> [Update User] -> ReaderT SqlBackend m (Entity User)
+    -- > upsertBySpjName record updates = upsertBy (UniqueUserName "SPJ") record updates
     --
-    -- The above code will alter dataset-1 to:
+    -- > mSpjEnt <- upsertBySpjName (Person "X" 999) [PersonAge += .15]
+    --
+    -- The above query will alter <#dataset-persist-unique-1 dataset-1> to:
     --
     -- > +-----+-----+--------+
     -- > |id   |name |age     |
@@ -191,21 +208,27 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- > |2    |Simon|41      |
     -- > +-----+-----+--------+
     --
-    -- > upsertBy (UniqueUserAge "41") (User "X" 999) [UserName =. "Philip"]
+    -- > upsertBySimonAge :: MonadIO m => User -> [Update User] -> ReaderT SqlBackend m (Entity User)
+    -- > upsertBySimonAge record updates = upsertBy (UniqueUserName "SPJ") record updates
     --
-    -- The above code will alter dataset-1 to:
+    -- > mPhilipEnt <- upsertBySimonAge (User "X" 999) [UserName =. "Philip"]
     --
-    -- > +-----+---------------+--------+
-    -- > |id   |name           |age     |
-    -- > +-----+---------------+--------+
-    -- > |1    |SPJ            |40 -> 55|
-    -- > +-----+---------------+--------+
-    -- > |2    |Simon -> Philip|41      |
-    -- > +-----+---------------+--------+
+    -- The above query will alter <#dataset-persist-unique-1 dataset-1> to:
     --
-    -- > upsertBy (UniqueUserName "D") (User "X" 999) [UserAge +=. 15]
+    -- > +----+-----------------+-----+
+    -- > | id |      name       | age |
+    -- > +----+-----------------+-----+
+    -- > |  1 | SPJ             |  40 |
+    -- > +----+-----------------+-----+
+    -- > |  2 | Simon -> Philip |  41 |
+    -- > +----+-----------------+-----+
     --
-    -- The above code will alter dataset-1 to:
+    -- > upsertByUnknownName :: MonadIO m => User -> [Update User] -> ReaderT SqlBackend m (Entity User)
+    -- > upsertByUnknownName record updates = upsertBy (UniqueUserName "Unknown") record updates
+    --
+    -- > mXEnt <- upsertByUnknownName (User "X" 999) [UserAge +=. 15]
+    --
+    -- This query will alter <#dataset-persist-unique-1 dataset-1> to:
     --
     -- > +-----+-----+-----+
     -- > |id   |name |age  |
@@ -246,19 +269,14 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
 --
 -- === __Example usage__
 --
--- With schema-2 and dataset-1, we have following lines of code:
+-- With <#schema-persist-unique-2 schema-2> and <#dataset-persist-unique-1 dataset-1>, we have following lines of code:
 --
--- > er1 <- insertBy $ User "SPJ" 20
--- > er2 <- insertBy $ User "XXX" 41
--- > er3 <- insertBy $ User "SPJ" 40
--- > ek1 <- insertBy $ User "XXX" 100
+-- > l1 <- insertBy $ User "SPJ" 20
+-- > l2 <- insertBy $ User "XXX" 41
+-- > l3 <- insertBy $ User "SPJ" 40
+-- > r1 <- insertBy $ User "XXX" 100
 --
--- Each value should be:
---
--- > Left (Entity {entityKey = UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 1}}, entityVal = User {userName = "SPJ", userAge = 40}})
--- > Left (Entity {entityKey = UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 2}}, entityVal = User {userName = "Simon", userAge = 41}})
--- > Left (Entity {entityKey = UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 1}}, entityVal = User {userName = "SPJ", userAge = 40}})
--- > Right (UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 4}})
+-- First three lines return 'Left' because there're duplicates in given record's uniqueness constraints. While the last line returns a new key as 'Right'.
 insertBy
     :: (MonadIO m
        ,PersistUniqueWrite backend
@@ -288,16 +306,32 @@ _insertOrGet val = do
 --
 -- === __Example usage__
 --
--- We use schema-2 and dataset-1 here.
+-- We use <#schema-persist-unique-2 schema-2> and <#dataset-persist-unique-1 dataset-1> here.
 --
--- Following values would be 'Nothing':
+-- > insertUniqueSpjEntity :: MonadIO m => ReaderT SqlBackend m (Maybe (Entity User))
+-- > insertUniqueSpjEntity = insertUniqueEntity $ User "SPJ" 50
 --
--- > mEnt1 <- insertUniqueEntity $ User "SPJ" 50
--- > mEnt2 <- insertUniqueEntity $ User "XXX" 40
+-- > mSpjEnt <- insertUniqueSpjEntity
 --
--- This would be 'Just' because there's no such matching uniqueness constraints of the given record:
+-- The above query results 'Nothing' as SPJ already exists.
 --
--- > mEnt3 <- insertUniqueEntity $ User "Alex" 45
+-- > insertUniqueAlexaEntity :: MonadIO m => ReaderT SqlBackend m (Maybe (Entity User))
+-- > insertUniqueAlexaEntity = insertUniqueEntity $ User "Alexa" 3
+--
+-- > mAlexaEnt <- insertUniqueSpjEntity
+--
+-- Because there's no such unique keywords of the given record, the above query when applied on <#dataset-persist-unique-1 dataset-1>, will produce this:
+--
+-- > +----+-------+-----+
+-- > | id | name  | age |
+-- > +----+-------+-----+
+-- > |  1 | SPJ   |  40 |
+-- > +----+-------+-----+
+-- > |  2 | Simon |  41 |
+-- > +----+-------+-----+
+-- > |  3 | Alexa |   3 |
+-- > +----+-------+-----+
+
 insertUniqueEntity
     :: (MonadIO m
        ,PersistRecordBackend record backend
@@ -310,11 +344,14 @@ insertUniqueEntity datum =
 --
 -- === __Example usage__
 --
--- We use shcema-1 and dataset-1 here.
+-- We use shcema-1 and <#dataset-persist-unique-1 dataset-1> here.
 --
--- Following value would be Simon's uniqueness constraint
+-- > onlySimonConst :: MonadIO m => ReaderT SqlBackend m (Unique User)
+-- > onlySimonConst = onlyUnique $ User "Simon" 999
 --
--- > mSimonConst <- onlyUnique $ User "Simon" 99
+-- > mSimonConst <- onlySimonConst
+--
+-- @mSimonConst@ would be Simon's uniqueness constraint. Note that @onlyUnique@ doesn't work if there're more than two constraints.
 onlyUnique
     :: (MonadIO m
        ,PersistUniqueWrite backend
@@ -342,13 +379,20 @@ onlyUniqueEither record =
 --
 -- === __Example usage__
 --
--- With schema-1 and dataset-1:
+-- With <#schema-persist-unique-1 schema-1> and <#dataset-persist-unique-1 dataset-1>,
 --
--- > mSpjEnt <- getByValue $ User "SPJ" 9
+-- getBySpjValue :: MonadIO m => ReaderT SqlBackend m (Maybe (Entity User))
+-- getBySpjValue = getByValue $ User "SPJ" 999
 --
--- It's like:
+-- > mSpjEnt <- getBySpjValue
 --
--- > Just (Entity {entityKey = UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 1}}, entityVal = User {userName = "SPJ", userAge = 40}})
+-- The above query when applied on <#dataset-persist-unique-1 dataset-1>, will get this record:
+--
+-- > +----+------+-----+
+-- > | id | name | age |
+-- > +----+------+-----+
+-- > |  1 | SPJ  |  40 |
+-- > +----+------+-----+
 getByValue
     :: (MonadIO m
        ,PersistUniqueRead backend
@@ -414,15 +458,15 @@ replaceUnique key datumNew = getJust key >>= replaceOriginal
 --
 -- === __Example usage__
 --
--- We use schema-1 and dataset-1 here.
+-- We use <#schema-persist-unique-1 schema-1> and <#dataset-persist-unique-1 dataset-1> here.
 --
 -- This would be 'Nothing':
 --
--- > mConst <- checkUnique $ User "Alan" 70
+-- > mAlanConst <- checkUnique $ User "Alan" 70
 --
 -- While this would be 'Just' because SPJ already exists:
 --
--- > mConst <- checkUnique $ User "SPJ" 60
+-- > mSpjConst <- checkUnique $ User "SPJ" 60
 checkUnique
     :: (MonadIO m
        ,PersistRecordBackend record backend

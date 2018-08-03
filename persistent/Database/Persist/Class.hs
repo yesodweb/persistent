@@ -6,9 +6,12 @@ module Database.Persist.Class
     -- * PersistStore
     -- |
     --
-    -- All the examples present here will be explained based on this schema and dataset:
+    -- All the examples present here will be explained based on these schemas, datasets and functions:
     --
     -- = schema-1
+    --
+    -- #schema-persist-store-1#
+    --
     -- > share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
     -- > User
     -- >     name String
@@ -18,13 +21,15 @@ module Database.Persist.Class
     --
     -- = dataset-1
     --
-    -- > +-----+-----+-----+
-    -- > |id   |name |age  |
-    -- > +-----+-----+-----+
-    -- > |1    |SPJ  |40   |
-    -- > +-----+-----+-----+
-    -- > |2    |Simon|41   |
-    -- > +-----+-----+-----+
+    -- #dataset-persist-store-1#
+    --
+    -- > +----+-------+-----+
+    -- > | id | name  | age |
+    -- > +----+-------+-----+
+    -- > |  1 | SPJ   |  40 |
+    -- > +----+-------+-----+
+    -- > |  2 | Simon |  41 |
+    -- > +----+-------+-----+
 
     , PersistCore (..)
     , PersistStore
@@ -47,6 +52,8 @@ module Database.Persist.Class
     -- = schema-1
     -- This schema has single unique constraint.
     --
+    -- #schema-persist-unique-1#
+    --
     -- > share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
     -- > User
     -- >     name String
@@ -58,6 +65,8 @@ module Database.Persist.Class
     -- = schema-2
     -- This schema has two unique constraints.
     --
+    -- #schema-persist-unique-2#
+    --
     -- > share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
     -- > User
     -- >     name String
@@ -68,6 +77,8 @@ module Database.Persist.Class
     -- > |]
     --
     -- = dataset-1
+    --
+    -- #dataset-persist-unique-1#
     --
     -- > +-----+-----+-----+
     -- > |id   |name |age  |

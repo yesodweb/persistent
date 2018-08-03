@@ -135,13 +135,20 @@ class
     --
     -- === __Example usage__
     --
-    -- With schema-1 and dataset-1
+    -- With <#schema-persist-store-1 schema-1> and <#dataset-persist-store-1 dataset-1>,
     --
-    -- > spj <- get spjId
+    -- > getSpj :: MonadIO m => ReaderT SqlBackend m (Maybe User)
+    -- > getSpj = get spjId
     --
-    -- @spj@ is like the following:
+    -- > mspj <- getSpj
     --
-    -- > Just (User {userName = "SPJ", userAge = 40})
+    -- The above query when applied on <#dataset-persist-store-1 dataset-1>, will get this:
+    --
+    -- > +------+-----+
+    -- > | name | age |
+    -- > +------+-----+
+    -- > | SPJ  |  40 |
+    -- > +------+-----+
     get :: (MonadIO m, PersistRecordBackend record backend)
         => Key record -> ReaderT backend m (Maybe record)
 
@@ -151,13 +158,22 @@ class
     --
     -- === __Example usage__
     --
-    -- With schema-1 and dataset-1:
+    -- With <#schema-persist-store-1 schema-1> and <#dataset-persist-store-1 dataset-1>:
     --
-    -- > records <- getMany keys
+    -- > getUsers :: MonadIO m => ReaderT SqlBackend m (Map (Key User) User)
+    -- > getUsers = getMany allkeys
     --
-    -- Now, records is something like:
+    -- > musers <- getUsers
     --
-    -- > fromList [(UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 1}},User {userName = "SPJ", userAge = 40}),(UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 2}},User {userName = "Simon", userAge = 41})]
+    -- The above query when applied on <#dataset-persist-store-1 dataset-1>, will get these records:
+    --
+    -- > +----+-------+-----+
+    -- > | id | name  | age |
+    -- > +----+-------+-----+
+    -- > |  1 | SPJ   |  40 |
+    -- > +----+-------+-----+
+    -- > |  2 | Simon |  41 |
+    -- > +----+-------+-----+
     getMany
         :: (MonadIO m, PersistRecordBackend record backend)
         => [Key record] -> ReaderT backend m (Map (Key record) record)
@@ -180,9 +196,14 @@ class
     --
     -- === __Example usage__
     --
-    -- Using schema-1 and dataset-1, let's insert a new user 'John':
+    -- Using <#schema-persist-store-1 schema-1> and <#dataset-persist-store-1 dataset-1>, let's insert a new user 'John'.
     --
-    -- > johnId <- insert $ User "John" 30
+    -- > insertJohn :: MonadIO m => ReaderT SqlBackend m (Key User)
+    -- > insertJohn = insert $ User "John" 30
+    --
+    -- > johnId <- insertJohn
+    --
+    -- The above query when applied on <#dataset-persist-store-1 dataset-1>, will produce this:
     --
     -- > +-----+------+-----+
     -- > |id   |name  |age  |
@@ -200,9 +221,12 @@ class
     --
     -- === __Example usage__
     --
-    -- Insertion with schema-1 and dataset-1:
+    -- with <#schema-persist-store-1 schema-1> and <#dataset-persist-store-1 dataset-1>,
     --
-    -- > insert_ $ User "John" 30
+    -- > insertJohn :: MonadIO m => ReaderT SqlBackend m (Key User)
+    -- > insertJohn = insert_ $ User "John" 30
+    --
+    -- The above query when applied on <#dataset-persist-store-1 dataset-1>, will produce this:
     --
     -- > +-----+------+-----+
     -- > |id   |name  |age  |
@@ -229,9 +253,14 @@ class
     --
     -- === __Example usage__
     --
-    -- With schema-1 and dataset-1:
+    -- with <#schema-persist-store-1 schema-1> and <#dataset-persist-store-1 dataset-1>,
     --
-    -- > keys <- insertMany [User "John" 30, User "Nick" 32, User "Jane" 20]
+    -- > insertUsers :: MonadIO m => ReaderT SqlBackend m [Key User]
+    -- > insertUsers = insertMany [User "John" 30, User "Nick" 32, User "Jane" 20]
+    --
+    -- > userIds <- insertUsers
+    --
+    -- The above query when applied on <#dataset-persist-store-1 dataset-1>, will produce this:
     --
     -- > +-----+------+-----+
     -- > |id   |name  |age  |
@@ -257,7 +286,12 @@ class
     --
     -- === __Example usage__
     --
-    -- > insertMany_ [User "John" 30, User "Nick" 32, User "Jane" 20]
+    -- With <#schema-persist-store-1 schema-1> and <#dataset-persist-store-1 dataset-1>,
+    --
+    -- > insertUsers_ :: MonadIO m => ReaderT SqlBackend m ()
+    -- > insertUsers_ = insertMany_ [User "John" 30, User "Nick" 32, User "Jane" 20]
+    --
+    -- The above query when applied on <#dataset-persist-store-1 dataset-1>, will produce this:
     --
     -- > +-----+------+-----+
     -- > |id   |name  |age  |
@@ -286,11 +320,12 @@ class
     --
     -- === __Example usage__
     --
-    -- > let erecords = [ Entity { entityKey = UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 3}}
-    -- >                         , entityVal = User {userName = "Snake", userAge = 38}}
-    -- >                , Entity { entityKey = UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 4}}
-    -- >                         , entityVal = User {userName = "Eva", userAge = 38}}]
-    -- > insertEntityMany erecords
+    -- With <#schema-persist-store-1 schema-1> and <#dataset-persist-store-1 dataset-1>,
+    --
+    -- > insertUserEntityMany :: MonadIO m => ReaderT SqlBackend m ()
+    -- > insertUserEntityMany = insertEntityMany [SnakeEntity, EvaEntity]
+    --
+    -- The above query when applied on <#dataset-persist-store-1 dataset-1>, will produce this:
     --
     -- > +-----+------+-----+
     -- > |id   |name  |age  |
@@ -310,8 +345,15 @@ class
     -- | Create a new record in the database using the given key.
     --
     -- === __Example usage__
+    -- With <#schema-persist-store-1 schema-1> and <#dataset-persist-store-1 dataset-1>,
     --
-    -- > insertKey (UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 3}}) $ User "Alice" 20
+    -- > insertAliceKey :: MonadIO m => Key User -> ReaderT SqlBackend m ()
+    -- > insertAliceKey key = insertKey key $ User "Alice" 20
+    --
+    -- > insertAliceKey $ UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 3}}
+    --
+    -- The above query when applied on <#dataset-persist-store-1 dataset-1>, will produce this:
+    --
     -- > +-----+------+-----+
     -- > |id   |name  |age  |
     -- > +-----+------+-----+
@@ -330,11 +372,16 @@ class
     --
     -- === __Example usage__
     --
-    -- We try to explain 'upsertBy' using schema-1 and dataset-1.
+    -- We try to explain 'upsertBy' using <#schema-persist-store-1 schema-1> and <#dataset-persist-store-1 dataset-1>.
     --
-    -- First, we insert Philip to dataset-1:
+    -- First, we insert Philip to <#dataset-persist-store-1 dataset-1>.
     --
-    -- > philipId <- insert $ User "Philip" 42
+    -- > insertPhilip :: MonadIO m => ReaderT SqlBackend m (Key User)
+    -- > insertPhilip = insert $ User "Philip" 42
+    --
+    -- > philipId <- insertPhilip
+    --
+    -- This query will produce:
     --
     -- > +-----+------+-----+
     -- > |id   |name  |age  |
@@ -346,9 +393,12 @@ class
     -- > |3    |Philip|42   |
     -- > +-----+------+-----+
     --
-    -- This code will replace Philip's record with Haskell's one:
+    -- > repsertHaskell :: MonadIO m => Key record -> ReaderT SqlBackend m ()
+    -- > repsertHaskell id = repsert id $ User "Haskell" 81
     --
-    -- > repsert philipId $ User "Haskell" 55
+    -- > repsertHaskell philipId
+    --
+    -- This query will replace Philip's record with Haskell's one:
     --
     -- > +-----+-----------------+--------+
     -- > |id   |name             |age     |
@@ -357,13 +407,15 @@ class
     -- > +-----+-----------------+--------+
     -- > |2    |Simon            |41      |
     -- > +-----+-----------------+--------+
-    -- > |3    |Philip -> Haskell|42 -> 55|
+    -- > |3    |Philip -> Haskell|42 -> 81|
     -- > +-----+-----------------+--------+
     --
-    -- 'repsert' inserts the given record if the key
-    -- doesn't exist. For example, with dataset-1, the following code will insert the user X:
+    -- 'repsert' inserts the given record if the key doesn't exist.
     --
-    -- > repsert unknownId $ User "X" 999
+    -- > repsertXToUnknown :: MonadIO m => ReaderT SqlBackend m ()
+    -- > repsertXToUnknown = repsert unknownId $ User "X" 999
+    --
+    -- For example, applying the above query to <#dataset-persist-store-1 dataset-1> will produce this:
     --
     -- > +-----+------+-----+
     -- > |id   |name  |age  |
@@ -390,9 +442,12 @@ class
     --
     -- === __Example usage__
     --
-    -- With schema-1 and dataset-1:
+    -- With <#schema-persist-store-1 schema-1> and <#dataset-persist-store-1 dataset-1>,
     --
-    -- > repsertMany [(spjId, User "Alice" 10), (simonId, User "BobId" 20), (unknownId, User "Mr. X" 999)]
+    -- > repsertManyUsers :: MonadIO m =>ReaderT SqlBackend m ()
+    -- > repsertManyusers = repsertMany [(spjId, User "Alice" 10), (simonId, User "BobId" 20), (unknownId999, User "Mr. X" 999)]
+    --
+    -- The above query when applied on <#dataset-persist-store-1 dataset-1>, will produce this:
     --
     -- > +-----+------+-----+
     -- > |id   |name  |age  |
@@ -415,9 +470,12 @@ class
     --
     -- === __Example usage__
     --
-    -- With schama-1 and dataset-1:
+    -- With <#schema-persist-store-1 schema-1 schama-1> and <#dataset-persist-store-1 dataset-1>,
     --
-    -- > replace spjId $ User "Mike" 45
+    -- > replaceSpj :: MonadIO m => User -> ReaderT SqlBackend m ()
+    -- > replaceSpj record = replace spjId record
+    --
+    -- The above query when applied on <#dataset-persist-store-1 dataset-1>, will produce this:
     --
     -- > +-----+------+-----+
     -- > |id   |name  |age  |
@@ -434,10 +492,12 @@ class
     --
     -- === __Example usage__
     --
-    -- With schema-1 and dataset-1:
+    -- With <#schema-persist-store-1 schema-1> and <#dataset-persist-store-1 dataset-1>,
     --
-    -- > spjId <- head <$> selectKeysList ([] :: [Filter User]) []
-    -- > delete spjId
+    -- > deleteSpj :: MonadIO m => ReaderT SqlBackend m ()
+    -- > deleteSpj = delete spjId
+    --
+    -- The above query when applied on <#dataset-persist-store-1 dataset-1>, will produce this:
     --
     -- > +-----+------+-----+
     -- > |id   |name  |age  |
@@ -451,10 +511,14 @@ class
     --
     -- === __Example usage__
     --
-    -- With schema-1 and dataset-1:
+    -- With <#schema-persist-store-1 schema-1> and <#dataset-persist-store-1 dataset-1>,
     --
-    -- > spjId <- head <$> selectKeysList ([] :: [Filter User]) []
-    -- > update spjId [UserAge +=. 100]
+    -- > updateSpj :: MonadIO m => [Update User] -> ReaderT SqlBackend m ()
+    -- > updateSpj updates = update spjId updates
+    --
+    -- > updateSpj [UserAge +=. 100]
+    --
+    -- The above query when applied on <#dataset-persist-store-1 dataset-1>, will produce this:
     --
     -- > +-----+------+-----+
     -- > |id   |name  |age  |
@@ -474,9 +538,14 @@ class
     --
     -- === __Example usage__
     --
-    -- With schema-1 and dataset-1:
+    -- With <#schema-persist-store-1 schema-1> and <#dataset-persist-store-1 dataset-1>,
     --
-    -- record <- updateGet spjId [UserAge +=. 100]
+    -- > updateGetSpj :: MonadIO m => [Update User] -> ReaderT SqlBackend m User
+    -- > updateGetSpj updates = updateGet spjId updates
+    --
+    -- > spj <- updateGetSpj [UserAge +=. 100]
+    --
+    -- The above query when applied on <#dataset-persist-store-1 dataset-1>, will produce this:
     --
     -- > +-----+------+-----+
     -- > |id   |name  |age  |
@@ -497,16 +566,27 @@ class
 --
 -- === __Example usage__
 --
--- With schema-1 and dataset-1:
+-- With <#schema-persist-store-1 schema-1> and <#dataset-persist-store-1 dataset-1>,
+--
+-- > getJustSpj :: MonadIO m => ReaderT SqlBackend m User
+-- > getJustSpj = getJust spjId
 --
 -- > spj <- getJust spjId
--- > mrx <- getJust unknownId
 --
--- The former is something like:
+-- The above query when applied on <#dataset-persist-store-1 dataset-1>, will get this record:
 --
--- > User "SPJ" 40
+-- > +----+------+-----+
+-- > | id | name | age |
+-- > +----+------+-----+
+-- > |  1 | SPJ  |  40 |
+-- > +----+------+-----+
 --
--- The latter just throws an error.
+-- > getJustUnknown :: MonadIO m => ReaderT SqlBackend m User
+-- > getJustUnknown = getJust unknownId
+--
+-- mrx <- getJustUnknown
+--
+-- This just throws an error.
 getJust :: ( PersistStoreRead backend
            , Show (Key record)
            , PersistRecordBackend record backend
@@ -522,13 +602,20 @@ getJust key = get key >>= maybe
 --
 -- === __Example usage__
 --
--- With schema-1 and dataset-1:
+-- With <#schema-persist-store-1 schema-1> and <#dataset-persist-store-1 dataset-1>,
 --
--- > spjEnt <- getJustEntity spjId
+-- > getJustEntitySpj :: MonadIO m => ReaderT SqlBackend m (Entity User)
+-- > getJustEntitySpj = getJustEntity spjId
 --
--- @spjEnt@ is:
+-- > spjEnt <- getJustEntitySpj
 --
--- > Entity {entityKey = UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 1}}, entityVal = User {userName = "SPJ", userAge = 40}
+-- The above query when applied on <#dataset-persist-store-1 dataset-1>, will get this entity:
+--
+-- > +----+------+-----+
+-- > | id | name | age |
+-- > +----+------+-----+
+-- > |  1 | SPJ  |  40 |
+-- > +----+------+-----+
 getJustEntity
   :: (PersistEntityBackend record ~ BaseBackend backend
      ,MonadIO m
@@ -570,21 +657,24 @@ belongsToJust getForeignKey model = getJust $ getForeignKey model
 --
 -- === __Example usage__
 --
--- With schema-1 and dataset-1:
+-- With <#schema-persist-store-1 schema-1> and <#dataset-persist-store-1 dataset-1>,
 --
--- > carEnt <- insertEntity $ User "Carol" 29
+-- > insertHaskellEntity :: MonadIO m => ReaderT SqlBackend m (Entity User)
+-- > insertHaskellEntity = insertEntity $ User "Haskell" 81
 --
--- > +-----+------+-----+
--- > |id   |name  |age  |
--- > +-----+------+-----+
--- > |1    |SPJ   |40   |
--- > +-----+------+-----+
--- > |2    |Simon |41   |
--- > +-----+------+-----+
--- > |3    |Carol |29   |
--- > +-----+------+-----+
+-- > haskellEnt <- insertHaskellEntity
 --
--- @carEnt@ is the entity of Carol.
+-- The above query when applied on <#dataset-persist-store-1 dataset-1>, will produce this:
+--
+-- > +----+---------+-----+
+-- > | id |  name   | age |
+-- > +----+---------+-----+
+-- > |  1 | SPJ     |  40 |
+-- > +----+---------+-----+
+-- > |  2 | Simon   |  41 |
+-- > +----+---------+-----+
+-- > |  3 | Haskell |  81 |
+-- > +----+---------+-----+
 insertEntity ::
     ( PersistStoreWrite backend
     , PersistRecordBackend e backend
@@ -598,13 +688,20 @@ insertEntity e = do
 --
 -- === __Example usage__
 --
--- With schema-1 and dataset-1:
+-- With <#schema-persist-store-1 schema-1> and <#dataset-persist-store-1 dataset-1>,
 --
--- > mspjEnt <- getEntity spjId
+-- > getSpjEntity :: MonadIO m => ReaderT SqlBackend m (Maybe (Entity User))
+-- > getSpjEntity = getEntity spjId
 --
--- @mspjEnt@ is:
+-- > mSpjEnt <- getSpjEntity
 --
--- > Just (Entity {entityKey = UserKey {unUserKey = SqlBackendKey {unSqlBackendKey = 1}}, entityVal = User {userName = "SPJ", userAge = 40}})
+-- The above query when applied on <#dataset-persist-store-1 dataset-1>, will get this entity:
+--
+-- > +----+------+-----+
+-- > | id | name | age |
+-- > +----+------+-----+
+-- > |  1 | SPJ  |  40 |
+-- > +----+------+-----+
 getEntity ::
     ( PersistStoreRead backend
     , PersistRecordBackend e backend
@@ -620,9 +717,14 @@ getEntity key = do
 --
 -- === __Example usage__
 --
--- With schema-1 and dataset-1:
+-- With <#schema-persist-store-1 schema-1> and <#dataset-persist-store-1 dataset-1>,
 --
--- >>> daveRec <- insertRecord $ User "Dave" 50
+-- > insertDaveRecord :: MonadIO m => ReaderT SqlBackend m User
+-- > insertDaveRecord = insertRecord $ User "Dave" 50
+--
+-- > dave <- insertDaveRecord
+--
+-- The above query when applied on <#dataset-persist-store-1 dataset-1>, will produce this:
 --
 -- > +-----+------+-----+
 -- > |id   |name  |age  |
