@@ -524,7 +524,10 @@ uniqueTypeDec mps t =
             Nothing
 #endif
             (map (mkUnique mps t) $ entityUniques t)
-            []
+            (deriveClause $ entityUniques t)
+  where
+    deriveClause [] = []
+    deriveClause _  = [DerivClause Nothing [ConT ''Show]]
 
 mkUnique :: MkPersistSettings -> EntityDef -> UniqueDef -> Con
 mkUnique mps t (UniqueDef (HaskellName constr) _ fields attrs) =
