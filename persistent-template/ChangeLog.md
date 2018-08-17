@@ -1,3 +1,6 @@
+## 2.6.0
+* [persistent#826](https://github.com/yesodweb/persistent/pull/826): Change `Unique` derive `Show`
+
 ## 2.5.4
 
 * [persistent#778](https://github.com/yesodweb/persistent/issues/778): Add `persistManyFileWith`.
