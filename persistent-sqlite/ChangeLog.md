@@ -1,3 +1,9 @@
+# Changelog for persistent-sqlite
+
+## 2.8.2
+
+* Add the `extraPragmas` setting
+
 ## 2.8.1.2
 
 * Add flag to enable full-text search extensions (enabled by default)
