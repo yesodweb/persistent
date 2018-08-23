@@ -24,6 +24,7 @@ module Database.Persist.Sqlite
     , sqlConnectionStr
     , walEnabled
     , fkEnabled
+    , extraPragmas
     , runSqlite
     , runSqliteInfo
     , wrapConnection
@@ -38,7 +39,7 @@ import qualified Database.Sqlite as Sqlite
 
 import Control.Applicative as A
 import qualified Control.Exception as E
-import Control.Monad (when)
+import Control.Monad (forM_)
 import Control.Monad.IO.Unlift (MonadIO (..), MonadUnliftIO, withUnliftIO, unliftIO)
 import Control.Monad.Logger (NoLoggingT, runNoLoggingT, MonadLogger)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT)
@@ -130,21 +131,28 @@ wrapConnectionInfo :: (IsSqlBackend backend)
                   -> LogFunc
                   -> IO backend
 wrapConnectionInfo connInfo conn logFunc = do
-    when (_walEnabled connInfo) $ do
+    let
         -- Turn on the write-ahead log
         -- https://github.com/yesodweb/persistent/issues/363
-        turnOnWal <- Sqlite.prepare conn "PRAGMA journal_mode=WAL;"
-        _ <- Sqlite.stepConn conn turnOnWal
-        Sqlite.reset conn turnOnWal
-        Sqlite.finalize turnOnWal
+        walPragma
+          | _walEnabled connInfo = ("PRAGMA journal_mode=WAL;":)
+          | otherwise = id
 
-    when (_fkEnabled connInfo) $ do
         -- Turn on foreign key constraints
         -- https://github.com/yesodweb/persistent/issues/646
-        turnOnFK <- Sqlite.prepare conn "PRAGMA foreign_keys = on;"
-        _ <- Sqlite.stepConn conn turnOnFK
-        Sqlite.reset conn turnOnFK
-        Sqlite.finalize turnOnFK
+        fkPragma
+          | _fkEnabled connInfo = ("PRAGMA foreign_keys = on;":)
+          | otherwise = id
+
+        -- Allow arbitrary additional pragmas to be set
+        -- https://github.com/commercialhaskell/stack/issues/4247
+        pragmas = walPragma $ fkPragma $ _extraPragmas connInfo
+
+    forM_ pragmas $ \pragma -> do
+        stmt <- Sqlite.prepare conn pragma
+        _ <- Sqlite.stepConn conn stmt
+        Sqlite.reset conn stmt
+        Sqlite.finalize stmt
 
     smap <- newIORef $ Map.empty
     return . mkPersistBackend $ SqlBackend
@@ -529,11 +537,11 @@ finally a sequel = withUnliftIO $ \u ->
 --
 -- @since 2.6.2
 mkSqliteConnectionInfo :: Text -> SqliteConnectionInfo
-mkSqliteConnectionInfo fp = SqliteConnectionInfo fp True True
+mkSqliteConnectionInfo fp = SqliteConnectionInfo fp True True []
 
 -- | Parses connection options from a connection string. Used only to provide deprecated API.
 conStringToInfo :: Text -> SqliteConnectionInfo
-conStringToInfo connStr = SqliteConnectionInfo connStr' enableWal True where
+conStringToInfo connStr = SqliteConnectionInfo connStr' enableWal True [] where
     (connStr', enableWal) = case () of
         ()
             | Just cs <- T.stripPrefix "WAL=on "  connStr -> (cs, True)
@@ -549,6 +557,7 @@ data SqliteConnectionInfo = SqliteConnectionInfo
     { _sqlConnectionStr :: Text -- ^ connection string for the database. Use @:memory:@ for an in-memory database.
     , _walEnabled :: Bool -- ^ if the write-ahead log is enabled - see https://github.com/yesodweb/persistent/issues/363.
     , _fkEnabled :: Bool -- ^ if foreign-key constraints are enabled.
+    , _extraPragmas :: [Text] -- ^ additional pragmas to be set on initialization
     } deriving Show
 makeLenses ''SqliteConnectionInfo
 
@@ -558,3 +567,4 @@ instance FromJSON SqliteConnectionInfo where
         <$> o .: "connectionString"
         <*> o .: "walEnabled"
         <*> o .: "fkEnabled"
+        <*> o .:? "extraPragmas" .!= []

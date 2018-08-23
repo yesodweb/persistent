@@ -1,6 +1,12 @@
+# Changelog for persistent-sqlite
+
 ## 2.9.1
 
 * Added support for SQL isolation levels to via SqlBackend. [#812] SQLite technically only supports Serializable.
+
+## 2.8.2
+
+* Add the `extraPragmas` setting
 
 ## 2.8.1.2
 
