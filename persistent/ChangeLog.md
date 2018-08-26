@@ -1,6 +1,7 @@
 ## 2.9.1
 
 * Added support for SQL isolation levels to via SqlBackend. [#812]
+* Move `Database.Persist.Sql.Raw.QQ` to a separate `persistent-qq` package [#827](https://github.com/yesodweb/persistent/issues/827)
 
 ## 2.8.2
 

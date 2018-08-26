@@ -10,8 +10,6 @@ module Database.Persist.Sql
     , rawExecute
     , rawExecuteCount
     , rawSql
-    , sqlQQ
-    , executeQQ
     , deleteWhereCount
     , updateWhereCount
     , transactionSave
@@ -31,7 +29,6 @@ import Database.Persist.Sql.Types.Internal (IsolationLevel (..))
 import Database.Persist.Sql.Class
 import Database.Persist.Sql.Run hiding (withResourceTimeout)
 import Database.Persist.Sql.Raw
-import Database.Persist.Sql.Raw.QQ
 import Database.Persist.Sql.Migration
 import Database.Persist.Sql.Internal
 

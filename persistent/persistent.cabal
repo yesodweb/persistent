@@ -41,7 +41,6 @@ library
                    , vector
                    , attoparsec
                    , template-haskell
-                   , haskell-src-meta
                    , blaze-html               >= 0.5
                    , blaze-markup             >= 0.5.1
                    , silently
@@ -74,7 +73,6 @@ library
                      Database.Persist.Sql.Internal
                      Database.Persist.Sql.Types
                      Database.Persist.Sql.Raw
-                     Database.Persist.Sql.Raw.QQ
                      Database.Persist.Sql.Run
                      Database.Persist.Sql.Class
                      Database.Persist.Sql.Orphan.PersistQuery
