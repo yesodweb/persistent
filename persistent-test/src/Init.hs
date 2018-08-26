@@ -34,6 +34,7 @@ module Init (
    -- re-exports
   , (A.<$>), (A.<*>)
   , module Database.Persist
+  , module Database.Persist.Sql.Raw.QQ
   , module Test.Hspec
   , module Test.HUnit
   , liftIO
@@ -57,6 +58,7 @@ import Control.Exception (SomeException)
 import Control.Monad (void, replicateM, liftM, when, forM_)
 import Control.Monad.Trans.Reader
 import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase, MkPersistSettings(..))
+import Database.Persist.Sql.Raw.QQ
 import Test.Hspec
 
 -- testing
