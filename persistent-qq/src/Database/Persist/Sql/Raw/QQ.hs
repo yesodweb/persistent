@@ -1,5 +1,5 @@
 {-|
-@since 2.7.2
+@since 2.9.1
 
 Module: module Database.Persist.Sql.Raw.QQ
 Description: QuasiQuoters for performing raw sql queries
@@ -40,9 +40,8 @@ import Language.Haskell.TH.Quote
 import Language.Haskell.Meta.Parse
 
 import Database.Persist.Class (toPersistValue)
-import Database.Persist.Sql.Raw (rawSql, rawQuery, rawQueryRes, rawExecute, rawExecuteCount)
-import Database.Persist.Sql.Types (connEscapeName)
-import Database.Persist.Sql.Orphan.PersistStore (getFieldName, getTableName)
+import Database.Persist
+import Database.Persist.Sql
 
 data Token
   = Literal String
