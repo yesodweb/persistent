@@ -5,7 +5,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE Rank2Types #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
@@ -214,7 +213,7 @@ instance PersistStoreWrite SqlBackend where
 
         case connInsertManySql conn of
             Nothing -> mapM insert vals
-            Just insertManyFn -> do
+            Just insertManyFn ->
                 case insertManyFn ent valss of
                     ISRSingle sql -> rawSql sql (concat valss)
                     _ -> error "ISRSingle is expected from the connInsertManySql function"
@@ -264,7 +263,7 @@ instance PersistStoreWrite SqlBackend where
         let columnNames = keyAndEntityColumnNames entDef conn
         runChunked (length columnNames) go es'
       where
-        go es = insrepHelper "INSERT" es
+        go = insrepHelper "INSERT"
 
     repsert key value = do
         mExisting <- get key
@@ -272,14 +271,7 @@ instance PersistStoreWrite SqlBackend where
           Nothing -> insertKey key value
           Just _ -> replace key value
 
-    repsertMany krs = do
-        let es = (uncurry Entity) `fmap` krs
-        let ks = entityKey `fmap` es
-        let mEs = Map.fromList $ zip ks es
-        mRsExisting <- getMany ks
-        let mEsNew = Map.difference mEs mRsExisting
-        let esNew = snd `fmap` Map.toList mEsNew
-        insertEntityMany esNew
+    repsertMany = defaultRepsertMany
 
     delete k = do
         conn <- ask
@@ -386,3 +378,19 @@ runChunked width m xs = do
 chunksOf :: Int -> [a] -> [[a]]
 chunksOf _ [] = []
 chunksOf size xs = let (chunk, rest) = splitAt size xs in chunk : chunksOf size rest
+
+defaultRepsertMany
+  ::( PersistEntityBackend record ~ BaseBackend backend
+    , PersistStoreWrite backend
+    , PersistEntity record
+    , MonadIO m
+    )
+  => [(Key record, record)] -> ReaderT backend m ()
+defaultRepsertMany krs = do
+    let es = uncurry Entity `fmap` krs
+    let ks = entityKey `fmap` es
+    let mEs = Map.fromList $ zip ks es
+    mRsExisting <- getMany ks
+    let mEsNew = Map.difference mEs mRsExisting
+    let esNew = snd `fmap` Map.toList mEsNew
+    insertEntityMany esNew
