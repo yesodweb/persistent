@@ -515,7 +515,7 @@ putManySql' :: [Text] -> [FieldDef] -> EntityDef -> Int -> Text
 putManySql' conflictColumns fields ent n = q
   where
     fieldDbToText = escape . fieldDB
-    mkAssignment n = T.concat [n, "=EXCLUDED.", n]
+    mkAssignment f = T.concat [f, "=EXCLUDED.", f]
 
     table = escape . entityDB $ ent
     columns = Util.commaSeparated $ map fieldDbToText fields

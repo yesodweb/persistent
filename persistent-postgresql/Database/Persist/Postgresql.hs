@@ -31,7 +31,7 @@ module Database.Persist.Postgresql
     ) where
 
 import Database.Persist.Sql
-import Database.Persist.Sql.Util (dbIdColumnsEsc, commaSeparated, parenWrapped)
+import qualified Database.Persist.Sql.Util as Util
 import Database.Persist.Sql.Types.Internal (mkPersistBackend)
 import Data.Fixed (Pico)
 
@@ -240,6 +240,7 @@ openSimpleConn logFunc conn = do
     serverVersion <- getServerVersion conn
     return $ createBackend logFunc serverVersion smap conn
 
+
 -- | Create the backend given a logging function, server version, mutable statement cell,
 -- and connection.
 createBackend :: IsSqlBackend backend => LogFunc -> Maybe Double
@@ -269,6 +270,7 @@ createBackend logFunc serverVersion smap conn = do
         , connLimitOffset = decorateSQLWithLimitOffset "LIMIT ALL"
         , connLogFunc = logFunc
         , connMaxParams = Nothing
+        , connRepsertManySql = serverVersion >>= upsertFunction repsertManySql
         }
 
 prepare' :: PG.Connection -> Text -> IO Statement
@@ -337,7 +339,7 @@ insertManySql' ent valss =
                 , ") VALUES ("
                 , T.intercalate "),(" $ replicate (length valss) $ T.intercalate "," $ map (const "?") (entityFields ent)
                 , ") RETURNING "
-                , commaSeparated $ dbIdColumnsEsc escape ent
+                , Util.commaSeparated $ Util.dbIdColumnsEsc escape ent
                 ]
   in ISRSingle sql
 
@@ -869,7 +871,7 @@ findAlters defs _tablename col@(Column name isNull sqltype def _defConstraintNam
                 refAdd Nothing = []
                 refAdd (Just (tname, a)) =
                     case find ((==tname) . entityDB) defs of
-                        Just refdef -> [(tname, AddReference a [name] (dbIdColumnsEsc escape refdef))]
+                        Just refdef -> [(tname, AddReference a [name] (Util.dbIdColumnsEsc escape refdef))]
                         Nothing -> error $ "could not find the entityDef for reftable[" ++ show tname ++ "]"
                 modRef =
                     if fmap snd ref == fmap snd ref'
@@ -914,7 +916,7 @@ getAddReference allDefs table reftable cname ref =
                             id_ = fromMaybe (error $ "Could not find ID of entity " ++ show reftable)
                                         $ do
                                           entDef <- find ((== reftable) . entityDB) allDefs
-                                          return $ dbIdColumnsEsc escape entDef
+                                          return $ Util.dbIdColumnsEsc escape entDef
 
 
 showColumn :: Column -> Text
@@ -1213,37 +1215,49 @@ mockMigration mig = do
                              connRDBMS = undefined,
                              connLimitOffset = undefined,
                              connLogFunc = undefined,
-                             connMaxParams = Nothing}
+                             connMaxParams = Nothing,
+                             connRepsertManySql = Nothing
+                             }
       result = runReaderT $ runWriterT $ runWriterT mig
   resp <- result sqlbackend
   mapM_ T.putStrLn $ map snd $ snd resp
 
 putManySql :: EntityDef -> Int -> Text
-putManySql entityDef' numRecords
-  | numRecords > 0 = q
-  | otherwise = error "putManySql: numRecords MUST be greater than 0!"
+putManySql ent n = putManySql' conflictColumns fields ent n
   where
-    tableName' = escape . entityDB $ entityDef'
+    fields = entityFields ent
+    conflictColumns = concatMap (map (escape . snd) . uniqueFields) (entityUniques ent)
+
+repsertManySql :: EntityDef -> Int -> Text
+repsertManySql ent n = putManySql' conflictColumns fields ent n
+  where
+    fields = keyAndEntityFields ent
+    conflictColumns = escape . fieldDB <$> entityKeyFields ent
+
+putManySql' :: [Text] -> [FieldDef] -> EntityDef -> Int -> Text
+putManySql' conflictColumns fields ent n = q
+  where
     fieldDbToText = escape . fieldDB
-    entityFieldNames = map fieldDbToText (entityFields entityDef')
-    recordPlaceholders= parenWrapped . commaSeparated
-                      $ map (const "?") (entityFields entityDef')
-    mkAssignment n = T.concat [n, "=EXCLUDED.", n]
-    fieldSets = map (mkAssignment . fieldDbToText) (entityFields entityDef')
-    uniqueFields' = concat $ map (\x -> map escape (map snd $ uniqueFields x)) (entityUniques entityDef')
+    mkAssignment f = T.concat [f, "=EXCLUDED.", f]
+
+    table = escape . entityDB $ ent
+    columns = Util.commaSeparated $ map fieldDbToText fields
+    placeholders = map (const "?") fields
+    updates = map (mkAssignment . fieldDbToText) fields
+
     q = T.concat
         [ "INSERT INTO "
-        , tableName'
-        , " ("
-        , commaSeparated entityFieldNames
-        , ") "
+        , table
+        , Util.parenWrapped columns
         , " VALUES "
-        , commaSeparated (replicate numRecords recordPlaceholders)
-        , "  ON CONFLICT ("
-        , commaSeparated uniqueFields'
-        , ") DO UPDATE SET "
-        , commaSeparated fieldSets
+        , Util.commaSeparated . replicate n
+            . Util.parenWrapped . Util.commaSeparated $ placeholders
+        , " ON CONFLICT "
+        , Util.parenWrapped . Util.commaSeparated $ conflictColumns
+        , " DO UPDATE SET "
+        , Util.commaSeparated updates
         ]
+
 
 -- | Enable a Postgres extension. See https://www.postgresql.org/docs/current/static/contrib.html
 -- for a list.
