@@ -26,6 +26,7 @@ import Data.Functor.Identity
 import Data.Functor.Constant
 import Data.Maybe (fromJust)
 import qualified Data.HashMap.Lazy as M
+import qualified Data.Map as Map
 import Test.HUnit hiding (Test)
 import Test.Hspec.Expectations ()
 import Test.Hspec.QuickCheck(prop)
@@ -528,24 +529,21 @@ specs = describe "persistent" $ do
 
   describe "repsertMany" $ do
     it "adds new rows when no conflicts" $ db $ do
+        ids@[johnId, janeId, aliceId, eveId] <- replicateM 4 $ liftIO (Person1Key `fmap` generateKey)
         let john = Person1 "john" 20
         let jane = Person1 "jane" 18
         let alice = Person1 "alice" 18
         let eve = Person1 "eve" 19
 
-        johnId <- insert john
-        janeId <- insert jane
-        let (Right aliceId) = keyFromValues [PersistInt64 100]
-        let (Right eveId) = keyFromValues [PersistInt64 101]
+        insertKey johnId john
+        insertKey janeId jane
 
         _ <- repsertMany [ (aliceId, alice), (eveId, eve) ]
-        (Just john') <- get johnId
-        (Just jane') <- get janeId
-        (Just alice') <- get aliceId
-        (Just eve') <- get eveId
+        es <- getMany ids
 
-        [john',jane',alice',eve'] @== [john,jane,alice,eve]
-        mapM_ delete [johnId, janeId, aliceId, eveId]
+        let rs = [john, jane, alice, eve]
+        es @== Map.fromList (zip ids rs)
+        mapM_ delete ids
 
     it "handles conflicts by replacing old keys with new records" $ db $ do
         let john = Person1 "john" 20
