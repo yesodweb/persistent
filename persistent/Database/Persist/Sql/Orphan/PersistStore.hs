@@ -34,7 +34,7 @@ import Data.Monoid (mappend, (<>))
 import Control.Monad.IO.Class
 import Data.ByteString.Char8 (readInteger)
 import Data.Maybe (isJust)
-import Data.List (find)
+import Data.List (find, nubBy)
 import Data.Void (Void)
 import Control.Monad.Trans.Reader (ReaderT, ask, withReaderT)
 import Data.Acquire (with)
@@ -47,6 +47,7 @@ import Control.Exception (throwIO)
 import Database.Persist.Class ()
 import qualified Data.Map as Map
 import qualified Data.Foldable as Foldable
+import Data.Function (on)
 
 withRawQuery :: MonadIO m
              => Text
@@ -271,7 +272,20 @@ instance PersistStoreWrite SqlBackend where
           Nothing -> insertKey key value
           Just _ -> replace key value
 
-    repsertMany = defaultRepsertMany
+    repsertMany [] = return ()
+    repsertMany krsDups = do
+        conn <- ask
+        let krs = nubBy ((==) `on` fst) (reverse krsDups)
+        let rs = snd `fmap` krs
+        let ent = entityDef rs
+        let nr  = length krs
+        let toVals (k,r)
+                = case entityPrimary ent of
+                    Nothing -> keyToValues k <> (toPersistValue <$> toPersistFields r)
+                    Just _  -> toPersistValue <$> toPersistFields r
+        case connRepsertManySql conn of
+            (Just mkSql) -> rawExecute (mkSql ent nr) (concatMap toVals krs)
+            Nothing -> mapM_ (uncurry repsert) krs
 
     delete k = do
         conn <- ask
@@ -378,19 +392,3 @@ runChunked width m xs = do
 chunksOf :: Int -> [a] -> [[a]]
 chunksOf _ [] = []
 chunksOf size xs = let (chunk, rest) = splitAt size xs in chunk : chunksOf size rest
-
-defaultRepsertMany
-  ::( PersistEntityBackend record ~ BaseBackend backend
-    , PersistStoreWrite backend
-    , PersistEntity record
-    , MonadIO m
-    )
-  => [(Key record, record)] -> ReaderT backend m ()
-defaultRepsertMany krs = do
-    let es = uncurry Entity `fmap` krs
-    let ks = entityKey `fmap` es
-    let mEs = Map.fromList $ zip ks es
-    mRsExisting <- getMany ks
-    let mEsNew = Map.difference mEs mRsExisting
-    let esNew = snd `fmap` Map.toList mEsNew
-    insertEntityMany esNew

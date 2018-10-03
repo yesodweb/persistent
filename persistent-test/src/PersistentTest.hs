@@ -79,6 +79,7 @@ share [mkPersist persistSettings,  mkMigrate "testMigrate", mkDeleteCascade pers
     -- Indented comment
     name Text
     age Int
+    deriving Show Eq
   PersonMaybeAge
     name Text
     age Int Maybe
@@ -524,6 +525,43 @@ specs = describe "persistent" $ do
         deleteBy $ UniqueUpsert "putMany5"
         deleteBy $ UniqueUpsert "putMany6"
         deleteBy $ UniqueUpsert "putMany7"
+
+  describe "repsertMany" $ do
+    it "adds new rows when no conflicts" $ db $ do
+        let john = Person1 "john" 20
+        let jane = Person1 "jane" 18
+        let alice = Person1 "alice" 18
+        let eve = Person1 "eve" 19
+
+        johnId <- insert john
+        janeId <- insert jane
+        let (Right aliceId) = keyFromValues [PersistInt64 100]
+        let (Right eveId) = keyFromValues [PersistInt64 101]
+
+        _ <- repsertMany [ (aliceId, alice), (eveId, eve) ]
+        (Just john') <- get johnId
+        (Just jane') <- get janeId
+        (Just alice') <- get aliceId
+        (Just eve') <- get eveId
+
+        [john',jane',alice',eve'] @== [john,jane,alice,eve]
+        mapM_ delete [johnId, janeId, aliceId, eveId]
+
+    it "handles conflicts by replacing old keys with new records" $ db $ do
+        let john = Person1 "john" 20
+        let jane = Person1 "jane" 18
+        let alice = Person1 "alice" 18
+        let eve = Person1 "eve" 19
+
+        johnId <- insert john
+        janeId <- insert jane
+
+        _ <- repsertMany [ (johnId, alice), (janeId, eve) ]
+        (Just alice') <- get johnId
+        (Just eve') <- get janeId
+
+        [alice',eve'] @== [alice,eve]
+        mapM_ delete [johnId, janeId]
 
   describe "upsert" $ do
     it "adds a new row with no updates" $ db $ do
