@@ -5,7 +5,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE Rank2Types #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
@@ -35,7 +34,7 @@ import Data.Monoid (mappend, (<>))
 import Control.Monad.IO.Class
 import Data.ByteString.Char8 (readInteger)
 import Data.Maybe (isJust)
-import Data.List (find)
+import Data.List (find, nubBy)
 import Data.Void (Void)
 import Control.Monad.Trans.Reader (ReaderT, ask, withReaderT)
 import Data.Acquire (with)
@@ -48,6 +47,7 @@ import Control.Exception (throwIO)
 import Database.Persist.Class ()
 import qualified Data.Map as Map
 import qualified Data.Foldable as Foldable
+import Data.Function (on)
 
 withRawQuery :: MonadIO m
              => Text
@@ -214,7 +214,7 @@ instance PersistStoreWrite SqlBackend where
 
         case connInsertManySql conn of
             Nothing -> mapM insert vals
-            Just insertManyFn -> do
+            Just insertManyFn ->
                 case insertManyFn ent valss of
                     ISRSingle sql -> rawSql sql (concat valss)
                     _ -> error "ISRSingle is expected from the connInsertManySql function"
@@ -264,7 +264,7 @@ instance PersistStoreWrite SqlBackend where
         let columnNames = keyAndEntityColumnNames entDef conn
         runChunked (length columnNames) go es'
       where
-        go es = insrepHelper "INSERT" es
+        go = insrepHelper "INSERT"
 
     repsert key value = do
         mExisting <- get key
@@ -272,14 +272,20 @@ instance PersistStoreWrite SqlBackend where
           Nothing -> insertKey key value
           Just _ -> replace key value
 
-    repsertMany krs = do
-        let es = (uncurry Entity) `fmap` krs
-        let ks = entityKey `fmap` es
-        let mEs = Map.fromList $ zip ks es
-        mRsExisting <- getMany ks
-        let mEsNew = Map.difference mEs mRsExisting
-        let esNew = snd `fmap` Map.toList mEsNew
-        insertEntityMany esNew
+    repsertMany [] = return ()
+    repsertMany krsDups = do
+        conn <- ask
+        let krs = nubBy ((==) `on` fst) (reverse krsDups)
+        let rs = snd `fmap` krs
+        let ent = entityDef rs
+        let nr  = length krs
+        let toVals (k,r)
+                = case entityPrimary ent of
+                    Nothing -> keyToValues k <> (toPersistValue <$> toPersistFields r)
+                    Just _  -> toPersistValue <$> toPersistFields r
+        case connRepsertManySql conn of
+            (Just mkSql) -> rawExecute (mkSql ent nr) (concatMap toVals krs)
+            Nothing -> mapM_ (uncurry repsert) krs
 
     delete k = do
         conn <- ask

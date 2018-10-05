@@ -34,6 +34,7 @@ module Database.Persist.Sqlite
 
 import Database.Persist.Sql
 import Database.Persist.Sql.Types.Internal (mkPersistBackend)
+import qualified Database.Persist.Sql.Util as Util
 
 import qualified Database.Sqlite as Sqlite
 
@@ -160,7 +161,7 @@ wrapConnectionInfo connInfo conn logFunc = do
         , connStmtMap = smap
         , connInsertSql = insertSql'
         , connUpsertSql = Nothing
-        , connPutManySql = Nothing
+        , connPutManySql = Just putManySql
         , connInsertManySql = Nothing
         , connClose = Sqlite.close conn
         , connMigrateSql = migrate'
@@ -173,6 +174,7 @@ wrapConnectionInfo connInfo conn logFunc = do
         , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
         , connLogFunc = logFunc
         , connMaxParams = Just 999
+        , connRepsertManySql = Just repsertManySql
         }
   where
     helper t getter = do
@@ -355,6 +357,7 @@ mockMigration mig = do
                    , connUpsertSql = undefined
                    , connPutManySql = undefined
                    , connMaxParams = Just 999
+                   , connRepsertManySql = Nothing
                    }
       result = runReaderT . runWriterT . runWriterT $ mig
   resp <- result sqlbackend
@@ -495,6 +498,42 @@ escape (DBName s) =
     q = T.singleton '"'
     go '"' = "\"\""
     go c = T.singleton c
+
+putManySql :: EntityDef -> Int -> Text
+putManySql ent n = putManySql' conflictColumns fields ent n
+  where
+    fields = entityFields ent
+    conflictColumns = concatMap (map (escape . snd) . uniqueFields) (entityUniques ent)
+
+repsertManySql :: EntityDef -> Int -> Text
+repsertManySql ent n = putManySql' conflictColumns fields ent n
+  where
+    fields = keyAndEntityFields ent
+    conflictColumns = escape . fieldDB <$> entityKeyFields ent
+
+putManySql' :: [Text] -> [FieldDef] -> EntityDef -> Int -> Text
+putManySql' conflictColumns fields ent n = q
+  where
+    fieldDbToText = escape . fieldDB
+    mkAssignment f = T.concat [f, "=EXCLUDED.", f]
+
+    table = escape . entityDB $ ent
+    columns = Util.commaSeparated $ map fieldDbToText fields
+    placeholders = map (const "?") fields
+    updates = map (mkAssignment . fieldDbToText) fields
+
+    q = T.concat
+        [ "INSERT INTO "
+        , table
+        , Util.parenWrapped columns
+        , " VALUES "
+        , Util.commaSeparated . replicate n
+            . Util.parenWrapped . Util.commaSeparated $ placeholders
+        , " ON CONFLICT "
+        , Util.parenWrapped . Util.commaSeparated $ conflictColumns
+        , " DO UPDATE SET "
+        , Util.commaSeparated updates
+        ]
 
 -- | Information required to setup a connection pool.
 data SqliteConf = SqliteConf

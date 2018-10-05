@@ -1,5 +1,5 @@
 name:            persistent-mysql
-version:         2.9.1
+version:         2.9.2
 license:         MIT
 license-file:    LICENSE
 author:          Felipe Lessa <felipe.lessa@gmail.com>, Michael Snoyman

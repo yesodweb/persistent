@@ -436,8 +436,6 @@ class
     -- Useful when migrating data from one entity to another
     -- and want to preserve ids.
     --
-    -- Differs from @insertEntityMany@ by gracefully skipping
-    -- pre-existing records matching key(s).
     -- @since 2.8.1
     --
     -- === __Example usage__
@@ -445,19 +443,19 @@ class
     -- With <#schema-persist-store-1 schema-1> and <#dataset-persist-store-1 dataset-1>,
     --
     -- > repsertManyUsers :: MonadIO m =>ReaderT SqlBackend m ()
-    -- > repsertManyusers = repsertMany [(spjId, User "Alice" 10), (simonId, User "BobId" 20), (unknownId999, User "Mr. X" 999)]
+    -- > repsertManyusers = repsertMany [(simonId, User "Philip" 20), (unknownId999, User "Mr. X" 999)]
     --
     -- The above query when applied on <#dataset-persist-store-1 dataset-1>, will produce this:
     --
-    -- > +-----+------+-----+
-    -- > |id   |name  |age  |
-    -- > +-----+------+-----+
-    -- > |1    |SPJ   |40   |
-    -- > +-----+------+-----+
-    -- > |2    |Simon |41   |
-    -- > +-----+------+-----+
-    -- > |999  |Mr. X |999  |
-    -- > +-----+------+-----+
+    -- > +-----+----------------+---------+
+    -- > |id   |name            |age      |
+    -- > +-----+----------------+---------+
+    -- > |1    |SPJ             |40       |
+    -- > +-----+----------------+---------+
+    -- > |2    |Simon -> Philip |41 -> 20 |
+    -- > +-----+----------------+---------+
+    -- > |999  |Mr. X           |999      |
+    -- > +-----+----------------+---------+
     repsertMany
         :: (MonadIO m, PersistRecordBackend record backend)
         => [(Key record, record)] -> ReaderT backend m ()

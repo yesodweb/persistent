@@ -26,6 +26,7 @@ import Data.Functor.Identity
 import Data.Functor.Constant
 import Data.Maybe (fromJust)
 import qualified Data.HashMap.Lazy as M
+import qualified Data.Map as Map
 import Test.HUnit hiding (Test)
 import Test.Hspec.Expectations ()
 import Test.Hspec.QuickCheck(prop)
@@ -79,6 +80,7 @@ share [mkPersist persistSettings,  mkMigrate "testMigrate", mkDeleteCascade pers
     -- Indented comment
     name Text
     age Int
+    deriving Show Eq
   PersonMaybeAge
     name Text
     age Int Maybe
@@ -524,6 +526,40 @@ specs = describe "persistent" $ do
         deleteBy $ UniqueUpsert "putMany5"
         deleteBy $ UniqueUpsert "putMany6"
         deleteBy $ UniqueUpsert "putMany7"
+
+  describe "repsertMany" $ do
+    it "adds new rows when no conflicts" $ db $ do
+        ids@[johnId, janeId, aliceId, eveId] <- replicateM 4 $ liftIO (Person1Key `fmap` generateKey)
+        let john = Person1 "john" 20
+        let jane = Person1 "jane" 18
+        let alice = Person1 "alice" 18
+        let eve = Person1 "eve" 19
+
+        insertKey johnId john
+        insertKey janeId jane
+
+        _ <- repsertMany [ (aliceId, alice), (eveId, eve) ]
+        es <- getMany ids
+
+        let rs = [john, jane, alice, eve]
+        es @== Map.fromList (zip ids rs)
+        mapM_ delete ids
+
+    it "handles conflicts by replacing old keys with new records" $ db $ do
+        let john = Person1 "john" 20
+        let jane = Person1 "jane" 18
+        let alice = Person1 "alice" 18
+        let eve = Person1 "eve" 19
+
+        johnId <- insert john
+        janeId <- insert jane
+
+        _ <- repsertMany [ (johnId, alice), (janeId, eve) ]
+        (Just alice') <- get johnId
+        (Just eve') <- get janeId
+
+        [alice',eve'] @== [alice,eve]
+        mapM_ delete [johnId, janeId]
 
   describe "upsert" $ do
     it "adds a new row with no updates" $ db $ do

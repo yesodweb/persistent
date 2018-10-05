@@ -12,11 +12,10 @@ module Database.Persist.Sql.Orphan.PersistQuery
 import Database.Persist hiding (updateField)
 import Database.Persist.Sql.Util (
     entityColumnNames, parseEntityValues, isIdField, updatePersistValue
-  , mkUpdateText, commaSeparated)
+  , mkUpdateText, commaSeparated, dbIdColumns)
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
-import Database.Persist.Sql.Util (dbIdColumns)
 import qualified Data.Text as T
 import Data.Text (Text)
 import Data.Monoid (Monoid (..), (<>))
@@ -329,7 +328,7 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
                 OrNullYes -> mconcat [" OR ", name, " IS NULL"]
                 OrNullNo -> ""
 
-        isNull = any (== PersistNull) allVals
+        isNull = PersistNull `elem` allVals
         notNullVals = filter (/= PersistNull) allVals
         allVals = filterValueToPersistValues value
         tn = connEscapeName conn $ entityDB
