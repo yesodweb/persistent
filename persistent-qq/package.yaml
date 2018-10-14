@@ -14,7 +14,7 @@ extra-source-files:
 
 dependencies:
 - base >= 4.7 && < 5
-- persistent >= 2.9.1
+- persistent >= 2.9
 - haskell-src-meta
 - template-haskell
 - text
