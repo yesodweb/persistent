@@ -1,13 +1,10 @@
 # Changelog for persistent-sqlite
 
-## 2.9.2
-
-* Update the vendored SQLite C library from 3.22.0 to 3.25.2. See [the SQLite changelog](https://sqlite.org/changes.html) for details.
-* Fix [832](https://github.com/yesodweb/persistent/issues/832): `repsertMany` now matches `mapM_ (uncurry repsert)` and is atomic.
-
-## 2.9.1
+## 2.9.0
 
 * Added support for SQL isolation levels to via SqlBackend. [#812] SQLite technically only supports Serializable.
+* Update the vendored SQLite C library from 3.22.0 to 3.25.2. See [the SQLite changelog](https://sqlite.org/changes.html) for details.
+* Fix [832](https://github.com/yesodweb/persistent/issues/832): `repsertMany` now matches `mapM_ (uncurry repsert)` and is atomic.
 
 ## 2.8.2
 
