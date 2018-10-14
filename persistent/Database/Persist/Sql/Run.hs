@@ -33,7 +33,7 @@ runSqlPool r pconn = withRunInIO $ \run -> withResource pconn $ run . runSqlConn
 
 -- | Like 'runSqlPool', but supports specifying an isolation level.
 --
--- @since 2.9.1
+-- @since 2.9.0
 runSqlPoolWithIsolation
     :: (MonadUnliftIO m, IsSqlBackend backend)
     => ReaderT backend m a -> Pool backend -> IsolationLevel -> m a
@@ -74,7 +74,7 @@ runSqlConn r conn = withRunInIO $ \runInIO -> mask $ \restore -> do
 
 -- | Like 'runSqlConn', but supports specifying an isolation level.
 --
--- @since 2.9.1
+-- @since 2.9.0
 runSqlConnWithIsolation :: (MonadUnliftIO m, IsSqlBackend backend) => ReaderT backend m a -> backend -> IsolationLevel -> m a
 runSqlConnWithIsolation r conn isolation = withRunInIO $ \runInIO -> mask $ \restore -> do
     let conn' = persistBackend conn

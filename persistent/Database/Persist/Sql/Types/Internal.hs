@@ -147,7 +147,7 @@ data SqlBackend = SqlBackend
     --
     -- When left as 'Nothing', we default to using 'defaultRepsertMany'.
     --
-    -- @since 2.9.2
+    -- @since 2.9.0
     }
     deriving Typeable
 instance HasPersistBackend SqlBackend where

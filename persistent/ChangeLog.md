@@ -1,13 +1,10 @@
 # Changelog for persistent
 
-## 2.9.2
-
-* Fix [832](https://github.com/yesodweb/persistent/issues/832): `repsertMany` now matches `mapM_ (uncurry repsert)` and is atomic for supported sql back-ends.
-
-## 2.9.1
+## 2.9.0
 
 * Added support for SQL isolation levels to via SqlBackend. [#812]
 * Move `Database.Persist.Sql.Raw.QQ` to a separate `persistent-qq` package [#827](https://github.com/yesodweb/persistent/issues/827)
+* Fix [832](https://github.com/yesodweb/persistent/issues/832): `repsertMany` now matches `mapM_ (uncurry repsert)` and is atomic for supported sql back-ends.
 
 ## 2.8.2
 

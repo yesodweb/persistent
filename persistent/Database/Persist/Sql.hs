@@ -49,7 +49,7 @@ transactionSave = do
 
 -- | Commit the current transaction and begin a new one with the specified isolation level.
 --
--- @since 2.9.1
+-- @since 2.9.0
 transactionSaveWithIsolation :: MonadIO m => IsolationLevel -> ReaderT SqlBackend m ()
 transactionSaveWithIsolation isolation = do
     conn <- ask
@@ -67,7 +67,7 @@ transactionUndo = do
 
 -- | Roll back the current transaction and begin a new one with the specified isolation level.
 --
--- @since 2.9.1
+-- @since 2.9.0
 transactionUndoWithIsolation :: MonadIO m => IsolationLevel -> ReaderT SqlBackend m ()
 transactionUndoWithIsolation isolation = do
     conn <- ask
