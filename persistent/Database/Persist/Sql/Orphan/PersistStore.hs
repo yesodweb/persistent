@@ -83,10 +83,10 @@ whereStmtForKeys conn ks = T.intercalate " OR " $ whereStmtForKey conn `fmap` ks
 getTableName :: forall record m backend.
              ( PersistEntity record
              , PersistEntityBackend record ~ SqlBackend
-             , IsSqlBackend backend
+             , BackendCompatible SqlBackend backend
              , Monad m
              ) => record -> ReaderT backend m Text
-getTableName rec = withReaderT persistBackend $ do
+getTableName rec = withReaderT projectBackend $ do
     conn <- ask
     return $ connEscapeName conn $ tableDBName rec
 
@@ -102,11 +102,11 @@ tableDBName rec = entityDB $ entityDef (Just rec)
 getFieldName :: forall record typ m backend.
              ( PersistEntity record
              , PersistEntityBackend record ~ SqlBackend
-             , IsSqlBackend backend
+             , BackendCompatible SqlBackend backend
              , Monad m
              )
              => EntityField record typ -> ReaderT backend m Text
-getFieldName rec = withReaderT persistBackend $ do
+getFieldName rec = withReaderT projectBackend $ do
     conn <- ask
     return $ connEscapeName conn $ fieldDBName rec
 
