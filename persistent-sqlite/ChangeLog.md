@@ -1,5 +1,9 @@
 # Changelog for persistent-sqlite
 
+## 2.9.1
+
+* Add enableExtendedResultCodes and disableExtendedResultCodes functions
+
 ## 2.9.0
 
 * Added support for SQL isolation levels to via SqlBackend. [#812] SQLite technically only supports Serializable.
