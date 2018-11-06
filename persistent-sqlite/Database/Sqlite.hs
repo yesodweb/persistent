@@ -36,7 +36,8 @@ module Database.Sqlite  (
                          config,
                          status,
                          softHeapLimit,
-                         enableExtendedResultCodes
+                         enableExtendedResultCodes,
+                         disableExtendedResultCodes 
                         )
     where
 
@@ -233,11 +234,21 @@ close database = do
 foreign import ccall "sqlite3_extended_result_codes"
   sqlite3_extended_result_codesC :: Ptr () -> Int -> IO Int
 
+
+-- @since 2.9.1
 enableExtendedResultCodes :: Connection -> IO ()
 enableExtendedResultCodes con@(Connection _ (Connection' database)) =  do
   error <- sqlite3_extended_result_codesC database 1
   let err = decodeError error
-  print err
+  case err of
+    ErrorOK -> return ()
+    _ -> sqlError (Just con) "enableExtendedResultCodes" err
+
+-- @since 2.9.1
+disableExtendedResultCodes :: Connection -> IO ()
+disableExtendedResultCodes con@(Connection _ (Connection' database)) =  do
+  error <- sqlite3_extended_result_codesC database 0
+  let err = decodeError error
   case err of
     ErrorOK -> return ()
     _ -> sqlError (Just con) "enableExtendedResultCodes" err
