@@ -35,7 +35,8 @@ module Database.Sqlite  (
                          freeLogFunction,
                          config,
                          status,
-                         softHeapLimit
+                         softHeapLimit,
+                         enableExtendedResultCodes
                         )
     where
 
@@ -191,6 +192,7 @@ sqlError maybeConnection functionName error = do
 
 foreign import ccall "sqlite3_open_v2"
   openC :: CString -> Ptr (Ptr ()) -> Int -> CString -> IO Int
+
 openError :: Text -> IO (Either Connection Error)
 openError path' = do
     let flag = sqliteFlagReadWrite .|. sqliteFlagCreate .|. sqliteFlagUri
@@ -227,6 +229,18 @@ close database = do
   case error of
     ErrorOK -> return ()
     _ -> sqlError (Just database) "close" error
+
+foreign import ccall "sqlite3_extended_result_codes"
+  sqlite3_extended_result_codesC :: Ptr () -> Int -> IO Int
+
+enableExtendedResultCodes :: Connection -> IO ()
+enableExtendedResultCodes con@(Connection _ (Connection' database)) =  do
+  error <- sqlite3_extended_result_codesC database 1
+  let err = decodeError error
+  print err
+  case err of
+    ErrorOK -> return ()
+    _ -> sqlError (Just con) "enableExtendedResultCodes" err
 
 foreign import ccall "sqlite3_prepare_v2"
   prepareC :: Ptr () -> CString -> Int -> Ptr (Ptr ()) -> Ptr (Ptr ()) -> IO Int
