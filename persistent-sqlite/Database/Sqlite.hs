@@ -251,7 +251,7 @@ disableExtendedResultCodes con@(Connection _ (Connection' database)) =  do
   let err = decodeError error
   case err of
     ErrorOK -> return ()
-    _ -> sqlError (Just con) "enableExtendedResultCodes" err
+    _ -> sqlError (Just con) "disableExtendedResultCodes" err
 
 foreign import ccall "sqlite3_prepare_v2"
   prepareC :: Ptr () -> CString -> Int -> Ptr (Ptr ()) -> Ptr (Ptr ()) -> IO Int
