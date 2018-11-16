@@ -122,11 +122,11 @@ open' connInfo logFunc = do
 --
 -- > {-# LANGUAGE GADTs #-}
 -- > {-# LANGUAGE ScopedTypeVariables #-}
--- > {-# LANGUAGE OverloadedStrings#-}
--- > {-# LANGUAGE MultiParamTypeClasses#-}
--- > {-# LANGUAGE TypeFamilies#-}
--- > {-# LANGUAGE TemplateHaskell#-}
--- > {-# LANGUAGE QuasiQuotes#-}
+-- > {-# LANGUAGE OverloadedStrings #-}
+-- > {-# LANGUAGE MultiParamTypeClasses #-}
+-- > {-# LANGUAGE TypeFamilies #-}
+-- > {-# LANGUAGE TemplateHaskell #-}
+-- > {-# LANGUAGE QuasiQuotes #-}
 -- > {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 -- > 
 -- > import Control.Monad.IO.Class  (liftIO)
