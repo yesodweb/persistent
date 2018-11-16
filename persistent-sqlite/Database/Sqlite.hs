@@ -17,7 +17,9 @@ module Database.Sqlite  (
     -- * Basic usage guide
     -- |
     --
-    -- Let's create a small demo sqlite3 database which we will use:
+    -- Note that the example code shown here is a low level interface
+    -- usage. Let's create a small demo sqlite3 database which we will
+    -- use in our program:
     --
     -- > $ sqlite3 ~/test.db
     -- > sqlite> create table t1(a,b);
@@ -27,7 +29,8 @@ module Database.Sqlite  (
     -- > 1|1
     -- > 2|2
     --
-    -- Now let's write code using the functions in this module to fetch the rows from the table:
+    -- Now let's write code using the functions in this module to
+    -- fetch the rows from the table:
     --
     -- > {-#LANGUAGE OverloadedStrings#-}
     -- > 
