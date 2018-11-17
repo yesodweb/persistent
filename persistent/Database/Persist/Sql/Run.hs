@@ -160,11 +160,14 @@ askLogFunc = withRunInIO $ \run ->
 -- >   deriving Show
 -- > |]
 -- > 
+-- > openConnection :: LogFunc -> IO SqlBackend
+-- > openConnection logfn = do
+-- >  conn <- open "/home/sibi/test.db"
+-- >  wrapConnection conn logfn
+-- >
 -- > main :: IO ()
 -- > main = do
--- >   conn <- open "/home/sibi/test.db"
--- >   (backend :: SqlBackend) <- wrapConnection conn (\_ _ _ _ -> return ())
--- >   runNoLoggingT $ runResourceT $ withSqlConn (\_ -> return backend) (\_ ->
+-- >   runNoLoggingT $ runResourceT $ withSqlConn openConnection (\backend ->
 -- >                                       flip runSqlConn backend $ do
 -- >                                         runMigration migrateAll
 -- >                                         insert_ $ Person "John doe" $ Just 35
