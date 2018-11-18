@@ -131,6 +131,58 @@ askLogFunc :: forall m. (MonadUnliftIO m, MonadLogger m) => m LogFunc
 askLogFunc = withRunInIO $ \run ->
     return $ \a b c d -> run (monadLoggerLog a b c d)
 
+-- | Create a connection and run sql queries within it. This function
+-- automatically closes the connection on it's completion.
+--
+-- === __Example usage__
+--
+-- > {-# LANGUAGE GADTs #-}
+-- > {-# LANGUAGE ScopedTypeVariables #-}
+-- > {-# LANGUAGE OverloadedStrings #-}
+-- > {-# LANGUAGE MultiParamTypeClasses #-}
+-- > {-# LANGUAGE TypeFamilies#-}
+-- > {-# LANGUAGE TemplateHaskell#-}
+-- > {-# LANGUAGE QuasiQuotes#-}
+-- > {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+-- > 
+-- > import Control.Monad.IO.Class  (liftIO)
+-- > import Control.Monad.Logger
+-- > import Conduit
+-- > import Database.Persist
+-- > import Database.Sqlite
+-- > import Database.Persist.Sqlite
+-- > import Database.Persist.TH
+-- > 
+-- > share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
+-- > Person
+-- >   name String
+-- >   age Int Maybe
+-- >   deriving Show
+-- > |]
+-- > 
+-- > openConnection :: LogFunc -> IO SqlBackend
+-- > openConnection logfn = do
+-- >  conn <- open "/home/sibi/test.db"
+-- >  wrapConnection conn logfn
+-- >
+-- > main :: IO ()
+-- > main = do
+-- >   runNoLoggingT $ runResourceT $ withSqlConn openConnection (\backend ->
+-- >                                       flip runSqlConn backend $ do
+-- >                                         runMigration migrateAll
+-- >                                         insert_ $ Person "John doe" $ Just 35
+-- >                                         insert_ $ Person "Divya" $ Just 36
+-- >                                         (pers :: [Entity Person]) <- selectList [] []
+-- >                                         liftIO $ print pers
+-- >                                         return ()
+-- >                                      )
+--
+-- On executing it, you get this output:
+--
+-- > Migrating: CREATE TABLE "person"("id" INTEGER PRIMARY KEY,"name" VARCHAR NOT NULL,"age" INTEGER NULL)
+-- > [Entity {entityKey = PersonKey {unPersonKey = SqlBackendKey {unSqlBackendKey = 1}}, entityVal = Person {personName = "John doe", personAge = Just 35}},Entity {entityKey = PersonKey {unPersonKey = SqlBackendKey {unSqlBackendKey = 2}}, entityVal = Person {personName = "Hema", personAge = Just 36}}]
+-- 
+
 withSqlConn
     :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
     => (LogFunc -> IO backend) -> (backend -> m a) -> m a

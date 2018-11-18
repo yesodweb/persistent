@@ -118,6 +118,47 @@ open' connInfo logFunc = do
 
 -- | Wrap up a raw 'Sqlite.Connection' as a Persistent SQL 'Connection'.
 --
+-- === __Example usage__
+--
+-- > {-# LANGUAGE GADTs #-}
+-- > {-# LANGUAGE ScopedTypeVariables #-}
+-- > {-# LANGUAGE OverloadedStrings #-}
+-- > {-# LANGUAGE MultiParamTypeClasses #-}
+-- > {-# LANGUAGE TypeFamilies #-}
+-- > {-# LANGUAGE TemplateHaskell #-}
+-- > {-# LANGUAGE QuasiQuotes #-}
+-- > {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+-- > 
+-- > import Control.Monad.IO.Class  (liftIO)
+-- > import Database.Persist
+-- > import Database.Sqlite
+-- > import Database.Persist.Sqlite
+-- > import Database.Persist.TH
+-- > 
+-- > share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
+-- > Person
+-- >   name String
+-- >   age Int Maybe
+-- >   deriving Show
+-- > |]
+-- > 
+-- > main :: IO ()
+-- > main = do
+-- >   conn <- open "/home/sibi/test.db"
+-- >   (backend :: SqlBackend) <- wrapConnection conn (\_ _ _ _ -> return ())
+-- >   flip runSqlPersistM backend $ do
+-- >          runMigration migrateAll
+-- >          insert_ $ Person "John doe" $ Just 35
+-- >          insert_ $ Person "Hema" $ Just 36
+-- >          (pers :: [Entity Person]) <- selectList [] []
+-- >          liftIO $ print pers
+-- >   close' backend
+--
+-- On executing it, you get this output:
+--
+-- > Migrating: CREATE TABLE "person"("id" INTEGER PRIMARY KEY,"name" VARCHAR NOT NULL,"age" INTEGER NULL)
+-- > [Entity {entityKey = PersonKey {unPersonKey = SqlBackendKey {unSqlBackendKey = 1}}, entityVal = Person {personName = "John doe", personAge = Just 35}},Entity {entityKey = PersonKey {unPersonKey = SqlBackendKey {unSqlBackendKey = 2}}, entityVal = Person {personName = "Hema", personAge = Just 36}}]
+-- 
 -- @since 1.1.5
 wrapConnection :: (IsSqlBackend backend) => Sqlite.Connection -> LogFunc -> IO backend
 wrapConnection = wrapConnectionInfo (mkSqliteConnectionInfo "")
