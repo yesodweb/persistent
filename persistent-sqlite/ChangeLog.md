@@ -1,5 +1,9 @@
 # Changelog for persistent-sqlite
 
+## 2.9.1
+
+* Bump vendored SQLite library to [3.26.0](https://www.sqlite.org/releaselog/3_26_0.html) to address [RCE bug: `magellan`](https://blade.tencent.com/magellan/index_en.html).
+
 ## 2.9.0
 
 * Added support for SQL isolation levels to via SqlBackend. [#812] SQLite technically only supports Serializable.
