@@ -51,6 +51,9 @@ library
                    , unliftio-core
                    , void
 
+    if impl (ghc < 8.0)
+      build-depends:   semigroups == 0.18.*
+
     exposed-modules: Database.Persist
                      Database.Persist.Quasi
 
@@ -111,6 +114,9 @@ test-suite test
                    , mtl
                    , template-haskell
                    , resource-pool
+
+    if impl (ghc < 8.0)
+      build-depends:   semigroups == 0.18.*
 
     cpp-options: -DTEST
 

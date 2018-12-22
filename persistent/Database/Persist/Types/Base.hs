@@ -1,6 +1,9 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings #-}
+#if __GLASGOW_HASKELL__ >= 861
+{-# LANGUAGE DerivingVia #-}
+#endif
 {-# OPTIONS_GHC -fno-warn-deprecations #-} -- usage of Error typeclass
 module Database.Persist.Types.Base where
 
@@ -33,6 +36,8 @@ import qualified Data.Scientific
 #else
 import qualified Data.Attoparsec.Number as AN
 #endif
+import Data.Semigroup (Semigroup, (<>))
+import Data.String (IsString, fromString)
 
 -- | A 'Checkmark' should be used as a field type whenever a
 -- uniqueness constraint should guarantee that a certain kind of
@@ -461,7 +466,7 @@ data SqlType = SqlString
              | SqlOther T.Text -- ^ a backend-specific name
     deriving (Show, Read, Eq, Typeable, Ord)
 
-data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le | In | NotIn
+data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le | In | NotIn | Like | NotLike
                    | BackendSpecificFilter T.Text
     deriving (Read, Show)
 
@@ -483,3 +488,36 @@ instance Exception OnlyUniqueException
 data PersistUpdate = Assign | Add | Subtract | Multiply | Divide
                    | BackendSpecificUpdate T.Text
     deriving (Read, Show)
+
+newtype EscapedLikeText = EscapedLikeText { runWildcardEscape :: Char -> T.Text }
+#if __GLASGOW_HASKELL__ >= 861
+  deriving (Semigroup, Monoid) via (Char -> T.Text)
+#endif
+
+#if __GLASGOW_HASKELL__ < 861
+instance Semigroup EscapedLikeText where
+  EscapedLikeText f <> EscapedLikeText g = EscapedLikeText (\c -> f c <> g c)
+
+instance Monoid EscapedLikeText where
+  mempty = EscapedLikeText (\_ -> T.pack "")
+  mappend = (<>)
+#endif
+
+instance IsString EscapedLikeText where
+  fromString = preEscapedLikeText . T.pack
+
+preEscapedLikeText :: Text -> EscapedLikeText
+preEscapedLikeText = EscapedLikeText . const
+
+toEscapedLikeText :: Text -> EscapedLikeText
+toEscapedLikeText = EscapedLikeText . escapeWildcards
+
+escapeWildcards :: Text -> Char -> T.Text
+escapeWildcards t c = T.foldr go "" t
+  where
+    isWildcard '%' = True
+    isWildcard '_' = True
+    isWildcard  _  = False
+    go x xs
+      | isWildcard x = c `T.cons` x `T.cons` xs
+      | otherwise = x `T.cons` xs

@@ -249,6 +249,12 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
                            let xxs = transpose (map fromPersistList allVals)
                                sqls=map (\(a,xs) -> connEscapeName conn (fieldDB a) <> showSqlFilter pfilter <> "(" <> T.intercalate "," (replicate (length xs) " ?") <> ") ") (zip (compositeFields pdef) xxs)
                            in (wrapSql (T.intercalate " or " (map wrapSql sqls)), concat xxs)
+                        ([PersistList xs], Like, _) ->
+                           let sqlcl=T.intercalate " and " (map (\a -> connEscapeName conn (fieldDB a) <> showSqlFilter pfilter <> "?" <> " ESCAPE ? ") (compositeFields pdef))
+                           in (wrapSql sqlcl,xs)
+                        ([PersistList xs], NotLike, _) ->
+                           let sqlcl=T.intercalate " or " (map (\a -> connEscapeName conn (fieldDB a) <> showSqlFilter pfilter <> "?" <> " ESCAPE ? ") (compositeFields pdef))
+                           in (wrapSql sqlcl,xs)
                         ([PersistList xs], _, True) ->
                            let zs = tail (inits (compositeFields pdef))
                                sql1 = map (\b -> wrapSql (T.intercalate " and " (map (\(i,a) -> sql2 (i==length b) a) (zip [1..] b)))) zs
@@ -307,6 +313,10 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
                                 , qmarks
                                 , ")"
                                 ], notNullVals)
+                            (False, Like,_) -> (name <> showSqlFilter pfilter <> "?" <> " ESCAPE ?", allVals)
+                            (True,  Like, _) -> ("1=2", [])
+                            (False, NotLike, _) -> (name <> showSqlFilter pfilter <> "?" <> " ESCAPE ?", allVals)
+                            (True,  NotLike, _) -> ("1=2", [])
                             _ -> (name <> showSqlFilter pfilter <> "?" <> orNullSuffix, allVals)
 
       where
@@ -351,6 +361,8 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
         showSqlFilter Le = "<="
         showSqlFilter In = " IN "
         showSqlFilter NotIn = " NOT IN "
+        showSqlFilter Like = " LIKE "
+        showSqlFilter NotLike = " NOT LIKE "
         showSqlFilter (BackendSpecificFilter s) = s
 
 filterClause :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)

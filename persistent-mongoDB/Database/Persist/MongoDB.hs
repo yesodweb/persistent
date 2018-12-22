@@ -878,6 +878,8 @@ filterToBSON fname v filt = case filt of
     showFilter In = "$in"
     showFilter NotIn = "$nin"
     showFilter Eq = error "EQ filter not expected"
+    showFilter Like = error "LIKE filter not expected"
+    showFilter NotLike = error "NOT LIKE filter not expected"
     showFilter (BackendSpecificFilter bsf) = throw $ PersistMongoDBError $ T.pack $ "did not expect BackendSpecificFilter " ++ T.unpack bsf
 
 

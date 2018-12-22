@@ -34,7 +34,9 @@ module Database.Persist
     , (=.), (+=.), (-=.), (*=.), (/=.)
 
       -- * Query filter combinators
-    , (==.), (!=.), (<.), (>.), (<=.), (>=.), (<-.), (/<-.), (||.)
+    , (==.), (!=.), (<.), (>.), (<=.), (>=.), (<-.), (/<-.), (||.), likeWithEscape, notLikeWithEscape
+
+    , EscapedLikeText(..)
 
       -- * JSON Utilities
     , listToJSON
@@ -50,6 +52,7 @@ import Database.Persist.Types
 import Database.Persist.Class
 import Database.Persist.Class.PersistField (getPersistMap)
 import qualified Data.Text as T
+import Data.Text (Text)
 import Data.Text.Lazy (toStrict)
 import Data.Text.Lazy.Builder (toLazyText)
 import Data.Aeson (toJSON, ToJSON)
@@ -294,6 +297,70 @@ f >=. a  = Filter f (Left a) Ge
 
 infix 4 <-., /<-.
 (<-.), (/<-.) :: forall v typ.  PersistField typ => EntityField v typ -> [typ] -> Filter v
+
+
+-- |
+-- Check if value is like given pattern. This function takes
+-- field, a character to escape wildcards and a like pattern
+--
+-- === __Example usage__
+--
+-- @
+-- selectLikeSimon :: MonadIO m => ReaderT SqlBackend m ()
+-- selectLikeSimon = selectList [likeWithEscape '@' UserName "%Si%"]
+-- @
+--
+-- The above query when applied on dataset-1, will produce this:
+--
+-- > +-----+-----+-----+
+-- > |id   |name |age  |
+-- > +-----+-----+-----+
+-- > |2    |Simon|41   |
+-- > +-----+-----+-----+
+--
+-- and the SQL like the following:
+--
+-- > SELECT id, name, age, color FROM Person WHERE name LIKE "%si%" '@'
+--
+-- Undesirable wildcards, such as the one mixed in user inputs
+-- can be escaped explicitly:
+--
+-- > maltext = "mon%"
+-- > selectList [likeWithEscape '#' UserName $ "%Si" <> toEscapedLikeText maltext]
+
+likeWithEscape :: Char -> EntityField v Text -> EscapedLikeText-> Filter v
+likeWithEscape c f t = Filter f (Right [runWildcardEscape t c, T.singleton c]) Like
+
+-- |
+-- Check if value is not like given pattern
+--
+-- === __Example usage__
+--
+-- @
+-- selectNotLikeSimon :: MonadIO m => ReaderT SqlBackend m ()
+-- selectNotLikeSimon = selectList [notLikeWithEscape '@' UserName "Simon"]
+-- @
+--
+-- The above query when applied on dataset-1, will produce this:
+--
+-- > +-----+-----+-----+
+-- > |id   |name |age  |
+-- > +-----+-----+-----+
+-- > |1    |SPJ  |40   |
+-- > +-----+-----+-----+
+--
+-- and the SQL like the following:
+--
+-- > SELECT id, name, age, color FROM Person WHERE name NOT LIKE "Simon" '@'
+--
+-- Undesirable wildcards, such as the one mixed in user inputs
+-- can be escaped explicitly:
+--
+-- > maltext = "mon%"
+-- > selectList [notLikeWithEscape '@' UserName $ "%Si" <> toEscapedLikeText maltext]
+
+notLikeWithEscape :: Char -> EntityField v Text -> EscapedLikeText -> Filter v
+notLikeWithEscape c f t = Filter f (Right [runWildcardEscape t c, T.singleton c]) NotLike
 
 -- | Check if value is in given list.
 --
