@@ -59,6 +59,10 @@ import Init
 import PersistTestPetType
 import PersistTestPetCollarType
 
+#ifndef WITH_MONGODB
+import Data.Semigroup ((<>))
+#endif
+
 #ifdef WITH_NOSQL
 mkPersist persistSettings [persistUpperCase|
 #else
@@ -223,6 +227,25 @@ specs = describe "persistent" $ do
       _ <- insert p
       ps <- selectList [FilterAnd []] [Desc PersonAge]
       assertNotEmpty ps
+
+#ifndef WITH_MONGODB
+  it "LIKE" $ db $ do
+      let p = Person "Shakespeare" 52 Nothing
+      _ <- insert p
+
+      let maltext = "re%"
+      ps <- selectList [likeWithEscape '@' PersonName ("%espea" <> toEscapedLikeText maltext)] []
+      assertEmpty ps
+
+  it "NOT LIKE" $ db $ do
+      let p = Person "Shakespeare" 52 Nothing
+      _ <- insert p
+
+      let maltext = "re%"
+      ps <- selectList [notLikeWithEscape '@' PersonName ("%espea" <> toEscapedLikeText maltext)] []
+      assertNotEmpty ps
+#endif
+
 
   it "order of opts is irrelevant" $ db $ do
       let eq (a, b, _) (c, d) = (a, b) @== (c, d)
