@@ -1561,6 +1561,8 @@ instance Lift PersistFilter where
     lift Le = [|Le|]
     lift In = [|In|]
     lift NotIn = [|NotIn|]
+    lift Like = [|Like|]
+    lift NotLike = [|NotLike|]
     lift (BackendSpecificFilter x) = [|BackendSpecificFilter x|]
 
 instance Lift PersistUpdate where
