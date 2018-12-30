@@ -1,5 +1,9 @@
 # Changelog for persistent-sqlite
 
+## 2.9.2
+
+* Add enableExtendedResultCodes and disableExtendedResultCodes functions
+
 ## 2.9.1
 
 * Bump vendored SQLite library to [3.26.0](https://www.sqlite.org/releaselog/3_26_0.html) to address [RCE bug: `magellan`](https://blade.tencent.com/magellan/index_en.html).

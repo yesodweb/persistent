@@ -33,10 +33,10 @@ module Database.Sqlite  (
     -- fetch the rows from the table:
     --
     -- > {-#LANGUAGE OverloadedStrings#-}
-    -- > 
+    -- >
     -- > import Database.Sqlite
     -- > import Data.Text
-    -- > 
+    -- >
     -- > main :: IO ()
     -- > main = do
     -- >   conn <- open "/home/sibi/test.db"
@@ -73,7 +73,9 @@ module Database.Sqlite  (
                          freeLogFunction,
                          config,
                          status,
-                         softHeapLimit
+                         softHeapLimit,
+                         enableExtendedResultCodes,
+                         disableExtendedResultCodes
                         )
     where
 
@@ -229,6 +231,7 @@ sqlError maybeConnection functionName error = do
 
 foreign import ccall "sqlite3_open_v2"
   openC :: CString -> Ptr (Ptr ()) -> Int -> CString -> IO Int
+
 openError :: Text -> IO (Either Connection Error)
 openError path' = do
     let flag = sqliteFlagReadWrite .|. sqliteFlagCreate .|. sqliteFlagUri
@@ -265,6 +268,28 @@ close database = do
   case error of
     ErrorOK -> return ()
     _ -> sqlError (Just database) "close" error
+
+foreign import ccall "sqlite3_extended_result_codes"
+  sqlite3_extended_result_codesC :: Ptr () -> Int -> IO Int
+
+
+-- @since 2.9.2
+enableExtendedResultCodes :: Connection -> IO ()
+enableExtendedResultCodes con@(Connection _ (Connection' database)) =  do
+  error <- sqlite3_extended_result_codesC database 1
+  let err = decodeError error
+  case err of
+    ErrorOK -> return ()
+    _ -> sqlError (Just con) "enableExtendedResultCodes" err
+
+-- @since 2.9.2
+disableExtendedResultCodes :: Connection -> IO ()
+disableExtendedResultCodes con@(Connection _ (Connection' database)) =  do
+  error <- sqlite3_extended_result_codesC database 0
+  let err = decodeError error
+  case err of
+    ErrorOK -> return ()
+    _ -> sqlError (Just con) "disableExtendedResultCodes" err
 
 foreign import ccall "sqlite3_prepare_v2"
   prepareC :: Ptr () -> CString -> Int -> Ptr (Ptr ()) -> Ptr (Ptr ()) -> IO Int
