@@ -14,6 +14,44 @@ module Database.Sqlite  (
                          LogFunction,
                          SqliteStatus (..),
                          SqliteStatusVerb (..),
+    -- * Basic usage guide
+    -- |
+    --
+    -- Note that the example code shown here is a low level interface
+    -- usage. Let's create a small demo sqlite3 database which we will
+    -- use in our program:
+    --
+    -- > $ sqlite3 ~/test.db
+    -- > sqlite> create table t1(a,b);
+    -- > sqlite> insert into t1(a,b) values (1,1);
+    -- > sqlite> insert into t1(a,b) values (2,2);
+    -- > sqlite> select * from t1;
+    -- > 1|1
+    -- > 2|2
+    --
+    -- Now let's write code using the functions in this module to
+    -- fetch the rows from the table:
+    --
+    -- > {-#LANGUAGE OverloadedStrings#-}
+    -- > 
+    -- > import Database.Sqlite
+    -- > import Data.Text
+    -- > 
+    -- > main :: IO ()
+    -- > main = do
+    -- >   conn <- open "/home/sibi/test.db"
+    -- >   smt <- prepare conn "select * from t1;"
+    -- >   row1 <- step smt >> columns smt
+    -- >   row2 <- step smt >> columns smt
+    -- >   print (row1, row2)
+    -- >   finalize smt
+    -- >   close conn
+    --
+    -- On executing the above code:
+    --
+    -- > $ ./demo-program
+    -- > $ ([PersistInt64 1,PersistInt64 1],[PersistInt64 2,PersistInt64 2])
+
                          open,
                          close,
                          prepare,

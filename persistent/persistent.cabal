@@ -33,7 +33,7 @@ library
                    , resourcet                >= 1.1.10
                    , resource-pool            >= 0.2.2.0
                    , path-pieces              >= 0.1
-                   , http-api-data            >= 0.2       && < 0.4
+                   , http-api-data            >= 0.2
                    , aeson                    >= 0.5
                    , monad-logger             >= 0.3.28
                    , base64-bytestring
@@ -98,7 +98,7 @@ test-suite test
                    , attoparsec
                    , transformers
                    , path-pieces
-                   , http-api-data            >= 0.2       && < 0.4
+                   , http-api-data
                    , aeson
                    , resourcet
                    , monad-logger
