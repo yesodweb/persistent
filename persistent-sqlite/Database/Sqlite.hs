@@ -33,10 +33,10 @@ module Database.Sqlite  (
     -- fetch the rows from the table:
     --
     -- > {-#LANGUAGE OverloadedStrings#-}
-    -- > 
+    -- >
     -- > import Database.Sqlite
     -- > import Data.Text
-    -- > 
+    -- >
     -- > main :: IO ()
     -- > main = do
     -- >   conn <- open "/home/sibi/test.db"
@@ -75,7 +75,7 @@ module Database.Sqlite  (
                          status,
                          softHeapLimit,
                          enableExtendedResultCodes,
-                         disableExtendedResultCodes 
+                         disableExtendedResultCodes
                         )
     where
 
@@ -273,7 +273,7 @@ foreign import ccall "sqlite3_extended_result_codes"
   sqlite3_extended_result_codesC :: Ptr () -> Int -> IO Int
 
 
--- @since 2.9.1
+-- @since 2.9.2
 enableExtendedResultCodes :: Connection -> IO ()
 enableExtendedResultCodes con@(Connection _ (Connection' database)) =  do
   error <- sqlite3_extended_result_codesC database 1
@@ -282,7 +282,7 @@ enableExtendedResultCodes con@(Connection _ (Connection' database)) =  do
     ErrorOK -> return ()
     _ -> sqlError (Just con) "enableExtendedResultCodes" err
 
--- @since 2.9.1
+-- @since 2.9.2
 disableExtendedResultCodes :: Connection -> IO ()
 disableExtendedResultCodes con@(Connection _ (Connection' database)) =  do
   error <- sqlite3_extended_result_codesC database 0
