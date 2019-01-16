@@ -75,14 +75,20 @@ instance PersistUniqueWrite SqlBackend where
 
     putMany [] = return ()
     putMany rsD = do
-        conn <- ask
-        let rs = nubBy ((==) `on` persistUniqueKeyValues) (reverse rsD)
-        let ent = entityDef rs
-        let nr  = length rs
-        let toVals r = map toPersistValue $ toPersistFields r
-        case connPutManySql conn of
-            (Just mkSql) -> rawExecute (mkSql ent nr) (concatMap toVals rs)
-            Nothing -> defaultPutMany rs
+        let uKeys = persistUniqueKeys . head $ rsD
+        case uKeys of
+            [] -> insertMany_ rsD
+            _ -> go
+        where
+          go = do
+            let rs = nubBy ((==) `on` persistUniqueKeyValues) (reverse rsD)
+            let ent = entityDef rs
+            let nr  = length rs
+            let toVals r = map toPersistValue $ toPersistFields r
+            conn <- ask
+            case connPutManySql conn of
+                (Just mkSql) -> rawExecute (mkSql ent nr) (concatMap toVals rs)
+                Nothing -> defaultPutMany rs
 
 instance PersistUniqueWrite SqlWriteBackend where
     deleteBy uniq = withReaderT persistBackend $ deleteBy uniq
