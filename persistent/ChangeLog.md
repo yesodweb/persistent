@@ -1,5 +1,9 @@
 # Changelog for persistent
 
+## 2.9.1
+
+* Fix [#847](https://github.com/yesodweb/persistent/issues/847): SQL error with `putMany` on Sqlite when Entity has no unique index.
+
 ## 2.9.0
 
 * Added support for SQL isolation levels to via SqlBackend. [#812]

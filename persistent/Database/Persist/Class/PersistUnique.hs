@@ -502,31 +502,37 @@ defaultPutMany
     -> ReaderT backend m ()
 defaultPutMany []   = return ()
 defaultPutMany rsD  = do
-    let rs = nubBy ((==) `on` persistUniqueKeyValues) (reverse rsD)
+    let uKeys = persistUniqueKeys . head $ rsD
+    case uKeys of
+        [] -> insertMany_ rsD
+        _ -> go
+  where
+    go = do
+        let rs = nubBy ((==) `on` persistUniqueKeyValues) (reverse rsD)
 
-    -- lookup record(s) by their unique key
-    mEsOld <- mapM getByValue rs
+        -- lookup record(s) by their unique key
+        mEsOld <- mapM getByValue rs
 
-    -- find pre-existing entities and corresponding (incoming) records
-    let merge (Just x) y = Just (x, y)
-        merge _        _ = Nothing
-    let mEsOldAndRs = zipWith merge mEsOld rs
-    let esOldAndRs = catMaybes mEsOldAndRs
+        -- find pre-existing entities and corresponding (incoming) records
+        let merge (Just x) y = Just (x, y)
+            merge _        _ = Nothing
+        let mEsOldAndRs = zipWith merge mEsOld rs
+        let esOldAndRs = catMaybes mEsOldAndRs
 
-    -- determine records to insert
-    let esOld = fmap fst esOldAndRs
-    let rsOld = fmap entityVal esOld
-    let rsNew = deleteFirstsBy ((==) `on` persistUniqueKeyValues) rs rsOld
+        -- determine records to insert
+        let esOld = fmap fst esOldAndRs
+        let rsOld = fmap entityVal esOld
+        let rsNew = deleteFirstsBy ((==) `on` persistUniqueKeyValues) rs rsOld
 
-    -- determine records to update
-    let rsUpd = fmap snd esOldAndRs
-    let ksOld = fmap entityKey esOld
-    let krs   = zip ksOld rsUpd
+        -- determine records to update
+        let rsUpd = fmap snd esOldAndRs
+        let ksOld = fmap entityKey esOld
+        let krs   = zip ksOld rsUpd
 
-    -- insert `new` records
-    insertMany_ rsNew
-    -- replace existing records
-    mapM_ (uncurry replace) krs
+        -- insert `new` records
+        insertMany_ rsNew
+        -- replace existing records
+        mapM_ (uncurry replace) krs
 
 -- | The _essence_ of a unique record.
 -- useful for comaparing records in haskell land for uniqueness equality.

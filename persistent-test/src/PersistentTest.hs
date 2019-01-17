@@ -493,6 +493,15 @@ specs = describe "persistent" $ do
       pBlue30 @== Person "Updated" 30 Nothing
 
   describe "putMany" $ do
+    it "adds new rows when entity has no unique constraints" $ db $ do
+        let mkPerson name = Person1 name 25
+        let names = ["putMany bob", "putMany bob", "putMany smith"]
+        let records = map mkPerson names
+        _ <- putMany records
+        entitiesDb <- selectList [Person1Name <-. names] []
+        let recordsDb = fmap entityVal entitiesDb
+        recordsDb @== records
+        deleteWhere [Person1Name <-. names]
     it "adds new rows when no conflicts" $ db $ do
         let mkUpsert e = Upsert e "new" "" 1
         let keys = ["putMany1","putMany2","putMany3"]
