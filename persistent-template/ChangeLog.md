@@ -1,4 +1,5 @@
 ## 2.6.0
+* [persistent#846](https://github.com/yesodweb/persistent/pull/846): Improve error message when marshalling fails
 * [persistent#826](https://github.com/yesodweb/persistent/pull/826): Change `Unique` derive `Show`
 
 ## 2.5.4
