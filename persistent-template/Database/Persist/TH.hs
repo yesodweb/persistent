@@ -993,7 +993,7 @@ fromValues t funName conE fields = do
         _ -> do
           x1 <- newName "x1"
           restNames <- mapM (\i -> newName $ "x" `mappend` show i) [2..length fields]
-          (fpv1:mkPersistValues) <- mapM mkPvFromFd fields
+          (fpv1:mkPersistValues) <- mapM mkPersistValue fields
           app1E <- [|(<$>)|]
           let conApp = infixFromPersistValue app1E fpv1 conE x1
           applyE <- [|(A.<*>)|]
@@ -1006,14 +1006,19 @@ fromValues t funName conE fields = do
     infixFromPersistValue applyE fpv exp name =
       UInfixE exp applyE (fpv `AppE` VarE name)
 
-    mkPvFromFd =
-      mkPersistValue . unHaskellName . fieldHaskell
+    mkPersistValue field =
+      [|mapLeft (fieldError field) . fromPersistValue|]
 
-    mkPersistValue fieldName =
-      [|mapLeft (fieldError fieldName) . fromPersistValue|]
-
-fieldError :: Text -> Text -> Text
-fieldError fieldName err = "Couldn't parse field `" `mappend` fieldName `mappend` "` from database results: " `mappend` err
+fieldError :: FieldDef -> Text -> Text
+fieldError field err = mconcat
+  [ "Couldn't parse field `"
+  , fieldName
+  , "` from database results: "
+  , err
+  ]
+  where
+    fieldName =
+      unHaskellName (fieldHaskell field)
 
 mkEntity :: EntityMap -> MkPersistSettings -> EntityDef -> Q [Dec]
 mkEntity entMap mps t = do
