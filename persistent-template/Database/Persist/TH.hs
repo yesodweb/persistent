@@ -1007,18 +1007,23 @@ fromValues t funName conE fields = do
       UInfixE exp applyE (fpv `AppE` VarE name)
 
     mkPersistValue field =
-      [|mapLeft (fieldError field) . fromPersistValue|]
+      [|mapLeft (fieldError t field) . fromPersistValue|]
 
-fieldError :: FieldDef -> Text -> Text
-fieldError field err = mconcat
+fieldError :: EntityDef -> FieldDef -> Text -> Text
+fieldError entity field err = mconcat
   [ "Couldn't parse field `"
   , fieldName
-  , "` from database results: "
+  , "` from table `"
+  , tableName
+  , "`. "
   , err
   ]
   where
     fieldName =
       unHaskellName (fieldHaskell field)
+
+    tableName =
+      unDBName (entityDB entity)
 
 mkEntity :: EntityMap -> MkPersistSettings -> EntityDef -> Q [Dec]
 mkEntity entMap mps t = do
