@@ -674,9 +674,6 @@ mapLeft :: (a -> c) -> Either a b -> Either c b
 mapLeft _ (Right r) = Right r
 mapLeft f (Left l)  = Left (f l)
 
-fieldError :: Text -> Text -> Text
-fieldError fieldName err = "Couldn't parse field `" `mappend` fieldName `mappend` "` from database results: " `mappend` err
-
 mkFromPersistValues :: MkPersistSettings -> EntityDef -> Q [Clause]
 mkFromPersistValues _ t@(EntityDef { entitySum = False }) =
     fromValues t "fromPersistValues" entE $ entityFields t
@@ -980,37 +977,53 @@ headNote (x:[]) = x
 headNote xs = error $ "mkKeyFromValues: expected a list of one element, got: "
   `mappend` show xs
 
-
 fromValues :: EntityDef -> Text -> Exp -> [FieldDef] -> Q [Clause]
 fromValues t funName conE fields = do
-    x <- newName "x"
-    let funMsg = entityText t `mappend` ": " `mappend` funName `mappend` " failed on: "
-    patternMatchFailure <-
-      [|Left $ mappend funMsg (pack $ show $(return $ VarE x))|]
-    suc <- patternSuccess fields
-    return [ suc, normalClause [VarP x] patternMatchFailure ]
+  x <- newName "x"
+  let funMsg = entityText t `mappend` ": " `mappend` funName `mappend` " failed on: "
+  patternMatchFailure <- [|Left $ mappend funMsg (pack $ show $(return $ VarE x))|]
+  suc <- patternSuccess
+  return [ suc, normalClause [VarP x] patternMatchFailure ]
   where
-    patternSuccess [] = do
-      rightE <- [|Right|]
-      return $ normalClause [ListP []] (rightE `AppE` conE)
-    patternSuccess fieldsNE = do
-        x1 <- newName "x1"
-        restNames <- mapM (\i -> newName $ "x" `mappend` show i) [2..length fieldsNE]
-        (fpv1:mkPersistValues) <- mapM mkPvFromFd fieldsNE
-        app1E <- [|(<$>)|]
-        let conApp = infixFromPersistValue app1E fpv1 conE x1
-        applyE <- [|(A.<*>)|]
-        let applyFromPersistValue = infixFromPersistValue applyE
+    patternSuccess =
+      case fields of
+        [] -> do
+          rightE <- [|Right|]
+          return $ normalClause [ListP []] (rightE `AppE` conE)
+        _ -> do
+          x1 <- newName "x1"
+          restNames <- mapM (\i -> newName $ "x" `mappend` show i) [2..length fields]
+          (fpv1:mkPersistValues) <- mapM mkPersistValue fields
+          app1E <- [|(<$>)|]
+          let conApp = infixFromPersistValue app1E fpv1 conE x1
+          applyE <- [|(A.<*>)|]
+          let applyFromPersistValue = infixFromPersistValue applyE
 
-        return $ normalClause
-            [ListP $ map VarP (x1:restNames)]
-            (foldl' (\exp (name, fpv) -> applyFromPersistValue fpv exp name) conApp (zip restNames mkPersistValues))
-        where
-          infixFromPersistValue applyE fpv exp name =
-              UInfixE exp applyE (fpv `AppE` VarE name)
-          mkPvFromFd = mkPersistValue . unHaskellName . fieldHaskell
-          mkPersistValue fieldName = [|mapLeft (fieldError fieldName) . fromPersistValue|]
+          return $ normalClause
+              [ListP $ map VarP (x1:restNames)]
+              (foldl' (\exp (name, fpv) -> applyFromPersistValue fpv exp name) conApp (zip restNames mkPersistValues))
 
+    infixFromPersistValue applyE fpv exp name =
+      UInfixE exp applyE (fpv `AppE` VarE name)
+
+    mkPersistValue field =
+      [|mapLeft (fieldError t field) . fromPersistValue|]
+
+fieldError :: EntityDef -> FieldDef -> Text -> Text
+fieldError entity field err = mconcat
+  [ "Couldn't parse field `"
+  , fieldName
+  , "` from table `"
+  , tableName
+  , "`. "
+  , err
+  ]
+  where
+    fieldName =
+      unHaskellName (fieldHaskell field)
+
+    tableName =
+      unDBName (entityDB entity)
 
 mkEntity :: EntityMap -> MkPersistSettings -> EntityDef -> Q [Dec]
 mkEntity entMap mps t = do
