@@ -1,5 +1,9 @@
 # Changelog for persistent
 
+## 2.9.2
+
+* Added support for LIKE operator [#845]
+
 ## 2.9.1
 
 * Fix [#847](https://github.com/yesodweb/persistent/issues/847): SQL error with `putMany` on Sqlite when Entity has no unique index.
