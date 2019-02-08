@@ -303,6 +303,8 @@ infix 4 <-., /<-.
 -- Check if value is like given pattern. This function takes
 -- field, a character to escape wildcards and a like pattern
 --
+-- @since 2.9.2
+--
 -- === __Example usage__
 --
 -- @
@@ -333,6 +335,8 @@ likeWithEscape c f t = Filter f (Right [runWildcardEscape t c, T.singleton c]) L
 
 -- |
 -- Check if value is not like given pattern
+--
+-- @since 2.9.2
 --
 -- === __Example usage__
 --
