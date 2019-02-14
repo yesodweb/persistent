@@ -111,13 +111,15 @@ persistLowerCase :: QuasiQuoter
 persistLowerCase = persistWith lowerCaseSettings
 
 -- | Same as 'persistWith', but uses an external file instead of a
--- quasiquotation.
+-- quasiquotation. The recommended file extension is @.persistentmodels@.
 persistFileWith :: PersistSettings -> FilePath -> Q Exp
 persistFileWith ps fp = persistManyFileWith ps [fp]
 
 -- | Same as 'persistFileWith', but uses several external files instead of
 -- one. Splitting your Persistent definitions into multiple modules can 
 -- potentially dramatically speed up compile times.
+--
+-- The recommended file extension is @.persistentmodels@.
 --
 -- ==== __Examples__
 --
@@ -143,7 +145,7 @@ persistFileWith ps fp = persistManyFileWith ps [fp]
 -- -- Migrate.hs
 -- 'share'
 --     ['mkMigrate' "migrateAll"]
---     $('persistManyFileWith' 'lowerCaseSettings' ["models1","models2"]) 
+--     $('persistManyFileWith' 'lowerCaseSettings' ["models1.persistentmodels","models2.persistentmodels"]) 
 -- @
 --
 -- Tip: To get the same import behavior as if you were declaring all your models in
