@@ -11,7 +11,7 @@ module Database.Persist.Sql.Orphan.PersistUnique
 import Control.Exception (throwIO)
 import Control.Monad.IO.Class (liftIO, MonadIO)
 import Database.Persist
-import Database.Persist.Class.PersistUnique (defaultPutMany, persistUniqueKeyValues)
+import Database.Persist.Class.PersistUnique (defaultUpsertBy, defaultPutMany, persistUniqueKeyValues)
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
@@ -23,26 +23,15 @@ import Control.Monad.Trans.Reader (ask, withReaderT, ReaderT)
 import Data.List (nubBy)
 import Data.Function (on)
 
-defaultUpsert
-    :: (MonadIO m
-       ,PersistEntity record
-       ,PersistUniqueWrite backend
-       ,PersistEntityBackend record ~ BaseBackend backend)
-    => record -> [Update record] -> ReaderT backend m (Entity record)
-defaultUpsert record updates = do
-    uniqueKey <- onlyUnique record
-    upsertBy uniqueKey record updates
-
 instance PersistUniqueWrite SqlBackend where
-    upsert record updates = do
+    upsertBy uniqueKey record updates = do
       conn <- ask
       let escape = connEscapeName conn
       let refCol n = T.concat [escape (entityDB t), ".", n]
       let mkUpdateText = mkUpdateText' escape refCol
-      uniqueKey <- onlyUnique record
       case connUpsertSql conn of
         Just upsertSql -> case updates of
-                            [] -> defaultUpsert record updates
+                            [] -> defaultUpsertBy uniqueKey record updates
                             _:_ -> do
                                 let upds = T.intercalate "," $ map mkUpdateText updates
                                     sql = upsertSql t upds
@@ -52,10 +41,10 @@ instance PersistUniqueWrite SqlBackend where
 
                                 x <- rawSql sql vals
                                 return $ head x
-        Nothing -> defaultUpsert record updates
+        Nothing -> defaultUpsertBy uniqueKey record updates
         where
           t = entityDef $ Just record
-          unqs uniqueKey = concatMap persistUniqueToValues [uniqueKey]
+          unqs uniqueKey' = concatMap persistUniqueToValues [uniqueKey']
 
     deleteBy uniq = do
         conn <- ask

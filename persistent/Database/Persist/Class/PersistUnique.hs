@@ -10,6 +10,7 @@ module Database.Persist.Class.PersistUnique
   ,replaceUnique
   ,checkUnique
   ,onlyUnique
+  ,defaultUpsertBy
   ,defaultPutMany
   ,persistUniqueKeyValues
   )
@@ -245,12 +246,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
         -> record          -- ^ new record to insert
         -> [Update record] -- ^ updates to perform if the record already exists
         -> ReaderT backend m (Entity record) -- ^ the record in the database after the operation
-    upsertBy uniqueKey record updates = do
-        mrecord <- getBy uniqueKey
-        maybe (insertEntity record) (`updateGetEntity` updates) mrecord
-      where
-        updateGetEntity (Entity k _) upds =
-            (Entity k) `liftM` (updateGet k upds)
+    upsertBy = defaultUpsertBy
 
     -- | Put many records into db
     --
@@ -486,6 +482,25 @@ checkUniqueKeys (x:xs) = do
     case y of
         Nothing -> checkUniqueKeys xs
         Just _ -> return (Just x)
+
+
+defaultUpsertBy
+    :: ( PersistEntityBackend record ~ BaseBackend backend
+       , PersistEntity record
+       , MonadIO m
+       , PersistStoreWrite backend
+       , PersistUniqueRead backend
+       )
+    => Unique record   -- ^ uniqueness constraint to find by
+    -> record          -- ^ new record to insert
+    -> [Update record] -- ^ updates to perform if the record already exists
+    -> ReaderT backend m (Entity record) -- ^ the record in the database after the operation
+defaultUpsertBy uniqueKey record updates = do
+    mrecord <- getBy uniqueKey
+    maybe (insertEntity record) (`updateGetEntity` updates) mrecord
+  where
+    updateGetEntity (Entity k _) upds =
+        (Entity k) `liftM` (updateGet k upds)
 
 -- | The slow but generic 'putMany' implemetation for any 'PersistUniqueRead'.
 -- * Lookup corresponding entities (if any) for each record using 'getByValue'
