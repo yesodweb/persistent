@@ -484,6 +484,11 @@ checkUniqueKeys (x:xs) = do
         Just _ -> return (Just x)
 
 
+-- | The slow but generic 'upsertBy' implementation for any 'PersistUniqueRead'.
+-- * Lookup corresponding entities (if any) 'getBy'.
+-- * If the record exists, update using 'updateGet'.
+-- * If it does not exist, insert using 'insertEntity'.
+-- @since 2.9.2
 defaultUpsertBy
     :: ( PersistEntityBackend record ~ BaseBackend backend
        , PersistEntity record
@@ -502,7 +507,7 @@ defaultUpsertBy uniqueKey record updates = do
     updateGetEntity (Entity k _) upds =
         (Entity k) `liftM` (updateGet k upds)
 
--- | The slow but generic 'putMany' implemetation for any 'PersistUniqueRead'.
+-- | The slow but generic 'putMany' implementation for any 'PersistUniqueRead'.
 -- * Lookup corresponding entities (if any) for each record using 'getByValue'
 -- * For pre-existing records, issue a 'replace' for each old key and new record
 -- * For new records, issue a bulk 'insertMany_'
