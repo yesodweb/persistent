@@ -190,8 +190,8 @@ instance PersistField Int32 where
     fromPersistValue x = Left $ fromPersistValueError "Int32" "integer" x
 
 instance PersistField Int64 where
-    toPersistValue = PersistInt64 . fromIntegral
-    fromPersistValue (PersistInt64 i)  = Right $ fromIntegral i
+    toPersistValue = PersistInt64
+    fromPersistValue (PersistInt64 i)  = Right i
     fromPersistValue (PersistDouble i) = Right (truncate i :: Int64) -- oracle
     fromPersistValue (PersistByteString bs) = case readInt bs of  -- oracle
                                                Just (i,"") -> Right $ fromIntegral i
