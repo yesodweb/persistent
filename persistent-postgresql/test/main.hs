@@ -50,6 +50,7 @@ import qualified TreeTest
 import qualified UniqueTest
 import qualified UpsertTest
 import qualified CustomConstraintTest
+import qualified LongIdentifierTest
 
 type Tuple = (,)
 
@@ -117,6 +118,7 @@ main = do
       , CustomPrimaryKeyReferenceTest.migration
       , MigrationColumnLengthTest.migration
       , TransactionLevelTest.migration
+      , LongIdentifierTest.migration
       ]
     PersistentTest.cleanDB
 
@@ -177,5 +179,6 @@ main = do
     TransactionLevelTest.specsWith db
     JSONTest.specs
     CustomConstraintTest.specs db
+    LongIdentifierTest.specsWith db
     -- FIXME: not used, probably should?
     -- ArrayAggTest.specs db

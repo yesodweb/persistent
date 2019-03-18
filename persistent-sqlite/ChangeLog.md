@@ -1,5 +1,9 @@
 # Changelog for persistent-sqlite
 
+## 2.10.6
+
+* Compatibility with latest persistent
+
 ## 2.10.5.2
 
 * Compatibility with latest persistent-template for test suite [#1002](https://github.com/yesodweb/persistent/pull/1002/files)

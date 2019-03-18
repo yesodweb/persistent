@@ -1,5 +1,9 @@
 # Changelog for persistent-postgresql
 
+## 2.10.2
+
+* Handle foreign key constraint names over 63 characters. See [#996](https://github.com/yesodweb/persistent/pull/996) for details.
+
 ## 2.10.1.1
 
 * Compatibility with latest persistent-template for test suite [#1002](https://github.com/yesodweb/persistent/pull/1002/files)

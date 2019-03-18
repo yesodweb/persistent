@@ -331,7 +331,7 @@ migrate' :: MySQL.ConnectInfo
 migrate' connectInfo allDefs getter val = do
     let name = entityDB val
     (idClmn, old) <- getColumns connectInfo getter val
-    let (newcols, udefs, fdefs) = mkColumns allDefs val
+    let (newcols, udefs, fdefs) = mysqlMkColumns allDefs val
     let udspair = map udToPair udefs
     case (idClmn, old, partitionEithers old) of
       -- Nothing found, create everything
@@ -969,7 +969,7 @@ mockMigrate :: MySQL.ConnectInfo
          -> IO (Either [Text] [(Bool, Text)])
 mockMigrate _connectInfo allDefs _getter val = do
     let name = entityDB val
-    let (newcols, udefs, fdefs) = mkColumns allDefs val
+    let (newcols, udefs, fdefs) = mysqlMkColumns allDefs val
     let udspair = map udToPair udefs
     case () of
       -- Nothing found, create everything
@@ -1308,3 +1308,6 @@ putManySql' fields ent n = q
         , " ON DUPLICATE KEY UPDATE "
         , Util.commaSeparated updates
         ]
+
+mysqlMkColumns :: [EntityDef] -> EntityDef -> ([Column], [UniqueDef], [ForeignDef])
+mysqlMkColumns allDefs t = mkColumns allDefs t emptyBackendSpecificOverrides

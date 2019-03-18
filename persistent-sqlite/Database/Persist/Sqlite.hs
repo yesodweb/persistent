@@ -386,12 +386,15 @@ showSqlType SqlBlob = "BLOB"
 showSqlType SqlBool = "BOOLEAN"
 showSqlType (SqlOther t) = t
 
+sqliteMkColumns :: [EntityDef] -> EntityDef -> ([Column], [UniqueDef], [ForeignDef])
+sqliteMkColumns allDefs t = mkColumns allDefs t emptyBackendSpecificOverrides
+
 migrate' :: [EntityDef]
          -> (Text -> IO Statement)
          -> EntityDef
          -> IO (Either [Text] [(Bool, Text)])
 migrate' allDefs getter val = do
-    let (cols, uniqs, fdefs) = mkColumns allDefs val
+    let (cols, uniqs, fdefs) = sqliteMkColumns allDefs val
     let newSql = mkCreateTable False def (filter (not . safeToRemove val . cName) cols, uniqs, fdefs)
     stmt <- getter "SELECT sql FROM sqlite_master WHERE type='table' AND name=?"
     oldSql' <- with (stmtQuery stmt [PersistText $ unDBName table])
@@ -496,7 +499,7 @@ getCopyTable allDefs getter def = do
             Just y -> error $ "Invalid result from PRAGMA table_info: " ++ show y
     table = entityDB def
     tableTmp = DBName $ unDBName table <> "_backup"
-    (cols, uniqs, fdef) = mkColumns allDefs def
+    (cols, uniqs, fdef) = sqliteMkColumns allDefs def
     cols' = filter (not . safeToRemove def . cName) cols
     newSql = mkCreateTable False def (cols', uniqs, fdef)
     tmpSql = mkCreateTable True def { entityDB = tableTmp } (cols', uniqs, [])
