@@ -52,7 +52,6 @@ module Init (
 ) where
 
 -- re-exports
-import Control.Applicative as A ((<$>), (<*>))
 import Control.Exception (SomeException)
 import Control.Monad (void, replicateM, liftM, when, forM_)
 import Control.Monad.Trans.Reader
