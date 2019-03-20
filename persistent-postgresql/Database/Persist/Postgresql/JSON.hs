@@ -5,6 +5,9 @@
 module Database.Persist.Postgresql.JSON
   ( (@>.)
   , (<@.)
+  , (?.)
+  , (?|.)
+  , (?&.)
   , Value()
   ) where
 
@@ -16,6 +19,7 @@ import Data.Text.Encoding as TE (encodeUtf8)
 
 import Database.Persist (EntityField, Filter(..), PersistValue(..), PersistField(..), PersistFilter(..))
 import Database.Persist.Sql (PersistFieldSql(..), SqlType(..))
+import Database.Persist.Types (FilterValue(..))
 
 
 infix 4 @>., <@.
@@ -126,7 +130,7 @@ infix 4 @>., <@.
 --
 -- @since 2.8.2
 (@>.) :: EntityField record Value -> Value -> Filter record
-(@>.) field val = Filter field (Left val) $ BackendSpecificFilter " @> "
+(@>.) field val = Filter field (FilterValue val) $ BackendSpecificFilter " @> "
 
 -- | Same as '@>.' except the inclusion check is reversed.
 -- i.e. is the JSON value on the left hand side included
@@ -134,8 +138,69 @@ infix 4 @>., <@.
 --
 -- @since 2.8.2
 (<@.) :: EntityField record Value -> Value -> Filter record
-(<@.) field val = Filter field (Left val) $ BackendSpecificFilter " <@ "
+(<@.) field val = Filter field (FilterValue val) $ BackendSpecificFilter " <@ "
 
+jsonFilter :: PersistField a => Text -> EntityField record Value -> a -> Filter record
+jsonFilter op field a = Filter field (UnsafeValue a) $ BackendSpecificFilter op
+
+-- | This operator takes a column and a string to find a
+-- top-level key/field in an object.
+--
+-- @column ?. field@
+--
+-- N.B. This operator might have some unexpected interactions
+-- with non-object values. Please reference the examples.
+--
+-- === __Objects__
+--
+-- @
+-- {"a":null}             ? "a" == True
+-- {"test":false,"a":500} ? "a" == True
+-- {}                     ? "a" == False
+-- {"b":{"a":[]}}         ? "a" == False
+-- @
+--
+-- === __Arrays__
+--
+-- This operator will match an array if the string to be matched
+-- is an element of that array, but nothing else.
+--
+-- @
+-- ["a"]              ? "a"   == True
+-- [["a"]]            ? "a"   == False
+-- [9,false,"1",null] ? "1"   == True
+-- []                 ? "[]"  == False
+-- [{"a":true}]       ? "a"   == False
+-- @
+--
+-- === __Other values__
+--
+-- This operator functions like an equivalence operator on strings only.
+-- Any other value does not match.
+--
+-- @
+-- "a"  ? "a"    == True
+-- "1"  ? "1"    == True
+-- "ab" ? "a"    == False
+-- 1    ? "1"    == False
+-- null ? "null" == False
+-- true ? "true" == False
+-- 1.5  ? "1.5"  == False
+-- @
+--
+-- @since 2.10.0
+(?.) :: EntityField record Value -> Text -> Filter record
+(?.) = jsonFilter " ?? "
+
+(?|.) :: EntityField record Value -> [Text] -> Filter record
+(?|.) = jsonFilter " ??| "
+
+(?&.) :: EntityField record Value -> [Text] -> Filter record
+(?&.) = jsonFilter " ??& "
+
+-----------------
+-- AESON VALUE --
+-----------------
 
 instance PersistField Value where
   toPersistValue = toPersistValueJsonB
