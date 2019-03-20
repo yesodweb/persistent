@@ -31,7 +31,7 @@ module Database.Persist.Postgresql
     ) where
 
 import Database.Persist.Sql
-import Database.Persist.Sql.Util (dbIdColumnsEsc, commaSeparated, parenWrapped)
+import qualified Database.Persist.Sql.Util as Util
 import Database.Persist.Sql.Types.Internal (mkPersistBackend)
 import Data.Fixed (Pico)
 
@@ -40,6 +40,7 @@ import qualified Database.PostgreSQL.Simple.TypeInfo.Static as PS
 import qualified Database.PostgreSQL.Simple.Internal as PG
 import qualified Database.PostgreSQL.Simple.ToField as PGTF
 import qualified Database.PostgreSQL.Simple.FromField as PGFF
+import qualified Database.PostgreSQL.Simple.Transaction as PG
 import qualified Database.PostgreSQL.Simple.Types as PG
 import Database.PostgreSQL.Simple.Ok (Ok (..))
 
@@ -88,7 +89,7 @@ import Control.Exception (Exception, throwIO)
 -- string would be @\"host=localhost port=5432 user=test
 -- dbname=test password=test\"@.  Please read libpq's
 -- documentation at
--- <http://www.postgresql.org/docs/9.1/static/libpq-connect.html>
+-- <https://www.postgresql.org/docs/current/static/libpq-connect.html>
 -- for more details on how to create such strings.
 type ConnectionString = ByteString
 
@@ -104,8 +105,8 @@ instance Exception PostgresServerVersionError
 -- | Create a PostgreSQL connection pool and run the given
 -- action.  The pool is properly released after the action
 -- finishes using it.  Note that you should not use the given
--- 'ConnectionPool' outside the action since it may be already
--- been released.
+-- 'ConnectionPool' outside the action since it may already
+-- have been released.
 withPostgresqlPool :: (MonadLogger m, MonadUnliftIO m, IsSqlBackend backend)
                    => ConnectionString
                    -- ^ Connection string to the database.
@@ -119,12 +120,12 @@ withPostgresqlPool :: (MonadLogger m, MonadUnliftIO m, IsSqlBackend backend)
 withPostgresqlPool ci = withPostgresqlPoolWithVersion getServerVersion ci
 
 -- | Same as 'withPostgresPool', but takes a callback for obtaining
--- the server version (to workaround an Amazon Redshift bug).
+-- the server version (to work around an Amazon Redshift bug).
 --
 -- @since 2.6.2
 withPostgresqlPoolWithVersion :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
                               => (PG.Connection -> IO (Maybe Double))
-                              -- ^ action to perform to get the server version
+                              -- ^ Action to perform to get the server version.
                               -> ConnectionString
                               -- ^ Connection string to the database.
                               -> Int
@@ -159,21 +160,21 @@ createPostgresqlPool = createPostgresqlPoolModified (const $ return ())
 -- @since 2.1.3
 createPostgresqlPoolModified
     :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
-    => (PG.Connection -> IO ()) -- ^ action to perform after connection is created
+    => (PG.Connection -> IO ()) -- ^ Action to perform after connection is created.
     -> ConnectionString -- ^ Connection string to the database.
     -> Int -- ^ Number of connections to be kept open in the pool.
     -> m (Pool backend)
 createPostgresqlPoolModified = createPostgresqlPoolModifiedWithVersion getServerVersion
 
 -- | Same as other similarly-named functions in this module, but takes callbacks for obtaining
--- the server version (to workaround an Amazon Redshift bug) and connection-specific tweaking
+-- the server version (to work around an Amazon Redshift bug) and connection-specific tweaking
 -- (to change the schema).
 --
 -- @since 2.6.2
 createPostgresqlPoolModifiedWithVersion
     :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
-    => (PG.Connection -> IO (Maybe Double)) -- ^ action to perform to get the server version
-    -> (PG.Connection -> IO ()) -- ^ action to perform after connection is created
+    => (PG.Connection -> IO (Maybe Double)) -- ^ Action to perform to get the server version.
+    -> (PG.Connection -> IO ()) -- ^ Action to perform after connection is created.
     -> ConnectionString -- ^ Connection string to the database.
     -> Int -- ^ Number of connections to be kept open in the pool.
     -> m (Pool backend)
@@ -187,7 +188,7 @@ withPostgresqlConn :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
 withPostgresqlConn = withPostgresqlConnWithVersion getServerVersion
 
 -- | Same as 'withPostgresqlConn', but takes a callback for obtaining
--- the server version (to workaround an Amazon Redshift bug).
+-- the server version (to work around an Amazon Redshift bug).
 --
 -- @since 2.6.2
 withPostgresqlConnWithVersion :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
@@ -232,15 +233,16 @@ upsertFunction f version = if (version >= 9.5)
                          else Nothing
 
 
--- | Generate a 'SqlBackend' from a 'PG.Connection'
+-- | Generate a 'SqlBackend' from a 'PG.Connection'.
 openSimpleConn :: (IsSqlBackend backend) => LogFunc -> PG.Connection -> IO backend
 openSimpleConn logFunc conn = do
     smap <- newIORef $ Map.empty
     serverVersion <- getServerVersion conn
     return $ createBackend logFunc serverVersion smap conn
 
+
 -- | Create the backend given a logging function, server version, mutable statement cell,
--- and connection
+-- and connection.
 createBackend :: IsSqlBackend backend => LogFunc -> Maybe Double
               -> IORef (Map.Map Text Statement) -> PG.Connection -> backend
 createBackend logFunc serverVersion smap conn = do
@@ -253,7 +255,13 @@ createBackend logFunc serverVersion smap conn = do
         , connPutManySql = serverVersion >>= upsertFunction putManySql
         , connClose      = PG.close conn
         , connMigrateSql = migrate'
-        , connBegin      = const $ PG.begin    conn
+        , connBegin      = \_ mIsolation -> case mIsolation of
+              Nothing -> PG.begin conn
+              Just iso -> PG.beginLevel (case iso of
+                  ReadUncommitted -> PG.ReadCommitted -- PG Upgrades uncommitted reads to committed anyways
+                  ReadCommitted -> PG.ReadCommitted
+                  RepeatableRead -> PG.RepeatableRead
+                  Serializable -> PG.Serializable) conn
         , connCommit     = const $ PG.commit   conn
         , connRollback   = const $ PG.rollback conn
         , connEscapeName = escape
@@ -262,6 +270,7 @@ createBackend logFunc serverVersion smap conn = do
         , connLimitOffset = decorateSQLWithLimitOffset "LIMIT ALL"
         , connLogFunc = logFunc
         , connMaxParams = Nothing
+        , connRepsertManySql = serverVersion >>= upsertFunction repsertManySql
         }
 
 prepare' :: PG.Connection -> Text -> IO Statement
@@ -330,7 +339,7 @@ insertManySql' ent valss =
                 , ") VALUES ("
                 , T.intercalate "),(" $ replicate (length valss) $ T.intercalate "," $ map (const "?") (entityFields ent)
                 , ") RETURNING "
-                , commaSeparated $ dbIdColumnsEsc escape ent
+                , Util.commaSeparated $ Util.dbIdColumnsEsc escape ent
                 ]
   in ISRSingle sql
 
@@ -862,7 +871,7 @@ findAlters defs _tablename col@(Column name isNull sqltype def _defConstraintNam
                 refAdd Nothing = []
                 refAdd (Just (tname, a)) =
                     case find ((==tname) . entityDB) defs of
-                        Just refdef -> [(tname, AddReference a [name] (dbIdColumnsEsc escape refdef))]
+                        Just refdef -> [(tname, AddReference a [name] (Util.dbIdColumnsEsc escape refdef))]
                         Nothing -> error $ "could not find the entityDef for reftable[" ++ show tname ++ "]"
                 modRef =
                     if fmap snd ref == fmap snd ref'
@@ -907,7 +916,7 @@ getAddReference allDefs table reftable cname ref =
                             id_ = fromMaybe (error $ "Could not find ID of entity " ++ show reftable)
                                         $ do
                                           entDef <- find ((== reftable) . entityDB) allDefs
-                                          return $ dbIdColumnsEsc escape entDef
+                                          return $ Util.dbIdColumnsEsc escape entDef
 
 
 showColumn :: Column -> Text
@@ -1053,13 +1062,13 @@ showAlter table (_, DropReference cname) = T.concat
     , escape cname
     ]
 
--- | get the SQL string for the table that a PeristEntity represents
--- Useful for raw SQL queries
+-- | Get the SQL string for the table that a PeristEntity represents.
+-- Useful for raw SQL queries.
 tableName :: (PersistEntity record) => record -> Text
 tableName = escape . tableDBName
 
--- | get the SQL string for the field that an EntityField represents
--- Useful for raw SQL queries
+-- | Get the SQL string for the field that an EntityField represents.
+-- Useful for raw SQL queries.
 fieldName :: (PersistEntity record) => EntityField record typ -> Text
 fieldName = escape . fieldDBName
 
@@ -1078,7 +1087,7 @@ data PostgresConf = PostgresConf
     { pgConnStr  :: ConnectionString
       -- ^ The connection string.
     , pgPoolSize :: Int
-      -- ^ How many connections should be held on the connection pool.
+      -- ^ How many connections should be held in the connection pool.
     } deriving (Show, Read, Data, Typeable)
 
 instance FromJSON PostgresConf where
@@ -1180,7 +1189,7 @@ mockMigrate allDefs _ entity = fmap (fmap $ map showAlterDb) $ do
 
 -- | Mock a migration even when the database is not present.
 -- This function performs the same functionality of 'printMigration'
--- with the difference that an actualy database isn't needed for it.
+-- with the difference that an actual database is not needed.
 mockMigration :: Migration -> IO ()
 mockMigration mig = do
   smap <- newIORef $ Map.empty
@@ -1206,39 +1215,51 @@ mockMigration mig = do
                              connRDBMS = undefined,
                              connLimitOffset = undefined,
                              connLogFunc = undefined,
-                             connMaxParams = Nothing}
+                             connMaxParams = Nothing,
+                             connRepsertManySql = Nothing
+                             }
       result = runReaderT $ runWriterT $ runWriterT mig
   resp <- result sqlbackend
   mapM_ T.putStrLn $ map snd $ snd resp
 
 putManySql :: EntityDef -> Int -> Text
-putManySql entityDef' numRecords
-  | numRecords > 0 = q
-  | otherwise = error "putManySql: numRecords MUST be greater than 0!"
+putManySql ent n = putManySql' conflictColumns fields ent n
   where
-    tableName' = escape . entityDB $ entityDef'
+    fields = entityFields ent
+    conflictColumns = concatMap (map (escape . snd) . uniqueFields) (entityUniques ent)
+
+repsertManySql :: EntityDef -> Int -> Text
+repsertManySql ent n = putManySql' conflictColumns fields ent n
+  where
+    fields = keyAndEntityFields ent
+    conflictColumns = escape . fieldDB <$> entityKeyFields ent
+
+putManySql' :: [Text] -> [FieldDef] -> EntityDef -> Int -> Text
+putManySql' conflictColumns fields ent n = q
+  where
     fieldDbToText = escape . fieldDB
-    entityFieldNames = map fieldDbToText (entityFields entityDef')
-    recordPlaceholders= parenWrapped . commaSeparated
-                      $ map (const "?") (entityFields entityDef')
-    mkAssignment n = T.concat [n, "=EXCLUDED.", n]
-    fieldSets = map (mkAssignment . fieldDbToText) (entityFields entityDef')
-    uniqueFields' = concat $ map (\x -> map escape (map snd $ uniqueFields x)) (entityUniques entityDef')
+    mkAssignment f = T.concat [f, "=EXCLUDED.", f]
+
+    table = escape . entityDB $ ent
+    columns = Util.commaSeparated $ map fieldDbToText fields
+    placeholders = map (const "?") fields
+    updates = map (mkAssignment . fieldDbToText) fields
+
     q = T.concat
         [ "INSERT INTO "
-        , tableName'
-        , " ("
-        , commaSeparated entityFieldNames
-        , ") "
+        , table
+        , Util.parenWrapped columns
         , " VALUES "
-        , commaSeparated (replicate numRecords recordPlaceholders)
-        , "  ON CONFLICT ("
-        , commaSeparated uniqueFields'
-        , ") DO UPDATE SET "
-        , commaSeparated fieldSets
+        , Util.commaSeparated . replicate n
+            . Util.parenWrapped . Util.commaSeparated $ placeholders
+        , " ON CONFLICT "
+        , Util.parenWrapped . Util.commaSeparated $ conflictColumns
+        , " DO UPDATE SET "
+        , Util.commaSeparated updates
         ]
 
--- | Enable a Postgres extension. See https://www.postgresql.org/docs/10/static/contrib.html
+
+-- | Enable a Postgres extension. See https://www.postgresql.org/docs/current/static/contrib.html
 -- for a list.
 migrateEnableExtension :: Text -> Migration
 migrateEnableExtension extName = WriterT $ WriterT $ do

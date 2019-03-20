@@ -8,6 +8,7 @@ packages:
   - ./persistent-mysql
   - ./persistent-postgresql
   - ./persistent-redis
+  - ./persistent-qq
 
 docker:
   enable: true

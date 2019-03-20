@@ -1,0 +1,25 @@
+name:        persistent-qq
+version:     2.9.0
+synopsis:    Provides a quasi-quoter for raw SQL for persistent
+description: Please see README and API docs at <http://www.stackage.org/package/persistent>.
+category:    Database, Yesod
+author:      Michael Snoyman <michael@snoyman.com>
+maintainer:  Michael Snoyman <michael@snoyman.com>
+license:     MIT
+github:      yesodweb/persistent
+
+extra-source-files:
+- ChangeLog.md
+- README.md
+
+dependencies:
+- base >= 4.7 && < 5
+- persistent >= 2.9
+- haskell-src-meta
+- template-haskell
+- text
+- mtl
+
+library:
+  ghc-options: -Wall
+  source-dirs: src

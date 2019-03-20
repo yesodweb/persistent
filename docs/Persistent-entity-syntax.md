@@ -119,8 +119,18 @@ For MongoDB currently one always needs to create the key on the application side
     Id String sqltype=varchar(3) sql=code
 ```
 
-Composite key (using multiple columns) can also be defined using `Primary` (see [Primary and Foreign Keys](#primary-and-foreign-keys)). 
-    
+Composite key (using multiple columns) can also be defined using `Primary` (see [Primary and Foreign Keys](#primary-and-foreign-keys)).
+
+`sql=` also works for setting the names of unique indexes.
+
+```
+Person
+  name Text
+  phone Text
+  UniquePersonPhone phone sql=UniqPerPhone
+```
+
+This makes a unique index requiring `phone` to be unique across `Person` rows. Ordinarily Persistent will generate a snake-case index name from the capitalized name provided such that `UniquePersonPhone` becomes `unique_person_phone`. However, we provided a `sql=` so the index name in the database will instead be `UniqPerPhone`. Keep in mind `sql=` and `!` attrs must come after the list of fields in front of the index name in the quasi-quoter.
 
 ## Primary and Foreign keys
 
@@ -180,6 +190,127 @@ import Employment as Import
 ### Entity-level
 
 The [tests for this feature](https://github.com/yesodweb/persistent/blob/master/persistent-test/src/SumTypeTest.hs#L35) demonstrates their usage. Note the use of the sign `+` in front of the entity name.
+
+The schema in the test is reproduced here:
+
+```haskell
+share [mkPersist persistSettings, mkMigrate "sumTypeMigrate"] [persistLowerCase|
+Bicycle
+    brand T.Text
+Car
+    make T.Text
+    model T.Text
++Vehicle
+    bicycle BicycleId
+    car CarId
+|]
+```
+
+Let's check out the definition of the Haskell type `Vehicle`.
+Using `ghci`, we can query for `:info Vehicle`:
+
+```
+>>> :i Vehicle
+type Vehicle = VehicleGeneric SqlBackend
+        -- Defined at .../Projects/persistent/persistent-test/src/SumTypeTest.hs:26:1
+
+>>> :i VehicleGeneric
+type role VehicleGeneric nominal
+data VehicleGeneric backend
+  = VehicleBicycleSum (Key (BicycleGeneric backend))
+  | VehicleCarSum (Key (CarGeneric backend))
+        -- Defined at .../persistent/persistent-test/src/SumTypeTest.hs:26:1
+-- lots of instances follow...
+```
+
+A `VehicleGeneric` has two constructors:
+
+- `VehicleBicycleSum` with a `Key (BicycleGeneric backend)` field
+- `VehicleCarSum` with a `Key (CarGeneric backend)` field
+
+The `Bicycle` and `Car` are typical `persistent` entities.
+
+This generates the following SQL migrations (formatted for readability):
+
+```sql
+CREATE TABLE "bicycle" (
+    "id"        INTEGER PRIMARY KEY,
+    "brand"     VARCHAR NOT NULL
+);
+
+CREATE TABLE "car"(
+    "id"        INTEGER PRIMARY KEY,
+    "make"      VARCHAR NOT NULL,
+    "model"     VARCHAR NOT NULL
+);
+
+CREATE TABLE "vehicle"(
+    "id"        INTEGER PRIMARY KEY,
+    "bicycle"   INTEGER NULL REFERENCES "bicycle",
+    "car"       INTEGER NULL REFERENCES "car"
+);
+```
+
+The `vehicle` table contains a nullable foreign key reference to both the bicycle and the car tables.
+
+A SQL query that grabs all the vehicles from the database looks like this (note the `??` is for the `persistent` raw SQL query functions):
+
+```sql
+SELECT ??, ??, ??
+FROM vehicle
+LEFT JOIN car
+    ON vehicle.car = car.id
+LEFT JOIN bicycle
+    ON vehicle.bicycle = bicycle.id
+```
+
+If we use the above query with `rawSql`, we'd get the following result:
+
+```haskell
+getVehicles 
+    :: SqlPersistM 
+        [ ( Entity Vehicle
+          , Maybe (Entity Bicycle)
+          , Maybe (Entity Car)
+          )
+        ]
+```
+
+This result has some post-conditions that are not guaranteed by the types *or* the schema.
+The constructor for `Entity Vehicle` is going to determine which of the other members of the tuple is `Nothing`.
+We can convert this to a friendlier domain model like this:
+
+```haskell
+data Vehicle'
+    = Car' Text Text
+    | Bike Text
+
+check = do
+    result <- getVehicles
+    pure (map convert result)
+
+convert 
+    :: (Entity Vehicle, Maybe (Entity Bicycle), Maybe (Entity Car))
+    -> Vehicle'
+convert (Entity _ (VehicycleBicycleSum _), Just (Entity _ (Bicycle brand)), _) =
+    Bike brand
+convert (Entity _ (VehicycleCarSum _), _, Just (Entity _ (Car make model))) =
+    Car make model
+convert _ =
+    error "The database preconditions have been violated!"
+```
+
+## Printing Migrations
+
+You can print migrations in GHCi with the following snippets:
+
+```haskell
+>>> :load SumTypeTest
+>>> import qualified Data.Text as Text
+>>> import Control.Monad.Logger (runStdoutLoggingT)
+>>> import Database.Persist.Sqlite
+>>> mapM_ Text.putStrLn =<< do runStdoutLoggingT $ runResourceT $ withSqliteConn ":memory:" (runSqlConn (showMigration sumTypeMigrate))
+```
 
 ## sqltype=
 

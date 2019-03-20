@@ -22,6 +22,7 @@ module Database.Persist.TH
     , persistUpperCase
     , persistLowerCase
     , persistFileWith
+    , persistManyFileWith
       -- * Turn @EntityDef@s into types
     , mkPersist
     , MkPersistSettings
@@ -63,6 +64,7 @@ import Data.Char (toLower, toUpper)
 import Control.Monad (forM, (<=<), mzero)
 import qualified System.IO as SIO
 import Data.Text (pack, Text, append, unpack, concat, uncons, cons, stripPrefix, stripSuffix)
+import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
 import qualified Data.Text.IO as TIO
 import Data.Int (Int64)
@@ -109,16 +111,67 @@ persistLowerCase :: QuasiQuoter
 persistLowerCase = persistWith lowerCaseSettings
 
 -- | Same as 'persistWith', but uses an external file instead of a
--- quasiquotation.
+-- quasiquotation. The recommended file extension is @.persistentmodels@.
 persistFileWith :: PersistSettings -> FilePath -> Q Exp
-persistFileWith ps fp = do
+persistFileWith ps fp = persistManyFileWith ps [fp]
+
+-- | Same as 'persistFileWith', but uses several external files instead of
+-- one. Splitting your Persistent definitions into multiple modules can 
+-- potentially dramatically speed up compile times.
+--
+-- The recommended file extension is @.persistentmodels@.
+--
+-- ==== __Examples__
+--
+-- Split your Persistent definitions into multiple files (@models1@, @models2@), 
+-- then create a new module for each new file and run 'mkPersist' there:
+--
+-- @
+-- -- Model1.hs
+-- 'share'
+--     ['mkPersist' 'sqlSettings']
+--     $('persistFileWith' 'lowerCaseSettings' "models1")
+-- @
+-- @
+-- -- Model2.hs
+-- 'share'
+--     ['mkPersist' 'sqlSettings']
+--     $('persistFileWith' 'lowerCaseSettings' "models2")
+-- @
+--
+-- Use 'persistManyFileWith' to create your migrations:
+--
+-- @
+-- -- Migrate.hs
+-- 'share'
+--     ['mkMigrate' "migrateAll"]
+--     $('persistManyFileWith' 'lowerCaseSettings' ["models1.persistentmodels","models2.persistentmodels"]) 
+-- @
+--
+-- Tip: To get the same import behavior as if you were declaring all your models in
+-- one file, import your new files @as Name@ into another file, then export @module Name@.
+--
+-- This approach may be used in the future to reduce memory usage during compilation, 
+-- but so far we've only seen mild reductions.
+--
+-- See <https://github.com/yesodweb/persistent/issues/778 persistent#778> and
+-- <https://github.com/yesodweb/persistent/pull/791 persistent#791> for more details.
+--
+-- @since 2.5.4
+persistManyFileWith :: PersistSettings -> [FilePath] -> Q Exp
+persistManyFileWith ps fps = do
 #ifdef GHC_7_4
-    qAddDependentFile fp
+    mapM_ qAddDependentFile fps
 #endif
-    h <- qRunIO $ SIO.openFile fp SIO.ReadMode
-    qRunIO $ SIO.hSetEncoding h SIO.utf8_bom
-    s <- qRunIO $ TIO.hGetContents h
+    ss <- mapM getS fps
+    let s = T.intercalate "\n" ss -- be tolerant of the user forgetting to put a line-break at EOF.
     parseReferences ps s
+  where
+    getS fp = do
+      h <- qRunIO $ SIO.openFile fp SIO.ReadMode
+      qRunIO $ SIO.hSetEncoding h SIO.utf8_bom
+      s <- qRunIO $ TIO.hGetContents h
+      return s
 
 -- calls parse to Quasi.parse individual entities in isolation
 -- afterwards, sets references to other entities
@@ -473,7 +526,16 @@ uniqueTypeDec mps t =
             Nothing
 #endif
             (map (mkUnique mps t) $ entityUniques t)
-            []
+            (derivClause $ entityUniques t)
+  where
+    derivClause [] = []
+#if MIN_VERSION_template_haskell(2,12,0)
+    derivClause _  = [DerivClause Nothing [ConT ''Show]]
+#elif MIN_VERSION_template_haskell(2,11,0)
+    derivClause _  = [ConT ''Show]
+#else
+    derivClause _  = [''Show]
+#endif
 
 mkUnique :: MkPersistSettings -> EntityDef -> UniqueDef -> Con
 mkUnique mps t (UniqueDef (HaskellName constr) _ fields attrs) =
@@ -613,9 +675,6 @@ isNotNull _ = True
 mapLeft :: (a -> c) -> Either a b -> Either c b
 mapLeft _ (Right r) = Right r
 mapLeft f (Left l)  = Left (f l)
-
-fieldError :: Text -> Text -> Text
-fieldError fieldName err = "Couldn't parse field `" `mappend` fieldName `mappend` "` from database results: " `mappend` err
 
 mkFromPersistValues :: MkPersistSettings -> EntityDef -> Q [Clause]
 mkFromPersistValues _ t@(EntityDef { entitySum = False }) =
@@ -920,37 +979,53 @@ headNote (x:[]) = x
 headNote xs = error $ "mkKeyFromValues: expected a list of one element, got: "
   `mappend` show xs
 
-
 fromValues :: EntityDef -> Text -> Exp -> [FieldDef] -> Q [Clause]
 fromValues t funName conE fields = do
-    x <- newName "x"
-    let funMsg = entityText t `mappend` ": " `mappend` funName `mappend` " failed on: "
-    patternMatchFailure <-
-      [|Left $ mappend funMsg (pack $ show $(return $ VarE x))|]
-    suc <- patternSuccess fields
-    return [ suc, normalClause [VarP x] patternMatchFailure ]
+  x <- newName "x"
+  let funMsg = entityText t `mappend` ": " `mappend` funName `mappend` " failed on: "
+  patternMatchFailure <- [|Left $ mappend funMsg (pack $ show $(return $ VarE x))|]
+  suc <- patternSuccess
+  return [ suc, normalClause [VarP x] patternMatchFailure ]
   where
-    patternSuccess [] = do
-      rightE <- [|Right|]
-      return $ normalClause [ListP []] (rightE `AppE` conE)
-    patternSuccess fieldsNE = do
-        x1 <- newName "x1"
-        restNames <- mapM (\i -> newName $ "x" `mappend` show i) [2..length fieldsNE]
-        (fpv1:mkPersistValues) <- mapM mkPvFromFd fieldsNE
-        app1E <- [|(<$>)|]
-        let conApp = infixFromPersistValue app1E fpv1 conE x1
-        applyE <- [|(A.<*>)|]
-        let applyFromPersistValue = infixFromPersistValue applyE
+    patternSuccess =
+      case fields of
+        [] -> do
+          rightE <- [|Right|]
+          return $ normalClause [ListP []] (rightE `AppE` conE)
+        _ -> do
+          x1 <- newName "x1"
+          restNames <- mapM (\i -> newName $ "x" `mappend` show i) [2..length fields]
+          (fpv1:mkPersistValues) <- mapM mkPersistValue fields
+          app1E <- [|(<$>)|]
+          let conApp = infixFromPersistValue app1E fpv1 conE x1
+          applyE <- [|(A.<*>)|]
+          let applyFromPersistValue = infixFromPersistValue applyE
 
-        return $ normalClause
-            [ListP $ map VarP (x1:restNames)]
-            (foldl' (\exp (name, fpv) -> applyFromPersistValue fpv exp name) conApp (zip restNames mkPersistValues))
-        where
-          infixFromPersistValue applyE fpv exp name =
-              UInfixE exp applyE (fpv `AppE` VarE name)
-          mkPvFromFd = mkPersistValue . unHaskellName . fieldHaskell
-          mkPersistValue fieldName = [|mapLeft (fieldError fieldName) . fromPersistValue|]
+          return $ normalClause
+              [ListP $ map VarP (x1:restNames)]
+              (foldl' (\exp (name, fpv) -> applyFromPersistValue fpv exp name) conApp (zip restNames mkPersistValues))
 
+    infixFromPersistValue applyE fpv exp name =
+      UInfixE exp applyE (fpv `AppE` VarE name)
+
+    mkPersistValue field =
+      [|mapLeft (fieldError t field) . fromPersistValue|]
+
+fieldError :: EntityDef -> FieldDef -> Text -> Text
+fieldError entity field err = mconcat
+  [ "Couldn't parse field `"
+  , fieldName
+  , "` from table `"
+  , tableName
+  , "`. "
+  , err
+  ]
+  where
+    fieldName =
+      unHaskellName (fieldHaskell field)
+
+    tableName =
+      unDBName (entityDB entity)
 
 mkEntity :: EntityMap -> MkPersistSettings -> EntityDef -> Q [Dec]
 mkEntity entMap mps t = do

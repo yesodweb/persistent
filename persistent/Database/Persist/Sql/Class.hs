@@ -211,6 +211,63 @@ to8 ((a,b),(c,d),(e,f),(g,h)) = (a,b,c,d,e,f,g,h)
 extractMaybe :: Maybe a -> a
 extractMaybe = fromMaybe (error "Database.Persist.GenericSql.extractMaybe")
 
+-- | Tells Persistent what database column type should be used to store a Haskell type.
+--
+-- ==== __Examples__
+--
+-- ===== Simple Boolean Alternative
+--
+-- @
+-- data Switch = On | Off
+--   deriving (Show, Eq)
+--
+-- instance 'PersistField' Switch where
+--   'toPersistValue' s = case s of
+--     On -> 'PersistBool' True
+--     Off -> 'PersistBool' False
+--   'fromPersistValue' ('PersistBool' b) = if b then 'Right' On else 'Right' Off
+--   'fromPersistValue' x = Left $ "File.hs: When trying to deserialize a Switch: expected PersistBool, received: " <> T.pack (show x)
+--
+-- instance 'PersistFieldSql' Switch where
+--   'sqlType' _ = 'SqlBool'
+-- @
+--
+-- ===== Non-Standard Database Types
+--
+-- If your database supports non-standard types, such as Postgres' @uuid@, you can use 'SqlOther' to use them:
+--
+-- @
+-- import qualified Data.UUID as UUID
+-- instance 'PersistField' UUID where
+--   'toPersistValue' = 'PersistDbSpecific' . toASCIIBytes
+--   'fromPersistValue' ('PersistDbSpecific' uuid) =
+--     case fromASCIIBytes uuid of
+--       'Nothing' -> 'Left' $ "Model/CustomTypes.hs: Failed to deserialize a UUID; received: " <> T.pack (show uuid)
+--       'Just' uuid' -> 'Right' uuid'
+--   'fromPersistValue' x = Left $ "File.hs: When trying to deserialize a UUID: expected PersistDbSpecific, received: "-- >  <> T.pack (show x)
+--
+-- instance 'PersistFieldSql' UUID where
+--   'sqlType' _ = 'SqlOther' "uuid"
+-- @
+--
+-- ===== User Created Database Types
+--
+-- Similarly, some databases support creating custom types, e.g. Postgres' <https://www.postgresql.org/docs/current/static/sql-createdomain.html DOMAIN> and <https://www.postgresql.org/docs/current/static/datatype-enum.html ENUM> features. You can use 'SqlOther' to specify a custom type:
+--
+-- > CREATE DOMAIN ssn AS text
+-- >       CHECK ( value ~ '^[0-9]{9}$');
+--
+-- @
+-- instance 'PersistFieldSQL' SSN where
+--   'sqlType' _ = 'SqlOther' "ssn"
+-- @
+--
+-- > CREATE TYPE rainbow_color AS ENUM ('red', 'orange', 'yellow', 'green', 'blue', 'indigo', 'violet');
+--
+-- @
+-- instance 'PersistFieldSQL' RainbowColor where
+--   'sqlType' _ = 'SqlOther' "rainbow_color"
+-- @
 class PersistField a => PersistFieldSql a where
     sqlType :: Proxy a -> SqlType
 

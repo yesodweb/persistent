@@ -10,12 +10,13 @@ module Database.Persist.Sql
     , rawExecute
     , rawExecuteCount
     , rawSql
-    , sqlQQ
-    , executeQQ
     , deleteWhereCount
     , updateWhereCount
     , transactionSave
+    , transactionSaveWithIsolation
     , transactionUndo
+    , transactionUndoWithIsolation
+    , IsolationLevel (..)
     , getStmtConn
       -- * Internal
     , module Database.Persist.Sql.Internal
@@ -24,10 +25,10 @@ module Database.Persist.Sql
 
 import Database.Persist
 import Database.Persist.Sql.Types
+import Database.Persist.Sql.Types.Internal (IsolationLevel (..))
 import Database.Persist.Sql.Class
 import Database.Persist.Sql.Run hiding (withResourceTimeout)
 import Database.Persist.Sql.Raw
-import Database.Persist.Sql.Raw.QQ
 import Database.Persist.Sql.Migration
 import Database.Persist.Sql.Internal
 
@@ -44,7 +45,16 @@ transactionSave :: MonadIO m => ReaderT SqlBackend m ()
 transactionSave = do
     conn <- ask
     let getter = getStmtConn conn
-    liftIO $ connCommit conn getter >> connBegin conn getter
+    liftIO $ connCommit conn getter >> connBegin conn getter Nothing
+
+-- | Commit the current transaction and begin a new one with the specified isolation level.
+--
+-- @since 2.9.0
+transactionSaveWithIsolation :: MonadIO m => IsolationLevel -> ReaderT SqlBackend m ()
+transactionSaveWithIsolation isolation = do
+    conn <- ask
+    let getter = getStmtConn conn
+    liftIO $ connCommit conn getter >> connBegin conn getter (Just isolation)
 
 -- | Roll back the current transaction and begin a new one.
 --
@@ -53,4 +63,13 @@ transactionUndo :: MonadIO m => ReaderT SqlBackend m ()
 transactionUndo = do
     conn <- ask
     let getter = getStmtConn conn
-    liftIO $ connRollback conn getter >> connBegin conn getter
+    liftIO $ connRollback conn getter >> connBegin conn getter Nothing
+
+-- | Roll back the current transaction and begin a new one with the specified isolation level.
+--
+-- @since 2.9.0
+transactionUndoWithIsolation :: MonadIO m => IsolationLevel -> ReaderT SqlBackend m ()
+transactionUndoWithIsolation isolation = do
+    conn <- ask
+    let getter = getStmtConn conn
+    liftIO $ connRollback conn getter >> connBegin conn getter (Just isolation)

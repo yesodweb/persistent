@@ -1,5 +1,5 @@
 name:            persistent
-version:         2.8.1
+version:         2.9.1
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -33,7 +33,7 @@ library
                    , resourcet                >= 1.1.10
                    , resource-pool            >= 0.2.2.0
                    , path-pieces              >= 0.1
-                   , http-api-data            >= 0.2       && < 0.4
+                   , http-api-data            >= 0.2
                    , aeson                    >= 0.5
                    , monad-logger             >= 0.3.28
                    , base64-bytestring
@@ -41,7 +41,6 @@ library
                    , vector
                    , attoparsec
                    , template-haskell
-                   , haskell-src-meta
                    , blaze-html               >= 0.5
                    , blaze-markup             >= 0.5.1
                    , silently
@@ -74,7 +73,6 @@ library
                      Database.Persist.Sql.Internal
                      Database.Persist.Sql.Types
                      Database.Persist.Sql.Raw
-                     Database.Persist.Sql.Raw.QQ
                      Database.Persist.Sql.Run
                      Database.Persist.Sql.Class
                      Database.Persist.Sql.Orphan.PersistQuery
@@ -100,7 +98,7 @@ test-suite test
                    , attoparsec
                    , transformers
                    , path-pieces
-                   , http-api-data            >= 0.2       && < 0.4
+                   , http-api-data
                    , aeson
                    , resourcet
                    , monad-logger

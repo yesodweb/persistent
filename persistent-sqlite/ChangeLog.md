@@ -1,3 +1,23 @@
+# Changelog for persistent-sqlite
+
+## 2.9.2
+
+* Add enableExtendedResultCodes and disableExtendedResultCodes functions
+
+## 2.9.1
+
+* Bump vendored SQLite library to [3.26.0](https://www.sqlite.org/releaselog/3_26_0.html) to address [RCE bug: `magellan`](https://blade.tencent.com/magellan/index_en.html).
+
+## 2.9.0
+
+* Added support for SQL isolation levels to via SqlBackend. [#812] SQLite technically only supports Serializable.
+* Update the vendored SQLite C library from 3.22.0 to 3.25.2. See [the SQLite changelog](https://sqlite.org/changes.html) for details.
+* Fix [832](https://github.com/yesodweb/persistent/issues/832): `repsertMany` now matches `mapM_ (uncurry repsert)` and is atomic.
+
+## 2.8.2
+
+* Add the `extraPragmas` setting
+
 ## 2.8.1.2
 
 * Add flag to enable full-text search extensions (enabled by default)

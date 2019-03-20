@@ -10,7 +10,6 @@ module Database.Persist.Sql.Orphan.PersistUnique
 
 import Control.Exception (throwIO)
 import Control.Monad.IO.Class (liftIO, MonadIO)
-import Control.Monad.Trans.Reader (ReaderT)
 import Database.Persist
 import Database.Persist.Class.PersistUnique (defaultPutMany, persistUniqueKeyValues)
 import Database.Persist.Sql.Types
@@ -20,7 +19,7 @@ import Database.Persist.Sql.Util (dbColumns, parseEntityValues, updatePersistVal
 import qualified Data.Text as T
 import Data.Monoid (mappend)
 import qualified Data.Conduit.List as CL
-import Control.Monad.Trans.Reader (ask, withReaderT)
+import Control.Monad.Trans.Reader (ask, withReaderT, ReaderT)
 import Data.List (nubBy)
 import Data.Function (on)
 
@@ -47,14 +46,16 @@ instance PersistUniqueWrite SqlBackend where
                             _:_ -> do
                                 let upds = T.intercalate "," $ map mkUpdateText updates
                                     sql = upsertSql t upds
-                                    vals = (map toPersistValue $ toPersistFields record) ++ (map updatePersistValue updates) ++ (unqs uniqueKey)
+                                    vals = map toPersistValue (toPersistFields record)
+                                        ++ map updatePersistValue updates
+                                        ++ unqs uniqueKey
 
                                 x <- rawSql sql vals
                                 return $ head x
         Nothing -> defaultUpsert record updates
         where
           t = entityDef $ Just record
-          unqs uniqueKey = concat $ map (persistUniqueToValues) [uniqueKey]
+          unqs uniqueKey = concatMap persistUniqueToValues [uniqueKey]
 
     deleteBy uniq = do
         conn <- ask
@@ -74,14 +75,20 @@ instance PersistUniqueWrite SqlBackend where
 
     putMany [] = return ()
     putMany rsD = do
-        conn <- ask
-        let rs = nubBy ((==) `on` persistUniqueKeyValues) (reverse rsD)
-        let ent = entityDef rs
-        let nr  = length rs
-        let toVals r = (map toPersistValue $ toPersistFields r)
-        case connPutManySql conn of
-            (Just mkSql) -> rawExecute (mkSql ent nr) (concat (map toVals rs))
-            Nothing -> defaultPutMany rs
+        let uKeys = persistUniqueKeys . head $ rsD
+        case uKeys of
+            [] -> insertMany_ rsD
+            _ -> go
+        where
+          go = do
+            let rs = nubBy ((==) `on` persistUniqueKeyValues) (reverse rsD)
+            let ent = entityDef rs
+            let nr  = length rs
+            let toVals r = map toPersistValue $ toPersistFields r
+            conn <- ask
+            case connPutManySql conn of
+                (Just mkSql) -> rawExecute (mkSql ent nr) (concatMap toVals rs)
+                Nothing -> defaultPutMany rs
 
 instance PersistUniqueWrite SqlWriteBackend where
     deleteBy uniq = withReaderT persistBackend $ deleteBy uniq

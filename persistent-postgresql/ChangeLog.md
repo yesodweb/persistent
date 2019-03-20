@@ -1,3 +1,10 @@
+# Changelog for persistent-postgresql
+
+## 2.9.0
+
+* Added support for SQL isolation levels to via SqlBackend. [#812]
+* Fix [832](https://github.com/yesodweb/persistent/issues/832): `repsertMany` now matches `mapM_ (uncurry repsert)` and is atomic.
+
 ## 2.8.2
 
 Added module `Database.Persist.Postgres.JSON` [#793](https://github.com/yesodweb/persistent/pull/793)

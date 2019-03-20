@@ -1,3 +1,10 @@
+# Changelog for persistent-mysql
+
+## 2.9.0
+
+* Added support for SQL isolation levels to via SqlBackend. [#812]
+* Fix [832](https://github.com/yesodweb/persistent/issues/832): `repsertMany` now matches `mapM_ (uncurry repsert)` and is atomic.
+
 ## 2.8.1
 
 * Implemented `connPutManySql` to utilize batched `putMany`. [#770](https://github.com/yesodweb/persistent/pull/770)

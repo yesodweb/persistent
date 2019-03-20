@@ -1,3 +1,11 @@
+## 2.6.0
+* [persistent#846](https://github.com/yesodweb/persistent/pull/846): Improve error message when marshalling fails
+* [persistent#826](https://github.com/yesodweb/persistent/pull/826): Change `Unique` derive `Show`
+
+## 2.5.4
+
+* [persistent#778](https://github.com/yesodweb/persistent/issues/778): Add `persistManyFileWith`.
+
 ## 2.5.3.1
 
 * Slight improvement to the error message when a Persistent field can't be parsed from database results
