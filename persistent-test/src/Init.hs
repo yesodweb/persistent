@@ -32,7 +32,6 @@ module Init (
   , generateKey
 
    -- re-exports
-  , (A.<$>), (A.<*>)
   , module Database.Persist
   , module Database.Persist.Sql.Raw.QQ
   , module Test.Hspec
@@ -246,7 +245,7 @@ runConn f = do
     _ <- if travis
       then withPostgresqlPool "host=localhost port=5432 user=postgres dbname=persistent" 1 $ runSqlPool f
       else do
-        host <- fromMaybe "localhost" A.<$> liftIO dockerPg
+        host <- fromMaybe "localhost" <$> liftIO dockerPg
         withPostgresqlPool ("host=" <> host <> " port=5432 user=postgres dbname=test") 1 $ runSqlPool f
 #  else
 #    ifdef WITH_MYSQL

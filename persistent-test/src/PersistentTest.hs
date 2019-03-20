@@ -16,6 +16,7 @@
 {-# LANGUAGE TypeFamilies #-}
 module PersistentTest where
 
+import Control.Monad.Fail (MonadFail)
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Resource (runResourceT)
 import Data.Aeson
@@ -182,7 +183,7 @@ db :: Action IO () -> Assertion
 db = db' cleanDB
 #endif
 
-catchPersistException :: MonadUnliftIO m => m a -> b -> m b
+catchPersistException :: (MonadUnliftIO m, MonadFail m) => m a -> b -> m b
 catchPersistException action errValue = do
     Left res <-
       (Right `fmap` action) `catch`
@@ -734,13 +735,13 @@ specs = describe "persistent" $ do
           p3 = Person "selectSource3" 3 Nothing
       [k1,k2,k3] <- insertMany [p1, p2, p3]
 
-      ps1 <- runResourceT $ selectSource [] [Desc PersonAge] $$ await
+      ps1 <- runResourceT $ runConduit $ selectSource [] [Desc PersonAge] .| await
       ps1 @== Just (Entity k3 p3)
 
-      ps2 <- runResourceT $ selectSource [PersonAge <. 3] [Asc PersonAge] $$ CL.consume
+      ps2 <- runResourceT $ runConduit $ selectSource [PersonAge <. 3] [Asc PersonAge] .| CL.consume
       ps2 @== [Entity k1 p1, Entity k2 p2]
 
-      runResourceT $ selectSource [] [Desc PersonAge] $$ do
+      runResourceT $ runConduit $ selectSource [] [Desc PersonAge] .| do
           e1 <- await
           e1 @== Just (Entity k3 p3)
 
@@ -768,13 +769,13 @@ specs = describe "persistent" $ do
           p3 = Person "selectKeys3" 3 Nothing
       [k1,k2,k3] <- insertMany [p1, p2, p3]
 
-      ps1 <- runResourceT $ selectKeys [] [Desc PersonAge] $$ await
+      ps1 <- runResourceT $ runConduit $ selectKeys [] [Desc PersonAge] .| await
       ps1 @== Just k3
 
-      ps2 <- runResourceT $ selectKeys [PersonAge <. 3] [Asc PersonAge] $$ CL.consume
+      ps2 <- runResourceT $ runConduit $ selectKeys [PersonAge <. 3] [Asc PersonAge] .| CL.consume
       ps2 @== [k1, k2]
 
-      runResourceT $ selectKeys [] [Desc PersonAge] $$ do
+      runResourceT $ runConduit $ selectKeys [] [Desc PersonAge] .| do
           e1 <- await
           e1 @== Just k3
 
@@ -1267,7 +1268,11 @@ caseCommitRollback = db $ do
 #endif
 
 -- Test proper polymorphism
-_polymorphic :: (MonadIO m, PersistQuery backend, BaseBackend backend ~ PersistEntityBackend Pet) => ReaderT backend m ()
+_polymorphic :: ( MonadIO m
+                , MonadFail m
+                , PersistQuery backend
+                , BaseBackend backend ~ PersistEntityBackend Pet
+                ) => ReaderT backend m ()
 _polymorphic = do
     ((Entity id' _):_) <- selectList [] [LimitTo 1]
     _ <- selectList [PetOwnerId ==. id'] []
