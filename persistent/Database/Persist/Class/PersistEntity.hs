@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
@@ -12,6 +13,7 @@ module Database.Persist.Class.PersistEntity
     , BackendSpecificUpdate
     , SelectOpt (..)
     , Filter (..)
+    , FilterValue (..)
     , BackendSpecificFilter
     , Entity (..)
 
@@ -134,13 +136,19 @@ type family BackendSpecificFilter backend record
 -- Persistent users use combinators to create these.
 data Filter record = forall typ. PersistField typ => Filter
     { filterField  :: EntityField record typ
-    , filterValue  :: Either typ [typ] -- FIXME
+    , filterValue  :: FilterValue typ
     , filterFilter :: PersistFilter -- FIXME
     }
     | FilterAnd [Filter record] -- ^ convenient for internal use, not needed for the API
     | FilterOr  [Filter record]
     | BackendFilter
           (BackendSpecificFilter (PersistEntityBackend record) record)
+
+-- | Value to filter with. Highly dependant on the type of filter used.
+data FilterValue typ where
+  FilterValue  :: typ -> FilterValue typ
+  FilterValues :: [typ] -> FilterValue typ
+  UnsafeValue  :: forall a typ. PersistField a => a -> FilterValue typ
 
 -- | Datatype that represents an entity, with both its 'Key' and
 -- its Haskell record representation.
