@@ -146,7 +146,7 @@ jsonFilter op field a = Filter field (UnsafeValue a) $ BackendSpecificFilter op
 -- | This operator takes a column and a string to find a
 -- top-level key/field in an object.
 --
--- @column ?. field@
+-- @column ?. string@
 --
 -- N.B. This operator might have some unexpected interactions
 -- with non-object values. Please reference the examples.
@@ -192,6 +192,57 @@ jsonFilter op field a = Filter field (UnsafeValue a) $ BackendSpecificFilter op
 (?.) :: EntityField record Value -> Text -> Filter record
 (?.) = jsonFilter " ?? "
 
+-- | This operator takes a column and a list of strings to
+-- test whether ANY of the elements of the list are top
+-- level fields in an object.
+--
+-- @column ?|. list@
+--
+-- /N.B. An empty list will never match anything. Also, this
+-- operator might have some unexpected interactions with
+-- non-object values. Please reference the examples./
+--
+-- === __Objects__
+--
+-- @
+-- {"a":null}                 ?| ["a","b","c"] == True
+-- {"test":false,"a":500}     ?| ["a","b","c"] == True
+-- {}                         ?| ["a","{}"]    == False
+-- {"b":{"a":[]}}             ?| ["a","c"]     == False
+-- {"b":{"a":[]},"test":null} ?| []            == False
+-- @
+--
+-- === __Arrays__
+--
+-- This operator will match an array if any of the elements
+-- of the list are matching string elements of the array.
+--
+-- @
+-- ["a"]              ?| ["a","b","c"] == True
+-- [["a"]]            ?| ["a","b","c"] == False
+-- [9,false,"1",null] ?| ["a","false"] == False
+-- []                 ?| ["a","b","c"] == False
+-- []                 ?| []            == False
+-- [{"a":true}]       ?| ["a","b","c"] == False
+-- [null,4,"b",[]]    ?| ["a","b","c"] == True
+-- @
+--
+-- === __Other values__
+--
+-- This operator functions much like an equivalence operator
+-- on strings only. If a string matches with any element of
+-- the given list, the comparison matches.
+--
+-- @
+-- "a"  ?| ["a","b","c"] == True
+-- "1"  ?| ["a","b","1"] == True
+-- "ab" ?| ["a","b","c"] == False
+-- 1    ?| ["a","1"]     == False
+-- null ?| ["a","null"]  == False
+-- true ?| ["a","true"]  == False
+-- @
+--
+-- @since 2.10.0
 (?|.) :: EntityField record Value -> [Text] -> Filter record
 (?|.) = jsonFilter " ??| "
 
