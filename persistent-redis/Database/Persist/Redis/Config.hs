@@ -89,14 +89,14 @@ instance PersistConfig RedisConf where
 
     loadConfig _ = mzero
 
-    createPoolConfig (RedisConf h p Nothing m) = 
+    createPoolConfig (RedisConf h p Nothing m) =
         R.connect $
         R.defaultConnectInfo {
             R.connectHost = unpack h,
             R.connectPort = p,
             R.connectMaxConnections = m
         }
-    createPoolConfig (RedisConf h p (Just (RedisAuth pwd)) m) = 
+    createPoolConfig (RedisConf h p (Just (RedisAuth pwd)) m) =
         R.connect $
         R.defaultConnectInfo {
             R.connectHost = unpack h,

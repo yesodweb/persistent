@@ -434,6 +434,7 @@ instance PGTF.ToField P where
     toField (P (PersistList l))        = PGTF.toField $ listToJSON l
     toField (P (PersistMap m))         = PGTF.toField $ mapToJSON m
     toField (P (PersistDbSpecific s))  = PGTF.toField (Unknown s)
+    toField (P (PersistArray a))       = PGTF.toField $ PG.PGArray $ P <$> a
     toField (P (PersistObjectId _))    =
         error "Refusing to serialize a PersistObjectId to a PostgreSQL value"
 
