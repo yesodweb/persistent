@@ -14,7 +14,8 @@ module Database.Persist.Postgresql.JSON
 import Data.Aeson (FromJSON, ToJSON, Value, encode, eitherDecodeStrict)
 import qualified Data.ByteString.Lazy as BSL
 import Data.Proxy (Proxy)
-import Data.Text as T (Text, pack, concat)
+import Data.Text (Text)
+import qualified Data.Text as T
 import Data.Text.Encoding as TE (encodeUtf8)
 
 import Database.Persist (EntityField, Filter(..), PersistValue(..), PersistField(..), PersistFilter(..))
@@ -140,9 +141,6 @@ infix 4 @>., <@.
 (<@.) :: EntityField record Value -> Value -> Filter record
 (<@.) field val = Filter field (FilterValue val) $ BackendSpecificFilter " <@ "
 
-jsonFilter :: PersistField a => Text -> EntityField record Value -> a -> Filter record
-jsonFilter op field a = Filter field (UnsafeValue a) $ BackendSpecificFilter op
-
 -- | This operator takes a column and a string to find a
 -- top-level key/field in an object.
 --
@@ -154,10 +152,13 @@ jsonFilter op field a = Filter field (UnsafeValue a) $ BackendSpecificFilter op
 -- === __Objects__
 --
 -- @
--- {"a":null}             ? "a" == True
--- {"test":false,"a":500} ? "a" == True
--- {}                     ? "a" == False
--- {"b":{"a":[]}}         ? "a" == False
+-- {"a":null}             ? "a"  == True
+-- {"test":false,"a":500} ? "a"  == True
+-- {"b":{"a":[]}}         ? "a"  == False
+-- {}                     ? "a"  == False
+-- {}                     ? "{}" == False
+-- {}                     ? ""   == False
+-- {"":9001}              ? ""   == True
 -- @
 --
 -- === __Arrays__
@@ -198,7 +199,7 @@ jsonFilter op field a = Filter field (UnsafeValue a) $ BackendSpecificFilter op
 --
 -- @column ?|. list@
 --
--- /N.B. An empty list will never match anything. Also, this
+-- /N.B. An empty list __will never match anything__. Also, this
 -- operator might have some unexpected interactions with
 -- non-object values. Please reference the examples./
 --
@@ -214,7 +215,7 @@ jsonFilter op field a = Filter field (UnsafeValue a) $ BackendSpecificFilter op
 --
 -- === __Arrays__
 --
--- This operator will match an array if any of the elements
+-- This operator will match an array if __any__ of the elements
 -- of the list are matching string elements of the array.
 --
 -- @
@@ -230,8 +231,8 @@ jsonFilter op field a = Filter field (UnsafeValue a) $ BackendSpecificFilter op
 -- === __Other values__
 --
 -- This operator functions much like an equivalence operator
--- on strings only. If a string matches with any element of
--- the given list, the comparison matches.
+-- on strings only. If a string matches with __any__ element of
+-- the given list, the comparison matches. No other values match.
 --
 -- @
 -- "a"  ?| ["a","b","c"] == True
@@ -244,10 +245,74 @@ jsonFilter op field a = Filter field (UnsafeValue a) $ BackendSpecificFilter op
 --
 -- @since 2.10.0
 (?|.) :: EntityField record Value -> [Text] -> Filter record
-(?|.) = jsonFilter " ??| "
+(?|.) field = jsonFilter " ??| " field . PostgresArray
 
+-- | This operator takes a column and a list of strings to
+-- test whether ALL of the elements of the list are top
+-- level fields in an object.
+--
+-- @column ?&. list@
+--
+-- /N.B. An empty list __will match anything__. Also, this
+-- operator might have some unexpected interactions with
+-- non-object values. Please reference the examples./
+--
+-- === __Objects__
+--
+-- @
+-- {"a":null}                 ?& ["a"]         == True
+-- {"test":false,"a":500}     ?& ["a"]         == True
+-- {"test":false,"a":500}     ?& ["a","b"]     == False
+-- {}                         ?& ["{}"]        == False
+-- {"b":{"a":[]}}             ?& ["a"]         == False
+-- {"b":{"a":[]},"c":false}   ?& ["a","c"]     == False
+-- {"a":1,"b":2,"c":3,"d":4}  ?& ["b","d"]     == True
+-- {}                         ?& []            == True
+-- {"b":{"a":[]},"test":null} ?& []            == True
+-- @
+--
+-- === __Arrays__
+--
+-- This operator will match an array if __all__ of the elements
+-- of the list are matching string elements of the array.
+--
+-- @
+-- ["a"]                   ?& ["a"]         == True
+-- [["a"]]                 ?& ["a"]         == False
+-- ["a","b","c"]           ?& ["a","b","d"] == False
+-- [9,"false","1",null]    ?& ["1","false"] == True
+-- []                      ?& ["a","b"]     == False
+-- [{"a":true}]            ?& ["a"]         == False
+-- ["a","b","c","d"]       ?& ["b","c","d"] == True
+-- [null,4,{"test":false}] ?& []            == True
+-- []                      ?& []            == True
+-- @
+--
+-- === __Other values__
+--
+-- This operator functions much like an equivalence operator
+-- on strings only. If a string matches with any element of
+-- the given list, the comparison matches.
+--
+-- @
+-- "a"   ?& ["a"]     == True
+-- "1"   ?& ["a","1"] == False
+-- "ab"  ?& ["a","b"] == False
+-- 1     ?& ["1"]     == False
+-- null  ?& ["null"]  == False
+-- true  ?& ["true"]  == False
+-- 31337 ?& []        == True
+-- true  ?& []        == True
+-- null  ?& []        == True
+-- @
+--
+-- @since 2.10.0
 (?&.) :: EntityField record Value -> [Text] -> Filter record
-(?&.) = jsonFilter " ??& "
+(?&.) field = jsonFilter " ??& " field . PostgresArray
+
+jsonFilter :: PersistField a => Text -> EntityField record Value -> a -> Filter record
+jsonFilter op field a = Filter field (UnsafeValue a) $ BackendSpecificFilter op
+
 
 -----------------
 -- AESON VALUE --
@@ -309,3 +374,10 @@ fromPersistValueParseError haskellType received err = T.concat
     , " | with error: "
     , err
     ]
+
+newtype PostgresArray a = PostgresArray [a]
+
+instance PersistField a => PersistField (PostgresArray a) where
+  toPersistValue (PostgresArray ts) = PersistArray $ toPersistValue <$> ts
+  fromPersistValue (PersistArray as) = PostgresArray <$> traverse fromPersistValue as
+  fromPersistValue wat = Left $ fromPersistValueError "PostgresArray" "array" wat
