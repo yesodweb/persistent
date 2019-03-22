@@ -23,7 +23,7 @@ import Database.Persist.Sql (PersistFieldSql(..), SqlType(..))
 import Database.Persist.Types (FilterValue(..))
 
 
-infix 4 @>., <@.
+infix 4 @>., <@., ?., ?|., ?&.
 
 -- | This operator checks inclusion of the JSON value
 -- on the right hand side in the JSON value on the left
