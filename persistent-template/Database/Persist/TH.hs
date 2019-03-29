@@ -116,14 +116,14 @@ persistFileWith :: PersistSettings -> FilePath -> Q Exp
 persistFileWith ps fp = persistManyFileWith ps [fp]
 
 -- | Same as 'persistFileWith', but uses several external files instead of
--- one. Splitting your Persistent definitions into multiple modules can 
+-- one. Splitting your Persistent definitions into multiple modules can
 -- potentially dramatically speed up compile times.
 --
 -- The recommended file extension is @.persistentmodels@.
 --
 -- ==== __Examples__
 --
--- Split your Persistent definitions into multiple files (@models1@, @models2@), 
+-- Split your Persistent definitions into multiple files (@models1@, @models2@),
 -- then create a new module for each new file and run 'mkPersist' there:
 --
 -- @
@@ -145,13 +145,13 @@ persistFileWith ps fp = persistManyFileWith ps [fp]
 -- -- Migrate.hs
 -- 'share'
 --     ['mkMigrate' "migrateAll"]
---     $('persistManyFileWith' 'lowerCaseSettings' ["models1.persistentmodels","models2.persistentmodels"]) 
+--     $('persistManyFileWith' 'lowerCaseSettings' ["models1.persistentmodels","models2.persistentmodels"])
 -- @
 --
 -- Tip: To get the same import behavior as if you were declaring all your models in
 -- one file, import your new files @as Name@ into another file, then export @module Name@.
 --
--- This approach may be used in the future to reduce memory usage during compilation, 
+-- This approach may be used in the future to reduce memory usage during compilation,
 -- but so far we've only seen mild reductions.
 --
 -- See <https://github.com/yesodweb/persistent/issues/778 persistent#778> and
@@ -256,7 +256,7 @@ instance Lift FieldsSqlTypeExp where
 data FieldSqlTypeExp = FieldSqlTypeExp FieldDef SqlTypeExp
 instance Lift FieldSqlTypeExp where
     lift (FieldSqlTypeExp (FieldDef{..}) sqlTypeExp) =
-      [|FieldDef fieldHaskell fieldDB fieldType $(lift sqlTypeExp) fieldAttrs fieldStrict fieldReference|]
+      [|FieldDef fieldHaskell fieldDB fieldType $(lift sqlTypeExp) fieldAttrs fieldStrict fieldReference fieldComments|]
 
 instance Lift EntityDefSqlTypeExp where
     lift (EntityDefSqlTypeExp ent sqlTypeExp sqlTypeExps) =
@@ -1475,11 +1475,12 @@ liftAndFixKeys entMap EntityDef{..} =
       entityDerives
       entityExtra
       entitySum
+      entityComments
    |]
 
 liftAndFixKey :: EntityMap -> FieldDef -> Q Exp
-liftAndFixKey entMap (FieldDef a b c sqlTyp e f fieldRef) =
-  [|FieldDef a b c $(sqlTyp') e f fieldRef'|]
+liftAndFixKey entMap (FieldDef a b c sqlTyp e f fieldRef mcomments) =
+  [|FieldDef a b c $(sqlTyp') e f fieldRef' mcomments|]
   where
     (fieldRef', sqlTyp') = fromMaybe (fieldRef, lift sqlTyp) $
       case fieldRef of
@@ -1504,9 +1505,10 @@ instance Lift EntityDef where
             entityDerives
             entityExtra
             entitySum
+            entityComments
             |]
 instance Lift FieldDef where
-    lift (FieldDef a b c d e f g) = [|FieldDef a b c d e f g|]
+    lift (FieldDef a b c d e f g h) = [|FieldDef a b c d e f g h|]
 instance Lift UniqueDef where
     lift (UniqueDef a b c d) = [|UniqueDef a b c d|]
 instance Lift CompositeDef where

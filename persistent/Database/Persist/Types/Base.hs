@@ -123,6 +123,7 @@ data EntityDef = EntityDef
     , entityDerives :: ![Text]
     , entityExtra   :: !(Map Text [ExtraLine])
     , entitySum     :: !Bool
+    , entityComments :: !(Maybe Text)
     }
     deriving (Show, Eq, Read, Ord)
 
@@ -167,6 +168,7 @@ data FieldDef = FieldDef
     , fieldAttrs     :: ![Attr]    -- ^ user annotations for a field
     , fieldStrict    :: !Bool      -- ^ a strict field in the data type. Default: true
     , fieldReference :: !ReferenceDef
+    , fieldComments  :: !(Maybe Text)
     }
     deriving (Show, Eq, Read, Ord)
 
@@ -237,7 +239,7 @@ toEmbedEntityDef ent = embDef
 -- (DBName (packPTH "unique_age")) [(HaskellName (packPTH "age"), DBName (packPTH "age"))] []
 --
 data UniqueDef = UniqueDef
-    { uniqueHaskell :: !HaskellName 
+    { uniqueHaskell :: !HaskellName
     , uniqueDBName  :: !DBName
     , uniqueFields  :: ![(HaskellName, DBName)]
     , uniqueAttrs   :: ![Attr]
