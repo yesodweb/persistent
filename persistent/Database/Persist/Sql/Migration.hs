@@ -10,6 +10,11 @@ module Database.Persist.Sql.Migration
   , runMigrationSilent
   , runMigrationUnsafe
   , migrate
+  -- * Utilities for constructing migrations
+  , reportErrors
+  , reportError
+  , addMigrations
+  , addMigration
   ) where
 
 
@@ -140,4 +145,37 @@ migrate :: [EntityDef]
 migrate allDefs val = do
     conn <- lift $ lift ask
     res <- liftIO $ connMigrateSql conn allDefs (getStmtConn conn) val
-    either tell (lift . tell) res
+    either reportErrors addMigrations res
+
+-- | Report a single error in a 'Migration'.
+--
+-- @since 2.9.2
+reportError :: Text -> Migration
+reportError = tell . pure
+
+-- | Report multiple errors in a 'Migration'.
+--
+-- @since 2.9.2
+reportErrors :: [Text] -> Migration
+reportErrors = tell
+
+-- | Add a migration to the migration plan.
+--
+-- @since 2.9.2
+addMigration
+    :: Bool
+    -- ^ Is the migration safe to run? (eg a non-destructive and idempotent
+    -- update on the schema)
+    -> Sql
+    -- ^ A 'Text' value representing the command to run on the database.
+    -> Migration
+addMigration isSafe sql = lift (tell [(isSafe, sql)])
+
+-- | Add a 'CautiousMigration' (aka a @[('Bool', 'Text')]@) to the
+-- migration plan.
+--
+-- @since 2.9.2
+addMigrations
+    :: CautiousMigration
+    -> Migration
+addMigrations = lift . tell
