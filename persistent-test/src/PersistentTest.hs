@@ -741,13 +741,13 @@ specs = describe "persistent" $ do
           p3 = Person "selectSource3" 3 Nothing
       [k1,k2,k3] <- insertMany [p1, p2, p3]
 
-      ps1 <- runResourceT $ selectSource [] [Desc PersonAge] $$ await
+      ps1 <- runConduitRes $ selectSource [] [Desc PersonAge] .| await
       ps1 @== Just (Entity k3 p3)
 
-      ps2 <- runResourceT $ selectSource [PersonAge <. 3] [Asc PersonAge] $$ CL.consume
+      ps2 <- runConduitRes $ selectSource [PersonAge <. 3] [Asc PersonAge] .| CL.consume
       ps2 @== [Entity k1 p1, Entity k2 p2]
 
-      runResourceT $ selectSource [] [Desc PersonAge] $$ do
+      runConduitRes $ selectSource [] [Desc PersonAge] .| do
           e1 <- await
           e1 @== Just (Entity k3 p3)
 
@@ -775,13 +775,13 @@ specs = describe "persistent" $ do
           p3 = Person "selectKeys3" 3 Nothing
       [k1,k2,k3] <- insertMany [p1, p2, p3]
 
-      ps1 <- runResourceT $ selectKeys [] [Desc PersonAge] $$ await
+      ps1 <- runConduitRes $ selectKeys [] [Desc PersonAge] .| await
       ps1 @== Just k3
 
-      ps2 <- runResourceT $ selectKeys [PersonAge <. 3] [Asc PersonAge] $$ CL.consume
+      ps2 <- runConduitRes $ selectKeys [PersonAge <. 3] [Asc PersonAge] .| CL.consume
       ps2 @== [k1, k2]
 
-      runResourceT $ selectKeys [] [Desc PersonAge] $$ do
+      runConduitRes $ selectKeys [] [Desc PersonAge] .| do
           e1 <- await
           e1 @== Just k3
 

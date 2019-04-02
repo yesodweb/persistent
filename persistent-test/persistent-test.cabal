@@ -109,7 +109,7 @@ library
                    , containers               >= 0.2
                    , bytestring               >= 0.9
                    , base64-bytestring
-                   , conduit                  >= 1.0
+                   , conduit                  >= 1.2.8
                    , resourcet                >= 0.4
                    , exceptions               >= 0.6
                    , time                     >= 1.1.4

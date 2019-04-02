@@ -15,7 +15,6 @@ module RenameTest where
 #ifndef WITH_NOSQL
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
-import Control.Monad.Trans.Resource (runResourceT)
 #endif
 import Data.Time (getCurrentTime, Day, UTCTime(..))
 import qualified Data.Map as Map
@@ -80,8 +79,8 @@ specs = describe "rename specs" $ do
 #ifndef WITH_NOSQL
     it "handles lower casing" $ asIO $
         runConn $ do
-            runResourceT $ rawQuery "SELECT full_name from lower_case_table WHERE my_id=5" [] C.$$ CL.sinkNull
-            runResourceT $ rawQuery "SELECT something_else from ref_table WHERE id=4" [] C.$$ CL.sinkNull
+            C.runConduitRes $ rawQuery "SELECT full_name from lower_case_table WHERE my_id=5" [] C..| CL.sinkNull
+            C.runConduitRes $ rawQuery "SELECT something_else from ref_table WHERE id=4" [] C..| CL.sinkNull
 #endif
 
     it "user specified id, insertKey, no default=" $ db $ do
