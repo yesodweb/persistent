@@ -26,21 +26,25 @@ main = defaultMain
                 [ bench "10x1" $ nfIO $ mkPersist' $(parseReferencesQ (mkModels 10 1))
                 , bench "10x10" $ nfIO $ mkPersist' $(parseReferencesQ (mkModels 10 10))
                 , bench "10x100" $ nfIO $ mkPersist' $(parseReferencesQ (mkModels 10 100))
-                , bench "10x1000" $ nfIO $ mkPersist' $(parseReferencesQ (mkModels 10 1000))
+                -- , bench "10x1000" $ nfIO $ mkPersist' $(parseReferencesQ (mkModels 10 1000))
                 ]
             ]
         , bgroup "Nullable"
             [ bgroup "Increasing model count"
-                [ bench "1x10" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 10 10))
-                , bench "10x10" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 10 10))
+                [ bench "20x10" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 20 10))
+                , bench "40x10" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 40 10))
+                , bench "60x10" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 60 10))
+                , bench "80x10" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 80 10))
                 , bench "100x10" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 100 10))
                 -- , bench "1000x10" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 1000 10))
                 ]
             , bgroup "Increasing field count"
-                [ bench "10x1" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 10 1))
-                , bench "10x10" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 10 10))
+                [ bench "10x10" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 10 20))
+                , bench "20x40" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 10 40))
+                , bench "10x60" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 10 60))
+                , bench "10x80" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 10 80))
                 , bench "10x100" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 10 100))
-                , bench "10x1000" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 10 1000))
+                -- , bench "10x1000" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 10 1000))
                 ]
             ]
         ]
