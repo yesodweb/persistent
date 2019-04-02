@@ -3,6 +3,21 @@ module Models where
 import Data.Monoid
 import Data.List
 import Data.FileEmbed
+import Language.Haskell.TH
+import qualified Data.Text as Text
+
+import Database.Persist.Quasi
+import Database.Persist.TH
+import Database.Persist.Sql
+
+mkPersist' :: [EntityDef] -> IO [Dec]
+mkPersist' = runQ . mkPersist sqlSettings
+
+parseReferences' :: String -> IO Exp
+parseReferences' = runQ . parseReferencesQ
+
+parseReferencesQ :: String -> Q Exp
+parseReferencesQ = parseReferences upperCaseSettings . Text.pack
 
 -- | # of models, # of fields
 mkModels :: Int -> Int -> String
@@ -34,7 +49,6 @@ mkFields i = take i $ map mkField $ zip [0..] $ cycle
     [ "Bool"
     , "Int"
     , "String"
-    , "Char"
     , "Double"
     ]
   where

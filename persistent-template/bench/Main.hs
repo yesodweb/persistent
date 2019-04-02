@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 module Main (main) where
 
 import Criterion.Main
@@ -11,12 +12,40 @@ import Database.Persist.Quasi
 import Database.Persist.TH
 import Models
 
-parseReferences' :: String -> IO Exp
-parseReferences' = runQ . parseReferences upperCaseSettings . Text.pack
-
 main :: IO ()
 main = defaultMain
-    [ bgroup "parseReferences"
+    [ bgroup "mkPersist"
+        [ bgroup "Non-Null Fields"
+            [ bgroup "Increasing model count"
+                [ bench "1x10" $ nfIO $ mkPersist' $( parseReferencesQ (mkModels 10 10))
+                , bench "10x10" $ nfIO $ mkPersist' $(parseReferencesQ (mkModels 10 10))
+                , bench "100x10" $ nfIO $ mkPersist' $(parseReferencesQ (mkModels 100 10))
+                -- , bench "1000x10" $ nfIO $ mkPersist' $(parseReferencesQ (mkModels 1000 10))
+                ]
+            , bgroup "Increasing field count"
+                [ bench "10x1" $ nfIO $ mkPersist' $(parseReferencesQ (mkModels 10 1))
+                , bench "10x10" $ nfIO $ mkPersist' $(parseReferencesQ (mkModels 10 10))
+                , bench "10x100" $ nfIO $ mkPersist' $(parseReferencesQ (mkModels 10 100))
+                , bench "10x1000" $ nfIO $ mkPersist' $(parseReferencesQ (mkModels 10 1000))
+                ]
+            ]
+        , bgroup "Nullable"
+            [ bgroup "Increasing model count"
+                [ bench "1x10" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 10 10))
+                , bench "10x10" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 10 10))
+                , bench "100x10" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 100 10))
+                -- , bench "1000x10" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 1000 10))
+                ]
+            , bgroup "Increasing field count"
+                [ bench "10x1" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 10 1))
+                , bench "10x10" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 10 10))
+                , bench "10x100" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 10 100))
+                , bench "10x1000" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 10 1000))
+                ]
+            ]
+        ]
+
+    , bgroup "parseReferences"
         [ bgroup "Non-Null Fields"
             [ bgroup "Increasing model count"
                 [ bench "1x10" $ nfIO $ parseReferences' (mkModels 10 10)
@@ -25,10 +54,10 @@ main = defaultMain
                 , bench "1000x10" $ nfIO $ parseReferences' (mkModels 1000 10)
                 ]
             , bgroup "Increasing field count"
-                [ bench "100x1" $ nfIO $ parseReferences' (mkModels 100 1)
-                , bench "100x10" $ nfIO $ parseReferences' (mkModels 100 10)
-                , bench "100x100" $ nfIO $ parseReferences' (mkModels 100 100)
-                , bench "100x1000" $ nfIO $ parseReferences' (mkModels 100 1000)
+                [ bench "10x1" $ nfIO $ parseReferences' (mkModels 10 1)
+                , bench "10x10" $ nfIO $ parseReferences' (mkModels 10 10)
+                , bench "10x100" $ nfIO $ parseReferences' (mkModels 10 100)
+                , bench "10x1000" $ nfIO $ parseReferences' (mkModels 10 1000)
                 ]
             ]
         , bgroup "Nullable"
@@ -36,13 +65,13 @@ main = defaultMain
                 [ bench "1x10" $ nfIO $ parseReferences' (mkNullableModels 10 10)
                 , bench "10x10" $ nfIO $ parseReferences' (mkNullableModels 10 10)
                 , bench "100x10" $ nfIO $ parseReferences' (mkNullableModels 100 10)
-                , bench "1000x10" $ nfIO $ parseReferences' (mkNullableModels 1000 10)
+                -- , bench "1000x10" $ nfIO $ parseReferences' (mkNullableModels 1000 10)
                 ]
             , bgroup "Increasing field count"
-                [ bench "100x1" $ nfIO $ parseReferences' (mkNullableModels 100 1)
-                , bench "100x10" $ nfIO $ parseReferences' (mkNullableModels 100 10)
-                , bench "100x100" $ nfIO $ parseReferences' (mkNullableModels 100 100)
-                , bench "100x1000" $ nfIO $ parseReferences' (mkNullableModels 100 1000)
+                [ bench "10x1" $ nfIO $ parseReferences' (mkNullableModels 10 1)
+                , bench "10x10" $ nfIO $ parseReferences' (mkNullableModels 10 10)
+                , bench "10x100" $ nfIO $ parseReferences' (mkNullableModels 10 100)
+                , bench "10x1000" $ nfIO $ parseReferences' (mkNullableModels 10 1000)
                 ]
             ]
         ]
