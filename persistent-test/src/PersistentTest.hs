@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -15,6 +16,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 module PersistentTest where
+
+import qualified Control.Monad.Fail as Fail
 
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Resource (runResourceT)
@@ -58,6 +61,10 @@ import Database.Persist.MySQL()
 import Init
 import PersistTestPetType
 import PersistTestPetCollarType
+
+-- | This type alias is provided for potential backward compatibility
+-- concerns. will use CPP if earlier resolvers complain.
+type MonadFail = Fail.MonadFail
 
 #ifdef WITH_NOSQL
 mkPersist persistSettings [persistUpperCase|
@@ -182,7 +189,7 @@ db :: Action IO () -> Assertion
 db = db' cleanDB
 #endif
 
-catchPersistException :: MonadUnliftIO m => m a -> b -> m b
+catchPersistException :: (MonadUnliftIO m, MonadFail m) => m a -> b -> m b
 catchPersistException action errValue = do
     Left res <-
       (Right `fmap` action) `catch`
@@ -1267,7 +1274,7 @@ caseCommitRollback = db $ do
 #endif
 
 -- Test proper polymorphism
-_polymorphic :: (MonadIO m, PersistQuery backend, BaseBackend backend ~ PersistEntityBackend Pet) => ReaderT backend m ()
+_polymorphic :: (MonadFail m, MonadIO m, PersistQuery backend, BaseBackend backend ~ PersistEntityBackend Pet) => ReaderT backend m ()
 _polymorphic = do
     ((Entity id' _):_) <- selectList [] [LimitTo 1]
     _ <- selectList [PetOwnerId ==. id'] []

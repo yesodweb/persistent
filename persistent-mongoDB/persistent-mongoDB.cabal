@@ -32,7 +32,7 @@ library
                    , network            >= 2.2.1.7
                    , cereal             >= 0.3.0.0
                    , path-pieces        >= 0.1
-                   , http-api-data      >= 0.2       && < 0.4
+                   , http-api-data      >= 0.2       && < 0.5
                    , aeson              >= 0.6.2
                    , attoparsec
                    , time
