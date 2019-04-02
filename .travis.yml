@@ -14,10 +14,10 @@ services:
 
 matrix:
   include:
-  - env: ARGS="--resolver lts-6" BACKEND=none
-  - env: ARGS="--resolver lts-7" BACKEND=none
-  - env: ARGS="--resolver lts-9" BACKEND=none
-  - env: ARGS="--stack-yaml stack_lts-10.yaml" BACKEND=none
+  - env: ARGS="--resolver lts-6  --stack-yaml stack_lts-10.yaml" BACKEND=none
+  - env: ARGS="--resolver lts-7  --stack-yaml stack_lts-10.yaml" BACKEND=none
+  - env: ARGS="--resolver lts-9  --stack-yaml stack_lts-10.yaml" BACKEND=none
+  - env: ARGS="--resolver lts-10 --stack-yaml stack_lts-10.yaml" BACKEND=none
   - env: ARGS="--resolver lts-11" BACKEND=none
   - env: ARGS="--resolver lts-12" BACKEND=none
   - env: ARGS="--resolver lts-13" BACKEND=none
