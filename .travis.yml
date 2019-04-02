@@ -18,16 +18,19 @@ matrix:
   - env: ARGS="--resolver lts-7" BACKEND=none
   - env: ARGS="--resolver lts-9" BACKEND=none
   - env: ARGS="--resolver lts-10" BACKEND=none
+  - env: ARGS="--resolver lts-11" BACKEND=none
+  - env: ARGS="--resolver lts-12" BACKEND=none
+  - env: ARGS="--resolver lts-13" BACKEND=none
 
-  - env: ARGS="--resolver lts-9" BACKEND=sqlite
-  - env: ARGS="--resolver lts-9" BACKEND=mongodb
-  - env: ARGS="--resolver lts-9" BACKEND=postgresql
-  - env: ARGS="--resolver lts-9" BACKEND=mysql
+  - env: ARGS="--resolver lts-12" BACKEND=sqlite
+  - env: ARGS="--resolver lts-12" BACKEND=mongodb
+  - env: ARGS="--resolver lts-12" BACKEND=postgresql
+  - env: ARGS="--resolver lts-12" BACKEND=mysql
 
-  - env: ARGS="--resolver lts-10" BACKEND=sqlite
-  - env: ARGS="--resolver lts-10" BACKEND=mongodb
-  - env: ARGS="--resolver lts-10" BACKEND=postgresql
-  - env: ARGS="--resolver lts-10" BACKEND=mysql
+  - env: ARGS="--resolver lts-13" BACKEND=sqlite
+  - env: ARGS="--resolver lts-13" BACKEND=mongodb
+  - env: ARGS="--resolver lts-13" BACKEND=postgresql
+  - env: ARGS="--resolver lts-13" BACKEND=mysql
 
 before_install:
 # Download and unpack the stack executable
