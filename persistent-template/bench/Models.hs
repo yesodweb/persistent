@@ -6,19 +6,25 @@ import Data.FileEmbed
 
 -- | # of models, # of fields
 mkModels :: Int -> Int -> String
-mkModels i f = unlines . fmap unlines . take i . map mkModel . zip [0..] . cycle $
-    [ "Model"
-    , "Foobar"
-    , "User"
-    , "King"
-    , "Queen"
-    , "Dog"
-    , "Cat"
-    ]
+mkModels = mkModelsWithFieldModifier id
+
+mkNullableModels :: Int -> Int -> String
+mkNullableModels = mkModelsWithFieldModifier maybeFields
+
+mkModelsWithFieldModifier :: (String -> String) -> Int -> Int -> String
+mkModelsWithFieldModifier k i f =
+    unlines . fmap unlines . take i . map mkModel . zip [0..] . cycle $
+        [ "Model"
+        , "Foobar"
+        , "User"
+        , "King"
+        , "Queen"
+        , "Dog"
+        , "Cat"
+        ]
   where
     mkModel (i, m) =
-        (m <> show i) : indent 4 (mkFields f)
-
+        (m <> show i) : indent 4 (map k (mkFields f))
 
 indent :: Int -> [String] -> [String]
 indent i = map (replicate i ' ' ++)
@@ -34,3 +40,5 @@ mkFields i = take i $ map mkField $ zip [0..] $ cycle
   where
     mkField (i, typ) = "field" <> show i <> "\t\t" <> typ
 
+maybeFields :: String -> String
+maybeFields = (++ " Maybe")
