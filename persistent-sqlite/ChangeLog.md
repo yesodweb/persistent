@@ -1,5 +1,9 @@
 # Changelog for persistent-sqlite
 
+## 2.10.0
+
+* Add the `entityComments` field to the `EntityDef` datatype, and `fieldComments` fields to the `FieldDef` datatype. The QuasiQuoter does not currently know how to add documentation comments to these types, but it can be expanded later. [#865](https://github.com/yesodweb/persistent/pull/865)
+
 ## 2.9.2
 
 * Add enableExtendedResultCodes and disableExtendedResultCodes functions
