@@ -4,7 +4,7 @@ set -euxo pipefail
 
 if [ "$BACKEND" = "none" ]
 then
-    PACKAGES=$(stack --install-ghc query locals | grep '^ *path' | sed 's@^ *path:@@' | grep -v 'persistent-test' )
+    PACKAGES=$(stack --install-ghc $ARGS query locals | grep '^ *path' | sed 's@^ *path:@@' | grep -v 'persistent-test' )
 
     PEDANTIC="--pedantic"
     # Turn off pedantic for lts-7, due to the sometimes invalid
