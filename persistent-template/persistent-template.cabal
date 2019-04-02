@@ -56,7 +56,7 @@ source-repository head
   location: git://github.com/yesodweb/persistent.git
 
 benchmark persistent-th-bench
-    ghc-options:      -O2 -threaded 
+    ghc-options:      -O2
     type:             exitcode-stdio-1.0
     main-is:          Main.hs
     hs-source-dirs:   bench

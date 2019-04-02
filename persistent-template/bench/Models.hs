@@ -17,7 +17,7 @@ parseReferences' :: String -> IO Exp
 parseReferences' = runQ . parseReferencesQ
 
 parseReferencesQ :: String -> Q Exp
-parseReferencesQ = parseReferences upperCaseSettings . Text.pack
+parseReferencesQ = parseReferences lowerCaseSettings . Text.pack
 
 -- | # of models, # of fields
 mkModels :: Int -> Int -> String
@@ -50,6 +50,7 @@ mkFields i = take i $ map mkField $ zip [0..] $ cycle
     , "Int"
     , "String"
     , "Double"
+    , "Text"
     ]
   where
     mkField (i, typ) = "field" <> show i <> "\t\t" <> typ

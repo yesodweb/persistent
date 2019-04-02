@@ -1,16 +1,17 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Main (main) where
 
-import Criterion.Main
-import qualified Data.Text as Text
-import Language.Haskell.TH
-import Language.Haskell.TH.Syntax
-import Control.DeepSeq.Generics
-import Control.DeepSeq
+import           Control.DeepSeq
+import           Control.DeepSeq.Generics
+import           Criterion.Main
+import           Data.Text                  (Text)
+import qualified Data.Text                  as Text
+import           Language.Haskell.TH
+import           Language.Haskell.TH.Syntax
 
-import Database.Persist.Quasi
-import Database.Persist.TH
-import Models
+import           Database.Persist.Quasi
+import           Database.Persist.TH
+import           Models
 
 main :: IO ()
 main = defaultMain
@@ -39,43 +40,12 @@ main = defaultMain
                 -- , bench "1000x10" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 1000 10))
                 ]
             , bgroup "Increasing field count"
-                [ bench "10x10" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 10 20))
-                , bench "20x40" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 10 40))
+                [ bench "10x20" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 10 20))
+                , bench "10x40" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 10 40))
                 , bench "10x60" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 10 60))
                 , bench "10x80" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 10 80))
                 , bench "10x100" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 10 100))
                 -- , bench "10x1000" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 10 1000))
-                ]
-            ]
-        ]
-
-    , bgroup "parseReferences"
-        [ bgroup "Non-Null Fields"
-            [ bgroup "Increasing model count"
-                [ bench "1x10" $ nfIO $ parseReferences' (mkModels 10 10)
-                , bench "10x10" $ nfIO $ parseReferences' (mkModels 10 10)
-                , bench "100x10" $ nfIO $ parseReferences' (mkModels 100 10)
-                , bench "1000x10" $ nfIO $ parseReferences' (mkModels 1000 10)
-                ]
-            , bgroup "Increasing field count"
-                [ bench "10x1" $ nfIO $ parseReferences' (mkModels 10 1)
-                , bench "10x10" $ nfIO $ parseReferences' (mkModels 10 10)
-                , bench "10x100" $ nfIO $ parseReferences' (mkModels 10 100)
-                , bench "10x1000" $ nfIO $ parseReferences' (mkModels 10 1000)
-                ]
-            ]
-        , bgroup "Nullable"
-            [ bgroup "Increasing model count"
-                [ bench "1x10" $ nfIO $ parseReferences' (mkNullableModels 10 10)
-                , bench "10x10" $ nfIO $ parseReferences' (mkNullableModels 10 10)
-                , bench "100x10" $ nfIO $ parseReferences' (mkNullableModels 100 10)
-                -- , bench "1000x10" $ nfIO $ parseReferences' (mkNullableModels 1000 10)
-                ]
-            , bgroup "Increasing field count"
-                [ bench "10x1" $ nfIO $ parseReferences' (mkNullableModels 10 1)
-                , bench "10x10" $ nfIO $ parseReferences' (mkNullableModels 10 10)
-                , bench "10x100" $ nfIO $ parseReferences' (mkNullableModels 10 100)
-                , bench "10x1000" $ nfIO $ parseReferences' (mkNullableModels 10 1000)
                 ]
             ]
         ]
@@ -216,5 +186,3 @@ instance NFData OccName where
 
 instance NFData Name where
     rnf = genericRnf
-
-
