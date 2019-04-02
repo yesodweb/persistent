@@ -67,4 +67,6 @@ benchmark persistent-th-bench
                     , persistent
                     , text
                     , template-haskell
+                    , deepseq-generics
+                    , deepseq
     other-modules:    Models
