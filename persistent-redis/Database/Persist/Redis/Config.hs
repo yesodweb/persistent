@@ -4,7 +4,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, UndecidableInstances #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
+
+-- TODO: The `-fno-warn-deprecations` flag is passed because Redis has
+-- deprecated the PortID and PortNumber types, with the following message:
+-- Deprecated: "The high level Network interface is no longer supported. Please use Network.Socket."
+{-# OPTIONS_GHC -fno-warn-orphans -fno-warn-deprecations #-}
+
 module Database.Persist.Redis.Config
     ( RedisAuth (..)
     , RedisConf (..)
@@ -89,14 +94,14 @@ instance PersistConfig RedisConf where
 
     loadConfig _ = mzero
 
-    createPoolConfig (RedisConf h p Nothing m) = 
+    createPoolConfig (RedisConf h p Nothing m) =
         R.connect $
         R.defaultConnectInfo {
             R.connectHost = unpack h,
             R.connectPort = p,
             R.connectMaxConnections = m
         }
-    createPoolConfig (RedisConf h p (Just (RedisAuth pwd)) m) = 
+    createPoolConfig (RedisConf h p (Just (RedisAuth pwd)) m) =
         R.connect $
         R.defaultConnectInfo {
             R.connectHost = unpack h,
