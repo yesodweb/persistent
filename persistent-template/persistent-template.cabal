@@ -37,9 +37,11 @@ library
        cpp-options: -DGHC_7_4
 
 test-suite test
-    type:          exitcode-stdio-1.0
-    main-is:       main.hs
-    hs-source-dirs: test
+    type:            exitcode-stdio-1.0
+    main-is:         main.hs
+    hs-source-dirs:  test
+    other-modules:   TemplateTestImports
+    ghc-options:     -Wall
 
     build-depends:   base >= 4.6 && < 5
                    , persistent-template
