@@ -19,7 +19,10 @@
 {-# LANGUAGE RankNTypes, TypeFamilies #-}
 {-# LANGUAGE EmptyDataDecls #-}
 
-{-# OPTIONS_GHC -fno-warn-orphans #-}
+-- TODO: The `-fno-warn-deprecations` flag is passed because Redis has
+-- deprecated the PortID and PortNumber types, with the following message:
+-- Deprecated: "The high level Network interface is no longer supported. Please use Network.Socket."
+{-# OPTIONS_GHC -fno-warn-orphans -fno-warn-deprecations #-}
 {-# LANGUAGE GADTs #-}
 module Database.Persist.MongoDB
     (
@@ -638,7 +641,7 @@ instance PersistUniqueWrite DB.MongoContext where
 
     upsertBy uniq newRecord upds = do
         let uniqueDoc = toUniquesDoc uniq :: [DB.Field]
-        let uniqKeys = map DB.label uniqueDoc :: [DB.Label]   
+        let uniqKeys = map DB.label uniqueDoc :: [DB.Label]
         let insDoc = DB.exclude uniqKeys $ toInsertDoc newRecord :: DB.Document
         let selection = DB.select uniqueDoc $ collectionName newRecord :: DB.Selection
         mdoc <- getBy uniq

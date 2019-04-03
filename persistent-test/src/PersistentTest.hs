@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -16,8 +17,12 @@
 {-# LANGUAGE TypeFamilies #-}
 module PersistentTest where
 
+import qualified Control.Monad.Fail as Fail
+
 import Control.Monad.IO.Class
+#ifndef WITH_MONGODB
 import Control.Monad.Trans.Resource (runResourceT)
+#endif
 import Data.Aeson
 import Data.Conduit
 import qualified Data.Conduit.List as CL
@@ -58,6 +63,10 @@ import Database.Persist.MySQL()
 import Init
 import PersistTestPetType
 import PersistTestPetCollarType
+
+-- | This type alias is provided for potential backward compatibility
+-- concerns. will use CPP if earlier resolvers complain.
+type MonadFail = Fail.MonadFail
 
 #ifdef WITH_NOSQL
 mkPersist persistSettings [persistUpperCase|
@@ -182,7 +191,7 @@ db :: Action IO () -> Assertion
 db = db' cleanDB
 #endif
 
-catchPersistException :: MonadUnliftIO m => m a -> b -> m b
+catchPersistException :: (MonadUnliftIO m, MonadFail m) => m a -> b -> m b
 catchPersistException action errValue = do
     Left res <-
       (Right `fmap` action) `catch`
@@ -734,13 +743,13 @@ specs = describe "persistent" $ do
           p3 = Person "selectSource3" 3 Nothing
       [k1,k2,k3] <- insertMany [p1, p2, p3]
 
-      ps1 <- runResourceT $ selectSource [] [Desc PersonAge] $$ await
+      ps1 <- runConduitRes $ selectSource [] [Desc PersonAge] .| await
       ps1 @== Just (Entity k3 p3)
 
-      ps2 <- runResourceT $ selectSource [PersonAge <. 3] [Asc PersonAge] $$ CL.consume
+      ps2 <- runConduitRes $ selectSource [PersonAge <. 3] [Asc PersonAge] .| CL.consume
       ps2 @== [Entity k1 p1, Entity k2 p2]
 
-      runResourceT $ selectSource [] [Desc PersonAge] $$ do
+      runConduitRes $ selectSource [] [Desc PersonAge] .| do
           e1 <- await
           e1 @== Just (Entity k3 p3)
 
@@ -768,13 +777,13 @@ specs = describe "persistent" $ do
           p3 = Person "selectKeys3" 3 Nothing
       [k1,k2,k3] <- insertMany [p1, p2, p3]
 
-      ps1 <- runResourceT $ selectKeys [] [Desc PersonAge] $$ await
+      ps1 <- runConduitRes $ selectKeys [] [Desc PersonAge] .| await
       ps1 @== Just k3
 
-      ps2 <- runResourceT $ selectKeys [PersonAge <. 3] [Asc PersonAge] $$ CL.consume
+      ps2 <- runConduitRes $ selectKeys [PersonAge <. 3] [Asc PersonAge] .| CL.consume
       ps2 @== [k1, k2]
 
-      runResourceT $ selectKeys [] [Desc PersonAge] $$ do
+      runConduitRes $ selectKeys [] [Desc PersonAge] .| do
           e1 <- await
           e1 @== Just k3
 
@@ -1267,7 +1276,7 @@ caseCommitRollback = db $ do
 #endif
 
 -- Test proper polymorphism
-_polymorphic :: (MonadIO m, PersistQuery backend, BaseBackend backend ~ PersistEntityBackend Pet) => ReaderT backend m ()
+_polymorphic :: (MonadFail m, MonadIO m, PersistQuery backend, BaseBackend backend ~ PersistEntityBackend Pet) => ReaderT backend m ()
 _polymorphic = do
     ((Entity id' _):_) <- selectList [] [LimitTo 1]
     _ <- selectList [PetOwnerId ==. id'] []
