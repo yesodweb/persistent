@@ -13,6 +13,11 @@ then
     then
         PEDANTIC=""
     fi
+    # Turn off pedantic for lts-13 due to deprecations from Network.
+    if [ "$ARGS" = "--resolver lts-13" ]
+    then
+        PEDANTIC=""
+    fi
 
     exec stack $ARGS --no-terminal test $PEDANTIC $PACKAGES
 else
