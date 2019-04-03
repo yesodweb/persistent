@@ -20,7 +20,9 @@ module PersistentTest where
 import qualified Control.Monad.Fail as Fail
 
 import Control.Monad.IO.Class
+#ifndef WITH_MONGODB
 import Control.Monad.Trans.Resource (runResourceT)
+#endif
 import Data.Aeson
 import Data.Conduit
 import qualified Data.Conduit.List as CL
