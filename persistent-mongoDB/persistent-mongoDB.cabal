@@ -49,3 +49,41 @@ library
 source-repository head
   type:     git
   location: git://github.com/yesodweb/persistent.git
+
+test-suite test
+    type:           exitcode-stdio-1.0
+    main-is:        Main.hs
+    hs-source-dirs: test
+    other-modules:   RenameTestMongo
+                     InitMongo
+                     EmbedTestMongo
+                     EmbedOrderTestMongo
+                     EntityEmbedTestMongo
+                     DataTypeTestMongo
+                     HtmlTestMongo
+
+    build-depends:   base >= 4.6 && < 5
+                   , persistent-mongoDB
+                   , quickcheck-instances
+                   , containers
+                   , blaze-html
+                   , resourcet
+                   , random
+                   , time
+                   , template-haskell
+                   , persistent-template
+                   , unliftio-core
+                   , persistent-test
+                   , HUnit
+                   , aeson
+                   , persistent-qq
+                   , hspec >= 1.3
+                   , text
+                   , persistent
+                   , bytestring
+                   , QuickCheck
+                   , transformers
+                   , mongoDB            >= 2.0.4 && < 3.0
+                   , cereal
+                   , bson               >= 0.3.1
+                   , process
