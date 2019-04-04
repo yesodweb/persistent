@@ -54,13 +54,17 @@ test-suite test
     type:           exitcode-stdio-1.0
     main-is:        Main.hs
     hs-source-dirs: test
-    other-modules:   RenameTestMongo
-                     InitMongo
-                     EmbedTestMongo
-                     EmbedOrderTestMongo
-                     EntityEmbedTestMongo
-                     DataTypeTestMongo
-                     HtmlTestMongo
+    other-modules:  RenameTestMongo
+                    InitMongo
+                    EmbedTestMongo
+                    EmbedOrderTestMongo
+                    EntityEmbedTestMongo
+                    DataTypeTestMongo
+                    HtmlTestMongo
+                    LargeNumberTestMongo
+                    MaxLenTestMongo
+                    RecursiveMongo
+                    SumTypeTestMongo
 
     build-depends:   base >= 4.6 && < 5
                    , persistent-mongoDB

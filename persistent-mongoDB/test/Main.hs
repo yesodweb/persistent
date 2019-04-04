@@ -2,6 +2,9 @@
 
 {-# LANGUAGE ScopedTypeVariables #-}
 
+import InitMongo
+
+-- Modules that were commented out were effectively noops for MongoDB.
 import qualified CompositeTest
 import qualified CustomPersistFieldTest
 import qualified CustomPrimaryKeyReferenceTest
@@ -10,17 +13,16 @@ import qualified EmbedOrderTestMongo
 import qualified EmbedTestMongo
 import qualified EmptyEntityTest
 import qualified HtmlTestMongo
-import Init
-import qualified LargeNumberTest
-import qualified MaxLenTest
+import qualified LargeNumberTestMongo
+import qualified MaxLenTestMongo
 import qualified MigrationOnlyTest
 import qualified PersistentTest
 import qualified PersistUniqueTest
 import qualified PrimaryTest
-import qualified Recursive
+import qualified RecursiveMongo
 import qualified RenameTest
-import qualified SumTypeTest
-import qualified UniqueTest
+import qualified SumTypeTestMongo
+-- import qualified UniqueTestMongo
 import qualified MigrationColumnLengthTest
 import qualified TransactionLevelTest
 
@@ -33,11 +35,11 @@ main = do
     HtmlTestMongo.specs
     EmbedTestMongo.specs
     EmbedOrderTestMongo.specs
-    LargeNumberTest.specs
-    UniqueTest.specs
-    MaxLenTest.specs
-    Recursive.specs
-    SumTypeTest.specs
+    LargeNumberTestMongo.specs
+    -- UniqueTestMongo.specs
+    MaxLenTestMongo.specs
+    RecursiveMongo.specs
+    SumTypeTestMongo.specs
     MigrationOnlyTest.specs
     PersistentTest.specs
     EmptyEntityTest.specs
