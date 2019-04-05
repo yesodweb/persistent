@@ -29,9 +29,12 @@ import Text.Blaze.Html.Renderer.Text
 import CustomPersistField
 
 -- These tests are noops with the NoSQL flags set.
+--
 -- import qualified CompositeTest
 -- import qualified CustomPrimaryKeyReferenceTest
 -- import qualified InsertDuplicateUpdate
+-- import qualified PersistUniqueTest
+-- import qualified PrimaryTest
 
 -- These modules were quite complicated. Instead of fully extracting the
 -- relevant common functionality, I just copied and de-CPPed manually.
@@ -44,16 +47,14 @@ import qualified EmbedOrderTest
 import qualified EmptyEntityTest
 import qualified HtmlTest
 import qualified LargeNumberTest
+import qualified MaxLenTest
+import qualified MigrationOnlyTest
+import qualified Recursive
 
 -- This one is in progress!
-import qualified MaxLenTest
+import qualified PersistentTest
 
 -- These are TODO.
-import qualified MigrationOnlyTest
-import qualified PersistentTest
-import qualified PersistUniqueTest
-import qualified PrimaryTest
-import qualified Recursive
 import qualified RenameTest
 import qualified SumTypeTest
 import qualified UniqueTest
@@ -133,6 +134,22 @@ mkPersist persistSettings [persistUpperCase|
     deriving Show Eq
 |]
 
+mkPersist persistSettings [persistUpperCase|
+  MaxLen
+    text1 Text
+    text2 Text maxlen=3
+    bs1 ByteString
+    bs2 ByteString maxlen=3
+    str1 String
+    str2 String maxlen=3
+    MLText1 text1
+    MLText2 text2
+    MLBs1 bs1
+    MLBs2 bs2
+    MLStr1 str1
+    MLStr2 str2
+    deriving Show Eq
+|]
 main :: IO ()
 main = do
   hspec $ do
@@ -169,18 +186,21 @@ main = do
         (db' (deleteWhere ([] :: [Filter Number])))
         Number
     UniqueTest.specs
-    MaxLenTest.specs
-    Recursive.specs
+    MaxLenTest.specsWith
+        dbNoCleanup
+        MaxLen
+    Recursive.specsWith
+        (db' Recursive.cleanup)
+
     SumTypeTest.specs
-    MigrationOnlyTest.specs
+    MigrationOnlyTest.specsWith
+        dbNoCleanup
+        Nothing
     PersistentTest.specs
     EmptyEntityTest.specsWith
         (lift . db' (deleteWhere @_ @_ @EmptyEntity []))
         Nothing
         EmptyEntity
-    -- CompositeTest.specs
-    PersistUniqueTest.specs
-    PrimaryTest.specs
     CustomPersistFieldTest.specsWith
         dbNoCleanup
         BlogPost

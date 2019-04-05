@@ -1,10 +1,12 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TemplateHaskell #-}
+
 module Init (
   (@/=), (@==), (==@)
   , asIO
@@ -60,6 +62,7 @@ module Init (
   , truncateUTCTime
   , arbText
   , liftA2
+  , AbstractTest
   ) where
 
 -- re-exports
@@ -408,3 +411,11 @@ arbText =
   where forbidden = [NotAssigned, PrivateUse]
 
 type RunDb backend m = ReaderT backend m () -> IO ()
+
+type AbstractTest backend entity m =
+    ( PersistEntity entity
+    , PersistEntityBackend entity ~ BaseBackend backend
+    , Show entity, Eq entity
+    , MonadIO m, MonadFail m
+    , PersistStoreWrite backend
+    )

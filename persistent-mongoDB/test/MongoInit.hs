@@ -43,7 +43,7 @@ module MongoInit (
 ) where
 
 -- we have to be careful with this import becuase CPP is still a problem
-import Init (TestFn(..), truncateTimeOfDay, truncateUTCTime, truncateToMicro, arbText, liftA2)
+import Init (TestFn(..), AbstractTest, truncateTimeOfDay, truncateUTCTime, truncateToMicro, arbText, liftA2)
 
 -- re-exports
 import Control.Applicative as A ((<$>), (<*>))

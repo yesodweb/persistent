@@ -2,7 +2,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, QuasiQuotes, TemplateHaskell, CPP, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, FlexibleInstances, EmptyDataDecls, MultiParamTypeClasses #-}
 
 module MaxLenTest (
-  specs
+  specs, specsWith
 #ifndef WITH_NOSQL
   , maxlenMigrate
 #endif
@@ -35,11 +35,18 @@ share [mkPersist sqlSettings,  mkMigrate "maxlenMigrate"] [persistLowerCase|
 |]
 
 specs :: Spec
-specs = describe "Maximum length attribute" $ do
-  it "" $ db $ do
-    let t1  = MaxLen a a  a a  a a
-        t2  = MaxLen b b  b b  b b
-        t2' = MaxLen b b' b b' b b'
+specs = specsWith db MaxLen
+
+specsWith
+    :: AbstractTest backend entity m
+    => RunDb backend m
+    -> (Text -> Text -> ByteString -> ByteString -> String -> String -> entity)
+    -> Spec
+specsWith runDb maxLen = describe "Maximum length attribute" $ do
+  it "truncates values that are too long" $ runDb $ do
+    let t1  = maxLen a a  a a  a a
+        t2  = maxLen b b  b b  b b
+        t2' = maxLen b b' b b' b b'
         a, b, b' :: IsString t => t
         a  = "a"
         b  = "12345"
@@ -52,3 +59,4 @@ specs = describe "Maximum length attribute" $ do
                 if t2v == t2
                   then t2v @?= t2 -- FIXME: why u no truncate?
                   else t2v @?= t2'
+
