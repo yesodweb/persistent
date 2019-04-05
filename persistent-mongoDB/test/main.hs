@@ -76,6 +76,17 @@ DataTypeTable no-json
     utc UTCTime
 |]
 
+mkPersist persistSettings [persistUpperCase|
+Foo sql=foo_embed_order
+    bars [Bar]
+    deriving Eq Show
+Bar sql=bar_embed_order
+    b String
+    u String
+    g String
+    deriving Eq Show
+|]
+
 instance Arbitrary DataTypeTable where
   arbitrary = DataTypeTable
      <$> arbText                -- text
@@ -115,7 +126,10 @@ main = do
         dataTypeTableDouble
     HtmlTest.specs
     EmbedTest.specs
-    EmbedOrderTest.specs
+    EmbedOrderTest.specsWith
+        db
+        Foo
+        Bar
     LargeNumberTest.specs
     UniqueTest.specs
     MaxLenTest.specs
