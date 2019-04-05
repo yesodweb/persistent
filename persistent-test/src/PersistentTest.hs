@@ -194,11 +194,6 @@ specs = describe "persistent" $ do
       delete micK
       Nothing <- get micK
       return ()
-#ifdef WITH_ZOOKEEPER
-      -- zookeeper backend does not support idfield
-      -- zookeeper's key is node-name.
-      -- When uniq-key exists, zookeeper's key becomes encoded uniq-key.
-#else
   it "persistIdField" $ db $ do
       let p = Person "foo" 100 (Just "blue")
           q = Person "bar" 101 Nothing
@@ -210,7 +205,6 @@ specs = describe "persistent" $ do
 
       mq <- selectFirst [persistIdField ==. qk] []
       fmap entityVal mq @== Just q
-#endif
 
   it "!=." $ db $ do
       deleteWhere ([] :: [Filter Person])
@@ -323,19 +317,10 @@ specs = describe "persistent" $ do
       Just p <- get key3
       p3 @== p
 
-#ifdef WITH_ZOOKEEPER
-  it "toPathPiece . fromPathPiece" $  do
-  --  Below quickcheck causes error of "Cannot convert PersistObjectId to Text."
-  --  Currently, ZooKey does not support PersistObjectId.
-      let key1 = ZooKey "hogehogekey" :: (BackendKey BackendMonad)
-          key2 = fromJust $ fromPathPiece $ toPathPiece key1 :: (BackendKey BackendMonad)
-      toPathPiece key1 `shouldBe` toPathPiece key2
-#else
   prop "toPathPiece . fromPathPiece" $ \piece ->
       let key1 = piece :: (BackendKey BackendMonad)
           key2 = fromJust $ fromPathPiece $ toPathPiece key1 :: (BackendKey BackendMonad)
       in  toPathPiece key1 == toPathPiece key2
-#endif
 
   it "replace" $ db $ do
       key2 <- insert $ Person "Michael2" 27 Nothing
@@ -786,11 +771,6 @@ specs = describe "persistent" $ do
       Just (OutdoorPet _ collar' _) <- get catKey
       liftIO $ collar' @?= mittensCollar
 
-#ifdef WITH_ZOOKEEPER
-      -- zookeeper backend does not support idfield
-      -- zookeeper's key is node-name.
-      -- When uniq-key exists, zookeeper's key becomes encoded uniq-key.
-#else
   it "idIn" $ db $ do
       let p1 = Person "D" 0 Nothing
           p2 = Person "E" 1 Nothing
@@ -800,7 +780,6 @@ specs = describe "persistent" $ do
       pid3 <- insert p3
       x <- selectList [PersonId <-. [pid1, pid3]] []
       liftIO $ x @?= [Entity pid1 p1, Entity pid3 p3]
-#endif
 
   it "In" $ db $ do
       let p1 = Person "D" 0 Nothing

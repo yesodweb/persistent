@@ -101,14 +101,6 @@ import qualified Database.MongoDB as MongoDB
 import Database.Persist.MongoDB (Action, withMongoPool, runMongoDBPool, defaultMongoConf, applyDockerEnv, BackendKey(..))
 #  endif
 
-#  ifdef WITH_ZOOKEEPER
-import Data.IORef (newIORef, IORef, writeIORef, readIORef)
-import qualified Data.Text as T
-import Database.Persist.Zookeeper (Action, withZookeeperPool, runZookeeperPool, ZookeeperConf(..), defaultZookeeperConf, BackendKey(..), deleteRecursive)
-import qualified Database.Zookeeper as Z
-import System.IO.Unsafe (unsafePerformIO)
-#  endif
-
 #else
 import Control.Monad.Logger
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
@@ -148,14 +140,6 @@ setup :: Action IO ()
 setup = setupMongo
 type Context = MongoDB.MongoContext
 #endif
-
-#ifdef WITH_ZOOKEEPER
-setup :: Action IO ()
-setup = setupZookeeper
-type Context = Z.Zookeeper
-#endif
-
-
 
 
 (@/=), (@==), (==@) :: (Eq a, Show a, MonadIO m) => a -> a -> m ()
@@ -223,18 +207,6 @@ runConn f = do
 
 setupMongo :: Action IO ()
 setupMongo = void $ MongoDB.dropDatabase dbName
-#endif
-
-#ifdef WITH_ZOOKEEPER
-runConn :: MonadUnliftIO m => Action m backend -> m ()
-runConn f = do
-  let conf = defaultZookeeperConf {zCoord = "localhost:2181/" ++ T.unpack dbName}
-  void $ withZookeeperPool conf $ runZookeeperPool f
-
-setupZookeeper :: Action IO ()
-setupZookeeper = do
-  liftIO $ Z.setDebugLevel Z.ZLogError
-  deleteRecursive "/"
 #endif
 
 db' :: Action IO () -> Action IO () -> Assertion
@@ -341,30 +313,6 @@ instance PersistStore backend => Arbitrary (BackendKey backend) where
 #ifdef WITH_MONGODB
 generateKey :: IO (BackendKey Context)
 generateKey = MongoKey `liftM` MongoDB.genObjectId
-#endif
-
-#ifdef WITH_ZOOKEEPER
-keyCounter :: IORef Int64
-keyCounter = unsafePerformIO $ newIORef 1
-{-# NOINLINE keyCounter #-}
-
-generateKey :: IO (BackendKey Context)
-generateKey = do
-    i <- readIORef keyCounter
-    writeIORef keyCounter (i + 1)
-    return $ ZooKey $ T.pack $ show i
-#endif
-
-#else
-keyCounter :: IORef Int64
-keyCounter = unsafePerformIO $ newIORef 1
-{-# NOINLINE keyCounter #-}
-
-generateKey :: IO (BackendKey SqlBackend)
-generateKey = do
-    i <- readIORef keyCounter
-    writeIORef keyCounter (i + 1)
-    return $ SqlBackendKey $ i
 #endif
 
 -- | A datatype that wraps a function on @entity@ that can has testable results.

@@ -21,11 +21,6 @@ Flag sqlite
    Default: False
    manual: True
 
-Flag zookeeper
-   Description: test only Zookeeper.  default is to test just sqlite.
-   Default: False
-   manual: True
-
 Flag mongodb
    Description: test only MongoDB.  default is to test just sqlite.
    Default: False
@@ -147,7 +142,7 @@ library
    if flag(nooverlap)
      cpp-options: -DNO_OVERLAP
 
-   if !flag(postgresql) && !flag(mysql) && !flag(mongodb) && !flag(zookeeper)
+   if !flag(postgresql) && !flag(mysql) && !flag(mongodb)
       build-depends: persistent-sqlite     >= 2.6.1.1
      cpp-options: -DWITH_SQLITE -DDEBUG
 
@@ -173,14 +168,6 @@ library
                    , process
      cpp-options: -DWITH_NOSQL -DWITH_MONGODB -DDEBUG
 
-   if flag(zookeeper)
-     build-depends:  persistent-zookeeper
-                   , hzk                >= 2.1.0
-                   , binary
-                   , utf8-string           >= 0.3.7    && < 0.4.0
-                   , process
-     cpp-options: -DWITH_NOSQL -DWITH_ZOOKEEPER -DDEBUG
-
    if flag(high_precision_date)
      cpp-options: -DHIGH_PRECISION_DATE
 
@@ -201,10 +188,8 @@ executable persistent-test
                  , resourcet
                  , scientific
 
-  if !flag(postgresql) && !flag(mysql) && !flag(mongodb) && !flag(zookeeper)
+  if !flag(postgresql) && !flag(mysql) && !flag(mongodb)
       cpp-options: -DWITH_SQLITE -DDEBUG
-  if flag(zookeeper)
-      cpp-options: -DWITH_NOSQL -DWITH_ZOOKEEPER -DDEBUG
   if flag(mongodb)
       cpp-options: -DWITH_NOSQL -DWITH_MONGODB -DDEBUG
   if flag(postgresql)
