@@ -52,4 +52,3 @@ specs = describe "Maximum length attribute" $ do
                 if t2v == t2
                   then t2v @?= t2 -- FIXME: why u no truncate?
                   else t2v @?= t2'
-

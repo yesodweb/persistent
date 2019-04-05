@@ -37,21 +37,34 @@ db = db' cleanDB
 #endif
 
 specs :: Spec
-specs = describe "persistent" $ do
-  it "large numbers" $ db $ do
+specs = specsWith db Number
+
+specsWith
+    ::
+    ( PersistRecordBackend entity backend
+    , PersistStoreWrite backend
+    , Show entity, Eq entity
+    , MonadIO m
+    )
+    => RunDb backend m
+    -> (Int -> Int32 -> Word32 -> Int64 -> Word64 -> entity)
+    -> Spec
+specsWith runDb mkNumber = describe "Large Numbers" $ do
+  it "preserves their values in the database" $ runDb $ do
       let go x = do
               xid <- insert x
               x' <- get xid
               liftIO $ x' @?= Just x
 
-      go $ Number maxBound 0 0 0 0
-      go $ Number 0 maxBound 0 0 0
-      go $ Number 0 0 maxBound 0 0
-      go $ Number 0 0 0 maxBound 0
-      go $ Number 0 0 0 0 maxBound
+      go $ mkNumber maxBound 0 0 0 0
+      go $ mkNumber 0 maxBound 0 0 0
+      go $ mkNumber 0 0 maxBound 0 0
+      go $ mkNumber 0 0 0 maxBound 0
+      go $ mkNumber 0 0 0 0 maxBound
 
-      go $ Number minBound 0 0 0 0
-      go $ Number 0 minBound 0 0 0
-      go $ Number 0 0 minBound 0 0
-      go $ Number 0 0 0 minBound 0
-      go $ Number 0 0 0 0 minBound
+      go $ mkNumber minBound 0 0 0 0
+      go $ mkNumber 0 minBound 0 0 0
+      go $ mkNumber 0 0 minBound 0 0
+      go $ mkNumber 0 0 0 minBound 0
+      go $ mkNumber 0 0 0 0 minBound
+

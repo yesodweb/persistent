@@ -16,6 +16,8 @@
 import MongoInit
 
 import Data.Time
+import Data.Int
+import Data.Word
 import Data.IntMap (IntMap)
 import Control.Monad.Trans
 import Test.QuickCheck
@@ -41,12 +43,12 @@ import qualified DataTypeTest
 import qualified EmbedOrderTest
 import qualified EmptyEntityTest
 import qualified HtmlTest
+import qualified LargeNumberTest
 
 -- This one is in progress!
+import qualified MaxLenTest
 
 -- These are TODO.
-import qualified LargeNumberTest
-import qualified MaxLenTest
 import qualified MigrationOnlyTest
 import qualified PersistentTest
 import qualified PersistUniqueTest
@@ -121,6 +123,16 @@ mkPersist persistSettings [persistUpperCase|
 EmptyEntity
 |]
 
+mkPersist persistSettings [persistUpperCase|
+  Number
+    intx Int
+    int32 Int32
+    word32 Word32
+    int64 Int64
+    word64 Word64
+    deriving Show Eq
+|]
+
 main :: IO ()
 main = do
   hspec $ do
@@ -153,7 +165,9 @@ main = do
         (db' (deleteWhere ([] :: [Filter Foo]) >> deleteWhere ([] :: [Filter Bar])))
         Foo
         Bar
-    LargeNumberTest.specs
+    LargeNumberTest.specsWith
+        (db' (deleteWhere ([] :: [Filter Number])))
+        Number
     UniqueTest.specs
     MaxLenTest.specs
     Recursive.specs
