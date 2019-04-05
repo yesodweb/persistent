@@ -33,7 +33,7 @@ module Init (
   , sqlite_database_file
 #endif
   , BackendKey(..)
-  , generateKey
+  , GenerateKey(..)
 
   , RunDb
    -- re-exports
@@ -90,6 +90,8 @@ import Data.Text (Text, unpack)
 import Database.Persist
 import Database.Persist.TH ()
 import System.Environment (getEnvironment)
+import qualified Database.MongoDB as MongoDB
+import qualified Database.Persist.MongoDB as MongoDB
 
 #ifdef WITH_NOSQL
 import Database.Persist.Sql (PersistFieldSql(..))
@@ -97,7 +99,6 @@ import Database.Persist.TH (mkPersistSettings)
 import Language.Haskell.TH.Syntax (Type(..))
 
 #  ifdef WITH_MONGODB
-import qualified Database.MongoDB as MongoDB
 import Database.Persist.MongoDB (Action, withMongoPool, runMongoDBPool, defaultMongoConf, applyDockerEnv, BackendKey(..))
 #  endif
 
@@ -309,11 +310,21 @@ instance PersistStore backend => Arbitrary (BackendKey backend) where
           Left e -> error $ unpack e
           Right r -> r
 
-#ifdef WITH_NOSQL
-#ifdef WITH_MONGODB
-generateKey :: IO (BackendKey Context)
-generateKey = MongoKey `liftM` MongoDB.genObjectId
-#endif
+class GenerateKey backend where
+    generateKey :: IO (BackendKey backend)
+
+instance GenerateKey MongoDB.MongoContext where
+    generateKey = MongoDB.MongoKey `liftM` MongoDB.genObjectId
+
+instance GenerateKey SqlBackend where
+    generateKey = do
+        i <- readIORef keyCounter
+        writeIORef keyCounter (i + 1)
+        return $ SqlBackendKey $ i
+
+keyCounter :: IORef Int64
+keyCounter = unsafePerformIO $ newIORef 1
+{-# NOINLINE keyCounter #-}
 
 -- | A datatype that wraps a function on @entity@ that can has testable results.
 --

@@ -12,6 +12,7 @@ import Control.Monad.Logger
 import Control.Monad.Trans.Resource
 
 import PersistTestPetType
+import PersistentTestModels
 import PersistentTest hiding (specs)
 
 main :: IO ()

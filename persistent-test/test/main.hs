@@ -14,6 +14,7 @@ import qualified LargeNumberTest
 import qualified MaxLenTest
 import qualified MigrationOnlyTest
 import qualified PersistentTest
+import qualified MpsNoPrefixTest
 import qualified PersistUniqueTest
 import qualified PrimaryTest
 import qualified Recursive
@@ -103,6 +104,10 @@ main = do
     SumTypeTest.specs
     MigrationOnlyTest.specs
     PersistentTest.specs
+    PersistentTest.filterOrSpecs db
+#ifndef WITH_NOSQL
+    MpsNoPrefixTest.specs
+#endif
     EmptyEntityTest.specs
     CompositeTest.specs
     PersistUniqueTest.specs

@@ -1,8 +1,8 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TemplateHaskell #-}
+
 module MongoInit (
   (@/=), (@==), (==@)
   , assertNotEqual
