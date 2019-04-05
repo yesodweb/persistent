@@ -41,19 +41,7 @@ db = db' cleanDB
 #endif
 
 specs :: Spec
-specs = describe "embedded entities" $ do
-  it "preserves ordering" $ db $ do
-    let foo = Foo [Bar "b" "u" "g"]
-    fooId <- insert foo
-    Just otherFoo <- get fooId
-    foo @== otherFoo
-
-  it "PersistMap PersistValue serializaion" $ db $ do
-    let record = Map.fromList [("b" :: Text,"b" :: Text),("u","u"),("g","g")]
-    record @== (fromRight . fromPersistValue . toPersistValue) record
-
-specs' :: Spec
-specs' = specsWith db Foo Bar
+specs = specsWith db Foo Bar
 
 specsWith
     ::
