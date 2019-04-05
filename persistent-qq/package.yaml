@@ -27,3 +27,19 @@ when:
 library:
   ghc-options: -Wall
   source-dirs: src
+
+tests:
+  specs:
+    main:        Spec.hs
+    source-dirs: test
+    ghc-options: -Wall -Wcompat
+    dependencies:
+        - base
+        - persistent-test
+        - persistent-qq
+        - text
+        - monad-logger
+        - resourcet
+        - persistent-template
+        - hspec
+
