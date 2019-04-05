@@ -37,8 +37,8 @@ instance PersistFieldSql a => PersistFieldSql (NonEmpty a) where
 instance PersistField a => PersistField (NonEmpty a) where
     toPersistValue = toPersistValue . toList
     fromPersistValue pv = do
-        ls <- fromPersistValue pv
-        case ls of
+        list <- fromPersistValue pv
+        case list of
             [] -> Left "PersistField: NonEmpty found unexpected Empty List"
             (l:ls) -> Right (l:|ls)
 

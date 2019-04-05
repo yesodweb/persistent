@@ -1,4 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# language RankNTypes #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE EmptyDataDecls #-}
@@ -16,6 +17,7 @@ import MongoInit
 
 import Data.Time
 import Data.IntMap (IntMap)
+import Control.Monad.Trans
 import Test.QuickCheck
 import qualified Data.Text as T
 import qualified Data.ByteString as BS
@@ -31,7 +33,6 @@ import qualified CustomPersistFieldTest
 import qualified DataTypeTest
 import qualified EmbedOrderTest
 
-import qualified EmbedTest
 import qualified EmbedTestMongo
 
 import qualified EmptyEntityTest
@@ -103,6 +104,10 @@ instance Arbitrary DataTypeTable where
      <*> arbitrary              -- day
      <*> (truncateUTCTime   =<< arbitrary) -- utc
 
+mkPersist persistSettings [persistUpperCase|
+EmptyEntity
+|]
+
 main :: IO ()
 main = do
   hspec $ do
@@ -138,7 +143,10 @@ main = do
     SumTypeTest.specs
     MigrationOnlyTest.specs
     PersistentTest.specs
-    EmptyEntityTest.specs
+    EmptyEntityTest.specsWith
+        (lift . db' (deleteWhere @_ @_ @EmptyEntity []))
+        Nothing
+        EmptyEntity
     -- CompositeTest.specs
     PersistUniqueTest.specs
     PrimaryTest.specs

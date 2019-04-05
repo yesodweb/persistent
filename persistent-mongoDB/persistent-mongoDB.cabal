@@ -72,6 +72,7 @@ test-suite test
                    , bytestring
                    , QuickCheck
                    , transformers
+                   , mtl
                    , containers
                    , time
 
