@@ -21,6 +21,8 @@ import Control.Monad.Trans
 import Test.QuickCheck
 import qualified Data.Text as T
 import qualified Data.ByteString as BS
+import Text.Blaze.Html
+import Text.Blaze.Html.Renderer.Text
 
 import CustomPersistField
 
@@ -29,14 +31,20 @@ import CustomPersistField
 -- import qualified CustomPrimaryKeyReferenceTest
 -- import qualified InsertDuplicateUpdate
 
+-- These modules were quite complicated. Instead of fully extracting the
+-- relevant common functionality, I just copied and de-CPPed manually.
+import qualified EmbedTestMongo
+
+-- These are done.
 import qualified CustomPersistFieldTest
 import qualified DataTypeTest
 import qualified EmbedOrderTest
-
-import qualified EmbedTestMongo
-
 import qualified EmptyEntityTest
 import qualified HtmlTest
+
+-- This one is in progress!
+
+-- These are TODO.
 import qualified LargeNumberTest
 import qualified MaxLenTest
 import qualified MigrationOnlyTest
@@ -56,6 +64,11 @@ type Tuple = (,)
 dbNoCleanup :: Action IO () -> Assertion
 dbNoCleanup = db' (pure ())
 
+share [mkPersist persistSettings, mkMigrate "htmlMigrate"] [persistLowerCase|
+HtmlTable
+    html Html
+    deriving
+|]
 mkPersist persistSettings [persistUpperCase|
   BlogPost
     article Markdown
@@ -130,7 +143,11 @@ main = do
         ]
         []
         dataTypeTableDouble
-    HtmlTest.specs
+    HtmlTest.specsWith
+        (db' (deleteWhere @_ @_ @HtmlTable []))
+        Nothing
+        HtmlTable
+        htmlTableHtml
     EmbedTestMongo.specs
     EmbedOrderTest.specsWith
         (db' (deleteWhere ([] :: [Filter Foo]) >> deleteWhere ([] :: [Filter Bar])))

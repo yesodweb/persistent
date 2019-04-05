@@ -80,14 +80,14 @@ DataTypeTable no-json
 #endif
 |]
 
-cleanDB :: (MonadIO m, PersistQuery backend, backend ~ PersistEntityBackend DataTypeTable) => ReaderT backend m ()
-cleanDB = deleteWhere ([] :: [Filter DataTypeTable])
+cleanDB' :: (MonadIO m, PersistQuery backend, backend ~ PersistEntityBackend DataTypeTable) => ReaderT backend m ()
+cleanDB' = deleteWhere ([] :: [Filter DataTypeTable])
 
 specs :: Spec
 specs =
     specsWith
         runConn
-        cleanDB
+        cleanDB'
 #ifdef WITH_NOSQL
         Nothing
 #else
@@ -131,7 +131,7 @@ specs' = describe "data type specs" $
         -- Ensure reading the data from the database works...
         _ <- runMigrationSilent dataTypeMigrate
 #endif
-        cleanDB
+        cleanDB'
         rvals <- liftIO $ randomValues 1000
         forM_ rvals $ \x -> do
             key <- insert x
@@ -279,8 +279,8 @@ specsWith
     -- ^ List of pico fields to test
     -> (entity -> Double)
     -> Spec
-specsWith runConn cleanDB mmigration checks apprxChecks doubleFn = describe "data type specs" $
-    it "handles all types" $ asIO $ runConn $ do
+specsWith runConn' cleanDB mmigration checks apprxChecks doubleFn = describe "data type specs" $
+    it "handles all types" $ asIO $ runConn' $ do
 
         _ <- sequence_ mmigration
         -- Ensure reading the data from the database works...

@@ -33,6 +33,7 @@ module Init (
   , BackendKey(..)
   , generateKey
 
+  , RunDb
    -- re-exports
   , (A.<$>), (A.<*>)
   , module Database.Persist
@@ -406,3 +407,4 @@ arbText =
   <$> arbitrary
   where forbidden = [NotAssigned, PrivateUse]
 
+type RunDb backend m = ReaderT backend m () -> IO ()

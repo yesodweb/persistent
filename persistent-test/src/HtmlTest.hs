@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds #-}
 {-# LANGUAGE QuasiQuotes, TemplateHaskell, CPP, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, EmptyDataDecls, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses #-}
-module HtmlTest (specs) where
+module HtmlTest (specs, specsWith) where
 
 import Database.Persist.TH
 import Data.Char (generalCategory, GeneralCategory(..))
@@ -23,21 +23,34 @@ cleanDB :: (MonadIO m, PersistQuery backend, PersistEntityBackend HtmlTable ~ ba
 cleanDB = do
   deleteWhere ([] :: [Filter HtmlTable])
 
-specs :: Spec
-specs = describe "html" $ do
-    it "works" $ asIO $ runResourceT $ runConn $ do
-#ifndef WITH_NOSQL
-        _ <- runMigrationSilent htmlMigrate
+specsWith
+    ::
+    ( MonadFail m, MonadIO m
+    , PersistEntityBackend entity ~ BaseBackend backend
+    , PersistEntity entity
+    , PersistStoreWrite backend
+    )
+    => RunDb backend m
+    -> Maybe (ReaderT backend m a)
+    -> (Html -> entity)
+    -> (entity -> Html)
+    -> Spec
+specsWith runConn mmigrate htmlTable getHtmlFrom = describe "html" $ do
+    it "works" $ asIO $ runConn $ do
+        sequence_ mmigrate
         -- Ensure reading the data from the database works...
-        _ <- runMigrationSilent htmlMigrate
-#endif
+        sequence_ mmigrate
 
         sequence_ $ replicate 1000 $ do
             x <- liftIO randomValue
-            key <- insert $ HtmlTable x
-            Just (HtmlTable y) <- get key
+            key <- insert $ htmlTable x
+            Just htmlTableY <- get key
             liftIO $ do
-                renderHtml x @?= renderHtml y
+                renderHtml x @?= renderHtml (getHtmlFrom htmlTableY)
+
+specs :: Spec
+specs =
+    specsWith runConn (Just (runMigrationSilent htmlMigrate)) HtmlTable htmlTableHtml
 
 randomValue :: IO Html
 randomValue =

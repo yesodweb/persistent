@@ -74,6 +74,7 @@ test-suite test
                    , transformers
                    , mtl
                    , containers
+                   , blaze-html
                    , time
 
 source-repository head
