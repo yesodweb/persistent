@@ -16,7 +16,7 @@ module EntityEmbedTest where
 -- because we are using a type alias we need to declare in a separate module
 -- this is used in EmbedTest
 #if WITH_NOSQL
-import MongoInit
+import Init
 
 mkPersist persistSettings [persistUpperCase|
   ARecord
