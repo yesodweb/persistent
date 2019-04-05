@@ -1,6 +1,8 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# OPTIONS_GHC -fno-warn-unused-binds #-}
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE EmptyDataDecls #-}
@@ -15,7 +17,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module DataTypeTest (specs) where
+module DataTypeTest (specs, specsWith) where
 
 import Control.Applicative (liftA2)
 import Database.Persist.TH
@@ -28,6 +30,7 @@ import Data.Char (generalCategory, GeneralCategory(..))
 import qualified Data.ByteString as BS
 import Data.Fixed (Pico,Micro)
 import Data.IntMap (IntMap)
+import Data.Foldable (for_)
 import qualified Data.Text as T
 import Data.Time (Day, UTCTime (..), fromGregorian, picosecondsToDiffTime,
                   TimeOfDay (TimeOfDay), timeToTimeOfDay, timeOfDayToTime)
@@ -81,7 +84,46 @@ cleanDB :: (MonadIO m, PersistQuery backend, backend ~ PersistEntityBackend Data
 cleanDB = deleteWhere ([] :: [Filter DataTypeTable])
 
 specs :: Spec
-specs = describe "data type specs" $
+specs =
+    specsWith
+        runConn
+        cleanDB
+#ifdef WITH_NOSQL
+        Nothing
+#else
+        (Just (runMigrationSilent dataTypeMigrate))
+#endif
+        [ TestFn "text" dataTypeTableText
+        , TestFn "textMaxLen" dataTypeTableTextMaxLen
+        , TestFn "bytes" dataTypeTableBytes
+        , TestFn "bytesTextTuple" dataTypeTableBytesTextTuple
+        , TestFn "bytesMaxLen" dataTypeTableBytesMaxLen
+        , TestFn "int" dataTypeTableInt
+        , TestFn "intList" dataTypeTableIntList
+        , TestFn "intMap" dataTypeTableIntMap
+        , TestFn "bool" dataTypeTableBool
+        , TestFn "day" dataTypeTableDay
+#ifndef WITH_NOSQL
+        , TestFn "time" (roundTime . dataTypeTableTime)
+#endif
+#if !(defined(WITH_NOSQL)) || (defined(WITH_NOSQL) && defined(HIGH_PRECISION_DATE))
+        , TestFn "utc" (roundUTCTime . dataTypeTableUtc)
+#endif
+#if defined(WITH_MYSQL) && !(defined(OLD_MYSQL))
+        , TestFn "timeFrac" (dataTypeTableTimeFrac)
+        , TestFn "utcFrac" (dataTypeTableUtcFrac)
+#endif
+#ifdef WITH_POSTGRESQL
+        , TestFn "jsonb" dataTypeTableJsonb
+#endif
+        ]
+#ifndef WITH_NOSQL
+        [ ("pico", dataTypeTablePico) ]
+#endif
+        dataTypeTableDouble
+
+specs' :: Spec
+specs' = describe "data type specs" $
     it "handles all types" $ asIO $ runConn $ do
 
 #ifndef WITH_NOSQL
@@ -163,7 +205,7 @@ roundUTCTime t =
 roundUTCTime = id
 #endif
 
-randomValues :: Int -> IO [DataTypeTable]
+randomValues :: Arbitrary a => Int -> IO [a]
 randomValues i = do
   gs <- replicateM i newQCGen
   return $ zipWith (unGen arbitrary) gs [0..]
@@ -214,33 +256,58 @@ instance Arbitrary Value where
 #endif
 
 
-arbText :: Gen Text
-arbText =
-     T.pack
-  .  filter ((`notElem` forbidden) . generalCategory)
-  .  filter (<= '\xFFFF') -- only BMP
-  .  filter (/= '\0')     -- no nulls
-  .  T.unpack
-  <$> arbitrary
-  where forbidden = [NotAssigned, PrivateUse]
+specsWith
+    :: forall db backend m entity.
+    ( db ~ ReaderT backend m
+    , PersistStoreRead backend
+    , PersistEntity entity
+    , PersistEntityBackend entity ~ BaseBackend backend
+    , Arbitrary entity
+    , PersistStoreWrite backend
+    , MonadFail m
+    , MonadIO m
+    )
+    => (db () -> IO ())
+    -- ^ DB Runner
+    -> db ()
+    -- ^ Cleanup
+    -> Maybe (db [Text])
+    -- ^ Optional migrations to run
+    -> [TestFn entity]
+    -- ^ List of entity fields to test
+    -> [(String, entity -> Pico)]
+    -- ^ List of pico fields to test
+    -> (entity -> Double)
+    -> Spec
+specsWith runConn cleanDB mmigration checks apprxChecks doubleFn = describe "data type specs" $
+    it "handles all types" $ asIO $ runConn $ do
 
--- truncate less significant digits
-truncateToMicro :: Pico -> Pico
-truncateToMicro p = let
-  p' = fromRational . toRational $ p  :: Micro
-  in   fromRational . toRational $ p' :: Pico
+        _ <- sequence_ mmigration
+        -- Ensure reading the data from the database works...
+        _ <- sequence_ mmigration
+        cleanDB
+        rvals <- liftIO $ randomValues 1000
+        for_ rvals $ \x -> do
+            key <- insert x
+            Just y <- get key
+            liftIO $ do
+                let check :: (Eq a, Show a) => String -> (entity -> a) -> IO ()
+                    check s f = (s, f x) @=? (s, f y)
+                -- Check floating-point near equality
+                let check' :: (Fractional p, Show p, Real p) => String -> (entity -> p) -> IO ()
+                    check' s f
+                        | abs (f x - f y) < 0.000001 = return ()
+                        | otherwise = (s, f x) @=? (s, f y)
+                -- Check individual fields for better error messages
+                for_ checks $ \(TestFn msg f) -> check msg f
+                for_ apprxChecks $ \(msg, f) -> check' msg f
 
-truncateTimeOfDay :: TimeOfDay -> Gen TimeOfDay
-truncateTimeOfDay (TimeOfDay h m s) =
-  return $ TimeOfDay h m $ truncateToMicro s
-
-truncateUTCTime :: UTCTime -> Gen UTCTime
-truncateUTCTime (UTCTime d dift) = do
-  let pico = fromRational . toRational $ dift :: Pico
-      picoi= truncate . (*1000000000000) . toRational $ truncateToMicro pico :: Integer
-      -- https://github.com/lpsmith/postgresql-simple/issues/123
-      d' = max d $ fromGregorian 1950 1 1
-  return $ UTCTime d' $ picosecondsToDiffTime picoi
-
-asIO :: IO a -> IO a
-asIO = id
+                -- Do a special check for Double since it may
+                -- lose precision when serialized.
+                when (getDoubleDiff (doubleFn x) (doubleFn y) > 1e-14) $
+                    check "double" doubleFn
+    where
+      normDouble :: Double -> Double
+      normDouble x | abs x > 1 = x / 10 ^ (truncate (logBase 10 (abs x)) :: Integer)
+                   | otherwise = x
+      getDoubleDiff x y = abs (normDouble x - normDouble y)

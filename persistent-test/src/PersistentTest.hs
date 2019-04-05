@@ -17,7 +17,7 @@
 {-# LANGUAGE TypeFamilies #-}
 module PersistentTest where
 
-import qualified Control.Monad.Fail as Fail
+import Control.Monad.Fail
 
 import Control.Monad.IO.Class
 #ifndef WITH_MONGODB
@@ -64,10 +64,6 @@ import Database.Persist.MySQL()
 import Init
 import PersistTestPetType
 import PersistTestPetCollarType
-
--- | This type alias is provided for potential backward compatibility
--- concerns. will use CPP if earlier resolvers complain.
-type MonadFail = Fail.MonadFail
 
 #ifdef WITH_NOSQL
 mkPersist persistSettings [persistUpperCase|

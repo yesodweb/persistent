@@ -58,6 +58,3 @@ specs = describe "migration only" $ do
         mtf <- get tid
         liftIO $ mtf @?= Just tf
         deleteWhere ([] :: [Filter TwoField])
-
-asIO :: IO a -> IO a
-asIO = id

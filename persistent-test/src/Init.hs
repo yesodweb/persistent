@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -6,6 +7,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Init (
   (@/=), (@==), (==@)
+  , asIO
   , assertNotEqual
   , assertNotEmpty
   , assertEmpty
@@ -50,9 +52,23 @@ module Init (
 #endif
   , BS.ByteString
   , SomeException
-) where
+  , MonadFail
+  , TestFn(..)
+  , truncateTimeOfDay
+  , truncateToMicro
+  , truncateUTCTime
+  , arbText
+  , liftA2
+  ) where
 
 -- re-exports
+import Control.Applicative (liftA2)
+import Test.QuickCheck.Instances ()
+import Data.Char (generalCategory, GeneralCategory(..))
+import qualified Data.Text as T
+import Data.Fixed (Pico,Micro)
+import Data.Time
+import Control.Monad.Fail
 import Control.Applicative as A ((<$>), (<*>))
 import Control.Exception (SomeException)
 import Control.Monad (void, replicateM, liftM, when, forM_)
@@ -119,6 +135,9 @@ import Data.Int (Int32, Int64)
 
 import Control.Monad.IO.Class
 
+
+asIO :: IO a -> IO a
+asIO a = a
 
 #ifdef WITH_MONGODB
 setup :: Action IO ()
@@ -343,3 +362,47 @@ generateKey = do
     writeIORef keyCounter (i + 1)
     return $ SqlBackendKey $ i
 #endif
+
+-- | A datatype that wraps a function on @entity@ that can has testable results.
+--
+-- Allows us to write:
+--
+-- @
+-- foo :: entity -> entity -> [TestFn entity] -> Bool
+-- foo e0 e1 = all (\(TestFn msg f) -> f e0 == f e1)
+-- @
+data TestFn entity where
+    TestFn
+        :: (Show a, Eq a)
+        => String
+        -> (entity -> a)
+        -> TestFn entity
+
+truncateTimeOfDay :: TimeOfDay -> Gen TimeOfDay
+truncateTimeOfDay (TimeOfDay h m s) =
+  return $ TimeOfDay h m $ truncateToMicro s
+
+-- truncate less significant digits
+truncateToMicro :: Pico -> Pico
+truncateToMicro p = let
+  p' = fromRational . toRational $ p  :: Micro
+  in   fromRational . toRational $ p' :: Pico
+
+truncateUTCTime :: UTCTime -> Gen UTCTime
+truncateUTCTime (UTCTime d dift) = do
+  let pico = fromRational . toRational $ dift :: Pico
+      picoi= truncate . (*1000000000000) . toRational $ truncateToMicro pico :: Integer
+      -- https://github.com/lpsmith/postgresql-simple/issues/123
+      d' = max d $ fromGregorian 1950 1 1
+  return $ UTCTime d' $ picosecondsToDiffTime picoi
+
+arbText :: Gen Text
+arbText =
+     T.pack
+  .  filter ((`notElem` forbidden) . generalCategory)
+  .  filter (<= '\xFFFF') -- only BMP
+  .  filter (/= '\0')     -- no nulls
+  .  T.unpack
+  <$> arbitrary
+  where forbidden = [NotAssigned, PrivateUse]
+

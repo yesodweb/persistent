@@ -66,6 +66,3 @@ specs = describe "doesn't migrate equivalent types" $ do
         return ()
 #endif
 
-
-asIO :: IO a -> IO a
-asIO = id

@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds #-}
+{-# language RankNTypes #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -13,6 +14,7 @@
 
 module CustomPersistFieldTest (
   specs
+  , specsWith
 #ifndef WITH_NOSQL
   , customFieldMigrate
 #endif
@@ -20,6 +22,7 @@ module CustomPersistFieldTest (
 
 import Init
 import CustomPersistField
+import Control.Monad.Fail
 
 #ifdef WITH_NOSQL
 db :: Action IO () -> Assertion
@@ -34,10 +37,24 @@ share [mkPersist sqlSettings,  mkMigrate "customFieldMigrate"] [persistLowerCase
 |]
 
 specs :: Spec
-specs = describe "Custom persist field" $ do
-  it "should read what it wrote" $ db $ do
-    let originalBlogPost = BlogPost "article"
+specs = specsWith db BlogPost
+
+specsWith
+    ::
+    ( PersistEntityBackend entity ~ BaseBackend backend
+    , Show entity, Eq entity
+    , PersistStoreRead backend
+    , PersistStoreWrite backend
+    , MonadIO m
+    , MonadFail m
+    , PersistEntity entity
+    )
+    => (ReaderT backend m () -> IO ())
+    -> (Markdown -> entity)
+    -> Spec
+specsWith runDB blogPost = describe "Custom persist field" $ do
+  it "should read what it wrote" $ runDB $ do
+    let originalBlogPost = blogPost "article"
     blogPostId <- insert originalBlogPost
     Just newBlogPost <- get blogPostId
     liftIO $ originalBlogPost @?= newBlogPost
-

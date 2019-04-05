@@ -49,9 +49,6 @@ randomValue =
          <$> randomIOs
     where forbidden = [NotAssigned, PrivateUse]
 
-asIO :: IO a -> IO a
-asIO = id
-
 randomIOs :: Random a => IO [a]
 randomIOs = do
     len <- randomRIO (0, 20)

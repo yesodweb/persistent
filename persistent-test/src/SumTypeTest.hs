@@ -63,6 +63,3 @@ specs = describe "sum types" $
 
         x3 <- get vb1
         liftIO $ x3 @?= Just (VehicleBicycleSum bike1)
-
-asIO :: IO a -> IO a
-asIO = id

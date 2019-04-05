@@ -112,6 +112,3 @@ specs = describe "rename specs" $ do
                 [ ("ExtraBlock", map T.words ["foo bar", "baz", "bin"])
                 , ("ExtraBlock2", map T.words ["something"])
                 ]
-
-asIO :: IO a -> IO a
-asIO = id
