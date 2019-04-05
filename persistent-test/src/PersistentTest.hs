@@ -15,7 +15,12 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
-module PersistentTest where
+module PersistentTest
+    ( module PersistentTest
+    , cleanDB
+    , testMigrate
+    , noPrefixMigrate
+    ) where
 
 import Control.Monad.Fail
 
@@ -37,6 +42,9 @@ import Test.Hspec.Expectations ()
 import Test.Hspec.QuickCheck(prop)
 import UnliftIO (MonadUnliftIO, catch)
 import Web.PathPieces (PathPiece (..))
+
+import qualified RawSqlTest
+import PersistentTestModels
 
 import Database.Persist
 
@@ -64,124 +72,7 @@ import Database.Persist.MySQL()
 import Init
 import PersistTestPetType
 import PersistTestPetCollarType
-
-#ifdef WITH_NOSQL
-mkPersist persistSettings { mpsGeneric = True }[persistUpperCase|
-#else
-share [mkPersist persistSettings { mpsGeneric = True },  mkMigrate "testMigrate", mkDeleteCascade persistSettings, mkSave "_ignoredSave"] [persistUpperCase|
-#endif
-
--- Dedented comment
-  -- Header-level comment
-    -- Indented comment
-  Person json
-    name Text
-    age Int "some ignored -- \" attribute"
-    color Text Maybe -- this is a comment sql=foobarbaz
-    PersonNameKey name -- this is a comment sql=foobarbaz
-    deriving Show Eq
-  Person1
--- Dedented comment
-  -- Header-level comment
-    -- Indented comment
-    name Text
-    age Int
-    deriving Show Eq
-  PersonMaybeAge
-    name Text
-    age Int Maybe
-  PersonMay json
-    name Text Maybe
-    color Text Maybe
-    deriving Show Eq
-  Pet
-    ownerId PersonId
-    name Text
-    -- deriving Show Eq
--- Dedented comment
-  -- Header-level comment
-    -- Indented comment
-    type PetType
-  MaybeOwnedPet
-    ownerId PersonId Maybe
-    name Text
-    type PetType
--- Dedented comment
-  -- Header-level comment
-    -- Indented comment
-  NeedsPet
-    petKey PetId
-  OutdoorPet
-    ownerId PersonId
-    collar PetCollar
-    type PetType
-
-  -- From the scaffold
-  UserPT
-    ident Text
-    password Text Maybe
-    UniqueUserPT ident
-  EmailPT
-    email Text
-    user UserPTId Maybe
-    verkey Text Maybe
-    UniqueEmailPT email
-
-  Upsert
-    email Text
-    attr Text
-    extra Text
-    age Int
-    UniqueUpsert email
-    deriving Eq Show
-
-  UpsertBy
-    email Text
-    city Text
-    attr Text
-    UniqueUpsertBy email
-    UniqueUpsertByCity city
-    deriving Eq Show
-
-  Strict
-    !yes Int
-    ~no Int
-    def Int
-|]
-
-deriving instance Show (BackendKey backend) => Show (PetGeneric backend)
-deriving instance Eq (BackendKey backend) => Eq (PetGeneric backend)
-
-share [mkPersist persistSettings { mpsPrefixFields = False, mpsGeneric = False }
-#ifdef WITH_NOSQL
-      ] [persistUpperCase|
-#else
-      , mkMigrate "noPrefixMigrate"
-      ] [persistLowerCase|
-#endif
-NoPrefix1
-    someFieldName Int
-    deriving Show Eq
-NoPrefix2
-    someOtherFieldName Int
-    unprefixedRef NoPrefix1Id
-    deriving Show Eq
-+NoPrefixSum
-    unprefixedLeft Int
-    unprefixedRight String
-    deriving Show Eq
-|]
-
-cleanDB :: (MonadIO m, PersistQuery backend, PersistEntityBackend EmailPT ~ backend) => ReaderT backend m ()
-cleanDB = do
-  deleteWhere ([] :: [Filter Person])
-  deleteWhere ([] :: [Filter Person1])
-  deleteWhere ([] :: [Filter Pet])
-  deleteWhere ([] :: [Filter MaybeOwnedPet])
-  deleteWhere ([] :: [Filter NeedsPet])
-  deleteWhere ([] :: [Filter OutdoorPet])
-  deleteWhere ([] :: [Filter UserPT])
-  deleteWhere ([] :: [Filter EmailPT])
+import PersistentTestModels
 
 #ifdef WITH_NOSQL
 db :: Action IO () -> Assertion
@@ -969,90 +860,7 @@ specs = describe "persistent" $ do
         liftIO $ p2 @?= ent2
 #endif
 #else
-  it "rawSql/2+2" $ db $ do
-      ret <- rawSql "SELECT 2+2" []
-      liftIO $ ret @?= [Single (4::Int)]
-
-  it "rawSql/?-?" $ db $ do
-      ret <- rawSql "SELECT ?-?" [PersistInt64 5, PersistInt64 3]
-      liftIO $ ret @?= [Single (2::Int)]
-
-  it "rawSql/NULL" $ db $ do
-      ret <- rawSql "SELECT NULL" []
-      liftIO $ ret @?= [Nothing :: Maybe (Single Int)]
-
-  it "rawSql/entity" $ db $ do
-      let insert' :: (PersistStore backend, PersistEntity val, PersistEntityBackend val ~ BaseBackend backend, MonadIO m)
-                  => val -> ReaderT backend m (Key val, val)
-          insert' v = insert v >>= \k -> return (k, v)
-      (p1k, p1) <- insert' $ Person "Mathias"   23 Nothing
-      (p2k, p2) <- insert' $ Person "Norbert"   44 Nothing
-      (p3k, _ ) <- insert' $ Person "Cassandra" 19 Nothing
-      (_  , _ ) <- insert' $ Person "Thiago"    19 Nothing
-      (a1k, a1) <- insert' $ Pet p1k "Rodolfo" Cat
-      (a2k, a2) <- insert' $ Pet p1k "Zeno"    Cat
-      (a3k, a3) <- insert' $ Pet p2k "Lhama"   Dog
-      (_  , _ ) <- insert' $ Pet p3k "Abacate" Cat
-      escape <- ((. DBName) . connEscapeName) `fmap` ask
-      person <- getTableName (error "rawSql Person" :: Person)
-      name   <- getFieldName PersonName
-      let query = T.concat [ "SELECT ??, ?? "
-                           , "FROM ", person
-                           , ", ", escape "Pet"
-                           , " WHERE ", person, ".", escape "age", " >= ? "
-                           , "AND ", escape "Pet", ".", escape "ownerId", " = "
-                                   , person, ".", escape "id"
-                           , " ORDER BY ", person, ".", name
-                           ]
-      ret <- rawSql query [PersistInt64 20]
-      liftIO $ ret @?= [ (Entity p1k p1, Entity a1k a1)
-                       , (Entity p1k p1, Entity a2k a2)
-                       , (Entity p2k p2, Entity a3k a3) ]
-      ret2 <- rawSql query [PersistInt64 20]
-      liftIO $ ret2 @?= [ (Just (Entity p1k p1), Just (Entity a1k a1))
-                        , (Just (Entity p1k p1), Just (Entity a2k a2))
-                        , (Just (Entity p2k p2), Just (Entity a3k a3)) ]
-      ret3 <- rawSql query [PersistInt64 20]
-      liftIO $ ret3 @?= [ Just (Entity p1k p1, Entity a1k a1)
-                        , Just (Entity p1k p1, Entity a2k a2)
-                        , Just (Entity p2k p2, Entity a3k a3) ]
-
-  it "rawSql/order-proof" $ db $ do
-      let p1 = Person "Zacarias" 93 Nothing
-      p1k <- insert p1
-      escape <- ((. DBName) . connEscapeName) `fmap` ask
-      let query = T.concat [ "SELECT ?? "
-                           , "FROM ", escape "Person"
-                           ]
-      ret1 <- rawSql query []
-      ret2 <- rawSql query [] :: MonadIO m => SqlPersistT m [Entity (ReverseFieldOrder Person)]
-      liftIO $ ret1 @?= [Entity p1k p1]
-      liftIO $ ret2 @?= [Entity (RFOKey $ unPersonKey p1k) (RFO p1)]
-
-  it "rawSql/OUTER JOIN" $ db $ do
-      let insert' :: (PersistStore backend, PersistEntity val, PersistEntityBackend val ~ BaseBackend backend, MonadIO m)
-                  => val -> ReaderT backend m (Key val, val)
-          insert' v = insert v >>= \k -> return (k, v)
-      (p1k, p1) <- insert' $ Person "Mathias"   23 Nothing
-      (p2k, p2) <- insert' $ Person "Norbert"   44 Nothing
-      (a1k, a1) <- insert' $ Pet p1k "Rodolfo" Cat
-      (a2k, a2) <- insert' $ Pet p1k "Zeno"    Cat
-      escape <- ((. DBName) . connEscapeName) `fmap` ask
-      let query = T.concat [ "SELECT ??, ?? "
-                           , "FROM ", person
-                           , "LEFT OUTER JOIN ", pet
-                           , " ON ", person, ".", escape "id"
-                           , " = ", pet, ".", escape "ownerId"
-                           , " ORDER BY ", person, ".", escape "name"]
-          person = escape "Person"
-          pet    = escape "Pet"
-      ret <- rawSql query []
-      liftIO $ ret @?= [ (Entity p1k p1, Just (Entity a1k a1))
-                       , (Entity p1k p1, Just (Entity a2k a2))
-                       , (Entity p2k p2, Nothing) ]
-
-  it "commit/rollback" (caseCommitRollback >> runResourceT (runConn cleanDB))
-
+  RawSqlTest.specs
 #ifndef WITH_MYSQL
 #  ifndef WITH_POSTGRESQL
 #    ifndef WITH_NOSQL
@@ -1119,66 +927,6 @@ specs = describe "persistent" $ do
     it "works for [Text]"       $ runArrayAggTest "ident"    ["a", "c", "e", "g" :: Text]
     it "works for [Maybe Text]" $ runArrayAggTest "password" [Nothing, Just "b", Just "d", Just "h" :: Maybe Text]
 #endif
-
--- | Reverses the order of the fields of an entity.  Used to test
--- @??@ placeholders of 'rawSql'.
-newtype ReverseFieldOrder a = RFO {unRFO :: a} deriving (Eq, Show)
-instance ToJSON (Key (ReverseFieldOrder a))   where toJSON = error "ReverseFieldOrder"
-instance FromJSON (Key (ReverseFieldOrder a)) where parseJSON = error "ReverseFieldOrder"
-instance (PersistEntity a) => PersistEntity (ReverseFieldOrder a) where
-    type PersistEntityBackend (ReverseFieldOrder a) = PersistEntityBackend a
-
-    newtype Key (ReverseFieldOrder a) = RFOKey { unRFOKey :: BackendKey SqlBackend } deriving (Show, Read, Eq, Ord, PersistField, PersistFieldSql)
-    keyFromValues = fmap RFOKey . fromPersistValue . head
-    keyToValues   = (:[]) . toPersistValue . unRFOKey
-
-    entityDef = revFields . entityDef . liftM unRFO
-        where
-          revFields ed = ed { entityFields = reverse (entityFields ed) }
-
-    toPersistFields = reverse . toPersistFields . unRFO
-    newtype EntityField (ReverseFieldOrder a) b = EFRFO {unEFRFO :: EntityField a b}
-    persistFieldDef = persistFieldDef . unEFRFO
-    fromPersistValues = fmap RFO . fromPersistValues . reverse
-
-    newtype Unique      (ReverseFieldOrder a)   = URFO  {unURFO  :: Unique      a  }
-    persistUniqueToFieldNames = reverse . persistUniqueToFieldNames . unURFO
-    persistUniqueToValues = reverse . persistUniqueToValues . unURFO
-    persistUniqueKeys = map URFO . reverse . persistUniqueKeys . unRFO
-
-    persistIdField = error "ReverseFieldOrder.persistIdField"
-    fieldLens = error "ReverseFieldOrder.fieldLens"
-
-caseCommitRollback :: Assertion
-caseCommitRollback = db $ do
-    let filt :: [Filter Person1]
-        filt = []
-
-    let p = Person1 "foo" 0
-
-    _ <- insert p
-    _ <- insert p
-    _ <- insert p
-
-    c1 <- count filt
-    c1 @== 3
-
-    transactionSave
-    c2 <- count filt
-    c2 @== 3
-
-    _ <- insert p
-    transactionUndo
-    c3 <- count filt
-    c3 @== 3
-
-    _ <- insert p
-    transactionSave
-    _ <- insert p
-    _ <- insert p
-    transactionUndo
-    c4 <- count filt
-    c4 @== 4
 
 #endif
 

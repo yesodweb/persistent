@@ -53,8 +53,10 @@ flag nooverlap
 
 library
     exposed-modules: PersistentTest
+                     PersistentTestModels
                      PersistTestPetType
                      PersistTestPetCollarType
+                     RawSqlTest
                      RenameTest
                      DataTypeTest
                      EmptyEntityTest
