@@ -28,10 +28,10 @@ import CustomPersistField
 -- import qualified InsertDuplicateUpdate
 
 import qualified CustomPersistFieldTest
-
 import qualified DataTypeTest
 
 import qualified EmbedOrderTest
+
 import qualified EmbedTest
 import qualified EmptyEntityTest
 import qualified HtmlTest

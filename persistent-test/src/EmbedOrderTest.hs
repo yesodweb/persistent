@@ -9,7 +9,7 @@ embedOrderMigrate
 ) where
 
 import Init
-import Data.Map hiding (insert)
+import qualified Data.Map as Map
 
 import Debug.Trace (trace)
 debug :: Show s => s -> s
@@ -49,23 +49,37 @@ specs = describe "embedded entities" $ do
     foo @== otherFoo
 
   it "PersistMap PersistValue serializaion" $ db $ do
-    let record = fromList [("b","b"),("u","u"),("g","g")] :: Map Text Text
+    let record = Map.fromList [("b" :: Text,"b" :: Text),("u","u"),("g","g")]
     record @== (fromRight . fromPersistValue . toPersistValue) record
 
-    -- this demonstrates a change in ordering
-    -- that won't be a problem if the keys are properly tracked
-    {-
-    let precord = PersistMap [("b",PersistText "b"),("u",PersistText "u"),("g",PersistText "g")]
-    precord ==@ (debug . toPersistValue . debug . (fromRight . fromPersistValue :: PersistValue -> Map Text Text)) precord
+specs' :: Spec
+specs' = specsWith db Foo Bar
 
-    let precord = PersistMap [("b",PersistText "b"),("u",PersistText "u"),("g",PersistText "g")]
-    precord ==@ (fromSuccess . fromJSON . debug . (toJSON :: PersistValue -> Value)) precord
+specsWith
+    ::
+    ( PersistEntityBackend foo ~ BaseBackend backend
+    , PersistEntityBackend bar ~ BaseBackend backend
+    , PersistStoreRead backend, PersistStoreWrite backend
+    , Show foo, Eq foo
+    , MonadFail m
+    , MonadIO m
+    , Show bar, Eq bar
+    , PersistEntity foo, PersistEntity bar
+    )
+    => (ReaderT backend m () -> IO ())
+    -> ([bar] -> foo)
+    -> (String -> String -> String -> bar)
+    -> Spec
+specsWith db mkFoo mkBar = describe "embedded entities" $ do
+    it "preserves ordering" $ db $ do
+        let foo = mkFoo [mkBar "b" "u" "g"]
+        fooId <- insert foo
+        Just otherFoo <- get fooId
+        foo @== otherFoo
 
-
-fromSuccess :: Result a -> a
-fromSuccess (Success s) = s
-fromSuccess (Error e) = error $ "expected Success, got Error " ++ e
-    -}
+    it "PersistMap PersistValue serializaion" $ db $ do
+        let record = Map.fromList [("b" :: Text,"b" :: Text),("u","u"),("g","g")]
+        record @== (fromRight . fromPersistValue . toPersistValue) record
 
 fromRight :: Show a => Either a b -> b
 fromRight (Left e) = error $ "expected Right, got Left " ++ show e
