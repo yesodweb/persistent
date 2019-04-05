@@ -11,11 +11,10 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
-module EntityEmbedTest where
+module EntityEmbedTestMongo where
 
 -- because we are using a type alias we need to declare in a separate module
 -- this is used in EmbedTest
-#if WITH_NOSQL
 import MongoInit
 
 mkPersist persistSettings [persistUpperCase|
@@ -25,4 +24,3 @@ mkPersist persistSettings [persistUpperCase|
 |]
 
 type AnEntity = Entity ARecord
-#endif

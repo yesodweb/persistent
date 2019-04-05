@@ -29,10 +29,11 @@ import CustomPersistField
 
 import qualified CustomPersistFieldTest
 import qualified DataTypeTest
-
 import qualified EmbedOrderTest
 
 import qualified EmbedTest
+import qualified EmbedTestMongo
+
 import qualified EmptyEntityTest
 import qualified HtmlTest
 import qualified LargeNumberTest
@@ -49,10 +50,10 @@ import qualified MigrationColumnLengthTest
 import qualified EquivalentTypeTest
 import qualified TransactionLevelTest
 
-db :: Action IO () -> Assertion
-db = db' (return ())
-
 type Tuple = (,)
+
+dbNoCleanup :: Action IO () -> Assertion
+dbNoCleanup = db' (pure ())
 
 mkPersist persistSettings [persistUpperCase|
   BlogPost
@@ -107,7 +108,7 @@ main = do
   hspec $ do
     RenameTest.specs
     DataTypeTest.specsWith
-        db
+        dbNoCleanup
         (pure ())
         Nothing
         [ TestFn "Text" dataTypeTableText
@@ -125,9 +126,9 @@ main = do
         []
         dataTypeTableDouble
     HtmlTest.specs
-    EmbedTest.specs
+    EmbedTestMongo.specs
     EmbedOrderTest.specsWith
-        db
+        (db' (deleteWhere ([] :: [Filter Foo]) >> deleteWhere ([] :: [Filter Bar])))
         Foo
         Bar
     LargeNumberTest.specs
@@ -142,7 +143,7 @@ main = do
     PersistUniqueTest.specs
     PrimaryTest.specs
     CustomPersistFieldTest.specsWith
-        db
+        dbNoCleanup
         BlogPost
     MigrationColumnLengthTest.specs
     EquivalentTypeTest.specs

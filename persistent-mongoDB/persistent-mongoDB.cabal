@@ -51,6 +51,8 @@ test-suite test
     main-is:         main.hs
     hs-source-dirs:  test
     other-modules:   MongoInit
+                     EmbedTestMongo
+                     EntityEmbedTestMongo
     ghc-options:     -Wall
 
     build-depends:   base >= 4.6 && < 5
@@ -61,6 +63,7 @@ test-suite test
                    , persistent-test
                    , persistent-qq
                    , template-haskell
+                   , process
                    , unliftio-core
                    , aeson
                    , hspec >= 1.3
