@@ -14,9 +14,9 @@ import Data.String (IsString)
 #ifdef WITH_NOSQL
 db :: Action IO () -> Assertion
 db = db' (return ())
-mkPersist persistSettings [persistUpperCase|
+mkPersist persistSettings { mpsGeneric = True } [persistUpperCase|
 #else
-share [mkPersist sqlSettings,  mkMigrate "maxlenMigrate"] [persistLowerCase|
+share [mkPersist sqlSettings { mpsGeneric = True },  mkMigrate "maxlenMigrate"] [persistLowerCase|
 #endif
   MaxLen
     text1 Text
@@ -35,18 +35,20 @@ share [mkPersist sqlSettings,  mkMigrate "maxlenMigrate"] [persistLowerCase|
 |]
 
 specs :: Spec
-specs = specsWith db MaxLen
+specs = specsWith db
 
 specsWith
-    :: AbstractTest backend entity m
+    ::
+    ( MonadIO m, MonadFail m
+    , PersistStoreWrite backend, PersistStoreWrite (BaseBackend backend)
+    )
     => RunDb backend m
-    -> (Text -> Text -> ByteString -> ByteString -> String -> String -> entity)
     -> Spec
-specsWith runDb maxLen = describe "Maximum length attribute" $ do
+specsWith runDb = describe "Maximum length attribute" $ do
   it "truncates values that are too long" $ runDb $ do
-    let t1  = maxLen a a  a a  a a
-        t2  = maxLen b b  b b  b b
-        t2' = maxLen b b' b b' b b'
+    let t1  = MaxLen a a  a a  a a
+        t2  = MaxLen b b  b b  b b
+        t2' = MaxLen b b' b b' b b'
         a, b, b' :: IsString t => t
         a  = "a"
         b  = "12345"

@@ -11,11 +11,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
-module EmbedTest (specs,
-#ifndef WITH_NOSQL
-embedMigrate
-#endif
-) where
+module EmbedTest (specs, specsWith, cleanDB, embedMigrate) where
 
 import Init
 import Control.Exception (Exception, throw)
@@ -24,10 +20,7 @@ import Data.Typeable (Typeable)
 import qualified Data.Text as T
 import qualified Data.Set as S
 import qualified Data.Map as M
-#if WITH_NOSQL
 import EntityEmbedTest
-import System.Process (readProcess)
-#endif
 import Data.List.NonEmpty hiding (insert, length)
 
 data TestException = TestException
@@ -46,11 +39,7 @@ instance PersistField a => PersistField (NonEmpty a) where
             (l:ls) -> Right (l:|ls)
 
 
-#if WITH_NOSQL
-mkPersist persistSettings [persistUpperCase|
-#else
-share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
-#endif
+share [mkPersist sqlSettings { mpsGeneric = True },  mkMigrate "embedMigrate"] [persistUpperCase|
 
   OnlyName
     name Text
@@ -140,6 +129,10 @@ share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
     map (M.Map T.Text (Key OnlyName))
     deriving Show Eq Read Ord
 
+  HasArrayWithEntities
+    hasEntity (Entity ARecord)
+    arrayWithEntities [AnEntity]
+    deriving Show Eq Read Ord
 
   -- Self refrences are only allowed as a nullable type:
   -- a Maybe or a List
@@ -153,22 +146,22 @@ share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
   -- SelfDirect
   --  reference SelfDirect
 |]
-#ifdef WITH_NOSQL
 cleanDB :: (PersistQuery backend, PersistEntityBackend HasMap ~ backend, MonadIO m) => ReaderT backend m ()
 cleanDB = do
-  deleteWhere ([] :: [Filter HasEmbed])
-  deleteWhere ([] :: [Filter HasEmbeds])
-  deleteWhere ([] :: [Filter HasListEmbed])
-  deleteWhere ([] :: [Filter HasSetEmbed])
-  deleteWhere ([] :: [Filter User])
-  deleteWhere ([] :: [Filter HasMap])
-  deleteWhere ([] :: [Filter HasList])
-  deleteWhere ([] :: [Filter EmbedsHasMap])
-  deleteWhere ([] :: [Filter ListEmbed])
-  deleteWhere ([] :: [Filter ARecord])
-  deleteWhere ([] :: [Filter Account])
-  deleteWhere ([] :: [Filter HasNestedList])
+  deleteWhere ([] :: [Filter (HasEmbedGeneric backend)])
+  deleteWhere ([] :: [Filter (HasEmbedsGeneric backend)])
+  deleteWhere ([] :: [Filter (HasListEmbedGeneric backend)])
+  deleteWhere ([] :: [Filter (HasSetEmbedGeneric backend)])
+  deleteWhere ([] :: [Filter (UserGeneric backend)])
+  deleteWhere ([] :: [Filter (HasMapGeneric backend)])
+  deleteWhere ([] :: [Filter (HasListGeneric backend)])
+  deleteWhere ([] :: [Filter (EmbedsHasMapGeneric backend)])
+  deleteWhere ([] :: [Filter (ListEmbedGeneric backend)])
+  deleteWhere ([] :: [Filter (ARecordGeneric backend)])
+  deleteWhere ([] :: [Filter (AccountGeneric backend)])
+  deleteWhere ([] :: [Filter (HasNestedListGeneric backend)])
 
+#ifdef WITH_NOSQL
 db :: Action IO () -> Assertion
 db = db' cleanDB
 #endif
@@ -179,22 +172,33 @@ unlessM predicate body = do
     unless b body
 
 specs :: Spec
-specs = describe "embedded entities" $ do
+specs = specsWith db
 
-  it "simple entities" $ db $ do
+specsWith
+    ::
+    ( MonadIO m, MonadFail m
+    , PersistStoreWrite backend
+    , PersistQueryRead backend
+    , BaseBackend backend ~ SqlBackend
+    )
+    =>RunDb backend m
+    -> Spec
+specsWith runDb = describe "embedded entities" $ do
+
+  it "simple entities" $ runDb $ do
       let container = HasEmbeds "container" (OnlyName "2")
             (HasEmbed "embed" (OnlyName "1"))
       contK <- insert container
       Just res <- selectFirst [HasEmbedsName ==. "container"] []
       res @== Entity contK container
 
-  it "query for equality of embeded entity" $ db $ do
+  it "query for equality of embeded entity" $ runDb $ do
       let container = HasEmbed "container" (OnlyName "2")
       contK <- insert container
       Just res <- selectFirst [HasEmbedEmbed ==. OnlyName "2"] []
       res @== Entity contK container
 
-  it "Set" $ db $ do
+  it "Set" $ runDb $ do
       let container = HasSetEmbed "set" $ S.fromList
             [ HasEmbed "embed" (OnlyName "1")
             , HasEmbed "embed" (OnlyName "2")
@@ -203,13 +207,13 @@ specs = describe "embedded entities" $ do
       Just res <- selectFirst [HasSetEmbedName ==. "set"] []
       res @== Entity contK container
 
-  it "Set empty" $ db $ do
+  it "Set empty" $ runDb $ do
       let container = HasSetEmbed "set empty" $ S.fromList []
       contK <- insert container
       Just res <- selectFirst [HasSetEmbedName ==. "set empty"] []
       res @== Entity contK container
 
-  it "exception" $ flip shouldThrow (== TestException) $ db $ do
+  it "exception" $ flip shouldThrow (== TestException) $ runDb $ do
       let container = HasSetEmbed "set" $ S.fromList
             [ HasEmbed "embed" (OnlyName "1")
             , HasEmbed "embed" (OnlyName "2")
@@ -218,7 +222,7 @@ specs = describe "embedded entities" $ do
       Just res <- selectFirst [HasSetEmbedName ==. throw TestException] []
       res @== Entity contK container
 
-  it "ListEmbed" $ db $ do
+  it "ListEmbed" $ runDb $ do
       let container = HasListEmbed "list"
             [ HasEmbed "embed" (OnlyName "1")
             , HasEmbed "embed" (OnlyName "2")
@@ -227,19 +231,19 @@ specs = describe "embedded entities" $ do
       Just res <- selectFirst [HasListEmbedName ==. "list"] []
       res @== Entity contK container
 
-  it "ListEmbed empty" $ db $ do
+  it "ListEmbed empty" $ runDb $ do
       let container = HasListEmbed "list empty" []
       contK <- insert container
       Just res <- selectFirst [HasListEmbedName ==. "list empty"] []
       res @== Entity contK container
 
-  it "List empty" $ db $ do
+  it "List empty" $ runDb $ do
       let container = HasList []
       contK <- insert container
       Just res <- selectFirst [] []
       res @== Entity contK container
 
-  it "NonEmpty List wrapper" $ db $ do
+  it "NonEmpty List wrapper" $ runDb $ do
       let con = Contact 123456 "foo@bar.com"
       let prof = Profile "fstN" "lstN" (Just con)
       uid <- insert $ User "foo" (Just "pswd") prof
@@ -248,7 +252,7 @@ specs = describe "embedded entities" $ do
       Just res <- selectFirst [AccountUserIds ==. (uid:|[])] []
       res @== Entity contK container
 
-  it "Map" $ db $ do
+  it "Map" $ runDb $ do
       let container = HasMap "2 items" $ M.fromList [
               ("k1","v1")
             , ("k2","v2")
@@ -257,13 +261,13 @@ specs = describe "embedded entities" $ do
       Just res <- selectFirst [HasMapName ==. "2 items"] []
       res @== Entity contK container
 
-  it "Map empty" $ db $ do
+  it "Map empty" $ runDb $ do
       let container = HasMap "empty" $ M.fromList []
       contK <- insert container
       Just res <- selectFirst [HasMapName ==. "empty"] []
       res @== Entity contK container
 
-  it "Embeds a Map" $ db $ do
+  it "Embeds a Map" $ runDb $ do
       let container = EmbedsHasMap (Just "non-empty map") $ HasMap "2 items" $ M.fromList [
               ("k1","v1")
             , ("k2","v2")
@@ -272,13 +276,13 @@ specs = describe "embedded entities" $ do
       Just res <- selectFirst [EmbedsHasMapName ==. Just "non-empty map"] []
       res @== Entity contK container
 
-  it "Embeds a Map empty" $ db $ do
+  it "Embeds a Map empty" $ runDb $ do
       let container = EmbedsHasMap (Just "empty map") $ HasMap "empty" $ M.fromList []
       contK <- insert container
       Just res <- selectFirst [EmbedsHasMapName ==. Just "empty map"] []
       res @== Entity contK container
 
-  it "Embeds a Map with ids as values" $ db $ do
+  it "Embeds a Map with ids as values" $ runDb $ do
       onId <- insert $ OnlyName "nombre"
       onId2 <- insert $ OnlyName "nombre2"
       let midValue = MapIdValue $ M.fromList [("foo", onId),("bar",onId2)]

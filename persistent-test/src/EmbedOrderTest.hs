@@ -2,7 +2,7 @@
 {-# LANGUAGE CPP, ScopedTypeVariables, FlexibleInstances #-}
 {-# LANGUAGE QuasiQuotes, TypeFamilies, GeneralizedNewtypeDeriving, TemplateHaskell,
              OverloadedStrings, GADTs, FlexibleContexts, EmptyDataDecls, MultiParamTypeClasses #-}
-module EmbedOrderTest (specs, specsWith
+module EmbedOrderTest (specs, specsWith, Foo(..), Bar(..)
 #ifndef WITH_NOSQL
 , embedOrderMigrate
 #endif

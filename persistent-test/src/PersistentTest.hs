@@ -91,23 +91,18 @@ catchPersistException action errValue = do
 filterOrSpecs
     :: forall m backend.
     ( MonadIO m, MonadFail m, MonadUnliftIO m
-    , Typeable backend, PersistStoreWrite backend
+    , PersistStoreWrite backend, PersistQueryRead backend
+    , PersistStoreWrite (BaseBackend backend)
     )
     => RunDb backend m
     -> Spec
 filterOrSpecs runDb = describe "FilterOr" $ do
---     case eqT @backend @MongoContext of
---         Just Refl -> describe "WithMongo" $ do
---             it "fails with empty list of Or in mongo" $ runDb $ do
---                 c <- catchPersistException (selectList [FilterOr []] [Desc PersonAge]) 42
---                 c @== 42
---         Nothing -> describe "Non-Mongo" $ do
-            it "FilterOr []" $ db $ do
+            it "FilterOr []" $ runDb $ do
                 let p = Person "z" 1 Nothing
                 _ <- insert p
                 ps <- selectList [FilterOr []] [Desc PersonAge]
                 assertEmpty ps
-            it "||. []" $ db $ do
+            it "||. []" $ runDb $ do
                 let p = Person "z" 1 Nothing
                 _ <- insert p
                 c <- count $ [PersonName ==. "a"] ||. []
@@ -731,18 +726,19 @@ specsWith runDb = describe "persistent" $ do
         -}
 
 
+-- TODO: This only runs on SQLite. Uncomment and put in that suite directly.
 #ifdef WITH_NOSQL
 #else
 #  ifndef WITH_MYSQL
 #    ifndef WITH_POSTGRESQL
 #      ifndef WITH_NOSQL
-  it "afterException" $ runDb $ do
-    let catcher :: forall m. Monad m => SomeException -> m ()
-        catcher _ = return ()
-    _ <- insert $ Person "A" 0 Nothing
-    _ <- insert_ (Person "A" 1 Nothing) `catch` catcher
-    _ <- insert $ Person "B" 0 Nothing
-    return ()
+--  it "afterException" $ runDb $ do
+--    let catcher :: forall m. Monad m => SomeException -> m ()
+--        catcher _ = return ()
+--    _ <- insert $ Person "A" 0 Nothing
+--    _ <- insert_ (Person "A" 1 Nothing) `catch` catcher
+--    _ <- insert $ Person "B" 0 Nothing
+--    return ()
 #      endif
 #    endif
 #  endif
@@ -751,24 +747,4 @@ specsWith runDb = describe "persistent" $ do
     it "bang" $ (return $! Strict (error "foo") 5 5) `shouldThrow` anyErrorCall
     it "tilde" $ void (return $! Strict 5 (error "foo") 5 :: IO Strict)
     it "blank" $ (return $! Strict 5 5 (error "foo")) `shouldThrow` anyErrorCall
-
-#  ifdef WITH_POSTGRESQL
-  describe "rawSql/array_agg" $ do
-    let runArrayAggTest dbField expected = runDb $ do
-          void $ insertMany
-            [ UserPT "a" $ Just "b"
-            , UserPT "c" $ Just "d"
-            , UserPT "e"   Nothing
-            , UserPT "g" $ Just "h" ]
-          escape <- ((. DBName) . connEscapeName) `fmap` ask
-          let query = T.concat [ "SELECT array_agg(", escape dbField, ") "
-                               , "FROM ", escape "UserPT"
-                               ]
-          [Single xs] <- rawSql query []
-          liftIO $ sort xs @?= expected
-
-    it "works for [Text]"       $ runArrayAggTest "ident"    ["a", "c", "e", "g" :: Text]
-    it "works for [Maybe Text]" $ runArrayAggTest "password" [Nothing, Just "b", Just "d", Just "h" :: Maybe Text]
-#  endif
-
 #endif

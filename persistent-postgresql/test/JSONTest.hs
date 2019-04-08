@@ -21,7 +21,7 @@ import Test.Hspec.Expectations ()
 import Database.Persist
 import Database.Persist.Postgresql.JSON
 
-import Init
+import PgInit
 
 share [mkPersist persistSettings,  mkMigrate "jsonTestMigrate"] [persistLowerCase|
   TestValue

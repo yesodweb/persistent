@@ -15,9 +15,9 @@ import Init
 import Data.Word
 
 #ifdef WITH_NOSQL
-mkPersist persistSettings [persistUpperCase|
+mkPersist persistSettings { mpsGeneric = True } [persistUpperCase|
 #else
-share [mkPersist sqlSettings,  mkMigrate "numberMigrate"] [persistLowerCase|
+share [mkPersist sqlSettings { mpsGeneric = True },  mkMigrate "numberMigrate"] [persistLowerCase|
 #endif
   Number
     intx Int
@@ -37,34 +37,32 @@ db = db' cleanDB
 #endif
 
 specs :: Spec
-specs = specsWith db Number
+specs = specsWith db
 
 specsWith
     ::
-    ( PersistRecordBackend entity backend
-    , PersistStoreWrite backend
-    , Show entity, Eq entity
+    ( PersistStoreWrite backend
+    , PersistStoreWrite (BaseBackend backend)
     , MonadIO m
     )
     => RunDb backend m
-    -> (Int -> Int32 -> Word32 -> Int64 -> Word64 -> entity)
     -> Spec
-specsWith runDb mkNumber = describe "Large Numbers" $ do
+specsWith runDb = describe "Large Numbers" $ do
   it "preserves their values in the database" $ runDb $ do
       let go x = do
               xid <- insert x
               x' <- get xid
               liftIO $ x' @?= Just x
 
-      go $ mkNumber maxBound 0 0 0 0
-      go $ mkNumber 0 maxBound 0 0 0
-      go $ mkNumber 0 0 maxBound 0 0
-      go $ mkNumber 0 0 0 maxBound 0
-      go $ mkNumber 0 0 0 0 maxBound
+      go $ Number maxBound 0 0 0 0
+      go $ Number 0 maxBound 0 0 0
+      go $ Number 0 0 maxBound 0 0
+      go $ Number 0 0 0 maxBound 0
+      go $ Number 0 0 0 0 maxBound
 
-      go $ mkNumber minBound 0 0 0 0
-      go $ mkNumber 0 minBound 0 0 0
-      go $ mkNumber 0 0 minBound 0 0
-      go $ mkNumber 0 0 0 minBound 0
-      go $ mkNumber 0 0 0 0 minBound
+      go $ Number minBound 0 0 0 0
+      go $ Number 0 minBound 0 0 0
+      go $ Number 0 0 minBound 0 0
+      go $ Number 0 0 0 minBound 0
+      go $ Number 0 0 0 0 minBound
 

@@ -17,7 +17,13 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module DataTypeTest (specs, specsWith) where
+module DataTypeTest
+    ( specs
+    , specsWith
+    , dataTypeMigrate
+    , roundTime
+    , roundUTCTime
+    ) where
 
 import Control.Applicative (liftA2)
 import Database.Persist.TH
@@ -80,14 +86,15 @@ DataTypeTable no-json
 #endif
 |]
 
-cleanDB' :: (MonadIO m, PersistQuery backend, backend ~ PersistEntityBackend DataTypeTable) => ReaderT backend m ()
-cleanDB' = deleteWhere ([] :: [Filter DataTypeTable])
+cleanDB'
+    ::
+    ( MonadIO m, PersistStoreWrite (BaseBackend backend), PersistQuery backend) => ReaderT backend m ()
+cleanDB' = deleteWhere ([] :: [Filter (DataTypeTableGeneric backend)])
 
 specs :: Spec
 specs =
     specsWith
         runConn
-        cleanDB'
 #ifdef WITH_NOSQL
         Nothing
 #else
@@ -122,64 +129,6 @@ specs =
 #endif
         dataTypeTableDouble
 
-specs' :: Spec
-specs' = describe "data type specs" $
-    it "handles all types" $ asIO $ runConn $ do
-
-#ifndef WITH_NOSQL
-        _ <- runMigrationSilent dataTypeMigrate
-        -- Ensure reading the data from the database works...
-        _ <- runMigrationSilent dataTypeMigrate
-#endif
-        cleanDB'
-        rvals <- liftIO $ randomValues 1000
-        forM_ rvals $ \x -> do
-            key <- insert x
-            Just y <- get key
-            liftIO $ do
-                let check :: (Eq a, Show a) => String -> (DataTypeTable -> a) -> IO ()
-                    check s f = (s, f x) @=? (s, f y)
-                -- Check floating-point near equality
-                let check' :: String -> (DataTypeTable -> Pico) -> IO ()
-                    check' s f
-                        | abs (f x - f y) < 0.000001 = return ()
-                        | otherwise = (s, f x) @=? (s, f y)
-                -- Check individual fields for better error messages
-                check "text" dataTypeTableText
-                check "textMaxLen" dataTypeTableTextMaxLen
-                check "bytes" dataTypeTableBytes
-                check "bytesTextTuple" dataTypeTableBytesTextTuple
-                check "bytesMaxLen" dataTypeTableBytesMaxLen
-                check "int" dataTypeTableInt
-                check "intList" dataTypeTableIntList
-                check "intMap" dataTypeTableIntMap
-                check "bool" dataTypeTableBool
-                check "day" dataTypeTableDay
-#ifndef WITH_NOSQL
-                check' "pico" dataTypeTablePico
-                check "time" (roundTime . dataTypeTableTime)
-#endif
-#if !(defined(WITH_NOSQL)) || (defined(WITH_NOSQL) && defined(HIGH_PRECISION_DATE))
-                check "utc" (roundUTCTime . dataTypeTableUtc)
-#endif
-#if defined(WITH_MYSQL) && !(defined(OLD_MYSQL))
-                check "timeFrac" (dataTypeTableTimeFrac)
-                check "utcFrac" (dataTypeTableUtcFrac)
-#endif
-#ifdef WITH_POSTGRESQL
-                check "jsonb" dataTypeTableJsonb
-#endif
-
-                -- Do a special check for Double since it may
-                -- lose precision when serialized.
-                when (getDoubleDiff (dataTypeTableDouble x)(dataTypeTableDouble y) > 1e-14) $
-                  check "double" dataTypeTableDouble
-    where
-      normDouble :: Double -> Double
-      normDouble x | abs x > 1 = x / 10 ^ (truncate (logBase 10 (abs x)) :: Integer)
-                   | otherwise = x
-      getDoubleDiff x y = abs (normDouble x - normDouble y)
-
 roundFn :: RealFrac a => a -> Integer
 #ifdef OLD_MYSQL
 -- At version 5.6.4, MySQL changed the method used to round values for
@@ -191,11 +140,11 @@ roundFn = round
 #endif
 
 roundTime :: TimeOfDay -> TimeOfDay
-#ifdef WITH_MYSQL
+-- #ifdef WITH_MYSQL
 roundTime t = timeToTimeOfDay $ fromIntegral $ roundFn $ timeOfDayToTime t
-#else
-roundTime = id
-#endif
+-- #else
+-- roundTime = id
+-- #endif
 
 roundUTCTime :: UTCTime -> UTCTime
 #ifdef WITH_MYSQL
@@ -264,13 +213,14 @@ specsWith
     , PersistEntityBackend entity ~ BaseBackend backend
     , Arbitrary entity
     , PersistStoreWrite backend
+    , PersistStoreWrite (BaseBackend backend)
+    , PersistQueryWrite (BaseBackend backend)
+    , PersistQueryWrite backend
     , MonadFail m
     , MonadIO m
     )
     => (db () -> IO ())
     -- ^ DB Runner
-    -> db ()
-    -- ^ Cleanup
     -> Maybe (db [Text])
     -- ^ Optional migrations to run
     -> [TestFn entity]
@@ -279,13 +229,13 @@ specsWith
     -- ^ List of pico fields to test
     -> (entity -> Double)
     -> Spec
-specsWith runConn' cleanDB mmigration checks apprxChecks doubleFn = describe "data type specs" $
-    it "handles all types" $ asIO $ runConn' $ do
+specsWith runDb mmigration checks apprxChecks doubleFn = describe "data type specs" $
+    it "handles all types" $ asIO $ runDb $ do
 
         _ <- sequence_ mmigration
         -- Ensure reading the data from the database works...
         _ <- sequence_ mmigration
-        cleanDB
+        cleanDB'
         rvals <- liftIO $ randomValues 1000
         for_ rvals $ \x -> do
             key <- insert x

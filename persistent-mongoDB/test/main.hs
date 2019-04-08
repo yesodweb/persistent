@@ -131,22 +131,6 @@ mkPersist persistSettings [persistUpperCase|
     deriving Show Eq
 |]
 
-mkPersist persistSettings [persistUpperCase|
-  MaxLen
-    text1 Text
-    text2 Text maxlen=3
-    bs1 ByteString
-    bs2 ByteString maxlen=3
-    str1 String
-    str2 String maxlen=3
-    MLText1 text1
-    MLText2 text2
-    MLBs1 bs1
-    MLBs2 bs2
-    MLStr1 str1
-    MLStr2 str2
-    deriving Show Eq
-|]
 main :: IO ()
 main = do
   hspec $ afterAll dropDatabase $ do
@@ -154,7 +138,6 @@ main = do
         RenameTest.specsWith (db' RenameTest.cleanDB)
     DataTypeTest.specsWith
         dbNoCleanup
-        (pure ())
         Nothing
         [ TestFn "Text" dataTypeTableText
         , TestFn "Text" dataTypeTableTextMaxLen
@@ -171,10 +154,8 @@ main = do
         []
         dataTypeTableDouble
     HtmlTest.specsWith
-        (db' (deleteWhere @_ @_ @HtmlTable []))
+        (db' (deleteWhere @_ @_ @HtmlTest.HtmlTable []))
         Nothing
-        HtmlTable
-        htmlTableHtml
     EmbedTestMongo.specs
     EmbedOrderTest.specsWith
         (db' (deleteWhere ([] :: [Filter Foo]) >> deleteWhere ([] :: [Filter Bar])))
@@ -183,11 +164,8 @@ main = do
     LargeNumberTest.specsWith
         (db' (deleteWhere ([] :: [Filter Number])))
         Number
-    MaxLenTest.specsWith
-        dbNoCleanup
-        MaxLen
-    Recursive.specsWith
-        (db' Recursive.cleanup)
+    MaxLenTest.specsWith dbNoCleanup
+    Recursive.specsWith (db' Recursive.cleanup)
 
     SumTypeTest.specsWith (dbNoCleanup) Nothing
     MigrationOnlyTest.specsWith

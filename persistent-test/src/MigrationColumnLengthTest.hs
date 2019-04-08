@@ -19,14 +19,11 @@ VaryingLengths
     field2 T.Text sqltype=varchar(5)
 |]
 
-
-specs :: Spec
-specs = describe "Migration" $ do
-#ifdef WITH_NOSQL
-    return ()
-#else
-  it "is idempotent" $ db $ do
+specsWith :: MonadIO m => RunDb SqlBackend m -> Spec
+specsWith runDb =
+  it "is idempotent" $ runDb $ do
       again <- getMigration migration
       liftIO $ again @?= []
-#endif
 
+specs :: Spec
+specs = specsWith db

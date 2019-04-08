@@ -35,20 +35,24 @@ db :: Action IO () -> Assertion
 db = db' cleanDB
 #endif
 
-specs :: Spec
-specs = describe "custom primary key" $ do
-#ifdef WITH_NOSQL
-  return ()
-#else
-  it "getBy" $ db $ do
+specsWith :: (MonadIO m, MonadFail m) => RunDb SqlBackend m -> Spec
+specsWith runDb = describe "custom primary key" $ do
+  it "getBy" $ runDb $ do
     let b = 5
     k <- insert $ Fo 3 b
     Just vk <- get k
     Just vu <- getBy (UniqueBar b)
     vu @== Entity k vk
-  it "insertUniqueEntity" $ db $ do
+  it "insertUniqueEntity" $ runDb $ do
     let fo = Fo 3 5
     Just (Entity _ insertedFoValue) <- insertUniqueEntity fo
     Nothing <- insertUniqueEntity fo
     fo @== insertedFoValue
+
+specs :: Spec
+specs =
+#ifdef WITH_NOSQL
+  return ()
+#else
+  specsWith db
 #endif

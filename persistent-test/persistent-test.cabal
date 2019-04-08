@@ -149,7 +149,6 @@ library
                    , postgresql-simple
                    , postgresql-libpq
      cpp-options: -DWITH_POSTGRESQL -DDEBUG
-     exposed-modules: JSONTest
 
 
    if flag(mysql)

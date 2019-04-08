@@ -44,7 +44,9 @@ test-suite test
     main-is:         main.hs
     hs-source-dirs:  test
     other-modules:   PgInit
+                     ArrayAggTest
                      JSONTest
+                     EquivalentTypeTestPostgres
     ghc-options:     -Wall
 
     build-depends:   base >= 4.6 && < 5
@@ -74,4 +76,5 @@ test-suite test
                    , time
                    , monad-logger
                    , quickcheck-instances
+                   , unordered-containers
 

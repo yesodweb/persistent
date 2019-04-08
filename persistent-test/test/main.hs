@@ -40,9 +40,6 @@ import qualified MigrationTest
 #ifdef WITH_MYSQL
 import qualified MigrationIdempotencyTest
 #endif
-#ifdef WITH_POSTGRESQL
-import qualified JSONTest
-#endif
 
 
 #ifdef WITH_NOSQL
@@ -140,7 +137,4 @@ main = do
 #endif
 #ifdef WITH_MYSQL
     MigrationIdempotencyTest.specs
-#endif
-#ifdef WITH_POSTGRESQL
-    JSONTest.specs
 #endif

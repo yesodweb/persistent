@@ -12,7 +12,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-module SumTypeTest (specs, specsWith) where
+module SumTypeTest (specs, specsWith, sumTypeMigrate) where
 
 import Database.Persist.TH
 import Control.Monad.Trans.Resource (runResourceT)
@@ -20,11 +20,7 @@ import qualified Data.Text as T
 
 import Init
 
-#if WITH_NOSQL
-mkPersist persistSettings [persistLowerCase|
-#else
-share [mkPersist persistSettings, mkMigrate "sumTypeMigrate"] [persistLowerCase|
-#endif
+share [mkPersist persistSettings { mpsGeneric = True }, mkMigrate "sumTypeMigrate"] [persistLowerCase|
 Bicycle
     brand T.Text
 Car

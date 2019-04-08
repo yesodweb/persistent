@@ -41,21 +41,25 @@ db :: Action IO () -> Assertion
 db = db' cleanDB
 #endif
 
+specsWith :: (MonadIO m, MonadFail m) => RunDb SqlBackend m -> Spec
+specsWith runDb = describe "primary key reference" $ do
+  it "insert a primary reference" $ runDb $ do
+    kf  <- insert $ Foo "name"
+    _kb <- insert $ Bar kf
+    return ()
+  it "uses RawSql for a Primary key" $ runDb $ do
+    key <- insert $ Foo "name"
+    keyFromRaw <- rawSql "SELECT name FROM foo LIMIT 1" []
+    [key] @== keyFromRaw
+
 specs :: Spec
-specs = describe "primary key reference" $ do
+specs =
 #ifdef WITH_NOSQL
   return ()
 #else
 #  ifdef WITH_MYSQL
   return ()
 #  else
-  it "insert a primary reference" $ db $ do
-    kf  <- insert $ Foo "name"
-    _kb <- insert $ Bar kf
-    return ()
-  it "uses RawSql for a Primary key" $ db $ do
-    key <- insert $ Foo "name"
-    keyFromRaw <- rawSql "SELECT name FROM foo LIMIT 1" []
-    [key] @== keyFromRaw
+  specsWith db
 #  endif
 #endif

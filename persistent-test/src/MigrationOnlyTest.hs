@@ -10,7 +10,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
-module MigrationOnlyTest (specs, specsWith) where
+module MigrationOnlyTest (specs, specsWith, migrateAll1, migrateAll2) where
 
 import Database.Persist.TH
 import Control.Monad.Trans.Resource (runResourceT)

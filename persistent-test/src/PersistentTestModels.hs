@@ -25,11 +25,7 @@ import Database.Persist.TH
 import PersistTestPetType
 import PersistTestPetCollarType
 
-#ifdef WITH_NOSQL
-mkPersist persistSettings { mpsGeneric = True }[persistUpperCase|
-#else
 share [mkPersist persistSettings { mpsGeneric = True },  mkMigrate "testMigrate", mkDeleteCascade persistSettings, mkSave "_ignoredSave"] [persistUpperCase|
-#endif
 
 -- Dedented comment
   -- Header-level comment
@@ -113,12 +109,8 @@ deriving instance Show (BackendKey backend) => Show (PetGeneric backend)
 deriving instance Eq (BackendKey backend) => Eq (PetGeneric backend)
 
 share [mkPersist persistSettings { mpsPrefixFields = False, mpsGeneric = True }
-#ifdef WITH_NOSQL
-      ] [persistUpperCase|
-#else
       , mkMigrate "noPrefixMigrate"
       ] [persistLowerCase|
-#endif
 NoPrefix1
     someFieldName Int
 NoPrefix2

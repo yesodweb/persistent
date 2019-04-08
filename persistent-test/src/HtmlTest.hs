@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds #-}
 {-# LANGUAGE QuasiQuotes, TemplateHaskell, CPP, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, EmptyDataDecls, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses #-}
-module HtmlTest (specs, specsWith) where
+module HtmlTest (specs, specsWith, htmlMigrate) where
 
 import Database.Persist.TH
 import Data.Char (generalCategory, GeneralCategory(..))
@@ -13,29 +13,26 @@ import Text.Blaze.Html
 import Text.Blaze.Html.Renderer.Text
 
 -- Test lower case names
-share [mkPersist persistSettings, mkMigrate "htmlMigrate"] [persistLowerCase|
+share [mkPersist persistSettings { mpsGeneric = True }, mkMigrate "htmlMigrate"] [persistLowerCase|
 HtmlTable
     html Html
     deriving
 |]
 
-cleanDB :: (MonadIO m, PersistQuery backend, PersistEntityBackend HtmlTable ~ backend) => ReaderT backend m ()
+cleanDB :: (MonadIO m, PersistQueryWrite backend, PersistStoreWrite (BaseBackend backend)) => ReaderT backend m ()
 cleanDB = do
-  deleteWhere ([] :: [Filter HtmlTable])
+  deleteWhere ([] :: [Filter (HtmlTableGeneric backend)])
 
 specsWith
     ::
     ( MonadFail m, MonadIO m
-    , PersistEntityBackend entity ~ BaseBackend backend
-    , PersistEntity entity
     , PersistStoreWrite backend
+    , BaseBackend backend ~ backend
     )
     => RunDb backend m
     -> Maybe (ReaderT backend m a)
-    -> (Html -> entity)
-    -> (entity -> Html)
     -> Spec
-specsWith runConn mmigrate htmlTable getHtmlFrom = describe "html" $ do
+specsWith runConn mmigrate = describe "html" $ do
     it "works" $ asIO $ runConn $ do
         sequence_ mmigrate
         -- Ensure reading the data from the database works...
@@ -43,14 +40,14 @@ specsWith runConn mmigrate htmlTable getHtmlFrom = describe "html" $ do
 
         sequence_ $ replicate 1000 $ do
             x <- liftIO randomValue
-            key <- insert $ htmlTable x
+            key <- insert $ HtmlTable x
             Just htmlTableY <- get key
             liftIO $ do
-                renderHtml x @?= renderHtml (getHtmlFrom htmlTableY)
+                renderHtml x @?= renderHtml (htmlTableHtml htmlTableY)
 
 specs :: Spec
 specs =
-    specsWith runConn (Just (runMigrationSilent htmlMigrate)) HtmlTable htmlTableHtml
+    specsWith runConn (Just (runMigrationSilent htmlMigrate))
 
 randomValue :: IO Html
 randomValue =

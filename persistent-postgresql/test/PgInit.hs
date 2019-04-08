@@ -47,7 +47,13 @@ module PgInit (
   , arbText
   , liftA2
   , AbstractTest
+  , module Init
   ) where
+
+import Init
+    ( TestFn(..), AbstractTest, truncateTimeOfDay, truncateUTCTime
+    , truncateToMicro, arbText, liftA2, GenerateKey(..), RunDb
+    )
 
 -- re-exports
 import Control.Applicative (liftA2)
@@ -64,6 +70,9 @@ import Control.Monad.Trans.Reader
 import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase, MkPersistSettings(..))
 import Database.Persist.Sql.Raw.QQ
 import Test.Hspec
+import Data.Aeson (Value(..))
+import Database.Persist.Postgresql.JSON
+import qualified Data.HashMap.Strict as HM
 
 -- testing
 import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
@@ -131,7 +140,7 @@ isTravis = do
     _ -> False
 
 _debugOn :: Bool
-_debugOn = True
+_debugOn = False
 
 dockerPg :: IO (Maybe BS.ByteString)
 dockerPg = do
@@ -161,78 +170,23 @@ db :: SqlPersistT (LoggingT (ResourceT IO)) () -> Assertion
 db actions = do
   runResourceT $ runConn $ actions >> transactionUndo
 
-instance Arbitrary PersistValue where
-    arbitrary = PersistObjectId `fmap` BS.pack `fmap` replicateM 12 arbitrary
-
-instance PersistStore backend => Arbitrary (BackendKey backend) where
-  arbitrary = (errorLeft . fromPersistValue) `fmap` arbitrary
-    where
-      errorLeft x = case x of
-          Left e -> error $ unpack e
-          Right r -> r
-
-class GenerateKey backend where
-    generateKey :: IO (BackendKey backend)
-
-instance GenerateKey SqlBackend where
-    generateKey = do
-        i <- readIORef keyCounter
-        writeIORef keyCounter (i + 1)
-        return $ SqlBackendKey $ i
-
 keyCounter :: IORef Int64
 keyCounter = unsafePerformIO $ newIORef 1
 {-# NOINLINE keyCounter #-}
 
--- | A datatype that wraps a function on @entity@ that can has testable results.
---
--- Allows us to write:
---
--- @
--- foo :: entity -> entity -> [TestFn entity] -> Bool
--- foo e0 e1 = all (\(TestFn msg f) -> f e0 == f e1)
--- @
-data TestFn entity where
-    TestFn
-        :: (Show a, Eq a)
-        => String
-        -> (entity -> a)
-        -> TestFn entity
-
-truncateTimeOfDay :: TimeOfDay -> Gen TimeOfDay
-truncateTimeOfDay (TimeOfDay h m s) =
-  return $ TimeOfDay h m $ truncateToMicro s
-
--- truncate less significant digits
-truncateToMicro :: Pico -> Pico
-truncateToMicro p = let
-  p' = fromRational . toRational $ p  :: Micro
-  in   fromRational . toRational $ p' :: Pico
-
-truncateUTCTime :: UTCTime -> Gen UTCTime
-truncateUTCTime (UTCTime d dift) = do
-  let pico = fromRational . toRational $ dift :: Pico
-      picoi= truncate . (*1000000000000) . toRational $ truncateToMicro pico :: Integer
-      -- https://github.com/lpsmith/postgresql-simple/issues/123
-      d' = max d $ fromGregorian 1950 1 1
-  return $ UTCTime d' $ picosecondsToDiffTime picoi
-
-arbText :: Gen Text
-arbText =
-     T.pack
-  .  filter ((`notElem` forbidden) . generalCategory)
-  .  filter (<= '\xFFFF') -- only BMP
-  .  filter (/= '\0')     -- no nulls
-  .  T.unpack
-  <$> arbitrary
-  where forbidden = [NotAssigned, PrivateUse]
-
-type RunDb backend m = ReaderT backend m () -> IO ()
-
-type AbstractTest backend entity m =
-    ( PersistEntity entity
-    , PersistEntityBackend entity ~ BaseBackend backend
-    , Show entity, Eq entity
-    , MonadIO m, MonadFail m
-    , PersistStoreWrite backend
-    )
+instance Arbitrary Value where
+  arbitrary = frequency [ (1, pure Null)
+                        , (1, Bool <$> arbitrary)
+                        , (2, Number <$> arbitrary)
+                        , (2, String <$> arbText)
+                        , (3, Array <$> limitIt 4 arbitrary)
+                        , (3, Object <$> arbObject)
+                        ]
+    where limitIt i x = sized $ \n -> do
+            let m = if n > i then i else n
+            resize m x
+          arbObject = limitIt 4 -- Recursion can make execution divergent
+                    $ fmap HM.fromList -- HashMap -> [(,)]
+                    . listOf -- [(,)] -> (,)
+                    . liftA2 (,) arbText -- (,) -> Text and Value
+                    $ limitIt 4 arbitrary -- Again, precaution against divergent recursion.

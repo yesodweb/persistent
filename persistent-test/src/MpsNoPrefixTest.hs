@@ -8,9 +8,9 @@ import Test.Hspec
 
 import PersistentTestModels
 
-specs :: Spec
-specs = describe "mpsNoPrefix" $ do
-  it "works" $ db $ do
+specsWith :: MonadIO m => RunDb SqlBackend m -> Spec
+specsWith runDb = describe "mpsNoPrefix" $ do
+  it "works" $ runDb $ do
     deleteWhere ([] :: [Filter NoPrefix2])
     deleteWhere ([] :: [Filter NoPrefix1])
     np1a <- insert $ NoPrefix1 1
@@ -29,9 +29,12 @@ specs = describe "mpsNoPrefix" $ do
     insert_ $ UnprefixedLeftSum 5
     insert_ $ UnprefixedRightSum "Hello"
 
-  it "IsSqlKey instance" $ db $ do
+  it "IsSqlKey instance" $ runDb $ do
     let p = Person "Alice" 30 Nothing
     key@(PersonKey (SqlBackendKey i)) <- insert p
     liftIO $ fromSqlKey key `shouldBe` (i :: Int64)
     mp <- get $ toSqlKey i
     liftIO $ mp `shouldBe` Just p
+
+specs :: Spec
+specs = specsWith db

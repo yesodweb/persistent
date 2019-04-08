@@ -27,9 +27,9 @@ import Control.Monad.Fail
 #ifdef WITH_NOSQL
 db :: Action IO () -> Assertion
 db = db' (return ())
-mkPersist persistSettings [persistUpperCase|
+mkPersist persistSettings { mpsGeneric = True }[persistUpperCase|
 #else
-share [mkPersist sqlSettings,  mkMigrate "customFieldMigrate"] [persistLowerCase|
+share [mkPersist sqlSettings { mpsGeneric = True },  mkMigrate "customFieldMigrate"] [persistLowerCase|
 #endif
   BlogPost
     article Markdown
@@ -37,24 +37,21 @@ share [mkPersist sqlSettings,  mkMigrate "customFieldMigrate"] [persistLowerCase
 |]
 
 specs :: Spec
-specs = specsWith db BlogPost
+specs = specsWith db
 
 specsWith
     ::
-    ( PersistEntityBackend entity ~ BaseBackend backend
-    , Show entity, Eq entity
-    , PersistStoreRead backend
+    ( PersistStoreRead backend
     , PersistStoreWrite backend
+    , PersistStoreWrite (BaseBackend backend)
     , MonadIO m
     , MonadFail m
-    , PersistEntity entity
     )
-    => (ReaderT backend m () -> IO ())
-    -> (Markdown -> entity)
+    => RunDb backend m
     -> Spec
-specsWith runDB blogPost = describe "Custom persist field" $ do
+specsWith runDB = describe "Custom persist field" $ do
   it "should read what it wrote" $ runDB $ do
-    let originalBlogPost = blogPost "article"
+    let originalBlogPost = BlogPost "article"
     blogPostId <- insert originalBlogPost
     Just newBlogPost <- get blogPostId
     liftIO $ originalBlogPost @?= newBlogPost

@@ -8,26 +8,27 @@ import qualified Data.Text as T
 import Control.Monad.Trans.Resource (runResourceT)
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
+import UnliftIO
 
 import PersistTestPetCollarType
 import PersistTestPetType
 import PersistentTestModels
 
-specs :: Spec
-specs = describe "rawSql" $ do
-  it "2+2" $ db $ do
+specsWith :: MonadUnliftIO m => RunDb SqlBackend m -> Spec
+specsWith runDb = describe "rawSql" $ do
+  it "2+2" $ runDb $ do
       ret <- rawSql "SELECT 2+2" []
       liftIO $ ret @?= [Single (4::Int)]
 
-  it "?-?" $ db $ do
+  it "?-?" $ runDb $ do
       ret <- rawSql "SELECT ?-?" [PersistInt64 5, PersistInt64 3]
       liftIO $ ret @?= [Single (2::Int)]
 
-  it "NULL" $ db $ do
+  it "NULL" $ runDb $ do
       ret <- rawSql "SELECT NULL" []
       liftIO $ ret @?= [Nothing :: Maybe (Single Int)]
 
-  it "entity" $ db $ do
+  it "entity" $ runDb $ do
       let insert' :: (PersistStore backend, PersistEntity val, PersistEntityBackend val ~ BaseBackend backend, MonadIO m)
                   => val -> ReaderT backend m (Key val, val)
           insert' v = insert v >>= \k -> return (k, v)
@@ -63,7 +64,7 @@ specs = describe "rawSql" $ do
                         , Just (Entity p1k p1, Entity a2k a2)
                         , Just (Entity p2k p2, Entity a3k a3) ]
 
-  it "order-proof" $ db $ do
+  it "order-proof" $ runDb $ do
       let p1 = Person "Zacarias" 93 Nothing
       p1k <- insert p1
       escape <- ((. DBName) . connEscapeName) `fmap` ask
@@ -75,7 +76,7 @@ specs = describe "rawSql" $ do
       liftIO $ ret1 @?= [Entity p1k p1]
       liftIO $ ret2 @?= [Entity (RFOKey $ unPersonKey p1k) (RFO p1)]
 
-  it "OUTER JOIN" $ db $ do
+  it "OUTER JOIN" $ runDb $ do
       let insert' :: (PersistStore backend, PersistEntity val, PersistEntityBackend val ~ BaseBackend backend, MonadIO m)
                   => val -> ReaderT backend m (Key val, val)
           insert' v = insert v >>= \k -> return (k, v)
@@ -98,14 +99,19 @@ specs = describe "rawSql" $ do
                        , (Entity p2k p2, Nothing) ]
 
   it "handles lower casing" $ asIO $
-      runConn $ do
+      runDb $ do
           C.runConduitRes $ rawQuery "SELECT full_name from lower_case_table WHERE my_id=5" [] C..| CL.sinkNull
           C.runConduitRes $ rawQuery "SELECT something_else from ref_table WHERE id=4" [] C..| CL.sinkNull
 
-  it "commit/rollback" (caseCommitRollback >> runResourceT (runConn cleanDB))
+  it "commit/rollback" $ do
+      caseCommitRollback runDb
+      runDb cleanDB
 
-caseCommitRollback :: Assertion
-caseCommitRollback = db $ do
+specs :: Spec
+specs = specsWith db
+
+caseCommitRollback :: MonadIO m => RunDb SqlBackend m -> Assertion
+caseCommitRollback runDb = runDb $ do
     let filt :: [Filter Person1]
         filt = []
 
