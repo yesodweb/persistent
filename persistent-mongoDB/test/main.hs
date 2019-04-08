@@ -15,6 +15,7 @@
 
 import MongoInit
 
+import Database.MongoDB (runCommand1)
 import Data.Time
 import Data.Int
 import Data.Word
@@ -50,6 +51,7 @@ import qualified LargeNumberTest
 import qualified MaxLenTest
 import qualified MigrationOnlyTest
 import qualified Recursive
+import qualified UpsertTest
 
 -- This one is in progress!
 import qualified PersistentTest
@@ -152,7 +154,7 @@ mkPersist persistSettings [persistUpperCase|
 |]
 main :: IO ()
 main = do
-  hspec $ do
+  hspec $ afterAll dropDatabase $ do
     RenameTest.specs
     DataTypeTest.specsWith
         dbNoCleanup
@@ -197,6 +199,11 @@ main = do
         dbNoCleanup
         Nothing
     PersistentTest.specsWith (db' PersistentTest.cleanDB)
+    -- TODO: The upsert tests are currently failing.
+    --UpsertTest.specsWith
+    --    (db' PersistentTest.cleanDB)
+    --    UpsertTest.AssumeNullIsZero
+    --    UpsertTest.UpsertGenerateNewKey
     EmptyEntityTest.specsWith
         (lift . db' (deleteWhere @_ @_ @EmptyEntity []))
         Nothing
@@ -207,3 +214,6 @@ main = do
     MigrationColumnLengthTest.specs
     EquivalentTypeTest.specs
     TransactionLevelTest.specs
+
+  where
+    dropDatabase () = dbNoCleanup (void (runCommand1 "dropDatabase()"))

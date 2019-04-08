@@ -16,6 +16,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
+
 module UpsertTest where
 
 import Init
@@ -47,9 +48,19 @@ import PersistentTestModels
 
 import Database.Persist
 
+-- | MongoDB assumes that a @NULL@ value in the database is some "empty"
+-- value. So a query that does @+ 2@ to a @NULL@ value results in @2@. SQL
+-- databases instead "annihilate" with null, so @NULL + 2 = NULL@.
 data BackendNullUpdateBehavior
     = AssumeNullIsZero
     | Don'tUpdateNull
+
+-- | @UPSERT@ on SQL databses does an "update-or-insert," which preserves
+-- all prior values, including keys. MongoDB does not preserve the
+-- identifier, so the entity key changes on an upsert.
+data BackendUpsertKeyBehavior
+    = UpsertGenerateNewKey
+    | UpsertPreserveOldKey
 
 specsWith
     :: forall backend m.
@@ -65,8 +76,15 @@ specsWith
     )
     => RunDb backend m
     -> BackendNullUpdateBehavior
+    -> BackendUpsertKeyBehavior
     -> Spec
-specsWith runDb handleNull = describe "UpsertTests" $ do
+specsWith runDb handleNull handleKey = describe "UpsertTests" $ do
+  let
+    ifKeyIsPreserved expectation =
+      case handleKey of
+        UpsertGenerateNewKey -> pure ()
+        UpsertPreserveOldKey -> expectation
+
   describe "upsert" $ do
     it "adds a new row with no updates" $ runDb $ do
         Entity _ u <- upsert (Upsert "a" "new" "" 2) [UpsertAttr =. "update"]
@@ -74,9 +92,10 @@ specsWith runDb handleNull = describe "UpsertTests" $ do
         c @== 1
         upsertAttr u @== "new"
     it "keeps the existing row" $ runDb $ do
-        initial <- insertEntity (Upsert "a" "initial" "" 1)
-        update' <- upsert (Upsert "a" "update" "" 2) []
+        Entity k0 initial <- insertEntity (Upsert "a" "initial" "" 1)
+        Entity k1 update' <- upsert (Upsert "a" "update" "" 2) []
         update' @== initial
+        ifKeyIsPreserved $ k0 @== k1
     it "updates an existing row - assignment" $ runDb $ do
 -- #ifdef WITH_MONGODB
 --         initial <- insertEntity (Upsert "cow" "initial" "extra" 1)
@@ -89,7 +108,7 @@ specsWith runDb handleNull = describe "UpsertTests" $ do
         initial <- insertEntity (Upsert "a" "initial" "extra" 1)
         update' <-
             upsert (Upsert "a" "wow" "such unused" 2) [UpsertAttr =. "update"]
-        ((==@) `on` entityKey) initial update'
+        ifKeyIsPreserved $ ((==@) `on` entityKey) initial update'
         upsertAttr (entityVal update') @== "update"
         upsertExtra (entityVal update') @== "extra"
 -- #endif
@@ -105,7 +124,7 @@ specsWith runDb handleNull = describe "UpsertTests" $ do
         initial <- insertEntity (Upsert "a" "initial" "extra" 2)
         update' <-
             upsert (Upsert "a" "wow" "such unused" 2) [UpsertAge +=. 3]
-        ((==@) `on` entityKey) initial update'
+        ifKeyIsPreserved $ ((==@) `on` entityKey) initial update'
         upsertAge (entityVal update') @== 5
         upsertExtra (entityVal update') @== "extra"
 -- #endif
@@ -123,15 +142,10 @@ specsWith runDb handleNull = describe "UpsertTests" $ do
         c @== 1
         upsertByAttr u @== "new"
     it "keeps the existing row" $ runDb $ do
--- #ifdef WITH_MONGODB
---        initial <- insertEntity (UpsertBy "foo" "Chennai" "initial")
---        update' <- upsertBy (UniqueUpsertBy "foo") (UpsertBy "foo" "Chennai" "update") []
---        update' @== initial
--- #else
-        initial <- insertEntity (UpsertBy "a" "Boston" "initial")
-        update' <- upsertBy uniqueEmail (UpsertBy "a" "Boston" "update") []
+        Entity k0 initial <- insertEntity (UpsertBy "a" "Boston" "initial")
+        Entity k1 update' <- upsertBy uniqueEmail (UpsertBy "a" "Boston" "update") []
         update' @== initial
--- #endif
+        ifKeyIsPreserved $ k0 @== k1
     it "updates an existing row" $ runDb $ do
 -- #ifdef WITH_MONGODB
 --         initial <- insertEntity (UpsertBy "ko" "Kumbakonam" "initial")
@@ -150,7 +164,7 @@ specsWith runDb handleNull = describe "UpsertTests" $ do
                 uniqueEmail
                 (UpsertBy "a" "wow" "such unused")
                 [UpsertByAttr =. "update"]
-        ((==@) `on` entityKey) initial update'
+        ifKeyIsPreserved $ ((==@) `on` entityKey) initial update'
         upsertByAttr (entityVal update') @== "update"
         upsertByCity (entityVal update') @== "Boston"
 -- #endif
@@ -167,8 +181,8 @@ specsWith runDb handleNull = describe "UpsertTests" $ do
                 (UniqueUpsertByCity "Krum")
                 (UpsertBy "bos" "Krum" "unused")
                 [UpsertByAttr =. "krum update"]
-        ((==@) `on` entityKey) initBoston updBoston
-        ((==@) `on` entityKey) initKrum updKrum
+        ifKeyIsPreserved $ ((==@) `on` entityKey) initBoston updBoston
+        ifKeyIsPreserved $ ((==@) `on` entityKey) initKrum updKrum
         entityVal updBoston @== UpsertBy "bos" "Boston" "bos update"
         entityVal updKrum @== UpsertBy "krum" "Krum" "krum update"
 
@@ -184,4 +198,3 @@ specsWith runDb handleNull = describe "UpsertTests" $ do
               Just 2
           Don'tUpdateNull ->
               Nothing
-

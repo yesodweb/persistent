@@ -110,8 +110,10 @@ main = do
         db
 #ifdef WITH_NOSQL
         UpsertTest.AssumeNullIsZero
+        UpsertTest.UpsertGenerateNewKey
 #else
         UpsertTest.Don'tUpdateNull
+        UpsertTest.UpsertPreserveOldKey
 #endif
 
 #ifndef WITH_NOSQL
