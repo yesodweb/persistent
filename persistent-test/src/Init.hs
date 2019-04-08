@@ -91,16 +91,11 @@ import Database.Persist
 import Database.Persist.TH ()
 import System.Environment (getEnvironment)
 import qualified Database.MongoDB as MongoDB
-import qualified Database.Persist.MongoDB as MongoDB
 
 #ifdef WITH_NOSQL
 import Database.Persist.Sql (PersistFieldSql(..))
 import Database.Persist.TH (mkPersistSettings)
 import Language.Haskell.TH.Syntax (Type(..))
-
-#  ifdef WITH_MONGODB
-import Database.Persist.MongoDB (Action, withMongoPool, runMongoDBPool, defaultMongoConf, applyDockerEnv, BackendKey(..))
-#  endif
 
 #else
 import Control.Monad.Logger
@@ -135,13 +130,6 @@ import Control.Monad.IO.Class
 
 asIO :: IO a -> IO a
 asIO a = a
-
-#ifdef WITH_MONGODB
-setup :: Action IO ()
-setup = setupMongo
-type Context = MongoDB.MongoContext
-#endif
-
 
 (@/=), (@==), (==@) :: (Eq a, Show a, MonadIO m) => a -> a -> m ()
 infix 1 @/= --, /=@
@@ -199,16 +187,6 @@ dbName :: Text
 dbName = "persistent"
 
 type BackendMonad = Context
-
-#ifdef WITH_MONGODB
-runConn :: MonadUnliftIO m => Action m backend -> m ()
-runConn f = do
-  conf <- liftIO $ applyDockerEnv $ defaultMongoConf dbName -- { mgRsPrimary = Just "replicaset" }
-  void $ withMongoPool conf $ runMongoDBPool MongoDB.master f
-
-setupMongo :: Action IO ()
-setupMongo = void $ MongoDB.dropDatabase dbName
-#endif
 
 db' :: Action IO () -> Action IO () -> Assertion
 db' actions cleanDB = do
@@ -312,9 +290,6 @@ instance PersistStore backend => Arbitrary (BackendKey backend) where
 
 class GenerateKey backend where
     generateKey :: IO (BackendKey backend)
-
-instance GenerateKey MongoDB.MongoContext where
-    generateKey = MongoDB.MongoKey `liftM` MongoDB.genObjectId
 
 instance GenerateKey SqlBackend where
     generateKey = do

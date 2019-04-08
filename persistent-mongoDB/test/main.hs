@@ -196,7 +196,7 @@ main = do
     MigrationOnlyTest.specsWith
         dbNoCleanup
         Nothing
-    PersistentTest.specs
+    PersistentTest.specsWith (db' PersistentTest.cleanDB)
     EmptyEntityTest.specsWith
         (lift . db' (deleteWhere @_ @_ @EmptyEntity []))
         Nothing

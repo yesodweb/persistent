@@ -53,6 +53,7 @@ test-suite test
     other-modules:   MongoInit
                      EmbedTestMongo
                      EntityEmbedTestMongo
+                     RawMongoHelpers
     ghc-options:     -Wall
 
     build-depends:   base >= 4.6 && < 5

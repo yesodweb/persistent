@@ -21,11 +21,6 @@ Flag sqlite
    Default: False
    manual: True
 
-Flag mongodb
-   Description: test only MongoDB.  default is to test just sqlite.
-   Default: False
-   manual: True
-
 Flag postgresql
    Description: test postgresql. default is to test just sqlite.
    Default: False
@@ -90,7 +85,6 @@ library
                    , persistent
                    , persistent-template
                    , persistent-qq
-                   , persistent-mongoDB
                    , mongoDB
                    , HUnit
                    , hspec >= 1.12.1
@@ -145,7 +139,7 @@ library
    if flag(nooverlap)
      cpp-options: -DNO_OVERLAP
 
-   if !flag(postgresql) && !flag(mysql) && !flag(mongodb)
+   if !flag(postgresql) && !flag(mysql)
       build-depends: persistent-sqlite     >= 2.6.1.1
      cpp-options: -DWITH_SQLITE -DDEBUG
 
@@ -162,14 +156,6 @@ library
                    , mysql-simple          >= 0.4.3    && < 0.5
                    , mysql                 >= 0.1.1.3  && < 0.2
      cpp-options: -DWITH_MYSQL
-
-   if flag(mongodb)
-     build-depends:  persistent-mongoDB
-                   , mongoDB            >= 2.0.4 && < 3.0
-                   , cereal
-                   , bson               >= 0.3.1
-                   , process
-     cpp-options: -DWITH_NOSQL -DWITH_MONGODB -DDEBUG
 
    if flag(high_precision_date)
      cpp-options: -DHIGH_PRECISION_DATE
@@ -191,10 +177,8 @@ executable persistent-test
                  , resourcet
                  , scientific
 
-  if !flag(postgresql) && !flag(mysql) && !flag(mongodb)
+  if !flag(postgresql) && !flag(mysql)
       cpp-options: -DWITH_SQLITE -DDEBUG
-  if flag(mongodb)
-      cpp-options: -DWITH_NOSQL -DWITH_MONGODB -DDEBUG
   if flag(postgresql)
       cpp-options: -DWITH_POSTGRESQL
   if flag(mysql)

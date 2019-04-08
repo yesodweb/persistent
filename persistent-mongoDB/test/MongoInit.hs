@@ -43,7 +43,10 @@ module MongoInit (
 ) where
 
 -- we have to be careful with this import becuase CPP is still a problem
-import Init (TestFn(..), AbstractTest, truncateTimeOfDay, truncateUTCTime, truncateToMicro, arbText, liftA2)
+import Init
+    ( TestFn(..), AbstractTest, truncateTimeOfDay, truncateUTCTime
+    , truncateToMicro, arbText, liftA2, GenerateKey(..)
+    )
 
 -- re-exports
 import Control.Applicative as A ((<$>), (<*>))
@@ -139,8 +142,8 @@ db' actions cleanDB = do
   r <- runConn (actions >> cleanDB)
   return r
 
-generateKey :: IO (BackendKey Context)
-generateKey = MongoKey `liftM` MongoDB.genObjectId
-
 asIO :: IO a -> IO a
 asIO a = a
+
+instance GenerateKey MongoDB.MongoContext where
+    generateKey = MongoKey `liftM` MongoDB.genObjectId
