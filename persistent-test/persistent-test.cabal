@@ -43,6 +43,7 @@ flag nooverlap
 
 library
     exposed-modules: PersistentTest
+                     UpsertTest
                      MpsNoPrefixTest
                      PersistentTestModels
                      PersistTestPetType

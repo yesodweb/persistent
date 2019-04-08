@@ -11,6 +11,7 @@ import qualified EmptyEntityTest
 import qualified HtmlTest
 import Init
 import qualified LargeNumberTest
+import qualified UpsertTest
 import qualified MaxLenTest
 import qualified MigrationOnlyTest
 import qualified PersistentTest
@@ -105,6 +106,14 @@ main = do
     MigrationOnlyTest.specs
     PersistentTest.specs
     PersistentTest.filterOrSpecs db
+    UpsertTest.specsWith
+        db
+#ifdef WITH_NOSQL
+        UpsertTest.AssumeNullIsZero
+#else
+        UpsertTest.Don'tUpdateNull
+#endif
+
 #ifndef WITH_NOSQL
     MpsNoPrefixTest.specs
 #endif
