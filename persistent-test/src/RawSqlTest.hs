@@ -6,6 +6,8 @@ import Init
 
 import qualified Data.Text as T
 import Control.Monad.Trans.Resource (runResourceT)
+import qualified Data.Conduit as C
+import qualified Data.Conduit.List as CL
 
 import PersistTestPetCollarType
 import PersistTestPetType
@@ -95,6 +97,11 @@ specs = describe "rawSql" $ do
                        , (Entity p1k p1, Just (Entity a2k a2))
                        , (Entity p2k p2, Nothing) ]
 
+  it "handles lower casing" $ asIO $
+      runConn $ do
+          C.runConduitRes $ rawQuery "SELECT full_name from lower_case_table WHERE my_id=5" [] C..| CL.sinkNull
+          C.runConduitRes $ rawQuery "SELECT something_else from ref_table WHERE id=4" [] C..| CL.sinkNull
+
   it "commit/rollback" (caseCommitRollback >> runResourceT (runConn cleanDB))
 
 caseCommitRollback :: Assertion
@@ -127,5 +134,3 @@ caseCommitRollback = db $ do
     transactionUndo
     c4 <- count filt
     c4 @== 4
-
-
