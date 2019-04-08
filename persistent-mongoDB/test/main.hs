@@ -69,11 +69,6 @@ HtmlTable
     html Html
     deriving
 |]
-mkPersist persistSettings [persistUpperCase|
-  BlogPost
-    article Markdown
-    deriving Show Eq
-|]
 
 mkPersist persistSettings [persistUpperCase|
 DataTypeTable no-json
@@ -121,16 +116,6 @@ mkPersist persistSettings [persistUpperCase|
 EmptyEntity
 |]
 
-mkPersist persistSettings [persistUpperCase|
-  Number
-    intx Int
-    int32 Int32
-    word32 Word32
-    int64 Int64
-    word64 Word64
-    deriving Show Eq
-|]
-
 main :: IO ()
 main = do
   hspec $ afterAll dropDatabase $ do
@@ -153,17 +138,14 @@ main = do
         ]
         []
         dataTypeTableDouble
-    HtmlTest.specsWith
-        (db' (deleteWhere @_ @_ @HtmlTest.HtmlTable []))
-        Nothing
+    HtmlTest.specsWith (db' HtmlTest.cleanDB) Nothing
     EmbedTestMongo.specs
     EmbedOrderTest.specsWith
         (db' (deleteWhere ([] :: [Filter Foo]) >> deleteWhere ([] :: [Filter Bar])))
         Foo
         Bar
     LargeNumberTest.specsWith
-        (db' (deleteWhere ([] :: [Filter Number])))
-        Number
+        (db' (deleteWhere ([] :: [Filter (LargeNumberTest.NumberGeneric backend)])))
     MaxLenTest.specsWith dbNoCleanup
     Recursive.specsWith (db' Recursive.cleanup)
 
@@ -180,12 +162,10 @@ main = do
             UpsertTest.AssumeNullIsZero
             UpsertTest.UpsertGenerateNewKey
     EmptyEntityTest.specsWith
-        (lift . db' (deleteWhere @_ @_ @EmptyEntity []))
+        (db' EmptyEntityTest.cleanDB)
         Nothing
-        EmptyEntity
     CustomPersistFieldTest.specsWith
         dbNoCleanup
-        BlogPost
 
   where
     dropDatabase () = dbNoCleanup (void (runCommand1 "dropDatabase()"))

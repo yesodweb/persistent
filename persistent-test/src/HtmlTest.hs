@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds #-}
 {-# LANGUAGE QuasiQuotes, TemplateHaskell, CPP, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, EmptyDataDecls, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses #-}
-module HtmlTest (specs, specsWith, htmlMigrate) where
+module HtmlTest (specs, specsWith, cleanDB, htmlMigrate) where
 
 import Database.Persist.TH
 import Data.Char (generalCategory, GeneralCategory(..))

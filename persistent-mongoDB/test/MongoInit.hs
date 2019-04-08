@@ -3,6 +3,16 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TemplateHaskell #-}
 
+-- We create an orphan instance for GenerateKey here to avoid a circular
+-- dependency between:
+--
+-- a) persistent-mongoDB:test depends on
+-- b) persistent-test:lib depends on
+-- c) persistent-mongODB:lib
+--
+-- This kind of cycle is all kinds of bad news.
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 module MongoInit (
   (@/=), (@==), (==@)
   , assertNotEqual
@@ -22,7 +32,6 @@ module MongoInit (
   , Action
   , Context
   , BackendKey(..)
-  , generateKey
 
    -- re-exports
   , (A.<$>), (A.<*>)

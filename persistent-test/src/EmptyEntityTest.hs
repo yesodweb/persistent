@@ -11,7 +11,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
-module EmptyEntityTest (specs, specsWith, migration) where
+module EmptyEntityTest (specs, specsWith, migration, cleanDB) where
 
 import Database.Persist.Sql
 import Database.Persist.TH
@@ -28,10 +28,14 @@ share [mkPersist sqlSettings { mpsGeneric = True }, mkMigrate "migration"] [pers
 EmptyEntity
 |]
 
-#ifdef WITH_NOSQL
-cleanDB :: MonadIO m => ReaderT Context m ()
-cleanDB = deleteWhere ([] :: [Filter EmptyEntity])
-#endif
+cleanDB
+    ::
+    ( PersistQueryWrite backend
+    , MonadIO m
+    , PersistStoreWrite (BaseBackend backend)
+    )
+    => ReaderT backend m ()
+cleanDB = deleteWhere ([] :: [Filter (EmptyEntityGeneric backend)])
 
 specs :: Spec
 specs = describe "empty entity" $
