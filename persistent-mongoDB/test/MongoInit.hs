@@ -14,14 +14,9 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module MongoInit (
-  (@/=), (@==), (==@)
-  , assertNotEqual
-  , assertNotEmpty
-  , assertEmpty
-  , isTravis
+  isTravis
   , BackendMonad
   , runConn
-  , asIO
   , MonadIO
   , persistSettings
   , MkPersistSettings (..)
@@ -49,12 +44,15 @@ module MongoInit (
   , BS.ByteString
   , SomeException
   , module Init
-) where
+  ) where
 
 -- we have to be careful with this import becuase CPP is still a problem
 import Init
     ( TestFn(..), AbstractTest, truncateTimeOfDay, truncateUTCTime
     , truncateToMicro, arbText, liftA2, GenerateKey(..)
+    , (@/=), (@==), (==@)
+    , assertNotEqual, assertNotEmpty, assertEmpty, asIO
+    , isTravis
     )
 
 -- re-exports
@@ -95,38 +93,6 @@ setup :: Action IO ()
 setup = setupMongo
 type Context = MongoDB.MongoContext
 
-(@/=), (@==), (==@) :: (Eq a, Show a, MonadIO m) => a -> a -> m ()
-infix 1 @/= --, /=@
-actual @/= expected = liftIO $ assertNotEqual "" expected actual
-
-infix 1 @==, ==@
-actual @== expected = liftIO $ actual @?= expected
-expected ==@ actual = liftIO $ expected @=? actual
-
-{-
-expected /=@ actual = liftIO $ assertNotEqual "" expected actual
--}
-
-
-assertNotEqual :: (Eq a, Show a) => String -> a -> a -> Assertion
-assertNotEqual preface expected actual =
-  unless (actual /= expected) (assertFailure msg)
-  where msg = (if null preface then "" else preface ++ "\n") ++
-             "expected: " ++ show expected ++ "\n to not equal: " ++ show actual
-
-assertEmpty :: (Monad m, MonadIO m) => [a] -> m ()
-assertEmpty xs    = liftIO $ assertBool "" (null xs)
-
-assertNotEmpty :: (Monad m, MonadIO m) => [a] -> m ()
-assertNotEmpty xs = liftIO $ assertBool "" (not (null xs))
-
-isTravis :: IO Bool
-isTravis = do
-  env <- liftIO getEnvironment
-  return $ case lookup "TRAVIS" env of
-    Just "true" -> True
-    _ -> False
-
 _debugOn :: Bool
 _debugOn = True
 
@@ -150,9 +116,6 @@ db' :: Action IO () -> Action IO () -> Assertion
 db' actions cleanDB = do
   r <- runConn (actions >> cleanDB)
   return r
-
-asIO :: IO a -> IO a
-asIO a = a
 
 instance GenerateKey MongoDB.MongoContext where
     generateKey = MongoKey `liftM` MongoDB.genObjectId

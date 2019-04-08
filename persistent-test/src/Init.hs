@@ -103,11 +103,6 @@ import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import Database.Persist.Sql
 import System.Log.FastLogger (fromLogStr)
 
-#  ifdef WITH_POSTGRESQL
-import Data.Maybe (fromMaybe)
-import Data.Monoid ((<>))
-import Database.Persist.Postgresql
-#  endif
 #  ifdef WITH_SQLITE
 import Database.Persist.Sqlite
 #  endif
@@ -170,15 +165,6 @@ _debugOn = True
 _debugOn = False
 #endif
 
-#ifdef WITH_POSTGRESQL
-dockerPg :: IO (Maybe BS.ByteString)
-dockerPg = do
-  env <- liftIO getEnvironment
-  return $ case lookup "POSTGRES_NAME" env of
-    Just _name -> Just "postgres" -- /persistent/postgres
-    _ -> Nothing
-#endif
-
 #ifdef WITH_NOSQL
 persistSettings :: MkPersistSettings
 persistSettings = (mkPersistSettings $ ConT ''Context) { mpsGeneric = True }
@@ -216,14 +202,7 @@ runConn f = do
   let debugPrint = not travis && _debugOn
   let printDebug = if debugPrint then print . fromLogStr else void . return
   flip runLoggingT (\_ _ _ s -> printDebug s) $ do
-#  ifdef WITH_POSTGRESQL
-    _ <- if travis
-      then withPostgresqlPool "host=localhost port=5432 user=postgres dbname=persistent" 1 $ runSqlPool f
-      else do
-        host <- fromMaybe "localhost" A.<$> liftIO dockerPg
-        withPostgresqlPool ("host=" <> host <> " port=5432 user=postgres dbname=test") 1 $ runSqlPool f
-#  else
-#    ifdef WITH_MYSQL
+#ifdef WITH_MYSQL
     -- Since version 5.7.5, MySQL adds a mode value `STRICT_TRANS_TABLES`
     -- which can cause an exception in MaxLenTest, depending on the server
     -- configuration.  Persistent tests do not need any of the modes which are
@@ -247,10 +226,9 @@ runConn f = do
                         , connectPassword = ""
                         , connectDatabase = "persistent"
                         } 1 $ runSqlPool f
-#    else
+#else
     _<-withSqlitePoolInfo sqlite_database 1 $ runSqlPool f
-#    endif
-#  endif
+#endif
     return ()
 
 db :: SqlPersistT (LoggingT (ResourceT IO)) () -> Assertion

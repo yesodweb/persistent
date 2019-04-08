@@ -21,11 +21,6 @@ Flag sqlite
    Default: False
    manual: True
 
-Flag postgresql
-   Description: test postgresql. default is to test just sqlite.
-   Default: False
-   manual: True
-
 Flag mysql
    Description: test MySQL. default is to test just sqlite.
    Default: False
@@ -140,16 +135,9 @@ library
    if flag(nooverlap)
      cpp-options: -DNO_OVERLAP
 
-   if !flag(postgresql) && !flag(mysql)
+   if !flag(mysql)
       build-depends: persistent-sqlite     >= 2.6.1.1
      cpp-options: -DWITH_SQLITE -DDEBUG
-
-   if flag(postgresql)
-     build-depends:  persistent-postgresql
-                   , postgresql-simple
-                   , postgresql-libpq
-     cpp-options: -DWITH_POSTGRESQL -DDEBUG
-
 
    if flag(mysql)
      build-depends:  persistent-mysql
@@ -177,10 +165,8 @@ executable persistent-test
                  , resourcet
                  , scientific
 
-  if !flag(postgresql) && !flag(mysql)
+  if !flag(mysql)
       cpp-options: -DWITH_SQLITE -DDEBUG
-  if flag(postgresql)
-      cpp-options: -DWITH_POSTGRESQL
   if flag(mysql)
       cpp-options: -DWITH_MYSQL
 
