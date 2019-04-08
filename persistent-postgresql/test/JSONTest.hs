@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans #-}
+{-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
@@ -12,7 +13,6 @@
 {-# LANGUAGE TypeFamilies #-}
 module JSONTest where
 
-#ifdef WITH_POSTGRESQL
 import Control.Monad.IO.Class (MonadIO)
 import Data.Aeson
 import qualified Data.Vector as V (fromList)
@@ -305,8 +305,3 @@ specs = describe "postgresql's @> and <@ operators behave" $ do
       nullMatch2 <- selectList [TestValueJson <@. Null] []
       nullMatch2 `lengthIs` 1
       nullMatch2 `matchKey` [nullK]
-
-asIO :: IO a -> IO a
-asIO = id
-
-#endif

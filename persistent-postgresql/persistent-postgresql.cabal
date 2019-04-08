@@ -8,7 +8,7 @@ synopsis:        Backend for the persistent library using postgresql.
 description:     Based on the postgresql-simple package
 category:        Database, Yesod
 stability:       Stable
-cabal-version:   >= 1.6
+cabal-version:   >= 1.8
 build-type:      Simple
 homepage:        http://www.yesodweb.com/book/persistent
 bug-reports:     https://github.com/yesodweb/persistent/issues
@@ -38,3 +38,40 @@ library
 source-repository head
   type:     git
   location: git://github.com/yesodweb/persistent.git
+
+test-suite test
+    type:            exitcode-stdio-1.0
+    main-is:         main.hs
+    hs-source-dirs:  test
+    other-modules:   PgInit
+                     JSONTest
+    ghc-options:     -Wall
+
+    build-depends:   base >= 4.6 && < 5
+                   , persistent-postgresql
+                   , persistent-template
+                   , hspec-expectations
+                   , vector
+                   , HUnit
+                   , persistent-test
+                   , persistent-qq
+                   , template-haskell
+                   , process
+                   , unliftio-core
+                   , aeson
+                   , hspec >= 1.3
+                   , text
+                   , persistent
+                   , bytestring
+                   , QuickCheck
+                   , transformers
+                   , mtl
+                   , containers
+                   , blaze-html
+                   , random >= 1.0.1
+                   , fast-logger
+                   , resourcet
+                   , time
+                   , monad-logger
+                   , quickcheck-instances
+
