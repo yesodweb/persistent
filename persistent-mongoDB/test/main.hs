@@ -199,11 +199,13 @@ main = do
         dbNoCleanup
         Nothing
     PersistentTest.specsWith (db' PersistentTest.cleanDB)
-    -- TODO: The upsert tests are currently failing.
-    --UpsertTest.specsWith
-    --    (db' PersistentTest.cleanDB)
-    --    UpsertTest.AssumeNullIsZero
-    --    UpsertTest.UpsertGenerateNewKey
+    -- TODO: The upsert tests are currently failing. Find out why and fix
+    -- them.
+    xdescribe "UpsertTest is currently failing for Mongo due to differing behavior" $ do
+        UpsertTest.specsWith
+            (db' PersistentTest.cleanDB)
+            UpsertTest.AssumeNullIsZero
+            UpsertTest.UpsertGenerateNewKey
     EmptyEntityTest.specsWith
         (lift . db' (deleteWhere @_ @_ @EmptyEntity []))
         Nothing
