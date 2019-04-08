@@ -733,7 +733,6 @@ specsWith runDb = describe "persistent" $ do
 
 #ifdef WITH_NOSQL
 #else
-  RawSqlTest.specs
 #  ifndef WITH_MYSQL
 #    ifndef WITH_POSTGRESQL
 #      ifndef WITH_NOSQL

@@ -15,6 +15,7 @@ import qualified UpsertTest
 import qualified MaxLenTest
 import qualified MigrationOnlyTest
 import qualified PersistentTest
+import qualified RawSqlTest
 import qualified MpsNoPrefixTest
 import qualified PersistUniqueTest
 import qualified PrimaryTest
@@ -106,6 +107,10 @@ main = do
     MigrationOnlyTest.specs
     PersistentTest.specs
     PersistentTest.filterOrSpecs db
+#ifdef WITH_NOSQL
+#else
+    RawSqlTest.specs
+#endif
     UpsertTest.specsWith
         db
 #ifdef WITH_NOSQL
