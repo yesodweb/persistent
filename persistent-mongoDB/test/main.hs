@@ -36,6 +36,9 @@ import CustomPersistField
 -- import qualified InsertDuplicateUpdate
 -- import qualified PersistUniqueTest
 -- import qualified PrimaryTest
+-- import qualified UniqueTest
+-- import qualified MigrationColumnLengthTest
+-- import qualified EquivalentTypeTest
 
 -- These modules were quite complicated. Instead of fully extracting the
 -- relevant common functionality, I just copied and de-CPPed manually.
@@ -55,14 +58,6 @@ import qualified UpsertTest
 import qualified PersistentTest
 import qualified RenameTest
 import qualified SumTypeTest
-
--- This one is in progress!
-
--- These are TODO.
-import qualified UniqueTest
-import qualified MigrationColumnLengthTest
-import qualified EquivalentTypeTest
-import qualified TransactionLevelTest
 
 type Tuple = (,)
 
@@ -188,7 +183,6 @@ main = do
     LargeNumberTest.specsWith
         (db' (deleteWhere ([] :: [Filter Number])))
         Number
-    UniqueTest.specs
     MaxLenTest.specsWith
         dbNoCleanup
         MaxLen
@@ -214,9 +208,6 @@ main = do
     CustomPersistFieldTest.specsWith
         dbNoCleanup
         BlogPost
-    MigrationColumnLengthTest.specs
-    EquivalentTypeTest.specs
-    TransactionLevelTest.specs
 
   where
     dropDatabase () = dbNoCleanup (void (runCommand1 "dropDatabase()"))
