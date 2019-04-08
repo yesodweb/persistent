@@ -13,10 +13,10 @@ import Data.Monoid (mappend)
 import qualified Data.Text as T
 
 import Database.Persist
-import Database.Persist.Class.PersistUnique (defaultPutMany, persistUniqueKeyValues, onlyOneUniqueDef)
+import Database.Persist.Class.PersistUnique (defaultPutMany, defaultInsertUnique, persistUniqueKeyValues, onlyOneUniqueDef)
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
-import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
+import Database.Persist.Sql.Orphan.PersistStore (withRawQuery, sqlInsert)
 import Database.Persist.Sql.Util (dbColumns, parseEntityValues, updatePersistValue, mkUpdateText')
 
 defaultUpsert
@@ -33,6 +33,16 @@ defaultUpsert record updates = do
     upsertBy uniqueKey record updates
 
 instance PersistUniqueWrite SqlBackend where
+    insertUnique record = do
+        conn <- ask
+        case connInsertUniqueSql conn of
+            Nothing -> defaultInsertUnique record
+            Just mksql -> do
+                ekey <- sqlInsert mksql record
+                case ekey of
+                    Left _ -> return Nothing
+                    Right k -> return $ Just k
+
     upsert record updates = do
       conn <- ask
       let escape = connEscapeName conn
@@ -90,6 +100,7 @@ instance PersistUniqueWrite SqlBackend where
                 Nothing -> defaultPutMany rs
 
 instance PersistUniqueWrite SqlWriteBackend where
+    insertUnique r = withReaderT persistBackend $ insertUnique r
     deleteBy uniq = withReaderT persistBackend $ deleteBy uniq
     upsert rs us = withReaderT persistBackend $ upsert rs us
     putMany rs = withReaderT persistBackend $ putMany rs

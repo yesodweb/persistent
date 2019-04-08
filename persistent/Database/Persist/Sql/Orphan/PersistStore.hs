@@ -12,6 +12,7 @@ module Database.Persist.Sql.Orphan.PersistStore
   , getTableName
   , tableDBName
   , fieldDBName
+  , sqlInsert
   ) where
 
 import Control.Exception (throwIO)
@@ -148,61 +149,10 @@ instance PersistStoreWrite SqlBackend where
 
     insert val = do
         conn <- ask
-        let esql = connInsertSql conn t vals
-        key <-
-            case esql of
-                ISRSingle sql -> withRawQuery sql vals $ do
-                    x <- CL.head
-                    case x of
-                        Just [PersistInt64 i] -> case keyFromValues [PersistInt64 i] of
-                            Left err -> error $ "SQL insert: keyFromValues: PersistInt64 " `mappend` show i `mappend` " " `mappend` unpack err
-                            Right k -> return k
-                        Nothing -> error $ "SQL insert did not return a result giving the generated ID"
-                        Just vals' -> case keyFromValues vals' of
-                            Left e -> error $ "Invalid result from a SQL insert, got: " ++ show vals' ++ ". Error was: " ++ unpack e
-                            Right k -> return k
-
-                ISRInsertGet sql1 sql2 -> do
-                    rawExecute sql1 vals
-                    withRawQuery sql2 [] $ do
-                        mm <- CL.head
-                        let m = maybe
-                                  (Left $ "No results from ISRInsertGet: " `mappend` tshow (sql1, sql2))
-                                  Right mm
-
-                        -- TODO: figure out something better for MySQL
-                        let convert x =
-                                case x of
-                                    [PersistByteString i] -> case readInteger i of -- mssql
-                                                            Just (ret,"") -> [PersistInt64 $ fromIntegral ret]
-                                                            _ -> x
-                                    _ -> x
-                            -- Yes, it's just <|>. Older bases don't have the
-                            -- instance for Either.
-                            onLeft Left{} x = x
-                            onLeft x _ = x
-
-                        case m >>= (\x -> keyFromValues x `onLeft` keyFromValues (convert x)) of
-                            Right k -> return k
-                            Left err -> throw $ "ISRInsertGet: keyFromValues failed: " `mappend` err
-                ISRManyKeys sql fs -> do
-                    rawExecute sql vals
-                    case entityPrimary t of
-                       Nothing -> error $ "ISRManyKeys is used when Primary is defined " ++ show sql
-                       Just pdef ->
-                            let pks = map fieldHaskell $ compositeFields pdef
-                                keyvals = map snd $ filter (\(a, _) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ entityFields t) fs
-                            in  case keyFromValues keyvals of
-                                    Right k -> return k
-                                    Left e  -> error $ "ISRManyKeys: unexpected keyvals result: " `mappend` unpack e
-
-        return key
-      where
-        tshow :: Show a => a -> Text
-        tshow = T.pack . show
-        throw = liftIO . throwIO . userError . T.unpack
-        t = entityDef $ Just val
-        vals = map toPersistValue $ toPersistFields val
+        ekey <- sqlInsert (connInsertSql conn) val
+        case ekey of
+            Left e -> liftIO $ throwIO $ userError e
+            Right key -> return key
 
     insertMany [] = return []
     insertMany vals = do
@@ -388,3 +338,75 @@ runChunked width m xs = do
 chunksOf :: Int -> [a] -> [[a]]
 chunksOf _ [] = []
 chunksOf size xs = let (chunk, rest) = splitAt size xs in chunk : chunksOf size rest
+
+-- | Insert a record, and return 'Right' the key of the new row. If we didn't
+-- get any IDs back from the backend, return 'Left' an error message. On any
+-- other error, throw an exception.
+sqlInsert
+    :: (MonadIO m, PersistRecordBackend record SqlBackend)
+    => (EntityDef -> [PersistValue] -> InsertSqlResult)
+    -> record
+    -> ReaderT SqlBackend m (Either String (Key record))
+sqlInsert mksql val = do
+    let esql = mksql t vals
+    ekey <-
+        case esql of
+            ISRSingle sql -> withRawQuery sql vals $ do
+                x <- CL.head
+                case x of
+                    Just [PersistInt64 i] -> case keyFromValues [PersistInt64 i] of
+                        Left err -> error $ "SQL insert: keyFromValues: PersistInt64 " `mappend` show i `mappend` " " `mappend` unpack err
+                        Right k -> return $ Right k
+                    Nothing -> return $ Left "SQL insert did not return a result giving the generated ID"
+                    Just vals' -> case keyFromValues vals' of
+                        Left e ->
+                            let err = "Invalid result from a SQL insert, got: " ++ show vals' ++ ". Error was: " ++ unpack e
+                            in  if null vals'
+                                    then return $ Left err
+                                    else error err
+                        Right k -> return $ Right k
+
+            ISRInsertGet sql1 sql2 -> do
+                rawExecute sql1 vals
+                withRawQuery sql2 [] $ do
+                    mm <- CL.head
+
+                    -- TODO: figure out something better for MySQL
+                    let convert x =
+                            case x of
+                                [PersistByteString i] -> case readInteger i of -- mssql
+                                                        Just (ret,"") -> [PersistInt64 $ fromIntegral ret]
+                                                        _ -> x
+                                _ -> x
+                        -- Yes, it's just <|>. Older bases don't have the
+                        -- instance for Either.
+                        onLeft Left{} x = x
+                        onLeft x _ = x
+
+                    case mm of
+                        Nothing -> return $ Left $ "No results from ISRInsertGet: " ++ show (sql1, sql2)
+                        Just x ->
+                            case keyFromValues x `onLeft` keyFromValues (convert x) of
+                                Right k -> return $ Right k
+                                Left e ->
+                                    let err = "ISRInsertGet: keyFromValues failed: " `mappend` e
+                                    in  if null x
+                                            then return $ Left $ T.unpack err
+                                            else throw err
+
+            ISRManyKeys sql fs -> do
+                rawExecute sql vals
+                case entityPrimary t of
+                   Nothing -> error $ "ISRManyKeys is used when Primary is defined " ++ show sql
+                   Just pdef ->
+                        let pks = map fieldHaskell $ compositeFields pdef
+                            keyvals = map snd $ filter (\(a, _) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ entityFields t) fs
+                        in  case keyFromValues keyvals of
+                                Right k -> return $ Right k
+                                Left e  -> error $ "ISRManyKeys: unexpected keyvals result: " `mappend` unpack e
+
+    return ekey
+  where
+    throw = liftIO . throwIO . userError . T.unpack
+    t = entityDef $ Just val
+    vals = map toPersistValue $ toPersistFields val

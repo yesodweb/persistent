@@ -251,6 +251,7 @@ wrapConnectionInfo connInfo conn logFunc = do
         , connLogFunc = logFunc
         , connMaxParams = Just 999
         , connRepsertManySql = Just repsertManySql
+        , connInsertUniqueSql = Nothing
         }
   where
     helper t getter = do
@@ -434,6 +435,7 @@ mockMigration mig = do
                    , connPutManySql = undefined
                    , connMaxParams = Just 999
                    , connRepsertManySql = Nothing
+                   , connInsertUniqueSql = Nothing
                    }
       result = runReaderT . runWriterT . runWriterT $ mig
   resp <- result sqlbackend

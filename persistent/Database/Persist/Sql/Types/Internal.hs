@@ -145,6 +145,14 @@ data SqlBackend = SqlBackend
     -- When left as 'Nothing', we default to using 'defaultRepsertMany'.
     --
     -- @since 2.9.0
+    , connInsertUniqueSql :: Maybe (EntityDef -> [PersistValue] -> InsertSqlResult)
+    -- ^ Some databases support atomically checking for conflicts before
+    -- insertion, and skipping insertion (doing nothing) if there is a conflict.
+    --
+    -- When this field is left as 'Nothing', we default to checking for each
+    -- unique constraint separately, and finally insert if they all pass.
+    --
+    -- @since 2.10.0
     }
     deriving Typeable
 instance HasPersistBackend SqlBackend where

@@ -19,6 +19,7 @@ module Database.Persist.Class.PersistUnique
   , checkUnique
   , onlyUnique
   , defaultPutMany
+  , defaultInsertUnique
   , persistUniqueKeyValues
   )
   where
@@ -134,12 +135,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     insertUnique
         :: (MonadIO m, PersistRecordBackend record backend)
         => record -> ReaderT backend m (Maybe (Key record))
-    insertUnique datum = do
-        conflict <- checkUnique datum
-        case conflict of
-            Nothing -> Just `liftM` insert datum
-            Just _ -> return Nothing
-
+    insertUnique = defaultInsertUnique
     -- | Update based on a uniqueness constraint or insert:
     --
     -- * insert the new record if it does not exist;
@@ -627,6 +623,19 @@ defaultPutMany rsD@(e:_)  = do
         insertMany_ rsNew
         -- replace existing records
         mapM_ (uncurry replace) krs
+
+defaultInsertUnique
+    :: ( MonadIO m
+       , PersistRecordBackend record backend
+       , PersistStoreWrite backend
+       , PersistUniqueRead backend
+       )
+    => record -> ReaderT backend m (Maybe (Key record))
+defaultInsertUnique datum = do
+    conflict <- checkUnique datum
+    case conflict of
+        Nothing -> Just `liftM` insert datum
+        Just _ -> return Nothing
 
 -- | This function returns a list of 'PersistValue' that correspond to the
 -- 'Unique' keys on that record. This is useful for comparing two @record@s

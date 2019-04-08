@@ -268,6 +268,7 @@ createBackend logFunc serverVersion smap conn = do
         , connLogFunc = logFunc
         , connMaxParams = Nothing
         , connRepsertManySql = serverVersion >>= upsertFunction repsertManySql
+        , connInsertUniqueSql = serverVersion >>= upsertFunction insertUniqueSql
         }
 
 prepare' :: PG.Connection -> Text -> IO Statement
@@ -1210,7 +1211,8 @@ mockMigration mig = do
                              connLimitOffset = undefined,
                              connLogFunc = undefined,
                              connMaxParams = Nothing,
-                             connRepsertManySql = Nothing
+                             connRepsertManySql = Nothing,
+                             connInsertUniqueSql = Nothing
                              }
       result = runReaderT $ runWriterT $ runWriterT mig
   resp <- result sqlbackend
@@ -1227,6 +1229,27 @@ repsertManySql ent n = putManySql' conflictColumns fields ent n
   where
     fields = keyAndEntityFields ent
     conflictColumns = escape . fieldDB <$> entityKeyFields ent
+
+insertUniqueSql :: EntityDef -> [PersistValue] -> InsertSqlResult
+insertUniqueSql ent vals =
+    let sql = T.concat
+            [ "INSERT INTO "
+            , escape $ entityDB ent
+            , if null (entityFields ent)
+                then " DEFAULT VALUES"
+                else T.concat
+                    [ "("
+                    , T.intercalate "," $ map (escape . fieldDB) $ entityFields ent
+                    , ") VALUES("
+                    , T.intercalate "," $ map (const "?") $ entityFields ent
+                    , ") ON CONFLICT ("
+                    , T.intercalate "," $ concat $ map (\x -> map escape (map snd $ uniqueFields x)) (entityUniques ent)
+                    , ") DO NOTHING"
+                    ]
+            ]
+    in case entityPrimary ent of
+        Just _pdef -> ISRManyKeys sql vals
+        Nothing -> ISRSingle (sql <> " RETURNING " <> escape (fieldDB (entityId ent)))
 
 putManySql' :: [Text] -> [FieldDef] -> EntityDef -> Int -> Text
 putManySql' conflictColumns fields ent n = q

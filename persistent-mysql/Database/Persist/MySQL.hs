@@ -143,6 +143,7 @@ open' ci logFunc = do
         , connLogFunc    = logFunc
         , connMaxParams = Nothing
         , connRepsertManySql = Just repsertManySql
+        , connInsertUniqueSql = Nothing
         }
 
 -- | Prepare a query.  We don't support prepared statements, but
@@ -1041,7 +1042,8 @@ mockMigration mig = do
                              connUpsertSql = undefined,
                              connPutManySql = undefined,
                              connMaxParams = Nothing,
-                             connRepsertManySql = Nothing
+                             connRepsertManySql = Nothing,
+                             connInsertUniqueSql = Nothing
                              }
       result = runReaderT . runWriterT . runWriterT $ mig
   resp <- result sqlbackend
