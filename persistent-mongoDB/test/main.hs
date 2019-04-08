@@ -54,9 +54,9 @@ import qualified Recursive
 import qualified UpsertTest
 import qualified PersistentTest
 import qualified RenameTest
+import qualified SumTypeTest
 
 -- This one is in progress!
-import qualified SumTypeTest
 
 -- These are TODO.
 import qualified UniqueTest
@@ -195,7 +195,7 @@ main = do
     Recursive.specsWith
         (db' Recursive.cleanup)
 
-    SumTypeTest.specs
+    SumTypeTest.specsWith (dbNoCleanup) Nothing
     MigrationOnlyTest.specsWith
         dbNoCleanup
         Nothing

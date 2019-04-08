@@ -12,7 +12,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-module SumTypeTest (specs) where
+module SumTypeTest (specs, specsWith) where
 
 import Database.Persist.TH
 import Control.Monad.Trans.Resource (runResourceT)
@@ -42,11 +42,26 @@ deriving instance Show (BackendKey backend) => Show (VehicleGeneric backend)
 deriving instance Eq (BackendKey backend) => Eq (VehicleGeneric backend)
 
 specs :: Spec
-specs = describe "sum types" $
-    it "works" $ asIO $ runResourceT $ runConn $ do
-#ifndef WITH_NOSQL
-        _ <- runMigrationSilent sumTypeMigrate
+specs = specsWith runConn
+#ifdef WITH_NOSQL
+    Nothing
+#else
+    (Just (runMigrationSilent sumTypeMigrate))
 #endif
+
+specsWith
+    ::
+    ( PersistQueryWrite backend
+    , BaseBackend backend ~ backend
+    , MonadIO m, MonadFail m
+    )
+    => RunDb backend m
+    -> Maybe (ReaderT backend m a)
+    -- ^ Optional migrations for SQL backends
+    -> Spec
+specsWith runDb mmigrate = describe "sum types" $
+    it "works" $ asIO $ runDb $ do
+        sequence_ mmigrate
         car1 <- insert $ Car "Ford" "Thunderbird"
         car2 <- insert $ Car "Kia" "Rio"
         bike1 <- insert $ Bicycle "Shwinn"
