@@ -24,6 +24,7 @@ module Database.Persist.Postgresql
     , ConnectionString
     , PostgresConf (..)
     , openSimpleConn
+    , openSimpleConnWithVersion
     , tableName
     , fieldName
     , mockMigration
@@ -235,11 +236,15 @@ upsertFunction f version = if (version >= 9.5)
 
 -- | Generate a 'SqlBackend' from a 'PG.Connection'.
 openSimpleConn :: (IsSqlBackend backend) => LogFunc -> PG.Connection -> IO backend
-openSimpleConn logFunc conn = do
-    smap <- newIORef $ Map.empty
-    serverVersion <- getServerVersion conn
-    return $ createBackend logFunc serverVersion smap conn
+openSimpleConn = openSimpleConnWithVersion getServerVersion
 
+-- | Generate a 'SqlBackend' from a 'PG.Connection', but takes a callback for
+-- obtaining the server version.
+openSimpleConnWithVersion :: (IsSqlBackend backend) => (PG.Connection -> IO (Maybe Double)) -> LogFunc -> PG.Connection -> IO backend
+openSimpleConnWithVersion getVer logFunc conn = do
+    smap <- newIORef $ Map.empty
+    serverVersion <- getVer conn
+    return $ createBackend logFunc serverVersion smap conn
 
 -- | Create the backend given a logging function, server version, mutable statement cell,
 -- and connection.
