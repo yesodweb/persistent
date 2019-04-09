@@ -86,21 +86,6 @@ source-repository head
   type:     git
   location: git://github.com/yesodweb/persistent.git
 
-
-test-suite test
-  type:           exitcode-stdio-1.0
-  main-is:        Spec.hs
-  hs-source-dirs: test
-  build-depends:  base
-                , hspec
-                , persistent
-                , persistent-sqlite
-                , persistent-template
-                , temporary
-                , text
-                , time
-                , transformers
-
 executable sanity
     if flag(build-sanity-exe)
         buildable: True
@@ -109,3 +94,51 @@ executable sanity
     main-is: sanity.hs
     hs-source-dirs: test
     build-depends: base, persistent-sqlite, monad-logger
+
+test-suite test
+    type:            exitcode-stdio-1.0
+    main-is:         main.hs
+    hs-source-dirs:  test
+    other-modules:   SqliteInit
+    ghc-options:     -Wall
+
+    build-depends:   base >= 4.6 && < 5
+                   , persistent-sqlite
+                   , hspec
+                   , persistent
+                   , persistent-sqlite
+                   , persistent-template
+                   , system-filepath
+                   , system-fileio
+                   , temporary
+                   , text
+                   , time
+                   , transformers
+                   , persistent-template
+                   , hspec-expectations
+                   , vector
+                   , HUnit
+                   , persistent-test
+                   , persistent-qq
+                   , template-haskell
+                   , process
+                   , unliftio-core
+                   , aeson
+                   , hspec >= 1.3
+                   , text
+                   , persistent
+                   , bytestring
+                   , QuickCheck
+                   , transformers
+                   , mtl
+                   , containers
+                   , blaze-html
+                   , random >= 1.0.1
+                   , fast-logger
+                   , resourcet
+                   , time
+                   , monad-logger
+                   , quickcheck-instances
+                   , unordered-containers
+                   , mysql
+
