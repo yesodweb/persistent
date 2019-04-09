@@ -23,3 +23,4 @@ extra-deps:
 - hspec-core-2.4.0
 - hspec-discover-2.4.0
 - hspec-expectations-0.8.2
+- quickcheck-io-0.1.4

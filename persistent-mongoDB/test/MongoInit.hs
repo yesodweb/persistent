@@ -26,7 +26,7 @@ module MongoInit (
   , mkPersistSettings
   , Action
   , Context
-  , BackendKey(..)
+  , BackendKey(MongoKey)
 
    -- re-exports
   , (A.<$>), (A.<*>)

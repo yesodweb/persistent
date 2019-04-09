@@ -47,14 +47,14 @@ module Init (
   , liftA2
   ) where
 
--- re-exports
--- needed
-#if !MIN_VERSION_base(4,9,0)
+-- needed for backwards compatibility
 import Control.Monad.Logger
 import Control.Monad.Trans.Resource
+import Control.Monad.Catch
 import Control.Monad.Trans.Control
 import qualified Control.Monad.Fail as MonadFail
-#endif
+
+-- re-exports
 import Control.Applicative (liftA2)
 import Test.QuickCheck.Instances ()
 import Data.Char (generalCategory, GeneralCategory(..))
@@ -209,7 +209,7 @@ type Runner backend m =
 
 type RunDb backend m = ReaderT backend m () -> IO ()
 
-#if !MIN_VERSION_base(4,9,0)
+#if !MIN_VERSION_base(4,10,0)
 instance MonadFail (LoggingT (ResourceT IO)) where
     fail = liftIO . MonadFail.fail
 #endif
