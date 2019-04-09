@@ -1,5 +1,11 @@
 # Changelog for persistent-sqlite
 
+## 2.9.3
+
+* Add retry-on-busy support, automatically retrying when sqlite returns a busy
+  error on enabling WAL mode, and providing helper `retryOnBusy` and
+  `waitForDatabase` identifiers.
+
 ## 2.9.2
 
 * Add enableExtendedResultCodes and disableExtendedResultCodes functions

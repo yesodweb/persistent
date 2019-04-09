@@ -60,6 +60,14 @@ type Sql = Text
 -- Bool indicates if the Sql is safe
 type CautiousMigration = [(Bool, Sql)]
 
+-- | A 'Migration' is a four level monad stack consisting of:
+--
+-- * @'WriterT' ['Text']@ representing a log of errors in the migrations.
+-- * @'WriterT' 'CautiousMigration'@ representing a list of migrations to
+--   run, along with whether or not they are safe.
+-- * @'ReaderT' 'SqlBackend'@, aka the 'SqlPersistT' transformer for
+--   database interop.
+-- * @'IO'@ for arbitrary IO.
 type Migration = WriterT [Text] (WriterT CautiousMigration (ReaderT SqlBackend IO)) ()
 
 type ConnectionPool = Pool SqlBackend

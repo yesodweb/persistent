@@ -8,6 +8,9 @@ Added question mark operators (`(?.), (?|.), (?&.)`) to `Database.Persist.Postgr
     * `PersistValue`: added `PersistArray` data constructor
     * `Filter`: Changed the `filterValue :: Either a [a]` to `filterValue :: FilterValue`
 
+## 2.9.1
+* Add `openSimpleConnWithVersion` function. [#883](https://github.com/yesodweb/persistent/pull/883)
+
 ## 2.9.0
 
 * Added support for SQL isolation levels to via SqlBackend. [#812]

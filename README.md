@@ -1,4 +1,4 @@
-## Learn more: http://yesodweb.com/book/persistent
+## Learn more: http://www.yesodweb.com/book/persistent
 
 [![Join the chat at https://gitter.im/yesodweb/persistent](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/yesodweb/persistent?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 

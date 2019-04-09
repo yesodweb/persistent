@@ -5,6 +5,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE PatternGuards #-}
 -- | A sqlite backend for persistent.
 --
@@ -30,6 +31,8 @@ module Database.Persist.Sqlite
     , wrapConnection
     , wrapConnectionInfo
     , mockMigration
+    , retryOnBusy
+    , waitForDatabase
     ) where
 
 import Database.Persist.Sql
@@ -40,9 +43,10 @@ import qualified Database.Sqlite as Sqlite
 
 import Control.Applicative as A
 import qualified Control.Exception as E
+import Control.Concurrent (threadDelay)
 import Control.Monad (forM_)
-import Control.Monad.IO.Unlift (MonadIO (..), MonadUnliftIO, withUnliftIO, unliftIO)
-import Control.Monad.Logger (NoLoggingT, runNoLoggingT, MonadLogger)
+import Control.Monad.IO.Unlift (MonadIO (..), MonadUnliftIO, withUnliftIO, unliftIO, withRunInIO)
+import Control.Monad.Logger (NoLoggingT, runNoLoggingT, MonadLogger, logWarn, runLoggingT)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT)
 import UnliftIO.Resource (ResourceT, runResourceT)
 import Control.Monad.Trans.Writer (runWriterT)
@@ -163,6 +167,37 @@ open' connInfo logFunc = do
 wrapConnection :: (IsSqlBackend backend) => Sqlite.Connection -> LogFunc -> IO backend
 wrapConnection = wrapConnectionInfo (mkSqliteConnectionInfo "")
 
+-- | Retry if a Busy is thrown, following an exponential backoff strategy.
+--
+-- @since 2.9.3
+retryOnBusy :: (MonadUnliftIO m, MonadLogger m) => m a -> m a
+retryOnBusy action =
+  start $ take 20 $ delays 1000
+  where
+    delays x
+      | x >= 1000000 = repeat x
+      | otherwise = x : delays (x * 2)
+
+    start [] = do
+      $logWarn "Out of retry attempts"
+      action
+    start (x:xs) = do
+      -- Using try instead of catch to avoid creating a stack overflow
+      eres <- withRunInIO $ \run -> E.try $ run action
+      case eres of
+        Left (Sqlite.SqliteException { Sqlite.seError = Sqlite.ErrorBusy }) -> do
+          $logWarn "Encountered an SQLITE_BUSY, going to retry..."
+          liftIO $ threadDelay x
+          start xs
+        Left e -> liftIO $ E.throwIO e
+        Right y -> return y
+
+-- | Wait until some noop action on the database does not return an 'Sqlite.ErrorBusy'. See 'retryOnBusy'.
+--
+-- @since 2.9.3
+waitForDatabase :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend, BackendCompatible SqlBackend backend) => ReaderT backend m ()
+waitForDatabase = retryOnBusy $ rawExecute "SELECT 42" []
+
 -- | Wrap up a raw 'Sqlite.Connection' as a Persistent SQL
 -- 'Connection', allowing full control over WAL and FK constraints.
 --
@@ -177,20 +212,21 @@ wrapConnectionInfo connInfo conn logFunc = do
         -- Turn on the write-ahead log
         -- https://github.com/yesodweb/persistent/issues/363
         walPragma
-          | _walEnabled connInfo = ("PRAGMA journal_mode=WAL;":)
+          | _walEnabled connInfo = (("PRAGMA journal_mode=WAL;", True):)
           | otherwise = id
 
         -- Turn on foreign key constraints
         -- https://github.com/yesodweb/persistent/issues/646
         fkPragma
-          | _fkEnabled connInfo = ("PRAGMA foreign_keys = on;":)
+          | _fkEnabled connInfo = (("PRAGMA foreign_keys = on;", False):)
           | otherwise = id
 
         -- Allow arbitrary additional pragmas to be set
         -- https://github.com/commercialhaskell/stack/issues/4247
-        pragmas = walPragma $ fkPragma $ _extraPragmas connInfo
+        pragmas = walPragma $ fkPragma $ map (, False) $ _extraPragmas connInfo
 
-    forM_ pragmas $ \pragma -> do
+    forM_ pragmas $ \(pragma, shouldRetry) -> flip runLoggingT logFunc $
+        (if shouldRetry then retryOnBusy else id) $ liftIO $ do
         stmt <- Sqlite.prepare conn pragma
         _ <- Sqlite.stepConn conn stmt
         Sqlite.reset conn stmt

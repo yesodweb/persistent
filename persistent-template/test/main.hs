@@ -21,10 +21,13 @@ import Database.Persist.TH
 import Data.Text (Text, pack)
 import Data.Aeson
 
+import TemplateTestImports
+
 share [mkPersist sqlSettings { mpsGeneric = False }, mkDeleteCascade sqlSettings { mpsGeneric = False }] [persistUpperCase|
 Person json
     name Text
     age Int Maybe
+    foo Foo
     address Address
     deriving Show Eq
 Address json
@@ -54,7 +57,7 @@ arbitraryT :: Gen Text
 arbitraryT = pack A.<$> arbitrary
 
 instance Arbitrary Person where
-    arbitrary = Person <$> arbitraryT A.<*> arbitrary <*> arbitrary
+    arbitrary = Person <$> arbitraryT A.<*> arbitrary <*> arbitrary <*> arbitrary
 instance Arbitrary Address where
     arbitrary = Address <$> arbitraryT <*> arbitraryT <*> arbitrary
 
@@ -64,15 +67,15 @@ main = hspec $ do
         prop "to/from is idempotent" $ \person ->
             decode (encode person) == Just (person :: Person)
         it "decode" $
-            decode "{\"name\":\"Michael\",\"age\":27,\"address\":{\"street\":\"Narkis\",\"city\":\"Maalot\"}}" `shouldBe` Just
-                (Person "Michael" (Just 27) $ Address "Narkis" "Maalot" Nothing)
+            decode "{\"name\":\"Michael\",\"age\":27,\"foo\":\"Bar\",\"address\":{\"street\":\"Narkis\",\"city\":\"Maalot\"}}" `shouldBe` Just
+                (Person "Michael" (Just 27) Bar $ Address "Narkis" "Maalot" Nothing)
     describe "JSON serialization for Entity" $ do
         let key = PersonKey 0
         prop "to/from is idempotent" $ \person ->
             decode (encode (Entity key person)) == Just (Entity key (person :: Person))
         it "decode" $
-            decode "{\"id\": 0, \"name\":\"Michael\",\"age\":27,\"address\":{\"street\":\"Narkis\",\"city\":\"Maalot\"}}" `shouldBe` Just
-                (Entity key (Person "Michael" (Just 27) $ Address "Narkis" "Maalot" Nothing))
+            decode "{\"id\": 0, \"name\":\"Michael\",\"age\":27,\"foo\":\"Bar\",\"address\":{\"street\":\"Narkis\",\"city\":\"Maalot\"}}" `shouldBe` Just
+                (Entity key (Person "Michael" (Just 27) Bar $ Address "Narkis" "Maalot" Nothing))
     it "lens operations" $ do
         let street1 = "street1"
             city1 = "city1"
