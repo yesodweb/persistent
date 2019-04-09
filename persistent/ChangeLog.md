@@ -1,5 +1,9 @@
 # Changelog for persistent
 
+## 2.9.2
+
+* Add documentation for the `Migration` type and some helpers. [#860](https://github.com/yesodweb/persistent/pull/860)
+
 ## 2.9.1
 
 * Fix [#847](https://github.com/yesodweb/persistent/issues/847): SQL error with `putMany` on Sqlite when Entity has no unique index.

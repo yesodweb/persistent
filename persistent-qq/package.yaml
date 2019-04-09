@@ -1,5 +1,5 @@
 name:        persistent-qq
-version:     2.9.0
+version:     2.9.1
 synopsis:    Provides a quasi-quoter for raw SQL for persistent
 description: Please see README and API docs at <http://www.stackage.org/package/persistent>.
 category:    Database, Yesod
@@ -19,6 +19,10 @@ dependencies:
 - template-haskell
 - text
 - mtl
+
+when:
+  - condition: impl(ghc < 8)
+    dependencies: semigroups
 
 library:
   ghc-options: -Wall
