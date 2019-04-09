@@ -1,5 +1,8 @@
 # Changelog for persistent-postgresql
 
+## 2.9.1
+* Add `openSimpleConnWithVersion` function. [#881](https://github.com/yesodweb/persistent/pull/881)
+
 ## 2.9.0
 
 * Added support for SQL isolation levels to via SqlBackend. [#812]

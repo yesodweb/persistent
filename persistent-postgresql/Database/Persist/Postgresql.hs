@@ -240,6 +240,8 @@ openSimpleConn = openSimpleConnWithVersion getServerVersion
 
 -- | Generate a 'SqlBackend' from a 'PG.Connection', but takes a callback for
 -- obtaining the server version.
+--
+-- @since 2.9.1
 openSimpleConnWithVersion :: (IsSqlBackend backend) => (PG.Connection -> IO (Maybe Double)) -> LogFunc -> PG.Connection -> IO backend
 openSimpleConnWithVersion getVer logFunc conn = do
     smap <- newIORef $ Map.empty
