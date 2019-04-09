@@ -1,5 +1,4 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -19,22 +18,14 @@ module CompositeTest where
 
 import Test.Hspec.Expectations ()
 import Init
-#ifndef WITH_NOSQL
 import qualified Data.Map as Map
-#endif
 
-#ifndef WITH_NOSQL
 import Data.Maybe (isJust)
 import Database.Persist.TH (mkDeleteCascade)
-#endif
 
 
 -- mpsGeneric = False is due to a bug or at least lack of a feature in mkKeyTypeDec TH.hs
-#if WITH_NOSQL
-mkPersist persistSettings { mpsGeneric = False } [persistUpperCase|
-#else
 share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMigrate", mkDeleteCascade persistSettings { mpsGeneric = False }] [persistLowerCase|
-#endif
   TestParent
       name  String maxlen=20
       name2 String maxlen=20
@@ -72,8 +63,6 @@ share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMig
     deriving Eq Show
 |]
 
-
-#ifdef WITH_NOSQL
 cleanDB :: (PersistQuery backend, PersistEntityBackend TestChild ~ backend, MonadIO m) => ReaderT backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter TestChild])
@@ -81,13 +70,6 @@ cleanDB = do
   deleteWhere ([] :: [Filter CitizenAddress])
   deleteWhere ([] :: [Filter Citizen])
   deleteWhere ([] :: [Filter Address])
-
-db :: Action IO () -> Assertion
-db = db' cleanDB
-
-specs :: Spec
-specs = return ()
-#else
 
 specsWith :: (MonadIO m, MonadFail m) => RunDb SqlBackend m -> Spec
 specsWith runDb = describe "composite" $
@@ -252,28 +234,26 @@ specsWith runDb = describe "composite" $
       keyFromRaw <- rawSql "SELECT name, name2, age FROM test_parent LIMIT 1" []
       [key] @== keyFromRaw
 
-    it "RawSql Key instance with sqlQQ" $ runDb $ do
-      key <- insert p1
-      keyFromRaw' <- [sqlQQ|
-          SELECT @{TestParentName}, @{TestParentName2}, @{TestParentAge}
-            FROM ^{TestParent}
-            LIMIT 1
-      |]
-      [key] @== keyFromRaw'
+-- TODO: push into persistent-qq test suite
+--     it "RawSql Key instance with sqlQQ" $ runDb $ do
+--       key <- insert p1
+--       keyFromRaw' <- [sqlQQ|
+--           SELECT @{TestParentName}, @{TestParentName2}, @{TestParentAge}
+--             FROM ^{TestParent}
+--             LIMIT 1
+--       |]
+--       [key] @== keyFromRaw'
 
     it "RawSql Entity instance" $ runDb $ do
       key <- insert p1
       newp1 <- rawSql "SELECT ?? FROM test_parent LIMIT 1" []
       [Entity key p1] @== newp1
 
-    it "RawSql Entity instance with sqlQQ" $ runDb $ do
-      key <- insert p1
-      newp1' <- [sqlQQ| SELECT ?? FROM ^{TestParent} |]
-      [Entity key p1] @== newp1'
-
-specs :: Spec
-specs = specsWith db
-#endif
+-- TODO: put into persistent-qq test suite
+--     it "RawSql Entity instance with sqlQQ" $ runDb $ do
+--       key <- insert p1
+--       newp1' <- [sqlQQ| SELECT ?? FROM ^{TestParent} |]
+--       [Entity key p1] @== newp1'
 
 matchK :: (PersistField a, PersistEntity record) => Key record -> Either Text a
 matchK = (\(pv:[]) -> fromPersistValue pv) . keyToValues

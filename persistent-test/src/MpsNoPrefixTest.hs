@@ -35,6 +35,3 @@ specsWith runDb = describe "mpsNoPrefix" $ do
     liftIO $ fromSqlKey key `shouldBe` (i :: Int64)
     mp <- get $ toSqlKey i
     liftIO $ mp `shouldBe` Just p
-
-specs :: Spec
-specs = specsWith db

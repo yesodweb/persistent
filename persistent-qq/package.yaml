@@ -35,11 +35,14 @@ tests:
     ghc-options: -Wall -Wcompat
     dependencies:
         - base
-        - persistent-test
         - persistent-qq
         - text
         - monad-logger
         - resourcet
         - persistent-template
         - hspec
+        - aeson
+        - persistent-sqlite
+        - HUnit
+        - fast-logger
 

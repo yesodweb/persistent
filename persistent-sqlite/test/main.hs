@@ -57,6 +57,11 @@ import qualified Database.Sqlite as Sqlite
 import System.IO (hClose)
 import System.IO.Temp (withSystemTempFile)
 import Test.Hspec
+import qualified Data.ByteString as BS
+import Test.QuickCheck.Arbitrary (Arbitrary, arbitrary)
+import Test.QuickCheck.Gen (Gen(..), frequency, listOf, sized, resize)
+import Test.QuickCheck.Instances ()
+import Test.QuickCheck.Random (newQCGen)
 
 import Control.Exception (handle, IOException)
 import Filesystem (removeFile)
@@ -83,6 +88,23 @@ DataTypeTable no-json
     time TimeOfDay
     utc UTCTime
 |]
+
+instance Arbitrary DataTypeTable where
+  arbitrary = DataTypeTable
+     <$> arbText                -- text
+     <*> (T.take 100 <$> arbText)          -- textManLen
+     <*> arbitrary              -- bytes
+     <*> liftA2 (,) arbitrary arbText      -- bytesTextTuple
+     <*> (BS.take 100 <$> arbitrary)       -- bytesMaxLen
+     <*> arbitrary              -- int
+     <*> arbitrary              -- intList
+     <*> arbitrary              -- intMap
+     <*> arbitrary              -- double
+     <*> arbitrary              -- bool
+     <*> arbitrary              -- day
+     <*> arbitrary              -- pico
+     <*> (truncateTimeOfDay =<< arbitrary) -- time
+     <*> (truncateUTCTime   =<< arbitrary) -- utc
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
 Test
@@ -122,36 +144,59 @@ main = do
     PersistentTest.cleanDB
 
   hspec $ do
-    RenameTest.specs
-    DataTypeTest.specs
-    HtmlTest.specs
-    EmbedTest.specs
-    EmbedOrderTest.specs
-    LargeNumberTest.specs
-    UniqueTest.specs
-    MaxLenTest.specs
-    Recursive.specs
-    SumTypeTest.specs
-    MigrationOnlyTest.specs
-    PersistentTest.specs
+    RenameTest.specsWith db
+    DataTypeTest.specsWith
+        db
+        (Just (runMigrationSilent dataTypeMigrate))
+        [ TestFn "text" dataTypeTableText
+        , TestFn "textMaxLen" dataTypeTableTextMaxLen
+        , TestFn "bytes" dataTypeTableBytes
+        , TestFn "bytesTextTuple" dataTypeTableBytesTextTuple
+        , TestFn "bytesMaxLen" dataTypeTableBytesMaxLen
+        , TestFn "int" dataTypeTableInt
+        , TestFn "intList" dataTypeTableIntList
+        , TestFn "intMap" dataTypeTableIntMap
+        , TestFn "bool" dataTypeTableBool
+        , TestFn "day" dataTypeTableDay
+        , TestFn "time" (DataTypeTest.roundTime . dataTypeTableTime)
+        , TestFn "utc" (DataTypeTest.roundUTCTime . dataTypeTableUtc)
+        ]
+        [ ("pico", dataTypeTablePico) ]
+        dataTypeTableDouble
+    HtmlTest.specsWith
+        db
+        (Just (runMigrationSilent HtmlTest.htmlMigrate))
+    EmbedTest.specsWith db
+    EmbedOrderTest.specsWith db
+    LargeNumberTest.specsWith db
+    UniqueTest.specsWith db
+    MaxLenTest.specsWith db
+    Recursive.specsWith db
+    SumTypeTest.specsWith db (Just (runMigrationSilent SumTypeTest.sumTypeMigrate))
+    MigrationOnlyTest.specsWith db
+        (Just
+            $ runMigrationSilent MigrationOnlyTest.migrateAll1
+            >> runMigrationSilent MigrationOnlyTest.migrateAll2
+        )
+    PersistentTest.specsWith db
     PersistentTest.filterOrSpecs db
-    RawSqlTest.specs
+    RawSqlTest.specsWith db
     UpsertTest.specsWith
         db
         UpsertTest.Don'tUpdateNull
         UpsertTest.UpsertPreserveOldKey
 
-    MpsNoPrefixTest.specs
-    EmptyEntityTest.specs
-    CompositeTest.specs
-    PersistUniqueTest.specs
-    PrimaryTest.specs
-    CustomPersistFieldTest.specs
-    CustomPrimaryKeyReferenceTest.specs
-    MigrationColumnLengthTest.specs
-    EquivalentTypeTest.specs
-    TransactionLevelTest.specs
-    MigrationTest.specs
+    MpsNoPrefixTest.specsWith db
+    EmptyEntityTest.specsWith db (Just (runMigrationSilent EmptyEntityTest.migration))
+    CompositeTest.specsWith db
+    PersistUniqueTest.specsWith db
+    PrimaryTest.specsWith db
+    CustomPersistFieldTest.specsWith db
+    CustomPrimaryKeyReferenceTest.specsWith db
+    MigrationColumnLengthTest.specsWith db
+    EquivalentTypeTest.specsWith db
+    TransactionLevelTest.specsWith db
+    MigrationTest.specsWith db
 
     it "issue #328" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
         runMigration migrateAll

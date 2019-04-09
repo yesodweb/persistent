@@ -48,7 +48,7 @@ module MongoInit (
 
 -- we have to be careful with this import becuase CPP is still a problem
 import Init
-    ( TestFn(..), AbstractTest, truncateTimeOfDay, truncateUTCTime
+    ( TestFn(..), truncateTimeOfDay, truncateUTCTime
     , truncateToMicro, arbText, liftA2, GenerateKey(..)
     , (@/=), (@==), (==@)
     , assertNotEqual, assertNotEmpty, assertEmpty, asIO

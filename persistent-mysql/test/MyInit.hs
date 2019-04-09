@@ -46,11 +46,10 @@ module MyInit (
   , truncateUTCTime
   , arbText
   , liftA2
-  , AbstractTest
   ) where
 
 import Init
-    ( TestFn(..), AbstractTest, truncateTimeOfDay, truncateUTCTime
+    ( TestFn(..), truncateTimeOfDay, truncateUTCTime
     , truncateToMicro, arbText, liftA2, GenerateKey(..)
     , (@/=), (@==), (==@)
     , assertNotEqual, assertNotEmpty, assertEmpty, asIO

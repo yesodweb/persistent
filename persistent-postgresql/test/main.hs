@@ -58,7 +58,6 @@ import qualified PrimaryTest
 import qualified Recursive
 import qualified RenameTest
 import qualified SumTypeTest
-import qualified InsertDuplicateUpdate
 import qualified UniqueTest
 import qualified MigrationColumnLengthTest
 import qualified EquivalentTypeTestPostgres

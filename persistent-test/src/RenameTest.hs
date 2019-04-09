@@ -1,5 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans #-}
-{-# LANGUAGE RankNTypes, ScopedTypeVariables, CPP #-}
+{-# LANGUAGE RankNTypes, ScopedTypeVariables #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -12,10 +12,6 @@
 {-# LANGUAGE TypeFamilies #-}
 module RenameTest where
 
-#ifndef WITH_NOSQL
-import qualified Data.Conduit as C
-import qualified Data.Conduit.List as CL
-#endif
 import Data.Time (getCurrentTime, Day, UTCTime(..))
 import qualified Data.Map as Map
 import qualified Data.Text as T
@@ -26,11 +22,7 @@ import Init
 type TextId = Text
 
 -- Test lower case names
-#if WITH_NOSQL
-mkPersist persistSettings { mpsGeneric = True } [persistUpperCase|
-#else
 share [mkPersist sqlSettings { mpsGeneric = True }, mkMigrate "migration"] [persistLowerCase|
-#endif
 -- This just tests that a field can be named "key"
 KeyTable
     key Text
@@ -76,14 +68,6 @@ cleanDB = do
   deleteWhere ([] :: [Filter (LowerCaseTableGeneric backend)])
   deleteWhere ([] :: [Filter (RefTableGeneric backend)])
 
-#if WITH_NOSQL
-db :: Action IO () -> Assertion
-db = db' cleanDB
-#endif
-
-specs :: Spec
-specs = specsWith db
-
 specsWith
     ::
     ( PersistStoreWrite backend, PersistQueryRead backend
@@ -105,18 +89,6 @@ specsWith runDb = describe "rename specs" $ do
       rec' @== rec
       (Entity key' _):_ <- selectList ([] :: [Filter (IdTableGeneric backend)]) []
       key' @== key
-
-#ifndef WITH_MYSQL
-#  ifndef WITH_NOSQL
-    -- this uses default=
-    it "user specified id, default=" $ runDb $ do
-      liftIO $ pendingWith "This test should only run against SQLite and Postgresql."
-      let rec = IdTable "Foo" Nothing
-      k <- insert rec
-      Just rec' <- get k
-      rec' @== rec
-#  endif
-#endif
 
     it "extra blocks" $
         entityExtra (entityDef (Nothing :: Maybe LowerCaseTable)) @?=

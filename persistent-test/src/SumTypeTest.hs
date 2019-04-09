@@ -12,10 +12,9 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-module SumTypeTest (specs, specsWith, sumTypeMigrate) where
+module SumTypeTest (specsWith, sumTypeMigrate) where
 
 import Database.Persist.TH
-import Control.Monad.Trans.Resource (runResourceT)
 import qualified Data.Text as T
 
 import Init
@@ -36,14 +35,6 @@ Car
 -- https://ghc.haskell.org/trac/ghc/ticket/8100
 deriving instance Show (BackendKey backend) => Show (VehicleGeneric backend)
 deriving instance Eq (BackendKey backend) => Eq (VehicleGeneric backend)
-
-specs :: Spec
-specs = specsWith runConn
-#ifdef WITH_NOSQL
-    Nothing
-#else
-    (Just (runMigrationSilent sumTypeMigrate))
-#endif
 
 specsWith
     ::

@@ -1,7 +1,7 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -14,32 +14,19 @@ module Init (
   , assertNotEmpty
   , assertEmpty
   , isTravis
-  , BackendMonad
-  , runConn
 
+  , module Database.Persist.Sql
   , MonadIO
   , persistSettings
   , MkPersistSettings (..)
-#ifdef WITH_NOSQL
-  , dbName
-  , db'
-  , setup
-  , mkPersistSettings
-  , Action
-  , Context
-#else
-  , db
-  , sqlite_database
-  , sqlite_database_file
-#endif
   , BackendKey(..)
   , GenerateKey(..)
 
   , RunDb
+  , Runner
    -- re-exports
   , (A.<$>), (A.<*>)
   , module Database.Persist
-  , module Database.Persist.Sql.Raw.QQ
   , module Test.Hspec
   , module Test.HUnit
   , liftIO
@@ -48,11 +35,6 @@ module Init (
   , Text
   , module Control.Monad.Trans.Reader
   , module Control.Monad
-#ifndef WITH_NOSQL
-  , module Database.Persist.Sql
-#else
-  , PersistFieldSql(..)
-#endif
   , BS.ByteString
   , SomeException
   , MonadFail
@@ -62,7 +44,6 @@ module Init (
   , truncateUTCTime
   , arbText
   , liftA2
-  , AbstractTest
   ) where
 
 -- re-exports
@@ -78,7 +59,6 @@ import Control.Exception (SomeException)
 import Control.Monad (void, replicateM, liftM, when, forM_)
 import Control.Monad.Trans.Reader
 import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase, MkPersistSettings(..))
-import Database.Persist.Sql.Raw.QQ
 import Test.Hspec
 
 -- testing
@@ -90,29 +70,9 @@ import Data.Text (Text, unpack)
 import Database.Persist
 import Database.Persist.TH ()
 import System.Environment (getEnvironment)
-import qualified Database.MongoDB as MongoDB
-
-#ifdef WITH_NOSQL
-import Database.Persist.Sql (PersistFieldSql(..))
-import Database.Persist.TH (mkPersistSettings)
-import Language.Haskell.TH.Syntax (Type(..))
-
-#else
-import Control.Monad.Logger
-import Control.Monad.Trans.Resource (ResourceT, runResourceT)
+import Data.IORef
 import Database.Persist.Sql
-import System.Log.FastLogger (fromLogStr)
-
-#  ifdef WITH_SQLITE
-import Database.Persist.Sqlite
-#  endif
-#  ifdef WITH_MYSQL
-import Database.Persist.MySQL
-import qualified Database.MySQL.Base as MySQL
-#  endif
-import Data.IORef (newIORef, IORef, writeIORef, readIORef)
-import System.IO.Unsafe (unsafePerformIO)
-#endif
+import System.IO.Unsafe
 
 import Control.Monad (unless, (>=>))
 import Control.Monad.IO.Unlift (MonadUnliftIO)
@@ -158,106 +118,11 @@ isTravis = do
     Just "true" -> True
     _ -> False
 
-_debugOn :: Bool
-#ifdef DEBUG
-_debugOn = True
-#else
-_debugOn = False
-#endif
-
-#ifdef WITH_NOSQL
-persistSettings :: MkPersistSettings
-persistSettings = (mkPersistSettings $ ConT ''Context) { mpsGeneric = True }
-
-dbName :: Text
-dbName = "persistent"
-
-type BackendMonad = Context
-
-db' :: Action IO () -> Action IO () -> Assertion
-db' actions cleanDB = do
-  r <- runConn (actions >> cleanDB)
-  return r
-
-instance Arbitrary PersistValue where
-    arbitrary = PersistObjectId `fmap` BS.pack `fmap` replicateM 12 arbitrary
-#else
 persistSettings :: MkPersistSettings
 persistSettings = sqlSettings { mpsGeneric = True }
-type BackendMonad = SqlBackend
-#  ifdef WITH_SQLITE
-sqlite_database_file :: Text
-sqlite_database_file = "testdb.sqlite3"
-sqlite_database :: SqliteConnectionInfo
-sqlite_database = mkSqliteConnectionInfo sqlite_database_file
-#  else
-sqlite_database_file :: Text
-sqlite_database_file = error "Sqlite tests disabled"
-sqlite_database :: ()
-sqlite_database = error "Sqlite tests disabled"
-#  endif
-runConn :: MonadUnliftIO m => SqlPersistT (LoggingT m) t -> m ()
-runConn f = do
-  travis <- liftIO isTravis
-  let debugPrint = not travis && _debugOn
-  let printDebug = if debugPrint then print . fromLogStr else void . return
-  flip runLoggingT (\_ _ _ s -> printDebug s) $ do
-#ifdef WITH_MYSQL
-    -- Since version 5.7.5, MySQL adds a mode value `STRICT_TRANS_TABLES`
-    -- which can cause an exception in MaxLenTest, depending on the server
-    -- configuration.  Persistent tests do not need any of the modes which are
-    -- set by default, so it is simplest to clear `sql_mode` for the session.
-    let baseConnectInfo =
-            defaultConnectInfo {
-                connectOptions =
-                    connectOptions defaultConnectInfo
-                    ++ [MySQL.InitCommand "SET SESSION sql_mode = '';\0"]
-            }
-    _ <- if not travis
-      then withMySQLPool baseConnectInfo
-                        { connectHost     = "localhost"
-                        , connectUser     = "test"
-                        , connectPassword = "test"
-                        , connectDatabase = "test"
-                        } 1 $ runSqlPool f
-      else withMySQLPool baseConnectInfo
-                        { connectHost     = "localhost"
-                        , connectUser     = "travis"
-                        , connectPassword = ""
-                        , connectDatabase = "persistent"
-                        } 1 $ runSqlPool f
-#else
-    _<-withSqlitePoolInfo sqlite_database 1 $ runSqlPool f
-#endif
-    return ()
-
-db :: SqlPersistT (LoggingT (ResourceT IO)) () -> Assertion
-db actions = do
-  runResourceT $ runConn $ actions >> transactionUndo
-
-#if !MIN_VERSION_random(1,0,1)
-instance Random Int32 where
-    random g =
-        let ((i::Int), g') = random g in
-        (fromInteger $ toInteger i, g')
-    randomR (lo, hi) g =
-        let ((i::Int), g') = randomR (fromInteger $ toInteger lo, fromInteger $ toInteger hi) g in
-        (fromInteger $ toInteger i, g')
-
-instance Random Int64 where
-    random g =
-        let ((i0::Int32), g0) = random g
-            ((i1::Int32), g1) = random g0 in
-        (fromInteger (toInteger i0) + fromInteger (toInteger i1) * 2 ^ (32::Int), g1)
-    randomR (lo, hi) g = -- TODO : generate on the whole range, and not only on a part of it
-        let ((i::Int), g') = randomR (fromInteger $ toInteger lo, fromInteger $ toInteger hi) g in
-        (fromInteger $ toInteger i, g')
-#endif
 
 instance Arbitrary PersistValue where
     arbitrary = PersistInt64 `fmap` choose (0, maxBound)
-
-#endif
 
 instance PersistStore backend => Arbitrary (BackendKey backend) where
   arbitrary = (errorLeft . fromPersistValue) `fmap` arbitrary
@@ -322,12 +187,13 @@ arbText =
   <$> arbitrary
   where forbidden = [NotAssigned, PrivateUse]
 
-type RunDb backend m = ReaderT backend m () -> IO ()
-
-type AbstractTest backend entity m =
-    ( PersistEntity entity
-    , PersistEntityBackend entity ~ BaseBackend backend
-    , Show entity, Eq entity
-    , MonadIO m, MonadFail m
-    , PersistStoreWrite backend
+type Runner backend m =
+    ( MonadIO m, MonadUnliftIO m, MonadFail m
+    , PersistStoreWrite backend, PersistStoreWrite (BaseBackend backend)
+    , PersistUniqueWrite backend
+    , PersistQueryWrite backend
+    , backend ~ BaseBackend backend
+    , PersistQueryRead backend
     )
+
+type RunDb backend m = ReaderT backend m () -> IO ()

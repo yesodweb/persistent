@@ -40,12 +40,11 @@ module PgInit (
   , truncateUTCTime
   , arbText
   , liftA2
-  , AbstractTest
   , module Init
   ) where
 
 import Init
-    ( TestFn(..), AbstractTest, truncateTimeOfDay, truncateUTCTime
+    ( TestFn(..), truncateTimeOfDay, truncateUTCTime
     , truncateToMicro, arbText, liftA2, GenerateKey(..)
     , (@/=), (@==), (==@)
     , assertNotEqual, assertNotEmpty, assertEmpty, asIO

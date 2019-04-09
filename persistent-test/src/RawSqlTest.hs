@@ -1,3 +1,4 @@
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE OverloadedStrings, GADTs #-}
 
 module RawSqlTest where
@@ -5,16 +6,13 @@ module RawSqlTest where
 import Init
 
 import qualified Data.Text as T
-import Control.Monad.Trans.Resource (runResourceT)
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
-import UnliftIO
 
-import PersistTestPetCollarType
 import PersistTestPetType
 import PersistentTestModels
 
-specsWith :: MonadUnliftIO m => RunDb SqlBackend m -> Spec
+specsWith :: Runner SqlBackend m => RunDb SqlBackend m -> Spec
 specsWith runDb = describe "rawSql" $ do
   it "2+2" $ runDb $ do
       ret <- rawSql "SELECT 2+2" []
@@ -29,17 +27,14 @@ specsWith runDb = describe "rawSql" $ do
       liftIO $ ret @?= [Nothing :: Maybe (Single Int)]
 
   it "entity" $ runDb $ do
-      let insert' :: (PersistStore backend, PersistEntity val, PersistEntityBackend val ~ BaseBackend backend, MonadIO m)
-                  => val -> ReaderT backend m (Key val, val)
-          insert' v = insert v >>= \k -> return (k, v)
-      (p1k, p1) <- insert' $ Person "Mathias"   23 Nothing
-      (p2k, p2) <- insert' $ Person "Norbert"   44 Nothing
-      (p3k, _ ) <- insert' $ Person "Cassandra" 19 Nothing
-      (_  , _ ) <- insert' $ Person "Thiago"    19 Nothing
-      (a1k, a1) <- insert' $ Pet p1k "Rodolfo" Cat
-      (a2k, a2) <- insert' $ Pet p1k "Zeno"    Cat
-      (a3k, a3) <- insert' $ Pet p2k "Lhama"   Dog
-      (_  , _ ) <- insert' $ Pet p3k "Abacate" Cat
+      Entity p1k p1 <- insertEntity $ Person "Mathias"   23 Nothing
+      Entity p2k p2 <- insertEntity $ Person "Norbert"   44 Nothing
+      Entity p3k _  <- insertEntity $ Person "Cassandra" 19 Nothing
+      Entity _   _  <- insertEntity $ Person "Thiago"    19 Nothing
+      Entity a1k a1 <- insertEntity $ Pet p1k "Rodolfo" Cat
+      Entity a2k a2 <- insertEntity $ Pet p1k "Zeno"    Cat
+      Entity a3k a3 <- insertEntity $ Pet p2k "Lhama"   Dog
+      Entity _   _  <- insertEntity $ Pet p3k "Abacate" Cat
       escape <- ((. DBName) . connEscapeName) `fmap` ask
       person <- getTableName (error "rawSql Person" :: Person)
       name   <- getFieldName PersonName
@@ -107,10 +102,7 @@ specsWith runDb = describe "rawSql" $ do
       caseCommitRollback runDb
       runDb cleanDB
 
-specs :: Spec
-specs = specsWith db
-
-caseCommitRollback :: MonadIO m => RunDb SqlBackend m -> Assertion
+caseCommitRollback :: Runner SqlBackend m => RunDb SqlBackend m -> Assertion
 caseCommitRollback runDb = runDb $ do
     let filt :: [Filter Person1]
         filt = []

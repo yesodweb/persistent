@@ -3,8 +3,6 @@
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -18,8 +16,7 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module DataTypeTest
-    ( specs
-    , specsWith
+    ( specsWith
     , dataTypeMigrate
     , roundTime
     , roundUTCTime
@@ -27,11 +24,6 @@ module DataTypeTest
 
 import Control.Applicative (liftA2)
 import Database.Persist.TH
-#ifdef WITH_POSTGRESQL
-import Data.Aeson (Value(..))
-import Database.Persist.Postgresql.JSON
-import qualified Data.HashMap.Strict as HM
-#endif
 import Data.Char (generalCategory, GeneralCategory(..))
 import qualified Data.ByteString as BS
 import Data.Fixed (Pico,Micro)
@@ -50,12 +42,8 @@ import Init
 
 type Tuple a b = (a, b)
 
-#ifdef WITH_NOSQL
-mkPersist persistSettings [persistUpperCase|
-#else
 -- Test lower case names
 share [mkPersist persistSettings, mkMigrate "dataTypeMigrate"] [persistLowerCase|
-#endif
 DataTypeTable no-json
     text Text
     textMaxLen Text maxlen=100
@@ -68,22 +56,7 @@ DataTypeTable no-json
     double Double
     bool Bool
     day Day
-#ifndef WITH_NOSQL
-    pico Pico
-    time TimeOfDay
-#endif
     utc UTCTime
-#if defined(WITH_MYSQL) && !(defined(OLD_MYSQL))
-    -- For MySQL, provide extra tests for time fields with fractional seconds,
-    -- since the default (used above) is to have no fractional part.  This
-    -- requires the server version to be at least 5.6.4, and should be switched
-    -- off for older servers by defining OLD_MYSQL.
-    timeFrac TimeOfDay sqltype=TIME(6)
-    utcFrac UTCTime sqltype=DATETIME(6)
-#endif
-#ifdef WITH_POSTGRESQL
-    jsonb Value
-#endif
 |]
 
 cleanDB'
@@ -91,75 +64,22 @@ cleanDB'
     ( MonadIO m, PersistStoreWrite (BaseBackend backend), PersistQuery backend) => ReaderT backend m ()
 cleanDB' = deleteWhere ([] :: [Filter (DataTypeTableGeneric backend)])
 
-specs :: Spec
-specs =
-    specsWith
-        runConn
-#ifdef WITH_NOSQL
-        Nothing
-#else
-        (Just (runMigrationSilent dataTypeMigrate))
-#endif
-        [ TestFn "text" dataTypeTableText
-        , TestFn "textMaxLen" dataTypeTableTextMaxLen
-        , TestFn "bytes" dataTypeTableBytes
-        , TestFn "bytesTextTuple" dataTypeTableBytesTextTuple
-        , TestFn "bytesMaxLen" dataTypeTableBytesMaxLen
-        , TestFn "int" dataTypeTableInt
-        , TestFn "intList" dataTypeTableIntList
-        , TestFn "intMap" dataTypeTableIntMap
-        , TestFn "bool" dataTypeTableBool
-        , TestFn "day" dataTypeTableDay
-#ifndef WITH_NOSQL
-        , TestFn "time" (roundTime . dataTypeTableTime)
-#endif
-#if !(defined(WITH_NOSQL)) || (defined(WITH_NOSQL) && defined(HIGH_PRECISION_DATE))
-        , TestFn "utc" (roundUTCTime . dataTypeTableUtc)
-#endif
-#if defined(WITH_MYSQL) && !(defined(OLD_MYSQL))
-        , TestFn "timeFrac" (dataTypeTableTimeFrac)
-        , TestFn "utcFrac" (dataTypeTableUtcFrac)
-#endif
-#ifdef WITH_POSTGRESQL
-        , TestFn "jsonb" dataTypeTableJsonb
-#endif
-        ]
-#ifndef WITH_NOSQL
-        [ ("pico", dataTypeTablePico) ]
-#endif
-        dataTypeTableDouble
-
 roundFn :: RealFrac a => a -> Integer
-#ifdef OLD_MYSQL
--- At version 5.6.4, MySQL changed the method used to round values for
--- date/time types - this is the same version which added support for
--- fractional seconds in the storage type.
-roundFn = truncate
-#else
 roundFn = round
-#endif
 
 roundTime :: TimeOfDay -> TimeOfDay
--- #ifdef WITH_MYSQL
 roundTime t = timeToTimeOfDay $ fromIntegral $ roundFn $ timeOfDayToTime t
--- #else
--- roundTime = id
--- #endif
 
 roundUTCTime :: UTCTime -> UTCTime
-#ifdef WITH_MYSQL
 roundUTCTime t =
     posixSecondsToUTCTime $ fromIntegral $ roundFn $ utcTimeToPOSIXSeconds t
-#else
-roundUTCTime = id
-#endif
 
 randomValues :: Arbitrary a => Int -> IO [a]
 randomValues i = do
   gs <- replicateM i newQCGen
   return $ zipWith (unGen arbitrary) gs [0..]
 
-instance Arbitrary (DataTypeTableGeneric backend) where
+instance Arbitrary DataTypeTable where
   arbitrary = DataTypeTable
      <$> arbText                -- text
      <*> (T.take 100 <$> arbText)          -- textManLen
@@ -172,38 +92,7 @@ instance Arbitrary (DataTypeTableGeneric backend) where
      <*> arbitrary              -- double
      <*> arbitrary              -- bool
      <*> arbitrary              -- day
-#ifndef WITH_NOSQL
-     <*> arbitrary              -- pico
-     <*> (truncateTimeOfDay =<< arbitrary) -- time
-#endif
      <*> (truncateUTCTime   =<< arbitrary) -- utc
-#if defined(WITH_MYSQL) && !(defined(OLD_MYSQL))
-     <*> (truncateTimeOfDay =<< arbitrary) -- timeFrac
-     <*> (truncateUTCTime   =<< arbitrary) -- utcFrac
-#endif
-#ifdef WITH_POSTGRESQL
-     <*> arbitrary              -- value
-#endif
-
-#ifdef WITH_POSTGRESQL
-instance Arbitrary Value where
-  arbitrary = frequency [ (1, pure Null)
-                        , (1, Bool <$> arbitrary)
-                        , (2, Number <$> arbitrary)
-                        , (2, String <$> arbText)
-                        , (3, Array <$> limitIt 4 arbitrary)
-                        , (3, Object <$> arbObject)
-                        ]
-    where limitIt i x = sized $ \n -> do
-            let m = if n > i then i else n
-            resize m x
-          arbObject = limitIt 4 -- Recursion can make execution divergent
-                    $ fmap HM.fromList -- HashMap -> [(,)]
-                    . listOf -- [(,)] -> (,)
-                    . liftA2 (,) arbText -- (,) -> Text and Value
-                    $ limitIt 4 arbitrary -- Again, precaution against divergent recursion.
-#endif
-
 
 specsWith
     :: forall db backend m entity.

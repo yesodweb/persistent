@@ -25,9 +25,6 @@ share [mkPersist sqlSettings, mkMigrate "migration"] [persistUpperCase|
 
 |]
 
-specs :: Spec
-specs = specsWith db
-
 specsWith :: (MonadIO m, MonadFail m) => RunDb SqlBackend m -> Spec
 specsWith runDb = describe "IsolationLevel" $ do
   let item = Wombat "uno"

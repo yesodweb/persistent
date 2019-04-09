@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -9,16 +8,13 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
+
 module LargeNumberTest where
 
 import Init
 import Data.Word
 
-#ifdef WITH_NOSQL
-mkPersist persistSettings { mpsGeneric = True } [persistUpperCase|
-#else
 share [mkPersist sqlSettings { mpsGeneric = True },  mkMigrate "numberMigrate"] [persistLowerCase|
-#endif
   Number
     intx Int
     int32 Int32
@@ -28,25 +24,12 @@ share [mkPersist sqlSettings { mpsGeneric = True },  mkMigrate "numberMigrate"] 
     deriving Show Eq
 |]
 
-#ifdef WITH_NOSQL
-cleanDB :: (MonadIO m, PersistQuery backend, PersistEntityBackend Number ~ backend) => ReaderT backend m ()
+cleanDB
+    :: Runner backend m => ReaderT backend m ()
 cleanDB = do
-  deleteWhere ([] :: [Filter Number])
-db :: Action IO () -> Assertion
-db = db' cleanDB
-#endif
+  deleteWhere ([] :: [Filter (NumberGeneric backend)])
 
-specs :: Spec
-specs = specsWith db
-
-specsWith
-    ::
-    ( PersistStoreWrite backend
-    , PersistStoreWrite (BaseBackend backend)
-    , MonadIO m
-    )
-    => RunDb backend m
-    -> Spec
+specsWith :: Runner backend m => RunDb backend m -> Spec
 specsWith runDb = describe "Large Numbers" $ do
   it "preserves their values in the database" $ runDb $ do
       let go x = do

@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -17,11 +16,7 @@ module CustomPrimaryKeyReferenceTest where
 import Init
 
 -- mpsGeneric = False is due to a bug or at least lack of a feature in mkKeyTypeDec TH.hs
-#if WITH_NOSQL
-mkPersist persistSettings { mpsGeneric = False } [persistUpperCase|
-#else
 share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "migration"] [persistLowerCase|
-#endif
   Tweet
     tweetId Int
     statusText Text sqltype=varchar(170)
@@ -35,15 +30,11 @@ share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "migration"] 
     UniqueTweetIdTweetUrl tweetId tweetUrl
     deriving Show
 |]
-#ifdef WITH_NOSQL
+
 cleanDB :: (MonadIO m, PersistQuery backend, PersistEntityBackend Tweet ~ backend) => ReaderT backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter Tweet])
   deleteWhere ([] :: [Filter TweetUrl])
-
-db :: Action IO () -> Assertion
-db = db' cleanDB
-#endif
 
 specsWith :: (MonadFail m, MonadIO m) => RunDb SqlBackend m -> Spec
 specsWith runDb = describe "custom primary key reference" $ do
@@ -53,8 +44,3 @@ specsWith runDb = describe "custom primary key reference" $ do
     tweetId <- insert tweet
     let url = TweetUrl {tweetUrlTweetId = tweetId, tweetUrlTweetUrl = "http://google.com", tweetUrlFinalUrl = Just "http://example.com"}
     insert_ url
-
-  return ()
-
-specs :: Spec
-specs = specsWith db

@@ -21,32 +21,12 @@ module UpsertTest where
 
 import Init
 
-import PersistentTestModels
-
-import Data.Typeable
 import Control.Monad.IO.Class
-import Control.Monad.Trans.Resource (runResourceT)
-import Data.Aeson
-import Data.Conduit
-import qualified Data.Conduit.List as CL
 import Data.Function (on)
-import Data.Functor.Identity
-import Data.Functor.Constant
-import Data.Maybe (fromJust)
-import qualified Data.HashMap.Lazy as M
-import qualified Data.Map as Map
-import Test.HUnit hiding (Test)
 import Test.Hspec.Expectations ()
-import Test.Hspec.QuickCheck(prop)
-import UnliftIO (MonadUnliftIO, catch)
-import Web.PathPieces (PathPiece (..))
--- import Database.Persist.MongoDB (MongoContext)
+import UnliftIO (MonadUnliftIO)
 
-import qualified MpsNoPrefixTest
-import qualified RawSqlTest
 import PersistentTestModels
-
-import Database.Persist
 
 -- | MongoDB assumes that a @NULL@ value in the database is some "empty"
 -- value. So a query that does @+ 2@ to a @NULL@ value results in @2@. SQL
@@ -63,17 +43,7 @@ data BackendUpsertKeyBehavior
     | UpsertPreserveOldKey
 
 specsWith
-    :: forall backend m.
-    ( MonadIO m, MonadFail m, MonadUnliftIO m
-    , PersistStoreWrite backend
-    , PersistStoreRead (BaseBackend backend)
-    , BaseBackend backend ~ backend
-    , HasPersistBackend backend
-    , Init.GenerateKey backend
-    , PersistUniqueWrite backend
-    , PersistQueryWrite backend
-    , PersistQueryRead backend
-    )
+    :: forall backend m. Runner backend m
     => RunDb backend m
     -> BackendNullUpdateBehavior
     -> BackendUpsertKeyBehavior

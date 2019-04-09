@@ -1,5 +1,4 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans -O0 #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -11,7 +10,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
-module EmbedTest (specs, specsWith, cleanDB, embedMigrate) where
+module EmbedTest (specsWith, cleanDB, embedMigrate) where
 
 import Init
 import Control.Exception (Exception, throw)
@@ -33,8 +32,8 @@ instance PersistFieldSql a => PersistFieldSql (NonEmpty a) where
 instance PersistField a => PersistField (NonEmpty a) where
     toPersistValue = toPersistValue . toList
     fromPersistValue pv = do
-        ls <- fromPersistValue pv
-        case ls of
+        xs <- fromPersistValue pv
+        case xs of
             [] -> Left "PersistField: NonEmpty found unexpected Empty List"
             (l:ls) -> Right (l:|ls)
 
@@ -161,28 +160,12 @@ cleanDB = do
   deleteWhere ([] :: [Filter (AccountGeneric backend)])
   deleteWhere ([] :: [Filter (HasNestedListGeneric backend)])
 
-#ifdef WITH_NOSQL
-db :: Action IO () -> Assertion
-db = db' cleanDB
-#endif
-
 unlessM :: MonadIO m => IO Bool -> m () -> m ()
 unlessM predicate body = do
     b <- liftIO predicate
     unless b body
 
-specs :: Spec
-specs = specsWith db
-
-specsWith
-    ::
-    ( MonadIO m, MonadFail m
-    , PersistStoreWrite backend
-    , PersistQueryRead backend
-    , BaseBackend backend ~ SqlBackend
-    )
-    =>RunDb backend m
-    -> Spec
+specsWith :: Runner SqlBackend m => RunDb SqlBackend m -> Spec
 specsWith runDb = describe "embedded entities" $ do
 
   it "simple entities" $ runDb $ do

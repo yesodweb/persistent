@@ -11,9 +11,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module EquivalentTypeTest (specs, specsWith) where
+module EquivalentTypeTest (specsWith) where
 
-import Control.Monad.Trans.Resource (runResourceT)
 import UnliftIO
 import Database.Persist.TH
 #ifdef WITH_POSTGRESQL
@@ -34,10 +33,7 @@ EquivalentType2 sql=equivalent_types
     deriving Eq Show
 |]
 
-specs :: Spec
-specs = specsWith db
-
-specsWith :: (MonadUnliftIO m) => RunDb SqlBackend m -> Spec
+specsWith :: Runner SqlBackend m => RunDb SqlBackend m -> Spec
 specsWith runDb = describe "doesn't migrate equivalent types" $ do
     it "works" $ runDb $ do
         _ <- runMigrationSilent migrateAll1

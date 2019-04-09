@@ -1,5 +1,4 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -17,11 +16,9 @@
 {-# LANGUAGE UndecidableInstances #-} -- FIXME
 module TreeTest where
 
-import Test.Hspec.Expectations ()
 import Init
-import qualified Data.Map as Map
 
-import Data.Maybe (isJust)
+import Test.Hspec.Expectations ()
 import Database.Persist.TH (mkDeleteCascade)
 
 
@@ -29,7 +26,7 @@ import Database.Persist.TH (mkDeleteCascade)
 -- mkKeyTypeDec TH.hs
 share
     [ mkPersist persistSettings { mpsGeneric = False }
-    , mkMigrate "compositeMigrate"
+    , mkMigrate "treeMigrate"
     , mkDeleteCascade persistSettings { mpsGeneric = False } ] [persistLowerCase|
   Tree
       name    Text

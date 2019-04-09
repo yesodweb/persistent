@@ -20,7 +20,6 @@ module RawMongoHelpers where
 
 import MongoInit
 
-import Test.Hspec
 import qualified Database.MongoDB as MongoDB
 import Database.Persist.MongoDB (toInsertDoc, docToEntityThrow, collectionName, recordToDocument)
 

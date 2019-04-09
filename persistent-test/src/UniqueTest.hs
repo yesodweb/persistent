@@ -1,5 +1,5 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE EmptyDataDecls #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
@@ -13,11 +13,7 @@ module UniqueTest where
 
 import Init
 
-#ifdef WITH_NOSQL
-mkPersist persistSettings [persistUpperCase|
-#else
 share [mkPersist sqlSettings,  mkMigrate "uniqueMigrate"] [persistLowerCase|
-#endif
   TestNonNull
     fieldA Int
     UniqueTestNonNull fieldA sql=UniqueTestNonNull !force
@@ -27,31 +23,21 @@ share [mkPersist sqlSettings,  mkMigrate "uniqueMigrate"] [persistLowerCase|
     fieldB Int Maybe
     UniqueTestNull fieldA fieldB sql=UniqueTestNonNullSqlName !force
     deriving Eq Show
-#ifndef WITH_NOSQL
+
   TestCheckmark
     name   Text
     value  Text
     active Checkmark nullable
     UniqueTestCheckmark name active !force
     deriving Eq Show
-#endif
 |]
-#ifdef WITH_NOSQL
+
 cleanDB :: (MonadIO m, PersistQuery backend, PersistEntityBackend TestNonNull ~ backend) => ReaderT backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter TestNonNull])
   deleteWhere ([] :: [Filter TestNull])
 
-db :: Action IO () -> Assertion
-db = db' cleanDB
-#endif
-
-specs :: Spec
-specs = specsWith db
-specsWith
-    :: MonadIO m
-    => RunDb SqlBackend m
-    -> Spec
+specsWith :: Runner SqlBackend m => RunDb SqlBackend m -> Spec
 specsWith runDb =
   describe "uniqueness constraints" $ do
     it "are respected for non-nullable Ints" $ do

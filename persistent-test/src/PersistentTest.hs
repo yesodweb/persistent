@@ -108,9 +108,6 @@ filterOrSpecs runDb = describe "FilterOr" $ do
                 c <- count $ [PersonName ==. "a"] ||. []
                 c @== (1::Int)
 
-specs :: Spec
-specs = specsWith db
-
 -- Test proper polymorphism
 _polymorphic :: (MonadFail m, MonadIO m, PersistQuery backend, BaseBackend backend ~ PersistEntityBackend Pet) => ReaderT backend m ()
 _polymorphic = do
@@ -351,8 +348,8 @@ specsWith runDb = describe "persistent" $ do
       p3 @== p
 
   prop "toPathPiece . fromPathPiece" $ \piece ->
-      let key1 = piece :: (BackendKey BackendMonad)
-          key2 = fromJust $ fromPathPiece $ toPathPiece key1 :: (BackendKey BackendMonad)
+      let key1 = piece :: (BackendKey SqlBackend)
+          key2 = fromJust $ fromPathPiece $ toPathPiece key1 :: (BackendKey SqlBackend)
       in  toPathPiece key1 == toPathPiece key2
 
   it "replace" $ runDb $ do

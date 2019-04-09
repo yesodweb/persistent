@@ -1,6 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -11,20 +10,15 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
-module EmptyEntityTest (specs, specsWith, migration, cleanDB) where
+module EmptyEntityTest (specsWith, migration, cleanDB) where
 
 import Database.Persist.Sql
 import Database.Persist.TH
-import Control.Monad.Trans.Resource (runResourceT, ResourceT)
 
 import Init
 
-#ifdef WITH_NOSQL
-mkPersist persistSettings { mpsGeneric = True } [persistUpperCase|
-#else
 -- Test lower case names
 share [mkPersist sqlSettings { mpsGeneric = True }, mkMigrate "migration"] [persistLowerCase|
-#endif
 EmptyEntity
 |]
 
@@ -37,24 +31,8 @@ cleanDB
     => ReaderT backend m ()
 cleanDB = deleteWhere ([] :: [Filter (EmptyEntityGeneric backend)])
 
-specs :: Spec
-specs = describe "empty entity" $
-    it "inserts" $ (id :: IO () -> IO ()) $ runResourceT $ runConn $ do
-#ifndef WITH_NOSQL
-        _ <- runMigrationSilent migration
-        -- Ensure reading the data from the database works...
-        _ <- runMigrationSilent migration
-#endif
-        x <- insert EmptyEntity
-        Just EmptyEntity <- get x
-        return ()
-
 specsWith
-    ::
-    ( PersistStoreRead backend, PersistStoreWrite backend
-    , PersistStoreWrite (BaseBackend backend)
-    , MonadFail m, MonadIO m
-    )
+    :: Runner backend m
     => RunDb backend m
     -> Maybe (ReaderT backend m a)
     -> Spec

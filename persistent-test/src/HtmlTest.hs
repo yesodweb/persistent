@@ -1,14 +1,13 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds #-}
-{-# LANGUAGE QuasiQuotes, TemplateHaskell, CPP, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, EmptyDataDecls, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses #-}
-module HtmlTest (specs, specsWith, cleanDB, htmlMigrate) where
+{-# LANGUAGE QuasiQuotes, TemplateHaskell, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, EmptyDataDecls, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses #-}
+module HtmlTest (specsWith, cleanDB, htmlMigrate) where
 
-import Database.Persist.TH
+import Init
+
 import Data.Char (generalCategory, GeneralCategory(..))
 import qualified Data.Text as T
 import System.Random (randomIO, randomRIO, Random)
-import Control.Monad.Trans.Resource (runResourceT)
 
-import Init
 import Text.Blaze.Html
 import Text.Blaze.Html.Renderer.Text
 
@@ -19,16 +18,12 @@ HtmlTable
     deriving
 |]
 
-cleanDB :: (MonadIO m, PersistQueryWrite backend, PersistStoreWrite (BaseBackend backend)) => ReaderT backend m ()
+cleanDB :: Runner backend m => ReaderT backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter (HtmlTableGeneric backend)])
 
 specsWith
-    ::
-    ( MonadFail m, MonadIO m
-    , PersistStoreWrite backend
-    , BaseBackend backend ~ backend
-    )
+    :: Runner backend m
     => RunDb backend m
     -> Maybe (ReaderT backend m a)
     -> Spec
@@ -44,10 +39,6 @@ specsWith runConn mmigrate = describe "html" $ do
             Just htmlTableY <- get key
             liftIO $ do
                 renderHtml x @?= renderHtml (htmlTableHtml htmlTableY)
-
-specs :: Spec
-specs =
-    specsWith runConn (Just (runMigrationSilent htmlMigrate))
 
 randomValue :: IO Html
 randomValue =
