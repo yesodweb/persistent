@@ -1,5 +1,4 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE EmptyDataDecls #-}

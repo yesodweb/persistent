@@ -47,6 +47,8 @@ module Init (
   ) where
 
 -- re-exports
+import Control.Monad.Trans.Control
+import Control.Monad.Catch
 import Control.Applicative (liftA2)
 import Test.QuickCheck.Instances ()
 import Data.Char (generalCategory, GeneralCategory(..))
@@ -189,7 +191,10 @@ arbText =
 
 type Runner backend m =
     ( MonadIO m, MonadUnliftIO m, MonadFail m
+    , MonadThrow m, MonadBaseControl IO m
     , PersistStoreWrite backend, PersistStoreWrite (BaseBackend backend)
+    , GenerateKey backend
+    , HasPersistBackend backend
     , PersistUniqueWrite backend
     , PersistQueryWrite backend
     , backend ~ BaseBackend backend

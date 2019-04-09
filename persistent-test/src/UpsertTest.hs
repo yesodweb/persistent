@@ -1,5 +1,4 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE EmptyDataDecls #-}
@@ -21,10 +20,8 @@ module UpsertTest where
 
 import Init
 
-import Control.Monad.IO.Class
 import Data.Function (on)
 import Test.Hspec.Expectations ()
-import UnliftIO (MonadUnliftIO)
 
 import PersistentTestModels
 

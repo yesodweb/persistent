@@ -139,5 +139,3 @@ test-suite test
                    , monad-logger
                    , quickcheck-instances
                    , unordered-containers
-                   , mysql
-

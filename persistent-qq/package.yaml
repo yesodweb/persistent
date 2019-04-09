@@ -33,6 +33,10 @@ tests:
     main:        Spec.hs
     source-dirs: test
     ghc-options: -Wall -Wcompat
+    other-modules:
+        - PersistentTestModels
+        - PersistentTestPetCollarType
+        - PersistentTestPetType
     dependencies:
         - base
         - persistent-qq

@@ -1,5 +1,4 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE EmptyDataDecls #-}
@@ -89,11 +88,7 @@ catchPersistException action errValue = do
     return  res
 
 filterOrSpecs
-    :: forall m backend.
-    ( MonadIO m, MonadFail m, MonadUnliftIO m
-    , PersistStoreWrite backend, PersistQueryRead backend
-    , PersistStoreWrite (BaseBackend backend)
-    )
+    :: forall m backend. Runner backend m
     => RunDb backend m
     -> Spec
 filterOrSpecs runDb = describe "FilterOr" $ do
@@ -127,20 +122,7 @@ type Getting r s t a b = (a -> Constant r b) -> s -> Constant r t
 view :: s -> Getting a s t a b -> a
 view s l = getConstant (l Constant s)
 
-specsWith
-    :: forall backend m.
-    ( MonadIO m, MonadFail m, MonadUnliftIO m
-    , PersistStoreWrite backend
-    , PersistStoreRead (BaseBackend backend)
-    , BaseBackend backend ~ backend
-    , HasPersistBackend backend
-    , Init.GenerateKey backend
-    , PersistUniqueWrite backend
-    , PersistQueryWrite backend
-    , PersistQueryRead backend
-    )
-    => RunDb backend m
-    -> Spec
+specsWith :: forall backend m. Runner backend m => RunDb backend m -> Spec
 specsWith runDb = describe "persistent" $ do
   it "fieldLens" $ do
       let michael = Entity undefined $ Person "Michael" 28 Nothing :: Entity Person

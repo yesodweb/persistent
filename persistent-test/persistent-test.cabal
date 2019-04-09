@@ -48,7 +48,7 @@ library
                      EquivalentTypeTest
                      TransactionLevelTest
 
-    hs-source-dirs: src, test
+    hs-source-dirs: src
 
     ghc-options:   -Wall
     if impl(ghc >= 7.8)
@@ -56,8 +56,10 @@ library
 
     build-depends:   base                     >= 4.6       && < 5
                    , persistent
+                   , monad-control
                    , persistent-template
                    , mongoDB
+                   , fail
                    , HUnit
                    , hspec >= 1.12.1
                    , hspec-expectations
