@@ -2,11 +2,7 @@
 {-# LANGUAGE CPP, ScopedTypeVariables, FlexibleInstances #-}
 {-# LANGUAGE QuasiQuotes, TypeFamilies, GeneralizedNewtypeDeriving, TemplateHaskell,
              OverloadedStrings, GADTs, FlexibleContexts, EmptyDataDecls, MultiParamTypeClasses #-}
-module EmbedOrderTest (specs, specsWith, Foo(..), Bar(..)
-#ifndef WITH_NOSQL
-, embedOrderMigrate
-#endif
-) where
+module EmbedOrderTest (specs, specsWith, embedOrderMigrate) where
 
 import Init
 import qualified Data.Map as Map
@@ -15,11 +11,7 @@ import Debug.Trace (trace)
 debug :: Show s => s -> s
 debug x = trace (show x) x
 
-#if WITH_NOSQL
-mkPersist persistSettings [persistUpperCase|
-#else
-share [mkPersist sqlSettings, mkMigrate "embedOrderMigrate"] [persistUpperCase|
-#endif
+share [mkPersist sqlSettings { mpsGeneric = True }, mkMigrate "embedOrderMigrate"] [persistUpperCase|
 Foo sql=foo_embed_order
     bars [Bar]
     deriving Eq Show
@@ -30,37 +22,30 @@ Bar sql=bar_embed_order
     deriving Eq Show
 |]
 
-#ifdef WITH_NOSQL
-cleanDB :: (PersistQuery backend, PersistEntityBackend Foo ~ backend, MonadIO m) => ReaderT backend m ()
+cleanDB
+    ::
+    ( PersistStoreWrite (BaseBackend backend)
+    , PersistQueryWrite backend
+    , MonadIO m
+    ) => ReaderT backend m ()
 cleanDB = do
-  deleteWhere ([] :: [Filter Foo])
-  deleteWhere ([] :: [Filter Bar])
-
-db :: Action IO () -> Assertion
-db = db' cleanDB
-#endif
+  deleteWhere ([] :: [Filter (FooGeneric backend)])
+  deleteWhere ([] :: [Filter (BarGeneric backend)])
 
 specs :: Spec
-specs = specsWith db Foo Bar
+specs = specsWith db
 
 specsWith
     ::
-    ( PersistEntityBackend foo ~ BaseBackend backend
-    , PersistEntityBackend bar ~ BaseBackend backend
-    , PersistStoreRead backend, PersistStoreWrite backend
-    , Show foo, Eq foo
-    , MonadFail m
-    , MonadIO m
-    , Show bar, Eq bar
-    , PersistEntity foo, PersistEntity bar
+    ( PersistStoreRead backend, PersistStoreWrite backend
+    , PersistStoreWrite (BaseBackend backend)
+    , MonadFail m, MonadIO m
     )
     => (ReaderT backend m () -> IO ())
-    -> ([bar] -> foo)
-    -> (String -> String -> String -> bar)
     -> Spec
-specsWith db mkFoo mkBar = describe "embedded entities" $ do
+specsWith db = describe "embedded entities" $ do
     it "preserves ordering" $ db $ do
-        let foo = mkFoo [mkBar "b" "u" "g"]
+        let foo = Foo [Bar "b" "u" "g"]
         fooId <- insert foo
         Just otherFoo <- get fooId
         foo @== otherFoo

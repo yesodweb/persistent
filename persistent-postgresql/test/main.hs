@@ -38,6 +38,7 @@ import Text.Blaze.Html
 import Text.Blaze.Html.Renderer.Text
 
 import qualified CompositeTest
+import qualified TreeTest
 import qualified CustomPersistFieldTest
 import qualified CustomPrimaryKeyReferenceTest
 import qualified DataTypeTest
@@ -122,6 +123,7 @@ main = do
       , MaxLenTest.maxlenMigrate
       , Recursive.recursiveMigrate
       , CompositeTest.compositeMigrate
+      , TreeTest.treeMigrate
       , PersistUniqueTest.migration
       , RenameTest.migration
       , CustomPersistFieldTest.customFieldMigrate
@@ -156,10 +158,7 @@ main = do
         db
         (Just (runMigrationSilent HtmlTest.htmlMigrate))
     EmbedTest.specsWith db
-    EmbedOrderTest.specsWith
-        db
-        EmbedOrderTest.Foo
-        EmbedOrderTest.Bar
+    EmbedOrderTest.specsWith db
     LargeNumberTest.specsWith db
     UniqueTest.specsWith db
     MaxLenTest.specsWith db
@@ -181,6 +180,7 @@ main = do
     MpsNoPrefixTest.specsWith db
     EmptyEntityTest.specsWith db (Just (runMigrationSilent EmptyEntityTest.migration))
     CompositeTest.specsWith db
+    TreeTest.specsWith db
     PersistUniqueTest.specsWith db
     PrimaryTest.specsWith db
     CustomPersistFieldTest.specsWith db

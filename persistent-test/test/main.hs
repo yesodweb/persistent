@@ -22,7 +22,6 @@ import qualified PrimaryTest
 import qualified Recursive
 import qualified RenameTest
 import qualified SumTypeTest
-import qualified InsertDuplicateUpdate
 import qualified UniqueTest
 import qualified MigrationColumnLengthTest
 import qualified EquivalentTypeTest
@@ -35,10 +34,6 @@ import Filesystem (removeFile)
 import Filesystem.Path.CurrentOS (fromText)
 import qualified MigrationTest
 #  endif
-#endif
-
-#ifdef WITH_MYSQL
-import qualified MigrationIdempotencyTest
 #endif
 
 
@@ -78,10 +73,6 @@ main = do
       , CustomPersistFieldTest.customFieldMigrate
 #  ifndef WITH_MYSQL
       , PrimaryTest.migration
-#  endif
-#  ifdef WITH_MYSQL
-      , InsertDuplicateUpdate.duplicateMigrate
-      , MigrationIdempotencyTest.migration
 #  endif
       , CustomPrimaryKeyReferenceTest.migration
       , MigrationColumnLengthTest.migration
@@ -127,14 +118,10 @@ main = do
     PrimaryTest.specs
     CustomPersistFieldTest.specs
     CustomPrimaryKeyReferenceTest.specs
-    InsertDuplicateUpdate.specs
     MigrationColumnLengthTest.specs
     EquivalentTypeTest.specs
     TransactionLevelTest.specs
 
 #ifdef WITH_SQLITE
     MigrationTest.specs
-#endif
-#ifdef WITH_MYSQL
-    MigrationIdempotencyTest.specs
 #endif

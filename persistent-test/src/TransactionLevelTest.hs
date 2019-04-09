@@ -16,7 +16,6 @@ module TransactionLevelTest where
 
 import           Init
 
-#ifndef WITH_NOSQL
 share [mkPersist sqlSettings, mkMigrate "migration"] [persistUpperCase|
   Wombat
      name        Text sqltype=varchar(80)
@@ -25,14 +24,12 @@ share [mkPersist sqlSettings, mkMigrate "migration"] [persistUpperCase|
      deriving Eq Show Ord
 
 |]
-#endif
 
 specs :: Spec
 specs = specsWith db
 
 specsWith :: (MonadIO m, MonadFail m) => RunDb SqlBackend m -> Spec
 specsWith runDb = describe "IsolationLevel" $ do
-#ifndef WITH_NOSQL
   let item = Wombat "uno"
       isolationLevels = [minBound..maxBound]
   forM_ isolationLevels $ \il -> describe "insertOnDuplicateKeyUpdate" $ do
@@ -42,7 +39,3 @@ specsWith runDb = describe "IsolationLevel" $ do
       _ <- insert item
       Just item' <- get (WombatKey "uno")
       item' @== item
-#else
-  it "Is only supported on SQL variants." $ do
-    pure ()
-#endif

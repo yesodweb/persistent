@@ -98,7 +98,7 @@ specsWith runDb = describe "rawSql" $ do
                        , (Entity p1k p1, Just (Entity a2k a2))
                        , (Entity p2k p2, Nothing) ]
 
-  it "handles lower casing" $ asIO $
+  it "handles lower casing" $
       runDb $ do
           C.runConduitRes $ rawQuery "SELECT full_name from lower_case_table WHERE my_id=5" [] C..| CL.sinkNull
           C.runConduitRes $ rawQuery "SELECT something_else from ref_table WHERE id=4" [] C..| CL.sinkNull

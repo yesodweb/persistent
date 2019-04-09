@@ -86,17 +86,6 @@ DataTypeTable no-json
     utc UTCTime
 |]
 
-mkPersist persistSettings [persistUpperCase|
-Foo sql=foo_embed_order
-    bars [Bar]
-    deriving Eq Show
-Bar sql=bar_embed_order
-    b String
-    u String
-    g String
-    deriving Eq Show
-|]
-
 instance Arbitrary DataTypeTable where
   arbitrary = DataTypeTable
      <$> arbText                -- text
@@ -140,10 +129,7 @@ main = do
         dataTypeTableDouble
     HtmlTest.specsWith (db' HtmlTest.cleanDB) Nothing
     EmbedTestMongo.specs
-    EmbedOrderTest.specsWith
-        (db' (deleteWhere ([] :: [Filter Foo]) >> deleteWhere ([] :: [Filter Bar])))
-        Foo
-        Bar
+    EmbedOrderTest.specsWith (db' EmbedOrderTest.cleanDB)
     LargeNumberTest.specsWith
         (db' (deleteWhere ([] :: [Filter (LargeNumberTest.NumberGeneric backend)])))
     MaxLenTest.specsWith dbNoCleanup

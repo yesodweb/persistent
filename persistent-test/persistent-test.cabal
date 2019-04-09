@@ -61,12 +61,12 @@ library
                      MigrationIdempotencyTest
                      PersistUniqueTest
                      CompositeTest
+                     TreeTest
                      Init
                      PrimaryTest
                      CustomPersistField
                      CustomPersistFieldTest
                      CustomPrimaryKeyReferenceTest
-                     InsertDuplicateUpdate
                      MigrationColumnLengthTest
                      EquivalentTypeTest
                      TransactionLevelTest

@@ -159,7 +159,7 @@ randomValues i = do
   gs <- replicateM i newQCGen
   return $ zipWith (unGen arbitrary) gs [0..]
 
-instance Arbitrary DataTypeTable where
+instance Arbitrary (DataTypeTableGeneric backend) where
   arbitrary = DataTypeTable
      <$> arbText                -- text
      <*> (T.take 100 <$> arbText)          -- textManLen
