@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE CPP, FlexibleInstances #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE UndecidableInstances, MultiParamTypeClasses, TypeFamilies, RankNTypes #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -8,6 +8,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TemplateHaskell #-}
 
+-- | This will hopefully be the only module with CPP in it.
 module Init (
   (@/=), (@==), (==@)
   , asIO
@@ -50,6 +51,9 @@ module Init (
 -- needed for backwards compatibility
 import Control.Monad.Logger
 import Control.Monad.Trans.Resource
+import Control.Monad.Trans.Resource.Internal
+import Control.Monad.Trans.Class
+import Control.Monad.Base
 import Control.Monad.Catch
 import Control.Monad.Trans.Control
 import qualified Control.Monad.Fail as MonadFail
@@ -209,7 +213,31 @@ type Runner backend m =
 
 type RunDb backend m = ReaderT backend m () -> IO ()
 
-#if !MIN_VERSION_base(4,10,0)
+#if !MIN_VERSION_monad_logger(0,3,30)
+-- Needed for GHC versions 7.10.3. Can drop when we drop support for GHC
+-- 7.10.3
 instance MonadFail (LoggingT (ResourceT IO)) where
     fail = liftIO . MonadFail.fail
+#endif
+
+#if MIN_VERSION_resourcet(1,2,0)
+-- This instance is necessary because LTS-9 and below are on
+-- MonadBaseControl, while LTS 11 and up are on UnliftIO. We can drop this
+-- instance (and related CPP) when we drop support for LTS-9 (GHC 8.0).
+instance MonadBase b m => MonadBase b (ResourceT m) where
+    liftBase = lift . liftBase
+instance MonadBaseControl b m => MonadBaseControl b (ResourceT m) where
+#  if MIN_VERSION_monad_control(1,0,0)
+     type StM (ResourceT m) a = StM m a
+     liftBaseWith f = ResourceT $ \reader' ->
+         liftBaseWith $ \runInBase ->
+             f $ runInBase . (\(ResourceT r) -> r reader'  )
+     restoreM = ResourceT . const . restoreM
+#  else
+     newtype StM (ResourceT m) a = StMT (StM m a)
+     liftBaseWith f = ResourceT $ \reader' ->
+         liftBaseWith $ \runInBase ->
+             f $ liftM StMT . runInBase . (\(ResourceT r) -> r reader'  )
+     restoreM (StMT base) = ResourceT $ const $ restoreM base
+#  endif
 #endif
