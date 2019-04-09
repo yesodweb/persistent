@@ -46,7 +46,7 @@ module PgInit (
 import Init
     ( TestFn(..), truncateTimeOfDay, truncateUTCTime
     , truncateToMicro, arbText, liftA2, GenerateKey(..)
-    , (@/=), (@==), (==@)
+    , (@/=), (@==), (==@), MonadFail
     , assertNotEqual, assertNotEmpty, assertEmpty, asIO
     , isTravis, RunDb
     )
@@ -58,7 +58,6 @@ import Data.Char (generalCategory, GeneralCategory(..))
 import qualified Data.Text as T
 import Data.Fixed (Pico,Micro)
 import Data.Time
-import Control.Monad.Fail
 import Control.Applicative as A ((<$>), (<*>))
 import Control.Exception (SomeException)
 import Control.Monad (void, replicateM, liftM, when, forM_)

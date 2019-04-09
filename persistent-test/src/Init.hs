@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# LANGUAGE CPP, FlexibleInstances #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ConstraintKinds #-}
@@ -47,15 +48,20 @@ module Init (
   ) where
 
 -- re-exports
+-- needed
+#if !MIN_VERSION_base(4,9,0)
+import Control.Monad.Logger
+import Control.Monad.Trans.Resource
 import Control.Monad.Trans.Control
-import Control.Monad.Catch
+import qualified Control.Monad.Fail as MonadFail
+#endif
 import Control.Applicative (liftA2)
 import Test.QuickCheck.Instances ()
 import Data.Char (generalCategory, GeneralCategory(..))
 import qualified Data.Text as T
 import Data.Fixed (Pico,Micro)
 import Data.Time
-import Control.Monad.Fail
+import Control.Monad.Fail (MonadFail)
 import Control.Applicative as A ((<$>), (<*>))
 import Control.Exception (SomeException)
 import Control.Monad (void, replicateM, liftM, when, forM_)
@@ -202,3 +208,8 @@ type Runner backend m =
     )
 
 type RunDb backend m = ReaderT backend m () -> IO ()
+
+#if !MIN_VERSION_base(4,9,0)
+instance MonadFail (LoggingT (ResourceT IO)) where
+    fail = liftIO . MonadFail.fail
+#endif

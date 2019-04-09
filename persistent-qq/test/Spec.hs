@@ -1,6 +1,7 @@
 {-# LANGUAGE QuasiQuotes, GADTs, OverloadedStrings #-}
 
 import Test.Hspec
+import UnliftIO
 import qualified Data.Text as T
 import Data.List.NonEmpty (NonEmpty(..))
 import Database.Persist.Sql.Raw.QQ

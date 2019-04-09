@@ -53,7 +53,7 @@ import Init
     , truncateToMicro, arbText, liftA2, GenerateKey(..)
     , (@/=), (@==), (==@)
     , assertNotEqual, assertNotEmpty, assertEmpty, asIO
-    , isTravis, RunDb
+    , isTravis, RunDb, MonadFail
     )
 
 -- re-exports
@@ -63,7 +63,6 @@ import Data.Char (generalCategory, GeneralCategory(..))
 import qualified Data.Text as T
 import Data.Fixed (Pico,Micro)
 import Data.Time
-import Control.Monad.Fail
 import Control.Applicative as A ((<$>), (<*>))
 import Control.Exception (SomeException)
 import Control.Monad (void, replicateM, liftM, when, forM_)

@@ -32,11 +32,11 @@ tests:
   specs:
     main:        Spec.hs
     source-dirs: test
-    ghc-options: -Wall -Wcompat
+    ghc-options: -Wall 
     other-modules:
         - PersistentTestModels
-        - PersistentTestPetCollarType
-        - PersistentTestPetType
+        - PersistTestPetCollarType
+        - PersistTestPetType
     dependencies:
         - base
         - persistent-qq
@@ -45,6 +45,7 @@ tests:
         - resourcet
         - persistent-template
         - hspec
+        - unliftio
         - aeson
         - persistent-sqlite
         - HUnit
