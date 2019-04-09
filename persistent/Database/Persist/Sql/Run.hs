@@ -27,7 +27,7 @@ import Control.Monad (liftM)
 -- was buggy and caused more problems than it solved. Since version 2.1.2, it
 -- performs no timeout checks.
 runSqlPool
-    :: (MonadUnliftIO m, IsSqlBackend backend)
+    :: (MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend m a -> Pool backend -> m a
 runSqlPool r pconn = withRunInIO $ \run -> withResource pconn $ run . runSqlConn r
 
@@ -35,7 +35,7 @@ runSqlPool r pconn = withRunInIO $ \run -> withResource pconn $ run . runSqlConn
 --
 -- @since 2.9.0
 runSqlPoolWithIsolation
-    :: (MonadUnliftIO m, IsSqlBackend backend)
+    :: (MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend m a -> Pool backend -> IsolationLevel -> m a
 runSqlPoolWithIsolation r pconn i = withRunInIO $ \run -> withResource pconn $ run . (\conn -> runSqlConnWithIsolation r conn i)
 
@@ -61,9 +61,9 @@ withResourceTimeout ms pool act = withRunInIO $ \runInIO -> mask $ \restore -> d
             return ret
 {-# INLINABLE withResourceTimeout #-}
 
-runSqlConn :: (MonadUnliftIO m, IsSqlBackend backend) => ReaderT backend m a -> backend -> m a
+runSqlConn :: (MonadUnliftIO m, BackendCompatible SqlBackend backend) => ReaderT backend m a -> backend -> m a
 runSqlConn r conn = withRunInIO $ \runInIO -> mask $ \restore -> do
-    let conn' = persistBackend conn
+    let conn' = projectBackend conn
         getter = getStmtConn conn'
     restore $ connBegin conn' getter Nothing
     x <- onException
@@ -75,9 +75,9 @@ runSqlConn r conn = withRunInIO $ \runInIO -> mask $ \restore -> do
 -- | Like 'runSqlConn', but supports specifying an isolation level.
 --
 -- @since 2.9.0
-runSqlConnWithIsolation :: (MonadUnliftIO m, IsSqlBackend backend) => ReaderT backend m a -> backend -> IsolationLevel -> m a
+runSqlConnWithIsolation :: (MonadUnliftIO m, BackendCompatible SqlBackend backend) => ReaderT backend m a -> backend -> IsolationLevel -> m a
 runSqlConnWithIsolation r conn isolation = withRunInIO $ \runInIO -> mask $ \restore -> do
-    let conn' = persistBackend conn
+    let conn' = projectBackend conn
         getter = getStmtConn conn'
     restore $ connBegin conn' getter $ Just isolation
     x <- onException
@@ -87,22 +87,22 @@ runSqlConnWithIsolation r conn isolation = withRunInIO $ \runInIO -> mask $ \res
     return x
 
 runSqlPersistM
-    :: (IsSqlBackend backend)
+    :: (BackendCompatible SqlBackend backend)
     => ReaderT backend (NoLoggingT (ResourceT IO)) a -> backend -> IO a
 runSqlPersistM x conn = runResourceT $ runNoLoggingT $ runSqlConn x conn
 
 runSqlPersistMPool
-    :: (IsSqlBackend backend)
+    :: (BackendCompatible SqlBackend backend)
     => ReaderT backend (NoLoggingT (ResourceT IO)) a -> Pool backend -> IO a
 runSqlPersistMPool x pool = runResourceT $ runNoLoggingT $ runSqlPool x pool
 
 liftSqlPersistMPool
-    :: (MonadIO m, IsSqlBackend backend)
+    :: (MonadIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend (NoLoggingT (ResourceT IO)) a -> Pool backend -> m a
 liftSqlPersistMPool x pool = liftIO (runSqlPersistMPool x pool)
 
 withSqlPool
-    :: (MonadLogger m, MonadUnliftIO m, IsSqlBackend backend)
+    :: (MonadLogger m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => (LogFunc -> IO backend) -- ^ create a new connection
     -> Int -- ^ connection count
     -> (Pool backend -> m a)
@@ -113,7 +113,7 @@ withSqlPool mkConn connCount f = withUnliftIO $ \u -> bracket
     (unliftIO u . f)
 
 createSqlPool
-    :: (MonadLogger m, MonadUnliftIO m, IsSqlBackend backend)
+    :: (MonadLogger m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => (LogFunc -> IO backend)
     -> Int
     -> m (Pool backend)
@@ -144,7 +144,7 @@ askLogFunc = withRunInIO $ \run ->
 -- > {-# LANGUAGE TemplateHaskell#-}
 -- > {-# LANGUAGE QuasiQuotes#-}
 -- > {-# LANGUAGE GeneralizedNewtypeDeriving #-}
--- > 
+-- >
 -- > import Control.Monad.IO.Class  (liftIO)
 -- > import Control.Monad.Logger
 -- > import Conduit
@@ -152,14 +152,14 @@ askLogFunc = withRunInIO $ \run ->
 -- > import Database.Sqlite
 -- > import Database.Persist.Sqlite
 -- > import Database.Persist.TH
--- > 
+-- >
 -- > share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
 -- > Person
 -- >   name String
 -- >   age Int Maybe
 -- >   deriving Show
 -- > |]
--- > 
+-- >
 -- > openConnection :: LogFunc -> IO SqlBackend
 -- > openConnection logfn = do
 -- >  conn <- open "/home/sibi/test.db"
@@ -181,10 +181,10 @@ askLogFunc = withRunInIO $ \run ->
 --
 -- > Migrating: CREATE TABLE "person"("id" INTEGER PRIMARY KEY,"name" VARCHAR NOT NULL,"age" INTEGER NULL)
 -- > [Entity {entityKey = PersonKey {unPersonKey = SqlBackendKey {unSqlBackendKey = 1}}, entityVal = Person {personName = "John doe", personAge = Just 35}},Entity {entityKey = PersonKey {unPersonKey = SqlBackendKey {unSqlBackendKey = 2}}, entityVal = Person {personName = "Hema", personAge = Just 36}}]
--- 
+--
 
 withSqlConn
-    :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
+    :: (MonadUnliftIO m, MonadLogger m, BackendCompatible SqlBackend backend)
     => (LogFunc -> IO backend) -> (backend -> m a) -> m a
 withSqlConn open f = do
     logFunc <- askLogFunc
@@ -193,7 +193,7 @@ withSqlConn open f = do
       close'
       (run . f)
 
-close' :: (IsSqlBackend backend) => backend -> IO ()
+close' :: (BackendCompatible SqlBackend backend) => backend -> IO ()
 close' conn = do
-    readIORef (connStmtMap $ persistBackend conn) >>= mapM_ stmtFinalize . Map.elems
-    connClose $ persistBackend conn
+    readIORef (connStmtMap $ projectBackend conn) >>= mapM_ stmtFinalize . Map.elems
+    connClose $ projectBackend conn
