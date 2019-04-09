@@ -1,7 +1,8 @@
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Database.Persist.Sql.Orphan.PersistQuery
     ( deleteWhereCount
@@ -147,10 +148,10 @@ instance PersistQueryWrite SqlWriteBackend where
 -- | Same as 'deleteWhere', but returns the number of rows affected.
 --
 -- @since 1.1.5
-deleteWhereCount :: (PersistEntity val, MonadIO m, PersistEntityBackend val ~ SqlBackend, IsSqlBackend backend)
+deleteWhereCount :: (PersistEntity val, MonadIO m, PersistEntityBackend val ~ SqlBackend, BackendCompatible SqlBackend backend)
                  => [Filter val]
                  -> ReaderT backend m Int64
-deleteWhereCount filts = withReaderT persistBackend $ do
+deleteWhereCount filts = withReaderT projectBackend $ do
     conn <- ask
     let t = entityDef $ dummyFromFilts filts
     let wher = if null filts
@@ -166,12 +167,12 @@ deleteWhereCount filts = withReaderT persistBackend $ do
 -- | Same as 'updateWhere', but returns the number of rows affected.
 --
 -- @since 1.1.5
-updateWhereCount :: (PersistEntity val, MonadIO m, SqlBackend ~ PersistEntityBackend val, IsSqlBackend backend)
+updateWhereCount :: (PersistEntity val, MonadIO m, SqlBackend ~ PersistEntityBackend val, BackendCompatible SqlBackend backend)
                  => [Filter val]
                  -> [Update val]
                  -> ReaderT backend m Int64
 updateWhereCount _ [] = return 0
-updateWhereCount filts upds = withReaderT persistBackend $ do
+updateWhereCount filts upds = withReaderT projectBackend $ do
     conn <- ask
     let wher = if null filts
                 then ""
