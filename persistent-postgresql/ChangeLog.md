@@ -1,7 +1,7 @@
 # Changelog for persistent-postgresql
 
 ## 2.9.1
-* Add `openSimpleConnWithVersion` function. [#881](https://github.com/yesodweb/persistent/pull/881)
+* Add `openSimpleConnWithVersion` function. [#883](https://github.com/yesodweb/persistent/pull/883)
 
 ## 2.9.0
 
