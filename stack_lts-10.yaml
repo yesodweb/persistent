@@ -19,3 +19,8 @@ extra-deps:
 - async-2.1.1.1
 - typed-process-0.2.1.0
 - resourcet-1.1.11
+- hspec-2.4.0
+- hspec-core-2.4.0
+- hspec-discover-2.4.0
+- hspec-expectations-0.8.2
+- quickcheck-io-0.1.4

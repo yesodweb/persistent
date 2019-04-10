@@ -1,23 +1,12 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving, QuasiQuotes, TemplateHaskell, CPP, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, FlexibleInstances, EmptyDataDecls, MultiParamTypeClasses #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, QuasiQuotes, TemplateHaskell, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, FlexibleInstances, EmptyDataDecls, MultiParamTypeClasses #-}
 
-module MaxLenTest (
-  specs
-#ifndef WITH_NOSQL
-  , maxlenMigrate
-#endif
-) where
+module MaxLenTest (specsWith, maxlenMigrate) where
 
 import Init
 import Data.String (IsString)
 
-#ifdef WITH_NOSQL
-db :: Action IO () -> Assertion
-db = db' (return ())
-mkPersist persistSettings [persistUpperCase|
-#else
-share [mkPersist sqlSettings,  mkMigrate "maxlenMigrate"] [persistLowerCase|
-#endif
+share [mkPersist sqlSettings { mpsGeneric = True },  mkMigrate "maxlenMigrate"] [persistLowerCase|
   MaxLen
     text1 Text
     text2 Text maxlen=3
@@ -34,9 +23,9 @@ share [mkPersist sqlSettings,  mkMigrate "maxlenMigrate"] [persistLowerCase|
     deriving Show Eq
 |]
 
-specs :: Spec
-specs = describe "Maximum length attribute" $ do
-  it "" $ db $ do
+specsWith :: Runner backend m => RunDb backend m -> Spec
+specsWith runDb = describe "Maximum length attribute" $ do
+  it "truncates values that are too long" $ runDb $ do
     let t1  = MaxLen a a  a a  a a
         t2  = MaxLen b b  b b  b b
         t2' = MaxLen b b' b b' b b'

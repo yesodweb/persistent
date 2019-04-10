@@ -31,13 +31,8 @@ Idempotency
     field7 Double sqltype=double(6,5)
 |]
 
-
-specs :: Spec
-specs = describe "MySQL migration with backend-specific sqltypes" $ do
-#ifdef WITH_NOSQL
-    return ()
-#else
-  it "is idempotent" $ db $ do
+specsWith :: (MonadIO m) => RunDb SqlBackend m -> Spec
+specsWith runDb = describe "MySQL migration with backend-specific sqltypes" $ do
+  it "is idempotent" $ runDb $ do
       again <- getMigration migration
       liftIO $ again @?= []
-#endif
