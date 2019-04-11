@@ -165,3 +165,48 @@ specsWith runDb handleNull handleKey = describe "UpsertTests" $ do
               Just 2
           Don'tUpdateNull ->
               Nothing
+
+  describe "putMany" $ do
+    it "adds new rows when entity has no unique constraints" $ runDb $ do
+        let mkPerson name = Person1 name 25
+        let names = ["putMany bob", "putMany bob", "putMany smith"]
+        let records = map mkPerson names
+        _ <- putMany records
+        entitiesDb <- selectList [Person1Name <-. names] []
+        let recordsDb = fmap entityVal entitiesDb
+        recordsDb @== records
+        deleteWhere [Person1Name <-. names]
+    it "adds new rows when no conflicts" $ runDb $ do
+        let mkUpsert e = Upsert e "new" "" 1
+        let keys = ["putMany1","putMany2","putMany3"]
+        let vals = map mkUpsert keys
+        _ <- putMany vals
+        Just (Entity _ v1) <- getBy $ UniqueUpsert "putMany1"
+        Just (Entity _ v2) <- getBy $ UniqueUpsert "putMany2"
+        Just (Entity _ v3) <- getBy $ UniqueUpsert "putMany3"
+        [v1,v2,v3] @== vals
+        deleteBy $ UniqueUpsert "putMany1"
+        deleteBy $ UniqueUpsert "putMany2"
+        deleteBy $ UniqueUpsert "putMany3"
+    it "handles conflicts by replacing old keys with new records" $ runDb $ do
+        let mkUpsert1 e = Upsert e "new" "" 1
+        let mkUpsert2 e = Upsert e "new" "" 2
+        let vals = map mkUpsert2 ["putMany4", "putMany5", "putMany6", "putMany7"]
+        Entity k1 _ <- insertEntity $ mkUpsert1 "putMany4"
+        Entity k2 _ <- insertEntity $ mkUpsert1 "putMany5"
+        _ <- putMany $ mkUpsert1 "putMany4" : vals
+        Just e1 <- getBy $ UniqueUpsert "putMany4"
+        Just e2 <- getBy $ UniqueUpsert "putMany5"
+        Just e3@(Entity k3 _) <- getBy $ UniqueUpsert "putMany6"
+        Just e4@(Entity k4 _) <- getBy $ UniqueUpsert "putMany7"
+
+        [e1,e2,e3,e4] @== [ Entity k1 (mkUpsert2 "putMany4")
+                          , Entity k2 (mkUpsert2 "putMany5")
+                          , Entity k3 (mkUpsert2 "putMany6")
+                          , Entity k4 (mkUpsert2 "putMany7")
+                          ]
+        deleteBy $ UniqueUpsert "putMany4"
+        deleteBy $ UniqueUpsert "putMany5"
+        deleteBy $ UniqueUpsert "putMany6"
+        deleteBy $ UniqueUpsert "putMany7"
+

@@ -24,10 +24,13 @@ import Data.List (nubBy)
 import Data.Function (on)
 
 defaultUpsert
-    :: (MonadIO m
-       ,PersistEntity record
-       ,PersistUniqueWrite backend
-       ,PersistEntityBackend record ~ BaseBackend backend)
+    ::
+    ( MonadIO m
+    , PersistEntity record
+    , PersistUniqueWrite backend
+    , PersistEntityBackend record ~ BaseBackend backend
+    , OnlyOneUniqueKey record
+    )
     => record -> [Update record] -> ReaderT backend m (Entity record)
 defaultUpsert record updates = do
     uniqueKey <- onlyUnique record

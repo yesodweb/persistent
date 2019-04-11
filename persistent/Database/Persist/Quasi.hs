@@ -310,7 +310,9 @@ mkEntityDef ps name entattribs lines =
         derives
         extras
         isSum
+        comments
   where
+    comments = Nothing
     entName = HaskellName name'
     (isSum, name') =
         case T.uncons name of
@@ -358,6 +360,7 @@ mkAutoIdField ps entName idName idSqlType = FieldDef
       , fieldReference = ForeignRef entName  defaultReferenceTypeCon
       , fieldAttrs = []
       , fieldStrict = True
+      , fieldComments = Nothing
       }
 
 defaultReferenceTypeCon :: FieldType
@@ -395,6 +398,7 @@ takeCols onErr ps (n':typ:rest)
                 , fieldAttrs = rest
                 , fieldStrict = fromMaybe (psStrictFields ps) mstrict
                 , fieldReference = NoReference
+                , fieldComments = Nothing
                 }
   where
     (mstrict, n)

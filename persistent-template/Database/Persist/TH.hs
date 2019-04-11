@@ -47,11 +47,16 @@ module Database.Persist.TH
     , packPTH
     , lensPTH
     , parseReferences
+    , AtLeastOneUniqueKey(..)
+    , OnlyOneUniqueKey(..)
     ) where
 
 import Prelude hiding ((++), take, concat, splitAt, exp)
+
+import qualified Data.List.NonEmpty as NEL
 import Database.Persist
 import Database.Persist.Sql (Migration, migrate, SqlBackend, PersistFieldSql)
+-- import Database.Persist.Class
 import Database.Persist.Quasi
 import Language.Haskell.TH.Lib (
 #if MIN_VERSION_template_haskell(2,11,0)
@@ -61,7 +66,7 @@ import Language.Haskell.TH.Lib (
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Data.Char (toLower, toUpper)
-import Control.Monad (forM, (<=<), mzero)
+import Control.Monad (forM, unless, (<=<), mzero)
 import qualified System.IO as SIO
 import Data.Text (pack, Text, append, unpack, concat, uncons, cons, stripPrefix, stripSuffix)
 import qualified Data.Text as T
@@ -86,6 +91,8 @@ import Web.PathPieces (PathPiece(..))
 import Web.HttpApiData (ToHttpApiData(..), FromHttpApiData(..))
 import GHC.Generics (Generic)
 import qualified Data.Text.Encoding as TE
+
+import GHC.TypeLits
 
 -- | This special-cases "type_" and strips out its underscore. When
 -- used for JSON serialization and deserialization, it works around
@@ -116,14 +123,14 @@ persistFileWith :: PersistSettings -> FilePath -> Q Exp
 persistFileWith ps fp = persistManyFileWith ps [fp]
 
 -- | Same as 'persistFileWith', but uses several external files instead of
--- one. Splitting your Persistent definitions into multiple modules can 
+-- one. Splitting your Persistent definitions into multiple modules can
 -- potentially dramatically speed up compile times.
 --
 -- The recommended file extension is @.persistentmodels@.
 --
 -- ==== __Examples__
 --
--- Split your Persistent definitions into multiple files (@models1@, @models2@), 
+-- Split your Persistent definitions into multiple files (@models1@, @models2@),
 -- then create a new module for each new file and run 'mkPersist' there:
 --
 -- @
@@ -145,13 +152,13 @@ persistFileWith ps fp = persistManyFileWith ps [fp]
 -- -- Migrate.hs
 -- 'share'
 --     ['mkMigrate' "migrateAll"]
---     $('persistManyFileWith' 'lowerCaseSettings' ["models1.persistentmodels","models2.persistentmodels"]) 
+--     $('persistManyFileWith' 'lowerCaseSettings' ["models1.persistentmodels","models2.persistentmodels"])
 -- @
 --
 -- Tip: To get the same import behavior as if you were declaring all your models in
 -- one file, import your new files @as Name@ into another file, then export @module Name@.
 --
--- This approach may be used in the future to reduce memory usage during compilation, 
+-- This approach may be used in the future to reduce memory usage during compilation,
 -- but so far we've only seen mild reductions.
 --
 -- See <https://github.com/yesodweb/persistent/issues/778 persistent#778> and
@@ -256,7 +263,7 @@ instance Lift FieldsSqlTypeExp where
 data FieldSqlTypeExp = FieldSqlTypeExp FieldDef SqlTypeExp
 instance Lift FieldSqlTypeExp where
     lift (FieldSqlTypeExp (FieldDef{..}) sqlTypeExp) =
-      [|FieldDef fieldHaskell fieldDB fieldType $(lift sqlTypeExp) fieldAttrs fieldStrict fieldReference|]
+      [|FieldDef fieldHaskell fieldDB fieldType $(lift sqlTypeExp) fieldAttrs fieldStrict fieldReference fieldComments|]
 
 instance Lift EntityDefSqlTypeExp where
     lift (EntityDefSqlTypeExp ent sqlTypeExp sqlTypeExps) =
@@ -367,7 +374,8 @@ mkPersist mps ents' = do
     x <- fmap Data.Monoid.mconcat $ mapM (persistFieldFromEntity mps) ents
     y <- fmap mconcat $ mapM (mkEntity entMap mps) ents
     z <- fmap mconcat $ mapM (mkJSON mps) ents
-    return $ mconcat [x, y, z]
+    uniqueKeyInstances <- fmap mconcat $ mapM (mkUniqueKeyInstances mps) ents
+    return $ mconcat [x, y, z, uniqueKeyInstances]
   where
     ents = map fixEntityDef ents'
     entMap = M.fromList $ map (\ent -> (entityHaskell ent, ent)) ents
@@ -1106,6 +1114,83 @@ mkEntity entMap mps t = do
     genDataType = genericDataType mps entName backendT
     entName = entityHaskell t
 
+mkUniqueKeyInstances :: MkPersistSettings -> EntityDef -> Q [Dec]
+mkUniqueKeyInstances mps t = do
+    undecidableInstancesEnabled <- isExtEnabled UndecidableInstances
+    unless undecidableInstancesEnabled . fail
+        $ "Generating Persistent entities now requires the 'UndecidableInstances' "
+        `mappend` "language extension. Please enable it in your file by copy/pasting "
+        `mappend` "this line into the top of your file: \n\n"
+        `mappend` "{-# LANGUAGE UndecidableInstances #-}"
+    case entityUniques t of
+        [] -> mappend <$> typeErrorSingle <*> typeErrorAtLeastOne
+        [_] -> mappend <$> singleUniqueKey <*> atLeastOneKey
+        (_:_) -> mappend <$> typeErrorMultiple <*> atLeastOneKey
+  where
+    requireUniquesPName = mkName "requireUniquesP"
+    onlyUniquePName = mkName "onlyUniqueP"
+    typeErrorSingle = mkOnlyUniqueError typeErrorNoneCtx
+    typeErrorMultiple = mkOnlyUniqueError typeErrorMultipleCtx
+
+    withPersistStoreWriteCxt =
+        if mpsGeneric mps
+            then do
+                write <- [t|PersistStoreWrite $(pure (VarT $ mkName "backend")) |]
+                pure [write]
+            else do
+                pure []
+
+    typeErrorNoneCtx = do
+        tyErr <- [t|TypeError (NoUniqueKeysError $(pure genDataType))|]
+        (tyErr :) <$> withPersistStoreWriteCxt
+
+    typeErrorMultipleCtx = do
+        tyErr <- [t|TypeError (MultipleUniqueKeysError $(pure genDataType))|]
+        (tyErr :) <$> withPersistStoreWriteCxt
+
+    mkOnlyUniqueError :: Q Cxt -> Q [Dec]
+    mkOnlyUniqueError mkCtx = do
+        ctx <- mkCtx
+        let impl = mkImpossible onlyUniquePName
+        pure [instanceD ctx onlyOneUniqueKeyClass impl]
+
+    mkImpossible name =
+        [ FunD name
+            [ Clause
+                [ WildP ]
+                (NormalB
+                    (VarE (mkName "error") `AppE` LitE (StringL "impossible"))
+                )
+                []
+            ]
+        ]
+
+    typeErrorAtLeastOne :: Q [Dec]
+    typeErrorAtLeastOne = do
+        let impl = mkImpossible requireUniquesPName
+        cxt <- typeErrorMultipleCtx
+        pure [instanceD cxt atLeastOneUniqueKeyClass impl]
+
+    singleUniqueKey :: Q [Dec]
+    singleUniqueKey = do
+        expr <- [e|\p -> head (persistUniqueKeys p)|]
+        let impl = [FunD onlyUniquePName [Clause [] (NormalB expr) []]]
+        cxt <- withPersistStoreWriteCxt
+        pure [instanceD cxt onlyOneUniqueKeyClass impl]
+
+    atLeastOneUniqueKeyClass = ConT ''AtLeastOneUniqueKey `AppT` genDataType
+    onlyOneUniqueKeyClass =  ConT ''OnlyOneUniqueKey `AppT` genDataType
+
+    atLeastOneKey :: Q [Dec]
+    atLeastOneKey = do
+        expr <- [e|\p -> NEL.fromList (persistUniqueKeys p)|]
+        let impl = [FunD requireUniquesPName [Clause [] (NormalB expr) []]]
+        cxt <- withPersistStoreWriteCxt
+        pure [instanceD cxt atLeastOneUniqueKeyClass impl]
+
+    genDataType = genericDataType mps (entityHaskell t) backendT
+
+
 entityText :: EntityDef -> Text
 entityText = unHaskellName . entityHaskell
 
@@ -1475,11 +1560,12 @@ liftAndFixKeys entMap EntityDef{..} =
       entityDerives
       entityExtra
       entitySum
+      entityComments
    |]
 
 liftAndFixKey :: EntityMap -> FieldDef -> Q Exp
-liftAndFixKey entMap (FieldDef a b c sqlTyp e f fieldRef) =
-  [|FieldDef a b c $(sqlTyp') e f fieldRef'|]
+liftAndFixKey entMap (FieldDef a b c sqlTyp e f fieldRef mcomments) =
+  [|FieldDef a b c $(sqlTyp') e f fieldRef' mcomments|]
   where
     (fieldRef', sqlTyp') = fromMaybe (fieldRef, lift sqlTyp) $
       case fieldRef of
@@ -1504,9 +1590,10 @@ instance Lift EntityDef where
             entityDerives
             entityExtra
             entitySum
+            entityComments
             |]
 instance Lift FieldDef where
-    lift (FieldDef a b c d e f g) = [|FieldDef a b c d e f g|]
+    lift (FieldDef a b c d e f g h) = [|FieldDef a b c d e f g h|]
 instance Lift UniqueDef where
     lift (UniqueDef a b c d) = [|UniqueDef a b c d|]
 instance Lift CompositeDef where

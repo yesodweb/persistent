@@ -112,17 +112,38 @@ data WhyNullable = ByMaybeAttr
                  | ByNullableAttr
                   deriving (Eq, Show)
 
+-- | An 'EntityDef' represents the information that @persistent@ knows
+-- about an Entity. It uses this information to generate the Haskell
+-- datatype, the SQL migrations, and other relevant conversions.
 data EntityDef = EntityDef
     { entityHaskell :: !HaskellName
+    -- ^ The name of the entity as Haskell understands it.
     , entityDB      :: !DBName
+    -- ^ The name of the database table corresponding to the entity.
     , entityId      :: !FieldDef
+    -- ^ The entity's primary key or identifier.
     , entityAttrs   :: ![Attr]
+    -- ^ The @persistent@ entity syntax allows you to add arbitrary 'Attr's
+    -- to an entity using the @!@ operator. Those attributes are stored in
+    -- this list.
     , entityFields  :: ![FieldDef]
+    -- ^ The fields for this entity. Note that the ID field will not be
+    -- present in this list. To get all of the fields for an entity, use
+    -- 'keyAndEntityFields'.
     , entityUniques :: ![UniqueDef]
+    -- ^ The Uniqueness constraints for this entity.
     , entityForeigns:: ![ForeignDef]
+    -- ^ The foreign key relationships that this entity has to other
+    -- entities.
     , entityDerives :: ![Text]
+    -- ^ A list of type classes that have been derived for this entity.
     , entityExtra   :: !(Map Text [ExtraLine])
     , entitySum     :: !Bool
+    -- ^ Whether or not this entity represents a sum type in the database.
+    , entityComments :: !(Maybe Text)
+    -- ^ Optional comments on the entity.
+    --
+    -- @since 2.10.0
     }
     deriving (Show, Eq, Read, Ord)
 
@@ -159,14 +180,35 @@ data FieldType
     | FTList FieldType
   deriving (Show, Eq, Read, Ord)
 
+-- | A 'FieldDef' represents the inormation that @persistent@ knows about
+-- a field of a datatype. This includes information used to parse the field
+-- out of the database and what the field corresponds to.
 data FieldDef = FieldDef
-    { fieldHaskell   :: !HaskellName -- ^ name of the field
+    { fieldHaskell   :: !HaskellName
+    -- ^ The name of the field. Note that this does not corresponds to the
+    -- record labels generated for the particular entity - record labels
+    -- are generated with the type name prefixed to the field, so
+    -- a 'FieldDef' that contains a @'HaskellName' "name"@ for a type
+    -- @User@ will have a record field @userName@.
     , fieldDB        :: !DBName
+    -- ^ The name of the field in the database. For SQL databases, this
+    -- corresponds to the column name.
     , fieldType      :: !FieldType
+    -- ^ The type of the field in Haskell.
     , fieldSqlType   :: !SqlType
-    , fieldAttrs     :: ![Attr]    -- ^ user annotations for a field
-    , fieldStrict    :: !Bool      -- ^ a strict field in the data type. Default: true
+    -- ^ The type of the field in a SQL database.
+    , fieldAttrs     :: ![Attr]
+    -- ^ User annotations for a field. These are provided with the @!@
+    -- operator.
+    , fieldStrict    :: !Bool
+    -- ^ If this is 'True', then the Haskell datatype will have a strict
+    -- record field. The default value for this is 'True'.
     , fieldReference :: !ReferenceDef
+    , fieldComments  :: !(Maybe Text)
+    -- ^ Optional comments for a 'Field'. There is not currently a way to
+    -- attach comments to a field in the quasiquoter.
+    --
+    -- @since 2.10.0
     }
     deriving (Show, Eq, Read, Ord)
 
@@ -237,7 +279,7 @@ toEmbedEntityDef ent = embDef
 -- (DBName (packPTH "unique_age")) [(HaskellName (packPTH "age"), DBName (packPTH "age"))] []
 --
 data UniqueDef = UniqueDef
-    { uniqueHaskell :: !HaskellName 
+    { uniqueHaskell :: !HaskellName
     , uniqueDBName  :: !DBName
     , uniqueFields  :: ![(HaskellName, DBName)]
     , uniqueAttrs   :: ![Attr]
