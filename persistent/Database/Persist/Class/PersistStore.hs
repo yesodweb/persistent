@@ -586,7 +586,6 @@ class
 --
 -- This just throws an error.
 getJust :: ( PersistStoreRead backend
-           , Show (Key record)
            , PersistRecordBackend record backend
            , MonadIO m
            ) => Key record -> ReaderT backend m record

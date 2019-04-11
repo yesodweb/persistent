@@ -433,7 +433,7 @@ recordName = unHaskellName . entityHaskell . entityDef . Just
 -- @since 1.2.2.0
 replaceUnique
     :: (MonadIO m
-       ,Eq record
+       ,Eq record -- Seems to be unnecessary?
        ,Eq (Unique record)
        ,PersistRecordBackend record backend
        ,PersistUniqueWrite backend)
