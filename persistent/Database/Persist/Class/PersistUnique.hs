@@ -185,7 +185,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- > mSpjEnt <- upsertSpj [UserAge +=. 15]
     --
     -- This fails with a compile-time type error alerting us to the fact
-    -- that this record has multiple unique keys, and suggests that we look or
+    -- that this record has multiple unique keys, and suggests that we look for
     -- 'upsertBy' to select the unique key we want.
     upsert
         :: (MonadIO m, PersistRecordBackend record backend, OnlyOneUniqueKey record)
@@ -575,13 +575,12 @@ defaultPutMany
     => [record]
     -> ReaderT backend m ()
 defaultPutMany []   = return ()
-defaultPutMany rsD@(e:es)  = do
-    let uKeys = persistUniqueKeys . head $ rsD
-    case uKeys of
+defaultPutMany rsD@(e:_)  = do
+    case persistUniqueKeys e of
         [] -> insertMany_ rsD
-        uniqs -> go uniqs
+        _ -> go
   where
-    go uniqs = do
+    go = do
         -- deduplicate the list of records in Haskell by unique key. The
         -- previous implementation used Data.List.nubBy which is O(n^2)
         -- complexity.

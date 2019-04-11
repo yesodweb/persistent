@@ -59,8 +59,6 @@ import Init
 
 -- re-exports
 import Test.QuickCheck.Instances ()
--- import Data.Fixed (Pico,Micro)
--- import Data.Time
 import Control.Applicative as A ((<$>), (<*>))
 import Control.Exception (SomeException)
 import Control.Monad (void, replicateM, liftM, when, forM_)
