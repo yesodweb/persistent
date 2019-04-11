@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE ScopedTypeVariables, TypeFamilies, FlexibleContexts, ConstraintKinds #-}
 {-# LANGUAGE TypeOperators, DataKinds #-}
 

@@ -1119,9 +1119,9 @@ mkUniqueKeyInstances mps t = do
     undecidableInstancesEnabled <- isExtEnabled UndecidableInstances
     unless undecidableInstancesEnabled . fail
         $ "Generating Persistent entities now requires the 'UndecidableInstances' "
-        <> "language extension. Please enable it in your file by copy/pasting "
-        <> "this line into the top of your file: \n\n"
-        <> "{-# LANGUAGE UndecidableInstances #-}"
+        `mappend` "language extension. Please enable it in your file by copy/pasting "
+        `mappend` "this line into the top of your file: \n\n"
+        `mappend` "{-# LANGUAGE UndecidableInstances #-}"
     case entityUniques t of
         [] -> mappend <$> typeErrorSingle <*> typeErrorAtLeastOne
         [_] -> mappend <$> singleUniqueKey <*> atLeastOneKey

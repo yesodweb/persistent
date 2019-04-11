@@ -22,7 +22,7 @@ library
     if flag(nooverlap)
         cpp-options: -DNO_OVERLAP
 
-    build-depends:   base                     >= 4.7       && < 5
+    build-depends:   base                     >= 4.9       && < 5
                    , bytestring               >= 0.9
                    , transformers             >= 0.2.1
                    , time                     >= 1.1.4
