@@ -14,23 +14,10 @@ services:
 
 matrix:
   include:
-  - env: ARGS="--resolver lts-6  --stack-yaml stack_lts-10.yaml" BACKEND=none
-  - env: ARGS="--resolver lts-7  --stack-yaml stack_lts-10.yaml" BACKEND=none
-  - env: ARGS="--resolver lts-9  --stack-yaml stack_lts-10.yaml" BACKEND=none
-  - env: ARGS="--resolver lts-10 --stack-yaml stack_lts-10.yaml" BACKEND=none
-  - env: ARGS="--resolver lts-11" BACKEND=none
-  - env: ARGS="--resolver lts-12" BACKEND=none
-  - env: ARGS="--resolver lts-13" BACKEND=none
-
-  - env: ARGS="--resolver lts-12" BACKEND=sqlite
-  - env: ARGS="--resolver lts-12" BACKEND=mongodb
-  - env: ARGS="--resolver lts-12" BACKEND=postgresql
-  - env: ARGS="--resolver lts-12" BACKEND=mysql
-
-  - env: ARGS="--resolver lts-13" BACKEND=sqlite
-  - env: ARGS="--resolver lts-13" BACKEND=mongodb
-  - env: ARGS="--resolver lts-13" BACKEND=postgresql
-  - env: ARGS="--resolver lts-13" BACKEND=mysql
+  - env: ARGS="--resolver lts-9  --stack-yaml stack_lts-10.yaml"
+  - env: ARGS="--resolver lts-11"
+  - env: ARGS="--resolver lts-12"
+  - env: ARGS="--resolver lts-13"
 
 before_install:
 # Download and unpack the stack executable
@@ -43,11 +30,3 @@ script: travis/run.sh
 cache:
   directories:
   - $HOME/.stack
-
-
-# zookeeper doesn't seem to work any more
-# matrix:
-#  - env: GHCVER=X CABALVER=Y BACKEND=zookeeper
-#        packages:
-#        - libzookeeper-mt-dev
-#        - zookeeperd

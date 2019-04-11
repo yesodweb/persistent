@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds #-}
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# language RankNTypes #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -11,33 +12,21 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module CustomPersistFieldTest (
-  specs
-#ifndef WITH_NOSQL
-  , customFieldMigrate
-#endif
-) where
+module CustomPersistFieldTest (specsWith, customFieldMigrate) where
 
 import Init
 import CustomPersistField
 
-#ifdef WITH_NOSQL
-db :: Action IO () -> Assertion
-db = db' (return ())
-mkPersist persistSettings [persistUpperCase|
-#else
-share [mkPersist sqlSettings,  mkMigrate "customFieldMigrate"] [persistLowerCase|
-#endif
+share [mkPersist sqlSettings { mpsGeneric = True },  mkMigrate "customFieldMigrate"] [persistLowerCase|
   BlogPost
     article Markdown
     deriving Show Eq
 |]
 
-specs :: Spec
-specs = describe "Custom persist field" $ do
-  it "should read what it wrote" $ db $ do
+specsWith :: Runner backend m => RunDb backend m -> Spec
+specsWith runDB = describe "Custom persist field" $ do
+  it "should read what it wrote" $ runDB $ do
     let originalBlogPost = BlogPost "article"
     blogPostId <- insert originalBlogPost
     Just newBlogPost <- get blogPostId
     liftIO $ originalBlogPost @?= newBlogPost
-
