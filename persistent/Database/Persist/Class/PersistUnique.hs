@@ -21,6 +21,7 @@ module Database.Persist.Class.PersistUnique
   where
 
 import Data.List.NonEmpty (NonEmpty)
+import qualified Data.List.NonEmpty as NEL
 import Database.Persist.Types
 import Control.Exception (throwIO)
 import Control.Monad (liftM)
@@ -33,7 +34,7 @@ import Database.Persist.Class.PersistEntity
 import Data.Monoid (mappend)
 import Data.Text (unpack, Text)
 import Data.Maybe (catMaybes)
-import GHC.TypeLits
+import GHC.TypeLits (TypeError(..), ErrorMessage(..))
 
 -- | Queries against 'Unique' keys (other than the id 'Key').
 --
@@ -71,10 +72,7 @@ class (PersistCore backend, PersistStoreRead backend) =>
     -- > |  1 | SPJ  |  40 |
     -- > +----+------+-----+
     getBy
-        ::
-        ( MonadIO m
-        , PersistRecordBackend record backend
-        )
+        :: (MonadIO m, PersistRecordBackend record backend)
         => Unique record -> ReaderT backend m (Maybe (Entity record))
 
 -- | Some functions in this module ('insertUnique', 'insertBy', and
@@ -283,8 +281,8 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
 -- instances for records that have 0 or multiple unique keys.
 --
 -- @since 2.10.0
-class OnlyOneUniqueKey record where
-    onlyUniqueP :: proxy record -> Unique record
+class PersistEntity record => OnlyOneUniqueKey record where
+    onlyUniqueP :: record -> Unique record
 
 type NoUniqueKeysError ty =
     'Text "The entity "
@@ -310,8 +308,8 @@ type MultipleUniqueKeysError ty =
 -- 0 unique keys.
 --
 -- @since 2.10.0
-class AtLeastOneUniqueKey record where
-    requireUniquesP :: proxy record -> NonEmpty (Unique record)
+class PersistEntity record => AtLeastOneUniqueKey record where
+    requireUniquesP :: record -> NonEmpty (Unique record)
 
 -- | Insert a value, checking for conflicts with any unique constraints.  If a
 -- duplicate exists in the database, it is returned as 'Left'. Otherwise, the

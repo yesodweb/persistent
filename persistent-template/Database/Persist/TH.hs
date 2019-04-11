@@ -1173,7 +1173,7 @@ mkUniqueKeyInstances mps t = do
 
     singleUniqueKey :: Q [Dec]
     singleUniqueKey = do
-        expr <- [e|\p -> head (persistUniqueKeysP p)|]
+        expr <- [e|\p -> head (persistUniqueKeys p)|]
         let impl = [FunD onlyUniquePName [Clause [] (NormalB expr) []]]
         cxt <- withPersistStoreWriteCxt
         pure [instanceD cxt onlyOneUniqueKeyClass impl]
@@ -1183,7 +1183,7 @@ mkUniqueKeyInstances mps t = do
 
     atLeastOneKey :: Q [Dec]
     atLeastOneKey = do
-        expr <- [e|\p -> NEL.fromList (persistUniqueKeysP p)|]
+        expr <- [e|\p -> NEL.fromList (persistUniqueKeys p)|]
         let impl = [FunD requireUniquesPName [Clause [] (NormalB expr) []]]
         cxt <- withPersistStoreWriteCxt
         pure [instanceD cxt atLeastOneUniqueKeyClass impl]
