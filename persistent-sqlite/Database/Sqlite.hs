@@ -480,7 +480,7 @@ bind statement sqlData = do
             PersistList l -> bindText statement parameterIndex $ listToJSON l
             PersistMap m -> bindText statement parameterIndex $ mapToJSON m
             PersistDbSpecific s -> bindText statement parameterIndex $ decodeUtf8With lenientDecode s
-            PersistArray _ -> P.error "Refusing to serialize a PersistArray to a SQLite value"
+            PersistArray a -> bindText statement parameterIndex $ listToJSON a -- copy of PersistList's definition
             PersistObjectId _ -> P.error "Refusing to serialize a PersistObjectId to a SQLite value"
             )
        $ zip [1..] sqlData
