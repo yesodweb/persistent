@@ -14,8 +14,7 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module MongoInit (
-  isTravis
-  , BackendMonad
+  BackendMonad
   , runConn
   , MonadIO
   , persistSettings
@@ -71,7 +70,6 @@ import qualified Data.ByteString as BS
 import Data.Text (Text)
 import Database.Persist
 import Database.Persist.TH ()
-import System.Environment (getEnvironment)
 
 import Database.Persist.Sql (PersistFieldSql(..))
 import Database.Persist.TH (mkPersistSettings)

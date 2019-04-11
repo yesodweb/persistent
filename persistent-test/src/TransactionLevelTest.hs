@@ -1,5 +1,4 @@
-{-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans -O0 #-}
-{-# LANGUAGE CPP                        #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE DeriveDataTypeable         #-}
 {-# LANGUAGE EmptyDataDecls             #-}
 {-# LANGUAGE FlexibleContexts           #-}

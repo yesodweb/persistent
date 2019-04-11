@@ -1,14 +1,8 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module PgInit (
-  BackendMonad
-  , runConn
+  runConn
 
   , MonadIO
   , persistSettings
@@ -75,8 +69,6 @@ import System.Log.FastLogger (fromLogStr)
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Database.Persist.Postgresql
-import Data.IORef (newIORef, IORef)
-import System.IO.Unsafe (unsafePerformIO)
 
 import Control.Monad (unless, (>=>))
 import Control.Monad.IO.Unlift (MonadUnliftIO)
@@ -99,7 +91,6 @@ dockerPg = do
 
 persistSettings :: MkPersistSettings
 persistSettings = sqlSettings { mpsGeneric = True }
-type BackendMonad = SqlBackend
 
 runConn :: MonadUnliftIO m => SqlPersistT (LoggingT m) t -> m ()
 runConn f = do
@@ -117,10 +108,6 @@ runConn f = do
 db :: SqlPersistT (LoggingT (ResourceT IO)) () -> Assertion
 db actions = do
   runResourceT $ runConn $ actions >> transactionUndo
-
-_keyCounter :: IORef Int64
-_keyCounter = unsafePerformIO $ newIORef 1
-{-# NOINLINE _keyCounter #-}
 
 instance Arbitrary Value where
   arbitrary = frequency [ (1, pure Null)
