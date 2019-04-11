@@ -14,7 +14,6 @@ services:
 
 matrix:
   include:
-  - env: ARGS="--resolver lts-6  --stack-yaml stack_lts-10.yaml"
   - env: ARGS="--resolver lts-9  --stack-yaml stack_lts-10.yaml"
   - env: ARGS="--resolver lts-11"
   - env: ARGS="--resolver lts-12"

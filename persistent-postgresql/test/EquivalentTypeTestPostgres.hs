@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}

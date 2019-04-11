@@ -1,6 +1,7 @@
 {-# LANGUAGE TemplateHaskell, QuasiQuotes #-}
 {-# LANGUAGE TypeFamilies, EmptyDataDecls, GADTs #-}
 {-# LANGUAGE TypeSynonymInstances, MultiParamTypeClasses, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Main where
 
 import qualified Database.Redis as R
@@ -12,7 +13,7 @@ import Control.Monad.IO.Class (liftIO)
 import Data.Text (Text, pack, unpack)
 
 let redisSettings = mkPersistSettings (ConT ''RedisBackend)
- in share [mkPersist redisSettings] [persistLowerCase| 
+ in share [mkPersist redisSettings] [persistLowerCase|
 Person
     name String
     age Int
@@ -34,7 +35,7 @@ mkKey s = case keyFromValues [PersistText s] of
     Left  a -> fail (unpack a)
 
 main :: IO ()
-main = 
+main =
     withRedisConn redisConf $ runRedisPool $ do
         _ <- liftIO $ print "Inserting..."
         s <- insert $ Person "Test" 12

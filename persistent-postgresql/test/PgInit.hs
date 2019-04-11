@@ -7,8 +7,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module PgInit (
-  BackendMonad
-  , runConn
+  runConn
 
   , MonadIO
   , persistSettings
@@ -17,7 +16,6 @@ module PgInit (
   , BackendKey(..)
   , GenerateKey(..)
 
-  , RunDb
    -- re-exports
   , (A.<$>), (A.<*>)
   , module Database.Persist
@@ -33,13 +31,7 @@ module PgInit (
   , module Database.Persist.Sql
   , BS.ByteString
   , SomeException
-  , MonadFail
   , TestFn(..)
-  , truncateTimeOfDay
-  , truncateToMicro
-  , truncateUTCTime
-  , arbText
-  , liftA2
   , module Init
   ) where
 
@@ -52,12 +44,7 @@ import Init
     )
 
 -- re-exports
-import Control.Applicative (liftA2)
 import Test.QuickCheck.Instances ()
-import Data.Char (generalCategory, GeneralCategory(..))
-import qualified Data.Text as T
-import Data.Fixed (Pico,Micro)
-import Data.Time
 import Control.Applicative as A ((<$>), (<*>))
 import Control.Exception (SomeException)
 import Control.Monad (void, replicateM, liftM, when, forM_)
@@ -66,7 +53,7 @@ import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLow
 import Database.Persist.Sql.Raw.QQ
 import Test.Hspec
 import Data.Aeson (Value(..))
-import Database.Persist.Postgresql.JSON
+import Database.Persist.Postgresql.JSON ()
 import qualified Data.HashMap.Strict as HM
 
 -- testing
@@ -74,7 +61,7 @@ import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
 import Test.QuickCheck
 
 import qualified Data.ByteString as BS
-import Data.Text (Text, unpack)
+import Data.Text (Text)
 import Database.Persist
 import Database.Persist.TH ()
 import System.Environment (getEnvironment)
@@ -87,8 +74,6 @@ import System.Log.FastLogger (fromLogStr)
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Database.Persist.Postgresql
-import Data.IORef (newIORef, IORef, writeIORef, readIORef)
-import System.IO.Unsafe (unsafePerformIO)
 
 import Control.Monad (unless, (>=>))
 import Control.Monad.IO.Unlift (MonadUnliftIO)
@@ -111,7 +96,6 @@ dockerPg = do
 
 persistSettings :: MkPersistSettings
 persistSettings = sqlSettings { mpsGeneric = True }
-type BackendMonad = SqlBackend
 
 runConn :: MonadUnliftIO m => SqlPersistT (LoggingT m) t -> m ()
 runConn f = do
@@ -129,10 +113,6 @@ runConn f = do
 db :: SqlPersistT (LoggingT (ResourceT IO)) () -> Assertion
 db actions = do
   runResourceT $ runConn $ actions >> transactionUndo
-
-keyCounter :: IORef Int64
-keyCounter = unsafePerformIO $ newIORef 1
-{-# NOINLINE keyCounter #-}
 
 instance Arbitrary Value where
   arbitrary = frequency [ (1, pure Null)
