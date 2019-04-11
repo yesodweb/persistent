@@ -11,13 +11,13 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
-module EntityEmbedTest where
+module EntityEmbedTestMongo where
 
 -- because we are using a type alias we need to declare in a separate module
 -- this is used in EmbedTest
-import Init
+import MongoInit
 
-mkPersist persistSettings { mpsGeneric = True } [persistUpperCase|
+mkPersist persistSettings [persistUpperCase|
   ARecord
     name Text
     deriving Show Eq Read Ord

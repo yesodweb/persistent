@@ -13,48 +13,14 @@ build-type:      Simple
 homepage:        http://www.yesodweb.com/book/persistent
 bug-reports:     https://github.com/yesodweb/persistent/issues
 
-extra-source-files:
-  test/main.hs
-
-Flag sqlite
-   Description: use sqlite. This is just present for consistency, and is not used
-   Default: False
-   manual: True
-
-Flag zookeeper
-   Description: test only Zookeeper.  default is to test just sqlite.
-   Default: False
-   manual: True
-
-Flag mongodb
-   Description: test only MongoDB.  default is to test just sqlite.
-   Default: False
-   manual: True
-
-Flag postgresql
-   Description: test postgresql. default is to test just sqlite.
-   Default: False
-   manual: True
-
-Flag mysql
-   Description: test MySQL. default is to test just sqlite.
-   Default: False
-   manual: True
-
-Flag high_precision_date
-   Description: for MongoDB use a time storage with nano second precision.
-   Default: False
-   manual: True
-
-flag nooverlap
-    default: False
-    description: test out our assumption that OverlappingInstances is just for String
-    manual: True
-
 library
     exposed-modules: PersistentTest
+                     UpsertTest
+                     MpsNoPrefixTest
+                     PersistentTestModels
                      PersistTestPetType
                      PersistTestPetCollarType
+                     RawSqlTest
                      RenameTest
                      DataTypeTest
                      EmptyEntityTest
@@ -72,17 +38,17 @@ library
                      MigrationIdempotencyTest
                      PersistUniqueTest
                      CompositeTest
+                     TreeTest
                      Init
                      PrimaryTest
                      CustomPersistField
                      CustomPersistFieldTest
                      CustomPrimaryKeyReferenceTest
-                     InsertDuplicateUpdate
                      MigrationColumnLengthTest
                      EquivalentTypeTest
                      TransactionLevelTest
 
-    hs-source-dirs: src, test
+    hs-source-dirs: src
 
     ghc-options:   -Wall
     if impl(ghc >= 7.8)
@@ -90,8 +56,10 @@ library
 
     build-depends:   base                     >= 4.6       && < 5
                    , persistent
+                   , monad-control
                    , persistent-template
-                   , persistent-qq
+                   , mongoDB
+                   , fail
                    , HUnit
                    , hspec >= 1.12.1
                    , hspec-expectations
@@ -142,74 +110,10 @@ library
      build-depends:
        semigroups
 
-   if flag(nooverlap)
-     cpp-options: -DNO_OVERLAP
-
-   if !flag(postgresql) && !flag(mysql) && !flag(mongodb) && !flag(zookeeper)
-      build-depends: persistent-sqlite     >= 2.6.1.1
-     cpp-options: -DWITH_SQLITE -DDEBUG
-
-   if flag(postgresql)
-     build-depends:  persistent-postgresql
-                   , postgresql-simple
-                   , postgresql-libpq
-     cpp-options: -DWITH_POSTGRESQL -DDEBUG
-     exposed-modules: JSONTest
-
-
-   if flag(mysql)
-     build-depends:  persistent-mysql
-                   , mysql-simple          >= 0.4.3    && < 0.5
-                   , mysql                 >= 0.1.1.3  && < 0.2
-     cpp-options: -DWITH_MYSQL
-
-   if flag(mongodb)
-     build-depends:  persistent-mongoDB
-                   , mongoDB            >= 2.0.4 && < 3.0
-                   , cereal
-                   , bson               >= 0.3.1
-                   , process
-     cpp-options: -DWITH_NOSQL -DWITH_MONGODB -DDEBUG
-
-   if flag(zookeeper)
-     build-depends:  persistent-zookeeper
-                   , hzk                >= 2.1.0
-                   , binary
-                   , utf8-string           >= 0.3.7    && < 0.4.0
-                   , process
-     cpp-options: -DWITH_NOSQL -DWITH_ZOOKEEPER -DDEBUG
-
-   if flag(high_precision_date)
-     cpp-options: -DHIGH_PRECISION_DATE
-
   default-language: Haskell2010
-
-
-executable persistent-test
-  main-is:       main.hs
-  hs-source-dirs: test
-  default-language: Haskell2010
-
-  build-depends:   base >= 4.6 && < 5
-                 , persistent-test
-                 , persistent
-                 , hspec
-                 , system-filepath
-                 , system-fileio
-                 , resourcet
-                 , scientific
-
-  if !flag(postgresql) && !flag(mysql) && !flag(mongodb) && !flag(zookeeper)
-      cpp-options: -DWITH_SQLITE -DDEBUG
-  if flag(zookeeper)
-      cpp-options: -DWITH_NOSQL -DWITH_ZOOKEEPER -DDEBUG
-  if flag(mongodb)
-      cpp-options: -DWITH_NOSQL -DWITH_MONGODB -DDEBUG
-  if flag(postgresql)
-      cpp-options: -DWITH_POSTGRESQL
-  if flag(mysql)
-      cpp-options: -DWITH_MYSQL
-
+  default-extensions: 
+                    FlexibleContexts
+                    RankNTypes
 
 source-repository head
   type:     git

@@ -46,6 +46,41 @@ library
    if flag(high_precision_date)
      cpp-options: -DHIGH_PRECISION_DATE
 
+test-suite test
+    type:            exitcode-stdio-1.0
+    main-is:         main.hs
+    hs-source-dirs:  test
+    other-modules:   MongoInit
+                     EmbedTestMongo
+                     EntityEmbedTestMongo
+                     RawMongoHelpers
+    ghc-options:     -Wall
+
+    build-depends:   base >= 4.6 && < 5
+                   , persistent-mongoDB
+                   , persistent-template
+                   , mongoDB
+                   , HUnit
+                   , persistent-test
+                   , persistent-qq
+                   , template-haskell
+                   , process
+                   , unliftio-core
+                   , aeson
+                   , hspec >= 2.4.0
+                   , text
+                   , persistent
+                   , bytestring
+                   , QuickCheck
+                   , transformers
+                   , mtl
+                   , containers
+                   , blaze-html
+                   , time
+   if impl(ghc < 8)
+     build-depends:
+       semigroups
+
 source-repository head
   type:     git
   location: git://github.com/yesodweb/persistent.git
