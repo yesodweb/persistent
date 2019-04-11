@@ -18,19 +18,15 @@
 
 module ArrayAggTest where
 
+import PgInit
+
 import qualified Data.Text as T
 import Data.List (sort)
 import Control.Monad.IO.Class (MonadIO)
 import Data.Aeson
-import qualified Data.Vector as V (fromList)
 import Test.Hspec.Expectations ()
 
 import PersistentTestModels
-
-import Database.Persist
-import Database.Persist.Postgresql.JSON
-
-import PgInit
 
 share [mkPersist persistSettings,  mkMigrate "jsonTestMigrate"] [persistLowerCase|
   TestValue
