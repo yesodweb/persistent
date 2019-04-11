@@ -10,6 +10,7 @@ module Database.Persist.Class.PersistUnique
   , NoUniqueKeysError
   , MultipleUniqueKeysError
   , getByValue
+  , getByValueUniques
   , insertBy
   , insertUniqueEntity
   , replaceUnique
@@ -22,6 +23,7 @@ module Database.Persist.Class.PersistUnique
 
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NEL
+import qualified Data.Map as Map
 import Database.Persist.Types
 import Control.Exception (throwIO)
 import Control.Monad (liftM)
@@ -135,12 +137,11 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
         case conflict of
             Nothing -> Just `liftM` insert datum
             Just _ -> return Nothing
+
     -- | Update based on a uniqueness constraint or insert:
     --
     -- * insert the new record if it does not exist;
     -- * If the record exists (matched via it's uniqueness constraint), then update the existing record with the parameters which is passed on as list to the function.
-    --
-    -- Throws an exception if there is more than 1 uniqueness constraint.
     --
     -- === __Example usage__
     --
@@ -162,7 +163,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- > +-----+-----+--------+
     --
     -- > upsertX :: MonadIO m => [Update User] -> ReaderT SqlBackend m (Maybe (Entity User))
-    -- > upsertX updates = upsert (User "X" 999) upadtes
+    -- > upsertX updates = upsert (User "X" 999) updates
     --
     -- > mXEnt <- upsertX [UserAge +=. 15]
     --
@@ -183,15 +184,21 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     --
     -- > mSpjEnt <- upsertSpj [UserAge +=. 15]
     --
-    -- Then, it throws an error message something like "Expected only one unique key, got"
+    -- This fails with a compile-time type error alerting us to the fact
+    -- that this record has multiple unique keys, and suggests that we look or
+    -- 'upsertBy' to select the unique key we want.
     upsert
         :: (MonadIO m, PersistRecordBackend record backend, OnlyOneUniqueKey record)
-        => record          -- ^ new record to insert
-        -> [Update record]  -- ^ updates to perform if the record already exists
-        -> ReaderT backend m (Entity record) -- ^ the record in the database after the operation
+        => record
+        -- ^ new record to insert
+        -> [Update record]
+        -- ^ updates to perform if the record already exists
+        -> ReaderT backend m (Entity record)
+        -- ^ the record in the database after the operation
     upsert record updates = do
         uniqueKey <- onlyUnique record
         upsertBy uniqueKey record updates
+
     -- | Update based on a given uniqueness constraint or insert:
     --
     -- * insert the new record if it does not exist;
@@ -249,10 +256,14 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- > +-----+-----+-----+
     upsertBy
         :: (MonadIO m, PersistRecordBackend record backend)
-        => Unique record   -- ^ uniqueness constraint to find by
-        -> record          -- ^ new record to insert
-        -> [Update record] -- ^ updates to perform if the record already exists
-        -> ReaderT backend m (Entity record) -- ^ the record in the database after the operation
+        => Unique record
+        -- ^ uniqueness constraint to find by
+        -> record
+        -- ^ new record to insert
+        -> [Update record]
+        -- ^ updates to perform if the record already exists
+        -> ReaderT backend m (Entity record)
+        -- ^ the record in the database after the operation
     upsertBy uniqueKey record updates = do
         mrecord <- getBy uniqueKey
         maybe (insertEntity record) (`updateGetEntity` updates) mrecord
@@ -264,6 +275,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     --
     -- * insert new records that do not exist (or violate any unique constraints)
     -- * replace existing records (matching any unique constraint)
+    --
     -- @since 2.8.1
     putMany
         ::
@@ -284,6 +296,10 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
 class PersistEntity record => OnlyOneUniqueKey record where
     onlyUniqueP :: record -> Unique record
 
+-- | This is an error message. It is used when writing instances of
+-- 'OnlyOneUniqueKey' for an entity that has no unique keys.
+--
+-- @since 2.10.0
 type NoUniqueKeysError ty =
     'Text "The entity "
         ':<>: 'ShowType ty
@@ -291,6 +307,10 @@ type NoUniqueKeysError ty =
     ':$$: 'Text "The function you are trying to call requires a unique key "
         ':<>: 'Text "to be defined on the entity."
 
+-- | This is an error message. It is used when an entity has multiple
+-- unique keys, and the function expects a single unique key.
+--
+-- @since 2.10.0
 type MultipleUniqueKeysError ty =
     'Text "The entity "
         ':<>: 'ShowType ty
@@ -338,23 +358,6 @@ insertBy val = do
     case res of
         Nothing -> Right `liftM` insert val
         Just z -> return $ Left z
-
--- | Insert a value, checking for conflicts with any unique constraints. If a
--- duplicate exists in the database, it is left untouched. The key of the
--- existing or new entry is returned
-_insertOrGet
-    ::
-    ( MonadIO m
-    , PersistUniqueWrite backend
-    , PersistRecordBackend record backend
-    , AtLeastOneUniqueKey record
-    )
-    => record -> ReaderT backend m (Key record)
-_insertOrGet val = do
-    res <- getByValue val
-    case res of
-        Nothing -> insert val
-        Just (Entity key _) -> return key
 
 -- | Like 'insertEntity', but returns 'Nothing' when the record
 -- couldn't be inserted because of a uniqueness constraint.
@@ -408,18 +411,18 @@ insertUniqueEntity datum =
 --
 -- > mSimonConst <- onlySimonConst
 --
--- @mSimonConst@ would be Simon's uniqueness constraint. Note that @onlyUnique@ doesn't work if there're more than two constraints.
+-- @mSimonConst@ would be Simon's uniqueness constraint. Note that
+-- @onlyUnique@ doesn't work if there're more than two constraints. It will
+-- fail with a type error instead.
 onlyUnique
-    :: (MonadIO m
-       ,PersistUniqueWrite backend
-       ,PersistRecordBackend record backend)
+    ::
+    ( MonadIO m
+    , PersistUniqueWrite backend
+    , PersistRecordBackend record backend
+    , OnlyOneUniqueKey record
+    )
     => record -> ReaderT backend m (Unique record)
-onlyUnique record =
-    case onlyUniqueEither record of
-        Right u -> return u
-        Left us ->
-            requireUniques record us >>=
-            liftIO . throwIO . OnlyUniqueException . show . length
+onlyUnique = pure . onlyUniqueP
 
 onlyUniqueEither
     :: (PersistEntity record)
@@ -459,10 +462,15 @@ getByValue
     )
     => record -> ReaderT backend m (Maybe (Entity record))
 getByValue record = do
-    uniqs <- requireUniques record (persistUniqueKeys record)
-    getByValueUniques uniqs record
+    let uniqs = requireUniquesP record
+    getByValueUniques (NEL.toList uniqs)
 
--- | Retrieve a record from the database using the given unique keys.
+-- | Retrieve a record from the database using the given unique keys. It
+-- will attempt to find a matching record for each 'Unique' in the list,
+-- and returns the first one that has a match.
+--
+-- Returns 'Nothing' if you provide an empty list ('[]') or if no value
+-- matches in the database.
 --
 -- @since 2.10.0
 getByValueUniques
@@ -472,9 +480,8 @@ getByValueUniques
     , PersistRecordBackend record backend
     )
     => [Unique record]
-    -> record
     -> ReaderT backend m (Maybe (Entity record))
-getByValueUniques uniqs _ =
+getByValueUniques uniqs =
     checkUniques uniqs
   where
     checkUniques [] = return Nothing
@@ -483,15 +490,6 @@ getByValueUniques uniqs _ =
         case y of
             Nothing -> checkUniques xs
             Just z -> return $ Just z
-
-requireUniques
-    :: (MonadIO m, PersistEntity record)
-    => record -> [Unique record] -> m [Unique record]
-requireUniques record [] = liftIO $ throwIO $ userError errorMsg
-  where
-    errorMsg = "getByValue: " `Data.Monoid.mappend` unpack (recordName record) `mappend` " does not have any Unique"
-
-requireUniques _ xs = return xs
 
 -- TODO: expose this to users
 recordName
@@ -577,17 +575,24 @@ defaultPutMany
     => [record]
     -> ReaderT backend m ()
 defaultPutMany []   = return ()
-defaultPutMany rsD  = do
+defaultPutMany rsD@(e:es)  = do
     let uKeys = persistUniqueKeys . head $ rsD
     case uKeys of
         [] -> insertMany_ rsD
         uniqs -> go uniqs
   where
     go uniqs = do
-        let rs = nubBy ((==) `on` persistUniqueKeyValues) (reverse rsD)
+        -- deduplicate the list of records in Haskell by unique key. The
+        -- previous implementation used Data.List.nubBy which is O(n^2)
+        -- complexity.
+        let rs = map snd
+                . Map.toList
+                . Map.fromList
+                . map (\r -> (persistUniqueKeyValues r, r))
+                $ rsD
 
         -- lookup record(s) by their unique key
-        mEsOld <- mapM (getByValueUniques uniqs) rs
+        mEsOld <- mapM (getByValueUniques . persistUniqueKeys) rs
 
         -- find pre-existing entities and corresponding (incoming) records
         let merge (Just x) y = Just (x, y)
@@ -610,7 +615,8 @@ defaultPutMany rsD  = do
         -- replace existing records
         mapM_ (uncurry replace) krs
 
--- | The _essence_ of a unique record.
--- useful for comaparing records in haskell land for uniqueness equality.
+-- | This function returns a list of 'PersistValue' that correspond to the
+-- 'Unique' keys on that record. This is useful for comparing two @record@s
+-- for equality only on the basis of their 'Unique' keys.
 persistUniqueKeyValues :: PersistEntity record => record -> [PersistValue]
-persistUniqueKeyValues r = concat $ map persistUniqueToValues $ persistUniqueKeys r
+persistUniqueKeyValues = concatMap persistUniqueToValues . persistUniqueKeys
