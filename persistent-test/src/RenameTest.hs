@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans #-}
 {-# LANGUAGE RankNTypes, ScopedTypeVariables #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -12,10 +13,11 @@
 {-# LANGUAGE TypeFamilies #-}
 module RenameTest where
 
+import Init
+
 import Data.Time (getCurrentTime, Day, UTCTime(..))
 import qualified Data.Map as Map
 import qualified Data.Text as T
-import Init
 
 -- persistent used to not allow types with an "Id" suffix
 -- this verifies that the issue is fixed

@@ -21,6 +21,7 @@ module Database.Persist.Class.PersistEntity
       -- * PersistField based on other typeclasses
     , toPersistValueJSON, fromPersistValueJSON
     , toPersistValueEnum, fromPersistValueEnum
+    , persistUniqueKeysP
     ) where
 
 import Database.Persist.Types.Base
@@ -101,6 +102,9 @@ class ( PersistField (Key record), ToJSON (Key record), FromJSON (Key record)
     -- | Use a 'PersistField' as a lens.
     fieldLens :: EntityField record field
               -> (forall f. Functor f => (field -> f field) -> Entity record -> f (Entity record))
+
+    persistUniqueKeysP :: proxy record -> [Unique record]
+    persistUniqueKeysP _ = persistUniqueKeys (undefined :: record)
 
 type family BackendSpecificUpdate backend record
 

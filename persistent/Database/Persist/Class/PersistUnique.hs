@@ -1,20 +1,26 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE TypeFamilies, FlexibleContexts, ConstraintKinds #-}
+{-# LANGUAGE ScopedTypeVariables, TypeFamilies, FlexibleContexts, ConstraintKinds #-}
+{-# LANGUAGE TypeOperators, DataKinds #-}
 
 module Database.Persist.Class.PersistUnique
-  (PersistUniqueRead(..)
-  ,PersistUniqueWrite(..)
-  ,getByValue
-  ,insertBy
-  ,insertUniqueEntity
-  ,replaceUnique
-  ,checkUnique
-  ,onlyUnique
-  ,defaultPutMany
-  ,persistUniqueKeyValues
+  ( PersistUniqueRead(..)
+  , PersistUniqueWrite(..)
+  , OnlyOneUniqueKey(..)
+  , AtLeastOneUniqueKey(..)
+  , NoUniqueKeysError
+  , MultipleUniqueKeysError
+  , getByValue
+  , insertBy
+  , insertUniqueEntity
+  , replaceUnique
+  , checkUnique
+  , onlyUnique
+  , defaultPutMany
+  , persistUniqueKeyValues
   )
   where
 
+import Data.List.NonEmpty (NonEmpty)
 import Database.Persist.Types
 import Control.Exception (throwIO)
 import Control.Monad (liftM)
@@ -27,6 +33,7 @@ import Database.Persist.Class.PersistEntity
 import Data.Monoid (mappend)
 import Data.Text (unpack, Text)
 import Data.Maybe (catMaybes)
+import GHC.TypeLits
 
 -- | Queries against 'Unique' keys (other than the id 'Key').
 --
@@ -64,7 +71,10 @@ class (PersistCore backend, PersistStoreRead backend) =>
     -- > |  1 | SPJ  |  40 |
     -- > +----+------+-----+
     getBy
-        :: (MonadIO m, PersistRecordBackend record backend)
+        ::
+        ( MonadIO m
+        , PersistRecordBackend record backend
+        )
         => Unique record -> ReaderT backend m (Maybe (Entity record))
 
 -- | Some functions in this module ('insertUnique', 'insertBy', and
@@ -177,7 +187,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     --
     -- Then, it throws an error message something like "Expected only one unique key, got"
     upsert
-        :: (MonadIO m, PersistRecordBackend record backend)
+        :: (MonadIO m, PersistRecordBackend record backend, OnlyOneUniqueKey record)
         => record          -- ^ new record to insert
         -> [Update record]  -- ^ updates to perform if the record already exists
         -> ReaderT backend m (Entity record) -- ^ the record in the database after the operation
@@ -258,10 +268,50 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- * replace existing records (matching any unique constraint)
     -- @since 2.8.1
     putMany
-        :: (MonadIO m, PersistRecordBackend record backend)
-        => [record]             -- ^ A list of the records you want to insert or replace.
+        ::
+        ( MonadIO m
+        , PersistRecordBackend record backend
+        )
+        => [record]
+        -- ^ A list of the records you want to insert or replace.
         -> ReaderT backend m ()
     putMany = defaultPutMany
+
+-- | This class is used to ensure that 'upsert' is only called on records
+-- that have a single 'Unique' key. The quasiquoter automatically generates
+-- working instances for appropriate records, and generates 'TypeError'
+-- instances for records that have 0 or multiple unique keys.
+--
+-- @since 2.10.0
+class OnlyOneUniqueKey record where
+    onlyUniqueP :: proxy record -> Unique record
+
+type NoUniqueKeysError ty =
+    'Text "The entity "
+        ':<>: 'ShowType ty
+        ':<>: 'Text " does not have any unique keys."
+    ':$$: 'Text "The function you are trying to call requires a unique key "
+        ':<>: 'Text "to be defined on the entity."
+
+type MultipleUniqueKeysError ty =
+    'Text "The entity "
+        ':<>: 'ShowType ty
+        ':<>: 'Text " has multiple unique keys."
+    ':$$: 'Text "The function you are trying to call requires only a single "
+        ':<>: 'Text "unique key."
+    ':$$: 'Text "There is probably a variant of the function with 'By' "
+        ':<>: 'Text "appended that will allow you to select a unique key "
+        ':<>: 'Text "for the operation."
+
+-- | This class is used to ensure that functions requring at least one
+-- unique key are not called with records that have 0 unique keys. The
+-- quasiquoter automatically writes working instances for appropriate
+-- entities, and generates 'TypeError' instances for records that have
+-- 0 unique keys.
+--
+-- @since 2.10.0
+class AtLeastOneUniqueKey record where
+    requireUniquesP :: proxy record -> NonEmpty (Unique record)
 
 -- | Insert a value, checking for conflicts with any unique constraints.  If a
 -- duplicate exists in the database, it is returned as 'Left'. Otherwise, the
@@ -278,9 +328,12 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
 --
 -- First three lines return 'Left' because there're duplicates in given record's uniqueness constraints. While the last line returns a new key as 'Right'.
 insertBy
-    :: (MonadIO m
-       ,PersistUniqueWrite backend
-       ,PersistRecordBackend record backend)
+    ::
+    ( MonadIO m
+    , PersistUniqueWrite backend
+    , PersistRecordBackend record backend
+    , AtLeastOneUniqueKey record
+    )
     => record -> ReaderT backend m (Either (Entity record) (Key record))
 insertBy val = do
     res <- getByValue val
@@ -291,8 +344,14 @@ insertBy val = do
 -- | Insert a value, checking for conflicts with any unique constraints. If a
 -- duplicate exists in the database, it is left untouched. The key of the
 -- existing or new entry is returned
-_insertOrGet :: (MonadIO m, PersistUniqueWrite backend, PersistRecordBackend record backend)
-            => record -> ReaderT backend m (Key record)
+_insertOrGet
+    ::
+    ( MonadIO m
+    , PersistUniqueWrite backend
+    , PersistRecordBackend record backend
+    , AtLeastOneUniqueKey record
+    )
+    => record -> ReaderT backend m (Key record)
 _insertOrGet val = do
     res <- getByValue val
     case res of
@@ -394,12 +453,31 @@ onlyUniqueEither record =
 -- > |  1 | SPJ  |  40 |
 -- > +----+------+-----+
 getByValue
-    :: (MonadIO m
-       ,PersistUniqueRead backend
-       ,PersistRecordBackend record backend)
+    :: forall record m backend.
+    ( MonadIO m
+    , PersistUniqueRead backend
+    , PersistRecordBackend record backend
+    , AtLeastOneUniqueKey record
+    )
     => record -> ReaderT backend m (Maybe (Entity record))
-getByValue record =
-    checkUniques =<< requireUniques record (persistUniqueKeys record)
+getByValue record = do
+    uniqs <- requireUniques record (persistUniqueKeys record)
+    getByValueUniques uniqs record
+
+-- | Retrieve a record from the database using the given unique keys.
+--
+-- @since 2.10.0
+getByValueUniques
+    ::
+    ( MonadIO m
+    , PersistUniqueRead backend
+    , PersistRecordBackend record backend
+    )
+    => [Unique record]
+    -> record
+    -> ReaderT backend m (Maybe (Entity record))
+getByValueUniques uniqs _ =
+    checkUniques uniqs
   where
     checkUniques [] = return Nothing
     checkUniques (x:xs) = do
@@ -505,13 +583,13 @@ defaultPutMany rsD  = do
     let uKeys = persistUniqueKeys . head $ rsD
     case uKeys of
         [] -> insertMany_ rsD
-        _ -> go
+        uniqs -> go uniqs
   where
-    go = do
+    go uniqs = do
         let rs = nubBy ((==) `on` persistUniqueKeyValues) (reverse rsD)
 
         -- lookup record(s) by their unique key
-        mEsOld <- mapM getByValue rs
+        mEsOld <- mapM (getByValueUniques uniqs) rs
 
         -- find pre-existing entities and corresponding (incoming) records
         let merge (Just x) y = Just (x, y)

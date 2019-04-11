@@ -1,5 +1,9 @@
 # Changelog for persistent
 
+## 2.10.0
+
+* Added two type classes `OnlyOneUniqueKey` and `AtLeastOneUniqueKey`. These classes are used as constraints on functions that expect a certain amount of unique keys. They are defined automatically as part of the `persistent-template`'s generation. [TODO: add issue number]()
+
 ## 2.9.2
 
 * Add documentation for the `Migration` type and some helpers. [#860](https://github.com/yesodweb/persistent/pull/860)

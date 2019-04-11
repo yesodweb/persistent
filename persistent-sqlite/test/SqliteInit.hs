@@ -46,6 +46,7 @@ module SqliteInit (
   , truncateUTCTime
   , arbText
   , liftA2
+  , MonadFail
   ) where
 
 import Init
@@ -57,12 +58,9 @@ import Init
     )
 
 -- re-exports
-import Control.Applicative (liftA2)
 import Test.QuickCheck.Instances ()
-import Data.Char (generalCategory, GeneralCategory(..))
-import qualified Data.Text as T
-import Data.Fixed (Pico,Micro)
-import Data.Time
+-- import Data.Fixed (Pico,Micro)
+-- import Data.Time
 import Control.Applicative as A ((<$>), (<*>))
 import Control.Exception (SomeException)
 import Control.Monad (void, replicateM, liftM, when, forM_)
@@ -72,13 +70,11 @@ import Test.Hspec
 
 -- testing
 import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
-import Test.QuickCheck
 
 import qualified Data.ByteString as BS
-import Data.Text (Text, unpack)
+import Data.Text (Text)
 import Database.Persist
 import Database.Persist.TH ()
-import System.Environment (getEnvironment)
 
 import Control.Monad.Logger
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
@@ -86,8 +82,6 @@ import Database.Persist.Sql
 import System.Log.FastLogger (fromLogStr)
 
 import Database.Persist.Sqlite
-import Data.IORef (newIORef, IORef, writeIORef, readIORef)
-import System.IO.Unsafe (unsafePerformIO)
 
 import Control.Monad (unless, (>=>))
 import Control.Monad.IO.Unlift (MonadUnliftIO)

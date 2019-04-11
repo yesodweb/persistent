@@ -91,6 +91,10 @@ module Database.Persist.Class
     , PersistUnique
     , PersistUniqueRead (..)
     , PersistUniqueWrite (..)
+    , OnlyOneUniqueKey (..)
+    , AtLeastOneUniqueKey (..)
+    , NoUniqueKeysError
+    , MultipleUniqueKeysError
     , getByValue
     , insertBy
     , insertUniqueEntity

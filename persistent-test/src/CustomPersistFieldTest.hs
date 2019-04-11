@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# language RankNTypes #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -15,7 +16,6 @@ module CustomPersistFieldTest (specsWith, customFieldMigrate) where
 
 import Init
 import CustomPersistField
-import Control.Monad.Fail
 
 share [mkPersist sqlSettings { mpsGeneric = True },  mkMigrate "customFieldMigrate"] [persistLowerCase|
   BlogPost
