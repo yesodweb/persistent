@@ -11,6 +11,7 @@ packages:
   - ./persistent-qq
 extra-deps:
 - aeson-1.4.1.0
+- aeson-compat-0.3.8
 - async-2.1.1.1
 - attoparsec-0.13.2.2
 - bytestring-builder-0.10.8.1.0
@@ -20,17 +21,21 @@ extra-deps:
 - hspec-core-2.4.0
 - hspec-discover-2.4.0
 - hspec-expectations-0.8.2
+- integer-logarithms-1.0.2.2
 - monad-logger-0.3.28.1
 - mono-traversable-1.0.8.1
 - mysql-simple-0.4.4
 - Only-0.1
 - postgresql-libpq-0.9.4.2
 - postgresql-simple-0.6.1
+- primitive-0.6.2.0
 - quickcheck-io-0.1.4
 - resourcet-1.1.11
 - scientific-0.3.6.2
 - semigroups-0.18.5
 - text-1.2.3.0
+- th-abstraction-0.2.2
+- transformers-compat-0.5.0.2
 - typed-process-0.2.1.0
 - vector-0.12.0.1
 - unliftio-0.2.4.0

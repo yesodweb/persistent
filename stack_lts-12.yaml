@@ -14,4 +14,4 @@ extra-deps:
 - postgresql-libpq-0.9.4.2
 - postgresql-simple-0.6.1
 - time-locale-compat-0.1.1.5
-- time-0.1.4.2
+- time-1.4.2
