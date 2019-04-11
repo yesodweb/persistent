@@ -263,7 +263,7 @@ instance Lift FieldsSqlTypeExp where
 data FieldSqlTypeExp = FieldSqlTypeExp FieldDef SqlTypeExp
 instance Lift FieldSqlTypeExp where
     lift (FieldSqlTypeExp (FieldDef{..}) sqlTypeExp) =
-      [|FieldDef fieldHaskell fieldDB fieldType $(lift sqlTypeExp) fieldAttrs fieldStrict fieldReference|]
+      [|FieldDef fieldHaskell fieldDB fieldType $(lift sqlTypeExp) fieldAttrs fieldStrict fieldReference fieldComments|]
 
 instance Lift EntityDefSqlTypeExp where
     lift (EntityDefSqlTypeExp ent sqlTypeExp sqlTypeExps) =
@@ -1560,11 +1560,12 @@ liftAndFixKeys entMap EntityDef{..} =
       entityDerives
       entityExtra
       entitySum
+      entityComments
    |]
 
 liftAndFixKey :: EntityMap -> FieldDef -> Q Exp
-liftAndFixKey entMap (FieldDef a b c sqlTyp e f fieldRef) =
-  [|FieldDef a b c $(sqlTyp') e f fieldRef'|]
+liftAndFixKey entMap (FieldDef a b c sqlTyp e f fieldRef mcomments) =
+  [|FieldDef a b c $(sqlTyp') e f fieldRef' mcomments|]
   where
     (fieldRef', sqlTyp') = fromMaybe (fieldRef, lift sqlTyp) $
       case fieldRef of
@@ -1589,9 +1590,10 @@ instance Lift EntityDef where
             entityDerives
             entityExtra
             entitySum
+            entityComments
             |]
 instance Lift FieldDef where
-    lift (FieldDef a b c d e f g) = [|FieldDef a b c d e f g|]
+    lift (FieldDef a b c d e f g h) = [|FieldDef a b c d e f g h|]
 instance Lift UniqueDef where
     lift (UniqueDef a b c d) = [|UniqueDef a b c d|]
 instance Lift CompositeDef where
