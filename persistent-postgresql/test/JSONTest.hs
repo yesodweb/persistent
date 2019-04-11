@@ -1,5 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans #-}
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
@@ -13,7 +13,6 @@
 {-# LANGUAGE TypeFamilies #-}
 module JSONTest where
 
-#ifdef WITH_POSTGRESQL
 import Control.Monad.IO.Class (MonadIO)
 import Data.Aeson
 import qualified Data.Vector as V (fromList)
@@ -23,7 +22,7 @@ import Test.Hspec.Expectations ()
 import Database.Persist
 import Database.Persist.Postgresql.JSON
 
-import Init
+import PgInit
 
 share [mkPersist persistSettings,  mkMigrate "jsonTestMigrate"] [persistLowerCase|
   TestValue
@@ -64,9 +63,6 @@ matchKeys s ys xs = do
             , "\" not in result:\n  ", show ks
             ]
 
-asIO :: IO a -> IO a
-asIO = id
-
 specs :: Spec
 specs = describe "postgresql's JSON operators behave" $ do
 
@@ -74,7 +70,7 @@ specs = describe "postgresql's JSON operators behave" $ do
       runMigration jsonTestMigrate
       cleanDB
 
-      liftIO $ putStrLn "\n\n- - - - -  Inserting JSON values  - - - - -\n\n"
+      liftIO $ putStrLn "\n- - - - -  Inserting JSON values  - - - - -\n"
 
       nullK <- insert' Null
 
@@ -109,7 +105,7 @@ specs = describe "postgresql's JSON operators behave" $ do
 
 ----------------------------------------------------------------------------------------
 
-      liftIO $ putStrLn "\n\n- - - - -  Starting @> tests  - - - - -\n\n"
+      liftIO $ putStrLn "\n- - - - -  Starting @> tests  - - - - -\n"
 
       -- An empty Object matches any object
       selectList [TestValueJson @>. Object mempty] []
@@ -270,7 +266,7 @@ specs = describe "postgresql's JSON operators behave" $ do
 
 ----------------------------------------------------------------------------------------
 
-      liftIO $ putStrLn "\n\n- - - - -  Starting <@ tests  - - - - -\n\n"
+      liftIO $ putStrLn "\n- - - - -  Starting <@ tests  - - - - -\n"
 
       -- {}                         <@ {"test":null,"test1":"no","blabla":[]} == True
       -- {"test":null,"test1":"no"} <@ {"test":null,"test1":"no","blabla":[]} == True
@@ -303,7 +299,7 @@ specs = describe "postgresql's JSON operators behave" $ do
 
 ----------------------------------------------------------------------------------------
 
-      liftIO $ putStrLn "\n\n- - - - -  Starting ? tests  - - - - -\n\n"
+      liftIO $ putStrLn "\n- - - - -  Starting ? tests  - - - - -\n"
 
       arrList3K <- insert' $ toJSON [toJSON [String "a"], Number 1]
       arrList4K <- insert' $ toJSON [String "a", String "b", String "c", String "d"]
@@ -356,7 +352,7 @@ specs = describe "postgresql's JSON operators behave" $ do
 
 ----------------------------------------------------------------------------------------
 
-      liftIO $ putStrLn "\n\n- - - - -  Starting ?| tests  - - - - -\n\n"
+      liftIO $ putStrLn "\n- - - - -  Starting ?| tests  - - - - -\n"
 
       -- "a"                                              ?| ["a","b","c"] == True
       -- [["a"],1]                                        ?| ["a","b","c"] == False
@@ -398,7 +394,7 @@ specs = describe "postgresql's JSON operators behave" $ do
 
 ----------------------------------------------------------------------------------------
 
-      liftIO $ putStrLn "\n\n- - - - -  Starting ?& tests  - - - - -\n\n"
+      liftIO $ putStrLn "\n- - - - -  Starting ?& tests  - - - - -\n"
 
       -- ANYTHING ?& [] == True
       selectList [TestValueJson ?&. []] []
@@ -472,5 +468,3 @@ specs = describe "postgresql's JSON operators behave" $ do
       -- {"":9001} ?& [""] == True
       selectList [TestValueJson ?&. [""]] []
         >>= matchKeys "71" [strNullK,objEmptyK]
-
-#endif

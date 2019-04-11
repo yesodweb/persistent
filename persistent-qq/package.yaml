@@ -27,3 +27,27 @@ when:
 library:
   ghc-options: -Wall
   source-dirs: src
+
+tests:
+  specs:
+    main:        Spec.hs
+    source-dirs: test
+    ghc-options: -Wall 
+    other-modules:
+        - PersistentTestModels
+        - PersistTestPetCollarType
+        - PersistTestPetType
+    dependencies:
+        - base
+        - persistent-qq
+        - text
+        - monad-logger
+        - resourcet
+        - persistent-template
+        - hspec
+        - unliftio
+        - aeson
+        - persistent-sqlite
+        - HUnit
+        - fast-logger
+

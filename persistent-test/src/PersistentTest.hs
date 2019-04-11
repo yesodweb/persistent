@@ -15,14 +15,18 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
-module PersistentTest where
+module PersistentTest
+    ( module PersistentTest
+    , cleanDB
+    , testMigrate
+    , noPrefixMigrate
+    ) where
 
+import Control.Monad.Fail
 
+import Data.Typeable
 import Control.Monad.IO.Class
-import qualified Control.Monad.Fail as Fail
-#ifndef WITH_MONGODB
 import Control.Monad.Trans.Resource (runResourceT)
-#endif
 import Data.Aeson
 import Data.Conduit
 import qualified Data.Conduit.List as CL
@@ -37,14 +41,19 @@ import Test.Hspec.Expectations ()
 import Test.Hspec.QuickCheck(prop)
 import UnliftIO (MonadUnliftIO, catch)
 import Web.PathPieces (PathPiece (..))
+-- import Database.Persist.MongoDB (MongoContext)
+
+import qualified MpsNoPrefixTest
+import qualified RawSqlTest
+import PersistentTestModels
 
 import Database.Persist
 
 #ifdef WITH_NOSQL
-#  ifdef WITH_MONGODB
-import qualified Database.MongoDB as MongoDB
-import Database.Persist.MongoDB (toInsertDoc, docToEntityThrow, collectionName, recordToDocument)
-#  endif
+-- #  ifdef WITH_MONGODB
+-- import qualified Database.MongoDB as MongoDB
+-- import Database.Persist.MongoDB (toInsertDoc, docToEntityThrow, collectionName, recordToDocument)
+-- #  endif
 
 #else
 
@@ -64,128 +73,7 @@ import Database.Persist.MySQL()
 import Init
 import PersistTestPetType
 import PersistTestPetCollarType
-
--- | This type alias is provided for potential backward compatibility
--- concerns. will use CPP if earlier resolvers complain.
-type MonadFail = Fail.MonadFail
-
-#ifdef WITH_NOSQL
-mkPersist persistSettings [persistUpperCase|
-#else
-share [mkPersist persistSettings,  mkMigrate "testMigrate", mkDeleteCascade persistSettings, mkSave "_ignoredSave"] [persistUpperCase|
-#endif
-
--- Dedented comment
-  -- Header-level comment
-    -- Indented comment
-  Person json
-    name Text
-    age Int "some ignored -- \" attribute"
-    color Text Maybe -- this is a comment sql=foobarbaz
-    PersonNameKey name -- this is a comment sql=foobarbaz
-    deriving Show Eq
-  Person1
--- Dedented comment
-  -- Header-level comment
-    -- Indented comment
-    name Text
-    age Int
-    deriving Show Eq
-  PersonMaybeAge
-    name Text
-    age Int Maybe
-  PersonMay json
-    name Text Maybe
-    color Text Maybe
-    deriving Show Eq
-  Pet
-    ownerId PersonId
-    name Text
-    -- deriving Show Eq
--- Dedented comment
-  -- Header-level comment
-    -- Indented comment
-    type PetType
-  MaybeOwnedPet
-    ownerId PersonId Maybe
-    name Text
-    type PetType
--- Dedented comment
-  -- Header-level comment
-    -- Indented comment
-  NeedsPet
-    petKey PetId
-  OutdoorPet
-    ownerId PersonId
-    collar PetCollar
-    type PetType
-
-  -- From the scaffold
-  UserPT
-    ident Text
-    password Text Maybe
-    UniqueUserPT ident
-  EmailPT
-    email Text
-    user UserPTId Maybe
-    verkey Text Maybe
-    UniqueEmailPT email
-
-  Upsert
-    email Text
-    attr Text
-    extra Text
-    age Int
-    UniqueUpsert email
-    deriving Eq Show
-
-  UpsertBy
-    email Text
-    city Text
-    attr Text
-    UniqueUpsertBy email
-    UniqueUpsertByCity city
-    deriving Eq Show
-
-  Strict
-    !yes Int
-    ~no Int
-    def Int
-|]
-
-deriving instance Show (BackendKey backend) => Show (PetGeneric backend)
-deriving instance Eq (BackendKey backend) => Eq (PetGeneric backend)
-
-share [mkPersist persistSettings { mpsPrefixFields = False, mpsGeneric = False }
-#ifdef WITH_NOSQL
-      ] [persistUpperCase|
-#else
-      , mkMigrate "noPrefixMigrate"
-      ] [persistLowerCase|
-#endif
-NoPrefix1
-    someFieldName Int
-    deriving Show Eq
-NoPrefix2
-    someOtherFieldName Int
-    unprefixedRef NoPrefix1Id
-    deriving Show Eq
-+NoPrefixSum
-    unprefixedLeft Int
-    unprefixedRight String
-    deriving Show Eq
-|]
-
-cleanDB :: (MonadIO m, PersistQuery backend, PersistEntityBackend EmailPT ~ backend) => ReaderT backend m ()
-cleanDB = do
-  deleteWhere ([] :: [Filter Person])
-  deleteWhere ([] :: [Filter Person1])
-  deleteWhere ([] :: [Filter Pet])
-  deleteWhere ([] :: [Filter MaybeOwnedPet])
-  deleteWhere ([] :: [Filter NeedsPet])
-  deleteWhere ([] :: [Filter OutdoorPet])
-  deleteWhere ([] :: [Filter UserPT])
-  deleteWhere ([] :: [Filter EmailPT])
+import PersistentTestModels
 
 #ifdef WITH_NOSQL
 db :: Action IO () -> Assertion
@@ -199,42 +87,56 @@ catchPersistException action errValue = do
       (\(_::PersistException) -> return $ Left errValue)
     return  res
 
+filterOrSpecs
+    :: forall m backend. Runner backend m
+    => RunDb backend m
+    -> Spec
+filterOrSpecs runDb = describe "FilterOr" $ do
+            it "FilterOr []" $ runDb $ do
+                let p = Person "z" 1 Nothing
+                _ <- insert p
+                ps <- selectList [FilterOr []] [Desc PersonAge]
+                assertEmpty ps
+            it "||. []" $ runDb $ do
+                let p = Person "z" 1 Nothing
+                _ <- insert p
+                c <- count $ [PersonName ==. "a"] ||. []
+                c @== (1::Int)
 
-specs :: Spec
-specs = describe "persistent" $ do
+-- Test proper polymorphism
+_polymorphic :: (MonadFail m, MonadIO m, PersistQuery backend, BaseBackend backend ~ PersistEntityBackend Pet) => ReaderT backend m ()
+_polymorphic = do
+    ((Entity id' _):_) <- selectList [] [LimitTo 1]
+    _ <- selectList [PetOwnerId ==. id'] []
+    _ <- insert $ Pet id' "foo" Cat
+    return ()
+
+-- Some lens stuff
+type ASetter s t a b = (a -> Identity b) -> s -> Identity t
+
+set :: ASetter s t a b -> b -> s -> t
+set l b = runIdentity . (l (\_ -> Identity b))
+
+type Getting r s t a b = (a -> Constant r b) -> s -> Constant r t
+
+view :: s -> Getting a s t a b -> a
+view s l = getConstant (l Constant s)
+
+specsWith :: forall backend m. Runner backend m => RunDb backend m -> Spec
+specsWith runDb = describe "persistent" $ do
   it "fieldLens" $ do
       let michael = Entity undefined $ Person "Michael" 28 Nothing :: Entity Person
           michaelP1 = Person "Michael" 29 Nothing :: Person
       view michael (fieldLens PersonAge) @?= 28
       entityVal (set (fieldLens PersonAge) 29 michael) @?= michaelP1
 
-  it "FilterOr []" $ db $ do
-      let p = Person "z" 1 Nothing
-      _ <- insert p
-#ifdef WITH_MONGODB
-      ps <- catchPersistException (selectList [FilterOr []] [Desc PersonAge]) []
-#else
-      ps <- selectList [FilterOr []] [Desc PersonAge]
-#endif
-      assertEmpty ps
-
-  it "||. []" $ db $ do
-      let p = Person "z" 1 Nothing
-      _ <- insert p
-#ifdef WITH_MONGODB
-      c <- catchPersistException (count $ [PersonName ==. "a"] ||. []) 1
-#else
-      c <- count $ [PersonName ==. "a"] ||. []
-#endif
-      c @== (1::Int)
-
-  it "FilterAnd []" $ db $ do
+  it "FilterAnd []" $ runDb $ do
       let p = Person "z" 1 Nothing
       _ <- insert p
       ps <- selectList [FilterAnd []] [Desc PersonAge]
       assertNotEmpty ps
 
-  it "order of opts is irrelevant" $ db $ do
+  it "order of opts is irrelevant" $ runDb $ do
       let eq (a, b, _) (c, d) = (a, b) @== (c, d)
           limitOffsetOrder' :: [SelectOpt Person] -> (Int, Int, [SelectOpt Person])
           limitOffsetOrder' = limitOffsetOrder
@@ -261,7 +163,7 @@ specs = describe "persistent" $ do
       c @== a
 
 
-  it "passes the general tests" $ db $ do
+  it "passes the general tests" $ runDb $ do
       let mic26 = Person "Michael" 26 Nothing
       micK <- insert mic26
       results <- selectList [PersonName ==. "Michael"] []
@@ -273,12 +175,9 @@ specs = describe "persistent" $ do
       p28 <- updateGet micK [PersonAge =. 28]
       personAge p28 @== 28
 
-#ifdef WITH_NOSQL
       updateWhere [PersonName ==. "Michael"] [PersonAge =. 29]
-#else
-      uc <- updateWhereCount [PersonName ==. "Michael"] [PersonAge =. 29]
+      uc <- count [PersonName ==. "Michael"]
       uc @== 1
-#endif
       Just mic29 <- get micK
       personAge mic29 @== 29
 
@@ -307,12 +206,7 @@ specs = describe "persistent" $ do
       delete micK
       Nothing <- get micK
       return ()
-#ifdef WITH_ZOOKEEPER
-      -- zookeeper backend does not support idfield
-      -- zookeeper's key is node-name.
-      -- When uniq-key exists, zookeeper's key becomes encoded uniq-key.
-#else
-  it "persistIdField" $ db $ do
+  it "persistIdField" $ runDb $ do
       let p = Person "foo" 100 (Just "blue")
           q = Person "bar" 101 Nothing
       pk <- insert p
@@ -323,10 +217,9 @@ specs = describe "persistent" $ do
 
       mq <- selectFirst [persistIdField ==. qk] []
       fmap entityVal mq @== Just q
-#endif
 
-  it "!=." $ db $ do
-      deleteWhere ([] :: [Filter Person])
+  it "!=." $ runDb $ do
+      deleteWhere ([] :: [Filter (PersonGeneric backend)])
       let mic = Person "Michael" 25 Nothing
       _ <- insert mic
       let eli = Person "Eliezer" 25 (Just "Red")
@@ -342,8 +235,8 @@ specs = describe "persistent" $ do
       map entityVal pnm @== [mic]
 
 
-  it "Double Maybe" $ db $ do
-      deleteWhere ([] :: [Filter PersonMay])
+  it "Double Maybe" $ runDb $ do
+      deleteWhere ([] :: [Filter (PersonMayGeneric backend)])
       let mic = PersonMay (Just "Michael") Nothing
       _ <- insert mic
       let eli = PersonMay (Just "Eliezer") (Just "Red")
@@ -353,8 +246,8 @@ specs = describe "persistent" $ do
       pne <- selectList [PersonMayName !=. Nothing, PersonMayColor !=. Nothing] []
       map entityVal pne @== [eli]
 
-  it "and/or" $ db $ do
-      deleteWhere ([] :: [Filter Person1])
+  it "and/or" $ runDb $ do
+      deleteWhere ([] :: [Filter (Person1Generic backend)])
       insertMany_ [ Person1 "Michael" 25
                   , Person1 "Miriam" 25
                   , Person1 "Michael" 30
@@ -389,7 +282,7 @@ specs = describe "persistent" $ do
       c40 @== 4
 
 
-  it "deleteWhere" $ db $ do
+  it "deleteWhere" $ runDb $ do
       key2 <- insert $ Person "Michael2" 90 Nothing
       _    <- insert $ Person "Michael3" 90 Nothing
       let p91 = Person "Michael4" 91 Nothing
@@ -406,7 +299,7 @@ specs = describe "persistent" $ do
       p91 @== p2_91
 
 
-  it "deleteBy" $ db $ do
+  it "deleteBy" $ runDb $ do
       _ <- insert $ Person "Michael2" 27 Nothing
       let p3 = Person "Michael3" 27 Nothing
       key3 <- insert p3
@@ -422,7 +315,7 @@ specs = describe "persistent" $ do
       p3 @== p32
 
 
-  it "delete" $ db $ do
+  it "delete" $ runDb $ do
       key2 <- insert $ Person "Michael2" 27 Nothing
       let p3 = Person "Michael3" 27 Nothing
       key3 <- insert p3
@@ -436,21 +329,12 @@ specs = describe "persistent" $ do
       Just p <- get key3
       p3 @== p
 
-#ifdef WITH_ZOOKEEPER
-  it "toPathPiece . fromPathPiece" $  do
-  --  Below quickcheck causes error of "Cannot convert PersistObjectId to Text."
-  --  Currently, ZooKey does not support PersistObjectId.
-      let key1 = ZooKey "hogehogekey" :: (BackendKey BackendMonad)
-          key2 = fromJust $ fromPathPiece $ toPathPiece key1 :: (BackendKey BackendMonad)
-      toPathPiece key1 `shouldBe` toPathPiece key2
-#else
   prop "toPathPiece . fromPathPiece" $ \piece ->
-      let key1 = piece :: (BackendKey BackendMonad)
-          key2 = fromJust $ fromPathPiece $ toPathPiece key1 :: (BackendKey BackendMonad)
+      let key1 = piece :: (BackendKey SqlBackend)
+          key2 = fromJust $ fromPathPiece $ toPathPiece key1 :: (BackendKey SqlBackend)
       in  toPathPiece key1 == toPathPiece key2
-#endif
 
-  it "replace" $ db $ do
+  it "replace" $ runDb $ do
       key2 <- insert $ Person "Michael2" 27 Nothing
       let p3 = Person "Michael3" 27 Nothing
       replace key2 p3
@@ -480,7 +364,7 @@ specs = describe "persistent" $ do
 
 
 
-  it "getBy" $ db $ do
+  it "getBy" $ runDb $ do
       let p2 = Person "Michael2" 27 Nothing
       key2 <- insert p2
       Just (Entity k p) <- getBy $ PersonNameKey "Michael2"
@@ -494,7 +378,7 @@ specs = describe "persistent" $ do
       return ()
 
 
-  it "updateGet" $ db $ do
+  it "updateGet" $ runDb $ do
       let p25 = Person "Michael" 25 Nothing
       key25 <- insert p25
       pBlue28 <- updateGet key25 [PersonAge =. 28, PersonName =. "Updated"]
@@ -503,7 +387,7 @@ specs = describe "persistent" $ do
       pBlue30 @== Person "Updated" 30 Nothing
 
   describe "putMany" $ do
-    it "adds new rows when entity has no unique constraints" $ db $ do
+    it "adds new rows when entity has no unique constraints" $ runDb $ do
         let mkPerson name = Person1 name 25
         let names = ["putMany bob", "putMany bob", "putMany smith"]
         let records = map mkPerson names
@@ -512,7 +396,7 @@ specs = describe "persistent" $ do
         let recordsDb = fmap entityVal entitiesDb
         recordsDb @== records
         deleteWhere [Person1Name <-. names]
-    it "adds new rows when no conflicts" $ db $ do
+    it "adds new rows when no conflicts" $ runDb $ do
         let mkUpsert e = Upsert e "new" "" 1
         let keys = ["putMany1","putMany2","putMany3"]
         let vals = map mkUpsert keys
@@ -524,7 +408,7 @@ specs = describe "persistent" $ do
         deleteBy $ UniqueUpsert "putMany1"
         deleteBy $ UniqueUpsert "putMany2"
         deleteBy $ UniqueUpsert "putMany3"
-    it "handles conflicts by replacing old keys with new records" $ db $ do
+    it "handles conflicts by replacing old keys with new records" $ runDb $ do
         let mkUpsert1 e = Upsert e "new" "" 1
         let mkUpsert2 e = Upsert e "new" "" 2
         let vals = map mkUpsert2 ["putMany4", "putMany5", "putMany6", "putMany7"]
@@ -547,7 +431,7 @@ specs = describe "persistent" $ do
         deleteBy $ UniqueUpsert "putMany7"
 
   describe "repsertMany" $ do
-    it "adds new rows when no conflicts" $ db $ do
+    it "adds new rows when no conflicts" $ runDb $ do
         ids@[johnId, janeId, aliceId, eveId] <- replicateM 4 $ liftIO (Person1Key `fmap` generateKey)
         let john = Person1 "john" 20
         let jane = Person1 "jane" 18
@@ -564,7 +448,7 @@ specs = describe "persistent" $ do
         es @== Map.fromList (zip ids rs)
         mapM_ delete ids
 
-    it "handles conflicts by replacing old keys with new records" $ db $ do
+    it "handles conflicts by replacing old keys with new records" $ runDb $ do
         let john = Person1 "john" 20
         let jane = Person1 "jane" 18
         let alice = Person1 "alice" 18
@@ -580,131 +464,7 @@ specs = describe "persistent" $ do
         [alice',eve'] @== [alice,eve]
         mapM_ delete [johnId, janeId]
 
-  describe "upsert" $ do
-    it "adds a new row with no updates" $ db $ do
-        Entity _ u <- upsert (Upsert "a" "new" "" 2) [UpsertAttr =. "update"]
-        c <- count ([] :: [Filter Upsert])
-        c @== 1
-        upsertAttr u @== "new"
-    it "keeps the existing row" $ db $ do
-#ifdef WITH_MONGODB
-        initial <- insertEntity (Upsert "foo" "initial" "" 2)
-        update' <- upsert (Upsert "foo" "update" "" 3) []
-        update' @== initial
-#else
-        initial <- insertEntity (Upsert "a" "initial" "" 1)
-        update' <- upsert (Upsert "a" "update" "" 2) []
-        update' @== initial
-#endif
-    it "updates an existing row - assignment" $ db $ do
-#ifdef WITH_MONGODB
-        initial <- insertEntity (Upsert "cow" "initial" "extra" 1)
-        update' <-
-            upsert (Upsert "cow" "wow" "such unused" 2) [UpsertAttr =. "update"]
-        ((==@) `on` entityKey) initial update'
-        upsertAttr (entityVal update') @== "update"
-        upsertExtra (entityVal update') @== "extra"
-#else
-        initial <- insertEntity (Upsert "a" "initial" "extra" 1)
-        update' <-
-            upsert (Upsert "a" "wow" "such unused" 2) [UpsertAttr =. "update"]
-        ((==@) `on` entityKey) initial update'
-        upsertAttr (entityVal update') @== "update"
-        upsertExtra (entityVal update') @== "extra"
-#endif
-    it "updates existing row - addition " $ db $ do
-#ifdef WITH_MONGODB
-        initial <- insertEntity (Upsert "a1" "initial" "extra" 2)
-        update' <-
-            upsert (Upsert "a1" "wow" "such unused" 2) [UpsertAge +=. 3]
-        ((==@) `on` entityKey) initial update'
-        upsertAge (entityVal update') @== 5
-        upsertExtra (entityVal update') @== "extra"
-#else
-        initial <- insertEntity (Upsert "a" "initial" "extra" 2)
-        update' <-
-            upsert (Upsert "a" "wow" "such unused" 2) [UpsertAge +=. 3]
-        ((==@) `on` entityKey) initial update'
-        upsertAge (entityVal update') @== 5
-        upsertExtra (entityVal update') @== "extra"
-#endif
-
-  describe "upsertBy" $ do
-    let uniqueEmail = UniqueUpsertBy "a"
-        uniqueCity = UniqueUpsertByCity "Boston"
-    it "adds a new row with no updates" $ db $ do
-        Entity _ u <-
-            upsertBy
-                uniqueEmail
-                (UpsertBy "a" "Boston" "new")
-                [UpsertByAttr =. "update"]
-        c <- count ([] :: [Filter UpsertBy])
-        c @== 1
-        upsertByAttr u @== "new"
-    it "keeps the existing row" $ db $ do
-#ifdef WITH_MONGODB
-        initial <- insertEntity (UpsertBy "foo" "Chennai" "initial")
-        update' <- upsertBy (UniqueUpsertBy "foo") (UpsertBy "foo" "Chennai" "update") []
-        update' @== initial
-#else
-        initial <- insertEntity (UpsertBy "a" "Boston" "initial")
-        update' <- upsertBy uniqueEmail (UpsertBy "a" "Boston" "update") []
-        update' @== initial
-#endif
-    it "updates an existing row" $ db $ do
-#ifdef WITH_MONGODB
-        initial <- insertEntity (UpsertBy "ko" "Kumbakonam" "initial")
-        update' <-
-            upsertBy
-                (UniqueUpsertBy "ko")
-                (UpsertBy "ko" "Bangalore" "such unused")
-                [UpsertByAttr =. "update"]
-        ((==@) `on` entityKey) initial update'
-        upsertByAttr (entityVal update') @== "update"
-        upsertByCity (entityVal update') @== "Kumbakonam"
-#else
-        initial <- insertEntity (UpsertBy "a" "Boston" "initial")
-        update' <-
-            upsertBy
-                uniqueEmail
-                (UpsertBy "a" "wow" "such unused")
-                [UpsertByAttr =. "update"]
-        ((==@) `on` entityKey) initial update'
-        upsertByAttr (entityVal update') @== "update"
-        upsertByCity (entityVal update') @== "Boston"
-#endif
-    it "updates by the appropriate constraint" $ db $ do
-        initBoston <- insertEntity (UpsertBy "bos" "Boston" "bos init")
-        initKrum <- insertEntity (UpsertBy "krum" "Krum" "krum init")
-        updBoston <-
-            upsertBy
-                (UniqueUpsertBy "bos")
-                (UpsertBy "bos" "Krum" "unused")
-                [UpsertByAttr =. "bos update"]
-        updKrum <-
-            upsertBy
-                (UniqueUpsertByCity "Krum")
-                (UpsertBy "bos" "Krum" "unused")
-                [UpsertByAttr =. "krum update"]
-        ((==@) `on` entityKey) initBoston updBoston
-        ((==@) `on` entityKey) initKrum updKrum
-        entityVal updBoston @== UpsertBy "bos" "Boston" "bos update"
-        entityVal updKrum @== UpsertBy "krum" "Krum" "krum update"
-
-  it "maybe update" $ db $ do
-      let noAge = PersonMaybeAge "Michael" Nothing
-      keyNoAge <- insert noAge
-      noAge2 <- updateGet keyNoAge [PersonMaybeAgeAge +=. Just 2]
-      -- the correct answer is very debatable
-#ifdef WITH_NOSQL
-      personMaybeAgeAge noAge2 @== Just 2
-#else
-      personMaybeAgeAge noAge2 @== Nothing
-#endif
-
-
-
-  it "updateWhere" $ db $ do
+  it "updateWhere" $ runDb $ do
       let p1 = Person "Michael" 25 Nothing
       let p2 = Person "Michael2" 25 Nothing
       key1 <- insert p1
@@ -716,8 +476,7 @@ specs = describe "persistent" $ do
       Just p <- get key1
       p @== p1
 
-
-  it "selectList" $ db $ do
+  it "selectList" $ runDb $ do
       let p25 = Person "Michael" 25 Nothing
       let p26 = Person "Michael2" 26 Nothing
       [key25, key26] <- insertMany [p25, p26]
@@ -738,7 +497,7 @@ specs = describe "persistent" $ do
       ps6 <- selectList [PersonAge ==. 26] []
       ps6 @== [(Entity key26 p26)]
 
-  it "selectSource" $ db $ do
+  it "selectSource" $ runDb $ do
       let p1 = Person "selectSource1" 1 Nothing
           p2 = Person "selectSource2" 2 Nothing
           p3 = Person "selectSource3" 3 Nothing
@@ -763,7 +522,7 @@ specs = describe "persistent" $ do
           e4 <- await
           e4 @== Nothing
 
-  it "selectFirst" $ db $ do
+  it "selectFirst" $ runDb $ do
       _ <- insert $ Person "Michael" 26 Nothing
       let pOld = Person "Oldie" 75 Nothing
       kOld <- insert pOld
@@ -772,7 +531,7 @@ specs = describe "persistent" $ do
       x @== Just (Entity kOld pOld)
 
 
-  it "selectKeys" $ db $ do
+  it "selectKeys" $ runDb $ do
       let p1 = Person "selectKeys1" 1 Nothing
           p2 = Person "selectKeys2" 2 Nothing
           p3 = Person "selectKeys3" 3 Nothing
@@ -797,18 +556,18 @@ specs = describe "persistent" $ do
           e4 <- await
           e4 @== Nothing
 
-  it "insertMany_ with no arguments" $ db $ do
-    _ <- insertMany_ ([] :: [Person])
-    rows <- count ([] :: [Filter Person])
+  it "insertMany_ with no arguments" $ runDb $ do
+    _ <- insertMany_ ([] :: [PersonGeneric backend])
+    rows <- (count ([] :: [Filter (PersonGeneric backend)]) :: ReaderT backend m Int)
     rows @== 0
-    _ <- insertMany ([] :: [Person])
-    rows2 <- count ([] :: [Filter Person])
+    _ <- insertMany ([] :: [PersonGeneric backend])
+    rows2 <- count ([] :: [Filter (PersonGeneric backend)])
     rows2 @== 0
-    _ <- insertEntityMany ([] :: [Entity Person])
-    rows3 <- count ([] :: [Filter Person])
+    _ <- insertEntityMany ([] :: [Entity (PersonGeneric backend)])
+    rows3 <- count ([] :: [Filter (PersonGeneric backend)])
     rows3 @== 0
 
-  it "insertEntityMany" $ db $ do
+  it "insertEntityMany" $ runDb $ do
     id1:id2:id3:id4:id5:[] <- liftIO $ replicateM 5 (PersonKey `fmap` generateKey)
     let p1 = Entity id1 $ Person "insertEntityMany1" 1 Nothing
         p2 = Entity id2 $ Person "insertEntityMany2" 2 Nothing
@@ -816,45 +575,45 @@ specs = describe "persistent" $ do
         p4 = Entity id4 $ Person "insertEntityMany4" 3 Nothing
         p5 = Entity id5 $ Person "insertEntityMany5" 3 Nothing
     insertEntityMany [p1,p2,p3,p4,p5]
-    rows <- count ([] :: [Filter Person])
+    rows <- count ([] :: [Filter (PersonGeneric backend)])
     rows @== 5
 
-  it "insertBy" $ db $ do
+  it "insertBy" $ runDb $ do
       Right _ <- insertBy $ Person "name" 1 Nothing
       Left _ <- insertBy $ Person "name" 1 Nothing
       Right _ <- insertBy $ Person "name2" 1 Nothing
       return ()
 
-  it "insertKey" $ db $ do
+  it "insertKey" $ runDb $ do
       k <- liftIO (PersonKey `fmap` generateKey)
       insertKey k $ Person "Key" 26 Nothing
       Just (Entity k2 _) <- selectFirst [PersonName ==. "Key"] []
       k2 @== k
 
-  it "insertEntity" $ db $ do
+  it "insertEntity" $ runDb $ do
       Entity k p <- insertEntity $ Person "name" 1 Nothing
       Just p2 <- get k
       p2 @== p
 
-  it "insertRecord" $ db $ do
+  it "insertRecord" $ runDb $ do
       let record = Person "name" 1 Nothing
       record' <- insertRecord record
       record' @== record
 
-  it "getEntity" $ db $ do
+  it "getEntity" $ runDb $ do
       Entity k p <- insertEntity $ Person "name" 1 Nothing
       Just (Entity k2 p2) <- getEntity k
       p @== p2
       k @== k2
 
-  it "getJustEntity" $ db $ do
+  it "getJustEntity" $ runDb $ do
       let p1 = Person "name" 1 Nothing
       k1 <- insert p1
       Entity k2 p2 <- getJustEntity k1
       p1 @== p2
       k1 @== k2
 
-  it "repsert" $ db $ do
+  it "repsert" $ runDb $ do
       k <- liftIO (PersonKey `fmap` generateKey)
       Nothing <- selectFirst [PersonName ==. "Repsert"] []
       repsert k $ Person "Repsert" 26 Nothing
@@ -865,7 +624,7 @@ specs = describe "persistent" $ do
       k3 @== k
       27 @== personAge p
 
-  it "retrieves a belongsToJust association" $ db $ do
+  it "retrieves a belongsToJust association" $ runDb $ do
       let p = Person "pet owner" 30 Nothing
       person <- insert p
       let cat = Pet person "Mittens" Cat
@@ -874,7 +633,7 @@ specs = describe "persistent" $ do
       p3 <- belongsToJust petOwnerId cat
       p @== p3
 
-  it "retrieves a belongsTo association" $ db $ do
+  it "retrieves a belongsTo association" $ runDb $ do
       let p = Person "pet owner" 30 Nothing
       person <- insert p
       let cat = MaybeOwnedPet (Just person) "Mittens" Cat
@@ -883,7 +642,7 @@ specs = describe "persistent" $ do
       Just p4 <- belongsTo maybeOwnedPetOwnerId cat
       p @== p4
 
-  it "derivePersistField" $ db $ do
+  it "derivePersistField" $ runDb $ do
       person <- insert $ Person "pet owner" 30 Nothing
       catKey <- insert $ Pet person "Mittens" Cat
       Just cat' <- get catKey
@@ -892,19 +651,14 @@ specs = describe "persistent" $ do
       Just dog' <- get dog
       liftIO $ petType dog' @?= Dog
 
-  it "derivePersistFieldJSON" $ db $ do
+  it "derivePersistFieldJSON" $ runDb $ do
       let mittensCollar = PetCollar "Mittens\n1-714-668-9672" True
       pkey <- insert $ Person "pet owner" 30 Nothing
       catKey <- insert $ OutdoorPet pkey mittensCollar Cat
       Just (OutdoorPet _ collar' _) <- get catKey
       liftIO $ collar' @?= mittensCollar
 
-#ifdef WITH_ZOOKEEPER
-      -- zookeeper backend does not support idfield
-      -- zookeeper's key is node-name.
-      -- When uniq-key exists, zookeeper's key becomes encoded uniq-key.
-#else
-  it "idIn" $ db $ do
+  it "idIn" $ runDb $ do
       let p1 = Person "D" 0 Nothing
           p2 = Person "E" 1 Nothing
           p3 = Person "F" 2 Nothing
@@ -913,9 +667,8 @@ specs = describe "persistent" $ do
       pid3 <- insert p3
       x <- selectList [PersonId <-. [pid1, pid3]] []
       liftIO $ x @?= [Entity pid1 p1, Entity pid3 p3]
-#endif
 
-  it "In" $ db $ do
+  it "In" $ runDb $ do
       let p1 = Person "D" 0 Nothing
           p2 = Person "E" 1 Nothing
           p3 = Person "F" 2 (Just "blue")
@@ -938,7 +691,7 @@ specs = describe "persistent" $ do
       liftIO $ x6 @?= [p3]
 
   describe "toJSON" $ do
-    it "serializes" $ db $ do
+    it "serializes" $ runDb $ do
       let p = Person "D" 0 Nothing
       k <- insert p
       liftIO $ toJSON (Entity k p) @?=
@@ -952,367 +705,25 @@ specs = describe "persistent" $ do
         -}
 
 
+-- TODO: This only runs on SQLite. Uncomment and put in that suite directly.
 #ifdef WITH_NOSQL
-#ifdef WITH_MONGODB
-  describe "raw MongoDB helpers" $ do
-    it "collectionName" $ do
-        collectionName (Person "Duder" 0 Nothing) @?= "Person"
-
-    it "toInsertFields, entityFields, & docToEntityThrow" $ db $ do
-        let p1 = Person "Duder" 0 Nothing
-        let doc = toInsertDoc p1
-        MongoDB.ObjId _id <- MongoDB.insert "Person" $ doc
-        let idSelector = "_id" MongoDB.=: _id
-        Entity _ ent1 <- docToEntityThrow $ idSelector:doc
-        liftIO $ p1 @?= ent1
-
-        let p2 = p1 {personColor = Just "blue"}
-        let doc2 = idSelector:recordToDocument p2
-        MongoDB.save "Person" doc2
-        Entity _ ent2 <- docToEntityThrow doc2
-        liftIO $ p2 @?= ent2
-#endif
 #else
-  it "rawSql/2+2" $ db $ do
-      ret <- rawSql "SELECT 2+2" []
-      liftIO $ ret @?= [Single (4::Int)]
-
-  it "sqlQQ/?-?" $ db $ do
-      ret <- [sqlQQ| SELECT #{2 :: Int}+#{2 :: Int} |]
-      liftIO $ ret @?= [Single (4::Int)]
-
-  it "rawSql/?-?" $ db $ do
-      ret <- rawSql "SELECT ?-?" [PersistInt64 5, PersistInt64 3]
-      liftIO $ ret @?= [Single (2::Int)]
-
-  it "sqlQQ/?-?" $ db $ do
-      ret <- [sqlQQ| SELECT #{5 :: Int}-#{3 :: Int} |]
-      liftIO $ ret @?= [Single (2::Int)]
-
-  it "rawSql/NULL" $ db $ do
-      ret <- rawSql "SELECT NULL" []
-      liftIO $ ret @?= [Nothing :: Maybe (Single Int)]
-
-  it "sqlQQ/NULL" $ db $ do
-      ret <- [sqlQQ| SELECT NULL |]
-      liftIO $ ret @?= [Nothing :: Maybe (Single Int)]
-
-  it "rawSql/entity" $ db $ do
-      let insert' :: (PersistStore backend, PersistEntity val, PersistEntityBackend val ~ BaseBackend backend, MonadIO m)
-                  => val -> ReaderT backend m (Key val, val)
-          insert' v = insert v >>= \k -> return (k, v)
-      (p1k, p1) <- insert' $ Person "Mathias"   23 Nothing
-      (p2k, p2) <- insert' $ Person "Norbert"   44 Nothing
-      (p3k, _ ) <- insert' $ Person "Cassandra" 19 Nothing
-      (_  , _ ) <- insert' $ Person "Thiago"    19 Nothing
-      (a1k, a1) <- insert' $ Pet p1k "Rodolfo" Cat
-      (a2k, a2) <- insert' $ Pet p1k "Zeno"    Cat
-      (a3k, a3) <- insert' $ Pet p2k "Lhama"   Dog
-      (_  , _ ) <- insert' $ Pet p3k "Abacate" Cat
-      escape <- ((. DBName) . connEscapeName) `fmap` ask
-      person <- getTableName (error "rawSql Person" :: Person)
-      name   <- getFieldName PersonName
-      let query = T.concat [ "SELECT ??, ?? "
-                           , "FROM ", person
-                           , ", ", escape "Pet"
-                           , " WHERE ", person, ".", escape "age", " >= ? "
-                           , "AND ", escape "Pet", ".", escape "ownerId", " = "
-                                   , person, ".", escape "id"
-                           , " ORDER BY ", person, ".", name
-                           ]
-      ret <- rawSql query [PersistInt64 20]
-      liftIO $ ret @?= [ (Entity p1k p1, Entity a1k a1)
-                       , (Entity p1k p1, Entity a2k a2)
-                       , (Entity p2k p2, Entity a3k a3) ]
-      ret2 <- rawSql query [PersistInt64 20]
-      liftIO $ ret2 @?= [ (Just (Entity p1k p1), Just (Entity a1k a1))
-                        , (Just (Entity p1k p1), Just (Entity a2k a2))
-                        , (Just (Entity p2k p2), Just (Entity a3k a3)) ]
-      ret3 <- rawSql query [PersistInt64 20]
-      liftIO $ ret3 @?= [ Just (Entity p1k p1, Entity a1k a1)
-                        , Just (Entity p1k p1, Entity a2k a2)
-                        , Just (Entity p2k p2, Entity a3k a3) ]
-
-  it "rawSql/order-proof" $ db $ do
-      let p1 = Person "Zacarias" 93 Nothing
-      p1k <- insert p1
-      escape <- ((. DBName) . connEscapeName) `fmap` ask
-      let query = T.concat [ "SELECT ?? "
-                           , "FROM ", escape "Person"
-                           ]
-      ret1 <- rawSql query []
-      ret2 <- rawSql query [] :: MonadIO m => SqlPersistT m [Entity (ReverseFieldOrder Person)]
-      liftIO $ ret1 @?= [Entity p1k p1]
-      liftIO $ ret2 @?= [Entity (RFOKey $ unPersonKey p1k) (RFO p1)]
-
-  it "rawSql/OUTER JOIN" $ db $ do
-      let insert' :: (PersistStore backend, PersistEntity val, PersistEntityBackend val ~ BaseBackend backend, MonadIO m)
-                  => val -> ReaderT backend m (Key val, val)
-          insert' v = insert v >>= \k -> return (k, v)
-      (p1k, p1) <- insert' $ Person "Mathias"   23 Nothing
-      (p2k, p2) <- insert' $ Person "Norbert"   44 Nothing
-      (a1k, a1) <- insert' $ Pet p1k "Rodolfo" Cat
-      (a2k, a2) <- insert' $ Pet p1k "Zeno"    Cat
-      escape <- ((. DBName) . connEscapeName) `fmap` ask
-      let query = T.concat [ "SELECT ??, ?? "
-                           , "FROM ", person
-                           , "LEFT OUTER JOIN ", pet
-                           , " ON ", person, ".", escape "id"
-                           , " = ", pet, ".", escape "ownerId"
-                           , " ORDER BY ", person, ".", escape "name"]
-          person = escape "Person"
-          pet    = escape "Pet"
-      ret <- rawSql query []
-      liftIO $ ret @?= [ (Entity p1k p1, Just (Entity a1k a1))
-                       , (Entity p1k p1, Just (Entity a2k a2))
-                       , (Entity p2k p2, Nothing) ]
-
-  it "sqlQQ/entity" $ db $ do
-      let insert'
-            :: PersistStore backend
-            => PersistEntity val
-            => PersistEntityBackend val ~ BaseBackend backend
-            => MonadIO m
-            => val
-            -> ReaderT backend m (Key val, val)
-          insert' v = insert v >>= \k -> return (k, v)
-      (p1k, p1) <- insert' $ Person "Mathias"   23 Nothing
-      (p2k, p2) <- insert' $ Person "Norbert"   44 Nothing
-      (p3k, _ ) <- insert' $ Person "Cassandra" 19 Nothing
-      (_  , _ ) <- insert' $ Person "Thiago"    19 Nothing
-      (a1k, a1) <- insert' $ Pet p1k "Rodolfo" Cat
-      (a2k, a2) <- insert' $ Pet p1k "Zeno"    Cat
-      (a3k, a3) <- insert' $ Pet p2k "Lhama"   Dog
-      (_  , _ ) <- insert' $ Pet p3k "Abacate" Cat
-
-      let runQuery
-            :: (RawSql a, Functor m, MonadIO m)
-            => Int
-            -> ReaderT SqlBackend m [a]
-          runQuery age =
-            [sqlQQ|
-                SELECT ??, ??
-                FROM
-                  ^{Person},
-                  ^{Pet}
-                WHERE ^{Person}.@{PersonAge} >= #{age}
-                    AND ^{Pet}.@{PetOwnerId} = ^{Person}.@{PersonId}
-                    ORDER BY ^{Person}.@{PersonName}
-            |]
-
-      ret <- runQuery 20
-      liftIO $ ret @?= [ (Entity p1k p1, Entity a1k a1)
-                       , (Entity p1k p1, Entity a2k a2)
-                       , (Entity p2k p2, Entity a3k a3) ]
-      ret2 <- runQuery 20
-      liftIO $ ret2 @?= [ (Just (Entity p1k p1), Just (Entity a1k a1))
-                        , (Just (Entity p1k p1), Just (Entity a2k a2))
-                        , (Just (Entity p2k p2), Just (Entity a3k a3)) ]
-      ret3 <- runQuery 20
-      liftIO $ ret3 @?= [ Just (Entity p1k p1, Entity a1k a1)
-                        , Just (Entity p1k p1, Entity a2k a2)
-                        , Just (Entity p2k p2, Entity a3k a3) ]
-
-  it "sqlQQ/order-proof" $ db $ do
-      let p1 = Person "Zacarias" 93 Nothing
-      p1k <- insert p1
-
-      let runQuery
-            :: (RawSql a, Functor m, MonadIO m)
-            => ReaderT SqlBackend m [a]
-          runQuery = [sqlQQ| SELECT ?? FROM ^{Person} |]
-      ret1 <- runQuery
-      ret2 <- runQuery :: (MonadIO m, Functor m) => SqlPersistT m [Entity (ReverseFieldOrder Person)]
-      liftIO $ ret1 @?= [Entity p1k p1]
-      liftIO $ ret2 @?= [Entity (RFOKey $ unPersonKey p1k) (RFO p1)]
-
-  it "sqlQQ/OUTER JOIN" $ db $ do
-      let insert' :: (PersistStore backend, PersistEntity val, PersistEntityBackend val ~ BaseBackend backend, MonadIO m)
-                  => val -> ReaderT backend m (Key val, val)
-          insert' v = insert v >>= \k -> return (k, v)
-      (p1k, p1) <- insert' $ Person "Mathias"   23 Nothing
-      (p2k, p2) <- insert' $ Person "Norbert"   44 Nothing
-      (a1k, a1) <- insert' $ Pet p1k "Rodolfo" Cat
-      (a2k, a2) <- insert' $ Pet p1k "Zeno"    Cat
-      ret <- [sqlQQ|
-        SELECT ??, ??
-        FROM ^{Person}
-        LEFT OUTER JOIN ^{Pet}
-            ON ^{Person}.@{PersonId} = ^{Pet}.@{PetOwnerId}
-        ORDER BY ^{Person}.@{PersonName}
-      |]
-      liftIO $ ret @?= [ (Entity p1k p1, Just (Entity a1k a1))
-                       , (Entity p1k p1, Just (Entity a2k a2))
-                       , (Entity p2k p2, Nothing) ]
-
-  it "sqlQQ/values syntax" $ db $ do
-      let insert' :: (PersistStore backend, PersistEntity val, PersistEntityBackend val ~ BaseBackend backend, MonadIO m)
-                  => val -> ReaderT backend m (Key val, val)
-          insert' v = insert v >>= \k -> return (k, v)
-      (p1k, p1) <- insert' $ Person "Mathias"   23 (Just "red")
-      (_  , _ ) <- insert' $ Person "Norbert"   44 (Just "green")
-      (p3k, p3) <- insert' $ Person "Cassandra" 19 (Just "blue")
-      (_  , _ ) <- insert' $ Person "Thiago"    19 (Just "yellow")
-      let
-        colors = Just "blue" :| Just "red" : [] :: NonEmpty (Maybe Text)
-      ret <- [sqlQQ|
-        SELECT ??
-        FROM ^{Person}
-        WHERE ^{Person}.@{PersonColor} IN %{colors}
-      |]
-      liftIO $ ret @?= [ (Entity p1k p1)
-                       , (Entity p3k p3) ]
-
-  it "commit/rollback" (caseCommitRollback >> runResourceT (runConn cleanDB))
-
-#ifndef WITH_MYSQL
-#  ifndef WITH_POSTGRESQL
-#    ifndef WITH_NOSQL
-  it "afterException" $ db $ do
-    let catcher :: Monad m => SomeException -> m ()
-        catcher _ = return ()
-    _ <- insert $ Person "A" 0 Nothing
-    _ <- insert_ (Person "A" 1 Nothing) `catch` catcher
-    _ <- insert $ Person "B" 0 Nothing
-    return ()
+#  ifndef WITH_MYSQL
+#    ifndef WITH_POSTGRESQL
+#      ifndef WITH_NOSQL
+--  it "afterException" $ runDb $ do
+--    let catcher :: forall m. Monad m => SomeException -> m ()
+--        catcher _ = return ()
+--    _ <- insert $ Person "A" 0 Nothing
+--    _ <- insert_ (Person "A" 1 Nothing) `catch` catcher
+--    _ <- insert $ Person "B" 0 Nothing
+--    return ()
+#      endif
 #    endif
 #  endif
-#endif
-
-
-#ifndef WITH_NOSQL
-  it "mpsNoPrefix" $ db $ do
-    deleteWhere ([] :: [Filter NoPrefix2])
-    deleteWhere ([] :: [Filter NoPrefix1])
-    np1a <- insert $ NoPrefix1 1
-    update np1a [SomeFieldName =. 2]
-    np1b <- insert $ NoPrefix1 3
-    np2 <- insert $ NoPrefix2 4 np1a
-    update np2 [UnprefixedRef =. np1b, SomeOtherFieldName =. 5]
-
-    mnp1a <- get np1a
-    liftIO $ mnp1a @?= Just (NoPrefix1 2)
-    liftIO $ fmap someFieldName mnp1a @?= Just 2
-    mnp2 <- get np2
-    liftIO $ fmap unprefixedRef mnp2 @?= Just np1b
-    liftIO $ fmap someOtherFieldName mnp2 @?= Just 5
-
-    insert_ $ UnprefixedLeftSum 5
-    insert_ $ UnprefixedRightSum "Hello"
-
-  it "IsSqlKey instance" $ db $ do
-    let p = Person "Alice" 30 Nothing
-    key@(PersonKey (SqlBackendKey i)) <- insert p
-    liftIO $ fromSqlKey key `shouldBe` (i :: Int64)
-    mp <- get $ toSqlKey i
-    liftIO $ mp `shouldBe` Just p
-#endif
 
   describe "strictness" $ do
     it "bang" $ (return $! Strict (error "foo") 5 5) `shouldThrow` anyErrorCall
     it "tilde" $ void (return $! Strict 5 (error "foo") 5 :: IO Strict)
     it "blank" $ (return $! Strict 5 5 (error "foo")) `shouldThrow` anyErrorCall
-
-#ifdef WITH_POSTGRESQL
-  describe "rawSql/array_agg" $ do
-    let runArrayAggTest dbField expected = db $ do
-          void $ insertMany
-            [ UserPT "a" $ Just "b"
-            , UserPT "c" $ Just "d"
-            , UserPT "e"   Nothing
-            , UserPT "g" $ Just "h" ]
-          escape <- ((. DBName) . connEscapeName) `fmap` ask
-          let query = T.concat [ "SELECT array_agg(", escape dbField, ") "
-                               , "FROM ", escape "UserPT"
-                               ]
-          [Single xs] <- rawSql query []
-          liftIO $ sort xs @?= expected
-
-    it "works for [Text]"       $ runArrayAggTest "ident"    ["a", "c", "e", "g" :: Text]
-    it "works for [Maybe Text]" $ runArrayAggTest "password" [Nothing, Just "b", Just "d", Just "h" :: Maybe Text]
 #endif
-
--- | Reverses the order of the fields of an entity.  Used to test
--- @??@ placeholders of 'rawSql'.
-newtype ReverseFieldOrder a = RFO {unRFO :: a} deriving (Eq, Show)
-instance ToJSON (Key (ReverseFieldOrder a))   where toJSON = error "ReverseFieldOrder"
-instance FromJSON (Key (ReverseFieldOrder a)) where parseJSON = error "ReverseFieldOrder"
-instance (PersistEntity a) => PersistEntity (ReverseFieldOrder a) where
-    type PersistEntityBackend (ReverseFieldOrder a) = PersistEntityBackend a
-
-    newtype Key (ReverseFieldOrder a) = RFOKey { unRFOKey :: BackendKey SqlBackend } deriving (Show, Read, Eq, Ord, PersistField, PersistFieldSql)
-    keyFromValues = fmap RFOKey . fromPersistValue . head
-    keyToValues   = (:[]) . toPersistValue . unRFOKey
-
-    entityDef = revFields . entityDef . liftM unRFO
-        where
-          revFields ed = ed { entityFields = reverse (entityFields ed) }
-
-    toPersistFields = reverse . toPersistFields . unRFO
-    newtype EntityField (ReverseFieldOrder a) b = EFRFO {unEFRFO :: EntityField a b}
-    persistFieldDef = persistFieldDef . unEFRFO
-    fromPersistValues = fmap RFO . fromPersistValues . reverse
-
-    newtype Unique      (ReverseFieldOrder a)   = URFO  {unURFO  :: Unique      a  }
-    persistUniqueToFieldNames = reverse . persistUniqueToFieldNames . unURFO
-    persistUniqueToValues = reverse . persistUniqueToValues . unURFO
-    persistUniqueKeys = map URFO . reverse . persistUniqueKeys . unRFO
-
-    persistIdField = error "ReverseFieldOrder.persistIdField"
-    fieldLens = error "ReverseFieldOrder.fieldLens"
-
-caseCommitRollback :: Assertion
-caseCommitRollback = db $ do
-    let filt :: [Filter Person1]
-        filt = []
-
-    let p = Person1 "foo" 0
-
-    _ <- insert p
-    _ <- insert p
-    _ <- insert p
-
-    c1 <- count filt
-    c1 @== 3
-
-    transactionSave
-    c2 <- count filt
-    c2 @== 3
-
-    _ <- insert p
-    transactionUndo
-    c3 <- count filt
-    c3 @== 3
-
-    _ <- insert p
-    transactionSave
-    _ <- insert p
-    _ <- insert p
-    transactionUndo
-    c4 <- count filt
-    c4 @== 4
-
-#endif
-
--- Test proper polymorphism
-_polymorphic :: ( MonadIO m
-                , MonadFail m
-                , PersistQuery backend
-                , BaseBackend backend ~ PersistEntityBackend Pet
-                ) => ReaderT backend m ()
-_polymorphic = do
-    ((Entity id' _):_) <- selectList [] [LimitTo 1]
-    _ <- selectList [PetOwnerId ==. id'] []
-    _ <- insert $ Pet id' "foo" Cat
-    return ()
-
--- Some lens stuff
-type ASetter s t a b = (a -> Identity b) -> s -> Identity t
-
-set :: ASetter s t a b -> b -> s -> t
-set l b = runIdentity . (l (\_ -> Identity b))
-
-type Getting r s t a b = (a -> Constant r b) -> s -> Constant r t
-
-view :: s -> Getting a s t a b -> a
-view s l = getConstant (l Constant s)
