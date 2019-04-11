@@ -145,6 +145,8 @@ data Filter record = forall typ. PersistField typ => Filter
           (BackendSpecificFilter (PersistEntityBackend record) record)
 
 -- | Value to filter with. Highly dependant on the type of filter used.
+--
+-- @since 2.10.0
 data FilterValue typ where
   FilterValue  :: typ -> FilterValue typ
   FilterValues :: [typ] -> FilterValue typ
