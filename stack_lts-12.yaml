@@ -1,4 +1,4 @@
-resolver: lts-10.4
+resolver: lts-12.26
 packages:
   - ./persistent
   - ./persistent-template
@@ -10,13 +10,4 @@ packages:
   - ./persistent-redis
   - ./persistent-qq
 extra-deps:
-- monad-logger-0.3.28.1
-- mysql-simple-0.4.4
 - postgresql-simple-0.6.1
-
-- mono-traversable-1.0.8.1
-- unliftio-0.2.4.0
-- unliftio-core-0.1.1.0
-- async-2.1.1.1
-- typed-process-0.2.1.0
-- resourcet-1.1.11
