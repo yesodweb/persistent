@@ -1,24 +1,13 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
-{-# OPTIONS_GHC -fno-warn-unused-binds #-}
-{-# OPTIONS_GHC -fno-warn-unused-imports #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
-
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 import SqliteInit
 
@@ -47,26 +36,22 @@ import qualified MigrationColumnLengthTest
 import qualified EquivalentTypeTest
 import qualified TransactionLevelTest
 
+import Control.Exception (handle, IOException)
+import Control.Monad.IO.Class  (liftIO)
+import qualified Data.ByteString as BS
 import Data.Fixed
 import Data.IntMap (IntMap)
-import Control.Monad.IO.Class  (liftIO)
 import qualified Data.Text as T
 import Data.Time
-import Database.Persist.Sqlite
-import Database.Persist.TH
-import qualified Database.Sqlite as Sqlite
-import System.IO (hClose)
-import System.IO.Temp (withSystemTempFile)
-import Test.Hspec
-import qualified Data.ByteString as BS
-import Test.QuickCheck.Arbitrary (Arbitrary, arbitrary)
-import Test.QuickCheck.Gen (Gen(..), frequency, listOf, sized, resize)
-import Test.QuickCheck.Instances ()
-import Test.QuickCheck.Random (newQCGen)
-
-import Control.Exception (handle, IOException)
 import Filesystem (removeFile)
 import Filesystem.Path.CurrentOS (fromText)
+import Test.QuickCheck.Arbitrary (Arbitrary, arbitrary)
+import System.IO (hClose)
+import System.IO.Temp (withSystemTempFile)
+
+import Database.Persist.Sqlite
+import qualified Database.Sqlite as Sqlite
+
 import qualified MigrationTest
 
 type Tuple = (,)
