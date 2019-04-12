@@ -1,7 +1,6 @@
-{-# LANGUAGE EmptyDataDecls #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
@@ -11,15 +10,14 @@
 
 module ArrayAggTest where
 
-import PgInit
-
-import qualified Data.Text as T
-import Data.List (sort)
 import Control.Monad.IO.Class (MonadIO)
 import Data.Aeson
+import Data.List (sort)
+import qualified Data.Text as T
 import Test.Hspec.Expectations ()
 
 import PersistentTestModels
+import PgInit
 
 share [mkPersist persistSettings,  mkMigrate "jsonTestMigrate"] [persistLowerCase|
   TestValue

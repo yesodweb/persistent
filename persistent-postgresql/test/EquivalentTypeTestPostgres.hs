@@ -1,5 +1,4 @@
-{-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -7,13 +6,14 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 module EquivalentTypeTestPostgres (specs) where
 
 import Control.Monad.Trans.Resource (runResourceT)
-import Database.Persist.TH
 import qualified Data.Text as T
 
+import Database.Persist.TH
 import PgInit
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll1"] [persistLowerCase|

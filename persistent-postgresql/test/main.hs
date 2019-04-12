@@ -1,69 +1,50 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
-{-# OPTIONS_GHC -fno-warn-unused-binds #-}
-{-# OPTIONS_GHC -fno-warn-unused-imports #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
-
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 import PgInit
 
-import Data.IntMap (IntMap)
 import Data.Aeson
+import qualified Data.ByteString as BS
+import Data.IntMap (IntMap)
 import Data.Fixed
-import Test.QuickCheck
 import qualified Data.Text as T
 import Data.Time
-import Data.Int
-import Data.Word
-import Data.IntMap (IntMap)
-import Control.Monad.Trans
 import Test.QuickCheck
-import qualified Data.Text as T
-import qualified Data.ByteString as BS
-import Text.Blaze.Html
-import Text.Blaze.Html.Renderer.Text
 
+-- FIXME: should probably be used?
+-- import qualified ArrayAggTest
 import qualified CompositeTest
-import qualified TreeTest
 import qualified CustomPersistFieldTest
 import qualified CustomPrimaryKeyReferenceTest
 import qualified DataTypeTest
 import qualified EmbedOrderTest
 import qualified EmbedTest
 import qualified EmptyEntityTest
+import qualified EquivalentTypeTestPostgres
 import qualified HtmlTest
+import qualified JSONTest
 import qualified LargeNumberTest
-import qualified UpsertTest
 import qualified MaxLenTest
+import qualified MigrationColumnLengthTest
 import qualified MigrationOnlyTest
-import qualified PersistentTest
-import qualified RawSqlTest
 import qualified MpsNoPrefixTest
+import qualified PersistentTest
 import qualified PersistUniqueTest
 import qualified PrimaryTest
+import qualified RawSqlTest
 import qualified Recursive
 import qualified RenameTest
 import qualified SumTypeTest
-import qualified UniqueTest
-import qualified MigrationColumnLengthTest
-import qualified EquivalentTypeTestPostgres
 import qualified TransactionLevelTest
-import qualified JSONTest
+import qualified TreeTest
+import qualified UniqueTest
+import qualified UpsertTest
 
 type Tuple = (,)
 
@@ -189,3 +170,5 @@ main = do
     EquivalentTypeTestPostgres.specs
     TransactionLevelTest.specsWith db
     JSONTest.specs
+    -- FIXME: not used, probably should?
+    -- ArrayAggTest.specs db
