@@ -1,14 +1,3 @@
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 module Database.Persist.Sql.Types
     ( module Database.Persist.Sql.Types
     , SqlBackend (..), SqlReadBackend (..), SqlWriteBackend (..)
@@ -18,15 +7,16 @@ module Database.Persist.Sql.Types
     ) where
 
 import Control.Exception (Exception)
-import Control.Monad.Trans.Resource (ResourceT)
 import Control.Monad.Logger (NoLoggingT)
 import Control.Monad.Trans.Reader (ReaderT (..))
+import Control.Monad.Trans.Resource (ResourceT)
 import Control.Monad.Trans.Writer (WriterT)
-import Data.Typeable (Typeable)
-import Database.Persist.Types
-import Database.Persist.Sql.Types.Internal
 import Data.Pool (Pool)
 import Data.Text (Text)
+import Data.Typeable (Typeable)
+
+import Database.Persist.Types
+import Database.Persist.Sql.Types.Internal
 
 -- | Deprecated synonym for @SqlBackend@.
 type Connection = SqlBackend

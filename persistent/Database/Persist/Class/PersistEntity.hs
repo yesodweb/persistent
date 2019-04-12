@@ -1,12 +1,8 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE FlexibleContexts, StandaloneDeriving, UndecidableInstances #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Database.Persist.Class.PersistEntity
     ( PersistEntity (..)
     , Update (..)
@@ -25,28 +21,25 @@ module Database.Persist.Class.PersistEntity
     , toPersistValueEnum, fromPersistValueEnum
     ) where
 
-import Database.Persist.Types.Base
-import Database.Persist.Class.PersistField
+import Control.Applicative as A ((<$>), (<*>))
+import Data.Aeson (ToJSON (..), FromJSON (..), fromJSON, object, (.:), (.=), Value (Object))
+import qualified Data.Aeson.Parser as AP
+import Data.Aeson.Types (Parser,Result(Error,Success))
+import Data.Aeson.Text (encodeToTextBuilder)
+import Data.Attoparsec.ByteString (parseOnly)
+import qualified Data.HashMap.Strict as HM
+import Data.Maybe (isJust)
+import Data.Monoid (mappend)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy as LT
 import qualified Data.Text.Lazy.Builder as TB
-import Data.Aeson (ToJSON (..), FromJSON (..), fromJSON, object, (.:), (.=), Value (Object))
-import qualified Data.Aeson.Parser as AP
-import Data.Aeson.Types (Parser,Result(Error,Success))
-#if MIN_VERSION_aeson(1,0,0)
-import Data.Aeson.Text (encodeToTextBuilder)
-#else
-import Data.Aeson.Encode (encodeToTextBuilder)
-#endif
-import Data.Attoparsec.ByteString (parseOnly)
-import Control.Applicative as A ((<$>), (<*>))
-import Data.Monoid (mappend)
-import qualified Data.HashMap.Strict as HM
 import Data.Typeable (Typeable)
-import Data.Maybe (isJust)
 import GHC.Generics
+
+import Database.Persist.Class.PersistField
+import Database.Persist.Types.Base
 
 -- | Persistent serialized Haskell records to the database.
 -- A Database 'Entity' (A row in SQL, a document in MongoDB, etc)

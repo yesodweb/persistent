@@ -1,14 +1,24 @@
-{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Database.Persist.Sql.Orphan.PersistQuery
     ( deleteWhereCount
     , updateWhereCount
     , decorateSQLWithLimitOffset
     ) where
+
+import Control.Exception (throwIO)
+import Control.Monad.IO.Class
+import Control.Monad.Trans.Reader (ReaderT, ask, withReaderT)
+import Data.ByteString.Char8 (readInteger)
+import Data.Conduit
+import qualified Data.Conduit.List as CL
+import Data.Int (Int64)
+import Data.List (transpose, inits, find)
+import Data.Maybe (isJust)
+import Data.Monoid (Monoid (..), (<>))
+import qualified Data.Text as T
+import Data.Text (Text)
 
 import Database.Persist hiding (updateField)
 import Database.Persist.Sql.Util (
@@ -17,18 +27,6 @@ import Database.Persist.Sql.Util (
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
-import qualified Data.Text as T
-import Data.Text (Text)
-import Data.Monoid (Monoid (..), (<>))
-import Data.Int (Int64)
-import Control.Monad.IO.Class
-import Control.Monad.Trans.Reader (ReaderT, ask, withReaderT)
-import Control.Exception (throwIO)
-import qualified Data.Conduit.List as CL
-import Data.Conduit
-import Data.ByteString.Char8 (readInteger)
-import Data.Maybe (isJust)
-import Data.List (transpose, inits, find)
 
 -- orphaned instance for convenience of modularity
 instance PersistQueryRead SqlBackend where

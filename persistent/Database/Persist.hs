@@ -1,7 +1,4 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE FlexibleContexts #-}
 module Database.Persist
     ( module Database.Persist.Class
     , module Database.Persist.Types
@@ -46,20 +43,15 @@ module Database.Persist
     , limitOffsetOrder
     ) where
 
-import Database.Persist.Types
-import Database.Persist.Class
-import Database.Persist.Class.PersistField (getPersistMap)
+import Data.Aeson (toJSON, ToJSON)
+import Data.Aeson.Text (encodeToTextBuilder)
 import qualified Data.Text as T
 import Data.Text.Lazy (toStrict)
 import Data.Text.Lazy.Builder (toLazyText)
-import Data.Aeson (toJSON, ToJSON)
-#if MIN_VERSION_aeson(1, 0, 0)
-import Data.Aeson.Text (encodeToTextBuilder)
-#elif MIN_VERSION_aeson(0, 7, 0)
-import Data.Aeson.Encode (encodeToTextBuilder)
-#else
-import Data.Aeson.Encode (fromValue)
-#endif
+
+import Database.Persist.Types
+import Database.Persist.Class
+import Database.Persist.Class.PersistField (getPersistMap)
 
 infixr 3 =., +=., -=., *=., /=.
 (=.), (+=.), (-=.), (*=.), (/=.) ::
@@ -392,11 +384,7 @@ mapToJSON = toJsonText
 -- | A more general way to convert instances of `ToJSON` type class to
 -- strict text 'T.Text'.
 toJsonText :: ToJSON j => j -> T.Text
-#if MIN_VERSION_aeson(0, 7, 0)
 toJsonText = toStrict . toLazyText . encodeToTextBuilder . toJSON
-#else
-toJsonText = toStrict . toLazyText . fromValue . toJSON
-#endif
 
 -- | FIXME What's this exactly?
 limitOffsetOrder :: PersistEntity val

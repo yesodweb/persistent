@@ -1,14 +1,6 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE Rank2Types #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-{-# OPTIONS_GHC -fno-warn-unused-imports #-}
-
 module Database.Persist.Sql.Orphan.PersistStore
   ( withRawQuery
   , BackendKey(..)
@@ -20,34 +12,35 @@ module Database.Persist.Sql.Orphan.PersistStore
   , fieldDBName
   ) where
 
+import Control.Exception (throwIO)
+import Control.Monad.IO.Class
+import Control.Monad.Trans.Reader (ReaderT, ask, withReaderT)
+import Data.Conduit (ConduitM, (.|), runConduit)
+import qualified Data.Conduit.List as CL
+import Data.Acquire (with)
+import qualified Data.Aeson as A
+import Data.ByteString.Char8 (readInteger)
+import Data.List (find, nubBy)
+import qualified Data.Foldable as Foldable
+import Data.Function (on)
+import Data.Int (Int64)
+import Data.Maybe (isJust)
+import Data.Monoid (mappend, (<>))
+import qualified Data.Map as Map
+import Data.Text (Text, unpack)
+import qualified Data.Text as T
+import Data.Void (Void)
+import Web.PathPieces (PathPiece)
+import Web.HttpApiData (ToHttpApiData, FromHttpApiData)
+
 import Database.Persist
-import Database.Persist.Sql.Types
+import Database.Persist.Class ()
+import Database.Persist.Sql.Class (PersistFieldSql)
 import Database.Persist.Sql.Raw
+import Database.Persist.Sql.Types
 import Database.Persist.Sql.Util (
     dbIdColumns, keyAndEntityColumnNames, parseEntityValues, entityColumnNames
   , updatePersistValue, mkUpdateText, commaSeparated)
-import           Data.Conduit (ConduitM, (.|), runConduit)
-import qualified Data.Conduit.List as CL
-import qualified Data.Text as T
-import Data.Text (Text, unpack)
-import Data.Monoid (mappend, (<>))
-import Control.Monad.IO.Class
-import Data.ByteString.Char8 (readInteger)
-import Data.Maybe (isJust)
-import Data.List (find, nubBy)
-import Data.Void (Void)
-import Control.Monad.Trans.Reader (ReaderT, ask, withReaderT)
-import Data.Acquire (with)
-import Data.Int (Int64)
-import Web.PathPieces (PathPiece)
-import Web.HttpApiData (ToHttpApiData, FromHttpApiData)
-import Database.Persist.Sql.Class (PersistFieldSql)
-import qualified Data.Aeson as A
-import Control.Exception (throwIO)
-import Database.Persist.Class ()
-import qualified Data.Map as Map
-import qualified Data.Foldable as Foldable
-import Data.Function (on)
 
 withRawQuery :: MonadIO m
              => Text

@@ -1,5 +1,6 @@
-{-# LANGUAGE ScopedTypeVariables, TypeFamilies, FlexibleContexts, ConstraintKinds #-}
-{-# LANGUAGE TypeOperators, DataKinds #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Database.Persist.Class.PersistUnique
   ( PersistUniqueRead(..)
@@ -20,22 +21,21 @@ module Database.Persist.Class.PersistUnique
   )
   where
 
+import Control.Monad (liftM)
+import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.Trans.Reader (ReaderT)
+import Data.Function (on)
+import Data.List ((\\), deleteFirstsBy)
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
+import Data.Maybe (catMaybes)
+import Data.Text (Text)
+import GHC.TypeLits (ErrorMessage(..))
+
 import Database.Persist.Types
-import Control.Exception (throwIO)
-import Control.Monad (liftM)
-import Control.Monad.IO.Class (liftIO, MonadIO)
-import Data.List ((\\), deleteFirstsBy, nubBy)
-import Data.Function (on)
-import Control.Monad.Trans.Reader (ReaderT)
 import Database.Persist.Class.PersistStore
 import Database.Persist.Class.PersistEntity
-import Data.Monoid (mappend)
-import Data.Text (unpack, Text)
-import Data.Maybe (catMaybes)
-import GHC.TypeLits (TypeError(..), ErrorMessage(..))
 
 -- | Queries against 'Unique' keys (other than the id 'Key').
 --
@@ -423,10 +423,11 @@ onlyUnique
     => record -> ReaderT backend m (Unique record)
 onlyUnique = pure . onlyUniqueP
 
-onlyUniqueEither
+-- Was this supposed to be exported for use by users?
+_onlyUniqueEither
     :: (PersistEntity record)
     => record -> Either [Unique record] (Unique record)
-onlyUniqueEither record =
+_onlyUniqueEither record =
     case persistUniqueKeys record of
         [u] -> Right u
         us -> Left us
@@ -491,10 +492,10 @@ getByValueUniques uniqs =
             Just z -> return $ Just z
 
 -- TODO: expose this to users
-recordName
+_recordName
     :: (PersistEntity record)
     => record -> Text
-recordName = unHaskellName . entityHaskell . entityDef . Just
+_recordName = unHaskellName . entityHaskell . entityDef . Just
 
 -- | Attempt to replace the record of the given key with the given new record.
 -- First query the unique fields to make sure the replacement maintains
@@ -505,11 +506,10 @@ recordName = unHaskellName . entityHaskell . entityDef . Just
 --
 -- @since 1.2.2.0
 replaceUnique
-    :: (MonadIO m
-       ,Eq record -- Seems to be unnecessary?
-       ,Eq (Unique record)
-       ,PersistRecordBackend record backend
-       ,PersistUniqueWrite backend)
+    :: ( MonadIO m
+       , Eq (Unique record)
+       , PersistRecordBackend record backend
+       , PersistUniqueWrite backend )
     => Key record -> record -> ReaderT backend m (Maybe (Unique record))
 replaceUnique key datumNew = getJust key >>= replaceOriginal
   where
@@ -549,7 +549,6 @@ checkUnique = checkUniqueKeys . persistUniqueKeys
 
 checkUniqueKeys
     :: (MonadIO m
-       ,PersistEntity record
        ,PersistUniqueRead backend
        ,PersistRecordBackend record backend)
     => [Unique record] -> ReaderT backend m (Maybe (Unique record))

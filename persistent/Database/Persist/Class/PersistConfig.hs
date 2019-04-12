@@ -1,14 +1,11 @@
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE OverloadedStrings #-}
 module Database.Persist.Class.PersistConfig
     ( PersistConfig (..)
     ) where
 
+import Control.Applicative as A ((<$>))
+import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Data.Aeson (Value (Object))
 import Data.Aeson.Types (Parser)
-import Control.Monad.IO.Unlift (MonadUnliftIO)
-import Control.Applicative as A ((<$>))
 import qualified Data.HashMap.Strict as HashMap
 
 -- | Represents a value containing all the configuration options for a specific

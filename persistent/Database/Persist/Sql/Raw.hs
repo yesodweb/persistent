@@ -1,25 +1,22 @@
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TypeFamilies #-}
 module Database.Persist.Sql.Raw where
+
+import Control.Exception (throwIO)
+import Control.Monad (when, liftM)
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Logger (logDebugNS, runLoggingT)
+import Control.Monad.Reader (ReaderT, ask, MonadReader)
+import Control.Monad.Trans.Resource (MonadResource,release)
+import Data.Acquire (allocateAcquire, Acquire, mkAcquire, with)
+import Data.Conduit
+import Data.IORef (writeIORef, readIORef, newIORef)
+import qualified Data.Map as Map
+import Data.Int (Int64)
+import Data.Text (Text, pack)
+import qualified Data.Text as T
 
 import Database.Persist
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Class
-import qualified Data.Map as Map
-import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Reader (ReaderT, ask, MonadReader)
-import Data.Acquire (allocateAcquire, Acquire, mkAcquire, with)
-import Data.IORef (writeIORef, readIORef, newIORef)
-import Control.Exception (throwIO)
-import Control.Monad (when, liftM)
-import Data.Text (Text, pack)
-import Control.Monad.Logger (logDebugNS, runLoggingT)
-import Data.Int (Int64)
-import qualified Data.Text as T
-import Data.Conduit
-import Control.Monad.Trans.Resource (MonadResource,release)
 
 rawQuery :: (MonadResource m, MonadReader env m, HasPersistBackend env, BaseBackend env ~ SqlBackend)
          => Text

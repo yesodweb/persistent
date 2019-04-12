@@ -1,5 +1,3 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE FlexibleContexts #-}
 module Database.Persist.Sql.Migration
   ( parseMigration
   , parseMigration'
@@ -18,15 +16,16 @@ module Database.Persist.Sql.Migration
   ) where
 
 
-import Control.Monad.Trans.Class (MonadTrans (..))
-import Control.Monad.IO.Unlift
-import Control.Monad.Trans.Writer
-import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Control.Monad (liftM, unless)
+import Control.Monad.IO.Unlift
+import Control.Monad.Trans.Class (MonadTrans (..))
+import Control.Monad.Trans.Reader (ReaderT (..), ask)
+import Control.Monad.Trans.Writer
 import Data.Text (Text, unpack, snoc, isPrefixOf, pack)
 import qualified Data.Text.IO
 import System.IO
 import System.IO.Silently (hSilence)
+
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
 import Database.Persist.Types
