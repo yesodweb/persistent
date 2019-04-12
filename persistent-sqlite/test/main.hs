@@ -35,6 +35,7 @@ import qualified UpsertTest
 import qualified MaxLenTest
 import qualified MigrationOnlyTest
 import qualified PersistentTest
+import qualified ReadWriteTest
 import qualified RawSqlTest
 import qualified MpsNoPrefixTest
 import qualified PersistUniqueTest
@@ -181,6 +182,7 @@ main = do
         )
     PersistentTest.specsWith db
     PersistentTest.filterOrSpecs db
+    ReadWriteTest.specsWith db
     RawSqlTest.specsWith db
     UpsertTest.specsWith
         db

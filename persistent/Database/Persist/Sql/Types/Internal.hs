@@ -9,8 +9,8 @@
 module Database.Persist.Sql.Types.Internal
     ( HasPersistBackend (..)
     , IsPersistBackend (..)
-    , SqlReadBackend (unSqlReadBackend)
-    , SqlWriteBackend (unSqlWriteBackend)
+    , SqlReadBackend (..)
+    , SqlWriteBackend (..)
     , readToUnknown
     , readToWrite
     , writeToUnknown

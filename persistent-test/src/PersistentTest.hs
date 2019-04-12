@@ -41,7 +41,6 @@ import Test.Hspec.Expectations ()
 import Test.Hspec.QuickCheck(prop)
 import UnliftIO (MonadUnliftIO, catch)
 import Web.PathPieces (PathPiece (..))
--- import Database.Persist.MongoDB (MongoContext)
 
 import qualified MpsNoPrefixTest
 import qualified RawSqlTest
@@ -49,36 +48,16 @@ import PersistentTestModels
 
 import Database.Persist
 
-#ifdef WITH_NOSQL
--- #  ifdef WITH_MONGODB
--- import qualified Database.MongoDB as MongoDB
--- import Database.Persist.MongoDB (toInsertDoc, docToEntityThrow, collectionName, recordToDocument)
--- #  endif
-
-#else
-
 import Database.Persist.TH (mkDeleteCascade, mkSave)
 import qualified Data.Text as T
 import Data.List.NonEmpty (NonEmpty (..))
 
-#  ifdef WITH_POSTGRESQL
 import Data.List (sort)
-#  endif
-#  if WITH_MYSQL
-import Database.Persist.MySQL()
-#  endif
-
-#endif
 
 import Init
 import PersistTestPetType
 import PersistTestPetCollarType
 import PersistentTestModels
-
-#ifdef WITH_NOSQL
-db :: Action IO () -> Assertion
-db = db' cleanDB
-#endif
 
 catchPersistException :: (MonadUnliftIO m, MonadFail m) => m a -> b -> m b
 catchPersistException action errValue = do
@@ -662,11 +641,6 @@ specsWith runDb = describe "persistent" $ do
 
 
 -- TODO: This only runs on SQLite. Uncomment and put in that suite directly.
-#ifdef WITH_NOSQL
-#else
-#  ifndef WITH_MYSQL
-#    ifndef WITH_POSTGRESQL
-#      ifndef WITH_NOSQL
 --  it "afterException" $ runDb $ do
 --    let catcher :: forall m. Monad m => SomeException -> m ()
 --        catcher _ = return ()
@@ -674,12 +648,8 @@ specsWith runDb = describe "persistent" $ do
 --    _ <- insert_ (Person "A" 1 Nothing) `catch` catcher
 --    _ <- insert $ Person "B" 0 Nothing
 --    return ()
-#      endif
-#    endif
-#  endif
 
   describe "strictness" $ do
     it "bang" $ (return $! Strict (error "foo") 5 5) `shouldThrow` anyErrorCall
     it "tilde" $ void (return $! Strict 5 (error "foo") 5 :: IO Strict)
     it "blank" $ (return $! Strict 5 5 (error "foo")) `shouldThrow` anyErrorCall
-#endif
