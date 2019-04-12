@@ -194,17 +194,20 @@ retryOnBusy action =
 -- | Wait until some noop action on the database does not return an 'Sqlite.ErrorBusy'. See 'retryOnBusy'.
 --
 -- @since 2.9.3
-waitForDatabase :: (MonadUnliftIO m, MonadLogger m) => ReaderT SqlBackend m ()
+waitForDatabase
+    :: (MonadUnliftIO m, MonadLogger m, BackendCompatible SqlBackend backend)
+    => ReaderT backend m ()
 waitForDatabase = retryOnBusy $ rawExecute "SELECT 42" []
 
 -- | Wrap up a raw 'Sqlite.Connection' as a Persistent SQL
 -- 'Connection', allowing full control over WAL and FK constraints.
 --
 -- @since 2.6.2
-wrapConnectionInfo :: SqliteConnectionInfo
-                   -> Sqlite.Connection
-                   -> LogFunc
-                   -> IO SqlBackend
+wrapConnectionInfo
+    :: SqliteConnectionInfo
+    -> Sqlite.Connection
+    -> LogFunc
+    -> IO SqlBackend
 wrapConnectionInfo connInfo conn logFunc = do
     let
         -- Turn on the write-ahead log
