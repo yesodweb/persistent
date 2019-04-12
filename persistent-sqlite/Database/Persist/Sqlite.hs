@@ -100,9 +100,9 @@ withSqlitePool connInfo = withSqlPool . open' $ conStringToInfo connInfo
 --
 -- @since 2.6.2
 withSqlitePoolInfo :: (MonadUnliftIO m, MonadLogger m)
-               => SqliteConnectionInfo
-               -> Int -- ^ number of connections to open
-               -> (Pool SqlBackend -> m a) -> m a
+                   => SqliteConnectionInfo
+                   -> Int -- ^ number of connections to open
+                   -> (Pool SqlBackend -> m a) -> m a
 withSqlitePoolInfo connInfo = withSqlPool $ open' connInfo
 
 withSqliteConn :: (MonadUnliftIO m, MonadLogger m)

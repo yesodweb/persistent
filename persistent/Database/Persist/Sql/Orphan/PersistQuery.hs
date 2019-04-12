@@ -190,7 +190,7 @@ updateWhereCount filts upds = withReaderT projectBackend $ do
   where
     t = entityDef $ dummyFromFilts filts
 
-fieldName ::  forall record typ.  (PersistEntity record, PersistEntityBackend record ~ SqlBackend) => EntityField record typ -> DBName
+fieldName ::  forall record typ. (PersistEntity record, PersistEntityBackend record ~ SqlBackend) => EntityField record typ -> DBName
 fieldName f = fieldDB $ persistFieldDef f
 
 dummyFromFilts :: [Filter v] -> Maybe v

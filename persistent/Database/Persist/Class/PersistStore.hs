@@ -100,11 +100,11 @@ class BackendCompatible sup sub where
 type PersistRecordBackend record backend = (PersistEntity record, PersistEntityBackend record ~ BaseBackend backend)
 
 liftPersist
-    :: (MonadIO m, MonadReader backend m, HasPersistBackend backend)
-    => ReaderT (BaseBackend backend) IO b -> m b
+    :: (MonadIO m, MonadReader backend m)
+    => ReaderT backend IO b -> m b
 liftPersist f = do
     env <- ask
-    liftIO $ runReaderT f (persistBackend env)
+    liftIO $ runReaderT f env
 
 -- | 'ToBackendKey' converts a 'PersistEntity' 'Key' into a 'BackendKey'
 -- This can be used by each backend to convert between a 'Key' and a plain

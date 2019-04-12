@@ -82,7 +82,6 @@ whereStmtForKeys conn ks = T.intercalate " OR " $ whereStmtForKey conn `fmap` ks
 -- which does not operate in a Monad
 getTableName :: forall record m backend.
              ( PersistEntity record
-             , PersistEntityBackend record ~ SqlBackend
              , BackendCompatible SqlBackend backend
              , Monad m
              ) => record -> ReaderT backend m Text
@@ -101,7 +100,6 @@ tableDBName rec = entityDB $ entityDef (Just rec)
 -- which does not operate in a Monad
 getFieldName :: forall record typ m backend.
              ( PersistEntity record
-             , PersistEntityBackend record ~ SqlBackend
              , BackendCompatible SqlBackend backend
              , Monad m
              )
