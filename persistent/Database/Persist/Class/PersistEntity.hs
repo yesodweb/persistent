@@ -21,7 +21,6 @@ module Database.Persist.Class.PersistEntity
     , toPersistValueEnum, fromPersistValueEnum
     ) where
 
-import Control.Applicative as A ((<$>), (<*>))
 import Data.Aeson (ToJSON (..), FromJSON (..), fromJSON, object, (.:), (.=), Value (Object))
 import qualified Data.Aeson.Parser as AP
 import Data.Aeson.Types (Parser,Result(Error,Success))
@@ -226,8 +225,8 @@ keyValueEntityToJSON (Entity key value) = object
 keyValueEntityFromJSON :: (PersistEntity record, FromJSON record)
                        => Value -> Parser (Entity record)
 keyValueEntityFromJSON (Object o) = Entity
-    A.<$> o .: "key"
-    A.<*> o .: "value"
+    <$> o .: "key"
+    <*> o .: "value"
 keyValueEntityFromJSON _ = fail "keyValueEntityFromJSON: not an object"
 
 -- | Predefined @toJSON@. The resulting JSON looks like

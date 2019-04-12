@@ -2,7 +2,6 @@ module Database.Persist.Class.PersistConfig
     ( PersistConfig (..)
     ) where
 
-import Control.Applicative as A ((<$>))
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Data.Aeson (Value (Object))
 import Data.Aeson.Types (Parser)
@@ -44,7 +43,7 @@ instance
 
     loadConfig (Object o) =
         case HashMap.lookup "left" o of
-            Just v -> Left A.<$> loadConfig v
+            Just v -> Left <$> loadConfig v
             Nothing ->
                 case HashMap.lookup "right" o of
                     Just v -> Right <$> loadConfig v

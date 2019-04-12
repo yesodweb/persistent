@@ -13,7 +13,7 @@ module Main
     module Main
   ) where
 
-import Control.Applicative as A ((<$>), (<*>), Const (..))
+import Control.Applicative (Const (..))
 import Data.Aeson
 import Data.ByteString.Lazy.Char8 ()
 import Data.Functor.Identity (Identity (..))
@@ -59,10 +59,10 @@ Laddress json
 |]
 
 arbitraryT :: Gen Text
-arbitraryT = pack A.<$> arbitrary
+arbitraryT = pack <$> arbitrary
 
 instance Arbitrary Person where
-    arbitrary = Person <$> arbitraryT A.<*> arbitrary <*> arbitrary <*> arbitrary
+    arbitrary = Person <$> arbitraryT <*> arbitrary <*> arbitrary <*> arbitrary
 instance Arbitrary Address where
     arbitrary = Address <$> arbitraryT <*> arbitraryT <*> arbitrary
 

@@ -9,7 +9,6 @@ module Database.Persist.Sql.Class
     , PersistFieldSql (..)
     ) where
 
-import Control.Applicative as A ((<$>), (<*>))
 import Data.Bits (bitSizeMaybe)
 import Data.ByteString (ByteString)
 import Data.Fixed
@@ -50,7 +49,7 @@ class RawSql a where
 instance PersistField a => RawSql (Single a) where
     rawSqlCols _ _         = (1, [])
     rawSqlColCountReason _ = "one column for a 'Single' data type"
-    rawSqlProcessRow [pv]  = Single A.<$> fromPersistValue pv
+    rawSqlProcessRow [pv]  = Single <$> fromPersistValue pv
     rawSqlProcessRow _     = Left $ pack "RawSql (Single a): wrong number of columns."
 
 instance
@@ -79,8 +78,8 @@ instance
           1 -> "one column for an 'Entity' data type without fields"
           n -> show n ++ " columns for an 'Entity' data type"
     rawSqlProcessRow row = case splitAt nKeyFields row of
-      (rowKey, rowVal) -> Entity A.<$> keyFromValues rowKey
-                                 A.<*> fromPersistValues rowVal
+      (rowKey, rowVal) -> Entity <$> keyFromValues rowKey
+                                 <*> fromPersistValues rowVal
       where
         nKeyFields = length $ entityKeyFields entDef
         entDef = entityDef (Nothing :: Maybe record)

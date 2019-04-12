@@ -46,7 +46,6 @@ module Database.Persist.TH
 
 import Prelude hiding ((++), take, concat, splitAt, exp)
 
-import Control.Applicative as A (pure, (<$>), (<*>))
 import Control.Monad (forM, unless, (<=<), mzero)
 import Data.Aeson.Compat
     ( ToJSON (toJSON), FromJSON (parseJSON), (.=), object
@@ -792,7 +791,7 @@ mkKeyTypeDec mps t = do
     k = ''Key
     recordType = genericDataType mps (entityHaskell t) backendT
     pfInstD = -- FIXME: generate a PersistMap instead of PersistList
-      [d|instance PersistField (Key $(A.pure recordType)) where
+      [d|instance PersistField (Key $(pure recordType)) where
             toPersistValue = PersistList . keyToValues
             fromPersistValue (PersistList l) = keyFromValues l
             fromPersistValue got = error $ "fromPersistValue: expected PersistList, got: " `mappend` show got
@@ -930,7 +929,7 @@ mkKeyToValues :: MkPersistSettings -> EntityDef -> Q Dec
 mkKeyToValues mps t = do
     (p, e) <- case entityPrimary t of
         Nothing  ->
-          ([],) A.<$> [|(:[]) . toPersistValue . $(return $ unKeyExp t)|]
+          ([],) <$> [|(:[]) . toPersistValue . $(return $ unKeyExp t)|]
         Just pdef ->
           return $ toValuesPrimary pdef
     return $ FunD 'keyToValues $ return $ normalClause p e
@@ -980,7 +979,7 @@ fromValues t funName conE fields = do
           (fpv1:mkPersistValues) <- mapM mkPersistValue fields
           app1E <- [|(<$>)|]
           let conApp = infixFromPersistValue app1E fpv1 conE x1
-          applyE <- [|(A.<*>)|]
+          applyE <- [|(<*>)|]
           let applyFromPersistValue = infixFromPersistValue applyE
 
           return $ normalClause

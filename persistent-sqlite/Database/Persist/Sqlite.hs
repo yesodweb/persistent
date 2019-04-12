@@ -32,7 +32,6 @@ module Database.Persist.Sqlite
     , waitForDatabase
     ) where
 
-import Control.Applicative as A
 import Control.Concurrent (threadDelay)
 import qualified Control.Exception as E
 import Control.Monad (forM_)
@@ -623,11 +622,11 @@ instance FromJSON SqliteConf where
     parseJSON v = modifyFailure ("Persistent: error loading Sqlite conf: " ++) $ flip (withObject "SqliteConf") v parser where
         parser o = if HashMap.member "database" o
                       then SqliteConf
-                            A.<$> o .: "database"
-                            A.<*> o .: "poolsize"
+                            <$> o .: "database"
+                            <*> o .: "poolsize"
                       else SqliteConfInfo
-                            A.<$> o .: "connInfo"
-                            A.<*> o .: "poolsize"
+                            <$> o .: "connInfo"
+                            <*> o .: "poolsize"
 
 instance PersistConfig SqliteConf where
     type PersistConfigBackend SqliteConf = SqlPersistT

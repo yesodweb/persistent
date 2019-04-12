@@ -82,7 +82,6 @@ import Prelude hiding (error)
 import qualified Prelude as P
 
 import Control.Exception (Exception, throwIO)
-import Control.Applicative as A ((<$>))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Unsafe as BSU
 import qualified Data.ByteString.Internal as BSI
@@ -231,7 +230,7 @@ openError :: Text -> IO (Either Connection Error)
 openError path' = do
     let flag = sqliteFlagReadWrite .|. sqliteFlagCreate .|. sqliteFlagUri
     BS.useAsCString (encodeUtf8 path') $ \path -> alloca $ \database -> do
-        err <- decodeError A.<$> openC path database flag nullPtr
+        err <- decodeError <$> openC path database flag nullPtr
         case err of
             ErrorOK -> do database' <- peek database
                           active <- newIORef True

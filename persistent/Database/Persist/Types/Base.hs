@@ -2,7 +2,6 @@
 {-# OPTIONS_GHC -fno-warn-deprecations #-} -- usage of Error typeclass
 module Database.Persist.Types.Base where
 
-import Control.Applicative as A ((<$>))
 import Control.Arrow (second)
 import Control.Exception (Exception)
 import Control.Monad.Trans.Error (Error (..))
@@ -368,9 +367,9 @@ instance ToHttpApiData PersistValue where
 
 instance FromHttpApiData PersistValue where
     parseUrlPiece input =
-          PersistInt64 A.<$> parseUrlPiece input
-      <!> PersistList  A.<$> readTextData input
-      <!> PersistText  A.<$> return input
+          PersistInt64 <$> parseUrlPiece input
+      <!> PersistList  <$> readTextData input
+      <!> PersistText  <$> return input
       where
         infixl 3 <!>
         Left _ <!> y = y

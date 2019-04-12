@@ -21,7 +21,6 @@ module SqliteInit (
 
   , RunDb
    -- re-exports
-  , (A.<$>), (A.<*>)
   , module Database.Persist
   , module Test.Hspec
   , module Test.HUnit
@@ -52,7 +51,6 @@ import Init
     )
 
 -- re-exports
-import Control.Applicative as A ((<$>), (<*>))
 import Control.Exception (SomeException)
 import Control.Monad (void, replicateM, liftM, when, forM_)
 import Control.Monad.Trans.Reader
