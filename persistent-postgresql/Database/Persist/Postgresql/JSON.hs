@@ -241,6 +241,7 @@ infix 4 @>., <@., ?., ?|., ?&.
 -- 1    ?| ["a","1"]     == False
 -- null ?| ["a","null"]  == False
 -- true ?| ["a","true"]  == False
+-- "a"  ?| []            == False
 -- @
 --
 -- @since 2.10.0
@@ -261,6 +262,7 @@ infix 4 @>., <@., ?., ?|., ?&.
 --
 -- @
 -- {"a":null}                 ?& ["a"]         == True
+-- {"a":null}                 ?& ["a","a"]     == True
 -- {"test":false,"a":500}     ?& ["a"]         == True
 -- {"test":false,"a":500}     ?& ["a","b"]     == False
 -- {}                         ?& ["{}"]        == False
@@ -278,6 +280,7 @@ infix 4 @>., <@., ?., ?|., ?&.
 --
 -- @
 -- ["a"]                   ?& ["a"]         == True
+-- ["a"]                   ?& ["a","a"]     == True
 -- [["a"]]                 ?& ["a"]         == False
 -- ["a","b","c"]           ?& ["a","b","d"] == False
 -- [9,"false","1",null]    ?& ["1","false"] == True
@@ -291,12 +294,13 @@ infix 4 @>., <@., ?., ?|., ?&.
 -- === __Other values__
 --
 -- This operator functions much like an equivalence operator
--- on strings only. If a string matches with any element of
+-- on strings only. If a string matches with all elements of
 -- the given list, the comparison matches.
 --
 -- @
 -- "a"   ?& ["a"]     == True
 -- "1"   ?& ["a","1"] == False
+-- "b"   ?& ["b","b"] == True
 -- "ab"  ?& ["a","b"] == False
 -- 1     ?& ["1"]     == False
 -- null  ?& ["null"]  == False
