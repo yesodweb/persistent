@@ -1,23 +1,17 @@
-{-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans -O0 #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE CPP                        #-}
-{-# LANGUAGE DeriveDataTypeable         #-}
-{-# LANGUAGE EmptyDataDecls             #-}
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE FlexibleInstances          #-}
-{-# LANGUAGE GADTs                      #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE QuasiQuotes                #-}
-{-# LANGUAGE TemplateHaskell            #-}
-{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module InsertDuplicateUpdate where
 
-import           Data.List              (sort)
-import           Database.Persist.MySQL
-import           MyInit
+import Data.List              (sort)
+
+import Database.Persist.MySQL
+import MyInit
 
 share [mkPersist sqlSettings, mkMigrate "duplicateMigrate"] [persistUpperCase|
   Item
