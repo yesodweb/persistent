@@ -112,6 +112,7 @@ test-suite test
                    , persistent-test
                    , bytestring
                    , containers
+                   , exceptions
                    , fast-logger
                    , hspec >= 2.4
                    , HUnit

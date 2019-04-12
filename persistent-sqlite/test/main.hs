@@ -15,29 +15,30 @@ import qualified CompositeTest
 import qualified CustomPersistFieldTest
 import qualified CustomPrimaryKeyReferenceTest
 import qualified DataTypeTest
+import qualified EmptyEntityTest
 import qualified EmbedOrderTest
 import qualified EmbedTest
-import qualified EmptyEntityTest
+import qualified EquivalentTypeTest
 import qualified HtmlTest
 import qualified LargeNumberTest
-import qualified UpsertTest
 import qualified MaxLenTest
+import qualified MpsNoPrefixTest
+import qualified MigrationColumnLengthTest
 import qualified MigrationOnlyTest
 import qualified PersistentTest
-import qualified RawSqlTest
-import qualified MpsNoPrefixTest
 import qualified PersistUniqueTest
 import qualified PrimaryTest
+import qualified RawSqlTest
 import qualified Recursive
 import qualified RenameTest
 import qualified SumTypeTest
-import qualified UniqueTest
-import qualified MigrationColumnLengthTest
-import qualified EquivalentTypeTest
 import qualified TransactionLevelTest
+import qualified UniqueTest
+import qualified UpsertTest
 
 import Control.Exception (handle, IOException)
-import Control.Monad.IO.Class  (liftIO)
+import Control.Monad.Catch (catch)
+import Control.Monad.IO.Class (liftIO)
 import qualified Data.ByteString as BS
 import Data.Fixed
 import Data.IntMap (IntMap)
@@ -51,6 +52,7 @@ import System.IO.Temp (withSystemTempFile)
 
 import Database.Persist.Sqlite
 import qualified Database.Sqlite as Sqlite
+import PersistentTestModels
 
 import qualified MigrationTest
 
@@ -203,3 +205,12 @@ main = do
     it "issue #527" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
         runMigration migrateAll
         insertMany_ $ replicate 1000 (Test $ read "2014-11-30 05:15:25.123")
+
+    it "afterException" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
+        runMigration testMigrate
+        let catcher :: forall m. Monad m => SomeException -> m ()
+            catcher _ = return ()
+        _ <- insert $ Person "A" 0 Nothing
+        _ <- insert_ (Person "A" 1 Nothing) `catch` catcher
+        _ <- insert $ Person "B" 0 Nothing
+        return ()
