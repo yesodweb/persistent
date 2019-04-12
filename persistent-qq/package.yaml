@@ -36,14 +36,13 @@ tests:
     dependencies:
         - base
         - persistent-qq
-        # - aeson
-        # - hspec
-        # - fast-logger
-        # - monad-logger
+        - persistent-sqlite
         - persistent-template
-        # - persistent-sqlite
-        # - resourcet
-        # - text
-        # - unliftio
-        # - HUnit
+        - aeson
+        - fast-logger
+        - hspec
+        - HUnit
+        - monad-logger
+        - resourcet
+        - unliftio
 
