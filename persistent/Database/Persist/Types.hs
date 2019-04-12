@@ -7,6 +7,7 @@ module Database.Persist.Types
     , BackendSpecificUpdate
     , SelectOpt (..)
     , Filter (..)
+    , FilterValue (..)
     , BackendSpecificFilter
     , Key
     , Entity (..)

@@ -105,7 +105,7 @@ import Numeric.Natural (Natural)
 -- Tips:
 --
 -- * This file contain dozens of 'PersistField' instances you can look at for examples.
--- * Typically custom 'PersistField' instances will only accept a single 'PersistValue' constructor in 'fromPersistValue'. 
+-- * Typically custom 'PersistField' instances will only accept a single 'PersistValue' constructor in 'fromPersistValue'.
 -- * Internal 'PersistField' instances accept a wide variety of 'PersistValue's to accomodate e.g. storing booleans as integers, booleans or strings.
 -- * If you're making a custom instance and using a SQL database, you'll also need @PersistFieldSql@ to specify the type of the database column.
 class PersistField a where
@@ -133,6 +133,7 @@ instance PersistField [Char] where
     fromPersistValue (PersistList _) = Left $ T.pack "Cannot convert PersistList to String"
     fromPersistValue (PersistMap _) = Left $ T.pack "Cannot convert PersistMap to String"
     fromPersistValue (PersistDbSpecific _) = Left $ T.pack "Cannot convert PersistDbSpecific to String. See the documentation of PersistDbSpecific for an example of using a custom database type with Persistent."
+    fromPersistValue (PersistArray _) = Left $ T.pack "Cannot convert PersistArray to String"
     fromPersistValue (PersistObjectId _) = Left $ T.pack "Cannot convert PersistObjectId to String"
 #endif
 
