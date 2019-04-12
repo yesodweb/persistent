@@ -1,10 +1,5 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module PgInit (
   runConn
@@ -53,7 +48,7 @@ import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLow
 import Database.Persist.Sql.Raw.QQ
 import Test.Hspec
 import Data.Aeson (Value(..))
-import Database.Persist.Postgresql.JSON ()
+import Database.Persist.Postgresql.JSON()
 import qualified Data.HashMap.Strict as HM
 
 -- testing

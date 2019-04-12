@@ -847,7 +847,7 @@ andDollar = "$and"
 
 filterToBSON :: forall a. ( PersistField a)
              => Text
-             -> Either a [a]
+             -> FilterValue a
              -> PersistFilter
              -> DB.Field
 filterToBSON fname v filt = case filt of
@@ -921,11 +921,12 @@ nestedFieldName = T.intercalate "." . nesFldName
     nesFldName (nf1 `LastNestFld` nf2)         = [fieldName nf1, fieldName nf2]
     nesFldName (nf1 `LastNestFldNullable` nf2) = [fieldName nf1, fieldName nf2]
 
-toValue :: forall a.  PersistField a => Either a [a] -> DB.Value
+toValue :: forall a.  PersistField a => FilterValue a -> DB.Value
 toValue val =
     case val of
-      Left v   -> DB.val $ toPersistValue v
-      Right vs -> DB.val $ map toPersistValue vs
+      FilterValue v   -> DB.val $ toPersistValue v
+      UnsafeValue v   -> DB.val $ toPersistValue v
+      FilterValues vs -> DB.val $ map toPersistValue vs
 
 fieldName ::  forall record typ.  (PersistEntity record) => EntityField record typ -> DB.Label
 fieldName f | fieldHaskell fd == HaskellName "Id" = id_
@@ -1078,6 +1079,7 @@ instance DB.Val PersistValue where
   val x@(PersistObjectId _) = DB.ObjId $ persistObjectIdToDbOid x
   val (PersistTimeOfDay _)  = throw $ PersistMongoDBUnsupported "PersistTimeOfDay not implemented for the MongoDB backend. only PersistUTCTime currently implemented"
   val (PersistRational _)   = throw $ PersistMongoDBUnsupported "PersistRational not implemented for the MongoDB backend"
+  val (PersistArray a)      = DB.val $ PersistList a
   val (PersistDbSpecific _)   = throw $ PersistMongoDBUnsupported "PersistDbSpecific not implemented for the MongoDB backend"
   cast' (DB.Float x)  = Just (PersistDouble x)
   cast' (DB.Int32 x)  = Just $ PersistInt64 $ fromIntegral x
@@ -1268,7 +1270,7 @@ instance MongoRegexSearchable rs => MongoRegexSearchable [rs]
 (=~.) :: forall record searchable. (MongoRegexSearchable searchable, PersistEntity record, PersistEntityBackend record ~ DB.MongoContext) => EntityField record searchable -> MongoRegex -> Filter record
 fld =~. val = BackendFilter $ RegExpFilter fld val
 
-data MongoFilterOperator typ = PersistFilterOperator (Either typ [typ]) PersistFilter
+data MongoFilterOperator typ = PersistFilterOperator (FilterValue typ) PersistFilter
                              | MongoFilterOperator DB.Value
 
 data UpdateValueOp typ =
@@ -1401,7 +1403,7 @@ nestedFilterOp :: forall record typ.
        , PersistEntityBackend record ~ DB.MongoContext
        ) => PersistFilter -> NestedField record typ -> typ -> Filter record
 nestedFilterOp op nf v = BackendFilter $
-   NestedFilter nf $ PersistFilterOperator (Left v) op
+   NestedFilter nf $ PersistFilterOperator (FilterValue v) op
 
 -- | same as `nestEq`, but give a BSON Value
 nestBsonEq :: forall record typ.
@@ -1424,7 +1426,7 @@ anyEq :: forall record typ.
         , PersistEntityBackend record ~ DB.MongoContext
         ) => EntityField record [typ] -> typ -> Filter record
 fld `anyEq` val = BackendFilter $
-    ArrayFilter fld $ PersistFilterOperator (Left val) Eq
+    ArrayFilter fld $ PersistFilterOperator (FilterValue val) Eq
 
 -- | Like nestEq, but for an embedded list.
 -- Checks to see if the nested list contains an item.
@@ -1433,7 +1435,7 @@ nestAnyEq :: forall record typ.
         , PersistEntityBackend record ~ DB.MongoContext
         ) => NestedField record [typ] -> typ -> Filter record
 fld `nestAnyEq` val = BackendFilter $
-    NestedArrayFilter fld $ PersistFilterOperator (Left val) Eq
+    NestedArrayFilter fld $ PersistFilterOperator (FilterValue val) Eq
 
 multiBsonEq :: forall record typ.
         ( PersistField typ
@@ -1511,10 +1513,10 @@ nestedUpdateOp op nf v = BackendUpdate $
 
 -- | Intersection of lists: if any value in the field is found in the list.
 inList :: PersistField typ => EntityField v [typ] -> [typ] -> Filter v
-f `inList` a = Filter (unsafeCoerce f) (Right a) In
+f `inList` a = Filter (unsafeCoerce f) (FilterValues a) In
 infix 4 `inList`
 
 -- | No intersection of lists: if no value in the field is found in the list.
 ninList :: PersistField typ => EntityField v [typ] -> [typ] -> Filter v
-f `ninList` a = Filter (unsafeCoerce f) (Right a) In
+f `ninList` a = Filter (unsafeCoerce f) (FilterValues a) In
 infix 4 `ninList`
