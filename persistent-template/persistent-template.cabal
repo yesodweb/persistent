@@ -8,33 +8,33 @@ synopsis:        Type-safe, non-relational, multi-backend persistence.
 description:     Hackage documentation generation is not reliable. For up to date documentation, please see: <http://www.stackage.org/package/persistent-template>.
 category:        Database, Yesod
 stability:       Stable
-cabal-version:   >= 1.8
+cabal-version:   >= 1.10
 build-type:      Simple
 homepage:        http://www.yesodweb.com/book/persistent
 bug-reports:     https://github.com/yesodweb/persistent/issues
 extra-source-files: test/main.hs ChangeLog.md README.md
 
 library
-    build-depends:   base                     >= 4.6       && < 5
-                   , template-haskell
+    build-depends:   base                     >= 4.9       && < 5
                    , persistent               >= 2.10      && < 3
-                   , monad-control            >= 0.2       && < 1.1
-                   , bytestring               >= 0.9
-                   , text                     >= 0.5
-                   , transformers             >= 0.2       && < 0.6
+                   , aeson                    >= 1.0       && < 1.5
+                   , aeson-compat             >= 0.3.6.0   && < 0.4
+                   , bytestring               >= 0.10
                    , containers
-                   , aeson                    >= 0.7       && < 1.5
-                   , aeson-compat             >= 0.3.2.0   && < 0.4
-                   , monad-logger
-                   , unordered-containers
-                   , tagged
-                   , path-pieces
-                   , http-api-data            >= 0.2
                    , ghc-prim
+                   , http-api-data            >= 0.3.7
+                   , monad-control            >= 1.0       && < 1.1
+                   , monad-logger
+                   , path-pieces
+                   , tagged
+                   , template-haskell
+                   , text                     >= 1.2
+                   , transformers             >= 0.5       && < 0.6
+                   , unordered-containers
     exposed-modules: Database.Persist.TH
     ghc-options:     -Wall
-    if impl(ghc >= 7.4)
-       cpp-options: -DGHC_7_4
+    cpp-options:     -DGHC_7_4
+    default-language: Haskell2010
 
 test-suite test
     type:            exitcode-stdio-1.0
@@ -43,15 +43,15 @@ test-suite test
     other-modules:   TemplateTestImports
     ghc-options:     -Wall
 
-    build-depends:   base >= 4.6 && < 5
+    build-depends:   base >= 4.9 && < 5
+                   , persistent
                    , persistent-template
                    , aeson
-                   , hspec >= 1.3
-                   , text
-                   , persistent
                    , bytestring
+                   , hspec >= 2.4
                    , QuickCheck
-                   , transformers
+                   , text
+    default-language: Haskell2010
 
 source-repository head
   type:     git
@@ -63,12 +63,13 @@ benchmark persistent-th-bench
     main-is:          Main.hs
     hs-source-dirs:   bench
     build-depends:    base
-                    , criterion
-                    , file-embed
-                    , persistent-template
                     , persistent
+                    , persistent-template
+                    , criterion
+                    , deepseq
+                    , deepseq-generics
+                    , file-embed
                     , text
                     , template-haskell
-                    , deepseq-generics
-                    , deepseq
     other-modules:    Models
+    default-language: Haskell2010

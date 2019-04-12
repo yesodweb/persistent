@@ -13,16 +13,12 @@ extra-source-files:
 - README.md
 
 dependencies:
-- base >= 4.7 && < 5
-- persistent >= 2.9
+- base >= 4.9 && < 5
+- persistent >= 2.10
 - haskell-src-meta
+- mtl
 - template-haskell
 - text
-- mtl
-
-when:
-  - condition: impl(ghc < 8)
-    dependencies: semigroups
 
 library:
   ghc-options: -Wall
@@ -32,7 +28,7 @@ tests:
   specs:
     main:        Spec.hs
     source-dirs: test
-    ghc-options: -Wall 
+    ghc-options: -Wall
     other-modules:
         - PersistentTestModels
         - PersistTestPetCollarType
@@ -40,14 +36,14 @@ tests:
     dependencies:
         - base
         - persistent-qq
-        - text
-        - monad-logger
-        - resourcet
+        # - aeson
+        # - hspec
+        # - fast-logger
+        # - monad-logger
         - persistent-template
-        - hspec
-        - unliftio
-        - aeson
-        - persistent-sqlite
-        - HUnit
-        - fast-logger
+        # - persistent-sqlite
+        # - resourcet
+        # - text
+        # - unliftio
+        # - HUnit
 

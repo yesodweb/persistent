@@ -1,18 +1,12 @@
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
-{-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-missing-fields #-}
-
-#if !MIN_VERSION_base(4,8,0)
--- overlapping instances is for automatic lifting
--- while avoiding an orphan of Lift for Text
-{-# LANGUAGE OverlappingInstances #-}
-#endif
 
 -- | This module provides utilities for creating backends. Regular users do not
 -- need to use this module.
@@ -44,7 +38,6 @@ module Database.Persist.TH
     , derivePersistFieldJSON
     , persistFieldFromEntity
       -- * Internal
-    , packPTH
     , lensPTH
     , parseReferences
     , AtLeastOneUniqueKey(..)
@@ -53,46 +46,40 @@ module Database.Persist.TH
 
 import Prelude hiding ((++), take, concat, splitAt, exp)
 
-import qualified Data.List.NonEmpty as NEL
-import Database.Persist
-import Database.Persist.Sql (Migration, migrate, SqlBackend, PersistFieldSql)
--- import Database.Persist.Class
-import Database.Persist.Quasi
-import Language.Haskell.TH.Lib (
-#if MIN_VERSION_template_haskell(2,11,0)
-    conT,
-#endif
-    varE)
-import Language.Haskell.TH.Quote
-import Language.Haskell.TH.Syntax
-import Data.Char (toLower, toUpper)
+import Control.Applicative as A (pure, (<$>), (<*>))
 import Control.Monad (forM, unless, (<=<), mzero)
-import qualified System.IO as SIO
-import Data.Text (pack, Text, append, unpack, concat, uncons, cons, stripPrefix, stripSuffix)
-import qualified Data.Text as T
-import Data.Text.Encoding (decodeUtf8)
-import qualified Data.Text.IO as TIO
-import Data.Int (Int64)
-import Data.List (foldl')
-import Data.Maybe (isJust, listToMaybe, mapMaybe, fromMaybe)
-import Data.Monoid (mappend, mconcat)
-import Text.Read (readPrec, lexP, step, prec, parens, Lexeme(Ident))
-import qualified Data.Map as M
-import qualified Data.HashMap.Strict as HM
 import Data.Aeson.Compat
     ( ToJSON (toJSON), FromJSON (parseJSON), (.=), object
     , Value (Object), (.:), (.:?)
     , eitherDecodeStrict'
     )
-import Control.Applicative as A (pure, (<$>), (<*>))
-import Database.Persist.Sql (sqlType)
+import Data.Char (toLower, toUpper)
+import qualified Data.HashMap.Strict as HM
+import Data.Int (Int64)
+import Data.List (foldl')
+import qualified Data.List.NonEmpty as NEL
+import qualified Data.Map as M
+import Data.Maybe (isJust, listToMaybe, mapMaybe, fromMaybe)
+import Data.Monoid (mappend, mconcat)
 import Data.Proxy (Proxy (Proxy))
+import Data.Text (pack, Text, append, unpack, concat, uncons, cons, stripPrefix, stripSuffix)
+import qualified Data.Text as T
+import Data.Text.Encoding (decodeUtf8)
+import qualified Data.Text.Encoding as TE
+import qualified Data.Text.IO as TIO
+import GHC.Generics (Generic)
+import GHC.TypeLits
+import Language.Haskell.TH.Lib (conT, varE)
+import Language.Haskell.TH.Quote
+import Language.Haskell.TH.Syntax
+import qualified System.IO as SIO
+import Text.Read (readPrec, lexP, step, prec, parens, Lexeme(Ident))
 import Web.PathPieces (PathPiece(..))
 import Web.HttpApiData (ToHttpApiData(..), FromHttpApiData(..))
-import GHC.Generics (Generic)
-import qualified Data.Text.Encoding as TE
 
-import GHC.TypeLits
+import Database.Persist
+import Database.Persist.Sql (Migration, PersistFieldSql, SqlBackend, migrate, sqlType)
+import Database.Persist.Quasi
 
 -- | This special-cases "type_" and strips out its underscore. When
 -- used for JSON serialization and deserialization, it works around
@@ -167,9 +154,6 @@ persistFileWith ps fp = persistManyFileWith ps [fp]
 -- @since 2.5.4
 persistManyFileWith :: PersistSettings -> [FilePath] -> Q Exp
 persistManyFileWith ps fps = do
-#ifdef GHC_7_4
-    mapM_ qAddDependentFile fps
-#endif
     ss <- mapM getS fps
     let s = T.intercalate "\n" ss -- be tolerant of the user forgetting to put a line-break at EOF.
     parseReferences ps s
@@ -487,13 +471,11 @@ dataTypeDec mps t = do
                 Nothing
                 constrs
                 <$> fmap (pure . DerivClause Nothing) (mapM conT names)
-#elif MIN_VERSION_template_haskell(2,11,0)
+#else
     DataD [] nameFinal paramsFinal
                 Nothing
                 constrs
                 <$> mapM conT names
-#else
-    return $ DataD [] nameFinal paramsFinal constrs names
 #endif
   where
     mkCol x fd@FieldDef {..} =
@@ -530,19 +512,15 @@ uniqueTypeDec :: MkPersistSettings -> EntityDef -> Dec
 uniqueTypeDec mps t =
     DataInstD [] ''Unique
         [genericDataType mps (entityHaskell t) backendT]
-#if MIN_VERSION_template_haskell(2,11,0)
             Nothing
-#endif
             (map (mkUnique mps t) $ entityUniques t)
             (derivClause $ entityUniques t)
   where
     derivClause [] = []
 #if MIN_VERSION_template_haskell(2,12,0)
     derivClause _  = [DerivClause Nothing [ConT ''Show]]
-#elif MIN_VERSION_template_haskell(2,11,0)
-    derivClause _  = [ConT ''Show]
 #else
-    derivClause _  = [''Show]
+    derivClause _  = [ConT ''Show]
 #endif
 
 mkUnique :: MkPersistSettings -> EntityDef -> UniqueDef -> Con
@@ -800,15 +778,11 @@ mkKeyTypeDec mps t = do
     let kd = if useNewtype
                then NewtypeInstD [] k [recordType] Nothing dec [DerivClause Nothing cxti]
                else DataInstD    [] k [recordType] Nothing [dec] [DerivClause Nothing cxti]
-#elif MIN_VERSION_template_haskell(2,11,0)
+#else
     cxti <- mapM conT i
     let kd = if useNewtype
                then NewtypeInstD [] k [recordType] Nothing dec cxti
                else DataInstD    [] k [recordType] Nothing [dec] cxti
-#else
-    let kd = if useNewtype
-               then NewtypeInstD [] k [recordType] dec i
-               else DataInstD    [] k [recordType] [dec] i
 #endif
     return (kd, instDecs)
   where
@@ -1090,22 +1064,15 @@ mkEntity entMap mps t = do
             [ genDataType
             , VarT $ mkName "typ"
             ]
-#if MIN_VERSION_template_haskell(2,11,0)
             Nothing
-#endif
             (map fst fields)
             []
         , FunD 'persistFieldDef (map snd fields)
         , TySynInstD
             ''PersistEntityBackend
-#if MIN_VERSION_template_haskell(2,9,0)
             (TySynEqn
                [genDataType]
                (backendDataType mps))
-#else
-            [genDataType]
-            (backendDataType mps)
-#endif
         , FunD 'persistIdField [normalClause [] (ConE $ keyIdName t)]
         , FunD 'fieldLens lensClauses
         ]
@@ -1116,6 +1083,7 @@ mkEntity entMap mps t = do
 
 mkUniqueKeyInstances :: MkPersistSettings -> EntityDef -> Q [Dec]
 mkUniqueKeyInstances mps t = do
+    -- FIXME: isExtEnabled breaks the benchmark
     undecidableInstancesEnabled <- isExtEnabled UndecidableInstances
     unless undecidableInstancesEnabled . fail
         $ "Generating Persistent entities now requires the 'UndecidableInstances' "
@@ -1611,22 +1579,15 @@ instance Lift' a => Lift' [a] where
 instance (Lift' k, Lift' v) => Lift' (M.Map k v) where
     lift' m = [|M.fromList $(fmap ListE $ mapM liftPair $ M.toList m)|]
 
+-- overlapping instances is for automatic lifting
+-- while avoiding an orphan of Lift for Text
+
 -- auto-lifting, means instances are overlapping
-#if MIN_VERSION_base(4,8,0)
 instance {-# OVERLAPPABLE #-} Lift' a => Lift a where
-#else
-instance Lift' a => Lift a where
-#endif
     lift = lift'
 
-packPTH :: String -> Text
-packPTH = pack
-#if !MIN_VERSION_text(0, 11, 2)
-{-# NOINLINE packPTH #-}
-#endif
-
 liftT :: Text -> Q Exp
-liftT t = [|packPTH $(lift (unpack t))|]
+liftT t = [|pack $(lift (unpack t))|]
 
 liftPair :: (Lift' k, Lift' v) => (k, v) -> Q Exp
 liftPair (k, v) = [|($(lift' k), $(lift' v))|]
@@ -1777,12 +1738,10 @@ mkJSON mps def = do
         Just entityJSON -> do
             entityJSONIs <- if mpsGeneric mps
               then [d|
-#if MIN_VERSION_base(4, 6, 0)
                 instance PersistStore $(pure backendT) => ToJSON (Entity $(pure typ)) where
                     toJSON = $(varE (entityToJSON entityJSON))
                 instance PersistStore $(pure backendT) => FromJSON (Entity $(pure typ)) where
                     parseJSON = $(varE (entityFromJSON entityJSON))
-#endif
                 |]
               else [d|
                 instance ToJSON (Entity $(pure typ)) where
@@ -1793,39 +1752,19 @@ mkJSON mps def = do
             return $ toJSONI : fromJSONI : entityJSONIs
 
 mkClassP :: Name -> [Type] -> Pred
-#if MIN_VERSION_template_haskell(2,10,0)
 mkClassP cla tys = foldl AppT (ConT cla) tys
-#else
-mkClassP = ClassP
-#endif
 
 mkEqualP :: Type -> Type -> Pred
-#if MIN_VERSION_template_haskell(2,10,0)
 mkEqualP tleft tright = foldl AppT EqualityT [tleft, tright]
-#else
-mkEqualP = EqualP
-#endif
 
-#if MIN_VERSION_template_haskell(2,11,0)
 notStrict :: Bang
 notStrict = Bang NoSourceUnpackedness NoSourceStrictness
 
 isStrict :: Bang
 isStrict = Bang NoSourceUnpackedness SourceStrict
-#else
-notStrict :: Strict
-notStrict = NotStrict
-
-isStrict :: Strict
-isStrict = IsStrict
-#endif
 
 instanceD :: Cxt -> Type -> [Dec] -> Dec
-#if MIN_VERSION_template_haskell(2,11,0)
 instanceD = InstanceD Nothing
-#else
-instanceD = InstanceD
-#endif
 
 -- entityUpdates :: EntityDef -> [(HaskellName, FieldType, IsNullable, PersistUpdate)]
 -- entityUpdates =
