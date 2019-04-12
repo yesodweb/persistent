@@ -46,6 +46,7 @@ module Init (
   , truncateUTCTime
   , arbText
   , liftA2
+  , changeBackend
   ) where
 
 -- needed for backwards compatibility
@@ -212,6 +213,14 @@ type Runner backend m =
     )
 
 type RunDb backend m = ReaderT backend m () -> IO ()
+
+changeBackend
+    :: forall backend backend' m. MonadUnliftIO m
+    => (backend -> backend')
+    -> RunDb backend m
+    -> RunDb backend' m
+changeBackend f runDb =
+    runDb . ReaderT . (. f) . runReaderT
 
 #if !MIN_VERSION_monad_logger(0,3,30)
 -- Needed for GHC versions 7.10.3. Can drop when we drop support for GHC

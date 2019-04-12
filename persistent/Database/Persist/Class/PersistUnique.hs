@@ -107,6 +107,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     deleteBy
         :: (MonadIO m, PersistRecordBackend record backend)
         => Unique record -> ReaderT backend m ()
+
     -- | Like 'insert', but returns 'Nothing' when the record
     -- couldn't be inserted because of a uniqueness constraint.
     --

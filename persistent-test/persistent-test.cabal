@@ -47,6 +47,7 @@ library
                      MigrationColumnLengthTest
                      EquivalentTypeTest
                      TransactionLevelTest
+                     ReadWriteTest
 
     hs-source-dirs: src
 

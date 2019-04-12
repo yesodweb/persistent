@@ -7,6 +7,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE PatternGuards #-}
+
 -- | A sqlite backend for persistent.
 --
 -- Note: If you prepend @WAL=off @ to your connection string, it will disable
@@ -132,20 +133,20 @@ open' connInfo logFunc = do
 -- > {-# LANGUAGE TemplateHaskell #-}
 -- > {-# LANGUAGE QuasiQuotes #-}
 -- > {-# LANGUAGE GeneralizedNewtypeDeriving #-}
--- > 
+-- >
 -- > import Control.Monad.IO.Class  (liftIO)
 -- > import Database.Persist
 -- > import Database.Sqlite
 -- > import Database.Persist.Sqlite
 -- > import Database.Persist.TH
--- > 
+-- >
 -- > share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
 -- > Person
 -- >   name String
 -- >   age Int Maybe
 -- >   deriving Show
 -- > |]
--- > 
+-- >
 -- > main :: IO ()
 -- > main = do
 -- >   conn <- open "/home/sibi/test.db"
@@ -162,7 +163,7 @@ open' connInfo logFunc = do
 --
 -- > Migrating: CREATE TABLE "person"("id" INTEGER PRIMARY KEY,"name" VARCHAR NOT NULL,"age" INTEGER NULL)
 -- > [Entity {entityKey = PersonKey {unPersonKey = SqlBackendKey {unSqlBackendKey = 1}}, entityVal = Person {personName = "John doe", personAge = Just 35}},Entity {entityKey = PersonKey {unPersonKey = SqlBackendKey {unSqlBackendKey = 2}}, entityVal = Person {personName = "Hema", personAge = Just 36}}]
--- 
+--
 -- @since 1.1.5
 wrapConnection :: (IsSqlBackend backend) => Sqlite.Connection -> LogFunc -> IO backend
 wrapConnection = wrapConnectionInfo (mkSqliteConnectionInfo "")
