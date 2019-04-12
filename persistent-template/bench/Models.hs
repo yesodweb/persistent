@@ -1,8 +1,6 @@
 module Models where
 
 import Data.Monoid
--- import Data.List
--- import Data.FileEmbed
 import Language.Haskell.TH
 import qualified Data.Text as Text
 

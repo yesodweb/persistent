@@ -1,27 +1,18 @@
-{-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans -O0 #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# OPTIONS_GHC -Wno-orphans -O0 #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 module EmbedTest (specsWith, cleanDB, embedMigrate) where
 
-import Init
 import Control.Exception (Exception, throw)
-import Data.Typeable (Typeable)
-
-import qualified Data.Text as T
-import qualified Data.Set as S
-import qualified Data.Map as M
-import EntityEmbedTest
 import Data.List.NonEmpty hiding (insert, length)
+import qualified Data.Map as M
+import qualified Data.Text as T
+import Data.Typeable (Typeable)
+import qualified Data.Set as S
+
+import EntityEmbedTest
+import Init
 
 data TestException = TestException
     deriving (Show, Typeable, Eq)
@@ -161,8 +152,8 @@ cleanDB = do
   deleteWhere ([] :: [Filter (AccountGeneric backend)])
   deleteWhere ([] :: [Filter (HasNestedListGeneric backend)])
 
-unlessM :: MonadIO m => IO Bool -> m () -> m ()
-unlessM predicate body = do
+_unlessM :: MonadIO m => IO Bool -> m () -> m ()
+_unlessM predicate body = do
     b <- liftIO predicate
     unless b body
 

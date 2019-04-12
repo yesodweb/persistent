@@ -1,20 +1,6 @@
-{-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE UndecidableInstances #-} -- FIXME
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE UndecidableInstances #-} -- FIXME
 module PersistentTest
     ( module PersistentTest
     , cleanDB
@@ -23,62 +9,25 @@ module PersistentTest
     ) where
 
 import Control.Monad.Fail
-
-import Data.Typeable
 import Control.Monad.IO.Class
-import Control.Monad.Trans.Resource (runResourceT)
 import Data.Aeson
 import Data.Conduit
 import qualified Data.Conduit.List as CL
-import Data.Function (on)
-import Data.Functor.Identity
 import Data.Functor.Constant
-import Data.Maybe (fromJust)
+import Data.Functor.Identity
 import qualified Data.HashMap.Lazy as M
 import qualified Data.Map as Map
-import Test.HUnit hiding (Test)
-import Test.Hspec.Expectations ()
+import Data.Maybe (fromJust)
 import Test.Hspec.QuickCheck(prop)
+import Test.HUnit hiding (Test)
 import UnliftIO (MonadUnliftIO, catch)
 import Web.PathPieces (PathPiece (..))
--- import Database.Persist.MongoDB (MongoContext)
-
-import qualified MpsNoPrefixTest
-import qualified RawSqlTest
-import PersistentTestModels
 
 import Database.Persist
-
-#ifdef WITH_NOSQL
--- #  ifdef WITH_MONGODB
--- import qualified Database.MongoDB as MongoDB
--- import Database.Persist.MongoDB (toInsertDoc, docToEntityThrow, collectionName, recordToDocument)
--- #  endif
-
-#else
-
-import Database.Persist.TH (mkDeleteCascade, mkSave)
-import qualified Data.Text as T
-import Data.List.NonEmpty (NonEmpty (..))
-
-#  ifdef WITH_POSTGRESQL
-import Data.List (sort)
-#  endif
-#  if WITH_MYSQL
-import Database.Persist.MySQL()
-#  endif
-
-#endif
-
 import Init
+import PersistentTestModels
 import PersistTestPetType
 import PersistTestPetCollarType
-import PersistentTestModels
-
-#ifdef WITH_NOSQL
-db :: Action IO () -> Assertion
-db = db' cleanDB
-#endif
 
 catchPersistException :: (MonadUnliftIO m, MonadFail m) => m a -> b -> m b
 catchPersistException action errValue = do
@@ -658,28 +607,9 @@ specsWith runDb = describe "persistent" $ do
       case (fromJSON . toJSON) person of
         Success p -> p == person
         _ -> error "fromJSON"
-        -}
-
-
--- TODO: This only runs on SQLite. Uncomment and put in that suite directly.
-#ifdef WITH_NOSQL
-#else
-#  ifndef WITH_MYSQL
-#    ifndef WITH_POSTGRESQL
-#      ifndef WITH_NOSQL
---  it "afterException" $ runDb $ do
---    let catcher :: forall m. Monad m => SomeException -> m ()
---        catcher _ = return ()
---    _ <- insert $ Person "A" 0 Nothing
---    _ <- insert_ (Person "A" 1 Nothing) `catch` catcher
---    _ <- insert $ Person "B" 0 Nothing
---    return ()
-#      endif
-#    endif
-#  endif
+-}
 
   describe "strictness" $ do
     it "bang" $ (return $! Strict (error "foo") 5 5) `shouldThrow` anyErrorCall
     it "tilde" $ void (return $! Strict 5 (error "foo") 5 :: IO Strict)
     it "blank" $ (return $! Strict 5 5 (error "foo")) `shouldThrow` anyErrorCall
-#endif

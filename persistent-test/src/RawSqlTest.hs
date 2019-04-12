@@ -1,14 +1,10 @@
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE OverloadedStrings, GADTs #-}
-
 module RawSqlTest where
 
-import Init
-
-import qualified Data.Text as T
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
+import qualified Data.Text as T
 
+import Init
 import PersistTestPetType
 import PersistentTestModels
 

@@ -1,14 +1,13 @@
-{-# OPTIONS_GHC -fno-warn-unused-binds #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE ScopedTypeVariables, FlexibleInstances #-}
-{-# LANGUAGE QuasiQuotes, TypeFamilies, GeneralizedNewtypeDeriving, TemplateHaskell,
-             OverloadedStrings, GADTs, FlexibleContexts, EmptyDataDecls, MultiParamTypeClasses #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 module EmbedOrderTest (specsWith, embedOrderMigrate, cleanDB) where
 
-import Init
 import qualified Data.Map as Map
-
 import Debug.Trace (trace)
+
+import Init
+
 debug :: Show s => s -> s
 debug x = trace (show x) x
 

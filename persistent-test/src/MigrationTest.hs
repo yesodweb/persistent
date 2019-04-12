@@ -1,15 +1,6 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 module MigrationTest where
 
 import Database.Persist.TH
@@ -17,11 +8,7 @@ import qualified Data.Text as T
 
 import Init
 
-#ifdef WITH_NOSQL
-mkPersist persistSettings [persistUpperCase|
-#else
 share [mkPersist sqlSettings, mkMigrate "migrationMigrate", mkDeleteCascade sqlSettings] [persistLowerCase|
-#endif
 Target
     field1 Int
     field2 T.Text
@@ -33,11 +20,7 @@ Source
     field4 TargetId
 |]
 
-#ifdef WITH_NOSQL
-mkPersist persistSettings [persistUpperCase|
-#else
 share [mkPersist sqlSettings, mkMigrate "migrationAddCol", mkDeleteCascade sqlSettings] [persistLowerCase|
-#endif
 Target1 sql=target
     field1 Int
     field2 T.Text

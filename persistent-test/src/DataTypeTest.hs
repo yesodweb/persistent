@@ -1,21 +1,7 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# OPTIONS_GHC -fno-warn-unused-binds #-}
-{-# OPTIONS_GHC -fno-warn-unused-imports #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeFamilies #-}
-
+{-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 module DataTypeTest
     ( specsWith
     , dataTypeMigrate
@@ -24,21 +10,19 @@ module DataTypeTest
     ) where
 
 import Control.Applicative (liftA2)
-import Database.Persist.TH
-import Data.Char (generalCategory, GeneralCategory(..))
 import qualified Data.ByteString as BS
-import Data.Fixed (Pico,Micro)
-import Data.IntMap (IntMap)
+import Data.Fixed (Pico)
 import Data.Foldable (for_)
+import Data.IntMap (IntMap)
 import qualified Data.Text as T
-import Data.Time (Day, UTCTime (..), fromGregorian, picosecondsToDiffTime,
-                  TimeOfDay (TimeOfDay), timeToTimeOfDay, timeOfDayToTime)
+import Data.Time (Day, UTCTime (..), TimeOfDay, timeToTimeOfDay, timeOfDayToTime)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds, posixSecondsToUTCTime)
 import Test.QuickCheck.Arbitrary (Arbitrary, arbitrary)
-import Test.QuickCheck.Gen (Gen(..), frequency, listOf, sized, resize)
+import Test.QuickCheck.Gen (Gen(..))
 import Test.QuickCheck.Instances ()
 import Test.QuickCheck.Random (newQCGen)
 
+import Database.Persist.TH
 import Init
 
 type Tuple a b = (a, b)

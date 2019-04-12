@@ -1,12 +1,7 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
-{-# LANGUAGE CPP, FlexibleInstances #-}
-{-# LANGUAGE UndecidableInstances, MultiParamTypeClasses, TypeFamilies, RankNTypes #-}
-{-# LANGUAGE GADTs #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE GADTs #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 -- | This will hopefully be the only module with CPP in it.
 module Init (
@@ -49,50 +44,47 @@ module Init (
   ) where
 
 -- needed for backwards compatibility
-import Control.Monad.Logger
-import Control.Monad.Trans.Resource
-import Control.Monad.Trans.Resource.Internal
-import Control.Monad.Trans.Class
-import Control.Monad.Base
 import Control.Monad.Catch
-import Control.Monad.Trans.Control
 import qualified Control.Monad.Fail as MonadFail
+import Control.Monad.Logger
+import Control.Monad.Trans.Control
+import Control.Monad.Trans.Resource
 
 -- re-exports
 import Control.Applicative (liftA2)
-import Test.QuickCheck.Instances ()
-import Data.Char (generalCategory, GeneralCategory(..))
-import qualified Data.Text as T
-import Data.Fixed (Pico,Micro)
-import Data.Time
-import Control.Monad.Fail (MonadFail)
 import Control.Applicative as A ((<$>), (<*>))
 import Control.Exception (SomeException)
 import Control.Monad (void, replicateM, liftM, when, forM_)
+import Control.Monad.Fail (MonadFail)
 import Control.Monad.Trans.Reader
-import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase, MkPersistSettings(..))
+import Data.Char (generalCategory, GeneralCategory(..))
+import Data.Fixed (Pico,Micro)
+import qualified Data.Text as T
+import Data.Time
 import Test.Hspec
+import Test.QuickCheck.Instances ()
+
+import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase, MkPersistSettings(..))
 
 -- testing
 import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
 import Test.QuickCheck
 
+import Control.Monad (unless, (>=>))
+import Control.Monad.IO.Class
+import Control.Monad.IO.Unlift (MonadUnliftIO)
 import qualified Data.ByteString as BS
-import Data.Text (Text, unpack)
-import Database.Persist
-import Database.Persist.TH ()
-import System.Environment (getEnvironment)
 import Data.IORef
-import Database.Persist.Sql
+import Data.Text (Text, unpack)
+import System.Environment (getEnvironment)
 import System.IO.Unsafe
 
-import Control.Monad (unless, (>=>))
-import Control.Monad.IO.Unlift (MonadUnliftIO)
+import Database.Persist
+import Database.Persist.Sql
+import Database.Persist.TH ()
 
 -- Data types
 import Data.Int (Int32, Int64)
-
-import Control.Monad.IO.Class
 
 
 asIO :: IO a -> IO a
@@ -227,17 +219,9 @@ instance MonadFail (LoggingT (ResourceT IO)) where
 instance MonadBase b m => MonadBase b (ResourceT m) where
     liftBase = lift . liftBase
 instance MonadBaseControl b m => MonadBaseControl b (ResourceT m) where
-#  if MIN_VERSION_monad_control(1,0,0)
      type StM (ResourceT m) a = StM m a
      liftBaseWith f = ResourceT $ \reader' ->
          liftBaseWith $ \runInBase ->
              f $ runInBase . (\(ResourceT r) -> r reader'  )
      restoreM = ResourceT . const . restoreM
-#  else
-     newtype StM (ResourceT m) a = StMT (StM m a)
-     liftBaseWith f = ResourceT $ \reader' ->
-         liftBaseWith $ \runInBase ->
-             f $ liftM StMT . runInBase . (\(ResourceT r) -> r reader'  )
-     restoreM (StMT base) = ResourceT $ const $ restoreM base
-#  endif
 #endif
