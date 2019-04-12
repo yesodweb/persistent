@@ -1,30 +1,13 @@
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE UndecidableInstances #-} -- FIXME
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeFamilies #-}
-
 module RawMongoHelpers where
-
-import MongoInit
 
 import qualified Database.MongoDB as MongoDB
 import Database.Persist.MongoDB (toInsertDoc, docToEntityThrow, collectionName, recordToDocument)
 
+import MongoInit
 import PersistentTest (cleanDB)
-
 import PersistentTestModels
+
 
 db :: ReaderT MongoDB.MongoContext IO () -> IO ()
 db = db' cleanDB
