@@ -1,4 +1,4 @@
-module Database.Persist.Redis.Parser 
+module Database.Persist.Redis.Parser
     ( redisToPerisistValues
     , toValue
     ) where
@@ -24,11 +24,11 @@ import Database.Persist.Redis.Exception
 newtype BinText = BinText { unBinText :: Text }
 instance Binary BinText where
     put = put . U.fromString . unpack . unBinText
-    get = do 
+    get = do
         str <- Q.get
         return $ BinText $ (T.pack . U.toString) str
 
-newtype BinPico= BinPico { unBinPico :: Pico } 
+newtype BinPico= BinPico { unBinPico :: Pico }
 instance Binary BinPico where
     put = put . toRational . unBinPico
     get = do
@@ -60,7 +60,7 @@ instance Binary BinTimeOfDay where
         let tod = liftM3 TimeOfDay (Q.get :: Get Int) (Q.get :: Get Int) s
         liftM BinTimeOfDay tod
 
-{-  
+{-
 newtype BinZT = BinZT { unBinZT :: ZT }
 instance Binary BinZT where
     put (BinZT (ZT (ZonedTime (LocalTime day timeOfDay) (TimeZone mins summer name)))) = do
@@ -96,7 +96,7 @@ instance Binary BinPersistValue where
         put (4 :: Word8)
         put x
 
-    put (BinPersistValue (PersistBool x)) = do 
+    put (BinPersistValue (PersistBool x)) = do
         put (5 :: Word8)
         put x
 
@@ -114,7 +114,7 @@ instance Binary BinPersistValue where
         put (BinDiffTime pc)
 
     put (BinPersistValue PersistNull) = put (9 :: Word8)
-    put (BinPersistValue (PersistList x)) = do 
+    put (BinPersistValue (PersistList x)) = do
         put (10 :: Word8)
         put (map BinPersistValue x)
 
@@ -126,6 +126,7 @@ instance Binary BinPersistValue where
         put (12 :: Word8)
         put x
 
+    put (BinPersistValue (PersistArray _)) = throw $ NotSupportedValueType "PersistArray"
     put (BinPersistValue (PersistDbSpecific _)) = throw $ NotSupportedValueType "PersistDbSpecific"
     put (BinPersistValue (PersistObjectId _)) = throw $ NotSupportedValueType "PersistObjectId"
 

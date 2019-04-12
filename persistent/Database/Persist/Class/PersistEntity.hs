@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
@@ -12,6 +13,7 @@ module Database.Persist.Class.PersistEntity
     , BackendSpecificUpdate
     , SelectOpt (..)
     , Filter (..)
+    , FilterValue (..)
     , BackendSpecificFilter
     , Entity (..)
 
@@ -134,13 +136,21 @@ type family BackendSpecificFilter backend record
 -- Persistent users use combinators to create these.
 data Filter record = forall typ. PersistField typ => Filter
     { filterField  :: EntityField record typ
-    , filterValue  :: Either typ [typ] -- FIXME
+    , filterValue  :: FilterValue typ
     , filterFilter :: PersistFilter -- FIXME
     }
     | FilterAnd [Filter record] -- ^ convenient for internal use, not needed for the API
     | FilterOr  [Filter record]
     | BackendFilter
           (BackendSpecificFilter (PersistEntityBackend record) record)
+
+-- | Value to filter with. Highly dependant on the type of filter used.
+--
+-- @since 2.10.0
+data FilterValue typ where
+  FilterValue  :: typ -> FilterValue typ
+  FilterValues :: [typ] -> FilterValue typ
+  UnsafeValue  :: forall a typ. PersistField a => a -> FilterValue typ
 
 -- | Datatype that represents an entity, with both its 'Key' and
 -- its Haskell record representation.
@@ -204,7 +214,7 @@ entityValues (Entity k record) =
 -- instance ToJSON (Entity User) where
 --     toJSON = keyValueEntityToJSON
 -- @
-keyValueEntityToJSON :: (PersistEntity record, ToJSON record, ToJSON (Key record))
+keyValueEntityToJSON :: (PersistEntity record, ToJSON record)
                      => Entity record -> Value
 keyValueEntityToJSON (Entity key value) = object
     [ "key" .= key
@@ -220,7 +230,7 @@ keyValueEntityToJSON (Entity key value) = object
 -- instance FromJSON (Entity User) where
 --     parseJSON = keyValueEntityFromJSON
 -- @
-keyValueEntityFromJSON :: (PersistEntity record, FromJSON record, FromJSON (Key record))
+keyValueEntityFromJSON :: (PersistEntity record, FromJSON record)
                        => Value -> Parser (Entity record)
 keyValueEntityFromJSON (Object o) = Entity
     A.<$> o .: "key"
@@ -236,7 +246,7 @@ keyValueEntityFromJSON _ = fail "keyValueEntityFromJSON: not an object"
 -- instance ToJSON (Entity User) where
 --     toJSON = entityIdToJSON
 -- @
-entityIdToJSON :: (PersistEntity record, ToJSON record, ToJSON (Key record)) => Entity record -> Value
+entityIdToJSON :: (PersistEntity record, ToJSON record) => Entity record -> Value
 entityIdToJSON (Entity key value) = case toJSON value of
     Object o -> Object $ HM.insert "id" (toJSON key) o
     x -> x
@@ -250,7 +260,7 @@ entityIdToJSON (Entity key value) = case toJSON value of
 -- instance FromJSON (Entity User) where
 --     parseJSON = entityIdFromJSON
 -- @
-entityIdFromJSON :: (PersistEntity record, FromJSON record, FromJSON (Key record)) => Value -> Parser (Entity record)
+entityIdFromJSON :: (PersistEntity record, FromJSON record) => Value -> Parser (Entity record)
 entityIdFromJSON value@(Object o) = Entity <$> o .: "id" <*> parseJSON value
 entityIdFromJSON _ = fail "entityIdFromJSON: not an object"
 

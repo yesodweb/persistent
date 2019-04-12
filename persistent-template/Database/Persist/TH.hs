@@ -1369,13 +1369,13 @@ mkDeleteCascade mps defs = do
         just <- [|Just|]
         filt <- [|Filter|]
         eq <- [|Eq|]
-        left <- [|Left|]
+        value <- [|FilterValue|]
         let mkStmt :: Dep -> Stmt
             mkStmt dep = NoBindS
                 $ dcw `AppE`
                   ListE
                     [ filt `AppE` ConE filtName
-                           `AppE` (left `AppE` val (depSourceNull dep))
+                           `AppE` (value `AppE` val (depSourceNull dep))
                            `AppE` eq
                     ]
               where

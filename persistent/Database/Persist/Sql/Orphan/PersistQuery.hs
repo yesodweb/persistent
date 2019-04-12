@@ -1,9 +1,10 @@
-{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+
 module Database.Persist.Sql.Orphan.PersistQuery
     ( deleteWhereCount
     , updateWhereCount
@@ -321,8 +322,11 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
         fromPersistList (PersistList xs) = xs
         fromPersistList other = error $ "expected PersistList but found " ++ show other
 
-        filterValueToPersistValues :: forall a.  PersistField a => Either a [a] -> [PersistValue]
-        filterValueToPersistValues v = map toPersistValue $ either return id v
+        filterValueToPersistValues :: forall a.  PersistField a => FilterValue a -> [PersistValue]
+        filterValueToPersistValues = \case
+            FilterValue a -> [toPersistValue a]
+            FilterValues as -> toPersistValue <$> as
+            UnsafeValue x -> [toPersistValue x]
 
         orNullSuffix =
             case orNull of
@@ -340,10 +344,14 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
                 else id)
             $ connEscapeName conn $ fieldName field
         qmarks = case value of
-                    Left _ -> "?"
-                    Right x ->
-                        let x' = filter (/= PersistNull) $ map toPersistValue x
-                         in "(" <> T.intercalate "," (map (const "?") x') <> ")"
+                    FilterValue{} -> "?"
+                    UnsafeValue{} -> "?"
+                    FilterValues xs ->
+                        let parens a = "(" <> a <> ")"
+                            commas = T.intercalate ","
+                            toQs = fmap $ const "?"
+                            nonNulls = filter (/= PersistNull) $ map toPersistValue xs
+                         in parens . commas . toQs $ nonNulls
         showSqlFilter Eq = "="
         showSqlFilter Ne = "<>"
         showSqlFilter Gt = ">"

@@ -1,5 +1,13 @@
 # Changelog for persistent-postgresql
 
+## 2.10.0
+
+Added question mark operators (`(?.), (?|.), (?&.)`) to `Database.Persist.Postgresql.JSON` [#863](https://github.com/yesodweb/persistent/pull/863)
+
+* Changes to certain types:
+    * `PersistValue`: added `PersistArray` data constructor
+    * `Filter`: Changed the `filterValue :: Either a [a]` to `filterValue :: FilterValue`
+
 ## 2.9.1
 * Add `openSimpleConnWithVersion` function. [#883](https://github.com/yesodweb/persistent/pull/883)
 
@@ -10,7 +18,7 @@
 
 ## 2.8.2
 
-Added module `Database.Persist.Postgres.JSON` [#793](https://github.com/yesodweb/persistent/pull/793)
+Added module `Database.Persist.Postgresql.JSON` [#793](https://github.com/yesodweb/persistent/pull/793)
 
 * `PersistField` and `PersistFieldSql` instances for `Data.Aeson.Value`
 * Filter operators `(@>.)` and `(<@.)` to filter on JSON values

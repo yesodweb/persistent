@@ -86,11 +86,8 @@ getStmtConn conn sql = do
             let stmt = Statement
                     { stmtFinalize = do
                         active <- readIORef iactive
-                        if active
-                            then do
-                                stmtFinalize stmt'
-                                writeIORef iactive False
-                            else return ()
+                        when active $ do stmtFinalize stmt'
+                                         writeIORef iactive False
                     , stmtReset = do
                         active <- readIORef iactive
                         when active $ stmtReset stmt'

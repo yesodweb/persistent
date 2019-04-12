@@ -83,7 +83,7 @@ runMigration m = runMigration' m False >> return ()
 
 -- | Same as 'runMigration', but returns a list of the SQL commands executed
 -- instead of printing them to stderr.
-runMigrationSilent :: (MonadUnliftIO m, MonadIO m)
+runMigrationSilent :: MonadUnliftIO m
                    => Migration
                    -> ReaderT SqlBackend m [Text]
 runMigrationSilent m = withRunInIO $ \run ->
