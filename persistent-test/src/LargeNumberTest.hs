@@ -1,6 +1,4 @@
-{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE UndecidableInstances #-}
-
 module LargeNumberTest where
 
 import Data.Word

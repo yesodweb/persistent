@@ -1,7 +1,5 @@
-{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
-
 module MigrationColumnLengthTest where
 
 import qualified Data.Text as T

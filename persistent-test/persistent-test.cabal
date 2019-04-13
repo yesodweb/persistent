@@ -82,6 +82,7 @@ library
 
   default-language: Haskell2010
   default-extensions:
+                    ExistentialQuantification
                     FlexibleContexts
                     FlexibleInstances
                     MultiParamTypeClasses
