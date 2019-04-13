@@ -40,6 +40,7 @@ library
                      PersistUniqueTest
                      PrimaryTest
                      RawSqlTest
+                     ReadWriteTest
                      RenameTest
                      Recursive
                      SumTypeTest
@@ -74,6 +75,7 @@ library
                    , text                     >= 1.2
                    , time                     >= 1.6
                    , transformers             >= 0.5
+                   , transformers-base
                    , unliftio
                    , unliftio-core
                    , unordered-containers

@@ -4,8 +4,8 @@
 module Database.Persist.Sql.Types.Internal
     ( HasPersistBackend (..)
     , IsPersistBackend (..)
-    , SqlReadBackend (unSqlReadBackend)
-    , SqlWriteBackend (unSqlWriteBackend)
+    , SqlReadBackend (..)
+    , SqlWriteBackend (..)
     , readToUnknown
     , readToWrite
     , writeToUnknown
@@ -153,6 +153,8 @@ instance IsPersistBackend SqlBackend where
     mkPersistBackend = id
 
 -- | An SQL backend which can only handle read queries
+--
+-- The constructor was exposed in 2.10.0.
 newtype SqlReadBackend = SqlReadBackend { unSqlReadBackend :: SqlBackend } deriving Typeable
 instance HasPersistBackend SqlReadBackend where
     type BaseBackend SqlReadBackend = SqlBackend
@@ -161,6 +163,8 @@ instance IsPersistBackend SqlReadBackend where
     mkPersistBackend = SqlReadBackend
 
 -- | An SQL backend which can handle read or write queries
+--
+-- The constructor was exposed in 2.10.0
 newtype SqlWriteBackend = SqlWriteBackend { unSqlWriteBackend :: SqlBackend } deriving Typeable
 instance HasPersistBackend SqlWriteBackend where
     type BaseBackend SqlWriteBackend = SqlBackend

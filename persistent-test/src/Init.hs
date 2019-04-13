@@ -1,6 +1,8 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 -- | This will hopefully be the only module with CPP in it.
@@ -40,14 +42,18 @@ module Init (
   , truncateUTCTime
   , arbText
   , liftA2
+  , changeBackend
   ) where
 
 -- needed for backwards compatibility
+import Control.Monad.Base
 import Control.Monad.Catch
 import qualified Control.Monad.Fail as MonadFail
 import Control.Monad.Logger
+import Control.Monad.Trans.Class
 import Control.Monad.Trans.Control
 import Control.Monad.Trans.Resource
+import Control.Monad.Trans.Resource.Internal
 
 -- re-exports
 import Control.Applicative (liftA2)
@@ -107,10 +113,10 @@ assertNotEqual preface expected actual =
   where msg = (if null preface then "" else preface ++ "\n") ++
              "expected: " ++ show expected ++ "\n to not equal: " ++ show actual
 
-assertEmpty :: (Monad m, MonadIO m) => [a] -> m ()
-assertEmpty xs    = liftIO $ assertBool "" (null xs)
+assertEmpty :: (MonadIO m) => [a] -> m ()
+assertEmpty xs = liftIO $ assertBool "" (null xs)
 
-assertNotEmpty :: (Monad m, MonadIO m) => [a] -> m ()
+assertNotEmpty :: (MonadIO m) => [a] -> m ()
 assertNotEmpty xs = liftIO $ assertBool "" (not (null xs))
 
 isTravis :: IO Bool
@@ -203,6 +209,14 @@ type Runner backend m =
 
 type RunDb backend m = ReaderT backend m () -> IO ()
 
+changeBackend
+    :: forall backend backend' m. MonadUnliftIO m
+    => (backend -> backend')
+    -> RunDb backend m
+    -> RunDb backend' m
+changeBackend f runDb =
+    runDb . ReaderT . (. f) . runReaderT
+
 #if !MIN_VERSION_monad_logger(0,3,30)
 -- Needed for GHC versions 7.10.3. Can drop when we drop support for GHC
 -- 7.10.3
@@ -220,6 +234,6 @@ instance MonadBaseControl b m => MonadBaseControl b (ResourceT m) where
      type StM (ResourceT m) a = StM m a
      liftBaseWith f = ResourceT $ \reader' ->
          liftBaseWith $ \runInBase ->
-             f $ runInBase . (\(ResourceT r) -> r reader'  )
+             f $ runInBase . (\(ResourceT r) -> r reader')
      restoreM = ResourceT . const . restoreM
 #endif

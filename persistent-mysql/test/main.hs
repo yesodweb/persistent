@@ -38,6 +38,7 @@ import qualified PersistUniqueTest
 -- FIXME: Not used... should it be?
 -- import qualified PrimaryTest
 import qualified RawSqlTest
+import qualified ReadWriteTest
 import qualified Recursive
 import qualified RenameTest
 import qualified SumTypeTest
@@ -159,6 +160,7 @@ main = do
         )
     PersistentTest.specsWith db
     PersistentTest.filterOrSpecs db
+    ReadWriteTest.specsWith db
     RawSqlTest.specsWith db
     UpsertTest.specsWith
         db

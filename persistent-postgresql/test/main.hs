@@ -38,6 +38,7 @@ import qualified PersistentTest
 import qualified PersistUniqueTest
 import qualified PrimaryTest
 import qualified RawSqlTest
+import qualified ReadWriteTest
 import qualified Recursive
 import qualified RenameTest
 import qualified SumTypeTest
@@ -151,6 +152,7 @@ main = do
             >> runMigrationSilent MigrationOnlyTest.migrateAll2
         )
     PersistentTest.specsWith db
+    ReadWriteTest.specsWith db
     PersistentTest.filterOrSpecs db
     RawSqlTest.specsWith db
     UpsertTest.specsWith
