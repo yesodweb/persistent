@@ -153,6 +153,7 @@ persistFileWith ps fp = persistManyFileWith ps [fp]
 -- @since 2.5.4
 persistManyFileWith :: PersistSettings -> [FilePath] -> Q Exp
 persistManyFileWith ps fps = do
+    mapM_ qAddDependentFile fps
     ss <- mapM getS fps
     let s = T.intercalate "\n" ss -- be tolerant of the user forgetting to put a line-break at EOF.
     parseReferences ps s

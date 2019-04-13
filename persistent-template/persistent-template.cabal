@@ -30,7 +30,6 @@ library
                    , unordered-containers
     exposed-modules: Database.Persist.TH
     ghc-options:     -Wall
-    cpp-options:     -DGHC_7_4
     default-language: Haskell2010
 
 test-suite test
