@@ -47,7 +47,7 @@ module Database.Persist.TH
 import Prelude hiding ((++), take, concat, splitAt, exp)
 
 import Control.Monad (forM, unless, (<=<), mzero)
-import Data.Aeson.Compat
+import Data.Aeson
     ( ToJSON (toJSON), FromJSON (parseJSON), (.=), object
     , Value (Object), (.:), (.:?)
     , eitherDecodeStrict'
