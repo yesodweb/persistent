@@ -424,15 +424,6 @@ onlyUnique
     => record -> ReaderT backend m (Unique record)
 onlyUnique = pure . onlyUniqueP
 
--- Was this supposed to be exported for use by users?
-_onlyUniqueEither
-    :: (PersistEntity record)
-    => record -> Either [Unique record] (Unique record)
-_onlyUniqueEither record =
-    case persistUniqueKeys record of
-        [u] -> Right u
-        us -> Left us
-
 -- | A modification of 'getBy', which takes the 'PersistEntity' itself instead
 -- of a 'Unique' record. Returns a record matching /one/ of the unique keys. This
 -- function makes the most sense on entities with a single 'Unique'

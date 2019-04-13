@@ -1,28 +1,8 @@
-{-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE UndecidableInstances #-} -- FIXME
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeFamilies #-}
-
 module UpsertTest where
 
-import Init
-
 import Data.Function (on)
-import Test.Hspec.Expectations ()
 
+import Init
 import PersistentTestModels
 
 -- | MongoDB assumes that a @NULL@ value in the database is some "empty"
@@ -98,7 +78,7 @@ specsWith runDb handleNull handleKey = describe "UpsertTests" $ do
 
   describe "upsertBy" $ do
     let uniqueEmail = UniqueUpsertBy "a"
-        uniqueCity = UniqueUpsertByCity "Boston"
+        _uniqueCity = UniqueUpsertByCity "Boston"
     it "adds a new row with no updates" $ runDb $ do
         Entity _ u <-
             upsertBy
