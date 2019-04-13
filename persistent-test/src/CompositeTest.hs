@@ -97,7 +97,7 @@ specsWith runDb = describe "composite" $
       kp2 <- insert p2
       xs <- selectList [TestParentId <-. [kp1,kp2]] []
       length xs @== 2
-      let [(Entity newkp1 newp1),(Entity newkp2 newp2)] = xs
+      [(Entity newkp1 newp1),(Entity newkp2 newp2)] <- pure xs
       matchParentK kp1 @== matchParentK newkp1
       matchParentK kp2 @== matchParentK newkp2
       p1 @== newp1
