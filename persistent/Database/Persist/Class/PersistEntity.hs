@@ -13,6 +13,7 @@ module Database.Persist.Class.PersistEntity
     , BackendSpecificFilter
     , Entity (..)
 
+    , recordName
     , entityValues
     , keyValueEntityToJSON, keyValueEntityFromJSON
     , entityIdToJSON, entityIdFromJSON
@@ -97,6 +98,13 @@ class ( PersistField (Key record), ToJSON (Key record), FromJSON (Key record)
               -> (forall f. Functor f => (field -> f field) -> Entity record -> f (Entity record))
 
 type family BackendSpecificUpdate backend record
+
+-- Moved over from Database.Persist.Class.PersistUnique
+-- | Textual representation of the record
+recordName
+    :: (PersistEntity record)
+    => record -> Text
+recordName = unHaskellName . entityHaskell . entityDef . Just
 
 -- | Updating a database entity.
 --

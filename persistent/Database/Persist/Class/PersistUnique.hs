@@ -483,12 +483,6 @@ getByValueUniques uniqs =
             Nothing -> checkUniques xs
             Just z -> return $ Just z
 
--- TODO: expose this to users
-_recordName
-    :: (PersistEntity record)
-    => record -> Text
-_recordName = unHaskellName . entityHaskell . entityDef . Just
-
 -- | Attempt to replace the record of the given key with the given new record.
 -- First query the unique fields to make sure the replacement maintains
 -- uniqueness constraints.
