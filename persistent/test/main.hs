@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 import Test.Hspec
 
 import Database.Persist.Quasi

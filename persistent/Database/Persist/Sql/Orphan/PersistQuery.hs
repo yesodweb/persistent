@@ -1,13 +1,24 @@
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE LambdaCase #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Database.Persist.Sql.Orphan.PersistQuery
     ( deleteWhereCount
     , updateWhereCount
     , decorateSQLWithLimitOffset
     ) where
+
+import Control.Exception (throwIO)
+import Control.Monad.IO.Class
+import Control.Monad.Trans.Reader (ReaderT, ask, withReaderT)
+import Data.ByteString.Char8 (readInteger)
+import Data.Conduit
+import qualified Data.Conduit.List as CL
+import Data.Int (Int64)
+import Data.List (transpose, inits, find)
+import Data.Maybe (isJust)
+import Data.Monoid (Monoid (..), (<>))
+import qualified Data.Text as T
+import Data.Text (Text)
 
 import Database.Persist hiding (updateField)
 import Database.Persist.Sql.Util (
@@ -16,18 +27,6 @@ import Database.Persist.Sql.Util (
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
-import qualified Data.Text as T
-import Data.Text (Text)
-import Data.Monoid (Monoid (..), (<>))
-import Data.Int (Int64)
-import Control.Monad.IO.Class
-import Control.Monad.Trans.Reader (ReaderT, ask, withReaderT)
-import Control.Exception (throwIO)
-import qualified Data.Conduit.List as CL
-import Data.Conduit
-import Data.ByteString.Char8 (readInteger)
-import Data.Maybe (isJust)
-import Data.List (transpose, inits, find)
 
 -- orphaned instance for convenience of modularity
 instance PersistQueryRead SqlBackend where
@@ -320,8 +319,11 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
         fromPersistList (PersistList xs) = xs
         fromPersistList other = error $ "expected PersistList but found " ++ show other
 
-        filterValueToPersistValues :: forall a.  PersistField a => Either a [a] -> [PersistValue]
-        filterValueToPersistValues v = map toPersistValue $ either return id v
+        filterValueToPersistValues :: forall a.  PersistField a => FilterValue a -> [PersistValue]
+        filterValueToPersistValues = \case
+            FilterValue a -> [toPersistValue a]
+            FilterValues as -> toPersistValue <$> as
+            UnsafeValue x -> [toPersistValue x]
 
         orNullSuffix =
             case orNull of
@@ -339,10 +341,14 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
                 else id)
             $ connEscapeName conn $ fieldName field
         qmarks = case value of
-                    Left _ -> "?"
-                    Right x ->
-                        let x' = filter (/= PersistNull) $ map toPersistValue x
-                         in "(" <> T.intercalate "," (map (const "?") x') <> ")"
+                    FilterValue{} -> "?"
+                    UnsafeValue{} -> "?"
+                    FilterValues xs ->
+                        let parens a = "(" <> a <> ")"
+                            commas = T.intercalate ","
+                            toQs = fmap $ const "?"
+                            nonNulls = filter (/= PersistNull) $ map toPersistValue xs
+                         in parens . commas . toQs $ nonNulls
         showSqlFilter Eq = "="
         showSqlFilter Ne = "<>"
         showSqlFilter Gt = ">"

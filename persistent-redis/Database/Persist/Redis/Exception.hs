@@ -3,8 +3,8 @@ module Database.Persist.Redis.Exception
     ( RedisException (..)
     ) where
 
-import Data.Typeable (Typeable)
 import Control.Exception (Exception)
+import Data.Typeable (Typeable)
 
 data RedisException = NotSupportedOperation String
                     | ParserError String
@@ -12,6 +12,7 @@ data RedisException = NotSupportedOperation String
                     | IncorrectUpdate String
                     | IncorrectBehavior
     deriving Typeable
+
 instance Show RedisException where
     show (NotSupportedOperation key) = "The operation is not supported: " ++ key
     show (ParserError msg) = "Error during parsing: " ++ msg

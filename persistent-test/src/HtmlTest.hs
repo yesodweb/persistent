@@ -1,43 +1,43 @@
-{-# OPTIONS_GHC -fno-warn-unused-binds #-}
-{-# LANGUAGE QuasiQuotes, TemplateHaskell, CPP, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, EmptyDataDecls, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses #-}
-module HtmlTest (specs) where
+{-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
+module HtmlTest (specsWith, cleanDB, htmlMigrate) where
 
-import Database.Persist.TH
 import Data.Char (generalCategory, GeneralCategory(..))
 import qualified Data.Text as T
 import System.Random (randomIO, randomRIO, Random)
-import Control.Monad.Trans.Resource (runResourceT)
-
-import Init
 import Text.Blaze.Html
 import Text.Blaze.Html.Renderer.Text
 
+import Init
+
 -- Test lower case names
-share [mkPersist persistSettings, mkMigrate "htmlMigrate"] [persistLowerCase|
+share [mkPersist persistSettings { mpsGeneric = True }, mkMigrate "htmlMigrate"] [persistLowerCase|
 HtmlTable
     html Html
     deriving
 |]
 
-cleanDB :: (MonadIO m, PersistQuery backend, PersistEntityBackend HtmlTable ~ backend) => ReaderT backend m ()
+cleanDB :: Runner backend m => ReaderT backend m ()
 cleanDB = do
-  deleteWhere ([] :: [Filter HtmlTable])
+  deleteWhere ([] :: [Filter (HtmlTableGeneric backend)])
 
-specs :: Spec
-specs = describe "html" $ do
-    it "works" $ asIO $ runResourceT $ runConn $ do
-#ifndef WITH_NOSQL
-        _ <- runMigrationSilent htmlMigrate
+specsWith
+    :: Runner backend m
+    => RunDb backend m
+    -> Maybe (ReaderT backend m a)
+    -> Spec
+specsWith runConn mmigrate = describe "html" $ do
+    it "works" $ asIO $ runConn $ do
+        sequence_ mmigrate
         -- Ensure reading the data from the database works...
-        _ <- runMigrationSilent htmlMigrate
-#endif
+        sequence_ mmigrate
 
         sequence_ $ replicate 1000 $ do
             x <- liftIO randomValue
             key <- insert $ HtmlTable x
-            Just (HtmlTable y) <- get key
+            Just htmlTableY <- get key
             liftIO $ do
-                renderHtml x @?= renderHtml y
+                renderHtml x @?= renderHtml (htmlTableHtml htmlTableY)
 
 randomValue :: IO Html
 randomValue =
@@ -48,9 +48,6 @@ randomValue =
               . filter (/= '\0')     -- no nulls
          <$> randomIOs
     where forbidden = [NotAssigned, PrivateUse]
-
-asIO :: IO a -> IO a
-asIO = id
 
 randomIOs :: Random a => IO [a]
 randomIOs = do

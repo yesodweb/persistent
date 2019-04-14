@@ -1,23 +1,17 @@
-{-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans -O0 #-}
-{-# LANGUAGE CPP                        #-}
-{-# LANGUAGE DeriveDataTypeable         #-}
-{-# LANGUAGE EmptyDataDecls             #-}
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE FlexibleInstances          #-}
-{-# LANGUAGE GADTs                      #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE QuasiQuotes                #-}
-{-# LANGUAGE TemplateHaskell            #-}
-{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module InsertDuplicateUpdate where
 
-import           Init
-#ifdef WITH_MYSQL
+import Data.List              (sort)
+
 import Database.Persist.MySQL
-import Data.List (sort)
+import MyInit
 
 share [mkPersist sqlSettings, mkMigrate "duplicateMigrate"] [persistUpperCase|
   Item
@@ -94,10 +88,3 @@ specs = describe "DuplicateKeyUpdate" $ do
         []
       dbItems <- sort . fmap entityVal <$> selectList [] []
       dbItems @== sort (newItem : items)
-
-#else
-specs :: Spec
-specs = describe "DuplicateKeyUpdate" $ do
-  it "Is only supported on MySQL currently." $ do
-    True `shouldBe` True
-#endif

@@ -1,5 +1,5 @@
 name:        persistent-qq
-version:     2.9.0
+version:     2.9.1
 synopsis:    Provides a quasi-quoter for raw SQL for persistent
 description: Please see README and API docs at <http://www.stackage.org/package/persistent>.
 category:    Database, Yesod
@@ -13,13 +13,36 @@ extra-source-files:
 - README.md
 
 dependencies:
-- base >= 4.7 && < 5
-- persistent >= 2.9
+- base >= 4.9 && < 5
+- persistent >= 2.10
 - haskell-src-meta
+- mtl
 - template-haskell
 - text
-- mtl
 
 library:
   ghc-options: -Wall
   source-dirs: src
+
+tests:
+  specs:
+    main:        Spec.hs
+    source-dirs: test
+    ghc-options: -Wall
+    other-modules:
+        - PersistentTestModels
+        - PersistTestPetCollarType
+        - PersistTestPetType
+    dependencies:
+        - base
+        - persistent-qq
+        - persistent-sqlite
+        - persistent-template
+        - aeson
+        - fast-logger
+        - hspec
+        - HUnit
+        - monad-logger
+        - resourcet
+        - unliftio
+

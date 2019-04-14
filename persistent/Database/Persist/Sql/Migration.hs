@@ -1,5 +1,3 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE FlexibleContexts #-}
 module Database.Persist.Sql.Migration
   ( parseMigration
   , parseMigration'
@@ -10,18 +8,24 @@ module Database.Persist.Sql.Migration
   , runMigrationSilent
   , runMigrationUnsafe
   , migrate
+  -- * Utilities for constructing migrations
+  , reportErrors
+  , reportError
+  , addMigrations
+  , addMigration
   ) where
 
 
-import Control.Monad.Trans.Class (MonadTrans (..))
-import Control.Monad.IO.Unlift
-import Control.Monad.Trans.Writer
-import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Control.Monad (liftM, unless)
+import Control.Monad.IO.Unlift
+import Control.Monad.Trans.Class (MonadTrans (..))
+import Control.Monad.Trans.Reader (ReaderT (..), ask)
+import Control.Monad.Trans.Writer
 import Data.Text (Text, unpack, snoc, isPrefixOf, pack)
 import qualified Data.Text.IO
 import System.IO
 import System.IO.Silently (hSilence)
+
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
 import Database.Persist.Types
@@ -78,7 +82,7 @@ runMigration m = runMigration' m False >> return ()
 
 -- | Same as 'runMigration', but returns a list of the SQL commands executed
 -- instead of printing them to stderr.
-runMigrationSilent :: (MonadUnliftIO m, MonadIO m)
+runMigrationSilent :: MonadUnliftIO m
                    => Migration
                    -> ReaderT SqlBackend m [Text]
 runMigrationSilent m = withRunInIO $ \run ->
@@ -140,4 +144,37 @@ migrate :: [EntityDef]
 migrate allDefs val = do
     conn <- lift $ lift ask
     res <- liftIO $ connMigrateSql conn allDefs (getStmtConn conn) val
-    either tell (lift . tell) res
+    either reportErrors addMigrations res
+
+-- | Report a single error in a 'Migration'.
+--
+-- @since 2.9.2
+reportError :: Text -> Migration
+reportError = tell . pure
+
+-- | Report multiple errors in a 'Migration'.
+--
+-- @since 2.9.2
+reportErrors :: [Text] -> Migration
+reportErrors = tell
+
+-- | Add a migration to the migration plan.
+--
+-- @since 2.9.2
+addMigration
+    :: Bool
+    -- ^ Is the migration safe to run? (eg a non-destructive and idempotent
+    -- update on the schema)
+    -> Sql
+    -- ^ A 'Text' value representing the command to run on the database.
+    -> Migration
+addMigration isSafe sql = lift (tell [(isSafe, sql)])
+
+-- | Add a 'CautiousMigration' (aka a @[('Bool', 'Text')]@) to the
+-- migration plan.
+--
+-- @since 2.9.2
+addMigrations
+    :: CautiousMigration
+    -> Migration
+addMigrations = lift . tell

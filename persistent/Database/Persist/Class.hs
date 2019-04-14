@@ -1,5 +1,4 @@
 {-# LANGUAGE ConstraintKinds #-}
-
 module Database.Persist.Class
     ( ToBackendKey (..)
 
@@ -91,6 +90,10 @@ module Database.Persist.Class
     , PersistUnique
     , PersistUniqueRead (..)
     , PersistUniqueWrite (..)
+    , OnlyOneUniqueKey (..)
+    , AtLeastOneUniqueKey (..)
+    , NoUniqueKeysError
+    , MultipleUniqueKeysError
     , getByValue
     , insertBy
     , insertUniqueEntity
@@ -132,12 +135,12 @@ module Database.Persist.Class
     ) where
 
 import Database.Persist.Class.DeleteCascade
-import Database.Persist.Class.PersistEntity
-import Database.Persist.Class.PersistQuery
-import Database.Persist.Class.PersistUnique
 import Database.Persist.Class.PersistConfig
+import Database.Persist.Class.PersistEntity
 import Database.Persist.Class.PersistField
+import Database.Persist.Class.PersistQuery
 import Database.Persist.Class.PersistStore
+import Database.Persist.Class.PersistUnique
 
 
 -- | A backwards-compatible alias for those that don't care about distinguishing between read and write queries.

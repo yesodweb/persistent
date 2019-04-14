@@ -1,20 +1,19 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE FlexibleContexts, StandaloneDeriving, UndecidableInstances #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Database.Persist.Class.PersistEntity
     ( PersistEntity (..)
     , Update (..)
     , BackendSpecificUpdate
     , SelectOpt (..)
     , Filter (..)
+    , FilterValue (..)
     , BackendSpecificFilter
     , Entity (..)
 
+    , recordName
     , entityValues
     , keyValueEntityToJSON, keyValueEntityFromJSON
     , entityIdToJSON, entityIdFromJSON
@@ -23,28 +22,24 @@ module Database.Persist.Class.PersistEntity
     , toPersistValueEnum, fromPersistValueEnum
     ) where
 
-import Database.Persist.Types.Base
-import Database.Persist.Class.PersistField
+import Data.Aeson (ToJSON (..), FromJSON (..), fromJSON, object, (.:), (.=), Value (Object))
+import qualified Data.Aeson.Parser as AP
+import Data.Aeson.Types (Parser,Result(Error,Success))
+import Data.Aeson.Text (encodeToTextBuilder)
+import Data.Attoparsec.ByteString (parseOnly)
+import qualified Data.HashMap.Strict as HM
+import Data.Maybe (isJust)
+import Data.Monoid (mappend)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy as LT
 import qualified Data.Text.Lazy.Builder as TB
-import Data.Aeson (ToJSON (..), FromJSON (..), fromJSON, object, (.:), (.=), Value (Object))
-import qualified Data.Aeson.Parser as AP
-import Data.Aeson.Types (Parser,Result(Error,Success))
-#if MIN_VERSION_aeson(1,0,0)
-import Data.Aeson.Text (encodeToTextBuilder)
-#else
-import Data.Aeson.Encode (encodeToTextBuilder)
-#endif
-import Data.Attoparsec.ByteString (parseOnly)
-import Control.Applicative as A ((<$>), (<*>))
-import Data.Monoid (mappend)
-import qualified Data.HashMap.Strict as HM
 import Data.Typeable (Typeable)
-import Data.Maybe (isJust)
 import GHC.Generics
+
+import Database.Persist.Class.PersistField
+import Database.Persist.Types.Base
 
 -- | Persistent serialized Haskell records to the database.
 -- A Database 'Entity' (A row in SQL, a document in MongoDB, etc)
@@ -104,6 +99,13 @@ class ( PersistField (Key record), ToJSON (Key record), FromJSON (Key record)
 
 type family BackendSpecificUpdate backend record
 
+-- Moved over from Database.Persist.Class.PersistUnique
+-- | Textual representation of the record
+recordName
+    :: (PersistEntity record)
+    => record -> Text
+recordName = unHaskellName . entityHaskell . entityDef . Just
+
 -- | Updating a database entity.
 --
 -- Persistent users use combinators to create these.
@@ -134,13 +136,21 @@ type family BackendSpecificFilter backend record
 -- Persistent users use combinators to create these.
 data Filter record = forall typ. PersistField typ => Filter
     { filterField  :: EntityField record typ
-    , filterValue  :: Either typ [typ] -- FIXME
+    , filterValue  :: FilterValue typ
     , filterFilter :: PersistFilter -- FIXME
     }
     | FilterAnd [Filter record] -- ^ convenient for internal use, not needed for the API
     | FilterOr  [Filter record]
     | BackendFilter
           (BackendSpecificFilter (PersistEntityBackend record) record)
+
+-- | Value to filter with. Highly dependant on the type of filter used.
+--
+-- @since 2.10.0
+data FilterValue typ where
+  FilterValue  :: typ -> FilterValue typ
+  FilterValues :: [typ] -> FilterValue typ
+  UnsafeValue  :: forall a typ. PersistField a => a -> FilterValue typ
 
 -- | Datatype that represents an entity, with both its 'Key' and
 -- its Haskell record representation.
@@ -204,7 +214,7 @@ entityValues (Entity k record) =
 -- instance ToJSON (Entity User) where
 --     toJSON = keyValueEntityToJSON
 -- @
-keyValueEntityToJSON :: (PersistEntity record, ToJSON record, ToJSON (Key record))
+keyValueEntityToJSON :: (PersistEntity record, ToJSON record)
                      => Entity record -> Value
 keyValueEntityToJSON (Entity key value) = object
     [ "key" .= key
@@ -220,11 +230,11 @@ keyValueEntityToJSON (Entity key value) = object
 -- instance FromJSON (Entity User) where
 --     parseJSON = keyValueEntityFromJSON
 -- @
-keyValueEntityFromJSON :: (PersistEntity record, FromJSON record, FromJSON (Key record))
+keyValueEntityFromJSON :: (PersistEntity record, FromJSON record)
                        => Value -> Parser (Entity record)
 keyValueEntityFromJSON (Object o) = Entity
-    A.<$> o .: "key"
-    A.<*> o .: "value"
+    <$> o .: "key"
+    <*> o .: "value"
 keyValueEntityFromJSON _ = fail "keyValueEntityFromJSON: not an object"
 
 -- | Predefined @toJSON@. The resulting JSON looks like
@@ -236,7 +246,7 @@ keyValueEntityFromJSON _ = fail "keyValueEntityFromJSON: not an object"
 -- instance ToJSON (Entity User) where
 --     toJSON = entityIdToJSON
 -- @
-entityIdToJSON :: (PersistEntity record, ToJSON record, ToJSON (Key record)) => Entity record -> Value
+entityIdToJSON :: (PersistEntity record, ToJSON record) => Entity record -> Value
 entityIdToJSON (Entity key value) = case toJSON value of
     Object o -> Object $ HM.insert "id" (toJSON key) o
     x -> x
@@ -250,7 +260,7 @@ entityIdToJSON (Entity key value) = case toJSON value of
 -- instance FromJSON (Entity User) where
 --     parseJSON = entityIdFromJSON
 -- @
-entityIdFromJSON :: (PersistEntity record, FromJSON record, FromJSON (Key record)) => Value -> Parser (Entity record)
+entityIdFromJSON :: (PersistEntity record, FromJSON record) => Value -> Parser (Entity record)
 entityIdFromJSON value@(Object o) = Entity <$> o .: "id" <*> parseJSON value
 entityIdFromJSON _ = fail "entityIdFromJSON: not an object"
 

@@ -14,12 +14,10 @@ The QuasiQuoters in this module perform a simple substitution on the query text,
 that allows value substitutions, table name substitutions as well as column name
 substitutions.
 -}
-
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
-
 module Database.Persist.Sql.Raw.QQ (
       -- * Sql QuasiQuoters
       queryQQ
@@ -32,7 +30,8 @@ module Database.Persist.Sql.Raw.QQ (
 import Prelude
 import Control.Arrow (first, second)
 import Control.Monad.Reader (ask)
-import Data.Text (pack, unpack)
+import qualified Data.List.NonEmpty (toList)
+import Data.Text (pack, unpack, intercalate)
 import Data.Maybe (fromMaybe, Maybe(..))
 import Data.Monoid (mempty, (<>))
 import qualified Language.Haskell.TH as TH
@@ -46,6 +45,7 @@ import Database.Persist.Sql
 data Token
   = Literal String
   | Value String
+  | Values String
   | TableName String
   | ColumnName String
   deriving Show
@@ -64,6 +64,7 @@ parseStr a []           = [Literal (reverse a)]
 parseStr a ('\\':x:xs)  = parseStr (x:a) xs
 parseStr a ['\\']       = parseStr ('\\':a) []
 parseStr a ('#':'{':xs) = Literal (reverse a) : parseHaskell Value      [] xs
+parseStr a ('%':'{':xs) = Literal (reverse a) : parseHaskell Values     [] xs
 parseStr a ('^':'{':xs) = Literal (reverse a) : parseHaskell TableName  [] xs
 parseStr a ('@':'{':xs) = Literal (reverse a) : parseHaskell ColumnName [] xs
 parseStr a (x:xs)       = parseStr (x:a) xs
@@ -71,20 +72,28 @@ parseStr a (x:xs)       = parseStr (x:a) xs
 makeExpr :: TH.ExpQ -> [Token] -> TH.ExpQ
 makeExpr fun toks = do
     TH.infixE
-        (Just [| uncurry $(fun) |])
+        (Just [| uncurry $(fun) . second concat |])
         ([| (=<<) |])
         (Just $ go toks)
 
     where
     go :: [Token] -> TH.ExpQ
-    go [] = [| return (mempty, mempty) |]
+    go [] = [| return (mempty, []) |]
     go (Literal a:xs) =
         TH.appE
             [| fmap $ first (pack a <>) |]
             (go xs)
     go (Value a:xs) =
         TH.appE
-            [| fmap $ first ("?" <>) . second (toPersistValue $(reifyExp a) :) |]
+            [| fmap $ first ("?" <>) . second ([toPersistValue $(reifyExp a)] :) |]
+            (go xs)
+    go (Values a:xs) =
+        TH.appE
+            [| let a' = Data.List.NonEmpty.toList $(reifyExp a) in
+               fmap $
+                 first (("(" <> intercalate ", " (replicate (length a') "?") <> ")") <>) .
+                 second (map toPersistValue a' :)
+             |]
             (go xs)
     go (ColumnName a:xs) = do
         colN <- TH.newName "field"
@@ -147,6 +156,7 @@ makeQQ x = QuasiQuoter
 -- Category
 --   rgt Int
 --   lft Int
+--   nam Text
 -- @
 --
 -- We can now execute this raw query:
@@ -155,18 +165,22 @@ makeQQ x = QuasiQuoter
 -- let lft = 10 :: Int
 --     rgt = 20 :: Int
 --     width = rgt - lft
+--     nams = "first" :| ["second", "third"]
 --  in [sqlQQ|
 --       DELETE FROM ^{Category} WHERE @{CategoryLft} BETWEEN #{lft} AND #{rgt};
 --       UPDATE category SET @{CategoryRgt} = @{CategoryRgt} - #{width} WHERE @{CategoryRgt} > #{rgt};
 --       UPDATE category SET @{CategoryLft} = @{CategoryLft} - #{width} WHERE @{CategoryLft} > #{rgt};
+--       SELECT ?? FROM ^{Category} WHERE ^{Category}.@{CategoryNam} IN %{nams};
 --     |]
 -- @
 --
 -- @^{TableName}@ looks up the table's name and escapes it, @\@{ColumnName}@
--- looks up the column's name and properly escapes it and @#{value}@ inserts
--- the value via the usual parameter substitution mechanism.
+-- looks up the column's name and properly escapes it, @#{value}@ inserts
+-- the value via the usual parameter substitution mechanism and @%{values}@
+-- inserts comma separated values (of a 'Data.List.NonEmpty.NonEmpty' list).
 --
 -- @since 2.9.0
+-- @%{values}@ was added with 2.9.1
 sqlQQ :: QuasiQuoter
 sqlQQ = makeQQ [| rawSql |]
 

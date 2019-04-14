@@ -1,14 +1,3 @@
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 module Database.Persist.Sql.Types
     ( module Database.Persist.Sql.Types
     , SqlBackend (..), SqlReadBackend (..), SqlWriteBackend (..)
@@ -18,15 +7,16 @@ module Database.Persist.Sql.Types
     ) where
 
 import Control.Exception (Exception)
-import Control.Monad.Trans.Resource (ResourceT)
 import Control.Monad.Logger (NoLoggingT)
 import Control.Monad.Trans.Reader (ReaderT (..))
+import Control.Monad.Trans.Resource (ResourceT)
 import Control.Monad.Trans.Writer (WriterT)
-import Data.Typeable (Typeable)
-import Database.Persist.Types
-import Database.Persist.Sql.Types.Internal
 import Data.Pool (Pool)
 import Data.Text (Text)
+import Data.Typeable (Typeable)
+
+import Database.Persist.Types
+import Database.Persist.Sql.Types.Internal
 
 -- | Deprecated synonym for @SqlBackend@.
 type Connection = SqlBackend
@@ -60,6 +50,14 @@ type Sql = Text
 -- Bool indicates if the Sql is safe
 type CautiousMigration = [(Bool, Sql)]
 
+-- | A 'Migration' is a four level monad stack consisting of:
+--
+-- * @'WriterT' ['Text']@ representing a log of errors in the migrations.
+-- * @'WriterT' 'CautiousMigration'@ representing a list of migrations to
+--   run, along with whether or not they are safe.
+-- * @'ReaderT' 'SqlBackend'@, aka the 'SqlPersistT' transformer for
+--   database interop.
+-- * @'IO'@ for arbitrary IO.
 type Migration = WriterT [Text] (WriterT CautiousMigration (ReaderT SqlBackend IO)) ()
 
 type ConnectionPool = Pool SqlBackend

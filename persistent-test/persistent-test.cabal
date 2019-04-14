@@ -13,199 +13,83 @@ build-type:      Simple
 homepage:        http://www.yesodweb.com/book/persistent
 bug-reports:     https://github.com/yesodweb/persistent/issues
 
-extra-source-files:
-  test/main.hs
-
-Flag sqlite
-   Description: use sqlite. This is just present for consistency, and is not used
-   Default: False
-   manual: True
-
-Flag zookeeper
-   Description: test only Zookeeper.  default is to test just sqlite.
-   Default: False
-   manual: True
-
-Flag mongodb
-   Description: test only MongoDB.  default is to test just sqlite.
-   Default: False
-   manual: True
-
-Flag postgresql
-   Description: test postgresql. default is to test just sqlite.
-   Default: False
-   manual: True
-
-Flag mysql
-   Description: test MySQL. default is to test just sqlite.
-   Default: False
-   manual: True
-
-Flag high_precision_date
-   Description: for MongoDB use a time storage with nano second precision.
-   Default: False
-   manual: True
-
-flag nooverlap
-    default: False
-    description: test out our assumption that OverlappingInstances is just for String
-    manual: True
-
 library
-    exposed-modules: PersistentTest
-                     PersistTestPetType
-                     PersistTestPetCollarType
-                     RenameTest
-                     DataTypeTest
-                     EmptyEntityTest
-                     HtmlTest
-                     EmbedTest
-                     EmbedOrderTest
-                     EntityEmbedTest
-                     LargeNumberTest
-                     UniqueTest
-                     MaxLenTest
-                     Recursive
-                     SumTypeTest
-                     MigrationOnlyTest
-                     MigrationTest
-                     MigrationIdempotencyTest
-                     PersistUniqueTest
-                     CompositeTest
-                     Init
-                     PrimaryTest
+    exposed-modules: CompositeTest
                      CustomPersistField
                      CustomPersistFieldTest
                      CustomPrimaryKeyReferenceTest
-                     InsertDuplicateUpdate
-                     MigrationColumnLengthTest
+                     DataTypeTest
+                     EmbedTest
+                     EmbedOrderTest
+                     EmptyEntityTest
+                     EntityEmbedTest
                      EquivalentTypeTest
+                     HtmlTest
+                     Init
+                     LargeNumberTest
+                     MaxLenTest
+                     MigrationColumnLengthTest
+                     MigrationIdempotencyTest
+                     MigrationOnlyTest
+                     MigrationTest
+                     MpsNoPrefixTest
+                     PersistentTest
+                     PersistentTestModels
+                     PersistTestPetType
+                     PersistTestPetCollarType
+                     PersistUniqueTest
+                     PrimaryTest
+                     RawSqlTest
+                     ReadWriteTest
+                     RenameTest
+                     Recursive
+                     SumTypeTest
                      TransactionLevelTest
+                     TreeTest
+                     UniqueTest
+                     UpsertTest
 
-    hs-source-dirs: src, test
+    hs-source-dirs: src
 
-    ghc-options:   -Wall
-    if impl(ghc >= 7.8)
-      ghc-options: -Wall -j
+    ghc-options:   -Wall -j
 
-    build-depends:   base                     >= 4.6       && < 5
+    build-depends:   base                     >= 4.9       && < 5
                    , persistent
                    , persistent-template
-                   , persistent-qq
-                   , HUnit
-                   , hspec >= 1.12.1
+                   , aeson                    >= 1.0
+                   , blaze-html               >= 0.9
+                   , bytestring               >= 0.10
+                   , conduit                  >= 1.2.12
+                   , containers               >= 0.5
+                   , exceptions               >= 0.8
+                   , hspec                    >= 2.4
                    , hspec-expectations
-                   , template-haskell
-                   , aeson                    >= 0.7
-                   , aeson-compat             >= 0.3.2.0   && < 0.4
-                   , lifted-base              >= 0.1
-                   , network
-                   , path-pieces              >= 0.1
-                   , http-api-data            >= 0.2
-                   , text                     >= 0.8
-                   , transformers             >= 0.2.1
-                   , unliftio-core
-                   , unliftio
-                   , containers               >= 0.2
-                   , bytestring               >= 0.9
-                   , base64-bytestring
-                   , conduit                  >= 1.0
-                   , resourcet                >= 0.4
-                   , exceptions               >= 0.6
-                   , time                     >= 1.1.4
-                   , random >= 1.0
-                   , QuickCheck >= 2.7
-                   , blaze-html               >= 0.5
-                   , blaze-markup             >= 0.5.1
-                   , quickcheck-instances >= 0.3
+                   , HUnit
+                   , monad-control
+                   , monad-logger             >= 0.3.25
+                   , path-pieces              >= 0.2
+                   , QuickCheck               >= 2.9
+                   , quickcheck-instances     >= 0.3
+                   , random                   >= 1.1
+                   , resourcet                >= 1.1
+                   , text                     >= 1.2
+                   , time                     >= 1.6
+                   , transformers             >= 0.5
                    , transformers-base
-                   , attoparsec
-                   , vector
+                   , unliftio
+                   , unliftio-core
                    , unordered-containers
-                   , monad-logger             >= 0.3
-                   , hashable
-                   -- actually just a mongoDB dependency
-                   -- fixes build warning on current build server
-                   , cereal
-                   , silently
-                   , blaze-builder
-                   , mtl
-                   , fast-logger
-                   , semigroups
-                   , scientific
-                   , resource-pool
-                   , exceptions
-                   , tagged
-                   , old-locale
-
-   if flag(nooverlap)
-     cpp-options: -DNO_OVERLAP
-
-   if !flag(postgresql) && !flag(mysql) && !flag(mongodb) && !flag(zookeeper)
-      build-depends: persistent-sqlite     >= 2.6.1.1
-     cpp-options: -DWITH_SQLITE -DDEBUG
-
-   if flag(postgresql)
-     build-depends:  persistent-postgresql
-                   , postgresql-simple
-                   , postgresql-libpq
-     cpp-options: -DWITH_POSTGRESQL -DDEBUG
-     exposed-modules: JSONTest
-
-
-   if flag(mysql)
-     build-depends:  persistent-mysql
-                   , mysql-simple          >= 0.4.3    && < 0.5
-                   , mysql                 >= 0.1.1.3  && < 0.2
-     cpp-options: -DWITH_MYSQL
-
-   if flag(mongodb)
-     build-depends:  persistent-mongoDB
-                   , mongoDB            >= 2.0.4 && < 3.0
-                   , cereal
-                   , bson               >= 0.3.1
-                   , process
-     cpp-options: -DWITH_NOSQL -DWITH_MONGODB -DDEBUG
-
-   if flag(zookeeper)
-     build-depends:  persistent-zookeeper
-                   , hzk                >= 2.1.0
-                   , binary
-                   , utf8-string           >= 0.3.7    && < 0.4.0
-                   , process
-     cpp-options: -DWITH_NOSQL -DWITH_ZOOKEEPER -DDEBUG
-
-   if flag(high_precision_date)
-     cpp-options: -DHIGH_PRECISION_DATE
 
   default-language: Haskell2010
-
-
-executable persistent-test
-  main-is:       main.hs
-  hs-source-dirs: test
-  default-language: Haskell2010
-
-  build-depends:   base >= 4.6 && < 5
-                 , persistent-test
-                 , persistent
-                 , hspec
-                 , system-filepath
-                 , system-fileio
-                 , resourcet
-                 , scientific
-
-  if !flag(postgresql) && !flag(mysql) && !flag(mongodb) && !flag(zookeeper)
-      cpp-options: -DWITH_SQLITE -DDEBUG
-  if flag(zookeeper)
-      cpp-options: -DWITH_NOSQL -DWITH_ZOOKEEPER -DDEBUG
-  if flag(mongodb)
-      cpp-options: -DWITH_NOSQL -DWITH_MONGODB -DDEBUG
-  if flag(postgresql)
-      cpp-options: -DWITH_POSTGRESQL
-  if flag(mysql)
-      cpp-options: -DWITH_MYSQL
-
+  default-extensions:
+                    ExistentialQuantification
+                    FlexibleContexts
+                    FlexibleInstances
+                    MultiParamTypeClasses
+                    OverloadedStrings
+                    QuasiQuotes
+                    TemplateHaskell
+                    TypeFamilies
 
 source-repository head
   type:     git

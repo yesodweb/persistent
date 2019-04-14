@@ -2,12 +2,6 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE PatternGuards #-}
-{-# LANGUAGE OverloadedStrings #-}
-
-#if !MIN_VERSION_base(4,8,0)
-{-# LANGUAGE OverlappingInstances #-}
-#endif
-
 module Database.Persist.Class.PersistField
     ( PersistField (..)
     , SomePersistField (..)
@@ -15,52 +9,38 @@ module Database.Persist.Class.PersistField
     ) where
 
 import Control.Arrow (second)
-import Database.Persist.Types.Base
-import Data.Time (Day(..), TimeOfDay, UTCTime,
-#if MIN_VERSION_time(1,5,0)
-    parseTimeM)
-#else
-    parseTime)
-#endif
-#ifdef HIGH_PRECISION_DATE
-import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
-#endif
+import Control.Monad ((<=<))
+import qualified Data.Aeson as A
 import Data.ByteString.Char8 (ByteString, unpack, readInt)
-import Data.Int (Int8, Int16, Int32, Int64)
-import Data.Word (Word, Word8, Word16, Word32, Word64)
-import Data.Text (Text)
-import Data.Text.Read (double)
+import qualified Data.ByteString.Lazy as L
 import Data.Fixed
+import Data.Int (Int8, Int16, Int32, Int64)
+import qualified Data.IntMap as IM
+import qualified Data.Map as M
 import Data.Monoid ((<>))
-
+import qualified Data.Set as S
+import Data.Text (Text)
+import qualified Data.Text as T
+import Data.Text.Read (double)
+import qualified Data.Text.Encoding as TE
+import qualified Data.Text.Encoding.Error as TERR
+import qualified Data.Text.Lazy as TL
+import qualified Data.Vector as V
+import Data.Word (Word, Word8, Word16, Word32, Word64)
+import Numeric.Natural (Natural)
 import Text.Blaze.Html
 import Text.Blaze.Html.Renderer.Text (renderHtml)
 
-import qualified Data.Text as T
-import qualified Data.Text.Lazy as TL
-import qualified Data.ByteString.Lazy as L
+import Database.Persist.Types.Base
 
-import Control.Monad ((<=<))
-
-import qualified Data.Aeson as A
-
-import qualified Data.Set as S
-import qualified Data.Map as M
-import qualified Data.IntMap as IM
-
-import qualified Data.Text.Encoding as TE
-import qualified Data.Text.Encoding.Error as TERR
-import qualified Data.Vector as V
-
-#if MIN_VERSION_time(1,5,0)
+import Data.Time (Day(..), TimeOfDay, UTCTime,
+    parseTimeM)
 import Data.Time (defaultTimeLocale)
-#else
-import System.Locale (defaultTimeLocale)
+
+#ifdef HIGH_PRECISION_DATE
+import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 #endif
 
-#if MIN_VERSION_base(4,8,0)
-import Numeric.Natural (Natural)
-#endif
 
 -- | This class teaches Persistent how to take a custom type and marshal it to and from a 'PersistValue', allowing it to be stored in a database.
 --
@@ -105,7 +85,7 @@ import Numeric.Natural (Natural)
 -- Tips:
 --
 -- * This file contain dozens of 'PersistField' instances you can look at for examples.
--- * Typically custom 'PersistField' instances will only accept a single 'PersistValue' constructor in 'fromPersistValue'. 
+-- * Typically custom 'PersistField' instances will only accept a single 'PersistValue' constructor in 'fromPersistValue'.
 -- * Internal 'PersistField' instances accept a wide variety of 'PersistValue's to accomodate e.g. storing booleans as integers, booleans or strings.
 -- * If you're making a custom instance and using a SQL database, you'll also need @PersistFieldSql@ to specify the type of the database column.
 class PersistField a where
@@ -113,11 +93,7 @@ class PersistField a where
     fromPersistValue :: PersistValue -> Either T.Text a
 
 #ifndef NO_OVERLAP
-#if MIN_VERSION_base(4,8,0)
 instance {-# OVERLAPPING #-} PersistField [Char] where
-#else
-instance PersistField [Char] where
-#endif
     toPersistValue = PersistText . T.pack
     fromPersistValue (PersistText s) = Right $ T.unpack s
     fromPersistValue (PersistByteString bs) =
@@ -133,6 +109,7 @@ instance PersistField [Char] where
     fromPersistValue (PersistList _) = Left $ T.pack "Cannot convert PersistList to String"
     fromPersistValue (PersistMap _) = Left $ T.pack "Cannot convert PersistMap to String"
     fromPersistValue (PersistDbSpecific _) = Left $ T.pack "Cannot convert PersistDbSpecific to String. See the documentation of PersistDbSpecific for an example of using a custom database type with Persistent."
+    fromPersistValue (PersistArray _) = Left $ T.pack "Cannot convert PersistArray to String"
     fromPersistValue (PersistObjectId _) = Left $ T.pack "Cannot convert PersistObjectId to String"
 #endif
 
@@ -190,8 +167,8 @@ instance PersistField Int32 where
     fromPersistValue x = Left $ fromPersistValueError "Int32" "integer" x
 
 instance PersistField Int64 where
-    toPersistValue = PersistInt64 . fromIntegral
-    fromPersistValue (PersistInt64 i)  = Right $ fromIntegral i
+    toPersistValue = PersistInt64
+    fromPersistValue (PersistInt64 i)  = Right i
     fromPersistValue (PersistDouble i) = Right (truncate i :: Int64) -- oracle
     fromPersistValue (PersistByteString bs) = case readInt bs of  -- oracle
                                                Just (i,"") -> Right $ fromIntegral i
@@ -345,13 +322,11 @@ instance PersistField UTCTime where
 
     fromPersistValue x = Left $ fromPersistValueError "UTCTime" "time, integer, string, or bytestring" x
 
-#if MIN_VERSION_base(4,8,0)
 instance PersistField Natural where
   toPersistValue = (toPersistValue :: Int64 -> PersistValue) . fromIntegral
   fromPersistValue x = case (fromPersistValue x :: Either Text Int64) of
     Left err -> Left $ T.replace "Int64" "Natural" err
     Right int -> Right $ fromIntegral int -- TODO use bimap?
-#endif
 
 instance PersistField a => PersistField (Maybe a) where
     toPersistValue Nothing = PersistNull
@@ -359,11 +334,7 @@ instance PersistField a => PersistField (Maybe a) where
     fromPersistValue PersistNull = Right Nothing
     fromPersistValue x = Just <$> fromPersistValue x
 
-#if MIN_VERSION_base(4,8,0)
 instance {-# OVERLAPPABLE #-} PersistField a => PersistField [a] where
-#else
-instance PersistField a => PersistField [a] where
-#endif
     toPersistValue = PersistList . fmap toPersistValue
     fromPersistValue (PersistList l) = fromPersistList l
     fromPersistValue (PersistText t) = fromPersistValue (PersistByteString $ TE.encodeUtf8 t)

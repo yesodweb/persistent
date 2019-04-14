@@ -1,30 +1,14 @@
-{-# OPTIONS_GHC -fno-warn-unused-binds #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-module SumTypeTest (specs) where
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
+module SumTypeTest (specsWith, sumTypeMigrate) where
 
-import Database.Persist.TH
-import Control.Monad.Trans.Resource (runResourceT)
 import qualified Data.Text as T
 
+import Database.Persist.TH
 import Init
 
-#if WITH_NOSQL
-mkPersist persistSettings [persistLowerCase|
-#else
-share [mkPersist persistSettings, mkMigrate "sumTypeMigrate"] [persistLowerCase|
-#endif
+share [mkPersist persistSettings { mpsGeneric = True }, mkMigrate "sumTypeMigrate"] [persistLowerCase|
 Bicycle
     brand T.Text
 Car
@@ -41,12 +25,19 @@ Car
 deriving instance Show (BackendKey backend) => Show (VehicleGeneric backend)
 deriving instance Eq (BackendKey backend) => Eq (VehicleGeneric backend)
 
-specs :: Spec
-specs = describe "sum types" $
-    it "works" $ asIO $ runResourceT $ runConn $ do
-#ifndef WITH_NOSQL
-        _ <- runMigrationSilent sumTypeMigrate
-#endif
+specsWith
+    ::
+    ( PersistQueryWrite backend
+    , BaseBackend backend ~ backend
+    , MonadIO m, MonadFail m
+    )
+    => RunDb backend m
+    -> Maybe (ReaderT backend m a)
+    -- ^ Optional migrations for SQL backends
+    -> Spec
+specsWith runDb mmigrate = describe "sum types" $
+    it "works" $ asIO $ runDb $ do
+        sequence_ mmigrate
         car1 <- insert $ Car "Ford" "Thunderbird"
         car2 <- insert $ Car "Kia" "Rio"
         bike1 <- insert $ Bicycle "Shwinn"
@@ -63,6 +54,3 @@ specs = describe "sum types" $
 
         x3 <- get vb1
         liftIO $ x3 @?= Just (VehicleBicycleSum bike1)
-
-asIO :: IO a -> IO a
-asIO = id

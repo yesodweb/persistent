@@ -1,25 +1,24 @@
-{-# LANGUAGE FlexibleContexts, UndecidableInstances #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Database.Persist.Redis.Store
     ( execRedisT
     , RedisBackend
     )where
 
-import Database.Persist
 import Control.Monad.IO.Class (MonadIO (..))
-import qualified Database.Persist.Sql as Sql
-import qualified Database.Redis as R
+import Data.Aeson(FromJSON(..), ToJSON(..))
 import Data.Text (Text, pack)
+import qualified Database.Redis as R
+import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData (..), parseUrlPieceMaybe)
+import Web.PathPieces (PathPiece(..))
+
+import Database.Persist
 import Database.Persist.Redis.Config (RedisT, thisConnection)
 import Database.Persist.Redis.Internal
 import Database.Persist.Redis.Update
-import Web.PathPieces (PathPiece(..))
-import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData (..), parseUrlPieceMaybe)
-
-import Data.Aeson(FromJSON(..), ToJSON(..))
+import qualified Database.Persist.Sql as Sql
 
 type RedisBackend = R.Connection
 
@@ -35,7 +34,7 @@ desugar R.TxAborted = Left "Transaction aborted!"
 desugar (R.TxError string) = Left string
 
 -- | Execute Redis transaction inside RedisT monad transformer
-execRedisT :: (Monad m, MonadIO m) => R.RedisTx (R.Queued a) -> RedisT m a
+execRedisT :: (MonadIO m) => R.RedisTx (R.Queued a) -> RedisT m a
 execRedisT action = do
     conn <- thisConnection
     result <- liftIO $ R.runRedis conn $ R.multiExec action -- this is the question if we should support transaction here

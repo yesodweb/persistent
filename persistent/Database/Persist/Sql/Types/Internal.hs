@@ -1,16 +1,11 @@
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE OverloadedStrings #-}
-
+{-# LANGUAGE RankNTypes #-}
 module Database.Persist.Sql.Types.Internal
     ( HasPersistBackend (..)
     , IsPersistBackend (..)
-    , SqlReadBackend (unSqlReadBackend)
-    , SqlWriteBackend (unSqlWriteBackend)
+    , SqlReadBackend (..)
+    , SqlWriteBackend (..)
     , readToUnknown
     , readToWrite
     , writeToUnknown
@@ -40,6 +35,9 @@ import Data.Monoid ((<>))
 import Data.String (IsString)
 import Data.Text (Text)
 import Data.Typeable (Typeable)
+import Language.Haskell.TH.Syntax (Loc)
+import System.Log.FastLogger (LogStr)
+
 import Database.Persist.Class
   ( HasPersistBackend (..)
   , PersistQueryRead, PersistQueryWrite
@@ -49,8 +47,6 @@ import Database.Persist.Class
   )
 import Database.Persist.Class.PersistStore (IsPersistBackend (..))
 import Database.Persist.Types
-import Language.Haskell.TH.Syntax (Loc)
-import System.Log.FastLogger (LogStr)
 
 type LogFunc = Loc -> LogSource -> LogLevel -> LogStr -> IO ()
 
@@ -157,6 +153,8 @@ instance IsPersistBackend SqlBackend where
     mkPersistBackend = id
 
 -- | An SQL backend which can only handle read queries
+--
+-- The constructor was exposed in 2.10.0.
 newtype SqlReadBackend = SqlReadBackend { unSqlReadBackend :: SqlBackend } deriving Typeable
 instance HasPersistBackend SqlReadBackend where
     type BaseBackend SqlReadBackend = SqlBackend
@@ -165,6 +163,8 @@ instance IsPersistBackend SqlReadBackend where
     mkPersistBackend = SqlReadBackend
 
 -- | An SQL backend which can handle read or write queries
+--
+-- The constructor was exposed in 2.10.0
 newtype SqlWriteBackend = SqlWriteBackend { unSqlWriteBackend :: SqlBackend } deriving Typeable
 instance HasPersistBackend SqlWriteBackend where
     type BaseBackend SqlWriteBackend = SqlBackend

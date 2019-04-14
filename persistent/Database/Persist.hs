@@ -1,7 +1,4 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE FlexibleContexts #-}
 module Database.Persist
     ( module Database.Persist.Class
     , module Database.Persist.Types
@@ -46,20 +43,15 @@ module Database.Persist
     , limitOffsetOrder
     ) where
 
-import Database.Persist.Types
-import Database.Persist.Class
-import Database.Persist.Class.PersistField (getPersistMap)
+import Data.Aeson (toJSON, ToJSON)
+import Data.Aeson.Text (encodeToTextBuilder)
 import qualified Data.Text as T
 import Data.Text.Lazy (toStrict)
 import Data.Text.Lazy.Builder (toLazyText)
-import Data.Aeson (toJSON, ToJSON)
-#if MIN_VERSION_aeson(1, 0, 0)
-import Data.Aeson.Text (encodeToTextBuilder)
-#elif MIN_VERSION_aeson(0, 7, 0)
-import Data.Aeson.Encode (encodeToTextBuilder)
-#else
-import Data.Aeson.Encode (fromValue)
-#endif
+
+import Database.Persist.Types
+import Database.Persist.Class
+import Database.Persist.Class.PersistField (getPersistMap)
 
 infixr 3 =., +=., -=., *=., /=.
 (=.), (+=.), (-=.), (*=.), (/=.) ::
@@ -77,7 +69,7 @@ infixr 3 =., +=., -=., *=., /=.
 -- Similar to `updateWhere` which is shown in the above example you can use other functions present in the module "Database.Persist.Class". Note that the first parameter of `updateWhere` is [`Filter` val] and second parameter is [`Update` val]. By comparing this with the type of `==.` and `=.`, you can see that they match up in the above usage.
 --
 -- The above query when applied on <#dataset dataset-1>, will produce this:
--- 
+--
 -- > +-----+-----+--------+
 -- > |id   |name |age     |
 -- > +-----+-----+--------+
@@ -195,7 +187,7 @@ infix 4 ==., <., <=., >., >=., !=.
 -- > |1    |SPJ  |40   |
 -- > +-----+-----+-----+
 
-f ==. a  = Filter f (Left a) Eq
+f ==. a  = Filter f (FilterValue a) Eq
 
 -- | Non-equality check.
 --
@@ -214,7 +206,7 @@ f ==. a  = Filter f (Left a) Eq
 -- > |2    |Simon|41   |
 -- > +-----+-----+-----+
 
-f !=. a = Filter f (Left a) Ne
+f !=. a = Filter f (FilterValue a) Ne
 
 -- | Less-than check.
 --
@@ -233,7 +225,7 @@ f !=. a = Filter f (Left a) Ne
 -- > |1    |SPJ  |40   |
 -- > +-----+-----+-----+
 
-f <. a  = Filter f (Left a) Lt
+f <. a  = Filter f (FilterValue a) Lt
 
 -- | Less-than or equal check.
 --
@@ -252,7 +244,7 @@ f <. a  = Filter f (Left a) Lt
 -- > |1    |SPJ  |40   |
 -- > +-----+-----+-----+
 
-f <=. a  = Filter f (Left a) Le
+f <=. a  = Filter f (FilterValue a) Le
 
 -- | Greater-than check.
 --
@@ -271,7 +263,7 @@ f <=. a  = Filter f (Left a) Le
 -- > |2    |Simon|41   |
 -- > +-----+-----+-----+
 
-f >. a  = Filter f (Left a) Gt
+f >. a  = Filter f (FilterValue a) Gt
 
 -- | Greater-than or equal check.
 --
@@ -290,7 +282,7 @@ f >. a  = Filter f (Left a) Gt
 -- > |2    |Simon|41   |
 -- > +-----+-----+-----+
 
-f >=. a  = Filter f (Left a) Ge
+f >=. a  = Filter f (FilterValue a) Ge
 
 infix 4 <-., /<-.
 (<-.), (/<-.) :: forall v typ.  PersistField typ => EntityField v typ -> [typ] -> Filter v
@@ -328,7 +320,7 @@ infix 4 <-., /<-.
 -- > |1    |SPJ  |40   |
 -- > +-----+-----+-----+
 
-f <-. a = Filter f (Right a) In
+f <-. a = Filter f (FilterValues a) In
 
 -- | Check if value is not in given list.
 --
@@ -347,7 +339,7 @@ f <-. a = Filter f (Right a) In
 -- > |2    |Simon|41   |
 -- > +-----+-----+-----+
 
-f /<-. a = Filter f (Right a) NotIn
+f /<-. a = Filter f (FilterValues a) NotIn
 
 infixl 3 ||.
 (||.) :: forall v. [Filter v] -> [Filter v] -> [Filter v]
@@ -392,11 +384,7 @@ mapToJSON = toJsonText
 -- | A more general way to convert instances of `ToJSON` type class to
 -- strict text 'T.Text'.
 toJsonText :: ToJSON j => j -> T.Text
-#if MIN_VERSION_aeson(0, 7, 0)
 toJsonText = toStrict . toLazyText . encodeToTextBuilder . toJSON
-#else
-toJsonText = toStrict . toLazyText . fromValue . toJSON
-#endif
 
 -- | FIXME What's this exactly?
 limitOffsetOrder :: PersistEntity val

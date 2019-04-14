@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 module Database.Persist.Sql.Util (
     parseEntityValues
   , entityColumnNames
@@ -19,8 +18,9 @@ module Database.Persist.Sql.Util (
 
 import Data.Maybe (isJust)
 import Data.Monoid ((<>))
-import qualified Data.Text as T
 import Data.Text (Text, pack)
+import qualified Data.Text as T
+
 import Database.Persist (
     Entity(Entity), EntityDef, EntityField, HaskellName(HaskellName)
   , PersistEntity, PersistValue

@@ -1,11 +1,9 @@
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE FlexibleContexts #-}
 -- | A MySQL backend for @persistent@.
 module Database.Persist.MySQL
     ( withMySQLPool
@@ -21,12 +19,8 @@ module Database.Persist.MySQL
      -- * @ON DUPLICATE KEY UPDATE@ Functionality
     , insertOnDuplicateKeyUpdate
     , insertManyOnDuplicateKeyUpdate
-#if MIN_VERSION_base(4,7,0)
     , HandleUpdateCollision
     , pattern SomeField
-#elif MIN_VERSION_base(4,9,0)
-    , HandleUpdateCollision(SomeField)
-#endif
     , SomeField
     , copyField
     , copyUnlessNull
@@ -34,54 +28,52 @@ module Database.Persist.MySQL
     , copyUnlessEq
     ) where
 
+import qualified Blaze.ByteString.Builder.Char8 as BBB
+import qualified Blaze.ByteString.Builder.ByteString as BBS
+
 import Control.Arrow
 import Control.Monad
-import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.IO.Unlift (MonadUnliftIO)
+import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (runReaderT, ReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
-import Data.Either (partitionEithers)
-import Data.Monoid ((<>))
-import qualified Data.Monoid as Monoid
+
+import Data.Conduit
+import qualified Data.Conduit.List as CL
+import Data.Acquire (Acquire, mkAcquire, with)
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import Data.ByteString (ByteString)
+import Data.Either (partitionEithers)
 import Data.Fixed (Pico)
 import Data.Function (on)
+import Data.Int (Int64)
 import Data.IORef
 import Data.List (find, intercalate, sort, groupBy)
+import qualified Data.Map as Map
+import Data.Monoid ((<>))
+import qualified Data.Monoid as Monoid
 import Data.Pool (Pool)
 import Data.Text (Text, pack)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import qualified Data.Text.IO as T
 import Text.Read (readMaybe)
 import System.Environment (getEnvironment)
-import Data.Acquire (Acquire, mkAcquire, with)
-
-import Data.Conduit
-import qualified Blaze.ByteString.Builder.Char8 as BBB
-import qualified Blaze.ByteString.Builder.ByteString as BBS
-import qualified Data.Conduit.List as CL
-import qualified Data.Map as Map
-import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
 
 import Database.Persist.Sql
 import Database.Persist.Sql.Types.Internal (mkPersistBackend, makeIsolationLevelStatement)
 import qualified Database.Persist.Sql.Util as Util
-import Data.Int (Int64)
 
+import qualified Database.MySQL.Base          as MySQLBase
+import qualified Database.MySQL.Base.Types    as MySQLBase
 import qualified Database.MySQL.Simple        as MySQL
 import qualified Database.MySQL.Simple.Param  as MySQL
 import qualified Database.MySQL.Simple.Result as MySQL
 import qualified Database.MySQL.Simple.Types  as MySQL
-
-import qualified Database.MySQL.Base          as MySQLBase
-import qualified Database.MySQL.Base.Types    as MySQLBase
-import Control.Monad.IO.Unlift (MonadUnliftIO)
-
-import Prelude
 
 -- | Create a MySQL connection pool and run the given action.
 -- The pool is properly released after the action finishes using
@@ -245,6 +237,7 @@ instance MySQL.Param P where
       MySQL.Plain $ BBB.fromString $ show (fromRational r :: Pico)
       -- FIXME: Too Ambigous, can not select precision without information about field
     render (P (PersistDbSpecific s))    = MySQL.Plain $ BBS.fromByteString s
+    render (P (PersistArray a))       = MySQL.render (P (PersistList a))
     render (P (PersistObjectId _))    =
         error "Refusing to serialize a PersistObjectId to a MySQL value"
 
@@ -1089,9 +1082,7 @@ data HandleUpdateCollision record where
 -- @since 2.6.2
 type SomeField = HandleUpdateCollision
 
-#if MIN_VERSION_base(4,8,0)
 pattern SomeField :: EntityField record typ -> SomeField record
-#endif
 pattern SomeField x = CopyField x
 {-# DEPRECATED SomeField "The type SomeField is deprecated. Use the type HandleUpdateCollision instead, and use the function copyField instead of the data constructor." #-}
 

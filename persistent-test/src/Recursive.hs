@@ -1,29 +1,10 @@
-{-# OPTIONS_GHC -fno-warn-unused-binds #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeFamilies #-}
-module Recursive (specs,
-#ifndef WITH_NOSQL
-recursiveMigrate
-#endif
-) where
+{-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
+module Recursive (specsWith, recursiveMigrate, cleanup) where
 
 import Init
 
-#if WITH_NOSQL
-mkPersist persistSettings [persistUpperCase|
-#else
-share [mkPersist sqlSettings, mkMigrate "recursiveMigrate"] [persistLowerCase|
-#endif
+share [mkPersist sqlSettings { mpsGeneric = True }, mkMigrate "recursiveMigrate"] [persistLowerCase|
 SubType
   object [MenuObject]
   deriving Show Eq
@@ -31,18 +12,24 @@ MenuObject
   sub SubType Maybe
   deriving Show Eq
 |]
-#if WITH_NOSQL
-cleanDB :: ReaderT Context IO ()
-cleanDB = do
-  deleteWhere ([] :: [Filter MenuObject])
-  deleteWhere ([] :: [Filter SubType])
-db :: Action IO () -> Assertion
-db = db' cleanDB
-#endif
 
-specs :: Spec
-specs = describe "recursive definitions" $ do
-  it "mutually recursive" $ db $ do
+cleanup
+    :: (PersistStoreWrite (BaseBackend backend), PersistQueryWrite backend)
+    => ReaderT backend IO ()
+cleanup = do
+  deleteWhere ([] :: [Filter (MenuObjectGeneric backend)])
+  deleteWhere ([] :: [Filter (SubTypeGeneric backend)])
+
+specsWith
+    ::
+    ( PersistStoreWrite backend
+    , PersistStoreWrite (BaseBackend backend)
+    , MonadIO m
+    )
+    => RunDb backend m
+    -> Spec
+specsWith runDb = describe "recursive definitions" $ do
+  it "mutually recursive" $ runDb $ do
     let m1 = MenuObject $ Just $ SubType []
     let m2 = MenuObject $ Just $ SubType [m1]
     let m3 = MenuObject $ Just $ SubType [m2]

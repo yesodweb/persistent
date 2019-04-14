@@ -1,30 +1,38 @@
-{-# LANGUAGE OverloadedStrings, QuasiQuotes, TemplateHaskell, TypeFamilies, GADTs #-}
-{-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Main
   (
   -- avoid unused ident warnings
     module Main
   ) where
+
+import Control.Applicative (Const (..))
+import Data.Aeson
+import Data.ByteString.Lazy.Char8 ()
+import Data.Functor.Identity (Identity (..))
+import Data.Text (Text, pack)
 import Test.Hspec
 import Test.Hspec.QuickCheck
-import Data.ByteString.Lazy.Char8 ()
 import Test.QuickCheck.Arbitrary
 import Test.QuickCheck.Gen (Gen)
-import Control.Applicative as A ((<$>), (<*>), Const (..))
-import Data.Functor.Identity (Identity (..))
 
 import Database.Persist
 import Database.Persist.TH
-import Data.Text (Text, pack)
-import Data.Aeson
+import TemplateTestImports
+
 
 share [mkPersist sqlSettings { mpsGeneric = False }, mkDeleteCascade sqlSettings { mpsGeneric = False }] [persistUpperCase|
 Person json
     name Text
     age Int Maybe
+    foo Foo
     address Address
     deriving Show Eq
 Address json
@@ -51,10 +59,10 @@ Laddress json
 |]
 
 arbitraryT :: Gen Text
-arbitraryT = pack A.<$> arbitrary
+arbitraryT = pack <$> arbitrary
 
 instance Arbitrary Person where
-    arbitrary = Person <$> arbitraryT A.<*> arbitrary <*> arbitrary
+    arbitrary = Person <$> arbitraryT <*> arbitrary <*> arbitrary <*> arbitrary
 instance Arbitrary Address where
     arbitrary = Address <$> arbitraryT <*> arbitraryT <*> arbitrary
 
@@ -64,15 +72,15 @@ main = hspec $ do
         prop "to/from is idempotent" $ \person ->
             decode (encode person) == Just (person :: Person)
         it "decode" $
-            decode "{\"name\":\"Michael\",\"age\":27,\"address\":{\"street\":\"Narkis\",\"city\":\"Maalot\"}}" `shouldBe` Just
-                (Person "Michael" (Just 27) $ Address "Narkis" "Maalot" Nothing)
+            decode "{\"name\":\"Michael\",\"age\":27,\"foo\":\"Bar\",\"address\":{\"street\":\"Narkis\",\"city\":\"Maalot\"}}" `shouldBe` Just
+                (Person "Michael" (Just 27) Bar $ Address "Narkis" "Maalot" Nothing)
     describe "JSON serialization for Entity" $ do
         let key = PersonKey 0
         prop "to/from is idempotent" $ \person ->
             decode (encode (Entity key person)) == Just (Entity key (person :: Person))
         it "decode" $
-            decode "{\"id\": 0, \"name\":\"Michael\",\"age\":27,\"address\":{\"street\":\"Narkis\",\"city\":\"Maalot\"}}" `shouldBe` Just
-                (Entity key (Person "Michael" (Just 27) $ Address "Narkis" "Maalot" Nothing))
+            decode "{\"id\": 0, \"name\":\"Michael\",\"age\":27,\"foo\":\"Bar\",\"address\":{\"street\":\"Narkis\",\"city\":\"Maalot\"}}" `shouldBe` Just
+                (Entity key (Person "Michael" (Just 27) Bar $ Address "Narkis" "Maalot" Nothing))
     it "lens operations" $ do
         let street1 = "street1"
             city1 = "city1"

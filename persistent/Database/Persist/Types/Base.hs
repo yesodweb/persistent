@@ -1,38 +1,32 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -fno-warn-deprecations #-} -- usage of Error typeclass
 module Database.Persist.Types.Base where
 
-import qualified Data.Aeson as A
+import Control.Arrow (second)
 import Control.Exception (Exception)
-import Web.PathPieces (PathPiece(..))
-import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData (..), parseUrlPieceMaybe, showTextData, readTextData, parseBoundedTextData)
 import Control.Monad.Trans.Error (Error (..))
-import Data.Typeable (Typeable)
+import qualified Data.Aeson as A
+import Data.Bits (shiftL, shiftR)
+import Data.ByteString (ByteString, foldl')
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base64 as B64
+import qualified Data.ByteString.Char8 as BS8
+import qualified Data.HashMap.Strict as HM
+import Data.Int (Int64)
+import Data.Map (Map)
+import qualified Data.Scientific
 import Data.Text (Text, pack)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import Data.Text.Encoding.Error (lenientDecode)
-import qualified Data.ByteString.Base64 as B64
-import qualified Data.Vector as V
-import Control.Arrow (second)
-import Control.Applicative as A ((<$>))
 import Data.Time (Day, TimeOfDay, UTCTime)
-import Data.Int (Int64)
-import Data.ByteString (ByteString, foldl')
-import Data.Bits (shiftL, shiftR)
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as BS8
-import Data.Map (Map)
-import qualified Data.HashMap.Strict as HM
+import Data.Typeable (Typeable)
+import qualified Data.Vector as V
 import Data.Word (Word32)
 import Numeric (showHex, readHex)
-#if MIN_VERSION_aeson(0, 7, 0)
-import qualified Data.Scientific
-#else
-import qualified Data.Attoparsec.Number as AN
-#endif
+import Web.PathPieces (PathPiece(..))
+import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData (..), parseUrlPieceMaybe, showTextData, readTextData, parseBoundedTextData)
+
 
 -- | A 'Checkmark' should be used as a field type whenever a
 -- uniqueness constraint should guarantee that a certain kind of
@@ -112,17 +106,38 @@ data WhyNullable = ByMaybeAttr
                  | ByNullableAttr
                   deriving (Eq, Show)
 
+-- | An 'EntityDef' represents the information that @persistent@ knows
+-- about an Entity. It uses this information to generate the Haskell
+-- datatype, the SQL migrations, and other relevant conversions.
 data EntityDef = EntityDef
     { entityHaskell :: !HaskellName
+    -- ^ The name of the entity as Haskell understands it.
     , entityDB      :: !DBName
+    -- ^ The name of the database table corresponding to the entity.
     , entityId      :: !FieldDef
+    -- ^ The entity's primary key or identifier.
     , entityAttrs   :: ![Attr]
+    -- ^ The @persistent@ entity syntax allows you to add arbitrary 'Attr's
+    -- to an entity using the @!@ operator. Those attributes are stored in
+    -- this list.
     , entityFields  :: ![FieldDef]
+    -- ^ The fields for this entity. Note that the ID field will not be
+    -- present in this list. To get all of the fields for an entity, use
+    -- 'keyAndEntityFields'.
     , entityUniques :: ![UniqueDef]
+    -- ^ The Uniqueness constraints for this entity.
     , entityForeigns:: ![ForeignDef]
+    -- ^ The foreign key relationships that this entity has to other
+    -- entities.
     , entityDerives :: ![Text]
+    -- ^ A list of type classes that have been derived for this entity.
     , entityExtra   :: !(Map Text [ExtraLine])
     , entitySum     :: !Bool
+    -- ^ Whether or not this entity represents a sum type in the database.
+    , entityComments :: !(Maybe Text)
+    -- ^ Optional comments on the entity.
+    --
+    -- @since 2.10.0
     }
     deriving (Show, Eq, Read, Ord)
 
@@ -159,14 +174,35 @@ data FieldType
     | FTList FieldType
   deriving (Show, Eq, Read, Ord)
 
+-- | A 'FieldDef' represents the inormation that @persistent@ knows about
+-- a field of a datatype. This includes information used to parse the field
+-- out of the database and what the field corresponds to.
 data FieldDef = FieldDef
-    { fieldHaskell   :: !HaskellName -- ^ name of the field
+    { fieldHaskell   :: !HaskellName
+    -- ^ The name of the field. Note that this does not corresponds to the
+    -- record labels generated for the particular entity - record labels
+    -- are generated with the type name prefixed to the field, so
+    -- a 'FieldDef' that contains a @'HaskellName' "name"@ for a type
+    -- @User@ will have a record field @userName@.
     , fieldDB        :: !DBName
+    -- ^ The name of the field in the database. For SQL databases, this
+    -- corresponds to the column name.
     , fieldType      :: !FieldType
+    -- ^ The type of the field in Haskell.
     , fieldSqlType   :: !SqlType
-    , fieldAttrs     :: ![Attr]    -- ^ user annotations for a field
-    , fieldStrict    :: !Bool      -- ^ a strict field in the data type. Default: true
+    -- ^ The type of the field in a SQL database.
+    , fieldAttrs     :: ![Attr]
+    -- ^ User annotations for a field. These are provided with the @!@
+    -- operator.
+    , fieldStrict    :: !Bool
+    -- ^ If this is 'True', then the Haskell datatype will have a strict
+    -- record field. The default value for this is 'True'.
     , fieldReference :: !ReferenceDef
+    , fieldComments  :: !(Maybe Text)
+    -- ^ Optional comments for a 'Field'. There is not currently a way to
+    -- attach comments to a field in the quasiquoter.
+    --
+    -- @since 2.10.0
     }
     deriving (Show, Eq, Read, Ord)
 
@@ -237,7 +273,7 @@ toEmbedEntityDef ent = embDef
 -- (DBName (packPTH "unique_age")) [(HaskellName (packPTH "age"), DBName (packPTH "age"))] []
 --
 data UniqueDef = UniqueDef
-    { uniqueHaskell :: !HaskellName 
+    { uniqueHaskell :: !HaskellName
     , uniqueDBName  :: !DBName
     , uniqueFields  :: ![(HaskellName, DBName)]
     , uniqueAttrs   :: ![Attr]
@@ -293,6 +329,7 @@ data PersistValue = PersistText Text
                   | PersistList [PersistValue]
                   | PersistMap [(Text, PersistValue)]
                   | PersistObjectId ByteString -- ^ Intended especially for MongoDB backend
+                  | PersistArray [PersistValue] -- ^ Intended especially for PostgreSQL backend for text arrays
                   | PersistDbSpecific ByteString -- ^ Using 'PersistDbSpecific' allows you to use types specific to a particular backend
 -- For example, below is a simple example of the PostGIS geography type:
 --
@@ -330,9 +367,9 @@ instance ToHttpApiData PersistValue where
 
 instance FromHttpApiData PersistValue where
     parseUrlPiece input =
-          PersistInt64 A.<$> parseUrlPiece input
-      <!> PersistList  A.<$> readTextData input
-      <!> PersistText  A.<$> return input
+          PersistInt64 <$> parseUrlPiece input
+      <!> PersistList  <$> readTextData input
+      <!> PersistText  <$> return input
       where
         infixl 3 <!>
         Left _ <!> y = y
@@ -357,19 +394,14 @@ fromPersistValueText (PersistBool b) = Right $ T.pack $ show b
 fromPersistValueText (PersistList _) = Left "Cannot convert PersistList to Text"
 fromPersistValueText (PersistMap _) = Left "Cannot convert PersistMap to Text"
 fromPersistValueText (PersistObjectId _) = Left "Cannot convert PersistObjectId to Text"
+fromPersistValueText (PersistArray _) = Left "Cannot convert PersistArray to Text"
 fromPersistValueText (PersistDbSpecific _) = Left "Cannot convert PersistDbSpecific to Text. See the documentation of PersistDbSpecific for an example of using a custom database type with Persistent."
 
 instance A.ToJSON PersistValue where
     toJSON (PersistText t) = A.String $ T.cons 's' t
     toJSON (PersistByteString b) = A.String $ T.cons 'b' $ TE.decodeUtf8 $ B64.encode b
     toJSON (PersistInt64 i) = A.Number $ fromIntegral i
-    toJSON (PersistDouble d) = A.Number $
-#if MIN_VERSION_aeson(0, 7, 0)
-        Data.Scientific.fromFloatDigits
-#else
-        AN.D
-#endif
-        d
+    toJSON (PersistDouble d) = A.Number $ Data.Scientific.fromFloatDigits d
     toJSON (PersistRational r) = A.String $ T.pack $ 'r' : show r
     toJSON (PersistBool b) = A.Bool b
     toJSON (PersistTimeOfDay t) = A.String $ T.pack $ 't' : show t
@@ -379,6 +411,7 @@ instance A.ToJSON PersistValue where
     toJSON (PersistList l) = A.Array $ V.fromList $ map A.toJSON l
     toJSON (PersistMap m) = A.object $ map (second A.toJSON) m
     toJSON (PersistDbSpecific b) = A.String $ T.cons 'p' $ TE.decodeUtf8 $ B64.encode b
+    toJSON (PersistArray a) = A.Array $ V.fromList $ map A.toJSON a
     toJSON (PersistObjectId o) =
       A.toJSON $ showChar 'o' $ showHexLen 8 (bs2i four) $ showHexLen 16 (bs2i eight) ""
         where
@@ -428,15 +461,10 @@ instance A.FromJSON PersistValue where
         {-# INLINE i2bs #-}
 
 
-#if MIN_VERSION_aeson(0, 7, 0)
     parseJSON (A.Number n) = return $
         if fromInteger (floor n) == n
             then PersistInt64 $ floor n
             else PersistDouble $ fromRational $ toRational n
-#else
-    parseJSON (A.Number (AN.I i)) = return $ PersistInt64 $ fromInteger i
-    parseJSON (A.Number (AN.D d)) = return $ PersistDouble d
-#endif
     parseJSON (A.Bool b) = return $ PersistBool b
     parseJSON A.Null = return $ PersistNull
     parseJSON (A.Array a) = fmap PersistList (mapM A.parseJSON $ V.toList a)

@@ -1,40 +1,18 @@
-{-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-} -- FIXME
+{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 module CompositeTest where
 
-import Test.Hspec.Expectations ()
-import Init
-#ifndef WITH_NOSQL
 import qualified Data.Map as Map
-#endif
-
-#ifndef WITH_NOSQL
 import Data.Maybe (isJust)
+
 import Database.Persist.TH (mkDeleteCascade)
-#endif
+import Init
 
 
 -- mpsGeneric = False is due to a bug or at least lack of a feature in mkKeyTypeDec TH.hs
-#if WITH_NOSQL
-mkPersist persistSettings { mpsGeneric = False } [persistUpperCase|
-#else
 share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMigrate", mkDeleteCascade persistSettings { mpsGeneric = False }] [persistLowerCase|
-#endif
   TestParent
       name  String maxlen=20
       name2 String maxlen=20
@@ -49,13 +27,6 @@ share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMig
       extra4 String
       Foreign TestParent fkparent name name2 age
       deriving Show Eq
-#ifndef WITH_MYSQL
-  Tree
-      name    Text
-      parent  Text Maybe
-      Primary name
-      Foreign Tree fkparent parent
-#endif
 
   Citizen
     name String
@@ -79,8 +50,6 @@ share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMig
     deriving Eq Show
 |]
 
-
-#ifdef WITH_NOSQL
 cleanDB :: (PersistQuery backend, PersistEntityBackend TestChild ~ backend, MonadIO m) => ReaderT backend m ()
 cleanDB = do
   deleteWhere ([] :: [Filter TestChild])
@@ -89,15 +58,8 @@ cleanDB = do
   deleteWhere ([] :: [Filter Citizen])
   deleteWhere ([] :: [Filter Address])
 
-db :: Action IO () -> Assertion
-db = db' cleanDB
-
-specs :: Spec
-specs = return ()
-#else
-
-specs :: Spec
-specs = describe "composite" $
+specsWith :: (MonadIO m, MonadFail m) => RunDb SqlBackend m -> Spec
+specsWith runDb = describe "composite" $
   describe "primary keys" $ do
 
     let p1 = TestParent "a1" "b1" 11 "p1"
@@ -107,16 +69,16 @@ specs = describe "composite" $
     let c1 = TestChild "a1" "b1" 11 "c1"
     let c1' = TestChild "a1" "b1" 11 "c1'"
 
-    it "insertWithKey" $ db $ do
+    it "insertWithKey" $ runDb $ do
       kp1 <- insert p1
       delete kp1
       insertKey kp1 p2
 
-    it "repsert" $ db $ do
+    it "repsert" $ runDb $ do
       kp1 <- insert p1
       repsert kp1 p2
 
-    it "Insert" $ db $ do
+    it "Insert" $ runDb $ do
       kp1 <- insert p1
       matchParentK kp1 @== Right ("a1","b1",11)
       mp <- get kp1
@@ -129,49 +91,49 @@ specs = describe "composite" $
       matchParentK kp1 @== matchParentK newkp1
       p1 @== newp1
 
-    it "Id field" $ db $ do
+    it "Id field" $ runDb $ do
       kp1 <- insert p1
       kp2 <- insert p2
       xs <- selectList [TestParentId <-. [kp1,kp2]] []
       length xs @== 2
-      let [e1@(Entity newkp1 newp1),e2@(Entity newkp2 newp2)] = xs
+      [(Entity newkp1 newp1),(Entity newkp2 newp2)] <- pure xs
       matchParentK kp1 @== matchParentK newkp1
       matchParentK kp2 @== matchParentK newkp2
       p1 @== newp1
       p2 @== newp2
 
-    it "Filter by Id with 'not equal'" $ db $ do
+    it "Filter by Id with 'not equal'" $ runDb $ do
       kp1 <- insert p1
       kp2 <- insert p2
       xs <- selectList [TestParentId !=. kp1] []
       length xs @== 1
-      let [Entity newkp2 newp2] = xs
+      let [Entity newkp2 _newp2] = xs
       matchParentK kp2 @== matchParentK newkp2
 
-    it "Filter by Id with 'in'" $ db $ do
+    it "Filter by Id with 'in'" $ runDb $ do
       kp1 <- insert p1
       kp2 <- insert p2
       xs <- selectList [TestParentId <-. [kp1,kp2]] []
       length xs @== 2
-      let [Entity newkp1 newp1,Entity newkp2 newp2] = xs
+      let [Entity newkp1 _newp1,Entity newkp2 _newp2] = xs
       matchParentK kp1 @== matchParentK newkp1
       matchParentK kp2 @== matchParentK newkp2
 
-    it "Filter by Id with 'not in'" $ db $ do
+    it "Filter by Id with 'not in'" $ runDb $ do
       kp1 <- insert p1
       kp2 <- insert p2
       xs <- selectList [TestParentId /<-. [kp1]] []
       length xs @== 1
-      let [Entity newkp2 newp2] = xs
+      let [Entity newkp2 _newp2] = xs
       matchParentK kp2 @== matchParentK newkp2
 
-    it "Filter by Id with 'not in' with no data" $ db $ do
+    it "Filter by Id with 'not in' with no data" $ runDb $ do
       kp1 <- insert p1
       kp2 <- insert p2
       xs <- selectList [TestParentId /<-. [kp1,kp2]] []
       length xs @== 0
 
-    it "Extract Parent Foreign Key from Child value" $ db $ do
+    it "Extract Parent Foreign Key from Child value" $ runDb $ do
       kp1 <- insert p1
       _ <- insert p2
       kc1 <- insert c1
@@ -181,20 +143,7 @@ specs = describe "composite" $
       c1 @== c11
       testChildFkparent c11 @== kp1
 
-#ifndef WITH_MYSQL
-    it "Tree relationships" $ db $ do
-      kgp@(TreeKey gpt) <- insert $ Tree "grandpa" Nothing
-      kdad@(TreeKey dadt) <- insert $ Tree "dad" $ Just gpt
-      kc <- insert $ Tree "child" $ Just dadt
-      c <- getJust kc
-      treeFkparent c @== Just kdad
-      dad <- getJust kdad
-      treeFkparent dad @== Just kgp
-      gp <- getJust kgp
-      treeFkparent gp @== Nothing
-#endif
-
-    it "Validate Key contents" $ db $ do
+    it "Validate Key contents" $ runDb $ do
       _ <- insert p1
       _ <- insert p2
       _ <- insert p3
@@ -205,7 +154,7 @@ specs = describe "composite" $
       matchParentK kps2 @== Right ("a2","b2",22)
       matchParentK kps3 @== Right ("a3","b3",33)
 
-    it "Delete" $ db $ do
+    it "Delete" $ runDb $ do
       kp1 <- insert p1
       kp2 <- insert p2
 
@@ -215,19 +164,19 @@ specs = describe "composite" $
       r1 <- get kp2
       isJust r1 @== True
 
-    it "Update" $ db $ do
+    it "Update" $ runDb $ do
       kp1 <- insert p1
       _ <- update kp1 [TestParentExtra44 =. "q1"]
       newkps1 <- get kp1
       newkps1 @== Just (TestParent "a1" "b1" 11 "q1")
 
-    it "Replace Parent" $ db $ do
+    it "Replace Parent" $ runDb $ do
       kp1 <- insert p1
       _ <- replace kp1 p1'
       newp1 <- get kp1
       newp1 @== Just p1'
 
-    it "Replace Child" $ db $ do
+    it "Replace Child" $ runDb $ do
       -- c1 FKs p1
       _ <- insert p1
       kc1 <- insert c1
@@ -235,7 +184,7 @@ specs = describe "composite" $
       newc1 <- get kc1
       newc1 @== Just c1'
 
-    it "Insert Many to Many" $ db $ do
+    it "Insert Many to Many" $ runDb $ do
       let z1 = Citizen "mk" (Just 11)
       let a1 = Address "abc" "usa"
       let z2 = Citizen "gb" (Just 22)
@@ -263,35 +212,35 @@ specs = describe "composite" $
       let [Entity newkca1 newca2] = xs
       matchCitizenAddressK kca1 @== matchCitizenAddressK newkca1
       ca1 @== newca2
-    it "insertMany" $ db $ do
+    it "insertMany" $ runDb $ do
       [kp1, kp2] <- insertMany [p1, p2]
       rs <- getMany [kp1, kp2]
       rs @== Map.fromList [(kp1, p1), (kp2, p2)]
-    it "RawSql Key instance" $ db $ do
+    it "RawSql Key instance" $ runDb $ do
       key <- insert p1
       keyFromRaw <- rawSql "SELECT name, name2, age FROM test_parent LIMIT 1" []
       [key] @== keyFromRaw
 
-    it "RawSql Key instance with sqlQQ" $ db $ do
-      key <- insert p1
-      keyFromRaw' <- [sqlQQ|
-          SELECT @{TestParentName}, @{TestParentName2}, @{TestParentAge}
-            FROM ^{TestParent}
-            LIMIT 1
-      |]
-      [key] @== keyFromRaw'
+-- TODO: push into persistent-qq test suite
+--     it "RawSql Key instance with sqlQQ" $ runDb $ do
+--       key <- insert p1
+--       keyFromRaw' <- [sqlQQ|
+--           SELECT @{TestParentName}, @{TestParentName2}, @{TestParentAge}
+--             FROM ^{TestParent}
+--             LIMIT 1
+--       |]
+--       [key] @== keyFromRaw'
 
-    it "RawSql Entity instance" $ db $ do
+    it "RawSql Entity instance" $ runDb $ do
       key <- insert p1
       newp1 <- rawSql "SELECT ?? FROM test_parent LIMIT 1" []
       [Entity key p1] @== newp1
 
-    it "RawSql Entity instance with sqlQQ" $ db $ do
-      key <- insert p1
-      newp1' <- [sqlQQ| SELECT ?? FROM ^{TestParent} |]
-      [Entity key p1] @== newp1'
-
-#endif
+-- TODO: put into persistent-qq test suite
+--     it "RawSql Entity instance with sqlQQ" $ runDb $ do
+--       key <- insert p1
+--       newp1' <- [sqlQQ| SELECT ?? FROM ^{TestParent} |]
+--       [Entity key p1] @== newp1'
 
 matchK :: (PersistField a, PersistEntity record) => Key record -> Either Text a
 matchK = (\(pv:[]) -> fromPersistValue pv) . keyToValues

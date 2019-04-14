@@ -1,10 +1,7 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE RankNTypes, TypeFamilies, GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, UndecidableInstances #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
+
 module Database.Persist.Redis.Config
     ( RedisAuth (..)
     , RedisConf (..)
@@ -19,22 +16,17 @@ module Database.Persist.Redis.Config
     , module Database.Persist
     ) where
 
-import Database.Persist
-import qualified Database.Redis as R
-import Data.Text (Text, unpack, pack)
-import Data.Aeson (Value (Object, Number, String), (.:?), (.!=), FromJSON(..))
-import Control.Monad (mzero, MonadPlus(..))
 import Control.Monad.IO.Class (MonadIO (..))
--- import Control.Monad.Trans.Class (MonadTrans (..))
--- import Control.Applicative (Applicative (..))
 import Control.Monad.Reader(ReaderT(..))
 import Control.Monad.Reader.Class
+import Data.Aeson (Value (Object, Number, String), (.:?), (.!=), FromJSON(..))
 import qualified Data.ByteString.Char8 as B
-#if MIN_VERSION_aeson(0, 7, 0)
+import Control.Monad (mzero, MonadPlus(..))
 import Data.Scientific() -- we require only RealFrac instance of Scientific
-#else
-import Data.Attoparsec.Number
-#endif
+import Data.Text (Text, unpack, pack)
+import qualified Database.Redis as R
+
+import Database.Persist
 
 newtype RedisAuth =  RedisAuth Text deriving (Eq, Show)
 
@@ -62,7 +54,7 @@ thisConnection :: Monad m => RedisT m R.Connection
 thisConnection = ask
 
 -- | Run a connection reader function against a Redis configuration
-withRedisConn :: (Monad m, MonadIO m) => RedisConf -> (R.Connection -> m a) -> m a
+withRedisConn :: (MonadIO m) => RedisConf -> (R.Connection -> m a) -> m a
 withRedisConn conf connectionReader = do
     conn <- liftIO $ createPoolConfig conf
     connectionReader conn
@@ -89,14 +81,14 @@ instance PersistConfig RedisConf where
 
     loadConfig _ = mzero
 
-    createPoolConfig (RedisConf h p Nothing m) = 
+    createPoolConfig (RedisConf h p Nothing m) =
         R.connect $
         R.defaultConnectInfo {
             R.connectHost = unpack h,
             R.connectPort = p,
             R.connectMaxConnections = m
         }
-    createPoolConfig (RedisConf h p (Just (RedisAuth pwd)) m) = 
+    createPoolConfig (RedisConf h p (Just (RedisAuth pwd)) m) =
         R.connect $
         R.defaultConnectInfo {
             R.connectHost = unpack h,

@@ -1,5 +1,5 @@
 name:            persistent-postgresql
-version:         2.9.0
+version:         2.10.0
 license:         MIT
 license-file:    LICENSE
 author:          Felipe Lessa, Michael Snoyman <michael@snoyman.com>
@@ -8,33 +8,69 @@ synopsis:        Backend for the persistent library using postgresql.
 description:     Based on the postgresql-simple package
 category:        Database, Yesod
 stability:       Stable
-cabal-version:   >= 1.6
+cabal-version:   >= 1.10
 build-type:      Simple
 homepage:        http://www.yesodweb.com/book/persistent
 bug-reports:     https://github.com/yesodweb/persistent/issues
 extra-source-files: ChangeLog.md
 
 library
-    build-depends:   base                  >= 4.8        && < 5
-                   , transformers          >= 0.2.1
-                   , postgresql-simple     >= 0.4.0    && < 0.7
-                   , postgresql-libpq      >= 0.6.1    && < 0.10
-                   , persistent            >= 2.9      && < 3
-                   , containers            >= 0.2
-                   , bytestring            >= 0.9
-                   , text                  >= 0.7
-                   , unliftio-core
+    build-depends:   base                  >= 4.9      && < 5
+                   , persistent            >= 2.10     && < 3
+                   , aeson                 >= 1.0
                    , blaze-builder
-                   , time                  >= 1.1
-                   , aeson                 >= 0.6.2
-                   , conduit               >= 1.2.8
-                   , resourcet             >= 1.1
-                   , monad-logger          >= 0.3.4
+                   , bytestring            >= 0.10
+                   , conduit               >= 1.2.12
+                   , containers            >= 0.5
+                   , monad-logger          >= 0.3.25
+                   , postgresql-simple     >= 0.6.1    && < 0.7
+                   , postgresql-libpq      >= 0.9.4.2  && < 0.10
+                   , resourcet             >= 1.1.9
                    , resource-pool
+                   , text                  >= 1.2
+                   , time                  >= 1.6
+                   , transformers          >= 0.5
+                   , unliftio-core
     exposed-modules: Database.Persist.Postgresql
                    , Database.Persist.Postgresql.JSON
     ghc-options:     -Wall
+    default-language: Haskell2010
 
 source-repository head
   type:     git
   location: git://github.com/yesodweb/persistent.git
+
+test-suite test
+    type:            exitcode-stdio-1.0
+    main-is:         main.hs
+    hs-source-dirs:  test
+    other-modules:   PgInit
+                     ArrayAggTest
+                     EquivalentTypeTestPostgres
+                     JSONTest
+    ghc-options:     -Wall
+
+    build-depends:   base                 >= 4.9 && < 5
+                   , persistent
+                   , persistent-postgresql
+                   , persistent-qq
+                   , persistent-template
+                   , persistent-test
+                   , aeson
+                   , bytestring
+                   , containers
+                   , fast-logger
+                   , HUnit
+                   , hspec                >= 2.4
+                   , hspec-expectations
+                   , monad-logger
+                   , QuickCheck
+                   , quickcheck-instances
+                   , resourcet
+                   , text
+                   , time
+                   , transformers
+                   , unliftio-core
+                   , unordered-containers
+                   , vector
+    default-language: Haskell2010
