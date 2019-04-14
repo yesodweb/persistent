@@ -1,13 +1,10 @@
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
-{-# LANGUAGE PatternGuards #-}
-
+{-# LANGUAGE TypeFamilies #-}
 -- | A sqlite backend for persistent.
 --
 -- Note: If you prepend @WAL=off @ to your connection string, it will disable
@@ -36,20 +33,12 @@ module Database.Persist.Sqlite
     , waitForDatabase
     ) where
 
-import Database.Persist.Sql
-import Database.Persist.Sql.Types.Internal (mkPersistBackend)
-import qualified Database.Persist.Sql.Util as Util
-
-import qualified Database.Sqlite as Sqlite
-
-import Control.Applicative as A
-import qualified Control.Exception as E
 import Control.Concurrent (threadDelay)
+import qualified Control.Exception as E
 import Control.Monad (forM_)
 import Control.Monad.IO.Unlift (MonadIO (..), MonadUnliftIO, withUnliftIO, unliftIO, withRunInIO)
 import Control.Monad.Logger (NoLoggingT, runNoLoggingT, MonadLogger, logWarn, runLoggingT)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT)
-import UnliftIO.Resource (ResourceT, runResourceT)
 import Control.Monad.Trans.Writer (runWriterT)
 import Data.Acquire (Acquire, mkAcquire, with)
 import Data.Aeson
@@ -66,6 +55,13 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import Lens.Micro.TH (makeLenses)
+import UnliftIO.Resource (ResourceT, runResourceT)
+
+import Database.Persist.Sql
+import Database.Persist.Sql.Types.Internal (mkPersistBackend)
+import qualified Database.Persist.Sql.Util as Util
+import qualified Database.Sqlite as Sqlite
+
 
 -- | Create a pool of SQLite connections.
 --
@@ -196,7 +192,7 @@ retryOnBusy action =
 -- | Wait until some noop action on the database does not return an 'Sqlite.ErrorBusy'. See 'retryOnBusy'.
 --
 -- @since 2.9.3
-waitForDatabase :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend, BackendCompatible SqlBackend backend) => ReaderT backend m ()
+waitForDatabase :: (MonadUnliftIO m, MonadLogger m, BackendCompatible SqlBackend backend) => ReaderT backend m ()
 waitForDatabase = retryOnBusy $ rawExecute "SELECT 42" []
 
 -- | Wrap up a raw 'Sqlite.Connection' as a Persistent SQL
@@ -627,11 +623,11 @@ instance FromJSON SqliteConf where
     parseJSON v = modifyFailure ("Persistent: error loading Sqlite conf: " ++) $ flip (withObject "SqliteConf") v parser where
         parser o = if HashMap.member "database" o
                       then SqliteConf
-                            A.<$> o .: "database"
-                            A.<*> o .: "poolsize"
+                            <$> o .: "database"
+                            <*> o .: "poolsize"
                       else SqliteConfInfo
-                            A.<$> o .: "connInfo"
-                            A.<*> o .: "poolsize"
+                            <$> o .: "connInfo"
+                            <*> o .: "poolsize"
 
 instance PersistConfig SqliteConf where
     type PersistConfigBackend SqliteConf = SqlPersistT

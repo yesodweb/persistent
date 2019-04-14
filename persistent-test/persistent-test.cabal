@@ -14,107 +14,82 @@ homepage:        http://www.yesodweb.com/book/persistent
 bug-reports:     https://github.com/yesodweb/persistent/issues
 
 library
-    exposed-modules: PersistentTest
-                     UpsertTest
-                     MpsNoPrefixTest
-                     PersistentTestModels
-                     PersistTestPetType
-                     PersistTestPetCollarType
-                     RawSqlTest
-                     RenameTest
-                     DataTypeTest
-                     EmptyEntityTest
-                     HtmlTest
-                     EmbedTest
-                     EmbedOrderTest
-                     EntityEmbedTest
-                     LargeNumberTest
-                     UniqueTest
-                     MaxLenTest
-                     Recursive
-                     SumTypeTest
-                     MigrationOnlyTest
-                     MigrationTest
-                     MigrationIdempotencyTest
-                     PersistUniqueTest
-                     CompositeTest
-                     TreeTest
-                     Init
-                     PrimaryTest
+    exposed-modules: CompositeTest
                      CustomPersistField
                      CustomPersistFieldTest
                      CustomPrimaryKeyReferenceTest
-                     MigrationColumnLengthTest
+                     DataTypeTest
+                     EmbedTest
+                     EmbedOrderTest
+                     EmptyEntityTest
+                     EntityEmbedTest
                      EquivalentTypeTest
-                     TransactionLevelTest
+                     HtmlTest
+                     Init
+                     LargeNumberTest
+                     MaxLenTest
+                     MigrationColumnLengthTest
+                     MigrationIdempotencyTest
+                     MigrationOnlyTest
+                     MigrationTest
+                     MpsNoPrefixTest
+                     PersistentTest
+                     PersistentTestModels
+                     PersistTestPetType
+                     PersistTestPetCollarType
+                     PersistUniqueTest
+                     PrimaryTest
+                     RawSqlTest
                      ReadWriteTest
+                     RenameTest
+                     Recursive
+                     SumTypeTest
+                     TransactionLevelTest
+                     TreeTest
+                     UniqueTest
+                     UpsertTest
 
     hs-source-dirs: src
 
-    ghc-options:   -Wall
-    if impl(ghc >= 7.8)
-      ghc-options: -Wall -j
+    ghc-options:   -Wall -j
 
-    build-depends:   base                     >= 4.6       && < 5
+    build-depends:   base                     >= 4.9       && < 5
                    , persistent
-                   , monad-control
                    , persistent-template
-                   , mongoDB
-                   , fail
-                   , HUnit
-                   , hspec >= 1.12.1
+                   , aeson                    >= 1.0
+                   , blaze-html               >= 0.9
+                   , bytestring               >= 0.10
+                   , conduit                  >= 1.2.12
+                   , containers               >= 0.5
+                   , exceptions               >= 0.8
+                   , hspec                    >= 2.4
                    , hspec-expectations
-                   , template-haskell
-                   , aeson                    >= 0.7
-                   , aeson-compat             >= 0.3.2.0   && < 0.4
-                   , lifted-base              >= 0.1
-                   , network
-                   , path-pieces              >= 0.1
-                   , http-api-data            >= 0.2
-                   , text                     >= 0.8
-                   , transformers             >= 0.2.1
-                   , unliftio-core
-                   , unliftio
-                   , containers               >= 0.2
-                   , bytestring               >= 0.9
-                   , base64-bytestring
-                   , conduit                  >= 1.2.8
-                   , resourcet                >= 0.4
-                   , exceptions               >= 0.6
-                   , time                     >= 1.1.4
-                   , random >= 1.0
-                   , QuickCheck >= 2.7
-                   , blaze-html               >= 0.5
-                   , blaze-markup             >= 0.5.1
-                   , quickcheck-instances >= 0.3
+                   , HUnit
+                   , monad-control
+                   , monad-logger             >= 0.3.25
+                   , path-pieces              >= 0.2
+                   , QuickCheck               >= 2.9
+                   , quickcheck-instances     >= 0.3
+                   , random                   >= 1.1
+                   , resourcet                >= 1.1
+                   , text                     >= 1.2
+                   , time                     >= 1.6
+                   , transformers             >= 0.5
                    , transformers-base
-                   , attoparsec
-                   , vector
+                   , unliftio
+                   , unliftio-core
                    , unordered-containers
-                   , monad-logger             >= 0.3
-                   , hashable
-                   -- actually just a mongoDB dependency
-                   -- fixes build warning on current build server
-                   , cereal
-                   , silently
-                   , blaze-builder
-                   , mtl
-                   , fast-logger
-                   , semigroups
-                   , scientific
-                   , resource-pool
-                   , exceptions
-                   , tagged
-                   , old-locale
-
-   if impl(ghc < 8)
-     build-depends:
-       semigroups
 
   default-language: Haskell2010
-  default-extensions: 
+  default-extensions:
+                    ExistentialQuantification
                     FlexibleContexts
-                    RankNTypes
+                    FlexibleInstances
+                    MultiParamTypeClasses
+                    OverloadedStrings
+                    QuasiQuotes
+                    TemplateHaskell
+                    TypeFamilies
 
 source-repository head
   type:     git

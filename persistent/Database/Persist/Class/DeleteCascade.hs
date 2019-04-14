@@ -1,19 +1,17 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TypeFamilies #-}
 module Database.Persist.Class.DeleteCascade
     ( DeleteCascade (..)
     , deleteCascadeWhere
     ) where
 
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Reader (ReaderT, ask, runReaderT)
+import Data.Conduit
+import qualified Data.Conduit.List as CL
+import Data.Acquire (with)
+
 import Database.Persist.Class.PersistStore
 import Database.Persist.Class.PersistQuery
 import Database.Persist.Class.PersistEntity
-
-import Data.Conduit
-import qualified Data.Conduit.List as CL
-import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Reader (ReaderT, ask, runReaderT)
-import Data.Acquire (with)
 
 -- | For combinations of backends and entities that support
 -- cascade-deletion. “Cascade-deletion” means that entries that depend on

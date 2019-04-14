@@ -1,11 +1,6 @@
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE OverloadedStrings #-}
-
+{-# LANGUAGE RankNTypes #-}
 module Database.Persist.Sql.Types.Internal
     ( HasPersistBackend (..)
     , IsPersistBackend (..)
@@ -40,6 +35,9 @@ import Data.Monoid ((<>))
 import Data.String (IsString)
 import Data.Text (Text)
 import Data.Typeable (Typeable)
+import Language.Haskell.TH.Syntax (Loc)
+import System.Log.FastLogger (LogStr)
+
 import Database.Persist.Class
   ( HasPersistBackend (..)
   , PersistQueryRead, PersistQueryWrite
@@ -49,8 +47,6 @@ import Database.Persist.Class
   )
 import Database.Persist.Class.PersistStore (IsPersistBackend (..))
 import Database.Persist.Types
-import Language.Haskell.TH.Syntax (Loc)
-import System.Log.FastLogger (LogStr)
 
 type LogFunc = Loc -> LogSource -> LogLevel -> LogStr -> IO ()
 

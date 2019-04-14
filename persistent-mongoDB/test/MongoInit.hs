@@ -1,8 +1,6 @@
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TemplateHaskell #-}
-
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 -- We create an orphan instance for GenerateKey here to avoid a circular
 -- dependency between:
 --
@@ -11,7 +9,6 @@
 -- c) persistent-mongODB:lib
 --
 -- This kind of cycle is all kinds of bad news.
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module MongoInit (
   BackendMonad
@@ -28,7 +25,6 @@ module MongoInit (
   , BackendKey(MongoKey)
 
    -- re-exports
-  , (A.<$>), (A.<*>)
   , module Database.Persist
   , module Database.Persist.Sql.Raw.QQ
   , module Test.Hspec
@@ -55,7 +51,6 @@ import Init
     )
 
 -- re-exports
-import Control.Applicative as A ((<$>), (<*>))
 import Control.Exception (SomeException)
 import Control.Monad (void, replicateM, liftM, when, forM_)
 import Control.Monad.Trans.Reader
@@ -66,26 +61,19 @@ import Test.Hspec
 -- testing
 import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
 
+import Control.Monad (unless, (>=>))
+import Control.Monad.IO.Class
+import Control.Monad.IO.Unlift (MonadUnliftIO)
 import qualified Data.ByteString as BS
+import Data.Int (Int32, Int64)
 import Data.Text (Text)
-import Database.Persist
-import Database.Persist.TH ()
-
-import Database.Persist.Sql (PersistFieldSql(..))
-import Database.Persist.TH (mkPersistSettings)
-import Language.Haskell.TH.Syntax (Type(..))
-
 import qualified Database.MongoDB as MongoDB
 import Database.Persist.MongoDB (Action, withMongoPool, runMongoDBPool, defaultMongoConf, applyDockerEnv, BackendKey(..))
+import Language.Haskell.TH.Syntax (Type(..))
 
-import Control.Monad (unless, (>=>))
-import Control.Monad.IO.Unlift (MonadUnliftIO)
-
--- Data types
-import Data.Int (Int32, Int64)
-
-import Control.Monad.IO.Class
-
+import Database.Persist
+import Database.Persist.Sql (PersistFieldSql(..))
+import Database.Persist.TH (mkPersistSettings)
 
 setup :: Action IO ()
 setup = setupMongo

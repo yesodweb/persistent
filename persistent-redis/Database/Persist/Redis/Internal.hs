@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 module Database.Persist.Redis.Internal
     ( toKey
     , unKey
@@ -9,13 +8,13 @@ module Database.Persist.Redis.Internal
     , toB
     ) where
 
-import Data.Text (Text, unpack)
-import qualified Data.Text as T
-import Database.Persist.Types
-import Database.Persist.Class
 import qualified Data.ByteString as B
 import qualified Data.ByteString.UTF8 as U
+import Data.Text (Text, unpack)
+import qualified Data.Text as T
 
+import Database.Persist.Class
+import Database.Persist.Types
 import Database.Persist.Redis.Parser
 
 toLabel :: FieldDef -> B.ByteString
@@ -39,7 +38,7 @@ mkEntity key fields = do
 zipAndConvert :: PersistField t => [FieldDef] -> [t] -> [(B.ByteString, B.ByteString)]
 zipAndConvert [] _ = []
 zipAndConvert _ [] = []
-zipAndConvert (e:efields) (p:pfields) = 
+zipAndConvert (e:efields) (p:pfields) =
     let pv = toPersistValue p
     in
         if pv == PersistNull then zipAndConvert efields pfields
@@ -57,7 +56,7 @@ underscoreBs = U.fromString "_"
 
 -- | Make a key for given entity and id
 toKeyText :: PersistEntity val => val -> Integer -> Text
-toKeyText val k = T.append (T.append (toEntityString val) "_") (T.pack $ show k)
+toKeyText val k = toEntityString val `T.append` T.pack "_" `T.append` T.pack (show k)
 
 toB :: Text -> B.ByteString
 toB = U.fromString . unpack
@@ -77,7 +76,7 @@ unKey :: (PersistEntity val) => Key val -> B.ByteString
 unKey = toValue . head . keyToValues
 
 toKey :: (Monad m, PersistEntity val) => Text -> m (Key val)
-toKey x = case q of 
+toKey x = case q of
         Right z -> return z
         Left a -> fail (unpack a)
     where

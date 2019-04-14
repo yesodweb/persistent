@@ -1,5 +1,5 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 -- | Filter operators for JSON values added to PostgreSQL 9.4
 module Database.Persist.Postgresql.JSON
@@ -342,7 +342,8 @@ fromPersistValueJsonB (PersistByteString bs) =
       Right v -> Right v
 fromPersistValueJsonB x = Left $ fromPersistValueError "FromJSON" "string or bytea" x
 
--- Constraints on the type are not necessary.
+-- Constraints on the type might not be necessary,
+-- but better to leave them in.
 sqlTypeJsonB :: (ToJSON a, FromJSON a) => Proxy a -> SqlType
 sqlTypeJsonB _ = SqlOther "JSONB"
 

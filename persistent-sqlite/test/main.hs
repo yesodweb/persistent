@@ -1,24 +1,13 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
-{-# OPTIONS_GHC -fno-warn-unused-binds #-}
-{-# OPTIONS_GHC -fno-warn-unused-imports #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
-
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 import SqliteInit
 
@@ -26,48 +15,46 @@ import qualified CompositeTest
 import qualified CustomPersistFieldTest
 import qualified CustomPrimaryKeyReferenceTest
 import qualified DataTypeTest
+import qualified EmptyEntityTest
 import qualified EmbedOrderTest
 import qualified EmbedTest
-import qualified EmptyEntityTest
+import qualified EquivalentTypeTest
 import qualified HtmlTest
 import qualified LargeNumberTest
-import qualified UpsertTest
 import qualified MaxLenTest
+import qualified MpsNoPrefixTest
+import qualified MigrationColumnLengthTest
 import qualified MigrationOnlyTest
 import qualified PersistentTest
-import qualified ReadWriteTest
-import qualified RawSqlTest
-import qualified MpsNoPrefixTest
 import qualified PersistUniqueTest
 import qualified PrimaryTest
+import qualified RawSqlTest
+import qualified ReadWriteTest
 import qualified Recursive
 import qualified RenameTest
 import qualified SumTypeTest
-import qualified UniqueTest
-import qualified MigrationColumnLengthTest
-import qualified EquivalentTypeTest
 import qualified TransactionLevelTest
-
-import Data.Fixed
-import Data.IntMap (IntMap)
-import Control.Monad.IO.Class  (liftIO)
-import qualified Data.Text as T
-import Data.Time
-import Database.Persist.Sqlite
-import Database.Persist.TH
-import qualified Database.Sqlite as Sqlite
-import System.IO (hClose)
-import System.IO.Temp (withSystemTempFile)
-import Test.Hspec
-import qualified Data.ByteString as BS
-import Test.QuickCheck.Arbitrary (Arbitrary, arbitrary)
-import Test.QuickCheck.Gen (Gen(..), frequency, listOf, sized, resize)
-import Test.QuickCheck.Instances ()
-import Test.QuickCheck.Random (newQCGen)
+import qualified UniqueTest
+import qualified UpsertTest
 
 import Control.Exception (handle, IOException)
+import Control.Monad.Catch (catch)
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString as BS
+import Data.Fixed
+import Data.IntMap (IntMap)
+import qualified Data.Text as T
+import Data.Time
 import Filesystem (removeFile)
 import Filesystem.Path.CurrentOS (fromText)
+import Test.QuickCheck.Arbitrary (Arbitrary, arbitrary)
+import System.IO (hClose)
+import System.IO.Temp (withSystemTempFile)
+
+import Database.Persist.Sqlite
+import qualified Database.Sqlite as Sqlite
+import PersistentTestModels
+
 import qualified MigrationTest
 
 type Tuple = (,)
@@ -220,3 +207,12 @@ main = do
     it "issue #527" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
         runMigration migrateAll
         insertMany_ $ replicate 1000 (Test $ read "2014-11-30 05:15:25.123")
+
+    it "afterException" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
+        runMigration testMigrate
+        let catcher :: forall m. Monad m => SomeException -> m ()
+            catcher _ = return ()
+        _ <- insert $ Person "A" 0 Nothing
+        _ <- insert_ (Person "A" 1 Nothing) `catch` catcher
+        _ <- insert $ Person "B" 0 Nothing
+        return ()

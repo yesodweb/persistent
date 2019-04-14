@@ -8,7 +8,7 @@ synopsis:        Backend for the persistent library using sqlite3.
 description:     This package includes a thin sqlite3 wrapper based on the direct-sqlite package, as well as the entire C library, so there are no system dependencies.
 category:        Database, Yesod
 stability:       Stable
-cabal-version:   >= 1.8
+cabal-version:   >= 1.10
 build-type:      Simple
 homepage:        http://www.yesodweb.com/book/persistent
 bug-reports:     https://github.com/yesodweb/persistent/issues
@@ -37,25 +37,25 @@ flag json1
   default: True
 
 library
-    build-depends:   base                    >= 4.8         && < 5
-                   , bytestring              >= 0.9.1
-                   , transformers            >= 0.2.1
+    build-depends:   base                    >= 4.9         && < 5
                    , persistent              >= 2.9         && < 3
-                   , unliftio-core
-                   , containers              >= 0.2
-                   , text                    >= 0.7
-                   , aeson                   >= 0.6.2
-                   , conduit                 >= 1.2.8
-                   , monad-logger            >= 0.2.4
+                   , aeson                   >= 1.0
+                   , bytestring              >= 0.10
+                   , conduit                 >= 1.2.12
+                   , containers              >= 0.5
                    , microlens-th            >= 0.4.1.1
-                   , resourcet               >= 1.1
-                   , time
-                   , old-locale
+                   , monad-logger            >= 0.3.25
                    , resource-pool
+                   , resourcet               >= 1.1.9
+                   , text                    >= 1.2
+                   , time
+                   , transformers            >= 0.5
+                   , unliftio-core
                    , unordered-containers
     exposed-modules: Database.Sqlite
                      Database.Persist.Sqlite
     ghc-options:     -Wall
+    default-language: Haskell2010
     if flag(systemlib)
         if flag(use-pkgconfig)
             pkgconfig-depends: sqlite3
@@ -93,7 +93,10 @@ executable sanity
         buildable: False
     main-is: sanity.hs
     hs-source-dirs: test
-    build-depends: base, persistent-sqlite, monad-logger
+    build-depends: base
+                 , persistent-sqlite
+                 , monad-logger
+    default-language: Haskell2010
 
 test-suite test
     type:            exitcode-stdio-1.0
@@ -102,40 +105,26 @@ test-suite test
     other-modules:   SqliteInit
     ghc-options:     -Wall
 
-    build-depends:   base >= 4.6 && < 5
-                   , persistent-sqlite
-                   , hspec
+    build-depends:   base >= 4.9 && < 5
                    , persistent
                    , persistent-sqlite
                    , persistent-template
-                   , system-filepath
+                   , persistent-test
+                   , bytestring
+                   , containers
+                   , exceptions
+                   , fast-logger
+                   , hspec >= 2.4
+                   , HUnit
+                   , monad-logger
+                   , QuickCheck
+                   , resourcet
                    , system-fileio
+                   , system-filepath
                    , temporary
                    , text
                    , time
                    , transformers
-                   , persistent-template
-                   , hspec-expectations
-                   , vector
-                   , HUnit
-                   , persistent-test
-                   , template-haskell
-                   , process
-                   , unliftio-core
-                   , aeson
-                   , hspec >= 1.3
-                   , text
-                   , persistent
-                   , bytestring
-                   , QuickCheck
-                   , transformers
-                   , mtl
-                   , containers
-                   , blaze-html
-                   , random >= 1.0.1
-                   , fast-logger
-                   , resourcet
                    , time
-                   , monad-logger
-                   , quickcheck-instances
-                   , unordered-containers
+                   , unliftio-core
+    default-language: Haskell2010

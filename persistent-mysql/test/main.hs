@@ -1,45 +1,21 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
-{-# OPTIONS_GHC -fno-warn-unused-binds #-}
-{-# OPTIONS_GHC -fno-warn-unused-imports #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
-
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 import MyInit
 
-import Data.Time (Day, UTCTime (..), fromGregorian, picosecondsToDiffTime,
-                  TimeOfDay (TimeOfDay), timeToTimeOfDay, timeOfDayToTime)
+import Data.Time (Day, UTCTime (..), TimeOfDay, timeToTimeOfDay, timeOfDayToTime)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds, posixSecondsToUTCTime)
-import Data.IntMap (IntMap)
-import Data.Aeson
 import Data.Fixed
 import Test.QuickCheck
 import qualified Data.Text as T
-import Data.Time
-import Data.Int
-import Data.Word
 import Data.IntMap (IntMap)
-import Control.Monad.Trans
-import Test.QuickCheck
-import qualified Data.Text as T
 import qualified Data.ByteString as BS
-import Text.Blaze.Html
-import Text.Blaze.Html.Renderer.Text
 
 import qualified CompositeTest
 import qualified CustomPersistFieldTest
@@ -48,27 +24,27 @@ import qualified DataTypeTest
 import qualified EmbedOrderTest
 import qualified EmbedTest
 import qualified EmptyEntityTest
+import qualified EquivalentTypeTest
 import qualified HtmlTest
+import qualified InsertDuplicateUpdate
 import qualified LargeNumberTest
-import qualified UpsertTest
 import qualified MaxLenTest
+import qualified MigrationColumnLengthTest
+import qualified MigrationIdempotencyTest
 import qualified MigrationOnlyTest
-import qualified PersistentTest
-import qualified ReadWriteTest
-import qualified RawSqlTest
 import qualified MpsNoPrefixTest
+import qualified PersistentTest
 import qualified PersistUniqueTest
-import qualified PrimaryTest
+-- FIXME: Not used... should it be?
+-- import qualified PrimaryTest
+import qualified RawSqlTest
+import qualified ReadWriteTest
 import qualified Recursive
 import qualified RenameTest
 import qualified SumTypeTest
-import qualified InsertDuplicateUpdate
-import qualified UniqueTest
-import qualified MigrationColumnLengthTest
-import qualified EquivalentTypeTest
 import qualified TransactionLevelTest
-
-import qualified MigrationIdempotencyTest
+import qualified UniqueTest
+import qualified UpsertTest
 
 type Tuple a b = (a, b)
 

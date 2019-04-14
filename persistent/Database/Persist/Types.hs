@@ -1,5 +1,3 @@
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE TypeFamilies #-}
 module Database.Persist.Types
     ( module Database.Persist.Types.Base
     , SomePersistField (..)

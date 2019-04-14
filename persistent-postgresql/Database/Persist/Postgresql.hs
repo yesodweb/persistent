@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -25,60 +24,56 @@ module Database.Persist.Postgresql
     , migrateEnableExtension
     ) where
 
-import Database.Persist.Sql
-import qualified Database.Persist.Sql.Util as Util
-import Database.Persist.Sql.Types.Internal (mkPersistBackend)
-import Data.Fixed (Pico)
-
+import qualified Database.PostgreSQL.LibPQ as LibPQ
 import qualified Database.PostgreSQL.Simple as PG
-import qualified Database.PostgreSQL.Simple.TypeInfo.Static as PS
 import qualified Database.PostgreSQL.Simple.Internal as PG
-import qualified Database.PostgreSQL.Simple.ToField as PGTF
 import qualified Database.PostgreSQL.Simple.FromField as PGFF
+import qualified Database.PostgreSQL.Simple.ToField as PGTF
 import qualified Database.PostgreSQL.Simple.Transaction as PG
 import qualified Database.PostgreSQL.Simple.Types as PG
+import qualified Database.PostgreSQL.Simple.TypeInfo.Static as PS
 import Database.PostgreSQL.Simple.Ok (Ok (..))
 
-import qualified Database.PostgreSQL.LibPQ as LibPQ
-
-import Control.Exception (throw)
-import Control.Monad.IO.Unlift (MonadIO (..), MonadUnliftIO)
-import Data.Data
-import Data.Typeable (Typeable)
-import Data.IORef
-import qualified Data.Map as Map
-import Data.Maybe
-import Data.Either (partitionEithers)
 import Control.Arrow
-import Data.List (find, sort, groupBy)
-import Data.Function (on)
-import Data.Conduit
-import qualified Data.Conduit.List as CL
-import Control.Monad.Logger (MonadLogger, runNoLoggingT)
-
-import qualified Data.IntMap as I
-
-import Data.ByteString (ByteString)
-import qualified Data.ByteString.Char8 as B8
-import qualified Data.Text as T
-import Data.Text.Read (rational)
-import qualified Data.Text.Encoding as T
-import qualified Data.Text.IO as T
-import qualified Blaze.ByteString.Builder.Char8 as BBB
-
-import Data.Text (Text)
-import Data.Aeson
-import Data.Aeson.Types (modifyFailure)
+import Control.Exception (Exception, throw, throwIO)
 import Control.Monad (forM)
+import Control.Monad.IO.Unlift (MonadIO (..), MonadUnliftIO)
+import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Control.Monad.Trans.Reader (runReaderT)
 import Control.Monad.Trans.Writer (WriterT(..), runWriterT)
+
+import qualified Blaze.ByteString.Builder.Char8 as BBB
 import Data.Acquire (Acquire, mkAcquire, with)
-import System.Environment (getEnvironment)
+import Data.Aeson
+import Data.Aeson.Types (modifyFailure)
+import Data.ByteString (ByteString)
+import qualified Data.ByteString.Char8 as B8
+import Data.Conduit
+import qualified Data.Conduit.List as CL
+import Data.Data
+import Data.Either (partitionEithers)
+import Data.Fixed (Pico)
+import Data.Function (on)
 import Data.Int (Int64)
+import qualified Data.IntMap as I
+import Data.IORef
+import Data.List (find, sort, groupBy)
+import qualified Data.Map as Map
+import Data.Maybe
 import Data.Monoid ((<>))
 import Data.Pool (Pool)
+import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
+import qualified Data.Text.IO as T
+import Data.Text.Read (rational)
 import Data.Time (utc, localTimeToUTC)
-import Control.Exception (Exception, throwIO)
+import Data.Typeable (Typeable)
+import System.Environment (getEnvironment)
+
+import Database.Persist.Sql
+import Database.Persist.Sql.Types.Internal (mkPersistBackend)
+import qualified Database.Persist.Sql.Util as Util
 
 -- | A @libpq@ connection string.  A simple example of connection
 -- string would be @\"host=localhost port=5432 user=test
@@ -469,10 +464,6 @@ builtinGetters = I.fromList
     , (k PS.xml,         convertPV PersistText)
     , (k PS.float4,      convertPV PersistDouble)
     , (k PS.float8,      convertPV PersistDouble)
-#if !MIN_VERSION_postgresql_simple(0,5,0)
-    , (k PS.abstime,     convertPV PersistUTCTime)
-    , (k PS.reltime,     convertPV PersistUTCTime)
-#endif
     , (k PS.money,       convertPV PersistRational)
     , (k PS.bpchar,      convertPV PersistText)
     , (k PS.varchar,     convertPV PersistText)

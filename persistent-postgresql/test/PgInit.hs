@@ -12,22 +12,21 @@ module PgInit (
   , GenerateKey(..)
 
    -- re-exports
-  , (A.<$>), (A.<*>)
-  , module Database.Persist
-  , module Database.Persist.Sql.Raw.QQ
-  , module Test.Hspec
-  , module Test.HUnit
-  , liftIO
-  , mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase
-  , Int32, Int64
-  , Text
   , module Control.Monad.Trans.Reader
   , module Control.Monad
   , module Database.Persist.Sql
-  , BS.ByteString
-  , SomeException
-  , TestFn(..)
+  , module Database.Persist
+  , module Database.Persist.Sql.Raw.QQ
   , module Init
+  , module Test.Hspec
+  , module Test.HUnit
+  , BS.ByteString
+  , Int32, Int64
+  , liftIO
+  , mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase
+  , SomeException
+  , Text
+  , TestFn(..)
   ) where
 
 import Init
@@ -39,45 +38,38 @@ import Init
     )
 
 -- re-exports
-import Test.QuickCheck.Instances ()
-import Control.Applicative as A ((<$>), (<*>))
 import Control.Exception (SomeException)
 import Control.Monad (void, replicateM, liftM, when, forM_)
 import Control.Monad.Trans.Reader
+import Data.Aeson (Value(..))
 import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase, MkPersistSettings(..))
 import Database.Persist.Sql.Raw.QQ
-import Test.Hspec
-import Data.Aeson (Value(..))
 import Database.Persist.Postgresql.JSON()
-import qualified Data.HashMap.Strict as HM
+import Test.Hspec
+import Test.QuickCheck.Instances ()
 
 -- testing
 import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
 import Test.QuickCheck
 
-import qualified Data.ByteString as BS
-import Data.Text (Text)
-import Database.Persist
-import Database.Persist.TH ()
-import System.Environment (getEnvironment)
-
+import Control.Monad (unless, (>=>))
+import Control.Monad.IO.Class
+import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
-import Database.Persist.Sql
-import System.Log.FastLogger (fromLogStr)
-
+import qualified Data.ByteString as BS
+import qualified Data.HashMap.Strict as HM
+import Data.Int (Int32, Int64)
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
+import Data.Text (Text)
+import System.Environment (getEnvironment)
+import System.Log.FastLogger (fromLogStr)
+
+import Database.Persist
 import Database.Persist.Postgresql
-
-import Control.Monad (unless, (>=>))
-import Control.Monad.IO.Unlift (MonadUnliftIO)
-
--- Data types
-import Data.Int (Int32, Int64)
-
-import Control.Monad.IO.Class
-
+import Database.Persist.Sql
+import Database.Persist.TH ()
 
 _debugOn :: Bool
 _debugOn = False
@@ -101,7 +93,7 @@ runConn f = do
     _ <- if travis
       then withPostgresqlPool "host=localhost port=5432 user=postgres dbname=persistent" 1 $ runSqlPool f
       else do
-        host <- fromMaybe "localhost" A.<$> liftIO dockerPg
+        host <- fromMaybe "localhost" <$> liftIO dockerPg
         withPostgresqlPool ("host=" <> host <> " port=5432 user=postgres dbname=test") 1 $ runSqlPool f
     return ()
 

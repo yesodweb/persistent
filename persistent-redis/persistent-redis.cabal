@@ -7,7 +7,7 @@ synopsis:        Backend for persistent library using Redis.
 description:     Based on the Redis package.
 category:        Database
 stability:       Experimental
-cabal-version:   >= 1.8
+cabal-version:   >= 1.10
 maintainer:      Pavel Ryzhov <paul@paulrz.cz>
 build-type:      Simple
 bug-reports:     https://github.com/yesodweb/persistent/issues
@@ -17,56 +17,53 @@ source-repository head
         location:       https://github.com/yesodweb/persistent.git
 
 library
-    build-depends:   base                  >= 4.6        && < 5
-                   , hedis                 >= 0.6.0
-                   , bytestring            >= 0.10.0.0 && < 0.11.0.0
+    build-depends:   base                  >= 4.9        && < 5
                    , persistent            >= 2.5      && < 3.0
-                   , text                  >= 1.2.0.0
-                   , aeson                 >= 0.8
-                   , time                  >= 1.4
-                   , attoparsec            >= 0.12.0.0
-                   , mtl                   >= 2.2.0    && < 2.3
-                   , transformers          >= 0.4.0.0  && < 0.6.0.0
-                   , monad-control         >= 0.3.2.0  && < 1.2.0.0
-                   , utf8-string           >= 0.3.7    && < 1.1.0
-                   , binary                >= 0.7      && < 0.9
-                   , scientific            >= 0.3.1    && < 0.4
-                   , path-pieces           >= 0.1
+                   , aeson                 >= 1.0
+                   , binary                >= 0.8      && < 0.9
+                   , bytestring            >= 0.10.8   && < 0.11
+                   , hedis                 >= 0.9
                    , http-api-data
+                   , mtl                   >= 2.2.1    && < 2.3
+                   , path-pieces           >= 0.2
+                   , scientific            >= 0.3.5    && < 0.4
+                   , text                  >= 1.2
+                   , time                  >= 1.6
+                   , transformers          >= 0.5         && < 0.6
+                   , utf8-string           >= 1.0         && < 1.1
 
     exposed-modules: Database.Persist.Redis
 
     other-modules:   Database.Persist.Redis.Config
-                     Database.Persist.Redis.Internal
-                     Database.Persist.Redis.Store
-                     Database.Persist.Redis.Parser
-                     Database.Persist.Redis.Update
                      Database.Persist.Redis.Exception
+                     Database.Persist.Redis.Internal
+                     Database.Persist.Redis.Parser
+                     Database.Persist.Redis.Store
+                     Database.Persist.Redis.Update
 
     ghc-options:     -Wall
+    default-language: Haskell2010
 
 test-suite  basic
     type: exitcode-stdio-1.0
     main-is: tests/basic-test.hs
-    build-depends:   base                  >= 4.6        && < 5
-                   , hedis                 >= 0.6.0
-                   , persistent            >= 2.5      && < 3.0
-                   , persistent-template   >= 2.5      && < 3.0
-                   , mtl                   >= 2.2.0    && < 2.3
-                   , transformers          >= 0.4.0.0  && < 0.6.0.0
-                   , utf8-string           >= 0.3.7    && < 1.1.0
-                   , bytestring            >= 0.10.0.0 && < 0.11.0.0
-                   , text                  >= 1.2.0.0
-                   , aeson                 >= 0.8
-                   , binary                >= 0.7      && < 0.9
-                   , time                  >= 1.4
-                   , attoparsec            >= 0.12.0.0
-                   , template-haskell
-                   , monad-control         >= 0.3.2.0  && < 1.2.0.0
-                   , path-pieces           >= 0.1
-                   , scientific
-                   , http-api-data
+    build-depends:   base                  >= 4.9      && < 5
+                   , persistent            >= 2.10     && < 3.0
                    , persistent-redis
+                   , persistent-template   >= 2.7      && < 3.0
+                   , aeson                 >= 1.0
+                   , bytestring            >= 0.10.8   && < 0.11
+                   , binary                >= 0.8      && < 0.9
+                   , hedis                 >= 0.9
+                   , http-api-data
+                   , mtl                   >= 2.2.1    && < 2.3
+                   , path-pieces           >= 0.2
+                   , scientific
+                   , template-haskell
+                   , text                  >= 1.2
+                   , time                  >= 1.6
+                   , transformers          >= 0.5      && < 0.6
+                   , utf8-string           >= 1.0      && < 1.1
 
     other-modules:   Database.Persist.Redis
                      Database.Persist.Redis.Config
@@ -75,3 +72,4 @@ test-suite  basic
                      Database.Persist.Redis.Parser
                      Database.Persist.Redis.Update
                      Database.Persist.Redis.Exception
+    default-language: Haskell2010

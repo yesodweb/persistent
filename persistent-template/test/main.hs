@@ -1,28 +1,32 @@
-{-# LANGUAGE OverloadedStrings, QuasiQuotes, TemplateHaskell, TypeFamilies, GADTs #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Main
   (
   -- avoid unused ident warnings
     module Main
   ) where
+
+import Control.Applicative (Const (..))
+import Data.Aeson
+import Data.ByteString.Lazy.Char8 ()
+import Data.Functor.Identity (Identity (..))
+import Data.Text (Text, pack)
 import Test.Hspec
 import Test.Hspec.QuickCheck
-import Data.ByteString.Lazy.Char8 ()
 import Test.QuickCheck.Arbitrary
 import Test.QuickCheck.Gen (Gen)
-import Control.Applicative as A ((<$>), (<*>), Const (..))
-import Data.Functor.Identity (Identity (..))
 
 import Database.Persist
 import Database.Persist.TH
-import Data.Text (Text, pack)
-import Data.Aeson
-
 import TemplateTestImports
+
 
 share [mkPersist sqlSettings { mpsGeneric = False }, mkDeleteCascade sqlSettings { mpsGeneric = False }] [persistUpperCase|
 Person json
@@ -55,10 +59,10 @@ Laddress json
 |]
 
 arbitraryT :: Gen Text
-arbitraryT = pack A.<$> arbitrary
+arbitraryT = pack <$> arbitrary
 
 instance Arbitrary Person where
-    arbitrary = Person <$> arbitraryT A.<*> arbitrary <*> arbitrary <*> arbitrary
+    arbitrary = Person <$> arbitraryT <*> arbitrary <*> arbitrary <*> arbitrary
 instance Arbitrary Address where
     arbitrary = Address <$> arbitraryT <*> arbitraryT <*> arbitrary
 

@@ -1,27 +1,14 @@
-{-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-} -- FIXME
+{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 module CompositeTest where
 
-import Test.Hspec.Expectations ()
-import Init
 import qualified Data.Map as Map
-
 import Data.Maybe (isJust)
+
 import Database.Persist.TH (mkDeleteCascade)
+import Init
 
 
 -- mpsGeneric = False is due to a bug or at least lack of a feature in mkKeyTypeDec TH.hs
@@ -109,7 +96,7 @@ specsWith runDb = describe "composite" $
       kp2 <- insert p2
       xs <- selectList [TestParentId <-. [kp1,kp2]] []
       length xs @== 2
-      let [e1@(Entity newkp1 newp1),e2@(Entity newkp2 newp2)] = xs
+      [(Entity newkp1 newp1),(Entity newkp2 newp2)] <- pure xs
       matchParentK kp1 @== matchParentK newkp1
       matchParentK kp2 @== matchParentK newkp2
       p1 @== newp1
@@ -120,7 +107,7 @@ specsWith runDb = describe "composite" $
       kp2 <- insert p2
       xs <- selectList [TestParentId !=. kp1] []
       length xs @== 1
-      let [Entity newkp2 newp2] = xs
+      let [Entity newkp2 _newp2] = xs
       matchParentK kp2 @== matchParentK newkp2
 
     it "Filter by Id with 'in'" $ runDb $ do
@@ -128,7 +115,7 @@ specsWith runDb = describe "composite" $
       kp2 <- insert p2
       xs <- selectList [TestParentId <-. [kp1,kp2]] []
       length xs @== 2
-      let [Entity newkp1 newp1,Entity newkp2 newp2] = xs
+      let [Entity newkp1 _newp1,Entity newkp2 _newp2] = xs
       matchParentK kp1 @== matchParentK newkp1
       matchParentK kp2 @== matchParentK newkp2
 
@@ -137,7 +124,7 @@ specsWith runDb = describe "composite" $
       kp2 <- insert p2
       xs <- selectList [TestParentId /<-. [kp1]] []
       length xs @== 1
-      let [Entity newkp2 newp2] = xs
+      let [Entity newkp2 _newp2] = xs
       matchParentK kp2 @== matchParentK newkp2
 
     it "Filter by Id with 'not in' with no data" $ runDb $ do
