@@ -257,13 +257,6 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- > +-----+-----+-----+
     upsertBy
         :: (MonadIO m, PersistRecordBackend record backend)
-<<<<<<< HEAD
-        => Unique record   -- ^ uniqueness constraint to find by
-        -> record          -- ^ new record to insert
-        -> [Update record] -- ^ updates to perform if the record already exists
-        -> ReaderT backend m (Entity record) -- ^ the record in the database after the operation
-    upsertBy = defaultUpsertBy
-=======
         => Unique record
         -- ^ uniqueness constraint to find by
         -> record
@@ -272,13 +265,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
         -- ^ updates to perform if the record already exists
         -> ReaderT backend m (Entity record)
         -- ^ the record in the database after the operation
-    upsertBy uniqueKey record updates = do
-        mrecord <- getBy uniqueKey
-        maybe (insertEntity record) (`updateGetEntity` updates) mrecord
-      where
-        updateGetEntity (Entity k _) upds =
-            (Entity k) `liftM` (updateGet k upds)
->>>>>>> upstream/master
+    upsertBy = defaultUpsertBy
 
     -- | Put many records into db
     --
@@ -635,8 +622,4 @@ defaultPutMany rsD@(e:_)  = do
 -- 'Unique' keys on that record. This is useful for comparing two @record@s
 -- for equality only on the basis of their 'Unique' keys.
 persistUniqueKeyValues :: PersistEntity record => record -> [PersistValue]
-<<<<<<< HEAD
-persistUniqueKeyValues r = concat $ map persistUniqueToValues $ persistUniqueKeys r
-=======
 persistUniqueKeyValues = concatMap persistUniqueToValues . persistUniqueKeys
->>>>>>> upstream/master
