@@ -1,16 +1,14 @@
-{-# OPTIONS_GHC -fno-warn-unused-binds #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE QuasiQuotes, TemplateHaskell, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, EmptyDataDecls, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 module HtmlTest (specsWith, cleanDB, htmlMigrate) where
-
-import Init
 
 import Data.Char (generalCategory, GeneralCategory(..))
 import qualified Data.Text as T
 import System.Random (randomIO, randomRIO, Random)
-
 import Text.Blaze.Html
 import Text.Blaze.Html.Renderer.Text
+
+import Init
 
 -- Test lower case names
 share [mkPersist persistSettings { mpsGeneric = True }, mkMigrate "htmlMigrate"] [persistLowerCase|

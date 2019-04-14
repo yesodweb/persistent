@@ -1,22 +1,11 @@
-{-# OPTIONS_GHC -fno-warn-unused-binds #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 module SumTypeTest (specsWith, sumTypeMigrate) where
 
-import Database.Persist.TH
 import qualified Data.Text as T
 
+import Database.Persist.TH
 import Init
 
 share [mkPersist persistSettings { mpsGeneric = True }, mkMigrate "sumTypeMigrate"] [persistLowerCase|

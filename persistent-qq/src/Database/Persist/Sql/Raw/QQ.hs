@@ -14,12 +14,10 @@ The QuasiQuoters in this module perform a simple substitution on the query text,
 that allows value substitutions, table name substitutions as well as column name
 substitutions.
 -}
-
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
-
 module Database.Persist.Sql.Raw.QQ (
       -- * Sql QuasiQuoters
       queryQQ

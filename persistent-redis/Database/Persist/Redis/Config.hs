@@ -1,14 +1,6 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE RankNTypes, TypeFamilies, GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, UndecidableInstances #-}
-
--- TODO: The `-fno-warn-deprecations` flag is passed because Redis has
--- deprecated the PortID and PortNumber types, with the following message:
--- Deprecated: "The high level Network interface is no longer supported. Please use Network.Socket."
-{-# OPTIONS_GHC -fno-warn-orphans -fno-warn-deprecations #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Database.Persist.Redis.Config
     ( RedisAuth (..)
@@ -24,22 +16,17 @@ module Database.Persist.Redis.Config
     , module Database.Persist
     ) where
 
-import Database.Persist
-import qualified Database.Redis as R
-import Data.Text (Text, unpack, pack)
-import Data.Aeson (Value (Object, Number, String), (.:?), (.!=), FromJSON(..))
-import Control.Monad (mzero, MonadPlus(..))
 import Control.Monad.IO.Class (MonadIO (..))
--- import Control.Monad.Trans.Class (MonadTrans (..))
--- import Control.Applicative (Applicative (..))
 import Control.Monad.Reader(ReaderT(..))
 import Control.Monad.Reader.Class
+import Data.Aeson (Value (Object, Number, String), (.:?), (.!=), FromJSON(..))
 import qualified Data.ByteString.Char8 as B
-#if MIN_VERSION_aeson(0, 7, 0)
+import Control.Monad (mzero, MonadPlus(..))
 import Data.Scientific() -- we require only RealFrac instance of Scientific
-#else
-import Data.Attoparsec.Number
-#endif
+import Data.Text (Text, unpack, pack)
+import qualified Database.Redis as R
+
+import Database.Persist
 
 newtype RedisAuth =  RedisAuth Text deriving (Eq, Show)
 
@@ -67,7 +54,7 @@ thisConnection :: Monad m => RedisT m R.Connection
 thisConnection = ask
 
 -- | Run a connection reader function against a Redis configuration
-withRedisConn :: (Monad m, MonadIO m) => RedisConf -> (R.Connection -> m a) -> m a
+withRedisConn :: (MonadIO m) => RedisConf -> (R.Connection -> m a) -> m a
 withRedisConn conf connectionReader = do
     conn <- liftIO $ createPoolConfig conf
     connectionReader conn

@@ -1,10 +1,4 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TemplateHaskell #-}
 
 module MyInit (
   (@/=), (@==), (==@)
@@ -25,7 +19,6 @@ module MyInit (
 
   , RunDb
    -- re-exports
-  , (A.<$>), (A.<*>)
   , module Database.Persist
   , module Database.Persist.Sql.Raw.QQ
   , module Test.Hspec
@@ -50,7 +43,7 @@ module MyInit (
 
 import Init
     ( TestFn(..), truncateTimeOfDay, truncateUTCTime
-    , truncateToMicro, arbText, liftA2, GenerateKey(..)
+    , truncateToMicro, arbText, GenerateKey(..)
     , (@/=), (@==), (==@)
     , assertNotEqual, assertNotEmpty, assertEmpty, asIO
     , isTravis, RunDb, MonadFail
@@ -58,46 +51,32 @@ import Init
 
 -- re-exports
 import Control.Applicative (liftA2)
-import Test.QuickCheck.Instances ()
-import Data.Char (generalCategory, GeneralCategory(..))
-import qualified Data.Text as T
-import Data.Fixed (Pico,Micro)
-import Data.Time
-import Control.Applicative as A ((<$>), (<*>))
 import Control.Exception (SomeException)
 import Control.Monad (void, replicateM, liftM, when, forM_)
 import Control.Monad.Trans.Reader
 import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase, MkPersistSettings(..))
 import Database.Persist.Sql.Raw.QQ
 import Test.Hspec
+import Test.QuickCheck.Instances ()
 
 -- testing
 import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
-import Test.QuickCheck
-
-import qualified Data.ByteString as BS
-import Data.Text (Text, unpack)
-import Database.Persist
-import Database.Persist.TH ()
-import System.Environment (getEnvironment)
-
-import Control.Monad.Logger
-import Control.Monad.Trans.Resource (ResourceT, runResourceT)
-import Database.Persist.Sql
-import System.Log.FastLogger (fromLogStr)
-
-import Database.Persist.MySQL
-import qualified Database.MySQL.Base as MySQL
-import Data.IORef (newIORef, IORef, writeIORef, readIORef)
-import System.IO.Unsafe (unsafePerformIO)
 
 import Control.Monad (unless, (>=>))
 import Control.Monad.IO.Unlift (MonadUnliftIO)
-
--- Data types
-import Data.Int (Int32, Int64)
-
 import Control.Monad.IO.Class
+import Control.Monad.Logger
+import Control.Monad.Trans.Resource (ResourceT, runResourceT)
+import qualified Data.ByteString as BS
+import Data.Int (Int32, Int64)
+import Data.Text (Text)
+import qualified Database.MySQL.Base as MySQL
+import System.Log.FastLogger (fromLogStr)
+
+import Database.Persist
+import Database.Persist.MySQL
+import Database.Persist.Sql
+import Database.Persist.TH ()
 
 _debugOn :: Bool
 _debugOn = False

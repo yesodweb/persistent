@@ -1,14 +1,10 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE QuasiQuotes, TemplateHaskell, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, EmptyDataDecls  #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-
 module MigrationColumnLengthTest where
 
-import Init
-
 import qualified Data.Text as T
+
+import Init
 
 share [mkPersist sqlSettings, mkMigrate "migration"] [persistLowerCase|
 VaryingLengths

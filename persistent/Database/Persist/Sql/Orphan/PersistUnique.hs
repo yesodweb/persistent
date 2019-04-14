@@ -1,27 +1,23 @@
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# OPTIONS_GHC -fno-warn-orphans  #-}
-{-# OPTIONS_GHC -fno-warn-unused-imports #-}
-
 module Database.Persist.Sql.Orphan.PersistUnique
   ()
   where
 
 import Control.Exception (throwIO)
 import Control.Monad.IO.Class (liftIO, MonadIO)
+import Control.Monad.Trans.Reader (ask, withReaderT, ReaderT)
+import qualified Data.Conduit.List as CL
+import Data.Function (on)
+import Data.List (nubBy)
+import Data.Monoid (mappend)
+import qualified Data.Text as T
+
 import Database.Persist
 import Database.Persist.Class.PersistUnique (defaultPutMany, persistUniqueKeyValues)
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
 import Database.Persist.Sql.Util (dbColumns, parseEntityValues, updatePersistValue, mkUpdateText')
-import qualified Data.Text as T
-import Data.Monoid (mappend)
-import qualified Data.Conduit.List as CL
-import Control.Monad.Trans.Reader (ask, withReaderT, ReaderT)
-import Data.List (nubBy)
-import Data.Function (on)
 
 defaultUpsert
     ::

@@ -1,21 +1,22 @@
-{-# LANGUAGE QuasiQuotes, GADTs, OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TypeFamilies #-}
 
-import Test.Hspec
-import UnliftIO
-import qualified Data.Text as T
-import Data.List.NonEmpty (NonEmpty(..))
-import Database.Persist.Sql.Raw.QQ
-import Database.Persist.Sql
-import System.Log.FastLogger
 import Control.Monad.Logger
 import Control.Monad.Trans.Resource
 import Control.Monad.Reader
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Text (Text)
-import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
+import System.Log.FastLogger
+import Test.Hspec
+import Test.HUnit ((@?=))
+import UnliftIO
 
+import Database.Persist.Sql
+import Database.Persist.Sql.Raw.QQ
+import Database.Persist.Sqlite
 import PersistTestPetType
 import PersistentTestModels
-import Database.Persist.Sqlite
 
 main :: IO ()
 main = hspec specs
@@ -112,7 +113,7 @@ specs = describe "persistent-qq" $ do
               => ReaderT SqlBackend m [a]
             runQuery = [sqlQQ| SELECT ?? FROM ^{Person} |]
         ret1 <- runQuery
-        ret2 <- runQuery :: (MonadIO m, Functor m) => SqlPersistT m [Entity (ReverseFieldOrder Person)]
+        ret2 <- runQuery :: (MonadIO m) => SqlPersistT m [Entity (ReverseFieldOrder Person)]
         liftIO $ ret1 @?= [Entity p1k p1]
         liftIO $ ret2 @?= [Entity (RFOKey $ unPersonKey p1k) (RFO p1)]
 

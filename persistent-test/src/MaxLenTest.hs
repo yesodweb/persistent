@@ -1,11 +1,11 @@
-{-# OPTIONS_GHC -fno-warn-unused-binds #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving, QuasiQuotes, TemplateHaskell, GADTs, TypeFamilies, OverloadedStrings, FlexibleContexts, FlexibleInstances, EmptyDataDecls, MultiParamTypeClasses #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 module MaxLenTest (specsWith, maxlenMigrate) where
 
-import Init
 import Data.String (IsString)
+
+import Init
 
 share [mkPersist sqlSettings { mpsGeneric = True },  mkMigrate "maxlenMigrate"] [persistLowerCase|
   MaxLen

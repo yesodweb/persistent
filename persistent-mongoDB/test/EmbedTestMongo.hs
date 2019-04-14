@@ -1,31 +1,28 @@
-{-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-orphans -O0 #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds -Wno-orphans -O0 #-}
 module EmbedTestMongo (specs) where
 
 import MongoInit
 
 import Control.Exception (Exception, throw)
-import Data.Typeable (Typeable)
-import qualified Data.Text as T
-import qualified Data.Set as S
+import Data.List.NonEmpty hiding (insert, length)
 import qualified Data.Map as M
+import qualified Data.Set as S
+import qualified Data.Text as T
+import Data.Typeable (Typeable)
 import Database.MongoDB (genObjectId)
 import Database.MongoDB (Value(String))
-import EntityEmbedTestMongo
 import System.Process (readProcess)
-import Data.List.NonEmpty hiding (insert, length)
 
+import EntityEmbedTestMongo
 import Database.Persist.MongoDB
 
 data TestException = TestException
@@ -400,7 +397,7 @@ specs = describe "embedded entities" $ do
               , (HasEmbed "embed" (OnlyName "2"))
               ]
         contk <- insert container
-        let contEnt = Entity contk container
+        let _contEnt = Entity contk container
 
         pushed <- updateGet contk [HasListEmbedList `push` HasEmbed "embed" (OnlyName "3")]
         (Prelude.map (onlyNameName . hasEmbedEmbed) $ hasListEmbedList pushed) @== ["1","2","3"]

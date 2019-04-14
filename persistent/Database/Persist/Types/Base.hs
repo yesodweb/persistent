@@ -1,38 +1,32 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -fno-warn-deprecations #-} -- usage of Error typeclass
 module Database.Persist.Types.Base where
 
-import qualified Data.Aeson as A
+import Control.Arrow (second)
 import Control.Exception (Exception)
-import Web.PathPieces (PathPiece(..))
-import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData (..), parseUrlPieceMaybe, showTextData, readTextData, parseBoundedTextData)
 import Control.Monad.Trans.Error (Error (..))
-import Data.Typeable (Typeable)
+import qualified Data.Aeson as A
+import Data.Bits (shiftL, shiftR)
+import Data.ByteString (ByteString, foldl')
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base64 as B64
+import qualified Data.ByteString.Char8 as BS8
+import qualified Data.HashMap.Strict as HM
+import Data.Int (Int64)
+import Data.Map (Map)
+import qualified Data.Scientific
 import Data.Text (Text, pack)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import Data.Text.Encoding.Error (lenientDecode)
-import qualified Data.ByteString.Base64 as B64
-import qualified Data.Vector as V
-import Control.Arrow (second)
-import Control.Applicative as A ((<$>))
 import Data.Time (Day, TimeOfDay, UTCTime)
-import Data.Int (Int64)
-import Data.ByteString (ByteString, foldl')
-import Data.Bits (shiftL, shiftR)
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as BS8
-import Data.Map (Map)
-import qualified Data.HashMap.Strict as HM
+import Data.Typeable (Typeable)
+import qualified Data.Vector as V
 import Data.Word (Word32)
 import Numeric (showHex, readHex)
-#if MIN_VERSION_aeson(0, 7, 0)
-import qualified Data.Scientific
-#else
-import qualified Data.Attoparsec.Number as AN
-#endif
+import Web.PathPieces (PathPiece(..))
+import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData (..), parseUrlPieceMaybe, showTextData, readTextData, parseBoundedTextData)
+
 
 -- | A 'Checkmark' should be used as a field type whenever a
 -- uniqueness constraint should guarantee that a certain kind of
@@ -373,9 +367,9 @@ instance ToHttpApiData PersistValue where
 
 instance FromHttpApiData PersistValue where
     parseUrlPiece input =
-          PersistInt64 A.<$> parseUrlPiece input
-      <!> PersistList  A.<$> readTextData input
-      <!> PersistText  A.<$> return input
+          PersistInt64 <$> parseUrlPiece input
+      <!> PersistList  <$> readTextData input
+      <!> PersistText  <$> return input
       where
         infixl 3 <!>
         Left _ <!> y = y
@@ -407,13 +401,7 @@ instance A.ToJSON PersistValue where
     toJSON (PersistText t) = A.String $ T.cons 's' t
     toJSON (PersistByteString b) = A.String $ T.cons 'b' $ TE.decodeUtf8 $ B64.encode b
     toJSON (PersistInt64 i) = A.Number $ fromIntegral i
-    toJSON (PersistDouble d) = A.Number $
-#if MIN_VERSION_aeson(0, 7, 0)
-        Data.Scientific.fromFloatDigits
-#else
-        AN.D
-#endif
-        d
+    toJSON (PersistDouble d) = A.Number $ Data.Scientific.fromFloatDigits d
     toJSON (PersistRational r) = A.String $ T.pack $ 'r' : show r
     toJSON (PersistBool b) = A.Bool b
     toJSON (PersistTimeOfDay t) = A.String $ T.pack $ 't' : show t
@@ -473,15 +461,10 @@ instance A.FromJSON PersistValue where
         {-# INLINE i2bs #-}
 
 
-#if MIN_VERSION_aeson(0, 7, 0)
     parseJSON (A.Number n) = return $
         if fromInteger (floor n) == n
             then PersistInt64 $ floor n
             else PersistDouble $ fromRational $ toRational n
-#else
-    parseJSON (A.Number (AN.I i)) = return $ PersistInt64 $ fromInteger i
-    parseJSON (A.Number (AN.D d)) = return $ PersistDouble d
-#endif
     parseJSON (A.Bool b) = return $ PersistBool b
     parseJSON A.Null = return $ PersistNull
     parseJSON (A.Array a) = fmap PersistList (mapM A.parseJSON $ V.toList a)

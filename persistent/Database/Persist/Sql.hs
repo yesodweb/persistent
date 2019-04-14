@@ -23,6 +23,9 @@ module Database.Persist.Sql
     , decorateSQLWithLimitOffset
     ) where
 
+import Control.Monad.IO.Class
+import Control.Monad.Trans.Reader (ReaderT, ask)
+
 import Database.Persist
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal (IsolationLevel (..))
@@ -35,8 +38,6 @@ import Database.Persist.Sql.Internal
 import Database.Persist.Sql.Orphan.PersistQuery
 import Database.Persist.Sql.Orphan.PersistStore
 import Database.Persist.Sql.Orphan.PersistUnique ()
-import Control.Monad.IO.Class
-import Control.Monad.Trans.Reader (ReaderT, ask)
 
 -- | Commit the current transaction and begin a new one.
 --

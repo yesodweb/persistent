@@ -1,27 +1,13 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE UndecidableInstances #-}
 module MigrationIdempotencyTest where
 
-import Database.Persist.TH
 import qualified Data.Text as T
 
+import Database.Persist.TH
 import Init
 
-#ifdef WITH_NOSQL
-mkPersist persistSettings [persistUpperCase|
-#else
 share [mkPersist sqlSettings, mkMigrate "migration"] [persistLowerCase|
-#endif
 Idempotency
     field1 Int
     field2 T.Text sqltype=varchar(5)

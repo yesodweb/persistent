@@ -3,20 +3,20 @@ module Database.Persist.Redis.Parser
     , toValue
     ) where
 
-import Data.Fixed
-import Data.Time
-import Data.Int (Int64)
-import Data.Word (Word8)
-import Data.Text (Text, unpack)
-import qualified Data.Text as T
+import Control.Arrow((***))
+import Control.Monad (liftM, liftM3)
+import Control.Exception (throw)
 import Data.Binary (Binary(..), encode, getWord8, Get)
 import qualified Data.Binary as Q
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.UTF8 as U
-import Control.Arrow((***))
-import Control.Monad (liftM, liftM3)
-import Control.Exception (throw)
+import Data.Fixed
+import Data.Int (Int64)
+import Data.Text (Text, unpack)
+import qualified Data.Text as T
+import Data.Time
+import Data.Word (Word8)
 
 import Database.Persist.Types
 import Database.Persist.Redis.Exception

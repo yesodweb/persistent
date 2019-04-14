@@ -1,24 +1,21 @@
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
 module Database.Persist.Sql.Run where
+
+import Control.Exception (bracket, mask, onException)
+import Control.Monad (liftM)
+import Control.Monad.IO.Unlift
+import Control.Monad.Logger
+import Control.Monad.Trans.Reader hiding (local)
+import Control.Monad.Trans.Resource
+import Data.IORef (readIORef)
+import Data.Pool as P
+import qualified Data.Map as Map
+import System.Timeout (timeout)
 
 import Database.Persist.Class.PersistStore
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal (IsolationLevel)
 import Database.Persist.Sql.Raw
-import Data.Pool as P
-import Control.Monad.Trans.Reader hiding (local)
-import Control.Monad.Trans.Resource
-import Control.Monad.Logger
-import Control.Exception (onException, bracket)
-import Control.Monad.IO.Unlift
-import Control.Exception (mask)
-import System.Timeout (timeout)
-import Data.IORef (readIORef)
-import qualified Data.Map as Map
-import Control.Monad (liftM)
 
 -- | Get a connection from the pool, run the given action, and then return the
 -- connection to the pool.
@@ -144,7 +141,7 @@ askLogFunc = withRunInIO $ \run ->
 -- > {-# LANGUAGE TemplateHaskell#-}
 -- > {-# LANGUAGE QuasiQuotes#-}
 -- > {-# LANGUAGE GeneralizedNewtypeDeriving #-}
--- > 
+-- >
 -- > import Control.Monad.IO.Class  (liftIO)
 -- > import Control.Monad.Logger
 -- > import Conduit
@@ -152,14 +149,14 @@ askLogFunc = withRunInIO $ \run ->
 -- > import Database.Sqlite
 -- > import Database.Persist.Sqlite
 -- > import Database.Persist.TH
--- > 
+-- >
 -- > share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
 -- > Person
 -- >   name String
 -- >   age Int Maybe
 -- >   deriving Show
 -- > |]
--- > 
+-- >
 -- > openConnection :: LogFunc -> IO SqlBackend
 -- > openConnection logfn = do
 -- >  conn <- open "/home/sibi/test.db"
@@ -181,7 +178,7 @@ askLogFunc = withRunInIO $ \run ->
 --
 -- > Migrating: CREATE TABLE "person"("id" INTEGER PRIMARY KEY,"name" VARCHAR NOT NULL,"age" INTEGER NULL)
 -- > [Entity {entityKey = PersonKey {unPersonKey = SqlBackendKey {unSqlBackendKey = 1}}, entityVal = Person {personName = "John doe", personAge = Just 35}},Entity {entityKey = PersonKey {unPersonKey = SqlBackendKey {unSqlBackendKey = 2}}, entityVal = Person {personName = "Hema", personAge = Just 36}}]
--- 
+--
 
 withSqlConn
     :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)

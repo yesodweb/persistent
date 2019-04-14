@@ -1,6 +1,6 @@
-{-# LANGUAGE ForeignFunctionInterface, DeriveDataTypeable #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE CPP #-}
 -- | A port of the direct-sqlite package for dealing directly with
 -- 'PersistValue's.
 module Database.Sqlite  (
@@ -8,8 +8,7 @@ module Database.Sqlite  (
                          Statement,
                          Error(..),
                          SqliteException(..),
-                         StepResult(Row,
-                                    Done),
+                         StepResult(Row, Done),
                          Config(ConfigLogFn),
                          LogFunction,
                          SqliteStatus (..),
@@ -81,29 +80,24 @@ module Database.Sqlite  (
 
 import Prelude hiding (error)
 import qualified Prelude as P
-import qualified Prelude
+
+import Control.Exception (Exception, throwIO)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Unsafe as BSU
 import qualified Data.ByteString.Internal as BSI
-import Foreign
-import Foreign.C
-import Control.Exception (Exception, throwIO)
-import Control.Applicative as A ((<$>))
-import Database.Persist (PersistValue (..), listToJSON, mapToJSON)
+import Data.Fixed (Pico)
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
+import Data.Monoid (mappend, mconcat)
 import Data.Text (Text, pack, unpack)
 import Data.Text.Encoding (encodeUtf8, decodeUtf8With)
 import Data.Text.Encoding.Error (lenientDecode)
-import Data.Monoid (mappend, mconcat)
-import Data.IORef (IORef, newIORef, readIORef, writeIORef)
-import Data.Fixed (Pico)
-import Data.Time (formatTime, UTCTime)
+import Data.Time (defaultTimeLocale, formatTime, UTCTime)
 import Data.Typeable (Typeable)
+import Foreign
+import Foreign.C
 
-#if MIN_VERSION_time(1,5,0)
-import Data.Time (defaultTimeLocale)
-#else
-import System.Locale (defaultTimeLocale)
-#endif
+import Database.Persist (PersistValue (..), listToJSON, mapToJSON)
+
 
 data Connection = Connection !(IORef Bool) Connection'
 newtype Connection' = Connection' (Ptr ())
@@ -198,7 +192,7 @@ decodeError 25 = ErrorRange
 decodeError 26 = ErrorNotAConnection
 decodeError 100 = ErrorRow
 decodeError 101 = ErrorDone
-decodeError i = Prelude.error $ "decodeError " ++ show i
+decodeError i = P.error $ "decodeError " ++ show i
 
 decodeColumnType :: Int -> ColumnType
 decodeColumnType 1 = IntegerColumn
@@ -206,7 +200,7 @@ decodeColumnType 2 = FloatColumn
 decodeColumnType 3 = TextColumn
 decodeColumnType 4 = BlobColumn
 decodeColumnType 5 = NullColumn
-decodeColumnType i = Prelude.error $ "decodeColumnType " ++ show i
+decodeColumnType i = P.error $ "decodeColumnType " ++ show i
 
 foreign import ccall "sqlite3_errmsg"
   errmsgC :: Ptr () -> IO CString
@@ -236,7 +230,7 @@ openError :: Text -> IO (Either Connection Error)
 openError path' = do
     let flag = sqliteFlagReadWrite .|. sqliteFlagCreate .|. sqliteFlagUri
     BS.useAsCString (encodeUtf8 path') $ \path -> alloca $ \database -> do
-        err <- decodeError A.<$> openC path database flag nullPtr
+        err <- decodeError <$> openC path database flag nullPtr
         case err of
             ErrorOK -> do database' <- peek database
                           active <- newIORef True

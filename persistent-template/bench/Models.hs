@@ -1,8 +1,6 @@
 module Models where
 
 import Data.Monoid
-import Data.List
-import Data.FileEmbed
 import Language.Haskell.TH
 import qualified Data.Text as Text
 
@@ -38,8 +36,9 @@ mkModelsWithFieldModifier k i f =
         , "Cat"
         ]
   where
-    mkModel (i, m) =
-        (m <> show i) : indent 4 (map k (mkFields f))
+    mkModel :: (Int, String) -> [String]
+    mkModel (i', m) =
+        (m <> show i') : indent 4 (map k (mkFields f))
 
 indent :: Int -> [String] -> [String]
 indent i = map (replicate i ' ' ++)
@@ -53,7 +52,8 @@ mkFields i = take i $ map mkField $ zip [0..] $ cycle
     , "Text"
     ]
   where
-    mkField (i, typ) = "field" <> show i <> "\t\t" <> typ
+    mkField :: (Int, String) -> String
+    mkField (i', typ) = "field" <> show i' <> "\t\t" <> typ
 
 maybeFields :: String -> String
 maybeFields = (++ " Maybe")

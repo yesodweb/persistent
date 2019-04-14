@@ -1,33 +1,24 @@
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# language RankNTypes #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
-import MongoInit
-
-import Database.MongoDB (runCommand1)
-import Data.Time
-import Data.Int
-import Data.Word
-import Data.IntMap (IntMap)
-import Control.Monad.Trans
-import Test.QuickCheck
-import qualified Data.Text as T
 import qualified Data.ByteString as BS
+import Data.IntMap (IntMap)
+import qualified Data.Text as T
+import Data.Time
+import Database.MongoDB (runCommand1)
 import Text.Blaze.Html
-import Text.Blaze.Html.Renderer.Text
+import Test.QuickCheck
 
-import CustomPersistField
+-- FIXME: should this be added? (RawMongoHelpers module wasn't used)
+-- import qualified RawMongoHelpers
+import MongoInit
 
 -- These tests are noops with the NoSQL flags set.
 --
@@ -53,17 +44,18 @@ import qualified HtmlTest
 import qualified LargeNumberTest
 import qualified MaxLenTest
 import qualified MigrationOnlyTest
-import qualified Recursive
-import qualified UpsertTest
 import qualified PersistentTest
+import qualified Recursive
 import qualified RenameTest
 import qualified SumTypeTest
+import qualified UpsertTest
 
 type Tuple = (,)
 
 dbNoCleanup :: Action IO () -> Assertion
 dbNoCleanup = db' (pure ())
 
+-- FIXME: This isn't actually used?
 share [mkPersist persistSettings, mkMigrate "htmlMigrate"] [persistLowerCase|
 HtmlTable
     html Html
@@ -152,6 +144,8 @@ main = do
         Nothing
     CustomPersistFieldTest.specsWith
         dbNoCleanup
+    -- FIXME: should this be added? (RawMongoHelpers module wasn't used)
+    -- RawMongoHelpers.specs
 
   where
-    dropDatabase () = dbNoCleanup (void (runCommand1 "dropDatabase()"))
+    dropDatabase () = dbNoCleanup (void (runCommand1 $ T.pack "dropDatabase()"))

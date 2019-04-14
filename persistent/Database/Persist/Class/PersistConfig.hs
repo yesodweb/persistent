@@ -1,14 +1,10 @@
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE OverloadedStrings #-}
 module Database.Persist.Class.PersistConfig
     ( PersistConfig (..)
     ) where
 
+import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Data.Aeson (Value (Object))
 import Data.Aeson.Types (Parser)
-import Control.Monad.IO.Unlift (MonadUnliftIO)
-import Control.Applicative as A ((<$>))
 import qualified Data.HashMap.Strict as HashMap
 
 -- | Represents a value containing all the configuration options for a specific
@@ -47,7 +43,7 @@ instance
 
     loadConfig (Object o) =
         case HashMap.lookup "left" o of
-            Just v -> Left A.<$> loadConfig v
+            Just v -> Left <$> loadConfig v
             Nothing ->
                 case HashMap.lookup "right" o of
                     Just v -> Right <$> loadConfig v

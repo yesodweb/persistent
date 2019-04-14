@@ -1,10 +1,10 @@
 {-# LANGUAGE TemplateHaskell #-}
-
 module TemplateTestImports where
 
-import Test.QuickCheck
-import Database.Persist.TH
 import Data.Aeson.TH
+import Test.QuickCheck
+
+import Database.Persist.TH
 
 data Foo = Bar | Baz
     deriving (Show, Eq)

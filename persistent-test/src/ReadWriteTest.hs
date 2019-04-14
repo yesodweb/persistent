@@ -1,13 +1,9 @@
-{-# LANGUAGE OverloadedStrings, GADTs, ScopedTypeVariables, RankNTypes #-}
-
+{-# LANGUAGE ScopedTypeVariables #-}
 module ReadWriteTest where
 
 import Init
-
-import Database.Persist.Sql
-import Test.Hspec
-
 import PersistentTestModels
+
 
 specsWith :: forall m. Runner SqlBackend m => RunDb SqlBackend m -> Spec
 specsWith originalRunDb = describe "ReadWriteTest" $ do
@@ -50,10 +46,10 @@ specsWith originalRunDb = describe "ReadWriteTest" $ do
 
         it "type checks on PersistUniqueWrite/Read functions" $ do
             runDb $ do
-                let personName = "Matt Parsons New"
-                    person = Person personName 30 Nothing
-                mkey0 <- insertUnique person
+                let name = "Matt Parsons New"
+                    person = Person name 30 Nothing
+                _mkey0 <- insertUnique person
                 mkey1 <- insertUnique person
                 mkey1 @== Nothing
-                mperson <- selectFirst [PersonName ==. personName] []
+                mperson <- selectFirst [PersonName ==. name] []
                 fmap entityVal mperson @== Just person

@@ -1,11 +1,6 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 module MpsNoPrefixTest where
 
 import Init
-
-import Test.Hspec
-
 import PersistentTestModels
 
 specsWith :: MonadIO m => RunDb SqlBackend m -> Spec
