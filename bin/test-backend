@@ -29,7 +29,7 @@ case "$1" in
             docker rm -f persistent_mongo_run_1
         }
         trap finish EXIT
-        stack test persistent-test --flag persistent-test:mongodb --exec persistent-test
+        stack test persistent-mongodb
         ;;
     postgresql|postgres)
         docker-compose run --rm -d postgres
@@ -41,7 +41,7 @@ case "$1" in
             }
         }
         trap finish EXIT
-        stack test persistent-test --flag persistent-test:postgresql --exec persistent-test
+        stack test persistent-postgresql
         ;;
     *)
         exit_msg "don't yet know how to test: $1, please teach me!"
