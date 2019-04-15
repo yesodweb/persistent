@@ -73,7 +73,6 @@ import Data.Typeable (Typeable)
 import System.Environment (getEnvironment)
 
 import Database.Persist.Sql
-import Database.Persist.Sql.Types.Internal (mkPersistBackend)
 import qualified Database.Persist.Sql.Util as Util
 
 -- | A @libpq@ connection string.  A simple example of connection
