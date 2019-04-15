@@ -18,7 +18,7 @@ import Database.Persist
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Class
 
-rawQuery :: (MonadResource m, MonadReader env m, HasPersistBackend env, BaseBackend env ~ SqlBackend)
+rawQuery :: (MonadResource m, MonadReader env m, BackendCompatible SqlBackend env)
          => Text
          -> [PersistValue]
          -> ConduitM () [PersistValue] m ()
@@ -29,12 +29,12 @@ rawQuery sql vals = do
     release releaseKey
 
 rawQueryRes
-    :: (MonadIO m1, MonadIO m2, IsSqlBackend env)
+    :: (MonadIO m1, MonadIO m2, BackendCompatible SqlBackend env)
     => Text
     -> [PersistValue]
     -> ReaderT env m1 (Acquire (ConduitM () [PersistValue] m2 ()))
 rawQueryRes sql vals = do
-    conn <- persistBackend `liftM` ask
+    conn <- projectBackend `liftM` ask
     let make = do
             runLoggingT (logDebugNS (pack "SQL") $ T.append sql $ pack $ "; " ++ show vals)
                 (connLogFunc conn)
@@ -198,10 +198,10 @@ getStmtConn conn sql = do
 -- >          liftIO (print xs)
 -- >
 
-rawSql :: (RawSql a, MonadIO m)
+rawSql :: (RawSql a, MonadIO m, BackendCompatible SqlBackend backend)
        => Text             -- ^ SQL statement, possibly with placeholders.
        -> [PersistValue]   -- ^ Values to fill the placeholders.
-       -> ReaderT SqlBackend m [a]
+       -> ReaderT backend m [a]
 rawSql stmt = run
     where
       getType :: (x -> m [a]) -> a
@@ -229,7 +229,7 @@ rawSql stmt = run
                         ]
 
       run params = do
-        conn <- ask
+        conn <- projectBackend `liftM` ask
         let (colCount, colSubsts) = rawSqlCols (connEscapeName conn) x
         withStmt' colSubsts params $ firstRow colCount
 

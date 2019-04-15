@@ -22,13 +22,13 @@ class (PersistCore backend, PersistStoreRead backend) => PersistQueryRead backen
     -- | Get all records matching the given criterion in the specified order.
     -- Returns also the identifiers.
     selectSourceRes
-           :: (PersistRecordBackend record backend, MonadIO m1, MonadIO m2)
+           :: (PersistEntity record, PersistRecordBackend record backend, MonadIO m1, MonadIO m2)
            => [Filter record]
            -> [SelectOpt record]
            -> ReaderT backend m1 (Acquire (ConduitM () (Entity record) m2 ()))
 
     -- | Get just the first record for the criterion.
-    selectFirst :: (MonadIO m, PersistRecordBackend record backend)
+    selectFirst :: (MonadIO m, PersistEntity record, PersistRecordBackend record backend)
                 => [Filter record]
                 -> [SelectOpt record]
                 -> ReaderT backend m (Maybe (Entity record))
@@ -60,7 +60,7 @@ class (PersistQueryRead backend, PersistStoreWrite backend) => PersistQueryWrite
 -- | Get all records matching the given criterion in the specified order.
 -- Returns also the identifiers.
 selectSource
-       :: (PersistQueryRead (BaseBackend backend), MonadResource m, PersistEntity record, PersistEntityBackend record ~ BaseBackend (BaseBackend backend), MonadReader backend m, HasPersistBackend backend)
+       :: (PersistQueryRead backend, MonadResource m, PersistEntity record, PersistRecordBackend record backend, MonadReader backend m)
        => [Filter record]
        -> [SelectOpt record]
        -> ConduitM () (Entity record) m ()
@@ -71,7 +71,7 @@ selectSource filts opts = do
     release releaseKey
 
 -- | Get the 'Key's of all records matching the given criterion.
-selectKeys :: (PersistQueryRead (BaseBackend backend), MonadResource m, PersistEntity record, BaseBackend (BaseBackend backend) ~ PersistEntityBackend record, MonadReader backend m, HasPersistBackend backend)
+selectKeys :: (PersistQueryRead backend, MonadResource m, PersistEntity record, PersistRecordBackend record backend, MonadReader backend m)
            => [Filter record]
            -> [SelectOpt record]
            -> ConduitM () (Key record) m ()
