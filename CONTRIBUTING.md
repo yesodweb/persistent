@@ -8,7 +8,7 @@ Persistent is a mega-repo that contains many Haskell packages, each in a differe
 
 * `stack build persistent-mysql`
 * `stack haddock persistent`
-* `stack test persistent-test --flag persistent-test:sqlite --exec persistent-test`
+* `stack test persistent-postgresql`
 
 If you'd like to test your changes in a full-fledged app, you can use Stack to build against it, e.g.:
 
@@ -49,11 +49,11 @@ As much as possible, keep separate changes in separate PRs.
 
 ### Testing
 
-Tests are strongly recommended, but not required.
+Tests are strongly recommended. If your patch does not include tests, then it must be trivially correct or have type-level guarantees.
 
 If you're reporting an issue, contributing a failing test is a great way to kickstart development on it.
 
-The `persistent-test` package is used to test all the backends, and the tests use the C Preprocessor to support this. An easy way to get started on a test is to find a similar one and copy and paste it into your new file.
+Each backend defines it's own test suite. The `persistent-test` package defines a common set of helpers and scenarios that backends can implement.
 
 ### Documentation
 
