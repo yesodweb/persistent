@@ -1068,7 +1068,7 @@ insertOnDuplicateKeyUpdate record =
 -- @INSERT ... ON DUPLICATE KEY UPDATE@ functionality, exposed via
 -- 'insertManyOnDuplicateKeyUpdate' in this library.
 --
--- @since 3.0.0
+-- @since 2.8.0
 data HandleUpdateCollision record where
   -- | Copy the field directly from the record.
   CopyField :: EntityField record typ -> HandleUpdateCollision record

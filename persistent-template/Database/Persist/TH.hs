@@ -28,7 +28,6 @@ module Database.Persist.TH
     , EntityJSON(..)
     , mkPersistSettings
     , sqlSettings
-    , sqlOnlySettings
       -- * Various other TH functions
     , mkMigrate
     , mkSave
@@ -429,13 +428,6 @@ mkPersistSettings t = MkPersistSettings
 -- | Use the 'SqlPersist' backend.
 sqlSettings :: MkPersistSettings
 sqlSettings = mkPersistSettings $ ConT ''SqlBackend
-
--- | Same as 'sqlSettings'.
---
--- @since 1.1.1
-sqlOnlySettings :: MkPersistSettings
-sqlOnlySettings = sqlSettings
-{-# DEPRECATED sqlOnlySettings "use sqlSettings" #-}
 
 recNameNoUnderscore :: MkPersistSettings -> HaskellName -> HaskellName -> Text
 recNameNoUnderscore mps dt f

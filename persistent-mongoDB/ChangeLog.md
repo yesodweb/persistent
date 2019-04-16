@@ -1,3 +1,8 @@
+## 2.9.0
+
+* Removed deprecated `entityToDocument`. Please use `recordToDocument` instead. [#894](https://github.com/yesodweb/persistent/pull/894)
+* Removed deprecated `multiBsonEq`. Please use `anyBsonEq` instead. [#894](https://github.com/yesodweb/persistent/pull/894)
+
 ## 2.8.0
 
 * Switch from `MonadBaseControl` to `MonadUnliftIO`

@@ -18,10 +18,6 @@ import Data.Typeable (Typeable)
 import Database.Persist.Types
 import Database.Persist.Sql.Types.Internal
 
--- | Deprecated synonym for @SqlBackend@.
-type Connection = SqlBackend
-{-# DEPRECATED Connection "Please use SqlBackend instead" #-}
-
 data Column = Column
     { cName      :: !DBName
     , cNull      :: !Bool
@@ -39,9 +35,6 @@ data PersistentSqlException = StatementAlreadyFinalized Text
 instance Exception PersistentSqlException
 
 type SqlPersistT = ReaderT SqlBackend
-
-type SqlPersist = SqlPersistT
-{-# DEPRECATED SqlPersist "Please use SqlPersistT instead" #-}
 
 type SqlPersistM = SqlPersistT (NoLoggingT (ResourceT IO))
 
