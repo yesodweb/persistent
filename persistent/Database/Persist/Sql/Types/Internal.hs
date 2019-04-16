@@ -22,6 +22,7 @@ module Database.Persist.Sql.Types.Internal
     , IsSqlBackend
     ) where
 
+import Data.List.NonEmpty (NonEmpty(..))
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Logger (LogSource, LogLevel)
 import Control.Monad.Trans.Class (lift)
@@ -86,7 +87,7 @@ data SqlBackend = SqlBackend
     -- ^ SQL for inserting many rows and returning their primary keys, for
     -- backends that support this functioanlity. If 'Nothing', rows will be
     -- inserted one-at-a-time using 'connInsertSql'.
-    , connUpsertSql :: Maybe (EntityDef -> Text -> Text)
+    , connUpsertSql :: Maybe (EntityDef -> NonEmpty UniqueDef -> Text -> Text)
     -- ^ Some databases support performing UPSERT _and_ RETURN entity
     -- in a single call.
     --

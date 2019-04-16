@@ -6,7 +6,9 @@ module Database.Persist.Class.PersistUnique
   ( PersistUniqueRead(..)
   , PersistUniqueWrite(..)
   , OnlyOneUniqueKey(..)
+  , onlyOneUniqueDef
   , AtLeastOneUniqueKey(..)
+  , atLeastOneUniqueDef
   , NoUniqueKeysError
   , MultipleUniqueKeysError
   , getByValue
@@ -26,7 +28,7 @@ import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.Function (on)
 import Data.List ((\\), deleteFirstsBy)
-import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes)
@@ -296,6 +298,19 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
 class PersistEntity record => OnlyOneUniqueKey record where
     onlyUniqueP :: record -> Unique record
 
+-- | Given a proxy for a 'PersistEntity' record, this returns the sole
+-- 'UniqueDef' for that entity.
+--
+-- @since 2.10.0
+onlyOneUniqueDef
+    :: (OnlyOneUniqueKey record, Monad proxy)
+    => proxy record
+    -> UniqueDef
+onlyOneUniqueDef prxy =
+    case entityUniques (entityDef prxy) of
+        [uniq] -> uniq
+        _ -> error "impossible due to OnlyOneUniqueKey constraint"
+
 -- | This is an error message. It is used when writing instances of
 -- 'OnlyOneUniqueKey' for an entity that has no unique keys.
 --
@@ -330,6 +345,21 @@ type MultipleUniqueKeysError ty =
 -- @since 2.10.0
 class PersistEntity record => AtLeastOneUniqueKey record where
     requireUniquesP :: record -> NonEmpty (Unique record)
+
+-- | Given a proxy for a record that has an instance of
+-- 'AtLeastOneUniqueKey', this returns a 'NonEmpty' list of the
+-- 'UniqueDef's for that entity.
+--
+-- @since 2.10.0
+atLeastOneUniqueDef
+    :: (AtLeastOneUniqueKey record, Monad proxy)
+    => proxy record
+    -> NonEmpty UniqueDef
+atLeastOneUniqueDef prxy =
+    case entityUniques (entityDef prxy) of
+        (x:xs) -> x :| xs
+        _ ->
+            error "impossible due to AtLeastOneUniqueKey record constraint"
 
 -- | Insert a value, checking for conflicts with any unique constraints.  If a
 -- duplicate exists in the database, it is returned as 'Left'. Otherwise, the
