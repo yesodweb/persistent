@@ -59,6 +59,8 @@ import Data.Int (Int64)
 import qualified Data.IntMap as I
 import Data.IORef
 import Data.List (find, sort, groupBy)
+import Data.List.NonEmpty (NonEmpty)
+import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
 import Data.Maybe
 import Data.Monoid ((<>))
@@ -298,8 +300,8 @@ insertSql' ent vals =
        Nothing -> ISRSingle (sql <> " RETURNING " <> escape (fieldDB (entityId ent)))
 
 
-upsertSql' :: EntityDef -> Text -> Text
-upsertSql' ent updateVal = T.concat
+upsertSql' :: EntityDef -> NonEmpty UniqueDef -> Text -> Text
+upsertSql' ent uniqs updateVal = T.concat
                            [ "INSERT INTO "
                            , escape (entityDB ent)
                            , "("
@@ -315,7 +317,7 @@ upsertSql' ent updateVal = T.concat
                            , " RETURNING ??"
                            ]
     where
-      wher = T.intercalate " AND " $ map singleCondition $ entityUniques ent
+      wher = T.intercalate " AND " $ map singleCondition $ NEL.toList uniqs
 
       singleCondition :: UniqueDef -> Text
       singleCondition udef = T.intercalate " AND " (map singleClause $ map snd (uniqueFields udef))
