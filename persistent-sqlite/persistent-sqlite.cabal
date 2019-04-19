@@ -38,7 +38,7 @@ flag json1
 
 library
     build-depends:   base                    >= 4.9         && < 5
-                   , persistent              >= 2.9         && < 3
+                   , persistent              >= 2.10        && < 3
                    , aeson                   >= 1.0
                    , bytestring              >= 0.10
                    , conduit                 >= 1.2.12
