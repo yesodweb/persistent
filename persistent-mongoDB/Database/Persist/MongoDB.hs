@@ -28,7 +28,6 @@ module Database.Persist.MongoDB
       collectionName
     , docToEntityEither
     , docToEntityThrow
-    , entityToDocument
     , recordToDocument
     , documentFromEntity
     , toInsertDoc
@@ -43,7 +42,7 @@ module Database.Persist.MongoDB
     -- ** Filters
     -- $filters
     , nestEq, nestNe, nestGe, nestLe, nestIn, nestNotIn
-    , anyEq, nestAnyEq, nestBsonEq, anyBsonEq, multiBsonEq
+    , anyEq, nestAnyEq, nestBsonEq, anyBsonEq
     , inList, ninList
     , (=~.)
     -- non-operator forms of filters
@@ -414,7 +413,7 @@ toUniquesDoc uniq = zipWith (DB.:=)
 
 -- | convert a PersistEntity into document fields.
 -- for inserts only: nulls are ignored so they will be unset in the document.
--- 'entityToDocument' includes nulls
+-- 'recordToDocument' includes nulls
 toInsertDoc :: forall record.  (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
             => record -> DB.Document
 toInsertDoc record = zipFilter (embeddedFields $ toEmbedEntityDef entDef)
@@ -459,15 +458,10 @@ recordToDocument record = zipToDoc (map fieldDB $ entityFields entity) (toPersis
   where
     entity = entityDef $ Just record
 
-entityToDocument :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
-                 => record -> DB.Document
-entityToDocument = recordToDocument
-{-# DEPRECATED entityToDocument "use recordToDocument" #-}
-
 documentFromEntity :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
                    => Entity record -> DB.Document
 documentFromEntity (Entity key record) =
-    keyToMongoDoc key ++ entityToDocument record
+    keyToMongoDoc key ++ recordToDocument record
 
 zipToDoc :: PersistField a => [DBName] -> [a] -> [DB.Field]
 zipToDoc [] _  = []
@@ -1339,7 +1333,6 @@ infixr 4 `nestNotIn`
 infixr 4 `anyEq`
 infixr 4 `nestAnyEq`
 infixr 4 `nestBsonEq`
-infixr 4 `multiBsonEq`
 infixr 4 `anyBsonEq`
 
 infixr 4 `nestSet`
@@ -1404,13 +1397,6 @@ nestAnyEq :: forall record typ.
         ) => NestedField record [typ] -> typ -> Filter record
 fld `nestAnyEq` val = BackendFilter $
     NestedArrayFilter fld $ PersistFilterOperator (FilterValue val) Eq
-
-multiBsonEq :: forall record typ.
-        ( PersistField typ
-        , PersistEntityBackend record ~ DB.MongoContext
-        ) => EntityField record [typ] -> DB.Value -> Filter record
-multiBsonEq = anyBsonEq
-{-# DEPRECATED multiBsonEq "Please use anyBsonEq instead" #-}
 
 -- | same as `anyEq`, but give a BSON Value
 anyBsonEq :: forall record typ.

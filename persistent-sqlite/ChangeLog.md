@@ -1,5 +1,9 @@
 # Changelog for persistent-sqlite
 
+## 2.10.0
+
+* Updated for `persistent-2.10.0` compatibility.
+
 ## 2.9.3
 
 * Add retry-on-busy support, automatically retrying when sqlite returns a busy

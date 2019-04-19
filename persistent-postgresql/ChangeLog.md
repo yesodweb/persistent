@@ -2,8 +2,7 @@
 
 ## 2.10.0
 
-Added question mark operators (`(?.), (?|.), (?&.)`) to `Database.Persist.Postgresql.JSON` [#863](https://github.com/yesodweb/persistent/pull/863)
-
+* Added question mark operators (`(?.), (?|.), (?&.)`) to `Database.Persist.Postgresql.JSON` [#863](https://github.com/yesodweb/persistent/pull/863)
 * Changes to certain types:
     * `PersistValue`: added `PersistArray` data constructor
     * `Filter`: Changed the `filterValue :: Either a [a]` to `filterValue :: FilterValue`

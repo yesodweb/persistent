@@ -1,8 +1,6 @@
 ## Learn more: http://www.yesodweb.com/book/persistent
 
-[![Join the chat at https://gitter.im/yesodweb/persistent](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/yesodweb/persistent?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
-
-[![Build Status](https://travis-ci.org/yesodweb/persistent.svg?branch=master)](https://travis-ci.org/yesodweb/persistent)
+[![Join the chat at https://gitter.im/yesodweb/persistent](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/yesodweb/persistent?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) [![Build Status](https://travis-ci.org/yesodweb/persistent.svg?branch=master)](https://travis-ci.org/yesodweb/persistent) ![Hackage](https://img.shields.io/hackage/v/persistent.svg) ![Hackage-Deps](https://img.shields.io/hackage-deps/v/persistent.svg)
 
 A Haskell datastore. Datastores are often referred to as "ORM"s. While 'O' traditionally means object, the concept can be generalized as:
 

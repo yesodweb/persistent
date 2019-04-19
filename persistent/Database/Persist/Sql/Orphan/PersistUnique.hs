@@ -13,7 +13,7 @@ import Data.Monoid (mappend)
 import qualified Data.Text as T
 
 import Database.Persist
-import Database.Persist.Class.PersistUnique (defaultPutMany, persistUniqueKeyValues)
+import Database.Persist.Class.PersistUnique (defaultPutMany, persistUniqueKeyValues, onlyOneUniqueDef)
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
@@ -44,7 +44,7 @@ instance PersistUniqueWrite SqlBackend where
                             [] -> defaultUpsert record updates
                             _:_ -> do
                                 let upds = T.intercalate "," $ map mkUpdateText updates
-                                    sql = upsertSql t upds
+                                    sql = upsertSql t (pure (onlyOneUniqueDef (Just record))) upds
                                     vals = map toPersistValue (toPersistFields record)
                                         ++ map updatePersistValue updates
                                         ++ unqs uniqueKey
