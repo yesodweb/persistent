@@ -16,7 +16,7 @@ matrix:
   include:
   - env: BUILD=cabal GHCVER=8.0.2 CABALVER=2.0 HAPPYVER=1.19.5 ALEXVER=3.1.7
     compiler: ": #GHC 8.0.2"
-    addons: {apt: {packages: [cabal-install-1.24.2.0,ghc-8.0.2,happy-1.19.5,alex-3.1.7], sources: [hvr-ghc]}}
+    addons: {apt: {packages: [cabal-install-1.24,ghc-8.0.2,happy-1.19.5,alex-3.1.7], sources: [hvr-ghc]}}
   - env: BUILD=cabal GHCVER=8.2.2 CABALVER=2.0 HAPPYVER=1.19.5 ALEXVER=3.1.7
     compiler: ": #GHC 8.2.2"
     addons: {apt: {packages: [cabal-install-2.0,ghc-8.2.2,happy-1.19.5,alex-3.1.7], sources: [hvr-ghc]}}
@@ -90,7 +90,9 @@ install:
       ;;
     cabal)
       cabal --version
-      # travis_retry cabal new-update
+      travis_retry { 
+        cabal new-update || cabal update
+      }
 
       # Get the list of packages from the stack.yaml file. Note that
       # this will also implicitly run hpack as necessary to generate
