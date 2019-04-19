@@ -199,9 +199,9 @@ infix 4 @>., <@., ?., ?|., ?&.
 --
 -- @column ?|. list@
 --
--- /N.B. An empty list __will never match anything__. Also, this
--- operator might have some unexpected interactions with
--- non-object values. Please reference the examples./
+-- /N.B. An empty list __will never match anything__. Also, this/
+-- /operator might have some unexpected interactions with/
+-- /non-object values. Please reference the examples./
 --
 -- === __Objects__
 --
@@ -254,9 +254,9 @@ infix 4 @>., <@., ?., ?|., ?&.
 --
 -- @column ?&. list@
 --
--- /N.B. An empty list __will match anything__. Also, this
--- operator might have some unexpected interactions with
--- non-object values. Please reference the examples./
+-- /N.B. An empty list __will match anything__. Also, this/
+-- /operator might have some unexpected interactions with/
+-- /non-object values. Please reference the examples./
 --
 -- === __Objects__
 --
