@@ -4,4 +4,13 @@ set -euxo pipefail
 
 psql -c 'create database persistent;' -U postgres
 mysql -e 'create database persistent;'
-exec stack $ARGS --no-terminal test --bench --no-run-benchmarks
+
+case "$BUILD" in
+stack)
+  exec stack --no-terminal $ARGS test --bench --no-run-benchmarks --haddock --no-haddock-deps
+  ;;
+cabal)
+  cabal new-test all
+  ;;
+esac
+set +ex
