@@ -13,7 +13,7 @@ import Data.Monoid (mappend)
 import qualified Data.Text as T
 
 import Database.Persist
-import Database.Persist.Class.PersistUnique (defaultUpsertBy, defaultPutMany, persistUniqueKeyValues)
+import Database.Persist.Class.PersistUnique (defaultUpsertBy, defaultPutMany, persistUniqueKeyValues, onlyOneUniqueDef)
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
