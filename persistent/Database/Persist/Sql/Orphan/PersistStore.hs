@@ -1,6 +1,8 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+
 module Database.Persist.Sql.Orphan.PersistStore
   ( withRawQuery
   , BackendKey(..)
@@ -20,13 +22,15 @@ import qualified Data.Conduit.List as CL
 import Data.Acquire (with)
 import qualified Data.Aeson as A
 import Data.ByteString.Char8 (readInteger)
-import Data.List (find, nubBy)
+import Data.Conduit (ConduitM, (.|), runConduit)
+import qualified Data.Conduit.List as CL
 import qualified Data.Foldable as Foldable
 import Data.Function (on)
 import Data.Int (Int64)
+import Data.List (find, nubBy)
+import qualified Data.Map as Map
 import Data.Maybe (isJust)
 import Data.Monoid (mappend, (<>))
-import qualified Data.Map as Map
 import Data.Text (Text, unpack)
 import qualified Data.Text as T
 import Data.Void (Void)
@@ -75,11 +79,10 @@ whereStmtForKeys conn ks = T.intercalate " OR " $ whereStmtForKey conn `fmap` ks
 -- which does not operate in a Monad
 getTableName :: forall record m backend.
              ( PersistEntity record
-             , PersistEntityBackend record ~ SqlBackend
-             , IsSqlBackend backend
+             , BackendCompatible SqlBackend backend
              , Monad m
              ) => record -> ReaderT backend m Text
-getTableName rec = withReaderT persistBackend $ do
+getTableName rec = withReaderT projectBackend $ do
     conn <- ask
     return $ connEscapeName conn $ tableDBName rec
 
@@ -95,11 +98,11 @@ tableDBName rec = entityDB $ entityDef (Just rec)
 getFieldName :: forall record typ m backend.
              ( PersistEntity record
              , PersistEntityBackend record ~ SqlBackend
-             , IsSqlBackend backend
+             , BackendCompatible SqlBackend backend
              , Monad m
              )
              => EntityField record typ -> ReaderT backend m Text
-getFieldName rec = withReaderT persistBackend $ do
+getFieldName rec = withReaderT projectBackend $ do
     conn <- ask
     return $ connEscapeName conn $ fieldDBName rec
 

@@ -36,53 +36,25 @@ Completed 6 action(s).
 
 # Running persistent tests using Stack
 
-For testing specific package:
+To run all the tests for the repository, run:
+
+    > stack test
+
+For testing specific packages, you can run:
 
     > stack test persistent-sqlite
 
-For appropriate backend specific testing using the package `persistent-test`:
-
-    > stack test persistent-test --flag persistent-test:<backend> --exec persistent-test
-
-where <backend> is one listed in the cabal file
+This will run the tests for the `persistent-sqlite` package alone.
 
 # Running persistent tests using Cabal
 
-All tests are ran from the persistent-test directory
+    > cabal new-test all
 
-    > cd persistent-test
-
-Use cabal
-
-    > cabal configure --enable-tests
-
-If you would like to configure tests with a specific backend that can be enabled
-using
-
-    > cabal configure -f<backend> --enable-tests
-
-where <backend> is one of mongodb/postgresql/mysql/couchdb.
-
-Now run with
-
-    > cabal build && dist/build/test/test
+To test a specific package, you'll pass the package names instead of `all`.
 
 # Testing Backends
 
-By default the sqlite backend is tested.
-To test other backends, you can give a flag described in persisten-test.
-
-    > cabal configure -fmongodb --enable-tests
-
-## Installing backends
-
-For an easy install we recommend running a database from a docker container.
-Lets develop easy entry points for testing a database using a command runner.
-
-    > just --list
-    > just test-mongo
-
-[Installing just is easy](https://github.com/casey/just/releases).
-Or you can look in `./bin/` for the commands it will call and run them directly
-Or
-Lets develop a docker-compose file for running different databases.
+The different backend libraries (`persistent-postgresql`, `persistent-mysql`, etc) are tested in their respective package directories.
+`persistent-sqlite` requires 0 additional setup.
+The other packages require some amount of setup in order to run.
+Details for setup in these should be present in those package directories.

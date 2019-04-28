@@ -25,6 +25,7 @@ module Database.Persist.Postgresql
     ) where
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
+
 import qualified Database.PostgreSQL.Simple as PG
 import qualified Database.PostgreSQL.Simple.Internal as PG
 import qualified Database.PostgreSQL.Simple.FromField as PGFF
@@ -58,6 +59,8 @@ import Data.Int (Int64)
 import qualified Data.IntMap as I
 import Data.IORef
 import Data.List (find, sort, groupBy)
+import Data.List.NonEmpty (NonEmpty)
+import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
 import Data.Maybe
 import Data.Monoid ((<>))
@@ -72,7 +75,6 @@ import Data.Typeable (Typeable)
 import System.Environment (getEnvironment)
 
 import Database.Persist.Sql
-import Database.Persist.Sql.Types.Internal (mkPersistBackend)
 import qualified Database.Persist.Sql.Util as Util
 
 -- | A @libpq@ connection string.  A simple example of connection
@@ -97,13 +99,13 @@ instance Exception PostgresServerVersionError
 -- finishes using it.  Note that you should not use the given
 -- 'ConnectionPool' outside the action since it may already
 -- have been released.
-withPostgresqlPool :: (MonadLogger m, MonadUnliftIO m, IsSqlBackend backend)
+withPostgresqlPool :: (MonadLogger m, MonadUnliftIO m)
                    => ConnectionString
                    -- ^ Connection string to the database.
                    -> Int
                    -- ^ Number of connections to be kept open in
                    -- the pool.
-                   -> (Pool backend -> m a)
+                   -> (Pool SqlBackend -> m a)
                    -- ^ Action to be executed that uses the
                    -- connection pool.
                    -> m a
@@ -113,7 +115,7 @@ withPostgresqlPool ci = withPostgresqlPoolWithVersion getServerVersion ci
 -- the server version (to work around an Amazon Redshift bug).
 --
 -- @since 2.6.2
-withPostgresqlPoolWithVersion :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
+withPostgresqlPoolWithVersion :: (MonadUnliftIO m, MonadLogger m)
                               => (PG.Connection -> IO (Maybe Double))
                               -- ^ Action to perform to get the server version.
                               -> ConnectionString
@@ -121,7 +123,7 @@ withPostgresqlPoolWithVersion :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend b
                               -> Int
                               -- ^ Number of connections to be kept open in
                               -- the pool.
-                              -> (Pool backend -> m a)
+                              -> (Pool SqlBackend -> m a)
                               -- ^ Action to be executed that uses the
                               -- connection pool.
                               -> m a
@@ -131,13 +133,13 @@ withPostgresqlPoolWithVersion getVer ci = withSqlPool $ open' (const $ return ()
 -- responsibility to properly close the connection pool when
 -- unneeded.  Use 'withPostgresqlPool' for an automatic resource
 -- control.
-createPostgresqlPool :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
+createPostgresqlPool :: (MonadUnliftIO m, MonadLogger m)
                      => ConnectionString
                      -- ^ Connection string to the database.
                      -> Int
                      -- ^ Number of connections to be kept open
                      -- in the pool.
-                     -> m (Pool backend)
+                     -> m (Pool SqlBackend)
 createPostgresqlPool = createPostgresqlPoolModified (const $ return ())
 
 -- | Same as 'createPostgresqlPool', but additionally takes a callback function
@@ -149,11 +151,11 @@ createPostgresqlPool = createPostgresqlPoolModified (const $ return ())
 --
 -- @since 2.1.3
 createPostgresqlPoolModified
-    :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
+    :: (MonadUnliftIO m, MonadLogger m)
     => (PG.Connection -> IO ()) -- ^ Action to perform after connection is created.
     -> ConnectionString -- ^ Connection string to the database.
     -> Int -- ^ Number of connections to be kept open in the pool.
-    -> m (Pool backend)
+    -> m (Pool SqlBackend)
 createPostgresqlPoolModified = createPostgresqlPoolModifiedWithVersion getServerVersion
 
 -- | Same as other similarly-named functions in this module, but takes callbacks for obtaining
@@ -162,37 +164,36 @@ createPostgresqlPoolModified = createPostgresqlPoolModifiedWithVersion getServer
 --
 -- @since 2.6.2
 createPostgresqlPoolModifiedWithVersion
-    :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
+    :: (MonadUnliftIO m, MonadLogger m)
     => (PG.Connection -> IO (Maybe Double)) -- ^ Action to perform to get the server version.
     -> (PG.Connection -> IO ()) -- ^ Action to perform after connection is created.
     -> ConnectionString -- ^ Connection string to the database.
     -> Int -- ^ Number of connections to be kept open in the pool.
-    -> m (Pool backend)
+    -> m (Pool SqlBackend)
 createPostgresqlPoolModifiedWithVersion getVer modConn ci =
   createSqlPool $ open' modConn getVer ci
 
 -- | Same as 'withPostgresqlPool', but instead of opening a pool
 -- of connections, only one connection is opened.
-withPostgresqlConn :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
-                   => ConnectionString -> (backend -> m a) -> m a
+withPostgresqlConn :: (MonadUnliftIO m, MonadLogger m)
+                   => ConnectionString -> (SqlBackend -> m a) -> m a
 withPostgresqlConn = withPostgresqlConnWithVersion getServerVersion
 
 -- | Same as 'withPostgresqlConn', but takes a callback for obtaining
 -- the server version (to work around an Amazon Redshift bug).
 --
 -- @since 2.6.2
-withPostgresqlConnWithVersion :: (MonadUnliftIO m, MonadLogger m, IsSqlBackend backend)
+withPostgresqlConnWithVersion :: (MonadUnliftIO m, MonadLogger m)
                               => (PG.Connection -> IO (Maybe Double))
                               -> ConnectionString
-                              -> (backend -> m a)
+                              -> (SqlBackend -> m a)
                               -> m a
 withPostgresqlConnWithVersion getVer = withSqlConn . open' (const $ return ()) getVer
 
 open'
-    :: (IsSqlBackend backend)
-    => (PG.Connection -> IO ())
+    :: (PG.Connection -> IO ())
     -> (PG.Connection -> IO (Maybe Double))
-    -> ConnectionString -> LogFunc -> IO backend
+    -> ConnectionString -> LogFunc -> IO SqlBackend
 open' modConn getVer cstr logFunc = do
     conn <- PG.connectPostgreSQL cstr
     modConn conn
@@ -224,14 +225,14 @@ upsertFunction f version = if (version >= 9.5)
 
 
 -- | Generate a 'SqlBackend' from a 'PG.Connection'.
-openSimpleConn :: (IsSqlBackend backend) => LogFunc -> PG.Connection -> IO backend
+openSimpleConn :: LogFunc -> PG.Connection -> IO SqlBackend
 openSimpleConn = openSimpleConnWithVersion getServerVersion
 
 -- | Generate a 'SqlBackend' from a 'PG.Connection', but takes a callback for
 -- obtaining the server version.
 --
 -- @since 2.9.1
-openSimpleConnWithVersion :: (IsSqlBackend backend) => (PG.Connection -> IO (Maybe Double)) -> LogFunc -> PG.Connection -> IO backend
+openSimpleConnWithVersion :: (PG.Connection -> IO (Maybe Double)) -> LogFunc -> PG.Connection -> IO SqlBackend
 openSimpleConnWithVersion getVer logFunc conn = do
     smap <- newIORef $ Map.empty
     serverVersion <- getVer conn
@@ -239,10 +240,10 @@ openSimpleConnWithVersion getVer logFunc conn = do
 
 -- | Create the backend given a logging function, server version, mutable statement cell,
 -- and connection.
-createBackend :: IsSqlBackend backend => LogFunc -> Maybe Double
-              -> IORef (Map.Map Text Statement) -> PG.Connection -> backend
+createBackend :: LogFunc -> Maybe Double
+              -> IORef (Map.Map Text Statement) -> PG.Connection -> SqlBackend
 createBackend logFunc serverVersion smap conn = do
-    mkPersistBackend $ SqlBackend
+    SqlBackend
         { connPrepare    = prepare' conn
         , connStmtMap    = smap
         , connInsertSql  = insertSql'
@@ -299,8 +300,8 @@ insertSql' ent vals =
        Nothing -> ISRSingle (sql <> " RETURNING " <> escape (fieldDB (entityId ent)))
 
 
-upsertSql' :: EntityDef -> Text -> Text
-upsertSql' ent updateVal = T.concat
+upsertSql' :: EntityDef -> NonEmpty UniqueDef -> Text -> Text
+upsertSql' ent uniqs updateVal = T.concat
                            [ "INSERT INTO "
                            , escape (entityDB ent)
                            , "("
@@ -316,7 +317,7 @@ upsertSql' ent updateVal = T.concat
                            , " RETURNING ??"
                            ]
     where
-      wher = T.intercalate " AND " $ map singleCondition $ entityUniques ent
+      wher = T.intercalate " AND " $ map singleCondition $ NEL.toList uniqs
 
       singleCondition :: UniqueDef -> Text
       singleCondition udef = T.intercalate " AND " (map singleClause $ map snd (uniqueFields udef))

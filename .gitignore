@@ -25,6 +25,8 @@ tarballs/
 cabal-dev/
 cabal.sandbox.config
 .cabal-sandbox/
+dist-newstyle/
+.ghc.environment.*
 
 ## Docker image ignores
 /.cabal/

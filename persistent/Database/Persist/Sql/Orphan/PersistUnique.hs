@@ -13,7 +13,9 @@ import Data.Monoid (mappend)
 import qualified Data.Text as T
 
 import Database.Persist
-import Database.Persist.Class.PersistUnique (defaultUpsertBy, defaultPutMany, persistUniqueKeyValues, onlyOneUniqueDef)
+import Database.Persist.Class.PersistUnique (defaultUpsertBy, defaultPutMany, persistUniqueKeyValues
+                                            , onlyOneUniqueDef, atLeastOneUniqueDef)
+
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
@@ -26,6 +28,7 @@ defaultUpsert
     , PersistUniqueWrite backend
     , PersistEntityBackend record ~ BaseBackend backend
     , OnlyOneUniqueKey record
+    , AtLeastOneUniqueKey record
     )
     => record -> [Update record] -> ReaderT backend m (Entity record)
 defaultUpsert record updates = do
@@ -43,7 +46,7 @@ instance PersistUniqueWrite SqlBackend where
                             [] -> defaultUpsertBy uniqueKey record updates
                             _:_ -> do
                                 let upds = T.intercalate "," $ map mkUpdateText updates
-                                    sql = upsertSql t upds
+                                    sql = upsertSql t (atLeastOneUniqueDef (Just record)) upds
                                     vals = map toPersistValue (toPersistFields record)
                                         ++ map updatePersistValue updates
                                         ++ unqs uniqueKey
