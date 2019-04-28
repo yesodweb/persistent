@@ -309,7 +309,7 @@ upsertSql' ent uniqs updateVal = T.concat
                            , ") VALUES ("
                            , T.intercalate "," $ map (const "?") (entityFields ent)
                            , ") ON CONFLICT ("
-                           , T.intercalate "," $ concat $ map (\x -> map escape (map snd $ uniqueFields x)) (entityUniques ent)
+                           , T.intercalate "," $ concat $ map (\x -> map escape (map snd $ uniqueFields x)) (NEL.toList uniqs)
                            , ") DO UPDATE SET "
                            , updateVal
                            , " WHERE "
