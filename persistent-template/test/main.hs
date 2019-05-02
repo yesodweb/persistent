@@ -18,6 +18,7 @@ import Data.Aeson
 import Data.ByteString.Lazy.Char8 ()
 import Data.Functor.Identity (Identity (..))
 import Data.Text (Text, pack)
+import qualified Data.List as List
 import Test.Hspec
 import Test.Hspec.QuickCheck
 import Test.QuickCheck.Arbitrary
@@ -26,24 +27,10 @@ import Test.QuickCheck.Gen (Gen)
 import Database.Persist
 import Database.Persist.TH
 import TemplateTestImports
+import Entities
 
 
-share [mkPersist sqlSettings { mpsGeneric = False }, mkDeleteCascade sqlSettings { mpsGeneric = False }] [persistUpperCase|
-Person json
-    name Text
-    age Int Maybe
-    foo Foo
-    address Address
-    deriving Show Eq
-Address json
-    street Text
-    city Text
-    zip Int Maybe
-    deriving Show Eq
-NoJson
-    foo Text
-    deriving Show Eq
-|]
+share [mkPersist sqlSettings { mpsGeneric = False }, mkDeleteCascade sqlSettings { mpsGeneric = False }] entityDefs
 
 share [mkPersist sqlSettings { mpsGeneric = False, mpsGenerateLenses = True }] [persistLowerCase|
 Lperson json
@@ -95,6 +82,45 @@ main = hspec $ do
         (person1 ^. lpersonAddress) `shouldBe` address1
         (person1 ^. (lpersonAddress . laddressCity)) `shouldBe` city1
         (person1 & ((lpersonAddress . laddressCity) .~ city2)) `shouldBe` person2
+    let Just thingEntity =
+            List.find
+                (\edef -> unHaskellName (entityHaskell edef ) == "Thing")
+                entityDefs
+    it "the loaded entity should be the same as the class method" $ do
+        entityDef (Nothing :: Maybe Thing)
+            `shouldBe`
+                thingEntity
+    it "should have the right id type" $ do
+        entityId thingEntity
+            `shouldBe`
+                FieldDef
+                    (HaskellName "id")
+                    (DBName "id")
+                    (FTTypeCon Nothing "Text")
+                    SqlString
+                    ["sql=id"]
+                    True
+                    (ForeignRef (HaskellName "Thing") (FTTypeCon Nothing "Text"))
+                    Nothing
+
+    let Just gearEntityDef =
+            List.find
+                (\edef -> unHaskellName (entityHaskell edef ) == "Gear")
+                entityDefs
+    it "the loaded entity should be the same as the class method" $ do
+        entityDef (Nothing :: Maybe Gear)
+            `shouldBe`
+                gearEntityDef
+
+    let [thingRefDef] = entityFields gearEntityDef
+
+    it "should have the right foreign key type to Thing" $ do
+        fieldSqlType thingRefDef
+            `shouldBe`
+                fieldSqlType (entityId thingEntity)
+        fieldReference thingRefDef
+            `shouldBe`
+                fieldReference (entityId thingEntity)
 
 (&) :: a -> (a -> b) -> b
 x & f = f x
