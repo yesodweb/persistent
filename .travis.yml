@@ -90,8 +90,8 @@ install:
       ;;
     cabal)
       cabal --version
-      travis_retry cabal new-update 
-      travis_retry cabal update
+      travis_retry cabal update 
+      # travis_retry cabal update
 
       # Get the list of packages from the stack.yaml file. Note that
       # this will also implicitly run hpack as necessary to generate
