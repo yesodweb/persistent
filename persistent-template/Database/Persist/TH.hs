@@ -1530,12 +1530,28 @@ liftAndFixKey entMap (FieldDef a b c sqlTyp e f fieldRef mcomments) =
     (fieldRef', sqlTyp') = fromMaybe (fieldRef, lift sqlTyp) $
       case fieldRef of
         ForeignRef refName _ft -> case M.lookup refName entMap of
-          Nothing -> Nothing
+          Nothing ->
+            Nothing
           Just ent ->
             case fieldReference $ entityId ent of
-              fr@(ForeignRef _Name ft) -> Just (fr, lift $ SqlTypeExp ft)
-              _ -> Nothing
+              fr@(ForeignRef _Name ft) ->
+                Just (fr, lift $ SqlTypeExp ft)
+              _ ->
+                Nothing
         _ -> Nothing
+
+fixKey :: EntityMap -> FieldDef -> Q FieldDef
+fixKey entMap (FieldDef a b c sqlTyp e f fieldRef mcomments) = do
+  sqlTyp'' <- sqlTypE
+
+  pure (FieldDef a b c sqlTyp'' e f fieldRef' mcomments)
+  where
+    (fieldRef', sqlTypE) = fromMaybe (fieldRef, pure sqlTyp) $ do
+        ForeignRef refName _ft <- pure fieldRef
+        ent <- M.lookup refName entMap
+        fr@(ForeignRef _Name ft) <- pure . fieldReference $ entityId ent
+        let typ = ftToType ft
+        pure (fr, _f ft)
 
 instance Lift EntityDef where
     lift EntityDef{..} =
