@@ -1819,4 +1819,3 @@ instanceD = InstanceD Nothing
 --         let x = mkName "x"
 --          in normalClause [ConP (mkName constr) [VarP x]]
 --                    (VarE 'toPersistValue `AppE` VarE x)
---
