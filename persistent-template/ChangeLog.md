@@ -1,3 +1,7 @@
+## 2.7.1
+
+* Add the `mkEntityDefList` function to work around [#902](https://github.com/yesodweb/persistent/issues/902). [#904](https://github.com/yesodweb/persistent/pull/904)
+
 ## 2.7.0
 
 * Depends on `persistent-2.10.0` which provides the `OnlyOneUniqueKey` and `AtLeastOneUniqueKey` classes. Automatically generates instances for these classes based on how many unique keys the entity definition gets. This changes requires `UndecidableInstances` to be enabled on each module that generates entity definitions. [#885](https://github.com/yesodweb/persistent/pull/885)

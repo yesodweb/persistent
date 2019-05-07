@@ -32,6 +32,7 @@ module Database.Persist.TH
     , mkMigrate
     , mkSave
     , mkDeleteCascade
+    , mkEntityDefList
     , share
     , derivePersistField
     , derivePersistFieldJSON
@@ -1360,6 +1361,36 @@ mkDeleteCascade mps defs = do
             [ FunD 'deleteCascade
                 [normalClause [VarP key] (DoE stmts)]
             ]
+
+-- | Creates a declaration for the @['EntityDef']@ from the @persistent@
+-- schema. This is necessary because the Persistent QuasiQuoter is unable
+-- to know the correct type of ID fields, and assumes that they are all
+-- Int64.
+--
+-- Provide this in the list you give to 'share', much like @'mkMigrate'@.
+--
+-- @
+-- 'share' ['mkMigrate' "migrateAll", 'mkEntityDefList' "entityDefs"] [...]
+-- @
+--
+-- @since 2.7.1
+mkEntityDefList
+    :: String
+    -- ^ The name that will be given to the 'EntityDef' list.
+    -> [EntityDef]
+    -> Q [Dec]
+mkEntityDefList entityList entityDefs = do
+    let entityListName = mkName entityList
+    edefs <- fmap ListE
+        . forM entityDefs
+        $ \(EntityDef { entityHaskell = HaskellName haskellName }) ->
+            let entityType = conT (mkName (T.unpack haskellName))
+             in [|entityDef (Proxy :: Proxy $(entityType))|]
+    typ <- [t|[EntityDef]|]
+    pure
+        [ SigD entityListName typ
+        , ValD (VarP entityListName) (NormalB edefs) []
+        ]
 
 mkUniqueKeys :: EntityDef -> Q Dec
 mkUniqueKeys def | entitySum def =
