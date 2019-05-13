@@ -34,6 +34,7 @@ import qualified MaxLenTest
 import qualified MigrationColumnLengthTest
 import qualified MigrationOnlyTest
 import qualified MpsNoPrefixTest
+import qualified MigrationTest
 import qualified PersistentTest
 import qualified PersistUniqueTest
 import qualified PrimaryTest
@@ -146,6 +147,7 @@ main = do
     MaxLenTest.specsWith db
     Recursive.specsWith db
     SumTypeTest.specsWith db (Just (runMigrationSilent SumTypeTest.sumTypeMigrate))
+    MigrationTest.specsWith db
     MigrationOnlyTest.specsWith db
         (Just
             $ runMigrationSilent MigrationOnlyTest.migrateAll1
