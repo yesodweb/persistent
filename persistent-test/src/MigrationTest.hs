@@ -18,6 +18,10 @@ Source
     field3 Int
     field4 TargetId
 
+PreUnique sql=pre_unique
+    field5 Int
+    field6 T.Text
+
 |]
 
 share [mkPersist sqlSettings, mkMigrate "migrationAddCol", mkDeleteCascade sqlSettings] [persistLowerCase|
@@ -40,11 +44,27 @@ FromRawMigration
     age  Int
 
     Primary name
+|]
+
+share [mkPersist sqlSettings, mkMigrate "addUniqKey", mkDeleteCascade sqlSettings] [persistLowerCase|
+
+PostUnique sql=pre_unique
+    field5 Int
+    field6 T.Text
+
+    UniquField5 field5
 
 |]
 
+dropTables :: MonadIO m => SqlPersistT m ()
+dropTables = do
+    rawExecute "DROP TABLE IF EXISTS source" []
+    rawExecute "DROP TABLE IF EXISTS target" []
+    rawExecute "DROP TABLE IF EXISTS pre_unique" []
+    rawExecute "DROP TABLE IF EXISTS from_raw_migration" []
+
 specsWith :: (MonadIO m, MonadFail m) => RunDb SqlBackend m -> Spec
-specsWith runDb = describe "Migration" $ do
+specsWith runDb = describe "Migration" $ before_ (runDb dropTables) $ do
     it "is idempotent" $ runDb $ do
         _ <- runMigration migrationMigrate
         again <- getMigration migrationMigrate
@@ -57,7 +77,15 @@ specsWith runDb = describe "Migration" $ do
         _ <- runMigration migrationAddCol
         again <- getMigration migrationAddCol
         liftIO $ again @?= []
-    describe "Add Primary key constraint on raw table" $ do
+    describe "Add Unique Key constraint" $ do
+        it "should not be considered safe" $ runDb $ do
+            _ <- runMigration migrationMigrate
+            Right migration <- parseMigration addUniqKey
+            liftIO $ migration
+                `shouldSatisfy`
+                    (\cm -> True `elem` map fst cm)
+
+    xdescribe "Add Primary key constraint on raw table" $ do
         it "should not be considered safe" $ runDb $ do
             rawExecute "CREATE TABLE from_raw_migration (name VARCHAR NOT NULL, age INT8 NOT NULL)" []
             Right migration <- parseMigration addPrimKey
