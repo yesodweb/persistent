@@ -41,10 +41,9 @@ specsWith runDb = describe "DeleteCascade" $ do
 
     it "should delete by non-primary key refernece" $ do
         pendingWith "Depends on specifying non-PK references: see issue #909"
-  where
-    setup = do
         runDb $ do
-            runMigrationUnsafe migrateAll
-            deleteWhere ([] :: [Filter PersonX])
-            deleteWhere ([] :: [Filter BlogPostX])
-            deleteWhere ([] :: [Filter AliasX])
+            pk <-insert (PersonX "username0" "name0" Nothing)
+            ak <- insert (AliasX "name0" "othername")
+            deleteCascade pk
+            ma <- get ak
+            liftIO $ void ma `shouldBe` Nothing
