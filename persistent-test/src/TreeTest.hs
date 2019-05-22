@@ -1,5 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE UndecidableInstances #-} -- FIXME
+{-# LANGUAGE UndecidableInstances #-}
+
 module TreeTest where
 
 import Database.Persist.TH (mkDeleteCascade)

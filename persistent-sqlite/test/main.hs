@@ -15,6 +15,7 @@ import qualified CompositeTest
 import qualified CustomPersistFieldTest
 import qualified CustomPrimaryKeyReferenceTest
 import qualified DataTypeTest
+import qualified DeleteCascadeTest
 import qualified EmptyEntityTest
 import qualified EmbedOrderTest
 import qualified EmbedTest
@@ -114,6 +115,7 @@ main = do
     mapM_ setup
       [ PersistentTest.testMigrate
       , PersistentTest.noPrefixMigrate
+      , DeleteCascadeTest.migrateAll
       , EmbedTest.embedMigrate
       , EmbedOrderTest.embedOrderMigrate
       , LargeNumberTest.numberMigrate
@@ -155,6 +157,7 @@ main = do
     HtmlTest.specsWith
         db
         (Just (runMigrationSilent HtmlTest.htmlMigrate))
+    DeleteCascadeTest.specsWith db
     EmbedTest.specsWith db
     EmbedOrderTest.specsWith db
     LargeNumberTest.specsWith db

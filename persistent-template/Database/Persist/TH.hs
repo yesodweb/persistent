@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -1296,9 +1297,10 @@ mkSave name' defs' = do
 data Dep = Dep
     { depTarget :: HaskellName
     , depSourceTable :: HaskellName
-    , depSourceField :: HaskellName
+    , depSourceFields :: [HaskellName]
     , depSourceNull  :: IsNullable
     }
+    deriving Show
 
 -- | Generate a 'DeleteCascade' instance for the given @EntityDef@s.
 mkDeleteCascade :: MkPersistSettings -> [EntityDef] -> Q [Dec]
@@ -1307,8 +1309,10 @@ mkDeleteCascade mps defs = do
     mapM (go deps) defs
   where
     getDeps :: EntityDef -> [Dep]
-    getDeps def =
-        concatMap getDeps' $ entityFields $ fixEntityDef def
+    getDeps (fixEntityDef -> def) =
+        map mkDepFromForeign (entityForeigns def) <>
+            concatMap getDeps' (entityFields def)
+
       where
         getDeps' :: FieldDef -> [Dep]
         getDeps' field@FieldDef {..} =
@@ -1317,10 +1321,25 @@ mkDeleteCascade mps defs = do
                      return Dep
                         { depTarget = name
                         , depSourceTable = entityHaskell def
-                        , depSourceField = fieldHaskell
+                        , depSourceFields = pure fieldHaskell
                         , depSourceNull  = nullable fieldAttrs
                         }
                 Nothing -> []
+        mkDepFromForeign :: ForeignDef -> Dep
+        mkDepFromForeign ForeignDef{..} =
+            Dep
+                { depTarget =
+                    foreignRefTableHaskell
+                , depSourceTable =
+                    entityHaskell def
+                , depSourceFields =
+                    map (fst . fst) foreignFields
+                , depSourceNull =
+                    if foreignNullable
+                        then error "What should this be?"
+                        else NotNullable
+                }
+
     go :: [Dep] -> EntityDef -> Q Dec
     go allDeps EntityDef{entityHaskell = name} = do
         let deps = filter (\x -> depTarget x == name) allDeps
@@ -1335,14 +1354,15 @@ mkDeleteCascade mps defs = do
             mkStmt dep = NoBindS
                 $ dcw `AppE`
                   ListE
-                    [ filt `AppE` ConE filtName
-                           `AppE` (value `AppE` val (depSourceNull dep))
-                           `AppE` eq
-                    ]
+                    (map mk (depSourceFields dep))
               where
-                filtName = filterConName' mps (depSourceTable dep) (depSourceField dep)
-                val (Nullable ByMaybeAttr) = just `AppE` VarE key
-                val _                      =             VarE key
+                mk depSourceField = filt `AppE` ConE filtName
+                               `AppE` (value `AppE` val (depSourceNull dep))
+                               `AppE` eq
+                  where
+                    filtName = filterConName' mps (depSourceTable dep) depSourceField
+                    val (Nullable ByMaybeAttr) = just `AppE` VarE key
+                    val _                      =             VarE key
 
 
 
