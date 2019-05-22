@@ -15,7 +15,7 @@ import Init
 share
     [ mkPersist persistSettings { mpsGeneric = False }
     , mkMigrate "compositeMigrate"
-    -- , mkDeleteCascade persistSettings { mpsGeneric = False }
+    , mkDeleteCascade persistSettings { mpsGeneric = False }
     ] [persistLowerCase|
   TestParent
       name  String maxlen=20
