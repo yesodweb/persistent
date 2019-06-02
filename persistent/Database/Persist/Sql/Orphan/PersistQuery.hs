@@ -343,8 +343,8 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
                 else id)
             $ connEscapeName conn $ fieldName field
         qmarks = case value of
-                    FilterValue{} -> "?"
-                    UnsafeValue{} -> "?"
+                    FilterValue{} -> "(?)"
+                    UnsafeValue{} -> "(?)"
                     FilterValues xs ->
                         let parens a = "(" <> a <> ")"
                             commas = T.intercalate ","
