@@ -1,5 +1,9 @@
 # Changelog for persistent-sqlite
 
+## 2.10.1
+
+* Add support for reading text values with null characters from the database. Fixes [#921](https://github.com/yesodweb/persistent/issues/921)
+
 ## 2.10.0
 
 * Updated for `persistent-2.10.0` compatibility.
