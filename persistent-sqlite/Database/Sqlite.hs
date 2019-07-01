@@ -521,7 +521,8 @@ foreign import ccall "sqlite3_column_text"
 columnText :: Statement -> Int -> IO Text
 columnText (Statement statement) columnIndex = do
   text <- columnTextC statement columnIndex
-  byteString <- BS.packCString text
+  len <- columnBytesC statement columnIndex
+  byteString <- BS.packCStringLen (text, len)
   return $ decodeUtf8With lenientDecode byteString
 
 foreign import ccall "sqlite3_column_count"
