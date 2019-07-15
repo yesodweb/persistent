@@ -36,10 +36,10 @@ flag json1
   description: Enable json1 in the vendored SQLite library; has no effect if a system SQLite library is used.
   default: True
 flag use-stat3
-  description: Enable STAT3 in the vendored SQLite library; has no effect if a syste
+  description: Enable STAT3 in the vendored SQLite library; has no effect if a system SQLite library is used.
   default: False
 flag use-stat4
-  description: Enable STAT4 in the vendored SQLite library (supercedes stat3); has n
+  description: Enable STAT4 in the vendored SQLite library (supercedes stat3); has no effect if a system SQLite library is used.
   default: True
 
 library
