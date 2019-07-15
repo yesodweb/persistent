@@ -463,15 +463,18 @@ getCopyTable allDefs getter def = do
     let oldCols = map DBName $ filter (/= "id") oldCols' -- need to update for table id attribute ?
     let newCols = filter (not . safeToRemove def) $ map cName cols
     let common = filter (`elem` oldCols) newCols
-    let id_ = fieldDB (entityId def)
     return [ (False, tmpSql)
-           , (False, copyToTemp $ id_ : common)
+           , (False, copyToTemp $ addIdCol common)
            , (common /= filter (not . safeToRemove def) oldCols, dropOld)
            , (False, newSql)
-           , (False, copyToFinal $ id_ : newCols)
+           , (False, copyToFinal $ addIdCol newCols)
            , (False, dropTmp)
            ]
   where
+    addIdCol = case entityPrimary def of
+        Nothing -> (fieldDB (entityId def) :)
+        Just _ -> id
+
     getCols = do
         x <- CL.head
         case x of
