@@ -1,5 +1,10 @@
 # Changelog for persistent-sqlite
 
+## 2.10.2
+
+* Expose the internals of `Connection` in an Internal module, allowing the user
+  to call SQLite functions via the C FFI. [#772](https://github.com/yesodweb/persistent)
+
 ## 2.10.1
 
 * Add support for reading text values with null characters from the database. Fixes [#921](https://github.com/yesodweb/persistent/issues/921)
