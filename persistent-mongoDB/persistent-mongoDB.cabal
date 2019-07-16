@@ -28,7 +28,7 @@ library
                    , conduit            >= 1.2
                    , http-api-data      >= 0.3.7     && < 0.5
                    , mongoDB            >= 2.3
-                   , network            >= 2.6
+                   , network            >= 2.6   && < 3.0
                    , path-pieces        >= 0.2
                    , resource-pool      >= 0.2       && < 0.3
                    , resourcet          >= 1.1
