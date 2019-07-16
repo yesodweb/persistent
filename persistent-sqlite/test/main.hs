@@ -226,7 +226,7 @@ main = do
         runMigration migrateAll
         insertMany_ $ replicate 1000 (Test $ read "2014-11-30 05:15:25.123")
 
-    it "issue #669" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
+    it "properly migrates to a composite primary key (issue #669)" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
         runMigration compositeSetup
         runMigration compositeMigrateTest
 

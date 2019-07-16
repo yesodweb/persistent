@@ -1,5 +1,9 @@
 # Changelog for persistent-sqlite
 
+## 2.10.2
+
+* Add support for migrating entities with composite primary keys. Fixes [#669](https://github.com/yesodweb/persistent/issues/669)
+
 ## 2.10.1
 
 * Add support for reading text values with null characters from the database. Fixes [#921](https://github.com/yesodweb/persistent/issues/921)
