@@ -2,10 +2,9 @@
 
 ## 2.10.2
 
-* Add a new `RawSqlite` type and `withRawSqliteConnInfo` function that allow
-  access to the underlying Sqlite `Connection` type. [#772](https://github.com/yesodweb/persistent/pull/772)
-* Expose the internals of `Connection` in an Internal module, allowing the user
-  to call SQLite functions via the C FFI. [#772](https://github.com/yesodweb/persistent/pull/772)
+* Add a new `RawSqlite` type and `withRawSqliteConnInfo` function that allow  access to the underlying Sqlite `Connection` type. [#772](https://github.com/yesodweb/persistent/pull/772)
+* Expose the internals of `Connection` in an Internal module, allowing the user to call SQLite functions via the C FFI. [#772](https://github.com/yesodweb/persistent/pull/772)
+* Add a flag for SQLITE_STAT4 and enable it by default, allowing for better query optimisation when using ANALYZE. This breaks the query planner stability guarantee, but the required flag for that isn't enabled or exposed by persistent. Only affects the vendored SQLite library, has no effect when using system SQLite.
 * Add support for migrating entities with composite primary keys. Fixes [#669](https://github.com/yesodweb/persistent/issues/669)
 
 ## 2.10.1
