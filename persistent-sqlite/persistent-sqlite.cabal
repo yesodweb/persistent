@@ -35,6 +35,12 @@ flag have-usleep
 flag json1
   description: Enable json1 in the vendored SQLite library; has no effect if a system SQLite library is used.
   default: True
+flag use-stat3
+  description: Enable STAT3 in the vendored SQLite library; has no effect if a system SQLite library is used.
+  default: False
+flag use-stat4
+  description: Enable STAT4 in the vendored SQLite library (supercedes stat3); has no effect if a system SQLite library is used.
+  default: True
 
 library
     build-depends:   base                    >= 4.9         && < 5
@@ -76,6 +82,10 @@ library
        cc-options: -DHAVE_USLEEP
     if flag(json1)
       cc-options: -DSQLITE_ENABLE_JSON1
+    if flag(use-stat3)
+      cc-options: -DSQLITE_ENABLE_STAT3
+    if flag(use-stat4)
+      cc-options: -DSQLITE_ENABLE_STAT4
 
     c-sources: cbits/config.c
 
