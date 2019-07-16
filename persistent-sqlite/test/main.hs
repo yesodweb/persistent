@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -76,6 +77,23 @@ DataTypeTable no-json
     pico Pico
     time TimeOfDay
     utc UTCTime
+|]
+
+share [mkPersist sqlSettings, mkMigrate "compositeSetup"] [persistLowerCase|
+Simple
+    int Int
+    text Text
+    Primary text int
+    deriving Show Eq
+|]
+
+share [mkPersist sqlSettings, mkMigrate "compositeMigrateTest"] [persistLowerCase|
+Simple2 sql=simple
+    int Int
+    text Text
+    bool Bool
+    Primary text int
+    deriving Show Eq
 |]
 
 instance Arbitrary DataTypeTable where
@@ -207,6 +225,10 @@ main = do
     it "issue #527" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
         runMigration migrateAll
         insertMany_ $ replicate 1000 (Test $ read "2014-11-30 05:15:25.123")
+
+    it "issue #669" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
+        runMigration compositeSetup
+        runMigration compositeMigrateTest
 
     it "afterException" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
         runMigration testMigrate
