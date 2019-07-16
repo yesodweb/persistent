@@ -1,5 +1,9 @@
 # Changelog for persistent-sqlite
 
+## 2.10.2
+
+* Add a flag for SQLITE_STAT4 and enable it by default, allowing for better query optimisation when using ANALYZE. This breaks the query planner stability guarantee, but the required flag for that isn't enabled or exposed by persistent. Only affects the vendored SQLite library, has no effect when using system SQLite.
+
 ## 2.10.1
 
 * Add support for reading text values with null characters from the database. Fixes [#921](https://github.com/yesodweb/persistent/issues/921)
