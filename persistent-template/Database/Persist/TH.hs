@@ -40,6 +40,7 @@ module Database.Persist.TH
       -- * Internal
     , lensPTH
     , parseReferences
+    , embedEntityDefs
     , AtLeastOneUniqueKey(..)
     , OnlyOneUniqueKey(..)
     ) where
@@ -164,14 +165,20 @@ persistManyFileWith ps fps = do
       s <- qRunIO $ TIO.hGetContents h
       return s
 
--- calls parse to Quasi.parse individual entities in isolation
--- afterwards, sets references to other entities
--- | @since 2.5.3
-parseReferences :: PersistSettings -> Text -> Q Exp
-parseReferences ps s = lift $
-     map (mkEntityDefSqlTypeExp embedEntityMap entMap) noCycleEnts
+-- Takes a list of (potentially) independently defined entities and properly
+-- links all foreign keys to reference the right 'EntityDef', tying the knot
+-- between entities.
+--
+-- Allows users to define entities indepedently or in separate modules and then
+-- fix the cross-references between them at runtime to create a 'Migration'.
+--
+-- @since 2.7.2
+embedEntityDefs :: [EntityDef] -> [EntityDef]
+embedEntityDefs = snd . embedEntityDefsMap
+
+embedEntityDefsMap :: [EntityDef] -> (M.Map HaskellName EmbedEntityDef, [EntityDef])
+embedEntityDefsMap rawEnts = (embedEntityMap, noCycleEnts)
   where
-    entMap = M.fromList $ map (\ent -> (entityHaskell ent, ent)) noCycleEnts
     noCycleEnts = map breakCycleEnt entsWithEmbeds
     -- every EntityDef could reference each-other (as an EmbedRef)
     -- let Haskell tie the knot
@@ -180,7 +187,6 @@ parseReferences ps s = lift $
     setEmbedEntity ent = ent
       { entityFields = map (setEmbedField (entityHaskell ent) embedEntityMap) $ entityFields ent
       }
-    rawEnts = parse ps s
 
     -- self references are already broken
     -- look at every emFieldEmbed to see if it refers to an already seen HaskellName
@@ -208,6 +214,15 @@ parseReferences ps s = lift $
       where
         membed = emFieldEmbed emf
 
+-- calls parse to Quasi.parse individual entities in isolation
+-- afterwards, sets references to other entities
+-- | @since 2.5.3
+parseReferences :: PersistSettings -> Text -> Q Exp
+parseReferences ps s = lift $
+     map (mkEntityDefSqlTypeExp embedEntityMap entMap) noCycleEnts
+  where
+    (embedEntityMap, noCycleEnts) = embedEntityDefsMap $ parse ps s
+    entMap = M.fromList $ map (\ent -> (entityHaskell ent, ent)) noCycleEnts
 
 
 stripId :: FieldType -> Maybe Text
