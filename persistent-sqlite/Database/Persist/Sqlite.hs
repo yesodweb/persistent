@@ -536,6 +536,7 @@ mkCreateTable isTemp entity (cols, uniqs) =
         , "("
         , T.intercalate "," $ map (escape . fieldDB) $ compositeFields pdef
         , ")"
+        , T.concat $ map sqlUnique uniqs
         , ")"
         ]
     Nothing -> T.concat

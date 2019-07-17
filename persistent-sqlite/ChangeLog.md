@@ -1,5 +1,9 @@
 # Changelog for persistent-sqlite
 
+## 2.10.3
+
+* Unique constraints are correctly generated. [#922](https://github.com/yesodweb/persistent/pull/922) @kderme
+
 ## 2.10.2
 
 * Add a new `RawSqlite` type and `withRawSqliteConnInfo` function that allow  access to the underlying Sqlite `Connection` type. [#772](https://github.com/yesodweb/persistent/pull/772)
