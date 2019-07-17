@@ -1,5 +1,5 @@
 name:            persistent-sqlite
-version:         2.10.1
+version:         2.10.2
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -59,6 +59,7 @@ library
                    , unliftio-core
                    , unordered-containers
     exposed-modules: Database.Sqlite
+                     Database.Sqlite.Internal
                      Database.Persist.Sqlite
     ghc-options:     -Wall
     default-language: Haskell2010

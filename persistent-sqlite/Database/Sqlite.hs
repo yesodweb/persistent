@@ -86,22 +86,18 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Unsafe as BSU
 import qualified Data.ByteString.Internal as BSI
 import Data.Fixed (Pico)
-import Data.IORef (IORef, newIORef, readIORef, writeIORef)
+import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.Monoid (mappend, mconcat)
 import Data.Text (Text, pack, unpack)
 import Data.Text.Encoding (encodeUtf8, decodeUtf8With)
 import Data.Text.Encoding.Error (lenientDecode)
 import Data.Time (defaultTimeLocale, formatTime, UTCTime)
 import Data.Typeable (Typeable)
+import Database.Sqlite.Internal (Connection(..), Connection'(..), Statement(..))
 import Foreign
 import Foreign.C
 
 import Database.Persist (PersistValue (..), listToJSON, mapToJSON)
-
-
-data Connection = Connection !(IORef Bool) Connection'
-newtype Connection' = Connection' (Ptr ())
-newtype Statement = Statement (Ptr ())
 
 -- | A custom exception type to make it easier to catch exceptions.
 --
