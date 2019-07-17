@@ -85,7 +85,7 @@ specsWith runDb = describe "persistent" $ do
       assertNotEmpty ps
 
   it "Filter In" $ runDb $ do
-    _ <- selectList [Filter PersonName (FilterValue "Kostas") In] []
+    _ <- selectList [Filter PersonName (FilterValues ["Kostas"]) In] []
     return ()
 
   it "order of opts is irrelevant" $ runDb $ do
