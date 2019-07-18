@@ -165,7 +165,7 @@ persistManyFileWith ps fps = do
       s <- qRunIO $ TIO.hGetContents h
       return s
 
--- Takes a list of (potentially) independently defined entities and properly
+-- | Takes a list of (potentially) independently defined entities and properly
 -- links all foreign keys to reference the right 'EntityDef', tying the knot
 -- between entities.
 --
