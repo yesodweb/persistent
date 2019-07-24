@@ -46,7 +46,7 @@ import qualified Control.Exception as E
 import Control.Monad (forM_)
 import Control.Monad.IO.Unlift (MonadIO (..), MonadUnliftIO, withRunInIO, withUnliftIO, unliftIO, withRunInIO)
 import Control.Monad.Logger (NoLoggingT, runNoLoggingT, MonadLogger, logWarn, runLoggingT)
-import Control.Monad.Trans.Reader (ReaderT, runReaderT)
+import Control.Monad.Trans.Reader (ReaderT, runReaderT, withReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
 import Data.Acquire (Acquire, mkAcquire, with)
 import Data.Aeson
@@ -752,39 +752,39 @@ deriving instance (ToJSON (BackendKey b)) => ToJSON (BackendKey (RawSqlite b))
 deriving instance (FromJSON (BackendKey b)) => FromJSON (BackendKey (RawSqlite b))
 
 instance (PersistStoreRead b) => PersistStoreRead (RawSqlite b) where
-    get = liftPersist . get
-    getMany = liftPersist . getMany
+    get = withReaderT _persistentBackend . get
+    getMany = withReaderT _persistentBackend . getMany
 
 instance (PersistQueryRead b) => PersistQueryRead (RawSqlite b) where
-    selectSourceRes filts opts = liftPersist $ selectSourceRes filts opts
-    selectFirst filts opts = liftPersist $ selectFirst filts opts
-    selectKeysRes filts opts = liftPersist $ selectKeysRes filts opts
-    count = liftPersist . count
+    selectSourceRes filts opts = withReaderT _persistentBackend $ selectSourceRes filts opts
+    selectFirst filts opts = withReaderT _persistentBackend $ selectFirst filts opts
+    selectKeysRes filts opts = withReaderT _persistentBackend $ selectKeysRes filts opts
+    count = withReaderT _persistentBackend . count
 
 instance (PersistQueryWrite b) => PersistQueryWrite (RawSqlite b) where
-    updateWhere filts updates = liftPersist $ updateWhere filts updates
-    deleteWhere = liftPersist . deleteWhere
+    updateWhere filts updates = withReaderT _persistentBackend $ updateWhere filts updates
+    deleteWhere = withReaderT _persistentBackend . deleteWhere
 
 instance (PersistUniqueRead b) => PersistUniqueRead (RawSqlite b) where
-    getBy = liftPersist . getBy
+    getBy = withReaderT _persistentBackend . getBy
 
 instance (PersistStoreWrite b) => PersistStoreWrite (RawSqlite b) where
-    insert = liftPersist . insert
-    insert_ = liftPersist . insert_
-    insertMany = liftPersist . insertMany
-    insertMany_ = liftPersist . insertMany_
-    insertEntityMany = liftPersist . insertEntityMany
-    insertKey k = liftPersist . insertKey k
-    repsert k = liftPersist . repsert k
-    repsertMany = liftPersist . repsertMany
-    replace k = liftPersist . replace k
-    delete = liftPersist . delete
-    update k = liftPersist . update k
-    updateGet k = liftPersist . updateGet k
+    insert = withReaderT _persistentBackend . insert
+    insert_ = withReaderT _persistentBackend . insert_
+    insertMany = withReaderT _persistentBackend . insertMany
+    insertMany_ = withReaderT _persistentBackend . insertMany_
+    insertEntityMany = withReaderT _persistentBackend . insertEntityMany
+    insertKey k = withReaderT _persistentBackend . insertKey k
+    repsert k = withReaderT _persistentBackend . repsert k
+    repsertMany = withReaderT _persistentBackend . repsertMany
+    replace k = withReaderT _persistentBackend . replace k
+    delete = withReaderT _persistentBackend . delete
+    update k = withReaderT _persistentBackend . update k
+    updateGet k = withReaderT _persistentBackend . updateGet k
 
 instance (PersistUniqueWrite b) => PersistUniqueWrite (RawSqlite b) where
-    deleteBy = liftPersist . deleteBy
-    insertUnique = liftPersist . insertUnique
-    upsert rec = liftPersist . upsert rec
-    upsertBy uniq rec = liftPersist . upsertBy uniq rec
-    putMany = liftPersist . putMany
+    deleteBy = withReaderT _persistentBackend . deleteBy
+    insertUnique = withReaderT _persistentBackend . insertUnique
+    upsert rec = withReaderT _persistentBackend . upsert rec
+    upsertBy uniq rec = withReaderT _persistentBackend . upsertBy uniq rec
+    putMany = withReaderT _persistentBackend . putMany
