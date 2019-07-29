@@ -156,14 +156,15 @@ persistFileWith ps fp = persistManyFileWith ps [fp]
 persistManyFileWith :: PersistSettings -> [FilePath] -> Q Exp
 persistManyFileWith ps fps = do
     mapM_ qAddDependentFile fps
-    ss <- mapM getS fps
+    ss <- mapM (qRunIO . getFileContents) fps
     let s = T.intercalate "\n" ss -- be tolerant of the user forgetting to put a line-break at EOF.
     parseReferences ps s
-  where
-    getS fp = do
-      h <- qRunIO $ SIO.openFile fp SIO.ReadMode
-      qRunIO $ SIO.hSetEncoding h SIO.utf8_bom
-      qRunIO $ TIO.hGetContents h
+
+getFileContents :: FilePath -> IO Text
+getFileContents fp = do
+  h <- SIO.openFile fp SIO.ReadMode
+  SIO.hSetEncoding h SIO.utf8_bom
+  TIO.hGetContents h
 
 -- | Takes a list of (potentially) independently defined entities and properly
 -- links all foreign keys to reference the right 'EntityDef', tying the knot
