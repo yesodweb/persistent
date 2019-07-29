@@ -84,6 +84,10 @@ specsWith runDb = describe "persistent" $ do
       ps <- selectList [FilterAnd []] [Desc PersonAge]
       assertNotEmpty ps
 
+  it "Filter In" $ runDb $ do
+    _ <- selectList [Filter PersonName (FilterValues ["Kostas"]) In] []
+    return ()
+
   it "order of opts is irrelevant" $ runDb $ do
       let eq (a, b, _) (c, d) = (a, b) @== (c, d)
           limitOffsetOrder' :: [SelectOpt Person] -> (Int, Int, [SelectOpt Person])

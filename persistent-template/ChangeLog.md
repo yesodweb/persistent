@@ -1,3 +1,8 @@
+## 2.7.2
+
+* Expose the knot tying logic of `parseReferences` so that users can build
+  migrations from independently define entities at runtime [#932](https://github.com/yesodweb/persistent/pull/932)
+
 ## 2.7.1
 
 * Add the `mkEntityDefList` function to work around [#902](https://github.com/yesodweb/persistent/issues/902). [#904](https://github.com/yesodweb/persistent/pull/904)
