@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -162,8 +163,7 @@ persistManyFileWith ps fps = do
     getS fp = do
       h <- qRunIO $ SIO.openFile fp SIO.ReadMode
       qRunIO $ SIO.hSetEncoding h SIO.utf8_bom
-      s <- qRunIO $ TIO.hGetContents h
-      return s
+      qRunIO $ TIO.hGetContents h
 
 -- | Takes a list of (potentially) independently defined entities and properly
 -- links all foreign keys to reference the right 'EntityDef', tying the knot
@@ -195,13 +195,14 @@ embedEntityDefsMap rawEnts = (embedEntityMap, noCycleEnts)
       let entName = entityHaskell entDef
       in  entDef { entityFields = map (breakCycleField entName) $ entityFields entDef }
 
-    breakCycleField entName f@(FieldDef { fieldReference = EmbedRef em }) =
-      f { fieldReference = EmbedRef $ breakCycleEmbed [entName] em }
-    breakCycleField _ f = f
+    breakCycleField entName f = case f of
+      FieldDef { fieldReference = EmbedRef em } ->
+        f { fieldReference = EmbedRef $ breakCycleEmbed [entName] em }
+      _ ->
+        f
 
     breakCycleEmbed ancestors em =
-        em { embeddedFields = map (breakCycleEmField $ emName : ancestors)
-                                  (embeddedFields em)
+        em { embeddedFields = breakCycleEmField (emName : ancestors) <$> embeddedFields em
            }
       where
         emName = embeddedHaskell em
@@ -248,7 +249,7 @@ instance Lift SqlTypeExp where
     lift (SqlTypeExp ftype) = return st
       where
         typ = ftToType ftype
-        mtyp = (ConT ''Proxy `AppT` typ)
+        mtyp = ConT ''Proxy `AppT` typ
         typedNothing = SigE (ConE 'Proxy) mtyp
         st = VarE 'sqlType `AppE` typedNothing
 
@@ -260,7 +261,7 @@ instance Lift FieldsSqlTypeExp where
 
 data FieldSqlTypeExp = FieldSqlTypeExp FieldDef SqlTypeExp
 instance Lift FieldSqlTypeExp where
-    lift (FieldSqlTypeExp (FieldDef{..}) sqlTypeExp) =
+    lift (FieldSqlTypeExp FieldDef{..} sqlTypeExp) =
       [|FieldDef fieldHaskell fieldDB fieldType $(lift sqlTypeExp) fieldAttrs fieldStrict fieldReference fieldComments|]
 
 instance Lift EntityDefSqlTypeExp where
@@ -275,7 +276,7 @@ instance Lift ReferenceDef where
     lift (ForeignRef name ft) = [|ForeignRef name ft|]
     lift (EmbedRef em) = [|EmbedRef em|]
     lift (CompositeRef cdef) = [|CompositeRef cdef|]
-    lift (SelfReference) = [|SelfReference|]
+    lift SelfReference = [|SelfReference|]
 
 instance Lift EmbedEntityDef where
     lift (EmbedEntityDef name fields) = [|EmbedEntityDef name fields|]
@@ -330,7 +331,7 @@ setEmbedField entName allEntities field = field
                        FTList _ -> SelfReference
                        _ -> error $ unpack $ unHaskellName entName
                            `Data.Monoid.mappend` ": a self reference must be a Maybe"
-      existing@_   -> existing
+      existing -> existing
   }
 
 mkEntityDefSqlTypeExp :: EmbedEntityMap -> EntityMap -> EntityDef -> EntityDefSqlTypeExp
@@ -543,8 +544,8 @@ mkUnique :: MkPersistSettings -> EntityDef -> UniqueDef -> Con
 mkUnique mps t (UniqueDef (HaskellName constr) _ fields attrs) =
     NormalC (mkName $ unpack constr) types
   where
-    types = map (go . flip lookup3 (entityFields t))
-          $ map (unHaskellName . fst) fields
+    types =
+      map (go . flip lookup3 (entityFields t) . unHaskellName . fst) fields
 
     force = "!force" `elem` attrs
 
@@ -885,7 +886,7 @@ keyIdName :: EntityDef -> Name
 keyIdName = mkName . unpack . keyIdText
 
 keyIdText :: EntityDef -> Text
-keyIdText t = (unHaskellName $ entityHaskell t) `mappend` "Id"
+keyIdText t = unHaskellName (entityHaskell t) `mappend` "Id"
 
 unKeyName :: EntityDef -> Name
 unKeyName t = mkName $ "un" `mappend` keyString t
@@ -922,7 +923,7 @@ defaultIdType t = fieldType (entityId t) == FTTypeCon Nothing (keyIdText t)
 
 keyFields :: MkPersistSettings -> EntityDef -> [(Name, Strict, Type)]
 keyFields mps t = case entityPrimary t of
-  Just pdef -> map primaryKeyVar $ (compositeFields pdef)
+  Just pdef -> map primaryKeyVar (compositeFields pdef)
   Nothing   -> if defaultIdType t
     then [idKeyVar backendKeyType]
     else [idKeyVar $ ftToType $ fieldType $ entityId t]
@@ -939,8 +940,7 @@ keyFields mps t = case entityPrimary t of
 keyFieldName :: MkPersistSettings -> EntityDef -> FieldDef -> Name
 keyFieldName mps t fd
   | pkNewtype mps t = unKeyName t
-  | otherwise = mkName $ unpack
-    $ lowerFirst (keyText t) `mappend` (unHaskellName $ fieldHaskell fd)
+  | otherwise = mkName $ unpack $ lowerFirst (keyText t) `mappend` unHaskellName (fieldHaskell fd)
 
 mkKeyToValues :: MkPersistSettings -> EntityDef -> Q Dec
 mkKeyToValues mps t = do
@@ -964,8 +964,8 @@ mkKeyFromValues :: MkPersistSettings -> EntityDef -> Q Dec
 mkKeyFromValues _mps t = do
     clauses <- case entityPrimary t of
         Nothing  -> do
-            e <- [|fmap $(return $ keyConE) . fromPersistValue . headNote|]
-            return $ [normalClause [] e]
+            e <- [|fmap $(return keyConE) . fromPersistValue . headNote|]
+            return [normalClause [] e]
         Just pdef ->
             fromValues t "keyFromValues" keyConE (compositeFields pdef)
     return $ FunD 'keyFromValues clauses
@@ -973,9 +973,9 @@ mkKeyFromValues _mps t = do
     keyConE = keyConExp t
 
 headNote :: [PersistValue] -> PersistValue
-headNote (x:[]) = x
-headNote xs = error $ "mkKeyFromValues: expected a list of one element, got: "
-  `mappend` show xs
+headNote = \case
+  [x] -> x
+  xs -> error $ "mkKeyFromValues: expected a list of one element, got: " `mappend` show xs
 
 fromValues :: EntityDef -> Text -> Exp -> [FieldDef] -> Q [Clause]
 fromValues t funName conE fields = do
@@ -1063,7 +1063,7 @@ mkEntity entityMap mps t = do
        dtd : mconcat fkc `mappend`
       ([ TySynD (keyIdName t) [] $
             ConT ''Key `AppT` ConT (mkName nameS)
-      , instanceD instanceConstraint clazz $
+      , instanceD instanceConstraint clazz
         [ uniqueTypeDec mps t
         , keyTypeDec
         , keyToValues'
@@ -1157,7 +1157,7 @@ mkUniqueKeyInstances mps t = do
 
     singleUniqueKey :: Q [Dec]
     singleUniqueKey = do
-        expr <- [e|\p -> head (persistUniqueKeys p)|]
+        expr <- [e| head . persistUniqueKeys|]
         let impl = [FunD onlyUniquePName [Clause [] (NormalB expr) []]]
         cxt <- withPersistStoreWriteCxt
         pure [instanceD cxt onlyOneUniqueKeyClass impl]
@@ -1167,7 +1167,7 @@ mkUniqueKeyInstances mps t = do
 
     atLeastOneKey :: Q [Dec]
     atLeastOneKey = do
-        expr <- [e|\p -> NEL.fromList (persistUniqueKeys p)|]
+        expr <- [e| NEL.fromList . persistUniqueKeys|]
         let impl = [FunD requireUniquesPName [Clause [] (NormalB expr) []]]
         cxt <- withPersistStoreWriteCxt
         pure [instanceD cxt atLeastOneUniqueKeyClass impl]
@@ -1231,12 +1231,12 @@ mkForeignKeysComposite :: MkPersistSettings -> EntityDef -> ForeignDef -> Q [Dec
 mkForeignKeysComposite mps t ForeignDef {..} = do
    let fieldName f = mkName $ unpack $ recName mps (entityHaskell t) f
    let fname = fieldName foreignConstraintNameHaskell
-   let reftableString = unpack $ unHaskellName $ foreignRefTableHaskell
+   let reftableString = unpack $ unHaskellName foreignRefTableHaskell
    let reftableKeyName = mkName $ reftableString `mappend` "Key"
    let tablename = mkName $ unpack $ entityText t
    recordName <- newName "record"
 
-   let fldsE = map (\((foreignName, _),_) -> VarE (fieldName $ foreignName)
+   let fldsE = map (\((foreignName, _),_) -> VarE (fieldName foreignName)
                  `AppE` VarE recordName) foreignFields
    let mkKeyE = foldl' AppE (maybeExp foreignNullable $ ConE reftableKeyName) fldsE
    let fn = FunD fname [normalClause [VarP recordName] mkKeyE]
@@ -1251,8 +1251,6 @@ maybeExp may exp | may = fmapE `AppE` exp
 maybeTyp :: Bool -> Type -> Type
 maybeTyp may typ | may = ConT ''Maybe `AppT` typ
                  | otherwise = typ
-
-
 
 -- | produce code similar to the following:
 --
@@ -1305,7 +1303,7 @@ persistFieldFromEntity mps e = do
 --
 -- >>> share [mkSave "myDefs", mkPersist sqlSettings] [persistLowerCase|...|]
 share :: [[EntityDef] -> Q [Dec]] -> [EntityDef] -> Q [Dec]
-share fs x = fmap mconcat $ mapM ($ x) fs
+share fs x = mconcat <$> mapM ($ x) fs
 
 -- | Save the @EntityDef@s passed in under the given name.
 mkSave :: String -> [EntityDef] -> Q [Dec]
@@ -1540,7 +1538,7 @@ mkMigrate fun allDefs = do
         ]
   where
     defs = filter isMigrated allDefs
-    isMigrated def = not $ "no-migrate" `elem` entityAttrs def
+    isMigrated def = "no-migrate" `notElem` entityAttrs def
     typ = ConT ''Migration
     entityMap = constructEntityMap allDefs
     body :: Q Exp
@@ -1738,7 +1736,7 @@ infixr 5 ++
 (++) = append
 
 mkJSON :: MkPersistSettings -> EntityDef -> Q [Dec]
-mkJSON _ def | not ("json" `elem` entityAttrs def) = return []
+mkJSON _ def | ("json" `notElem` entityAttrs def) = return []
 mkJSON mps def = do
     pureE <- [|pure|]
     apE' <- [|(<*>)|]
