@@ -87,15 +87,15 @@ import Database.Persist.Quasi
 -- <https://github.com/yesodweb/persistent/issues/412>
 unHaskellNameForJSON :: HaskellName -> Text
 unHaskellNameForJSON = fixTypeUnderscore . unHaskellName
-  where fixTypeUnderscore "type" = "type_"
-        fixTypeUnderscore name = name
+  where
+    fixTypeUnderscore = \case
+      "type" -> "type_"
+      name -> name
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
 persistWith :: PersistSettings -> QuasiQuoter
-persistWith ps = QuasiQuoter
-    { quoteExp = parseReferences ps . pack
-    }
+persistWith ps = QuasiQuoter { quoteExp = parseReferences ps . pack }
 
 -- | Apply 'persistWith' to 'upperCaseSettings'.
 persistUpperCase :: QuasiQuoter
@@ -155,10 +155,10 @@ persistFileWith ps fp = persistManyFileWith ps [fp]
 -- @since 2.5.4
 persistManyFileWith :: PersistSettings -> [FilePath] -> Q Exp
 persistManyFileWith ps fps = do
-    mapM_ qAddDependentFile fps
-    ss <- mapM (qRunIO . getFileContents) fps
-    let s = T.intercalate "\n" ss -- be tolerant of the user forgetting to put a line-break at EOF.
-    parseReferences ps s
+  mapM_ qAddDependentFile fps
+  ss <- mapM (qRunIO . getFileContents) fps
+  let s = T.intercalate "\n" ss -- be tolerant of the user forgetting to put a line-break at EOF.
+  parseReferences ps s
 
 getFileContents :: FilePath -> IO Text
 getFileContents fp = do
@@ -203,16 +203,16 @@ embedEntityDefsMap rawEnts = (embedEntityMap, noCycleEnts)
         f
 
     breakCycleEmbed ancestors em =
-        em { embeddedFields = breakCycleEmField (emName : ancestors) <$> embeddedFields em
-           }
+      em { embeddedFields = breakCycleEmField (emName : ancestors) <$> embeddedFields em
+         }
       where
         emName = embeddedHaskell em
 
     breakCycleEmField ancestors emf = case embeddedHaskell <$> membed of
-        Nothing -> emf
-        Just embName -> if embName `elem` ancestors
-          then emf { emFieldEmbed = Nothing, emFieldCycle = Just embName }
-          else emf { emFieldEmbed = breakCycleEmbed ancestors <$> membed }
+      Nothing -> emf
+      Just embName -> if embName `elem` ancestors
+        then emf { emFieldEmbed = Nothing, emFieldCycle = Just embName }
+        else emf { emFieldEmbed = breakCycleEmbed ancestors <$> membed }
       where
         membed = emFieldEmbed emf
 
@@ -221,7 +221,7 @@ embedEntityDefsMap rawEnts = (embedEntityMap, noCycleEnts)
 -- | @since 2.5.3
 parseReferences :: PersistSettings -> Text -> Q Exp
 parseReferences ps s = lift $
-     map (mkEntityDefSqlTypeExp embedEntityMap entityMap) noCycleEnts
+  map (mkEntityDefSqlTypeExp embedEntityMap entityMap) noCycleEnts
   where
     (embedEntityMap, noCycleEnts) = embedEntityDefsMap $ parse ps s
     entityMap = constructEntityMap noCycleEnts
@@ -232,58 +232,61 @@ stripId _ = Nothing
 
 foreignReference :: FieldDef -> Maybe HaskellName
 foreignReference field = case fieldReference field of
-    ForeignRef ref _ -> Just ref
-    _              -> Nothing
+  ForeignRef ref _ -> Just ref
+  _              -> Nothing
 
 
 -- fieldSqlType at parse time can be an Exp
 -- This helps delay setting fieldSqlType until lift time
-data EntityDefSqlTypeExp = EntityDefSqlTypeExp EntityDef SqlTypeExp [SqlTypeExp]
-                           deriving Show
+data EntityDefSqlTypeExp
+  = EntityDefSqlTypeExp EntityDef SqlTypeExp [SqlTypeExp]
+  deriving Show
 
-data SqlTypeExp = SqlTypeExp FieldType
-                | SqlType' SqlType
-                deriving Show
+data SqlTypeExp
+  = SqlTypeExp FieldType
+  | SqlType' SqlType
+  deriving Show
 
 instance Lift SqlTypeExp where
-    lift (SqlType' t)       = lift t
-    lift (SqlTypeExp ftype) = return st
-      where
-        typ = ftToType ftype
-        mtyp = ConT ''Proxy `AppT` typ
-        typedNothing = SigE (ConE 'Proxy) mtyp
-        st = VarE 'sqlType `AppE` typedNothing
+  lift (SqlType' t)       = lift t
+  lift (SqlTypeExp ftype) = return st
+    where
+      typ = ftToType ftype
+      mtyp = ConT ''Proxy `AppT` typ
+      typedNothing = SigE (ConE 'Proxy) mtyp
+      st = VarE 'sqlType `AppE` typedNothing
 
 data FieldsSqlTypeExp = FieldsSqlTypeExp [FieldDef] [SqlTypeExp]
 
 instance Lift FieldsSqlTypeExp where
-    lift (FieldsSqlTypeExp fields sqlTypeExps) =
-        lift $ zipWith FieldSqlTypeExp fields sqlTypeExps
+  lift (FieldsSqlTypeExp fields sqlTypeExps) =
+    lift $ zipWith FieldSqlTypeExp fields sqlTypeExps
 
 data FieldSqlTypeExp = FieldSqlTypeExp FieldDef SqlTypeExp
+
 instance Lift FieldSqlTypeExp where
-    lift (FieldSqlTypeExp FieldDef{..} sqlTypeExp) =
-      [|FieldDef fieldHaskell fieldDB fieldType $(lift sqlTypeExp) fieldAttrs fieldStrict fieldReference fieldComments|]
+  lift (FieldSqlTypeExp FieldDef{..} sqlTypeExp) =
+    [|FieldDef fieldHaskell fieldDB fieldType $(lift sqlTypeExp) fieldAttrs fieldStrict fieldReference fieldComments|]
 
 instance Lift EntityDefSqlTypeExp where
-    lift (EntityDefSqlTypeExp ent sqlTypeExp sqlTypeExps) =
-        [|ent { entityFields = $(lift $ FieldsSqlTypeExp (entityFields ent) sqlTypeExps)
-              , entityId = $(lift $ FieldSqlTypeExp (entityId ent) sqlTypeExp)
-              }
-        |]
+  lift (EntityDefSqlTypeExp ent sqlTypeExp sqlTypeExps) =
+    [|ent { entityFields = $(lift $ FieldsSqlTypeExp (entityFields ent) sqlTypeExps)
+          , entityId = $(lift $ FieldSqlTypeExp (entityId ent) sqlTypeExp)
+          }
+    |]
 
 instance Lift ReferenceDef where
-    lift NoReference = [|NoReference|]
-    lift (ForeignRef name ft) = [|ForeignRef name ft|]
-    lift (EmbedRef em) = [|EmbedRef em|]
-    lift (CompositeRef cdef) = [|CompositeRef cdef|]
-    lift SelfReference = [|SelfReference|]
+  lift NoReference = [|NoReference|]
+  lift (ForeignRef name ft) = [|ForeignRef name ft|]
+  lift (EmbedRef em) = [|EmbedRef em|]
+  lift (CompositeRef cdef) = [|CompositeRef cdef|]
+  lift SelfReference = [|SelfReference|]
 
 instance Lift EmbedEntityDef where
-    lift (EmbedEntityDef name fields) = [|EmbedEntityDef name fields|]
+  lift (EmbedEntityDef name fields) = [|EmbedEntityDef name fields|]
 
 instance Lift EmbedFieldDef where
-    lift (EmbedFieldDef name em cyc) = [|EmbedFieldDef name em cyc|]
+  lift (EmbedFieldDef name em cyc) = [|EmbedFieldDef name em cyc|]
 
 type EmbedEntityMap = M.Map HaskellName EmbedEntityDef
 
@@ -301,8 +304,9 @@ data FTTypeConDescr = FTKeyCon deriving Show
 
 mEmbedded :: EmbedEntityMap -> FieldType -> Either (Maybe FTTypeConDescr) EmbedEntityDef
 mEmbedded _ (FTTypeCon Just{} _) = Left Nothing
-mEmbedded ents (FTTypeCon Nothing n) = let name = HaskellName n in
-    maybe (Left Nothing) Right $ M.lookup name ents
+mEmbedded ents (FTTypeCon Nothing n) =
+  let name = HaskellName n
+   in maybe (Left Nothing) Right $ M.lookup name ents
 mEmbedded ents (FTList x) = mEmbedded ents x
 mEmbedded ents (FTApp x y) =
   -- Key converts an Record to a RecordId
@@ -314,24 +318,27 @@ mEmbedded ents (FTApp x y) =
 
 setEmbedField :: HaskellName -> EmbedEntityMap -> FieldDef -> FieldDef
 setEmbedField entName allEntities field = field
-  { fieldReference = case fieldReference field of
+  { fieldReference =
+    case fieldReference field of
       NoReference ->
         case mEmbedded allEntities (fieldType field) of
-            Left _ -> case stripId $ fieldType field of
-                Nothing -> NoReference
-                Just name -> case M.lookup (HaskellName name) allEntities of
-                    Nothing -> NoReference
-                    Just _ -> ForeignRef (HaskellName name)
+          Left _ ->
+            case stripId $ fieldType field of
+              Nothing -> NoReference
+              Just name ->
+                case M.lookup (HaskellName name) allEntities of
+                  Nothing -> NoReference
+                  Just _ -> ForeignRef (HaskellName name)
                                     -- This can get corrected in mkEntityDefSqlTypeExp
                                     (FTTypeCon (Just "Data.Int") "Int64")
-            Right em -> if embeddedHaskell em /= entName
-              then EmbedRef em
-              else if maybeNullable field
-                     then SelfReference
-                     else case fieldType field of
-                       FTList _ -> SelfReference
-                       _ -> error $ unpack $ unHaskellName entName
-                           `Data.Monoid.mappend` ": a self reference must be a Maybe"
+          Right em ->
+            if embeddedHaskell em /= entName
+               then EmbedRef em
+            else if maybeNullable field
+               then SelfReference
+            else case fieldType field of
+                   FTList _ -> SelfReference
+                   _ -> error $ unpack $ unHaskellName entName <> ": a self reference must be a Maybe"
       existing -> existing
   }
 
@@ -339,40 +346,42 @@ mkEntityDefSqlTypeExp :: EmbedEntityMap -> EntityMap -> EntityDef -> EntityDefSq
 mkEntityDefSqlTypeExp emEntities entityMap ent =
   EntityDefSqlTypeExp ent (getSqlType $ entityId ent) (map getSqlType $ entityFields ent)
   where
-    getSqlType field = maybe
+    getSqlType field =
+      maybe
         (defaultSqlTypeExp field)
         (SqlType' . SqlOther)
         (listToMaybe $ mapMaybe (stripPrefix "sqltype=") $ fieldAttrs field)
 
-
     -- In the case of embedding, there won't be any datatype created yet.
     -- We just use SqlString, as the data will be serialized to JSON.
-    defaultSqlTypeExp field = case mEmbedded emEntities ftype of
+    defaultSqlTypeExp field =
+      case mEmbedded emEntities ftype of
         Right _ -> SqlType' SqlString
         Left (Just FTKeyCon) -> SqlType' SqlString
         Left Nothing -> case fieldReference field of
-            ForeignRef refName ft  -> case M.lookup refName entityMap of
-                Nothing  -> SqlTypeExp ft
-                -- A ForeignRef is blindly set to an Int64 in setEmbedField
-                -- correct that now
-                Just ent' -> case entityPrimary ent' of
-                    Nothing -> SqlTypeExp ft
-                    Just pdef -> case compositeFields pdef of
-                        [] -> error "mkEntityDefSqlTypeExp: no composite fields"
-                        [x] -> SqlTypeExp $ fieldType x
-                        _ -> SqlType' $ SqlOther "Composite Reference"
-            CompositeRef _  -> SqlType' $ SqlOther "Composite Reference"
-            _ -> case ftype of
-                    -- In the case of lists, we always serialize to a string
-                    -- value (via JSON).
-                    --
-                    -- Normally, this would be determined automatically by
-                    -- SqlTypeExp. However, there's one corner case: if there's
-                    -- a list of entity IDs, the datatype for the ID has not
-                    -- yet been created, so the compiler will fail. This extra
-                    -- clause works around this limitation.
-                    FTList _ -> SqlType' SqlString
-                    _ -> SqlTypeExp ftype
+          ForeignRef refName ft  -> case M.lookup refName entityMap of
+            Nothing  -> SqlTypeExp ft
+            -- A ForeignRef is blindly set to an Int64 in setEmbedField
+            -- correct that now
+            Just ent' -> case entityPrimary ent' of
+              Nothing -> SqlTypeExp ft
+              Just pdef -> case compositeFields pdef of
+                [] -> error "mkEntityDefSqlTypeExp: no composite fields"
+                [x] -> SqlTypeExp $ fieldType x
+                _ -> SqlType' $ SqlOther "Composite Reference"
+          CompositeRef _  -> SqlType' $ SqlOther "Composite Reference"
+          _ ->
+            case ftype of
+              -- In the case of lists, we always serialize to a string
+              -- value (via JSON).
+              --
+              -- Normally, this would be determined automatically by
+              -- SqlTypeExp. However, there's one corner case: if there's
+              -- a list of entity IDs, the datatype for the ID has not
+              -- yet been created, so the compiler will fail. This extra
+              -- clause works around this limitation.
+              FTList _ -> SqlType' SqlString
+              _ -> SqlTypeExp ftype
       where
         ftype = fieldType field
 
@@ -380,11 +389,11 @@ mkEntityDefSqlTypeExp emEntities entityMap ent =
 -- 'EntityDef's. Works well with the persist quasi-quoter.
 mkPersist :: MkPersistSettings -> [EntityDef] -> Q [Dec]
 mkPersist mps ents' = do
-    x <- fmap Data.Monoid.mconcat $ mapM (persistFieldFromEntity mps) ents
-    y <- fmap mconcat $ mapM (mkEntity entityMap mps) ents
-    z <- fmap mconcat $ mapM (mkJSON mps) ents
-    uniqueKeyInstances <- fmap mconcat $ mapM (mkUniqueKeyInstances mps) ents
-    return $ mconcat [x, y, z, uniqueKeyInstances]
+  x <- fmap Data.Monoid.mconcat $ mapM (persistFieldFromEntity mps) ents
+  y <- fmap mconcat $ mapM (mkEntity entityMap mps) ents
+  z <- fmap mconcat $ mapM (mkJSON mps) ents
+  uniqueKeyInstances <- fmap mconcat $ mapM (mkUniqueKeyInstances mps) ents
+  return $ mconcat [x, y, z, uniqueKeyInstances]
   where
     ents = map fixEntityDef ents'
     entityMap = constructEntityMap ents
@@ -392,64 +401,64 @@ mkPersist mps ents' = do
 -- | Implement special preprocessing on EntityDef as necessary for 'mkPersist'.
 -- For example, strip out any fields marked as MigrationOnly.
 fixEntityDef :: EntityDef -> EntityDef
-fixEntityDef ed =
-    ed { entityFields = filter keepField $ entityFields ed }
+fixEntityDef ed = ed { entityFields = filter keepField $ entityFields ed }
   where
     keepField fd = "MigrationOnly" `notElem` fieldAttrs fd &&
                    "SafeToRemove" `notElem` fieldAttrs fd
 
 -- | Settings to be passed to the 'mkPersist' function.
 data MkPersistSettings = MkPersistSettings
-    { mpsBackend :: Type
-    -- ^ Which database backend we\'re using.
-    --
-    -- When generating data types, each type is given a generic version- which
-    -- works with any backend- and a type synonym for the commonly used
-    -- backend. This is where you specify that commonly used backend.
-    , mpsGeneric :: Bool
-    -- ^ Create generic types that can be used with multiple backends. Good for
-    -- reusable code, but makes error messages harder to understand. Default:
-    -- False.
-    , mpsPrefixFields :: Bool
-    -- ^ Prefix field names with the model name. Default: True.
-    , mpsEntityJSON :: Maybe EntityJSON
-    -- ^ Generate @ToJSON@/@FromJSON@ instances for each model types. If it's
-    -- @Nothing@, no instances will be generated. Default:
-    --
-    -- @
-    --  Just EntityJSON
-    --      { entityToJSON = 'keyValueEntityToJSON
-    --      , entityFromJSON = 'keyValueEntityFromJSON
-    --      }
-    -- @
-    , mpsGenerateLenses :: !Bool
-    -- ^ Instead of generating normal field accessors, generator lens-style accessors.
-    --
-    -- Default: False
-    --
-    -- @since 1.3.1
-    }
+  { mpsBackend :: Type
+  -- ^ Which database backend we\'re using.
+  --
+  -- When generating data types, each type is given a generic version- which
+  -- works with any backend- and a type synonym for the commonly used
+  -- backend. This is where you specify that commonly used backend.
+  , mpsGeneric :: Bool
+  -- ^ Create generic types that can be used with multiple backends. Good for
+  -- reusable code, but makes error messages harder to understand. Default:
+  -- False.
+  , mpsPrefixFields :: Bool
+  -- ^ Prefix field names with the model name. Default: True.
+  , mpsEntityJSON :: Maybe EntityJSON
+  -- ^ Generate @ToJSON@/@FromJSON@ instances for each model types. If it's
+  -- @Nothing@, no instances will be generated. Default:
+  --
+  -- @
+  --  Just EntityJSON
+  --      { entityToJSON = 'keyValueEntityToJSON
+  --      , entityFromJSON = 'keyValueEntityFromJSON
+  --      }
+  -- @
+  , mpsGenerateLenses :: !Bool
+  -- ^ Instead of generating normal field accessors, generator lens-style accessors.
+  --
+  -- Default: False
+  --
+  -- @since 1.3.1
+  }
 
 data EntityJSON = EntityJSON
-    { entityToJSON :: Name
-    -- ^ Name of the @toJSON@ implementation for @Entity a@.
-    , entityFromJSON :: Name
-    -- ^ Name of the @fromJSON@ implementation for @Entity a@.
-    }
+  { entityToJSON :: Name
+  -- ^ Name of the @toJSON@ implementation for @Entity a@.
+  , entityFromJSON :: Name
+  -- ^ Name of the @fromJSON@ implementation for @Entity a@.
+  }
 
 -- | Create an @MkPersistSettings@ with default values.
-mkPersistSettings :: Type -- ^ Value for 'mpsBackend'
-                  -> MkPersistSettings
+mkPersistSettings
+  :: Type -- ^ Value for 'mpsBackend'
+  -> MkPersistSettings
 mkPersistSettings t = MkPersistSettings
-    { mpsBackend = t
-    , mpsGeneric = False
-    , mpsPrefixFields = True
-    , mpsEntityJSON = Just EntityJSON
-        { entityToJSON = 'entityIdToJSON
-        , entityFromJSON = 'entityIdFromJSON
-        }
-    , mpsGenerateLenses = False
+  { mpsBackend = t
+  , mpsGeneric = False
+  , mpsPrefixFields = True
+  , mpsEntityJSON = Just EntityJSON
+    { entityToJSON = 'entityIdToJSON
+    , entityFromJSON = 'entityIdFromJSON
     }
+  , mpsGenerateLenses = False
+  }
 
 -- | Use the 'SqlPersist' backend.
 sqlSettings :: MkPersistSettings
