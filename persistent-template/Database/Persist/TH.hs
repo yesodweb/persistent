@@ -182,7 +182,7 @@ embedEntityDefsMap rawEnts = (embedEntityMap, noCycleEnts)
     noCycleEnts = map breakCycleEnt entsWithEmbeds
     -- every EntityDef could reference each-other (as an EmbedRef)
     -- let Haskell tie the knot
-    embedEntityMap = M.fromList $ map (\ent -> (entityHaskell ent, toEmbedEntityDef ent)) entsWithEmbeds
+    embedEntityMap = constructEmbedEntityMap entsWithEmbeds
     entsWithEmbeds = map setEmbedEntity rawEnts
     setEmbedEntity ent = ent
       { entityFields = map (setEmbedField (entityHaskell ent) embedEntityMap) $ entityFields ent
@@ -219,11 +219,10 @@ embedEntityDefsMap rawEnts = (embedEntityMap, noCycleEnts)
 -- | @since 2.5.3
 parseReferences :: PersistSettings -> Text -> Q Exp
 parseReferences ps s = lift $
-     map (mkEntityDefSqlTypeExp embedEntityMap entMap) noCycleEnts
+     map (mkEntityDefSqlTypeExp embedEntityMap entityMap) noCycleEnts
   where
     (embedEntityMap, noCycleEnts) = embedEntityDefsMap $ parse ps s
-    entMap = M.fromList $ map (\ent -> (entityHaskell ent, ent)) noCycleEnts
-
+    entityMap = constructEntityMap noCycleEnts
 
 stripId :: FieldType -> Maybe Text
 stripId (FTTypeCon Nothing t) = stripSuffix "Id" t
@@ -285,9 +284,19 @@ instance Lift EmbedFieldDef where
     lift (EmbedFieldDef name em cyc) = [|EmbedFieldDef name em cyc|]
 
 type EmbedEntityMap = M.Map HaskellName EmbedEntityDef
+
+constructEmbedEntityMap :: [EntityDef] -> EmbedEntityMap
+constructEmbedEntityMap =
+  M.fromList . fmap (\ent -> (entityHaskell ent, toEmbedEntityDef ent))
+
 type EntityMap = M.Map HaskellName EntityDef
 
+constructEntityMap :: [EntityDef] -> EntityMap
+constructEntityMap =
+  M.fromList . fmap (\ent -> (entityHaskell ent, ent))
+
 data FTTypeConDescr = FTKeyCon deriving Show
+
 mEmbedded :: EmbedEntityMap -> FieldType -> Either (Maybe FTTypeConDescr) EmbedEntityDef
 mEmbedded _ (FTTypeCon Just{} _) = Left Nothing
 mEmbedded ents (FTTypeCon Nothing n) = let name = HaskellName n in
@@ -325,9 +334,8 @@ setEmbedField entName allEntities field = field
   }
 
 mkEntityDefSqlTypeExp :: EmbedEntityMap -> EntityMap -> EntityDef -> EntityDefSqlTypeExp
-mkEntityDefSqlTypeExp emEntities entMap ent = EntityDefSqlTypeExp ent
-    (getSqlType $ entityId ent)
-    $ (map getSqlType $ entityFields ent)
+mkEntityDefSqlTypeExp emEntities entityMap ent =
+  EntityDefSqlTypeExp ent (getSqlType $ entityId ent) (map getSqlType $ entityFields ent)
   where
     getSqlType field = maybe
         (defaultSqlTypeExp field)
@@ -341,7 +349,7 @@ mkEntityDefSqlTypeExp emEntities entMap ent = EntityDefSqlTypeExp ent
         Right _ -> SqlType' SqlString
         Left (Just FTKeyCon) -> SqlType' SqlString
         Left Nothing -> case fieldReference field of
-            ForeignRef refName ft  -> case M.lookup refName entMap of
+            ForeignRef refName ft  -> case M.lookup refName entityMap of
                 Nothing  -> SqlTypeExp ft
                 -- A ForeignRef is blindly set to an Int64 in setEmbedField
                 -- correct that now
@@ -371,13 +379,13 @@ mkEntityDefSqlTypeExp emEntities entMap ent = EntityDefSqlTypeExp ent
 mkPersist :: MkPersistSettings -> [EntityDef] -> Q [Dec]
 mkPersist mps ents' = do
     x <- fmap Data.Monoid.mconcat $ mapM (persistFieldFromEntity mps) ents
-    y <- fmap mconcat $ mapM (mkEntity entMap mps) ents
+    y <- fmap mconcat $ mapM (mkEntity entityMap mps) ents
     z <- fmap mconcat $ mapM (mkJSON mps) ents
     uniqueKeyInstances <- fmap mconcat $ mapM (mkUniqueKeyInstances mps) ents
     return $ mconcat [x, y, z, uniqueKeyInstances]
   where
     ents = map fixEntityDef ents'
-    entMap = M.fromList $ map (\ent -> (entityHaskell ent, ent)) ents
+    entityMap = constructEntityMap ents
 
 -- | Implement special preprocessing on EntityDef as necessary for 'mkPersist'.
 -- For example, strip out any fields marked as MigrationOnly.
@@ -1018,8 +1026,8 @@ fieldError entity field err = mconcat
       unDBName (entityDB entity)
 
 mkEntity :: EntityMap -> MkPersistSettings -> EntityDef -> Q [Dec]
-mkEntity entMap mps t = do
-    t' <- liftAndFixKeys entMap t
+mkEntity entityMap mps t = do
+    t' <- liftAndFixKeys entityMap t
     let nameT = unHaskellName entName
     let nameS = unpack nameT
     let clazz = ConT ''PersistEntity `AppT` genDataType
@@ -1534,7 +1542,7 @@ mkMigrate fun allDefs = do
     defs = filter isMigrated allDefs
     isMigrated def = not $ "no-migrate" `elem` entityAttrs def
     typ = ConT ''Migration
-    entMap = M.fromList $ map (\ent -> (entityHaskell ent, ent)) allDefs
+    entityMap = constructEntityMap allDefs
     body :: Q Exp
     body =
         case defs of
@@ -1542,25 +1550,25 @@ mkMigrate fun allDefs = do
             _  -> do
               defsName <- newName "defs"
               defsStmt <- do
-                defs' <- mapM (liftAndFixKeys entMap) defs
+                defs' <- mapM (liftAndFixKeys entityMap) defs
                 let defsExp = ListE defs'
                 return $ LetS [ValD (VarP defsName) (NormalB defsExp) []]
               stmts <- mapM (toStmt $ VarE defsName) defs
               return (DoE $ defsStmt : stmts)
     toStmt :: Exp -> EntityDef -> Q Stmt
     toStmt defsExp ed = do
-        u <- liftAndFixKeys entMap ed
+        u <- liftAndFixKeys entityMap ed
         m <- [|migrate|]
         return $ NoBindS $ m `AppE` defsExp `AppE` u
 
 liftAndFixKeys :: EntityMap -> EntityDef -> Q Exp
-liftAndFixKeys entMap EntityDef{..} =
+liftAndFixKeys entityMap EntityDef{..} =
   [|EntityDef
       entityHaskell
       entityDB
       entityId
       entityAttrs
-      $(ListE <$> mapM (liftAndFixKey entMap) entityFields)
+      $(ListE <$> mapM (liftAndFixKey entityMap) entityFields)
       entityUniques
       entityForeigns
       entityDerives
@@ -1570,12 +1578,12 @@ liftAndFixKeys entMap EntityDef{..} =
    |]
 
 liftAndFixKey :: EntityMap -> FieldDef -> Q Exp
-liftAndFixKey entMap (FieldDef a b c sqlTyp e f fieldRef mcomments) =
+liftAndFixKey entityMap (FieldDef a b c sqlTyp e f fieldRef mcomments) =
   [|FieldDef a b c $(sqlTyp') e f fieldRef' mcomments|]
   where
     (fieldRef', sqlTyp') = fromMaybe (fieldRef, lift sqlTyp) $
       case fieldRef of
-        ForeignRef refName _ft -> case M.lookup refName entMap of
+        ForeignRef refName _ft -> case M.lookup refName entityMap of
           Nothing -> Nothing
           Just ent ->
             case fieldReference $ entityId ent of
