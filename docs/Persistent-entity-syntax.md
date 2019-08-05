@@ -136,6 +136,18 @@ This makes a unique index requiring `phone` to be unique across `Person` rows. O
 
 The [tests for this feature](https://github.com/yesodweb/persistent/blob/master/persistent-test/src/CompositeTest.hs#L53) demonstrates their usage
 
+### constraint=
+
+You can use the `constraint=` attribute to override the constraint name used in migrations. This is useful particularly when the automatically generated constraint names exceed database limits (e.g. MySQL does not allow constraint names longer than 64 characters).
+
+```
+VeryLongTableName
+  name Text
+
+AnotherVeryLongTableName
+  veryLongTableNameId VeryLongTableNameId constraint=short_foreign_key
+```
+
 ## Laziness
 
 By default the records created by persistent have strict fields. You can prefix a field name with `~` to make it lazy (or `!` to make it strict).
