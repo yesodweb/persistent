@@ -61,7 +61,7 @@ import Data.List (foldl')
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as M
 import Data.Maybe (isJust, listToMaybe, mapMaybe, fromMaybe)
-import Data.Monoid (mappend, mconcat)
+import Data.Monoid ((<>), mappend, mconcat)
 import Data.Proxy (Proxy (Proxy))
 import Data.Text (pack, Text, append, unpack, concat, uncons, cons, stripPrefix, stripSuffix)
 import qualified Data.Text as T
@@ -95,7 +95,9 @@ unHaskellNameForJSON = fixTypeUnderscore . unHaskellName
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
 persistWith :: PersistSettings -> QuasiQuoter
-persistWith ps = QuasiQuoter { quoteExp = parseReferences ps . pack }
+persistWith ps = QuasiQuoter
+    { quoteExp = parseReferences ps . pack
+    }
 
 -- | Apply 'persistWith' to 'upperCaseSettings'.
 persistUpperCase :: QuasiQuoter
@@ -338,7 +340,7 @@ setEmbedField entName allEntities field = field
                              then SelfReference
                         else case fieldType field of
                                  FTList _ -> SelfReference
-                                 _ -> error $ pack (unHaskellName entName) ++ ": a self reference must be a Maybe"
+                                 _ -> error $ unpack $ unHaskellName entName <> ": a self reference must be a Maybe"
             existing -> existing
   }
 
@@ -401,7 +403,8 @@ mkPersist mps ents' = do
 -- | Implement special preprocessing on EntityDef as necessary for 'mkPersist'.
 -- For example, strip out any fields marked as MigrationOnly.
 fixEntityDef :: EntityDef -> EntityDef
-fixEntityDef ed = ed { entityFields = filter keepField $ entityFields ed }
+fixEntityDef ed =
+    ed { entityFields = filter keepField $ entityFields ed }
   where
     keepField fd = "MigrationOnly" `notElem` fieldAttrs fd &&
                    "SafeToRemove" `notElem` fieldAttrs fd
@@ -454,9 +457,9 @@ mkPersistSettings t = MkPersistSettings
     , mpsGeneric = False
     , mpsPrefixFields = True
     , mpsEntityJSON = Just EntityJSON
-      { entityToJSON = 'entityIdToJSON
-      , entityFromJSON = 'entityIdFromJSON
-      }
+        { entityToJSON = 'entityIdToJSON
+        , entityFromJSON = 'entityIdFromJSON
+        }
     , mpsGenerateLenses = False
     }
 
@@ -466,8 +469,8 @@ sqlSettings = mkPersistSettings $ ConT ''SqlBackend
 
 recNameNoUnderscore :: MkPersistSettings -> HaskellName -> HaskellName -> Text
 recNameNoUnderscore mps dt f
-    | mpsPrefixFields mps = lowerFirst (unHaskellName dt) ++ upperFirst ft
-    | otherwise           = lowerFirst ft
+  | mpsPrefixFields mps = lowerFirst (unHaskellName dt) ++ upperFirst ft
+  | otherwise           = lowerFirst ft
   where
     ft = unHaskellName f
 
