@@ -54,6 +54,7 @@ import Data.Aeson
     , Value (Object), (.:), (.:?)
     , eitherDecodeStrict'
     )
+import qualified Data.ByteString as BS
 import Data.Char (toLower, toUpper)
 import qualified Data.HashMap.Strict as HM
 import Data.Int (Int64)
@@ -163,10 +164,7 @@ persistManyFileWith ps fps = do
     parseReferences ps s
 
 getFileContents :: FilePath -> IO Text
-getFileContents fp = do
-    h <- SIO.openFile fp SIO.ReadMode
-    SIO.hSetEncoding h SIO.utf8_bom
-    TIO.hGetContents h
+getFileContents = fmap decodeUtf8 . BS.readFile
 
 -- | Takes a list of (potentially) independently defined entities and properly
 -- links all foreign keys to reference the right 'EntityDef', tying the knot
