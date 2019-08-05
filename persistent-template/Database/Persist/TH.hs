@@ -68,13 +68,11 @@ import Data.Text (pack, Text, append, unpack, concat, uncons, cons, stripPrefix,
 import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
 import qualified Data.Text.Encoding as TE
-import qualified Data.Text.IO as TIO
 import GHC.Generics (Generic)
 import GHC.TypeLits
 import Language.Haskell.TH.Lib (conT, varE)
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
-import qualified System.IO as SIO
 import Text.Read (readPrec, lexP, step, prec, parens, Lexeme(Ident))
 import Web.PathPieces (PathPiece(..))
 import Web.HttpApiData (ToHttpApiData(..), FromHttpApiData(..))
