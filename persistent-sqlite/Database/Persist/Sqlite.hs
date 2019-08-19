@@ -391,8 +391,8 @@ migrate' :: [EntityDef]
          -> EntityDef
          -> IO (Either [Text] [(Bool, Text)])
 migrate' allDefs getter val = do
-    let (cols, uniqs, _) = mkColumns allDefs val
-    let newSql = mkCreateTable False def (filter (not . safeToRemove val . cName) cols, uniqs)
+    let (cols, uniqs, fdefs) = mkColumns allDefs val
+    let newSql = mkCreateTable False def (filter (not . safeToRemove val . cName) cols, uniqs, fdefs)
     stmt <- getter "SELECT sql FROM sqlite_master WHERE type='table' AND name=?"
     oldSql' <- with (stmtQuery stmt [PersistText $ unDBName table])
       (\src -> runConduit $ src .| go)
@@ -496,10 +496,10 @@ getCopyTable allDefs getter def = do
             Just y -> error $ "Invalid result from PRAGMA table_info: " ++ show y
     table = entityDB def
     tableTmp = DBName $ unDBName table <> "_backup"
-    (cols, uniqs, _) = mkColumns allDefs def
+    (cols, uniqs, fdef) = mkColumns allDefs def
     cols' = filter (not . safeToRemove def . cName) cols
-    newSql = mkCreateTable False def (cols', uniqs)
-    tmpSql = mkCreateTable True def { entityDB = tableTmp } (cols', uniqs)
+    newSql = mkCreateTable False def (cols', uniqs, fdef)
+    tmpSql = mkCreateTable True def { entityDB = tableTmp } (cols', uniqs, [])
     dropTmp = "DROP TABLE " <> escape tableTmp
     dropOld = "DROP TABLE " <> escape table
     copyToTemp common = T.concat
@@ -521,8 +521,8 @@ getCopyTable allDefs getter def = do
         , escape tableTmp
         ]
 
-mkCreateTable :: Bool -> EntityDef -> ([Column], [UniqueDef]) -> Text
-mkCreateTable isTemp entity (cols, uniqs) =
+mkCreateTable :: Bool -> EntityDef -> ([Column], [UniqueDef], [ForeignDef]) -> Text
+mkCreateTable isTemp entity (cols, uniqs, fdefs) =
   case entityPrimary entity of
     Just pdef ->
        T.concat
@@ -537,6 +537,7 @@ mkCreateTable isTemp entity (cols, uniqs) =
         , T.intercalate "," $ map (escape . fieldDB) $ compositeFields pdef
         , ")"
         , T.concat $ map sqlUnique uniqs
+        , T.concat $ map sqlForeign fdefs
         , ")"
         ]
     Nothing -> T.concat
@@ -552,6 +553,7 @@ mkCreateTable isTemp entity (cols, uniqs) =
         , mayDefault $ defaultAttribute $ fieldAttrs $ entityId entity
         , T.concat $ map (sqlColumn isTemp) cols
         , T.concat $ map sqlUnique uniqs
+        , T.concat $ map sqlForeign fdefs
         , ")"
         ]
 
@@ -571,6 +573,19 @@ sqlColumn noRef (Column name isNull typ def _cn _maxLen ref) = T.concat
     , case ref of
         Nothing -> ""
         Just (table, _) -> if noRef then "" else " REFERENCES " <> escape table
+    ]
+
+sqlForeign :: ForeignDef -> Text
+sqlForeign fdef = T.concat
+    [ ", CONSTRAINT "
+    , escape $ foreignConstraintNameDBName fdef
+    , " FOREIGN KEY("
+    , T.intercalate "," $ map (escape . snd. fst) $ foreignFields fdef
+    , ") REFERENCES "
+    , escape $ foreignRefTableDBName fdef
+    , "("
+    , T.intercalate "," $ map (escape . snd . snd) $ foreignFields fdef
+    , ")"
     ]
 
 sqlUnique :: UniqueDef -> Text
