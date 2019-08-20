@@ -1,5 +1,9 @@
 # Changelog for persistent-sqlite
 
+## 2.10.5
+
+* Foreign keys table constraints are correctly generated [#945](https://github.com/yesodweb/persistent/pull/945) @kderme
+
 ## 2.10.4
 
 * Fix bug with 2.10.3 and 2.10.2 that caused the `RawSqlite` loop. [#934](https://github.com/yesodweb/persistent/pull/934) @merijn
