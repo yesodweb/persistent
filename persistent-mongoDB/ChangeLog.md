@@ -4,6 +4,7 @@
 
 * Removed deprecated `entityToDocument`. Please use `recordToDocument` instead. [#894](https://github.com/yesodweb/persistent/pull/894)
 * Removed deprecated `multiBsonEq`. Please use `anyBsonEq` instead. [#894](https://github.com/yesodweb/persistent/pull/894)
+* Use `portID` from `mongoDB` instead of `network`. [#946](https://github.com/yesodweb/persistent/pull/946)
 
 ## 2.8.0
 
