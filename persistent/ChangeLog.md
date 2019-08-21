@@ -1,5 +1,9 @@
 # Changelog for persistent
 
+## 2.10.2
+
+* Added functions `transactionBegin`,  `transactionCommit` and  `withTransaction`.
+
 ## 2.10.1
 
 * Added `constraint=` attribute to allow users to specify foreign reference constraint names.
