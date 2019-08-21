@@ -94,11 +94,12 @@ instance Show PostgresServerVersionError where
       "Unexpected PostgreSQL server version, got " <> uniqueMsg
 instance Exception PostgresServerVersionError
 
--- | Create a PostgreSQL connection pool and run the given
--- action.  The pool is properly released after the action
--- finishes using it.  Note that you should not use the given
--- 'ConnectionPool' outside the action since it may already
+-- | Create a PostgreSQL connection pool and run the given action.  The pool is
+-- properly released after the action finishes using it.  Note that you should
+-- not use the given 'ConnectionPool' outside the action since it may already
 -- have been released.
+-- The provided action should use 'runSqlConn' and *not* 'runReaderT' because
+-- the former brackets the database action with transaction begin/commit.
 withPostgresqlPool :: (MonadLogger m, MonadUnliftIO m)
                    => ConnectionString
                    -- ^ Connection string to the database.
@@ -175,6 +176,8 @@ createPostgresqlPoolModifiedWithVersion getVer modConn ci =
 
 -- | Same as 'withPostgresqlPool', but instead of opening a pool
 -- of connections, only one connection is opened.
+-- The provided action should use 'runSqlConn' and *not* 'runReaderT' because
+-- the former brackets the database action with transaction begin/commit.
 withPostgresqlConn :: (MonadUnliftIO m, MonadLogger m)
                    => ConnectionString -> (SqlBackend -> m a) -> m a
 withPostgresqlConn = withPostgresqlConnWithVersion getServerVersion
