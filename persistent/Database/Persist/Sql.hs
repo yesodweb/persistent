@@ -12,6 +12,9 @@ module Database.Persist.Sql
     , rawSql
     , deleteWhereCount
     , updateWhereCount
+    , transactionBegin
+    , transactionCommit
+    , withTransaction
     , transactionSave
     , transactionSaveWithIsolation
     , transactionUndo
@@ -38,6 +41,24 @@ import Database.Persist.Sql.Internal
 import Database.Persist.Sql.Orphan.PersistQuery
 import Database.Persist.Sql.Orphan.PersistStore
 import Database.Persist.Sql.Orphan.PersistUnique ()
+
+-- | Begin an SQL transaction.
+--
+-- @since 2.10.2
+transactionBegin :: MonadIO m => ReaderT SqlBackend m ()
+transactionBegin = do
+    conn <- ask
+    let getter = getStmtConn conn
+    liftIO $ connBegin conn getter Nothing
+
+-- | Begin an SQL transaction.
+--
+-- @since 2.10.2
+transactionCommit :: MonadIO m => ReaderT SqlBackend m ()
+transactionCommit = do
+    conn <- ask
+    let getter = getStmtConn conn
+    liftIO $ connCommit conn getter
 
 -- | Commit the current transaction and begin a new one.
 --
@@ -74,3 +95,17 @@ transactionUndoWithIsolation isolation = do
     conn <- ask
     let getter = getStmtConn conn
     liftIO $ connRollback conn getter >> connBegin conn getter (Just isolation)
+
+
+-- | Run a database action within a transaction
+--
+-- @since 2.10.2
+withTransaction :: MonadIO m => ReaderT SqlBackend m a -> ReaderT SqlBackend m a
+withTransaction action = do
+    conn <- ask
+    let getter = getStmtConn conn
+    liftIO $ connBegin conn getter Nothing
+    a <- action
+    liftIO $ connCommit conn getter
+    pure a
+
