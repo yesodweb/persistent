@@ -438,6 +438,18 @@ specsWith runDb = describe "persistent" $ do
       x <- selectFirst [] [Desc PersonAge]
       x @== Just (Entity kOld pOld)
 
+  describe "selectFirstOrInsert" $ do
+      it "returns a record if there is one matching the search criteria" $ runDb $ do
+          insert_ $ Person "John" 26 Nothing
+          p <- insertEntity $ Person "Michael" 26 Nothing
+          x <- selectFirstOrInsert [PersonName ==. "Michael"] [] (Person "Michael" 26 Nothing)
+          x @== p
+
+      it "creates a new record if there is no record matching the search criteria" $ runDb $ do
+          insert_ $ Person "John" 26 Nothing
+          let p = Person "Michael" 26 Nothing
+          x <- selectFirstOrInsert [PersonName ==. "Michael"] [] p
+          entityVal x @== p
 
   it "selectKeys" $ runDb $ do
       let p1 = Person "selectKeys1" 1 Nothing

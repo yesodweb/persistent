@@ -109,6 +109,7 @@ module Database.Persist.Class
     , selectKeys
     , selectList
     , selectKeysList
+    , selectFirstOrInsert
 
     -- * DeleteCascade
     , DeleteCascade (..)

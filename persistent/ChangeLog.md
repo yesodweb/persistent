@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## 2.10.2
+
+* Added `selectFirstOrInsert` - Get the first record matching the search
+  criteria or create a new one if there is no match.
+
 ## 2.10.1
 
 * Added `constraint=` attribute to allow users to specify foreign reference constraint names.

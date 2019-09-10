@@ -5,6 +5,7 @@ module Database.Persist.Class.PersistQuery
     , selectKeys
     , selectList
     , selectKeysList
+    , selectFirstOrInsert
     ) where
 
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -98,3 +99,54 @@ selectKeysList :: (MonadIO m, PersistQueryRead backend, PersistRecordBackend rec
 selectKeysList filts opts = do
     srcRes <- selectKeysRes filts opts
     liftIO $ with srcRes (\src -> runConduit $ src .| CL.consume)
+
+-- | Get the first record matching the search criteria or create a new one if
+-- there is no match.
+--
+-- @since 2.10.2
+--
+-- === __Example usage__
+--
+-- > personByName :: MonadIO m => Person -> ReaderT SqlBackend m (Entity Person)
+-- > personByName Person{..}@rec = selectFirstOrInsert [PersonName ==. personName] [] rec
+--
+-- With <#schema-persist-store-1 schema-1> and <#dataset-persist-store-1 dataset-1>:
+--
+-- __When the record exists__
+--
+-- > personByName $ Person "SPJ" 40
+--
+-- The above query when applied on <#dataset-persist-store-1 dataset-1>, will
+-- get these records:
+--
+-- > +----+-------+-----+
+-- > | id | name  | age |
+-- > +----+-------+-----+
+-- > |  1 | SPJ   |  40 |
+-- > +----+-------+-----+
+--
+-- __When the record does not exist__
+--
+-- > personByName $ Person "John" 42
+--
+-- The above query when applied on <#dataset-persist-store-1 dataset-1>, will
+-- get these records:
+--
+-- > +----+-------+-----+
+-- > | id | name  | age |
+-- > +----+-------+-----+
+-- > |  3 | John  |  42 |
+-- > +----+-------+-----+
+selectFirstOrInsert
+    :: ( MonadIO m
+       , PersistQueryRead backend
+       , PersistRecordBackend record backend
+       , PersistStoreWrite backend
+       )
+    => [Filter record]     -- ^ select filters
+    -> [SelectOpt record]  -- ^ select options
+    -> record              -- ^ record to be created if there is no match
+    -> ReaderT backend m (Entity record)
+selectFirstOrInsert filts opts rec = do
+    mrec <- selectFirst filts opts
+    maybe (insertEntity rec) return mrec
