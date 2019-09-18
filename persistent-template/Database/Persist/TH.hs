@@ -1100,11 +1100,19 @@ mkEntity entityMap mps t = do
             (map fst fields)
             []
         , FunD 'persistFieldDef (map snd fields)
+#if MIN_VERSION_template_haskell(2,12,0)
+        , TySynInstD
+            (TySynEqn
+               Nothing
+               (AppT ''PersistEntityBackend genDataType)
+               (backendDataType mps))
+#else
         , TySynInstD
             ''PersistEntityBackend
             (TySynEqn
                [genDataType]
                (backendDataType mps))
+#endif
         , FunD 'persistIdField [normalClause [] (ConE $ keyIdName t)]
         , FunD 'fieldLens lensClauses
         ]
