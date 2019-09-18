@@ -448,7 +448,7 @@ instance A.FromJSON PersistValue where
       where
         headMay []    = Nothing
         headMay (x:_) = Just x
-        readMay :: (Read a, Monad m) => T.Text -> m a
+        readMay :: (Read a, MonadFail m) => T.Text -> m a
         readMay t =
             case reads $ T.unpack t of
                 (x, _):_ -> return x
