@@ -806,7 +806,12 @@ mkKeyTypeDec mps t = do
                         bi <- backendKeyI
                         return (bi, allInstances)
 
-#if MIN_VERSION_template_haskell(2,12,0)
+#if MIN_VERSION_template_haskell(2,15,0)
+    cxti <- mapM conT i
+    let kd = if useNewtype
+               then NewtypeInstD [] Nothing (AppT k recordType) Nothing dec [DerivClause Nothing cxti]
+               else DataInstD    [] Nothing (AppT k recordType) Nothing [dec] [DerivClause Nothing cxti]
+#elif MIN_VERSION_template_haskell(2,12,0)
     cxti <- mapM conT i
     let kd = if useNewtype
                then NewtypeInstD [] k [recordType] Nothing dec [DerivClause Nothing cxti]
@@ -1094,7 +1099,7 @@ mkEntity entityMap mps t = do
         , DataInstD
             []
             Nothing
-            (AppT (AppT (ConT ''EntityField) genDataType) (VarT $ mkName "typ"))
+            (AppT (AppT (ConT ''EntityField) genDataType) (VarT $ mkName "typ")
             Nothing
             (map fst fields)
             []
