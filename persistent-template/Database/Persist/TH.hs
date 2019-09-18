@@ -809,8 +809,8 @@ mkKeyTypeDec mps t = do
 #if MIN_VERSION_template_haskell(2,15,0)
     cxti <- mapM conT i
     let kd = if useNewtype
-               then NewtypeInstD [] Nothing (AppT k recordType) Nothing dec [DerivClause Nothing cxti]
-               else DataInstD    [] Nothing (AppT k recordType) Nothing [dec] [DerivClause Nothing cxti]
+               then NewtypeInstD [] Nothing (AppT (ConT k) recordType) Nothing dec [DerivClause Nothing cxti]
+               else DataInstD    [] Nothing (AppT (ConT k) recordType) Nothing [dec] [DerivClause Nothing cxti]
 #elif MIN_VERSION_template_haskell(2,12,0)
     cxti <- mapM conT i
     let kd = if useNewtype
