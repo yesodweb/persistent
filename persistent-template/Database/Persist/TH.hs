@@ -539,7 +539,7 @@ uniqueTypeDec :: MkPersistSettings -> EntityDef -> Dec
 uniqueTypeDec mps t =
 #if MIN_VERSION_template_haskell(2,15,0)
     DataInstD [] Nothing
-        (AppT ''Unique (genericDataType mps (entityHaskell t) backendT))
+        (AppT (ConT ''Unique) (genericDataType mps (entityHaskell t) backendT))
             Nothing
             (map (mkUnique mps t) $ entityUniques t)
             (derivClause $ entityUniques t)
@@ -1100,11 +1100,11 @@ mkEntity entityMap mps t = do
             (map fst fields)
             []
         , FunD 'persistFieldDef (map snd fields)
-#if MIN_VERSION_template_haskell(2,12,0)
+#if MIN_VERSION_template_haskell(2,15,0)
         , TySynInstD
             (TySynEqn
                Nothing
-               (AppT ''PersistEntityBackend genDataType)
+               (AppT (ConT ''PersistEntityBackend) genDataType)
                (backendDataType mps))
 #else
         , TySynInstD
