@@ -1094,7 +1094,7 @@ mkEntity entityMap mps t = do
         , DataInstD
             []
             Nothing
-            (AppT (AppT (ConT ''EntityField) genDataType) (VarT $ mkName "typ")
+            (AppT (AppT (ConT ''EntityField) genDataType) (VarT $ mkName "typ"))
             Nothing
             (map fst fields)
             []
