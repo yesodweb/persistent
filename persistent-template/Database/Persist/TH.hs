@@ -1090,6 +1090,15 @@ mkEntity entityMap mps t = do
         , toFieldNames
         , utv
         , puk
+#if MIN_VERSION_template_haskell(2,15,0)
+        , DataInstD
+            []
+            Nothing
+            (AppT (AppT (ConT ''EntityField) genDataType) (VarT $ mkName "typ")
+            Nothing
+            (map fst fields)
+            []
+#else
         , DataInstD
             []
             ''EntityField
@@ -1099,6 +1108,7 @@ mkEntity entityMap mps t = do
             Nothing
             (map fst fields)
             []
+#endif
         , FunD 'persistFieldDef (map snd fields)
 #if MIN_VERSION_template_haskell(2,15,0)
         , TySynInstD
