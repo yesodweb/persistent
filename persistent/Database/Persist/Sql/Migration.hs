@@ -24,7 +24,6 @@ import Control.Monad.Trans.Writer
 import Data.Text (Text, unpack, snoc, isPrefixOf, pack)
 import qualified Data.Text.IO
 import System.IO
-import System.IO.Silently (hSilence)
 
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
@@ -86,7 +85,7 @@ runMigrationSilent :: MonadUnliftIO m
                    => Migration
                    -> ReaderT SqlBackend m [Text]
 runMigrationSilent m = withRunInIO $ \run ->
-  hSilence [stderr] $ run $ runMigration' m True
+  run $ runMigration' m True
 
 -- | Run the given migration against the database. If the migration fails
 -- to parse, or there are any unsafe migrations, then this will error at
