@@ -9,8 +9,8 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-missing-fields #-}
 
--- | This module provides utilities for creating backends. Regular users do not
--- need to use this module.
+-- | This module provides the tools for defining your database schema and using
+-- it to generate Haskell data types and migrations.
 module Database.Persist.TH
     ( -- * Parse entity defs
       persistWith
