@@ -93,7 +93,7 @@ runMigration m = runMigration' m False >> return ()
 runMigrationQuiet :: MonadIO m
                   => Migration
                   -> ReaderT SqlBackend m [Text]
-runMigrationQuiet m = runMigration' m True >> return ()
+runMigrationQuiet m = runMigration' m True
 
 -- | Same as 'runMigration', but returns a list of the SQL commands executed
 -- instead of printing them to stderr.
@@ -135,7 +135,7 @@ runMigration' m silent = do
 runMigrationUnsafe :: MonadIO m
                    => Migration
                    -> ReaderT SqlBackend m ()
-runMigrationUnsafe m = runMigrationUnsafe' False >> return ()
+runMigrationUnsafe m = runMigrationUnsafe' False m >> return ()
 
 -- | Same as 'runMigrationUnsafe', but returns a list of the SQL commands
 -- executed instead of printing them to stderr.
@@ -144,12 +144,12 @@ runMigrationUnsafe m = runMigrationUnsafe' False >> return ()
 runMigrationUnsafeQuiet :: MonadIO m
                         => Migration
                         -> ReaderT SqlBackend m [Text]
-runMigrationUnsafeQuiet m = runMigrationUnsafe' True
+runMigrationUnsafeQuiet = runMigrationUnsafe' True
 
 runMigrationUnsafe' :: MonadIO m
                     => Bool
                     -> Migration
-                    -> ReaderT SqlBackend m ()
+                    -> ReaderT SqlBackend m [Text]
 runMigrationUnsafe' silent m = do
     mig <- parseMigration' m
     mapM (executeMigrate silent) $ sortMigrations $ allSql mig
