@@ -1,5 +1,9 @@
 # Changelog for persistent
 
+## 2.10.2
+
+* Added `runMigrationQuiet` and `runMigrationUnsafeQuiet` to `Database.Persist.Sql.Migration` as safer alternatives to `runMigrationSilent`. This functions as workaround/fix for: [#966](https://github.com/yesodweb/persistent/issues/966), [#948](https://github.com/yesodweb/persistent/issues/948), [#640](https://github.com/yesodweb/persistent/issues/640), and [#474](https://github.com/yesodweb/persistent/issues/474)
+
 ## 2.10.1
 
 * Added `constraint=` attribute to allow users to specify foreign reference constraint names.
