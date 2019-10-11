@@ -16,6 +16,7 @@ module Database.Persist.Sql.Migration
   ) where
 
 
+import Control.Exception (throwIO)
 import Control.Monad (liftM, unless)
 import Control.Monad.IO.Unlift
 import Control.Monad.Trans.Class (MonadTrans (..))
@@ -99,7 +100,7 @@ runMigration'
 runMigration' m silent = do
     mig <- parseMigration' m
     if any fst mig
-        then error $ concat
+        then liftIO . throwIO . PersistError . pack $ concat
                  [ "\n\nDatabase migration: manual intervention required.\n"
                  , "The unsafe actions are prefixed by '***' below:\n\n"
                  , unlines $ map displayMigration mig
