@@ -1,3 +1,7 @@
+## Unreleased changes
+
+* Update module documentation for `Database.Persist.TH` to better describe the purpose of the module [#968](https://github.com/yesodweb/persistent/pull/968)
+
 ## 2.7.2
 
 * Expose the knot tying logic of `parseReferences` so that users can build
