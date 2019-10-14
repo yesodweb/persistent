@@ -1,5 +1,9 @@
 # Changelog for persistent
 
+## 2.10.2
+
+* Added RawSql instances for 9, 10, 11 and 12-column results
+
 ## 2.10.1
 
 * Added `constraint=` attribute to allow users to specify foreign reference constraint names.

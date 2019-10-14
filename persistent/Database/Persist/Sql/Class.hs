@@ -197,6 +197,7 @@ from8 (a,b,c,d,e,f,g,h) = ((a,b),(c,d),(e,f),(g,h))
 to8 :: ((a,b),(c,d),(e,f),(g,h)) -> (a,b,c,d,e,f,g,h)
 to8 ((a,b),(c,d),(e,f),(g,h)) = (a,b,c,d,e,f,g,h)
 
+-- | @since 2.10.2
 instance (RawSql a, RawSql b, RawSql c,
           RawSql d, RawSql e, RawSql f,
           RawSql g, RawSql h, RawSql i)
@@ -205,12 +206,15 @@ instance (RawSql a, RawSql b, RawSql c,
     rawSqlColCountReason = rawSqlColCountReason . from9
     rawSqlProcessRow     = fmap to9 . rawSqlProcessRow
 
+-- | @since 2.10.2
 from9 :: (a,b,c,d,e,f,g,h,i) -> ((a,b),(c,d),(e,f),(g,h),i)
 from9 (a,b,c,d,e,f,g,h,i) = ((a,b),(c,d),(e,f),(g,h),i)
 
+-- | @since 2.10.2
 to9 :: ((a,b),(c,d),(e,f),(g,h),i) -> (a,b,c,d,e,f,g,h,i)
 to9 ((a,b),(c,d),(e,f),(g,h),i) = (a,b,c,d,e,f,g,h,i)
 
+-- | @since 2.10.2
 instance (RawSql a, RawSql b, RawSql c,
           RawSql d, RawSql e, RawSql f,
           RawSql g, RawSql h, RawSql i,
@@ -220,12 +224,15 @@ instance (RawSql a, RawSql b, RawSql c,
     rawSqlColCountReason = rawSqlColCountReason . from10
     rawSqlProcessRow     = fmap to10 . rawSqlProcessRow
 
+-- | @since 2.10.2
 from10 :: (a,b,c,d,e,f,g,h,i,j) -> ((a,b),(c,d),(e,f),(g,h),(i,j))
 from10 (a,b,c,d,e,f,g,h,i,j) = ((a,b),(c,d),(e,f),(g,h),(i,j))
 
+-- | @since 2.10.2
 to10 :: ((a,b),(c,d),(e,f),(g,h),(i,j)) -> (a,b,c,d,e,f,g,h,i,j)
 to10 ((a,b),(c,d),(e,f),(g,h),(i,j)) = (a,b,c,d,e,f,g,h,i,j)
 
+-- | @since 2.10.2
 instance (RawSql a, RawSql b, RawSql c,
           RawSql d, RawSql e, RawSql f,
           RawSql g, RawSql h, RawSql i,
@@ -235,12 +242,15 @@ instance (RawSql a, RawSql b, RawSql c,
     rawSqlColCountReason = rawSqlColCountReason . from11
     rawSqlProcessRow     = fmap to11 . rawSqlProcessRow
 
+-- | @since 2.10.2
 from11 :: (a,b,c,d,e,f,g,h,i,j,k) -> ((a,b),(c,d),(e,f),(g,h),(i,j),k)
 from11 (a,b,c,d,e,f,g,h,i,j,k) = ((a,b),(c,d),(e,f),(g,h),(i,j),k)
 
+-- | @since 2.10.2
 to11 :: ((a,b),(c,d),(e,f),(g,h),(i,j),k) -> (a,b,c,d,e,f,g,h,i,j,k)
 to11 ((a,b),(c,d),(e,f),(g,h),(i,j),k) = (a,b,c,d,e,f,g,h,i,j,k)
 
+-- | @since 2.10.2
 instance (RawSql a, RawSql b, RawSql c,
           RawSql d, RawSql e, RawSql f,
           RawSql g, RawSql h, RawSql i,
@@ -250,9 +260,11 @@ instance (RawSql a, RawSql b, RawSql c,
     rawSqlColCountReason = rawSqlColCountReason . from12
     rawSqlProcessRow     = fmap to12 . rawSqlProcessRow
 
+-- | @since 2.10.2
 from12 :: (a,b,c,d,e,f,g,h,i,j,k,l) -> ((a,b),(c,d),(e,f),(g,h),(i,j),(k,l))
 from12 (a,b,c,d,e,f,g,h,i,j,k,l) = ((a,b),(c,d),(e,f),(g,h),(i,j),(k,l))
 
+-- | @since 2.10.2
 to12 :: ((a,b),(c,d),(e,f),(g,h),(i,j),(k,l)) -> (a,b,c,d,e,f,g,h,i,j,k,l)
 to12 ((a,b),(c,d),(e,f),(g,h),(i,j),(k,l)) = (a,b,c,d,e,f,g,h,i,j,k,l)
 
