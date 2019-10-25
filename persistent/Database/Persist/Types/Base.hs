@@ -433,10 +433,10 @@ instance A.FromJSON PersistValue where
     parseJSON (A.String t0) =
         case T.uncons t0 of
             Nothing -> fail "Null string"
-            Just ('p', t) -> either (fail "Invalid base64") (return . PersistDbSpecific)
+            Just ('p', t) -> either (\_ -> fail "Invalid base64") (return . PersistDbSpecific)
                            $ B64.decode $ TE.encodeUtf8 t
             Just ('s', t) -> return $ PersistText t
-            Just ('b', t) -> either (fail "Invalid base64") (return . PersistByteString)
+            Just ('b', t) -> either (\_ -> fail "Invalid base64") (return . PersistByteString)
                            $ B64.decode $ TE.encodeUtf8 t
             Just ('t', t) -> fmap PersistTimeOfDay $ readMay t
             Just ('u', t) -> fmap PersistUTCTime $ readMay t
@@ -448,7 +448,6 @@ instance A.FromJSON PersistValue where
       where
         headMay []    = Nothing
         headMay (x:_) = Just x
-        readMay :: (Read a, Monad m) => T.Text -> m a
         readMay t =
             case reads $ T.unpack t of
                 (x, _):_ -> return x
