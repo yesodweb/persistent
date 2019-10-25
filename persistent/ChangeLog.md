@@ -1,5 +1,9 @@
 # Changelog for persistent
 
+## 2.10.3
+
+* Added support for GHC 8.8 about MonadFail changes [#976](https://github.com/yesodweb/persistent/pull/976)
+
 ## 2.10.2
 
 * Added `runMigrationQuiet` and `runMigrationUnsafeQuiet` to `Database.Persist.Sql.Migration` as safer alternatives to `runMigrationSilent`. [#971](https://github.com/yesodweb/persistent/pull/971)
