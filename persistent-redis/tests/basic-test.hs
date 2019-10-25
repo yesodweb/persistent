@@ -8,7 +8,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Main where
 
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Text (Text, pack, unpack)
 import qualified Database.Redis as R
 import Language.Haskell.TH.Syntax
@@ -34,10 +34,10 @@ host = pack $ R.connectHost d
 redisConf :: RedisConf
 redisConf = RedisConf host (R.connectPort d) Nothing 10
 
-mkKey :: (Monad m, PersistEntity val) => Text -> m (Key val)
+mkKey :: (MonadIO m, PersistEntity val) => Text -> m (Key val)
 mkKey s = case keyFromValues [PersistText s] of
     Right z -> return z
-    Left  a -> fail (unpack a)
+    Left  a -> liftIO $ fail (unpack a)
 
 main :: IO ()
 main =
