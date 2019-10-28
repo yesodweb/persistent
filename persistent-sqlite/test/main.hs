@@ -208,7 +208,7 @@ main = do
 
     it "issue #328" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
         runMigration migrateAll
-        _ <- insert . Test $ read "2014-11-30 05:15:25.123"
+        _ <- insert . Test $ read "2014-11-30 05:15:25.123Z"
         [Single x] <- rawSql "select strftime('%s%f',time) from test" []
         liftIO $ x `shouldBe` Just ("141732452525.123" :: String)
     it "issue #339" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
@@ -224,7 +224,7 @@ main = do
         return ()
     it "issue #527" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
         runMigration migrateAll
-        insertMany_ $ replicate 1000 (Test $ read "2014-11-30 05:15:25.123")
+        insertMany_ $ replicate 1000 (Test $ read "2014-11-30 05:15:25.123Z")
 
     it "properly migrates to a composite primary key (issue #669)" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
         runMigration compositeSetup

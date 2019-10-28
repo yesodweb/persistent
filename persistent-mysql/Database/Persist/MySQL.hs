@@ -37,7 +37,7 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (runExceptT)
+import Control.Monad.Trans.Except (ExceptT, runExceptT)
 import Control.Monad.Trans.Reader (runReaderT, ReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
 
@@ -627,7 +627,7 @@ data ColumnInfo = ColumnInfo
 
 -- | Parse the type of column as returned by MySQL's
 -- @INFORMATION_SCHEMA@ tables.
-parseColumnType :: Monad m => Text -> ColumnInfo -> m (SqlType, Maybe Integer)
+parseColumnType :: Text -> ColumnInfo -> ExceptT String IO (SqlType, Maybe Integer)
 -- Ints
 parseColumnType "tinyint" ci | ciColumnType ci == "tinyint(1)" = return (SqlBool, Nothing)
 parseColumnType "int" ci | ciColumnType ci == "int(11)"        = return (SqlInt32, Nothing)

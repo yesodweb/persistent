@@ -4,7 +4,6 @@ module Database.Persist.Types.Base where
 
 import Control.Arrow (second)
 import Control.Exception (Exception)
-import Control.Monad.Fail (MonadFail)
 import Control.Monad.Trans.Error (Error (..))
 import qualified Data.Aeson as A
 import Data.Bits (shiftL, shiftR)
@@ -449,7 +448,6 @@ instance A.FromJSON PersistValue where
       where
         headMay []    = Nothing
         headMay (x:_) = Just x
-        readMay :: (Read a, MonadFail m) => T.Text -> m a
         readMay t =
             case reads $ T.unpack t of
                 (x, _):_ -> return x

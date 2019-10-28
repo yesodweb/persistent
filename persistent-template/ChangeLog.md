@@ -1,6 +1,9 @@
 ## Unreleased changes
 
+## 2.7.3
+
 * Update module documentation for `Database.Persist.TH` to better describe the purpose of the module [#968](https://github.com/yesodweb/persistent/pull/968)
+* Support template-haskell-2.15 [#959](https://github.com/yesodweb/persistent/pull/959)
 
 ## 2.7.2
 

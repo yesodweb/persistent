@@ -1,5 +1,9 @@
 # Changelog for persistent-mysql
 
+## 2.10.2
+
+* Added support for GHC 8.8 [#977](https://github.com/yesodweb/persistent/pull/977)
+
 ## 2.10.1
 
 * Added `constraint=` attribute to allow users to specify foreign reference constraint names.
