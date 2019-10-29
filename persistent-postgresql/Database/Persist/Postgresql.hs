@@ -792,23 +792,29 @@ getColumn getter tableName' [PersistText columnName, PersistText isNullable, Per
                 Nothing -> loop' ps
                 Just t' -> t'
     getRef cname = do
-        let sql = T.concat
-                [ "SELECT COUNT(*) FROM "
-                , "information_schema.table_constraints "
-                , "WHERE table_catalog=current_database() "
-                , "AND table_schema=current_schema() "
-                , "AND table_name=? "
-                , "AND constraint_type='FOREIGN KEY' "
-                , "AND constraint_name=?"
-                ]
-        let ref = refName tableName' cname
+        let sql = T.concat ["SELECT "
+                           ,"ccu.table_name, "
+                           ,"tc.constraint_name "
+                          -- ,"kcu.column_name, "
+                           ,"FROM information_schema.constraint_column_usage ccu, "
+                           ,"information_schema.key_column_usage kcu, "
+                           ,"information_schema.table_constraints tc "
+                           ,"WHERE tc.constraint_type='FOREIGN KEY' "
+                           ,"AND ccu.constraint_name=tc.constraint_name "
+                           ,"AND kcu.constraint_name=tc.constraint_name "
+                           ,"AND tc.table_catalog=current_database() "
+                           ,"AND tc.table_schema=current_schema() "
+                           ,"AND kcu.table_name=? "
+                           ,"AND kcu.column_name=?"]
         stmt <- getter sql
-        with (stmtQuery stmt
-                     [ PersistText $ unDBName tableName'
-                     , PersistText $ unDBName ref
-                     ]) (\src -> runConduit $ src .| do
-            Just [PersistInt64 i] <- CL.head
-            return $ if i == 0 then Nothing else Just (DBName "", ref))
+        cntrs <- with (stmtQuery stmt [PersistText $ unDBName tableName'
+                                      ,PersistText $ unDBName cname])
+                      (\src -> runConduit $ src .| CL.consume)
+        case cntrs of
+          [] -> return Nothing
+          [[PersistText table, PersistText constraint]] ->
+            return $ Just (DBName table, DBName constraint)
+          _ -> error "Postgresql.getColumn: error fetching constraints"
     d' = case defaultValue of
             PersistNull   -> Right Nothing
             PersistText t -> Right $ Just t
@@ -908,7 +914,7 @@ getAddReference :: [EntityDef] -> DBName -> DBName -> DBName -> Maybe (DBName, D
 getAddReference allDefs table reftable cname ref =
     case ref of
         Nothing -> Nothing
-        Just (s, _) -> Just $ AlterColumn table (s, AddReference (refName table cname) [cname] id_)
+        Just (s, constraintName) -> Just $ AlterColumn table (s, AddReference constraintName [cname] id_)
                           where
                             id_ = fromMaybe (error $ "Could not find ID of entity " ++ show reftable)
                                         $ do
@@ -1139,10 +1145,6 @@ instance PersistConfig PostgresConf where
         addUser     = maybeAddParam "user"     "PGUSER"
         addPass     = maybeAddParam "password" "PGPASS"
         addDatabase = maybeAddParam "dbname"   "PGDATABASE"
-
-refName :: DBName -> DBName -> DBName
-refName (DBName table) (DBName column) =
-    DBName $ T.concat [table, "_", column, "_fkey"]
 
 udToPair :: UniqueDef -> (DBName, [DBName])
 udToPair ud = (uniqueDBName ud, map snd $ uniqueFields ud)
