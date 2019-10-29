@@ -1,5 +1,9 @@
 # Changelog for persistent
 
+## 2.10.4
+
+* Log exceptions when closing a connection fails. See point 1 in [yesod #1635](https://github.com/yesodweb/yesod/issues/1635#issuecomment-547300856). [#978](https://github.com/yesodweb/persistent/pull/978)
+
 ## 2.10.3
 
 * Added support for GHC 8.8 about MonadFail changes [#976](https://github.com/yesodweb/persistent/pull/976)
