@@ -4,12 +4,14 @@ module Database.Persist.Sql.Run where
 import Control.Exception (bracket, mask, onException)
 import Control.Monad (liftM)
 import Control.Monad.IO.Unlift
-import Control.Monad.Logger
+import qualified UnliftIO.Exception as UE
+import Control.Monad.Logger.CallStack
 import Control.Monad.Trans.Reader hiding (local)
 import Control.Monad.Trans.Resource
 import Data.IORef (readIORef)
 import Data.Pool as P
 import qualified Data.Map as Map
+import qualified Data.Text as T
 import System.Timeout (timeout)
 
 import Database.Persist.Class.PersistStore
@@ -110,13 +112,19 @@ withSqlPool mkConn connCount f = withUnliftIO $ \u -> bracket
     (unliftIO u . f)
 
 createSqlPool
-    :: (MonadLogger m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    :: forall m backend. (MonadLogger m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => (LogFunc -> IO backend)
     -> Int
     -> m (Pool backend)
 createSqlPool mkConn size = do
     logFunc <- askLogFunc
-    liftIO $ createPool (mkConn logFunc) close' 1 20 size
+    -- Resource pool will swallow any exceptions from close. We want to log
+    -- them instead.
+    let loggedClose :: backend -> IO ()
+        loggedClose backend = close' backend `UE.catchAny` \e -> runLoggingT
+          (logError $ T.pack $ "Error closing database connection in pool: " ++ show e)
+          logFunc
+    liftIO $ createPool (mkConn logFunc) loggedClose 1 20 size
 
 -- NOTE: This function is a terrible, ugly hack. It would be much better to
 -- just clean up monad-logger.
