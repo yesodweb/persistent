@@ -48,6 +48,7 @@ test-suite test
                      ArrayAggTest
                      EquivalentTypeTestPostgres
                      JSONTest
+                     CustomConstraintTest
     ghc-options:     -Wall
 
     build-depends:   base                 >= 4.9 && < 5
