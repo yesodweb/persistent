@@ -568,7 +568,7 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
     migrationText exists old'' =
         if not exists
             then createText newcols fdefs udspair
-            else let (acs, ats) = getAlters allDefs entity (newcols, udspair) old'
+            else let (acs, ats) = getAlters allDefs entity (newcols, udspair) $ excludeForeignKeys $ old'
                      acs' = map (AlterColumn name) acs
                      ats' = map (AlterTable name) ats
                  in  acs' ++ ats'
@@ -577,6 +577,14 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
          (newcols', udefs, fdefs) = mkColumns allDefs entity
          newcols = filter (not . safeToRemove entity . cName) newcols'
          udspair = map udToPair udefs
+         excludeForeignKeys (xs,ys) =
+           (map (\c -> case cReference c of
+                         Just (_,fk) ->
+                           case find (\f -> fk == foreignConstraintNameDBName f) fdefs of
+                             Just _ -> c { cReference = Nothing }
+                             Nothing -> c
+                         Nothing -> c) xs,ys)
+  
             -- Check for table existence if there are no columns, workaround
             -- for https://github.com/yesodweb/persistent/issues/152
 
@@ -792,18 +800,16 @@ getColumn getter tableName' [PersistText columnName, PersistText isNullable, Per
                 Nothing -> loop' ps
                 Just t' -> t'
     getRef cname = do
-        let sql = T.concat ["SELECT "
+        let sql = T.concat ["SELECT DISTINCT "
                            ,"ccu.table_name, "
                            ,"tc.constraint_name "
-                          -- ,"kcu.column_name, "
                            ,"FROM information_schema.constraint_column_usage ccu, "
                            ,"information_schema.key_column_usage kcu, "
                            ,"information_schema.table_constraints tc "
                            ,"WHERE tc.constraint_type='FOREIGN KEY' "
-                           ,"AND ccu.constraint_name=tc.constraint_name "
                            ,"AND kcu.constraint_name=tc.constraint_name "
-                           ,"AND tc.table_catalog=current_database() "
-                           ,"AND tc.table_schema=current_schema() "
+                           ,"AND ccu.constraint_name=kcu.constraint_name "
+                           ,"AND kcu.ordinal_position=1 "
                            ,"AND kcu.table_name=? "
                            ,"AND kcu.column_name=?"]
         stmt <- getter sql
