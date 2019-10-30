@@ -577,14 +577,13 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
          (newcols', udefs, fdefs) = mkColumns allDefs entity
          newcols = filter (not . safeToRemove entity . cName) newcols'
          udspair = map udToPair udefs
-         excludeForeignKeys (xs,ys) =
-           (map (\c -> case cReference c of
-                         Just (_,fk) ->
-                           case find (\f -> fk == foreignConstraintNameDBName f) fdefs of
-                             Just _ -> c { cReference = Nothing }
-                             Nothing -> c
-                         Nothing -> c) xs,ys)
-  
+         excludeForeignKeys (xs,ys) = (map excludeForeignKey xs,ys)
+         excludeForeignKey c = case cReference c of
+           Just (_,fk) ->
+             case find (\f -> fk == foreignConstraintNameDBName f) fdefs of
+               Just _ -> c { cReference = Nothing }
+               Nothing -> c
+           Nothing -> c
             -- Check for table existence if there are no columns, workaround
             -- for https://github.com/yesodweb/persistent/issues/152
 
