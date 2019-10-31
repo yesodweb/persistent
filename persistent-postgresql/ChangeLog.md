@@ -1,5 +1,9 @@
 # Changelog for persistent-postgresql
 
+## 2.10.1
+
+* Added support for the `constraint=` attribute to the Postgresql backend. [#979](https://github.com/yesodweb/persistent/pull/979)
+
 ## 2.10.0
 
 * Added question mark operators (`(?.), (?|.), (?&.)`) to `Database.Persist.Postgresql.JSON` [#863](https://github.com/yesodweb/persistent/pull/863)
