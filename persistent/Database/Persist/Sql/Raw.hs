@@ -1,14 +1,17 @@
 module Database.Persist.Sql.Raw where
 
-import Control.Exception (throwIO)
-import Control.Monad (when, liftM)
+import Control.Concurrent.MVar
+import Control.Exception (mask_, throwIO)
+import Control.Monad (join, when, liftM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Logger (logDebugNS, runLoggingT)
 import Control.Monad.Reader (ReaderT, ask, MonadReader)
 import Control.Monad.Trans.Resource (MonadResource,release)
 import Data.Acquire (allocateAcquire, Acquire, mkAcquire, with)
 import Data.Conduit
-import Data.IORef (writeIORef, readIORef, newIORef)
+import Data.Foldable (traverse_)
+import Data.IORef (IORef, atomicModifyIORef', readIORef, newIORef)
+import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Int (Int64)
 import Data.Text (Text, pack)
@@ -74,33 +77,76 @@ getStmt sql = do
 
 getStmtConn :: SqlBackend -> Text -> IO Statement
 getStmtConn conn sql = do
-    smap <- liftIO $ readIORef $ connStmtMap conn
+    -- Keep the happy path of just looking up a Statement fast by only using
+    -- readIORef for read-only operations
+    smap <- readIORef smapRef
     case Map.lookup sql smap of
         Just stmt -> return stmt
-        Nothing -> do
-            stmt' <- liftIO $ connPrepare conn sql
-            iactive <- liftIO $ newIORef True
-            let stmt = Statement
-                    { stmtFinalize = do
-                        active <- readIORef iactive
-                        when active $ do stmtFinalize stmt'
-                                         writeIORef iactive False
-                    , stmtReset = do
-                        active <- readIORef iactive
-                        when active $ stmtReset stmt'
-                    , stmtExecute = \x -> do
-                        active <- readIORef iactive
-                        if active
-                            then stmtExecute stmt' x
-                            else throwIO $ StatementAlreadyFinalized sql
-                    , stmtQuery = \x -> do
-                        active <- liftIO $ readIORef iactive
-                        if active
-                            then stmtQuery stmt' x
-                            else liftIO $ throwIO $ StatementAlreadyFinalized sql
-                    }
-            liftIO $ writeIORef (connStmtMap conn) $ Map.insert sql stmt smap
-            return stmt
+        Nothing -> mask_ $ do
+            -- No statement in the map yet for your query, we allocate a new
+            -- prepared Statement for the query, then race with potential other
+            -- threads to insert it in the map. We use the Statement prepared
+            -- by whichever thread won the race.
+            --
+            -- Runs within mask to avoid leaking prepared statements upon async
+            -- exceptions.
+            stmt <- makeStatement
+            join . atomicModifyIORef' smapRef $ insertIfMissing stmt
+  where
+    smapRef :: IORef (Map Text Statement)
+    smapRef = connStmtMap conn
+
+    makeStatement :: IO Statement
+    makeStatement = do
+        stmt <- connPrepare conn sql
+        stmtMVar <- newMVar stmt
+        iactive <- newIORef True
+        return Statement
+            { stmtFinalize = tryTakeMVar stmtMVar >>= traverse_ stmtFinalize
+            , stmtReset = tryTakeMVar stmtMVar >>= traverse_ (\rawStmt -> do
+                stmtReset rawStmt >> putMVar stmtMVar rawStmt)
+            , stmtExecute = \x -> do
+                active <- readIORef iactive
+                when (not active) . throwIO $ StatementAlreadyFinalized sql
+                let acquireQuery = mkAcquire (tryTakeMVar stmtMVar) (traverse_ $ putMVar stmtMVar)
+
+                with acquireQuery $ \rawStmt -> do
+                    case rawStmt of
+                        Just stmt' -> stmtExecute stmt' x
+                        Nothing -> with (mkAcquire (connPrepare conn sql) stmtFinalize) $ \stmt' -> stmtExecute stmt' x
+            , stmtQuery = \x -> do
+                liftIO $ do
+                    active <- readIORef iactive
+                    when (not active) . throwIO $ StatementAlreadyFinalized sql
+
+                rawStmt <- mkAcquire (tryTakeMVar stmtMVar) (traverse_ $ putMVar stmtMVar)
+                case rawStmt of
+                    Just stmt' -> stmtQuery stmt' x
+                    Nothing -> mkAcquire (connPrepare conn sql) stmtFinalize >>= \stmt' -> stmtQuery stmt' x
+            }
+
+    -- Given a Statement and Map check if there is already a statement stored
+    -- for our query.
+    --
+    -- If not insert our new statement and return the new map, the statement,
+    -- and a noop IO action.
+    --
+    -- If it already exists, return the old map, old statement, and a cleanup
+    -- action to free the new Statement instead.
+    insertIfMissing
+        :: Statement
+        -> Map Text Statement
+        -> (Map Text Statement, IO Statement)
+    insertIfMissing newStmt smap = (newMap, stmtWithCleanup oldStmt)
+      where
+        (oldStmt, newMap) = Map.insertLookupWithKey keepOld sql newStmt smap
+
+        keepOld :: Text -> Statement -> Statement -> Statement
+        keepOld _key _newVal oldVal = oldVal
+
+        stmtWithCleanup :: Maybe Statement -> IO Statement
+        stmtWithCleanup Nothing = return newStmt
+        stmtWithCleanup (Just stmt) = stmt <$ stmtFinalize newStmt
 
 -- | Execute a raw SQL statement and return its results as a
 -- list. If you do not expect a return value, use of
