@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## 2.10.5
+
+* Added Acquire based API to `Database.Persist.Sql` for working with
+  connections/pools in monads which aren't MonadUnliftIO. [#984](https://github.com/yesodweb/persistent/pull/984)
+
 ## 2.10.4
 
 * Log exceptions when closing a connection fails. See point 1 in [yesod #1635](https://github.com/yesodweb/yesod/issues/1635#issuecomment-547300856). [#978](https://github.com/yesodweb/persistent/pull/978)
