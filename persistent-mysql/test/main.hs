@@ -45,6 +45,7 @@ import qualified SumTypeTest
 import qualified TransactionLevelTest
 import qualified UniqueTest
 import qualified UpsertTest
+import qualified CustomConstraintTest
 
 type Tuple a b = (a, b)
 
@@ -179,6 +180,7 @@ main = do
     TransactionLevelTest.specsWith db
 
     MigrationIdempotencyTest.specsWith db
+    CustomConstraintTest.specs db
 
 roundFn :: RealFrac a => a -> Integer
 roundFn = round
