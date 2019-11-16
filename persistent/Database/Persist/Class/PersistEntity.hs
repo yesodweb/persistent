@@ -134,6 +134,12 @@ type family BackendSpecificFilter backend record
 -- and the argument for the comparison.
 --
 -- Persistent users use combinators to create these.
+--
+-- Note that it's important to be careful about the 'PersistFilter' that
+-- you are using, if you use this directly. For example, using the 'In'
+-- 'PersistFilter' requires that you have an array- or list-shaped
+-- 'EntityField'. It is possible to construct values using this that will
+-- create malformed runtime values.
 data Filter record = forall typ. PersistField typ => Filter
     { filterField  :: EntityField record typ
     , filterValue  :: FilterValue typ

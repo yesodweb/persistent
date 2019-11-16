@@ -40,6 +40,8 @@ import Database.Persist.Sql.Orphan.PersistStore
 import Database.Persist.Sql.Orphan.PersistUnique ()
 
 -- | Commit the current transaction and begin a new one.
+-- This is used when a transaction commit is required within the context of 'runSqlConn'
+-- (which brackets its provided action with a transaction begin/commit pair).
 --
 -- @since 1.2.0
 transactionSave :: MonadIO m => ReaderT SqlBackend m ()
@@ -58,6 +60,8 @@ transactionSaveWithIsolation isolation = do
     liftIO $ connCommit conn getter >> connBegin conn getter (Just isolation)
 
 -- | Roll back the current transaction and begin a new one.
+-- This rolls back to the state of the last call to 'transactionSave' or the enclosing
+-- 'runSqlConn' call.
 --
 -- @since 1.2.0
 transactionUndo :: MonadIO m => ReaderT SqlBackend m ()

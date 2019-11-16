@@ -94,11 +94,12 @@ instance Show PostgresServerVersionError where
       "Unexpected PostgreSQL server version, got " <> uniqueMsg
 instance Exception PostgresServerVersionError
 
--- | Create a PostgreSQL connection pool and run the given
--- action.  The pool is properly released after the action
--- finishes using it.  Note that you should not use the given
--- 'ConnectionPool' outside the action since it may already
+-- | Create a PostgreSQL connection pool and run the given action.  The pool is
+-- properly released after the action finishes using it.  Note that you should
+-- not use the given 'ConnectionPool' outside the action since it may already
 -- have been released.
+-- The provided action should use 'runSqlConn' and *not* 'runReaderT' because
+-- the former brackets the database action with transaction begin/commit.
 withPostgresqlPool :: (MonadLogger m, MonadUnliftIO m)
                    => ConnectionString
                    -- ^ Connection string to the database.
@@ -175,6 +176,8 @@ createPostgresqlPoolModifiedWithVersion getVer modConn ci =
 
 -- | Same as 'withPostgresqlPool', but instead of opening a pool
 -- of connections, only one connection is opened.
+-- The provided action should use 'runSqlConn' and *not* 'runReaderT' because
+-- the former brackets the database action with transaction begin/commit.
 withPostgresqlConn :: (MonadUnliftIO m, MonadLogger m)
                    => ConnectionString -> (SqlBackend -> m a) -> m a
 withPostgresqlConn = withPostgresqlConnWithVersion getServerVersion
@@ -565,7 +568,7 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
     migrationText exists old'' =
         if not exists
             then createText newcols fdefs udspair
-            else let (acs, ats) = getAlters allDefs entity (newcols, udspair) old'
+            else let (acs, ats) = getAlters allDefs entity (newcols, udspair) $ excludeForeignKeys $ old'
                      acs' = map (AlterColumn name) acs
                      ats' = map (AlterTable name) ats
                  in  acs' ++ ats'
@@ -574,6 +577,13 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
          (newcols', udefs, fdefs) = mkColumns allDefs entity
          newcols = filter (not . safeToRemove entity . cName) newcols'
          udspair = map udToPair udefs
+         excludeForeignKeys (xs,ys) = (map excludeForeignKey xs,ys)
+         excludeForeignKey c = case cReference c of
+           Just (_,fk) ->
+             case find (\f -> fk == foreignConstraintNameDBName f) fdefs of
+               Just _ -> c { cReference = Nothing }
+               Nothing -> c
+           Nothing -> c
             -- Check for table existence if there are no columns, workaround
             -- for https://github.com/yesodweb/persistent/issues/152
 
@@ -789,23 +799,27 @@ getColumn getter tableName' [PersistText columnName, PersistText isNullable, Per
                 Nothing -> loop' ps
                 Just t' -> t'
     getRef cname = do
-        let sql = T.concat
-                [ "SELECT COUNT(*) FROM "
-                , "information_schema.table_constraints "
-                , "WHERE table_catalog=current_database() "
-                , "AND table_schema=current_schema() "
-                , "AND table_name=? "
-                , "AND constraint_type='FOREIGN KEY' "
-                , "AND constraint_name=?"
-                ]
-        let ref = refName tableName' cname
+        let sql = T.concat ["SELECT DISTINCT "
+                           ,"ccu.table_name, "
+                           ,"tc.constraint_name "
+                           ,"FROM information_schema.constraint_column_usage ccu, "
+                           ,"information_schema.key_column_usage kcu, "
+                           ,"information_schema.table_constraints tc "
+                           ,"WHERE tc.constraint_type='FOREIGN KEY' "
+                           ,"AND kcu.constraint_name=tc.constraint_name "
+                           ,"AND ccu.constraint_name=kcu.constraint_name "
+                           ,"AND kcu.ordinal_position=1 "
+                           ,"AND kcu.table_name=? "
+                           ,"AND kcu.column_name=?"]
         stmt <- getter sql
-        with (stmtQuery stmt
-                     [ PersistText $ unDBName tableName'
-                     , PersistText $ unDBName ref
-                     ]) (\src -> runConduit $ src .| do
-            Just [PersistInt64 i] <- CL.head
-            return $ if i == 0 then Nothing else Just (DBName "", ref))
+        cntrs <- with (stmtQuery stmt [PersistText $ unDBName tableName'
+                                      ,PersistText $ unDBName cname])
+                      (\src -> runConduit $ src .| CL.consume)
+        case cntrs of
+          [] -> return Nothing
+          [[PersistText table, PersistText constraint]] ->
+            return $ Just (DBName table, DBName constraint)
+          _ -> error "Postgresql.getColumn: error fetching constraints"
     d' = case defaultValue of
             PersistNull   -> Right Nothing
             PersistText t -> Right $ Just t
@@ -905,7 +919,7 @@ getAddReference :: [EntityDef] -> DBName -> DBName -> DBName -> Maybe (DBName, D
 getAddReference allDefs table reftable cname ref =
     case ref of
         Nothing -> Nothing
-        Just (s, _) -> Just $ AlterColumn table (s, AddReference (refName table cname) [cname] id_)
+        Just (s, constraintName) -> Just $ AlterColumn table (s, AddReference constraintName [cname] id_)
                           where
                             id_ = fromMaybe (error $ "Could not find ID of entity " ++ show reftable)
                                         $ do
@@ -1136,10 +1150,6 @@ instance PersistConfig PostgresConf where
         addUser     = maybeAddParam "user"     "PGUSER"
         addPass     = maybeAddParam "password" "PGPASS"
         addDatabase = maybeAddParam "dbname"   "PGDATABASE"
-
-refName :: DBName -> DBName -> DBName
-refName (DBName table) (DBName column) =
-    DBName $ T.concat [table, "_", column, "_fkey"]
 
 udToPair :: UniqueDef -> (DBName, [DBName])
 udToPair ud = (uniqueDBName ud, map snd $ uniqueFields ud)

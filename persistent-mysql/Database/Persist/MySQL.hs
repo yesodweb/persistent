@@ -37,7 +37,7 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (runExceptT)
+import Control.Monad.Trans.Except (ExceptT, runExceptT)
 import Control.Monad.Trans.Reader (runReaderT, ReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
 
@@ -341,8 +341,8 @@ migrate' connectInfo allDefs getter val = do
                         AddUniqueConstraint uname $
                         map (findTypeAndMaxLen name) ucols ]
         let foreigns = do
-              Column { cName=cname, cReference=Just (refTblName, _a) } <- newcols
-              return $ AlterColumn name (refTblName, addReference allDefs (refName name cname) refTblName cname)
+              Column { cName=cname, cReference=Just (refTblName, refConstraintName) } <- newcols
+              return $ AlterColumn name (refTblName, addReference allDefs refConstraintName refTblName cname)
 
         let foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef))
                                         in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignRefTableDBName fdef) (foreignConstraintNameDBName fdef) childfields parentfields)) fdefs
@@ -627,7 +627,7 @@ data ColumnInfo = ColumnInfo
 
 -- | Parse the type of column as returned by MySQL's
 -- @INFORMATION_SCHEMA@ tables.
-parseColumnType :: Monad m => Text -> ColumnInfo -> m (SqlType, Maybe Integer)
+parseColumnType :: Text -> ColumnInfo -> ExceptT String IO (SqlType, Maybe Integer)
 -- Ints
 parseColumnType "tinyint" ci | ciColumnType ci == "tinyint(1)" = return (SqlBool, Nothing)
 parseColumnType "int" ci | ciColumnType ci == "int(11)"        = return (SqlInt32, Nothing)
@@ -704,7 +704,7 @@ findAlters tblName allDefs col@(Column name isNull type_ def _defConstraintName 
     -- new fkey that didnt exist before
         [] -> case ref of
                Nothing -> ([(name, Add' col)],[])
-               Just (tname, _b) -> let cnstr = [addReference allDefs (refName tblName name) tname name]
+               Just (tname, cname) -> let cnstr = [addReference allDefs cname tname name]
                                   in (map ((,) tname) (Add' col : cnstr), cols)
         Column _ isNull' type_' def' _defConstraintName' maxLen' ref':_ ->
             let -- Foreign key
@@ -712,7 +712,7 @@ findAlters tblName allDefs col@(Column name isNull type_ def _defConstraintName 
                             (False, Just (_, cname)) -> [(name, DropReference cname)]
                             _ -> []
                 refAdd  = case (ref == ref', ref) of
-                            (False, Just (tname, _cname)) -> [(tname, addReference allDefs (refName tblName name) tname name)]
+                            (False, Just (tname, cname)) -> [(tname, addReference allDefs cname tname name)]
                             _ -> []
                 -- Type and nullability
                 modType | showSqlType type_ maxLen False `ciEquals` showSqlType type_' maxLen' False && isNull == isNull' = []
@@ -883,10 +883,6 @@ showAlter table (_, DropReference cname) = concat
     , escapeDBName cname
     ]
 
-refName :: DBName -> DBName -> DBName
-refName (DBName table) (DBName column) =
-    DBName $ T.concat [table, "_", column, "_fkey"]
-
 ----------------------------------------------------------------------
 
 escape :: DBName -> Text
@@ -983,8 +979,8 @@ mockMigrate _connectInfo allDefs _getter val = do
                         AddUniqueConstraint uname $
                         map (findTypeAndMaxLen name) ucols ]
         let foreigns = do
-              Column { cName=cname, cReference=Just (refTblName, _a) } <- newcols
-              return $ AlterColumn name (refTblName, addReference allDefs (refName name cname) refTblName cname)
+              Column { cName=cname, cReference=Just (refTblName, refConstraintName) } <- newcols
+              return $ AlterColumn name (refTblName, addReference allDefs refConstraintName refTblName cname)
 
         let foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef))
                                         in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignRefTableDBName fdef) (foreignConstraintNameDBName fdef) childfields parentfields)) fdefs
