@@ -23,11 +23,18 @@ import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal (IsolationLevel)
 import Database.Persist.Sql.Raw
 
-rawAcquireSqlConnFromPool
+-- | The returned 'Acquire' gets a connection from the pool, but does __NOT__
+-- start a new transaction. Used to implement 'acquireSqlConnFromPool' and
+-- 'acquireSqlConnFromPoolWithIsolation', this is useful for performing actions
+-- on a connection that cannot be done within a transaction, such as VACUUM in
+-- Sqlite.
+--
+-- @since 2.10.5
+unsafeAcquireSqlConnFromPool
     :: forall backend m
      . (MonadReader (Pool backend) m, BackendCompatible SqlBackend backend)
     => m (Acquire backend)
-rawAcquireSqlConnFromPool = do
+unsafeAcquireSqlConnFromPool = do
     pool <- MonadReader.ask
 
     let freeConn :: (backend, LocalPool backend) -> ReleaseType -> IO ()
@@ -56,7 +63,7 @@ acquireSqlConnFromPool
     :: (MonadReader (Pool backend) m, BackendCompatible SqlBackend backend)
     => m (Acquire backend)
 acquireSqlConnFromPool = do
-    connFromPool <- rawAcquireSqlConnFromPool
+    connFromPool <- unsafeAcquireSqlConnFromPool
     return $ connFromPool >>= acquireSqlConn
 
 -- | Like 'acquireSqlConnFromPool', but lets you specify an explicit isolation
@@ -67,7 +74,7 @@ acquireSqlConnFromPoolWithIsolation
     :: (MonadReader (Pool backend) m, BackendCompatible SqlBackend backend)
     => IsolationLevel -> m (Acquire backend)
 acquireSqlConnFromPoolWithIsolation isolation = do
-    connFromPool <- rawAcquireSqlConnFromPool
+    connFromPool <- unsafeAcquireSqlConnFromPool
     return $ connFromPool >>= acquireSqlConnWithIsolation isolation
 
 -- | Get a connection from the pool, run the given action, and then return the
