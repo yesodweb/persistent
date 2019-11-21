@@ -1,5 +1,9 @@
 # Changelog for persistent
 
+## 2.10.1
+
+* Don't use silently. The usage was originally added for [#105](https://github.com/yesodweb/persistent/issues/105). However, this introduces unacceptable race conditions and other issues around mutable global stuff.
+
 ## 2.10.0
 
 * Added two type classes `OnlyOneUniqueKey` and `AtLeastOneUniqueKey`. These classes are used as constraints on functions that expect a certain amount of unique keys. They are defined automatically as part of the `persistent-template`'s generation. [#885](https://github.com/yesodweb/persistent/pull/885)
