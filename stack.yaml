@@ -9,3 +9,5 @@ packages:
   - ./persistent-postgresql
   - ./persistent-redis
   - ./persistent-qq
+drop-packages:
+- silently

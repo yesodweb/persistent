@@ -38,7 +38,6 @@ library
                    , resource-pool            >= 0.2.3
                    , resourcet                >= 1.1.10
                    , scientific
-                   , silently
                    , template-haskell
                    , text                     >= 1.2
                    , time                     >= 1.6
