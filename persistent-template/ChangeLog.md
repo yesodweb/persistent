@@ -1,5 +1,9 @@
 ## Unreleased changes
 
+## 2.7.4
+
+* Let the user pass instances that will be derived for record and for key types (https://github.com/yesodweb/persistent/pull/990
+
 ## 2.7.3
 
 * Update module documentation for `Database.Persist.TH` to better describe the purpose of the module [#968](https://github.com/yesodweb/persistent/pull/968)
