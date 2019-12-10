@@ -303,7 +303,7 @@ insertSql' ent vals =
        Nothing -> ISRSingle (sql <> " RETURNING " <> escape (fieldDB (entityId ent)))
 
 
-upsertSql' :: EntityDef -> NonEmpty UniqueDef -> Text -> Text
+upsertSql' :: EntityDef -> NonEmpty (HaskellName, DBName) -> Text -> Text
 upsertSql' ent uniqs updateVal = T.concat
                            [ "INSERT INTO "
                            , escape (entityDB ent)
@@ -312,7 +312,7 @@ upsertSql' ent uniqs updateVal = T.concat
                            , ") VALUES ("
                            , T.intercalate "," $ map (const "?") (entityFields ent)
                            , ") ON CONFLICT ("
-                           , T.intercalate "," $ concat $ map (\x -> map escape (map snd $ uniqueFields x)) (NEL.toList uniqs)
+                           , T.intercalate "," $ map (escape . snd) (NEL.toList uniqs)
                            , ") DO UPDATE SET "
                            , updateVal
                            , " WHERE "
@@ -320,10 +320,7 @@ upsertSql' ent uniqs updateVal = T.concat
                            , " RETURNING ??"
                            ]
     where
-      wher = T.intercalate " AND " $ map singleCondition $ NEL.toList uniqs
-
-      singleCondition :: UniqueDef -> Text
-      singleCondition udef = T.intercalate " AND " (map singleClause $ map snd (uniqueFields udef))
+      wher = T.intercalate " AND " $ map (singleClause . snd) $ NEL.toList uniqs
 
       singleClause :: DBName -> Text
       singleClause field = escape (entityDB ent) <> "." <> (escape field) <> " =?"
