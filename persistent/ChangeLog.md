@@ -1,5 +1,9 @@
 # Changelog for persistent
 
+## 2.10.5
+
+* Modify `upsertBy` to use backend-specific implementation (if any). [#856](https://github.com/yesodweb/persistent/pull/856)
+
 ## 2.10.4
 
 * Log exceptions when closing a connection fails. See point 1 in [yesod #1635](https://github.com/yesodweb/yesod/issues/1635#issuecomment-547300856). [#978](https://github.com/yesodweb/persistent/pull/978)

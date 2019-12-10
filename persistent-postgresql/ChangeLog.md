@@ -1,5 +1,9 @@
 # Changelog for persistent-postgresql
 
+## 2.10.2
+
+* Fix a bug in `upsertSql` query which had not been discovered previously because the query wasn't actually used. [#856](https://github.com/yesodweb/persistent/pull/856)
+
 ## 2.10.1
 
 * Added support for the `constraint=` attribute to the Postgresql backend. [#979](https://github.com/yesodweb/persistent/pull/979)

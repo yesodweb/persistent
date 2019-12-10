@@ -576,7 +576,7 @@ checkUniqueKeys (x:xs) = do
 -- * Lookup corresponding entities (if any) 'getBy'.
 -- * If the record exists, update using 'updateGet'.
 -- * If it does not exist, insert using 'insertEntity'.
--- @since 2.9.2
+-- @since 2.10.5
 defaultUpsertBy
     :: ( PersistEntityBackend record ~ BaseBackend backend
        , PersistEntity record
