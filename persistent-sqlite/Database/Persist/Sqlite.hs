@@ -704,7 +704,6 @@ data SqliteConnectionInfo = SqliteConnectionInfo
     , _fkEnabled :: Bool -- ^ if foreign-key constraints are enabled.
     , _extraPragmas :: [Text] -- ^ additional pragmas to be set on initialization
     } deriving Show
-makeLenses ''SqliteConnectionInfo
 
 instance FromJSON SqliteConnectionInfo where
     parseJSON v = modifyFailure ("Persistent: error loading SqliteConnectionInfo: " ++) $
@@ -714,6 +713,7 @@ instance FromJSON SqliteConnectionInfo where
         <*> o .: "fkEnabled"
         <*> o .:? "extraPragmas" .!= []
 
+makeLenses ''SqliteConnectionInfo
 
 -- | Like `withSqliteConnInfo`, but exposes the internal `Sqlite.Connection`.
 -- For power users who want to manually interact with SQLite's C API via
