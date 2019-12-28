@@ -70,6 +70,9 @@ import Data.Text.Encoding (decodeUtf8)
 import qualified Data.Text.Encoding as TE
 import GHC.Generics (Generic)
 import GHC.TypeLits
+import Instances.TH.Lift ()
+    -- Bring `Lift (Map k v)` instance into scope, as well as `Lift Text`
+    -- instance on pre-1.2.4 versions of `text`
 import Language.Haskell.TH.Lib (conT, varE)
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
@@ -1655,29 +1658,6 @@ instance Lift CompositeDef where
 
 instance Lift ForeignDef where
     lift (ForeignDef a b c d e f g) = [|ForeignDef a b c d e f g|]
-
--- | A hack to avoid orphans.
-class Lift' a where
-    lift' :: a -> Q Exp
-instance Lift' Text where
-    lift' = liftT
-instance Lift' a => Lift' [a] where
-    lift' xs = do { xs' <- mapM lift' xs; return (ListE xs') }
-instance (Lift' k, Lift' v) => Lift' (M.Map k v) where
-    lift' m = [|M.fromList $(fmap ListE $ mapM liftPair $ M.toList m)|]
-
--- overlapping instances is for automatic lifting
--- while avoiding an orphan of Lift for Text
-
--- auto-lifting, means instances are overlapping
-instance {-# OVERLAPPABLE #-} Lift' a => Lift a where
-    lift = lift'
-
-liftT :: Text -> Q Exp
-liftT t = [|pack $(lift (unpack t))|]
-
-liftPair :: (Lift' k, Lift' v) => (k, v) -> Q Exp
-liftPair (k, v) = [|($(lift' k), $(lift' v))|]
 
 instance Lift HaskellName where
     lift (HaskellName t) = [|HaskellName t|]
