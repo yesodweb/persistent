@@ -3,6 +3,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE BangPatterns #-}
 
 -- | A postgresql backend for persistent.
 module Database.Persist.Postgresql
@@ -356,7 +357,7 @@ withStmt' conn query vals =
     where
         closeS _= return ()
         openS  = PG.fold conn query (map P vals) CL.sourceNull processRow
-        processRow s row = return $ s >> yield (map pVal row)
+        processRow s !row = return $ s >> yield (map pVal row)
 
 -- | Avoid orphan instances.
 newtype P = P { pVal :: PersistValue }
