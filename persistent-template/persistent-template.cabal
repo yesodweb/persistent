@@ -1,5 +1,5 @@
 name:            persistent-template
-version:         2.7.3
+version:         2.7.4
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -26,6 +26,7 @@ library
                    , path-pieces
                    , template-haskell         >= 2.11
                    , text                     >= 1.2
+                   , th-lift-instances        >= 0.1.14    && < 0.2
                    , transformers             >= 0.5       && < 0.6
                    , unordered-containers
     exposed-modules: Database.Persist.TH

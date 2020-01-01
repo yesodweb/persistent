@@ -1,5 +1,9 @@
 ## Unreleased changes
 
+## 2.7.4
+
+* Remove an overlapping instance for `Lift a`. [#998](https://github.com/yesodweb/persistent/pull/998)
+
 ## 2.7.3
 
 * Update module documentation for `Database.Persist.TH` to better describe the purpose of the module [#968](https://github.com/yesodweb/persistent/pull/968)
