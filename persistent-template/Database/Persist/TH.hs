@@ -51,7 +51,7 @@ module Database.Persist.TH
 
 import Prelude hiding ((++), take, concat, splitAt, exp)
 
-import Control.Monad (forM, unless, (<=<), mzero, filterM)
+import Control.Monad (forM, (<=<), mzero, filterM)
 import Data.Aeson
     ( ToJSON (toJSON), FromJSON (parseJSON), (.=), object
     , Value (Object), (.:), (.:?)
@@ -80,7 +80,6 @@ import Instances.TH.Lift ()
 import Language.Haskell.TH.Lib (conT, varE)
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
-import Text.Read (readPrec, lexP, step, prec, parens, Lexeme(Ident))
 import Web.PathPieces (PathPiece(..))
 import Web.HttpApiData (ToHttpApiData(..), FromHttpApiData(..))
 
@@ -832,10 +831,6 @@ mkKeyTypeDec mps t = do
          instance ToJSON (Key $(pure recordType))
          instance FromJSON (Key $(pure recordType))
       |]
-
-    keyStringL = StringL . keyString
-    -- ghc 7.6 cannot parse the left arrow Ident $() <- lexP
-    keyPattern = BindS (ConP 'Ident [LitP $ keyStringL t])
 
     backendKeyGenericI =
         [d| instance PersistStore $(pure backendT) =>
@@ -1832,7 +1827,9 @@ instanceD = InstanceD Nothing
 -- This function should be called before any code that depends on one of the required extensions being enabled.
 requirePersistentExtensions :: Q ()
 requirePersistentExtensions = do
--- FIXME: isExtEnabled breaks the benchmark
+  -- isExtEnabled breaks the persistent-template benchmark with the following error:
+  -- Template Haskell error: Can't do `isExtEnabled' in the IO monad
+  -- You can workaround this by replacing isExtEnabled with (pure . const True)
   unenabledExtensions <- filterM (fmap not . isExtEnabled) requiredExtensions
 
   case unenabledExtensions of
