@@ -847,27 +847,9 @@ mkKeyTypeDec mps t = do
         |]
 
     genericNewtypeInstances = do
-      standaloneDerivingEnabled <- isExtEnabled StandaloneDeriving
-      unless standaloneDerivingEnabled . fail
-        $ "Generating Persistent entities now requires the 'StandaloneDeriving' "
-        `mappend` "language extension. Please enable it in your file by copy/pasting "
-        `mappend` "this line into the top of your file: \n\n"
-        `mappend` "{-# LANGUAGE StandaloneDeriving #-}"
+      requirePersistentExtensions
 
-      derivingStrategiesEnabled <- isExtEnabled DerivingStrategies
-      unless derivingStrategiesEnabled . fail
-        $ "Generating Persistent entities now requires the 'DerivingStrategies' "
-        `mappend` "language extension. Please enable it in your file by copy/pasting "
-        `mappend` "this line into the top of your file: \n\n"
-        `mappend` "{-# LANGUAGE DerivingStrategies #-}"
-
-      gndEnabled <- isExtEnabled GeneralizedNewtypeDeriving
-      unless gndEnabled . fail
-        $ "Generating Persistent entities now requires the 'GeneralizedNewtypeDeriving' "
-        `mappend` "language extension. Please enable it in your file by copy/pasting "
-        `mappend` "this line into the top of your file: \n\n"
-        `mappend` "{-# LANGUAGE GeneralizedNewtypeDeriving #-}"
-      instances <- [|lexP|] >>= \lexPE -> [| step readPrec >>= return . ($(pure keyConE) )|] >>= \readE -> do
+      instances <- do
         alwaysInstances <-
           [d|deriving newtype instance Show (BackendKey $(pure backendT)) => Show (Key $(pure recordType))
              deriving newtype instance Read (BackendKey $(pure backendT)) => Read (Key $(pure recordType))
@@ -1871,9 +1853,12 @@ instanceD = InstanceD Nothing
 --          in normalClause [ConP (mkName constr) [VarP x]]
 --                    (VarE 'toPersistValue `AppE` VarE x)
 
+-- | Check that all of Persistent's required extensions are enabled, or else fail compilation
+--
+-- This function should be called before any code that depends on one of the required extensions being enabled.
 requirePersistentExtensions :: Q ()
 requirePersistentExtensions = do
-  unenabledExtensions <- filterM (\ext -> not <$> isExtEnabled ext) requiredExtensions
+  unenabledExtensions <- filterM (fmap not . isExtEnabled) requiredExtensions
 
   case unenabledExtensions of
     [] -> pure ()
@@ -1892,4 +1877,4 @@ requirePersistentExtensions = do
         
   where
     requiredExtensions = [DerivingStrategies, GeneralizedNewtypeDeriving, StandaloneDeriving]
-    extensionToPragma ext = "{-# LANGUAGE " <> (show ext) <> " #-}"
+    extensionToPragma ext = "{-# LANGUAGE " <> show ext <> " #-}"
