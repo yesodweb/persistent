@@ -30,7 +30,6 @@ matrix:
     compiler: ": #GHC HEAD"
     addons: {apt: {packages: [cabal-install-head,ghc-head,happy-1.19.5,alex-3.1.7], sources: [hvr-ghc]}}
 
-  - env: BUILD=stack ARGS="--resolver lts-9  --stack-yaml stack_lts-10.yaml"
   - env: BUILD=stack ARGS="--resolver lts-11 --stack-yaml stack_lts-12.yaml"
   - env: BUILD=stack ARGS="--resolver lts-12 --stack-yaml stack_lts-12.yaml"
   - env: BUILD=stack ARGS="--resolver lts-14"
