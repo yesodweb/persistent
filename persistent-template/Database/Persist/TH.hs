@@ -7,6 +7,9 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-missing-fields #-}
 
 -- | This module provides the tools for defining your database schema and using
@@ -48,7 +51,7 @@ module Database.Persist.TH
 
 import Prelude hiding ((++), take, concat, splitAt, exp)
 
-import Control.Monad (forM, unless, (<=<), mzero)
+import Control.Monad (forM, unless, (<=<), mzero, filterM)
 import Data.Aeson
     ( ToJSON (toJSON), FromJSON (parseJSON), (.=), object
     , Value (Object), (.:), (.:?)
@@ -59,6 +62,7 @@ import Data.Char (toLower, toUpper)
 import qualified Data.HashMap.Strict as HM
 import Data.Int (Int64)
 import Data.List (foldl')
+import qualified Data.List as List
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as M
 import Data.Maybe (isJust, listToMaybe, mapMaybe, fromMaybe)
@@ -493,17 +497,10 @@ upperFirst t =
 dataTypeDec :: MkPersistSettings -> EntityDef -> Q Dec
 dataTypeDec mps t = do
     let names = map (mkName . unpack) $ entityDerives t
-#if MIN_VERSION_template_haskell(2,12,0)
     DataD [] nameFinal paramsFinal
                 Nothing
                 constrs
                 <$> fmap (pure . DerivClause Nothing) (mapM conT names)
-#else
-    DataD [] nameFinal paramsFinal
-                Nothing
-                constrs
-                <$> mapM conT names
-#endif
   where
     mkCol x fd@FieldDef {..} =
         (mkName $ unpack $ recName mps x fieldHaskell,
@@ -552,11 +549,7 @@ uniqueTypeDec mps t =
 #endif
   where
     derivClause [] = []
-#if MIN_VERSION_template_haskell(2,12,0)
     derivClause _  = [DerivClause Nothing [ConT ''Show]]
-#else
-    derivClause _  = [ConT ''Show]
-#endif
 
 mkUnique :: MkPersistSettings -> EntityDef -> UniqueDef -> Con
 mkUnique mps t (UniqueDef (HaskellName constr) _ fields attrs) =
@@ -806,21 +799,18 @@ mkKeyTypeDec mps t = do
                         bi <- backendKeyI
                         return (bi, allInstances)
 
+    requirePersistentExtensions
+
 #if MIN_VERSION_template_haskell(2,15,0)
     cxti <- mapM conT i
     let kd = if useNewtype
-               then NewtypeInstD [] Nothing (AppT (ConT k) recordType) Nothing dec [DerivClause Nothing cxti]
-               else DataInstD    [] Nothing (AppT (ConT k) recordType) Nothing [dec] [DerivClause Nothing cxti]
-#elif MIN_VERSION_template_haskell(2,12,0)
-    cxti <- mapM conT i
-    let kd = if useNewtype
-               then NewtypeInstD [] k [recordType] Nothing dec [DerivClause Nothing cxti]
-               else DataInstD    [] k [recordType] Nothing [dec] [DerivClause Nothing cxti]
+               then NewtypeInstD [] Nothing (AppT (ConT k) recordType) Nothing dec [DerivClause (Just NewtypeStrategy) cxti]
+               else DataInstD    [] Nothing (AppT (ConT k) recordType) Nothing [dec] [DerivClause (Just StockStrategy) cxti]
 #else
     cxti <- mapM conT i
     let kd = if useNewtype
-               then NewtypeInstD [] k [recordType] Nothing dec cxti
-               else DataInstD    [] k [recordType] Nothing [dec] cxti
+               then NewtypeInstD [] k [recordType] Nothing dec [DerivClause (Just NewtypeStrategy) cxti]
+               else DataInstD    [] k [recordType] Nothing [dec] [DerivClause (Just StockStrategy) cxti]
 #endif
     return (kd, instDecs)
   where
@@ -856,43 +846,40 @@ mkKeyTypeDec mps t = do
                 fromBackendKey = $(return keyConE)
         |]
 
-    -- truly unfortunate that TH doesn't support standalone deriving
-    -- https://ghc.haskell.org/trac/ghc/ticket/8100
     genericNewtypeInstances = do
+      standaloneDerivingEnabled <- isExtEnabled StandaloneDeriving
+      unless standaloneDerivingEnabled . fail
+        $ "Generating Persistent entities now requires the 'StandaloneDeriving' "
+        `mappend` "language extension. Please enable it in your file by copy/pasting "
+        `mappend` "this line into the top of your file: \n\n"
+        `mappend` "{-# LANGUAGE StandaloneDeriving #-}"
+
+      derivingStrategiesEnabled <- isExtEnabled DerivingStrategies
+      unless derivingStrategiesEnabled . fail
+        $ "Generating Persistent entities now requires the 'DerivingStrategies' "
+        `mappend` "language extension. Please enable it in your file by copy/pasting "
+        `mappend` "this line into the top of your file: \n\n"
+        `mappend` "{-# LANGUAGE DerivingStrategies #-}"
+
+      gndEnabled <- isExtEnabled GeneralizedNewtypeDeriving
+      unless gndEnabled . fail
+        $ "Generating Persistent entities now requires the 'GeneralizedNewtypeDeriving' "
+        `mappend` "language extension. Please enable it in your file by copy/pasting "
+        `mappend` "this line into the top of your file: \n\n"
+        `mappend` "{-# LANGUAGE GeneralizedNewtypeDeriving #-}"
       instances <- [|lexP|] >>= \lexPE -> [| step readPrec >>= return . ($(pure keyConE) )|] >>= \readE -> do
         alwaysInstances <-
-          [d|instance Show (BackendKey $(pure backendT)) => Show (Key $(pure recordType)) where
-              showsPrec i x = showParen (i > app_prec) $
-                (showString $ $(pure $ LitE $ keyStringL t) `mappend` " ") .
-                showsPrec i ($(return unKeyE) x)
-                where app_prec = (10::Int)
-             instance Read (BackendKey $(pure backendT)) => Read (Key $(pure recordType)) where
-                readPrec = parens $ (prec app_prec $ $(pure $ DoE [keyPattern lexPE, NoBindS readE]))
-                  where app_prec = (10::Int)
-             instance Eq (BackendKey $(pure backendT)) => Eq (Key $(pure recordType)) where
-                x == y =
-                    ($(return unKeyE) x) ==
-                    ($(return unKeyE) y)
-             instance Ord (BackendKey $(pure backendT)) => Ord (Key $(pure recordType)) where
-                compare x y = compare
-                    ($(return unKeyE) x)
-                    ($(return unKeyE) y)
-             instance ToHttpApiData (BackendKey $(pure backendT)) => ToHttpApiData (Key $(pure recordType)) where
-                toUrlPiece = toUrlPiece . $(return unKeyE)
-             instance FromHttpApiData (BackendKey $(pure backendT)) => FromHttpApiData(Key $(pure recordType)) where
-                parseUrlPiece = fmap $(return keyConE) . parseUrlPiece
-             instance PathPiece (BackendKey $(pure backendT)) => PathPiece (Key $(pure recordType)) where
-                toPathPiece = toPathPiece . $(return unKeyE)
-                fromPathPiece = fmap $(return keyConE) . fromPathPiece
-             instance PersistField (BackendKey $(pure backendT)) => PersistField (Key $(pure recordType)) where
-                toPersistValue = toPersistValue . $(return unKeyE)
-                fromPersistValue = fmap $(return keyConE) . fromPersistValue
-             instance PersistFieldSql (BackendKey $(pure backendT)) => PersistFieldSql (Key $(pure recordType)) where
-                sqlType = sqlType . fmap $(return unKeyE)
-             instance ToJSON (BackendKey $(pure backendT)) => ToJSON (Key $(pure recordType)) where
-                toJSON = toJSON . $(return unKeyE)
-             instance FromJSON (BackendKey $(pure backendT)) => FromJSON (Key $(pure recordType)) where
-                parseJSON = fmap $(return keyConE) . parseJSON
+          [d|deriving newtype instance Show (BackendKey $(pure backendT)) => Show (Key $(pure recordType))
+             deriving newtype instance Read (BackendKey $(pure backendT)) => Read (Key $(pure recordType))
+             deriving newtype instance Eq (BackendKey $(pure backendT)) => Eq (Key $(pure recordType))
+             deriving newtype instance Ord (BackendKey $(pure backendT)) => Ord (Key $(pure recordType))
+             deriving newtype instance ToHttpApiData (BackendKey $(pure backendT)) => ToHttpApiData (Key $(pure recordType))
+             deriving newtype instance FromHttpApiData (BackendKey $(pure backendT)) => FromHttpApiData(Key $(pure recordType))
+             deriving newtype instance PathPiece (BackendKey $(pure backendT)) => PathPiece (Key $(pure recordType))
+             deriving newtype instance PersistField (BackendKey $(pure backendT)) => PersistField (Key $(pure recordType))
+             deriving newtype instance PersistFieldSql (BackendKey $(pure backendT)) => PersistFieldSql (Key $(pure recordType))
+             deriving newtype instance ToJSON (BackendKey $(pure backendT)) => ToJSON (Key $(pure recordType))
+             deriving newtype instance FromJSON (BackendKey $(pure backendT)) => FromJSON (Key $(pure recordType))
               |]
 
         if customKeyType then return alwaysInstances
@@ -1883,3 +1870,26 @@ instanceD = InstanceD Nothing
 --         let x = mkName "x"
 --          in normalClause [ConP (mkName constr) [VarP x]]
 --                    (VarE 'toPersistValue `AppE` VarE x)
+
+requirePersistentExtensions :: Q ()
+requirePersistentExtensions = do
+  unenabledExtensions <- filterM (\ext -> not <$> isExtEnabled ext) requiredExtensions
+
+  case unenabledExtensions of
+    [] -> pure ()
+    [extension] -> fail $ mconcat 
+                     [ "Generating Persistent entities now requires the "
+                     , show extension
+                     , " language extension. Please enable it by copy/pasting this line to the top of your file:\n\n"
+                     , extensionToPragma extension
+                     ]
+    extensions -> fail $ mconcat 
+                    [ "Generating Persistent entities now requires the following language extensions:\n\n"
+                    , List.intercalate "\n" (map show extensions)
+                    , "\n\nPlease enable the extensions by copy/pasting these lines into the top of your file:\n\n"
+                    , List.intercalate "\n" (map extensionToPragma extensions)
+                    ]
+        
+  where
+    requiredExtensions = [DerivingStrategies, GeneralizedNewtypeDeriving, StandaloneDeriving]
+    extensionToPragma ext = "{-# LANGUAGE " <> (show ext) <> " #-}"
