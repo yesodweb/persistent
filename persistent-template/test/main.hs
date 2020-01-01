@@ -7,10 +7,13 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 -- DeriveAnyClass is not actually used by persistent-template
 -- But a long standing bug was that if it was enabled, it was used to derive instead of GeneralizedNewtypeDeriving
 -- This was fixed by using DerivingStrategies to specify newtype deriving should be used.
+-- This pragma is left here as a "test" that deriving works when DeriveAnyClass is enabled.
 -- See https://github.com/yesodweb/persistent/issues/578
 {-# LANGUAGE DeriveAnyClass #-}
 module Main
