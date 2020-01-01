@@ -1,5 +1,12 @@
 ## Unreleased changes
 
+## 2.7.5
+
+* Drops support for GHC 8.0, so that `DerivingStrategies` can be used by `persistent-template`
+* `persistent-template` now requires `DerivingStrategies`, `GeneralizedNewtypeDeriving`, and `StandaloneDeriving` to be enabled in the file where Persistent entities are created
+* Fixes a long-standing issue where persistent-template would fail when `DeriveAnyClass` was enabled (See #578)
+* [#]()
+
 ## 2.7.4
 
 * Remove an overlapping instance for `Lift a`. [#998](https://github.com/yesodweb/persistent/pull/998)
