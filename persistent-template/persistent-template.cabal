@@ -15,7 +15,7 @@ bug-reports:     https://github.com/yesodweb/persistent/issues
 extra-source-files: test/main.hs ChangeLog.md README.md
 
 library
-    build-depends:   base                     >= 4.9       && < 5
+    build-depends:   base                     >= 4.10      && < 5
                    , persistent               >= 2.10      && < 3
                    , aeson                    >= 1.0       && < 1.5
                    , bytestring               >= 0.10
@@ -40,7 +40,7 @@ test-suite test
     other-modules:   TemplateTestImports
     ghc-options:     -Wall
 
-    build-depends:   base                     >= 4.9 && < 5
+    build-depends:   base                     >= 4.10 && < 5
                    , persistent
                    , persistent-template
                    , aeson
