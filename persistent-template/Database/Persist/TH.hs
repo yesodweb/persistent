@@ -1110,13 +1110,7 @@ mkEntity entityMap mps t = do
 
 mkUniqueKeyInstances :: MkPersistSettings -> EntityDef -> Q [Dec]
 mkUniqueKeyInstances mps t = do
-    -- FIXME: isExtEnabled breaks the benchmark
-    undecidableInstancesEnabled <- isExtEnabled UndecidableInstances
-    unless undecidableInstancesEnabled . fail
-        $ "Generating Persistent entities now requires the 'UndecidableInstances' "
-        `mappend` "language extension. Please enable it in your file by copy/pasting "
-        `mappend` "this line into the top of your file: \n\n"
-        `mappend` "{-# LANGUAGE UndecidableInstances #-}"
+    requirePersistentExtensions
     case entityUniques t of
         [] -> mappend <$> typeErrorSingle <*> typeErrorAtLeastOne
         [_] -> mappend <$> singleUniqueKey <*> atLeastOneKey
@@ -1838,6 +1832,7 @@ instanceD = InstanceD Nothing
 -- This function should be called before any code that depends on one of the required extensions being enabled.
 requirePersistentExtensions :: Q ()
 requirePersistentExtensions = do
+-- FIXME: isExtEnabled breaks the benchmark
   unenabledExtensions <- filterM (fmap not . isExtEnabled) requiredExtensions
 
   case unenabledExtensions of
@@ -1856,5 +1851,5 @@ requirePersistentExtensions = do
                     ]
         
   where
-    requiredExtensions = [DerivingStrategies, GeneralizedNewtypeDeriving, StandaloneDeriving]
+    requiredExtensions = [DerivingStrategies, GeneralizedNewtypeDeriving, StandaloneDeriving, UndecidableInstances]
     extensionToPragma ext = "{-# LANGUAGE " <> show ext <> " #-}"
