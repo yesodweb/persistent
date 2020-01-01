@@ -88,6 +88,9 @@ library
                     QuasiQuotes
                     TemplateHaskell
                     TypeFamilies
+                    StandaloneDeriving
+                    DerivingStrategies
+                    GeneralizedNewtypeDeriving
 
 source-repository head
   type:     git
