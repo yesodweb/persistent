@@ -1,6 +1,6 @@
 ## Unreleased changes
 
-## 2.7.5
+## 2.8.0
 
 * Drops support for GHC 8.0, so that `DerivingStrategies` can be used by `persistent-template`
 * `persistent-template` now requires `DerivingStrategies`, `GeneralizedNewtypeDeriving`, and `StandaloneDeriving` to be enabled in the file where Persistent entities are created
