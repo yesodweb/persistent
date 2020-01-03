@@ -49,6 +49,9 @@ module Database.Persist.TH
     , OnlyOneUniqueKey(..)
     ) where
 
+-- Development Tip: See persistent-template/README.md for advice on seeing generated Template Haskell code
+-- It's highly recommended to check the diff between master and your PR's generated code.
+
 import Prelude hiding ((++), take, concat, splitAt, exp)
 
 import Control.Monad (forM, (<=<), mzero, filterM)
@@ -973,6 +976,7 @@ fromValues t funName conE fields = do
     suc <- patternSuccess
     return [ suc, normalClause [VarP x] patternMatchFailure ]
   where
+    tableName = unDBName (entityDB t)
     patternSuccess =
         case fields of
             [] -> do
@@ -995,23 +999,18 @@ fromValues t funName conE fields = do
         UInfixE exp applyE (fpv `AppE` VarE name)
 
     mkPersistValue field =
-        [|mapLeft (fieldError t field) . fromPersistValue|]
+        let fieldName = (unHaskellName (fieldHaskell field))
+        in [|mapLeft (fieldError tableName fieldName) . fromPersistValue|]
 
-fieldError :: EntityDef -> FieldDef -> Text -> Text
-fieldError entity field err = mconcat
+fieldError :: Text -> Text -> Text -> Text
+fieldError tableName fieldName err = mconcat
     [ "Couldn't parse field `"
     , fieldName
     , "` from table `"
     , tableName
     , "`. "
     , err
-    ]
-  where
-    fieldName =
-        unHaskellName (fieldHaskell field)
-
-    tableName =
-        unDBName (entityDB entity)
+    ]        
 
 mkEntity :: EntityMap -> MkPersistSettings -> EntityDef -> Q [Dec]
 mkEntity entityMap mps t = do
