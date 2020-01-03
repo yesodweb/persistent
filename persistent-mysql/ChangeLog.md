@@ -3,6 +3,7 @@
 ## 2.10.2.1
 
 * Changed persistent-mysql to use 'utf8mb4' instead of 'utf8' in migrations [#980](https://github.com/yesodweb/persistent/pull/980) @charukiewicz
+* Compatibility with latest persistent-template for test suite [#1002](https://github.com/yesodweb/persistent/pull/1002/files)
 
 ## 2.10.2
 
