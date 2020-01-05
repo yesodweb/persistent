@@ -26,7 +26,7 @@ import Database.Persist.Sql.Raw
 -- was buggy and caused more problems than it solved. Since version 2.1.2, it
 -- performs no timeout checks.
 runSqlPool
-    :: (MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    :: forall backend m a. (MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend m a -> Pool backend -> m a
 runSqlPool r pconn = withRunInIO $ \run -> withResource pconn $ run . runSqlConn r
 
@@ -34,7 +34,7 @@ runSqlPool r pconn = withRunInIO $ \run -> withResource pconn $ run . runSqlConn
 --
 -- @since 2.9.0
 runSqlPoolWithIsolation
-    :: (MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    :: forall backend m a. (MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend m a -> Pool backend -> IsolationLevel -> m a
 runSqlPoolWithIsolation r pconn i = withRunInIO $ \run -> withResource pconn $ run . (\conn -> runSqlConnWithIsolation r conn i)
 
@@ -60,7 +60,7 @@ withResourceTimeout ms pool act = withRunInIO $ \runInIO -> mask $ \restore -> d
             return ret
 {-# INLINABLE withResourceTimeout #-}
 
-runSqlConn :: (MonadUnliftIO m, BackendCompatible SqlBackend backend) => ReaderT backend m a -> backend -> m a
+runSqlConn :: forall backend m a. (MonadUnliftIO m, BackendCompatible SqlBackend backend) => ReaderT backend m a -> backend -> m a
 runSqlConn r conn = withRunInIO $ \runInIO -> mask $ \restore -> do
     let conn' = projectBackend conn
         getter = getStmtConn conn'
@@ -74,7 +74,9 @@ runSqlConn r conn = withRunInIO $ \runInIO -> mask $ \restore -> do
 -- | Like 'runSqlConn', but supports specifying an isolation level.
 --
 -- @since 2.9.0
-runSqlConnWithIsolation :: (MonadUnliftIO m, BackendCompatible SqlBackend backend) => ReaderT backend m a -> backend -> IsolationLevel -> m a
+runSqlConnWithIsolation :: forall backend m a.
+    (MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    => ReaderT backend m a -> backend -> IsolationLevel -> m a
 runSqlConnWithIsolation r conn isolation = withRunInIO $ \runInIO -> mask $ \restore -> do
     let conn' = projectBackend conn
         getter = getStmtConn conn'
@@ -96,12 +98,12 @@ runSqlPersistMPool
 runSqlPersistMPool x pool = runResourceT $ runNoLoggingT $ runSqlPool x pool
 
 liftSqlPersistMPool
-    :: (MonadIO m, BackendCompatible SqlBackend backend)
+    :: forall backend m a. (MonadIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend (NoLoggingT (ResourceT IO)) a -> Pool backend -> m a
 liftSqlPersistMPool x pool = liftIO (runSqlPersistMPool x pool)
 
 withSqlPool
-    :: (MonadLogger m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    :: forall backend m a. (MonadLogger m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => (LogFunc -> IO backend) -- ^ create a new connection
     -> Int -- ^ connection count
     -> (Pool backend -> m a)
@@ -112,7 +114,7 @@ withSqlPool mkConn connCount f = withUnliftIO $ \u -> bracket
     (unliftIO u . f)
 
 createSqlPool
-    :: forall m backend. (MonadLogger m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    :: forall backend m. (MonadLogger m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => (LogFunc -> IO backend)
     -> Int
     -> m (Pool backend)
@@ -189,7 +191,7 @@ askLogFunc = withRunInIO $ \run ->
 --
 
 withSqlConn
-    :: (MonadUnliftIO m, MonadLogger m, BackendCompatible SqlBackend backend)
+    :: forall backend m a. (MonadUnliftIO m, MonadLogger m, BackendCompatible SqlBackend backend)
     => (LogFunc -> IO backend) -> (backend -> m a) -> m a
 withSqlConn open f = do
     logFunc <- askLogFunc

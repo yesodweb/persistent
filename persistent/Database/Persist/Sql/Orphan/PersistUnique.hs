@@ -1,3 +1,4 @@
+{-# LANGUAGE ExplicitForAll  #-}
 {-# OPTIONS_GHC -fno-warn-orphans  #-}
 module Database.Persist.Sql.Orphan.PersistUnique
   ()
@@ -20,7 +21,7 @@ import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
 import Database.Persist.Sql.Util (dbColumns, parseEntityValues, updatePersistValue, mkUpdateText')
 
 defaultUpsert
-    ::
+    :: forall record backend m.
     ( MonadIO m
     , PersistEntity record
     , PersistUniqueWrite backend
