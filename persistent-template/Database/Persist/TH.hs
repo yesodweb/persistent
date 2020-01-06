@@ -45,6 +45,7 @@ module Database.Persist.TH
     , lensPTH
     , parseReferences
     , embedEntityDefs
+    , fieldError
     , AtLeastOneUniqueKey(..)
     , OnlyOneUniqueKey(..)
     ) where
