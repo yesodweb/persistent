@@ -819,7 +819,15 @@ getColumn getter tableName' [PersistText columnName, PersistText isNullable, Per
           [] -> return Nothing
           [[PersistText table, PersistText constraint]] ->
             return $ Just (DBName table, DBName constraint)
-          _ -> error "Postgresql.getColumn: error fetching constraints"
+          xs ->
+            error $ mconcat
+              [ "Postgresql.getColumn: error fetching constraints. Expected a single table and a single constraint for table: "
+              , T.unpack (unDBName tableName')
+              , " and a column: "
+              , T.unpack (unDBName cname)
+              , " but got: "
+              , show xs
+              ]
     d' = case defaultValue of
             PersistNull   -> Right Nothing
             PersistText t -> Right $ Just t
