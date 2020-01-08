@@ -829,9 +829,9 @@ getColumn getter tableName' [PersistText columnName, PersistText isNullable, Per
             return $ Just (DBName table, DBName constraint)
           xs ->
             error $ mconcat
-              [ "Postgresql.getColumn: error fetching constraints. Expected a single table and a single constraint for table: "
+              [ "Postgresql.getColumn: error fetching constraints. Expected a single result for foreign key query for table: "
               , T.unpack (unDBName tableName')
-              , " and a column: "
+              , " and column: "
               , T.unpack (unDBName cname)
               , " but got: "
               , show xs
