@@ -554,7 +554,7 @@ migrate' :: [EntityDef]
          -> EntityDef
          -> IO (Either [Text] [(Bool, Text)])
 migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
-    old <- getColumns getter entity
+    old <- getColumns getter entity newcols'
     case partitionEithers old of
         ([], old'') -> do
             exists <-
@@ -565,6 +565,7 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
         (errs, _) -> return $ Left errs
   where
     name = entityDB entity
+    (newcols', udefs, fdefs) = mkColumns allDefs entity
     migrationText exists old'' =
         if not exists
             then createText newcols fdefs udspair
@@ -574,7 +575,6 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
                  in  acs' ++ ats'
        where
          old' = partitionEithers old''
-         (newcols', udefs, fdefs) = mkColumns allDefs entity
          newcols = filter (not . safeToRemove entity . cName) newcols'
          udspair = map udToPair udefs
          excludeForeignKeys (xs,ys) = (map excludeForeignKey xs,ys)
@@ -650,9 +650,9 @@ data AlterDB = AddTable Text
 
 -- | Returns all of the columns in the given table currently in the database.
 getColumns :: (Text -> IO Statement)
-           -> EntityDef
+           -> EntityDef -> [Column]
            -> IO [Either Text (Either Column (DBName, [DBName]))]
-getColumns getter def = do
+getColumns getter def cols = do
     let sqlv=T.concat ["SELECT "
                           ,"column_name "
                           ,",is_nullable "
@@ -700,6 +700,10 @@ getColumns getter def = do
     us <- with (stmtQuery stmt' vals) (\src -> runConduit $ src .| helperU)
     return $ cs ++ us
   where
+    refMap = Map.fromList $ foldl ref [] cols
+        where ref rs c = case cReference c of
+                  Nothing -> rs
+                  (Just r) -> (unDBName $ cName c, r) : rs
     getAll front = do
         x <- CL.head
         case x of
@@ -715,8 +719,8 @@ getColumns getter def = do
         x <- CL.head
         case x of
             Nothing -> return []
-            Just x' -> do
-                col <- liftIO $ getColumn getter (entityDB def) x'
+            Just x'@((PersistText cname):_) -> do
+                col <- liftIO $ getColumn getter (entityDB def) x' (Map.lookup cname refMap)
                 let col' = case col of
                             Left e -> Left e
                             Right c -> Right $ Left c
@@ -764,8 +768,9 @@ getAlters defs def (c1, u1) (c2, u2) =
 
 getColumn :: (Text -> IO Statement)
           -> DBName -> [PersistValue]
+          -> Maybe (DBName, DBName) 
           -> IO (Either Text Column)
-getColumn getter tableName' [PersistText columnName, PersistText isNullable, PersistText typeName, defaultValue, numericPrecision, numericScale, maxlen] =
+getColumn getter tableName' [PersistText columnName, PersistText isNullable, PersistText typeName, defaultValue, numericPrecision, numericScale, maxlen] refName =
     case d' of
         Left s -> return $ Left s
         Right d'' ->
@@ -776,7 +781,7 @@ getColumn getter tableName' [PersistText columnName, PersistText isNullable, Per
                   Left s -> return $ Left s
                   Right t -> do
                       let cname = DBName columnName
-                      ref <- getRef cname
+                      ref <- getRef cname refName
                       return $ Right Column
                           { cName = cname
                           , cNull = isNullable == "YES"
@@ -798,7 +803,8 @@ getColumn getter tableName' [PersistText columnName, PersistText isNullable, Per
             case T.stripSuffix p t of
                 Nothing -> loop' ps
                 Just t' -> t'
-    getRef cname = do
+    getRef _ Nothing = return Nothing
+    getRef cname (Just (_, refName')) = do
         let sql = T.concat ["SELECT DISTINCT "
                            ,"ccu.table_name, "
                            ,"tc.constraint_name "
@@ -810,10 +816,12 @@ getColumn getter tableName' [PersistText columnName, PersistText isNullable, Per
                            ,"AND ccu.constraint_name=kcu.constraint_name "
                            ,"AND kcu.ordinal_position=1 "
                            ,"AND kcu.table_name=? "
-                           ,"AND kcu.column_name=?"]
+                           ,"AND kcu.column_name=? "
+                           ,"AND tc.constraint_name=?"]
         stmt <- getter sql
         cntrs <- with (stmtQuery stmt [PersistText $ unDBName tableName'
-                                      ,PersistText $ unDBName cname])
+                                      ,PersistText $ unDBName cname
+                                      ,PersistText $ unDBName refName'])
                       (\src -> runConduit $ src .| CL.consume)
         case cntrs of
           [] -> return Nothing
@@ -869,7 +877,7 @@ getColumn getter tableName' [PersistText columnName, PersistText isNullable, Per
       , ", respectively."
       , " Specify the values as numeric(total_digits, digits_after_decimal_place)."
       ]
-getColumn _ _ columnName =
+getColumn _ _ columnName _ =
     return $ Left $ T.pack $ "Invalid result from information_schema: " ++ show columnName
 
 -- | Intelligent comparison of SQL types, to account for SqlInt32 vs SqlOther integer
