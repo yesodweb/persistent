@@ -2,7 +2,7 @@
 
 ## 2.9.0.2
 
-* Compatibility with latest mongoDB
+* Compatibility with latest mongoDB [#1012](https://github.com/yesodweb/persistent/pull/1012)
 
 ## 2.9.0.1
 
