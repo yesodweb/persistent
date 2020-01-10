@@ -1003,6 +1003,7 @@ fromValues t funName conE fields = do
         let fieldName = (unHaskellName (fieldHaskell field))
         in [|mapLeft (fieldError tableName fieldName) . fromPersistValue|]
 
+-- | @since 2.8.1
 fieldError :: Text -> Text -> Text -> Text
 fieldError tableName fieldName err = mconcat
     [ "Couldn't parse field `"
