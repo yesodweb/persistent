@@ -1,6 +1,6 @@
 # Changelog for persistent
 
-## 2.10.5
+## 2.11.0
 
 * Added explicit `forall` notation to make most API functions play nice when using `TypeApplications`. (e.g. instead of `selectList @_ @_ @User [] []`, you can now write `selectList @User [] []`) [#1006](https://github.com/yesodweb/persistent/pull/1006)
 
