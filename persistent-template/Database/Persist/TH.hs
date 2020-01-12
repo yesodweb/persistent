@@ -976,7 +976,7 @@ fromValues t funName conE fields = do
     suc <- patternSuccess
     return [ suc, normalClause [VarP x] patternMatchFailure ]
   where
-    tableName = unDBName (entityDB t)
+    tableName = unpack (unDBName (entityDB t))
     patternSuccess =
         case fields of
             [] -> do
@@ -984,8 +984,11 @@ fromValues t funName conE fields = do
                 return $ normalClause [ListP []] (rightE `AppE` conE)
             _ -> do
                 x1 <- newName "x1"
+                mkPersistValueForTable <- newName "mkPersistValueForTable"
+                mkPersistValueForTableSig <- [t|forall a. PersistField a => String -> PersistValue -> Either Text a|]
+                mkPersistValueForTableExp <- [|fromPersistValueWithErrorContext tableName|]
                 restNames <- mapM (\i -> newName $ "x" `mappend` show i) [2..length fields]
-                (fpv1:mkPersistValues) <- mapM mkPersistValue fields
+                (fpv1:mkPersistValues) <- mapM (mkPersistValue mkPersistValueForTable) fields
                 app1E <- [|(<$>)|]
                 let conApp = infixFromPersistValue app1E fpv1 conE x1
                 applyE <- [|(<*>)|]
@@ -993,14 +996,33 @@ fromValues t funName conE fields = do
 
                 return $ normalClause
                     [ListP $ map VarP (x1:restNames)]
-                    (foldl' (\exp (name, fpv) -> applyFromPersistValue fpv exp name) conApp (zip restNames mkPersistValues))
+                    (LetE 
+                      [ SigD mkPersistValueForTable mkPersistValueForTableSig
+                      , FunD mkPersistValueForTable [normalClause [] mkPersistValueForTableExp]
+                      ]
+                      (foldl' (\exp (name, fpv) -> applyFromPersistValue fpv exp name) conApp (zip restNames mkPersistValues))
+                    )
 
     infixFromPersistValue applyE fpv exp name =
         UInfixE exp applyE (fpv `AppE` VarE name)
 
-    mkPersistValue field =
-        let fieldName = (unHaskellName (fieldHaskell field))
-        in [|mapLeft (fieldError tableName fieldName) . fromPersistValue|]
+
+        -- = Person
+        --     <$>
+        --       (Database.Persist.TH.mapLeft
+        --          ((Database.Persist.TH.fieldError (pack "Person")) (pack "name"))
+        --          . fromPersistValue)
+        --         x1_arGI
+
+    -- mkPersistValue :: Name -> PersistField -> 
+    mkPersistValue contextFn field = do
+        let fieldName = unpack (unHaskellName (fieldHaskell field))
+        fieldNameExp <- [|fieldName|]
+        pure $ (VarE contextFn `AppE` fieldNameExp)
+
+fromPersistValueWithErrorContext :: PersistField a => String -> String -> PersistValue -> Either Text a
+fromPersistValueWithErrorContext tableName fieldName pv =
+    mapLeft (fieldError (pack tableName) (pack fieldName)) (fromPersistValue pv)
 
 fieldError :: Text -> Text -> Text -> Text
 fieldError tableName fieldName err = mconcat
@@ -1829,7 +1851,7 @@ requirePersistentExtensions = do
   -- isExtEnabled breaks the persistent-template benchmark with the following error:
   -- Template Haskell error: Can't do `isExtEnabled' in the IO monad
   -- You can workaround this by replacing isExtEnabled with (pure . const True)
-  unenabledExtensions <- filterM (fmap not . isExtEnabled) requiredExtensions
+  unenabledExtensions <- filterM (fmap not . (pure . const True)) requiredExtensions
 
   case unenabledExtensions of
     [] -> pure ()
