@@ -14,7 +14,6 @@ module Init (
   , isTravis
 
   , module Database.Persist.Sql
-  , MonadIO
   , persistSettings
   , MkPersistSettings (..)
   , BackendKey(..)
@@ -26,11 +25,10 @@ module Init (
   , module Database.Persist
   , module Test.Hspec
   , module Test.HUnit
-  , liftIO
   , mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase
   , Int32, Int64
   , Text
-  , module Control.Monad.Trans.Reader
+  , module Control.Monad.Reader
   , module Control.Monad
   , BS.ByteString
   , SomeException
@@ -59,7 +57,7 @@ import Control.Applicative (liftA2)
 import Control.Exception (SomeException)
 import Control.Monad (void, replicateM, liftM, when, forM_)
 import Control.Monad.Fail (MonadFail)
-import Control.Monad.Trans.Reader
+import Control.Monad.Reader
 import Data.Char (generalCategory, GeneralCategory(..))
 import Data.Fixed (Pico,Micro)
 import qualified Data.Text as T
