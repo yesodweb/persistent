@@ -1,7 +1,8 @@
-{-# language ScopedTypeVariables #-}
+{-# language ScopedTypeVariables, DataKinds #-}
 
 module RawSqlTest where
 
+import Data.Coerce
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import qualified Data.Text as T
@@ -80,21 +81,22 @@ specsWith runDb = describe "rawSql" $ do
         r4k <- insert r4
         escape <- getEscape
         let query = T.concat
-                [ "SELECT parent.??, child.?? "
+                [ "SELECT ??, ?? "
                 , "FROM ", escape "Relationship", " AS parent "
                 , "LEFT OUTER JOIN ", escape "Relationship", " AS child "
                 , "ON parent.id = child.parent"
                 ]
 
-        result :: [(Entity Relationship, Maybe (Entity Relationship))] <-
+        result :: [(EntityWithPrefix "parent" Relationship, Maybe (EntityWithPrefix "child" Relationship))] <-
             rawSql query []
 
         liftIO $
-            result `shouldBe`
+            coerce result `shouldMatchList`
                 [ (Entity r1k r1, Just (Entity r2k r2))
                 , (Entity r1k r1, Just (Entity r3k r3))
                 , (Entity r2k r2, Just (Entity r4k r4))
                 , (Entity r3k r3, Nothing)
+                , (Entity r4k r4, Nothing)
                 ]
 
 

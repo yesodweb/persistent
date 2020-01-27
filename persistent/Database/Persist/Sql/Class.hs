@@ -10,9 +10,10 @@ module Database.Persist.Sql.Class
     ( RawSql (..)
     , PersistFieldSql (..)
     , EntityWithPrefix(..)
+    , unPrefix
     ) where
 
-import GHC.TypeLits (Symbol, KnownSymbol(..), symbolVal)
+import GHC.TypeLits (Symbol, KnownSymbol, symbolVal)
 import Data.Bits (bitSizeMaybe)
 import Data.ByteString (ByteString)
 import Data.Fixed
@@ -88,8 +89,60 @@ instance
         nKeyFields = length $ entityKeyFields entDef
         entDef = entityDef (Nothing :: Maybe record)
 
+-- | This newtype wrapper is useful when selecting an entity out of the
+-- database and you want to provide a prefix to the table being selected.
+--
+-- Consider this raw SQL query:
+--
+-- > SELECT ??
+-- > FROM my_long_table_name AS mltn
+-- > INNER JOIN other_table AS ot
+-- >    ON mltn.some_col = ot.other_col
+-- > WHERE ...
+--
+-- We don't want to refer to @my_long_table_name@ every time, so we create
+-- an alias. If we want to select it, we have to tell the raw SQL
+-- quasi-quoter that we expect the entity to be prefixed with some other
+-- name.
+--
+-- We can give the above query a type with this, like:
+--
+-- @
+-- getStuff :: 'SqlPersistM' ['EntityWithPrefix' \"mltn\" MyLongTableName]
+-- getStuff = rawSql queryText []
+-- @
+--
+-- The 'EntityWithPrefix' bit is a boilerplate newtype wrapper, so you can
+-- remove it with 'unPrefix', like this:
+--
+-- @
+-- getStuff :: 'SqlPersistM' ['Entity' MyLongTableName]
+-- getStuff = 'unPrefix' @\"mltn\" '<$>' 'rawSql' queryText []
+-- @
+--
+-- The @ symbol is a "type application" and requires the @TypeApplications@
+-- language extension.
+--
+-- @since 2.10.5
 newtype EntityWithPrefix (prefix :: Symbol) record
     = EntityWithPrefix { unEntityWithPrefix :: Entity record }
+
+-- | A helper function to tell GHC what the 'EntityWithPrefix' prefix
+-- should be. This allows you to use a type application to specify the
+-- prefix, instead of specifying the etype on the result.
+--
+-- As an example, here's code that uses this:
+--
+-- @
+-- myQuery :: 'SqlPersistM' ['Entity' Person]
+-- myQuery = map (unPrefix @\"p\") <$> rawSql query []
+--   where
+--     query = "SELECT ?? FROM person AS p"
+-- @
+--
+-- @since 2.10.5
+unPrefix :: forall prefix record. EntityWithPrefix prefix record -> Entity record
+unPrefix = unEntityWithPrefix
 
 instance
     ( PersistEntity record
