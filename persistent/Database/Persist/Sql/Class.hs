@@ -4,11 +4,15 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DataKinds #-}
+
 module Database.Persist.Sql.Class
     ( RawSql (..)
     , PersistFieldSql (..)
+    , EntityWithPrefix(..)
     ) where
 
+import GHC.TypeLits (Symbol, KnownSymbol(..), symbolVal)
 import Data.Bits (bitSizeMaybe)
 import Data.ByteString (ByteString)
 import Data.Fixed
@@ -17,7 +21,7 @@ import qualified Data.IntMap as IM
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
-import Data.Proxy (Proxy)
+import Data.Proxy (Proxy(..))
 import qualified Data.Set as S
 import Data.Text (Text, intercalate, pack)
 import qualified Data.Text as T
@@ -79,6 +83,36 @@ instance
           n -> show n ++ " columns for an 'Entity' data type"
     rawSqlProcessRow row = case splitAt nKeyFields row of
       (rowKey, rowVal) -> Entity <$> keyFromValues rowKey
+                                 <*> fromPersistValues rowVal
+      where
+        nKeyFields = length $ entityKeyFields entDef
+        entDef = entityDef (Nothing :: Maybe record)
+
+newtype EntityWithPrefix (prefix :: Symbol) record
+    = EntityWithPrefix { unEntityWithPrefix :: Entity record }
+
+instance
+    ( PersistEntity record
+    , KnownSymbol prefix
+    , PersistEntityBackend record ~ backend
+    , IsPersistBackend backend
+    )
+  => RawSql (EntityWithPrefix prefix record) where
+    rawSqlCols escape _ent = (length sqlFields, [intercalate ", " sqlFields])
+        where
+          sqlFields = map (((name <> ".") <>) . escape)
+              $ map fieldDB
+              -- Hacky for a composite key because
+              -- it selects the same field multiple times
+              $ entityKeyFields entDef ++ entityFields entDef
+          name = pack $ symbolVal (Proxy :: Proxy prefix)
+          entDef = entityDef (Nothing :: Maybe record)
+    rawSqlColCountReason a =
+        case fst (rawSqlCols (error "RawSql") a) of
+          1 -> "one column for an 'Entity' data type without fields"
+          n -> show n ++ " columns for an 'Entity' data type"
+    rawSqlProcessRow row = case splitAt nKeyFields row of
+      (rowKey, rowVal) -> fmap EntityWithPrefix $ Entity <$> keyFromValues rowKey
                                  <*> fromPersistValues rowVal
       where
         nKeyFields = length $ entityKeyFields entDef
