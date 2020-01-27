@@ -1,5 +1,9 @@
 # Changelog for persistent
 
+## 2.10.5
+
+* Add the `EntityWithPrefix` type to allow users to specify a custom prefix for raw SQL queries. [#1018](https://github.com/yesodweb/persistent/pull/1018)
+
 ## 2.10.4
 
 * Log exceptions when closing a connection fails. See point 1 in [yesod #1635](https://github.com/yesodweb/yesod/issues/1635#issuecomment-547300856). [#978](https://github.com/yesodweb/persistent/pull/978)
