@@ -30,6 +30,7 @@ module Database.Persist.TH
     , mpsPrefixFields
     , mpsEntityJSON
     , mpsGenerateLenses
+    , mpsDeriveInstances
     , EntityJSON(..)
     , mkPersistSettings
     , sqlSettings
@@ -445,6 +446,12 @@ data MkPersistSettings = MkPersistSettings
     -- Default: False
     --
     -- @since 1.3.1
+    , mpsDeriveInstances :: ![Name]
+    -- ^ Automatically derive these typeclass instances for all record and key types.
+    --
+    -- Default: []
+    --
+    -- @since 2.7.4
     }
 
 data EntityJSON = EntityJSON
@@ -467,6 +474,7 @@ mkPersistSettings t = MkPersistSettings
         , entityFromJSON = 'entityIdFromJSON
         }
     , mpsGenerateLenses = False
+    , mpsDeriveInstances = []
     }
 
 -- | Use the 'SqlPersist' backend.
@@ -502,7 +510,9 @@ upperFirst t =
 
 dataTypeDec :: MkPersistSettings -> EntityDef -> Q Dec
 dataTypeDec mps t = do
-    let names = map (mkName . unpack) $ entityDerives t
+    let entityInstances     = map (mkName . unpack) $ entityDerives t
+        additionalInstances = filter (`notElem` entityInstances) $ mpsDeriveInstances mps
+        names               = entityInstances <> additionalInstances
     DataD [] nameFinal paramsFinal
                 Nothing
                 constrs
@@ -791,14 +801,14 @@ mkKeyTypeDec mps t = do
       if mpsGeneric mps
         then if not useNewtype
                then do pfDec <- pfInstD
-                       return (pfDec, [''Generic])
+                       return (pfDec, supplement [''Generic])
                else do gi <- genericNewtypeInstances
-                       return (gi, [])
+                       return (gi, supplement [])
         else if not useNewtype
                then do pfDec <- pfInstD
-                       return (pfDec, [''Show, ''Read, ''Eq, ''Ord, ''Generic])
+                       return (pfDec, supplement [''Show, ''Read, ''Eq, ''Ord, ''Generic])
                 else do
-                    let allInstances = [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''ToHttpApiData, ''FromHttpApiData, ''PersistField, ''PersistFieldSql, ''ToJSON, ''FromJSON]
+                    let allInstances = supplement [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''ToHttpApiData, ''FromHttpApiData, ''PersistField, ''PersistFieldSql, ''ToJSON, ''FromJSON]
                     if customKeyType
                       then return ([], allInstances)
                       else do
@@ -873,6 +883,8 @@ mkKeyTypeDec mps t = do
     useNewtype = pkNewtype mps t
     customKeyType = not (defaultIdType t) || not useNewtype || isJust (entityPrimary t)
 
+    supplement :: [Name] -> [Name]
+    supplement names = names <> (filter (`notElem` names) $ mpsDeriveInstances mps)
 
 keyIdName :: EntityDef -> Name
 keyIdName = mkName . unpack . keyIdText
