@@ -1,5 +1,5 @@
 name:            persistent-sqlite
-version:         2.10.5.2
+version:         2.10.6
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>

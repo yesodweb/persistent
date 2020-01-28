@@ -39,12 +39,16 @@ module Database.Persist.Sqlite
     , persistentBackend
     , rawSqliteConnection
     , withRawSqliteConnInfo
+    , createRawSqlitePoolFromInfo
+    , createRawSqlitePoolFromInfo_
+    , withRawSqlitePoolInfo
+    , withRawSqlitePoolInfo_
     ) where
 
 import Control.Concurrent (threadDelay)
 import qualified Control.Exception as E
 import Control.Monad (forM_)
-import Control.Monad.IO.Unlift (MonadIO (..), MonadUnliftIO, withRunInIO, withUnliftIO, unliftIO, withRunInIO)
+import Control.Monad.IO.Unlift (MonadIO (..), MonadUnliftIO, askRunInIO, withRunInIO, withUnliftIO, unliftIO, withRunInIO)
 import Control.Monad.Logger (NoLoggingT, runNoLoggingT, MonadLogger, logWarn, runLoggingT)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, withReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
@@ -731,6 +735,71 @@ withRawSqliteConnInfo connInfo f = do
   where
     openBackend = openWith RawSqlite connInfo
     closeBackend = close' . _persistentBackend
+
+-- | Like `createSqlitePoolFromInfo`, but like `withRawSqliteConnInfo` it
+-- exposes the internal `Sqlite.Connection`.
+--
+-- For power users who want to manually interact with SQLite's C API via
+-- internals exposed by "Database.Sqlite.Internal". The callback can be used to
+-- run arbitrary actions on the connection upon allocation from the pool.
+--
+-- @since 2.10.6
+createRawSqlitePoolFromInfo
+    :: (MonadLogger m, MonadUnliftIO m)
+    => SqliteConnectionInfo
+    -> (RawSqlite SqlBackend -> m ())
+    -- ^ An action that is run whenever a new `RawSqlite` connection is
+    -- allocated in the pool. The main use of this function is to register
+    -- custom functions with the SQLite connection upon creation.
+    -> Int
+    -> m (Pool (RawSqlite SqlBackend))
+createRawSqlitePoolFromInfo connInfo f n = do
+    runIO <- askRunInIO
+    let createRawSqlite logFun = do
+            result <- openWith RawSqlite connInfo logFun
+            result <$ runIO (f result)
+
+    createSqlPool createRawSqlite n
+
+-- | Like `createRawSqlitePoolFromInfo`, but doesn't require a callback
+-- operating on the connection.
+--
+-- @since 2.10.6
+createRawSqlitePoolFromInfo_
+    :: (MonadLogger m, MonadUnliftIO m)
+    => SqliteConnectionInfo -> Int -> m (Pool (RawSqlite SqlBackend))
+createRawSqlitePoolFromInfo_ connInfo =
+  createRawSqlitePoolFromInfo connInfo (const (return ()))
+
+-- | Like `createSqlitePoolInfo`, but based on `createRawSqlitePoolFromInfo`.
+--
+-- @since 2.10.6
+withRawSqlitePoolInfo
+    :: (MonadUnliftIO m, MonadLogger m)
+    => SqliteConnectionInfo
+    -> (RawSqlite SqlBackend -> m ())
+    -> Int -- ^ number of connections to open
+    -> (Pool (RawSqlite SqlBackend) -> m a)
+    -> m a
+withRawSqlitePoolInfo connInfo f n work = do
+    runIO <- askRunInIO
+    let createRawSqlite logFun = do
+            result <- openWith RawSqlite connInfo logFun
+            result <$ runIO (f result)
+
+    withSqlPool createRawSqlite n work
+
+-- | Like `createSqlitePoolInfo`, but based on `createRawSqlitePoolFromInfo_`.
+--
+-- @since 2.10.6
+withRawSqlitePoolInfo_
+    :: (MonadUnliftIO m, MonadLogger m)
+    => SqliteConnectionInfo
+    -> Int -- ^ number of connections to open
+    -> (Pool (RawSqlite SqlBackend) -> m a)
+    -> m a
+withRawSqlitePoolInfo_ connInfo =
+  withRawSqlitePoolInfo connInfo (const (return ()))
 
 -- | Wrapper for persistent SqlBackends that carry the corresponding
 -- `Sqlite.Connection`.
