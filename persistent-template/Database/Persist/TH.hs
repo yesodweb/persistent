@@ -451,7 +451,7 @@ data MkPersistSettings = MkPersistSettings
     --
     -- Default: []
     --
-    -- @since 2.7.4
+    -- @since 2.8.1
     }
 
 data EntityJSON = EntityJSON
@@ -1023,7 +1023,7 @@ fieldError tableName fieldName err = mconcat
     , tableName
     , "`. "
     , err
-    ]        
+    ]
 
 mkEntity :: EntityMap -> MkPersistSettings -> EntityDef -> Q [Dec]
 mkEntity entityMap mps t = do
@@ -1272,7 +1272,7 @@ entityToPersistValueHelper entity = PersistMap $ zip columnNames fieldsAsPersist
         columnNames = map (unHaskellName . fieldHaskell) (entityFields (entityDef (Just entity)))
         fieldsAsPersistValues = map toPersistValue $ toPersistFields entity
 
-entityFromPersistValueHelper :: (PersistEntity record) 
+entityFromPersistValueHelper :: (PersistEntity record)
                              => [String] -- ^ Column names, as '[String]' to avoid extra calls to "pack" in the generated code
                              -> PersistValue
                              -> Either Text record
@@ -1281,9 +1281,9 @@ entityFromPersistValueHelper columnNames pv = do
 
     let columnMap = HM.fromList persistMap
         lookupPersistValueByColumnName :: String -> PersistValue
-        lookupPersistValueByColumnName columnName = 
+        lookupPersistValueByColumnName columnName =
             fromMaybe PersistNull (HM.lookup (pack columnName) columnMap)
-    
+
     fromPersistValues $ map lookupPersistValueByColumnName columnNames
 
 -- | Produce code similar to the following:
@@ -1852,19 +1852,19 @@ requirePersistentExtensions = do
 
   case unenabledExtensions of
     [] -> pure ()
-    [extension] -> fail $ mconcat 
+    [extension] -> fail $ mconcat
                      [ "Generating Persistent entities now requires the "
                      , show extension
                      , " language extension. Please enable it by copy/pasting this line to the top of your file:\n\n"
                      , extensionToPragma extension
                      ]
-    extensions -> fail $ mconcat 
+    extensions -> fail $ mconcat
                     [ "Generating Persistent entities now requires the following language extensions:\n\n"
                     , List.intercalate "\n" (map show extensions)
                     , "\n\nPlease enable the extensions by copy/pasting these lines into the top of your file:\n\n"
                     , List.intercalate "\n" (map extensionToPragma extensions)
                     ]
-        
+
   where
     requiredExtensions = [DerivingStrategies, GeneralizedNewtypeDeriving, StandaloneDeriving, UndecidableInstances]
     extensionToPragma ext = "{-# LANGUAGE " <> show ext <> " #-}"
