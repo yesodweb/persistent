@@ -2,6 +2,7 @@
 
 ## 2.10.5
 
+* Add the `EntityWithPrefix` type to allow users to specify a custom prefix for raw SQL queries. [#1018](https://github.com/yesodweb/persistent/pull/1018)
 * Added Acquire based API to `Database.Persist.Sql` for working with
   connections/pools in monads which aren't MonadUnliftIO. [#984](https://github.com/yesodweb/persistent/pull/984)
 
