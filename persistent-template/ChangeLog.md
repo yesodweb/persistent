@@ -1,5 +1,9 @@
 ## Unreleased changes
 
+## 2.8.2
+
+* Add `fieldError` to the export list of `Database.Persist.TH` [#1008](https://github.com/yesodweb/persistent/pull/1008)
+
 ## 2.8.1
 
 * Let the user pass instances that will be derived for record and for key types (https://github.com/yesodweb/persistent/pull/990
