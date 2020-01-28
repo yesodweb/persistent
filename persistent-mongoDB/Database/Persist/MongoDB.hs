@@ -548,7 +548,8 @@ instance PersistStoreWrite DB.MongoContext where
            $ updatesToDoc upds
 
     updateGet key upds = do
-        result <- DB.findAndModify (queryByKey key) (updatesToDoc upds)
+        context <- ask
+        result <- liftIO $ runReaderT (DB.findAndModify (queryByKey key) (updatesToDoc upds)) context
         either err instantiate result
       where
         instantiate doc = do

@@ -89,6 +89,10 @@ share [mkPersist persistSettings { mpsGeneric = True },  mkMigrate "testMigrate"
     !yes Int
     ~no Int
     def Int
+
+  Relationship
+    name String
+    parent RelationshipId Maybe
 |]
 
 deriving instance Show (BackendKey backend) => Show (PetGeneric backend)
@@ -113,6 +117,9 @@ deriving instance Eq (BackendKey backend) => Eq (NoPrefix1Generic backend)
 
 deriving instance Show (BackendKey backend) => Show (NoPrefix2Generic backend)
 deriving instance Eq (BackendKey backend) => Eq (NoPrefix2Generic backend)
+
+deriving instance Show (BackendKey backend) => Show (RelationshipGeneric backend)
+deriving instance Eq (BackendKey backend) => Eq (RelationshipGeneric backend)
 
 -- | Reverses the order of the fields of an entity.  Used to test
 -- @??@ placeholders of 'rawSql'.

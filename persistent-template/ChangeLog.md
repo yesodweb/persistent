@@ -1,6 +1,16 @@
 ## Unreleased changes
 
+## 2.8.2
+
 * Add `fieldError` to the export list of `Database.Persist.TH` [#1008](https://github.com/yesodweb/persistent/pull/1008)
+
+## 2.8.1
+
+* Let the user pass instances that will be derived for record and for key types (https://github.com/yesodweb/persistent/pull/990
+
+## 2.8.0.1
+
+* Small optimization/code cleanup to generated Template Haskell code size, by slimming the implementation of to/fromPersistValue for Entities. [#1014](https://github.com/yesodweb/persistent/pull/1014)
 
 ## 2.8.0
 
