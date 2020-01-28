@@ -1,5 +1,5 @@
 name:            persistent-test
-version:         2.0.3.0
+version:         2.0.3.1
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -88,6 +88,9 @@ library
                     QuasiQuotes
                     TemplateHaskell
                     TypeFamilies
+                    StandaloneDeriving
+                    DerivingStrategies
+                    GeneralizedNewtypeDeriving
 
 source-repository head
   type:     git

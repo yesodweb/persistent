@@ -1,5 +1,5 @@
 name:            persistent-template
-version:         2.7.4
+version:         2.8.1
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -15,7 +15,7 @@ bug-reports:     https://github.com/yesodweb/persistent/issues
 extra-source-files: test/main.hs ChangeLog.md README.md
 
 library
-    build-depends:   base                     >= 4.9       && < 5
+    build-depends:   base                     >= 4.10      && < 5
                    , persistent               >= 2.10      && < 3
                    , aeson                    >= 1.0       && < 1.5
                    , bytestring               >= 0.10
@@ -26,6 +26,7 @@ library
                    , path-pieces
                    , template-haskell         >= 2.11
                    , text                     >= 1.2
+                   , th-lift-instances        >= 0.1.14    && < 0.2
                    , transformers             >= 0.5       && < 0.6
                    , unordered-containers
     exposed-modules: Database.Persist.TH
@@ -39,7 +40,7 @@ test-suite test
     other-modules:   TemplateTestImports
     ghc-options:     -Wall
 
-    build-depends:   base                     >= 4.9 && < 5
+    build-depends:   base                     >= 4.10 && < 5
                    , persistent
                    , persistent-template
                    , aeson

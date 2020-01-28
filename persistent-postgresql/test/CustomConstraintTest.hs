@@ -8,6 +8,8 @@
 {-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE UndecidableInstances       #-}
+{-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE StandaloneDeriving         #-}
 module CustomConstraintTest where
 
 import PgInit
@@ -20,6 +22,12 @@ CustomConstraint1
 
 CustomConstraint2
     cc_id CustomConstraint1Id constraint=custom_constraint
+    deriving Show
+
+CustomConstraint3
+    -- | This will lead to a constraint with the name custom_constraint3_cc_id1_fkey
+    cc_id1 CustomConstraint1Id
+    cc_id2 CustomConstraint1Id
     deriving Show
 |]
 
@@ -49,3 +57,10 @@ specs runDb = do
                                       ,PersistText "custom_constraint"]
       liftIO $ 1 @?= (exists :: Int)
 
+    it "allows multiple constraints on a single column" $ runDb $ do
+      runMigration customConstraintMigrate
+      -- | Here we add another foreign key on the same column where the default one already exists. In practice, this could be a compound key with another field.
+      rawExecute "ALTER TABLE \"custom_constraint3\" ADD CONSTRAINT \"extra_constraint\" FOREIGN KEY(\"cc_id1\") REFERENCES \"custom_constraint1\"(\"id\")" []
+      -- | This is where the error is thrown in `getColumn`
+      _ <- getMigration customConstraintMigrate
+      pure ()
