@@ -10,6 +10,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-missing-fields #-}
 
 -- | This module provides the tools for defining your database schema and using
@@ -54,7 +55,7 @@ module Database.Persist.TH
 
 import Prelude hiding ((++), take, concat, splitAt, exp)
 
-import Control.Monad (forM, (<=<), mzero, filterM)
+import Control.Monad (forM, mzero, filterM)
 import Data.Aeson
     ( ToJSON (toJSON), FromJSON (parseJSON), (.=), object
     , Value (Object), (.:), (.:?)
@@ -1251,50 +1252,56 @@ maybeTyp :: Bool -> Type -> Type
 maybeTyp may typ | may = ConT ''Maybe `AppT` typ
                  | otherwise = typ
 
--- | produce code similar to the following:
+
+
+entityToPersistValueHelper :: (PersistEntity record) => record -> PersistValue
+entityToPersistValueHelper entity = PersistMap $ zip columnNames fieldsAsPersistValues
+    where
+        columnNames = map (unHaskellName . fieldHaskell) (entityFields (entityDef (Just entity)))
+        fieldsAsPersistValues = map toPersistValue $ toPersistFields entity
+
+entityFromPersistValueHelper :: (PersistEntity record) 
+                             => [String] -- ^ Column names, as '[String]' to avoid extra calls to "pack" in the generated code
+                             -> PersistValue
+                             -> Either Text record
+entityFromPersistValueHelper columnNames pv = do
+    (persistMap :: [(T.Text, PersistValue)]) <- getPersistMap pv
+
+    let columnMap = HM.fromList persistMap
+        lookupPersistValueByColumnName :: String -> PersistValue
+        lookupPersistValueByColumnName columnName = 
+            fromMaybe PersistNull (HM.lookup (pack columnName) columnMap)
+    
+    fromPersistValues $ map lookupPersistValueByColumnName columnNames
+
+-- | Produce code similar to the following:
 --
 -- @
 --   instance PersistEntity e => PersistField e where
---      toPersistValue = PersistMap $ zip columNames (map toPersistValue . toPersistFields)
---      fromPersistValue (PersistMap o) =
---          let columns = HM.fromList o
---          in fromPersistValues $ map (\name ->
---            case HM.lookup name columns of
---              Just v -> v
---              Nothing -> PersistNull
---      fromPersistValue x = Left $ "Expected PersistMap, received: " ++ show x
+--      toPersistValue = entityToPersistValueHelper
+--      fromPersistValue = entityFromPersistValueHelper ["col1", "col2"]
 --      sqlType _ = SqlString
 -- @
 persistFieldFromEntity :: MkPersistSettings -> EntityDef -> Q [Dec]
-persistFieldFromEntity mps e = do
-    ss <- [|SqlString|]
-    obj <- [|\ent -> PersistMap $ zip (map pack columnNames) (map toPersistValue $ toPersistFields ent)|]
-    fpv <- [|\x -> let columns = HM.fromList x
-                    in fromPersistValues $ map
-                         (\(name) ->
-                            case HM.lookup (pack name) columns of
-                                Just v -> v
-                                Nothing -> PersistNull)
-                         $ columnNames
-          |]
+persistFieldFromEntity mps entDef = do
+    sqlStringConstructor' <- [|SqlString|]
+    toPersistValueImplementation <- [|entityToPersistValueHelper|]
+    fromPersistValueImplementation <- [|entityFromPersistValueHelper columnNames|]
 
-    compose <- [|(<=<)|]
-    getPersistMap' <- [|getPersistMap|]
     return
         [ persistFieldInstanceD (mpsGeneric mps) typ
-            [ FunD 'toPersistValue [ normalClause [] obj ]
+            [ FunD 'toPersistValue [ normalClause [] toPersistValueImplementation ]
             , FunD 'fromPersistValue
-                [ normalClause [] (InfixE (Just fpv) compose $ Just getPersistMap')
-                ]
+                [ normalClause [] fromPersistValueImplementation ]
             ]
         , persistFieldSqlInstanceD (mpsGeneric mps) typ
-            [ sqlTypeFunD ss
+            [ sqlTypeFunD sqlStringConstructor'
             ]
         ]
   where
-    typ = genericDataType mps (entityHaskell e) backendT
-    entFields = entityFields e
-    columnNames  = map (unpack . unHaskellName . fieldHaskell) entFields
+    typ = genericDataType mps (entityHaskell entDef) backendT
+    entFields = entityFields entDef
+    columnNames = map (unpack . unHaskellName . fieldHaskell) entFields
 
 -- | Apply the given list of functions to the same @EntityDef@s.
 --
