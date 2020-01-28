@@ -1,5 +1,12 @@
 # Changelog for persistent-sqlite
 
+## 2.10.6
+
+* Bump SQLite amalgamation to version 3.30.1 [#991](https://github.com/yesodweb/persistent/pull/991)
+* Add `createRawSqlitePoolFromInfo`, `createRawSqlitePoolFromInfo_`,
+  `withRawSqlitePoolInfo`, and `withRawSqlitePoolInfo_` to match the existing
+  pool functions for regular `SqlBackend`. [#983](https://github.com/yesodweb/persistent/pull/983)
+
 ## 2.10.5.2
 
 * Compatibility with latest persistent-template for test suite [#1002](https://github.com/yesodweb/persistent/pull/1002/files)

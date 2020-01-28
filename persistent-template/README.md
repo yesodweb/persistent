@@ -15,7 +15,7 @@ Similarly mant of the types come from the persistent library
 To get a better idea of what code you're generating, you can output the content of Template Haskell expressions to a file:
 
 ```
-stack test persistent-template --ghc-options='-ddump-splices -ddump-file'
+stack test persistent-template --ghc-options='-ddump-splices -ddump-to-file'
 ```
 
 The output will be in the `.stack-work` directory. The exact path will depend on your specific setup, but if you search for files ending in `.dump-splices` you'll find the output (`find .stack-work -type f -name '*.dump-splices'`)
