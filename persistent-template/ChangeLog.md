@@ -1,5 +1,9 @@
 ## Unreleased changes
 
+## 2.8.2.1
+
+* Fix the test-suite for persistent-template. [#1023](https://github.com/yesodweb/persistent/pull/1023)
+
 ## 2.8.2
 
 * Add `fieldError` to the export list of `Database.Persist.TH` [#1008](https://github.com/yesodweb/persistent/pull/1008)
