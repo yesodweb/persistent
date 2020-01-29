@@ -1,5 +1,10 @@
 # Changelog for persistent-sqlite
 
+## 2.10.6.1
+
+* Missing `includes` and `install-includes` cabal fields added, to allow
+  packages depending on persistent-sqlite access to the header files.
+
 ## 2.10.6
 
 * Bump SQLite amalgamation to version 3.30.1 [#991](https://github.com/yesodweb/persistent/pull/991)

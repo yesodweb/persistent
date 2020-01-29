@@ -1,5 +1,5 @@
 name:            persistent-sqlite
-version:         2.10.6
+version:         2.10.6.1
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -71,6 +71,8 @@ library
     else
         c-sources:   cbits/sqlite3.c
         include-dirs: cbits
+        includes:    sqlite3.h
+        install-includes: sqlite3.h
         cc-options:  -fPIC -std=c99
     if flag(full-text-search)
       cc-options: -DSQLITE_ENABLE_FTS3
