@@ -1,5 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE UndecidableInstances #-} -- FIXME
+{-# LANGUAGE UndecidableInstances #-}
 module PersistentTest
     ( module PersistentTest
     , cleanDB
@@ -21,6 +21,7 @@ import Test.Hspec.QuickCheck(prop)
 import Test.HUnit hiding (Test)
 import UnliftIO (MonadUnliftIO, catch)
 import Web.PathPieces (PathPiece (..))
+import Data.Proxy (Proxy(..))
 
 import Database.Persist
 import Init
@@ -616,3 +617,15 @@ specsWith runDb = describe "persistent" $ do
     it "bang" $ (return $! Strict (error "foo") 5 5) `shouldThrow` anyErrorCall
     it "tilde" $ void (return $! Strict 5 (error "foo") 5 :: IO Strict)
     it "blank" $ (return $! Strict 5 5 (error "foo")) `shouldThrow` anyErrorCall
+
+  describe "documentation syntax" $ do
+    let edef = entityDef (Proxy :: Proxy Relationship)
+    it "provides comments on entity def" $ do
+      entityComments edef
+        `shouldBe`
+          Just "This is a doc comment for a relationship.\nYou need to put the pipe character for each line of documentation.\nBut you can resume the doc comments afterwards."
+    it "provides comments on the field" $ do
+      let [nameField, parentField] = entityFields edef
+      fieldComments nameField
+        `shouldBe`
+          Just "Fields should be documentable."
