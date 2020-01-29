@@ -1,6 +1,8 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE ViewPatterns #-}
+
 module Database.Persist.Quasi
     ( parse
     , PersistSettings (..)
@@ -16,6 +18,8 @@ module Database.Persist.Quasi
 
 import Prelude hiding (lines)
 
+import qualified Data.List.NonEmpty as NEL
+import Data.List.NonEmpty (NonEmpty(..))
 import Control.Arrow ((&&&))
 import Control.Monad (msum, mplus)
 import Data.Char
@@ -181,9 +185,19 @@ empty _          = False
 
 -- | A line.  We don't care about spaces in the middle of the
 -- line.  Also, we don't care about the ammount of indentation.
-data Line = Line { lineIndent :: Int
-                 , tokens     :: [Text]
-                 }
+data Line' f
+    = Line
+    { lineIndent :: Int
+    , tokens     :: f Text
+    }
+
+mapLine :: (forall x. f x -> g x) -> Line' f -> Line' g
+mapLine k (Line i t) = Line i (k t)
+
+traverseLine :: Functor t => (forall x. f x -> t (g x)) -> Line' f -> t (Line' g)
+traverseLine k (Line i xs) = Line i <$> k xs
+
+type Line = Line' []
 
 -- | Remove leading spaces and remove spaces in the middle of the
 -- tokens.
@@ -204,11 +218,13 @@ parseLines :: PersistSettings -> [Line] -> [EntityDef]
 parseLines ps lines =
     fixForeignKeysAll $ toEnts lines
   where
-    toEnts (Line indent (name:entattribs) : rest) =
-        let (x, y) = span ((> indent) . lineIndent) rest
-        in  mkEntityDef ps name entattribs x : toEnts y
-    toEnts (Line _ []:rest) = toEnts rest
-    toEnts [] = []
+    toEnts = map mk . associateLines . mapMaybe skipEmpty
+    mk (Line _ (name :| entAttribs) :| rest) =
+        mkEntityDef ps name entAttribs (map (mapLine NEL.toList) rest)
+    associateLines =
+        NEL.groupBy (\l0 l1 -> lineIndent l0 < lineIndent l1)
+    skipEmpty =
+        traverseLine NEL.nonEmpty
 
 fixForeignKeysAll :: [UnboundEntityDef] -> [EntityDef]
 fixForeignKeysAll unEnts = map fixForeignKeys unEnts
