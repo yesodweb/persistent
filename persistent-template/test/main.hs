@@ -35,6 +35,7 @@ import Test.QuickCheck.Gen (Gen)
 import GHC.Generics (Generic)
 
 import Database.Persist
+import Database.Persist.Sql
 import Database.Persist.TH
 import TemplateTestImports
 
@@ -55,6 +56,9 @@ NoJson
     foo Text
     deriving Show Eq
 |]
+
+-- TODO: Derive Generic at the source site to get this unblocked.
+deriving instance Generic (BackendKey SqlBackend)
 
 share [mkPersist sqlSettings { mpsGeneric = False, mpsGenerateLenses = True }] [persistLowerCase|
 Lperson json
