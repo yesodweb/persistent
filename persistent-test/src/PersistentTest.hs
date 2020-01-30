@@ -11,6 +11,7 @@ import Control.Monad.Fail
 import Control.Monad.IO.Class
 import Data.Aeson
 import Data.Conduit
+import qualified Data.Text as T
 import qualified Data.Conduit.List as CL
 import Data.Functor.Constant
 import Data.Functor.Identity
@@ -24,6 +25,7 @@ import Web.PathPieces (PathPiece (..))
 import Data.Proxy (Proxy(..))
 
 import Database.Persist
+import Database.Persist.Quasi
 import Init
 import PersistentTestModels
 import PersistTestPetType

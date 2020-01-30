@@ -88,6 +88,10 @@ main = hspec $ do
                         [ [Token "Foo"]
                         , [DocComment "-- | Hello"]
                         ]
+            it "works if comment is indented" $ do
+                tokenize "  -- | comment" `shouldBe`
+                    [ Spaces 2, DocComment "-- | comment"
+                    ]
     describe "parseFieldType" $ do
         it "simple types" $
             parseFieldType "FooBar" `shouldBe` Right (FTTypeCon Nothing "FooBar")
@@ -169,6 +173,22 @@ main = hspec $ do
                     , Line { lineIndent = 0, tokens = ["-- | Hello"] }
                     , Line { lineIndent = 0, tokens = ["Bar"] }
                     , Line { lineIndent = 1, tokens = ["name", "String"] }
+                    ]
+            it "preparse indented" $ do
+                let t = T.unlines
+                        [ "  Foo"
+                        , "    x X"
+                        , "  -- | Comment"
+                        , "  -- hidden comment"
+                        , "  Bar"
+                        , "    name String"
+                        ]
+                preparse t `shouldBe`
+                    [ Line { lineIndent = 2, tokens = ["Foo"] }
+                    , Line { lineIndent = 4, tokens = ["x", "X"] }
+                    , Line { lineIndent = 2, tokens = ["-- | Comment"] }
+                    , Line { lineIndent = 2, tokens = ["Bar"] }
+                    , Line { lineIndent = 4, tokens = ["name", "String"] }
                     ]
 
     describe "empty" $ do
