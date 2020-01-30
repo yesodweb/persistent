@@ -623,7 +623,7 @@ specsWith runDb = describe "persistent" $ do
     it "provides comments on entity def" $ do
       entityComments edef
         `shouldBe`
-          Just "This is a doc comment for a relationship.\nYou need to put the pipe character for each line of documentation.\nBut you can resume the doc comments afterwards."
+          Just "This is a doc comment for a relationship.\nYou need to put the pipe character for each line of documentation.\nBut you can resume the doc comments afterwards.\n"
     it "provides comments on the field" $ do
       let [nameField, parentField] = entityFields edef
       fieldComments nameField

@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE StandaloneDeriving, UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Database.Persist.Quasi
@@ -11,8 +12,12 @@ module Database.Persist.Quasi
     , nullable
 #if TEST
     , Token (..)
+    , Line' (..)
+    , preparse
     , tokenize
     , parseFieldType
+    , empty
+    , removeSpaces
 #endif
     ) where
 
@@ -113,21 +118,26 @@ lowerCaseSettings = defaultPersistSettings
 
 -- | Parses a quasi-quoted syntax into a list of entity definitions.
 parse :: PersistSettings -> Text -> [EntityDef]
-parse ps = parseLines ps
-      . removeSpaces
-      . filter (not . empty)
-      . map tokenize
-      . T.lines
+parse ps = parseLines ps . preparse
+
+preparse :: Text -> [Line]
+preparse =
+    removeSpaces
+        . filter (not . empty)
+        . map tokenize
+        . T.lines
 
 -- | A token used by the parser.
 data Token = Spaces !Int   -- ^ @Spaces n@ are @n@ consecutive spaces.
            | Token Text    -- ^ @Token tok@ is token @tok@ already unquoted.
+           | DocComment Text -- ^ @DocComment@ is a documentation comment, unmodified.
   deriving (Show, Eq)
 
 -- | Tokenize a string.
 tokenize :: Text -> [Token]
 tokenize t
     | T.null t = []
+    | "-- | " `T.isPrefixOf` t = [DocComment t]
     | "--" `T.isPrefixOf` t = [] -- Comment until the end of the line.
     | "#" `T.isPrefixOf` t = [] -- Also comment to the end of the line, needed for a CPP bug (#110)
     | T.head t == '"' = quotes (T.tail t) id
@@ -187,9 +197,12 @@ empty _          = False
 -- line.  Also, we don't care about the ammount of indentation.
 data Line' f
     = Line
-    { lineIndent :: Int
-    , tokens     :: f Text
+    { lineIndent   :: Int
+    , tokens       :: f Text
     }
+
+deriving instance Show (f Text) => Show (Line' f)
+deriving instance Eq (f Text) => Eq (Line' f)
 
 mapLine :: (forall x. f x -> g x) -> Line' f -> Line' g
 mapLine k (Line i t) = Line i (k t)
@@ -211,6 +224,7 @@ removeSpaces =
     toLine' i = Line i . mapMaybe fromToken
 
     fromToken (Token t) = Just t
+    fromToken (DocComment t) = Just t
     fromToken Spaces{}  = Nothing
 
 -- | Divide lines into blocks and make entity definitions.
@@ -218,13 +232,60 @@ parseLines :: PersistSettings -> [Line] -> [EntityDef]
 parseLines ps lines =
     fixForeignKeysAll $ toEnts lines
   where
+    toEnts :: [Line] -> [UnboundEntityDef]
     toEnts = map mk . associateLines . mapMaybe skipEmpty
-    mk (Line _ (name :| entAttribs) :| rest) =
-        mkEntityDef ps name entAttribs (map (mapLine NEL.toList) rest)
-    associateLines =
-        NEL.groupBy (\l0 l1 -> lineIndent l0 < lineIndent l1)
-    skipEmpty =
-        traverseLine NEL.nonEmpty
+    mk :: LinesWithComments -> UnboundEntityDef
+    mk lwc =
+        let Line _ (name :| entAttribs) :| rest = lwcLines lwc
+         in setComments (lwcComments lwc) $ mkEntityDef ps name entAttribs (map (mapLine NEL.toList) rest)
+
+isComment :: Text -> Maybe Text
+isComment xs =
+    T.stripPrefix "-- | " xs
+
+data LinesWithComments = LinesWithComments
+    { lwcLines :: NonEmpty (Line' NonEmpty)
+    , lwcComments :: [Text]
+    } deriving Show
+
+newLine :: Line' NonEmpty -> LinesWithComments
+newLine l = LinesWithComments (pure l) []
+
+firstLine :: LinesWithComments -> Line' NonEmpty
+firstLine = NEL.head . lwcLines
+
+consLine :: Line' NonEmpty -> LinesWithComments -> LinesWithComments
+consLine l lwc = lwc { lwcLines = NEL.cons l (lwcLines lwc) }
+
+consComment :: Text -> LinesWithComments -> LinesWithComments
+consComment l lwc = lwc { lwcComments = l : lwcComments lwc }
+
+associateLines :: [Line' NonEmpty] -> [LinesWithComments]
+associateLines =
+    foldr (\line linesWithComments ->
+        case linesWithComments of
+            [] ->
+                [newLine line]
+            (lwc : lwcs) ->
+                case isComment (NEL.head (tokens line)) of
+                    Just comment ->
+                        error "am i here"
+                        consComment comment lwc : lwcs
+                    Nothing ->
+                        if lineIndent line <= lineIndent (firstLine lwc) then
+                            consLine line lwc : lwcs
+                        else
+                            newLine line : lwc : lwcs
+        )
+        []
+
+skipEmpty :: Line' [] -> Maybe (Line' NonEmpty)
+skipEmpty = traverseLine NEL.nonEmpty
+
+setComments :: [Text] -> UnboundEntityDef -> UnboundEntityDef
+setComments [] = id
+setComments comments =
+    overUnboundEntityDef (\ed -> ed { entityComments = Just (T.unlines comments) })
 
 fixForeignKeysAll :: [UnboundEntityDef] -> [EntityDef]
 fixForeignKeysAll unEnts = map fixForeignKeys unEnts
@@ -297,6 +358,11 @@ data UnboundEntityDef = UnboundEntityDef
                         { _unboundForeignDefs :: [UnboundForeignDef]
                         , unboundEntityDef :: EntityDef
                         }
+
+overUnboundEntityDef
+    :: (EntityDef -> EntityDef) -> UnboundEntityDef -> UnboundEntityDef
+overUnboundEntityDef f ubed =
+    ubed { unboundEntityDef = f (unboundEntityDef ubed) }
 
 
 lookupKeyVal :: Text -> [Text] -> Maybe Text
