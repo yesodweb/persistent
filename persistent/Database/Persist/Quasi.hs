@@ -18,6 +18,9 @@ module Database.Persist.Quasi
     , parseFieldType
     , empty
     , removeSpaces
+    , associateLines
+    , skipEmpty
+    , LinesWithComments(..)
 #endif
     ) where
 
@@ -233,7 +236,7 @@ parseLines ps lines =
     fixForeignKeysAll $ toEnts lines
   where
     toEnts :: [Line] -> [UnboundEntityDef]
-    toEnts = map mk . associateLines . mapMaybe skipEmpty
+    toEnts = map mk . associateLines . skipEmpty
     mk :: LinesWithComments -> UnboundEntityDef
     mk lwc =
         let Line _ (name :| entAttribs) :| rest = lwcLines lwc
@@ -246,7 +249,7 @@ isComment xs =
 data LinesWithComments = LinesWithComments
     { lwcLines :: NonEmpty (Line' NonEmpty)
     , lwcComments :: [Text]
-    } deriving Show
+    } deriving (Eq, Show)
 
 newLine :: Line' NonEmpty -> LinesWithComments
 newLine l = LinesWithComments (pure l) []
@@ -269,7 +272,6 @@ associateLines =
             (lwc : lwcs) ->
                 case isComment (NEL.head (tokens line)) of
                     Just comment ->
-                        error "am i here"
                         consComment comment lwc : lwcs
                     Nothing ->
                         if lineIndent line <= lineIndent (firstLine lwc) then
@@ -279,8 +281,8 @@ associateLines =
         )
         []
 
-skipEmpty :: Line' [] -> Maybe (Line' NonEmpty)
-skipEmpty = traverseLine NEL.nonEmpty
+skipEmpty :: [Line' []] -> [Line' NonEmpty]
+skipEmpty = mapMaybe (traverseLine NEL.nonEmpty)
 
 setComments :: [Text] -> UnboundEntityDef -> UnboundEntityDef
 setComments [] = id

@@ -1,5 +1,7 @@
 import Test.Hspec
 import qualified Data.Text as T
+import Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NEL
 
 import Database.Persist.Quasi
 import Database.Persist.Types
@@ -203,3 +205,109 @@ main = hspec $ do
                     , Line { lineIndent = 0, tokens = ["Foo"] }
                     , Line { lineIndent = 2, tokens = ["name", "String"] }
                     ]
+
+    describe "associateLines" $ do
+        let foo = Line { lineIndent = 0, tokens = pure "Foo" }
+            name'String = Line { lineIndent = 2, tokens = "name" :| ["String"] }
+            comment = Line { lineIndent = 0, tokens = pure "-- | comment" }
+        it "works" $ do
+            associateLines
+                [ comment
+                , foo
+                , name'String
+                ]
+                `shouldBe`
+                    [ LinesWithComments
+                        { lwcComments = ["comment"]
+                        , lwcLines = foo :| [name'String]
+                        }
+                    ]
+        let bar = Line { lineIndent = 0, tokens = "Bar" :| ["sql", "=", "bars"] }
+            age'Int = Line { lineIndent = 1, tokens = "age" :| ["Int"] }
+        it "works when used consecutively" $ do
+            associateLines
+                [ bar
+                , age'Int
+                , comment
+                , foo
+                , name'String
+                ]
+                `shouldBe`
+                    [ LinesWithComments
+                        { lwcComments = []
+                        , lwcLines = bar :| [age'Int]
+                        }
+                    , LinesWithComments
+                        { lwcComments = ["comment"]
+                        , lwcLines = foo :| [name'String]
+                        }
+                    ]
+        it "works with textual input" $ do
+            let text = "Foo\n  x X\n-- | Hello\nBar\n name String"
+                parsed = preparse text
+                allFull = skipEmpty parsed
+            associateLines allFull
+                `shouldBe`
+                    [ LinesWithComments
+                        { lwcLines =
+                            Line {lineIndent = 0, tokens = "Foo" :| []}
+                            :| [ Line {lineIndent = 2, tokens = "x" :| ["X"]} ]
+                        , lwcComments =
+                            []
+                        }
+                    , LinesWithComments
+                        { lwcLines =
+                            Line {lineIndent = 0, tokens = "Bar" :| []}
+                            :| [ Line {lineIndent = 1, tokens = "name" :| ["String"]}]
+                        , lwcComments =
+                            ["Hello"]
+                        }
+                    ]
+    describe "parseLines" $ do
+        let subject = parse lowerCaseSettings
+        let lines =
+                T.unlines
+                    [ "-- | Comment"
+                    , "Foo"
+                    , "  name String"
+                    ]
+        it "works" $ do
+            subject lines `shouldBe`
+                [ EntityDef
+                    { entityHaskell = HaskellName "Foo"
+                    , entityDB = DBName "foo"
+                    , entityId =
+                        FieldDef
+                            { fieldHaskell = HaskellName "Id"
+                            , fieldDB = DBName "id"
+                            , fieldType = FTTypeCon Nothing "FooId"
+                            , fieldSqlType = SqlInt64
+                            , fieldAttrs = []
+                            , fieldStrict = True
+                            , fieldReference =
+                                ForeignRef
+                                    (HaskellName "Foo")
+                                    (FTTypeCon (Just "Data.Int") "Int64")
+                            , fieldComments = Nothing
+                            }
+                    , entityFields =
+                        [ FieldDef
+                            { fieldHaskell = HaskellName "name"
+                            , fieldDB = DBName "name"
+                            , fieldType = FTTypeCon Nothing "String"
+                            , fieldSqlType = SqlOther "SqlType unset for name"
+                            , fieldAttrs = []
+                            , fieldStrict = True
+                            , fieldReference = NoReference
+                            , fieldComments = Nothing
+                            }
+                        ]
+                    , entityUniques = []
+                    , entityForeigns = []
+                    , entityDerives = []
+                    , entityAttrs = []
+                    , entityExtra = mempty
+                    , entitySum = False
+                    , entityComments = Just "Comment\n"
+                    }
+                ]
