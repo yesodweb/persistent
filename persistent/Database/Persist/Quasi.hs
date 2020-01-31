@@ -262,7 +262,7 @@ data LinesWithComments = LinesWithComments
     } deriving (Eq, Show)
 
 appendLwc a b =
-    LinesWithComments (lwcLines a <> lwcLines b) (lwcComments a <> lwcComments b)
+    LinesWithComments (foldr NEL.cons (lwcLines b) (lwcLines a)) (lwcComments a `mappend` lwcComments b)
 
 newLine :: Line' NonEmpty -> LinesWithComments
 newLine l = LinesWithComments (pure l) []
