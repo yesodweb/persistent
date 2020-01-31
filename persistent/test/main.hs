@@ -1,7 +1,10 @@
+{-# language RecordWildCards #-}
+
 import Test.Hspec
 import qualified Data.Text as T
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NEL
+import qualified Data.Map as Map
 
 import Database.Persist.Quasi
 import Database.Persist.Types
@@ -190,6 +193,25 @@ main = hspec $ do
                     , Line { lineIndent = 2, tokens = ["Bar"] }
                     , Line { lineIndent = 4, tokens = ["name", "String"] }
                     ]
+            it "preparse extra blocks" $ do
+                let t = T.unlines
+                        [ "LowerCaseTable"
+                        , "  name String"
+                        , "  ExtraBlock"
+                        , "    foo bar"
+                        , "    baz"
+                        , "  ExtraBlock2"
+                        , "    something"
+                        ]
+                preparse t `shouldBe`
+                    [ Line { lineIndent = 0, tokens = ["LowerCaseTable"] }
+                    , Line { lineIndent = 2, tokens = ["name", "String"] }
+                    , Line { lineIndent = 2, tokens = ["ExtraBlock"] }
+                    , Line { lineIndent = 4, tokens = ["foo", "bar"] }
+                    , Line { lineIndent = 4, tokens = ["baz"] }
+                    , Line { lineIndent = 2, tokens = ["ExtraBlock2"] }
+                    , Line { lineIndent = 4, tokens = ["something"] }
+                    ]
             it "field comments" $ do
                 let text = T.unlines
                         [ "-- | Model"
@@ -296,6 +318,76 @@ main = hspec $ do
                             ["Hello"]
                         }
                     ]
+        it "works with extra blocks" $ do
+            let text = skipEmpty . preparse . T.unlines $
+                    [ "LowerCaseTable"
+                    , "    Id             sql=my_id"
+                    , "    fullName Text"
+                    , "    ExtraBlock"
+                    , "        foo bar"
+                    , "        baz"
+                    , "        bin"
+                    , "    ExtraBlock2"
+                    , "        something"
+                    ]
+            associateLines text `shouldBe`
+                [ LinesWithComments
+                    { lwcLines =
+                        Line { lineIndent = 0, tokens = pure "LowerCaseTable" } :|
+                        [ Line { lineIndent = 4, tokens = "Id" :| ["sql=my_id"] }
+                        , Line { lineIndent = 4, tokens = "fullName" :| ["Text"] }
+                        , Line { lineIndent = 4, tokens = pure "ExtraBlock" }
+                        , Line { lineIndent = 8, tokens = "foo" :| ["bar"] }
+                        , Line { lineIndent = 8, tokens = pure "baz" }
+                        , Line { lineIndent = 8, tokens = pure "bin" }
+                        , Line { lineIndent = 4, tokens = pure "ExtraBlock2" }
+                        , Line { lineIndent = 8, tokens = pure "something" }
+                        ]
+                    , lwcComments = []
+                    }
+                ]
+
+        it "works with extra blocks twice" $ do
+            let text = skipEmpty . preparse . T.unlines $
+                    [ "IdTable"
+                    , "    Id Day default=CURRENT_DATE"
+                    , "    name Text"
+                    , ""
+                    , "LowerCaseTable"
+                    , "    Id             sql=my_id"
+                    , "    fullName Text"
+                    , "    ExtraBlock"
+                    , "        foo bar"
+                    , "        baz"
+                    , "        bin"
+                    , "    ExtraBlock2"
+                    , "        something"
+                    ]
+            associateLines text `shouldBe`
+                [ LinesWithComments
+                    { lwcLines = Line 0 (pure "IdTable") :|
+                        [ Line 4 ("Id" :| ["Day", "default=CURRENT_DATE"])
+                        , Line 4 ("name" :| ["Text"])
+                        ]
+                    , lwcComments = []
+                    }
+                , LinesWithComments
+                    { lwcLines =
+                        Line { lineIndent = 0, tokens = pure "LowerCaseTable" } :|
+                        [ Line { lineIndent = 4, tokens = "Id" :| ["sql=my_id"] }
+                        , Line { lineIndent = 4, tokens = "fullName" :| ["Text"] }
+                        , Line { lineIndent = 4, tokens = pure "ExtraBlock" }
+                        , Line { lineIndent = 8, tokens = "foo" :| ["bar"] }
+                        , Line { lineIndent = 8, tokens = pure "baz" }
+                        , Line { lineIndent = 8, tokens = pure "bin" }
+                        , Line { lineIndent = 4, tokens = pure "ExtraBlock2" }
+                        , Line { lineIndent = 8, tokens = pure "something" }
+                        ]
+                    , lwcComments = []
+                    }
+                ]
+
+
         it "works with field comments" $ do
             let text = skipEmpty . preparse . T.unlines $
                     [ "-- | Model"
@@ -325,6 +417,11 @@ main = hspec $ do
                     , "  -- | Field"
                     , "  name String"
                     , "  age  Int"
+                    , "  Extra"
+                    , "    foo bar"
+                    , "    baz"
+                    , "  Extra2"
+                    , "    something"
                     ]
         let [subject] = parse lowerCaseSettings lines
         it "produces the right name" $ do
@@ -344,3 +441,55 @@ main = hspec $ do
         it "has the comments" $ do
             entityComments subject `shouldBe`
                 Just "Comment\n"
+        it "combines extrablocks" $ do
+            entityExtra subject `shouldBe` Map.fromList
+                [ ("Extra", [["foo", "bar"], ["baz"]])
+                , ("Extra2", [["something"]])
+                ]
+        describe "works with extra blocks" $ do
+            let [lowerCaseTable, idTable] =
+                    parse lowerCaseSettings $ T.unlines
+                    [ "LowerCaseTable"
+                    , "    Id             sql=my_id"
+                    , "    fullName Text"
+                    , "    ExtraBlock"
+                    , "        foo bar"
+                    , "        baz"
+                    , "        bin"
+                    , "    ExtraBlock2"
+                    , "        something"
+                    , "IdTable"
+                    , "    Id Day default=CURRENT_DATE"
+                    , "    name Text"
+                    , ""
+                    ]
+            describe "idTable" $ do
+                let EntityDef {..} = idTable
+                it "has no extra blocks" $ do
+                    entityExtra `shouldBe` mempty
+                it "has the right name" $ do
+                    entityHaskell `shouldBe` HaskellName "IdTable"
+                it "has the right fields" $ do
+                    map fieldHaskell entityFields `shouldMatchList`
+                        [ HaskellName "name"
+                        ]
+            describe "lowerCaseTable" $ do
+                let EntityDef {..} = lowerCaseTable
+                it "has the right name" $ do
+                    entityHaskell `shouldBe` HaskellName "LowerCaseTable"
+                it "has the right fields" $ do
+                    map fieldHaskell entityFields `shouldMatchList`
+                        [ HaskellName "fullName"
+                        ]
+                it "has ExtraBlock" $ do
+                    Map.lookup "ExtraBlock" entityExtra
+                        `shouldBe` Just
+                            [ ["foo", "bar"]
+                            , ["baz"]
+                            , ["bin"]
+                            ]
+                it "has ExtraBlock2" $ do
+                    Map.lookup "ExtraBlock2" entityExtra
+                        `shouldBe` Just
+                            [ ["something"]
+                            ]

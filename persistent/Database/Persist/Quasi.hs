@@ -26,6 +26,7 @@ module Database.Persist.Quasi
 
 import Prelude hiding (lines)
 
+import qualified Debug.Trace as Debug
 import qualified Data.List.NonEmpty as NEL
 import Data.List.NonEmpty (NonEmpty(..))
 import Control.Arrow ((&&&))
@@ -236,11 +237,20 @@ parseLines ps lines =
     fixForeignKeysAll $ toEnts lines
   where
     toEnts :: [Line] -> [UnboundEntityDef]
-    toEnts = map mk . associateLines . skipEmpty
+    toEnts =
+        map mk
+        . associateLines
+        . skipEmpty
     mk :: LinesWithComments -> UnboundEntityDef
     mk lwc =
         let Line _ (name :| entAttribs) :| rest = lwcLines lwc
          in setComments (lwcComments lwc) $ mkEntityDef ps name entAttribs (map (mapLine NEL.toList) rest)
+
+--     toEnts0 (Line indent (name:entattribs) : rest) =
+--        let (x, y) = span ((> indent) . lineIndent) rest
+--        in  mkEntityDef ps name entattribs x : toEnts y
+--    toEnts0 (Line _ []:rest) = toEnts rest
+--    toEnts0 [] = []
 
 isComment :: Text -> Maybe Text
 isComment xs =
@@ -250,6 +260,9 @@ data LinesWithComments = LinesWithComments
     { lwcLines :: NonEmpty (Line' NonEmpty)
     , lwcComments :: [Text]
     } deriving (Eq, Show)
+
+instance Semigroup LinesWithComments where
+    a <> b = LinesWithComments (lwcLines a <> lwcLines b) (lwcComments a <> lwcComments b)
 
 newLine :: Line' NonEmpty -> LinesWithComments
 newLine l = LinesWithComments (pure l) []
@@ -265,25 +278,40 @@ consComment l lwc = lwc { lwcComments = l : lwcComments lwc }
 
 associateLines :: [Line' NonEmpty] -> [LinesWithComments]
 associateLines lines =
-    foldr (\line linesWithComments ->
+    foldr combine [] $
+    foldr toLinesWithComments [] lines
+  where
+    toLinesWithComments line linesWithComments =
         case linesWithComments of
             [] ->
                 [newLine line]
             (lwc : lwcs) ->
                 case isComment (NEL.head (tokens line)) of
                     Just comment
-                        | lineIndent line == lowestIndent lwc ->
+                        | lineIndent line == lowestIndent ->
                         consComment comment lwc : lwcs
                     _ ->
-                        if lineIndent line <= lineIndent (firstLine lwc) then
+                        if lineIndent line <= lineIndent (firstLine lwc)
+                        then
                             consLine line lwc : lwcs
                         else
                             newLine line : lwc : lwcs
-        )
-        []
-        lines
-  where
-    lowestIndent _ = minimum . fmap lineIndent $ lines
+
+    lowestIndent = minimum . fmap lineIndent $ lines
+    combine :: LinesWithComments -> [LinesWithComments] -> [LinesWithComments]
+    combine lwc [] =
+        [lwc]
+    combine lwc (lwc' : lwcs) =
+        let minIndent = minimumIndentOf lwc
+            otherIndent = minimumIndentOf lwc'
+         in
+            if minIndent < otherIndent then
+                lwc <> lwc' : lwcs
+            else
+                lwc : lwc' : lwcs
+
+
+    minimumIndentOf = minimum . fmap lineIndent . lwcLines
 
 skipEmpty :: [Line' []] -> [Line' NonEmpty]
 skipEmpty = mapMaybe (traverseLine NEL.nonEmpty)
