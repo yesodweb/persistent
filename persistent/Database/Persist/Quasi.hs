@@ -34,7 +34,7 @@ import Control.Monad (msum, mplus)
 import Data.Char
 import Data.List (find, foldl')
 import qualified Data.Map as M
-import Data.Maybe (mapMaybe, fromMaybe, maybeToList)
+import Data.Maybe (mapMaybe, fromMaybe, maybeToList, listToMaybe)
 import Data.Monoid (mappend)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -386,20 +386,21 @@ mkEntityDef :: PersistSettings
 mkEntityDef ps name entattribs lines =
   UnboundEntityDef foreigns $
     EntityDef
-        entName
-        (DBName $ getDbName ps name' entattribs)
+        { entityHaskell = entName
+        , entityDB = DBName $ getDbName ps name' entattribs
         -- idField is the user-specified Id
         -- otherwise useAutoIdField
         -- but, adjust it if the user specified a Primary
-        (setComposite primaryComposite $ fromMaybe autoIdField idField)
-        entattribs
-        cols
-        uniqs
-        []
-        derives
-        extras
-        isSum
-        comments
+        , entityId = (setComposite primaryComposite $ fromMaybe autoIdField idField)
+        , entityAttrs = entattribs
+        , entityFields = cols
+        , entityUniques = uniqs
+        , entityForeigns = []
+        , entityDerives = derives
+        , entityExtra = extras
+        , entitySum = isSum
+        , entityComments = comments
+        }
   where
     comments = Nothing
     entName = HaskellName name'
@@ -421,7 +422,18 @@ mkEntityDef ps name entattribs lines =
     derives = concat $ mapMaybe takeDerives attribs
 
     cols :: [FieldDef]
-    cols = mapMaybe (takeColsEx ps) attribs
+    cols = reverse . fst . foldr k ([], []) $ reverse attribs
+    k x (acc, comments) =
+        case isComment =<< listToMaybe x of
+            Just comment ->
+                (acc, comment : comments)
+            Nothing ->
+                ( maybeToList (setFieldComments comments <$> takeColsEx ps x) ++ acc
+                , []
+                )
+    setFieldComments [] x = x
+    setFieldComments xs fld =
+        fld { fieldComments = Just (T.unlines xs) }
 
     autoIdField = mkAutoIdField ps entName (DBName `fmap` idName) idSqlType
     idSqlType = maybe SqlInt64 (const $ SqlOther "Primary Key") primaryComposite
@@ -471,9 +483,15 @@ splitExtras (Line _ ts:rest) =
      in (ts:x, y)
 
 takeColsEx :: PersistSettings -> [Text] -> Maybe FieldDef
-takeColsEx = takeCols (\ft perr -> error $ "Invalid field type " ++ show ft ++ " " ++ perr)
+takeColsEx =
+    takeCols
+        (\ft perr -> error $ "Invalid field type " ++ show ft ++ " " ++ perr)
 
-takeCols :: (Text -> String -> Maybe FieldDef) -> PersistSettings -> [Text] -> Maybe FieldDef
+takeCols
+    :: (Text -> String -> Maybe FieldDef)
+    -> PersistSettings
+    -> [Text]
+    -> Maybe FieldDef
 takeCols _ _ ("deriving":_) = Nothing
 takeCols onErr ps (n':typ:rest)
     | not (T.null n) && isLower (T.head n) =

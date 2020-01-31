@@ -318,51 +318,29 @@ main = hspec $ do
 
 
     describe "parseLines" $ do
-        let subject = parse lowerCaseSettings
         let lines =
                 T.unlines
                     [ "-- | Comment"
                     , "Foo"
+                    , "  -- | Field"
                     , "  name String"
+                    , "  age  Int"
                     ]
-        it "works" $ do
-            subject lines `shouldBe`
-                [ EntityDef
-                    { entityHaskell = HaskellName "Foo"
-                    , entityDB = DBName "foo"
-                    , entityId =
-                        FieldDef
-                            { fieldHaskell = HaskellName "Id"
-                            , fieldDB = DBName "id"
-                            , fieldType = FTTypeCon Nothing "FooId"
-                            , fieldSqlType = SqlInt64
-                            , fieldAttrs = []
-                            , fieldStrict = True
-                            , fieldReference =
-                                ForeignRef
-                                    (HaskellName "Foo")
-                                    (FTTypeCon (Just "Data.Int") "Int64")
-                            , fieldComments = Nothing
-                            }
-                    , entityFields =
-                        [ FieldDef
-                            { fieldHaskell = HaskellName "name"
-                            , fieldDB = DBName "name"
-                            , fieldType = FTTypeCon Nothing "String"
-                            , fieldSqlType = SqlOther "SqlType unset for name"
-                            , fieldAttrs = []
-                            , fieldStrict = True
-                            , fieldReference = NoReference
-                            , fieldComments = Nothing
-                            }
-                        ]
-                    , entityUniques = []
-                    , entityForeigns = []
-                    , entityDerives = []
-                    , entityAttrs = []
-                    , entityExtra = mempty
-                    , entitySum = False
-                    , entityComments = Just "Comment\n"
-                    }
-                ]
-
+        let [subject] = parse lowerCaseSettings lines
+        it "produces the right name" $ do
+            entityHaskell subject `shouldBe` HaskellName "Foo"
+        describe "entityFields" $ do
+            let fields = entityFields subject
+            it "has the right field names" $ do
+                map fieldHaskell fields `shouldMatchList`
+                    [ HaskellName "name"
+                    , HaskellName "age"
+                    ]
+            it "has comments" $ do
+                map fieldComments fields `shouldBe`
+                    [ Just "Field\n"
+                    , Nothing
+                    ]
+        it "has the comments" $ do
+            entityComments subject `shouldBe`
+                Just "Comment\n"
