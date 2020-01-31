@@ -630,4 +630,4 @@ specsWith runDb = describe "persistent" $ do
       let [nameField, parentField] = entityFields edef
       fieldComments nameField
         `shouldBe`
-          Just "Fields should be documentable."
+          Just "Fields should be documentable.\n"
