@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE BangPatterns, CPP #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE StandaloneDeriving, UndecidableInstances #-}
@@ -423,12 +423,12 @@ mkEntityDef ps name entattribs lines =
 
     cols :: [FieldDef]
     cols = reverse . fst . foldr k ([], []) $ reverse attribs
-    k x (acc, comments) =
+    k x (!acc, !comments) =
         case isComment =<< listToMaybe x of
             Just comment ->
                 (acc, comment : comments)
             Nothing ->
-                ( maybeToList (setFieldComments comments <$> takeColsEx ps x) ++ acc
+                ( maybe id (:) (setFieldComments comments <$> takeColsEx ps x) acc
                 , []
                 )
     setFieldComments [] x = x
