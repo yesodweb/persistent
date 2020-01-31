@@ -40,7 +40,7 @@ data TableName = TableName
 As with the SQL generated, the specifics of this are customizable.
 See the @persistent-template@ package for details.
 
--- * Deriving
+= Deriving
 
 You can add a deriving clause to a table, and the generated Haskell type will have a deriving clause with that.
 Unlike normal Haskell syntax, you don't need parentheses or commas to separate the classes, and you can even have multiple deriving clauses.
@@ -51,7 +51,7 @@ Unlike normal Haskell syntax, you don't need parentheses or commas to separate t
 >     deriving Eq Show
 >     deriving Ord
 
--- * Unique Keys
+= Unique Keys
 
 You can define a uniqueness key on a table with the following format:
 
@@ -63,7 +63,7 @@ You can define a uniqueness key on a table with the following format:
 
 This will put a unique index on the @user@ table and the @name@ field.
 
--- * Setting defaults
+= Setting defaults
 
 You can use a @default=${sql expression}@ clause to set a default for a field.
 The thing following the `=` is interpreted as SQL that will be put directly into the table definition.
@@ -93,7 +93,7 @@ data User = User
 
 You can work around this by using a 'Maybe Bool' and supplying 'Nothing' by default.
 
--- * Custom ID column
+= Custom ID column
 
 If you don't want to use the default ID column type of 'Int64', you can set a custom type with an @Id@ field.
 This @User@ has a @Text@ ID.
@@ -120,7 +120,7 @@ User
     age     Int
 @
 
--- * Custom Primary Keys
+= Custom Primary Keys
 
 Sometimes you don't want to have an ID column, and you want a different sort of primary key.
 This is a table that stores unique email addresses, and the email is the primary key.
@@ -146,7 +146,7 @@ CREATE TABLE email (
 
 You can specify 1 or more columns in the primary key.
 
--- * Overriding SQL
+= Overriding SQL
 
 You can use a @sql=custom@ annotation to provide some customization on the entity and field.
 For example, you might prefer to name a table differently than what @persistent@ will do by default.
@@ -168,7 +168,7 @@ CREATE TABEL big_user_table (
 );
 @
 
--- * Attributes
+= Attributes
 
 The QuasiQuoter allows you to provide arbitrary attributes to an entity or field.
 This can be used to extend the code in ways that the library hasn't anticipated.
@@ -193,7 +193,7 @@ userAttrs = do
 -- [["sad"],["sogood"]]
 @
 
--- * Documentation Comments
+= Documentation Comments
 
 The quasiquoter supports ordinary comments with @--@ and @#@.
 Since @persistent-2.10.5.1@, it also supports documentation comments.
