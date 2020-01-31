@@ -24,7 +24,6 @@ module Database.Persist.Quasi
 #endif
     ) where
 
-import qualified Debug.Trace as Debug
 import Prelude hiding (lines)
 
 import qualified Data.List.NonEmpty as NEL
