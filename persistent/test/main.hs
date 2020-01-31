@@ -190,6 +190,19 @@ main = hspec $ do
                     , Line { lineIndent = 2, tokens = ["Bar"] }
                     , Line { lineIndent = 4, tokens = ["name", "String"] }
                     ]
+            it "field comments" $ do
+                let text = T.unlines
+                        [ "-- | Model"
+                        , "Foo"
+                        , "  -- | Field"
+                        , "  name String"
+                        ]
+                preparse text `shouldBe`
+                    [ Line { lineIndent = 0, tokens = ["-- | Model"] }
+                    , Line { lineIndent = 0, tokens = ["Foo"] }
+                    , Line { lineIndent = 2, tokens = ["-- | Field"] }
+                    , Line { lineIndent = 2, tokens = ["name", "String"] }
+                    ]
 
     describe "empty" $ do
         it "doesn't dispatch comments" $ do
@@ -283,6 +296,27 @@ main = hspec $ do
                             ["Hello"]
                         }
                     ]
+        it "works with field comments" $ do
+            let text = skipEmpty . preparse . T.unlines $
+                    [ "-- | Model"
+                    , "Foo"
+                    , "  -- | Field"
+                    , "  name String"
+                    ]
+            associateLines text `shouldBe`
+                [ LinesWithComments
+                    { lwcLines =
+                        Line { lineIndent = 0, tokens = "Foo" :| [] } :|
+                            [ Line { lineIndent = 2, tokens = pure "-- | Field" }
+                            , Line { lineIndent = 2, tokens = "name" :| ["String"] }
+                            ]
+                    , lwcComments =
+                        ["Model"]
+                    }
+                ]
+
+
+
     describe "parseLines" $ do
         let subject = parse lowerCaseSettings
         let lines =
@@ -331,3 +365,4 @@ main = hspec $ do
                     , entityComments = Just "Comment\n"
                     }
                 ]
+

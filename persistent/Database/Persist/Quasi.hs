@@ -24,6 +24,7 @@ module Database.Persist.Quasi
 #endif
     ) where
 
+import qualified Debug.Trace as Debug
 import Prelude hiding (lines)
 
 import qualified Data.List.NonEmpty as NEL
@@ -264,22 +265,26 @@ consComment :: Text -> LinesWithComments -> LinesWithComments
 consComment l lwc = lwc { lwcComments = l : lwcComments lwc }
 
 associateLines :: [Line' NonEmpty] -> [LinesWithComments]
-associateLines =
+associateLines lines =
     foldr (\line linesWithComments ->
         case linesWithComments of
             [] ->
                 [newLine line]
             (lwc : lwcs) ->
                 case isComment (NEL.head (tokens line)) of
-                    Just comment ->
+                    Just comment
+                        | lineIndent line == lowestIndent lwc ->
                         consComment comment lwc : lwcs
-                    Nothing ->
+                    _ ->
                         if lineIndent line <= lineIndent (firstLine lwc) then
                             consLine line lwc : lwcs
                         else
                             newLine line : lwc : lwcs
         )
         []
+        lines
+  where
+    lowestIndent _ = minimum . fmap lineIndent $ lines
 
 skipEmpty :: [Line' []] -> [Line' NonEmpty]
 skipEmpty = mapMaybe (traverseLine NEL.nonEmpty)
