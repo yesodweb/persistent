@@ -458,6 +458,7 @@ main = hspec $ do
                     , "        bin"
                     , "    ExtraBlock2"
                     , "        something"
+                    , ""
                     , "IdTable"
                     , "    Id Day default=CURRENT_DATE"
                     , "    name Text"
