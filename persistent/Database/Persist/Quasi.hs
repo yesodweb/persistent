@@ -260,7 +260,6 @@ module Database.Persist.Quasi
 
 import Prelude hiding (lines)
 
-import qualified Debug.Trace as Debug
 import qualified Data.List.NonEmpty as NEL
 import Data.List.NonEmpty (NonEmpty(..))
 import Control.Arrow ((&&&))
@@ -480,12 +479,6 @@ parseLines ps lines =
         let Line _ (name :| entAttribs) :| rest = lwcLines lwc
          in setComments (lwcComments lwc) $ mkEntityDef ps name entAttribs (map (mapLine NEL.toList) rest)
 
---     toEnts0 (Line indent (name:entattribs) : rest) =
---        let (x, y) = span ((> indent) . lineIndent) rest
---        in  mkEntityDef ps name entattribs x : toEnts y
---    toEnts0 (Line _ []:rest) = toEnts rest
---    toEnts0 [] = []
-
 isComment :: Text -> Maybe Text
 isComment xs =
     T.stripPrefix "-- | " xs
@@ -495,6 +488,9 @@ data LinesWithComments = LinesWithComments
     , lwcComments :: [Text]
     } deriving (Eq, Show)
 
+-- TODO: drop this and use <> when 8.2 isn't supported anymore so the
+-- monoid/semigroup nonsense isn't annoying
+appendLwc :: LinesWithComments -> LinesWithComments -> LinesWithComments
 appendLwc a b =
     LinesWithComments (foldr NEL.cons (lwcLines b) (lwcLines a)) (lwcComments a `mappend` lwcComments b)
 
