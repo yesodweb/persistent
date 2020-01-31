@@ -261,8 +261,8 @@ data LinesWithComments = LinesWithComments
     , lwcComments :: [Text]
     } deriving (Eq, Show)
 
-instance Semigroup LinesWithComments where
-    a <> b = LinesWithComments (lwcLines a <> lwcLines b) (lwcComments a <> lwcComments b)
+appendLwc a b =
+    LinesWithComments (lwcLines a <> lwcLines b) (lwcComments a <> lwcComments b)
 
 newLine :: Line' NonEmpty -> LinesWithComments
 newLine l = LinesWithComments (pure l) []
@@ -306,7 +306,7 @@ associateLines lines =
             otherIndent = minimumIndentOf lwc'
          in
             if minIndent < otherIndent then
-                lwc <> lwc' : lwcs
+                appendLwc lwc lwc' : lwcs
             else
                 lwc : lwc' : lwcs
 
