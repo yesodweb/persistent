@@ -447,9 +447,14 @@ main = hspec $ do
                 , ("Extra2", [["something"]])
                 ]
         describe "works with extra blocks" $ do
-            let [lowerCaseTable, idTable] =
+            let [_, lowerCaseTable, idTable] =
                     parse lowerCaseSettings $ T.unlines
-                    [ "LowerCaseTable"
+                    [ ""
+                    , "IdTable"
+                    , "    Id Day default=CURRENT_DATE"
+                    , "    name Text"
+                    , ""
+                    , "LowerCaseTable"
                     , "    Id             sql=my_id"
                     , "    fullName Text"
                     , "    ExtraBlock"
