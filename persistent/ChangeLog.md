@@ -1,5 +1,9 @@
 # Changelog for persistent
 
+## 2.10.5.1
+
+* Add the ability to do documentation comments in entity definition syntax. Unfortunately, TemplateHaskell cannot add documentation comments, so this can't be used to add Haddocks to entities. [#1024](https://github.com/yesodweb/persistent/pull/1024)
+
 ## 2.10.5
 
 * Add the `EntityWithPrefix` type to allow users to specify a custom prefix for raw SQL queries. [#1018](https://github.com/yesodweb/persistent/pull/1018)
