@@ -2,7 +2,7 @@
 
 ## 2.8.2.2
 
-* Fix the `mkPersist` function to not require importing the classes explicitly. Also add more of the required extensions to the error message. []()
+* Fix the `mkPersist` function to not require importing the classes explicitly. Also add more of the required extensions to the error message. [#1027](https://github.com/yesodweb/persistent/pull/1027)
 
 ## 2.8.2.1
 

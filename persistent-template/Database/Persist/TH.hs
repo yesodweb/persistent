@@ -1878,8 +1878,8 @@ requirePersistentExtensions = do
         , StandaloneDeriving
         , UndecidableInstances
         , TypeFamilies
-        , GADTs
         , MultiParamTypeClasses
         , FlexibleInstances
+        , GADTs
         ]
     extensionToPragma ext = "{-# LANGUAGE " <> show ext <> " #-}"
