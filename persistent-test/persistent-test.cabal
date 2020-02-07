@@ -35,6 +35,7 @@ library
                      MpsNoPrefixTest
                      PersistentTest
                      PersistentTestModels
+                     PersistentTestModelsImports
                      PersistTestPetType
                      PersistTestPetCollarType
                      PersistUniqueTest

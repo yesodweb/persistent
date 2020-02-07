@@ -1,5 +1,9 @@
 ## Unreleased changes
 
+## 2.8.2.2
+
+* Fix the `mkPersist` function to not require importing the classes explicitly. [#1027](https://github.com/yesodweb/persistent/pull/1027)
+
 ## 2.8.2.1
 
 * Fix the test-suite for persistent-template. [#1023](https://github.com/yesodweb/persistent/pull/1023)
