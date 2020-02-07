@@ -399,7 +399,6 @@ mkEntityDefSqlTypeExp emEntities entityMap ent =
 -- 'EntityDef's. Works well with the persist quasi-quoter.
 mkPersist :: MkPersistSettings -> [EntityDef] -> Q [Dec]
 mkPersist mps ents' = do
-    requirePersistentExtensions
     x <- fmap Data.Monoid.mconcat $ mapM (persistFieldFromEntity mps) ents
     y <- fmap mconcat $ mapM (mkEntity entityMap mps) ents
     z <- fmap mconcat $ mapM (mkJSON mps) ents
@@ -1877,9 +1876,5 @@ requirePersistentExtensions = do
         , GeneralizedNewtypeDeriving
         , StandaloneDeriving
         , UndecidableInstances
-        , TypeFamilies
-        , MultiParamTypeClasses
-        , FlexibleInstances
-        , GADTs
         ]
     extensionToPragma ext = "{-# LANGUAGE " <> show ext <> " #-}"
