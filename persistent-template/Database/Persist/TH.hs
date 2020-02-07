@@ -58,7 +58,7 @@ module Database.Persist.TH
 import Prelude hiding ((++), take, concat, splitAt, exp)
 
 import Data.Either
-import Control.Monad (forM, mzero, filterM)
+import Control.Monad (forM, mzero, filterM, guard, unless)
 import Data.Aeson
     ( ToJSON (toJSON), FromJSON (parseJSON), (.=), object
     , Value (Object), (.:), (.:?)
@@ -519,20 +519,26 @@ dataTypeDec mps t = do
         names               = entityInstances <> additionalInstances
 
     let (stocks, anyclasses) = partitionEithers (map stratFor names)
+    let stockDerives = do
+            guard (not (null stocks))
+            pure (DerivClause (Just StockStrategy) (map ConT stocks))
+        anyclassDerives = do
+            guard (not (null anyclasses))
+            pure (DerivClause (Just AnyclassStrategy) (map ConT anyclasses))
+    unless (null anyclassDerives) $ do
+        requireExtensions [[DeriveAnyClass]]
     pure $ DataD [] nameFinal paramsFinal
                 Nothing
                 constrs
-                [ DerivClause (Just StockStrategy) (map ConT stocks)
-                , DerivClause (Just AnyclassStrategy) (map ConT anyclasses)
-                ]
+                (stockDerives <> anyclassDerives)
   where
-    stratFor name =
-        if name `elem` stockClasses then
-            Left name
+    stratFor n =
+        if n `elem` stockClasses then
+            Left n
         else
-            Right name
+            Right n
 
-    stockClasses = Set.fromList $ map mkName $
+    stockClasses = Set.fromList . map mkName $
         [ "Eq", "Ord", "Show", "Read", "Bounded", "Enum", "Ix", "Generic", "Data", "Typeable"
         ]
     mkCol x fd@FieldDef {..} =
@@ -1873,7 +1879,6 @@ requirePersistentExtensions = requireExtensions requiredExtensions
         , GeneralizedNewtypeDeriving
         , StandaloneDeriving
         , UndecidableInstances
-        , MultiParamTypeClasses
         ]
 
 -- | Pass in a list of lists of extensions, where any of the given
