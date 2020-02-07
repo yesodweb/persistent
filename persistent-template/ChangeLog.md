@@ -1,5 +1,10 @@
 ## Unreleased changes
 
+## 2.8.2.3
+
+* Require extensions in a more friendly manner.
+* Specify a strategy for all deriving clauses.
+
 ## 2.8.2.2
 
 * Fix the `mkPersist` function to not require importing the classes explicitly. [#1027](https://github.com/yesodweb/persistent/pull/1027)
