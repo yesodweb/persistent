@@ -399,6 +399,7 @@ mkEntityDefSqlTypeExp emEntities entityMap ent =
 -- 'EntityDef's. Works well with the persist quasi-quoter.
 mkPersist :: MkPersistSettings -> [EntityDef] -> Q [Dec]
 mkPersist mps ents' = do
+    requirePersistentExtensions
     x <- fmap Data.Monoid.mconcat $ mapM (persistFieldFromEntity mps) ents
     y <- fmap mconcat $ mapM (mkEntity entityMap mps) ents
     z <- fmap mconcat $ mapM (mkJSON mps) ents
@@ -1128,8 +1129,8 @@ mkUniqueKeyInstances mps t = do
         [_] -> mappend <$> singleUniqueKey <*> atLeastOneKey
         (_:_) -> mappend <$> typeErrorMultiple <*> atLeastOneKey
   where
-    requireUniquesPName = mkName "requireUniquesP"
-    onlyUniquePName = mkName "onlyUniqueP"
+    requireUniquesPName = 'requireUniquesP
+    onlyUniquePName = 'onlyUniqueP
     typeErrorSingle = mkOnlyUniqueError typeErrorNoneCtx
     typeErrorMultiple = mkOnlyUniqueError typeErrorMultipleCtx
 
@@ -1160,7 +1161,7 @@ mkUniqueKeyInstances mps t = do
             [ Clause
                 [ WildP ]
                 (NormalB
-                    (VarE (mkName "error") `AppE` LitE (StringL "impossible"))
+                    (VarE 'error `AppE` LitE (StringL "impossible"))
                 )
                 []
             ]
@@ -1871,5 +1872,14 @@ requirePersistentExtensions = do
                     ]
 
   where
-    requiredExtensions = [DerivingStrategies, GeneralizedNewtypeDeriving, StandaloneDeriving, UndecidableInstances]
+    requiredExtensions =
+        [ DerivingStrategies
+        , GeneralizedNewtypeDeriving
+        , StandaloneDeriving
+        , UndecidableInstances
+        , TypeFamilies
+        , GADTs
+        , MultiParamTypeClasses
+        , FlexibleInstances
+        ]
     extensionToPragma ext = "{-# LANGUAGE " <> show ext <> " #-}"

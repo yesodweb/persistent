@@ -11,6 +11,9 @@ import Init
 import PersistTestPetType
 import PersistTestPetCollarType
 
+-- just need to ensure this compiles
+import PersistentTestModelsImports()
+
 share [mkPersist persistSettings { mpsGeneric = True },  mkMigrate "testMigrate", mkDeleteCascade persistSettings, mkSave "_ignoredSave"] [persistUpperCase|
 
 -- Dedented comment
