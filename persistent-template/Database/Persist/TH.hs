@@ -57,7 +57,8 @@ module Database.Persist.TH
 
 import Prelude hiding ((++), take, concat, splitAt, exp)
 
-import Control.Monad (forM, mzero, filterM)
+import Data.Either
+import Control.Monad (forM, mzero, filterM, guard, unless)
 import Data.Aeson
     ( ToJSON (toJSON), FromJSON (parseJSON), (.=), object
     , Value (Object), (.:), (.:?)
@@ -88,6 +89,7 @@ import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Web.PathPieces (PathPiece(..))
 import Web.HttpApiData (ToHttpApiData(..), FromHttpApiData(..))
+import qualified Data.Set as Set
 
 import Database.Persist
 import Database.Persist.Sql (Migration, PersistFieldSql, SqlBackend, migrate, sqlType)
@@ -399,6 +401,7 @@ mkEntityDefSqlTypeExp emEntities entityMap ent =
 -- 'EntityDef's. Works well with the persist quasi-quoter.
 mkPersist :: MkPersistSettings -> [EntityDef] -> Q [Dec]
 mkPersist mps ents' = do
+    requireExtensions [[TypeFamilies], [GADTs, ExistentialQuantification]]
     x <- fmap Data.Monoid.mconcat $ mapM (persistFieldFromEntity mps) ents
     y <- fmap mconcat $ mapM (mkEntity entityMap mps) ents
     z <- fmap mconcat $ mapM (mkJSON mps) ents
@@ -514,11 +517,30 @@ dataTypeDec mps t = do
     let entityInstances     = map (mkName . unpack) $ entityDerives t
         additionalInstances = filter (`notElem` entityInstances) $ mpsDeriveInstances mps
         names               = entityInstances <> additionalInstances
-    DataD [] nameFinal paramsFinal
+
+    let (stocks, anyclasses) = partitionEithers (map stratFor names)
+    let stockDerives = do
+            guard (not (null stocks))
+            pure (DerivClause (Just StockStrategy) (map ConT stocks))
+        anyclassDerives = do
+            guard (not (null anyclasses))
+            pure (DerivClause (Just AnyclassStrategy) (map ConT anyclasses))
+    unless (null anyclassDerives) $ do
+        requireExtensions [[DeriveAnyClass]]
+    pure $ DataD [] nameFinal paramsFinal
                 Nothing
                 constrs
-                <$> fmap (pure . DerivClause Nothing) (mapM conT names)
+                (stockDerives <> anyclassDerives)
   where
+    stratFor n =
+        if n `elem` stockClasses then
+            Left n
+        else
+            Right n
+
+    stockClasses = Set.fromList . map mkName $
+        [ "Eq", "Ord", "Show", "Read", "Bounded", "Enum", "Ix", "Generic", "Data", "Typeable"
+        ]
     mkCol x fd@FieldDef {..} =
         (mkName $ unpack $ recName mps x fieldHaskell,
          if fieldStrict then isStrict else notStrict,
@@ -1742,6 +1764,7 @@ infixr 5 ++
 mkJSON :: MkPersistSettings -> EntityDef -> Q [Dec]
 mkJSON _ def | ("json" `notElem` entityAttrs def) = return []
 mkJSON mps def = do
+    requireExtensions [[FlexibleInstances]]
     pureE <- [|pure|]
     apE' <- [|(<*>)|]
     packE <- [|pack|]
@@ -1849,13 +1872,33 @@ instanceD = InstanceD Nothing
 --
 -- This function should be called before any code that depends on one of the required extensions being enabled.
 requirePersistentExtensions :: Q ()
-requirePersistentExtensions = do
+requirePersistentExtensions = requireExtensions requiredExtensions
+  where
+    requiredExtensions = map pure
+        [ DerivingStrategies
+        , GeneralizedNewtypeDeriving
+        , StandaloneDeriving
+        , UndecidableInstances
+        ]
+
+-- | Pass in a list of lists of extensions, where any of the given
+-- extensions will satisfy it. For example, you might need either GADTs or
+-- ExistentialQuantification, so you'd write:
+--
+-- > requireExtensions [[GADTs, ExistentialQuantification]]
+--
+-- But if you need TypeFamilies and MultiParamTypeClasses, then you'd
+-- write:
+--
+-- > requireExtensions [[TypeFamilies], [MultiParamTypeClasses]]
+requireExtensions :: [[Extension]] -> Q ()
+requireExtensions requiredExtensions = do
   -- isExtEnabled breaks the persistent-template benchmark with the following error:
   -- Template Haskell error: Can't do `isExtEnabled' in the IO monad
   -- You can workaround this by replacing isExtEnabled with (pure . const True)
-  unenabledExtensions <- filterM (fmap not . isExtEnabled) requiredExtensions
+  unenabledExtensions <- filterM (fmap (not . or) . traverse isExtEnabled) requiredExtensions
 
-  case unenabledExtensions of
+  case mapMaybe listToMaybe unenabledExtensions of
     [] -> pure ()
     [extension] -> fail $ mconcat
                      [ "Generating Persistent entities now requires the "
@@ -1871,10 +1914,4 @@ requirePersistentExtensions = do
                     ]
 
   where
-    requiredExtensions =
-        [ DerivingStrategies
-        , GeneralizedNewtypeDeriving
-        , StandaloneDeriving
-        , UndecidableInstances
-        ]
     extensionToPragma ext = "{-# LANGUAGE " <> show ext <> " #-}"

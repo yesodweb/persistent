@@ -1,5 +1,10 @@
 ## Unreleased changes
 
+## 2.8.2.3
+
+* Require extensions in a more friendly manner. [#1030](https://github.com/yesodweb/persistent/pull/1030)
+* Specify a strategy for all deriving clauses, which avoids the `-Wmissing-deriving-strategy` warning introduced in GHC 8.8.2. [#1030](https://github.com/yesodweb/persistent/pull/1030)
+
 ## 2.8.2.2
 
 * Fix the `mkPersist` function to not require importing the classes explicitly. [#1027](https://github.com/yesodweb/persistent/pull/1027)
