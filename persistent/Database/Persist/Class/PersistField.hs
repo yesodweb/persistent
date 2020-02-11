@@ -1,11 +1,12 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE PatternGuards, DataKinds, TypeOperators, UndecidableInstances #-}
 module Database.Persist.Class.PersistField
     ( PersistField (..)
     , SomePersistField (..)
     , getPersistMap
+    , OverflowNatural(..)
     ) where
 
 import Control.Arrow (second)
@@ -30,6 +31,7 @@ import Data.Word (Word, Word8, Word16, Word32, Word64)
 import Numeric.Natural (Natural)
 import Text.Blaze.Html
 import Text.Blaze.Html.Renderer.Text (renderHtml)
+import GHC.TypeLits
 
 import Database.Persist.Types.Base
 
@@ -322,11 +324,36 @@ instance PersistField UTCTime where
 
     fromPersistValue x = Left $ fromPersistValueError "UTCTime" "time, integer, string, or bytestring" x
 
-instance PersistField Natural where
-  toPersistValue = (toPersistValue :: Int64 -> PersistValue) . fromIntegral
+-- | Prior to @persistent-2.11.0@, we provided an instance of
+-- 'PersistField' for the 'Natural' type. This was in error, because
+-- 'Natural' represents an infinite value, and databases don't have
+-- reasonable types for this.
+--
+-- The instance used the 'Int64' underlying type, which will cause
+-- underflow and overflow errors. This type has the exact same code
+--
+-- @since 2.11.0
+newtype OverflowNatural = OverflowNatural { unOverflowNatural :: Natural }
+    deriving (Eq, Show, Ord)
+
+instance
+  TypeError
+    ( 'Text "The instance of PersistField for the Natural type was removed."
+    ':$$: 'Text "Please see the documentation for OverflowNatural if you want to "
+    ':$$: 'Text "continue using the old behavior or want to see documentation on "
+    ':$$: 'Text "why the instance was removed."
+    )
+  =>
+    PersistField Natural
+  where
+    toPersistValue = undefined
+    fromPersistValue = undefined
+
+instance PersistField OverflowNatural where
+  toPersistValue = (toPersistValue :: Int64 -> PersistValue) . fromIntegral . unOverflowNatural
   fromPersistValue x = case (fromPersistValue x :: Either Text Int64) of
-    Left err -> Left $ T.replace "Int64" "Natural" err
-    Right int -> Right $ fromIntegral int -- TODO use bimap?
+    Left err -> Left $ T.replace "Int64" "OverflowNatural" err
+    Right int -> Right $ OverflowNatural $ fromIntegral int -- TODO use bimap?
 
 instance PersistField a => PersistField (Maybe a) where
     toPersistValue Nothing = PersistNull
