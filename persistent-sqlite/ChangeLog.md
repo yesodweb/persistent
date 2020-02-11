@@ -1,5 +1,9 @@
 # Changelog for persistent-sqlite
 
+## 2.10.6.2
+
+* Move template haskell splices to be correct (and GHC 8.10 compatible) [#1034](https://github.com/yesodweb/persistent/pull/1034)
+
 ## 2.10.6.1
 
 * Missing `includes` and `install-includes` cabal fields added, to allow
