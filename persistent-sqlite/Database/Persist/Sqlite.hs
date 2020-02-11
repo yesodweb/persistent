@@ -717,8 +717,6 @@ instance FromJSON SqliteConnectionInfo where
         <*> o .: "fkEnabled"
         <*> o .:? "extraPragmas" .!= []
 
-makeLenses ''SqliteConnectionInfo
-
 -- | Like `withSqliteConnInfo`, but exposes the internal `Sqlite.Connection`.
 -- For power users who want to manually interact with SQLite's C API via
 -- internals exposed by "Database.Sqlite.Internal"
@@ -809,7 +807,6 @@ data RawSqlite backend = RawSqlite
     { _persistentBackend :: backend -- ^ The persistent backend
     , _rawSqliteConnection :: Sqlite.Connection -- ^ The underlying `Sqlite.Connection`
     }
-makeLenses ''RawSqlite
 
 instance HasPersistBackend b => HasPersistBackend (RawSqlite b) where
     type BaseBackend (RawSqlite b) = BaseBackend b
@@ -872,3 +869,6 @@ instance (PersistUniqueWrite b) => PersistUniqueWrite (RawSqlite b) where
     upsert rec = withReaderT _persistentBackend . upsert rec
     upsertBy uniq rec = withReaderT _persistentBackend . upsertBy uniq rec
     putMany = withReaderT _persistentBackend . putMany
+
+makeLenses ''RawSqlite
+makeLenses ''SqliteConnectionInfo
