@@ -329,8 +329,13 @@ instance PersistField UTCTime where
 -- 'Natural' represents an infinite value, and databases don't have
 -- reasonable types for this.
 --
--- The instance used the 'Int64' underlying type, which will cause
--- underflow and overflow errors. This type has the exact same code
+-- The instance for 'Natural' used the 'Int64' underlying type, which will
+-- cause underflow and overflow errors. This type has the exact same code
+-- in the instances, and will work seamlessly.
+--
+-- A more appropriate type for this is the 'Word' series of types from
+-- "Data.Word". These have a bounded size, are guaranteed to be
+-- non-negative, and are quite efficient for the database to store.
 --
 -- @since 2.11.0
 newtype OverflowNatural = OverflowNatural { unOverflowNatural :: Natural }
@@ -342,6 +347,8 @@ instance
     ':$$: 'Text "Please see the documentation for OverflowNatural if you want to "
     ':$$: 'Text "continue using the old behavior or want to see documentation on "
     ':$$: 'Text "why the instance was removed."
+    ':$$: 'Text ""
+    ':$$: 'Text "This error instance will be removed in a future release."
     )
   =>
     PersistField Natural
