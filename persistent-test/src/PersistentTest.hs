@@ -1,5 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE RecordWildCards, UndecidableInstances #-}
+
 module PersistentTest
     ( module PersistentTest
     , cleanDB
@@ -631,3 +632,49 @@ specsWith runDb = describe "persistent" $ do
       fieldComments nameField
         `shouldBe`
           Just "Fields should be documentable.\n"
+
+  describe "JsonEncoding" $ do
+    let
+      subject =
+        JsonEncoding "Bob" 32
+      subjectEntity =
+        Entity (JsonEncodingKey (jsonEncodingName subject)) subject
+
+    it "encodes without an ID field" $ do
+      toJSON subjectEntity
+        `shouldBe`
+          Object (M.fromList
+            [ ("name", String "Bob")
+            , ("age", toJSON (32 :: Int))
+            ])
+
+    it "decodes without an ID field" $ do
+      let
+        json = encode . Object . M.fromList $
+          [ ("name", String "Bob")
+          , ("age", toJSON (32 :: Int))
+          ]
+      decode json
+        `shouldBe`
+          Just subjectEntity
+
+    prop "works with a Primary" $ \jsonEncoding -> do
+      let
+        ent =
+          Entity (JsonEncodingKey (jsonEncodingName jsonEncoding)) jsonEncoding
+      decode (encode ent)
+        `shouldBe`
+          Just ent
+
+    prop "excuse me what" $ \j@JsonEncoding{..} -> do
+      let
+        ent =
+          Entity (JsonEncodingKey jsonEncodingName) j
+      toJSON ent
+        `shouldBe`
+          Object (M.fromList
+            [ ("name", toJSON jsonEncodingName)
+            , ("age", toJSON jsonEncodingAge)
+            ])
+
+

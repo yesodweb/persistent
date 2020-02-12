@@ -5,6 +5,7 @@ module PersistentTestModels where
 
 import Data.Aeson
 
+import Test.QuickCheck
 import Database.Persist.Sql
 import Database.Persist.TH
 import Init
@@ -101,6 +102,7 @@ share [mkPersist persistSettings { mpsGeneric = True },  mkMigrate "testMigrate"
       -- | Fields should be documentable.
       name String
       parent RelationshipId Maybe
+
 |]
 
 deriving instance Show (BackendKey backend) => Show (PetGeneric backend)
@@ -118,7 +120,19 @@ NoPrefix2
     unprefixedLeft Int
     unprefixedRight String
     deriving Show Eq
+
 |]
+
+share [mkPersist sqlSettings] [persistLowerCase|
+JsonEncoding json
+    name Text
+    age  Int
+    Primary name
+    deriving Show Eq
+|]
+
+instance Arbitrary JsonEncoding where
+    arbitrary = JsonEncoding <$> arbitrary <*> arbitrary
 
 deriving instance Show (BackendKey backend) => Show (NoPrefix1Generic backend)
 deriving instance Eq (BackendKey backend) => Eq (NoPrefix1Generic backend)
