@@ -231,6 +231,7 @@ main = do
     it "properly migrates to a composite primary key (issue #669)" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
         runMigrationSilent compositeSetup
         runMigrationSilent compositeMigrateTest
+        pure ()
 
     it "afterException" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
         runMigrationSilent testMigrate
