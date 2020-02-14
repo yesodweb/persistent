@@ -102,6 +102,7 @@ main = do
     mapM_ setup
       [ PersistentTest.testMigrate
       , PersistentTest.noPrefixMigrate
+      , PersistentTest.treeMigrate
       , EmbedTest.embedMigrate
       , EmbedOrderTest.embedOrderMigrate
       , LargeNumberTest.numberMigrate
