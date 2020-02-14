@@ -32,7 +32,7 @@ Source1 sql=source
     field4 Target1Id
 |]
 
-specsWith :: (MonadIO m) => RunDb SqlBackend m -> Spec
+specsWith :: (MonadUnliftIO m) => RunDb SqlBackend m -> Spec
 specsWith runDb = describe "Migration" $ do
     it "is idempotent" $ runDb $ do
       again <- getMigration migrationMigrate
