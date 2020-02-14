@@ -65,6 +65,9 @@ import Data.Aeson
     , eitherDecodeStrict'
     )
 import qualified Data.ByteString as BS
+import Data.Typeable (Typeable)
+import Data.Ix (Ix)
+import Data.Data (Data)
 import Data.Char (toLower, toUpper)
 import qualified Data.HashMap.Strict as HM
 import Data.Int (Int64)
@@ -538,9 +541,12 @@ dataTypeDec mps t = do
         else
             Right n
 
-    stockClasses = Set.fromList . map mkName $
+    stockClasses =
+        Set.fromList (map mkName
         [ "Eq", "Ord", "Show", "Read", "Bounded", "Enum", "Ix", "Generic", "Data", "Typeable"
+        ] <> [''Eq, ''Ord, ''Show, ''Read, ''Bounded, ''Enum, ''Ix, ''Generic, ''Data, ''Typeable
         ]
+        )
     mkCol x fd@FieldDef {..} =
         (mkName $ unpack $ recName mps x fieldHaskell,
          if fieldStrict then isStrict else notStrict,
