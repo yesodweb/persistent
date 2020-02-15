@@ -28,6 +28,7 @@ module Database.Persist.TH
     , mpsBackend
     , mpsGeneric
     , mpsPrefixFields
+    , mpsFieldLabelModifier
     , mpsEntityJSON
     , mpsGenerateLenses
     , mpsDeriveInstances
@@ -434,6 +435,8 @@ data MkPersistSettings = MkPersistSettings
     -- False.
     , mpsPrefixFields :: Bool
     -- ^ Prefix field names with the model name. Default: True.
+    , mpsFieldLabelModifier :: Text -> Text -> Text
+    -- ^ Customise the field accessors and lens names using the entity and field name. Default: appends both
     , mpsEntityJSON :: Maybe EntityJSON
     -- ^ Generate @ToJSON@/@FromJSON@ instances for each model types. If it's
     -- @Nothing@, no instances will be generated. Default:
@@ -473,6 +476,7 @@ mkPersistSettings t = MkPersistSettings
     { mpsBackend = t
     , mpsGeneric = False
     , mpsPrefixFields = True
+    , mpsFieldLabelModifier = (++)
     , mpsEntityJSON = Just EntityJSON
         { entityToJSON = 'entityIdToJSON
         , entityFromJSON = 'entityIdFromJSON
@@ -487,9 +491,10 @@ sqlSettings = mkPersistSettings $ ConT ''SqlBackend
 
 recNameNoUnderscore :: MkPersistSettings -> HaskellName -> HaskellName -> Text
 recNameNoUnderscore mps dt f
-  | mpsPrefixFields mps = lowerFirst (unHaskellName dt) ++ upperFirst ft
-  | otherwise           = lowerFirst ft
+  | mpsPrefixFields mps = modifier (lowerFirst $ unHaskellName dt) (upperFirst ft)
+  | otherwise           = modifier "" $ lowerFirst ft
   where
+    modifier = mpsFieldLabelModifier mps
     ft = unHaskellName f
 
 recName :: MkPersistSettings -> HaskellName -> HaskellName -> Text

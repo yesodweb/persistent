@@ -10,6 +10,7 @@ import Database.Persist.TH
 import Init
 import PersistTestPetType
 import PersistTestPetCollarType
+import Data.Text (append)
 
 -- just need to ensure this compiles
 import PersistentTestModelsImports()
@@ -106,6 +107,9 @@ share [mkPersist persistSettings { mpsGeneric = True },  mkMigrate "testMigrate"
 deriving instance Show (BackendKey backend) => Show (PetGeneric backend)
 deriving instance Eq (BackendKey backend) => Eq (PetGeneric backend)
 
+deriving instance Show (BackendKey backend) => Show (RelationshipGeneric backend)
+deriving instance Eq (BackendKey backend) => Eq (RelationshipGeneric backend)
+
 share [mkPersist persistSettings { mpsPrefixFields = False, mpsGeneric = True }
       , mkMigrate "noPrefixMigrate"
       ] [persistLowerCase|
@@ -126,8 +130,32 @@ deriving instance Eq (BackendKey backend) => Eq (NoPrefix1Generic backend)
 deriving instance Show (BackendKey backend) => Show (NoPrefix2Generic backend)
 deriving instance Eq (BackendKey backend) => Eq (NoPrefix2Generic backend)
 
-deriving instance Show (BackendKey backend) => Show (RelationshipGeneric backend)
-deriving instance Eq (BackendKey backend) => Eq (RelationshipGeneric backend)
+share [mkPersist persistSettings { 
+          mpsFieldLabelModifier = \entity field -> case entity of
+            "customPrefix1" -> append "_cp1" field
+            "customPrefix2" -> append "_cp2" field
+            _ -> append "_" field
+        , mpsGeneric = True
+        , mpsPrefixFields = True
+        }
+      , mkMigrate "customPrefixMigrate"
+      ] [persistLowerCase|
+CustomPrefix1
+    customFieldName Int
+CustomPrefix2
+    otherCustomFieldName Int
+    customPrefixedRef CustomPrefix1Id
++CustomPrefixSum
+    customPrefixedLeft Int
+    customPrefixedRight String
+    deriving Show Eq
+|]
+
+deriving instance Show (BackendKey backend) => Show (CustomPrefix1Generic backend)
+deriving instance Eq (BackendKey backend) => Eq (CustomPrefix1Generic backend)
+
+deriving instance Show (BackendKey backend) => Show (CustomPrefix2Generic backend)
+deriving instance Eq (BackendKey backend) => Eq (CustomPrefix2Generic backend)
 
 -- | Reverses the order of the fields of an entity.  Used to test
 -- @??@ placeholders of 'rawSql'.
