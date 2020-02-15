@@ -6,6 +6,7 @@ module PersistentTest
     , testMigrate
     , noPrefixMigrate
     , customPrefixMigrate
+    , treeMigrate
     ) where
 
 import Control.Monad.Fail

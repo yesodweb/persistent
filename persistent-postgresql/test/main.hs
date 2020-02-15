@@ -104,6 +104,7 @@ main = do
       [ PersistentTest.testMigrate
       , PersistentTest.noPrefixMigrate
       , PersistentTest.customPrefixMigrate
+      , PersistentTest.treeMigrate
       , EmbedTest.embedMigrate
       , EmbedOrderTest.embedOrderMigrate
       , LargeNumberTest.numberMigrate
