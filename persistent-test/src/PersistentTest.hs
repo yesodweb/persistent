@@ -5,6 +5,7 @@ module PersistentTest
     , cleanDB
     , testMigrate
     , noPrefixMigrate
+    , treeMigrate
     ) where
 
 import Control.Monad.Fail

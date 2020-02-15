@@ -564,24 +564,41 @@ fixForeignKeysAll unEnts = map fixForeignKeys unEnts
     -- check the count and the sqltypes match and update the foreignFields with the names of the primary columns
     fixForeignKey :: EntityDef -> UnboundForeignDef -> ForeignDef
     fixForeignKey ent (UnboundForeignDef foreignFieldTexts fdef) =
-        case M.lookup (foreignRefTableHaskell fdef) entLookup of
-          Just pent -> case entityPrimary pent of
-             Just pdef ->
-                 if length foreignFieldTexts /= length (compositeFields pdef)
-                   then lengthError pdef
-                   else let fds_ffs = zipWith (toForeignFields pent)
-                                foreignFieldTexts
-                                (compositeFields pdef)
-                        in  fdef { foreignFields = map snd fds_ffs
-                                 , foreignNullable = setNull $ map fst fds_ffs
-                                 }
-             Nothing ->
-                 error $ "no explicit primary key fdef="++show fdef++ " ent="++show ent
-          Nothing ->
-             error $ "could not find table " ++ show (foreignRefTableHaskell fdef)
-               ++ " fdef=" ++ show fdef ++ " allnames="
-               ++ show (map (unHaskellName . entityHaskell . unboundEntityDef) unEnts)
-               ++ "\n\nents=" ++ show ents
+        let pentError =
+                error $ "could not find table " ++ show (foreignRefTableHaskell fdef)
+                ++ " fdef=" ++ show fdef ++ " allnames="
+                ++ show (map (unHaskellName . entityHaskell . unboundEntityDef) unEnts)
+                ++ "\n\nents=" ++ show ents
+            pent =
+                fromMaybe pentError $ M.lookup (foreignRefTableHaskell fdef) entLookup
+         in
+            case entityPrimary pent of
+                Just pdef ->
+                    if length foreignFieldTexts /= length (compositeFields pdef)
+                    then
+                        lengthError pdef
+                    else
+                        let
+                            fds_ffs =
+                                zipWith (toForeignFields pent)
+                                    foreignFieldTexts
+                                    (compositeFields pdef)
+                            dbname =
+                                unDBName (entityDB pent)
+                            oldDbName =
+                                unDBName (foreignRefTableDBName fdef)
+                         in fdef
+                            { foreignFields = map snd fds_ffs
+                            , foreignNullable = setNull $ map fst fds_ffs
+                            , foreignRefTableDBName =
+                                DBName dbname
+                            , foreignConstraintNameDBName =
+                                DBName
+                                . T.replace oldDbName dbname . unDBName
+                                $ foreignConstraintNameDBName fdef
+                            }
+                Nothing ->
+                    error $ "no explicit primary key fdef="++show fdef++ " ent="++show ent
       where
         setNull :: [FieldDef] -> Bool
         setNull [] = error "setNull: impossible!"
@@ -628,9 +645,9 @@ overUnboundEntityDef
 overUnboundEntityDef f ubed =
     ubed { unboundEntityDef = f (unboundEntityDef ubed) }
 
-
 lookupKeyVal :: Text -> [Text] -> Maybe Text
 lookupKeyVal key = lookupPrefix $ key `mappend` "="
+
 lookupPrefix :: Text -> [Text] -> Maybe Text
 lookupPrefix prefix = msum . map (T.stripPrefix prefix)
 
@@ -894,13 +911,21 @@ takeForeign :: PersistSettings
 takeForeign ps tableName _defs (refTableName:n:rest)
     | not (T.null n) && isLower (T.head n)
         = UnboundForeignDef fields $ ForeignDef
-            (HaskellName refTableName)
-            (DBName $ psToDBName ps refTableName)
-            (HaskellName n)
-            (DBName $ psToDBName ps (tableName `T.append` n))
-            []
-            attrs
-            False
+            { foreignRefTableHaskell =
+                HaskellName refTableName
+            , foreignRefTableDBName =
+                DBName $ psToDBName ps refTableName
+            , foreignConstraintNameHaskell =
+                HaskellName n
+            , foreignConstraintNameDBName =
+                DBName $ psToDBName ps (tableName `T.append` n)
+            , foreignFields =
+                []
+            , foreignAttrs =
+                attrs
+            , foreignNullable =
+                False
+            }
   where
     (fields,attrs) = break ("!" `T.isPrefixOf`) rest
 

@@ -31,12 +31,18 @@ CustomConstraint3
     deriving Show
 |]
 
-specs :: (MonadIO m, MonadFail m) => RunDb SqlBackend m -> Spec
+clean :: MonadUnliftIO m => SqlPersistT m ()
+clean = do
+    rawExecute "drop table custom_constraint3" []
+    rawExecute "drop table custom_constraint2" []
+    rawExecute "drop table custom_constraint1" []
+
+specs :: (MonadUnliftIO m, MonadFail m) => RunDb SqlBackend m -> Spec
 specs runDb = do
-  describe "custom constraint used in migration" $ do
+  describe "custom constraint used in migration" $ before_ (runDb $ void $ runMigrationSilent customConstraintMigrate) $ after_ (runDb clean) $ do
+
     it "custom constraint is actually created" $ runDb $ do
-      runMigration customConstraintMigrate
-      runMigration customConstraintMigrate -- run a second time to ensure the constraint isn't dropped
+      runMigrationSilent customConstraintMigrate -- run a second time to ensure the constraint isn't dropped
       let query = T.concat ["SELECT COUNT(*) "
                            ,"FROM information_schema.key_column_usage "
                            ,"WHERE ordinal_position=1 "
@@ -51,10 +57,12 @@ specs runDb = do
                                       ,PersistText "cc_id"
                                       ,PersistText "custom_constraint"]
       liftIO $ 1 @?= (exists :: Int)
+
     it "allows multiple constraints on a single column" $ runDb $ do
-      runMigration customConstraintMigrate
-      -- | Here we add another foreign key on the same column where the default one already exists. In practice, this could be a compound key with another field.
+      -- Here we add another foreign key on the same column where the
+      -- default one already exists. In practice, this could be
+      -- a compound key with another field.
       rawExecute "ALTER TABLE custom_constraint3 ADD CONSTRAINT extra_constraint FOREIGN KEY(cc_id1) REFERENCES custom_constraint1(id)" []
-      -- | This is where the error is thrown in `getColumn`
+      -- This is where the error is thrown in `getColumn`
       _ <- getMigration customConstraintMigrate
       pure ()

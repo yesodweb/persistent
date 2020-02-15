@@ -23,6 +23,7 @@ module MyInit (
   , module Database.Persist.Sql.Raw.QQ
   , module Test.Hspec
   , module Test.HUnit
+  , MonadUnliftIO
   , liftIO
   , mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase
   , Int32, Int64
