@@ -139,9 +139,9 @@ deriving instance Eq (BackendKey backend) => Eq (NoPrefix2Generic backend)
 
 share [mkPersist persistSettings { 
           mpsFieldLabelModifier = \entity field -> case entity of
-            "customPrefix1" -> append "_cp1" field
-            "customPrefix2" -> append "_cp2" field
-            _ -> append "_" field
+            "CustomPrefix1" -> append "_cp1" field
+            "CustomPrefix2" -> append "_cp2" field
+            _ -> append entity field
         , mpsGeneric = True
         , mpsPrefixFields = True
         }

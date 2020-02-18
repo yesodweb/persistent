@@ -439,7 +439,8 @@ data MkPersistSettings = MkPersistSettings
     , mpsPrefixFields :: Bool
     -- ^ Prefix field names with the model name. Default: True.
     , mpsFieldLabelModifier :: Text -> Text -> Text
-    -- ^ Customise the field accessors and lens names using the entity and field name. Default: appends both
+    -- ^ Customise the field accessors and lens names using the entity and field name. 
+    -- Both arguments are upper cased. Default: appends both
     , mpsEntityJSON :: Maybe EntityJSON
     -- ^ Generate @ToJSON@/@FromJSON@ instances for each model types. If it's
     -- @Nothing@, no instances will be generated. Default:
@@ -494,7 +495,7 @@ sqlSettings = mkPersistSettings $ ConT ''SqlBackend
 
 recNameNoUnderscore :: MkPersistSettings -> HaskellName -> HaskellName -> Text
 recNameNoUnderscore mps dt f
-  | mpsPrefixFields mps = modifier (lowerFirst $ unHaskellName dt) (upperFirst ft)
+  | mpsPrefixFields mps = lowerFirst $ modifier (unHaskellName dt) (upperFirst ft)
   | otherwise           = modifier "" $ lowerFirst ft
   where
     modifier = mpsFieldLabelModifier mps
