@@ -539,8 +539,7 @@ doesTableExist getter (DBName name) = do
     stmt <- getter sql
     with (stmtQuery stmt vals) (\src -> runConduit $ src .| start)
   where
-    sql = "SELECT COUNT(*) FROM pg_catalog.pg_tables WHERE schemaname != 'pg_catalog'"
-          <> " AND schemaname != 'information_schema' AND tablename=?"
+    sql = "SELECT COUNT(*) FROM pg_catalog.pg_tables WHERE schemaname == current_schema() AND tablename=?"
     vals = [PersistText name]
 
     start = await >>= maybe (error "No results when checking doesTableExist") start'
@@ -684,10 +683,9 @@ getColumns getter def cols = do
                           ,"c.column_name "
                           ,"FROM information_schema.key_column_usage c, "
                           ,"information_schema.table_constraints k "
-                          ,"WHERE c.table_catalog=current_database() "
-                          ,"AND c.table_catalog=k.table_catalog "
-                          ,"AND c.table_schema=current_schema() "
-                          ,"AND c.table_schema=k.table_schema "
+                          ,"WHERE "
+                          , currentSchemaAndCatalog "c"
+                          , currentSchemaAndCatalog "k"
                           ,"AND c.table_name=? "
                           ,"AND c.table_name=k.table_name "
                           ,"AND c.column_name <> ? "
@@ -727,6 +725,13 @@ getColumns getter def cols = do
                 cols <- helper
                 return $ col' : cols
 
+currentSchemaAndCatalog :: Text -> Text
+currentSchemaAndCatalog table = "(" <> T.intercalate " AND " conds <> ")"
+  where conds = (table <>) <$> [".table_catalog         = current_database()"
+                               ,".constraint_catalog    = current_database()"
+                               ,".table_schema          = current_schema()"
+                               ,".constraint_schema     = current_schema()"]
+  
 -- | Check if a column name is listed as the "safe to remove" in the entity
 -- list.
 safeToRemove :: EntityDef -> DBName -> Bool
@@ -812,6 +817,9 @@ getColumn getter tableName' [PersistText columnName, PersistText isNullable, Per
                            ,"information_schema.key_column_usage kcu, "
                            ,"information_schema.table_constraints tc "
                            ,"WHERE tc.constraint_type='FOREIGN KEY' "
+                           , currentSchemaAndCatalog "ccu"
+                           , currentSchemaAndCatalog "kcu"
+                           , currentSchemaAndCatalog "tc"
                            ,"AND kcu.constraint_name=tc.constraint_name "
                            ,"AND ccu.constraint_name=kcu.constraint_name "
                            ,"AND kcu.ordinal_position=1 "
