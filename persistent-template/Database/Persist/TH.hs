@@ -29,6 +29,7 @@ module Database.Persist.TH
     , mpsGeneric
     , mpsPrefixFields
     , mpsFieldLabelModifier
+    , mpsConstraintLabelModifier
     , mpsEntityJSON
     , mpsGenerateLenses
     , mpsDeriveInstances
@@ -438,9 +439,24 @@ data MkPersistSettings = MkPersistSettings
     -- False.
     , mpsPrefixFields :: Bool
     -- ^ Prefix field names with the model name. Default: True.
+    --
+    -- Note: this field is deprecated. Use the mpsFieldLabelModifier  and mpsConstraintLabelModifier instead.
     , mpsFieldLabelModifier :: Text -> Text -> Text
     -- ^ Customise the field accessors and lens names using the entity and field name. 
-    -- Both arguments are upper cased. Default: appends both
+    -- Both arguments are upper cased. 
+    --
+    -- Default: appends entity and field.
+    --
+    -- Note: this setting is ignored if mpsPrefixFields is set to False.
+    -- @since 2.10.5.3
+    , mpsConstraintLabelModifier :: Text -> Text -> Text
+    -- ^ Customise the Constraint names using the entity and field name. The result
+    -- should be a valid haskell type (start with an upper cased letter).
+    --
+    -- Default: appends entity and field
+    --
+    -- Note: this setting is ignored if mpsPrefixFields is set to False.
+    -- @since 2.10.5.3
     , mpsEntityJSON :: Maybe EntityJSON
     -- ^ Generate @ToJSON@/@FromJSON@ instances for each model types. If it's
     -- @Nothing@, no instances will be generated. Default:
@@ -481,6 +497,7 @@ mkPersistSettings t = MkPersistSettings
     , mpsGeneric = False
     , mpsPrefixFields = True
     , mpsFieldLabelModifier = (++)
+    , mpsConstraintLabelModifier = (++)
     , mpsEntityJSON = Just EntityJSON
         { entityToJSON = 'entityIdToJSON
         , entityFromJSON = 'entityIdFromJSON
@@ -496,7 +513,7 @@ sqlSettings = mkPersistSettings $ ConT ''SqlBackend
 recNameNoUnderscore :: MkPersistSettings -> HaskellName -> HaskellName -> Text
 recNameNoUnderscore mps dt f
   | mpsPrefixFields mps = lowerFirst $ modifier (unHaskellName dt) (upperFirst ft)
-  | otherwise           = modifier "" $ lowerFirst ft
+  | otherwise           = lowerFirst ft
   where
     modifier = mpsFieldLabelModifier mps
     ft = unHaskellName f
@@ -575,13 +592,14 @@ dataTypeDec mps t = do
         [(notStrict, maybeIdType mps fd Nothing Nothing)]
 
 sumConstrName :: MkPersistSettings -> EntityDef -> FieldDef -> Name
-sumConstrName mps t FieldDef {..} = mkName $ unpack $ concat
-    [ if mpsPrefixFields mps
-        then unHaskellName $ entityHaskell t
-        else ""
-    , upperFirst $ unHaskellName fieldHaskell
-    , "Sum"
-    ]
+sumConstrName mps t FieldDef {..} = mkName $ unpack name 
+    where
+        name
+            | mpsPrefixFields mps = modifiedName ++ "Sum"
+            | otherwise           = fieldName ++ "Sum"
+        modifiedName = mpsConstraintLabelModifier mps entityName fieldName
+        entityName   = unHaskellName $ entityHaskell t
+        fieldName    = upperFirst $ unHaskellName fieldHaskell
 
 uniqueTypeDec :: MkPersistSettings -> EntityDef -> Dec
 uniqueTypeDec mps t =
@@ -1753,12 +1771,15 @@ filterConName' :: MkPersistSettings
                -> HaskellName -- ^ table
                -> HaskellName -- ^ field
                -> Name
-filterConName' mps entity field = mkName $ unpack $ concat
-    [ if mpsPrefixFields mps || field == HaskellName "Id"
-        then unHaskellName entity
-        else ""
-    , upperFirst $ unHaskellName field
-    ]
+filterConName' mps entity field = mkName $ unpack name
+    where 
+        name 
+            | field == HaskellName "Id" = entityName ++ fieldName
+            | mpsPrefixFields mps       = modifiedName
+            | otherwise                 = fieldName
+        modifiedName = mpsConstraintLabelModifier mps entityName fieldName
+        entityName   = unHaskellName entity
+        fieldName    = upperFirst $ unHaskellName field
 
 ftToType :: FieldType -> Type
 ftToType (FTTypeCon Nothing t) = ConT $ mkName $ unpack t

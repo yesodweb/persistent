@@ -117,7 +117,12 @@ deriving instance Eq (BackendKey backend) => Eq (PetGeneric backend)
 deriving instance Show (BackendKey backend) => Show (RelationshipGeneric backend)
 deriving instance Eq (BackendKey backend) => Eq (RelationshipGeneric backend)
 
-share [mkPersist persistSettings { mpsPrefixFields = False, mpsGeneric = True }
+share [mkPersist persistSettings { 
+          mpsPrefixFields = False
+        , mpsFieldLabelModifier = \_ _ -> "" -- this field is ignored when mpsPrefixFields == False
+        , mpsConstraintLabelModifier = \_ _ -> "" -- this field is ignored when mpsPrefixFields == False
+        , mpsGeneric = True 
+        }
       , mkMigrate "noPrefixMigrate"
       ] [persistLowerCase|
 NoPrefix1
@@ -141,9 +146,13 @@ share [mkPersist persistSettings {
           mpsFieldLabelModifier = \entity field -> case entity of
             "CustomPrefix1" -> append "_cp1" field
             "CustomPrefix2" -> append "_cp2" field
-            _ -> append entity field
+            _ -> error "should not be called"
+        , mpsConstraintLabelModifier = \entity field -> case entity of
+            "CustomPrefix1" -> append "CP1" field
+            "CustomPrefix2" -> append "CP2" field
+            "CustomPrefixSum" -> append "CP" field
+            _ -> error "should not be called"
         , mpsGeneric = True
-        , mpsPrefixFields = True
         }
       , mkMigrate "customPrefixMigrate"
       ] [persistLowerCase|
