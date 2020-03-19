@@ -272,6 +272,7 @@ import Data.Monoid (mappend)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Database.Persist.Types
+import Text.Read (readEither)
 
 data ParseState a = PSDone | PSFail String | PSSuccess a Text deriving Show
 
@@ -908,28 +909,48 @@ takeForeign :: PersistSettings
           -> [FieldDef]
           -> [Text]
           -> UnboundForeignDef
-takeForeign ps tableName _defs (refTableName:n:rest)
-    | not (T.null n) && isLower (T.head n)
-        = UnboundForeignDef fields $ ForeignDef
-            { foreignRefTableHaskell =
-                HaskellName refTableName
-            , foreignRefTableDBName =
-                DBName $ psToDBName ps refTableName
-            , foreignConstraintNameHaskell =
-                HaskellName n
-            , foreignConstraintNameDBName =
-                DBName $ psToDBName ps (tableName `T.append` n)
-            , foreignFields =
-                []
-            , foreignAttrs =
-                attrs
-            , foreignNullable =
-                False
-            }
+takeForeign ps tableName _defs = takeRefTable
   where
-    (fields,attrs) = break ("!" `T.isPrefixOf`) rest
+    errorPrefix :: String
+    errorPrefix = "invalid foreign key constraint on table[" ++ show tableName ++ "] "
 
-takeForeign _ tableName _ xs = error $ "invalid foreign key constraint on table[" ++ show tableName ++ "] expecting a lower case constraint name xs=" ++ show xs
+    takeRefTable :: [Text] -> UnboundForeignDef
+    takeRefTable [] = error $ errorPrefix ++ " expecting foreign table name"
+    takeRefTable (refTableName:restLine) = go restLine Nothing Nothing
+      where
+        go :: [Text] -> Maybe CascadeAction -> Maybe CascadeAction -> UnboundForeignDef
+        go (n:rest) onDelete onUpdate | not (T.null n) && isLower (T.head n)
+            = UnboundForeignDef fields $ ForeignDef
+                { foreignRefTableHaskell =
+                    HaskellName refTableName
+                , foreignRefTableDBName =
+                    DBName $ psToDBName ps refTableName
+                , foreignConstraintNameHaskell =
+                    HaskellName n
+                , foreignConstraintNameDBName =
+                    DBName $ psToDBName ps (tableName `T.append` n)
+                , foreignOnDelete = onDelete
+                , foreignOnUpdate = onUpdate
+                , foreignFields =
+                    []
+                , foreignAttrs =
+                    attrs
+                , foreignNullable =
+                    False
+                }
+          where
+            (fields,attrs) = break ("!" `T.isPrefixOf`) rest
+        go ((T.stripPrefix "OnDelete" -> Just onDelete) : rest) onDelete' onUpdate
+          = case (onDelete', readEither $ T.unpack onDelete) of
+            (Nothing, Right cascadingAction) -> go rest (Just cascadingAction) onUpdate
+            (Nothing, Left _) -> error $ errorPrefix ++ "could not parse OnDelete action"
+            (Just _, _)  -> error $ errorPrefix ++ "found more than one OnDelete actions"
+        go ((T.stripPrefix "OnUpdate" -> Just onUpdate) : rest) onDelete onUpdate'
+          = case (onUpdate', readEither $ T.unpack onUpdate) of
+            (Nothing, Right cascadingAction) -> go rest onDelete (Just cascadingAction)
+            (Nothing, Left _) -> error $ errorPrefix ++ "could not parse OnUpdate action"
+            (Just _, _)  -> error $ errorPrefix ++ "found more than one OnUpdate actions"
+        go xs _ _ = error $ errorPrefix ++ "expecting a lower case constraint name or a cascading action xs=" ++ show xs
 
 takeDerives :: [Text] -> Maybe [Text]
 takeDerives ("deriving":rest) = Just rest
