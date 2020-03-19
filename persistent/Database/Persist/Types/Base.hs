@@ -295,10 +295,15 @@ data ForeignDef = ForeignDef
     , foreignRefTableDBName        :: !DBName
     , foreignConstraintNameHaskell :: !HaskellName
     , foreignConstraintNameDBName  :: !DBName
+    , foreignOnDelete              :: !(Maybe CascadeAction)
+    , foreignOnUpdate              :: !(Maybe CascadeAction)
     , foreignFields                :: ![(ForeignFieldDef, ForeignFieldDef)] -- this entity plus the primary entity
     , foreignAttrs                 :: ![Attr]
     , foreignNullable              :: Bool
     }
+    deriving (Show, Eq, Read, Ord)
+
+data CascadeAction = Cascade | Restrict | SetNull | SetDefault
     deriving (Show, Eq, Read, Ord)
 
 data PersistException

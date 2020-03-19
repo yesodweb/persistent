@@ -580,7 +580,7 @@ sqlColumn noRef (Column name isNull typ def _cn _maxLen ref) = T.concat
     ]
 
 sqlForeign :: ForeignDef -> Text
-sqlForeign fdef = T.concat
+sqlForeign fdef = T.concat $
     [ ", CONSTRAINT "
     , escape $ foreignConstraintNameDBName fdef
     , " FOREIGN KEY("
@@ -590,7 +590,17 @@ sqlForeign fdef = T.concat
     , "("
     , T.intercalate "," $ map (escape . snd . snd) $ foreignFields fdef
     , ")"
-    ]
+    ] ++ onDelete ++ onUpdate
+  where
+    onDelete = fmap (T.append " ON DELETE ") $ showAction $ foreignOnDelete fdef
+    onUpdate = fmap (T.append " ON UPDATE ") $ showAction $ foreignOnUpdate fdef
+
+    showAction action = case action of
+      Nothing         -> []
+      Just Cascade    -> ["CASCADE"]
+      Just Restrict   -> ["RESTRICT"]
+      Just SetNull    -> ["SET NULL"]
+      Just SetDefault -> ["SET DEFAULT"]
 
 sqlUnique :: UniqueDef -> Text
 sqlUnique (UniqueDef _ cname cols _) = T.concat
