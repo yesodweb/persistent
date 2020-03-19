@@ -22,6 +22,7 @@ import qualified EmptyEntityTest
 import qualified EmbedOrderTest
 import qualified EmbedTest
 import qualified EquivalentTypeTest
+import qualified ForeignKey
 import qualified HtmlTest
 import qualified LargeNumberTest
 import qualified MaxLenTest
@@ -141,6 +142,7 @@ main = do
       , MaxLenTest.maxlenMigrate
       , Recursive.recursiveMigrate
       , CompositeTest.compositeMigrate
+      , ForeignKey.compositeMigrate
       , MigrationTest.migrationMigrate
       , PersistUniqueTest.migration
       , RenameTest.migration
@@ -205,6 +207,7 @@ main = do
     CustomPrimaryKeyReferenceTest.specsWith db
     MigrationColumnLengthTest.specsWith db
     EquivalentTypeTest.specsWith db
+    ForeignKey.specsWith db
     TransactionLevelTest.specsWith db
     MigrationTest.specsWith db
 
