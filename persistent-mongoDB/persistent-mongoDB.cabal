@@ -1,5 +1,5 @@
 name:            persistent-mongoDB
-version:         2.9.0.2
+version:         2.9.0.3
 license:         MIT
 license-file:    LICENSE
 author:          Greg Weber <greg@gregweber.info>
