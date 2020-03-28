@@ -18,6 +18,7 @@ library
     build-depends:   base                  >= 4.9      && < 5
                    , persistent            >= 2.11     && < 3
                    , aeson                 >= 1.0
+                   , attoparsec
                    , blaze-builder
                    , bytestring            >= 0.10
                    , conduit               >= 1.2.12
@@ -27,6 +28,7 @@ library
                    , postgresql-libpq      >= 0.9.4.2  && < 0.10
                    , resourcet             >= 1.1.9
                    , resource-pool
+                   , string-conversions
                    , text                  >= 1.2
                    , time                  >= 1.6
                    , transformers          >= 0.5
@@ -49,6 +51,7 @@ test-suite test
                      EquivalentTypeTestPostgres
                      JSONTest
                      CustomConstraintTest
+                     PgIntervalTest
     ghc-options:     -Wall
 
     build-depends:   base                 >= 4.9 && < 5

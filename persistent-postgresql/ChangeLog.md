@@ -2,6 +2,8 @@
 
 ## 2.11.0.0
 
+* Implement interval support. [#1053](https://github.com/yesodweb/persistent/pull/1053)
+
 * [#1060](https://github.com/yesodweb/persistent/pull/1060)
   * The QuasiQuoter now supports `OnDelete` and `OnUpdate` cascade options.
 * Handle foreign key constraint names over 63 characters. See [#996](https://github.com/yesodweb/persistent/pull/996) for details.
