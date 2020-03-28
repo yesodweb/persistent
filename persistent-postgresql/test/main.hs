@@ -53,6 +53,7 @@ import qualified UniqueTest
 import qualified UpsertTest
 import qualified CustomConstraintTest
 import qualified LongIdentifierTest
+import qualified PgIntervalTest
 
 type Tuple = (,)
 
@@ -124,6 +125,7 @@ main = do
       , TransactionLevelTest.migration
       , LongIdentifierTest.migration
       , ForeignKey.compositeMigrate
+      , PgIntervalTest.pgIntervalMigrate
       ]
     PersistentTest.cleanDB
 
@@ -187,5 +189,6 @@ main = do
     JSONTest.specs
     CustomConstraintTest.specs db
     LongIdentifierTest.specsWith db
+    PgIntervalTest.specs db
     -- FIXME: not used, probably should?
     -- ArrayAggTest.specs db

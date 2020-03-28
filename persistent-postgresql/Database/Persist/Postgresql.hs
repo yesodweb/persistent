@@ -17,6 +17,7 @@ module Database.Persist.Postgresql
     , module Database.Persist.Sql
     , ConnectionString
     , PostgresConf (..)
+    , PgInterval (..)
     , openSimpleConn
     , openSimpleConnWithVersion
     , tableName
@@ -48,13 +49,16 @@ import qualified Blaze.ByteString.Builder.Char8 as BBB
 import Data.Acquire (Acquire, mkAcquire, with)
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
+import qualified Data.Attoparsec.ByteString.Char8 as P
+import Data.Bits ((.&.))
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as B8
+import Data.Char (ord)
 import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Data.Data
 import Data.Either (partitionEithers)
-import Data.Fixed (Pico)
+import Data.Fixed (Fixed(..), Pico)
 import Data.Function (on)
 import Data.Int (Int64)
 import qualified Data.IntMap as I
@@ -66,12 +70,13 @@ import qualified Data.Map as Map
 import Data.Maybe
 import Data.Monoid ((<>))
 import Data.Pool (Pool)
+import Data.String.Conversions.Monomorphic (toStrictByteString)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.IO as T
 import Data.Text.Read (rational)
-import Data.Time (utc, localTimeToUTC)
+import Data.Time (utc, NominalDiffTime, localTimeToUTC)
 import Data.Typeable (Typeable)
 import System.Environment (getEnvironment)
 
@@ -439,6 +444,103 @@ instance PGTF.ToField P where
     toField (P (PersistObjectId _))    =
         error "Refusing to serialize a PersistObjectId to a PostgreSQL value"
 
+-- | Represent Postgres interval using NominalDiffTime
+--
+-- @since 2.11.0.0
+newtype PgInterval = PgInterval { getPgInterval :: NominalDiffTime }
+  deriving (Eq, Show)
+
+pgIntervalToBs :: PgInterval -> ByteString
+pgIntervalToBs = toStrictByteString . show . getPgInterval
+
+instance PGTF.ToField PgInterval where
+    toField (PgInterval t) = PGTF.toField t
+
+instance PGFF.FromField PgInterval where
+    fromField f mdata =
+      if PGFF.typeOid f /= PS.typoid PS.interval
+        then PGFF.returnError PGFF.Incompatible f ""
+        else case mdata of
+          Nothing  -> PGFF.returnError PGFF.UnexpectedNull f ""
+          Just dat -> case P.parseOnly (nominalDiffTime <* P.endOfInput) dat of
+            Left msg  ->  PGFF.returnError PGFF.ConversionFailed f msg
+            Right t   -> return $ PgInterval t
+
+      where
+        toPico :: Integer -> Pico
+        toPico = MkFixed
+
+        -- Taken from Database.PostgreSQL.Simple.Time.Internal.Parser
+        twoDigits :: P.Parser Int
+        twoDigits = do
+          a <- P.digit
+          b <- P.digit
+          let c2d c = ord c .&. 15
+          return $! c2d a * 10 + c2d b
+
+        -- Taken from Database.PostgreSQL.Simple.Time.Internal.Parser
+        seconds :: P.Parser Pico
+        seconds = do
+          real <- twoDigits
+          mc <- P.peekChar
+          case mc of
+            Just '.' -> do
+              t <- P.anyChar *> P.takeWhile1 P.isDigit
+              return $! parsePicos (fromIntegral real) t
+            _ -> return $! fromIntegral real
+         where
+          parsePicos :: Int64 -> B8.ByteString -> Pico
+          parsePicos a0 t = toPico (fromIntegral (t' * 10^n))
+            where n  = max 0 (12 - B8.length t)
+                  t' = B8.foldl' (\a c -> 10 * a + fromIntegral (ord c .&. 15)) a0
+                                 (B8.take 12 t)
+
+        parseSign :: P.Parser Bool
+        parseSign = P.choice [P.char '-' >> return True, return False]
+
+        -- Db stores it in [-]HHH:MM:SS.[SSSS]
+        -- For example, nominalDay is stored as 24:00:00
+        interval :: P.Parser (Bool, Int, Int, Pico)
+        interval = do
+            s  <- parseSign
+            h  <- P.decimal <* P.char ':'
+            m  <- twoDigits <* P.char ':'
+            ss <- seconds
+            if m < 60 && ss <= 60
+                then return (s, h, m, ss)
+                else fail "Invalid interval"
+
+        nominalDiffTime :: P.Parser NominalDiffTime
+        nominalDiffTime = do
+          (s, h, m, ss) <- interval
+          let pico   = ss + 60 * (fromIntegral m) + 60 * 60 * (fromIntegral (abs h))
+          return . fromRational . toRational $ if s then (-pico) else pico
+
+fromPersistValueError :: Text -- ^ Haskell type, should match Haskell name exactly, e.g. "Int64"
+                      -> Text -- ^ Database type(s), should appear different from Haskell name, e.g. "integer" or "INT", not "Int".
+                      -> PersistValue -- ^ Incorrect value
+                      -> Text -- ^ Error message
+fromPersistValueError haskellType databaseType received = T.concat
+    [ "Failed to parse Haskell type `"
+    , haskellType
+    , "`; expected "
+    , databaseType
+    , " from database, but received: "
+    , T.pack (show received)
+    , ". Potential solution: Check that your database schema matches your Persistent model definitions."
+    ]
+
+instance PersistField PgInterval where
+    toPersistValue = PersistDbSpecific . pgIntervalToBs
+    fromPersistValue x@(PersistDbSpecific bs) =
+      case P.parseOnly (P.signed P.rational <* P.char 's' <* P.endOfInput) bs of
+        Left _  -> Left $ fromPersistValueError "PgInterval" "Interval" x
+        Right i -> Right $ PgInterval i
+    fromPersistValue x = Left $ fromPersistValueError "PgInterval" "Interval" x
+
+instance PersistFieldSql PgInterval where
+  sqlType _ = SqlOther "interval"
+
 newtype Unknown = Unknown { unUnknown :: ByteString }
   deriving (Eq, Show, Read, Ord, Typeable)
 
@@ -476,6 +578,7 @@ builtinGetters = I.fromList
     , (k PS.time,        convertPV PersistTimeOfDay)
     , (k PS.timestamp,   convertPV (PersistUTCTime. localTimeToUTC utc))
     , (k PS.timestamptz, convertPV PersistUTCTime)
+    , (k PS.interval,    convertPV (PersistDbSpecific . pgIntervalToBs))
     , (k PS.bit,         convertPV PersistInt64)
     , (k PS.varbit,      convertPV PersistInt64)
     , (k PS.numeric,     convertPV PersistRational)
@@ -506,6 +609,7 @@ builtinGetters = I.fromList
     , (1183,             listOf PersistTimeOfDay)
     , (1115,             listOf PersistUTCTime)
     , (1185,             listOf PersistUTCTime)
+    , (1187,             listOf (PersistDbSpecific . pgIntervalToBs))
     , (1561,             listOf PersistInt64)
     , (1563,             listOf PersistInt64)
     , (1231,             listOf PersistRational)
