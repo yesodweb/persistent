@@ -53,6 +53,7 @@ import Control.Monad.Logger (NoLoggingT, runNoLoggingT, MonadLogger, logWarn, ru
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, withReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
 import Data.Acquire (Acquire, mkAcquire, with)
+import Data.Maybe
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import Data.Conduit
@@ -592,15 +593,18 @@ sqlForeign fdef = T.concat $
     , ")"
     ] ++ onDelete ++ onUpdate
   where
-    onDelete = fmap (T.append " ON DELETE ") $ showAction $ foreignOnDelete fdef
-    onUpdate = fmap (T.append " ON UPDATE ") $ showAction $ foreignOnUpdate fdef
+    onDelete =
+        fmap (T.append " ON DELETE ")
+        $ showAction
+        $ fcOnDelete
+        $ foreignFieldCascade fdef
+    onUpdate =
+        fmap (T.append " ON UPDATE ")
+        $ showAction
+        $ fcOnUpdate
+        $ foreignFieldCascade fdef
 
-    showAction action = case action of
-      Nothing         -> []
-      Just Cascade    -> ["CASCADE"]
-      Just Restrict   -> ["RESTRICT"]
-      Just SetNull    -> ["SET NULL"]
-      Just SetDefault -> ["SET DEFAULT"]
+    showAction = maybeToList . fmap renderCascadeAction
 
 sqlUnique :: UniqueDef -> Text
 sqlUnique (UniqueDef _ cname cols _) = T.concat

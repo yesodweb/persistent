@@ -295,16 +295,28 @@ data ForeignDef = ForeignDef
     , foreignRefTableDBName        :: !DBName
     , foreignConstraintNameHaskell :: !HaskellName
     , foreignConstraintNameDBName  :: !DBName
-    , foreignOnDelete              :: !(Maybe CascadeAction)
-    , foreignOnUpdate              :: !(Maybe CascadeAction)
+    , foreignFieldCascade          :: !FieldCascade
     , foreignFields                :: ![(ForeignFieldDef, ForeignFieldDef)] -- this entity plus the primary entity
     , foreignAttrs                 :: ![Attr]
     , foreignNullable              :: Bool
     }
     deriving (Show, Eq, Read, Ord)
 
+data FieldCascade = FieldCascade
+    { fcOnUpdate :: !(Maybe CascadeAction)
+    , fcOnDelete :: !(Maybe CascadeAction)
+    }
+    deriving (Show, Eq, Read, Ord)
+
 data CascadeAction = Cascade | Restrict | SetNull | SetDefault
     deriving (Show, Eq, Read, Ord)
+
+renderCascadeAction :: CascadeAction -> Text
+renderCascadeAction action = case action of
+  Cascade    -> "CASCADE"
+  Restrict   -> "RESTRICT"
+  SetNull    -> "SET NULL"
+  SetDefault -> "SET DEFAULT"
 
 data PersistException
   = PersistError Text -- ^ Generic Exception

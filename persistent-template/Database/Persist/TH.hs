@@ -1666,7 +1666,10 @@ instance Lift CompositeDef where
     lift (CompositeDef a b) = [|CompositeDef a b|]
 
 instance Lift ForeignDef where
-    lift (ForeignDef a b c d e f g h i) = [|ForeignDef a b c d e f g h i|]
+    lift (ForeignDef a b c d e f g h) = [|ForeignDef a b c d e f g h|]
+
+instance Lift FieldCascade where
+    lift (FieldCascade a b) = [|FieldCascade a b|]
 
 instance Lift CascadeAction where
     lift Cascade = [|Cascade|]

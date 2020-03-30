@@ -600,9 +600,25 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
                         getAddReference allDefs name cName cref
                 )
                 newcols
-        foreignsAlt = flip map fdefs (\fdef ->
-            let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef))
-            in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignConstraintNameDBName fdef) childfields (map escape parentfields)))
+        foreignsAlt = map (mkForeignAlt name) fdefs
+
+mkForeignAlt
+    :: DBName
+    -> ForeignDef
+    -> AlterDB
+mkForeignAlt name fdef =
+    AlterColumn
+        name
+        ( foreignRefTableDBName fdef
+        , AddReference constraintName childfields escapedParentFields
+        )
+  where
+    constraintName =
+        foreignConstraintNameDBName fdef
+    (childfields, parentfields) =
+        unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef))
+    escapedParentFields =
+        map escape parentfields
 
 addTable :: [Column] -> EntityDef -> AlterDB
 addTable cols entity = AddTable $ T.concat
@@ -1214,9 +1230,7 @@ mockMigrate allDefs _ entity = fmap (fmap $ map showAlterDb) $ do
                         getAddReference allDefs name cName cref
                 )
                 $ newcols
-        foreignsAlt = flip map fdefs (\fdef ->
-            let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef))
-            in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignConstraintNameDBName fdef) childfields (map escape parentfields)))
+        foreignsAlt = map (mkForeignAlt name) fdefs
 
 -- | Mock a migration even when the database is not present.
 -- This function performs the same functionality of 'printMigration'

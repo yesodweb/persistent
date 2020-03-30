@@ -929,8 +929,10 @@ takeForeign ps tableName _defs = takeRefTable
                     HaskellName n
                 , foreignConstraintNameDBName =
                     DBName $ psToDBName ps (tableName `T.append` n)
-                , foreignOnDelete = onDelete
-                , foreignOnUpdate = onUpdate
+                , foreignFieldCascade = FieldCascade
+                    { fcOnDelete = onDelete
+                    , fcOnUpdate = onUpdate
+                    }
                 , foreignFields =
                     []
                 , foreignAttrs =
