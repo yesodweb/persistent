@@ -596,8 +596,8 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
         references =
             mapMaybe
                 (\Column { cName, cReference } ->
-                    cReference >>= \(refTblName, _) ->
-                        getAddReference allDefs name refTblName cName cReference
+                    flip fmap cReference $ \cref ->
+                        getAddReference allDefs name cName cref
                 )
                 newcols
         foreignsAlt = flip map fdefs (\fdef ->
@@ -936,16 +936,18 @@ findAlters defs _tablename col@(Column name isNull sqltype def _defConstraintNam
                  filter (\c -> cName c /= name) cols)
 
 -- | Get the references to be added to a table for the given column.
-getAddReference :: [EntityDef] -> DBName -> DBName -> DBName -> Maybe (DBName, DBName) -> Maybe AlterDB
-getAddReference allDefs table reftable cname ref =
-    case ref of
-        Nothing -> Nothing
-        Just (s, constraintName) -> Just $ AlterColumn table (s, AddReference constraintName [cname] id_)
-                          where
-                            id_ = fromMaybe (error $ "Could not find ID of entity " ++ show reftable)
-                                        $ do
-                                          entDef <- find ((== reftable) . entityDB) allDefs
-                                          return $ Util.dbIdColumnsEsc escape entDef
+getAddReference :: [EntityDef] -> DBName -> DBName -> (DBName, DBName) -> AlterDB
+getAddReference allDefs table cname (s, constraintName) =
+    AlterColumn
+        table
+        (s, AddReference constraintName [cname] id_)
+  where
+    id_ =
+        fromMaybe
+            (error $ "Could not find ID of entity " ++ show s)
+            $ do
+                entDef <- find ((== s) . entityDB) allDefs
+                return $ Util.dbIdColumnsEsc escape entDef
 
 
 showColumn :: Column -> Text
@@ -1208,8 +1210,8 @@ mockMigrate allDefs _ entity = fmap (fmap $ map showAlterDb) $ do
         references =
             mapMaybe
                 (\Column { cName, cReference } ->
-                    cReference >>= \(refTblName, _) ->
-                        getAddReference allDefs name refTblName cName cReference
+                    flip fmap cReference $ \cref ->
+                        getAddReference allDefs name cName cref
                 )
                 $ newcols
         foreignsAlt = flip map fdefs (\fdef ->
