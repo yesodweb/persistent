@@ -1692,7 +1692,22 @@ instance Lift CompositeDef where
     lift (CompositeDef a b) = [|CompositeDef a b|]
 
 instance Lift ForeignDef where
-    lift (ForeignDef a b c d e f g) = [|ForeignDef a b c d e f g|]
+    lift (ForeignDef a b c d e f g h) = [|ForeignDef a b c d e f g h|]
+
+-- |
+--
+-- @since 2.8.3.0
+instance Lift FieldCascade where
+    lift (FieldCascade a b) = [|FieldCascade a b|]
+
+-- |
+--
+-- @since 2.8.3.0
+instance Lift CascadeAction where
+    lift Cascade = [|Cascade|]
+    lift Restrict = [|Restrict|]
+    lift SetNull = [|SetNull|]
+    lift SetDefault = [|SetDefault|]
 
 instance Lift HaskellName where
     lift (HaskellName t) = [|HaskellName t|]
