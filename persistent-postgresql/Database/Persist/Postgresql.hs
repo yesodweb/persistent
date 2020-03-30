@@ -567,13 +567,18 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
   where
     name = entityDB entity
     (newcols', udefs, fdefs) = mkColumns allDefs entity
-    migrationText exists old'' =
-        if not exists
-            then createText newcols fdefs udspair
-            else let (acs, ats) = getAlters allDefs entity (newcols, udspair) $ excludeForeignKeys $ old'
-                     acs' = map (AlterColumn name) acs
-                     ats' = map (AlterTable name) ats
-                 in  acs' ++ ats'
+    migrationText exists old''
+        | not exists =
+            createText newcols fdefs udspair
+        | otherwise =
+            let (acs, ats) =
+                    getAlters allDefs entity (newcols, udspair)
+                    -- $ excludeForeignKeys
+                    $ old'
+                acs' = map (AlterColumn name) acs
+                ats' = map (AlterTable name) ats
+            in
+                acs' ++ ats'
        where
          old' = partitionEithers old''
          newcols = filter (not . safeToRemove entity . cName) newcols'
@@ -777,13 +782,16 @@ getAlters defs def (c1, u1) (c2, u2) =
         let (alters, old') = findAlters defs (entityDB def) new old
          in alters ++ getAltersC news old'
 
-    getAltersU :: [(DBName, [DBName])]
-               -> [(DBName, [DBName])]
-               -> [AlterTable]
-    getAltersU [] old = map DropConstraint $ filter (not . isManual) $ map fst old
+    getAltersU
+        :: [(DBName, [DBName])]
+        -> [(DBName, [DBName])]
+        -> [AlterTable]
+    getAltersU [] old =
+        map DropConstraint $ filter (not . isManual) $ map fst old
     getAltersU ((name, cols):news) old =
         case lookup name old of
-            Nothing -> AddUniqueConstraint name cols : getAltersU news old
+            Nothing ->
+                AddUniqueConstraint name cols : getAltersU news old
             Just ocols ->
                 let old' = filter (\(x, _) -> x /= name) old
                  in if sort cols == sort ocols
