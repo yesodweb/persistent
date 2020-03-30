@@ -296,21 +296,35 @@ data ForeignDef = ForeignDef
     , foreignConstraintNameHaskell :: !HaskellName
     , foreignConstraintNameDBName  :: !DBName
     , foreignFieldCascade          :: !FieldCascade
+    -- ^ Determine how the field will cascade on updates and deletions.
+    --
+    -- @since 2.11.0
     , foreignFields                :: ![(ForeignFieldDef, ForeignFieldDef)] -- this entity plus the primary entity
     , foreignAttrs                 :: ![Attr]
     , foreignNullable              :: Bool
     }
     deriving (Show, Eq, Read, Ord)
 
+-- | This datatype describes how a foreign reference field cascades deletes
+-- or updates.
+--
+-- @since 2.11.0
 data FieldCascade = FieldCascade
     { fcOnUpdate :: !(Maybe CascadeAction)
     , fcOnDelete :: !(Maybe CascadeAction)
     }
     deriving (Show, Eq, Read, Ord)
 
+-- | A 'FieldCascade' that does nothing.
+--
+-- @since 2.11.0
 noCascade :: FieldCascade
 noCascade = FieldCascade Nothing Nothing
 
+-- | Renders a 'FieldCascade' value such that it can be used in SQL
+-- migrations.
+--
+-- @since 2.11.0
 renderFieldCascade :: FieldCascade -> Text
 renderFieldCascade (FieldCascade onUpdate onDelete) =
     T.unwords
@@ -318,9 +332,17 @@ renderFieldCascade (FieldCascade onUpdate onDelete) =
         , foldMap (mappend "ON UPDATE " . renderCascadeAction) onUpdate
         ]
 
+-- | An action that might happen on a deletion or update on a foreign key
+-- change.
+--
+-- @since 2.11.0
 data CascadeAction = Cascade | Restrict | SetNull | SetDefault
     deriving (Show, Eq, Read, Ord)
 
+-- | Render a 'CascadeAction' to 'Text' such that it can be used in a SQL
+-- command.
+--
+-- @since 2.11.0
 renderCascadeAction :: CascadeAction -> Text
 renderCascadeAction action = case action of
   Cascade    -> "CASCADE"
