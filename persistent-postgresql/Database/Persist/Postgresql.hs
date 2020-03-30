@@ -596,8 +596,7 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
         references =
             mapMaybe
                 (\Column { cName, cReference } ->
-                    flip fmap cReference $ \cref ->
-                        getAddReference allDefs name cName cref
+                    fmap (getAddReference allDefs Nothing name cName) cReference
                 )
                 newcols
         foreignsAlt = map (mkForeignAlt name) fdefs
@@ -610,9 +609,15 @@ mkForeignAlt name fdef =
     AlterColumn
         name
         ( foreignRefTableDBName fdef
-        , AddReference constraintName childfields escapedParentFields
+        , addReference
         )
   where
+    addReference =
+        AddReference
+            constraintName
+            childfields
+            escapedParentFields
+            (foreignFieldCascade fdef)
     constraintName =
         foreignConstraintNameDBName fdef
     (childfields, parentfields) =
@@ -656,10 +661,13 @@ mayDefault def = case def of
 
 type SafeToRemove = Bool
 
-data AlterColumn = ChangeType SqlType Text
-                 | IsNull | NotNull | Add' Column | Drop SafeToRemove
-                 | Default Text | NoDefault | Update' Text
-                 | AddReference DBName [DBName] [Text] | DropReference DBName
+data AlterColumn
+    = ChangeType SqlType Text
+    | IsNull | NotNull | Add' Column | Drop SafeToRemove
+    | Default Text | NoDefault | Update' Text
+    | AddReference DBName [DBName] [Text] FieldCascade
+    | DropReference DBName
+
 type AlterColumn' = (DBName, AlterColumn)
 
 data AlterTable = AddUniqueConstraint DBName [DBName]
@@ -916,8 +924,17 @@ findAlters defs _tablename col@(Column name isNull sqltype def _defConstraintNam
                 refAdd Nothing = []
                 refAdd (Just (tname, a)) =
                     case find ((==tname) . entityDB) defs of
-                        Just refdef -> [(tname, AddReference a [name] (Util.dbIdColumnsEsc escape refdef))]
-                        Nothing -> error $ "could not find the entityDef for reftable[" ++ show tname ++ "]"
+                        Just refdef ->
+                            [ ( tname
+                              , AddReference
+                                    a
+                                    [name]
+                                    (Util.dbIdColumnsEsc escape refdef)
+                                    noCascade
+                              )
+                            ]
+                        Nothing ->
+                            error $ "could not find the entityDef for reftable[" ++ show tname ++ "]"
                 modRef =
                     if fmap snd ref == fmap snd ref'
                         then []
@@ -952,11 +969,19 @@ findAlters defs _tablename col@(Column name isNull sqltype def _defConstraintNam
                  filter (\c -> cName c /= name) cols)
 
 -- | Get the references to be added to a table for the given column.
-getAddReference :: [EntityDef] -> DBName -> DBName -> (DBName, DBName) -> AlterDB
-getAddReference allDefs table cname (s, constraintName) =
+getAddReference
+    :: [EntityDef]
+    -> Maybe ForeignDef
+    -> DBName
+    -> DBName
+    -> (DBName, DBName)
+    -> AlterDB
+getAddReference allDefs mforeignDef table cname (s, constraintName) =
     AlterColumn
         table
-        (s, AddReference constraintName [cname] id_)
+        ( s
+        , AddReference constraintName [cname] id_ (maybe noCascade foreignFieldCascade mforeignDef)
+        )
   where
     id_ =
         fromMaybe
@@ -1089,7 +1114,7 @@ showAlter table (n, Update' s) = T.concat
     , escape n
     , " IS NULL"
     ]
-showAlter table (reftable, AddReference fkeyname t2 id2) = T.concat
+showAlter table (reftable, AddReference fkeyname t2 id2 cascade) = T.concat
     [ "ALTER TABLE "
     , escape table
     , " ADD CONSTRAINT "
@@ -1101,7 +1126,7 @@ showAlter table (reftable, AddReference fkeyname t2 id2) = T.concat
     , "("
     , T.intercalate "," id2
     , ")"
-    ]
+    ] <> renderFieldCascade cascade
 showAlter table (_, DropReference cname) = T.concat
     [ "ALTER TABLE "
     , escape table
@@ -1226,8 +1251,7 @@ mockMigrate allDefs _ entity = fmap (fmap $ map showAlterDb) $ do
         references =
             mapMaybe
                 (\Column { cName, cReference } ->
-                    flip fmap cReference $ \cref ->
-                        getAddReference allDefs name cName cref
+                    fmap (getAddReference allDefs Nothing name cName) cReference
                 )
                 $ newcols
         foreignsAlt = map (mkForeignAlt name) fdefs

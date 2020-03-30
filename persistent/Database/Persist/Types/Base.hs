@@ -308,6 +308,16 @@ data FieldCascade = FieldCascade
     }
     deriving (Show, Eq, Read, Ord)
 
+noCascade :: FieldCascade
+noCascade = FieldCascade Nothing Nothing
+
+renderFieldCascade :: FieldCascade -> Text
+renderFieldCascade (FieldCascade onUpdate onDelete) =
+    T.unwords
+        [ foldMap (mappend "ON DELETE " . renderCascadeAction) onDelete
+        , foldMap (mappend "ON UPDATE " . renderCascadeAction) onUpdate
+        ]
+
 data CascadeAction = Cascade | Restrict | SetNull | SetDefault
     deriving (Show, Eq, Read, Ord)
 
