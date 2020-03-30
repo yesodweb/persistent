@@ -843,7 +843,7 @@ takeComposite fields pkcols
     getDef (d:ds) t
         | fieldHaskell d == HaskellName t =
             if nullable (fieldAttrs d) /= NotNullable
-                then error $ "primary key column cannot be nullable: " ++ show t
+                then error $ "primary key column cannot be nullable: " ++ show t ++ show fields
                 else d
         | otherwise = getDef ds t
 

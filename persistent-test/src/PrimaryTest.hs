@@ -1,5 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DeriveGeneric #-}
+
 module PrimaryTest where
 
 import Init
@@ -9,6 +11,7 @@ share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "migration"] 
   Foo
     name String
     Primary name
+
   Bar
     quux FooId
 
@@ -17,6 +20,11 @@ share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "migration"] 
     parent String Maybe
     Primary name
     Foreign Trees fkparent parent
+
+  CompositePrimary
+    name String
+    age Int
+    Primary name age
 |]
 
 
@@ -35,3 +43,17 @@ specsWith runDb = describe "primary key reference" $ do
     key <- insert $ Foo "name"
     keyFromRaw <- rawSql "SELECT name FROM foo LIMIT 1" []
     [key] @== keyFromRaw
+  describe "keyFromRecordM" $ do
+    it "works on singleton case" $ do
+      let
+        foo = Foo "hello"
+        fooKey = fmap ($ foo) keyFromRecordM
+      fooKey `shouldBe` Just (FooKey "hello")
+    it "works on multiple fields" $ do
+      let
+        name = "hello"
+        age = 31
+        rec = CompositePrimary name age
+      fmap ($ rec) keyFromRecordM
+        `shouldBe`
+          Just (CompositePrimaryKey name age)

@@ -87,7 +87,7 @@ import GHC.TypeLits
 import Instances.TH.Lift ()
     -- Bring `Lift (Map k v)` instance into scope, as well as `Lift Text`
     -- instance on pre-1.2.4 versions of `text`
-import Language.Haskell.TH.Lib (conT, varE)
+import Language.Haskell.TH.Lib (conT, varE, varP)
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Web.PathPieces (PathPiece(..))
@@ -1091,6 +1091,31 @@ mkEntity entityMap mps t = do
     let instanceConstraint = if not (mpsGeneric mps) then [] else
           [mkClassP ''PersistStore [backendT]]
 
+    [keyFromRecordM'] <-
+        case entityPrimary t of
+            Just prim -> do
+                recordName <- newName "record"
+                let fields = map fieldHaskell (compositeFields prim)
+                    keyCon = keyConName t
+                    keyFields' =
+                        map (mkName . T.unpack . recName mps entName . fieldHaskell)
+                            (compositeFields prim)
+                    constr =
+                        foldl'
+                            AppE
+                            (ConE keyCon)
+                            (map
+                                (\n ->
+                                    VarE n `AppE` VarE recordName
+                                )
+                                keyFields'
+                            )
+                    keyFromRec = varP $ mkName "keyFromRecordM"
+                [d|$(keyFromRec) = Just ( \ $(varP recordName) -> $(pure constr)) |]
+
+            Nothing ->
+                [d|$(varP $ mkName "keyFromRecordM") = Nothing|]
+
     dtd <- dataTypeDec mps t
     return $ addSyn $
        dtd : mconcat fkc `mappend`
@@ -1101,6 +1126,7 @@ mkEntity entityMap mps t = do
         , keyTypeDec
         , keyToValues'
         , keyFromValues'
+        , keyFromRecordM'
         , FunD 'entityDef [normalClause [WildP] t']
         , tpf
         , FunD 'fromPersistValues fpv
