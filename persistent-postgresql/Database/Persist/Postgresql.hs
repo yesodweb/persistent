@@ -3,6 +3,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE NamedFieldPuns #-}
 
 -- | A postgresql backend for persistent.
 module Database.Persist.Postgresql
@@ -592,9 +593,13 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
       where
         uniques = flip concatMap udspair $ \(uname, ucols) ->
                 [AlterTable name $ AddUniqueConstraint uname ucols]
-        references = mapMaybe (\c@Column { cName=cname, cReference=Just (refTblName, _) } ->
-            getAddReference allDefs name refTblName cname (cReference c))
-                   $ filter (isJust . cReference) newcols
+        references =
+            mapMaybe
+                (\Column { cName, cReference } ->
+                    cReference >>= \(refTblName, _) ->
+                        getAddReference allDefs name refTblName cName cReference
+                )
+                newcols
         foreignsAlt = flip map fdefs (\fdef ->
             let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef))
             in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignConstraintNameDBName fdef) childfields (map escape parentfields)))
@@ -768,7 +773,7 @@ getAlters defs def (c1, u1) (c2, u2) =
 
 getColumn :: (Text -> IO Statement)
           -> DBName -> [PersistValue]
-          -> Maybe (DBName, DBName) 
+          -> Maybe (DBName, DBName)
           -> IO (Either Text Column)
 getColumn getter tableName' [PersistText columnName, PersistText isNullable, PersistText typeName, defaultValue, numericPrecision, numericScale, maxlen] refName =
     case d' of
@@ -1200,9 +1205,13 @@ mockMigrate allDefs _ entity = fmap (fmap $ map showAlterDb) $ do
       where
         uniques = flip concatMap udspair $ \(uname, ucols) ->
                 [AlterTable name $ AddUniqueConstraint uname ucols]
-        references = mapMaybe (\c@Column { cName=cname, cReference=Just (refTblName, _) } ->
-            getAddReference allDefs name refTblName cname (cReference c))
-                   $ filter (isJust . cReference) newcols
+        references =
+            mapMaybe
+                (\Column { cName, cReference } ->
+                    cReference >>= \(refTblName, _) ->
+                        getAddReference allDefs name refTblName cName cReference
+                )
+                $ newcols
         foreignsAlt = flip map fdefs (\fdef ->
             let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef))
             in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignConstraintNameDBName fdef) childfields (map escape parentfields)))
