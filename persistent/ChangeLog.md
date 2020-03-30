@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## 2.11.0.0
+
+* [#1060](https://github.com/yesodweb/persistent/pull/1060)
+  * The QuasiQuoter now supports `OnDelete` and `OnUpdate` cascade options.
+
 ## 2.10.5.2
 
 * [#1041](https://github.com/yesodweb/persistent/pull/1041)
