@@ -443,8 +443,8 @@ data MkPersistSettings = MkPersistSettings
     --
     -- @
     --  Just EntityJSON
-    --      { entityToJSON = 'keyValueEntityToJSON
-    --      , entityFromJSON = 'keyValueEntityFromJSON
+    --      { entityToJSON = 'entityIdToJSON
+    --      , entityFromJSON = 'entityIdFromJSON
     --      }
     -- @
     , mpsGenerateLenses :: !Bool
