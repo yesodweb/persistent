@@ -67,7 +67,7 @@ specs :: Spec
 specs = describe "postgresql's JSON operators behave" $ do
 
   it "migrate, clean table, insert values and check queries" $ asIO $ runConn $ do
-      runMigration jsonTestMigrate
+      runMigrationSilent jsonTestMigrate
       cleanDB
 
       liftIO $ putStrLn "\n- - - - -  Inserting JSON values  - - - - -\n"

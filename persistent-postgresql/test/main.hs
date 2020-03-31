@@ -23,6 +23,7 @@ import Test.QuickCheck
 -- FIXME: should probably be used?
 -- import qualified ArrayAggTest
 import qualified CompositeTest
+import qualified ForeignKey
 import qualified CustomPersistFieldTest
 import qualified CustomPrimaryKeyReferenceTest
 import qualified DataTypeTest
@@ -102,6 +103,7 @@ main = do
     mapM_ setup
       [ PersistentTest.testMigrate
       , PersistentTest.noPrefixMigrate
+      , PersistentTest.treeMigrate
       , EmbedTest.embedMigrate
       , EmbedOrderTest.embedOrderMigrate
       , LargeNumberTest.numberMigrate
@@ -117,6 +119,7 @@ main = do
       , CustomPrimaryKeyReferenceTest.migration
       , MigrationColumnLengthTest.migration
       , TransactionLevelTest.migration
+      , ForeignKey.compositeMigrate
       ]
     PersistentTest.cleanDB
 
@@ -146,6 +149,7 @@ main = do
     EmbedTest.specsWith db
     EmbedOrderTest.specsWith db
     LargeNumberTest.specsWith db
+    ForeignKey.specsWith db
     UniqueTest.specsWith db
     MaxLenTest.specsWith db
     Recursive.specsWith db

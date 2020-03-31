@@ -1,16 +1,18 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE UndecidableInstances #-} -- FIXME
+{-# LANGUAGE UndecidableInstances #-}
 module PersistentTest
     ( module PersistentTest
     , cleanDB
     , testMigrate
     , noPrefixMigrate
+    , treeMigrate
     ) where
 
 import Control.Monad.Fail
 import Control.Monad.IO.Class
 import Data.Aeson
 import Data.Conduit
+import qualified Data.Text as T
 import qualified Data.Conduit.List as CL
 import Data.Functor.Constant
 import Data.Functor.Identity
@@ -21,8 +23,10 @@ import Test.Hspec.QuickCheck(prop)
 import Test.HUnit hiding (Test)
 import UnliftIO (MonadUnliftIO, catch)
 import Web.PathPieces (PathPiece (..))
+import Data.Proxy (Proxy(..))
 
 import Database.Persist
+import Database.Persist.Quasi
 import Init
 import PersistentTestModels
 import PersistTestPetType
@@ -616,3 +620,15 @@ specsWith runDb = describe "persistent" $ do
     it "bang" $ (return $! Strict (error "foo") 5 5) `shouldThrow` anyErrorCall
     it "tilde" $ void (return $! Strict 5 (error "foo") 5 :: IO Strict)
     it "blank" $ (return $! Strict 5 5 (error "foo")) `shouldThrow` anyErrorCall
+
+  describe "documentation syntax" $ do
+    let edef = entityDef (Proxy :: Proxy Relationship)
+    it "provides comments on entity def" $ do
+      entityComments edef
+        `shouldBe`
+          Just "This is a doc comment for a relationship.\nYou need to put the pipe character for each line of documentation.\nBut you can resume the doc comments afterwards.\n"
+    it "provides comments on the field" $ do
+      let [nameField, parentField] = entityFields edef
+      fieldComments nameField
+        `shouldBe`
+          Just "Fields should be documentable.\n"

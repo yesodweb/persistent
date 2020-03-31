@@ -10,6 +10,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-missing-fields #-}
 
 -- | This module provides the tools for defining your database schema and using
@@ -29,6 +30,7 @@ module Database.Persist.TH
     , mpsPrefixFields
     , mpsEntityJSON
     , mpsGenerateLenses
+    , mpsDeriveInstances
     , EntityJSON(..)
     , mkPersistSettings
     , sqlSettings
@@ -45,6 +47,7 @@ module Database.Persist.TH
     , lensPTH
     , parseReferences
     , embedEntityDefs
+    , fieldError
     , AtLeastOneUniqueKey(..)
     , OnlyOneUniqueKey(..)
     ) where
@@ -54,13 +57,17 @@ module Database.Persist.TH
 
 import Prelude hiding ((++), take, concat, splitAt, exp)
 
-import Control.Monad (forM, (<=<), mzero, filterM)
+import Data.Either
+import Control.Monad (forM, mzero, filterM, guard, unless)
 import Data.Aeson
     ( ToJSON (toJSON), FromJSON (parseJSON), (.=), object
     , Value (Object), (.:), (.:?)
     , eitherDecodeStrict'
     )
 import qualified Data.ByteString as BS
+import Data.Typeable (Typeable)
+import Data.Ix (Ix)
+import Data.Data (Data)
 import Data.Char (toLower, toUpper)
 import qualified Data.HashMap.Strict as HM
 import Data.Int (Int64)
@@ -85,6 +92,7 @@ import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Web.PathPieces (PathPiece(..))
 import Web.HttpApiData (ToHttpApiData(..), FromHttpApiData(..))
+import qualified Data.Set as Set
 
 import Database.Persist
 import Database.Persist.Sql (Migration, PersistFieldSql, SqlBackend, migrate, sqlType)
@@ -396,6 +404,7 @@ mkEntityDefSqlTypeExp emEntities entityMap ent =
 -- 'EntityDef's. Works well with the persist quasi-quoter.
 mkPersist :: MkPersistSettings -> [EntityDef] -> Q [Dec]
 mkPersist mps ents' = do
+    requireExtensions [[TypeFamilies], [GADTs, ExistentialQuantification]]
     x <- fmap Data.Monoid.mconcat $ mapM (persistFieldFromEntity mps) ents
     y <- fmap mconcat $ mapM (mkEntity entityMap mps) ents
     z <- fmap mconcat $ mapM (mkJSON mps) ents
@@ -444,6 +453,12 @@ data MkPersistSettings = MkPersistSettings
     -- Default: False
     --
     -- @since 1.3.1
+    , mpsDeriveInstances :: ![Name]
+    -- ^ Automatically derive these typeclass instances for all record and key types.
+    --
+    -- Default: []
+    --
+    -- @since 2.8.1
     }
 
 data EntityJSON = EntityJSON
@@ -466,6 +481,7 @@ mkPersistSettings t = MkPersistSettings
         , entityFromJSON = 'entityIdFromJSON
         }
     , mpsGenerateLenses = False
+    , mpsDeriveInstances = []
     }
 
 -- | Use the 'SqlPersist' backend.
@@ -501,12 +517,36 @@ upperFirst t =
 
 dataTypeDec :: MkPersistSettings -> EntityDef -> Q Dec
 dataTypeDec mps t = do
-    let names = map (mkName . unpack) $ entityDerives t
-    DataD [] nameFinal paramsFinal
+    let entityInstances     = map (mkName . unpack) $ entityDerives t
+        additionalInstances = filter (`notElem` entityInstances) $ mpsDeriveInstances mps
+        names               = entityInstances <> additionalInstances
+
+    let (stocks, anyclasses) = partitionEithers (map stratFor names)
+    let stockDerives = do
+            guard (not (null stocks))
+            pure (DerivClause (Just StockStrategy) (map ConT stocks))
+        anyclassDerives = do
+            guard (not (null anyclasses))
+            pure (DerivClause (Just AnyclassStrategy) (map ConT anyclasses))
+    unless (null anyclassDerives) $ do
+        requireExtensions [[DeriveAnyClass]]
+    pure $ DataD [] nameFinal paramsFinal
                 Nothing
                 constrs
-                <$> fmap (pure . DerivClause Nothing) (mapM conT names)
+                (stockDerives <> anyclassDerives)
   where
+    stratFor n =
+        if n `elem` stockClasses then
+            Left n
+        else
+            Right n
+
+    stockClasses =
+        Set.fromList (map mkName
+        [ "Eq", "Ord", "Show", "Read", "Bounded", "Enum", "Ix", "Generic", "Data", "Typeable"
+        ] <> [''Eq, ''Ord, ''Show, ''Read, ''Bounded, ''Enum, ''Ix, ''Generic, ''Data, ''Typeable
+        ]
+        )
     mkCol x fd@FieldDef {..} =
         (mkName $ unpack $ recName mps x fieldHaskell,
          if fieldStrict then isStrict else notStrict,
@@ -790,14 +830,14 @@ mkKeyTypeDec mps t = do
       if mpsGeneric mps
         then if not useNewtype
                then do pfDec <- pfInstD
-                       return (pfDec, [''Generic])
+                       return (pfDec, supplement [''Generic])
                else do gi <- genericNewtypeInstances
-                       return (gi, [])
+                       return (gi, supplement [])
         else if not useNewtype
                then do pfDec <- pfInstD
-                       return (pfDec, [''Show, ''Read, ''Eq, ''Ord, ''Generic])
+                       return (pfDec, supplement [''Show, ''Read, ''Eq, ''Ord, ''Generic])
                 else do
-                    let allInstances = [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''ToHttpApiData, ''FromHttpApiData, ''PersistField, ''PersistFieldSql, ''ToJSON, ''FromJSON]
+                    let allInstances = supplement [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''ToHttpApiData, ''FromHttpApiData, ''PersistField, ''PersistFieldSql, ''ToJSON, ''FromJSON]
                     if customKeyType
                       then return ([], allInstances)
                       else do
@@ -872,6 +912,8 @@ mkKeyTypeDec mps t = do
     useNewtype = pkNewtype mps t
     customKeyType = not (defaultIdType t) || not useNewtype || isJust (entityPrimary t)
 
+    supplement :: [Name] -> [Name]
+    supplement names = names <> (filter (`notElem` names) $ mpsDeriveInstances mps)
 
 keyIdName :: EntityDef -> Name
 keyIdName = mkName . unpack . keyIdText
@@ -1002,6 +1044,10 @@ fromValues t funName conE fields = do
         let fieldName = (unHaskellName (fieldHaskell field))
         in [|mapLeft (fieldError tableName fieldName) . fromPersistValue|]
 
+-- |  Render an error message based on the @tableName@ and @fieldName@ with
+-- the provided message.
+--
+-- @since 2.8.2
 fieldError :: Text -> Text -> Text -> Text
 fieldError tableName fieldName err = mconcat
     [ "Couldn't parse field `"
@@ -1010,7 +1056,7 @@ fieldError tableName fieldName err = mconcat
     , tableName
     , "`. "
     , err
-    ]        
+    ]
 
 mkEntity :: EntityMap -> MkPersistSettings -> EntityDef -> Q [Dec]
 mkEntity entityMap mps t = do
@@ -1110,8 +1156,8 @@ mkUniqueKeyInstances mps t = do
         [_] -> mappend <$> singleUniqueKey <*> atLeastOneKey
         (_:_) -> mappend <$> typeErrorMultiple <*> atLeastOneKey
   where
-    requireUniquesPName = mkName "requireUniquesP"
-    onlyUniquePName = mkName "onlyUniqueP"
+    requireUniquesPName = 'requireUniquesP
+    onlyUniquePName = 'onlyUniqueP
     typeErrorSingle = mkOnlyUniqueError typeErrorNoneCtx
     typeErrorMultiple = mkOnlyUniqueError typeErrorMultipleCtx
 
@@ -1142,7 +1188,7 @@ mkUniqueKeyInstances mps t = do
             [ Clause
                 [ WildP ]
                 (NormalB
-                    (VarE (mkName "error") `AppE` LitE (StringL "impossible"))
+                    (VarE 'error `AppE` LitE (StringL "impossible"))
                 )
                 []
             ]
@@ -1251,50 +1297,56 @@ maybeTyp :: Bool -> Type -> Type
 maybeTyp may typ | may = ConT ''Maybe `AppT` typ
                  | otherwise = typ
 
--- | produce code similar to the following:
+
+
+entityToPersistValueHelper :: (PersistEntity record) => record -> PersistValue
+entityToPersistValueHelper entity = PersistMap $ zip columnNames fieldsAsPersistValues
+    where
+        columnNames = map (unHaskellName . fieldHaskell) (entityFields (entityDef (Just entity)))
+        fieldsAsPersistValues = map toPersistValue $ toPersistFields entity
+
+entityFromPersistValueHelper :: (PersistEntity record)
+                             => [String] -- ^ Column names, as '[String]' to avoid extra calls to "pack" in the generated code
+                             -> PersistValue
+                             -> Either Text record
+entityFromPersistValueHelper columnNames pv = do
+    (persistMap :: [(T.Text, PersistValue)]) <- getPersistMap pv
+
+    let columnMap = HM.fromList persistMap
+        lookupPersistValueByColumnName :: String -> PersistValue
+        lookupPersistValueByColumnName columnName =
+            fromMaybe PersistNull (HM.lookup (pack columnName) columnMap)
+
+    fromPersistValues $ map lookupPersistValueByColumnName columnNames
+
+-- | Produce code similar to the following:
 --
 -- @
 --   instance PersistEntity e => PersistField e where
---      toPersistValue = PersistMap $ zip columNames (map toPersistValue . toPersistFields)
---      fromPersistValue (PersistMap o) =
---          let columns = HM.fromList o
---          in fromPersistValues $ map (\name ->
---            case HM.lookup name columns of
---              Just v -> v
---              Nothing -> PersistNull
---      fromPersistValue x = Left $ "Expected PersistMap, received: " ++ show x
+--      toPersistValue = entityToPersistValueHelper
+--      fromPersistValue = entityFromPersistValueHelper ["col1", "col2"]
 --      sqlType _ = SqlString
 -- @
 persistFieldFromEntity :: MkPersistSettings -> EntityDef -> Q [Dec]
-persistFieldFromEntity mps e = do
-    ss <- [|SqlString|]
-    obj <- [|\ent -> PersistMap $ zip (map pack columnNames) (map toPersistValue $ toPersistFields ent)|]
-    fpv <- [|\x -> let columns = HM.fromList x
-                    in fromPersistValues $ map
-                         (\(name) ->
-                            case HM.lookup (pack name) columns of
-                                Just v -> v
-                                Nothing -> PersistNull)
-                         $ columnNames
-          |]
+persistFieldFromEntity mps entDef = do
+    sqlStringConstructor' <- [|SqlString|]
+    toPersistValueImplementation <- [|entityToPersistValueHelper|]
+    fromPersistValueImplementation <- [|entityFromPersistValueHelper columnNames|]
 
-    compose <- [|(<=<)|]
-    getPersistMap' <- [|getPersistMap|]
     return
         [ persistFieldInstanceD (mpsGeneric mps) typ
-            [ FunD 'toPersistValue [ normalClause [] obj ]
+            [ FunD 'toPersistValue [ normalClause [] toPersistValueImplementation ]
             , FunD 'fromPersistValue
-                [ normalClause [] (InfixE (Just fpv) compose $ Just getPersistMap')
-                ]
+                [ normalClause [] fromPersistValueImplementation ]
             ]
         , persistFieldSqlInstanceD (mpsGeneric mps) typ
-            [ sqlTypeFunD ss
+            [ sqlTypeFunD sqlStringConstructor'
             ]
         ]
   where
-    typ = genericDataType mps (entityHaskell e) backendT
-    entFields = entityFields e
-    columnNames  = map (unpack . unHaskellName . fieldHaskell) entFields
+    typ = genericDataType mps (entityHaskell entDef) backendT
+    entFields = entityFields entDef
+    columnNames = map (unpack . unHaskellName . fieldHaskell) entFields
 
 -- | Apply the given list of functions to the same @EntityDef@s.
 --
@@ -1614,7 +1666,22 @@ instance Lift CompositeDef where
     lift (CompositeDef a b) = [|CompositeDef a b|]
 
 instance Lift ForeignDef where
-    lift (ForeignDef a b c d e f g) = [|ForeignDef a b c d e f g|]
+    lift (ForeignDef a b c d e f g h) = [|ForeignDef a b c d e f g h|]
+
+-- |
+--
+-- @since 2.8.3.0
+instance Lift FieldCascade where
+    lift (FieldCascade a b) = [|FieldCascade a b|]
+
+-- |
+--
+-- @since 2.8.3.0
+instance Lift CascadeAction where
+    lift Cascade = [|Cascade|]
+    lift Restrict = [|Restrict|]
+    lift SetNull = [|SetNull|]
+    lift SetDefault = [|SetDefault|]
 
 instance Lift HaskellName where
     lift (HaskellName t) = [|HaskellName t|]
@@ -1718,6 +1785,7 @@ infixr 5 ++
 mkJSON :: MkPersistSettings -> EntityDef -> Q [Dec]
 mkJSON _ def | ("json" `notElem` entityAttrs def) = return []
 mkJSON mps def = do
+    requireExtensions [[FlexibleInstances]]
     pureE <- [|pure|]
     apE' <- [|(<*>)|]
     packE <- [|pack|]
@@ -1825,27 +1893,46 @@ instanceD = InstanceD Nothing
 --
 -- This function should be called before any code that depends on one of the required extensions being enabled.
 requirePersistentExtensions :: Q ()
-requirePersistentExtensions = do
+requirePersistentExtensions = requireExtensions requiredExtensions
+  where
+    requiredExtensions = map pure
+        [ DerivingStrategies
+        , GeneralizedNewtypeDeriving
+        , StandaloneDeriving
+        , UndecidableInstances
+        ]
+
+-- | Pass in a list of lists of extensions, where any of the given
+-- extensions will satisfy it. For example, you might need either GADTs or
+-- ExistentialQuantification, so you'd write:
+--
+-- > requireExtensions [[GADTs, ExistentialQuantification]]
+--
+-- But if you need TypeFamilies and MultiParamTypeClasses, then you'd
+-- write:
+--
+-- > requireExtensions [[TypeFamilies], [MultiParamTypeClasses]]
+requireExtensions :: [[Extension]] -> Q ()
+requireExtensions requiredExtensions = do
   -- isExtEnabled breaks the persistent-template benchmark with the following error:
   -- Template Haskell error: Can't do `isExtEnabled' in the IO monad
   -- You can workaround this by replacing isExtEnabled with (pure . const True)
-  unenabledExtensions <- filterM (fmap not . isExtEnabled) requiredExtensions
+  unenabledExtensions <- filterM (fmap (not . or) . traverse isExtEnabled) requiredExtensions
 
-  case unenabledExtensions of
+  case mapMaybe listToMaybe unenabledExtensions of
     [] -> pure ()
-    [extension] -> fail $ mconcat 
+    [extension] -> fail $ mconcat
                      [ "Generating Persistent entities now requires the "
                      , show extension
                      , " language extension. Please enable it by copy/pasting this line to the top of your file:\n\n"
                      , extensionToPragma extension
                      ]
-    extensions -> fail $ mconcat 
+    extensions -> fail $ mconcat
                     [ "Generating Persistent entities now requires the following language extensions:\n\n"
                     , List.intercalate "\n" (map show extensions)
                     , "\n\nPlease enable the extensions by copy/pasting these lines into the top of your file:\n\n"
                     , List.intercalate "\n" (map extensionToPragma extensions)
                     ]
-        
+
   where
-    requiredExtensions = [DerivingStrategies, GeneralizedNewtypeDeriving, StandaloneDeriving, UndecidableInstances]
     extensionToPragma ext = "{-# LANGUAGE " <> show ext <> " #-}"

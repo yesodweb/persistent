@@ -32,19 +32,19 @@ Source1 sql=source
     field4 Target1Id
 |]
 
-specsWith :: (MonadIO m) => RunDb SqlBackend m -> Spec
+specsWith :: (MonadUnliftIO m) => RunDb SqlBackend m -> Spec
 specsWith runDb = describe "Migration" $ do
     it "is idempotent" $ runDb $ do
       again <- getMigration migrationMigrate
       liftIO $ again @?= []
     it "really is idempotent" $ runDb $ do
-      runMigration migrationMigrate
+      runMigrationSilent migrationMigrate
       again <- getMigration migrationMigrate
       liftIO $ again @?= []
     it "can add an extra column" $ runDb $ do
       -- Failing test case for #735.  Foreign-key checking, switched on in
       -- version 2.6.1, caused persistent-sqlite to generate a `references`
       -- constraint in a *temporary* table during migration, which fails.
-      _ <- runMigration migrationAddCol
+      _ <- runMigrationSilent migrationAddCol
       again <- getMigration migrationAddCol
       liftIO $ again @?= []

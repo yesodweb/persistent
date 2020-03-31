@@ -24,6 +24,7 @@ library
                      EmptyEntityTest
                      EntityEmbedTest
                      EquivalentTypeTest
+                     ForeignKey
                      HtmlTest
                      Init
                      LargeNumberTest
@@ -35,6 +36,7 @@ library
                      MpsNoPrefixTest
                      PersistentTest
                      PersistentTestModels
+                     PersistentTestModelsImports
                      PersistTestPetType
                      PersistTestPetCollarType
                      PersistUniqueTest
@@ -65,6 +67,7 @@ library
                    , HUnit
                    , monad-control
                    , monad-logger             >= 0.3.25
+                   , mtl
                    , path-pieces              >= 0.2
                    , QuickCheck               >= 2.9
                    , quickcheck-instances     >= 0.3

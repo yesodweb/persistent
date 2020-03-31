@@ -30,7 +30,7 @@ import Database.Persist
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal (IsolationLevel (..))
 import Database.Persist.Sql.Class
-import Database.Persist.Sql.Run hiding (withResourceTimeout)
+import Database.Persist.Sql.Run hiding (withResourceTimeout, rawAcquireSqlConn)
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Migration
 import Database.Persist.Sql.Internal

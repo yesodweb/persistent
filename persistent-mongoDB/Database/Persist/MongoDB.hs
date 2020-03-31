@@ -548,7 +548,8 @@ instance PersistStoreWrite DB.MongoContext where
            $ updatesToDoc upds
 
     updateGet key upds = do
-        result <- DB.findAndModify (queryByKey key) (updatesToDoc upds)
+        context <- ask
+        result <- liftIO $ runReaderT (DB.findAndModify (queryByKey key) (updatesToDoc upds)) context
         either err instantiate result
       where
         instantiate doc = do
@@ -1471,5 +1472,5 @@ infix 4 `inList`
 
 -- | No intersection of lists: if no value in the field is found in the list.
 ninList :: PersistField typ => EntityField v [typ] -> [typ] -> Filter v
-f `ninList` a = Filter (unsafeCoerce f) (FilterValues a) In
+f `ninList` a = Filter (unsafeCoerce f) (FilterValues a) NotIn
 infix 4 `ninList`

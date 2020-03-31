@@ -235,7 +235,7 @@ instance MySQL.Param P where
     render (P (PersistMap m))         = MySQL.render $ mapToJSON m
     render (P (PersistRational r))    =
       MySQL.Plain $ BBB.fromString $ show (fromRational r :: Pico)
-      -- FIXME: Too Ambigous, can not select precision without information about field
+      -- FIXME: Too Ambiguous, can not select precision without information about field
     render (P (PersistDbSpecific s))    = MySQL.Plain $ BBS.fromByteString s
     render (P (PersistArray a))       = MySQL.render (P (PersistList a))
     render (P (PersistObjectId _))    =
@@ -330,8 +330,8 @@ migrate' :: MySQL.ConnectInfo
          -> IO (Either [Text] [(Bool, Text)])
 migrate' connectInfo allDefs getter val = do
     let name = entityDB val
-    (idClmn, old) <- getColumns connectInfo getter val
     let (newcols, udefs, fdefs) = mkColumns allDefs val
+    (idClmn, old) <- getColumns connectInfo getter val newcols
     let udspair = map udToPair udefs
     case (idClmn, old, partitionEithers old) of
       -- Nothing found, create everything
@@ -467,11 +467,11 @@ udToPair ud = (uniqueDBName ud, map snd $ uniqueFields ud)
 -- in the database.
 getColumns :: MySQL.ConnectInfo
            -> (Text -> IO Statement)
-           -> EntityDef
+           -> EntityDef -> [Column] 
            -> IO ( [Either Text (Either Column (DBName, [DBName]))] -- ID column
                  , [Either Text (Either Column (DBName, [DBName]))] -- everything else
                  )
-getColumns connectInfo getter def = do
+getColumns connectInfo getter def cols = do
     -- Find out ID column.
     stmtIdClmn <- getter $ T.concat
       [ "SELECT COLUMN_NAME, "
@@ -522,15 +522,22 @@ getColumns connectInfo getter def = do
     -- Return both
     return (ids, cs ++ us)
   where
+    refMap = Map.fromList $ foldl ref [] cols
+      where ref rs c = case cReference c of
+                Nothing -> rs
+                (Just r) -> (unDBName $ cName c, r) : rs
     vals = [ PersistText $ pack $ MySQL.connectDatabase connectInfo
            , PersistText $ unDBName $ entityDB def
            , PersistText $ unDBName $ fieldDB $ entityId def ]
 
     helperClmns = CL.mapM getIt .| CL.consume
         where
-          getIt = fmap (either Left (Right . Left)) .
-                  liftIO .
-                  getColumn connectInfo getter (entityDB def)
+          getIt row = fmap (either Left (Right . Left)) .
+                      liftIO .
+                      getColumn connectInfo getter (entityDB def) row $ ref
+            where ref = case row of
+                    (PersistText cname : _) -> (Map.lookup cname refMap)
+                    _ -> Nothing
 
     helperCntrs = do
       let check [ PersistText cntrName
@@ -546,6 +553,7 @@ getColumn :: MySQL.ConnectInfo
           -> (Text -> IO Statement)
           -> DBName
           -> [PersistValue]
+          -> Maybe (DBName, DBName)
           -> IO (Either Text Column)
 getColumn connectInfo getter tname [ PersistText cname
                                    , PersistText null_
@@ -554,7 +562,7 @@ getColumn connectInfo getter tname [ PersistText cname
                                    , colMaxLen
                                    , colPrecision
                                    , colScale
-                                   , default'] =
+                                   , default'] refName =
     fmap (either (Left . pack) Right) $
     runExceptT $ do
       -- Default value
@@ -569,30 +577,7 @@ getColumn connectInfo getter tname [ PersistText cname
                         Right t  -> return (Just t)
                     _ -> fail $ "Invalid default column: " ++ show default'
 
-      -- Foreign key (if any)
-      stmt <- lift . getter $ T.concat
-        [ "SELECT REFERENCED_TABLE_NAME, "
-        ,   "CONSTRAINT_NAME, "
-        ,   "ORDINAL_POSITION "
-        , "FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE "
-        , "WHERE TABLE_SCHEMA = ? "
-        ,   "AND TABLE_NAME   = ? "
-        ,   "AND COLUMN_NAME  = ? "
-        ,   "AND REFERENCED_TABLE_SCHEMA = ? "
-        , "ORDER BY CONSTRAINT_NAME, "
-        ,   "COLUMN_NAME"
-        ]
-      let vars = [ PersistText $ pack $ MySQL.connectDatabase connectInfo
-                 , PersistText $ unDBName $ tname
-                 , PersistText cname
-                 , PersistText $ pack $ MySQL.connectDatabase connectInfo ]
-      cntrs <- liftIO $ with (stmtQuery stmt vars) (\src -> runConduit $ src .| CL.consume)
-      ref <- case cntrs of
-               [] -> return Nothing
-               [[PersistText tab, PersistText ref, PersistInt64 pos]] ->
-                   return $ if pos == 1 then Just (DBName tab, DBName ref) else Nothing
-               _ -> fail "MySQL.getColumn/getRef: never here"
-
+      ref <- getRef refName
       let colMaxLen' = case colMaxLen of
             PersistInt64 l -> Just (fromIntegral l)
             _ -> Nothing
@@ -613,8 +598,43 @@ getColumn connectInfo getter tname [ PersistText cname
         , cMaxLen = maxLen
         , cReference = ref
         }
+  where getRef Nothing = return Nothing
+        getRef (Just (_, refName')) = do
+          -- Foreign key (if any)
+          stmt <- lift . getter $ T.concat
+            [ "SELECT REFERENCED_TABLE_NAME, "
+            ,   "CONSTRAINT_NAME, "
+            ,   "ORDINAL_POSITION "
+            , "FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE "
+            , "WHERE TABLE_SCHEMA = ? "
+            ,   "AND TABLE_NAME   = ? "
+            ,   "AND COLUMN_NAME  = ? "
+            ,   "AND REFERENCED_TABLE_SCHEMA = ? "
+            ,   "AND CONSTRAINT_NAME = ? "
+            , "ORDER BY CONSTRAINT_NAME, "
+            ,   "COLUMN_NAME"
+            ]
+          let vars = [ PersistText $ pack $ MySQL.connectDatabase connectInfo
+                     , PersistText $ unDBName $ tname
+                     , PersistText cname
+                     , PersistText $ pack $ MySQL.connectDatabase connectInfo
+                     , PersistText $ unDBName refName' ]
+          cntrs <- liftIO $ with (stmtQuery stmt vars) (\src -> runConduit $ src .| CL.consume)
+          case cntrs of
+            [] -> return Nothing
+            [[PersistText tab, PersistText ref, PersistInt64 pos]] ->
+              return $ if pos == 1 then Just (DBName tab, DBName ref) else Nothing
+            xs -> error $ mconcat 
+              [ "MySQL.getColumn/getRef: error fetching constraints. Expected a single result for foreign key query for table: "
+              , T.unpack (unDBName tname)
+              , " and column: "
+              , T.unpack cname
+              , " but got: "
+              , show xs
+              ]
 
-getColumn _ _ _ x =
+
+getColumn _ _ _ x  _ =
     return $ Left $ pack $ "Invalid result from INFORMATION_SCHEMA: " ++ show x
 
 -- | Extra column information from MySQL schema
@@ -701,7 +721,7 @@ getAlters allDefs tblName (c1, u1) (c2, u2) =
 findAlters :: DBName -> [EntityDef] -> Column -> [Column] -> ([AlterColumn'], [Column])
 findAlters tblName allDefs col@(Column name isNull type_ def _defConstraintName maxLen ref) cols =
     case filter ((name ==) . cName) cols of
-    -- new fkey that didnt exist before
+    -- new fkey that didn't exist before
         [] -> case ref of
                Nothing -> ([(name, Add' col)],[])
                Just (tname, cname) -> let cnstr = [addReference allDefs cname tname name]
