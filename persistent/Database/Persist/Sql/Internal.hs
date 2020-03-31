@@ -17,7 +17,7 @@ import qualified Data.Text as T
 import Database.Persist.Quasi
 import Database.Persist.Sql.Types
 import Database.Persist.Types
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 
 -- | Record of functions to override the default behavior in 'mkColumns'.
 -- It is recommended you initialize this with 'emptyBackendSpecificOverrides' and override the default values,
@@ -35,32 +35,69 @@ emptyBackendSpecificOverrides :: BackendSpecificOverrides
 emptyBackendSpecificOverrides = BackendSpecificOverrides Nothing
 
 defaultAttribute :: [Attr] -> Maybe Text
-defaultAttribute [] = Nothing
-defaultAttribute (a:as)
-    | Just d <- T.stripPrefix "default=" a = Just d
-    | otherwise = defaultAttribute as
+defaultAttribute =
+    listToMaybe
+    . mapMaybe (T.stripPrefix "default=")
 
 -- | Create the list of columns for the given entity.
-mkColumns :: [EntityDef] -> EntityDef -> BackendSpecificOverrides -> ([Column], [UniqueDef], [ForeignDef])
+mkColumns
+    :: [EntityDef]
+    -> EntityDef
+    -> BackendSpecificOverrides
+    -> ([Column], [UniqueDef], [ForeignDef])
 mkColumns allDefs t overrides =
     (cols, entityUniques t, entityForeigns t)
   where
     cols :: [Column]
-    cols = map go (entityFields t)
+    cols = map goId idCol <> map go (entityFields t)
 
-    tn :: DBName
-    tn = entityDB t
+    idCol :: [FieldDef]
+    idCol = case entityPrimary t of
+        Just _ -> []
+        Nothing -> [entityId t]
+
+    goId fd =
+        Column
+            { cName = fieldDB fd
+            , cNull = False
+            , cSqlType = fieldSqlType fd
+            , cDefault =
+                case defaultAttribute $ fieldAttrs fd of
+                    Nothing ->
+                        -- So this is not necessarily a problem...
+                        -- because you can use eg `inserKey` to insert
+                        -- a value into the database without ever asking
+                        -- for a default attribute.
+                        Nothing
+                        -- But we need to be able to say "Hey, if this is
+                        -- an *auto generated ID column*, then I need to
+                        -- specify that it has the default serial picking
+                        -- behavior for whatever SQL backend this is using.
+                        -- Because naturally MySQL, Postgres, MSSQL, etc
+                        -- all do ths differently, sigh.
+                    Just def ->
+                        --
+                        Just def
+
+            , cDefaultConstraintName =  Nothing
+            , cMaxLen = maxLen $ fieldAttrs fd
+            , cReference = ref (fieldDB fd) (fieldReference fd) (fieldAttrs fd)
+            }
+
+    tableName :: DBName
+    tableName = entityDB t
 
     go :: FieldDef -> Column
     go fd =
         Column
-            (fieldDB fd)
-            (nullable (fieldAttrs fd) /= NotNullable || entitySum t)
-            (fieldSqlType fd)
-            (defaultAttribute $ fieldAttrs fd)
-            Nothing
-            (maxLen $ fieldAttrs fd)
-            (ref (fieldDB fd) (fieldReference fd) (fieldAttrs fd))
+            { cName = fieldDB fd
+            , cNull = nullable (fieldAttrs fd) /= NotNullable || entitySum t
+            , cSqlType = fieldSqlType fd
+            , cDefault = defaultAttribute $ fieldAttrs fd
+            , cDefaultConstraintName =  Nothing
+            , cMaxLen = maxLen $ fieldAttrs fd
+            , cReference = ref (fieldDB fd) (fieldReference fd) (fieldAttrs fd)
+            }
 
     maxLen :: [Attr] -> Maybe Integer
     maxLen [] = Nothing
@@ -69,7 +106,7 @@ mkColumns allDefs t overrides =
             case reads (T.unpack d) of
               [(i, s)] | all isSpace s -> Just i
               _ -> error $ "Could not parse maxlen field with value " ++
-                           show d ++ " on " ++ show tn
+                           show d ++ " on " ++ show tableName
         | otherwise = maxLen as
 
     refNameFn = fromMaybe refName (backendSpecificForeignKeyName overrides)
@@ -80,7 +117,7 @@ mkColumns allDefs t overrides =
         -> Maybe (DBName, DBName) -- table name, constraint name
     ref c fe []
         | ForeignRef f _ <- fe =
-            Just (resolveTableName allDefs f, refNameFn tn c)
+            Just (resolveTableName allDefs f, refNameFn tableName c)
         | otherwise = Nothing
     ref _ _ ("noreference":_) = Nothing
     ref c fe (a:as)

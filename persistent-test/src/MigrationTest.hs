@@ -17,6 +17,11 @@ Target
 Source
     field3 Int
     field4 TargetId
+
+CustomSqlId
+    pk      Int   sql=id
+    Primary pk
+
 |]
 
 share [mkPersist sqlSettings, mkMigrate "migrationAddCol", mkDeleteCascade sqlSettings] [persistLowerCase|
@@ -38,6 +43,7 @@ specsWith runDb = describe "Migration" $ do
       again <- getMigration migrationMigrate
       liftIO $ again @?= []
     it "really is idempotent" $ runDb $ do
+      runMigrationSilent migrationMigrate
       runMigrationSilent migrationMigrate
       again <- getMigration migrationMigrate
       liftIO $ again @?= []

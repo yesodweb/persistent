@@ -666,7 +666,7 @@ mkEntityDef ps name entattribs lines =
         -- idField is the user-specified Id
         -- otherwise useAutoIdField
         -- but, adjust it if the user specified a Primary
-        , entityId = (setComposite primaryComposite $ fromMaybe autoIdField idField)
+        , entityId = setComposite primaryComposite $ fromMaybe autoIdField idField
         , entityAttrs = entattribs
         , entityFields = cols
         , entityUniques = uniqs
