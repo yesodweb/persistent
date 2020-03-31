@@ -4,6 +4,9 @@
 
 * [#1060](https://github.com/yesodweb/persistent/pull/1060)
   * The QuasiQuoter now supports `OnDelete` and `OnUpdate` cascade options.
+* [#1032](https://github.com/yesodweb/persistent/pull/1032)
+  * Instance for `Natural` is removed. See `OverflowNatural` for a
+    replacement and rationale on why.
 
 ## 2.10.5.2
 
