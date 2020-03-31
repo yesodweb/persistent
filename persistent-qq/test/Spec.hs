@@ -40,7 +40,7 @@ runConn f = do
 db :: SqlPersistT (LoggingT (ResourceT IO)) () -> IO ()
 db actions = do
   runResourceT $ runConn $ do
-      runMigration testMigrate
+      runMigrationSilent testMigrate
       actions
       transactionUndo
 

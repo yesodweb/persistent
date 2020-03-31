@@ -38,7 +38,6 @@ import qualified Data.Text.Lazy.Builder as TB
 import Data.Typeable (Typeable)
 import GHC.Generics
 
-import Database.Persist.Class.PersistEntity
 import Database.Persist.Class.PersistField
 import Database.Persist.Types.Base
 
@@ -97,6 +96,15 @@ class ( PersistField (Key record), ToJSON (Key record), FromJSON (Key record)
     -- | Use a 'PersistField' as a lens.
     fieldLens :: EntityField record field
               -> (forall f. Functor f => (field -> f field) -> Entity record -> f (Entity record))
+
+    -- | Extract a @'Key' record@ from a @record@ value. Currently, this is
+    -- only defined for entities using the @Primary@ syntax for
+    -- natural/composite keys. In a future version of @persistent@ which
+    -- incorporates the ID directly into the entity, this will always be Just.
+    --
+    -- @since 2.11.0.0
+    keyFromRecordM :: Maybe (record -> Key record)
+    keyFromRecordM = Nothing
 
 type family BackendSpecificUpdate backend record
 
@@ -254,7 +262,17 @@ keyValueEntityFromJSON _ = fail "keyValueEntityFromJSON: not an object"
 --     toJSON = entityIdToJSON
 -- @
 entityIdToJSON :: (PersistEntity record, ToJSON record) => Entity record -> Value
-entityIdToJSON (Entity key value) = case toJSON value of
+entityIdToJSON (Entity key value) =
+    case toJSON value of
+        Object o -> Object $ HM.insert "id" (toJSON key) o
+        x -> x
+
+-- | Like 'entityIdToJSON', but this does not copy the primary key into an
+-- @id@ field.
+--
+-- @since 2.11.0.0
+entityIdToJSONCopyPrimary :: (PersistEntity record, ToJSON record) => Entity record -> Value
+entityIdToJSONCopyPrimary (Entity key value) = case toJSON value of
     Object o -> Object $ HM.insert "id" (toJSON key) o
     x -> x
 
@@ -270,11 +288,11 @@ entityIdToJSON (Entity key value) = case toJSON value of
 entityIdFromJSON :: (PersistEntity record, FromJSON record) => Value -> Parser (Entity record)
 entityIdFromJSON = withObject "entityIdFromJSON" $ \o -> do
     val <- parseJSON (Object o)
-    k <- case keyFromRecordM val of
+    k <- case ($ val) <$> keyFromRecordM of
         Nothing ->
             o .: "id"
-        Just func ->
-            pure $ func val
+        Just key ->
+            pure key
     pure $ Entity k val
 
 instance (PersistEntity record, PersistField record, PersistField (Key record))

@@ -1,5 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE UndecidableInstances #-} -- FIXME
 module PersistentTestModels where
 
@@ -103,6 +104,11 @@ share [mkPersist persistSettings { mpsGeneric = True },  mkMigrate "testMigrate"
       name String
       parent RelationshipId Maybe
 
+  MutA
+    mutB    MutBId
+
+  MutB
+    mutA    MutAId
 |]
 
 deriving instance Show (BackendKey backend) => Show (PetGeneric backend)
@@ -129,10 +135,20 @@ JsonEncoding json
     age  Int
     Primary name
     deriving Show Eq
+
+JsonEncoding2 json
+    name Text
+    age Int
+    blood Text
+    Primary name blood
+    deriving Show Eq
 |]
 
 instance Arbitrary JsonEncoding where
     arbitrary = JsonEncoding <$> arbitrary <*> arbitrary
+
+instance Arbitrary JsonEncoding2 where
+    arbitrary = JsonEncoding2 <$> arbitrary <*> arbitrary <*> arbitrary
 
 deriving instance Show (BackendKey backend) => Show (NoPrefix1Generic backend)
 deriving instance Eq (BackendKey backend) => Eq (NoPrefix1Generic backend)
@@ -142,6 +158,17 @@ deriving instance Eq (BackendKey backend) => Eq (NoPrefix2Generic backend)
 
 deriving instance Show (BackendKey backend) => Show (RelationshipGeneric backend)
 deriving instance Eq (BackendKey backend) => Eq (RelationshipGeneric backend)
+
+share [mkPersist persistSettings { mpsPrefixFields = False, mpsGeneric = False }
+      , mkMigrate "treeMigrate"
+      ] [persistLowerCase|
+
+Tree sql=trees
+  name String
+  parent String Maybe
+  Primary name
+  Foreign Tree fkparent parent
+|]
 
 -- | Reverses the order of the fields of an entity.  Used to test
 -- @??@ placeholders of 'rawSql'.

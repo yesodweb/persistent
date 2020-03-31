@@ -6,6 +6,7 @@ module PersistentTest
     , cleanDB
     , testMigrate
     , noPrefixMigrate
+    , treeMigrate
     ) where
 
 import Control.Monad.Fail
@@ -646,6 +647,7 @@ specsWith runDb = describe "persistent" $ do
           Object (M.fromList
             [ ("name", String "Bob")
             , ("age", toJSON (32 :: Int))
+            , ("id", String "Bob")
             ])
 
     it "decodes without an ID field" $ do
@@ -675,6 +677,30 @@ specsWith runDb = describe "persistent" $ do
           Object (M.fromList
             [ ("name", toJSON jsonEncodingName)
             , ("age", toJSON jsonEncodingAge)
+            , ("id", toJSON jsonEncodingName)
+            ])
+
+    prop "round trip works with composite key" $ \j@JsonEncoding2{..} -> do
+      let
+        key = JsonEncoding2Key jsonEncoding2Name jsonEncoding2Blood
+        ent =
+          Entity key j
+      decode (encode ent)
+        `shouldBe`
+          Just ent
+
+    prop "works with a composite key" $ \j@JsonEncoding2{..} -> do
+      let
+        key = JsonEncoding2Key jsonEncoding2Name jsonEncoding2Blood
+        ent =
+          Entity key j
+      toJSON ent
+        `shouldBe`
+          Object (M.fromList
+            [ ("name", toJSON jsonEncoding2Name)
+            , ("age", toJSON jsonEncoding2Age)
+            , ("blood", toJSON jsonEncoding2Blood)
+            , ("id", toJSON key)
             ])
 
 

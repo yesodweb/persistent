@@ -1,5 +1,9 @@
 # Changelog for persistent-mongoDB
 
+## 2.10.0.0
+
+* Fix `ninList` filter operator [#1058](https://github.com/yesodweb/persistent/pull/1058)
+
 ## 2.9.0.2
 
 * Compatibility with latest mongoDB [#1012](https://github.com/yesodweb/persistent/pull/1012)

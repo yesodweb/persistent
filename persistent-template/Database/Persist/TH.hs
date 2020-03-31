@@ -65,6 +65,9 @@ import Data.Aeson
     , eitherDecodeStrict'
     )
 import qualified Data.ByteString as BS
+import Data.Typeable (Typeable)
+import Data.Ix (Ix)
+import Data.Data (Data)
 import Data.Char (toLower, toUpper)
 import qualified Data.HashMap.Strict as HM
 import Data.Int (Int64)
@@ -84,7 +87,7 @@ import GHC.TypeLits
 import Instances.TH.Lift ()
     -- Bring `Lift (Map k v)` instance into scope, as well as `Lift Text`
     -- instance on pre-1.2.4 versions of `text`
-import Language.Haskell.TH.Lib (conT, varE)
+import Language.Haskell.TH.Lib (conT, varE, varP)
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Web.PathPieces (PathPiece(..))
@@ -440,8 +443,8 @@ data MkPersistSettings = MkPersistSettings
     --
     -- @
     --  Just EntityJSON
-    --      { entityToJSON = 'keyValueEntityToJSON
-    --      , entityFromJSON = 'keyValueEntityFromJSON
+    --      { entityToJSON = 'entityIdToJSON
+    --      , entityFromJSON = 'entityIdFromJSON
     --      }
     -- @
     , mpsGenerateLenses :: !Bool
@@ -538,9 +541,12 @@ dataTypeDec mps t = do
         else
             Right n
 
-    stockClasses = Set.fromList . map mkName $
+    stockClasses =
+        Set.fromList (map mkName
         [ "Eq", "Ord", "Show", "Read", "Bounded", "Enum", "Ix", "Generic", "Data", "Typeable"
+        ] <> [''Eq, ''Ord, ''Show, ''Read, ''Bounded, ''Enum, ''Ix, ''Generic, ''Data, ''Typeable
         ]
+        )
     mkCol x fd@FieldDef {..} =
         (mkName $ unpack $ recName mps x fieldHaskell,
          if fieldStrict then isStrict else notStrict,
@@ -1085,6 +1091,31 @@ mkEntity entityMap mps t = do
     let instanceConstraint = if not (mpsGeneric mps) then [] else
           [mkClassP ''PersistStore [backendT]]
 
+    [keyFromRecordM'] <-
+        case entityPrimary t of
+            Just prim -> do
+                recordName <- newName "record"
+                let fields = map fieldHaskell (compositeFields prim)
+                    keyCon = keyConName t
+                    keyFields' =
+                        map (mkName . T.unpack . recName mps entName . fieldHaskell)
+                            (compositeFields prim)
+                    constr =
+                        foldl'
+                            AppE
+                            (ConE keyCon)
+                            (map
+                                (\n ->
+                                    VarE n `AppE` VarE recordName
+                                )
+                                keyFields'
+                            )
+                    keyFromRec = varP 'keyFromRecordM
+                [d|$(keyFromRec) = Just ( \ $(varP recordName) -> $(pure constr)) |]
+
+            Nothing ->
+                [d|$(varP 'keyFromRecordM) = Nothing|]
+
     dtd <- dataTypeDec mps t
     return $ addSyn $
        dtd : mconcat fkc `mappend`
@@ -1095,6 +1126,7 @@ mkEntity entityMap mps t = do
         , keyTypeDec
         , keyToValues'
         , keyFromValues'
+        , keyFromRecordM'
         , FunD 'entityDef [normalClause [WildP] t']
         , tpf
         , FunD 'fromPersistValues fpv
@@ -1660,7 +1692,22 @@ instance Lift CompositeDef where
     lift (CompositeDef a b) = [|CompositeDef a b|]
 
 instance Lift ForeignDef where
-    lift (ForeignDef a b c d e f g) = [|ForeignDef a b c d e f g|]
+    lift (ForeignDef a b c d e f g h) = [|ForeignDef a b c d e f g h|]
+
+-- |
+--
+-- @since 2.8.3.0
+instance Lift FieldCascade where
+    lift (FieldCascade a b) = [|FieldCascade a b|]
+
+-- |
+--
+-- @since 2.8.3.0
+instance Lift CascadeAction where
+    lift Cascade = [|Cascade|]
+    lift Restrict = [|Restrict|]
+    lift SetNull = [|SetNull|]
+    lift SetDefault = [|SetDefault|]
 
 instance Lift HaskellName where
     lift (HaskellName t) = [|HaskellName t|]

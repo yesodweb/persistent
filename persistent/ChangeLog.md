@@ -1,5 +1,19 @@
 # Changelog for persistent
 
+## 2.11.0.0
+
+* [#1060](https://github.com/yesodweb/persistent/pull/1060)
+  * The QuasiQuoter now supports `OnDelete` and `OnUpdate` cascade options.
+* [#1063](https://github.com/yesodweb/persistent/pull/1063)
+  * A new class member `keyFromRecordM` allows you to construct a `Key
+    record` from a `record` if it was defined with `Primary`.
+
+## 2.10.5.2
+
+* [#1041](https://github.com/yesodweb/persistent/pull/1041)
+  * Explicit foreign keys can now reference tables with custom sql name
+  * Add qualified names to the stock classes list.
+
 ## 2.10.5.1
 
 * [#1024](https://github.com/yesodweb/persistent/pull/1024)

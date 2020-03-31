@@ -53,6 +53,7 @@ import Control.Monad.Logger (NoLoggingT, runNoLoggingT, MonadLogger, logWarn, ru
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, withReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
 import Data.Acquire (Acquire, mkAcquire, with)
+import Data.Maybe
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import Data.Conduit
@@ -580,7 +581,7 @@ sqlColumn noRef (Column name isNull typ def _cn _maxLen ref) = T.concat
     ]
 
 sqlForeign :: ForeignDef -> Text
-sqlForeign fdef = T.concat
+sqlForeign fdef = T.concat $
     [ ", CONSTRAINT "
     , escape $ foreignConstraintNameDBName fdef
     , " FOREIGN KEY("
@@ -590,7 +591,20 @@ sqlForeign fdef = T.concat
     , "("
     , T.intercalate "," $ map (escape . snd . snd) $ foreignFields fdef
     , ")"
-    ]
+    ] ++ onDelete ++ onUpdate
+  where
+    onDelete =
+        fmap (T.append " ON DELETE ")
+        $ showAction
+        $ fcOnDelete
+        $ foreignFieldCascade fdef
+    onUpdate =
+        fmap (T.append " ON UPDATE ")
+        $ showAction
+        $ fcOnUpdate
+        $ foreignFieldCascade fdef
+
+    showAction = maybeToList . fmap renderCascadeAction
 
 sqlUnique :: UniqueDef -> Text
 sqlUnique (UniqueDef _ cname cols _) = T.concat
@@ -717,8 +731,6 @@ instance FromJSON SqliteConnectionInfo where
         <*> o .: "fkEnabled"
         <*> o .:? "extraPragmas" .!= []
 
-makeLenses ''SqliteConnectionInfo
-
 -- | Like `withSqliteConnInfo`, but exposes the internal `Sqlite.Connection`.
 -- For power users who want to manually interact with SQLite's C API via
 -- internals exposed by "Database.Sqlite.Internal"
@@ -809,7 +821,6 @@ data RawSqlite backend = RawSqlite
     { _persistentBackend :: backend -- ^ The persistent backend
     , _rawSqliteConnection :: Sqlite.Connection -- ^ The underlying `Sqlite.Connection`
     }
-makeLenses ''RawSqlite
 
 instance HasPersistBackend b => HasPersistBackend (RawSqlite b) where
     type BaseBackend (RawSqlite b) = BaseBackend b
@@ -872,3 +883,6 @@ instance (PersistUniqueWrite b) => PersistUniqueWrite (RawSqlite b) where
     upsert rec = withReaderT _persistentBackend . upsert rec
     upsertBy uniq rec = withReaderT _persistentBackend . upsertBy uniq rec
     putMany = withReaderT _persistentBackend . putMany
+
+makeLenses ''RawSqlite
+makeLenses ''SqliteConnectionInfo

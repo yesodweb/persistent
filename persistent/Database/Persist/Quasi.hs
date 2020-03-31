@@ -272,6 +272,7 @@ import Data.Monoid (mappend)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Database.Persist.Types
+import Text.Read (readEither)
 
 data ParseState a = PSDone | PSFail String | PSSuccess a Text deriving Show
 
@@ -564,24 +565,41 @@ fixForeignKeysAll unEnts = map fixForeignKeys unEnts
     -- check the count and the sqltypes match and update the foreignFields with the names of the primary columns
     fixForeignKey :: EntityDef -> UnboundForeignDef -> ForeignDef
     fixForeignKey ent (UnboundForeignDef foreignFieldTexts fdef) =
-        case M.lookup (foreignRefTableHaskell fdef) entLookup of
-          Just pent -> case entityPrimary pent of
-             Just pdef ->
-                 if length foreignFieldTexts /= length (compositeFields pdef)
-                   then lengthError pdef
-                   else let fds_ffs = zipWith (toForeignFields pent)
-                                foreignFieldTexts
-                                (compositeFields pdef)
-                        in  fdef { foreignFields = map snd fds_ffs
-                                 , foreignNullable = setNull $ map fst fds_ffs
-                                 }
-             Nothing ->
-                 error $ "no explicit primary key fdef="++show fdef++ " ent="++show ent
-          Nothing ->
-             error $ "could not find table " ++ show (foreignRefTableHaskell fdef)
-               ++ " fdef=" ++ show fdef ++ " allnames="
-               ++ show (map (unHaskellName . entityHaskell . unboundEntityDef) unEnts)
-               ++ "\n\nents=" ++ show ents
+        let pentError =
+                error $ "could not find table " ++ show (foreignRefTableHaskell fdef)
+                ++ " fdef=" ++ show fdef ++ " allnames="
+                ++ show (map (unHaskellName . entityHaskell . unboundEntityDef) unEnts)
+                ++ "\n\nents=" ++ show ents
+            pent =
+                fromMaybe pentError $ M.lookup (foreignRefTableHaskell fdef) entLookup
+         in
+            case entityPrimary pent of
+                Just pdef ->
+                    if length foreignFieldTexts /= length (compositeFields pdef)
+                    then
+                        lengthError pdef
+                    else
+                        let
+                            fds_ffs =
+                                zipWith (toForeignFields pent)
+                                    foreignFieldTexts
+                                    (compositeFields pdef)
+                            dbname =
+                                unDBName (entityDB pent)
+                            oldDbName =
+                                unDBName (foreignRefTableDBName fdef)
+                         in fdef
+                            { foreignFields = map snd fds_ffs
+                            , foreignNullable = setNull $ map fst fds_ffs
+                            , foreignRefTableDBName =
+                                DBName dbname
+                            , foreignConstraintNameDBName =
+                                DBName
+                                . T.replace oldDbName dbname . unDBName
+                                $ foreignConstraintNameDBName fdef
+                            }
+                Nothing ->
+                    error $ "no explicit primary key fdef="++show fdef++ " ent="++show ent
       where
         setNull :: [FieldDef] -> Bool
         setNull [] = error "setNull: impossible!"
@@ -628,9 +646,9 @@ overUnboundEntityDef
 overUnboundEntityDef f ubed =
     ubed { unboundEntityDef = f (unboundEntityDef ubed) }
 
-
 lookupKeyVal :: Text -> [Text] -> Maybe Text
 lookupKeyVal key = lookupPrefix $ key `mappend` "="
+
 lookupPrefix :: Text -> [Text] -> Maybe Text
 lookupPrefix prefix = msum . map (T.stripPrefix prefix)
 
@@ -826,7 +844,7 @@ takeComposite fields pkcols
     getDef (d:ds) t
         | fieldHaskell d == HaskellName t =
             if nullable (fieldAttrs d) /= NotNullable
-                then error $ "primary key column cannot be nullable: " ++ show t
+                then error $ "primary key column cannot be nullable: " ++ show t ++ show fields
                 else d
         | otherwise = getDef ds t
 
@@ -891,20 +909,50 @@ takeForeign :: PersistSettings
           -> [FieldDef]
           -> [Text]
           -> UnboundForeignDef
-takeForeign ps tableName _defs (refTableName:n:rest)
-    | not (T.null n) && isLower (T.head n)
-        = UnboundForeignDef fields $ ForeignDef
-            (HaskellName refTableName)
-            (DBName $ psToDBName ps refTableName)
-            (HaskellName n)
-            (DBName $ psToDBName ps (tableName `T.append` n))
-            []
-            attrs
-            False
+takeForeign ps tableName _defs = takeRefTable
   where
-    (fields,attrs) = break ("!" `T.isPrefixOf`) rest
+    errorPrefix :: String
+    errorPrefix = "invalid foreign key constraint on table[" ++ show tableName ++ "] "
 
-takeForeign _ tableName _ xs = error $ "invalid foreign key constraint on table[" ++ show tableName ++ "] expecting a lower case constraint name xs=" ++ show xs
+    takeRefTable :: [Text] -> UnboundForeignDef
+    takeRefTable [] = error $ errorPrefix ++ " expecting foreign table name"
+    takeRefTable (refTableName:restLine) = go restLine Nothing Nothing
+      where
+        go :: [Text] -> Maybe CascadeAction -> Maybe CascadeAction -> UnboundForeignDef
+        go (n:rest) onDelete onUpdate | not (T.null n) && isLower (T.head n)
+            = UnboundForeignDef fields $ ForeignDef
+                { foreignRefTableHaskell =
+                    HaskellName refTableName
+                , foreignRefTableDBName =
+                    DBName $ psToDBName ps refTableName
+                , foreignConstraintNameHaskell =
+                    HaskellName n
+                , foreignConstraintNameDBName =
+                    DBName $ psToDBName ps (tableName `T.append` n)
+                , foreignFieldCascade = FieldCascade
+                    { fcOnDelete = onDelete
+                    , fcOnUpdate = onUpdate
+                    }
+                , foreignFields =
+                    []
+                , foreignAttrs =
+                    attrs
+                , foreignNullable =
+                    False
+                }
+          where
+            (fields,attrs) = break ("!" `T.isPrefixOf`) rest
+        go ((T.stripPrefix "OnDelete" -> Just onDelete) : rest) onDelete' onUpdate
+          = case (onDelete', readEither $ T.unpack onDelete) of
+            (Nothing, Right cascadingAction) -> go rest (Just cascadingAction) onUpdate
+            (Nothing, Left _) -> error $ errorPrefix ++ "could not parse OnDelete action"
+            (Just _, _)  -> error $ errorPrefix ++ "found more than one OnDelete actions"
+        go ((T.stripPrefix "OnUpdate" -> Just onUpdate) : rest) onDelete onUpdate'
+          = case (onUpdate', readEither $ T.unpack onUpdate) of
+            (Nothing, Right cascadingAction) -> go rest onDelete (Just cascadingAction)
+            (Nothing, Left _) -> error $ errorPrefix ++ "could not parse OnUpdate action"
+            (Just _, _)  -> error $ errorPrefix ++ "found more than one OnUpdate actions"
+        go xs _ _ = error $ errorPrefix ++ "expecting a lower case constraint name or a cascading action xs=" ++ show xs
 
 takeDerives :: [Text] -> Maybe [Text]
 takeDerives ("deriving":rest) = Just rest
