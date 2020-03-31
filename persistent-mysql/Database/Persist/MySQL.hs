@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
@@ -57,7 +58,7 @@ import Data.Int (Int64)
 import Data.IORef
 import Data.List (find, intercalate, sort, groupBy)
 import qualified Data.Map as Map
-import Data.Maybe (listToMaybe, mapMaybe)
+import Data.Maybe (listToMaybe, mapMaybe, fromMaybe)
 import Data.Monoid ((<>))
 import qualified Data.Monoid as Monoid
 import Data.Pool (Pool)
@@ -206,9 +207,9 @@ withStmt' conn query vals = do
       let getters = [ maybe PersistNull (getGetter f f . Just) | f <- fields]
           convert = use getters
             where use (g:gs) (col:cols) =
-                    let v  = g col
-                        vs = use gs cols
-                    in v `seq` vs `seq` (v:vs)
+                    let !v  = g col
+                        !vs = use gs cols
+                    in (v:vs)
                   use _ _ = []
 
       -- Ready to go!
@@ -216,8 +217,8 @@ withStmt' conn query vals = do
             row <- MySQLBase.fetchRow result
             case row of
               [] -> return (acc [])
-              _  -> let converted = convert row
-                    in converted `seq` go (acc . (converted:))
+              _  -> let !converted = convert row
+                    in go (acc . (converted:))
       go id
 
 
@@ -348,8 +349,12 @@ migrate' connectInfo allDefs getter val = do
                         $ map (findTypeAndMaxLen name) ucols
 
             let foreigns = do
-                  Column { cName=cname, cReference=Just (refTblName, refConstraintName) } <- newcols
-                  return $ AlterColumn name (refTblName, addReference allDefs refConstraintName refTblName cname)
+                    Column { cName=cname, cReference=Just (refTblName, refConstraintName) } <- newcols
+                    let refTarget =
+                          addReference allDefs refConstraintName refTblName cname
+
+                    guard $ refTblName /= name && cname /= fieldDB (entityId val)
+                    return $ Debug.traceShowId $ AlterColumn name (refTblName, refTarget)
 
             let foreignsAlt =
                     map
@@ -402,7 +407,10 @@ migrate' connectInfo allDefs getter val = do
                     map (AlterColumn name) acs
                 ats' =
                     map (AlterTable  name) ats
-            return $ Right $ map showAlterDb $ acs' ++ ats'
+            return
+                $ Right
+                $ map showAlterDb
+                $ acs' ++ ats'
 
         -- Errors
         (_, _, (errs, _)) ->
@@ -481,13 +489,17 @@ findMaxLenOfField fieldDef = do
 
 -- | Helper for 'AddReference' that finds out the which primary key columns to reference.
 addReference :: [EntityDef] -> DBName -> DBName -> DBName -> AlterColumn
-addReference allDefs fkeyname reftable cname = AddReference reftable fkeyname [cname] referencedColumns
-    where
-      referencedColumns = maybe (error $ "Could not find ID of entity " ++ show reftable
-                                  ++ " (allDefs = " ++ show allDefs ++ ")")
-                                id $ do
-                                  entDef <- find ((== reftable) . entityDB) allDefs
-                                  return $ map fieldDB $ entityKeyFields entDef
+addReference allDefs fkeyname reftable cname =
+    AddReference reftable fkeyname [cname] referencedColumns
+  where
+    errorMessage =
+        error
+            $ "Could not find ID of entity " ++ show reftable
+            ++ " (allDefs = " ++ show allDefs ++ ")"
+    referencedColumns =
+        fromMaybe errorMessage $ do
+            entDef <- find ((== reftable) . entityDB) allDefs
+            return $ map fieldDB $ entityKeyFields entDef
 
 data AlterColumn = Change Column
                  | Add' Column
@@ -504,14 +516,25 @@ data AlterColumn = Change Column
                  | DropReference DBName
                  deriving Show
 
+isSameRef :: AlterColumn -> Bool
+isSameRef ac = case ac of
+    AddReference refTableName foreignKeyName refCols referencedCols ->
+        undefined
+    _ ->
+        False
+
+
+
 type AlterColumn' = (DBName, AlterColumn)
 
 data AlterTable = AddUniqueConstraint DBName [(DBName, FieldType, Integer)]
                 | DropUniqueConstraint DBName
+                deriving Show
 
 data AlterDB = AddTable String
              | AlterColumn DBName AlterColumn'
              | AlterTable DBName AlterTable
+             deriving Show
 
 
 udToPair :: UniqueDef -> (DBName, [DBName])

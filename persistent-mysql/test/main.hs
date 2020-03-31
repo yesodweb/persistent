@@ -119,7 +119,7 @@ main = do
       , Recursive.recursiveMigrate
       , CompositeTest.compositeMigrate
       , PersistUniqueTest.migration
-      , RenameTest.migration
+      -- , RenameTest.migration
       , CustomPersistFieldTest.customFieldMigrate
       , InsertDuplicateUpdate.duplicateMigrate
       , MigrationIdempotencyTest.migration
@@ -131,7 +131,8 @@ main = do
     PersistentTest.cleanDB
 
   hspec $ do
-    RenameTest.specsWith db
+    xdescribe "This is pending on MySQL because you can't have DEFAULT CURRENT_DATE" $ do
+        RenameTest.specsWith db
     DataTypeTest.specsWith
         db
         (Just (runMigrationSilent dataTypeMigrate))
