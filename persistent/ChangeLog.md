@@ -13,6 +13,8 @@
 * [#1063](https://github.com/yesodweb/persistent/pull/1063)
   * A new class member `keyFromRecordM` allows you to construct a `Key
     record` from a `record` if it was defined with `Primary`.
+* [#1036](https://github.com/yesodweb/persistent/pull/1036):
+  * The method `entityIdFromJSON` that is used to parse entities now correctly works for entities that define a custom `Primary` key.
 
 ## 2.10.5.2
 
