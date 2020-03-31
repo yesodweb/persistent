@@ -30,6 +30,7 @@ module Init (
   , Text
   , module Control.Monad.Reader
   , module Control.Monad
+  , module Control.Monad.IO.Unlift
   , BS.ByteString
   , SomeException
   , MonadFail
@@ -45,6 +46,7 @@ module Init (
 -- needed for backwards compatibility
 import Control.Monad.Base
 import Control.Monad.Catch
+import Control.Monad.IO.Unlift
 import qualified Control.Monad.Fail as MonadFail
 import Control.Monad.Logger
 import Control.Monad.Trans.Class

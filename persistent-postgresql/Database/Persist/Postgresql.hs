@@ -3,6 +3,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE NamedFieldPuns #-}
 
 -- | A postgresql backend for persistent.
 module Database.Persist.Postgresql
@@ -566,13 +567,18 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
   where
     name = entityDB entity
     (newcols', udefs, fdefs) = mkColumns allDefs entity
-    migrationText exists old'' =
-        if not exists
-            then createText newcols fdefs udspair
-            else let (acs, ats) = getAlters allDefs entity (newcols, udspair) $ excludeForeignKeys $ old'
-                     acs' = map (AlterColumn name) acs
-                     ats' = map (AlterTable name) ats
-                 in  acs' ++ ats'
+    migrationText exists old''
+        | not exists =
+            createText newcols fdefs udspair
+        | otherwise =
+            let (acs, ats) =
+                    getAlters allDefs entity (newcols, udspair)
+                    -- $ excludeForeignKeys
+                    $ old'
+                acs' = map (AlterColumn name) acs
+                ats' = map (AlterTable name) ats
+            in
+                acs' ++ ats'
        where
          old' = partitionEithers old''
          newcols = filter (not . safeToRemove entity . cName) newcols'
@@ -592,12 +598,37 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
       where
         uniques = flip concatMap udspair $ \(uname, ucols) ->
                 [AlterTable name $ AddUniqueConstraint uname ucols]
-        references = mapMaybe (\c@Column { cName=cname, cReference=Just (refTblName, _) } ->
-            getAddReference allDefs name refTblName cname (cReference c))
-                   $ filter (isJust . cReference) newcols
-        foreignsAlt = flip map fdefs (\fdef ->
-            let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef))
-            in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignConstraintNameDBName fdef) childfields (map escape parentfields)))
+        references =
+            mapMaybe
+                (\Column { cName, cReference } ->
+                    fmap (getAddReference allDefs Nothing name cName) cReference
+                )
+                newcols
+        foreignsAlt = map (mkForeignAlt name) fdefs
+
+mkForeignAlt
+    :: DBName
+    -> ForeignDef
+    -> AlterDB
+mkForeignAlt name fdef =
+    AlterColumn
+        name
+        ( foreignRefTableDBName fdef
+        , addReference
+        )
+  where
+    addReference =
+        AddReference
+            constraintName
+            childfields
+            escapedParentFields
+            (foreignFieldCascade fdef)
+    constraintName =
+        foreignConstraintNameDBName fdef
+    (childfields, parentfields) =
+        unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef))
+    escapedParentFields =
+        map escape parentfields
 
 addTable :: [Column] -> EntityDef -> AlterDB
 addTable cols entity = AddTable $ T.concat
@@ -635,10 +666,13 @@ mayDefault def = case def of
 
 type SafeToRemove = Bool
 
-data AlterColumn = ChangeType SqlType Text
-                 | IsNull | NotNull | Add' Column | Drop SafeToRemove
-                 | Default Text | NoDefault | Update' Text
-                 | AddReference DBName [DBName] [Text] | DropReference DBName
+data AlterColumn
+    = ChangeType SqlType Text
+    | IsNull | NotNull | Add' Column | Drop SafeToRemove
+    | Default Text | NoDefault | Update' Text
+    | AddReference DBName [DBName] [Text] FieldCascade
+    | DropReference DBName
+
 type AlterColumn' = (DBName, AlterColumn)
 
 data AlterTable = AddUniqueConstraint DBName [DBName]
@@ -748,13 +782,16 @@ getAlters defs def (c1, u1) (c2, u2) =
         let (alters, old') = findAlters defs (entityDB def) new old
          in alters ++ getAltersC news old'
 
-    getAltersU :: [(DBName, [DBName])]
-               -> [(DBName, [DBName])]
-               -> [AlterTable]
-    getAltersU [] old = map DropConstraint $ filter (not . isManual) $ map fst old
+    getAltersU
+        :: [(DBName, [DBName])]
+        -> [(DBName, [DBName])]
+        -> [AlterTable]
+    getAltersU [] old =
+        map DropConstraint $ filter (not . isManual) $ map fst old
     getAltersU ((name, cols):news) old =
         case lookup name old of
-            Nothing -> AddUniqueConstraint name cols : getAltersU news old
+            Nothing ->
+                AddUniqueConstraint name cols : getAltersU news old
             Just ocols ->
                 let old' = filter (\(x, _) -> x /= name) old
                  in if sort cols == sort ocols
@@ -768,7 +805,7 @@ getAlters defs def (c1, u1) (c2, u2) =
 
 getColumn :: (Text -> IO Statement)
           -> DBName -> [PersistValue]
-          -> Maybe (DBName, DBName) 
+          -> Maybe (DBName, DBName)
           -> IO (Either Text Column)
 getColumn getter tableName' [PersistText columnName, PersistText isNullable, PersistText typeName, defaultValue, numericPrecision, numericScale, maxlen] refName =
     case d' of
@@ -895,8 +932,17 @@ findAlters defs _tablename col@(Column name isNull sqltype def _defConstraintNam
                 refAdd Nothing = []
                 refAdd (Just (tname, a)) =
                     case find ((==tname) . entityDB) defs of
-                        Just refdef -> [(tname, AddReference a [name] (Util.dbIdColumnsEsc escape refdef))]
-                        Nothing -> error $ "could not find the entityDef for reftable[" ++ show tname ++ "]"
+                        Just refdef ->
+                            [ ( tname
+                              , AddReference
+                                    a
+                                    [name]
+                                    (Util.dbIdColumnsEsc escape refdef)
+                                    noCascade
+                              )
+                            ]
+                        Nothing ->
+                            error $ "could not find the entityDef for reftable[" ++ show tname ++ "]"
                 modRef =
                     if fmap snd ref == fmap snd ref'
                         then []
@@ -931,16 +977,26 @@ findAlters defs _tablename col@(Column name isNull sqltype def _defConstraintNam
                  filter (\c -> cName c /= name) cols)
 
 -- | Get the references to be added to a table for the given column.
-getAddReference :: [EntityDef] -> DBName -> DBName -> DBName -> Maybe (DBName, DBName) -> Maybe AlterDB
-getAddReference allDefs table reftable cname ref =
-    case ref of
-        Nothing -> Nothing
-        Just (s, constraintName) -> Just $ AlterColumn table (s, AddReference constraintName [cname] id_)
-                          where
-                            id_ = fromMaybe (error $ "Could not find ID of entity " ++ show reftable)
-                                        $ do
-                                          entDef <- find ((== reftable) . entityDB) allDefs
-                                          return $ Util.dbIdColumnsEsc escape entDef
+getAddReference
+    :: [EntityDef]
+    -> Maybe ForeignDef
+    -> DBName
+    -> DBName
+    -> (DBName, DBName)
+    -> AlterDB
+getAddReference allDefs mforeignDef table cname (s, constraintName) =
+    AlterColumn
+        table
+        ( s
+        , AddReference constraintName [cname] id_ (maybe noCascade foreignFieldCascade mforeignDef)
+        )
+  where
+    id_ =
+        fromMaybe
+            (error $ "Could not find ID of entity " ++ show s)
+            $ do
+                entDef <- find ((== s) . entityDB) allDefs
+                return $ Util.dbIdColumnsEsc escape entDef
 
 
 showColumn :: Column -> Text
@@ -1066,7 +1122,7 @@ showAlter table (n, Update' s) = T.concat
     , escape n
     , " IS NULL"
     ]
-showAlter table (reftable, AddReference fkeyname t2 id2) = T.concat
+showAlter table (reftable, AddReference fkeyname t2 id2 cascade) = T.concat
     [ "ALTER TABLE "
     , escape table
     , " ADD CONSTRAINT "
@@ -1078,7 +1134,7 @@ showAlter table (reftable, AddReference fkeyname t2 id2) = T.concat
     , "("
     , T.intercalate "," id2
     , ")"
-    ]
+    ] <> renderFieldCascade cascade
 showAlter table (_, DropReference cname) = T.concat
     [ "ALTER TABLE "
     , escape table
@@ -1200,12 +1256,13 @@ mockMigrate allDefs _ entity = fmap (fmap $ map showAlterDb) $ do
       where
         uniques = flip concatMap udspair $ \(uname, ucols) ->
                 [AlterTable name $ AddUniqueConstraint uname ucols]
-        references = mapMaybe (\c@Column { cName=cname, cReference=Just (refTblName, _) } ->
-            getAddReference allDefs name refTblName cname (cReference c))
-                   $ filter (isJust . cReference) newcols
-        foreignsAlt = flip map fdefs (\fdef ->
-            let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef))
-            in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignConstraintNameDBName fdef) childfields (map escape parentfields)))
+        references =
+            mapMaybe
+                (\Column { cName, cReference } ->
+                    fmap (getAddReference allDefs Nothing name cName) cReference
+                )
+                $ newcols
+        foreignsAlt = map (mkForeignAlt name) fdefs
 
 -- | Mock a migration even when the database is not present.
 -- This function performs the same functionality of 'printMigration'

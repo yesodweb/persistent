@@ -1,5 +1,9 @@
 ## Unreleased changes
 
+## 2.8.3.0
+
+* Add `Lift` instances for the cascade types. [#1060](https://github.com/yesodweb/persistent/pull/1060)
+
 ## 2.8.2.3
 
 * Require extensions in a more friendly manner. [#1030](https://github.com/yesodweb/persistent/pull/1030)
