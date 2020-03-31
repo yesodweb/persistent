@@ -152,7 +152,7 @@ data SqlBackend = SqlBackend
     -- When this field is left as 'Nothing', we default to checking for each
     -- unique constraint separately, and finally insert if they all pass.
     --
-    -- @since 2.10.0
+    -- @since 2.11.0
     }
     deriving Typeable
 instance HasPersistBackend SqlBackend where
