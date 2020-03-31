@@ -1,7 +1,10 @@
 # Changelog for persistent
 
+
+
 ## 2.11.0.0
 
+* Added explicit `forall` notation to make most API functions play nice when using `TypeApplications`. (e.g. instead of `selectList @_ @_ @User [] []`, you can now write `selectList @User [] []`) [#1006](https://github.com/yesodweb/persistent/pull/1006)
 * [#1060](https://github.com/yesodweb/persistent/pull/1060)
   * The QuasiQuoter now supports `OnDelete` and `OnUpdate` cascade options.
 * [#1032](https://github.com/yesodweb/persistent/pull/1032)

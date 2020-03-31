@@ -17,8 +17,6 @@ module Database.Persist.Sql.Orphan.PersistStore
 import Control.Exception (throwIO)
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader (ReaderT, ask, withReaderT)
-import Data.Conduit (ConduitM, (.|), runConduit)
-import qualified Data.Conduit.List as CL
 import Data.Acquire (with)
 import qualified Data.Aeson as A
 import Data.ByteString.Char8 (readInteger)
