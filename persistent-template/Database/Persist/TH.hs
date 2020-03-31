@@ -1110,11 +1110,11 @@ mkEntity entityMap mps t = do
                                 )
                                 keyFields'
                             )
-                    keyFromRec = varP $ mkName "keyFromRecordM"
+                    keyFromRec = varP 'keyFromRecordM
                 [d|$(keyFromRec) = Just ( \ $(varP recordName) -> $(pure constr)) |]
 
             Nothing ->
-                [d|$(varP $ mkName "keyFromRecordM") = Nothing|]
+                [d|$(varP 'keyFromRecordM) = Nothing|]
 
     dtd <- dataTypeDec mps t
     return $ addSyn $
