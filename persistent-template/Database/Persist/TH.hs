@@ -448,7 +448,7 @@ data MkPersistSettings = MkPersistSettings
     -- Default: appends entity and field.
     --
     -- Note: this setting is ignored if mpsPrefixFields is set to False.
-    -- @since 2.10.5.3
+    -- @since 2.11.0.0
     , mpsConstraintLabelModifier :: Text -> Text -> Text
     -- ^ Customise the Constraint names using the entity and field name. The result
     -- should be a valid haskell type (start with an upper cased letter).
