@@ -235,7 +235,7 @@ instance MySQL.Param P where
     render (P (PersistMap m))         = MySQL.render $ mapToJSON m
     render (P (PersistRational r))    =
       MySQL.Plain $ BBB.fromString $ show (fromRational r :: Pico)
-      -- FIXME: Too Ambigous, can not select precision without information about field
+      -- FIXME: Too Ambiguous, can not select precision without information about field
     render (P (PersistDbSpecific s))    = MySQL.Plain $ BBS.fromByteString s
     render (P (PersistArray a))       = MySQL.render (P (PersistList a))
     render (P (PersistObjectId _))    =
@@ -721,7 +721,7 @@ getAlters allDefs tblName (c1, u1) (c2, u2) =
 findAlters :: DBName -> [EntityDef] -> Column -> [Column] -> ([AlterColumn'], [Column])
 findAlters tblName allDefs col@(Column name isNull type_ def _defConstraintName maxLen ref) cols =
     case filter ((name ==) . cName) cols of
-    -- new fkey that didnt exist before
+    -- new fkey that didn't exist before
         [] -> case ref of
                Nothing -> ([(name, Add' col)],[])
                Just (tname, cname) -> let cnstr = [addReference allDefs cname tname name]

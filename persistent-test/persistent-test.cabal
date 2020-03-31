@@ -24,6 +24,7 @@ library
                      EmptyEntityTest
                      EntityEmbedTest
                      EquivalentTypeTest
+                     ForeignKey
                      HtmlTest
                      Init
                      LargeNumberTest
