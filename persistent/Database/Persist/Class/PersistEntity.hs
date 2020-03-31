@@ -262,19 +262,9 @@ keyValueEntityFromJSON _ = fail "keyValueEntityFromJSON: not an object"
 --     toJSON = entityIdToJSON
 -- @
 entityIdToJSON :: (PersistEntity record, ToJSON record) => Entity record -> Value
-entityIdToJSON (Entity key value) =
-    case toJSON value of
+entityIdToJSON (Entity key value) = case toJSON value of
         Object o -> Object $ HM.insert "id" (toJSON key) o
         x -> x
-
--- | Like 'entityIdToJSON', but this does not copy the primary key into an
--- @id@ field.
---
--- @since 2.11.0.0
-entityIdToJSONCopyPrimary :: (PersistEntity record, ToJSON record) => Entity record -> Value
-entityIdToJSONCopyPrimary (Entity key value) = case toJSON value of
-    Object o -> Object $ HM.insert "id" (toJSON key) o
-    x -> x
 
 -- | Predefined @parseJSON@. The input JSON looks like
 -- @{"id": 1, "name": ...}@.
@@ -288,11 +278,11 @@ entityIdToJSONCopyPrimary (Entity key value) = case toJSON value of
 entityIdFromJSON :: (PersistEntity record, FromJSON record) => Value -> Parser (Entity record)
 entityIdFromJSON = withObject "entityIdFromJSON" $ \o -> do
     val <- parseJSON (Object o)
-    k <- case ($ val) <$> keyFromRecordM of
+    k <- case keyFromRecordM of
         Nothing ->
             o .: "id"
-        Just key ->
-            pure key
+        Just func ->
+            pure $ func val
     pure $ Entity k val
 
 instance (PersistEntity record, PersistField record, PersistField (Key record))
