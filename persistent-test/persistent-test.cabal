@@ -34,6 +34,7 @@ library
                      MigrationOnlyTest
                      MigrationTest
                      MpsNoPrefixTest
+                     MpsCustomPrefixTest
                      PersistentTest
                      PersistentTestModels
                      PersistentTestModelsImports

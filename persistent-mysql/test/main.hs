@@ -36,6 +36,7 @@ import qualified MigrationColumnLengthTest
 import qualified MigrationIdempotencyTest
 import qualified MigrationOnlyTest
 import qualified MpsNoPrefixTest
+import qualified MpsCustomPrefixTest
 import qualified PersistentTest
 import qualified PersistUniqueTest
 -- FIXME: Not used... should it be?
@@ -108,6 +109,7 @@ main = do
     mapM_ setup
       [ PersistentTest.testMigrate
       , PersistentTest.noPrefixMigrate
+      , PersistentTest.customPrefixMigrate
       , EmbedTest.embedMigrate
       , EmbedOrderTest.embedOrderMigrate
       , LargeNumberTest.numberMigrate
@@ -173,6 +175,7 @@ main = do
         UpsertTest.UpsertPreserveOldKey
 
     MpsNoPrefixTest.specsWith db
+    MpsCustomPrefixTest.specsWith db
     EmptyEntityTest.specsWith db (Just (runMigrationSilent EmptyEntityTest.migration))
     CompositeTest.specsWith db
     PersistUniqueTest.specsWith db

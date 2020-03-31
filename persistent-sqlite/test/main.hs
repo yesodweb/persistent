@@ -27,6 +27,7 @@ import qualified HtmlTest
 import qualified LargeNumberTest
 import qualified MaxLenTest
 import qualified MpsNoPrefixTest
+import qualified MpsCustomPrefixTest
 import qualified MigrationColumnLengthTest
 import qualified MigrationOnlyTest
 import qualified PersistentTest
@@ -135,6 +136,7 @@ main = do
     mapM_ setup
       [ PersistentTest.testMigrate
       , PersistentTest.noPrefixMigrate
+      , PersistentTest.customPrefixMigrate
       , EmbedTest.embedMigrate
       , EmbedOrderTest.embedOrderMigrate
       , LargeNumberTest.numberMigrate
@@ -199,6 +201,7 @@ main = do
         UpsertTest.UpsertPreserveOldKey
 
     MpsNoPrefixTest.specsWith db
+    MpsCustomPrefixTest.specsWith db
     EmptyEntityTest.specsWith db (Just (runMigrationSilent EmptyEntityTest.migration))
     CompositeTest.specsWith db
     PersistUniqueTest.specsWith db

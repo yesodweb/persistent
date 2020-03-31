@@ -6,6 +6,7 @@ module PersistentTest
     , cleanDB
     , testMigrate
     , noPrefixMigrate
+    , customPrefixMigrate
     , treeMigrate
     ) where
 
