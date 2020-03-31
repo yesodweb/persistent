@@ -11,6 +11,9 @@ import Init
 import PersistTestPetType
 import PersistTestPetCollarType
 
+-- just need to ensure this compiles
+import PersistentTestModelsImports()
+
 share [mkPersist persistSettings { mpsGeneric = True },  mkMigrate "testMigrate", mkDeleteCascade persistSettings, mkSave "_ignoredSave"] [persistUpperCase|
 
 -- Dedented comment
@@ -89,6 +92,22 @@ share [mkPersist persistSettings { mpsGeneric = True },  mkMigrate "testMigrate"
     !yes Int
     ~no Int
     def Int
+
+  -- | This is a doc comment for a relationship.
+  -- | You need to put the pipe character for each line of documentation.
+  -- Lines without a pipe are omitted.
+  -- | But you can resume the doc comments afterwards.
+  Relationship
+      -- | Fields should be documentable.
+      name String
+      parent RelationshipId Maybe
+
+  MutA
+    mutB    MutBId
+
+  MutB
+    mutA    MutAId
+
 |]
 
 deriving instance Show (BackendKey backend) => Show (PetGeneric backend)
@@ -113,6 +132,20 @@ deriving instance Eq (BackendKey backend) => Eq (NoPrefix1Generic backend)
 
 deriving instance Show (BackendKey backend) => Show (NoPrefix2Generic backend)
 deriving instance Eq (BackendKey backend) => Eq (NoPrefix2Generic backend)
+
+deriving instance Show (BackendKey backend) => Show (RelationshipGeneric backend)
+deriving instance Eq (BackendKey backend) => Eq (RelationshipGeneric backend)
+
+share [mkPersist persistSettings { mpsPrefixFields = False, mpsGeneric = False }
+      , mkMigrate "treeMigrate"
+      ] [persistLowerCase|
+
+Tree sql=trees
+  name String
+  parent String Maybe
+  Primary name
+  Foreign Tree fkparent parent
+|]
 
 -- | Reverses the order of the fields of an entity.  Used to test
 -- @??@ placeholders of 'rawSql'.

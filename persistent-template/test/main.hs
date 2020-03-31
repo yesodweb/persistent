@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -31,13 +32,15 @@ import Test.Hspec
 import Test.Hspec.QuickCheck
 import Test.QuickCheck.Arbitrary
 import Test.QuickCheck.Gen (Gen)
+import GHC.Generics (Generic)
 
 import Database.Persist
+import Database.Persist.Sql
 import Database.Persist.TH
 import TemplateTestImports
 
 
-share [mkPersist sqlSettings { mpsGeneric = False }, mkDeleteCascade sqlSettings { mpsGeneric = False }] [persistUpperCase|
+share [mkPersist sqlSettings { mpsGeneric = False, mpsDeriveInstances = [''Generic] }, mkDeleteCascade sqlSettings { mpsGeneric = False }] [persistUpperCase|
 Person json
     name Text
     age Int Maybe
@@ -53,6 +56,9 @@ NoJson
     foo Text
     deriving Show Eq
 |]
+
+-- TODO: Derive Generic at the source site to get this unblocked.
+deriving instance Generic (BackendKey SqlBackend)
 
 share [mkPersist sqlSettings { mpsGeneric = False, mpsGenerateLenses = True }] [persistLowerCase|
 Lperson json
