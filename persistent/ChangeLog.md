@@ -4,9 +4,12 @@
 
 ## 2.11.0.0
 
+* Added explicit `forall` notation to make most API functions play nice when using `TypeApplications`. (e.g. instead of `selectList @_ @_ @User [] []`, you can now write `selectList @User [] []`) [#1006](https://github.com/yesodweb/persistent/pull/1006)
 * [#1060](https://github.com/yesodweb/persistent/pull/1060)
   * The QuasiQuoter now supports `OnDelete` and `OnUpdate` cascade options.
-* Added explicit `forall` notation to make most API functions play nice when using `TypeApplications`. (e.g. instead of `selectList @_ @_ @User [] []`, you can now write `selectList @User [] []`) [#1006](https://github.com/yesodweb/persistent/pull/1006)
+* [#1063](https://github.com/yesodweb/persistent/pull/1063)
+  * A new class member `keyFromRecordM` allows you to construct a `Key
+    record` from a `record` if it was defined with `Primary`.
 
 ## 2.10.5.2
 
