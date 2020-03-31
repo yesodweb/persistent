@@ -4,11 +4,16 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DataKinds #-}
+
 module Database.Persist.Sql.Class
     ( RawSql (..)
     , PersistFieldSql (..)
+    , EntityWithPrefix(..)
+    , unPrefix
     ) where
 
+import GHC.TypeLits (Symbol, KnownSymbol, symbolVal)
 import Data.Bits (bitSizeMaybe)
 import Data.ByteString (ByteString)
 import Data.Fixed
@@ -17,7 +22,7 @@ import qualified Data.IntMap as IM
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
-import Data.Proxy (Proxy)
+import Data.Proxy (Proxy(..))
 import qualified Data.Set as S
 import Data.Text (Text, intercalate, pack)
 import qualified Data.Text as T
@@ -79,6 +84,88 @@ instance
           n -> show n ++ " columns for an 'Entity' data type"
     rawSqlProcessRow row = case splitAt nKeyFields row of
       (rowKey, rowVal) -> Entity <$> keyFromValues rowKey
+                                 <*> fromPersistValues rowVal
+      where
+        nKeyFields = length $ entityKeyFields entDef
+        entDef = entityDef (Nothing :: Maybe record)
+
+-- | This newtype wrapper is useful when selecting an entity out of the
+-- database and you want to provide a prefix to the table being selected.
+--
+-- Consider this raw SQL query:
+--
+-- > SELECT ??
+-- > FROM my_long_table_name AS mltn
+-- > INNER JOIN other_table AS ot
+-- >    ON mltn.some_col = ot.other_col
+-- > WHERE ...
+--
+-- We don't want to refer to @my_long_table_name@ every time, so we create
+-- an alias. If we want to select it, we have to tell the raw SQL
+-- quasi-quoter that we expect the entity to be prefixed with some other
+-- name.
+--
+-- We can give the above query a type with this, like:
+--
+-- @
+-- getStuff :: 'SqlPersistM' ['EntityWithPrefix' \"mltn\" MyLongTableName]
+-- getStuff = rawSql queryText []
+-- @
+--
+-- The 'EntityWithPrefix' bit is a boilerplate newtype wrapper, so you can
+-- remove it with 'unPrefix', like this:
+--
+-- @
+-- getStuff :: 'SqlPersistM' ['Entity' MyLongTableName]
+-- getStuff = 'unPrefix' @\"mltn\" '<$>' 'rawSql' queryText []
+-- @
+--
+-- The @ symbol is a "type application" and requires the @TypeApplications@
+-- language extension.
+--
+-- @since 2.10.5
+newtype EntityWithPrefix (prefix :: Symbol) record
+    = EntityWithPrefix { unEntityWithPrefix :: Entity record }
+
+-- | A helper function to tell GHC what the 'EntityWithPrefix' prefix
+-- should be. This allows you to use a type application to specify the
+-- prefix, instead of specifying the etype on the result.
+--
+-- As an example, here's code that uses this:
+--
+-- @
+-- myQuery :: 'SqlPersistM' ['Entity' Person]
+-- myQuery = map (unPrefix @\"p\") <$> rawSql query []
+--   where
+--     query = "SELECT ?? FROM person AS p"
+-- @
+--
+-- @since 2.10.5
+unPrefix :: forall prefix record. EntityWithPrefix prefix record -> Entity record
+unPrefix = unEntityWithPrefix
+
+instance
+    ( PersistEntity record
+    , KnownSymbol prefix
+    , PersistEntityBackend record ~ backend
+    , IsPersistBackend backend
+    )
+  => RawSql (EntityWithPrefix prefix record) where
+    rawSqlCols escape _ent = (length sqlFields, [intercalate ", " sqlFields])
+        where
+          sqlFields = map (((name <> ".") <>) . escape)
+              $ map fieldDB
+              -- Hacky for a composite key because
+              -- it selects the same field multiple times
+              $ entityKeyFields entDef ++ entityFields entDef
+          name = pack $ symbolVal (Proxy :: Proxy prefix)
+          entDef = entityDef (Nothing :: Maybe record)
+    rawSqlColCountReason a =
+        case fst (rawSqlCols (error "RawSql") a) of
+          1 -> "one column for an 'Entity' data type without fields"
+          n -> show n ++ " columns for an 'Entity' data type"
+    rawSqlProcessRow row = case splitAt nKeyFields row of
+      (rowKey, rowVal) -> fmap EntityWithPrefix $ Entity <$> keyFromValues rowKey
                                  <*> fromPersistValues rowVal
       where
         nKeyFields = length $ entityKeyFields entDef
@@ -196,6 +283,77 @@ from8 (a,b,c,d,e,f,g,h) = ((a,b),(c,d),(e,f),(g,h))
 
 to8 :: ((a,b),(c,d),(e,f),(g,h)) -> (a,b,c,d,e,f,g,h)
 to8 ((a,b),(c,d),(e,f),(g,h)) = (a,b,c,d,e,f,g,h)
+
+-- | @since 2.10.2
+instance (RawSql a, RawSql b, RawSql c,
+          RawSql d, RawSql e, RawSql f,
+          RawSql g, RawSql h, RawSql i)
+       => RawSql (a, b, c, d, e, f, g, h, i) where
+    rawSqlCols e         = rawSqlCols e         . from9
+    rawSqlColCountReason = rawSqlColCountReason . from9
+    rawSqlProcessRow     = fmap to9 . rawSqlProcessRow
+
+-- | @since 2.10.2
+from9 :: (a,b,c,d,e,f,g,h,i) -> ((a,b),(c,d),(e,f),(g,h),i)
+from9 (a,b,c,d,e,f,g,h,i) = ((a,b),(c,d),(e,f),(g,h),i)
+
+-- | @since 2.10.2
+to9 :: ((a,b),(c,d),(e,f),(g,h),i) -> (a,b,c,d,e,f,g,h,i)
+to9 ((a,b),(c,d),(e,f),(g,h),i) = (a,b,c,d,e,f,g,h,i)
+
+-- | @since 2.10.2
+instance (RawSql a, RawSql b, RawSql c,
+          RawSql d, RawSql e, RawSql f,
+          RawSql g, RawSql h, RawSql i,
+          RawSql j)
+       => RawSql (a, b, c, d, e, f, g, h, i, j) where
+    rawSqlCols e         = rawSqlCols e         . from10
+    rawSqlColCountReason = rawSqlColCountReason . from10
+    rawSqlProcessRow     = fmap to10 . rawSqlProcessRow
+
+-- | @since 2.10.2
+from10 :: (a,b,c,d,e,f,g,h,i,j) -> ((a,b),(c,d),(e,f),(g,h),(i,j))
+from10 (a,b,c,d,e,f,g,h,i,j) = ((a,b),(c,d),(e,f),(g,h),(i,j))
+
+-- | @since 2.10.2
+to10 :: ((a,b),(c,d),(e,f),(g,h),(i,j)) -> (a,b,c,d,e,f,g,h,i,j)
+to10 ((a,b),(c,d),(e,f),(g,h),(i,j)) = (a,b,c,d,e,f,g,h,i,j)
+
+-- | @since 2.10.2
+instance (RawSql a, RawSql b, RawSql c,
+          RawSql d, RawSql e, RawSql f,
+          RawSql g, RawSql h, RawSql i,
+          RawSql j, RawSql k)
+       => RawSql (a, b, c, d, e, f, g, h, i, j, k) where
+    rawSqlCols e         = rawSqlCols e         . from11
+    rawSqlColCountReason = rawSqlColCountReason . from11
+    rawSqlProcessRow     = fmap to11 . rawSqlProcessRow
+
+-- | @since 2.10.2
+from11 :: (a,b,c,d,e,f,g,h,i,j,k) -> ((a,b),(c,d),(e,f),(g,h),(i,j),k)
+from11 (a,b,c,d,e,f,g,h,i,j,k) = ((a,b),(c,d),(e,f),(g,h),(i,j),k)
+
+-- | @since 2.10.2
+to11 :: ((a,b),(c,d),(e,f),(g,h),(i,j),k) -> (a,b,c,d,e,f,g,h,i,j,k)
+to11 ((a,b),(c,d),(e,f),(g,h),(i,j),k) = (a,b,c,d,e,f,g,h,i,j,k)
+
+-- | @since 2.10.2
+instance (RawSql a, RawSql b, RawSql c,
+          RawSql d, RawSql e, RawSql f,
+          RawSql g, RawSql h, RawSql i,
+          RawSql j, RawSql k, RawSql l)
+       => RawSql (a, b, c, d, e, f, g, h, i, j, k, l) where
+    rawSqlCols e         = rawSqlCols e         . from12
+    rawSqlColCountReason = rawSqlColCountReason . from12
+    rawSqlProcessRow     = fmap to12 . rawSqlProcessRow
+
+-- | @since 2.10.2
+from12 :: (a,b,c,d,e,f,g,h,i,j,k,l) -> ((a,b),(c,d),(e,f),(g,h),(i,j),(k,l))
+from12 (a,b,c,d,e,f,g,h,i,j,k,l) = ((a,b),(c,d),(e,f),(g,h),(i,j),(k,l))
+
+-- | @since 2.10.2
+to12 :: ((a,b),(c,d),(e,f),(g,h),(i,j),(k,l)) -> (a,b,c,d,e,f,g,h,i,j,k,l)
+to12 ((a,b),(c,d),(e,f),(g,h),(i,j),(k,l)) = (a,b,c,d,e,f,g,h,i,j,k,l)
 
 extractMaybe :: Maybe a -> a
 extractMaybe = fromMaybe (error "Database.Persist.GenericSql.extractMaybe")

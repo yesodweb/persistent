@@ -5,6 +5,9 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 import MyInit
@@ -45,6 +48,7 @@ import qualified SumTypeTest
 import qualified TransactionLevelTest
 import qualified UniqueTest
 import qualified UpsertTest
+import qualified CustomConstraintTest
 
 type Tuple a b = (a, b)
 
@@ -92,10 +96,11 @@ instance Arbitrary (DataTypeTableGeneric backend) where
      <*> (truncateTimeOfDay =<< arbitrary) -- timeFrac
      <*> (truncateUTCTime   =<< arbitrary) -- utcFrac
 
-setup :: MonadIO m => Migration -> ReaderT SqlBackend m ()
+setup :: MonadUnliftIO m => Migration -> ReaderT SqlBackend m ()
 setup migration = do
   printMigration migration
-  runMigrationUnsafe migration
+  _ <- runMigrationSilent migration
+  pure ()
 
 main :: IO ()
 main = do
@@ -179,6 +184,7 @@ main = do
     TransactionLevelTest.specsWith db
 
     MigrationIdempotencyTest.specsWith db
+    CustomConstraintTest.specs db
 
 roundFn :: RealFrac a => a -> Integer
 roundFn = round

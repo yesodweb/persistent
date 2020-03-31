@@ -4,18 +4,78 @@ module Database.Persist.Sql.Run where
 import Control.Exception (bracket, mask, onException)
 import Control.Monad (liftM)
 import Control.Monad.IO.Unlift
-import Control.Monad.Logger
+import qualified UnliftIO.Exception as UE
+import Control.Monad.Logger.CallStack
+import Control.Monad.Reader (MonadReader)
+import qualified Control.Monad.Reader as MonadReader
 import Control.Monad.Trans.Reader hiding (local)
 import Control.Monad.Trans.Resource
+import Data.Acquire (Acquire, ReleaseType(..), mkAcquireType, with)
 import Data.IORef (readIORef)
+import Data.Pool (Pool, LocalPool)
 import Data.Pool as P
 import qualified Data.Map as Map
+import qualified Data.Text as T
 import System.Timeout (timeout)
 
 import Database.Persist.Class.PersistStore
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal (IsolationLevel)
 import Database.Persist.Sql.Raw
+
+-- | The returned 'Acquire' gets a connection from the pool, but does __NOT__
+-- start a new transaction. Used to implement 'acquireSqlConnFromPool' and
+-- 'acquireSqlConnFromPoolWithIsolation', this is useful for performing actions
+-- on a connection that cannot be done within a transaction, such as VACUUM in
+-- Sqlite.
+--
+-- @since 2.10.5
+unsafeAcquireSqlConnFromPool
+    :: forall backend m
+     . (MonadReader (Pool backend) m, BackendCompatible SqlBackend backend)
+    => m (Acquire backend)
+unsafeAcquireSqlConnFromPool = do
+    pool <- MonadReader.ask
+
+    let freeConn :: (backend, LocalPool backend) -> ReleaseType -> IO ()
+        freeConn (res, localPool) relType = case relType of
+            ReleaseException -> P.destroyResource pool localPool res
+            _ -> P.putResource localPool res
+
+    return $ fst <$> mkAcquireType (P.takeResource pool) freeConn
+
+
+-- | The returned 'Acquire' gets a connection from the pool, starts a new
+-- transaction and gives access to the prepared connection.
+--
+-- When the acquired connection is released the transaction is committed and
+-- the connection returned to the pool.
+--
+-- Upon an exception the transaction is rolled back and the connection
+-- destroyed.
+--
+-- This is equivalent to 'runSqlPool' but does not incur the 'MonadUnliftIO'
+-- constraint, meaning it can be used within, for example, a 'Conduit'
+-- pipeline.
+--
+-- @since 2.10.5
+acquireSqlConnFromPool
+    :: (MonadReader (Pool backend) m, BackendCompatible SqlBackend backend)
+    => m (Acquire backend)
+acquireSqlConnFromPool = do
+    connFromPool <- unsafeAcquireSqlConnFromPool
+    return $ connFromPool >>= acquireSqlConn
+
+-- | Like 'acquireSqlConnFromPool', but lets you specify an explicit isolation
+-- level.
+--
+-- @since 2.10.5
+acquireSqlConnFromPoolWithIsolation
+    :: (MonadReader (Pool backend) m, BackendCompatible SqlBackend backend)
+    => IsolationLevel -> m (Acquire backend)
+acquireSqlConnFromPoolWithIsolation isolation = do
+    connFromPool <- unsafeAcquireSqlConnFromPool
+    return $ connFromPool >>= acquireSqlConnWithIsolation isolation
 
 -- | Get a connection from the pool, run the given action, and then return the
 -- connection to the pool.
@@ -26,7 +86,7 @@ import Database.Persist.Sql.Raw
 runSqlPool
     :: (MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend m a -> Pool backend -> m a
-runSqlPool r pconn = withRunInIO $ \run -> withResource pconn $ run . runSqlConn r
+runSqlPool r pconn = with (acquireSqlConnFromPool pconn) $ runReaderT r
 
 -- | Like 'runSqlPool', but supports specifying an isolation level.
 --
@@ -34,7 +94,8 @@ runSqlPool r pconn = withRunInIO $ \run -> withResource pconn $ run . runSqlConn
 runSqlPoolWithIsolation
     :: (MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend m a -> Pool backend -> IsolationLevel -> m a
-runSqlPoolWithIsolation r pconn i = withRunInIO $ \run -> withResource pconn $ run . (\conn -> runSqlConnWithIsolation r conn i)
+runSqlPoolWithIsolation r pconn i =
+    with (acquireSqlConnFromPoolWithIsolation i pconn) $ runReaderT r
 
 -- | Like 'withResource', but times out the operation if resource
 -- allocation does not complete within the given timeout period.
@@ -58,30 +119,62 @@ withResourceTimeout ms pool act = withRunInIO $ \runInIO -> mask $ \restore -> d
             return ret
 {-# INLINABLE withResourceTimeout #-}
 
+rawAcquireSqlConn
+    :: forall backend m
+     . (MonadReader backend m, BackendCompatible SqlBackend backend)
+    => Maybe IsolationLevel -> m (Acquire backend)
+rawAcquireSqlConn isolation = do
+    conn <- MonadReader.ask
+    let rawConn :: SqlBackend
+        rawConn = projectBackend conn
+
+        getter :: T.Text -> IO Statement
+        getter = getStmtConn rawConn
+
+        beginTransaction :: IO backend
+        beginTransaction = conn <$ connBegin rawConn getter isolation
+
+        finishTransaction :: backend -> ReleaseType -> IO ()
+        finishTransaction _ relType = case relType of
+            ReleaseException -> connRollback rawConn getter
+            _ -> connCommit rawConn getter
+
+    return $ mkAcquireType beginTransaction finishTransaction
+
+-- | Starts a new transaction on the connection. When the acquired connection
+-- is released the transaction is committed and the connection returned to the
+-- pool.
+--
+-- Upon an exception the transaction is rolled back and the connection
+-- destroyed.
+--
+-- This is equivalent to 'runSqlConn but does not incur the 'MonadUnliftIO'
+-- constraint, meaning it can be used within, for example, a 'Conduit'
+-- pipeline.
+--
+-- @since 2.10.5
+acquireSqlConn
+    :: (MonadReader backend m, BackendCompatible SqlBackend backend)
+    => m (Acquire backend)
+acquireSqlConn = rawAcquireSqlConn Nothing
+
+-- | Like 'acquireSqlConn', but lets you specify an explicit isolation level.
+--
+-- @since 2.10.5
+acquireSqlConnWithIsolation
+    :: (MonadReader backend m, BackendCompatible SqlBackend backend)
+    => IsolationLevel -> m (Acquire backend)
+acquireSqlConnWithIsolation = rawAcquireSqlConn . Just
+
 runSqlConn :: (MonadUnliftIO m, BackendCompatible SqlBackend backend) => ReaderT backend m a -> backend -> m a
-runSqlConn r conn = withRunInIO $ \runInIO -> mask $ \restore -> do
-    let conn' = projectBackend conn
-        getter = getStmtConn conn'
-    restore $ connBegin conn' getter Nothing
-    x <- onException
-            (restore $ runInIO $ runReaderT r conn)
-            (restore $ connRollback conn' getter)
-    restore $ connCommit conn' getter
-    return x
+runSqlConn r conn = with (acquireSqlConn conn) $ runReaderT r
 
 -- | Like 'runSqlConn', but supports specifying an isolation level.
 --
 -- @since 2.9.0
 runSqlConnWithIsolation :: (MonadUnliftIO m, BackendCompatible SqlBackend backend) => ReaderT backend m a -> backend -> IsolationLevel -> m a
-runSqlConnWithIsolation r conn isolation = withRunInIO $ \runInIO -> mask $ \restore -> do
-    let conn' = projectBackend conn
-        getter = getStmtConn conn'
-    restore $ connBegin conn' getter $ Just isolation
-    x <- onException
-            (restore $ runInIO $ runReaderT r conn)
-            (restore $ connRollback conn' getter)
-    restore $ connCommit conn' getter
-    return x
+runSqlConnWithIsolation r conn isolation =
+  with (acquireSqlConnWithIsolation isolation conn) $ runReaderT r
 
 runSqlPersistM
     :: (BackendCompatible SqlBackend backend)
@@ -110,13 +203,19 @@ withSqlPool mkConn connCount f = withUnliftIO $ \u -> bracket
     (unliftIO u . f)
 
 createSqlPool
-    :: (MonadLogger m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    :: forall m backend. (MonadLogger m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => (LogFunc -> IO backend)
     -> Int
     -> m (Pool backend)
 createSqlPool mkConn size = do
     logFunc <- askLogFunc
-    liftIO $ createPool (mkConn logFunc) close' 1 20 size
+    -- Resource pool will swallow any exceptions from close. We want to log
+    -- them instead.
+    let loggedClose :: backend -> IO ()
+        loggedClose backend = close' backend `UE.catchAny` \e -> runLoggingT
+          (logError $ T.pack $ "Error closing database connection in pool: " ++ show e)
+          logFunc
+    liftIO $ createPool (mkConn logFunc) loggedClose 1 20 size
 
 -- NOTE: This function is a terrible, ugly hack. It would be much better to
 -- just clean up monad-logger.

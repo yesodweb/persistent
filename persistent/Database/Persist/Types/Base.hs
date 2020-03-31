@@ -295,11 +295,60 @@ data ForeignDef = ForeignDef
     , foreignRefTableDBName        :: !DBName
     , foreignConstraintNameHaskell :: !HaskellName
     , foreignConstraintNameDBName  :: !DBName
+    , foreignFieldCascade          :: !FieldCascade
+    -- ^ Determine how the field will cascade on updates and deletions.
+    --
+    -- @since 2.11.0
     , foreignFields                :: ![(ForeignFieldDef, ForeignFieldDef)] -- this entity plus the primary entity
     , foreignAttrs                 :: ![Attr]
     , foreignNullable              :: Bool
     }
     deriving (Show, Eq, Read, Ord)
+
+-- | This datatype describes how a foreign reference field cascades deletes
+-- or updates.
+--
+-- @since 2.11.0
+data FieldCascade = FieldCascade
+    { fcOnUpdate :: !(Maybe CascadeAction)
+    , fcOnDelete :: !(Maybe CascadeAction)
+    }
+    deriving (Show, Eq, Read, Ord)
+
+-- | A 'FieldCascade' that does nothing.
+--
+-- @since 2.11.0
+noCascade :: FieldCascade
+noCascade = FieldCascade Nothing Nothing
+
+-- | Renders a 'FieldCascade' value such that it can be used in SQL
+-- migrations.
+--
+-- @since 2.11.0
+renderFieldCascade :: FieldCascade -> Text
+renderFieldCascade (FieldCascade onUpdate onDelete) =
+    T.unwords
+        [ foldMap (mappend "ON DELETE " . renderCascadeAction) onDelete
+        , foldMap (mappend "ON UPDATE " . renderCascadeAction) onUpdate
+        ]
+
+-- | An action that might happen on a deletion or update on a foreign key
+-- change.
+--
+-- @since 2.11.0
+data CascadeAction = Cascade | Restrict | SetNull | SetDefault
+    deriving (Show, Eq, Read, Ord)
+
+-- | Render a 'CascadeAction' to 'Text' such that it can be used in a SQL
+-- command.
+--
+-- @since 2.11.0
+renderCascadeAction :: CascadeAction -> Text
+renderCascadeAction action = case action of
+  Cascade    -> "CASCADE"
+  Restrict   -> "RESTRICT"
+  SetNull    -> "SET NULL"
+  SetDefault -> "SET DEFAULT"
 
 data PersistException
   = PersistError Text -- ^ Generic Exception
@@ -433,10 +482,10 @@ instance A.FromJSON PersistValue where
     parseJSON (A.String t0) =
         case T.uncons t0 of
             Nothing -> fail "Null string"
-            Just ('p', t) -> either (fail "Invalid base64") (return . PersistDbSpecific)
+            Just ('p', t) -> either (\_ -> fail "Invalid base64") (return . PersistDbSpecific)
                            $ B64.decode $ TE.encodeUtf8 t
             Just ('s', t) -> return $ PersistText t
-            Just ('b', t) -> either (fail "Invalid base64") (return . PersistByteString)
+            Just ('b', t) -> either (\_ -> fail "Invalid base64") (return . PersistByteString)
                            $ B64.decode $ TE.encodeUtf8 t
             Just ('t', t) -> fmap PersistTimeOfDay $ readMay t
             Just ('u', t) -> fmap PersistUTCTime $ readMay t
@@ -448,7 +497,6 @@ instance A.FromJSON PersistValue where
       where
         headMay []    = Nothing
         headMay (x:_) = Just x
-        readMay :: (Read a, Monad m) => T.Text -> m a
         readMay t =
             case reads $ T.unpack t of
                 (x, _):_ -> return x

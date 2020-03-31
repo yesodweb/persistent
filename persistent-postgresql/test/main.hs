@@ -5,6 +5,9 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 import PgInit
@@ -20,6 +23,7 @@ import Test.QuickCheck
 -- FIXME: should probably be used?
 -- import qualified ArrayAggTest
 import qualified CompositeTest
+import qualified ForeignKey
 import qualified CustomPersistFieldTest
 import qualified CustomPrimaryKeyReferenceTest
 import qualified DataTypeTest
@@ -46,6 +50,7 @@ import qualified TransactionLevelTest
 import qualified TreeTest
 import qualified UniqueTest
 import qualified UpsertTest
+import qualified CustomConstraintTest
 
 type Tuple = (,)
 
@@ -98,6 +103,7 @@ main = do
     mapM_ setup
       [ PersistentTest.testMigrate
       , PersistentTest.noPrefixMigrate
+      , PersistentTest.treeMigrate
       , EmbedTest.embedMigrate
       , EmbedOrderTest.embedOrderMigrate
       , LargeNumberTest.numberMigrate
@@ -113,6 +119,7 @@ main = do
       , CustomPrimaryKeyReferenceTest.migration
       , MigrationColumnLengthTest.migration
       , TransactionLevelTest.migration
+      , ForeignKey.compositeMigrate
       ]
     PersistentTest.cleanDB
 
@@ -142,6 +149,7 @@ main = do
     EmbedTest.specsWith db
     EmbedOrderTest.specsWith db
     LargeNumberTest.specsWith db
+    ForeignKey.specsWith db
     UniqueTest.specsWith db
     MaxLenTest.specsWith db
     Recursive.specsWith db
@@ -172,5 +180,6 @@ main = do
     EquivalentTypeTestPostgres.specs
     TransactionLevelTest.specsWith db
     JSONTest.specs
+    CustomConstraintTest.specs db
     -- FIXME: not used, probably should?
     -- ArrayAggTest.specs db

@@ -103,7 +103,8 @@ getStmtConn conn sql = do
             return stmt
 
 -- | Execute a raw SQL statement and return its results as a
--- list.
+-- list. If you do not expect a return value, use of
+-- `rawExecute` is recommended.
 --
 -- If you're using 'Entity'@s@ (which is quite likely), then you
 -- /must/ use entity selection placeholders (double question

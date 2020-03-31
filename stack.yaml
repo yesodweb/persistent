@@ -1,4 +1,4 @@
-resolver: lts-13.15
+resolver: lts-14.1
 packages:
   - ./persistent
   - ./persistent-template
@@ -9,3 +9,6 @@ packages:
   - ./persistent-postgresql
   - ./persistent-redis
   - ./persistent-qq
+
+extra-deps:
+  - th-lift-instances-0.1.14

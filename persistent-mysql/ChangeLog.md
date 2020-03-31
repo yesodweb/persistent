@@ -1,6 +1,26 @@
 # Changelog for persistent-mysql
 
-## 2.10.0 (unreleased)
+## 2.10.2.3
+
+* Fix issue with multiple foreign keys on single column. [#1025](https://github.com/yesodweb/persistent/pull/1025)
+
+## 2.10.2.2
+
+* Compatibility with latest persistent-template for test suite [#1002](https://github.com/yesodweb/persistent/pull/1002/files)
+
+## 2.10.2.1
+
+* Changed persistent-mysql to use 'utf8mb4' instead of 'utf8' in migrations [#980](https://github.com/yesodweb/persistent/pull/980) @charukiewicz
+
+## 2.10.2
+
+* Added support for GHC 8.8 [#977](https://github.com/yesodweb/persistent/pull/977)
+
+## 2.10.1
+
+* Added `constraint=` attribute to allow users to specify foreign reference constraint names.
+
+## 2.10.0
 
 * Remove deprecated `SomeField` type and pattern synonym. Use `HandleUpdateCollision` type instead and the `copyField` function instead of `SomeField` constructor/pattern. [#894](https://github.com/yesodweb/persistent/pull/894)
 

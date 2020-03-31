@@ -1,11 +1,11 @@
 name:            persistent-test
-version:         2.0.2.0
+version:         2.0.3.1
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
 maintainer:      Michael Snoyman <michael@snoyman.com>
 synopsis:        Tests for Persistent
-description:     Tests for Persistent
+description:     Tests for Persistent. This is only for use in developing libraries that should conform to the persistent interface, not for users of the persistent suite of database libraries.
 category:        Database, Yesod
 stability:       Stable
 cabal-version:   >= 1.10
@@ -24,6 +24,7 @@ library
                      EmptyEntityTest
                      EntityEmbedTest
                      EquivalentTypeTest
+                     ForeignKey
                      HtmlTest
                      Init
                      LargeNumberTest
@@ -35,6 +36,7 @@ library
                      MpsNoPrefixTest
                      PersistentTest
                      PersistentTestModels
+                     PersistentTestModelsImports
                      PersistTestPetType
                      PersistTestPetCollarType
                      PersistUniqueTest
@@ -51,8 +53,6 @@ library
 
     hs-source-dirs: src
 
-    ghc-options:   -Wall -j
-
     build-depends:   base                     >= 4.9       && < 5
                    , persistent
                    , persistent-template
@@ -67,6 +67,7 @@ library
                    , HUnit
                    , monad-control
                    , monad-logger             >= 0.3.25
+                   , mtl
                    , path-pieces              >= 0.2
                    , QuickCheck               >= 2.9
                    , quickcheck-instances     >= 0.3
@@ -90,6 +91,9 @@ library
                     QuasiQuotes
                     TemplateHaskell
                     TypeFamilies
+                    StandaloneDeriving
+                    DerivingStrategies
+                    GeneralizedNewtypeDeriving
 
 source-repository head
   type:     git

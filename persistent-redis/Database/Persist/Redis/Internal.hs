@@ -12,6 +12,7 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.UTF8 as U
 import Data.Text (Text, unpack)
 import qualified Data.Text as T
+import Control.Monad.Fail (MonadFail)
 
 import Database.Persist.Class
 import Database.Persist.Types
@@ -26,7 +27,7 @@ toEntityString = unDBName . entityDB . entityDef . Just
 toEntityName :: EntityDef -> B.ByteString
 toEntityName = U.fromString . unpack . unDBName . entityDB
 
-mkEntity :: (Monad m, PersistEntity val) => Key val -> [(B.ByteString, B.ByteString)] -> m (Entity val)
+mkEntity :: (MonadFail m, PersistEntity val) => Key val -> [(B.ByteString, B.ByteString)] -> m (Entity val)
 mkEntity key fields = do
     let values = redisToPerisistValues fields
     let v = fromPersistValues values
@@ -75,7 +76,7 @@ toKeyId val = B.append (toObjectPrefix val) idBs
 unKey :: (PersistEntity val) => Key val -> B.ByteString
 unKey = toValue . head . keyToValues
 
-toKey :: (Monad m, PersistEntity val) => Text -> m (Key val)
+toKey :: (Monad m, MonadFail m, PersistEntity val) => Text -> m (Key val)
 toKey x = case q of
         Right z -> return z
         Left a -> fail (unpack a)

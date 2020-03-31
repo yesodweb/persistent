@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -8,6 +9,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE DerivingStrategies #-}
 
 import SqliteInit
 
@@ -19,6 +22,7 @@ import qualified EmptyEntityTest
 import qualified EmbedOrderTest
 import qualified EmbedTest
 import qualified EquivalentTypeTest
+import qualified ForeignKey
 import qualified HtmlTest
 import qualified LargeNumberTest
 import qualified MaxLenTest
@@ -78,6 +82,23 @@ DataTypeTable no-json
     utc UTCTime
 |]
 
+share [mkPersist sqlSettings, mkMigrate "compositeSetup"] [persistLowerCase|
+Simple
+    int Int
+    text Text
+    Primary text int
+    deriving Show Eq
+|]
+
+share [mkPersist sqlSettings, mkMigrate "compositeMigrateTest"] [persistLowerCase|
+Simple2 sql=simple
+    int Int
+    text Text
+    bool Bool
+    Primary text int
+    deriving Show Eq
+|]
+
 instance Arbitrary DataTypeTable where
   arbitrary = DataTypeTable
      <$> arbText                -- text
@@ -121,6 +142,7 @@ main = do
       , MaxLenTest.maxlenMigrate
       , Recursive.recursiveMigrate
       , CompositeTest.compositeMigrate
+      , ForeignKey.compositeMigrate
       , MigrationTest.migrationMigrate
       , PersistUniqueTest.migration
       , RenameTest.migration
@@ -185,16 +207,17 @@ main = do
     CustomPrimaryKeyReferenceTest.specsWith db
     MigrationColumnLengthTest.specsWith db
     EquivalentTypeTest.specsWith db
+    ForeignKey.specsWith db
     TransactionLevelTest.specsWith db
     MigrationTest.specsWith db
 
     it "issue #328" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
-        runMigration migrateAll
-        _ <- insert . Test $ read "2014-11-30 05:15:25.123"
+        runMigrationSilent migrateAll
+        _ <- insert . Test $ read "2014-11-30 05:15:25.123Z"
         [Single x] <- rawSql "select strftime('%s%f',time) from test" []
         liftIO $ x `shouldBe` Just ("141732452525.123" :: String)
     it "issue #339" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
-        runMigration migrateAll
+        runMigrationSilent migrateAll
         now <- liftIO getCurrentTime
         tid <- insert $ Test now
         Just (Test now') <- get tid
@@ -205,11 +228,16 @@ main = do
         Sqlite.close conn
         return ()
     it "issue #527" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
-        runMigration migrateAll
-        insertMany_ $ replicate 1000 (Test $ read "2014-11-30 05:15:25.123")
+        runMigrationSilent migrateAll
+        insertMany_ $ replicate 1000 (Test $ read "2014-11-30 05:15:25.123Z")
+
+    it "properly migrates to a composite primary key (issue #669)" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
+        runMigrationSilent compositeSetup
+        runMigrationSilent compositeMigrateTest
+        pure ()
 
     it "afterException" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
-        runMigration testMigrate
+        runMigrationSilent testMigrate
         let catcher :: forall m. Monad m => SomeException -> m ()
             catcher _ = return ()
         _ <- insert $ Person "A" 0 Nothing

@@ -1,5 +1,5 @@
 name:            persistent
-version:         2.10.0
+version:         2.11.0.0
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -44,6 +44,7 @@ library
                    , time                     >= 1.6
                    , transformers             >= 0.5
                    , unliftio-core
+                   , unliftio
                    , unordered-containers
                    , vector
 
