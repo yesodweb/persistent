@@ -566,31 +566,21 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
         (errs, _) -> return $ Left errs
   where
     name = entityDB entity
-    (newcols', udefs, fdefs) = mkColumns allDefs entity
+    (newcols', udefs, fdefs) = postgresMkColumns allDefs entity
     migrationText exists old''
         | not exists =
             createText newcols fdefs udspair
         | otherwise =
             let (acs, ats) =
-                    getAlters allDefs entity (newcols, udspair)
-                    -- $ excludeForeignKeys
-                    $ old'
+                    getAlters allDefs entity (newcols, udspair) old'
                 acs' = map (AlterColumn name) acs
                 ats' = map (AlterTable name) ats
             in
                 acs' ++ ats'
        where
          old' = partitionEithers old''
-         (newcols', udefs, fdefs) = postgresMkColumns allDefs entity
          newcols = filter (not . safeToRemove entity . cName) newcols'
          udspair = map udToPair udefs
-         excludeForeignKeys (xs,ys) = (map excludeForeignKey xs,ys)
-         excludeForeignKey c = case cReference c of
-           Just (_,fk) ->
-             case find (\f -> fk == foreignConstraintNameDBName f) fdefs of
-               Just _ -> c { cReference = Nothing }
-               Nothing -> c
-           Nothing -> c
             -- Check for table existence if there are no columns, workaround
             -- for https://github.com/yesodweb/persistent/issues/152
 
