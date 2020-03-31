@@ -330,7 +330,7 @@ migrate' :: MySQL.ConnectInfo
          -> IO (Either [Text] [(Bool, Text)])
 migrate' connectInfo allDefs getter val = do
     let name = entityDB val
-    let (newcols, udefs, fdefs) = mkColumns allDefs val
+    let (newcols, udefs, fdefs) = mysqlMkColumns allDefs val
     (idClmn, old) <- getColumns connectInfo getter val newcols
     let udspair = map udToPair udefs
     case (idClmn, old, partitionEithers old) of
@@ -467,7 +467,7 @@ udToPair ud = (uniqueDBName ud, map snd $ uniqueFields ud)
 -- in the database.
 getColumns :: MySQL.ConnectInfo
            -> (Text -> IO Statement)
-           -> EntityDef -> [Column] 
+           -> EntityDef -> [Column]
            -> IO ( [Either Text (Either Column (DBName, [DBName]))] -- ID column
                  , [Either Text (Either Column (DBName, [DBName]))] -- everything else
                  )
@@ -624,7 +624,7 @@ getColumn connectInfo getter tname [ PersistText cname
             [] -> return Nothing
             [[PersistText tab, PersistText ref, PersistInt64 pos]] ->
               return $ if pos == 1 then Just (DBName tab, DBName ref) else Nothing
-            xs -> error $ mconcat 
+            xs -> error $ mconcat
               [ "MySQL.getColumn/getRef: error fetching constraints. Expected a single result for foreign key query for table: "
               , T.unpack (unDBName tname)
               , " and column: "
@@ -989,7 +989,7 @@ mockMigrate :: MySQL.ConnectInfo
          -> IO (Either [Text] [(Bool, Text)])
 mockMigrate _connectInfo allDefs _getter val = do
     let name = entityDB val
-    let (newcols, udefs, fdefs) = mkColumns allDefs val
+    let (newcols, udefs, fdefs) = mysqlMkColumns allDefs val
     let udspair = map udToPair udefs
     case () of
       -- Nothing found, create everything
@@ -1328,3 +1328,6 @@ putManySql' fields ent n = q
         , " ON DUPLICATE KEY UPDATE "
         , Util.commaSeparated updates
         ]
+
+mysqlMkColumns :: [EntityDef] -> EntityDef -> ([Column], [UniqueDef], [ForeignDef])
+mysqlMkColumns allDefs t = mkColumns allDefs t emptyBackendSpecificOverrides

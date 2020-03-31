@@ -51,6 +51,7 @@ library
                      TreeTest
                      UniqueTest
                      UpsertTest
+                     LongIdentifierTest
 
     hs-source-dirs: src
 
