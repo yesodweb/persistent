@@ -706,7 +706,6 @@ getColumns getter def cols = do
             , "WHERE table_catalog=current_database() "
             , "AND table_schema=current_schema() "
             , "AND table_name=? "
-            -- , "AND column_name <> ?"
             ]
 
 -- DOMAINS Postgres supports the concept of domains, which are data types with optional constraints.
@@ -718,7 +717,6 @@ getColumns getter def cols = do
     stmt <- getter sqlv
     let vals =
             [ PersistText $ unDBName $ entityDB def
-            -- , PersistText $ unDBName $ fieldDB (entityId def)
             ]
     cs <- with (stmtQuery stmt vals) (\src -> runConduit $ src .| helper)
     let sqlc = T.concat
@@ -733,7 +731,6 @@ getColumns getter def cols = do
             , "AND c.table_schema=k.table_schema "
             , "AND c.table_name=? "
             , "AND c.table_name=k.table_name "
-            -- ,"AND c.column_name <> ? "
             , "AND c.constraint_name=k.constraint_name "
             , "AND NOT k.constraint_type IN ('PRIMARY KEY', 'FOREIGN KEY') "
             , "ORDER BY c.constraint_name, c.column_name"
@@ -944,7 +941,7 @@ findAlters
     -> ([AlterColumn'], [Column])
 findAlters defs edef col@(Column name isNull sqltype def _defConstraintName _maxLen ref) cols =
     case filter (\c -> cName c == name) cols of
-        [] -> -- for the failing test case, this is showing up as cols=[] and name="id"
+        [] ->
             ([(name, Add' col)], cols)
         Column _ isNull' sqltype' def' _defConstraintName' _maxLen' ref':_ ->
             let refDrop Nothing = []
