@@ -3,6 +3,9 @@
 ## 2.8.3.0
 
 * Add `Lift` instances for the cascade types. [#1060](https://github.com/yesodweb/persistent/pull/1060)
+* Use `DeriveLift` to implement all `Lift` instances. Among other benefits,
+  this provides implementations of `liftTyped` on `template-haskell-2.16` (GHC
+  8.10) or later. [#1064](https://github.com/yesodweb/persistent/pull/1064)
 
 ## 2.8.2.3
 
