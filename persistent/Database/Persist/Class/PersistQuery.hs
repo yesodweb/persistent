@@ -1,3 +1,4 @@
+{-# LANGUAGE ExplicitForAll #-}
 module Database.Persist.Class.PersistQuery
     ( PersistQueryRead (..)
     , PersistQueryWrite (..)
@@ -60,7 +61,7 @@ class (PersistQueryRead backend, PersistStoreWrite backend) => PersistQueryWrite
 -- | Get all records matching the given criterion in the specified order.
 -- Returns also the identifiers.
 selectSource
-       :: (PersistQueryRead backend, MonadResource m, PersistRecordBackend record backend, MonadReader backend m)
+       :: forall record backend m. (PersistQueryRead backend, MonadResource m, PersistRecordBackend record backend, MonadReader backend m)
        => [Filter record]
        -> [SelectOpt record]
        -> ConduitM () (Entity record) m ()
@@ -71,7 +72,7 @@ selectSource filts opts = do
     release releaseKey
 
 -- | Get the 'Key's of all records matching the given criterion.
-selectKeys :: (PersistQueryRead backend, MonadResource m, PersistRecordBackend record backend, MonadReader backend m)
+selectKeys :: forall record backend m. (PersistQueryRead backend, MonadResource m, PersistRecordBackend record backend, MonadReader backend m)
            => [Filter record]
            -> [SelectOpt record]
            -> ConduitM () (Key record) m ()
@@ -82,7 +83,7 @@ selectKeys filts opts = do
     release releaseKey
 
 -- | Call 'selectSource' but return the result as a list.
-selectList :: (MonadIO m, PersistQueryRead backend, PersistRecordBackend record backend)
+selectList :: forall record backend m. (MonadIO m, PersistQueryRead backend, PersistRecordBackend record backend)
            => [Filter record]
            -> [SelectOpt record]
            -> ReaderT backend m [Entity record]
@@ -91,7 +92,7 @@ selectList filts opts = do
     liftIO $ with srcRes (\src -> runConduit $ src .| CL.consume)
 
 -- | Call 'selectKeys' but return the result as a list.
-selectKeysList :: (MonadIO m, PersistQueryRead backend, PersistRecordBackend record backend)
+selectKeysList :: forall record backend m. (MonadIO m, PersistQueryRead backend, PersistRecordBackend record backend)
                => [Filter record]
                -> [SelectOpt record]
                -> ReaderT backend m [Key record]
