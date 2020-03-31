@@ -4,6 +4,8 @@
 
 * [#1060](https://github.com/yesodweb/persistent/pull/1060)
   * The QuasiQuoter now supports `OnDelete` and `OnUpdate` cascade options.
+* [#913](https://github.com/yesodweb/persistent/pull/913)
+  * Support an atomic insertUnique
 
 ## 2.10.1.2
 
