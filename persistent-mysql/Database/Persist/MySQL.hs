@@ -334,33 +334,72 @@ migrate' connectInfo allDefs getter val = do
     (idClmn, old) <- getColumns connectInfo getter val newcols
     let udspair = map udToPair udefs
     case (idClmn, old, partitionEithers old) of
-      -- Nothing found, create everything
-      ([], [], _) -> do
-        let uniques = flip concatMap udspair $ \(uname, ucols) ->
-                      [ AlterTable name $
-                        AddUniqueConstraint uname $
-                        map (findTypeAndMaxLen name) ucols ]
-        let foreigns = do
-              Column { cName=cname, cReference=Just (refTblName, refConstraintName) } <- newcols
-              return $ AlterColumn name (refTblName, addReference allDefs refConstraintName refTblName cname)
+        -- Nothing found, create everything
+        ([], [], _) -> do
+            let uniques = do
+                    (uname, ucols) <- udspair
+                    pure
+                        $ AlterTable name
+                        $ AddUniqueConstraint uname
+                        $ map (findTypeAndMaxLen name) ucols
 
-        let foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef))
-                                        in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignRefTableDBName fdef) (foreignConstraintNameDBName fdef) childfields parentfields)) fdefs
+            let foreigns = do
+                  Column { cName=cname, cReference=Just (refTblName, refConstraintName) } <- newcols
+                  return $ AlterColumn name (refTblName, addReference allDefs refConstraintName refTblName cname)
 
-        return $ Right $ map showAlterDb $ (addTable newcols val): uniques ++ foreigns ++ foreignsAlt
-      -- No errors and something found, migrate
-      (_, _, ([], old')) -> do
-        let excludeForeignKeys (xs,ys) = (map (\c -> case cReference c of
-                                                    Just (_,fk) -> case find (\f -> fk == foreignConstraintNameDBName f) fdefs of
-                                                                     Just _ -> c { cReference = Nothing }
-                                                                     Nothing -> c
-                                                    Nothing -> c) xs,ys)
-            (acs, ats) = getAlters allDefs name (newcols, udspair) $ excludeForeignKeys $ partitionEithers old'
-            acs' = map (AlterColumn name) acs
-            ats' = map (AlterTable  name) ats
-        return $ Right $ map showAlterDb $ acs' ++ ats'
-      -- Errors
-      (_, _, (errs, _)) -> return $ Left errs
+            let foreignsAlt =
+                    map
+                        (\fdef ->
+                            let (childfields, parentfields) =
+                                    unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef))
+                            in
+                                AlterColumn
+                                    name
+                                    ( foreignRefTableDBName fdef
+                                    , AddReference
+                                        (foreignRefTableDBName fdef)
+                                        (foreignConstraintNameDBName fdef)
+                                        childfields parentfields
+                                    )
+                        )
+                        fdefs
+
+            return
+                $ Right
+                $ map showAlterDb
+                $ (addTable newcols val) : uniques ++ foreigns ++ foreignsAlt
+
+        -- No errors and something found, migrate
+        (_, _, ([], old')) -> do
+            let excludeForeignKeys (xs,ys) =
+                    ( map
+                        (\c ->
+                            case cReference c of
+                                Just (_,fk) ->
+                                    case find (\f -> fk == foreignConstraintNameDBName f) fdefs of
+                                        Just _ -> c { cReference = Nothing }
+                                        Nothing -> c
+                                Nothing -> c
+                        )
+                        xs
+                    , ys
+                    )
+                (acs, ats) =
+                    getAlters
+                        allDefs
+                        name
+                        (newcols, udspair)
+                        $ excludeForeignKeys
+                        $ partitionEithers old'
+                acs' =
+                    map (AlterColumn name) acs
+                ats' =
+                    map (AlterTable  name) ats
+            return $ Right $ map showAlterDb $ acs' ++ ats'
+
+        -- Errors
+        (_, _, (errs, _)) ->
+            return $ Left errs
 
       where
         findTypeAndMaxLen tblName col = let (col', ty) = findTypeOfColumn allDefs tblName col
@@ -374,11 +413,13 @@ addTable cols entity = AddTable $ concat
            , escapeDBName name
            , "("
            , idtxt
-           , if null cols then [] else ","
-           , intercalate "," $ map showColumn cols
+           , if null nonIdCols then [] else ","
+           , intercalate "," $ map showColumn nonIdCols
            , ")"
            ]
     where
+      nonIdCols =
+          filter (\c -> cName c /= fieldDB (entityId entity) ) cols
       name = entityDB entity
       idtxt = case entityPrimary entity of
                 Just pdef -> concat [" PRIMARY KEY (", intercalate "," $ map (escapeDBName . fieldDB) $ compositeFields pdef, ")"]
@@ -528,7 +569,8 @@ getColumns connectInfo getter def cols = do
                 (Just r) -> (unDBName $ cName c, r) : rs
     vals = [ PersistText $ pack $ MySQL.connectDatabase connectInfo
            , PersistText $ unDBName $ entityDB def
-           , PersistText $ unDBName $ fieldDB $ entityId def ]
+           , PersistText $ unDBName $ fieldDB $ entityId def
+           ]
 
     helperClmns = CL.mapM getIt .| CL.consume
         where
