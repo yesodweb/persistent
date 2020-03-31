@@ -11,6 +11,7 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DeriveLift #-}
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-missing-fields #-}
 
 -- | This module provides the tools for defining your database schema and using
@@ -272,18 +273,27 @@ instance Lift SqlTypeExp where
             mtyp = ConT ''Proxy `AppT` typ
             typedNothing = SigE (ConE 'Proxy) mtyp
             st = VarE 'sqlType `AppE` typedNothing
+#if MIN_VERSION_template_haskell(2,16,0)
+    liftTyped = unsafeTExpCoerce . lift
+#endif
 
 data FieldsSqlTypeExp = FieldsSqlTypeExp [FieldDef] [SqlTypeExp]
 
 instance Lift FieldsSqlTypeExp where
     lift (FieldsSqlTypeExp fields sqlTypeExps) =
         lift $ zipWith FieldSqlTypeExp fields sqlTypeExps
+#if MIN_VERSION_template_haskell(2,16,0)
+    liftTyped = unsafeTExpCoerce . lift
+#endif
 
 data FieldSqlTypeExp = FieldSqlTypeExp FieldDef SqlTypeExp
 
 instance Lift FieldSqlTypeExp where
     lift (FieldSqlTypeExp FieldDef{..} sqlTypeExp) =
         [|FieldDef fieldHaskell fieldDB fieldType $(lift sqlTypeExp) fieldAttrs fieldStrict fieldReference fieldComments|]
+#if MIN_VERSION_template_haskell(2,16,0)
+    liftTyped = unsafeTExpCoerce . lift
+#endif
 
 instance Lift EntityDefSqlTypeExp where
     lift (EntityDefSqlTypeExp ent sqlTypeExp sqlTypeExps) =
@@ -291,19 +301,15 @@ instance Lift EntityDefSqlTypeExp where
               , entityId = $(lift $ FieldSqlTypeExp (entityId ent) sqlTypeExp)
               }
         |]
+#if MIN_VERSION_template_haskell(2,16,0)
+    liftTyped = unsafeTExpCoerce . lift
+#endif
 
-instance Lift ReferenceDef where
-    lift NoReference = [|NoReference|]
-    lift (ForeignRef name ft) = [|ForeignRef name ft|]
-    lift (EmbedRef em) = [|EmbedRef em|]
-    lift (CompositeRef cdef) = [|CompositeRef cdef|]
-    lift SelfReference = [|SelfReference|]
+deriving instance Lift ReferenceDef
 
-instance Lift EmbedEntityDef where
-    lift (EmbedEntityDef name fields) = [|EmbedEntityDef name fields|]
+deriving instance Lift EmbedEntityDef
 
-instance Lift EmbedFieldDef where
-    lift (EmbedFieldDef name em cyc) = [|EmbedFieldDef name em cyc|]
+deriving instance Lift EmbedFieldDef
 
 type EmbedEntityMap = M.Map HaskellName EmbedEntityDef
 
@@ -442,8 +448,8 @@ data MkPersistSettings = MkPersistSettings
     --
     -- Note: this field is deprecated. Use the mpsFieldLabelModifier  and mpsConstraintLabelModifier instead.
     , mpsFieldLabelModifier :: Text -> Text -> Text
-    -- ^ Customise the field accessors and lens names using the entity and field name. 
-    -- Both arguments are upper cased. 
+    -- ^ Customise the field accessors and lens names using the entity and field name.
+    -- Both arguments are upper cased.
     --
     -- Default: appends entity and field.
     --
@@ -592,7 +598,7 @@ dataTypeDec mps t = do
         [(notStrict, maybeIdType mps fd Nothing Nothing)]
 
 sumConstrName :: MkPersistSettings -> EntityDef -> FieldDef -> Name
-sumConstrName mps t FieldDef {..} = mkName $ unpack name 
+sumConstrName mps t FieldDef {..} = mkName $ unpack name
     where
         name
             | mpsPrefixFields mps = modifiedName ++ "Sum"
@@ -1690,94 +1696,35 @@ liftAndFixKey entityMap (FieldDef a b c sqlTyp e f fieldRef mcomments) =
               _ -> Nothing
         _ -> Nothing
 
-instance Lift EntityDef where
-    lift EntityDef{..} =
-        [|EntityDef
-            entityHaskell
-            entityDB
-            entityId
-            entityAttrs
-            entityFields
-            entityUniques
-            entityForeigns
-            entityDerives
-            entityExtra
-            entitySum
-            entityComments
-            |]
+deriving instance Lift EntityDef
 
-instance Lift FieldDef where
-    lift (FieldDef a b c d e f g h) = [|FieldDef a b c d e f g h|]
+deriving instance Lift FieldDef
 
-instance Lift UniqueDef where
-    lift (UniqueDef a b c d) = [|UniqueDef a b c d|]
+deriving instance Lift UniqueDef
 
-instance Lift CompositeDef where
-    lift (CompositeDef a b) = [|CompositeDef a b|]
+deriving instance Lift CompositeDef
 
-instance Lift ForeignDef where
-    lift (ForeignDef a b c d e f g h) = [|ForeignDef a b c d e f g h|]
+deriving instance Lift ForeignDef
 
 -- |
 --
 -- @since 2.8.3.0
-instance Lift FieldCascade where
-    lift (FieldCascade a b) = [|FieldCascade a b|]
+deriving instance Lift FieldCascade
 
 -- |
 --
 -- @since 2.8.3.0
-instance Lift CascadeAction where
-    lift Cascade = [|Cascade|]
-    lift Restrict = [|Restrict|]
-    lift SetNull = [|SetNull|]
-    lift SetDefault = [|SetDefault|]
+deriving instance Lift CascadeAction
 
-instance Lift HaskellName where
-    lift (HaskellName t) = [|HaskellName t|]
-instance Lift DBName where
-    lift (DBName t) = [|DBName t|]
-instance Lift FieldType where
-    lift (FTTypeCon Nothing t)  = [|FTTypeCon Nothing t|]
-    lift (FTTypeCon (Just x) t) = [|FTTypeCon (Just x) t|]
-    lift (FTApp x y) = [|FTApp x y|]
-    lift (FTList x) = [|FTList x|]
+deriving instance Lift HaskellName
+deriving instance Lift DBName
+deriving instance Lift FieldType
 
-instance Lift PersistFilter where
-    lift Eq = [|Eq|]
-    lift Ne = [|Ne|]
-    lift Gt = [|Gt|]
-    lift Lt = [|Lt|]
-    lift Ge = [|Ge|]
-    lift Le = [|Le|]
-    lift In = [|In|]
-    lift NotIn = [|NotIn|]
-    lift (BackendSpecificFilter x) = [|BackendSpecificFilter x|]
+deriving instance Lift PersistFilter
 
-instance Lift PersistUpdate where
-    lift Assign = [|Assign|]
-    lift Add = [|Add|]
-    lift Subtract = [|Subtract|]
-    lift Multiply = [|Multiply|]
-    lift Divide = [|Divide|]
-    lift (BackendSpecificUpdate x) = [|BackendSpecificUpdate x|]
+deriving instance Lift PersistUpdate
 
-instance Lift SqlType where
-    lift SqlString = [|SqlString|]
-    lift SqlInt32 = [|SqlInt32|]
-    lift SqlInt64 = [|SqlInt64|]
-    lift SqlReal = [|SqlReal|]
-    lift (SqlNumeric x y) =
-        [|SqlNumeric (fromInteger x') (fromInteger y')|]
-      where
-        x' = fromIntegral x :: Integer
-        y' = fromIntegral y :: Integer
-    lift SqlBool = [|SqlBool|]
-    lift SqlDay = [|SqlDay|]
-    lift SqlTime = [|SqlTime|]
-    lift SqlDayTime = [|SqlDayTime|]
-    lift SqlBlob = [|SqlBlob|]
-    lift (SqlOther a) = [|SqlOther a|]
+deriving instance Lift SqlType
 
 -- Ent
 --   fieldName FieldType
@@ -1813,8 +1760,8 @@ filterConName' :: MkPersistSettings
                -> HaskellName -- ^ field
                -> Name
 filterConName' mps entity field = mkName $ unpack name
-    where 
-        name 
+    where
+        name
             | field == HaskellName "Id" = entityName ++ fieldName
             | mpsPrefixFields mps       = modifiedName
             | otherwise                 = fieldName
