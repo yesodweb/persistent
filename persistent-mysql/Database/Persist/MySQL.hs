@@ -330,8 +330,8 @@ migrate' :: MySQL.ConnectInfo
          -> IO (Either [Text] [(Bool, Text)])
 migrate' connectInfo allDefs getter val = do
     let name = entityDB val
-    (idClmn, old) <- getColumns connectInfo getter val
     let (newcols, udefs, fdefs) = mysqlMkColumns allDefs val
+    (idClmn, old) <- getColumns connectInfo getter val newcols
     let udspair = map udToPair udefs
     case (idClmn, old, partitionEithers old) of
       -- Nothing found, create everything
