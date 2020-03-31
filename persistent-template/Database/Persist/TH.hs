@@ -456,7 +456,7 @@ data MkPersistSettings = MkPersistSettings
     -- Default: appends entity and field
     --
     -- Note: this setting is ignored if mpsPrefixFields is set to False.
-    -- @since 2.10.5.3
+    -- @since 2.11.0.0
     , mpsEntityJSON :: Maybe EntityJSON
     -- ^ Generate @ToJSON@/@FromJSON@ instances for each model types. If it's
     -- @Nothing@, no instances will be generated. Default:
