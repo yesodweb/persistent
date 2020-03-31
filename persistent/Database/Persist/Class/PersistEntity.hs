@@ -22,7 +22,7 @@ module Database.Persist.Class.PersistEntity
     , toPersistValueEnum, fromPersistValueEnum
     ) where
 
-import Data.Aeson (ToJSON (..), FromJSON (..), fromJSON, object, (.:), (.=), Value (Object))
+import Data.Aeson (ToJSON (..), withObject, FromJSON (..), fromJSON, object, (.:), (.=), Value (Object))
 import qualified Data.Aeson.Parser as AP
 import Data.Aeson.Types (Parser,Result(Error,Success))
 import Data.Aeson.Text (encodeToTextBuilder)
@@ -38,6 +38,7 @@ import qualified Data.Text.Lazy.Builder as TB
 import Data.Typeable (Typeable)
 import GHC.Generics
 
+import Database.Persist.Class.PersistEntity
 import Database.Persist.Class.PersistField
 import Database.Persist.Types.Base
 
@@ -267,8 +268,14 @@ entityIdToJSON (Entity key value) = case toJSON value of
 --     parseJSON = entityIdFromJSON
 -- @
 entityIdFromJSON :: (PersistEntity record, FromJSON record) => Value -> Parser (Entity record)
-entityIdFromJSON value@(Object o) = Entity <$> o .: "id" <*> parseJSON value
-entityIdFromJSON _ = fail "entityIdFromJSON: not an object"
+entityIdFromJSON = withObject "entityIdFromJSON" $ \o -> do
+    val <- parseJSON (Object o)
+    k <- case keyFromRecordM val of
+        Nothing ->
+            o .: "id"
+        Just func ->
+            pure $ func val
+    pure $ Entity k val
 
 instance (PersistEntity record, PersistField record, PersistField (Key record))
   => PersistField (Entity record) where
