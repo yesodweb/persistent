@@ -17,6 +17,8 @@
     record` from a `record` if it was defined with `Primary`.
 * [#1036](https://github.com/yesodweb/persistent/pull/1036):
   * The method `entityIdFromJSON` that is used to parse entities now correctly works for entities that define a custom `Primary` key.
+* [#1066](https://github.com/yesodweb/persistent/pull/1066)
+  * You can set a column's `sql=id` for a non `Id` column.
 
 ## 2.10.5.2
 
