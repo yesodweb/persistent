@@ -42,7 +42,7 @@ specs runDb = do
   describe "custom constraint used in migration" $ before_ (runDb $ void $ runMigrationSilent customConstraintMigrate) $ after_ (runDb clean) $ do
 
     it "custom constraint is actually created" $ runDb $ do
-      runMigrationSilent customConstraintMigrate -- run a second time to ensure the constraint isn't dropped
+      runMigration customConstraintMigrate -- run a second time to ensure the constraint isn't dropped
       let query = T.concat ["SELECT COUNT(*) "
                            ,"FROM information_schema.key_column_usage "
                            ,"WHERE ordinal_position=1 "

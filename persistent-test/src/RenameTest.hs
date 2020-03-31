@@ -19,7 +19,7 @@ KeyTable
     deriving Eq Show
 
 IdTable
-    Id   Day default=CURRENT_DATE
+    Id   Day default=NOW()
     name Text
     -- This was added to test the ability to break a cycle
     -- getting rid of the Maybe should be a compilation failure

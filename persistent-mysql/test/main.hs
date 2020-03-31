@@ -98,7 +98,7 @@ instance Arbitrary (DataTypeTableGeneric backend) where
      <*> (truncateTimeOfDay =<< arbitrary) -- timeFrac
      <*> (truncateUTCTime   =<< arbitrary) -- utcFrac
 
-setup :: MonadUnliftIO m => Migration -> ReaderT SqlBackend m ()
+setup :: (HasCallStack, MonadUnliftIO m) => Migration -> ReaderT SqlBackend m ()
 setup migration = do
   printMigration migration
   _ <- runMigrationSilent migration
