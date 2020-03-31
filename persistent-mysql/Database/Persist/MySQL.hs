@@ -336,7 +336,7 @@ migrate' :: MySQL.ConnectInfo
 migrate' connectInfo allDefs getter val = do
     let name = entityDB val
     let (newcols, udefs, fdefs) = mysqlMkColumns allDefs val
-    (_, old) <- getColumns connectInfo getter val newcols
+    old <- getColumns connectInfo getter val newcols
     let udspair = map udToPair udefs
     case ([], old, partitionEithers old) of
         -- Nothing found, create everything
@@ -516,15 +516,6 @@ data AlterColumn = Change Column
                  | DropReference DBName
                  deriving Show
 
-isSameRef :: AlterColumn -> Bool
-isSameRef ac = case ac of
-    AddReference refTableName foreignKeyName refCols referencedCols ->
-        undefined
-    _ ->
-        False
-
-
-
 type AlterColumn' = (DBName, AlterColumn)
 
 data AlterTable = AddUniqueConstraint DBName [(DBName, FieldType, Integer)]
@@ -550,10 +541,7 @@ getColumns
     => MySQL.ConnectInfo
     -> (Text -> IO Statement)
     -> EntityDef -> [Column]
-    -> IO
-        ( [Either Text (Either Column (DBName, [DBName]))] -- ID column
-        , [Either Text (Either Column (DBName, [DBName]))] -- everything else
-        )
+    -> IO [Either Text (Either Column (DBName, [DBName]))]
 getColumns connectInfo getter def cols = do
 
     -- Find out all columns.
@@ -590,7 +578,7 @@ getColumns connectInfo getter def cols = do
     us <- with (stmtQuery stmtCntrs vals) (\src -> runConduitRes $ src .| helperCntrs)
 
     -- Return both
-    return ([], cs ++ us)
+    return (cs ++ us)
   where
     refMap = Map.fromList $ foldl ref [] cols
       where ref rs c = case cReference c of
