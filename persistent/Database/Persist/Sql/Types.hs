@@ -4,6 +4,7 @@ module Database.Persist.Sql.Types
     , Statement (..), LogFunc, InsertSqlResult (..)
     , readToUnknown, readToWrite, writeToUnknown
     , SqlBackendCanRead, SqlBackendCanWrite, SqlReadT, SqlWriteT, IsSqlBackend
+    , OverflowNatural(..)
     ) where
 
 import Control.Exception (Exception)

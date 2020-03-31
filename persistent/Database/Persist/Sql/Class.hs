@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeOperators, FlexibleInstances #-}
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -32,6 +32,7 @@ import qualified Data.Vector as V
 import Data.Word
 import Numeric.Natural (Natural)
 import Text.Blaze.Html (Html)
+import GHC.TypeLits
 
 import Database.Persist
 import Database.Persist.Sql.Types
@@ -487,10 +488,17 @@ instance (HasResolution a) => PersistFieldSql (Fixed a) where
         long = prec + 10                                                        --  FIXME: Is this enough ?
         n = 0
         _mn = return n `asTypeOf` a
+
 instance PersistFieldSql Rational where
     sqlType _ = SqlNumeric 32 20   --  need to make this field big enough to handle Rational to Mumber string conversion for ODBC
 
-instance PersistFieldSql Natural where
+
+-- | This type uses the 'SqlInt64' version, which will exhibit overflow and
+-- underflow behavior. Additionally, it permits negative values in the
+-- database, which isn't ideal.
+--
+-- @since 2.11.0
+instance PersistFieldSql OverflowNatural where
   sqlType _ = SqlInt64
 
 -- An embedded Entity

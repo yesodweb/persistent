@@ -9,6 +9,7 @@ module Database.Persist.Types
     , BackendSpecificFilter
     , Key
     , Entity (..)
+    , OverflowNatural(..)
     ) where
 
 import Database.Persist.Types.Base
