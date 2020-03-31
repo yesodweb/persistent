@@ -97,6 +97,15 @@ class ( PersistField (Key record), ToJSON (Key record), FromJSON (Key record)
     fieldLens :: EntityField record field
               -> (forall f. Functor f => (field -> f field) -> Entity record -> f (Entity record))
 
+    -- | Extract a @'Key' record@ from a @record@ value. Currently, this is
+    -- only defined for entities using the @Primary@ syntax for
+    -- natural/composite keys. In a future version of @persistent@ which
+    -- incorporates the ID directly into the entity, this will always be Just.
+    --
+    -- @since 2.11.0.0
+    keyFromRecordM :: Maybe (record -> Key record)
+    keyFromRecordM = Nothing
+
 type family BackendSpecificUpdate backend record
 
 -- Moved over from Database.Persist.Class.PersistUnique

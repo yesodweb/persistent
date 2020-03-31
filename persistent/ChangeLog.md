@@ -4,6 +4,9 @@
 
 * [#1060](https://github.com/yesodweb/persistent/pull/1060)
   * The QuasiQuoter now supports `OnDelete` and `OnUpdate` cascade options.
+* [#1063](https://github.com/yesodweb/persistent/pull/1063)
+  * A new class member `keyFromRecordM` allows you to construct a `Key
+    record` from a `record` if it was defined with `Primary`.
 
 ## 2.10.5.2
 
