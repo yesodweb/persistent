@@ -63,6 +63,7 @@ import qualified Data.IntMap as I
 import Data.IORef
 import Data.List (find, sort, groupBy, foldl')
 import Data.List.NonEmpty (NonEmpty)
+import qualified Data.List as List
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
 import Data.Maybe
@@ -594,22 +595,23 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
         references =
             mapMaybe
                 (\Column { cName, cReference } ->
-                    fmap (getAddReference allDefs Nothing name cName) cReference
+                    getAddReference allDefs name cName =<< cReference
                 )
                 newcols
-        foreignsAlt = map (mkForeignAlt name) fdefs
+        foreignsAlt = mapMaybe (mkForeignAlt entity) fdefs
 
 mkForeignAlt
-    :: DBName
+    :: EntityDef
     -> ForeignDef
-    -> AlterDB
-mkForeignAlt name fdef =
-    AlterColumn
-        name
+    -> Maybe AlterDB
+mkForeignAlt entity fdef = do
+    pure $ AlterColumn
+        tableName
         ( foreignRefTableDBName fdef
         , addReference
         )
   where
+    tableName = entityDB entity
     addReference =
         AddReference
             constraintName
@@ -637,12 +639,17 @@ addTable cols entity =
         ]
   where
     nonIdCols =
-        filter (\c -> cName c /= fieldDB (entityId entity) ) cols
+        case entityPrimary entity of
+            Just _ ->
+                cols
+            _ ->
+                filter (\c -> cName c /= fieldDB (entityId entity) ) cols
+
     name =
         entityDB entity
     idtxt =
         case entityPrimary entity of
-            Just pdef ->
+            Just pdef -> Debug.traceShowId $
                 T.concat
                     [ " PRIMARY KEY ("
                     , T.intercalate "," $ map (escape . fieldDB) $ compositeFields pdef
@@ -687,6 +694,7 @@ data AlterTable
 data AlterDB = AddTable Text
              | AlterColumn DBName AlterColumn'
              | AlterTable DBName AlterTable
+             deriving Show
 
 -- | Returns all of the columns in the given table currently in the database.
 getColumns :: (Text -> IO Statement)
@@ -940,16 +948,19 @@ findAlters
     -> [Column]
     -> ([AlterColumn'], [Column])
 findAlters defs edef col@(Column name isNull sqltype def _defConstraintName _maxLen ref) cols =
-    case filter (\c -> cName c == name) cols of
-        [] ->
+    case List.find (\c -> cName c == name) cols of
+        Nothing ->
             ([(name, Add' col)], cols)
-        Column _ isNull' sqltype' def' _defConstraintName' _maxLen' ref':_ ->
+        Just (Column _oldName isNull' sqltype' def' _defConstraintName' _maxLen' ref') ->
             let refDrop Nothing = []
                 refDrop (Just (_, cname)) = [(name, DropReference cname)]
                 refAdd Nothing = []
                 refAdd (Just (tname, a)) =
                     case find ((==tname) . entityDB) defs of
-                        Just refdef ->
+                        Just refdef
+                            | entityDB edef /= tname
+                            && _oldName /= fieldDB (entityId edef)
+                            ->
                             [ ( tname
                               , AddReference
                                     a
@@ -958,6 +969,7 @@ findAlters defs edef col@(Column name isNull sqltype def _defConstraintName _max
                                     noCascade
                               )
                             ]
+                        Just _ -> []
                         Nothing ->
                             error $ "could not find the entityDef for reftable[" ++ show tname ++ "]"
                 modRef =
@@ -999,16 +1011,20 @@ findAlters defs edef col@(Column name isNull sqltype def _defConstraintName _max
 -- | Get the references to be added to a table for the given column.
 getAddReference
     :: [EntityDef]
-    -> Maybe ForeignDef
     -> DBName
     -> DBName
     -> (DBName, DBName)
-    -> AlterDB
-getAddReference allDefs mforeignDef table cname (s, constraintName) =
-    AlterColumn
+    -> Maybe AlterDB
+getAddReference allDefs table cname (s, constraintName) = do
+    Debug.traceM $
+        "getAddReference: table: " <> show table
+        <> "; cname: " <> show cname
+        <> "; s: " <> show s
+    guard $ table /= s && cname /= s
+    pure $ AlterColumn
         table
         ( s
-        , AddReference constraintName [cname] id_ (maybe noCascade foreignFieldCascade mforeignDef)
+        , AddReference constraintName [cname] id_ noCascade
         )
   where
     id_ =
@@ -1311,10 +1327,10 @@ mockMigrate allDefs _ entity = fmap (fmap $ map showAlterDb) $ do
         references =
             mapMaybe
                 (\Column { cName, cReference } ->
-                    fmap (getAddReference allDefs Nothing name cName) cReference
+                    getAddReference allDefs name cName =<< cReference
                 )
-                $ newcols
-        foreignsAlt = map (mkForeignAlt name) fdefs
+                newcols
+        foreignsAlt = mapMaybe (mkForeignAlt entity) fdefs
 
 -- | Mock a migration even when the database is not present.
 -- This function performs the same functionality of 'printMigration'
