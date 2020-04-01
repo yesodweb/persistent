@@ -595,7 +595,7 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
         references =
             mapMaybe
                 (\Column { cName, cReference } ->
-                    getAddReference allDefs name cName =<< cReference
+                    getAddReference allDefs entity cName =<< cReference
                 )
                 newcols
         foreignsAlt = mapMaybe (mkForeignAlt entity) fdefs
@@ -649,7 +649,7 @@ addTable cols entity =
         entityDB entity
     idtxt =
         case entityPrimary entity of
-            Just pdef -> Debug.traceShowId $
+            Just pdef ->
                 T.concat
                     [ " PRIMARY KEY ("
                     , T.intercalate "," $ map (escape . fieldDB) $ compositeFields pdef
@@ -1011,22 +1011,19 @@ findAlters defs edef col@(Column name isNull sqltype def _defConstraintName _max
 -- | Get the references to be added to a table for the given column.
 getAddReference
     :: [EntityDef]
-    -> DBName
+    -> EntityDef
     -> DBName
     -> (DBName, DBName)
     -> Maybe AlterDB
-getAddReference allDefs table cname (s, constraintName) = do
-    Debug.traceM $
-        "getAddReference: table: " <> show table
-        <> "; cname: " <> show cname
-        <> "; s: " <> show s
-    guard $ table /= s && cname /= s
+getAddReference allDefs entity cname (s, constraintName) = do
+    guard $ table /= s && cname /= fieldDB (entityId entity)
     pure $ AlterColumn
         table
         ( s
         , AddReference constraintName [cname] id_ noCascade
         )
   where
+    table = entityDB entity
     id_ =
         fromMaybe
             (error $ "Could not find ID of entity " ++ show s)
@@ -1327,7 +1324,7 @@ mockMigrate allDefs _ entity = fmap (fmap $ map showAlterDb) $ do
         references =
             mapMaybe
                 (\Column { cName, cReference } ->
-                    getAddReference allDefs name cName =<< cReference
+                    getAddReference allDefs entity cName =<< cReference
                 )
                 newcols
         foreignsAlt = mapMaybe (mkForeignAlt entity) fdefs
