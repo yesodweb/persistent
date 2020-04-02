@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -54,11 +55,12 @@ Address json
     deriving Show Eq
 NoJson
     foo Text
+    UniqueNoJsonFoo foo
     deriving Show Eq
 |]
 
 -- TODO: Derive Generic at the source site to get this unblocked.
-deriving instance Generic (BackendKey SqlBackend)
+deriving stock instance Generic (BackendKey SqlBackend)
 
 share [mkPersist sqlSettings { mpsGeneric = False, mpsGenerateLenses = True }] [persistLowerCase|
 Lperson json

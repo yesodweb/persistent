@@ -624,7 +624,7 @@ uniqueTypeDec mps t =
 #endif
   where
     derivClause [] = []
-    derivClause _  = [DerivClause Nothing [ConT ''Show]]
+    derivClause _  = [DerivClause (Just StockStrategy) [ConT ''Show]]
 
 mkUnique :: MkPersistSettings -> EntityDef -> UniqueDef -> Con
 mkUnique mps t (UniqueDef (HaskellName constr) _ fields attrs) =
