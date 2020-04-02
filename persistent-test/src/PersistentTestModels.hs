@@ -1,15 +1,21 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE UndecidableInstances #-} -- FIXME
 module PersistentTestModels where
 
 import Data.Aeson
 
+import Test.QuickCheck
 import Database.Persist.Sql
 import Database.Persist.TH
 import Init
 import PersistTestPetType
 import PersistTestPetCollarType
+import Data.Text (append)
+
+-- just need to ensure this compiles
+import PersistentTestModelsImports()
 
 share [mkPersist persistSettings { mpsGeneric = True },  mkMigrate "testMigrate", mkDeleteCascade persistSettings, mkSave "_ignoredSave"] [persistUpperCase|
 
@@ -89,12 +95,35 @@ share [mkPersist persistSettings { mpsGeneric = True },  mkMigrate "testMigrate"
     !yes Int
     ~no Int
     def Int
+
+  -- | This is a doc comment for a relationship.
+  -- | You need to put the pipe character for each line of documentation.
+  -- Lines without a pipe are omitted.
+  -- | But you can resume the doc comments afterwards.
+  Relationship
+      -- | Fields should be documentable.
+      name String
+      parent RelationshipId Maybe
+
+  MutA
+    mutB    MutBId
+
+  MutB
+    mutA    MutAId
 |]
 
 deriving instance Show (BackendKey backend) => Show (PetGeneric backend)
 deriving instance Eq (BackendKey backend) => Eq (PetGeneric backend)
 
-share [mkPersist persistSettings { mpsPrefixFields = False, mpsGeneric = True }
+deriving instance Show (BackendKey backend) => Show (RelationshipGeneric backend)
+deriving instance Eq (BackendKey backend) => Eq (RelationshipGeneric backend)
+
+share [mkPersist persistSettings { 
+          mpsPrefixFields = False
+        , mpsFieldLabelModifier = \_ _ -> "" -- this field is ignored when mpsPrefixFields == False
+        , mpsConstraintLabelModifier = \_ _ -> "" -- this field is ignored when mpsPrefixFields == False
+        , mpsGeneric = True 
+        }
       , mkMigrate "noPrefixMigrate"
       ] [persistLowerCase|
 NoPrefix1
@@ -106,13 +135,77 @@ NoPrefix2
     unprefixedLeft Int
     unprefixedRight String
     deriving Show Eq
+
 |]
+
+share [mkPersist sqlSettings] [persistLowerCase|
+JsonEncoding json
+    name Text
+    age  Int
+    Primary name
+    deriving Show Eq
+
+JsonEncoding2 json
+    name Text
+    age Int
+    blood Text
+    Primary name blood
+    deriving Show Eq
+|]
+
+instance Arbitrary JsonEncoding where
+    arbitrary = JsonEncoding <$> arbitrary <*> arbitrary
+
+instance Arbitrary JsonEncoding2 where
+    arbitrary = JsonEncoding2 <$> arbitrary <*> arbitrary <*> arbitrary
 
 deriving instance Show (BackendKey backend) => Show (NoPrefix1Generic backend)
 deriving instance Eq (BackendKey backend) => Eq (NoPrefix1Generic backend)
 
 deriving instance Show (BackendKey backend) => Show (NoPrefix2Generic backend)
 deriving instance Eq (BackendKey backend) => Eq (NoPrefix2Generic backend)
+
+share [mkPersist persistSettings { 
+          mpsFieldLabelModifier = \entity field -> case entity of
+            "CustomPrefix1" -> append "_cp1" field
+            "CustomPrefix2" -> append "_cp2" field
+            _ -> error "should not be called"
+        , mpsConstraintLabelModifier = \entity field -> case entity of
+            "CustomPrefix1" -> append "CP1" field
+            "CustomPrefix2" -> append "CP2" field
+            "CustomPrefixSum" -> append "CP" field
+            _ -> error "should not be called"
+        , mpsGeneric = True
+        }
+      , mkMigrate "customPrefixMigrate"
+      ] [persistLowerCase|
+CustomPrefix1
+    customFieldName Int
+CustomPrefix2
+    otherCustomFieldName Int
+    customPrefixedRef CustomPrefix1Id
++CustomPrefixSum
+    customPrefixedLeft Int
+    customPrefixedRight String
+    deriving Show Eq
+|]
+
+deriving instance Show (BackendKey backend) => Show (CustomPrefix1Generic backend)
+deriving instance Eq (BackendKey backend) => Eq (CustomPrefix1Generic backend)
+
+deriving instance Show (BackendKey backend) => Show (CustomPrefix2Generic backend)
+deriving instance Eq (BackendKey backend) => Eq (CustomPrefix2Generic backend)
+
+share [mkPersist persistSettings { mpsPrefixFields = False, mpsGeneric = False }
+      , mkMigrate "treeMigrate"
+      ] [persistLowerCase|
+
+Tree sql=trees
+  name String
+  parent String Maybe
+  Primary name
+  Foreign Tree fkparent parent
+|]
 
 -- | Reverses the order of the fields of an entity.  Used to test
 -- @??@ placeholders of 'rawSql'.

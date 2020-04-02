@@ -18,8 +18,8 @@ main :: IO ()
 main = defaultMain
     [ bgroup "mkPersist"
         [ bench "From File" $ nfIO $ mkPersist' $(persistFileWith lowerCaseSettings "bench/models-slowly")
-        --, bgroup "Non-Null Fields"
-        --    , bgroup "Increasing model count"
+        -- , bgroup "Non-Null Fields"
+        --    [ bgroup "Increasing model count"
         --        [ bench "1x10" $ nfIO $ mkPersist' $( parseReferencesQ (mkModels 10 10))
         --        , bench "10x10" $ nfIO $ mkPersist' $(parseReferencesQ (mkModels 10 10))
         --        , bench "100x10" $ nfIO $ mkPersist' $(parseReferencesQ (mkModels 100 10))
@@ -32,7 +32,7 @@ main = defaultMain
         --        -- , bench "10x1000" $ nfIO $ mkPersist' $(parseReferencesQ (mkModels 10 1000))
         --        ]
         --    ]
-        --, bgroup "Nullable"
+        -- , bgroup "Nullable"
         --    [ bgroup "Increasing model count"
         --        [ bench "20x10" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 20 10))
         --        , bench "40x10" $ nfIO $ mkPersist' $(parseReferencesQ (mkNullableModels 40 10))

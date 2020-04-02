@@ -1,3 +1,4 @@
+{-# LANGUAGE ExplicitForAll  #-}
 {-# OPTIONS_GHC -fno-warn-orphans  #-}
 module Database.Persist.Sql.Orphan.PersistUnique
   ()

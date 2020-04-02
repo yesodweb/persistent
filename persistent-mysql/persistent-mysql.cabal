@@ -1,5 +1,5 @@
 name:            persistent-mysql
-version:         2.10.2
+version:         2.10.3
 license:         MIT
 license-file:    LICENSE
 author:          Felipe Lessa <felipe.lessa@gmail.com>, Michael Snoyman
@@ -28,7 +28,7 @@ extra-source-files: ChangeLog.md
 
 library
     build-depends:   base             >= 4.9      && < 5
-                   , persistent       >= 2.10.0   && < 3
+                   , persistent       >= 2.11   && < 3
                    , aeson            >= 1.0
                    , blaze-builder
                    , bytestring       >= 0.10.8

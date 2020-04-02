@@ -22,7 +22,7 @@ module Database.Persist.Class.PersistEntity
     , toPersistValueEnum, fromPersistValueEnum
     ) where
 
-import Data.Aeson (ToJSON (..), FromJSON (..), fromJSON, object, (.:), (.=), Value (Object))
+import Data.Aeson (ToJSON (..), withObject, FromJSON (..), fromJSON, object, (.:), (.=), Value (Object))
 import qualified Data.Aeson.Parser as AP
 import Data.Aeson.Types (Parser,Result(Error,Success))
 import Data.Aeson.Text (encodeToTextBuilder)
@@ -96,6 +96,15 @@ class ( PersistField (Key record), ToJSON (Key record), FromJSON (Key record)
     -- | Use a 'PersistField' as a lens.
     fieldLens :: EntityField record field
               -> (forall f. Functor f => (field -> f field) -> Entity record -> f (Entity record))
+
+    -- | Extract a @'Key' record@ from a @record@ value. Currently, this is
+    -- only defined for entities using the @Primary@ syntax for
+    -- natural/composite keys. In a future version of @persistent@ which
+    -- incorporates the ID directly into the entity, this will always be Just.
+    --
+    -- @since 2.11.0.0
+    keyFromRecordM :: Maybe (record -> Key record)
+    keyFromRecordM = Nothing
 
 type family BackendSpecificUpdate backend record
 
@@ -254,8 +263,8 @@ keyValueEntityFromJSON _ = fail "keyValueEntityFromJSON: not an object"
 -- @
 entityIdToJSON :: (PersistEntity record, ToJSON record) => Entity record -> Value
 entityIdToJSON (Entity key value) = case toJSON value of
-    Object o -> Object $ HM.insert "id" (toJSON key) o
-    x -> x
+        Object o -> Object $ HM.insert "id" (toJSON key) o
+        x -> x
 
 -- | Predefined @parseJSON@. The input JSON looks like
 -- @{"id": 1, "name": ...}@.
@@ -267,8 +276,14 @@ entityIdToJSON (Entity key value) = case toJSON value of
 --     parseJSON = entityIdFromJSON
 -- @
 entityIdFromJSON :: (PersistEntity record, FromJSON record) => Value -> Parser (Entity record)
-entityIdFromJSON value@(Object o) = Entity <$> o .: "id" <*> parseJSON value
-entityIdFromJSON _ = fail "entityIdFromJSON: not an object"
+entityIdFromJSON = withObject "entityIdFromJSON" $ \o -> do
+    val <- parseJSON (Object o)
+    k <- case keyFromRecordM of
+        Nothing ->
+            o .: "id"
+        Just func ->
+            pure $ func val
+    pure $ Entity k val
 
 instance (PersistEntity record, PersistField record, PersistField (Key record))
   => PersistField (Entity record) where

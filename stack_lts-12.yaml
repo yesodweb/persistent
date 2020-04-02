@@ -13,3 +13,5 @@ extra-deps:
 - aeson-1.4.1.0
 - postgresql-libpq-0.9.4.2
 - postgresql-simple-0.6.1
+- th-lift-0.8.0.1
+- th-lift-instances-0.1.14

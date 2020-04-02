@@ -1,8 +1,12 @@
 {-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE RecordWildCards #-}
+
 -- | Intended for creating new backends.
 module Database.Persist.Sql.Internal
     ( mkColumns
     , defaultAttribute
+    , BackendSpecificOverrides(..)
+    , emptyBackendSpecificOverrides
     ) where
 
 import Data.Char (isSpace)
@@ -13,6 +17,22 @@ import qualified Data.Text as T
 import Database.Persist.Quasi
 import Database.Persist.Sql.Types
 import Database.Persist.Types
+import Data.Maybe (fromMaybe)
+
+-- | Record of functions to override the default behavior in 'mkColumns'.
+-- It is recommended you initialize this with 'emptyBackendSpecificOverrides' and override the default values,
+-- so that as new fields are added, your code still compiles.
+--
+-- @since 2.11
+data BackendSpecificOverrides = BackendSpecificOverrides
+    { backendSpecificForeignKeyName :: Maybe (DBName -> DBName -> DBName)
+    }
+
+-- | Creates an empty 'BackendSpecificOverrides' (i.e. use the default behavior; no overrides)
+--
+-- @since 2.11
+emptyBackendSpecificOverrides :: BackendSpecificOverrides
+emptyBackendSpecificOverrides = BackendSpecificOverrides Nothing
 
 defaultAttribute :: [Attr] -> Maybe Text
 defaultAttribute [] = Nothing
@@ -21,8 +41,8 @@ defaultAttribute (a:as)
     | otherwise = defaultAttribute as
 
 -- | Create the list of columns for the given entity.
-mkColumns :: [EntityDef] -> EntityDef -> ([Column], [UniqueDef], [ForeignDef])
-mkColumns allDefs t =
+mkColumns :: [EntityDef] -> EntityDef -> BackendSpecificOverrides -> ([Column], [UniqueDef], [ForeignDef])
+mkColumns allDefs t overrides =
     (cols, entityUniques t, entityForeigns t)
   where
     cols :: [Column]
@@ -52,13 +72,15 @@ mkColumns allDefs t =
                            show d ++ " on " ++ show tn
         | otherwise = maxLen as
 
+    refNameFn = fromMaybe refName (backendSpecificForeignKeyName overrides)
+
     ref :: DBName
         -> ReferenceDef
         -> [Attr]
         -> Maybe (DBName, DBName) -- table name, constraint name
     ref c fe []
         | ForeignRef f _ <- fe =
-            Just (resolveTableName allDefs f, refName tn c)
+            Just (resolveTableName allDefs f, refNameFn tn c)
         | otherwise = Nothing
     ref _ _ ("noreference":_) = Nothing
     ref c fe (a:as)

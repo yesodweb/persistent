@@ -1,16 +1,20 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE UndecidableInstances #-} -- FIXME
+{-# LANGUAGE RecordWildCards, UndecidableInstances #-}
+
 module PersistentTest
     ( module PersistentTest
     , cleanDB
     , testMigrate
     , noPrefixMigrate
+    , customPrefixMigrate
+    , treeMigrate
     ) where
 
 import Control.Monad.Fail
 import Control.Monad.IO.Class
 import Data.Aeson
 import Data.Conduit
+import qualified Data.Text as T
 import qualified Data.Conduit.List as CL
 import Data.Functor.Constant
 import Data.Functor.Identity
@@ -21,8 +25,10 @@ import Test.Hspec.QuickCheck(prop)
 import Test.HUnit hiding (Test)
 import UnliftIO (MonadUnliftIO, catch)
 import Web.PathPieces (PathPiece (..))
+import Data.Proxy (Proxy(..))
 
 import Database.Persist
+import Database.Persist.Quasi
 import Init
 import PersistentTestModels
 import PersistTestPetType
@@ -616,3 +622,86 @@ specsWith runDb = describe "persistent" $ do
     it "bang" $ (return $! Strict (error "foo") 5 5) `shouldThrow` anyErrorCall
     it "tilde" $ void (return $! Strict 5 (error "foo") 5 :: IO Strict)
     it "blank" $ (return $! Strict 5 5 (error "foo")) `shouldThrow` anyErrorCall
+
+  describe "documentation syntax" $ do
+    let edef = entityDef (Proxy :: Proxy Relationship)
+    it "provides comments on entity def" $ do
+      entityComments edef
+        `shouldBe`
+          Just "This is a doc comment for a relationship.\nYou need to put the pipe character for each line of documentation.\nBut you can resume the doc comments afterwards.\n"
+    it "provides comments on the field" $ do
+      let [nameField, parentField] = entityFields edef
+      fieldComments nameField
+        `shouldBe`
+          Just "Fields should be documentable.\n"
+
+  describe "JsonEncoding" $ do
+    let
+      subject =
+        JsonEncoding "Bob" 32
+      subjectEntity =
+        Entity (JsonEncodingKey (jsonEncodingName subject)) subject
+
+    it "encodes without an ID field" $ do
+      toJSON subjectEntity
+        `shouldBe`
+          Object (M.fromList
+            [ ("name", String "Bob")
+            , ("age", toJSON (32 :: Int))
+            , ("id", String "Bob")
+            ])
+
+    it "decodes without an ID field" $ do
+      let
+        json = encode . Object . M.fromList $
+          [ ("name", String "Bob")
+          , ("age", toJSON (32 :: Int))
+          ]
+      decode json
+        `shouldBe`
+          Just subjectEntity
+
+    prop "works with a Primary" $ \jsonEncoding -> do
+      let
+        ent =
+          Entity (JsonEncodingKey (jsonEncodingName jsonEncoding)) jsonEncoding
+      decode (encode ent)
+        `shouldBe`
+          Just ent
+
+    prop "excuse me what" $ \j@JsonEncoding{..} -> do
+      let
+        ent =
+          Entity (JsonEncodingKey jsonEncodingName) j
+      toJSON ent
+        `shouldBe`
+          Object (M.fromList
+            [ ("name", toJSON jsonEncodingName)
+            , ("age", toJSON jsonEncodingAge)
+            , ("id", toJSON jsonEncodingName)
+            ])
+
+    prop "round trip works with composite key" $ \j@JsonEncoding2{..} -> do
+      let
+        key = JsonEncoding2Key jsonEncoding2Name jsonEncoding2Blood
+        ent =
+          Entity key j
+      decode (encode ent)
+        `shouldBe`
+          Just ent
+
+    prop "works with a composite key" $ \j@JsonEncoding2{..} -> do
+      let
+        key = JsonEncoding2Key jsonEncoding2Name jsonEncoding2Blood
+        ent =
+          Entity key j
+      toJSON ent
+        `shouldBe`
+          Object (M.fromList
+            [ ("name", toJSON jsonEncoding2Name)
+            , ("age", toJSON jsonEncoding2Age)
+            , ("blood", toJSON jsonEncoding2Blood)
+            , ("id", toJSON key)
+            ])
+
+

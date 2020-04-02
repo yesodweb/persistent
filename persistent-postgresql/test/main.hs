@@ -5,6 +5,9 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 import PgInit
@@ -20,6 +23,7 @@ import Test.QuickCheck
 -- FIXME: should probably be used?
 -- import qualified ArrayAggTest
 import qualified CompositeTest
+import qualified ForeignKey
 import qualified CustomPersistFieldTest
 import qualified CustomPrimaryKeyReferenceTest
 import qualified DataTypeTest
@@ -34,6 +38,7 @@ import qualified MaxLenTest
 import qualified MigrationColumnLengthTest
 import qualified MigrationOnlyTest
 import qualified MpsNoPrefixTest
+import qualified MpsCustomPrefixTest
 import qualified PersistentTest
 import qualified PersistUniqueTest
 import qualified PrimaryTest
@@ -47,6 +52,7 @@ import qualified TreeTest
 import qualified UniqueTest
 import qualified UpsertTest
 import qualified CustomConstraintTest
+import qualified LongIdentifierTest
 
 type Tuple = (,)
 
@@ -99,6 +105,8 @@ main = do
     mapM_ setup
       [ PersistentTest.testMigrate
       , PersistentTest.noPrefixMigrate
+      , PersistentTest.customPrefixMigrate
+      , PersistentTest.treeMigrate
       , EmbedTest.embedMigrate
       , EmbedOrderTest.embedOrderMigrate
       , LargeNumberTest.numberMigrate
@@ -114,6 +122,8 @@ main = do
       , CustomPrimaryKeyReferenceTest.migration
       , MigrationColumnLengthTest.migration
       , TransactionLevelTest.migration
+      , LongIdentifierTest.migration
+      , ForeignKey.compositeMigrate
       ]
     PersistentTest.cleanDB
 
@@ -143,6 +153,7 @@ main = do
     EmbedTest.specsWith db
     EmbedOrderTest.specsWith db
     LargeNumberTest.specsWith db
+    ForeignKey.specsWith db
     UniqueTest.specsWith db
     MaxLenTest.specsWith db
     Recursive.specsWith db
@@ -162,6 +173,7 @@ main = do
         UpsertTest.UpsertPreserveOldKey
 
     MpsNoPrefixTest.specsWith db
+    MpsCustomPrefixTest.specsWith db
     EmptyEntityTest.specsWith db (Just (runMigrationSilent EmptyEntityTest.migration))
     CompositeTest.specsWith db
     TreeTest.specsWith db
@@ -174,5 +186,6 @@ main = do
     TransactionLevelTest.specsWith db
     JSONTest.specs
     CustomConstraintTest.specs db
+    LongIdentifierTest.specsWith db
     -- FIXME: not used, probably should?
     -- ArrayAggTest.specs db

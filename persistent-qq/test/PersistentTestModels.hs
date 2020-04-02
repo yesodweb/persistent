@@ -9,6 +9,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-} -- FIXME
+{-# LANGUAGE DerivingStrategies #-}
 module PersistentTestModels where
 
 import Control.Monad.Reader
@@ -101,6 +102,7 @@ share
     !yes Int
     ~no Int
     def Int
+
 |]
 
 deriving instance Show (BackendKey backend) => Show (PetGeneric backend)

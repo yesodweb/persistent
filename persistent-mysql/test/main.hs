@@ -5,6 +5,9 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 import MyInit
@@ -33,6 +36,7 @@ import qualified MigrationColumnLengthTest
 import qualified MigrationIdempotencyTest
 import qualified MigrationOnlyTest
 import qualified MpsNoPrefixTest
+import qualified MpsCustomPrefixTest
 import qualified PersistentTest
 import qualified PersistUniqueTest
 -- FIXME: Not used... should it be?
@@ -46,6 +50,7 @@ import qualified TransactionLevelTest
 import qualified UniqueTest
 import qualified UpsertTest
 import qualified CustomConstraintTest
+import qualified LongIdentifierTest
 
 type Tuple a b = (a, b)
 
@@ -93,10 +98,11 @@ instance Arbitrary (DataTypeTableGeneric backend) where
      <*> (truncateTimeOfDay =<< arbitrary) -- timeFrac
      <*> (truncateUTCTime   =<< arbitrary) -- utcFrac
 
-setup :: MonadIO m => Migration -> ReaderT SqlBackend m ()
+setup :: MonadUnliftIO m => Migration -> ReaderT SqlBackend m ()
 setup migration = do
   printMigration migration
-  runMigrationUnsafe migration
+  _ <- runMigrationSilent migration
+  pure ()
 
 main :: IO ()
 main = do
@@ -104,6 +110,7 @@ main = do
     mapM_ setup
       [ PersistentTest.testMigrate
       , PersistentTest.noPrefixMigrate
+      , PersistentTest.customPrefixMigrate
       , EmbedTest.embedMigrate
       , EmbedOrderTest.embedOrderMigrate
       , LargeNumberTest.numberMigrate
@@ -119,6 +126,7 @@ main = do
       , CustomPrimaryKeyReferenceTest.migration
       , MigrationColumnLengthTest.migration
       , TransactionLevelTest.migration
+      -- , LongIdentifierTest.migration
       ]
     PersistentTest.cleanDB
 
@@ -169,6 +177,7 @@ main = do
         UpsertTest.UpsertPreserveOldKey
 
     MpsNoPrefixTest.specsWith db
+    MpsCustomPrefixTest.specsWith db
     EmptyEntityTest.specsWith db (Just (runMigrationSilent EmptyEntityTest.migration))
     CompositeTest.specsWith db
     PersistUniqueTest.specsWith db
@@ -181,6 +190,9 @@ main = do
 
     MigrationIdempotencyTest.specsWith db
     CustomConstraintTest.specs db
+    -- TODO: implement automatic truncation for too long foreign keys, so we can run this test.
+    xdescribe "The migration for this test currently fails because of MySQL's 64 character limit for identifiers. See https://github.com/yesodweb/persistent/issues/1000 for details" $
+        LongIdentifierTest.specsWith db
 
 roundFn :: RealFrac a => a -> Integer
 roundFn = round

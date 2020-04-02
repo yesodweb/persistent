@@ -7,7 +7,7 @@ cabal-version: 1.12
 -- hash: bef2b585278826bc60fe813d4918833dc06cec43f2a8e4567190448ccfdee163
 
 name:           persistent-qq
-version:        2.9.1
+version:        2.9.1.1
 synopsis:       Provides a quasi-quoter for raw SQL for persistent
 description:    Please see README and API docs at <http://www.stackage.org/package/persistent>.
 category:       Database, Yesod

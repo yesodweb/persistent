@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -7,6 +8,15 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE StandaloneDeriving #-}
+
+-- DeriveAnyClass is not actually used by persistent-template
+-- But a long standing bug was that if it was enabled, it was used to derive instead of GeneralizedNewtypeDeriving
+-- This was fixed by using DerivingStrategies to specify newtype deriving should be used.
+-- This pragma is left here as a "test" that deriving works when DeriveAnyClass is enabled.
+-- See https://github.com/yesodweb/persistent/issues/578
+{-# LANGUAGE DeriveAnyClass #-}
 module Main
   (
   -- avoid unused ident warnings
@@ -22,13 +32,15 @@ import Test.Hspec
 import Test.Hspec.QuickCheck
 import Test.QuickCheck.Arbitrary
 import Test.QuickCheck.Gen (Gen)
+import GHC.Generics (Generic)
 
 import Database.Persist
+import Database.Persist.Sql
 import Database.Persist.TH
 import TemplateTestImports
 
 
-share [mkPersist sqlSettings { mpsGeneric = False }, mkDeleteCascade sqlSettings { mpsGeneric = False }] [persistUpperCase|
+share [mkPersist sqlSettings { mpsGeneric = False, mpsDeriveInstances = [''Generic] }, mkDeleteCascade sqlSettings { mpsGeneric = False }] [persistUpperCase|
 Person json
     name Text
     age Int Maybe
@@ -44,6 +56,9 @@ NoJson
     foo Text
     deriving Show Eq
 |]
+
+-- TODO: Derive Generic at the source site to get this unblocked.
+deriving instance Generic (BackendKey SqlBackend)
 
 share [mkPersist sqlSettings { mpsGeneric = False, mpsGenerateLenses = True }] [persistLowerCase|
 Lperson json

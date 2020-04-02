@@ -1,5 +1,21 @@
 # Changelog for persistent-mysql
 
+## 2.10.3
+
+* Compatibility with latest persistent
+
+## 2.10.2.3
+
+* Fix issue with multiple foreign keys on single column. [#1025](https://github.com/yesodweb/persistent/pull/1025)
+
+## 2.10.2.2
+
+* Compatibility with latest persistent-template for test suite [#1002](https://github.com/yesodweb/persistent/pull/1002/files)
+
+## 2.10.2.1
+
+* Changed persistent-mysql to use 'utf8mb4' instead of 'utf8' in migrations [#980](https://github.com/yesodweb/persistent/pull/980) @charukiewicz
+
 ## 2.10.2
 
 * Added support for GHC 8.8 [#977](https://github.com/yesodweb/persistent/pull/977)
