@@ -191,7 +191,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- that this record has multiple unique keys, and suggests that we look for
     -- 'upsertBy' to select the unique key we want.
     upsert
-        :: (MonadIO m, PersistRecordBackend record backend, OnlyOneUniqueKey record, AtLeastOneUniqueKey record)
+        :: (MonadIO m, PersistRecordBackend record backend, OnlyOneUniqueKey record)
         => record
         -- ^ new record to insert
         -> [Update record]
@@ -258,7 +258,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- > |3    |X    |999  |
     -- > +-----+-----+-----+
     upsertBy
-        :: (MonadIO m, PersistRecordBackend record backend, AtLeastOneUniqueKey record)
+        :: (MonadIO m, PersistRecordBackend record backend)
         => Unique record
         -- ^ uniqueness constraint to find by
         -> record
