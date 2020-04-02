@@ -1,5 +1,9 @@
 # Changelog for persistent-mongoDB
 
+## 2.11.0
+
+* Naive implementation of `exists`function from `PersistQueryRead` type class using `count`.
+
 ## 2.10.0.0
 
 * Fix `ninList` filter operator [#1058](https://github.com/yesodweb/persistent/pull/1058)
