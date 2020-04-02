@@ -71,6 +71,7 @@ instance PersistQueryRead SqlBackend where
             case mm of
               Just [PersistBool b]  -> return b
               Just [PersistInt64 i] -> return $ i > 0
+              Just [PersistDouble i] -> return $ (truncate i :: Int64) > 0 -- gb oracle
               Just [PersistByteString i] -> case readInteger i of -- gb mssql
                                               Just (ret,"") -> return $ ret > 0
                                               xs -> error $ "invalid number i["++show i++"] xs[" ++ show xs ++ "]"
