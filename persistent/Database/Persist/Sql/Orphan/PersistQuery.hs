@@ -69,7 +69,11 @@ instance PersistQueryRead SqlBackend where
         withRawQuery sql (getFiltsValues conn filts) $ do
             mm <- CL.head
             case mm of
-              Just [PersistBool b] -> return b
+              Just [PersistBool b]  -> return b
+              Just [PersistInt64 i] -> return $ i > 0
+              Just [PersistByteString i] -> case readInteger i of -- gb mssql
+                                              Just (ret,"") -> return $ ret > 0
+                                              xs -> error $ "invalid number i["++show i++"] xs[" ++ show xs ++ "]"
               Just xs -> error $ "count:invalid sql  return xs["++show xs++"] sql["++show sql++"]"
               Nothing -> error $ "count:invalid sql returned nothing sql["++show sql++"]"
       where
