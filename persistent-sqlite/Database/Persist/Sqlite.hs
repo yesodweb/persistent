@@ -858,6 +858,7 @@ instance (PersistQueryRead b) => PersistQueryRead (RawSqlite b) where
     selectFirst filts opts = withReaderT _persistentBackend $ selectFirst filts opts
     selectKeysRes filts opts = withReaderT _persistentBackend $ selectKeysRes filts opts
     count = withReaderT _persistentBackend . count
+    exists = withReaderT _persistentBackend . exists
 
 instance (PersistQueryWrite b) => PersistQueryWrite (RawSqlite b) where
     updateWhere filts updates = withReaderT _persistentBackend $ updateWhere filts updates

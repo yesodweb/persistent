@@ -558,17 +558,17 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
     old <- getColumns getter entity newcols'
     case partitionEithers old of
         ([], old'') -> do
-            exists <-
+            exists' <-
                 if null old
                     then doesTableExist getter name
                     else return True
-            return $ Right $ migrationText exists old''
+            return $ Right $ migrationText exists' old''
         (errs, _) -> return $ Left errs
   where
     name = entityDB entity
     (newcols', udefs, fdefs) = postgresMkColumns allDefs entity
-    migrationText exists old''
-        | not exists =
+    migrationText exists' old''
+        | not exists' =
             createText newcols fdefs udspair
         | otherwise =
             let (acs, ats) =
@@ -1259,8 +1259,8 @@ mockMigrate allDefs _ entity = fmap (fmap $ map showAlterDb) $ do
         (errs, _) -> return $ Left errs
   where
     name = entityDB entity
-    migrationText exists old'' =
-        if not exists
+    migrationText exists' old'' =
+        if not exists'
             then createText newcols fdefs udspair
             else let (acs, ats) = getAlters allDefs entity (newcols, udspair) old'
                      acs' = map (AlterColumn name) acs
