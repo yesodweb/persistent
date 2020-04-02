@@ -1,5 +1,9 @@
 ## Unreleased changes
 
+## 2.8.3.1
+
+* Use `stock` deriving strategy on generated `Show` instances for `Uniques`. [#1068](https://github.com/yesodweb/persistent/pull/1068)
+
 ## 2.8.3.0
 
 * Add `Lift` instances for the cascade types. [#1060](https://github.com/yesodweb/persistent/pull/1060)
