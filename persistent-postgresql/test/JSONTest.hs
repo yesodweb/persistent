@@ -76,6 +76,21 @@ shouldBeIO x y = liftIO $ shouldBe x y
 assertBoolIO :: MonadIO m => String -> Bool -> m ()
 assertBoolIO s b = liftIO $ assertBool s b
 
+edgeCases :: (Monad m, MonadIO m) => ReaderT SqlBackend m (EdgeCaseKeys TestValue)
+edgeCases = do
+  arrList3K <- insert' $ toJSON [toJSON [String "a"], Number 1]
+  arrList4K <- insert' $ toJSON [String "a", String "b", String "c", String "d"]
+  objEmptyK <- insert' $ object ["" .= Number 9001]
+  objFullK  <- insert' $ object ["a" .= Number 1, "b" .= Number 2
+                                , "c" .= Number 3, "d" .= Number 4 ]
+  return $ EdgeCaseKeys {..}
+
+data EdgeCaseKeys record =
+  EdgeCaseKeys { arrList3K  :: Key record
+               , arrList4K  :: Key record
+               , objEmptyK  :: Key record
+               , objFullK   :: Key record }
+
 data TestDBKeys record =
   TestDBKeys { nulls   :: [Key record]
              , bools   :: [Key record]
@@ -155,7 +170,7 @@ specs =
             vals <- selectList [TestValueJson @>. object ["foo" .= object []]] []
             [objDeepK] `matchKeys`  vals
 
-        it "does'nt match a nested object against a string at the same key" $ db $ do
+        it "doesn't match a nested object against a string at the same key" $ db $ do
             -- {c: 24.986, foo: {deep1: true}} @>. {foo: nope} == False
             vals <- selectList [TestValueJson @>. object ["foo" .= String "nope"]] []
             [] `matchKeys`  vals
@@ -165,7 +180,7 @@ specs =
             vals <- selectList [TestValueJson @>. (object ["foo" .= object ["deep1" .= True]])] []
             [objDeepK] `matchKeys`  vals
 
-        it "does'nt match a nested object when queried with that exact object" $ db $ do
+        it "doesn't match a nested object when queried with that exact object" $ db $ do
             -- {c: 24.986, foo: {deep1: true}} @>. {deep1: true} == False
             vals <- selectList [TestValueJson @>. object ["deep1" .= True]] []
             [] `matchKeys`  vals
@@ -185,7 +200,7 @@ specs =
             vals <- selectList [TestValueJson @>. toJSON [Null, String "b"]] []
             [arrFilledK] `matchKeys` vals
 
-        it "does'nt match list when queried with intersecting list (1 match, 1 diff)" $ db $ do
+        it "doesn't match list when queried with intersecting list (1 match, 1 diff)" $ db $ do
             -- [null, 4, 'b', {}, [], {test: [null], test2: 'yes'}] @>. [null,'d'] == False
             vals <- selectList [TestValueJson @>. toJSON [emptyArr, String "d"]] []
             [] `matchKeys` vals
@@ -193,10 +208,15 @@ specs =
         it "matches list when queried with same list in different order" $ db $ do
             -- [null, 4, 'b', {}, [], {test: [null], test2: 'yes'}] @>.
             -- [[],'b',{test: [null],test2: 'yes'},4,null,{}] == True
-            vals <- selectList [TestValueJson @>. toJSON [emptyArr, String "b", object [ "test" .= [Null], "test2" .= String "yes"], Number 4, Null, Object mempty]] []
+            let queryList =
+                  toJSON [ emptyArr, String "b"
+                         , object [ "test" .= [Null], "test2" .= String "yes"]
+                         , Number 4, Null, Object mempty ]
+
+            vals <- selectList [TestValueJson @>. queryList ] []
             [arrFilledK] `matchKeys` vals
 
-        it "does'nt match list when queried with same list + 1 item" $ db $ do
+        it "doesn't match list when queried with same list + 1 item" $ db $ do
             -- [null,4,'b',{},[],{test:[null],test2:'yes'}] @>.
             -- [null,4,'b',{},[],{test:[null],test2: 'yes'}, false] == False
             let testList =
@@ -217,7 +237,7 @@ specs =
             vals <- selectList [TestValueJson @>. toJSON [object ["test" .= emptyArr]]] []
             [arrFilledK] `matchKeys` vals
 
-        it "does'nt match list with nested list, when queried with a diff. nested list" $ db $ do
+        it "doesn't match list with nested list, when queried with a diff. nested list" $ db $ do
           -- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @>.
           -- [{"test1":[null]}]  == False
           vals <- selectList [TestValueJson @>. toJSON [object ["test1" .= [Null]]]] []
@@ -363,11 +383,11 @@ specs =
           [objNullK,objTestK] `matchKeys` vals
 
         it "matches raw values and sublists when queried with superlist" $ db $ do
-          -- [] <@ [null,4,"b",{},[],{"test":[null],"test2":"yes"},false] == True
-          -- null <@ [null,4,"b",{},[],{"test":[null],"test2":"yes"},false] == True
-          -- false <@ [null,4,"b",{},[],{"test":[null],"test2":"yes"},false] == True
+          -- []    <@. [null,4,"b",{},[],{"test":[null],"test2":"yes"},false] == True
+          -- null  <@. [null,4,"b",{},[],{"test":[null],"test2":"yes"},false] == True
+          -- false <@. [null,4,"b",{},[],{"test":[null],"test2":"yes"},false] == True
 
-          -- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] <@
+          -- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] <@.
           -- [null,4,"b",{},[],{"test":[null],"test2":"yes"},false] == True
 
           let queryList =
@@ -379,7 +399,7 @@ specs =
           [arrNullK,arrFilledK,boolFK,nullK] `matchKeys` vals
 
         it "matches identical strings" $ db $ do
-          -- "a" <@ "a" == True
+          -- "a" <@. "a" == True
           vals <- selectList [TestValueJson <@. String "a"] []
           [strAK] `matchKeys` vals
 
@@ -389,68 +409,97 @@ specs =
           vals <- selectList [TestValueJson <@. Number 9876543210.123457] []
           [numBigFloatK] `matchKeys` vals
 
-        it "does not match different big floats" $ db $ do
-          -- 9876543210.123457 <@ 9876543210.123456789 == False
+        it "doesn't match different big floats" $ db $ do
+          -- 9876543210.123457 <@. 9876543210.123456789 == False
           vals <- selectList [TestValueJson <@. Number 9876543210.123456789] []
           [] `matchKeys` vals
 
         it "matches nulls" $ db $ do
-          -- null <@ null == True
+          -- null <@. null == True
           vals <- selectList [TestValueJson <@. Null] []
           [nullK] `matchKeys` vals
 
-    ------------------------------------------------------------------------------------------
+      describe "?. queries" $ do
 
-          --liftIO $ putStrLn "\n- - - - -  Starting ? tests  - - - - -\n"
+        -- let [ arrList3K, arrList4K, objEmptyK, objFullK ] = edgeCases
 
-          --arrList3K <- insert' $ toJSON [toJSON [String "a"], Number 1]
-          --arrList4K <- insert' $ toJSON [String "a", String "b", String "c", String "d"]
-          --objEmptyK <- insert' $ object ["" .= Number 9001]
-          --objFullK  <- insert' $ object ["a" .= Number 1, "b" .= Number 2, "c" .= Number 3, "d" .= Number 4]
+        it "matches top level keys and not the keys of nested objects" $ db $ do
+          void $ edgeCases
 
-          ---- {"test":null,"test1":"no"}                       ? "test" == True
-          ---- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] ? "test" == False
-          --selectList [TestValueJson ?. "test"] []
-          --  >>= matchKeys "45" [objTestK]
+          -- {"test":null,"test1":"no"}                       ? "test" == True
+          -- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] ? "test" == False
 
-          ---- {"c":24.986,"foo":{"deep1":true"}} ? "deep1" == False
-          --selectList [TestValueJson ?. "deep1"] []
-          --  >>= matchKeys "46" []
+          vals <- selectList [TestValueJson ?. "test"] []
+          [objTestK] `matchKeys` vals
 
-          ---- "{}" ? "{}" == True
-          ---- {}   ? "{}" == False
-          --selectList [TestValueJson ?. "{}"] []
-          --  >>= matchKeys "47" [strObjK]
+        it "doesn't match nested key" $ db $ do
+          void $ edgeCases
+
+          -- {"c":24.986,"foo":{"deep1":true"}} ? "deep1" == False
+
+          vals <- selectList [TestValueJson ?. "deep1"] []
+          [] `matchKeys` vals
+
+        it "matches \"{}\" but not empty object when queried with \"{}\"" $ db $ do
+          void $ edgeCases
+
+          -- "{}" ? "{}" == True
+          -- {}   ? "{}" == False
+
+          vals <- selectList [TestValueJson ?. "{}"] []
+          [strObjK] `matchKeys` vals
+
+        it "matches raw empty str and empty str key when queried with \"\"" $ db $ do
+          EdgeCaseKeys {..} <- edgeCases
 
           ---- {}        ? "" == False
           ---- ""        ? "" == True
           ---- {"":9001} ? "" == True
-          --selectList [TestValueJson ?. ""] []
-          --  >>= matchKeys "48" [strNullK,objEmptyK]
 
-          ---- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] ? "b" == True
-          --selectList [TestValueJson ?. "b"] []
-          --  >>= matchKeys "49" [arrFilledK,arrList4K,objFullK]
+          vals <- selectList [TestValueJson ?. ""] []
+          [strNullK,objEmptyK] `matchKeys` vals
 
-          ---- [["a"]]                   ? "a" == False
-          ---- "a"                       ? "a" == True
-          ---- ["a","b","c","d"]         ? "a" == True
-          ---- {"a":1,"b":2,"c":3,"d":4} ? "a" == True
-          --selectList [TestValueJson ?. "a"] []
-          --  >>= matchKeys "50" [strAK,arrList4K,objFullK]
+        it "matches lists containing string value when queried with raw string value" $ db $ do
+          EdgeCaseKeys {..} <- edgeCases
 
-          ---- "[]" ? "[]" == True
-          ---- []   ? "[]" == False
-          --selectList [TestValueJson ?. "[]"] []
-          --  >>= matchKeys "51" [strArrK]
+          -- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] ? "b" == True
+          vals <- selectList [TestValueJson ?. "b"] []
+          [arrFilledK,arrList4K,objFullK] `matchKeys` vals
 
-          ---- null ? "null" == False
-          --selectList [TestValueJson ?. "null"] []
-          --  >>= matchKeys "52" []
+        it "matches lists, objects, and raw values correctly when queried with string" $ db $ do
+          EdgeCaseKeys {..} <- edgeCases
 
-          ---- true ? "true" == False
-          --selectList [TestValueJson ?. "true"] []
-          --  >>= matchKeys "53" []
+          -- [["a"]]                   ? "a" == False
+          -- "a"                       ? "a" == True
+          -- ["a","b","c","d"]         ? "a" == True
+          -- {"a":1,"b":2,"c":3,"d":4} ? "a" == True
+
+          vals <- selectList [TestValueJson ?. "a"] []
+          [strAK,arrList4K,objFullK] `matchKeys` vals
+
+        it "matches string list but not real list when queried with \"[]\"" $ db $ do
+          EdgeCaseKeys {..} <- edgeCases
+
+          -- "[]" ? "[]" == True
+          -- []   ? "[]" == False
+
+          vals <- selectList [TestValueJson ?. "[]"] []
+          [strArrK] `matchKeys` vals
+
+        it "does not match null when queried with string null" $ db $ do
+          void $ edgeCases
+
+          -- null ? "null" == False
+          vals <- selectList [TestValueJson ?. "null"] []
+          [] `matchKeys` vals
+
+        it "does not match bool whe nqueried with string bool" $ db $ do
+          void $ edgeCases
+
+          -- true ? "true" == False
+
+          vals <- selectList [TestValueJson ?. "true"] []
+          [] `matchKeys` vals
 
     ------------------------------------------------------------------------------------------
 
