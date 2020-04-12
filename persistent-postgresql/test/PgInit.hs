@@ -4,11 +4,11 @@
 module PgInit (
   runConn
   , runConn_
+  , runConnAssert
 
   , MonadIO
   , persistSettings
   , MkPersistSettings (..)
-  , db
   , BackendKey(..)
   , GenerateKey(..)
 
@@ -100,8 +100,8 @@ runConn_ f = do
         host <- fromMaybe "localhost" <$> liftIO dockerPg
         withPostgresqlPool ("host=" <> host <> " port=5432 user=postgres dbname=test") 1 $ runSqlPool f
 
-db :: SqlPersistT (LoggingT (ResourceT IO)) () -> Assertion
-db actions = do
+runConnAssert :: SqlPersistT (LoggingT (ResourceT IO)) () -> Assertion
+runConnAssert actions = do
   runResourceT $ runConn $ actions >> transactionUndo
 
 instance Arbitrary Value where

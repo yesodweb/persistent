@@ -160,68 +160,68 @@ specs = afterAll_ teardown $ do
     describe "Testing JSON operators" $ do
       describe "@>. object queries" $ do
         it "matches an empty Object with any object" $
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. Object mempty] []
             [objNullK, objTestK, objDeepK, objEmptyK, objFullK] `matchKeys`  vals
 
         it "matches a subset of object properties" $
             -- {test: null, test1: no} @>. {test: null} == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. object ["test" .= Null]] []
             [objTestK] `matchKeys`  vals
 
         it "matches a nested object against an empty object at the same key" $
             -- {c: 24.986, foo: {deep1: true}} @>. {foo: {}} == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. object ["foo" .= object []]] []
             [objDeepK] `matchKeys`  vals
 
         it "doesn't match a nested object against a string at the same key" $
             -- {c: 24.986, foo: {deep1: true}} @>. {foo: nope} == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. object ["foo" .= String "nope"]] []
             [] `matchKeys`  vals
 
         it "matches a nested object when the query object is identical" $
             -- {c: 24.986, foo: {deep1: true}} @>. {foo: {deep1: true}} == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. (object ["foo" .= object ["deep1" .= True]])] []
             [objDeepK] `matchKeys`  vals
 
         it "doesn't match a nested object when queried with that exact object" $
             -- {c: 24.986, foo: {deep1: true}} @>. {deep1: true} == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. object ["deep1" .= True]] []
             [] `matchKeys`  vals
 
       describe "@>. array queries" $ do
         it "matches an empty Array with any list" $
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. emptyArr] []
             [arrNullK, arrListK, arrList2K, arrFilledK, arrList3K, arrList4K] `matchKeys`  vals
 
         it "matches list when queried with subset (1 item)" $
             -- [null, 4, 'b', {}, [], {test: [null], test2: 'yes'}] @>. [4] == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. toJSON [4 :: Int]] []
             [arrFilledK] `matchKeys` vals
 
         it "matches list when queried with subset (2 items)" $
             -- [null, 4, 'b', {}, [], {test: [null], test2: 'yes'}] @>. [null,'b'] == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. toJSON [Null, String "b"]] []
             [arrFilledK] `matchKeys` vals
 
         it "doesn't match list when queried with intersecting list (1 match, 1 diff)" $
             -- [null, 4, 'b', {}, [], {test: [null], test2: 'yes'}] @>. [null,'d'] == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. toJSON [emptyArr, String "d"]] []
             [] `matchKeys` vals
 
         it "matches list when queried with same list in different order" $
             -- [null, 4, 'b', {}, [], {test: [null], test2: 'yes'}] @>.
             -- [[],'b',{test: [null],test2: 'yes'},4,null,{}] == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             let queryList =
                   toJSON [ emptyArr, String "b"
                          , object [ "test" .= [Null], "test2" .= String "yes"]
@@ -233,7 +233,7 @@ specs = afterAll_ teardown $ do
         it "doesn't match list when queried with same list + 1 item" $
             -- [null,4,'b',{},[],{test:[null],test2:'yes'}] @>.
             -- [null,4,'b',{},[],{test:[null],test2: 'yes'}, false] == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             let testList =
                   toJSON [ Null, Number 4, String "b", Object mempty, emptyArr
                          , object [ "test" .= [Null], "test2" .= String "yes"]
@@ -244,20 +244,20 @@ specs = afterAll_ teardown $ do
 
         it "matches list when it shares an empty object with the query list" $
             -- [null,4,'b',{},[],{test: [null],test2: 'yes'}] @>. [{}] == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. toJSON [Object mempty]] []
             [arrFilledK] `matchKeys` vals
 
         it "matches list with nested list, when queried with an empty nested list" $
             -- [null,4,'b',{},[],{test:[null],test2:'yes'}] @>. [{test:[]}] == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. toJSON [object ["test" .= emptyArr]]] []
             [arrFilledK] `matchKeys` vals
 
         it "doesn't match list with nested list, when queried with a diff. nested list" $
             -- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @>.
             -- [{"test1":[null]}]  == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. toJSON [object ["test1" .= [Null]]]] []
             [] `matchKeys` vals
 
@@ -265,50 +265,50 @@ specs = afterAll_ teardown $ do
             -- [[],[],[[],[]]]                                  @>. [[]] == True
             -- [[],[3,false],[[],[{}]]]                         @>. [[]] == True
             -- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @>. [[]] == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. toJSON [emptyArr]] []
             [arrListK,arrList2K,arrFilledK, arrList3K] `matchKeys` vals
 
         it "matches nested list when queried with a subset of that list" $
             -- [[],[3,false],[[],[{}]]] @>. [[3]] == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. toJSON [[3 :: Int]]] []
             [arrList2K] `matchKeys` vals
 
         it "doesn't match nested list againts a partial intersection of that list" $
             -- [[],[3,false],[[],[{}]]] @>. [[true,3]] == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. toJSON [[Bool True, Number 3]]] []
             [] `matchKeys` vals
 
         it "matches list when queried with raw number contained in the list" $
             -- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @>. 4 == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. Number 4] []
             [arrFilledK] `matchKeys` vals
 
         it "doesn't match list when queried with raw value not contained in the list" $
             -- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @>. 99 == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
           vals <- selectList [TestValueJson @>. Number 99] []
           [] `matchKeys` vals
 
         it "matches list when queried with raw string contained in the list" $
             -- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @>. "b" == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. String "b"] []
             [arrFilledK, arrList4K] `matchKeys` vals
 
         it "doesn't match list with empty object when queried with \"{}\" " $
             -- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @>. "{}" == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. String "{}"] []
             [strObjK] `matchKeys` vals
 
         it "doesnt match list with nested object when queried with object (not in list)" $
             -- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @>.
             -- {"test":[null],"test2":"yes"} == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             let queryObject = object [ "test" .= [Null], "test2" .= String "yes"]
             vals <- selectList [TestValueJson @>. queryObject ] []
             [] `matchKeys` vals
@@ -316,25 +316,25 @@ specs = afterAll_ teardown $ do
       describe "@>. string queries" $ do
         it "matches identical strings" $
             -- "testing" @>. "testing" == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. String "testing"] []
             [strTestK] `matchKeys` vals
 
         it "doesnt match case insensitive" $
             -- "testing" @>. "Testing" == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. String "Testing"] []
             [] `matchKeys` vals
 
         it "doesn't match substrings" $
             -- "testing" @>. "test" == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. String "test"] []
             [] `matchKeys` vals
 
         it "doesn't match strings with object keys" $
             -- "testing" @>. {"testing":1} == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. object ["testing" .= Number 1]] []
             [] `matchKeys` vals
 
@@ -342,38 +342,38 @@ specs = afterAll_ teardown $ do
         it "matches identical numbers" $
             -- 1   @>. 1 == True
             -- [1] @>. 1 == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. toJSON (1 :: Int)] []
             [num1K, arrList3K] `matchKeys` vals
 
         it "matches numbers when queried with float" $
             -- 0 @>. 0.0 == True
             -- 0.0 @>. 0.0 == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. toJSON (0.0 :: Double)] []
             [num0K,numFloatK] `matchKeys` vals
 
         it "does not match numbers when queried with a substring of that number" $
             -- 1234567890 @>. 123456789 == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. toJSON (123456789 :: Int)] []
             [] `matchKeys` vals
 
         it "does not match number when queried with different number" $
             -- 1234567890 @>. 234567890 == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. toJSON (234567890 :: Int)] []
             [] `matchKeys` vals
 
         it "does not match number when queried with string of that number" $
             -- 1 @>. "1" == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. String "1"] []
             [] `matchKeys` vals
 
         it "does not match number when queried with list of digits" $
             -- 1234567890 @>. [1,2,3,4,5,6,7,8,9,0] == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. toJSON ([1,2,3,4,5,6,7,8,9,0] :: [Int])] []
             [] `matchKeys` vals
 
@@ -381,33 +381,33 @@ specs = afterAll_ teardown $ do
         it "matches identical booleans (True)" $
             -- true @>. true == True
             -- false @>. true == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. toJSON True] []
             [boolTK] `matchKeys` vals
 
         it "matches identical booleans (False)" $
             -- false @>. false == True
             -- true @>. false == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. Bool False] []
             [boolFK] `matchKeys` vals
 
         it "does not match boolean with string of boolean" $
             -- true @>. "true" == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. String "true"] []
             [] `matchKeys` vals
 
       describe "@>. null queries" $ do
         it "matches nulls" $
             -- null @>. null == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. Null] []
             [nullK,arrFilledK] `matchKeys` vals
 
         it "does not match null with string of null" $
             -- null @>. "null" == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson @>. String "null"] []
             [] `matchKeys` vals
 
@@ -416,7 +416,7 @@ specs = afterAll_ teardown $ do
         it "matches subobject when queried with superobject" $
             -- {}                         <@. {"test":null,"test1":"no","blabla":[]} == True
             -- {"test":null,"test1":"no"} <@. {"test":null,"test1":"no","blabla":[]} == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             let queryObject = object ["test" .= Null
                                      , "test1" .= String "no"
                                      , "blabla" .= emptyArr
@@ -430,7 +430,7 @@ specs = afterAll_ teardown $ do
             -- false <@. [null,4,"b",{},[],{"test":[null],"test2":"yes"},false] == True
             -- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] <@.
             -- [null,4,"b",{},[],{"test":[null],"test2":"yes"},false] == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             let queryList =
                   toJSON [ Null, Number 4, String "b", Object mempty, emptyArr
                          , object [ "test" .= [Null], "test2" .= String "yes"]
@@ -441,25 +441,25 @@ specs = afterAll_ teardown $ do
 
         it "matches identical strings" $
             -- "a" <@. "a" == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson <@. String "a"] []
             [strAK] `matchKeys` vals
 
         it "matches identical big floats" $
             -- 9876543210.123457 <@ 9876543210.123457 == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson <@. Number 9876543210.123457] []
             [numBigFloatK] `matchKeys` vals
 
         it "doesn't match different big floats" $
             -- 9876543210.123457 <@. 9876543210.123456789 == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson <@. Number 9876543210.123456789] []
             [] `matchKeys` vals
 
         it "matches nulls" $
             -- null <@. null == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson <@. Null] []
             [nullK] `matchKeys` vals
 
@@ -467,20 +467,20 @@ specs = afterAll_ teardown $ do
         it "matches top level keys and not the keys of nested objects" $
             -- {"test":null,"test1":"no"}                       ?. "test" == True
             -- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] ?. "test" == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson ?. "test"] []
             [objTestK] `matchKeys` vals
 
         it "doesn't match nested key" $
             -- {"c":24.986,"foo":{"deep1":true"}} ?. "deep1" == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson ?. "deep1"] []
             [] `matchKeys` vals
 
         it "matches \"{}\" but not empty object when queried with \"{}\"" $
             -- "{}" ?. "{}" == True
             -- {}   ?. "{}" == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson ?. "{}"] []
             [strObjK] `matchKeys` vals
 
@@ -488,13 +488,13 @@ specs = afterAll_ teardown $ do
             ---- {}        ?. "" == False
             ---- ""        ?. "" == True
             ---- {"":9001} ?. "" == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson ?. ""] []
             [strNullK,objEmptyK] `matchKeys` vals
 
         it "matches lists containing string value when queried with raw string value" $
             -- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] ?. "b" == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson ?. "b"] []
             [arrFilledK,arrList4K,objFullK] `matchKeys` vals
 
@@ -503,26 +503,26 @@ specs = afterAll_ teardown $ do
             -- "a"                       ?. "a" == True
             -- ["a","b","c","d"]         ?. "a" == True
             -- {"a":1,"b":2,"c":3,"d":4} ?. "a" == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson ?. "a"] []
             [strAK,arrList4K,objFullK] `matchKeys` vals
 
         it "matches string list but not real list when queried with \"[]\"" $
             -- "[]" ?. "[]" == True
             -- []   ?. "[]" == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson ?. "[]"] []
             [strArrK] `matchKeys` vals
 
         it "does not match null when queried with string null" $
             -- null ?. "null" == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson ?. "null"] []
             [] `matchKeys` vals
 
         it "does not match bool whe nqueried with string bool" $
             -- true ?. "true" == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson ?. "true"] []
             [] `matchKeys` vals
 
@@ -534,14 +534,14 @@ specs = afterAll_ teardown $ do
             -- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] ?|. ["a","b","c"] == True
             -- ["a","b","c","d"]                                ?|. ["a","b","c"] == True
             -- {"a":1,"b":2,"c":3,"d":4}                        ?|. ["a","b","c"] == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson ?|. ["a","b","c"]] []
             [strAK,arrFilledK,objDeepK,arrList4K,objFullK] `matchKeys` vals
 
         it "matches str object but not object when queried with \"{}\"" $
             -- "{}"  ?|. ["{}"] == True
             -- {}    ?|. ["{}"] == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson ?|. ["{}"]] []
             [strObjK] `matchKeys` vals
 
@@ -549,19 +549,19 @@ specs = afterAll_ teardown $ do
             -- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] ?|. ["test"] == False
             -- "testing"                                        ?|. ["test"] == False
             -- {"test":null,"test1":"no"}                       ?|. ["test"] == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson ?|. ["test"]] []
             [objTestK] `matchKeys` vals
 
         it "doesn't match nested keys" $
             -- {"c":24.986,"foo":{"deep1":true"}} ?|. ["deep1"] == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson ?|. ["deep1"]] []
             [] `matchKeys` vals
 
         it "doesn't match anything when queried with empty list" $
             -- ANYTHING ?|. [] == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson ?|. []] []
             [] `matchKeys` vals
 
@@ -569,21 +569,21 @@ specs = afterAll_ teardown $ do
             -- true ?|. ["true","null","1"] == False
             -- null ?|. ["true","null","1"] == False
             -- 1    ?|. ["true","null","1"] == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson ?|. ["true","null","1"]] []
             [] `matchKeys` vals
 
         it "matches string array when queried with \"[]\"" $
             -- []   ?|. ["[]"] == False
             -- "[]" ?|. ["[]"] == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson ?|. ["[]"]] []
             [strArrK] `matchKeys` vals
 
       describe "?&. queries" $ do
         it "matches anything when queried with an empty list" $
             -- ANYTHING ?&. [] == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson ?&. []] []
             flip matchKeys vals [ nullK
                                 , boolTK, boolFK
@@ -602,7 +602,7 @@ specs = afterAll_ teardown $ do
             -- [["a"],1]                 ?&. ["a"] == False
             -- ["a","b","c","d"]         ?&. ["a"] == True
             -- {"a":1,"b":2,"c":3,"d":4} ?&. ["a"] == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson ?&. ["a"]] []
             [strAK,arrList4K,objFullK] `matchKeys` vals
 
@@ -611,14 +611,14 @@ specs = afterAll_ teardown $ do
             -- {"c":24.986,"foo":{"deep1":true"}}               ?&. ["b","c"] == False
             -- ["a","b","c","d"]                                ?&. ["b","c"] == True
             -- {"a":1,"b":2,"c":3,"d":4}                        ?&. ["b","c"] == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson ?&. ["b","c"]] []
             [arrList4K,objFullK] `matchKeys` vals
 
         it "matches object string when queried with \"{}\"" $
             -- {}   ?&. ["{}"] == False
             -- "{}" ?&. ["{}"] == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson ?&. ["{}"]] []
             [strObjK] `matchKeys` vals
 
@@ -626,13 +626,13 @@ specs = afterAll_ teardown $ do
             -- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] ?&. ["test"] == False
             -- "testing"                                        ?&. ["test"] == False
             -- {"test":null,"test1":"no"}                       ?&. ["test"] == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson ?&. ["test"]] []
             [objTestK] `matchKeys` vals
 
         it "doesn't match nested keys" $
             -- {"c":24.986,"foo":{"deep1":true"}} ?&. ["deep1"] == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson ?&. ["deep1"]] []
             [] `matchKeys` vals
 
@@ -640,14 +640,14 @@ specs = afterAll_ teardown $ do
             -- "a"                       ?&. ["a","e"] == False
             -- ["a","b","c","d"]         ?&. ["a","e"] == False
             -- {"a":1,"b":2,"c":3,"d":4} ?&. ["a","e"] == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson ?&. ["a","e"]] []
             [] `matchKeys` vals
 
         it "matches string array when queried with \"[]\"" $
             -- []   ?&. ["[]"] == False
             -- "[]" ?&. ["[]"] == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson ?&. ["[]"]] []
             [strArrK] `matchKeys` vals
 
@@ -657,14 +657,14 @@ specs = afterAll_ teardown $ do
             -- INSTEAD OF
             -- @ ARRAY['null'] @
             -- null ?&. ["null"] == False
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson ?&. ["null"]] []
             [] `matchKeys` vals
 
         it "doesn't match number when queried with str of that number" $
             -- [["a"],1] ?&. ["1"] == False
             -- "1"       ?&. ["1"] == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
           str1 <- insert' $ toJSON $ String "1"
           vals <- selectList [TestValueJson ?&. ["1"]] []
           [str1] `matchKeys` vals
@@ -674,6 +674,6 @@ specs = afterAll_ teardown $ do
             -- []        ?&. [""] == False
             -- ""        ?&. [""] == True
             -- {"":9001} ?&. [""] == True
-          \TestKeys {..} -> db $ do
+          \TestKeys {..} -> runConnAssert $ do
             vals <- selectList [TestValueJson ?&. [""]] []
             [strNullK,objEmptyK] `matchKeys` vals

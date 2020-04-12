@@ -13,7 +13,6 @@
 module CustomConstraintTest where
 
 import PgInit
-import Control.Monad.IO.Unlift
 import qualified Data.Text as T
 
 share [mkPersist sqlSettings, mkMigrate "customConstraintMigrate"] [persistLowerCase|
@@ -32,10 +31,10 @@ CustomConstraint3
     deriving Show
 |]
 
-specs :: (MonadUnliftIO m, MonadFail m) => RunDb SqlBackend m -> Spec
-specs runDb = do
+specs :: Spec
+specs = do
   describe "custom constraint used in migration" $ do
-    it "custom constraint is actually created" $ runDb $ do
+    it "custom constraint is actually created" $ runConnAssert $ do
       void $ runMigrationSilent customConstraintMigrate
       void $ runMigrationSilent customConstraintMigrate -- run a second time to ensure the constraint isn't dropped
       let query = T.concat ["SELECT DISTINCT COUNT(*) "
@@ -58,10 +57,10 @@ specs runDb = do
                                       ,PersistText "custom_constraint"]
       liftIO $ 1 @?= (exists :: Int)
 
-    it "allows multiple constraints on a single column" $ runDb $ do
-      runMigrationSilent customConstraintMigrate
+    it "allows multiple constraints on a single column" $ runConnAssert $ do
+      void $ runMigrationSilent customConstraintMigrate
       -- | Here we add another foreign key on the same column where the default one already exists. In practice, this could be a compound key with another field.
       rawExecute "ALTER TABLE \"custom_constraint3\" ADD CONSTRAINT \"extra_constraint\" FOREIGN KEY(\"cc_id1\") REFERENCES \"custom_constraint1\"(\"id\")" []
       -- | This is where the error is thrown in `getColumn`
-      _ <- getMigration customConstraintMigrate
+      void $ getMigration customConstraintMigrate
       pure ()
