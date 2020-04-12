@@ -294,47 +294,56 @@ specs =
           [] `matchKeys` vals
 
       describe "@>. number queries" $ do
-        return ()
-          ---- 1 @> 1 == True
-          --selectList [TestValueJson @>. toJSON (1 :: Int)] []
-          --  >>= matchKeys "28" [num1K]
 
-          ---- 0 @> 0.0 == True
-          ---- 0.0 @> 0.0 == True
-          --selectList [TestValueJson @>. toJSON (0.0 :: Double)] []
-          --  >>= matchKeys "29" [num0K,numFloatK]
+        it "matches identical numbers" $ db $ do
+          -- 1 @> 1 == True
+          vals <- selectList [TestValueJson @>. toJSON (1 :: Int)] []
+          [num1K] `matchKeys` vals
 
-          ---- 1234567890 @> 123456789 == False
-          --selectList [TestValueJson @>. toJSON (123456789 :: Int)] []
-          --  >>= matchKeys "30" []
+        it "matches numbers when queried with float" $ db $ do
+          -- 0 @> 0.0 == True
+          -- 0.0 @> 0.0 == True
+          vals <- selectList [TestValueJson @>. toJSON (0.0 :: Double)] []
+          [num0K,numFloatK] `matchKeys` vals
 
-          ---- 1234567890 @> 234567890 == False
-          --selectList [TestValueJson @>. toJSON (234567890 :: Int)] []
-          --  >>= matchKeys "31" []
+        it "does not match numbers when queried with a substring of that number" $ db $ do
+          -- 1234567890 @> 123456789 == False
+          vals <- selectList [TestValueJson @>. toJSON (123456789 :: Int)] []
+          [] `matchKeys` vals
 
-          ---- 1 @> "1" == False
-          --selectList [TestValueJson @>. String "1"] []
-          --  >>= matchKeys "32" []
+        it "does not match number when queried with different number" $ db $ do
+          -- 1234567890 @> 234567890 == False
+          vals <- selectList [TestValueJson @>. toJSON (234567890 :: Int)] []
+          [] `matchKeys` vals
 
-          ---- 1234567890 @> [1,2,3,4,5,6,7,8,9,0] == False
-          --selectList [TestValueJson @>. toJSON ([1,2,3,4,5,6,7,8,9,0] :: [Int])] []
-          --  >>= matchKeys "33" []
+        it "does not match number when queried with string of that number" $ db $ do
+          -- 1 @> "1" == False
+          vals <- selectList [TestValueJson @>. String "1"] []
+          [] `matchKeys` vals
+
+        it "does not match number when queried with list of digits" $ db $ do
+          -- 1234567890 @> [1,2,3,4,5,6,7,8,9,0] == False
+          vals <- selectList [TestValueJson @>. toJSON ([1,2,3,4,5,6,7,8,9,0] :: [Int])] []
+          [] `matchKeys` vals
 
       describe "@>. boolean queries" $ do
-        return ()
-          ---- true @> true == True
-          ---- false @> true == False
-          --selectList [TestValueJson @>. toJSON True] []
-          --  >>= matchKeys "34" [boolTK]
 
-          ---- false @> false == True
-          ---- true @> false == False
-          --selectList [TestValueJson @>. Bool False] []
-          --  >>= matchKeys "35" [boolFK]
+        it "matches identical booleans (True)" $ db $ do
+          -- true @> true == True
+          -- false @> true == False
+          vals <- selectList [TestValueJson @>. toJSON True] []
+          [boolTK] `matchKeys` vals
 
-          ---- true @> "true" == False
-          --selectList [TestValueJson @>. String "true"] []
-          --  >>= matchKeys "36" []
+        it "matches identical booleans (False)" $ db $ do
+          -- false @> false == True
+          -- true @> false == False
+          vals <- selectList [TestValueJson @>. Bool False] []
+          [boolFK] `matchKeys` vals
+
+        it "does not match boolean with string of boolean" $ db $ do
+          -- true @> "true" == False
+          vals <- selectList [TestValueJson @>. String "true"] []
+          [] `matchKeys` vals
 
       describe "@>. null queries" $ do
         return ()
