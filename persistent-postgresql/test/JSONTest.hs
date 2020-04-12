@@ -15,7 +15,6 @@
 module JSONTest where
 
 import Control.Monad.IO.Class (MonadIO)
-import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Data.Aeson
 import qualified Data.Vector as V (fromList)
 import Test.HUnit (assertBool)
@@ -89,16 +88,15 @@ data TestDBKeys record =
              , arrays  :: [Key record]
              , objects :: [Key record] }
 
--- $> :t asIO
-
-specs :: (MonadUnliftIO m, MonadFail m, MonadIO m) => RunDb SqlBackend m -> Spec
-specs runDb =
+specs :: Spec
+specs =
     describe "tests for @>. operator"
     $ beforeAll migrateJSON
     $ before preHook
     $ afterAll_ cleanUp $ do
 
-      keys <- runIO $ runConn_ $ do
+      -- Setup DB and get ahold of keys
+      TestDBKeys {..} <- runIO $ runConn_ $ do
           nullK <- insert' Null
           let nulls = [nullK]
 
@@ -139,99 +137,52 @@ specs runDb =
           let objects = [ objNullK, objTestK, objDeepK ]
           return TestDBKeys{..}
 
-      it "matches an empty Object with any object" $ runDb $ do
+      let [ nullK ] = nulls
+      let [ boolTK, boolFK ] = bools
+      let [ num0K, num1K, numBigK, numFloatK, numSmallK, numFloat2K, numBigFloatK ] = numbers
+      let [ strNullK, strObjK, strArrK, strAK, strTestK, str2K, strFloatK ] = strings
+      let [ arrNullK, arrListK, arrList2K, arrFilledK ] = arrays
+      let [ objNullK, objTestK, objDeepK ] = objects
+
+      it "matches an empty Object with any object" $ db $ do
           vals <- selectList [TestValueJson @>. Object mempty] []
-          matchKeys (objects keys) vals
+          objects `matchKeys`  vals
 
-      it "{test: null, test1: no} @>. {test: null} == True" $ runDb $ do
-          cleanDB
-          objTestK <- insert' $ object ["test" .= Null, "test1" .= String "no"]
-
+      it "{test: null, test1: no} @>. {test: null} == True" $ db $ do
           vals <- selectList [TestValueJson @>. object ["test" .= Null]] []
-          matchKeys [objTestK] vals
+          [objTestK] `matchKeys`  vals
 
-      xit "migrate, clean table, insert values and check queries" $ asIO $ runConn $ do
+      it "{c: 24.986, foo: {deep1: true}} @>. {foo: {}} == True" $ db $ do
+          vals <- selectList [TestValueJson @>. object ["foo" .= object []]] []
+          [objDeepK] `matchKeys`  vals
 
-          -- void $ runMigrationSilent jsonTestMigrate
-          -- cleanDB
+      it "{c: 24.986, foo: {deep1: true}} @> {foo: nope} == False" $ db $ do
+          vals <- selectList [TestValueJson @>. object ["foo" .= String "nope"]] []
+          [] `matchKeys`  vals
 
-          -- liftIO $ putStrLn "\n- - - - -  Inserting JSON values  - - - - -\n"
+      it "{c: 24.986, foo: {deep1: true}} @> {foo: {deep1: true}} == True" $ db $ do
+          vals <- selectList [TestValueJson @>. (object ["foo" .= object ["deep1" .= True]])] []
+          [objDeepK] `matchKeys`  vals
 
-          -- nullK <- insert' Null
+      it "{c: 24.986, foo: {deep1: true}} @> {deep1: true} == False" $ db $ do
+          vals <- selectList [TestValueJson @>. object ["deep1" .= True]] []
+          [] `matchKeys`  vals
 
-          -- boolTK <- insert' $ Bool True
-          -- boolFK <- insert' $ toJSON False
+      it "matches an empty Array with any array" $ db $ do
+          vals <- selectList [TestValueJson @>. emptyArr] []
+          arrays `matchKeys`  vals
 
-          -- num0K <- insert' $ Number 0
-          -- num1K <- insert' $ Number 1
-          -- numBigK <- insert' $ toJSON (1234567890 :: Int)
-          -- numFloatK <- insert' $ Number 0.0
-          -- numSmallK <- insert' $ Number 0.0000000000000000123
-          -- numFloat2K <- insert' $ Number 1.5
-          -- -- numBigFloatK will turn into 9876543210.123457 because JSON
-          -- numBigFloatK <- insert' $ toJSON (9876543210.123456789 :: Double)
+      it "[null, 4, 'b', {}, [], {test: [null], test2: 'yes'}] @> [4] == True" $ db $ do
+          vals <- selectList [TestValueJson @>. toJSON [4 :: Int]] []
+          [arrFilledK] `matchKeys` vals
 
-          -- strNullK <- insert' $ String ""
-          -- strObjK <- insert' $ String "{}"
-          -- strArrK <- insert' $ String "[]"
-          -- strAK <- insert' $ String "a"
-          -- strTestK <- insert' $ toJSON ("testing" :: Text)
-          -- str2K <- insert' $ String "2"
-          -- strFloatK <- insert' $ String "0.45876"
+      it "[null, 4, 'b', {}, [], {test: [null], test2: 'yes'}] @> [null,'b'] == True" $ db $ do
+          vals <- selectList [TestValueJson @>. toJSON [Null, String "b"]] []
+          [arrFilledK] `matchKeys` vals
 
-          -- arrNullK <- insert' $ Array $ V.fromList []
-          -- arrListK <- insert' $ toJSON ([emptyArr,emptyArr,toJSON [emptyArr,emptyArr]])
-          -- arrList2K <- insert' $ toJSON [emptyArr,toJSON [Number 3,Bool False],toJSON [emptyArr,toJSON [Object mempty]]]
-          -- arrFilledK <- insert' $ toJSON [Null, Number 4, String "b", Object mempty, emptyArr, object [ "test" .= [Null], "test2" .= String "yes"]]
-
-          -- objNullK <- insert' $ Object mempty
-          -- objTestK <- insert' $ object ["test" .= Null, "test1" .= String "no"]
-          -- objDeepK <- insert' $ object ["c" .= Number 24.986, "foo" .= object ["deep1" .= Bool True]]
-
-          return ()
-    ----------------------------------------------------------------------------------------
-
-          --liftIO $ putStrLn "\n- - - - -  Starting @> tests  - - - - -\n"
-
-          ---- An empty Object matches any object
-          --selectList [TestValueJson @>. Object mempty] []
-          --  >>= matchKeys "1" [objNullK,objTestK,objDeepK]
-
-          ---- {"test":null,"test1":"no"} @> {"test":null} == True
-          --selectList [TestValueJson @>. object ["test" .= Null]] []
-          --  >>= matchKeys "2" [objTestK]
-
-          ---- {"c":24.986,"foo":{"deep1":true"}} @> {"foo":{}} == True
-          --selectList [TestValueJson @>. object ["foo" .= object []]] []
-          --  >>= matchKeys "3" [objDeepK]
-
-          ---- {"c":24.986,"foo":{"deep1":true"}} @> {"foo":"nope"} == False
-          --selectList [TestValueJson @>. object ["foo" .= String "nope"]] []
-          --  >>= matchKeys "4" []
-
-          ---- {"c":24.986,"foo":{"deep1":true"}} @> {"foo":{"deep1":true}} == True
-          --selectList [TestValueJson @>. (object ["foo" .= object ["deep1" .= True]])] []
-          --  >>= matchKeys "5" [objDeepK]
-
-          ---- {"c":24.986,"foo":{"deep1":true"}} @> {"deep1":true} == False
-          --selectList [TestValueJson @>. object ["deep1" .= True]] []
-          --  >>= matchKeys "6" []
-
-          ---- An empty Array matches any array
-          --selectList [TestValueJson @>. emptyArr] []
-          --  >>= matchKeys "7" [arrNullK,arrListK,arrList2K,arrFilledK]
-
-          ---- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @> [4] == True
-          --selectList [TestValueJson @>. toJSON [4 :: Int]] []
-          --  >>= matchKeys "8" [arrFilledK]
-
-          ---- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @> [null,"b"] == True
-          --selectList [TestValueJson @>. toJSON [Null, String "b"]] []
-          --  >>= matchKeys "9" [arrFilledK]
-
-          ---- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @> [null,"d"] == False
-          --selectList [TestValueJson @>. toJSON [emptyArr, String "d"]] []
-          --  >>= matchKeys "10" []
+      it "[null, 4, 'b', {}, [], {test: [null], test2: 'yes'}] @> [null,'d'] == False" $ db $ do
+          vals <- selectList [TestValueJson @>. toJSON [emptyArr, String "d"]] []
+          [] `matchKeys` vals
 
           ---- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @> [[],"b",{"test":[null],"test2":"yes"},4,null,{}] == True
           --selectList [TestValueJson @>. toJSON [emptyArr, String "b", object [ "test" .= [Null], "test2" .= String "yes"], Number 4, Null, Object mempty]] []

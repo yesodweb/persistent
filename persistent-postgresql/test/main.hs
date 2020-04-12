@@ -185,7 +185,7 @@ main = do
     -- MigrationColumnLengthTest.specsWith db
     -- EquivalentTypeTestPostgres.specs
     -- TransactionLevelTest.specsWith db
-    JSONTest.specs db
+    JSONTest.specs
     -- CustomConstraintTest.specs db
     -- LongIdentifierTest.specsWith db
     -- PgIntervalTest.specs db
