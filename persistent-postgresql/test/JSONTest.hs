@@ -85,18 +85,19 @@ data TestDBKeys record =
              , bools   :: [Key record]
              , numbers :: [Key record]
              , strings :: [Key record]
-             , arrays  :: [Key record]
+             , lists  :: [Key record]
              , objects :: [Key record] }
 
 specs :: Spec
 specs =
-    describe "tests for @>. operator"
+    describe "Testing JSON operators"
     $ beforeAll migrateJSON
     $ before preHook
     $ afterAll_ cleanUp $ do
 
       -- Setup DB and get ahold of keys
       TestDBKeys {..} <- runIO $ runConn_ $ do
+          liftIO $ putStrLn "-------------------- JSON Test Setup -------------------------"
           nullK <- insert' Null
           let nulls = [nullK]
 
@@ -129,7 +130,7 @@ specs =
           arrListK <- insert' $ toJSON ([emptyArr,emptyArr,toJSON [emptyArr,emptyArr]])
           arrList2K <- insert' $ toJSON [emptyArr,toJSON [Number 3,Bool False],toJSON [emptyArr,toJSON [Object mempty]]]
           arrFilledK <- insert' $ toJSON [Null, Number 4, String "b", Object mempty, emptyArr, object [ "test" .= [Null], "test2" .= String "yes"]]
-          let arrays = [ arrNullK, arrListK, arrList2K, arrFilledK ]
+          let lists = [ arrNullK, arrListK, arrList2K, arrFilledK ]
 
           objNullK <- insert' $ Object mempty
           objTestK <- insert' $ object ["test" .= Null, "test1" .= String "no"]
@@ -141,119 +142,159 @@ specs =
       let [ boolTK, boolFK ] = bools
       let [ num0K, num1K, numBigK, numFloatK, numSmallK, numFloat2K, numBigFloatK ] = numbers
       let [ strNullK, strObjK, strArrK, strAK, strTestK, str2K, strFloatK ] = strings
-      let [ arrNullK, arrListK, arrList2K, arrFilledK ] = arrays
+      let [ arrNullK, arrListK, arrList2K, arrFilledK ] = lists
       let [ objNullK, objTestK, objDeepK ] = objects
 
-      it "matches an empty Object with any object" $ db $ do
-          vals <- selectList [TestValueJson @>. Object mempty] []
-          objects `matchKeys`  vals
+      describe "@>. object queries" $ do
+        it "matches an empty Object with any object" $ db $ do
+            vals <- selectList [TestValueJson @>. Object mempty] []
+            objects `matchKeys`  vals
 
-      it "{test: null, test1: no} @>. {test: null} == True" $ db $ do
-          vals <- selectList [TestValueJson @>. object ["test" .= Null]] []
-          [objTestK] `matchKeys`  vals
+        it "matches a subset of object properties" $ db $ do
+            -- {test: null, test1: no} @>. {test: null} == True
+            vals <- selectList [TestValueJson @>. object ["test" .= Null]] []
+            [objTestK] `matchKeys`  vals
 
-      it "{c: 24.986, foo: {deep1: true}} @>. {foo: {}} == True" $ db $ do
-          vals <- selectList [TestValueJson @>. object ["foo" .= object []]] []
-          [objDeepK] `matchKeys`  vals
+        it "matches a nested object against an empty object at the same key" $ db $ do
+            -- {c: 24.986, foo: {deep1: true}} @>. {foo: {}} == True
+            vals <- selectList [TestValueJson @>. object ["foo" .= object []]] []
+            [objDeepK] `matchKeys`  vals
 
-      it "{c: 24.986, foo: {deep1: true}} @> {foo: nope} == False" $ db $ do
-          vals <- selectList [TestValueJson @>. object ["foo" .= String "nope"]] []
-          [] `matchKeys`  vals
+        it "does'nt match a nested object against a string at the same key" $ db $ do
+            -- {c: 24.986, foo: {deep1: true}} @>. {foo: nope} == False
+            vals <- selectList [TestValueJson @>. object ["foo" .= String "nope"]] []
+            [] `matchKeys`  vals
 
-      it "{c: 24.986, foo: {deep1: true}} @> {foo: {deep1: true}} == True" $ db $ do
-          vals <- selectList [TestValueJson @>. (object ["foo" .= object ["deep1" .= True]])] []
-          [objDeepK] `matchKeys`  vals
+        it "matches a nested object when the query object is identical" $ db $ do
+            -- {c: 24.986, foo: {deep1: true}} @>. {foo: {deep1: true}} == True
+            vals <- selectList [TestValueJson @>. (object ["foo" .= object ["deep1" .= True]])] []
+            [objDeepK] `matchKeys`  vals
 
-      it "{c: 24.986, foo: {deep1: true}} @> {deep1: true} == False" $ db $ do
-          vals <- selectList [TestValueJson @>. object ["deep1" .= True]] []
-          [] `matchKeys`  vals
+        it "does'nt match a nested object when queried with that exact object" $ db $ do
+            -- {c: 24.986, foo: {deep1: true}} @>. {deep1: true} == False
+            vals <- selectList [TestValueJson @>. object ["deep1" .= True]] []
+            [] `matchKeys`  vals
 
-      it "matches an empty Array with any array" $ db $ do
-          vals <- selectList [TestValueJson @>. emptyArr] []
-          arrays `matchKeys`  vals
+      describe "@>. array queries" $ do
+        it "matches an empty Array with any list" $ db $ do
+            vals <- selectList [TestValueJson @>. emptyArr] []
+            lists `matchKeys`  vals
 
-      it "[null, 4, 'b', {}, [], {test: [null], test2: 'yes'}] @> [4] == True" $ db $ do
-          vals <- selectList [TestValueJson @>. toJSON [4 :: Int]] []
-          [arrFilledK] `matchKeys` vals
+        it "matches list when queried with subset (1 item)" $ db $ do
+            -- [null, 4, 'b', {}, [], {test: [null], test2: 'yes'}] @>. [4] == True
+            vals <- selectList [TestValueJson @>. toJSON [4 :: Int]] []
+            [arrFilledK] `matchKeys` vals
 
-      it "[null, 4, 'b', {}, [], {test: [null], test2: 'yes'}] @> [null,'b'] == True" $ db $ do
-          vals <- selectList [TestValueJson @>. toJSON [Null, String "b"]] []
-          [arrFilledK] `matchKeys` vals
+        it "matches list when queried with subset (2 items)" $ db $ do
+            -- [null, 4, 'b', {}, [], {test: [null], test2: 'yes'}] @>. [null,'b'] == True
+            vals <- selectList [TestValueJson @>. toJSON [Null, String "b"]] []
+            [arrFilledK] `matchKeys` vals
 
-      it "[null, 4, 'b', {}, [], {test: [null], test2: 'yes'}] @> [null,'d'] == False" $ db $ do
-          vals <- selectList [TestValueJson @>. toJSON [emptyArr, String "d"]] []
+        it "does'nt match list when queried with intersecting list (1 match, 1 diff)" $ db $ do
+            -- [null, 4, 'b', {}, [], {test: [null], test2: 'yes'}] @>. [null,'d'] == False
+            vals <- selectList [TestValueJson @>. toJSON [emptyArr, String "d"]] []
+            [] `matchKeys` vals
+
+        it "matches list when queried with same list in different order" $ db $ do
+            -- [null, 4, 'b', {}, [], {test: [null], test2: 'yes'}] @>.
+            -- [[],'b',{test: [null],test2: 'yes'},4,null,{}] == True
+            vals <- selectList [TestValueJson @>. toJSON [emptyArr, String "b", object [ "test" .= [Null], "test2" .= String "yes"], Number 4, Null, Object mempty]] []
+            [arrFilledK] `matchKeys` vals
+
+        it "does'nt match list when queried with same list + 1 item" $ db $ do
+            -- [null,4,'b',{},[],{test:[null],test2:'yes'}] @>.
+            -- [null,4,'b',{},[],{test:[null],test2: 'yes'}, false] == False
+            let testList =
+                  toJSON [ Null, Number 4, String "b", Object mempty, emptyArr
+                         , object [ "test" .= [Null], "test2" .= String "yes"]
+                         , Bool False ]
+
+            vals <- selectList [TestValueJson @>. testList]  []
+            [] `matchKeys` vals
+
+        it "matches list when it shares an empty object with the query list" $ db $ do
+            -- [null,4,'b',{},[],{test: [null],test2: 'yes'}] @>. [{}] == True
+            vals <- selectList [TestValueJson @>. toJSON [Object mempty]] []
+            [arrFilledK] `matchKeys` vals
+
+        it "matches list with nested list, when queried with an empty nested list" $ db $ do
+            -- [null,4,'b',{},[],{test:[null],test2:'yes'}] @>. [{test:[]}] == True
+            vals <- selectList [TestValueJson @>. toJSON [object ["test" .= emptyArr]]] []
+            [arrFilledK] `matchKeys` vals
+
+        it "does'nt match list with nested list, when queried with a diff. nested list" $ db $ do
+          -- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @>.
+          -- [{"test1":[null]}]  == False
+          vals <- selectList [TestValueJson @>. toJSON [object ["test1" .= [Null]]]] []
           [] `matchKeys` vals
 
-          ---- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @> [[],"b",{"test":[null],"test2":"yes"},4,null,{}] == True
-          --selectList [TestValueJson @>. toJSON [emptyArr, String "b", object [ "test" .= [Null], "test2" .= String "yes"], Number 4, Null, Object mempty]] []
-          --  >>= matchKeys "11" [arrFilledK]
+        it "matches many nested lists when queried with empty nested list" $ db $ do
+          ---- [[],[],[[],[]]]                                  @>. [[]] == True
+          ---- [[],[3,false],[[],[{}]]]                         @>. [[]] == True
+          ---- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @>. [[]] == True
+          vals <- selectList [TestValueJson @>. toJSON [emptyArr]] []
+          [arrListK,arrList2K,arrFilledK] `matchKeys` vals
 
-          ---- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @> [null,4,"b",{},[],{"test":[null],"test2":"yes"},false] == False
-          --selectList [TestValueJson @>. toJSON [Null, Number 4, String "b", Object mempty, emptyArr, object [ "test" .= [Null], "test2" .= String "yes"], Bool False]] []
-          --  >>= matchKeys "12" []
+        it "matches nested list when queried with a subset of that list" $ db $ do
+          ---- [[],[3,false],[[],[{}]]] @>. [[3]] == True
+          vals <- selectList [TestValueJson @>. toJSON [[3 :: Int]]] []
+          [arrList2K] `matchKeys` vals
 
-          ---- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @> [{}] == True
-          --selectList [TestValueJson @>. toJSON [Object mempty]] []
-          --  >>= matchKeys "13" [arrFilledK]
+        it "doesn't match nested list againts a partial intersection of that list" $ db $ do
+          ---- [[],[3,false],[[],[{}]]] @>. [[true,3]] == False
+          vals <- selectList [TestValueJson @>. toJSON [[Bool True, Number 3]]] []
+          [] `matchKeys` vals
 
-          ---- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @> [{"test":[]}] == True
-          --selectList [TestValueJson @>. toJSON [object ["test" .= emptyArr]]] []
-          --  >>= matchKeys "14" [arrFilledK]
+        it "matches list when queried with raw number contained in the list" $ db $ do
+          ---- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @>. 4 == True
+          vals <- selectList [TestValueJson @>. Number 4] []
+          [arrFilledK] `matchKeys` vals
 
-          ---- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @> [{"test1":[null]}]  == False
-          --selectList [TestValueJson @>. toJSON [object ["test1" .= [Null]]]] []
-          --  >>= matchKeys "15" []
+        it "doesn't match list when queried with raw value not contained in the list" $ db $ do
+          ---- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @>. 99 == False
+          vals <- selectList [TestValueJson @>. Number 99] []
+          [] `matchKeys` vals
 
-          ---- [[],[],[[],[]]]                                  @> [[]] == True
-          ---- [[],[3,false],[[],[{}]]]                         @> [[]] == True
-          ---- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @> [[]] == True
-          --selectList [TestValueJson @>. toJSON [emptyArr]] []
-          --  >>= matchKeys "16" [arrListK,arrList2K,arrFilledK]
+        it "matches list when queried with raw string contained in the list" $ db $ do
+          ---- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @>. "b" == True
+          vals <- selectList [TestValueJson @>. String "b"] []
+          [arrFilledK] `matchKeys` vals
 
-          ---- [[],[3,false],[[],[{}]]] @> [[3]] == True
-          --selectList [TestValueJson @>. toJSON [[3 :: Int]]] []
-          --  >>= matchKeys "17" [arrList2K]
+        it "doesn't match list with empty object when queried with \"{}\" " $ db $ do
+          -- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @>. "{}" == False
+          vals <- selectList [TestValueJson @>. String "{}"] []
+          [strObjK] `matchKeys` vals
 
-          ---- [[],[3,false],[[],[{}]]] @> [[true,3]] == False
-          --selectList [TestValueJson @>. toJSON [[Bool True, Number 3]]] []
-          --  >>= matchKeys "18" []
+        it "doesnt match list with nested object when queried with object (not in list)" $ db $ do
+          -- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @>.
+          --{"test":[null],"test2":"yes"} == False
+          let queryObject = object [ "test" .= [Null], "test2" .= String "yes"]
+          vals <- selectList [TestValueJson @>. queryObject ] []
+          [] `matchKeys` vals
 
-          ---- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @> 4 == True
-          --selectList [TestValueJson @>. Number 4] []
-          --  >>= matchKeys "19" [arrFilledK]
+      describe "@>. string queries" $ do
+        it "matches identical strings" $ db $ do
+          -- "testing" @>. "testing" == True
+          vals <- selectList [TestValueJson @>. String "testing"] []
+          [strTestK] `matchKeys` vals
 
-          ---- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @> 4 == True
-          --selectList [TestValueJson @>. Number 99] []
-          --  >>= matchKeys "20" []
+        it "doesnt match case insensitive" $ db $ do
+          -- "testing" @> "Testing" == False
+          vals <- selectList [TestValueJson @>. String "Testing"] []
+          [] `matchKeys` vals
 
-          ---- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @> "b" == True
-          --selectList [TestValueJson @>. String "b"] []
-          --  >>= matchKeys "21" [arrFilledK]
+        it "doesn't match substrings" $ db $ do
+          -- "testing" @> "test" == False
+          vals <- selectList [TestValueJson @>. String "test"] []
+          [] `matchKeys` vals
 
-          ---- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @> "{}" == False
-          --selectList [TestValueJson @>. String "{}"] []
-          --  >>= matchKeys "22" [strObjK]
+        it "doesn't match strings with object keys" $ db $ do
+          -- "testing" @> {"testing":1} == False
+          vals <- selectList [TestValueJson @>. object ["testing" .= Number 1]] []
+          [] `matchKeys` vals
 
-          ---- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] @> {"test":[null],"test2":"yes"} == False
-          --selectList [TestValueJson @>. object [ "test" .= [Null], "test2" .= String "yes"]] []
-          --  >>= matchKeys "23" []
-
-          ---- "testing" @> "testing" == True
-          --selectList [TestValueJson @>. String "testing"] []
-          --  >>= matchKeys "24" [strTestK]
-
-          ---- "testing" @> "Testing" == False
-          --selectList [TestValueJson @>. String "Testing"] []
-          --  >>= matchKeys "25" []
-
-          ---- "testing" @> "test" == False
-          --selectList [TestValueJson @>. String "test"] []
-          --  >>= matchKeys "26" []
-
-          ---- "testing" @> {"testing":1} == False
-          --selectList [TestValueJson @>. object ["testing" .= Number 1]] []
-          --  >>= matchKeys "27" []
-
+      describe "@>. number queries" $ do
+        return ()
           ---- 1 @> 1 == True
           --selectList [TestValueJson @>. toJSON (1 :: Int)] []
           --  >>= matchKeys "28" [num1K]
@@ -279,6 +320,8 @@ specs =
           --selectList [TestValueJson @>. toJSON ([1,2,3,4,5,6,7,8,9,0] :: [Int])] []
           --  >>= matchKeys "33" []
 
+      describe "@>. boolean queries" $ do
+        return ()
           ---- true @> true == True
           ---- false @> true == False
           --selectList [TestValueJson @>. toJSON True] []
@@ -293,6 +336,8 @@ specs =
           --selectList [TestValueJson @>. String "true"] []
           --  >>= matchKeys "36" []
 
+      describe "@>. null queries" $ do
+        return ()
           ---- null @> null == True
           --selectList [TestValueJson @>. Null] []
           --  >>= matchKeys "37" [nullK,arrFilledK]
