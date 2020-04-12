@@ -36,8 +36,8 @@ specs :: (MonadUnliftIO m, MonadFail m) => RunDb SqlBackend m -> Spec
 specs runDb = do
   describe "custom constraint used in migration" $ do
     it "custom constraint is actually created" $ runDb $ do
-      runMigrationSilent customConstraintMigrate
-      runMigrationSilent customConstraintMigrate -- run a second time to ensure the constraint isn't dropped
+      void $ runMigrationSilent customConstraintMigrate
+      void $ runMigrationSilent customConstraintMigrate -- run a second time to ensure the constraint isn't dropped
       let query = T.concat ["SELECT DISTINCT COUNT(*) "
                            ,"FROM information_schema.constraint_column_usage ccu, "
                            ,"information_schema.key_column_usage kcu, "

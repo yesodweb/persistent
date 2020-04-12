@@ -33,7 +33,7 @@ cleanDB = deleteWhere ([] :: [Filter TestValue])
 emptyArr :: Value
 emptyArr = toJSON ([] :: [Value])
 
-specs :: RunDb SqlBackend IO -> Spec
+specs :: (MonadFail m, MonadIO m) => RunDb SqlBackend m -> Spec
 specs runDb = do
   describe "rawSql/array_agg" $ do
     let runArrayAggTest :: (PersistField [a], Ord a, Show a) => Text -> [a] -> Assertion
