@@ -62,16 +62,12 @@ matchKeys ys xs = do
             , "\" not in result:\n  ", show ks
             ]
 
-migrateJSON :: IO ()
-migrateJSON = asIO $ runConn $ do
+setup :: IO ()
+setup = asIO $ runConn $ do
     void $ runMigrationSilent jsonTestMigrate
 
-preHook :: IO ()
-preHook = asIO $ runConn $ do
-  return ()
-
-cleanUp :: IO ()
-cleanUp = asIO $ runConn $ do
+teardown :: IO ()
+teardown = asIO $ runConn $ do
   cleanDB
 
 shouldBeIO :: (Show a, Eq a, MonadIO m) => a -> a -> m ()
@@ -91,9 +87,8 @@ data TestDBKeys record =
 specs :: Spec
 specs =
     describe "Testing JSON operators"
-    $ beforeAll migrateJSON
-    $ before preHook
-    $ afterAll_ cleanUp $ do
+    $ beforeAll setup
+    $ afterAll_ teardown $ do
 
       -- Setup DB and get ahold of keys
       TestDBKeys {..} <- runIO $ runConn_ $ do
@@ -279,114 +274,130 @@ specs =
           [strTestK] `matchKeys` vals
 
         it "doesnt match case insensitive" $ db $ do
-          -- "testing" @> "Testing" == False
+          -- "testing" @>. "Testing" == False
           vals <- selectList [TestValueJson @>. String "Testing"] []
           [] `matchKeys` vals
 
         it "doesn't match substrings" $ db $ do
-          -- "testing" @> "test" == False
+          -- "testing" @>. "test" == False
           vals <- selectList [TestValueJson @>. String "test"] []
           [] `matchKeys` vals
 
         it "doesn't match strings with object keys" $ db $ do
-          -- "testing" @> {"testing":1} == False
+          -- "testing" @>. {"testing":1} == False
           vals <- selectList [TestValueJson @>. object ["testing" .= Number 1]] []
           [] `matchKeys` vals
 
       describe "@>. number queries" $ do
 
         it "matches identical numbers" $ db $ do
-          -- 1 @> 1 == True
+          -- 1 @>. 1 == True
           vals <- selectList [TestValueJson @>. toJSON (1 :: Int)] []
           [num1K] `matchKeys` vals
 
         it "matches numbers when queried with float" $ db $ do
-          -- 0 @> 0.0 == True
-          -- 0.0 @> 0.0 == True
+          -- 0 @>. 0.0 == True
+          -- 0.0 @>. 0.0 == True
           vals <- selectList [TestValueJson @>. toJSON (0.0 :: Double)] []
           [num0K,numFloatK] `matchKeys` vals
 
         it "does not match numbers when queried with a substring of that number" $ db $ do
-          -- 1234567890 @> 123456789 == False
+          -- 1234567890 @>. 123456789 == False
           vals <- selectList [TestValueJson @>. toJSON (123456789 :: Int)] []
           [] `matchKeys` vals
 
         it "does not match number when queried with different number" $ db $ do
-          -- 1234567890 @> 234567890 == False
+          -- 1234567890 @>. 234567890 == False
           vals <- selectList [TestValueJson @>. toJSON (234567890 :: Int)] []
           [] `matchKeys` vals
 
         it "does not match number when queried with string of that number" $ db $ do
-          -- 1 @> "1" == False
+          -- 1 @>. "1" == False
           vals <- selectList [TestValueJson @>. String "1"] []
           [] `matchKeys` vals
 
         it "does not match number when queried with list of digits" $ db $ do
-          -- 1234567890 @> [1,2,3,4,5,6,7,8,9,0] == False
+          -- 1234567890 @>. [1,2,3,4,5,6,7,8,9,0] == False
           vals <- selectList [TestValueJson @>. toJSON ([1,2,3,4,5,6,7,8,9,0] :: [Int])] []
           [] `matchKeys` vals
 
       describe "@>. boolean queries" $ do
 
         it "matches identical booleans (True)" $ db $ do
-          -- true @> true == True
-          -- false @> true == False
+          -- true @>. true == True
+          -- false @>. true == False
           vals <- selectList [TestValueJson @>. toJSON True] []
           [boolTK] `matchKeys` vals
 
         it "matches identical booleans (False)" $ db $ do
-          -- false @> false == True
-          -- true @> false == False
+          -- false @>. false == True
+          -- true @>. false == False
           vals <- selectList [TestValueJson @>. Bool False] []
           [boolFK] `matchKeys` vals
 
         it "does not match boolean with string of boolean" $ db $ do
-          -- true @> "true" == False
+          -- true @>. "true" == False
           vals <- selectList [TestValueJson @>. String "true"] []
           [] `matchKeys` vals
 
       describe "@>. null queries" $ do
-        return ()
-          ---- null @> null == True
-          --selectList [TestValueJson @>. Null] []
-          --  >>= matchKeys "37" [nullK,arrFilledK]
 
-          ---- null @> "null" == False
-          --selectList [TestValueJson @>. String "null"] []
-          --  >>= matchKeys "38" []
+        it "matches nulls" $ db $ do
+          -- null @>. null == True
+          vals <- selectList [TestValueJson @>. Null] []
+          [nullK,arrFilledK] `matchKeys` vals
 
-    ------------------------------------------------------------------------------------------
-
-          --liftIO $ putStrLn "\n- - - - -  Starting <@ tests  - - - - -\n"
-
-          ---- {}                         <@ {"test":null,"test1":"no","blabla":[]} == True
-          ---- {"test":null,"test1":"no"} <@ {"test":null,"test1":"no","blabla":[]} == True
-          --selectList [TestValueJson <@. object ["test" .= Null, "test1" .= String "no", "blabla" .= emptyArr]] []
-          --  >>= matchKeys "39" [objNullK,objTestK]
-
-          ---- []                                               <@ [null,4,"b",{},[],{"test":[null],"test2":"yes"},false] == True
-          ---- null                                             <@ [null,4,"b",{},[],{"test":[null],"test2":"yes"},false] == True
-          ---- false                                            <@ [null,4,"b",{},[],{"test":[null],"test2":"yes"},false] == True
-          ---- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] <@ [null,4,"b",{},[],{"test":[null],"test2":"yes"},false] == True
-          --selectList [TestValueJson <@. toJSON [Null, Number 4, String "b", Object mempty, emptyArr, object [ "test" .= [Null], "test2" .= String "yes"], Bool False]] []
-          --  >>= matchKeys "40" [arrNullK,arrFilledK,boolFK,nullK]
-
-          ---- "a" <@ "a" == True
-          --selectList [TestValueJson <@. String "a"] []
-          --  >>= matchKeys "41" [strAK]
+        it "does not match null with string of null" $ db $ do
+          -- null @>. "null" == False
+          vals <- selectList [TestValueJson @>. String "null"] []
+          [] `matchKeys` vals
 
 
-          ---- 9876543210.123457 <@ 9876543210.123457 == False
-          --selectList [TestValueJson <@. Number 9876543210.123457] []
-          --  >>= matchKeys "42" [numBigFloatK]
+      describe "<@. queries" $ do
 
-          ---- 9876543210.123457 <@ 9876543210.123456789 == False
-          --selectList [TestValueJson <@. Number 9876543210.123456789] []
-          --  >>= matchKeys "43" []
+        it "matches subobject when queried with superobject" $ db $ do
+          -- {}                         <@. {"test":null,"test1":"no","blabla":[]} == True
+          -- {"test":null,"test1":"no"} <@. {"test":null,"test1":"no","blabla":[]} == True
+          let queryObject = object ["test" .= Null, "test1" .= String "no", "blabla" .= emptyArr]
+          vals <- selectList [TestValueJson <@. queryObject] []
+          [objNullK,objTestK] `matchKeys` vals
 
-          ---- null <@ null == True
-          --selectList [TestValueJson <@. Null] []
-          --  >>= matchKeys "44" [nullK]
+        it "matches raw values and sublists when queried with superlist" $ db $ do
+          -- [] <@ [null,4,"b",{},[],{"test":[null],"test2":"yes"},false] == True
+          -- null <@ [null,4,"b",{},[],{"test":[null],"test2":"yes"},false] == True
+          -- false <@ [null,4,"b",{},[],{"test":[null],"test2":"yes"},false] == True
+
+          -- [null,4,"b",{},[],{"test":[null],"test2":"yes"}] <@
+          -- [null,4,"b",{},[],{"test":[null],"test2":"yes"},false] == True
+
+          let queryList =
+                toJSON [ Null, Number 4, String "b", Object mempty, emptyArr
+                       , object [ "test" .= [Null], "test2" .= String "yes"]
+                       , Bool False ]
+
+          vals <- selectList [TestValueJson <@. queryList ] []
+          [arrNullK,arrFilledK,boolFK,nullK] `matchKeys` vals
+
+        it "matches identical strings" $ db $ do
+          -- "a" <@ "a" == True
+          vals <- selectList [TestValueJson <@. String "a"] []
+          [strAK] `matchKeys` vals
+
+
+        it "matches identical big floats" $ db $ do
+          -- 9876543210.123457 <@ 9876543210.123457 == True
+          vals <- selectList [TestValueJson <@. Number 9876543210.123457] []
+          [numBigFloatK] `matchKeys` vals
+
+        it "does not match different big floats" $ db $ do
+          -- 9876543210.123457 <@ 9876543210.123456789 == False
+          vals <- selectList [TestValueJson <@. Number 9876543210.123456789] []
+          [] `matchKeys` vals
+
+        it "matches nulls" $ db $ do
+          -- null <@ null == True
+          vals <- selectList [TestValueJson <@. Null] []
+          [nullK] `matchKeys` vals
 
     ------------------------------------------------------------------------------------------
 
