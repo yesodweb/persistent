@@ -15,7 +15,6 @@
 module PgIntervalTest where
 
 import PgInit
-import Control.Monad.IO.Unlift
 import Data.Time.Clock (NominalDiffTime)
 import Database.Persist.Postgresql (PgInterval(..))
 import Test.Hspec.QuickCheck
@@ -33,9 +32,9 @@ PgIntervalDb
 truncate' :: NominalDiffTime -> NominalDiffTime
 truncate' x = (fromIntegral (round (x * 10^6))) / 10^6
 
-specs :: (MonadUnliftIO m, MonadFail m) => RunDb SqlBackend m -> Spec
-specs runDb = describe "Postgres Interval Property tests" $
-    prop "Round trips" $ \time -> runDb $ do
+specs :: Spec
+specs = describe "Postgres Interval Property tests" $
+    prop "Round trips" $ \time -> runConnAssert $ do
       let eg = PgIntervalDb $ PgInterval (truncate' time)
       rid <- insert eg
       r <- getJust rid

@@ -3,11 +3,12 @@
 
 module PgInit (
   runConn
+  , runConn_
+  , runConnAssert
 
   , MonadIO
   , persistSettings
   , MkPersistSettings (..)
-  , db
   , BackendKey(..)
   , GenerateKey(..)
 
@@ -85,20 +86,22 @@ persistSettings :: MkPersistSettings
 persistSettings = sqlSettings { mpsGeneric = True }
 
 runConn :: MonadUnliftIO m => SqlPersistT (LoggingT m) t -> m ()
-runConn f = do
+runConn f = runConn_ f >>= const (return ())
+
+runConn_ :: MonadUnliftIO m => SqlPersistT (LoggingT m) t -> m t
+runConn_ f = do
   travis <- liftIO isTravis
   let debugPrint = not travis && _debugOn
   let printDebug = if debugPrint then print . fromLogStr else void . return
   flip runLoggingT (\_ _ _ s -> printDebug s) $ do
-    _ <- if travis
+    if travis
       then withPostgresqlPool "host=localhost port=5432 user=postgres dbname=persistent" 1 $ runSqlPool f
       else do
         host <- fromMaybe "localhost" <$> liftIO dockerPg
         withPostgresqlPool ("host=" <> host <> " port=5432 user=postgres dbname=test") 1 $ runSqlPool f
-    return ()
 
-db :: SqlPersistT (LoggingT (ResourceT IO)) () -> Assertion
-db actions = do
+runConnAssert :: SqlPersistT (LoggingT (ResourceT IO)) () -> Assertion
+runConnAssert actions = do
   runResourceT $ runConn $ actions >> transactionUndo
 
 instance Arbitrary Value where
