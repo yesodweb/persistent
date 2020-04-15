@@ -7,6 +7,10 @@
 * [#1060](https://github.com/yesodweb/persistent/pull/1060)
   * The QuasiQuoter now supports `OnDelete` and `OnUpdate` cascade options.
 * Handle foreign key constraint names over 63 characters. See [#996](https://github.com/yesodweb/persistent/pull/996) for details.
+* [#1072](https://github.com/yesodweb/persistent/pull/1072) Refactored `test/JSONTest.hs` to use `hspec`
+  * added `runConn_` to run a db connection and return result
+  * Renamed `db` to `runConnAssert` in `test/PgInit.hs` for clarity
+  * Ran `test/ArrayAggTest.hs` (which was previously written but not being run)
 
 ## 2.10.1.2
 
