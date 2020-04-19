@@ -73,7 +73,7 @@ import Database.Persist.Sql
 import Database.Persist.TH ()
 
 _debugOn :: Bool
-_debugOn = False
+_debugOn = True
 
 dockerPg :: IO (Maybe BS.ByteString)
 dockerPg = do
