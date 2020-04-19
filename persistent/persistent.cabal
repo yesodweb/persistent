@@ -18,9 +18,20 @@ flag nooverlap
     default: False
     description: test out our assumption that OverlappingInstances is just for String
 
+flag monad-logger-th
+    default:
+      True
+    manual:
+      True
+    description:
+      Enable usage of monad-logger template haskell
+
 library
     if flag(nooverlap)
         cpp-options: -DNO_OVERLAP
+
+    if flag(monad-logger-th)
+        cpp-options: -DMONAD_LOGGER_TH
 
     build-depends:   base                     >= 4.9       && < 5
                    , aeson                    >= 1.0
