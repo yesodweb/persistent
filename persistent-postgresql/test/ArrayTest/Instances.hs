@@ -81,7 +81,7 @@ newtype JSONArray a = JSONArray [a]
 
 instance (ToJSON a, FromJSON a) => PersistField (JSONArray a) where
   -- Note: You can also serialize to PersistByteString or PersistText, and get the same error
-  toPersistValue (JSONArray xs) = PersistArray $ map (PersistDbSpecific . DTLE.decodeUtf8 . encode) xs
+  toPersistValue (JSONArray xs) = PersistArray $ map (PersistDbSpecific . BSL.toStrict . encode) xs
   fromPersistValue = error "todo"
 
 -- Started writing an implmentation for this but it was really ugly, realized I didn't need it to demonstrate the error.
