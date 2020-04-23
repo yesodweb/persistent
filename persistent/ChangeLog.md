@@ -1,5 +1,9 @@
 # Changelog for persistent
 
+## 2.11.1.0
+
+* Fix a bug where unsafe migration error messages were being shown using `Show` prior to printing, resulting in less helpful output. [#1080](https://github.com/yesodweb/persistent/pull/1080)
+
 ## 2.11.0.0
 
 * Introduces a breaking change to the internal function `mkColumns`, which can now be passed a record of functions to override its default behavior. [#996](https://github.com/yesodweb/persistent/pull/996)
