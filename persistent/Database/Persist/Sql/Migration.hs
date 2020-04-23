@@ -77,7 +77,7 @@ getMigration m = do
   return $ allSql mig
 
 -- | Runs a migration. If the migration fails to parse or if any of the
--- migrations are unsafe, then this calls 'error' to halt the program.
+-- migrations are unsafe, then this throws a 'PersistUnsafeMigrationException'.
 runMigration :: MonadIO m
              => Migration
              -> ReaderT SqlBackend m ()
@@ -120,16 +120,8 @@ runMigration'
 runMigration' m silent = do
     mig <- parseMigration' m
     if any fst mig
-        then liftIO . throwIO . PersistError . pack $ concat
-                 [ "\n\nDatabase migration: manual intervention required.\n"
-                 , "The unsafe actions are prefixed by '***' below:\n\n"
-                 , unlines $ map displayMigration mig
-                 ]
+        then liftIO . throwIO $ PersistUnsafeMigrationException mig
         else mapM (executeMigrate silent) $ sortMigrations $ safeSql mig
-  where
-    displayMigration :: (Bool, Sql) -> String
-    displayMigration (True,  s) = "*** " ++ unpack s ++ ";"
-    displayMigration (False, s) = "    " ++ unpack s ++ ";"
 
 -- | Like 'runMigration', but this will perform the unsafe database
 -- migrations instead of erroring out.
