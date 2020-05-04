@@ -1,6 +1,6 @@
 # Changelog for persistent-sqlite
 
-## 2.11.0.0
+## (Unreleased) 2.11.0.0
 
 * [#1060](https://github.com/yesodweb/persistent/pull/1060)
   * The QuasiQuoter now supports `OnDelete` and `OnUpdate` cascade options.

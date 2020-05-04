@@ -1,6 +1,6 @@
 # Changelog for persistent-postgresql
 
-## 2.11.0.0
+## (Unreleased) 2.11.0.0
 
 * Implement interval support. [#1053](https://github.com/yesodweb/persistent/pull/1053)
 
