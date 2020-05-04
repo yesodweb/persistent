@@ -17,6 +17,7 @@
     record` from a `record` if it was defined with `Primary`.
 * [#1036](https://github.com/yesodweb/persistent/pull/1036):
   * The method `entityIdFromJSON` that is used to parse entities now correctly works for entities that define a custom `Primary` key.
+* Fix a bug where unsafe migration error messages were being shown using `Show` prior to printing, resulting in less helpful output. [#1080](https://github.com/yesodweb/persistent/pull/1080)
 
 ## 2.10.5.2
 
