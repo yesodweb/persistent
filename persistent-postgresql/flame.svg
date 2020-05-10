@@ -1,0 +1,2218 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" width="1200" height="998" onload="init(evt)" viewBox="0 0 1200 998" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->
+<!-- NOTES:  -->
+<defs >
+	<linearGradient id="background" y1="0" y2="1" x1="0" x2="0" >
+		<stop stop-color="#eeeeee" offset="5%" />
+		<stop stop-color="#eeeeb0" offset="95%" />
+	</linearGradient>
+</defs>
+<style type="text/css">
+	.func_g:hover { stroke:black; stroke-width:0.5; cursor:pointer; }
+</style>
+<script type="text/ecmascript">
+<![CDATA[
+	var details, searchbtn, matchedtxt, svg;
+	function init(evt) {
+		details = document.getElementById("details").firstChild;
+		searchbtn = document.getElementById("search");
+		matchedtxt = document.getElementById("matched");
+		svg = document.getElementsByTagName("svg")[0];
+		searching = 0;
+	}
+
+	// mouse-over for info
+	function s(node) {		// show
+		info = g_to_text(node);
+		details.nodeValue = "Function: " + info;
+	}
+	function c() {			// clear
+		details.nodeValue = ' ';
+	}
+
+	// ctrl-F for search
+	window.addEventListener("keydown",function (e) {
+		if (e.keyCode === 114 || (e.ctrlKey && e.keyCode === 70)) {
+			e.preventDefault();
+			search_prompt();
+		}
+	})
+
+	// functions
+	function find_child(parent, name, attr) {
+		var children = parent.childNodes;
+		for (var i=0; i<children.length;i++) {
+			if (children[i].tagName == name)
+				return (attr != undefined) ? children[i].attributes[attr].value : children[i];
+		}
+		return;
+	}
+	function orig_save(e, attr, val) {
+		if (e.attributes["_orig_"+attr] != undefined) return;
+		if (e.attributes[attr] == undefined) return;
+		if (val == undefined) val = e.attributes[attr].value;
+		e.setAttribute("_orig_"+attr, val);
+	}
+	function orig_load(e, attr) {
+		if (e.attributes["_orig_"+attr] == undefined) return;
+		e.attributes[attr].value = e.attributes["_orig_"+attr].value;
+		e.removeAttribute("_orig_"+attr);
+	}
+	function g_to_text(e) {
+		var text = find_child(e, "title").firstChild.nodeValue;
+		return (text)
+	}
+	function g_to_func(e) {
+		var func = g_to_text(e);
+		// if there's any manipulation we want to do to the function
+		// name before it's searched, do it here before returning.
+		return (func);
+	}
+	function update_text(e) {
+		var r = find_child(e, "rect");
+		var t = find_child(e, "text");
+		var w = parseFloat(r.attributes["width"].value) -3;
+		var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/,"");
+		t.attributes["x"].value = parseFloat(r.attributes["x"].value) +3;
+
+		// Smaller than this size won't fit anything
+		if (w < 2*12*0.59) {
+			t.textContent = "";
+			return;
+		}
+
+		t.textContent = txt;
+		// Fit in full text width
+		if (/^ *$/.test(txt) || t.getSubStringLength(0, txt.length) < w)
+			return;
+
+		for (var x=txt.length-2; x>0; x--) {
+			if (t.getSubStringLength(0, x+2) <= w) {
+				t.textContent = txt.substring(0,x) + "..";
+				return;
+			}
+		}
+		t.textContent = "";
+	}
+
+	// zoom
+	function zoom_reset(e) {
+		if (e.attributes != undefined) {
+			orig_load(e, "x");
+			orig_load(e, "width");
+		}
+		if (e.childNodes == undefined) return;
+		for(var i=0, c=e.childNodes; i<c.length; i++) {
+			zoom_reset(c[i]);
+		}
+	}
+	function zoom_child(e, x, ratio) {
+		if (e.attributes != undefined) {
+			if (e.attributes["x"] != undefined) {
+				orig_save(e, "x");
+				e.attributes["x"].value = (parseFloat(e.attributes["x"].value) - x - 10) * ratio + 10;
+				if(e.tagName == "text") e.attributes["x"].value = find_child(e.parentNode, "rect", "x") + 3;
+			}
+			if (e.attributes["width"] != undefined) {
+				orig_save(e, "width");
+				e.attributes["width"].value = parseFloat(e.attributes["width"].value) * ratio;
+			}
+		}
+
+		if (e.childNodes == undefined) return;
+		for(var i=0, c=e.childNodes; i<c.length; i++) {
+			zoom_child(c[i], x-10, ratio);
+		}
+	}
+	function zoom_parent(e) {
+		if (e.attributes) {
+			if (e.attributes["x"] != undefined) {
+				orig_save(e, "x");
+				e.attributes["x"].value = 10;
+			}
+			if (e.attributes["width"] != undefined) {
+				orig_save(e, "width");
+				e.attributes["width"].value = parseInt(svg.width.baseVal.value) - (10*2);
+			}
+		}
+		if (e.childNodes == undefined) return;
+		for(var i=0, c=e.childNodes; i<c.length; i++) {
+			zoom_parent(c[i]);
+		}
+	}
+	function zoom(node) {
+		var attr = find_child(node, "rect").attributes;
+		var width = parseFloat(attr["width"].value);
+		var xmin = parseFloat(attr["x"].value);
+		var xmax = parseFloat(xmin + width);
+		var ymin = parseFloat(attr["y"].value);
+		var ratio = (svg.width.baseVal.value - 2*10) / width;
+
+		// XXX: Workaround for JavaScript float issues (fix me)
+		var fudge = 0.0001;
+
+		var unzoombtn = document.getElementById("unzoom");
+		unzoombtn.style["opacity"] = "1.0";
+
+		var el = document.getElementsByTagName("g");
+		for(var i=0;i<el.length;i++){
+			var e = el[i];
+			var a = find_child(e, "rect").attributes;
+			var ex = parseFloat(a["x"].value);
+			var ew = parseFloat(a["width"].value);
+			// Is it an ancestor
+			if (0 == 0) {
+				var upstack = parseFloat(a["y"].value) > ymin;
+			} else {
+				var upstack = parseFloat(a["y"].value) < ymin;
+			}
+			if (upstack) {
+				// Direct ancestor
+				if (ex <= xmin && (ex+ew+fudge) >= xmax) {
+					e.style["opacity"] = "0.5";
+					zoom_parent(e);
+					e.onclick = function(e){unzoom(); zoom(this);};
+					update_text(e);
+				}
+				// not in current path
+				else
+					e.style["display"] = "none";
+			}
+			// Children maybe
+			else {
+				// no common path
+				if (ex < xmin || ex + fudge >= xmax) {
+					e.style["display"] = "none";
+				}
+				else {
+					zoom_child(e, xmin, ratio);
+					e.onclick = function(e){zoom(this);};
+					update_text(e);
+				}
+			}
+		}
+	}
+	function unzoom() {
+		var unzoombtn = document.getElementById("unzoom");
+		unzoombtn.style["opacity"] = "0.0";
+
+		var el = document.getElementsByTagName("g");
+		for(i=0;i<el.length;i++) {
+			el[i].style["display"] = "block";
+			el[i].style["opacity"] = "1";
+			zoom_reset(el[i]);
+			update_text(el[i]);
+		}
+	}
+
+	// search
+	function reset_search() {
+		var el = document.getElementsByTagName("rect");
+		for (var i=0; i < el.length; i++) {
+			orig_load(el[i], "fill")
+		}
+	}
+	function search_prompt() {
+		if (!searching) {
+			var term = prompt("Enter a search term (regexp " +
+			    "allowed, eg: ^ext4_)", "");
+			if (term != null) {
+				search(term)
+			}
+		} else {
+			reset_search();
+			searching = 0;
+			searchbtn.style["opacity"] = "0.1";
+			searchbtn.firstChild.nodeValue = "Search"
+			matchedtxt.style["opacity"] = "0.0";
+			matchedtxt.firstChild.nodeValue = ""
+		}
+	}
+	function search(term) {
+		var re = new RegExp(term);
+		var el = document.getElementsByTagName("g");
+		var matches = new Object();
+		var maxwidth = 0;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			if (e.attributes["class"].value != "func_g")
+				continue;
+			var func = g_to_func(e);
+			var rect = find_child(e, "rect");
+			if (rect == null) {
+				// the rect might be wrapped in an anchor
+				// if nameattr href is being used
+				if (rect = find_child(e, "a")) {
+				    rect = find_child(r, "rect");
+				}
+			}
+			if (func == null || rect == null)
+				continue;
+
+			// Save max width. Only works as we have a root frame
+			var w = parseFloat(rect.attributes["width"].value);
+			if (w > maxwidth)
+				maxwidth = w;
+
+			if (func.match(re)) {
+				// highlight
+				var x = parseFloat(rect.attributes["x"].value);
+				orig_save(rect, "fill");
+				rect.attributes["fill"].value =
+				    "rgb(230,0,230)";
+
+				// remember matches
+				if (matches[x] == undefined) {
+					matches[x] = w;
+				} else {
+					if (w > matches[x]) {
+						// overwrite with parent
+						matches[x] = w;
+					}
+				}
+				searching = 1;
+			}
+		}
+		if (!searching)
+			return;
+
+		searchbtn.style["opacity"] = "1.0";
+		searchbtn.firstChild.nodeValue = "Reset Search"
+
+		// calculate percent matched, excluding vertical overlap
+		var count = 0;
+		var lastx = -1;
+		var lastw = 0;
+		var keys = Array();
+		for (k in matches) {
+			if (matches.hasOwnProperty(k))
+				keys.push(k);
+		}
+		// sort the matched frames by their x location
+		// ascending, then width descending
+		keys.sort(function(a, b){
+			return a - b;
+		});
+		// Step through frames saving only the biggest bottom-up frames
+		// thanks to the sort order. This relies on the tree property
+		// where children are always smaller than their parents.
+		var fudge = 0.0001;	// JavaScript floating point
+		for (var k in keys) {
+			var x = parseFloat(keys[k]);
+			var w = matches[keys[k]];
+			if (x >= lastx + lastw - fudge) {
+				count += w;
+				lastx = x;
+				lastw = w;
+			}
+		}
+		// display matched percent
+		matchedtxt.style["opacity"] = "1.0";
+		pct = 100 * count / maxwidth;
+		if (pct == 100)
+			pct = "100"
+		else
+			pct = pct.toFixed(1)
+		matchedtxt.firstChild.nodeValue = "Matched: " + pct + "%";
+	}
+	function searchover(e) {
+		searchbtn.style["opacity"] = "1.0";
+	}
+	function searchout(e) {
+		if (searching) {
+			searchbtn.style["opacity"] = "1.0";
+		} else {
+			searchbtn.style["opacity"] = "0.1";
+		}
+	}
+]]>
+</script>
+<rect x="0.0" y="0" width="1200.0" height="998.0" fill="url(#background)"  />
+<text text-anchor="middle" x="600.00" y="24" font-size="17" font-family="Verdana" fill="rgb(0,0,0)"  >Flame Graph</text>
+<text text-anchor="" x="10.00" y="981" font-size="12" font-family="Verdana" fill="rgb(0,0,0)" id="details" > </text>
+<text text-anchor="" x="10.00" y="24" font-size="12" font-family="Verdana" fill="rgb(0,0,0)" id="unzoom" onclick="unzoom()" style="opacity:0.0;cursor:pointer" >Reset Zoom</text>
+<text text-anchor="" x="1090.00" y="24" font-size="12" font-family="Verdana" fill="rgb(0,0,0)" id="search" onmouseover="searchover()" onmouseout="searchout()" onclick="search_prompt()" style="opacity:0.1;cursor:pointer" >Search</text>
+<text text-anchor="" x="1090.00" y="981" font-size="12" font-family="Verdana" fill="rgb(0,0,0)" id="matched" > </text>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap (2 samples, 0.20%)</title><rect x="1005.9" y="133" width="2.4" height="15.0" fill="rgb(247,189,38)" rx="2" ry="2" />
+<text text-anchor="" x="1008.92" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Time.Internal.Printer.utcTime.f (6 samples, 0.60%)</title><rect x="1148.7" y="229" width="7.1" height="15.0" fill="rgb(208,11,0)" rx="2" ry="2" />
+<text text-anchor="" x="1151.70" y="239.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withStmt'.openS.\ (8 samples, 0.80%)</title><rect x="1108.6" y="437" width="9.4" height="15.0" fill="rgb(229,4,12)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="447.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Raw.getStmtConn (1 samples, 0.10%)</title><rect x="1168.8" y="517" width="1.1" height="15.0" fill="rgb(251,155,43)" rx="2" ry="2" />
+<text text-anchor="" x="1171.76" y="527.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withStmt'.pullS.\ (54 samples, 5.40%)</title><rect x="52.5" y="341" width="63.7" height="15.0" fill="rgb(233,125,9)" rx="2" ry="2" />
+<text text-anchor="" x="55.48" y="351.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Databa..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Types.Internal.stmtExecute (21 samples, 2.10%)</title><rect x="1144.0" y="597" width="24.8" height="15.0" fill="rgb(238,33,27)" rx="2" ry="2" />
+<text text-anchor="" x="1146.98" y="607.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.FromField.fromField (765 samples, 76.50%)</title><rect x="126.8" y="229" width="902.7" height="15.0" fill="rgb(229,191,30)" rx="2" ry="2" />
+<text text-anchor="" x="129.82" y="239.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.PostgreSQL.Simple.FromField.fromField</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.runSqlPool (2 samples, 0.20%)</title><rect x="1106.2" y="805" width="2.4" height="15.0" fill="rgb(248,158,24)" rx="2" ry="2" />
+<text text-anchor="" x="1109.22" y="815.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Raw.rawQueryRes.make (6 samples, 0.60%)</title><rect x="1043.7" y="597" width="7.1" height="15.0" fill="rgb(212,179,29)" rx="2" ry="2" />
+<text text-anchor="" x="1046.68" y="607.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Acquire.Internal.fmap (6 samples, 0.60%)</title><rect x="1043.7" y="693" width="7.1" height="15.0" fill="rgb(212,13,37)" rx="2" ry="2" />
+<text text-anchor="" x="1046.68" y="703.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Class.PersistQuery.selectList (27 samples, 2.70%)</title><rect x="1050.8" y="741" width="31.8" height="15.0" fill="rgb(207,147,20)" rx="2" ry="2" />
+<text text-anchor="" x="1053.76" y="751.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap (2 samples, 0.20%)</title><rect x="1001.2" y="117" width="2.4" height="15.0" fill="rgb(222,140,9)" rx="2" ry="2" />
+<text text-anchor="" x="1004.20" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.LibPQ.resultFromConn (1 samples, 0.10%)</title><rect x="1168.8" y="389" width="1.1" height="15.0" fill="rgb(206,205,24)" rx="2" ry="2" />
+<text text-anchor="" x="1171.76" y="399.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Time.Internal.Parser.day (27 samples, 2.70%)</title><rect x="915.1" y="101" width="31.8" height="15.0" fill="rgb(239,121,26)" rx="2" ry="2" />
+<text text-anchor="" x="918.06" y="111.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.&gt;&gt;= (7 samples, 0.70%)</title><rect x="190.5" y="197" width="8.3" height="15.0" fill="rgb(252,165,48)" rx="2" ry="2" />
+<text text-anchor="" x="193.54" y="207.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Class.PersistQuery.selectList (6 samples, 0.60%)</title><rect x="1043.7" y="725" width="7.1" height="15.0" fill="rgb(215,75,5)" rx="2" ry="2" />
+<text text-anchor="" x="1046.68" y="735.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Migration.runMigrationUnsafe (1 samples, 0.10%)</title><rect x="1168.8" y="773" width="1.1" height="15.0" fill="rgb(234,41,53)" rx="2" ry="2" />
+<text text-anchor="" x="1171.76" y="783.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>MAIN.MAIN (983 samples, 98.30%)</title><rect x="10.0" y="933" width="1159.9" height="15.0" fill="rgb(237,82,50)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="943.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >MAIN.MAIN</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.acquireSqlConnFromPool (844 samples, 84.40%)</title><rect x="33.6" y="485" width="995.9" height="15.0" fill="rgb(238,160,51)" rx="2" ry="2" />
+<text text-anchor="" x="36.60" y="495.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.Persist.Sql.Run.acquireSqlConnFromPool</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withStmt'.openS.\ (19 samples, 1.90%)</title><rect x="1060.2" y="341" width="22.4" height="15.0" fill="rgb(223,158,19)" rx="2" ry="2" />
+<text text-anchor="" x="1063.20" y="351.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withStmt' (8 samples, 0.80%)</title><rect x="1108.6" y="501" width="9.4" height="15.0" fill="rgb(205,100,43)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="511.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Orphan.PersistQuery.selectSourceRes (6 samples, 0.60%)</title><rect x="1043.7" y="709" width="7.1" height="15.0" fill="rgb(224,228,16)" rx="2" ry="2" />
+<text text-anchor="" x="1046.68" y="719.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Compat.toByteString (10 samples, 1.00%)</title><rect x="1144.0" y="389" width="11.8" height="15.0" fill="rgb(222,193,23)" rx="2" ry="2" />
+<text text-anchor="" x="1146.98" y="399.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.LibPQ.exec.\ (19 samples, 1.90%)</title><rect x="1060.2" y="293" width="22.4" height="15.0" fill="rgb(254,66,15)" rx="2" ry="2" />
+<text text-anchor="" x="1063.20" y="303.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withStmt' (1 samples, 0.10%)</title><rect x="1168.8" y="485" width="1.1" height="15.0" fill="rgb(210,92,21)" rx="2" ry="2" />
+<text text-anchor="" x="1171.76" y="495.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Raw.rawQueryRes.make (844 samples, 84.40%)</title><rect x="33.6" y="549" width="995.9" height="15.0" fill="rgb(250,115,20)" rx="2" ry="2" />
+<text text-anchor="" x="36.60" y="559.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.Persist.Sql.Raw.rawQueryRes.make</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.*&gt; (1 samples, 0.10%)</title><rect x="189.4" y="197" width="1.1" height="15.0" fill="rgb(215,97,37)" rx="2" ry="2" />
+<text text-anchor="" x="192.36" y="207.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withStmt'.openS (27 samples, 2.70%)</title><rect x="64.3" y="277" width="31.8" height="15.0" fill="rgb(236,114,22)" rx="2" ry="2" />
+<text text-anchor="" x="67.28" y="287.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.&gt;&gt;=.\ (2 samples, 0.20%)</title><rect x="1044.9" y="389" width="2.3" height="15.0" fill="rgb(212,153,39)" rx="2" ry="2" />
+<text text-anchor="" x="1047.86" y="399.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.withConnection.\ (19 samples, 1.90%)</title><rect x="1060.2" y="357" width="22.4" height="15.0" fill="rgb(236,139,26)" rx="2" ry="2" />
+<text text-anchor="" x="1063.20" y="367.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Time.Internal.Parser.utcTime.tt (22 samples, 2.20%)</title><rect x="959.9" y="133" width="26.0" height="15.0" fill="rgb(236,149,31)" rx="2" ry="2" />
+<text text-anchor="" x="962.90" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.withConnection (8 samples, 0.80%)</title><rect x="1108.6" y="469" width="9.4" height="15.0" fill="rgb(221,147,20)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="479.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.LibPQ.exec (8 samples, 0.80%)</title><rect x="1108.6" y="421" width="9.4" height="15.0" fill="rgb(207,184,38)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="431.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.unsafeAcquireSqlConnFromPool (2 samples, 0.20%)</title><rect x="1106.2" y="773" width="2.4" height="15.0" fill="rgb(234,99,26)" rx="2" ry="2" />
+<text text-anchor="" x="1109.22" y="783.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Raw.getStmtConn (27 samples, 2.70%)</title><rect x="1050.8" y="597" width="31.8" height="15.0" fill="rgb(207,52,47)" rx="2" ry="2" />
+<text text-anchor="" x="1053.76" y="607.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.&gt;&gt;=.\.\ (2 samples, 0.20%)</title><rect x="31.2" y="645" width="2.4" height="15.0" fill="rgb(215,90,8)" rx="2" ry="2" />
+<text text-anchor="" x="34.24" y="655.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Migration.runMigrationUnsafe' (1 samples, 0.10%)</title><rect x="1168.8" y="757" width="1.1" height="15.0" fill="rgb(236,70,36)" rx="2" ry="2" />
+<text text-anchor="" x="1171.76" y="767.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.LibPQ.escapeStringConn.\ (8 samples, 0.80%)</title><rect x="1155.8" y="261" width="9.4" height="15.0" fill="rgb(252,213,42)" rx="2" ry="2" />
+<text text-anchor="" x="1158.78" y="271.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap (1 samples, 0.10%)</title><rect x="198.8" y="197" width="1.2" height="15.0" fill="rgb(221,193,36)" rx="2" ry="2" />
+<text text-anchor="" x="201.80" y="207.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.open' (21 samples, 2.10%)</title><rect x="1119.2" y="709" width="24.8" height="15.0" fill="rgb(232,159,9)" rx="2" ry="2" />
+<text text-anchor="" x="1122.20" y="719.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Time.Internal.Parser.seconds.parsePicos.t' (4 samples, 0.40%)</title><rect x="951.6" y="117" width="4.8" height="15.0" fill="rgb(215,213,28)" rx="2" ry="2" />
+<text text-anchor="" x="954.64" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.FromField.atto (10 samples, 1.00%)</title><rect x="203.5" y="213" width="11.8" height="15.0" fill="rgb(232,168,46)" rx="2" ry="2" />
+<text text-anchor="" x="206.52" y="223.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Raw.getStmtConn (844 samples, 84.40%)</title><rect x="33.6" y="533" width="995.9" height="15.0" fill="rgb(209,202,1)" rx="2" ry="2" />
+<text text-anchor="" x="36.60" y="543.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.Persist.Sql.Raw.getStmtConn</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.plus (2 samples, 0.20%)</title><rect x="200.0" y="197" width="2.3" height="15.0" fill="rgb(211,218,5)" rx="2" ry="2" />
+<text text-anchor="" x="202.98" y="207.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap.\ (1 samples, 0.10%)</title><rect x="946.9" y="69" width="1.2" height="15.0" fill="rgb(249,131,27)" rx="2" ry="2" />
+<text text-anchor="" x="949.92" y="79.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.withSqlPool.\ (8 samples, 0.80%)</title><rect x="1108.6" y="709" width="9.4" height="15.0" fill="rgb(248,203,33)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="719.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fail (2 samples, 0.20%)</title><rect x="194.1" y="149" width="2.3" height="15.0" fill="rgb(232,158,7)" rx="2" ry="2" />
+<text text-anchor="" x="197.08" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.unsafeAcquireSqlConnFromPool (6 samples, 0.60%)</title><rect x="1043.7" y="517" width="7.1" height="15.0" fill="rgb(250,167,44)" rx="2" ry="2" />
+<text text-anchor="" x="1046.68" y="527.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.&gt;&gt;= (16 samples, 1.60%)</title><rect x="157.5" y="197" width="18.9" height="15.0" fill="rgb(228,92,34)" rx="2" ry="2" />
+<text text-anchor="" x="160.50" y="207.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.createSqlPool (8 samples, 0.80%)</title><rect x="1108.6" y="693" width="9.4" height="15.0" fill="rgb(250,79,23)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="703.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>UNKNOWN (17 samples, 1.70%)</title><rect x="1169.9" y="933" width="20.1" height="15.0" fill="rgb(225,112,13)" rx="2" ry="2" />
+<text text-anchor="" x="1172.94" y="943.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.builtinGetters (773 samples, 77.30%)</title><rect x="117.4" y="261" width="912.1" height="15.0" fill="rgb(217,108,23)" rx="2" ry="2" />
+<text text-anchor="" x="120.38" y="271.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.Persist.Postgresql.builtinGetters</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Migration.parseMigration.liftIOReader (1 samples, 0.10%)</title><rect x="1168.8" y="709" width="1.1" height="15.0" fill="rgb(209,179,41)" rx="2" ry="2" />
+<text text-anchor="" x="1171.76" y="719.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Statistics.Regression.olsRegress.coeffs (2 samples, 0.20%)</title><rect x="10.0" y="453" width="2.4" height="15.0" fill="rgb(226,53,51)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="463.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.open' (8 samples, 0.80%)</title><rect x="1108.6" y="677" width="9.4" height="15.0" fill="rgb(217,13,52)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="687.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Raw.getStmtConn (6 samples, 0.60%)</title><rect x="1043.7" y="581" width="7.1" height="15.0" fill="rgb(208,134,17)" rx="2" ry="2" />
+<text text-anchor="" x="1046.68" y="591.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap.\ (6 samples, 0.60%)</title><rect x="492.6" y="117" width="7.1" height="15.0" fill="rgb(227,19,37)" rx="2" ry="2" />
+<text text-anchor="" x="495.62" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.execute (21 samples, 2.10%)</title><rect x="1144.0" y="421" width="24.8" height="15.0" fill="rgb(230,138,52)" rx="2" ry="2" />
+<text text-anchor="" x="1146.98" y="431.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Statistics.Regression.bootstrapRegress (3 samples, 0.30%)</title><rect x="10.0" y="501" width="3.5" height="15.0" fill="rgb(226,96,35)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="511.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.awaitForever (2 samples, 0.20%)</title><rect x="1029.5" y="645" width="2.4" height="15.0" fill="rgb(235,1,26)" rx="2" ry="2" />
+<text text-anchor="" x="1032.52" y="655.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.acquireSqlConnFromPool (2 samples, 0.20%)</title><rect x="1106.2" y="789" width="2.4" height="15.0" fill="rgb(242,171,20)" rx="2" ry="2" />
+<text text-anchor="" x="1109.22" y="799.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Criterion.Main.runMode (3 samples, 0.30%)</title><rect x="10.0" y="773" width="3.5" height="15.0" fill="rgb(245,40,52)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="783.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.buildQuery (9 samples, 0.90%)</title><rect x="1155.8" y="389" width="10.6" height="15.0" fill="rgb(210,155,1)" rx="2" ry="2" />
+<text text-anchor="" x="1158.78" y="399.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Control.Monad.IO.Unlift.withRunInIO.\ (8 samples, 0.80%)</title><rect x="1108.6" y="741" width="9.4" height="15.0" fill="rgb(228,34,44)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="751.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.*&gt; (2 samples, 0.20%)</title><rect x="155.1" y="197" width="2.4" height="15.0" fill="rgb(207,13,19)" rx="2" ry="2" />
+<text text-anchor="" x="158.14" y="207.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.withSqlPool (8 samples, 0.80%)</title><rect x="1108.6" y="805" width="9.4" height="15.0" fill="rgb(213,67,34)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="815.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Acquire.Internal.mkAcquire (773 samples, 77.30%)</title><rect x="117.4" y="357" width="912.1" height="15.0" fill="rgb(220,191,20)" rx="2" ry="2" />
+<text text-anchor="" x="120.38" y="367.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Data.Acquire.Internal.mkAcquire</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.buildQuery.split (10 samples, 1.00%)</title><rect x="1144.0" y="357" width="11.8" height="15.0" fill="rgb(213,133,45)" rx="2" ry="2" />
+<text text-anchor="" x="1146.98" y="367.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Statistics.Regression.ols (2 samples, 0.20%)</title><rect x="10.0" y="437" width="2.4" height="15.0" fill="rgb(209,210,39)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="447.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.&lt; (1 samples, 0.10%)</title><rect x="1021.3" y="165" width="1.1" height="15.0" fill="rgb(221,153,33)" rx="2" ry="2" />
+<text text-anchor="" x="1024.26" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.getColumns (1 samples, 0.10%)</title><rect x="1168.8" y="533" width="1.1" height="15.0" fill="rgb(252,108,35)" rx="2" ry="2" />
+<text text-anchor="" x="1171.76" y="543.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Control.Monad.IO.Unlift.withRunInIO.\ (1 samples, 0.10%)</title><rect x="1168.8" y="645" width="1.1" height="15.0" fill="rgb(253,39,52)" rx="2" ry="2" />
+<text text-anchor="" x="1171.76" y="655.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.getGetter (27 samples, 2.70%)</title><rect x="64.3" y="229" width="31.8" height="15.0" fill="rgb(235,174,19)" rx="2" ry="2" />
+<text text-anchor="" x="67.28" y="239.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Acquire.Internal.&gt;&gt;=.\ (6 samples, 0.60%)</title><rect x="1043.7" y="661" width="7.1" height="15.0" fill="rgb(210,83,8)" rx="2" ry="2" />
+<text text-anchor="" x="1046.68" y="671.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.LibPQ.withResult (15 samples, 1.50%)</title><rect x="98.5" y="309" width="17.7" height="15.0" fill="rgb(210,60,37)" rx="2" ry="2" />
+<text text-anchor="" x="101.50" y="319.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.prepare' (6 samples, 0.60%)</title><rect x="1043.7" y="437" width="7.1" height="15.0" fill="rgb(233,62,0)" rx="2" ry="2" />
+<text text-anchor="" x="1046.68" y="447.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Control.Monad.Logger.&gt;&gt;= (8 samples, 0.80%)</title><rect x="1108.6" y="789" width="9.4" height="15.0" fill="rgb(215,16,0)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="799.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.toField (2 samples, 0.20%)</title><rect x="1166.4" y="357" width="2.4" height="15.0" fill="rgb(252,132,37)" rx="2" ry="2" />
+<text text-anchor="" x="1169.40" y="367.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.withConnection.\ (1 samples, 0.10%)</title><rect x="1168.8" y="437" width="1.1" height="15.0" fill="rgb(208,113,26)" rx="2" ry="2" />
+<text text-anchor="" x="1171.76" y="447.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.createSqlPool (21 samples, 2.10%)</title><rect x="1144.0" y="501" width="24.8" height="15.0" fill="rgb(245,171,53)" rx="2" ry="2" />
+<text text-anchor="" x="1146.98" y="511.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Class.PersistQuery.selectList (856 samples, 85.60%)</title><rect x="33.6" y="677" width="1010.1" height="15.0" fill="rgb(238,12,52)" rx="2" ry="2" />
+<text text-anchor="" x="36.60" y="687.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.Persist.Class.PersistQuery.selectList</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap.\ (2 samples, 0.20%)</title><rect x="171.7" y="133" width="2.3" height="15.0" fill="rgb(238,21,6)" rx="2" ry="2" />
+<text text-anchor="" x="174.66" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.&gt;&gt;=.\ (1 samples, 0.10%)</title><rect x="33.6" y="341" width="1.2" height="15.0" fill="rgb(249,23,15)" rx="2" ry="2" />
+<text text-anchor="" x="36.60" y="351.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.prepare' (21 samples, 2.10%)</title><rect x="1144.0" y="453" width="24.8" height="15.0" fill="rgb(248,142,42)" rx="2" ry="2" />
+<text text-anchor="" x="1146.98" y="463.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Time.Implementation.utcTimeToBuilder (9 samples, 0.90%)</title><rect x="1145.2" y="261" width="10.6" height="15.0" fill="rgb(226,48,46)" rx="2" ry="2" />
+<text text-anchor="" x="1148.16" y="271.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.convertPV (773 samples, 77.30%)</title><rect x="117.4" y="245" width="912.1" height="15.0" fill="rgb(221,24,21)" rx="2" ry="2" />
+<text text-anchor="" x="120.38" y="255.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.Persist.Postgresql.convertPV</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Main.runConn_ (8 samples, 0.80%)</title><rect x="1108.6" y="853" width="9.4" height="15.0" fill="rgb(211,24,34)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="863.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Statistics.Matrix.Algorithms.qr.\ (1 samples, 0.10%)</title><rect x="11.2" y="389" width="1.2" height="15.0" fill="rgb(214,210,33)" rx="2" ry="2" />
+<text text-anchor="" x="14.18" y="399.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Util.parseEntityValues (13 samples, 1.30%)</title><rect x="1090.9" y="693" width="15.3" height="15.0" fill="rgb(230,92,25)" rx="2" ry="2" />
+<text text-anchor="" x="1093.88" y="703.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Control.Monad.Logger.&gt;&gt;=.\ (8 samples, 0.80%)</title><rect x="1108.6" y="773" width="9.4" height="15.0" fill="rgb(225,101,36)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="783.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Class.PersistQuery.selectList (20 samples, 2.00%)</title><rect x="1082.6" y="805" width="23.6" height="15.0" fill="rgb(224,113,8)" rx="2" ry="2" />
+<text text-anchor="" x="1085.62" y="815.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withStmt' (27 samples, 2.70%)</title><rect x="64.3" y="325" width="31.8" height="15.0" fill="rgb(238,153,12)" rx="2" ry="2" />
+<text text-anchor="" x="67.28" y="335.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.connectdb (2 samples, 0.20%)</title><rect x="1106.2" y="693" width="2.4" height="15.0" fill="rgb(253,134,39)" rx="2" ry="2" />
+<text text-anchor="" x="1109.22" y="703.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.acquireSqlConnFromPool (6 samples, 0.60%)</title><rect x="1043.7" y="533" width="7.1" height="15.0" fill="rgb(215,171,33)" rx="2" ry="2" />
+<text text-anchor="" x="1046.68" y="543.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.withConnection.\ (8 samples, 0.80%)</title><rect x="1108.6" y="453" width="9.4" height="15.0" fill="rgb(238,186,13)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="463.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.LibPQ.connectStart (2 samples, 0.20%)</title><rect x="1119.2" y="661" width="2.4" height="15.0" fill="rgb(216,74,39)" rx="2" ry="2" />
+<text text-anchor="" x="1122.20" y="671.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap.\ (2 samples, 0.20%)</title><rect x="1001.2" y="101" width="2.4" height="15.0" fill="rgb(234,198,52)" rx="2" ry="2" />
+<text text-anchor="" x="1004.20" y="111.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Criterion.Internal.runAndAnalyse (3 samples, 0.30%)</title><rect x="10.0" y="645" width="3.5" height="15.0" fill="rgb(249,202,47)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="655.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.pure (1 samples, 0.10%)</title><rect x="92.6" y="133" width="1.2" height="15.0" fill="rgb(231,134,30)" rx="2" ry="2" />
+<text text-anchor="" x="95.60" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.escapeWrap.\ (8 samples, 0.80%)</title><rect x="1155.8" y="293" width="9.4" height="15.0" fill="rgb(231,78,15)" rx="2" ry="2" />
+<text text-anchor="" x="1158.78" y="303.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.LibPQ.== (1 samples, 0.10%)</title><rect x="213.0" y="165" width="1.1" height="15.0" fill="rgb(238,34,1)" rx="2" ry="2" />
+<text text-anchor="" x="215.96" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Orphan.PersistStore.insertMany_ (1 samples, 0.10%)</title><rect x="1118.0" y="901" width="1.2" height="15.0" fill="rgb(246,74,14)" rx="2" ry="2" />
+<text text-anchor="" x="1121.02" y="911.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Ok.fmap (2 samples, 0.20%)</title><rect x="93.8" y="149" width="2.3" height="15.0" fill="rgb(235,40,53)" rx="2" ry="2" />
+<text text-anchor="" x="96.78" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.fmap.\ (12 samples, 1.20%)</title><rect x="82.0" y="165" width="14.1" height="15.0" fill="rgb(226,176,53)" rx="2" ry="2" />
+<text text-anchor="" x="84.98" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Acquire.Internal.&gt;&gt;= (844 samples, 84.40%)</title><rect x="33.6" y="629" width="995.9" height="15.0" fill="rgb(246,183,51)" rx="2" ry="2" />
+<text text-anchor="" x="36.60" y="639.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Data.Acquire.Internal.&gt;&gt;=</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.createBackend (1 samples, 0.10%)</title><rect x="1168.8" y="565" width="1.1" height="15.0" fill="rgb(244,220,35)" rx="2" ry="2" />
+<text text-anchor="" x="1171.76" y="575.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Time.Internal.Printer.day.toYMD (2 samples, 0.20%)</title><rect x="1146.3" y="213" width="2.4" height="15.0" fill="rgb(250,159,31)" rx="2" ry="2" />
+<text text-anchor="" x="1149.34" y="223.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.FromField.ok64 (3 samples, 0.30%)</title><rect x="210.6" y="181" width="3.5" height="15.0" fill="rgb(243,90,15)" rx="2" ry="2" />
+<text text-anchor="" x="213.60" y="191.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withStmt'.openS (8 samples, 0.80%)</title><rect x="1108.6" y="485" width="9.4" height="15.0" fill="rgb(236,106,5)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="495.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Main.runConn (43 samples, 4.30%)</title><rect x="1119.2" y="901" width="50.7" height="15.0" fill="rgb(232,210,27)" rx="2" ry="2" />
+<text text-anchor="" x="1122.20" y="911.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Main...</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Util.parseEntityValues.fromPersistValues' (13 samples, 1.30%)</title><rect x="1090.9" y="677" width="15.3" height="15.0" fill="rgb(232,223,15)" rx="2" ry="2" />
+<text text-anchor="" x="1093.88" y="687.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.createBackend (27 samples, 2.70%)</title><rect x="1050.8" y="469" width="31.8" height="15.0" fill="rgb(242,135,48)" rx="2" ry="2" />
+<text text-anchor="" x="1053.76" y="479.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Main.main (983 samples, 98.30%)</title><rect x="10.0" y="917" width="1159.9" height="15.0" fill="rgb(217,229,28)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="927.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Main.main</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Raw.rawQueryRes (6 samples, 0.60%)</title><rect x="1043.7" y="613" width="7.1" height="15.0" fill="rgb(252,156,19)" rx="2" ry="2" />
+<text text-anchor="" x="1046.68" y="623.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Acquire.Internal.&gt;&gt;= (6 samples, 0.60%)</title><rect x="1043.7" y="677" width="7.1" height="15.0" fill="rgb(213,26,30)" rx="2" ry="2" />
+<text text-anchor="" x="1046.68" y="687.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.pure (2 samples, 0.20%)</title><rect x="174.0" y="149" width="2.4" height="15.0" fill="rgb(249,55,26)" rx="2" ry="2" />
+<text text-anchor="" x="177.02" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Pipe.injectLeftovers (865 samples, 86.50%)</title><rect x="23.0" y="709" width="1020.7" height="15.0" fill="rgb(219,156,44)" rx="2" ry="2" />
+<text text-anchor="" x="25.98" y="719.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Data.Conduit.Internal.Pipe.injectLeftovers</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Acquire.Internal.&gt;&gt;=.\ (844 samples, 84.40%)</title><rect x="33.6" y="613" width="995.9" height="15.0" fill="rgb(236,170,24)" rx="2" ry="2" />
+<text text-anchor="" x="36.60" y="623.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Data.Acquire.Internal.&gt;&gt;=.\</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Control.Monad.Logger.&gt;&gt;=.\ (43 samples, 4.30%)</title><rect x="1119.2" y="805" width="50.7" height="15.0" fill="rgb(220,129,53)" rx="2" ry="2" />
+<text text-anchor="" x="1122.20" y="815.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Contr..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.withConnection (8 samples, 0.80%)</title><rect x="1155.8" y="325" width="9.4" height="15.0" fill="rgb(241,103,53)" rx="2" ry="2" />
+<text text-anchor="" x="1158.78" y="335.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap.\ (1 samples, 0.10%)</title><rect x="175.2" y="101" width="1.2" height="15.0" fill="rgb(250,113,26)" rx="2" ry="2" />
+<text text-anchor="" x="178.20" y="111.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.&gt;&gt;=.\ (2 samples, 0.20%)</title><rect x="1054.3" y="405" width="2.4" height="15.0" fill="rgb(237,205,47)" rx="2" ry="2" />
+<text text-anchor="" x="1057.30" y="415.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.typeOid (1 samples, 0.10%)</title><rect x="227.1" y="213" width="1.2" height="15.0" fill="rgb(238,35,30)" rx="2" ry="2" />
+<text text-anchor="" x="230.12" y="223.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Statistics.Regression.bootstrapRegress.coeffs (1 samples, 0.10%)</title><rect x="12.4" y="485" width="1.1" height="15.0" fill="rgb(252,54,24)" rx="2" ry="2" />
+<text text-anchor="" x="15.36" y="495.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.pure (1 samples, 0.10%)</title><rect x="1026.0" y="85" width="1.2" height="15.0" fill="rgb(210,160,0)" rx="2" ry="2" />
+<text text-anchor="" x="1028.98" y="95.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.ByteString.Char8.decimal (2 samples, 0.20%)</title><rect x="1001.2" y="133" width="2.4" height="15.0" fill="rgb(224,144,26)" rx="2" ry="2" />
+<text text-anchor="" x="1004.20" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.&lt;*.\ (19 samples, 1.90%)</title><rect x="833.6" y="133" width="22.5" height="15.0" fill="rgb(236,66,46)" rx="2" ry="2" />
+<text text-anchor="" x="836.64" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.&gt;&gt;=.\ (2 samples, 0.20%)</title><rect x="1029.5" y="565" width="2.4" height="15.0" fill="rgb(254,208,0)" rx="2" ry="2" />
+<text text-anchor="" x="1032.52" y="575.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.LibPQ.escapeStringConn (8 samples, 0.80%)</title><rect x="1155.8" y="277" width="9.4" height="15.0" fill="rgb(253,158,11)" rx="2" ry="2" />
+<text text-anchor="" x="1158.78" y="287.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.&gt;&gt;=.\ (2 samples, 0.20%)</title><rect x="1086.2" y="693" width="2.3" height="15.0" fill="rgb(248,210,7)" rx="2" ry="2" />
+<text text-anchor="" x="1089.16" y="703.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.ByteString.Char8.decimal.step (19 samples, 1.90%)</title><rect x="921.0" y="85" width="22.4" height="15.0" fill="rgb(215,191,48)" rx="2" ry="2" />
+<text text-anchor="" x="923.96" y="95.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.open' (1 samples, 0.10%)</title><rect x="1168.8" y="581" width="1.1" height="15.0" fill="rgb(206,178,17)" rx="2" ry="2" />
+<text text-anchor="" x="1171.76" y="591.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.formatQuery.xs (9 samples, 0.90%)</title><rect x="1145.2" y="325" width="10.6" height="15.0" fill="rgb(246,93,6)" rx="2" ry="2" />
+<text text-anchor="" x="1148.16" y="335.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Control.Monad.IO.Unlift.withRunInIO (906 samples, 90.60%)</title><rect x="13.5" y="789" width="1069.1" height="15.0" fill="rgb(254,36,16)" rx="2" ry="2" />
+<text text-anchor="" x="16.54" y="799.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Control.Monad.IO.Unlift.withRunInIO</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.&lt;* (663 samples, 66.30%)</title><rect x="233.0" y="197" width="782.4" height="15.0" fill="rgb(228,102,11)" rx="2" ry="2" />
+<text text-anchor="" x="236.02" y="207.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Data.Attoparsec.Internal.Types.&lt;*</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Pipe.injectLeftovers.go (865 samples, 86.50%)</title><rect x="23.0" y="693" width="1020.7" height="15.0" fill="rgb(245,87,30)" rx="2" ry="2" />
+<text text-anchor="" x="25.98" y="703.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Data.Conduit.Internal.Pipe.injectLeftovers.go</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>System.IO.CodePage.withCP65001 (3 samples, 0.30%)</title><rect x="10.0" y="741" width="3.5" height="15.0" fill="rgb(227,102,45)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="751.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.ToField.toField (2 samples, 0.20%)</title><rect x="1166.4" y="341" width="2.4" height="15.0" fill="rgb(243,219,46)" rx="2" ry="2" />
+<text text-anchor="" x="1169.40" y="351.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.acquireSqlConnFromPool (27 samples, 2.70%)</title><rect x="1050.8" y="549" width="31.8" height="15.0" fill="rgb(216,139,14)" rx="2" ry="2" />
+<text text-anchor="" x="1053.76" y="559.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>System.IO.CodePage.withCodePageOptions.fixLocale (3 samples, 0.30%)</title><rect x="10.0" y="661" width="3.5" height="15.0" fill="rgb(209,79,13)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="671.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Main.main.\ (931 samples, 93.10%)</title><rect x="10.0" y="821" width="1098.6" height="15.0" fill="rgb(252,191,15)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="831.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Main.main.\</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Statistics.Regression.bootstrapRegress.est (1 samples, 0.10%)</title><rect x="12.4" y="437" width="1.1" height="15.0" fill="rgb(226,63,31)" rx="2" ry="2" />
+<text text-anchor="" x="15.36" y="447.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.escapeStringConn (8 samples, 0.80%)</title><rect x="1155.8" y="357" width="9.4" height="15.0" fill="rgb(212,228,39)" rx="2" ry="2" />
+<text text-anchor="" x="1158.78" y="367.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.FromField.doFromField (9 samples, 0.90%)</title><rect x="204.7" y="197" width="10.6" height="15.0" fill="rgb(236,159,53)" rx="2" ry="2" />
+<text text-anchor="" x="207.70" y="207.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.createSqlPool (6 samples, 0.60%)</title><rect x="1043.7" y="485" width="7.1" height="15.0" fill="rgb(243,103,41)" rx="2" ry="2" />
+<text text-anchor="" x="1046.68" y="495.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Control.Monad.Logger.liftIO (8 samples, 0.80%)</title><rect x="1108.6" y="725" width="9.4" height="15.0" fill="rgb(251,0,20)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="735.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.LibPQ.escapeStringConn.\.\.\.\ (8 samples, 0.80%)</title><rect x="1155.8" y="213" width="9.4" height="15.0" fill="rgb(245,61,44)" rx="2" ry="2" />
+<text text-anchor="" x="1158.78" y="223.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.lift (2 samples, 0.20%)</title><rect x="1048.4" y="389" width="2.4" height="15.0" fill="rgb(208,88,0)" rx="2" ry="2" />
+<text text-anchor="" x="1051.40" y="399.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.escapeWrap (8 samples, 0.80%)</title><rect x="1155.8" y="341" width="9.4" height="15.0" fill="rgb(244,114,1)" rx="2" ry="2" />
+<text text-anchor="" x="1158.78" y="351.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Raw.rawQueryRes.make (27 samples, 2.70%)</title><rect x="1050.8" y="613" width="31.8" height="15.0" fill="rgb(209,175,52)" rx="2" ry="2" />
+<text text-anchor="" x="1053.76" y="623.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withStmt'.pull (8 samples, 0.80%)</title><rect x="1050.8" y="437" width="9.4" height="15.0" fill="rgb(219,11,32)" rx="2" ry="2" />
+<text text-anchor="" x="1053.76" y="447.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.buildQuery.zipParams (9 samples, 0.90%)</title><rect x="1145.2" y="341" width="10.6" height="15.0" fill="rgb(215,70,32)" rx="2" ry="2" />
+<text text-anchor="" x="1148.16" y="351.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.liftIO (3 samples, 0.30%)</title><rect x="1056.7" y="421" width="3.5" height="15.0" fill="rgb(231,160,6)" rx="2" ry="2" />
+<text text-anchor="" x="1059.66" y="431.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap.\ (7 samples, 0.70%)</title><rect x="857.2" y="117" width="8.3" height="15.0" fill="rgb(221,125,48)" rx="2" ry="2" />
+<text text-anchor="" x="860.24" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.lift.\ (2 samples, 0.20%)</title><rect x="1029.5" y="533" width="2.4" height="15.0" fill="rgb(253,207,43)" rx="2" ry="2" />
+<text text-anchor="" x="1032.52" y="543.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Time.Internal.Parser.timeOfDay (2 samples, 0.20%)</title><rect x="1009.5" y="149" width="2.3" height="15.0" fill="rgb(228,25,49)" rx="2" ry="2" />
+<text text-anchor="" x="1012.46" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.ToField.toField (9 samples, 0.90%)</title><rect x="1145.2" y="277" width="10.6" height="15.0" fill="rgb(240,76,52)" rx="2" ry="2" />
+<text text-anchor="" x="1148.16" y="287.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.FromField.doFromField (10 samples, 1.00%)</title><rect x="215.3" y="213" width="11.8" height="15.0" fill="rgb(238,221,1)" rx="2" ry="2" />
+<text text-anchor="" x="218.32" y="223.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.&gt;&gt;=.\.succ' (3 samples, 0.30%)</title><rect x="192.9" y="165" width="3.5" height="15.0" fill="rgb(210,144,50)" rx="2" ry="2" />
+<text text-anchor="" x="195.90" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.&gt;&gt;= (2 samples, 0.20%)</title><rect x="1044.9" y="405" width="2.3" height="15.0" fill="rgb(247,122,17)" rx="2" ry="2" />
+<text text-anchor="" x="1047.86" y="415.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.withConnection (19 samples, 1.90%)</title><rect x="1060.2" y="373" width="22.4" height="15.0" fill="rgb(211,26,35)" rx="2" ry="2" />
+<text text-anchor="" x="1063.20" y="383.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Pipe.runPipe (869 samples, 86.90%)</title><rect x="18.3" y="725" width="1025.4" height="15.0" fill="rgb(233,134,43)" rx="2" ry="2" />
+<text text-anchor="" x="21.26" y="735.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Data.Conduit.Internal.Pipe.runPipe</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Criterion.Main.defaultMainWith (3 samples, 0.30%)</title><rect x="10.0" y="789" width="3.5" height="15.0" fill="rgb(254,171,8)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="799.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.LibPQ.resultFromConn (19 samples, 1.90%)</title><rect x="1060.2" y="309" width="22.4" height="15.0" fill="rgb(247,204,12)" rx="2" ry="2" />
+<text text-anchor="" x="1063.20" y="319.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.createSqlPool (1 samples, 0.10%)</title><rect x="1168.8" y="597" width="1.1" height="15.0" fill="rgb(234,131,15)" rx="2" ry="2" />
+<text text-anchor="" x="1171.76" y="607.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.plus.\ (2 samples, 0.20%)</title><rect x="196.4" y="149" width="2.4" height="15.0" fill="rgb(239,218,7)" rx="2" ry="2" />
+<text text-anchor="" x="199.44" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.FromField.atto.go (4 samples, 0.40%)</title><rect x="69.0" y="133" width="4.7" height="15.0" fill="rgb(238,204,42)" rx="2" ry="2" />
+<text text-anchor="" x="72.00" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.&gt;&gt;= (7 samples, 0.70%)</title><rect x="179.9" y="149" width="8.3" height="15.0" fill="rgb(241,170,31)" rx="2" ry="2" />
+<text text-anchor="" x="182.92" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.prepare' (844 samples, 84.40%)</title><rect x="33.6" y="389" width="995.9" height="15.0" fill="rgb(231,32,15)" rx="2" ry="2" />
+<text text-anchor="" x="36.60" y="399.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.Persist.Postgresql.prepare'</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Raw.getStmtConn.stmt (21 samples, 2.10%)</title><rect x="1144.0" y="549" width="24.8" height="15.0" fill="rgb(222,97,19)" rx="2" ry="2" />
+<text text-anchor="" x="1146.98" y="559.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Orphan.PersistQuery.selectSourceRes.parse (15 samples, 1.50%)</title><rect x="1088.5" y="709" width="17.7" height="15.0" fill="rgb(216,45,35)" rx="2" ry="2" />
+<text text-anchor="" x="1091.52" y="719.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.connectdb.loop (2 samples, 0.20%)</title><rect x="1106.2" y="677" width="2.4" height="15.0" fill="rgb(246,189,8)" rx="2" ry="2" />
+<text text-anchor="" x="1109.22" y="687.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Time.Internal.Parser.localTime (1 samples, 0.10%)</title><rect x="946.9" y="101" width="1.2" height="15.0" fill="rgb(249,132,47)" rx="2" ry="2" />
+<text text-anchor="" x="949.92" y="111.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withPostgresqlPool (8 samples, 0.80%)</title><rect x="1108.6" y="837" width="9.4" height="15.0" fill="rgb(249,64,21)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="847.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap.\.succ' (1 samples, 0.10%)</title><rect x="175.2" y="85" width="1.2" height="15.0" fill="rgb(224,164,9)" rx="2" ry="2" />
+<text text-anchor="" x="178.20" y="95.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Control.Monad.Logger.&gt;&gt;=.\.(...) (42 samples, 4.20%)</title><rect x="1119.2" y="789" width="49.6" height="15.0" fill="rgb(228,75,11)" rx="2" ry="2" />
+<text text-anchor="" x="1122.20" y="799.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Cont..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Criterion.Analysis.analyseSample (3 samples, 0.30%)</title><rect x="10.0" y="549" width="3.5" height="15.0" fill="rgb(211,210,29)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="559.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.FromField.atto (4 samples, 0.40%)</title><rect x="69.0" y="165" width="4.7" height="15.0" fill="rgb(230,11,31)" rx="2" ry="2" />
+<text text-anchor="" x="72.00" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Time.Internal.Parser.localTime.daySep (1 samples, 0.10%)</title><rect x="1008.3" y="133" width="1.2" height="15.0" fill="rgb(216,73,29)" rx="2" ry="2" />
+<text text-anchor="" x="1011.28" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Time.Internal.Parser.seconds.parsePicos (7 samples, 0.70%)</title><rect x="948.1" y="133" width="8.3" height="15.0" fill="rgb(232,40,7)" rx="2" ry="2" />
+<text text-anchor="" x="951.10" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Raw.rawQueryRes (844 samples, 84.40%)</title><rect x="33.6" y="565" width="995.9" height="15.0" fill="rgb(221,224,4)" rx="2" ry="2" />
+<text text-anchor="" x="36.60" y="575.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.Persist.Sql.Raw.rawQueryRes</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Raw.getStmtConn (21 samples, 2.10%)</title><rect x="1144.0" y="565" width="24.8" height="15.0" fill="rgb(234,185,14)" rx="2" ry="2" />
+<text text-anchor="" x="1146.98" y="575.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Acquire.Internal.fmap (844 samples, 84.40%)</title><rect x="33.6" y="645" width="995.9" height="15.0" fill="rgb(250,205,11)" rx="2" ry="2" />
+<text text-anchor="" x="36.60" y="655.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Data.Acquire.Internal.fmap</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Orphan.PersistQuery.selectSourceRes (20 samples, 2.00%)</title><rect x="1082.6" y="789" width="23.6" height="15.0" fill="rgb(230,166,51)" rx="2" ry="2" />
+<text text-anchor="" x="1085.62" y="799.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.plus (2 samples, 0.20%)</title><rect x="196.4" y="165" width="2.4" height="15.0" fill="rgb(217,157,36)" rx="2" ry="2" />
+<text text-anchor="" x="199.44" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.&gt;&gt;=.\ (6 samples, 0.60%)</title><rect x="181.1" y="133" width="7.1" height="15.0" fill="rgb(219,200,52)" rx="2" ry="2" />
+<text text-anchor="" x="184.10" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Orphan.PersistStore.runChunked (21 samples, 2.10%)</title><rect x="1144.0" y="645" width="24.8" height="15.0" fill="rgb(239,109,51)" rx="2" ry="2" />
+<text text-anchor="" x="1146.98" y="655.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.&gt;&gt;=.\.succ' (11 samples, 1.10%)</title><rect x="163.4" y="165" width="13.0" height="15.0" fill="rgb(227,41,34)" rx="2" ry="2" />
+<text text-anchor="" x="166.40" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap.\.succ' (1 samples, 0.10%)</title><rect x="172.8" y="117" width="1.2" height="15.0" fill="rgb(210,100,47)" rx="2" ry="2" />
+<text text-anchor="" x="175.84" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.lift (2 samples, 0.20%)</title><rect x="1029.5" y="549" width="2.4" height="15.0" fill="rgb(251,215,2)" rx="2" ry="2" />
+<text text-anchor="" x="1032.52" y="559.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Time.Internal.Parser.day (2 samples, 0.20%)</title><rect x="1001.2" y="149" width="2.4" height="15.0" fill="rgb(206,198,29)" rx="2" ry="2" />
+<text text-anchor="" x="1004.20" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.withSqlPool.\ (931 samples, 93.10%)</title><rect x="10.0" y="853" width="1098.6" height="15.0" fill="rgb(210,19,6)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="863.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.Persist.Sql.Run.withSqlPool.\</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.pure.\ (1 samples, 0.10%)</title><rect x="74.9" y="149" width="1.2" height="15.0" fill="rgb(217,140,41)" rx="2" ry="2" />
+<text text-anchor="" x="77.90" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Criterion.Monad.withConfig (3 samples, 0.30%)</title><rect x="10.0" y="757" width="3.5" height="15.0" fill="rgb(208,97,12)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="767.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.&gt;&gt;=.\ (15 samples, 1.50%)</title><rect x="158.7" y="181" width="17.7" height="15.0" fill="rgb(209,155,11)" rx="2" ry="2" />
+<text text-anchor="" x="161.68" y="191.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap.\ (1 samples, 0.10%)</title><rect x="1007.1" y="117" width="1.2" height="15.0" fill="rgb(246,74,32)" rx="2" ry="2" />
+<text text-anchor="" x="1010.10" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.open' (27 samples, 2.70%)</title><rect x="1050.8" y="485" width="31.8" height="15.0" fill="rgb(215,76,50)" rx="2" ry="2" />
+<text text-anchor="" x="1053.76" y="495.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Acquire.Internal.with (906 samples, 90.60%)</title><rect x="13.5" y="805" width="1069.1" height="15.0" fill="rgb(246,49,54)" rx="2" ry="2" />
+<text text-anchor="" x="16.54" y="815.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Data.Acquire.Internal.with</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Control.Monad.Logger.askUnliftIO.\ (931 samples, 93.10%)</title><rect x="10.0" y="837" width="1098.6" height="15.0" fill="rgb(229,78,40)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="847.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Control.Monad.Logger.askUnliftIO.\</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap.\.succ' (10 samples, 1.00%)</title><rect x="989.4" y="117" width="11.8" height="15.0" fill="rgb(213,130,29)" rx="2" ry="2" />
+<text text-anchor="" x="992.40" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Pool.takeResource (6 samples, 0.60%)</title><rect x="1043.7" y="501" width="7.1" height="15.0" fill="rgb(233,81,6)" rx="2" ry="2" />
+<text text-anchor="" x="1046.68" y="511.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.LibPQ.exec (1 samples, 0.10%)</title><rect x="1168.8" y="405" width="1.1" height="15.0" fill="rgb(247,128,7)" rx="2" ry="2" />
+<text text-anchor="" x="1171.76" y="415.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Raw.rawExecuteCount (21 samples, 2.10%)</title><rect x="1144.0" y="581" width="24.8" height="15.0" fill="rgb(214,127,8)" rx="2" ry="2" />
+<text text-anchor="" x="1146.98" y="591.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.migrate' (1 samples, 0.10%)</title><rect x="1168.8" y="549" width="1.1" height="15.0" fill="rgb(230,198,29)" rx="2" ry="2" />
+<text text-anchor="" x="1171.76" y="559.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.withSqlPool.\ (42 samples, 4.20%)</title><rect x="1119.2" y="741" width="49.6" height="15.0" fill="rgb(229,221,9)" rx="2" ry="2" />
+<text text-anchor="" x="1122.20" y="751.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Data..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Criterion.Internal.runAndAnalyse.\ (3 samples, 0.30%)</title><rect x="10.0" y="597" width="3.5" height="15.0" fill="rgb(224,99,47)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="607.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Pool.takeResource (27 samples, 2.70%)</title><rect x="1050.8" y="517" width="31.8" height="15.0" fill="rgb(214,167,20)" rx="2" ry="2" />
+<text text-anchor="" x="1053.76" y="527.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.createSqlPool (27 samples, 2.70%)</title><rect x="1050.8" y="501" width="31.8" height="15.0" fill="rgb(206,24,33)" rx="2" ry="2" />
+<text text-anchor="" x="1053.76" y="511.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.&gt;&gt;=.\ (2 samples, 0.20%)</title><rect x="31.2" y="661" width="2.4" height="15.0" fill="rgb(205,185,14)" rx="2" ry="2" />
+<text text-anchor="" x="34.24" y="671.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.&gt;&gt;=.\.\ (1 samples, 0.10%)</title><rect x="33.6" y="325" width="1.2" height="15.0" fill="rgb(250,174,18)" rx="2" ry="2" />
+<text text-anchor="" x="36.60" y="335.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.&gt;&gt;=.\.succ' (3 samples, 0.30%)</title><rect x="184.6" y="117" width="3.6" height="15.0" fill="rgb(218,175,3)" rx="2" ry="2" />
+<text text-anchor="" x="187.64" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.buildQuery (10 samples, 1.00%)</title><rect x="1144.0" y="373" width="11.8" height="15.0" fill="rgb(239,121,15)" rx="2" ry="2" />
+<text text-anchor="" x="1146.98" y="383.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.LibPQ./= (1 samples, 0.10%)</title><rect x="202.3" y="213" width="1.2" height="15.0" fill="rgb(224,54,20)" rx="2" ry="2" />
+<text text-anchor="" x="205.34" y="223.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.createBackend (6 samples, 0.60%)</title><rect x="1043.7" y="453" width="7.1" height="15.0" fill="rgb(207,208,28)" rx="2" ry="2" />
+<text text-anchor="" x="1046.68" y="463.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.pure (7 samples, 0.70%)</title><rect x="847.8" y="117" width="8.3" height="15.0" fill="rgb(222,120,33)" rx="2" ry="2" />
+<text text-anchor="" x="850.80" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withPostgresqlPool (43 samples, 4.30%)</title><rect x="1119.2" y="869" width="50.7" height="15.0" fill="rgb(246,125,28)" rx="2" ry="2" />
+<text text-anchor="" x="1122.20" y="879.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Datab..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Types.Base.fromPersistValueText (1 samples, 0.10%)</title><rect x="1105.0" y="645" width="1.2" height="15.0" fill="rgb(211,43,23)" rx="2" ry="2" />
+<text text-anchor="" x="1108.04" y="655.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.awaitForever.\ (20 samples, 2.00%)</title><rect x="1082.6" y="757" width="23.6" height="15.0" fill="rgb(224,83,35)" rx="2" ry="2" />
+<text text-anchor="" x="1085.62" y="767.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Raw.rawExecute (21 samples, 2.10%)</title><rect x="1144.0" y="613" width="24.8" height="15.0" fill="rgb(249,183,27)" rx="2" ry="2" />
+<text text-anchor="" x="1146.98" y="623.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.createBackend (844 samples, 84.40%)</title><rect x="33.6" y="405" width="995.9" height="15.0" fill="rgb(241,165,8)" rx="2" ry="2" />
+<text text-anchor="" x="36.60" y="415.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.Persist.Postgresql.createBackend</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap (6 samples, 0.60%)</title><rect x="492.6" y="133" width="7.1" height="15.0" fill="rgb(228,160,18)" rx="2" ry="2" />
+<text text-anchor="" x="495.62" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.&gt;&gt;=.\ (4 samples, 0.40%)</title><rect x="1022.4" y="133" width="4.8" height="15.0" fill="rgb(233,41,20)" rx="2" ry="2" />
+<text text-anchor="" x="1025.44" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.buildAction (1 samples, 0.10%)</title><rect x="1144.0" y="341" width="1.2" height="15.0" fill="rgb(214,108,28)" rx="2" ry="2" />
+<text text-anchor="" x="1146.98" y="351.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.toField (9 samples, 0.90%)</title><rect x="1145.2" y="293" width="10.6" height="15.0" fill="rgb(221,168,35)" rx="2" ry="2" />
+<text text-anchor="" x="1148.16" y="303.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap.\ (13 samples, 1.30%)</title><rect x="985.9" y="133" width="15.3" height="15.0" fill="rgb(248,206,14)" rx="2" ry="2" />
+<text text-anchor="" x="988.86" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.typeOid (1 samples, 0.10%)</title><rect x="214.1" y="181" width="1.2" height="15.0" fill="rgb(226,134,44)" rx="2" ry="2" />
+<text text-anchor="" x="217.14" y="191.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Types.Internal.connMigrateSql (1 samples, 0.10%)</title><rect x="1168.8" y="677" width="1.1" height="15.0" fill="rgb(254,17,54)" rx="2" ry="2" />
+<text text-anchor="" x="1171.76" y="687.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Types.Internal.stmtQuery (6 samples, 0.60%)</title><rect x="1043.7" y="629" width="7.1" height="15.0" fill="rgb(224,105,40)" rx="2" ry="2" />
+<text text-anchor="" x="1046.68" y="639.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Types.Internal.stmtQuery (844 samples, 84.40%)</title><rect x="33.6" y="581" width="995.9" height="15.0" fill="rgb(209,91,43)" rx="2" ry="2" />
+<text text-anchor="" x="36.60" y="591.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.Persist.Sql.Types.Internal.stmtQuery</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.quote (1 samples, 0.10%)</title><rect x="1144.0" y="325" width="1.2" height="15.0" fill="rgb(230,14,27)" rx="2" ry="2" />
+<text text-anchor="" x="1146.98" y="335.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.ByteString.Buffer.buffer (1 samples, 0.10%)</title><rect x="209.4" y="165" width="1.2" height="15.0" fill="rgb(211,106,13)" rx="2" ry="2" />
+<text text-anchor="" x="212.42" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.getColumns (8 samples, 0.80%)</title><rect x="1108.6" y="629" width="9.4" height="15.0" fill="rgb(228,169,14)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="639.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Control.Monad.Logger.&gt;&gt;=.\.(...) (1 samples, 0.10%)</title><rect x="1168.8" y="661" width="1.1" height="15.0" fill="rgb(234,215,29)" rx="2" ry="2" />
+<text text-anchor="" x="1171.76" y="671.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Control.Monad.Logger.liftIO (42 samples, 4.20%)</title><rect x="1119.2" y="757" width="49.6" height="15.0" fill="rgb(228,197,54)" rx="2" ry="2" />
+<text text-anchor="" x="1122.20" y="767.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Cont..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Acquire.Internal.&gt;&gt;=.\.(...) (27 samples, 2.70%)</title><rect x="1050.8" y="661" width="31.8" height="15.0" fill="rgb(228,66,49)" rx="2" ry="2" />
+<text text-anchor="" x="1053.76" y="671.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.&lt;*.\ (1 samples, 0.10%)</title><rect x="1026.0" y="101" width="1.2" height="15.0" fill="rgb(247,65,18)" rx="2" ry="2" />
+<text text-anchor="" x="1028.98" y="111.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.awaitForever (20 samples, 2.00%)</title><rect x="1082.6" y="773" width="23.6" height="15.0" fill="rgb(232,118,3)" rx="2" ry="2" />
+<text text-anchor="" x="1085.62" y="783.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Pipe.injectLeftovers (4 samples, 0.40%)</title><rect x="13.5" y="725" width="4.8" height="15.0" fill="rgb(208,160,11)" rx="2" ry="2" />
+<text text-anchor="" x="16.54" y="735.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Acquire.Internal.mkAcquire.\ (27 samples, 2.70%)</title><rect x="64.3" y="293" width="31.8" height="15.0" fill="rgb(228,140,11)" rx="2" ry="2" />
+<text text-anchor="" x="67.28" y="303.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withStmt'.pull (6 samples, 0.60%)</title><rect x="1043.7" y="421" width="7.1" height="15.0" fill="rgb(232,205,29)" rx="2" ry="2" />
+<text text-anchor="" x="1046.68" y="431.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.liftIO (6 samples, 0.60%)</title><rect x="34.8" y="357" width="7.1" height="15.0" fill="rgb(225,80,41)" rx="2" ry="2" />
+<text text-anchor="" x="37.78" y="367.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap (3 samples, 0.30%)</title><rect x="943.4" y="69" width="3.5" height="15.0" fill="rgb(252,17,52)" rx="2" ry="2" />
+<text text-anchor="" x="946.38" y="79.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.unsafeAcquireSqlConnFromPool (844 samples, 84.40%)</title><rect x="33.6" y="469" width="995.9" height="15.0" fill="rgb(241,191,5)" rx="2" ry="2" />
+<text text-anchor="" x="36.60" y="479.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.Persist.Sql.Run.unsafeAcquireSqlConnFromPool</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.FromField.doFromField (2 samples, 0.20%)</title><rect x="73.7" y="165" width="2.4" height="15.0" fill="rgb(212,226,11)" rx="2" ry="2" />
+<text text-anchor="" x="76.72" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Control.Monad.IO.Unlift.withRunInIO (8 samples, 0.80%)</title><rect x="1108.6" y="597" width="9.4" height="15.0" fill="rgb(215,168,21)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="607.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.awaitForever.\ (2 samples, 0.20%)</title><rect x="1029.5" y="629" width="2.4" height="15.0" fill="rgb(220,31,24)" rx="2" ry="2" />
+<text text-anchor="" x="1032.52" y="639.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.runSqlPool (6 samples, 0.60%)</title><rect x="1043.7" y="549" width="7.1" height="15.0" fill="rgb(228,44,3)" rx="2" ry="2" />
+<text text-anchor="" x="1046.68" y="559.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Control.Monad.IO.Unlift.withRunInIO.\ (42 samples, 4.20%)</title><rect x="1119.2" y="773" width="49.6" height="15.0" fill="rgb(224,106,28)" rx="2" ry="2" />
+<text text-anchor="" x="1122.20" y="783.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Cont..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Acquire.Internal.with.\ (21 samples, 2.10%)</title><rect x="1144.0" y="693" width="24.8" height="15.0" fill="rgb(220,203,16)" rx="2" ry="2" />
+<text text-anchor="" x="1146.98" y="703.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Acquire.Internal.fmap (27 samples, 2.70%)</title><rect x="1050.8" y="709" width="31.8" height="15.0" fill="rgb(225,45,13)" rx="2" ry="2" />
+<text text-anchor="" x="1053.76" y="719.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.connectPostgreSQL (21 samples, 2.10%)</title><rect x="1119.2" y="693" width="24.8" height="15.0" fill="rgb(248,29,33)" rx="2" ry="2" />
+<text text-anchor="" x="1122.20" y="703.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap (10 samples, 1.00%)</title><rect x="176.4" y="197" width="11.8" height="15.0" fill="rgb(246,162,17)" rx="2" ry="2" />
+<text text-anchor="" x="179.38" y="207.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withStmt'.openS.getters (773 samples, 77.30%)</title><rect x="117.4" y="309" width="912.1" height="15.0" fill="rgb(232,33,49)" rx="2" ry="2" />
+<text text-anchor="" x="120.38" y="319.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.Persist.Postgresql.withStmt'.openS.getters</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.runSqlPool (844 samples, 84.40%)</title><rect x="33.6" y="501" width="995.9" height="15.0" fill="rgb(205,207,2)" rx="2" ry="2" />
+<text text-anchor="" x="36.60" y="511.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.Persist.Sql.Run.runSqlPool</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.&lt;* (4 samples, 0.40%)</title><rect x="1022.4" y="165" width="4.8" height="15.0" fill="rgb(217,99,2)" rx="2" ry="2" />
+<text text-anchor="" x="1025.44" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Criterion.Main.defaultMain (3 samples, 0.30%)</title><rect x="10.0" y="805" width="3.5" height="15.0" fill="rgb(210,22,17)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="815.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withStmt' (19 samples, 1.90%)</title><rect x="1060.2" y="437" width="22.4" height="15.0" fill="rgb(235,53,11)" rx="2" ry="2" />
+<text text-anchor="" x="1063.20" y="447.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withStmt'.pull (71 samples, 7.10%)</title><rect x="33.6" y="373" width="83.8" height="15.0" fill="rgb(210,227,34)" rx="2" ry="2" />
+<text text-anchor="" x="36.60" y="383.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database...</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Main.runConn (8 samples, 0.80%)</title><rect x="1108.6" y="869" width="9.4" height="15.0" fill="rgb(236,114,31)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="879.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Control.Monad.Logger.&gt;&gt;=.\.(...) (8 samples, 0.80%)</title><rect x="1108.6" y="757" width="9.4" height="15.0" fill="rgb(216,76,45)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="767.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.awaitForever.\.go.\ (18 samples, 1.80%)</title><rect x="1085.0" y="725" width="21.2" height="15.0" fill="rgb(219,30,45)" rx="2" ry="2" />
+<text text-anchor="" x="1087.98" y="735.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Migration.parseMigration (1 samples, 0.10%)</title><rect x="1168.8" y="725" width="1.1" height="15.0" fill="rgb(215,16,33)" rx="2" ry="2" />
+<text text-anchor="" x="1171.76" y="735.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.ByteString.Char8.decimal (3 samples, 0.30%)</title><rect x="943.4" y="85" width="3.5" height="15.0" fill="rgb(224,90,14)" rx="2" ry="2" />
+<text text-anchor="" x="946.38" y="95.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Acquire.Internal.&gt;&gt;=.\.(...) (6 samples, 0.60%)</title><rect x="1043.7" y="645" width="7.1" height="15.0" fill="rgb(241,228,51)" rx="2" ry="2" />
+<text text-anchor="" x="1046.68" y="655.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Time.Implementation.parseUTCTime (679 samples, 67.90%)</title><rect x="228.3" y="213" width="801.2" height="15.0" fill="rgb(251,87,35)" rx="2" ry="2" />
+<text text-anchor="" x="231.30" y="223.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.PostgreSQL.Simple.Time.Implementation.parseUTCTime</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Orphan.PersistStore.runChunked (1 samples, 0.10%)</title><rect x="1118.0" y="885" width="1.2" height="15.0" fill="rgb(246,145,32)" rx="2" ry="2" />
+<text text-anchor="" x="1121.02" y="895.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Acquire.Internal.with.\.\ (21 samples, 2.10%)</title><rect x="1144.0" y="677" width="24.8" height="15.0" fill="rgb(239,24,50)" rx="2" ry="2" />
+<text text-anchor="" x="1146.98" y="687.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Types.Internal.connPrepare (844 samples, 84.40%)</title><rect x="33.6" y="517" width="995.9" height="15.0" fill="rgb(219,65,10)" rx="2" ry="2" />
+<text text-anchor="" x="36.60" y="527.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.Persist.Sql.Types.Internal.connPrepare</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.&gt;&gt;=.\.succ' (4 samples, 0.40%)</title><rect x="1022.4" y="117" width="4.8" height="15.0" fill="rgb(236,159,10)" rx="2" ry="2" />
+<text text-anchor="" x="1025.44" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.pure (3 samples, 0.30%)</title><rect x="997.7" y="85" width="3.5" height="15.0" fill="rgb(244,118,7)" rx="2" ry="2" />
+<text text-anchor="" x="1000.66" y="95.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap (2 samples, 0.20%)</title><rect x="171.7" y="149" width="2.3" height="15.0" fill="rgb(232,82,18)" rx="2" ry="2" />
+<text text-anchor="" x="174.66" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withStmt'.openS.getters (27 samples, 2.70%)</title><rect x="64.3" y="261" width="31.8" height="15.0" fill="rgb(250,146,8)" rx="2" ry="2" />
+<text text-anchor="" x="67.28" y="271.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.migrate' (8 samples, 0.80%)</title><rect x="1108.6" y="645" width="9.4" height="15.0" fill="rgb(233,41,46)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="655.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Acquire.Internal.with.\ (906 samples, 90.60%)</title><rect x="13.5" y="773" width="1069.1" height="15.0" fill="rgb(215,128,6)" rx="2" ry="2" />
+<text text-anchor="" x="16.54" y="783.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Data.Acquire.Internal.with.\</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.prepare' (1 samples, 0.10%)</title><rect x="1168.8" y="501" width="1.1" height="15.0" fill="rgb(213,84,36)" rx="2" ry="2" />
+<text text-anchor="" x="1171.76" y="511.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Statistics.Matrix.multiplyV (1 samples, 0.10%)</title><rect x="10.0" y="421" width="1.2" height="15.0" fill="rgb(246,29,3)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="431.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.&gt;&gt;= (661 samples, 66.10%)</title><rect x="235.4" y="181" width="780.0" height="15.0" fill="rgb(211,209,10)" rx="2" ry="2" />
+<text text-anchor="" x="238.38" y="191.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Data.Attoparsec.Internal.Types.&gt;&gt;=</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.open' (844 samples, 84.40%)</title><rect x="33.6" y="421" width="995.9" height="15.0" fill="rgb(247,23,12)" rx="2" ry="2" />
+<text text-anchor="" x="36.60" y="431.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.Persist.Postgresql.open'</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.createBackend (8 samples, 0.80%)</title><rect x="1108.6" y="661" width="9.4" height="15.0" fill="rgb(251,93,27)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="671.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.&gt;&gt;= (1 samples, 0.10%)</title><rect x="189.4" y="181" width="1.1" height="15.0" fill="rgb(249,126,12)" rx="2" ry="2" />
+<text text-anchor="" x="192.36" y="191.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.runSqlPool (21 samples, 2.10%)</title><rect x="1144.0" y="725" width="24.8" height="15.0" fill="rgb(232,197,1)" rx="2" ry="2" />
+<text text-anchor="" x="1146.98" y="735.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.&gt;&gt;= (2 samples, 0.20%)</title><rect x="155.1" y="181" width="2.4" height="15.0" fill="rgb(235,207,23)" rx="2" ry="2" />
+<text text-anchor="" x="158.14" y="191.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.fmap (14 samples, 1.40%)</title><rect x="79.6" y="181" width="16.5" height="15.0" fill="rgb(208,216,2)" rx="2" ry="2" />
+<text text-anchor="" x="82.62" y="191.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.open' (2 samples, 0.20%)</title><rect x="1106.2" y="725" width="2.4" height="15.0" fill="rgb(213,31,4)" rx="2" ry="2" />
+<text text-anchor="" x="1109.22" y="735.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.awaitForever.\.go (2 samples, 0.20%)</title><rect x="1029.5" y="613" width="2.4" height="15.0" fill="rgb(248,183,15)" rx="2" ry="2" />
+<text text-anchor="" x="1032.52" y="623.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Migration.migrate (1 samples, 0.10%)</title><rect x="1168.8" y="693" width="1.1" height="15.0" fill="rgb(220,39,13)" rx="2" ry="2" />
+<text text-anchor="" x="1171.76" y="703.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Class.PersistQuery.selectList.\ (879 samples, 87.90%)</title><rect x="13.5" y="741" width="1037.3" height="15.0" fill="rgb(227,210,22)" rx="2" ry="2" />
+<text text-anchor="" x="16.54" y="751.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.Persist.Class.PersistQuery.selectList.\</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Orphan.PersistQuery.selectSourceRes (856 samples, 85.60%)</title><rect x="33.6" y="661" width="1010.1" height="15.0" fill="rgb(209,27,5)" rx="2" ry="2" />
+<text text-anchor="" x="36.60" y="671.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.Persist.Sql.Orphan.PersistQuery.selectSourceRes</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.ByteString.Char8.signed (12 samples, 1.20%)</title><rect x="188.2" y="213" width="14.1" height="15.0" fill="rgb(216,53,16)" rx="2" ry="2" />
+<text text-anchor="" x="191.18" y="223.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withStmt'.openS (1 samples, 0.10%)</title><rect x="1168.8" y="469" width="1.1" height="15.0" fill="rgb(223,190,31)" rx="2" ry="2" />
+<text text-anchor="" x="1171.76" y="479.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.endOfInput.\ (12 samples, 1.20%)</title><rect x="1015.4" y="181" width="14.1" height="15.0" fill="rgb(244,43,34)" rx="2" ry="2" />
+<text text-anchor="" x="1018.36" y="191.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.createSqlPool (21 samples, 2.10%)</title><rect x="1119.2" y="725" width="24.8" height="15.0" fill="rgb(243,212,37)" rx="2" ry="2" />
+<text text-anchor="" x="1122.20" y="735.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Class.PersistField.fromPersistValue (2 samples, 0.20%)</title><rect x="1103.9" y="661" width="2.3" height="15.0" fill="rgb(218,37,34)" rx="2" ry="2" />
+<text text-anchor="" x="1106.86" y="671.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.prepare' (27 samples, 2.70%)</title><rect x="1050.8" y="453" width="31.8" height="15.0" fill="rgb(225,172,10)" rx="2" ry="2" />
+<text text-anchor="" x="1053.76" y="463.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.LibPQ.connectPoll (19 samples, 1.90%)</title><rect x="1121.6" y="645" width="22.4" height="15.0" fill="rgb(210,205,36)" rx="2" ry="2" />
+<text text-anchor="" x="1124.56" y="655.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.&gt;&gt;=.\.\ (1 samples, 0.10%)</title><rect x="1083.8" y="741" width="1.2" height="15.0" fill="rgb(247,158,2)" rx="2" ry="2" />
+<text text-anchor="" x="1086.80" y="751.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>System.IO.CodePage.withCodePageOptions.fixInput (3 samples, 0.30%)</title><rect x="10.0" y="693" width="3.5" height="15.0" fill="rgb(214,92,52)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="703.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.formatQuery.xs (2 samples, 0.20%)</title><rect x="1166.4" y="389" width="2.4" height="15.0" fill="rgb(242,46,47)" rx="2" ry="2" />
+<text text-anchor="" x="1169.40" y="399.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Statistics.Regression.bootstrapRegress.\ (2 samples, 0.20%)</title><rect x="10.0" y="485" width="2.4" height="15.0" fill="rgb(210,190,29)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="495.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Pipe.injectLeftovers.go (4 samples, 0.40%)</title><rect x="13.5" y="709" width="4.8" height="15.0" fill="rgb(214,186,38)" rx="2" ry="2" />
+<text text-anchor="" x="16.54" y="719.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Pool.takeResource (844 samples, 84.40%)</title><rect x="33.6" y="453" width="995.9" height="15.0" fill="rgb(218,82,29)" rx="2" ry="2" />
+<text text-anchor="" x="36.60" y="463.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Data.Pool.takeResource</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap (1 samples, 0.10%)</title><rect x="946.9" y="85" width="1.2" height="15.0" fill="rgb(236,171,28)" rx="2" ry="2" />
+<text text-anchor="" x="949.92" y="95.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap.\.succ' (4 samples, 0.40%)</title><rect x="860.8" y="101" width="4.7" height="15.0" fill="rgb(207,49,35)" rx="2" ry="2" />
+<text text-anchor="" x="863.78" y="111.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Types.Internal.connMigrateSql (8 samples, 0.80%)</title><rect x="1108.6" y="885" width="9.4" height="15.0" fill="rgb(251,141,27)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="895.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.&gt;&gt;= (3 samples, 0.30%)</title><rect x="1053.1" y="421" width="3.6" height="15.0" fill="rgb(250,49,42)" rx="2" ry="2" />
+<text text-anchor="" x="1056.12" y="431.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.&gt;&gt;=.\ (7 samples, 0.70%)</title><rect x="190.5" y="181" width="8.3" height="15.0" fill="rgb(245,39,19)" rx="2" ry="2" />
+<text text-anchor="" x="193.54" y="191.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.withSqlPool.\ (1 samples, 0.10%)</title><rect x="1168.8" y="613" width="1.1" height="15.0" fill="rgb(238,3,20)" rx="2" ry="2" />
+<text text-anchor="" x="1171.76" y="623.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.&gt;&gt;= (2 samples, 0.20%)</title><rect x="1029.5" y="581" width="2.4" height="15.0" fill="rgb(206,23,4)" rx="2" ry="2" />
+<text text-anchor="" x="1032.52" y="591.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Statistics.Function.sort (1 samples, 0.10%)</title><rect x="12.4" y="405" width="1.1" height="15.0" fill="rgb(241,130,27)" rx="2" ry="2" />
+<text text-anchor="" x="15.36" y="415.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.open' (6 samples, 0.60%)</title><rect x="1043.7" y="469" width="7.1" height="15.0" fill="rgb(243,173,40)" rx="2" ry="2" />
+<text text-anchor="" x="1046.68" y="479.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Types.Internal.stmtQuery (8 samples, 0.80%)</title><rect x="1108.6" y="549" width="9.4" height="15.0" fill="rgb(232,155,8)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="559.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Acquire.Internal.&gt;&gt;=.\.(...) (844 samples, 84.40%)</title><rect x="33.6" y="597" width="995.9" height="15.0" fill="rgb(225,141,12)" rx="2" ry="2" />
+<text text-anchor="" x="36.60" y="607.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Data.Acquire.Internal.&gt;&gt;=.\.(...)</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Raw.rawQueryRes (27 samples, 2.70%)</title><rect x="1050.8" y="629" width="31.8" height="15.0" fill="rgb(223,45,48)" rx="2" ry="2" />
+<text text-anchor="" x="1053.76" y="639.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap (8 samples, 0.80%)</title><rect x="856.1" y="133" width="9.4" height="15.0" fill="rgb(207,117,4)" rx="2" ry="2" />
+<text text-anchor="" x="859.06" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.withSqlPool (931 samples, 93.10%)</title><rect x="10.0" y="869" width="1098.6" height="15.0" fill="rgb(238,226,47)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="879.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.Persist.Sql.Run.withSqlPool</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Orphan.PersistStore.insertMany_ (21 samples, 2.10%)</title><rect x="1144.0" y="661" width="24.8" height="15.0" fill="rgb(245,180,50)" rx="2" ry="2" />
+<text text-anchor="" x="1146.98" y="671.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.ToRow.toRow (9 samples, 0.90%)</title><rect x="1145.2" y="309" width="10.6" height="15.0" fill="rgb(237,191,37)" rx="2" ry="2" />
+<text text-anchor="" x="1148.16" y="319.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Criterion.Analysis.regress (3 samples, 0.30%)</title><rect x="10.0" y="517" width="3.5" height="15.0" fill="rgb(226,211,33)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="527.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.connectdb.loop (19 samples, 1.90%)</title><rect x="1121.6" y="661" width="22.4" height="15.0" fill="rgb(230,26,34)" rx="2" ry="2" />
+<text text-anchor="" x="1124.56" y="671.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.FromField.fromField (11 samples, 1.10%)</title><rect x="66.6" y="181" width="13.0" height="15.0" fill="rgb(253,10,21)" rx="2" ry="2" />
+<text text-anchor="" x="69.64" y="191.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.+ (1 samples, 0.10%)</title><rect x="162.2" y="165" width="1.2" height="15.0" fill="rgb(228,147,42)" rx="2" ry="2" />
+<text text-anchor="" x="165.22" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.LibPQ.exec (19 samples, 1.90%)</title><rect x="1060.2" y="325" width="22.4" height="15.0" fill="rgb(241,224,7)" rx="2" ry="2" />
+<text text-anchor="" x="1063.20" y="335.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.*&gt; (1 samples, 0.10%)</title><rect x="498.5" y="69" width="1.2" height="15.0" fill="rgb(254,176,50)" rx="2" ry="2" />
+<text text-anchor="" x="501.52" y="79.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.pure.\ (5 samples, 0.50%)</title><rect x="850.2" y="101" width="5.9" height="15.0" fill="rgb(226,69,53)" rx="2" ry="2" />
+<text text-anchor="" x="853.16" y="111.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withStmt'.openS.getters.\ (27 samples, 2.70%)</title><rect x="64.3" y="245" width="31.8" height="15.0" fill="rgb(225,80,25)" rx="2" ry="2" />
+<text text-anchor="" x="67.28" y="255.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Orphan.PersistStore.insertMany_.insertMany_' (21 samples, 2.10%)</title><rect x="1144.0" y="629" width="24.8" height="15.0" fill="rgb(212,11,44)" rx="2" ry="2" />
+<text text-anchor="" x="1146.98" y="639.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Time.Internal.Parser.twoDigits.c2d (3 samples, 0.30%)</title><rect x="956.4" y="133" width="3.5" height="15.0" fill="rgb(227,123,35)" rx="2" ry="2" />
+<text text-anchor="" x="959.36" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>System.IO.CodePage.withCodePageOptions (3 samples, 0.30%)</title><rect x="10.0" y="709" width="3.5" height="15.0" fill="rgb(242,16,37)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="719.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withStmt' (773 samples, 77.30%)</title><rect x="117.4" y="373" width="912.1" height="15.0" fill="rgb(243,90,35)" rx="2" ry="2" />
+<text text-anchor="" x="120.38" y="383.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.Persist.Postgresql.withStmt'</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Statistics.Regression.bootstrapRegress.coeffs.\ (1 samples, 0.10%)</title><rect x="12.4" y="453" width="1.1" height="15.0" fill="rgb(235,92,48)" rx="2" ry="2" />
+<text text-anchor="" x="15.36" y="463.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.lift (6 samples, 0.60%)</title><rect x="34.8" y="341" width="7.1" height="15.0" fill="rgb(224,91,39)" rx="2" ry="2" />
+<text text-anchor="" x="37.78" y="351.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.prepare' (8 samples, 0.80%)</title><rect x="1108.6" y="517" width="9.4" height="15.0" fill="rgb(236,32,37)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="527.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Migration.parseMigration' (1 samples, 0.10%)</title><rect x="1168.8" y="741" width="1.1" height="15.0" fill="rgb(231,133,42)" rx="2" ry="2" />
+<text text-anchor="" x="1171.76" y="751.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Statistics.Regression.bootstrapRegress.est.w (1 samples, 0.10%)</title><rect x="12.4" y="421" width="1.1" height="15.0" fill="rgb(213,20,12)" rx="2" ry="2" />
+<text text-anchor="" x="15.36" y="431.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.&gt;&gt;=.\.succ' (402 samples, 40.20%)</title><rect x="511.5" y="149" width="474.4" height="15.0" fill="rgb(242,93,14)" rx="2" ry="2" />
+<text text-anchor="" x="514.50" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Data.Attoparsec.Internal.Types.&gt;&gt;=.\.succ'</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap.\.succ' (4 samples, 0.40%)</title><rect x="495.0" y="101" width="4.7" height="15.0" fill="rgb(222,130,2)" rx="2" ry="2" />
+<text text-anchor="" x="497.98" y="111.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.LibPQ.escapeStringConn.\.\ (8 samples, 0.80%)</title><rect x="1155.8" y="245" width="9.4" height="15.0" fill="rgb(238,54,6)" rx="2" ry="2" />
+<text text-anchor="" x="1158.78" y="255.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap (13 samples, 1.30%)</title><rect x="985.9" y="149" width="15.3" height="15.0" fill="rgb(214,159,8)" rx="2" ry="2" />
+<text text-anchor="" x="988.86" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.liftIO (3 samples, 0.30%)</title><rect x="1047.2" y="405" width="3.6" height="15.0" fill="rgb(249,55,24)" rx="2" ry="2" />
+<text text-anchor="" x="1050.22" y="415.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Time.Internal.Printer.utcTime (9 samples, 0.90%)</title><rect x="1145.2" y="245" width="10.6" height="15.0" fill="rgb(219,169,11)" rx="2" ry="2" />
+<text text-anchor="" x="1148.16" y="255.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>all (1,000 samples, 100%)</title><rect x="10.0" y="949" width="1180.0" height="15.0" fill="rgb(227,86,1)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="959.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.breakOnSingleQuestionMark (1 samples, 0.10%)</title><rect x="1165.2" y="341" width="1.2" height="15.0" fill="rgb(222,227,46)" rx="2" ry="2" />
+<text text-anchor="" x="1168.22" y="351.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Raw.getStmtConn (8 samples, 0.80%)</title><rect x="1108.6" y="533" width="9.4" height="15.0" fill="rgb(234,229,54)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="543.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Raw.getStmtConn.stmt.\ (21 samples, 2.10%)</title><rect x="1144.0" y="533" width="24.8" height="15.0" fill="rgb(219,177,35)" rx="2" ry="2" />
+<text text-anchor="" x="1146.98" y="543.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.LibPQ.pollHelper (19 samples, 1.90%)</title><rect x="1121.6" y="629" width="22.4" height="15.0" fill="rgb(247,42,13)" rx="2" ry="2" />
+<text text-anchor="" x="1124.56" y="639.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.lift (1 samples, 0.10%)</title><rect x="1087.3" y="677" width="1.2" height="15.0" fill="rgb(227,170,16)" rx="2" ry="2" />
+<text text-anchor="" x="1090.34" y="687.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.ToRow.toRow (2 samples, 0.20%)</title><rect x="1166.4" y="373" width="2.4" height="15.0" fill="rgb(222,13,12)" rx="2" ry="2" />
+<text text-anchor="" x="1169.40" y="383.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.unsafeAcquireSqlConnFromPool (27 samples, 2.70%)</title><rect x="1050.8" y="533" width="31.8" height="15.0" fill="rgb(230,223,3)" rx="2" ry="2" />
+<text text-anchor="" x="1053.76" y="543.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withPostgresqlPoolWithVersion (931 samples, 93.10%)</title><rect x="10.0" y="885" width="1098.6" height="15.0" fill="rgb(210,193,29)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="895.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.Persist.Postgresql.withPostgresqlPoolWithVersion</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.LibPQ.getvalue' (17 samples, 1.70%)</title><rect x="96.1" y="325" width="20.1" height="15.0" fill="rgb(229,24,29)" rx="2" ry="2" />
+<text text-anchor="" x="99.14" y="335.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.createSqlPool (2 samples, 0.20%)</title><rect x="1106.2" y="741" width="2.4" height="15.0" fill="rgb(218,174,12)" rx="2" ry="2" />
+<text text-anchor="" x="1109.22" y="751.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Acquire.Internal.with (8 samples, 0.80%)</title><rect x="1108.6" y="613" width="9.4" height="15.0" fill="rgb(237,24,39)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="623.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.&gt;&gt;= (1 samples, 0.10%)</title><rect x="33.6" y="357" width="1.2" height="15.0" fill="rgb(209,142,41)" rx="2" ry="2" />
+<text text-anchor="" x="36.60" y="367.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Main.setup (1 samples, 0.10%)</title><rect x="1168.8" y="789" width="1.1" height="15.0" fill="rgb(227,180,32)" rx="2" ry="2" />
+<text text-anchor="" x="1171.76" y="799.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Acquire.Internal.with.\.\ (906 samples, 90.60%)</title><rect x="13.5" y="757" width="1069.1" height="15.0" fill="rgb(235,105,3)" rx="2" ry="2" />
+<text text-anchor="" x="16.54" y="767.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Data.Acquire.Internal.with.\.\</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.pure (1 samples, 0.10%)</title><rect x="76.1" y="165" width="1.2" height="15.0" fill="rgb(230,19,28)" rx="2" ry="2" />
+<text text-anchor="" x="79.08" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.ByteString.Char8.decimal (28 samples, 2.80%)</title><rect x="155.1" y="213" width="33.1" height="15.0" fill="rgb(239,167,16)" rx="2" ry="2" />
+<text text-anchor="" x="158.14" y="223.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Orphan.PersistStore.insertMany_.insertMany_'.sql (1 samples, 0.10%)</title><rect x="1118.0" y="853" width="1.2" height="15.0" fill="rgb(214,106,24)" rx="2" ry="2" />
+<text text-anchor="" x="1121.02" y="863.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.FromField.fromField (1 samples, 0.10%)</title><rect x="92.6" y="149" width="1.2" height="15.0" fill="rgb(247,88,40)" rx="2" ry="2" />
+<text text-anchor="" x="95.60" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap (1 samples, 0.10%)</title><rect x="175.2" y="117" width="1.2" height="15.0" fill="rgb(217,134,29)" rx="2" ry="2" />
+<text text-anchor="" x="178.20" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Criterion.Internal.analyseOne (3 samples, 0.30%)</title><rect x="10.0" y="565" width="3.5" height="15.0" fill="rgb(230,54,39)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="575.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Acquire.Internal.mkAcquire.\ (773 samples, 77.30%)</title><rect x="117.4" y="341" width="912.1" height="15.0" fill="rgb(252,182,4)" rx="2" ry="2" />
+<text text-anchor="" x="120.38" y="351.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Data.Acquire.Internal.mkAcquire.\</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap.\ (1 samples, 0.10%)</title><rect x="198.8" y="181" width="1.2" height="15.0" fill="rgb(222,67,27)" rx="2" ry="2" />
+<text text-anchor="" x="201.80" y="191.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.&gt;&gt;= (4 samples, 0.40%)</title><rect x="1022.4" y="149" width="4.8" height="15.0" fill="rgb(252,40,26)" rx="2" ry="2" />
+<text text-anchor="" x="1025.44" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.pure.\ (2 samples, 0.20%)</title><rect x="71.4" y="117" width="2.3" height="15.0" fill="rgb(250,43,53)" rx="2" ry="2" />
+<text text-anchor="" x="74.36" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.buildQuery.split.(...) (1 samples, 0.10%)</title><rect x="1165.2" y="357" width="1.2" height="15.0" fill="rgb(220,94,33)" rx="2" ry="2" />
+<text text-anchor="" x="1168.22" y="367.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withPostgresqlPoolWithVersion (8 samples, 0.80%)</title><rect x="1108.6" y="821" width="9.4" height="15.0" fill="rgb(242,59,31)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="831.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Vector.Algorithms.Intro.sort (1 samples, 0.10%)</title><rect x="12.4" y="389" width="1.1" height="15.0" fill="rgb(239,62,32)" rx="2" ry="2" />
+<text text-anchor="" x="15.36" y="399.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.builtinGetters (27 samples, 2.70%)</title><rect x="64.3" y="213" width="31.8" height="15.0" fill="rgb(223,168,39)" rx="2" ry="2" />
+<text text-anchor="" x="67.28" y="223.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.awaitForever.\.go (18 samples, 1.80%)</title><rect x="1085.0" y="741" width="21.2" height="15.0" fill="rgb(227,54,4)" rx="2" ry="2" />
+<text text-anchor="" x="1087.98" y="751.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.open' (21 samples, 2.10%)</title><rect x="1144.0" y="485" width="24.8" height="15.0" fill="rgb(254,155,43)" rx="2" ry="2" />
+<text text-anchor="" x="1146.98" y="495.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>System.IO.CodePage.withCodePageOptions.fixOutput (3 samples, 0.30%)</title><rect x="10.0" y="677" width="3.5" height="15.0" fill="rgb(236,173,34)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="687.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.withConnection.\ (8 samples, 0.80%)</title><rect x="1155.8" y="309" width="9.4" height="15.0" fill="rgb(213,20,20)" rx="2" ry="2" />
+<text text-anchor="" x="1158.78" y="319.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.&gt;&gt;=.\.succ' (2 samples, 0.20%)</title><rect x="497.3" y="85" width="2.4" height="15.0" fill="rgb(206,137,8)" rx="2" ry="2" />
+<text text-anchor="" x="500.34" y="95.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.*&gt; (15 samples, 1.50%)</title><rect x="815.9" y="133" width="17.7" height="15.0" fill="rgb(215,145,36)" rx="2" ry="2" />
+<text text-anchor="" x="818.94" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.LibPQ.getvalue'.\ (11 samples, 1.10%)</title><rect x="103.2" y="293" width="13.0" height="15.0" fill="rgb(231,198,50)" rx="2" ry="2" />
+<text text-anchor="" x="106.22" y="303.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.LibPQ.exec.\ (8 samples, 0.80%)</title><rect x="1108.6" y="389" width="9.4" height="15.0" fill="rgb(215,143,24)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="399.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.LibPQ.connectPoll (2 samples, 0.20%)</title><rect x="1106.2" y="661" width="2.4" height="15.0" fill="rgb(244,154,28)" rx="2" ry="2" />
+<text text-anchor="" x="1109.22" y="671.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Statistics.Regression.olsRegress (2 samples, 0.20%)</title><rect x="10.0" y="469" width="2.4" height="15.0" fill="rgb(205,1,35)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="479.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Migration.migrate (8 samples, 0.80%)</title><rect x="1108.6" y="901" width="9.4" height="15.0" fill="rgb(215,180,26)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="911.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withStmt'.pullS (64 samples, 6.40%)</title><rect x="41.9" y="357" width="75.5" height="15.0" fill="rgb(238,143,24)" rx="2" ry="2" />
+<text text-anchor="" x="44.86" y="367.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.ByteString.Char8.decimal.step (11 samples, 1.10%)</title><rect x="142.2" y="213" width="12.9" height="15.0" fill="rgb(240,139,32)" rx="2" ry="2" />
+<text text-anchor="" x="145.16" y="223.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Time.Internal.Parser.timeZoneHMS (2 samples, 0.20%)</title><rect x="1011.8" y="149" width="2.4" height="15.0" fill="rgb(226,167,45)" rx="2" ry="2" />
+<text text-anchor="" x="1014.82" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.atBufferEnd (2 samples, 0.20%)</title><rect x="1027.2" y="165" width="2.3" height="15.0" fill="rgb(220,76,4)" rx="2" ry="2" />
+<text text-anchor="" x="1030.16" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.*&gt; (6 samples, 0.60%)</title><rect x="840.7" y="117" width="7.1" height="15.0" fill="rgb(245,2,6)" rx="2" ry="2" />
+<text text-anchor="" x="843.72" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.&gt;&gt;=.\.\ (2 samples, 0.20%)</title><rect x="1054.3" y="389" width="2.4" height="15.0" fill="rgb(214,162,50)" rx="2" ry="2" />
+<text text-anchor="" x="1057.30" y="399.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Statistics.Matrix.Algorithms.qr (1 samples, 0.10%)</title><rect x="11.2" y="405" width="1.2" height="15.0" fill="rgb(233,98,20)" rx="2" ry="2" />
+<text text-anchor="" x="14.18" y="415.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Criterion.Analysis.analyseSample.\ (3 samples, 0.30%)</title><rect x="10.0" y="533" width="3.5" height="15.0" fill="rgb(252,177,38)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="543.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>System.IO.CodePage.withCodePage (3 samples, 0.30%)</title><rect x="10.0" y="725" width="3.5" height="15.0" fill="rgb(205,198,1)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="735.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Acquire.Internal.with (21 samples, 2.10%)</title><rect x="1144.0" y="709" width="24.8" height="15.0" fill="rgb(205,40,10)" rx="2" ry="2" />
+<text text-anchor="" x="1146.98" y="719.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Acquire.Internal.with.\.\ (8 samples, 0.80%)</title><rect x="1108.6" y="565" width="9.4" height="15.0" fill="rgb(208,165,50)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="575.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withPostgresqlPoolWithVersion (43 samples, 4.30%)</title><rect x="1119.2" y="853" width="50.7" height="15.0" fill="rgb(213,168,17)" rx="2" ry="2" />
+<text text-anchor="" x="1122.20" y="863.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Datab..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Acquire.Internal.mkAcquire.\ (19 samples, 1.90%)</title><rect x="1060.2" y="405" width="22.4" height="15.0" fill="rgb(213,2,0)" rx="2" ry="2" />
+<text text-anchor="" x="1063.20" y="415.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.LibPQ.escapeStringConn.\.\.\ (8 samples, 0.80%)</title><rect x="1155.8" y="229" width="9.4" height="15.0" fill="rgb(234,38,54)" rx="2" ry="2" />
+<text text-anchor="" x="1158.78" y="239.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Types.Internal.connPrepare (6 samples, 0.60%)</title><rect x="1043.7" y="565" width="7.1" height="15.0" fill="rgb(216,220,33)" rx="2" ry="2" />
+<text text-anchor="" x="1046.68" y="575.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.connectPostgreSQL (2 samples, 0.20%)</title><rect x="1106.2" y="709" width="2.4" height="15.0" fill="rgb(236,221,19)" rx="2" ry="2" />
+<text text-anchor="" x="1109.22" y="719.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.&gt;&gt;=.\ (1 samples, 0.10%)</title><rect x="189.4" y="165" width="1.1" height="15.0" fill="rgb(236,153,47)" rx="2" ry="2" />
+<text text-anchor="" x="192.36" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.formatQuery (21 samples, 2.10%)</title><rect x="1144.0" y="405" width="24.8" height="15.0" fill="rgb(233,120,1)" rx="2" ry="2" />
+<text text-anchor="" x="1146.98" y="415.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.ToField.inQuotes (1 samples, 0.10%)</title><rect x="1144.0" y="309" width="1.2" height="15.0" fill="rgb(238,50,37)" rx="2" ry="2" />
+<text text-anchor="" x="1146.98" y="319.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.&gt;&gt;= (2 samples, 0.20%)</title><rect x="1086.2" y="709" width="2.3" height="15.0" fill="rgb(245,226,37)" rx="2" ry="2" />
+<text text-anchor="" x="1089.16" y="719.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.pure.\ (64 samples, 6.40%)</title><rect x="872.6" y="117" width="75.5" height="15.0" fill="rgb(246,106,2)" rx="2" ry="2" />
+<text text-anchor="" x="875.58" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Data.Att..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.withConnection (1 samples, 0.10%)</title><rect x="1168.8" y="453" width="1.1" height="15.0" fill="rgb(239,94,18)" rx="2" ry="2" />
+<text text-anchor="" x="1171.76" y="463.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.LibPQ.resultFromConn (8 samples, 0.80%)</title><rect x="1108.6" y="405" width="9.4" height="15.0" fill="rgb(253,76,47)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="415.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withStmt'.openS.\ (1 samples, 0.10%)</title><rect x="1168.8" y="421" width="1.1" height="15.0" fill="rgb(222,132,15)" rx="2" ry="2" />
+<text text-anchor="" x="1171.76" y="431.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.pure.\ (2 samples, 0.20%)</title><rect x="174.0" y="133" width="2.4" height="15.0" fill="rgb(220,208,7)" rx="2" ry="2" />
+<text text-anchor="" x="177.02" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.connectdb (21 samples, 2.10%)</title><rect x="1119.2" y="677" width="24.8" height="15.0" fill="rgb(250,1,44)" rx="2" ry="2" />
+<text text-anchor="" x="1122.20" y="687.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.buildQuery.split (1 samples, 0.10%)</title><rect x="1165.2" y="373" width="1.2" height="15.0" fill="rgb(245,146,8)" rx="2" ry="2" />
+<text text-anchor="" x="1168.22" y="383.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.pure.\ (2 samples, 0.20%)</title><rect x="998.8" y="69" width="2.4" height="15.0" fill="rgb(252,30,38)" rx="2" ry="2" />
+<text text-anchor="" x="1001.84" y="79.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.&gt;&gt;=.\.succ' (9 samples, 0.90%)</title><rect x="990.6" y="101" width="10.6" height="15.0" fill="rgb(242,173,27)" rx="2" ry="2" />
+<text text-anchor="" x="993.58" y="111.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.ByteString.Char8.decimal (1 samples, 0.10%)</title><rect x="141.0" y="213" width="1.2" height="15.0" fill="rgb(227,92,50)" rx="2" ry="2" />
+<text text-anchor="" x="143.98" y="223.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.awaitForever.\.go.\ (2 samples, 0.20%)</title><rect x="1029.5" y="597" width="2.4" height="15.0" fill="rgb(228,91,18)" rx="2" ry="2" />
+<text text-anchor="" x="1032.52" y="607.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap.\ (9 samples, 0.90%)</title><rect x="177.6" y="181" width="10.6" height="15.0" fill="rgb(242,62,39)" rx="2" ry="2" />
+<text text-anchor="" x="180.56" y="191.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withStmt'.openS (773 samples, 77.30%)</title><rect x="117.4" y="325" width="912.1" height="15.0" fill="rgb(219,9,21)" rx="2" ry="2" />
+<text text-anchor="" x="120.38" y="335.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.Persist.Postgresql.withStmt'.openS</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Statistics.Matrix.Algorithms.qr.\.\ (1 samples, 0.10%)</title><rect x="11.2" y="373" width="1.2" height="15.0" fill="rgb(226,62,2)" rx="2" ry="2" />
+<text text-anchor="" x="14.18" y="383.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.buildAction (8 samples, 0.80%)</title><rect x="1155.8" y="373" width="9.4" height="15.0" fill="rgb(252,76,54)" rx="2" ry="2" />
+<text text-anchor="" x="1158.78" y="383.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.ByteString.Char8.decimal (7 samples, 0.70%)</title><rect x="491.4" y="149" width="8.3" height="15.0" fill="rgb(243,10,6)" rx="2" ry="2" />
+<text text-anchor="" x="494.44" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.&gt;&gt;=.\ (1 samples, 0.10%)</title><rect x="156.3" y="165" width="1.2" height="15.0" fill="rgb(222,18,40)" rx="2" ry="2" />
+<text text-anchor="" x="159.32" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Main.runConn_ (43 samples, 4.30%)</title><rect x="1119.2" y="885" width="50.7" height="15.0" fill="rgb(221,85,2)" rx="2" ry="2" />
+<text text-anchor="" x="1122.20" y="895.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Main...</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Time.Internal.Parser.localTime (5 samples, 0.50%)</title><rect x="1003.6" y="149" width="5.9" height="15.0" fill="rgb(211,163,6)" rx="2" ry="2" />
+<text text-anchor="" x="1006.56" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Acquire.Internal.with.\ (8 samples, 0.80%)</title><rect x="1108.6" y="581" width="9.4" height="15.0" fill="rgb(242,97,1)" rx="2" ry="2" />
+<text text-anchor="" x="1111.58" y="591.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Criterion.Internal.runAndAnalyseOne (3 samples, 0.30%)</title><rect x="10.0" y="581" width="3.5" height="15.0" fill="rgb(249,30,40)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="591.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap.\.succ' (2 samples, 0.20%)</title><rect x="944.6" y="37" width="2.3" height="15.0" fill="rgb(220,183,49)" rx="2" ry="2" />
+<text text-anchor="" x="947.56" y="47.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Criterion.Internal.for.go (3 samples, 0.30%)</title><rect x="10.0" y="613" width="3.5" height="15.0" fill="rgb(234,62,16)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="623.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Statistics.Regression.ols.(...) (1 samples, 0.10%)</title><rect x="11.2" y="421" width="1.2" height="15.0" fill="rgb(214,222,4)" rx="2" ry="2" />
+<text text-anchor="" x="14.18" y="431.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.+ (10 samples, 1.00%)</title><rect x="499.7" y="149" width="11.8" height="15.0" fill="rgb(244,5,51)" rx="2" ry="2" />
+<text text-anchor="" x="502.70" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.lift.\ (1 samples, 0.10%)</title><rect x="1049.6" y="373" width="1.2" height="15.0" fill="rgb(209,179,17)" rx="2" ry="2" />
+<text text-anchor="" x="1052.58" y="383.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Criterion.Internal.for (3 samples, 0.30%)</title><rect x="10.0" y="629" width="3.5" height="15.0" fill="rgb(253,148,51)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="639.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.FromField.doFromField (4 samples, 0.40%)</title><rect x="69.0" y="149" width="4.7" height="15.0" fill="rgb(218,215,37)" rx="2" ry="2" />
+<text text-anchor="" x="72.00" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.withSqlPool (43 samples, 4.30%)</title><rect x="1119.2" y="837" width="50.7" height="15.0" fill="rgb(210,195,40)" rx="2" ry="2" />
+<text text-anchor="" x="1122.20" y="847.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Datab..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.pure (1 samples, 0.10%)</title><rect x="70.2" y="117" width="1.2" height="15.0" fill="rgb(216,209,54)" rx="2" ry="2" />
+<text text-anchor="" x="73.18" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.getGetter (773 samples, 77.30%)</title><rect x="117.4" y="277" width="912.1" height="15.0" fill="rgb(216,60,53)" rx="2" ry="2" />
+<text text-anchor="" x="120.38" y="287.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.Persist.Postgresql.getGetter</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.pure.\ (2 samples, 0.20%)</title><rect x="77.3" y="165" width="2.3" height="15.0" fill="rgb(226,81,29)" rx="2" ry="2" />
+<text text-anchor="" x="80.26" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap.\.succ' (1 samples, 0.10%)</title><rect x="946.9" y="53" width="1.2" height="15.0" fill="rgb(223,62,28)" rx="2" ry="2" />
+<text text-anchor="" x="949.92" y="63.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.plus.\ (2 samples, 0.20%)</title><rect x="200.0" y="181" width="2.3" height="15.0" fill="rgb(251,142,34)" rx="2" ry="2" />
+<text text-anchor="" x="202.98" y="191.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.LibPQ.pollHelper (2 samples, 0.20%)</title><rect x="1106.2" y="645" width="2.4" height="15.0" fill="rgb(246,21,37)" rx="2" ry="2" />
+<text text-anchor="" x="1109.22" y="655.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap.\ (3 samples, 0.30%)</title><rect x="943.4" y="53" width="3.5" height="15.0" fill="rgb(217,58,5)" rx="2" ry="2" />
+<text text-anchor="" x="946.38" y="63.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Time.Internal.Parser.twoDigits (1 samples, 0.10%)</title><rect x="1014.2" y="149" width="1.2" height="15.0" fill="rgb(248,126,36)" rx="2" ry="2" />
+<text text-anchor="" x="1017.18" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.createSqlPool (844 samples, 84.40%)</title><rect x="33.6" y="437" width="995.9" height="15.0" fill="rgb(237,81,39)" rx="2" ry="2" />
+<text text-anchor="" x="36.60" y="447.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.Persist.Sql.Run.createSqlPool</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.createBackend (21 samples, 2.10%)</title><rect x="1144.0" y="469" width="24.8" height="15.0" fill="rgb(238,153,0)" rx="2" ry="2" />
+<text text-anchor="" x="1146.98" y="479.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.LibPQ.== (1 samples, 0.10%)</title><rect x="116.2" y="341" width="1.2" height="15.0" fill="rgb(252,157,20)" rx="2" ry="2" />
+<text text-anchor="" x="119.20" y="351.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Types.Internal.connPrepare (27 samples, 2.70%)</title><rect x="1050.8" y="581" width="31.8" height="15.0" fill="rgb(242,69,8)" rx="2" ry="2" />
+<text text-anchor="" x="1053.76" y="591.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.&gt;&gt;=.\ (632 samples, 63.20%)</title><rect x="269.6" y="165" width="745.8" height="15.0" fill="rgb(219,57,49)" rx="2" ry="2" />
+<text text-anchor="" x="272.60" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Data.Attoparsec.Internal.Types.&gt;&gt;=.\</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withStmt'.openS (19 samples, 1.90%)</title><rect x="1060.2" y="389" width="22.4" height="15.0" fill="rgb(208,102,10)" rx="2" ry="2" />
+<text text-anchor="" x="1063.20" y="399.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Internal.breakOnSingleQuestionMark.go (1 samples, 0.10%)</title><rect x="1165.2" y="325" width="1.2" height="15.0" fill="rgb(216,24,17)" rx="2" ry="2" />
+<text text-anchor="" x="1168.22" y="335.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Acquire.Internal.mkAcquire (27 samples, 2.70%)</title><rect x="64.3" y="309" width="31.8" height="15.0" fill="rgb(250,89,17)" rx="2" ry="2" />
+<text text-anchor="" x="67.28" y="319.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Pool.takeResource (2 samples, 0.20%)</title><rect x="1106.2" y="757" width="2.4" height="15.0" fill="rgb(241,156,36)" rx="2" ry="2" />
+<text text-anchor="" x="1109.22" y="767.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.fuse (10 samples, 1.00%)</title><rect x="1031.9" y="645" width="11.8" height="15.0" fill="rgb(239,168,38)" rx="2" ry="2" />
+<text text-anchor="" x="1034.88" y="655.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.execute' (21 samples, 2.10%)</title><rect x="1144.0" y="437" width="24.8" height="15.0" fill="rgb(237,116,42)" rx="2" ry="2" />
+<text text-anchor="" x="1146.98" y="447.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.pure (70 samples, 7.00%)</title><rect x="865.5" y="133" width="82.6" height="15.0" fill="rgb(223,61,14)" rx="2" ry="2" />
+<text text-anchor="" x="868.50" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Data.Atto..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Orphan.PersistStore.insertMany_.insertMany_' (1 samples, 0.10%)</title><rect x="1118.0" y="869" width="1.2" height="15.0" fill="rgb(247,108,51)" rx="2" ry="2" />
+<text text-anchor="" x="1121.02" y="879.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.convertPV (27 samples, 2.70%)</title><rect x="64.3" y="197" width="31.8" height="15.0" fill="rgb(220,47,36)" rx="2" ry="2" />
+<text text-anchor="" x="67.28" y="207.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.&gt;&gt;= (2 samples, 0.20%)</title><rect x="31.2" y="677" width="2.4" height="15.0" fill="rgb(220,40,48)" rx="2" ry="2" />
+<text text-anchor="" x="34.24" y="687.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.ByteString.Buffer.buffer (1 samples, 0.10%)</title><rect x="231.8" y="197" width="1.2" height="15.0" fill="rgb(238,94,21)" rx="2" ry="2" />
+<text text-anchor="" x="234.84" y="207.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.endOfInput (12 samples, 1.20%)</title><rect x="1015.4" y="197" width="14.1" height="15.0" fill="rgb(231,29,53)" rx="2" ry="2" />
+<text text-anchor="" x="1018.36" y="207.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.&gt;&gt;=.\.\ (1 samples, 0.10%)</title><rect x="1046.0" y="373" width="1.2" height="15.0" fill="rgb(218,107,4)" rx="2" ry="2" />
+<text text-anchor="" x="1049.04" y="383.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withStmt'.openS.getters.\ (773 samples, 77.30%)</title><rect x="117.4" y="293" width="912.1" height="15.0" fill="rgb(243,20,37)" rx="2" ry="2" />
+<text text-anchor="" x="120.38" y="303.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.Persist.Postgresql.withStmt'.openS.getters.\</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Control.Monad.Logger.liftIO (1 samples, 0.10%)</title><rect x="1168.8" y="629" width="1.1" height="15.0" fill="rgb(249,165,17)" rx="2" ry="2" />
+<text text-anchor="" x="1171.76" y="639.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Orphan.PersistQuery.selectSourceRes (27 samples, 2.70%)</title><rect x="1050.8" y="725" width="31.8" height="15.0" fill="rgb(244,194,31)" rx="2" ry="2" />
+<text text-anchor="" x="1053.76" y="735.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Postgresql.withPostgresqlPool (931 samples, 93.10%)</title><rect x="10.0" y="901" width="1098.6" height="15.0" fill="rgb(250,53,14)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="911.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Database.Persist.Postgresql.withPostgresqlPool</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.Time.Internal.Printer.day (3 samples, 0.30%)</title><rect x="1145.2" y="229" width="3.5" height="15.0" fill="rgb(237,91,27)" rx="2" ry="2" />
+<text text-anchor="" x="1148.16" y="239.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.plus.\.lose' (2 samples, 0.20%)</title><rect x="196.4" y="133" width="2.4" height="15.0" fill="rgb(252,202,39)" rx="2" ry="2" />
+<text text-anchor="" x="199.44" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.Simple.FromField.atto.go (3 samples, 0.30%)</title><rect x="207.1" y="181" width="3.5" height="15.0" fill="rgb(243,208,28)" rx="2" ry="2" />
+<text text-anchor="" x="210.06" y="191.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fmap.\.succ' (7 samples, 0.70%)</title><rect x="179.9" y="165" width="8.3" height="15.0" fill="rgb(246,45,6)" rx="2" ry="2" />
+<text text-anchor="" x="182.92" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.PostgreSQL.LibPQ.exec.\ (1 samples, 0.10%)</title><rect x="1168.8" y="373" width="1.1" height="15.0" fill="rgb(220,43,15)" rx="2" ry="2" />
+<text text-anchor="" x="1171.76" y="383.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Conduit.Internal.Conduit.lift.\ (6 samples, 0.60%)</title><rect x="34.8" y="325" width="7.1" height="15.0" fill="rgb(216,147,18)" rx="2" ry="2" />
+<text text-anchor="" x="37.78" y="335.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Types.Internal.stmtQuery (27 samples, 2.70%)</title><rect x="1050.8" y="645" width="31.8" height="15.0" fill="rgb(205,222,15)" rx="2" ry="2" />
+<text text-anchor="" x="1053.76" y="655.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Types.Internal.connPrepare (21 samples, 2.10%)</title><rect x="1144.0" y="517" width="24.8" height="15.0" fill="rgb(209,17,31)" rx="2" ry="2" />
+<text text-anchor="" x="1146.98" y="527.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Acquire.Internal.mkAcquire (19 samples, 1.90%)</title><rect x="1060.2" y="421" width="22.4" height="15.0" fill="rgb(233,219,18)" rx="2" ry="2" />
+<text text-anchor="" x="1063.20" y="431.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >D..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Data.Attoparsec.Internal.Types.fail.\ (1 samples, 0.10%)</title><rect x="195.3" y="133" width="1.1" height="15.0" fill="rgb(243,110,1)" rx="2" ry="2" />
+<text text-anchor="" x="198.26" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Database.Persist.Sql.Run.runSqlPool (27 samples, 2.70%)</title><rect x="1050.8" y="565" width="31.8" height="15.0" fill="rgb(253,85,41)" rx="2" ry="2" />
+<text text-anchor="" x="1053.76" y="575.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Da..</text>
+</g>
+</svg>

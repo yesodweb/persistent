@@ -78,3 +78,43 @@ test-suite test
                    , unordered-containers
                    , vector
     default-language: Haskell2010
+
+
+benchmark persistent-postgresql-bench
+  hs-source-dirs: benchmark
+  type: exitcode-stdio-1.0
+  other-modules: UTCTimeSetup
+                 ChronosPersistent
+  main-is: Main.hs
+  default-language: Haskell2010
+  build-depends:   base                 >= 4.9 && < 5
+                 , persistent
+                 , persistent-postgresql
+                 , persistent-qq
+                 , persistent-template
+                 , persistent-test
+                 , aeson
+                 , bytestring
+                 , containers
+                 , fast-logger
+                 , HUnit
+                 , hspec                >= 2.4
+                 , hspec-expectations
+                 , monad-logger
+                 , QuickCheck
+                 , quickcheck-instances
+                 , resourcet
+                 , text
+                 , time
+                 , transformers
+                 , unliftio-core
+                 , unordered-containers
+                 , vector
+                 , criterion
+                 , time
+                 , chronos
+                 , attoparsec
+                 , binary
+                 , string-conversions
+  ghc-options: -O1 -fprof-auto "-with-rtsopts=-p"
+  other-extensions: TemplateHaskell
