@@ -61,17 +61,19 @@ dbColumns conn t = case entityPrimary t of
     escapeDB = connEscapeName conn . fieldDB
     flds = map escapeDB (entityFields t)
 
+{-# SCC parseEntityValues #-}
 parseEntityValues :: PersistEntity record
                   => EntityDef -> [PersistValue] -> Either Text (Entity record)
 parseEntityValues t vals =
     case entityPrimary t of
       Just pdef ->
-            let pks = map fieldHaskell $ compositeFields pdef
-                keyvals = map snd . filter ((`elem` pks) . fst)
+            let pks = {-# SCC pks #-} map fieldHaskell $ compositeFields pdef
+                keyvals = {-# SCC keyvals #-} map snd . filter ((`elem` pks) . fst)
                         $ zip (map fieldHaskell $ entityFields t) vals
             in fromPersistValuesComposite' keyvals vals
       Nothing -> fromPersistValues' vals
   where
+    {-# SCC fromPersistValues' #-}
     fromPersistValues' (kpv:xs) = -- oracle returns Double
         case fromPersistValues xs of
             Left e -> Left e
