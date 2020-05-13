@@ -68,8 +68,7 @@ parseEntityValues t vals =
     case entityPrimary t of
       Just pdef ->
             let pks = {-# SCC pks #-} map fieldHaskell $ compositeFields pdef
-                keyvals = {-# SCC keyvals #-} map snd . filter ((`elem` pks) . fst)
-                        $ zip (map fieldHaskell $ entityFields t) vals
+                keyvals = {-# SCC keyvals #-} map snd . filter ((`elem` pks) . fst) $ zip (map fieldHaskell $ entityFields t) vals
             in fromPersistValuesComposite' keyvals vals
       Nothing -> fromPersistValues' vals
   where
@@ -85,10 +84,11 @@ parseEntityValues t vals =
 
     fromPersistValues' xs = Left $ pack ("error in fromPersistValues' xs=" ++ show xs)
 
+    {-# SCC fromPersistValuesComposite' #-}
     fromPersistValuesComposite' keyvals xs =
-        case fromPersistValues xs of
+        {-# SCC "caseFromPersistValues" #-} case fromPersistValues xs of
             Left e -> Left e
-            Right xs' -> case keyFromValues keyvals of
+            Right xs' -> {-# SCC "caseKeyFromValues" #-} case keyFromValues keyvals of
                 Left _ -> error "fromPersistValuesComposite': keyFromValues failed"
                 Right key -> Right (Entity key xs')
 
