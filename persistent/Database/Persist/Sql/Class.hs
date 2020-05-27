@@ -1106,36 +1106,6 @@ from62 (a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z,a2,b2,c2,d2,e2,f2,g2
 to62 :: ((a,b),(c,d),(e,f),(g,h),(i,j),(k,l),(m,n),(o,p),(q,r),(s,t),(u,v),(w,x),(y,z),(a2,b2),(c2,d2),(e2,f2),(g2,h2),(i2,j2),(k2,l2),(m2,n2),(o2,p2),(q2,r2),(s2,t2),(u2,v2),(w2,x2),(y2,z2),(a3,b3),(c3,d3),(e3,f3),(g3,h3),(i3,j3)) -> (a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z,a2,b2,c2,d2,e2,f2,g2,h2,i2,j2,k2,l2,m2,n2,o2,p2,q2,r2,s2,t2,u2,v2,w2,x2,y2,z2,a3,b3,c3,d3,e3,f3,g3,h3,i3,j3)
 to62 ((a,b),(c,d),(e,f),(g,h),(i,j),(k,l),(m,n),(o,p),(q,r),(s,t),(u,v),(w,x),(y,z),(a2,b2),(c2,d2),(e2,f2),(g2,h2),(i2,j2),(k2,l2),(m2,n2),(o2,p2),(q2,r2),(s2,t2),(u2,v2),(w2,x2),(y2,z2),(a3,b3),(c3,d3),(e3,f3),(g3,h3),(i3,j3)) = (a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z,a2,b2,c2,d2,e2,f2,g2,h2,i2,j2,k2,l2,m2,n2,o2,p2,q2,r2,s2,t2,u2,v2,w2,x2,y2,z2,a3,b3,c3,d3,e3,f3,g3,h3,i3,j3)
 
--- | @since 2.10.5
-instance (RawSql a, RawSql b, RawSql c, RawSql d, RawSql e, RawSql f, RawSql g, RawSql h, RawSql i, RawSql j, RawSql k, RawSql l, RawSql m, RawSql n, RawSql o, RawSql p, RawSql q, RawSql r, RawSql s, RawSql t, RawSql u, RawSql v, RawSql w, RawSql x, RawSql y, RawSql z, RawSql a2, RawSql b2, RawSql c2, RawSql d2, RawSql e2, RawSql f2, RawSql g2, RawSql h2, RawSql i2, RawSql j2, RawSql k2, RawSql l2, RawSql m2, RawSql n2, RawSql o2, RawSql p2, RawSql q2, RawSql r2, RawSql s2, RawSql t2, RawSql u2, RawSql v2, RawSql w2, RawSql x2, RawSql y2, RawSql z2, RawSql a3, RawSql b3, RawSql c3, RawSql d3, RawSql e3, RawSql f3, RawSql g3, RawSql h3, RawSql i3, RawSql j3, RawSql k3)
-      => RawSql (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, a2, b2, c2, d2, e2, f2, g2, h2, i2, j2, k2, l2, m2, n2, o2, p2, q2, r2, s2, t2, u2, v2, w2, x2, y2, z2, a3, b3, c3, d3, e3, f3, g3, h3, i3, j3, k3) where
-    rawSqlCols e         = rawSqlCols e         . from63
-    rawSqlColCountReason = rawSqlColCountReason . from63
-    rawSqlProcessRow     = fmap to63 . rawSqlProcessRow
-
--- | @since 2.10.5
-from63 :: (a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z,a2,b2,c2,d2,e2,f2,g2,h2,i2,j2,k2,l2,m2,n2,o2,p2,q2,r2,s2,t2,u2,v2,w2,x2,y2,z2,a3,b3,c3,d3,e3,f3,g3,h3,i3,j3,k3) -> ((a,b),(c,d),(e,f),(g,h),(i,j),(k,l),(m,n),(o,p),(q,r),(s,t),(u,v),(w,x),(y,z),(a2,b2),(c2,d2),(e2,f2),(g2,h2),(i2,j2),(k2,l2),(m2,n2),(o2,p2),(q2,r2),(s2,t2),(u2,v2),(w2,x2),(y2,z2),(a3,b3),(c3,d3),(e3,f3),(g3,h3),(i3,j3),k3)
-from63 (a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z,a2,b2,c2,d2,e2,f2,g2,h2,i2,j2,k2,l2,m2,n2,o2,p2,q2,r2,s2,t2,u2,v2,w2,x2,y2,z2,a3,b3,c3,d3,e3,f3,g3,h3,i3,j3,k3) = ((a,b),(c,d),(e,f),(g,h),(i,j),(k,l),(m,n),(o,p),(q,r),(s,t),(u,v),(w,x),(y,z),(a2,b2),(c2,d2),(e2,f2),(g2,h2),(i2,j2),(k2,l2),(m2,n2),(o2,p2),(q2,r2),(s2,t2),(u2,v2),(w2,x2),(y2,z2),(a3,b3),(c3,d3),(e3,f3),(g3,h3),(i3,j3),k3)
-
--- | @since 2.10.5
-to63 :: ((a,b),(c,d),(e,f),(g,h),(i,j),(k,l),(m,n),(o,p),(q,r),(s,t),(u,v),(w,x),(y,z),(a2,b2),(c2,d2),(e2,f2),(g2,h2),(i2,j2),(k2,l2),(m2,n2),(o2,p2),(q2,r2),(s2,t2),(u2,v2),(w2,x2),(y2,z2),(a3,b3),(c3,d3),(e3,f3),(g3,h3),(i3,j3),k3) -> (a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z,a2,b2,c2,d2,e2,f2,g2,h2,i2,j2,k2,l2,m2,n2,o2,p2,q2,r2,s2,t2,u2,v2,w2,x2,y2,z2,a3,b3,c3,d3,e3,f3,g3,h3,i3,j3,k3)
-to63 ((a,b),(c,d),(e,f),(g,h),(i,j),(k,l),(m,n),(o,p),(q,r),(s,t),(u,v),(w,x),(y,z),(a2,b2),(c2,d2),(e2,f2),(g2,h2),(i2,j2),(k2,l2),(m2,n2),(o2,p2),(q2,r2),(s2,t2),(u2,v2),(w2,x2),(y2,z2),(a3,b3),(c3,d3),(e3,f3),(g3,h3),(i3,j3),k3) = (a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z,a2,b2,c2,d2,e2,f2,g2,h2,i2,j2,k2,l2,m2,n2,o2,p2,q2,r2,s2,t2,u2,v2,w2,x2,y2,z2,a3,b3,c3,d3,e3,f3,g3,h3,i3,j3,k3)
-
--- | @since 2.10.5
-instance (RawSql a, RawSql b, RawSql c, RawSql d, RawSql e, RawSql f, RawSql g, RawSql h, RawSql i, RawSql j, RawSql k, RawSql l, RawSql m, RawSql n, RawSql o, RawSql p, RawSql q, RawSql r, RawSql s, RawSql t, RawSql u, RawSql v, RawSql w, RawSql x, RawSql y, RawSql z, RawSql a2, RawSql b2, RawSql c2, RawSql d2, RawSql e2, RawSql f2, RawSql g2, RawSql h2, RawSql i2, RawSql j2, RawSql k2, RawSql l2, RawSql m2, RawSql n2, RawSql o2, RawSql p2, RawSql q2, RawSql r2, RawSql s2, RawSql t2, RawSql u2, RawSql v2, RawSql w2, RawSql x2, RawSql y2, RawSql z2, RawSql a3, RawSql b3, RawSql c3, RawSql d3, RawSql e3, RawSql f3, RawSql g3, RawSql h3, RawSql i3, RawSql j3, RawSql k3, RawSql l3)
-      => RawSql (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, a2, b2, c2, d2, e2, f2, g2, h2, i2, j2, k2, l2, m2, n2, o2, p2, q2, r2, s2, t2, u2, v2, w2, x2, y2, z2, a3, b3, c3, d3, e3, f3, g3, h3, i3, j3, k3, l3) where
-    rawSqlCols e         = rawSqlCols e         . from64
-    rawSqlColCountReason = rawSqlColCountReason . from64
-    rawSqlProcessRow     = fmap to64 . rawSqlProcessRow
-
--- | @since 2.10.5
-from64 :: (a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z,a2,b2,c2,d2,e2,f2,g2,h2,i2,j2,k2,l2,m2,n2,o2,p2,q2,r2,s2,t2,u2,v2,w2,x2,y2,z2,a3,b3,c3,d3,e3,f3,g3,h3,i3,j3,k3,l3) -> ((a,b),(c,d),(e,f),(g,h),(i,j),(k,l),(m,n),(o,p),(q,r),(s,t),(u,v),(w,x),(y,z),(a2,b2),(c2,d2),(e2,f2),(g2,h2),(i2,j2),(k2,l2),(m2,n2),(o2,p2),(q2,r2),(s2,t2),(u2,v2),(w2,x2),(y2,z2),(a3,b3),(c3,d3),(e3,f3),(g3,h3),(i3,j3),(k3,l3))
-from64 (a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z,a2,b2,c2,d2,e2,f2,g2,h2,i2,j2,k2,l2,m2,n2,o2,p2,q2,r2,s2,t2,u2,v2,w2,x2,y2,z2,a3,b3,c3,d3,e3,f3,g3,h3,i3,j3,k3,l3) = ((a,b),(c,d),(e,f),(g,h),(i,j),(k,l),(m,n),(o,p),(q,r),(s,t),(u,v),(w,x),(y,z),(a2,b2),(c2,d2),(e2,f2),(g2,h2),(i2,j2),(k2,l2),(m2,n2),(o2,p2),(q2,r2),(s2,t2),(u2,v2),(w2,x2),(y2,z2),(a3,b3),(c3,d3),(e3,f3),(g3,h3),(i3,j3),(k3,l3))
-
--- | @since 2.10.5
-to64 :: ((a,b),(c,d),(e,f),(g,h),(i,j),(k,l),(m,n),(o,p),(q,r),(s,t),(u,v),(w,x),(y,z),(a2,b2),(c2,d2),(e2,f2),(g2,h2),(i2,j2),(k2,l2),(m2,n2),(o2,p2),(q2,r2),(s2,t2),(u2,v2),(w2,x2),(y2,z2),(a3,b3),(c3,d3),(e3,f3),(g3,h3),(i3,j3),(k3,l3)) -> (a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z,a2,b2,c2,d2,e2,f2,g2,h2,i2,j2,k2,l2,m2,n2,o2,p2,q2,r2,s2,t2,u2,v2,w2,x2,y2,z2,a3,b3,c3,d3,e3,f3,g3,h3,i3,j3,k3,l3)
-to64 ((a,b),(c,d),(e,f),(g,h),(i,j),(k,l),(m,n),(o,p),(q,r),(s,t),(u,v),(w,x),(y,z),(a2,b2),(c2,d2),(e2,f2),(g2,h2),(i2,j2),(k2,l2),(m2,n2),(o2,p2),(q2,r2),(s2,t2),(u2,v2),(w2,x2),(y2,z2),(a3,b3),(c3,d3),(e3,f3),(g3,h3),(i3,j3),(k3,l3)) = (a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z,a2,b2,c2,d2,e2,f2,g2,h2,i2,j2,k2,l2,m2,n2,o2,p2,q2,r2,s2,t2,u2,v2,w2,x2,y2,z2,a3,b3,c3,d3,e3,f3,g3,h3,i3,j3,k3,l3)
-
 extractMaybe :: Maybe a -> a
 extractMaybe = fromMaybe (error "Database.Persist.GenericSql.extractMaybe")
 
