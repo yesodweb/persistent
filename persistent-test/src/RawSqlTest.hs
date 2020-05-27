@@ -132,9 +132,9 @@ specsWith runDb = describe "rawSql" $ do
         runDb cleanDB
 
     it "queries with large number of results" $ runDb $ do
-        -- max size of a GHC tuple is 62
-        ret <- rawSql "SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?" $ map PersistInt64 ([1..62] :: [Int64])
-        liftIO $ ret @?= Single . PersistInt64 <$> ([1..62] :: [Int64])
+        -- max size of a GHC tuple is 62, but Eq instances currently only exist up to 15-tuples
+        ret <- rawSql "SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?" $ map PersistInt64 [1..62]
+        liftIO $ ret @?= [(Single (1::Int), Single (2::Int), Single (3::Int), Single (4::Int), Single (5::Int), Single (6::Int), Single (7::Int), Single (8::Int), Single (9::Int), Single (10::Int), Single (11::Int), Single (12::Int), Single (13::Int), Single (14::Int), Single (15::Int))]
 
 getEscape :: MonadReader SqlBackend m => m (Text -> Text)
 getEscape = asks ((. DBName) . connEscapeName)
