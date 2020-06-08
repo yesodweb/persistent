@@ -1,0 +1,1 @@
+bench --before="stack clean mercury" "stack build mercury --ghc-options='-O0 -ddump-timings -ddump-to-file'" --after="cp ./.stack-work/dist/x86_64-osx/Cabal-2.4.0.1/build/Main.dump-timings results/`uuidgen`.dump-timings"

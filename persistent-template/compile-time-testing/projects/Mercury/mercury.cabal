@@ -1,0 +1,43 @@
+name:            mercury
+version:         2.8.3.0
+license:         MIT
+license-file:    LICENSE
+author:          Michael Snoyman <michael@snoyman.com>
+maintainer:      Michael Snoyman <michael@snoyman.com>, Greg Weber <greg@gregweber.info>
+synopsis:        Type-safe, non-relational, multi-backend persistence.
+description:     Hackage documentation generation is not reliable. For up to date documentation, please see: <http://www.stackage.org/package/persistent-template>.
+category:        Database, Yesod
+stability:       Stable
+cabal-version:   >= 1.10
+build-type:      Simple
+homepage:        http://www.yesodweb.com/book/persistent
+bug-reports:     https://github.com/yesodweb/persistent/issues
+extra-source-files: README.md
+
+library
+    build-depends:   base                     >= 4.10      && < 5
+                   , persistent               >= 2.11      && < 3
+                   , aeson                    >= 1.0       && < 1.5
+                   , bytestring               >= 0.10
+                   , containers
+                   , http-api-data            >= 0.3.7
+                   , monad-control            >= 1.0       && < 1.1
+                   , monad-logger
+                   , path-pieces
+                   , template-haskell         >= 2.11
+                   , text                     >= 1.2
+                   , th-lift-instances        >= 0.1.14    && < 0.2
+                   , transformers             >= 0.5       && < 0.6
+                   , unordered-containers
+                   , persistent-template
+                   , uuid
+                   , time
+    exposed-modules: Main
+                     Instances
+    ghc-options:     -Wall
+    default-language: Haskell2010
+
+
+source-repository head
+  type:     git
+  location: git://github.com/yesodweb/persistent.git
