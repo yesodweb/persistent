@@ -85,7 +85,7 @@ data SqlBackend = SqlBackend
     , connInsertSql :: EntityDef -> [PersistValue] -> InsertSqlResult
     , connInsertManySql :: Maybe (EntityDef -> [[PersistValue]] -> InsertSqlResult)
     -- ^ SQL for inserting many rows and returning their primary keys, for
-    -- backends that support this functioanlity. If 'Nothing', rows will be
+    -- backends that support this functionality. If 'Nothing', rows will be
     -- inserted one-at-a-time using 'connInsertSql'.
     , connUpsertSql :: Maybe (EntityDef -> NonEmpty UniqueDef -> Text -> Text)
     -- ^ Some databases support performing UPSERT _and_ RETURN entity
