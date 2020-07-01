@@ -33,7 +33,7 @@ Copy the path to the module you want to check compilation data on. An example pa
 
 ```
 mkdir RESULTS_DIR
-bench --before="stack clean persistent-performance-test" "stack build persistent-performance-test --ghc-options='-O0 -ddump-timings -ddump-to-file'" --after="cp PATH_TO_TIMINGS_FILE RESULTS_DIR/`uuidgen`.dump-timings"
+bench --before="stack clean PROJECTNAME" "stack build PROJECTNAME --ghc-options='-O0 -ddump-timings -ddump-to-file'" --after="cp PATH_TO_TIMINGS_FILE RESULTS_DIR/`uuidgen`.dump-timings"
 ```
 
 4. This benchmark will include the noise/overhead of calling GHC and compiling other files. To get module-specific data, use the `add-timings.rb` script to see how long compiling your specific module took.

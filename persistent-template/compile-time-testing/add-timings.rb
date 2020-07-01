@@ -21,4 +21,4 @@ filenames.each do |name|
 end
 
 mean = totals.inject(0.0) { |sum, el| sum + el } / totals.size
-puts "Mean is #{mean}"
+puts "Mean is #{mean}ms"

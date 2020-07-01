@@ -1,18 +1,14 @@
--- By default this file is used in Model.hs (which is imported by Foundation.hs)
--- Syntax for this file here: https://github.com/yesodweb/persistent/blob/master/docs/Persistent-entity-syntax.md
-
 Address sql=addresses
   Id UUID default=uuid_generate_v1mc
-  name Text -- intentionally left as Text since we are constructing these by concatenating name strings
+  name Text 
   address1 Text
-  address2 Text Maybe -- need the Maybe so it can be omitted in JSON
+  address2 Text Maybe 
   city Text
   region Text sqltype=text299
   postalCode Text
   country Text
   deriving Show
 
--- Entries in this table are whitelisted as deliverable, and will skip lob verification
 AddressDeliverabilityOverride sql=address_deliverability_overrides
   Id UUID default=uuid_generate_v1mc
   primaryLine Text
@@ -28,9 +24,6 @@ AdminOrganizationData sql=admin_organization_data
   onboardingNote Text Maybe
   Primary organizationId
 
--- | Added in April 2020 to provide a better admin view of the current state of an org. Especially useful in onboarding.
--- Status is an admin-only concept and dictates where a user is in the lifecycle of an org.
--- If you edit this table definition, you must also edit admin_organization_status_history
 AdminOrganizationStatus sql=admin_organization_status
   organizationId OrganizationId
   Primary organizationId
@@ -39,9 +32,8 @@ AdminOrganizationStatus sql=admin_organization_status
   updatedAt UTCTime
   deriving Show
 
--- Note, this history table was created in April 2020 and it was not possible to backfill it beyond the current status of a company at that time.
 AdminOrganizationStatusHistory sql=admin_organization_status_history
-  Id UUID default=uuid_generate_v1mc -- ^ since we are going to query this table from Persistent, it has to have an Id field to form an Entity
+  Id UUID default=uuid_generate_v1mc 
   operation Text
   organizationId OrganizationId
   status Text
@@ -55,11 +47,11 @@ AlphaCode sql=alpha_codes
   contactName Text Maybe
   contactEmail Text Maybe
   userId UserId Maybe
-  createdAt UTCTime -- autopopulated by the db, see `Mercury.PersistentUtils.fakeUTCTime`
+  createdAt UTCTime 
   usedAt UTCTime Maybe
   externalOnboardingDataId ExternalOnboardingDataId Maybe
   partnerBank Text
-  UniqueAlphaCodeUserId userId !force -- you have to do !force to have a uniqueness constraint on a Maybe
+  UniqueAlphaCodeUserId userId !force 
   deriving Show
 
 MFAResetCode sql=mfa_reset_codes
@@ -69,15 +61,14 @@ MFAResetCode sql=mfa_reset_codes
   code Text
   deriving Show
 
--- | A company using Mercury.
 Organization sql=organizations
   Id UUID default=uuid_generate_v1mc
   name Text
-  callsign Text -- ^ URL safe nickname for the company.
+  callsign Text 
   UniqueOrganizationCallsign callsign
-  primaryUserId UserId -- ^ The user who signed up creating the organization.
+  primaryUserId UserId 
   shipCards Bool default=true
-  -- expediteCards Bool default=false Maybe -- ^ We're in the process of removing this column. It's nullable in the database so we can leave it out of the models file.
+  
   createdAt UTCTime
   teaRoom Bool
   topTuna Bool
@@ -112,21 +103,15 @@ OrganizationPrivilege sql=organization_privileges
   rdcEnabledDaysAfterApproval Int
   rdcSettlementDelay Int
 
-
--- | Join table listing users who are members of an organization
---
--- Currently users can only be members of a single organization. (TODO MULTI-ORG)
--- If you edit this table definition, you must also edit organization_user_history
 OrganizationUser
   Id UUID default=uuid_generate_v1mc
   organizationId OrganizationId
   userId UserId
   UniqueOrganizationIdUserId organizationId userId
-  role Text -- ^ Is the user an admin/bookkeeper? (TODO PERMISSIONING)
+  role Text 
   userPermissionsId OrganizationUserPermissionsId
   deriving Show
 
--- Audit table for OrganizationUser, must be kept in sync with OrganizationUser
 OrganizationUserHistory sql=organization_user_history
   Id UUID default=uuid_generate_v1mc
   operation Text
@@ -135,12 +120,11 @@ OrganizationUserHistory sql=organization_user_history
   role Text
   userPermissionsId OrganizationUserPermissionsId
 
--- | A row inserted when a user requests a password reset via email.
 PasswordReset sql=password_resets
   Id UUID default=uuid_generate_v1mc
   userId UserId
   UniquePasswordResetUserId userId
-  code ByteString -- ^ The code sent to the user's email (hashed, so e.g. someone with readonly DB access couldn't use it)
+  code ByteString 
   expiresAt UTCTime
   deriving Show
 
@@ -194,10 +178,9 @@ TOTP sql=totp
   userId UserId
   secretKeyEncrypted Text
   verified Text
-  UniqueUserTOTPWithVerification userId verified -- A user could have a verified and an unverified at the same time, e.g. while updating
+  UniqueUserTOTPWithVerification userId verified 
   deriving Show
 
--- These define the thresholds at which a user wants to be notified about particular types of transactions
 TransactionEmailThresholds sql=transaction_email_thresholds
   organizationId OrganizationId
   userId UserId
@@ -235,15 +218,12 @@ OrganizationUserLockdown sql=organization_user_lockdowns
   active Bool
   UniqueOrgUserLockdown orgUserId
 
--- Allows users to unsubscribe or opt in to marketing emails
 MarketingEmailSubscription sql=marketing_email_subscriptions
   userId UserId
   type Text
   subscribed Bool
   Primary userId type
 
--- Allows users to unsubscribe or opt in to account activity emails
--- In the absence of this record, a default is used based on organizationSubscriptionDefault
 OrganizationEmailSubscription sql=organization_email_subscriptions
   organizationId OrganizationId
   userId UserId
@@ -251,7 +231,6 @@ OrganizationEmailSubscription sql=organization_email_subscriptions
   subscribed Bool
   Primary organizationId userId type
 
--- Allows generation of semi-secure account activity unsubscription links that don't require the user to log in
 EmailSubscriptionManagementToken sql=email_subscription_management_tokens
   organizationId OrganizationId
   userId UserId
@@ -286,7 +265,6 @@ Invite sql=invites
 InvitePermissions sql=invite_permissions
   inviteId InviteId
   Primary inviteId
-  -- Should match the permissions set available in OrganizationUserPermissions
   sendMoneyPermissions Text
   canAddAccounts Bool
   canChangeTeam Bool
@@ -295,7 +273,6 @@ InvitePermissions sql=invite_permissions
   canResetTeammate2fa Bool
   canAddApiTokens Bool
 
--- This is data saved from the SubmitOnboardingData API endpoint that clerky uses
 ExternalOnboardingData sql=external_onboarding_data
   Id UUID default=uuid_generate_v1mc
   onboardingData Value sqltype=jsonb
@@ -313,11 +290,8 @@ UserApiSecret sql=user_api_secrets
   userId UserId
   UniqueUserId userId
 
--- Individual user permissions
--- If you edit this table definition, you must also edit organization_user_permissions_history
 OrganizationUserPermissions sql=organization_user_permissions
   Id UUID default=uuid_generate_v1mc
-
   sendMoneyPermissions Text
   canAddAccounts Bool
   canChangeTeam Bool
@@ -329,28 +303,23 @@ OrganizationUserPermissions sql=organization_user_permissions
   deriving Show
   deriving Eq
 
--- Tracks the last time an organization was synchronized to segment
 SegmentOrganizationSync sql=segment_organization_syncs
   organizationId OrganizationId
   Primary organizationId
   lastSyncAt UTCTime
 
--- Tracks the last time an organization user was synchronized to segment
 SegmentOrganizationUserSync sql=segment_organization_user_syncs
   organizationUserId OrganizationUserId
   Primary organizationUserId
   lastSyncAt UTCTime
 
--- tracks the last time an OrganizationUser was synchronized to various data
--- export services like Front or Freshsales
+
 OrganizationUserExport sql=organization_user_exports
   organizationUserId OrganizationUserId
   lastSyncAt UTCTime
   service Text
   Primary organizationUserId service
 
--- | Stores a referral during the time when a user has been referred, but hasn't created an organization.
---   Marked as not pending on org creation.
 PendingReferral sql=pending_referrals
   Id UUID default=uuid_generate_v1mc
   userId UserId
@@ -358,10 +327,8 @@ PendingReferral sql=pending_referrals
   referralPartner Text
   pending Bool default=true
 
--- | Tracks whether an organization came in through a referral from a partner like AngelList or Stripe Atlas
 OrganizationReferral sql=organization_referrals
   Id UUID default=uuid_generate_v1mc
   organizationId OrganizationId
   UniqueOrganizationReferralOrganizationId organizationId
   referralPartner Text
-
