@@ -1024,6 +1024,7 @@ keyToOid = unMongoKey . toBackendKey
 
 instance DB.Val PersistValue where
   val (PersistInt64 x)   = DB.Int64 x
+  val (PersistWord64 x)  = DB.Word64 x
   val (PersistText x)    = DB.String x
   val (PersistDouble x)  = DB.Float x
   val (PersistBool x)    = DB.Bool x

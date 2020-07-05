@@ -225,6 +225,7 @@ instance MySQL.Param P where
     render (P (PersistText t))        = MySQL.render t
     render (P (PersistByteString bs)) = MySQL.render bs
     render (P (PersistInt64 i))       = MySQL.render i
+    render (P (PersistWord64 i))      = MySQL.render i
     render (P (PersistDouble d))      = MySQL.render d
     render (P (PersistBool b))        = MySQL.render b
     render (P (PersistDay d))         = MySQL.render d
