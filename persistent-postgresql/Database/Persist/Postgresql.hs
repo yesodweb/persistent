@@ -428,6 +428,7 @@ instance PGTF.ToField P where
     toField (P (PersistText t))        = PGTF.toField t
     toField (P (PersistByteString bs)) = PGTF.toField (PG.Binary bs)
     toField (P (PersistInt64 i))       = PGTF.toField i
+    toField (P (PersistWord64 i))      = PGTF.toField i
     toField (P (PersistDouble d))      = PGTF.toField d
     toField (P (PersistRational r))    = PGTF.Plain $
                                          BBB.fromString $
@@ -1110,6 +1111,7 @@ showSqlType :: SqlType -> Text
 showSqlType SqlString = "VARCHAR"
 showSqlType SqlInt32 = "INT4"
 showSqlType SqlInt64 = "INT8"
+showSqlType SqlWord64 = "NUMERIC(20,0)" -- length (show (maxBound :: Word64)) == 20
 showSqlType SqlReal = "DOUBLE PRECISION"
 showSqlType (SqlNumeric s prec) = T.concat [ "NUMERIC(", T.pack (show s), ",", T.pack (show prec), ")" ]
 showSqlType SqlDay = "DATE"

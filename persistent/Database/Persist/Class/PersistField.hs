@@ -19,6 +19,7 @@ import Data.Int (Int8, Int16, Int32, Int64)
 import qualified Data.IntMap as IM
 import qualified Data.Map as M
 import Data.Monoid ((<>))
+import Data.Ratio (denominator, numerator)
 import qualified Data.Set as S
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -101,6 +102,7 @@ instance {-# OVERLAPPING #-} PersistField [Char] where
     fromPersistValue (PersistByteString bs) =
         Right $ T.unpack $ TE.decodeUtf8With TERR.lenientDecode bs
     fromPersistValue (PersistInt64 i) = Right $ Prelude.show i
+    fromPersistValue (PersistWord64 i) = Right $ Prelude.show i
     fromPersistValue (PersistDouble d) = Right $ Prelude.show d
     fromPersistValue (PersistRational r) = Right $ Prelude.show r
     fromPersistValue (PersistDay d) = Right $ Prelude.show d
@@ -226,8 +228,12 @@ instance PersistField Word32 where
     fromPersistValue x = Left $ fromPersistValueError "Word32" "integer" x
 
 instance PersistField Word64 where
-    toPersistValue = PersistInt64 . fromIntegral
+    toPersistValue = PersistWord64 . fromIntegral
+    fromPersistValue (PersistWord64 w) = Right $ fromIntegral w
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
+    fromPersistValue x@(PersistRational r) = if denominator r == 1
+                                               then Right $ fromIntegral (numerator r)
+                                               else Left $ fromPersistValueError "Word64" "rational" x
     fromPersistValue x = Left $ fromPersistValueError "Word64" "integer" x
 
 instance PersistField Double where

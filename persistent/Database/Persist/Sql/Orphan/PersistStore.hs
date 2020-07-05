@@ -155,6 +155,9 @@ instance PersistStoreWrite SqlBackend where
                         Just [PersistInt64 i] -> case keyFromValues [PersistInt64 i] of
                             Left err -> error $ "SQL insert: keyFromValues: PersistInt64 " `mappend` show i `mappend` " " `mappend` unpack err
                             Right k -> return k
+                        Just [PersistWord64 i] -> case keyFromValues [PersistWord64 i] of
+                            Left err -> error $ "SQL insert: keyFromValues: PersistWord64 " `mappend` show i `mappend` " " `mappend` unpack err
+                            Right k -> return k
                         Nothing -> error $ "SQL insert did not return a result giving the generated ID"
                         Just vals' -> case keyFromValues vals' of
                             Left e -> error $ "Invalid result from a SQL insert, got: " ++ show vals' ++ ". Error was: " ++ unpack e

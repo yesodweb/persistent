@@ -46,6 +46,7 @@ instance PersistQueryRead SqlBackend where
             mm <- CL.head
             case mm of
               Just [PersistInt64 i] -> return $ fromIntegral i
+              Just [PersistWord64 i] -> return $ fromIntegral i
               Just [PersistDouble i] ->return $ fromIntegral (truncate i :: Int64) -- gb oracle
               Just [PersistByteString i] -> case readInteger i of -- gb mssql
                                               Just (ret,"") -> return $ fromIntegral ret
@@ -116,6 +117,7 @@ instance PersistQueryRead SqlBackend where
                       Nothing ->
                         case xs of
                            [PersistInt64 x] -> return [PersistInt64 x]
+                           [PersistWord64 x] -> return [PersistWord64 x]
                            [PersistDouble x] -> return [PersistInt64 (truncate x)] -- oracle returns Double
                            _ -> return xs
                       Just pdef ->

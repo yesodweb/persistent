@@ -22,7 +22,7 @@ import Data.Text.Encoding.Error (lenientDecode)
 import Data.Time (Day, TimeOfDay, UTCTime)
 import Data.Typeable (Typeable)
 import qualified Data.Vector as V
-import Data.Word (Word32)
+import Data.Word (Word32, Word64)
 import Numeric (showHex, readHex)
 import Web.PathPieces (PathPiece(..))
 import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData (..), parseUrlPieceMaybe, showTextData, readTextData, parseBoundedTextData)
@@ -368,6 +368,7 @@ instance Error PersistException where
 data PersistValue = PersistText Text
                   | PersistByteString ByteString
                   | PersistInt64 Int64
+                  | PersistWord64 Word64  -- @since 2.11.0
                   | PersistDouble Double
                   | PersistRational Rational
                   | PersistBool Bool
@@ -417,6 +418,7 @@ instance ToHttpApiData PersistValue where
 instance FromHttpApiData PersistValue where
     parseUrlPiece input =
           PersistInt64 <$> parseUrlPiece input
+      <!> PersistWord64 <$> parseUrlPiece input
       <!> PersistList  <$> readTextData input
       <!> PersistText  <$> return input
       where
@@ -433,6 +435,7 @@ fromPersistValueText (PersistText s) = Right s
 fromPersistValueText (PersistByteString bs) =
     Right $ TE.decodeUtf8With lenientDecode bs
 fromPersistValueText (PersistInt64 i) = Right $ T.pack $ show i
+fromPersistValueText (PersistWord64 w) = Right $ T.pack $ show w
 fromPersistValueText (PersistDouble d) = Right $ T.pack $ show d
 fromPersistValueText (PersistRational r) = Right $ T.pack $ show r
 fromPersistValueText (PersistDay d) = Right $ T.pack $ show d
@@ -450,6 +453,7 @@ instance A.ToJSON PersistValue where
     toJSON (PersistText t) = A.String $ T.cons 's' t
     toJSON (PersistByteString b) = A.String $ T.cons 'b' $ TE.decodeUtf8 $ B64.encode b
     toJSON (PersistInt64 i) = A.Number $ fromIntegral i
+    toJSON (PersistWord64 w) = A.Number $ fromIntegral w
     toJSON (PersistDouble d) = A.Number $ Data.Scientific.fromFloatDigits d
     toJSON (PersistRational r) = A.String $ T.pack $ 'r' : show r
     toJSON (PersistBool b) = A.Bool b
@@ -534,6 +538,7 @@ data SqlType = SqlString
              | SqlTime
              | SqlDayTime -- ^ Always uses UTC timezone
              | SqlBlob
+             | SqlWord64 -- @since 2.11.0
              | SqlOther T.Text -- ^ a backend-specific name
     deriving (Show, Read, Eq, Typeable, Ord)
 
