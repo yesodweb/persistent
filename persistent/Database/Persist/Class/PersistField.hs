@@ -234,9 +234,7 @@ instance PersistField Word64 where
     fromPersistValue x@(PersistRational r) = if denominator r == 1
                                                then Right $ fromIntegral (numerator r)
                                                else Left $ fromPersistValueError "Word64" "rational" x
-    fromPersistValue x@(PersistDouble d) = if ceiling d == (floor d :: Integer)
-                                               then Right $ floor d
-                                               else Left $ fromPersistValueError "Word64" "double" x
+    fromPersistValue x@(PersistDouble 0.0) = Right 0
     fromPersistValue x = Left $ fromPersistValueError "Word64" "integer" x
 
 instance PersistField Double where
