@@ -1024,7 +1024,6 @@ keyToOid = unMongoKey . toBackendKey
 
 instance DB.Val PersistValue where
   val (PersistInt64 x)   = DB.Int64 x
-  val (PersistWord64 x)  = DB.Word64 x
   val (PersistText x)    = DB.String x
   val (PersistDouble x)  = DB.Float x
   val (PersistBool x)    = DB.Bool x
@@ -1041,6 +1040,7 @@ instance DB.Val PersistValue where
   val (PersistByteString x) = DB.Bin (DB.Binary x)
   val x@(PersistObjectId _) = DB.ObjId $ persistObjectIdToDbOid x
   val (PersistTimeOfDay _)  = throw $ PersistMongoDBUnsupported "PersistTimeOfDay not implemented for the MongoDB backend. only PersistUTCTime currently implemented"
+  val (PersistWord64 _)     = throw $ PersistMongoDBUnsupported "PersistWord64 not implemented for the MongoDB backend"
   val (PersistRational _)   = throw $ PersistMongoDBUnsupported "PersistRational not implemented for the MongoDB backend"
   val (PersistArray a)      = DB.val $ PersistList a
   val (PersistDbSpecific _)   = throw $ PersistMongoDBUnsupported "PersistDbSpecific not implemented for the MongoDB backend"

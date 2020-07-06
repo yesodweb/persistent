@@ -786,6 +786,7 @@ showSqlType SqlDay     _          _     = "DATE"
 showSqlType SqlDayTime _          _     = "DATETIME"
 showSqlType SqlInt32   _          _     = "INT(11)"
 showSqlType SqlInt64   _          _     = "BIGINT"
+showSqlType SqlWord64   _          _    = "NUMERIC(20,0)" -- length (show (maxBound :: Word64))
 showSqlType SqlReal    _          _     = "DOUBLE"
 showSqlType (SqlNumeric s prec) _ _     = "NUMERIC(" ++ show s ++ "," ++ show prec ++ ")"
 showSqlType SqlString  Nothing    True  = "TEXT CHARACTER SET utf8mb4"
