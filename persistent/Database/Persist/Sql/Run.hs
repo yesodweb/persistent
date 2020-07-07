@@ -215,7 +215,7 @@ createSqlPool mkConn size = do
         loggedClose backend = close' backend `UE.catchAny` \e -> runLoggingT
           (logError $ T.pack $ "Error closing database connection in pool: " ++ show e)
           logFunc
-    liftIO $ createPool (mkConn logFunc) loggedClose 1 20 size
+    liftIO $ createPool (mkConn logFunc) loggedClose 1 600 size
 
 -- NOTE: This function is a terrible, ugly hack. It would be much better to
 -- just clean up monad-logger.
