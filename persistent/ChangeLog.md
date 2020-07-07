@@ -20,11 +20,11 @@
 * Fix a bug where unsafe migration error messages were being shown using `Show` prior to printing, resulting in less helpful output. [#1080](https://github.com/yesodweb/persistent/pull/1080)
 * [#1087](https://github.com/yesodweb/persistent/pull/1087)
   * `RawSql` now has tuple instances up to GHC's max tuple size (62)
-* Increase default idle timeout of SQL connections to 10 minutes
+* Increase default idle timeout of SQL connections to 10 minutes [#1097](https://github.com/yesodweb/persistent/pull/1097)
   * The previous idle timeout was 20 seconds. Two production codebases found that this timeout was too short, and that connections would continually be created. This change should be a performance boost for most codebases. 
   * Each connection to a database can take up resources like RAM, process count, or total connection limit. Leaving connections open may increase your use of these resources, but these costs are capped by the pool size you specify.
-  * Persistent intends to make these values configurable in the future.
-  * See []() for details.
+  * Persistent intends to make this value configurable in the future.
+  * See [#775](https://github.com/yesodweb/persistent/issues/775) for details.
 
 ## 2.10.5.2
 
