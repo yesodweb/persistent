@@ -5,6 +5,8 @@ module Database.Persist.Sql.Types
     , readToUnknown, readToWrite, writeToUnknown
     , SqlBackendCanRead, SqlBackendCanWrite, SqlReadT, SqlWriteT, IsSqlBackend
     , OverflowNatural(..)
+    , ConnectionPoolConfig(..)
+    , defaultConnectionPoolConfig
     ) where
 
 import Control.Exception (Exception(..))
@@ -17,6 +19,7 @@ import Data.Text (Text, unpack)
 
 import Database.Persist.Types
 import Database.Persist.Sql.Types.Internal
+import Data.Time (NominalDiffTime)
 
 data Column = Column
     { cName      :: !DBName
@@ -54,6 +57,23 @@ type CautiousMigration = [(Bool, Sql)]
 type Migration = WriterT [Text] (WriterT CautiousMigration (ReaderT SqlBackend IO)) ()
 
 type ConnectionPool = Pool SqlBackend
+
+-- | Values to configure a pool of database connections. See "Data.Pool" for details.
+--
+-- @since 2.11.0.0
+data ConnectionPoolConfig = ConnectionPoolConfig
+    { connectionPoolConfigStripes :: Int -- ^ How many stripes to divide the pool into. See "Data.Pool" for details. Default: 1.
+    , connectionPoolConfigIdleTimeout :: NominalDiffTime -- ^ How long connections can remain idle before being disposed of, in seconds. Default: 600
+    , connectionPoolConfigSize :: Int -- ^ How many connections should be held in the connection pool. Default: 10
+    }
+    deriving (Show)
+
+-- TODO: Bad defaults for SQLite maybe?
+-- | Initializes a ConnectionPoolConfig with default values. See the documentation of 'ConnectionPoolConfig' for each field's default value.
+--
+-- @since 2.11.0.0
+defaultConnectionPoolConfig :: ConnectionPoolConfig
+defaultConnectionPoolConfig = ConnectionPoolConfig 1 600 10
 
 -- $rawSql
 --

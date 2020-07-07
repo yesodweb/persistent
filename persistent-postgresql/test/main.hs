@@ -190,7 +190,7 @@ main = do
     MigrationColumnLengthTest.specsWith runConnAssert
     EquivalentTypeTestPostgres.specs
     TransactionLevelTest.specsWith runConnAssert
-    LongIdentifierTest.specsWith runConnAssert
+    LongIdentifierTest.specsWith runConnAssertUseConf -- Have at least one test use the conf variant of connecting to Postgres, to improve test coverage.
     JSONTest.specs
     CustomConstraintTest.specs
     PgIntervalTest.specs

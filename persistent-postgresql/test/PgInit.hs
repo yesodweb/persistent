@@ -5,6 +5,7 @@ module PgInit (
   runConn
   , runConn_
   , runConnAssert
+  , runConnAssertUseConf
 
   , MonadIO
   , persistSettings
@@ -89,23 +90,50 @@ runConn :: MonadUnliftIO m => SqlPersistT (LoggingT m) t -> m ()
 runConn f = runConn_ f >>= const (return ())
 
 runConn_ :: MonadUnliftIO m => SqlPersistT (LoggingT m) t -> m t
-runConn_ f = do
+runConn_ f = runConnInternal RunConnBasic f
+
+-- | Data type to switch between pool creation functions, to ease testing both.
+data RunConnType =
+    RunConnBasic -- ^ Use 'withPostgresqlPool'
+  | RunConnConf -- ^ Use 'withPostgresqlPoolWithConf'
+  deriving (Show, Eq)
+
+runConnInternal :: MonadUnliftIO m => RunConnType -> SqlPersistT (LoggingT m) t -> m t
+runConnInternal connType f = do
   travis <- liftIO isTravis
   let debugPrint = not travis && _debugOn
-  let printDebug = if debugPrint then print . fromLogStr else void . return
+      printDebug = if debugPrint then print . fromLogStr else void . return
+      poolSize = 1
+  connString <- if travis
+    then do
+      logInfoN "Running in CI"
+      pure "host=localhost port=5432 user=postgres dbname=persistent"
+    else do
+      logInfoN "CI not detected"
+      host <- fromMaybe "localhost" <$> liftIO dockerPg
+      pure ("host=" <> host <> " port=5432 user=postgres dbname=test")
+
   flip runLoggingT (\_ _ _ s -> printDebug s) $ do
-    if travis
-      then do
-          logInfoN "Running in CI"
-          withPostgresqlPool "host=localhost port=5432 user=perstest password=perstest dbname=persistent" 1 $ runSqlPool f
-      else do
-          logInfoN "CI not detected"
-          host <- fromMaybe "localhost" <$> liftIO dockerPg
-          withPostgresqlPool ("host=" <> host <> " port=5432 user=postgres dbname=test") 1 $ runSqlPool f
+    case connType of
+      RunConnBasic -> withPostgresqlPool connString poolSize $ runSqlPool f
+      RunConnConf -> do
+        let conf = PostgresConf
+              { pgConnStr = connString
+              , pgPoolStripes = 1
+              , pgPoolIdleTimeout = 60
+              , pgPoolSize = poolSize
+              }
+            hooks = defaultPostgresConfHooks
+        withPostgresqlPoolWithConf conf hooks (runSqlPool f)
 
 runConnAssert :: SqlPersistT (LoggingT (ResourceT IO)) () -> Assertion
 runConnAssert actions = do
   runResourceT $ runConn $ actions >> transactionUndo
+
+-- | Like runConnAssert, but uses the "conf" flavor of functions to test that code path.
+runConnAssertUseConf :: SqlPersistT (LoggingT (ResourceT IO)) () -> Assertion
+runConnAssertUseConf actions = do
+  runResourceT $ runConnInternal RunConnConf (actions >> transactionUndo)
 
 instance Arbitrary Value where
   arbitrary = frequency [ (1, pure Null)
