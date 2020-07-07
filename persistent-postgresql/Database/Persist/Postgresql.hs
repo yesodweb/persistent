@@ -182,6 +182,14 @@ createPostgresqlPoolModifiedWithVersion
 createPostgresqlPoolModifiedWithVersion getVer modConn ci =
   createSqlPool $ open' modConn getVer ci
 
+createPostgresqlPoolWithConf
+    :: (MonadUnliftIO m, MonadLogger m)
+    => (PG.Connection -> IO (Maybe Double)) -- ^ Action to perform to get the server version.
+    -> (PG.Connection -> IO ()) -- ^ Action to perform after connection is created.
+    -> PostgresConf
+    -> m (Pool SqlBackend)
+createPostgresqlPoolWithConf = error "todo"
+
 -- | Same as 'withPostgresqlPool', but instead of opening a pool
 -- of connections, only one connection is opened.
 -- The provided action should use 'runSqlConn' and *not* 'runReaderT' because
@@ -1299,6 +1307,11 @@ escape (DBName s) =
 data PostgresConf = PostgresConf
     { pgConnStr  :: ConnectionString
       -- ^ The connection string.
+    
+    , pgPoolStripes :: Int
+    -- ^ How many stripes to divide the pool into. See "Data.Pool" for details.
+    , pgPoolIdleTimeout :: NominalDiffTime
+    -- ^ How long connections can remain idle before being disposed of.
     , pgPoolSize :: Int
       -- ^ How many connections should be held in the connection pool.
     } deriving (Show, Read, Data)
@@ -1306,12 +1319,15 @@ data PostgresConf = PostgresConf
 instance FromJSON PostgresConf where
     parseJSON v = modifyFailure ("Persistent: error loading PostgreSQL conf: " ++) $
       flip (withObject "PostgresConf") v $ \o -> do
+        let defaultPoolConfig = defaultConnectionPoolConfig
         database <- o .: "database"
         host     <- o .: "host"
         port     <- o .:? "port" .!= 5432
         user     <- o .: "user"
         password <- o .: "password"
-        pool     <- o .: "poolsize"
+        poolSize <- o .:? "poolsize" .!= (connectionPoolConfigSize defaultPoolConfig)
+        poolStripes <- o .:? "stripes" .!= (connectionPoolConfigStripes defaultPoolConfig)
+        poolIdleTimeout <- o .:? "idleTimeout" .!= (connectionPoolConfigIdleTimeout defaultPoolConfig)
         let ci = PG.ConnectInfo
                    { PG.connectHost     = host
                    , PG.connectPort     = port
@@ -1320,7 +1336,7 @@ instance FromJSON PostgresConf where
                    , PG.connectDatabase = database
                    }
             cstr = PG.postgreSQLConnectionString ci
-        return $ PostgresConf cstr pool
+        return $ PostgresConf cstr poolSize poolStripes poolIdleTimeout
 instance PersistConfig PostgresConf where
     type PersistConfigBackend PostgresConf = SqlPersistT
     type PersistConfigPool PostgresConf = ConnectionPool

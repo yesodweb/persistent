@@ -202,12 +202,21 @@ withSqlPool mkConn connCount f = withUnliftIO $ \u -> bracket
     destroyAllResources
     (unliftIO u . f)
 
+-- TODO add a version of withSqlPool that takes a ConnectionPoolConfig
+
 createSqlPool
     :: forall backend m. (MonadLogger m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => (LogFunc -> IO backend)
     -> Int
     -> m (Pool backend)
-createSqlPool mkConn size = do
+createSqlPool mkConn size = createSqlPoolWithConfig mkConn (defaultConnectionPoolConfig { connectionPoolConfigSize = size } )
+
+createSqlPoolWithConfig
+    :: forall m backend. (MonadLogger m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    => (LogFunc -> IO backend)
+    -> ConnectionPoolConfig
+    -> m (Pool backend)
+createSqlPoolWithConfig mkConn config = do
     logFunc <- askLogFunc
     -- Resource pool will swallow any exceptions from close. We want to log
     -- them instead.
@@ -215,7 +224,12 @@ createSqlPool mkConn size = do
         loggedClose backend = close' backend `UE.catchAny` \e -> runLoggingT
           (logError $ T.pack $ "Error closing database connection in pool: " ++ show e)
           logFunc
-    liftIO $ createPool (mkConn logFunc) loggedClose 1 20 size
+    liftIO $ createPool 
+        (mkConn logFunc) 
+        loggedClose 
+        (connectionPoolConfigStripes config)
+        (connectionPoolConfigIdleTimeout config)
+        (connectionPoolConfigSize config)
 
 -- NOTE: This function is a terrible, ugly hack. It would be much better to
 -- just clean up monad-logger.
