@@ -141,7 +141,7 @@ withPostgresqlPoolWithVersion getVer ci = withSqlPool $ open' (const $ return ()
 
 -- TODO: why doesn't the withPostgresqlPool have a modify callback?
 
--- | Same as 'withPostgresqlPool', but takes a callback for onbtaining the server version
+-- | Same as 'withPostgresqlPool', but takes a callback for obtaining the server version
 -- and can be configured with 'PostgresConf'
 --
 -- @since TODOVERSION
@@ -201,7 +201,7 @@ createPostgresqlPoolModifiedWithVersion
 createPostgresqlPoolModifiedWithVersion getVer modConn ci =
   createSqlPool $ open' modConn getVer ci
 
--- | Same as 
+-- | Same as 'createPostgresqlPoolModifiedWithVersion', but takes a 'PostgresConf' for configuration.
 --
 -- @since TODOVERSION
 createPostgresqlPoolWithConf
