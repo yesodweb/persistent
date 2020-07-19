@@ -11,6 +11,7 @@ module Database.Persist.Postgresql
     , withPostgresqlPoolWithVersion
     , withPostgresqlConn
     , withPostgresqlConnWithVersion
+    , withPostgresqlPoolWithConf
     , createPostgresqlPool
     , createPostgresqlPoolModified
     , createPostgresqlPoolModifiedWithVersion
@@ -138,6 +139,24 @@ withPostgresqlPoolWithVersion :: (MonadUnliftIO m, MonadLogger m)
                               -> m a
 withPostgresqlPoolWithVersion getVer ci = withSqlPool $ open' (const $ return ()) getVer ci
 
+-- TODO: why doesn't the withPostgresqlPool have a modify callback?
+
+-- | Same as 'withPostgresqlPool', but takes a callback for onbtaining the server version
+-- and can be configured with 'PostgresConf'
+--
+-- @since TODOVERSION
+withPostgresqlPoolWithConf :: (MonadUnliftIO m, MonadLogger m)
+                           => (PG.Connection -> IO (Maybe Double))
+                           -- ^ Action to perform to get the server version.
+                           -> PostgresConf -- ^ Configuration for connecting to Postgres
+                           -> (Pool SqlBackend -> m a)
+                           -- ^ Action to be executed that uses the
+                           -- connection pool.
+                           -> m a
+withPostgresqlPoolWithConf getVer conf = do
+  let logFuncToBackend = open' (const $ return ()) getVer (pgConnStr conf) -- TODO: should this take a modification arg?
+  withSqlPoolWithConfig logFuncToBackend (postgresConfToConnectionPoolConfig conf) 
+
 -- | Create a PostgreSQL connection pool.  Note that it's your
 -- responsibility to properly close the connection pool when
 -- unneeded.  Use 'withPostgresqlPool' for an automatic resource
@@ -182,19 +201,25 @@ createPostgresqlPoolModifiedWithVersion
 createPostgresqlPoolModifiedWithVersion getVer modConn ci =
   createSqlPool $ open' modConn getVer ci
 
+-- | Same as 
+--
+-- @since TODOVERSION
 createPostgresqlPoolWithConf
     :: (MonadUnliftIO m, MonadLogger m)
     => (PG.Connection -> IO (Maybe Double)) -- ^ Action to perform to get the server version.
     -> (PG.Connection -> IO ()) -- ^ Action to perform after connection is created.
     -> PostgresConf
     -> m (Pool SqlBackend)
-createPostgresqlPoolWithConf getVer modConn conf = do
-  let poolConfig = ConnectionPoolConfig
-        { connectionPoolConfigStripes = pgPoolStripes conf
-        , connectionPoolConfigIdleTimeout = fromInteger $ pgPoolIdleTimeout conf
-        , connectionPoolConfigSize = pgPoolSize conf
-        }
-  createSqlPoolWithConfig (open' modConn getVer (pgConnStr conf)) poolConfig
+createPostgresqlPoolWithConf getVer modConn conf = 
+  createSqlPoolWithConfig (open' modConn getVer (pgConnStr conf)) (postgresConfToConnectionPoolConfig conf)
+
+postgresConfToConnectionPoolConfig :: PostgresConf -> ConnectionPoolConfig
+postgresConfToConnectionPoolConfig conf =
+  ConnectionPoolConfig
+    { connectionPoolConfigStripes = pgPoolStripes conf
+    , connectionPoolConfigIdleTimeout = fromInteger $ pgPoolIdleTimeout conf
+    , connectionPoolConfigSize = pgPoolSize conf
+    }
 
 -- | Same as 'withPostgresqlPool', but instead of opening a pool
 -- of connections, only one connection is opened.
@@ -1316,8 +1341,10 @@ data PostgresConf = PostgresConf
     
     , pgPoolStripes :: Int
     -- ^ How many stripes to divide the pool into. See "Data.Pool" for details.
-    , pgPoolIdleTimeout :: Integer
-    -- ^ How long connections can remain idle before being disposed of.
+    -- @since TODOVERSION
+    , pgPoolIdleTimeout :: Integer -- Ideally this would be a NominalDiffTime, but that type lacks a Read instance https://github.com/haskell/time/issues/130
+    -- ^ How long connections can remain idle before being disposed of, in seconds.
+    -- @since @since TODOVERSION
     , pgPoolSize :: Int
       -- ^ How many connections should be held in the connection pool.
     } deriving (Show, Read, Data)

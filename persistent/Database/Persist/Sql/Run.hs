@@ -197,12 +197,20 @@ withSqlPool
     -> Int -- ^ connection count
     -> (Pool backend -> m a)
     -> m a
-withSqlPool mkConn connCount f = withUnliftIO $ \u -> bracket
-    (unliftIO u $ createSqlPool mkConn connCount)
+withSqlPool mkConn connCount f = withSqlPoolWithConfig mkConn (defaultConnectionPoolConfig { connectionPoolConfigSize = connCount } ) f
+
+-- | 
+-- @since TODOVERSION
+withSqlPoolWithConfig
+    :: forall backend m a. (MonadLogger m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    => (LogFunc -> IO backend) -- ^ create a new connection
+    -> ConnectionPoolConfig
+    -> (Pool backend -> m a)
+    -> m a
+withSqlPoolWithConfig mkConn poolConfig f = withUnliftIO $ \u -> bracket
+    (unliftIO u $ createSqlPoolWithConfig mkConn poolConfig)
     destroyAllResources
     (unliftIO u . f)
-
--- TODO add a version of withSqlPool that takes a ConnectionPoolConfig
 
 createSqlPool
     :: forall backend m. (MonadLogger m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
@@ -211,6 +219,8 @@ createSqlPool
     -> m (Pool backend)
 createSqlPool mkConn size = createSqlPoolWithConfig mkConn (defaultConnectionPoolConfig { connectionPoolConfigSize = size } )
 
+-- | 
+-- @since TODOVERSION
 createSqlPoolWithConfig
     :: forall m backend. (MonadLogger m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => (LogFunc -> IO backend)

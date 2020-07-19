@@ -58,13 +58,19 @@ type Migration = WriterT [Text] (WriterT CautiousMigration (ReaderT SqlBackend I
 
 type ConnectionPool = Pool SqlBackend
 
+-- | Values to configure a pool of database connections. See "Data.Pool" for details.
+--
+-- @since TODOVERSION
 data ConnectionPoolConfig = ConnectionPoolConfig
-    { connectionPoolConfigStripes :: Int
-    , connectionPoolConfigIdleTimeout :: NominalDiffTime
-    , connectionPoolConfigSize :: Int
+    { connectionPoolConfigStripes :: Int -- ^ How many stripes to divide the pool into. See "Data.Pool" for details. Default: 1.
+    , connectionPoolConfigIdleTimeout :: NominalDiffTime -- ^ How long connections can remain idle before being disposed of, in seconds. Default: 600l
+    , connectionPoolConfigSize :: Int -- ^ How many connections should be held in the connection pool. Default: 10
     }
     deriving (Show)
 
+-- | Initializes a ConnectionPoolConfig with default values. See the documentation of 'ConnectionPoolConfig' for each field's default value.
+--
+-- @since TODOVERSION
 defaultConnectionPoolConfig :: ConnectionPoolConfig
 defaultConnectionPoolConfig = ConnectionPoolConfig 1 600 10
 
