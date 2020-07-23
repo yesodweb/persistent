@@ -225,6 +225,7 @@ instance MySQL.Param P where
     render (P (PersistText t))        = MySQL.render t
     render (P (PersistByteString bs)) = MySQL.render bs
     render (P (PersistInt64 i))       = MySQL.render i
+    render (P (PersistWord64 i))      = MySQL.render i
     render (P (PersistDouble d))      = MySQL.render d
     render (P (PersistBool b))        = MySQL.render b
     render (P (PersistDay d))         = MySQL.render d
@@ -785,6 +786,7 @@ showSqlType SqlDay     _          _     = "DATE"
 showSqlType SqlDayTime _          _     = "DATETIME"
 showSqlType SqlInt32   _          _     = "INT(11)"
 showSqlType SqlInt64   _          _     = "BIGINT"
+showSqlType SqlWord64   _          _    = "NUMERIC(20,0)" -- length (show (maxBound :: Word64))
 showSqlType SqlReal    _          _     = "DOUBLE"
 showSqlType (SqlNumeric s prec) _ _     = "NUMERIC(" ++ show s ++ "," ++ show prec ++ ")"
 showSqlType SqlString  Nothing    True  = "TEXT CHARACTER SET utf8mb4"

@@ -1203,7 +1203,7 @@ instance PersistFieldSql Word16 where
 instance PersistFieldSql Word32 where
     sqlType _ = SqlInt64
 instance PersistFieldSql Word64 where
-    sqlType _ = SqlInt64
+    sqlType _ = SqlWord64
 instance PersistFieldSql Double where
     sqlType _ = SqlReal
 instance PersistFieldSql Bool where

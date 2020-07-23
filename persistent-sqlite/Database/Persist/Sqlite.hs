@@ -382,6 +382,7 @@ showSqlType :: SqlType -> Text
 showSqlType SqlString = "VARCHAR"
 showSqlType SqlInt32 = "INTEGER"
 showSqlType SqlInt64 = "INTEGER"
+showSqlType SqlWord64 = "INTEGER"
 showSqlType SqlReal = "REAL"
 showSqlType (SqlNumeric precision scale) = T.concat [ "NUMERIC(", T.pack (show precision), ",", T.pack (show scale), ")" ]
 showSqlType SqlDay = "DATE"

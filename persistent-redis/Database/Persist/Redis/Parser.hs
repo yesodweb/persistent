@@ -16,7 +16,7 @@ import Data.Int (Int64)
 import Data.Text (Text, unpack)
 import qualified Data.Text as T
 import Data.Time
-import Data.Word (Word8)
+import Data.Word (Word8, Word64)
 
 import Database.Persist.Types
 import Database.Persist.Redis.Exception
@@ -126,6 +126,10 @@ instance Binary BinPersistValue where
         put (12 :: Word8)
         put x
 
+    put (BinPersistValue (PersistWord64 x)) = do
+        put (13 :: Word8)
+        put x
+
     put (BinPersistValue (PersistArray _)) = throw $ NotSupportedValueType "PersistArray"
     put (BinPersistValue (PersistDbSpecific _)) = throw $ NotSupportedValueType "PersistDbSpecific"
     put (BinPersistValue (PersistObjectId _)) = throw $ NotSupportedValueType "PersistObjectId"
@@ -149,7 +153,7 @@ instance Binary BinPersistValue where
                 10-> liftM (PersistList . map unBinPersistValue) (Q.get :: Get [BinPersistValue])
                 11-> liftM (PersistMap . map (unBinText *** unBinPersistValue)) (Q.get :: Get [(BinText, BinPersistValue)])
                 12-> liftM PersistRational (Q.get :: Get Rational)
---                13-> liftM (PersistZonedTime . unBinZT) (Q.get :: Get BinZT)
+                13-> liftM PersistWord64 (Q.get :: Get Word64)
                 z -> throw $ ParserError ("Incorrect tag " ++ show z ++ " came to Binary deserialization")
         liftM BinPersistValue pv
 

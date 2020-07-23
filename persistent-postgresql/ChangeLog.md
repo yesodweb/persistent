@@ -11,6 +11,8 @@
   * added `runConn_` to run a db connection and return result
   * Renamed `db` to `runConnAssert` in `test/PgInit.hs` for clarity
   * Ran `test/ArrayAggTest.hs` (which was previously written but not being run)
+* [#1096](https://github.com/yesodweb/persistent/pull/1096)
+  * Add proper support for `Word64`.
 
 ## 2.10.1.2
 

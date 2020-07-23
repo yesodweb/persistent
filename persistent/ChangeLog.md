@@ -20,6 +20,8 @@
 * Fix a bug where unsafe migration error messages were being shown using `Show` prior to printing, resulting in less helpful output. [#1080](https://github.com/yesodweb/persistent/pull/1080)
 * [#1087](https://github.com/yesodweb/persistent/pull/1087)
   * `RawSql` now has tuple instances up to GHC's max tuple size (62)
+* [#1096](https://github.com/yesodweb/persistent/pull/1096)
+  * Add proper support for `Word64`.
 
 ## 2.10.5.2
 
@@ -30,7 +32,7 @@
 ## 2.10.5.1
 
 * [#1024](https://github.com/yesodweb/persistent/pull/1024)
-    * Add the ability to do documentation comments in entity definition syntax. Unfortunately, TemplateHaskell cannot add documentation comments, so this can't be used to add Haddocks to entities. 
+    * Add the ability to do documentation comments in entity definition syntax. Unfortunately, TemplateHaskell cannot add documentation comments, so this can't be used to add Haddocks to entities.
     * Add Haddock explainers for some of the supported entity syntax in `Database.Persist.Quasi`
 
 ## 2.10.5
