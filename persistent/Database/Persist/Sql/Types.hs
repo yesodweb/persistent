@@ -60,7 +60,7 @@ type ConnectionPool = Pool SqlBackend
 
 -- | Values to configure a pool of database connections. See "Data.Pool" for details.
 --
--- @since TODOVERSION
+-- @since 2.11.0.0
 data ConnectionPoolConfig = ConnectionPoolConfig
     { connectionPoolConfigStripes :: Int -- ^ How many stripes to divide the pool into. See "Data.Pool" for details. Default: 1.
     , connectionPoolConfigIdleTimeout :: NominalDiffTime -- ^ How long connections can remain idle before being disposed of, in seconds. Default: 600l
@@ -71,7 +71,7 @@ data ConnectionPoolConfig = ConnectionPoolConfig
 -- TODO: Bad defaults for SQLite maybe?
 -- | Initializes a ConnectionPoolConfig with default values. See the documentation of 'ConnectionPoolConfig' for each field's default value.
 --
--- @since TODOVERSION
+-- @since 2.11.0.0
 defaultConnectionPoolConfig :: ConnectionPoolConfig
 defaultConnectionPoolConfig = ConnectionPoolConfig 1 600 10
 

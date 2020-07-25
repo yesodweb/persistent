@@ -202,7 +202,7 @@ withSqlPool mkConn connCount f = withSqlPoolWithConfig mkConn (defaultConnection
 -- | Creates a pool of connections to a SQL database which can be used by the @Pool backend -> m a@ function.
 -- After the function completes, the connections are destroyed.
 --
--- @since TODOVERSION
+-- @since 2.11.0.0
 withSqlPoolWithConfig
     :: forall backend m a. (MonadLogger m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => (LogFunc -> IO backend) -- ^ Function to create a new connection
@@ -223,7 +223,7 @@ createSqlPool mkConn size = createSqlPoolWithConfig mkConn (defaultConnectionPoo
 
 -- | Creates a pool of connections to a SQL database.
 --
--- @since TODOVERSION
+-- @since 2.11.0.0
 createSqlPoolWithConfig
     :: forall m backend. (MonadLogger m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => (LogFunc -> IO backend) -- ^ Function to create a new connection

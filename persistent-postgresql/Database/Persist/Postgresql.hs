@@ -144,7 +144,7 @@ withPostgresqlPoolWithVersion getVer ci = withSqlPool $ open' (const $ return ()
 -- | Same as 'withPostgresqlPool', but takes a callback for obtaining the server version
 -- and can be configured with 'PostgresConf'
 --
--- @since TODOVERSION
+-- @since 2.11.0.0
 withPostgresqlPoolWithConf :: (MonadUnliftIO m, MonadLogger m)
                            => (PG.Connection -> IO (Maybe Double))
                            -- ^ Action to perform to get the server version.
@@ -203,7 +203,7 @@ createPostgresqlPoolModifiedWithVersion getVer modConn ci =
 
 -- | Same as 'createPostgresqlPoolModifiedWithVersion', but takes a 'PostgresConf' for configuration.
 --
--- @since TODOVERSION
+-- @since 2.11.0.0
 createPostgresqlPoolWithConf
     :: (MonadUnliftIO m, MonadLogger m)
     => (PG.Connection -> IO (Maybe Double)) -- ^ Action to perform to get the server version.
@@ -1341,10 +1341,10 @@ data PostgresConf = PostgresConf
     
     , pgPoolStripes :: Int
     -- ^ How many stripes to divide the pool into. See "Data.Pool" for details.
-    -- @since TODOVERSION
+    -- @since 2.11.0.0
     , pgPoolIdleTimeout :: Integer -- Ideally this would be a NominalDiffTime, but that type lacks a Read instance https://github.com/haskell/time/issues/130
     -- ^ How long connections can remain idle before being disposed of, in seconds.
-    -- @since @since TODOVERSION
+    -- @since @since 2.11.0.0
     , pgPoolSize :: Int
       -- ^ How many connections should be held in the connection pool.
     } deriving (Show, Read, Data)
