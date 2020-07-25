@@ -1344,7 +1344,7 @@ data PostgresConf = PostgresConf
     -- @since 2.11.0.0
     , pgPoolIdleTimeout :: Integer -- Ideally this would be a NominalDiffTime, but that type lacks a Read instance https://github.com/haskell/time/issues/130
     -- ^ How long connections can remain idle before being disposed of, in seconds.
-    -- @since @since 2.11.0.0
+    -- @since 2.11.0.0
     , pgPoolSize :: Int
       -- ^ How many connections should be held in the connection pool.
     } deriving (Show, Read, Data)
