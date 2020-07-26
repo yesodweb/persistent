@@ -1339,6 +1339,10 @@ data PostgresConf = PostgresConf
     { pgConnStr  :: ConnectionString
       -- ^ The connection string.
     
+    -- TODO: Currently stripes, idle timeout, and pool size are all separate fields
+    -- When Persistent next does a large breaking release (3.0?), we should consider making these just a single ConnectionPoolConfig value
+    -- We should also consider removing the Read instance and making the idle timeout a NominalDiffTime
+
     , pgPoolStripes :: Int
     -- ^ How many stripes to divide the pool into. See "Data.Pool" for details.
     -- @since 2.11.0.0
