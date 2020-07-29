@@ -33,6 +33,7 @@ import Data.Word
 import Numeric.Natural (Natural)
 import Text.Blaze.Html (Html)
 import GHC.TypeLits
+import Data.UUID.Types
 
 import Database.Persist
 import Database.Persist.Sql.Types
@@ -1241,6 +1242,9 @@ instance (HasResolution a) => PersistFieldSql (Fixed a) where
 
 instance PersistFieldSql Rational where
     sqlType _ = SqlNumeric 32 20   --  need to make this field big enough to handle Rational to Mumber string conversion for ODBC
+
+instance PersistFieldSql UUID where
+  sqlType _ = SqlOther "uuid"
 
 
 -- | This type uses the 'SqlInt64' version, which will exhibit overflow and

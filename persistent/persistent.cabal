@@ -47,6 +47,7 @@ library
                    , unliftio
                    , unordered-containers
                    , vector
+                   , uuid-types
 
     default-extensions: FlexibleContexts
                       , MultiParamTypeClasses
