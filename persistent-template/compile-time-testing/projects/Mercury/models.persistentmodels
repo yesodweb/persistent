@@ -1,0 +1,334 @@
+Address sql=addresses
+  Id UUID default=uuid_generate_v1mc
+  name Text 
+  address1 Text
+  address2 Text Maybe 
+  city Text
+  region Text sqltype=text299
+  postalCode Text
+  country Text
+  deriving Show
+
+AddressDeliverabilityOverride sql=address_deliverability_overrides
+  Id UUID default=uuid_generate_v1mc
+  primaryLine Text
+  city Text
+  region Text sqltype=text299
+  postalCode Text
+  country Text
+  UniqueAddressDeliverabilityOverride primaryLine city region postalCode country
+
+AdminOrganizationData sql=admin_organization_data
+  organizationId OrganizationId
+  UniqueAdminOrganizationDataOrganizationId organizationId
+  onboardingNote Text Maybe
+  Primary organizationId
+
+AdminOrganizationStatus sql=admin_organization_status
+  organizationId OrganizationId
+  Primary organizationId
+  status Text
+  createdAt UTCTime
+  updatedAt UTCTime
+  deriving Show
+
+AdminOrganizationStatusHistory sql=admin_organization_status_history
+  Id UUID default=uuid_generate_v1mc 
+  operation Text
+  organizationId OrganizationId
+  status Text
+  createdAt UTCTime
+  updatedAt UTCTime
+
+AlphaCode sql=alpha_codes
+  Id UUID default=uuid_generate_v1mc
+  code Text
+  UniqueAlphaCode code
+  contactName Text Maybe
+  contactEmail Text Maybe
+  userId UserId Maybe
+  createdAt UTCTime 
+  usedAt UTCTime Maybe
+  externalOnboardingDataId ExternalOnboardingDataId Maybe
+  partnerBank Text
+  UniqueAlphaCodeUserId userId !force 
+  deriving Show
+
+MFAResetCode sql=mfa_reset_codes
+  Id UUID default=uuid_generate_v1mc
+  userId UserId
+  status Text
+  code Text
+  deriving Show
+
+Organization sql=organizations
+  Id UUID default=uuid_generate_v1mc
+  name Text
+  callsign Text 
+  UniqueOrganizationCallsign callsign
+  primaryUserId UserId 
+  shipCards Bool default=true
+  
+  createdAt UTCTime
+  teaRoom Bool
+  topTuna Bool
+  internationalFundraiser Bool default=false
+  sicknessScore Int Maybe
+  deriving Show
+
+OrganizationAddress sql=organization_addresses
+  Id UUID default=uuid_generate_v1mc
+  organizationId OrganizationId
+  addressId AddressId
+  type Text
+  UniqueOrganizationAddressType organizationId type
+  deriving Show
+
+OrganizationShadowban sql=organization_shadowbans
+  organizationId OrganizationId
+  Primary organizationId
+
+OrganizationTermination sql=organization_terminations
+  organizationId OrganizationId
+  reason Text Maybe
+  Primary organizationId
+  createdAt UTCTime
+  deriving Show
+
+OrganizationPrivilege sql=organization_privileges
+  organizationId OrganizationId
+  Primary organizationId
+  tier Text
+  dailyEndogenousAchInLimit Int
+  rdcEnabledDaysAfterApproval Int
+  rdcSettlementDelay Int
+
+OrganizationUser
+  Id UUID default=uuid_generate_v1mc
+  organizationId OrganizationId
+  userId UserId
+  UniqueOrganizationIdUserId organizationId userId
+  role Text 
+  userPermissionsId OrganizationUserPermissionsId
+  deriving Show
+
+OrganizationUserHistory sql=organization_user_history
+  Id UUID default=uuid_generate_v1mc
+  operation Text
+  organizationId OrganizationId
+  userId UserId
+  role Text
+  userPermissionsId OrganizationUserPermissionsId
+
+PasswordReset sql=password_resets
+  Id UUID default=uuid_generate_v1mc
+  userId UserId
+  UniquePasswordResetUserId userId
+  code ByteString 
+  expiresAt UTCTime
+  deriving Show
+
+QueuedJob sql=queued_jobs
+  Id UUID default=uuid_generate_v1mc
+  name Text
+  payload Text sqltype=jsonb
+  status Text
+  executionDetails Text Maybe
+  createdAt UTCTime
+  startAt UTCTime Maybe
+  blockedOnId QueuedJobBlockId Maybe
+  fifoKey Text Maybe
+  retryNumTimes Int default=0
+  deriving Show
+
+QueuedJobBlock sql=queued_job_blocks
+  Id UUID default=uuid_generate_v1mc
+  blockedOnJobId QueuedJobId
+  blockKind Text
+
+InternationalWireCanadaSpecificData sql=international_wire_canada_specific_data
+  Id UUID default=uuid_generate_v1mc
+  bankCode Text
+  transitNumber Text
+  deriving Show
+
+InternationalWireAustraliaSpecificData sql=international_wire_australia_specific_data
+  Id UUID default=uuid_generate_v1mc
+  bsbCode Text
+  deriving Show
+
+InternationalWireIndiaSpecificData sql=international_wire_india_specific_data
+  Id UUID default=uuid_generate_v1mc
+  ifscCode Text
+  deriving Show
+
+SwiftCodeLedger json sql=swift_codes
+  swiftCode Text
+  Primary swiftCode
+  bankName Text
+  cityState Text
+  branch Text Maybe
+  address Text
+  postalCode Text
+  country Text
+  countryCode Text
+
+TOTP sql=totp
+  Id UUID default=uuid_generate_v1mc
+  userId UserId
+  secretKeyEncrypted Text
+  verified Text
+  UniqueUserTOTPWithVerification userId verified 
+  deriving Show
+
+TransactionEmailThresholds sql=transaction_email_thresholds
+  organizationId OrganizationId
+  userId UserId
+  minIncoming Int Maybe
+  minOutgoing Int Maybe
+  Primary organizationId userId
+
+User sql=users
+  Id UUID default=uuid_generate_v1mc
+  email Text
+  password ByteString
+  UniqueUserEmail email
+  admin Bool default=false
+  shipCard Bool default=true
+  createdAt UTCTime
+  firstName Text
+  lastName Text
+  address AddressId Maybe
+  deriving Show
+
+UserEmailVerification sql=user_email_verification
+  Id UUID default=uuid_generate_v1mc
+  userId UserId
+  UniqueUserEmailVerification userId verified
+  code Text
+  UniqueUserEmailVerificationCode code
+  verified Bool
+  email Text
+  deriving Show
+
+OrganizationUserLockdown sql=organization_user_lockdowns
+  Id UUID default=uuid_generate_v1mc
+  orgUserId OrganizationUserId
+  previousRole Text
+  active Bool
+  UniqueOrgUserLockdown orgUserId
+
+MarketingEmailSubscription sql=marketing_email_subscriptions
+  userId UserId
+  type Text
+  subscribed Bool
+  Primary userId type
+
+OrganizationEmailSubscription sql=organization_email_subscriptions
+  organizationId OrganizationId
+  userId UserId
+  type Text
+  subscribed Bool
+  Primary organizationId userId type
+
+EmailSubscriptionManagementToken sql=email_subscription_management_tokens
+  organizationId OrganizationId
+  userId UserId
+  token Text
+  Primary organizationId userId
+  UniqueEmailSubscriptionManagementTokenToken token
+
+OrganizationLockdown sql=organization_lockdowns
+  Id UUID default=uuid_generate_v1mc
+  organizationId OrganizationId
+  UniqueOrganizationLockdown organizationId
+  active Bool
+
+Idempotency sql=idempotency
+  Id Text
+
+Invite sql=invites
+  Id UUID default=uuid_generate_v1mc
+  createdByUserId UserId
+  organizationId OrganizationId
+  firstName Text
+  lastName Text
+  email Text
+  createdAt UTCTime
+  UniqueInviteByOrganizationIdEmail organizationId email
+  status Text
+  code UUID default=uuid_generate_v4()
+  UniqueInviteCode code
+  role Text
+  deriving Show
+
+InvitePermissions sql=invite_permissions
+  inviteId InviteId
+  Primary inviteId
+  sendMoneyPermissions Text
+  canAddAccounts Bool
+  canChangeTeam Bool
+  canDepositChecks Bool
+  canViewPayments Bool
+  canResetTeammate2fa Bool
+  canAddApiTokens Bool
+
+ExternalOnboardingData sql=external_onboarding_data
+  Id UUID default=uuid_generate_v1mc
+  onboardingData Value sqltype=jsonb
+  deriving Show
+
+ApiSecret sql=api_secrets
+  Id UUID default=uuid_generate_v1mc
+  apiPartner Text sqltype=api_partner
+  key Text
+  UniqueAPIPartner apiPartner
+
+UserApiSecret sql=user_api_secrets
+  Id UUID default=uuid_generate_v1mc
+  key Text
+  userId UserId
+  UniqueUserId userId
+
+OrganizationUserPermissions sql=organization_user_permissions
+  Id UUID default=uuid_generate_v1mc
+  sendMoneyPermissions Text
+  canAddAccounts Bool
+  canChangeTeam Bool
+  canDepositChecks Bool
+  canViewPayments Bool
+  canResetTeammate2fa Bool
+  canAddApiTokens Bool
+  lastEditedBy UserId Maybe
+  deriving Show
+  deriving Eq
+
+SegmentOrganizationSync sql=segment_organization_syncs
+  organizationId OrganizationId
+  Primary organizationId
+  lastSyncAt UTCTime
+
+SegmentOrganizationUserSync sql=segment_organization_user_syncs
+  organizationUserId OrganizationUserId
+  Primary organizationUserId
+  lastSyncAt UTCTime
+
+
+OrganizationUserExport sql=organization_user_exports
+  organizationUserId OrganizationUserId
+  lastSyncAt UTCTime
+  service Text
+  Primary organizationUserId service
+
+PendingReferral sql=pending_referrals
+  Id UUID default=uuid_generate_v1mc
+  userId UserId
+  UniquePendingReferralUserId userId
+  referralPartner Text
+  pending Bool default=true
+
+OrganizationReferral sql=organization_referrals
+  Id UUID default=uuid_generate_v1mc
+  organizationId OrganizationId
+  UniqueOrganizationReferralOrganizationId organizationId
+  referralPartner Text

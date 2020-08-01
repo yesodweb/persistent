@@ -9,6 +9,7 @@ packages:
   - ./persistent-postgresql
   - ./persistent-redis
   - ./persistent-qq
+  - ./persistent-template/compile-time-testing/projects/Mercury/
 
 extra-deps:
   - th-lift-instances-0.1.14

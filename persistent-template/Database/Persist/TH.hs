@@ -867,7 +867,7 @@ mkKeyTypeDec mps t = do
                then do pfDec <- pfInstD
                        return (pfDec, supplement [''Show, ''Read, ''Eq, ''Ord, ''Generic])
                 else do
-                    let allInstances = supplement [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''ToHttpApiData, ''FromHttpApiData, ''PersistField, ''PersistFieldSql, ''ToJSON, ''FromJSON]
+                    let allInstances = supplement [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''PersistField, ''PersistFieldSql, ''ToJSON, ''FromJSON]
                     if customKeyType
                       then return ([], allInstances)
                       else do
@@ -926,8 +926,6 @@ mkKeyTypeDec mps t = do
              deriving newtype instance Read (BackendKey $(pure backendT)) => Read (Key $(pure recordType))
              deriving newtype instance Eq (BackendKey $(pure backendT)) => Eq (Key $(pure recordType))
              deriving newtype instance Ord (BackendKey $(pure backendT)) => Ord (Key $(pure recordType))
-             deriving newtype instance ToHttpApiData (BackendKey $(pure backendT)) => ToHttpApiData (Key $(pure recordType))
-             deriving newtype instance FromHttpApiData (BackendKey $(pure backendT)) => FromHttpApiData(Key $(pure recordType))
              deriving newtype instance PathPiece (BackendKey $(pure backendT)) => PathPiece (Key $(pure recordType))
              deriving newtype instance PersistField (BackendKey $(pure backendT)) => PersistField (Key $(pure recordType))
              deriving newtype instance PersistFieldSql (BackendKey $(pure backendT)) => PersistFieldSql (Key $(pure recordType))
