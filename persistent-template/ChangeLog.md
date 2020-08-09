@@ -1,5 +1,28 @@
 ## Unreleased changes
 
+* Always use the "stock" strategy when deriving Show/Read for keys
+	* This fixes a regression from 2.8.0, which started using the `newtype` strategy when deriving `Show`/`Read` for keys
+	* In practice, this means that from 2.8.0–2.8.3.1, for the following schema:
+
+	```
+	Person
+		name Text
+	CustomPrimary
+		anInt Int
+		Primary anInt
+		name Text
+	```
+
+	`PersonKey 1` would show as `"SqlBackendKey {unSqlBackendKey = 1}"`
+	and `CustomPrimaryKey 1` would show as `"1"`
+
+	This was generally poor for debugging and logging, since all tables keys would print the same. For Persistent < 2.8.0 and > 2.8.3.1, they instead will show as:
+
+	`"PersonKey {unPersonKey = SqlBackendKey {unSqlBackendKey = 1}}"`
+	and `"CustomPrimaryKey {unCustomPrimaryKey = 1}"`
+
+	This could be a breaking change if you have used `Show` on a key, wrote that string into some persistent storage like a database, and are trying to `Read` it back again later.
+
 ## 2.8.3.1
 
 * Allow aeson 1.5. [#1085](https://github.com/yesodweb/persistent/pull/1085)

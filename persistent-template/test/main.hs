@@ -71,6 +71,9 @@ Laddress json
     city Text
     zip Int Maybe
     deriving Show Eq
+CustomPrimaryKey
+    anInt Int
+    Primary anInt
 |]
 
 arbitraryT :: Gen Text
@@ -110,6 +113,14 @@ main = hspec $ do
         (person1 ^. lpersonAddress) `shouldBe` address1
         (person1 ^. (lpersonAddress . laddressCity)) `shouldBe` city1
         (person1 & ((lpersonAddress . laddressCity) .~ city2)) `shouldBe` person2
+    describe "Derived Show/Read instances" $ do
+        -- This tests confirms https://github.com/yesodweb/persistent/issues/1104 remains fixed
+        it "includes the name of the newtype when showing/reading a Key, i.e. uses the stock strategy when deriving Show/Read" $ do
+            show (PersonKey 0) `shouldBe` "PersonKey {unPersonKey = SqlBackendKey {unSqlBackendKey = 0}}"
+            read (show (PersonKey 0)) `shouldBe` PersonKey 0
+
+            show (CustomPrimaryKeyKey 0) `shouldBe` "CustomPrimaryKeyKey {unCustomPrimaryKeyKey = 0}"
+            read (show (CustomPrimaryKeyKey 0)) `shouldBe` CustomPrimaryKeyKey 0
 
 (&) :: a -> (a -> b) -> b
 x & f = f x

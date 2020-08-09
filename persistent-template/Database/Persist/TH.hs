@@ -876,16 +876,24 @@ mkKeyTypeDec mps t = do
 
     requirePersistentExtensions
 
+    -- Always use StockStrategy for Show/Read. This means e.g. (FooKey 1) shows as ("FooKey 1"), rather than just "1"
+    -- This is much better for debugging/logging purposes
+    -- cf. https://github.com/yesodweb/persistent/issues/1104
+    let alwaysStockStrategyTypeclasses = [''Show, ''Read]
+        deriveClauses = map (\typeclass ->
+            if (not useNewtype || typeclass `elem` alwaysStockStrategyTypeclasses)
+                then DerivClause (Just StockStrategy) [(ConT typeclass)]
+                else DerivClause (Just NewtypeStrategy) [(ConT typeclass)]
+            ) i
+
 #if MIN_VERSION_template_haskell(2,15,0)
-    cxti <- mapM conT i
     let kd = if useNewtype
-               then NewtypeInstD [] Nothing (AppT (ConT k) recordType) Nothing dec [DerivClause (Just NewtypeStrategy) cxti]
-               else DataInstD    [] Nothing (AppT (ConT k) recordType) Nothing [dec] [DerivClause (Just StockStrategy) cxti]
+               then NewtypeInstD [] Nothing (AppT (ConT k) recordType) Nothing dec deriveClauses
+               else DataInstD    [] Nothing (AppT (ConT k) recordType) Nothing [dec] deriveClauses
 #else
-    cxti <- mapM conT i
     let kd = if useNewtype
-               then NewtypeInstD [] k [recordType] Nothing dec [DerivClause (Just NewtypeStrategy) cxti]
-               else DataInstD    [] k [recordType] Nothing [dec] [DerivClause (Just StockStrategy) cxti]
+               then NewtypeInstD [] k [recordType] Nothing dec deriveClauses
+               else DataInstD    [] k [recordType] Nothing [dec] deriveClauses
 #endif
     return (kd, instDecs)
   where
@@ -922,8 +930,9 @@ mkKeyTypeDec mps t = do
 
       instances <- do
         alwaysInstances <-
-          [d|deriving newtype instance Show (BackendKey $(pure backendT)) => Show (Key $(pure recordType))
-             deriving newtype instance Read (BackendKey $(pure backendT)) => Read (Key $(pure recordType))
+          -- See the "Always use StockStrategy" comment above, on why Show/Read use "stock" here
+          [d|deriving stock instance Show (BackendKey $(pure backendT)) => Show (Key $(pure recordType))
+             deriving stock instance Read (BackendKey $(pure backendT)) => Read (Key $(pure recordType))
              deriving newtype instance Eq (BackendKey $(pure backendT)) => Eq (Key $(pure recordType))
              deriving newtype instance Ord (BackendKey $(pure backendT)) => Ord (Key $(pure recordType))
              deriving newtype instance ToHttpApiData (BackendKey $(pure backendT)) => ToHttpApiData (Key $(pure recordType))
