@@ -1,6 +1,6 @@
 ## Unreleased changes
 
-* Always use the "stock" strategy when deriving Show/Read for keys
+* Always use the "stock" strategy when deriving Show/Read for keys [#1106](https://github.com/yesodweb/persistent/pull/1106)
 	* This fixes a regression from 2.8.0, which started using the `newtype` strategy when deriving `Show`/`Read` for keys
 	* In practice, this means that from 2.8.0–2.8.3.1, for the following schema:
 
