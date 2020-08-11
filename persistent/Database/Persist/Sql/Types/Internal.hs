@@ -23,15 +23,9 @@ module Database.Persist.Sql.Types.Internal
     , IsSqlBackend
     ) where
 
-#ifdef MONAD_LOGGER_TH
-import Language.Haskell.TH.Syntax (Loc)
-import Control.Monad.Logger (LogSource, LogLevel)
-#else
-import Control.Monad.Logger (LogSource, LogLevel, Loc)
-#endif
-
 import Data.List.NonEmpty (NonEmpty(..))
 import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.Logger (LogSource, LogLevel, Loc)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, ask)
 import Data.Acquire (Acquire)
