@@ -24,7 +24,7 @@ module Database.Persist.Sql.Types.Internal
 
 import Data.List.NonEmpty (NonEmpty(..))
 import Control.Monad.IO.Class (MonadIO (..))
-import Control.Monad.Logger (LogSource, LogLevel)
+import Control.Monad.Logger (LogSource, LogLevel, Loc)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, ask)
 import Data.Acquire (Acquire)
@@ -36,7 +36,6 @@ import Data.Monoid ((<>))
 import Data.String (IsString)
 import Data.Text (Text)
 import Data.Typeable (Typeable)
-import Language.Haskell.TH.Syntax (Loc)
 import System.Log.FastLogger (LogStr)
 
 import Database.Persist.Class

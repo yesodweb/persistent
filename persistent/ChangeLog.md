@@ -20,6 +20,8 @@
 * Fix a bug where unsafe migration error messages were being shown using `Show` prior to printing, resulting in less helpful output. [#1080](https://github.com/yesodweb/persistent/pull/1080)
 * [#1087](https://github.com/yesodweb/persistent/pull/1087)
   * `RawSql` now has tuple instances up to GHC's max tuple size (62)
+* [#1076](https://github.com/yesodweb/persistent/pull/1076)
+  * `Loc` is now imported from `monad-logger` as opposed to `template-haskell`. Removes `template-haskell` as an explicit dependency.
 
 ## 2.10.5.2
 
