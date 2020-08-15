@@ -22,6 +22,8 @@
   * `RawSql` now has tuple instances up to GHC's max tuple size (62)
 * [#1076](https://github.com/yesodweb/persistent/pull/1076)
   * `Loc` is now imported from `monad-logger` as opposed to `template-haskell`. Removes `template-haskell` as an explicit dependency.
+* [#1114](https://github.com/yesodweb/persistent/pull/1114)
+  * Remove unnecessary deriving of `Typeable`.
 
 ## 2.10.5.2
 

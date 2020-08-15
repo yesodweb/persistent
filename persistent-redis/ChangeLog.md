@@ -1,3 +1,7 @@
+# 2.5.2.5
+
+* Remove unnecessary deriving of Typeable [#1114](https://github.com/yesodweb/persistent/pull/1114)
+
 # 2.5.2.4
 
 * Compatibility with latest persistent-template for test suite [#1002](https://github.com/yesodweb/persistent/pull/1002/files)

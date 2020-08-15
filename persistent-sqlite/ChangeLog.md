@@ -5,6 +5,8 @@
 * [#1060](https://github.com/yesodweb/persistent/pull/1060)
   * The QuasiQuoter now supports `OnDelete` and `OnUpdate` cascade options.
 
+* Remove unnecessary deriving of Typeable [#1114](https://github.com/yesodweb/persistent/pull/1114)
+
 ## 2.10.6.2
 
 * Move template haskell splices to be correct (and GHC 8.10 compatible) [#1034](https://github.com/yesodweb/persistent/pull/1034)

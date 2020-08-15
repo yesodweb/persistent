@@ -1,5 +1,4 @@
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE RankNTypes #-}
 module Database.Persist.Sql.Types.Internal
     ( HasPersistBackend (..)
@@ -35,7 +34,6 @@ import Data.Map (Map)
 import Data.Monoid ((<>))
 import Data.String (IsString)
 import Data.Text (Text)
-import Data.Typeable (Typeable)
 import System.Log.FastLogger (LogStr)
 
 import Database.Persist.Class
@@ -145,7 +143,6 @@ data SqlBackend = SqlBackend
     --
     -- @since 2.9.0
     }
-    deriving Typeable
 instance HasPersistBackend SqlBackend where
     type BaseBackend SqlBackend = SqlBackend
     persistBackend = id
@@ -155,7 +152,7 @@ instance IsPersistBackend SqlBackend where
 -- | An SQL backend which can only handle read queries
 --
 -- The constructor was exposed in 2.10.0.
-newtype SqlReadBackend = SqlReadBackend { unSqlReadBackend :: SqlBackend } deriving Typeable
+newtype SqlReadBackend = SqlReadBackend { unSqlReadBackend :: SqlBackend } 
 instance HasPersistBackend SqlReadBackend where
     type BaseBackend SqlReadBackend = SqlBackend
     persistBackend = unSqlReadBackend
@@ -165,7 +162,7 @@ instance IsPersistBackend SqlReadBackend where
 -- | An SQL backend which can handle read or write queries
 --
 -- The constructor was exposed in 2.10.0
-newtype SqlWriteBackend = SqlWriteBackend { unSqlWriteBackend :: SqlBackend } deriving Typeable
+newtype SqlWriteBackend = SqlWriteBackend { unSqlWriteBackend :: SqlBackend }
 instance HasPersistBackend SqlWriteBackend where
     type BaseBackend SqlWriteBackend = SqlBackend
     persistBackend = unSqlWriteBackend

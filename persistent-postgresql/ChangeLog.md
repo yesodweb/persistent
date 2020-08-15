@@ -12,6 +12,8 @@
   * Renamed `db` to `runConnAssert` in `test/PgInit.hs` for clarity
   * Ran `test/ArrayAggTest.hs` (which was previously written but not being run)
 
+* Remove unnecessary deriving of Typeable [#1114](https://github.com/yesodweb/persistent/pull/1114)
+
 ## 2.10.1.2
 
 * Fix issue with multiple foreign keys on single column. [#1010](https://github.com/yesodweb/persistent/pull/1010)
