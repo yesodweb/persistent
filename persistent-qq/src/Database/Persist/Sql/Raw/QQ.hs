@@ -30,8 +30,9 @@ module Database.Persist.Sql.Raw.QQ (
 import Prelude
 import Control.Arrow (first, second)
 import Control.Monad.Reader (ask)
-import qualified Data.List.NonEmpty (toList)
-import Data.Text (pack, unpack, intercalate)
+import           Data.List.NonEmpty (NonEmpty)
+import qualified Data.List.NonEmpty as NonEmpty
+import Data.Text (Text, pack, unpack, intercalate)
 import Data.Maybe (fromMaybe, Maybe(..))
 import Data.Monoid (mempty, (<>))
 import qualified Language.Haskell.TH as TH
@@ -69,6 +70,21 @@ parseStr a ('^':'{':xs) = Literal (reverse a) : parseHaskell TableName  [] xs
 parseStr a ('@':'{':xs) = Literal (reverse a) : parseHaskell ColumnName [] xs
 parseStr a (x:xs)       = parseStr (x:a) xs
 
+interpolateValues :: PersistField a => NonEmpty a -> (Text, [[PersistValue]]) -> (Text, [[PersistValue]])
+interpolateValues xs =
+    first (mkPlaceholders values <>) .
+    second (NonEmpty.toList values :)
+    where
+    values = NonEmpty.map toPersistValue xs
+
+mkPlaceholders :: NonEmpty a -> Text
+mkPlaceholders values = "(" <> n `timesCommaSeparated` "?" <> ")"
+    where
+    n = NonEmpty.length values
+
+timesCommaSeparated :: Int -> Text -> Text
+timesCommaSeparated n = intercalate "," . replicate n
+
 makeExpr :: TH.ExpQ -> [Token] -> TH.ExpQ
 makeExpr fun toks = do
     TH.infixE
@@ -89,11 +105,7 @@ makeExpr fun toks = do
             (go xs)
     go (Values a:xs) =
         TH.appE
-            [| let a' = Data.List.NonEmpty.toList $(reifyExp a) in
-               fmap $
-                 first (("(" <> intercalate ", " (replicate (length a') "?") <> ")") <>) .
-                 second (map toPersistValue a' :)
-             |]
+            [| fmap $ interpolateValues $(reifyExp a) |]
             (go xs)
     go (ColumnName a:xs) = do
         colN <- TH.newName "field"
