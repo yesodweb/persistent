@@ -2,15 +2,14 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TypeFamilies #-}
 
-import Control.Monad.Logger
+import Control.Monad.Logger (LoggingT, runLoggingT)
 import Control.Monad.Trans.Resource
 import Control.Monad.Reader
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Text (Text)
-import System.Log.FastLogger
+import System.Log.FastLogger (fromLogStr)
 import Test.Hspec
 import Test.HUnit ((@?=))
-import UnliftIO
 
 import Database.Persist.Sql
 import Database.Persist.Sql.Raw.QQ
@@ -40,7 +39,7 @@ runConn f = do
 db :: SqlPersistT (LoggingT (ResourceT IO)) () -> IO ()
 db actions = do
   runResourceT $ runConn $ do
-      runMigrationSilent testMigrate
+      _ <- runMigrationSilent testMigrate
       actions
       transactionUndo
 
