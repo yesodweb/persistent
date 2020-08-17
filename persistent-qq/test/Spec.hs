@@ -23,17 +23,11 @@ main = hspec spec
 _debugOn :: Bool
 _debugOn = False
 
-sqlite_database_file :: Text
-sqlite_database_file = "testdb.sqlite3"
-sqlite_database :: SqliteConnectionInfo
-sqlite_database = mkSqliteConnectionInfo sqlite_database_file
-
 runConn :: MonadUnliftIO m => SqlPersistT (LoggingT m) t -> m ()
 runConn f = do
-  let debugPrint = _debugOn
-  let printDebug = if debugPrint then print . fromLogStr else void . return
+  let printDebug = if _debugOn then print . fromLogStr else void . return
   flip runLoggingT (\_ _ _ s -> printDebug s) $ do
-    _ <- withSqlitePoolInfo sqlite_database 1 $ runSqlPool f
+    _ <- withSqliteConn ":memory:" $ runSqlConn f
     return ()
 
 db :: SqlPersistT (LoggingT (ResourceT IO)) () -> IO ()
