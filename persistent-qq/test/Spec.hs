@@ -18,7 +18,7 @@ import PersistTestPetType
 import PersistentTestModels
 
 main :: IO ()
-main = hspec specs
+main = hspec spec
 
 _debugOn :: Bool
 _debugOn = False
@@ -43,8 +43,8 @@ db actions = do
       actions
       transactionUndo
 
-specs :: Spec
-specs = describe "persistent-qq" $ do
+spec :: Spec
+spec = describe "persistent-qq" $ do
     it "sqlQQ/?-?" $ db $ do
         ret <- [sqlQQ| SELECT #{2 :: Int}+#{2 :: Int} |]
         liftIO $ ret @?= [Single (4::Int)]
