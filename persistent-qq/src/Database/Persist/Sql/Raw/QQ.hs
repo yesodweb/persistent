@@ -162,15 +162,15 @@ makeQQ x = QuasiQuoter
 -- We can now execute this raw query:
 --
 -- @
--- let lft = 10 :: Int
---     rgt = 20 :: Int
---     width = rgt - lft
---     nams = "first" :| ["second", "third"]
+-- let lft = 10 :: `Int`
+--     rgt = 20 :: `Int`
+--     width = rgt `-` lft
+--     nams = "first" `:|` ["second", "third"]
 --  in [sqlQQ|
---       DELETE FROM ^{Category} WHERE @{CategoryLft} BETWEEN #{lft} AND #{rgt};
---       UPDATE category SET @{CategoryRgt} = @{CategoryRgt} - #{width} WHERE @{CategoryRgt} > #{rgt};
---       UPDATE category SET @{CategoryLft} = @{CategoryLft} - #{width} WHERE @{CategoryLft} > #{rgt};
---       SELECT ?? FROM ^{Category} WHERE ^{Category}.@{CategoryNam} IN %{nams};
+--       DELETE FROM ^{Category} WHERE \@{CategoryLft} BETWEEN \#{lft} AND \#{rgt};
+--       UPDATE category SET \@{CategoryRgt} = \@{CategoryRgt} - \#{width} WHERE \@{CategoryRgt} > \#{rgt};
+--       UPDATE category SET \@{CategoryLft} = \@{CategoryLft} - \#{width} WHERE \@{CategoryLft} > \#{rgt};
+--       SELECT ?? FROM ^{Category} WHERE ^{Category}.\@{CategoryNam} IN %{nams};
 --     |]
 -- @
 --
