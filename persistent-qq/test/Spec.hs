@@ -5,6 +5,7 @@
 import Control.Monad.Logger (LoggingT, runLoggingT)
 import Control.Monad.Trans.Resource
 import Control.Monad.Reader
+import qualified Data.ByteString.Char8 as B
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Text (Text)
 import System.Log.FastLogger (fromLogStr)
@@ -25,7 +26,7 @@ _debugOn = False
 
 runConn :: MonadUnliftIO m => SqlPersistT (LoggingT m) t -> m ()
 runConn f = do
-  let printDebug = if _debugOn then print . fromLogStr else void . return
+  let printDebug = when _debugOn . B.putStrLn . fromLogStr
   flip runLoggingT (\_ _ _ s -> printDebug s) $ do
     _ <- withSqliteConn ":memory:" $ runSqlConn f
     return ()
