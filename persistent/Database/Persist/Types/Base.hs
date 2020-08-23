@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -fno-warn-deprecations #-} -- usage of Error typeclass
 module Database.Persist.Types.Base where
 
@@ -20,7 +19,6 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import Data.Text.Encoding.Error (lenientDecode)
 import Data.Time (Day, TimeOfDay, UTCTime)
-import Data.Typeable (Typeable)
 import qualified Data.Vector as V
 import Data.Word (Word32)
 import Numeric (showHex, readHex)
@@ -357,7 +355,7 @@ data PersistException
   | PersistForeignConstraintUnmet Text
   | PersistMongoDBError Text
   | PersistMongoDBUnsupported Text
-    deriving (Show, Typeable)
+    deriving Show
 
 instance Exception PersistException
 instance Error PersistException where
@@ -405,7 +403,7 @@ data PersistValue = PersistText Text
 -- insert $ Foo (toPoint 44 44)
 -- @
 --
-    deriving (Show, Read, Eq, Typeable, Ord)
+    deriving (Show, Read, Eq, Ord)
 
 
 instance ToHttpApiData PersistValue where
@@ -535,7 +533,7 @@ data SqlType = SqlString
              | SqlDayTime -- ^ Always uses UTC timezone
              | SqlBlob
              | SqlOther T.Text -- ^ a backend-specific name
-    deriving (Show, Read, Eq, Typeable, Ord)
+    deriving (Show, Read, Eq, Ord)
 
 data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le | In | NotIn
                    | BackendSpecificFilter T.Text
@@ -543,13 +541,12 @@ data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le | In | NotIn
 
 data UpdateException = KeyNotFound String
                      | UpsertError String
-    deriving Typeable
 instance Show UpdateException where
     show (KeyNotFound key) = "Key not found during updateGet: " ++ key
     show (UpsertError msg) = "Error during upsert: " ++ msg
 instance Exception UpdateException
 
-data OnlyUniqueException = OnlyUniqueException String deriving Typeable
+data OnlyUniqueException = OnlyUniqueException String
 instance Show OnlyUniqueException where
     show (OnlyUniqueException uniqueMsg) =
       "Expected only one unique key, got " ++ uniqueMsg

@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | A port of the direct-sqlite package for dealing directly with
@@ -92,7 +91,6 @@ import Data.Text (Text, pack, unpack)
 import Data.Text.Encoding (encodeUtf8, decodeUtf8With)
 import Data.Text.Encoding.Error (lenientDecode)
 import Data.Time (defaultTimeLocale, formatTime, UTCTime)
-import Data.Typeable (Typeable)
 import Database.Sqlite.Internal (Connection(..), Connection'(..), Statement(..))
 import Foreign
 import Foreign.C
@@ -107,7 +105,7 @@ data SqliteException = SqliteException
     , seFunctionName :: !Text
     , seDetails      :: !Text
     }
-    deriving (Typeable)
+
 instance Show SqliteException where
     show (SqliteException error functionName details) = unpack $ Data.Monoid.mconcat
         ["SQLite3 returned "

@@ -77,7 +77,6 @@ import qualified Data.Text.Encoding as T
 import qualified Data.Text.IO as T
 import Data.Text.Read (rational)
 import Data.Time (utc, NominalDiffTime, localTimeToUTC)
-import Data.Typeable (Typeable)
 import System.Environment (getEnvironment)
 
 import Database.Persist.Sql
@@ -93,7 +92,7 @@ type ConnectionString = ByteString
 
 -- | PostgresServerVersionError exception. This is thrown when persistent
 -- is unable to find the version of the postgreSQL server.
-data PostgresServerVersionError = PostgresServerVersionError String deriving Data.Typeable.Typeable
+data PostgresServerVersionError = PostgresServerVersionError String
 
 instance Show PostgresServerVersionError where
     show (PostgresServerVersionError uniqueMsg) =
@@ -542,7 +541,7 @@ instance PersistFieldSql PgInterval where
   sqlType _ = SqlOther "interval"
 
 newtype Unknown = Unknown { unUnknown :: ByteString }
-  deriving (Eq, Show, Read, Ord, Typeable)
+  deriving (Eq, Show, Read, Ord)
 
 instance PGFF.FromField Unknown where
     fromField f mdata =
@@ -1263,7 +1262,7 @@ data PostgresConf = PostgresConf
       -- ^ The connection string.
     , pgPoolSize :: Int
       -- ^ How many connections should be held in the connection pool.
-    } deriving (Show, Read, Data, Typeable)
+    } deriving (Show, Read, Data)
 
 instance FromJSON PostgresConf where
     parseJSON v = modifyFailure ("Persistent: error loading PostgreSQL conf: " ++) $
