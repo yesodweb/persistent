@@ -53,7 +53,7 @@ data Token
 
 parseHaskell :: (String -> Token) -> String -> String -> [Token]
 parseHaskell cons = go
-    where
+  where
     go a []          = [Literal (reverse a)]
     go a ('\\':x:xs) = go (x:a) xs
     go a ['\\']      = go ('\\':a) []
@@ -74,12 +74,12 @@ interpolateValues :: PersistField a => NonEmpty a -> (Text, [[PersistValue]]) ->
 interpolateValues xs =
     first (mkPlaceholders values <>) .
     second (NonEmpty.toList values :)
-    where
+  where
     values = NonEmpty.map toPersistValue xs
 
 mkPlaceholders :: NonEmpty a -> Text
 mkPlaceholders values = "(" <> n `timesCommaSeparated` "?" <> ")"
-    where
+  where
     n = NonEmpty.length values
 
 timesCommaSeparated :: Int -> Text -> Text
@@ -92,7 +92,7 @@ makeExpr fun toks = do
         ([| (=<<) |])
         (Just $ go toks)
 
-    where
+  where
     go :: [Token] -> TH.ExpQ
     go [] = [| return (mempty, []) |]
     go (Literal a:xs) =
