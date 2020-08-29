@@ -139,6 +139,14 @@ data EntityDef = EntityDef
     }
     deriving (Show, Eq, Read, Ord)
 
+entitiesPrimary :: EntityDef -> Maybe [FieldDef]
+entitiesPrimary t = case fieldReference primaryField of
+    CompositeRef c -> Just $ (compositeFields c)
+    ForeignRef _ _ -> Just [primaryField]
+    _ -> Nothing
+  where
+    primaryField = entityId t
+
 entityPrimary :: EntityDef -> Maybe CompositeDef
 entityPrimary t = case fieldReference (entityId t) of
     CompositeRef c -> Just c
