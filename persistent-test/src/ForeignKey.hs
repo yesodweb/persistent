@@ -16,6 +16,15 @@ share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMig
     Foreign Parent OnDeleteCascade OnUpdateCascade fkparent pname
     deriving Show Eq
 
+  ParentImplicit
+    name String
+
+  ChildImplicit
+    pname String
+    parentId ParentImplicitId noreference
+    Foreign ParentImplicit OnDeleteCascade OnUpdateCascade fkparent parentId
+    deriving Show Eq
+
   ParentComposite
     name String
     lastName String
@@ -50,6 +59,13 @@ specsWith runDb = describe "foreign keys options" $ do
     update kf [ParentName =. "B"]
     cs <- selectList [] []
     fmap (childPname . entityVal) cs @== ["B"]
+  it "delete cascades on implicit Primary key" $ runDb $ do
+    kf <- insert $ ParentImplicit "A"
+    kc <- insert $ ChildImplicit "B" kf
+    delete kf
+    cs <- selectList [] []
+    let expected = [] :: [Entity ChildImplicit]
+    cs @== expected
   it "delete Composite cascades" $ runDb $ do
     kf <- insert $ ParentComposite "A" "B"
     kc <- insert $ ChildComposite "A" "B"
