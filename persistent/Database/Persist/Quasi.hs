@@ -562,9 +562,9 @@ fixForeignKeysAll unEnts = map fixForeignKeys unEnts
     fixForeignKeys (UnboundEntityDef foreigns ent) =
       ent { entityForeigns = map (fixForeignKey ent) foreigns }
 
-    -- check the count and the sqltypes match and update the foreignFields with the names of the primary columns
+    -- check the count and the sqltypes match and update the foreignFields with the names of the referenced columns
     fixForeignKey :: EntityDef -> UnboundForeignDef -> ForeignDef
-    fixForeignKey ent (UnboundForeignDef foreignFieldTexts fdef) =
+    fixForeignKey ent (UnboundForeignDef foreignFieldTexts _parentFieldTexts fdef) =
         case entitiesPrimary pent of
              Just fds ->
                  if length foreignFieldTexts /= length fds
@@ -899,7 +899,8 @@ takeUniq _ tableName _ xs =
           ++ show xs
 
 data UnboundForeignDef = UnboundForeignDef
-                         { _unboundFields :: [Text] -- ^ fields in other entity
+                         { _unboundForeignFields :: [Text] -- ^ fields in the parent entity
+                         , _unboundParentFields :: [Text] -- ^ fields in parent entity
                          , _unboundForeignDef :: ForeignDef
                          }
 
@@ -919,7 +920,7 @@ takeForeign ps tableName _defs = takeRefTable
       where
         go :: [Text] -> Maybe CascadeAction -> Maybe CascadeAction -> UnboundForeignDef
         go (n:rest) onDelete onUpdate | not (T.null n) && isLower (T.head n)
-            = UnboundForeignDef fields $ ForeignDef
+            = UnboundForeignDef fFields pFields $ ForeignDef
                 { foreignRefTableHaskell =
                     HaskellName refTableName
                 , foreignRefTableDBName =
@@ -940,7 +941,14 @@ takeForeign ps tableName _defs = takeRefTable
                     False
                 }
           where
-            (fields,attrs) = break ("!" `T.isPrefixOf`) rest
+            (fields ,attrs) = break ("!" `T.isPrefixOf`) rest
+            (fFields, pFields) = case break (== "References") fields of
+                (ffs, []) -> (ffs, [])
+                (ffs, _ : pfs) -> case (length ffs, length pfs) of
+                    (flen, plen) | flen == plen -> (ffs, pfs)
+                    (flen, plen) -> error $ errorPrefix ++ concat
+                        [ "Found ", show flen, " foreign fields but "
+                        , show plen, " parent fields" ]
         go ((T.stripPrefix "OnDelete" -> Just onDelete) : rest) onDelete' onUpdate
           = case (onDelete', readEither $ T.unpack onDelete) of
             (Nothing, Right cascadingAction) -> go rest (Just cascadingAction) onUpdate
