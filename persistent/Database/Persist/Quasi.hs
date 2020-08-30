@@ -609,8 +609,9 @@ fixForeignKeysAll unEnts = map fixForeignKeys unEnts
                    ++ show (map (unHaskellName . fieldHaskell) (fd:fds))
         isNull = (NotNullable /=) . nullable . fieldAttrs
 
+        toForeignFields :: EntityDef -> Text -> FieldDef -> (FieldDef, ((HaskellName, DBName), (HaskellName, DBName)))
         toForeignFields pent fieldText pfd =
-           case chktypes fd haskellField (entityFields pent) pfh of
+           case chktypes fd haskellField pfd of
                Just err -> error err
                Nothing -> (fd, ((haskellField, fieldDB fd), (pfh, pfdb)))
           where
@@ -619,12 +620,9 @@ fixForeignKeysAll unEnts = map fixForeignKeys unEnts
             haskellField = HaskellName fieldText
             (pfh, pfdb) = (fieldHaskell pfd, fieldDB pfd)
 
-            chktypes :: FieldDef -> HaskellName -> [FieldDef] -> HaskellName -> Maybe String
-            chktypes ffld _fkey pflds pkey =
+            chktypes ffld _fkey pfld =
                 if fieldType ffld == fieldType pfld then Nothing
                   else Just $ "fieldType mismatch: " ++ show (fieldType ffld) ++ ", " ++ show (fieldType pfld)
-              where
-                pfld = getFd pflds pkey
 
             entName = entityHaskell ent
             getFd [] t = error $ "foreign key constraint for: " ++ show (unHaskellName entName)
