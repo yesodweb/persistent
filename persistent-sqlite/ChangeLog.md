@@ -2,6 +2,11 @@
 
 ## (Unreleased) 2.11.0.0
 
+* Foreign Key improvements [#1121] (https://github.com/yesodweb/persistent/pull/1121)
+  * It is now supported to refer to a table with an auto generated Primary Kay
+  * It is now supported to refer to non-primary fields, using the keyword `References`
+  * It is now supported to have cascade options for simple/single-field Foreign Keys
+
 * [#1060](https://github.com/yesodweb/persistent/pull/1060)
   * The QuasiQuoter now supports `OnDelete` and `OnUpdate` cascade options.
 

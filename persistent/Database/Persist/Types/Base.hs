@@ -210,6 +210,10 @@ data FieldDef = FieldDef
     --
     -- @since 2.10.0
     , fieldCascadeOpts :: !FieldCascade
+    -- ^ The cascade options of this fields. Used when this field refers to
+    -- another field.
+    --
+    -- @since 2.11.0
     }
     deriving (Show, Eq, Read, Ord)
 
@@ -310,6 +314,9 @@ data ForeignDef = ForeignDef
     , foreignAttrs                 :: ![Attr]
     , foreignNullable              :: Bool
     , foreignToPrimary             :: Bool
+    -- ^ Determines if the reference is towards a Primary Key or not.
+    --
+    -- @since 2.11.0
     }
     deriving (Show, Eq, Read, Ord)
 
