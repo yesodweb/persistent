@@ -42,6 +42,33 @@ share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMig
     Primary name
     Foreign SelfReferenced OnDeleteCascade fkparent pname
     deriving Show Eq
+
+  A
+    aa String
+    ab Int
+    U1 aa
+
+  B
+    ba String
+    bb Int
+    Foreign A OnDeleteCascade fkA ba References aa
+    deriving Show Eq
+
+  AComposite
+    aa String
+    ab Int
+    U2 aa ab
+
+  BComposite
+    ba String
+    bb Int
+    Foreign AComposite OnDeleteCascade fkAComposite ba bb References aa ab
+    deriving Show Eq
+
+  BExplicit
+    ba AId noreference
+    Foreign A OnDeleteCascade fkAI ba References Id
+    deriving Show Eq
 |]
 
 specsWith :: (MonadIO m, MonadFail m) => RunDb SqlBackend m -> Spec
@@ -80,3 +107,35 @@ specsWith runDb = describe "foreign keys options" $ do
     srs <- selectList [] []
     let expected = [] :: [Entity SelfReferenced]
     srs @== expected
+  it "delete cascades with explicit Reference" $ runDb $ do
+    kf <- insert $ A "A" 40
+    kc <- insert $ B "A" 15
+    delete kf
+    return ()
+    cs <- selectList [] []
+    let expected = [] :: [Entity B]
+    cs @== expected
+  it "delete cascades with explicit Composite Reference" $ runDb $ do
+    kf <- insert $ AComposite "A" 20
+    kc <- insert $ BComposite "A" 20
+    delete kf
+    return ()
+    cs <- selectList [] []
+    let expected = [] :: [Entity B]
+    cs @== expected
+  it "delete cascades with explicit Composite Reference" $ runDb $ do
+    kf <- insert $ AComposite "A" 20
+    kc <- insert $ BComposite "A" 20
+    delete kf
+    return ()
+    cs <- selectList [] []
+    let expected = [] :: [Entity B]
+    cs @== expected
+  it "delete cascades with explicit Id field" $ runDb $ do
+    kf <- insert $ A "A" 20
+    kc <- insert $ BExplicit kf
+    delete kf
+    return ()
+    cs <- selectList [] []
+    let expected = [] :: [Entity B]
+    cs @== expected

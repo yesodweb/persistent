@@ -308,6 +308,7 @@ data ForeignDef = ForeignDef
     , foreignFields                :: ![(ForeignFieldDef, ForeignFieldDef)] -- this entity plus the primary entity
     , foreignAttrs                 :: ![Attr]
     , foreignNullable              :: Bool
+    , foreignToPrimary             :: Bool
     }
     deriving (Show, Eq, Read, Ord)
 
