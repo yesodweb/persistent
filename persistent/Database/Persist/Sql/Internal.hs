@@ -1,5 +1,6 @@
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
 
 -- | Intended for creating new backends.
 module Database.Persist.Sql.Internal
@@ -87,11 +88,12 @@ mkColumns allDefs t overrides =
 
             , cDefaultConstraintName =  Nothing
             , cMaxLen = maxLen $ fieldAttrs fd
-            , cReference = ref (fieldDB fd) (fieldReference fd) (fieldAttrs fd)
+            , cReference = mkColumnReference fd
             }
 
     tableName :: DBName
     tableName = entityDB t
+
 
     go :: FieldDef -> Column
     go fd =
@@ -102,7 +104,7 @@ mkColumns allDefs t overrides =
             , cDefault = defaultAttribute $ fieldAttrs fd
             , cDefaultConstraintName =  Nothing
             , cMaxLen = maxLen $ fieldAttrs fd
-            , cReference = ref (fieldDB fd) (fieldReference fd) (fieldAttrs fd)
+            , cReference = mkColumnReference fd
             }
 
     maxLen :: [Attr] -> Maybe Integer
@@ -116,6 +118,11 @@ mkColumns allDefs t overrides =
         | otherwise = maxLen as
 
     refNameFn = fromMaybe refName (backendSpecificForeignKeyName overrides)
+
+    mkColumnReference :: FieldDef -> Maybe ColumnReference
+    mkColumnReference fd =
+        fmap (\(tName, cName) -> ColumnReference tName cName (fieldCascadeOpts fd))
+        $ ref (fieldDB fd) (fieldReference fd) (fieldAttrs fd)
 
     ref :: DBName
         -> ReferenceDef

@@ -209,6 +209,7 @@ data FieldDef = FieldDef
     -- attach comments to a field in the quasiquoter.
     --
     -- @since 2.10.0
+    , fieldCascadeOpts :: !FieldCascade
     }
     deriving (Show, Eq, Read, Ord)
 
