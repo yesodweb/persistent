@@ -1335,7 +1335,8 @@ mkLenses mps ent = fmap mconcat $ forM (entityFields ent) $ \field -> do
         ]
 
 mkForeignKeysComposite :: MkPersistSettings -> EntityDef -> ForeignDef -> Q [Dec]
-mkForeignKeysComposite mps t ForeignDef {..} = do
+mkForeignKeysComposite mps t ForeignDef {..} =
+    if not foreignToPrimary then return [] else do
     let fieldName f = mkName $ unpack $ recName mps (entityHaskell t) f
     let fname = fieldName foreignConstraintNameHaskell
     let reftableString = unpack $ unHaskellName foreignRefTableHaskell
