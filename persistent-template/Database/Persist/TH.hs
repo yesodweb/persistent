@@ -290,7 +290,7 @@ data FieldSqlTypeExp = FieldSqlTypeExp FieldDef SqlTypeExp
 
 instance Lift FieldSqlTypeExp where
     lift (FieldSqlTypeExp FieldDef{..} sqlTypeExp) =
-        [|FieldDef fieldHaskell fieldDB fieldType $(lift sqlTypeExp) fieldAttrs fieldStrict fieldReference fieldComments|]
+        [|FieldDef fieldHaskell fieldDB fieldType $(lift sqlTypeExp) fieldAttrs fieldStrict fieldReference fieldComments fieldCascadeOpts|]
 #if MIN_VERSION_template_haskell(2,16,0)
     liftTyped = unsafeTExpCoerce . lift
 #endif
@@ -1694,18 +1694,22 @@ liftAndFixKeys entityMap EntityDef{..} =
     |]
 
 liftAndFixKey :: EntityMap -> FieldDef -> Q Exp
-liftAndFixKey entityMap (FieldDef a b c sqlTyp e f fieldRef mcomments) =
-    [|FieldDef a b c $(sqlTyp') e f fieldRef' mcomments|]
+liftAndFixKey entityMap (FieldDef a b c sqlTyp e f fieldRef mcomments casc) =
+    [|FieldDef a b c $(sqlTyp') e f fieldRef' mcomments casc|]
   where
     (fieldRef', sqlTyp') = fromMaybe (fieldRef, lift sqlTyp) $
       case fieldRef of
         ForeignRef refName _ft -> case M.lookup refName entityMap of
-          Nothing -> Nothing
+          Nothing -> checkCascade
           Just ent ->
             case fieldReference $ entityId ent of
               fr@(ForeignRef _Name ft) -> Just (fr, lift $ SqlTypeExp ft)
-              _ -> Nothing
-        _ -> Nothing
+              _ -> checkCascade
+        _ -> checkCascade
+    checkCascade = case casc of
+      FieldCascade Nothing Nothing -> Nothing
+      _ -> error $ "cascade field is not allown for field " <> show a
+           <> ". It doesn't reference any other tables."
 
 deriving instance Lift EntityDef
 

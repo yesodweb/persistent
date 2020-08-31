@@ -741,6 +741,7 @@ mkAutoIdField ps entName idName idSqlType = FieldDef
       , fieldAttrs = []
       , fieldStrict = True
       , fieldComments = Nothing
+      , fieldCascadeOpts = FieldCascade Nothing Nothing
       }
 
 defaultReferenceTypeCon :: FieldType
@@ -772,25 +773,43 @@ takeCols
     -> [Text]
     -> Maybe FieldDef
 takeCols _ _ ("deriving":_) = Nothing
-takeCols onErr ps (n':typ:rest)
+takeCols onErr ps (n':typ:rest')
     | not (T.null n) && isLower (T.head n) =
         case parseFieldType typ of
             Left err -> onErr typ err
             Right ft -> Just FieldDef
                 { fieldHaskell = HaskellName n
-                , fieldDB = DBName $ getDbName ps n rest
+                , fieldDB = DBName $ getDbName ps n attr
                 , fieldType = ft
                 , fieldSqlType = SqlOther $ "SqlType unset for " `mappend` n
-                , fieldAttrs = rest
+                , fieldAttrs = attr
                 , fieldStrict = fromMaybe (psStrictFields ps) mstrict
                 , fieldReference = NoReference
                 , fieldComments = Nothing
+                , fieldCascadeOpts = FieldCascade onUpd onDel
                 }
   where
     (mstrict, n)
         | Just x <- T.stripPrefix "!" n' = (Just True, x)
         | Just x <- T.stripPrefix "~" n' = (Just False, x)
         | otherwise = (Nothing, n')
+    (onDel, onUpd, attr) = go rest' Nothing Nothing
+
+    go (txt : rest) onDelete' onUpdate' =
+      case (T.stripPrefix "OnDelete" txt, T.stripPrefix "OnUpdate" txt) of
+        (Just onDelete, _) -> case (readEither $ T.unpack onDelete, onDelete') of
+            (Right action, Nothing) -> go rest (Just action) onUpdate'
+            (Right _, Just _) -> error $
+                "found more than one OnDelete actions at field " ++ show (n':typ:rest')
+            (Left _, _) -> (onDelete', onUpdate', txt : rest)
+        (_, Just onUpdate) -> case (readEither $ T.unpack onUpdate, onUpdate') of
+            (Right action, Nothing) -> go rest onDelete' (Just action)
+            (Right _, Just _) -> error $
+                "found more than one OnUpdate actions at field " ++ show (n':typ:rest')
+            _ -> (onDelete', onUpdate', txt : rest)
+        _ -> (onDelete', onUpdate', txt : rest)
+    go [] onDelete' onUpdate' = (onDelete', onUpdate', [])
+
 takeCols _ _ _ = Nothing
 
 getDbName :: PersistSettings -> Text -> [Text] -> Text

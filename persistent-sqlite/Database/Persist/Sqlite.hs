@@ -581,7 +581,7 @@ sqlColumn noRef (Column name isNull typ def _cn _maxLen ref) = T.concat
     , mayDefault def
     , case ref of
         Nothing -> ""
-        Just (table, _) -> if noRef then "" else " REFERENCES " <> escape table
+        Just cref -> if noRef then "" else " REFERENCES " <> escape (crTableName cref)
     ]
 
 sqlForeign :: ForeignDef -> Text

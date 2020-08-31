@@ -7,6 +7,8 @@ module Database.Persist.Sql.Types
     , OverflowNatural(..)
     ) where
 
+import Database.Persist.Types.Base (FieldCascade)
+
 import Control.Exception (Exception(..))
 import Control.Monad.Logger (NoLoggingT)
 import Control.Monad.Trans.Reader (ReaderT (..))
@@ -25,7 +27,14 @@ data Column = Column
     , cDefault   :: !(Maybe Text)
     , cDefaultConstraintName   :: !(Maybe DBName)
     , cMaxLen    :: !(Maybe Integer)
-    , cReference :: !(Maybe (DBName, DBName)) -- table name, constraint name
+    , cReference :: !(Maybe ColumnReference)
+    }
+    deriving (Eq, Ord, Show)
+
+data ColumnReference = ColumnReference
+    { crTableName :: DBName
+    , crConstraintName :: DBName
+    , crFieldCascade :: FieldCascade
     }
     deriving (Eq, Ord, Show)
 
