@@ -69,6 +69,18 @@ share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMig
     ba AId noreference
     Foreign A OnDeleteCascade fkAI ba References Id
     deriving Show Eq
+
+  Chain
+    name String
+    previous ChainId Maybe noreference
+    Foreign Chain OnDeleteSetNull fkChain previous References Id
+    deriving Show Eq
+
+  Chain2
+    name String
+    previous Chain2Id Maybe noreference
+    Foreign Chain2 OnDeleteCascade fkChain previous References Id
+    deriving Show Eq
 |]
 
 specsWith :: (MonadIO m, MonadFail m) => RunDb SqlBackend m -> Spec
@@ -138,4 +150,19 @@ specsWith runDb = describe "foreign keys options" $ do
     return ()
     cs <- selectList [] []
     let expected = [] :: [Entity B]
+    cs @== expected
+  it "deletes sets null with self reference" $ runDb $ do
+    kf <- insert $ Chain "A" Nothing
+    insert $ Chain "B" (Just kf)
+    delete kf
+    cs <- selectList [] []
+    let expected = [Entity {entityKey = ChainKey 2, entityVal = Chain "B" Nothing}]
+    cs @== expected
+  it "deletes cascades with self reference to the whole chain" $ runDb $ do
+    k1 <- insert $ Chain2 "A" Nothing
+    k2 <- insert $ Chain2 "B" (Just k1)
+    k3 <- insert $ Chain2 "C" (Just k2)
+    delete k1
+    cs <- selectList [] []
+    let expected = [] :: [Entity Chain2]
     cs @== expected
