@@ -44,7 +44,8 @@ import qualified PersistUniqueTest
 import qualified RawSqlTest
 import qualified ReadWriteTest
 import qualified Recursive
-import qualified RenameTest
+-- TODO: can't use this as MySQL can't do DEFAULT CURRENT_DATE
+-- import qualified RenameTest
 import qualified SumTypeTest
 import qualified TransactionLevelTest
 import qualified UniqueTest
@@ -132,7 +133,7 @@ main = do
 
   hspec $ do
     xdescribe "This is pending on MySQL because you can't have DEFAULT CURRENT_DATE" $ do
-        RenameTest.specsWith db
+        pure () --RenameTest.specsWith db
     DataTypeTest.specsWith
         db
         (Just (runMigrationSilent dataTypeMigrate))

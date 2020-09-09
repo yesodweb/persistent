@@ -114,7 +114,8 @@ specsWith runDb = describe "rawSql" $ do
                              , "LEFT OUTER JOIN ", pet
                              , " ON ", person, ".", escape "id"
                              , " = ", pet, ".", escape "ownerId"
-                             , " ORDER BY ", person, ".", escape "name"]
+                             , " ORDER BY ", person, ".", escape "name"
+                             , ", ", pet, ".", escape "id" ]
             person = escape "Person"
             pet    = escape "Pet"
         ret <- rawSql query []
