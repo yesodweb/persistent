@@ -52,6 +52,8 @@ test-suite test
                      JSONTest
                      CustomConstraintTest
                      PgIntervalTest
+                     ArrayTest
+                     ArrayTest.Instances
     ghc-options:     -Wall
 
     build-depends:   base                 >= 4.9 && < 5

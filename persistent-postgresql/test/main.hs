@@ -53,6 +53,7 @@ import qualified UpsertTest
 import qualified CustomConstraintTest
 import qualified LongIdentifierTest
 import qualified PgIntervalTest
+import qualified ArrayTest
 
 type Tuple = (,)
 
@@ -125,6 +126,7 @@ main = do
       , LongIdentifierTest.migration
       , ForeignKey.compositeMigrate
       , PgIntervalTest.pgIntervalMigrate
+      , ArrayTest.migrate
       ]
     PersistentTest.cleanDB
 
@@ -190,3 +192,4 @@ main = do
     CustomConstraintTest.specs
     PgIntervalTest.specs
     ArrayAggTest.specs
+    ArrayTest.specs
