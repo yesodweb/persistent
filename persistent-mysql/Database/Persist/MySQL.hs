@@ -32,6 +32,8 @@ module Database.Persist.MySQL
     , copyUnlessNull
     , copyUnlessEmpty
     , copyUnlessEq
+    -- * Internal
+    , open''
     ) where
 
 import qualified Blaze.ByteString.Builder.Char8 as BBB
@@ -122,12 +124,13 @@ withMySQLConn = withSqlConn . open'
 
 -- | Internal function that opens a connection to the MySQL
 -- server.
-open' :: MySQL.ConnectInfo -> LogFunc -> IO SqlBackend
-open' ci logFunc = do
+open'' :: MySQL.ConnectInfo -> LogFunc -> IO (MySQL.Connection, SqlBackend)
+open'' ci logFunc = do
     conn <- MySQL.connect ci
     MySQLBase.autocommit conn False -- disable autocommit!
     smap <- newIORef $ Map.empty
-    return $ SqlBackend
+    let
+      backend = SqlBackend
         { connPrepare    = prepare' conn
         , connStmtMap    = smap
         , connInsertSql  = insertSql'
@@ -153,6 +156,10 @@ open' ci logFunc = do
         , connMaxParams = Nothing
         , connRepsertManySql = Just repsertManySql
         }
+    pure (conn, backend)
+
+open' :: MySQL.ConnectInfo -> LogFunc -> IO SqlBackend
+open' ci logFunc = snd <$> open'' ci logFunc
 
 -- | Prepare a query.  We don't support prepared statements, but
 -- we'll do some client-side preprocessing here.
