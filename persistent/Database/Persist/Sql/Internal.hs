@@ -47,7 +47,7 @@ mkColumns allDefs t overrides =
     (cols, entityUniques t, entityForeigns t)
   where
     cols :: [Column]
-    cols = map goId idCol <> map go (entityFields t)
+    cols = map goId idCol `mappend` map go (entityFields t)
 
     idCol :: [FieldDef]
     idCol = case entityPrimary t of
