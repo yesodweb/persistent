@@ -52,6 +52,7 @@ import Data.Aeson.Types (modifyFailure)
 import qualified Data.Attoparsec.ByteString.Char8 as P
 import Data.Bits ((.&.))
 import Data.ByteString (ByteString)
+import qualified Data.ByteString.Builder as BB
 import qualified Data.ByteString.Char8 as B8
 import Data.Char (ord)
 import Data.Conduit
@@ -550,7 +551,7 @@ instance PGFF.FromField Unknown where
         Just dat -> return (Unknown dat)
 
 instance PGTF.ToField Unknown where
-    toField (Unknown a) = PGTF.Escape a
+    toField (Unknown a) = PGTF.Plain $ BB.byteString a
 
 type Getter a = PGFF.FieldParser a
 

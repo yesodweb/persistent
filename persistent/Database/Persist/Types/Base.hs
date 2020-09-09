@@ -394,7 +394,7 @@ data PersistValue = PersistText Text
 --
 -- toPoint :: Double -> Double -> Geo
 -- toPoint lat lon = Geo $ Data.ByteString.concat ["'POINT(", ps $ lon, " ", ps $ lat, ")'"]
---   where ps = Data.Text.pack . show
+--   where ps = Data.ByteString.Char8.pack . show
 -- @
 --
 -- If Foo has a geography field, we can then perform insertions like the following:

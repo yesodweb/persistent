@@ -53,6 +53,7 @@ import qualified UpsertTest
 import qualified CustomConstraintTest
 import qualified LongIdentifierTest
 import qualified PgIntervalTest
+import qualified GeographyTest
 
 type Tuple = (,)
 
@@ -190,3 +191,4 @@ main = do
     CustomConstraintTest.specs
     PgIntervalTest.specs
     ArrayAggTest.specs
+    GeographyTest.specs
