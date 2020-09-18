@@ -30,6 +30,12 @@
   * Remove unnecessary deriving of `Typeable`.
 * [#1128](https://github.com/yesodweb/persistent/pull/1128)
   * Remove `Monad` constraint on `entityDef`
+* [#1127](https://github.com/yesodweb/persistent/pull/1127)
+  * Remove deriving of `Show` for uniques. Users that need a `Show` instance can put a standalone deriving instance:
+
+    ```haskell
+    deriving stock instance Show (Unique User)
+    ```
 
 ## 2.10.5.2
 
