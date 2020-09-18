@@ -1,5 +1,9 @@
 # Changelog for persistent-mongoDB
 
+## 2.10.0.1
+
+* Remove unnecessary deriving of Typeable [#1114](https://github.com/yesodweb/persistent/pull/1114)
+
 ## 2.10.0.0
 
 * Fix `ninList` filter operator [#1058](https://github.com/yesodweb/persistent/pull/1058)

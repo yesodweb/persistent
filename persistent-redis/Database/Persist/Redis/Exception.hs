@@ -1,17 +1,14 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 module Database.Persist.Redis.Exception
     ( RedisException (..)
     ) where
 
 import Control.Exception (Exception)
-import Data.Typeable (Typeable)
 
 data RedisException = NotSupportedOperation String
                     | ParserError String
                     | NotSupportedValueType String
                     | IncorrectUpdate String
                     | IncorrectBehavior
-    deriving Typeable
 
 instance Show RedisException where
     show (NotSupportedOperation key) = "The operation is not supported: " ++ key

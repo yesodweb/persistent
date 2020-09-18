@@ -7,14 +7,13 @@ module Database.Persist.Sql.Types
     , OverflowNatural(..)
     ) where
 
-import Control.Exception (Exception)
+import Control.Exception (Exception(..))
 import Control.Monad.Logger (NoLoggingT)
 import Control.Monad.Trans.Reader (ReaderT (..))
 import Control.Monad.Trans.Resource (ResourceT)
 import Control.Monad.Trans.Writer (WriterT)
 import Data.Pool (Pool)
-import Data.Text (Text)
-import Data.Typeable (Typeable)
+import Data.Text (Text, unpack)
 
 import Database.Persist.Types
 import Database.Persist.Sql.Types.Internal
@@ -32,7 +31,7 @@ data Column = Column
 
 data PersistentSqlException = StatementAlreadyFinalized Text
                             | Couldn'tGetSQLConnection
-    deriving (Typeable, Show)
+    deriving Show
 instance Exception PersistentSqlException
 
 type SqlPersistT = ReaderT SqlBackend
@@ -114,3 +113,29 @@ type ConnectionPool = Pool SqlBackend
 -- processing).
 newtype Single a = Single {unSingle :: a}
     deriving (Eq, Ord, Show, Read)
+
+-- | An exception indicating that Persistent refused to run some unsafe
+-- migrations. Contains a list of pairs where the Bool tracks whether the
+-- migration was unsafe (True means unsafe), and the Sql is the sql statement
+-- for the migration.
+--
+-- @since 2.11.1.0
+newtype PersistUnsafeMigrationException
+  = PersistUnsafeMigrationException [(Bool, Sql)]
+
+-- | This 'Show' instance renders an error message suitable for printing to the
+-- console. This is a little dodgy, but since GHC uses Show instances when
+-- displaying uncaught exceptions, we have little choice.
+instance Show PersistUnsafeMigrationException where
+  show (PersistUnsafeMigrationException mig) =
+    concat
+      [ "\n\nDatabase migration: manual intervention required.\n"
+      , "The unsafe actions are prefixed by '***' below:\n\n"
+      , unlines $ map displayMigration mig
+      ]
+    where
+      displayMigration :: (Bool, Sql) -> String
+      displayMigration (True,  s) = "*** " ++ unpack s ++ ";"
+      displayMigration (False, s) = "    " ++ unpack s ++ ";"
+
+instance Exception PersistUnsafeMigrationException

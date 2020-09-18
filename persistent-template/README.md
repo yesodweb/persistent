@@ -8,7 +8,7 @@ Provides Template Haskell helpers for persistent. For more information, see
 The TH.hs module contains code generators.
 persistent-template uses `EntityDef`s that it gets from the quasi-quoter.
 The quasi-quoter is in persistent Quasi.hs
-Similarly mant of the types come from the persistent library
+Similarly many of the types come from the persistent library
 
 ### Development tips
 

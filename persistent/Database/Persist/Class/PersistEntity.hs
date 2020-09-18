@@ -35,7 +35,6 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy as LT
 import qualified Data.Text.Lazy.Builder as TB
-import Data.Typeable (Typeable)
 import GHC.Generics
 
 import Database.Persist.Class.PersistField
@@ -200,7 +199,6 @@ data FilterValue typ where
 data Entity record =
     Entity { entityKey :: Key record
            , entityVal :: record }
-    deriving Typeable
 
 deriving instance (Generic (Key record), Generic record) => Generic (Entity record)
 deriving instance (Eq (Key record), Eq record) => Eq (Entity record)

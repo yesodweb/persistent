@@ -1,6 +1,6 @@
 # Changelog for persistent-mysql
 
-## 2.10.3
+## (Unreleased) 2.10.3
 
 * Compatibility with latest persistent
 
