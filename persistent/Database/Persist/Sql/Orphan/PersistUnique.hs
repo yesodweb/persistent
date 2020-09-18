@@ -10,52 +10,41 @@ import Control.Monad.Trans.Reader (ask, withReaderT, ReaderT)
 import qualified Data.Conduit.List as CL
 import Data.Function (on)
 import Data.List (nubBy)
+import qualified Data.List.NonEmpty as NEL
 import Data.Monoid (mappend)
 import qualified Data.Text as T
 
 import Database.Persist
-import Database.Persist.Class.PersistUnique (defaultPutMany, persistUniqueKeyValues, onlyOneUniqueDef)
+import Database.Persist.Class.PersistUnique (defaultUpsertBy, defaultPutMany, persistUniqueKeyValues
+                                            , onlyOneUniqueDef, atLeastOneUniqueDef)
+
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
 import Database.Persist.Sql.Util (dbColumns, parseEntityValues, updatePersistValue, mkUpdateText')
 
-defaultUpsert
-    :: forall record backend m.
-    ( MonadIO m
-    , PersistEntity record
-    , PersistUniqueWrite backend
-    , PersistEntityBackend record ~ BaseBackend backend
-    , OnlyOneUniqueKey record
-    )
-    => record -> [Update record] -> ReaderT backend m (Entity record)
-defaultUpsert record updates = do
-    uniqueKey <- onlyUnique record
-    upsertBy uniqueKey record updates
-
 instance PersistUniqueWrite SqlBackend where
-    upsert record updates = do
+    upsertBy uniqueKey record updates = do
       conn <- ask
       let escape = connEscapeName conn
       let refCol n = T.concat [escape (entityDB t), ".", n]
       let mkUpdateText = mkUpdateText' escape refCol
-      uniqueKey <- onlyUnique record
       case connUpsertSql conn of
         Just upsertSql -> case updates of
-                            [] -> defaultUpsert record updates
+                            [] -> defaultUpsertBy uniqueKey record updates
                             _:_ -> do
                                 let upds = T.intercalate "," $ map mkUpdateText updates
-                                    sql = upsertSql t (pure (onlyOneUniqueDef (Just record))) upds
+                                    sql = upsertSql t (NEL.fromList $ persistUniqueToFieldNames uniqueKey) upds
                                     vals = map toPersistValue (toPersistFields record)
                                         ++ map updatePersistValue updates
                                         ++ unqs uniqueKey
 
                                 x <- rawSql sql vals
                                 return $ head x
-        Nothing -> defaultUpsert record updates
+        Nothing -> defaultUpsertBy uniqueKey record updates
         where
           t = entityDef $ Just record
-          unqs uniqueKey = concatMap persistUniqueToValues [uniqueKey]
+          unqs uniqueKey' = concatMap persistUniqueToValues [uniqueKey']
 
     deleteBy uniq = do
         conn <- ask

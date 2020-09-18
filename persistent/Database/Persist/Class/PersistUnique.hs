@@ -18,6 +18,7 @@ module Database.Persist.Class.PersistUnique
   , replaceUnique
   , checkUnique
   , onlyUnique
+  , defaultUpsertBy
   , defaultPutMany
   , persistUniqueKeyValues
   )
@@ -266,12 +267,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
         -- ^ updates to perform if the record already exists
         -> ReaderT backend m (Entity record)
         -- ^ the record in the database after the operation
-    upsertBy uniqueKey record updates = do
-        mrecord <- getBy uniqueKey
-        maybe (insertEntity record) (`updateGetEntity` updates) mrecord
-      where
-        updateGetEntity (Entity k _) upds =
-            (Entity k) `liftM` (updateGet k upds)
+    upsertBy = defaultUpsertBy
 
     -- | Put many records into db
     --
@@ -575,7 +571,31 @@ checkUniqueKeys (x:xs) = do
         Nothing -> checkUniqueKeys xs
         Just _ -> return (Just x)
 
--- | The slow but generic 'putMany' implemetation for any 'PersistUniqueRead'.
+
+-- | The slow but generic 'upsertBy' implementation for any 'PersistUniqueRead'.
+-- * Lookup corresponding entities (if any) 'getBy'.
+-- * If the record exists, update using 'updateGet'.
+-- * If it does not exist, insert using 'insertEntity'.
+-- @since 2.11
+defaultUpsertBy
+    :: ( PersistEntityBackend record ~ BaseBackend backend
+       , PersistEntity record
+       , MonadIO m
+       , PersistStoreWrite backend
+       , PersistUniqueRead backend
+       )
+    => Unique record   -- ^ uniqueness constraint to find by
+    -> record          -- ^ new record to insert
+    -> [Update record] -- ^ updates to perform if the record already exists
+    -> ReaderT backend m (Entity record) -- ^ the record in the database after the operation
+defaultUpsertBy uniqueKey record updates = do
+    mrecord <- getBy uniqueKey
+    maybe (insertEntity record) (`updateGetEntity` updates) mrecord
+  where
+    updateGetEntity (Entity k _) upds =
+        (Entity k) `liftM` (updateGet k upds)
+
+-- | The slow but generic 'putMany' implementation for any 'PersistUniqueRead'.
 -- * Lookup corresponding entities (if any) for each record using 'getByValue'
 -- * For pre-existing records, issue a 'replace' for each old key and new record
 -- * For new records, issue a bulk 'insertMany_'

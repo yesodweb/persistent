@@ -3,15 +3,14 @@
 ## (Unreleased) 2.11.0.0
 
 * Implement interval support. [#1053](https://github.com/yesodweb/persistent/pull/1053)
-
 * [#1060](https://github.com/yesodweb/persistent/pull/1060)
   * The QuasiQuoter now supports `OnDelete` and `OnUpdate` cascade options.
 * Handle foreign key constraint names over 63 characters. See [#996](https://github.com/yesodweb/persistent/pull/996) for details.
+* Fix a bug in `upsertSql` query which had not been discovered previously because the query wasn't actually used. [#856](https://github.com/yesodweb/persistent/pull/856)
 * [#1072](https://github.com/yesodweb/persistent/pull/1072) Refactored `test/JSONTest.hs` to use `hspec`
   * added `runConn_` to run a db connection and return result
   * Renamed `db` to `runConnAssert` in `test/PgInit.hs` for clarity
   * Ran `test/ArrayAggTest.hs` (which was previously written but not being run)
-
 * Remove unnecessary deriving of Typeable [#1114](https://github.com/yesodweb/persistent/pull/1114)
 
 ## 2.10.1.2
