@@ -45,7 +45,7 @@ import qualified RawSqlTest
 import qualified ReadWriteTest
 import qualified Recursive
 -- TODO: can't use this as MySQL can't do DEFAULT CURRENT_DATE
--- import qualified RenameTest
+import qualified RenameTest
 import qualified SumTypeTest
 import qualified TransactionLevelTest
 import qualified UniqueTest
@@ -120,7 +120,7 @@ main = do
       , Recursive.recursiveMigrate
       , CompositeTest.compositeMigrate
       , PersistUniqueTest.migration
-      -- , RenameTest.migration
+      , RenameTest.migration
       , CustomPersistFieldTest.customFieldMigrate
       , InsertDuplicateUpdate.duplicateMigrate
       , MigrationIdempotencyTest.migration
@@ -133,7 +133,7 @@ main = do
 
   hspec $ do
     xdescribe "This is pending on MySQL because you can't have DEFAULT CURRENT_DATE" $ do
-        pure () --RenameTest.specsWith db
+        RenameTest.specsWith db
     DataTypeTest.specsWith
         db
         (Just (runMigrationSilent dataTypeMigrate))
