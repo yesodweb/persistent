@@ -110,6 +110,7 @@ share [mkPersist persistSettings { mpsGeneric = True },  mkMigrate "testMigrate"
 
   MutB
     mutA    MutAId
+
 |]
 
 deriving instance Show (BackendKey backend) => Show (PetGeneric backend)
@@ -118,11 +119,11 @@ deriving instance Eq (BackendKey backend) => Eq (PetGeneric backend)
 deriving instance Show (BackendKey backend) => Show (RelationshipGeneric backend)
 deriving instance Eq (BackendKey backend) => Eq (RelationshipGeneric backend)
 
-share [mkPersist persistSettings { 
+share [mkPersist persistSettings {
           mpsPrefixFields = False
         , mpsFieldLabelModifier = \_ _ -> "" -- this field is ignored when mpsPrefixFields == False
         , mpsConstraintLabelModifier = \_ _ -> "" -- this field is ignored when mpsPrefixFields == False
-        , mpsGeneric = True 
+        , mpsGeneric = True
         }
       , mkMigrate "noPrefixMigrate"
       ] [persistLowerCase|
@@ -138,7 +139,7 @@ NoPrefix2
 
 |]
 
-share [mkPersist sqlSettings] [persistLowerCase|
+share [mkMigrate "testNonGenericMigrate", mkPersist sqlSettings] [persistLowerCase|
 JsonEncoding json
     name Text
     age  Int
@@ -165,7 +166,7 @@ deriving instance Eq (BackendKey backend) => Eq (NoPrefix1Generic backend)
 deriving instance Show (BackendKey backend) => Show (NoPrefix2Generic backend)
 deriving instance Eq (BackendKey backend) => Eq (NoPrefix2Generic backend)
 
-share [mkPersist persistSettings { 
+share [mkPersist persistSettings {
           mpsFieldLabelModifier = \entity field -> case entity of
             "CustomPrefix1" -> append "_cp1" field
             "CustomPrefix2" -> append "_cp2" field

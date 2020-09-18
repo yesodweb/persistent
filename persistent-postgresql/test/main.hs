@@ -35,6 +35,7 @@ import qualified JSONTest
 import qualified LargeNumberTest
 import qualified MaxLenTest
 import qualified MigrationColumnLengthTest
+import qualified MigrationTest
 import qualified MigrationOnlyTest
 import qualified MpsNoPrefixTest
 import qualified MpsCustomPrefixTest
@@ -124,6 +125,7 @@ main = do
       , TransactionLevelTest.migration
       , LongIdentifierTest.migration
       , ForeignKey.compositeMigrate
+      , MigrationTest.migrationMigrate
       , PgIntervalTest.pgIntervalMigrate
       ]
     PersistentTest.cleanDB
@@ -151,6 +153,7 @@ main = do
     HtmlTest.specsWith
         runConnAssert
         (Just (runMigrationSilent HtmlTest.htmlMigrate))
+
     EmbedTest.specsWith runConnAssert
     EmbedOrderTest.specsWith runConnAssert
     LargeNumberTest.specsWith runConnAssert
@@ -159,7 +162,9 @@ main = do
     MaxLenTest.specsWith runConnAssert
     Recursive.specsWith runConnAssert
     SumTypeTest.specsWith runConnAssert (Just (runMigrationSilent SumTypeTest.sumTypeMigrate))
+    MigrationTest.specsWith runConnAssert
     MigrationOnlyTest.specsWith runConnAssert
+
         (Just
             $ runMigrationSilent MigrationOnlyTest.migrateAll1
             >> runMigrationSilent MigrationOnlyTest.migrateAll2

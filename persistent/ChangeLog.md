@@ -19,6 +19,8 @@
   * The method `entityIdFromJSON` that is used to parse entities now correctly works for entities that define a custom `Primary` key.
 * [#856](https://github.com/yesodweb/persistent/pull/856)
   * Modify `upsertBy` to use backend-specific implementation (if any).
+* [#1066](https://github.com/yesodweb/persistent/pull/1066)
+  * You can set a column's `sql=id` for a non `Id` column.
 * Fix a bug where unsafe migration error messages were being shown using `Show` prior to printing, resulting in less helpful output. [#1080](https://github.com/yesodweb/persistent/pull/1080)
 * [#1087](https://github.com/yesodweb/persistent/pull/1087)
   * `RawSql` now has tuple instances up to GHC's max tuple size (62)

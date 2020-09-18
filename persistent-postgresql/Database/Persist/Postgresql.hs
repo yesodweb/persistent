@@ -26,6 +26,8 @@ module Database.Persist.Postgresql
     , migrateEnableExtension
     ) where
 
+import qualified Debug.Trace as Debug
+
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
 import qualified Database.PostgreSQL.Simple as PG
@@ -39,7 +41,7 @@ import Database.PostgreSQL.Simple.Ok (Ok (..))
 
 import Control.Arrow
 import Control.Exception (Exception, throw, throwIO)
-import Control.Monad (forM)
+import Control.Monad (forM, guard)
 import Control.Monad.IO.Unlift (MonadIO (..), MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Control.Monad.Trans.Reader (runReaderT)
@@ -63,8 +65,9 @@ import Data.Function (on)
 import Data.Int (Int64)
 import qualified Data.IntMap as I
 import Data.IORef
-import Data.List (find, sort, groupBy)
+import Data.List (find, sort, groupBy, foldl')
 import Data.List.NonEmpty (NonEmpty)
+import qualified Data.List as List
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
 import Data.Maybe
@@ -692,22 +695,23 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
         references =
             mapMaybe
                 (\Column { cName, cReference } ->
-                    fmap (getAddReference allDefs Nothing name cName) cReference
+                    getAddReference allDefs entity cName =<< cReference
                 )
                 newcols
-        foreignsAlt = map (mkForeignAlt name) fdefs
+        foreignsAlt = mapMaybe (mkForeignAlt entity) fdefs
 
 mkForeignAlt
-    :: DBName
+    :: EntityDef
     -> ForeignDef
-    -> AlterDB
-mkForeignAlt name fdef =
-    AlterColumn
-        name
+    -> Maybe AlterDB
+mkForeignAlt entity fdef = do
+    pure $ AlterColumn
+        tableName
         ( foreignRefTableDBName fdef
         , addReference
         )
   where
+    tableName = entityDB entity
     addReference =
         AddReference
             constraintName
@@ -722,29 +726,44 @@ mkForeignAlt name fdef =
         map escape parentfields
 
 addTable :: [Column] -> EntityDef -> AlterDB
-addTable cols entity = AddTable $ T.concat
-                       -- Lower case e: see Database.Persist.Sql.Migration
-                       [ "CREATe TABLE " -- DO NOT FIX THE CAPITALIZATION!
-                       , escape name
-                       , "("
-                       , idtxt
-                       , if null cols then "" else ","
-                       , T.intercalate "," $ map showColumn cols
-                       , ")"
-                       ]
-    where
-      name = entityDB entity
-      idtxt = case entityPrimary entity of
-                Just pdef -> T.concat [" PRIMARY KEY (", T.intercalate "," $ map (escape . fieldDB) $ compositeFields pdef, ")"]
-                Nothing   ->
-                    let defText = defaultAttribute $ fieldAttrs $ entityId entity
-                        sType = fieldSqlType $ entityId entity
-                    in  T.concat
-                            [ escape $ fieldDB (entityId entity)
-                            , maySerial sType defText
-                            , " PRIMARY KEY UNIQUE"
-                            , mayDefault defText
-                            ]
+addTable cols entity =
+    AddTable $ T.concat
+        -- Lower case e: see Database.Persist.Sql.Migration
+        [ "CREATe TABLE " -- DO NOT FIX THE CAPITALIZATION!
+        , escape name
+        , "("
+        , idtxt
+        , if null nonIdCols then "" else ","
+        , T.intercalate "," $ map showColumn nonIdCols
+        , ")"
+        ]
+  where
+    nonIdCols =
+        case entityPrimary entity of
+            Just _ ->
+                cols
+            _ ->
+                filter (\c -> cName c /= fieldDB (entityId entity) ) cols
+
+    name =
+        entityDB entity
+    idtxt =
+        case entityPrimary entity of
+            Just pdef ->
+                T.concat
+                    [ " PRIMARY KEY ("
+                    , T.intercalate "," $ map (escape . fieldDB) $ compositeFields pdef
+                    , ")"
+                    ]
+            Nothing ->
+                let defText = defaultAttribute $ fieldAttrs $ entityId entity
+                    sType = fieldSqlType $ entityId entity
+                in  T.concat
+                        [ escape $ fieldDB (entityId entity)
+                        , maySerial sType defText
+                        , " PRIMARY KEY UNIQUE"
+                        , mayDefault defText
+                        ]
 
 maySerial :: SqlType -> Maybe Text -> Text
 maySerial SqlInt64 Nothing = " SERIAL8 "
@@ -763,34 +782,39 @@ data AlterColumn
     | Default Text | NoDefault | Update' Text
     | AddReference DBName [DBName] [Text] FieldCascade
     | DropReference DBName
+    deriving Show
 
 type AlterColumn' = (DBName, AlterColumn)
 
-data AlterTable = AddUniqueConstraint DBName [DBName]
-                | DropConstraint DBName
+data AlterTable
+    = AddUniqueConstraint DBName [DBName]
+    | DropConstraint DBName
+    deriving Show
 
 data AlterDB = AddTable Text
              | AlterColumn DBName AlterColumn'
              | AlterTable DBName AlterTable
+             deriving Show
 
 -- | Returns all of the columns in the given table currently in the database.
 getColumns :: (Text -> IO Statement)
            -> EntityDef -> [Column]
            -> IO [Either Text (Either Column (DBName, [DBName]))]
 getColumns getter def cols = do
-    let sqlv=T.concat ["SELECT "
-                          ,"column_name "
-                          ,",is_nullable "
-                          ,",COALESCE(domain_name, udt_name)" -- See DOMAINS below
-                          ,",column_default "
-                          ,",numeric_precision "
-                          ,",numeric_scale "
-                          ,",character_maximum_length "
-                          ,"FROM information_schema.columns "
-                          ,"WHERE table_catalog=current_database() "
-                          ,"AND table_schema=current_schema() "
-                          ,"AND table_name=? "
-                          ,"AND column_name <> ?"]
+    let sqlv = T.concat
+            [ "SELECT "
+            , "column_name "
+            , ",is_nullable "
+            , ",COALESCE(domain_name, udt_name)" -- See DOMAINS below
+            , ",column_default "
+            , ",numeric_precision "
+            , ",numeric_scale "
+            , ",character_maximum_length "
+            , "FROM information_schema.columns "
+            , "WHERE table_catalog=current_database() "
+            , "AND table_schema=current_schema() "
+            , "AND table_name=? "
+            ]
 
 -- DOMAINS Postgres supports the concept of domains, which are data types with optional constraints.
 -- An app might make an "email" domain over the varchar type, with a CHECK that the emails are valid
@@ -801,31 +825,31 @@ getColumns getter def cols = do
     stmt <- getter sqlv
     let vals =
             [ PersistText $ unDBName $ entityDB def
-            , PersistText $ unDBName $ fieldDB (entityId def)
             ]
     cs <- with (stmtQuery stmt vals) (\src -> runConduit $ src .| helper)
-    let sqlc = T.concat ["SELECT "
-                          ,"c.constraint_name, "
-                          ,"c.column_name "
-                          ,"FROM information_schema.key_column_usage c, "
-                          ,"information_schema.table_constraints k "
-                          ,"WHERE c.table_catalog=current_database() "
-                          ,"AND c.table_catalog=k.table_catalog "
-                          ,"AND c.table_schema=current_schema() "
-                          ,"AND c.table_schema=k.table_schema "
-                          ,"AND c.table_name=? "
-                          ,"AND c.table_name=k.table_name "
-                          ,"AND c.column_name <> ? "
-                          ,"AND c.constraint_name=k.constraint_name "
-                          ,"AND NOT k.constraint_type IN ('PRIMARY KEY', 'FOREIGN KEY') "
-                          ,"ORDER BY c.constraint_name, c.column_name"]
+    let sqlc = T.concat
+            [ "SELECT "
+            , "c.constraint_name, "
+            , "c.column_name "
+            , "FROM information_schema.key_column_usage c, "
+            , "information_schema.table_constraints k "
+            , "WHERE c.table_catalog=current_database() "
+            , "AND c.table_catalog=k.table_catalog "
+            , "AND c.table_schema=current_schema() "
+            , "AND c.table_schema=k.table_schema "
+            , "AND c.table_name=? "
+            , "AND c.table_name=k.table_name "
+            , "AND c.constraint_name=k.constraint_name "
+            , "AND NOT k.constraint_type IN ('PRIMARY KEY', 'FOREIGN KEY') "
+            , "ORDER BY c.constraint_name, c.column_name"
+            ]
 
     stmt' <- getter sqlc
 
     us <- with (stmtQuery stmt' vals) (\src -> runConduit $ src .| helperU)
     return $ cs ++ us
   where
-    refMap = Map.fromList $ foldl ref [] cols
+    refMap = Map.fromList $ foldl' ref [] cols
         where ref rs c = case cReference c of
                   Nothing -> rs
                   (Just r) -> (unDBName $ cName c, r) : rs
@@ -858,7 +882,7 @@ safeToRemove :: EntityDef -> DBName -> Bool
 safeToRemove def (DBName colName)
     = any (elem "SafeToRemove" . fieldAttrs)
     $ filter ((== DBName colName) . fieldDB)
-    $ entityFields def
+    $ keyAndEntityFields def
 
 getAlters :: [EntityDef]
           -> EntityDef
@@ -868,9 +892,10 @@ getAlters :: [EntityDef]
 getAlters defs def (c1, u1) (c2, u2) =
     (getAltersC c1 c2, getAltersU u1 u2)
   where
-    getAltersC [] old = map (\x -> (cName x, Drop $ safeToRemove def $ cName x)) old
+    getAltersC [] old =
+        map (\x -> (cName x, Drop $ safeToRemove def $ cName x)) old
     getAltersC (new:news) old =
-        let (alters, old') = findAlters defs (entityDB def) new old
+        let (alters, old') = findAlters defs def new old
          in alters ++ getAltersC news old'
 
     getAltersU
@@ -1013,17 +1038,29 @@ sqlTypeEq :: SqlType -> SqlType -> Bool
 sqlTypeEq x y =
     T.toCaseFold (showSqlType x) == T.toCaseFold (showSqlType y)
 
-findAlters :: [EntityDef] -> DBName -> Column -> [Column] -> ([AlterColumn'], [Column])
-findAlters defs _tablename col@(Column name isNull sqltype def _defConstraintName _maxLen ref) cols =
-    case filter (\c -> cName c == name) cols of
-        [] -> ([(name, Add' col)], cols)
-        Column _ isNull' sqltype' def' _defConstraintName' _maxLen' ref':_ ->
+findAlters
+    :: [EntityDef]
+    -- ^ The list of all entity definitions that persistent is aware of.
+    -> EntityDef
+    -- ^ The entity definition for the entity that we're working on.
+    -> Column
+    -- ^ The column that we're searching for potential alterations for.
+    -> [Column]
+    -> ([AlterColumn'], [Column])
+findAlters defs edef col@(Column name isNull sqltype def _defConstraintName _maxLen ref) cols =
+    case List.find (\c -> cName c == name) cols of
+        Nothing ->
+            ([(name, Add' col)], cols)
+        Just (Column _oldName isNull' sqltype' def' _defConstraintName' _maxLen' ref') ->
             let refDrop Nothing = []
                 refDrop (Just (_, cname)) = [(name, DropReference cname)]
                 refAdd Nothing = []
                 refAdd (Just (tname, a)) =
                     case find ((==tname) . entityDB) defs of
-                        Just refdef ->
+                        Just refdef
+                            | entityDB edef /= tname
+                            && _oldName /= fieldDB (entityId edef)
+                            ->
                             [ ( tname
                               , AddReference
                                     a
@@ -1032,6 +1069,7 @@ findAlters defs _tablename col@(Column name isNull sqltype def _defConstraintNam
                                     noCascade
                               )
                             ]
+                        Just _ -> []
                         Nothing ->
                             error $ "could not find the entityDef for reftable[" ++ show tname ++ "]"
                 modRef =
@@ -1039,7 +1077,9 @@ findAlters defs _tablename col@(Column name isNull sqltype def _defConstraintNam
                         then []
                         else refDrop ref' ++ refAdd ref
                 modNull = case (isNull, isNull') of
-                            (True, False) -> [(name, IsNull)]
+                            (True, False) ->  do
+                                guard $ name /= fieldDB (entityId edef)
+                                pure (name, IsNull)
                             (False, True) ->
                                 let up = case def of
                                             Nothing -> id
@@ -1060,6 +1100,7 @@ findAlters defs _tablename col@(Column name isNull sqltype def _defConstraintNam
                     | otherwise = [(name, ChangeType sqltype "")]
                 modDef =
                     if def == def'
+                        || isJust (T.stripPrefix "nextval" =<< def')
                         then []
                         else case def of
                                 Nothing -> [(name, NoDefault)]
@@ -1070,18 +1111,19 @@ findAlters defs _tablename col@(Column name isNull sqltype def _defConstraintNam
 -- | Get the references to be added to a table for the given column.
 getAddReference
     :: [EntityDef]
-    -> Maybe ForeignDef
-    -> DBName
+    -> EntityDef
     -> DBName
     -> (DBName, DBName)
-    -> AlterDB
-getAddReference allDefs mforeignDef table cname (s, constraintName) =
-    AlterColumn
+    -> Maybe AlterDB
+getAddReference allDefs entity cname (s, constraintName) = do
+    guard $ table /= s && cname /= fieldDB (entityId entity)
+    pure $ AlterColumn
         table
         ( s
-        , AddReference constraintName [cname] id_ (maybe noCascade foreignFieldCascade mforeignDef)
+        , AddReference constraintName [cname] id_ noCascade
         )
   where
+    table = entityDB entity
     id_ =
         fromMaybe
             (error $ "Could not find ID of entity " ++ show s)
@@ -1382,10 +1424,10 @@ mockMigrate allDefs _ entity = fmap (fmap $ map showAlterDb) $ do
         references =
             mapMaybe
                 (\Column { cName, cReference } ->
-                    fmap (getAddReference allDefs Nothing name cName) cReference
+                    getAddReference allDefs entity cName =<< cReference
                 )
-                $ newcols
-        foreignsAlt = map (mkForeignAlt name) fdefs
+                newcols
+        foreignsAlt = mapMaybe (mkForeignAlt entity) fdefs
 
 -- | Mock a migration even when the database is not present.
 -- This function performs the same functionality of 'printMigration'
@@ -1470,5 +1512,8 @@ migrateEnableExtension extName = WriterT $ WriterT $ do
     else return (((), []), [])
 
 postgresMkColumns :: [EntityDef] -> EntityDef -> ([Column], [UniqueDef], [ForeignDef])
-postgresMkColumns allDefs t = mkColumns allDefs t (emptyBackendSpecificOverrides {backendSpecificForeignKeyName = Just refName})
-
+postgresMkColumns allDefs t =
+    mkColumns allDefs t (emptyBackendSpecificOverrides
+        { backendSpecificForeignKeyName = Just refName
+        }
+    )
