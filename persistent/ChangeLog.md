@@ -1,6 +1,6 @@
 # Changelog for persistent
 
-## 2.11.0.0
+## (Unreleased) 2.11.0.0
 
 * Introduces a breaking change to the internal function `mkColumns`, which can now be passed a record of functions to override its default behavior. [#996](https://github.com/yesodweb/persistent/pull/996)
 * Added explicit `forall` notation to make most API functions play nice when using `TypeApplications`. (e.g. instead of `selectList @_ @_ @User [] []`, you can now write `selectList @User [] []`) [#1006](https://github.com/yesodweb/persistent/pull/1006)
@@ -19,6 +19,13 @@
   * The method `entityIdFromJSON` that is used to parse entities now correctly works for entities that define a custom `Primary` key.
 * [#1066](https://github.com/yesodweb/persistent/pull/1066)
   * You can set a column's `sql=id` for a non `Id` column.
+* Fix a bug where unsafe migration error messages were being shown using `Show` prior to printing, resulting in less helpful output. [#1080](https://github.com/yesodweb/persistent/pull/1080)
+* [#1087](https://github.com/yesodweb/persistent/pull/1087)
+  * `RawSql` now has tuple instances up to GHC's max tuple size (62)
+* [#1076](https://github.com/yesodweb/persistent/pull/1076)
+  * `Loc` is now imported from `monad-logger` as opposed to `template-haskell`. Removes `template-haskell` as an explicit dependency.
+* [#1114](https://github.com/yesodweb/persistent/pull/1114)
+  * Remove unnecessary deriving of `Typeable`.
 
 ## 2.10.5.2
 

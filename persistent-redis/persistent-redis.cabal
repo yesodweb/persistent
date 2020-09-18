@@ -1,5 +1,5 @@
 name:            persistent-redis
-version:         2.5.2.4
+version:         2.5.2.5
 license:         BSD3
 license-file:    LICENSE
 author:          Pavel Ryzhov <paul@paulrz.cz>

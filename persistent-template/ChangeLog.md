@@ -1,5 +1,9 @@
 ## Unreleased changes
 
+## 2.8.3.1
+
+* Allow aeson 1.5. [#1085](https://github.com/yesodweb/persistent/pull/1085)
+
 ## 2.8.3.0
 
 * Add `Lift` instances for the cascade types. [#1060](https://github.com/yesodweb/persistent/pull/1060)

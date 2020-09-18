@@ -25,13 +25,16 @@ module Database.Persist.Sql.Raw.QQ (
     , sqlQQ
     , executeQQ
     , executeCountQQ
+    , ToRow(..)
     ) where
 
 import Prelude
 import Control.Arrow (first, second)
 import Control.Monad.Reader (ask)
-import qualified Data.List.NonEmpty (toList)
-import Data.Text (pack, unpack, intercalate)
+import           Data.List.NonEmpty (NonEmpty(..), (<|))
+import qualified Data.List.NonEmpty as NonEmpty
+import qualified Data.List as List
+import Data.Text (Text, pack, unpack, intercalate)
 import Data.Maybe (fromMaybe, Maybe(..))
 import Data.Monoid (mempty, (<>))
 import qualified Language.Haskell.TH as TH
@@ -42,17 +45,36 @@ import Database.Persist.Class (toPersistValue)
 import Database.Persist
 import Database.Persist.Sql
 
+class ToRow a where
+    toRow :: a -> NonEmpty PersistValue
+
+instance PersistField a => ToRow (Single a) where
+    toRow (Single a) = toPersistValue a :| []
+
+instance (PersistField a, PersistField b) => ToRow (a, b) where
+    toRow (a, b) = toPersistValue a <| toRow (Single b)
+
+instance (PersistField a, PersistField b, PersistField c) => ToRow (a, b, c) where
+    toRow (a, b, c) = toPersistValue a <| toRow (b, c)
+
+instance (PersistField a, PersistField b, PersistField c, PersistField d) => ToRow (a, b, c, d) where
+    toRow (a, b, c, d) = toPersistValue a <| toRow (b, c, d)
+
+instance (PersistField a, PersistField b, PersistField c, PersistField d, PersistField e) => ToRow (a, b, c, d, e) where
+    toRow (a, b, c, d, e) = toPersistValue a <| toRow (b, c, d, e)
+
 data Token
   = Literal String
   | Value String
   | Values String
+  | Rows String
   | TableName String
   | ColumnName String
   deriving Show
 
 parseHaskell :: (String -> Token) -> String -> String -> [Token]
 parseHaskell cons = go
-    where
+  where
     go a []          = [Literal (reverse a)]
     go a ('\\':x:xs) = go (x:a) xs
     go a ['\\']      = go ('\\':a) []
@@ -65,9 +87,37 @@ parseStr a ('\\':x:xs)  = parseStr (x:a) xs
 parseStr a ['\\']       = parseStr ('\\':a) []
 parseStr a ('#':'{':xs) = Literal (reverse a) : parseHaskell Value      [] xs
 parseStr a ('%':'{':xs) = Literal (reverse a) : parseHaskell Values     [] xs
+parseStr a ('*':'{':xs) = Literal (reverse a) : parseHaskell Rows       [] xs
 parseStr a ('^':'{':xs) = Literal (reverse a) : parseHaskell TableName  [] xs
 parseStr a ('@':'{':xs) = Literal (reverse a) : parseHaskell ColumnName [] xs
 parseStr a (x:xs)       = parseStr (x:a) xs
+
+interpolateValues :: PersistField a => NonEmpty a -> (Text, [[PersistValue]]) -> (Text, [[PersistValue]])
+interpolateValues xs =
+    first (mkPlaceholders values <>) .
+    second (NonEmpty.toList values :)
+  where
+    values = NonEmpty.map toPersistValue xs
+
+interpolateRows :: ToRow a => NonEmpty a -> (Text, [[PersistValue]]) -> (Text, [[PersistValue]])
+interpolateRows xs =
+    first (placeholders <>)
+  . second (values :)
+  where
+    rows :: NonEmpty (NonEmpty PersistValue)
+    rows = NonEmpty.map toRow xs
+
+    n = NonEmpty.length rows
+    placeholders = n `timesCommaSeparated` mkPlaceholders (NonEmpty.head rows)
+    values = List.concatMap NonEmpty.toList $ NonEmpty.toList rows
+
+mkPlaceholders :: NonEmpty a -> Text
+mkPlaceholders values = "(" <> n `timesCommaSeparated` "?" <> ")"
+  where
+    n = NonEmpty.length values
+
+timesCommaSeparated :: Int -> Text -> Text
+timesCommaSeparated n = intercalate "," . replicate n
 
 makeExpr :: TH.ExpQ -> [Token] -> TH.ExpQ
 makeExpr fun toks = do
@@ -76,7 +126,7 @@ makeExpr fun toks = do
         ([| (=<<) |])
         (Just $ go toks)
 
-    where
+  where
     go :: [Token] -> TH.ExpQ
     go [] = [| return (mempty, []) |]
     go (Literal a:xs) =
@@ -89,11 +139,11 @@ makeExpr fun toks = do
             (go xs)
     go (Values a:xs) =
         TH.appE
-            [| let a' = Data.List.NonEmpty.toList $(reifyExp a) in
-               fmap $
-                 first (("(" <> intercalate ", " (replicate (length a') "?") <> ")") <>) .
-                 second (map toPersistValue a' :)
-             |]
+            [| fmap $ interpolateValues $(reifyExp a) |]
+            (go xs)
+    go (Rows a:xs) =
+        TH.appE
+            [| fmap $ interpolateRows $(reifyExp a) |]
             (go xs)
     go (ColumnName a:xs) = do
         colN <- TH.newName "field"
@@ -154,33 +204,34 @@ makeQQ x = QuasiQuoter
 --
 -- @
 -- Category
---   rgt Int
---   lft Int
+--   rgt Int default=0
+--   lft Int default=0
 --   nam Text
 -- @
 --
 -- We can now execute this raw query:
 --
 -- @
--- let lft = 10 :: Int
---     rgt = 20 :: Int
---     width = rgt - lft
---     nams = "first" :| ["second", "third"]
+-- let lft = 10 :: `Int`
+--     rgt = 20 :: `Int`
+--     width = rgt `-` lft
+--     nams = "first" `:|` ["second", "third"]
 --  in [sqlQQ|
---       DELETE FROM ^{Category} WHERE @{CategoryLft} BETWEEN #{lft} AND #{rgt};
---       UPDATE category SET @{CategoryRgt} = @{CategoryRgt} - #{width} WHERE @{CategoryRgt} > #{rgt};
---       UPDATE category SET @{CategoryLft} = @{CategoryLft} - #{width} WHERE @{CategoryLft} > #{rgt};
---       SELECT ?? FROM ^{Category} WHERE ^{Category}.@{CategoryNam} IN %{nams};
+--       DELETE FROM ^{Category} WHERE \@{CategoryLft} BETWEEN \#{lft} AND \#{rgt};
+--       UPDATE category SET \@{CategoryRgt} = \@{CategoryRgt} - \#{width} WHERE \@{CategoryRgt} > \#{rgt};
+--       UPDATE category SET \@{CategoryLft} = \@{CategoryLft} - \#{width} WHERE \@{CategoryLft} > \#{rgt};
+--       SELECT ?? FROM ^{Category} WHERE ^{Category}.\@{CategoryNam} IN %{nams};
+--       INSERT INTO ^{Category}(\@{CategoryNam}) VALUES *{`Single` `<$>` nams};
 --     |]
 -- @
 --
--- @^{TableName}@ looks up the table's name and escapes it, @\@{ColumnName}@
--- looks up the column's name and properly escapes it, @#{value}@ inserts
--- the value via the usual parameter substitution mechanism and @%{values}@
--- inserts comma separated values (of a 'Data.List.NonEmpty.NonEmpty' list).
+-- - @^{TableName}@ looks up the table's name and escapes it
+-- - @\@{ColumnName}@ looks up the column's name and properly escapes it
+-- - @#{value}@ inserts the value via the usual parameter substitution mechanism
+-- - @%{values}@ inserts comma separated values (of a 'Data.List.NonEmpty.NonEmpty' list) (since 2.9.1)
+-- - @*{rows}@ inserts a 'Data.List.NonEmpty.NonEmpty' list of tuples for use with a multirow @INSERT@ statement (since 2.9.2)
 --
 -- @since 2.9.0
--- @%{values}@ was added with 2.9.1
 sqlQQ :: QuasiQuoter
 sqlQQ = makeQQ [| rawSql |]
 
