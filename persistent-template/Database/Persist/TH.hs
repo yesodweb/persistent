@@ -614,17 +614,14 @@ uniqueTypeDec mps t =
         (AppT (ConT ''Unique) (genericDataType mps (entityHaskell t) backendT))
             Nothing
             (map (mkUnique mps t) $ entityUniques t)
-            (derivClause $ entityUniques t)
+            []
 #else
     DataInstD [] ''Unique
         [genericDataType mps (entityHaskell t) backendT]
             Nothing
             (map (mkUnique mps t) $ entityUniques t)
-            (derivClause $ entityUniques t)
+            []
 #endif
-  where
-    derivClause [] = []
-    derivClause _  = [DerivClause Nothing [ConT ''Show]]
 
 mkUnique :: MkPersistSettings -> EntityDef -> UniqueDef -> Con
 mkUnique mps t (UniqueDef (HaskellName constr) _ fields attrs) =
