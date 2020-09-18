@@ -7,14 +7,13 @@ import Control.Exception (Exception, throw)
 import Data.List.NonEmpty hiding (insert, length)
 import qualified Data.Map as M
 import qualified Data.Text as T
-import Data.Typeable (Typeable)
 import qualified Data.Set as S
 
 import EntityEmbedTest
 import Init
 
 data TestException = TestException
-    deriving (Show, Typeable, Eq)
+    deriving (Show, Eq)
 instance Exception TestException
 
 instance PersistFieldSql a => PersistFieldSql (NonEmpty a) where

@@ -1,9 +1,11 @@
 # Changelog for persistent-sqlite
 
-## 2.11.0.0
+## (Unreleased) 2.11.0.0
 
 * [#1060](https://github.com/yesodweb/persistent/pull/1060)
   * The QuasiQuoter now supports `OnDelete` and `OnUpdate` cascade options.
+
+* Remove unnecessary deriving of Typeable [#1114](https://github.com/yesodweb/persistent/pull/1114)
 
 ## 2.10.6.2
 
@@ -20,6 +22,7 @@
 * Add `createRawSqlitePoolFromInfo`, `createRawSqlitePoolFromInfo_`,
   `withRawSqlitePoolInfo`, and `withRawSqlitePoolInfo_` to match the existing
   pool functions for regular `SqlBackend`. [#983](https://github.com/yesodweb/persistent/pull/983)
+>>>>>>> master
 
 ## 2.10.5.2
 

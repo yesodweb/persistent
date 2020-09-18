@@ -17,6 +17,7 @@ module Database.Persist.Postgresql
     , module Database.Persist.Sql
     , ConnectionString
     , PostgresConf (..)
+    , PgInterval (..)
     , openSimpleConn
     , openSimpleConnWithVersion
     , tableName
@@ -24,6 +25,8 @@ module Database.Persist.Postgresql
     , mockMigration
     , migrateEnableExtension
     ) where
+
+import qualified Debug.Trace as Debug
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
@@ -38,7 +41,7 @@ import Database.PostgreSQL.Simple.Ok (Ok (..))
 
 import Control.Arrow
 import Control.Exception (Exception, throw, throwIO)
-import Control.Monad (forM)
+import Control.Monad (forM, guard)
 import Control.Monad.IO.Unlift (MonadIO (..), MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Control.Monad.Trans.Reader (runReaderT)
@@ -48,31 +51,35 @@ import qualified Blaze.ByteString.Builder.Char8 as BBB
 import Data.Acquire (Acquire, mkAcquire, with)
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
+import qualified Data.Attoparsec.ByteString.Char8 as P
+import Data.Bits ((.&.))
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as B8
+import Data.Char (ord)
 import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Data.Data
 import Data.Either (partitionEithers)
-import Data.Fixed (Pico)
+import Data.Fixed (Fixed(..), Pico)
 import Data.Function (on)
 import Data.Int (Int64)
 import qualified Data.IntMap as I
 import Data.IORef
-import Data.List (find, sort, groupBy)
+import Data.List (find, sort, groupBy, foldl')
 import Data.List.NonEmpty (NonEmpty)
+import qualified Data.List as List
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
 import Data.Maybe
 import Data.Monoid ((<>))
 import Data.Pool (Pool)
+import Data.String.Conversions.Monomorphic (toStrictByteString)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.IO as T
 import Data.Text.Read (rational)
-import Data.Time (utc, localTimeToUTC)
-import Data.Typeable (Typeable)
+import Data.Time (utc, NominalDiffTime, localTimeToUTC)
 import System.Environment (getEnvironment)
 
 import Database.Persist.Sql
@@ -88,7 +95,7 @@ type ConnectionString = ByteString
 
 -- | PostgresServerVersionError exception. This is thrown when persistent
 -- is unable to find the version of the postgreSQL server.
-data PostgresServerVersionError = PostgresServerVersionError String deriving Data.Typeable.Typeable
+data PostgresServerVersionError = PostgresServerVersionError String
 
 instance Show PostgresServerVersionError where
     show (PostgresServerVersionError uniqueMsg) =
@@ -304,7 +311,7 @@ insertSql' ent vals =
        Nothing -> ISRSingle (sql <> " RETURNING " <> escape (fieldDB (entityId ent)))
 
 
-upsertSql' :: EntityDef -> NonEmpty UniqueDef -> Text -> Text
+upsertSql' :: EntityDef -> NonEmpty (HaskellName, DBName) -> Text -> Text
 upsertSql' ent uniqs updateVal = T.concat
                            [ "INSERT INTO "
                            , escape (entityDB ent)
@@ -313,7 +320,7 @@ upsertSql' ent uniqs updateVal = T.concat
                            , ") VALUES ("
                            , T.intercalate "," $ map (const "?") (entityFields ent)
                            , ") ON CONFLICT ("
-                           , T.intercalate "," $ concat $ map (\x -> map escape (map snd $ uniqueFields x)) (entityUniques ent)
+                           , T.intercalate "," $ map (escape . snd) (NEL.toList uniqs)
                            , ") DO UPDATE SET "
                            , updateVal
                            , " WHERE "
@@ -321,10 +328,7 @@ upsertSql' ent uniqs updateVal = T.concat
                            , " RETURNING ??"
                            ]
     where
-      wher = T.intercalate " AND " $ map singleCondition $ NEL.toList uniqs
-
-      singleCondition :: UniqueDef -> Text
-      singleCondition udef = T.intercalate " AND " (map singleClause $ map snd (uniqueFields udef))
+      wher = T.intercalate " AND " $ map (singleClause . snd) $ NEL.toList uniqs
 
       singleClause :: DBName -> Text
       singleClause field = escape (entityDB ent) <> "." <> (escape field) <> " =?"
@@ -439,8 +443,105 @@ instance PGTF.ToField P where
     toField (P (PersistObjectId _))    =
         error "Refusing to serialize a PersistObjectId to a PostgreSQL value"
 
+-- | Represent Postgres interval using NominalDiffTime
+--
+-- @since 2.11.0.0
+newtype PgInterval = PgInterval { getPgInterval :: NominalDiffTime }
+  deriving (Eq, Show)
+
+pgIntervalToBs :: PgInterval -> ByteString
+pgIntervalToBs = toStrictByteString . show . getPgInterval
+
+instance PGTF.ToField PgInterval where
+    toField (PgInterval t) = PGTF.toField t
+
+instance PGFF.FromField PgInterval where
+    fromField f mdata =
+      if PGFF.typeOid f /= PS.typoid PS.interval
+        then PGFF.returnError PGFF.Incompatible f ""
+        else case mdata of
+          Nothing  -> PGFF.returnError PGFF.UnexpectedNull f ""
+          Just dat -> case P.parseOnly (nominalDiffTime <* P.endOfInput) dat of
+            Left msg  ->  PGFF.returnError PGFF.ConversionFailed f msg
+            Right t   -> return $ PgInterval t
+
+      where
+        toPico :: Integer -> Pico
+        toPico = MkFixed
+
+        -- Taken from Database.PostgreSQL.Simple.Time.Internal.Parser
+        twoDigits :: P.Parser Int
+        twoDigits = do
+          a <- P.digit
+          b <- P.digit
+          let c2d c = ord c .&. 15
+          return $! c2d a * 10 + c2d b
+
+        -- Taken from Database.PostgreSQL.Simple.Time.Internal.Parser
+        seconds :: P.Parser Pico
+        seconds = do
+          real <- twoDigits
+          mc <- P.peekChar
+          case mc of
+            Just '.' -> do
+              t <- P.anyChar *> P.takeWhile1 P.isDigit
+              return $! parsePicos (fromIntegral real) t
+            _ -> return $! fromIntegral real
+         where
+          parsePicos :: Int64 -> B8.ByteString -> Pico
+          parsePicos a0 t = toPico (fromIntegral (t' * 10^n))
+            where n  = max 0 (12 - B8.length t)
+                  t' = B8.foldl' (\a c -> 10 * a + fromIntegral (ord c .&. 15)) a0
+                                 (B8.take 12 t)
+
+        parseSign :: P.Parser Bool
+        parseSign = P.choice [P.char '-' >> return True, return False]
+
+        -- Db stores it in [-]HHH:MM:SS.[SSSS]
+        -- For example, nominalDay is stored as 24:00:00
+        interval :: P.Parser (Bool, Int, Int, Pico)
+        interval = do
+            s  <- parseSign
+            h  <- P.decimal <* P.char ':'
+            m  <- twoDigits <* P.char ':'
+            ss <- seconds
+            if m < 60 && ss <= 60
+                then return (s, h, m, ss)
+                else fail "Invalid interval"
+
+        nominalDiffTime :: P.Parser NominalDiffTime
+        nominalDiffTime = do
+          (s, h, m, ss) <- interval
+          let pico   = ss + 60 * (fromIntegral m) + 60 * 60 * (fromIntegral (abs h))
+          return . fromRational . toRational $ if s then (-pico) else pico
+
+fromPersistValueError :: Text -- ^ Haskell type, should match Haskell name exactly, e.g. "Int64"
+                      -> Text -- ^ Database type(s), should appear different from Haskell name, e.g. "integer" or "INT", not "Int".
+                      -> PersistValue -- ^ Incorrect value
+                      -> Text -- ^ Error message
+fromPersistValueError haskellType databaseType received = T.concat
+    [ "Failed to parse Haskell type `"
+    , haskellType
+    , "`; expected "
+    , databaseType
+    , " from database, but received: "
+    , T.pack (show received)
+    , ". Potential solution: Check that your database schema matches your Persistent model definitions."
+    ]
+
+instance PersistField PgInterval where
+    toPersistValue = PersistDbSpecific . pgIntervalToBs
+    fromPersistValue x@(PersistDbSpecific bs) =
+      case P.parseOnly (P.signed P.rational <* P.char 's' <* P.endOfInput) bs of
+        Left _  -> Left $ fromPersistValueError "PgInterval" "Interval" x
+        Right i -> Right $ PgInterval i
+    fromPersistValue x = Left $ fromPersistValueError "PgInterval" "Interval" x
+
+instance PersistFieldSql PgInterval where
+  sqlType _ = SqlOther "interval"
+
 newtype Unknown = Unknown { unUnknown :: ByteString }
-  deriving (Eq, Show, Read, Ord, Typeable)
+  deriving (Eq, Show, Read, Ord)
 
 instance PGFF.FromField Unknown where
     fromField f mdata =
@@ -476,6 +577,7 @@ builtinGetters = I.fromList
     , (k PS.time,        convertPV PersistTimeOfDay)
     , (k PS.timestamp,   convertPV (PersistUTCTime. localTimeToUTC utc))
     , (k PS.timestamptz, convertPV PersistUTCTime)
+    , (k PS.interval,    convertPV (PersistDbSpecific . pgIntervalToBs))
     , (k PS.bit,         convertPV PersistInt64)
     , (k PS.varbit,      convertPV PersistInt64)
     , (k PS.numeric,     convertPV PersistRational)
@@ -506,6 +608,7 @@ builtinGetters = I.fromList
     , (1183,             listOf PersistTimeOfDay)
     , (1115,             listOf PersistUTCTime)
     , (1185,             listOf PersistUTCTime)
+    , (1187,             listOf (PersistDbSpecific . pgIntervalToBs))
     , (1561,             listOf PersistInt64)
     , (1563,             listOf PersistInt64)
     , (1231,             listOf PersistRational)
@@ -566,15 +669,13 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
         (errs, _) -> return $ Left errs
   where
     name = entityDB entity
-    (newcols', udefs, fdefs) = mkColumns allDefs entity
+    (newcols', udefs, fdefs) = postgresMkColumns allDefs entity
     migrationText exists old''
         | not exists =
             createText newcols fdefs udspair
         | otherwise =
             let (acs, ats) =
-                    getAlters allDefs entity (newcols, udspair)
-                    -- $ excludeForeignKeys
-                    $ old'
+                    getAlters allDefs entity (newcols, udspair) old'
                 acs' = map (AlterColumn name) acs
                 ats' = map (AlterTable name) ats
             in
@@ -583,13 +684,6 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
          old' = partitionEithers old''
          newcols = filter (not . safeToRemove entity . cName) newcols'
          udspair = map udToPair udefs
-         excludeForeignKeys (xs,ys) = (map excludeForeignKey xs,ys)
-         excludeForeignKey c = case cReference c of
-           Just (_,fk) ->
-             case find (\f -> fk == foreignConstraintNameDBName f) fdefs of
-               Just _ -> c { cReference = Nothing }
-               Nothing -> c
-           Nothing -> c
             -- Check for table existence if there are no columns, workaround
             -- for https://github.com/yesodweb/persistent/issues/152
 
@@ -601,22 +695,23 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
         references =
             mapMaybe
                 (\Column { cName, cReference } ->
-                    fmap (getAddReference allDefs Nothing name cName) cReference
+                    getAddReference allDefs entity cName =<< cReference
                 )
                 newcols
-        foreignsAlt = map (mkForeignAlt name) fdefs
+        foreignsAlt = mapMaybe (mkForeignAlt entity) fdefs
 
 mkForeignAlt
-    :: DBName
+    :: EntityDef
     -> ForeignDef
-    -> AlterDB
-mkForeignAlt name fdef =
-    AlterColumn
-        name
+    -> Maybe AlterDB
+mkForeignAlt entity fdef = do
+    pure $ AlterColumn
+        tableName
         ( foreignRefTableDBName fdef
         , addReference
         )
   where
+    tableName = entityDB entity
     addReference =
         AddReference
             constraintName
@@ -631,29 +726,44 @@ mkForeignAlt name fdef =
         map escape parentfields
 
 addTable :: [Column] -> EntityDef -> AlterDB
-addTable cols entity = AddTable $ T.concat
-                       -- Lower case e: see Database.Persist.Sql.Migration
-                       [ "CREATe TABLE " -- DO NOT FIX THE CAPITALIZATION!
-                       , escape name
-                       , "("
-                       , idtxt
-                       , if null cols then "" else ","
-                       , T.intercalate "," $ map showColumn cols
-                       , ")"
-                       ]
-    where
-      name = entityDB entity
-      idtxt = case entityPrimary entity of
-                Just pdef -> T.concat [" PRIMARY KEY (", T.intercalate "," $ map (escape . fieldDB) $ compositeFields pdef, ")"]
-                Nothing   ->
-                    let defText = defaultAttribute $ fieldAttrs $ entityId entity
-                        sType = fieldSqlType $ entityId entity
-                    in  T.concat
-                            [ escape $ fieldDB (entityId entity)
-                            , maySerial sType defText
-                            , " PRIMARY KEY UNIQUE"
-                            , mayDefault defText
-                            ]
+addTable cols entity =
+    AddTable $ T.concat
+        -- Lower case e: see Database.Persist.Sql.Migration
+        [ "CREATe TABLE " -- DO NOT FIX THE CAPITALIZATION!
+        , escape name
+        , "("
+        , idtxt
+        , if null nonIdCols then "" else ","
+        , T.intercalate "," $ map showColumn nonIdCols
+        , ")"
+        ]
+  where
+    nonIdCols =
+        case entityPrimary entity of
+            Just _ ->
+                cols
+            _ ->
+                filter (\c -> cName c /= fieldDB (entityId entity) ) cols
+
+    name =
+        entityDB entity
+    idtxt =
+        case entityPrimary entity of
+            Just pdef ->
+                T.concat
+                    [ " PRIMARY KEY ("
+                    , T.intercalate "," $ map (escape . fieldDB) $ compositeFields pdef
+                    , ")"
+                    ]
+            Nothing ->
+                let defText = defaultAttribute $ fieldAttrs $ entityId entity
+                    sType = fieldSqlType $ entityId entity
+                in  T.concat
+                        [ escape $ fieldDB (entityId entity)
+                        , maySerial sType defText
+                        , " PRIMARY KEY UNIQUE"
+                        , mayDefault defText
+                        ]
 
 maySerial :: SqlType -> Maybe Text -> Text
 maySerial SqlInt64 Nothing = " SERIAL8 "
@@ -672,34 +782,39 @@ data AlterColumn
     | Default Text | NoDefault | Update' Text
     | AddReference DBName [DBName] [Text] FieldCascade
     | DropReference DBName
+    deriving Show
 
 type AlterColumn' = (DBName, AlterColumn)
 
-data AlterTable = AddUniqueConstraint DBName [DBName]
-                | DropConstraint DBName
+data AlterTable
+    = AddUniqueConstraint DBName [DBName]
+    | DropConstraint DBName
+    deriving Show
 
 data AlterDB = AddTable Text
              | AlterColumn DBName AlterColumn'
              | AlterTable DBName AlterTable
+             deriving Show
 
 -- | Returns all of the columns in the given table currently in the database.
 getColumns :: (Text -> IO Statement)
            -> EntityDef -> [Column]
            -> IO [Either Text (Either Column (DBName, [DBName]))]
 getColumns getter def cols = do
-    let sqlv=T.concat ["SELECT "
-                          ,"column_name "
-                          ,",is_nullable "
-                          ,",COALESCE(domain_name, udt_name)" -- See DOMAINS below
-                          ,",column_default "
-                          ,",numeric_precision "
-                          ,",numeric_scale "
-                          ,",character_maximum_length "
-                          ,"FROM information_schema.columns "
-                          ,"WHERE table_catalog=current_database() "
-                          ,"AND table_schema=current_schema() "
-                          ,"AND table_name=? "
-                          ,"AND column_name <> ?"]
+    let sqlv = T.concat
+            [ "SELECT "
+            , "column_name "
+            , ",is_nullable "
+            , ",COALESCE(domain_name, udt_name)" -- See DOMAINS below
+            , ",column_default "
+            , ",numeric_precision "
+            , ",numeric_scale "
+            , ",character_maximum_length "
+            , "FROM information_schema.columns "
+            , "WHERE table_catalog=current_database() "
+            , "AND table_schema=current_schema() "
+            , "AND table_name=? "
+            ]
 
 -- DOMAINS Postgres supports the concept of domains, which are data types with optional constraints.
 -- An app might make an "email" domain over the varchar type, with a CHECK that the emails are valid
@@ -710,31 +825,31 @@ getColumns getter def cols = do
     stmt <- getter sqlv
     let vals =
             [ PersistText $ unDBName $ entityDB def
-            , PersistText $ unDBName $ fieldDB (entityId def)
             ]
     cs <- with (stmtQuery stmt vals) (\src -> runConduit $ src .| helper)
-    let sqlc = T.concat ["SELECT "
-                          ,"c.constraint_name, "
-                          ,"c.column_name "
-                          ,"FROM information_schema.key_column_usage c, "
-                          ,"information_schema.table_constraints k "
-                          ,"WHERE c.table_catalog=current_database() "
-                          ,"AND c.table_catalog=k.table_catalog "
-                          ,"AND c.table_schema=current_schema() "
-                          ,"AND c.table_schema=k.table_schema "
-                          ,"AND c.table_name=? "
-                          ,"AND c.table_name=k.table_name "
-                          ,"AND c.column_name <> ? "
-                          ,"AND c.constraint_name=k.constraint_name "
-                          ,"AND NOT k.constraint_type IN ('PRIMARY KEY', 'FOREIGN KEY') "
-                          ,"ORDER BY c.constraint_name, c.column_name"]
+    let sqlc = T.concat
+            [ "SELECT "
+            , "c.constraint_name, "
+            , "c.column_name "
+            , "FROM information_schema.key_column_usage c, "
+            , "information_schema.table_constraints k "
+            , "WHERE c.table_catalog=current_database() "
+            , "AND c.table_catalog=k.table_catalog "
+            , "AND c.table_schema=current_schema() "
+            , "AND c.table_schema=k.table_schema "
+            , "AND c.table_name=? "
+            , "AND c.table_name=k.table_name "
+            , "AND c.constraint_name=k.constraint_name "
+            , "AND NOT k.constraint_type IN ('PRIMARY KEY', 'FOREIGN KEY') "
+            , "ORDER BY c.constraint_name, c.column_name"
+            ]
 
     stmt' <- getter sqlc
 
     us <- with (stmtQuery stmt' vals) (\src -> runConduit $ src .| helperU)
     return $ cs ++ us
   where
-    refMap = Map.fromList $ foldl ref [] cols
+    refMap = Map.fromList $ foldl' ref [] cols
         where ref rs c = case cReference c of
                   Nothing -> rs
                   (Just r) -> (unDBName $ cName c, r) : rs
@@ -767,7 +882,7 @@ safeToRemove :: EntityDef -> DBName -> Bool
 safeToRemove def (DBName colName)
     = any (elem "SafeToRemove" . fieldAttrs)
     $ filter ((== DBName colName) . fieldDB)
-    $ entityFields def
+    $ keyAndEntityFields def
 
 getAlters :: [EntityDef]
           -> EntityDef
@@ -777,9 +892,10 @@ getAlters :: [EntityDef]
 getAlters defs def (c1, u1) (c2, u2) =
     (getAltersC c1 c2, getAltersU u1 u2)
   where
-    getAltersC [] old = map (\x -> (cName x, Drop $ safeToRemove def $ cName x)) old
+    getAltersC [] old =
+        map (\x -> (cName x, Drop $ safeToRemove def $ cName x)) old
     getAltersC (new:news) old =
-        let (alters, old') = findAlters defs (entityDB def) new old
+        let (alters, old') = findAlters defs def new old
          in alters ++ getAltersC news old'
 
     getAltersU
@@ -922,17 +1038,29 @@ sqlTypeEq :: SqlType -> SqlType -> Bool
 sqlTypeEq x y =
     T.toCaseFold (showSqlType x) == T.toCaseFold (showSqlType y)
 
-findAlters :: [EntityDef] -> DBName -> Column -> [Column] -> ([AlterColumn'], [Column])
-findAlters defs _tablename col@(Column name isNull sqltype def _defConstraintName _maxLen ref) cols =
-    case filter (\c -> cName c == name) cols of
-        [] -> ([(name, Add' col)], cols)
-        Column _ isNull' sqltype' def' _defConstraintName' _maxLen' ref':_ ->
+findAlters
+    :: [EntityDef]
+    -- ^ The list of all entity definitions that persistent is aware of.
+    -> EntityDef
+    -- ^ The entity definition for the entity that we're working on.
+    -> Column
+    -- ^ The column that we're searching for potential alterations for.
+    -> [Column]
+    -> ([AlterColumn'], [Column])
+findAlters defs edef col@(Column name isNull sqltype def _defConstraintName _maxLen ref) cols =
+    case List.find (\c -> cName c == name) cols of
+        Nothing ->
+            ([(name, Add' col)], cols)
+        Just (Column _oldName isNull' sqltype' def' _defConstraintName' _maxLen' ref') ->
             let refDrop Nothing = []
                 refDrop (Just (_, cname)) = [(name, DropReference cname)]
                 refAdd Nothing = []
                 refAdd (Just (tname, a)) =
                     case find ((==tname) . entityDB) defs of
-                        Just refdef ->
+                        Just refdef
+                            | entityDB edef /= tname
+                            && _oldName /= fieldDB (entityId edef)
+                            ->
                             [ ( tname
                               , AddReference
                                     a
@@ -941,6 +1069,7 @@ findAlters defs _tablename col@(Column name isNull sqltype def _defConstraintNam
                                     noCascade
                               )
                             ]
+                        Just _ -> []
                         Nothing ->
                             error $ "could not find the entityDef for reftable[" ++ show tname ++ "]"
                 modRef =
@@ -948,7 +1077,9 @@ findAlters defs _tablename col@(Column name isNull sqltype def _defConstraintNam
                         then []
                         else refDrop ref' ++ refAdd ref
                 modNull = case (isNull, isNull') of
-                            (True, False) -> [(name, IsNull)]
+                            (True, False) ->  do
+                                guard $ name /= fieldDB (entityId edef)
+                                pure (name, IsNull)
                             (False, True) ->
                                 let up = case def of
                                             Nothing -> id
@@ -969,6 +1100,7 @@ findAlters defs _tablename col@(Column name isNull sqltype def _defConstraintNam
                     | otherwise = [(name, ChangeType sqltype "")]
                 modDef =
                     if def == def'
+                        || isJust (T.stripPrefix "nextval" =<< def')
                         then []
                         else case def of
                                 Nothing -> [(name, NoDefault)]
@@ -979,18 +1111,19 @@ findAlters defs _tablename col@(Column name isNull sqltype def _defConstraintNam
 -- | Get the references to be added to a table for the given column.
 getAddReference
     :: [EntityDef]
-    -> Maybe ForeignDef
-    -> DBName
+    -> EntityDef
     -> DBName
     -> (DBName, DBName)
-    -> AlterDB
-getAddReference allDefs mforeignDef table cname (s, constraintName) =
-    AlterColumn
+    -> Maybe AlterDB
+getAddReference allDefs entity cname (s, constraintName) = do
+    guard $ table /= s && cname /= fieldDB (entityId entity)
+    pure $ AlterColumn
         table
         ( s
-        , AddReference constraintName [cname] id_ (maybe noCascade foreignFieldCascade mforeignDef)
+        , AddReference constraintName [cname] id_ noCascade
         )
   where
+    table = entityDB entity
     id_ =
         fromMaybe
             (error $ "Could not find ID of entity " ++ show s)
@@ -1168,7 +1301,7 @@ data PostgresConf = PostgresConf
       -- ^ The connection string.
     , pgPoolSize :: Int
       -- ^ How many connections should be held in the connection pool.
-    } deriving (Show, Read, Data, Typeable)
+    } deriving (Show, Read, Data)
 
 instance FromJSON PostgresConf where
     parseJSON v = modifyFailure ("Persistent: error loading PostgreSQL conf: " ++) $
@@ -1223,6 +1356,38 @@ instance PersistConfig PostgresConf where
         addPass     = maybeAddParam "password" "PGPASS"
         addDatabase = maybeAddParam "dbname"   "PGDATABASE"
 
+refName :: DBName -> DBName -> DBName
+refName (DBName table) (DBName column) =
+    let overhead = T.length $ T.concat ["_", "_fkey"]
+        (fromTable, fromColumn) = shortenNames overhead (T.length table, T.length column)
+    in DBName $ T.concat [T.take fromTable table, "_", T.take fromColumn column, "_fkey"]
+
+    where
+
+      -- Postgres automatically truncates too long foreign keys to a combination of
+      -- truncatedTableName + "_" + truncatedColumnName + "_fkey"
+      -- This works fine for normal use cases, but it creates an issue for Persistent
+      -- Because after running the migrations, Persistent sees the truncated foreign key constraint
+      -- doesn't have the expected name, and suggests that you migrate again
+      -- To workaround this, we copy the Postgres truncation approach before sending foreign key constraints to it.
+      --
+      -- I believe this will also be an issue for extremely long table names,
+      -- but it's just much more likely to exist with foreign key constraints because they're usually tablename * 2 in length
+
+      -- Approximation of the algorithm Postgres uses to truncate identifiers
+      -- See makeObjectName https://github.com/postgres/postgres/blob/5406513e997f5ee9de79d4076ae91c04af0c52f6/src/backend/commands/indexcmds.c#L2074-L2080
+      shortenNames :: Int -> (Int, Int) -> (Int, Int)
+      shortenNames overhead (x, y)
+           | x + y + overhead <= maximumIdentifierLength = (x, y)
+           | x > y = shortenNames overhead (x - 1, y)
+           | otherwise = shortenNames overhead (x, y - 1)
+
+-- | Postgres' default maximum identifier length in bytes
+-- (You can re-compile Postgres with a new limit, but I'm assuming that virtually noone does this).
+-- See https://www.postgresql.org/docs/11/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS
+maximumIdentifierLength :: Int
+maximumIdentifierLength = 63
+
 udToPair :: UniqueDef -> (DBName, [DBName])
 udToPair ud = (uniqueDBName ud, map snd $ uniqueFields ud)
 
@@ -1245,7 +1410,7 @@ mockMigrate allDefs _ entity = fmap (fmap $ map showAlterDb) $ do
                  in  acs' ++ ats'
        where
          old' = partitionEithers old''
-         (newcols', udefs, fdefs) = mkColumns allDefs entity
+         (newcols', udefs, fdefs) = postgresMkColumns allDefs entity
          newcols = filter (not . safeToRemove entity . cName) newcols'
          udspair = map udToPair udefs
             -- Check for table existence if there are no columns, workaround
@@ -1259,10 +1424,10 @@ mockMigrate allDefs _ entity = fmap (fmap $ map showAlterDb) $ do
         references =
             mapMaybe
                 (\Column { cName, cReference } ->
-                    fmap (getAddReference allDefs Nothing name cName) cReference
+                    getAddReference allDefs entity cName =<< cReference
                 )
-                $ newcols
-        foreignsAlt = map (mkForeignAlt name) fdefs
+                newcols
+        foreignsAlt = mapMaybe (mkForeignAlt entity) fdefs
 
 -- | Mock a migration even when the database is not present.
 -- This function performs the same functionality of 'printMigration'
@@ -1345,3 +1510,10 @@ migrateEnableExtension extName = WriterT $ WriterT $ do
   if res == [Single 0]
     then return (((), []) , [(False, "CREATe EXTENSION \"" <> extName <> "\"")])
     else return (((), []), [])
+
+postgresMkColumns :: [EntityDef] -> EntityDef -> ([Column], [UniqueDef], [ForeignDef])
+postgresMkColumns allDefs t =
+    mkColumns allDefs t (emptyBackendSpecificOverrides
+        { backendSpecificForeignKeyName = Just refName
+        }
+    )

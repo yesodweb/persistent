@@ -20,8 +20,7 @@ import qualified Data.Text as T
 import Data.Time
 import Test.QuickCheck
 
--- FIXME: should probably be used?
--- import qualified ArrayAggTest
+import qualified ArrayAggTest
 import qualified CompositeTest
 import qualified ForeignKey
 import qualified CustomPersistFieldTest
@@ -36,8 +35,10 @@ import qualified JSONTest
 import qualified LargeNumberTest
 import qualified MaxLenTest
 import qualified MigrationColumnLengthTest
+import qualified MigrationTest
 import qualified MigrationOnlyTest
 import qualified MpsNoPrefixTest
+import qualified MpsCustomPrefixTest
 import qualified PersistentTest
 import qualified PersistUniqueTest
 import qualified PrimaryTest
@@ -51,6 +52,8 @@ import qualified TreeTest
 import qualified UniqueTest
 import qualified UpsertTest
 import qualified CustomConstraintTest
+import qualified LongIdentifierTest
+import qualified PgIntervalTest
 
 type Tuple = (,)
 
@@ -103,6 +106,7 @@ main = do
     mapM_ setup
       [ PersistentTest.testMigrate
       , PersistentTest.noPrefixMigrate
+      , PersistentTest.customPrefixMigrate
       , PersistentTest.treeMigrate
       , EmbedTest.embedMigrate
       , EmbedOrderTest.embedOrderMigrate
@@ -119,13 +123,16 @@ main = do
       , CustomPrimaryKeyReferenceTest.migration
       , MigrationColumnLengthTest.migration
       , TransactionLevelTest.migration
+      , LongIdentifierTest.migration
       , ForeignKey.compositeMigrate
+      , MigrationTest.migrationMigrate
+      , PgIntervalTest.pgIntervalMigrate
       ]
     PersistentTest.cleanDB
 
   hspec $ do
-    RenameTest.specsWith db
-    DataTypeTest.specsWith db
+    RenameTest.specsWith runConnAssert
+    DataTypeTest.specsWith runConnAssert
         (Just (runMigrationSilent dataTypeMigrate))
         [ TestFn "text" dataTypeTableText
         , TestFn "textMaxLen" dataTypeTableTextMaxLen
@@ -144,42 +151,47 @@ main = do
         [ ("pico", dataTypeTablePico) ]
         dataTypeTableDouble
     HtmlTest.specsWith
-        db
+        runConnAssert
         (Just (runMigrationSilent HtmlTest.htmlMigrate))
-    EmbedTest.specsWith db
-    EmbedOrderTest.specsWith db
-    LargeNumberTest.specsWith db
-    ForeignKey.specsWith db
-    UniqueTest.specsWith db
-    MaxLenTest.specsWith db
-    Recursive.specsWith db
-    SumTypeTest.specsWith db (Just (runMigrationSilent SumTypeTest.sumTypeMigrate))
-    MigrationOnlyTest.specsWith db
+
+    EmbedTest.specsWith runConnAssert
+    EmbedOrderTest.specsWith runConnAssert
+    LargeNumberTest.specsWith runConnAssert
+    ForeignKey.specsWith runConnAssert
+    UniqueTest.specsWith runConnAssert
+    MaxLenTest.specsWith runConnAssert
+    Recursive.specsWith runConnAssert
+    SumTypeTest.specsWith runConnAssert (Just (runMigrationSilent SumTypeTest.sumTypeMigrate))
+    MigrationTest.specsWith runConnAssert
+    MigrationOnlyTest.specsWith runConnAssert
+
         (Just
             $ runMigrationSilent MigrationOnlyTest.migrateAll1
             >> runMigrationSilent MigrationOnlyTest.migrateAll2
         )
-    PersistentTest.specsWith db
-    ReadWriteTest.specsWith db
-    PersistentTest.filterOrSpecs db
-    RawSqlTest.specsWith db
+    PersistentTest.specsWith runConnAssert
+    ReadWriteTest.specsWith runConnAssert
+    PersistentTest.filterOrSpecs runConnAssert
+    RawSqlTest.specsWith runConnAssert
     UpsertTest.specsWith
-        db
+        runConnAssert
         UpsertTest.Don'tUpdateNull
         UpsertTest.UpsertPreserveOldKey
 
-    MpsNoPrefixTest.specsWith db
-    EmptyEntityTest.specsWith db (Just (runMigrationSilent EmptyEntityTest.migration))
-    CompositeTest.specsWith db
-    TreeTest.specsWith db
-    PersistUniqueTest.specsWith db
-    PrimaryTest.specsWith db
-    CustomPersistFieldTest.specsWith db
-    CustomPrimaryKeyReferenceTest.specsWith db
-    MigrationColumnLengthTest.specsWith db
+    MpsNoPrefixTest.specsWith runConnAssert
+    MpsCustomPrefixTest.specsWith runConnAssert
+    EmptyEntityTest.specsWith runConnAssert (Just (runMigrationSilent EmptyEntityTest.migration))
+    CompositeTest.specsWith runConnAssert
+    TreeTest.specsWith runConnAssert
+    PersistUniqueTest.specsWith runConnAssert
+    PrimaryTest.specsWith runConnAssert
+    CustomPersistFieldTest.specsWith runConnAssert
+    CustomPrimaryKeyReferenceTest.specsWith runConnAssert
+    MigrationColumnLengthTest.specsWith runConnAssert
     EquivalentTypeTestPostgres.specs
-    TransactionLevelTest.specsWith db
+    TransactionLevelTest.specsWith runConnAssert
+    LongIdentifierTest.specsWith runConnAssert
     JSONTest.specs
-    CustomConstraintTest.specs db
-    -- FIXME: not used, probably should?
-    -- ArrayAggTest.specs db
+    CustomConstraintTest.specs
+    PgIntervalTest.specs
+    ArrayAggTest.specs

@@ -22,7 +22,7 @@ module Database.Persist.Class.PersistEntity
     , toPersistValueEnum, fromPersistValueEnum
     ) where
 
-import Data.Aeson (ToJSON (..), FromJSON (..), fromJSON, object, (.:), (.=), Value (Object))
+import Data.Aeson (ToJSON (..), withObject, FromJSON (..), fromJSON, object, (.:), (.=), Value (Object))
 import qualified Data.Aeson.Parser as AP
 import Data.Aeson.Types (Parser,Result(Error,Success))
 import Data.Aeson.Text (encodeToTextBuilder)
@@ -35,7 +35,6 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy as LT
 import qualified Data.Text.Lazy.Builder as TB
-import Data.Typeable (Typeable)
 import GHC.Generics
 
 import Database.Persist.Class.PersistField
@@ -200,7 +199,6 @@ data FilterValue typ where
 data Entity record =
     Entity { entityKey :: Key record
            , entityVal :: record }
-    deriving Typeable
 
 deriving instance (Generic (Key record), Generic record) => Generic (Entity record)
 deriving instance (Eq (Key record), Eq record) => Eq (Entity record)
@@ -263,8 +261,8 @@ keyValueEntityFromJSON _ = fail "keyValueEntityFromJSON: not an object"
 -- @
 entityIdToJSON :: (PersistEntity record, ToJSON record) => Entity record -> Value
 entityIdToJSON (Entity key value) = case toJSON value of
-    Object o -> Object $ HM.insert "id" (toJSON key) o
-    x -> x
+        Object o -> Object $ HM.insert "id" (toJSON key) o
+        x -> x
 
 -- | Predefined @parseJSON@. The input JSON looks like
 -- @{"id": 1, "name": ...}@.
@@ -276,8 +274,14 @@ entityIdToJSON (Entity key value) = case toJSON value of
 --     parseJSON = entityIdFromJSON
 -- @
 entityIdFromJSON :: (PersistEntity record, FromJSON record) => Value -> Parser (Entity record)
-entityIdFromJSON value@(Object o) = Entity <$> o .: "id" <*> parseJSON value
-entityIdFromJSON _ = fail "entityIdFromJSON: not an object"
+entityIdFromJSON = withObject "entityIdFromJSON" $ \o -> do
+    val <- parseJSON (Object o)
+    k <- case keyFromRecordM of
+        Nothing ->
+            o .: "id"
+        Just func ->
+            pure $ func val
+    pure $ Entity k val
 
 instance (PersistEntity record, PersistField record, PersistField (Key record))
   => PersistField (Entity record) where

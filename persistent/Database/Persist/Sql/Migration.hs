@@ -28,6 +28,7 @@ import Data.Text (Text, unpack, snoc, isPrefixOf, pack)
 import qualified Data.Text.IO
 import System.IO
 import System.IO.Silently (hSilence)
+import GHC.Stack
 
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw
@@ -41,7 +42,7 @@ safeSql = allSql . filter (not . fst)
 
 -- | Given a 'Migration', this parses it and returns either a list of
 -- errors associated with the migration or a list of migrations to do.
-parseMigration :: MonadIO m => Migration -> ReaderT SqlBackend m (Either [Text] CautiousMigration)
+parseMigration :: (HasCallStack, MonadIO m) => Migration -> ReaderT SqlBackend m (Either [Text] CautiousMigration)
 parseMigration =
     liftIOReader . liftM go . runWriterT . execWriterT
   where
@@ -52,7 +53,7 @@ parseMigration =
 
 -- | Like 'parseMigration', but instead of returning the value in an
 -- 'Either' value, it calls 'error' on the error values.
-parseMigration' :: MonadIO m => Migration -> ReaderT SqlBackend m (CautiousMigration)
+parseMigration' :: (HasCallStack, MonadIO m) => Migration -> ReaderT SqlBackend m (CautiousMigration)
 parseMigration' m = do
   x <- parseMigration m
   case x of
@@ -60,25 +61,26 @@ parseMigration' m = do
       Right sql -> return sql
 
 -- | Prints a migration.
-printMigration :: MonadIO m => Migration -> ReaderT SqlBackend m ()
+printMigration :: (HasCallStack, MonadIO m) => Migration -> ReaderT SqlBackend m ()
 printMigration m = showMigration m
                >>= mapM_ (liftIO . Data.Text.IO.putStrLn)
 
 -- | Convert a 'Migration' to a list of 'Text' values corresponding to their
 -- 'Sql' statements.
-showMigration :: MonadIO m => Migration -> ReaderT SqlBackend m [Text]
+showMigration :: (HasCallStack, MonadIO m) => Migration -> ReaderT SqlBackend m [Text]
 showMigration m = map (flip snoc ';') `liftM` getMigration m
 
 -- | Return all of the 'Sql' values associated with the given migration.
 -- Calls 'error' if there's a parse error on any migration.
-getMigration :: MonadIO m => Migration -> ReaderT SqlBackend m [Sql]
+getMigration :: (MonadIO m, HasCallStack) => Migration -> ReaderT SqlBackend m [Sql]
 getMigration m = do
   mig <- parseMigration' m
   return $ allSql mig
 
 -- | Runs a migration. If the migration fails to parse or if any of the
--- migrations are unsafe, then this calls 'error' to halt the program.
+-- migrations are unsafe, then this throws a 'PersistUnsafeMigrationException'.
 runMigration :: MonadIO m
+
              => Migration
              -> ReaderT SqlBackend m ()
 runMigration m = runMigration' m False >> return ()
@@ -113,23 +115,15 @@ runMigrationSilent m = withRunInIO $ \run ->
 -- to parse, or there are any unsafe migrations, then this will error at
 -- runtime. This returns a list of the migrations that were executed.
 runMigration'
-    :: MonadIO m
+    :: (HasCallStack, MonadIO m)
     => Migration
     -> Bool -- ^ is silent?
     -> ReaderT SqlBackend m [Text]
 runMigration' m silent = do
     mig <- parseMigration' m
     if any fst mig
-        then liftIO . throwIO . PersistError . pack $ concat
-                 [ "\n\nDatabase migration: manual intervention required.\n"
-                 , "The unsafe actions are prefixed by '***' below:\n\n"
-                 , unlines $ map displayMigration mig
-                 ]
+        then liftIO . throwIO $ PersistUnsafeMigrationException mig
         else mapM (executeMigrate silent) $ sortMigrations $ safeSql mig
-  where
-    displayMigration :: (Bool, Sql) -> String
-    displayMigration (True,  s) = "*** " ++ unpack s ++ ";"
-    displayMigration (False, s) = "    " ++ unpack s ++ ";"
 
 -- | Like 'runMigration', but this will perform the unsafe database
 -- migrations instead of erroring out.
@@ -142,12 +136,12 @@ runMigrationUnsafe m = runMigrationUnsafe' False m >> return ()
 -- executed instead of printing them to stderr.
 --
 -- @since 2.10.2
-runMigrationUnsafeQuiet :: MonadIO m
+runMigrationUnsafeQuiet :: (HasCallStack, MonadIO m)
                         => Migration
                         -> ReaderT SqlBackend m [Text]
 runMigrationUnsafeQuiet = runMigrationUnsafe' True
 
-runMigrationUnsafe' :: MonadIO m
+runMigrationUnsafe' :: (HasCallStack, MonadIO m)
                     => Bool
                     -> Migration
                     -> ReaderT SqlBackend m [Text]

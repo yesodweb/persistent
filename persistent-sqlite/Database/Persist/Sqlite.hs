@@ -45,6 +45,8 @@ module Database.Persist.Sqlite
     , withRawSqlitePoolInfo_
     ) where
 
+import qualified Debug.Trace as Debug
+
 import Control.Concurrent (threadDelay)
 import qualified Control.Exception as E
 import Control.Monad (forM_)
@@ -391,12 +393,16 @@ showSqlType SqlBlob = "BLOB"
 showSqlType SqlBool = "BOOLEAN"
 showSqlType (SqlOther t) = t
 
-migrate' :: [EntityDef]
-         -> (Text -> IO Statement)
-         -> EntityDef
-         -> IO (Either [Text] [(Bool, Text)])
+sqliteMkColumns :: [EntityDef] -> EntityDef -> ([Column], [UniqueDef], [ForeignDef])
+sqliteMkColumns allDefs t = mkColumns allDefs t emptyBackendSpecificOverrides
+
+migrate'
+    :: [EntityDef]
+    -> (Text -> IO Statement)
+    -> EntityDef
+    -> IO (Either [Text] [(Bool, Text)])
 migrate' allDefs getter val = do
-    let (cols, uniqs, fdefs) = mkColumns allDefs val
+    let (cols, uniqs, fdefs) = sqliteMkColumns allDefs val
     let newSql = mkCreateTable False def (filter (not . safeToRemove val . cName) cols, uniqs, fdefs)
     stmt <- getter "SELECT sql FROM sqlite_master WHERE type='table' AND name=?"
     oldSql' <- with (stmtQuery stmt [PersistText $ unDBName table])
@@ -480,17 +486,13 @@ getCopyTable allDefs getter def = do
     let newCols = filter (not . safeToRemove def) $ map cName cols
     let common = filter (`elem` oldCols) newCols
     return [ (False, tmpSql)
-           , (False, copyToTemp $ addIdCol common)
+           , (False, copyToTemp common)
            , (common /= filter (not . safeToRemove def) oldCols, dropOld)
            , (False, newSql)
-           , (False, copyToFinal $ addIdCol newCols)
+           , (False, copyToFinal newCols)
            , (False, dropTmp)
            ]
   where
-    addIdCol = case entityPrimary def of
-        Nothing -> (fieldDB (entityId def) :)
-        Just _ -> id
-
     getCols = do
         x <- CL.head
         case x of
@@ -501,7 +503,7 @@ getCopyTable allDefs getter def = do
             Just y -> error $ "Invalid result from PRAGMA table_info: " ++ show y
     table = entityDB def
     tableTmp = DBName $ unDBName table <> "_backup"
-    (cols, uniqs, fdef) = mkColumns allDefs def
+    (cols, uniqs, fdef) = sqliteMkColumns allDefs def
     cols' = filter (not . safeToRemove def . cName) cols
     newSql = mkCreateTable False def (cols', uniqs, fdef)
     tmpSql = mkCreateTable True def { entityDB = tableTmp } (cols', uniqs, [])
@@ -554,13 +556,15 @@ mkCreateTable isTemp entity (cols, uniqs, fdefs) =
         , escape $ fieldDB (entityId entity)
         , " "
         , showSqlType $ fieldSqlType $ entityId entity
-        ," PRIMARY KEY"
+        , " PRIMARY KEY"
         , mayDefault $ defaultAttribute $ fieldAttrs $ entityId entity
-        , T.concat $ map (sqlColumn isTemp) cols
+        , T.concat $ map (sqlColumn isTemp) nonIdCols
         , T.concat $ map sqlUnique uniqs
         , T.concat $ map sqlForeign fdefs
         , ")"
         ]
+  where
+    nonIdCols = filter (\c -> cName c /= fieldDB (entityId entity)) cols
 
 mayDefault :: Maybe Text -> Text
 mayDefault def = case def of

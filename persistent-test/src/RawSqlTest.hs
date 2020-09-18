@@ -114,7 +114,8 @@ specsWith runDb = describe "rawSql" $ do
                              , "LEFT OUTER JOIN ", pet
                              , " ON ", person, ".", escape "id"
                              , " = ", pet, ".", escape "ownerId"
-                             , " ORDER BY ", person, ".", escape "name"]
+                             , " ORDER BY ", person, ".", escape "name"
+                             , ", ", pet, ".", escape "id" ]
             person = escape "Person"
             pet    = escape "Pet"
         ret <- rawSql query []
@@ -130,6 +131,12 @@ specsWith runDb = describe "rawSql" $ do
     it "commit/rollback" $ do
         caseCommitRollback runDb
         runDb cleanDB
+
+    it "queries with large number of results" $ runDb $ do
+        -- max size of a GHC tuple is 62, but Eq instances currently only exist up to 15-tuples
+        -- See https://gitlab.haskell.org/ghc/ghc/-/merge_requests/3369
+        ret <- rawSql "SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?" $ map PersistInt64 [1..15]
+        liftIO $ ret @?= [(Single (1::Int), Single (2::Int), Single (3::Int), Single (4::Int), Single (5::Int), Single (6::Int), Single (7::Int), Single (8::Int), Single (9::Int), Single (10::Int), Single (11::Int), Single (12::Int), Single (13::Int), Single (14::Int), Single (15::Int))]
 
 getEscape :: MonadReader SqlBackend m => m (Text -> Text)
 getEscape = asks ((. DBName) . connEscapeName)

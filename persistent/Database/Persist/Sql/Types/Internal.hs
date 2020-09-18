@@ -1,5 +1,4 @@
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE RankNTypes #-}
 module Database.Persist.Sql.Types.Internal
     ( HasPersistBackend (..)
@@ -24,7 +23,7 @@ module Database.Persist.Sql.Types.Internal
 
 import Data.List.NonEmpty (NonEmpty(..))
 import Control.Monad.IO.Class (MonadIO (..))
-import Control.Monad.Logger (LogSource, LogLevel)
+import Control.Monad.Logger (LogSource, LogLevel, Loc)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, ask)
 import Data.Acquire (Acquire)
@@ -35,8 +34,6 @@ import Data.Map (Map)
 import Data.Monoid ((<>))
 import Data.String (IsString)
 import Data.Text (Text)
-import Data.Typeable (Typeable)
-import Language.Haskell.TH.Syntax (Loc)
 import System.Log.FastLogger (LogStr)
 
 import Database.Persist.Class
@@ -102,9 +99,9 @@ data SqlBackend = SqlBackend
     -- performing an insert against the database.
     , connInsertManySql :: Maybe (EntityDef -> [[PersistValue]] -> InsertSqlResult)
     -- ^ SQL for inserting many rows and returning their primary keys, for
-    -- backends that support this functioanlity. If 'Nothing', rows will be
+    -- backends that support this functionality. If 'Nothing', rows will be
     -- inserted one-at-a-time using 'connInsertSql'.
-    , connUpsertSql :: Maybe (EntityDef -> NonEmpty UniqueDef -> Text -> Text)
+    , connUpsertSql :: Maybe (EntityDef -> NonEmpty (HaskellName,DBName) -> Text -> Text)
     -- ^ Some databases support performing UPSERT _and_ RETURN entity
     -- in a single call.
     --
@@ -182,7 +179,6 @@ data SqlBackend = SqlBackend
     --
     -- @since 2.9.0
     }
-    deriving Typeable
 
 instance HasPersistBackend SqlBackend where
     type BaseBackend SqlBackend = SqlBackend
@@ -194,8 +190,7 @@ instance IsPersistBackend SqlBackend where
 -- | An SQL backend which can only handle read queries
 --
 -- The constructor was exposed in 2.10.0.
-newtype SqlReadBackend = SqlReadBackend { unSqlReadBackend :: SqlBackend }
-    deriving Typeable
+newtype SqlReadBackend = SqlReadBackend { unSqlReadBackend :: SqlBackend } 
 
 instance HasPersistBackend SqlReadBackend where
     type BaseBackend SqlReadBackend = SqlBackend
@@ -208,7 +203,6 @@ instance IsPersistBackend SqlReadBackend where
 --
 -- The constructor was exposed in 2.10.0
 newtype SqlWriteBackend = SqlWriteBackend { unSqlWriteBackend :: SqlBackend }
-    deriving Typeable
 
 instance HasPersistBackend SqlWriteBackend where
     type BaseBackend SqlWriteBackend = SqlBackend

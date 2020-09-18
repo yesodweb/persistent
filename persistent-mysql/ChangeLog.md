@@ -1,5 +1,9 @@
 # Changelog for persistent-mysql
 
+## (Unreleased) 2.10.3
+
+* Compatibility with latest persistent
+
 ## 2.10.2.3
 
 * Fix issue with multiple foreign keys on single column. [#1025](https://github.com/yesodweb/persistent/pull/1025)
