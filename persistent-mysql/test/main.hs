@@ -44,6 +44,7 @@ import qualified PersistUniqueTest
 import qualified RawSqlTest
 import qualified ReadWriteTest
 import qualified Recursive
+-- TODO: can't use this as MySQL can't do DEFAULT CURRENT_DATE
 import qualified RenameTest
 import qualified SumTypeTest
 import qualified TransactionLevelTest
@@ -98,7 +99,7 @@ instance Arbitrary (DataTypeTableGeneric backend) where
      <*> (truncateTimeOfDay =<< arbitrary) -- timeFrac
      <*> (truncateUTCTime   =<< arbitrary) -- utcFrac
 
-setup :: MonadUnliftIO m => Migration -> ReaderT SqlBackend m ()
+setup :: (HasCallStack, MonadUnliftIO m) => Migration -> ReaderT SqlBackend m ()
 setup migration = do
   printMigration migration
   _ <- runMigrationSilent migration
@@ -131,7 +132,8 @@ main = do
     PersistentTest.cleanDB
 
   hspec $ do
-    RenameTest.specsWith db
+    xdescribe "This is pending on MySQL because you can't have DEFAULT CURRENT_DATE" $ do
+        RenameTest.specsWith db
     DataTypeTest.specsWith
         db
         (Just (runMigrationSilent dataTypeMigrate))

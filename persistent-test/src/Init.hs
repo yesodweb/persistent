@@ -93,7 +93,7 @@ import Data.Int (Int32, Int64)
 asIO :: IO a -> IO a
 asIO a = a
 
-(@/=), (@==), (==@) :: (Eq a, Show a, MonadIO m) => a -> a -> m ()
+(@/=), (@==), (==@) :: (HasCallStack, Eq a, Show a, MonadIO m) => a -> a -> m ()
 infix 1 @/= --, /=@
 actual @/= expected = liftIO $ assertNotEqual "" expected actual
 
@@ -106,7 +106,7 @@ expected /=@ actual = liftIO $ assertNotEqual "" expected actual
 -}
 
 
-assertNotEqual :: (Eq a, Show a) => String -> a -> a -> Assertion
+assertNotEqual :: (Eq a, Show a, HasCallStack) => String -> a -> a -> Assertion
 assertNotEqual preface expected actual =
   unless (actual /= expected) (assertFailure msg)
   where msg = (if null preface then "" else preface ++ "\n") ++
