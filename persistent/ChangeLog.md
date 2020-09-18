@@ -28,7 +28,7 @@
   * `Loc` is now imported from `monad-logger` as opposed to `template-haskell`. Removes `template-haskell` as an explicit dependency.
 * [#1114](https://github.com/yesodweb/persistent/pull/1114)
   * Remove unnecessary deriving of `Typeable`.
-* [#]()
+* [#1127](https://github.com/yesodweb/persistent/pull/1127)
   * Remove deriving of `Show` for uniques. Users that need a `Show` instance can put a standalone deriving instance:
 
     ```haskell
