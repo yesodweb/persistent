@@ -19,7 +19,11 @@ KeyTable
     deriving Eq Show
 
 IdTable
-    Id   Day default=NOW()
+    -- this used to have a default=CURRENT_DATE, but the test that uses it
+    -- specifies that there is no default on this column. the default is
+    -- failing MySQL and sqlite tests since they don't have shared overlap on
+    -- an appropriate default for a date.
+    Id   Day
     name Text
     -- This was added to test the ability to break a cycle
     -- getting rid of the Maybe should be a compilation failure
