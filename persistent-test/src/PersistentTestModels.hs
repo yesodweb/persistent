@@ -6,6 +6,7 @@ module PersistentTestModels where
 
 import Data.Aeson
 
+import Data.Proxy
 import Test.QuickCheck
 import Database.Persist.Sql
 import Database.Persist.TH
@@ -220,9 +221,11 @@ instance (PersistEntity a) => PersistEntity (ReverseFieldOrder a) where
     keyFromValues = fmap RFOKey . fromPersistValue . head
     keyToValues   = (:[]) . toPersistValue . unRFOKey
 
-    entityDef = revFields . entityDef . liftM unRFO
-        where
-          revFields ed = ed { entityFields = reverse (entityFields ed) }
+    entityDef = revFields . entityDef . unRfoProxy
+      where
+        unRfoProxy :: proxy (ReverseFieldOrder a) -> Proxy a
+        unRfoProxy _ = Proxy
+        revFields ed = ed { entityFields = reverse (entityFields ed) }
 
     toPersistFields = reverse . toPersistFields . unRFO
     newtype EntityField (ReverseFieldOrder a) b = EFRFO {unEFRFO :: EntityField a b}

@@ -71,7 +71,7 @@ class ( PersistField (Key record), ToJSON (Key record), FromJSON (Key record)
     persistIdField :: EntityField record (Key record)
 
     -- | Retrieve the 'EntityDef' meta-data for the record.
-    entityDef :: Monad m => m record -> EntityDef
+    entityDef :: proxy record -> EntityDef
 
     -- | An 'EntityField' is parameterised by the Haskell record it belongs to
     -- and the additional type of that field.
