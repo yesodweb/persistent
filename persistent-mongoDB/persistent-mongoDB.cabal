@@ -22,12 +22,12 @@ library
     build-depends:   base               >= 4.8 && < 5
                    , persistent         >= 2.8   && < 3
                    , aeson              >= 1.0
-                   , bson               >= 0.3.2   && < 0.4
+                   , bson               >= 0.3.2   && < 0.5
                    , bytestring
                    , cereal             >= 0.5
                    , conduit            >= 1.2
                    , http-api-data      >= 0.3.7     && < 0.5
-                   , mongoDB            >= 2.3       && < 2.7
+                   , mongoDB            >= 2.3       && < 2.8
                    , network            >= 2.6
                    , path-pieces        >= 0.2
                    , resource-pool      >= 0.2       && < 0.3
