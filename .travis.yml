@@ -33,6 +33,9 @@ matrix:
   - env: BUILD=stack ARGS="--resolver lts-11 --stack-yaml stack_lts-12.yaml"
   - env: BUILD=stack ARGS="--resolver lts-12 --stack-yaml stack_lts-12.yaml"
   - env: BUILD=stack ARGS="--resolver lts-14"
+  - env: BUILD=stack ARGS="--resolver lts-15"
+  - env: BUILD=stack ARGS="--resolver lts-16"
+
   # Nightly builds are allowed to fail
   - env: BUILD=stack ARGS="--resolver nightly --stack-yaml stack-nightly.yaml"
     compiler: ": #stack nightly"
