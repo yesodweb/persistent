@@ -48,6 +48,9 @@ class (PersistCore backend, PersistStoreRead backend) => PersistQueryRead backen
     count :: (MonadIO m, PersistRecordBackend record backend)
           => [Filter record] -> ReaderT backend m Int
 
+    -- | Check if there is at least one record fulfilling the given criterien.
+    --
+    -- @since 2.11
     exists :: (MonadIO m, PersistRecordBackend record backend)
            => [Filter record] -> ReaderT backend m Bool
 
