@@ -55,6 +55,26 @@ instance PersistQueryRead SqlBackend where
       where
         t = entityDef $ dummyFromFilts filts
 
+    exists filts = do
+        conn <- ask
+        let wher = if null filts
+                    then ""
+                    else filterClause False conn filts
+        let sql = mconcat
+                [ "SELECT EXISTS(SELECT 1 FROM "
+                , connEscapeName conn $ entityDB t
+                , wher
+                , ")"
+                ]
+        withRawQuery sql (getFiltsValues conn filts) $ do
+            mm <- CL.head
+            case mm of
+              Just [PersistBool b] -> return b
+              Just xs -> error $ "count:invalid sql  return xs["++show xs++"] sql["++show sql++"]"
+              Nothing -> error $ "count:invalid sql returned nothing sql["++show sql++"]"
+      where
+        t = entityDef $ dummyFromFilts filts
+
     selectSourceRes filts opts = do
         conn <- ask
         srcRes <- rawQueryRes (sql conn) (getFiltsValues conn filts)
@@ -127,10 +147,12 @@ instance PersistQueryRead SqlBackend where
                 Left err -> error $ "selectKeysImpl: keyFromValues failed" <> show err
 instance PersistQueryRead SqlReadBackend where
     count filts = withReaderT persistBackend $ count filts
+    exists filts = withReaderT persistBackend $ exists filts
     selectSourceRes filts opts = withReaderT persistBackend $ selectSourceRes filts opts
     selectKeysRes filts opts = withReaderT persistBackend $ selectKeysRes filts opts
 instance PersistQueryRead SqlWriteBackend where
     count filts = withReaderT persistBackend $ count filts
+    exists filts = withReaderT persistBackend $ exists filts
     selectSourceRes filts opts = withReaderT persistBackend $ selectSourceRes filts opts
     selectKeysRes filts opts = withReaderT persistBackend $ selectKeysRes filts opts
 
