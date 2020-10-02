@@ -2,7 +2,7 @@
 
 ## 2.11.0
 
-* Naive implementation of `exists` function from `PersistQueryRead` type class using `count`. [#1070](https://github.com/yesodweb/persistent/pull/1070/files)
+* Naive implementation of `exists` function from `PersistQueryRead` type class using `count`. [#1131](https://github.com/yesodweb/persistent/pull/1131/files)
 
 ## 2.10.0.1
 

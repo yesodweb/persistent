@@ -4,7 +4,7 @@
 
 * [#1060](https://github.com/yesodweb/persistent/pull/1060)
   * The QuasiQuoter now supports `OnDelete` and `OnUpdate` cascade options.
-* [#1070](https://github.com/yesodweb/persistent/pull/1070)
+* [#1131](https://github.com/yesodweb/persistent/pull/1131)
   * Provide `exists` function as required by `PersistQueryRead` type class.
 
 * Remove unnecessary deriving of Typeable [#1114](https://github.com/yesodweb/persistent/pull/1114)

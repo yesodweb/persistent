@@ -36,7 +36,7 @@
     ```haskell
     deriving stock instance Show (Unique User)
     ```
-* [#1070](https://github.com/yesodweb/persistent/pull/1070)
+* [#1131](https://github.com/yesodweb/persistent/pull/1131)
   * Add an `exists` function to the `PersistQueryRead` type class.
 
 ## 2.10.5.2
