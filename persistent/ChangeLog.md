@@ -36,6 +36,8 @@
     ```haskell
     deriving stock instance Show (Unique User)
     ```
+* [#1117](https://github.com/yesodweb/persistent/issues/1117)
+  * Allow parsing UTCTimes from sqlite with the format "%F %T%Q" as well, instead of only "%FT%T%Q".
 
 ## 2.10.5.2
 
