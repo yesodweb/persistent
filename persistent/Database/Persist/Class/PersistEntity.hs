@@ -1,3 +1,4 @@
+{-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
@@ -22,6 +23,7 @@ module Database.Persist.Class.PersistEntity
     , toPersistValueEnum, fromPersistValueEnum
     ) where
 
+import GHC.TypeLits (TypeError(..))
 import Data.Aeson (ToJSON (..), withObject, FromJSON (..), fromJSON, object, (.:), (.=), Value (Object))
 import qualified Data.Aeson.Parser as AP
 import Data.Aeson.Types (Parser,Result(Error,Success))
@@ -104,6 +106,24 @@ class ( PersistField (Key record), ToJSON (Key record), FromJSON (Key record)
     -- @since 2.11.0.0
     keyFromRecordM :: Maybe (record -> Key record)
     keyFromRecordM = Nothing
+
+instance (TypeError ('Text "no"), rec ~ ()) => PersistEntity (Entity rec) where
+  type PersistEntityBackend (Entity rec) = Void
+
+  data Key (Entity rec)
+
+  keyToValues = undefined
+  keyFromValues = undefiend
+  persistIdField = undefined
+  entityDef = undefined
+  data EntityField rec a
+  persistFieldDef = undefined
+  toPersistFields = undefined
+  fromPersistValues = undefined
+  data Unique (Entity rec)
+  persistUniqueToFieldNames =undefined
+  fieldLens = undefined
+  keyFromRecordM = undefined
 
 type family BackendSpecificUpdate backend record
 
