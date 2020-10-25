@@ -52,6 +52,7 @@ import qualified Blaze.ByteString.Builder.Char8 as BBB
 import Data.Acquire (Acquire, mkAcquire, with)
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
+import qualified Data.Attoparsec.Text as AT
 import qualified Data.Attoparsec.ByteString.Char8 as P
 import Data.Bits ((.&.))
 import Data.ByteString (ByteString)
@@ -137,7 +138,9 @@ withPostgresqlPoolWithVersion :: (MonadUnliftIO m, MonadLogger m)
                               -- ^ Action to be executed that uses the
                               -- connection pool.
                               -> m a
-withPostgresqlPoolWithVersion getVer ci = withSqlPool $ open' (const $ return ()) getVer ci
+withPostgresqlPoolWithVersion getVerDouble ci = do
+  let getVer = oldGetVersionToNew getVerDouble
+  withSqlPool $ open' (const $ return ()) getVer ci
 
 -- TODO: why doesn't the withPostgresqlPool have a modify callback?
 
@@ -146,16 +149,17 @@ withPostgresqlPoolWithVersion getVer ci = withSqlPool $ open' (const $ return ()
 --
 -- @since 2.11.0.0
 withPostgresqlPoolWithConf :: (MonadUnliftIO m, MonadLogger m)
-                           => (PG.Connection -> IO (Maybe Double))
-                           -- ^ Action to perform to get the server version.
-                           -> PostgresConf -- ^ Configuration for connecting to Postgres
+                           => PostgresConf -- ^ Configuration for connecting to Postgres
+                           -> PostgresConfHooks -- ^ TODO
                            -> (Pool SqlBackend -> m a)
                            -- ^ Action to be executed that uses the
                            -- connection pool.
                            -> m a
-withPostgresqlPoolWithConf getVer conf = do
-  let logFuncToBackend = open' (const $ return ()) getVer (pgConnStr conf) -- TODO: should this take a modification arg?
-  withSqlPoolWithConfig logFuncToBackend (postgresConfToConnectionPoolConfig conf) 
+withPostgresqlPoolWithConf conf hooks = do
+  let getVer = pgConfHooksGetServerVersion hooks
+      modConn = pgConfHooksAfterCreate hooks
+  let logFuncToBackend = open' modConn getVer (pgConnStr conf)
+  withSqlPoolWithConfig logFuncToBackend (postgresConfToConnectionPoolConfig conf)
 
 -- | Create a PostgreSQL connection pool.  Note that it's your
 -- responsibility to properly close the connection pool when
@@ -198,7 +202,8 @@ createPostgresqlPoolModifiedWithVersion
     -> ConnectionString -- ^ Connection string to the database.
     -> Int -- ^ Number of connections to be kept open in the pool.
     -> m (Pool SqlBackend)
-createPostgresqlPoolModifiedWithVersion getVer modConn ci =
+createPostgresqlPoolModifiedWithVersion getVerDouble modConn ci = do
+  let getVer = oldGetVersionToNew getVerDouble
   createSqlPool $ open' modConn getVer ci
 
 -- | Same as 'createPostgresqlPoolModifiedWithVersion', but takes a 'PostgresConf' for configuration.
@@ -206,11 +211,12 @@ createPostgresqlPoolModifiedWithVersion getVer modConn ci =
 -- @since 2.11.0.0
 createPostgresqlPoolWithConf
     :: (MonadUnliftIO m, MonadLogger m)
-    => (PG.Connection -> IO (Maybe Double)) -- ^ Action to perform to get the server version.
-    -> (PG.Connection -> IO ()) -- ^ Action to perform after connection is created.
-    -> PostgresConf
+    => PostgresConf
+    -> PostgresConfHooks
     -> m (Pool SqlBackend)
-createPostgresqlPoolWithConf getVer modConn conf = 
+createPostgresqlPoolWithConf conf hooks = do
+  let getVer = pgConfHooksGetServerVersion hooks
+      modConn = pgConfHooksAfterCreate hooks
   createSqlPoolWithConfig (open' modConn getVer (pgConnStr conf)) (postgresConfToConnectionPoolConfig conf)
 
 postgresConfToConnectionPoolConfig :: PostgresConf -> ConnectionPoolConfig
@@ -238,11 +244,13 @@ withPostgresqlConnWithVersion :: (MonadUnliftIO m, MonadLogger m)
                               -> ConnectionString
                               -> (SqlBackend -> m a)
                               -> m a
-withPostgresqlConnWithVersion getVer = withSqlConn . open' (const $ return ()) getVer
+withPostgresqlConnWithVersion getVerDouble = do
+  let getVer = oldGetVersionToNew getVerDouble
+  withSqlConn . open' (const $ return ()) getVer
 
 open'
     :: (PG.Connection -> IO ())
-    -> (PG.Connection -> IO (Maybe Double))
+    -> (PG.Connection -> IO (NonEmpty Word))
     -> ConnectionString -> LogFunc -> IO SqlBackend
 open' modConn getVer cstr logFunc = do
     conn <- PG.connectPostgreSQL cstr
@@ -264,15 +272,46 @@ getServerVersion conn = do
     Right (a,_) -> return $ Just a
     Left err -> throwIO $ PostgresServerVersionError err
 
+getServerVersion2 :: PG.Connection -> IO (NonEmpty Word)
+getServerVersion2 conn = do
+  [PG.Only version] <- PG.query_ conn "show server_version";
+  case AT.parseOnly parseVersion (T.pack version) of
+    Left err -> throwIO $ PostgresServerVersionError $ "Failed to parse Postgres version. Got: " <> version <> ". Error: " <> err
+    Right versionComponents -> case NEL.nonEmpty versionComponents of
+      Nothing -> throwIO $ PostgresServerVersionError $ "Empty Postgres version string. Got: " <> version
+      Just neVersion -> pure neVersion
+
+  where
+    -- Partially copied from the `versions` package
+    parseVersion = AT.decimal `AT.sepBy` AT.char '.' <* AT.endOfInput
+
 -- | Choose upsert sql generation function based on postgresql version.
 -- PostgreSQL version >= 9.5 supports native upsert feature,
 -- so depending upon that we have to choose how the sql query is generated.
 -- upsertFunction :: Double -> Maybe (EntityDef -> Text -> Text)
-upsertFunction :: a -> Double -> Maybe a
-upsertFunction f version = if (version >= 9.5)
+upsertFunction :: a -> NonEmpty Word -> Maybe a
+upsertFunction f version = if (version >= postgres9dot5)
                          then Just f
                          else Nothing
+  where
 
+postgres9dot5 :: NonEmpty Word
+postgres9dot5 = 9 NEL.:| [5]
+
+-- | If the user doesn't supply a Postgres version, we assume this version.
+--
+-- This is currently below any version-specific features Persistent uses.
+minimumPostgresVersion :: NonEmpty Word
+minimumPostgresVersion = 9 NEL.:| [4]
+
+oldGetVersionToNew :: (PG.Connection -> IO (Maybe Double)) -> (PG.Connection -> IO (NonEmpty Word))
+oldGetVersionToNew oldFn = \conn -> do
+  mDouble <- oldFn conn
+  case mDouble of
+    Nothing -> pure minimumPostgresVersion
+    Just double -> do
+      let (major, minor) = properFraction double
+      pure $ major NEL.:| [floor minor]
 
 -- | Generate a 'SqlBackend' from a 'PG.Connection'.
 openSimpleConn :: LogFunc -> PG.Connection -> IO SqlBackend
@@ -283,14 +322,14 @@ openSimpleConn = openSimpleConnWithVersion getServerVersion
 --
 -- @since 2.9.1
 openSimpleConnWithVersion :: (PG.Connection -> IO (Maybe Double)) -> LogFunc -> PG.Connection -> IO SqlBackend
-openSimpleConnWithVersion getVer logFunc conn = do
+openSimpleConnWithVersion getVerDouble logFunc conn = do
     smap <- newIORef $ Map.empty
-    serverVersion <- getVer conn
+    serverVersion <- (oldGetVersionToNew getVerDouble) conn
     return $ createBackend logFunc serverVersion smap conn
 
 -- | Create the backend given a logging function, server version, mutable statement cell,
 -- and connection.
-createBackend :: LogFunc -> Maybe Double
+createBackend :: LogFunc -> (NonEmpty Word)
               -> IORef (Map.Map Text Statement) -> PG.Connection -> SqlBackend
 createBackend logFunc serverVersion smap conn = do
     SqlBackend
@@ -298,8 +337,8 @@ createBackend logFunc serverVersion smap conn = do
         , connStmtMap    = smap
         , connInsertSql  = insertSql'
         , connInsertManySql = Just insertManySql'
-        , connUpsertSql  = serverVersion >>= upsertFunction upsertSql'
-        , connPutManySql = serverVersion >>= upsertFunction putManySql
+        , connUpsertSql  = upsertFunction upsertSql' serverVersion
+        , connPutManySql = upsertFunction putManySql serverVersion
         , connClose      = PG.close conn
         , connMigrateSql = migrate'
         , connBegin      = \_ mIsolation -> case mIsolation of
@@ -317,7 +356,7 @@ createBackend logFunc serverVersion smap conn = do
         , connLimitOffset = decorateSQLWithLimitOffset "LIMIT ALL"
         , connLogFunc = logFunc
         , connMaxParams = Nothing
-        , connRepsertManySql = serverVersion >>= upsertFunction repsertManySql
+        , connRepsertManySql = upsertFunction repsertManySql serverVersion
         }
 
 prepare' :: PG.Connection -> Text -> IO Statement
@@ -1377,7 +1416,7 @@ instance FromJSON PostgresConf where
 instance PersistConfig PostgresConf where
     type PersistConfigBackend PostgresConf = SqlPersistT
     type PersistConfigPool PostgresConf = ConnectionPool
-    createPoolConfig conf = runNoLoggingT $ createPostgresqlPoolWithConf getServerVersion (const $ pure ()) conf -- FIXME
+    createPoolConfig conf = runNoLoggingT $ createPostgresqlPoolWithConf conf defaultPostgresConfHooks
     runPool _ = runSqlPool
     loadConfig = parseJSON
 
@@ -1408,6 +1447,29 @@ instance PersistConfig PostgresConf where
         addUser     = maybeAddParam "user"     "PGUSER"
         addPass     = maybeAddParam "password" "PGPASS"
         addDatabase = maybeAddParam "dbname"   "PGDATABASE"
+
+-- | Hooks for configuring the Persistent/its connection to Postgres
+--
+-- TODO: API guarantees? Consider not exporting constructor and/or fields
+data PostgresConfHooks = PostgresConfHooks
+  { pgConfHooksGetServerVersion :: PG.Connection -> IO (NonEmpty Word) 
+      -- ^ Function to get the version of Postgres
+      --
+      -- The default implementation queries the server with "show server_version".
+      -- Some variants of Postgres, such as Redshift, don't support showing the version.
+      -- It's recommended you return a hardcoded version in those cases.
+  , pgConfHooksAfterCreate :: PG.Connection -> IO ()
+      -- ^ Action to perform after a connection is created.
+      --
+      -- Typical uses of this are modifying the connection (e.g. to set the schema) or logging a connection being created.
+  }
+
+defaultPostgresConfHooks :: PostgresConfHooks
+defaultPostgresConfHooks = PostgresConfHooks
+  { pgConfHooksGetServerVersion = getServerVersion2
+  , pgConfHooksAfterCreate = const $ pure ()
+  }
+
 
 refName :: DBName -> DBName -> DBName
 refName (DBName table) (DBName column) =
