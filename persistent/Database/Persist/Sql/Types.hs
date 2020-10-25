@@ -63,7 +63,7 @@ type ConnectionPool = Pool SqlBackend
 -- @since 2.11.0.0
 data ConnectionPoolConfig = ConnectionPoolConfig
     { connectionPoolConfigStripes :: Int -- ^ How many stripes to divide the pool into. See "Data.Pool" for details. Default: 1.
-    , connectionPoolConfigIdleTimeout :: NominalDiffTime -- ^ How long connections can remain idle before being disposed of, in seconds. Default: 600l
+    , connectionPoolConfigIdleTimeout :: NominalDiffTime -- ^ How long connections can remain idle before being disposed of, in seconds. Default: 600
     , connectionPoolConfigSize :: Int -- ^ How many connections should be held in the connection pool. Default: 10
     }
     deriving (Show)
