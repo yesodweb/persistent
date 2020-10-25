@@ -37,13 +37,15 @@ specsWith runDb = describe "rawSql" $ do
         escape <- getEscape
         person <- getTableName (error "rawSql Person" :: Person)
         name   <- getFieldName PersonName
+        pet <- getTableName (error "rawSql Pet" :: Pet)
+        petName   <- getFieldName PetName
         let query = T.concat [ "SELECT ??, ?? "
                              , "FROM ", person
                              , ", ", escape "Pet"
                              , " WHERE ", person, ".", escape "age", " >= ? "
                              , "AND ", escape "Pet", ".", escape "ownerId", " = "
                                      , person, ".", escape "id"
-                             , " ORDER BY ", person, ".", name
+                             , " ORDER BY ", person, ".", name, ", ", pet, ".", petName
                              ]
         ret <- rawSql query [PersistInt64 20]
         liftIO $ ret @?= [ (Entity p1k p1, Entity a1k a1)
