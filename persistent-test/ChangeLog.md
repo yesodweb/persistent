@@ -1,5 +1,9 @@
 ## Unreleased changes
 
+## 2.0.3.3
+
+* Fix RawSqlTest, which could fail non-deterministically for Postgres [#1139](https://github.com/yesodweb/persistent/pull/1139)
+
 ## 2.0.3.2
 
 * Remove unnecessary deriving of Typeable [#1114](https://github.com/yesodweb/persistent/pull/1114)
