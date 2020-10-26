@@ -99,6 +99,7 @@ module Database.Persist.Class
     , insertUniqueEntity
     , replaceUnique
     , checkUnique
+    , checkUniqueUpdateable
     , onlyUnique
 
     -- * PersistQuery

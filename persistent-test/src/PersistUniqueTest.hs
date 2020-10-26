@@ -31,3 +31,17 @@ specsWith runDb = describe "custom primary key" $ do
     Just (Entity _ insertedFoValue) <- insertUniqueEntity fo
     Nothing <- insertUniqueEntity fo
     fo @== insertedFoValue
+  it "checkUniqueUpdate" $ runDb $ do
+    let b = 5
+    let fo = Fo 3 b
+    k <- insert fo
+    Just _ <- checkUnique fo -- conflicts with itself
+
+    let fo' = Fo 4 b
+    Just _ <- checkUnique fo' -- conflicts with fo
+    Nothing <- checkUniqueUpdateable $ Entity k fo' -- but fo can be updated to fo'
+
+    let fo'' = Fo 3 (b + 1)
+    _ <- insert fo''
+    Just (UniqueBar conflict) <- checkUniqueUpdateable $ Entity k fo'' -- fo can't be updated to fo''
+    conflict @== b + 1
