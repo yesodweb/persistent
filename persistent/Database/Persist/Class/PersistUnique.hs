@@ -593,6 +593,8 @@ checkUniqueKeys (x:xs) = do
 -- While this would be 'Just' because SPJ already exists:
 --
 -- > mSpjConst <- checkUnique $ User "SPJ" 60
+--
+-- @since 2.11.0.0
 checkUniqueUpdateable
     :: forall record backend m. ( MonadIO m
        , PersistRecordBackend record backend
