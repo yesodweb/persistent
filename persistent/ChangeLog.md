@@ -38,6 +38,9 @@
     ```
 * [#1117](https://github.com/yesodweb/persistent/issues/1117)
   * Allow parsing UTCTimes from sqlite with the format "%F %T%Q" as well, instead of only "%FT%T%Q".
+* [#1140](https://github.com/yesodweb/persistent/pull/1140)
+  * A new function `checkUniqueUpdateable` allows you to check uniqueness
+    constraints on an entity update without having to update it.
 
 ## 2.10.5.2
 

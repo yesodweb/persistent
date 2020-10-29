@@ -17,6 +17,7 @@ module Database.Persist.Class.PersistUnique
   , insertUniqueEntity
   , replaceUnique
   , checkUnique
+  , checkUniqueUpdateable
   , onlyUnique
   , defaultUpsertBy
   , defaultPutMany
@@ -571,6 +572,49 @@ checkUniqueKeys (x:xs) = do
         Nothing -> checkUniqueKeys xs
         Just _ -> return (Just x)
 
+-- | Check whether there are any conflicts for unique keys with this entity and
+-- existing entities in the database.
+--
+-- Returns 'Nothing' if the entity would stay unique, and could thus safely be updated.
+-- on a conflict returns the conflicting key
+--
+-- This is similar to 'checkUnique', except it's useful for updating - when the
+-- particular entity already exists, it would normally conflict with itself.
+-- This variant ignores those conflicts
+--
+-- === __Example usage__
+--
+-- We use <#schema-persist-unique-1 schema-1> and <#dataset-persist-unique-1 dataset-1> here.
+--
+-- This would be 'Nothing':
+--
+-- > mAlanConst <- checkUnique $ User "Alan" 70
+--
+-- While this would be 'Just' because SPJ already exists:
+--
+-- > mSpjConst <- checkUnique $ User "SPJ" 60
+--
+-- @since 2.11.0.0
+checkUniqueUpdateable
+    :: forall record backend m. ( MonadIO m
+       , PersistRecordBackend record backend
+       , PersistUniqueRead backend)
+    => Entity record -> ReaderT backend m (Maybe (Unique record))
+checkUniqueUpdateable (Entity key record) = checkUniqueKeysUpdateable key (persistUniqueKeys record)
+
+checkUniqueKeysUpdateable
+    :: forall record backend m. ( MonadIO m
+       , PersistUniqueRead backend
+       , PersistRecordBackend record backend)
+    => Key record -> [Unique record] -> ReaderT backend m (Maybe (Unique record))
+checkUniqueKeysUpdateable _ [] = return Nothing
+checkUniqueKeysUpdateable key (x:xs) = do
+    y <- getBy x
+    case y of
+        Nothing -> checkUniqueKeysUpdateable key xs
+        Just (Entity k _)
+          | key == k -> checkUniqueKeysUpdateable key xs
+        Just _ ->  return (Just x)
 
 -- | The slow but generic 'upsertBy' implementation for any 'PersistUniqueRead'.
 -- * Lookup corresponding entities (if any) 'getBy'.
