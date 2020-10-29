@@ -115,6 +115,7 @@ runConn f = do
                         , connectUser     = "test"
                         , connectPassword = "test"
                         , connectDatabase = "test"
+                        , connectPort     = 33306
                         } 1 $ runSqlPool f
     return ()
 

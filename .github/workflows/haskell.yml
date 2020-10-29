@@ -49,13 +49,9 @@ jobs:
         with:
            postgresql version: '12'  # See https://hub.docker.com/_/postgres for available versions  
            postgresql user: postgres
-           postgresql db: test
-           # - uses: mirromutth/mysql-action@v1.1
-           #   with:
-           #     mysql version: '8.0' # Optional, default value is "latest". The version of the MySQL
-           #     mysql database: 'test' # Optional, default value is "test". The specified database which will be create
-           #     mysql user: 'test' # Required if "mysql root password" is empty, default is empty. The superuser for the specified database. Can use secrets, too
-           #     mysql password: 'test' # Required if "mysql user" exists. The password for the "mysql user"
+           postgresql db: persistent
+      - name: Start MongoDB
+        uses: supercharge/mongodb-github-action@1.3.0
       - run: cabal v2-update
       - run: cabal v2-freeze $CONFIG
       - uses: actions/cache@v2
