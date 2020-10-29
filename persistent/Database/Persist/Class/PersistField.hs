@@ -11,6 +11,7 @@ module Database.Persist.Class.PersistField
 
 import Control.Arrow (second)
 import Control.Monad ((<=<))
+import Control.Applicative ((<|>))
 import qualified Data.Aeson as A
 import Data.ByteString.Char8 (ByteString, unpack, readInt)
 import qualified Data.ByteString.Lazy as L
@@ -305,18 +306,24 @@ instance PersistField UTCTime where
     fromPersistValue (PersistInt64 i)   = Right $ posixSecondsToUTCTime $ (/ (1000 * 1000 * 1000)) $ fromIntegral $ i
 #endif
     fromPersistValue x@(PersistText t)  =
-        case reads $ T.unpack t of
+        let s = T.unpack t
+        in
+          case reads s of
             (d, _):_ -> Right d
             _ ->
-                case parse8601 $ T.unpack t of
+                case parse8601 s <|> parsePretty s of
                     Nothing -> Left $ fromPersistValueParseError "UTCTime" x
                     Just x' -> Right x'
       where
 #if MIN_VERSION_time(1,5,0)
-        parse8601 = parseTimeM True defaultTimeLocale "%FT%T%Q"
+        parse8601 = parseTimeM True defaultTimeLocale format8601
+        parsePretty = parseTimeM True defaultTimeLocale formatPretty
 #else
-        parse8601 = parseTime defaultTimeLocale "%FT%T%Q"
+        parse8601 = parseTime defaultTimeLocale format8601
+        parsePretty = parseTime defaultTimeLocale formatPretty
 #endif
+        format8601 = "%FT%T%Q"
+        formatPretty = "%F %T%Q"
     fromPersistValue x@(PersistByteString s) =
         case reads $ unpack s of
             (d, _):_ -> Right d

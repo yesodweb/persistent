@@ -9,6 +9,9 @@
 
 * Remove unnecessary deriving of Typeable [#1114](https://github.com/yesodweb/persistent/pull/1114)
 
+* [#1134](https://github.com/yesodweb/persistent/pull/1134)
+  * Update the SQLite amalgamation to 3.33.0
+
 ## 2.10.6.2
 
 * Move template haskell splices to be correct (and GHC 8.10 compatible) [#1034](https://github.com/yesodweb/persistent/pull/1034)

@@ -1,5 +1,5 @@
 name:            persistent-test
-version:         2.0.3.2
+version:         2.0.3.3
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -12,6 +12,7 @@ cabal-version:   >= 1.10
 build-type:      Simple
 homepage:        http://www.yesodweb.com/book/persistent
 bug-reports:     https://github.com/yesodweb/persistent/issues
+extra-source-files: ChangeLog.md
 
 library
     exposed-modules: CompositeTest

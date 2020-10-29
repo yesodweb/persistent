@@ -5,7 +5,9 @@ import qualified Data.Text as T
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
+import Data.Time
 
+import Database.Persist.Class.PersistField
 import Database.Persist.Quasi
 import Database.Persist.Types
 
@@ -500,3 +502,8 @@ main = hspec $ do
                             [ ["something"]
                             ]
 
+    describe "fromPersistValue" $
+        describe "UTCTime" $
+            it "works with format" $
+                fromPersistValue (PersistText "2018-02-27 10:49:42.123")
+                    `shouldBe` Right (UTCTime (fromGregorian 2018 02 27) (timeOfDayToTime (TimeOfDay 10 49 42.123)))
