@@ -112,9 +112,9 @@ runConn f = do
                         } 1 $ runSqlPool f
       else withMySQLPool baseConnectInfo
                         { connectHost     = "localhost"
-                        , connectUser     = "travis"
-                        , connectPassword = ""
-                        , connectDatabase = "persistent"
+                        , connectUser     = "test"
+                        , connectPassword = "test"
+                        , connectDatabase = "test"
                         } 1 $ runSqlPool f
     return ()
 

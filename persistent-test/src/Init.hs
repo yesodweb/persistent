@@ -119,11 +119,15 @@ assertNotEmpty :: (MonadIO m) => [a] -> m ()
 assertNotEmpty xs = liftIO $ assertBool "" (not (null xs))
 
 isTravis :: IO Bool
-isTravis = do
-  env <- liftIO getEnvironment
-  return $ case lookup "TRAVIS" env of
-    Just "true" -> True
-    _ -> False
+isTravis = isCI
+
+isCI :: IO Bool
+isCI =  do
+    env <- liftIO getEnvironment
+    return $ case lookup "TRAVIS" env || lookup "CI" env of
+        Just "true" -> True
+        _ -> False
+
 
 persistSettings :: MkPersistSettings
 persistSettings = sqlSettings { mpsGeneric = True }
