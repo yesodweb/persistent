@@ -1,20 +1,22 @@
-module Database.Persist.Sql.Util (
-    parseEntityValues
-  , entityColumnNames
-  , keyAndEntityColumnNames
-  , entityColumnCount
-  , isIdField
-  , hasCompositeKey
-  , dbIdColumns
-  , dbIdColumnsEsc
-  , dbColumns
-  , updateFieldDef
-  , updatePersistValue
-  , mkUpdateText
-  , mkUpdateText'
-  , commaSeparated
-  , parenWrapped
-) where
+module Database.Persist.Sql.Util
+    ( parseEntityValues
+    , entityColumnNames
+    , keyAndEntityColumnNames
+    , entityColumnCount
+    , isIdField
+    , hasCompositeKey
+    , hasCompositePrimaryKey
+    , hasNaturalKey
+    , dbIdColumns
+    , dbIdColumnsEsc
+    , dbColumns
+    , updateFieldDef
+    , updatePersistValue
+    , mkUpdateText
+    , mkUpdateText'
+    , commaSeparated
+    , parenWrapped
+    ) where
 
 import Data.Maybe (isJust)
 import Data.Monoid ((<>))
@@ -44,8 +46,100 @@ entityColumnCount :: EntityDef -> Int
 entityColumnCount e = length (entityFields e)
                     + if hasCompositeKey e then 0 else 1
 
+{-# DEPRECATED hasCompositeKey "hasCompositeKey is misleading - it returns True if the entity is defined with the Primary keyword. See issue #685 for discussion. \n If you want the same behavior, use 'hasNaturalKey'. If you want to know if the key has multiple fields, use 'hasCompositePrimaryKey'. This function will be removed in the next major version." #-}
+-- | Deprecated as of 2.11. See 'hasNaturalKey' or 'hasCompositePrimaryKey'
+-- for replacements.
 hasCompositeKey :: EntityDef -> Bool
 hasCompositeKey = isJust . entityPrimary
+
+-- | Returns 'True' if the entity has a natural key defined with the
+-- Primary keyword.
+--
+-- A natural key is a key that is inherent to the record, and is part of
+-- the actual Haskell record. The opposite of a natural key is a "surrogate
+-- key", which is not part of the normal domain object. Automatically
+-- generated ID columns are the most common surrogate ID, while an email
+-- address is a common natural key.
+--
+-- @
+-- User
+--     email String
+--     name String
+--     Primary email
+--
+-- Person
+--     Id   UUID
+--     name String
+--
+-- Follower
+--     name String
+-- @
+--
+-- Given these entity definitions, @User@ would return 'True', because the
+-- @Primary@ keyword sets the @email@ column to be the primary key. The
+-- generated Haskell type would look like this:
+--
+-- @
+-- data User = User
+--     { userEmail :: String
+--     , userName :: String
+--     }
+-- @
+--
+-- @Person@ would be false. While the @Id@ syntax allows you to define
+-- a custom ID type for an entity, the @Id@ column is a surrogate key.
+--
+-- The same is true for @Follower@. The automatically generated
+-- autoincremented integer primary key is a surrogate key.
+--
+-- There's nothing preventing you from defining a @Primary@ definition that
+-- refers to a surrogate key. This is totally fine.
+--
+-- @since 2.11.0
+hasNaturalKey :: EntityDef -> Bool
+hasNaturalKey =
+    isJust . entityPrimary
+
+-- | Returns 'True' if the provided entity has a custom composite primary
+-- key. Composite keys have multiple fields in them.
+--
+-- @
+-- User
+--     email String
+--     name String
+--     Primary userId
+--
+-- Profile
+--     personId PersonId
+--     email    String
+--     Primary personId email
+--
+-- Person
+--     Id   UUID
+--     name String
+--
+-- Follower
+--     name String
+-- @
+--
+-- Given these entity definitions, only @Profile@ would return 'True',
+-- because it is the only entity with multiple columns in the primary key.
+-- @User@ has a single column natural key. @Person@ has a custom single
+-- column surrogate key defined with @Id@. And @Follower@ has a default
+-- single column surrogate key.
+--
+-- @since 2.11.0
+hasCompositePrimaryKey :: EntityDef -> Bool
+hasCompositePrimaryKey ed =
+    case entityPrimary ed of
+        Just cdef ->
+            case compositeFields cdef of
+                (_ : _ : _) ->
+                    True
+                _ ->
+                    False
+        Nothing ->
+            False
 
 dbIdColumns :: SqlBackend -> EntityDef -> [Text]
 dbIdColumns conn = dbIdColumnsEsc (connEscapeName conn)
