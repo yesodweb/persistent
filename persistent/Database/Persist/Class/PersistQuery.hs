@@ -48,6 +48,12 @@ class (PersistCore backend, PersistStoreRead backend) => PersistQueryRead backen
     count :: (MonadIO m, PersistRecordBackend record backend)
           => [Filter record] -> ReaderT backend m Int
 
+    -- | Check if there is at least one record fulfilling the given criterion.
+    --
+    -- @since 2.11
+    exists :: (MonadIO m, PersistRecordBackend record backend)
+           => [Filter record] -> ReaderT backend m Bool
+
 -- | Backends supporting conditional write operations
 class (PersistQueryRead backend, PersistStoreWrite backend) => PersistQueryWrite backend where
     -- | Update individual fields on any record matching the given criterion.

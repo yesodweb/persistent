@@ -139,6 +139,14 @@ specsWith runDb = describe "persistent" $ do
       Just mic29 <- get micK
       personAge mic29 @== 29
 
+      let louis = Person "Louis" 55 $ Just "brown"
+      ex0 <- exists [PersonName ==. "Louis"]
+      ex0 @== False
+      louisK <- insert louis
+      ex1 <- exists [PersonName ==. "Louis"]
+      ex1 @== True
+      delete louisK
+
       let eli = Person "Eliezer" 2 $ Just "blue"
       _ <- insert eli
       pasc <- selectList [] [Asc PersonAge]

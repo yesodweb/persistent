@@ -55,6 +55,31 @@ instance PersistQueryRead SqlBackend where
       where
         t = entityDef $ dummyFromFilts filts
 
+    exists filts = do
+        conn <- ask
+        let wher = if null filts
+                    then ""
+                    else filterClause False conn filts
+        let sql = mconcat
+                [ "SELECT EXISTS(SELECT 1 FROM "
+                , connEscapeName conn $ entityDB t
+                , wher
+                , ")"
+                ]
+        withRawQuery sql (getFiltsValues conn filts) $ do
+            mm <- CL.head
+            case mm of
+              Just [PersistBool b]  -> return b -- Postgres
+              Just [PersistInt64 i] -> return $ i > 0 -- MySQL, SQLite
+              Just [PersistDouble i] -> return $ (truncate i :: Int64) > 0 -- gb oracle
+              Just [PersistByteString i] -> case readInteger i of -- gb mssql
+                                              Just (ret,"") -> return $ ret > 0
+                                              xs -> error $ "invalid number i["++show i++"] xs[" ++ show xs ++ "]"
+              Just xs -> error $ "PersistQuery.exists: Expected a boolean, int, double, or bytestring; got: " ++ show xs ++ " for query: " ++ show sql
+              Nothing -> error $ "PersistQuery.exists: Expected a boolean, int, double, or bytestring; got: Nothing for query: " ++ show sql
+      where
+        t = entityDef $ dummyFromFilts filts
+
     selectSourceRes filts opts = do
         conn <- ask
         srcRes <- rawQueryRes (sql conn) (getFiltsValues conn filts)
@@ -127,10 +152,12 @@ instance PersistQueryRead SqlBackend where
                 Left err -> error $ "selectKeysImpl: keyFromValues failed" <> show err
 instance PersistQueryRead SqlReadBackend where
     count filts = withReaderT persistBackend $ count filts
+    exists filts = withReaderT persistBackend $ exists filts
     selectSourceRes filts opts = withReaderT persistBackend $ selectSourceRes filts opts
     selectKeysRes filts opts = withReaderT persistBackend $ selectKeysRes filts opts
 instance PersistQueryRead SqlWriteBackend where
     count filts = withReaderT persistBackend $ count filts
+    exists filts = withReaderT persistBackend $ exists filts
     selectSourceRes filts opts = withReaderT persistBackend $ selectSourceRes filts opts
     selectKeysRes filts opts = withReaderT persistBackend $ selectKeysRes filts opts
 

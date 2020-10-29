@@ -691,6 +691,10 @@ instance PersistQueryRead DB.MongoContext where
         query = DB.select (filtersToDoc filts) $
                   collectionName $ dummyFromFilts filts
 
+    exists filts = do
+        cnt <- count filts
+        pure (cnt > 0)
+
     -- | uses cursor option NoCursorTimeout
     -- If there is no sorting, it will turn the $snapshot option on
     -- and explicitly closes the cursor when done

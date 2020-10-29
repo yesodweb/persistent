@@ -1,5 +1,9 @@
 # Changelog for persistent-mongoDB
 
+## 2.11.0
+
+* Naive implementation of `exists` function from `PersistQueryRead` type class using `count`. [#1131](https://github.com/yesodweb/persistent/pull/1131/files)
+
 ## 2.10.0.1
 
 * Remove unnecessary deriving of Typeable [#1114](https://github.com/yesodweb/persistent/pull/1114)
