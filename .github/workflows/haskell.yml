@@ -43,6 +43,8 @@ jobs:
         with:
           ghc-version: ${{ matrix.ghc }}
           cabal-version: ${{ matrix.cabal }}
+      - name: Check MySQL connection
+        run: mysql -utravis -pesqutest -h127.0.0.1 --port=33306 esqutest -e "SELECT 1;"
       - uses: harmon758/postgresql-action@v1
         with:
            postgresql version: '12'  # See https://hub.docker.com/_/postgres for available versions  
@@ -54,12 +56,6 @@ jobs:
            #     mysql database: 'test' # Optional, default value is "test". The specified database which will be create
            #     mysql user: 'test' # Required if "mysql root password" is empty, default is empty. The superuser for the specified database. Can use secrets, too
            #     mysql password: 'test' # Required if "mysql user" exists. The password for the "mysql user"
-      - name: Create MySQL
-        run: |
-          mysql -uroot -proot -e "CREATE DATABASE test;"
-          mysql -uroot -proot -e "CREATE USER 'test'@'localhost' IDENTIFIED BY 'test';"
-          mysql -uroot -proot -e "GRANT ALL PRIVILEGES ON *.* TO 'test'@'localhost';"
-          mysql -uroot -proot -e "FLUSH PRIVILEGES;"
       - run: cabal v2-update
       - run: cabal v2-freeze $CONFIG
       - uses: actions/cache@v2
