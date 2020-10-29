@@ -28,6 +28,8 @@ jobs:
            postgresql version: '12'  # See https://hub.docker.com/_/postgres for available versions  
            postgresql user: postgres
            postgresql db: test
+      - name: Shutdown Ubuntu MySQL (SUDO)
+        run: sudo service mysql stop
       - uses: mirromutth/mysql-action@v1.1
         with:
           mysql version: '8.0' # Optional, default value is "latest". The version of the MySQL
