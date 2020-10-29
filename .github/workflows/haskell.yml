@@ -44,7 +44,7 @@ jobs:
           ghc-version: ${{ matrix.ghc }}
           cabal-version: ${{ matrix.cabal }}
       - name: Check MySQL connection
-        run: mysql -utravis -pesqutest -h127.0.0.1 --port=33306 esqutest -e "SELECT 1;"
+        run: mysql -utest -ptest -h127.0.0.1 --port=33306 test -e "SELECT 1;"
       - uses: harmon758/postgresql-action@v1
         with:
            postgresql version: '12'  # See https://hub.docker.com/_/postgres for available versions  
