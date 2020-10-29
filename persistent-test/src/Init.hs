@@ -55,7 +55,7 @@ import Control.Monad.Trans.Resource
 import Control.Monad.Trans.Resource.Internal
 
 -- re-exports
-import Control.Applicative (liftA2)
+import Control.Applicative (liftA2, (<|>))
 import Control.Exception (SomeException)
 import Control.Monad (void, replicateM, liftM, when, forM_)
 import Control.Monad.Fail (MonadFail)
@@ -124,7 +124,7 @@ isTravis = isCI
 isCI :: IO Bool
 isCI =  do
     env <- liftIO getEnvironment
-    return $ case lookup "TRAVIS" env || lookup "CI" env of
+    return $ case lookup "TRAVIS" env <|> lookup "CI" env of
         Just "true" -> True
         _ -> False
 
