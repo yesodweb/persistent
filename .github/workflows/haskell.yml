@@ -52,6 +52,8 @@ jobs:
            postgresql db: persistent
       - name: Start MongoDB
         uses: supercharge/mongodb-github-action@1.3.0
+      - name: Start Redis
+        uses: supercharge/redis-github-action@1.1.0
       - run: cabal v2-update
       - run: cabal v2-freeze $CONFIG
       - uses: actions/cache@v2
