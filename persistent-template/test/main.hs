@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE TypeApplications, DeriveGeneric #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -23,6 +23,7 @@ module Main
     module Main
   ) where
 
+import Data.Proxy
 import Control.Applicative (Const (..))
 import Data.Aeson
 import Data.ByteString.Lazy.Char8 ()
@@ -36,6 +37,7 @@ import GHC.Generics (Generic)
 
 import Database.Persist
 import Database.Persist.Sql
+import Database.Persist.Sql.Util
 import Database.Persist.TH
 import TemplateTestImports
 
@@ -57,8 +59,25 @@ NoJson
     deriving Show Eq
 |]
 
--- TODO: Derive Generic at the source site to get this unblocked.
-deriving instance Generic (BackendKey SqlBackend)
+mkPersist sqlSettings [persistLowerCase|
+HasPrimaryDef
+    userId Int
+    name String
+    Primary userId
+
+HasMultipleColPrimaryDef
+    foobar Int
+    barbaz String
+    Primary foobar barbaz
+
+HasIdDef
+    Id Int
+    name String
+
+HasDefaultId
+    name String
+
+|]
 
 share [mkPersist sqlSettings { mpsGeneric = False, mpsGenerateLenses = True }] [persistLowerCase|
 Lperson json
@@ -81,11 +100,51 @@ arbitraryT = pack <$> arbitrary
 
 instance Arbitrary Person where
     arbitrary = Person <$> arbitraryT <*> arbitrary <*> arbitrary <*> arbitrary
+
 instance Arbitrary Address where
     arbitrary = Address <$> arbitraryT <*> arbitraryT <*> arbitrary
 
 main :: IO ()
 main = hspec $ do
+    describe "hasNaturalKey" $ do
+        let subject :: PersistEntity a => Proxy a -> Bool
+            subject p = hasNaturalKey (entityDef p)
+        it "is True for Primary keyword" $ do
+            subject (Proxy @HasPrimaryDef)
+                `shouldBe`
+                    True
+        it "is True for multiple Primary columns " $ do
+            subject (Proxy @HasMultipleColPrimaryDef)
+                `shouldBe`
+                    True
+        it "is False for Id keyword" $ do
+            subject (Proxy @HasIdDef)
+                `shouldBe`
+                    False
+        it "is False for unspecified/default id" $ do
+            subject (Proxy @HasDefaultId)
+                `shouldBe`
+                    False
+    describe "hasCompositePrimaryKey" $ do
+        let subject :: PersistEntity a => Proxy a -> Bool
+            subject p = hasCompositePrimaryKey (entityDef p)
+        it "is False for Primary with single column" $ do
+            subject (Proxy @HasPrimaryDef)
+                `shouldBe`
+                    False
+        it "is True for multiple Primary columns " $ do
+            subject (Proxy @HasMultipleColPrimaryDef)
+                `shouldBe`
+                    True
+        it "is False for Id keyword" $ do
+            subject (Proxy @HasIdDef)
+                `shouldBe`
+                    False
+        it "is False for unspecified/default id" $ do
+            subject (Proxy @HasDefaultId)
+                `shouldBe`
+                    False
+
     describe "JSON serialization" $ do
         prop "to/from is idempotent" $ \person ->
             decode (encode person) == Just (person :: Person)

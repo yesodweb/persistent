@@ -44,6 +44,8 @@
 * [#1140](https://github.com/yesodweb/persistent/pull/1140)
   * A new function `checkUniqueUpdateable` allows you to check uniqueness
     constraints on an entity update without having to update it.
+* [#1142](https://github.com/yesodweb/persistent/pull/1142)
+    * Deprecate `hasCompositeKey` in favor of `hasCustomPrimaryKey` and `hasCompositePrimaryKey` functions.
 
 ## 2.10.5.2
 
