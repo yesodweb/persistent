@@ -34,6 +34,7 @@ import Test.Hspec.QuickCheck
 import Test.QuickCheck.Arbitrary
 import Test.QuickCheck.Gen (Gen)
 import GHC.Generics (Generic)
+import qualified Data.List as List
 
 import Database.Persist
 import Database.Persist.Sql
@@ -43,12 +44,18 @@ import TemplateTestImports
 
 
 share [mkPersist sqlSettings { mpsGeneric = False, mpsDeriveInstances = [''Generic] }, mkDeleteCascade sqlSettings { mpsGeneric = False }] [persistUpperCase|
+
 Person json
     name Text
     age Int Maybe
     foo Foo
     address Address
     deriving Show Eq
+
+HasSimpleCascadeRef
+    person PersonId OnDeleteCascade
+    deriving Show Eq
+
 Address json
     street Text
     city Text
@@ -106,6 +113,75 @@ instance Arbitrary Address where
 
 main :: IO ()
 main = hspec $ do
+    describe "OnCascadeDelete" $ do
+        let subject :: FieldDef
+            Just subject =
+                List.find ((HaskellName "person" ==) . fieldHaskell)
+                $ entityFields
+                $ simpleCascadeDef
+            simpleCascadeDef =
+                entityDef (Proxy :: Proxy HasSimpleCascadeRef)
+            expected =
+                FieldCascade
+                    { fcOnDelete = Just Cascade
+                    , fcOnUpdate = Nothing
+                    }
+        describe "entityDef" $ do
+            it "works" $ do
+                simpleCascadeDef
+                    `shouldBe`
+                        EntityDef
+                            { entityHaskell = HaskellName "HasSimpleCascadeRef"
+                            , entityDB = DBName "HasSimpleCascadeRef"
+                            , entityId =
+                                FieldDef
+                                    { fieldHaskell = HaskellName "Id"
+                                    , fieldDB = DBName "id"
+                                    , fieldType = FTTypeCon Nothing "HasSimpleCascadeRefId"
+                                    , fieldSqlType = SqlInt64
+                                    , fieldReference =
+                                        ForeignRef (HaskellName "HasSimpleCascadeRef") (FTTypeCon (Just "Data.Int") "Int64") noCascade
+                                    , fieldAttrs = []
+                                    , fieldStrict = True
+                                    , fieldComments = Nothing
+                                    , fieldCascade = noCascade
+                                    }
+                            , entityAttrs = []
+                            , entityFields =
+                                [ FieldDef
+                                    { fieldHaskell = HaskellName "person"
+                                    , fieldDB = DBName "person"
+                                    , fieldType = FTTypeCon Nothing "PersonId"
+                                    , fieldSqlType = SqlInt64
+                                    , fieldAttrs = []
+                                    , fieldStrict = True
+                                    , fieldReference =
+                                        ForeignRef
+                                            (HaskellName "Person")
+                                            (FTTypeCon (Just "Data.Int") "Int64")
+                                            (FieldCascade { fcOnUpdate = Nothing, fcOnDelete = Just Cascade })
+                                    , fieldCascade =
+                                        FieldCascade { fcOnUpdate = Nothing, fcOnDelete = Just Cascade }
+                                    , fieldComments = Nothing
+                                    }
+                                ]
+                            , entityUniques = []
+                            , entityForeigns = []
+                            , entityDerives =  ["Show", "Eq"]
+                            , entityExtra = mempty
+                            , entitySum = False
+                            , entityComments = Nothing
+                            }
+        it "has the cascade on the field def" $ do
+            fieldCascade subject `shouldBe` expected
+        it "has the cascade on the reference def" $ do
+            ForeignRef _ _ fc <- pure $ fieldReference subject
+            fc `shouldBe` expected
+        it "doesn't have any extras" $ do
+            entityExtra simpleCascadeDef
+                `shouldBe`
+                    mempty
+
     describe "hasNaturalKey" $ do
         let subject :: PersistEntity a => Proxy a -> Bool
             subject p = hasNaturalKey (entityDef p)

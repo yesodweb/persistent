@@ -141,7 +141,7 @@ data EntityDef = EntityDef
 
 entityPrimary :: EntityDef -> Maybe CompositeDef
 entityPrimary t = case fieldReference (entityId t) of
-    CompositeRef c -> Just c
+    CompositeRef c _ -> Just c
     _ -> Nothing
 
 entityKeyFields :: EntityDef -> [FieldDef]
@@ -165,9 +165,21 @@ newtype DBName = DBName { unDBName :: Text }
 
 type Attr = Text
 
+-- | A 'FieldType' describes a field parsed from the QuasiQuoter and is
+-- used to determine the Haskell type in the generated code.
+--
+-- @name Text@ parses into @FTTypeCon Nothing "Text"@
+--
+-- @name T.Text@ parses into @FTTypeCon (Just "T" "Text")@
+--
+-- @name (Jsonb User)@ parses into:
+--
+-- @
+-- FTApp (FTTypeCon Nothing "Jsonb") (FTTypeCon Nothing "User")
+-- @
 data FieldType
     = FTTypeCon (Maybe Text) Text
-      -- ^ Optional module and name.
+    -- ^ Optional module and name.
     | FTApp FieldType FieldType
     | FTList FieldType
   deriving (Show, Eq, Read, Ord)
@@ -196,6 +208,13 @@ data FieldDef = FieldDef
     -- ^ If this is 'True', then the Haskell datatype will have a strict
     -- record field. The default value for this is 'True'.
     , fieldReference :: !ReferenceDef
+    , fieldCascade :: !FieldCascade
+    -- ^ Defines how operations on the field cascade on to the referenced
+    -- tables. This doesn't have any meaning if the 'fieldReference' is set
+    -- to 'NoReference' or 'SelfReference'. The cascade option here should
+    -- be the same as the one obtained in the 'fieldReference'.
+    --
+    -- @since 2.11.0
     , fieldComments  :: !(Maybe Text)
     -- ^ Optional comments for a 'Field'. There is not currently a way to
     -- attach comments to a field in the quasiquoter.
@@ -210,13 +229,27 @@ data FieldDef = FieldDef
 -- 2) single field
 -- 3) embedded
 data ReferenceDef = NoReference
-                  | ForeignRef !HaskellName !FieldType
+                  | ForeignRef !HaskellName !FieldType !FieldCascade
                     -- ^ A ForeignRef has a late binding to the EntityDef it references via HaskellName and has the Haskell type of the foreign key in the form of FieldType
                   | EmbedRef EmbedEntityDef
-                  | CompositeRef CompositeDef
+                  | CompositeRef CompositeDef !FieldCascade
                   | SelfReference
                     -- ^ A SelfReference stops an immediate cycle which causes non-termination at compile-time (issue #311).
                   deriving (Show, Eq, Read, Ord)
+
+getReferenceDefCascade :: ReferenceDef -> Maybe FieldCascade
+getReferenceDefCascade rd =
+    case rd of
+        ForeignRef _ _ fc -> Just fc
+        CompositeRef _ fc -> Just fc
+        _ -> Nothing
+
+setReferenceDefCascade :: FieldCascade -> ReferenceDef -> ReferenceDef
+setReferenceDefCascade fc rd =
+    case rd of
+        ForeignRef a b _ -> ForeignRef a b fc
+        CompositeRef a _ -> CompositeRef a fc
+        _ -> rd
 
 -- | An EmbedEntityDef is the same as an EntityDef
 -- But it is only used for fieldReference

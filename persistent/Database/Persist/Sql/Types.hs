@@ -25,7 +25,7 @@ data Column = Column
     , cDefault   :: !(Maybe Text)
     , cDefaultConstraintName   :: !(Maybe DBName)
     , cMaxLen    :: !(Maybe Integer)
-    , cReference :: !(Maybe (DBName, DBName)) -- table name, constraint name
+    , cReference :: !(Maybe (DBName, DBName, FieldCascade)) -- table name, constraint name
     }
     deriving (Eq, Ord, Show)
 

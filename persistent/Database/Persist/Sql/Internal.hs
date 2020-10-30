@@ -120,19 +120,19 @@ mkColumns allDefs t overrides =
     ref :: DBName
         -> ReferenceDef
         -> [Attr]
-        -> Maybe (DBName, DBName) -- table name, constraint name
+        -> Maybe (DBName, DBName, FieldCascade) -- table name, constraint name
     ref c fe []
-        | ForeignRef f _ <- fe =
-            Just (resolveTableName allDefs f, refNameFn tableName c)
+        | ForeignRef f _ cascade <- fe =
+            Just (resolveTableName allDefs f, refNameFn tableName c, cascade)
         | otherwise = Nothing
     ref _ _ ("noreference":_) = Nothing
     ref c fe (a:as)
         | Just x <- T.stripPrefix "reference=" a = do
-            constraintName <- snd <$> (ref c fe as)
-            pure (DBName x, constraintName)
+            (_, constraintName, _)  <- ref c fe as
+            pure (DBName x, constraintName, fromMaybe noCascade $ getReferenceDefCascade fe)
         | Just x <- T.stripPrefix "constraint=" a = do
-            tableName <- fst <$> (ref c fe as)
-            pure (tableName, DBName x)
+            (tableName, _, _) <- ref c fe as
+            pure (tableName, DBName x, fromMaybe noCascade $ getReferenceDefCascade fe)
     ref c x (_:as) = ref c x as
 
 refName :: DBName -> DBName -> DBName

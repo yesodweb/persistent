@@ -255,10 +255,14 @@ module Database.Persist.Quasi
     , associateLines
     , skipEmpty
     , LinesWithComments(..)
+    , splitExtras
+    , takeColsEx
 #endif
     ) where
 
 import Prelude hiding (lines)
+
+import qualified Debug.Trace as  Debug
 
 import qualified Data.List.NonEmpty as NEL
 import Data.List.NonEmpty (NonEmpty(..))
@@ -697,7 +701,7 @@ mkEntityDef ps name entattribs lines =
     derives = concat $ mapMaybe takeDerives attribs
 
     cols :: [FieldDef]
-    cols = reverse . fst . foldr k ([], []) $ reverse attribs
+    cols = fmap setReferenceCascade . reverse . fst . foldr k ([], []) $ reverse attribs
     k x (!acc, !comments) =
         case isComment =<< listToMaybe x of
             Just comment ->
@@ -709,12 +713,17 @@ mkEntityDef ps name entattribs lines =
     setFieldComments [] x = x
     setFieldComments xs fld =
         fld { fieldComments = Just (T.unlines xs) }
+    setReferenceCascade fd = fd
+        { fieldReference = setReferenceDefCascade (fieldCascade fd) (fieldReference fd)
+        }
 
     autoIdField = mkAutoIdField ps entName (DBName `fmap` idName) idSqlType
     idSqlType = maybe SqlInt64 (const $ SqlOther "Primary Key") primaryComposite
 
     setComposite Nothing fd = fd
-    setComposite (Just c) fd = fd { fieldReference = CompositeRef c }
+    setComposite (Just c) fd = fd
+        { fieldReference = CompositeRef c (fieldCascade fd)
+        }
 
 
 just1 :: (Show x) => Maybe x -> Maybe x -> Maybe x
@@ -722,22 +731,23 @@ just1 (Just x) (Just y) = error $ "expected only one of: "
   `mappend` show x `mappend` " " `mappend` show y
 just1 x y = x `mplus` y
 
-
 mkAutoIdField :: PersistSettings -> HaskellName -> Maybe DBName -> SqlType -> FieldDef
-mkAutoIdField ps entName idName idSqlType = FieldDef
-      { fieldHaskell = HaskellName "Id"
-      -- this should be modeled as a Maybe
-      -- but that sucks for non-ID field
-      -- TODO: use a sumtype FieldDef | IdFieldDef
-      , fieldDB = fromMaybe (DBName $ psIdName ps) idName
-      , fieldType = FTTypeCon Nothing $ keyConName $ unHaskellName entName
-      , fieldSqlType = idSqlType
-      -- the primary field is actually a reference to the entity
-      , fieldReference = ForeignRef entName  defaultReferenceTypeCon
-      , fieldAttrs = []
-      , fieldStrict = True
-      , fieldComments = Nothing
-      }
+mkAutoIdField ps entName idName idSqlType =
+    FieldDef
+        { fieldHaskell = HaskellName "Id"
+        -- this should be modeled as a Maybe
+        -- but that sucks for non-ID field
+        -- TODO: use a sumtype FieldDef | IdFieldDef
+        , fieldDB = fromMaybe (DBName $ psIdName ps) idName
+        , fieldType = FTTypeCon Nothing $ keyConName $ unHaskellName entName
+        , fieldSqlType = idSqlType
+        -- the primary field is actually a reference to the entity
+        , fieldReference = ForeignRef entName defaultReferenceTypeCon noCascade
+        , fieldAttrs = []
+        , fieldStrict = True
+        , fieldComments = Nothing
+        , fieldCascade = noCascade
+        }
 
 defaultReferenceTypeCon :: FieldType
 defaultReferenceTypeCon = FTTypeCon (Just "Data.Int") "Int64"
@@ -745,8 +755,11 @@ defaultReferenceTypeCon = FTTypeCon (Just "Data.Int") "Int64"
 keyConName :: Text -> Text
 keyConName entName = entName `mappend` "Id"
 
-
-splitExtras :: [Line] -> ([[Text]], M.Map Text [[Text]])
+splitExtras
+    :: [Line]
+    -> ( [[Text]]
+       , M.Map Text [[Text]]
+       )
 splitExtras [] = ([], M.empty)
 splitExtras (Line indent [name]:rest)
     | not (T.null name) && isUpper (T.head name) =
@@ -772,17 +785,19 @@ takeCols onErr ps (n':typ:rest)
     | not (T.null n) && isLower (T.head n) =
         case parseFieldType typ of
             Left err -> onErr typ err
-            Right ft -> Just FieldDef
+            Right ft -> Just $ FieldDef
                 { fieldHaskell = HaskellName n
                 , fieldDB = DBName $ getDbName ps n rest
                 , fieldType = ft
                 , fieldSqlType = SqlOther $ "SqlType unset for " `mappend` n
-                , fieldAttrs = rest
+                , fieldAttrs = attrs_
                 , fieldStrict = fromMaybe (psStrictFields ps) mstrict
                 , fieldReference = NoReference
                 , fieldComments = Nothing
+                , fieldCascade = cascade_
                 }
   where
+    (cascade_, attrs_) = parseCascade rest
     (mstrict, n)
         | Just x <- T.stripPrefix "!" n' = (Just True, x)
         | Just x <- T.stripPrefix "~" n' = (Just False, x)
@@ -811,19 +826,29 @@ takeConstraint _ _ _ _ = (Nothing, Nothing, Nothing, Nothing)
 -- TODO: this is hacky (the double takeCols, the setFieldDef stuff, and setIdName.
 -- need to re-work takeCols function
 takeId :: PersistSettings -> Text -> [Text] -> FieldDef
-takeId ps tableName (n:rest) = fromMaybe (error "takeId: impossible!") $ setFieldDef $
-    takeCols (\_ _ -> addDefaultIdType) ps (field:rest `mappend` setIdName)
+takeId ps tableName (n:rest) =
+    setFieldDef
+    $ fromMaybe (error "takeId: impossible!")
+    $ takeCols (\_ _ -> addDefaultIdType) ps (field:rest `mappend` setIdName)
   where
     field = case T.uncons n of
-      Nothing -> error "takeId: empty field"
-      Just (f, ield) -> toLower f `T.cons` ield
+        Nothing -> error "takeId: empty field"
+        Just (f, ield) -> toLower f `T.cons` ield
     addDefaultIdType = takeColsEx ps (field : keyCon : rest `mappend` setIdName)
-    setFieldDef = fmap (\fd ->
-      let refFieldType = if fieldType fd == FTTypeCon Nothing keyCon
-              then defaultReferenceTypeCon
-              else fieldType fd
-      in fd { fieldReference = ForeignRef (HaskellName tableName) $ refFieldType
-            })
+    setFieldDef fd =
+        let refFieldType =
+                if fieldType fd == FTTypeCon Nothing keyCon
+                then defaultReferenceTypeCon
+                else fieldType fd
+            -- this is fine because we're only calling this function with
+            -- the primary key type
+            cascade =
+                fieldCascade fd
+        in
+            fd
+                { fieldReference =
+                    ForeignRef (HaskellName tableName) refFieldType cascade
+                }
     keyCon = keyConName tableName
     -- this will be ignored if there is already an existing sql=
     -- TODO: I think there is a ! ignore syntax that would screw this up
@@ -831,13 +856,12 @@ takeId ps tableName (n:rest) = fromMaybe (error "takeId: impossible!") $ setFiel
 takeId _ tableName _ = error $ "empty Id field for " `mappend` show tableName
 
 
-takeComposite :: [FieldDef]
-              -> [Text]
-              -> CompositeDef
-takeComposite fields pkcols
-        = CompositeDef
-            (map (getDef fields) pkcols)
-            attrs
+takeComposite
+    :: [FieldDef]
+    -> [Text]
+    -> CompositeDef
+takeComposite fields pkcols =
+    CompositeDef (map (getDef fields) pkcols) attrs
   where
     (_, attrs) = break ("!" `T.isPrefixOf`) pkcols
     getDef [] t = error $ "Unknown column in primary key constraint: " ++ show t
@@ -942,17 +966,75 @@ takeForeign ps tableName _defs = takeRefTable
                 }
           where
             (fields,attrs) = break ("!" `T.isPrefixOf`) rest
-        go ((T.stripPrefix "OnDelete" -> Just onDelete) : rest) onDelete' onUpdate
-          = case (onDelete', readEither $ T.unpack onDelete) of
-            (Nothing, Right cascadingAction) -> go rest (Just cascadingAction) onUpdate
-            (Nothing, Left _) -> error $ errorPrefix ++ "could not parse OnDelete action"
-            (Just _, _)  -> error $ errorPrefix ++ "found more than one OnDelete actions"
-        go ((T.stripPrefix "OnUpdate" -> Just onUpdate) : rest) onDelete onUpdate'
-          = case (onUpdate', readEither $ T.unpack onUpdate) of
-            (Nothing, Right cascadingAction) -> go rest onDelete (Just cascadingAction)
-            (Nothing, Left _) -> error $ errorPrefix ++ "could not parse OnUpdate action"
-            (Just _, _)  -> error $ errorPrefix ++ "found more than one OnUpdate actions"
+
+        go ((parseCascadeAction CascadeDelete -> Just cascadingAction) : rest) onDelete' onUpdate =
+            case onDelete' of
+                Nothing ->
+                    go rest (Just cascadingAction) onUpdate
+                Just _ ->
+                    error $ errorPrefix ++ "found more than one OnDelete actions"
+
+        go ((parseCascadeAction CascadeUpdate -> Just cascadingAction) : rest) onDelete onUpdate' =
+            case onUpdate' of
+                Nothing ->
+                    go rest onDelete (Just cascadingAction)
+                Just _ ->
+                    error $ errorPrefix ++ "found more than one OnUpdate actions"
+
         go xs _ _ = error $ errorPrefix ++ "expecting a lower case constraint name or a cascading action xs=" ++ show xs
+
+data CascadePrefix = CascadeUpdate | CascadeDelete
+
+parseCascade :: [Text] -> (FieldCascade, [Text])
+parseCascade allTokens =
+    go [] Nothing Nothing allTokens
+  where
+    go acc mupd mdel tokens =
+        case tokens of
+            [] ->
+                ( FieldCascade
+                    { fcOnDelete = mdel
+                    , fcOnUpdate = mupd
+                    }
+                , acc
+                )
+            this : rest ->
+                case parseCascadeAction CascadeUpdate this of
+                    Just cascUpd ->
+                        case mupd of
+                            Nothing ->
+                                go acc (Just cascUpd) mdel rest
+                            Just _ ->
+                                nope "found more than one OnUpdate action"
+                    Nothing ->
+                        case parseCascadeAction CascadeDelete this of
+                            Just cascDel ->
+                                case mdel of
+                                    Nothing ->
+                                        go acc mupd (Just cascDel) rest
+                                    Just _ ->
+                                        nope "found more than one OnDelete action: "
+                            Nothing ->
+                                go (this : acc) mupd mdel rest
+    nope msg =
+        error $ msg <> ", tokens: " <> show allTokens
+
+parseCascadeAction
+    :: CascadePrefix
+    -> Text
+    -> Maybe CascadeAction
+parseCascadeAction prfx text = do
+    cascadeStr <- T.stripPrefix ("On" <> toPrefix prfx) text
+    case readEither (T.unpack cascadeStr) of
+        Right a ->
+            Just a
+        Left _ ->
+            Nothing
+  where
+    toPrefix cp =
+        case cp of
+            CascadeUpdate -> "Update"
+            CascadeDelete -> "Delete"
 
 takeDerives :: [Text] -> Maybe [Text]
 takeDerives ("deriving":rest) = Just rest
