@@ -31,6 +31,7 @@ import qualified MpsCustomPrefixTest
 import qualified MigrationColumnLengthTest
 import qualified MigrationOnlyTest
 import qualified PersistentTest
+import qualified PersistLiteralTestSQL
 import qualified PersistUniqueTest
 import qualified PrimaryTest
 import qualified RawSqlTest
@@ -216,6 +217,7 @@ main = do
     TransactionLevelTest.specsWith db
     MigrationTest.specsWith db
     LongIdentifierTest.specsWith db
+    PersistLiteralTestSQL.specsWith db
 
     it "issue #328" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
         runMigrationSilent migrateAll

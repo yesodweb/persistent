@@ -377,6 +377,7 @@ data PersistValue = PersistText Text
                   | PersistMap [(Text, PersistValue)]
                   | PersistObjectId ByteString -- ^ Intended especially for MongoDB backend
                   | PersistArray [PersistValue] -- ^ Intended especially for PostgreSQL backend for text arrays
+                  | PersistLiteral ByteString -- ^ Using 'PersistLiteral' you can customize PersistField instances to output unescaped SQL
                   | PersistDbSpecific ByteString -- ^ Using 'PersistDbSpecific' allows you to use types specific to a particular backend
 -- For example, below is a simple example of the PostGIS geography type:
 --
@@ -443,6 +444,7 @@ fromPersistValueText (PersistMap _) = Left "Cannot convert PersistMap to Text"
 fromPersistValueText (PersistObjectId _) = Left "Cannot convert PersistObjectId to Text"
 fromPersistValueText (PersistArray _) = Left "Cannot convert PersistArray to Text"
 fromPersistValueText (PersistDbSpecific _) = Left "Cannot convert PersistDbSpecific to Text. See the documentation of PersistDbSpecific for an example of using a custom database type with Persistent."
+fromPersistValueText (PersistLiteral _) = Left "Cannot convert PersistLiteral to Text."
 
 instance A.ToJSON PersistValue where
     toJSON (PersistText t) = A.String $ T.cons 's' t
@@ -458,6 +460,7 @@ instance A.ToJSON PersistValue where
     toJSON (PersistList l) = A.Array $ V.fromList $ map A.toJSON l
     toJSON (PersistMap m) = A.object $ map (second A.toJSON) m
     toJSON (PersistDbSpecific b) = A.String $ T.cons 'p' $ TE.decodeUtf8 $ B64.encode b
+    toJSON (PersistLiteral b) = A.String $ T.cons 'l' $ TE.decodeUtf8 $ B64.encode b
     toJSON (PersistArray a) = A.Array $ V.fromList $ map A.toJSON a
     toJSON (PersistObjectId o) =
       A.toJSON $ showChar 'o' $ showHexLen 8 (bs2i four) $ showHexLen 16 (bs2i eight) ""
@@ -481,6 +484,8 @@ instance A.FromJSON PersistValue where
         case T.uncons t0 of
             Nothing -> fail "Null string"
             Just ('p', t) -> either (\_ -> fail "Invalid base64") (return . PersistDbSpecific)
+                           $ B64.decode $ TE.encodeUtf8 t
+            Just ('l', t) -> either (\_ -> fail "Invalid base64") (return . PersistLiteral)
                            $ B64.decode $ TE.encodeUtf8 t
             Just ('s', t) -> return $ PersistText t
             Just ('b', t) -> either (\_ -> fail "Invalid base64") (return . PersistByteString)

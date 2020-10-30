@@ -112,6 +112,7 @@ instance {-# OVERLAPPING #-} PersistField [Char] where
     fromPersistValue (PersistList _) = Left $ T.pack "Cannot convert PersistList to String"
     fromPersistValue (PersistMap _) = Left $ T.pack "Cannot convert PersistMap to String"
     fromPersistValue (PersistDbSpecific _) = Left $ T.pack "Cannot convert PersistDbSpecific to String. See the documentation of PersistDbSpecific for an example of using a custom database type with Persistent."
+    fromPersistValue (PersistLiteral _) = Left $ T.pack "Cannot convert PersistLiteral to String."
     fromPersistValue (PersistArray _) = Left $ T.pack "Cannot convert PersistArray to String"
     fromPersistValue (PersistObjectId _) = Left $ T.pack "Cannot convert PersistObjectId to String"
 #endif

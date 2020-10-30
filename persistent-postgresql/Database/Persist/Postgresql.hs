@@ -54,6 +54,7 @@ import Data.Aeson.Types (modifyFailure)
 import qualified Data.Attoparsec.ByteString.Char8 as P
 import Data.Bits ((.&.))
 import Data.ByteString (ByteString)
+import qualified Data.ByteString.Builder as BB
 import qualified Data.ByteString.Char8 as B8
 import Data.Char (ord)
 import Data.Conduit
@@ -439,6 +440,7 @@ instance PGTF.ToField P where
     toField (P (PersistList l))        = PGTF.toField $ listToJSON l
     toField (P (PersistMap m))         = PGTF.toField $ mapToJSON m
     toField (P (PersistDbSpecific s))  = PGTF.toField (Unknown s)
+    toField (P (PersistLiteral l))     = PGTF.toField (UnknownLiteral l)
     toField (P (PersistArray a))       = PGTF.toField $ PG.PGArray $ P <$> a
     toField (P (PersistObjectId _))    =
         error "Refusing to serialize a PersistObjectId to a PostgreSQL value"
@@ -551,6 +553,19 @@ instance PGFF.FromField Unknown where
 
 instance PGTF.ToField Unknown where
     toField (Unknown a) = PGTF.Escape a
+
+newtype UnknownLiteral = UnknownLiteral { unUnknownLiteral :: ByteString }
+  deriving (Eq, Show, Read, Ord, Typeable)
+
+instance PGFF.FromField UnknownLiteral where
+    fromField f mdata =
+      case mdata of
+        Nothing  -> PGFF.returnError PGFF.UnexpectedNull f "Database.Persist.Postgresql/PGFF.FromField UnknownLiteral"
+        Just dat -> return (UnknownLiteral dat)
+
+instance PGTF.ToField UnknownLiteral where
+    toField (UnknownLiteral a) = PGTF.Plain $ BB.byteString a
+
 
 type Getter a = PGFF.FieldParser a
 

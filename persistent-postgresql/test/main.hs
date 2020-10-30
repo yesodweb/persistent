@@ -54,6 +54,7 @@ import qualified UpsertTest
 import qualified CustomConstraintTest
 import qualified LongIdentifierTest
 import qualified PgIntervalTest
+import qualified PersistLiteralTestSQL
 
 type Tuple = (,)
 
@@ -195,3 +196,4 @@ main = do
     CustomConstraintTest.specs
     PgIntervalTest.specs
     ArrayAggTest.specs
+    PersistLiteralTestSQL.specsWith runConnAssert

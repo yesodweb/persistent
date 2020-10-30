@@ -130,6 +130,7 @@ instance Binary BinPersistValue where
     --     put (BinZT x)
 
     put (BinPersistValue (PersistDbSpecific _)) = undefined
+    put (BinPersistValue (PersistLiteral _)) = undefined
     put (BinPersistValue (PersistObjectId x)) = do
         put (14 :: Word8)
         put x

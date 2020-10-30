@@ -52,6 +52,7 @@ import qualified UniqueTest
 import qualified UpsertTest
 import qualified CustomConstraintTest
 import qualified LongIdentifierTest
+import qualified PersistLiteralTestSQL
 
 type Tuple a b = (a, b)
 
@@ -195,6 +196,7 @@ main = do
     -- TODO: implement automatic truncation for too long foreign keys, so we can run this test.
     xdescribe "The migration for this test currently fails because of MySQL's 64 character limit for identifiers. See https://github.com/yesodweb/persistent/issues/1000 for details" $
         LongIdentifierTest.specsWith db
+    PersistLiteralTestSQL.specsWith db
 
 roundFn :: RealFrac a => a -> Integer
 roundFn = round
