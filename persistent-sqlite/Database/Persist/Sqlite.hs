@@ -45,8 +45,6 @@ module Database.Persist.Sqlite
     , withRawSqlitePoolInfo_
     ) where
 
-import qualified Debug.Trace as Debug
-
 import Control.Concurrent (threadDelay)
 import qualified Control.Exception as E
 import Control.Monad (forM_)
