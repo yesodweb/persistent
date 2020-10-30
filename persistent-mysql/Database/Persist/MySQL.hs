@@ -349,7 +349,9 @@ migrate' connectInfo allDefs getter val = do
                         $ map (findTypeAndMaxLen name) ucols
 
             let foreigns = do
-                    Column { cName=cname, cReference=Just (refTblName, refConstraintName) } <- newcols
+                    Column { cName=cname, cReference=Just cRef } <- newcols
+                    let refConstraintName = crConstraintName cRef
+                    let refTblName = crTableName cRef
                     let refTarget =
                           addReference allDefs refConstraintName refTblName cname
 
@@ -386,7 +388,7 @@ migrate' connectInfo allDefs getter val = do
                     ( map
                         (\c ->
                             case cReference c of
-                                Just (_,fk) ->
+                                Just ColumnReference {crConstraintName=fk} ->
                                     case find (\f -> fk == foreignConstraintNameDBName f) fdefs of
                                         Just _ -> c { cReference = Nothing }
                                         Nothing -> c
@@ -614,7 +616,7 @@ getColumn
     -> (Text -> IO Statement)
     -> DBName
     -> [PersistValue]
-    -> Maybe (DBName, DBName)
+    -> Maybe ColumnReference
     -> IO (Either Text Column)
 getColumn connectInfo getter tname [ PersistText cname
                                    , PersistText null_
@@ -623,7 +625,7 @@ getColumn connectInfo getter tname [ PersistText cname
                                    , colMaxLen
                                    , colPrecision
                                    , colScale
-                                   , default'] refName =
+                                   , default'] cRef =
     fmap (either (Left . pack) Right) $
     runExceptT $ do
       -- Default value
@@ -638,7 +640,7 @@ getColumn connectInfo getter tname [ PersistText cname
                         Right t  -> return (Just t)
                     _ -> fail $ "Invalid default column: " ++ show default'
 
-      ref <- getRef refName
+      ref <- getRef (crConstraintName <$> cRef)
       let colMaxLen' = case colMaxLen of
             PersistInt64 l -> Just (fromIntegral l)
             _ -> Nothing
@@ -660,7 +662,7 @@ getColumn connectInfo getter tname [ PersistText cname
         , cReference = ref
         }
   where getRef Nothing = return Nothing
-        getRef (Just (_, refName')) = do
+        getRef (Just refName') = do
           -- Foreign key (if any)
           stmt <- lift . getter $ T.concat
             [ "SELECT REFERENCED_TABLE_NAME, "
@@ -684,7 +686,9 @@ getColumn connectInfo getter tname [ PersistText cname
           case cntrs of
             [] -> return Nothing
             [[PersistText tab, PersistText ref, PersistInt64 pos]] ->
-              return $ if pos == 1 then Just (DBName tab, DBName ref) else Nothing
+              -- TODO: Fix cascade reference is ignored
+              return $ if pos == 1 then Just (ColumnReference (DBName tab) (DBName ref) noCascade)
+                       else Nothing
             xs -> error $ mconcat
               [ "MySQL.getColumn/getRef: error fetching constraints. Expected a single result for foreign key query for table: "
               , T.unpack (unDBName tname)
@@ -756,7 +760,7 @@ getAlters allDefs edef (c1, u1) (c2, u2) =
 
     dropColumn col =
       map ((,) (cName col)) $
-        [DropReference n | Just (_, n) <- [cReference col]] ++
+        [DropReference (crConstraintName cr) | Just cr <- [cReference col]] ++
         [Drop]
 
     getAltersU [] old = map (DropUniqueConstraint . fst) old
@@ -795,7 +799,7 @@ findAlters edef allDefs col@(Column name isNull type_ def _defConstraintName max
         [] ->
             case ref of
                 Nothing -> ([(name, Add' col)],[])
-                Just (tname, cname) ->
+                Just ColumnReference {crTableName=tname, crConstraintName=cname} ->
                     let cnstr = [addReference allDefs cname tname name]
                     in
                         (map ((,) tname) (Add' col : cnstr), cols)
@@ -803,13 +807,13 @@ findAlters edef allDefs col@(Column name isNull type_ def _defConstraintName max
             let -- Foreign key
                 refDrop =
                     case (ref == ref', ref') of
-                        (False, Just (_, cname)) ->
+                        (False, Just ColumnReference {crConstraintName=cname}) ->
                             [(name, DropReference cname)]
                         _ ->
                             []
                 refAdd  =
                     case (ref == ref', ref) of
-                        (False, Just (tname, cname))
+                        (False, Just ColumnReference {crTableName=tname, crConstraintName=cname})
                             | tname /= entityDB edef
                             , cname /= fieldDB (entityId edef)
                             ->
@@ -851,7 +855,7 @@ showColumn (Column n nu t def _defConstraintName maxLen ref) = concat
                   else " DEFAULT " ++ T.unpack s
     , case ref of
         Nothing -> ""
-        Just (s, _) -> " REFERENCES " ++ escapeDBName s
+        Just cRef -> " REFERENCES " ++ escapeDBName (crTableName cRef)
     ]
 
 
@@ -1081,8 +1085,8 @@ mockMigrate _connectInfo allDefs _getter val = do
                         AddUniqueConstraint uname $
                         map (findTypeAndMaxLen name) ucols ]
         let foreigns = do
-              Column { cName=cname, cReference=Just (refTblName, refConstraintName) } <- newcols
-              return $ AlterColumn name (refTblName, addReference allDefs refConstraintName refTblName cname)
+              Column { cName=cname, cReference= Just ColumnReference{crTableName = refTable, crConstraintName = refConstr}} <- newcols
+              return $ AlterColumn name (refTable, addReference allDefs refConstr refTable cname)
 
         let foreignsAlt = map (\fdef -> let (childfields, parentfields) = unzip (map (\((_,b),(_,d)) -> (b,d)) (foreignFields fdef))
                                         in AlterColumn name (foreignRefTableDBName fdef, AddReference (foreignRefTableDBName fdef) (foreignConstraintNameDBName fdef) childfields parentfields)) fdefs

@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -849,7 +850,7 @@ getColumns getter def cols = do
     us <- with (stmtQuery stmt' vals) (\src -> runConduit $ src .| helperU)
     return $ cs ++ us
   where
-    refMap = Map.fromList $ foldl' ref [] cols
+    refMap = fmap (\cr -> (crTableName cr, crConstraintName cr)) $ Map.fromList $ foldl' ref [] cols
         where ref rs c = case cReference c of
                   Nothing -> rs
                   (Just r) -> (unDBName $ cName c, r) : rs
@@ -942,7 +943,8 @@ getColumn getter tableName' [PersistText columnName, PersistText isNullable, Per
                           , cDefault = fmap stripSuffixes d''
                           , cDefaultConstraintName = Nothing
                           , cMaxLen = Nothing
-                          , cReference = ref
+                          -- TODO: Fix cascade reference is ignored
+                          , cReference = fmap (\(a,b) -> ColumnReference a b noCascade) ref
                           }
   where
     stripSuffixes t =
@@ -1053,9 +1055,9 @@ findAlters defs edef col@(Column name isNull sqltype def _defConstraintName _max
             ([(name, Add' col)], cols)
         Just (Column _oldName isNull' sqltype' def' _defConstraintName' _maxLen' ref') ->
             let refDrop Nothing = []
-                refDrop (Just (_, cname)) = [(name, DropReference cname)]
+                refDrop (Just ColumnReference {crConstraintName=cname}) = [(name, DropReference cname)]
                 refAdd Nothing = []
-                refAdd (Just (tname, a)) =
+                refAdd (Just ColumnReference {crTableName=tname, crConstraintName=a}) =
                     case find ((==tname) . entityDB) defs of
                         Just refdef
                             | entityDB edef /= tname
@@ -1066,6 +1068,7 @@ findAlters defs edef col@(Column name isNull sqltype def _defConstraintName _max
                                     a
                                     [name]
                                     (Util.dbIdColumnsEsc escape refdef)
+                                    -- TODO: Fix cascade reference is ignored
                                     noCascade
                               )
                             ]
@@ -1073,7 +1076,7 @@ findAlters defs edef col@(Column name isNull sqltype def _defConstraintName _max
                         Nothing ->
                             error $ "could not find the entityDef for reftable[" ++ show tname ++ "]"
                 modRef =
-                    if fmap snd ref == fmap snd ref'
+                    if fmap crConstraintName ref == fmap crConstraintName ref'
                         then []
                         else refDrop ref' ++ refAdd ref
                 modNull = case (isNull, isNull') of
@@ -1113,13 +1116,14 @@ getAddReference
     :: [EntityDef]
     -> EntityDef
     -> DBName
-    -> (DBName, DBName)
+    -> ColumnReference
     -> Maybe AlterDB
-getAddReference allDefs entity cname (s, constraintName) = do
+getAddReference allDefs entity cname ColumnReference {crTableName = s, crConstraintName=constraintName} = do
     guard $ table /= s && cname /= fieldDB (entityId entity)
     pure $ AlterColumn
         table
         ( s
+        -- TODO: Fix cascade reference is ignored
         , AddReference constraintName [cname] id_ noCascade
         )
   where

@@ -1,5 +1,6 @@
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
 
 -- | Intended for creating new backends.
 module Database.Persist.Sql.Internal
@@ -87,11 +88,12 @@ mkColumns allDefs t overrides =
 
             , cDefaultConstraintName =  Nothing
             , cMaxLen = maxLen $ fieldAttrs fd
-            , cReference = ref (fieldDB fd) (fieldReference fd) (fieldAttrs fd)
+            , cReference = mkColumnReference fd
             }
 
     tableName :: DBName
     tableName = entityDB t
+
 
     go :: FieldDef -> Column
     go fd =
@@ -102,7 +104,7 @@ mkColumns allDefs t overrides =
             , cDefault = defaultAttribute $ fieldAttrs fd
             , cDefaultConstraintName =  Nothing
             , cMaxLen = maxLen $ fieldAttrs fd
-            , cReference = ref (fieldDB fd) (fieldReference fd) (fieldAttrs fd)
+            , cReference = mkColumnReference fd
             }
 
     maxLen :: [Attr] -> Maybe Integer
@@ -117,22 +119,27 @@ mkColumns allDefs t overrides =
 
     refNameFn = fromMaybe refName (backendSpecificForeignKeyName overrides)
 
+    mkColumnReference :: FieldDef -> Maybe ColumnReference
+    mkColumnReference fd =
+        fmap (\(tName, cName) -> ColumnReference tName cName (fieldCascade fd))
+        $ ref (fieldDB fd) (fieldReference fd) (fieldAttrs fd)
+
     ref :: DBName
         -> ReferenceDef
         -> [Attr]
-        -> Maybe (DBName, DBName, FieldCascade) -- table name, constraint name
+        -> Maybe (DBName, DBName) -- table name, constraint name
     ref c fe []
         | ForeignRef f _ cascade <- fe =
-            Just (resolveTableName allDefs f, refNameFn tableName c, cascade)
+            Just (resolveTableName allDefs f, refNameFn tableName c)
         | otherwise = Nothing
     ref _ _ ("noreference":_) = Nothing
     ref c fe (a:as)
         | Just x <- T.stripPrefix "reference=" a = do
-            (_, constraintName, _)  <- ref c fe as
-            pure (DBName x, constraintName, fromMaybe noCascade $ getReferenceDefCascade fe)
+            (_, constraintName)  <- ref c fe as
+            pure (DBName x, constraintName)
         | Just x <- T.stripPrefix "constraint=" a = do
-            (tableName, _, _) <- ref c fe as
-            pure (tableName, DBName x, fromMaybe noCascade $ getReferenceDefCascade fe)
+            (tableName, _) <- ref c fe as
+            pure (tableName, DBName x)
     ref c x (_:as) = ref c x as
 
 refName :: DBName -> DBName -> DBName

@@ -1134,11 +1134,11 @@ mkEntity entityMap mps t = do
     fpv <- mkFromPersistValues mps t
     utv <- mkUniqueToValues $ entityUniques t
     puk <- mkUniqueKeys t
+    let primaryField = entityId t
+    fields <- mapM (mkField mps t) $ primaryField : entityFields t
     fkc <- mapM (mkForeignKeysComposite mps t) $ entityForeigns t
 
-    let primaryField = entityId t
 
-    fields <- mapM (mkField mps t) $ primaryField : entityFields t
     toFieldNames <- mkToFieldNames $ entityUniques t
 
     (keyTypeDec, keyInstanceDecs) <- mkKeyTypeDec mps t
@@ -1365,7 +1365,8 @@ mkLenses mps ent = fmap mconcat $ forM (entityFields ent) $ \field -> do
         ]
 
 mkForeignKeysComposite :: MkPersistSettings -> EntityDef -> ForeignDef -> Q [Dec]
-mkForeignKeysComposite mps t ForeignDef {..} = do
+mkForeignKeysComposite mps t ForeignDef {..} =
+    if not foreignToPrimary then return [] else do
     let fieldName f = mkName $ unpack $ recName mps (entityHaskell t) f
     let fname = fieldName foreignConstraintNameHaskell
     let reftableString = unpack $ unHaskellName foreignRefTableHaskell
@@ -1373,8 +1374,12 @@ mkForeignKeysComposite mps t ForeignDef {..} = do
     let tablename = mkName $ unpack $ entityText t
     recordName <- newName "record"
 
-    let fldsE = map (\((foreignName, _),_) -> VarE (fieldName foreignName)
-                  `AppE` VarE recordName) foreignFields
+    let mkFldE ((foreignName, _),ff) = case ff of
+          (HaskellName {unHaskellName = "Id"}, DBName {unDBName = "id"})
+            -> AppE (VarE $ mkName "toBackendKey") $
+               VarE (fieldName foreignName) `AppE` VarE recordName
+          _ -> VarE (fieldName foreignName) `AppE` VarE recordName
+    let fldsE = map mkFldE foreignFields
     let mkKeyE = foldl' AppE (maybeExp foreignNullable $ ConE reftableKeyName) fldsE
     let fn = FunD fname [normalClause [VarP recordName] mkKeyE]
 

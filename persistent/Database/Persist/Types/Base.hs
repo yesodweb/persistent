@@ -139,6 +139,14 @@ data EntityDef = EntityDef
     }
     deriving (Show, Eq, Read, Ord)
 
+entitiesPrimary :: EntityDef -> Maybe [FieldDef]
+entitiesPrimary t = case fieldReference primaryField of
+    CompositeRef c _ -> Just $ (compositeFields c)
+    ForeignRef _ _ _ -> Just [primaryField]
+    _ -> Nothing
+  where
+    primaryField = entityId t
+
 entityPrimary :: EntityDef -> Maybe CompositeDef
 entityPrimary t = case fieldReference (entityId t) of
     CompositeRef c _ -> Just c
@@ -333,6 +341,10 @@ data ForeignDef = ForeignDef
     , foreignFields                :: ![(ForeignFieldDef, ForeignFieldDef)] -- this entity plus the primary entity
     , foreignAttrs                 :: ![Attr]
     , foreignNullable              :: Bool
+    , foreignToPrimary             :: Bool
+    -- ^ Determines if the reference is towards a Primary Key or not.
+    --
+    -- @since 2.11.0
     }
     deriving (Show, Eq, Read, Ord)
 

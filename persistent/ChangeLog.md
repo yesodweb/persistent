@@ -2,6 +2,10 @@
 
 ## (Unreleased) 2.11.0.0
 
+* Foreign Key improvements [#1121] https://github.com/yesodweb/persistent/pull/1121
+  * It is now supported to refer to a table with an auto generated Primary Kay
+  * It is now supported to refer to non-primary fields, using the keyword `References`
+  * It is now supported to have cascade options for simple/single-field Foreign Keys
 * Introduces a breaking change to the internal function `mkColumns`, which can now be passed a record of functions to override its default behavior. [#996](https://github.com/yesodweb/persistent/pull/996)
 * Added explicit `forall` notation to make most API functions play nice when using `TypeApplications`. (e.g. instead of `selectList @_ @_ @User [] []`, you can now write `selectList @User [] []`) [#1006](https://github.com/yesodweb/persistent/pull/1006)
 * [#1060](https://github.com/yesodweb/persistent/pull/1060)
