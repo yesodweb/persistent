@@ -95,10 +95,13 @@ runConn_ f = do
   let printDebug = if debugPrint then print . fromLogStr else void . return
   flip runLoggingT (\_ _ _ s -> printDebug s) $ do
     if travis
-      then withPostgresqlPool "host=localhost port=5432 user=postgres dbname=persistent" 1 $ runSqlPool f
+      then do
+          logInfoN "Running in CI"
+          withPostgresqlPool "host=localhost port=5432 user=perstest password=perstest dbname=persistent" 1 $ runSqlPool f
       else do
-        host <- fromMaybe "localhost" <$> liftIO dockerPg
-        withPostgresqlPool ("host=" <> host <> " port=5432 user=postgres dbname=test") 1 $ runSqlPool f
+          logInfoN "CI not detected"
+          host <- fromMaybe "localhost" <$> liftIO dockerPg
+          withPostgresqlPool ("host=" <> host <> " port=5432 user=postgres dbname=test") 1 $ runSqlPool f
 
 runConnAssert :: SqlPersistT (LoggingT (ResourceT IO)) () -> Assertion
 runConnAssert actions = do
