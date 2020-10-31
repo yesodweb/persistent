@@ -1,5 +1,5 @@
 name:            persistent-template
-version:         2.9
+version:         2.9.1.0
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -37,7 +37,11 @@ test-suite test
     type:            exitcode-stdio-1.0
     main-is:         main.hs
     hs-source-dirs:  test
-    other-modules:   TemplateTestImports
+    other-modules:   
+        TemplateTestImports
+      , SharedPrimaryKeyTest
+      , SharedPrimaryKeyTestImported
+                    
     ghc-options:     -Wall
 
     build-depends:   base                     >= 4.10 && < 5

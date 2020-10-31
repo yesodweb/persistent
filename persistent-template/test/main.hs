@@ -44,6 +44,8 @@ import Database.Persist.Sql.Util
 import Database.Persist.TH
 import TemplateTestImports
 
+import qualified SharedPrimaryKeyTest
+import qualified SharedPrimaryKeyTestImported
 
 share [mkPersist sqlSettings { mpsGeneric = False, mpsDeriveInstances = [''Generic] }, mkDeleteCascade sqlSettings { mpsGeneric = False }] [persistUpperCase|
 
@@ -130,6 +132,8 @@ instance Arbitrary Address where
 
 main :: IO ()
 main = hspec $ do
+    SharedPrimaryKeyTest.spec
+    SharedPrimaryKeyTestImported.spec
     describe "HasDefaultId" $ do
         let FieldDef{..} =
                 entityId (entityDef (Proxy @HasDefaultId))

@@ -1719,7 +1719,7 @@ liftAndFixKeys entityMap EntityDef{..} =
     [|EntityDef
         entityHaskell
         entityDB
-        entityId
+        $(liftAndFixKey entityMap entityId)
         entityAttrs
         $(ListE <$> mapM (liftAndFixKey entityMap) entityFields)
         entityUniques
