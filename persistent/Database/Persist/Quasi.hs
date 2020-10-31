@@ -834,12 +834,12 @@ takeId :: PersistSettings -> Text -> [Text] -> FieldDef
 takeId ps tableName (n:rest) =
     setFieldDef
     $ fromMaybe (error "takeId: impossible!")
-    $ takeCols (\_ _ -> addDefaultIdType) ps (field:rest `mappend` setIdName)
+    $ takeCols (\_ _ -> addDefaultIdType) ps (field:rest) -- `mappend` setIdName)
   where
     field = case T.uncons n of
         Nothing -> error "takeId: empty field"
         Just (f, ield) -> toLower f `T.cons` ield
-    addDefaultIdType = takeColsEx ps (field : keyCon : rest `mappend` setIdName)
+    addDefaultIdType = takeColsEx ps (field : keyCon : rest ) -- `mappend` setIdName)
     setFieldDef fd =
         let refFieldType =
                 if fieldType fd == FTTypeCon Nothing keyCon

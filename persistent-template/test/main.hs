@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeApplications, DeriveGeneric #-}
+{-# LANGUAGE TypeApplications, DeriveGeneric, RecordWildCards #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -23,6 +23,7 @@ module Main
     module Main
   ) where
 
+import Data.Int
 import Data.Proxy
 import Control.Applicative (Const (..))
 import Data.Aeson
@@ -35,6 +36,7 @@ import Test.QuickCheck.Arbitrary
 import Test.QuickCheck.Gen (Gen)
 import GHC.Generics (Generic)
 import qualified Data.List as List
+import Data.Coerce
 
 import Database.Persist
 import Database.Persist.Sql
@@ -84,6 +86,21 @@ HasIdDef
 HasDefaultId
     name String
 
+HasCustomSqlId
+    Id String sql=my_id
+    name String
+
+SharedPrimaryKey
+    Id (Key HasDefaultId)
+    name String
+
+SharedPrimaryKeyWithCascade
+    Id (Key HasDefaultId) OnDeleteCascade
+    name String
+
+SharedPrimaryKeyWithCascadeAndCustomName
+    Id (Key HasDefaultId) OnDeleteCascade sql=my_id
+    name String
 |]
 
 share [mkPersist sqlSettings { mpsGeneric = False, mpsGenerateLenses = True }] [persistLowerCase|
@@ -113,6 +130,93 @@ instance Arbitrary Address where
 
 main :: IO ()
 main = hspec $ do
+    describe "HasDefaultId" $ do
+        let FieldDef{..} =
+                entityId (entityDef (Proxy @HasDefaultId))
+        it "should have usual db name" $ do
+            fieldDB `shouldBe` DBName "id"
+        it "should have usual haskell name" $ do
+            fieldHaskell `shouldBe` HaskellName "Id"
+        it "should have correct underlying sql type" $ do
+            fieldSqlType `shouldBe` SqlInt64
+        it "persistfieldsql should be right" $ do
+            sqlType (Proxy @HasDefaultIdId) `shouldBe` SqlInt64
+        it "should have correct haskell type" $ do
+            fieldType `shouldBe` FTTypeCon Nothing "HasDefaultIdId"
+
+    describe "HasCustomSqlId" $ do
+        let FieldDef{..} =
+                entityId (entityDef (Proxy @HasCustomSqlId))
+        it "should have custom db name" $ do
+            fieldDB `shouldBe` DBName "my_id"
+        it "should have usual haskell name" $ do
+            fieldHaskell `shouldBe` HaskellName "id"
+        it "should have correct underlying sql type" $ do
+            fieldSqlType `shouldBe` SqlString
+        it "should have correct haskell type" $ do
+            fieldType `shouldBe` FTTypeCon Nothing "String"
+    describe "HasIdDef" $ do
+        let FieldDef{..} =
+                entityId (entityDef (Proxy @HasIdDef))
+        it "should have usual db name" $ do
+            fieldDB `shouldBe` DBName "id"
+        it "should have usual haskell name" $ do
+            fieldHaskell `shouldBe` HaskellName "id"
+        it "should have correct underlying sql type" $ do
+            fieldSqlType `shouldBe` SqlInt64
+        it "should have correct haskell type" $ do
+            fieldType `shouldBe` FTTypeCon Nothing "Int"
+
+    describe "SharedPrimaryKey" $ do
+        let sharedDef = entityDef (Proxy @SharedPrimaryKey)
+            FieldDef{..} =
+                entityId sharedDef
+        it "should have usual db name" $ do
+            fieldDB `shouldBe` DBName "id"
+        it "should have usual haskell name" $ do
+            fieldHaskell `shouldBe` HaskellName "id"
+        it "should have correct underlying sql type" $ do
+            fieldSqlType `shouldBe` SqlInt64
+        it "should have correct haskell type" $ do
+            fieldType `shouldBe` FTApp (FTTypeCon Nothing "Key") (FTTypeCon Nothing "HasDefaultId")
+        it "should have correct sql type from PersistFieldSql" $ do
+            sqlType (Proxy @SharedPrimaryKeyId)
+                `shouldBe`
+                    SqlInt64
+        it "should have same sqlType as underlying record" $ do
+            sqlType (Proxy @SharedPrimaryKeyId)
+                `shouldBe`
+                    sqlType (Proxy @HasDefaultIdId)
+        it "should be a coercible newtype" $ do
+            coerce @Int64 3
+                `shouldBe`
+                    SharedPrimaryKeyKey (toSqlKey 3)
+
+        it "is a newtype" $ do
+            pkNewtype sqlSettings sharedDef
+                `shouldBe`
+                    True
+
+    describe "SharedPrimaryKeyWithCascade" $ do
+        let FieldDef{..} =
+                entityId (entityDef (Proxy @SharedPrimaryKeyWithCascade))
+        it "should have usual db name" $ do
+            fieldDB `shouldBe` DBName "id"
+        it "should have usual haskell name" $ do
+            fieldHaskell `shouldBe` HaskellName "id"
+        it "should have correct underlying sql type" $ do
+            fieldSqlType `shouldBe` SqlInt64
+        it "should have correct haskell type" $ do
+            fieldType
+                `shouldBe`
+                    FTApp (FTTypeCon Nothing "Key") (FTTypeCon Nothing "HasDefaultId")
+        it "should have cascade in field def" $ do
+            fieldCascade `shouldBe` noCascade { fcOnDelete = Just Cascade }
+        it "should have cascade in foreign ref" $ do
+            getReferenceDefCascade fieldReference
+                `shouldBe` Just noCascade { fcOnDelete = Just Cascade }
+
+
     describe "OnCascadeDelete" $ do
         let subject :: FieldDef
             Just subject =

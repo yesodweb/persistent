@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP, BangPatterns #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
@@ -55,13 +55,17 @@ module Database.Persist.TH
     , fieldError
     , AtLeastOneUniqueKey(..)
     , OnlyOneUniqueKey(..)
+    , pkNewtype
     ) where
 
 -- Development Tip: See persistent-template/README.md for advice on seeing generated Template Haskell code
 -- It's highly recommended to check the diff between master and your PR's generated code.
 
+import qualified Debug.Trace as Debug
+
 import Prelude hiding ((++), take, concat, splitAt, exp)
 
+import Control.Applicative
 import Data.Either
 import Control.Monad (forM, mzero, filterM, guard, unless)
 import Data.Aeson
@@ -1014,6 +1018,9 @@ keyString = unpack . keyText
 keyText :: EntityDef -> Text
 keyText t = unHaskellName (entityHaskell t) ++ "Key"
 
+-- | Returns 'True' if the key definition has more than 1 field.
+--
+-- @since 2.11.0.0
 pkNewtype :: MkPersistSettings -> EntityDef -> Bool
 pkNewtype mps t = length (keyFields mps t) < 2
 
@@ -1733,8 +1740,8 @@ liftAndFixKey entityMap (FieldDef a b c sqlTyp e f fieldRef fc mcomments) =
                 ForeignRef refName _ft cascade ->  do
                     ent <- M.lookup refName entityMap
                     case fieldReference $ entityId ent of
-                        ForeignRef targetName ft _targetCascade ->
-                            Just (ForeignRef targetName ft cascade, lift $ SqlTypeExp ft)
+                        fr@(ForeignRef targetName ft _targetCascade) ->
+                            Just (fr, lift $ SqlTypeExp ft)
                         _ ->
                             Nothing
                 _ ->

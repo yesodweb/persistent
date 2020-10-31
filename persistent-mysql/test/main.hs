@@ -102,7 +102,7 @@ instance Arbitrary (DataTypeTableGeneric backend) where
 setup :: (HasCallStack, MonadUnliftIO m) => Migration -> ReaderT SqlBackend m ()
 setup migration = do
   printMigration migration
-  _ <- runMigrationSilent migration
+  _ <- runMigrationUnsafe migration
   pure ()
 
 main :: IO ()

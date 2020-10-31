@@ -41,6 +41,7 @@ module Init (
   , arbText
   , liftA2
   , changeBackend
+  , Proxy(..)
   ) where
 
 -- needed for backwards compatibility
@@ -66,6 +67,7 @@ import qualified Data.Text as T
 import Data.Time
 import Test.Hspec
 import Test.QuickCheck.Instances ()
+import Data.Proxy
 
 import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase, MkPersistSettings(..))
 
