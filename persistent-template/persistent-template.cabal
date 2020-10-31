@@ -1,5 +1,5 @@
 name:            persistent-template
-version:         2.9
+version:         2.9.1.0
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -40,6 +40,7 @@ test-suite test
     other-modules:   
         TemplateTestImports
       , SharedPrimaryKeyTest
+      , SharedPrimaryKeyTestImported
                     
     ghc-options:     -Wall
 
