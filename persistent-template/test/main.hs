@@ -41,6 +41,8 @@ import Database.Persist.Sql.Util
 import Database.Persist.TH
 import TemplateTestImports
 
+import qualified SharedPrimaryKeyTest
+import qualified SharedPrimaryKeyTestImported
 
 share [mkPersist sqlSettings { mpsGeneric = False, mpsDeriveInstances = [''Generic] }, mkDeleteCascade sqlSettings { mpsGeneric = False }] [persistUpperCase|
 Person json
@@ -106,6 +108,8 @@ instance Arbitrary Address where
 
 main :: IO ()
 main = hspec $ do
+    SharedPrimaryKeyTest.spec
+    SharedPrimaryKeyTestImported.spec
     describe "hasNaturalKey" $ do
         let subject :: PersistEntity a => Proxy a -> Bool
             subject p = hasNaturalKey (entityDef p)

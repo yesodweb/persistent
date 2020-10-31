@@ -1,5 +1,12 @@
 ## Unreleased changes
 
+## 2.9.1.0
+
+* [#1145](https://github.com/yesodweb/persistent/pull/1148)
+    * Fix a bug where the `SqlType` for a shared primary key was being
+      incorrectly set to `SqlString` instead of whatever the target primary key
+      sql type was.
+
 ## 2.9
 
 * Always use the "stock" strategy when deriving Show/Read for keys [#1106](https://github.com/yesodweb/persistent/pull/1106)
