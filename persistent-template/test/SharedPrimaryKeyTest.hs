@@ -27,7 +27,7 @@ share [ mkPersist sqlSettings ] [persistLowerCase|
 User
     name    String
 
--- TODO: uncomment this out.
+-- TODO: uncomment this out https://github.com/yesodweb/persistent/issues/1149
 -- Profile
 --     Id      UserId
 --     email   String
