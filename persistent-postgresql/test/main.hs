@@ -129,6 +129,7 @@ main = do
       , PgIntervalTest.pgIntervalMigrate
       ]
     PersistentTest.cleanDB
+    ForeignKey.cleanDB
 
   hspec $ do
     RenameTest.specsWith runConnAssert

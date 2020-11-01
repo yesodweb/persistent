@@ -157,6 +157,7 @@ main = do
       , LongIdentifierTest.migration
       ]
     PersistentTest.cleanDB
+    ForeignKey.cleanDB
 
   hspec $ do
     RenameTest.specsWith db

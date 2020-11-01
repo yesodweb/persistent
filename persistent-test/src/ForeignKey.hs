@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE TypeApplications, UndecidableInstances #-}
+{-# LANGUAGE AllowAmbiguousTypes, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE ScopedTypeVariables, TypeApplications, UndecidableInstances #-}
 
 module ForeignKey where
 
@@ -208,3 +208,31 @@ specsWith runDb = fdescribe "foreign keys options" $ do
             entityExtra ed
                 `shouldBe`
                     mempty
+
+cleanDB :: (MonadIO m) => SqlPersistT m ()
+cleanDB = do
+    del @SimpleCascadeChild
+    del @SimpleCascade
+    del @Parent
+    del @ParentComposite
+    del @ParentImplicit
+    del @Child
+    del @ChildComposite
+    del @ChildImplicit
+    del @SelfReferenced
+    del @A
+    del @AComposite
+    del @B
+    del @BExplicit
+    del @BComposite
+    del @Chain
+    del @Chain2
+
+del
+    :: forall a m.
+    ( PersistEntity a
+    , PersistEntityBackend a ~ SqlBackend
+    , MonadIO m
+    )
+    => SqlPersistT m ()
+del = deleteWhere @_ @_ @a []

@@ -35,15 +35,15 @@ data Column = Column
 --
 -- @since 2.11.0.0
 data ColumnReference = ColumnReference
-    { crTableName :: DBName
+    { crTableName :: !DBName
     -- ^ The table name that the
     --
     -- @since 2.11.0.0
-    , crConstraintName :: DBName
+    , crConstraintName :: !DBName
     -- ^ The name of the foreign key constraint.
     --
     -- @since 2.11.0.0
-    , crFieldCascade :: FieldCascade
+    , crFieldCascade :: !FieldCascade
     -- ^ Whether or not updates/deletions to the referenced table cascade
     -- to this table.
     --

@@ -40,9 +40,11 @@ import qualified Database.PostgreSQL.Simple.Types as PG
 import qualified Database.PostgreSQL.Simple.TypeInfo.Static as PS
 import Database.PostgreSQL.Simple.Ok (Ok (..))
 
+import Data.Foldable
 import Control.Arrow
 import Control.Exception (Exception, throw, throwIO)
-import Control.Monad (forM, guard)
+import Control.Monad
+import Control.Monad.Trans.Except
 import Control.Monad.IO.Unlift (MonadIO (..), MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Control.Monad.Trans.Reader (runReaderT)
@@ -817,23 +819,25 @@ getColumns getter def cols = do
             , "AND table_name=? "
             ]
 
--- DOMAINS Postgres supports the concept of domains, which are data types with optional constraints.
--- An app might make an "email" domain over the varchar type, with a CHECK that the emails are valid
--- In this case the generated SQL should use the domain name: ALTER TABLE users ALTER COLUMN foo TYPE email
--- This code exists to use the domain name (email), instead of the underlying type (varchar).
--- This is tested in EquivalentTypeTest.hs
+-- DOMAINS Postgres supports the concept of domains, which are data types
+-- with optional constraints.  An app might make an "email" domain over the
+-- varchar type, with a CHECK that the emails are valid In this case the
+-- generated SQL should use the domain name: ALTER TABLE users ALTER COLUMN
+-- foo TYPE email This code exists to use the domain name (email), instead
+-- of the underlying type (varchar).  This is tested in
+-- EquivalentTypeTest.hs
 
     stmt <- getter sqlv
     let vals =
             [ PersistText $ unDBName $ entityDB def
             ]
-    cs <- with (stmtQuery stmt vals) (\src -> runConduit $ src .| helper)
+    columns <- with (stmtQuery stmt vals) (\src -> runConduit $ src .| processColumns .| CL.consume)
     let sqlc = T.concat
             [ "SELECT "
             , "c.constraint_name, "
             , "c.column_name "
-            , "FROM information_schema.key_column_usage c, "
-            , "information_schema.table_constraints k "
+            , "FROM information_schema.key_column_usage AS c, "
+            , "information_schema.table_constraints AS k "
             , "WHERE c.table_catalog=current_database() "
             , "AND c.table_catalog=k.table_catalog "
             , "AND c.table_schema=current_schema() "
@@ -848,34 +852,34 @@ getColumns getter def cols = do
     stmt' <- getter sqlc
 
     us <- with (stmtQuery stmt' vals) (\src -> runConduit $ src .| helperU)
-    return $ cs ++ us
+    return $ columns ++ us
   where
-    refMap = fmap (\cr -> (crTableName cr, crConstraintName cr)) $ Map.fromList $ foldl' ref [] cols
-        where ref rs c = case cReference c of
-                  Nothing -> rs
-                  (Just r) -> (unDBName $ cName c, r) : rs
-    getAll front = do
-        x <- CL.head
-        case x of
-            Nothing -> return $ front []
-            Just [PersistText con, PersistText col] -> getAll (front . (:) (con, col))
-            Just [PersistByteString con, PersistByteString col] -> getAll (front . (:) (T.decodeUtf8 con, T.decodeUtf8 col))
-            Just o -> error $ "unexpected datatype returned for postgres o="++show o
+    refMap =
+        fmap (\cr -> (crTableName cr, crConstraintName cr))
+        $ Map.fromList
+        $ foldl' ref [] cols
+      where
+        ref rs c =
+            maybe rs (\r -> (unDBName $ cName c, r) : rs) (cReference c)
+    getAll =
+        CL.mapM $ \x ->
+            pure $ case x of
+                [PersistText con, PersistText col] ->
+                    (con, col)
+                [PersistByteString con, PersistByteString col] ->
+                    (T.decodeUtf8 con, T.decodeUtf8 col)
+                o ->
+                    error $ "unexpected datatype returned for postgres o="++show o
     helperU = do
-        rows <- getAll id
+        rows <- getAll .| CL.consume
         return $ map (Right . Right . (DBName . fst . head &&& map (DBName . snd)))
                $ groupBy ((==) `on` fst) rows
-    helper = do
-        x <- CL.head
-        case x of
-            Nothing -> return []
-            Just x'@((PersistText cname):_) -> do
-                col <- liftIO $ getColumn getter (entityDB def) x' (Map.lookup cname refMap)
-                let col' = case col of
-                            Left e -> Left e
-                            Right c -> Right $ Left c
-                cols <- helper
-                return $ col' : cols
+    processColumns =
+        CL.mapM $ \x'@((PersistText cname) : _) -> do
+            col <- liftIO $ getColumn getter (entityDB def) x' (Map.lookup cname refMap)
+            pure $ case col of
+                Left e -> Left e
+                Right c -> Right $ Left c
 
 -- | Check if a column name is listed as the "safe to remove" in the entity
 -- list.
@@ -920,33 +924,49 @@ getAlters defs def (c1, u1) (c2, u2) =
     -- Don't drop constraints which were manually added.
     isManual (DBName x) = "__manual_" `T.isPrefixOf` x
 
-getColumn :: (Text -> IO Statement)
-          -> DBName -> [PersistValue]
-          -> Maybe (DBName, DBName)
-          -> IO (Either Text Column)
-getColumn getter tableName' [PersistText columnName, PersistText isNullable, PersistText typeName, defaultValue, numericPrecision, numericScale, maxlen] refName =
-    case d' of
-        Left s -> return $ Left s
-        Right d'' ->
-            let typeStr = case maxlen of
-                            PersistInt64 n -> T.concat [typeName, "(", T.pack (show n), ")"]
-                            _              -> typeName
-             in case getType typeStr of
-                  Left s -> return $ Left s
-                  Right t -> do
-                      let cname = DBName columnName
-                      ref <- getRef cname refName
-                      return $ Right Column
-                          { cName = cname
-                          , cNull = isNullable == "YES"
-                          , cSqlType = t
-                          , cDefault = fmap stripSuffixes d''
-                          , cDefaultConstraintName = Nothing
-                          , cMaxLen = Nothing
-                          -- TODO: Fix cascade reference is ignored
-                          , cReference = fmap (\(a,b) -> ColumnReference a b noCascade) ref
-                          }
+getColumn
+    :: (Text -> IO Statement)
+    -> DBName
+    -> [PersistValue]
+    -> Maybe (DBName, DBName)
+    -> IO (Either Text Column)
+getColumn getter tableName' [PersistText columnName, PersistText isNullable, PersistText typeName, defaultValue, numericPrecision, numericScale, maxlen] refName = runExceptT $ do
+    d'' <- ExceptT $ pure d'
+    let typeStr = case maxlen of
+                    PersistInt64 n -> T.concat [typeName, "(", T.pack (show n), ")"]
+                    _              -> typeName
+    t <- either throwE pure $ getType typeStr
+    let cname = DBName columnName
+    ref <- ExceptT $ fmap Right $ fmap join $ traverse (getRef cname) refName
+    return Column
+        { cName = cname
+        , cNull = isNullable == "YES"
+        , cSqlType = t
+        , cDefault = fmap stripSuffixes d''
+        , cDefaultConstraintName = Nothing
+        , cMaxLen = Nothing
+        , cReference = fmap (\(a,b,c,d) -> ColumnReference a b (mkCascade c d)) ref
+        }
   where
+    mkCascade updText delText =
+        FieldCascade
+            { fcOnUpdate = parseCascade updText
+            , fcOnDelete = parseCascade delText
+            }
+    parseCascade txt =
+        case txt of
+            "NO ACTION" ->
+                Nothing
+            "CASCADE" ->
+                Just Cascade
+            "SET NULL" ->
+                Just SetNull
+            "SET DEFAULT" ->
+                Just SetDefault
+            "RESTRICT" ->
+                Just Restrict
+            _ ->
+                error $ "Unexpected value in parseCascade: " <> show txt
     stripSuffixes t =
         loop'
             [ "::character varying"
@@ -958,21 +978,27 @@ getColumn getter tableName' [PersistText columnName, PersistText isNullable, Per
             case T.stripSuffix p t of
                 Nothing -> loop' ps
                 Just t' -> t'
-    getRef _ Nothing = return Nothing
-    getRef cname (Just (_, refName')) = do
-        let sql = T.concat ["SELECT DISTINCT "
-                           ,"ccu.table_name, "
-                           ,"tc.constraint_name "
-                           ,"FROM information_schema.constraint_column_usage ccu, "
-                           ,"information_schema.key_column_usage kcu, "
-                           ,"information_schema.table_constraints tc "
-                           ,"WHERE tc.constraint_type='FOREIGN KEY' "
-                           ,"AND kcu.constraint_name=tc.constraint_name "
-                           ,"AND ccu.constraint_name=kcu.constraint_name "
-                           ,"AND kcu.ordinal_position=1 "
-                           ,"AND kcu.table_name=? "
-                           ,"AND kcu.column_name=? "
-                           ,"AND tc.constraint_name=?"]
+
+    getRef cname (_, refName') = do
+        let sql = T.concat
+                [ "SELECT DISTINCT "
+                , "ccu.table_name, "
+                , "tc.constraint_name, "
+                , "rc.update_rule, "
+                , "rc.delete_rule "
+                , "FROM information_schema.constraint_column_usage ccu "
+                , "INNER JOIN information_schema.key_column_usage kcu "
+                , "  ON ccu.constraint_name = kcu.constraint_name "
+                , "INNER JOIN information_schema.table_constraints tc "
+                , "  ON tc.constraint_name = kcu.constraint_name "
+                , "LEFT JOIN information_schema.referential_constraints AS rc"
+                , "  ON rc.constraint_name = ccu.constraint_name "
+                , "WHERE tc.constraint_type='FOREIGN KEY' "
+                , "AND kcu.ordinal_position=1 "
+                , "AND kcu.table_name=? "
+                , "AND kcu.column_name=? "
+                , "AND tc.constraint_name=?"
+                ]
         stmt <- getter sql
         cntrs <- with (stmtQuery stmt [PersistText $ unDBName tableName'
                                       ,PersistText $ unDBName cname
@@ -980,8 +1006,8 @@ getColumn getter tableName' [PersistText columnName, PersistText isNullable, Per
                       (\src -> runConduit $ src .| CL.consume)
         case cntrs of
           [] -> return Nothing
-          [[PersistText table, PersistText constraint]] ->
-            return $ Just (DBName table, DBName constraint)
+          [[PersistText table, PersistText constraint, PersistText updRule, PersistText delRule]] ->
+            return $ Just (DBName table, DBName constraint, updRule, delRule)
           xs ->
             error $ mconcat
               [ "Postgresql.getColumn: error fetching constraints. Expected a single result for foreign key query for table: "
@@ -991,6 +1017,7 @@ getColumn getter tableName' [PersistText columnName, PersistText isNullable, Per
               , " but got: "
               , show xs
               ]
+
     d' = case defaultValue of
             PersistNull   -> Right Nothing
             PersistText t -> Right $ Just t
@@ -1055,26 +1082,28 @@ findAlters defs edef col@(Column name isNull sqltype def _defConstraintName _max
             ([(name, Add' col)], cols)
         Just (Column _oldName isNull' sqltype' def' _defConstraintName' _maxLen' ref') ->
             let refDrop Nothing = []
-                refDrop (Just ColumnReference {crConstraintName=cname}) = [(name, DropReference cname)]
+                refDrop (Just ColumnReference {crConstraintName=cname}) =
+                    [(name, DropReference cname)]
+
                 refAdd Nothing = []
-                refAdd (Just ColumnReference {crTableName=tname, crConstraintName=a}) =
-                    case find ((==tname) . entityDB) defs of
+                refAdd (Just colRef) =
+                    case find ((== crTableName colRef) . entityDB) defs of
                         Just refdef
-                            | entityDB edef /= tname
+                            | entityDB edef /= crTableName colRef
                             && _oldName /= fieldDB (entityId edef)
                             ->
-                            [ ( tname
+                            [ ( crTableName colRef
                               , AddReference
-                                    a
+                                    (crConstraintName colRef)
                                     [name]
                                     (Util.dbIdColumnsEsc escape refdef)
-                                    -- TODO: Fix cascade reference is ignored
-                                    noCascade
+                                    (crFieldCascade colRef)
                               )
                             ]
                         Just _ -> []
                         Nothing ->
-                            error $ "could not find the entityDef for reftable[" ++ show tname ++ "]"
+                            error $ "could not find the entityDef for reftable["
+                                ++ show (crTableName colRef) ++ "]"
                 modRef =
                     if fmap crConstraintName ref == fmap crConstraintName ref'
                         then []
