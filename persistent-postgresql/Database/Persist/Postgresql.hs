@@ -1451,6 +1451,8 @@ instance PersistConfig PostgresConf where
 -- | Hooks for configuring the Persistent/its connection to Postgres
 --
 -- TODO: API guarantees? Consider not exporting constructor and/or fields
+--
+-- @since 2.11.0
 data PostgresConfHooks = PostgresConfHooks
   { pgConfHooksGetServerVersion :: PG.Connection -> IO (NonEmpty Word) 
       -- ^ Function to get the version of Postgres
