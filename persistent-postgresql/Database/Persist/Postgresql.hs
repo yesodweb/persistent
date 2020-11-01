@@ -1466,6 +1466,9 @@ data PostgresConfHooks = PostgresConfHooks
       -- Typical uses of this are modifying the connection (e.g. to set the schema) or logging a connection being created.
   }
 
+-- | 
+--
+-- @since 2.11.0
 defaultPostgresConfHooks :: PostgresConfHooks
 defaultPostgresConfHooks = PostgresConfHooks
   { pgConfHooksGetServerVersion = getServerVersion2
