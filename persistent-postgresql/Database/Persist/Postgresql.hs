@@ -324,7 +324,7 @@ openSimpleConn = openSimpleConnWithVersion getServerVersion
 openSimpleConnWithVersion :: (PG.Connection -> IO (Maybe Double)) -> LogFunc -> PG.Connection -> IO SqlBackend
 openSimpleConnWithVersion getVerDouble logFunc conn = do
     smap <- newIORef $ Map.empty
-    serverVersion <- (oldGetVersionToNew getVerDouble) conn
+    serverVersion <- oldGetVersionToNew getVerDouble conn
     return $ createBackend logFunc serverVersion smap conn
 
 -- | Create the backend given a logging function, server version, mutable statement cell,
