@@ -329,7 +329,7 @@ openSimpleConnWithVersion getVerDouble logFunc conn = do
 
 -- | Create the backend given a logging function, server version, mutable statement cell,
 -- and connection.
-createBackend :: LogFunc -> (NonEmpty Word)
+createBackend :: LogFunc -> NonEmpty Word
               -> IORef (Map.Map Text Statement) -> PG.Connection -> SqlBackend
 createBackend logFunc serverVersion smap conn = do
     SqlBackend
