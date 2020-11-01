@@ -15,6 +15,7 @@ module Database.Persist.Postgresql
     , createPostgresqlPool
     , createPostgresqlPoolModified
     , createPostgresqlPoolModifiedWithVersion
+    , createPostgresqlPoolWithConf
     , module Database.Persist.Sql
     , ConnectionString
     , PostgresConf (..)
@@ -25,6 +26,8 @@ module Database.Persist.Postgresql
     , fieldName
     , mockMigration
     , migrateEnableExtension
+    , PostgresConfHooks(..)
+    , defaultPostgresConfHooks
     ) where
 
 import qualified Debug.Trace as Debug
@@ -142,15 +145,12 @@ withPostgresqlPoolWithVersion getVerDouble ci = do
   let getVer = oldGetVersionToNew getVerDouble
   withSqlPool $ open' (const $ return ()) getVer ci
 
--- TODO: why doesn't the withPostgresqlPool have a modify callback?
-
--- | Same as 'withPostgresqlPool', but takes a callback for obtaining the server version
--- and can be configured with 'PostgresConf'
+-- | Same as 'withPostgresqlPool', but can be configured with 'PostgresConf' and 'PostgresConfHooks'.
 --
 -- @since 2.11.0.0
 withPostgresqlPoolWithConf :: (MonadUnliftIO m, MonadLogger m)
                            => PostgresConf -- ^ Configuration for connecting to Postgres
-                           -> PostgresConfHooks -- ^ TODO
+                           -> PostgresConfHooks -- ^ Record of callback functions
                            -> (Pool SqlBackend -> m a)
                            -- ^ Action to be executed that uses the
                            -- connection pool.
@@ -206,13 +206,13 @@ createPostgresqlPoolModifiedWithVersion getVerDouble modConn ci = do
   let getVer = oldGetVersionToNew getVerDouble
   createSqlPool $ open' modConn getVer ci
 
--- | Same as 'createPostgresqlPoolModifiedWithVersion', but takes a 'PostgresConf' for configuration.
+-- | Same as 'createPostgresqlPool', but can be configured with 'PostgresConf' and 'PostgresConfHooks'.
 --
 -- @since 2.11.0.0
 createPostgresqlPoolWithConf
     :: (MonadUnliftIO m, MonadLogger m)
-    => PostgresConf
-    -> PostgresConfHooks
+    => PostgresConf -- ^ Configuration for connecting to Postgres
+    -> PostgresConfHooks -- ^ Record of callback functions
     -> m (Pool SqlBackend)
 createPostgresqlPoolWithConf conf hooks = do
   let getVer = pgConfHooksGetServerVersion hooks
@@ -272,8 +272,8 @@ getServerVersion conn = do
     Right (a,_) -> return $ Just a
     Left err -> throwIO $ PostgresServerVersionError err
 
-getServerVersion2 :: PG.Connection -> IO (NonEmpty Word)
-getServerVersion2 conn = do
+getServerVersionNonEmpty :: PG.Connection -> IO (NonEmpty Word)
+getServerVersionNonEmpty conn = do
   [PG.Only version] <- PG.query_ conn "show server_version";
   case AT.parseOnly parseVersion (T.pack version) of
     Left err -> throwIO $ PostgresServerVersionError $ "Failed to parse Postgres version. Got: " <> version <> ". Error: " <> err
@@ -1380,7 +1380,10 @@ data PostgresConf = PostgresConf
     
     -- TODO: Currently stripes, idle timeout, and pool size are all separate fields
     -- When Persistent next does a large breaking release (3.0?), we should consider making these just a single ConnectionPoolConfig value
-    -- We should also consider removing the Read instance and making the idle timeout a NominalDiffTime
+    -- 
+    -- Currently there the idle timeout is an Integer, rather than resource-pool's NominalDiffTime type.
+    -- This is because the time package only recently added the Read instance for NominalDiffTime.
+    -- Future TODO: Consider removing the Read instance, and/or making the idle timeout a NominalDiffTime.
 
     , pgPoolStripes :: Int
     -- ^ How many stripes to divide the pool into. See "Data.Pool" for details.
@@ -1450,8 +1453,6 @@ instance PersistConfig PostgresConf where
 
 -- | Hooks for configuring the Persistent/its connection to Postgres
 --
--- TODO: API guarantees? Consider not exporting constructor and/or fields
---
 -- @since 2.11.0
 data PostgresConfHooks = PostgresConfHooks
   { pgConfHooksGetServerVersion :: PG.Connection -> IO (NonEmpty Word) 
@@ -1460,18 +1461,24 @@ data PostgresConfHooks = PostgresConfHooks
       -- The default implementation queries the server with "show server_version".
       -- Some variants of Postgres, such as Redshift, don't support showing the version.
       -- It's recommended you return a hardcoded version in those cases.
+      --
+      -- @since 2.11.0
   , pgConfHooksAfterCreate :: PG.Connection -> IO ()
       -- ^ Action to perform after a connection is created.
       --
       -- Typical uses of this are modifying the connection (e.g. to set the schema) or logging a connection being created.
+      --
+      -- The default implementation does nothing.
+      --
+      -- @since 2.11.0
   }
 
--- | 
+-- | Default settings for 'PostgresConfHooks'. See the individual fields of 'PostgresConfHooks' for the default values.
 --
 -- @since 2.11.0
 defaultPostgresConfHooks :: PostgresConfHooks
 defaultPostgresConfHooks = PostgresConfHooks
-  { pgConfHooksGetServerVersion = getServerVersion2
+  { pgConfHooksGetServerVersion = getServerVersionNonEmpty
   , pgConfHooksAfterCreate = const $ pure ()
   }
 
