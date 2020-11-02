@@ -23,6 +23,7 @@ data Column = Column
     , cNull      :: !Bool
     , cSqlType   :: !SqlType
     , cDefault   :: !(Maybe Text)
+    , cGenerated :: !(Maybe Text)
     , cDefaultConstraintName   :: !(Maybe DBName)
     , cMaxLen    :: !(Maybe Integer)
     , cReference :: !(Maybe (DBName, DBName)) -- table name, constraint name

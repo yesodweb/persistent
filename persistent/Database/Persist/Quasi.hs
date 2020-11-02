@@ -260,12 +260,13 @@ module Database.Persist.Quasi
 
 import Prelude hiding (lines)
 
-import qualified Data.List.NonEmpty as NEL
-import Data.List.NonEmpty (NonEmpty(..))
 import Control.Arrow ((&&&))
-import Control.Monad (msum, mplus)
+import Control.Monad (msum, mplus, (<=<))
+import Data.Bifunctor (second)
 import Data.Char
 import Data.List (find, foldl')
+import qualified Data.List.NonEmpty as NEL
+import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Map as M
 import Data.Maybe (mapMaybe, fromMaybe, maybeToList, listToMaybe)
 import Data.Monoid (mappend)
@@ -777,7 +778,7 @@ takeCols onErr ps (n':typ:rest)
                 , fieldDB = DBName $ getDbName ps n rest
                 , fieldType = ft
                 , fieldSqlType = SqlOther $ "SqlType unset for " `mappend` n
-                , fieldAttrs = rest
+                , fieldAttrs = parseFieldAttrs rest
                 , fieldStrict = fromMaybe (psStrictFields ps) mstrict
                 , fieldReference = NoReference
                 , fieldComments = Nothing
@@ -958,8 +959,8 @@ takeDerives :: [Text] -> Maybe [Text]
 takeDerives ("deriving":rest) = Just rest
 takeDerives _ = Nothing
 
-nullable :: [Text] -> IsNullable
+nullable :: [FieldAttr] -> IsNullable
 nullable s
-    | "Maybe"    `elem` s = Nullable ByMaybeAttr
-    | "nullable" `elem` s = Nullable ByNullableAttr
+    | FieldAttrMaybe    `elem` s = Nullable ByMaybeAttr
+    | FieldAttrNullable `elem` s = Nullable ByNullableAttr
     | otherwise = NotNullable

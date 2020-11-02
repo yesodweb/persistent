@@ -36,7 +36,6 @@ library
                      MigrationTest
                      MpsNoPrefixTest
                      MpsCustomPrefixTest
-                     NullableGenerated
                      PersistentTest
                      PersistentTestModels
                      PersistentTestModelsImports

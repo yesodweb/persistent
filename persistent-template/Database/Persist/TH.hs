@@ -373,7 +373,7 @@ mkEntityDefSqlTypeExp emEntities entityMap ent =
         maybe
             (defaultSqlTypeExp field)
             (SqlType' . SqlOther)
-            (listToMaybe $ mapMaybe (stripPrefix "sqltype=") $ fieldAttrs field)
+            (listToMaybe $ mapMaybe (\case {FieldAttrSqltype x -> Just x; _ -> Nothing}) $ fieldAttrs field)
 
     -- In the case of embedding, there won't be any datatype created yet.
     -- We just use SqlString, as the data will be serialized to JSON.
@@ -428,8 +428,8 @@ fixEntityDef :: EntityDef -> EntityDef
 fixEntityDef ed =
     ed { entityFields = filter keepField $ entityFields ed }
   where
-    keepField fd = "MigrationOnly" `notElem` fieldAttrs fd &&
-                   "SafeToRemove" `notElem` fieldAttrs fd
+    keepField fd = FieldAttrMigrationOnly `notElem` fieldAttrs fd &&
+                   FieldAttrSafeToRemove `notElem` fieldAttrs fd
 
 -- | Settings to be passed to the 'mkPersist' function.
 data MkPersistSettings = MkPersistSettings
@@ -1705,6 +1705,8 @@ liftAndFixKey entityMap (FieldDef a b c sqlTyp e f fieldRef mcomments) =
 deriving instance Lift EntityDef
 
 deriving instance Lift FieldDef
+
+deriving instance Lift FieldAttr
 
 deriving instance Lift UniqueDef
 

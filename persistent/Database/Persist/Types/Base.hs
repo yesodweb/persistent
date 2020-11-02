@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiWayIf #-}
 {-# OPTIONS_GHC -fno-warn-deprecations #-} -- usage of Error typeclass
 module Database.Persist.Types.Base where
 
@@ -10,6 +11,7 @@ import Data.ByteString (ByteString, foldl')
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base64 as B64
 import qualified Data.ByteString.Char8 as BS8
+import Data.Char (isSpace)
 import qualified Data.HashMap.Strict as HM
 import Data.Int (Int64)
 import Data.Map (Map)
@@ -165,6 +167,38 @@ newtype DBName = DBName { unDBName :: Text }
 
 type Attr = Text
 
+data FieldAttr
+    = FieldAttrMaybe
+    | FieldAttrNullable
+    | FieldAttrMigrationOnly
+    | FieldAttrSafeToRemove
+    | FieldAttrNoreference
+    | FieldAttrReference Text
+    | FieldAttrConstraint Text
+    | FieldAttrDefault Text
+    | FieldAttrGenerated Text
+    | FieldAttrSqltype Text
+    | FieldAttrMaxlen Integer
+    | FieldAttrOther Text
+    deriving (Show, Eq, Read, Ord)
+
+parseFieldAttrs :: [Text] -> [FieldAttr]
+parseFieldAttrs = fmap $ \raw -> if
+    | raw == "Maybe" -> FieldAttrMaybe
+    | raw == "nullable" -> FieldAttrNullable
+    | raw == "MigrationOnly" -> FieldAttrMigrationOnly
+    | raw == "SafeToRemove" -> FieldAttrSafeToRemove
+    | raw == "noreference" -> FieldAttrNoreference
+    | Just x <- T.stripPrefix "reference=" raw -> FieldAttrReference x
+    | Just x <- T.stripPrefix "constraint=" raw -> FieldAttrConstraint x
+    | Just x <- T.stripPrefix "default=" raw -> FieldAttrDefault x
+    | Just x <- T.stripPrefix "generated=" raw -> FieldAttrGenerated x
+    | Just x <- T.stripPrefix "sqltype=" raw -> FieldAttrSqltype x
+    | Just x <- T.stripPrefix "maxlen=" raw -> case reads (T.unpack x) of
+        [(n, s)] | all isSpace s -> FieldAttrMaxlen n
+        _ -> error $ "Could not parse maxlen field with value " <> show raw
+    | otherwise -> FieldAttrOther raw
+
 data FieldType
     = FTTypeCon (Maybe Text) Text
       -- ^ Optional module and name.
@@ -172,7 +206,7 @@ data FieldType
     | FTList FieldType
   deriving (Show, Eq, Read, Ord)
 
--- | A 'FieldDef' represents the inormation that @persistent@ knows about
+-- | A 'FieldDef' represents the information that @persistent@ knows about
 -- a field of a datatype. This includes information used to parse the field
 -- out of the database and what the field corresponds to.
 data FieldDef = FieldDef
@@ -189,7 +223,8 @@ data FieldDef = FieldDef
     -- ^ The type of the field in Haskell.
     , fieldSqlType   :: !SqlType
     -- ^ The type of the field in a SQL database.
-    , fieldAttrs     :: ![Attr]
+    , fieldAttrs     :: ![FieldAttr]
+    -- ^ Whether or not the field is gnerated and how. Backend-dependent.
     -- ^ User annotations for a field. These are provided with the @!@
     -- operator.
     , fieldStrict    :: !Bool
