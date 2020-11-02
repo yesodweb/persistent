@@ -1,5 +1,5 @@
 name:            persistent-sqlite
-version:         2.10.0
+version:         2.11.0.0
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -35,10 +35,16 @@ flag have-usleep
 flag json1
   description: Enable json1 in the vendored SQLite library; has no effect if a system SQLite library is used.
   default: True
+flag use-stat3
+  description: This flag is now a no-op, as the corresponding SQLite option is now a no-op; has no effect if a system SQLite library is used.
+  default: False
+flag use-stat4
+  description: Enable STAT4 in the vendored SQLite library (supercedes stat3); has no effect if a system SQLite library is used.
+  default: True
 
 library
     build-depends:   base                    >= 4.9         && < 5
-                   , persistent              >= 2.10        && < 3
+                   , persistent              >= 2.11        && < 3
                    , aeson                   >= 1.0
                    , bytestring              >= 0.10
                    , conduit                 >= 1.2.12
@@ -53,6 +59,7 @@ library
                    , unliftio-core
                    , unordered-containers
     exposed-modules: Database.Sqlite
+                     Database.Sqlite.Internal
                      Database.Persist.Sqlite
     ghc-options:     -Wall
     default-language: Haskell2010
@@ -64,6 +71,8 @@ library
     else
         c-sources:   cbits/sqlite3.c
         include-dirs: cbits
+        includes:    sqlite3.h
+        install-includes: sqlite3.h
         cc-options:  -fPIC -std=c99
     if flag(full-text-search)
       cc-options: -DSQLITE_ENABLE_FTS3
@@ -76,6 +85,8 @@ library
        cc-options: -DHAVE_USLEEP
     if flag(json1)
       cc-options: -DSQLITE_ENABLE_JSON1
+    if flag(use-stat4)
+      cc-options: -DSQLITE_ENABLE_STAT4
 
     c-sources: cbits/config.c
 

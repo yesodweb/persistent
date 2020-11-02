@@ -2,15 +2,16 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TypeFamilies #-}
 
-import Control.Monad.Logger
+import Control.Monad.Logger (LoggingT, runLoggingT)
 import Control.Monad.Trans.Resource
 import Control.Monad.Reader
+import qualified Data.ByteString.Char8 as B
 import Data.List.NonEmpty (NonEmpty(..))
+import Data.List (sort)
 import Data.Text (Text)
-import System.Log.FastLogger
+import System.Log.FastLogger (fromLogStr)
 import Test.Hspec
 import Test.HUnit ((@?=))
-import UnliftIO
 
 import Database.Persist.Sql
 import Database.Persist.Sql.Raw.QQ
@@ -19,33 +20,25 @@ import PersistTestPetType
 import PersistentTestModels
 
 main :: IO ()
-main = hspec specs
+main = hspec spec
 
 _debugOn :: Bool
 _debugOn = False
 
-sqlite_database_file :: Text
-sqlite_database_file = "testdb.sqlite3"
-sqlite_database :: SqliteConnectionInfo
-sqlite_database = mkSqliteConnectionInfo sqlite_database_file
-
-runConn :: MonadUnliftIO m => SqlPersistT (LoggingT m) t -> m ()
+runConn :: MonadUnliftIO m => SqlPersistT (LoggingT m) a -> m a
 runConn f = do
-  let debugPrint = _debugOn
-  let printDebug = if debugPrint then print . fromLogStr else void . return
+  let printDebug = when _debugOn . B.putStrLn . fromLogStr
   flip runLoggingT (\_ _ _ s -> printDebug s) $ do
-    _ <- withSqlitePoolInfo sqlite_database 1 $ runSqlPool f
-    return ()
+    withSqliteConn ":memory:" $ runSqlConn f
 
-db :: SqlPersistT (LoggingT (ResourceT IO)) () -> IO ()
+db :: SqlPersistT (LoggingT (ResourceT IO)) a -> IO a
 db actions = do
   runResourceT $ runConn $ do
-      runMigration testMigrate
-      actions
-      transactionUndo
+      _ <- runMigrationSilent testMigrate
+      actions <* transactionUndo
 
-specs :: Spec
-specs = describe "persistent-qq" $ do
+spec :: Spec
+spec = describe "persistent-qq" $ do
     it "sqlQQ/?-?" $ db $ do
         ret <- [sqlQQ| SELECT #{2 :: Int}+#{2 :: Int} |]
         liftIO $ ret @?= [Single (4::Int)]
@@ -153,3 +146,11 @@ specs = describe "persistent-qq" $ do
         |]
         liftIO $ ret @?= [ (Entity p1k p1)
                          , (Entity p3k p3) ]
+
+    it "sqlQQ/rows syntax" $ do
+        let rows :: NonEmpty (Text, Int)
+            rows = ("Mathias", 23) :| ("Norbert", 44) : ("Cassandra", 19) : []
+        db $ do
+            [executeQQ|INSERT INTO ^{Person} (@{PersonName}, @{PersonAge}) VALUES *{rows}|]
+            map unSingle <$> [sqlQQ|SELECT @{PersonName} FROM ^{Person} ORDER BY @{PersonName}|]
+        `shouldReturn` sort ["Mathias", "Norbert", "Cassandra" :: Text]

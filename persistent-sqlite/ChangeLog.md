@@ -1,5 +1,71 @@
 # Changelog for persistent-sqlite
 
+## (Unreleased) 2.11.0.0
+
+* Foreign Key improvements [#1121] (https://github.com/yesodweb/persistent/pull/1121)
+  * It is now supported to refer to a table with an auto generated Primary Kay
+  * It is now supported to refer to non-primary fields, using the keyword `References`
+  * It is now supported to have cascade options for simple/single-field Foreign Keys
+
+* [#1060](https://github.com/yesodweb/persistent/pull/1060)
+  * The QuasiQuoter now supports `OnDelete` and `OnUpdate` cascade options.
+* [#1131](https://github.com/yesodweb/persistent/pull/1131)
+  * Provide `exists` function as required by `PersistQueryRead` type class.
+
+* Remove unnecessary deriving of Typeable [#1114](https://github.com/yesodweb/persistent/pull/1114)
+
+* [#1134](https://github.com/yesodweb/persistent/pull/1134)
+  * Update the SQLite amalgamation to 3.33.0
+
+## 2.10.6.2
+
+* Move template haskell splices to be correct (and GHC 8.10 compatible) [#1034](https://github.com/yesodweb/persistent/pull/1034)
+
+## 2.10.6.1
+
+* Missing `includes` and `install-includes` cabal fields added, to allow
+  packages depending on persistent-sqlite access to the header files.
+
+## 2.10.6
+
+* Bump SQLite amalgamation to version 3.30.1 [#991](https://github.com/yesodweb/persistent/pull/991)
+* Add `createRawSqlitePoolFromInfo`, `createRawSqlitePoolFromInfo_`,
+  `withRawSqlitePoolInfo`, and `withRawSqlitePoolInfo_` to match the existing
+  pool functions for regular `SqlBackend`. [#983](https://github.com/yesodweb/persistent/pull/983)
+>>>>>>> master
+
+## 2.10.5.2
+
+* Compatibility with latest persistent-template for test suite [#1002](https://github.com/yesodweb/persistent/pull/1002/files)
+
+## 2.10.5.1
+
+* a fix for template-haskell 2.16, GHC 8.10 alpha [#993](https://github.com/yesodweb/persistent/pull/993) @simonmichael
+
+## 2.10.5
+
+* Foreign keys table constraints are correctly generated [#945](https://github.com/yesodweb/persistent/pull/945) @kderme
+
+## 2.10.4
+
+* Fix bug with 2.10.3 and 2.10.2 that caused the `RawSqlite` loop. [#934](https://github.com/yesodweb/persistent/pull/934) @merijn
+
+## 2.10.3
+
+* Unique constraints are correctly generated. [#922](https://github.com/yesodweb/persistent/pull/922) @kderme
+
+## 2.10.2
+
+* Add a new `RawSqlite` type and `withRawSqliteConnInfo` function that allow  access to the underlying Sqlite `Connection` type. [#772](https://github.com/yesodweb/persistent/pull/772)
+* Expose the internals of `Connection` in an Internal module, allowing the user to call SQLite functions via the C FFI. [#772](https://github.com/yesodweb/persistent/pull/772)
+* Add a flag for SQLITE_STAT4 and enable it by default, allowing for better query optimisation when using ANALYZE. This breaks the query planner stability guarantee, but the required flag for that isn't enabled or exposed by persistent. Only affects the vendored SQLite library, has no effect when using system SQLite.
+* Add support for migrating entities with composite primary keys. Fixes [#669](https://github.com/yesodweb/persistent/issues/669)
+* Fix a bug when using the `Filter` datatype directly. See [#915](https://github.com/yesodweb/persistent/pull/915) for more details.
+
+## 2.10.1
+
+* Add support for reading text values with null characters from the database. Fixes [#921](https://github.com/yesodweb/persistent/issues/921)
+
 ## 2.10.0
 
 * Updated for `persistent-2.10.0` compatibility.

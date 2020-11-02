@@ -22,7 +22,7 @@ module Database.Persist.Class.PersistEntity
     , toPersistValueEnum, fromPersistValueEnum
     ) where
 
-import Data.Aeson (ToJSON (..), FromJSON (..), fromJSON, object, (.:), (.=), Value (Object))
+import Data.Aeson (ToJSON (..), withObject, FromJSON (..), fromJSON, object, (.:), (.=), Value (Object))
 import qualified Data.Aeson.Parser as AP
 import Data.Aeson.Types (Parser,Result(Error,Success))
 import Data.Aeson.Text (encodeToTextBuilder)
@@ -35,7 +35,6 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy as LT
 import qualified Data.Text.Lazy.Builder as TB
-import Data.Typeable (Typeable)
 import GHC.Generics
 
 import Database.Persist.Class.PersistField
@@ -72,7 +71,7 @@ class ( PersistField (Key record), ToJSON (Key record), FromJSON (Key record)
     persistIdField :: EntityField record (Key record)
 
     -- | Retrieve the 'EntityDef' meta-data for the record.
-    entityDef :: Monad m => m record -> EntityDef
+    entityDef :: proxy record -> EntityDef
 
     -- | An 'EntityField' is parameterised by the Haskell record it belongs to
     -- and the additional type of that field.
@@ -96,6 +95,15 @@ class ( PersistField (Key record), ToJSON (Key record), FromJSON (Key record)
     -- | Use a 'PersistField' as a lens.
     fieldLens :: EntityField record field
               -> (forall f. Functor f => (field -> f field) -> Entity record -> f (Entity record))
+
+    -- | Extract a @'Key' record@ from a @record@ value. Currently, this is
+    -- only defined for entities using the @Primary@ syntax for
+    -- natural/composite keys. In a future version of @persistent@ which
+    -- incorporates the ID directly into the entity, this will always be Just.
+    --
+    -- @since 2.11.0.0
+    keyFromRecordM :: Maybe (record -> Key record)
+    keyFromRecordM = Nothing
 
 type family BackendSpecificUpdate backend record
 
@@ -134,6 +142,12 @@ type family BackendSpecificFilter backend record
 -- and the argument for the comparison.
 --
 -- Persistent users use combinators to create these.
+--
+-- Note that it's important to be careful about the 'PersistFilter' that
+-- you are using, if you use this directly. For example, using the 'In'
+-- 'PersistFilter' requires that you have an array- or list-shaped
+-- 'EntityField'. It is possible to construct values using this that will
+-- create malformed runtime values.
 data Filter record = forall typ. PersistField typ => Filter
     { filterField  :: EntityField record typ
     , filterValue  :: FilterValue typ
@@ -185,7 +199,6 @@ data FilterValue typ where
 data Entity record =
     Entity { entityKey :: Key record
            , entityVal :: record }
-    deriving Typeable
 
 deriving instance (Generic (Key record), Generic record) => Generic (Entity record)
 deriving instance (Eq (Key record), Eq record) => Eq (Entity record)
@@ -248,8 +261,8 @@ keyValueEntityFromJSON _ = fail "keyValueEntityFromJSON: not an object"
 -- @
 entityIdToJSON :: (PersistEntity record, ToJSON record) => Entity record -> Value
 entityIdToJSON (Entity key value) = case toJSON value of
-    Object o -> Object $ HM.insert "id" (toJSON key) o
-    x -> x
+        Object o -> Object $ HM.insert "id" (toJSON key) o
+        x -> x
 
 -- | Predefined @parseJSON@. The input JSON looks like
 -- @{"id": 1, "name": ...}@.
@@ -261,8 +274,14 @@ entityIdToJSON (Entity key value) = case toJSON value of
 --     parseJSON = entityIdFromJSON
 -- @
 entityIdFromJSON :: (PersistEntity record, FromJSON record) => Value -> Parser (Entity record)
-entityIdFromJSON value@(Object o) = Entity <$> o .: "id" <*> parseJSON value
-entityIdFromJSON _ = fail "entityIdFromJSON: not an object"
+entityIdFromJSON = withObject "entityIdFromJSON" $ \o -> do
+    val <- parseJSON (Object o)
+    k <- case keyFromRecordM of
+        Nothing ->
+            o .: "id"
+        Just func ->
+            pure $ func val
+    pure $ Entity k val
 
 instance (PersistEntity record, PersistField record, PersistField (Key record))
   => PersistField (Entity record) where

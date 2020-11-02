@@ -7,6 +7,9 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds -Wno-orphans -O0 #-}
 module EmbedTestMongo (specs) where
 
@@ -17,7 +20,6 @@ import Data.List.NonEmpty hiding (insert, length)
 import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.Text as T
-import Data.Typeable (Typeable)
 import Database.MongoDB (genObjectId)
 import Database.MongoDB (Value(String))
 import System.Process (readProcess)
@@ -26,7 +28,7 @@ import EntityEmbedTestMongo
 import Database.Persist.MongoDB
 
 data TestException = TestException
-    deriving (Show, Typeable, Eq)
+    deriving (Show, Eq)
 instance Exception TestException
 
 instance PersistFieldSql a => PersistFieldSql (NonEmpty a) where

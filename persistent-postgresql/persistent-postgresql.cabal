@@ -1,5 +1,5 @@
 name:            persistent-postgresql
-version:         2.10.0
+version:         2.11.0.0
 license:         MIT
 license-file:    LICENSE
 author:          Felipe Lessa, Michael Snoyman <michael@snoyman.com>
@@ -16,17 +16,20 @@ extra-source-files: ChangeLog.md
 
 library
     build-depends:   base                  >= 4.9      && < 5
-                   , persistent            >= 2.10     && < 3
+                   , persistent            >= 2.11     && < 3
                    , aeson                 >= 1.0
+                   , attoparsec
                    , blaze-builder
                    , bytestring            >= 0.10
                    , conduit               >= 1.2.12
                    , containers            >= 0.5
                    , monad-logger          >= 0.3.25
+                   , mtl
                    , postgresql-simple     >= 0.6.1    && < 0.7
                    , postgresql-libpq      >= 0.9.4.2  && < 0.10
                    , resourcet             >= 1.1.9
                    , resource-pool
+                   , string-conversions
                    , text                  >= 1.2
                    , time                  >= 1.6
                    , transformers          >= 0.5
@@ -48,6 +51,8 @@ test-suite test
                      ArrayAggTest
                      EquivalentTypeTestPostgres
                      JSONTest
+                     CustomConstraintTest
+                     PgIntervalTest
     ghc-options:     -Wall
 
     build-depends:   base                 >= 4.9 && < 5

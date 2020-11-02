@@ -49,3 +49,5 @@ persistent-test/db/
 
 # hspec nonsense
 .hspec-failures
+
+stack.yaml.lock

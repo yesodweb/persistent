@@ -22,6 +22,9 @@ PreUnique sql=pre_unique
     field5 Int
     field6 T.Text
 
+CustomSqlId
+    pk      Int   sql=id
+    Primary pk
 |]
 
 share [mkPersist sqlSettings, mkMigrate "migrationAddCol", mkDeleteCascade sqlSettings] [persistLowerCase|

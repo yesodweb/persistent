@@ -1,3 +1,4 @@
+{-# LANGUAGE ExplicitForAll #-}
 module Database.Persist.Class.DeleteCascade
     ( DeleteCascade (..)
     , deleteCascadeWhere
@@ -24,7 +25,7 @@ class (PersistStoreWrite backend, PersistEntity record, BaseBackend backend ~ Pe
     deleteCascade :: MonadIO m => Key record -> ReaderT backend m ()
 
 -- | Cascade-deletion of entries satisfying given filters.
-deleteCascadeWhere :: (MonadIO m, DeleteCascade record backend, PersistQueryWrite backend)
+deleteCascadeWhere :: forall record backend m. (MonadIO m, DeleteCascade record backend, PersistQueryWrite backend)
                    => [Filter record] -> ReaderT backend m ()
 deleteCascadeWhere filts = do
     srcRes <- selectKeysRes filts []

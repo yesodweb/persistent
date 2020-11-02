@@ -23,6 +23,7 @@ module MyInit (
   , module Database.Persist.Sql.Raw.QQ
   , module Test.Hspec
   , module Test.HUnit
+  , MonadUnliftIO
   , liftIO
   , mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase
   , Int32, Int64
@@ -110,10 +111,11 @@ runConn f = do
                         , connectDatabase = "test"
                         } 1 $ runSqlPool f
       else withMySQLPool baseConnectInfo
-                        { connectHost     = "localhost"
-                        , connectUser     = "travis"
-                        , connectPassword = ""
-                        , connectDatabase = "persistent"
+                        { connectHost     = "127.0.0.1"
+                        , connectUser     = "test"
+                        , connectPassword = "test"
+                        , connectDatabase = "test"
+                        , connectPort     = 33306
                         } 1 $ runSqlPool f
     return ()
 

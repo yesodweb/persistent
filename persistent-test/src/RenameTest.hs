@@ -1,4 +1,5 @@
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE TypeApplications, UndecidableInstances #-}
+
 module RenameTest where
 
 import qualified Data.Map as Map
@@ -19,7 +20,11 @@ KeyTable
     deriving Eq Show
 
 IdTable
-    Id   Day default=CURRENT_DATE
+    -- this used to have a default=CURRENT_DATE, but the test that uses it
+    -- specifies that there is no default on this column. the default is
+    -- failing MySQL and sqlite tests since they don't have shared overlap on
+    -- an appropriate default for a date.
+    Id   Day
     name Text
     -- This was added to test the ability to break a cycle
     -- getting rid of the Maybe should be a compilation failure
@@ -68,17 +73,23 @@ specsWith
     => RunDb backend m
     -> Spec
 specsWith runDb = describe "rename specs" $ do
+    describe "LowerCaseTable" $ do
+        it "LowerCaseTable has the right sql name" $ do
+            fieldDB (entityId (entityDef (Proxy @LowerCaseTable)))
+                `shouldBe`
+                    DBName "my_id"
+
     it "user specified id, insertKey, no default=" $ runDb $ do
-      let rec2 = IdTable "Foo2" Nothing
-      let rec1 = IdTable "Foo1" $ Just rec2
-      let rec  = IdTable "Foo" $ Just rec1
-      now <- liftIO getCurrentTime
-      let key = IdTableKey $ utctDay now
-      insertKey key rec
-      Just rec' <- get key
-      rec' @== rec
-      (Entity key' _):_ <- selectList ([] :: [Filter (IdTableGeneric backend)]) []
-      key' @== key
+        let rec2 = IdTable "Foo2" Nothing
+        let rec1 = IdTable "Foo1" $ Just rec2
+        let rec  = IdTable "Foo" $ Just rec1
+        now <- liftIO getCurrentTime
+        let key = IdTableKey $ utctDay now
+        insertKey key rec
+        Just rec' <- get key
+        rec' @== rec
+        (Entity key' _):_ <- selectList ([] :: [Filter (IdTableGeneric backend)]) []
+        key' @== key
 
     it "extra blocks" $
         entityExtra (entityDef (Nothing :: Maybe LowerCaseTable)) @?=

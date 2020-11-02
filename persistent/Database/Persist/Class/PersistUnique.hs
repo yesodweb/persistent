@@ -17,7 +17,9 @@ module Database.Persist.Class.PersistUnique
   , insertUniqueEntity
   , replaceUnique
   , checkUnique
+  , checkUniqueUpdateable
   , onlyUnique
+  , defaultUpsertBy
   , defaultPutMany
   , persistUniqueKeyValues
   )
@@ -75,7 +77,7 @@ class (PersistCore backend, PersistStoreRead backend) =>
     -- > |  1 | SPJ  |  40 |
     -- > +----+------+-----+
     getBy
-        :: (MonadIO m, PersistRecordBackend record backend)
+        :: forall record m. (MonadIO m, PersistRecordBackend record backend)
         => Unique record -> ReaderT backend m (Maybe (Entity record))
 
 -- | Some functions in this module ('insertUnique', 'insertBy', and
@@ -107,7 +109,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- > |2    |Simon |41   |
     -- > +-----+------+-----+
     deleteBy
-        :: (MonadIO m, PersistRecordBackend record backend)
+        :: forall record m. (MonadIO m, PersistRecordBackend record backend)
         => Unique record -> ReaderT backend m ()
 
     -- | Like 'insert', but returns 'Nothing' when the record
@@ -132,7 +134,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     --
     -- Linus's record was inserted to <#dataset-persist-unique-1 dataset-1>, while SPJ wasn't because SPJ already exists in <#dataset-persist-unique-1 dataset-1>.
     insertUnique
-        :: (MonadIO m, PersistRecordBackend record backend)
+        :: forall record m. (MonadIO m, PersistRecordBackend record backend)
         => record -> ReaderT backend m (Maybe (Key record))
     insertUnique datum = do
         conflict <- checkUnique datum
@@ -190,7 +192,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- that this record has multiple unique keys, and suggests that we look for
     -- 'upsertBy' to select the unique key we want.
     upsert
-        :: (MonadIO m, PersistRecordBackend record backend, OnlyOneUniqueKey record)
+        :: forall record m. (MonadIO m, PersistRecordBackend record backend, OnlyOneUniqueKey record)
         => record
         -- ^ new record to insert
         -> [Update record]
@@ -257,7 +259,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- > |3    |X    |999  |
     -- > +-----+-----+-----+
     upsertBy
-        :: (MonadIO m, PersistRecordBackend record backend)
+        :: forall record m. (MonadIO m, PersistRecordBackend record backend)
         => Unique record
         -- ^ uniqueness constraint to find by
         -> record
@@ -266,12 +268,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
         -- ^ updates to perform if the record already exists
         -> ReaderT backend m (Entity record)
         -- ^ the record in the database after the operation
-    upsertBy uniqueKey record updates = do
-        mrecord <- getBy uniqueKey
-        maybe (insertEntity record) (`updateGetEntity` updates) mrecord
-      where
-        updateGetEntity (Entity k _) upds =
-            (Entity k) `liftM` (updateGet k upds)
+    upsertBy = defaultUpsertBy
 
     -- | Put many records into db
     --
@@ -280,7 +277,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     --
     -- @since 2.8.1
     putMany
-        ::
+        :: forall record m.
         ( MonadIO m
         , PersistRecordBackend record backend
         )
@@ -376,7 +373,7 @@ atLeastOneUniqueDef prxy =
 --
 -- First three lines return 'Left' because there're duplicates in given record's uniqueness constraints. While the last line returns a new key as 'Right'.
 insertBy
-    ::
+    :: forall record backend m.
     ( MonadIO m
     , PersistUniqueWrite backend
     , PersistRecordBackend record backend
@@ -423,7 +420,7 @@ insertBy val = do
 -- > +----+-------+-----+
 
 insertUniqueEntity
-    :: (MonadIO m
+    :: forall record backend m. (MonadIO m
        ,PersistRecordBackend record backend
        ,PersistUniqueWrite backend)
     => record -> ReaderT backend m (Maybe (Entity record))
@@ -445,7 +442,7 @@ insertUniqueEntity datum =
 -- @onlyUnique@ doesn't work if there're more than two constraints. It will
 -- fail with a type error instead.
 onlyUnique
-    ::
+    :: forall record backend m.
     ( MonadIO m
     , PersistUniqueWrite backend
     , PersistRecordBackend record backend
@@ -496,7 +493,7 @@ getByValue record = do
 --
 -- @since 2.10.0
 getByValueUniques
-    ::
+    :: forall record backend m.
     ( MonadIO m
     , PersistUniqueRead backend
     , PersistRecordBackend record backend
@@ -522,7 +519,7 @@ getByValueUniques uniqs =
 --
 -- @since 1.2.2.0
 replaceUnique
-    :: ( MonadIO m
+    :: forall record backend m. ( MonadIO m
        , Eq (Unique record)
        , PersistRecordBackend record backend
        , PersistUniqueWrite backend )
@@ -557,16 +554,16 @@ replaceUnique key datumNew = getJust key >>= replaceOriginal
 --
 -- > mSpjConst <- checkUnique $ User "SPJ" 60
 checkUnique
-    :: (MonadIO m
-       ,PersistRecordBackend record backend
-       ,PersistUniqueRead backend)
+    :: forall record backend m. ( MonadIO m
+       , PersistRecordBackend record backend
+       , PersistUniqueRead backend)
     => record -> ReaderT backend m (Maybe (Unique record))
 checkUnique = checkUniqueKeys . persistUniqueKeys
 
 checkUniqueKeys
-    :: (MonadIO m
-       ,PersistUniqueRead backend
-       ,PersistRecordBackend record backend)
+    :: forall record backend m. ( MonadIO m
+       , PersistUniqueRead backend
+       , PersistRecordBackend record backend)
     => [Unique record] -> ReaderT backend m (Maybe (Unique record))
 checkUniqueKeys [] = return Nothing
 checkUniqueKeys (x:xs) = do
@@ -575,12 +572,79 @@ checkUniqueKeys (x:xs) = do
         Nothing -> checkUniqueKeys xs
         Just _ -> return (Just x)
 
--- | The slow but generic 'putMany' implemetation for any 'PersistUniqueRead'.
+-- | Check whether there are any conflicts for unique keys with this entity and
+-- existing entities in the database.
+--
+-- Returns 'Nothing' if the entity would stay unique, and could thus safely be updated.
+-- on a conflict returns the conflicting key
+--
+-- This is similar to 'checkUnique', except it's useful for updating - when the
+-- particular entity already exists, it would normally conflict with itself.
+-- This variant ignores those conflicts
+--
+-- === __Example usage__
+--
+-- We use <#schema-persist-unique-1 schema-1> and <#dataset-persist-unique-1 dataset-1> here.
+--
+-- This would be 'Nothing':
+--
+-- > mAlanConst <- checkUnique $ User "Alan" 70
+--
+-- While this would be 'Just' because SPJ already exists:
+--
+-- > mSpjConst <- checkUnique $ User "SPJ" 60
+--
+-- @since 2.11.0.0
+checkUniqueUpdateable
+    :: forall record backend m. ( MonadIO m
+       , PersistRecordBackend record backend
+       , PersistUniqueRead backend)
+    => Entity record -> ReaderT backend m (Maybe (Unique record))
+checkUniqueUpdateable (Entity key record) = checkUniqueKeysUpdateable key (persistUniqueKeys record)
+
+checkUniqueKeysUpdateable
+    :: forall record backend m. ( MonadIO m
+       , PersistUniqueRead backend
+       , PersistRecordBackend record backend)
+    => Key record -> [Unique record] -> ReaderT backend m (Maybe (Unique record))
+checkUniqueKeysUpdateable _ [] = return Nothing
+checkUniqueKeysUpdateable key (x:xs) = do
+    y <- getBy x
+    case y of
+        Nothing -> checkUniqueKeysUpdateable key xs
+        Just (Entity k _)
+          | key == k -> checkUniqueKeysUpdateable key xs
+        Just _ ->  return (Just x)
+
+-- | The slow but generic 'upsertBy' implementation for any 'PersistUniqueRead'.
+-- * Lookup corresponding entities (if any) 'getBy'.
+-- * If the record exists, update using 'updateGet'.
+-- * If it does not exist, insert using 'insertEntity'.
+-- @since 2.11
+defaultUpsertBy
+    :: ( PersistEntityBackend record ~ BaseBackend backend
+       , PersistEntity record
+       , MonadIO m
+       , PersistStoreWrite backend
+       , PersistUniqueRead backend
+       )
+    => Unique record   -- ^ uniqueness constraint to find by
+    -> record          -- ^ new record to insert
+    -> [Update record] -- ^ updates to perform if the record already exists
+    -> ReaderT backend m (Entity record) -- ^ the record in the database after the operation
+defaultUpsertBy uniqueKey record updates = do
+    mrecord <- getBy uniqueKey
+    maybe (insertEntity record) (`updateGetEntity` updates) mrecord
+  where
+    updateGetEntity (Entity k _) upds =
+        (Entity k) `liftM` (updateGet k upds)
+
+-- | The slow but generic 'putMany' implementation for any 'PersistUniqueRead'.
 -- * Lookup corresponding entities (if any) for each record using 'getByValue'
 -- * For pre-existing records, issue a 'replace' for each old key and new record
 -- * For new records, issue a bulk 'insertMany_'
 defaultPutMany
-    ::( PersistEntityBackend record ~ BaseBackend backend
+    :: forall record backend m. ( PersistEntityBackend record ~ BaseBackend backend
       , PersistEntity record
       , MonadIO m
       , PersistStoreWrite backend

@@ -1,15 +1,17 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE PatternGuards, DataKinds, TypeOperators, UndecidableInstances #-}
 module Database.Persist.Class.PersistField
     ( PersistField (..)
     , SomePersistField (..)
     , getPersistMap
+    , OverflowNatural(..)
     ) where
 
 import Control.Arrow (second)
 import Control.Monad ((<=<))
+import Control.Applicative ((<|>))
 import qualified Data.Aeson as A
 import Data.ByteString.Char8 (ByteString, unpack, readInt)
 import qualified Data.ByteString.Lazy as L
@@ -30,6 +32,7 @@ import Data.Word (Word, Word8, Word16, Word32, Word64)
 import Numeric.Natural (Natural)
 import Text.Blaze.Html
 import Text.Blaze.Html.Renderer.Text (renderHtml)
+import GHC.TypeLits
 
 import Database.Persist.Types.Base
 
@@ -303,18 +306,24 @@ instance PersistField UTCTime where
     fromPersistValue (PersistInt64 i)   = Right $ posixSecondsToUTCTime $ (/ (1000 * 1000 * 1000)) $ fromIntegral $ i
 #endif
     fromPersistValue x@(PersistText t)  =
-        case reads $ T.unpack t of
+        let s = T.unpack t
+        in
+          case reads s of
             (d, _):_ -> Right d
             _ ->
-                case parse8601 $ T.unpack t of
+                case parse8601 s <|> parsePretty s of
                     Nothing -> Left $ fromPersistValueParseError "UTCTime" x
                     Just x' -> Right x'
       where
 #if MIN_VERSION_time(1,5,0)
-        parse8601 = parseTimeM True defaultTimeLocale "%FT%T%Q"
+        parse8601 = parseTimeM True defaultTimeLocale format8601
+        parsePretty = parseTimeM True defaultTimeLocale formatPretty
 #else
-        parse8601 = parseTime defaultTimeLocale "%FT%T%Q"
+        parse8601 = parseTime defaultTimeLocale format8601
+        parsePretty = parseTime defaultTimeLocale formatPretty
 #endif
+        format8601 = "%FT%T%Q"
+        formatPretty = "%F %T%Q"
     fromPersistValue x@(PersistByteString s) =
         case reads $ unpack s of
             (d, _):_ -> Right d
@@ -322,11 +331,43 @@ instance PersistField UTCTime where
 
     fromPersistValue x = Left $ fromPersistValueError "UTCTime" "time, integer, string, or bytestring" x
 
-instance PersistField Natural where
-  toPersistValue = (toPersistValue :: Int64 -> PersistValue) . fromIntegral
+-- | Prior to @persistent-2.11.0@, we provided an instance of
+-- 'PersistField' for the 'Natural' type. This was in error, because
+-- 'Natural' represents an infinite value, and databases don't have
+-- reasonable types for this.
+--
+-- The instance for 'Natural' used the 'Int64' underlying type, which will
+-- cause underflow and overflow errors. This type has the exact same code
+-- in the instances, and will work seamlessly.
+--
+-- A more appropriate type for this is the 'Word' series of types from
+-- "Data.Word". These have a bounded size, are guaranteed to be
+-- non-negative, and are quite efficient for the database to store.
+--
+-- @since 2.11.0
+newtype OverflowNatural = OverflowNatural { unOverflowNatural :: Natural }
+    deriving (Eq, Show, Ord)
+
+instance
+  TypeError
+    ( 'Text "The instance of PersistField for the Natural type was removed."
+    ':$$: 'Text "Please see the documentation for OverflowNatural if you want to "
+    ':$$: 'Text "continue using the old behavior or want to see documentation on "
+    ':$$: 'Text "why the instance was removed."
+    ':$$: 'Text ""
+    ':$$: 'Text "This error instance will be removed in a future release."
+    )
+  =>
+    PersistField Natural
+  where
+    toPersistValue = undefined
+    fromPersistValue = undefined
+
+instance PersistField OverflowNatural where
+  toPersistValue = (toPersistValue :: Int64 -> PersistValue) . fromIntegral . unOverflowNatural
   fromPersistValue x = case (fromPersistValue x :: Either Text Int64) of
-    Left err -> Left $ T.replace "Int64" "Natural" err
-    Right int -> Right $ fromIntegral int -- TODO use bimap?
+    Left err -> Left $ T.replace "Int64" "OverflowNatural" err
+    Right int -> Right $ OverflowNatural $ fromIntegral int -- TODO use bimap?
 
 instance PersistField a => PersistField (Maybe a) where
     toPersistValue Nothing = PersistNull

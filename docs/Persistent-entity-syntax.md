@@ -136,6 +136,18 @@ This makes a unique index requiring `phone` to be unique across `Person` rows. O
 
 The [tests for this feature](https://github.com/yesodweb/persistent/blob/master/persistent-test/src/CompositeTest.hs#L53) demonstrates their usage
 
+### constraint=
+
+You can use the `constraint=` attribute to override the constraint name used in migrations. This is useful particularly when the automatically generated constraint names exceed database limits (e.g. MySQL does not allow constraint names longer than 64 characters).
+
+```
+VeryLongTableName
+  name Text
+
+AnotherVeryLongTableName
+  veryLongTableNameId VeryLongTableNameId constraint=short_foreign_key
+```
+
 ## Laziness
 
 By default the records created by persistent have strict fields. You can prefix a field name with `~` to make it lazy (or `!` to make it strict).
@@ -416,3 +428,47 @@ Storing times with timezones in one type in databases is not possible, although 
 * http://justatheory.com/computers/databases/postgresql/use-timestamptz.html
 * https://github.com/lpsmith/postgresql-simple/issues/69
 * https://github.com/nikita-volkov/hasql-postgres/issues/1
+
+## Documentation Comments
+
+The quasiquoter supports ordinary comments with `--` and `#`.
+Since `persistent-2.10.5.1`, it also supports documentation comments.
+The grammar for documentation comments is similar to Haskell's Haddock syntax, with a few restrictions:
+
+1. Only the `-- | ` form is allowed.
+2. You must put a space before and after the `|` pipe character.
+3. The comment must be indented at the same level as the entity or field it documents.
+
+An example of the field documentation is:
+
+```
+-- | I am a doc comment for a User. Users are important
+-- | to the application, and should be treasured.
+User
+    -- | Users have names. Call them by names.
+    name String
+    -- | A user can be old, or young, and we care about 
+    -- | this for some reason.
+    age Int
+```
+
+The documentation is present on the `entityComments` field on the `EntityDef` for the entity:
+
+```haskell
+>>> let userDefinition = entityDef (Proxy :: Proxy User)
+>>> entityComments userDefinition
+"I am a doc comment for a User. Users are important\nto the application, and should be treasured.\n"
+```
+
+Likewise, the field documentation is present in the `fieldComments` field on the `FieldDef` present in the `EntityDef`:
+
+```haskell
+>>> let userFields = entityFields userDefinition
+>>> let comments = map fieldComments userFields
+>>> mapM_ putStrLn comments
+"Users have names. Call them by names."
+"A user can be old, or young, and we care about\nthis for some reason."
+```
+
+Unfortunately, we can't use this to create Haddocks for you, because [Template Haskell does not support Haddock yet](https://gitlab.haskell.org/ghc/ghc/issues/5467).
+`persistent` backends *can* use this to generate SQL `COMMENT`s, which are useful for a database perspective, and you can use the [`persistent-documentation`](https://hackage.haskell.org/package/persistent-documentation) library to render a Markdown document of the entity definitions.

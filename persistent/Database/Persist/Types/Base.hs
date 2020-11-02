@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -fno-warn-deprecations #-} -- usage of Error typeclass
 module Database.Persist.Types.Base where
 
@@ -20,7 +19,6 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import Data.Text.Encoding.Error (lenientDecode)
 import Data.Time (Day, TimeOfDay, UTCTime)
-import Data.Typeable (Typeable)
 import qualified Data.Vector as V
 import Data.Word (Word32)
 import Numeric (showHex, readHex)
@@ -141,6 +139,14 @@ data EntityDef = EntityDef
     }
     deriving (Show, Eq, Read, Ord)
 
+entitiesPrimary :: EntityDef -> Maybe [FieldDef]
+entitiesPrimary t = case fieldReference primaryField of
+    CompositeRef c -> Just $ (compositeFields c)
+    ForeignRef _ _ -> Just [primaryField]
+    _ -> Nothing
+  where
+    primaryField = entityId t
+
 entityPrimary :: EntityDef -> Maybe CompositeDef
 entityPrimary t = case fieldReference (entityId t) of
     CompositeRef c -> Just c
@@ -167,9 +173,21 @@ newtype DBName = DBName { unDBName :: Text }
 
 type Attr = Text
 
+-- | A 'FieldType' describes a field parsed from the QuasiQuoter and is
+-- used to determine the Haskell type in the generated code.
+--
+-- @name Text@ parses into @FTTypeCon Nothing "Text"@
+--
+-- @name T.Text@ parses into @FTTypeCon (Just "T" "Text")@
+--
+-- @name (Jsonb User)@ parses into:
+--
+-- @
+-- FTApp (FTTypeCon Nothing "Jsonb") (FTTypeCon Nothing "User")
+-- @
 data FieldType
     = FTTypeCon (Maybe Text) Text
-      -- ^ Optional module and name.
+    -- ^ Optional module and name.
     | FTApp FieldType FieldType
     | FTList FieldType
   deriving (Show, Eq, Read, Ord)
@@ -198,6 +216,13 @@ data FieldDef = FieldDef
     -- ^ If this is 'True', then the Haskell datatype will have a strict
     -- record field. The default value for this is 'True'.
     , fieldReference :: !ReferenceDef
+    , fieldCascade :: !FieldCascade
+    -- ^ Defines how operations on the field cascade on to the referenced
+    -- tables. This doesn't have any meaning if the 'fieldReference' is set
+    -- to 'NoReference' or 'SelfReference'. The cascade option here should
+    -- be the same as the one obtained in the 'fieldReference'.
+    --
+    -- @since 2.11.0
     , fieldComments  :: !(Maybe Text)
     -- ^ Optional comments for a 'Field'. There is not currently a way to
     -- attach comments to a field in the quasiquoter.
@@ -295,11 +320,69 @@ data ForeignDef = ForeignDef
     , foreignRefTableDBName        :: !DBName
     , foreignConstraintNameHaskell :: !HaskellName
     , foreignConstraintNameDBName  :: !DBName
+    , foreignFieldCascade          :: !FieldCascade
+    -- ^ Determine how the field will cascade on updates and deletions.
+    --
+    -- @since 2.11.0
     , foreignFields                :: ![(ForeignFieldDef, ForeignFieldDef)] -- this entity plus the primary entity
     , foreignAttrs                 :: ![Attr]
     , foreignNullable              :: Bool
+    , foreignToPrimary             :: Bool
+    -- ^ Determines if the reference is towards a Primary Key or not.
+    --
+    -- @since 2.11.0
     }
     deriving (Show, Eq, Read, Ord)
+
+-- | This datatype describes how a foreign reference field cascades deletes
+-- or updates.
+--
+-- This type is used in both parsing the model definitions and performing
+-- migrations. A 'Nothing' in either of the field values means that the
+-- user has not specified a 'CascadeAction'. An unspecified 'CascadeAction'
+-- is defaulted to 'Restrict' when doing migrations.
+--
+-- @since 2.11.0
+data FieldCascade = FieldCascade
+    { fcOnUpdate :: !(Maybe CascadeAction)
+    , fcOnDelete :: !(Maybe CascadeAction)
+    }
+    deriving (Show, Eq, Read, Ord)
+
+-- | A 'FieldCascade' that does nothing.
+--
+-- @since 2.11.0
+noCascade :: FieldCascade
+noCascade = FieldCascade Nothing Nothing
+
+-- | Renders a 'FieldCascade' value such that it can be used in SQL
+-- migrations.
+--
+-- @since 2.11.0
+renderFieldCascade :: FieldCascade -> Text
+renderFieldCascade (FieldCascade onUpdate onDelete) =
+    T.unwords
+        [ foldMap (mappend "ON DELETE " . renderCascadeAction) onDelete
+        , foldMap (mappend "ON UPDATE " . renderCascadeAction) onUpdate
+        ]
+
+-- | An action that might happen on a deletion or update on a foreign key
+-- change.
+--
+-- @since 2.11.0
+data CascadeAction = Cascade | Restrict | SetNull | SetDefault
+    deriving (Show, Eq, Read, Ord)
+
+-- | Render a 'CascadeAction' to 'Text' such that it can be used in a SQL
+-- command.
+--
+-- @since 2.11.0
+renderCascadeAction :: CascadeAction -> Text
+renderCascadeAction action = case action of
+  Cascade    -> "CASCADE"
+  Restrict   -> "RESTRICT"
+  SetNull    -> "SET NULL"
+  SetDefault -> "SET DEFAULT"
 
 data PersistException
   = PersistError Text -- ^ Generic Exception
@@ -308,7 +391,7 @@ data PersistException
   | PersistForeignConstraintUnmet Text
   | PersistMongoDBError Text
   | PersistMongoDBUnsupported Text
-    deriving (Show, Typeable)
+    deriving Show
 
 instance Exception PersistException
 instance Error PersistException where
@@ -356,7 +439,7 @@ data PersistValue = PersistText Text
 -- insert $ Foo (toPoint 44 44)
 -- @
 --
-    deriving (Show, Read, Eq, Typeable, Ord)
+    deriving (Show, Read, Eq, Ord)
 
 
 instance ToHttpApiData PersistValue where
@@ -433,10 +516,10 @@ instance A.FromJSON PersistValue where
     parseJSON (A.String t0) =
         case T.uncons t0 of
             Nothing -> fail "Null string"
-            Just ('p', t) -> either (fail "Invalid base64") (return . PersistDbSpecific)
+            Just ('p', t) -> either (\_ -> fail "Invalid base64") (return . PersistDbSpecific)
                            $ B64.decode $ TE.encodeUtf8 t
             Just ('s', t) -> return $ PersistText t
-            Just ('b', t) -> either (fail "Invalid base64") (return . PersistByteString)
+            Just ('b', t) -> either (\_ -> fail "Invalid base64") (return . PersistByteString)
                            $ B64.decode $ TE.encodeUtf8 t
             Just ('t', t) -> fmap PersistTimeOfDay $ readMay t
             Just ('u', t) -> fmap PersistUTCTime $ readMay t
@@ -448,7 +531,6 @@ instance A.FromJSON PersistValue where
       where
         headMay []    = Nothing
         headMay (x:_) = Just x
-        readMay :: (Read a, Monad m) => T.Text -> m a
         readMay t =
             case reads $ T.unpack t of
                 (x, _):_ -> return x
@@ -487,7 +569,7 @@ data SqlType = SqlString
              | SqlDayTime -- ^ Always uses UTC timezone
              | SqlBlob
              | SqlOther T.Text -- ^ a backend-specific name
-    deriving (Show, Read, Eq, Typeable, Ord)
+    deriving (Show, Read, Eq, Ord)
 
 data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le | In | NotIn
                    | BackendSpecificFilter T.Text
@@ -495,13 +577,12 @@ data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le | In | NotIn
 
 data UpdateException = KeyNotFound String
                      | UpsertError String
-    deriving Typeable
 instance Show UpdateException where
     show (KeyNotFound key) = "Key not found during updateGet: " ++ key
     show (UpsertError msg) = "Error during upsert: " ++ msg
 instance Exception UpdateException
 
-data OnlyUniqueException = OnlyUniqueException String deriving Typeable
+data OnlyUniqueException = OnlyUniqueException String
 instance Show OnlyUniqueException where
     show (OnlyUniqueException uniqueMsg) =
       "Expected only one unique key, got " ++ uniqueMsg

@@ -1,0 +1,17 @@
+resolver: lts-14.1
+packages:
+  - ./persistent
+  - ./persistent-template
+  - ./persistent-sqlite
+  - ./persistent-test
+    # - ./persistent-mongoDB
+  - ./persistent-mysql
+  - ./persistent-postgresql
+  - ./persistent-redis
+  - ./persistent-qq
+
+extra-deps:
+  - bson-0.3.2.8
+  - hedis-0.12.8
+  - HTTP-4000.3.14
+  - th-lift-instances-0.1.14
