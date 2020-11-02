@@ -107,7 +107,7 @@ instance Show PostgresServerVersionError where
       "Unexpected PostgreSQL server version, got " <> uniqueMsg
 instance Exception PostgresServerVersionError
 
--- | Create a PostgreSQL connection pool and run the given action.  The pool is
+-- | Create a PostgreSQL connection pool and run the given action. The pool is
 -- properly released after the action finishes using it.  Note that you should
 -- not use the given 'ConnectionPool' outside the action since it may already
 -- have been released.
