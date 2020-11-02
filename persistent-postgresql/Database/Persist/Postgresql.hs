@@ -12,9 +12,11 @@ module Database.Persist.Postgresql
     , withPostgresqlPoolWithVersion
     , withPostgresqlConn
     , withPostgresqlConnWithVersion
+    , withPostgresqlPoolWithConf
     , createPostgresqlPool
     , createPostgresqlPoolModified
     , createPostgresqlPoolModifiedWithVersion
+    , createPostgresqlPoolWithConf
     , module Database.Persist.Sql
     , ConnectionString
     , PostgresConf (..)
@@ -25,6 +27,8 @@ module Database.Persist.Postgresql
     , fieldName
     , mockMigration
     , migrateEnableExtension
+    , PostgresConfHooks(..)
+    , defaultPostgresConfHooks
     ) where
 
 import qualified Debug.Trace as Debug
@@ -54,6 +58,7 @@ import qualified Blaze.ByteString.Builder.Char8 as BBB
 import Data.Acquire (Acquire, mkAcquire, with)
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
+import qualified Data.Attoparsec.Text as AT
 import qualified Data.Attoparsec.ByteString.Char8 as P
 import Data.Bits ((.&.))
 import Data.ByteString (ByteString)
@@ -105,7 +110,7 @@ instance Show PostgresServerVersionError where
       "Unexpected PostgreSQL server version, got " <> uniqueMsg
 instance Exception PostgresServerVersionError
 
--- | Create a PostgreSQL connection pool and run the given action.  The pool is
+-- | Create a PostgreSQL connection pool and run the given action. The pool is
 -- properly released after the action finishes using it.  Note that you should
 -- not use the given 'ConnectionPool' outside the action since it may already
 -- have been released.
@@ -139,7 +144,25 @@ withPostgresqlPoolWithVersion :: (MonadUnliftIO m, MonadLogger m)
                               -- ^ Action to be executed that uses the
                               -- connection pool.
                               -> m a
-withPostgresqlPoolWithVersion getVer ci = withSqlPool $ open' (const $ return ()) getVer ci
+withPostgresqlPoolWithVersion getVerDouble ci = do
+  let getVer = oldGetVersionToNew getVerDouble
+  withSqlPool $ open' (const $ return ()) getVer ci
+
+-- | Same as 'withPostgresqlPool', but can be configured with 'PostgresConf' and 'PostgresConfHooks'.
+--
+-- @since 2.11.0.0
+withPostgresqlPoolWithConf :: (MonadUnliftIO m, MonadLogger m)
+                           => PostgresConf -- ^ Configuration for connecting to Postgres
+                           -> PostgresConfHooks -- ^ Record of callback functions
+                           -> (Pool SqlBackend -> m a)
+                           -- ^ Action to be executed that uses the
+                           -- connection pool.
+                           -> m a
+withPostgresqlPoolWithConf conf hooks = do
+  let getVer = pgConfHooksGetServerVersion hooks
+      modConn = pgConfHooksAfterCreate hooks
+  let logFuncToBackend = open' modConn getVer (pgConnStr conf)
+  withSqlPoolWithConfig logFuncToBackend (postgresConfToConnectionPoolConfig conf)
 
 -- | Create a PostgreSQL connection pool.  Note that it's your
 -- responsibility to properly close the connection pool when
@@ -182,8 +205,30 @@ createPostgresqlPoolModifiedWithVersion
     -> ConnectionString -- ^ Connection string to the database.
     -> Int -- ^ Number of connections to be kept open in the pool.
     -> m (Pool SqlBackend)
-createPostgresqlPoolModifiedWithVersion getVer modConn ci =
+createPostgresqlPoolModifiedWithVersion getVerDouble modConn ci = do
+  let getVer = oldGetVersionToNew getVerDouble
   createSqlPool $ open' modConn getVer ci
+
+-- | Same as 'createPostgresqlPool', but can be configured with 'PostgresConf' and 'PostgresConfHooks'.
+--
+-- @since 2.11.0.0
+createPostgresqlPoolWithConf
+    :: (MonadUnliftIO m, MonadLogger m)
+    => PostgresConf -- ^ Configuration for connecting to Postgres
+    -> PostgresConfHooks -- ^ Record of callback functions
+    -> m (Pool SqlBackend)
+createPostgresqlPoolWithConf conf hooks = do
+  let getVer = pgConfHooksGetServerVersion hooks
+      modConn = pgConfHooksAfterCreate hooks
+  createSqlPoolWithConfig (open' modConn getVer (pgConnStr conf)) (postgresConfToConnectionPoolConfig conf)
+
+postgresConfToConnectionPoolConfig :: PostgresConf -> ConnectionPoolConfig
+postgresConfToConnectionPoolConfig conf =
+  ConnectionPoolConfig
+    { connectionPoolConfigStripes = pgPoolStripes conf
+    , connectionPoolConfigIdleTimeout = fromInteger $ pgPoolIdleTimeout conf
+    , connectionPoolConfigSize = pgPoolSize conf
+    }
 
 -- | Same as 'withPostgresqlPool', but instead of opening a pool
 -- of connections, only one connection is opened.
@@ -202,11 +247,13 @@ withPostgresqlConnWithVersion :: (MonadUnliftIO m, MonadLogger m)
                               -> ConnectionString
                               -> (SqlBackend -> m a)
                               -> m a
-withPostgresqlConnWithVersion getVer = withSqlConn . open' (const $ return ()) getVer
+withPostgresqlConnWithVersion getVerDouble = do
+  let getVer = oldGetVersionToNew getVerDouble
+  withSqlConn . open' (const $ return ()) getVer
 
 open'
     :: (PG.Connection -> IO ())
-    -> (PG.Connection -> IO (Maybe Double))
+    -> (PG.Connection -> IO (NonEmpty Word))
     -> ConnectionString -> LogFunc -> IO SqlBackend
 open' modConn getVer cstr logFunc = do
     conn <- PG.connectPostgreSQL cstr
@@ -228,15 +275,48 @@ getServerVersion conn = do
     Right (a,_) -> return $ Just a
     Left err -> throwIO $ PostgresServerVersionError err
 
+getServerVersionNonEmpty :: PG.Connection -> IO (NonEmpty Word)
+getServerVersionNonEmpty conn = do
+  [PG.Only version] <- PG.query_ conn "show server_version";
+  case AT.parseOnly parseVersion (T.pack version) of
+    Left err -> throwIO $ PostgresServerVersionError $ "Parse failure on: " <> version <> ". Error: " <> err
+    Right versionComponents -> case NEL.nonEmpty versionComponents of
+      Nothing -> throwIO $ PostgresServerVersionError $ "Empty Postgres version string: " <> version
+      Just neVersion -> pure neVersion
+
+  where
+    -- Partially copied from the `versions` package
+    -- Typically server_version gives e.g. 12.3
+    -- In Persistent's CI, we get "12.4 (Debian 12.4-1.pgdg100+1)", so we ignore the trailing data.
+    parseVersion = AT.decimal `AT.sepBy` AT.char '.'
+
 -- | Choose upsert sql generation function based on postgresql version.
 -- PostgreSQL version >= 9.5 supports native upsert feature,
 -- so depending upon that we have to choose how the sql query is generated.
 -- upsertFunction :: Double -> Maybe (EntityDef -> Text -> Text)
-upsertFunction :: a -> Double -> Maybe a
-upsertFunction f version = if (version >= 9.5)
+upsertFunction :: a -> NonEmpty Word -> Maybe a
+upsertFunction f version = if (version >= postgres9dot5)
                          then Just f
                          else Nothing
+  where
 
+postgres9dot5 :: NonEmpty Word
+postgres9dot5 = 9 NEL.:| [5]
+
+-- | If the user doesn't supply a Postgres version, we assume this version.
+--
+-- This is currently below any version-specific features Persistent uses.
+minimumPostgresVersion :: NonEmpty Word
+minimumPostgresVersion = 9 NEL.:| [4]
+
+oldGetVersionToNew :: (PG.Connection -> IO (Maybe Double)) -> (PG.Connection -> IO (NonEmpty Word))
+oldGetVersionToNew oldFn = \conn -> do
+  mDouble <- oldFn conn
+  case mDouble of
+    Nothing -> pure minimumPostgresVersion
+    Just double -> do
+      let (major, minor) = properFraction double
+      pure $ major NEL.:| [floor minor]
 
 -- | Generate a 'SqlBackend' from a 'PG.Connection'.
 openSimpleConn :: LogFunc -> PG.Connection -> IO SqlBackend
@@ -247,14 +327,14 @@ openSimpleConn = openSimpleConnWithVersion getServerVersion
 --
 -- @since 2.9.1
 openSimpleConnWithVersion :: (PG.Connection -> IO (Maybe Double)) -> LogFunc -> PG.Connection -> IO SqlBackend
-openSimpleConnWithVersion getVer logFunc conn = do
+openSimpleConnWithVersion getVerDouble logFunc conn = do
     smap <- newIORef $ Map.empty
-    serverVersion <- getVer conn
+    serverVersion <- oldGetVersionToNew getVerDouble conn
     return $ createBackend logFunc serverVersion smap conn
 
 -- | Create the backend given a logging function, server version, mutable statement cell,
 -- and connection.
-createBackend :: LogFunc -> Maybe Double
+createBackend :: LogFunc -> NonEmpty Word
               -> IORef (Map.Map Text Statement) -> PG.Connection -> SqlBackend
 createBackend logFunc serverVersion smap conn = do
     SqlBackend
@@ -262,8 +342,8 @@ createBackend logFunc serverVersion smap conn = do
         , connStmtMap    = smap
         , connInsertSql  = insertSql'
         , connInsertManySql = Just insertManySql'
-        , connUpsertSql  = serverVersion >>= upsertFunction upsertSql'
-        , connPutManySql = serverVersion >>= upsertFunction putManySql
+        , connUpsertSql  = upsertFunction upsertSql' serverVersion
+        , connPutManySql = upsertFunction putManySql serverVersion
         , connClose      = PG.close conn
         , connMigrateSql = migrate'
         , connBegin      = \_ mIsolation -> case mIsolation of
@@ -281,7 +361,7 @@ createBackend logFunc serverVersion smap conn = do
         , connLimitOffset = decorateSQLWithLimitOffset "LIMIT ALL"
         , connLogFunc = logFunc
         , connMaxParams = Nothing
-        , connRepsertManySql = serverVersion >>= upsertFunction repsertManySql
+        , connRepsertManySql = upsertFunction repsertManySql serverVersion
         }
 
 prepare' :: PG.Connection -> Text -> IO Statement
@@ -1347,6 +1427,20 @@ escape (DBName s) =
 data PostgresConf = PostgresConf
     { pgConnStr  :: ConnectionString
       -- ^ The connection string.
+    
+    -- TODO: Currently stripes, idle timeout, and pool size are all separate fields
+    -- When Persistent next does a large breaking release (3.0?), we should consider making these just a single ConnectionPoolConfig value
+    -- 
+    -- Currently there the idle timeout is an Integer, rather than resource-pool's NominalDiffTime type.
+    -- This is because the time package only recently added the Read instance for NominalDiffTime.
+    -- Future TODO: Consider removing the Read instance, and/or making the idle timeout a NominalDiffTime.
+
+    , pgPoolStripes :: Int
+    -- ^ How many stripes to divide the pool into. See "Data.Pool" for details.
+    -- @since 2.11.0.0
+    , pgPoolIdleTimeout :: Integer -- Ideally this would be a NominalDiffTime, but that type lacks a Read instance https://github.com/haskell/time/issues/130
+    -- ^ How long connections can remain idle before being disposed of, in seconds.
+    -- @since 2.11.0.0
     , pgPoolSize :: Int
       -- ^ How many connections should be held in the connection pool.
     } deriving (Show, Read, Data)
@@ -1354,12 +1448,15 @@ data PostgresConf = PostgresConf
 instance FromJSON PostgresConf where
     parseJSON v = modifyFailure ("Persistent: error loading PostgreSQL conf: " ++) $
       flip (withObject "PostgresConf") v $ \o -> do
+        let defaultPoolConfig = defaultConnectionPoolConfig
         database <- o .: "database"
         host     <- o .: "host"
         port     <- o .:? "port" .!= 5432
         user     <- o .: "user"
         password <- o .: "password"
-        pool     <- o .: "poolsize"
+        poolSize <- o .:? "poolsize" .!= (connectionPoolConfigSize defaultPoolConfig)
+        poolStripes <- o .:? "stripes" .!= (connectionPoolConfigStripes defaultPoolConfig)
+        poolIdleTimeout <- o .:? "idleTimeout" .!= (floor $ connectionPoolConfigIdleTimeout defaultPoolConfig)
         let ci = PG.ConnectInfo
                    { PG.connectHost     = host
                    , PG.connectPort     = port
@@ -1368,11 +1465,11 @@ instance FromJSON PostgresConf where
                    , PG.connectDatabase = database
                    }
             cstr = PG.postgreSQLConnectionString ci
-        return $ PostgresConf cstr pool
+        return $ PostgresConf cstr poolStripes poolIdleTimeout poolSize
 instance PersistConfig PostgresConf where
     type PersistConfigBackend PostgresConf = SqlPersistT
     type PersistConfigPool PostgresConf = ConnectionPool
-    createPoolConfig (PostgresConf cs size) = runNoLoggingT $ createPostgresqlPool cs size -- FIXME
+    createPoolConfig conf = runNoLoggingT $ createPostgresqlPoolWithConf conf defaultPostgresConfHooks
     runPool _ = runSqlPool
     loadConfig = parseJSON
 
@@ -1403,6 +1500,38 @@ instance PersistConfig PostgresConf where
         addUser     = maybeAddParam "user"     "PGUSER"
         addPass     = maybeAddParam "password" "PGPASS"
         addDatabase = maybeAddParam "dbname"   "PGDATABASE"
+
+-- | Hooks for configuring the Persistent/its connection to Postgres
+--
+-- @since 2.11.0
+data PostgresConfHooks = PostgresConfHooks
+  { pgConfHooksGetServerVersion :: PG.Connection -> IO (NonEmpty Word) 
+      -- ^ Function to get the version of Postgres
+      --
+      -- The default implementation queries the server with "show server_version".
+      -- Some variants of Postgres, such as Redshift, don't support showing the version.
+      -- It's recommended you return a hardcoded version in those cases.
+      --
+      -- @since 2.11.0
+  , pgConfHooksAfterCreate :: PG.Connection -> IO ()
+      -- ^ Action to perform after a connection is created.
+      --
+      -- Typical uses of this are modifying the connection (e.g. to set the schema) or logging a connection being created.
+      --
+      -- The default implementation does nothing.
+      --
+      -- @since 2.11.0
+  }
+
+-- | Default settings for 'PostgresConfHooks'. See the individual fields of 'PostgresConfHooks' for the default values.
+--
+-- @since 2.11.0
+defaultPostgresConfHooks :: PostgresConfHooks
+defaultPostgresConfHooks = PostgresConfHooks
+  { pgConfHooksGetServerVersion = getServerVersionNonEmpty
+  , pgConfHooksAfterCreate = const $ pure ()
+  }
+
 
 refName :: DBName -> DBName -> DBName
 refName (DBName table) (DBName column) =

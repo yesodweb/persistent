@@ -197,8 +197,20 @@ withSqlPool
     -> Int -- ^ connection count
     -> (Pool backend -> m a)
     -> m a
-withSqlPool mkConn connCount f = withUnliftIO $ \u -> bracket
-    (unliftIO u $ createSqlPool mkConn connCount)
+withSqlPool mkConn connCount f = withSqlPoolWithConfig mkConn (defaultConnectionPoolConfig { connectionPoolConfigSize = connCount } ) f
+
+-- | Creates a pool of connections to a SQL database which can be used by the @Pool backend -> m a@ function.
+-- After the function completes, the connections are destroyed.
+--
+-- @since 2.11.0.0
+withSqlPoolWithConfig
+    :: forall backend m a. (MonadLogger m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    => (LogFunc -> IO backend) -- ^ Function to create a new connection
+    -> ConnectionPoolConfig
+    -> (Pool backend -> m a)
+    -> m a
+withSqlPoolWithConfig mkConn poolConfig f = withUnliftIO $ \u -> bracket
+    (unliftIO u $ createSqlPoolWithConfig mkConn poolConfig)
     destroyAllResources
     (unliftIO u . f)
 
@@ -207,7 +219,17 @@ createSqlPool
     => (LogFunc -> IO backend)
     -> Int
     -> m (Pool backend)
-createSqlPool mkConn size = do
+createSqlPool mkConn size = createSqlPoolWithConfig mkConn (defaultConnectionPoolConfig { connectionPoolConfigSize = size } )
+
+-- | Creates a pool of connections to a SQL database.
+--
+-- @since 2.11.0.0
+createSqlPoolWithConfig
+    :: forall m backend. (MonadLogger m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    => (LogFunc -> IO backend) -- ^ Function to create a new connection
+    -> ConnectionPoolConfig
+    -> m (Pool backend)
+createSqlPoolWithConfig mkConn config = do
     logFunc <- askLogFunc
     -- Resource pool will swallow any exceptions from close. We want to log
     -- them instead.
@@ -215,7 +237,12 @@ createSqlPool mkConn size = do
         loggedClose backend = close' backend `UE.catchAny` \e -> runLoggingT
           (logError $ T.pack $ "Error closing database connection in pool: " ++ show e)
           logFunc
-    liftIO $ createPool (mkConn logFunc) loggedClose 1 20 size
+    liftIO $ createPool 
+        (mkConn logFunc) 
+        loggedClose 
+        (connectionPoolConfigStripes config)
+        (connectionPoolConfigIdleTimeout config)
+        (connectionPoolConfigSize config)
 
 -- NOTE: This function is a terrible, ugly hack. It would be much better to
 -- just clean up monad-logger.
