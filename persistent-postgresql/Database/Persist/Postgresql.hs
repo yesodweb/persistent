@@ -276,14 +276,16 @@ getServerVersionNonEmpty :: PG.Connection -> IO (NonEmpty Word)
 getServerVersionNonEmpty conn = do
   [PG.Only version] <- PG.query_ conn "show server_version";
   case AT.parseOnly parseVersion (T.pack version) of
-    Left err -> throwIO $ PostgresServerVersionError $ "Failed to parse Postgres version. Got: " <> version <> ". Error: " <> err
+    Left err -> throwIO $ PostgresServerVersionError $ "Parse failure on: " <> version <> ". Error: " <> err
     Right versionComponents -> case NEL.nonEmpty versionComponents of
-      Nothing -> throwIO $ PostgresServerVersionError $ "Empty Postgres version string. Got: " <> version
+      Nothing -> throwIO $ PostgresServerVersionError $ "Empty Postgres version string: " <> version
       Just neVersion -> pure neVersion
 
   where
     -- Partially copied from the `versions` package
-    parseVersion = AT.decimal `AT.sepBy` AT.char '.' <* AT.endOfInput
+    -- Typically server_version gives e.g. 12.3
+    -- In Persistent's CI, we get "12.4 (Debian 12.4-1.pgdg100+1)", so we ignore the trailing data.
+    parseVersion = AT.decimal `AT.sepBy` AT.char '.'
 
 -- | Choose upsert sql generation function based on postgresql version.
 -- PostgreSQL version >= 9.5 supports native upsert feature,
