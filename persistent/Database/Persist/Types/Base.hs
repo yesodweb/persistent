@@ -139,6 +139,14 @@ data EntityDef = EntityDef
     }
     deriving (Show, Eq, Read, Ord)
 
+entitiesPrimary :: EntityDef -> Maybe [FieldDef]
+entitiesPrimary t = case fieldReference primaryField of
+    CompositeRef c -> Just $ (compositeFields c)
+    ForeignRef _ _ -> Just [primaryField]
+    _ -> Nothing
+  where
+    primaryField = entityId t
+
 entityPrimary :: EntityDef -> Maybe CompositeDef
 entityPrimary t = case fieldReference (entityId t) of
     CompositeRef c -> Just c
@@ -165,9 +173,21 @@ newtype DBName = DBName { unDBName :: Text }
 
 type Attr = Text
 
+-- | A 'FieldType' describes a field parsed from the QuasiQuoter and is
+-- used to determine the Haskell type in the generated code.
+--
+-- @name Text@ parses into @FTTypeCon Nothing "Text"@
+--
+-- @name T.Text@ parses into @FTTypeCon (Just "T" "Text")@
+--
+-- @name (Jsonb User)@ parses into:
+--
+-- @
+-- FTApp (FTTypeCon Nothing "Jsonb") (FTTypeCon Nothing "User")
+-- @
 data FieldType
     = FTTypeCon (Maybe Text) Text
-      -- ^ Optional module and name.
+    -- ^ Optional module and name.
     | FTApp FieldType FieldType
     | FTList FieldType
   deriving (Show, Eq, Read, Ord)
@@ -196,6 +216,13 @@ data FieldDef = FieldDef
     -- ^ If this is 'True', then the Haskell datatype will have a strict
     -- record field. The default value for this is 'True'.
     , fieldReference :: !ReferenceDef
+    , fieldCascade :: !FieldCascade
+    -- ^ Defines how operations on the field cascade on to the referenced
+    -- tables. This doesn't have any meaning if the 'fieldReference' is set
+    -- to 'NoReference' or 'SelfReference'. The cascade option here should
+    -- be the same as the one obtained in the 'fieldReference'.
+    --
+    -- @since 2.11.0
     , fieldComments  :: !(Maybe Text)
     -- ^ Optional comments for a 'Field'. There is not currently a way to
     -- attach comments to a field in the quasiquoter.
@@ -300,11 +327,20 @@ data ForeignDef = ForeignDef
     , foreignFields                :: ![(ForeignFieldDef, ForeignFieldDef)] -- this entity plus the primary entity
     , foreignAttrs                 :: ![Attr]
     , foreignNullable              :: Bool
+    , foreignToPrimary             :: Bool
+    -- ^ Determines if the reference is towards a Primary Key or not.
+    --
+    -- @since 2.11.0
     }
     deriving (Show, Eq, Read, Ord)
 
 -- | This datatype describes how a foreign reference field cascades deletes
 -- or updates.
+--
+-- This type is used in both parsing the model definitions and performing
+-- migrations. A 'Nothing' in either of the field values means that the
+-- user has not specified a 'CascadeAction'. An unspecified 'CascadeAction'
+-- is defaulted to 'Restrict' when doing migrations.
 --
 -- @since 2.11.0
 data FieldCascade = FieldCascade

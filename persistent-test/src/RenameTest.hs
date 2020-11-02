@@ -1,4 +1,5 @@
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE TypeApplications, UndecidableInstances #-}
+
 module RenameTest where
 
 import qualified Data.Map as Map
@@ -72,17 +73,23 @@ specsWith
     => RunDb backend m
     -> Spec
 specsWith runDb = describe "rename specs" $ do
+    describe "LowerCaseTable" $ do
+        it "LowerCaseTable has the right sql name" $ do
+            fieldDB (entityId (entityDef (Proxy @LowerCaseTable)))
+                `shouldBe`
+                    DBName "my_id"
+
     it "user specified id, insertKey, no default=" $ runDb $ do
-      let rec2 = IdTable "Foo2" Nothing
-      let rec1 = IdTable "Foo1" $ Just rec2
-      let rec  = IdTable "Foo" $ Just rec1
-      now <- liftIO getCurrentTime
-      let key = IdTableKey $ utctDay now
-      insertKey key rec
-      Just rec' <- get key
-      rec' @== rec
-      (Entity key' _):_ <- selectList ([] :: [Filter (IdTableGeneric backend)]) []
-      key' @== key
+        let rec2 = IdTable "Foo2" Nothing
+        let rec1 = IdTable "Foo1" $ Just rec2
+        let rec  = IdTable "Foo" $ Just rec1
+        now <- liftIO getCurrentTime
+        let key = IdTableKey $ utctDay now
+        insertKey key rec
+        Just rec' <- get key
+        rec' @== rec
+        (Entity key' _):_ <- selectList ([] :: [Filter (IdTableGeneric backend)]) []
+        key' @== key
 
     it "extra blocks" $
         entityExtra (entityDef (Nothing :: Maybe LowerCaseTable)) @?=

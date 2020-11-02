@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeApplications, DeriveGeneric #-}
+{-# LANGUAGE TypeApplications, DeriveGeneric, RecordWildCards #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -23,6 +23,7 @@ module Main
     module Main
   ) where
 
+import Data.Int
 import Data.Proxy
 import Control.Applicative (Const (..))
 import Data.Aeson
@@ -34,6 +35,8 @@ import Test.Hspec.QuickCheck
 import Test.QuickCheck.Arbitrary
 import Test.QuickCheck.Gen (Gen)
 import GHC.Generics (Generic)
+import qualified Data.List as List
+import Data.Coerce
 
 import Database.Persist
 import Database.Persist.Sql
@@ -45,12 +48,18 @@ import qualified SharedPrimaryKeyTest
 import qualified SharedPrimaryKeyTestImported
 
 share [mkPersist sqlSettings { mpsGeneric = False, mpsDeriveInstances = [''Generic] }, mkDeleteCascade sqlSettings { mpsGeneric = False }] [persistUpperCase|
+
 Person json
     name Text
     age Int Maybe
     foo Foo
     address Address
     deriving Show Eq
+
+HasSimpleCascadeRef
+    person PersonId OnDeleteCascade
+    deriving Show Eq
+
 Address json
     street Text
     city Text
@@ -79,6 +88,21 @@ HasIdDef
 HasDefaultId
     name String
 
+HasCustomSqlId
+    Id String sql=my_id
+    name String
+
+SharedPrimaryKey
+    Id (Key HasDefaultId)
+    name String
+
+SharedPrimaryKeyWithCascade
+    Id (Key HasDefaultId) OnDeleteCascade
+    name String
+
+SharedPrimaryKeyWithCascadeAndCustomName
+    Id (Key HasDefaultId) OnDeleteCascade sql=my_id
+    name String
 |]
 
 share [mkPersist sqlSettings { mpsGeneric = False, mpsGenerateLenses = True }] [persistLowerCase|
@@ -110,6 +134,154 @@ main :: IO ()
 main = hspec $ do
     SharedPrimaryKeyTest.spec
     SharedPrimaryKeyTestImported.spec
+    describe "HasDefaultId" $ do
+        let FieldDef{..} =
+                entityId (entityDef (Proxy @HasDefaultId))
+        it "should have usual db name" $ do
+            fieldDB `shouldBe` DBName "id"
+        it "should have usual haskell name" $ do
+            fieldHaskell `shouldBe` HaskellName "Id"
+        it "should have correct underlying sql type" $ do
+            fieldSqlType `shouldBe` SqlInt64
+        it "persistfieldsql should be right" $ do
+            sqlType (Proxy @HasDefaultIdId) `shouldBe` SqlInt64
+        it "should have correct haskell type" $ do
+            fieldType `shouldBe` FTTypeCon Nothing "HasDefaultIdId"
+
+    describe "HasCustomSqlId" $ do
+        let FieldDef{..} =
+                entityId (entityDef (Proxy @HasCustomSqlId))
+        it "should have custom db name" $ do
+            fieldDB `shouldBe` DBName "my_id"
+        it "should have usual haskell name" $ do
+            fieldHaskell `shouldBe` HaskellName "id"
+        it "should have correct underlying sql type" $ do
+            fieldSqlType `shouldBe` SqlString
+        it "should have correct haskell type" $ do
+            fieldType `shouldBe` FTTypeCon Nothing "String"
+    describe "HasIdDef" $ do
+        let FieldDef{..} =
+                entityId (entityDef (Proxy @HasIdDef))
+        it "should have usual db name" $ do
+            fieldDB `shouldBe` DBName "id"
+        it "should have usual haskell name" $ do
+            fieldHaskell `shouldBe` HaskellName "id"
+        it "should have correct underlying sql type" $ do
+            fieldSqlType `shouldBe` SqlInt64
+        it "should have correct haskell type" $ do
+            fieldType `shouldBe` FTTypeCon Nothing "Int"
+
+    describe "SharedPrimaryKey" $ do
+        let sharedDef = entityDef (Proxy @SharedPrimaryKey)
+            FieldDef{..} =
+                entityId sharedDef
+        it "should have usual db name" $ do
+            fieldDB `shouldBe` DBName "id"
+        it "should have usual haskell name" $ do
+            fieldHaskell `shouldBe` HaskellName "id"
+        it "should have correct underlying sql type" $ do
+            fieldSqlType `shouldBe` SqlInt64
+        it "should have correct haskell type" $ do
+            fieldType `shouldBe` FTApp (FTTypeCon Nothing "Key") (FTTypeCon Nothing "HasDefaultId")
+        it "should have correct sql type from PersistFieldSql" $ do
+            sqlType (Proxy @SharedPrimaryKeyId)
+                `shouldBe`
+                    SqlInt64
+        it "should have same sqlType as underlying record" $ do
+            sqlType (Proxy @SharedPrimaryKeyId)
+                `shouldBe`
+                    sqlType (Proxy @HasDefaultIdId)
+        it "should be a coercible newtype" $ do
+            coerce @Int64 3
+                `shouldBe`
+                    SharedPrimaryKeyKey (toSqlKey 3)
+
+        it "is a newtype" $ do
+            pkNewtype sqlSettings sharedDef
+                `shouldBe`
+                    True
+
+    describe "SharedPrimaryKeyWithCascade" $ do
+        let FieldDef{..} =
+                entityId (entityDef (Proxy @SharedPrimaryKeyWithCascade))
+        it "should have usual db name" $ do
+            fieldDB `shouldBe` DBName "id"
+        it "should have usual haskell name" $ do
+            fieldHaskell `shouldBe` HaskellName "id"
+        it "should have correct underlying sql type" $ do
+            fieldSqlType `shouldBe` SqlInt64
+        it "should have correct haskell type" $ do
+            fieldType
+                `shouldBe`
+                    FTApp (FTTypeCon Nothing "Key") (FTTypeCon Nothing "HasDefaultId")
+        it "should have cascade in field def" $ do
+            fieldCascade `shouldBe` noCascade { fcOnDelete = Just Cascade }
+
+    describe "OnCascadeDelete" $ do
+        let subject :: FieldDef
+            Just subject =
+                List.find ((HaskellName "person" ==) . fieldHaskell)
+                $ entityFields
+                $ simpleCascadeDef
+            simpleCascadeDef =
+                entityDef (Proxy :: Proxy HasSimpleCascadeRef)
+            expected =
+                FieldCascade
+                    { fcOnDelete = Just Cascade
+                    , fcOnUpdate = Nothing
+                    }
+        describe "entityDef" $ do
+            it "works" $ do
+                simpleCascadeDef
+                    `shouldBe`
+                        EntityDef
+                            { entityHaskell = HaskellName "HasSimpleCascadeRef"
+                            , entityDB = DBName "HasSimpleCascadeRef"
+                            , entityId =
+                                FieldDef
+                                    { fieldHaskell = HaskellName "Id"
+                                    , fieldDB = DBName "id"
+                                    , fieldType = FTTypeCon Nothing "HasSimpleCascadeRefId"
+                                    , fieldSqlType = SqlInt64
+                                    , fieldReference =
+                                        ForeignRef (HaskellName "HasSimpleCascadeRef") (FTTypeCon (Just "Data.Int") "Int64")
+                                    , fieldAttrs = []
+                                    , fieldStrict = True
+                                    , fieldComments = Nothing
+                                    , fieldCascade = noCascade
+                                    }
+                            , entityAttrs = []
+                            , entityFields =
+                                [ FieldDef
+                                    { fieldHaskell = HaskellName "person"
+                                    , fieldDB = DBName "person"
+                                    , fieldType = FTTypeCon Nothing "PersonId"
+                                    , fieldSqlType = SqlInt64
+                                    , fieldAttrs = []
+                                    , fieldStrict = True
+                                    , fieldReference =
+                                        ForeignRef
+                                            (HaskellName "Person")
+                                            (FTTypeCon (Just "Data.Int") "Int64")
+                                    , fieldCascade =
+                                        FieldCascade { fcOnUpdate = Nothing, fcOnDelete = Just Cascade }
+                                    , fieldComments = Nothing
+                                    }
+                                ]
+                            , entityUniques = []
+                            , entityForeigns = []
+                            , entityDerives =  ["Show", "Eq"]
+                            , entityExtra = mempty
+                            , entitySum = False
+                            , entityComments = Nothing
+                            }
+        it "has the cascade on the field def" $ do
+            fieldCascade subject `shouldBe` expected
+        it "doesn't have any extras" $ do
+            entityExtra simpleCascadeDef
+                `shouldBe`
+                    mempty
+
     describe "hasNaturalKey" $ do
         let subject :: PersistEntity a => Proxy a -> Bool
             subject p = hasNaturalKey (entityDef p)

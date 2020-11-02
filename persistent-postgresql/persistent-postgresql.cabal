@@ -24,6 +24,7 @@ library
                    , conduit               >= 1.2.12
                    , containers            >= 0.5
                    , monad-logger          >= 0.3.25
+                   , mtl
                    , postgresql-simple     >= 0.6.1    && < 0.7
                    , postgresql-libpq      >= 0.9.4.2  && < 0.10
                    , resourcet             >= 1.1.9

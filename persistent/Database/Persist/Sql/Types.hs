@@ -7,6 +7,8 @@ module Database.Persist.Sql.Types
     , OverflowNatural(..)
     ) where
 
+import Database.Persist.Types.Base (FieldCascade)
+
 import Control.Exception (Exception(..))
 import Control.Monad.Logger (NoLoggingT)
 import Control.Monad.Trans.Reader (ReaderT (..))
@@ -25,7 +27,27 @@ data Column = Column
     , cDefault   :: !(Maybe Text)
     , cDefaultConstraintName   :: !(Maybe DBName)
     , cMaxLen    :: !(Maybe Integer)
-    , cReference :: !(Maybe (DBName, DBName)) -- table name, constraint name
+    , cReference :: !(Maybe ColumnReference)
+    }
+    deriving (Eq, Ord, Show)
+
+-- | This value specifies how a field references another table.
+--
+-- @since 2.11.0.0
+data ColumnReference = ColumnReference
+    { crTableName :: !DBName
+    -- ^ The table name that the
+    --
+    -- @since 2.11.0.0
+    , crConstraintName :: !DBName
+    -- ^ The name of the foreign key constraint.
+    --
+    -- @since 2.11.0.0
+    , crFieldCascade :: !FieldCascade
+    -- ^ Whether or not updates/deletions to the referenced table cascade
+    -- to this table.
+    --
+    -- @since 2.11.0.0
     }
     deriving (Eq, Ord, Show)
 

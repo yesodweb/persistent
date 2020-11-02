@@ -1,4 +1,4 @@
-{-# language RecordWildCards #-}
+{-# language RecordWildCards, OverloadedStrings #-}
 
 import Test.Hspec
 import qualified Data.Text as T
@@ -13,6 +13,99 @@ import Database.Persist.Types
 
 main :: IO ()
 main = hspec $ do
+    describe "splitExtras" $ do
+        it "works" $ do
+            splitExtras []
+                `shouldBe`
+                    mempty
+        it "works2" $ do
+            splitExtras
+                [ Line 0 ["hello", "world"]
+                ]
+                `shouldBe`
+                    ( [["hello", "world"]], mempty )
+        it "works3" $ do
+            splitExtras
+                [ Line 0 ["hello", "world"]
+                , Line 2 ["foo", "bar", "baz"]
+                ]
+                `shouldBe`
+                    ( [["hello", "world"], ["foo", "bar", "baz"]], mempty )
+        it "works4" $ do
+            let foobarbarz = ["foo", "Bar", "baz"]
+            splitExtras
+                [ Line 0 ["Hello"]
+                , Line 2 foobarbarz
+                , Line 2 foobarbarz
+                ]
+                `shouldBe`
+                    ( []
+                    , Map.fromList
+                        [ ("Hello", [foobarbarz, foobarbarz])
+                        ]
+                    )
+        it "works5" $ do
+            let foobarbarz = ["foo", "Bar", "baz"]
+            splitExtras
+                [ Line 0 ["Hello"]
+                , Line 2 foobarbarz
+                , Line 4 foobarbarz
+                ]
+                `shouldBe`
+                    ( []
+                    , Map.fromList
+                        [ ("Hello", [foobarbarz, foobarbarz])
+                        ]
+                    )
+    describe "takeColsEx" $ do
+        let subject = takeColsEx upperCaseSettings
+        it "fails on a single word" $ do
+            subject ["asdf"]
+                `shouldBe`
+                    Nothing
+        it "works if it has a name and a type" $ do
+            subject ["asdf", "Int"]
+                `shouldBe`
+                    Just FieldDef
+                        { fieldHaskell = HaskellName "asdf"
+                        , fieldDB = DBName "asdf"
+                        , fieldType = FTTypeCon Nothing "Int"
+                        , fieldSqlType = SqlOther "SqlType unset for asdf"
+                        , fieldAttrs = []
+                        , fieldStrict = True
+                        , fieldReference = NoReference
+                        , fieldCascade = noCascade
+                        , fieldComments = Nothing
+                        }
+        it "works if it has a name, type, and cascade" $ do
+            subject ["asdf", "Int", "OnDeleteCascade", "OnUpdateCascade"]
+                `shouldBe`
+                    Just FieldDef
+                        { fieldHaskell = HaskellName "asdf"
+                        , fieldDB = DBName "asdf"
+                        , fieldType = FTTypeCon Nothing "Int"
+                        , fieldSqlType = SqlOther "SqlType unset for asdf"
+                        , fieldAttrs = []
+                        , fieldStrict = True
+                        , fieldReference = NoReference
+                        , fieldCascade = FieldCascade (Just Cascade) (Just Cascade)
+                        , fieldComments = Nothing
+                        }
+        it "never tries to make a refernece" $ do
+            subject ["asdf", "UserId", "OnDeleteCascade"]
+                `shouldBe`
+                    Just FieldDef
+                        { fieldHaskell = HaskellName "asdf"
+                        , fieldDB = DBName "asdf"
+                        , fieldType = FTTypeCon Nothing "UserId"
+                        , fieldSqlType = SqlOther "SqlType unset for asdf"
+                        , fieldAttrs = []
+                        , fieldStrict = True
+                        , fieldReference = NoReference
+                        , fieldCascade = FieldCascade Nothing (Just Cascade)
+                        , fieldComments = Nothing
+                        }
+
     describe "tokenization" $ do
         it "handles normal words" $
             tokenize " foo   bar  baz" `shouldBe`
