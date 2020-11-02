@@ -61,8 +61,6 @@ module Database.Persist.TH
 -- Development Tip: See persistent-template/README.md for advice on seeing generated Template Haskell code
 -- It's highly recommended to check the diff between master and your PR's generated code.
 
-import qualified Debug.Trace as Debug
-
 import Prelude hiding ((++), take, concat, splitAt, exp)
 
 import Control.Applicative

@@ -1147,13 +1147,12 @@ getAddReference
     -> DBName
     -> ColumnReference
     -> Maybe AlterDB
-getAddReference allDefs entity cname ColumnReference {crTableName = s, crConstraintName=constraintName} = do
+getAddReference allDefs entity cname cr@ColumnReference {crTableName = s, crConstraintName=constraintName} = do
     guard $ table /= s && cname /= fieldDB (entityId entity)
     pure $ AlterColumn
         table
         ( s
-        -- TODO: Fix cascade reference is ignored
-        , AddReference constraintName [cname] id_ noCascade
+        , AddReference constraintName [cname] id_ (crFieldCascade cr)
         )
   where
     table = entityDB entity

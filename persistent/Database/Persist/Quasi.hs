@@ -262,8 +262,6 @@ module Database.Persist.Quasi
 
 import Prelude hiding (lines)
 
-import qualified Debug.Trace as  Debug
-
 import qualified Data.List.NonEmpty as NEL
 import Data.List.NonEmpty (NonEmpty(..))
 import Control.Arrow ((&&&))

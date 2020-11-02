@@ -15,63 +15,63 @@ SimpleCascadeChild
     deriving Show Eq
 
 SimpleCascade
-    name String
+    name Int
     deriving Show Eq
 
 Parent
-    name String
+    name Int
     Primary name
 
 Child
-    pname String
+    pname Int
     Foreign Parent OnDeleteCascade OnUpdateCascade fkparent pname
     deriving Show Eq
 
 ParentImplicit
-    name String
+    name Int
 
 ChildImplicit
-    pname String
+    pname Int
     parentId ParentImplicitId noreference
     Foreign ParentImplicit OnDeleteCascade OnUpdateCascade fkparent parentId
     deriving Show Eq
 
 ParentComposite
-    name String
-    lastName String
+    name Int
+    lastName Int
     Primary name lastName
 
 ChildComposite
-    pname String
-    plastName String
+    pname Int
+    plastName Int
     Foreign ParentComposite OnDeleteCascade fkparent pname plastName
     deriving Show Eq
 
 SelfReferenced
-    name String
-    pname String
+    name Int
+    pname Int
     Primary name
     Foreign SelfReferenced OnDeleteCascade fkparent pname
     deriving Show Eq
 
 A
-    aa String
+    aa Int
     ab Int
     U1 aa
 
 B
-    ba String
+    ba Int
     bb Int
     Foreign A OnDeleteCascade fkA ba References aa
     deriving Show Eq
 
 AComposite
-    aa String
+    aa Int
     ab Int
     U2 aa ab
 
 BComposite
-    ba String
+    ba Int
     bb Int
     Foreign AComposite OnDeleteCascade fkAComposite ba bb References aa ab
     deriving Show Eq
@@ -82,13 +82,13 @@ BExplicit
     deriving Show Eq
 
 Chain
-    name String
+    name Int
     previous ChainId Maybe noreference
     Foreign Chain OnDeleteSetNull fkChain previous References Id
-    deriving Show Eq
+    deriving Show Eq Ord
 
 Chain2
-    name String
+    name Int
     previous Chain2Id Maybe noreference
     Foreign Chain2 OnDeleteCascade fkChain previous References Id
     deriving Show Eq
@@ -97,34 +97,34 @@ Chain2
 specsWith :: (MonadIO m, MonadFail m) => RunDb SqlBackend m -> Spec
 specsWith runDb = fdescribe "foreign keys options" $ do
     it "delete cascades" $ runDb $ do
-        kf <- insert $ Parent "A"
-        kc <- insert $ Child "A"
+        kf <- insert $ Parent 1
+        kc <- insert $ Child 1
         delete kf
         cs <- selectList [] []
         let expected = [] :: [Entity Child]
         cs @== expected
     it "update cascades" $ runDb $ do
-        kf <- insert $ Parent "A"
-        kc <- insert $ Child "A"
-        update kf [ParentName =. "B"]
+        kf <- insert $ Parent 1
+        kc <- insert $ Child 1
+        update kf [ParentName =. 2]
         cs <- selectList [] []
-        fmap (childPname . entityVal) cs @== ["B"]
+        fmap (childPname . entityVal) cs @== [2]
     it "delete Composite cascades" $ runDb $ do
-        kf <- insert $ ParentComposite "A" "B"
-        kc <- insert $ ChildComposite "A" "B"
+        kf <- insert $ ParentComposite 1 2
+        kc <- insert $ ChildComposite 1 2
         delete kf
         cs <- selectList [] []
         let expected = [] :: [Entity ChildComposite]
         cs @== expected
     it "delete self referenced cascades" $ runDb $ do
-        kf <- insert $ SelfReferenced "A" "A" -- bootstrap self reference
-        kc <- insert $ SelfReferenced "B" "A"
+        kf <- insert $ SelfReferenced 1 1
+        kc <- insert $ SelfReferenced 2 1
         delete kf
         srs <- selectList [] []
         let expected = [] :: [Entity SelfReferenced]
         srs @== expected
     it "delete cascade works on simple references" $ runDb $ do
-        scId <- insert $ SimpleCascade "Hello"
+        scId <- insert $ SimpleCascade 1
         sccId <- insert $ SimpleCascadeChild scId
         Just _ <- get sccId
         delete scId
@@ -134,31 +134,31 @@ specsWith runDb = fdescribe "foreign keys options" $ do
             mres `shouldBe` Nothing
             mxs `shouldBe` []
     it "delete cascades with explicit Reference" $ runDb $ do
-        kf <- insert $ A "A" 40
-        kc <- insert $ B "A" 15
+        kf <- insert $ A 1 40
+        kc <- insert $ B 1 15
         delete kf
         return ()
         cs <- selectList [] []
         let expected = [] :: [Entity B]
         cs @== expected
     it "delete cascades with explicit Composite Reference" $ runDb $ do
-        kf <- insert $ AComposite "A" 20
-        kc <- insert $ BComposite "A" 20
+        kf <- insert $ AComposite 1 20
+        kc <- insert $ BComposite 1 20
         delete kf
         return ()
         cs <- selectList [] []
         let expected = [] :: [Entity B]
         cs @== expected
     it "delete cascades with explicit Composite Reference" $ runDb $ do
-        kf <- insert $ AComposite "A" 20
-        kc <- insert $ BComposite "A" 20
+        kf <- insert $ AComposite 1 20
+        kc <- insert $ BComposite 1 20
         delete kf
         return ()
         cs <- selectList [] []
         let expected = [] :: [Entity B]
         cs @== expected
     it "delete cascades with explicit Id field" $ runDb $ do
-        kf <- insert $ A "A" 20
+        kf <- insert $ A 1 20
         kc <- insert $ BExplicit kf
         delete kf
         return ()
@@ -166,16 +166,16 @@ specsWith runDb = fdescribe "foreign keys options" $ do
         let expected = [] :: [Entity B]
         cs @== expected
     it "deletes sets null with self reference" $ runDb $ do
-        kf <- insert $ Chain "A" Nothing
-        insert $ Chain "B" (Just kf)
+        kf <- insert $ Chain 1 Nothing
+        kf' <- insert $ Chain 2 (Just kf)
         delete kf
         cs <- selectList [] []
-        let expected = [Entity {entityKey = ChainKey 2, entityVal = Chain "B" Nothing}]
-        cs @== expected
+        let expected = [Entity {entityKey = kf', entityVal = Chain 2 Nothing}]
+        List.sort cs @== List.sort expected
     it "deletes cascades with self reference to the whole chain" $ runDb $ do
-        k1 <- insert $ Chain2 "A" Nothing
-        k2 <- insert $ Chain2 "B" (Just k1)
-        k3 <- insert $ Chain2 "C" (Just k2)
+        k1 <- insert $ Chain2 1 Nothing
+        k2 <- insert $ Chain2 2 (Just k1)
+        k3 <- insert $ Chain2 3 (Just k2)
         delete k1
         cs <- selectList [] []
         let expected = [] :: [Entity Chain2]
