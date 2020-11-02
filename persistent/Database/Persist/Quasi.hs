@@ -144,7 +144,10 @@ CREATE TABLE email (
     PRIMARY KEY (first_part, second_part)
 @
 
-You can specify 1 or more columns in the primary key.
+Since the primary key for this table is part of the record, it's called a "natural key" in the SQL lingo.
+As a key with multiple fields, it is also a "composite key."
+
+You can specify a @Primary@ key with a single field, too.
 
 = Overriding SQL
 
@@ -191,6 +194,176 @@ userAttrs = do
 -- ["funny"]
     print fieldAttributes
 -- [["sad"],["sogood"]]
+@
+
+= Foreign Keys
+
+If you define an entity and want to refer to it in another table, you can use the entity's Id type in a column directly.
+
+@
+Person
+    name    Text
+
+Dog
+    name    Text
+    owner   PersonId
+@
+
+This automatically creates a foreign key reference from @Dog@ to @Person@.
+The foreign key constraint means that, if you have a @PersonId@ on the @Dog@, the database guarantees that the corresponding @Person@ exists in the database.
+If you try to delete a @Person@ out of the database that has a @Dog@, you'll receive an exception that a foreign key violation has occurred.
+
+== OnUpdate and OnDelete
+
+These options affects how a referring record behaves when the target record is changed.
+There are several options:
+
+* 'Restrict' - This is the default. It prevents the action from occurring.
+* 'Cascade' - this copies the change to the child record. If a parent record is deleted, then the child record will be deleted too.
+* 'SetNull' - If the parent record is modified, then this sets the reference to @NULL@. This only works on @Maybe@ foreign keys.
+* 'SetDefault' - This will set the column's value to the @default@ for the column, if specified.
+
+To specify the behavior for a reference, write @OnUpdate@ or @OnDelete@ followed by the action.
+
+@
+Record
+    -- If the referred Foo is deleted or updated, then this record will
+    -- also be deleted or updated.
+    fooId   FooId   OnDeleteCascade OnUpdateCascade
+
+    -- If the referred Bar is deleted, then we'll set the reference to
+    -- 'Nothing'. If the referred Bar is updated, then we'll cascade the
+    -- update.
+    barId   BarId Maybe     OnDeleteSetNull OnUpdateCascade
+
+    -- If the referred Baz is deleted, then we set to the default ID.
+    bazId   BazId   OnDeleteSetDefault  default=1
+@
+
+Let's demonstrate this with a shopping cart example.
+
+@
+User
+    name    Text
+
+Cart
+    user    UserId Maybe
+
+CartItem
+    cartId  CartId
+    itemId  ItemId
+
+Item
+    name    Text
+    price   Int
+@
+
+Let's consider how we want to handle deletions and updates.
+If a @User@ is deleted or update, then we want to cascade the action to the associated @Cart@.
+
+@
+Cart
+    user    UserId Maybe OnDeleteCascade OnUpdateCascade
+@
+
+If an @Item@ is deleted, then we want to set the @CartItem@ to refer to a special "deleted item" in the database.
+If a @Cart@ is deleted, though, then we just want to delete the @CartItem@.
+
+@
+CartItem
+    cartId CartId   OnDeleteCascade
+    itemId ItemId   OnDeleteSetDefault default=1
+@
+
+== @Foreign@ keyword
+
+The above example is a "simple" foreign key. It refers directly to the Id column, and it only works with a non-composite primary key. We can define more complicated foreign keys using the @Foreign@ keyword.
+
+A pseudo formal syntax for @Foreign@ is:
+
+@
+Foreign $(TargetEntity) [$(cascade-actions)] $(constraint-name) $(columns) [ $(references) ]
+
+columns := column0 [column1 column2 .. columnX]
+references := References $(target-columns)
+target-columns := target-column0 [target-column1 target-columns2 .. target-columnX]
+@
+
+Columns are the columns as defined on this entity.
+@target-columns@ are the columns as defined on the target entity.
+
+Let's look at some examples.
+
+=== Composite Primary Key References
+
+The most common use for this is to refer to a composite primary key.
+Since composite primary keys take up more than one column, we can't refer to them with a single @persistent@ column.
+
+@
+Email
+    firstPart   Text
+    secondPart  Text
+    Primary firstPart secondPart
+
+User
+    name            Text
+    emailFirstPart  Text
+    emailSecondPart Text
+
+    Foreign Email fk_user_email emailFirstPart emailSecondPart
+@
+
+If you omit the @References@ keyword, then it assumes that the foreign key reference is for the target table's primary key.
+If we wanted to be fully redundant, we could specify the @References@ keyword.
+
+@
+    Foreign Email fk_user_email emailFirstPart emailSecondPart References firstPart secondPart
+@
+
+We can specify delete/cascade behavior directly after the target table.
+
+@
+    Foreign Email OnDeleteCascade OnUpdateCascade fk_user_email emailFirstPart emailSecondPart
+@
+
+Now, if the email is deleted or updated, the user will be deleted or updated to match.
+
+=== Non-Primary Key References
+
+SQL database backends allow you to create a foreign key to any column(s) with a Unique constraint.
+Persistent does not check this, because you might be defining your uniqueness constraints outside of Persistent.
+To do this, we must use the @References@ keyword.
+
+@
+User
+    name    Text
+    email   Text
+
+    UniqueEmail email
+
+Notification
+    content Text
+    sentTo  Text
+
+    Foreign User fk_noti_user sentTo References email
+@
+
+If the target uniqueness constraint has multiple columns, then you must specify them independently.
+
+@
+User
+    name            Text
+    emailFirst      Text
+    emailSecond     Text
+
+    UniqueEmail emailFirst emailSecond
+
+Notification
+    content         Text
+    sentToFirst     Text
+    sentToSecond    Text
+
+    Foreign User fk_noti_user sentToFirst sentToSecond References emailFirst emailSecond
 @
 
 = Documentation Comments
@@ -922,11 +1095,12 @@ data UnboundForeignDef = UnboundForeignDef
                          , _unboundForeignDef :: ForeignDef
                          }
 
-takeForeign :: PersistSettings
-          -> Text
-          -> [FieldDef]
-          -> [Text]
-          -> UnboundForeignDef
+takeForeign
+    :: PersistSettings
+    -> Text
+    -> [FieldDef]
+    -> [Text]
+    -> UnboundForeignDef
 takeForeign ps tableName _defs = takeRefTable
   where
     errorPrefix :: String
