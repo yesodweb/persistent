@@ -142,7 +142,7 @@ mkColumns allDefs t overrides =
         -> [Attr]
         -> Maybe (DBName, DBName) -- table name, constraint name
     ref c fe []
-        | ForeignRef f _ cascade <- fe =
+        | ForeignRef f _ <- fe =
             Just (resolveTableName allDefs f, refNameFn tableName c)
         | otherwise = Nothing
     ref _ _ ("noreference":_) = Nothing

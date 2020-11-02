@@ -216,10 +216,6 @@ main = hspec $ do
                     FTApp (FTTypeCon Nothing "Key") (FTTypeCon Nothing "HasDefaultId")
         it "should have cascade in field def" $ do
             fieldCascade `shouldBe` noCascade { fcOnDelete = Just Cascade }
-        it "should have cascade in foreign ref" $ do
-            getReferenceDefCascade fieldReference
-                `shouldBe` Just noCascade { fcOnDelete = Just Cascade }
-
 
     describe "OnCascadeDelete" $ do
         let subject :: FieldDef
@@ -248,7 +244,7 @@ main = hspec $ do
                                     , fieldType = FTTypeCon Nothing "HasSimpleCascadeRefId"
                                     , fieldSqlType = SqlInt64
                                     , fieldReference =
-                                        ForeignRef (HaskellName "HasSimpleCascadeRef") (FTTypeCon (Just "Data.Int") "Int64") noCascade
+                                        ForeignRef (HaskellName "HasSimpleCascadeRef") (FTTypeCon (Just "Data.Int") "Int64")
                                     , fieldAttrs = []
                                     , fieldStrict = True
                                     , fieldComments = Nothing
@@ -267,7 +263,6 @@ main = hspec $ do
                                         ForeignRef
                                             (HaskellName "Person")
                                             (FTTypeCon (Just "Data.Int") "Int64")
-                                            (FieldCascade { fcOnUpdate = Nothing, fcOnDelete = Just Cascade })
                                     , fieldCascade =
                                         FieldCascade { fcOnUpdate = Nothing, fcOnDelete = Just Cascade }
                                     , fieldComments = Nothing
@@ -282,9 +277,6 @@ main = hspec $ do
                             }
         it "has the cascade on the field def" $ do
             fieldCascade subject `shouldBe` expected
-        it "has the cascade on the reference def" $ do
-            ForeignRef _ _ fc <- pure $ fieldReference subject
-            fc `shouldBe` expected
         it "doesn't have any extras" $ do
             entityExtra simpleCascadeDef
                 `shouldBe`

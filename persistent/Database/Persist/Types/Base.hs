@@ -141,15 +141,15 @@ data EntityDef = EntityDef
 
 entitiesPrimary :: EntityDef -> Maybe [FieldDef]
 entitiesPrimary t = case fieldReference primaryField of
-    CompositeRef c _ -> Just $ (compositeFields c)
-    ForeignRef _ _ _ -> Just [primaryField]
+    CompositeRef c -> Just $ (compositeFields c)
+    ForeignRef _ _ -> Just [primaryField]
     _ -> Nothing
   where
     primaryField = entityId t
 
 entityPrimary :: EntityDef -> Maybe CompositeDef
 entityPrimary t = case fieldReference (entityId t) of
-    CompositeRef c _ -> Just c
+    CompositeRef c -> Just c
     _ -> Nothing
 
 entityKeyFields :: EntityDef -> [FieldDef]
@@ -237,27 +237,13 @@ data FieldDef = FieldDef
 -- 2) single field
 -- 3) embedded
 data ReferenceDef = NoReference
-                  | ForeignRef !HaskellName !FieldType !FieldCascade
+                  | ForeignRef !HaskellName !FieldType
                     -- ^ A ForeignRef has a late binding to the EntityDef it references via HaskellName and has the Haskell type of the foreign key in the form of FieldType
                   | EmbedRef EmbedEntityDef
-                  | CompositeRef CompositeDef !FieldCascade
+                  | CompositeRef CompositeDef
                   | SelfReference
                     -- ^ A SelfReference stops an immediate cycle which causes non-termination at compile-time (issue #311).
                   deriving (Show, Eq, Read, Ord)
-
-getReferenceDefCascade :: ReferenceDef -> Maybe FieldCascade
-getReferenceDefCascade rd =
-    case rd of
-        ForeignRef _ _ fc -> Just fc
-        CompositeRef _ fc -> Just fc
-        _ -> Nothing
-
-setReferenceDefCascade :: FieldCascade -> ReferenceDef -> ReferenceDef
-setReferenceDefCascade fc rd =
-    case rd of
-        ForeignRef a b _ -> ForeignRef a b fc
-        CompositeRef a _ -> CompositeRef a fc
-        _ -> rd
 
 -- | An EmbedEntityDef is the same as an EntityDef
 -- But it is only used for fieldReference

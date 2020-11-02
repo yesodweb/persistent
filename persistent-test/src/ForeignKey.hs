@@ -196,14 +196,6 @@ specsWith runDb = fdescribe "foreign keys options" $ do
         it "parses into fieldCascade"  $ do
             fieldCascade refField `shouldBe` expected
 
-        it "parses into the fieldReference" $ do
-            ForeignRef haskName _ cascade <-
-                pure $ fieldReference refField
-
-            haskName `shouldBe` HaskellName "SimpleCascade"
-
-            cascade `shouldBe` expected
-
         it "shouldn't have cascade in extras" $ do
             entityExtra ed
                 `shouldBe`

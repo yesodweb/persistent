@@ -703,7 +703,7 @@ mkEntityDef ps name entattribs lines =
     derives = concat $ mapMaybe takeDerives attribs
 
     cols :: [FieldDef]
-    cols = fmap setReferenceCascade . reverse . fst . foldr k ([], []) $ reverse attribs
+    cols = reverse . fst . foldr k ([], []) $ reverse attribs
     k x (!acc, !comments) =
         case isComment =<< listToMaybe x of
             Just comment ->
@@ -715,16 +715,13 @@ mkEntityDef ps name entattribs lines =
     setFieldComments [] x = x
     setFieldComments xs fld =
         fld { fieldComments = Just (T.unlines xs) }
-    setReferenceCascade fd = fd
-        { fieldReference = setReferenceDefCascade (fieldCascade fd) (fieldReference fd)
-        }
 
     autoIdField = mkAutoIdField ps entName (DBName `fmap` idName) idSqlType
     idSqlType = maybe SqlInt64 (const $ SqlOther "Primary Key") primaryComposite
 
     setComposite Nothing fd = fd
     setComposite (Just c) fd = fd
-        { fieldReference = CompositeRef c (fieldCascade fd)
+        { fieldReference = CompositeRef c
         }
 
 
@@ -744,7 +741,7 @@ mkAutoIdField ps entName idName idSqlType =
         , fieldType = FTTypeCon Nothing $ keyConName $ unHaskellName entName
         , fieldSqlType = idSqlType
         -- the primary field is actually a reference to the entity
-        , fieldReference = ForeignRef entName defaultReferenceTypeCon noCascade
+        , fieldReference = ForeignRef entName defaultReferenceTypeCon
         , fieldAttrs = []
         , fieldStrict = True
         , fieldComments = Nothing
@@ -838,20 +835,13 @@ takeId ps tableName (n:rest) =
         Nothing -> error "takeId: empty field"
         Just (f, ield) -> toLower f `T.cons` ield
     addDefaultIdType = takeColsEx ps (field : keyCon : rest ) -- `mappend` setIdName)
-    setFieldDef fd =
-        let refFieldType =
+    setFieldDef fd = fd
+        { fieldReference =
+            ForeignRef (HaskellName tableName) $
                 if fieldType fd == FTTypeCon Nothing keyCon
                 then defaultReferenceTypeCon
                 else fieldType fd
-            -- this is fine because we're only calling this function with
-            -- the primary key type
-            cascade =
-                fieldCascade fd
-        in
-            fd
-                { fieldReference =
-                    ForeignRef (HaskellName tableName) refFieldType cascade
-                }
+        }
     keyCon = keyConName tableName
     -- this will be ignored if there is already an existing sql=
     -- TODO: I think there is a ! ignore syntax that would screw this up

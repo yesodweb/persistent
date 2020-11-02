@@ -254,7 +254,7 @@ stripId _ = Nothing
 
 foreignReference :: FieldDef -> Maybe HaskellName
 foreignReference field = case fieldReference field of
-    ForeignRef ref _ _cascade -> Just ref
+    ForeignRef ref _ -> Just ref
     _              -> Nothing
 
 
@@ -361,7 +361,7 @@ mEmbedded ents (FTApp x y) =
 setEmbedField :: HaskellName -> EmbedEntityMap -> FieldDef -> FieldDef
 setEmbedField entName allEntities field = field
     { fieldReference =
-        setReferenceDefCascade (fieldCascade field) $ case fieldReference field of
+        case fieldReference field of
             NoReference ->
                 case mEmbedded allEntities (fieldType field) of
                     Left _ ->
@@ -377,7 +377,6 @@ setEmbedField entName allEntities field = field
                                             (HaskellName name)
                                             -- This can get corrected in mkEntityDefSqlTypeExp
                                             (FTTypeCon (Just "Data.Int") "Int64")
-                                            (fieldCascade field)
                     Right em ->
                         if embeddedHaskell em /= entName
                              then EmbedRef em
@@ -410,7 +409,7 @@ mkEntityDefSqlTypeExp emEntities entityMap ent =
                 SqlType' SqlString
             Left Nothing ->
                 case fieldReference field of
-                    ForeignRef refName ft _cascde ->
+                    ForeignRef refName ft ->
                         case M.lookup refName entityMap of
                             Nothing  -> SqlTypeExp ft
                             -- A ForeignRef is blindly set to an Int64 in setEmbedField
@@ -423,7 +422,7 @@ mkEntityDefSqlTypeExp emEntities entityMap ent =
                                             [] -> error "mkEntityDefSqlTypeExp: no composite fields"
                                             [x] -> SqlTypeExp $ fieldType x
                                             _ -> SqlType' $ SqlOther "Composite Reference"
-                    CompositeRef _ _cascade ->
+                    CompositeRef _ ->
                         SqlType' $ SqlOther "Composite Reference"
                     _ ->
                         case ftype of
@@ -1730,15 +1729,15 @@ liftAndFixKeys entityMap EntityDef{..} =
 
 liftAndFixKey :: EntityMap -> FieldDef -> Q Exp
 liftAndFixKey entityMap (FieldDef a b c sqlTyp e f fieldRef fc mcomments) =
-    [|FieldDef a b c $(sqlTyp') e f (setReferenceDefCascade fc fieldRef') fc mcomments|]
+    [|FieldDef a b c $(sqlTyp') e f (fieldRef') fc mcomments|]
   where
     (fieldRef', sqlTyp') =
         fromMaybe (fieldRef, lift sqlTyp) $
             case fieldRef of
-                ForeignRef refName _ft cascade ->  do
+                ForeignRef refName _ft ->  do
                     ent <- M.lookup refName entityMap
                     case fieldReference $ entityId ent of
-                        fr@(ForeignRef targetName ft _targetCascade) ->
+                        fr@(ForeignRef targetName ft) ->
                             Just (fr, lift $ SqlTypeExp ft)
                         _ ->
                             Nothing
