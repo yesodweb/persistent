@@ -106,7 +106,7 @@ runConnInternal connType f = do
       poolSize = 1
   connString <- if travis
     then do
-      pure "host=localhost port=5432 user=postgres dbname=persistent"
+      pure "host=localhost port=5432 user=perstest password=perstest dbname=persistent"
     else do
       host <- fromMaybe "localhost" <$> liftIO dockerPg
       pure ("host=" <> host <> " port=5432 user=postgres dbname=test")
