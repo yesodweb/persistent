@@ -652,8 +652,8 @@ getColumn connectInfo getter tname [ PersistText cname
                                 $ "Invalid default column: "
                                 ++ show default'
                                 ++ " (error: " ++ show exc ++ ")"
-                          Right t  ->
-                              return (Just t)
+                        Right t  ->
+                            return (Just t)
                       _ ->
                           fail $ "Invalid default column: " ++ show default'
 
