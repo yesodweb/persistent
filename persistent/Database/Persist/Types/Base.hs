@@ -1,4 +1,3 @@
-{-# LANGUAGE MultiWayIf #-}
 {-# OPTIONS_GHC -fno-warn-deprecations #-} -- usage of Error typeclass
 module Database.Persist.Types.Base where
 
