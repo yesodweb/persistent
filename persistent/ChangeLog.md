@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## 2.10.5.3
+
+* Backported the fix from [#1135](https://github.com/yesodweb/persistent/pull/1135) to the 2.10 branch.
+  This should fix reading `PersistUTCTime` values.
+
 ## 2.10.5.2
 
 * [#1041](https://github.com/yesodweb/persistent/pull/1041)
