@@ -217,7 +217,8 @@ main = do
     TransactionLevelTest.specsWith db
     MigrationTest.specsWith db
     LongIdentifierTest.specsWith db
-    PersistLiteralTestSQL.specsWith db
+    xdescribe "SQLite doesn't work, see issue #1110  for discussion" $ do
+        PersistLiteralTestSQL.specsWith db
 
     it "issue #328" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
         runMigrationSilent migrateAll
