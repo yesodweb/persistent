@@ -45,7 +45,9 @@ defaultAttribute = findMaybe $ \case
      _ -> Nothing
 
 generatedAttribute :: [FieldAttr] -> Maybe Text
-generatedAttribute = findMaybe (\case {FieldAttrGenerated x -> Just x; _ -> Nothing})
+generatedAttribute = findMaybe $ \case 
+    FieldAttrGenerated x -> Just x
+    _ -> Nothing
 
 -- | Create the list of columns for the given entity.
 mkColumns
