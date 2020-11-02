@@ -185,6 +185,9 @@ data FieldAttr
     | FieldAttrOther Text
     deriving (Show, Eq, Read, Ord)
 
+-- |
+--
+-- @since 2.11.0.0
 parseFieldAttrs :: [Text] -> [FieldAttr]
 parseFieldAttrs = fmap $ \raw -> if
     | raw == "Maybe" -> FieldAttrMaybe
