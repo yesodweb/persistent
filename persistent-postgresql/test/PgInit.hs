@@ -95,7 +95,7 @@ runConn_ f = runConnInternal RunConnBasic f
 -- | Data type to switch between pool creation functions, to ease testing both.
 data RunConnType =
     RunConnBasic -- ^ Use 'withPostgresqlPool'
-  | RunConnConf -- ^ Use 'withPostgresqlPoolWithConf '
+  | RunConnConf -- ^ Use 'withPostgresqlPoolWithConf'
   deriving (Show, Eq)
 
 runConnInternal :: MonadUnliftIO m => RunConnType -> SqlPersistT (LoggingT m) t -> m t
