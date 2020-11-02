@@ -29,8 +29,6 @@ module Database.Persist.MySQL
     , copyUnlessEq
     ) where
 
-import qualified Debug.Trace as Debug
-
 import qualified Blaze.ByteString.Builder.Char8 as BBB
 import qualified Blaze.ByteString.Builder.ByteString as BBS
 
@@ -654,8 +652,8 @@ getColumn connectInfo getter tname [ PersistText cname
                                 ++ " (error: " ++ show exc ++ ")"
                         Right t  ->
                             return (Just t)
-                      _ ->
-                          fail $ "Invalid default column: " ++ show default'
+                _ ->
+                    fail $ "Invalid default column: " ++ show default'
 
         ref <- getRef (crConstraintName <$> cRef)
         let colMaxLen' =
