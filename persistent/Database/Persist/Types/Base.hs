@@ -167,6 +167,9 @@ newtype DBName = DBName { unDBName :: Text }
 
 type Attr = Text
 
+-- | Documentation goes here please
+--
+-- @since 2.11.0.0
 data FieldAttr
     = FieldAttrMaybe
     | FieldAttrNullable
