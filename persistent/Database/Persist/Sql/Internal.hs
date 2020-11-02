@@ -40,7 +40,9 @@ emptyBackendSpecificOverrides :: BackendSpecificOverrides
 emptyBackendSpecificOverrides = BackendSpecificOverrides Nothing
 
 defaultAttribute :: [FieldAttr] -> Maybe Text
-defaultAttribute = findMaybe (\case {FieldAttrDefault x -> Just x; _ -> Nothing})
+defaultAttribute = findMaybe $ \case 
+    FieldAttrDefault x -> Just x
+     _ -> Nothing
 
 generatedAttribute :: [FieldAttr] -> Maybe Text
 generatedAttribute = findMaybe (\case {FieldAttrGenerated x -> Just x; _ -> Nothing})
