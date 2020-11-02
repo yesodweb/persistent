@@ -106,14 +106,13 @@ runConnInternal connType f = do
       poolSize = 1
   connString <- if travis
     then do
-      logInfoN "Running in CI"
       pure "host=localhost port=5432 user=postgres dbname=persistent"
     else do
-      logInfoN "CI not detected"
       host <- fromMaybe "localhost" <$> liftIO dockerPg
       pure ("host=" <> host <> " port=5432 user=postgres dbname=test")
 
   flip runLoggingT (\_ _ _ s -> printDebug s) $ do
+    logInfoN (if travis then "Running in CI" else "CI not detected")
     case connType of
       RunConnBasic -> withPostgresqlPool connString poolSize $ runSqlPool f
       RunConnConf -> do
