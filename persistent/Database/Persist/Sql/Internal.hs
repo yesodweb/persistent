@@ -119,7 +119,9 @@ mkColumns allDefs t overrides =
             }
 
     maxLen :: [FieldAttr] -> Maybe Integer
-    maxLen = findMaybe (\case {FieldAttrMaxlen n -> Just n; _ -> Nothing})
+    maxLen = findMaybe $ \case 
+        FieldAttrMaxlen n -> Just n
+         _ -> Nothing
 
     refNameFn = fromMaybe refName (backendSpecificForeignKeyName overrides)
 
