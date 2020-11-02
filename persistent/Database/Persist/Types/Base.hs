@@ -351,6 +351,11 @@ data ForeignDef = ForeignDef
 -- | This datatype describes how a foreign reference field cascades deletes
 -- or updates.
 --
+-- This type is used in both parsing the model definitions and performing
+-- migrations. A 'Nothing' in either of the field values means that the
+-- user has not specified a 'CascadeAction'. An unspecified 'CascadeAction'
+-- is defaulted to 'Restrict' when doing migrations.
+--
 -- @since 2.11.0
 data FieldCascade = FieldCascade
     { fcOnUpdate :: !(Maybe CascadeAction)

@@ -10,6 +10,7 @@ module Database.Persist.Sql.Internal
     , emptyBackendSpecificOverrides
     ) where
 
+import Control.Applicative ((<|>))
 import Data.Char (isSpace)
 import Data.Monoid (mappend, mconcat)
 import Data.Text (Text)
@@ -121,8 +122,20 @@ mkColumns allDefs t overrides =
 
     mkColumnReference :: FieldDef -> Maybe ColumnReference
     mkColumnReference fd =
-        fmap (\(tName, cName) -> ColumnReference tName cName (fieldCascade fd))
+        fmap
+            (\(tName, cName) ->
+                ColumnReference tName cName $ overrideNothings $ fieldCascade fd
+            )
         $ ref (fieldDB fd) (fieldReference fd) (fieldAttrs fd)
+
+    -- a 'Nothing' in the definition means that the QQ migration doesn't
+    -- specify behavior. the default is RESTRICT. setting this here
+    -- explicitly makes migrations run smoother.
+    overrideNothings (FieldCascade { fcOnUpdate = upd, fcOnDelete = del }) =
+        FieldCascade
+            { fcOnUpdate = upd <|> Just Restrict
+            , fcOnDelete = del <|> Just Restrict
+            }
 
     ref :: DBName
         -> ReferenceDef
