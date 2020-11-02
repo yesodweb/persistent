@@ -44,7 +44,7 @@ import Data.Foldable
 import Control.Arrow
 import Control.Exception (Exception, throw, throwIO)
 import Control.Monad
-import Control.Monad.Trans.Except
+import Control.Monad.Except
 import Control.Monad.IO.Unlift (MonadIO (..), MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Control.Monad.Trans.Reader (runReaderT)
@@ -931,13 +931,24 @@ getColumn
     -> Maybe (DBName, DBName)
     -> IO (Either Text Column)
 getColumn getter tableName' [PersistText columnName, PersistText isNullable, PersistText typeName, defaultValue, numericPrecision, numericScale, maxlen] refName = runExceptT $ do
-    d'' <- ExceptT $ pure d'
-    let typeStr = case maxlen of
-                    PersistInt64 n -> T.concat [typeName, "(", T.pack (show n), ")"]
-                    _              -> typeName
-    t <- either throwE pure $ getType typeStr
+    d'' <-
+        case defaultValue of
+            PersistNull ->
+                pure Nothing
+            PersistText t ->
+                pure $ Just t
+            _ ->
+                throwError $ T.pack $ "Invalid default column: " ++ show defaultValue
+
+    let typeStr =
+            case maxlen of
+                PersistInt64 n ->
+                    T.concat [typeName, "(", T.pack (show n), ")"]
+                _ ->
+                    typeName
+    t <- getType typeStr
     let cname = DBName columnName
-    ref <- ExceptT $ fmap Right $ fmap join $ traverse (getRef cname) refName
+    ref <- lift $ fmap join $ traverse (getRef cname) refName
     return Column
         { cName = cname
         , cNull = isNullable == "YES"
@@ -1000,65 +1011,68 @@ getColumn getter tableName' [PersistText columnName, PersistText isNullable, Per
                 , "AND tc.constraint_name=?"
                 ]
         stmt <- getter sql
-        cntrs <- with (stmtQuery stmt [PersistText $ unDBName tableName'
-                                      ,PersistText $ unDBName cname
-                                      ,PersistText $ unDBName refName'])
-                      (\src -> runConduit $ src .| CL.consume)
+        cntrs <-
+            with
+                (stmtQuery stmt
+                    [ PersistText $ unDBName tableName'
+                    , PersistText $ unDBName cname
+                    , PersistText $ unDBName refName'
+                    ]
+                )
+                (\src -> runConduit $ src .| CL.consume)
         case cntrs of
-          [] -> return Nothing
+          [] ->
+              return Nothing
           [[PersistText table, PersistText constraint, PersistText updRule, PersistText delRule]] ->
-            return $ Just (DBName table, DBName constraint, updRule, delRule)
+              return $ Just (DBName table, DBName constraint, updRule, delRule)
           xs ->
-            error $ mconcat
-              [ "Postgresql.getColumn: error fetching constraints. Expected a single result for foreign key query for table: "
-              , T.unpack (unDBName tableName')
-              , " and column: "
-              , T.unpack (unDBName cname)
-              , " but got: "
-              , show xs
-              ]
+              error $ mconcat
+                  [ "Postgresql.getColumn: error fetching constraints. Expected a single result for foreign key query for table: "
+                  , T.unpack (unDBName tableName')
+                  , " and column: "
+                  , T.unpack (unDBName cname)
+                  , " but got: "
+                  , show xs
+                  ]
 
-    d' = case defaultValue of
-            PersistNull   -> Right Nothing
-            PersistText t -> Right $ Just t
-            _ -> Left $ T.pack $ "Invalid default column: " ++ show defaultValue
-    getType "int4"        = Right SqlInt32
-    getType "int8"        = Right SqlInt64
-    getType "varchar"     = Right SqlString
-    getType "text"        = Right SqlString
-    getType "date"        = Right SqlDay
-    getType "bool"        = Right SqlBool
-    getType "timestamptz" = Right SqlDayTime
-    getType "float4"      = Right SqlReal
-    getType "float8"      = Right SqlReal
-    getType "bytea"       = Right SqlBlob
-    getType "time"        = Right SqlTime
+    getType "int4"        = pure SqlInt32
+    getType "int8"        = pure SqlInt64
+    getType "varchar"     = pure SqlString
+    getType "text"        = pure SqlString
+    getType "date"        = pure SqlDay
+    getType "bool"        = pure SqlBool
+    getType "timestamptz" = pure SqlDayTime
+    getType "float4"      = pure SqlReal
+    getType "float8"      = pure SqlReal
+    getType "bytea"       = pure SqlBlob
+    getType "time"        = pure SqlTime
     getType "numeric"     = getNumeric numericPrecision numericScale
-    getType a             = Right $ SqlOther a
+    getType a             = pure $ SqlOther a
 
-    getNumeric (PersistInt64 a) (PersistInt64 b) = Right $ SqlNumeric (fromIntegral a) (fromIntegral b)
-    getNumeric PersistNull PersistNull = Left $ T.concat
-      [ "No precision and scale were specified for the column: "
-      , columnName
-      , " in table: "
-      , unDBName tableName'
-      , ". Postgres defaults to a maximum scale of 147,455 and precision of 16383,"
-      , " which is probably not what you intended."
-      , " Specify the values as numeric(total_digits, digits_after_decimal_place)."
-      ]
-    getNumeric a b = Left $ T.concat
-      [ "Can not get numeric field precision for the column: "
-      , columnName
-      , " in table: "
-      , unDBName tableName'
-      , ". Expected an integer for both precision and scale, "
-      , "got: "
-      , T.pack $ show a
-      , " and "
-      , T.pack $ show b
-      , ", respectively."
-      , " Specify the values as numeric(total_digits, digits_after_decimal_place)."
-      ]
+    getNumeric (PersistInt64 a) (PersistInt64 b) =
+        pure $ SqlNumeric (fromIntegral a) (fromIntegral b)
+    getNumeric PersistNull PersistNull = throwError $ T.concat
+        [ "No precision and scale were specified for the column: "
+        , columnName
+        , " in table: "
+        , unDBName tableName'
+        , ". Postgres defaults to a maximum scale of 147,455 and precision of 16383,"
+        , " which is probably not what you intended."
+        , " Specify the values as numeric(total_digits, digits_after_decimal_place)."
+        ]
+    getNumeric a b = throwError $ T.concat
+        [ "Can not get numeric field precision for the column: "
+        , columnName
+        , " in table: "
+        , unDBName tableName'
+        , ". Expected an integer for both precision and scale, "
+        , "got: "
+        , T.pack $ show a
+        , " and "
+        , T.pack $ show b
+        , ", respectively."
+        , " Specify the values as numeric(total_digits, digits_after_decimal_place)."
+        ]
 getColumn _ _ columnName _ =
     return $ Left $ T.pack $ "Invalid result from information_schema: " ++ show columnName
 
@@ -1134,11 +1148,14 @@ findAlters defs edef col@(Column name isNull sqltype def _defConstraintName _max
                     if def == def'
                         || isJust (T.stripPrefix "nextval" =<< def')
                         then []
-                        else case def of
+                        else
+                            case def of
                                 Nothing -> [(name, NoDefault)]
                                 Just s -> [(name, Default s)]
-             in (modRef ++ modDef ++ modNull ++ modType,
-                 filter (\c -> cName c /= name) cols)
+             in
+                ( modRef ++ modDef ++ modNull ++ modType
+                , filter (\c -> cName c /= name) cols
+                )
 
 -- | Get the references to be added to a table for the given column.
 getAddReference
@@ -1162,7 +1179,6 @@ getAddReference allDefs entity cname cr@ColumnReference {crTableName = s, crCons
             $ do
                 entDef <- find ((== s) . entityDB) allDefs
                 return $ Util.dbIdColumnsEsc escape entDef
-
 
 showColumn :: Column -> Text
 showColumn (Column n nu sqlType' def _defConstraintName _maxLen _ref) = T.concat

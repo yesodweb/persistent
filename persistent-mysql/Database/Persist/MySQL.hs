@@ -641,21 +641,27 @@ getColumn connectInfo getter tname [ PersistText cname
     fmap (either (Left . pack) Right) $
     runExceptT $ do
         -- Default value
-        default_ <- case default' of
-                      PersistNull   -> return Nothing
-                      PersistText t -> return (Just t)
-                      PersistByteString bs ->
-                        case T.decodeUtf8' bs of
-                          Left exc -> fail $ "Invalid default column: " ++
-                                             show default' ++ " (error: " ++
-                                             show exc ++ ")"
-                          Right t  -> return (Just t)
-                      _ -> fail $ "Invalid default column: " ++ show default'
+        default_ <-
+            case default' of
+                PersistNull   -> return Nothing
+                PersistText t -> return (Just t)
+                PersistByteString bs ->
+                    case T.decodeUtf8' bs of
+                        Left exc ->
+                            fail
+                                $ "Invalid default column: "
+                                ++ show default'
+                                ++ " (error: " ++ show exc ++ ")"
+                          Right t  ->
+                              return (Just t)
+                      _ ->
+                          fail $ "Invalid default column: " ++ show default'
 
         ref <- getRef (crConstraintName <$> cRef)
-        let colMaxLen' = case colMaxLen of
-              PersistInt64 l -> Just (fromIntegral l)
-              _ -> Nothing
+        let colMaxLen' =
+                case colMaxLen of
+                    PersistInt64 l -> Just (fromIntegral l)
+                    _ -> Nothing
             ci = ColumnInfo
               { ciColumnType = colType
               , ciMaxLength = colMaxLen'
