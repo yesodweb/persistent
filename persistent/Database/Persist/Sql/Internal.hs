@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
 
 -- | Intended for creating new backends.
 module Database.Persist.Sql.Internal
@@ -11,6 +12,7 @@ module Database.Persist.Sql.Internal
     , emptyBackendSpecificOverrides
     ) where
 
+import Control.Applicative ((<|>))
 import Control.Monad ((<=<))
 import Data.Char (isSpace)
 import Data.Monoid (mappend, mconcat)
@@ -102,11 +104,12 @@ mkColumns allDefs t overrides =
             , cGenerated = generatedAttribute $ fieldAttrs fd
             , cDefaultConstraintName =  Nothing
             , cMaxLen = maxLen $ fieldAttrs fd
-            , cReference = ref (fieldDB fd) (fieldReference fd) (fieldAttrs fd)
+            , cReference = mkColumnReference fd
             }
 
     tableName :: DBName
     tableName = entityDB t
+
 
     go :: FieldDef -> Column
     go fd =
@@ -118,7 +121,7 @@ mkColumns allDefs t overrides =
             , cGenerated = generatedAttribute $ fieldAttrs fd
             , cDefaultConstraintName =  Nothing
             , cMaxLen = maxLen $ fieldAttrs fd
-            , cReference = ref (fieldDB fd) (fieldReference fd) (fieldAttrs fd)
+            , cReference = mkColumnReference fd
             }
 
     maxLen :: [FieldAttr] -> Maybe Integer
@@ -127,6 +130,23 @@ mkColumns allDefs t overrides =
         _ -> Nothing
 
     refNameFn = fromMaybe refName (backendSpecificForeignKeyName overrides)
+
+    mkColumnReference :: FieldDef -> Maybe ColumnReference
+    mkColumnReference fd =
+        fmap
+            (\(tName, cName) ->
+                ColumnReference tName cName $ overrideNothings $ fieldCascade fd
+            )
+        $ ref (fieldDB fd) (fieldReference fd) (fieldAttrs fd)
+
+    -- a 'Nothing' in the definition means that the QQ migration doesn't
+    -- specify behavior. the default is RESTRICT. setting this here
+    -- explicitly makes migrations run smoother.
+    overrideNothings (FieldCascade { fcOnUpdate = upd, fcOnDelete = del }) =
+        FieldCascade
+            { fcOnUpdate = upd <|> Just Restrict
+            , fcOnDelete = del <|> Just Restrict
+            }
 
     ref :: DBName
         -> ReferenceDef
@@ -139,10 +159,10 @@ mkColumns allDefs t overrides =
     ref _ _ (FieldAttrNoreference:_) = Nothing
     ref c fe (a:as) = case a of
         FieldAttrReference x -> do
-            constraintName <- snd <$> (ref c fe as)
+            (_, constraintName) <- ref c fe as
             pure (DBName x, constraintName)
         FieldAttrConstraint x -> do
-            tableName <- fst <$> (ref c fe as)
+            (tableName, _) <- ref c fe as
             pure (tableName, DBName x)
         _ -> ref c fe as
     ref c x (_:as) = ref c x as

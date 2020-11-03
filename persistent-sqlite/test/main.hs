@@ -136,7 +136,8 @@ main = do
 
   runConn $ do
     mapM_ setup
-      [ PersistentTest.testMigrate
+      [ ForeignKey.compositeMigrate
+      , PersistentTest.testMigrate
       , PersistentTest.noPrefixMigrate
       , PersistentTest.customPrefixMigrate
       , EmbedTest.embedMigrate
@@ -146,7 +147,6 @@ main = do
       , MaxLenTest.maxlenMigrate
       , Recursive.recursiveMigrate
       , CompositeTest.compositeMigrate
-      , ForeignKey.compositeMigrate
       , MigrationTest.migrationMigrate
       , PersistUniqueTest.migration
       , RenameTest.migration
@@ -158,6 +158,7 @@ main = do
       , LongIdentifierTest.migration
       ]
     PersistentTest.cleanDB
+    ForeignKey.cleanDB
 
   hspec $ do
     RenameTest.specsWith db

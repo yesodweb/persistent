@@ -144,7 +144,10 @@ CREATE TABLE email (
     PRIMARY KEY (first_part, second_part)
 @
 
-You can specify 1 or more columns in the primary key.
+Since the primary key for this table is part of the record, it's called a "natural key" in the SQL lingo.
+As a key with multiple fields, it is also a "composite key."
+
+You can specify a @Primary@ key with a single field, too.
 
 = Overriding SQL
 
@@ -191,6 +194,176 @@ userAttrs = do
 -- ["funny"]
     print fieldAttributes
 -- [["sad"],["sogood"]]
+@
+
+= Foreign Keys
+
+If you define an entity and want to refer to it in another table, you can use the entity's Id type in a column directly.
+
+@
+Person
+    name    Text
+
+Dog
+    name    Text
+    owner   PersonId
+@
+
+This automatically creates a foreign key reference from @Dog@ to @Person@.
+The foreign key constraint means that, if you have a @PersonId@ on the @Dog@, the database guarantees that the corresponding @Person@ exists in the database.
+If you try to delete a @Person@ out of the database that has a @Dog@, you'll receive an exception that a foreign key violation has occurred.
+
+== OnUpdate and OnDelete
+
+These options affects how a referring record behaves when the target record is changed.
+There are several options:
+
+* 'Restrict' - This is the default. It prevents the action from occurring.
+* 'Cascade' - this copies the change to the child record. If a parent record is deleted, then the child record will be deleted too.
+* 'SetNull' - If the parent record is modified, then this sets the reference to @NULL@. This only works on @Maybe@ foreign keys.
+* 'SetDefault' - This will set the column's value to the @default@ for the column, if specified.
+
+To specify the behavior for a reference, write @OnUpdate@ or @OnDelete@ followed by the action.
+
+@
+Record
+    -- If the referred Foo is deleted or updated, then this record will
+    -- also be deleted or updated.
+    fooId   FooId   OnDeleteCascade OnUpdateCascade
+
+    -- If the referred Bar is deleted, then we'll set the reference to
+    -- 'Nothing'. If the referred Bar is updated, then we'll cascade the
+    -- update.
+    barId   BarId Maybe     OnDeleteSetNull OnUpdateCascade
+
+    -- If the referred Baz is deleted, then we set to the default ID.
+    bazId   BazId   OnDeleteSetDefault  default=1
+@
+
+Let's demonstrate this with a shopping cart example.
+
+@
+User
+    name    Text
+
+Cart
+    user    UserId Maybe
+
+CartItem
+    cartId  CartId
+    itemId  ItemId
+
+Item
+    name    Text
+    price   Int
+@
+
+Let's consider how we want to handle deletions and updates.
+If a @User@ is deleted or update, then we want to cascade the action to the associated @Cart@.
+
+@
+Cart
+    user    UserId Maybe OnDeleteCascade OnUpdateCascade
+@
+
+If an @Item@ is deleted, then we want to set the @CartItem@ to refer to a special "deleted item" in the database.
+If a @Cart@ is deleted, though, then we just want to delete the @CartItem@.
+
+@
+CartItem
+    cartId CartId   OnDeleteCascade
+    itemId ItemId   OnDeleteSetDefault default=1
+@
+
+== @Foreign@ keyword
+
+The above example is a "simple" foreign key. It refers directly to the Id column, and it only works with a non-composite primary key. We can define more complicated foreign keys using the @Foreign@ keyword.
+
+A pseudo formal syntax for @Foreign@ is:
+
+@
+Foreign $(TargetEntity) [$(cascade-actions)] $(constraint-name) $(columns) [ $(references) ]
+
+columns := column0 [column1 column2 .. columnX]
+references := References $(target-columns)
+target-columns := target-column0 [target-column1 target-columns2 .. target-columnX]
+@
+
+Columns are the columns as defined on this entity.
+@target-columns@ are the columns as defined on the target entity.
+
+Let's look at some examples.
+
+=== Composite Primary Key References
+
+The most common use for this is to refer to a composite primary key.
+Since composite primary keys take up more than one column, we can't refer to them with a single @persistent@ column.
+
+@
+Email
+    firstPart   Text
+    secondPart  Text
+    Primary firstPart secondPart
+
+User
+    name            Text
+    emailFirstPart  Text
+    emailSecondPart Text
+
+    Foreign Email fk_user_email emailFirstPart emailSecondPart
+@
+
+If you omit the @References@ keyword, then it assumes that the foreign key reference is for the target table's primary key.
+If we wanted to be fully redundant, we could specify the @References@ keyword.
+
+@
+    Foreign Email fk_user_email emailFirstPart emailSecondPart References firstPart secondPart
+@
+
+We can specify delete/cascade behavior directly after the target table.
+
+@
+    Foreign Email OnDeleteCascade OnUpdateCascade fk_user_email emailFirstPart emailSecondPart
+@
+
+Now, if the email is deleted or updated, the user will be deleted or updated to match.
+
+=== Non-Primary Key References
+
+SQL database backends allow you to create a foreign key to any column(s) with a Unique constraint.
+Persistent does not check this, because you might be defining your uniqueness constraints outside of Persistent.
+To do this, we must use the @References@ keyword.
+
+@
+User
+    name    Text
+    email   Text
+
+    UniqueEmail email
+
+Notification
+    content Text
+    sentTo  Text
+
+    Foreign User fk_noti_user sentTo References email
+@
+
+If the target uniqueness constraint has multiple columns, then you must specify them independently.
+
+@
+User
+    name            Text
+    emailFirst      Text
+    emailSecond     Text
+
+    UniqueEmail emailFirst emailSecond
+
+Notification
+    content         Text
+    sentToFirst     Text
+    sentToSecond    Text
+
+    Foreign User fk_noti_user sentToFirst sentToSecond References emailFirst emailSecond
 @
 
 = Documentation Comments
@@ -255,6 +428,8 @@ module Database.Persist.Quasi
     , associateLines
     , skipEmpty
     , LinesWithComments(..)
+    , splitExtras
+    , takeColsEx
 #endif
     ) where
 
@@ -563,45 +738,48 @@ fixForeignKeysAll unEnts = map fixForeignKeys unEnts
     fixForeignKeys (UnboundEntityDef foreigns ent) =
       ent { entityForeigns = map (fixForeignKey ent) foreigns }
 
-    -- check the count and the sqltypes match and update the foreignFields with the names of the primary columns
+    -- check the count and the sqltypes match and update the foreignFields with the names of the referenced columns
     fixForeignKey :: EntityDef -> UnboundForeignDef -> ForeignDef
-    fixForeignKey ent (UnboundForeignDef foreignFieldTexts fdef) =
-        let pentError =
-                error $ "could not find table " ++ show (foreignRefTableHaskell fdef)
-                ++ " fdef=" ++ show fdef ++ " allnames="
-                ++ show (map (unHaskellName . entityHaskell . unboundEntityDef) unEnts)
-                ++ "\n\nents=" ++ show ents
-            pent =
-                fromMaybe pentError $ M.lookup (foreignRefTableHaskell fdef) entLookup
-         in
-            case entityPrimary pent of
-                Just pdef ->
-                    if length foreignFieldTexts /= length (compositeFields pdef)
-                    then
-                        lengthError pdef
-                    else
-                        let
-                            fds_ffs =
-                                zipWith (toForeignFields pent)
-                                    foreignFieldTexts
-                                    (compositeFields pdef)
-                            dbname =
-                                unDBName (entityDB pent)
-                            oldDbName =
-                                unDBName (foreignRefTableDBName fdef)
-                         in fdef
-                            { foreignFields = map snd fds_ffs
-                            , foreignNullable = setNull $ map fst fds_ffs
-                            , foreignRefTableDBName =
-                                DBName dbname
-                            , foreignConstraintNameDBName =
-                                DBName
-                                . T.replace oldDbName dbname . unDBName
-                                $ foreignConstraintNameDBName fdef
-                            }
-                Nothing ->
-                    error $ "no explicit primary key fdef="++show fdef++ " ent="++show ent
+    fixForeignKey ent (UnboundForeignDef foreignFieldTexts parentFieldTexts fdef) =
+        case mfdefs of
+             Just fdefs ->
+                 if length foreignFieldTexts /= length fdefs
+                 then
+                     lengthError fdefs
+                 else
+                     let
+                         fds_ffs =
+                             zipWith toForeignFields
+                                 foreignFieldTexts
+                                 fdefs
+                         dbname =
+                             unDBName (entityDB pent)
+                         oldDbName =
+                             unDBName (foreignRefTableDBName fdef)
+                      in fdef
+                         { foreignFields = map snd fds_ffs
+                         , foreignNullable = setNull $ map fst fds_ffs
+                         , foreignRefTableDBName =
+                             DBName dbname
+                         , foreignConstraintNameDBName =
+                             DBName
+                             . T.replace oldDbName dbname . unDBName
+                             $ foreignConstraintNameDBName fdef
+                         }
+             Nothing ->
+                 error $ "no primary key found fdef="++show fdef++ " ent="++show ent
       where
+        pentError =
+            error $ "could not find table " ++ show (foreignRefTableHaskell fdef)
+            ++ " fdef=" ++ show fdef ++ " allnames="
+            ++ show (map (unHaskellName . entityHaskell . unboundEntityDef) unEnts)
+            ++ "\n\nents=" ++ show ents
+        pent =
+            fromMaybe pentError $ M.lookup (foreignRefTableHaskell fdef) entLookup
+        mfdefs = case parentFieldTexts of
+            [] -> entitiesPrimary pent
+            _  -> Just $ map (getFd pent . HaskellName) parentFieldTexts
+
         setNull :: [FieldDef] -> Bool
         setNull [] = error "setNull: impossible!"
         setNull (fd:fds) = let nullSetting = isNull fd in
@@ -610,31 +788,32 @@ fixForeignKeysAll unEnts = map fixForeignKeys unEnts
                    ++ show (map (unHaskellName . fieldHaskell) (fd:fds))
         isNull = (NotNullable /=) . nullable . fieldAttrs
 
-        toForeignFields pent fieldText pfd =
-           case chktypes fd haskellField (entityFields pent) pfh of
+        toForeignFields :: Text -> FieldDef
+            -> (FieldDef, (ForeignFieldDef, ForeignFieldDef))
+        toForeignFields fieldText pfd =
+           case chktypes fd haskellField pfd of
                Just err -> error err
                Nothing -> (fd, ((haskellField, fieldDB fd), (pfh, pfdb)))
           where
-            fd = getFd (entityFields ent) haskellField
+            fd = getFd ent haskellField
 
             haskellField = HaskellName fieldText
             (pfh, pfdb) = (fieldHaskell pfd, fieldDB pfd)
 
-            chktypes :: FieldDef -> HaskellName -> [FieldDef] -> HaskellName -> Maybe String
-            chktypes ffld _fkey pflds pkey =
+            chktypes ffld _fkey pfld =
                 if fieldType ffld == fieldType pfld then Nothing
                   else Just $ "fieldType mismatch: " ++ show (fieldType ffld) ++ ", " ++ show (fieldType pfld)
-              where
-                pfld = getFd pflds pkey
 
-            entName = entityHaskell ent
-            getFd [] t = error $ "foreign key constraint for: " ++ show (unHaskellName entName)
-                           ++ " unknown column: " ++ show t
-            getFd (f:fs) t
+        getFd :: EntityDef -> HaskellName -> FieldDef
+        getFd entity t = go (keyAndEntityFields entity)
+          where
+            go [] = error $ "foreign key constraint for: " ++ show (unHaskellName $ entityHaskell entity)
+                       ++ " unknown column: " ++ show t
+            go (f:fs)
                 | fieldHaskell f == t = f
-                | otherwise = getFd fs t
+                | otherwise = go fs
 
-        lengthError pdef = error $ "found " ++ show (length foreignFieldTexts) ++ " fkeys and " ++ show (length (compositeFields pdef)) ++ " pkeys: fdef=" ++ show fdef ++ " pdef=" ++ show pdef
+        lengthError pdef = error $ "found " ++ show (length foreignFieldTexts) ++ " fkeys and " ++ show (length pdef) ++ " pkeys: fdef=" ++ show fdef ++ " pdef=" ++ show pdef
 
 
 data UnboundEntityDef = UnboundEntityDef
@@ -715,7 +894,9 @@ mkEntityDef ps name entattribs lines =
     idSqlType = maybe SqlInt64 (const $ SqlOther "Primary Key") primaryComposite
 
     setComposite Nothing fd = fd
-    setComposite (Just c) fd = fd { fieldReference = CompositeRef c }
+    setComposite (Just c) fd = fd
+        { fieldReference = CompositeRef c
+        }
 
 
 just1 :: (Show x) => Maybe x -> Maybe x -> Maybe x
@@ -723,22 +904,23 @@ just1 (Just x) (Just y) = error $ "expected only one of: "
   `mappend` show x `mappend` " " `mappend` show y
 just1 x y = x `mplus` y
 
-
 mkAutoIdField :: PersistSettings -> HaskellName -> Maybe DBName -> SqlType -> FieldDef
-mkAutoIdField ps entName idName idSqlType = FieldDef
-      { fieldHaskell = HaskellName "Id"
-      -- this should be modeled as a Maybe
-      -- but that sucks for non-ID field
-      -- TODO: use a sumtype FieldDef | IdFieldDef
-      , fieldDB = fromMaybe (DBName $ psIdName ps) idName
-      , fieldType = FTTypeCon Nothing $ keyConName $ unHaskellName entName
-      , fieldSqlType = idSqlType
-      -- the primary field is actually a reference to the entity
-      , fieldReference = ForeignRef entName  defaultReferenceTypeCon
-      , fieldAttrs = []
-      , fieldStrict = True
-      , fieldComments = Nothing
-      }
+mkAutoIdField ps entName idName idSqlType =
+    FieldDef
+        { fieldHaskell = HaskellName "Id"
+        -- this should be modeled as a Maybe
+        -- but that sucks for non-ID field
+        -- TODO: use a sumtype FieldDef | IdFieldDef
+        , fieldDB = fromMaybe (DBName $ psIdName ps) idName
+        , fieldType = FTTypeCon Nothing $ keyConName $ unHaskellName entName
+        , fieldSqlType = idSqlType
+        -- the primary field is actually a reference to the entity
+        , fieldReference = ForeignRef entName defaultReferenceTypeCon
+        , fieldAttrs = []
+        , fieldStrict = True
+        , fieldComments = Nothing
+        , fieldCascade = noCascade
+        }
 
 defaultReferenceTypeCon :: FieldType
 defaultReferenceTypeCon = FTTypeCon (Just "Data.Int") "Int64"
@@ -746,8 +928,11 @@ defaultReferenceTypeCon = FTTypeCon (Just "Data.Int") "Int64"
 keyConName :: Text -> Text
 keyConName entName = entName `mappend` "Id"
 
-
-splitExtras :: [Line] -> ([[Text]], M.Map Text [[Text]])
+splitExtras
+    :: [Line]
+    -> ( [[Text]]
+       , M.Map Text [[Text]]
+       )
 splitExtras [] = ([], M.empty)
 splitExtras (Line indent [name]:rest)
     | not (T.null name) && isUpper (T.head name) =
@@ -769,25 +954,28 @@ takeCols
     -> [Text]
     -> Maybe FieldDef
 takeCols _ _ ("deriving":_) = Nothing
-takeCols onErr ps (n':typ:rest)
+takeCols onErr ps (n':typ:rest')
     | not (T.null n) && isLower (T.head n) =
         case parseFieldType typ of
             Left err -> onErr typ err
-            Right ft -> Just FieldDef
+            Right ft -> Just $ FieldDef
                 { fieldHaskell = HaskellName n
-                , fieldDB = DBName $ getDbName ps n rest
+                , fieldDB = DBName $ getDbName ps n attrs_
                 , fieldType = ft
                 , fieldSqlType = SqlOther $ "SqlType unset for " `mappend` n
-                , fieldAttrs = parseFieldAttrs rest
+                , fieldAttrs = parseFieldAttrs attrs_
                 , fieldStrict = fromMaybe (psStrictFields ps) mstrict
                 , fieldReference = NoReference
                 , fieldComments = Nothing
+                , fieldCascade = cascade_
                 }
   where
+    (cascade_, attrs_) = parseCascade rest'
     (mstrict, n)
         | Just x <- T.stripPrefix "!" n' = (Just True, x)
         | Just x <- T.stripPrefix "~" n' = (Just False, x)
         | otherwise = (Nothing, n')
+
 takeCols _ _ _ = Nothing
 
 getDbName :: PersistSettings -> Text -> [Text] -> Text
@@ -812,19 +1000,22 @@ takeConstraint _ _ _ _ = (Nothing, Nothing, Nothing, Nothing)
 -- TODO: this is hacky (the double takeCols, the setFieldDef stuff, and setIdName.
 -- need to re-work takeCols function
 takeId :: PersistSettings -> Text -> [Text] -> FieldDef
-takeId ps tableName (n:rest) = fromMaybe (error "takeId: impossible!") $ setFieldDef $
-    takeCols (\_ _ -> addDefaultIdType) ps (field:rest `mappend` setIdName)
+takeId ps tableName (n:rest) =
+    setFieldDef
+    $ fromMaybe (error "takeId: impossible!")
+    $ takeCols (\_ _ -> addDefaultIdType) ps (field:rest) -- `mappend` setIdName)
   where
     field = case T.uncons n of
-      Nothing -> error "takeId: empty field"
-      Just (f, ield) -> toLower f `T.cons` ield
-    addDefaultIdType = takeColsEx ps (field : keyCon : rest `mappend` setIdName)
-    setFieldDef = fmap (\fd ->
-      let refFieldType = if fieldType fd == FTTypeCon Nothing keyCon
-              then defaultReferenceTypeCon
-              else fieldType fd
-      in fd { fieldReference = ForeignRef (HaskellName tableName) $ refFieldType
-            })
+        Nothing -> error "takeId: empty field"
+        Just (f, ield) -> toLower f `T.cons` ield
+    addDefaultIdType = takeColsEx ps (field : keyCon : rest ) -- `mappend` setIdName)
+    setFieldDef fd = fd
+        { fieldReference =
+            ForeignRef (HaskellName tableName) $
+                if fieldType fd == FTTypeCon Nothing keyCon
+                then defaultReferenceTypeCon
+                else fieldType fd
+        }
     keyCon = keyConName tableName
     -- this will be ignored if there is already an existing sql=
     -- TODO: I think there is a ! ignore syntax that would screw this up
@@ -832,13 +1023,12 @@ takeId ps tableName (n:rest) = fromMaybe (error "takeId: impossible!") $ setFiel
 takeId _ tableName _ = error $ "empty Id field for " `mappend` show tableName
 
 
-takeComposite :: [FieldDef]
-              -> [Text]
-              -> CompositeDef
-takeComposite fields pkcols
-        = CompositeDef
-            (map (getDef fields) pkcols)
-            attrs
+takeComposite
+    :: [FieldDef]
+    -> [Text]
+    -> CompositeDef
+takeComposite fields pkcols =
+    CompositeDef (map (getDef fields) pkcols) attrs
   where
     (_, attrs) = break ("!" `T.isPrefixOf`) pkcols
     getDef [] t = error $ "Unknown column in primary key constraint: " ++ show t
@@ -901,15 +1091,17 @@ takeUniq _ tableName _ xs =
           ++ show xs
 
 data UnboundForeignDef = UnboundForeignDef
-                         { _unboundFields :: [Text] -- ^ fields in other entity
+                         { _unboundForeignFields :: [Text] -- ^ fields in the parent entity
+                         , _unboundParentFields :: [Text] -- ^ fields in parent entity
                          , _unboundForeignDef :: ForeignDef
                          }
 
-takeForeign :: PersistSettings
-          -> Text
-          -> [FieldDef]
-          -> [Text]
-          -> UnboundForeignDef
+takeForeign
+    :: PersistSettings
+    -> Text
+    -> [FieldDef]
+    -> [Text]
+    -> UnboundForeignDef
 takeForeign ps tableName _defs = takeRefTable
   where
     errorPrefix :: String
@@ -921,7 +1113,7 @@ takeForeign ps tableName _defs = takeRefTable
       where
         go :: [Text] -> Maybe CascadeAction -> Maybe CascadeAction -> UnboundForeignDef
         go (n:rest) onDelete onUpdate | not (T.null n) && isLower (T.head n)
-            = UnboundForeignDef fields $ ForeignDef
+            = UnboundForeignDef fFields pFields $ ForeignDef
                 { foreignRefTableHaskell =
                     HaskellName refTableName
                 , foreignRefTableDBName =
@@ -940,20 +1132,87 @@ takeForeign ps tableName _defs = takeRefTable
                     attrs
                 , foreignNullable =
                     False
+                , foreignToPrimary =
+                    null pFields
                 }
           where
             (fields,attrs) = break ("!" `T.isPrefixOf`) rest
-        go ((T.stripPrefix "OnDelete" -> Just onDelete) : rest) onDelete' onUpdate
-          = case (onDelete', readEither $ T.unpack onDelete) of
-            (Nothing, Right cascadingAction) -> go rest (Just cascadingAction) onUpdate
-            (Nothing, Left _) -> error $ errorPrefix ++ "could not parse OnDelete action"
-            (Just _, _)  -> error $ errorPrefix ++ "found more than one OnDelete actions"
-        go ((T.stripPrefix "OnUpdate" -> Just onUpdate) : rest) onDelete onUpdate'
-          = case (onUpdate', readEither $ T.unpack onUpdate) of
-            (Nothing, Right cascadingAction) -> go rest onDelete (Just cascadingAction)
-            (Nothing, Left _) -> error $ errorPrefix ++ "could not parse OnUpdate action"
-            (Just _, _)  -> error $ errorPrefix ++ "found more than one OnUpdate actions"
+            (fFields, pFields) = case break (== "References") fields of
+                (ffs, []) -> (ffs, [])
+                (ffs, _ : pfs) -> case (length ffs, length pfs) of
+                    (flen, plen) | flen == plen -> (ffs, pfs)
+                    (flen, plen) -> error $ errorPrefix ++ concat
+                        [ "Found ", show flen, " foreign fields but "
+                        , show plen, " parent fields" ]
+
+        go ((parseCascadeAction CascadeDelete -> Just cascadingAction) : rest) onDelete' onUpdate =
+            case onDelete' of
+                Nothing ->
+                    go rest (Just cascadingAction) onUpdate
+                Just _ ->
+                    error $ errorPrefix ++ "found more than one OnDelete actions"
+
+        go ((parseCascadeAction CascadeUpdate -> Just cascadingAction) : rest) onDelete onUpdate' =
+            case onUpdate' of
+                Nothing ->
+                    go rest onDelete (Just cascadingAction)
+                Just _ ->
+                    error $ errorPrefix ++ "found more than one OnUpdate actions"
+
         go xs _ _ = error $ errorPrefix ++ "expecting a lower case constraint name or a cascading action xs=" ++ show xs
+
+data CascadePrefix = CascadeUpdate | CascadeDelete
+
+parseCascade :: [Text] -> (FieldCascade, [Text])
+parseCascade allTokens =
+    go [] Nothing Nothing allTokens
+  where
+    go acc mupd mdel tokens =
+        case tokens of
+            [] ->
+                ( FieldCascade
+                    { fcOnDelete = mdel
+                    , fcOnUpdate = mupd
+                    }
+                , acc
+                )
+            this : rest ->
+                case parseCascadeAction CascadeUpdate this of
+                    Just cascUpd ->
+                        case mupd of
+                            Nothing ->
+                                go acc (Just cascUpd) mdel rest
+                            Just _ ->
+                                nope "found more than one OnUpdate action"
+                    Nothing ->
+                        case parseCascadeAction CascadeDelete this of
+                            Just cascDel ->
+                                case mdel of
+                                    Nothing ->
+                                        go acc mupd (Just cascDel) rest
+                                    Just _ ->
+                                        nope "found more than one OnDelete action: "
+                            Nothing ->
+                                go (this : acc) mupd mdel rest
+    nope msg =
+        error $ msg <> ", tokens: " <> show allTokens
+
+parseCascadeAction
+    :: CascadePrefix
+    -> Text
+    -> Maybe CascadeAction
+parseCascadeAction prfx text = do
+    cascadeStr <- T.stripPrefix ("On" <> toPrefix prfx) text
+    case readEither (T.unpack cascadeStr) of
+        Right a ->
+            Just a
+        Left _ ->
+            Nothing
+  where
+    toPrefix cp =
+        case cp of
+            CascadeUpdate -> "Update"
+            CascadeDelete -> "Delete"
 
 takeDerives :: [Text] -> Maybe [Text]
 takeDerives ("deriving":rest) = Just rest

@@ -711,5 +711,3 @@ specsWith runDb = describe "persistent" $ do
             , ("blood", toJSON jsonEncoding2Blood)
             , ("id", toJSON key)
             ])
-
-

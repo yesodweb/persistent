@@ -5,7 +5,11 @@ module Database.Persist.Sql.Types
     , readToUnknown, readToWrite, writeToUnknown
     , SqlBackendCanRead, SqlBackendCanWrite, SqlReadT, SqlWriteT, IsSqlBackend
     , OverflowNatural(..)
+    , ConnectionPoolConfig(..)
+    , defaultConnectionPoolConfig
     ) where
+
+import Database.Persist.Types.Base (FieldCascade)
 
 import Control.Exception (Exception(..))
 import Control.Monad.Logger (NoLoggingT)
@@ -17,6 +21,7 @@ import Data.Text (Text, unpack)
 
 import Database.Persist.Types
 import Database.Persist.Sql.Types.Internal
+import Data.Time (NominalDiffTime)
 
 data Column = Column
     { cName      :: !DBName
@@ -26,7 +31,27 @@ data Column = Column
     , cGenerated :: !(Maybe Text)
     , cDefaultConstraintName   :: !(Maybe DBName)
     , cMaxLen    :: !(Maybe Integer)
-    , cReference :: !(Maybe (DBName, DBName)) -- table name, constraint name
+    , cReference :: !(Maybe ColumnReference)
+    }
+    deriving (Eq, Ord, Show)
+
+-- | This value specifies how a field references another table.
+--
+-- @since 2.11.0.0
+data ColumnReference = ColumnReference
+    { crTableName :: !DBName
+    -- ^ The table name that the
+    --
+    -- @since 2.11.0.0
+    , crConstraintName :: !DBName
+    -- ^ The name of the foreign key constraint.
+    --
+    -- @since 2.11.0.0
+    , crFieldCascade :: !FieldCascade
+    -- ^ Whether or not updates/deletions to the referenced table cascade
+    -- to this table.
+    --
+    -- @since 2.11.0.0
     }
     deriving (Eq, Ord, Show)
 
@@ -55,6 +80,23 @@ type CautiousMigration = [(Bool, Sql)]
 type Migration = WriterT [Text] (WriterT CautiousMigration (ReaderT SqlBackend IO)) ()
 
 type ConnectionPool = Pool SqlBackend
+
+-- | Values to configure a pool of database connections. See "Data.Pool" for details.
+--
+-- @since 2.11.0.0
+data ConnectionPoolConfig = ConnectionPoolConfig
+    { connectionPoolConfigStripes :: Int -- ^ How many stripes to divide the pool into. See "Data.Pool" for details. Default: 1.
+    , connectionPoolConfigIdleTimeout :: NominalDiffTime -- ^ How long connections can remain idle before being disposed of, in seconds. Default: 600
+    , connectionPoolConfigSize :: Int -- ^ How many connections should be held in the connection pool. Default: 10
+    }
+    deriving (Show)
+
+-- TODO: Bad defaults for SQLite maybe?
+-- | Initializes a ConnectionPoolConfig with default values. See the documentation of 'ConnectionPoolConfig' for each field's default value.
+--
+-- @since 2.11.0.0
+defaultConnectionPoolConfig :: ConnectionPoolConfig
+defaultConnectionPoolConfig = ConnectionPoolConfig 1 600 10
 
 -- $rawSql
 --

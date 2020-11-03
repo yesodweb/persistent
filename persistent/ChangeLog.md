@@ -2,6 +2,10 @@
 
 ## (Unreleased) 2.11.0.0
 
+* Foreign Key improvements [#1121] https://github.com/yesodweb/persistent/pull/1121
+  * It is now supported to refer to a table with an auto generated Primary Kay
+  * It is now supported to refer to non-primary fields, using the keyword `References`
+  * It is now supported to have cascade options for simple/single-field Foreign Keys
 * Introduces a breaking change to the internal function `mkColumns`, which can now be passed a record of functions to override its default behavior. [#996](https://github.com/yesodweb/persistent/pull/996)
 * Added explicit `forall` notation to make most API functions play nice when using `TypeApplications`. (e.g. instead of `selectList @_ @_ @User [] []`, you can now write `selectList @User [] []`) [#1006](https://github.com/yesodweb/persistent/pull/1006)
 * [#1060](https://github.com/yesodweb/persistent/pull/1060)
@@ -46,6 +50,13 @@
     constraints on an entity update without having to update it.
 * [#1142](https://github.com/yesodweb/persistent/pull/1142)
     * Deprecate `hasCompositeKey` in favor of `hasCustomPrimaryKey` and `hasCompositePrimaryKey` functions.
+* [#1098](https://github.com/yesodweb/persistent/pull/1098)
+  * Add support for configuring the number of stripes and idle timeout for connection pools 
+    * For functions that do not specify an idle timeout, the default has been bumped to 600 seconds.
+      * This change is based off the experience of two production codebases. See [#775](https://github.com/yesodweb/persistent/issues/775)
+    * Add a new type `ConnectionPoolConfig` to configure the number of connections in a pool, their idle timeout, and stripe size.
+    * Add `defaultConnectionPoolConfig` to create a `ConnectionPoolConfig`
+    * Add `createSqlPoolWithConfig` and `withSqlPoolWithConfig`, which take this new data type
 
 ## 2.10.5.2
 

@@ -1,4 +1,5 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP, BangPatterns #-}
+{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -12,6 +13,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DeriveLift #-}
+
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-missing-fields #-}
 
 -- | This module provides the tools for defining your database schema and using
@@ -53,6 +55,7 @@ module Database.Persist.TH
     , fieldError
     , AtLeastOneUniqueKey(..)
     , OnlyOneUniqueKey(..)
+    , pkNewtype
     ) where
 
 -- Development Tip: See persistent-template/README.md for advice on seeing generated Template Haskell code
@@ -60,6 +63,7 @@ module Database.Persist.TH
 
 import Prelude hiding ((++), take, concat, splitAt, exp)
 
+import Control.Applicative
 import Data.Either
 import Control.Monad (forM, mzero, filterM, guard, unless)
 import Data.Aeson
@@ -290,7 +294,7 @@ data FieldSqlTypeExp = FieldSqlTypeExp FieldDef SqlTypeExp
 
 instance Lift FieldSqlTypeExp where
     lift (FieldSqlTypeExp FieldDef{..} sqlTypeExp) =
-        [|FieldDef fieldHaskell fieldDB fieldType $(lift sqlTypeExp) fieldAttrs fieldStrict fieldReference fieldComments|]
+        [|FieldDef fieldHaskell fieldDB fieldType $(lift sqlTypeExp) fieldAttrs fieldStrict fieldReference fieldCascade fieldComments|]
 #if MIN_VERSION_template_haskell(2,16,0)
     liftTyped = unsafeTExpCoerce . lift
 #endif
@@ -323,14 +327,29 @@ constructEntityMap :: [EntityDef] -> EntityMap
 constructEntityMap =
     M.fromList . fmap (\ent -> (entityHaskell ent, ent))
 
-data FTTypeConDescr = FTKeyCon deriving Show
+data FTTypeConDescr = FTKeyCon
+    deriving Show
 
-mEmbedded :: EmbedEntityMap -> FieldType -> Either (Maybe FTTypeConDescr) EmbedEntityDef
-mEmbedded _ (FTTypeCon Just{} _) = Left Nothing
-mEmbedded ents (FTTypeCon Nothing n) =
-    let name = HaskellName n
-     in maybe (Left Nothing) Right $ M.lookup name ents
-mEmbedded ents (FTList x) = mEmbedded ents x
+-- | Recurses through the 'FieldType'. Returns a 'Right' with the
+-- 'EmbedEntityDef' if the 'FieldType' corresponds to an unqualified use of
+-- a name and that name is present in the 'EmbedEntityMap' provided as
+-- a first argument.
+--
+-- If the 'FieldType' represents a @Key something@, this returns a @'Left
+-- ('Just' 'FTKeyCon')@.
+--
+-- If the 'FieldType' has a module qualified value, then it returns @'Left'
+-- 'Nothing'@.
+mEmbedded
+    :: EmbedEntityMap
+    -> FieldType
+    -> Either (Maybe FTTypeConDescr) EmbedEntityDef
+mEmbedded _ (FTTypeCon Just{} _) =
+    Left Nothing
+mEmbedded ents (FTTypeCon Nothing (HaskellName -> name)) =
+    maybe (Left Nothing) Right $ M.lookup name ents
+mEmbedded ents (FTList x) =
+    mEmbedded ents x
 mEmbedded ents (FTApp x y) =
     -- Key converts an Record to a RecordId
     -- special casing this is obviously a hack
@@ -347,13 +366,17 @@ setEmbedField entName allEntities field = field
                 case mEmbedded allEntities (fieldType field) of
                     Left _ ->
                         case stripId $ fieldType field of
-                            Nothing -> NoReference
+                            Nothing ->
+                                NoReference
                             Just name ->
                                 case M.lookup (HaskellName name) allEntities of
-                                    Nothing -> NoReference
-                                    Just _ -> ForeignRef (HaskellName name)
-                                        -- This can get corrected in mkEntityDefSqlTypeExp
-                                        (FTTypeCon (Just "Data.Int") "Int64")
+                                    Nothing ->
+                                        NoReference
+                                    Just _ ->
+                                        ForeignRef
+                                            (HaskellName name)
+                                            -- This can get corrected in mkEntityDefSqlTypeExp
+                                            (FTTypeCon (Just "Data.Int") "Int64")
                     Right em ->
                         if embeddedHaskell em /= entName
                              then EmbedRef em
@@ -362,7 +385,8 @@ setEmbedField entName allEntities field = field
                         else case fieldType field of
                                  FTList _ -> SelfReference
                                  _ -> error $ unpack $ unHaskellName entName <> ": a self reference must be a Maybe"
-            existing -> existing
+            existing ->
+                existing
   }
 
 mkEntityDefSqlTypeExp :: EmbedEntityMap -> EntityMap -> EntityDef -> EntityDefSqlTypeExp
@@ -379,32 +403,39 @@ mkEntityDefSqlTypeExp emEntities entityMap ent =
     -- We just use SqlString, as the data will be serialized to JSON.
     defaultSqlTypeExp field =
         case mEmbedded emEntities ftype of
-            Right _ -> SqlType' SqlString
-            Left (Just FTKeyCon) -> SqlType' SqlString
-            Left Nothing -> case fieldReference field of
-                ForeignRef refName ft  -> case M.lookup refName entityMap of
-                    Nothing  -> SqlTypeExp ft
-                    -- A ForeignRef is blindly set to an Int64 in setEmbedField
-                    -- correct that now
-                    Just ent' -> case entityPrimary ent' of
-                        Nothing -> SqlTypeExp ft
-                        Just pdef -> case compositeFields pdef of
-                            [] -> error "mkEntityDefSqlTypeExp: no composite fields"
-                            [x] -> SqlTypeExp $ fieldType x
-                            _ -> SqlType' $ SqlOther "Composite Reference"
-                CompositeRef _  -> SqlType' $ SqlOther "Composite Reference"
-                _ ->
-                    case ftype of
-                        -- In the case of lists, we always serialize to a string
-                        -- value (via JSON).
-                        --
-                        -- Normally, this would be determined automatically by
-                        -- SqlTypeExp. However, there's one corner case: if there's
-                        -- a list of entity IDs, the datatype for the ID has not
-                        -- yet been created, so the compiler will fail. This extra
-                        -- clause works around this limitation.
-                        FTList _ -> SqlType' SqlString
-                        _ -> SqlTypeExp ftype
+            Right _ ->
+                SqlType' SqlString
+            Left (Just FTKeyCon) ->
+                SqlType' SqlString
+            Left Nothing ->
+                case fieldReference field of
+                    ForeignRef refName ft ->
+                        case M.lookup refName entityMap of
+                            Nothing  -> SqlTypeExp ft
+                            -- A ForeignRef is blindly set to an Int64 in setEmbedField
+                            -- correct that now
+                            Just ent' ->
+                                case entityPrimary ent' of
+                                    Nothing -> SqlTypeExp ft
+                                    Just pdef ->
+                                        case compositeFields pdef of
+                                            [] -> error "mkEntityDefSqlTypeExp: no composite fields"
+                                            [x] -> SqlTypeExp $ fieldType x
+                                            _ -> SqlType' $ SqlOther "Composite Reference"
+                    CompositeRef _ ->
+                        SqlType' $ SqlOther "Composite Reference"
+                    _ ->
+                        case ftype of
+                            -- In the case of lists, we always serialize to a string
+                            -- value (via JSON).
+                            --
+                            -- Normally, this would be determined automatically by
+                            -- SqlTypeExp. However, there's one corner case: if there's
+                            -- a list of entity IDs, the datatype for the ID has not
+                            -- yet been created, so the compiler will fail. This extra
+                            -- clause works around this limitation.
+                            FTList _ -> SqlType' SqlString
+                            _ -> SqlTypeExp ftype
         where
             ftype = fieldType field
 
@@ -984,6 +1015,9 @@ keyString = unpack . keyText
 keyText :: EntityDef -> Text
 keyText t = unHaskellName (entityHaskell t) ++ "Key"
 
+-- | Returns 'True' if the key definition has more than 1 field.
+--
+-- @since 2.11.0.0
 pkNewtype :: MkPersistSettings -> EntityDef -> Bool
 pkNewtype mps t = length (keyFields mps t) < 2
 
@@ -1104,11 +1138,11 @@ mkEntity entityMap mps t = do
     fpv <- mkFromPersistValues mps t
     utv <- mkUniqueToValues $ entityUniques t
     puk <- mkUniqueKeys t
+    let primaryField = entityId t
+    fields <- mapM (mkField mps t) $ primaryField : entityFields t
     fkc <- mapM (mkForeignKeysComposite mps t) $ entityForeigns t
 
-    let primaryField = entityId t
 
-    fields <- mapM (mkField mps t) $ primaryField : entityFields t
     toFieldNames <- mkToFieldNames $ entityUniques t
 
     (keyTypeDec, keyInstanceDecs) <- mkKeyTypeDec mps t
@@ -1335,7 +1369,8 @@ mkLenses mps ent = fmap mconcat $ forM (entityFields ent) $ \field -> do
         ]
 
 mkForeignKeysComposite :: MkPersistSettings -> EntityDef -> ForeignDef -> Q [Dec]
-mkForeignKeysComposite mps t ForeignDef {..} = do
+mkForeignKeysComposite mps t ForeignDef {..} =
+    if not foreignToPrimary then return [] else do
     let fieldName f = mkName $ unpack $ recName mps (entityHaskell t) f
     let fname = fieldName foreignConstraintNameHaskell
     let reftableString = unpack $ unHaskellName foreignRefTableHaskell
@@ -1343,8 +1378,12 @@ mkForeignKeysComposite mps t ForeignDef {..} = do
     let tablename = mkName $ unpack $ entityText t
     recordName <- newName "record"
 
-    let fldsE = map (\((foreignName, _),_) -> VarE (fieldName foreignName)
-                  `AppE` VarE recordName) foreignFields
+    let mkFldE ((foreignName, _),ff) = case ff of
+          (HaskellName {unHaskellName = "Id"}, DBName {unDBName = "id"})
+            -> AppE (VarE $ mkName "toBackendKey") $
+               VarE (fieldName foreignName) `AppE` VarE recordName
+          _ -> VarE (fieldName foreignName) `AppE` VarE recordName
+    let fldsE = map mkFldE foreignFields
     let mkKeyE = foldl' AppE (maybeExp foreignNullable $ ConE reftableKeyName) fldsE
     let fn = FunD fname [normalClause [VarP recordName] mkKeyE]
 
@@ -1677,7 +1716,7 @@ liftAndFixKeys entityMap EntityDef{..} =
     [|EntityDef
         entityHaskell
         entityDB
-        entityId
+        $(liftAndFixKey entityMap entityId)
         entityAttrs
         $(ListE <$> mapM (liftAndFixKey entityMap) entityFields)
         entityUniques
@@ -1689,18 +1728,21 @@ liftAndFixKeys entityMap EntityDef{..} =
     |]
 
 liftAndFixKey :: EntityMap -> FieldDef -> Q Exp
-liftAndFixKey entityMap (FieldDef a b c sqlTyp e f fieldRef mcomments) =
-    [|FieldDef a b c $(sqlTyp') e f fieldRef' mcomments|]
+liftAndFixKey entityMap (FieldDef a b c sqlTyp e f fieldRef fc mcomments) =
+    [|FieldDef a b c $(sqlTyp') e f (fieldRef') fc mcomments|]
   where
-    (fieldRef', sqlTyp') = fromMaybe (fieldRef, lift sqlTyp) $
-      case fieldRef of
-        ForeignRef refName _ft -> case M.lookup refName entityMap of
-          Nothing -> Nothing
-          Just ent ->
-            case fieldReference $ entityId ent of
-              fr@(ForeignRef _Name ft) -> Just (fr, lift $ SqlTypeExp ft)
-              _ -> Nothing
-        _ -> Nothing
+    (fieldRef', sqlTyp') =
+        fromMaybe (fieldRef, lift sqlTyp) $
+            case fieldRef of
+                ForeignRef refName _ft ->  do
+                    ent <- M.lookup refName entityMap
+                    case fieldReference $ entityId ent of
+                        fr@(ForeignRef targetName ft) ->
+                            Just (fr, lift $ SqlTypeExp ft)
+                        _ ->
+                            Nothing
+                _ ->
+                    Nothing
 
 deriving instance Lift EntityDef
 

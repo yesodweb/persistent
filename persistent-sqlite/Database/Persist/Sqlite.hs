@@ -46,8 +46,6 @@ module Database.Persist.Sqlite
     , withRawSqlitePoolInfo_
     ) where
 
-import qualified Debug.Trace as Debug
-
 import Control.Concurrent (threadDelay)
 import qualified Control.Exception as E
 import Control.Monad (forM_)
@@ -614,8 +612,14 @@ sqlColumn noRef (Column name isNull typ def _gen _cn _maxLen ref) = T.concat
     -- , mayGenerated gen
     , case ref of
         Nothing -> ""
-        Just (table, _) -> if noRef then "" else " REFERENCES " <> escape table
+        Just ColumnReference {crTableName=table, crFieldCascade=cascadeOpts} ->
+          if noRef then "" else " REFERENCES " <> escape table
+            <> onDelete cascadeOpts <> onUpdate cascadeOpts
     ]
+  where
+
+    onDelete opts = maybe "" (T.append " ON DELETE " . renderCascadeAction) (fcOnDelete opts)
+    onUpdate opts = maybe "" (T.append " ON UPDATE " . renderCascadeAction) (fcOnUpdate opts)
 
 sqlForeign :: ForeignDef -> Text
 sqlForeign fdef = T.concat $

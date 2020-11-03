@@ -2,6 +2,10 @@
 
 ## (Unreleased) 2.11.0.0
 
+* Foreign Key improvements [#1121] https://github.com/yesodweb/persistent/pull/1121
+  * It is now supported to refer to a table with an auto generated Primary Kay
+  * It is now supported to refer to non-primary fields, using the keyword `References`
+
 * Implement interval support. [#1053](https://github.com/yesodweb/persistent/pull/1053)
 * [#1060](https://github.com/yesodweb/persistent/pull/1060)
   * The QuasiQuoter now supports `OnDelete` and `OnUpdate` cascade options.
@@ -12,6 +16,11 @@
   * Renamed `db` to `runConnAssert` in `test/PgInit.hs` for clarity
   * Ran `test/ArrayAggTest.hs` (which was previously written but not being run)
 * Remove unnecessary deriving of Typeable [#1114](https://github.com/yesodweb/persistent/pull/1114)
+* Add support for configuring the number of stripes and idle timeout for connection pools [#1098](https://github.com/yesodweb/persistent/pull/1098)
+	* `PostgresConf` has two new fields to configure these values.
+		* Its `FromJSON` instance will default stripes to 1 and idle timeout to 600 seconds
+		* If you're constructing a `PostgresConf` manually, this is a breaking change
+	* Add `createPostgresqlPoolWithConf` and `withPostgresqlPoolWithConf`, which take a `PostgresConf` for the new configuration.
 
 ## 2.10.1.2
 

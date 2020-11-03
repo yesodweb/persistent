@@ -53,6 +53,7 @@ import qualified UpsertTest
 import qualified CustomConstraintTest
 import qualified LongIdentifierTest
 import qualified GeneratedColumnTestSQL
+import qualified ForeignKey
 
 type Tuple a b = (a, b)
 
@@ -103,7 +104,7 @@ instance Arbitrary (DataTypeTableGeneric backend) where
 setup :: (HasCallStack, MonadUnliftIO m) => Migration -> ReaderT SqlBackend m ()
 setup migration = do
   printMigration migration
-  _ <- runMigrationSilent migration
+  _ <- runMigrationUnsafe migration
   pure ()
 
 main :: IO ()
@@ -129,8 +130,10 @@ main = do
       , MigrationColumnLengthTest.migration
       , TransactionLevelTest.migration
       -- , LongIdentifierTest.migration
+      , ForeignKey.compositeMigrate
       ]
     PersistentTest.cleanDB
+    ForeignKey.cleanDB
 
   hspec $ do
     xdescribe "This is pending on MySQL because you can't have DEFAULT CURRENT_DATE" $ do
@@ -179,6 +182,7 @@ main = do
         UpsertTest.Don'tUpdateNull
         UpsertTest.UpsertPreserveOldKey
 
+    ForeignKey.specsWith db
     MpsNoPrefixTest.specsWith db
     MpsCustomPrefixTest.specsWith db
     EmptyEntityTest.specsWith db (Just (runMigrationSilent EmptyEntityTest.migration))
