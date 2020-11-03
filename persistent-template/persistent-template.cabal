@@ -41,6 +41,7 @@ test-suite test
         TemplateTestImports
       , SharedPrimaryKeyTest
       , SharedPrimaryKeyTestImported
+      , OverloadedLabelTest
                     
     ghc-options:     -Wall
 

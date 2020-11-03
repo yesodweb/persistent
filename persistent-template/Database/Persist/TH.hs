@@ -65,7 +65,7 @@ import Prelude hiding ((++), take, concat, splitAt, exp)
 
 import Control.Applicative
 import Data.Either
-import Control.Monad (forM, mzero, filterM, guard, unless)
+import Control.Monad
 import Data.Aeson
     ( ToJSON (toJSON), FromJSON (parseJSON), (.=), object
     , Value (Object), (.:), (.:?)
@@ -94,7 +94,7 @@ import GHC.TypeLits
 import Instances.TH.Lift ()
     -- Bring `Lift (Map k v)` instance into scope, as well as `Lift Text`
     -- instance on pre-1.2.4 versions of `text`
-import Language.Haskell.TH.Lib (conT, varE, varP)
+import Language.Haskell.TH.Lib (appT, varT, conT, varE, varP, conE, litT, strTyLit)
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Web.PathPieces (PathPiece(..))
@@ -443,12 +443,17 @@ mkEntityDefSqlTypeExp emEntities entityMap ent =
 -- 'EntityDef's. Works well with the persist quasi-quoter.
 mkPersist :: MkPersistSettings -> [EntityDef] -> Q [Dec]
 mkPersist mps ents' = do
-    requireExtensions [[TypeFamilies], [GADTs, ExistentialQuantification]]
+    requireExtensions
+        [ [TypeFamilies], [GADTs, ExistentialQuantification]
+        , [DerivingStrategies], [GeneralizedNewtypeDeriving], [StandaloneDeriving]
+        , [UndecidableInstances], [DataKinds], [FlexibleInstances]
+        ]
     x <- fmap Data.Monoid.mconcat $ mapM (persistFieldFromEntity mps) ents
     y <- fmap mconcat $ mapM (mkEntity entityMap mps) ents
     z <- fmap mconcat $ mapM (mkJSON mps) ents
     uniqueKeyInstances <- fmap mconcat $ mapM (mkUniqueKeyInstances mps) ents
-    return $ mconcat [x, y, z, uniqueKeyInstances]
+    symbolToFieldInstances <- fmap mconcat $ mapM (mkSymbolToFieldInstances mps) ents
+    return $ mconcat [x, y, z, uniqueKeyInstances, symbolToFieldInstances]
   where
     ents = map fixEntityDef ents'
     entityMap = constructEntityMap ents
@@ -1948,7 +1953,32 @@ requirePersistentExtensions = requireExtensions requiredExtensions
         , GeneralizedNewtypeDeriving
         , StandaloneDeriving
         , UndecidableInstances
+        , MultiParamTypeClasses
         ]
+
+mkSymbolToFieldInstances :: MkPersistSettings -> EntityDef -> Q [Dec]
+mkSymbolToFieldInstances mps ed = do
+    fmap join $ forM (entityFields ed) $ \fieldDef -> do
+        let fieldNameT =
+                litT $ strTyLit $ T.unpack $ unHaskellName $ fieldHaskell fieldDef
+                    :: Q Type
+            nameG = mkName $ unpack $ unHaskellName (entityHaskell ed) ++ "Generic"
+
+            recordNameT
+                | mpsGeneric mps =
+                    conT nameG `appT` varT backendName
+                | otherwise =
+                    conT $ mkName $ T.unpack $ unHaskellName $ entityHaskell ed
+            fieldTypeT =
+                maybeIdType mps fieldDef Nothing Nothing
+            entityFieldConstr =
+                conE $ filterConName mps ed fieldDef
+                    :: Q Exp
+        [d|
+            instance SymbolToField $(fieldNameT) $(recordNameT) $(pure fieldTypeT) where
+                symbolToField = $(entityFieldConstr)
+
+            |]
 
 -- | Pass in a list of lists of extensions, where any of the given
 -- extensions will satisfy it. For example, you might need either GADTs or

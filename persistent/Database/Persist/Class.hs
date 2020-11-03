@@ -117,6 +117,7 @@ module Database.Persist.Class
 
     -- * PersistEntity
     , PersistEntity (..)
+    , SymbolToField (..)
     -- * PersistField
     , PersistField (..)
     -- * PersistConfig

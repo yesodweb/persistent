@@ -1,5 +1,6 @@
 {-# LANGUAGE EmptyDataDecls             #-}
 {-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE DataKinds, FlexibleInstances           #-}
 {-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
@@ -10,6 +11,7 @@
 {-# LANGUAGE UndecidableInstances       #-}
 {-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE StandaloneDeriving         #-}
+
 module CustomConstraintTest where
 
 import MyInit
