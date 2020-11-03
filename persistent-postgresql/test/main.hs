@@ -38,6 +38,7 @@ import qualified MigrationColumnLengthTest
 import qualified MigrationTest
 import qualified MigrationOnlyTest
 import qualified MpsNoPrefixTest
+import qualified MigrationTest
 import qualified MpsCustomPrefixTest
 import qualified PersistentTest
 import qualified PersistUniqueTest
@@ -154,18 +155,16 @@ main = do
     HtmlTest.specsWith
         runConnAssert
         (Just (runMigrationSilent HtmlTest.htmlMigrate))
-
-    EmbedTest.specsWith runConnAssert
     EmbedOrderTest.specsWith runConnAssert
-    LargeNumberTest.specsWith runConnAssert
+    EmbedTest.specsWith runConnAssert
     ForeignKey.specsWith runConnAssert
-    UniqueTest.specsWith runConnAssert
+    LargeNumberTest.specsWith runConnAssert
     MaxLenTest.specsWith runConnAssert
+    MigrationOnlyTest.specsWith runConnAssert
+    MigrationTest.specsWith runConnAssert
     Recursive.specsWith runConnAssert
     SumTypeTest.specsWith runConnAssert (Just (runMigrationSilent SumTypeTest.sumTypeMigrate))
-    MigrationTest.specsWith runConnAssert
-    MigrationOnlyTest.specsWith runConnAssert
-
+    UniqueTest.specsWith runConnAssert
         (Just
             $ runMigrationSilent MigrationOnlyTest.migrateAll1
             >> runMigrationSilent MigrationOnlyTest.migrateAll2
