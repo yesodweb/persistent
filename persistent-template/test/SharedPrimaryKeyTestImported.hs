@@ -1,5 +1,5 @@
 {-# LANGUAGE TypeApplications, DeriveGeneric #-}
-{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE DataKinds, ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
