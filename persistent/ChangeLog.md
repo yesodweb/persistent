@@ -57,6 +57,8 @@
     * Add a new type `ConnectionPoolConfig` to configure the number of connections in a pool, their idle timeout, and stripe size.
     * Add `defaultConnectionPoolConfig` to create a `ConnectionPoolConfig`
     * Add `createSqlPoolWithConfig` and `withSqlPoolWithConfig`, which take this new data type
+* [#TODO](https://github.com/yesodweb/persistent/pull/TODO)
+  * Allow `OverloadedLabels` to be used with the `EntityField` type.
 
 ## 2.10.5.2
 

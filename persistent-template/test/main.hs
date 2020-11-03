@@ -10,6 +10,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# language DataKinds #-}
 
 -- DeriveAnyClass is not actually used by persistent-template
 -- But a long standing bug was that if it was enabled, it was used to derive instead of GeneralizedNewtypeDeriving
@@ -46,6 +47,7 @@ import TemplateTestImports
 
 import qualified SharedPrimaryKeyTest
 import qualified SharedPrimaryKeyTestImported
+import qualified OverloadedLabelTest
 
 share [mkPersist sqlSettings { mpsGeneric = False, mpsDeriveInstances = [''Generic] }, mkDeleteCascade sqlSettings { mpsGeneric = False }] [persistUpperCase|
 
@@ -132,6 +134,7 @@ instance Arbitrary Address where
 
 main :: IO ()
 main = hspec $ do
+    OverloadedLabelTest.spec
     SharedPrimaryKeyTest.spec
     SharedPrimaryKeyTestImported.spec
     describe "HasDefaultId" $ do

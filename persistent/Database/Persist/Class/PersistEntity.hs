@@ -1,8 +1,16 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
+
 module Database.Persist.Class.PersistEntity
     ( PersistEntity (..)
     , Update (..)
@@ -20,6 +28,8 @@ module Database.Persist.Class.PersistEntity
       -- * PersistField based on other typeclasses
     , toPersistValueJSON, fromPersistValueJSON
     , toPersistValueEnum, fromPersistValueEnum
+      -- * Support for @OverloadedLabels@ with 'EntityField'
+    , SymbolToField (..)
     ) where
 
 import Data.Aeson (ToJSON (..), withObject, FromJSON (..), fromJSON, object, (.:), (.=), Value (Object))
@@ -36,6 +46,8 @@ import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy as LT
 import qualified Data.Text.Lazy.Builder as TB
 import GHC.Generics
+import GHC.OverloadedLabels
+import GHC.TypeLits
 
 import Database.Persist.Class.PersistField
 import Database.Persist.Types.Base
@@ -391,3 +403,34 @@ fromPersistValueEnum v = fromPersistValue v >>= go
                  then Right res
                  else Left ("The number " `mappend` T.pack (show i) `mappend` " was out of the "
                   `mappend` "allowed bounds for an enum type")
+
+-- | This type class is used with the @OverloadedLabels@ extension to
+-- provide a more convenient means of using the 'EntityField' type.
+-- 'EntityField' definitions are prefixed with the type name to avoid
+-- ambiguity, but this ambiguity can result in verbose code.
+--
+-- If you have a table @User@ with a @name Text@ field, then the
+-- corresponding 'EntityField' is @UserName@. With this, we can write
+-- @#name :: 'EntityField' User Text@.
+--
+-- What's more fun is that the type is more general: it's actually
+-- @
+-- #name
+--     :: ('SymbolToField' "name" rec typ)
+--     => EntityField rec typ
+-- @
+--
+-- Which means it is *polymorphic* over the actual record. This allows you
+-- to write code that can be generic over the tables, provided they have
+-- the right fields.
+--
+-- @since 2.11.0.0
+class SymbolToField (sym :: Symbol) rec typ | sym rec -> typ where
+    symbolToField :: EntityField rec typ
+
+-- | This instance delegates to 'SymbolToField' to provide
+-- @OverloadedLabels@ support to the 'EntityField' type.
+--
+-- @since 2.11.0.0
+instance SymbolToField sym rec typ => IsLabel sym (EntityField rec typ) where
+    fromLabel = symbolToField @sym
