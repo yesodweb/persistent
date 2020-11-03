@@ -87,6 +87,10 @@ class ( PersistField (Key record), ToJSON (Key record), FromJSON (Key record)
 
     -- | An 'EntityField' is parameterised by the Haskell record it belongs to
     -- and the additional type of that field.
+    --
+    -- As of @persistent-2.11.0.0@, it's possible to use the @OverloadedLabels@
+    -- language extension to refer to 'EntityField' values polymorphically. See
+    -- the documentation on 'SymbolToField' for more information.
     data EntityField record :: * -> *
     -- | Return meta-data for a given 'EntityField'.
     persistFieldDef :: EntityField record typ -> FieldDef

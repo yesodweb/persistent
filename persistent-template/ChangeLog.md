@@ -6,7 +6,7 @@
     * Fix a bug where the `SqlType` for a shared primary key was being
       incorrectly set to `SqlString` instead of whatever the target primary key
       sql type was.
-* [#TODO](https://github.com/yesodweb/persistent/pull/TODO)
+* [#1151](https://github.com/yesodweb/persistent/pull/1151)
     * Automatically generate `SymbolToField` instances for datatypes, allowing
       `OverloadedLabels` to be used with the `EntityField` type.
 
