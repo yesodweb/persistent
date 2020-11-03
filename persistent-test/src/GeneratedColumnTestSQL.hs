@@ -1,7 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
-module PersistLiteralTestSQL (specsWith) where
+module GeneratedColumnTestSQL (specsWith) where
 
 import Init
 import qualified Data.Text as T
@@ -20,7 +20,7 @@ specsWith runDB = describe "PersistLiteral field" $ do
     runMigration migrateAll
     insert_ $ PersistLiteralFieldTestTable
       { persistLiteralFieldTestTableFieldOne = Just "like, literally this exact string"
-      , persistLiteralFieldTestTableFieldTwo = Just "like, literally some other string"
+      , persistLiteralFieldTestTableFieldTwo = Just "like, totally some other string"
       , persistLiteralFieldTestTableFieldThree = Nothing
       }
     Just (Entity _ PersistLiteralFieldTestTable{..}) <- selectFirst [] []

@@ -1,9 +1,10 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE NamedFieldPuns #-}
 
 -- | A postgresql backend for persistent.
 module Database.Persist.Postgresql
@@ -822,6 +823,7 @@ getColumns getter def cols = do
             , ",is_nullable "
             , ",COALESCE(domain_name, udt_name)" -- See DOMAINS below
             , ",column_default "
+            , ",generation_expression "
             , ",numeric_precision "
             , ",numeric_scale "
             , ",character_maximum_length "
@@ -895,7 +897,7 @@ getColumns getter def cols = do
 -- list.
 safeToRemove :: EntityDef -> DBName -> Bool
 safeToRemove def (DBName colName)
-    = any (elem "SafeToRemove" . fieldAttrs)
+    = any (elem FieldAttrSafeToRemove . fieldAttrs)
     $ filter ((== DBName colName) . fieldDB)
     $ keyAndEntityFields def
 
@@ -938,10 +940,11 @@ getColumn :: (Text -> IO Statement)
           -> DBName -> [PersistValue]
           -> Maybe (DBName, DBName)
           -> IO (Either Text Column)
-getColumn getter tableName' [PersistText columnName, PersistText isNullable, PersistText typeName, defaultValue, numericPrecision, numericScale, maxlen] refName =
-    case d' of
-        Left s -> return $ Left s
-        Right d'' ->
+getColumn getter tableName' [PersistText columnName, PersistText isNullable, PersistText typeName, defaultValue, generationExpression, numericPrecision, numericScale, maxlen] refName =
+    case (d', g') of
+        (Left s, _) -> return $ Left s
+        (_, Left s) -> return $ Left s
+        (Right d'', Right g'') ->
             let typeStr = case maxlen of
                             PersistInt64 n -> T.concat [typeName, "(", T.pack (show n), ")"]
                             _              -> typeName
@@ -955,6 +958,7 @@ getColumn getter tableName' [PersistText columnName, PersistText isNullable, Per
                           , cNull = isNullable == "YES"
                           , cSqlType = t
                           , cDefault = fmap stripSuffixes d''
+                          , cGenerated = fmap stripSuffixes g''
                           , cDefaultConstraintName = Nothing
                           , cMaxLen = Nothing
                           , cReference = ref
@@ -1008,6 +1012,10 @@ getColumn getter tableName' [PersistText columnName, PersistText isNullable, Per
             PersistNull   -> Right Nothing
             PersistText t -> Right $ Just t
             _ -> Left $ T.pack $ "Invalid default column: " ++ show defaultValue
+    g' = case generationExpression of
+            PersistNull   -> Right Nothing
+            PersistText t -> Right $ Just t
+            _ -> Left $ T.pack $ "Invalid generated column: " ++ show generationExpression
     getType "int4"        = Right SqlInt32
     getType "int8"        = Right SqlInt64
     getType "varchar"     = Right SqlString
@@ -1062,11 +1070,11 @@ findAlters
     -- ^ The column that we're searching for potential alterations for.
     -> [Column]
     -> ([AlterColumn'], [Column])
-findAlters defs edef col@(Column name isNull sqltype def _defConstraintName _maxLen ref) cols =
+findAlters defs edef col@(Column name isNull sqltype def _gen _defConstraintName _maxLen ref) cols =
     case List.find (\c -> cName c == name) cols of
         Nothing ->
             ([(name, Add' col)], cols)
-        Just (Column _oldName isNull' sqltype' def' _defConstraintName' _maxLen' ref') ->
+        Just (Column _oldName isNull' sqltype' def' _gen' _defConstraintName' _maxLen' ref') ->
             let refDrop Nothing = []
                 refDrop (Just (_, cname)) = [(name, DropReference cname)]
                 refAdd Nothing = []
@@ -1148,7 +1156,7 @@ getAddReference allDefs entity cname (s, constraintName) = do
 
 
 showColumn :: Column -> Text
-showColumn (Column n nu sqlType' def _defConstraintName _maxLen _ref) = T.concat
+showColumn (Column n nu sqlType' def gen _defConstraintName _maxLen _ref) = T.concat
     [ escape n
     , " "
     , showSqlType sqlType'
@@ -1157,6 +1165,9 @@ showColumn (Column n nu sqlType' def _defConstraintName _maxLen _ref) = T.concat
     , case def of
         Nothing -> ""
         Just s -> " DEFAULT " <> s
+    , case gen of
+        Nothing -> ""
+        Just s -> " GENERATED ALWAYS AS (" <> s <> ") STORED"
     ]
 
 showSqlType :: SqlType -> Text

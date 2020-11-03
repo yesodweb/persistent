@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# OPTIONS_GHC -fno-warn-deprecations #-} -- usage of Error typeclass
 module Database.Persist.Types.Base where
 
@@ -166,7 +167,11 @@ newtype DBName = DBName { unDBName :: Text }
 
 type Attr = Text
 
--- | Documentation goes here please
+-- | Attributes that may be attached to fields that can affect migrations
+-- and serialization in backend-specific ways.
+--
+-- While we endeavor to, we can't forsee all use cases for all backends,
+-- and so 'FieldAttr' is extensible through its constructor 'FieldAttrOther'.
 --
 -- @since 2.11.0.0
 data FieldAttr
@@ -184,25 +189,28 @@ data FieldAttr
     | FieldAttrOther Text
     deriving (Show, Eq, Read, Ord)
 
--- |
+-- | Parse raw field attributes into structured form. Any unrecognized
+-- attributes will be preserved, identically as they are encountered,
+-- as 'FieldAttrOther' values.
 --
 -- @since 2.11.0.0
 parseFieldAttrs :: [Text] -> [FieldAttr]
-parseFieldAttrs = fmap $ \raw -> if
-    | raw == "Maybe" -> FieldAttrMaybe
-    | raw == "nullable" -> FieldAttrNullable
-    | raw == "MigrationOnly" -> FieldAttrMigrationOnly
-    | raw == "SafeToRemove" -> FieldAttrSafeToRemove
-    | raw == "noreference" -> FieldAttrNoreference
-    | Just x <- T.stripPrefix "reference=" raw -> FieldAttrReference x
-    | Just x <- T.stripPrefix "constraint=" raw -> FieldAttrConstraint x
-    | Just x <- T.stripPrefix "default=" raw -> FieldAttrDefault x
-    | Just x <- T.stripPrefix "generated=" raw -> FieldAttrGenerated x
-    | Just x <- T.stripPrefix "sqltype=" raw -> FieldAttrSqltype x
-    | Just x <- T.stripPrefix "maxlen=" raw -> case reads (T.unpack x) of
-        [(n, s)] | all isSpace s -> FieldAttrMaxlen n
-        _ -> error $ "Could not parse maxlen field with value " <> show raw
-    | otherwise -> FieldAttrOther raw
+parseFieldAttrs = fmap $ \case
+    "Maybe" -> FieldAttrMaybe
+    "nullable" -> FieldAttrNullable
+    "MigrationOnly" -> FieldAttrMigrationOnly
+    "SafeToRemove" -> FieldAttrSafeToRemove
+    "noreference" -> FieldAttrNoreference
+    raw
+        | Just x <- T.stripPrefix "reference=" raw -> FieldAttrReference x
+        | Just x <- T.stripPrefix "constraint=" raw -> FieldAttrConstraint x
+        | Just x <- T.stripPrefix "default=" raw -> FieldAttrDefault x
+        | Just x <- T.stripPrefix "generated=" raw -> FieldAttrGenerated x
+        | Just x <- T.stripPrefix "sqltype=" raw -> FieldAttrSqltype x
+        | Just x <- T.stripPrefix "maxlen=" raw -> case reads (T.unpack x) of
+            [(n, s)] | all isSpace s -> FieldAttrMaxlen n
+            _ -> error $ "Could not parse maxlen field with value " <> show raw
+        | otherwise -> FieldAttrOther raw
 
 data FieldType
     = FTTypeCon (Maybe Text) Text

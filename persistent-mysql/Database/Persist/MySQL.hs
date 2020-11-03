@@ -2,6 +2,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -481,12 +482,13 @@ findMaxLenOfColumn allDefs name col =
 
 -- | Find out the maxlen of a field
 findMaxLenOfField :: FieldDef -> Maybe Integer
-findMaxLenOfField fieldDef = do
-    maxLenAttr <- listToMaybe
-        . mapMaybe (T.stripPrefix "maxlen=" . T.toLower)
+findMaxLenOfField fieldDef =
+    listToMaybe
+        . mapMaybe (\case
+            FieldAttrMaxlen x -> Just x
+            _ -> Nothing)
         . fieldAttrs
         $ fieldDef
-    readMaybe $ T.unpack maxLenAttr
 
 -- | Helper for 'AddReference' that finds out the which primary key columns to reference.
 addReference :: [EntityDef] -> DBName -> DBName -> DBName -> AlterColumn
@@ -554,7 +556,8 @@ getColumns connectInfo getter def cols = do
       ,   "CHARACTER_MAXIMUM_LENGTH, "
       ,   "NUMERIC_PRECISION, "
       ,   "NUMERIC_SCALE, "
-      ,   "COLUMN_DEFAULT "
+      ,   "COLUMN_DEFAULT, "
+      ,   "GENERATION_EXPRESSION "
       , "FROM INFORMATION_SCHEMA.COLUMNS "
       , "WHERE TABLE_SCHEMA = ? "
       ,   "AND TABLE_NAME   = ? "
@@ -624,7 +627,8 @@ getColumn connectInfo getter tname [ PersistText cname
                                    , colMaxLen
                                    , colPrecision
                                    , colScale
-                                   , default'] refName =
+                                   , default'
+                                   , generated] refName =
     fmap (either (Left . pack) Right) $
     runExceptT $ do
       -- Default value
@@ -638,6 +642,17 @@ getColumn connectInfo getter tname [ PersistText cname
                                            show exc ++ ")"
                         Right t  -> return (Just t)
                     _ -> fail $ "Invalid default column: " ++ show default'
+
+      generated_ <- case generated of
+                      PersistNull   -> return Nothing
+                      PersistText t -> return (Just t)
+                      PersistByteString bs ->
+                        case T.decodeUtf8' bs of
+                          Left exc -> fail $ "Invalid generated column: " ++
+                                             show generated ++ " (error: " ++
+                                             show exc ++ ")"
+                          Right t  -> return (Just t)
+                      _ -> fail $ "Invalid generated column: " ++ show generated
 
       ref <- getRef refName
       let colMaxLen' = case colMaxLen of
@@ -656,6 +671,7 @@ getColumn connectInfo getter tname [ PersistText cname
         , cNull = null_ == "YES"
         , cSqlType = typ
         , cDefault = default_
+        , cGenerated = generated_
         , cDefaultConstraintName = Nothing
         , cMaxLen = maxLen
         , cReference = ref
@@ -790,7 +806,7 @@ findAlters
     -> Column
     -> [Column]
     -> ([AlterColumn'], [Column])
-findAlters edef allDefs col@(Column name isNull type_ def _defConstraintName maxLen ref) cols =
+findAlters edef allDefs col@(Column name isNull type_ def _gen _defConstraintName maxLen ref) cols =
     case filter ((name ==) . cName) cols of
     -- new fkey that didn't exist before
         [] ->
@@ -800,7 +816,7 @@ findAlters edef allDefs col@(Column name isNull type_ def _defConstraintName max
                     let cnstr = [addReference allDefs cname tname name]
                     in
                         (map ((,) tname) (Add' col : cnstr), cols)
-        Column _ isNull' type_' def' _defConstraintName' maxLen' ref' : _ ->
+        Column _ isNull' type_' def' _gen' _defConstraintName' maxLen' ref' : _ ->
             let -- Foreign key
                 refDrop =
                     case (ref == ref', ref') of
@@ -839,7 +855,7 @@ findAlters edef allDefs col@(Column name isNull type_ def _defConstraintName max
 -- | Prints the part of a @CREATE TABLE@ statement about a given
 -- column.
 showColumn :: Column -> String
-showColumn (Column n nu t def _defConstraintName maxLen ref) = concat
+showColumn (Column n nu t def _gen _defConstraintName maxLen ref) = concat
     [ escapeDBName n
     , " "
     , showSqlType t maxLen True
@@ -914,14 +930,14 @@ showAlterTable table (DropUniqueConstraint cname) = concat
 
 -- | Render an action that must be done on a column.
 showAlter :: DBName -> AlterColumn' -> String
-showAlter table (oldName, Change (Column n nu t def defConstraintName maxLen _ref)) =
+showAlter table (oldName, Change (Column n nu t def _gen defConstraintName maxLen _ref)) =
     concat
     [ "ALTER TABLE "
     , escapeDBName table
     , " CHANGE "
     , escapeDBName oldName
     , " "
-    , showColumn (Column n nu t def defConstraintName maxLen Nothing)
+    , showColumn (Column n nu t def _gen defConstraintName maxLen Nothing)
     ]
 showAlter table (_, Add' col) =
     concat

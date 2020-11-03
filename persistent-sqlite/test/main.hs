@@ -31,7 +31,7 @@ import qualified MpsCustomPrefixTest
 import qualified MigrationColumnLengthTest
 import qualified MigrationOnlyTest
 import qualified PersistentTest
-import qualified PersistLiteralTestSQL
+import qualified GeneratedColumnTestSQL
 import qualified PersistUniqueTest
 import qualified PrimaryTest
 import qualified RawSqlTest
@@ -217,8 +217,8 @@ main = do
     TransactionLevelTest.specsWith db
     MigrationTest.specsWith db
     LongIdentifierTest.specsWith db
-    xdescribe "SQLite doesn't work, see issue #1110  for discussion" $ do
-        PersistLiteralTestSQL.specsWith db
+    xdescribe "SQLite doesn't work, see PR #1122 for discussion" $ do
+        GeneratedColumnTestSQL.specsWith db
 
     it "issue #328" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
         runMigrationSilent migrateAll

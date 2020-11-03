@@ -39,7 +39,7 @@ library
                      PersistentTest
                      PersistentTestModels
                      PersistentTestModelsImports
-                     PersistLiteralTestSQL
+                     GeneratedColumnTestSQL
                      PersistTestPetType
                      PersistTestPetCollarType
                      PersistUniqueTest

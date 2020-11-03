@@ -6,6 +6,7 @@
 module Database.Persist.Sql.Internal
     ( mkColumns
     , defaultAttribute
+    , generatedAttribute
     , BackendSpecificOverrides(..)
     , emptyBackendSpecificOverrides
     ) where
@@ -42,7 +43,7 @@ emptyBackendSpecificOverrides = BackendSpecificOverrides Nothing
 defaultAttribute :: [FieldAttr] -> Maybe Text
 defaultAttribute = findMaybe $ \case 
     FieldAttrDefault x -> Just x
-     _ -> Nothing
+    _ -> Nothing
 
 generatedAttribute :: [FieldAttr] -> Maybe Text
 generatedAttribute = findMaybe $ \case 
@@ -123,7 +124,7 @@ mkColumns allDefs t overrides =
     maxLen :: [FieldAttr] -> Maybe Integer
     maxLen = findMaybe $ \case 
         FieldAttrMaxlen n -> Just n
-         _ -> Nothing
+        _ -> Nothing
 
     refNameFn = fromMaybe refName (backendSpecificForeignKeyName overrides)
 
