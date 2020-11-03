@@ -94,7 +94,7 @@ import GHC.TypeLits
 import Instances.TH.Lift ()
     -- Bring `Lift (Map k v)` instance into scope, as well as `Lift Text`
     -- instance on pre-1.2.4 versions of `text`
-import Language.Haskell.TH.Lib (conT, varE, varP, conE, litT, strTyLit)
+import Language.Haskell.TH.Lib (appT, varT, conT, varE, varP, conE, litT, strTyLit)
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Web.PathPieces (PathPiece(..))
@@ -1962,9 +1962,13 @@ mkSymbolToFieldInstances mps ed = do
         let fieldNameT =
                 litT $ strTyLit $ T.unpack $ unHaskellName $ fieldHaskell fieldDef
                     :: Q Type
-            recordNameT =
-                conT $ mkName $ T.unpack $ unHaskellName $ entityHaskell ed
-                    :: Q Type
+            nameG = mkName $ unpack $ unHaskellName (entityHaskell ed) ++ "Generic"
+
+            recordNameT
+                | mpsGeneric mps =
+                    conT nameG `appT` varT backendName
+                | otherwise =
+                    conT $ mkName $ T.unpack $ unHaskellName $ entityHaskell ed
             fieldTypeT =
                 maybeIdType mps fieldDef Nothing Nothing
             entityFieldConstr =

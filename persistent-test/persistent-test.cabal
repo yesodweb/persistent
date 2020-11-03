@@ -97,6 +97,7 @@ library
                     StandaloneDeriving
                     DerivingStrategies
                     GeneralizedNewtypeDeriving
+                    DataKinds
 
 source-repository head
   type:     git
