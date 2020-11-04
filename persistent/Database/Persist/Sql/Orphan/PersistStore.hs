@@ -41,27 +41,11 @@ import Web.HttpApiData (ToHttpApiData, FromHttpApiData)
 import Database.Persist
 import Database.Persist.Class ()
 import Database.Persist.Sql.Class (PersistFieldSql)
-import Database.Persist.Sql.Internal (generatedAttribute)
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Util (
     dbIdColumns, keyAndEntityColumnNames, parseEntityValues, entityColumnNames
-  , updatePersistValue, mkUpdateText, commaSeparated)
-
--- Contributor note: any time you execute a prepared statement to
--- insert one or more rows, you need to use 'valuesToInsert entity' to
--- generate the list of values that you feed into your prepared
--- statement so that generated columns are properly scrubbed.
-valuesToInsert :: PersistEntity entity => entity -> [PersistValue]
-valuesToInsert entity =
-    zipWith redactGeneratedCol (entityFields . entityDef $ Just entity)
-        . map toPersistValue
-        $ toPersistFields entity
-  where
-    redactGeneratedCol fd pv = case generatedAttribute (fieldAttrs fd) of
-        Nothing -> pv
-        -- TODO: this redaction works fine in MySQL and Postgresql, but not Sqlite.
-        Just _ -> PersistLiteral "DEFAULT"
+  , updatePersistValue, mkUpdateText, commaSeparated, mkInsertValues)
 
 withRawQuery :: MonadIO m
              => Text
@@ -224,7 +208,7 @@ instance PersistStoreWrite SqlBackend where
         tshow = T.pack . show
         throw = liftIO . throwIO . userError . T.unpack
         t = entityDef $ Just val
-        vals = valuesToInsert val
+        vals = mkInsertValues val
 
     insertMany [] = return []
     insertMany vals = do
@@ -238,14 +222,14 @@ instance PersistStoreWrite SqlBackend where
                     _ -> error "ISRSingle is expected from the connInsertManySql function"
                 where
                     ent = entityDef vals
-                    valss = map valuesToInsert vals
+                    valss = map mkInsertValues vals
 
     insertMany_ vals0 = runChunked (length $ entityFields t) insertMany_' vals0
       where
         t = entityDef vals0
         insertMany_' vals = do
           conn <- ask
-          let valss = map valuesToInsert vals
+          let valss = map mkInsertValues vals
           let sql = T.concat
                   [ "INSERT INTO "
                   , connEscapeName conn (entityDB t)
@@ -269,7 +253,7 @@ instance PersistStoreWrite SqlBackend where
                 , " WHERE "
                 , wher
                 ]
-            vals = valuesToInsert val `mappend` keyToValues k
+            vals = mkInsertValues val `mappend` keyToValues k
         rawExecute sql vals
       where
         go conn x = connEscapeName conn x `T.append` "=?"
@@ -299,8 +283,8 @@ instance PersistStoreWrite SqlBackend where
         let nr  = length krs
         let toVals (k,r)
                 = case entityPrimary ent of
-                    Nothing -> keyToValues k <> (valuesToInsert r)
-                    Just _  -> valuesToInsert r
+                    Nothing -> keyToValues k <> (mkInsertValues r)
+                    Just _  -> mkInsertValues r
         case connRepsertManySql conn of
             (Just mkSql) -> rawExecute (mkSql ent nr) (concatMap toVals krs)
             Nothing -> mapM_ (uncurry repsert) krs

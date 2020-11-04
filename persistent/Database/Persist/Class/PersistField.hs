@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE PatternGuards, DataKinds, TypeOperators, UndecidableInstances #-}
@@ -450,7 +451,7 @@ getPersistMap (PersistByteString bs)
 getPersistMap PersistNull = Right []
 getPersistMap x = Left $ fromPersistValueError "[(Text, PersistValue)]" "map, string, bytestring or null" x
 
-data SomePersistField = forall a. PersistField a => SomePersistField a
+data SomePersistField = forall a. (PersistField a) => SomePersistField a
 instance PersistField SomePersistField where
     toPersistValue (SomePersistField a) = toPersistValue a
     fromPersistValue x = fmap SomePersistField (fromPersistValue x :: Either Text Text)

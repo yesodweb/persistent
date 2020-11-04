@@ -15,6 +15,7 @@ import Data.Char (isSpace)
 import qualified Data.HashMap.Strict as HM
 import Data.Int (Int64)
 import Data.Map (Map)
+import Data.Maybe
 import qualified Data.Scientific
 import Data.Text (Text, pack)
 import qualified Data.Text as T
@@ -191,7 +192,6 @@ data FieldAttr
     | FieldAttrReference Text
     | FieldAttrConstraint Text
     | FieldAttrDefault Text
-    | FieldAttrGenerated Text
     | FieldAttrSqltype Text
     | FieldAttrMaxlen Integer
     | FieldAttrOther Text
@@ -213,7 +213,6 @@ parseFieldAttrs = fmap $ \case
         | Just x <- T.stripPrefix "reference=" raw -> FieldAttrReference x
         | Just x <- T.stripPrefix "constraint=" raw -> FieldAttrConstraint x
         | Just x <- T.stripPrefix "default=" raw -> FieldAttrDefault x
-        | Just x <- T.stripPrefix "generated=" raw -> FieldAttrGenerated x
         | Just x <- T.stripPrefix "sqltype=" raw -> FieldAttrSqltype x
         | Just x <- T.stripPrefix "maxlen=" raw -> case reads (T.unpack x) of
             [(n, s)] | all isSpace s -> FieldAttrMaxlen n
@@ -276,9 +275,16 @@ data FieldDef = FieldDef
     -- attach comments to a field in the quasiquoter.
     --
     -- @since 2.10.0
+    , fieldGenerated :: !(Maybe Text)
+    -- ^ Whether or not the field is a @GENERATED@ column, and additionally
+    -- the expression to use for generation.
+    --
+    -- @since 2.11.0.0
     }
     deriving (Show, Eq, Read, Ord)
 
+isFieldNotGenerated :: FieldDef -> Bool
+isFieldNotGenerated = isNothing . fieldGenerated
 
 -- | There are 3 kinds of references
 -- 1) composite (to fields that exist in the record)
@@ -492,7 +498,7 @@ data PersistValue
 --
     deriving (Show, Read, Eq, Ord)
 
-{-# DEPRECATED PersistDbSpecific "Deprecated since 2.11 because of inconsistent escaping behavior across backends. Use one of 'PersistLiteral' or 'PersistLiteralEscaped' instead." #-}
+{-# DEPRECATED PersistDbSpecific "Deprecated since 2.11 because of inconsistent escaping behavior across backends. The Postgres backend escapes these values, while the MySQL backend does not. If you are using this, please switch to 'PersistLiteral' or 'PersistLiteralEscaped' based on your needs." #-}
 
 instance ToHttpApiData PersistValue where
     toUrlPiece val =

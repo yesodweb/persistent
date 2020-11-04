@@ -220,8 +220,7 @@ main = do
     TransactionLevelTest.specsWith db
     MigrationTest.specsWith db
     LongIdentifierTest.specsWith db
-    xdescribe "SQLite doesn't work, see PR #1122 for discussion" $ do
-        GeneratedColumnTestSQL.specsWith db
+    GeneratedColumnTestSQL.specsWith db
 
     it "issue #328" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
         void $ runMigrationSilent migrateAll

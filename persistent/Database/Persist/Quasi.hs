@@ -435,6 +435,7 @@ module Database.Persist.Quasi
 
 import Prelude hiding (lines)
 
+import Control.Applicative hiding (empty)
 import Control.Arrow ((&&&))
 import Control.Monad (msum, mplus)
 import Data.Char
@@ -916,6 +917,7 @@ mkAutoIdField ps entName idName idSqlType =
         , fieldStrict = True
         , fieldComments = Nothing
         , fieldCascade = noCascade
+        , fieldGenerated = Nothing
         }
 
 defaultReferenceTypeCon :: FieldType
@@ -954,18 +956,21 @@ takeCols onErr ps (n':typ:rest')
     | not (T.null n) && isLower (T.head n) =
         case parseFieldType typ of
             Left err -> onErr typ err
-            Right ft -> Just $ FieldDef
+            Right ft -> Just FieldDef
                 { fieldHaskell = HaskellName n
                 , fieldDB = DBName $ getDbName ps n attrs_
                 , fieldType = ft
                 , fieldSqlType = SqlOther $ "SqlType unset for " `mappend` n
-                , fieldAttrs = parseFieldAttrs attrs_
+                , fieldAttrs = fieldAttrs_
                 , fieldStrict = fromMaybe (psStrictFields ps) mstrict
                 , fieldReference = NoReference
                 , fieldComments = Nothing
                 , fieldCascade = cascade_
+                , fieldGenerated = generated_
                 }
   where
+    fieldAttrs_ = parseFieldAttrs attrs_
+    generated_ = parseGenerated attrs_
     (cascade_, attrs_) = parseCascade rest'
     (mstrict, n)
         | Just x <- T.stripPrefix "!" n' = (Just True, x)
@@ -973,6 +978,9 @@ takeCols onErr ps (n':typ:rest')
         | otherwise = (Nothing, n')
 
 takeCols _ _ _ = Nothing
+
+parseGenerated :: [Text] -> Maybe Text
+parseGenerated = foldl' (\acc x -> acc <|> T.stripPrefix "generated=" x) Nothing
 
 getDbName :: PersistSettings -> Text -> [Text] -> Text
 getDbName ps n [] = psToDBName ps n
