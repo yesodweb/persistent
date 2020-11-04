@@ -62,6 +62,7 @@ import qualified Data.Conduit.List as CL
 import qualified Data.HashMap.Lazy as HashMap
 import Data.Int (Int64)
 import Data.IORef
+import qualified Data.List as List
 import qualified Data.Map as Map
 import Data.Monoid ((<>))
 import Data.Pool (Pool)
@@ -314,17 +315,6 @@ prepare' conn sql = do
         , stmtQuery = withStmt' conn stmt
         }
 
--- TODO: Persistent support for Sqlite generated columns is currently broken.
--- In Postgresql and MySQL, it is valid to make a perpared insert statement that
--- includes a generated column so long as when you execute that statement,
--- you use the literal 'DEFAULT' keyword for the value of the generated column,
--- and so this is currently what Persistent does. However, Sqlite makes it
--- an error to create a prepared insert statement that includes a generated
--- column. As a result, we ignore the 'generated=' attribute for Sqlite. To
--- support generated columns, we need to: (1) remove the generated columns
--- from the prepared statement (done, but commented out); and (2) also
--- remove the /values/ of the generated columns at the point the prepared
--- statement is executed (not done).
 insertSql' :: EntityDef -> [PersistValue] -> InsertSqlResult
 insertSql' ent vals =
     case entityPrimary ent of
@@ -363,19 +353,10 @@ insertSql' ent vals =
                           ]
                   ]
   where
-    cols = entityFields ent
-    -- TODO: Sqlite generated columns
-    -- notGenerated =
-    --     null
-    --         . find (\case
-    --             FieldAttrGenerated{} -> True
-    --             _ -> False
-    --             )
-    --         . fieldAttrs
-    -- cols =
-    --     filter notGenerated $ entityFields ent
-    -- vals' =
-    --     filter notGenerated $ vals
+    notGenerated =
+        isNothing . fieldGenerated
+    cols =
+        filter notGenerated $ entityFields ent
 
 execute' :: Sqlite.Connection -> Sqlite.Statement -> [PersistValue] -> IO Int64
 execute' conn stmt vals = flip finally (liftIO $ Sqlite.reset conn stmt) $ do
@@ -595,21 +576,20 @@ mayDefault def = case def of
     Nothing -> ""
     Just d -> " DEFAULT " <> d
 
--- TODO: Sqlite generated columns
--- mayGenerated :: Maybe Text -> Text
--- mayGenerated gen = case gen of
---     Nothing -> ""
---     Just g -> " GENERATED ALWAYS AS (" <> g <> ") STORED"
+mayGenerated :: Maybe Text -> Text
+mayGenerated gen = case gen of
+    Nothing -> ""
+    Just g -> " GENERATED ALWAYS AS (" <> g <> ") STORED"
 
 sqlColumn :: Bool -> Column -> Text
-sqlColumn noRef (Column name isNull typ def _gen _cn _maxLen ref) = T.concat
+sqlColumn noRef (Column name isNull typ def gen _cn _maxLen ref) = T.concat
     [ ","
     , escape name
     , " "
     , showSqlType typ
     , if isNull then " NULL" else " NOT NULL"
     , mayDefault def
-    -- , mayGenerated gen
+    , mayGenerated gen
     , case ref of
         Nothing -> ""
         Just ColumnReference {crTableName=table, crFieldCascade=cascadeOpts} ->
@@ -617,7 +597,6 @@ sqlColumn noRef (Column name isNull typ def _gen _cn _maxLen ref) = T.concat
             <> onDelete cascadeOpts <> onUpdate cascadeOpts
     ]
   where
-
     onDelete opts = maybe "" (T.append " ON DELETE " . renderCascadeAction) (fcOnDelete opts)
     onUpdate opts = maybe "" (T.append " ON UPDATE " . renderCascadeAction) (fcOnUpdate opts)
 

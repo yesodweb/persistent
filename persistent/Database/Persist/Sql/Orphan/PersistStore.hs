@@ -46,22 +46,14 @@ import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Util (
     dbIdColumns, keyAndEntityColumnNames, parseEntityValues, entityColumnNames
-  , updatePersistValue, mkUpdateText, commaSeparated)
+  , updatePersistValue, mkUpdateText, commaSeparated, mkInsertValuesAndPlaceholders)
 
 -- Contributor note: any time you execute a prepared statement to
 -- insert one or more rows, you need to use 'valuesToInsert entity' to
 -- generate the list of values that you feed into your prepared
 -- statement so that generated columns are properly scrubbed.
 valuesToInsert :: PersistEntity entity => entity -> [PersistValue]
-valuesToInsert entity =
-    zipWith redactGeneratedCol (entityFields . entityDef $ Just entity)
-        . map toPersistValue
-        $ toPersistFields entity
-  where
-    redactGeneratedCol fd pv = case generatedAttribute (fieldAttrs fd) of
-        Nothing -> pv
-        -- TODO: this redaction works fine in MySQL and Postgresql, but not Sqlite.
-        Just _ -> PersistLiteral "DEFAULT"
+valuesToInsert = map (\(_, a, _) -> a) . mkInsertValuesAndPlaceholders
 
 withRawQuery :: MonadIO m
              => Text

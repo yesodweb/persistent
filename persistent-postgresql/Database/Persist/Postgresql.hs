@@ -376,60 +376,68 @@ prepare' conn sql = do
 
 insertSql' :: EntityDef -> [PersistValue] -> InsertSqlResult
 insertSql' ent vals =
-  let sql = T.concat
-                [ "INSERT INTO "
-                , escape $ entityDB ent
-                , if null (entityFields ent)
-                    then " DEFAULT VALUES"
-                    else T.concat
-                        [ "("
-                        , T.intercalate "," $ map (escape . fieldDB) $ entityFields ent
-                        , ") VALUES("
-                        , T.intercalate "," (map (const "?") $ entityFields ent)
-                        , ")"
-                        ]
+    case entityPrimary ent of
+        Just _pdef -> ISRManyKeys sql vals
+        Nothing -> ISRSingle (sql <> " RETURNING " <> escape (fieldDB (entityId ent)))
+  where
+    (fieldNames, placeholders) = unzip (Util.mkInsertPlaceholders ent escape)
+    sql = T.concat
+        [ "INSERT INTO "
+        , escape $ entityDB ent
+        , if null (entityFields ent)
+            then " DEFAULT VALUES"
+            else T.concat
+                [ "("
+                , T.intercalate "," fieldNames
+                , ") VALUES("
+                , T.intercalate "," placeholders
+                , ")"
                 ]
-  in case entityPrimary ent of
-       Just _pdef -> ISRManyKeys sql vals
-       Nothing -> ISRSingle (sql <> " RETURNING " <> escape (fieldDB (entityId ent)))
+        ]
 
 
 upsertSql' :: EntityDef -> NonEmpty (HaskellName, DBName) -> Text -> Text
-upsertSql' ent uniqs updateVal = T.concat
-                           [ "INSERT INTO "
-                           , escape (entityDB ent)
-                           , "("
-                           , T.intercalate "," $ map (escape . fieldDB) $ entityFields ent
-                           , ") VALUES ("
-                           , T.intercalate "," $ map (const "?") (entityFields ent)
-                           , ") ON CONFLICT ("
-                           , T.intercalate "," $ map (escape . snd) (NEL.toList uniqs)
-                           , ") DO UPDATE SET "
-                           , updateVal
-                           , " WHERE "
-                           , wher
-                           , " RETURNING ??"
-                           ]
-    where
-      wher = T.intercalate " AND " $ map (singleClause . snd) $ NEL.toList uniqs
+upsertSql' ent uniqs updateVal =
+    T.concat
+        [ "INSERT INTO "
+        , escape (entityDB ent)
+        , "("
+        , T.intercalate "," fieldNames
+        , ") VALUES ("
+        , T.intercalate "," placeholders
+        , ") ON CONFLICT ("
+        , T.intercalate "," $ map (escape . snd) (NEL.toList uniqs)
+        , ") DO UPDATE SET "
+        , updateVal
+        , " WHERE "
+        , wher
+        , " RETURNING ??"
+        ]
+  where
+    (fieldNames, placeholders) = unzip (Util.mkInsertPlaceholders ent escape)
 
-      singleClause :: DBName -> Text
-      singleClause field = escape (entityDB ent) <> "." <> (escape field) <> " =?"
+    wher = T.intercalate " AND " $ map (singleClause . snd) $ NEL.toList uniqs
+
+    singleClause :: DBName -> Text
+    singleClause field = escape (entityDB ent) <> "." <> (escape field) <> " =?"
 
 -- | SQL for inserting multiple rows at once and returning their primary keys.
 insertManySql' :: EntityDef -> [[PersistValue]] -> InsertSqlResult
 insertManySql' ent valss =
-  let sql = T.concat
-                [ "INSERT INTO "
-                , escape (entityDB ent)
-                , "("
-                , T.intercalate "," $ map (escape . fieldDB) $ entityFields ent
-                , ") VALUES ("
-                , T.intercalate "),(" $ replicate (length valss) $ T.intercalate "," $ map (const "?") (entityFields ent)
-                , ") RETURNING "
-                , Util.commaSeparated $ Util.dbIdColumnsEsc escape ent
-                ]
-  in ISRSingle sql
+    ISRSingle sql
+  where
+    (fieldNames, placeholders)= unzip (Util.mkInsertPlaceholders ent escape)
+    sql = T.concat
+        [ "INSERT INTO "
+        , escape (entityDB ent)
+        , "("
+        , T.intercalate "," fieldNames
+        , ") VALUES ("
+        , T.intercalate "),(" $ replicate (length valss) $ T.intercalate "," placeholders
+        , ") RETURNING "
+        , Util.commaSeparated $ Util.dbIdColumnsEsc escape ent
+        ]
+
 
 execute' :: PG.Connection -> PG.Query -> [PersistValue] -> IO Int64
 execute' conn query vals = PG.execute conn query (map P vals)
@@ -1064,9 +1072,9 @@ getColumn getter tableName' [ PersistText columnName
     t <- getType typeStr
 
     let cname = DBName columnName
-    
+
     ref <- lift $ fmap join $ traverse (getRef cname) refName_
-    
+
     return Column
         { cName = cname
         , cNull = isNullable == "YES"
@@ -1476,10 +1484,10 @@ escape (DBName s) =
 data PostgresConf = PostgresConf
     { pgConnStr  :: ConnectionString
       -- ^ The connection string.
-    
+
     -- TODO: Currently stripes, idle timeout, and pool size are all separate fields
     -- When Persistent next does a large breaking release (3.0?), we should consider making these just a single ConnectionPoolConfig value
-    -- 
+    --
     -- Currently there the idle timeout is an Integer, rather than resource-pool's NominalDiffTime type.
     -- This is because the time package only recently added the Read instance for NominalDiffTime.
     -- Future TODO: Consider removing the Read instance, and/or making the idle timeout a NominalDiffTime.
@@ -1554,7 +1562,7 @@ instance PersistConfig PostgresConf where
 --
 -- @since 2.11.0
 data PostgresConfHooks = PostgresConfHooks
-  { pgConfHooksGetServerVersion :: PG.Connection -> IO (NonEmpty Word) 
+  { pgConfHooksGetServerVersion :: PG.Connection -> IO (NonEmpty Word)
       -- ^ Function to get the version of Postgres
       --
       -- The default implementation queries the server with "show server_version".
@@ -1703,7 +1711,7 @@ repsertManySql ent n = putManySql' conflictColumns fields ent n
     conflictColumns = escape . fieldDB <$> entityKeyFields ent
 
 putManySql' :: [Text] -> [FieldDef] -> EntityDef -> Int -> Text
-putManySql' conflictColumns fields ent n = q
+putManySql' conflictColumns (filter isFieldNotGenerated -> fields) ent n = q
   where
     fieldDbToText = escape . fieldDB
     mkAssignment f = T.concat [f, "=EXCLUDED.", f]

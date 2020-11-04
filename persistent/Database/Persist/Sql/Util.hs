@@ -16,20 +16,22 @@ module Database.Persist.Sql.Util
     , mkUpdateText'
     , commaSeparated
     , parenWrapped
+    , mkInsertValuesAndPlaceholders
+    , mkInsertPlaceholders
     ) where
 
-import Data.Maybe (isJust)
+import qualified Data.Maybe as Maybe
 import Data.Monoid ((<>))
 import Data.Text (Text, pack)
 import qualified Data.Text as T
 
 import Database.Persist (
     Entity(Entity), EntityDef, EntityField, HaskellName(HaskellName)
-  , PersistEntity, PersistValue
+  , PersistEntity(..), PersistValue
   , keyFromValues, fromPersistValues, fieldDB, entityId, entityPrimary
   , entityFields, entityKeyFields, fieldHaskell, compositeFields, persistFieldDef
   , keyAndEntityFields, toPersistValue, DBName, Update(..), PersistUpdate(..)
-  , FieldDef
+  , FieldDef(..)
   )
 import Database.Persist.Sql.Types (Sql, SqlBackend, connEscapeName)
 
@@ -50,7 +52,7 @@ entityColumnCount e = length (entityFields e)
 -- | Deprecated as of 2.11. See 'hasNaturalKey' or 'hasCompositePrimaryKey'
 -- for replacements.
 hasCompositeKey :: EntityDef -> Bool
-hasCompositeKey = isJust . entityPrimary
+hasCompositeKey = Maybe.isJust . entityPrimary
 
 -- | Returns 'True' if the entity has a natural key defined with the
 -- Primary keyword.
@@ -98,7 +100,7 @@ hasCompositeKey = isJust . entityPrimary
 -- @since 2.11.0
 hasNaturalKey :: EntityDef -> Bool
 hasNaturalKey =
-    isJust . entityPrimary
+    Maybe.isJust . entityPrimary
 
 -- | Returns 'True' if the provided entity has a custom composite primary
 -- key. Composite keys have multiple fields in them.
@@ -219,3 +221,39 @@ mkUpdateText' escapeName refColumn x =
 
 parenWrapped :: Text -> Text
 parenWrapped t = T.concat ["(", t, ")"]
+
+-- | Make a list of @?@ placeholders for inserting into the database.
+--
+-- Does not include generated columns.
+--
+-- @since 2.11.0.0
+mkInsertValuesAndPlaceholders
+    :: PersistEntity rec
+    => rec
+    -> [(FieldDef, PersistValue, Text)]
+mkInsertValuesAndPlaceholders entity =
+    Maybe.catMaybes
+        . zipWith redactGeneratedCol (entityFields . entityDef $ Just entity)
+        . map toPersistValue
+        $ toPersistFields entity
+  where
+    redactGeneratedCol fd pv = case fieldGenerated fd of
+        Nothing ->
+            Just (fd, pv, "?")
+        Just _ ->
+            Nothing
+
+-- | TODO
+--
+-- Does not include generated columns.
+--
+-- @since 2.11.0.0
+mkInsertPlaceholders :: EntityDef -> (DBName -> Text) -> [(Text, Text)]
+mkInsertPlaceholders ed escape =
+    Maybe.mapMaybe redactGeneratedCol (entityFields ed)
+  where
+    redactGeneratedCol fd = case fieldGenerated fd of
+        Nothing ->
+            Just (escape (fieldDB fd), "?")
+        Just _ ->
+            Nothing

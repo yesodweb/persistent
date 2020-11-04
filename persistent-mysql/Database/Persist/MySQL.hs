@@ -7,6 +7,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
+
 {-# OPTIONS_GHC -fno-warn-deprecations #-} -- Pattern match 'PersistDbSpecific'
 -- | A MySQL backend for @persistent@.
 module Database.Persist.MySQL
@@ -166,18 +168,30 @@ prepare' conn sql = do
 -- | SQL code to be executed when inserting an entity.
 insertSql' :: EntityDef -> [PersistValue] -> InsertSqlResult
 insertSql' ent vals =
-  let sql = pack $ concat
-                [ "INSERT INTO "
-                , escapeDBName $ entityDB ent
-                , "("
-                , intercalate "," $ map (escapeDBName . fieldDB) $ entityFields ent
-                , ") VALUES("
-                , intercalate "," (map (const "?") $ entityFields ent)
-                , ")"
-                ]
-  in case entityPrimary ent of
-       Just _ -> ISRManyKeys sql vals
-       Nothing -> ISRInsertGet sql "SELECT LAST_INSERT_ID()"
+--   let sql = pack $ concat
+--                [ "INSERT INTO "
+--                , escapeDBName $ entityDB ent
+--                , "("
+--                , intercalate "," $ map (escapeDBName . fieldDB) $ entityFields ent
+--                , ") VALUES("
+--                , intercalate "," (map (const "?") $ entityFields ent)
+--                , ")"
+--                ]
+  -- in
+    case entityPrimary ent of
+        Just _ -> ISRManyKeys sql vals
+        Nothing -> ISRInsertGet sql "SELECT LAST_INSERT_ID()"
+  where
+    (fieldNames, placeholders) = unzip (Util.mkInsertPlaceholders ent escape)
+    sql = T.concat
+        [ "INSERT INTO "
+        , escape $ entityDB ent
+        , "("
+        , T.intercalate "," fieldNames
+        , ") VALUES("
+        , T.intercalate "," placeholders
+        , ")"
+        ]
 
 -- | Execute an statement that doesn't return any results.
 execute' :: MySQL.Connection -> MySQL.Query -> [PersistValue] -> IO Int64
@@ -1504,7 +1518,7 @@ repsertManySql ent n = putManySql' fields ent n
     fields = keyAndEntityFields ent
 
 putManySql' :: [FieldDef] -> EntityDef -> Int -> Text
-putManySql' fields ent n = q
+putManySql' (filter isFieldNotGenerated -> fields) ent n = q
   where
     fieldDbToText = escape . fieldDB
     mkAssignment f = T.concat [f, "=VALUES(", f, ")"]

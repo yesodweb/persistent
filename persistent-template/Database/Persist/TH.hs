@@ -293,7 +293,10 @@ data FieldSqlTypeExp = FieldSqlTypeExp FieldDef SqlTypeExp
 
 instance Lift FieldSqlTypeExp where
     lift (FieldSqlTypeExp FieldDef{..} sqlTypeExp) =
-        [|FieldDef fieldHaskell fieldDB fieldType $(lift sqlTypeExp) fieldAttrs fieldStrict fieldReference fieldCascade fieldComments|]
+        [|FieldDef fieldHaskell fieldDB fieldType $(lift sqlTypeExp) fieldAttrs fieldStrict fieldReference fieldCascade fieldComments fieldGenerated|]
+      where
+        FieldDef _x _ _ _ _ _ _ _ _ _ =
+            error "need to update this record wildcard match"
 #if MIN_VERSION_template_haskell(2,16,0)
     liftTyped = unsafeTExpCoerce . lift
 #endif
@@ -1731,8 +1734,8 @@ liftAndFixKeys entityMap EntityDef{..} =
     |]
 
 liftAndFixKey :: EntityMap -> FieldDef -> Q Exp
-liftAndFixKey entityMap (FieldDef a b c sqlTyp e f fieldRef fc mcomments) =
-    [|FieldDef a b c $(sqlTyp') e f (fieldRef') fc mcomments|]
+liftAndFixKey entityMap (FieldDef a b c sqlTyp e f fieldRef fc mcomments fg) =
+    [|FieldDef a b c $(sqlTyp') e f (fieldRef') fc mcomments fg|]
   where
     (fieldRef', sqlTyp') =
         fromMaybe (fieldRef, lift sqlTyp) $

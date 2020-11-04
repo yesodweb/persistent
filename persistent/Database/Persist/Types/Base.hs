@@ -15,6 +15,7 @@ import Data.Char (isSpace)
 import qualified Data.HashMap.Strict as HM
 import Data.Int (Int64)
 import Data.Map (Map)
+import Data.Maybe
 import qualified Data.Scientific
 import Data.Text (Text, pack)
 import qualified Data.Text as T
@@ -276,9 +277,16 @@ data FieldDef = FieldDef
     -- attach comments to a field in the quasiquoter.
     --
     -- @since 2.10.0
+    , fieldGenerated :: !(Maybe Text)
+    -- ^ Whether or not the field is a @GENERATED@ column, and additionally
+    -- the expression to use for generation.
+    --
+    -- @since 2.11.0.0
     }
     deriving (Show, Eq, Read, Ord)
 
+isFieldNotGenerated :: FieldDef -> Bool
+isFieldNotGenerated = isNothing . fieldGenerated
 
 -- | There are 3 kinds of references
 -- 1) composite (to fields that exist in the record)
