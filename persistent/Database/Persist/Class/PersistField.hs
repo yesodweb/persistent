@@ -451,15 +451,10 @@ getPersistMap (PersistByteString bs)
 getPersistMap PersistNull = Right []
 getPersistMap x = Left $ fromPersistValueError "[(Text, PersistValue)]" "map, string, bytestring or null" x
 
-data SomePersistField where
-    SomePersistField
-        :: (PersistField a)
-        => a
-        -> SomePersistField
-
+data SomePersistField = forall a. (PersistField a) => SomePersistField a
 instance PersistField SomePersistField where
     toPersistValue (SomePersistField a) = toPersistValue a
-    fromPersistValue x = error "oh no" $ fmap SomePersistField (fromPersistValue x :: Either Text Text)
+    fromPersistValue x = fmap SomePersistField (fromPersistValue x :: Either Text Text)
 
 instance PersistField Checkmark where
     toPersistValue Active   = PersistBool True

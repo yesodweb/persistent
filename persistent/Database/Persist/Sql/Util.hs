@@ -16,7 +16,7 @@ module Database.Persist.Sql.Util
     , mkUpdateText'
     , commaSeparated
     , parenWrapped
-    , mkInsertValuesAndPlaceholders
+    , mkInsertValues
     , mkInsertPlaceholders
     ) where
 
@@ -222,16 +222,17 @@ mkUpdateText' escapeName refColumn x =
 parenWrapped :: Text -> Text
 parenWrapped t = T.concat ["(", t, ")"]
 
--- | Make a list of @?@ placeholders for inserting into the database.
+-- | Make a list 'PersistValue' suitable for detabase inserts. Pairs nicely
+-- with the function 'mkInsertPlaceholders'.
 --
 -- Does not include generated columns.
 --
 -- @since 2.11.0.0
-mkInsertValuesAndPlaceholders
+mkInsertValues
     :: PersistEntity rec
     => rec
-    -> [(FieldDef, PersistValue, Text)]
-mkInsertValuesAndPlaceholders entity =
+    -> [PersistValue]
+mkInsertValues entity =
     Maybe.catMaybes
         . zipWith redactGeneratedCol (entityFields . entityDef $ Just entity)
         . map toPersistValue
@@ -239,7 +240,7 @@ mkInsertValuesAndPlaceholders entity =
   where
     redactGeneratedCol fd pv = case fieldGenerated fd of
         Nothing ->
-            Just (fd, pv, "?")
+            Just pv
         Just _ ->
             Nothing
 
