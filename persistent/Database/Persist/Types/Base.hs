@@ -498,7 +498,7 @@ data PersistValue
 --
     deriving (Show, Read, Eq, Ord)
 
-{-# DEPRECATED PersistDbSpecific "Deprecated since 2.11 because of inconsistent escaping behavior across backends. Use one of 'PersistLiteral' or 'PersistLiteralEscaped' instead." #-}
+{-# DEPRECATED PersistDbSpecific "Deprecated since 2.11 because of inconsistent escaping behavior across backends. The Postgres backend escapes these values, while the MySQL backend does not. If you are using this, please switch to 'PersistLiteral' or 'PersistLiteralEscaped' based on your needs." #-}
 
 instance ToHttpApiData PersistValue where
     toUrlPiece val =
