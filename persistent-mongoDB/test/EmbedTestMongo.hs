@@ -1,5 +1,5 @@
 {-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE DataKinds, ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE MultiParamTypeClasses #-}

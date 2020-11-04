@@ -1,23 +1,25 @@
-{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE ExistentialQuantification  #-}
+{-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE QuasiQuotes                #-}
+{-# LANGUAGE StandaloneDeriving         #-}
+{-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE TypeSynonymInstances       #-}
+{-# LANGUAGE UndecidableInstances       #-}
 module Main where
 
-import Control.Monad.IO.Class (MonadIO, liftIO)
-import Data.Text (Text, pack, unpack)
-import qualified Database.Redis as R
-import Language.Haskell.TH.Syntax
+import           Control.Monad.IO.Class     (MonadIO, liftIO)
+import           Data.Text                  (Text, pack, unpack)
+import qualified Database.Redis             as R
+import           Language.Haskell.TH.Syntax
 
-import Database.Persist
-import Database.Persist.Redis
-import Database.Persist.TH
+import           Database.Persist
+import           Database.Persist.Redis
+import           Database.Persist.TH
 
 let redisSettings = mkPersistSettings (ConT ''RedisBackend)
  in share [mkPersist redisSettings] [persistLowerCase|

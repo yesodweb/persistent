@@ -73,6 +73,8 @@
     * Support for MySQL >= 5.7. (No version checking is performed! Using this feature with older versions of MySQL will cause runtime SQL exceptions!)
     * Support for Postgresql >= 12. (No version checking is performed! Using this feature with older versions of Postgresql will cause runtime SQL exceptions!)
     * No support for Sqlite at this time. (`generated=` will be safely ignored.)
+* [#1151](https://github.com/yesodweb/persistent/pull/1151)
+  * Allow `OverloadedLabels` to be used with the `EntityField` type.
 
 ## 2.10.5.2
 
