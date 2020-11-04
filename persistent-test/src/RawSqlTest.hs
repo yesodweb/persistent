@@ -36,16 +36,16 @@ specsWith runDb = describe "rawSql" $ do
         Entity _   _  <- insertEntity $ Pet p3k "Abacate" Cat
         escape <- getEscape
         person <- getTableName (error "rawSql Person" :: Person)
-        name   <- getFieldName PersonName
+        name_   <- getFieldName PersonName
         pet <- getTableName (error "rawSql Pet" :: Pet)
-        petName   <- getFieldName PetName
+        petName_   <- getFieldName PetName
         let query = T.concat [ "SELECT ??, ?? "
                              , "FROM ", person
                              , ", ", escape "Pet"
                              , " WHERE ", person, ".", escape "age", " >= ? "
                              , "AND ", escape "Pet", ".", escape "ownerId", " = "
                                      , person, ".", escape "id"
-                             , " ORDER BY ", person, ".", name, ", ", pet, ".", petName
+                             , " ORDER BY ", person, ".", name_, ", ", pet, ".", petName_
                              ]
         ret <- rawSql query [PersistInt64 20]
         liftIO $ ret @?= [ (Entity p1k p1, Entity a1k a1)
@@ -150,9 +150,9 @@ caseCommitRollback runDb = runDb $ do
 
     let p = Person1 "foo" 0
 
-    _ <- insert p
-    _ <- insert p
-    _ <- insert p
+    insert_ p
+    insert_ p
+    insert_ p
 
     c1 <- count filt
     c1 @== 3
@@ -161,15 +161,15 @@ caseCommitRollback runDb = runDb $ do
     c2 <- count filt
     c2 @== 3
 
-    _ <- insert p
+    insert_ p
     transactionUndo
     c3 <- count filt
     c3 @== 3
 
-    _ <- insert p
+    insert_ p
     transactionSave
-    _ <- insert p
-    _ <- insert p
+    insert_ p
+    insert_ p
     transactionUndo
     c4 <- count filt
     c4 @== 4

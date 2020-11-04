@@ -12,6 +12,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# OPTIONS_GHC -fno-warn-unused-top-binds #-}
 
 import SqliteInit
 
@@ -32,6 +33,7 @@ import qualified MpsCustomPrefixTest
 import qualified MigrationColumnLengthTest
 import qualified MigrationOnlyTest
 import qualified PersistentTest
+import qualified GeneratedColumnTestSQL
 import qualified PersistUniqueTest
 import qualified PrimaryTest
 import qualified RawSqlTest
@@ -218,14 +220,16 @@ main = do
     TransactionLevelTest.specsWith db
     MigrationTest.specsWith db
     LongIdentifierTest.specsWith db
+    xdescribe "SQLite doesn't work, see PR #1122 for discussion" $ do
+        GeneratedColumnTestSQL.specsWith db
 
     it "issue #328" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
-        runMigrationSilent migrateAll
-        _ <- insert . Test $ read "2014-11-30 05:15:25.123Z"
+        void $ runMigrationSilent migrateAll
+        insert_ . Test $ read "2014-11-30 05:15:25.123Z"
         [Single x] <- rawSql "select strftime('%s%f',time) from test" []
         liftIO $ x `shouldBe` Just ("141732452525.123" :: String)
     it "issue #339" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
-        runMigrationSilent migrateAll
+        void $ runMigrationSilent migrateAll
         now <- liftIO getCurrentTime
         tid <- insert $ Test now
         Just (Test now') <- get tid
@@ -236,19 +240,19 @@ main = do
         Sqlite.close conn
         return ()
     it "issue #527" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
-        runMigrationSilent migrateAll
+        void $ runMigrationSilent migrateAll
         insertMany_ $ replicate 1000 (Test $ read "2014-11-30 05:15:25.123Z")
 
     it "properly migrates to a composite primary key (issue #669)" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
-        runMigrationSilent compositeSetup
-        runMigrationSilent compositeMigrateTest
+        void $ runMigrationSilent compositeSetup
+        void $ runMigrationSilent compositeMigrateTest
         pure ()
 
     it "afterException" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
-        runMigrationSilent testMigrate
+        void $ runMigrationSilent testMigrate
         let catcher :: forall m. Monad m => SomeException -> m ()
             catcher _ = return ()
-        _ <- insert $ Person "A" 0 Nothing
-        _ <- insert_ (Person "A" 1 Nothing) `catch` catcher
-        _ <- insert $ Person "B" 0 Nothing
+        insert_ $ Person "A" 0 Nothing
+        insert_ (Person "A" 1 Nothing) `catch` catcher
+        insert_ $ Person "B" 0 Nothing
         return ()

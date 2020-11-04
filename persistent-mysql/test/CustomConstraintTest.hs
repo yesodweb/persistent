@@ -44,7 +44,7 @@ specs runDb = do
   describe "custom constraint used in migration" $ before_ (runDb $ void $ runMigrationSilent customConstraintMigrate) $ after_ (runDb clean) $ do
 
     it "custom constraint is actually created" $ runDb $ do
-      runMigrationSilent customConstraintMigrate -- run a second time to ensure the constraint isn't dropped
+      void $ runMigrationSilent customConstraintMigrate -- run a second time to ensure the constraint isn't dropped
       let query = T.concat ["SELECT COUNT(*) "
                            ,"FROM information_schema.key_column_usage "
                            ,"WHERE ordinal_position=1 "
@@ -53,12 +53,14 @@ specs runDb = do
                            ,"AND table_name=? "
                            ,"AND column_name=? "
                            ,"AND constraint_name=?"]
-      [Single exists] <- rawSql query [PersistText "custom_constraint1"
-                                      ,PersistText "id"
-                                      ,PersistText "custom_constraint2"
-                                      ,PersistText "cc_id"
-                                      ,PersistText "custom_constraint"]
-      liftIO $ 1 @?= (exists :: Int)
+      [Single exists_] <- rawSql query
+          [ PersistText "custom_constraint1"
+          , PersistText "id"
+          , PersistText "custom_constraint2"
+          , PersistText "cc_id"
+          , PersistText "custom_constraint"
+          ]
+      liftIO $ 1 @?= (exists_ :: Int)
 
     it "allows multiple constraints on a single column" $ runDb $ do
       -- Here we add another foreign key on the same column where the

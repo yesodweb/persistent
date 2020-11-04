@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
@@ -6,12 +7,12 @@
 module Database.Persist.Sql.Internal
     ( mkColumns
     , defaultAttribute
+    , generatedAttribute
     , BackendSpecificOverrides(..)
     , emptyBackendSpecificOverrides
     ) where
 
 import Control.Applicative ((<|>))
-import Data.Char (isSpace)
 import Data.Monoid (mappend, mconcat)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -30,14 +31,24 @@ data BackendSpecificOverrides = BackendSpecificOverrides
     { backendSpecificForeignKeyName :: Maybe (DBName -> DBName -> DBName)
     }
 
+findMaybe :: (a -> Maybe b) -> [a] -> Maybe b
+findMaybe p = listToMaybe . mapMaybe p
+
 -- | Creates an empty 'BackendSpecificOverrides' (i.e. use the default behavior; no overrides)
 --
 -- @since 2.11
 emptyBackendSpecificOverrides :: BackendSpecificOverrides
 emptyBackendSpecificOverrides = BackendSpecificOverrides Nothing
 
-defaultAttribute :: [Attr] -> Maybe Text
-defaultAttribute = listToMaybe . mapMaybe (T.stripPrefix "default=")
+defaultAttribute :: [FieldAttr] -> Maybe Text
+defaultAttribute = findMaybe $ \case 
+    FieldAttrDefault x -> Just x
+    _ -> Nothing
+
+generatedAttribute :: [FieldAttr] -> Maybe Text
+generatedAttribute = findMaybe $ \case 
+    FieldAttrGenerated x -> Just x
+    _ -> Nothing
 
 -- | Create the list of columns for the given entity.
 mkColumns
@@ -56,6 +67,7 @@ mkColumns allDefs t overrides =
         Just _ -> []
         Nothing -> [entityId t]
 
+    goId :: FieldDef -> Column
     goId fd =
         Column
             { cName = fieldDB fd
@@ -87,6 +99,7 @@ mkColumns allDefs t overrides =
                     Just def ->
                         Just def
 
+            , cGenerated = generatedAttribute $ fieldAttrs fd
             , cDefaultConstraintName =  Nothing
             , cMaxLen = maxLen $ fieldAttrs fd
             , cReference = mkColumnReference fd
@@ -103,20 +116,16 @@ mkColumns allDefs t overrides =
             , cNull = nullable (fieldAttrs fd) /= NotNullable || entitySum t
             , cSqlType = fieldSqlType fd
             , cDefault = defaultAttribute $ fieldAttrs fd
+            , cGenerated = generatedAttribute $ fieldAttrs fd
             , cDefaultConstraintName =  Nothing
             , cMaxLen = maxLen $ fieldAttrs fd
             , cReference = mkColumnReference fd
             }
 
-    maxLen :: [Attr] -> Maybe Integer
-    maxLen [] = Nothing
-    maxLen (a:as)
-        | Just d <- T.stripPrefix "maxlen=" a =
-            case reads (T.unpack d) of
-              [(i, s)] | all isSpace s -> Just i
-              _ -> error $ "Could not parse maxlen field with value " ++
-                           show d ++ " on " ++ show tableName
-        | otherwise = maxLen as
+    maxLen :: [FieldAttr] -> Maybe Integer
+    maxLen = findMaybe $ \case 
+        FieldAttrMaxlen n -> Just n
+        _ -> Nothing
 
     refNameFn = fromMaybe refName (backendSpecificForeignKeyName overrides)
 
@@ -139,21 +148,21 @@ mkColumns allDefs t overrides =
 
     ref :: DBName
         -> ReferenceDef
-        -> [Attr]
+        -> [FieldAttr]
         -> Maybe (DBName, DBName) -- table name, constraint name
     ref c fe []
         | ForeignRef f _ <- fe =
             Just (resolveTableName allDefs f, refNameFn tableName c)
         | otherwise = Nothing
-    ref _ _ ("noreference":_) = Nothing
-    ref c fe (a:as)
-        | Just x <- T.stripPrefix "reference=" a = do
-            (_, constraintName)  <- ref c fe as
+    ref _ _ (FieldAttrNoreference:_) = Nothing
+    ref c fe (a:as) = case a of
+        FieldAttrReference x -> do
+            (_, constraintName) <- ref c fe as
             pure (DBName x, constraintName)
-        | Just x <- T.stripPrefix "constraint=" a = do
-            (tableName, _) <- ref c fe as
-            pure (tableName, DBName x)
-    ref c x (_:as) = ref c x as
+        FieldAttrConstraint x -> do
+            (tableName_, _) <- ref c fe as
+            pure (tableName_, DBName x)
+        _ -> ref c fe as
 
 refName :: DBName -> DBName -> DBName
 refName (DBName table) (DBName column) =

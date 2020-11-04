@@ -303,7 +303,7 @@ specs = describe "embedded entities" $ do
   it "can embed an Entity" $ db $ do
     let foo = ARecord "foo"
         bar = ARecord "bar"
-    _ <- insertMany [foo, bar]
+    insertMany_ [foo, bar]
     arecords <- selectList ([ARecordName ==. "foo"] ||. [ARecordName ==. "bar"]) []
     length arecords @== 2
 

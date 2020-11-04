@@ -43,6 +43,6 @@ specsWith runDb = describe "custom primary key" $ do
     Nothing <- checkUniqueUpdateable $ Entity k fo' -- but fo can be updated to fo'
 
     let fo'' = Fo (f + 1) (b + 1)
-    _ <- insert fo''
+    insert_ fo''
     Just (UniqueBar conflict) <- checkUniqueUpdateable $ Entity k fo'' -- fo can't be updated to fo''
     conflict @== b + 1

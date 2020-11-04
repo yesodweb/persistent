@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternGuards #-}
@@ -313,43 +314,68 @@ prepare' conn sql = do
         , stmtQuery = withStmt' conn stmt
         }
 
+-- TODO: Persistent support for Sqlite generated columns is currently broken.
+-- In Postgresql and MySQL, it is valid to make a perpared insert statement that
+-- includes a generated column so long as when you execute that statement,
+-- you use the literal 'DEFAULT' keyword for the value of the generated column,
+-- and so this is currently what Persistent does. However, Sqlite makes it
+-- an error to create a prepared insert statement that includes a generated
+-- column. As a result, we ignore the 'generated=' attribute for Sqlite. To
+-- support generated columns, we need to: (1) remove the generated columns
+-- from the prepared statement (done, but commented out); and (2) also
+-- remove the /values/ of the generated columns at the point the prepared
+-- statement is executed (not done).
 insertSql' :: EntityDef -> [PersistValue] -> InsertSqlResult
 insertSql' ent vals =
-  case entityPrimary ent of
-    Just _ ->
-      ISRManyKeys sql vals
-        where sql = T.concat
-                [ "INSERT INTO "
-                , escape $ entityDB ent
-                , "("
-                , T.intercalate "," $ map (escape . fieldDB) $ entityFields ent
-                , ") VALUES("
-                , T.intercalate "," (map (const "?") $ entityFields ent)
-                , ")"
-                ]
-    Nothing ->
-      ISRInsertGet ins sel
-        where
-          sel = T.concat
-              [ "SELECT "
-              , escape $ fieldDB (entityId ent)
-              , " FROM "
-              , escape $ entityDB ent
-              , " WHERE _ROWID_=last_insert_rowid()"
-              ]
-          ins = T.concat
-              [ "INSERT INTO "
-              , escape $ entityDB ent
-              , if null (entityFields ent)
-                    then " VALUES(null)"
-                    else T.concat
-                      [ "("
-                      , T.intercalate "," $ map (escape . fieldDB) $ entityFields ent
-                      , ") VALUES("
-                      , T.intercalate "," (map (const "?") $ entityFields ent)
-                      , ")"
-                      ]
-              ]
+    case entityPrimary ent of
+        Just _ ->
+          ISRManyKeys sql vals
+            where sql = T.concat
+                    [ "INSERT INTO "
+                    , escape $ entityDB ent
+                    , "("
+                    , T.intercalate "," $ map (escape . fieldDB) cols
+                    , ") VALUES("
+                    , T.intercalate "," (map (const "?") cols)
+                    , ")"
+                    ]
+        Nothing ->
+          ISRInsertGet ins sel
+            where
+              sel = T.concat
+                  [ "SELECT "
+                  , escape $ fieldDB (entityId ent)
+                  , " FROM "
+                  , escape $ entityDB ent
+                  , " WHERE _ROWID_=last_insert_rowid()"
+                  ]
+              ins = T.concat
+                  [ "INSERT INTO "
+                  , escape $ entityDB ent
+                  , if null cols
+                        then " VALUES(null)"
+                        else T.concat
+                          [ "("
+                          , T.intercalate "," $ map (escape . fieldDB) $ cols
+                          , ") VALUES("
+                          , T.intercalate "," (map (const "?") cols)
+                          , ")"
+                          ]
+                  ]
+  where
+    cols = entityFields ent
+    -- TODO: Sqlite generated columns
+    -- notGenerated =
+    --     null
+    --         . find (\case
+    --             FieldAttrGenerated{} -> True
+    --             _ -> False
+    --             )
+    --         . fieldAttrs
+    -- cols =
+    --     filter notGenerated $ entityFields ent
+    -- vals' =
+    --     filter notGenerated $ vals
 
 execute' :: Sqlite.Connection -> Sqlite.Statement -> [PersistValue] -> IO Int64
 execute' conn stmt vals = flip finally (liftIO $ Sqlite.reset conn stmt) $ do
@@ -469,7 +495,7 @@ mockMigration mig = do
 -- list.
 safeToRemove :: EntityDef -> DBName -> Bool
 safeToRemove def (DBName colName)
-    = any (elem "SafeToRemove" . fieldAttrs)
+    = any (elem FieldAttrSafeToRemove . fieldAttrs)
     $ filter ((== DBName colName) . fieldDB)
     $ entityFields def
 
@@ -528,40 +554,40 @@ getCopyTable allDefs getter def = do
 
 mkCreateTable :: Bool -> EntityDef -> ([Column], [UniqueDef], [ForeignDef]) -> Text
 mkCreateTable isTemp entity (cols, uniqs, fdefs) =
-  case entityPrimary entity of
-    Just pdef ->
-       T.concat
-        [ "CREATE"
-        , if isTemp then " TEMP" else ""
-        , " TABLE "
-        , escape $ entityDB entity
-        , "("
-        , T.drop 1 $ T.concat $ map (sqlColumn isTemp) cols
-        , ", PRIMARY KEY "
-        , "("
-        , T.intercalate "," $ map (escape . fieldDB) $ compositeFields pdef
-        , ")"
-        , T.concat $ map sqlUnique uniqs
-        , T.concat $ map sqlForeign fdefs
-        , ")"
-        ]
-    Nothing -> T.concat
-        [ "CREATE"
-        , if isTemp then " TEMP" else ""
-        , " TABLE "
-        , escape $ entityDB entity
-        , "("
-        , escape $ fieldDB (entityId entity)
-        , " "
-        , showSqlType $ fieldSqlType $ entityId entity
-        , " PRIMARY KEY"
-        , mayDefault $ defaultAttribute $ fieldAttrs $ entityId entity
-        , T.concat $ map (sqlColumn isTemp) nonIdCols
-        , T.concat $ map sqlUnique uniqs
-        , T.concat $ map sqlForeign fdefs
-        , ")"
-        ]
+    T.concat (header <> columns <> footer)
   where
+    header =
+        [ "CREATE"
+        , if isTemp then " TEMP" else ""
+        , " TABLE "
+        , escape $ entityDB entity
+        , "("
+        ]
+
+    footer =
+        [ T.concat $ map sqlUnique uniqs
+        , T.concat $ map sqlForeign fdefs
+        , ")"
+        ]
+
+    columns = case entityPrimary entity of
+        Just pdef ->
+            [ T.drop 1 $ T.concat $ map (sqlColumn isTemp) cols
+            , ", PRIMARY KEY "
+            , "("
+            , T.intercalate "," $ map (escape . fieldDB) $ compositeFields pdef
+            , ")"
+            ]
+
+        Nothing ->
+            [ escape $ fieldDB (entityId entity)
+            , " "
+            , showSqlType $ fieldSqlType $ entityId entity
+            , " PRIMARY KEY"
+            , mayDefault $ defaultAttribute $ fieldAttrs $ entityId entity
+            , T.concat $ map (sqlColumn isTemp) nonIdCols
+            ]
+
     nonIdCols = filter (\c -> cName c /= fieldDB (entityId entity)) cols
 
 mayDefault :: Maybe Text -> Text
@@ -569,14 +595,21 @@ mayDefault def = case def of
     Nothing -> ""
     Just d -> " DEFAULT " <> d
 
+-- TODO: Sqlite generated columns
+-- mayGenerated :: Maybe Text -> Text
+-- mayGenerated gen = case gen of
+--     Nothing -> ""
+--     Just g -> " GENERATED ALWAYS AS (" <> g <> ") STORED"
+
 sqlColumn :: Bool -> Column -> Text
-sqlColumn noRef (Column name isNull typ def _cn _maxLen ref) = T.concat
+sqlColumn noRef (Column name isNull typ def _gen _cn _maxLen ref) = T.concat
     [ ","
     , escape name
     , " "
     , showSqlType typ
     , if isNull then " NULL" else " NOT NULL"
     , mayDefault def
+    -- , mayGenerated gen
     , case ref of
         Nothing -> ""
         Just ColumnReference {crTableName=table, crFieldCascade=cascadeOpts} ->

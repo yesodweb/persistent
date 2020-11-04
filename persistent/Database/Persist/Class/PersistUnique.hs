@@ -34,7 +34,6 @@ import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes)
-import Data.Text (Text)
 import GHC.TypeLits (ErrorMessage(..))
 
 import Database.Persist.Types

@@ -1,10 +1,13 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# OPTIONS_GHC -fno-warn-deprecations #-} -- Pattern match 'PersistDbSpecific'
 -- | A MySQL backend for @persistent@.
 module Database.Persist.MySQL
     ( withMySQLPool
@@ -64,7 +67,6 @@ import Data.Text (Text, pack)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.IO as T
-import Text.Read (readMaybe)
 import System.Environment (getEnvironment)
 
 import Database.Persist.Sql
@@ -240,6 +242,8 @@ instance MySQL.Param P where
       MySQL.Plain $ BBB.fromString $ show (fromRational r :: Pico)
       -- FIXME: Too Ambiguous, can not select precision without information about field
     render (P (PersistDbSpecific s))    = MySQL.Plain $ BBS.fromByteString s
+    render (P (PersistLiteral l))     = MySQL.Plain $ BBS.fromByteString l
+    render (P (PersistLiteralEscaped e)) = MySQL.Escape e
     render (P (PersistArray a))       = MySQL.render (P (PersistList a))
     render (P (PersistObjectId _))    =
         error "Refusing to serialize a PersistObjectId to a MySQL value"
@@ -313,7 +317,7 @@ getGetter field = go (MySQLBase.fieldType field)
     -- Conversion using PersistDbSpecific
     go MySQLBase.Geometry   _ _  = \_ m ->
       case m of
-        Just g -> PersistDbSpecific g
+        Just g -> PersistLiteral g
         Nothing -> error "Unexpected null in database specific value"
     -- Unsupported
     go other _ _ = error $ "MySQL.getGetter: type " ++
@@ -481,12 +485,13 @@ findMaxLenOfColumn allDefs name col =
 
 -- | Find out the maxlen of a field
 findMaxLenOfField :: FieldDef -> Maybe Integer
-findMaxLenOfField fieldDef = do
-    maxLenAttr <- listToMaybe
-        . mapMaybe (T.stripPrefix "maxlen=" . T.toLower)
+findMaxLenOfField fieldDef =
+    listToMaybe
+        . mapMaybe (\case
+            FieldAttrMaxlen x -> Just x
+            _ -> Nothing)
         . fieldAttrs
         $ fieldDef
-    readMaybe $ T.unpack maxLenAttr
 
 -- | Helper for 'AddReference' that finds out the which primary key columns to reference.
 addReference
@@ -517,6 +522,8 @@ data AlterColumn = Change Column
                  | Drop
                  | Default String
                  | NoDefault
+                 | Gen SqlType (Maybe Integer) String
+                 | NoGen SqlType (Maybe Integer)
                  | Update' String
                  -- | See the definition of the 'showAlter' function to see how these fields are used.
                  | AddReference
@@ -565,7 +572,8 @@ getColumns connectInfo getter def cols = do
       ,   "CHARACTER_MAXIMUM_LENGTH, "
       ,   "NUMERIC_PRECISION, "
       ,   "NUMERIC_SCALE, "
-      ,   "COLUMN_DEFAULT "
+      ,   "COLUMN_DEFAULT, "
+      ,   "GENERATION_EXPRESSION "
       , "FROM INFORMATION_SCHEMA.COLUMNS "
       , "WHERE TABLE_SCHEMA = ? "
       ,   "AND TABLE_NAME   = ? "
@@ -635,13 +643,15 @@ getColumn connectInfo getter tname [ PersistText cname
                                    , colMaxLen
                                    , colPrecision
                                    , colScale
-                                   , default'] cRef =
+                                   , default'
+                                   , generated
+                                   ] cRef =
     fmap (either (Left . pack) Right) $
     runExceptT $ do
         -- Default value
         default_ <-
             case default' of
-                PersistNull   -> return Nothing
+                PersistNull -> return Nothing
                 PersistText t -> return (Just t)
                 PersistByteString bs ->
                     case T.decodeUtf8' bs of
@@ -650,12 +660,31 @@ getColumn connectInfo getter tname [ PersistText cname
                                 $ "Invalid default column: "
                                 ++ show default'
                                 ++ " (error: " ++ show exc ++ ")"
-                        Right t  ->
+                        Right t ->
                             return (Just t)
                 _ ->
                     fail $ "Invalid default column: " ++ show default'
 
+        generated_ <-
+            case generated of
+                PersistNull -> return Nothing
+                PersistText "" -> return Nothing
+                PersistByteString "" -> return Nothing
+                PersistText t -> return (Just t)
+                PersistByteString bs ->
+                    case T.decodeUtf8' bs of
+                        Left exc ->
+                            fail
+                                $ "Invalid generated column: "
+                                ++ show generated
+                                ++ " (error: " ++ show exc ++ ")"
+                        Right t ->
+                            return (Just t)
+                _ ->
+                    fail $ "Invalid generated column: " ++ show generated
+
         ref <- getRef (crConstraintName <$> cRef)
+
         let colMaxLen' =
                 case colMaxLen of
                     PersistInt64 l -> Just (fromIntegral l)
@@ -666,13 +695,16 @@ getColumn connectInfo getter tname [ PersistText cname
               , ciNumericPrecision = colPrecision
               , ciNumericScale = colScale
               }
+
         (typ, maxLen) <- parseColumnType dataType ci
+
         -- Okay!
         return Column
             { cName = DBName $ cname
             , cNull = null_ == "YES"
             , cSqlType = typ
             , cDefault = default_
+            , cGenerated = generated_
             , cDefaultConstraintName = Nothing
             , cMaxLen = maxLen
             , cReference = ref
@@ -821,7 +853,7 @@ getAlters allDefs edef (c1, u1) (c2, u2) =
                   (col', ty, ml)
 
 
--- | @findAlters newColumn oldColumns@ finds out what needs to be
+-- | @findAlters x y newColumn oldColumns@ finds out what needs to be
 -- changed in the columns @oldColumns@ for @newColumn@ to be
 -- supported.
 findAlters
@@ -830,7 +862,7 @@ findAlters
     -> Column
     -> [Column]
     -> ([AlterColumn'], [Column])
-findAlters edef allDefs col@(Column name isNull type_ def _defConstraintName maxLen ref) cols =
+findAlters edef allDefs col@(Column name isNull type_ def gen _defConstraintName maxLen ref) cols =
     case filter ((name ==) . cName) cols of
     -- new fkey that didn't exist before
         [] ->
@@ -842,7 +874,7 @@ findAlters edef allDefs col@(Column name isNull type_ def _defConstraintName max
                         cnstr = [addReference allDefs cname tname name (crFieldCascade cr)]
                     in
                         (map ((,) tname) (Add' col : cnstr), cols)
-        Column _ isNull' type_' def' _defConstraintName' maxLen' ref' : _ ->
+        Column _ isNull' type_' def' gen' _defConstraintName' maxLen' ref' : _ ->
             let -- Foreign key
                 refDrop =
                     case (ref == ref', ref') of
@@ -861,15 +893,25 @@ findAlters edef allDefs col@(Column name isNull type_ def _defConstraintName max
                 -- Type and nullability
                 modType | showSqlType type_ maxLen False `ciEquals` showSqlType type_' maxLen' False && isNull == isNull' = []
                         | otherwise = [(name, Change col)]
+
                 -- Default value
                 -- Avoid DEFAULT NULL, since it is always unnecessary, and is an error for text/blob fields
-                modDef | def == def' = []
-                       | otherwise   =
-                           case def of
-                               Nothing -> [(name, NoDefault)]
-                               Just s -> if T.toUpper s == "NULL" then []
-                                                   else [(name, Default $ T.unpack s)]
-            in ( refDrop ++ modType ++ modDef ++ refAdd
+                modDef =
+                    if def == def' then []
+                    else case def of
+                        Nothing -> [(name, NoDefault)]
+                        Just s ->
+                            if T.toUpper s == "NULL" then []
+                            else [(name, Default $ T.unpack s)]
+
+                -- Does the generated value need to change?
+                modGen =
+                    if gen == gen' then []
+                    else case gen of
+                        Nothing -> [(name, NoGen type_ maxLen)]
+                        Just genExpr -> [(name, Gen type_ maxLen $ T.unpack genExpr)]
+
+            in ( refDrop ++ modType ++ modDef ++ modGen ++ refAdd
                , filter ((name /=) . cName) cols
                )
 
@@ -882,11 +924,16 @@ findAlters edef allDefs col@(Column name isNull type_ def _defConstraintName max
 -- | Prints the part of a @CREATE TABLE@ statement about a given
 -- column.
 showColumn :: Column -> String
-showColumn (Column n nu t def _defConstraintName maxLen ref) = concat
+showColumn (Column n nu t def gen _defConstraintName maxLen ref) = concat
     [ escapeDBName n
     , " "
     , showSqlType t maxLen True
     , " "
+    , case gen of
+        Nothing -> ""
+        Just genExpr ->
+            if T.toUpper genExpr == "NULL" then ""
+            else " GENERATED ALWAYS AS (" <> T.unpack genExpr <> ") STORED "
     , if nu then "NULL" else "NOT NULL"
     , case def of
         Nothing -> ""
@@ -958,14 +1005,14 @@ showAlterTable table (DropUniqueConstraint cname) = concat
 
 -- | Render an action that must be done on a column.
 showAlter :: DBName -> AlterColumn' -> String
-showAlter table (oldName, Change (Column n nu t def defConstraintName maxLen _ref)) =
+showAlter table (oldName, Change (Column n nu t def gen defConstraintName maxLen _ref)) =
     concat
     [ "ALTER TABLE "
     , escapeDBName table
     , " CHANGE "
     , escapeDBName oldName
     , " "
-    , showColumn (Column n nu t def defConstraintName maxLen Nothing)
+    , showColumn (Column n nu t def gen defConstraintName maxLen Nothing)
     ]
 showAlter table (_, Add' col) =
     concat
@@ -997,6 +1044,27 @@ showAlter table (n, NoDefault) =
     , " ALTER COLUMN "
     , escapeDBName n
     , " DROP DEFAULT"
+    ]
+showAlter table (col, Gen typ len expr) =
+    concat
+    [ "ALTER TABLE "
+    , escapeDBName table
+    , " MODIFY COLUMN "
+    , escapeDBName col
+    , " "
+    , showSqlType typ len True
+    , " GENERATED ALWAYS AS ("
+    , expr
+    , ") STORED"
+    ]
+showAlter table (col, NoGen typ len) =
+    concat
+    [ "ALTER TABLE "
+    , escapeDBName table
+    , " MODIFY COLUMN "
+    , escapeDBName col
+    , " "
+    , showSqlType typ len True
     ]
 showAlter table (n, Update' s) =
     concat

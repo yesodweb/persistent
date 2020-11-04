@@ -1,10 +1,12 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE NamedFieldPuns #-}
+{-# OPTIONS_GHC -fno-warn-deprecations #-} -- Pattern match 'PersistDbSpecific'
 
 -- | A postgresql backend for persistent.
 module Database.Persist.Postgresql
@@ -31,8 +33,6 @@ module Database.Persist.Postgresql
     , defaultPostgresConfHooks
     ) where
 
-import qualified Debug.Trace as Debug
-
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
 import qualified Database.PostgreSQL.Simple as PG
@@ -44,7 +44,6 @@ import qualified Database.PostgreSQL.Simple.Types as PG
 import qualified Database.PostgreSQL.Simple.TypeInfo.Static as PS
 import Database.PostgreSQL.Simple.Ok (Ok (..))
 
-import Data.Foldable
 import Control.Arrow
 import Control.Exception (Exception, throw, throwIO)
 import Control.Monad
@@ -62,6 +61,7 @@ import qualified Data.Attoparsec.Text as AT
 import qualified Data.Attoparsec.ByteString.Char8 as P
 import Data.Bits ((.&.))
 import Data.ByteString (ByteString)
+import qualified Data.ByteString.Builder as BB
 import qualified Data.ByteString.Char8 as B8
 import Data.Char (ord)
 import Data.Conduit
@@ -522,6 +522,8 @@ instance PGTF.ToField P where
     toField (P (PersistList l))        = PGTF.toField $ listToJSON l
     toField (P (PersistMap m))         = PGTF.toField $ mapToJSON m
     toField (P (PersistDbSpecific s))  = PGTF.toField (Unknown s)
+    toField (P (PersistLiteral l))     = PGTF.toField (UnknownLiteral l)
+    toField (P (PersistLiteralEscaped e)) = PGTF.toField (Unknown e)
     toField (P (PersistArray a))       = PGTF.toField $ PG.PGArray $ P <$> a
     toField (P (PersistObjectId _))    =
         error "Refusing to serialize a PersistObjectId to a PostgreSQL value"
@@ -613,8 +615,9 @@ fromPersistValueError haskellType databaseType received = T.concat
     ]
 
 instance PersistField PgInterval where
-    toPersistValue = PersistDbSpecific . pgIntervalToBs
-    fromPersistValue x@(PersistDbSpecific bs) =
+    toPersistValue = PersistLiteralEscaped . pgIntervalToBs
+    fromPersistValue (PersistDbSpecific bs) = fromPersistValue (PersistLiteralEscaped bs)
+    fromPersistValue x@(PersistLiteralEscaped bs) =
       case P.parseOnly (P.signed P.rational <* P.char 's' <* P.endOfInput) bs of
         Left _  -> Left $ fromPersistValueError "PgInterval" "Interval" x
         Right i -> Right $ PgInterval i
@@ -634,6 +637,19 @@ instance PGFF.FromField Unknown where
 
 instance PGTF.ToField Unknown where
     toField (Unknown a) = PGTF.Escape a
+
+newtype UnknownLiteral = UnknownLiteral { unUnknownLiteral :: ByteString }
+  deriving (Eq, Show, Read, Ord, Typeable)
+
+instance PGFF.FromField UnknownLiteral where
+    fromField f mdata =
+      case mdata of
+        Nothing  -> PGFF.returnError PGFF.UnexpectedNull f "Database.Persist.Postgresql/PGFF.FromField UnknownLiteral"
+        Just dat -> return (UnknownLiteral dat)
+
+instance PGTF.ToField UnknownLiteral where
+    toField (UnknownLiteral a) = PGTF.Plain $ BB.byteString a
+
 
 type Getter a = PGFF.FieldParser a
 
@@ -660,7 +676,7 @@ builtinGetters = I.fromList
     , (k PS.time,        convertPV PersistTimeOfDay)
     , (k PS.timestamp,   convertPV (PersistUTCTime. localTimeToUTC utc))
     , (k PS.timestamptz, convertPV PersistUTCTime)
-    , (k PS.interval,    convertPV (PersistDbSpecific . pgIntervalToBs))
+    , (k PS.interval,    convertPV (PersistLiteralEscaped . pgIntervalToBs))
     , (k PS.bit,         convertPV PersistInt64)
     , (k PS.varbit,      convertPV PersistInt64)
     , (k PS.numeric,     convertPV PersistRational)
@@ -691,12 +707,12 @@ builtinGetters = I.fromList
     , (1183,             listOf PersistTimeOfDay)
     , (1115,             listOf PersistUTCTime)
     , (1185,             listOf PersistUTCTime)
-    , (1187,             listOf (PersistDbSpecific . pgIntervalToBs))
+    , (1187,             listOf (PersistLiteralEscaped . pgIntervalToBs))
     , (1561,             listOf PersistInt64)
     , (1563,             listOf PersistInt64)
     , (1231,             listOf PersistRational)
     -- no array(void) type
-    , (2951,             listOf (PersistDbSpecific . unUnknown))
+    , (2951,             listOf (PersistLiteralEscaped . unUnknown))
     , (199,              listOf (PersistByteString . unUnknown))
     , (3807,             listOf (PersistByteString . unUnknown))
     -- no array(unknown) either
@@ -714,7 +730,7 @@ builtinGetters = I.fromList
 getGetter :: PG.Connection -> PG.Oid -> Getter PersistValue
 getGetter _conn oid
   = fromMaybe defaultGetter $ I.lookup (PG.oid2int oid) builtinGetters
-  where defaultGetter = convertPV (PersistDbSpecific . unUnknown)
+  where defaultGetter = convertPV (PersistLiteralEscaped . unUnknown)
 
 unBinary :: PG.Binary a -> a
 unBinary (PG.Binary x) = x
@@ -770,7 +786,7 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
             -- Check for table existence if there are no columns, workaround
             -- for https://github.com/yesodweb/persistent/issues/152
 
-    createText newcols fdefs udspair =
+    createText newcols fdefs_ udspair =
         (addTable newcols entity) : uniques ++ references ++ foreignsAlt
       where
         uniques = flip concatMap udspair $ \(uname, ucols) ->
@@ -781,7 +797,7 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
                     getAddReference allDefs entity cName =<< cReference
                 )
                 newcols
-        foreignsAlt = mapMaybe (mkForeignAlt entity) fdefs
+        foreignsAlt = mapMaybe (mkForeignAlt entity) fdefs_
 
 mkForeignAlt
     :: EntityDef
@@ -789,12 +805,12 @@ mkForeignAlt
     -> Maybe AlterDB
 mkForeignAlt entity fdef = do
     pure $ AlterColumn
-        tableName
+        tableName_
         ( foreignRefTableDBName fdef
         , addReference
         )
   where
-    tableName = entityDB entity
+    tableName_ = entityDB entity
     addReference =
         AddReference
             constraintName
@@ -890,6 +906,7 @@ getColumns getter def cols = do
             , ",is_nullable "
             , ",COALESCE(domain_name, udt_name)" -- See DOMAINS below
             , ",column_default "
+            , ",generation_expression "
             , ",numeric_precision "
             , ",numeric_scale "
             , ",character_maximum_length "
@@ -965,7 +982,7 @@ getColumns getter def cols = do
 -- list.
 safeToRemove :: EntityDef -> DBName -> Bool
 safeToRemove def (DBName colName)
-    = any (elem "SafeToRemove" . fieldAttrs)
+    = any (elem FieldAttrSafeToRemove . fieldAttrs)
     $ filter ((== DBName colName) . fieldDB)
     $ keyAndEntityFields def
 
@@ -1010,8 +1027,16 @@ getColumn
     -> [PersistValue]
     -> Maybe (DBName, DBName)
     -> IO (Either Text Column)
-getColumn getter tableName' [PersistText columnName, PersistText isNullable, PersistText typeName, defaultValue, numericPrecision, numericScale, maxlen] refName = runExceptT $ do
-    d'' <-
+getColumn getter tableName' [ PersistText columnName
+                            , PersistText isNullable
+                            , PersistText typeName
+                            , defaultValue
+                            , generationExpression
+                            , numericPrecision
+                            , numericScale
+                            , maxlen
+                            ] refName_ = runExceptT $ do
+    defaultValue' <-
         case defaultValue of
             PersistNull ->
                 pure Nothing
@@ -1020,30 +1045,47 @@ getColumn getter tableName' [PersistText columnName, PersistText isNullable, Per
             _ ->
                 throwError $ T.pack $ "Invalid default column: " ++ show defaultValue
 
+    generationExpression' <-
+        case generationExpression of
+            PersistNull ->
+                pure Nothing
+            PersistText t ->
+                pure $ Just t
+            _ ->
+                throwError $ T.pack $ "Invalid generated column: " ++ show generationExpression
+
     let typeStr =
             case maxlen of
                 PersistInt64 n ->
                     T.concat [typeName, "(", T.pack (show n), ")"]
                 _ ->
                     typeName
+
     t <- getType typeStr
+
     let cname = DBName columnName
-    ref <- lift $ fmap join $ traverse (getRef cname) refName
+    
+    ref <- lift $ fmap join $ traverse (getRef cname) refName_
+    
     return Column
         { cName = cname
         , cNull = isNullable == "YES"
         , cSqlType = t
-        , cDefault = fmap stripSuffixes d''
+        , cDefault = fmap stripSuffixes defaultValue'
+        , cGenerated = fmap stripSuffixes generationExpression'
         , cDefaultConstraintName = Nothing
         , cMaxLen = Nothing
         , cReference = fmap (\(a,b,c,d) -> ColumnReference a b (mkCascade c d)) ref
         }
+
   where
+
     mkCascade updText delText =
         FieldCascade
             { fcOnUpdate = parseCascade updText
             , fcOnDelete = parseCascade delText
             }
+
     parseCascade txt =
         case txt of
             "NO ACTION" ->
@@ -1058,6 +1100,7 @@ getColumn getter tableName' [PersistText columnName, PersistText isNullable, Per
                 Just Restrict
             _ ->
                 error $ "Unexpected value in parseCascade: " <> show txt
+
     stripSuffixes t =
         loop'
             [ "::character varying"
@@ -1131,6 +1174,7 @@ getColumn getter tableName' [PersistText columnName, PersistText isNullable, Per
 
     getNumeric (PersistInt64 a) (PersistInt64 b) =
         pure $ SqlNumeric (fromIntegral a) (fromIntegral b)
+
     getNumeric PersistNull PersistNull = throwError $ T.concat
         [ "No precision and scale were specified for the column: "
         , columnName
@@ -1140,6 +1184,7 @@ getColumn getter tableName' [PersistText columnName, PersistText isNullable, Per
         , " which is probably not what you intended."
         , " Specify the values as numeric(total_digits, digits_after_decimal_place)."
         ]
+
     getNumeric a b = throwError $ T.concat
         [ "Can not get numeric field precision for the column: "
         , columnName
@@ -1153,6 +1198,7 @@ getColumn getter tableName' [PersistText columnName, PersistText isNullable, Per
         , ", respectively."
         , " Specify the values as numeric(total_digits, digits_after_decimal_place)."
         ]
+
 getColumn _ _ columnName _ =
     return $ Left $ T.pack $ "Invalid result from information_schema: " ++ show columnName
 
@@ -1170,11 +1216,11 @@ findAlters
     -- ^ The column that we're searching for potential alterations for.
     -> [Column]
     -> ([AlterColumn'], [Column])
-findAlters defs edef col@(Column name isNull sqltype def _defConstraintName _maxLen ref) cols =
+findAlters defs edef col@(Column name isNull sqltype def _gen _defConstraintName _maxLen ref) cols =
     case List.find (\c -> cName c == name) cols of
         Nothing ->
             ([(name, Add' col)], cols)
-        Just (Column _oldName isNull' sqltype' def' _defConstraintName' _maxLen' ref') ->
+        Just (Column _oldName isNull' sqltype' def' _gen' _defConstraintName' _maxLen' ref') ->
             let refDrop Nothing = []
                 refDrop (Just ColumnReference {crConstraintName=cname}) =
                     [(name, DropReference cname)]
@@ -1261,7 +1307,7 @@ getAddReference allDefs entity cname cr@ColumnReference {crTableName = s, crCons
                 return $ Util.dbIdColumnsEsc escape entDef
 
 showColumn :: Column -> Text
-showColumn (Column n nu sqlType' def _defConstraintName _maxLen _ref) = T.concat
+showColumn (Column n nu sqlType' def gen _defConstraintName _maxLen _ref) = T.concat
     [ escape n
     , " "
     , showSqlType sqlType'
@@ -1270,6 +1316,9 @@ showColumn (Column n nu sqlType' def _defConstraintName _maxLen _ref) = T.concat
     , case def of
         Nothing -> ""
         Just s -> " DEFAULT " <> s
+    , case gen of
+        Nothing -> ""
+        Just s -> " GENERATED ALWAYS AS (" <> s <> ") STORED"
     ]
 
 showSqlType :: SqlType -> Text

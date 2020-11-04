@@ -43,7 +43,7 @@ go = do
     p3 <- select [PersonNameEq "Michael"] []
     liftIO $ print p3
 
-    _ <- insert $ Person "Michael2" 27 Nothing
+    insert_ $ Person "Michael2" 27 Nothing
     deleteWhere [PersonNameEq "Michael2"]
     p4 <- select [PersonAgeLt 28] []
     liftIO $ print p4

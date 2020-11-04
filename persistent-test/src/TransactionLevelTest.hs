@@ -22,6 +22,6 @@ specsWith runDb = describe "IsolationLevel" $ do
     it (show il ++ " works") $ runDb $ do
       transactionUndoWithIsolation il
       deleteWhere ([] :: [Filter Wombat])
-      _ <- insert item
+      insert_ item
       Just item' <- get (WombatKey "uno")
       item' @== item

@@ -42,7 +42,7 @@ specs = describe "DuplicateKeyUpdate" $ do
     it "performs only updates given if record already exists" $ db $ do
       deleteWhere ([] :: [Filter Item])
       let newDescription = "I am a new description"
-      _ <- insert item1
+      insert_ item1
       insertOnDuplicateKeyUpdate
         (Item "item1" "i am inserted description" (Just 1) (Just 2))
         [ItemDescription =. newDescription]

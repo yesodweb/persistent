@@ -6,7 +6,6 @@ module Database.Persist.Sql.Types
     , SqlBackendCanRead, SqlBackendCanWrite, SqlReadT, SqlWriteT, IsSqlBackend
     , OverflowNatural(..)
     , ConnectionPoolConfig(..)
-    , defaultConnectionPoolConfig
     ) where
 
 import Database.Persist.Types.Base (FieldCascade)
@@ -28,6 +27,7 @@ data Column = Column
     , cNull      :: !Bool
     , cSqlType   :: !SqlType
     , cDefault   :: !(Maybe Text)
+    , cGenerated :: !(Maybe Text)
     , cDefaultConstraintName   :: !(Maybe DBName)
     , cMaxLen    :: !(Maybe Integer)
     , cReference :: !(Maybe ColumnReference)

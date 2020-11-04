@@ -148,7 +148,7 @@ specsWith runDb handleNull handleKey = describe "UpsertTests" $ do
 
   describe "putMany" $ do
     it "adds new rows when entity has no unique constraints" $ runDb $ do
-        let mkPerson name = Person1 name 25
+        let mkPerson name_ = Person1 name_ 25
         let names = ["putMany bob", "putMany bob", "putMany smith"]
         let records = map mkPerson names
         _ <- putMany records

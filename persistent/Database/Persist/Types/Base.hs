@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# OPTIONS_GHC -fno-warn-deprecations #-} -- usage of Error typeclass
 module Database.Persist.Types.Base where
 
@@ -10,6 +11,7 @@ import Data.ByteString (ByteString, foldl')
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base64 as B64
 import qualified Data.ByteString.Char8 as BS8
+import Data.Char (isSpace)
 import qualified Data.HashMap.Strict as HM
 import Data.Int (Int64)
 import Data.Map (Map)
@@ -173,6 +175,51 @@ newtype DBName = DBName { unDBName :: Text }
 
 type Attr = Text
 
+-- | Attributes that may be attached to fields that can affect migrations
+-- and serialization in backend-specific ways.
+--
+-- While we endeavor to, we can't forsee all use cases for all backends,
+-- and so 'FieldAttr' is extensible through its constructor 'FieldAttrOther'.
+--
+-- @since 2.11.0.0
+data FieldAttr
+    = FieldAttrMaybe
+    | FieldAttrNullable
+    | FieldAttrMigrationOnly
+    | FieldAttrSafeToRemove
+    | FieldAttrNoreference
+    | FieldAttrReference Text
+    | FieldAttrConstraint Text
+    | FieldAttrDefault Text
+    | FieldAttrGenerated Text
+    | FieldAttrSqltype Text
+    | FieldAttrMaxlen Integer
+    | FieldAttrOther Text
+    deriving (Show, Eq, Read, Ord)
+
+-- | Parse raw field attributes into structured form. Any unrecognized
+-- attributes will be preserved, identically as they are encountered,
+-- as 'FieldAttrOther' values.
+--
+-- @since 2.11.0.0
+parseFieldAttrs :: [Text] -> [FieldAttr]
+parseFieldAttrs = fmap $ \case
+    "Maybe" -> FieldAttrMaybe
+    "nullable" -> FieldAttrNullable
+    "MigrationOnly" -> FieldAttrMigrationOnly
+    "SafeToRemove" -> FieldAttrSafeToRemove
+    "noreference" -> FieldAttrNoreference
+    raw
+        | Just x <- T.stripPrefix "reference=" raw -> FieldAttrReference x
+        | Just x <- T.stripPrefix "constraint=" raw -> FieldAttrConstraint x
+        | Just x <- T.stripPrefix "default=" raw -> FieldAttrDefault x
+        | Just x <- T.stripPrefix "generated=" raw -> FieldAttrGenerated x
+        | Just x <- T.stripPrefix "sqltype=" raw -> FieldAttrSqltype x
+        | Just x <- T.stripPrefix "maxlen=" raw -> case reads (T.unpack x) of
+            [(n, s)] | all isSpace s -> FieldAttrMaxlen n
+            _ -> error $ "Could not parse maxlen field with value " <> show raw
+        | otherwise -> FieldAttrOther raw
+
 -- | A 'FieldType' describes a field parsed from the QuasiQuoter and is
 -- used to determine the Haskell type in the generated code.
 --
@@ -192,7 +239,7 @@ data FieldType
     | FTList FieldType
   deriving (Show, Eq, Read, Ord)
 
--- | A 'FieldDef' represents the inormation that @persistent@ knows about
+-- | A 'FieldDef' represents the information that @persistent@ knows about
 -- a field of a datatype. This includes information used to parse the field
 -- out of the database and what the field corresponds to.
 data FieldDef = FieldDef
@@ -209,7 +256,8 @@ data FieldDef = FieldDef
     -- ^ The type of the field in Haskell.
     , fieldSqlType   :: !SqlType
     -- ^ The type of the field in a SQL database.
-    , fieldAttrs     :: ![Attr]
+    , fieldAttrs     :: ![FieldAttr]
+    -- ^ Whether or not the field is gnerated and how. Backend-dependent.
     -- ^ User annotations for a field. These are provided with the @!@
     -- operator.
     , fieldStrict    :: !Bool
@@ -399,21 +447,24 @@ instance Error PersistException where
 
 -- | A raw value which can be stored in any backend and can be marshalled to
 -- and from a 'PersistField'.
-data PersistValue = PersistText Text
-                  | PersistByteString ByteString
-                  | PersistInt64 Int64
-                  | PersistDouble Double
-                  | PersistRational Rational
-                  | PersistBool Bool
-                  | PersistDay Day
-                  | PersistTimeOfDay TimeOfDay
-                  | PersistUTCTime UTCTime
-                  | PersistNull
-                  | PersistList [PersistValue]
-                  | PersistMap [(Text, PersistValue)]
-                  | PersistObjectId ByteString -- ^ Intended especially for MongoDB backend
-                  | PersistArray [PersistValue] -- ^ Intended especially for PostgreSQL backend for text arrays
-                  | PersistDbSpecific ByteString -- ^ Using 'PersistDbSpecific' allows you to use types specific to a particular backend
+data PersistValue
+    = PersistText Text
+    | PersistByteString ByteString
+    | PersistInt64 Int64
+    | PersistDouble Double
+    | PersistRational Rational
+    | PersistBool Bool
+    | PersistDay Day
+    | PersistTimeOfDay TimeOfDay
+    | PersistUTCTime UTCTime
+    | PersistNull
+    | PersistList [PersistValue]
+    | PersistMap [(Text, PersistValue)]
+    | PersistObjectId ByteString -- ^ Intended especially for MongoDB backend
+    | PersistArray [PersistValue] -- ^ Intended especially for PostgreSQL backend for text arrays
+    | PersistLiteral ByteString -- ^ Using 'PersistLiteral' allows you to use types or keywords specific to a particular backend.
+    | PersistLiteralEscaped ByteString -- ^ Similar to 'PersistLiteral', but escapes the @ByteString@.
+    | PersistDbSpecific ByteString -- ^ Using 'PersistDbSpecific' allows you to use types specific to a particular backend.
 -- For example, below is a simple example of the PostGIS geography type:
 --
 -- @
@@ -441,6 +492,7 @@ data PersistValue = PersistText Text
 --
     deriving (Show, Read, Eq, Ord)
 
+{-# DEPRECATED PersistDbSpecific "Deprecated since 2.11 because of inconsistent escaping behavior across backends. Use one of 'PersistLiteral' or 'PersistLiteralEscaped' instead." #-}
 
 instance ToHttpApiData PersistValue where
     toUrlPiece val =
@@ -478,7 +530,9 @@ fromPersistValueText (PersistList _) = Left "Cannot convert PersistList to Text"
 fromPersistValueText (PersistMap _) = Left "Cannot convert PersistMap to Text"
 fromPersistValueText (PersistObjectId _) = Left "Cannot convert PersistObjectId to Text"
 fromPersistValueText (PersistArray _) = Left "Cannot convert PersistArray to Text"
-fromPersistValueText (PersistDbSpecific _) = Left "Cannot convert PersistDbSpecific to Text. See the documentation of PersistDbSpecific for an example of using a custom database type with Persistent."
+fromPersistValueText (PersistDbSpecific _) = Left "Cannot convert PersistDbSpecific to Text"
+fromPersistValueText (PersistLiteral _) = Left "Cannot convert PersistLiteral to Text"
+fromPersistValueText (PersistLiteralEscaped _) = Left "Cannot convert PersistLiteralEscaped to Text"
 
 instance A.ToJSON PersistValue where
     toJSON (PersistText t) = A.String $ T.cons 's' t
@@ -494,6 +548,8 @@ instance A.ToJSON PersistValue where
     toJSON (PersistList l) = A.Array $ V.fromList $ map A.toJSON l
     toJSON (PersistMap m) = A.object $ map (second A.toJSON) m
     toJSON (PersistDbSpecific b) = A.String $ T.cons 'p' $ TE.decodeUtf8 $ B64.encode b
+    toJSON (PersistLiteral b) = A.String $ T.cons 'l' $ TE.decodeUtf8 $ B64.encode b
+    toJSON (PersistLiteralEscaped b) = A.String $ T.cons 'e' $ TE.decodeUtf8 $ B64.encode b
     toJSON (PersistArray a) = A.Array $ V.fromList $ map A.toJSON a
     toJSON (PersistObjectId o) =
       A.toJSON $ showChar 'o' $ showHexLen 8 (bs2i four) $ showHexLen 16 (bs2i eight) ""
@@ -517,6 +573,10 @@ instance A.FromJSON PersistValue where
         case T.uncons t0 of
             Nothing -> fail "Null string"
             Just ('p', t) -> either (\_ -> fail "Invalid base64") (return . PersistDbSpecific)
+                           $ B64.decode $ TE.encodeUtf8 t
+            Just ('l', t) -> either (\_ -> fail "Invalid base64") (return . PersistLiteral)
+                           $ B64.decode $ TE.encodeUtf8 t
+            Just ('e', t) -> either (\_ -> fail "Invalid base64") (return . PersistLiteralEscaped)
                            $ B64.decode $ TE.encodeUtf8 t
             Just ('s', t) -> return $ PersistText t
             Just ('b', t) -> either (\_ -> fail "Invalid base64") (return . PersistByteString)

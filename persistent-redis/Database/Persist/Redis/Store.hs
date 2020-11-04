@@ -65,7 +65,7 @@ instance PersistStoreWrite R.Connection where
         keyId <- execRedisT $ createKey val
         let textKey = toKeyText val keyId
         key <- liftIO $ toKey textKey
-        _ <- insertKey key val
+        insertKey key val
         return key
 
     insertKey k val = do

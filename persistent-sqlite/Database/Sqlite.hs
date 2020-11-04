@@ -1,5 +1,6 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -fno-warn-deprecations #-} -- Pattern match 'PersistDbSpecific'
 -- | A port of the direct-sqlite package for dealing directly with
 -- 'PersistValue's.
 module Database.Sqlite  (
@@ -470,6 +471,10 @@ bind statement sqlData = do
             PersistDbSpecific s -> bindText statement parameterIndex $ decodeUtf8With lenientDecode s
             PersistArray a -> bindText statement parameterIndex $ listToJSON a -- copy of PersistList's definition
             PersistObjectId _ -> P.error "Refusing to serialize a PersistObjectId to a SQLite value"
+
+            -- I know one of these is broken, but the docs for `sqlite3_bind_text` aren't very illuminating.
+            PersistLiteral l -> bindText statement parameterIndex $ decodeUtf8With lenientDecode l
+            PersistLiteralEscaped e -> bindText statement parameterIndex $ decodeUtf8With lenientDecode e
             )
        $ zip [1..] sqlData
   return ()
