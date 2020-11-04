@@ -1,6 +1,6 @@
 # Changelog for persistent
 
-## (Unreleased) 2.11.0.0
+## 2.11.0.0
 
 * Foreign Key improvements [#1121] https://github.com/yesodweb/persistent/pull/1121
   * It is now supported to refer to a table with an auto generated Primary Kay
