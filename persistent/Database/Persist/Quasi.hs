@@ -966,10 +966,11 @@ takeCols onErr ps (n':typ:rest')
                 , fieldReference = NoReference
                 , fieldComments = Nothing
                 , fieldCascade = cascade_
-                , fieldGenerated = findGenerated fieldAttrs_
+                , fieldGenerated = generated_
                 }
   where
     fieldAttrs_ = parseFieldAttrs attrs_
+    generated_ = parseGenerated attrs_
     (cascade_, attrs_) = parseCascade rest'
     (mstrict, n)
         | Just x <- T.stripPrefix "!" n' = (Just True, x)
@@ -978,12 +979,8 @@ takeCols onErr ps (n':typ:rest')
 
 takeCols _ _ _ = Nothing
 
-findGenerated :: [FieldAttr] -> Maybe Text
-findGenerated = foldr k Nothing
-  where
-    k a acc = acc <|> case a of
-        FieldAttrGenerated txt -> Just txt
-        _ -> Nothing
+parseGenerated :: [Text] -> Maybe Text
+parseGenerated = foldl' (\acc x -> acc <|> T.stripPrefix "generated=" x) Nothing
 
 getDbName :: PersistSettings -> Text -> [Text] -> Text
 getDbName ps n [] = psToDBName ps n

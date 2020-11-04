@@ -76,6 +76,7 @@ main = hspec $ do
                         , fieldReference = NoReference
                         , fieldCascade = noCascade
                         , fieldComments = Nothing
+                        , fieldGenerated = Nothing
                         }
         it "works if it has a name, type, and cascade" $ do
             subject ["asdf", "Int", "OnDeleteCascade", "OnUpdateCascade"]
@@ -90,6 +91,7 @@ main = hspec $ do
                         , fieldReference = NoReference
                         , fieldCascade = FieldCascade (Just Cascade) (Just Cascade)
                         , fieldComments = Nothing
+                        , fieldGenerated = Nothing
                         }
         it "never tries to make a refernece" $ do
             subject ["asdf", "UserId", "OnDeleteCascade"]
@@ -104,6 +106,7 @@ main = hspec $ do
                         , fieldReference = NoReference
                         , fieldCascade = FieldCascade Nothing (Just Cascade)
                         , fieldComments = Nothing
+                        , fieldGenerated = Nothing
                         }
 
     describe "tokenization" $ do

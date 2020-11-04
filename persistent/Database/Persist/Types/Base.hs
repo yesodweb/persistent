@@ -192,7 +192,6 @@ data FieldAttr
     | FieldAttrReference Text
     | FieldAttrConstraint Text
     | FieldAttrDefault Text
-    | FieldAttrGenerated Text
     | FieldAttrSqltype Text
     | FieldAttrMaxlen Integer
     | FieldAttrOther Text
@@ -214,7 +213,6 @@ parseFieldAttrs = fmap $ \case
         | Just x <- T.stripPrefix "reference=" raw -> FieldAttrReference x
         | Just x <- T.stripPrefix "constraint=" raw -> FieldAttrConstraint x
         | Just x <- T.stripPrefix "default=" raw -> FieldAttrDefault x
-        | Just x <- T.stripPrefix "generated=" raw -> FieldAttrGenerated x
         | Just x <- T.stripPrefix "sqltype=" raw -> FieldAttrSqltype x
         | Just x <- T.stripPrefix "maxlen=" raw -> case reads (T.unpack x) of
             [(n, s)] | all isSpace s -> FieldAttrMaxlen n

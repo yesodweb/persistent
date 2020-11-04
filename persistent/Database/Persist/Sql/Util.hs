@@ -243,12 +243,17 @@ mkInsertValuesAndPlaceholders entity =
         Just _ ->
             Nothing
 
--- | TODO
+-- | Returns a list of escaped field names and @"?"@ placeholder values for
+-- performing inserts. This does not include generated columns.
 --
 -- Does not include generated columns.
 --
 -- @since 2.11.0.0
-mkInsertPlaceholders :: EntityDef -> (DBName -> Text) -> [(Text, Text)]
+mkInsertPlaceholders
+    :: EntityDef
+    -> (DBName -> Text)
+    -- ^ An `escape` function
+    -> [(Text, Text)]
 mkInsertPlaceholders ed escape =
     Maybe.mapMaybe redactGeneratedCol (entityFields ed)
   where

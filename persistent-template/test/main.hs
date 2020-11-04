@@ -252,6 +252,7 @@ main = hspec $ do
                                     , fieldStrict = True
                                     , fieldComments = Nothing
                                     , fieldCascade = noCascade
+                                    , fieldGenerated = Nothing
                                     }
                             , entityAttrs = []
                             , entityFields =
@@ -269,6 +270,7 @@ main = hspec $ do
                                     , fieldCascade =
                                         FieldCascade { fcOnUpdate = Nothing, fcOnDelete = Just Cascade }
                                     , fieldComments = Nothing
+                                    , fieldGenerated = Nothing
                                     }
                                 ]
                             , entityUniques = []

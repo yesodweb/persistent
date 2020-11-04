@@ -57,7 +57,7 @@
     * Add a new type `ConnectionPoolConfig` to configure the number of connections in a pool, their idle timeout, and stripe size.
     * Add `defaultConnectionPoolConfig` to create a `ConnectionPoolConfig`
     * Add `createSqlPoolWithConfig` and `withSqlPoolWithConfig`, which take this new data type
-* [#1122](https://github.com/yesodweb/persistent/pull/1122)
+* [#1122](https://github.com/yesodweb/persistent/pull/1122), [#1152](https://github.com/yesodweb/persistent/pull/1152)
   * Adds a new constructor, `PersistLiteral ByteString` to `PersistValue` to support unescaped SQL literals.
     * Obviously, this is highly unsafe, and you should never use it with user input.
   * Adds a new field, `cGenerated :: Maybe Text` to `Column` for backend-specific support of generated columns.
@@ -72,11 +72,9 @@
 
     * Support for MySQL >= 5.7. (No version checking is performed! Using this feature with older versions of MySQL will cause runtime SQL exceptions!)
     * Support for Postgresql >= 12. (No version checking is performed! Using this feature with older versions of Postgresql will cause runtime SQL exceptions!)
-    * Support for SQLite >= 3.31 (same caveat applies; support added in #TODO )
+    * Support for SQLite >= 3.31 (same caveat applies; support added in #1152 )
 * [#1151](https://github.com/yesodweb/persistent/pull/1151)
   * Allow `OverloadedLabels` to be used with the `EntityField` type.
-* [#TODO](https://github.com/yesodweb/persistent/pull/TODO)
-  * `SomePersistField` constructor extended to include the `EntityField` that generated it.
 
 ## 2.10.5.2
 

@@ -168,16 +168,6 @@ prepare' conn sql = do
 -- | SQL code to be executed when inserting an entity.
 insertSql' :: EntityDef -> [PersistValue] -> InsertSqlResult
 insertSql' ent vals =
---   let sql = pack $ concat
---                [ "INSERT INTO "
---                , escapeDBName $ entityDB ent
---                , "("
---                , intercalate "," $ map (escapeDBName . fieldDB) $ entityFields ent
---                , ") VALUES("
---                , intercalate "," (map (const "?") $ entityFields ent)
---                , ")"
---                ]
-  -- in
     case entityPrimary ent of
         Just _ -> ISRManyKeys sql vals
         Nothing -> ISRInsertGet sql "SELECT LAST_INSERT_ID()"

@@ -7,7 +7,6 @@
 module Database.Persist.Sql.Internal
     ( mkColumns
     , defaultAttribute
-    , generatedAttribute
     , BackendSpecificOverrides(..)
     , emptyBackendSpecificOverrides
     ) where
@@ -41,13 +40,8 @@ emptyBackendSpecificOverrides :: BackendSpecificOverrides
 emptyBackendSpecificOverrides = BackendSpecificOverrides Nothing
 
 defaultAttribute :: [FieldAttr] -> Maybe Text
-defaultAttribute = findMaybe $ \case 
+defaultAttribute = findMaybe $ \case
     FieldAttrDefault x -> Just x
-    _ -> Nothing
-
-generatedAttribute :: [FieldAttr] -> Maybe Text
-generatedAttribute = findMaybe $ \case 
-    FieldAttrGenerated x -> Just x
     _ -> Nothing
 
 -- | Create the list of columns for the given entity.
@@ -99,7 +93,7 @@ mkColumns allDefs t overrides =
                     Just def ->
                         Just def
 
-            , cGenerated = generatedAttribute $ fieldAttrs fd
+            , cGenerated = fieldGenerated fd
             , cDefaultConstraintName =  Nothing
             , cMaxLen = maxLen $ fieldAttrs fd
             , cReference = mkColumnReference fd
@@ -116,14 +110,14 @@ mkColumns allDefs t overrides =
             , cNull = nullable (fieldAttrs fd) /= NotNullable || entitySum t
             , cSqlType = fieldSqlType fd
             , cDefault = defaultAttribute $ fieldAttrs fd
-            , cGenerated = generatedAttribute $ fieldAttrs fd
+            , cGenerated = fieldGenerated fd
             , cDefaultConstraintName =  Nothing
             , cMaxLen = maxLen $ fieldAttrs fd
             , cReference = mkColumnReference fd
             }
 
     maxLen :: [FieldAttr] -> Maybe Integer
-    maxLen = findMaybe $ \case 
+    maxLen = findMaybe $ \case
         FieldAttrMaxlen n -> Just n
         _ -> Nothing
 
