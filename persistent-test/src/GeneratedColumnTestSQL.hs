@@ -44,27 +44,10 @@ specsWith runDB = describe "PersistLiteral field" $ do
     liftIO $ sickness1 @?= 0
     liftIO $ cromulence1  @?= 5
 
+  it "should support adding or removing generation expressions from columns" $ runDB $ do
     runMigration migrate2
+
     k2 <- insert $ MigrateTestV2 0 0
     Just (MigrateTestV2 sickness2 cromulence2) <- get k2
     liftIO $ sickness2 @?= 3
     liftIO $ cromulence2 @?= 0
-
-
--- specsWith :: (MonadUnliftIO m) => RunDb SqlBackend m -> Spec
--- specsWith runDb = describe "Migration" $ do
---     it "is idempotent" $ runDb $ do
---       again <- getMigration migrationMigrate
---       liftIO $ again @?= []
---     it "really is idempotent" $ runDb $ do
---       runMigrationSilent migrationMigrate
---       runMigrationSilent migrationMigrate
---       again <- getMigration migrationMigrate
---       liftIO $ again @?= []
---     it "can add an extra column" $ runDb $ do
---       -- Failing test case for #735.  Foreign-key checking, switched on in
---       -- version 2.6.1, caused persistent-sqlite to generate a `references`
---       -- constraint in a *temporary* table during migration, which fails.
---       _ <- runMigrationSilent migrationAddCol
---       again <- getMigration migrationAddCol
---       liftIO $ again @?= []
