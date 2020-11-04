@@ -2,6 +2,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE PatternGuards, DataKinds, TypeOperators, UndecidableInstances #-}
+{-# OPTIONS_GHC -fno-warn-deprecations #-} -- Pattern match 'PersistDbSpecific'
 module Database.Persist.Class.PersistField
     ( PersistField (..)
     , SomePersistField (..)
@@ -111,8 +112,9 @@ instance {-# OVERLAPPING #-} PersistField [Char] where
     fromPersistValue (PersistBool b) = Right $ Prelude.show b
     fromPersistValue (PersistList _) = Left $ T.pack "Cannot convert PersistList to String"
     fromPersistValue (PersistMap _) = Left $ T.pack "Cannot convert PersistMap to String"
-    fromPersistValue (PersistDbSpecific _) = Left $ T.pack "Cannot convert PersistDbSpecific to String. See the documentation of PersistDbSpecific for an example of using a custom database type with Persistent."
-    fromPersistValue (PersistLiteral _) = Left $ T.pack "Cannot convert PersistLiteral to String."
+    fromPersistValue (PersistDbSpecific _) = Left $ T.pack "Cannot convert PersistDbSpecific to String"
+    fromPersistValue (PersistLiteralEscaped _) = Left $ T.pack "Cannot convert PersistLiteralEscaped to String"
+    fromPersistValue (PersistLiteral _) = Left $ T.pack "Cannot convert PersistLiteral to String"
     fromPersistValue (PersistArray _) = Left $ T.pack "Cannot convert PersistArray to String"
     fromPersistValue (PersistObjectId _) = Left $ T.pack "Cannot convert PersistObjectId to String"
 #endif

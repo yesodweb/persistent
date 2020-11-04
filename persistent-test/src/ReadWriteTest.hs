@@ -46,10 +46,10 @@ specsWith originalRunDb = describe "ReadWriteTest" $ do
 
         it "type checks on PersistUniqueWrite/Read functions" $ do
             runDb $ do
-                let name = "Matt Parsons New"
-                    person = Person name 30 Nothing
+                let name_ = "Matt Parsons New"
+                    person = Person name_ 30 Nothing
                 _mkey0 <- insertUnique person
                 mkey1 <- insertUnique person
                 mkey1 @== Nothing
-                mperson <- selectFirst [PersonName ==. name] []
+                mperson <- selectFirst [PersonName ==. name_] []
                 fmap entityVal mperson @== Just person

@@ -30,9 +30,7 @@ import qualified Data.Text.Lazy as TL
 import Data.Time (UTCTime, TimeOfDay, Day)
 import qualified Data.Vector as V
 import Data.Word
-import Numeric.Natural (Natural)
 import Text.Blaze.Html (Html)
-import GHC.TypeLits
 
 import Database.Persist
 import Database.Persist.Sql.Types

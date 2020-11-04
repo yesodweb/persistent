@@ -5,7 +5,6 @@ module GeneratedColumnTestSQL (specsWith) where
 
 import Database.Persist.TH
 import Init
-import qualified Data.Text as T
 
 share [mkPersist sqlSettings, mkMigrate "migrate1", mkDeleteCascade sqlSettings] [persistLowerCase|
 GenTest sql=gen_test

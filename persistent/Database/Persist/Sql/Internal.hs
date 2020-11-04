@@ -13,8 +13,6 @@ module Database.Persist.Sql.Internal
     ) where
 
 import Control.Applicative ((<|>))
-import Control.Monad ((<=<))
-import Data.Char (isSpace)
 import Data.Monoid (mappend, mconcat)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -34,7 +32,7 @@ data BackendSpecificOverrides = BackendSpecificOverrides
     }
 
 findMaybe :: (a -> Maybe b) -> [a] -> Maybe b
-findMaybe pred = listToMaybe . mapMaybe pred
+findMaybe p = listToMaybe . mapMaybe p
 
 -- | Creates an empty 'BackendSpecificOverrides' (i.e. use the default behavior; no overrides)
 --
@@ -162,10 +160,9 @@ mkColumns allDefs t overrides =
             (_, constraintName) <- ref c fe as
             pure (DBName x, constraintName)
         FieldAttrConstraint x -> do
-            (tableName, _) <- ref c fe as
-            pure (tableName, DBName x)
+            (tableName_, _) <- ref c fe as
+            pure (tableName_, DBName x)
         _ -> ref c fe as
-    ref c x (_:as) = ref c x as
 
 refName :: DBName -> DBName -> DBName
 refName (DBName table) (DBName column) =

@@ -98,27 +98,27 @@ specsWith :: (MonadIO m, MonadFail m) => RunDb SqlBackend m -> Spec
 specsWith runDb = describe "foreign keys options" $ do
     it "delete cascades" $ runDb $ do
         kf <- insert $ Parent 1
-        kc <- insert $ Child 1
+        insert_ $ Child 1
         delete kf
         cs <- selectList [] []
         let expected = [] :: [Entity Child]
         cs @== expected
     it "update cascades" $ runDb $ do
         kf <- insert $ Parent 1
-        kc <- insert $ Child 1
+        insert_ $ Child 1
         update kf [ParentName =. 2]
         cs <- selectList [] []
         fmap (childPname . entityVal) cs @== [2]
     it "delete Composite cascades" $ runDb $ do
         kf <- insert $ ParentComposite 1 2
-        kc <- insert $ ChildComposite 1 2
+        insert_ $ ChildComposite 1 2
         delete kf
         cs <- selectList [] []
         let expected = [] :: [Entity ChildComposite]
         cs @== expected
     it "delete self referenced cascades" $ runDb $ do
         kf <- insert $ SelfReferenced 1 1
-        kc <- insert $ SelfReferenced 2 1
+        insert_ $ SelfReferenced 2 1
         delete kf
         srs <- selectList [] []
         let expected = [] :: [Entity SelfReferenced]
@@ -135,7 +135,7 @@ specsWith runDb = describe "foreign keys options" $ do
             mxs `shouldBe` []
     it "delete cascades with explicit Reference" $ runDb $ do
         kf <- insert $ A 1 40
-        kc <- insert $ B 1 15
+        insert_ $ B 1 15
         delete kf
         return ()
         cs <- selectList [] []
@@ -143,7 +143,7 @@ specsWith runDb = describe "foreign keys options" $ do
         cs @== expected
     it "delete cascades with explicit Composite Reference" $ runDb $ do
         kf <- insert $ AComposite 1 20
-        kc <- insert $ BComposite 1 20
+        insert_ $ BComposite 1 20
         delete kf
         return ()
         cs <- selectList [] []
@@ -151,7 +151,7 @@ specsWith runDb = describe "foreign keys options" $ do
         cs @== expected
     it "delete cascades with explicit Composite Reference" $ runDb $ do
         kf <- insert $ AComposite 1 20
-        kc <- insert $ BComposite 1 20
+        insert_ $ BComposite 1 20
         delete kf
         return ()
         cs <- selectList [] []
@@ -159,7 +159,7 @@ specsWith runDb = describe "foreign keys options" $ do
         cs @== expected
     it "delete cascades with explicit Id field" $ runDb $ do
         kf <- insert $ A 1 20
-        kc <- insert $ BExplicit kf
+        insert_ $ BExplicit kf
         delete kf
         return ()
         cs <- selectList [] []
@@ -175,7 +175,7 @@ specsWith runDb = describe "foreign keys options" $ do
     it "deletes cascades with self reference to the whole chain" $ runDb $ do
         k1 <- insert $ Chain2 1 Nothing
         k2 <- insert $ Chain2 2 (Just k1)
-        k3 <- insert $ Chain2 3 (Just k2)
+        insert_ $ Chain2 3 (Just k2)
         delete k1
         cs <- selectList [] []
         let expected = [] :: [Entity Chain2]

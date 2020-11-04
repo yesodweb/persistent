@@ -44,12 +44,18 @@ module Init (
   , Proxy(..)
   ) where
 
+#if !MIN_VERSION_monad_logger(0,3,30)
+-- Needed for GHC versions 7.10.3. Can drop when we drop support for GHC
+-- 7.10.3
+import Control.Monad.IO.Class
+import Control.Monad.Logger
+import qualified Control.Monad.Fail as MonadFail
+#endif
+
 -- needed for backwards compatibility
 import Control.Monad.Base
 import Control.Monad.Catch
 import Control.Monad.IO.Unlift
-import qualified Control.Monad.Fail as MonadFail
-import Control.Monad.Logger
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Control
 import Control.Monad.Trans.Resource
@@ -76,7 +82,6 @@ import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
 import Test.QuickCheck
 
 import Control.Monad (unless, (>=>))
-import Control.Monad.IO.Class
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import qualified Data.ByteString as BS
 import Data.IORef

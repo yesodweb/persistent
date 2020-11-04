@@ -6,7 +6,6 @@ module TreeTest where
 import Init
 
 import Database.Persist.TH (mkDeleteCascade)
-import Data.Proxy
 
 
 -- mpsGeneric = False is due to a bug or at least lack of a feature in

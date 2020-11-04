@@ -333,7 +333,7 @@ instance PersistFieldSql Value where
 -- but needs testing/profiling before changing it.
 -- (When entering into the DB the type isn't as important as fromPersistValue)
 toPersistValueJsonB :: ToJSON a => a -> PersistValue
-toPersistValueJsonB = PersistDbSpecific . BSL.toStrict . encode
+toPersistValueJsonB = PersistLiteralEscaped . BSL.toStrict . encode
 
 fromPersistValueJsonB :: FromJSON a => PersistValue -> Either Text a
 fromPersistValueJsonB (PersistText t) =

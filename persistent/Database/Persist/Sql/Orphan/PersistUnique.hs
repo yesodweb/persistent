@@ -5,8 +5,8 @@ module Database.Persist.Sql.Orphan.PersistUnique
   where
 
 import Control.Exception (throwIO)
-import Control.Monad.IO.Class (liftIO, MonadIO)
-import Control.Monad.Trans.Reader (ask, withReaderT, ReaderT)
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Reader (ask, withReaderT)
 import qualified Data.Conduit.List as CL
 import Data.Function (on)
 import Data.List (nubBy)
@@ -15,8 +15,7 @@ import Data.Monoid (mappend)
 import qualified Data.Text as T
 
 import Database.Persist
-import Database.Persist.Class.PersistUnique (defaultUpsertBy, defaultPutMany, persistUniqueKeyValues
-                                            , onlyOneUniqueDef, atLeastOneUniqueDef)
+import Database.Persist.Class.PersistUnique (defaultUpsertBy, defaultPutMany, persistUniqueKeyValues)
 
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Raw

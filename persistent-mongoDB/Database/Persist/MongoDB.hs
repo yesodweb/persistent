@@ -7,6 +7,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# OPTIONS_GHC -fno-warn-deprecations #-} -- Pattern match 'PersistDbSpecific'
 -- | Use persistent-mongodb the same way you would use other persistent
 -- libraries and refer to the general persistent documentation.
 -- There are some new MongoDB specific filters under the filters section.
@@ -1048,6 +1049,7 @@ instance DB.Val PersistValue where
   val (PersistArray a)      = DB.val $ PersistList a
   val (PersistDbSpecific _)   = throw $ PersistMongoDBUnsupported "PersistDbSpecific not implemented for the MongoDB backend"
   val (PersistLiteral _)   = throw $ PersistMongoDBUnsupported "PersistLiteral not implemented for the MongoDB backend"
+  val (PersistLiteralEscaped _) = throw $ PersistMongoDBUnsupported "PersistLiteralEscaped not implemented for the MongoDB backend"
   cast' (DB.Float x)  = Just (PersistDouble x)
   cast' (DB.Int32 x)  = Just $ PersistInt64 $ fromIntegral x
   cast' (DB.Int64 x)  = Just $ PersistInt64 x

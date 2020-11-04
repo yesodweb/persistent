@@ -63,7 +63,6 @@ module Database.Persist.TH
 
 import Prelude hiding ((++), take, concat, splitAt, exp)
 
-import Control.Applicative
 import Data.Either
 import Control.Monad (forM, mzero, filterM, guard, unless)
 import Data.Aeson
@@ -85,7 +84,7 @@ import qualified Data.Map as M
 import Data.Maybe (isJust, listToMaybe, mapMaybe, fromMaybe)
 import Data.Monoid ((<>), mappend, mconcat)
 import Data.Proxy (Proxy (Proxy))
-import Data.Text (pack, Text, append, unpack, concat, uncons, cons, stripPrefix, stripSuffix)
+import Data.Text (pack, Text, append, unpack, concat, uncons, cons, stripSuffix)
 import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
 import qualified Data.Text.Encoding as TE
@@ -1165,8 +1164,7 @@ mkEntity entityMap mps t = do
         case entityPrimary t of
             Just prim -> do
                 recordName <- newName "record"
-                let fields = map fieldHaskell (compositeFields prim)
-                    keyCon = keyConName t
+                let keyCon = keyConName t
                     keyFields' =
                         map (mkName . T.unpack . recName mps entName . fieldHaskell)
                             (compositeFields prim)
@@ -1737,7 +1735,7 @@ liftAndFixKey entityMap (FieldDef a b c sqlTyp e f fieldRef fc mcomments) =
                 ForeignRef refName _ft ->  do
                     ent <- M.lookup refName entityMap
                     case fieldReference $ entityId ent of
-                        fr@(ForeignRef targetName ft) ->
+                        fr@(ForeignRef _ ft) ->
                             Just (fr, lift $ SqlTypeExp ft)
                         _ ->
                             Nothing

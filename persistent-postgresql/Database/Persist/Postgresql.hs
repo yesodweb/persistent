@@ -6,6 +6,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# OPTIONS_GHC -fno-warn-deprecations #-} -- Pattern match 'PersistDbSpecific'
 
 -- | A postgresql backend for persistent.
 module Database.Persist.Postgresql
@@ -522,6 +523,7 @@ instance PGTF.ToField P where
     toField (P (PersistMap m))         = PGTF.toField $ mapToJSON m
     toField (P (PersistDbSpecific s))  = PGTF.toField (Unknown s)
     toField (P (PersistLiteral l))     = PGTF.toField (UnknownLiteral l)
+    toField (P (PersistLiteralEscaped e)) = PGTF.toField (Unknown e)
     toField (P (PersistArray a))       = PGTF.toField $ PG.PGArray $ P <$> a
     toField (P (PersistObjectId _))    =
         error "Refusing to serialize a PersistObjectId to a PostgreSQL value"
@@ -613,8 +615,9 @@ fromPersistValueError haskellType databaseType received = T.concat
     ]
 
 instance PersistField PgInterval where
-    toPersistValue = PersistDbSpecific . pgIntervalToBs
-    fromPersistValue x@(PersistDbSpecific bs) =
+    toPersistValue = PersistLiteralEscaped . pgIntervalToBs
+    fromPersistValue (PersistDbSpecific bs) = fromPersistValue (PersistLiteralEscaped bs)
+    fromPersistValue x@(PersistLiteralEscaped bs) =
       case P.parseOnly (P.signed P.rational <* P.char 's' <* P.endOfInput) bs of
         Left _  -> Left $ fromPersistValueError "PgInterval" "Interval" x
         Right i -> Right $ PgInterval i
@@ -673,7 +676,7 @@ builtinGetters = I.fromList
     , (k PS.time,        convertPV PersistTimeOfDay)
     , (k PS.timestamp,   convertPV (PersistUTCTime. localTimeToUTC utc))
     , (k PS.timestamptz, convertPV PersistUTCTime)
-    , (k PS.interval,    convertPV (PersistDbSpecific . pgIntervalToBs))
+    , (k PS.interval,    convertPV (PersistLiteralEscaped . pgIntervalToBs))
     , (k PS.bit,         convertPV PersistInt64)
     , (k PS.varbit,      convertPV PersistInt64)
     , (k PS.numeric,     convertPV PersistRational)
@@ -704,12 +707,12 @@ builtinGetters = I.fromList
     , (1183,             listOf PersistTimeOfDay)
     , (1115,             listOf PersistUTCTime)
     , (1185,             listOf PersistUTCTime)
-    , (1187,             listOf (PersistDbSpecific . pgIntervalToBs))
+    , (1187,             listOf (PersistLiteralEscaped . pgIntervalToBs))
     , (1561,             listOf PersistInt64)
     , (1563,             listOf PersistInt64)
     , (1231,             listOf PersistRational)
     -- no array(void) type
-    , (2951,             listOf (PersistDbSpecific . unUnknown))
+    , (2951,             listOf (PersistLiteralEscaped . unUnknown))
     , (199,              listOf (PersistByteString . unUnknown))
     , (3807,             listOf (PersistByteString . unUnknown))
     -- no array(unknown) either
@@ -727,7 +730,7 @@ builtinGetters = I.fromList
 getGetter :: PG.Connection -> PG.Oid -> Getter PersistValue
 getGetter _conn oid
   = fromMaybe defaultGetter $ I.lookup (PG.oid2int oid) builtinGetters
-  where defaultGetter = convertPV (PersistDbSpecific . unUnknown)
+  where defaultGetter = convertPV (PersistLiteralEscaped . unUnknown)
 
 unBinary :: PG.Binary a -> a
 unBinary (PG.Binary x) = x

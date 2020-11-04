@@ -91,10 +91,10 @@ main =
         it "StoreTest" $ do
           va <- flip runZookeeperPool conn $ do
             deleteWhere [PersonName !=. ""]
-            _ <- insert (Person "hoge0" 1 Nothing)
-            _ <- insert (Person "hoge1" 2 Nothing)
-            _ <- insert (Person "hoge2" 3 Nothing)
-            _ <- insert (Person "hoge3" 4 Nothing)
+            insert_ (Person "hoge0" 1 Nothing)
+            insert_ (Person "hoge1" 2 Nothing)
+            insert_ (Person "hoge2" 3 Nothing)
+            insert_ (Person "hoge3" 4 Nothing)
             selectList [PersonAge ==. 2] []
           (entityVal (head va)) `shouldBe` (Person "hoge1" 2 Nothing)
           [Entity _k v] <- flip runZookeeperPool conn $ do

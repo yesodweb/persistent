@@ -436,8 +436,7 @@ module Database.Persist.Quasi
 import Prelude hiding (lines)
 
 import Control.Arrow ((&&&))
-import Control.Monad (msum, mplus, (<=<))
-import Data.Bifunctor (second)
+import Control.Monad (msum, mplus)
 import Data.Char
 import Data.List (find, foldl')
 import qualified Data.List.NonEmpty as NEL
@@ -841,7 +840,7 @@ mkEntityDef :: PersistSettings
 mkEntityDef ps name entattribs lines =
   UnboundEntityDef foreigns $
     EntityDef
-        { entityHaskell = entName
+        { entityHaskell = HaskellName name'
         , entityDB = DBName $ getDbName ps name' entattribs
         -- idField is the user-specified Id
         -- otherwise useAutoIdField
@@ -851,13 +850,12 @@ mkEntityDef ps name entattribs lines =
         , entityFields = cols
         , entityUniques = uniqs
         , entityForeigns = []
-        , entityDerives = derives
+        , entityDerives = concat $ mapMaybe takeDerives attribs
         , entityExtra = extras
         , entitySum = isSum
-        , entityComments = comments
+        , entityComments = Nothing
         }
   where
-    comments = Nothing
     entName = HaskellName name'
     (isSum, name') =
         case T.uncons name of
@@ -873,8 +871,6 @@ mkEntityDef ps name entattribs lines =
         let (i, p, u, f) = takeConstraint ps name' cols attr
             squish xs m = xs `mappend` maybeToList m
         in (just1 mid i, just1 mp p, squish us u, squish fs f)) (Nothing, Nothing, [],[]) attribs
-
-    derives = concat $ mapMaybe takeDerives attribs
 
     cols :: [FieldDef]
     cols = reverse . fst . foldr k ([], []) $ reverse attribs
@@ -1019,7 +1015,7 @@ takeId ps tableName (n:rest) =
     keyCon = keyConName tableName
     -- this will be ignored if there is already an existing sql=
     -- TODO: I think there is a ! ignore syntax that would screw this up
-    setIdName = ["sql=" `mappend` psIdName ps]
+    -- setIdName = ["sql=" `mappend` psIdName ps]
 takeId _ tableName _ = error $ "empty Id field for " `mappend` show tableName
 
 
@@ -1167,8 +1163,8 @@ parseCascade :: [Text] -> (FieldCascade, [Text])
 parseCascade allTokens =
     go [] Nothing Nothing allTokens
   where
-    go acc mupd mdel tokens =
-        case tokens of
+    go acc mupd mdel tokens_ =
+        case tokens_ of
             [] ->
                 ( FieldCascade
                     { fcOnDelete = mdel

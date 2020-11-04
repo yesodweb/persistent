@@ -447,22 +447,24 @@ instance Error PersistException where
 
 -- | A raw value which can be stored in any backend and can be marshalled to
 -- and from a 'PersistField'.
-data PersistValue = PersistText Text
-                  | PersistByteString ByteString
-                  | PersistInt64 Int64
-                  | PersistDouble Double
-                  | PersistRational Rational
-                  | PersistBool Bool
-                  | PersistDay Day
-                  | PersistTimeOfDay TimeOfDay
-                  | PersistUTCTime UTCTime
-                  | PersistNull
-                  | PersistList [PersistValue]
-                  | PersistMap [(Text, PersistValue)]
-                  | PersistObjectId ByteString -- ^ Intended especially for MongoDB backend
-                  | PersistArray [PersistValue] -- ^ Intended especially for PostgreSQL backend for text arrays
-                  | PersistLiteral ByteString -- ^ Using 'PersistLiteral' you can customize PersistField instances to output unescaped SQL
-                  | PersistDbSpecific ByteString -- ^ Using 'PersistDbSpecific' allows you to use types specific to a particular backend
+data PersistValue
+    = PersistText Text
+    | PersistByteString ByteString
+    | PersistInt64 Int64
+    | PersistDouble Double
+    | PersistRational Rational
+    | PersistBool Bool
+    | PersistDay Day
+    | PersistTimeOfDay TimeOfDay
+    | PersistUTCTime UTCTime
+    | PersistNull
+    | PersistList [PersistValue]
+    | PersistMap [(Text, PersistValue)]
+    | PersistObjectId ByteString -- ^ Intended especially for MongoDB backend
+    | PersistArray [PersistValue] -- ^ Intended especially for PostgreSQL backend for text arrays
+    | PersistLiteral ByteString -- ^ Using 'PersistLiteral' allows you to use types or keywords specific to a particular backend.
+    | PersistLiteralEscaped ByteString -- ^ Similar to 'PersistLiteral', but escapes the @ByteString@.
+    | PersistDbSpecific ByteString -- ^ Using 'PersistDbSpecific' allows you to use types specific to a particular backend.
 -- For example, below is a simple example of the PostGIS geography type:
 --
 -- @
@@ -490,6 +492,7 @@ data PersistValue = PersistText Text
 --
     deriving (Show, Read, Eq, Ord)
 
+{-# DEPRECATED PersistDbSpecific "Deprecated since 2.11 because of inconsistent escaping behavior across backends. Use one of 'PersistLiteral' or 'PersistLiteralEscaped' instead." #-}
 
 instance ToHttpApiData PersistValue where
     toUrlPiece val =
@@ -527,8 +530,9 @@ fromPersistValueText (PersistList _) = Left "Cannot convert PersistList to Text"
 fromPersistValueText (PersistMap _) = Left "Cannot convert PersistMap to Text"
 fromPersistValueText (PersistObjectId _) = Left "Cannot convert PersistObjectId to Text"
 fromPersistValueText (PersistArray _) = Left "Cannot convert PersistArray to Text"
-fromPersistValueText (PersistDbSpecific _) = Left "Cannot convert PersistDbSpecific to Text. See the documentation of PersistDbSpecific for an example of using a custom database type with Persistent."
-fromPersistValueText (PersistLiteral _) = Left "Cannot convert PersistLiteral to Text."
+fromPersistValueText (PersistDbSpecific _) = Left "Cannot convert PersistDbSpecific to Text"
+fromPersistValueText (PersistLiteral _) = Left "Cannot convert PersistLiteral to Text"
+fromPersistValueText (PersistLiteralEscaped _) = Left "Cannot convert PersistLiteralEscaped to Text"
 
 instance A.ToJSON PersistValue where
     toJSON (PersistText t) = A.String $ T.cons 's' t
@@ -545,6 +549,7 @@ instance A.ToJSON PersistValue where
     toJSON (PersistMap m) = A.object $ map (second A.toJSON) m
     toJSON (PersistDbSpecific b) = A.String $ T.cons 'p' $ TE.decodeUtf8 $ B64.encode b
     toJSON (PersistLiteral b) = A.String $ T.cons 'l' $ TE.decodeUtf8 $ B64.encode b
+    toJSON (PersistLiteralEscaped b) = A.String $ T.cons 'e' $ TE.decodeUtf8 $ B64.encode b
     toJSON (PersistArray a) = A.Array $ V.fromList $ map A.toJSON a
     toJSON (PersistObjectId o) =
       A.toJSON $ showChar 'o' $ showHexLen 8 (bs2i four) $ showHexLen 16 (bs2i eight) ""
@@ -570,6 +575,8 @@ instance A.FromJSON PersistValue where
             Just ('p', t) -> either (\_ -> fail "Invalid base64") (return . PersistDbSpecific)
                            $ B64.decode $ TE.encodeUtf8 t
             Just ('l', t) -> either (\_ -> fail "Invalid base64") (return . PersistLiteral)
+                           $ B64.decode $ TE.encodeUtf8 t
+            Just ('e', t) -> either (\_ -> fail "Invalid base64") (return . PersistLiteralEscaped)
                            $ B64.decode $ TE.encodeUtf8 t
             Just ('s', t) -> return $ PersistText t
             Just ('b', t) -> either (\_ -> fail "Invalid base64") (return . PersistByteString)

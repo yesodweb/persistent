@@ -7,6 +7,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# OPTIONS_GHC -fno-warn-deprecations #-} -- Pattern match 'PersistDbSpecific'
 -- | A MySQL backend for @persistent@.
 module Database.Persist.MySQL
     ( withMySQLPool
@@ -242,6 +243,7 @@ instance MySQL.Param P where
       -- FIXME: Too Ambiguous, can not select precision without information about field
     render (P (PersistDbSpecific s))    = MySQL.Plain $ BBS.fromByteString s
     render (P (PersistLiteral l))     = MySQL.Plain $ BBS.fromByteString l
+    render (P (PersistLiteralEscaped e)) = MySQL.Escape e
     render (P (PersistArray a))       = MySQL.render (P (PersistList a))
     render (P (PersistObjectId _))    =
         error "Refusing to serialize a PersistObjectId to a MySQL value"
@@ -315,7 +317,7 @@ getGetter field = go (MySQLBase.fieldType field)
     -- Conversion using PersistDbSpecific
     go MySQLBase.Geometry   _ _  = \_ m ->
       case m of
-        Just g -> PersistDbSpecific g
+        Just g -> PersistLiteral g
         Nothing -> error "Unexpected null in database specific value"
     -- Unsupported
     go other _ _ = error $ "MySQL.getGetter: type " ++

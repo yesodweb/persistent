@@ -50,12 +50,12 @@ specs = do
                            ,"AND kcu.table_name=? "
                            ,"AND kcu.column_name=? "
                            ,"AND tc.constraint_name=?"]
-      [Single exists] <- rawSql query [PersistText "custom_constraint1"
+      [Single exists_] <- rawSql query [PersistText "custom_constraint1"
                                       ,PersistText "id"
                                       ,PersistText "custom_constraint2"
                                       ,PersistText "cc_id"
                                       ,PersistText "custom_constraint"]
-      liftIO $ 1 @?= (exists :: Int)
+      liftIO $ 1 @?= (exists_ :: Int)
 
     it "allows multiple constraints on a single column" $ runConnAssert $ do
       void $ runMigrationSilent customConstraintMigrate

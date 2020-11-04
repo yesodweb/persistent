@@ -42,14 +42,14 @@ specsWith runDb = describe "Migration" $ do
       again <- getMigration migrationMigrate
       liftIO $ again @?= []
     it "really is idempotent" $ runDb $ do
-      runMigrationSilent migrationMigrate
-      runMigrationSilent migrationMigrate
+      void $ runMigrationSilent migrationMigrate
+      void $ runMigrationSilent migrationMigrate
       again <- getMigration migrationMigrate
       liftIO $ again @?= []
     it "can add an extra column" $ runDb $ do
       -- Failing test case for #735.  Foreign-key checking, switched on in
       -- version 2.6.1, caused persistent-sqlite to generate a `references`
       -- constraint in a *temporary* table during migration, which fails.
-      _ <- runMigrationSilent migrationAddCol
+      void $ runMigrationSilent migrationAddCol
       again <- getMigration migrationAddCol
       liftIO $ again @?= []

@@ -135,7 +135,7 @@ specsWith runDb = describe "composite" $
 
     it "Extract Parent Foreign Key from Child value" $ runDb $ do
       kp1 <- insert p1
-      _ <- insert p2
+      insert_ p2
       kc1 <- insert c1
       mc <- get kc1
       isJust mc @== True
@@ -144,9 +144,9 @@ specsWith runDb = describe "composite" $
       testChildFkparent c11 @== kp1
 
     it "Validate Key contents" $ runDb $ do
-      _ <- insert p1
-      _ <- insert p2
-      _ <- insert p3
+      insert_ p1
+      insert_ p2
+      insert_ p3
       xs <- selectKeysList [] [Asc TestParentName]
       length xs @== 3
       let [kps1,kps2,kps3] = xs
@@ -178,7 +178,7 @@ specsWith runDb = describe "composite" $
 
     it "Replace Child" $ runDb $ do
       -- c1 FKs p1
-      _ <- insert p1
+      insert_ p1
       kc1 <- insert c1
       _ <- replace kc1 c1'
       newc1 <- get kc1

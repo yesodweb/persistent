@@ -45,7 +45,7 @@ go = do
     p3 <- selectList [PersonNameEq "Michael"] [] 0 0
     liftIO $ print p3
 
-    _ <- insert $ Person "Michael2" 27 Nothing
+    insert_ $ Person "Michael2" 27 Nothing
     deleteWhere [PersonNameEq "Michael2"]
     p4 <- selectList [PersonAgeLt 28] [] 0 0
     liftIO $ print p4
@@ -59,11 +59,11 @@ go = do
     if fmap personAge p6 /= Just 29 then error "bug 57" else return ()
     liftIO $ print p6
 
-    _ <- insert $ Person "Eliezer" 2 $ Just "blue"
+    insert_ $ Person "Eliezer" 2 $ Just "blue"
     p7 <- selectList [] [PersonAgeAsc] 0 0
     liftIO $ print p7
 
-    _ <- insert $ Person "Abe" 30 $ Just "black"
+    insert_ $ Person "Abe" 30 $ Just "black"
     p8 <- selectList [PersonAgeLt 30] [PersonNameDesc] 0 0
     liftIO $ print p8
 
@@ -92,7 +92,7 @@ go = do
     plast <- get pid
     liftIO $ print plast
 
-    _ <- insert $ Person "Gavriella" 0 Nothing
+    insert_ $ Person "Gavriella" 0 Nothing
     x@(_, Person "Gavriella" 0 Nothing) <-
         insertBy $ Person "Gavriella" 1 $ Just "blue"
     liftIO $ print x
@@ -104,7 +104,7 @@ go = do
     p15 <- selectList [PersonNameIn $ words "Michael Gavriella"] [] 0 0
     liftIO $ print p15
 
-    _ <- insert $ Person "Miriam" 23 $ Just "red"
+    insert_ $ Person "Miriam" 23 $ Just "red"
     p16 <- selectList [PersonColorNotIn [Nothing, Just "blue"]] [] 0 0
     liftIO $ print p16
 
@@ -112,8 +112,8 @@ go = do
     liftIO $ print p17
 
     deleteWhere ([] :: [Filter Null])
-    _ <- insert $ Null $ Just 5
-    _ <- insert $ Null Nothing
+    insert_ $ Null $ Just 5
+    insert_ $ Null Nothing
     [(_, Null (Just 5))] <- selectList [NullFieldGt 4] [] 0 0
     [] <- selectList [NullFieldGt 5] [] 0 0
     [(_, Null (Just 5))] <- selectList [NullFieldEq $ Just 5] [] 0 0
@@ -128,7 +128,7 @@ go = do
     _ <- selectList ([] :: [Filter Person]) [] 0 10
 
     deleteWhere ([] :: [Filter Table])
-    _ <- insert $ Table "foo"
-    _ <- insert $ Table "bar"
+    insert_ $ Table "foo"
+    insert_ $ Table "bar"
 
     return ()
