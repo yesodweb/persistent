@@ -57,6 +57,22 @@
     * Add a new type `ConnectionPoolConfig` to configure the number of connections in a pool, their idle timeout, and stripe size.
     * Add `defaultConnectionPoolConfig` to create a `ConnectionPoolConfig`
     * Add `createSqlPoolWithConfig` and `withSqlPoolWithConfig`, which take this new data type
+* [#1122](https://github.com/yesodweb/persistent/pull/1122)
+  * Adds a new constructor, `PersistLiteral ByteString` to `PersistValue` to support unescaped SQL literals.
+    * Obviously, this is highly unsafe, and you should never use it with user input.
+  * Adds a new field, `cGenerated :: Maybe Text` to `Column` for backend-specific support of generated columns.
+    * Express generated fields in the Persistent DSL
+
+    ```haskell
+    GeneratedColumnExample
+        fieldOne Text Maybe
+        fieldTwo Text Maybe
+        fieldThree Text Maybe generated=COALESCE(field_one,field_two)
+    ```
+
+    * Support for MySQL >= 5.7. (No version checking is performed! Using this feature with older versions of MySQL will cause runtime SQL exceptions!)
+    * Support for Postgresql >= 12. (No version checking is performed! Using this feature with older versions of Postgresql will cause runtime SQL exceptions!)
+    * No support for Sqlite at this time. (`generated=` will be safely ignored.)
 
 ## 2.10.5.2
 
