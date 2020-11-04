@@ -1,19 +1,16 @@
 # Changelog for persistent-sqlite
 
-## (Unreleased) 2.11.0.0
+##  2.11.0.0
 
 * Foreign Key improvements [#1121] (https://github.com/yesodweb/persistent/pull/1121)
   * It is now supported to refer to a table with an auto generated Primary Kay
   * It is now supported to refer to non-primary fields, using the keyword `References`
   * It is now supported to have cascade options for simple/single-field Foreign Keys
-
 * [#1060](https://github.com/yesodweb/persistent/pull/1060)
   * The QuasiQuoter now supports `OnDelete` and `OnUpdate` cascade options.
 * [#1131](https://github.com/yesodweb/persistent/pull/1131)
   * Provide `exists` function as required by `PersistQueryRead` type class.
-
 * Remove unnecessary deriving of Typeable [#1114](https://github.com/yesodweb/persistent/pull/1114)
-
 * [#1134](https://github.com/yesodweb/persistent/pull/1134)
   * Update the SQLite amalgamation to 3.33.0
 
