@@ -1,6 +1,6 @@
 ## Unreleased changes
 
-## 2.9.1.0 (unreleased)
+## 2.9.1.0
 
 * [#1145](https://github.com/yesodweb/persistent/pull/1148)
     * Fix a bug where the `SqlType` for a shared primary key was being
