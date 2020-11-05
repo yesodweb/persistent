@@ -1,5 +1,11 @@
 # Changelog for persistent
 
+## Unreleased
+
+* Docs/Bugs fixes []
+  * Fix documentation on `FieldDef.fieldAttrs`.
+  * Postgresql backend: Add a space in cascade clause of generated SQL.
+
 ## 2.11.0.0
 
 * Foreign Key improvements [#1121] https://github.com/yesodweb/persistent/pull/1121
