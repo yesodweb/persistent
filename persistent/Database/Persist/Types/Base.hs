@@ -416,8 +416,8 @@ noCascade = FieldCascade Nothing Nothing
 renderFieldCascade :: FieldCascade -> Text
 renderFieldCascade (FieldCascade onUpdate onDelete) =
     T.unwords
-        [ foldMap (mappend "ON DELETE " . renderCascadeAction) onDelete
-        , foldMap (mappend "ON UPDATE " . renderCascadeAction) onUpdate
+        [ foldMap (mappend " ON DELETE " . renderCascadeAction) onDelete
+        , foldMap (mappend " ON UPDATE " . renderCascadeAction) onUpdate
         ]
 
 -- | An action that might happen on a deletion or update on a foreign key
