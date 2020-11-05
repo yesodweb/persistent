@@ -256,7 +256,6 @@ data FieldDef = FieldDef
     , fieldSqlType   :: !SqlType
     -- ^ The type of the field in a SQL database.
     , fieldAttrs     :: ![FieldAttr]
-    -- ^ Whether or not the field is gnerated and how. Backend-dependent.
     -- ^ User annotations for a field. These are provided with the @!@
     -- operator.
     , fieldStrict    :: !Bool
@@ -416,8 +415,8 @@ noCascade = FieldCascade Nothing Nothing
 renderFieldCascade :: FieldCascade -> Text
 renderFieldCascade (FieldCascade onUpdate onDelete) =
     T.unwords
-        [ foldMap (mappend "ON DELETE " . renderCascadeAction) onDelete
-        , foldMap (mappend "ON UPDATE " . renderCascadeAction) onUpdate
+        [ foldMap (mappend " ON DELETE " . renderCascadeAction) onDelete
+        , foldMap (mappend " ON UPDATE " . renderCascadeAction) onUpdate
         ]
 
 -- | An action that might happen on a deletion or update on a foreign key
