@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-* Docs/Bugs fixes []
+* Docs/Bugs fixes [#1153] https://github.com/yesodweb/persistent/pull/1153
   * Fix documentation on `FieldDef.fieldAttrs`.
   * Postgresql backend: Add a space in cascade clause of generated SQL.
 
