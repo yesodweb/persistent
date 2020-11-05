@@ -256,7 +256,6 @@ data FieldDef = FieldDef
     , fieldSqlType   :: !SqlType
     -- ^ The type of the field in a SQL database.
     , fieldAttrs     :: ![FieldAttr]
-    -- ^ Whether or not the field is gnerated and how. Backend-dependent.
     -- ^ User annotations for a field. These are provided with the @!@
     -- operator.
     , fieldStrict    :: !Bool
