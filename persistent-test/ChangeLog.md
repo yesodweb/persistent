@@ -1,5 +1,10 @@
 ## Unreleased changes
 
+## 2.0.3.5
+
+* Tighter version bounds on `persistent` and `persistent-template`.
+    * [#1155](https://github.com/yesodweb/persistent/pull/1155)
+
 ## 2.0.3.4
 
 * lots of stuff actually :\ should probably start tracking this more!
