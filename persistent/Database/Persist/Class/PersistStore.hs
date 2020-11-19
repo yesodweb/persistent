@@ -557,6 +557,9 @@ class
         update key ups
         get key >>= maybe (liftIO $ throwIO $ KeyNotFound $ show key) return
 
+    upsertKey :: forall record m. (MonadIO m, PersistRecordBackend record backend)
+           => Key record -> record -> [Update record] -> ReaderT backend m (Entity record)
+
 
 -- | Same as 'get', but for a non-null (not Maybe) foreign key.
 -- Unsafe unless your database is enforcing that the foreign key is valid.

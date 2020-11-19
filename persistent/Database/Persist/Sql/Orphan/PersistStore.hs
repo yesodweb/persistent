@@ -37,6 +37,7 @@ import qualified Data.Text as T
 import Data.Void (Void)
 import Web.PathPieces (PathPiece)
 import Web.HttpApiData (ToHttpApiData, FromHttpApiData)
+import qualified Data.List.NonEmpty as NEL
 
 import Database.Persist
 import Database.Persist.Class ()
@@ -45,7 +46,7 @@ import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Util (
     dbIdColumns, keyAndEntityColumnNames, parseEntityValues, entityColumnNames
-  , updatePersistValue, mkUpdateText, commaSeparated, mkInsertValues)
+  , updatePersistValue, mkUpdateText, commaSeparated, mkInsertValues, mkUpdateText')
 
 withRawQuery :: MonadIO m
              => Text
@@ -300,6 +301,43 @@ instance PersistStoreWrite SqlBackend where
             , " WHERE "
             , wher conn
             ]
+
+    upsertKey key record updates = do
+      conn <- ask
+
+      let entityDefinition = entityDef $ Just record
+          idColumns = dbIdColumns conn entityDefinition -- e.g. ["user_id", "company_id"]
+          idColumnPairs = map (\x -> (HaskellName "unused", (DBName x))) idColumns
+
+      let escape = connEscapeName conn
+      let mkQualifiedColumnName colName = T.concat [escape (entityDB entityDefinition), ".", colName] -- e.g. users.id
+
+      let mkSingleColumnUpdateText :: PersistEntity record => Update record -> Text
+          mkSingleColumnUpdateText = mkUpdateText' escape mkQualifiedColumnName
+
+      case connUpsertSql conn of
+        Just upsertSql -> case updates of
+                            [] -> fallbackUpsertKey -- TODO: It would be more efficient if upsertSql supported ON CONFLICT DO NOTHING
+                            _:_ -> do
+                                let onConflictUpdates = T.intercalate "," $ map mkSingleColumnUpdateText updates
+                                    sql = upsertSql entityDefinition (NEL.fromList $ idColumnPairs) onConflictUpdates
+                                    vals = map toPersistValue (toPersistFields record)
+                                        ++ map updatePersistValue updates
+                                        ++ keyToValues key
+
+                                x <- rawSql sql vals
+                                return $ head x
+        Nothing -> fallbackUpsertKey
+
+      where
+        fallbackUpsertKey = do
+          mRecord <- get key
+          case mRecord of
+            Nothing -> insertKey key record >> pure (Entity key record)
+            Just _ -> do
+              newRecord <- updateGet key updates
+              pure (Entity key newRecord)
+
 instance PersistStoreWrite SqlWriteBackend where
     insert v = withReaderT persistBackend $ insert v
     insertMany vs = withReaderT persistBackend $ insertMany vs
@@ -311,6 +349,7 @@ instance PersistStoreWrite SqlWriteBackend where
     delete k = withReaderT persistBackend $ delete k
     update k upds = withReaderT persistBackend $ update k upds
     repsertMany krs = withReaderT persistBackend $ repsertMany krs
+    upsertKey key record updates = withReaderT persistBackend $ upsertKey key record updates
 
 instance PersistStoreRead SqlBackend where
     get k = do
