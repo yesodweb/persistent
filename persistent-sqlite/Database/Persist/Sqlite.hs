@@ -277,7 +277,7 @@ wrapConnectionInfo connInfo conn logFunc = do
     ignoreExceptions = E.handle (\(_ :: E.SomeException) -> return ())
 
 -- | A convenience helper which creates a new database connection and runs the
--- given block, handling @MonadResource@ and @MonadLoggerIO@ requirements. Note
+-- given block, handling @MonadResource@ and @MonadLogger@ requirements. Note
 -- that all log messages are discarded.
 --
 -- @since 1.1.4
@@ -291,7 +291,7 @@ runSqlite connstr = runResourceT
                   . runSqlConn
 
 -- | A convenience helper which creates a new database connection and runs the
--- given block, handling @MonadResource@ and @MonadLoggerIO@ requirements. Note
+-- given block, handling @MonadResource@ and @MonadLogger@ requirements. Note
 -- that all log messages are discarded.
 --
 -- @since 2.6.2
