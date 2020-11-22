@@ -192,7 +192,7 @@ liftSqlPersistMPool
 liftSqlPersistMPool x pool = liftIO (runSqlPersistMPool x pool)
 
 withSqlPool
-    :: forall backend m a. (MonadLogger m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    :: forall backend m a. (MonadLoggerIO m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => (LogFunc -> IO backend) -- ^ create a new connection
     -> Int -- ^ connection count
     -> (Pool backend -> m a)
@@ -204,7 +204,7 @@ withSqlPool mkConn connCount f = withSqlPoolWithConfig mkConn (defaultConnection
 --
 -- @since 2.11.0.0
 withSqlPoolWithConfig
-    :: forall backend m a. (MonadLogger m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    :: forall backend m a. (MonadLoggerIO m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => (LogFunc -> IO backend) -- ^ Function to create a new connection
     -> ConnectionPoolConfig
     -> (Pool backend -> m a)
@@ -215,7 +215,7 @@ withSqlPoolWithConfig mkConn poolConfig f = withUnliftIO $ \u -> bracket
     (unliftIO u . f)
 
 createSqlPool
-    :: forall backend m. (MonadLogger m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    :: forall backend m. (MonadLoggerIO m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => (LogFunc -> IO backend)
     -> Int
     -> m (Pool backend)
@@ -225,12 +225,12 @@ createSqlPool mkConn size = createSqlPoolWithConfig mkConn (defaultConnectionPoo
 --
 -- @since 2.11.0.0
 createSqlPoolWithConfig
-    :: forall m backend. (MonadLogger m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    :: forall m backend. (MonadLoggerIO m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => (LogFunc -> IO backend) -- ^ Function to create a new connection
     -> ConnectionPoolConfig
     -> m (Pool backend)
 createSqlPoolWithConfig mkConn config = do
-    logFunc <- askLogFunc
+    logFunc <- askLoggerIO
     -- Resource pool will swallow any exceptions from close. We want to log
     -- them instead.
     let loggedClose :: backend -> IO ()
@@ -243,16 +243,6 @@ createSqlPoolWithConfig mkConn config = do
         (connectionPoolConfigStripes config)
         (connectionPoolConfigIdleTimeout config)
         (connectionPoolConfigSize config)
-
--- NOTE: This function is a terrible, ugly hack. It would be much better to
--- just clean up monad-logger.
---
--- FIXME: in a future release, switch over to the new askLoggerIO function
--- added in monad-logger 0.3.10. That function was not available at the time
--- this code was written.
-askLogFunc :: forall m. (MonadUnliftIO m, MonadLogger m) => m LogFunc
-askLogFunc = withRunInIO $ \run ->
-    return $ \a b c d -> run (monadLoggerLog a b c d)
 
 -- | Create a connection and run sql queries within it. This function
 -- automatically closes the connection on it's completion.
@@ -307,10 +297,10 @@ askLogFunc = withRunInIO $ \run ->
 --
 
 withSqlConn
-    :: forall backend m a. (MonadUnliftIO m, MonadLogger m, BackendCompatible SqlBackend backend)
+    :: forall backend m a. (MonadUnliftIO m, MonadLoggerIO m, BackendCompatible SqlBackend backend)
     => (LogFunc -> IO backend) -> (backend -> m a) -> m a
 withSqlConn open f = do
-    logFunc <- askLogFunc
+    logFunc <- askLoggerIO
     withRunInIO $ \run -> bracket
       (open logFunc)
       close'

@@ -86,7 +86,7 @@ import qualified Database.MySQL.Simple.Types  as MySQL
 -- The pool is properly released after the action finishes using
 -- it.  Note that you should not use the given 'ConnectionPool'
 -- outside the action since it may be already been released.
-withMySQLPool :: (MonadLogger m, MonadUnliftIO m)
+withMySQLPool :: (MonadLoggerIO m, MonadUnliftIO m)
               => MySQL.ConnectInfo
               -- ^ Connection information.
               -> Int
@@ -100,7 +100,7 @@ withMySQLPool ci = withSqlPool $ open' ci
 -- | Create a MySQL connection pool.  Note that it's your
 -- responsibility to properly close the connection pool when
 -- unneeded.  Use 'withMySQLPool' for automatic resource control.
-createMySQLPool :: (MonadUnliftIO m, MonadLogger m)
+createMySQLPool :: (MonadUnliftIO m, MonadLoggerIO m)
                 => MySQL.ConnectInfo
                 -- ^ Connection information.
                 -> Int
@@ -111,7 +111,7 @@ createMySQLPool ci = createSqlPool $ open' ci
 
 -- | Same as 'withMySQLPool', but instead of opening a pool
 -- of connections, only one connection is opened.
-withMySQLConn :: (MonadUnliftIO m, MonadLogger m)
+withMySQLConn :: (MonadUnliftIO m, MonadLoggerIO m)
               => MySQL.ConnectInfo
               -- ^ Connection information.
               -> (SqlBackend -> m a)
