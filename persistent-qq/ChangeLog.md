@@ -2,7 +2,7 @@
 
 ## 2.9.2.1
 
-* Support `persistent-2.11` in the test suite
+* Support `persistent-2.11` in the test suite [#1170](https://github.com/yesodweb/persistent/pull/1170)
 
 ## 2.9.2
 
