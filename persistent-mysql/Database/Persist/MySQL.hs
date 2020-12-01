@@ -361,7 +361,7 @@ migrate' connectInfo allDefs getter val = do
                     let refTarget =
                           addReference allDefs refConstraintName refTblName cname (crFieldCascade cRef)
 
-                    guard $ refTblName /= name && cname /= fieldDB (entityId val)
+                    guard $ cname /= fieldDB (entityId val)
                     return $ AlterColumn name (refTblName, refTarget)
 
             let foreignsAlt =

@@ -1237,8 +1237,7 @@ findAlters defs edef col@(Column name isNull sqltype def _gen _defConstraintName
                 refAdd (Just colRef) =
                     case find ((== crTableName colRef) . entityDB) defs of
                         Just refdef
-                            | entityDB edef /= crTableName colRef
-                            && _oldName /= fieldDB (entityId edef)
+                            | _oldName /= fieldDB (entityId edef)
                             ->
                             [ ( crTableName colRef
                               , AddReference
@@ -1317,7 +1316,7 @@ getAddReference
     -> ColumnReference
     -> Maybe AlterDB
 getAddReference allDefs entity cname cr@ColumnReference {crTableName = s, crConstraintName=constraintName} = do
-    guard $ table /= s && cname /= fieldDB (entityId entity)
+    guard $ cname /= fieldDB (entityId entity)
     pure $ AlterColumn
         table
         ( s
