@@ -1,5 +1,9 @@
 # Changelog for persistent-qq
 
+## 2.9.2.1
+
+* Support `persistent-2.11` in the test suite
+
 ## 2.9.2
 
 * Add interpolation support for multirow VALUES syntax (`*{rows}`) [#1111](https://github.com/yesodweb/persistent/pull/1111)
