@@ -1,5 +1,10 @@
 # Changelog for persistent-postgresql
 
+##  2.11.0.1
+* Fix foreign key migrations [#1167] https://github.com/yesodweb/persistent/pull/1167
+  * Fix a bug where a foreign key of a field to its table was ignored.
+  * Fix a bug where a altering details of a foreign key didn't trigger a migration
+
 ##  2.11.0.0
 
 * Foreign Key improvements [#1121] https://github.com/yesodweb/persistent/pull/1121
