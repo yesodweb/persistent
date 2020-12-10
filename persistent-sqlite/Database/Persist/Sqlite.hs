@@ -262,7 +262,9 @@ wrapConnectionInfo connInfo conn logFunc = do
         , connBegin = \f _ -> helper "BEGIN" f
         , connCommit = helper "COMMIT"
         , connRollback = ignoreExceptions . helper "ROLLBACK"
-        , connEscapeName = escape
+        , connEscapeFieldName = escape . unFieldNameDB
+        , connEscapeTableName = escape . unEntityNameDB . entityDB
+        , connEscapeRawName = escape
         , connNoLimit = "LIMIT -1"
         , connRDBMS = "sqlite"
         , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
@@ -322,9 +324,9 @@ insertSql' ent vals =
           ISRManyKeys sql vals
             where sql = T.concat
                     [ "INSERT INTO "
-                    , escape $ entityDB ent
+                    , escapeE $ entityDB ent
                     , "("
-                    , T.intercalate "," $ map (escape . fieldDB) cols
+                    , T.intercalate "," $ map (escapeF . fieldDB) cols
                     , ") VALUES("
                     , T.intercalate "," (map (const "?") cols)
                     , ")"
@@ -334,19 +336,19 @@ insertSql' ent vals =
             where
               sel = T.concat
                   [ "SELECT "
-                  , escape $ fieldDB (entityId ent)
+                  , escapeF $ fieldDB (entityId ent)
                   , " FROM "
-                  , escape $ entityDB ent
+                  , escapeE $ entityDB ent
                   , " WHERE _ROWID_=last_insert_rowid()"
                   ]
               ins = T.concat
                   [ "INSERT INTO "
-                  , escape $ entityDB ent
+                  , escapeE $ entityDB ent
                   , if null cols
                         then " VALUES(null)"
                         else T.concat
                           [ "("
-                          , T.intercalate "," $ map (escape . fieldDB) $ cols
+                          , T.intercalate "," $ map (escapeF . fieldDB) $ cols
                           , ") VALUES("
                           , T.intercalate "," (map (const "?") cols)
                           , ")"
@@ -410,7 +412,7 @@ migrate' allDefs getter val = do
     let (cols, uniqs, fdefs) = sqliteMkColumns allDefs val
     let newSql = mkCreateTable False def (filter (not . safeToRemove val . cName) cols, uniqs, fdefs)
     stmt <- getter "SELECT sql FROM sqlite_master WHERE type='table' AND name=?"
-    oldSql' <- with (stmtQuery stmt [PersistText $ unDBName table])
+    oldSql' <- with (stmtQuery stmt [PersistText $ unEntityNameDB table])
       (\src -> runConduit $ src .| go)
     case oldSql' of
         Nothing -> return $ Right [(False, newSql)]
@@ -452,7 +454,9 @@ mockMigration mig = do
                    , connBegin = \f _ -> helper "BEGIN" f
                    , connCommit = helper "COMMIT"
                    , connRollback = ignoreExceptions . helper "ROLLBACK"
-                   , connEscapeName = escape
+                   , connEscapeFieldName = escape . unFieldNameDB
+                   , connEscapeTableName = escape . unEntityNameDB . entityDB
+                   , connEscapeRawName = escape
                    , connNoLimit = "LIMIT -1"
                    , connRDBMS = "sqlite"
                    , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
@@ -474,10 +478,10 @@ mockMigration mig = do
 
 -- | Check if a column name is listed as the "safe to remove" in the entity
 -- list.
-safeToRemove :: EntityDef -> DBName -> Bool
-safeToRemove def (DBName colName)
+safeToRemove :: EntityDef -> FieldNameDB -> Bool
+safeToRemove def (FieldNameDB colName)
     = any (elem FieldAttrSafeToRemove . fieldAttrs)
-    $ filter ((== DBName colName) . fieldDB)
+    $ filter ((== FieldNameDB colName) . fieldDB)
     $ entityFields def
 
 getCopyTable :: [EntityDef]
@@ -485,9 +489,9 @@ getCopyTable :: [EntityDef]
              -> EntityDef
              -> IO [(Bool, Text)]
 getCopyTable allDefs getter def = do
-    stmt <- getter $ T.concat [ "PRAGMA table_info(", escape table, ")" ]
+    stmt <- getter $ T.concat [ "PRAGMA table_info(", escapeE table, ")" ]
     oldCols' <- with (stmtQuery stmt []) (\src -> runConduit $ src .| getCols)
-    let oldCols = map DBName $ filter (/= "id") oldCols' -- need to update for table id attribute ?
+    let oldCols = map FieldNameDB $ filter (/= "id") oldCols' -- need to update for table id attribute ?
     let newCols = filter (not . safeToRemove def) $ map cName cols
     let common = filter (`elem` oldCols) newCols
     return [ (False, tmpSql)
@@ -507,30 +511,30 @@ getCopyTable allDefs getter def = do
                 return $ name : names
             Just y -> error $ "Invalid result from PRAGMA table_info: " ++ show y
     table = entityDB def
-    tableTmp = DBName $ unDBName table <> "_backup"
+    tableTmp = EntityNameDB $ unEntityNameDB table <> "_backup"
     (cols, uniqs, fdef) = sqliteMkColumns allDefs def
     cols' = filter (not . safeToRemove def . cName) cols
     newSql = mkCreateTable False def (cols', uniqs, fdef)
     tmpSql = mkCreateTable True def { entityDB = tableTmp } (cols', uniqs, [])
-    dropTmp = "DROP TABLE " <> escape tableTmp
-    dropOld = "DROP TABLE " <> escape table
+    dropTmp = "DROP TABLE " <> escapeE tableTmp
+    dropOld = "DROP TABLE " <> escapeE table
     copyToTemp common = T.concat
         [ "INSERT INTO "
-        , escape tableTmp
+        , escapeE tableTmp
         , "("
-        , T.intercalate "," $ map escape common
+        , T.intercalate "," $ map escapeF common
         , ") SELECT "
-        , T.intercalate "," $ map escape common
+        , T.intercalate "," $ map escapeF common
         , " FROM "
-        , escape table
+        , escapeE table
         ]
     copyToFinal newCols = T.concat
         [ "INSERT INTO "
-        , escape table
+        , escapeE table
         , " SELECT "
-        , T.intercalate "," $ map escape newCols
+        , T.intercalate "," $ map escapeF newCols
         , " FROM "
-        , escape tableTmp
+        , escapeE tableTmp
         ]
 
 mkCreateTable :: Bool -> EntityDef -> ([Column], [UniqueDef], [ForeignDef]) -> Text
@@ -541,7 +545,7 @@ mkCreateTable isTemp entity (cols, uniqs, fdefs) =
         [ "CREATE"
         , if isTemp then " TEMP" else ""
         , " TABLE "
-        , escape $ entityDB entity
+        , escapeE $ entityDB entity
         , "("
         ]
 
@@ -556,12 +560,12 @@ mkCreateTable isTemp entity (cols, uniqs, fdefs) =
             [ T.drop 1 $ T.concat $ map (sqlColumn isTemp) cols
             , ", PRIMARY KEY "
             , "("
-            , T.intercalate "," $ map (escape . fieldDB) $ compositeFields pdef
+            , T.intercalate "," $ map (escapeF . fieldDB) $ compositeFields pdef
             , ")"
             ]
 
         Nothing ->
-            [ escape $ fieldDB (entityId entity)
+            [ escapeF $ fieldDB (entityId entity)
             , " "
             , showSqlType $ fieldSqlType $ entityId entity
             , " PRIMARY KEY"
@@ -584,7 +588,7 @@ mayGenerated gen = case gen of
 sqlColumn :: Bool -> Column -> Text
 sqlColumn noRef (Column name isNull typ def gen _cn _maxLen ref) = T.concat
     [ ","
-    , escape name
+    , escapeF name
     , " "
     , showSqlType typ
     , if isNull then " NULL" else " NOT NULL"
@@ -593,7 +597,7 @@ sqlColumn noRef (Column name isNull typ def gen _cn _maxLen ref) = T.concat
     , case ref of
         Nothing -> ""
         Just ColumnReference {crTableName=table, crFieldCascade=cascadeOpts} ->
-          if noRef then "" else " REFERENCES " <> escape table
+          if noRef then "" else " REFERENCES " <> escapeE table
             <> onDelete cascadeOpts <> onUpdate cascadeOpts
     ]
   where
@@ -603,13 +607,13 @@ sqlColumn noRef (Column name isNull typ def gen _cn _maxLen ref) = T.concat
 sqlForeign :: ForeignDef -> Text
 sqlForeign fdef = T.concat $
     [ ", CONSTRAINT "
-    , escape $ foreignConstraintNameDBName fdef
+    , escapeC $ foreignConstraintNameDBName fdef
     , " FOREIGN KEY("
-    , T.intercalate "," $ map (escape . snd. fst) $ foreignFields fdef
+    , T.intercalate "," $ map (escapeF . snd. fst) $ foreignFields fdef
     , ") REFERENCES "
-    , escape $ foreignRefTableDBName fdef
+    , escapeE $ foreignRefTableDBName fdef
     , "("
-    , T.intercalate "," $ map (escape . snd . snd) $ foreignFields fdef
+    , T.intercalate "," $ map (escapeF . snd . snd) $ foreignFields fdef
     , ")"
     ] ++ onDelete ++ onUpdate
   where
@@ -629,14 +633,23 @@ sqlForeign fdef = T.concat $
 sqlUnique :: UniqueDef -> Text
 sqlUnique (UniqueDef _ cname cols _) = T.concat
     [ ",CONSTRAINT "
-    , escape cname
+    , escapeC cname
     , " UNIQUE ("
-    , T.intercalate "," $ map (escape . snd) cols
+    , T.intercalate "," $ map (escapeF . snd) cols
     , ")"
     ]
 
-escape :: DBName -> Text
-escape (DBName s) =
+escapeC :: ConstraintNameDB -> Text
+escapeC = escapeWith escape
+
+escapeE :: EntityNameDB -> Text
+escapeE = escapeWith escape
+
+escapeF :: FieldNameDB -> Text
+escapeF = escapeWith escape
+
+escape :: Text -> Text
+escape s =
     T.concat [q, T.concatMap go s, q]
   where
     q = T.singleton '"'
@@ -647,21 +660,21 @@ putManySql :: EntityDef -> Int -> Text
 putManySql ent n = putManySql' conflictColumns fields ent n
   where
     fields = entityFields ent
-    conflictColumns = concatMap (map (escape . snd) . uniqueFields) (entityUniques ent)
+    conflictColumns = concatMap (map (escapeF . snd) . uniqueFields) (entityUniques ent)
 
 repsertManySql :: EntityDef -> Int -> Text
 repsertManySql ent n = putManySql' conflictColumns fields ent n
   where
     fields = keyAndEntityFields ent
-    conflictColumns = escape . fieldDB <$> entityKeyFields ent
+    conflictColumns = escapeF . fieldDB <$> entityKeyFields ent
 
 putManySql' :: [Text] -> [FieldDef] -> EntityDef -> Int -> Text
 putManySql' conflictColumns fields ent n = q
   where
-    fieldDbToText = escape . fieldDB
+    fieldDbToText = escapeF . fieldDB
     mkAssignment f = T.concat [f, "=EXCLUDED.", f]
 
-    table = escape . entityDB $ ent
+    table = escapeE . entityDB $ ent
     columns = Util.commaSeparated $ map fieldDbToText fields
     placeholders = map (const "?") fields
     updates = map (mkAssignment . fieldDbToText) fields

@@ -408,7 +408,7 @@ updateToMongoField (BackendUpdate up)  = mongoUpdateToDoc up
 -- | convert a unique key into a MongoDB document
 toUniquesDoc :: forall record. (PersistEntity record) => Unique record -> [DB.Field]
 toUniquesDoc uniq = zipWith (DB.:=)
-  (map (unDBName . snd) $ persistUniqueToFieldNames uniq)
+  (map (unFieldNameDB . snd) $ persistUniqueToFieldNames uniq)
   (map DB.val (persistUniqueToValues uniq))
 
 -- | convert a PersistEntity into document fields.
@@ -448,7 +448,7 @@ entityToInsertDoc (Entity key record) = keyToMongoDoc key ++ toInsertDoc record
 
 collectionName :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
                => record -> Text
-collectionName = unDBName . entityDB . entityDef . Just
+collectionName = unEntityNameDB . entityDB . entityDef . Just
 
 -- | convert a PersistEntity into document fields.
 -- unlike 'toInsertDoc', nulls are included.
@@ -463,15 +463,15 @@ documentFromEntity :: (PersistEntity record, PersistEntityBackend record ~ DB.Mo
 documentFromEntity (Entity key record) =
     keyToMongoDoc key ++ recordToDocument record
 
-zipToDoc :: PersistField a => [DBName] -> [a] -> [DB.Field]
+zipToDoc :: PersistField a => [FieldNameDB] -> [a] -> [DB.Field]
 zipToDoc [] _  = []
 zipToDoc _  [] = []
 zipToDoc (e:efields) (p:pfields) =
   let pv = toPersistValue p
-  in  (unDBName e DB.:= DB.val pv):zipToDoc efields pfields
+  in  (unFieldNameDB e DB.:= DB.val pv):zipToDoc efields pfields
 
 fieldToLabel :: EmbedFieldDef -> Text
-fieldToLabel = unDBName . emFieldDB
+fieldToLabel = unFieldNameDB . emFieldDB
 
 keyFrom_idEx :: (Trans.MonadIO m, PersistEntity record) => DB.Value -> m (Key record)
 keyFrom_idEx idVal = case keyFrom_id idVal of
@@ -643,7 +643,7 @@ id_ = "_id"
 keyToMongoDoc :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
                   => Key record -> DB.Document
 keyToMongoDoc k = case entityPrimary $ entityDefFromKey k of
-    Nothing   -> zipToDoc [DBName id_] values
+    Nothing   -> zipToDoc [FieldNameDB id_] values
     Just pdef -> [id_ DB.=: zipToDoc (primaryNames pdef)  values]
   where
     primaryNames = map fieldDB . compositeFields
@@ -661,7 +661,7 @@ projectionFromEntityDef eDef =
   map toField (entityFields eDef)
   where
     toField :: FieldDef -> DB.Field
-    toField fDef = (unDBName (fieldDB fDef)) DB.=: (1 :: Int)
+    toField fDef = (unFieldNameDB (fieldDB fDef)) DB.=: (1 :: Int)
 
 projectionFromKey :: PersistEntity record => Key record -> DB.Projector
 projectionFromKey = projectionFromEntityDef . entityDefFromKey
@@ -896,8 +896,8 @@ toValue val =
       FilterValues vs -> DB.val $ map toPersistValue vs
 
 fieldName ::  forall record typ.  (PersistEntity record) => EntityField record typ -> DB.Label
-fieldName f | fieldHaskell fd == HaskellName "Id" = id_
-            | otherwise = unDBName $ fieldDB $ fd
+fieldName f | fieldHaskell fd == FieldNameHS "Id" = id_
+            | otherwise = unFieldNameDB $ fieldDB $ fd
   where
     fd = persistFieldDef f
 
@@ -920,7 +920,7 @@ fromPersistValuesThrow :: (Trans.MonadIO m, PersistEntity record, PersistEntityB
 fromPersistValuesThrow entDef doc =
     case eitherFromPersistValues entDef doc of
         Left t -> Trans.liftIO . throwIO $ PersistMarshalError $
-                   unHaskellName (entityHaskell entDef) `mappend` ": " `mappend` t
+                   unEntityNameHS (entityHaskell entDef) `mappend` ": " `mappend` t
         Right entity -> return entity
 
 mapLeft :: (a -> c) -> Either a b -> Either c b

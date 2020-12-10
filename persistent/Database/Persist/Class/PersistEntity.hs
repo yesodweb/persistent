@@ -104,7 +104,7 @@ class ( PersistField (Key record), ToJSON (Key record), FromJSON (Key record)
     -- | A meta operation to retrieve all the 'Unique' keys.
     persistUniqueKeys :: record -> [Unique record]
     -- | A lower level operation.
-    persistUniqueToFieldNames :: Unique record -> [(HaskellName, DBName)]
+    persistUniqueToFieldNames :: Unique record -> [(FieldNameHS, FieldNameDB)]
     -- | A lower level operation.
     persistUniqueToValues :: Unique record -> [PersistValue]
 
@@ -128,7 +128,7 @@ type family BackendSpecificUpdate backend record
 recordName
     :: (PersistEntity record)
     => record -> Text
-recordName = unHaskellName . entityHaskell . entityDef . Just
+recordName = unEntityNameHS . entityHaskell . entityDef . Just
 
 -- | Updating a database entity.
 --
