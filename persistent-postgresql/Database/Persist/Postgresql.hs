@@ -1237,8 +1237,7 @@ findAlters defs edef col@(Column name isNull sqltype def _gen _defConstraintName
                 refAdd (Just colRef) =
                     case find ((== crTableName colRef) . entityDB) defs of
                         Just refdef
-                            | entityDB edef /= crTableName colRef
-                            && _oldName /= fieldDB (entityId edef)
+                            | _oldName /= fieldDB (entityId edef)
                             ->
                             [ ( crTableName colRef
                               , AddReference
@@ -1253,7 +1252,7 @@ findAlters defs edef col@(Column name isNull sqltype def _gen _defConstraintName
                             error $ "could not find the entityDef for reftable["
                                 ++ show (crTableName colRef) ++ "]"
                 modRef =
-                    if fmap crConstraintName ref == fmap crConstraintName ref'
+                    if equivalentRef ref ref'
                         then []
                         else refDrop ref' ++ refAdd ref
                 modNull = case (isNull, isNull') of
@@ -1291,6 +1290,24 @@ findAlters defs edef col@(Column name isNull sqltype def _gen _defConstraintName
                 , filter (\c -> cName c /= name) cols
                 )
 
+-- We check if we should alter a foreign key. This is almost an equality check,
+-- except we consider 'Nothing' and 'Just Restrict' equivalent.
+equivalentRef :: Maybe ColumnReference -> Maybe ColumnReference -> Bool
+equivalentRef Nothing Nothing = True
+equivalentRef (Just cr1) (Just cr2) =
+       crTableName cr1 == crTableName cr2
+    && crConstraintName cr1 == crConstraintName cr2
+    && eqCascade (fcOnUpdate $ crFieldCascade cr1) (fcOnUpdate $ crFieldCascade cr2)
+    && eqCascade (fcOnDelete $ crFieldCascade cr1) (fcOnDelete $ crFieldCascade cr2)
+  where
+    eqCascade :: Maybe CascadeAction -> Maybe CascadeAction -> Bool
+    eqCascade Nothing Nothing         = True
+    eqCascade Nothing (Just Restrict) = True
+    eqCascade (Just Restrict) Nothing = True
+    eqCascade (Just cs1) (Just cs2)   = cs1 == cs2
+    eqCascade _ _                     = False
+equivalentRef _ _ = False
+
 -- | Get the references to be added to a table for the given column.
 getAddReference
     :: [EntityDef]
@@ -1299,7 +1316,7 @@ getAddReference
     -> ColumnReference
     -> Maybe AlterDB
 getAddReference allDefs entity cname cr@ColumnReference {crTableName = s, crConstraintName=constraintName} = do
-    guard $ table /= s && cname /= fieldDB (entityId entity)
+    guard $ cname /= fieldDB (entityId entity)
     pure $ AlterColumn
         table
         ( s
