@@ -324,7 +324,7 @@ Baz
                 ]
 
         let parsed =
-                parse lowercaseSettings subject
+                parse lowerCaseSettings subject
         it "parse works" $ do
             let test name'fieldCount xs = do
                     case (name'fieldCount, xs) of
