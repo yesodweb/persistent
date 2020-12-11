@@ -1,5 +1,9 @@
 # Changelog for persistent
 
+## 2.11.0.2
+
+* Use `resourcet-pool` to break out some `Data.Pool` logic [#1163](https://github.com/yesodweb/persistent/pull/1163)
+
 ## 2.11.0.1
 
 * Docs/Bugs fixes [#1153](https://github.com/yesodweb/persistent/pull/1153)
