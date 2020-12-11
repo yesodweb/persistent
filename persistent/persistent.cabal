@@ -98,6 +98,7 @@ test-suite test
                    , http-api-data
                    , path-pieces
                    , scientific
+                   , shakespeare
                    , text
                    , time
                    , transformers

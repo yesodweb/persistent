@@ -1,4 +1,4 @@
-{-# language RecordWildCards, OverloadedStrings #-}
+{-# language RecordWildCards, OverloadedStrings, QuasiQuotes #-}
 
 import Test.Hspec
 import qualified Data.Text as T
@@ -6,6 +6,8 @@ import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
 import Data.Time
+import Text.Shakespeare.Text
+import Data.List
 
 import Database.Persist.Class.PersistField
 import Database.Persist.Quasi
@@ -219,6 +221,55 @@ main = hspec $ do
                 baz = FTTypeCon Nothing "Baz"
             parseFieldType "Foo [Bar] Baz" `shouldBe` Right (
                 foo `FTApp` bars `FTApp` baz)
+
+    describe "parse" $ do
+        let subject =
+                parse lowerCaseSettings
+            test name'fieldCount xs = do
+                case (name'fieldCount, xs) of
+                    ([], []) ->
+                        pure ()
+                    (((name, fieldCount) :_), []) ->
+                        expectationFailure
+                            $ "Expected an entity with name "
+                            <> name
+                            <> " and " <> show fieldCount <> " fields"
+                            <> ", but the list was empty..."
+                    ((name, fieldCount) : ys, (EntityDef {..} : xs)) -> do
+                        (unHaskellName entityHaskell, length entityFields)
+                            `shouldBe`
+                                (T.pack name, fieldCount)
+                        test ys xs
+
+        it "works with an empty entity in the middle"$ do
+            let
+                result =
+                    subject [st|
+Foo
+    name String
+    age Int
+
+EmptyEntity
+
+Bar
+    name String
+    age Int
+
+Baz
+    a Int
+    b String
+    c FooId
+                    |]
+
+            length result `shouldBe` 4
+
+            test
+                [ ("Foo", 2)
+                , ("EmptyEntity", 0)
+                , ("Bar", 2)
+                , ("Baz", 3)
+                ]
+                result
 
     describe "preparse" $ do
         it "recognizes entity" $ do
