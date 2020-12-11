@@ -678,27 +678,34 @@ Baz
                 ]
         describe "works with extra blocks" $ do
             let [_, lowerCaseTable, idTable] =
-                    parse lowerCaseSettings $ T.unlines
-                    [ ""
-                    , "IdTable"
-                    , "    Id Day default=CURRENT_DATE"
-                    , "    name Text"
-                    , ""
-                    , "LowerCaseTable"
-                    , "    Id             sql=my_id"
-                    , "    fullName Text"
-                    , "    ExtraBlock"
-                    , "        foo bar"
-                    , "        baz"
-                    , "        bin"
-                    , "    ExtraBlock2"
-                    , "        something"
-                    , ""
-                    , "IdTable"
-                    , "    Id Day default=CURRENT_DATE"
-                    , "    name Text"
-                    , ""
-                    ]
+                    case parse lowerCaseSettings $ T.unlines
+                        [ ""
+                        , "IdTable"
+                        , "    Id Day default=CURRENT_DATE"
+                        , "    name Text"
+                        , ""
+                        , "LowerCaseTable"
+                        , "    Id             sql=my_id"
+                        , "    fullName Text"
+                        , "    ExtraBlock"
+                        , "        foo bar"
+                        , "        baz"
+                        , "        bin"
+                        , "    ExtraBlock2"
+                        , "        something"
+                        , ""
+                        , "IdTable"
+                        , "    Id Day default=CURRENT_DATE"
+                        , "    name Text"
+                        , ""
+                        ] of
+                            [a, b, c] ->
+                                [a, b, c]
+                            xs ->
+                                error
+                                $ "Expected 3 elements in list, got: "
+                                <> show (length xs)
+                                <> ", list contents: \n\n" <> intercalate "\n" (map show xs)
             describe "idTable" $ do
                 let EntityDef {..} = idTable
                 it "has no extra blocks" $ do
