@@ -1,6 +1,7 @@
 {-# language RecordWildCards, OverloadedStrings, QuasiQuotes #-}
 
 import Test.Hspec
+import qualified Data.Char as Char
 import qualified Data.Text as T
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NEL
@@ -222,29 +223,9 @@ main = hspec $ do
             parseFieldType "Foo [Bar] Baz" `shouldBe` Right (
                 foo `FTApp` bars `FTApp` baz)
 
-    describe "parse" $ do
+    describe "#1175 empty entity" $ do
         let subject =
-                parse lowerCaseSettings
-            test name'fieldCount xs = do
-                case (name'fieldCount, xs) of
-                    ([], []) ->
-                        pure ()
-                    (((name, fieldCount) :_), []) ->
-                        expectationFailure
-                            $ "Expected an entity with name "
-                            <> name
-                            <> " and " <> show fieldCount <> " fields"
-                            <> ", but the list was empty..."
-                    ((name, fieldCount) : ys, (EntityDef {..} : xs)) -> do
-                        (unHaskellName entityHaskell, length entityFields)
-                            `shouldBe`
-                                (T.pack name, fieldCount)
-                        test ys xs
-
-        it "works with an empty entity in the middle"$ do
-            let
-                result =
-                    subject [st|
+                [st|
 Foo
     name String
     age Int
@@ -253,7 +234,6 @@ EmptyEntity
 
 Bar
     name String
-    age Int
 
 Baz
     a Int
@@ -261,12 +241,113 @@ Baz
     c FooId
                     |]
 
+        let preparsed =
+                preparse subject
+        it "preparse works" $ do
+            length preparsed
+                `shouldBe` do
+                    length . filter (not . T.all Char.isSpace) . T.lines
+                        $ subject
+
+        let skippedEmpty =
+                skipEmpty preparsed
+            fooLines =
+                [ Line
+                    { lineIndent = 0
+                    , tokens = "Foo" :| []
+                    }
+                , Line
+                    { lineIndent = 4
+                    , tokens = "name" :| ["String"]
+                    }
+                , Line
+                    { lineIndent = 4
+                    , tokens = "age" :| ["Int"]
+                    }
+                ]
+            emptyLines =
+                [ Line
+                    { lineIndent = 0
+                    , tokens = "EmptyEntity" :| []
+                    }
+                ]
+            barLines =
+                [ Line
+                    { lineIndent = 0
+                    , tokens = "Bar" :| []
+                    }
+                , Line
+                    { lineIndent = 4
+                    , tokens = "name" :| ["String"]
+                    }
+                ]
+            bazLines =
+                [ Line
+                    { lineIndent = 0
+                    , tokens = "Baz" :| []
+                    }
+                , Line
+                    { lineIndent = 4
+                    , tokens = "a" :| ["Int"]
+                    }
+                , Line
+                    { lineIndent = 4
+                    , tokens = "b" :| ["String"]
+                    }
+                , Line
+                    { lineIndent = 4
+                    , tokens = "c" :| ["FooId"]
+                    }
+                ]
+            resultLines =
+                concat
+                    [ fooLines
+                    , emptyLines
+                    , barLines
+                    , bazLines
+                    ]
+
+        it "skipEmpty works" $ do
+            skippedEmpty `shouldBe` resultLines
+
+        let linesAssociated =
+                associateLines skippedEmpty
+        it "associateLines works" $ do
+            linesAssociated `shouldMatchList`
+                [ LinesWithComments
+                    { lwcLines = NEL.fromList fooLines
+                    , lwcComments = []
+                    }
+                , LinesWithComments (NEL.fromList emptyLines) []
+                , LinesWithComments (NEL.fromList barLines) []
+                , LinesWithComments (NEL.fromList bazLines) []
+                ]
+
+        it "parse works" $ do
+            let test name'fieldCount xs = do
+                    case (name'fieldCount, xs) of
+                        ([], []) ->
+                            pure ()
+                        (((name, fieldCount) :_), []) ->
+                            expectationFailure
+                                $ "Expected an entity with name "
+                                <> name
+                                <> " and " <> show fieldCount <> " fields"
+                                <> ", but the list was empty..."
+                        ((name, fieldCount) : ys, (EntityDef {..} : xs)) -> do
+                            (unHaskellName entityHaskell, length entityFields)
+                                `shouldBe`
+                                    (T.pack name, fieldCount)
+                            test ys xs
+
+                result =
+                    parse lowerCaseSettings subject
             length result `shouldBe` 4
 
             test
                 [ ("Foo", 2)
                 , ("EmptyEntity", 0)
-                , ("Bar", 2)
+                , ("Bar", 1)
                 , ("Baz", 3)
                 ]
                 result
