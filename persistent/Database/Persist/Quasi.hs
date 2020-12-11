@@ -435,8 +435,6 @@ module Database.Persist.Quasi
 
 import Prelude hiding (lines)
 
-import qualified Debug.Trace as Debug
-
 import Control.Applicative hiding (empty)
 import Control.Arrow ((&&&))
 import Control.Monad (msum, mplus)
