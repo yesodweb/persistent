@@ -699,6 +699,7 @@ associateLines lines =
                         consComment comment lwc : lwcs
                     _ ->
                         if lineIndent line <= lineIndent (firstLine lwc)
+                            && lineIndent (firstLine lwc) /= lowestIndent
                         then
                             consLine line lwc : lwcs
                         else

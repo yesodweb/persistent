@@ -1,11 +1,14 @@
-{-# language RecordWildCards, OverloadedStrings #-}
+{-# language RecordWildCards, OverloadedStrings, QuasiQuotes #-}
 
 import Test.Hspec
+import qualified Data.Char as Char
 import qualified Data.Text as T
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
 import Data.Time
+import Text.Shakespeare.Text
+import Data.List
 
 import Database.Persist.Class.PersistField
 import Database.Persist.Quasi
@@ -219,6 +222,138 @@ main = hspec $ do
                 baz = FTTypeCon Nothing "Baz"
             parseFieldType "Foo [Bar] Baz" `shouldBe` Right (
                 foo `FTApp` bars `FTApp` baz)
+
+    describe "#1175 empty entity" $ do
+        let subject =
+                [st|
+Foo
+    name String
+    age Int
+
+EmptyEntity
+
+Bar
+    name String
+
+Baz
+    a Int
+    b String
+    c FooId
+                    |]
+
+        let preparsed =
+                preparse subject
+        it "preparse works" $ do
+            length preparsed
+                `shouldBe` do
+                    length . filter (not . T.all Char.isSpace) . T.lines
+                        $ subject
+
+        let skippedEmpty =
+                skipEmpty preparsed
+            fooLines =
+                [ Line
+                    { lineIndent = 0
+                    , tokens = "Foo" :| []
+                    }
+                , Line
+                    { lineIndent = 4
+                    , tokens = "name" :| ["String"]
+                    }
+                , Line
+                    { lineIndent = 4
+                    , tokens = "age" :| ["Int"]
+                    }
+                ]
+            emptyLines =
+                [ Line
+                    { lineIndent = 0
+                    , tokens = "EmptyEntity" :| []
+                    }
+                ]
+            barLines =
+                [ Line
+                    { lineIndent = 0
+                    , tokens = "Bar" :| []
+                    }
+                , Line
+                    { lineIndent = 4
+                    , tokens = "name" :| ["String"]
+                    }
+                ]
+            bazLines =
+                [ Line
+                    { lineIndent = 0
+                    , tokens = "Baz" :| []
+                    }
+                , Line
+                    { lineIndent = 4
+                    , tokens = "a" :| ["Int"]
+                    }
+                , Line
+                    { lineIndent = 4
+                    , tokens = "b" :| ["String"]
+                    }
+                , Line
+                    { lineIndent = 4
+                    , tokens = "c" :| ["FooId"]
+                    }
+                ]
+            resultLines =
+                concat
+                    [ fooLines
+                    , emptyLines
+                    , barLines
+                    , bazLines
+                    ]
+
+        it "skipEmpty works" $ do
+            skippedEmpty `shouldBe` resultLines
+
+        let linesAssociated =
+                associateLines skippedEmpty
+        it "associateLines works" $ do
+            linesAssociated `shouldMatchList`
+                [ LinesWithComments
+                    { lwcLines = NEL.fromList fooLines
+                    , lwcComments = []
+                    }
+                , LinesWithComments (NEL.fromList emptyLines) []
+                , LinesWithComments (NEL.fromList barLines) []
+                , LinesWithComments (NEL.fromList bazLines) []
+                ]
+
+        let parsed =
+                parse lowerCaseSettings subject
+        it "parse works" $ do
+            let test name'fieldCount xs = do
+                    case (name'fieldCount, xs) of
+                        ([], []) ->
+                            pure ()
+                        (((name, fieldCount) :_), []) ->
+                            expectationFailure
+                                $ "Expected an entity with name "
+                                <> name
+                                <> " and " <> show fieldCount <> " fields"
+                                <> ", but the list was empty..."
+                        ((name, fieldCount) : ys, (EntityDef {..} : xs)) -> do
+                            (unHaskellName entityHaskell, length entityFields)
+                                `shouldBe`
+                                    (T.pack name, fieldCount)
+                            test ys xs
+
+                result =
+                    parse lowerCaseSettings subject
+            length parsed `shouldBe` 4
+
+            test
+                [ ("Foo", 2)
+                , ("EmptyEntity", 0)
+                , ("Bar", 1)
+                , ("Baz", 3)
+                ]
+                parsed
+
 
     describe "preparse" $ do
         it "recognizes entity" $ do
@@ -546,27 +681,34 @@ main = hspec $ do
                 ]
         describe "works with extra blocks" $ do
             let [_, lowerCaseTable, idTable] =
-                    parse lowerCaseSettings $ T.unlines
-                    [ ""
-                    , "IdTable"
-                    , "    Id Day default=CURRENT_DATE"
-                    , "    name Text"
-                    , ""
-                    , "LowerCaseTable"
-                    , "    Id             sql=my_id"
-                    , "    fullName Text"
-                    , "    ExtraBlock"
-                    , "        foo bar"
-                    , "        baz"
-                    , "        bin"
-                    , "    ExtraBlock2"
-                    , "        something"
-                    , ""
-                    , "IdTable"
-                    , "    Id Day default=CURRENT_DATE"
-                    , "    name Text"
-                    , ""
-                    ]
+                    case parse lowerCaseSettings $ T.unlines
+                        [ ""
+                        , "IdTable"
+                        , "    Id Day default=CURRENT_DATE"
+                        , "    name Text"
+                        , ""
+                        , "LowerCaseTable"
+                        , "    Id             sql=my_id"
+                        , "    fullName Text"
+                        , "    ExtraBlock"
+                        , "        foo bar"
+                        , "        baz"
+                        , "        bin"
+                        , "    ExtraBlock2"
+                        , "        something"
+                        , ""
+                        , "IdTable"
+                        , "    Id Day default=CURRENT_DATE"
+                        , "    name Text"
+                        , ""
+                        ] of
+                            [a, b, c] ->
+                                [a, b, c]
+                            xs ->
+                                error
+                                $ "Expected 3 elements in list, got: "
+                                <> show (length xs)
+                                <> ", list contents: \n\n" <> intercalate "\n" (map show xs)
             describe "idTable" $ do
                 let EntityDef {..} = idTable
                 it "has no extra blocks" $ do

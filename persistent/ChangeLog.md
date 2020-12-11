@@ -1,5 +1,9 @@
 # Changelog for persistent
 
+## 2.11.0.2
+
+* Fix a bug where an empty entity definition would break parsing of `EntityDef`s. [#1176](https://github.com/yesodweb/persistent/issues/1176)
+
 ## 2.11.0.1
 
 * Docs/Bugs fixes [#1153](https://github.com/yesodweb/persistent/pull/1153)
