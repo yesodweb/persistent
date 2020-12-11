@@ -323,6 +323,8 @@ Baz
                 , LinesWithComments (NEL.fromList bazLines) []
                 ]
 
+        let parsed =
+                parse lowercaseSettings subject
         it "parse works" $ do
             let test name'fieldCount xs = do
                     case (name'fieldCount, xs) of
@@ -342,7 +344,7 @@ Baz
 
                 result =
                     parse lowerCaseSettings subject
-            length result `shouldBe` 4
+            length parsed `shouldBe` 4
 
             test
                 [ ("Foo", 2)
@@ -350,7 +352,8 @@ Baz
                 , ("Bar", 1)
                 , ("Baz", 3)
                 ]
-                result
+                parsed
+
 
     describe "preparse" $ do
         it "recognizes entity" $ do
