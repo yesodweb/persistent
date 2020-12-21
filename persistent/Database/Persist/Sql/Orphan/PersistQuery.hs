@@ -11,7 +11,7 @@ module Database.Persist.Sql.Orphan.PersistQuery
 
 import Control.Exception (throwIO)
 import Control.Monad.IO.Class
-import Control.Monad.Trans.Reader (ReaderT, ask, withReaderT)
+import Control.Monad.Trans.Reader (ReaderT, ask)
 import Data.ByteString.Char8 (readInteger)
 import Data.Conduit
 import qualified Data.Conduit.List as CL
@@ -151,15 +151,15 @@ instance PersistQueryRead SqlBackend where
                 Right k -> return k
                 Left err -> error $ "selectKeysImpl: keyFromValues failed" <> show err
 instance PersistQueryRead SqlReadBackend where
-    count filts = withReaderT persistBackend $ count filts
-    exists filts = withReaderT persistBackend $ exists filts
-    selectSourceRes filts opts = withReaderT persistBackend $ selectSourceRes filts opts
-    selectKeysRes filts opts = withReaderT persistBackend $ selectKeysRes filts opts
+    count filts = withBaseBackend $ count filts
+    exists filts = withBaseBackend $ exists filts
+    selectSourceRes filts opts = withBaseBackend $ selectSourceRes filts opts
+    selectKeysRes filts opts = withBaseBackend $ selectKeysRes filts opts
 instance PersistQueryRead SqlWriteBackend where
-    count filts = withReaderT persistBackend $ count filts
-    exists filts = withReaderT persistBackend $ exists filts
-    selectSourceRes filts opts = withReaderT persistBackend $ selectSourceRes filts opts
-    selectKeysRes filts opts = withReaderT persistBackend $ selectKeysRes filts opts
+    count filts = withBaseBackend $ count filts
+    exists filts = withBaseBackend $ exists filts
+    selectSourceRes filts opts = withBaseBackend $ selectSourceRes filts opts
+    selectKeysRes filts opts = withBaseBackend $ selectKeysRes filts opts
 
 instance PersistQueryWrite SqlBackend where
     deleteWhere filts = do
@@ -169,8 +169,8 @@ instance PersistQueryWrite SqlBackend where
         _ <- updateWhereCount filts upds
         return ()
 instance PersistQueryWrite SqlWriteBackend where
-    deleteWhere filts = withReaderT persistBackend $ deleteWhere filts
-    updateWhere filts upds = withReaderT persistBackend $ updateWhere filts upds
+    deleteWhere filts = withBaseBackend $ deleteWhere filts
+    updateWhere filts upds = withBaseBackend $ updateWhere filts upds
 
 -- | Same as 'deleteWhere', but returns the number of rows affected.
 --
@@ -178,7 +178,7 @@ instance PersistQueryWrite SqlWriteBackend where
 deleteWhereCount :: (PersistEntity val, MonadIO m, PersistEntityBackend val ~ SqlBackend, BackendCompatible SqlBackend backend)
                  => [Filter val]
                  -> ReaderT backend m Int64
-deleteWhereCount filts = withReaderT projectBackend $ do
+deleteWhereCount filts = withCompatibleBackend $ do
     conn <- ask
     let t = entityDef $ dummyFromFilts filts
     let wher = if null filts
@@ -199,7 +199,7 @@ updateWhereCount :: (PersistEntity val, MonadIO m, SqlBackend ~ PersistEntityBac
                  -> [Update val]
                  -> ReaderT backend m Int64
 updateWhereCount _ [] = return 0
-updateWhereCount filts upds = withReaderT projectBackend $ do
+updateWhereCount filts upds = withCompatibleBackend $ do
     conn <- ask
     let wher = if null filts
                 then ""

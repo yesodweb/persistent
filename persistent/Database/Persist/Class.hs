@@ -126,9 +126,11 @@ module Database.Persist.Class
 
     -- * Lifting
     , HasPersistBackend (..)
+    , withBaseBackend
     , IsPersistBackend ()
     , liftPersist
     , BackendCompatible (..)
+    , withCompatibleBackend
 
     -- * JSON utilities
     , keyValueEntityToJSON, keyValueEntityFromJSON
