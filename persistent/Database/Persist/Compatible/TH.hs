@@ -27,6 +27,8 @@ import Database.Persist.Compatible.Types
 --
 -- @v1 ... vn@ are implicitly quantified in the instance, which is derived via
 -- @'Compatible' b s@.
+--
+-- @since 2.12
 makeCompatibleInstances :: Q Type -> Q [Dec]
 makeCompatibleInstances compatibleType = do
   (b, s) <- compatibleType >>= \case
@@ -67,6 +69,8 @@ makeCompatibleInstances compatibleType = do
 --
 -- @v1 ... vn@ are implicitly quantified in the instance, which is derived via
 -- @'BackendKey' ('Compatible' b s)@.
+--
+-- @since 2.12
 makeCompatibleKeyInstances :: Q Type -> Q [Dec]
 makeCompatibleKeyInstances compatibleType = do
   (b, s) <- compatibleType >>= \case

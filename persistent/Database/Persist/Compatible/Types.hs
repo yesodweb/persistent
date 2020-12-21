@@ -51,6 +51,8 @@ import Control.Monad.Trans.Reader (withReaderT)
 -- @
 -- deriving via (Compatible SqlBackend BetterSqlBackend) instance HasPersistBackend BetterSqlBackend
 -- @
+--
+-- @since 2.12
 newtype Compatible b s = Compatible { unCompatible :: s }
 
 instance (BackendCompatible b s, HasPersistBackend b) => HasPersistBackend (Compatible b s) where
