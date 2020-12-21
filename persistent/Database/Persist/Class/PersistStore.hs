@@ -49,6 +49,8 @@ class HasPersistBackend backend where
 -- | Run a query against a larger backend by plucking out @BaseBackend backend@
 --
 -- This is a helper for reusing existing queries when expanding the backend type.
+--
+-- @since 2.11.1
 withBaseBackend :: (HasPersistBackend backend)
                 => ReaderT (BaseBackend backend) m a -> ReaderT backend m a
 withBaseBackend = withReaderT persistBackend
@@ -113,6 +115,8 @@ class BackendCompatible sup sub where
 --
 -- This is a helper for using queries which run against a specific backend type
 -- that your backend is compatible with.
+--
+-- @since 2.11.1
 withCompatibleBackend :: (BackendCompatible sup sub)
                       => ReaderT sup m a -> ReaderT sub m a
 withCompatibleBackend = withReaderT projectBackend
