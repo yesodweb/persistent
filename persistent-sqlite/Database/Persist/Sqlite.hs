@@ -1,3 +1,4 @@
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -10,6 +11,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 -- | A sqlite backend for persistent.
 --
 -- Note: If you prepend @WAL=off @ to your connection string, it will disable
@@ -51,7 +53,7 @@ import qualified Control.Exception as E
 import Control.Monad (forM_)
 import Control.Monad.IO.Unlift (MonadIO (..), MonadUnliftIO, askRunInIO, withRunInIO, withUnliftIO, unliftIO, withRunInIO)
 import Control.Monad.Logger (NoLoggingT, runNoLoggingT, MonadLoggerIO, logWarn, runLoggingT, askLoggerIO)
-import Control.Monad.Trans.Reader (ReaderT, runReaderT, withReaderT)
+import Control.Monad.Trans.Reader (ReaderT, runReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
 import Data.Acquire (Acquire, mkAcquire, with)
 import Data.Maybe
@@ -71,6 +73,7 @@ import qualified Data.Text.IO as TIO
 import Lens.Micro.TH (makeLenses)
 import UnliftIO.Resource (ResourceT, runResourceT)
 
+import Database.Persist.Compatible
 import Database.Persist.Sql
 import qualified Database.Persist.Sql.Util as Util
 import qualified Database.Sqlite as Sqlite
@@ -854,68 +857,15 @@ data RawSqlite backend = RawSqlite
     , _rawSqliteConnection :: Sqlite.Connection -- ^ The underlying `Sqlite.Connection`
     }
 
-instance HasPersistBackend b => HasPersistBackend (RawSqlite b) where
-    type BaseBackend (RawSqlite b) = BaseBackend b
-    persistBackend = persistBackend . _persistentBackend
-
 instance BackendCompatible b (RawSqlite b) where
     projectBackend = _persistentBackend
 
+makeCompatibleInstances [t| forall b. Compatible b (RawSqlite b) |]
+
 instance (PersistCore b) => PersistCore (RawSqlite b) where
-    newtype BackendKey (RawSqlite b) = RawSqliteKey (BackendKey b)
+  newtype BackendKey (RawSqlite b) = RawSqliteKey { unRawSqliteKey :: BackendKey (Compatible b (RawSqlite b)) }
 
-deriving instance (Show (BackendKey b)) => Show (BackendKey (RawSqlite b))
-deriving instance (Read (BackendKey b)) => Read (BackendKey (RawSqlite b))
-deriving instance (Eq (BackendKey b)) => Eq (BackendKey (RawSqlite b))
-deriving instance (Ord (BackendKey b)) => Ord (BackendKey (RawSqlite b))
-deriving instance (Num (BackendKey b)) => Num (BackendKey (RawSqlite b))
-deriving instance (Integral (BackendKey b)) => Integral (BackendKey (RawSqlite b))
-deriving instance (PersistField (BackendKey b)) => PersistField (BackendKey (RawSqlite b))
-deriving instance (PersistFieldSql (BackendKey b)) => PersistFieldSql (BackendKey (RawSqlite b))
-deriving instance (Real (BackendKey b)) => Real (BackendKey (RawSqlite b))
-deriving instance (Enum (BackendKey b)) => Enum (BackendKey (RawSqlite b))
-deriving instance (Bounded (BackendKey b)) => Bounded (BackendKey (RawSqlite b))
-deriving instance (ToJSON (BackendKey b)) => ToJSON (BackendKey (RawSqlite b))
-deriving instance (FromJSON (BackendKey b)) => FromJSON (BackendKey (RawSqlite b))
-
-instance (PersistStoreRead b) => PersistStoreRead (RawSqlite b) where
-    get = withReaderT _persistentBackend . get
-    getMany = withReaderT _persistentBackend . getMany
-
-instance (PersistQueryRead b) => PersistQueryRead (RawSqlite b) where
-    selectSourceRes filts opts = withReaderT _persistentBackend $ selectSourceRes filts opts
-    selectFirst filts opts = withReaderT _persistentBackend $ selectFirst filts opts
-    selectKeysRes filts opts = withReaderT _persistentBackend $ selectKeysRes filts opts
-    count = withReaderT _persistentBackend . count
-    exists = withReaderT _persistentBackend . exists
-
-instance (PersistQueryWrite b) => PersistQueryWrite (RawSqlite b) where
-    updateWhere filts updates = withReaderT _persistentBackend $ updateWhere filts updates
-    deleteWhere = withReaderT _persistentBackend . deleteWhere
-
-instance (PersistUniqueRead b) => PersistUniqueRead (RawSqlite b) where
-    getBy = withReaderT _persistentBackend . getBy
-
-instance (PersistStoreWrite b) => PersistStoreWrite (RawSqlite b) where
-    insert = withReaderT _persistentBackend . insert
-    insert_ = withReaderT _persistentBackend . insert_
-    insertMany = withReaderT _persistentBackend . insertMany
-    insertMany_ = withReaderT _persistentBackend . insertMany_
-    insertEntityMany = withReaderT _persistentBackend . insertEntityMany
-    insertKey k = withReaderT _persistentBackend . insertKey k
-    repsert k = withReaderT _persistentBackend . repsert k
-    repsertMany = withReaderT _persistentBackend . repsertMany
-    replace k = withReaderT _persistentBackend . replace k
-    delete = withReaderT _persistentBackend . delete
-    update k = withReaderT _persistentBackend . update k
-    updateGet k = withReaderT _persistentBackend . updateGet k
-
-instance (PersistUniqueWrite b) => PersistUniqueWrite (RawSqlite b) where
-    deleteBy = withReaderT _persistentBackend . deleteBy
-    insertUnique = withReaderT _persistentBackend . insertUnique
-    upsert rec = withReaderT _persistentBackend . upsert rec
-    upsertBy uniq rec = withReaderT _persistentBackend . upsertBy uniq rec
-    putMany = withReaderT _persistentBackend . putMany
+makeCompatibleKeyInstances [t| forall b. Compatible b (RawSqlite b) |]
 
 makeLenses ''RawSqlite
 makeLenses ''SqliteConnectionInfo

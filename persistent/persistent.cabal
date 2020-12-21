@@ -40,6 +40,7 @@ library
                    , resourcet-pool
                    , scientific
                    , silently
+                   , template-haskell         >= 2.4
                    , text                     >= 1.2
                    , time                     >= 1.6
                    , transformers             >= 0.5
@@ -58,6 +59,7 @@ library
 
                      Database.Persist.Types
                      Database.Persist.Class
+                     Database.Persist.Compatible
                      Database.Persist.Sql
                      Database.Persist.Sql.Util
                      Database.Persist.Sql.Types.Internal
@@ -70,6 +72,9 @@ library
                      Database.Persist.Class.PersistConfig
                      Database.Persist.Class.PersistField
                      Database.Persist.Class.PersistStore
+
+                     Database.Persist.Compatible.Types
+                     Database.Persist.Compatible.TH
 
                      Database.Persist.Sql.Migration
                      Database.Persist.Sql.Internal
