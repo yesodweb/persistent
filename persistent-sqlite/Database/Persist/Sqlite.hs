@@ -62,7 +62,6 @@ import qualified Data.Conduit.List as CL
 import qualified Data.HashMap.Lazy as HashMap
 import Data.Int (Int64)
 import Data.IORef
-import qualified Data.List as List
 import qualified Data.Map as Map
 import Data.Monoid ((<>))
 import Data.Pool (Pool)

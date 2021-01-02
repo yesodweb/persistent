@@ -1,14 +1,21 @@
-{-# language RecordWildCards, OverloadedStrings, QuasiQuotes #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE RecordWildCards #-}
 
 import Test.Hspec
 import qualified Data.Char as Char
 import qualified Data.Text as T
+import Data.List
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
+#if !MIN_VERSION_base(4,11,0)
+-- This can be removed when GHC < 8.2.2 isn't supported anymore
+import Data.Semigroup ((<>))
+#endif
 import Data.Time
 import Text.Shakespeare.Text
-import Data.List
 
 import Database.Persist.Class.PersistField
 import Database.Persist.Quasi
@@ -330,13 +337,13 @@ Baz
                     case (name'fieldCount, xs) of
                         ([], []) ->
                             pure ()
-                        (((name, fieldCount) :_), []) ->
+                        ((name, fieldCount) : _, []) ->
                             expectationFailure
                                 $ "Expected an entity with name "
                                 <> name
                                 <> " and " <> show fieldCount <> " fields"
                                 <> ", but the list was empty..."
-                        ((name, fieldCount) : ys, (EntityDef {..} : xs)) -> do
+                        ((name, fieldCount) : ys, EntityDef {..} : xs) -> do
                             (unHaskellName entityHaskell, length entityFields)
                                 `shouldBe`
                                     (T.pack name, fieldCount)
