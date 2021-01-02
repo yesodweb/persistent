@@ -1,6 +1,6 @@
 # Changelog for persistent
 
-## 2.11.0.3
+## 2.11.0.3 (unreleased)
 
 * Added GHC 8.2.2 and GHC 8.4.4 back into the CI and `persistent` builds on 8.2.2 again [#1181](https://github.com/yesodweb/persistent/issues/1181)
 
