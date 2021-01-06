@@ -14,6 +14,7 @@ import Data.Acquire (Acquire, ReleaseType(..), mkAcquireType, with)
 import Data.IORef (readIORef)
 import Data.Pool (Pool, LocalPool)
 import Data.Pool as P
+import Data.Pool.Acquire (poolToAcquire)
 import qualified Data.Map as Map
 import qualified Data.Text as T
 import System.Timeout (timeout)
@@ -34,15 +35,7 @@ unsafeAcquireSqlConnFromPool
     :: forall backend m
      . (MonadReader (Pool backend) m, BackendCompatible SqlBackend backend)
     => m (Acquire backend)
-unsafeAcquireSqlConnFromPool = do
-    pool <- MonadReader.ask
-
-    let freeConn :: (backend, LocalPool backend) -> ReleaseType -> IO ()
-        freeConn (res, localPool) relType = case relType of
-            ReleaseException -> P.destroyResource pool localPool res
-            _ -> P.putResource localPool res
-
-    return $ fst <$> mkAcquireType (P.takeResource pool) freeConn
+unsafeAcquireSqlConnFromPool = MonadReader.asks poolToAcquire
 
 
 -- | The returned 'Acquire' gets a connection from the pool, starts a new
