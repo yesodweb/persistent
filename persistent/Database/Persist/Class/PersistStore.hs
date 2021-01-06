@@ -50,7 +50,7 @@ class HasPersistBackend backend where
 --
 -- This is a helper for reusing existing queries when expanding the backend type.
 --
--- @since 2.11.1
+-- @since 2.12.0
 withBaseBackend :: (HasPersistBackend backend)
                 => ReaderT (BaseBackend backend) m a -> ReaderT backend m a
 withBaseBackend = withReaderT persistBackend
