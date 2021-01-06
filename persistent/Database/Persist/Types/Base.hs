@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
 {-# OPTIONS_GHC -fno-warn-deprecations #-} -- usage of Error typeclass
 module Database.Persist.Types.Base where
@@ -15,7 +16,11 @@ import Data.Char (isSpace)
 import qualified Data.HashMap.Strict as HM
 import Data.Int (Int64)
 import Data.Map (Map)
-import Data.Maybe
+import Data.Maybe ( isNothing )
+#if !MIN_VERSION_base(4,11,0)
+-- This can be removed when GHC < 8.2.2 isn't supported anymore
+import Data.Semigroup ((<>))
+#endif
 import qualified Data.Scientific
 import Data.Text (Text, pack)
 import qualified Data.Text as T
@@ -167,7 +172,7 @@ data EntityDef = EntityDef
 
 entitiesPrimary :: EntityDef -> Maybe [FieldDef]
 entitiesPrimary t = case fieldReference primaryField of
-    CompositeRef c -> Just $ (compositeFields c)
+    CompositeRef c -> Just $ compositeFields c
     ForeignRef _ _ -> Just [primaryField]
     _ -> Nothing
   where
@@ -179,9 +184,8 @@ entityPrimary t = case fieldReference (entityId t) of
     _ -> Nothing
 
 entityKeyFields :: EntityDef -> [FieldDef]
-entityKeyFields ent = case entityPrimary ent of
-    Nothing   -> [entityId ent]
-    Just pdef -> compositeFields pdef
+entityKeyFields ent =
+    maybe [entityId ent] compositeFields $ entityPrimary ent
 
 keyAndEntityFields :: EntityDef -> [FieldDef]
 keyAndEntityFields ent =
@@ -640,12 +644,14 @@ instance A.FromJSON PersistValue where
             Just ('s', t) -> return $ PersistText t
             Just ('b', t) -> either (\_ -> fail "Invalid base64") (return . PersistByteString)
                            $ B64.decode $ TE.encodeUtf8 t
-            Just ('t', t) -> fmap PersistTimeOfDay $ readMay t
-            Just ('u', t) -> fmap PersistUTCTime $ readMay t
-            Just ('d', t) -> fmap PersistDay $ readMay t
-            Just ('r', t) -> fmap PersistRational $ readMay t
-            Just ('o', t) -> maybe (fail "Invalid base64") (return . PersistObjectId) $
-                              fmap (i2bs (8 * 12) . fst) $ headMay $ readHex $ T.unpack t
+            Just ('t', t) -> PersistTimeOfDay <$> readMay t
+            Just ('u', t) -> PersistUTCTime <$> readMay t
+            Just ('d', t) -> PersistDay <$> readMay t
+            Just ('r', t) -> PersistRational <$> readMay t
+            Just ('o', t) -> maybe
+                (fail "Invalid base64")
+                (return . PersistObjectId . i2bs (8 * 12) . fst)
+                $ headMay $ readHex $ T.unpack t
             Just (c, _) -> fail $ "Unknown prefix: " ++ [c]
       where
         headMay []    = Nothing
@@ -667,12 +673,12 @@ instance A.FromJSON PersistValue where
             then PersistInt64 $ floor n
             else PersistDouble $ fromRational $ toRational n
     parseJSON (A.Bool b) = return $ PersistBool b
-    parseJSON A.Null = return $ PersistNull
+    parseJSON A.Null = return PersistNull
     parseJSON (A.Array a) = fmap PersistList (mapM A.parseJSON $ V.toList a)
     parseJSON (A.Object o) =
         fmap PersistMap $ mapM go $ HM.toList o
       where
-        go (k, v) = fmap ((,) k) $ A.parseJSON v
+        go (k, v) = (,) k <$> A.parseJSON v
 
 -- | A SQL data type. Naming attempts to reflect the underlying Haskell
 -- datatypes, eg SqlString instead of SqlVarchar. Different SQL databases may

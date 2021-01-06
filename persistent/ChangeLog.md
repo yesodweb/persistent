@@ -6,6 +6,7 @@
   * Replace `askLogFunc` with `askLoggerIO`
 * Decomposed `HaskellName` into `ConstraintNameHS`, `EntityNameHS`, `FieldNameHS`. Decomposed `DBName` into `ConstraintNameDB`, `EntityNameDB`, `FieldNameDB` respectively. [#1174](https://github.com/yesodweb/persistent/pull/1174)
 * Use `resourcet-pool` to break out some `Data.Pool` logic [#1163](https://github.com/yesodweb/persistent/pull/1163)
+* Added GHC 8.2.2 and GHC 8.4.4 back into the CI and `persistent` builds on 8.2.2 again [#1181](https://github.com/yesodweb/persistent/issues/1181)
 
 ## 2.11.0.2
 * Fix a bug where an empty entity definition would break parsing of `EntityDef`s. [#1176](https://github.com/yesodweb/persistent/issues/1176)
@@ -67,7 +68,7 @@
 * [#1142](https://github.com/yesodweb/persistent/pull/1142)
     * Deprecate `hasCompositeKey` in favor of `hasCustomPrimaryKey` and `hasCompositePrimaryKey` functions.
 * [#1098](https://github.com/yesodweb/persistent/pull/1098)
-  * Add support for configuring the number of stripes and idle timeout for connection pools 
+  * Add support for configuring the number of stripes and idle timeout for connection pools
     * For functions that do not specify an idle timeout, the default has been bumped to 600 seconds.
       * This change is based off the experience of two production codebases. See [#775](https://github.com/yesodweb/persistent/issues/775)
     * Add a new type `ConnectionPoolConfig` to configure the number of connections in a pool, their idle timeout, and stripe size.
@@ -101,7 +102,7 @@
 ## 2.10.5.1
 
 * [#1024](https://github.com/yesodweb/persistent/pull/1024)
-    * Add the ability to do documentation comments in entity definition syntax. Unfortunately, TemplateHaskell cannot add documentation comments, so this can't be used to add Haddocks to entities. 
+    * Add the ability to do documentation comments in entity definition syntax. Unfortunately, TemplateHaskell cannot add documentation comments, so this can't be used to add Haddocks to entities.
     * Add Haddock explainers for some of the supported entity syntax in `Database.Persist.Quasi`
 
 ## 2.10.5
