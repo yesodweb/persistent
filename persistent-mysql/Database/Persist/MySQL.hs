@@ -41,7 +41,7 @@ import Control.Arrow
 import Control.Monad
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.IO.Unlift (MonadUnliftIO)
-import Control.Monad.Logger (MonadLogger, runNoLoggingT)
+import Control.Monad.Logger (MonadLoggerIO, runNoLoggingT)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT, runExceptT)
 import Control.Monad.Trans.Reader (runReaderT, ReaderT)
@@ -86,7 +86,7 @@ import qualified Database.MySQL.Simple.Types  as MySQL
 -- The pool is properly released after the action finishes using
 -- it.  Note that you should not use the given 'ConnectionPool'
 -- outside the action since it may be already been released.
-withMySQLPool :: (MonadLogger m, MonadUnliftIO m)
+withMySQLPool :: (MonadLoggerIO m, MonadUnliftIO m)
               => MySQL.ConnectInfo
               -- ^ Connection information.
               -> Int
@@ -100,7 +100,7 @@ withMySQLPool ci = withSqlPool $ open' ci
 -- | Create a MySQL connection pool.  Note that it's your
 -- responsibility to properly close the connection pool when
 -- unneeded.  Use 'withMySQLPool' for automatic resource control.
-createMySQLPool :: (MonadUnliftIO m, MonadLogger m)
+createMySQLPool :: (MonadUnliftIO m, MonadLoggerIO m)
                 => MySQL.ConnectInfo
                 -- ^ Connection information.
                 -> Int
@@ -111,7 +111,7 @@ createMySQLPool ci = createSqlPool $ open' ci
 
 -- | Same as 'withMySQLPool', but instead of opening a pool
 -- of connections, only one connection is opened.
-withMySQLConn :: (MonadUnliftIO m, MonadLogger m)
+withMySQLConn :: (MonadUnliftIO m, MonadLoggerIO m)
               => MySQL.ConnectInfo
               -- ^ Connection information.
               -> (SqlBackend -> m a)
@@ -141,7 +141,9 @@ open' ci logFunc = do
             MySQL.execute_ conn "start transaction" >> return ()
         , connCommit     = const $ MySQL.commit   conn
         , connRollback   = const $ MySQL.rollback conn
-        , connEscapeName = pack . escapeDBName
+        , connEscapeFieldName = T.pack . escapeF
+        , connEscapeTableName = T.pack . escapeE . entityDB
+        , connEscapeRawName = T.pack . escapeDBName . T.unpack
         , connNoLimit    = "LIMIT 18446744073709551615"
         -- This noLimit is suggested by MySQL's own docs, see
         -- <http://dev.mysql.com/doc/refman/5.5/en/select.html>
@@ -172,10 +174,10 @@ insertSql' ent vals =
         Just _ -> ISRManyKeys sql vals
         Nothing -> ISRInsertGet sql "SELECT LAST_INSERT_ID()"
   where
-    (fieldNames, placeholders) = unzip (Util.mkInsertPlaceholders ent escape)
+    (fieldNames, placeholders) = unzip (Util.mkInsertPlaceholders ent escapeFT)
     sql = T.concat
         [ "INSERT INTO "
-        , escape $ entityDB ent
+        , escapeET $ entityDB ent
         , "("
         , T.intercalate "," fieldNames
         , ") VALUES("
@@ -361,8 +363,9 @@ migrate' connectInfo allDefs getter val = do
                     let refTarget =
                           addReference allDefs refConstraintName refTblName cname (crFieldCascade cRef)
 
-                    guard $ refTblName /= name && cname /= fieldDB (entityId val)
-                    return $ AlterColumn name (refTblName, refTarget)
+                    guard $ cname /= fieldDB (entityId val)
+                    return $ AlterColumn name refTarget
+
 
             let foreignsAlt =
                     map
@@ -374,11 +377,11 @@ migrate' connectInfo allDefs getter val = do
                             in
                                 AlterColumn
                                     name
-                                    ( foreignRefTableDBName fdef
-                                    , AddReference
+                                    (AddReference
                                         (foreignRefTableDBName fdef)
                                         (foreignConstraintNameDBName fdef)
-                                        childfields parentfields
+                                        childfields
+                                        parentfields
                                         (foreignFieldCascade fdef)
                                     )
                         )
@@ -436,7 +439,7 @@ addTable :: [Column] -> EntityDef -> AlterDB
 addTable cols entity = AddTable $ concat
            -- Lower case e: see Database.Persist.Sql.Migration
            [ "CREATe TABLE "
-           , escapeDBName name
+           , escapeE name
            , "("
            , idtxt
            , if null nonIdCols then [] else ","
@@ -448,7 +451,7 @@ addTable cols entity = AddTable $ concat
           filter (\c -> cName c /= fieldDB (entityId entity) ) cols
       name = entityDB entity
       idtxt = case entityPrimary entity of
-                Just pdef -> concat [" PRIMARY KEY (", intercalate "," $ map (escapeDBName . fieldDB) $ compositeFields pdef, ")"]
+                Just pdef -> concat [" PRIMARY KEY (", intercalate "," $ map (escapeF . fieldDB) $ compositeFields pdef, ")"]
                 Nothing ->
                   let defText = defaultAttribute $ fieldAttrs $ entityId entity
                       sType = fieldSqlType $ entityId entity
@@ -457,7 +460,7 @@ addTable cols entity = AddTable $ concat
                         _ -> ""
                       maxlen = findMaxLenOfField (entityId entity)
                   in concat
-                         [ escapeDBName $ fieldDB $ entityId entity
+                         [ escapeF $ fieldDB $ entityId entity
                          , " " <> showSqlType sType maxlen False
                          , " NOT NULL"
                          , autoIncrementText
@@ -465,7 +468,7 @@ addTable cols entity = AddTable $ concat
                          ]
 
 -- | Find out the type of a column.
-findTypeOfColumn :: [EntityDef] -> DBName -> DBName -> (DBName, FieldType)
+findTypeOfColumn :: [EntityDef] -> EntityNameDB -> FieldNameDB -> (FieldNameDB, FieldType)
 findTypeOfColumn allDefs name col =
     maybe
         (error $ "Could not find type of column " ++
@@ -479,7 +482,7 @@ findTypeOfColumn allDefs name col =
             return (fieldType fieldDef)
 
 -- | Find out the maxlen of a column (default to 200)
-findMaxLenOfColumn :: [EntityDef] -> DBName -> DBName -> (DBName, Integer)
+findMaxLenOfColumn :: [EntityDef] -> EntityNameDB -> FieldNameDB -> (FieldNameDB, Integer)
 findMaxLenOfColumn allDefs name col =
    maybe (col, 200)
          ((,) col) $ do
@@ -501,11 +504,11 @@ findMaxLenOfField fieldDef =
 addReference
     :: [EntityDef]
     -- ^ List of all known 'EntityDef's.
-    -> DBName
+    -> ConstraintNameDB
     -- ^ Foreign key name
-    -> DBName
+    -> EntityNameDB
     -- ^ Referenced table name
-    -> DBName
+    -> FieldNameDB
     -- ^ Column name
     -> FieldCascade
     -> AlterColumn
@@ -523,35 +526,33 @@ addReference allDefs fkeyname reftable cname fc =
 
 data AlterColumn = Change Column
                  | Add' Column
-                 | Drop
-                 | Default String
-                 | NoDefault
-                 | Gen SqlType (Maybe Integer) String
-                 | NoGen SqlType (Maybe Integer)
-                 | Update' String
+                 | Drop Column
+                 | Default Column String
+                 | NoDefault Column
+                 | Gen Column SqlType (Maybe Integer) String
+                 | NoGen Column SqlType (Maybe Integer)
+                 | Update' Column String
                  -- | See the definition of the 'showAlter' function to see how these fields are used.
                  | AddReference
-                    DBName -- Referenced table
-                    DBName -- Foreign key name
-                    [DBName] -- Referencing columns
-                    [DBName] -- Referenced columns
+                    EntityNameDB -- Referenced table
+                    ConstraintNameDB -- Foreign key name
+                    [FieldNameDB] -- Referencing columns
+                    [FieldNameDB] -- Referenced columns
                     FieldCascade
-                 | DropReference DBName
+                 | DropReference ConstraintNameDB
                  deriving Show
 
-type AlterColumn' = (DBName, AlterColumn)
-
-data AlterTable = AddUniqueConstraint DBName [(DBName, FieldType, Integer)]
-                | DropUniqueConstraint DBName
+data AlterTable = AddUniqueConstraint ConstraintNameDB [(FieldNameDB, FieldType, Integer)]
+                | DropUniqueConstraint ConstraintNameDB
                 deriving Show
 
 data AlterDB = AddTable String
-             | AlterColumn DBName AlterColumn'
-             | AlterTable DBName AlterTable
+             | AlterColumn EntityNameDB AlterColumn
+             | AlterTable EntityNameDB AlterTable
              deriving Show
 
 
-udToPair :: UniqueDef -> (DBName, [DBName])
+udToPair :: UniqueDef -> (ConstraintNameDB, [FieldNameDB])
 udToPair ud = (uniqueDBName ud, map snd $ uniqueFields ud)
 
 ----------------------------------------------------------------------
@@ -564,7 +565,7 @@ getColumns
     => MySQL.ConnectInfo
     -> (Text -> IO Statement)
     -> EntityDef -> [Column]
-    -> IO [Either Text (Either Column (DBName, [DBName]))]
+    -> IO [Either Text (Either Column (ConstraintNameDB, [FieldNameDB]))]
 getColumns connectInfo getter def cols = do
 
     -- Find out all columns.
@@ -607,9 +608,9 @@ getColumns connectInfo getter def cols = do
     refMap = Map.fromList $ foldl ref [] cols
       where ref rs c = case cReference c of
                 Nothing -> rs
-                (Just r) -> (unDBName $ cName c, r) : rs
+                (Just r) -> (unFieldNameDB $ cName c, r) : rs
     vals = [ PersistText $ pack $ MySQL.connectDatabase connectInfo
-           , PersistText $ unDBName $ entityDB def
+           , PersistText $ unEntityNameDB $ entityDB def
         --   , PersistText $ unDBName $ fieldDB $ entityId def
            ]
 
@@ -627,7 +628,7 @@ getColumns connectInfo getter def cols = do
                 , PersistText clmnName] = return ( cntrName, clmnName )
           check other = fail $ "helperCntrs: unexpected " ++ show other
       rows <- mapM check =<< CL.consume
-      return $ map (Right . Right . (DBName . fst . head &&& map (DBName . snd)))
+      return $ map (Right . Right . (ConstraintNameDB . fst . head &&& map (FieldNameDB . snd)))
              $ groupBy ((==) `on` fst) rows
 
 
@@ -636,7 +637,7 @@ getColumn
     :: HasCallStack
     => MySQL.ConnectInfo
     -> (Text -> IO Statement)
-    -> DBName
+    -> EntityNameDB
     -> [PersistValue]
     -> Maybe ColumnReference
     -> IO (Either Text Column)
@@ -704,7 +705,7 @@ getColumn connectInfo getter tname [ PersistText cname
 
         -- Okay!
         return Column
-            { cName = DBName $ cname
+            { cName = FieldNameDB cname
             , cNull = null_ == "YES"
             , cSqlType = typ
             , cDefault = default_
@@ -736,10 +737,10 @@ getColumn connectInfo getter tname [ PersistText cname
             ]
         let vars =
                 [ PersistText $ pack $ MySQL.connectDatabase connectInfo
-                , PersistText $ unDBName $ tname
+                , PersistText $ unEntityNameDB tname
                 , PersistText cname
                 , PersistText $ pack $ MySQL.connectDatabase connectInfo
-                , PersistText $ unDBName refName'
+                , PersistText $ unConstraintNameDB refName'
                 ]
             parseCascadeAction txt =
                 case txt of
@@ -757,14 +758,14 @@ getColumn connectInfo getter tname [ PersistText cname
                 Nothing
             [[PersistText tab, PersistText ref, PersistInt64 pos, PersistText onDel, PersistText onUpd]] ->
                 if pos == 1
-                then Just $ ColumnReference (DBName tab) (DBName ref) FieldCascade
+                then Just $ ColumnReference (EntityNameDB tab) (ConstraintNameDB ref) FieldCascade
                     { fcOnUpdate = parseCascadeAction onUpd
                     , fcOnDelete = parseCascadeAction onDel
                     }
                 else Nothing
             xs -> error $ mconcat
               [ "MySQL.getColumn/getRef: error fetching constraints. Expected a single result for foreign key query for table: "
-              , T.unpack (unDBName tname)
+              , T.unpack (unEntityNameDB tname)
               , " and column: "
               , T.unpack cname
               , " but got: "
@@ -819,9 +820,9 @@ parseColumnType _ ci                                           = return (SqlOthe
 getAlters
     :: [EntityDef]
     -> EntityDef
-    -> ([Column], [(DBName, [DBName])])
-    -> ([Column], [(DBName, [DBName])])
-    -> ([AlterColumn'], [AlterTable])
+    -> ([Column], [(ConstraintNameDB, [FieldNameDB])])
+    -> ([Column], [(ConstraintNameDB, [FieldNameDB])])
+    -> ([AlterColumn], [AlterTable])
 getAlters allDefs edef (c1, u1) (c2, u2) =
     (getAltersC c1 c2, getAltersU u1 u2)
   where
@@ -832,9 +833,8 @@ getAlters allDefs edef (c1, u1) (c2, u2) =
          in alters ++ getAltersC news old'
 
     dropColumn col =
-      map ((,) (cName col)) $
         [DropReference (crConstraintName cr) | Just cr <- [cReference col]] ++
-        [Drop]
+        [Drop col]
 
     getAltersU [] old = map (DropUniqueConstraint . fst) old
     getAltersU ((name, cols):news) old =
@@ -865,55 +865,55 @@ findAlters
     -> [EntityDef]
     -> Column
     -> [Column]
-    -> ([AlterColumn'], [Column])
+    -> ([AlterColumn], [Column])
 findAlters edef allDefs col@(Column name isNull type_ def gen _defConstraintName maxLen ref) cols =
     case filter ((name ==) . cName) cols of
     -- new fkey that didn't exist before
         [] ->
             case ref of
-                Nothing -> ([(name, Add' col)],[])
+                Nothing -> ([Add' col],[])
                 Just cr ->
                     let tname = crTableName cr
                         cname = crConstraintName cr
                         cnstr = [addReference allDefs cname tname name (crFieldCascade cr)]
                     in
-                        (map ((,) tname) (Add' col : cnstr), cols)
+                        (Add' col : cnstr, cols)
         Column _ isNull' type_' def' gen' _defConstraintName' maxLen' ref' : _ ->
             let -- Foreign key
                 refDrop =
                     case (ref == ref', ref') of
                         (False, Just ColumnReference {crConstraintName=cname}) ->
-                            [(name, DropReference cname)]
+                            [DropReference cname]
                         _ ->
                             []
                 refAdd  =
                     case (ref == ref', ref) of
                         (False, Just ColumnReference {crTableName=tname, crConstraintName=cname, crFieldCascade = cfc })
                             | tname /= entityDB edef
-                            , cname /= fieldDB (entityId edef)
+                            , unConstraintNameDB cname /= unFieldNameDB (fieldDB (entityId edef))
                             ->
-                            [(tname, addReference allDefs cname tname name cfc)]
+                            [addReference allDefs cname tname name cfc]
                         _ -> []
                 -- Type and nullability
                 modType | showSqlType type_ maxLen False `ciEquals` showSqlType type_' maxLen' False && isNull == isNull' = []
-                        | otherwise = [(name, Change col)]
+                        | otherwise = [Change col]
 
                 -- Default value
                 -- Avoid DEFAULT NULL, since it is always unnecessary, and is an error for text/blob fields
                 modDef =
                     if def == def' then []
                     else case def of
-                        Nothing -> [(name, NoDefault)]
+                        Nothing -> [NoDefault col]
                         Just s ->
                             if T.toUpper s == "NULL" then []
-                            else [(name, Default $ T.unpack s)]
+                            else [Default col $ T.unpack s]
 
                 -- Does the generated value need to change?
                 modGen =
                     if gen == gen' then []
                     else case gen of
-                        Nothing -> [(name, NoGen type_ maxLen)]
-                        Just genExpr -> [(name, Gen type_ maxLen $ T.unpack genExpr)]
+                        Nothing -> [NoGen col type_ maxLen]
+                        Just genExpr -> [Gen col type_ maxLen $ T.unpack genExpr]
 
             in ( refDrop ++ modType ++ modDef ++ modGen ++ refAdd
                , filter ((name /=) . cName) cols
@@ -929,7 +929,7 @@ findAlters edef allDefs col@(Column name isNull type_ def gen _defConstraintName
 -- column.
 showColumn :: Column -> String
 showColumn (Column n nu t def gen _defConstraintName maxLen ref) = concat
-    [ escapeDBName n
+    [ escapeF n
     , " "
     , showSqlType t maxLen True
     , " "
@@ -946,7 +946,7 @@ showColumn (Column n nu t def gen _defConstraintName maxLen ref) = concat
                   else " DEFAULT " ++ T.unpack s
     , case ref of
         Nothing -> ""
-        Just cRef -> " REFERENCES " ++ escapeDBName (crTableName cRef)
+        Just cRef -> " REFERENCES " ++ escapeE (crTableName cRef)
             <> " " <> T.unpack (renderFieldCascade (crFieldCascade cRef))
     ]
 
@@ -975,142 +975,154 @@ showSqlType (SqlOther t) _        _     = T.unpack t
 -- | Render an action that must be done on the database.
 showAlterDb :: AlterDB -> (Bool, Text)
 showAlterDb (AddTable s) = (False, pack s)
-showAlterDb (AlterColumn t (c, ac)) =
-    (isUnsafe ac, pack $ showAlter t (c, ac))
+showAlterDb (AlterColumn t ac) =
+    (isUnsafe ac, pack $ showAlter t ac)
   where
-    isUnsafe Drop = True
-    isUnsafe _    = False
+    isUnsafe Drop{} = True
+    isUnsafe _      = False
 showAlterDb (AlterTable t at) = (False, pack $ showAlterTable t at)
 
 
 -- | Render an action that must be done on a table.
-showAlterTable :: DBName -> AlterTable -> String
+showAlterTable :: EntityNameDB -> AlterTable -> String
 showAlterTable table (AddUniqueConstraint cname cols) = concat
     [ "ALTER TABLE "
-    , escapeDBName table
+    , escapeE table
     , " ADD CONSTRAINT "
-    , escapeDBName cname
+    , escapeC cname
     , " UNIQUE("
     , intercalate "," $ map escapeDBName' cols
     , ")"
     ]
     where
-      escapeDBName' (name, (FTTypeCon _ "Text"      ), maxlen) = escapeDBName name ++ "(" ++ show maxlen ++ ")"
-      escapeDBName' (name, (FTTypeCon _ "String"    ), maxlen) = escapeDBName name ++ "(" ++ show maxlen ++ ")"
-      escapeDBName' (name, (FTTypeCon _ "ByteString"), maxlen) = escapeDBName name ++ "(" ++ show maxlen ++ ")"
-      escapeDBName' (name, _                         , _) = escapeDBName name
+      escapeDBName' (name, (FTTypeCon _ "Text"      ), maxlen) = escapeF name ++ "(" ++ show maxlen ++ ")"
+      escapeDBName' (name, (FTTypeCon _ "String"    ), maxlen) = escapeF name ++ "(" ++ show maxlen ++ ")"
+      escapeDBName' (name, (FTTypeCon _ "ByteString"), maxlen) = escapeF name ++ "(" ++ show maxlen ++ ")"
+      escapeDBName' (name, _                         , _)      = escapeF name
 showAlterTable table (DropUniqueConstraint cname) = concat
     [ "ALTER TABLE "
-    , escapeDBName table
+    , escapeE table
     , " DROP INDEX "
-    , escapeDBName cname
+    , escapeC cname
     ]
 
 
 -- | Render an action that must be done on a column.
-showAlter :: DBName -> AlterColumn' -> String
-showAlter table (oldName, Change (Column n nu t def gen defConstraintName maxLen _ref)) =
+showAlter :: EntityNameDB -> AlterColumn -> String
+showAlter table (Change (Column n nu t def gen defConstraintName maxLen _ref)) =
     concat
     [ "ALTER TABLE "
-    , escapeDBName table
+    , escapeE table
     , " CHANGE "
-    , escapeDBName oldName
+    , escapeF n
     , " "
     , showColumn (Column n nu t def gen defConstraintName maxLen Nothing)
     ]
-showAlter table (_, Add' col) =
+showAlter table (Add' col) =
     concat
     [ "ALTER TABLE "
-    , escapeDBName table
+    , escapeE table
     , " ADD COLUMN "
     , showColumn col
     ]
-showAlter table (n, Drop) =
+showAlter table (Drop c) =
     concat
     [ "ALTER TABLE "
-    , escapeDBName table
+    , escapeE table
     , " DROP COLUMN "
-    , escapeDBName n
+    , escapeF (cName c)
     ]
-showAlter table (n, Default s) =
+showAlter table (Default c s) =
     concat
     [ "ALTER TABLE "
-    , escapeDBName table
+    , escapeE table
     , " ALTER COLUMN "
-    , escapeDBName n
+    , escapeF (cName c)
     , " SET DEFAULT "
     , s
     ]
-showAlter table (n, NoDefault) =
+showAlter table (NoDefault c) =
     concat
     [ "ALTER TABLE "
-    , escapeDBName table
+    , escapeE table
     , " ALTER COLUMN "
-    , escapeDBName n
+    , escapeF (cName c)
     , " DROP DEFAULT"
     ]
-showAlter table (col, Gen typ len expr) =
+showAlter table (Gen col typ len expr) =
     concat
     [ "ALTER TABLE "
-    , escapeDBName table
+    , escapeE table
     , " MODIFY COLUMN "
-    , escapeDBName col
+    , escapeF (cName col)
     , " "
     , showSqlType typ len True
     , " GENERATED ALWAYS AS ("
     , expr
     , ") STORED"
     ]
-showAlter table (col, NoGen typ len) =
+showAlter table (NoGen col typ len) =
     concat
     [ "ALTER TABLE "
-    , escapeDBName table
+    , escapeE table
     , " MODIFY COLUMN "
-    , escapeDBName col
+    , escapeF (cName col)
     , " "
     , showSqlType typ len True
     ]
-showAlter table (n, Update' s) =
+showAlter table (Update' c s) =
     concat
     [ "UPDATE "
-    , escapeDBName table
+    , escapeE table
     , " SET "
-    , escapeDBName n
+    , escapeF (cName c)
     , "="
     , s
     , " WHERE "
-    , escapeDBName n
+    , escapeF (cName c)
     , " IS NULL"
     ]
-showAlter table (_, AddReference reftable fkeyname t2 id2 fc) = concat
+showAlter table (AddReference reftable fkeyname t2 id2 fc) = concat
     [ "ALTER TABLE "
-    , escapeDBName table
+    , escapeE table
     , " ADD CONSTRAINT "
-    , escapeDBName fkeyname
+    , escapeC fkeyname
     , " FOREIGN KEY("
-    , intercalate "," $ map escapeDBName t2
+    , intercalate "," $ map escapeF t2
     , ") REFERENCES "
-    , escapeDBName reftable
+    , escapeE reftable
     , "("
-    , intercalate "," $ map escapeDBName id2
+    , intercalate "," $ map escapeF id2
     , ") "
     , T.unpack $ renderFieldCascade fc
     ]
-showAlter table (_, DropReference cname) = concat
+showAlter table (DropReference cname) = concat
     [ "ALTER TABLE "
-    , escapeDBName table
+    , escapeE table
     , " DROP FOREIGN KEY "
-    , escapeDBName cname
+    , escapeC cname
     ]
 
 ----------------------------------------------------------------------
 
-escape :: DBName -> Text
-escape = T.pack . escapeDBName
+escapeC :: ConstraintNameDB -> String
+escapeC = escapeWith (escapeDBName . T.unpack)
+
+escapeE :: EntityNameDB -> String
+escapeE = escapeWith (escapeDBName . T.unpack)
+
+escapeF :: FieldNameDB -> String
+escapeF = escapeWith (escapeDBName . T.unpack)
+
+escapeET :: EntityNameDB -> Text
+escapeET = escapeWith (T.pack . escapeDBName . T.unpack)
+
+escapeFT :: FieldNameDB -> Text
+escapeFT = escapeWith (T.pack . escapeDBName . T.unpack)
 
 -- | Escape a database name to be included on a query.
-escapeDBName :: DBName -> String
-escapeDBName (DBName s) = '`' : go (T.unpack s)
+escapeDBName :: String -> String
+escapeDBName str = '`' : go str
     where
       go ('`':xs) = '`' : '`' : go xs
       go ( x :xs) =     x     : go xs
@@ -1200,7 +1212,7 @@ mockMigrate _connectInfo allDefs _getter val = do
                         map (findTypeAndMaxLen name) ucols ]
         let foreigns = do
               Column { cName=cname, cReference= Just ColumnReference{crTableName = refTable, crConstraintName = refConstr, crFieldCascade = cfc }} <- newcols
-              return $ AlterColumn name (refTable, addReference allDefs refConstr refTable cname cfc)
+              return $ AlterColumn name (addReference allDefs refConstr refTable cname cfc)
 
         let foreignsAlt =
                 map
@@ -1209,8 +1221,7 @@ mockMigrate _connectInfo allDefs _getter val = do
                         in
                             AlterColumn
                                 name
-                                ( foreignRefTableDBName fdef
-                                , AddReference
+                                (AddReference
                                     (foreignRefTableDBName fdef)
                                     (foreignConstraintNameDBName fdef)
                                     childfields
@@ -1249,7 +1260,9 @@ mockMigration mig = do
                              connBegin = undefined,
                              connCommit = undefined,
                              connRollback = undefined,
-                             connEscapeName = undefined,
+                             connEscapeFieldName = T.pack . escapeDBName . T.unpack . unFieldNameDB,
+                             connEscapeTableName = T.pack . escapeDBName . T.unpack . unEntityNameDB . entityDB,
+                             connEscapeRawName = T.pack . escapeDBName . T.unpack,
                              connNoLimit = undefined,
                              connRDBMS = undefined,
                              connLimitOffset = undefined,
@@ -1458,13 +1471,13 @@ mkBulkInsertQuery records fieldValues updates =
         CopyField rec -> Right (fieldDbToText (persistFieldDef rec))
         CopyUnlessEq rec val -> Left (fieldDbToText (persistFieldDef rec), toPersistValue val)
     (fieldsToMaybeCopy, updateFieldNames) = partitionEithers $ map mfieldDef fieldValues
-    fieldDbToText = T.pack . escapeDBName . fieldDB
+    fieldDbToText = T.pack . escapeF . fieldDB
     entityDef' = entityDef records
     firstField = case entityFieldNames of
         [] -> error "The entity you're trying to insert does not have any fields."
         (field:_) -> field
     entityFieldNames = map fieldDbToText (entityFields entityDef')
-    tableName = T.pack . escapeDBName . entityDB $ entityDef'
+    tableName = T.pack . escapeE . entityDB $ entityDef'
     copyUnlessValues = map snd fieldsToMaybeCopy
     recordValues = concatMap (map toPersistValue . toPersistFields) records
     recordPlaceholders = Util.commaSeparated $ map (Util.parenWrapped . Util.commaSeparated . map (const "?") . toPersistFields) records
@@ -1480,7 +1493,7 @@ mkBulkInsertQuery records fieldValues updates =
         ]
     condFieldSets = map (uncurry mkCondFieldSet) fieldsToMaybeCopy
     fieldSets = map (\n -> T.concat [n, "=VALUES(", n, ")"]) updateFieldNames
-    upds = map (Util.mkUpdateText' (pack . escapeDBName) id) updates
+    upds = map (Util.mkUpdateText' (pack . escapeF) id) updates
     updsValues = map (\(Update _ val _) -> toPersistValue val) updates
     updateText = case fieldSets <> upds <> condFieldSets of
         [] -> T.concat [firstField, "=", firstField]
@@ -1510,10 +1523,10 @@ repsertManySql ent n = putManySql' fields ent n
 putManySql' :: [FieldDef] -> EntityDef -> Int -> Text
 putManySql' (filter isFieldNotGenerated -> fields) ent n = q
   where
-    fieldDbToText = escape . fieldDB
+    fieldDbToText = (T.pack . escapeF) . fieldDB
     mkAssignment f = T.concat [f, "=VALUES(", f, ")"]
 
-    table = escape . entityDB $ ent
+    table = (T.pack . escapeE) . entityDB $ ent
     columns = Util.commaSeparated $ map fieldDbToText fields
     placeholders = map (const "?") fields
     updates = map (mkAssignment . fieldDbToText) fields

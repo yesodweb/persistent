@@ -107,13 +107,36 @@ data WhyNullable = ByMaybeAttr
                  | ByNullableAttr
                   deriving (Eq, Show)
 
+-- | Convenience operations for working with '-NameDB' types.
+--
+-- @since 2.12.0.0
+class DatabaseName a where
+  escapeWith :: (Text -> str) -> (a -> str)
+
+-- | An 'EntityNameDB' represents the datastore-side name that @persistent@
+-- will use for an entity.
+--
+-- @since 2.12.0.0
+newtype EntityNameDB = EntityNameDB { unEntityNameDB :: Text }
+  deriving (Show, Eq, Read, Ord)
+
+instance DatabaseName EntityNameDB where
+  escapeWith f (EntityNameDB n) = f n
+
+-- | An 'EntityNameHS' represents the Haskell-side name that @persistent@
+-- will use for an entity.
+--
+-- @since 2.12.0.0
+newtype EntityNameHS = EntityNameHS { unEntityNameHS :: Text }
+  deriving (Show, Eq, Read, Ord)
+
 -- | An 'EntityDef' represents the information that @persistent@ knows
 -- about an Entity. It uses this information to generate the Haskell
 -- datatype, the SQL migrations, and other relevant conversions.
 data EntityDef = EntityDef
-    { entityHaskell :: !HaskellName
+    { entityHaskell :: !EntityNameHS
     -- ^ The name of the entity as Haskell understands it.
-    , entityDB      :: !DBName
+    , entityDB      :: !EntityNameDB
     -- ^ The name of the database table corresponding to the entity.
     , entityId      :: !FieldDef
     -- ^ The entity's primary key or identifier.
@@ -168,11 +191,6 @@ keyAndEntityFields ent =
 
 
 type ExtraLine = [Text]
-
-newtype HaskellName = HaskellName { unHaskellName :: Text }
-    deriving (Show, Eq, Read, Ord)
-newtype DBName = DBName { unDBName :: Text }
-    deriving (Show, Eq, Read, Ord)
 
 type Attr = Text
 
@@ -238,17 +256,35 @@ data FieldType
     | FTList FieldType
   deriving (Show, Eq, Read, Ord)
 
--- | A 'FieldDef' represents the information that @persistent@ knows about
+-- | An 'EntityNameDB' represents the datastore-side name that @persistent@
+-- will use for an entity.
+--
+-- @since 2.12.0.0
+newtype FieldNameDB = FieldNameDB { unFieldNameDB :: Text }
+  deriving (Show, Eq, Read, Ord)
+
+-- | @since 2.12.0.0
+instance DatabaseName FieldNameDB where
+  escapeWith f (FieldNameDB n) = f n
+
+-- | A 'FieldNameHS' represents the Haskell-side name that @persistent@
+-- will use for a field.
+--
+-- @since 2.12.0.0
+newtype FieldNameHS = FieldNameHS { unFieldNameHS :: Text }
+  deriving (Show, Eq, Read, Ord)
+
+-- | A 'FieldDef' represents the inormation that @persistent@ knows about
 -- a field of a datatype. This includes information used to parse the field
 -- out of the database and what the field corresponds to.
 data FieldDef = FieldDef
-    { fieldHaskell   :: !HaskellName
+    { fieldHaskell   :: !FieldNameHS
     -- ^ The name of the field. Note that this does not corresponds to the
     -- record labels generated for the particular entity - record labels
     -- are generated with the type name prefixed to the field, so
-    -- a 'FieldDef' that contains a @'HaskellName' "name"@ for a type
+    -- a 'FieldDef' that contains a @'FieldNameHS' "name"@ for a type
     -- @User@ will have a record field @userName@.
-    , fieldDB        :: !DBName
+    , fieldDB        :: !FieldNameDB
     -- ^ The name of the field in the database. For SQL databases, this
     -- corresponds to the column name.
     , fieldType      :: !FieldType
@@ -290,8 +326,8 @@ isFieldNotGenerated = isNothing . fieldGenerated
 -- 2) single field
 -- 3) embedded
 data ReferenceDef = NoReference
-                  | ForeignRef !HaskellName !FieldType
-                    -- ^ A ForeignRef has a late binding to the EntityDef it references via HaskellName and has the Haskell type of the foreign key in the form of FieldType
+                  | ForeignRef !EntityNameHS !FieldType
+                    -- ^ A ForeignRef has a late binding to the EntityDef it references via name and has the Haskell type of the foreign key in the form of FieldType
                   | EmbedRef EmbedEntityDef
                   | CompositeRef CompositeDef
                   | SelfReference
@@ -302,7 +338,7 @@ data ReferenceDef = NoReference
 -- But it is only used for fieldReference
 -- so it only has data needed for embedding
 data EmbedEntityDef = EmbedEntityDef
-    { embeddedHaskell :: !HaskellName
+    { embeddedHaskell :: !EntityNameHS
     , embeddedFields  :: ![EmbedFieldDef]
     } deriving (Show, Eq, Read, Ord)
 
@@ -310,9 +346,9 @@ data EmbedEntityDef = EmbedEntityDef
 -- But it is only used for embeddedFields
 -- so it only has data needed for embedding
 data EmbedFieldDef = EmbedFieldDef
-    { emFieldDB       :: !DBName
+    { emFieldDB    :: !FieldNameDB
     , emFieldEmbed :: Maybe EmbedEntityDef
-    , emFieldCycle :: Maybe HaskellName
+    , emFieldCycle :: Maybe EntityNameHS
     -- ^ 'emFieldEmbed' can create a cycle (issue #311)
     -- when a cycle is detected, 'emFieldEmbed' will be Nothing
     -- and 'emFieldCycle' will be Just
@@ -338,6 +374,24 @@ toEmbedEntityDef ent = embDef
                         _ -> Nothing
                     }
 
+-- | A 'ConstraintNameDB' represents the datastore-side name that @persistent@
+-- will use for a constraint.
+--
+-- @since 2.12.0.0
+newtype ConstraintNameDB = ConstraintNameDB { unConstraintNameDB :: Text }
+  deriving (Show, Eq, Read, Ord)
+
+-- | @since 2.12.0.0
+instance DatabaseName ConstraintNameDB where
+  escapeWith f (ConstraintNameDB n) = f n
+
+-- | An 'ConstraintNameHS' represents the Haskell-side name that @persistent@
+-- will use for a constraint.
+--
+-- @since 2.12.0.0
+newtype ConstraintNameHS = ConstraintNameHS { unConstraintNameHS :: Text }
+  deriving (Show, Eq, Read, Ord)
+
 -- Type for storing the Uniqueness constraint in the Schema.
 -- Assume you have the following schema with a uniqueness
 -- constraint:
@@ -347,13 +401,13 @@ toEmbedEntityDef ent = embDef
 --   UniqueAge age
 --
 -- This will be represented as:
--- UniqueDef (HaskellName (packPTH "UniqueAge"))
--- (DBName (packPTH "unique_age")) [(HaskellName (packPTH "age"), DBName (packPTH "age"))] []
+-- UniqueDef (ConstraintNameHS (packPTH "UniqueAge"))
+-- (ConstraintNameDB (packPTH "unique_age")) [(FieldNameHS (packPTH "age"), FieldNameDB (packPTH "age"))] []
 --
 data UniqueDef = UniqueDef
-    { uniqueHaskell :: !HaskellName
-    , uniqueDBName  :: !DBName
-    , uniqueFields  :: ![(HaskellName, DBName)]
+    { uniqueHaskell :: !ConstraintNameHS
+    , uniqueDBName  :: !ConstraintNameDB
+    , uniqueFields  :: ![(FieldNameHS, FieldNameDB)]
     , uniqueAttrs   :: ![Attr]
     }
     deriving (Show, Eq, Read, Ord)
@@ -366,13 +420,13 @@ data CompositeDef = CompositeDef
 
 -- | Used instead of FieldDef
 -- to generate a smaller amount of code
-type ForeignFieldDef = (HaskellName, DBName)
+type ForeignFieldDef = (FieldNameHS, FieldNameDB)
 
 data ForeignDef = ForeignDef
-    { foreignRefTableHaskell       :: !HaskellName
-    , foreignRefTableDBName        :: !DBName
-    , foreignConstraintNameHaskell :: !HaskellName
-    , foreignConstraintNameDBName  :: !DBName
+    { foreignRefTableHaskell       :: !EntityNameHS
+    , foreignRefTableDBName        :: !EntityNameDB
+    , foreignConstraintNameHaskell :: !ConstraintNameHS
+    , foreignConstraintNameDBName  :: !ConstraintNameDB
     , foreignFieldCascade          :: !FieldCascade
     -- ^ Determine how the field will cascade on updates and deletions.
     --

@@ -23,12 +23,12 @@ import Database.Persist.Sql.Types.Internal
 import Data.Time (NominalDiffTime)
 
 data Column = Column
-    { cName      :: !DBName
+    { cName      :: !FieldNameDB
     , cNull      :: !Bool
     , cSqlType   :: !SqlType
     , cDefault   :: !(Maybe Text)
     , cGenerated :: !(Maybe Text)
-    , cDefaultConstraintName   :: !(Maybe DBName)
+    , cDefaultConstraintName   :: !(Maybe ConstraintNameDB)
     , cMaxLen    :: !(Maybe Integer)
     , cReference :: !(Maybe ColumnReference)
     }
@@ -38,11 +38,11 @@ data Column = Column
 --
 -- @since 2.11.0.0
 data ColumnReference = ColumnReference
-    { crTableName :: !DBName
+    { crTableName :: !EntityNameDB
     -- ^ The table name that the
     --
     -- @since 2.11.0.0
-    , crConstraintName :: !DBName
+    , crConstraintName :: !ConstraintNameDB
     -- ^ The name of the foreign key constraint.
     --
     -- @since 2.11.0.0
