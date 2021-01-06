@@ -49,7 +49,7 @@ import Control.Exception (Exception, throw, throwIO)
 import Control.Monad
 import Control.Monad.Except
 import Control.Monad.IO.Unlift (MonadIO (..), MonadUnliftIO)
-import Control.Monad.Logger (MonadLogger, runNoLoggingT)
+import Control.Monad.Logger (MonadLoggerIO, runNoLoggingT)
 import Control.Monad.Trans.Reader (runReaderT)
 import Control.Monad.Trans.Writer (WriterT(..), runWriterT)
 
@@ -116,7 +116,7 @@ instance Exception PostgresServerVersionError
 -- have been released.
 -- The provided action should use 'runSqlConn' and *not* 'runReaderT' because
 -- the former brackets the database action with transaction begin/commit.
-withPostgresqlPool :: (MonadLogger m, MonadUnliftIO m)
+withPostgresqlPool :: (MonadLoggerIO m, MonadUnliftIO m)
                    => ConnectionString
                    -- ^ Connection string to the database.
                    -> Int
@@ -132,7 +132,7 @@ withPostgresqlPool ci = withPostgresqlPoolWithVersion getServerVersion ci
 -- the server version (to work around an Amazon Redshift bug).
 --
 -- @since 2.6.2
-withPostgresqlPoolWithVersion :: (MonadUnliftIO m, MonadLogger m)
+withPostgresqlPoolWithVersion :: (MonadUnliftIO m, MonadLoggerIO m)
                               => (PG.Connection -> IO (Maybe Double))
                               -- ^ Action to perform to get the server version.
                               -> ConnectionString
@@ -151,7 +151,7 @@ withPostgresqlPoolWithVersion getVerDouble ci = do
 -- | Same as 'withPostgresqlPool', but can be configured with 'PostgresConf' and 'PostgresConfHooks'.
 --
 -- @since 2.11.0.0
-withPostgresqlPoolWithConf :: (MonadUnliftIO m, MonadLogger m)
+withPostgresqlPoolWithConf :: (MonadUnliftIO m, MonadLoggerIO m)
                            => PostgresConf -- ^ Configuration for connecting to Postgres
                            -> PostgresConfHooks -- ^ Record of callback functions
                            -> (Pool SqlBackend -> m a)
@@ -168,7 +168,7 @@ withPostgresqlPoolWithConf conf hooks = do
 -- responsibility to properly close the connection pool when
 -- unneeded.  Use 'withPostgresqlPool' for an automatic resource
 -- control.
-createPostgresqlPool :: (MonadUnliftIO m, MonadLogger m)
+createPostgresqlPool :: (MonadUnliftIO m, MonadLoggerIO m)
                      => ConnectionString
                      -- ^ Connection string to the database.
                      -> Int
@@ -186,7 +186,7 @@ createPostgresqlPool = createPostgresqlPoolModified (const $ return ())
 --
 -- @since 2.1.3
 createPostgresqlPoolModified
-    :: (MonadUnliftIO m, MonadLogger m)
+    :: (MonadUnliftIO m, MonadLoggerIO m)
     => (PG.Connection -> IO ()) -- ^ Action to perform after connection is created.
     -> ConnectionString -- ^ Connection string to the database.
     -> Int -- ^ Number of connections to be kept open in the pool.
@@ -199,7 +199,7 @@ createPostgresqlPoolModified = createPostgresqlPoolModifiedWithVersion getServer
 --
 -- @since 2.6.2
 createPostgresqlPoolModifiedWithVersion
-    :: (MonadUnliftIO m, MonadLogger m)
+    :: (MonadUnliftIO m, MonadLoggerIO m)
     => (PG.Connection -> IO (Maybe Double)) -- ^ Action to perform to get the server version.
     -> (PG.Connection -> IO ()) -- ^ Action to perform after connection is created.
     -> ConnectionString -- ^ Connection string to the database.
@@ -213,7 +213,7 @@ createPostgresqlPoolModifiedWithVersion getVerDouble modConn ci = do
 --
 -- @since 2.11.0.0
 createPostgresqlPoolWithConf
-    :: (MonadUnliftIO m, MonadLogger m)
+    :: (MonadUnliftIO m, MonadLoggerIO m)
     => PostgresConf -- ^ Configuration for connecting to Postgres
     -> PostgresConfHooks -- ^ Record of callback functions
     -> m (Pool SqlBackend)
@@ -234,7 +234,7 @@ postgresConfToConnectionPoolConfig conf =
 -- of connections, only one connection is opened.
 -- The provided action should use 'runSqlConn' and *not* 'runReaderT' because
 -- the former brackets the database action with transaction begin/commit.
-withPostgresqlConn :: (MonadUnliftIO m, MonadLogger m)
+withPostgresqlConn :: (MonadUnliftIO m, MonadLoggerIO m)
                    => ConnectionString -> (SqlBackend -> m a) -> m a
 withPostgresqlConn = withPostgresqlConnWithVersion getServerVersion
 
@@ -242,7 +242,7 @@ withPostgresqlConn = withPostgresqlConnWithVersion getServerVersion
 -- the server version (to work around an Amazon Redshift bug).
 --
 -- @since 2.6.2
-withPostgresqlConnWithVersion :: (MonadUnliftIO m, MonadLogger m)
+withPostgresqlConnWithVersion :: (MonadUnliftIO m, MonadLoggerIO m)
                               => (PG.Connection -> IO (Maybe Double))
                               -> ConnectionString
                               -> (SqlBackend -> m a)

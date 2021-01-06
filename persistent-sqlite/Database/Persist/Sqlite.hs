@@ -50,7 +50,7 @@ import Control.Concurrent (threadDelay)
 import qualified Control.Exception as E
 import Control.Monad (forM_)
 import Control.Monad.IO.Unlift (MonadIO (..), MonadUnliftIO, askRunInIO, withRunInIO, withUnliftIO, unliftIO, withRunInIO)
-import Control.Monad.Logger (NoLoggingT, runNoLoggingT, MonadLogger, logWarn, runLoggingT)
+import Control.Monad.Logger (NoLoggingT, runNoLoggingT, MonadLoggerIO, logWarn, runLoggingT, askLoggerIO)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, withReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
 import Data.Acquire (Acquire, mkAcquire, with)
@@ -62,7 +62,6 @@ import qualified Data.Conduit.List as CL
 import qualified Data.HashMap.Lazy as HashMap
 import Data.Int (Int64)
 import Data.IORef
-import qualified Data.List as List
 import qualified Data.Map as Map
 import Data.Monoid ((<>))
 import Data.Pool (Pool)
@@ -82,7 +81,7 @@ import qualified Database.Sqlite as Sqlite
 -- Note that this should not be used with the @:memory:@ connection string, as
 -- the pool will regularly remove connections, destroying your database.
 -- Instead, use 'withSqliteConn'.
-createSqlitePool :: (MonadLogger m, MonadUnliftIO m)
+createSqlitePool :: (MonadLoggerIO m, MonadUnliftIO m)
                  => Text -> Int -> m (Pool SqlBackend)
 createSqlitePool = createSqlitePoolFromInfo . conStringToInfo
 
@@ -93,14 +92,14 @@ createSqlitePool = createSqlitePoolFromInfo . conStringToInfo
 -- Instead, use 'withSqliteConn'.
 --
 -- @since 2.6.2
-createSqlitePoolFromInfo :: (MonadLogger m, MonadUnliftIO m)
+createSqlitePoolFromInfo :: (MonadLoggerIO m, MonadUnliftIO m)
                          => SqliteConnectionInfo -> Int -> m (Pool SqlBackend)
 createSqlitePoolFromInfo connInfo = createSqlPool $ openWith const connInfo
 
 -- | Run the given action with a connection pool.
 --
 -- Like 'createSqlitePool', this should not be used with @:memory:@.
-withSqlitePool :: (MonadUnliftIO m, MonadLogger m)
+withSqlitePool :: (MonadUnliftIO m, MonadLoggerIO m)
                => Text
                -> Int -- ^ number of connections to open
                -> (Pool SqlBackend -> m a) -> m a
@@ -111,18 +110,18 @@ withSqlitePool connInfo = withSqlPool . openWith const $ conStringToInfo connInf
 -- Like 'createSqlitePool', this should not be used with @:memory:@.
 --
 -- @since 2.6.2
-withSqlitePoolInfo :: (MonadUnliftIO m, MonadLogger m)
+withSqlitePoolInfo :: (MonadUnliftIO m, MonadLoggerIO m)
                    => SqliteConnectionInfo
                    -> Int -- ^ number of connections to open
                    -> (Pool SqlBackend -> m a) -> m a
 withSqlitePoolInfo connInfo = withSqlPool $ openWith const connInfo
 
-withSqliteConn :: (MonadUnliftIO m, MonadLogger m)
+withSqliteConn :: (MonadUnliftIO m, MonadLoggerIO m)
                => Text -> (SqlBackend -> m a) -> m a
 withSqliteConn = withSqliteConnInfo . conStringToInfo
 
 -- | @since 2.6.2
-withSqliteConnInfo :: (MonadUnliftIO m, MonadLogger m)
+withSqliteConnInfo :: (MonadUnliftIO m, MonadLoggerIO m)
                    => SqliteConnectionInfo -> (SqlBackend -> m a) -> m a
 withSqliteConnInfo = withSqlConn . openWith const
 
@@ -185,7 +184,7 @@ wrapConnection = wrapConnectionInfo (mkSqliteConnectionInfo "")
 -- | Retry if a Busy is thrown, following an exponential backoff strategy.
 --
 -- @since 2.9.3
-retryOnBusy :: (MonadUnliftIO m, MonadLogger m) => m a -> m a
+retryOnBusy :: (MonadUnliftIO m, MonadLoggerIO m) => m a -> m a
 retryOnBusy action =
   start $ take 20 $ delays 1000
   where
@@ -211,7 +210,7 @@ retryOnBusy action =
 --
 -- @since 2.9.3
 waitForDatabase
-    :: (MonadUnliftIO m, MonadLogger m, BackendCompatible SqlBackend backend)
+    :: (MonadUnliftIO m, MonadLoggerIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend m ()
 waitForDatabase = retryOnBusy $ rawExecute "SELECT 42" []
 
@@ -770,12 +769,12 @@ instance FromJSON SqliteConnectionInfo where
 --
 -- @since 2.10.2
 withRawSqliteConnInfo
-    :: (MonadUnliftIO m, MonadLogger m)
+    :: (MonadUnliftIO m, MonadLoggerIO m)
     => SqliteConnectionInfo
     -> (RawSqlite SqlBackend -> m a)
     -> m a
 withRawSqliteConnInfo connInfo f = do
-    logFunc <- askLogFunc
+    logFunc <- askLoggerIO
     withRunInIO $ \run -> E.bracket (openBackend logFunc) closeBackend $ run . f
   where
     openBackend = openWith RawSqlite connInfo
@@ -790,7 +789,7 @@ withRawSqliteConnInfo connInfo f = do
 --
 -- @since 2.10.6
 createRawSqlitePoolFromInfo
-    :: (MonadLogger m, MonadUnliftIO m)
+    :: (MonadLoggerIO m, MonadUnliftIO m)
     => SqliteConnectionInfo
     -> (RawSqlite SqlBackend -> m ())
     -- ^ An action that is run whenever a new `RawSqlite` connection is
@@ -811,7 +810,7 @@ createRawSqlitePoolFromInfo connInfo f n = do
 --
 -- @since 2.10.6
 createRawSqlitePoolFromInfo_
-    :: (MonadLogger m, MonadUnliftIO m)
+    :: (MonadLoggerIO m, MonadUnliftIO m)
     => SqliteConnectionInfo -> Int -> m (Pool (RawSqlite SqlBackend))
 createRawSqlitePoolFromInfo_ connInfo =
   createRawSqlitePoolFromInfo connInfo (const (return ()))
@@ -820,7 +819,7 @@ createRawSqlitePoolFromInfo_ connInfo =
 --
 -- @since 2.10.6
 withRawSqlitePoolInfo
-    :: (MonadUnliftIO m, MonadLogger m)
+    :: (MonadUnliftIO m, MonadLoggerIO m)
     => SqliteConnectionInfo
     -> (RawSqlite SqlBackend -> m ())
     -> Int -- ^ number of connections to open
@@ -838,7 +837,7 @@ withRawSqlitePoolInfo connInfo f n work = do
 --
 -- @since 2.10.6
 withRawSqlitePoolInfo_
-    :: (MonadUnliftIO m, MonadLogger m)
+    :: (MonadUnliftIO m, MonadLoggerIO m)
     => SqliteConnectionInfo
     -> Int -- ^ number of connections to open
     -> (Pool (RawSqlite SqlBackend) -> m a)
