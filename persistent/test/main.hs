@@ -70,8 +70,8 @@ main = hspec $ do
             subject ["asdf", "Int"]
                 `shouldBe`
                     Just FieldDef
-                        { fieldHaskell = HaskellName "asdf"
-                        , fieldDB = DBName "asdf"
+                        { fieldHaskell = FieldNameHS "asdf"
+                        , fieldDB = FieldNameDB "asdf"
                         , fieldType = FTTypeCon Nothing "Int"
                         , fieldSqlType = SqlOther "SqlType unset for asdf"
                         , fieldAttrs = []
@@ -85,8 +85,8 @@ main = hspec $ do
             subject ["asdf", "Int", "OnDeleteCascade", "OnUpdateCascade"]
                 `shouldBe`
                     Just FieldDef
-                        { fieldHaskell = HaskellName "asdf"
-                        , fieldDB = DBName "asdf"
+                        { fieldHaskell = FieldNameHS "asdf"
+                        , fieldDB = FieldNameDB "asdf"
                         , fieldType = FTTypeCon Nothing "Int"
                         , fieldSqlType = SqlOther "SqlType unset for asdf"
                         , fieldAttrs = []
@@ -100,8 +100,8 @@ main = hspec $ do
             subject ["asdf", "UserId", "OnDeleteCascade"]
                 `shouldBe`
                     Just FieldDef
-                        { fieldHaskell = HaskellName "asdf"
-                        , fieldDB = DBName "asdf"
+                        { fieldHaskell = FieldNameHS "asdf"
+                        , fieldDB = FieldNameDB "asdf"
                         , fieldType = FTTypeCon Nothing "UserId"
                         , fieldSqlType = SqlOther "SqlType unset for asdf"
                         , fieldAttrs = []
@@ -337,7 +337,7 @@ Baz
                                 <> " and " <> show fieldCount <> " fields"
                                 <> ", but the list was empty..."
                         ((name, fieldCount) : ys, (EntityDef {..} : xs)) -> do
-                            (unHaskellName entityHaskell, length entityFields)
+                            (unEntityNameHS entityHaskell, length entityFields)
                                 `shouldBe`
                                     (T.pack name, fieldCount)
                             test ys xs
@@ -658,13 +658,13 @@ Baz
                     ]
         let [subject] = parse lowerCaseSettings lines
         it "produces the right name" $ do
-            entityHaskell subject `shouldBe` HaskellName "Foo"
+            entityHaskell subject `shouldBe` EntityNameHS "Foo"
         describe "entityFields" $ do
             let fields = entityFields subject
             it "has the right field names" $ do
                 map fieldHaskell fields `shouldMatchList`
-                    [ HaskellName "name"
-                    , HaskellName "age"
+                    [ FieldNameHS "name"
+                    , FieldNameHS "age"
                     ]
             it "has comments" $ do
                 map fieldComments fields `shouldBe`
@@ -714,18 +714,18 @@ Baz
                 it "has no extra blocks" $ do
                     entityExtra `shouldBe` mempty
                 it "has the right name" $ do
-                    entityHaskell `shouldBe` HaskellName "IdTable"
+                    entityHaskell `shouldBe` EntityNameHS "IdTable"
                 it "has the right fields" $ do
                     map fieldHaskell entityFields `shouldMatchList`
-                        [ HaskellName "name"
+                        [ FieldNameHS "name"
                         ]
             describe "lowerCaseTable" $ do
                 let EntityDef {..} = lowerCaseTable
                 it "has the right name" $ do
-                    entityHaskell `shouldBe` HaskellName "LowerCaseTable"
+                    entityHaskell `shouldBe` EntityNameHS "LowerCaseTable"
                 it "has the right fields" $ do
                     map fieldHaskell entityFields `shouldMatchList`
-                        [ HaskellName "fullName"
+                        [ FieldNameHS "fullName"
                         ]
                 it "has ExtraBlock" $ do
                     Map.lookup "ExtraBlock" entityExtra

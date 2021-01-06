@@ -39,7 +39,7 @@ instance PersistQueryRead SqlBackend where
                     else filterClause False conn filts
         let sql = mconcat
                 [ "SELECT COUNT(*) FROM "
-                , connEscapeName conn $ entityDB t
+                , connEscapeTableName conn t
                 , wher
                 ]
         withRawQuery sql (getFiltsValues conn filts) $ do
@@ -62,7 +62,7 @@ instance PersistQueryRead SqlBackend where
                     else filterClause False conn filts
         let sql = mconcat
                 [ "SELECT EXISTS(SELECT 1 FROM "
-                , connEscapeName conn $ entityDB t
+                , connEscapeTableName conn t
                 , wher
                 , ")"
                 ]
@@ -103,7 +103,7 @@ instance PersistQueryRead SqlBackend where
             [ "SELECT "
             , cols conn
             , " FROM "
-            , connEscapeName conn $ entityDB t
+            , connEscapeTableName conn t
             , wher conn
             , ord conn
             ]
@@ -124,7 +124,7 @@ instance PersistQueryRead SqlBackend where
             [ "SELECT "
             , cols conn
             , " FROM "
-            , connEscapeName conn $ entityDB t
+            , connEscapeTableName conn t
             , wher conn
             , ord conn
             ]
@@ -186,7 +186,7 @@ deleteWhereCount filts = withReaderT projectBackend $ do
                 else filterClause False conn filts
         sql = mconcat
             [ "DELETE FROM "
-            , connEscapeName conn $ entityDB t
+            , connEscapeTableName conn t
             , wher
             ]
     rawExecuteCount sql $ getFiltsValues conn filts
@@ -206,7 +206,7 @@ updateWhereCount filts upds = withReaderT projectBackend $ do
                 else filterClause False conn filts
     let sql = mconcat
             [ "UPDATE "
-            , connEscapeName conn $ entityDB t
+            , connEscapeTableName conn t
             , " SET "
             , T.intercalate "," $ map (mkUpdateText conn) upds
             , wher
@@ -217,7 +217,7 @@ updateWhereCount filts upds = withReaderT projectBackend $ do
   where
     t = entityDef $ dummyFromFilts filts
 
-fieldName ::  forall record typ. (PersistEntity record, PersistEntityBackend record ~ SqlBackend) => EntityField record typ -> DBName
+fieldName ::  forall record typ. (PersistEntity record, PersistEntityBackend record ~ SqlBackend) => EntityField record typ -> FieldNameDB
 fieldName f = fieldDB $ persistFieldDef f
 
 dummyFromFilts :: [Filter v] -> Maybe v
@@ -264,23 +264,23 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
                     else
                       case (allVals, pfilter, isCompFilter pfilter) of
                         ([PersistList xs], Eq, _) ->
-                           let sqlcl=T.intercalate " and " (map (\a -> connEscapeName conn (fieldDB a) <> showSqlFilter pfilter <> "? ")  (compositeFields pdef))
+                           let sqlcl=T.intercalate " and " (map (\a -> connEscapeFieldName conn (fieldDB a) <> showSqlFilter pfilter <> "? ")  (compositeFields pdef))
                            in (wrapSql sqlcl,xs)
                         ([PersistList xs], Ne, _) ->
-                           let sqlcl=T.intercalate " or " (map (\a -> connEscapeName conn (fieldDB a) <> showSqlFilter pfilter <> "? ")  (compositeFields pdef))
+                           let sqlcl=T.intercalate " or " (map (\a -> connEscapeFieldName conn (fieldDB a) <> showSqlFilter pfilter <> "? ")  (compositeFields pdef))
                            in (wrapSql sqlcl,xs)
                         (_, In, _) ->
                            let xxs = transpose (map fromPersistList allVals)
-                               sqls=map (\(a,xs) -> connEscapeName conn (fieldDB a) <> showSqlFilter pfilter <> "(" <> T.intercalate "," (replicate (length xs) " ?") <> ") ") (zip (compositeFields pdef) xxs)
+                               sqls=map (\(a,xs) -> connEscapeFieldName conn (fieldDB a) <> showSqlFilter pfilter <> "(" <> T.intercalate "," (replicate (length xs) " ?") <> ") ") (zip (compositeFields pdef) xxs)
                            in (wrapSql (T.intercalate " and " (map wrapSql sqls)), concat xxs)
                         (_, NotIn, _) ->
                            let xxs = transpose (map fromPersistList allVals)
-                               sqls=map (\(a,xs) -> connEscapeName conn (fieldDB a) <> showSqlFilter pfilter <> "(" <> T.intercalate "," (replicate (length xs) " ?") <> ") ") (zip (compositeFields pdef) xxs)
+                               sqls=map (\(a,xs) -> connEscapeFieldName conn (fieldDB a) <> showSqlFilter pfilter <> "(" <> T.intercalate "," (replicate (length xs) " ?") <> ") ") (zip (compositeFields pdef) xxs)
                            in (wrapSql (T.intercalate " or " (map wrapSql sqls)), concat xxs)
                         ([PersistList xs], _, True) ->
                            let zs = tail (inits (compositeFields pdef))
                                sql1 = map (\b -> wrapSql (T.intercalate " and " (map (\(i,a) -> sql2 (i==length b) a) (zip [1..] b)))) zs
-                               sql2 islast a = connEscapeName conn (fieldDB a) <> (if islast then showSqlFilter pfilter else showSqlFilter Eq) <> "? "
+                               sql2 islast a = connEscapeFieldName conn (fieldDB a) <> (if islast then showSqlFilter pfilter else showSqlFilter Eq) <> "? "
                                sqlcl = T.intercalate " or " sql1
                            in (wrapSql sqlcl, concat (tail (inits xs)))
                         (_, BackendSpecificFilter _, _) -> error "unhandled type BackendSpecificFilter for composite/non id primary keys"
@@ -362,13 +362,12 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
         isNull = PersistNull `elem` allVals
         notNullVals = filter (/= PersistNull) allVals
         allVals = filterValueToPersistValues value
-        tn = connEscapeName conn $ entityDB
-           $ entityDef $ dummyFromFilts [Filter field value pfilter]
+        tn = connEscapeTableName conn $ entityDef $ dummyFromFilts [Filter field value pfilter]
         name =
             (if includeTable
                 then ((tn <> ".") <>)
                 else id)
-            $ connEscapeName conn $ fieldName field
+            $ connEscapeFieldName conn (fieldName field)
         qmarks = case value of
                     FilterValue{} -> "(?)"
                     UnsafeValue{} -> "(?)"
@@ -409,7 +408,7 @@ orderClause includeTable conn o =
     dummyFromOrder :: SelectOpt a -> Maybe a
     dummyFromOrder _ = Nothing
 
-    tn = connEscapeName conn $ entityDB $ entityDef $ dummyFromOrder o
+    tn = connEscapeTableName conn (entityDef $ dummyFromOrder o)
 
     name :: (PersistEntityBackend record ~ SqlBackend, PersistEntity record)
          => EntityField record typ -> Text
@@ -417,7 +416,7 @@ orderClause includeTable conn o =
         (if includeTable
             then ((tn <> ".") <>)
             else id)
-        $ connEscapeName conn $ fieldName x
+        $ connEscapeFieldName conn (fieldName x)
 
 -- | Generates sql for limit and offset for postgres, sqlite and mysql.
 decorateSQLWithLimitOffset::Text -> (Int,Int) -> Bool -> Text -> Text
