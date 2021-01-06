@@ -6,7 +6,7 @@ module Database.Persist.Sql.Orphan.PersistUnique
 
 import Control.Exception (throwIO)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Reader (ask, withReaderT)
+import Control.Monad.Trans.Reader (ask)
 import qualified Data.Conduit.List as CL
 import Data.Function (on)
 import Data.List (nubBy)
@@ -78,9 +78,9 @@ instance PersistUniqueWrite SqlBackend where
                 Nothing -> defaultPutMany rs
 
 instance PersistUniqueWrite SqlWriteBackend where
-    deleteBy uniq = withReaderT persistBackend $ deleteBy uniq
-    upsert rs us = withReaderT persistBackend $ upsert rs us
-    putMany rs = withReaderT persistBackend $ putMany rs
+    deleteBy uniq = withBaseBackend $ deleteBy uniq
+    upsert rs us = withBaseBackend $ upsert rs us
+    putMany rs = withBaseBackend $ putMany rs
 
 instance PersistUniqueRead SqlBackend where
     getBy uniq = do
@@ -112,10 +112,10 @@ instance PersistUniqueRead SqlBackend where
         toFieldNames' = map snd . persistUniqueToFieldNames
 
 instance PersistUniqueRead SqlReadBackend where
-    getBy uniq = withReaderT persistBackend $ getBy uniq
+    getBy uniq = withBaseBackend $ getBy uniq
 
 instance PersistUniqueRead SqlWriteBackend where
-    getBy uniq = withReaderT persistBackend $ getBy uniq
+    getBy uniq = withBaseBackend $ getBy uniq
 
 dummyFromUnique :: Unique v -> Maybe v
 dummyFromUnique _ = Nothing

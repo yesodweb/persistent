@@ -6,6 +6,8 @@
   * Replace `askLogFunc` with `askLoggerIO`
 * Decomposed `HaskellName` into `ConstraintNameHS`, `EntityNameHS`, `FieldNameHS`. Decomposed `DBName` into `ConstraintNameDB`, `EntityNameDB`, `FieldNameDB` respectively. [#1174](https://github.com/yesodweb/persistent/pull/1174)
 * Use `resourcet-pool` to break out some `Data.Pool` logic [#1163](https://github.com/yesodweb/persistent/pull/1163)
+* [#1178](https://github.com/yesodweb/persistent/pull/1178)
+  * Added 'withBaseBackend', 'withCompatible' to ease use of base/compatible backend queries in external code.
 * Added GHC 8.2.2 and GHC 8.4.4 back into the CI and `persistent` builds on 8.2.2 again [#1181](https://github.com/yesodweb/persistent/issues/1181)
 
 ## 2.11.0.2

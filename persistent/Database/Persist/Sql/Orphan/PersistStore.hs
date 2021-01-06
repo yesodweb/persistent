@@ -83,7 +83,7 @@ getTableName :: forall record m backend.
              , BackendCompatible SqlBackend backend
              , Monad m
              ) => record -> ReaderT backend m Text
-getTableName rec = withReaderT projectBackend $ do
+getTableName rec = withCompatibleBackend $ do
     conn <- ask
     return $ connEscapeTableName conn (entityDef $ Just rec)
 
@@ -103,7 +103,7 @@ getFieldName :: forall record typ m backend.
              , Monad m
              )
              => EntityField record typ -> ReaderT backend m Text
-getFieldName rec = withReaderT projectBackend $ do
+getFieldName rec = withCompatibleBackend $ do
     conn <- ask
     return $ connEscapeFieldName conn (fieldDB $ persistFieldDef rec)
 
@@ -301,16 +301,16 @@ instance PersistStoreWrite SqlBackend where
             , wher conn
             ]
 instance PersistStoreWrite SqlWriteBackend where
-    insert v = withReaderT persistBackend $ insert v
-    insertMany vs = withReaderT persistBackend $ insertMany vs
-    insertMany_ vs = withReaderT persistBackend $ insertMany_ vs
-    insertEntityMany vs = withReaderT persistBackend $ insertEntityMany vs
-    insertKey k v = withReaderT persistBackend $ insertKey k v
-    repsert k v = withReaderT persistBackend $ repsert k v
-    replace k v = withReaderT persistBackend $ replace k v
-    delete k = withReaderT persistBackend $ delete k
-    update k upds = withReaderT persistBackend $ update k upds
-    repsertMany krs = withReaderT persistBackend $ repsertMany krs
+    insert v = withBaseBackend $ insert v
+    insertMany vs = withBaseBackend $ insertMany vs
+    insertMany_ vs = withBaseBackend $ insertMany_ vs
+    insertEntityMany vs = withBaseBackend $ insertEntityMany vs
+    insertKey k v = withBaseBackend $ insertKey k v
+    repsert k v = withBaseBackend $ repsert k v
+    replace k v = withBaseBackend $ replace k v
+    delete k = withBaseBackend $ delete k
+    update k upds = withBaseBackend $ update k upds
+    repsertMany krs = withBaseBackend $ repsertMany krs
 
 instance PersistStoreRead SqlBackend where
     get k = do
@@ -341,11 +341,11 @@ instance PersistStoreRead SqlBackend where
             return $ Map.fromList $ fmap (\e -> (entityKey e, entityVal e)) es
 
 instance PersistStoreRead SqlReadBackend where
-    get k = withReaderT persistBackend $ get k
-    getMany ks = withReaderT persistBackend $ getMany ks
+    get k = withBaseBackend $ get k
+    getMany ks = withBaseBackend $ getMany ks
 instance PersistStoreRead SqlWriteBackend where
-    get k = withReaderT persistBackend $ get k
-    getMany ks = withReaderT persistBackend $ getMany ks
+    get k = withBaseBackend $ get k
+    getMany ks = withBaseBackend $ getMany ks
 
 dummyFromKey :: Key record -> Maybe record
 dummyFromKey = Just . recordTypeFromKey
