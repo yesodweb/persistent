@@ -116,7 +116,7 @@ class BackendCompatible sup sub where
 -- This is a helper for using queries which run against a specific backend type
 -- that your backend is compatible with.
 --
--- @since 2.11.1
+-- @since 2.12.0
 withCompatibleBackend :: (BackendCompatible sup sub)
                       => ReaderT sup m a -> ReaderT sub m a
 withCompatibleBackend = withReaderT projectBackend
