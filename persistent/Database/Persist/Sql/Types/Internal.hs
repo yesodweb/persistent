@@ -101,7 +101,7 @@ data SqlBackend = SqlBackend
     -- ^ SQL for inserting many rows and returning their primary keys, for
     -- backends that support this functionality. If 'Nothing', rows will be
     -- inserted one-at-a-time using 'connInsertSql'.
-    , connUpsertSql :: Maybe (EntityDef -> NonEmpty (HaskellName,DBName) -> Text -> Text)
+    , connUpsertSql :: Maybe (EntityDef -> NonEmpty (FieldNameHS, FieldNameDB) -> Text -> Text)
     -- ^ Some databases support performing UPSERT _and_ RETURN entity
     -- in a single call.
     --
@@ -147,9 +147,21 @@ data SqlBackend = SqlBackend
     -- ^ A function to commit a transaction to the underlying database.
     , connRollback :: (Text -> IO Statement) -> IO ()
     -- ^ A function to roll back a transaction on the underlying database.
-    , connEscapeName :: DBName -> Text
-    -- ^ A function to escape a name for the underlying database. MySQL
-    -- uses backtick characters, while postgresql uses double quoes.
+    , connEscapeFieldName :: FieldNameDB -> Text
+    -- ^ A function to extract and escape the name of the column corresponding
+    -- to the provided field.
+    --
+    -- @since 2.12.0.0
+    , connEscapeTableName :: EntityDef -> Text
+    -- ^ A function to extract and escape the name of the table corresponding
+    -- to the provided entity. PostgreSQL uses this to support schemas.
+    --
+    -- @since 2.12.0.0
+    , connEscapeRawName :: Text -> Text
+    -- ^ A function to escape raw DB identifiers. MySQL uses backticks, while
+    -- PostgreSQL uses quotes, and so on.
+    --
+    -- @since 2.12.0.0
     , connNoLimit :: Text
     , connRDBMS :: Text
     -- ^ A tag displaying what database the 'SqlBackend' is for. Can be

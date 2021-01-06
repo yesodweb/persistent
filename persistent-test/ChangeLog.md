@@ -1,5 +1,9 @@
 ## Unreleased changes
 
+## 2.12.0.0
+
+* Decomposed `HaskellName` into `ConstraintNameHS`, `EntityNameHS`, `FieldNameHS`. Decomposed `DBName` into `ConstraintNameDB`, `EntityNameDB`, `FieldNameDB` respectively. [#1174](https://github.com/yesodweb/persistent/pull/1174)
+
 ## 2.0.3.5
 
 * Tighter version bounds on `persistent` and `persistent-template`.

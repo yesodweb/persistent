@@ -26,23 +26,24 @@ import Data.Text (Text, pack)
 import qualified Data.Text as T
 
 import Database.Persist (
-    Entity(Entity), EntityDef, EntityField, HaskellName(HaskellName)
+    Entity(Entity), EntityDef, EntityField, FieldNameHS(FieldNameHS)
   , PersistEntity(..), PersistValue
   , keyFromValues, fromPersistValues, fieldDB, entityId, entityPrimary
   , entityFields, entityKeyFields, fieldHaskell, compositeFields, persistFieldDef
-  , keyAndEntityFields, toPersistValue, DBName, Update(..), PersistUpdate(..)
+  , keyAndEntityFields, toPersistValue, FieldNameDB, Update(..), PersistUpdate(..)
   , FieldDef(..)
   )
-import Database.Persist.Sql.Types (Sql, SqlBackend, connEscapeName)
+
+import Database.Persist.Sql.Types (Sql, SqlBackend, connEscapeFieldName)
 
 entityColumnNames :: EntityDef -> SqlBackend -> [Sql]
 entityColumnNames ent conn =
      (if hasCompositeKey ent
-      then [] else [connEscapeName conn $ fieldDB (entityId ent)])
-  <> map (connEscapeName conn . fieldDB) (entityFields ent)
+      then [] else [connEscapeFieldName conn . fieldDB $ entityId ent])
+  <> map (connEscapeFieldName conn . fieldDB) (entityFields ent)
 
 keyAndEntityColumnNames :: EntityDef -> SqlBackend -> [Sql]
-keyAndEntityColumnNames ent conn = map (connEscapeName conn . fieldDB) (keyAndEntityFields ent)
+keyAndEntityColumnNames ent conn = map (connEscapeFieldName conn . fieldDB) (keyAndEntityFields ent)
 
 entityColumnCount :: EntityDef -> Int
 entityColumnCount e = length (entityFields e)
@@ -144,18 +145,18 @@ hasCompositePrimaryKey ed =
             False
 
 dbIdColumns :: SqlBackend -> EntityDef -> [Text]
-dbIdColumns conn = dbIdColumnsEsc (connEscapeName conn)
+dbIdColumns conn = dbIdColumnsEsc (connEscapeFieldName conn)
 
-dbIdColumnsEsc :: (DBName -> Text) -> EntityDef -> [Text]
+dbIdColumnsEsc :: (FieldNameDB -> Text) -> EntityDef -> [Text]
 dbIdColumnsEsc esc t = map (esc . fieldDB) $ entityKeyFields t
 
 dbColumns :: SqlBackend -> EntityDef -> [Text]
 dbColumns conn t = case entityPrimary t of
     Just _  -> flds
-    Nothing -> escapeDB (entityId t) : flds
+    Nothing -> escapeColumn (entityId t) : flds
   where
-    escapeDB = connEscapeName conn . fieldDB
-    flds = map escapeDB (entityFields t)
+    escapeColumn = connEscapeFieldName conn . fieldDB
+    flds = map escapeColumn (entityFields t)
 
 parseEntityValues :: PersistEntity record
                   => EntityDef -> [PersistValue] -> Either Text (Entity record)
@@ -188,7 +189,7 @@ parseEntityValues t vals =
 
 
 isIdField :: PersistEntity record => EntityField record typ -> Bool
-isIdField f = fieldHaskell (persistFieldDef f) == HaskellName "Id"
+isIdField f = fieldHaskell (persistFieldDef f) == FieldNameHS "Id"
 
 -- | Gets the 'FieldDef' for an 'Update'.
 updateFieldDef :: PersistEntity v => Update v -> FieldDef
@@ -204,9 +205,9 @@ commaSeparated :: [Text] -> Text
 commaSeparated = T.intercalate ", "
 
 mkUpdateText :: PersistEntity record => SqlBackend -> Update record -> Text
-mkUpdateText conn = mkUpdateText' (connEscapeName conn) id
+mkUpdateText conn = mkUpdateText' (connEscapeFieldName conn) id
 
-mkUpdateText' :: PersistEntity record => (DBName -> Text) -> (Text -> Text) -> Update record -> Text
+mkUpdateText' :: PersistEntity record => (FieldNameDB -> Text) -> (Text -> Text) -> Update record -> Text
 mkUpdateText' escapeName refColumn x =
   case updateUpdate x of
     Assign -> n <> "=?"
@@ -252,7 +253,7 @@ mkInsertValues entity =
 -- @since 2.11.0.0
 mkInsertPlaceholders
     :: EntityDef
-    -> (DBName -> Text)
+    -> (FieldNameDB -> Text)
     -- ^ An `escape` function
     -> [(Text, Text)]
 mkInsertPlaceholders ed escape =
