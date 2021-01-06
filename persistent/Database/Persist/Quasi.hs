@@ -699,6 +699,7 @@ associateLines lines =
                         consComment comment lwc : lwcs
                     _ ->
                         if lineIndent line <= lineIndent (firstLine lwc)
+                            && lineIndent (firstLine lwc) /= lowestIndent
                         then
                             consLine line lwc : lwcs
                         else
@@ -753,17 +754,17 @@ fixForeignKeysAll unEnts = map fixForeignKeys unEnts
                                  foreignFieldTexts
                                  fdefs
                          dbname =
-                             unDBName (entityDB pent)
+                             unEntityNameDB (entityDB pent)
                          oldDbName =
-                             unDBName (foreignRefTableDBName fdef)
+                             unEntityNameDB (foreignRefTableDBName fdef)
                       in fdef
                          { foreignFields = map snd fds_ffs
                          , foreignNullable = setNull $ map fst fds_ffs
                          , foreignRefTableDBName =
-                             DBName dbname
+                             EntityNameDB dbname
                          , foreignConstraintNameDBName =
-                             DBName
-                             . T.replace oldDbName dbname . unDBName
+                             ConstraintNameDB
+                             . T.replace oldDbName dbname . unConstraintNameDB
                              $ foreignConstraintNameDBName fdef
                          }
              Nothing ->
@@ -772,20 +773,20 @@ fixForeignKeysAll unEnts = map fixForeignKeys unEnts
         pentError =
             error $ "could not find table " ++ show (foreignRefTableHaskell fdef)
             ++ " fdef=" ++ show fdef ++ " allnames="
-            ++ show (map (unHaskellName . entityHaskell . unboundEntityDef) unEnts)
+            ++ show (map (unEntityNameHS . entityHaskell . unboundEntityDef) unEnts)
             ++ "\n\nents=" ++ show ents
         pent =
             fromMaybe pentError $ M.lookup (foreignRefTableHaskell fdef) entLookup
         mfdefs = case parentFieldTexts of
             [] -> entitiesPrimary pent
-            _  -> Just $ map (getFd pent . HaskellName) parentFieldTexts
+            _  -> Just $ map (getFd pent . FieldNameHS) parentFieldTexts
 
         setNull :: [FieldDef] -> Bool
         setNull [] = error "setNull: impossible!"
         setNull (fd:fds) = let nullSetting = isNull fd in
           if all ((nullSetting ==) . isNull) fds then nullSetting
             else error $ "foreign key columns must all be nullable or non-nullable"
-                   ++ show (map (unHaskellName . fieldHaskell) (fd:fds))
+                   ++ show (map (unFieldNameHS . fieldHaskell) (fd:fds))
         isNull = (NotNullable /=) . nullable . fieldAttrs
 
         toForeignFields :: Text -> FieldDef
@@ -797,17 +798,17 @@ fixForeignKeysAll unEnts = map fixForeignKeys unEnts
           where
             fd = getFd ent haskellField
 
-            haskellField = HaskellName fieldText
+            haskellField = FieldNameHS fieldText
             (pfh, pfdb) = (fieldHaskell pfd, fieldDB pfd)
 
             chktypes ffld _fkey pfld =
                 if fieldType ffld == fieldType pfld then Nothing
                   else Just $ "fieldType mismatch: " ++ show (fieldType ffld) ++ ", " ++ show (fieldType pfld)
 
-        getFd :: EntityDef -> HaskellName -> FieldDef
+        getFd :: EntityDef -> FieldNameHS -> FieldDef
         getFd entity t = go (keyAndEntityFields entity)
           where
-            go [] = error $ "foreign key constraint for: " ++ show (unHaskellName $ entityHaskell entity)
+            go [] = error $ "foreign key constraint for: " ++ show (unEntityNameHS $ entityHaskell entity)
                        ++ " unknown column: " ++ show t
             go (f:fs)
                 | fieldHaskell f == t = f
@@ -841,8 +842,8 @@ mkEntityDef :: PersistSettings
 mkEntityDef ps name entattribs lines =
   UnboundEntityDef foreigns $
     EntityDef
-        { entityHaskell = HaskellName name'
-        , entityDB = DBName $ getDbName ps name' entattribs
+        { entityHaskell = EntityNameHS name'
+        , entityDB = EntityNameDB $ getDbName ps name' entattribs
         -- idField is the user-specified Id
         -- otherwise useAutoIdField
         -- but, adjust it if the user specified a Primary
@@ -857,7 +858,7 @@ mkEntityDef ps name entattribs lines =
         , entityComments = Nothing
         }
   where
-    entName = HaskellName name'
+    entName = EntityNameHS name'
     (isSum, name') =
         case T.uncons name of
             Just ('+', x) -> (True, x)
@@ -887,7 +888,7 @@ mkEntityDef ps name entattribs lines =
     setFieldComments xs fld =
         fld { fieldComments = Just (T.unlines xs) }
 
-    autoIdField = mkAutoIdField ps entName (DBName `fmap` idName) idSqlType
+    autoIdField = mkAutoIdField ps entName (FieldNameDB `fmap` idName) idSqlType
     idSqlType = maybe SqlInt64 (const $ SqlOther "Primary Key") primaryComposite
 
     setComposite Nothing fd = fd
@@ -901,15 +902,15 @@ just1 (Just x) (Just y) = error $ "expected only one of: "
   `mappend` show x `mappend` " " `mappend` show y
 just1 x y = x `mplus` y
 
-mkAutoIdField :: PersistSettings -> HaskellName -> Maybe DBName -> SqlType -> FieldDef
+mkAutoIdField :: PersistSettings -> EntityNameHS -> Maybe FieldNameDB -> SqlType -> FieldDef
 mkAutoIdField ps entName idName idSqlType =
     FieldDef
-        { fieldHaskell = HaskellName "Id"
+        { fieldHaskell = FieldNameHS "Id"
         -- this should be modeled as a Maybe
         -- but that sucks for non-ID field
         -- TODO: use a sumtype FieldDef | IdFieldDef
-        , fieldDB = fromMaybe (DBName $ psIdName ps) idName
-        , fieldType = FTTypeCon Nothing $ keyConName $ unHaskellName entName
+        , fieldDB = fromMaybe (FieldNameDB $ psIdName ps) idName
+        , fieldType = FTTypeCon Nothing $ keyConName $ unEntityNameHS entName
         , fieldSqlType = idSqlType
         -- the primary field is actually a reference to the entity
         , fieldReference = ForeignRef entName defaultReferenceTypeCon
@@ -957,8 +958,8 @@ takeCols onErr ps (n':typ:rest')
         case parseFieldType typ of
             Left err -> onErr typ err
             Right ft -> Just FieldDef
-                { fieldHaskell = HaskellName n
-                , fieldDB = DBName $ getDbName ps n attrs_
+                { fieldHaskell = FieldNameHS n
+                , fieldDB = FieldNameDB $ getDbName ps n attrs_
                 , fieldType = ft
                 , fieldSqlType = SqlOther $ "SqlType unset for " `mappend` n
                 , fieldAttrs = fieldAttrs_
@@ -1015,7 +1016,7 @@ takeId ps tableName (n:rest) =
     addDefaultIdType = takeColsEx ps (field : keyCon : rest ) -- `mappend` setIdName)
     setFieldDef fd = fd
         { fieldReference =
-            ForeignRef (HaskellName tableName) $
+            ForeignRef (EntityNameHS tableName) $
                 if fieldType fd == FTTypeCon Nothing keyCon
                 then defaultReferenceTypeCon
                 else fieldType fd
@@ -1037,7 +1038,7 @@ takeComposite fields pkcols =
     (_, attrs) = break ("!" `T.isPrefixOf`) pkcols
     getDef [] t = error $ "Unknown column in primary key constraint: " ++ show t
     getDef (d:ds) t
-        | fieldHaskell d == HaskellName t =
+        | fieldHaskell d == FieldNameHS t =
             if nullable (fieldAttrs d) /= NotNullable
                 then error $ "primary key column cannot be nullable: " ++ show t ++ show fields
                 else d
@@ -1055,9 +1056,9 @@ takeUniq :: PersistSettings
 takeUniq ps tableName defs (n:rest)
     | not (T.null n) && isUpper (T.head n)
         = UniqueDef
-            (HaskellName n)
+            (ConstraintNameHS n)
             dbName
-            (map (HaskellName &&& getDBName defs) fields)
+            (map (FieldNameHS &&& getDBName defs) fields)
             attrs
   where
     isAttr a =
@@ -1071,22 +1072,22 @@ takeUniq ps tableName defs (n:rest)
       break isNonField rest
     attrs = filter isAttr nonFields
     usualDbName =
-      DBName $ psToDBName ps (tableName `T.append` n)
-    sqlName :: Maybe DBName
+      ConstraintNameDB $ psToDBName ps (tableName `T.append` n)
+    sqlName :: Maybe ConstraintNameDB
     sqlName =
       case find isSqlName nonFields of
         Nothing ->
           Nothing
         (Just t) ->
           case drop 1 $ T.splitOn "=" t of
-            (x : _) -> Just (DBName x)
+            (x : _) -> Just (ConstraintNameDB x)
             _ -> Nothing
     dbName = fromMaybe usualDbName sqlName
     getDBName [] t =
       error $ "Unknown column in unique constraint: " ++ show t
               ++ " " ++ show defs ++ show n ++ " " ++ show attrs
     getDBName (d:ds) t
-        | fieldHaskell d == HaskellName t = fieldDB d
+        | fieldHaskell d == FieldNameHS t = fieldDB d
         | otherwise = getDBName ds t
 takeUniq _ tableName _ xs =
   error $ "invalid unique constraint on table["
@@ -1119,13 +1120,13 @@ takeForeign ps tableName _defs = takeRefTable
         go (n:rest) onDelete onUpdate | not (T.null n) && isLower (T.head n)
             = UnboundForeignDef fFields pFields $ ForeignDef
                 { foreignRefTableHaskell =
-                    HaskellName refTableName
+                    EntityNameHS refTableName
                 , foreignRefTableDBName =
-                    DBName $ psToDBName ps refTableName
+                    EntityNameDB $ psToDBName ps refTableName
                 , foreignConstraintNameHaskell =
-                    HaskellName n
+                    ConstraintNameHS n
                 , foreignConstraintNameDBName =
-                    DBName $ psToDBName ps (tableName `T.append` n)
+                    ConstraintNameDB $ psToDBName ps (tableName `T.append` n)
                 , foreignFieldCascade = FieldCascade
                     { fcOnDelete = onDelete
                     , fcOnUpdate = onUpdate

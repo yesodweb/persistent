@@ -92,6 +92,11 @@ Chain2
     previous Chain2Id Maybe noreference
     Foreign Chain2 OnDeleteCascade fkChain previous References Id
     deriving Show Eq
+
+Chain3
+    name Int
+    previous Chain3Id Maybe OnDeleteCascade
+    deriving Show Eq
 |]
 
 specsWith :: (MonadIO m, MonadFail m) => RunDb SqlBackend m -> Spec
@@ -180,12 +185,20 @@ specsWith runDb = describe "foreign keys options" $ do
         cs <- selectList [] []
         let expected = [] :: [Entity Chain2]
         cs @== expected
+    it "deletes cascades with field self reference to the whole chain" $ runDb $ do
+        k1 <- insert $ Chain3 1 Nothing
+        k2 <- insert $ Chain3 2 (Just k1)
+        insert_ $ Chain3 3 (Just k2)
+        delete k1
+        cs <- selectList [] []
+        let expected = [] :: [Entity Chain3]
+        cs @== expected
 
     describe "EntityDef" $ do
         let ed =
                 entityDef (Proxy @SimpleCascadeChild)
             isRefCol =
-                (HaskellName "ref" ==) . fieldHaskell
+                (FieldNameHS "ref" ==) . fieldHaskell
             expected = FieldCascade
                 { fcOnUpdate = Nothing
                 , fcOnDelete = Just Cascade

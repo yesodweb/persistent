@@ -1,5 +1,9 @@
 # Changelog for persistent-mongoDB
 
+## 2.12.0.0
+
+* Decomposed `HaskellName` into `ConstraintNameHS`, `EntityNameHS`, `FieldNameHS`. Decomposed `DBName` into `ConstraintNameDB`, `EntityNameDB`, `FieldNameDB` respectively. [#1174](https://github.com/yesodweb/persistent/pull/1174)
+
 ## 2.11.0
 
 * Naive implementation of `exists` function from `PersistQueryRead` type class using `count`. [#1131](https://github.com/yesodweb/persistent/pull/1131/files)

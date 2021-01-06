@@ -1,5 +1,13 @@
 # Changelog for persistent-mysql
 
+## 2.12.0.0
+
+* Decomposed `HaskellName` into `ConstraintNameHS`, `EntityNameHS`, `FieldNameHS`. Decomposed `DBName` into `ConstraintNameDB`, `EntityNameDB`, `FieldNameDB` respectively. [#1174](https://github.com/yesodweb/persistent/pull/1174)
+
+## 2.10.3.1
+* Fix foreign key migrations [#1167] https://github.com/yesodweb/persistent/pull/1167
+  * Fix a bug where a foreign key of a field to its table was ignored.
+
 ## 2.10.3
 
 * Compatibility with latest persistent
