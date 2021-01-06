@@ -19,13 +19,13 @@ import Database.Persist.Types
 import Database.Persist.Redis.Parser
 
 toLabel :: FieldDef -> B.ByteString
-toLabel = U.fromString . unpack . unDBName . fieldDB
+toLabel = U.fromString . unpack . unFieldNameDB . fieldDB
 
 toEntityString :: PersistEntity val => val -> Text
-toEntityString = unDBName . entityDB . entityDef . Just
+toEntityString = unEntityNameDB . entityDB . entityDef . Just
 
 toEntityName :: EntityDef -> B.ByteString
-toEntityName = U.fromString . unpack . unDBName . entityDB
+toEntityName = U.fromString . unpack . unEntityNameDB . entityDB
 
 mkEntity :: (MonadFail m, PersistEntity val) => Key val -> [(B.ByteString, B.ByteString)] -> m (Entity val)
 mkEntity key fields = do

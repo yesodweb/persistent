@@ -77,7 +77,7 @@ specsWith runDb = describe "rename specs" $ do
         it "LowerCaseTable has the right sql name" $ do
             fieldDB (entityId (entityDef (Proxy @LowerCaseTable)))
                 `shouldBe`
-                    DBName "my_id"
+                    FieldNameDB "my_id"
 
     it "user specified id, insertKey, no default=" $ runDb $ do
         let rec2 = IdTable "Foo2" Nothing

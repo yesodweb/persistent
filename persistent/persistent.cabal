@@ -1,5 +1,5 @@
 name:            persistent
-version:         2.11.0.2
+version:         2.12.0.0
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -37,6 +37,7 @@ library
                    , path-pieces              >= 0.2
                    , resource-pool            >= 0.2.3
                    , resourcet                >= 1.1.10
+                   , resourcet-pool
                    , scientific
                    , silently
                    , text                     >= 1.2

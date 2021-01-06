@@ -1,5 +1,5 @@
 name:            persistent-mongoDB
-version:         2.11.0.0
+version:         2.12.0.0
 license:         MIT
 license-file:    LICENSE
 author:          Greg Weber <greg@gregweber.info>
@@ -20,7 +20,7 @@ Flag high_precision_date
 
 library
     build-depends:   base               >= 4.8 && < 5
-                   , persistent         >= 2.8   && < 3
+                   , persistent         >= 2.12   && < 3
                    , aeson              >= 1.0
                    , bson               >= 0.3.2   && < 0.5
                    , bytestring

@@ -25,9 +25,8 @@ import Database.Persist.Sql.Util (dbColumns, parseEntityValues, updatePersistVal
 instance PersistUniqueWrite SqlBackend where
     upsertBy uniqueKey record updates = do
       conn <- ask
-      let escape = connEscapeName conn
-      let refCol n = T.concat [escape (entityDB t), ".", n]
-      let mkUpdateText = mkUpdateText' escape refCol
+      let refCol n = T.concat [connEscapeTableName conn t, ".", n]
+      let mkUpdateText = mkUpdateText' (connEscapeFieldName conn) refCol
       case connUpsertSql conn of
         Just upsertSql -> case updates of
                             [] -> defaultUpsertBy uniqueKey record updates
@@ -53,11 +52,11 @@ instance PersistUniqueWrite SqlBackend where
       where
         t = entityDef $ dummyFromUnique uniq
         go = map snd . persistUniqueToFieldNames
-        go' conn x = connEscapeName conn x `mappend` "=?"
+        go' conn x = connEscapeFieldName conn x `mappend` "=?"
         sql conn =
             T.concat
                 [ "DELETE FROM "
-                , connEscapeName conn $ entityDB t
+                , connEscapeTableName conn t
                 , " WHERE "
                 , T.intercalate " AND " $ map (go' conn) $ go uniq]
 
@@ -91,7 +90,7 @@ instance PersistUniqueRead SqlBackend where
                     [ "SELECT "
                     , T.intercalate "," $ dbColumns conn t
                     , " FROM "
-                    , connEscapeName conn $ entityDB t
+                    , connEscapeTableName conn t
                     , " WHERE "
                     , sqlClause conn]
             uvals = persistUniqueToValues uniq
@@ -108,7 +107,7 @@ instance PersistUniqueRead SqlBackend where
       where
         sqlClause conn =
             T.intercalate " AND " $ map (go conn) $ toFieldNames' uniq
-        go conn x = connEscapeName conn x `mappend` "=?"
+        go conn x = connEscapeFieldName conn x `mappend` "=?"
         t = entityDef $ dummyFromUnique uniq
         toFieldNames' = map snd . persistUniqueToFieldNames
 

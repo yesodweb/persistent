@@ -41,7 +41,7 @@ import Database.Persist.Sql.Types
 class RawSql a where
     -- | Number of columns that this data type needs and the list
     -- of substitutions for @SELECT@ placeholders @??@.
-    rawSqlCols :: (DBName -> Text) -> a -> (Int, [Text])
+    rawSqlCols :: (Text -> Text) -> a -> (Int, [Text])
 
     -- | A string telling the user why the column count is what
     -- it is.
@@ -70,12 +70,12 @@ instance
     RawSql (Entity record) where
     rawSqlCols escape _ent = (length sqlFields, [intercalate ", " sqlFields])
         where
-          sqlFields = map (((name <> ".") <>) . escape)
+          sqlFields = map (((name <> ".") <>) . escapeWith escape)
               $ map fieldDB
               -- Hacky for a composite key because
               -- it selects the same field multiple times
               $ entityKeyFields entDef ++ entityFields entDef
-          name = escape (entityDB entDef)
+          name = escapeWith escape (entityDB entDef)
           entDef = entityDef (Nothing :: Maybe record)
     rawSqlColCountReason a =
         case fst (rawSqlCols (error "RawSql") a) of
@@ -152,7 +152,7 @@ instance
   => RawSql (EntityWithPrefix prefix record) where
     rawSqlCols escape _ent = (length sqlFields, [intercalate ", " sqlFields])
         where
-          sqlFields = map (((name <> ".") <>) . escape)
+          sqlFields = map (((name <> ".") <>) . escapeWith escape)
               $ map fieldDB
               -- Hacky for a composite key because
               -- it selects the same field multiple times

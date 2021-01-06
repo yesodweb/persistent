@@ -1,5 +1,9 @@
 # Changelog for persistent-sqlite
 
+## 2.12.0.0
+
+* Decomposed `HaskellName` into `ConstraintNameHS`, `EntityNameHS`, `FieldNameHS`. Decomposed `DBName` into `ConstraintNameDB`, `EntityNameDB`, `FieldNameDB` respectively. [#1174](https://github.com/yesodweb/persistent/pull/1174)
+
 ##  2.11.0.0
 
 * Foreign Key improvements [#1121] (https://github.com/yesodweb/persistent/pull/1121)
