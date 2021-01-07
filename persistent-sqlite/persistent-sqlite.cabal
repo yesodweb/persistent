@@ -124,11 +124,14 @@ test-suite test
                    , persistent-test
                    , bytestring
                    , containers
+                   , conduit
                    , exceptions
                    , fast-logger
                    , hspec >= 2.4
                    , HUnit
+                   , microlens
                    , monad-logger
+                   , mtl
                    , QuickCheck
                    , resourcet
                    , system-fileio
