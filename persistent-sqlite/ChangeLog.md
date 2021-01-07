@@ -4,6 +4,8 @@
 
 * Add `checkForeignKeys` operation to verify no foreign key constraints are
   violated by the database contents.
+* Fix the migration for primary keys that was broken in 2.11.0.0
+  [#1184](https://github.com/yesodweb/persistent/issues/1184)
 
 ##  2.11.0.0
 

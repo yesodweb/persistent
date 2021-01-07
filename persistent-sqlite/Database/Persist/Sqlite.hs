@@ -492,7 +492,7 @@ getCopyTable :: [EntityDef]
 getCopyTable allDefs getter def = do
     stmt <- getter $ T.concat [ "PRAGMA table_info(", escape table, ")" ]
     oldCols' <- with (stmtQuery stmt []) (\src -> runConduit $ src .| getCols)
-    let oldCols = map DBName $ filter (/= "id") oldCols' -- need to update for table id attribute ?
+    let oldCols = map DBName oldCols'
     let newCols = filter (not . safeToRemove def) $ map cName cols
     let common = filter (`elem` oldCols) newCols
     return [ (False, tmpSql)
