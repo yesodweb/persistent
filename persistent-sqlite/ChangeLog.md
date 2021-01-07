@@ -1,5 +1,10 @@
 # Changelog for persistent-sqlite
 
+##  2.11.1.0
+
+* Add `checkForeignKeys` operation to verify no foreign key constraints are
+  violated by the database contents.
+
 ##  2.11.0.0
 
 * Foreign Key improvements [#1121] (https://github.com/yesodweb/persistent/pull/1121)
