@@ -9,8 +9,8 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module Database.Persist.Compatible.Types
-  ( Compatible(..)
-  ) where
+    ( Compatible(..)
+    ) where
 
 import Data.Aeson
 import Database.Persist.Class
