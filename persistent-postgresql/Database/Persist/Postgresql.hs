@@ -768,7 +768,7 @@ getAlters defs def (c1, u1) (c2, u2) =
 
 getColumn :: (Text -> IO Statement)
           -> DBName -> [PersistValue]
-          -> Maybe (DBName, DBName) 
+          -> Maybe (DBName, DBName)
           -> IO (Either Text Column)
 getColumn getter tableName' [PersistText columnName, PersistText isNullable, PersistText typeName, defaultValue, numericPrecision, numericScale, maxlen] refName =
     case d' of
@@ -1098,8 +1098,10 @@ fieldName = escape . fieldDBName
 
 escape :: DBName -> Text
 escape (DBName s) =
-    T.pack $ '"' : go (T.unpack s) ++ "\""
+    T.pack $ go0 (T.unpack s)
   where
+    go0 (' ':r) = r
+    go0 o = '"' : go o ++ "\""
     go "" = ""
     go ('"':xs) = "\"\"" ++ go xs
     go (x:xs) = x : go xs
