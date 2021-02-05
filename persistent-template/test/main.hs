@@ -141,9 +141,9 @@ main = hspec $ do
         let FieldDef{..} =
                 entityId (entityDef (Proxy @HasDefaultId))
         it "should have usual db name" $ do
-            fieldDB `shouldBe` DBName "id"
+            fieldDB `shouldBe` FieldNameDB "id"
         it "should have usual haskell name" $ do
-            fieldHaskell `shouldBe` HaskellName "Id"
+            fieldHaskell `shouldBe` FieldNameHS "Id"
         it "should have correct underlying sql type" $ do
             fieldSqlType `shouldBe` SqlInt64
         it "persistfieldsql should be right" $ do
@@ -155,9 +155,9 @@ main = hspec $ do
         let FieldDef{..} =
                 entityId (entityDef (Proxy @HasCustomSqlId))
         it "should have custom db name" $ do
-            fieldDB `shouldBe` DBName "my_id"
+            fieldDB `shouldBe` FieldNameDB "my_id"
         it "should have usual haskell name" $ do
-            fieldHaskell `shouldBe` HaskellName "id"
+            fieldHaskell `shouldBe` FieldNameHS "id"
         it "should have correct underlying sql type" $ do
             fieldSqlType `shouldBe` SqlString
         it "should have correct haskell type" $ do
@@ -166,9 +166,9 @@ main = hspec $ do
         let FieldDef{..} =
                 entityId (entityDef (Proxy @HasIdDef))
         it "should have usual db name" $ do
-            fieldDB `shouldBe` DBName "id"
+            fieldDB `shouldBe` FieldNameDB "id"
         it "should have usual haskell name" $ do
-            fieldHaskell `shouldBe` HaskellName "id"
+            fieldHaskell `shouldBe` FieldNameHS "id"
         it "should have correct underlying sql type" $ do
             fieldSqlType `shouldBe` SqlInt64
         it "should have correct haskell type" $ do
@@ -179,9 +179,9 @@ main = hspec $ do
             FieldDef{..} =
                 entityId sharedDef
         it "should have usual db name" $ do
-            fieldDB `shouldBe` DBName "id"
+            fieldDB `shouldBe` FieldNameDB "id"
         it "should have usual haskell name" $ do
-            fieldHaskell `shouldBe` HaskellName "id"
+            fieldHaskell `shouldBe` FieldNameHS "id"
         it "should have correct underlying sql type" $ do
             fieldSqlType `shouldBe` SqlInt64
         it "should have correct haskell type" $ do
@@ -208,9 +208,9 @@ main = hspec $ do
         let FieldDef{..} =
                 entityId (entityDef (Proxy @SharedPrimaryKeyWithCascade))
         it "should have usual db name" $ do
-            fieldDB `shouldBe` DBName "id"
+            fieldDB `shouldBe` FieldNameDB "id"
         it "should have usual haskell name" $ do
-            fieldHaskell `shouldBe` HaskellName "id"
+            fieldHaskell `shouldBe` FieldNameHS "id"
         it "should have correct underlying sql type" $ do
             fieldSqlType `shouldBe` SqlInt64
         it "should have correct haskell type" $ do
@@ -223,7 +223,7 @@ main = hspec $ do
     describe "OnCascadeDelete" $ do
         let subject :: FieldDef
             Just subject =
-                List.find ((HaskellName "person" ==) . fieldHaskell)
+                List.find ((FieldNameHS "person" ==) . fieldHaskell)
                 $ entityFields
                 $ simpleCascadeDef
             simpleCascadeDef =
@@ -238,16 +238,16 @@ main = hspec $ do
                 simpleCascadeDef
                     `shouldBe`
                         EntityDef
-                            { entityHaskell = HaskellName "HasSimpleCascadeRef"
-                            , entityDB = DBName "HasSimpleCascadeRef"
+                            { entityHaskell = EntityNameHS "HasSimpleCascadeRef"
+                            , entityDB = EntityNameDB "HasSimpleCascadeRef"
                             , entityId =
                                 FieldDef
-                                    { fieldHaskell = HaskellName "Id"
-                                    , fieldDB = DBName "id"
+                                    { fieldHaskell = FieldNameHS "Id"
+                                    , fieldDB = FieldNameDB "id"
                                     , fieldType = FTTypeCon Nothing "HasSimpleCascadeRefId"
                                     , fieldSqlType = SqlInt64
                                     , fieldReference =
-                                        ForeignRef (HaskellName "HasSimpleCascadeRef") (FTTypeCon (Just "Data.Int") "Int64")
+                                        ForeignRef (EntityNameHS "HasSimpleCascadeRef") (FTTypeCon (Just "Data.Int") "Int64")
                                     , fieldAttrs = []
                                     , fieldStrict = True
                                     , fieldComments = Nothing
@@ -257,15 +257,15 @@ main = hspec $ do
                             , entityAttrs = []
                             , entityFields =
                                 [ FieldDef
-                                    { fieldHaskell = HaskellName "person"
-                                    , fieldDB = DBName "person"
+                                    { fieldHaskell = FieldNameHS "person"
+                                    , fieldDB = FieldNameDB "person"
                                     , fieldType = FTTypeCon Nothing "PersonId"
                                     , fieldSqlType = SqlInt64
                                     , fieldAttrs = []
                                     , fieldStrict = True
                                     , fieldReference =
                                         ForeignRef
-                                            (HaskellName "Person")
+                                            (EntityNameHS "Person")
                                             (FTTypeCon (Just "Data.Int") "Int64")
                                     , fieldCascade =
                                         FieldCascade { fcOnUpdate = Nothing, fcOnDelete = Just Cascade }

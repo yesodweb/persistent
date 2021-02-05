@@ -83,12 +83,12 @@ getTableName :: forall record m backend.
              , BackendCompatible SqlBackend backend
              , Monad m
              ) => record -> ReaderT backend m Text
-getTableName rec = withReaderT projectBackend $ do
+getTableName rec = withCompatibleBackend $ do
     conn <- ask
-    return $ connEscapeName conn $ tableDBName rec
+    return $ connEscapeTableName conn (entityDef $ Just rec)
 
 -- | useful for a backend to implement tableName by adding escaping
-tableDBName :: (PersistEntity record) => record -> DBName
+tableDBName :: (PersistEntity record) => record -> EntityNameDB
 tableDBName rec = entityDB $ entityDef (Just rec)
 
 -- | get the SQL string for the field that an EntityField represents
@@ -103,12 +103,12 @@ getFieldName :: forall record typ m backend.
              , Monad m
              )
              => EntityField record typ -> ReaderT backend m Text
-getFieldName rec = withReaderT projectBackend $ do
+getFieldName rec = withCompatibleBackend $ do
     conn <- ask
-    return $ connEscapeName conn $ fieldDBName rec
+    return $ connEscapeFieldName conn (fieldDB $ persistFieldDef rec)
 
 -- | useful for a backend to implement fieldName by adding escaping
-fieldDBName :: forall record typ. (PersistEntity record) => EntityField record typ -> DBName
+fieldDBName :: forall record typ. (PersistEntity record) => EntityField record typ -> FieldNameDB
 fieldDBName = fieldDB . persistFieldDef
 
 
@@ -143,7 +143,7 @@ instance PersistStoreWrite SqlBackend where
         let wher = whereStmtForKey conn k
         let sql = T.concat
                 [ "UPDATE "
-                , connEscapeName conn $ tableDBName $ recordTypeFromKey k
+                , connEscapeTableName conn (entityDef $ Just $ recordTypeFromKey k)
                 , " SET "
                 , T.intercalate "," $ map (mkUpdateText conn) upds
                 , " WHERE "
@@ -232,9 +232,9 @@ instance PersistStoreWrite SqlBackend where
           let valss = map mkInsertValues vals
           let sql = T.concat
                   [ "INSERT INTO "
-                  , connEscapeName conn (entityDB t)
+                  , connEscapeTableName conn t
                   , "("
-                  , T.intercalate "," $ map (connEscapeName conn . fieldDB) $ entityFields t
+                  , T.intercalate "," $ map (connEscapeFieldName conn . fieldDB) $ entityFields t
                   , ") VALUES ("
                   , T.intercalate "),(" $ replicate (length valss) $ T.intercalate "," $ map (const "?") (entityFields t)
                   , ")"
@@ -247,7 +247,7 @@ instance PersistStoreWrite SqlBackend where
         let wher = whereStmtForKey conn k
         let sql = T.concat
                 [ "UPDATE "
-                , connEscapeName conn (entityDB t)
+                , connEscapeTableName conn t
                 , " SET "
                 , T.intercalate "," (map (go conn . fieldDB) $ entityFields t)
                 , " WHERE "
@@ -256,7 +256,7 @@ instance PersistStoreWrite SqlBackend where
             vals = mkInsertValues val `mappend` keyToValues k
         rawExecute sql vals
       where
-        go conn x = connEscapeName conn x `T.append` "=?"
+        go conn x = connEscapeFieldName conn x `T.append` "=?"
 
     insertKey k v = insrepHelper "INSERT" [Entity k v]
 
@@ -296,21 +296,21 @@ instance PersistStoreWrite SqlBackend where
         wher conn = whereStmtForKey conn k
         sql conn = T.concat
             [ "DELETE FROM "
-            , connEscapeName conn $ tableDBName $ recordTypeFromKey k
+            , connEscapeTableName conn (entityDef $ Just $ recordTypeFromKey k)
             , " WHERE "
             , wher conn
             ]
 instance PersistStoreWrite SqlWriteBackend where
-    insert v = withReaderT persistBackend $ insert v
-    insertMany vs = withReaderT persistBackend $ insertMany vs
-    insertMany_ vs = withReaderT persistBackend $ insertMany_ vs
-    insertEntityMany vs = withReaderT persistBackend $ insertEntityMany vs
-    insertKey k v = withReaderT persistBackend $ insertKey k v
-    repsert k v = withReaderT persistBackend $ repsert k v
-    replace k v = withReaderT persistBackend $ replace k v
-    delete k = withReaderT persistBackend $ delete k
-    update k upds = withReaderT persistBackend $ update k upds
-    repsertMany krs = withReaderT persistBackend $ repsertMany krs
+    insert v = withBaseBackend $ insert v
+    insertMany vs = withBaseBackend $ insertMany vs
+    insertMany_ vs = withBaseBackend $ insertMany_ vs
+    insertEntityMany vs = withBaseBackend $ insertEntityMany vs
+    insertKey k v = withBaseBackend $ insertKey k v
+    repsert k v = withBaseBackend $ repsert k v
+    replace k v = withBaseBackend $ replace k v
+    delete k = withBaseBackend $ delete k
+    update k upds = withBaseBackend $ update k upds
+    repsertMany krs = withBaseBackend $ repsertMany krs
 
 instance PersistStoreRead SqlBackend where
     get k = do
@@ -328,7 +328,7 @@ instance PersistStoreRead SqlBackend where
                 [ "SELECT "
                 , cols conn
                 , " FROM "
-                , connEscapeName conn $ entityDB t
+                , connEscapeTableName conn t
                 , " WHERE "
                 , wher
                 ]
@@ -341,11 +341,11 @@ instance PersistStoreRead SqlBackend where
             return $ Map.fromList $ fmap (\e -> (entityKey e, entityVal e)) es
 
 instance PersistStoreRead SqlReadBackend where
-    get k = withReaderT persistBackend $ get k
-    getMany ks = withReaderT persistBackend $ getMany ks
+    get k = withBaseBackend $ get k
+    getMany ks = withBaseBackend $ getMany ks
 instance PersistStoreRead SqlWriteBackend where
-    get k = withReaderT persistBackend $ get k
-    getMany ks = withReaderT persistBackend $ getMany ks
+    get k = withBaseBackend $ get k
+    getMany ks = withBaseBackend $ getMany ks
 
 dummyFromKey :: Key record -> Maybe record
 dummyFromKey = Just . recordTypeFromKey
@@ -367,7 +367,7 @@ insrepHelper command es = do
     sql conn columnNames = T.concat
         [ command
         , " INTO "
-        , connEscapeName conn (entityDB entDef)
+        , connEscapeTableName conn entDef
         , "("
         , T.intercalate "," columnNames
         , ") VALUES ("

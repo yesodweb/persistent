@@ -2,6 +2,7 @@
 {-# LANGUAGE ExplicitForAll #-}
 module Database.Persist.Class.PersistStore
     ( HasPersistBackend (..)
+    , withBaseBackend
     , IsPersistBackend (..)
     , PersistRecordBackend
     , liftPersist
@@ -17,12 +18,13 @@ module Database.Persist.Class.PersistStore
     , insertRecord
     , ToBackendKey(..)
     , BackendCompatible(..)
+    , withCompatibleBackend
     ) where
 
 import Control.Exception (throwIO)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (MonadReader (ask), runReaderT)
-import Control.Monad.Trans.Reader (ReaderT)
+import Control.Monad.Trans.Reader (ReaderT, withReaderT)
 import qualified Data.Aeson as A
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -43,6 +45,16 @@ import Database.Persist.Types
 class HasPersistBackend backend where
     type BaseBackend backend
     persistBackend :: backend -> BaseBackend backend
+
+-- | Run a query against a larger backend by plucking out @BaseBackend backend@
+--
+-- This is a helper for reusing existing queries when expanding the backend type.
+--
+-- @since 2.12.0
+withBaseBackend :: (HasPersistBackend backend)
+                => ReaderT (BaseBackend backend) m a -> ReaderT backend m a
+withBaseBackend = withReaderT persistBackend
+
 -- | Class which witnesses that @backend@ is essentially the same as @BaseBackend backend@.
 -- That is, they're isomorphic and @backend@ is just some wrapper over @BaseBackend backend@.
 class (HasPersistBackend backend) => IsPersistBackend backend where
@@ -50,6 +62,10 @@ class (HasPersistBackend backend) => IsPersistBackend backend where
     -- It should be used carefully and only when actually constructing a @backend@. Careless use allows us
     -- to accidentally run a write query against a read-only database.
     mkPersistBackend :: BaseBackend backend -> backend
+
+-- NB: there is a deliberate *lack* of an equivalent to 'withBaseBackend' for
+-- 'IsPersistentBackend'. We don't want it to be easy for the user to construct
+-- a backend when they're not meant to.
 
 -- | This class witnesses that two backend are compatible, and that you can
 -- convert from the @sub@ backend into the @sup@ backend. This is similar
@@ -88,12 +104,22 @@ class (HasPersistBackend backend) => IsPersistBackend backend where
 --
 -- -- after:
 -- asdf' :: 'BackendCompatible' SqlBackend backend => ReaderT backend m ()
--- asdf' = withReaderT 'projectBackend' asdf
+-- asdf' = 'withCompatibleBackend' asdf
 -- @
 --
 -- @since 2.7.1
 class BackendCompatible sup sub where
     projectBackend :: sub -> sup
+
+-- | Run a query against a compatible backend, by projecting the backend
+--
+-- This is a helper for using queries which run against a specific backend type
+-- that your backend is compatible with.
+--
+-- @since 2.12.0
+withCompatibleBackend :: (BackendCompatible sup sub)
+                      => ReaderT sup m a -> ReaderT sub m a
+withCompatibleBackend = withReaderT projectBackend
 
 -- | A convenient alias for common type signatures
 type PersistRecordBackend record backend = (PersistEntity record, PersistEntityBackend record ~ BaseBackend backend)

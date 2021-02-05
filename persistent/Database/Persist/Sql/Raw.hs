@@ -231,7 +231,7 @@ rawSql stmt = run
 
       run params = do
         conn <- projectBackend `liftM` ask
-        let (colCount, colSubsts) = rawSqlCols (connEscapeName conn) x
+        let (colCount, colSubsts) = rawSqlCols (connEscapeRawName conn) x
         withStmt' colSubsts params $ firstRow colCount
 
       firstRow colCount = do

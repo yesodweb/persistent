@@ -6,7 +6,7 @@ module Database.Persist.Sql.Orphan.PersistUnique
 
 import Control.Exception (throwIO)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Reader (ask, withReaderT)
+import Control.Monad.Trans.Reader (ask)
 import qualified Data.Conduit.List as CL
 import Data.Function (on)
 import Data.List (nubBy)
@@ -25,9 +25,8 @@ import Database.Persist.Sql.Util (dbColumns, parseEntityValues, updatePersistVal
 instance PersistUniqueWrite SqlBackend where
     upsertBy uniqueKey record updates = do
       conn <- ask
-      let escape = connEscapeName conn
-      let refCol n = T.concat [escape (entityDB t), ".", n]
-      let mkUpdateText = mkUpdateText' escape refCol
+      let refCol n = T.concat [connEscapeTableName conn t, ".", n]
+      let mkUpdateText = mkUpdateText' (connEscapeFieldName conn) refCol
       case connUpsertSql conn of
         Just upsertSql -> case updates of
                             [] -> defaultUpsertBy uniqueKey record updates
@@ -53,11 +52,11 @@ instance PersistUniqueWrite SqlBackend where
       where
         t = entityDef $ dummyFromUnique uniq
         go = map snd . persistUniqueToFieldNames
-        go' conn x = connEscapeName conn x `mappend` "=?"
+        go' conn x = connEscapeFieldName conn x `mappend` "=?"
         sql conn =
             T.concat
                 [ "DELETE FROM "
-                , connEscapeName conn $ entityDB t
+                , connEscapeTableName conn t
                 , " WHERE "
                 , T.intercalate " AND " $ map (go' conn) $ go uniq]
 
@@ -79,9 +78,9 @@ instance PersistUniqueWrite SqlBackend where
                 Nothing -> defaultPutMany rs
 
 instance PersistUniqueWrite SqlWriteBackend where
-    deleteBy uniq = withReaderT persistBackend $ deleteBy uniq
-    upsert rs us = withReaderT persistBackend $ upsert rs us
-    putMany rs = withReaderT persistBackend $ putMany rs
+    deleteBy uniq = withBaseBackend $ deleteBy uniq
+    upsert rs us = withBaseBackend $ upsert rs us
+    putMany rs = withBaseBackend $ putMany rs
 
 instance PersistUniqueRead SqlBackend where
     getBy uniq = do
@@ -91,7 +90,7 @@ instance PersistUniqueRead SqlBackend where
                     [ "SELECT "
                     , T.intercalate "," $ dbColumns conn t
                     , " FROM "
-                    , connEscapeName conn $ entityDB t
+                    , connEscapeTableName conn t
                     , " WHERE "
                     , sqlClause conn]
             uvals = persistUniqueToValues uniq
@@ -108,15 +107,15 @@ instance PersistUniqueRead SqlBackend where
       where
         sqlClause conn =
             T.intercalate " AND " $ map (go conn) $ toFieldNames' uniq
-        go conn x = connEscapeName conn x `mappend` "=?"
+        go conn x = connEscapeFieldName conn x `mappend` "=?"
         t = entityDef $ dummyFromUnique uniq
         toFieldNames' = map snd . persistUniqueToFieldNames
 
 instance PersistUniqueRead SqlReadBackend where
-    getBy uniq = withReaderT persistBackend $ getBy uniq
+    getBy uniq = withBaseBackend $ getBy uniq
 
 instance PersistUniqueRead SqlWriteBackend where
-    getBy uniq = withReaderT persistBackend $ getBy uniq
+    getBy uniq = withBaseBackend $ getBy uniq
 
 dummyFromUnique :: Unique v -> Maybe v
 dummyFromUnique _ = Nothing

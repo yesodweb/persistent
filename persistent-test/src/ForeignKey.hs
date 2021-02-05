@@ -198,7 +198,7 @@ specsWith runDb = describe "foreign keys options" $ do
         let ed =
                 entityDef (Proxy @SimpleCascadeChild)
             isRefCol =
-                (HaskellName "ref" ==) . fieldHaskell
+                (FieldNameHS "ref" ==) . fieldHaskell
             expected = FieldCascade
                 { fcOnUpdate = Nothing
                 , fcOnDelete = Just Cascade
