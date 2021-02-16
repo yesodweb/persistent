@@ -635,8 +635,27 @@ instance A.FromJSON PersistValue where
     parseJSON (A.String t0) =
         case T.uncons t0 of
             Nothing -> fail "Null string"
-            Just ('p', t) -> either (\_ -> fail "Invalid base64") (return . PersistDbSpecific)
+            -- Just ('p', t) -> either (\_ -> fail "Invalid base64") (return . PersistDbSpecific)
+            --                $ B64.decode $ TE.encodeUtf8 t
+
+            -- This change will fix Postgresql but break Mysql and Sqlite.
+            -- Plan: Define the deserialization for `PersistValue` the "right
+            -- way", but use a newtype in Database.Persist.Postgresql. I don't
+            -- know if that will work, I might have to duplicate some functions
+            -- that the base library does, and that would just cause a nasty,
+            -- unmaintainable mess.
+            -- I guess I could define a transitional `Database.Persist.Internal`
+            -- that exports polymorphised versions of the functions I need, and
+            -- then `Database.Persist` can instantiate those at `PersistValue`
+            -- while `Database.Persist.Postgresql` instantiates them at its
+            -- special newtype, but then users would have to know that they're
+            -- supposed to use the functions exported by `Database.Persist.Postgresql`,
+            -- and not the ones exported by `Database.Persistent`. What a
+            -- revolting development.
+            -- It might be better to just provide a
+            Just ('p', t) -> either (\_ -> fail "Invalid base64") (return . PersistLiteralEscaped)
                            $ B64.decode $ TE.encodeUtf8 t
+
             Just ('l', t) -> either (\_ -> fail "Invalid base64") (return . PersistLiteral)
                            $ B64.decode $ TE.encodeUtf8 t
             Just ('e', t) -> either (\_ -> fail "Invalid base64") (return . PersistLiteralEscaped)
