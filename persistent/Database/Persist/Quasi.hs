@@ -614,7 +614,7 @@ empty [Spaces _] = True
 empty _          = False
 
 -- | A line.  We don't care about spaces in the middle of the
--- line.  Also, we don't care about the ammount of indentation.
+-- line.  Also, we don't care about the amount of indentation.
 data Line' f
     = Line
     { lineIndent   :: Int
