@@ -538,11 +538,12 @@ lowerCaseSettings = defaultPersistSettings
 
 -- | Parses a quasi-quoted syntax into a list of entity definitions.
 parse :: PersistSettings -> Text -> [EntityDef]
-parse ps = parseLines ps . preparse
+parse ps = maybe [] (parseLines ps) . preparse
 
-preparse :: Text -> [Line]
+preparse :: Text -> Maybe (NonEmpty Line)
 preparse =
-    removeSpaces
+    NEL.nonEmpty
+        . removeSpaces
         . filter (not . empty)
         . map tokenize
         . T.lines
@@ -648,15 +649,17 @@ removeSpaces =
     fromToken Spaces{}  = Nothing
 
 -- | Divide lines into blocks and make entity definitions.
-parseLines :: PersistSettings -> [Line] -> [EntityDef]
+parseLines :: PersistSettings -> NonEmpty Line -> [EntityDef]
 parseLines ps lines =
     fixForeignKeysAll $ toEnts lines
   where
-    toEnts :: [Line] -> [UnboundEntityDef]
+    toEnts :: NonEmpty Line -> [UnboundEntityDef]
     toEnts =
         map mk
         . associateLines
         . skipEmpty
+        . NEL.toList
+
     mk :: LinesWithComments -> UnboundEntityDef
     mk lwc =
         let Line _ (name :| entAttribs) :| rest = lwcLines lwc
