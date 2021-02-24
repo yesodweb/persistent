@@ -650,16 +650,9 @@ removeSpaces =
 
 -- | Divide lines into blocks and make entity definitions.
 parseLines :: PersistSettings -> NonEmpty Line -> [EntityDef]
-parseLines ps lines =
-    fixForeignKeysAll $ toEnts lines
+parseLines ps =
+    fixForeignKeysAll . map mk . associateLines . skipEmpty
   where
-    toEnts :: NonEmpty Line -> [UnboundEntityDef]
-    toEnts =
-        map mk
-        . associateLines
-        . skipEmpty
-        . NEL.toList
-
     mk :: LinesWithComments -> UnboundEntityDef
     mk lwc =
         let Line _ (name :| entAttribs) :| rest = lwcLines lwc
@@ -730,8 +723,8 @@ associateLines lines =
 
     minimumIndentOf = minimum . fmap lineIndent . lwcLines
 
-skipEmpty :: [Line' []] -> [Line' NonEmpty]
-skipEmpty = mapMaybe (traverseLine NEL.nonEmpty)
+skipEmpty :: NonEmpty (Line' []) -> [Line' NonEmpty]
+skipEmpty = mapMaybe (traverseLine NEL.nonEmpty) . NEL.toList
 
 setComments :: [Text] -> UnboundEntityDef -> UnboundEntityDef
 setComments [] = id

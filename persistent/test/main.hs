@@ -249,15 +249,12 @@ Baz
                     |]
 
         let preparsed =
-                foldMap NEL.toList (preparse subject)
+                preparse subject
         it "preparse works" $ do
-            length preparsed
-                `shouldBe` do
-                    length . filter (not . T.all Char.isSpace) . T.lines
-                        $ subject
+            (length <$> preparsed) `shouldBe` Just 10
 
         let skippedEmpty =
-                skipEmpty preparsed
+                maybe [] skipEmpty preparsed
             fooLines =
                 [ Line
                     { lineIndent = 0
@@ -549,8 +546,8 @@ Baz
                     ]
         it "works with textual input" $ do
             let text = "Foo\n  x X\n-- | Hello\nBar\n name String"
-                parsed = foldMap NEL.toList (preparse text)
-                allFull = skipEmpty parsed
+                parsed = preparse text
+                allFull = maybe [] skipEmpty parsed
             associateLines allFull
                 `shouldBe`
                     [ LinesWithComments
@@ -569,7 +566,7 @@ Baz
                         }
                     ]
         it "works with extra blocks" $ do
-            let text = skipEmpty . foldMap NEL.toList . preparse . T.unlines $
+            let text = maybe [] skipEmpty . preparse . T.unlines $
                     [ "LowerCaseTable"
                     , "    Id             sql=my_id"
                     , "    fullName Text"
@@ -598,7 +595,7 @@ Baz
                 ]
 
         it "works with extra blocks twice" $ do
-            let text = skipEmpty . foldMap NEL.toList . preparse . T.unlines $
+            let text = maybe [] skipEmpty . preparse . T.unlines $
                     [ "IdTable"
                     , "    Id Day default=CURRENT_DATE"
                     , "    name Text"
@@ -639,7 +636,7 @@ Baz
 
 
         it "works with field comments" $ do
-            let text = skipEmpty . foldMap NEL.toList . preparse . T.unlines $
+            let text = maybe [] skipEmpty . preparse . T.unlines $
                     [ "-- | Model"
                     , "Foo"
                     , "  -- | Field"
