@@ -62,7 +62,7 @@ jobs:
            # - name: Start Redis
            #   uses: supercharge/redis-github-action@1.1.0
       - name: Test postgres connection
-        run: PGPASS=perstest psql -c 'select version();' -d persistent -u perstest 
+        run: PGPASS=perstest psql -c 'select version();' -d persistent --username perstest 
       - run: cabal v2-update
       - run: cabal v2-freeze $CONFIG
       - uses: actions/cache@v2
