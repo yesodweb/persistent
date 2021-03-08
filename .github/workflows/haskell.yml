@@ -49,18 +49,20 @@ jobs:
         with:
           ghc-version: ${{ matrix.ghc }}
           cabal-version: ${{ matrix.cabal }}
-      - name: Check MySQL connection
-        run: mysql -utest -ptest -h127.0.0.1 --port=33306 test -e "SELECT 1;"
+          # - name: Check MySQL connection
+          #   run: mysql -utest -ptest -h127.0.0.1 --port=33306 test -e "SELECT 1;"
       - uses: harmon758/postgresql-action@v1
         with:
            postgresql version: '12'  # See https://hub.docker.com/_/postgres for available versions
            postgresql user: perstest
            postgresql password: perstest
            postgresql db: persistent
-      - name: Start MongoDB
-        uses: supercharge/mongodb-github-action@1.3.0
-      - name: Start Redis
-        uses: supercharge/redis-github-action@1.1.0
+           # - name: Start MongoDB
+           #   uses: supercharge/mongodb-github-action@1.3.0
+           # - name: Start Redis
+           #   uses: supercharge/redis-github-action@1.1.0
+      - name: Test postgres connection
+        run: PGPASS=perstest psql -c 'select version();' -d persistent -u perstest 
       - run: cabal v2-update
       - run: cabal v2-freeze $CONFIG
       - uses: actions/cache@v2
@@ -73,7 +75,6 @@ jobs:
             #  ${{ runner.os }}-${{ matrix.ghc }}-
       - run: cabal v2-build all --disable-optimization --only-dependencies $CONFIG
       - run: cabal v2-build all --disable-optimization $CONFIG
-      - run: PGPASS=perstest psql -c 'select version();' -d persistent -u perstest 
-      - run: cabal v2-test all --disable-optimization $CONFIG
+      - run: cabal v2-test persistent-postgresql --disable-optimization $CONFIG
       - run: cabal v2-haddock all $CONFIG
       - run: cabal v2-sdist all
