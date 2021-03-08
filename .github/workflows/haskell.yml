@@ -73,6 +73,7 @@ jobs:
             #  ${{ runner.os }}-${{ matrix.ghc }}-
       - run: cabal v2-build all --disable-optimization --only-dependencies $CONFIG
       - run: cabal v2-build all --disable-optimization $CONFIG
+      - run: PGPASS=perstest psql -c 'select version();' -d persistent -u perstest 
       - run: cabal v2-test all --disable-optimization $CONFIG
       - run: cabal v2-haddock all $CONFIG
       - run: cabal v2-sdist all
