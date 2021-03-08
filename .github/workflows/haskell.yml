@@ -64,7 +64,7 @@ jobs:
       - name: Test postgres connection
         run: |
             sleep 5
-            PGPASS=perstest psql -c 'select version();' -d persistent --username perstest -h 127.0.0.1 -p 5432
+            PGPASSWORD=perstest psql -c 'select version();' -d persistent --username perstest -h 127.0.0.1 -p 5432
       - run: cabal v2-update
       - run: cabal v2-freeze $CONFIG
       - uses: actions/cache@v2
