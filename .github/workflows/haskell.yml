@@ -9,7 +9,7 @@ on:
       - synchronize
 jobs:
   build:
-    services:
+     # services:
       # mysql-service Label used to access the service container
       # mysql-service:
       #   # Docker Hub image (also with version)
