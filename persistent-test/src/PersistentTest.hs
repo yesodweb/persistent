@@ -299,7 +299,7 @@ specsWith runDb = describe "persistent" $ do
       in  toPathPiece key1 == toPathPiece key2
 
   it "replace" $ runDb $ do
-      pendingWith "failing in CI for some reason?"
+      liftIO $ pendingWith "failing in CI for some reason?"
       key2 <- insert $ Person "Michael2" 27 Nothing
       let p3 = Person "Michael3" 27 Nothing
       replace key2 p3
