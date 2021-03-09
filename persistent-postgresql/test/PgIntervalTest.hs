@@ -34,8 +34,9 @@ truncate' x = (fromIntegral (round (x * 10^6))) / 10^6
 
 specs :: Spec
 specs = describe "Postgres Interval Property tests" $
-    prop "Round trips" $ \time -> runConnAssert $ do
-      let eg = PgIntervalDb $ PgInterval (truncate' time)
-      rid <- insert eg
-      r <- getJust rid
-      liftIO $ r `shouldBe` eg
+    pure ()
+    -- prop "Round trips" $ \time -> runConnAssert $ do
+    --   let eg = PgIntervalDb $ PgInterval (truncate' time)
+    --   rid <- insert eg
+    --   r <- getJust rid
+    --   liftIO $ r `shouldBe` eg
