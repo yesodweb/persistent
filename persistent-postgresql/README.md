@@ -18,3 +18,8 @@ CREATE DATABASE
 -- or,
 $ createdb test
 ```
+
+The tests do not pass a test and expect to connect with the `postgres` user.
+Ensure that peer authentication is allowed for this.
+An easy/insecure way to do this is to set the `METHOD` to `trust` for all the login methods in `/etc/postgresql/XX/main/pg_hba.coinf`.
+(TODO: make this better?)
