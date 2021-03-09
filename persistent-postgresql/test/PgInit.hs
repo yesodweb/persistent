@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables, OverloadedStrings #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module PgInit (
@@ -41,6 +41,7 @@ import Init
 
 -- re-exports
 import Control.Exception (SomeException)
+import UnliftIO
 import Control.Monad (void, replicateM, liftM, when, forM_)
 import Control.Monad.Trans.Reader
 import Data.Aeson (Value(..))
@@ -113,17 +114,32 @@ runConnInternal connType f = do
 
   flip runLoggingT (\_ _ _ s -> printDebug s) $ do
     logInfoN (if travis then "Running in CI" else "CI not detected")
-    case connType of
-      RunConnBasic -> withPostgresqlPool connString poolSize $ runSqlPool f
-      RunConnConf -> do
-        let conf = PostgresConf
-              { pgConnStr = connString
-              , pgPoolStripes = 1
-              , pgPoolIdleTimeout = 60
-              , pgPoolSize = poolSize
-              }
-            hooks = defaultPostgresConfHooks
-        withPostgresqlPoolWithConf conf hooks (runSqlPool f)
+    let go =
+            case connType of
+                RunConnBasic ->
+                    withPostgresqlPool connString poolSize $ runSqlPool f
+                RunConnConf -> do
+                    let conf = PostgresConf
+                          { pgConnStr = connString
+                          , pgPoolStripes = 1
+                          , pgPoolIdleTimeout = 60
+                          , pgPoolSize = poolSize
+                          }
+                        hooks = defaultPostgresConfHooks
+                    withPostgresqlPoolWithConf conf hooks (runSqlPool f)
+    eres <- try go
+    case eres of
+        Left (err :: SomeException) -> do
+            eres' <- try go
+            case eres' of
+                Left (err' :: SomeException) ->
+                    if show err == show err'
+                    then throwIO err
+                    else throwIO err'
+                Right a ->
+                    pure a
+        Right a ->
+            pure a
 
 runConnAssert :: SqlPersistT (LoggingT (ResourceT IO)) () -> Assertion
 runConnAssert actions = do
