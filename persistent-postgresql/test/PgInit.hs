@@ -127,20 +127,22 @@ runConnInternal connType f = do
                           }
                         hooks = defaultPostgresConfHooks
                     withPostgresqlPoolWithConf conf hooks (runSqlPool f)
-    go
-    -- eres <- try go
-    -- case eres of
-    --     Left (err :: SomeException) -> do
-    --         eres' <- try go
-    --         case eres' of
-    --             Left (err' :: SomeException) ->
-    --                 if show err == show err'
-    --                 then throwIO err
-    --                 else throwIO err'
-    --             Right a ->
-    --                 pure a
-    --     Right a ->
-    --         pure a
+    -- horrifying hack :( postgresql is having weird connection failures in
+    -- CI, for no reason that i can determine. see this PR for notes:
+                    -- https://github.com/yesodweb/persistent/pull/1197
+    eres <- try go
+    case eres of
+        Left (err :: SomeException) -> do
+            eres' <- try go
+            case eres' of
+                Left (err' :: SomeException) ->
+                    if show err == show err'
+                    then throwIO err
+                    else throwIO err'
+                Right a ->
+                    pure a
+        Right a ->
+            pure a
 
 runConnAssert :: SqlPersistT (LoggingT (ResourceT IO)) () -> Assertion
 runConnAssert actions = do
