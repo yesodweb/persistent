@@ -66,7 +66,7 @@ specsWith runDb = describe "QueryInProgress" $ do
         Persist.rawSql @(Persist.Single String) "select pg_sleep(5)" []
 
       let exceptionStr :: String = either Exception.displayException (const "no exception") result
-      liftIO $ exceptionStr @/= "libpq: failed (another command is already in progress\n)"
+      liftIO $ assertNotEqual "Did the libpq error happen?" "libpq: failed (another command is already in progress\n)" exceptionStr  
       -- void $ rawSql @(Maybe (Single String)) "select pg_sleep(1)" []
       
 
