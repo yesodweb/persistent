@@ -2,6 +2,7 @@
 
 ## 2.12
 
+* Refactor [] to NonEmpty in Quasi module [#1193](https://github.com/yesodweb/persistent/pull/1193)
 * [#1162](https://github.com/yesodweb/persistent/pull/1162)
   * Replace `askLogFunc` with `askLoggerIO`
 * Decomposed `HaskellName` into `ConstraintNameHS`, `EntityNameHS`, `FieldNameHS`. Decomposed `DBName` into `ConstraintNameDB`, `EntityNameDB`, `FieldNameDB` respectively. [#1174](https://github.com/yesodweb/persistent/pull/1174)
