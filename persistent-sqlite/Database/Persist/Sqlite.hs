@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -10,6 +11,12 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
+-- Strictly, this could go as low as GHC 8.6.1, which is when DerivingVia was
+-- introduced - this base version requires 8.6.5+
+#if MIN_VERSION_base(4,12,0)
+{-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE UndecidableInstances #-}
+#endif
 -- | A sqlite backend for persistent.
 --
 -- Note: If you prepend @WAL=off @ to your connection string, it will disable
@@ -54,8 +61,11 @@ import Control.Monad (forM_)
 import Control.Monad.IO.Unlift (MonadIO (..), MonadUnliftIO, askRunInIO, withRunInIO, withUnliftIO, unliftIO, withRunInIO)
 import Control.Monad.Logger (NoLoggingT, runNoLoggingT, MonadLoggerIO, logWarn, runLoggingT, askLoggerIO)
 import Control.Monad.Reader (MonadReader)
-import Control.Monad.Trans.Reader (ReaderT, runReaderT, withReaderT)
 import Control.Monad.Trans.Resource (MonadResource)
+import Control.Monad.Trans.Reader (ReaderT, runReaderT)
+#if !MIN_VERSION_base(4,12,0)
+import Control.Monad.Trans.Reader (withReaderT)
+#endif
 import Control.Monad.Trans.Writer (runWriterT)
 import Data.Acquire (Acquire, mkAcquire, with)
 import Data.Maybe
@@ -76,6 +86,9 @@ import qualified Data.Text.IO as TIO
 import Lens.Micro.TH (makeLenses)
 import UnliftIO.Resource (ResourceT, runResourceT)
 
+#if MIN_VERSION_base(4,12,0)
+import Database.Persist.Compatible
+#endif
 import Database.Persist.Sql
 import qualified Database.Persist.Sql.Util as Util
 import qualified Database.Sqlite as Sqlite
@@ -897,29 +910,15 @@ data RawSqlite backend = RawSqlite
     , _rawSqliteConnection :: Sqlite.Connection -- ^ The underlying `Sqlite.Connection`
     }
 
-instance HasPersistBackend b => HasPersistBackend (RawSqlite b) where
-    type BaseBackend (RawSqlite b) = BaseBackend b
-    persistBackend = persistBackend . _persistentBackend
-
 instance BackendCompatible b (RawSqlite b) where
     projectBackend = _persistentBackend
 
-instance (PersistCore b) => PersistCore (RawSqlite b) where
-    newtype BackendKey (RawSqlite b) = RawSqliteKey (BackendKey b)
-
-deriving instance (Show (BackendKey b)) => Show (BackendKey (RawSqlite b))
-deriving instance (Read (BackendKey b)) => Read (BackendKey (RawSqlite b))
-deriving instance (Eq (BackendKey b)) => Eq (BackendKey (RawSqlite b))
-deriving instance (Ord (BackendKey b)) => Ord (BackendKey (RawSqlite b))
-deriving instance (Num (BackendKey b)) => Num (BackendKey (RawSqlite b))
-deriving instance (Integral (BackendKey b)) => Integral (BackendKey (RawSqlite b))
-deriving instance (PersistField (BackendKey b)) => PersistField (BackendKey (RawSqlite b))
-deriving instance (PersistFieldSql (BackendKey b)) => PersistFieldSql (BackendKey (RawSqlite b))
-deriving instance (Real (BackendKey b)) => Real (BackendKey (RawSqlite b))
-deriving instance (Enum (BackendKey b)) => Enum (BackendKey (RawSqlite b))
-deriving instance (Bounded (BackendKey b)) => Bounded (BackendKey (RawSqlite b))
-deriving instance (ToJSON (BackendKey b)) => ToJSON (BackendKey (RawSqlite b))
-deriving instance (FromJSON (BackendKey b)) => FromJSON (BackendKey (RawSqlite b))
+#if MIN_VERSION_base(4,12,0)
+makeCompatibleInstances [t| forall b. Compatible b (RawSqlite b) |]
+#else
+instance HasPersistBackend b => HasPersistBackend (RawSqlite b) where
+    type BaseBackend (RawSqlite b) = BaseBackend b
+    persistBackend = persistBackend . _persistentBackend
 
 instance (PersistStoreRead b) => PersistStoreRead (RawSqlite b) where
     get = withReaderT _persistentBackend . get
@@ -959,6 +958,31 @@ instance (PersistUniqueWrite b) => PersistUniqueWrite (RawSqlite b) where
     upsert rec = withReaderT _persistentBackend . upsert rec
     upsertBy uniq rec = withReaderT _persistentBackend . upsertBy uniq rec
     putMany = withReaderT _persistentBackend . putMany
+#endif
+
+#if MIN_VERSION_base(4,12,0)
+instance (PersistCore b) => PersistCore (RawSqlite b) where
+  newtype BackendKey (RawSqlite b) = RawSqliteKey { unRawSqliteKey :: BackendKey (Compatible b (RawSqlite b)) }
+
+makeCompatibleKeyInstances [t| forall b. Compatible b (RawSqlite b) |]
+#else
+instance (PersistCore b) => PersistCore (RawSqlite b) where
+  newtype BackendKey (RawSqlite b) = RawSqliteKey { unRawSqliteKey :: BackendKey (RawSqlite b) }
+
+deriving instance (Show (BackendKey b)) => Show (BackendKey (RawSqlite b))
+deriving instance (Read (BackendKey b)) => Read (BackendKey (RawSqlite b))
+deriving instance (Eq (BackendKey b)) => Eq (BackendKey (RawSqlite b))
+deriving instance (Ord (BackendKey b)) => Ord (BackendKey (RawSqlite b))
+deriving instance (Num (BackendKey b)) => Num (BackendKey (RawSqlite b))
+deriving instance (Integral (BackendKey b)) => Integral (BackendKey (RawSqlite b))
+deriving instance (PersistField (BackendKey b)) => PersistField (BackendKey (RawSqlite b))
+deriving instance (PersistFieldSql (BackendKey b)) => PersistFieldSql (BackendKey (RawSqlite b))
+deriving instance (Real (BackendKey b)) => Real (BackendKey (RawSqlite b))
+deriving instance (Enum (BackendKey b)) => Enum (BackendKey (RawSqlite b))
+deriving instance (Bounded (BackendKey b)) => Bounded (BackendKey (RawSqlite b))
+deriving instance (ToJSON (BackendKey b)) => ToJSON (BackendKey (RawSqlite b))
+deriving instance (FromJSON (BackendKey b)) => FromJSON (BackendKey (RawSqlite b))
+#endif
 
 makeLenses ''RawSqlite
 makeLenses ''SqliteConnectionInfo

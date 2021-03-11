@@ -9,6 +9,9 @@
 * [#1178](https://github.com/yesodweb/persistent/pull/1178)
   * Added 'withBaseBackend', 'withCompatible' to ease use of base/compatible backend queries in external code.
 * Added GHC 8.2.2 and GHC 8.4.4 back into the CI and `persistent` builds on 8.2.2 again [#1181](https://github.com/yesodweb/persistent/issues/1181)
+* [#1179](https://github.com/yesodweb/persistent/pull/1179)
+  * Added `Compatible`, a newtype for marking a backend as compatible with another. Use it with `DerivingVia` to derive simple instances based on backend compatibility.
+  * Added `makeCompatibleInstances` and `makeCompatibleKeyInstances`, TemplateHaskell invocations for auto-generating standalone derivations using `Compatible` and `DerivingVia`.
 
 ## 2.11.0.2
 * Fix a bug where an empty entity definition would break parsing of `EntityDef`s. [#1176](https://github.com/yesodweb/persistent/issues/1176)
