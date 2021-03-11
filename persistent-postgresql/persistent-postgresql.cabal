@@ -52,6 +52,7 @@ test-suite test
                      JSONTest
                      CustomConstraintTest
                      PgIntervalTest
+                     QueryInProgressTest
     ghc-options:     -Wall
 
     build-depends:   base                 >= 4.9 && < 5
@@ -71,6 +72,7 @@ test-suite test
                    , QuickCheck
                    , quickcheck-instances
                    , resourcet
+                   , resource-pool
                    , text
                    , time
                    , transformers

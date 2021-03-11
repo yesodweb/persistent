@@ -40,8 +40,9 @@ import qualified Database.PostgreSQL.Simple.TypeInfo.Static as PS
 import Database.PostgreSQL.Simple.Ok (Ok (..))
 
 import Control.Arrow
-import Control.Exception (Exception, throw, throwIO)
-import Control.Monad (forM, guard)
+import Control.Exception (Exception, throw, throwIO, getMaskingState, finally, catch)
+import Control.Monad
+import Control.Monad.Except
 import Control.Monad.IO.Unlift (MonadIO (..), MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Control.Monad.Trans.Reader (runReaderT)
