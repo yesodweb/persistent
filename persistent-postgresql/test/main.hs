@@ -103,97 +103,98 @@ setup migration = do
 
 main :: IO ()
 main = do
-  runConn $ do
-    mapM_ setup
-      [ PersistentTest.testMigrate
-      , PersistentTest.noPrefixMigrate
-      , PersistentTest.customPrefixMigrate
-      , PersistentTest.treeMigrate
-      , EmbedTest.embedMigrate
-      , EmbedOrderTest.embedOrderMigrate
-      , LargeNumberTest.numberMigrate
-      , UniqueTest.uniqueMigrate
-      , MaxLenTest.maxlenMigrate
-      , Recursive.recursiveMigrate
-      , CompositeTest.compositeMigrate
-      , TreeTest.treeMigrate
-      , PersistUniqueTest.migration
-      , RenameTest.migration
-      , CustomPersistFieldTest.customFieldMigrate
-      , PrimaryTest.migration
-      , CustomPrimaryKeyReferenceTest.migration
-      , MigrationColumnLengthTest.migration
-      , TransactionLevelTest.migration
-      , LongIdentifierTest.migration
-      , ForeignKey.compositeMigrate
-      , MigrationTest.migrationMigrate
-      , PgIntervalTest.pgIntervalMigrate
-      ]
-    PersistentTest.cleanDB
+  -- runConn $ do
+  --   mapM_ setup
+  --     [ PersistentTest.testMigrate
+  --     , PersistentTest.noPrefixMigrate
+  --     , PersistentTest.customPrefixMigrate
+  --     , PersistentTest.treeMigrate
+  --     , EmbedTest.embedMigrate
+  --     , EmbedOrderTest.embedOrderMigrate
+  --     , LargeNumberTest.numberMigrate
+  --     , UniqueTest.uniqueMigrate
+  --     , MaxLenTest.maxlenMigrate
+  --     , Recursive.recursiveMigrate
+  --     , CompositeTest.compositeMigrate
+  --     , TreeTest.treeMigrate
+  --     , PersistUniqueTest.migration
+  --     , RenameTest.migration
+  --     , CustomPersistFieldTest.customFieldMigrate
+  --     , PrimaryTest.migration
+  --     , CustomPrimaryKeyReferenceTest.migration
+  --     , MigrationColumnLengthTest.migration
+  --     , TransactionLevelTest.migration
+  --     , LongIdentifierTest.migration
+  --     , ForeignKey.compositeMigrate
+  --     , MigrationTest.migrationMigrate
+  --     , PgIntervalTest.pgIntervalMigrate
+  --     ]
+  --   PersistentTest.cleanDB
 
   hspec $ do
-    RenameTest.specsWith runConnAssert
-    DataTypeTest.specsWith runConnAssert
-        (Just (runMigrationSilent dataTypeMigrate))
-        [ TestFn "text" dataTypeTableText
-        , TestFn "textMaxLen" dataTypeTableTextMaxLen
-        , TestFn "bytes" dataTypeTableBytes
-        , TestFn "bytesTextTuple" dataTypeTableBytesTextTuple
-        , TestFn "bytesMaxLen" dataTypeTableBytesMaxLen
-        , TestFn "int" dataTypeTableInt
-        , TestFn "intList" dataTypeTableIntList
-        , TestFn "intMap" dataTypeTableIntMap
-        , TestFn "bool" dataTypeTableBool
-        , TestFn "day" dataTypeTableDay
-        , TestFn "time" (DataTypeTest.roundTime . dataTypeTableTime)
-        , TestFn "utc" (DataTypeTest.roundUTCTime . dataTypeTableUtc)
-        , TestFn "jsonb" dataTypeTableJsonb
-        ]
-        [ ("pico", dataTypeTablePico) ]
-        dataTypeTableDouble
-    HtmlTest.specsWith
-        runConnAssert
-        (Just (runMigrationSilent HtmlTest.htmlMigrate))
+  --   RenameTest.specsWith runConnAssert
+  --   DataTypeTest.specsWith runConnAssert
+  --       (Just (runMigrationSilent dataTypeMigrate))
+  --       [ TestFn "text" dataTypeTableText
+  --       , TestFn "textMaxLen" dataTypeTableTextMaxLen
+  --       , TestFn "bytes" dataTypeTableBytes
+  --       , TestFn "bytesTextTuple" dataTypeTableBytesTextTuple
+  --       , TestFn "bytesMaxLen" dataTypeTableBytesMaxLen
+  --       , TestFn "int" dataTypeTableInt
+  --       , TestFn "intList" dataTypeTableIntList
+  --       , TestFn "intMap" dataTypeTableIntMap
+  --       , TestFn "bool" dataTypeTableBool
+  --       , TestFn "day" dataTypeTableDay
+  --       , TestFn "time" (DataTypeTest.roundTime . dataTypeTableTime)
+  --       , TestFn "utc" (DataTypeTest.roundUTCTime . dataTypeTableUtc)
+  --       , TestFn "jsonb" dataTypeTableJsonb
+  --       ]
+  --       [ ("pico", dataTypeTablePico) ]
+  --       dataTypeTableDouble
+  --   HtmlTest.specsWith
+  --       runConnAssert
+  --       (Just (runMigrationSilent HtmlTest.htmlMigrate))
 
-    EmbedTest.specsWith runConnAssert
-    EmbedOrderTest.specsWith runConnAssert
-    LargeNumberTest.specsWith runConnAssert
-    ForeignKey.specsWith runConnAssert
-    UniqueTest.specsWith runConnAssert
-    MaxLenTest.specsWith runConnAssert
-    Recursive.specsWith runConnAssert
-    SumTypeTest.specsWith runConnAssert (Just (runMigrationSilent SumTypeTest.sumTypeMigrate))
-    MigrationTest.specsWith runConnAssert
-    MigrationOnlyTest.specsWith runConnAssert
+  --   EmbedTest.specsWith runConnAssert
+  --   EmbedOrderTest.specsWith runConnAssert
+  --   LargeNumberTest.specsWith runConnAssert
+  --   ForeignKey.specsWith runConnAssert
+  --   UniqueTest.specsWith runConnAssert
+  --   MaxLenTest.specsWith runConnAssert
+  --   Recursive.specsWith runConnAssert
+  --   SumTypeTest.specsWith runConnAssert (Just (runMigrationSilent SumTypeTest.sumTypeMigrate))
+  --   MigrationTest.specsWith runConnAssert
+  --   MigrationOnlyTest.specsWith runConnAssert
 
-        (Just
-            $ runMigrationSilent MigrationOnlyTest.migrateAll1
-            >> runMigrationSilent MigrationOnlyTest.migrateAll2
-        )
-    PersistentTest.specsWith runConnAssert
-    ReadWriteTest.specsWith runConnAssert
-    PersistentTest.filterOrSpecs runConnAssert
-    RawSqlTest.specsWith runConnAssert
-    UpsertTest.specsWith
-        runConnAssert
-        UpsertTest.Don'tUpdateNull
-        UpsertTest.UpsertPreserveOldKey
+  --       (Just
+  --           $ runMigrationSilent MigrationOnlyTest.migrateAll1
+  --           >> runMigrationSilent MigrationOnlyTest.migrateAll2
+  --       )
+  --   PersistentTest.specsWith runConnAssert
+  --   ReadWriteTest.specsWith runConnAssert
+  --   PersistentTest.filterOrSpecs runConnAssert
+  --   RawSqlTest.specsWith runConnAssert
+  --   UpsertTest.specsWith
+  --       runConnAssert
+  --       UpsertTest.Don'tUpdateNull
+  --       UpsertTest.UpsertPreserveOldKey
 
-    MpsNoPrefixTest.specsWith runConnAssert
-    MpsCustomPrefixTest.specsWith runConnAssert
-    EmptyEntityTest.specsWith runConnAssert (Just (runMigrationSilent EmptyEntityTest.migration))
-    CompositeTest.specsWith runConnAssert
-    TreeTest.specsWith runConnAssert
-    PersistUniqueTest.specsWith runConnAssert
-    PrimaryTest.specsWith runConnAssert
-    CustomPersistFieldTest.specsWith runConnAssert
-    CustomPrimaryKeyReferenceTest.specsWith runConnAssert
-    MigrationColumnLengthTest.specsWith runConnAssert
-    EquivalentTypeTestPostgres.specs
-    TransactionLevelTest.specsWith runConnAssert
-    LongIdentifierTest.specsWith runConnAssert
-    JSONTest.specs
-    CustomConstraintTest.specs
-    PgIntervalTest.specs
-    ArrayAggTest.specs
+  --   MpsNoPrefixTest.specsWith runConnAssert
+  --   MpsCustomPrefixTest.specsWith runConnAssert
+  --   EmptyEntityTest.specsWith runConnAssert (Just (runMigrationSilent EmptyEntityTest.migration))
+  --   CompositeTest.specsWith runConnAssert
+  --   TreeTest.specsWith runConnAssert
+  --   PersistUniqueTest.specsWith runConnAssert
+  --   PrimaryTest.specsWith runConnAssert
+  --   CustomPersistFieldTest.specsWith runConnAssert
+  --   CustomPrimaryKeyReferenceTest.specsWith runConnAssert
+  --   MigrationColumnLengthTest.specsWith runConnAssert
+  --   EquivalentTypeTestPostgres.specs
+  --   TransactionLevelTest.specsWith runConnAssert
+  --   LongIdentifierTest.specsWith runConnAssert
+  --   JSONTest.specs
+  --   CustomConstraintTest.specs
+  --   PgIntervalTest.specs
+  --   ArrayAggTest.specs
     QueryInProgressTest.specsWith runConnAssert
+
