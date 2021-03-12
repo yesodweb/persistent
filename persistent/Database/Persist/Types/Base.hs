@@ -1,7 +1,11 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase, PatternSynonyms #-}
 {-# OPTIONS_GHC -fno-warn-deprecations #-} -- usage of Error typeclass
-module Database.Persist.Types.Base where
+module Database.Persist.Types.Base
+    ( module Database.Persist.Types.Base
+    , PersistValue(.., PersistLiteral, PersistLiteralEscaped, PersistDbSpecific)
+    , LiteralType(..)
+    ) where
 
 import Control.Arrow (second)
 import Control.Exception (Exception)
@@ -525,35 +529,25 @@ data PersistValue
     | PersistMap [(Text, PersistValue)]
     | PersistObjectId ByteString -- ^ Intended especially for MongoDB backend
     | PersistArray [PersistValue] -- ^ Intended especially for PostgreSQL backend for text arrays
-    | PersistLiteral ByteString -- ^ Using 'PersistLiteral' allows you to use types or keywords specific to a particular backend.
-    | PersistLiteralEscaped ByteString -- ^ Similar to 'PersistLiteral', but escapes the @ByteString@.
-    | PersistDbSpecific ByteString -- ^ Using 'PersistDbSpecific' allows you to use types specific to a particular backend.
--- For example, below is a simple example of the PostGIS geography type:
---
--- @
--- data Geo = Geo ByteString
---
--- instance PersistField Geo where
---   toPersistValue (Geo t) = PersistDbSpecific t
---
---   fromPersistValue (PersistDbSpecific t) = Right $ Geo $ Data.ByteString.concat ["'", t, "'"]
---   fromPersistValue _ = Left "Geo values must be converted from PersistDbSpecific"
---
--- instance PersistFieldSql Geo where
---   sqlType _ = SqlOther "GEOGRAPHY(POINT,4326)"
---
--- toPoint :: Double -> Double -> Geo
--- toPoint lat lon = Geo $ Data.ByteString.concat ["'POINT(", ps $ lon, " ", ps $ lat, ")'"]
---   where ps = Data.Text.pack . show
--- @
---
--- If Foo has a geography field, we can then perform insertions like the following:
---
--- @
--- insert $ Foo (toPoint 44 44)
--- @
---
+    | PersistLiteral_ LiteralType ByteString -- ^ Using 'PersistLiteral' allows you to use types or keywords specific to a particular backend.
+--     | PersistLiteralEscaped ByteString -- ^ Similar to 'PersistLiteral', but escapes the @ByteString@.
+--     | PersistDbSpecific ByteString -- ^ Using 'PersistDbSpecific' allows you to use types specific to a particular backend.
     deriving (Show, Read, Eq, Ord)
+
+-- | A type that determines how a backend should handle the literal.
+--
+-- @since 2.12.0.0
+data LiteralType = Escaped | Unescaped | DbSpecific
+    deriving (Show, Read, Eq, Ord)
+
+pattern PersistDbSpecific bs <- PersistLiteral_ _ bs where
+    PersistDbSpecific bs = PersistLiteral_ DbSpecific bs
+
+pattern PersistLiteralEscaped bs <- PersistLiteral_ _ bs where
+    PersistLiteralEscaped bs = PersistLiteral_ Escaped bs
+
+pattern PersistLiteral bs <- PersistLiteral_ _ bs where
+    PersistLiteral bs = PersistLiteral_ Unescaped bs
 
 {-# DEPRECATED PersistDbSpecific "Deprecated since 2.11 because of inconsistent escaping behavior across backends. The Postgres backend escapes these values, while the MySQL backend does not. If you are using this, please switch to 'PersistLiteral' or 'PersistLiteralEscaped' based on your needs." #-}
 
