@@ -812,12 +812,13 @@ checkForeignKeys = rawQuery query [] .| C.mapM parse
         _ -> liftIO . E.throwIO . PersistMarshalError $ mconcat
             [ "Unexpected result from foreign key check:\n", T.pack (show l) ]
 
-    query = "\
-\ SELECT origin.rowid, origin.\"table\", group_concat(foreignkeys.\"from\")\n\
-\ FROM pragma_foreign_key_check() AS origin\n\
-\ INNER JOIN pragma_foreign_key_list(origin.\"table\") AS foreignkeys\n\
-\ ON origin.fkid = foreignkeys.id AND origin.parent = foreignkeys.\"table\"\n\
-\ GROUP BY origin.rowid"
+    query = T.unlines
+        [ "SELECT origin.rowid, origin.\"table\", group_concat(foreignkeys.\"from\")"
+        , "FROM pragma_foreign_key_check() AS origin"
+        , "INNER JOIN pragma_foreign_key_list(origin.\"table\") AS foreignkeys"
+        , "ON origin.fkid = foreignkeys.id AND origin.parent = foreignkeys.\"table\""
+        , "GROUP BY origin.rowid"
+        ]
 
 -- | Like `withSqliteConnInfo`, but exposes the internal `Sqlite.Connection`.
 -- For power users who want to manually interact with SQLite's C API via
