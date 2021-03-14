@@ -1320,7 +1320,6 @@ mkUniqueKeyInstances mps t = do
 
     genDataType = genericDataType mps (entityHaskell t) backendT
 
-
 entityText :: EntityDef -> Text
 entityText = unEntityNameHS . entityHaskell
 
@@ -1719,14 +1718,20 @@ mkMigrate fun allDefs = do
         m <- [|migrate|]
         return $ NoBindS $ m `AppE` defsExp `AppE` u
 
+makeEntityDefDec :: EntityDef -> FieldDef -> Name
+makeEntityDefDec entDef fieldDef = do
+    let entityName   = unEntityNameHS $ entityHaskell entDef
+        fieldName    = upperFirst $ unFieldNameHS (fieldHaskell fieldDef)
+    mkName $ T.unpack (entityName <> fieldName)
+
 makeEntityDefExp :: EntityMap -> EntityDef -> Q Exp
-makeEntityDefExp entityMap EntityDef{..} =
+makeEntityDefExp entityMap entDef@EntityDef{..} =
     [|EntityDef
         entityHaskell
         entityDB
         $(liftAndFixKey entityMap entityId)
         entityAttrs
-        $(ListE <$> mapM (liftAndFixKey entityMap) entityFields)
+        $(fieldDefReferences (makeEntityDefDec entDef <$> entityFields))
         entityUniques
         entityForeigns
         entityDerives
@@ -1734,6 +1739,14 @@ makeEntityDefExp entityMap EntityDef{..} =
         entitySum
         entityComments
     |]
+
+fieldDefReferences :: [Name] -> Q Exp
+fieldDefReferences fieldDefs = do
+    lookupValueName "persistFieldDef" >>= \case
+        Nothing -> error "Fatal"
+        Just pfd -> pure $ ListE $ do
+            fieldDef <- fieldDefs
+            pure $ VarE pfd `AppE` ConE fieldDef
 
 liftAndFixKey :: EntityMap -> FieldDef -> Q Exp
 liftAndFixKey entityMap (FieldDef a b c sqlTyp e f fieldRef fc mcomments fg) =
