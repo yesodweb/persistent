@@ -1088,14 +1088,14 @@ headNote = \case
   xs -> error $ "mkKeyFromValues: expected a list of one element, got: " `mappend` show xs
 
 fromValues :: EntityDef -> Text -> Exp -> [FieldDef] -> Q [Clause]
-fromValues t funName conE fields = do
+fromValues entDef funName conE fields = do
     x <- newName "x"
-    let funMsg = entityText t `mappend` ": " `mappend` funName `mappend` " failed on: "
+    let funMsg = entityText entDef `mappend` ": " `mappend` funName `mappend` " failed on: "
     patternMatchFailure <- [|Left $ mappend funMsg (pack $ show $(return $ VarE x))|]
     suc <- patternSuccess
     return [ suc, normalClause [VarP x] patternMatchFailure ]
   where
-    tableName = unEntityNameDB (entityDB t)
+    tableName = unEntityNameDB (entityDB entDef)
     patternSuccess =
         case fields of
             [] -> do
@@ -1136,25 +1136,24 @@ fieldError tableName fieldName err = mconcat
     ]
 
 mkEntity :: EntityMap -> MkPersistSettings -> EntityDef -> Q [Dec]
-mkEntity entityMap mps t = do
-    t' <- liftAndFixKeys entityMap t
+mkEntity entityMap mps entDef = do
+    entityDefExp <- liftAndFixKeys entityMap entDef
     let nameT = unEntityNameHS entName
     let nameS = unpack nameT
     let clazz = ConT ''PersistEntity `AppT` genDataType
-    tpf <- mkToPersistFields mps nameS t
-    fpv <- mkFromPersistValues mps t
-    utv <- mkUniqueToValues $ entityUniques t
-    puk <- mkUniqueKeys t
-    let primaryField = entityId t
-    fields <- mapM (mkField mps t) $ primaryField : entityFields t
-    fkc <- mapM (mkForeignKeysComposite mps t) $ entityForeigns t
+    tpf <- mkToPersistFields mps nameS entDef
+    fpv <- mkFromPersistValues mps entDef
+    utv <- mkUniqueToValues $ entityUniques entDef
+    puk <- mkUniqueKeys entDef
+    let primaryField = entityId entDef
+    fields <- mapM (mkField mps entDef) $ primaryField : entityFields entDef
+    fkc <- mapM (mkForeignKeysComposite mps entDef) $ entityForeigns entDef
 
+    toFieldNames <- mkToFieldNames $ entityUniques entDef
 
-    toFieldNames <- mkToFieldNames $ entityUniques t
-
-    (keyTypeDec, keyInstanceDecs) <- mkKeyTypeDec mps t
-    keyToValues' <- mkKeyToValues mps t
-    keyFromValues' <- mkKeyFromValues mps t
+    (keyTypeDec, keyInstanceDecs) <- mkKeyTypeDec mps entDef
+    keyToValues' <- mkKeyToValues mps entDef
+    keyFromValues' <- mkKeyFromValues mps entDef
 
     let addSyn -- FIXME maybe remove this
             | mpsGeneric mps = (:) $
@@ -1162,17 +1161,17 @@ mkEntity entityMap mps t = do
                     genericDataType mps entName $ mpsBackend mps
             | otherwise = id
 
-    lensClauses <- mkLensClauses mps t
+    lensClauses <- mkLensClauses mps entDef
 
-    lenses <- mkLenses mps t
+    lenses <- mkLenses mps entDef
     let instanceConstraint = if not (mpsGeneric mps) then [] else
           [mkClassP ''PersistStore [backendT]]
 
     [keyFromRecordM'] <-
-        case entityPrimary t of
+        case entityPrimary entDef of
             Just prim -> do
                 recordName <- newName "record"
-                let keyCon = keyConName t
+                let keyCon = keyConName entDef
                     keyFields' =
                         map (mkName . T.unpack . recNameF mps entName . fieldHaskell)
                             (compositeFields prim)
@@ -1192,18 +1191,18 @@ mkEntity entityMap mps t = do
             Nothing ->
                 [d|$(varP 'keyFromRecordM) = Nothing|]
 
-    dtd <- dataTypeDec mps t
+    dtd <- dataTypeDec mps entDef
     return $ addSyn $
        dtd : mconcat fkc `mappend`
-      ([ TySynD (keyIdName t) [] $
+      ([ TySynD (keyIdName entDef) [] $
             ConT ''Key `AppT` ConT (mkName nameS)
       , instanceD instanceConstraint clazz
-        [ uniqueTypeDec mps t
+        [ uniqueTypeDec mps entDef
         , keyTypeDec
         , keyToValues'
         , keyFromValues'
         , keyFromRecordM'
-        , FunD 'entityDef [normalClause [WildP] t']
+        , FunD 'entityDef [normalClause [WildP] entityDefExp]
         , tpf
         , FunD 'fromPersistValues fpv
         , toFieldNames
@@ -1242,13 +1241,13 @@ mkEntity entityMap mps t = do
                [genDataType]
                (backendDataType mps))
 #endif
-        , FunD 'persistIdField [normalClause [] (ConE $ keyIdName t)]
+        , FunD 'persistIdField [normalClause [] (ConE $ keyIdName entDef)]
         , FunD 'fieldLens lensClauses
         ]
       ] `mappend` lenses) `mappend` keyInstanceDecs
   where
     genDataType = genericDataType mps entName backendT
-    entName = entityHaskell t
+    entName = entityHaskell entDef
 
 mkUniqueKeyInstances :: MkPersistSettings -> EntityDef -> Q [Dec]
 mkUniqueKeyInstances mps t = do
