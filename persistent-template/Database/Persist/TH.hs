@@ -1137,7 +1137,7 @@ fieldError tableName fieldName err = mconcat
 
 mkEntity :: EntityMap -> MkPersistSettings -> EntityDef -> Q [Dec]
 mkEntity entityMap mps entDef = do
-    entityDefExp <- liftAndFixKeys entityMap entDef
+    entityDefExp <- makeEntityDefExp entityMap entDef
     let nameT = unEntityNameHS entName
     let nameS = unpack nameT
     let clazz = ConT ''PersistEntity `AppT` genDataType
@@ -1708,19 +1708,19 @@ mkMigrate fun allDefs = do
             _  -> do
               defsName <- newName "defs"
               defsStmt <- do
-                defs' <- mapM (liftAndFixKeys entityMap) defs
+                defs' <- mapM (makeEntityDefExp entityMap) defs
                 let defsExp = ListE defs'
                 return $ LetS [ValD (VarP defsName) (NormalB defsExp) []]
               stmts <- mapM (toStmt $ VarE defsName) defs
               return (DoE $ defsStmt : stmts)
     toStmt :: Exp -> EntityDef -> Q Stmt
     toStmt defsExp ed = do
-        u <- liftAndFixKeys entityMap ed
+        u <- makeEntityDefExp entityMap ed
         m <- [|migrate|]
         return $ NoBindS $ m `AppE` defsExp `AppE` u
 
-liftAndFixKeys :: EntityMap -> EntityDef -> Q Exp
-liftAndFixKeys entityMap EntityDef{..} =
+makeEntityDefExp :: EntityMap -> EntityDef -> Q Exp
+makeEntityDefExp entityMap EntityDef{..} =
     [|EntityDef
         entityHaskell
         entityDB
