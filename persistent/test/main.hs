@@ -251,13 +251,10 @@ Baz
         let preparsed =
                 preparse subject
         it "preparse works" $ do
-            length preparsed
-                `shouldBe` do
-                    length . filter (not . T.all Char.isSpace) . T.lines
-                        $ subject
+            (length <$> preparsed) `shouldBe` Just 10
 
         let skippedEmpty =
-                skipEmpty preparsed
+                maybe [] skipEmpty preparsed
             fooLines =
                 [ Line
                     { lineIndent = 0
@@ -365,11 +362,13 @@ Baz
 
     describe "preparse" $ do
         it "recognizes entity" $ do
-            preparse "Person\n  name String\n  age Int" `shouldBe`
-                [ Line { lineIndent = 0, tokens = ["Person"] }
-                , Line { lineIndent = 2, tokens = ["name", "String"] }
-                , Line { lineIndent = 2, tokens = ["age", "Int"] }
-                ]
+            let expected =
+                    Line { lineIndent = 0, tokens = ["Person"] } :|
+                    [ Line { lineIndent = 2, tokens = ["name", "String"] }
+                    , Line { lineIndent = 2, tokens = ["age", "Int"] }
+                    ]
+            preparse "Person\n  name String\n  age Int" `shouldBe` Just expected
+
         describe "recognizes comments" $ do
             let text = "Foo\n  x X\n-- | Hello\nBar\n name String"
                 linesText = T.lines text
@@ -411,13 +410,15 @@ Baz
                     ]
 
             it "preparse" $ do
-                preparse text `shouldBe`
-                    [ Line { lineIndent = 0, tokens = ["Foo"] }
-                    , Line { lineIndent = 2, tokens = ["x", "X"] }
-                    , Line { lineIndent = 0, tokens = ["-- | Hello"] }
-                    , Line { lineIndent = 0, tokens = ["Bar"] }
-                    , Line { lineIndent = 1, tokens = ["name", "String"] }
-                    ]
+                let expected =
+                        Line { lineIndent = 0, tokens = ["Foo"] } :|
+                        [ Line { lineIndent = 2, tokens = ["x", "X"] }
+                        , Line { lineIndent = 0, tokens = ["-- | Hello"] }
+                        , Line { lineIndent = 0, tokens = ["Bar"] }
+                        , Line { lineIndent = 1, tokens = ["name", "String"] }
+                        ]
+                preparse text `shouldBe` Just expected
+
             it "preparse indented" $ do
                 let t = T.unlines
                         [ "  Foo"
@@ -427,13 +428,15 @@ Baz
                         , "  Bar"
                         , "    name String"
                         ]
-                preparse t `shouldBe`
-                    [ Line { lineIndent = 2, tokens = ["Foo"] }
-                    , Line { lineIndent = 4, tokens = ["x", "X"] }
-                    , Line { lineIndent = 2, tokens = ["-- | Comment"] }
-                    , Line { lineIndent = 2, tokens = ["Bar"] }
-                    , Line { lineIndent = 4, tokens = ["name", "String"] }
-                    ]
+                    expected =
+                        Line { lineIndent = 2, tokens = ["Foo"] } :|
+                        [ Line { lineIndent = 4, tokens = ["x", "X"] }
+                        , Line { lineIndent = 2, tokens = ["-- | Comment"] }
+                        , Line { lineIndent = 2, tokens = ["Bar"] }
+                        , Line { lineIndent = 4, tokens = ["name", "String"] }
+                        ]
+                preparse t `shouldBe` Just expected
+
             it "preparse extra blocks" $ do
                 let t = T.unlines
                         [ "LowerCaseTable"
@@ -444,15 +447,17 @@ Baz
                         , "  ExtraBlock2"
                         , "    something"
                         ]
-                preparse t `shouldBe`
-                    [ Line { lineIndent = 0, tokens = ["LowerCaseTable"] }
-                    , Line { lineIndent = 2, tokens = ["name", "String"] }
-                    , Line { lineIndent = 2, tokens = ["ExtraBlock"] }
-                    , Line { lineIndent = 4, tokens = ["foo", "bar"] }
-                    , Line { lineIndent = 4, tokens = ["baz"] }
-                    , Line { lineIndent = 2, tokens = ["ExtraBlock2"] }
-                    , Line { lineIndent = 4, tokens = ["something"] }
-                    ]
+                    expected =
+                        Line { lineIndent = 0, tokens = ["LowerCaseTable"] } :|
+                        [ Line { lineIndent = 2, tokens = ["name", "String"] }
+                        , Line { lineIndent = 2, tokens = ["ExtraBlock"] }
+                        , Line { lineIndent = 4, tokens = ["foo", "bar"] }
+                        , Line { lineIndent = 4, tokens = ["baz"] }
+                        , Line { lineIndent = 2, tokens = ["ExtraBlock2"] }
+                        , Line { lineIndent = 4, tokens = ["something"] }
+                        ]
+                preparse t `shouldBe` Just expected
+
             it "field comments" $ do
                 let text = T.unlines
                         [ "-- | Model"
@@ -460,12 +465,13 @@ Baz
                         , "  -- | Field"
                         , "  name String"
                         ]
-                preparse text `shouldBe`
-                    [ Line { lineIndent = 0, tokens = ["-- | Model"] }
-                    , Line { lineIndent = 0, tokens = ["Foo"] }
-                    , Line { lineIndent = 2, tokens = ["-- | Field"] }
-                    , Line { lineIndent = 2, tokens = ["name", "String"] }
-                    ]
+                    expected =
+                        Line { lineIndent = 0, tokens = ["-- | Model"] } :|
+                        [ Line { lineIndent = 0, tokens = ["Foo"] }
+                        , Line { lineIndent = 2, tokens = ["-- | Field"] }
+                        , Line { lineIndent = 2, tokens = ["name", "String"] }
+                        ]
+                preparse text `shouldBe` Just expected
 
     describe "empty" $ do
         it "doesn't dispatch comments" $ do
@@ -541,7 +547,7 @@ Baz
         it "works with textual input" $ do
             let text = "Foo\n  x X\n-- | Hello\nBar\n name String"
                 parsed = preparse text
-                allFull = skipEmpty parsed
+                allFull = maybe [] skipEmpty parsed
             associateLines allFull
                 `shouldBe`
                     [ LinesWithComments
@@ -560,7 +566,7 @@ Baz
                         }
                     ]
         it "works with extra blocks" $ do
-            let text = skipEmpty . preparse . T.unlines $
+            let text = maybe [] skipEmpty . preparse . T.unlines $
                     [ "LowerCaseTable"
                     , "    Id             sql=my_id"
                     , "    fullName Text"
@@ -589,7 +595,7 @@ Baz
                 ]
 
         it "works with extra blocks twice" $ do
-            let text = skipEmpty . preparse . T.unlines $
+            let text = maybe [] skipEmpty . preparse . T.unlines $
                     [ "IdTable"
                     , "    Id Day default=CURRENT_DATE"
                     , "    name Text"
@@ -630,7 +636,7 @@ Baz
 
 
         it "works with field comments" $ do
-            let text = skipEmpty . preparse . T.unlines $
+            let text = maybe [] skipEmpty . preparse . T.unlines $
                     [ "-- | Model"
                     , "Foo"
                     , "  -- | Field"
