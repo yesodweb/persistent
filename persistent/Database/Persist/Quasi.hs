@@ -886,9 +886,6 @@ mkEntityDef ps name entattribs lines =
                 ( maybe id (:) (setFieldComments comments <$> takeColsEx ps x) acc
                 , []
                 )
-    setFieldComments [] x = x
-    setFieldComments xs fld =
-        fld { fieldComments = Just (T.unlines xs) }
 
     autoIdField = mkAutoIdField ps entName (FieldNameDB `fmap` idName) idSqlType
     idSqlType = maybe SqlInt64 (const $ SqlOther "Primary Key") primaryComposite
@@ -898,6 +895,11 @@ mkEntityDef ps name entattribs lines =
         { fieldReference = CompositeRef c
         }
 
+setFieldComments :: [Text] -> FieldDef -> FieldDef
+setFieldComments xs fld =
+    case xs of
+        [] -> fld
+        _ -> fld { fieldComments = Just (T.unlines xs) }
 
 just1 :: (Show x) => Maybe x -> Maybe x -> Maybe x
 just1 (Just x) (Just y) = error $ "expected only one of: "
