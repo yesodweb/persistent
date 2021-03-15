@@ -938,13 +938,18 @@ splitExtras lns =
     case lns of
         [] -> ([], M.empty)
         (Line indent [name]:rest)
-          | not (T.null name) && isUpper (T.head name) ->
+          | isCapitalizedText name ->
             let (children, rest') = span ((> indent) . lineIndent) rest
                 (x, y) = splitExtras rest'
              in (x, M.insert name (map tokens children) y)
         (Line _ ts:rest) ->
             let (x, y) = splitExtras rest
              in (ts:x, y)
+
+
+isCapitalizedText :: Text -> Bool
+isCapitalizedText t =
+    not (T.null t) && isUpper (T.head t)
 
 takeColsEx :: PersistSettings -> [Text] -> Maybe FieldDef
 takeColsEx =
@@ -996,7 +1001,7 @@ takeConstraint :: PersistSettings
           -> [FieldDef]
           -> [Text]
           -> (Maybe FieldDef, Maybe CompositeDef, Maybe UniqueDef, Maybe UnboundForeignDef)
-takeConstraint ps tableName defs (n:rest) | not (T.null n) && isUpper (T.head n) = takeConstraint'
+takeConstraint ps tableName defs (n:rest) | isCapitalizedText n = takeConstraint'
     where
       takeConstraint'
             | n == "Unique"  = (Nothing, Nothing, Just $ takeUniq ps tableName defs rest, Nothing)
@@ -1058,7 +1063,7 @@ takeUniq :: PersistSettings
          -> [Text]
          -> UniqueDef
 takeUniq ps tableName defs (n:rest)
-    | not (T.null n) && isUpper (T.head n)
+    | isCapitalizedText n
         = UniqueDef
             (ConstraintNameHS n)
             dbName
