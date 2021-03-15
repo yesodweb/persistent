@@ -209,7 +209,7 @@ createSqlPool
     -> m (Pool backend)
 createSqlPool mkConn size = do
     logFunc <- askLogFunc
-    liftIO $ createPool (mkConn logFunc) (close' backend) 1 20 size
+    liftIO $ createPool (mkConn logFunc) close' 1 20 size
 
 -- NOTE: This function is a terrible, ugly hack. It would be much better to
 -- just clean up monad-logger.
