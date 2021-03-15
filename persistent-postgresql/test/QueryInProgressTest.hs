@@ -31,20 +31,13 @@ import qualified Database.Persist.Postgresql   as Persist
 import qualified Database.Persist.Sql          as Persist
 import           PgInit
 -- import Database.PostgreSQL.LibPQ (transactionStatus)
-
-share [mkPersist sqlSettings, mkMigrate "migration"] [persistUpperCase|
-  Wombat
-     name        Text sqltype=varchar(80)
-
-     Primary name
-     deriving Eq Show Ord
-
-|]
+import Data.Maybe
 
 createTableFoo :: Pool.Pool Persist.SqlBackend -> IO ()
 createTableFoo pool = flip Persist.runSqlPersistMPool pool
     $ Persist.rawExecute "CREATE table if not exists foobar(id int);" []
 
+testInterruptedConnection :: IO (Either SomeException [Maybe (Single String)])
 testInterruptedConnection = do
     pool <- Logger.runNoLoggingT $ Persist.createPostgresqlPool
         "postgresql://postgres:secret@localhost/postgres"
@@ -58,7 +51,7 @@ testInterruptedConnection = do
         Exception.try . flip Persist.runSqlPool pool $ do
 
             Persist.rawSql @(Maybe (Persist.Single String))
-                "select pg_sleep(5)"
+                "select pg_sleep(10)"
                 []
 
     pure result
@@ -67,11 +60,12 @@ testInterruptedConnection = do
 specsWith :: (MonadIO m, MonadFail m) => RunDb SqlBackend m -> Spec
 specsWith _ =
     describe "QueryInProgress" $ fit "queries are cleaned up correctly" $ do
-        results <- Concurrent.replicateConcurrently
-            10
-            testInterruptedConnection
-        results `shouldNotSatisfy` any isLeft
 
+  result <- testInterruptedConnection
+  result `shouldNotSatisfy` isLeft
+
+  -- results :: [Either SomeException [Maybe (Single String)]] <- Concurrent.replicateConcurrently 5 testInterruptedConnection
+  -- results `shouldSatisfy` all (== [Nothing]) . rights
 
 
 
@@ -84,12 +78,6 @@ simulateFailedLongRunningPostgresCall pool = do
             putStrLn
                 "verify pool can't be borrowed and we've set things up correctly"
 
-            -- maybe
-            --   (putStrLn "pool exhausted")
-            --   (const $ putStrLn "pool could be borrowed")
-            --   =<< Pool.tryTakeResource pool
-
-
             let numThings :: Int = 100000000
             putStrLn $ "start inserting " <> show numThings <> " things"
 
@@ -97,13 +85,10 @@ simulateFailedLongRunningPostgresCall pool = do
                 Logger.runStdoutLoggingT
                     $ flip Persist.runSqlPool pool
                     $
-
-                  -- this is basically calling Acquire.with in a loop and Resource.mkAcquireType
-                  -- if Pool's withResource is interruptible this calls putResource numThings times
                       Persist.rawExecute "insert into foobar values(?);"
                                          [toPersistValue i]
         )
 
-    -- Concurrent.threadDelay 5000000
+    Concurrent.threadDelay 2000000
     Monad.void $ Concurrent.killThread threadId
     putStrLn "killed thread"
