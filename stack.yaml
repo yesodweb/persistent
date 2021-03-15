@@ -12,3 +12,9 @@ packages:
 
 extra-deps:
   - th-lift-instances-0.1.14
+
+allow-newer: true
+nix:
+  pure: true
+  enable: true
+  packages: [ zlib postgresql mysql80 pcre mysql-client zstd openssl ]
