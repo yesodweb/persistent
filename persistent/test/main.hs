@@ -390,7 +390,7 @@ Baz
 
 
     describe "preparse" $ do
-        prop "omits lines that are only text" $ \len -> do
+        prop "omits lines that are only whitespace" $ \len -> do
             ws <- vectorOf len arbitraryWhiteSpaceChar
             pure $ preparse (T.pack ws) === Nothing
 
