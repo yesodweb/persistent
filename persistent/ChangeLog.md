@@ -17,6 +17,8 @@
       @parsonsmatt debugged the issue and determined that it had something to do with asynchronous exceptions. 
       Declaring it to be "out of his pay grade," he ripped the `poolToAcquire` function out and replaced it with `Data.Pool.withResource`, which doesn't exhibit the bug.
       Fortunately, this doesn't affect the public API, and can be a mere bug release.
+    * Removed the functions `unsafeAcquireSqlConnFromPool`, `acquireASqlConnFromPool`, and `acquireSqlConnFromPoolWithIsolation`. 
+      For a replacement, see `runSqlPoolNoTransaction` and `runSqlPoolWithHooks`.
 
 ## 2.11.0.2
 * Fix a bug where an empty entity definition would break parsing of `EntityDef`s. [#1176](https://github.com/yesodweb/persistent/issues/1176)

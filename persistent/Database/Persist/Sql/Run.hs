@@ -44,18 +44,64 @@ runSqlPoolWithIsolation
 runSqlPoolWithIsolation r pconn i =
     rawRunSqlPool r pconn (Just i)
 
+-- | Like 'runSqlPool', but does not surround the action in a transaction.
+-- This action might leave your database in a weird state.
+--
+-- @since 2.12.0.0
+runSqlPoolNoTransaction
+    :: forall backend m a. (MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    => ReaderT backend m a -> Pool backend -> Maybe IsolationLevel -> m a
+runSqlPoolNoTransaction r pconn i =
+    runSqlPoolWithHooks r pconn i (\_ -> pure ()) (\_ -> pure ()) (\_ _ -> pure ())
+
 rawRunSqlPool
     :: forall backend m a. (MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend m a -> Pool backend -> Maybe IsolationLevel -> m a
-runSqlPoolWithIsolation r pconn mi =
+rawRunSqlPool r pconn mi =
+    runSqlPoolWithHooks r pconn mi before after onException
+  where
+    before conn = do
+        let sqlBackend = projectBackend conn
+        let getter = getStmtConn sqlBackend
+        liftIO $ connBegin sqlBackend getter mi
+    after conn = do
+        let sqlBackend = projectBackend conn
+        let getter = getStmtConn sqlBackend
+        liftIO $ connCommit sqlBackend getter
+    onException conn _ = do
+        let sqlBackend = projectBackend conn
+        let getter = getStmtConn sqlBackend
+        liftIO $ connRollback sqlBackend getter
+
+-- | This function is how 'runSqlPool' and 'runSqlPoolNoTransaction' are
+-- defined. In addition to the action to be performed and the 'Pool' of
+-- conections to use, we give you the opportunity to provide three actions
+-- - initialize, afterwards, and onException.
+--
+-- @since 2.12.0.0
+runSqlPoolWithHooks
+    :: forall backend m a before after onException. (MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    => ReaderT backend m a
+    -> Pool backend
+    -> Maybe IsolationLevel
+    -> (backend -> m before)
+    -- ^ Run this action immediately before the action is performed.
+    -> (backend -> m after)
+    -- ^ Run this action immediately after the action is completed.
+    -> (backend -> UE.SomeException -> m onException)
+    -- ^ This action is performed when an exception is received. The
+    -- exception is provided as a convenience - it is rethrown once this
+    -- cleanup function is complete.
+    -> m a
+runSqlPoolWithHooks r pconn i before after onException =
     withRunInIO $ \runInIO ->
         withResource pconn $ \conn -> do
-            let sqlBackend = projectBackend conn
-            let getter = getStmtConn sqlBackend
-            connBegin sqlBackend getter mi
+            runInIO $ before conn
             a <- runInIO (runReaderT r conn)
-                `UE.onException` connRollback sqlBackend getter
-            connCommit sqlBackend getter
+                `UE.catchAny` \e -> do
+                    runInIO $ onException conn e
+                    UE.throwIO e
+            runInIO $ after conn
             pure a
 
 rawAcquireSqlConn
