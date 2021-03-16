@@ -117,7 +117,6 @@ runSqlPool r pconn = do
             connCommit sqlBackend getter
             pure a
 
-
 -- | Like 'runSqlPool', but supports specifying an isolation level.
 --
 -- @since 2.9.0
@@ -125,7 +124,15 @@ runSqlPoolWithIsolation
     :: forall backend m a. (MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend m a -> Pool backend -> IsolationLevel -> m a
 runSqlPoolWithIsolation r pconn i =
-    with (acquireSqlConnFromPoolWithIsolation i pconn) $ runReaderT r
+    withRunInIO $ \runInIO ->
+        withResource pconn $ \conn -> do
+            let sqlBackend = projectBackend conn
+            let getter = getStmtConn sqlBackend
+            connBegin sqlBackend getter (Just i)
+            a <- runInIO (runReaderT r conn)
+                `UE.onException` connRollback sqlBackend getter
+            connCommit sqlBackend getter
+            pure a
 
 -- | Like 'withResource', but times out the operation if resource
 -- allocation does not complete within the given timeout period.

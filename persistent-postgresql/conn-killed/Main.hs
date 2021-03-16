@@ -2,6 +2,8 @@
 {-# LANGUAGE OverloadedStrings, QuantifiedConstraints #-}
 {-# LANGUAGE TypeApplications #-}
 {-# language OverloadedStrings #-}
+
+-- | This executable is a test of the issue raised in #1199.
 module Main where
 
 import Prelude hiding (show)
