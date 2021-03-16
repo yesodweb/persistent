@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Database.Persist.Sql.Run where
 
-import Control.Exception (bracket, mask, onException)
+import Control.Exception (bracket, mask, onException, catch)
 import Control.Monad (liftM)
 import Control.Monad.IO.Unlift
 import qualified UnliftIO.Exception as UE
@@ -129,7 +129,10 @@ rawAcquireSqlConn isolation = do
 
         finishTransaction :: backend -> ReleaseType -> IO ()
         finishTransaction _ relType = case relType of
-            ReleaseException -> connRollback rawConn getter
+            ReleaseExceptionWith e -> do
+                putStrLn $ "got a release exception: " <> show e
+                connRollback rawConn getter
+                putStrLn "rolled back transaction"
             _ -> connCommit rawConn getter
 
     return $ mkAcquireType beginTransaction finishTransaction
@@ -202,7 +205,7 @@ withSqlPoolWithConfig
     -> ConnectionPoolConfig
     -> (Pool backend -> m a)
     -> m a
-withSqlPoolWithConfig mkConn poolConfig f = withUnliftIO $ \u -> bracket
+withSqlPoolWithConfig mkConn poolConfig f = withUnliftIO $ \u -> UE.bracket
     (unliftIO u $ createSqlPoolWithConfig mkConn poolConfig)
     destroyAllResources
     (unliftIO u . f)
@@ -227,12 +230,15 @@ createSqlPoolWithConfig mkConn config = do
     -- Resource pool will swallow any exceptions from close. We want to log
     -- them instead.
     let loggedClose :: backend -> IO ()
-        loggedClose backend = close' backend `UE.catchAny` \e -> runLoggingT
-          (logError $ T.pack $ "Error closing database connection in pool: " ++ show e)
-          logFunc
-    liftIO $ createPool 
-        (mkConn logFunc) 
-        loggedClose 
+        loggedClose backend = close' backend `catch` \e -> do
+            runLoggingT
+              (logError $ T.pack $ "Error closing database connection in pool: " ++ show e)
+              logFunc
+            putStrLn "exception caught boss"
+            UE.throwIO (e :: UE.SomeException)
+    liftIO $ createPool
+        (putStrLn "creating conn" >> mkConn logFunc)
+        loggedClose
         (connectionPoolConfigStripes config)
         (connectionPoolConfigIdleTimeout config)
         (connectionPoolConfigSize config)
@@ -294,12 +300,15 @@ withSqlConn
     => (LogFunc -> IO backend) -> (backend -> m a) -> m a
 withSqlConn open f = do
     logFunc <- askLoggerIO
-    withRunInIO $ \run -> bracket
+    withRunInIO $ \run -> UE.bracket
       (open logFunc)
       close'
       (run . f)
 
 close' :: (BackendCompatible SqlBackend backend) => backend -> IO ()
-close' conn = do
+close' conn = UE.uninterruptibleMask_ $ do
+    putStrLn "close' called"
     readIORef (connStmtMap $ projectBackend conn) >>= mapM_ stmtFinalize . Map.elems
+    putStrLn "statements finalized boss"
     connClose $ projectBackend conn
+    putStrLn "connection closed, boss"

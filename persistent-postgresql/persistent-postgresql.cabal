@@ -80,3 +80,22 @@ test-suite test
                    , unordered-containers
                    , vector
     default-language: Haskell2010
+
+executable conn-kill
+    main-is: Main.hs
+    hs-source-dirs: exe
+    ghc-options:
+    build-depends:
+        base
+      , persistent-postgresql
+      , monad-logger
+      , monad-logger-prefix
+      , text
+      , unliftio
+      , time
+      , transformers
+      , persistent
+      , bytestring
+      , resource-pool
+      , mtl
+
