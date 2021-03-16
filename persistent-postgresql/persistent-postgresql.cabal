@@ -84,7 +84,7 @@ test-suite test
 executable conn-kill
     main-is: Main.hs
     hs-source-dirs: exe
-    ghc-options:
+    ghc-options: -threaded
     build-depends:
         base
       , persistent-postgresql

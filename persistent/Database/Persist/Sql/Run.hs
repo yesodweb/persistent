@@ -188,7 +188,7 @@ liftSqlPersistMPool
 liftSqlPersistMPool x pool = liftIO (runSqlPersistMPool x pool)
 
 withSqlPool
-    :: forall backend m a. (MonadLoggerIO m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    :: forall backend m a. (MonadLogger m, MonadLoggerIO m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => (LogFunc -> IO backend) -- ^ create a new connection
     -> Int -- ^ connection count
     -> (Pool backend -> m a)
@@ -306,7 +306,7 @@ withSqlConn open f = do
       (run . f)
 
 close' :: (BackendCompatible SqlBackend backend) => backend -> IO ()
-close' conn = UE.uninterruptibleMask_ $ do
+close' conn = do
     putStrLn "close' called"
     readIORef (connStmtMap $ projectBackend conn) >>= mapM_ stmtFinalize . Map.elems
     putStrLn "statements finalized boss"

@@ -56,8 +56,8 @@ main = runStdoutLoggingT $ prefixLogs "main thread" $ do
   liftIO getCurrentTime >>= \now ->
     simulateFailedLongRunningPostgresCall pool
 
-  logInfoN "destroying resources"
-  liftIO $ Pool.destroyAllResources pool
+  -- logInfoN "destroying resources"
+  -- liftIO $ Pool.destroyAllResources pool
 
   logInfoN "pg_sleep"
   result :: Either Exception.SomeException [Persist.Single (Maybe String)] <-
