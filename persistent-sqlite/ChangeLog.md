@@ -33,7 +33,6 @@
 * Add `createRawSqlitePoolFromInfo`, `createRawSqlitePoolFromInfo_`,
   `withRawSqlitePoolInfo`, and `withRawSqlitePoolInfo_` to match the existing
   pool functions for regular `SqlBackend`. [#983](https://github.com/yesodweb/persistent/pull/983)
->>>>>>> master
 
 ## 2.10.5.2
 
