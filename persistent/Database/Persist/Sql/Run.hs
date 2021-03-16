@@ -132,7 +132,7 @@ liftSqlPersistMPool
 liftSqlPersistMPool x pool = liftIO (runSqlPersistMPool x pool)
 
 withSqlPool
-    :: forall backend m a. (MonadLogger m, MonadLoggerIO m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    :: forall backend m a. (MonadLoggerIO m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => (LogFunc -> IO backend) -- ^ create a new connection
     -> Int -- ^ connection count
     -> (Pool backend -> m a)
