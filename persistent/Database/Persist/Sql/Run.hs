@@ -33,15 +33,7 @@ runSqlPool
     :: forall backend m a. (MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend m a -> Pool backend -> m a
 runSqlPool r pconn = do
-    withRunInIO $ \runInIO ->
-        withResource pconn $ \conn -> do
-            let sqlBackend = projectBackend conn
-            let getter = getStmtConn sqlBackend
-            connBegin sqlBackend getter Nothing
-            a <- runInIO (runReaderT r conn)
-                `UE.onException` connRollback sqlBackend getter
-            connCommit sqlBackend getter
-            pure a
+    rawRunSqlPool r pconn Nothing
 
 -- | Like 'runSqlPool', but supports specifying an isolation level.
 --
@@ -50,11 +42,17 @@ runSqlPoolWithIsolation
     :: forall backend m a. (MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend m a -> Pool backend -> IsolationLevel -> m a
 runSqlPoolWithIsolation r pconn i =
+    rawRunSqlPool r pconn (Just i)
+
+rawRunSqlPool
+    :: forall backend m a. (MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    => ReaderT backend m a -> Pool backend -> Maybe IsolationLevel -> m a
+runSqlPoolWithIsolation r pconn mi =
     withRunInIO $ \runInIO ->
         withResource pconn $ \conn -> do
             let sqlBackend = projectBackend conn
             let getter = getStmtConn sqlBackend
-            connBegin sqlBackend getter (Just i)
+            connBegin sqlBackend getter mi
             a <- runInIO (runReaderT r conn)
                 `UE.onException` connRollback sqlBackend getter
             connCommit sqlBackend getter
