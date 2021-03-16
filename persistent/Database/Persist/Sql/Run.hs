@@ -1,8 +1,11 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Database.Persist.Sql.Run where
 
-import Control.Exception (bracket, mask, onException)
-import Control.Monad (liftM)
+
+
+
+import Control.Exception (bracket, mask, onException, uninterruptibleMask_, finally)
+import Control.Monad ( liftM, void )
 import Control.Monad.IO.Unlift
 import qualified UnliftIO.Exception as UE
 import Control.Monad.Logger.CallStack
@@ -22,6 +25,8 @@ import Database.Persist.Class.PersistStore
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal (IsolationLevel)
 import Database.Persist.Sql.Raw
+import qualified Debug.Trace as Debug
+import qualified Data.Pool as Pool
 
 -- | The returned 'Acquire' gets a connection from the pool, but does __NOT__
 -- start a new transaction. Used to implement 'acquireSqlConnFromPool' and
@@ -39,10 +44,30 @@ unsafeAcquireSqlConnFromPool = do
 
     let freeConn :: (backend, LocalPool backend) -> ReleaseType -> IO ()
         freeConn (res, localPool) relType = case relType of
-            ReleaseException -> P.destroyResource pool localPool res
-            _ -> P.putResource localPool res
+            ReleaseException -> do
 
-    return $ fst <$> mkAcquireType (P.takeResource pool) freeConn
+              putStrLn "release exception"
+              -- maybe
+              --   (putStrLn "1. pool exhausted")
+              --   (const $ putStrLn "1. pool could be borrowed")
+              --   =<< Pool.tryTakeResource pool
+
+              putStrLn "start destroy resource"
+              P.destroyResource pool localPool res
+              putStrLn "finish destroy resource"
+
+              -- maybe
+              --   (putStrLn "2. pool exhausted")
+              --   (const $ putStrLn "2. pool could be borrowed")
+              --   =<< Pool.tryTakeResource pool
+
+            _ ->
+              P.putResource localPool res
+
+    return $ fst <$> mkAcquireType (do
+                                       P.takeResource pool
+
+                                   ) freeConn
 
 
 -- | The returned 'Acquire' gets a connection from the pool, starts a new
@@ -86,7 +111,13 @@ acquireSqlConnFromPoolWithIsolation isolation = do
 runSqlPool
     :: forall backend m a. (MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend m a -> Pool backend -> m a
-runSqlPool r pconn = with (acquireSqlConnFromPool pconn) $ runReaderT r
+runSqlPool r pconn = do
+  -- with (acquireSqlConnFromPool pconn) $ runReaderT r
+  withRunInIO $ \runInIO ->
+      withResource pconn $ \backend ->
+          runInIO $ runReaderT r backend
+-- runSqlPool r pconn = do
+  -- Debug.trace "running sql pool" (with (acquireSqlConnFromPool pconn) $ runReaderT r)
 
 -- | Like 'runSqlPool', but supports specifying an isolation level.
 --
@@ -113,7 +144,7 @@ withResourceTimeout ms pool act = withRunInIO $ \runInIO -> mask $ \restore -> d
     case mres of
         Nothing -> runInIO $ return (Nothing :: Maybe b)
         Just (resource, local) -> do
-            ret <- restore (runInIO (liftM Just $ act resource)) `onException`
+            ret <- restore (runInIO (fmap Just $ act resource)) `onException`
                     destroyResource pool local resource
             putResource local resource
             return ret
@@ -212,9 +243,9 @@ createSqlPool mkConn size = do
     -- Resource pool will swallow any exceptions from close. We want to log
     -- them instead.
     let loggedClose :: backend -> IO ()
-        loggedClose backend = close' backend `UE.catchAny` \e -> runLoggingT
+        loggedClose backend = (close' backend `UE.catchAny` \e -> runLoggingT
           (logError $ T.pack $ "Error closing database connection in pool: " ++ show e)
-          logFunc
+          logFunc) `finally` putStrLn "loggedClose done"
     liftIO $ createPool (mkConn logFunc) loggedClose 1 20 size
 
 -- NOTE: This function is a terrible, ugly hack. It would be much better to
@@ -290,6 +321,5 @@ withSqlConn open f = do
       (run . f)
 
 close' :: (BackendCompatible SqlBackend backend) => backend -> IO ()
-close' conn = do
-    readIORef (connStmtMap $ projectBackend conn) >>= mapM_ stmtFinalize . Map.elems
+close' conn =
     connClose $ projectBackend conn

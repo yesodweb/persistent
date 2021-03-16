@@ -16,7 +16,6 @@ extra-deps:
   - HTTP-4000.3.14
   - th-lift-instances-0.1.14
 
-allow-newer: true
 nix:
   pure: true
   enable: true

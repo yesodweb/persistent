@@ -60,6 +60,7 @@ rawExecuteCount sql vals = do
     conn <- projectBackend `liftM` ask
     runLoggingT (logDebugNS (pack "SQL") $ T.append sql $ pack $ "; " ++ show vals)
         (connLogFunc conn)
+    -- liftIO $ putStrLn "rawExecute"
     stmt <- getStmt sql
     res <- liftIO $ stmtExecute stmt vals
     liftIO $ stmtReset stmt
@@ -212,8 +213,12 @@ rawSql stmt = run
       process = rawSqlProcessRow
 
       withStmt' colSubsts params sink = do
+            liftIO $ putStrLn " calling withStmt'"
             srcRes <- rawQueryRes sql params
-            liftIO $ with srcRes (\src -> runConduit $ src .| sink)
+            liftIO $ putStrLn "about to call with"
+            res <- liftIO $ with srcRes (\src -> runConduit $ src .| sink)
+            liftIO $ putStrLn "called with"
+            pure res
           where
             sql = T.concat $ makeSubsts colSubsts $ T.splitOn placeholder stmt
             placeholder = "??"
@@ -232,6 +237,7 @@ rawSql stmt = run
       run params = do
         conn <- projectBackend `liftM` ask
         let (colCount, colSubsts) = rawSqlCols (connEscapeName conn) x
+        liftIO $ putStrLn "foo foo"
         withStmt' colSubsts params $ firstRow colCount
 
       firstRow colCount = do

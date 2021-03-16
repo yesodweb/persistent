@@ -89,6 +89,7 @@ simulateFailedLongRunningPostgresCall pool = do
                                          [toPersistValue i]
         )
 
-    Concurrent.threadDelay 2000000
+    putStrLn "waiting 5 seconds"
+    Concurrent.threadDelay 5000000
     Monad.void $ Concurrent.killThread threadId
     putStrLn "killed thread"
