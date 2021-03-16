@@ -1,8 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Database.Persist.Sql.Run where
 
-import Control.Exception (bracket, mask, onException, catch)
-import Control.Monad (liftM)
+import Control.Exception (catch)
 import Control.Monad.IO.Unlift
 import qualified UnliftIO.Exception as UE
 import Control.Monad.Logger.CallStack
@@ -12,89 +11,15 @@ import Control.Monad.Trans.Reader hiding (local)
 import Control.Monad.Trans.Resource
 import Data.Acquire (Acquire, ReleaseType(..), mkAcquireType, with)
 import Data.IORef (readIORef)
-import Data.Pool (Pool, LocalPool)
+import Data.Pool (Pool)
 import Data.Pool as P
--- import Data.Pool.Acquire (poolToAcquire)
 import qualified Data.Map as Map
 import qualified Data.Text as T
-import System.Timeout (timeout)
 
 import Database.Persist.Class.PersistStore
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal (IsolationLevel)
 import Database.Persist.Sql.Raw
-
-import Control.Concurrent
-
-putStrLnWithThread :: String -> IO ()
-putStrLnWithThread msg = do
-    me <- myThreadId
-    putStrLn $ "[" ++ show me ++ "] " ++ msg
-
--- | Convert a 'Pool' into an 'Acquire'.
-poolToAcquire :: Pool a -> Acquire a
-poolToAcquire pool = fst <$> mkAcquireType getResource freeResource
-  where
-    getResource = do
-        putStrLnWithThread "Taking resource from Acquire"
-        takeResource pool
-    freeResource (resource, localPool) x = do
-        putStrLnWithThread $ "in free resource, reason: " <> show x
-        case x of
-            ReleaseException -> do
-                putStrLnWithThread "in freeResource: destroying resource"
-                destroyResource pool localPool resource
-                putStrLnWithThread "boom destroyed"
-            _ -> do
-                putStrLnWithThread "putresource"
-                putResource localPool resource
-                putStrLnWithThread "putresource complete"
-
--- | The returned 'Acquire' gets a connection from the pool, but does __NOT__
--- start a new transaction. Used to implement 'acquireSqlConnFromPool' and
--- 'acquireSqlConnFromPoolWithIsolation', this is useful for performing actions
--- on a connection that cannot be done within a transaction, such as VACUUM in
--- Sqlite.
---
--- @since 2.10.5
-unsafeAcquireSqlConnFromPool
-    :: forall backend m
-     . (MonadReader (Pool backend) m, BackendCompatible SqlBackend backend)
-    => m (Acquire backend)
-unsafeAcquireSqlConnFromPool = MonadReader.asks poolToAcquire
-
-
--- | The returned 'Acquire' gets a connection from the pool, starts a new
--- transaction and gives access to the prepared connection.
---
--- When the acquired connection is released the transaction is committed and
--- the connection returned to the pool.
---
--- Upon an exception the transaction is rolled back and the connection
--- destroyed.
---
--- This is equivalent to 'runSqlPool' but does not incur the 'MonadUnliftIO'
--- constraint, meaning it can be used within, for example, a 'Conduit'
--- pipeline.
---
--- @since 2.10.5
-acquireSqlConnFromPool
-    :: (MonadReader (Pool backend) m, BackendCompatible SqlBackend backend)
-    => m (Acquire backend)
-acquireSqlConnFromPool = do
-    connFromPool <- unsafeAcquireSqlConnFromPool
-    return $ connFromPool >>= acquireSqlConn
-
--- | Like 'acquireSqlConnFromPool', but lets you specify an explicit isolation
--- level.
---
--- @since 2.10.5
-acquireSqlConnFromPoolWithIsolation
-    :: (MonadReader (Pool backend) m, BackendCompatible SqlBackend backend)
-    => IsolationLevel -> m (Acquire backend)
-acquireSqlConnFromPoolWithIsolation isolation = do
-    connFromPool <- unsafeAcquireSqlConnFromPool
-    return $ connFromPool >>= acquireSqlConnWithIsolation isolation
 
 -- | Get a connection from the pool, run the given action, and then return the
 -- connection to the pool.
@@ -106,7 +31,6 @@ runSqlPool
     :: forall backend m a. (MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend m a -> Pool backend -> m a
 runSqlPool r pconn = do
-    -- with (acquireSqlConnFromPool pconn) $ runReaderT r
     withRunInIO $ \runInIO ->
         withResource pconn $ \conn -> do
             let sqlBackend = projectBackend conn
@@ -134,28 +58,6 @@ runSqlPoolWithIsolation r pconn i =
             connCommit sqlBackend getter
             pure a
 
--- | Like 'withResource', but times out the operation if resource
--- allocation does not complete within the given timeout period.
---
--- @since 2.0.0
-withResourceTimeout
-  :: forall a m b.  (MonadUnliftIO m)
-  => Int -- ^ Timeout period in microseconds
-  -> Pool a
-  -> (a -> m b)
-  -> m (Maybe b)
-{-# SPECIALIZE withResourceTimeout :: Int -> Pool a -> (a -> IO b) -> IO (Maybe b) #-}
-withResourceTimeout ms pool act = withRunInIO $ \runInIO -> mask $ \restore -> do
-    mres <- timeout ms $ takeResource pool
-    case mres of
-        Nothing -> runInIO $ return (Nothing :: Maybe b)
-        Just (resource, local) -> do
-            ret <- restore (runInIO (liftM Just $ act resource)) `onException`
-                    destroyResource pool local resource
-            putResource local resource
-            return ret
-{-# INLINABLE withResourceTimeout #-}
-
 rawAcquireSqlConn
     :: forall backend m
      . (MonadReader backend m, BackendCompatible SqlBackend backend)
@@ -173,10 +75,8 @@ rawAcquireSqlConn isolation = do
 
         finishTransaction :: backend -> ReleaseType -> IO ()
         finishTransaction _ relType = case relType of
-            ReleaseExceptionWith e -> do
-                putStrLnWithThread $ "got a release exception: " <> show e
+            ReleaseException -> do
                 connRollback rawConn getter
-                putStrLnWithThread "rolled back transaction"
             _ -> connCommit rawConn getter
 
     return $ mkAcquireType beginTransaction finishTransaction
@@ -278,10 +178,9 @@ createSqlPoolWithConfig mkConn config = do
             runLoggingT
               (logError $ T.pack $ "Error closing database connection in pool: " ++ show e)
               logFunc
-            putStrLnWithThread "exception caught boss"
             UE.throwIO (e :: UE.SomeException)
     liftIO $ createPool
-        (putStrLnWithThread "creating conn" >> mkConn logFunc)
+        (mkConn logFunc)
         loggedClose
         (connectionPoolConfigStripes config)
         (connectionPoolConfigIdleTimeout config)
@@ -351,8 +250,5 @@ withSqlConn open f = do
 
 close' :: (BackendCompatible SqlBackend backend) => backend -> IO ()
 close' conn = do
-    putStrLnWithThread "close' called"
     readIORef (connStmtMap $ projectBackend conn) >>= mapM_ stmtFinalize . Map.elems
-    putStrLnWithThread "statements finalized boss"
     connClose $ projectBackend conn
-    putStrLnWithThread "connection closed, boss"

@@ -37,7 +37,6 @@ library
                    , path-pieces              >= 0.2
                    , resource-pool            >= 0.2.3
                    , resourcet                >= 1.1.10
-                   , resourcet-pool
                    , scientific
                    , silently
                    , template-haskell         >= 2.4
