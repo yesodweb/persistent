@@ -44,7 +44,7 @@ show :: Show a => a -> Text.Text
 show = Text.pack . Prelude.show
 
 main :: IO ()
-main = runStdoutLoggingT $ prefixLogs "main thread" $ do
+main = runStdoutLoggingT $ Concurrent.myThreadId >>= \tid -> prefixLogs (show tid) $ do
 
   -- I started a postgres server with:
   -- docker run --rm --name some-postgres -p 5432:5432 -e POSTGRES_PASSWORD=secret postgres

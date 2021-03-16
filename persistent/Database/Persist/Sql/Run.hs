@@ -14,7 +14,7 @@ import Data.Acquire (Acquire, ReleaseType(..), mkAcquireType, with)
 import Data.IORef (readIORef)
 import Data.Pool (Pool, LocalPool)
 import Data.Pool as P
-import Data.Pool.Acquire (poolToAcquire)
+-- import Data.Pool.Acquire (poolToAcquire)
 import qualified Data.Map as Map
 import qualified Data.Text as T
 import System.Timeout (timeout)
@@ -23,6 +23,32 @@ import Database.Persist.Class.PersistStore
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal (IsolationLevel)
 import Database.Persist.Sql.Raw
+
+import Control.Concurrent
+
+putStrLnWithThread :: String -> IO ()
+putStrLnWithThread msg = do
+    me <- myThreadId
+    putStrLn $ "[" ++ show me ++ "] " ++ msg
+
+-- | Convert a 'Pool' into an 'Acquire'.
+poolToAcquire :: Pool a -> Acquire a
+poolToAcquire pool = fst <$> mkAcquireType getResource freeResource
+  where
+    getResource = do
+        putStrLnWithThread "Taking resource from Acquire"
+        takeResource pool
+    freeResource (resource, localPool) x = do
+        putStrLnWithThread $ "in free resource, reason: " <> show x
+        case x of
+            ReleaseException -> do
+                putStrLnWithThread "in freeResource: destroying resource"
+                destroyResource pool localPool resource
+                putStrLnWithThread "boom destroyed"
+            _ -> do
+                putStrLnWithThread "putresource"
+                putResource localPool resource
+                putStrLnWithThread "putresource complete"
 
 -- | The returned 'Acquire' gets a connection from the pool, but does __NOT__
 -- start a new transaction. Used to implement 'acquireSqlConnFromPool' and
@@ -79,7 +105,18 @@ acquireSqlConnFromPoolWithIsolation isolation = do
 runSqlPool
     :: forall backend m a. (MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend m a -> Pool backend -> m a
-runSqlPool r pconn = with (acquireSqlConnFromPool pconn) $ runReaderT r
+runSqlPool r pconn = do
+    -- with (acquireSqlConnFromPool pconn) $ runReaderT r
+    withRunInIO $ \runInIO ->
+        withResource pconn $ \conn -> do
+            let sqlBackend = projectBackend conn
+            let getter = getStmtConn sqlBackend
+            connBegin sqlBackend getter Nothing
+            a <- runInIO (runReaderT r conn)
+                `UE.onException` connRollback sqlBackend getter
+            connCommit sqlBackend getter
+            pure a
+
 
 -- | Like 'runSqlPool', but supports specifying an isolation level.
 --
@@ -130,9 +167,9 @@ rawAcquireSqlConn isolation = do
         finishTransaction :: backend -> ReleaseType -> IO ()
         finishTransaction _ relType = case relType of
             ReleaseExceptionWith e -> do
-                putStrLn $ "got a release exception: " <> show e
+                putStrLnWithThread $ "got a release exception: " <> show e
                 connRollback rawConn getter
-                putStrLn "rolled back transaction"
+                putStrLnWithThread "rolled back transaction"
             _ -> connCommit rawConn getter
 
     return $ mkAcquireType beginTransaction finishTransaction
@@ -234,10 +271,10 @@ createSqlPoolWithConfig mkConn config = do
             runLoggingT
               (logError $ T.pack $ "Error closing database connection in pool: " ++ show e)
               logFunc
-            putStrLn "exception caught boss"
+            putStrLnWithThread "exception caught boss"
             UE.throwIO (e :: UE.SomeException)
     liftIO $ createPool
-        (putStrLn "creating conn" >> mkConn logFunc)
+        (putStrLnWithThread "creating conn" >> mkConn logFunc)
         loggedClose
         (connectionPoolConfigStripes config)
         (connectionPoolConfigIdleTimeout config)
@@ -307,8 +344,8 @@ withSqlConn open f = do
 
 close' :: (BackendCompatible SqlBackend backend) => backend -> IO ()
 close' conn = do
-    putStrLn "close' called"
+    putStrLnWithThread "close' called"
     readIORef (connStmtMap $ projectBackend conn) >>= mapM_ stmtFinalize . Map.elems
-    putStrLn "statements finalized boss"
+    putStrLnWithThread "statements finalized boss"
     connClose $ projectBackend conn
-    putStrLn "connection closed, boss"
+    putStrLnWithThread "connection closed, boss"
