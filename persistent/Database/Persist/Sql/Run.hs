@@ -1,7 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Database.Persist.Sql.Run where
 
-import Control.Exception (catch)
 import Control.Monad.IO.Unlift
 import qualified UnliftIO.Exception as UE
 import Control.Monad.Logger.CallStack
@@ -177,11 +176,11 @@ createSqlPoolWithConfig mkConn config = do
     -- Resource pool will swallow any exceptions from close. We want to log
     -- them instead.
     let loggedClose :: backend -> IO ()
-        loggedClose backend = close' backend `catch` \e -> do
+        loggedClose backend = close' backend `UE.catchAny` \e -> do
             runLoggingT
               (logError $ T.pack $ "Error closing database connection in pool: " ++ show e)
               logFunc
-            UE.throwIO (e :: UE.SomeException)
+            UE.throwIO e
     liftIO $ createPool
         (mkConn logFunc)
         loggedClose
