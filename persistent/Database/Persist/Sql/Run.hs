@@ -24,6 +24,9 @@ import Database.Persist.Sql.Raw
 -- | Get a connection from the pool, run the given action, and then return the
 -- connection to the pool.
 --
+-- This function performs the given action in a transaction. If an
+-- exception occurs during the action, then the transaction is rolled back.
+--
 -- Note: This function previously timed out after 2 seconds, but this behavior
 -- was buggy and caused more problems than it solved. Since version 2.1.2, it
 -- performs no timeout checks.
