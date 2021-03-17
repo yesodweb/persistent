@@ -57,6 +57,7 @@ import Test.QuickCheck
 import Control.Monad (unless, (>=>))
 import Control.Monad.IO.Class
 import Control.Monad.IO.Unlift (MonadUnliftIO)
+import UnliftIO.Exception
 import Control.Monad.Logger
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import qualified Data.ByteString as BS
