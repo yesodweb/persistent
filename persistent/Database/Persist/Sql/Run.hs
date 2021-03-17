@@ -95,14 +95,15 @@ runSqlPoolWithHooks
     -> m a
 runSqlPoolWithHooks r pconn i before after onException =
     withRunInIO $ \runInIO ->
-        withResource pconn $ \conn -> do
-            runInIO $ before conn
-            a <- runInIO (runReaderT r conn)
-                `UE.catchAny` \e -> do
-                    runInIO $ onException conn e
-                    UE.throwIO e
-            runInIO $ after conn
-            pure a
+    withResource pconn $ \conn ->
+    UE.mask $ \restore -> do
+        _ <- restore $ runInIO $ before conn
+        a <- restore (runInIO (runReaderT r conn))
+            `UE.catchAny` \e -> do
+                _ <- restore $ runInIO $ onException conn e
+                UE.throwIO e
+        _ <- restore $ runInIO $ after conn
+        pure a
 
 rawAcquireSqlConn
     :: forall backend m
