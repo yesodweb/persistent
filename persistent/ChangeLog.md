@@ -1,6 +1,6 @@
 # Changelog for persistent
 
-## 2.12 (unreleased)
+## 2.12.0.1 (unreleased)
 
 * Refactor [] to NonEmpty in Quasi module [#1193](https://github.com/yesodweb/persistent/pull/1193)
 * [#1162](https://github.com/yesodweb/persistent/pull/1162)
