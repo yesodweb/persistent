@@ -27,7 +27,9 @@ import Data.Word (Word32)
 import Numeric (showHex, readHex)
 import Web.PathPieces (PathPiece(..))
 import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData (..), parseUrlPieceMaybe, showTextData, readTextData, parseBoundedTextData)
+import Data.Monoid
 
+import Prelude
 
 -- | A 'Checkmark' should be used as a field type whenever a
 -- uniqueness constraint should guarantee that a certain kind of
