@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module PgInit (
@@ -38,7 +38,6 @@ import Init
     )
 
 -- re-exports
-import Control.Exception (SomeException)
 import Control.Monad (void, replicateM, liftM, when, forM_)
 import Control.Monad.Trans.Reader
 import Data.Aeson (Value(..))
@@ -55,6 +54,7 @@ import Test.QuickCheck
 import Control.Monad (unless, (>=>))
 import Control.Monad.IO.Class
 import Control.Monad.IO.Unlift (MonadUnliftIO)
+import UnliftIO.Exception
 import Control.Monad.Logger
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import qualified Data.ByteString as BS
@@ -86,16 +86,33 @@ persistSettings = sqlSettings { mpsGeneric = True }
 
 runConn :: MonadUnliftIO m => SqlPersistT (LoggingT m) t -> m ()
 runConn f = do
-  travis <- liftIO isTravis
-  let debugPrint = not travis && _debugOn
-  let printDebug = if debugPrint then print . fromLogStr else void . return
-  flip runLoggingT (\_ _ _ s -> printDebug s) $ do
-    _ <- if travis
-      then withPostgresqlPool "host=localhost port=5432 user=postgres dbname=persistent" 1 $ runSqlPool f
-      else do
-        host <- fromMaybe "localhost" <$> liftIO dockerPg
-        withPostgresqlPool ("host=" <> host <> " port=5432 user=postgres dbname=test") 1 $ runSqlPool f
-    return ()
+    travis <- liftIO isTravis
+    let debugPrint = not travis && _debugOn
+    let printDebug = if debugPrint then print . fromLogStr else void . return
+        runLog a = runLoggingT a (\_ _ _ s -> printDebug s)
+    let go =
+            if travis
+            then
+                withPostgresqlPool "host=localhost port=5432 user=postgres dbname=persistent" 1 $ runSqlPool f
+            else do
+                host <- fromMaybe "localhost" <$> liftIO dockerPg
+                withPostgresqlPool ("host=" <> host <> " port=5432 user=postgres dbname=test") 1 $ runSqlPool f
+    -- horrifying hack :( postgresql is having weird connection failures in
+    -- CI, for no reason that i can determine. see this PR for notes:
+                    -- https://github.com/yesodweb/persistent/pull/1197
+    eres <- try $ runLog go
+    void $ case eres of
+        Left (err :: SomeException) -> do
+            eres' <- try $ runLog go
+            case eres' of
+                Left (err' :: SomeException) ->
+                    if show err == show err'
+                    then throwIO err
+                    else throwIO err'
+                Right a ->
+                    pure a
+        Right a ->
+            pure a
 
 db :: SqlPersistT (LoggingT (ResourceT IO)) () -> Assertion
 db actions = do
