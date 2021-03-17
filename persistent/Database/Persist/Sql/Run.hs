@@ -93,16 +93,17 @@ runSqlPool
     => ReaderT backend m a -> Pool backend -> m a
 runSqlPool r pconn =
     withRunInIO $ \runInIO ->
-        withResource pconn $ \conn -> do
-            let sqlBackend = projectBackend conn
-            let getter = getStmtConn sqlBackend
-            connBegin sqlBackend getter Nothing
-            a <- runInIO (runReaderT r conn)
-                `UE.catchAny` \e -> do
-                    connRollback sqlBackend getter
-                    UE.throwIO e
-            connCommit sqlBackend getter
-            pure a
+    withResource pconn $ \conn ->
+    UE.mask $ \restore ->
+        let sqlBackend = projectBackend conn
+        let getter = getStmtConn sqlBackend
+        restore $ connBegin sqlBackend getter Nothing
+        a <- restore (runInIO (runReaderT r conn))
+            `UE.catchAny` \e -> do
+                restore $ connRollback sqlBackend getter
+                UE.throwIO e
+        restore $ connCommit sqlBackend getter
+        pure a
 
 -- | Like 'runSqlPool', but supports specifying an isolation level.
 --
@@ -112,16 +113,17 @@ runSqlPoolWithIsolation
     => ReaderT backend m a -> Pool backend -> IsolationLevel -> m a
 runSqlPoolWithIsolation r pconn i =
     withRunInIO $ \runInIO ->
-        withResource pconn $ \conn -> do
-            let sqlBackend = projectBackend conn
-            let getter = getStmtConn sqlBackend
-            connBegin sqlBackend getter (Just i)
-            a <- runInIO (runReaderT r conn)
-                `UE.catchAny` \e -> do
-                    connRollback sqlBackend getter
-                    UE.throwIO e
-            connCommit sqlBackend getter
-            pure a
+    withResource pconn $ \conn ->
+    mask $ \restore -> do
+        let sqlBackend = projectBackend conn
+        let getter = getStmtConn sqlBackend
+        restore $ connBegin sqlBackend getter (Just i)
+        a <- restore (runInIO (runReaderT r conn))
+            `UE.catchAny` \e -> do
+                restore $ connRollback sqlBackend getter
+                UE.throwIO e
+        restore $ connCommit sqlBackend getter
+        pure a
 
 -- | Like 'withResource', but times out the operation if resource
 -- allocation does not complete within the given timeout period.
