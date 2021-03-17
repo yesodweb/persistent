@@ -10,6 +10,19 @@ on:
 jobs:
   build:
     services:
+      postgres:
+        image: postgres:12-alpine
+        env:
+          POSTGRES_USER: perstest
+          POSTGRES_PASSWORD: perstest
+          POSTGRES_DB: persistent
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
       # mysql-service Label used to access the service container
       mysql-service:
         # Docker Hub image (also with version)
@@ -33,7 +46,13 @@ jobs:
     strategy:
       matrix:
         cabal: ["3.2"]
-        ghc: ["8.6.5", "8.8.3", "8.10.1"]
+        ghc:
+          - "8.2.2"
+          - "8.4.4"
+          - "8.6.5"
+          - "8.8.4"
+          - "8.10.1"
+
     env:
       CONFIG: "--enable-tests"
     steps:
@@ -45,12 +64,6 @@ jobs:
           cabal-version: ${{ matrix.cabal }}
       - name: Check MySQL connection
         run: mysql -utest -ptest -h127.0.0.1 --port=33306 test -e "SELECT 1;"
-      - uses: harmon758/postgresql-action@v1
-        with:
-           postgresql version: '12'  # See https://hub.docker.com/_/postgres for available versions  
-           postgresql user: perstest
-           postgresql password: perstest
-           postgresql db: persistent
       - name: Start MongoDB
         uses: supercharge/mongodb-github-action@1.3.0
       - name: Start Redis
