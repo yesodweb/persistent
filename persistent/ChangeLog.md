@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## 2.11.0.3
+
+* Backported the fix from [#1207](https://github.com/yesodweb/persistent/pull/1207) for asynchronous exceptions.
+    * Deprecated the `Acquire` family of functions.
+
 ## 2.11.0.2
 
 * Fix a bug where an empty entity definition would break parsing of `EntityDef`s. [#1176](https://github.com/yesodweb/persistent/issues/1176)

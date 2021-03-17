@@ -44,6 +44,7 @@ unsafeAcquireSqlConnFromPool = do
 
     return $ fst <$> mkAcquireType (P.takeResource pool) freeConn
 
+{-# DEPRECATED unsafeAcquireSqlConnFromPool "The Pool ~> Acquire functions are unpredictable and may result in resource leaks with asynchronous exceptions. They will be removed in 2.12. If you need them, please file an issue and we'll try to help get you sorted. See issue #1199 on GitHub for the debugging log." #-}
 
 -- | The returned 'Acquire' gets a connection from the pool, starts a new
 -- transaction and gives access to the prepared connection.
@@ -66,6 +67,8 @@ acquireSqlConnFromPool = do
     connFromPool <- unsafeAcquireSqlConnFromPool
     return $ connFromPool >>= acquireSqlConn
 
+{-# DEPRECATED acquireSqlConnFromPool "The Pool ~> Acquire functions are unpredictable and may result in resource leaks with asynchronous exceptions. They will be removed in 2.12. If you need them, please file an issue and we'll try to help get you sorted. See issue #1199 on GitHub for the debugging log." #-}
+
 -- | Like 'acquireSqlConnFromPool', but lets you specify an explicit isolation
 -- level.
 --
@@ -77,6 +80,8 @@ acquireSqlConnFromPoolWithIsolation isolation = do
     connFromPool <- unsafeAcquireSqlConnFromPool
     return $ connFromPool >>= acquireSqlConnWithIsolation isolation
 
+{-# DEPRECATED acquireSqlConnFromPoolWithIsolation "The Pool ~> Acquire functions are unpredictable and may result in resource leaks with asynchronous exceptions. They will be removed in 2.12. If you need them, please file an issue and we'll try to help get you sorted. See issue #1199 on GitHub for the debugging log." #-}
+
 -- | Get a connection from the pool, run the given action, and then return the
 -- connection to the pool.
 --
@@ -86,7 +91,19 @@ acquireSqlConnFromPoolWithIsolation isolation = do
 runSqlPool
     :: forall backend m a. (MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend m a -> Pool backend -> m a
-runSqlPool r pconn = with (acquireSqlConnFromPool pconn) $ runReaderT r
+runSqlPool r pconn =
+    withRunInIO $ \runInIO ->
+    withResource pconn $ \conn ->
+    UE.mask $ \restore ->
+        let sqlBackend = projectBackend conn
+        let getter = getStmtConn sqlBackend
+        restore $ connBegin sqlBackend getter Nothing
+        a <- restore (runInIO (runReaderT r conn))
+            `UE.catchAny` \e -> do
+                restore $ connRollback sqlBackend getter
+                UE.throwIO e
+        restore $ connCommit sqlBackend getter
+        pure a
 
 -- | Like 'runSqlPool', but supports specifying an isolation level.
 --
@@ -95,7 +112,18 @@ runSqlPoolWithIsolation
     :: forall backend m a. (MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend m a -> Pool backend -> IsolationLevel -> m a
 runSqlPoolWithIsolation r pconn i =
-    with (acquireSqlConnFromPoolWithIsolation i pconn) $ runReaderT r
+    withRunInIO $ \runInIO ->
+    withResource pconn $ \conn ->
+    mask $ \restore -> do
+        let sqlBackend = projectBackend conn
+        let getter = getStmtConn sqlBackend
+        restore $ connBegin sqlBackend getter (Just i)
+        a <- restore (runInIO (runReaderT r conn))
+            `UE.catchAny` \e -> do
+                restore $ connRollback sqlBackend getter
+                UE.throwIO e
+        restore $ connCommit sqlBackend getter
+        pure a
 
 -- | Like 'withResource', but times out the operation if resource
 -- allocation does not complete within the given timeout period.
@@ -237,9 +265,9 @@ createSqlPoolWithConfig mkConn config = do
         loggedClose backend = close' backend `UE.catchAny` \e -> runLoggingT
           (logError $ T.pack $ "Error closing database connection in pool: " ++ show e)
           logFunc
-    liftIO $ createPool 
-        (mkConn logFunc) 
-        loggedClose 
+    liftIO $ createPool
+        (mkConn logFunc)
+        loggedClose
         (connectionPoolConfigStripes config)
         (connectionPoolConfigIdleTimeout config)
         (connectionPoolConfigSize config)
