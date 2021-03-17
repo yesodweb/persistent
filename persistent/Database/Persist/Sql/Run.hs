@@ -44,6 +44,8 @@ unsafeAcquireSqlConnFromPool = do
 
     return $ fst <$> mkAcquireType (P.takeResource pool) freeConn
 
+{-# DEPRECATED unsafeAcquireSqlConnFromPool "The Pool ~> Acquire functions are unpredictable and may result in resource leaks with asynchronous exceptions. They will be removed in 2.12. If you need them, please file an issue and we'll try to help get you sorted. See issue #1199 on GitHub for the debugging log." #-}
+
 
 -- | The returned 'Acquire' gets a connection from the pool, starts a new
 -- transaction and gives access to the prepared connection.
@@ -66,6 +68,8 @@ acquireSqlConnFromPool = do
     connFromPool <- unsafeAcquireSqlConnFromPool
     return $ connFromPool >>= acquireSqlConn
 
+{-# DEPRECATED acquireSqlConnFromPool "The Pool ~> Acquire functions are unpredictable and may result in resource leaks with asynchronous exceptions. They will be removed in 2.12. If you need them, please file an issue and we'll try to help get you sorted. See issue #1199 on GitHub for the debugging log." #-}
+--
 -- | Like 'acquireSqlConnFromPool', but lets you specify an explicit isolation
 -- level.
 --
@@ -77,6 +81,8 @@ acquireSqlConnFromPoolWithIsolation isolation = do
     connFromPool <- unsafeAcquireSqlConnFromPool
     return $ connFromPool >>= acquireSqlConnWithIsolation isolation
 
+{-# DEPRECATED acquireSqlConnFromPoolWithIsolation "The Pool ~> Acquire functions are unpredictable and may result in resource leaks with asynchronous exceptions. They will be removed in 2.12. If you need them, please file an issue and we'll try to help get you sorted. See issue #1199 on GitHub for the debugging log." #-}
+
 -- | Get a connection from the pool, run the given action, and then return the
 -- connection to the pool.
 --
@@ -86,7 +92,18 @@ acquireSqlConnFromPoolWithIsolation isolation = do
 runSqlPool
     :: (MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend m a -> Pool backend -> m a
-runSqlPool r pconn = with (acquireSqlConnFromPool pconn) $ runReaderT r
+runSqlPool r pconn =
+    withRunInIO $ \runInIO ->
+        withResource pconn $ \conn -> do
+            let sqlBackend = projectBackend conn
+            let getter = getStmtConn sqlBackend
+            connBegin sqlBackend getter Nothing
+            a <- runInIO (runReaderT r conn)
+                `UE.catchAny` \e -> do
+                    connRollback sqlBackend getter
+                    UE.throwIO e
+            connCommit sqlBackend getter
+            pure a
 
 -- | Like 'runSqlPool', but supports specifying an isolation level.
 --
@@ -95,29 +112,17 @@ runSqlPoolWithIsolation
     :: (MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend m a -> Pool backend -> IsolationLevel -> m a
 runSqlPoolWithIsolation r pconn i =
-    with (acquireSqlConnFromPoolWithIsolation i pconn) $ runReaderT r
-
--- | Like 'withResource', but times out the operation if resource
--- allocation does not complete within the given timeout period.
---
--- @since 2.0.0
-withResourceTimeout
-  :: forall a m b.  (MonadUnliftIO m)
-  => Int -- ^ Timeout period in microseconds
-  -> Pool a
-  -> (a -> m b)
-  -> m (Maybe b)
-{-# SPECIALIZE withResourceTimeout :: Int -> Pool a -> (a -> IO b) -> IO (Maybe b) #-}
-withResourceTimeout ms pool act = withRunInIO $ \runInIO -> mask $ \restore -> do
-    mres <- timeout ms $ takeResource pool
-    case mres of
-        Nothing -> runInIO $ return (Nothing :: Maybe b)
-        Just (resource, local) -> do
-            ret <- restore (runInIO (liftM Just $ act resource)) `onException`
-                    destroyResource pool local resource
-            putResource local resource
-            return ret
-{-# INLINABLE withResourceTimeout #-}
+    withRunInIO $ \runInIO ->
+        withResource pconn $ \conn -> do
+            let sqlBackend = projectBackend conn
+            let getter = getStmtConn sqlBackend
+            connBegin sqlBackend getter (Just i)
+            a <- runInIO (runReaderT r conn)
+                `UE.catchAny` \e -> do
+                    connRollback sqlBackend getter
+                    UE.throwIO e
+            connCommit sqlBackend getter
+            pure a
 
 rawAcquireSqlConn
     :: forall backend m
