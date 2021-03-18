@@ -9,6 +9,7 @@ import qualified Data.Map as Map
 import Data.Time
 import Text.Shakespeare.Text
 import Data.List
+import Data.Monoid
 
 import Database.Persist.Class.PersistField
 import Database.Persist.Quasi

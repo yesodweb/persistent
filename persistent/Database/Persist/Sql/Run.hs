@@ -94,7 +94,7 @@ runSqlPool
 runSqlPool r pconn =
     withRunInIO $ \runInIO ->
     withResource pconn $ \conn ->
-    UE.mask $ \restore ->
+    UE.mask $ \restore -> do
         let sqlBackend = projectBackend conn
         let getter = getStmtConn sqlBackend
         restore $ connBegin sqlBackend getter Nothing

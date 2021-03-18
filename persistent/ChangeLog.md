@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## 2.11.0.4
+
+* Fix a compile error [#1213](https://github.com/yesodweb/persistent/pull/1213)
+    * That's what I get for running this stuff with flakey CI!
+
 ## 2.11.0.3
 
 * Backported the fix from [#1207](https://github.com/yesodweb/persistent/pull/1207) for asynchronous exceptions.

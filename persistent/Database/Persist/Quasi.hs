@@ -1200,14 +1200,14 @@ parseCascade allTokens =
                             Nothing ->
                                 go (this : acc) mupd mdel rest
     nope msg =
-        error $ msg <> ", tokens: " <> show allTokens
+        error $ msg `mappend` ", tokens: " `mappend` show allTokens
 
 parseCascadeAction
     :: CascadePrefix
     -> Text
     -> Maybe CascadeAction
 parseCascadeAction prfx text = do
-    cascadeStr <- T.stripPrefix ("On" <> toPrefix prfx) text
+    cascadeStr <- T.stripPrefix ("On" `mappend` toPrefix prfx) text
     case readEither (T.unpack cascadeStr) of
         Right a ->
             Just a
