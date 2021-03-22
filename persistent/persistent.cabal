@@ -14,14 +14,7 @@ homepage:        http://www.yesodweb.com/book/persistent
 bug-reports:     https://github.com/yesodweb/persistent/issues
 extra-source-files: ChangeLog.md README.md
 
-flag nooverlap
-    default: False
-    description: test out our assumption that OverlappingInstances is just for String
-
 library
-    if flag(nooverlap)
-        cpp-options: -DNO_OVERLAP
-
     build-depends:   base                     >= 4.9       && < 5
                    , aeson                    >= 1.0
                    , attoparsec
@@ -39,13 +32,14 @@ library
                    , resourcet                >= 1.1.10
                    , scientific
                    , silently
-                   , template-haskell         >= 2.4
+                   , template-haskell         >= 2.11
                    , text                     >= 1.2
                    , time                     >= 1.6
                    , transformers             >= 0.5
                    , unliftio-core
                    , unliftio
                    , unordered-containers
+                   , th-lift-instances        >= 0.1.14    && < 0.2
                    , vector
 
     default-extensions: FlexibleContexts
@@ -55,6 +49,7 @@ library
 
     exposed-modules: Database.Persist
                      Database.Persist.Quasi
+                     Database.Persist.TH
 
                      Database.Persist.Types
                      Database.Persist.Class
@@ -94,24 +89,43 @@ test-suite test
     type:          exitcode-stdio-1.0
     main-is:       test/main.hs
 
-    build-depends:   base >= 4.9 && < 5
-                   , aeson
-                   , attoparsec
-                   , base64-bytestring
-                   , blaze-html
-                   , bytestring
-                   , containers
-                   , hspec         >= 2.4
-                   , http-api-data
-                   , path-pieces
-                   , scientific
-                   , shakespeare
-                   , text
-                   , time
-                   , transformers
-                   , unordered-containers
-                   , vector
+    build-depends:   
+        base >= 4.9 && < 5
+      , aeson
+      , attoparsec
+      , base64-bytestring
+      , blaze-html
+      , bytestring
+      , containers
+      , hspec         >= 2.4
+      , http-api-data
+      , path-pieces
+      , scientific
+      , shakespeare
+      , text
+      , time
+      , transformers
+      , unordered-containers
+      , vector
+      , QuickCheck
+        -- needed because of the `source-dirs: .`
+        -- TODO: factor the internal modules out so we can use them in tests
+        -- maybe in another package
+      , template-haskell         >= 2.4
+      , unliftio-core
+      , mtl
+      , resourcet
+      , conduit
+      , monad-logger
+      , fast-logger
+      , resource-pool
+      , unliftio
+      , silently
+      , th-lift-instances
 
+    hs-source-dirs:
+        .
+        test/
     cpp-options: -DTEST
 
     default-extensions: FlexibleContexts
@@ -119,13 +133,35 @@ test-suite test
                       , OverloadedStrings
                       , TypeFamilies
 
-    other-modules:   Database.Persist.Class.PersistEntity
-                     Database.Persist.Class.PersistField
-                     Database.Persist.Quasi
-                     Database.Persist.Types
-                     Database.Persist.Types.Base
+    other-modules:   
+        Database.Persist.Class.PersistEntity
+        Database.Persist.Class.PersistField
+        Database.Persist.Quasi
+        Database.Persist.Types
+        Database.Persist.Types.Base
+        Database.Persist.THSpec
+        TemplateTestImports
+        Database.Persist.TH.SharedPrimaryKeySpec
+        Database.Persist.TH.SharedPrimaryKeyImportedSpec
+        Database.Persist.TH.OverloadedLabelSpec
     default-language: Haskell2010
 
 source-repository head
   type:     git
   location: git://github.com/yesodweb/persistent.git
+
+benchmark persistent-th-bench
+    ghc-options:      -O2
+    type:             exitcode-stdio-1.0
+    main-is:          Main.hs
+    hs-source-dirs:   bench
+    build-depends:    base
+                    , persistent
+                    , criterion
+                    , deepseq
+                    , deepseq-generics
+                    , file-embed
+                    , text
+                    , template-haskell
+    other-modules:    Models
+    default-language: Haskell2010

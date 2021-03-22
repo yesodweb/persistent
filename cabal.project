@@ -1,6 +1,5 @@
 packages:
   persistent
-  persistent-template
   persistent-sqlite
   persistent-test
   persistent-mongoDB

@@ -11,7 +11,7 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
-module SharedPrimaryKeyTestImported where
+module Database.Persist.TH.SharedPrimaryKeyImportedSpec where
 
 import TemplateTestImports
 
@@ -22,7 +22,7 @@ import Database.Persist.Sql
 import Database.Persist.Sql.Util
 import Database.Persist.TH
 
-import SharedPrimaryKeyTest (User, UserId)
+import Database.Persist.TH.SharedPrimaryKeySpec (User, UserId)
 
 share [ mkPersist sqlSettings ] [persistLowerCase|
 

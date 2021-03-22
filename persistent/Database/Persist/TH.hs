@@ -14,7 +14,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DeriveLift #-}
 
-{-# OPTIONS_GHC -fno-warn-orphans -fno-warn-missing-fields #-}
+-- {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-missing-fields #-}
 
 -- | This module provides the tools for defining your database schema and using
 -- it to generate Haskell data types and migrations.
