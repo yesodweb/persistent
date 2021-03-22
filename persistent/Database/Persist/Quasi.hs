@@ -40,7 +40,7 @@ data TableName = TableName
 @
 
 As with the SQL generated, the specifics of this are customizable.
-See the @persistent-template@ package for details.
+See the "Database.Persist.TH" module for details.
 
 = Deriving
 

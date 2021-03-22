@@ -119,7 +119,6 @@ test-suite test
     build-depends:   base >= 4.9 && < 5
                    , persistent
                    , persistent-sqlite
-                   , persistent-template
                    , persistent-test
                    , bytestring
                    , containers

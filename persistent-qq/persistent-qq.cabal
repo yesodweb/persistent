@@ -58,7 +58,6 @@ test-suite specs
     , persistent >=2.10
     , persistent-qq
     , persistent-sqlite
-    , persistent-template
     , resourcet
     , template-haskell
     , text

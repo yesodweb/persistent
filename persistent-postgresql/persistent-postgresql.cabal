@@ -59,7 +59,6 @@ test-suite test
                    , persistent
                    , persistent-postgresql
                    , persistent-qq
-                   , persistent-template
                    , persistent-test
                    , aeson
                    , bytestring

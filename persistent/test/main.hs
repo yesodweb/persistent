@@ -21,8 +21,14 @@ import Database.Persist.Class.PersistField
 import Database.Persist.Quasi
 import Database.Persist.Types
 
+import qualified Database.Persist.THSpec as THSpec
+
 main :: IO ()
 main = hspec $ do
+    describe "Database.Persist" $ do
+        describe "THSpec" THSpec.spec
+
+    THSpec.spec
     describe "splitExtras" $ do
         it "works" $ do
             splitExtras []
