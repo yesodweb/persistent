@@ -1,7 +1,6 @@
 resolver: lts-12.26
 packages:
   - ./persistent
-  - ./persistent-template
   - ./persistent-sqlite
   - ./persistent-test
   - ./persistent-mongoDB

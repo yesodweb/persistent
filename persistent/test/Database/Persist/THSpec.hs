@@ -11,18 +11,15 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# language DataKinds #-}
-
+--
 -- DeriveAnyClass is not actually used by persistent-template
 -- But a long standing bug was that if it was enabled, it was used to derive instead of GeneralizedNewtypeDeriving
 -- This was fixed by using DerivingStrategies to specify newtype deriving should be used.
 -- This pragma is left here as a "test" that deriving works when DeriveAnyClass is enabled.
 -- See https://github.com/yesodweb/persistent/issues/578
 {-# LANGUAGE DeriveAnyClass #-}
-module Main
-  (
-  -- avoid unused ident warnings
-    module Main
-  ) where
+
+module Database.Persist.THSpec where
 
 import Data.Int
 import Data.Proxy
@@ -45,9 +42,9 @@ import Database.Persist.Sql.Util
 import Database.Persist.TH
 import TemplateTestImports
 
-import qualified SharedPrimaryKeyTest
-import qualified SharedPrimaryKeyTestImported
-import qualified OverloadedLabelTest
+import qualified Database.Persist.TH.SharedPrimaryKeySpec as SharedPrimaryKeySpec
+import qualified Database.Persist.TH.SharedPrimaryKeyImportedSpec as SharedPrimaryKeyImportedSpec
+import qualified Database.Persist.TH.OverloadedLabelSpec as OverloadedLabelSpec
 
 share [mkPersist sqlSettings { mpsGeneric = False, mpsDeriveInstances = [''Generic] }, mkDeleteCascade sqlSettings { mpsGeneric = False }] [persistUpperCase|
 
@@ -132,11 +129,11 @@ instance Arbitrary Person where
 instance Arbitrary Address where
     arbitrary = Address <$> arbitraryT <*> arbitraryT <*> arbitrary
 
-main :: IO ()
-main = hspec $ do
-    OverloadedLabelTest.spec
-    SharedPrimaryKeyTest.spec
-    SharedPrimaryKeyTestImported.spec
+spec :: Spec
+spec = do
+    OverloadedLabelSpec.spec
+    SharedPrimaryKeySpec.spec
+    SharedPrimaryKeyImportedSpec.spec
     describe "HasDefaultId" $ do
         let FieldDef{..} =
                 entityId (entityDef (Proxy @HasDefaultId))

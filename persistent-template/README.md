@@ -1,3 +1,7 @@
+# Begone!
+
+This package was absorbed into `persistent` with the 2.12.0.1 release.
+
 ## persistent-template
 
 Provides Template Haskell helpers for persistent. For more information, see
