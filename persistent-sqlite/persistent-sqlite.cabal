@@ -51,6 +51,7 @@ library
                    , containers              >= 0.5
                    , microlens-th            >= 0.4.1.1
                    , monad-logger            >= 0.3.25
+                   , mtl
                    , resource-pool
                    , resourcet               >= 1.1.9
                    , text                    >= 1.2
@@ -122,11 +123,14 @@ test-suite test
                    , persistent-test
                    , bytestring
                    , containers
+                   , conduit
                    , exceptions
                    , fast-logger
                    , hspec >= 2.4
                    , HUnit
+                   , microlens
                    , monad-logger
+                   , mtl
                    , QuickCheck
                    , resourcet
                    , system-fileio
