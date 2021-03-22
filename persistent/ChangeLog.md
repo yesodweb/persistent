@@ -20,6 +20,7 @@
       Fortunately, this doesn't affect the public API, and can be a mere bug release.
     * Removed the functions `unsafeAcquireSqlConnFromPool`, `acquireASqlConnFromPool`, and `acquireSqlConnFromPoolWithIsolation`. 
       For a replacement, see `runSqlPoolNoTransaction` and `runSqlPoolWithHooks`.
+* Renaming values in persistent-template [#1203](https://github.com/yesodweb/persistent/pull/1203)
 
 ## 2.11.0.2
 * Fix a bug where an empty entity definition would break parsing of `EntityDef`s. [#1176](https://github.com/yesodweb/persistent/issues/1176)
