@@ -20,7 +20,7 @@
       Fortunately, this doesn't affect the public API, and can be a mere bug release.
     * Removed the functions `unsafeAcquireSqlConnFromPool`, `acquireASqlConnFromPool`, and `acquireSqlConnFromPoolWithIsolation`. 
       For a replacement, see `runSqlPoolNoTransaction` and `runSqlPoolWithHooks`.
-* []():
+* [#1214](https://github.com/yesodweb/persistent/pull/1214):
     * Absorbed the `persistent-template` package. `persistent-template` will receive a 2.12 release with a warning and a deprecation notice.
     * Remove the `nooverlap` flag. It wasn't being used anymore.
 
