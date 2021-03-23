@@ -1721,12 +1721,6 @@ mkMigrate fun allDefs = do
         m <- [|migrate|]
         return $ NoBindS $ m `AppE` defsExp `AppE` u
 
-makeEntityDefDecName :: EntityDef -> FieldDef -> Name
-makeEntityDefDecName entDef fieldDef =
-    let entityName = unEntityNameHS $ entityHaskell entDef
-        fieldName = upperFirst $ unFieldNameHS (fieldHaskell fieldDef)
-     in mkName $ T.unpack (entityName <> fieldName)
-
 makePersistEntityDefExp :: MkPersistSettings -> EntityMap -> EntityDef -> Q Exp
 makePersistEntityDefExp mps entityMap entDef@EntityDef{..} =
     [|EntityDef
@@ -1748,7 +1742,7 @@ fieldDefReferences mps entDef fieldDefs = do
     lookupValueName "persistFieldDef" >>= \case
         Nothing -> error "Fatal `persistFieldDef` not in scope"
         Just pfd -> fmap ListE $ forM fieldDefs $ \fieldDef -> do
-            let fieldDefConE = ConE (makeEntityDefDecName entDef fieldDef)
+            let fieldDefConE = ConE (filterConName mps entDef fieldDef)
             pure $ VarE pfd `AppE` fieldDefConE
 
 liftAndFixKeys :: EntityMap -> EntityDef -> Q Exp

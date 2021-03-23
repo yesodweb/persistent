@@ -8,6 +8,7 @@ import Data.Aeson
 
 import Data.Proxy
 import Test.QuickCheck
+import Database.Persist
 import Database.Persist.Sql
 import Database.Persist.TH
 import Init
