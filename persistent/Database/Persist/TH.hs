@@ -1138,7 +1138,7 @@ fieldError tableName fieldName err = mconcat
 mkEntity :: EntityMap -> MkPersistSettings -> EntityDef -> Q [Dec]
 mkEntity entityMap mps entDef = do
     entityDefExp <-
-        if mpsGeneric
+        if mpsGeneric mps
            then liftAndFixKeys entityMap entDef
            else makePersistEntityDefExp mps entityMap entDef
     let nameT = unEntityNameHS entName
