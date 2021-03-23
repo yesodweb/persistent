@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE DeriveLift #-}
 {-# OPTIONS_GHC -fno-warn-deprecations #-} -- usage of Error typeclass
 module Database.Persist.Types.Base where
 
@@ -32,7 +33,10 @@ import Data.Word (Word32)
 import Numeric (showHex, readHex)
 import Web.PathPieces (PathPiece(..))
 import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData (..), parseUrlPieceMaybe, showTextData, readTextData, parseBoundedTextData)
-
+import Language.Haskell.TH.Syntax (Lift(..))
+    -- Bring `Lift (Map k v)` instance into scope, as well as `Lift Text`
+    -- instance on pre-1.2.4 versions of `text`
+import Instances.TH.Lift ()
 
 -- | A 'Checkmark' should be used as a field type whenever a
 -- uniqueness constraint should guarantee that a certain kind of
@@ -123,7 +127,7 @@ class DatabaseName a where
 --
 -- @since 2.12.0.0
 newtype EntityNameDB = EntityNameDB { unEntityNameDB :: Text }
-  deriving (Show, Eq, Read, Ord)
+  deriving (Show, Eq, Read, Ord, Lift)
 
 instance DatabaseName EntityNameDB where
   escapeWith f (EntityNameDB n) = f n
@@ -133,7 +137,7 @@ instance DatabaseName EntityNameDB where
 --
 -- @since 2.12.0.0
 newtype EntityNameHS = EntityNameHS { unEntityNameHS :: Text }
-  deriving (Show, Eq, Read, Ord)
+  deriving (Show, Eq, Read, Ord, Lift)
 
 -- | An 'EntityDef' represents the information that @persistent@ knows
 -- about an Entity. It uses this information to generate the Haskell
@@ -168,7 +172,7 @@ data EntityDef = EntityDef
     --
     -- @since 2.10.0
     }
-    deriving (Show, Eq, Read, Ord)
+    deriving (Show, Eq, Read, Ord, Lift)
 
 entitiesPrimary :: EntityDef -> Maybe [FieldDef]
 entitiesPrimary t = case fieldReference primaryField of
@@ -217,7 +221,7 @@ data FieldAttr
     | FieldAttrSqltype Text
     | FieldAttrMaxlen Integer
     | FieldAttrOther Text
-    deriving (Show, Eq, Read, Ord)
+    deriving (Show, Eq, Read, Ord, Lift)
 
 -- | Parse raw field attributes into structured form. Any unrecognized
 -- attributes will be preserved, identically as they are encountered,
@@ -258,25 +262,25 @@ data FieldType
     -- ^ Optional module and name.
     | FTApp FieldType FieldType
     | FTList FieldType
-  deriving (Show, Eq, Read, Ord)
+    deriving (Show, Eq, Read, Ord, Lift)
 
 -- | An 'EntityNameDB' represents the datastore-side name that @persistent@
 -- will use for an entity.
 --
 -- @since 2.12.0.0
 newtype FieldNameDB = FieldNameDB { unFieldNameDB :: Text }
-  deriving (Show, Eq, Read, Ord)
+    deriving (Show, Eq, Read, Ord, Lift)
 
 -- | @since 2.12.0.0
 instance DatabaseName FieldNameDB where
-  escapeWith f (FieldNameDB n) = f n
+    escapeWith f (FieldNameDB n) = f n
 
 -- | A 'FieldNameHS' represents the Haskell-side name that @persistent@
 -- will use for a field.
 --
 -- @since 2.12.0.0
 newtype FieldNameHS = FieldNameHS { unFieldNameHS :: Text }
-  deriving (Show, Eq, Read, Ord)
+    deriving (Show, Eq, Read, Ord, Lift)
 
 -- | A 'FieldDef' represents the inormation that @persistent@ knows about
 -- a field of a datatype. This includes information used to parse the field
@@ -320,7 +324,7 @@ data FieldDef = FieldDef
     --
     -- @since 2.11.0.0
     }
-    deriving (Show, Eq, Read, Ord)
+    deriving (Show, Eq, Read, Ord, Lift)
 
 isFieldNotGenerated :: FieldDef -> Bool
 isFieldNotGenerated = isNothing . fieldGenerated
@@ -336,7 +340,7 @@ data ReferenceDef = NoReference
                   | CompositeRef CompositeDef
                   | SelfReference
                     -- ^ A SelfReference stops an immediate cycle which causes non-termination at compile-time (issue #311).
-                  deriving (Show, Eq, Read, Ord)
+                  deriving (Show, Eq, Read, Ord, Lift)
 
 -- | An EmbedEntityDef is the same as an EntityDef
 -- But it is only used for fieldReference
@@ -344,7 +348,7 @@ data ReferenceDef = NoReference
 data EmbedEntityDef = EmbedEntityDef
     { embeddedHaskell :: !EntityNameHS
     , embeddedFields  :: ![EmbedFieldDef]
-    } deriving (Show, Eq, Read, Ord)
+    } deriving (Show, Eq, Read, Ord, Lift)
 
 -- | An EmbedFieldDef is the same as a FieldDef
 -- But it is only used for embeddedFields
@@ -357,7 +361,7 @@ data EmbedFieldDef = EmbedFieldDef
     -- when a cycle is detected, 'emFieldEmbed' will be Nothing
     -- and 'emFieldCycle' will be Just
     }
-    deriving (Show, Eq, Read, Ord)
+    deriving (Show, Eq, Read, Ord, Lift)
 
 toEmbedEntityDef :: EntityDef -> EmbedEntityDef
 toEmbedEntityDef ent = embDef
@@ -383,7 +387,7 @@ toEmbedEntityDef ent = embDef
 --
 -- @since 2.12.0.0
 newtype ConstraintNameDB = ConstraintNameDB { unConstraintNameDB :: Text }
-  deriving (Show, Eq, Read, Ord)
+  deriving (Show, Eq, Read, Ord, Lift)
 
 -- | @since 2.12.0.0
 instance DatabaseName ConstraintNameDB where
@@ -394,7 +398,7 @@ instance DatabaseName ConstraintNameDB where
 --
 -- @since 2.12.0.0
 newtype ConstraintNameHS = ConstraintNameHS { unConstraintNameHS :: Text }
-  deriving (Show, Eq, Read, Ord)
+  deriving (Show, Eq, Read, Ord, Lift)
 
 -- Type for storing the Uniqueness constraint in the Schema.
 -- Assume you have the following schema with a uniqueness
@@ -414,13 +418,13 @@ data UniqueDef = UniqueDef
     , uniqueFields  :: ![(FieldNameHS, FieldNameDB)]
     , uniqueAttrs   :: ![Attr]
     }
-    deriving (Show, Eq, Read, Ord)
+    deriving (Show, Eq, Read, Ord, Lift)
 
 data CompositeDef = CompositeDef
     { compositeFields  :: ![FieldDef]
     , compositeAttrs   :: ![Attr]
     }
-    deriving (Show, Eq, Read, Ord)
+    deriving (Show, Eq, Read, Ord, Lift)
 
 -- | Used instead of FieldDef
 -- to generate a smaller amount of code
@@ -443,7 +447,7 @@ data ForeignDef = ForeignDef
     --
     -- @since 2.11.0
     }
-    deriving (Show, Eq, Read, Ord)
+    deriving (Show, Eq, Read, Ord, Lift)
 
 -- | This datatype describes how a foreign reference field cascades deletes
 -- or updates.
@@ -458,7 +462,7 @@ data FieldCascade = FieldCascade
     { fcOnUpdate :: !(Maybe CascadeAction)
     , fcOnDelete :: !(Maybe CascadeAction)
     }
-    deriving (Show, Eq, Read, Ord)
+    deriving (Show, Eq, Read, Ord, Lift)
 
 -- | A 'FieldCascade' that does nothing.
 --
@@ -482,7 +486,7 @@ renderFieldCascade (FieldCascade onUpdate onDelete) =
 --
 -- @since 2.11.0
 data CascadeAction = Cascade | Restrict | SetNull | SetDefault
-    deriving (Show, Eq, Read, Ord)
+    deriving (Show, Eq, Read, Ord, Lift)
 
 -- | Render a 'CascadeAction' to 'Text' such that it can be used in a SQL
 -- command.
@@ -694,11 +698,11 @@ data SqlType = SqlString
              | SqlDayTime -- ^ Always uses UTC timezone
              | SqlBlob
              | SqlOther T.Text -- ^ a backend-specific name
-    deriving (Show, Read, Eq, Ord)
+    deriving (Show, Read, Eq, Ord, Lift)
 
 data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le | In | NotIn
                    | BackendSpecificFilter T.Text
-    deriving (Read, Show)
+    deriving (Read, Show, Lift)
 
 data UpdateException = KeyNotFound String
                      | UpsertError String
@@ -716,4 +720,4 @@ instance Exception OnlyUniqueException
 
 data PersistUpdate = Assign | Add | Subtract | Multiply | Divide
                    | BackendSpecificUpdate T.Text
-    deriving (Read, Show)
+    deriving (Read, Show, Lift)

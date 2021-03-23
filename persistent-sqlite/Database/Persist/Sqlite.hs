@@ -43,6 +43,8 @@ module Database.Persist.Sqlite
     , mockMigration
     , retryOnBusy
     , waitForDatabase
+    , ForeignKeyViolation(..)
+    , checkForeignKeys
     , RawSqlite
     , persistentBackend
     , rawSqliteConnection
@@ -58,6 +60,8 @@ import qualified Control.Exception as E
 import Control.Monad (forM_)
 import Control.Monad.IO.Unlift (MonadIO (..), MonadUnliftIO, askRunInIO, withRunInIO, withUnliftIO, unliftIO, withRunInIO)
 import Control.Monad.Logger (NoLoggingT, runNoLoggingT, MonadLoggerIO, logWarn, runLoggingT, askLoggerIO)
+import Control.Monad.Reader (MonadReader)
+import Control.Monad.Trans.Resource (MonadResource)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT)
 #if !MIN_VERSION_base(4,12,0)
 import Control.Monad.Trans.Reader (withReaderT)
@@ -68,6 +72,7 @@ import Data.Maybe
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import Data.Conduit
+import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.List as CL
 import qualified Data.HashMap.Lazy as HashMap
 import Data.Int (Int64)
@@ -503,7 +508,7 @@ getCopyTable :: [EntityDef]
 getCopyTable allDefs getter def = do
     stmt <- getter $ T.concat [ "PRAGMA table_info(", escapeE table, ")" ]
     oldCols' <- with (stmtQuery stmt []) (\src -> runConduit $ src .| getCols)
-    let oldCols = map FieldNameDB $ filter (/= "id") oldCols' -- need to update for table id attribute ?
+    let oldCols = map FieldNameDB oldCols'
     let newCols = filter (not . safeToRemove def) $ map cName cols
     let common = filter (`elem` oldCols) newCols
     return [ (False, tmpSql)
@@ -775,6 +780,45 @@ instance FromJSON SqliteConnectionInfo where
         <*> o .: "walEnabled"
         <*> o .: "fkEnabled"
         <*> o .:? "extraPragmas" .!= []
+
+-- | Data type for reporting foreign key violations using 'checkForeignKeys'.
+--
+-- @since 2.11.1
+data ForeignKeyViolation = ForeignKeyViolation
+    { foreignKeyTable :: Text -- ^ The table of the violated constraint
+    , foreignKeyColumn :: Text -- ^ The column of the violated constraint
+    , foreignKeyRowId :: Int64 -- ^ The ROWID of the row with the violated foreign key constraint
+    } deriving (Eq, Ord, Show)
+
+-- | Outputs all (if any) the violated foreign key constraints in the database.
+--
+-- The main use is to validate that no foreign key constraints were
+-- broken/corrupted by anyone operating on the database with foreign keys
+-- disabled. See 'fkEnabled'.
+--
+-- @since 2.11.1
+checkForeignKeys
+    :: (MonadResource m, MonadReader env m, BackendCompatible SqlBackend env)
+    => ConduitM () ForeignKeyViolation m ()
+checkForeignKeys = rawQuery query [] .| C.mapM parse
+  where
+    parse l = case l of
+        [ PersistInt64 rowid , PersistText table , PersistText column ] ->
+            return ForeignKeyViolation
+                { foreignKeyTable = table
+                , foreignKeyColumn = column
+                , foreignKeyRowId = rowid
+                }
+        _ -> liftIO . E.throwIO . PersistMarshalError $ mconcat
+            [ "Unexpected result from foreign key check:\n", T.pack (show l) ]
+
+    query = T.unlines
+        [ "SELECT origin.rowid, origin.\"table\", group_concat(foreignkeys.\"from\")"
+        , "FROM pragma_foreign_key_check() AS origin"
+        , "INNER JOIN pragma_foreign_key_list(origin.\"table\") AS foreignkeys"
+        , "ON origin.fkid = foreignkeys.id AND origin.parent = foreignkeys.\"table\""
+        , "GROUP BY origin.rowid"
+        ]
 
 -- | Like `withSqliteConnInfo`, but exposes the internal `Sqlite.Connection`.
 -- For power users who want to manually interact with SQLite's C API via

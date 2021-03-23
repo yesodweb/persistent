@@ -40,7 +40,7 @@ data TableName = TableName
 @
 
 As with the SQL generated, the specifics of this are customizable.
-See the @persistent-template@ package for details.
+See the "Database.Persist.TH" module for details.
 
 = Deriving
 
@@ -538,11 +538,12 @@ lowerCaseSettings = defaultPersistSettings
 
 -- | Parses a quasi-quoted syntax into a list of entity definitions.
 parse :: PersistSettings -> Text -> [EntityDef]
-parse ps = parseLines ps . preparse
+parse ps = maybe [] (parseLines ps) . preparse
 
-preparse :: Text -> [Line]
+preparse :: Text -> Maybe (NonEmpty Line)
 preparse =
-    removeSpaces
+    NEL.nonEmpty
+        . removeSpaces
         . filter (not . empty)
         . map tokenize
         . T.lines
@@ -614,7 +615,7 @@ empty [Spaces _] = True
 empty _          = False
 
 -- | A line.  We don't care about spaces in the middle of the
--- line.  Also, we don't care about the ammount of indentation.
+-- line.  Also, we don't care about the amount of indentation.
 data Line' f
     = Line
     { lineIndent   :: Int
@@ -648,15 +649,10 @@ removeSpaces =
     fromToken Spaces{}  = Nothing
 
 -- | Divide lines into blocks and make entity definitions.
-parseLines :: PersistSettings -> [Line] -> [EntityDef]
-parseLines ps lines =
-    fixForeignKeysAll $ toEnts lines
+parseLines :: PersistSettings -> NonEmpty Line -> [EntityDef]
+parseLines ps =
+    fixForeignKeysAll . map mk . associateLines . skipEmpty
   where
-    toEnts :: [Line] -> [UnboundEntityDef]
-    toEnts =
-        map mk
-        . associateLines
-        . skipEmpty
     mk :: LinesWithComments -> UnboundEntityDef
     mk lwc =
         let Line _ (name :| entAttribs) :| rest = lwcLines lwc
@@ -727,8 +723,8 @@ associateLines lines =
 
     minimumIndentOf = minimum . fmap lineIndent . lwcLines
 
-skipEmpty :: [Line' []] -> [Line' NonEmpty]
-skipEmpty = mapMaybe (traverseLine NEL.nonEmpty)
+skipEmpty :: NonEmpty (Line' []) -> [Line' NonEmpty]
+skipEmpty = mapMaybe (traverseLine NEL.nonEmpty) . NEL.toList
 
 setComments :: [Text] -> UnboundEntityDef -> UnboundEntityDef
 setComments [] = id
@@ -938,15 +934,17 @@ splitExtras
     -> ( [[Text]]
        , M.Map Text [[Text]]
        )
-splitExtras [] = ([], M.empty)
-splitExtras (Line indent [name]:rest)
-    | not (T.null name) && isUpper (T.head name) =
-        let (children, rest') = span ((> indent) . lineIndent) rest
-            (x, y) = splitExtras rest'
-         in (x, M.insert name (map tokens children) y)
-splitExtras (Line _ ts:rest) =
-    let (x, y) = splitExtras rest
-     in (ts:x, y)
+splitExtras lns =
+    case lns of
+        [] -> ([], M.empty)
+        (Line indent [name]:rest)
+          | not (T.null name) && isUpper (T.head name) ->
+            let (children, rest') = span ((> indent) . lineIndent) rest
+                (x, y) = splitExtras rest'
+             in (x, M.insert name (map tokens children) y)
+        (Line _ ts:rest) ->
+            let (x, y) = splitExtras rest
+             in (ts:x, y)
 
 takeColsEx :: PersistSettings -> [Text] -> Maybe FieldDef
 takeColsEx =

@@ -63,7 +63,6 @@ test-suite test
                    , persistent
                    , persistent-mysql
                    , persistent-qq
-                   , persistent-template
                    , persistent-test
                    , bytestring
                    , containers

@@ -1,7 +1,8 @@
 # Changelog for persistent
 
-## 2.12
+## 2.12.0.1 (unreleased)
 
+* Refactor [] to NonEmpty in Quasi module [#1193](https://github.com/yesodweb/persistent/pull/1193)
 * [#1162](https://github.com/yesodweb/persistent/pull/1162)
   * Replace `askLogFunc` with `askLoggerIO`
 * Decomposed `HaskellName` into `ConstraintNameHS`, `EntityNameHS`, `FieldNameHS`. Decomposed `DBName` into `ConstraintNameDB`, `EntityNameDB`, `FieldNameDB` respectively. [#1174](https://github.com/yesodweb/persistent/pull/1174)
@@ -12,6 +13,17 @@
 * [#1179](https://github.com/yesodweb/persistent/pull/1179)
   * Added `Compatible`, a newtype for marking a backend as compatible with another. Use it with `DerivingVia` to derive simple instances based on backend compatibility.
   * Added `makeCompatibleInstances` and `makeCompatibleKeyInstances`, TemplateHaskell invocations for auto-generating standalone derivations using `Compatible` and `DerivingVia`.
+* [#1207](https://github.com/yesodweb/persistent/pull/1207)
+    * @codygman discovered a bug in [issue #1199](https://github.com/yesodweb/persistent/issues/1199) where postgres connections were being returned to the `Pool SqlBackend` in an inconsistent state.
+      @parsonsmatt debugged the issue and determined that it had something to do with asynchronous exceptions. 
+      Declaring it to be "out of his pay grade," he ripped the `poolToAcquire` function out and replaced it with `Data.Pool.withResource`, which doesn't exhibit the bug.
+      Fortunately, this doesn't affect the public API, and can be a mere bug release.
+    * Removed the functions `unsafeAcquireSqlConnFromPool`, `acquireASqlConnFromPool`, and `acquireSqlConnFromPoolWithIsolation`. 
+      For a replacement, see `runSqlPoolNoTransaction` and `runSqlPoolWithHooks`.
+* Renaming values in persistent-template [#1203](https://github.com/yesodweb/persistent/pull/1203)
+* [#1214](https://github.com/yesodweb/persistent/pull/1214):
+    * Absorbed the `persistent-template` package. `persistent-template` will receive a 2.12 release with a warning and a deprecation notice.
+    * Remove the `nooverlap` flag. It wasn't being used anymore.
 
 ## 2.11.0.2
 * Fix a bug where an empty entity definition would break parsing of `EntityDef`s. [#1176](https://github.com/yesodweb/persistent/issues/1176)

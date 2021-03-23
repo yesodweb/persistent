@@ -3,6 +3,8 @@
 ## 2.12.0.0
 
 * Decomposed `HaskellName` into `ConstraintNameHS`, `EntityNameHS`, `FieldNameHS`. Decomposed `DBName` into `ConstraintNameDB`, `EntityNameDB`, `FieldNameDB` respectively. [#1174](https://github.com/yesodweb/persistent/pull/1174)
+* [#1214](https://github.com/yesodweb/persistent/pull/1214):
+    * This package was asborbed into `persistent` itself.
 
 ## 2.9.1.0
 

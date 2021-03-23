@@ -1,6 +1,6 @@
 {-# LANGUAGE TypeApplications, DeriveGeneric #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE DataKinds, FlexibleInstances #-}
+{-# LANGUAGE DataKinds, ExistentialQuantification #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -11,7 +11,7 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
-module SharedPrimaryKeyTest where
+module Database.Persist.TH.SharedPrimaryKeyImportedSpec where
 
 import TemplateTestImports
 
@@ -22,24 +22,21 @@ import Database.Persist.Sql
 import Database.Persist.Sql.Util
 import Database.Persist.TH
 
+import Database.Persist.TH.SharedPrimaryKeySpec (User, UserId)
+
 share [ mkPersist sqlSettings ] [persistLowerCase|
 
-User
-    name    String
-
--- TODO: uncomment this out https://github.com/yesodweb/persistent/issues/1149
--- Profile
---     Id      UserId
---     email   String
-
 Profile
-    Id      (Key User)
+    Id      UserId
     email   String
 
 |]
 
+-- This test is very similar to the one in SharedPrimaryKeyTest, but it is
+-- able to use 'UserId' directly, since the type is imported from another
+-- module.
 spec :: Spec
-spec = describe "Shared Primary Keys" $ do
+spec = describe "Shared Primary Keys Imported" $ do
 
     describe "PersistFieldSql" $ do
         it "should match underlying key" $ do
