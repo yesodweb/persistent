@@ -13,7 +13,7 @@
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE UndecidableInstances       #-}
 
-module OverloadedLabelTest where
+module Database.Persist.TH.OverloadedLabelSpec where
 
 import           TemplateTestImports
 

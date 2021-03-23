@@ -4,6 +4,13 @@
 
 * Decomposed `HaskellName` into `ConstraintNameHS`, `EntityNameHS`, `FieldNameHS`. Decomposed `DBName` into `ConstraintNameDB`, `EntityNameDB`, `FieldNameDB` respectively. [#1174](https://github.com/yesodweb/persistent/pull/1174)
 
+##  2.11.1.0
+
+* Add `checkForeignKeys` operation to verify no foreign key constraints are
+  violated by the database contents.
+* Fix the migration for primary keys that was broken in 2.11.0.0
+  [#1184](https://github.com/yesodweb/persistent/issues/1184)
+
 ##  2.11.0.0
 
 * Foreign Key improvements [#1121] (https://github.com/yesodweb/persistent/pull/1121)
