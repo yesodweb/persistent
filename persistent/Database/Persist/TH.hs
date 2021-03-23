@@ -1976,7 +1976,7 @@ mkSymbolToFieldInstances mps ed = do
                 conE $ filterConName mps ed fieldDef
                     :: Q Exp
         [d|
-            instance SymbolToField $(fieldNameT) $(pure recordNameT) $(pure fieldTypeT) where
+            instance SymbolToField $(fieldNameT) $(recordNameT) $(pure fieldTypeT) where
                 symbolToField = $(entityFieldConstr)
             |]
 
