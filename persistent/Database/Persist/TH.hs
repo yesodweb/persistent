@@ -1137,7 +1137,7 @@ fieldError tableName fieldName err = mconcat
 
 mkEntity :: EntityMap -> MkPersistSettings -> EntityDef -> Q [Dec]
 mkEntity entityMap mps entDef = do
-    entityDefExp <- makeEntityDefExp entityMap entDef
+    entityDefExp <- makePersistEntityDefExp mps entityMap entDef
     let nameT = unEntityNameHS entName
     let nameS = unpack nameT
     let clazz = ConT ''PersistEntity `AppT` genDataType
@@ -1707,31 +1707,70 @@ mkMigrate fun allDefs = do
             _  -> do
               defsName <- newName "defs"
               defsStmt <- do
-                defs' <- mapM (makeEntityDefExp entityMap) defs
+                defs' <- mapM (liftAndFixKeys entityMap) defs
                 let defsExp = ListE defs'
                 return $ LetS [ValD (VarP defsName) (NormalB defsExp) []]
               stmts <- mapM (toStmt $ VarE defsName) defs
               return (DoE $ defsStmt : stmts)
     toStmt :: Exp -> EntityDef -> Q Stmt
     toStmt defsExp ed = do
-        u <- makeEntityDefExp entityMap ed
+        u <- liftAndFixKeys entityMap ed
         m <- [|migrate|]
         return $ NoBindS $ m `AppE` defsExp `AppE` u
 
-makeEntityDefDec :: EntityDef -> FieldDef -> Name
-makeEntityDefDec entDef fieldDef = do
-    let entityName   = unEntityNameHS $ entityHaskell entDef
-        fieldName    = upperFirst $ unFieldNameHS (fieldHaskell fieldDef)
-    mkName $ T.unpack (entityName <> fieldName)
+makeEntityDefDecTypeHint :: MkPersistSettings -> EntityDef -> FieldDef -> Type
+makeEntityDefDecTypeHint mps entDef fieldDef =
+    let fieldName = mkName "EntityField"
+        backendName = mkName "backend"
+        entityFieldName = mkName $ T.unpack (entityFieldNameText mps entDef)
+        backendT =
+            if mpsGeneric mps
+               then ConT entityFieldName `AppT` VarT backendName
+               else VarT backendName
+        fieldTypeT =
+            idType mps fieldDef (Just backendName)
+     in AppT (ConT fieldName) backendT `AppT` fieldTypeT
 
-makeEntityDefExp :: EntityMap -> EntityDef -> Q Exp
-makeEntityDefExp entityMap entDef@EntityDef{..} =
+makeEntityDefDecName :: EntityDef -> FieldDef -> Name
+makeEntityDefDecName entDef fieldDef =
+    let entityName = unEntityNameHS $ entityHaskell entDef
+        fieldName = upperFirst $ unFieldNameHS (fieldHaskell fieldDef)
+     in mkName $ T.unpack (entityName <> fieldName)
+
+makePersistEntityDefExp :: MkPersistSettings -> EntityMap -> EntityDef -> Q Exp
+makePersistEntityDefExp mps entityMap entDef@EntityDef{..} =
+    if mpsGeneric mps
+       then liftAndFixKeys entityMap entDef
+       else [|EntityDef
+                entityHaskell
+                entityDB
+                $(liftAndFixKey entityMap entityId)
+                entityAttrs
+                $(fieldDefReferences mps entDef entityFields)
+                entityUniques
+                entityForeigns
+                entityDerives
+                entityExtra
+                entitySum
+                entityComments
+            |]
+
+fieldDefReferences :: MkPersistSettings -> EntityDef -> [FieldDef] -> Q Exp
+fieldDefReferences mps entDef fieldDefs = do
+    lookupValueName "persistFieldDef" >>= \case
+        Nothing -> error "Fatal `persistFieldDef` not in scope"
+        Just pfd -> fmap ListE $ forM fieldDefs $ \fieldDef -> do
+            let fieldDefConE = ConE (makeEntityDefDecName entDef fieldDef)
+            pure $ VarE pfd `AppE` fieldDefConE
+
+liftAndFixKeys :: EntityMap -> EntityDef -> Q Exp
+liftAndFixKeys entityMap EntityDef{..} =
     [|EntityDef
         entityHaskell
         entityDB
         $(liftAndFixKey entityMap entityId)
         entityAttrs
-        $(fieldDefReferences (makeEntityDefDec entDef <$> entityFields))
+        $(ListE <$> mapM (liftAndFixKey entityMap) entityFields)
         entityUniques
         entityForeigns
         entityDerives
@@ -1739,14 +1778,6 @@ makeEntityDefExp entityMap entDef@EntityDef{..} =
         entitySum
         entityComments
     |]
-
-fieldDefReferences :: [Name] -> Q Exp
-fieldDefReferences fieldDefs = do
-    lookupValueName "persistFieldDef" >>= \case
-        Nothing -> error "Fatal"
-        Just pfd -> pure $ ListE $ do
-            fieldDef <- fieldDefs
-            pure $ VarE pfd `AppE` ConE fieldDef
 
 liftAndFixKey :: EntityMap -> FieldDef -> Q Exp
 liftAndFixKey entityMap (FieldDef a b c sqlTyp e f fieldRef fc mcomments fg) =
@@ -1948,23 +1979,41 @@ mkSymbolToFieldInstances mps ed = do
         let fieldNameT =
                 litT $ strTyLit $ T.unpack $ unFieldNameHS $ fieldHaskell fieldDef
                     :: Q Type
-            nameG = mkName $ unpack $ unEntityNameHS (entityHaskell ed) ++ "Generic"
 
-            recordNameT
-                | mpsGeneric mps =
-                    conT nameG `appT` varT backendName
-                | otherwise =
-                    conT $ mkName $ T.unpack $ unEntityNameHS $ entityHaskell ed
+            recordNameT =
+                makeRecordNameType mps ed fieldDef
+
             fieldTypeT =
                 maybeIdType mps fieldDef Nothing Nothing
             entityFieldConstr =
                 conE $ filterConName mps ed fieldDef
                     :: Q Exp
         [d|
-            instance SymbolToField $(fieldNameT) $(recordNameT) $(pure fieldTypeT) where
+            instance SymbolToField $(fieldNameT) $(pure recordNameT) $(pure fieldTypeT) where
                 symbolToField = $(entityFieldConstr)
-
             |]
+
+makeRecordNameType :: MkPersistSettings -> EntityDef -> FieldDef -> Type
+makeRecordNameType mps entDef fieldDef
+    | mpsGeneric mps =
+        ConT entityFieldName `AppT` VarT backendName
+    | otherwise =
+        ConT entityFieldName
+  where
+    entityFieldName :: Name
+    entityFieldName =
+      mkName $ T.unpack (entityFieldNameText mps entDef)
+
+entityFieldNameText :: MkPersistSettings -> EntityDef -> Text
+entityFieldNameText mps entDef
+    | mpsGeneric mps =
+        entityNameText <> "Generic"
+    | otherwise =
+        entityNameText
+  where
+    entityNameText :: Text
+    entityNameText =
+      unEntityNameHS $ entityHaskell entDef
 
 -- | Pass in a list of lists of extensions, where any of the given
 -- extensions will satisfy it. For example, you might need either GADTs or
