@@ -555,13 +555,9 @@ sqlSettings :: MkPersistSettings
 sqlSettings = mkPersistSettings $ ConT ''SqlBackend
 
 recNameNoUnderscore :: MkPersistSettings -> EntityNameHS -> FieldNameHS -> Text
-recNameNoUnderscore mps entDef fieldDef =
-    lowerFirst (recNameNoUnderscore' mps entDef fieldDef)
-
-recNameNoUnderscore' :: MkPersistSettings -> EntityNameHS -> FieldNameHS -> Text
-recNameNoUnderscore' mps entDef fieldName
-  | mpsPrefixFields mps = modifier (unEntityNameHS entDef) (upperFirst ft)
-  | otherwise           = ft
+recNameNoUnderscore mps entDef fieldName
+  | mpsPrefixFields mps = lowerFirst $ modifier (unEntityNameHS entDef) (upperFirst ft)
+  | otherwise           = lowerFirst ft
   where
     modifier = mpsFieldLabelModifier mps
     ft = unFieldNameHS fieldName
@@ -1141,7 +1137,7 @@ fieldError tableName fieldName err = mconcat
 
 mkEntity :: EntityMap -> MkPersistSettings -> EntityDef -> Q [Dec]
 mkEntity entityMap mps entDef = do
-    entityDefExp <- makeEntityDefExp_ mps entityMap entDef
+    entityDefExp <- makeEntityDefExp entityMap entDef
     let nameT = unEntityNameHS entName
     let nameS = unpack nameT
     let clazz = ConT ''PersistEntity `AppT` genDataType
@@ -1252,26 +1248,6 @@ mkEntity entityMap mps entDef = do
   where
     genDataType = genericDataType mps entName backendT
     entName = entityHaskell entDef
-
-makeEntityDefExp_ :: MkPersistSettings -> EntityMap -> EntityDef -> Q Exp
-makeEntityDefExp_ mps entityMap entDef@EntityDef{..} =
-    [|EntityDef
-        entityHaskell
-        entityDB
-        $(liftAndFixKey entityMap entityId)
-        entityAttrs
-        $(
-            if mpsGeneric mps
-               then ListE <$> mapM (liftAndFixKey entityMap) entityFields
-               else makeEntityDefFieldDefs mps entDef
-        )
-        entityUniques
-        entityForeigns
-        entityDerives
-        entityExtra
-        entitySum
-        entityComments
-    |]
 
 mkUniqueKeyInstances :: MkPersistSettings -> EntityDef -> Q [Dec]
 mkUniqueKeyInstances mps entDef = do
@@ -1731,49 +1707,43 @@ mkMigrate fun allDefs = do
             _  -> do
               defsName <- newName "defs"
               defsStmt <- do
-                defs' <- mapM makeEntityDefExp defs
+                defs' <- mapM (makeEntityDefExp entityMap) defs
                 let defsExp = ListE defs'
                 return $ LetS [ValD (VarP defsName) (NormalB defsExp) []]
               stmts <- mapM (toStmt $ VarE defsName) defs
               return (DoE $ defsStmt : stmts)
     toStmt :: Exp -> EntityDef -> Q Stmt
     toStmt defsExp ed = do
-        u <- makeEntityDefExp ed
+        u <- makeEntityDefExp entityMap ed
         m <- [|migrate|]
         return $ NoBindS $ m `AppE` defsExp `AppE` u
 
-    makeEntityDefExp :: EntityDef -> Q Exp
-    makeEntityDefExp EntityDef{..} =
-        [|EntityDef
-            entityHaskell
-            entityDB
-            $(liftAndFixKey entityMap entityId)
-            entityAttrs
-            $(ListE <$> mapM (liftAndFixKey entityMap) entityFields)
-            entityUniques
-            entityForeigns
-            entityDerives
-            entityExtra
-            entitySum
-            entityComments
-        |]
+makeEntityDefDec :: EntityDef -> FieldDef -> Name
+makeEntityDefDec entDef fieldDef = do
+    let entityName   = unEntityNameHS $ entityHaskell entDef
+        fieldName    = upperFirst $ unFieldNameHS (fieldHaskell fieldDef)
+    mkName $ T.unpack (entityName <> fieldName)
 
-makeEntityDefDec :: MkPersistSettings -> EntityDef -> FieldDef -> Name
-makeEntityDefDec mps entDef fieldDef =
-    filterConName mps entDef fieldDef
-
-makeEntityDefFieldDefs :: MkPersistSettings -> EntityDef -> Q Exp
-makeEntityDefFieldDefs mps entDef =
-    fieldDefReferences (entityDefEntityFieldNames mps entDef)
-
-entityDefEntityFieldNames :: MkPersistSettings -> EntityDef -> [Name]
-entityDefEntityFieldNames mps entDef =
-    makeEntityDefDec mps entDef <$> entityFields entDef
+makeEntityDefExp :: EntityMap -> EntityDef -> Q Exp
+makeEntityDefExp entityMap entDef@EntityDef{..} =
+    [|EntityDef
+        entityHaskell
+        entityDB
+        $(liftAndFixKey entityMap entityId)
+        entityAttrs
+        $(fieldDefReferences (makeEntityDefDec entDef <$> entityFields))
+        entityUniques
+        entityForeigns
+        entityDerives
+        entityExtra
+        entitySum
+        entityComments
+    |]
 
 fieldDefReferences :: [Name] -> Q Exp
 fieldDefReferences fieldDefs = do
     lookupValueName "persistFieldDef" >>= \case
-        Nothing -> error "Fatal `persistFieldDef` not in scope"
+        Nothing -> error "Fatal"
         Just pfd -> pure $ ListE $ do
             fieldDef <- fieldDefs
             pure $ VarE pfd `AppE` ConE fieldDef
