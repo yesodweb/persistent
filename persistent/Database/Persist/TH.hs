@@ -1962,8 +1962,13 @@ mkSymbolToFieldInstances mps ed = do
                 litT $ strTyLit $ T.unpack $ unFieldNameHS $ fieldHaskell fieldDef
                     :: Q Type
 
-            recordNameT =
-                makeRecordNameType mps ed fieldDef
+            nameG = mkName $ unpack $ unEntityNameHS (entityHaskell ed) ++ "Generic"
+
+            recordNameT
+                | mpsGeneric mps =
+                    conT nameG `appT` varT backendName
+                | otherwise =
+                    conT $ mkName $ T.unpack $ unEntityNameHS $ entityHaskell ed
 
             fieldTypeT =
                 maybeIdType mps fieldDef Nothing Nothing
@@ -1974,28 +1979,6 @@ mkSymbolToFieldInstances mps ed = do
             instance SymbolToField $(fieldNameT) $(pure recordNameT) $(pure fieldTypeT) where
                 symbolToField = $(entityFieldConstr)
             |]
-
-makeRecordNameType :: MkPersistSettings -> EntityDef -> FieldDef -> Type
-makeRecordNameType mps entDef fieldDef
-    | mpsGeneric mps =
-        ConT entityFieldName `AppT` VarT backendName
-    | otherwise =
-        ConT entityFieldName
-  where
-    entityFieldName :: Name
-    entityFieldName =
-      mkName $ T.unpack (entityFieldNameText mps entDef)
-
-entityFieldNameText :: MkPersistSettings -> EntityDef -> Text
-entityFieldNameText mps entDef
-    | mpsGeneric mps =
-        entityNameText <> "Generic"
-    | otherwise =
-        entityNameText
-  where
-    entityNameText :: Text
-    entityNameText =
-      unEntityNameHS $ entityHaskell entDef
 
 -- | Pass in a list of lists of extensions, where any of the given
 -- extensions will satisfy it. For example, you might need either GADTs or
