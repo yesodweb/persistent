@@ -555,8 +555,8 @@ sqlSettings :: MkPersistSettings
 sqlSettings = mkPersistSettings $ ConT ''SqlBackend
 
 recNameNoUnderscore :: MkPersistSettings -> EntityNameHS -> FieldNameHS -> Text
-recNameNoUnderscore mps entDef fieldName
-  | mpsPrefixFields mps = lowerFirst $ modifier (unEntityNameHS entDef) (upperFirst ft)
+recNameNoUnderscore mps entName fieldName
+  | mpsPrefixFields mps = lowerFirst $ modifier (unEntityNameHS entName) (upperFirst ft)
   | otherwise           = lowerFirst ft
   where
     modifier = mpsFieldLabelModifier mps
@@ -1137,7 +1137,10 @@ fieldError tableName fieldName err = mconcat
 
 mkEntity :: EntityMap -> MkPersistSettings -> EntityDef -> Q [Dec]
 mkEntity entityMap mps entDef = do
-    entityDefExp <- makePersistEntityDefExp mps entityMap entDef
+    entityDefExp <-
+        if mpsGeneric
+           then liftAndFixKeys entityMap entDef
+           else makePersistEntityDefExp mps entityMap entDef
     let nameT = unEntityNameHS entName
     let nameS = unpack nameT
     let clazz = ConT ''PersistEntity `AppT` genDataType
@@ -1718,19 +1721,6 @@ mkMigrate fun allDefs = do
         m <- [|migrate|]
         return $ NoBindS $ m `AppE` defsExp `AppE` u
 
-makeEntityDefDecTypeHint :: MkPersistSettings -> EntityDef -> FieldDef -> Type
-makeEntityDefDecTypeHint mps entDef fieldDef =
-    let fieldName = mkName "EntityField"
-        backendName = mkName "backend"
-        entityFieldName = mkName $ T.unpack (entityFieldNameText mps entDef)
-        backendT =
-            if mpsGeneric mps
-               then ConT entityFieldName `AppT` VarT backendName
-               else VarT backendName
-        fieldTypeT =
-            idType mps fieldDef (Just backendName)
-     in AppT (ConT fieldName) backendT `AppT` fieldTypeT
-
 makeEntityDefDecName :: EntityDef -> FieldDef -> Name
 makeEntityDefDecName entDef fieldDef =
     let entityName = unEntityNameHS $ entityHaskell entDef
@@ -1739,21 +1729,19 @@ makeEntityDefDecName entDef fieldDef =
 
 makePersistEntityDefExp :: MkPersistSettings -> EntityMap -> EntityDef -> Q Exp
 makePersistEntityDefExp mps entityMap entDef@EntityDef{..} =
-    if mpsGeneric mps
-       then liftAndFixKeys entityMap entDef
-       else [|EntityDef
-                entityHaskell
-                entityDB
-                $(liftAndFixKey entityMap entityId)
-                entityAttrs
-                $(fieldDefReferences mps entDef entityFields)
-                entityUniques
-                entityForeigns
-                entityDerives
-                entityExtra
-                entitySum
-                entityComments
-            |]
+    [|EntityDef
+        entityHaskell
+        entityDB
+        $(liftAndFixKey entityMap entityId)
+        entityAttrs
+        $(fieldDefReferences mps entDef entityFields)
+        entityUniques
+        entityForeigns
+        entityDerives
+        entityExtra
+        entitySum
+        entityComments
+    |]
 
 fieldDefReferences :: MkPersistSettings -> EntityDef -> [FieldDef] -> Q Exp
 fieldDefReferences mps entDef fieldDefs = do
