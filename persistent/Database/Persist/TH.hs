@@ -1503,8 +1503,8 @@ mkEntityDefList entityList entityDefs = do
     let entityListName = mkName entityList
     edefs <- fmap ListE
         . forM entityDefs
-        $ \(EntityDef { entityHaskell = EntityNameHS haskellName }) ->
-            let entityType = conT (mkName (T.unpack haskellName))
+        $ \entityDef ->
+            let entityType = conT (mkEntityDefName entityDef)
              in [|entityDef (Proxy :: Proxy $(entityType))|]
     typ <- [t|[EntityDef]|]
     pure
@@ -1526,7 +1526,7 @@ mkUniqueKeys def = do
             return (x, x')
         let pcs = map (go xs) $ entityUniques def
         let pat = ConP
-                (mkName $ unpack $ unEntityNameHS $ entityHaskell def)
+                (mkEntityDefName def)
                 (map (VarP . snd) xs)
         return $ normalClause [pat] (ListE pcs)
 
@@ -1896,13 +1896,13 @@ mkSymbolToFieldInstances mps ed = do
                 litT $ strTyLit $ T.unpack $ unFieldNameHS $ fieldHaskell fieldDef
                     :: Q Type
 
-            nameG = mkName $ unpack $ unEntityNameHS (entityHaskell ed) ++ "Generic"
+            nameG = mkEntityDefGenericName ed
 
             recordNameT
                 | mpsGeneric mps =
                     conT nameG `appT` varT backendName
                 | otherwise =
-                    conT $ mkName $ T.unpack $ unEntityNameHS $ entityHaskell ed
+                    conT $ mkEntityDefName ed
 
             fieldTypeT =
                 maybeIdType mps fieldDef Nothing Nothing
