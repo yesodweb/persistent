@@ -1319,7 +1319,7 @@ mkForeignKeysComposite mps entDef ForeignDef {..} =
     let fname = fieldName (constraintToField foreignConstraintNameHaskell)
     let reftableString = unpack $ unEntityNameHS foreignRefTableHaskell
     let reftableKeyName = mkName $ reftableString `mappend` "Key"
-    let tablename = mkName $ unpack $ entityText entDef
+    let tablename = mkEntityDefName entDef
     recordName <- newName "record"
 
     let mkFldE ((foreignName, _),ff) = case ff of
