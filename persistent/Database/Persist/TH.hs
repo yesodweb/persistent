@@ -246,7 +246,6 @@ foreignReference field = case fieldReference field of
     ForeignRef ref _ -> Just ref
     _              -> Nothing
 
-
 -- fieldSqlType at parse time can be an Exp
 -- This helps delay setting fieldSqlType until lift time
 data EntityDefSqlTypeExp
@@ -685,13 +684,14 @@ backendDataType mps
     | mpsGeneric mps = backendT
     | otherwise = mpsBackend mps
 
-genericDataType :: MkPersistSettings
-                -> EntityNameHS
-                -> Type -- ^ backend
-                -> Type
-genericDataType mps (EntityNameHS typ') backend
-    | mpsGeneric mps = ConT (mkName $ unpack $ typ' ++ "Generic") `AppT` backend
-    | otherwise = ConT $ mkName $ unpack typ'
+genericDataType
+    :: MkPersistSettings
+    -> EntityNameHS
+    -> Type -- ^ backend
+    -> Type
+genericDataType mps name backend
+    | mpsGeneric mps = ConT (mkEntityNameHSGenericName name) `AppT` backend
+    | otherwise = ConT $ mkEntityNameHSName name
 
 idType :: MkPersistSettings -> FieldDef -> Maybe Name -> Type
 idType mps fieldDef mbackend =
@@ -2020,13 +2020,21 @@ mkEntityDefDeriveNames = fmap (mkName . T.unpack) . entityDerives
 
 -- | Make a TH Name for the EntityDef's Haskell type
 mkEntityDefName :: EntityDef -> Name
-mkEntityDefName entDef =
-    mkName $ T.unpack $ unEntityNameHS (entityHaskell entDef)
+mkEntityDefName =
+    mkEntityNameHSName . entityHaskell
+
+mkEntityNameHSName :: EntityNameHS -> Name
+mkEntityNameHSName =
+    mkName . T.unpack . unEntityNameHS
 
 -- | Make a TH Name for the EntityDef's Haskell type, when using mpsGeneric
 mkEntityDefGenericName :: EntityDef -> Name
-mkEntityDefGenericName entDef =
-    mkName $ T.unpack $ unEntityNameHS (entityHaskell entDef) <> "Generic"
+mkEntityDefGenericName =
+    mkEntityNameHSGenericName . entityHaskell
+
+mkEntityNameHSGenericName :: EntityNameHS -> Name
+mkEntityNameHSGenericName name =
+    mkName $ T.unpack (unEntityNameHS name <> "Generic")
 
 sumConstrName :: MkPersistSettings -> EntityDef -> FieldDef -> Name
 sumConstrName mps entDef FieldDef {..} = mkName $ T.unpack name
