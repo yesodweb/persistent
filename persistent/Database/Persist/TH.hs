@@ -754,7 +754,7 @@ mkToFieldNames pairs = do
         names' <- lift names
         return $
             normalClause
-                [RecP (mkName $ unpack $ unConstraintNameHS constr) []]
+                [RecP (mkConstraintName constr) []]
                 names'
 
 mkUniqueToValues :: [UniqueDef] -> Q Dec
@@ -765,7 +765,7 @@ mkUniqueToValues pairs = do
     go :: UniqueDef -> Q Clause
     go (UniqueDef constr _ names _) = do
         xs <- mapM (const $ newName "x") names
-        let pat = ConP (mkName $ unpack $ unConstraintNameHS constr) $ map VarP xs
+        let pat = ConP (mkConstraintName constr) $ map VarP xs
         tpv <- [|toPersistValue|]
         let bod = ListE $ map (AppE tpv . VarE) xs
         return $ normalClause [pat] bod
@@ -1572,7 +1572,7 @@ mkUniqueKeys def = do
 
     go :: [(FieldNameHS, Name)] -> UniqueDef -> Exp
     go xs (UniqueDef name _ cols _) =
-        foldl' (go' xs) (ConE (mkName $ unpack $ unConstraintNameHS name)) (map fst cols)
+        foldl' (go' xs) (ConE (mkConstraintName name)) (map fst cols)
 
     go' :: [(FieldNameHS, Name)] -> Exp -> FieldNameHS -> Exp
     go' xs front col =
