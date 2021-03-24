@@ -605,7 +605,7 @@ dataTypeDec mps entDef = do
         ]
         )
     mkCol x fd@FieldDef {..} =
-        (mkName $ unpack $ recNameF mps x fieldHaskell,
+        (mkRecName mps x fieldHaskell,
          if fieldStrict then isStrict else notStrict,
          maybeIdType mps fd Nothing Nothing
         )
@@ -848,7 +848,7 @@ mkLensClauses mps entDef = do
         [ConP (filterConName mps entDef f) []]
         (lens' `AppE` getter `AppE` setter)
       where
-        fieldName = mkName $ unpack $ recNameF mps (entityHaskell entDef) (fieldHaskell f)
+        fieldName = mkRecName mps (entityHaskell entDef) (fieldHaskell f)
         getter = InfixE (Just $ VarE fieldName) dot (Just getVal)
         setter = LamE
             [ ConP 'Entity [VarP keyVar, VarP valName]
@@ -1166,7 +1166,7 @@ mkEntity entityMap mps entDef = do
                 recordName <- newName "record"
                 let keyCon = keyConName entDef
                     keyFields' =
-                        map (mkName . T.unpack . recNameF mps entName . fieldHaskell)
+                        map (mkRecName mps entName . fieldHaskell)
                             (compositeFields prim)
                     constr =
                         foldl'
@@ -1368,7 +1368,7 @@ mkLenses mps ent = fmap mconcat $ forM (entityFields ent) $ \field -> do
 mkForeignKeysComposite :: MkPersistSettings -> EntityDef -> ForeignDef -> Q [Dec]
 mkForeignKeysComposite mps entDef ForeignDef {..} =
     if not foreignToPrimary then return [] else do
-    let fieldName f = mkName $ unpack $ recNameF mps (entityHaskell entDef) f
+    let fieldName f = mkRecName mps (entityHaskell entDef) f
     let fname = fieldName (constraintToField foreignConstraintNameHaskell)
     let reftableString = unpack $ unEntityNameHS foreignRefTableHaskell
     let reftableKeyName = mkName $ reftableString `mappend` "Key"
@@ -2016,3 +2016,13 @@ unFieldNameHSForJSON = fixTypeUnderscore . unFieldNameHS
     fixTypeUnderscore = \case
         "type" -> "type_"
         name -> name
+
+-- | creates a TH Name for an entity's field, based on the entity
+-- name and the field name, so for example:
+--
+-- Customer
+--   name Text
+--
+-- This would generate `customerName` as a TH Name
+mkRecName :: MkPersistSettings -> EntityNameHS -> FieldNameHS -> Name
+mkRecName mps entName fieldName = mkName $ T.unpack $ recNameF mps entName fieldName
