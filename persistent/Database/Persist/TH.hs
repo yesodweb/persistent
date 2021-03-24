@@ -1736,26 +1736,6 @@ mkField mps et cd = do
 maybeNullable :: FieldDef -> Bool
 maybeNullable fd = nullable (fieldAttrs fd) == Nullable ByMaybeAttr
 
-filterConName :: MkPersistSettings
-              -> EntityDef
-              -> FieldDef
-              -> Name
-filterConName mps entity field = filterConName' mps (entityHaskell entity) (fieldHaskell field)
-
-filterConName' :: MkPersistSettings
-               -> EntityNameHS
-               -> FieldNameHS
-               -> Name
-filterConName' mps entity field = mkName $ unpack name
-    where
-        name
-            | field == FieldNameHS "Id" = entityName ++ fieldName
-            | mpsPrefixFields mps       = modifiedName
-            | otherwise                 = fieldName
-        modifiedName = mpsConstraintLabelModifier mps entityName fieldName
-        entityName   = unEntityNameHS entity
-        fieldName    = upperFirst $ unFieldNameHS field
-
 ftToType :: FieldType -> Type
 ftToType (FTTypeCon Nothing t) = ConT $ mkName $ unpack t
 -- This type is generated from the Quasi-Quoter.
@@ -2045,3 +2025,23 @@ keyFieldName :: MkPersistSettings -> EntityDef -> FieldDef -> Name
 keyFieldName mps entDef fieldDef
   | pkNewtype mps entDef = unKeyName entDef
   | otherwise = mkName $ T.unpack $ lowerFirst (keyText entDef) `mappend` unFieldNameHS (fieldHaskell fieldDef)
+
+filterConName :: MkPersistSettings
+              -> EntityDef
+              -> FieldDef
+              -> Name
+filterConName mps entity field = filterConName' mps (entityHaskell entity) (fieldHaskell field)
+
+filterConName' :: MkPersistSettings
+               -> EntityNameHS
+               -> FieldNameHS
+               -> Name
+filterConName' mps entity field = mkName $ unpack name
+    where
+        name
+            | field == FieldNameHS "Id" = entityName ++ fieldName
+            | mpsPrefixFields mps       = modifiedName
+            | otherwise                 = fieldName
+        modifiedName = mpsConstraintLabelModifier mps entityName fieldName
+        entityName   = unEntityNameHS entity
+        fieldName    = upperFirst $ unFieldNameHS field
