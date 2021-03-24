@@ -104,16 +104,6 @@ import Database.Persist
 import Database.Persist.Sql (Migration, PersistFieldSql, SqlBackend, migrate, sqlType)
 import Database.Persist.Quasi
 
--- | This special-cases "type_" and strips out its underscore. When
--- used for JSON serialization and deserialization, it works around
--- <https://github.com/yesodweb/persistent/issues/412>
-unFieldNameHSForJSON :: FieldNameHS -> Text
-unFieldNameHSForJSON = fixTypeUnderscore . unFieldNameHS
-  where
-    fixTypeUnderscore = \case
-        "type" -> "type_"
-        name -> name
-
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
 persistWith :: PersistSettings -> QuasiQuoter
@@ -1846,8 +1836,7 @@ mkJSON mps def = do
     obj <- newName "obj"
     mzeroE <- [|mzero|]
 
-    xs <- mapM (newName . unpack . unFieldNameHSForJSON . fieldHaskell)
-        $ entityFields def
+    xs <- mapM fieldToJSONValName (entityFields def)
 
     let conName = mkName $ unpack $ unEntityNameHS $ entityHaskell def
         typ = genericDataType mps (entityHaskell def) backendT
@@ -2012,3 +2001,18 @@ requireExtensions requiredExtensions = do
 
   where
     extensionToPragma ext = "{-# LANGUAGE " <> show ext <> " #-}"
+
+-- | creates a TH Name for use in the ToJSON instance
+fieldToJSONValName :: FieldDef -> Q Name
+fieldToJSONValName =
+    newName . T.unpack . unFieldNameHSForJSON . fieldHaskell
+
+-- | This special-cases "type_" and strips out its underscore. When
+-- used for JSON serialization and deserialization, it works around
+-- <https://github.com/yesodweb/persistent/issues/412>
+unFieldNameHSForJSON :: FieldNameHS -> Text
+unFieldNameHSForJSON = fixTypeUnderscore . unFieldNameHS
+  where
+    fixTypeUnderscore = \case
+        "type" -> "type_"
+        name -> name
