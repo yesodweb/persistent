@@ -56,6 +56,7 @@ module Database.Persist.TH
     , AtLeastOneUniqueKey(..)
     , OnlyOneUniqueKey(..)
     , pkNewtype
+    , persistFieldDef
     ) where
 
 -- Development Tip: See persistent-template/README.md for advice on seeing generated Template Haskell code

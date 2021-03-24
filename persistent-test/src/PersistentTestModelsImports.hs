@@ -3,7 +3,6 @@
 -- | this just needs to compile
 module PersistentTestModelsImports where
 
-import Database.Persist
 import Database.Persist.TH
 
 share [mkPersist sqlSettings] [persistUpperCase|
