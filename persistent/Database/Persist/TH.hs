@@ -1503,8 +1503,8 @@ mkEntityDefList entityList entityDefs = do
     let entityListName = mkName entityList
     edefs <- fmap ListE
         . forM entityDefs
-        $ \entityDef ->
-            let entityType = conT (mkEntityDefName entityDef)
+        $ \entDef ->
+            let entityType = conT (mkEntityDefName entDef)
              in [|entityDef (Proxy :: Proxy $(entityType))|]
     typ <- [t|[EntityDef]|]
     pure
