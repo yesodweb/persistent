@@ -93,7 +93,7 @@ import GHC.TypeLits
 import Instances.TH.Lift ()
     -- Bring `Lift (Map k v)` instance into scope, as well as `Lift Text`
     -- instance on pre-1.2.4 versions of `text`
-import Language.Haskell.TH.Lib (appT, varT, conT, varE, varP, conE, litT, strTyLit)
+import Language.Haskell.TH.Lib (appT, varT, conK, conT, varE, varP, conE, litT, strTyLit)
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Web.PathPieces (PathPiece(..))
@@ -782,7 +782,7 @@ mkFromPersistValues :: MkPersistSettings -> EntityDef -> Q [Clause]
 mkFromPersistValues _ entDef@(EntityDef { entitySum = False }) =
     fromValues entDef "fromPersistValues" entE $ entityFields entDef
   where
-    entE = ConE $ mkEntityDefName entDef
+    entE = entityDefConE entDef
 
 mkFromPersistValues mps entDef@(EntityDef { entitySum = True }) = do
     nothing <- [|Left ("Invalid fromPersistValues input: sum type with all nulls. Entity: " `mappend` entName)|]
@@ -1504,7 +1504,7 @@ mkEntityDefList entityList entityDefs = do
     edefs <- fmap ListE
         . forM entityDefs
         $ \entDef ->
-            let entityType = conT (mkEntityDefName entDef)
+            let entityType = entityDefConT entDef
              in [|entityDef (Proxy :: Proxy $(entityType))|]
     typ <- [t|[EntityDef]|]
     pure
@@ -1882,7 +1882,7 @@ mkSymbolToFieldInstances mps ed = do
                 | mpsGeneric mps =
                     conT nameG `appT` varT backendName
                 | otherwise =
-                    conT $ mkEntityDefName ed
+                    entityDefConT ed
 
             fieldTypeT =
                 maybeIdType mps fieldDef Nothing Nothing
@@ -1943,6 +1943,15 @@ unFieldNameHSForJSON = fixTypeUnderscore . unFieldNameHS
     fixTypeUnderscore = \case
         "type" -> "type_"
         name -> name
+
+entityDefConK :: EntityDef -> Kind
+entityDefConK = conK . mkEntityDefName
+
+entityDefConT :: EntityDef -> Q Type
+entityDefConT = pure . entityDefConK
+
+entityDefConE :: EntityDef -> Exp
+entityDefConE = ConE . mkEntityDefName
 
 -- | creates a TH Name for an entity's field, based on the entity
 -- name and the field name, so for example:
