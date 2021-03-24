@@ -1268,9 +1268,8 @@ mkLenses :: MkPersistSettings -> EntityDef -> Q [Dec]
 mkLenses mps _ | not (mpsGenerateLenses mps) = return []
 mkLenses _ ent | entitySum ent = return []
 mkLenses mps ent = fmap mconcat $ forM (entityFields ent) $ \field -> do
-    let lensName' = recNameNoUnderscore mps (entityHaskell ent) (fieldHaskell field)
-        lensName = mkName $ unpack lensName'
-        fieldName = mkName $ unpack $ "_" ++ lensName'
+    let lensName = mkName $ T.unpack $ recNameNoUnderscore mps (entityHaskell ent) (fieldHaskell field)
+        fieldName = mkRecName mps (entityHaskell ent) (fieldHaskell field)
     needleN <- newName "needle"
     setterN <- newName "setter"
     fN <- newName "f"
