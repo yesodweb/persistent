@@ -782,8 +782,7 @@ mkFromPersistValues :: MkPersistSettings -> EntityDef -> Q [Clause]
 mkFromPersistValues _ entDef@(EntityDef { entitySum = False }) =
     fromValues entDef "fromPersistValues" entE $ entityFields entDef
   where
-    entE = ConE $ mkName $ unpack entName
-    entName = unEntityNameHS $ entityHaskell entDef
+    entE = ConE $ mkEntityDefName entDef
 
 mkFromPersistValues mps entDef@(EntityDef { entitySum = True }) = do
     nothing <- [|Left ("Invalid fromPersistValues input: sum type with all nulls. Entity: " `mappend` entName)|]
