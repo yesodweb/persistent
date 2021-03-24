@@ -708,8 +708,8 @@ degen [] =
      in [normalClause [WildP] err]
 degen x = x
 
-mkToPersistFields :: MkPersistSettings -> String -> EntityDef -> Q Dec
-mkToPersistFields mps constr ed@EntityDef { entitySum = isSum, entityFields = fields } = do
+mkToPersistFields :: MkPersistSettings -> EntityDef -> Q Dec
+mkToPersistFields mps ed@EntityDef { entitySum = isSum, entityFields = fields } = do
     clauses <-
         if isSum
             then sequence $ zipWith goSum fields [1..]
@@ -719,7 +719,8 @@ mkToPersistFields mps constr ed@EntityDef { entitySum = isSum, entityFields = fi
     go :: Q Clause
     go = do
         xs <- sequence $ replicate fieldCount $ newName "x"
-        let pat = ConP (mkName constr) $ map VarP xs
+        let name = mkEntityDefName ed
+            pat = ConP name $ map VarP xs
         sp <- [|SomePersistField|]
         let bod = ListE $ map (AppE sp . VarE) xs
         return $ normalClause [pat] bod
@@ -1118,10 +1119,9 @@ mkEntity entityMap mps entDef = do
         if mpsGeneric mps
            then liftAndFixKeys entityMap entDef
            else makePersistEntityDefExp mps entityMap entDef
-    let nameT = unEntityNameHS entName
-    let nameS = unpack nameT
+    let name = mkEntityDefName entDef
     let clazz = ConT ''PersistEntity `AppT` genDataType
-    tpf <- mkToPersistFields mps nameS entDef
+    tpf <- mkToPersistFields mps entDef
     fpv <- mkFromPersistValues mps entDef
     utv <- mkUniqueToValues $ entityUniques entDef
     puk <- mkUniqueKeys entDef
@@ -1137,7 +1137,7 @@ mkEntity entityMap mps entDef = do
 
     let addSyn -- FIXME maybe remove this
             | mpsGeneric mps = (:) $
-                TySynD (mkName nameS) [] $
+                TySynD name [] $
                     genericDataType mps entName $ mpsBackend mps
             | otherwise = id
 
@@ -1175,7 +1175,7 @@ mkEntity entityMap mps entDef = do
     return $ addSyn $
        dtd : mconcat fkc `mappend`
       ([ TySynD (keyIdName entDef) [] $
-            ConT ''Key `AppT` ConT (mkName nameS)
+            ConT ''Key `AppT` ConT name
       , instanceD instanceConstraint clazz
         [ uniqueTypeDec mps entDef
         , keyTypeDec
