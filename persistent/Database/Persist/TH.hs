@@ -574,7 +574,7 @@ upperFirst t =
 
 dataTypeDec :: MkPersistSettings -> EntityDef -> Q Dec
 dataTypeDec mps entDef = do
-    let entityInstances     = map (mkName . unpack) $ entityDerives entDef
+    let entityInstances     = mkEntityDefDeriveNames entDef
         additionalInstances = filter (`notElem` entityInstances) $ mpsDeriveInstances mps
         names               = entityInstances <> additionalInstances
 
@@ -2026,3 +2026,7 @@ unFieldNameHSForJSON = fixTypeUnderscore . unFieldNameHS
 -- This would generate `customerName` as a TH Name
 mkRecName :: MkPersistSettings -> EntityNameHS -> FieldNameHS -> Name
 mkRecName mps entName fieldName = mkName $ T.unpack $ recNameF mps entName fieldName
+
+-- | Take an EntityDef's `entityDerives` and turn them into TH Names
+mkEntityDefDeriveNames :: EntityDef -> [Name]
+mkEntityDefDeriveNames = fmap (mkName . T.unpack) . entityDerives
