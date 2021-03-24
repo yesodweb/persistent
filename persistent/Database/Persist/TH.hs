@@ -639,8 +639,8 @@ uniqueTypeDec mps entDef =
 #endif
 
 mkUnique :: MkPersistSettings -> EntityDef -> UniqueDef -> Con
-mkUnique mps entDef (UniqueDef (ConstraintNameHS constr) _ fields attrs) =
-    NormalC (mkName $ unpack constr) types
+mkUnique mps entDef (UniqueDef constr _ fields attrs) =
+    NormalC (mkConstraintName constr) types
   where
     types =
       map (go . flip lookup3 (entityFields entDef) . unFieldNameHS . fst) fields
@@ -653,7 +653,7 @@ mkUnique mps entDef (UniqueDef (ConstraintNameHS constr) _ fields attrs) =
 
     lookup3 :: Text -> [FieldDef] -> (FieldDef, IsNullable)
     lookup3 s [] =
-        error $ unpack $ "Column not found: " ++ s ++ " in unique " ++ constr
+        error $ unpack $ "Column not found: " ++ s ++ " in unique " ++ unConstraintNameHS constr
     lookup3 x (fd@FieldDef {..}:rest)
         | x == unFieldNameHS fieldHaskell = (fd, nullable fieldAttrs)
         | otherwise = lookup3 x rest
@@ -2037,3 +2037,8 @@ sumConstrName mps entDef FieldDef {..} = mkName $ T.unpack name
         modifiedName = mpsConstraintLabelModifier mps entityName fieldName
         entityName   = unEntityNameHS $ entityHaskell entDef
         fieldName    = upperFirst $ unFieldNameHS fieldHaskell
+
+-- | Turn a ConstraintName into a TH Name
+mkConstraintName :: ConstraintNameHS -> Name
+mkConstraintName (ConstraintNameHS name) =
+    mkName (T.unpack name)
