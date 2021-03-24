@@ -622,16 +622,6 @@ dataTypeDec mps entDef = do
         (sumConstrName mps entDef fieldDef)
         [(notStrict, maybeIdType mps fieldDef Nothing Nothing)]
 
-sumConstrName :: MkPersistSettings -> EntityDef -> FieldDef -> Name
-sumConstrName mps entDef FieldDef {..} = mkName $ unpack name
-    where
-        name
-            | mpsPrefixFields mps = modifiedName ++ "Sum"
-            | otherwise           = fieldName ++ "Sum"
-        modifiedName = mpsConstraintLabelModifier mps entityName fieldName
-        entityName   = unEntityNameHS $ entityHaskell entDef
-        fieldName    = upperFirst $ unFieldNameHS fieldHaskell
-
 uniqueTypeDec :: MkPersistSettings -> EntityDef -> Dec
 uniqueTypeDec mps entDef =
 #if MIN_VERSION_template_haskell(2,15,0)
@@ -2028,10 +2018,22 @@ mkRecName mps entName fieldName = mkName $ T.unpack $ recNameF mps entName field
 mkEntityDefDeriveNames :: EntityDef -> [Name]
 mkEntityDefDeriveNames = fmap (mkName . T.unpack) . entityDerives
 
+-- | Make a TH Name for the EntityDef's Haskell type
+mkEntityDefName :: EntityDef -> Name
+mkEntityDefName entDef =
+    mkName $ T.unpack $ unEntityNameHS (entityHaskell entDef)
+
+-- | Make a TH Name for the EntityDef's Haskell type, when using mpsGeneric
 mkEntityDefGenericName :: EntityDef -> Name
 mkEntityDefGenericName entDef =
     mkName $ T.unpack $ unEntityNameHS (entityHaskell entDef) <> "Generic"
 
-mkEntityDefName :: EntityDef -> Name
-mkEntityDefName entDef =
-    mkName $ T.unpack $ unEntityNameHS (entityHaskell entDef)
+sumConstrName :: MkPersistSettings -> EntityDef -> FieldDef -> Name
+sumConstrName mps entDef FieldDef {..} = mkName $ T.unpack name
+    where
+        name
+            | mpsPrefixFields mps = modifiedName ++ "Sum"
+            | otherwise           = fieldName ++ "Sum"
+        modifiedName = mpsConstraintLabelModifier mps entityName fieldName
+        entityName   = unEntityNameHS $ entityHaskell entDef
+        fieldName    = upperFirst $ unFieldNameHS fieldHaskell
