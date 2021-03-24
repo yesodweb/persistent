@@ -610,16 +610,13 @@ dataTypeDec mps entDef = do
          maybeIdType mps fd Nothing Nothing
         )
     (nameFinal, paramsFinal)
-        | mpsGeneric mps = (nameG, [PlainTV backend])
-        | otherwise = (name, [])
-    nameG = mkName $ unpack $ unEntityNameHS (entityHaskell entDef) ++ "Generic"
-    name = mkName $ unpack $ unEntityNameHS $ entityHaskell entDef
+        | mpsGeneric mps = (mkEntityDefGenericName entDef, [PlainTV backendName])
+        | otherwise = (mkEntityDefName entDef, [])
     cols = map (mkCol $ entityHaskell entDef) $ entityFields entDef
-    backend = backendName
 
     constrs
         | entitySum entDef = map sumCon $ entityFields entDef
-        | otherwise = [RecC name cols]
+        | otherwise = [RecC (mkEntityDefName entDef) cols]
 
     sumCon fieldDef = NormalC
         (sumConstrName mps entDef fieldDef)
@@ -2030,3 +2027,11 @@ mkRecName mps entName fieldName = mkName $ T.unpack $ recNameF mps entName field
 -- | Take an EntityDef's `entityDerives` and turn them into TH Names
 mkEntityDefDeriveNames :: EntityDef -> [Name]
 mkEntityDefDeriveNames = fmap (mkName . T.unpack) . entityDerives
+
+mkEntityDefGenericName :: EntityDef -> Name
+mkEntityDefGenericName entDef =
+    mkName $ T.unpack $ unEntityNameHS (entityHaskell entDef) <> "Generic"
+
+mkEntityDefName :: EntityDef -> Name
+mkEntityDefName entDef =
+    mkName $ T.unpack $ unEntityNameHS (entityHaskell entDef)
