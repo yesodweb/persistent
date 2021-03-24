@@ -2036,7 +2036,7 @@ filterConName' :: MkPersistSettings
                -> EntityNameHS
                -> FieldNameHS
                -> Name
-filterConName' mps entity field = mkName $ unpack name
+filterConName' mps entity field = mkName $ T.unpack name
     where
         name
             | field == FieldNameHS "Id" = entityName ++ fieldName
