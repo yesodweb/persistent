@@ -966,39 +966,6 @@ mkKeyTypeDec mps entDef = do
     supplement :: [Name] -> [Name]
     supplement names = names <> (filter (`notElem` names) $ mpsDeriveInstances mps)
 
-keyIdName :: EntityDef -> Name
-keyIdName = mkName . unpack . keyIdText
-
-keyIdText :: EntityDef -> Text
-keyIdText entDef = unEntityNameHS (entityHaskell entDef) `mappend` "Id"
-
-unKeyName :: EntityDef -> Name
-unKeyName entDef = mkName $ "un" `mappend` keyString entDef
-
-unKeyExp :: EntityDef -> Exp
-unKeyExp = VarE . unKeyName
-
-backendT :: Type
-backendT = VarT backendName
-
-backendName :: Name
-backendName = mkName "backend"
-
-keyConName :: EntityDef -> Name
-keyConName entDef = mkName $ resolveConflict $ keyString entDef
-  where
-    resolveConflict kn = if conflict then kn `mappend` "'" else kn
-    conflict = any ((== FieldNameHS "key") . fieldHaskell) $ entityFields entDef
-
-keyConExp :: EntityDef -> Exp
-keyConExp = ConE . keyConName
-
-keyString :: EntityDef -> String
-keyString = unpack . keyText
-
-keyText :: EntityDef -> Text
-keyText entDef = unEntityNameHS (entityHaskell entDef) ++ "Key"
-
 -- | Returns 'True' if the key definition has more than 1 field.
 --
 -- @since 2.11.0.0
@@ -1023,11 +990,6 @@ keyFields mps entDef = case entityPrimary entDef of
                        , notStrict
                        , ftToType $ fieldType fieldDef
                        )
-
-keyFieldName :: MkPersistSettings -> EntityDef -> FieldDef -> Name
-keyFieldName mps entDef fieldDef
-  | pkNewtype mps entDef = unKeyName entDef
-  | otherwise = mkName $ unpack $ lowerFirst (keyText entDef) `mappend` unFieldNameHS (fieldHaskell fieldDef)
 
 mkKeyToValues :: MkPersistSettings -> EntityDef -> Q Dec
 mkKeyToValues mps entDef = do
@@ -2049,3 +2011,38 @@ sumConstrName mps entDef FieldDef {..} = mkName $ T.unpack name
 mkConstraintName :: ConstraintNameHS -> Name
 mkConstraintName (ConstraintNameHS name) =
     mkName (T.unpack name)
+
+keyIdName :: EntityDef -> Name
+keyIdName = mkName . T.unpack . keyIdText
+
+keyIdText :: EntityDef -> Text
+keyIdText entDef = unEntityNameHS (entityHaskell entDef) `mappend` "Id"
+
+unKeyName :: EntityDef -> Name
+unKeyName entDef = mkName $ T.unpack $ "un" `mappend` keyText entDef
+
+unKeyExp :: EntityDef -> Exp
+unKeyExp = VarE . unKeyName
+
+backendT :: Type
+backendT = VarT backendName
+
+backendName :: Name
+backendName = mkName "backend"
+
+keyConName :: EntityDef -> Name
+keyConName entDef = mkName $ T.unpack $ resolveConflict $ keyText entDef
+  where
+    resolveConflict kn = if conflict then kn `mappend` "'" else kn
+    conflict = any ((== FieldNameHS "key") . fieldHaskell) $ entityFields entDef
+
+keyConExp :: EntityDef -> Exp
+keyConExp = ConE . keyConName
+
+keyText :: EntityDef -> Text
+keyText entDef = unEntityNameHS (entityHaskell entDef) ++ "Key"
+
+keyFieldName :: MkPersistSettings -> EntityDef -> FieldDef -> Name
+keyFieldName mps entDef fieldDef
+  | pkNewtype mps entDef = unKeyName entDef
+  | otherwise = mkName $ T.unpack $ lowerFirst (keyText entDef) `mappend` unFieldNameHS (fieldHaskell fieldDef)
