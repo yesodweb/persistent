@@ -56,7 +56,6 @@ module Database.Persist.TH
     , AtLeastOneUniqueKey(..)
     , OnlyOneUniqueKey(..)
     , pkNewtype
-    , persistFieldDef
     ) where
 
 -- Development Tip: See persistent-template/README.md for advice on seeing generated Template Haskell code
@@ -1739,12 +1738,10 @@ makePersistEntityDefExp mps entityMap entDef@EntityDef{..} =
     |]
 
 fieldDefReferences :: MkPersistSettings -> EntityDef -> [FieldDef] -> Q Exp
-fieldDefReferences mps entDef fieldDefs = do
-    lookupValueName "persistFieldDef" >>= \case
-        Nothing -> error "Fatal `persistFieldDef` not in scope"
-        Just pfd -> fmap ListE $ forM fieldDefs $ \fieldDef -> do
-            let fieldDefConE = ConE (filterConName mps entDef fieldDef)
-            pure $ VarE pfd `AppE` fieldDefConE
+fieldDefReferences mps entDef fieldDefs =
+  fmap ListE $ forM fieldDefs $ \fieldDef -> do
+    let fieldDefConE = ConE (filterConName mps entDef fieldDef)
+    pure $ VarE 'persistFieldDef `AppE` fieldDefConE
 
 liftAndFixKeys :: EntityMap -> EntityDef -> Q Exp
 liftAndFixKeys entityMap EntityDef{..} =
