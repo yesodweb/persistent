@@ -61,7 +61,6 @@ library
     build-depends: 
         base                     >= 4.9       && < 5
       , persistent               >= 2.12      && < 2.13
-      , persistent-template      >= 2.12      && < 2.13
       , aeson                    >= 1.0
       , blaze-html               >= 0.9
       , bytestring               >= 0.10

@@ -3,6 +3,7 @@
 ## 2.12.0.0
 
 * Decomposed `HaskellName` into `ConstraintNameHS`, `EntityNameHS`, `FieldNameHS`. Decomposed `DBName` into `ConstraintNameDB`, `EntityNameDB`, `FieldNameDB` respectively. [#1174](https://github.com/yesodweb/persistent/pull/1174)
+* Fix XML conversion [#1192](https://github.com/yesodweb/persistent/pull/1192)
 
 ##  2.11.0.1
 * Fix foreign key migrations [#1167] https://github.com/yesodweb/persistent/pull/1167

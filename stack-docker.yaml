@@ -1,7 +1,6 @@
 resolver: lts-9.17
 packages:
   - ./persistent
-  - ./persistent-template
   - ./persistent-sqlite
   - ./persistent-test
   - ./persistent-mongoDB

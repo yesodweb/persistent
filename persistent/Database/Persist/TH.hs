@@ -14,7 +14,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DeriveLift #-}
 
-{-# OPTIONS_GHC -fno-warn-orphans -fno-warn-missing-fields #-}
+-- {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-missing-fields #-}
 
 -- | This module provides the tools for defining your database schema and using
 -- it to generate Haskell data types and migrations.
@@ -310,12 +310,6 @@ instance Lift EntityDefSqlTypeExp where
 #if MIN_VERSION_template_haskell(2,16,0)
     liftTyped = unsafeTExpCoerce . lift
 #endif
-
-deriving instance Lift ReferenceDef
-
-deriving instance Lift EmbedEntityDef
-
-deriving instance Lift EmbedFieldDef
 
 type EmbedEntityMap = M.Map EntityNameHS EmbedEntityDef
 
@@ -1752,45 +1746,6 @@ liftAndFixKey entityMap (FieldDef a b c sqlTyp e f fieldRef fc mcomments fg) =
                             Nothing
                 _ ->
                     Nothing
-
-deriving instance Lift EntityDef
-
-deriving instance Lift FieldDef
-
-deriving instance Lift FieldAttr
-
-deriving instance Lift UniqueDef
-
-deriving instance Lift CompositeDef
-
-deriving instance Lift ForeignDef
-
--- |
---
--- @since 2.8.3.0
-deriving instance Lift FieldCascade
-
--- |
---
--- @since 2.8.3.0
-deriving instance Lift CascadeAction
-
-deriving instance Lift ConstraintNameDB
-deriving instance Lift ConstraintNameHS
-
-deriving instance Lift EntityNameDB
-deriving instance Lift EntityNameHS
-
-deriving instance Lift FieldNameDB
-deriving instance Lift FieldNameHS
-
-deriving instance Lift FieldType
-
-deriving instance Lift PersistFilter
-
-deriving instance Lift PersistUpdate
-
-deriving instance Lift SqlType
 
 -- Ent
 --   fieldName FieldType

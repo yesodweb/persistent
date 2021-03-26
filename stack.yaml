@@ -1,7 +1,6 @@
 resolver: lts-14.27
 packages:
   - ./persistent
-  - ./persistent-template
   - ./persistent-sqlite
   - ./persistent-test
   - ./persistent-mongoDB
@@ -9,6 +8,3 @@ packages:
   - ./persistent-postgresql
   - ./persistent-redis
   - ./persistent-qq
-
-extra-deps:
-  - resourcet-pool-0.1.0.0

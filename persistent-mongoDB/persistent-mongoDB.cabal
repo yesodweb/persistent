@@ -58,7 +58,6 @@ test-suite test
                    , persistent
                    , persistent-mongoDB
                    , persistent-qq
-                   , persistent-template
                    , persistent-test
                    , blaze-html
                    , bytestring
