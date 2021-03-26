@@ -1,8 +1,12 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase, PatternSynonyms #-}
 {-# LANGUAGE DeriveLift #-}
 {-# OPTIONS_GHC -fno-warn-deprecations #-} -- usage of Error typeclass
-module Database.Persist.Types.Base where
+module Database.Persist.Types.Base
+    ( module Database.Persist.Types.Base
+    , PersistValue(.., PersistLiteral, PersistLiteralEscaped, PersistDbSpecific)
+    , LiteralType(..)
+    ) where
 
 import Control.Arrow (second)
 import Control.Exception (Exception)
@@ -529,37 +533,73 @@ data PersistValue
     | PersistMap [(Text, PersistValue)]
     | PersistObjectId ByteString -- ^ Intended especially for MongoDB backend
     | PersistArray [PersistValue] -- ^ Intended especially for PostgreSQL backend for text arrays
-    | PersistLiteral ByteString -- ^ Using 'PersistLiteral' allows you to use types or keywords specific to a particular backend.
-    | PersistLiteralEscaped ByteString -- ^ Similar to 'PersistLiteral', but escapes the @ByteString@.
-    | PersistDbSpecific ByteString -- ^ Using 'PersistDbSpecific' allows you to use types specific to a particular backend.
--- For example, below is a simple example of the PostGIS geography type:
---
--- @
--- data Geo = Geo ByteString
---
--- instance PersistField Geo where
---   toPersistValue (Geo t) = PersistDbSpecific t
---
---   fromPersistValue (PersistDbSpecific t) = Right $ Geo $ Data.ByteString.concat ["'", t, "'"]
---   fromPersistValue _ = Left "Geo values must be converted from PersistDbSpecific"
---
--- instance PersistFieldSql Geo where
---   sqlType _ = SqlOther "GEOGRAPHY(POINT,4326)"
---
--- toPoint :: Double -> Double -> Geo
--- toPoint lat lon = Geo $ Data.ByteString.concat ["'POINT(", ps $ lon, " ", ps $ lat, ")'"]
---   where ps = Data.Text.pack . show
--- @
---
--- If Foo has a geography field, we can then perform insertions like the following:
---
--- @
--- insert $ Foo (toPoint 44 44)
--- @
---
+    | PersistLiteral_ LiteralType ByteString
+    -- ^ This constructor is used to specify some raw literal value for the
+    -- backend. The 'LiteralType' value specifies how the value should be
+    -- escaped. This can be used to make special, custom types avaialable
+    -- in the back end.
+    --
+    -- @since 2.12.0.0
     deriving (Show, Read, Eq, Ord)
 
-{-# DEPRECATED PersistDbSpecific "Deprecated since 2.11 because of inconsistent escaping behavior across backends. The Postgres backend escapes these values, while the MySQL backend does not. If you are using this, please switch to 'PersistLiteral' or 'PersistLiteralEscaped' based on your needs." #-}
+-- | A type that determines how a backend should handle the literal.
+--
+-- @since 2.12.0.0
+data LiteralType
+    = Escaped
+    -- ^ The accompanying value will be escaped before inserting into the
+    -- database. This is the correct default choice to use.
+    --
+    -- @since 2.12.0.0
+    | Unescaped
+    -- ^ The accompanying value will not be escaped when inserting into the
+    -- database. This is potentially dangerous - use this with care.
+    --
+    -- @since 2.12.0.0
+    | DbSpecific
+    -- ^ The 'DbSpecific' constructor corresponds to the legacy
+    -- 'PersistDbSpecific' constructor. We need to keep this around because
+    -- old databases may have serialized JSON representations that
+    -- reference this. We don't want to break the ability of a database to
+    -- load rows.
+    --
+    -- @since 2.12.0.0
+    deriving (Show, Read, Eq, Ord)
+
+-- | This pattern synonym used to be a data constructor for the
+-- 'PersistValue' type. It was changed to be a pattern so that JSON-encoded
+-- database values could be parsed into their corresponding values. You
+-- should not use this, and instead prefer to pattern match on
+-- `PersistLiteral_` directly.
+--
+-- If you use this, it will overlap a patern match on the 'PersistLiteral_,
+-- 'PersistLiteral', and 'PersistLiteralEscaped' patterns. If you need to
+-- disambiguate between these constructors, pattern match on
+-- 'PersistLiteral_' directly.
+--
+-- @since 2.12.0.0
+pattern PersistDbSpecific bs <- PersistLiteral_ _ bs where
+    PersistDbSpecific bs = PersistLiteral_ DbSpecific bs
+
+-- | This pattern synonym used to be a data constructor on 'PersistValue',
+-- but was changed into a catch-all pattern synonym to allow backwards
+-- compatiblity with database types. See the documentation on
+-- 'PersistDbSpecific' for more details.
+--
+-- @since 2.12.0.0
+pattern PersistLiteralEscaped bs <- PersistLiteral_ _ bs where
+    PersistLiteralEscaped bs = PersistLiteral_ Escaped bs
+
+-- | This pattern synonym used to be a data constructor on 'PersistValue',
+-- but was changed into a catch-all pattern synonym to allow backwards
+-- compatiblity with database types. See the documentation on
+-- 'PersistDbSpecific' for more details.
+--
+-- @since 2.12.0.0
+pattern PersistLiteral bs <- PersistLiteral_ _ bs where
+    PersistLiteral bs = PersistLiteral_ Unescaped bs
+
+{-# DEPRECATED PersistDbSpecific "Deprecated since 2.11 because of inconsistent escaping behavior across backends. The Postgres backend escapes these values, while the MySQL backend does not. If you are using this, please switch to 'PersistLiteral_' and provide a relevant 'LiteralType' for your conversion." #-}
 
 instance ToHttpApiData PersistValue where
     toUrlPiece val =
