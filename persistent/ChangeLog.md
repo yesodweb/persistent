@@ -23,6 +23,9 @@
 * [#1214](https://github.com/yesodweb/persistent/pull/1214):
     * Absorbed the `persistent-template` package. `persistent-template` will receive a 2.12 release with a warning and a deprecation notice.
     * Remove the `nooverlap` flag. It wasn't being used anymore.
+* [#1205](https://github.com/yesodweb/persistent/pull/1205)
+    * Introduce the `PersistLiteral_` constructor, replacing the `PersistLiteral`, `PersistLiteralEscaped`, and `PersistDbSpecific`.
+    * The old constructors are now pattern synonyms. They don't actually differentiate between the various escaping strategies when consuming them! If you pattern match on multiple of `PersistDbSpecific`, `PersistLiteral`, or `PersistLiteralEscaped` , then you should use the `PersistLiteral_` constructor to differentiate between them.
 
 ## 2.11.0.2
 * Fix a bug where an empty entity definition would break parsing of `EntityDef`s. [#1176](https://github.com/yesodweb/persistent/issues/1176)
