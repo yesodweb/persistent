@@ -599,7 +599,7 @@ pattern PersistLiteralEscaped bs <- PersistLiteral_ _ bs where
 pattern PersistLiteral bs <- PersistLiteral_ _ bs where
     PersistLiteral bs = PersistLiteral_ Unescaped bs
 
-{-# DEPRECATED PersistDbSpecific "Deprecated since 2.11 because of inconsistent escaping behavior across backends. The Postgres backend escapes these values, while the MySQL backend does not. If you are using this, please switch to 'PersistLiteral' or 'PersistLiteralEscaped' based on your needs." #-}
+{-# DEPRECATED PersistDbSpecific "Deprecated since 2.11 because of inconsistent escaping behavior across backends. The Postgres backend escapes these values, while the MySQL backend does not. If you are using this, please switch to 'PersistLiteral_' and provide a relevant 'LiteralType' for your conversion." #-}
 
 instance ToHttpApiData PersistValue where
     toUrlPiece val =
