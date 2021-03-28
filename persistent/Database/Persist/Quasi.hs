@@ -876,7 +876,6 @@ mkEntityDef ps name entattribs lines =
     textAttribs =
         fmap tokenText <$> attribs
 
-
     attribPrefix = flip lookupKeyVal entattribs
     idName | Just _ <- attribPrefix "id" = error "id= is deprecated, ad a field named 'Id' and use sql="
            | otherwise = Nothing

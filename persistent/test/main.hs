@@ -238,6 +238,131 @@ main = hspec $ do
                 parseLine "  -- | comment" `shouldBe`
                     Just (Line 2 [ DocComment "comment"])
 
+    describe "parse" $ do
+        let subject =
+                [st|
+Bicycle -- | this is a bike
+    brand String -- | the brand of the bike
+    ExtraBike
+        foo bar  -- | this is a foo bar
+        baz
+    deriving Eq
+-- | This is a Car
+Car
+    -- | the make of the Car
+    make String
+    -- | the model of the Car
+    model String
+    UniqueModel model
+    deriving Eq Show
++Vehicle
+    bicycle BicycleId -- | the bike reference
+    car CarId         -- | the car reference
+
+                    |]
+        let [bicycle, car, vehicle] = parse lowerCaseSettings subject
+
+        it "should parse the `entityHaskell` field" $ do
+            entityHaskell bicycle `shouldBe` EntityNameHS "Bicycle"
+            entityHaskell car `shouldBe` EntityNameHS "Car"
+            entityHaskell vehicle `shouldBe` EntityNameHS "Vehicle"
+
+        it "should parse the `entityDB` field" $ do
+            entityDB bicycle `shouldBe` EntityNameDB "bicycle"
+            entityDB car `shouldBe` EntityNameDB "car"
+            entityDB vehicle `shouldBe` EntityNameDB "vehicle"
+
+        it "should parse the `entityId` field" $ do
+            fieldHaskell (entityId bicycle) `shouldBe` FieldNameHS "Id"
+            fieldComments (entityId bicycle) `shouldBe` Nothing
+            fieldHaskell (entityId car) `shouldBe` FieldNameHS "Id"
+            fieldComments (entityId car) `shouldBe` Nothing
+            fieldHaskell (entityId vehicle) `shouldBe` FieldNameHS "Id"
+            fieldComments (entityId vehicle) `shouldBe` Nothing
+
+        it "should parse the `entityAttrs` field" $ do
+            entityAttrs bicycle `shouldBe` ["-- | this is a bike"]
+            entityAttrs car `shouldBe` []
+            entityAttrs vehicle `shouldBe` []
+
+        it "should parse the `entityFields` field" $ do
+            let simplifyField field =
+                    (fieldHaskell field, fieldDB field, fieldComments field)
+            (simplifyField <$> entityFields bicycle) `shouldBe`
+                [ (FieldNameHS "brand", FieldNameDB "brand", Nothing)
+                ]
+            (simplifyField <$> entityFields car) `shouldBe`
+                [ (FieldNameHS "make", FieldNameDB "make", Just "the make of the Car\n")
+                , (FieldNameHS "model", FieldNameDB "model", Just "the model of the Car\n")
+                ]
+            (simplifyField <$> entityFields vehicle) `shouldBe`
+                [ (FieldNameHS "bicycle", FieldNameDB "bicycle", Nothing)
+                , (FieldNameHS "car", FieldNameDB "car", Nothing)
+                ]
+
+        it "should parse the `entityUniques` field" $ do
+            let simplifyUnique unique =
+                    (uniqueHaskell unique, uniqueFields unique)
+            (simplifyUnique <$> entityUniques bicycle) `shouldBe` []
+            (simplifyUnique <$> entityUniques car) `shouldBe`
+                [ (ConstraintNameHS "UniqueModel", [(FieldNameHS "model", FieldNameDB "model")])
+                ]
+            (simplifyUnique <$> entityUniques vehicle) `shouldBe` []
+
+        it "should parse the `entityForeigns` field" $ do
+            let [user, notification] = parse lowerCaseSettings [st|
+User
+    name            Text
+    emailFirst      Text
+    emailSecond     Text
+
+    UniqueEmail emailFirst emailSecond
+
+Notification
+    content         Text
+    sentToFirst     Text
+    sentToSecond    Text
+
+    Foreign User fk_noti_user sentToFirst sentToSecond References emailFirst emailSecond
+|]
+            entityForeigns user `shouldBe` []
+            entityForeigns notification `shouldBe`
+                [ ForeignDef
+                    { foreignRefTableHaskell = EntityNameHS "User"
+                    , foreignRefTableDBName = EntityNameDB "user"
+                    , foreignConstraintNameHaskell = ConstraintNameHS "fk_noti_user"
+                    , foreignConstraintNameDBName = ConstraintNameDB "notificationfk_noti_user"
+                    , foreignFieldCascade = FieldCascade Nothing Nothing
+                    , foreignFields =
+                        [ ((FieldNameHS "sentToFirst", FieldNameDB "sent_to_first"), (FieldNameHS "emailFirst", FieldNameDB "email_first"))
+                        , ((FieldNameHS "sentToSecond", FieldNameDB "sent_to_second"), (FieldNameHS "emailSecond", FieldNameDB "email_second"))
+                        ]
+                    , foreignAttrs = []
+                    , foreignNullable = False
+                    , foreignToPrimary = False
+                    }
+                ]
+
+        it "should parse the `entityDerives` field" $ do
+            entityDerives bicycle `shouldBe` ["Eq"]
+            entityDerives car `shouldBe` ["Eq", "Show"]
+            entityDerives vehicle `shouldBe` []
+
+        it "should parse the `entityEntities` field" $ do
+            entityExtra bicycle `shouldBe` Map.singleton "ExtraBike" [["foo", "bar", "-- | this is a foo bar"], ["baz"]]
+            entityExtra car `shouldBe` mempty
+            entityExtra vehicle `shouldBe` mempty
+
+        it "should parse the `entitySum` field" $ do
+            entitySum bicycle `shouldBe` False
+            entitySum car `shouldBe` False
+            entitySum vehicle `shouldBe` True
+
+        it "should parse the `entityComments` field" $ do
+            entityComments bicycle `shouldBe` Nothing
+            entityComments car `shouldBe` Just "This is a Car\n"
+            entityComments vehicle `shouldBe` Nothing
+
     describe "parseFieldType" $ do
         it "simple types" $
             parseFieldType "FooBar" `shouldBe` Right (FTTypeCon Nothing "FooBar")
