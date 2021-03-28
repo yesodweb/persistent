@@ -2,7 +2,7 @@
 
 ## 2.12.0.1 (unreleased)
 
-* Refactoring quasi module [#1206](https://github.com/yesodweb/persistent/pull/1206)
+* Refactoring token parsing in quasi module [#1206](https://github.com/yesodweb/persistent/pull/1206)
 * Refactor [] to NonEmpty in Quasi module [#1193](https://github.com/yesodweb/persistent/pull/1193)
 * [#1162](https://github.com/yesodweb/persistent/pull/1162)
   * Replace `askLogFunc` with `askLoggerIO`
