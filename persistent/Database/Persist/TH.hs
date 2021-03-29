@@ -573,9 +573,7 @@ upperFirst t =
 
 dataTypeDec :: MkPersistSettings -> EntityDef -> Q Dec
 dataTypeDec mps entDef = do
-    let entityInstances     = mkEntityDefDeriveNames entDef
-        additionalInstances = filter (`notElem` entityInstances) $ mpsDeriveInstances mps
-        names               = entityInstances <> additionalInstances
+    let names = mkEntityDefDeriveNames mps entDef
 
     let (stocks, anyclasses) = partitionEithers (map stratFor names)
     let stockDerives = do
@@ -1963,9 +1961,12 @@ entityDefConE = ConE . mkEntityDefName
 mkRecName :: MkPersistSettings -> EntityDef -> FieldNameHS -> Name
 mkRecName mps entDef fieldName = mkName $ T.unpack $ recNameF mps (entityHaskell entDef) fieldName
 
--- | Take an EntityDef's `entityDerives` and turn them into TH Names
-mkEntityDefDeriveNames :: EntityDef -> [Name]
-mkEntityDefDeriveNames = fmap (mkName . T.unpack) . entityDerives
+-- | Construct a list of TH Names for the typeclasses of an EntityDef's `entityDerives`
+mkEntityDefDeriveNames :: MkPersistSettings -> EntityDef -> [Name]
+mkEntityDefDeriveNames mps entDef =
+    let entityInstances = mkName . T.unpack <$> entityDerives entDef
+        additionalInstances = filter (`notElem` entityInstances) $ mpsDeriveInstances mps
+     in entityInstances <> additionalInstances
 
 -- | Make a TH Name for the EntityDef's Haskell type
 mkEntityDefName :: EntityDef -> Name
