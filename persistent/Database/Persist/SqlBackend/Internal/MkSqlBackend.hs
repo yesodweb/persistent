@@ -80,6 +80,9 @@ data MkSqlBackendArgs = MkSqlBackendArgs
     -- queries are the superior way to offer pagination.
     , connLogFunc :: LogFunc
     -- ^ A log function for the 'SqlBackend' to use.
+    , connStatementMiddleware :: Text -> Statement -> IO Statement
+    -- ^ Provide facilities for injecting middleware into statements
+    -- to allow for instrumenting queries.
     }
 
 type LogFunc = Loc -> LogSource -> LogLevel -> LogStr -> IO ()

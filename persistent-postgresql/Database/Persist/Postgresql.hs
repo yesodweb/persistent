@@ -363,6 +363,7 @@ createBackend logFunc serverVersion smap conn =
         , connRDBMS      = "postgresql"
         , connLimitOffset = decorateSQLWithLimitOffset "LIMIT ALL"
         , connLogFunc = logFunc
+        , connStatementMiddleware = const pure
         }
 
 prepare' :: PG.Connection -> Text -> IO Statement
@@ -1717,6 +1718,7 @@ mockMigration mig = do
                 , connRDBMS = undefined
                 , connLimitOffset = undefined
                 , connLogFunc = undefined
+                , connStatementMiddleware = const pure
                 }
         result = runReaderT $ runWriterT $ runWriterT mig
     resp <- result sqlbackend

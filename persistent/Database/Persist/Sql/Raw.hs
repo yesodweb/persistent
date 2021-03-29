@@ -78,7 +78,7 @@ getStmtConn :: SqlBackend -> Text -> IO Statement
 getStmtConn conn sql = do
     smap <- liftIO $ readIORef $ connStmtMap conn
     case Map.lookup sql smap of
-        Just stmt -> return stmt
+        Just stmt -> connStatementMiddleware conn sql stmt
         Nothing -> do
             stmt' <- liftIO $ connPrepare conn sql
             iactive <- liftIO $ newIORef True
@@ -102,7 +102,7 @@ getStmtConn conn sql = do
                             else liftIO $ throwIO $ StatementAlreadyFinalized sql
                     }
             liftIO $ writeIORef (connStmtMap conn) $ Map.insert sql stmt smap
-            return stmt
+            connStatementMiddleware conn sql stmt
 
 -- | Execute a raw SQL statement and return its results as a
 -- list. If you do not expect a return value, use of

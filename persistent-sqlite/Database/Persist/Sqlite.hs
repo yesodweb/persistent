@@ -288,6 +288,7 @@ wrapConnectionInfo connInfo conn logFunc = do
             , connRDBMS = "sqlite"
             , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
             , connLogFunc = logFunc
+            , connStatementMiddleware = const pure
             }
   where
     helper t getter = do
@@ -479,6 +480,7 @@ mockMigration mig = do
                 , connRDBMS = "sqlite"
                 , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
                 , connLogFunc = undefined
+                , connStatementMiddleware = const pure
                 }
         result = runReaderT . runWriterT . runWriterT $ mig
     resp <- result sqlbackend
