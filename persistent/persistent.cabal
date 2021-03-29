@@ -124,7 +124,7 @@ test-suite test
       , th-lift-instances
 
     hs-source-dirs:
-        .
+        ./
         test/
     cpp-options: -DTEST
 
