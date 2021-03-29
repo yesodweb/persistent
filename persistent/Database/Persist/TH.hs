@@ -601,15 +601,18 @@ dataTypeDec mps entDef = do
         ] <> [''Eq, ''Ord, ''Show, ''Read, ''Bounded, ''Enum, ''Ix, ''Generic, ''Data, ''Typeable
         ]
         )
-    mkCol x fd@FieldDef {..} =
-        (mkFieldDefRecordName mps x fieldHaskell,
-         if fieldStrict then isStrict else notStrict,
-         maybeIdType mps fd Nothing Nothing
-        )
+
     (nameFinal, paramsFinal)
         | mpsGeneric mps = (mkEntityDefGenericName entDef, [PlainTV backendName])
         | otherwise = (mkEntityDefName entDef, [])
-    cols = map (mkCol entDef) $ entityFields entDef
+
+    cols :: [VarBangType]
+    cols = do
+        fd@FieldDef{..} <- entityFields entDef
+        let recordName = mkFieldDefRecordName mps entDef fieldHaskell
+            strictness = if fieldStrict then isStrict else notStrict
+            fieldIdType = maybeIdType mps fd Nothing Nothing
+         in pure (recordName, strictness, fieldIdType)
 
     constrs
         | entitySum entDef = map sumCon $ entityFields entDef
