@@ -1204,7 +1204,7 @@ mkUniqueKeyInstances mps entDef = do
     withPersistStoreWriteCxt =
         if mpsGeneric mps
             then do
-                write <- [t|PersistStoreWrite $(pure (VarT $ mkName "backend")) |]
+                write <- [t|PersistStoreWrite $(pure backendT) |]
                 pure [write]
             else do
                 pure []
