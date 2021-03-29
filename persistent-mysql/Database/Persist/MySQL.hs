@@ -247,9 +247,9 @@ instance MySQL.Param P where
     render (P (PersistRational r))    =
       MySQL.Plain $ BBB.fromString $ show (fromRational r :: Pico)
       -- FIXME: Too Ambiguous, can not select precision without information about field
-    render (P (PersistDbSpecific s))    = MySQL.Plain $ BBS.fromByteString s
-    render (P (PersistLiteral l))     = MySQL.Plain $ BBS.fromByteString l
-    render (P (PersistLiteralEscaped e)) = MySQL.Escape e
+    render (P (PersistLiteral_ DbSpecific s))    = MySQL.Plain $ BBS.fromByteString s
+    render (P (PersistLiteral_ Unescaped l))     = MySQL.Plain $ BBS.fromByteString l
+    render (P (PersistLiteral_ Escaped e)) = MySQL.Escape e
     render (P (PersistArray a))       = MySQL.render (P (PersistList a))
     render (P (PersistObjectId _))    =
         error "Refusing to serialize a PersistObjectId to a MySQL value"

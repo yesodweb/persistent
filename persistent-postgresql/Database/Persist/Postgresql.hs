@@ -531,9 +531,9 @@ instance PGTF.ToField P where
     toField (P PersistNull)            = PGTF.toField PG.Null
     toField (P (PersistList l))        = PGTF.toField $ listToJSON l
     toField (P (PersistMap m))         = PGTF.toField $ mapToJSON m
-    toField (P (PersistDbSpecific s))  = PGTF.toField (Unknown s)
-    toField (P (PersistLiteral l))     = PGTF.toField (UnknownLiteral l)
-    toField (P (PersistLiteralEscaped e)) = PGTF.toField (Unknown e)
+    toField (P (PersistLiteral_ DbSpecific s))  = PGTF.toField (Unknown s)
+    toField (P (PersistLiteral_ Unescaped l))     = PGTF.toField (UnknownLiteral l)
+    toField (P (PersistLiteral_ Escaped e)) = PGTF.toField (Unknown e)
     toField (P (PersistArray a))       = PGTF.toField $ PG.PGArray $ P <$> a
     toField (P (PersistObjectId _))    =
         error "Refusing to serialize a PersistObjectId to a PostgreSQL value"
@@ -626,8 +626,9 @@ fromPersistValueError haskellType databaseType received = T.concat
 
 instance PersistField PgInterval where
     toPersistValue = PersistLiteralEscaped . pgIntervalToBs
-    fromPersistValue (PersistDbSpecific bs) = fromPersistValue (PersistLiteralEscaped bs)
-    fromPersistValue x@(PersistLiteralEscaped bs) =
+    fromPersistValue (PersistLiteral_ DbSpecific bs) =
+        fromPersistValue (PersistLiteralEscaped bs)
+    fromPersistValue x@(PersistLiteral_ Escaped bs) =
       case P.parseOnly (P.signed P.rational <* P.char 's' <* P.endOfInput) bs of
         Left _  -> Left $ fromPersistValueError "PgInterval" "Interval" x
         Right i -> Right $ PgInterval i
