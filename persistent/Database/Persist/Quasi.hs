@@ -543,7 +543,9 @@ preparse txt = do
     lns <- NEL.nonEmpty (T.lines txt)
     NEL.nonEmpty $ mapMaybe parseLine (NEL.toList lns)
 
--- TODO: refactor to return (Line' NonEmpty)
+-- TODO: refactor to return (Line' NonEmpty), made possible by
+-- https://github.com/yesodweb/persistent/pull/1206 but left out
+-- in order to minimize the diff
 parseLine :: Text -> Maybe Line
 parseLine txt =
     case tokenize txt of
