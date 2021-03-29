@@ -611,7 +611,7 @@ dataTypeDec mps entDef = do
     (nameFinal, paramsFinal)
         | mpsGeneric mps = (mkEntityDefGenericName entDef, [PlainTV backendName])
         | otherwise = (mkEntityDefName entDef, [])
-    cols = map (mkCol $ entityHaskell entDef) $ entityFields entDef
+    cols = map (mkCol entDef) $ entityFields entDef
 
     constrs
         | entitySum entDef = map sumCon $ entityFields entDef
@@ -835,7 +835,7 @@ mkLensClauses mps entDef = do
         [ConP (filterConName mps entDef f) []]
         (lens' `AppE` getter `AppE` setter)
       where
-        fieldName = mkRecName mps (entityHaskell entDef) (fieldHaskell f)
+        fieldName = mkRecName mps entDef (fieldHaskell f)
         getter = InfixE (Just $ VarE fieldName) dot (Just getVal)
         setter = LamE
             [ ConP 'Entity [VarP keyVar, VarP valName]
@@ -1114,7 +1114,7 @@ mkEntity entityMap mps entDef = do
                 recordName <- newName "record"
                 let keyCon = keyConName entDef
                     keyFields' =
-                        map (mkRecName mps entName . fieldHaskell)
+                        map (mkRecName mps entDef . fieldHaskell)
                             (compositeFields prim)
                     constr =
                         foldl'
@@ -1269,7 +1269,7 @@ mkLenses mps _ | not (mpsGenerateLenses mps) = return []
 mkLenses _ ent | entitySum ent = return []
 mkLenses mps ent = fmap mconcat $ forM (entityFields ent) $ \field -> do
     let lensName = mkName $ T.unpack $ recNameNoUnderscore mps (entityHaskell ent) (fieldHaskell field)
-        fieldName = mkRecName mps (entityHaskell ent) (fieldHaskell field)
+        fieldName = mkRecName mps ent (fieldHaskell field)
     needleN <- newName "needle"
     setterN <- newName "setter"
     fN <- newName "f"
@@ -1315,7 +1315,7 @@ mkLenses mps ent = fmap mconcat $ forM (entityFields ent) $ \field -> do
 mkForeignKeysComposite :: MkPersistSettings -> EntityDef -> ForeignDef -> Q [Dec]
 mkForeignKeysComposite mps entDef ForeignDef {..} =
     if not foreignToPrimary then return [] else do
-    let fieldName f = mkRecName mps (entityHaskell entDef) f
+    let fieldName f = mkRecName mps entDef f
     let fname = fieldName (constraintToField foreignConstraintNameHaskell)
     let reftableString = unpack $ unEntityNameHS foreignRefTableHaskell
     let reftableKeyName = mkName $ reftableString `mappend` "Key"
@@ -1960,8 +1960,8 @@ entityDefConE = ConE . mkEntityDefName
 --   name Text
 --
 -- This would generate `customerName` as a TH Name
-mkRecName :: MkPersistSettings -> EntityNameHS -> FieldNameHS -> Name
-mkRecName mps entName fieldName = mkName $ T.unpack $ recNameF mps entName fieldName
+mkRecName :: MkPersistSettings -> EntityDef -> FieldNameHS -> Name
+mkRecName mps entDef fieldName = mkName $ T.unpack $ recNameF mps (entityHaskell entDef) fieldName
 
 -- | Take an EntityDef's `entityDerives` and turn them into TH Names
 mkEntityDefDeriveNames :: EntityDef -> [Name]
