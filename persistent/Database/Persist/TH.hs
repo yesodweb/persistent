@@ -608,10 +608,10 @@ dataTypeDec mps entDef = do
 
     cols :: [VarBangType]
     cols = do
-        fd@FieldDef{..} <- entityFields entDef
-        let recordName = fieldNameToRecordName mps entDef fieldHaskell
-            strictness = if fieldStrict then isStrict else notStrict
-            fieldIdType = maybeIdType mps fd Nothing Nothing
+        fieldDef <- entityFields entDef
+        let recordName = fieldDefToRecordName mps entDef fieldDef
+            strictness = if fieldStrict fieldDef then isStrict else notStrict
+            fieldIdType = maybeIdType mps fieldDef Nothing Nothing
          in pure (recordName, strictness, fieldIdType)
 
     constrs
@@ -832,11 +832,11 @@ mkLensClauses mps entDef = do
         then return $ idClause : map (toSumClause lens' keyVar valName xName) (entityFields entDef)
         else return $ idClause : map (toClause lens' getVal dot keyVar valName xName) (entityFields entDef)
   where
-    toClause lens' getVal dot keyVar valName xName f = normalClause
-        [ConP (filterConName mps entDef f) []]
+    toClause lens' getVal dot keyVar valName xName fieldDef = normalClause
+        [ConP (filterConName mps entDef fieldDef) []]
         (lens' `AppE` getter `AppE` setter)
       where
-        fieldName = fieldNameToRecordName mps entDef (fieldHaskell f)
+        fieldName = fieldDefToRecordName mps entDef fieldDef
         getter = InfixE (Just $ VarE fieldName) dot (Just getVal)
         setter = LamE
             [ ConP 'Entity [VarP keyVar, VarP valName]
@@ -1114,9 +1114,7 @@ mkEntity entityMap mps entDef = do
             Just prim -> do
                 recordName <- newName "record"
                 let keyCon = keyConName entDef
-                    keyFields' =
-                        map (fieldNameToRecordName mps entDef . fieldHaskell)
-                            (compositeFields prim)
+                    keyFields' = fieldDefToRecordName mps entDef <$> compositeFields prim
                     constr =
                         foldl'
                             AppE
@@ -1270,7 +1268,7 @@ mkLenses mps _ | not (mpsGenerateLenses mps) = return []
 mkLenses _ ent | entitySum ent = return []
 mkLenses mps ent = fmap mconcat $ forM (entityFields ent) $ \field -> do
     let lensName = mkName $ T.unpack $ recNameNoUnderscore mps (entityHaskell ent) (fieldHaskell field)
-        fieldName = fieldNameToRecordName mps ent (fieldHaskell field)
+        fieldName = fieldDefToRecordName mps ent field
     needleN <- newName "needle"
     setterN <- newName "setter"
     fN <- newName "f"
@@ -1316,7 +1314,7 @@ mkLenses mps ent = fmap mconcat $ forM (entityFields ent) $ \field -> do
 mkForeignKeysComposite :: MkPersistSettings -> EntityDef -> ForeignDef -> Q [Dec]
 mkForeignKeysComposite mps entDef ForeignDef {..} =
     if not foreignToPrimary then return [] else do
-    let fieldName f = fieldNameToRecordName mps entDef f
+    let fieldName = fieldNameToRecordName mps entDef
     let fname = fieldName (constraintToField foreignConstraintNameHaskell)
     let reftableString = unpack $ unEntityNameHS foreignRefTableHaskell
     let reftableKeyName = mkName $ reftableString `mappend` "Key"
@@ -1964,6 +1962,10 @@ entityDefConE = ConE . mkEntityDefName
 fieldNameToRecordName :: MkPersistSettings -> EntityDef -> FieldNameHS -> Name
 fieldNameToRecordName mps entDef fieldName = mkName $ T.unpack $ recNameF mps (entityHaskell entDef) fieldName
 
+-- | as above, only takes a `FieldDef`
+fieldDefToRecordName :: MkPersistSettings -> EntityDef -> FieldDef -> Name
+fieldDefToRecordName mps entDef fieldDef = fieldNameToRecordName mps entDef (fieldHaskell fieldDef)
+
 -- | Construct a list of TH Names for the typeclasses of an EntityDef's `entityDerives`
 mkEntityDefDeriveNames :: MkPersistSettings -> EntityDef -> [Name]
 mkEntityDefDeriveNames mps entDef =
@@ -1972,13 +1974,14 @@ mkEntityDefDeriveNames mps entDef =
      in entityInstances <> additionalInstances
 
 -- | Make a TH Name for the EntityDef's Haskell type
-mkEntityDefName :: EntityDef -> Name
-mkEntityDefName =
-    mkEntityNameHSName . entityHaskell
-
 mkEntityNameHSName :: EntityNameHS -> Name
 mkEntityNameHSName =
     mkName . T.unpack . unEntityNameHS
+
+-- | As above only taking an `EntityDef`
+mkEntityDefName :: EntityDef -> Name
+mkEntityDefName =
+    mkEntityNameHSName . entityHaskell
 
 -- | Make a TH Name for the EntityDef's Haskell type, when using mpsGeneric
 mkEntityDefGenericName :: EntityDef -> Name
