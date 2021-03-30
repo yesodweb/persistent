@@ -97,3 +97,4 @@ executable conn-kill
       , bytestring
       , resource-pool
       , mtl
+    default-language: Haskell2010
