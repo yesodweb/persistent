@@ -1,6 +1,6 @@
 # Changelog for persistent
 
-## 2.12.0.1 (unreleased)
+## 2.12.0.1
 
 * Refactoring token parsing in quasi module [#1206](https://github.com/yesodweb/persistent/pull/1206)
 * Removing duplication from TH output [#1202](https://github.com/yesodweb/persistent/pull/1202)
