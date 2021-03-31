@@ -1,5 +1,9 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -23,6 +27,7 @@ module Database.Persist.Postgresql
     , ConnectionString
     , PostgresConf (..)
     , PgInterval (..)
+    , upsertWhere
     , openSimpleConn
     , openSimpleConnWithVersion
     , tableName
@@ -50,7 +55,7 @@ import Control.Monad
 import Control.Monad.Except
 import Control.Monad.IO.Unlift (MonadIO (..), MonadUnliftIO)
 import Control.Monad.Logger (MonadLoggerIO, runNoLoggingT)
-import Control.Monad.Trans.Reader (runReaderT)
+import Control.Monad.Trans.Reader (ReaderT(..), runReaderT)
 import Control.Monad.Trans.Writer (WriterT(..), runWriterT)
 
 import qualified Blaze.ByteString.Builder.Char8 as BBB
@@ -73,7 +78,7 @@ import Data.Function (on)
 import Data.Int (Int64)
 import qualified Data.IntMap as I
 import Data.IORef
-import Data.List (find, sort, groupBy, foldl')
+import Data.List (find, sort, groupBy, foldl', transpose, inits)
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List as List
 import qualified Data.List.NonEmpty as NEL
@@ -82,7 +87,7 @@ import Data.Maybe
 import Data.Monoid ((<>))
 import Data.Pool (Pool)
 import Data.String.Conversions.Monomorphic (toStrictByteString)
-import Data.Text (Text)
+import Data.Text (Text, pack)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.IO as T
@@ -91,6 +96,7 @@ import Data.Time (utc, NominalDiffTime, localTimeToUTC)
 import System.Environment (getEnvironment)
 
 import Database.Persist.Sql
+import Database.Persist.Sql.Util (isIdField)
 import qualified Database.Persist.Sql.Util as Util
 
 -- | A @libpq@ connection string.  A simple example of connection
@@ -396,7 +402,6 @@ insertSql' ent vals =
                 , ")"
                 ]
         ]
-
 
 upsertSql' :: EntityDef -> NonEmpty (FieldNameHS, FieldNameDB) -> Text -> Text
 upsertSql' ent uniqs updateVal =
@@ -1487,14 +1492,23 @@ tableName = escapeE . tableDBName
 fieldName :: (PersistEntity record) => EntityField record typ -> Text
 fieldName = escapeF . fieldDBName
 
+fieldName' ::  forall record typ. (PersistEntity record, PersistEntityBackend record ~ SqlBackend) => EntityField record typ -> FieldNameDB
+fieldName' f = fieldDB $ persistFieldDef f
+
 escapeC :: ConstraintNameDB -> Text
 escapeC = escapeWith escape
 
 escapeE :: EntityNameDB -> Text
 escapeE = escapeWith escape
 
+escapeES :: EntityNameDB -> String
+escapeES = escapeWith (escapeDBName . T.unpack)
+
 escapeF :: FieldNameDB -> Text
 escapeF = escapeWith escape
+
+escapeFS :: FieldNameDB -> String
+escapeFS = escapeWith (escapeDBName . T.unpack)
 
 escape :: Text -> Text
 escape s =
@@ -1503,6 +1517,14 @@ escape s =
     go "" = ""
     go ('"':xs) = "\"\"" ++ go xs
     go (x:xs) = x : go xs
+
+-- | Escape a database name to be included on a query.
+escapeDBName :: String -> String
+escapeDBName str = '`' : go str
+    where
+      go ('`':xs) = '`' : '`' : go xs
+      go ( x :xs) =     x     : go xs
+      go ""       = "`"
 
 -- | Information required to connect to a PostgreSQL database
 -- using @persistent@'s generic facilities.  These values are the
@@ -1737,6 +1759,292 @@ repsertManySql ent n = putManySql' conflictColumns fields ent n
   where
     fields = keyAndEntityFields ent
     conflictColumns = escapeF . fieldDB <$> entityKeyFields ent
+
+-- | This type is used to determine how to update rows using MySQL's
+-- @INSERT ... ON DUPLICATE KEY UPDATE@ functionality, exposed via
+-- 'insertManyOnDuplicateKeyUpdate' in this library.
+--
+-- @since 2.8.0
+data HandleUpdateCollision record where
+  -- | Copy the field directly from the record.
+  CopyField :: EntityField record typ -> HandleUpdateCollision record
+  -- | Only copy the field if it is not equal to the provided value.
+  CopyUnlessEq :: PersistField typ => EntityField record typ -> typ -> HandleUpdateCollision record
+
+-- | Postgres specific 'upsertWhere'. This will prevent multiple queries, when one will
+-- do. The record will be inserted into the database. In the event that the
+-- record already exists in the database, the record will have the
+-- relevant updates performed.
+upsertWhere
+  :: ( backend ~ PersistEntityBackend record
+     , PersistEntity record
+     , PersistEntityBackend record ~ SqlBackend
+     , MonadIO m
+     , PersistStore backend
+     , BackendCompatible SqlBackend backend
+     )
+  => record
+  -> SqlBackend
+  -> [Update record]
+  -> [Filter record]
+  -> ReaderT backend m ()
+upsertWhere record conn updates filts =
+  upsertManyWhere [record] conn [] updates filts
+
+upsertManyWhere ::
+  forall record backend m.
+  ( backend ~ PersistEntityBackend record,
+    BackendCompatible SqlBackend backend,
+    PersistEntityBackend record ~ SqlBackend,
+    PersistEntity record,
+    MonadIO m
+  ) =>
+  -- | A list of the records you want to insert, or update
+  [record] ->
+  SqlBackend ->
+  -- | A list of the fields you want to copy over.
+  [HandleUpdateCollision record] ->
+  -- | A list of the updates to apply that aren't dependent on the record being inserted.
+  [Update record] ->
+  [Filter record] ->
+  ReaderT backend m ()
+upsertManyWhere [] _ _ _ _ = return ()
+upsertManyWhere records conn fieldValues updates conditions =
+  uncurry rawExecute $
+    mkBulkUpsertQuery records conn fieldValues updates conditions
+
+-- | This creates the query for 'bulkInsertOnDuplicateKeyUpdate'. If you
+-- provide an empty list of updates to perform, then it will generate
+-- a dummy/no-op update using the first field of the record. This avoids
+-- duplicate key exceptions.
+mkBulkUpsertQuery
+    :: (PersistEntity record, PersistEntityBackend record ~ SqlBackend)
+    => [record] -- ^ A list of the records you want to insert, or update
+    -> SqlBackend
+    -> [HandleUpdateCollision record] -- ^ A list of the fields you want to copy over.
+    -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
+    -> [Filter record]
+    -> (Text, [PersistValue])
+mkBulkUpsertQuery records conn fieldValues updates filts =
+    (q, recordValues <> updsValues <> copyUnlessValues)
+  where
+    mfieldDef x = case x of
+        CopyField rec -> Right (fieldDbToText (persistFieldDef rec))
+        CopyUnlessEq rec val -> Left (fieldDbToText (persistFieldDef rec), toPersistValue val)
+    (fieldsToMaybeCopy, updateFieldNames) = partitionEithers $ map mfieldDef fieldValues
+    fieldDbToText = T.pack . escapeFS . fieldDB
+    entityDef' = entityDef records
+    firstField = case entityFieldNames of
+        [] -> error "The entity you're trying to insert does not have any fields."
+        (field:_) -> field
+    entityFieldNames = map fieldDbToText (entityFields entityDef')
+    nameOfTable = T.pack . escapeES . entityDB $ entityDef'
+    copyUnlessValues = map snd fieldsToMaybeCopy
+    recordValues = concatMap (map toPersistValue . toPersistFields) records
+    recordPlaceholders = Util.commaSeparated $ map (Util.parenWrapped . Util.commaSeparated . map (const "?") . toPersistFields) records
+    mkCondFieldSet n _ = T.concat
+        [ n
+        , "=COALESCE("
+        ,   "NULLIF("
+        ,     "VALUES(", n, "),"
+        ,     "?"
+        ,   "),"
+        ,   n
+        , ")"
+        ]
+    condFieldSets = map (uncurry mkCondFieldSet) fieldsToMaybeCopy
+    fieldSets = map (\n -> T.concat [n, "=VALUES(", n, ")"]) updateFieldNames
+    upds = map (Util.mkUpdateText' (pack . escapeFS) id) updates
+    updsValues = map (\(Update _ val _) -> toPersistValue val) updates
+    wher = if null filts then "" else filterClause False conn filts
+    updateText = case fieldSets <> upds <> condFieldSets of
+        [] -> T.concat [firstField, "=", firstField]
+        xs -> Util.commaSeparated xs
+    q = T.concat
+        [ "INSERT INTO "
+        , nameOfTable
+        , " ("
+        , Util.commaSeparated entityFieldNames
+        , ") "
+        , " VALUES "
+        , recordPlaceholders
+        , " ON CONFLICT DO UPDATE SET "
+        , updateText
+        , " WHERE "
+        , wher
+        ]
+
+filterClause :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
+             => Bool -- ^ include table name?
+             -> SqlBackend
+             -> [Filter val]
+             -> Text
+filterClause b c = fst . filterClauseHelper b True c OrNullNo
+
+filterClauseHelper :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
+             => Bool -- ^ include table name?
+             -> Bool -- ^ include WHERE?
+             -> SqlBackend
+             -> OrNull
+             -> [Filter val]
+             -> (Text, [PersistValue])
+filterClauseHelper includeTable includeWhere conn orNull filters =
+    (if not (T.null sql) && includeWhere
+        then " WHERE " <> sql
+        else sql, vals)
+  where
+    (sql, vals) = combineAND filters
+    combineAND = combine " AND "
+
+    combine s fs =
+        (T.intercalate s $ map wrapP a, mconcat b)
+      where
+        (a, b) = unzip $ map go fs
+        wrapP x = T.concat ["(", x, ")"]
+
+    go (BackendFilter _) = error "BackendFilter not expected"
+    go (FilterAnd []) = ("1=1", [])
+    go (FilterAnd fs) = combineAND fs
+    go (FilterOr []) = ("1=0", [])
+    go (FilterOr fs)  = combine " OR " fs
+    go (Filter field value pfilter) =
+        let t = entityDef $ dummyFromFilts [Filter field value pfilter]
+        in case (isIdField field, entityPrimary t, allVals) of
+                 (True, Just pdef, PersistList ys:_) ->
+                    if length (compositeFields pdef) /= length ys
+                       then error $ "wrong number of entries in compositeFields vs PersistList allVals=" ++ show allVals
+                    else
+                      case (allVals, pfilter, isCompFilter pfilter) of
+                        ([PersistList xs], Eq, _) ->
+                           let sqlcl=T.intercalate " and " (map (\a -> connEscapeFieldName conn (fieldDB a) <> showSqlFilter pfilter <> "? ")  (compositeFields pdef))
+                           in (wrapSql sqlcl,xs)
+                        ([PersistList xs], Ne, _) ->
+                           let sqlcl=T.intercalate " or " (map (\a -> connEscapeFieldName conn (fieldDB a) <> showSqlFilter pfilter <> "? ")  (compositeFields pdef))
+                           in (wrapSql sqlcl,xs)
+                        (_, In, _) ->
+                           let xxs = transpose (map fromPersistList allVals)
+                               sqls=map (\(a,xs) -> connEscapeFieldName conn (fieldDB a) <> showSqlFilter pfilter <> "(" <> T.intercalate "," (replicate (length xs) " ?") <> ") ") (zip (compositeFields pdef) xxs)
+                           in (wrapSql (T.intercalate " and " (map wrapSql sqls)), concat xxs)
+                        (_, NotIn, _) ->
+                           let xxs = transpose (map fromPersistList allVals)
+                               sqls=map (\(a,xs) -> connEscapeFieldName conn (fieldDB a) <> showSqlFilter pfilter <> "(" <> T.intercalate "," (replicate (length xs) " ?") <> ") ") (zip (compositeFields pdef) xxs)
+                           in (wrapSql (T.intercalate " or " (map wrapSql sqls)), concat xxs)
+                        ([PersistList xs], _, True) ->
+                           let zs = tail (inits (compositeFields pdef))
+                               sql1 = map (\b -> wrapSql (T.intercalate " and " (map (\(i,a) -> sql2 (i==length b) a) (zip [1..] b)))) zs
+                               sql2 islast a = connEscapeFieldName conn (fieldDB a) <> (if islast then showSqlFilter pfilter else showSqlFilter Eq) <> "? "
+                               sqlcl = T.intercalate " or " sql1
+                           in (wrapSql sqlcl, concat (tail (inits xs)))
+                        (_, BackendSpecificFilter _, _) -> error "unhandled type BackendSpecificFilter for composite/non id primary keys"
+                        _ -> error $ "unhandled type/filter for composite/non id primary keys pfilter=" ++ show pfilter ++ " persistList="++show allVals
+                 (True, Just pdef, []) ->
+                     error $ "empty list given as filter value filter=" ++ show pfilter ++ " persistList=" ++ show allVals ++ " pdef=" ++ show pdef
+                 (True, Just pdef, _) ->
+                     error $ "unhandled error for composite/non id primary keys filter=" ++ show pfilter ++ " persistList=" ++ show allVals ++ " pdef=" ++ show pdef
+
+                 _ ->   case (isNull, pfilter, length notNullVals) of
+                            (True, Eq, _) -> (name <> " IS NULL", [])
+                            (True, Ne, _) -> (name <> " IS NOT NULL", [])
+                            (False, Ne, _) -> (T.concat
+                                [ "("
+                                , name
+                                , " IS NULL OR "
+                                , name
+                                , " <> "
+                                , qmarks
+                                , ")"
+                                ], notNullVals)
+                            -- We use 1=2 (and below 1=1) to avoid using TRUE and FALSE, since
+                            -- not all databases support those words directly.
+                            (_, In, 0) -> ("1=2" <> orNullSuffix, [])
+                            (False, In, _) -> (name <> " IN " <> qmarks <> orNullSuffix, allVals)
+                            (True, In, _) -> (T.concat
+                                [ "("
+                                , name
+                                , " IS NULL OR "
+                                , name
+                                , " IN "
+                                , qmarks
+                                , ")"
+                                ], notNullVals)
+                            (False, NotIn, 0) -> ("1=1", [])
+                            (True, NotIn, 0) -> (name <> " IS NOT NULL", [])
+                            (False, NotIn, _) -> (T.concat
+                                [ "("
+                                , name
+                                , " IS NULL OR "
+                                , name
+                                , " NOT IN "
+                                , qmarks
+                                , ")"
+                                ], notNullVals)
+                            (True, NotIn, _) -> (T.concat
+                                [ "("
+                                , name
+                                , " IS NOT NULL AND "
+                                , name
+                                , " NOT IN "
+                                , qmarks
+                                , ")"
+                                ], notNullVals)
+                            _ -> (name <> showSqlFilter pfilter <> "?" <> orNullSuffix, allVals)
+
+      where
+        isCompFilter Lt = True
+        isCompFilter Le = True
+        isCompFilter Gt = True
+        isCompFilter Ge = True
+        isCompFilter _ =  False
+
+        wrapSql sqlcl = "(" <> sqlcl <> ")"
+        fromPersistList (PersistList xs) = xs
+        fromPersistList other = error $ "expected PersistList but found " ++ show other
+
+        filterValueToPersistValues :: forall a.  PersistField a => FilterValue a -> [PersistValue]
+        filterValueToPersistValues = \case
+            FilterValue a -> [toPersistValue a]
+            FilterValues as -> toPersistValue <$> as
+            UnsafeValue x -> [toPersistValue x]
+
+        orNullSuffix =
+            case orNull of
+                OrNullYes -> mconcat [" OR ", name, " IS NULL"]
+                OrNullNo -> ""
+
+        isNull = PersistNull `elem` allVals
+        notNullVals = filter (/= PersistNull) allVals
+        allVals = filterValueToPersistValues value
+        tn = connEscapeTableName conn $ entityDef $ dummyFromFilts [Filter field value pfilter]
+        name =
+            (if includeTable
+                then ((tn <> ".") <>)
+                else id)
+            $ connEscapeFieldName conn (fieldName' field)
+        qmarks = case value of
+                    FilterValue{} -> "(?)"
+                    UnsafeValue{} -> "(?)"
+                    FilterValues xs ->
+                        let parens a = "(" <> a <> ")"
+                            commas = T.intercalate ","
+                            toQs = fmap $ const "?"
+                            nonNulls = filter (/= PersistNull) $ map toPersistValue xs
+                         in parens . commas . toQs $ nonNulls
+        showSqlFilter Eq = "="
+        showSqlFilter Ne = "<>"
+        showSqlFilter Gt = ">"
+        showSqlFilter Lt = "<"
+        showSqlFilter Ge = ">="
+        showSqlFilter Le = "<="
+        showSqlFilter In = " IN "
+        showSqlFilter NotIn = " NOT IN "
+        showSqlFilter (BackendSpecificFilter s) = s
+
+data OrNull = OrNullYes | OrNullNo
+
+dummyFromFilts :: [Filter v] -> Maybe v
+dummyFromFilts _ = Nothing
+
+
 
 putManySql' :: [Text] -> [FieldDef] -> EntityDef -> Int -> Text
 putManySql' conflictColumns (filter isFieldNotGenerated -> fields) ent n = q
