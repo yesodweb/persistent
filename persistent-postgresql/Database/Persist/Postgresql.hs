@@ -28,6 +28,7 @@ module Database.Persist.Postgresql
     , PostgresConf (..)
     , PgInterval (..)
     , upsertWhere
+    , upsertManyWhere
     , openSimpleConn
     , openSimpleConnWithVersion
     , tableName
@@ -71,7 +72,7 @@ import qualified Data.ByteString.Char8 as B8
 import Data.Char (ord)
 import Data.Conduit
 import qualified Data.Conduit.List as CL
-import Data.Data
+import Data.Data ( Data, Typeable )
 import Data.Either (partitionEithers)
 import Data.Fixed (Fixed(..), Pico)
 import Data.Function (on)
@@ -1760,21 +1761,29 @@ repsertManySql ent n = putManySql' conflictColumns fields ent n
     fields = keyAndEntityFields ent
     conflictColumns = escapeF . fieldDB <$> entityKeyFields ent
 
--- | This type is used to determine how to update rows using MySQL's
--- @INSERT ... ON DUPLICATE KEY UPDATE@ functionality, exposed via
--- 'insertManyOnDuplicateKeyUpdate' in this library.
+-- | This type is used to determine how to update rows using Postgres'
+-- @INSERT ... ON CONFLICT KEY UPDATE@ functionality, exposed via
+-- 'upsertWhere' and 'upsertManyWhere' in this library.
 --
--- @since 2.8.0
+-- @since 2.12.0.1
 data HandleUpdateCollision record where
   -- | Copy the field directly from the record.
   CopyField :: EntityField record typ -> HandleUpdateCollision record
   -- | Only copy the field if it is not equal to the provided value.
   CopyUnlessEq :: PersistField typ => EntityField record typ -> typ -> HandleUpdateCollision record
 
--- | Postgres specific 'upsertWhere'. This will prevent multiple queries, when one will
--- do. The record will be inserted into the database. In the event that the
--- record already exists in the database, the record will have the
--- relevant updates performed.
+-- | Postgres specific 'upsertWhere'. This method does the following:
+-- It will insert a record if no matching unique key exists.
+-- If a unique key exists, it will update the relevant field with a user-supplied value, however,
+-- it will only do this update on a user-supplied condition.
+-- For example, here's how this method could be called like such:
+--
+-- upsertWhere record [recordField =. newValue] [recordField /= newValue]
+--
+-- Called thusly, this method will insert a new record (if none exists) OR update a recordField with a new value
+-- assuming the condition in the last block is met.
+-- 
+-- @since 2.12.0.1
 upsertWhere
   :: ( backend ~ PersistEntityBackend record
      , PersistEntity record
@@ -1791,6 +1800,18 @@ upsertWhere
 upsertWhere record conn updates filts =
   upsertManyWhere [record] conn [] updates filts
 
+-- | Postgres specific 'upsertManyWhere'. This method does the following:
+-- It will insert a record if no matching unique key exists.
+-- If a unique key exists, it will update the relevant field with a user-supplied value, however,
+-- it will only do this update on a user-supplied condition.
+-- For example, here's how this method could be called like such:
+--
+-- upsertManyWhere record [recordField =. newValue] [recordField /= newValue]
+--
+-- Called thusly, this method will insert a new record (if none exists) OR update a recordField with a new value
+-- assuming the condition in the last block is met.
+--
+-- -- @since 2.12.0.1
 upsertManyWhere ::
   forall record backend m.
   ( backend ~ PersistEntityBackend record,
@@ -1813,7 +1834,7 @@ upsertManyWhere records conn fieldValues updates conditions =
   uncurry rawExecute $
     mkBulkUpsertQuery records conn fieldValues updates conditions
 
--- | This creates the query for 'bulkInsertOnDuplicateKeyUpdate'. If you
+-- | This creates the query for 'upsertManyWhere'. If you
 -- provide an empty list of updates to perform, then it will generate
 -- a dummy/no-op update using the first field of the record. This avoids
 -- duplicate key exceptions.
@@ -2043,8 +2064,6 @@ data OrNull = OrNullYes | OrNullNo
 
 dummyFromFilts :: [Filter v] -> Maybe v
 dummyFromFilts _ = Nothing
-
-
 
 putManySql' :: [Text] -> [FieldDef] -> EntityDef -> Int -> Text
 putManySql' conflictColumns (filter isFieldNotGenerated -> fields) ent n = q
