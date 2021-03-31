@@ -88,7 +88,7 @@ import Data.Maybe
 import Data.Monoid ((<>))
 import Data.Pool (Pool)
 import Data.String.Conversions.Monomorphic (toStrictByteString)
-import Data.Text (Text, pack)
+import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.IO as T
@@ -1493,23 +1493,15 @@ tableName = escapeE . tableDBName
 fieldName :: (PersistEntity record) => EntityField record typ -> Text
 fieldName = escapeF . fieldDBName
 
-fieldName' ::  forall record typ. (PersistEntity record, PersistEntityBackend record ~ SqlBackend) => EntityField record typ -> FieldNameDB
-fieldName' f = fieldDB $ persistFieldDef f
-
 escapeC :: ConstraintNameDB -> Text
 escapeC = escapeWith escape
 
 escapeE :: EntityNameDB -> Text
 escapeE = escapeWith escape
 
-escapeES :: EntityNameDB -> String
-escapeES = escapeWith (escapeDBName . T.unpack)
-
 escapeF :: FieldNameDB -> Text
 escapeF = escapeWith escape
 
-escapeFS :: FieldNameDB -> String
-escapeFS = escapeWith (escapeDBName . T.unpack)
 
 escape :: Text -> Text
 escape s =
@@ -1518,14 +1510,6 @@ escape s =
     go "" = ""
     go ('"':xs) = "\"\"" ++ go xs
     go (x:xs) = x : go xs
-
--- | Escape a database name to be included on a query.
-escapeDBName :: String -> String
-escapeDBName str = '`' : go str
-    where
-      go ('`':xs) = '`' : '`' : go xs
-      go ( x :xs) =     x     : go xs
-      go ""       = "`"
 
 -- | Information required to connect to a PostgreSQL database
 -- using @persistent@'s generic facilities.  These values are the
@@ -1853,13 +1837,13 @@ mkBulkUpsertQuery records conn fieldValues updates filts =
         CopyField rec -> Right (fieldDbToText (persistFieldDef rec))
         CopyUnlessEq rec val -> Left (fieldDbToText (persistFieldDef rec), toPersistValue val)
     (fieldsToMaybeCopy, updateFieldNames) = partitionEithers $ map mfieldDef fieldValues
-    fieldDbToText = T.pack . escapeFS . fieldDB
+    fieldDbToText = escapeF . fieldDB
     entityDef' = entityDef records
     firstField = case entityFieldNames of
         [] -> error "The entity you're trying to insert does not have any fields."
         (field:_) -> field
     entityFieldNames = map fieldDbToText (entityFields entityDef')
-    nameOfTable = T.pack . escapeES . entityDB $ entityDef'
+    nameOfTable = escapeE . entityDB $ entityDef'
     copyUnlessValues = map snd fieldsToMaybeCopy
     recordValues = concatMap (map toPersistValue . toPersistFields) records
     recordPlaceholders = Util.commaSeparated $ map (Util.parenWrapped . Util.commaSeparated . map (const "?") . toPersistFields) records
@@ -1875,7 +1859,7 @@ mkBulkUpsertQuery records conn fieldValues updates filts =
         ]
     condFieldSets = map (uncurry mkCondFieldSet) fieldsToMaybeCopy
     fieldSets = map (\n -> T.concat [n, "=VALUES(", n, ")"]) updateFieldNames
-    upds = map (Util.mkUpdateText' (pack . escapeFS) id) updates
+    upds = map (Util.mkUpdateText' (escapeF) id) updates
     updsValues = map (\(Update _ val _) -> toPersistValue val) updates
     wher = if null filts then "" else filterClause False conn filts
     updateText = case fieldSets <> upds <> condFieldSets of
@@ -2040,7 +2024,7 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
             (if includeTable
                 then ((tn <> ".") <>)
                 else id)
-            $ connEscapeFieldName conn (fieldName' field)
+            $ (fieldName field)
         qmarks = case value of
                     FilterValue{} -> "(?)"
                     UnsafeValue{} -> "(?)"
