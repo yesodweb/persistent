@@ -267,7 +267,7 @@ wrapConnectionInfo connInfo conn logFunc = do
         Sqlite.reset conn stmt
         Sqlite.finalize stmt
 
-    smap <- newIORef $ Map.empty
+    smap <- makeSimpleStatementCache
     return $
         setConnMaxParams 999 $
         setConnPutManySql putManySql $
@@ -455,7 +455,7 @@ migrate' allDefs getter val = do
 -- with the difference that an actual database isn't needed for it.
 mockMigration :: Migration -> IO ()
 mockMigration mig = do
-    smap <- newIORef $ Map.empty
+    smap <- makeSimpleStatementCache
     let sqlbackend =
             setConnMaxParams 999 $
             mkSqlBackend MkSqlBackendArgs
