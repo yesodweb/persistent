@@ -79,7 +79,7 @@ import Data.Function (on)
 import Data.Int (Int64)
 import qualified Data.IntMap as I
 import Data.IORef
-import Data.List (find, sort, groupBy, foldl', transpose, inits)
+import Data.List (find, sort, groupBy, foldl')
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List as List
 import qualified Data.List.NonEmpty as NEL
@@ -97,7 +97,6 @@ import Data.Time (utc, NominalDiffTime, localTimeToUTC)
 import System.Environment (getEnvironment)
 
 import Database.Persist.Sql
-import Database.Persist.Sql.Util (isIdField)
 import qualified Database.Persist.Sql.Util as Util
 
 -- | A @libpq@ connection string.  A simple example of connection
@@ -1790,7 +1789,7 @@ upsertWhere record conn updates filts =
 -- it will only do this update on a user-supplied condition.
 -- For example, here's how this method could be called like such:
 --
--- upsertManyWhere record [recordField =. newValue] [recordField /= newValue]
+-- upsertManyWhere [record] [recordField =. newValue] [recordField /= newValue]
 --
 -- Called thusly, this method will insert a new record (if none exists) OR update a recordField with a new value
 -- assuming the condition in the last block is met.
@@ -1878,176 +1877,6 @@ mkBulkUpsertQuery records conn fieldValues updates filts =
         , " WHERE "
         , wher
         ]
-
-filterClause :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
-             => Bool -- ^ include table name?
-             -> SqlBackend
-             -> [Filter val]
-             -> Text
-filterClause b c = fst . filterClauseHelper b True c OrNullNo
-
-filterClauseHelper :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
-             => Bool -- ^ include table name?
-             -> Bool -- ^ include WHERE?
-             -> SqlBackend
-             -> OrNull
-             -> [Filter val]
-             -> (Text, [PersistValue])
-filterClauseHelper includeTable includeWhere conn orNull filters =
-    (if not (T.null sql) && includeWhere
-        then " WHERE " <> sql
-        else sql, vals)
-  where
-    (sql, vals) = combineAND filters
-    combineAND = combine " AND "
-
-    combine s fs =
-        (T.intercalate s $ map wrapP a, mconcat b)
-      where
-        (a, b) = unzip $ map go fs
-        wrapP x = T.concat ["(", x, ")"]
-
-    go (BackendFilter _) = error "BackendFilter not expected"
-    go (FilterAnd []) = ("1=1", [])
-    go (FilterAnd fs) = combineAND fs
-    go (FilterOr []) = ("1=0", [])
-    go (FilterOr fs)  = combine " OR " fs
-    go (Filter field value pfilter) =
-        let t = entityDef $ dummyFromFilts [Filter field value pfilter]
-        in case (isIdField field, entityPrimary t, allVals) of
-                 (True, Just pdef, PersistList ys:_) ->
-                    if length (compositeFields pdef) /= length ys
-                       then error $ "wrong number of entries in compositeFields vs PersistList allVals=" ++ show allVals
-                    else
-                      case (allVals, pfilter, isCompFilter pfilter) of
-                        ([PersistList xs], Eq, _) ->
-                           let sqlcl=T.intercalate " and " (map (\a -> connEscapeFieldName conn (fieldDB a) <> showSqlFilter pfilter <> "? ")  (compositeFields pdef))
-                           in (wrapSql sqlcl,xs)
-                        ([PersistList xs], Ne, _) ->
-                           let sqlcl=T.intercalate " or " (map (\a -> connEscapeFieldName conn (fieldDB a) <> showSqlFilter pfilter <> "? ")  (compositeFields pdef))
-                           in (wrapSql sqlcl,xs)
-                        (_, In, _) ->
-                           let xxs = transpose (map fromPersistList allVals)
-                               sqls=map (\(a,xs) -> connEscapeFieldName conn (fieldDB a) <> showSqlFilter pfilter <> "(" <> T.intercalate "," (replicate (length xs) " ?") <> ") ") (zip (compositeFields pdef) xxs)
-                           in (wrapSql (T.intercalate " and " (map wrapSql sqls)), concat xxs)
-                        (_, NotIn, _) ->
-                           let xxs = transpose (map fromPersistList allVals)
-                               sqls=map (\(a,xs) -> connEscapeFieldName conn (fieldDB a) <> showSqlFilter pfilter <> "(" <> T.intercalate "," (replicate (length xs) " ?") <> ") ") (zip (compositeFields pdef) xxs)
-                           in (wrapSql (T.intercalate " or " (map wrapSql sqls)), concat xxs)
-                        ([PersistList xs], _, True) ->
-                           let zs = tail (inits (compositeFields pdef))
-                               sql1 = map (\b -> wrapSql (T.intercalate " and " (map (\(i,a) -> sql2 (i==length b) a) (zip [1..] b)))) zs
-                               sql2 islast a = connEscapeFieldName conn (fieldDB a) <> (if islast then showSqlFilter pfilter else showSqlFilter Eq) <> "? "
-                               sqlcl = T.intercalate " or " sql1
-                           in (wrapSql sqlcl, concat (tail (inits xs)))
-                        (_, BackendSpecificFilter _, _) -> error "unhandled type BackendSpecificFilter for composite/non id primary keys"
-                        _ -> error $ "unhandled type/filter for composite/non id primary keys pfilter=" ++ show pfilter ++ " persistList="++show allVals
-                 (True, Just pdef, []) ->
-                     error $ "empty list given as filter value filter=" ++ show pfilter ++ " persistList=" ++ show allVals ++ " pdef=" ++ show pdef
-                 (True, Just pdef, _) ->
-                     error $ "unhandled error for composite/non id primary keys filter=" ++ show pfilter ++ " persistList=" ++ show allVals ++ " pdef=" ++ show pdef
-
-                 _ ->   case (isNull, pfilter, length notNullVals) of
-                            (True, Eq, _) -> (name <> " IS NULL", [])
-                            (True, Ne, _) -> (name <> " IS NOT NULL", [])
-                            (False, Ne, _) -> (T.concat
-                                [ "("
-                                , name
-                                , " IS NULL OR "
-                                , name
-                                , " <> "
-                                , qmarks
-                                , ")"
-                                ], notNullVals)
-                            -- We use 1=2 (and below 1=1) to avoid using TRUE and FALSE, since
-                            -- not all databases support those words directly.
-                            (_, In, 0) -> ("1=2" <> orNullSuffix, [])
-                            (False, In, _) -> (name <> " IN " <> qmarks <> orNullSuffix, allVals)
-                            (True, In, _) -> (T.concat
-                                [ "("
-                                , name
-                                , " IS NULL OR "
-                                , name
-                                , " IN "
-                                , qmarks
-                                , ")"
-                                ], notNullVals)
-                            (False, NotIn, 0) -> ("1=1", [])
-                            (True, NotIn, 0) -> (name <> " IS NOT NULL", [])
-                            (False, NotIn, _) -> (T.concat
-                                [ "("
-                                , name
-                                , " IS NULL OR "
-                                , name
-                                , " NOT IN "
-                                , qmarks
-                                , ")"
-                                ], notNullVals)
-                            (True, NotIn, _) -> (T.concat
-                                [ "("
-                                , name
-                                , " IS NOT NULL AND "
-                                , name
-                                , " NOT IN "
-                                , qmarks
-                                , ")"
-                                ], notNullVals)
-                            _ -> (name <> showSqlFilter pfilter <> "?" <> orNullSuffix, allVals)
-
-      where
-        isCompFilter Lt = True
-        isCompFilter Le = True
-        isCompFilter Gt = True
-        isCompFilter Ge = True
-        isCompFilter _ =  False
-
-        wrapSql sqlcl = "(" <> sqlcl <> ")"
-        fromPersistList (PersistList xs) = xs
-        fromPersistList other = error $ "expected PersistList but found " ++ show other
-
-        filterValueToPersistValues :: forall a.  PersistField a => FilterValue a -> [PersistValue]
-        filterValueToPersistValues = \case
-            FilterValue a -> [toPersistValue a]
-            FilterValues as -> toPersistValue <$> as
-            UnsafeValue x -> [toPersistValue x]
-
-        orNullSuffix =
-            case orNull of
-                OrNullYes -> mconcat [" OR ", name, " IS NULL"]
-                OrNullNo -> ""
-
-        isNull = PersistNull `elem` allVals
-        notNullVals = filter (/= PersistNull) allVals
-        allVals = filterValueToPersistValues value
-        tn = connEscapeTableName conn $ entityDef $ dummyFromFilts [Filter field value pfilter]
-        name =
-            (if includeTable
-                then ((tn <> ".") <>)
-                else id)
-            $ (fieldName field)
-        qmarks = case value of
-                    FilterValue{} -> "(?)"
-                    UnsafeValue{} -> "(?)"
-                    FilterValues xs ->
-                        let parens a = "(" <> a <> ")"
-                            commas = T.intercalate ","
-                            toQs = fmap $ const "?"
-                            nonNulls = filter (/= PersistNull) $ map toPersistValue xs
-                         in parens . commas . toQs $ nonNulls
-        showSqlFilter Eq = "="
-        showSqlFilter Ne = "<>"
-        showSqlFilter Gt = ">"
-        showSqlFilter Lt = "<"
-        showSqlFilter Ge = ">="
-        showSqlFilter Le = "<="
-        showSqlFilter In = " IN "
-        showSqlFilter NotIn = " NOT IN "
-        showSqlFilter (BackendSpecificFilter s) = s
-
-data OrNull = OrNullYes | OrNullNo
-
-dummyFromFilts :: [Filter v] -> Maybe v
-dummyFromFilts _ = Nothing
 
 putManySql' :: [Text] -> [FieldDef] -> EntityDef -> Int -> Text
 putManySql' conflictColumns (filter isFieldNotGenerated -> fields) ent n = q

@@ -6,6 +6,8 @@
 module Database.Persist.Sql.Orphan.PersistQuery
     ( deleteWhereCount
     , updateWhereCount
+    , filterClause
+    , filterClauseHelper
     , decorateSQLWithLimitOffset
     ) where
 

@@ -12,6 +12,8 @@ module Database.Persist.Sql
     , rawSql
     , deleteWhereCount
     , updateWhereCount
+    , filterClause
+    , filterClauseHelper
     , transactionSave
     , transactionSaveWithIsolation
     , transactionUndo
