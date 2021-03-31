@@ -9,7 +9,6 @@ import Control.Monad.Trans.Resource (MonadResource,release)
 import Data.Acquire (allocateAcquire, Acquire, mkAcquire, with)
 import Data.Conduit
 import Data.IORef (writeIORef, readIORef, newIORef)
-import qualified Data.Map as Map
 import Data.Int (Int64)
 import Data.Text (Text, pack)
 import qualified Data.Text as T
@@ -19,6 +18,7 @@ import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal
 import Database.Persist.SqlBackend.Internal
 import Database.Persist.Sql.Class
+import Database.Persist.Sql.Types.Internal (statementCacheLookup, StatementCache (statementCacheInsert))
 
 rawQuery :: (MonadResource m, MonadReader env m, BackendCompatible SqlBackend env)
          => Text
@@ -76,8 +76,8 @@ getStmt sql = do
 
 getStmtConn :: SqlBackend -> Text -> IO Statement
 getStmtConn conn sql = do
-    smap <- liftIO $ readIORef $ connStmtMap conn
-    case Map.lookup sql smap of
+    smap <- liftIO $ statementCacheLookup (connStmtMap conn) sql
+    case smap of
         Just stmt -> connStatementMiddleware conn sql stmt
         Nothing -> do
             stmt' <- liftIO $ connPrepare conn sql
@@ -101,7 +101,7 @@ getStmtConn conn sql = do
                             then stmtQuery stmt' x
                             else liftIO $ throwIO $ StatementAlreadyFinalized sql
                     }
-            liftIO $ writeIORef (connStmtMap conn) $ Map.insert sql stmt smap
+            liftIO $ statementCacheInsert (connStmtMap conn) sql stmt
             connStatementMiddleware conn sql stmt
 
 -- | Execute a raw SQL statement and return its results as a

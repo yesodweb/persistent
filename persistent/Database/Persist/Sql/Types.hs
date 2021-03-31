@@ -6,6 +6,8 @@ module Database.Persist.Sql.Types
     , SqlBackendCanRead, SqlBackendCanWrite, SqlReadT, SqlWriteT, IsSqlBackend
     , OverflowNatural(..)
     , ConnectionPoolConfig(..)
+    , StatementCache(..)
+    , makeSimpleStatementCache
     ) where
 
 import Database.Persist.Types.Base (FieldCascade)

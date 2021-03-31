@@ -14,6 +14,7 @@ import Data.String
 import Data.Text (Text)
 import Database.Persist.Class.PersistStore
 import Database.Persist.SqlBackend.Internal.Statement
+import Database.Persist.SqlBackend.Internal.StatementCache
 import Database.Persist.SqlBackend.Internal.InsertSqlResult
 import Database.Persist.SqlBackend.Internal.IsolationLevel
 import Database.Persist.Types.Base
@@ -34,7 +35,7 @@ data MkSqlBackendArgs = MkSqlBackendArgs
     , connInsertSql :: EntityDef -> [PersistValue] -> InsertSqlResult
     -- ^ This function generates the SQL and values necessary for
     -- performing an insert against the database.
-    , connStmtMap :: IORef (Map Text Statement)
+    , connStmtMap :: InternalStatementCache
     -- ^ A reference to the cache of statements. 'Statement's are keyed by
     -- the 'Text' queries that generated them.
     , connClose :: IO ()
