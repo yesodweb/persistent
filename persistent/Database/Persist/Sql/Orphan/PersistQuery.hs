@@ -7,7 +7,6 @@ module Database.Persist.Sql.Orphan.PersistQuery
     ( deleteWhereCount
     , updateWhereCount
     , decorateSQLWithLimitOffset
-    , filterClauseHelper
     ) where
 
 import Control.Exception (throwIO)
