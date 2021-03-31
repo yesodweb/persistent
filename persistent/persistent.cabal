@@ -32,7 +32,7 @@ library
                    , resourcet                >= 1.1.10
                    , scientific
                    , silently
-                   , template-haskell         >= 2.11
+                   , template-haskell         >= 2.11 && < 2.17
                    , text                     >= 1.2
                    , time                     >= 1.6
                    , transformers             >= 0.5
