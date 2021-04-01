@@ -654,9 +654,15 @@ instance A.ToJSON PersistValue where
     toJSON PersistNull = A.Null
     toJSON (PersistList l) = A.Array $ V.fromList $ map A.toJSON l
     toJSON (PersistMap m) = A.object $ map (second A.toJSON) m
-    toJSON (PersistDbSpecific b) = A.String $ T.cons 'p' $ TE.decodeUtf8 $ B64.encode b
-    toJSON (PersistLiteral b) = A.String $ T.cons 'l' $ TE.decodeUtf8 $ B64.encode b
-    toJSON (PersistLiteralEscaped b) = A.String $ T.cons 'e' $ TE.decodeUtf8 $ B64.encode b
+    toJSON (PersistLiteral_ litTy b) =
+        let encoded = B64.encode b
+            prefix =
+                case litTy of
+                    DbSpecific -> 'p'
+                    Unescaped -> 'l'
+                    Escaped -> 'e'
+         in
+            A.string $ A.String $ T.cons prefix encoded
     toJSON (PersistArray a) = A.Array $ V.fromList $ map A.toJSON a
     toJSON (PersistObjectId o) =
       A.toJSON $ showChar 'o' $ showHexLen 8 (bs2i four) $ showHexLen 16 (bs2i eight) ""
