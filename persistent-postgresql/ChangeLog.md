@@ -1,6 +1,6 @@
 # Changelog for persistent-postgresql
 
-## 2.12.0.1
+## 2.12.1.0
 
 * Added `upsertWhere` and `upsertManyWhere` to `persistent-postgresql`.  [#1222](https://github.com/yesodweb/persistent/pull/1222).
 

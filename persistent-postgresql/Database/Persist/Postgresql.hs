@@ -56,7 +56,7 @@ import Control.Monad
 import Control.Monad.Except
 import Control.Monad.IO.Unlift (MonadIO (..), MonadUnliftIO)
 import Control.Monad.Logger (MonadLoggerIO, runNoLoggingT)
-import Control.Monad.Trans.Reader (ReaderT(..), runReaderT)
+import Control.Monad.Trans.Reader (ReaderT(..), runReaderT, asks)
 import Control.Monad.Trans.Writer (WriterT(..), runWriterT)
 
 import qualified Blaze.ByteString.Builder.Char8 as BBB
@@ -1776,12 +1776,11 @@ upsertWhere
      , BackendCompatible SqlBackend backend
      )
   => record
-  -> SqlBackend
   -> [Update record]
   -> [Filter record]
   -> ReaderT backend m ()
-upsertWhere record conn updates filts =
-  upsertManyWhere [record] conn [] updates filts
+upsertWhere record updates filts =
+  upsertManyWhere [record] [] updates filts
 
 -- | Postgres specific 'upsertManyWhere'. This method does the following:
 -- It will insert a record if no matching unique key exists.
@@ -1805,15 +1804,15 @@ upsertManyWhere ::
   ) =>
   -- | A list of the records you want to insert, or update
   [record] ->
-  SqlBackend ->
   -- | A list of the fields you want to copy over.
   [HandleUpdateCollision record] ->
   -- | A list of the updates to apply that aren't dependent on the record being inserted.
   [Update record] ->
   [Filter record] ->
   ReaderT backend m ()
-upsertManyWhere [] _ _ _ _ = return ()
-upsertManyWhere records conn fieldValues updates conditions =
+upsertManyWhere [] _ _ _ = return ()
+upsertManyWhere records fieldValues updates conditions = do
+  conn <- asks projectBackend
   uncurry rawExecute $
     mkBulkUpsertQuery records conn fieldValues updates conditions
 
@@ -1829,7 +1828,7 @@ mkBulkUpsertQuery
     -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
     -> [Filter record]
     -> (Text, [PersistValue])
-mkBulkUpsertQuery records conn fieldValues updates filts =
+mkBulkUpsertQuery records conn fieldValues updates filts = 
     (q, recordValues <> updsValues <> copyUnlessValues)
   where
     mfieldDef x = case x of
