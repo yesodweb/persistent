@@ -23,7 +23,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-          --continue-on-error
       # mysql-service Label used to access the service container
       mysql-service:
         # Docker Hub image (also with version)
@@ -57,6 +56,7 @@ jobs:
     env:
       CONFIG: "--enable-tests"
     steps:
+      - continue-on-error: true
       - uses: actions/checkout@v2
       - uses: actions/setup-haskell@v1.1.4
         id: setup-haskell-cabal
