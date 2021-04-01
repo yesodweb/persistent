@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## 2.12.0.2
+
+* [#1123](https://github.com/yesodweb/persistent/pull/1223)
+    * Fix JSON encoding for `PersistValue`
+
 ## 2.12.0.1
 
 * Refactoring token parsing in quasi module [#1206](https://github.com/yesodweb/persistent/pull/1206)

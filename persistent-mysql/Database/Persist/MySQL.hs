@@ -320,7 +320,7 @@ getGetter field = go (MySQLBase.fieldType field)
     -- Controversial conversions
     go MySQLBase.Set        _ _  = convertPV PersistText
     go MySQLBase.Enum       _ _  = convertPV PersistText
-    -- Conversion using PersistDbSpecific
+    -- Conversion using PersistLiteral
     go MySQLBase.Geometry   _ _  = \_ m ->
       case m of
         Just g -> PersistLiteral g
