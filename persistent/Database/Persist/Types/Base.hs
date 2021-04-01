@@ -637,9 +637,7 @@ fromPersistValueText (PersistList _) = Left "Cannot convert PersistList to Text"
 fromPersistValueText (PersistMap _) = Left "Cannot convert PersistMap to Text"
 fromPersistValueText (PersistObjectId _) = Left "Cannot convert PersistObjectId to Text"
 fromPersistValueText (PersistArray _) = Left "Cannot convert PersistArray to Text"
-fromPersistValueText (PersistDbSpecific _) = Left "Cannot convert PersistDbSpecific to Text"
-fromPersistValueText (PersistLiteral _) = Left "Cannot convert PersistLiteral to Text"
-fromPersistValueText (PersistLiteralEscaped _) = Left "Cannot convert PersistLiteralEscaped to Text"
+fromPersistValueText (PersistLiteral_ _ _) = Left "Cannot convert PersistLiteral to Text"
 
 instance A.ToJSON PersistValue where
     toJSON (PersistText t) = A.String $ T.cons 's' t
@@ -655,14 +653,14 @@ instance A.ToJSON PersistValue where
     toJSON (PersistList l) = A.Array $ V.fromList $ map A.toJSON l
     toJSON (PersistMap m) = A.object $ map (second A.toJSON) m
     toJSON (PersistLiteral_ litTy b) =
-        let encoded = B64.encode b
+        let encoded = TE.decodeUtf8 $ B64.encode b
             prefix =
                 case litTy of
                     DbSpecific -> 'p'
                     Unescaped -> 'l'
                     Escaped -> 'e'
          in
-            A.string $ A.String $ T.cons prefix encoded
+            A.String $ T.cons prefix encoded
     toJSON (PersistArray a) = A.Array $ V.fromList $ map A.toJSON a
     toJSON (PersistObjectId o) =
       A.toJSON $ showChar 'o' $ showHexLen 8 (bs2i four) $ showHexLen 16 (bs2i eight) ""
