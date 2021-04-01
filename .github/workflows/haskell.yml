@@ -23,6 +23,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+          --continue-on-error
       # mysql-service Label used to access the service container
       mysql-service:
         # Docker Hub image (also with version)
