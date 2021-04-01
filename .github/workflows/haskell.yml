@@ -56,10 +56,10 @@ jobs:
     env:
       CONFIG: "--enable-tests"
     steps:
-      - continue-on-error: true
       - uses: actions/checkout@v2
       - uses: actions/setup-haskell@v1.1.4
         id: setup-haskell-cabal
+        continue-on-error: true
         with:
           ghc-version: ${{ matrix.ghc }}
           cabal-version: ${{ matrix.cabal }}
