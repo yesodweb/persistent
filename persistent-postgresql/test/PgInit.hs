@@ -56,7 +56,7 @@ import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
 import Test.QuickCheck
 
 import Control.Monad (unless, (>=>))
-import Control.Monad.IO.Class
+
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
@@ -110,7 +110,7 @@ runConnInternal connType f = do
       pure "host=localhost port=5432 user=perstest password=perstest dbname=persistent"
     else do
       host <- fromMaybe "localhost" <$> liftIO dockerPg
-      pure ("host=" <> host <> " port=5432 user=postgres dbname=test")
+      pure ("host=" <> host <> " port=5432 user=postgres dbname=test-dylan")
 
   flip runLoggingT (\_ _ _ s -> printDebug s) $ do
     logInfoN (if travis then "Running in CI" else "CI not detected")

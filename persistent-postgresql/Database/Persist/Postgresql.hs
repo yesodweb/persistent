@@ -5,6 +5,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
@@ -26,6 +27,12 @@ module Database.Persist.Postgresql
     , module Database.Persist.Sql
     , ConnectionString
     , HandleUpdateCollision
+    , pattern SomeField
+    , SomeField
+    , copyField
+    , copyUnlessNull
+    , copyUnlessEmpty
+    , copyUnlessEq
     , PostgresConf (..)
     , PgInterval (..)
     , upsertWhere
@@ -87,6 +94,7 @@ import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
 import Data.Maybe
 import Data.Monoid ((<>))
+import qualified Data.Monoid as Monoid
 import Data.Pool (Pool)
 import Data.String.Conversions.Monomorphic (toStrictByteString)
 import Data.Text (Text)
@@ -1755,6 +1763,52 @@ data HandleUpdateCollision record where
   CopyField :: EntityField record typ -> HandleUpdateCollision record
   -- | Only copy the field if it is not equal to the provided value.
   CopyUnlessEq :: PersistField typ => EntityField record typ -> typ -> HandleUpdateCollision record
+
+-- | An alias for 'HandleUpdateCollision'. The type previously was only
+-- used to copy a single value, but was expanded to be handle more complex
+-- queries.
+--
+-- @since 2.6.2
+type SomeField = HandleUpdateCollision
+
+pattern SomeField :: EntityField record typ -> SomeField record
+pattern SomeField x = CopyField x
+{-# DEPRECATED SomeField "The type SomeField is deprecated. Use the type HandleUpdateCollision instead, and use the function copyField instead of the data constructor." #-}
+
+-- | Copy the field into the database only if the value in the
+-- corresponding record is non-@NULL@.
+--
+-- @since  2.6.2
+copyUnlessNull :: PersistField typ => EntityField record (Maybe typ) -> HandleUpdateCollision record
+copyUnlessNull field = CopyUnlessEq field Nothing
+
+-- | Copy the field into the database only if the value in the
+-- corresponding record is non-empty, where "empty" means the Monoid
+-- definition for 'mempty'. Useful for 'Text', 'String', 'ByteString', etc.
+--
+-- The resulting 'HandleUpdateCollision' type is useful for the
+-- 'insertManyOnDuplicateKeyUpdate' function.
+--
+-- @since  2.6.2
+copyUnlessEmpty :: (Monoid.Monoid typ, PersistField typ) => EntityField record typ -> HandleUpdateCollision record
+copyUnlessEmpty field = CopyUnlessEq field Monoid.mempty
+
+-- | Copy the field into the database only if the field is not equal to the
+-- provided value. This is useful to avoid copying weird nullary data into
+-- the database.
+--
+-- The resulting 'HandleUpdateCollision' type is useful for the
+-- 'insertManyOnDuplicateKeyUpdate' function.
+--
+-- @since  2.6.2
+copyUnlessEq :: PersistField typ => EntityField record typ -> typ -> HandleUpdateCollision record
+copyUnlessEq = CopyUnlessEq
+
+-- | Copy the field directly from the record.
+--
+-- @since 3.0
+copyField :: PersistField typ => EntityField record typ -> HandleUpdateCollision record
+copyField = CopyField
 
 -- | Postgres specific 'upsertWhere'. This method does the following:
 -- It will insert a record if no matching unique key exists.
