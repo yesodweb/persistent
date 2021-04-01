@@ -59,7 +59,6 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-haskell@v1.1.4
         id: setup-haskell-cabal
-        continue-on-error: true
         with:
           ghc-version: ${{ matrix.ghc }}
           cabal-version: ${{ matrix.cabal }}
@@ -83,4 +82,5 @@ jobs:
       - run: cabal v2-build all --disable-optimization $CONFIG
       - run: cabal v2-test all --disable-optimization $CONFIG
       - run: cabal v2-haddock all $CONFIG
+        continue-on-error: true
       - run: cabal v2-sdist all
