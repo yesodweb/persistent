@@ -25,6 +25,7 @@ module Database.Persist.Postgresql
     , createPostgresqlPoolWithConf
     , module Database.Persist.Sql
     , ConnectionString
+    , HandleUpdateCollision
     , PostgresConf (..)
     , PgInterval (..)
     , upsertWhere
