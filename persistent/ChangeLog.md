@@ -2,7 +2,7 @@
 
 ## 2.12.0.2
 
-* [#]()
+* [#1123](https://github.com/yesodweb/persistent/pull/1223)
     * Fix JSON encoding for `PersistValue`
 
 ## 2.12.0.1
