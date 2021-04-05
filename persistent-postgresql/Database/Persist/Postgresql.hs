@@ -147,7 +147,7 @@ withPostgresqlPool ci = withPostgresqlPoolWithVersion getServerVersion ci
 -- | Same as 'withPostgresPool', but takes a callback for obtaining
 -- the server version (to work around an Amazon Redshift bug).
 --
--- @since 2.12.1
+-- @since 2.6.2
 withPostgresqlPoolWithVersion :: (MonadUnliftIO m, MonadLoggerIO m)
                               => (PG.Connection -> IO (Maybe Double))
                               -- ^ Action to perform to get the server version.
@@ -213,7 +213,7 @@ createPostgresqlPoolModified = createPostgresqlPoolModifiedWithVersion getServer
 -- the server version (to work around an Amazon Redshift bug) and connection-specific tweaking
 -- (to change the schema).
 --
--- @since 2.12.1
+-- @since 2.6.2
 createPostgresqlPoolModifiedWithVersion
     :: (MonadUnliftIO m, MonadLoggerIO m)
     => (PG.Connection -> IO (Maybe Double)) -- ^ Action to perform to get the server version.
@@ -257,7 +257,7 @@ withPostgresqlConn = withPostgresqlConnWithVersion getServerVersion
 -- | Same as 'withPostgresqlConn', but takes a callback for obtaining
 -- the server version (to work around an Amazon Redshift bug).
 --
--- @since 2.12.1
+-- @since 2.6.2
 withPostgresqlConnWithVersion :: (MonadUnliftIO m, MonadLoggerIO m)
                               => (PG.Connection -> IO (Maybe Double))
                               -> ConnectionString
