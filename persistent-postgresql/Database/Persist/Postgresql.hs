@@ -100,7 +100,6 @@ import qualified Data.Text.Encoding as T
 import qualified Data.Text.IO as T
 import Data.Text.Read (rational)
 import Data.Time (utc, NominalDiffTime, localTimeToUTC)
-import Debug.Trace
 import System.Environment (getEnvironment)
 
 import Database.Persist.Sql
@@ -1873,7 +1872,7 @@ mkBulkUpsertQuery
     -> [Filter record]
     -> (Text, [PersistValue])
 mkBulkUpsertQuery records conn fieldValues updates filters =
-  (q, recordValues <> updsValues <> copyUnlessValues)
+  (q, recordValues <> updsValues <> copyUnlessValues <> whereVals)
   where
     mfieldDef x = case x of
         CopyField rec -> Right (fieldDbToText (persistFieldDef rec))
@@ -1889,12 +1888,25 @@ mkBulkUpsertQuery records conn fieldValues updates filters =
     copyUnlessValues = map snd fieldsToMaybeCopy
     recordValues = concatMap (map toPersistValue . toPersistFields) records
     recordPlaceholders = Util.commaSeparated $ map (Util.parenWrapped . Util.commaSeparated . map (const "?") . toPersistFields) records
-    mkCondFieldSet n _ = T.concat [n, "=EXCLUDED.", n]
+    mkCondFieldSet n _ =
+      T.concat
+        [ n
+            ,"=COALESCE("
+              ,"NULLIF("
+                ,"EXCLUDED."
+                  ,n
+                ,","
+              ,"?"
+            ,")"
+          ,")"
+        ]
     condFieldSets = map (uncurry mkCondFieldSet) fieldsToMaybeCopy
     fieldSets = map (\n -> T.concat [n, "=EXCLUDED.", n, ""]) updateFieldNames
     upds = map (Util.mkPostgresUpdateText (escapeF) id) updates
     updsValues = map (\(Update _ val _) -> toPersistValue val) updates
-    wher = if null filters then "" else filterClause False conn filters
+    (wher, whereVals) = if null filters 
+                          then ("", [])
+                          else (filterClauseWithVals False conn filters)
     updateText = case fieldSets <> upds <> condFieldSets of
         [] -> T.concat [firstField, "=EXCLUDED.", firstField]
         xs -> Util.commaSeparated xs

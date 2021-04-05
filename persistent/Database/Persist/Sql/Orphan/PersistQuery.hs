@@ -8,6 +8,7 @@ module Database.Persist.Sql.Orphan.PersistQuery
     , updateWhereCount
     , filterClause
     , filterClauseHelper
+    , filterClauseWithVals
     , decorateSQLWithLimitOffset
     ) where
 
@@ -227,18 +228,19 @@ dummyFromFilts _ = Nothing
 
 getFiltsValues :: forall val. (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
                => SqlBackend -> [Filter val] -> [PersistValue]
-getFiltsValues conn = snd . filterClauseHelper False False conn OrNullNo
+getFiltsValues conn = snd . filterClauseHelper False False False conn OrNullNo
 
 data OrNull = OrNullYes | OrNullNo
 
 filterClauseHelper :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
              => Bool -- ^ include table name?
              -> Bool -- ^ include WHERE?
+             -> Bool -- ^ use postgresl EXCLUDE
              -> SqlBackend
              -> OrNull
              -> [Filter val]
              -> (Text, [PersistValue])
-filterClauseHelper includeTable includeWhere conn orNull filters =
+filterClauseHelper includeTable includeWhere includeExcluded conn orNull filters =
     (if not (T.null sql) && includeWhere
         then " WHERE " <> sql
         else sql, vals)
@@ -337,7 +339,12 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
                                 , qmarks
                                 , ")"
                                 ], notNullVals)
-                            _ -> (name <> showSqlFilter pfilter <> "?" <> orNullSuffix, allVals)
+                            _ -> (T.concat 
+                                [
+                                  if includeExcluded then "EXCLUDED." else ""
+                                  , name
+                                   <> showSqlFilter pfilter <> "?" <> orNullSuffix
+                                ], allVals)
 
       where
         isCompFilter Lt = True
@@ -394,7 +401,14 @@ filterClause :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
              -> SqlBackend
              -> [Filter val]
              -> Text
-filterClause b c = fst . filterClauseHelper b True c OrNullNo
+filterClause b c = fst . filterClauseHelper b True False c OrNullNo
+
+filterClauseWithVals :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
+             => Bool -- ^ include table name?
+             -> SqlBackend
+             -> [Filter val]
+             -> (Text, [PersistValue])
+filterClauseWithVals b c  = filterClauseHelper b True True c OrNullNo
 
 orderClause :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
             => Bool -- ^ include the table name

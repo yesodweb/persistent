@@ -96,7 +96,6 @@ specs = describe "UpsertWhere" $ do
         []
       dbItems <- sort . fmap entityVal <$> selectList [] []
       dbItems @== sort (newItem : items)
-    -- TODO: this test doesn't pass
     it "inserts without modifying existing records if no updates specified and there's a filter" $
       runConnAssert $ do
         let newItem = Item "item3" "hi friends!" Nothing Nothing
