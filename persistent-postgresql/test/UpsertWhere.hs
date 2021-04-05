@@ -15,7 +15,7 @@ import Data.List              (sort)
 import Database.Persist.Postgresql
 import PgInit
 
-share [mkPersist sqlSettings, mkMigrate "upsertMigrate"] [persistLowerCase|
+share [mkPersist sqlSettings, mkMigrate "upsertWhereMigrate"] [persistLowerCase|
   Item
      name        Text sqltype=varchar(80)
      description Text
@@ -70,6 +70,7 @@ specs = describe "UpsertWhere" $ do
         []
         [ItemQuantity +=. Just 1]
         []
+    -- TODO: this test doesn't pass
     it "only copies passing values" $ runConnAssert $ do
       deleteWhere ([] :: [Filter Item])
       insertMany_ items
@@ -95,3 +96,16 @@ specs = describe "UpsertWhere" $ do
         []
       dbItems <- sort . fmap entityVal <$> selectList [] []
       dbItems @== sort (newItem : items)
+    -- TODO: this test doesn't pass
+    it "inserts without modifying existing records if no updates specified and there's a filter" $
+      runConnAssert $ do
+        let newItem = Item "item3" "hi friends!" Nothing Nothing
+        deleteWhere ([] :: [Filter Item])
+        insertMany_ items
+        upsertManyWhere
+          (newItem : items)
+          []
+          []
+          [ItemDescription ==. "hi friends!"]
+        dbItems <- sort . fmap entityVal <$> selectList [] []
+        dbItems @== sort (newItem : items)

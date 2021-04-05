@@ -96,13 +96,14 @@ import Data.Maybe
 import Data.Monoid ((<>))
 import qualified Data.Monoid as Monoid
 import Data.Pool (Pool)
-import Data.String.Conversions.Monomorphic (toStrictByteString)
+import Data.String.Conversions.Monomorphic (toStrictByteString, toString)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.IO as T
 import Data.Text.Read (rational)
 import Data.Time (utc, NominalDiffTime, localTimeToUTC)
+import Debug.Trace
 import System.Environment (getEnvironment)
 
 import Database.Persist.Sql
@@ -146,7 +147,7 @@ withPostgresqlPool ci = withPostgresqlPoolWithVersion getServerVersion ci
 -- | Same as 'withPostgresPool', but takes a callback for obtaining
 -- the server version (to work around an Amazon Redshift bug).
 --
--- @since 2.6.2
+-- @since 2.12.1
 withPostgresqlPoolWithVersion :: (MonadUnliftIO m, MonadLoggerIO m)
                               => (PG.Connection -> IO (Maybe Double))
                               -- ^ Action to perform to get the server version.
@@ -212,7 +213,7 @@ createPostgresqlPoolModified = createPostgresqlPoolModifiedWithVersion getServer
 -- the server version (to work around an Amazon Redshift bug) and connection-specific tweaking
 -- (to change the schema).
 --
--- @since 2.6.2
+-- @since 2.12.1
 createPostgresqlPoolModifiedWithVersion
     :: (MonadUnliftIO m, MonadLoggerIO m)
     => (PG.Connection -> IO (Maybe Double)) -- ^ Action to perform to get the server version.
@@ -256,7 +257,7 @@ withPostgresqlConn = withPostgresqlConnWithVersion getServerVersion
 -- | Same as 'withPostgresqlConn', but takes a callback for obtaining
 -- the server version (to work around an Amazon Redshift bug).
 --
--- @since 2.6.2
+-- @since 2.12.1
 withPostgresqlConnWithVersion :: (MonadUnliftIO m, MonadLoggerIO m)
                               => (PG.Connection -> IO (Maybe Double))
                               -> ConnectionString
@@ -1757,7 +1758,7 @@ repsertManySql ent n = putManySql' conflictColumns fields ent n
 -- @INSERT ... ON CONFLICT KEY UPDATE@ functionality, exposed via
 -- 'upsertWhere' and 'upsertManyWhere' in this library.
 --
--- @since 2.12.0.1
+-- @since 2.12.1
 data HandleUpdateCollision record where
   -- | Copy the field directly from the record.
   CopyField :: EntityField record typ -> HandleUpdateCollision record
@@ -1768,7 +1769,7 @@ data HandleUpdateCollision record where
 -- used to copy a single value, but was expanded to be handle more complex
 -- queries.
 --
--- @since 2.6.2
+-- @since 2.12.1
 type SomeField = HandleUpdateCollision
 
 pattern SomeField :: EntityField record typ -> SomeField record
@@ -1778,7 +1779,7 @@ pattern SomeField x = CopyField x
 -- | Copy the field into the database only if the value in the
 -- corresponding record is non-@NULL@.
 --
--- @since  2.6.2
+-- @since  2.12.1
 copyUnlessNull :: PersistField typ => EntityField record (Maybe typ) -> HandleUpdateCollision record
 copyUnlessNull field = CopyUnlessEq field Nothing
 
@@ -1789,7 +1790,7 @@ copyUnlessNull field = CopyUnlessEq field Nothing
 -- The resulting 'HandleUpdateCollision' type is useful for the
 -- 'insertManyOnDuplicateKeyUpdate' function.
 --
--- @since  2.6.2
+-- @since  2.12.1
 copyUnlessEmpty :: (Monoid.Monoid typ, PersistField typ) => EntityField record typ -> HandleUpdateCollision record
 copyUnlessEmpty field = CopyUnlessEq field Monoid.mempty
 
@@ -1806,7 +1807,7 @@ copyUnlessEq = CopyUnlessEq
 
 -- | Copy the field directly from the record.
 --
--- @since 3.0
+-- @since 2.6.2
 copyField :: PersistField typ => EntityField record typ -> HandleUpdateCollision record
 copyField = CopyField
 
@@ -1821,7 +1822,7 @@ copyField = CopyField
 -- Called thusly, this method will insert a new record (if none exists) OR update a recordField with a new value
 -- assuming the condition in the last block is met.
 -- 
--- @since 2.12.0.1
+-- @since 2.12.1
 upsertWhere
   :: ( backend ~ PersistEntityBackend record
      , PersistEntity record
@@ -1863,13 +1864,14 @@ upsertManyWhere ::
   [HandleUpdateCollision record] ->
   -- | A list of the updates to apply that aren't dependent on the record being inserted.
   [Update record] ->
+  -- a filter condition
   [Filter record] ->
   ReaderT backend m ()
 upsertManyWhere [] _ _ _ = return ()
-upsertManyWhere records fieldValues updates conditions = do
+upsertManyWhere records fieldValues updates filters = do
   conn <- asks projectBackend
   uncurry rawExecute $
-    mkBulkUpsertQuery records conn fieldValues updates conditions
+    mkBulkUpsertQuery records conn fieldValues updates filters
 
 -- | This creates the query for 'upsertManyWhere'. If you
 -- provide an empty list of updates to perform, then it will generate
@@ -1883,8 +1885,8 @@ mkBulkUpsertQuery
     -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
     -> [Filter record]
     -> (Text, [PersistValue])
-mkBulkUpsertQuery records conn fieldValues updates filts = 
-    (q, recordValues <> updsValues <> copyUnlessValues)
+mkBulkUpsertQuery records conn fieldValues updates filters =
+  (q, recordValues <> updsValues <> copyUnlessValues)
   where
     mfieldDef x = case x of
         CopyField rec -> Right (fieldDbToText (persistFieldDef rec))
@@ -1900,35 +1902,25 @@ mkBulkUpsertQuery records conn fieldValues updates filts =
     copyUnlessValues = map snd fieldsToMaybeCopy
     recordValues = concatMap (map toPersistValue . toPersistFields) records
     recordPlaceholders = Util.commaSeparated $ map (Util.parenWrapped . Util.commaSeparated . map (const "?") . toPersistFields) records
-    mkCondFieldSet n _ = T.concat
-        [ n
-        , "=COALESCE("
-        ,   "NULLIF("
-        ,     "VALUES(", n, "),"
-        ,     "?"
-        ,   "),"
-        ,   n
-        , ")"
-        ]
+    mkCondFieldSet n _ = T.concat [n, "=EXCLUDED.", n]
     condFieldSets = map (uncurry mkCondFieldSet) fieldsToMaybeCopy
-    fieldSets = map (\n -> T.concat [n, "=VALUES(", n, ")"]) updateFieldNames
-    upds = map (Util.mkUpdateText' (escapeF) id) updates
+    fieldSets = map (\n -> T.concat [n, "=EXCLUDED.", n, ""]) updateFieldNames
+    upds = map (Util.mkPostgresUpdateText (escapeF) id) updates
     updsValues = map (\(Update _ val _) -> toPersistValue val) updates
-    wher = if null filts then "" else filterClause False conn filts
+    wher = if null filters then "" else filterClause False conn filters
     updateText = case fieldSets <> upds <> condFieldSets of
-        [] -> T.concat [firstField, "=", firstField]
+        [] -> T.concat [firstField, "=EXCLUDED.", firstField]
         xs -> Util.commaSeparated xs
     q = T.concat
         [ "INSERT INTO "
         , nameOfTable
-        , " ("
-        , Util.commaSeparated entityFieldNames
-        , ") "
+        , Util.parenWrapped . Util.commaSeparated $ entityFieldNames
         , " VALUES "
         , recordPlaceholders
-        , " ON CONFLICT DO UPDATE SET "
+        , " ON CONFLICT "
+        , Util.parenWrapped $ firstField
+        , " DO UPDATE SET "
         , updateText
-        , " WHERE "
         , wher
         ]
 

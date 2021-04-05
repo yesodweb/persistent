@@ -14,6 +14,7 @@ module Database.Persist.Sql.Util
     , updatePersistValue
     , mkUpdateText
     , mkUpdateText'
+    , mkPostgresUpdateText
     , commaSeparated
     , parenWrapped
     , mkInsertValues
@@ -215,6 +216,19 @@ mkUpdateText' escapeName refColumn x =
     Subtract -> T.concat [n, "=", refColumn n, "-?"]
     Multiply -> T.concat [n, "=", refColumn n, "*?"]
     Divide -> T.concat [n, "=", refColumn n, "/?"]
+    BackendSpecificUpdate up ->
+      error . T.unpack $ "mkUpdateText: BackendSpecificUpdate " <> up <> " not supported"
+  where
+    n = escapeName . fieldDB . updateFieldDef $ x
+
+mkPostgresUpdateText :: PersistEntity record => (FieldNameDB -> Text) -> (Text -> Text) -> Update record -> Text
+mkPostgresUpdateText escapeName refColumn x =
+  case updateUpdate x of
+    Assign -> n <> "=?"
+    Add -> T.concat [n, "=EXCLUDED.", refColumn n, "+?"]
+    Subtract -> T.concat [n, "=EXCLUDED.", refColumn n, "-?"]
+    Multiply -> T.concat [n, "=EXCLUDED.", refColumn n, "*?"]
+    Divide -> T.concat [n, "=EXCLUDED.", refColumn n, "/?"]
     BackendSpecificUpdate up ->
       error . T.unpack $ "mkUpdateText: BackendSpecificUpdate " <> up <> " not supported"
   where
