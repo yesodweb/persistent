@@ -1899,6 +1899,8 @@ mkBulkUpsertQuery records conn fieldValues updates filters =
                 ,","
               ,"?"
             ,")"
+          , ", "
+          , n
           ,")"
         ]
     condFieldSets = map (uncurry mkCondFieldSet) fieldsToMaybeCopy
