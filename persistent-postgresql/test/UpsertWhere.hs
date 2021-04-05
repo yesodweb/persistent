@@ -74,7 +74,7 @@ specs = describe "UpsertWhere" $ do
     it "only copies passing values" $ runConnAssert $ do
       deleteWhere ([] :: [Filter Item])
       insertMany_ items
-      let newItems = map (\i -> i { itemQuantity = Just 0, itemPrice = fmap (*2) (itemPrice i) }) items
+      let newItems = map (\i -> i { itemQuantity = Nothing, itemPrice = fmap (*2) (itemPrice i) }) items
           postUpdate = map (\i -> i { itemPrice = fmap (*2) (itemPrice i) }) items
       upsertManyWhere
         newItems

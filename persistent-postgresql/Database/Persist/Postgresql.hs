@@ -1899,7 +1899,7 @@ mkBulkUpsertQuery records conn fieldValues updates filters =
                 ,","
               ,"?"
             ,")"
-          , ", "
+          , ", EXCLUDED."
           , n
           ,")"
         ]
