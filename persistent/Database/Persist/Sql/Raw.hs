@@ -17,6 +17,7 @@ import qualified Data.Text as T
 import Database.Persist
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Class
+import Debug.Trace
 
 rawQuery :: (MonadResource m, MonadReader env m, BackendCompatible SqlBackend env)
          => Text
@@ -50,7 +51,8 @@ rawExecute :: (MonadIO m, BackendCompatible SqlBackend backend)
            -> ReaderT backend m ()
 rawExecute x y = do
   -- TODO: remove this altogether when done debugging
-  -- liftIO $ putStrLn $ T.unpack x
+  liftIO $ putStrLn $ T.unpack x
+  liftIO $ putStrLn $ show y
   liftM (const ()) $ rawExecuteCount x y
 
 -- | Execute a raw SQL statement and return the number of
@@ -64,7 +66,7 @@ rawExecuteCount sql vals = do
     runLoggingT (logDebugNS (pack "SQL") $ T.append sql $ pack $ "; " ++ show vals)
         (connLogFunc conn)
     -- TODO: remove this altogether when done debugging
-    -- liftIO $ putStrLn $ T.unpack sql
+    liftIO $ putStrLn $ T.unpack sql
     stmt <- getStmt sql
     res <- liftIO $ stmtExecute stmt vals
     liftIO $ stmtReset stmt

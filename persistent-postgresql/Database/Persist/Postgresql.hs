@@ -5,7 +5,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
@@ -27,8 +26,6 @@ module Database.Persist.Postgresql
     , module Database.Persist.Sql
     , ConnectionString
     , HandleUpdateCollision
-    , pattern SomeField
-    , SomeField
     , copyField
     , copyUnlessNull
     , copyUnlessEmpty
@@ -96,7 +93,7 @@ import Data.Maybe
 import Data.Monoid ((<>))
 import qualified Data.Monoid as Monoid
 import Data.Pool (Pool)
-import Data.String.Conversions.Monomorphic (toStrictByteString, toString)
+import Data.String.Conversions.Monomorphic (toStrictByteString)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
@@ -108,6 +105,7 @@ import System.Environment (getEnvironment)
 
 import Database.Persist.Sql
 import qualified Database.Persist.Sql.Util as Util
+import Database.Persist.Postgresql.Util as Util
 
 -- | A @libpq@ connection string.  A simple example of connection
 -- string would be @\"host=localhost port=5432 user=test
@@ -1764,17 +1762,6 @@ data HandleUpdateCollision record where
   CopyField :: EntityField record typ -> HandleUpdateCollision record
   -- | Only copy the field if it is not equal to the provided value.
   CopyUnlessEq :: PersistField typ => EntityField record typ -> typ -> HandleUpdateCollision record
-
--- | An alias for 'HandleUpdateCollision'. The type previously was only
--- used to copy a single value, but was expanded to be handle more complex
--- queries.
---
--- @since 2.12.1
-type SomeField = HandleUpdateCollision
-
-pattern SomeField :: EntityField record typ -> SomeField record
-pattern SomeField x = CopyField x
-{-# DEPRECATED SomeField "The type SomeField is deprecated. Use the type HandleUpdateCollision instead, and use the function copyField instead of the data constructor." #-}
 
 -- | Copy the field into the database only if the value in the
 -- corresponding record is non-@NULL@.
