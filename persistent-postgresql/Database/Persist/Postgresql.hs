@@ -1799,7 +1799,7 @@ copyUnlessEmpty field = CopyUnlessEq field Monoid.mempty
 -- the database.
 --
 -- The resulting 'HandleUpdateCollision' type is useful for the
--- 'insertManyOnDuplicateKeyUpdate' function.
+-- 'upsertMany' function.
 --
 -- @since  2.6.2
 copyUnlessEq :: PersistField typ => EntityField record typ -> typ -> HandleUpdateCollision record
