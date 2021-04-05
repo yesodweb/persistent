@@ -65,8 +65,6 @@ rawExecuteCount sql vals = do
     conn <- projectBackend `liftM` ask
     runLoggingT (logDebugNS (pack "SQL") $ T.append sql $ pack $ "; " ++ show vals)
         (connLogFunc conn)
-    -- TODO: remove this altogether when done debugging
-    -- liftIO $ putStrLn $ T.unpack sql
     stmt <- getStmt sql
     res <- liftIO $ stmtExecute stmt vals
     liftIO $ stmtReset stmt

@@ -1880,6 +1880,7 @@ mkBulkUpsertQuery records conn fieldValues updates filters =
     (fieldsToMaybeCopy, updateFieldNames) = partitionEithers $ map mfieldDef fieldValues
     fieldDbToText = escapeF . fieldDB
     entityDef' = entityDef records
+    conflictColumns = escapeF . fieldDB <$> entityKeyFields entityDef'
     firstField = case entityFieldNames of
         [] -> error "The entity you're trying to insert does not have any fields."
         (field:_) -> field
@@ -1917,7 +1918,7 @@ mkBulkUpsertQuery records conn fieldValues updates filters =
         , " VALUES "
         , recordPlaceholders
         , " ON CONFLICT "
-        , Util.parenWrapped $ firstField
+        , Util.parenWrapped $ Util.commaSeparated $ conflictColumns
         , " DO UPDATE SET "
         , updateText
         , wher
