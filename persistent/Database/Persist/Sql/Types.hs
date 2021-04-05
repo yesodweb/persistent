@@ -1,6 +1,6 @@
 module Database.Persist.Sql.Types
     ( module Database.Persist.Sql.Types
-    , SqlBackend (..), SqlReadBackend (..), SqlWriteBackend (..)
+    , SqlBackend, SqlReadBackend (..), SqlWriteBackend (..)
     , Statement (..), LogFunc, InsertSqlResult (..)
     , readToUnknown, readToWrite, writeToUnknown
     , SqlBackendCanRead, SqlBackendCanWrite, SqlReadT, SqlWriteT, IsSqlBackend

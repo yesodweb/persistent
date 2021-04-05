@@ -17,7 +17,7 @@ import qualified Data.Text as T
 
 import Database.Persist.Class.PersistStore
 import Database.Persist.Sql.Types
-import Database.Persist.Sql.Types.Internal (IsolationLevel)
+import Database.Persist.Sql.Types.Internal
 import Database.Persist.Sql.Raw
 
 -- | Get a connection from the pool, run the given action, and then return the

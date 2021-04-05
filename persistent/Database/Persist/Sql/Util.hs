@@ -34,7 +34,8 @@ import Database.Persist (
   , FieldDef(..)
   )
 
-import Database.Persist.Sql.Types (Sql, SqlBackend, connEscapeFieldName)
+import Database.Persist.Sql.Types (Sql)
+import Database.Persist.Sql.Types.Internal (SqlBackend, connEscapeFieldName)
 
 entityColumnNames :: EntityDef -> SqlBackend -> [Sql]
 entityColumnNames ent conn =
