@@ -17,7 +17,6 @@ import qualified Data.Text as T
 import Database.Persist
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Class
-import Debug.Trace
 
 rawQuery :: (MonadResource m, MonadReader env m, BackendCompatible SqlBackend env)
          => Text
@@ -49,8 +48,7 @@ rawExecute :: (MonadIO m, BackendCompatible SqlBackend backend)
            => Text            -- ^ SQL statement, possibly with placeholders.
            -> [PersistValue]  -- ^ Values to fill the placeholders.
            -> ReaderT backend m ()
-rawExecute x y = do
-  liftM (const ()) $ rawExecuteCount x y
+rawExecute x y = liftM (const ()) $ rawExecuteCount x y
 
 -- | Execute a raw SQL statement and return the number of
 -- rows it has modified.
