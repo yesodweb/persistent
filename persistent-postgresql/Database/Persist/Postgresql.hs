@@ -1774,7 +1774,7 @@ copyUnlessNull field = CopyUnlessEq field Nothing
 -- definition for 'mempty'. Useful for 'Text', 'String', 'ByteString', etc.
 --
 -- The resulting 'HandleUpdateCollision' type is useful for the
--- 'insertManyOnDuplicateKeyUpdate' function.
+-- 'upsertManyWhere' function.
 --
 -- @since  2.12.1
 copyUnlessEmpty :: (Monoid.Monoid typ, PersistField typ) => EntityField record typ -> HandleUpdateCollision record
