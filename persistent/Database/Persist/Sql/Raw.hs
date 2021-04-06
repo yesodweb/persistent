@@ -50,9 +50,6 @@ rawExecute :: (MonadIO m, BackendCompatible SqlBackend backend)
            -> [PersistValue]  -- ^ Values to fill the placeholders.
            -> ReaderT backend m ()
 rawExecute x y = do
-  -- TODO: remove this altogether when done debugging
-  liftIO $ putStrLn $ T.unpack x
-  liftIO $ putStrLn $ show y
   liftM (const ()) $ rawExecuteCount x y
 
 -- | Execute a raw SQL statement and return the number of

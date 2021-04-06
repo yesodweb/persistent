@@ -1892,16 +1892,16 @@ mkBulkUpsertQuery records conn fieldValues updates filters =
     mkCondFieldSet n _ =
       T.concat
         [ n
-            ,"=COALESCE("
-              ,"NULLIF("
-                ,"EXCLUDED."
-                  ,n
-                ,","
-              ,"?"
-            ,")"
-          , ", EXCLUDED."
-          , n
-          ,")"
+        , "=COALESCE("
+        ,   "NULLIF("
+        ,     "EXCLUDED."
+        ,       n
+        ,         ","
+        ,       "?"
+        ,     ")"
+        ,   ",ITEM."
+        ,   n
+        ,")"
         ]
     condFieldSets = map (uncurry mkCondFieldSet) fieldsToMaybeCopy
     fieldSets = map (\n -> T.concat [n, "=EXCLUDED.", n, ""]) updateFieldNames

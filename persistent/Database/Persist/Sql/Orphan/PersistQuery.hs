@@ -309,7 +309,6 @@ filterClauseHelper includeTable includeWhere includeExcluded conn orNull filters
                                 , name
                                 , " <> "
                                 , qmarks
-                                , ")"
                                 ], notNullVals)
                             -- We use 1=2 (and below 1=1) to avoid using TRUE and FALSE, since
                             -- not all databases support those words directly.
@@ -321,7 +320,6 @@ filterClauseHelper includeTable includeWhere includeExcluded conn orNull filters
                                 , name
                                 , " IN "
                                 , qmarks
-                                , ")"
                                 ], notNullVals)
                             (False, NotIn, 0) -> ("1=1", [])
                             (True, NotIn, 0) -> (name <> " IS NOT NULL", [])
@@ -331,7 +329,6 @@ filterClauseHelper includeTable includeWhere includeExcluded conn orNull filters
                                 , name
                                 , " NOT IN "
                                 , qmarks
-                                , ")"
                                 ], notNullVals)
                             (True, NotIn, _) -> (T.concat
                                 [ name
@@ -339,7 +336,6 @@ filterClauseHelper includeTable includeWhere includeExcluded conn orNull filters
                                 , name
                                 , " NOT IN "
                                 , qmarks
-                                , ")"
                                 ], notNullVals)
                             _ -> (T.concat 
                                 [name
