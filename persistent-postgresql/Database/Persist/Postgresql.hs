@@ -1803,7 +1803,9 @@ copyField = CopyField
 -- it will only do this update on a user-supplied condition.
 -- For example, here's how this method could be called like such:
 --
+-- @
 -- upsertWhere record [recordField =. newValue] [recordField /= newValue]
+-- @
 --
 -- Called thusly, this method will insert a new record (if none exists) OR update a recordField with a new value
 -- assuming the condition in the last block is met.
