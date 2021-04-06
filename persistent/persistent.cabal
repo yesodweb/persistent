@@ -58,6 +58,13 @@ library
                      Database.Persist.Sql.Util
                      Database.Persist.Sql.Types.Internal
 
+                     Database.Persist.SqlBackend
+                     Database.Persist.SqlBackend.Internal
+                     Database.Persist.SqlBackend.Internal.InsertSqlResult
+                     Database.Persist.SqlBackend.Internal.IsolationLevel
+                     Database.Persist.SqlBackend.Internal.Statement
+                     Database.Persist.SqlBackend.Internal.MkSqlBackend
+
                      Database.Persist.Class.DeleteCascade
                      Database.Persist.Class.PersistEntity
                      Database.Persist.Class.PersistQuery

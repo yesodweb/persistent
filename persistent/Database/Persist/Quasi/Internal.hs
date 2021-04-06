@@ -6,6 +6,10 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 
+-- | This @Internal@ module may have breaking changes that will not be reflected
+-- in major version bumps. Please use "Database.Persist.Quasi" instead.
+--
+-- @since 2.13.0.0
 module Database.Persist.Quasi.Internal
     ( parse
     , PersistSettings (..)

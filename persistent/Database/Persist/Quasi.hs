@@ -421,6 +421,4 @@ module Database.Persist.Quasi
     , nullable
     ) where
 
-import Prelude hiding (lines)
-
 import Database.Persist.Quasi.Internal
