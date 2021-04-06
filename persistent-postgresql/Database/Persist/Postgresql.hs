@@ -1840,7 +1840,6 @@ upsertManyWhere ::
   forall record backend m.
   ( backend ~ PersistEntityBackend record,
     BackendCompatible SqlBackend backend,
-    PersistEntityBackend record ~ SqlBackend,
     PersistEntity record,
     MonadIO m
   ) =>
