@@ -1909,7 +1909,7 @@ mkBulkUpsertQuery records conn fieldValues updates filters =
     updsValues = map (\(Update _ val _) -> toPersistValue val) updates
     (wher, whereVals) = if null filters 
                           then ("", [])
-                          else (filterClauseWithVals False conn filters)
+                          else (filterClauseWithVals (Just PrefixExcluded) conn filters)
     updateText = case fieldSets <> upds <> condFieldSets of
         [] -> T.concat [firstField, "=EXCLUDED.", firstField]
         xs -> Util.commaSeparated xs

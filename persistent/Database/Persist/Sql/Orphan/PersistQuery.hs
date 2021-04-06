@@ -9,6 +9,7 @@ module Database.Persist.Sql.Orphan.PersistQuery
     , filterClause
     , filterClauseHelper
     , filterClauseWithVals
+    , FilterTablePrefix (..)
     , decorateSQLWithLimitOffset
     ) where
 
@@ -39,7 +40,7 @@ instance PersistQueryRead SqlBackend where
         conn <- ask
         let wher = if null filts
                     then ""
-                    else filterClause False conn filts
+                    else filterClause Nothing conn filts
         let sql = mconcat
                 [ "SELECT COUNT(*) FROM "
                 , connEscapeTableName conn t
@@ -62,7 +63,7 @@ instance PersistQueryRead SqlBackend where
         conn <- ask
         let wher = if null filts
                     then ""
-                    else filterClause False conn filts
+                    else filterClause Nothing conn filts
         let sql = mconcat
                 [ "SELECT EXISTS(SELECT 1 FROM "
                 , connEscapeTableName conn t
@@ -96,7 +97,7 @@ instance PersistQueryRead SqlBackend where
         t = entityDef $ dummyFromFilts filts
         wher conn = if null filts
                     then ""
-                    else filterClause False conn filts
+                    else filterClause Nothing conn filts
         ord conn =
             case map (orderClause False conn) orders of
                 [] -> ""
@@ -122,7 +123,7 @@ instance PersistQueryRead SqlBackend where
 
         wher conn = if null filts
                     then ""
-                    else filterClause False conn filts
+                    else filterClause Nothing conn filts
         sql conn = connLimitOffset conn (limit,offset) (not (null orders)) $ mconcat
             [ "SELECT "
             , cols conn
@@ -186,7 +187,7 @@ deleteWhereCount filts = withCompatibleBackend $ do
     let t = entityDef $ dummyFromFilts filts
     let wher = if null filts
                 then ""
-                else filterClause False conn filts
+                else filterClause Nothing conn filts
         sql = mconcat
             [ "DELETE FROM "
             , connEscapeTableName conn t
@@ -206,7 +207,7 @@ updateWhereCount filts upds = withCompatibleBackend $ do
     conn <- ask
     let wher = if null filts
                 then ""
-                else filterClause False conn filts
+                else filterClause Nothing conn filts
     let sql = mconcat
             [ "UPDATE "
             , connEscapeTableName conn t
@@ -228,19 +229,22 @@ dummyFromFilts _ = Nothing
 
 getFiltsValues :: forall val. (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
                => SqlBackend -> [Filter val] -> [PersistValue]
-getFiltsValues conn = snd . filterClauseHelper False False False conn OrNullNo
+getFiltsValues conn = snd . filterClauseHelper Nothing False conn OrNullNo
 
 data OrNull = OrNullYes | OrNullNo
 
+data FilterTablePrefix
+  = PrefixTableName
+  | PrefixExcluded
+
 filterClauseHelper :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
-             => Bool -- ^ include table name?
-             -> Bool -- ^ include WHERE?
-             -> Bool -- ^ include PostgresSQL EXCLUDED
+             => Maybe FilterTablePrefix -- ^ include table name or PostgresSQL EXCLUDED
+             -> Bool -- ^ include WHERE
              -> SqlBackend
              -> OrNull
              -> [Filter val]
              -> (Text, [PersistValue])
-filterClauseHelper includeTable includeWhere includeExcluded conn orNull filters =
+filterClauseHelper tablePrefix includeWhere conn orNull filters =
     (if not (T.null sql) && includeWhere
         then " WHERE " <> sql
         else sql, vals)
@@ -295,52 +299,51 @@ filterClauseHelper includeTable includeWhere includeExcluded conn orNull filters
                      error $ "unhandled error for composite/non id primary keys filter=" ++ show pfilter ++ " persistList=" ++ show allVals ++ " pdef=" ++ show pdef
 
                  _ ->   case (isNull, pfilter, length notNullVals) of
-                            (True, Eq, _) -> (T.concat
-                                [ name
-                                , " IS NULL"
-                                ],[])
-                            (True, Ne, _) -> (T.concat
-                                [ name
-                                , " IS NOT NULL"
-                                ],[])
+                            (True, Eq, _) -> (name <> " IS NULL", [])
+                            (True, Ne, _) -> (name <> " IS NOT NULL", [])
                             (False, Ne, _) -> (T.concat
-                                [ name
+                                [ "("
+                                , name
                                 , " IS NULL OR "
                                 , name
                                 , " <> "
                                 , qmarks
+                                , ")"
                                 ], notNullVals)
                             -- We use 1=2 (and below 1=1) to avoid using TRUE and FALSE, since
                             -- not all databases support those words directly.
                             (_, In, 0) -> ("1=2" <> orNullSuffix, [])
                             (False, In, _) -> (name <> " IN " <> qmarks <> orNullSuffix, allVals)
                             (True, In, _) -> (T.concat
-                                [ name
+                                [ "("
+                                , name
                                 , " IS NULL OR "
                                 , name
                                 , " IN "
                                 , qmarks
+                                , ")"
                                 ], notNullVals)
                             (False, NotIn, 0) -> ("1=1", [])
                             (True, NotIn, 0) -> (name <> " IS NOT NULL", [])
                             (False, NotIn, _) -> (T.concat
-                                [ name
+                                [ "("
+                                , name
                                 , " IS NULL OR "
                                 , name
                                 , " NOT IN "
                                 , qmarks
+                                , ")"
                                 ], notNullVals)
                             (True, NotIn, _) -> (T.concat
-                                [ name
+                                [ "("
+                                , name
                                 , " IS NOT NULL AND "
                                 , name
                                 , " NOT IN "
                                 , qmarks
+                                , ")"
                                 ], notNullVals)
-                            _ -> (T.concat 
-                                [name
-                                   <> showSqlFilter pfilter <> "?" <> orNullSuffix
-                                ], allVals)
+                            _ -> (name <> showSqlFilter pfilter <> "?" <> orNullSuffix, allVals)
 
       where
         isCompFilter Lt = True
@@ -371,12 +374,10 @@ filterClauseHelper includeTable includeWhere includeExcluded conn orNull filters
         allVals = filterValueToPersistValues value
         tn = connEscapeTableName conn $ entityDef $ dummyFromFilts [Filter field value pfilter]
         name =
-            (if includeTable
-                then ((tn <> ".") <>)
-                else if includeExcluded -- need this for PostgreSQL queries
-                  then (("EXCLUDED.") <>) 
-                else id)
-            $ connEscapeFieldName conn (fieldName field)
+          case tablePrefix of
+            Just PrefixTableName -> ((tn <> ".") <>) $ connEscapeFieldName conn (fieldName field)
+            Just PrefixExcluded -> (("EXCLUDED.") <>) $ connEscapeFieldName conn (fieldName field)
+            _ -> id $ connEscapeFieldName conn (fieldName field)
         qmarks = case value of
                     FilterValue{} -> "(?)"
                     UnsafeValue{} -> "(?)"
@@ -397,18 +398,18 @@ filterClauseHelper includeTable includeWhere includeExcluded conn orNull filters
         showSqlFilter (BackendSpecificFilter s) = s
 
 filterClause :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
-             => Bool -- ^ include table name?
+             => Maybe FilterTablePrefix -- ^ include table name or EXCLUDED
              -> SqlBackend
              -> [Filter val]
              -> Text
-filterClause b c = fst . filterClauseHelper b True False c OrNullNo
+filterClause b c = fst . filterClauseHelper b True c OrNullNo
 
 filterClauseWithVals :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
-             => Bool -- ^ include table name?
+             => Maybe FilterTablePrefix -- ^ include table name or EXCLUDED
              -> SqlBackend
              -> [Filter val]
              -> (Text, [PersistValue])
-filterClauseWithVals b c  = filterClauseHelper b True True c OrNullNo
+filterClauseWithVals b c  = filterClauseHelper b True c OrNullNo
 
 orderClause :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
             => Bool -- ^ include the table name

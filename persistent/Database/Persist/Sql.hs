@@ -15,6 +15,7 @@ module Database.Persist.Sql
     , filterClause
     , filterClauseHelper
     , filterClauseWithVals
+    , FilterTablePrefix (..)
     , transactionSave
     , transactionSaveWithIsolation
     , transactionUndo
