@@ -1755,7 +1755,7 @@ repsertManySql ent n = putManySql' conflictColumns fields ent n
 -- @INSERT ... ON CONFLICT KEY UPDATE@ functionality, exposed via
 -- 'upsertWhere' and 'upsertManyWhere' in this library.
 --
--- @since 2.12.1
+-- @since 2.12.1.0
 data HandleUpdateCollision record where
   -- | Copy the field directly from the record.
   CopyField :: EntityField record typ -> HandleUpdateCollision record
@@ -1765,7 +1765,7 @@ data HandleUpdateCollision record where
 -- | Copy the field into the database only if the value in the
 -- corresponding record is non-@NULL@.
 --
--- @since  2.12.1
+-- @since  2.12.1.0
 copyUnlessNull :: PersistField typ => EntityField record (Maybe typ) -> HandleUpdateCollision record
 copyUnlessNull field = CopyUnlessEq field Nothing
 
@@ -1776,7 +1776,7 @@ copyUnlessNull field = CopyUnlessEq field Nothing
 -- The resulting 'HandleUpdateCollision' type is useful for the
 -- 'upsertManyWhere' function.
 --
--- @since  2.12.1
+-- @since  2.12.1.0
 copyUnlessEmpty :: (Monoid.Monoid typ, PersistField typ) => EntityField record typ -> HandleUpdateCollision record
 copyUnlessEmpty field = CopyUnlessEq field Monoid.mempty
 
@@ -1787,13 +1787,13 @@ copyUnlessEmpty field = CopyUnlessEq field Monoid.mempty
 -- The resulting 'HandleUpdateCollision' type is useful for the
 -- 'upsertMany' function.
 --
--- @since  2.6.2
+-- @since  2.12.1.0
 copyUnlessEq :: PersistField typ => EntityField record typ -> typ -> HandleUpdateCollision record
 copyUnlessEq = CopyUnlessEq
 
 -- | Copy the field directly from the record.
 --
--- @since 2.6.2
+-- @since 2.12.1.0
 copyField :: PersistField typ => EntityField record typ -> HandleUpdateCollision record
 copyField = CopyField
 
@@ -1808,7 +1808,7 @@ copyField = CopyField
 -- Called thusly, this method will insert a new record (if none exists) OR update a recordField with a new value
 -- assuming the condition in the last block is met.
 -- 
--- @since 2.12.1
+-- @since 2.12.1.0
 upsertWhere
   :: ( backend ~ PersistEntityBackend record
      , PersistEntity record
@@ -1835,7 +1835,7 @@ upsertWhere record updates filts =
 -- Called thusly, this method will insert a new record (if none exists) OR update a recordField with a new value
 -- assuming the condition in the last block is met.
 --
--- -- @since 2.12.0.1
+-- -- @since 2.12.1.0
 upsertManyWhere ::
   forall record backend m.
   ( backend ~ PersistEntityBackend record,
@@ -1850,7 +1850,7 @@ upsertManyWhere ::
   [HandleUpdateCollision record] ->
   -- | A list of the updates to apply that aren't dependent on the record being inserted.
   [Update record] ->
-  -- a filter condition
+  -- | A filter condition that dictates the scope of the updates
   [Filter record] ->
   ReaderT backend m ()
 upsertManyWhere [] _ _ _ = return ()
@@ -1869,7 +1869,7 @@ mkBulkUpsertQuery
     -> SqlBackend
     -> [HandleUpdateCollision record] -- ^ A list of the fields you want to copy over.
     -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
-    -> [Filter record]
+    -> [Filter record] -- ^ A filter condition that dictates the scope of the updates
     -> (Text, [PersistValue])
 mkBulkUpsertQuery records conn fieldValues updates filters =
   (q, recordValues <> updsValues <> copyUnlessValues <> whereVals)

@@ -235,7 +235,7 @@ data OrNull = OrNullYes | OrNullNo
 filterClauseHelper :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
              => Bool -- ^ include table name?
              -> Bool -- ^ include WHERE?
-             -> Bool -- ^ use postgresl EXCLUDE
+             -> Bool -- ^ include PostgresSQL EXCLUDED
              -> SqlBackend
              -> OrNull
              -> [Filter val]
