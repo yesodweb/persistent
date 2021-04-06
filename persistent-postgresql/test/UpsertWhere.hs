@@ -78,11 +78,11 @@ specs = describe "UpsertWhere" $ do
           postUpdate = map (\i -> i { itemPrice = fmap (*2) (itemPrice i) }) items
       upsertManyWhere
         newItems
-        [ copyUnlessEq ItemQuantity (Just 0)
+        [ copyUnlessEq ItemQuantity (Just 2)
         , copyField ItemPrice
         ]
         []
-        []
+        [ItemQuantity ==. Nothing]
       dbItems <- sort . fmap entityVal <$> selectList [] []
       dbItems @== sort postUpdate
     it "inserts without modifying existing records if no updates specified" $ runConnAssert $ do

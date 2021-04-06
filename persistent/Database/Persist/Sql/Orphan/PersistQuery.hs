@@ -295,11 +295,16 @@ filterClauseHelper includeTable includeWhere includeExcluded conn orNull filters
                      error $ "unhandled error for composite/non id primary keys filter=" ++ show pfilter ++ " persistList=" ++ show allVals ++ " pdef=" ++ show pdef
 
                  _ ->   case (isNull, pfilter, length notNullVals) of
-                            (True, Eq, _) -> (name <> " IS NULL", [])
-                            (True, Ne, _) -> (name <> " IS NOT NULL", [])
+                            (True, Eq, _) -> (T.concat
+                                [ name
+                                , " IS NULL"
+                                ],[])
+                            (True, Ne, _) -> (T.concat
+                                [ name
+                                , " IS NOT NULL"
+                                ],[])
                             (False, Ne, _) -> (T.concat
-                                [ "("
-                                , name
+                                [ name
                                 , " IS NULL OR "
                                 , name
                                 , " <> "
@@ -311,8 +316,7 @@ filterClauseHelper includeTable includeWhere includeExcluded conn orNull filters
                             (_, In, 0) -> ("1=2" <> orNullSuffix, [])
                             (False, In, _) -> (name <> " IN " <> qmarks <> orNullSuffix, allVals)
                             (True, In, _) -> (T.concat
-                                [ "("
-                                , name
+                                [ name
                                 , " IS NULL OR "
                                 , name
                                 , " IN "
@@ -322,8 +326,7 @@ filterClauseHelper includeTable includeWhere includeExcluded conn orNull filters
                             (False, NotIn, 0) -> ("1=1", [])
                             (True, NotIn, 0) -> (name <> " IS NOT NULL", [])
                             (False, NotIn, _) -> (T.concat
-                                [ "("
-                                , name
+                                [ name
                                 , " IS NULL OR "
                                 , name
                                 , " NOT IN "
@@ -331,8 +334,7 @@ filterClauseHelper includeTable includeWhere includeExcluded conn orNull filters
                                 , ")"
                                 ], notNullVals)
                             (True, NotIn, _) -> (T.concat
-                                [ "("
-                                , name
+                                [ name
                                 , " IS NOT NULL AND "
                                 , name
                                 , " NOT IN "
@@ -340,9 +342,7 @@ filterClauseHelper includeTable includeWhere includeExcluded conn orNull filters
                                 , ")"
                                 ], notNullVals)
                             _ -> (T.concat 
-                                [
-                                  if includeExcluded then "EXCLUDED." else ""
-                                  , name
+                                [name
                                    <> showSqlFilter pfilter <> "?" <> orNullSuffix
                                 ], allVals)
 
@@ -365,7 +365,9 @@ filterClauseHelper includeTable includeWhere includeExcluded conn orNull filters
 
         orNullSuffix =
             case orNull of
-                OrNullYes -> mconcat [" OR ", name, " IS NULL"]
+                OrNullYes -> mconcat [" OR "
+                                      , name
+                                      , " IS NULL"]
                 OrNullNo -> ""
 
         isNull = PersistNull `elem` allVals
@@ -375,6 +377,8 @@ filterClauseHelper includeTable includeWhere includeExcluded conn orNull filters
         name =
             (if includeTable
                 then ((tn <> ".") <>)
+                else if includeExcluded -- need this for PostgreSQL queries
+                  then (("EXCLUDED.") <>) 
                 else id)
             $ connEscapeFieldName conn (fieldName field)
         qmarks = case value of
