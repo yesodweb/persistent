@@ -1,6 +1,7 @@
 module Database.Persist.SqlBackend.Internal.IsolationLevel where
 
 import Data.String (IsString(..))
+import Data.Monoid ((<>)) -- TODO: remove when GHC-8.2 support is dropped
 
 -- | Please refer to the documentation for the database in question for a full
 -- overview of the semantics of the varying isloation levels
