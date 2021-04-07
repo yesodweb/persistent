@@ -104,7 +104,6 @@ import System.Environment (getEnvironment)
 
 import Database.Persist.Sql
 import qualified Database.Persist.Sql.Util as Util
-import Database.Persist.Postgresql.Util as Util
 
 -- | A @libpq@ connection string.  A simple example of connection
 -- string would be @\"host=localhost port=5432 user=test
@@ -1907,11 +1906,11 @@ mkBulkUpsertQuery records conn fieldValues updates filters =
         ]
     condFieldSets = map (uncurry mkCondFieldSet) fieldsToMaybeCopy
     fieldSets = map (\n -> T.concat [n, "=EXCLUDED.", n, ""]) updateFieldNames
-    upds = map (Util.mkPostgresUpdateText (escapeF) id) updates
+    upds = map (Util.mkUpdateText' (escapeF) (\n -> T.concat [nameOfTable, ".", n])) updates
     updsValues = map (\(Update _ val _) -> toPersistValue val) updates
     (wher, whereVals) = if null filters 
                           then ("", [])
-                          else (filterClauseWithVals (Just PrefixExcluded) conn filters)
+                          else (filterClauseWithVals (Just PrefixTableName) conn filters)
     updateText = case fieldSets <> upds <> condFieldSets of
         [] -> T.concat [firstField, "=EXCLUDED.", firstField]
         xs -> Util.commaSeparated xs

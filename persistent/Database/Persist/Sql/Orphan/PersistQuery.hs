@@ -221,13 +221,13 @@ updateWhereCount filts upds = withCompatibleBackend $ do
   where
     t = entityDef $ dummyFromFilts filts
 
-fieldName ::  forall record typ. (PersistEntity record, PersistEntityBackend record ~ SqlBackend) => EntityField record typ -> FieldNameDB
+fieldName ::  forall record typ. (PersistEntity record) => EntityField record typ -> FieldNameDB
 fieldName f = fieldDB $ persistFieldDef f
 
 dummyFromFilts :: [Filter v] -> Maybe v
 dummyFromFilts _ = Nothing
 
-getFiltsValues :: forall val. (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
+getFiltsValues :: forall val. (PersistEntity val)
                => SqlBackend -> [Filter val] -> [PersistValue]
 getFiltsValues conn = snd . filterClauseHelper Nothing False conn OrNullNo
 
@@ -237,7 +237,7 @@ data FilterTablePrefix
   = PrefixTableName
   | PrefixExcluded
 
-filterClauseHelper :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
+filterClauseHelper :: (PersistEntity val)
              => Maybe FilterTablePrefix -- ^ include table name or PostgresSQL EXCLUDED
              -> Bool -- ^ include WHERE
              -> SqlBackend
@@ -397,21 +397,21 @@ filterClauseHelper tablePrefix includeWhere conn orNull filters =
         showSqlFilter NotIn = " NOT IN "
         showSqlFilter (BackendSpecificFilter s) = s
 
-filterClause :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
+filterClause :: (PersistEntity val)
              => Maybe FilterTablePrefix -- ^ include table name or EXCLUDED
              -> SqlBackend
              -> [Filter val]
              -> Text
 filterClause b c = fst . filterClauseHelper b True c OrNullNo
 
-filterClauseWithVals :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
+filterClauseWithVals :: (PersistEntity val)
              => Maybe FilterTablePrefix -- ^ include table name or EXCLUDED
              -> SqlBackend
              -> [Filter val]
              -> (Text, [PersistValue])
 filterClauseWithVals b c  = filterClauseHelper b True c OrNullNo
 
-orderClause :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
+orderClause :: (PersistEntity val)
             => Bool -- ^ include the table name
             -> SqlBackend
             -> SelectOpt val
@@ -427,7 +427,7 @@ orderClause includeTable conn o =
 
     tn = connEscapeTableName conn (entityDef $ dummyFromOrder o)
 
-    name :: (PersistEntityBackend record ~ SqlBackend, PersistEntity record)
+    name :: (PersistEntity record)
          => EntityField record typ -> Text
     name x =
         (if includeTable
