@@ -12,6 +12,7 @@ module Database.Persist.SqlBackend
 
     , getEscapedFieldName
     , getEscapedRawName
+    , getEscapeRawNameFunction
     , setConnMaxParams
     , setConnRepsertManySql
     , setConnInsertManySql
@@ -89,6 +90,15 @@ getEscapedRawName
 getEscapedRawName name = do
     func <- asks (SqlBackend.connEscapeRawName . projectBackend)
     pure (func name)
+
+-- | Return the function for escaping a raw name.
+--
+-- @since 2.13.0.0
+getEscapeRawNameFunction
+    :: (BackendCompatible SqlBackend backend, MonadReader backend m)
+    => m (Text -> Text)
+getEscapeRawNameFunction = do
+    asks (SqlBackend.connEscapeRawName . projectBackend)
 
 -- | Set the maximum parameters that may be issued in a given SQL query. This
 -- should be used only if the database backend have this limitation.

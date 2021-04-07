@@ -10,6 +10,24 @@
       release new functionality without breaking your code. It's recommended to
       switch to using the smart constructor functions and setter functions that
       are now exported from `Database.Persist.Sql` instead.
+    * A new API is available for constructing and using a `SqlBackend`, provided
+      in `Database.Persist.SqlBackend`. Instead of using the `SqlBackend`
+      directly, use `mkSqlBackend` and the datatype `MkSqlBackendArgs`. The
+      `MkSqlBackendArgs` record has the same field names as the `SqlBackend`, so
+      the translation is easy:
+      ```diff
+- SqlBackend
++ mkSqlBackend MkSqlBackendArgs
+    { connInsertSql = ...
+    , connCommit = ...
+    , connEscapeFieldName = ...
+    , connEscapeTableName = ...
+    , etc
+    }
+      ```
+      Some fields were omitted in `MkSqlBackendArgs`. These fields are
+      *optional* - they provide enhanced or backend-specific functionality. For
+      these, use the setter functions like `setConnUpsertSql`.
     * Previously hidden modules are now exposed under the `Internal` namespace.
 
 ## 2.12.0.2
