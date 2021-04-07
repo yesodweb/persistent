@@ -1865,7 +1865,7 @@ upsertManyWhere records fieldValues updates filters = do
 -- a dummy/no-op update using the first field of the record. This avoids
 -- duplicate key exceptions.
 mkBulkUpsertQuery
-    :: (PersistEntity record, PersistEntityBackend record ~ SqlBackend)
+    :: (PersistEntity record)
     => [record] -- ^ A list of the records you want to insert, or update
     -> SqlBackend
     -> [HandleUpdateCollision record] -- ^ A list of the fields you want to copy over.
