@@ -61,7 +61,7 @@ specs = describe "DuplicateKeyUpdate" $ do
       dbItems <- map entityVal <$> selectList [] []
       sort dbItems @== sort (newItem : items)
     it "updates existing records" $ db $ do
-      let postUpdate = map (\i -> i { itemPrice = fmap (+1) (itemPrice i) }) items
+      let postUpdate = map (\i -> i { itemQuantity = fmap (+1) (itemQuantity i) }) items
       deleteWhere ([] :: [Filter Item])
       insertMany_ items
       insertManyOnDuplicateKeyUpdate
