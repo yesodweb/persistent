@@ -141,6 +141,6 @@ specs = describe "UpsertWhere" $ do
           (newItem : items)
           []
           []
-          [excludedNotEqualToOriginal ItemDescription]
+          [excludeNotEqualToOriginal ItemDescription]
         dbItems <- sort . fmap entityVal <$> selectList [] []
         dbItems @== sort (newItem : items)

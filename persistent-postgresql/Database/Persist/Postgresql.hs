@@ -1826,12 +1826,18 @@ upsertWhere
 upsertWhere record updates filts =
   upsertManyWhere [record] [] updates filts
 
-excludedNotEqualToOriginal ::
+-- | Exclude any record field if it doesn't match the filter record.  Used only in `upsertWhere` and
+-- `upsertManyWhere`
+--
+-- @since 2.12.1.0
+-- TODO: we could probably make a sum type for the `Filter` record that's passed into the `upserWhere` and
+-- `upsertManyWhere` methods that has similar behavior to the HandleCollisionUpdate type.
+excludeNotEqualToOriginal ::
   (PersistField typ
   , PersistEntity rec) =>
   EntityField rec typ ->
   Filter rec
-excludedNotEqualToOriginal field =
+excludeNotEqualToOriginal field =
   Filter
     { filterField =
         field,
