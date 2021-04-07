@@ -1839,21 +1839,22 @@ upsertWhere record updates filts =
 --
 -- -- @since 2.12.1.0
 upsertManyWhere ::
-  forall record backend m.
-  ( backend ~ PersistEntityBackend record,
-    BackendCompatible SqlBackend backend,
-    PersistEntity record,
-    MonadIO m
-  ) =>
-  -- | A list of the records you want to insert, or update
-  [record] ->
-  -- | A list of the fields you want to copy over.
-  [HandleUpdateCollision record] ->
-  -- | A list of the updates to apply that aren't dependent on the record being inserted.
-  [Update record] ->
-  -- | A filter condition that dictates the scope of the updates
-  [Filter record] ->
-  ReaderT backend m ()
+    forall record backend m.
+    ( backend ~ PersistEntityBackend record,
+      BackendCompatible SqlBackend backend,
+      PersistEntityBackend record ~ SqlBackend,
+      PersistEntity record,
+      MonadIO m
+    ) =>
+    -- | A list of the records you want to insert, or update
+    [record] ->
+    -- | A list of the fields you want to copy over.
+    [HandleUpdateCollision record] ->
+    -- | A list of the updates to apply that aren't dependent on the record being inserted.
+    [Update record] ->
+    -- | A filter condition that dictates the scope of the updates
+    [Filter record] ->
+    ReaderT backend m ()
 upsertManyWhere [] _ _ _ = return ()
 upsertManyWhere records fieldValues updates filters = do
   conn <- asks projectBackend
@@ -1865,7 +1866,7 @@ upsertManyWhere records fieldValues updates filters = do
 -- a dummy/no-op update using the first field of the record. This avoids
 -- duplicate key exceptions.
 mkBulkUpsertQuery
-    :: (PersistEntity record)
+    :: (PersistEntity record, PersistEntityBackend record ~ SqlBackend)
     => [record] -- ^ A list of the records you want to insert, or update
     -> SqlBackend
     -> [HandleUpdateCollision record] -- ^ A list of the fields you want to copy over.
