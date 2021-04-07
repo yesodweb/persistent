@@ -36,7 +36,6 @@ library
                    , unliftio-core
     exposed-modules: Database.Persist.Postgresql
                    , Database.Persist.Postgresql.JSON
-    other-modules: Database.Persist.Postgresql.Util
     ghc-options:     -Wall
     default-language: Haskell2010
 

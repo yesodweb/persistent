@@ -132,3 +132,15 @@ specs = describe "UpsertWhere" $ do
           [ItemDescription ==. "bye friends!"]
         dbItems <- sort . fmap entityVal <$> selectList [] []
         dbItems @== sort (newItem : items)
+    it "inserts an item and excludes a field if it matches the filter" $ 
+      runConnAssert $ do
+        let newItem = Item "item3" "hello world" Nothing Nothing 
+        deleteWhere ([] :: [Filter Item])
+        insertMany_ items
+        upsertManyWhere
+          (newItem : items)
+          []
+          []
+          [excludedNotEqualToOriginal ItemDescription]
+        dbItems <- sort . fmap entityVal <$> selectList [] []
+        dbItems @== sort (newItem : items)

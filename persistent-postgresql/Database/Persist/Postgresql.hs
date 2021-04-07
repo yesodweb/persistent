@@ -30,6 +30,7 @@ module Database.Persist.Postgresql
     , copyUnlessNull
     , copyUnlessEmpty
     , copyUnlessEq
+    , excludedNotEqualToOriginal
     , PostgresConf (..)
     , PgInterval (..)
     , upsertWhere
@@ -1825,6 +1826,29 @@ upsertWhere
 upsertWhere record updates filts =
   upsertManyWhere [record] [] updates filts
 
+excludedNotEqualToOriginal ::
+  (PersistField typ
+  , PersistEntity rec) =>
+  EntityField rec typ ->
+  Filter rec
+excludedNotEqualToOriginal field =
+  Filter
+    { filterField =
+        field,
+      filterFilter =
+        Ne,
+      filterValue =
+        UnsafeValue $
+          PersistLiteral_
+            Unescaped
+            bsForExcludedField
+    }
+  where
+    bsForExcludedField =
+      T.encodeUtf8 $
+        "EXCLUDED."
+          <> fieldName field
+
 -- | Postgres specific 'upsertManyWhere'. This method does the following:
 -- It will insert a record if no matching unique key exists.
 -- If a unique key exists, it will update the relevant field with a user-supplied value, however,
@@ -1898,9 +1922,11 @@ mkBulkUpsertQuery records conn fieldValues updates filters =
         ,     "EXCLUDED."
         ,       n
         ,         ","
-        ,       "?"
-        ,     ")"
-        ,   ",ITEM."
+        ,           "?"
+        ,         ")"
+        ,       ","
+        ,     nameOfTable
+        ,   "."
         ,   n
         ,")"
         ]
