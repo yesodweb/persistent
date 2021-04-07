@@ -44,7 +44,7 @@ flag use-stat4
 
 library
     build-depends:   base                    >= 4.9         && < 5
-                   , persistent              >= 2.12        && < 3
+                   , persistent              >= 2.13        && < 3
                    , aeson                   >= 1.0
                    , bytestring              >= 0.10
                    , conduit                 >= 1.2.12
