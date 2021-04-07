@@ -99,7 +99,7 @@ specs = describe "UpsertWhere" $ do
         []
       dbItems <- sort . fmap entityVal <$> selectList [] []
       dbItems @== sort (newItem : items)
-    it "inserts without modifying existing records if no updates specified and there's a filter" $
+    it "inserts without modifying existing records if no updates specified and there's a filter with True condition" $
       runConnAssert $ do
         let newItem = Item "item3" "hi friends!" Nothing Nothing
         deleteWhere ([] :: [Filter Item])
@@ -111,7 +111,7 @@ specs = describe "UpsertWhere" $ do
           [ItemDescription ==. "hi friends!"]
         dbItems <- sort . fmap entityVal <$> selectList [] []
         dbItems @== sort (newItem : items)
-    it "inserts without modifying existing records if there are updates specified but there's a filter" $
+    it "inserts without updating existing records if there are updates specified but there's a filter with a False condition" $
       runConnAssert $ do
         let newItem = Item "item3" "hi friends!" Nothing Nothing
         deleteWhere ([] :: [Filter Item])
@@ -123,7 +123,7 @@ specs = describe "UpsertWhere" $ do
           [ItemDescription ==. "hi friends!"]
         dbItems <- sort . fmap entityVal <$> selectList [] []
         dbItems @== sort (newItem : items)
-    it "inserts new records but does not update existing records if there are updates specified but the modification condition is not triggered" $
+    it "inserts new records but does not update existing records if there are updates specified but the modification condition is False" $
       runConnAssert $ do
         let newItem = Item "item3" "hi friends!" Nothing Nothing
         deleteWhere ([] :: [Filter Item])
@@ -135,18 +135,19 @@ specs = describe "UpsertWhere" $ do
           [excludeNotEqualToOriginal ItemDescription]
         dbItems <- sort . fmap entityVal <$> selectList [] []
         dbItems @== sort (newItem : items)
-    it "inserts new records but does not update existing records if there are updates specified and the modification condition is not triggered" $
+    it "inserts new records and updates existing records if there are updates specified and the modification condition is True (because it's empty)" $
       runConnAssert $ do
         let newItem = Item "item3" "hello world" Nothing Nothing
+            postUpdate = map (\i -> i {itemQuantity = fmap (+ 1) (itemQuantity i)}) items
         deleteWhere ([] :: [Filter Item])
         insertMany_ items
         upsertManyWhere
           (newItem : items)
           []
           [ItemQuantity +=. Just 1]
-          [excludeNotEqualToOriginal ItemDescription]
+          []
         dbItems <- sort . fmap entityVal <$> selectList [] []
-        dbItems @== sort (newItem : items)
+        dbItems @== sort (newItem : postUpdate)
     it "inserts new records and updates existing records if there are updates specified and the modification filter condition is triggered" $
        runConnAssert $ do
         let newItem = Item "item3" "hi friends!" Nothing Nothing
