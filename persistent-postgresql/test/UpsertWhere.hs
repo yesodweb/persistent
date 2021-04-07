@@ -32,13 +32,13 @@ specs = describe "UpsertWhere" $ do
   let item1 = Item "item1" "" (Just 3) Nothing
       item2 = Item "item2" "hello world" Nothing (Just 2)
       items = [item1, item2]
+
   describe "upsertWhere" $ do
     it "inserts appropriately" $ runConnAssert $ do
       deleteWhere ([] :: [Filter Item])
       upsertWhere item1 [ItemDescription =. "i am item 1"] []
       Just item <- get (ItemKey "item1")
       item @== item1
-
     it "performs only updates given if record already exists" $ runConnAssert $ do
       deleteWhere ([] :: [Filter Item])
       let newDescription = "I am a new description"
@@ -64,12 +64,15 @@ specs = describe "UpsertWhere" $ do
       sort dbItems @== sort (newItem : items)
     it "updates existing records" $ runConnAssert $ do
       deleteWhere ([] :: [Filter Item])
+      let postUpdate = map (\i -> i { itemQuantity = fmap (+1) (itemQuantity i) }) items
       insertMany_ items
       upsertManyWhere
         items
         []
         [ItemQuantity +=. Just 1]
         []
+      dbItems <- sort . fmap entityVal <$> selectList [] []
+      dbItems @== sort postUpdate
     it "only copies passing values" $ runConnAssert $ do
       deleteWhere ([] :: [Filter Item])
       insertMany_ items
@@ -120,7 +123,7 @@ specs = describe "UpsertWhere" $ do
           [ItemDescription ==. "hi friends!"]
         dbItems <- sort . fmap entityVal <$> selectList [] []
         dbItems @== sort (newItem : items)
-    it "inserts and modifies existing records if there are updates specified and the filter doesn't apply" $
+    it "inserts new records but does not update existing records if there are updates specified but the modification condition is not triggered" $
       runConnAssert $ do
         let newItem = Item "item3" "hi friends!" Nothing Nothing
         deleteWhere ([] :: [Filter Item])
@@ -129,10 +132,38 @@ specs = describe "UpsertWhere" $ do
           (newItem : items)
           []
           [ItemQuantity +=. Just 1]
-          [ItemDescription ==. "bye friends!"]
+          [excludeNotEqualToOriginal ItemDescription]
         dbItems <- sort . fmap entityVal <$> selectList [] []
         dbItems @== sort (newItem : items)
-    it "inserts an item and excludes a field if it matches the filter" $ 
+    it "inserts new records but does not update existing records if there are updates specified and the modification condition is not triggered" $
+      runConnAssert $ do
+        let newItem = Item "item3" "hello world" Nothing Nothing
+        deleteWhere ([] :: [Filter Item])
+        insertMany_ items
+        upsertManyWhere
+          (newItem : items)
+          []
+          [ItemQuantity +=. Just 1]
+          [excludeNotEqualToOriginal ItemDescription]
+        dbItems <- sort . fmap entityVal <$> selectList [] []
+        dbItems @== sort (newItem : items)
+    it "inserts new records and updates existing records if there are updates specified and the modification filter condition is triggered" $
+       runConnAssert $ do
+        let newItem = Item "item3" "hi friends!" Nothing Nothing
+            postUpdate = map (\i -> i {itemQuantity = fmap (+1) (itemQuantity i)}) items
+        deleteWhere ([] :: [Filter Item])
+        insertMany_ items
+        upsertManyWhere
+          (newItem : items)
+          [ 
+            copyUnlessEq ItemDescription "hi friends!"
+          , copyField ItemPrice
+          ]
+          [ItemQuantity +=. Just 1]
+          [ItemDescription !=. "bye friends!"]
+        dbItems <- sort . fmap entityVal <$> selectList [] []
+        dbItems @== sort (newItem : postUpdate)
+    it "inserts an item and doesn't apply the update if the filter condition is triggered" $ 
       runConnAssert $ do
         let newItem = Item "item3" "hello world" Nothing Nothing 
         deleteWhere ([] :: [Filter Item])
@@ -140,7 +171,7 @@ specs = describe "UpsertWhere" $ do
         upsertManyWhere
           (newItem : items)
           []
-          []
+          [ItemQuantity +=. Just 1]
           [excludeNotEqualToOriginal ItemDescription]
         dbItems <- sort . fmap entityVal <$> selectList [] []
         dbItems @== sort (newItem : items)
