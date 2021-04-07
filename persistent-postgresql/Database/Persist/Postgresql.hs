@@ -30,7 +30,7 @@ module Database.Persist.Postgresql
     , copyUnlessNull
     , copyUnlessEmpty
     , copyUnlessEq
-    , excludedNotEqualToOriginal
+    , excludeNotEqualToOriginal
     , PostgresConf (..)
     , PgInterval (..)
     , upsertWhere
