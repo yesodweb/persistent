@@ -12,6 +12,10 @@ module Database.Persist.Sql
     , rawSql
     , deleteWhereCount
     , updateWhereCount
+    , filterClause
+    , filterClauseHelper
+    , filterClauseWithVals
+    , FilterTablePrefix (..)
     , transactionSave
     , transactionSaveWithIsolation
     , transactionUndo
