@@ -1267,7 +1267,6 @@ mockMigration mig = do
                 , connRDBMS = undefined
                 , connLimitOffset = undefined
                 , connLogFunc = undefined
-                , connStatementMiddleware = const pure
                 }
         result = runReaderT . runWriterT . runWriterT $ mig
     resp <- result sqlbackend
