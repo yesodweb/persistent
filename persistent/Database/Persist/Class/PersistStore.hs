@@ -57,6 +57,7 @@ withBaseBackend = withReaderT persistBackend
 
 -- | Class which witnesses that @backend@ is essentially the same as @BaseBackend backend@.
 -- That is, they're isomorphic and @backend@ is just some wrapper over @BaseBackend backend@.
+{-# DEPRECATED IsPersistBackend "Use BackendCompatible" #-}
 class (HasPersistBackend backend) => IsPersistBackend backend where
     -- | This function is how we actually construct and tag a backend as having read or write capabilities.
     -- It should be used carefully and only when actually constructing a @backend@. Careless use allows us

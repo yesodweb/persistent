@@ -107,4 +107,4 @@ type SqlReadT m a = forall backend. (SqlBackendCanRead backend) => ReaderT backe
 type SqlWriteT m a = forall backend. (SqlBackendCanWrite backend) => ReaderT backend m a
 
 -- | A backend which is a wrapper around @SqlBackend@.
-type IsSqlBackend backend = (IsPersistBackend backend, BaseBackend backend ~ SqlBackend)
+type IsSqlBackend backend = (BackendCompatible SqlBackend backend)
