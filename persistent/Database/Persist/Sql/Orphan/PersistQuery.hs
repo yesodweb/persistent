@@ -233,9 +233,21 @@ getFiltsValues conn = snd . filterClauseHelper Nothing False conn OrNullNo
 
 data OrNull = OrNullYes | OrNullNo
 
+-- | Used when determining how to prefix a column name in a @WHERE@ clause.
+--
+-- @since 2.12.1.0
 data FilterTablePrefix
-  = PrefixTableName
-  | PrefixExcluded
+    = PrefixTableName
+    -- ^ Prefix the column with the table name. This is useful if the column
+    -- name might be ambiguous.
+    --
+    -- @since 2.12.1.0
+    | PrefixExcluded
+    -- ^ Prefix the column name with the @EXCLUDED@ keyword. This is used with
+    -- the Postgresql backend when doing @ON CONFLICT DO UPDATE@ clauses - see
+    -- the documentation on @upsertWhere@ and @upsertManyWhere@.
+    --
+    -- @since 2.12.1.0
 
 filterClauseHelper :: (PersistEntity val)
              => Maybe FilterTablePrefix -- ^ include table name or PostgresSQL EXCLUDED
@@ -397,6 +409,10 @@ filterClauseHelper tablePrefix includeWhere conn orNull filters =
         showSqlFilter NotIn = " NOT IN "
         showSqlFilter (BackendSpecificFilter s) = s
 
+-- |  Render a @['Filter' record]@ into a 'Text' value suitable for inclusion
+-- into a SQL query.
+--
+-- @since 2.12.1.0
 filterClause :: (PersistEntity val)
              => Maybe FilterTablePrefix -- ^ include table name or EXCLUDED
              -> SqlBackend
@@ -404,6 +420,11 @@ filterClause :: (PersistEntity val)
              -> Text
 filterClause b c = fst . filterClauseHelper b True c OrNullNo
 
+-- |  Render a @['Filter' record]@ into a 'Text' value suitable for inclusion
+-- into a SQL query, as well as the @['PersistValue']@ to properly fill in the
+-- @?@ place holders.
+--
+-- @since 2.12.1.0
 filterClauseWithVals :: (PersistEntity val)
              => Maybe FilterTablePrefix -- ^ include table name or EXCLUDED
              -> SqlBackend

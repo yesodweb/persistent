@@ -13,7 +13,6 @@ module Database.Persist.Sql
     , deleteWhereCount
     , updateWhereCount
     , filterClause
-    , filterClauseHelper
     , filterClauseWithVals
     , FilterTablePrefix (..)
     , transactionSave
