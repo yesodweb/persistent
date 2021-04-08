@@ -30,13 +30,13 @@ import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader (ReaderT, ask)
 
 import Database.Persist
-import Database.Persist.Sql.Types
-import Database.Persist.Sql.Types.Internal (IsolationLevel (..))
 import Database.Persist.Sql.Class
-import Database.Persist.Sql.Run hiding (rawAcquireSqlConn, rawRunSqlPool)
-import Database.Persist.Sql.Raw
-import Database.Persist.Sql.Migration
 import Database.Persist.Sql.Internal
+import Database.Persist.Sql.Migration
+import Database.Persist.Sql.Raw
+import Database.Persist.Sql.Run hiding (rawAcquireSqlConn, rawRunSqlPool)
+import Database.Persist.Sql.Types
+import Database.Persist.Sql.Types.Internal (IsolationLevel(..))
 
 import Database.Persist.Sql.Orphan.PersistQuery
 import Database.Persist.Sql.Orphan.PersistStore
