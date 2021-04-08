@@ -14,6 +14,7 @@ module Init (
   , isTravis
 
   , module Database.Persist.Sql
+  , module Database.Persist.Sql.Types.Internal
   , persistSettings
   , MkPersistSettings (..)
   , BackendKey(..)
@@ -91,6 +92,7 @@ import System.IO.Unsafe
 
 import Database.Persist
 import Database.Persist.Sql
+import Database.Persist.Sql.Types.Internal
 import Database.Persist.TH ()
 
 -- Data types

@@ -3,7 +3,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -90,6 +89,8 @@ import Data.Time (utc, NominalDiffTime, localTimeToUTC)
 import System.Environment (getEnvironment)
 
 import Database.Persist.Sql
+import Database.Persist.SqlBackend
+import Database.Persist.SqlBackend.StatementCache
 import qualified Database.Persist.Sql.Util as Util
 
 -- | A @libpq@ connection string.  A simple example of connection
@@ -125,7 +126,7 @@ withPostgresqlPool :: (MonadLoggerIO m, MonadUnliftIO m)
                    -- ^ Action to be executed that uses the
                    -- connection pool.
                    -> m a
-withPostgresqlPool ci = withPostgresqlPoolWithVersion getServerVersion ci
+withPostgresqlPool = withPostgresqlPoolWithVersion getServerVersion
 
 -- | Same as 'withPostgresPool', but takes a callback for obtaining
 -- the server version (to work around an Amazon Redshift bug).
@@ -145,7 +146,7 @@ withPostgresqlPoolWithVersion :: (MonadUnliftIO m, MonadLoggerIO m)
                               -> m a
 withPostgresqlPoolWithVersion getVerDouble ci = do
   let getVer = oldGetVersionToNew getVerDouble
-  withSqlPool $ open' (const $ return ()) getVer ci
+  withSqlPool $ open' (defaultPostgresConfHooks { pgConfHooksGetServerVersion = getVer }) ci
 
 -- | Same as 'withPostgresqlPool', but can be configured with 'PostgresConf' and 'PostgresConfHooks'.
 --
@@ -158,9 +159,7 @@ withPostgresqlPoolWithConf :: (MonadUnliftIO m, MonadLoggerIO m)
                            -- connection pool.
                            -> m a
 withPostgresqlPoolWithConf conf hooks = do
-  let getVer = pgConfHooksGetServerVersion hooks
-      modConn = pgConfHooksAfterCreate hooks
-  let logFuncToBackend = open' modConn getVer (pgConnStr conf)
+  let logFuncToBackend = open' hooks (pgConnStr conf)
   withSqlPoolWithConfig logFuncToBackend (postgresConfToConnectionPoolConfig conf)
 
 -- | Create a PostgreSQL connection pool.  Note that it's your
@@ -206,7 +205,11 @@ createPostgresqlPoolModifiedWithVersion
     -> m (Pool SqlBackend)
 createPostgresqlPoolModifiedWithVersion getVerDouble modConn ci = do
   let getVer = oldGetVersionToNew getVerDouble
-  createSqlPool $ open' modConn getVer ci
+      hooks = defaultPostgresConfHooks
+        { pgConfHooksAfterCreate = modConn
+        , pgConfHooksGetServerVersion = getVer
+        }
+  createSqlPool $ open' hooks ci
 
 -- | Same as 'createPostgresqlPool', but can be configured with 'PostgresConf' and 'PostgresConfHooks'.
 --
@@ -217,9 +220,7 @@ createPostgresqlPoolWithConf
     -> PostgresConfHooks -- ^ Record of callback functions
     -> m (Pool SqlBackend)
 createPostgresqlPoolWithConf conf hooks = do
-  let getVer = pgConfHooksGetServerVersion hooks
-      modConn = pgConfHooksAfterCreate hooks
-  createSqlPoolWithConfig (open' modConn getVer (pgConnStr conf)) (postgresConfToConnectionPoolConfig conf)
+  createSqlPoolWithConfig (open' hooks (pgConnStr conf)) (postgresConfToConnectionPoolConfig conf)
 
 postgresConfToConnectionPoolConfig :: PostgresConf -> ConnectionPoolConfig
 postgresConfToConnectionPoolConfig conf =
@@ -248,17 +249,18 @@ withPostgresqlConnWithVersion :: (MonadUnliftIO m, MonadLoggerIO m)
                               -> m a
 withPostgresqlConnWithVersion getVerDouble = do
   let getVer = oldGetVersionToNew getVerDouble
-  withSqlConn . open' (const $ return ()) getVer
+  withSqlConn . open' (defaultPostgresConfHooks { pgConfHooksGetServerVersion = getVer })
 
 open'
-    :: (PG.Connection -> IO ())
-    -> (PG.Connection -> IO (NonEmpty Word))
-    -> ConnectionString -> LogFunc -> IO SqlBackend
-open' modConn getVer cstr logFunc = do
+    :: PostgresConfHooks
+    -> ConnectionString
+    -> LogFunc
+    -> IO SqlBackend
+open' PostgresConfHooks{..} cstr logFunc = do
     conn <- PG.connectPostgreSQL cstr
-    modConn conn
-    ver <- getVer conn
-    smap <- newIORef $ Map.empty
+    pgConfHooksAfterCreate conn
+    ver <- pgConfHooksGetServerVersion conn
+    smap <- pgConfHooksCreateStatementCache
     return $ createBackend logFunc ver smap conn
 
 -- | Gets the PostgreSQL server version
@@ -294,10 +296,9 @@ getServerVersionNonEmpty conn = do
 -- so depending upon that we have to choose how the sql query is generated.
 -- upsertFunction :: Double -> Maybe (EntityDef -> Text -> Text)
 upsertFunction :: a -> NonEmpty Word -> Maybe a
-upsertFunction f version = if (version >= postgres9dot5)
+upsertFunction f version = if version >= postgres9dot5
                          then Just f
                          else Nothing
-  where
 
 postgres9dot5 :: NonEmpty Word
 postgres9dot5 = 9 NEL.:| [5]
@@ -309,7 +310,7 @@ minimumPostgresVersion :: NonEmpty Word
 minimumPostgresVersion = 9 NEL.:| [4]
 
 oldGetVersionToNew :: (PG.Connection -> IO (Maybe Double)) -> (PG.Connection -> IO (NonEmpty Word))
-oldGetVersionToNew oldFn = \conn -> do
+oldGetVersionToNew oldFn conn = do
   mDouble <- oldFn conn
   case mDouble of
     Nothing -> pure minimumPostgresVersion
@@ -327,22 +328,23 @@ openSimpleConn = openSimpleConnWithVersion getServerVersion
 -- @since 2.9.1
 openSimpleConnWithVersion :: (PG.Connection -> IO (Maybe Double)) -> LogFunc -> PG.Connection -> IO SqlBackend
 openSimpleConnWithVersion getVerDouble logFunc conn = do
-    smap <- newIORef $ Map.empty
+    smap <- mkSimpleStatementCache
     serverVersion <- oldGetVersionToNew getVerDouble conn
     return $ createBackend logFunc serverVersion smap conn
 
 -- | Create the backend given a logging function, server version, mutable statement cell,
 -- and connection.
 createBackend :: LogFunc -> NonEmpty Word
-              -> IORef (Map.Map Text Statement) -> PG.Connection -> SqlBackend
-createBackend logFunc serverVersion smap conn = do
-    SqlBackend
+              -> MkStatementCache -> PG.Connection -> SqlBackend
+createBackend logFunc serverVersion smap conn =
+    maybe id setConnPutManySql (upsertFunction putManySql serverVersion) $
+    maybe id setConnUpsertSql (upsertFunction upsertSql' serverVersion) $
+    setConnInsertManySql insertManySql' $
+    maybe id setConnRepsertManySql (upsertFunction repsertManySql serverVersion) $
+    mkSqlBackend MkSqlBackendArgs
         { connPrepare    = prepare' conn
-        , connStmtMap    = smap
+        , connStmtMap    = mkStatementCache smap
         , connInsertSql  = insertSql'
-        , connInsertManySql = Just insertManySql'
-        , connUpsertSql  = upsertFunction upsertSql' serverVersion
-        , connPutManySql = upsertFunction putManySql serverVersion
         , connClose      = PG.close conn
         , connMigrateSql = migrate'
         , connBegin      = \_ mIsolation -> case mIsolation of
@@ -361,8 +363,6 @@ createBackend logFunc serverVersion smap conn = do
         , connRDBMS      = "postgresql"
         , connLimitOffset = decorateSQLWithLimitOffset "LIMIT ALL"
         , connLogFunc = logFunc
-        , connMaxParams = Nothing
-        , connRepsertManySql = upsertFunction repsertManySql serverVersion
         }
 
 prepare' :: PG.Connection -> Text -> IO Statement
@@ -420,7 +420,7 @@ upsertSql' ent uniqs updateVal =
     wher = T.intercalate " AND " $ map (singleClause . snd) $ NEL.toList uniqs
 
     singleClause :: FieldNameDB -> Text
-    singleClause field = escapeE (entityDB ent) <> "." <> (escapeF field) <> " =?"
+    singleClause field = escapeE (entityDB ent) <> "." <> escapeF field <> " =?"
 
 -- | SQL for inserting multiple rows at once and returning their primary keys.
 insertManySql' :: EntityDef -> [[PersistValue]] -> InsertSqlResult
@@ -606,7 +606,7 @@ instance PGFF.FromField PgInterval where
         nominalDiffTime :: P.Parser NominalDiffTime
         nominalDiffTime = do
           (s, h, m, ss) <- interval
-          let pico   = ss + 60 * (fromIntegral m) + 60 * 60 * (fromIntegral (abs h))
+          let pico   = ss + 60 * fromIntegral m + 60 * 60 * fromIntegral (abs h)
           return . fromRational . toRational $ if s then (-pico) else pico
 
 fromPersistValueError :: Text -- ^ Haskell type, should match Haskell name exactly, e.g. "Int64"
@@ -797,7 +797,7 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
             -- for https://github.com/yesodweb/persistent/issues/152
 
     createText newcols fdefs_ udspair =
-        (addTable newcols entity) : uniques ++ references ++ foreignsAlt
+        addTable newcols entity : uniques ++ references ++ foreignsAlt
       where
         uniques = flip concatMap udspair $ \(uname, ucols) ->
                 [AlterTable name $ AddUniqueConstraint uname ucols]
@@ -1074,7 +1074,7 @@ getColumn getter tableName' [ PersistText columnName
 
     let cname = FieldNameDB columnName
 
-    ref <- lift $ fmap join $ traverse (getRef cname) refName_
+    ref <- lift $ join <$> traverse (getRef cname) refName_
 
     return Column
         { cName = cname
@@ -1536,9 +1536,9 @@ instance FromJSON PostgresConf where
         port     <- o .:? "port" .!= 5432
         user     <- o .: "user"
         password <- o .: "password"
-        poolSize <- o .:? "poolsize" .!= (connectionPoolConfigSize defaultPoolConfig)
-        poolStripes <- o .:? "stripes" .!= (connectionPoolConfigStripes defaultPoolConfig)
-        poolIdleTimeout <- o .:? "idleTimeout" .!= (floor $ connectionPoolConfigIdleTimeout defaultPoolConfig)
+        poolSize <- o .:? "poolsize" .!= connectionPoolConfigSize defaultPoolConfig
+        poolStripes <- o .:? "stripes" .!= connectionPoolConfigStripes defaultPoolConfig
+        poolIdleTimeout <- o .:? "idleTimeout" .!= floor (connectionPoolConfigIdleTimeout defaultPoolConfig)
         let ci = PG.ConnectInfo
                    { PG.connectHost     = host
                    , PG.connectPort     = port
@@ -1603,6 +1603,7 @@ data PostgresConfHooks = PostgresConfHooks
       -- The default implementation does nothing.
       --
       -- @since 2.11.0
+  , pgConfHooksCreateStatementCache :: IO MkStatementCache
   }
 
 -- | Default settings for 'PostgresConfHooks'. See the individual fields of 'PostgresConfHooks' for the default values.
@@ -1612,6 +1613,7 @@ defaultPostgresConfHooks :: PostgresConfHooks
 defaultPostgresConfHooks = PostgresConfHooks
   { pgConfHooksGetServerVersion = getServerVersionNonEmpty
   , pgConfHooksAfterCreate = const $ pure ()
+  , pgConfHooksCreateStatementCache = mkSimpleStatementCache
   }
 
 
@@ -1693,37 +1695,34 @@ mockMigrate allDefs _ entity = fmap (fmap $ map showAlterDb) $ do
 -- with the difference that an actual database is not needed.
 mockMigration :: Migration -> IO ()
 mockMigration mig = do
-  smap <- newIORef $ Map.empty
-  let sqlbackend = SqlBackend { connPrepare = \_ -> do
-                                             return Statement
-                                                        { stmtFinalize = return ()
-                                                        , stmtReset = return ()
-                                                        , stmtExecute = undefined
-                                                        , stmtQuery = \_ -> return $ return ()
-                                                        },
-                             connInsertManySql = Nothing,
-                             connInsertSql = undefined,
-                             connUpsertSql = Nothing,
-                             connPutManySql = Nothing,
-                             connStmtMap = smap,
-                             connClose = undefined,
-                             connMigrateSql = mockMigrate,
-                             connBegin = undefined,
-                             connCommit = undefined,
-                             connRollback = undefined,
-                             connEscapeFieldName = escapeF,
-                             connEscapeTableName = escapeE . entityDB,
-                             connEscapeRawName = escape,
-                             connNoLimit = undefined,
-                             connRDBMS = undefined,
-                             connLimitOffset = undefined,
-                             connLogFunc = undefined,
-                             connMaxParams = Nothing,
-                             connRepsertManySql = Nothing
-                             }
-      result = runReaderT $ runWriterT $ runWriterT mig
-  resp <- result sqlbackend
-  mapM_ T.putStrLn $ map snd $ snd resp
+    smap <- mkStatementCache <$> mkSimpleStatementCache
+    let sqlbackend =
+            mkSqlBackend MkSqlBackendArgs
+                { connPrepare = \_ -> do
+                    return Statement
+                        { stmtFinalize = return ()
+                        , stmtReset = return ()
+                        , stmtExecute = undefined
+                        , stmtQuery = \_ -> return $ return ()
+                        }
+                , connInsertSql = undefined
+                , connStmtMap = smap
+                , connClose = undefined
+                , connMigrateSql = mockMigrate
+                , connBegin = undefined
+                , connCommit = undefined
+                , connRollback = undefined
+                , connEscapeFieldName = escapeF
+                , connEscapeTableName = escapeE . entityDB
+                , connEscapeRawName = escape
+                , connNoLimit = undefined
+                , connRDBMS = undefined
+                , connLimitOffset = undefined
+                , connLogFunc = undefined
+                }
+        result = runReaderT $ runWriterT $ runWriterT mig
+    resp <- result sqlbackend
+    mapM_ T.putStrLn $ map snd $ snd resp
 
 putManySql :: EntityDef -> Int -> Text
 putManySql ent n = putManySql' conflictColumns fields ent n

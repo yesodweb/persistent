@@ -17,6 +17,7 @@ module PgInit (
   , module Control.Monad.Trans.Reader
   , module Control.Monad
   , module Database.Persist.Sql
+  , module Database.Persist.SqlBackend
   , module Database.Persist
   , module Database.Persist.Sql.Raw.QQ
   , module Init
@@ -47,6 +48,7 @@ import Control.Monad.Trans.Reader
 import Data.Aeson (Value(..))
 import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase, MkPersistSettings(..))
 import Database.Persist.Sql.Raw.QQ
+import Database.Persist.SqlBackend
 import Database.Persist.Postgresql.JSON()
 import Test.Hspec
 import Test.QuickCheck.Instances ()
@@ -56,7 +58,6 @@ import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
 import Test.QuickCheck
 
 import Control.Monad (unless, (>=>))
-import Control.Monad.IO.Class
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)

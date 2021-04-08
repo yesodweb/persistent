@@ -9,14 +9,15 @@ import Control.Monad.Trans.Resource (MonadResource,release)
 import Data.Acquire (allocateAcquire, Acquire, mkAcquire, with)
 import Data.Conduit
 import Data.IORef (writeIORef, readIORef, newIORef)
-import qualified Data.Map as Map
 import Data.Int (Int64)
 import Data.Text (Text, pack)
 import qualified Data.Text as T
 
 import Database.Persist
 import Database.Persist.Sql.Types
+import Database.Persist.Sql.Types.Internal
 import Database.Persist.Sql.Class
+import Database.Persist.SqlBackend.Internal.StatementCache
 
 rawQuery :: (MonadResource m, MonadReader env m, BackendCompatible SqlBackend env)
          => Text
@@ -66,17 +67,18 @@ rawExecuteCount sql vals = do
     return res
 
 getStmt
-  :: (MonadIO m, BackendCompatible SqlBackend backend)
-  => Text -> ReaderT backend m Statement
+  :: (MonadIO m, MonadReader backend m, BackendCompatible SqlBackend backend)
+  => Text -> m Statement
 getStmt sql = do
     conn <- projectBackend `liftM` ask
     liftIO $ getStmtConn conn sql
 
 getStmtConn :: SqlBackend -> Text -> IO Statement
 getStmtConn conn sql = do
-    smap <- liftIO $ readIORef $ connStmtMap conn
-    case Map.lookup sql smap of
-        Just stmt -> return stmt
+    let cacheKey = mkCacheKeyFromQuery sql
+    smap <- liftIO $ statementCacheLookup (connStmtMap conn) cacheKey
+    case smap of
+        Just stmt -> connStatementMiddleware conn sql stmt
         Nothing -> do
             stmt' <- liftIO $ connPrepare conn sql
             iactive <- liftIO $ newIORef True
@@ -99,8 +101,8 @@ getStmtConn conn sql = do
                             then stmtQuery stmt' x
                             else liftIO $ throwIO $ StatementAlreadyFinalized sql
                     }
-            liftIO $ writeIORef (connStmtMap conn) $ Map.insert sql stmt smap
-            return stmt
+            liftIO $ statementCacheInsert (connStmtMap conn) cacheKey stmt
+            connStatementMiddleware conn sql stmt
 
 -- | Execute a raw SQL statement and return its results as a
 -- list. If you do not expect a return value, use of

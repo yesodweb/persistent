@@ -26,7 +26,7 @@ import Database.Persist hiding (updateField)
 import Database.Persist.Sql.Util (
     entityColumnNames, parseEntityValues, isIdField, updatePersistValue
   , mkUpdateText, commaSeparated, dbIdColumns)
-import Database.Persist.Sql.Types
+import Database.Persist.Sql.Types.Internal (SqlBackend(..), SqlReadBackend, SqlWriteBackend)
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
 

@@ -9,16 +9,15 @@ import qualified Control.Monad.Reader as MonadReader
 import Control.Monad.Trans.Reader hiding (local)
 import Control.Monad.Trans.Resource
 import Data.Acquire (Acquire, ReleaseType(..), mkAcquireType, with)
-import Data.IORef (readIORef)
 import Data.Pool (Pool)
 import Data.Pool as P
-import qualified Data.Map as Map
 import qualified Data.Text as T
 
 import Database.Persist.Class.PersistStore
 import Database.Persist.Sql.Types
-import Database.Persist.Sql.Types.Internal (IsolationLevel)
+import Database.Persist.Sql.Types.Internal
 import Database.Persist.Sql.Raw
+import Database.Persist.SqlBackend.Internal.StatementCache
 
 -- | Get a connection from the pool, run the given action, and then return the
 -- connection to the pool.
@@ -184,7 +183,7 @@ withSqlPool
     -> Int -- ^ connection count
     -> (Pool backend -> m a)
     -> m a
-withSqlPool mkConn connCount f = withSqlPoolWithConfig mkConn (defaultConnectionPoolConfig { connectionPoolConfigSize = connCount } ) f
+withSqlPool mkConn connCount = withSqlPoolWithConfig mkConn (defaultConnectionPoolConfig { connectionPoolConfigSize = connCount } )
 
 -- | Creates a pool of connections to a SQL database which can be used by the @Pool backend -> m a@ function.
 -- After the function completes, the connections are destroyed.
@@ -297,5 +296,6 @@ withSqlConn open f = do
 
 close' :: (BackendCompatible SqlBackend backend) => backend -> IO ()
 close' conn = do
-    readIORef (connStmtMap $ projectBackend conn) >>= mapM_ stmtFinalize . Map.elems
-    connClose $ projectBackend conn
+    let backend = projectBackend conn
+    statementCacheClear $ connStmtMap backend
+    connClose backend
