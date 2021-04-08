@@ -71,6 +71,7 @@ import System.Environment (getEnvironment)
 
 import Database.Persist.Sql
 import Database.Persist.SqlBackend
+import Database.Persist.SqlBackend.StatementCache
 import Database.Persist.Sql.Types.Internal (makeIsolationLevelStatement)
 import qualified Database.Persist.Sql.Util as Util
 
@@ -125,7 +126,7 @@ open' :: MySQL.ConnectInfo -> LogFunc -> IO SqlBackend
 open' ci logFunc = do
     conn <- MySQL.connect ci
     MySQLBase.autocommit conn False -- disable autocommit!
-    smap <- mkSimpleStatementCache
+    smap <- mkStatementCache <$> mkSimpleStatementCache
     return $
         setConnPutManySql putManySql $
         setConnRepsertManySql repsertManySql $
@@ -1242,7 +1243,7 @@ mockMigrate _connectInfo allDefs _getter val = do
 -- the actual database isn't already present in the system.
 mockMigration :: Migration -> IO ()
 mockMigration mig = do
-    smap <- mkSimpleStatementCache
+    smap <- mkStatemeentCache <$> mkSimpleStatementCache
     let sqlbackend =
             mkSqlBackend MkSqlBackendArgs
                 { connPrepare = \_ -> do
