@@ -17,6 +17,7 @@ import Database.Persist.Class.PersistStore
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal
 import Database.Persist.Sql.Raw
+import Database.Persist.SqlBackend.Internal.StatementCache
 
 -- | Get a connection from the pool, run the given action, and then return the
 -- connection to the pool.

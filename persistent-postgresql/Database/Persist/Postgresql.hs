@@ -90,6 +90,7 @@ import System.Environment (getEnvironment)
 
 import Database.Persist.Sql
 import Database.Persist.SqlBackend
+import Database.Persist.SqlBackend.StatementCache
 import qualified Database.Persist.Sql.Util as Util
 
 -- | A @libpq@ connection string.  A simple example of connection
@@ -327,14 +328,14 @@ openSimpleConn = openSimpleConnWithVersion getServerVersion
 -- @since 2.9.1
 openSimpleConnWithVersion :: (PG.Connection -> IO (Maybe Double)) -> LogFunc -> PG.Connection -> IO SqlBackend
 openSimpleConnWithVersion getVerDouble logFunc conn = do
-    smap <- makeSimpleStatementCache
+    smap <- mkSimpleStatementCache
     serverVersion <- oldGetVersionToNew getVerDouble conn
     return $ createBackend logFunc serverVersion smap conn
 
 -- | Create the backend given a logging function, server version, mutable statement cell,
 -- and connection.
 createBackend :: LogFunc -> NonEmpty Word
-              -> StatementCache -> PG.Connection -> SqlBackend
+              -> MkStatementCache -> PG.Connection -> SqlBackend
 createBackend logFunc serverVersion smap conn =
     maybe id setConnPutManySql (upsertFunction putManySql serverVersion) $
     maybe id setConnUpsertSql (upsertFunction upsertSql' serverVersion) $
@@ -342,7 +343,7 @@ createBackend logFunc serverVersion smap conn =
     maybe id setConnRepsertManySql (upsertFunction repsertManySql serverVersion) $
     mkSqlBackend MkSqlBackendArgs
         { connPrepare    = prepare' conn
-        , connStmtMap    = smap
+        , connStmtMap    = mkStatementCache smap
         , connInsertSql  = insertSql'
         , connClose      = PG.close conn
         , connMigrateSql = migrate'
@@ -362,7 +363,6 @@ createBackend logFunc serverVersion smap conn =
         , connRDBMS      = "postgresql"
         , connLimitOffset = decorateSQLWithLimitOffset "LIMIT ALL"
         , connLogFunc = logFunc
-        , connStatementMiddleware = const pure
         }
 
 prepare' :: PG.Connection -> Text -> IO Statement
@@ -1603,7 +1603,7 @@ data PostgresConfHooks = PostgresConfHooks
       -- The default implementation does nothing.
       --
       -- @since 2.11.0
-  , pgConfHooksCreateStatementCache :: IO StatementCache
+  , pgConfHooksCreateStatementCache :: IO MkStatementCache
   }
 
 -- | Default settings for 'PostgresConfHooks'. See the individual fields of 'PostgresConfHooks' for the default values.
@@ -1613,7 +1613,7 @@ defaultPostgresConfHooks :: PostgresConfHooks
 defaultPostgresConfHooks = PostgresConfHooks
   { pgConfHooksGetServerVersion = getServerVersionNonEmpty
   , pgConfHooksAfterCreate = const $ pure ()
-  , pgConfHooksCreateStatementCache = makeSimpleStatementCache
+  , pgConfHooksCreateStatementCache = mkSimpleStatementCache
   }
 
 
@@ -1695,7 +1695,7 @@ mockMigrate allDefs _ entity = fmap (fmap $ map showAlterDb) $ do
 -- with the difference that an actual database is not needed.
 mockMigration :: Migration -> IO ()
 mockMigration mig = do
-    smap <- makeSimpleStatementCache
+    smap <- mkStatementCache <$> mkSimpleStatementCache
     let sqlbackend =
             mkSqlBackend MkSqlBackendArgs
                 { connPrepare = \_ -> do
@@ -1719,7 +1719,6 @@ mockMigration mig = do
                 , connRDBMS = undefined
                 , connLimitOffset = undefined
                 , connLogFunc = undefined
-                , connStatementMiddleware = const pure
                 }
         result = runReaderT $ runWriterT $ runWriterT mig
     resp <- result sqlbackend

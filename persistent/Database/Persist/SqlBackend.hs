@@ -18,6 +18,7 @@ module Database.Persist.SqlBackend
     , setConnInsertManySql
     , setConnUpsertSql
     , setConnPutManySql
+    , setConnStatementMiddleware
     ) where
 
 import Control.Monad.Reader
@@ -29,6 +30,7 @@ import qualified Database.Persist.SqlBackend.Internal as SqlBackend
 import Database.Persist.SqlBackend.Internal.MkSqlBackend as Mk (MkSqlBackendArgs(..))
 import Database.Persist.Types.Base
 import Database.Persist.SqlBackend.Internal.InsertSqlResult
+import Database.Persist.SqlBackend.Internal.Statement
 import Data.List.NonEmpty (NonEmpty)
 
 -- $utilities
@@ -158,3 +160,16 @@ setConnPutManySql
     -> SqlBackend
 setConnPutManySql  mkQuery sb =
     sb { connPutManySql = Just mkQuery }
+
+-- | Set the 'connPutManySql field on the 'SqlBackend'. This can be used to
+-- locally alter the statement prior to the statement being queried or executed.
+-- If this is not set, it will have no effect.
+--
+-- @since 2.13.0.0
+setConnStatementMiddleware
+    :: (Text -> Statement -> IO Statement)
+    -> SqlBackend
+    -> SqlBackend
+setConnStatementMiddleware middleware sb =
+    sb { connStatementMiddleware = middleware }
+

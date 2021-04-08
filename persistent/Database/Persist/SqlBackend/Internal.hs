@@ -15,6 +15,7 @@ import Database.Persist.Types.Base
 import Data.Int
 import Data.IORef
 import Control.Monad.Reader
+import Database.Persist.SqlBackend.StatementCache
 import Database.Persist.SqlBackend.Internal.MkSqlBackend
 import Database.Persist.SqlBackend.Internal.Statement
 import Database.Persist.SqlBackend.Internal.InsertSqlResult
@@ -74,7 +75,7 @@ data SqlBackend = SqlBackend
     -- When left as 'Nothing', we default to using 'defaultPutMany'.
     --
     -- @since 2.8.1
-    , connStmtMap :: IORef (Map Text Statement)
+    , connStmtMap :: StatementCache
     -- ^ A reference to the cache of statements. 'Statement's are keyed by
     -- the 'Text' queries that generated them.
     , connClose :: IO ()
@@ -137,6 +138,9 @@ data SqlBackend = SqlBackend
     -- When left as 'Nothing', we default to using 'defaultRepsertMany'.
     --
     -- @since 2.9.0
+    , connStatementMiddleware :: Text -> Statement -> IO Statement
+    -- ^ Provide facilities for injecting middleware into statements
+    -- to allow for instrumenting queries.
     }
 
 -- | A function for creating a value of the 'SqlBackend' type. You should prefer
@@ -153,6 +157,7 @@ mkSqlBackend MkSqlBackendArgs {..} =
         , connPutManySql = Nothing
         , connUpsertSql = Nothing
         , connInsertManySql = Nothing
+        , connStatementMiddleware = const pure
         , ..
         }
 

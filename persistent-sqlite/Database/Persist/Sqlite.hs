@@ -76,8 +76,6 @@ import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.List as CL
 import qualified Data.HashMap.Lazy as HashMap
 import Data.Int (Int64)
-import Data.IORef
-import qualified Data.Map as Map
 import Data.Monoid ((<>))
 import Data.Pool (Pool)
 import Data.Text (Text)
@@ -91,6 +89,7 @@ import Database.Persist.Compatible
 #endif
 import Database.Persist.Sql
 import Database.Persist.SqlBackend
+import Database.Persist.SqlBackend.StatementCache
 import qualified Database.Persist.Sql.Util as Util
 import qualified Database.Sqlite as Sqlite
 
@@ -267,7 +266,7 @@ wrapConnectionInfo connInfo conn logFunc = do
         Sqlite.reset conn stmt
         Sqlite.finalize stmt
 
-    smap <- makeSimpleStatementCache
+    smap <- mkStatementCache <$> mkSimpleStatementCache
     return $
         setConnMaxParams 999 $
         setConnPutManySql putManySql $
@@ -288,7 +287,6 @@ wrapConnectionInfo connInfo conn logFunc = do
             , connRDBMS = "sqlite"
             , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
             , connLogFunc = logFunc
-            , connStatementMiddleware = const pure
             }
   where
     helper t getter = do
@@ -455,7 +453,7 @@ migrate' allDefs getter val = do
 -- with the difference that an actual database isn't needed for it.
 mockMigration :: Migration -> IO ()
 mockMigration mig = do
-    smap <- makeSimpleStatementCache
+    smap <- mkStatementCache <$> mkSimpleStatementCache
     let sqlbackend =
             setConnMaxParams 999 $
             mkSqlBackend MkSqlBackendArgs
@@ -480,7 +478,6 @@ mockMigration mig = do
                 , connRDBMS = "sqlite"
                 , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
                 , connLogFunc = undefined
-                , connStatementMiddleware = const pure
                 }
         result = runReaderT . runWriterT . runWriterT $ mig
     resp <- result sqlbackend

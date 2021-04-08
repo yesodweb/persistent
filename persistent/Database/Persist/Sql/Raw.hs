@@ -16,9 +16,8 @@ import qualified Data.Text as T
 import Database.Persist
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal
-import Database.Persist.SqlBackend.Internal
 import Database.Persist.Sql.Class
-import Database.Persist.Sql.Types.Internal (statementCacheLookup, StatementCache (statementCacheInsert))
+import Database.Persist.SqlBackend.Internal.StatementCache
 
 rawQuery :: (MonadResource m, MonadReader env m, BackendCompatible SqlBackend env)
          => Text
@@ -76,7 +75,8 @@ getStmt sql = do
 
 getStmtConn :: SqlBackend -> Text -> IO Statement
 getStmtConn conn sql = do
-    smap <- liftIO $ statementCacheLookup (connStmtMap conn) sql
+    let cacheKey = mkCacheKeyFromQuery sql
+    smap <- liftIO $ statementCacheLookup (connStmtMap conn) cacheKey
     case smap of
         Just stmt -> connStatementMiddleware conn sql stmt
         Nothing -> do
@@ -101,7 +101,7 @@ getStmtConn conn sql = do
                             then stmtQuery stmt' x
                             else liftIO $ throwIO $ StatementAlreadyFinalized sql
                     }
-            liftIO $ statementCacheInsert (connStmtMap conn) sql stmt
+            liftIO $ statementCacheInsert (connStmtMap conn) cacheKey stmt
             connStatementMiddleware conn sql stmt
 
 -- | Execute a raw SQL statement and return its results as a
