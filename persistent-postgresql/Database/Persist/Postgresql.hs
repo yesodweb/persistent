@@ -1771,7 +1771,5 @@ migrateEnableExtension extName = WriterT $ WriterT $ do
 
 postgresMkColumns :: [EntityDef] -> EntityDef -> ([Column], [UniqueDef], [ForeignDef])
 postgresMkColumns allDefs t =
-    mkColumns allDefs t (emptyBackendSpecificOverrides
-        { backendSpecificForeignKeyName = Just refName
-        }
-    )
+    mkColumns allDefs t
+    $ setBackendSpecificForeignKeyName refName emptyBackendSpecificOverrides
