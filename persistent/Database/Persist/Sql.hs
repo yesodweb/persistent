@@ -16,10 +16,15 @@ module Database.Persist.Sql
     , transactionSaveWithIsolation
     , transactionUndo
     , transactionUndoWithIsolation
-    , IsolationLevel (..)
     , getStmtConn
+    , mkColumns
+    , BackendSpecificOverrides
+    , emptyBackendSpecificOverrides
+    , getBackendSpecificForeignKeyName
+    , setBackendSpecificForeignKeyName
+    , defaultAttribute
       -- * Internal
-    , module Database.Persist.Sql.Internal
+    , IsolationLevel(..)
     , decorateSQLWithLimitOffset
     ) where
 

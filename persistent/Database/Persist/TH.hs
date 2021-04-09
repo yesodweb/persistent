@@ -118,7 +118,14 @@ unFieldNameHSForJSON = fixTypeUnderscore . unFieldNameHS
 -- used as input to the template haskell generation code (mkPersist).
 persistWith :: PersistSettings -> QuasiQuoter
 persistWith ps = QuasiQuoter
-    { quoteExp = parseReferences ps . pack
+    { quoteExp =
+        parseReferences ps . pack
+    , quotePat =
+        error "persistWith can't be used as pattern"
+    , quoteType =
+        error "persistWith can't be used as type"
+    , quoteDec =
+        error "persistWith can't be used as declaration"
     }
 
 -- | Apply 'persistWith' to 'upperCaseSettings'.
@@ -1088,7 +1095,7 @@ headNote = \case
   xs -> error $ "mkKeyFromValues: expected a list of one element, got: " `mappend` show xs
 
 fromValues :: EntityDef -> Text -> Exp -> [FieldDef] -> Q [Clause]
-fromValues entDef funName conE fields = do
+fromValues entDef funName constructExpr fields = do
     x <- newName "x"
     let funMsg = entityText entDef `mappend` ": " `mappend` funName `mappend` " failed on: "
     patternMatchFailure <- [|Left $ mappend funMsg (pack $ show $(return $ VarE x))|]
@@ -1100,13 +1107,13 @@ fromValues entDef funName conE fields = do
         case fields of
             [] -> do
                 rightE <- [|Right|]
-                return $ normalClause [ListP []] (rightE `AppE` conE)
+                return $ normalClause [ListP []] (rightE `AppE` constructExpr)
             _ -> do
                 x1 <- newName "x1"
                 restNames <- mapM (\i -> newName $ "x" `mappend` show i) [2..length fields]
                 (fpv1:mkPersistValues) <- mapM mkPersistValue fields
                 app1E <- [|(<$>)|]
-                let conApp = infixFromPersistValue app1E fpv1 conE x1
+                let conApp = infixFromPersistValue app1E fpv1 constructExpr x1
                 applyE <- [|(<*>)|]
                 let applyFromPersistValue = infixFromPersistValue applyE
 

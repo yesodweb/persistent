@@ -29,6 +29,8 @@
       *optional* - they provide enhanced or backend-specific functionality. For
       these, use the setter functions like `setConnUpsertSql`.
     * Previously hidden modules are now exposed under the `Internal` namespace.
+    * The `connLimitOffset` function used to have a `Bool` parameter. This
+      parameter is unused and has been removed.
 
 ## 2.12.0.2
 

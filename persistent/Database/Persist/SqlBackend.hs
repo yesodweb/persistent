@@ -13,6 +13,7 @@ module Database.Persist.SqlBackend
     , getEscapedFieldName
     , getEscapedRawName
     , getEscapeRawNameFunction
+    , getConnLimitOffset
     , setConnMaxParams
     , setConnRepsertManySql
     , setConnInsertManySql
@@ -99,6 +100,21 @@ getEscapeRawNameFunction
     => m (Text -> Text)
 getEscapeRawNameFunction = do
     asks (SqlBackend.connEscapeRawName . projectBackend)
+
+-- |
+--
+-- @since 2.13.0.0
+getConnLimitOffset
+    :: (BackendCompatible SqlBackend backend, MonadReader backend m)
+    => (Int, Int)
+    -- ^ The @(LIMIT, OFFSET)@ to put on the query.
+    -> Text
+    -- ^ The SQL query that the LIMIT/OFFSET clause will be attached to.
+    -> m Text
+getConnLimitOffset limitOffset sql = do
+    func <- asks (SqlBackend.connLimitOffset . projectBackend)
+    pure $ func limitOffset sql
+
 
 -- | Set the maximum parameters that may be issued in a given SQL query. This
 -- should be used only if the database backend have this limitation.
