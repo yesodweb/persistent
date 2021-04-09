@@ -10,10 +10,13 @@ module Database.Persist.SqlBackend
 
     -- $utilities
 
+    -- ** SqlBackend Getters
     , getEscapedFieldName
     , getEscapedRawName
     , getEscapeRawNameFunction
     , getConnLimitOffset
+    , getConnUpsertSql
+    -- ** SqlBackend Setters
     , setConnMaxParams
     , setConnRepsertManySql
     , setConnInsertManySql
@@ -101,7 +104,7 @@ getEscapeRawNameFunction
 getEscapeRawNameFunction = do
     asks (SqlBackend.connEscapeRawName . projectBackend)
 
--- |
+-- | Decorate the given SQL query with the @(LIMIT, OFFSET)@ specified.
 --
 -- @since 2.13.0.0
 getConnLimitOffset
@@ -114,6 +117,16 @@ getConnLimitOffset
 getConnLimitOffset limitOffset sql = do
     func <- asks (SqlBackend.connLimitOffset . projectBackend)
     pure $ func limitOffset sql
+
+-- | Retrieve the function for generating an upsert statement, if the backend
+-- supports it.
+--
+-- @since 2.13.0.0
+getConnUpsertSql
+    :: (BackendCompatible SqlBackend backend, MonadReader backend m)
+    => m (Maybe (EntityDef -> NonEmpty (FieldNameHS, FieldNameDB) -> Text -> Text))
+getConnUpsertSql = do
+    asks (SqlBackend.connUpsertSql . projectBackend)
 
 
 -- | Set the maximum parameters that may be issued in a given SQL query. This
