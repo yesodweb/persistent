@@ -1874,14 +1874,10 @@ upsertManyWhere ::
       PersistEntity record,
       MonadIO m
     ) =>
-    -- | A list of the records you want to insert, or update
-    [record] ->
-    -- | A list of the fields you want to copy over.
-    [HandleUpdateCollision record] ->
-    -- | A list of the updates to apply that aren't dependent on the record being inserted.
-    [Update record] ->
-    -- | A filter condition that dictates the scope of the updates
-    [Filter record] ->
+    [record] -> -- ^ A list of the records you want to insert, or update
+    [HandleUpdateCollision record] -> -- ^ A list of the fields you want to copy over.
+    [Update record] -> -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
+    [Filter record] -> -- ^ A filter condition that dictates the scope of the updates
     ReaderT backend m ()
 upsertManyWhere [] _ _ _ = return ()
 upsertManyWhere records fieldValues updates filters = do
