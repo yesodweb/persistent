@@ -1865,7 +1865,7 @@ excludeNotEqualToOriginal field =
 -- Called thusly, this method will insert a new record (if none exists) OR update a recordField with a new value
 -- assuming the condition in the last block is met.
 --
--- -- @since 2.12.1.0
+-- @since 2.12.1.0
 upsertManyWhere ::
     forall record backend m.
     ( backend ~ PersistEntityBackend record,
