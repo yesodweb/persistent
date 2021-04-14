@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -fno-warn-deprecations #-} -- Pattern match 'PersistDbSpecific'
 module Database.Persist.Redis.Parser
     ( redisToPerisistValues
     , toValue
@@ -128,9 +127,7 @@ instance Binary BinPersistValue where
         put x
 
     put (BinPersistValue (PersistArray _)) = throw $ NotSupportedValueType "PersistArray"
-    put (BinPersistValue (PersistDbSpecific _)) = throw $ NotSupportedValueType "PersistDbSpecific"
-    put (BinPersistValue (PersistLiteral _)) = throw $ NotSupportedValueType "PersistLiteral"
-    put (BinPersistValue (PersistLiteralEscaped _)) = throw $ NotSupportedValueType "PersistLiteralEscaped"
+    put (BinPersistValue (PersistLiteral_ _ _)) = throw $ NotSupportedValueType "PersistLiteral_"
     put (BinPersistValue (PersistObjectId _)) = throw $ NotSupportedValueType "PersistObjectId"
 
     get = do

@@ -1,4 +1,8 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -6,7 +10,6 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# OPTIONS_GHC -fno-warn-deprecations #-} -- Pattern match 'PersistDbSpecific'
 
 -- | A postgresql backend for persistent.
 module Database.Persist.Postgresql
@@ -21,8 +24,16 @@ module Database.Persist.Postgresql
     , createPostgresqlPoolWithConf
     , module Database.Persist.Sql
     , ConnectionString
+    , HandleUpdateCollision
+    , copyField
+    , copyUnlessNull
+    , copyUnlessEmpty
+    , copyUnlessEq
+    , excludeNotEqualToOriginal
     , PostgresConf (..)
     , PgInterval (..)
+    , upsertWhere
+    , upsertManyWhere
     , openSimpleConn
     , openSimpleConnWithVersion
     , tableName
@@ -36,29 +47,29 @@ module Database.Persist.Postgresql
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
 import qualified Database.PostgreSQL.Simple as PG
-import qualified Database.PostgreSQL.Simple.Internal as PG
 import qualified Database.PostgreSQL.Simple.FromField as PGFF
+import qualified Database.PostgreSQL.Simple.Internal as PG
+import Database.PostgreSQL.Simple.Ok (Ok(..))
 import qualified Database.PostgreSQL.Simple.ToField as PGTF
 import qualified Database.PostgreSQL.Simple.Transaction as PG
-import qualified Database.PostgreSQL.Simple.Types as PG
 import qualified Database.PostgreSQL.Simple.TypeInfo.Static as PS
-import Database.PostgreSQL.Simple.Ok (Ok (..))
+import qualified Database.PostgreSQL.Simple.Types as PG
 
 import Control.Arrow
 import Control.Exception (Exception, throw, throwIO)
 import Control.Monad
 import Control.Monad.Except
-import Control.Monad.IO.Unlift (MonadIO (..), MonadUnliftIO)
+import Control.Monad.IO.Unlift (MonadIO(..), MonadUnliftIO)
 import Control.Monad.Logger (MonadLoggerIO, runNoLoggingT)
-import Control.Monad.Trans.Reader (runReaderT)
+import Control.Monad.Trans.Reader (ReaderT(..), asks, runReaderT)
 import Control.Monad.Trans.Writer (WriterT(..), runWriterT)
 
 import qualified Blaze.ByteString.Builder.Char8 as BBB
 import Data.Acquire (Acquire, mkAcquire, with)
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
-import qualified Data.Attoparsec.Text as AT
 import qualified Data.Attoparsec.ByteString.Char8 as P
+import qualified Data.Attoparsec.Text as AT
 import Data.Bits ((.&.))
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Builder as BB
@@ -66,20 +77,21 @@ import qualified Data.ByteString.Char8 as B8
 import Data.Char (ord)
 import Data.Conduit
 import qualified Data.Conduit.List as CL
-import Data.Data
+import Data.Data (Data, Typeable)
 import Data.Either (partitionEithers)
 import Data.Fixed (Fixed(..), Pico)
 import Data.Function (on)
+import Data.IORef
 import Data.Int (Int64)
 import qualified Data.IntMap as I
-import Data.IORef
-import Data.List (find, sort, groupBy, foldl')
-import Data.List.NonEmpty (NonEmpty)
+import Data.List (find, foldl', groupBy, sort)
 import qualified Data.List as List
+import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
 import Data.Maybe
 import Data.Monoid ((<>))
+import qualified Data.Monoid as Monoid
 import Data.Pool (Pool)
 import Data.String.Conversions.Monomorphic (toStrictByteString)
 import Data.Text (Text)
@@ -87,7 +99,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.IO as T
 import Data.Text.Read (rational)
-import Data.Time (utc, NominalDiffTime, localTimeToUTC)
+import Data.Time (NominalDiffTime, localTimeToUTC, utc)
 import System.Environment (getEnvironment)
 
 import Database.Persist.Sql
@@ -396,7 +408,6 @@ insertSql' ent vals =
                 , ")"
                 ]
         ]
-
 
 upsertSql' :: EntityDef -> NonEmpty (FieldNameHS, FieldNameDB) -> Text -> Text
 upsertSql' ent uniqs updateVal =
@@ -1496,6 +1507,7 @@ escapeE = escapeWith escape
 escapeF :: FieldNameDB -> Text
 escapeF = escapeWith escape
 
+
 escape :: Text -> Text
 escape s =
     T.pack $ '"' : go (T.unpack s) ++ "\""
@@ -1737,6 +1749,214 @@ repsertManySql ent n = putManySql' conflictColumns fields ent n
   where
     fields = keyAndEntityFields ent
     conflictColumns = escapeF . fieldDB <$> entityKeyFields ent
+
+-- | This type is used to determine how to update rows using Postgres'
+-- @INSERT ... ON CONFLICT KEY UPDATE@ functionality, exposed via
+-- 'upsertWhere' and 'upsertManyWhere' in this library.
+--
+-- @since 2.12.1.0
+data HandleUpdateCollision record where
+  -- | Copy the field directly from the record.
+  CopyField :: EntityField record typ -> HandleUpdateCollision record
+  -- | Only copy the field if it is not equal to the provided value.
+  CopyUnlessEq :: PersistField typ => EntityField record typ -> typ -> HandleUpdateCollision record
+
+-- | Copy the field into the database only if the value in the
+-- corresponding record is non-@NULL@.
+--
+-- @since  2.12.1.0
+copyUnlessNull :: PersistField typ => EntityField record (Maybe typ) -> HandleUpdateCollision record
+copyUnlessNull field = CopyUnlessEq field Nothing
+
+-- | Copy the field into the database only if the value in the
+-- corresponding record is non-empty, where "empty" means the Monoid
+-- definition for 'mempty'. Useful for 'Text', 'String', 'ByteString', etc.
+--
+-- The resulting 'HandleUpdateCollision' type is useful for the
+-- 'upsertManyWhere' function.
+--
+-- @since  2.12.1.0
+copyUnlessEmpty :: (Monoid.Monoid typ, PersistField typ) => EntityField record typ -> HandleUpdateCollision record
+copyUnlessEmpty field = CopyUnlessEq field Monoid.mempty
+
+-- | Copy the field into the database only if the field is not equal to the
+-- provided value. This is useful to avoid copying weird nullary data into
+-- the database.
+--
+-- The resulting 'HandleUpdateCollision' type is useful for the
+-- 'upsertMany' function.
+--
+-- @since  2.12.1.0
+copyUnlessEq :: PersistField typ => EntityField record typ -> typ -> HandleUpdateCollision record
+copyUnlessEq = CopyUnlessEq
+
+-- | Copy the field directly from the record.
+--
+-- @since 2.12.1.0
+copyField :: PersistField typ => EntityField record typ -> HandleUpdateCollision record
+copyField = CopyField
+
+-- | Postgres specific 'upsertWhere'. This method does the following:
+-- It will insert a record if no matching unique key exists.
+-- If a unique key exists, it will update the relevant field with a user-supplied value, however,
+-- it will only do this update on a user-supplied condition.
+-- For example, here's how this method could be called like such:
+--
+-- @
+-- upsertWhere record [recordField =. newValue] [recordField /= newValue]
+-- @
+--
+-- Called thusly, this method will insert a new record (if none exists) OR update a recordField with a new value
+-- assuming the condition in the last block is met.
+--
+-- @since 2.12.1.0
+upsertWhere
+  :: ( backend ~ PersistEntityBackend record
+     , PersistEntity record
+     , PersistEntityBackend record ~ SqlBackend
+     , MonadIO m
+     , PersistStore backend
+     , BackendCompatible SqlBackend backend
+     )
+  => record
+  -> [Update record]
+  -> [Filter record]
+  -> ReaderT backend m ()
+upsertWhere record updates filts =
+  upsertManyWhere [record] [] updates filts
+
+-- | Exclude any record field if it doesn't match the filter record.  Used only in `upsertWhere` and
+-- `upsertManyWhere`
+--
+-- @since 2.12.1.0
+-- TODO: we could probably make a sum type for the `Filter` record that's passed into the `upserWhere` and
+-- `upsertManyWhere` methods that has similar behavior to the HandleCollisionUpdate type.
+excludeNotEqualToOriginal ::
+  (PersistField typ
+  , PersistEntity rec) =>
+  EntityField rec typ ->
+  Filter rec
+excludeNotEqualToOriginal field =
+  Filter
+    { filterField =
+        field,
+      filterFilter =
+        Ne,
+      filterValue =
+        UnsafeValue $
+          PersistLiteral_
+            Unescaped
+            bsForExcludedField
+    }
+  where
+    bsForExcludedField =
+      T.encodeUtf8 $
+        "EXCLUDED."
+          <> fieldName field
+
+-- | Postgres specific 'upsertManyWhere'. This method does the following:
+-- It will insert a record if no matching unique key exists.
+-- If a unique key exists, it will update the relevant field with a user-supplied value, however,
+-- it will only do this update on a user-supplied condition.
+-- For example, here's how this method could be called like such:
+--
+-- upsertManyWhere [record] [recordField =. newValue] [recordField /= newValue]
+--
+-- Called thusly, this method will insert a new record (if none exists) OR update a recordField with a new value
+-- assuming the condition in the last block is met.
+--
+-- -- @since 2.12.1.0
+upsertManyWhere ::
+    forall record backend m.
+    ( backend ~ PersistEntityBackend record,
+      BackendCompatible SqlBackend backend,
+      PersistEntityBackend record ~ SqlBackend,
+      PersistEntity record,
+      MonadIO m
+    ) =>
+    -- | A list of the records you want to insert, or update
+    [record] ->
+    -- | A list of the fields you want to copy over.
+    [HandleUpdateCollision record] ->
+    -- | A list of the updates to apply that aren't dependent on the record being inserted.
+    [Update record] ->
+    -- | A filter condition that dictates the scope of the updates
+    [Filter record] ->
+    ReaderT backend m ()
+upsertManyWhere [] _ _ _ = return ()
+upsertManyWhere records fieldValues updates filters = do
+  conn <- asks projectBackend
+  uncurry rawExecute $
+    mkBulkUpsertQuery records conn fieldValues updates filters
+
+-- | This creates the query for 'upsertManyWhere'. If you
+-- provide an empty list of updates to perform, then it will generate
+-- a dummy/no-op update using the first field of the record. This avoids
+-- duplicate key exceptions.
+mkBulkUpsertQuery
+    :: (PersistEntity record, PersistEntityBackend record ~ SqlBackend)
+    => [record] -- ^ A list of the records you want to insert, or update
+    -> SqlBackend
+    -> [HandleUpdateCollision record] -- ^ A list of the fields you want to copy over.
+    -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
+    -> [Filter record] -- ^ A filter condition that dictates the scope of the updates
+    -> (Text, [PersistValue])
+mkBulkUpsertQuery records conn fieldValues updates filters =
+  (q, recordValues <> updsValues <> copyUnlessValues <> whereVals)
+  where
+    mfieldDef x = case x of
+        CopyField rec -> Right (fieldDbToText (persistFieldDef rec))
+        CopyUnlessEq rec val -> Left (fieldDbToText (persistFieldDef rec), toPersistValue val)
+    (fieldsToMaybeCopy, updateFieldNames) = partitionEithers $ map mfieldDef fieldValues
+    fieldDbToText = escapeF . fieldDB
+    entityDef' = entityDef records
+    conflictColumns = escapeF . fieldDB <$> entityKeyFields entityDef'
+    firstField = case entityFieldNames of
+        [] -> error "The entity you're trying to insert does not have any fields."
+        (field:_) -> field
+    entityFieldNames = map fieldDbToText (entityFields entityDef')
+    nameOfTable = escapeE . entityDB $ entityDef'
+    copyUnlessValues = map snd fieldsToMaybeCopy
+    recordValues = concatMap (map toPersistValue . toPersistFields) records
+    recordPlaceholders = Util.commaSeparated $ map (Util.parenWrapped . Util.commaSeparated . map (const "?") . toPersistFields) records
+    mkCondFieldSet n _ =
+      T.concat
+        [ n
+        , "=COALESCE("
+        ,   "NULLIF("
+        ,     "EXCLUDED."
+        ,       n
+        ,         ","
+        ,           "?"
+        ,         ")"
+        ,       ","
+        ,     nameOfTable
+        ,   "."
+        ,   n
+        ,")"
+        ]
+    condFieldSets = map (uncurry mkCondFieldSet) fieldsToMaybeCopy
+    fieldSets = map (\n -> T.concat [n, "=EXCLUDED.", n, ""]) updateFieldNames
+    upds = map (Util.mkUpdateText' (escapeF) (\n -> T.concat [nameOfTable, ".", n])) updates
+    updsValues = map (\(Update _ val _) -> toPersistValue val) updates
+    (wher, whereVals) = if null filters
+                          then ("", [])
+                          else (filterClauseWithVals (Just PrefixTableName) conn filters)
+    updateText = case fieldSets <> upds <> condFieldSets of
+        [] -> T.concat [firstField, "=EXCLUDED.", firstField]
+        xs -> Util.commaSeparated xs
+    q = T.concat
+        [ "INSERT INTO "
+        , nameOfTable
+        , Util.parenWrapped . Util.commaSeparated $ entityFieldNames
+        , " VALUES "
+        , recordPlaceholders
+        , " ON CONFLICT "
+        , Util.parenWrapped $ Util.commaSeparated $ conflictColumns
+        , " DO UPDATE SET "
+        , updateText
+        , wher
+        ]
 
 putManySql' :: [Text] -> [FieldDef] -> EntityDef -> Int -> Text
 putManySql' conflictColumns (filter isFieldNotGenerated -> fields) ent n = q

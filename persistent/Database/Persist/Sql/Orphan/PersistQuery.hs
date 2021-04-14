@@ -6,6 +6,10 @@
 module Database.Persist.Sql.Orphan.PersistQuery
     ( deleteWhereCount
     , updateWhereCount
+    , filterClause
+    , filterClauseHelper
+    , filterClauseWithVals
+    , FilterTablePrefix (..)
     , decorateSQLWithLimitOffset
     ) where
 
@@ -36,7 +40,7 @@ instance PersistQueryRead SqlBackend where
         conn <- ask
         let wher = if null filts
                     then ""
-                    else filterClause False conn filts
+                    else filterClause Nothing conn filts
         let sql = mconcat
                 [ "SELECT COUNT(*) FROM "
                 , connEscapeTableName conn t
@@ -59,7 +63,7 @@ instance PersistQueryRead SqlBackend where
         conn <- ask
         let wher = if null filts
                     then ""
-                    else filterClause False conn filts
+                    else filterClause Nothing conn filts
         let sql = mconcat
                 [ "SELECT EXISTS(SELECT 1 FROM "
                 , connEscapeTableName conn t
@@ -93,7 +97,7 @@ instance PersistQueryRead SqlBackend where
         t = entityDef $ dummyFromFilts filts
         wher conn = if null filts
                     then ""
-                    else filterClause False conn filts
+                    else filterClause Nothing conn filts
         ord conn =
             case map (orderClause False conn) orders of
                 [] -> ""
@@ -119,7 +123,7 @@ instance PersistQueryRead SqlBackend where
 
         wher conn = if null filts
                     then ""
-                    else filterClause False conn filts
+                    else filterClause Nothing conn filts
         sql conn = connLimitOffset conn (limit,offset) (not (null orders)) $ mconcat
             [ "SELECT "
             , cols conn
@@ -183,7 +187,7 @@ deleteWhereCount filts = withCompatibleBackend $ do
     let t = entityDef $ dummyFromFilts filts
     let wher = if null filts
                 then ""
-                else filterClause False conn filts
+                else filterClause Nothing conn filts
         sql = mconcat
             [ "DELETE FROM "
             , connEscapeTableName conn t
@@ -203,7 +207,7 @@ updateWhereCount filts upds = withCompatibleBackend $ do
     conn <- ask
     let wher = if null filts
                 then ""
-                else filterClause False conn filts
+                else filterClause Nothing conn filts
     let sql = mconcat
             [ "UPDATE "
             , connEscapeTableName conn t
@@ -217,26 +221,42 @@ updateWhereCount filts upds = withCompatibleBackend $ do
   where
     t = entityDef $ dummyFromFilts filts
 
-fieldName ::  forall record typ. (PersistEntity record, PersistEntityBackend record ~ SqlBackend) => EntityField record typ -> FieldNameDB
+fieldName ::  forall record typ. (PersistEntity record) => EntityField record typ -> FieldNameDB
 fieldName f = fieldDB $ persistFieldDef f
 
 dummyFromFilts :: [Filter v] -> Maybe v
 dummyFromFilts _ = Nothing
 
-getFiltsValues :: forall val. (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
+getFiltsValues :: forall val. (PersistEntity val)
                => SqlBackend -> [Filter val] -> [PersistValue]
-getFiltsValues conn = snd . filterClauseHelper False False conn OrNullNo
+getFiltsValues conn = snd . filterClauseHelper Nothing False conn OrNullNo
 
 data OrNull = OrNullYes | OrNullNo
 
-filterClauseHelper :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
-             => Bool -- ^ include table name?
-             -> Bool -- ^ include WHERE?
+-- | Used when determining how to prefix a column name in a @WHERE@ clause.
+--
+-- @since 2.12.1.0
+data FilterTablePrefix
+    = PrefixTableName
+    -- ^ Prefix the column with the table name. This is useful if the column
+    -- name might be ambiguous.
+    --
+    -- @since 2.12.1.0
+    | PrefixExcluded
+    -- ^ Prefix the column name with the @EXCLUDED@ keyword. This is used with
+    -- the Postgresql backend when doing @ON CONFLICT DO UPDATE@ clauses - see
+    -- the documentation on @upsertWhere@ and @upsertManyWhere@.
+    --
+    -- @since 2.12.1.0
+
+filterClauseHelper :: (PersistEntity val)
+             => Maybe FilterTablePrefix -- ^ include table name or PostgresSQL EXCLUDED
+             -> Bool -- ^ include WHERE
              -> SqlBackend
              -> OrNull
              -> [Filter val]
              -> (Text, [PersistValue])
-filterClauseHelper includeTable includeWhere conn orNull filters =
+filterClauseHelper tablePrefix includeWhere conn orNull filters =
     (if not (T.null sql) && includeWhere
         then " WHERE " <> sql
         else sql, vals)
@@ -356,7 +376,9 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
 
         orNullSuffix =
             case orNull of
-                OrNullYes -> mconcat [" OR ", name, " IS NULL"]
+                OrNullYes -> mconcat [" OR "
+                                      , name
+                                      , " IS NULL"]
                 OrNullNo -> ""
 
         isNull = PersistNull `elem` allVals
@@ -364,10 +386,10 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
         allVals = filterValueToPersistValues value
         tn = connEscapeTableName conn $ entityDef $ dummyFromFilts [Filter field value pfilter]
         name =
-            (if includeTable
-                then ((tn <> ".") <>)
-                else id)
-            $ connEscapeFieldName conn (fieldName field)
+          case tablePrefix of
+            Just PrefixTableName -> ((tn <> ".") <>) $ connEscapeFieldName conn (fieldName field)
+            Just PrefixExcluded -> (("EXCLUDED.") <>) $ connEscapeFieldName conn (fieldName field)
+            _ -> id $ connEscapeFieldName conn (fieldName field)
         qmarks = case value of
                     FilterValue{} -> "(?)"
                     UnsafeValue{} -> "(?)"
@@ -387,14 +409,30 @@ filterClauseHelper includeTable includeWhere conn orNull filters =
         showSqlFilter NotIn = " NOT IN "
         showSqlFilter (BackendSpecificFilter s) = s
 
-filterClause :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
-             => Bool -- ^ include table name?
+-- |  Render a @['Filter' record]@ into a 'Text' value suitable for inclusion
+-- into a SQL query.
+--
+-- @since 2.12.1.0
+filterClause :: (PersistEntity val)
+             => Maybe FilterTablePrefix -- ^ include table name or EXCLUDED
              -> SqlBackend
              -> [Filter val]
              -> Text
 filterClause b c = fst . filterClauseHelper b True c OrNullNo
 
-orderClause :: (PersistEntity val, PersistEntityBackend val ~ SqlBackend)
+-- |  Render a @['Filter' record]@ into a 'Text' value suitable for inclusion
+-- into a SQL query, as well as the @['PersistValue']@ to properly fill in the
+-- @?@ place holders.
+--
+-- @since 2.12.1.0
+filterClauseWithVals :: (PersistEntity val)
+             => Maybe FilterTablePrefix -- ^ include table name or EXCLUDED
+             -> SqlBackend
+             -> [Filter val]
+             -> (Text, [PersistValue])
+filterClauseWithVals b c  = filterClauseHelper b True c OrNullNo
+
+orderClause :: (PersistEntity val)
             => Bool -- ^ include the table name
             -> SqlBackend
             -> SelectOpt val
@@ -410,7 +448,7 @@ orderClause includeTable conn o =
 
     tn = connEscapeTableName conn (entityDef $ dummyFromOrder o)
 
-    name :: (PersistEntityBackend record ~ SqlBackend, PersistEntity record)
+    name :: (PersistEntity record)
          => EntityField record typ -> Text
     name x =
         (if includeTable

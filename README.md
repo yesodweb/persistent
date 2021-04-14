@@ -34,3 +34,8 @@ Clone the repo and run `stack build` to build all targets. Persistent
 supports many backends. If you have only some of these installed the
 [development doc](development.md) shows how to build against a subset of
 targets.
+
+## Development
+
+For more information on how to hack ont he `persistent` set of libraries, see
+the [`development.md`](development.md) file.

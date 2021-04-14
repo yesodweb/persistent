@@ -1,6 +1,17 @@
 # Changelog for persistent
 
-## 2.12.0.1 (unreleased)
+## 2.12.1.0
+
+*  [#1226](https://github.com/yesodweb/persistent/pull/1226)
+    * Expose the `filterClause` and `filterClauseWithValues` functions to support
+      the `upsertWhere` functionality in `persistent-postgresql`.
+
+## 2.12.0.2
+
+* [#1123](https://github.com/yesodweb/persistent/pull/1223)
+    * Fix JSON encoding for `PersistValue`
+
+## 2.12.0.1
 
 * Refactoring token parsing in quasi module [#1206](https://github.com/yesodweb/persistent/pull/1206)
 * Removing duplication from TH output [#1202](https://github.com/yesodweb/persistent/pull/1202)
@@ -17,10 +28,10 @@
   * Added `makeCompatibleInstances` and `makeCompatibleKeyInstances`, TemplateHaskell invocations for auto-generating standalone derivations using `Compatible` and `DerivingVia`.
 * [#1207](https://github.com/yesodweb/persistent/pull/1207)
     * @codygman discovered a bug in [issue #1199](https://github.com/yesodweb/persistent/issues/1199) where postgres connections were being returned to the `Pool SqlBackend` in an inconsistent state.
-      @parsonsmatt debugged the issue and determined that it had something to do with asynchronous exceptions. 
+      @parsonsmatt debugged the issue and determined that it had something to do with asynchronous exceptions.
       Declaring it to be "out of his pay grade," he ripped the `poolToAcquire` function out and replaced it with `Data.Pool.withResource`, which doesn't exhibit the bug.
       Fortunately, this doesn't affect the public API, and can be a mere bug release.
-    * Removed the functions `unsafeAcquireSqlConnFromPool`, `acquireASqlConnFromPool`, and `acquireSqlConnFromPoolWithIsolation`. 
+    * Removed the functions `unsafeAcquireSqlConnFromPool`, `acquireASqlConnFromPool`, and `acquireSqlConnFromPoolWithIsolation`.
       For a replacement, see `runSqlPoolNoTransaction` and `runSqlPoolWithHooks`.
 * Renaming values in persistent-template [#1203](https://github.com/yesodweb/persistent/pull/1203)
 * [#1214](https://github.com/yesodweb/persistent/pull/1214):
