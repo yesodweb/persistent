@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, BangPatterns #-}
+{-# LANGUAGE CPP, BangPatterns, PolyKinds, AllowAmbiguousTypes, TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
@@ -72,6 +72,7 @@ import Data.Aeson
     )
 import qualified Data.ByteString as BS
 import Data.Typeable (Typeable)
+import Type.Reflection
 import Data.Ix (Ix)
 import Data.Data (Data)
 import Data.Char (toLower, toUpper)
@@ -2019,3 +2020,31 @@ requireExtensions requiredExtensions = do
 
   where
     extensionToPragma ext = "{-# LANGUAGE " <> show ext <> " #-}"
+
+liftType :: forall t. Typeable t => Q Type
+liftType = do
+    let rep = typeRep @t
+    go rep
+  where
+    go :: forall (a :: k). TypeRep a -> Q Type
+    go tr =
+        case tr of
+            Con tyCon -> do
+                let
+                    nameBase =
+                        mkOccName $ tyConName tyCon
+                    flavor =
+                        NameG
+                            TcClsName
+                            (mkPkgName $ tyConPackage tyCon)
+                            (mkModName $ tyConModule tyCon)
+                    name =
+                        Name
+                            nameBase
+                            flavor
+                pure $ ConT name
+            App trA trB ->
+                [t|$(go trA) $(go trB)|]
+            Fun trA trB ->
+                [t|$(go trA) -> $(go trB)|]
+
