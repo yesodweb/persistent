@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## 2.12.1.1
+
+* [#1229](https://github.com/yesodweb/persistent/pull/1229)
+    * The `#id` labels are now generated for entities.
+
 ## 2.12.1.0
 
 *  [#1226](https://github.com/yesodweb/persistent/pull/1226)
