@@ -1955,10 +1955,15 @@ requirePersistentExtensions = requireExtensions requiredExtensions
 
 mkSymbolToFieldInstances :: MkPersistSettings -> EntityDef -> Q [Dec]
 mkSymbolToFieldInstances mps ed = do
-    fmap join $ forM (entityFields ed) $ \fieldDef -> do
-        let fieldNameT =
-                litT $ strTyLit $ T.unpack $ unFieldNameHS $ fieldHaskell fieldDef
-                    :: Q Type
+    fmap join $ forM (keyAndEntityFields ed) $ \fieldDef -> do
+        let fieldNameT :: Q Type
+            fieldNameT =
+                litT $ strTyLit
+                    $ T.unpack $ lowerFirstIfId
+                    $ unFieldNameHS $ fieldHaskell fieldDef
+
+            lowerFirstIfId "Id" = "id"
+            lowerFirstIfId xs = xs
 
             nameG = mkName $ unpack $ unEntityNameHS (entityHaskell ed) ++ "Generic"
 
