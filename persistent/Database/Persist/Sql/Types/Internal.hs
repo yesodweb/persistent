@@ -3,6 +3,9 @@
 {-# language RecordWildCards #-}
 {-# language DuplicateRecordFields #-}
 
+-- | Breaking changes to this module are not reflected in the major version
+-- number. Prefer to import from "Database.Persist.Sql" instead. If you neeed
+-- something from this module, please file an issue on GitHub.
 module Database.Persist.Sql.Types.Internal
     ( HasPersistBackend (..)
     , IsPersistBackend (..)
@@ -32,12 +35,12 @@ import Control.Monad.Trans.Reader (ReaderT, runReaderT, ask)
 import Data.Monoid ((<>))
 
 import Database.Persist.Class
-  ( HasPersistBackend (..)
-  , PersistQueryRead, PersistQueryWrite
-  , PersistStoreRead, PersistStoreWrite
-  , PersistUniqueRead, PersistUniqueWrite
-  , BackendCompatible(..)
-  )
+    ( HasPersistBackend (..)
+    , PersistQueryRead, PersistQueryWrite
+    , PersistStoreRead, PersistStoreWrite
+    , PersistUniqueRead, PersistUniqueWrite
+    , BackendCompatible(..)
+    )
 import Database.Persist.Class.PersistStore (IsPersistBackend (..))
 import Database.Persist.Types
 import Database.Persist.SqlBackend.Internal
@@ -107,4 +110,7 @@ type SqlReadT m a = forall backend. (SqlBackendCanRead backend) => ReaderT backe
 type SqlWriteT m a = forall backend. (SqlBackendCanWrite backend) => ReaderT backend m a
 
 -- | A backend which is a wrapper around @SqlBackend@.
-type IsSqlBackend backend = (IsPersistBackend backend, BaseBackend backend ~ SqlBackend)
+type IsSqlBackend backend =
+    ( IsPersistBackend backend
+    , BaseBackend backend ~ SqlBackend
+    )

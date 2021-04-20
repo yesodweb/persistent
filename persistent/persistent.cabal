@@ -51,12 +51,12 @@ library
 
     exposed-modules: 
         Database.Persist
-        Database.Persist.Quasi
-        Database.Persist.Quasi.Internal
+        Database.Persist.Types
         Database.Persist.TH
 
-        Database.Persist.Types
-        Database.Persist.Class
+        Database.Persist.Quasi
+        Database.Persist.Quasi.Internal
+
         Database.Persist.Sql
         Database.Persist.Sql.Util
         Database.Persist.Sql.Types.Internal
@@ -68,6 +68,7 @@ library
         Database.Persist.SqlBackend.Internal.Statement
         Database.Persist.SqlBackend.Internal.MkSqlBackend
 
+        Database.Persist.Class
         Database.Persist.Class.DeleteCascade
         Database.Persist.Class.PersistEntity
         Database.Persist.Class.PersistQuery
