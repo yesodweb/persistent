@@ -1,58 +1,85 @@
-{-# LANGUAGE ScopedTypeVariables, OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module PgInit (
-  runConn
-  , runConn_
-  , runConnAssert
-  , runConnAssertUseConf
+module PgInit
+    ( runConn
+    , runConn_
+    , runConnAssert
+    , runConnAssertUseConf
 
-  , MonadIO
-  , persistSettings
-  , MkPersistSettings (..)
-  , BackendKey(..)
-  , GenerateKey(..)
+    , MonadIO
+    , persistSettings
+    , MkPersistSettings (..)
+    , BackendKey(..)
+    , GenerateKey(..)
 
-   -- re-exports
-  , module Control.Monad.Trans.Reader
-  , module Control.Monad
-  , module Database.Persist.Sql
-  , module Database.Persist
-  , module Database.Persist.Sql.Raw.QQ
-  , module Init
-  , module Test.Hspec
-  , module Test.HUnit
-  , BS.ByteString
-  , Int32, Int64
-  , liftIO
-  , mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase
-  , SomeException
-  , Text
-  , TestFn(..)
-  ) where
+     -- re-exports
+    , module Control.Monad.Trans.Reader
+    , module Control.Monad
+    , module Database.Persist.Sql
+    , module Database.Persist
+    , module Database.Persist.Sql.Raw.QQ
+    , module Init
+    , module Test.Hspec
+    , module Test.Hspec.Expectations.Lifted
+    , module Test.HUnit
+    , BS.ByteString
+    , Int32, Int64
+    , liftIO
+    , mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase
+    , SomeException
+    , Text
+    , TestFn(..)
+    , LoggingT
+    , ResourceT
+    ) where
 
 import Init
-    ( TestFn(..), truncateTimeOfDay, truncateUTCTime
-    , truncateToMicro, arbText, liftA2, GenerateKey(..)
-    , (@/=), (@==), (==@), MonadFail
-    , assertNotEqual, assertNotEmpty, assertEmpty, asIO
-    , isTravis, RunDb
-    )
+       ( GenerateKey(..)
+       , MonadFail
+       , RunDb
+       , TestFn(..)
+       , arbText
+       , asIO
+       , assertEmpty
+       , assertNotEmpty
+       , assertNotEqual
+       , isTravis
+       , liftA2
+       , truncateTimeOfDay
+       , truncateToMicro
+       , truncateUTCTime
+       , (==@)
+       , (@/=)
+       , (@==)
+       )
 
 -- re-exports
 import Control.Exception (SomeException)
-import UnliftIO
-import Control.Monad (void, replicateM, liftM, when, forM_)
+import Control.Monad (forM_, liftM, replicateM, void, when)
 import Control.Monad.Trans.Reader
 import Data.Aeson (Value(..))
-import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase, MkPersistSettings(..))
+import Database.Persist.Postgresql.JSON ()
 import Database.Persist.Sql.Raw.QQ
-import Database.Persist.Postgresql.JSON()
+import Database.Persist.TH
+       ( MkPersistSettings(..)
+       , mkMigrate
+       , mkPersist
+       , persistLowerCase
+       , persistUpperCase
+       , share
+       , sqlSettings
+       )
 import Test.Hspec
+       (Spec, afterAll_, before, beforeAll, describe, fdescribe, fit, it,
+       before_, SpecWith, Arg, hspec)
+import Test.Hspec.Expectations.Lifted
 import Test.QuickCheck.Instances ()
+import UnliftIO
 
 -- testing
-import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
+import Test.HUnit (Assertion, assertBool, assertFailure, (@=?), (@?=))
 import Test.QuickCheck
 
 import Control.Monad (unless, (>=>))
