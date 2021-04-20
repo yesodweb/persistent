@@ -8,6 +8,7 @@ import qualified Data.Conduit.List as CL
 import qualified Data.Text as T
 
 import Init
+import Database.Persist.SqlBackend
 import PersistTestPetType
 import PersistentTestModels
 
@@ -141,7 +142,7 @@ specsWith runDb = describe "rawSql" $ do
         liftIO $ ret @?= [(Single (1::Int), Single (2::Int), Single (3::Int), Single (4::Int), Single (5::Int), Single (6::Int), Single (7::Int), Single (8::Int), Single (9::Int), Single (10::Int), Single (11::Int), Single (12::Int), Single (13::Int), Single (14::Int), Single (15::Int))]
 
 getEscape :: MonadReader SqlBackend m => m (Text -> Text)
-getEscape = asks connEscapeRawName
+getEscape = getEscapeRawNameFunction
 
 caseCommitRollback :: Runner SqlBackend m => RunDb SqlBackend m -> Assertion
 caseCommitRollback runDb = runDb $ do

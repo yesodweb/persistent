@@ -55,8 +55,7 @@ import Database.Persist.Types
 -- you must manually place a unique index on a field to have a uniqueness
 -- constraint.
 --
-class (PersistCore backend, PersistStoreRead backend) =>
-      PersistUniqueRead backend  where
+class PersistStoreRead backend => PersistUniqueRead backend  where
     -- | Get a record by unique key, if available. Returns also the identifier.
     --
     -- === __Example usage__

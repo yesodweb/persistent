@@ -3,6 +3,7 @@
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
+-- | TODO: delete this module and get it in with SqlBackend.Internal
 module Database.Persist.Sql.Orphan.PersistQuery
     ( deleteWhereCount
     , updateWhereCount
@@ -20,19 +21,26 @@ import Data.ByteString.Char8 (readInteger)
 import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Data.Int (Int64)
-import Data.List (transpose, inits, find)
+import Data.List (find, inits, transpose)
 import Data.Maybe (isJust)
-import Data.Monoid (Monoid (..), (<>))
-import qualified Data.Text as T
+import Data.Monoid (Monoid(..), (<>))
 import Data.Text (Text)
+import qualified Data.Text as T
 
 import Database.Persist hiding (updateField)
-import Database.Persist.Sql.Util (
-    entityColumnNames, parseEntityValues, isIdField, updatePersistValue
-  , mkUpdateText, commaSeparated, dbIdColumns)
-import Database.Persist.Sql.Types
-import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
+import Database.Persist.Sql.Raw
+import Database.Persist.Sql.Types.Internal
+       (SqlBackend(..), SqlReadBackend, SqlWriteBackend)
+import Database.Persist.Sql.Util
+       ( commaSeparated
+       , dbIdColumns
+       , entityColumnNames
+       , isIdField
+       , mkUpdateText
+       , parseEntityValues
+       , updatePersistValue
+       )
 
 -- orphaned instance for convenience of modularity
 instance PersistQueryRead SqlBackend where
@@ -103,7 +111,7 @@ instance PersistQueryRead SqlBackend where
                 [] -> ""
                 ords -> " ORDER BY " <> T.intercalate "," ords
         cols = commaSeparated . entityColumnNames t
-        sql conn = connLimitOffset conn (limit,offset) (not (null orders)) $ mconcat
+        sql conn = connLimitOffset conn (limit,offset) $ mconcat
             [ "SELECT "
             , cols conn
             , " FROM "
@@ -124,7 +132,7 @@ instance PersistQueryRead SqlBackend where
         wher conn = if null filts
                     then ""
                     else filterClause Nothing conn filts
-        sql conn = connLimitOffset conn (limit,offset) (not (null orders)) $ mconcat
+        sql conn = connLimitOffset conn (limit,offset) $ mconcat
             [ "SELECT "
             , cols conn
             , " FROM "
@@ -457,8 +465,12 @@ orderClause includeTable conn o =
         $ connEscapeFieldName conn (fieldName x)
 
 -- | Generates sql for limit and offset for postgres, sqlite and mysql.
-decorateSQLWithLimitOffset::Text -> (Int,Int) -> Bool -> Text -> Text
-decorateSQLWithLimitOffset nolimit (limit,offset) _ sql =
+decorateSQLWithLimitOffset
+    :: Text
+    -> (Int,Int)
+    -> Text
+    -> Text
+decorateSQLWithLimitOffset nolimit (limit,offset) sql =
     let
         lim = case (limit, offset) of
                 (0, 0) -> ""

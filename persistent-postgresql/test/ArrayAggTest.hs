@@ -43,7 +43,7 @@ specs = do
             , UserPT "c" $ Just "d"
             , UserPT "e"   Nothing
             , UserPT "g" $ Just "h" ]
-          escape <- asks connEscapeRawName
+          escape <- getEscapeRawNameFunction
           let query = T.concat [ "SELECT array_agg(", escape dbField, ") "
                                , "FROM ", escape "UserPT"
                                ]

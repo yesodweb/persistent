@@ -90,6 +90,7 @@ import UnliftIO.Resource (ResourceT, runResourceT)
 import Database.Persist.Compatible
 #endif
 import Database.Persist.Sql
+import Database.Persist.SqlBackend
 import qualified Database.Persist.Sql.Util as Util
 import qualified Database.Sqlite as Sqlite
 
@@ -267,28 +268,27 @@ wrapConnectionInfo connInfo conn logFunc = do
         Sqlite.finalize stmt
 
     smap <- newIORef $ Map.empty
-    return $ SqlBackend
-        { connPrepare = prepare' conn
-        , connStmtMap = smap
-        , connInsertSql = insertSql'
-        , connUpsertSql = Nothing
-        , connPutManySql = Just putManySql
-        , connInsertManySql = Nothing
-        , connClose = Sqlite.close conn
-        , connMigrateSql = migrate'
-        , connBegin = \f _ -> helper "BEGIN" f
-        , connCommit = helper "COMMIT"
-        , connRollback = ignoreExceptions . helper "ROLLBACK"
-        , connEscapeFieldName = escape . unFieldNameDB
-        , connEscapeTableName = escape . unEntityNameDB . entityDB
-        , connEscapeRawName = escape
-        , connNoLimit = "LIMIT -1"
-        , connRDBMS = "sqlite"
-        , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
-        , connLogFunc = logFunc
-        , connMaxParams = Just 999
-        , connRepsertManySql = Just repsertManySql
-        }
+    return $
+        setConnMaxParams 999 $
+        setConnPutManySql putManySql $
+        setConnRepsertManySql repsertManySql $
+        mkSqlBackend MkSqlBackendArgs
+            { connPrepare = prepare' conn
+            , connStmtMap = smap
+            , connInsertSql = insertSql'
+            , connClose = Sqlite.close conn
+            , connMigrateSql = migrate'
+            , connBegin = \f _ -> helper "BEGIN" f
+            , connCommit = helper "COMMIT"
+            , connRollback = ignoreExceptions . helper "ROLLBACK"
+            , connEscapeFieldName = escape . unFieldNameDB
+            , connEscapeTableName = escape . unEntityNameDB . entityDB
+            , connEscapeRawName = escape
+            , connNoLimit = "LIMIT -1"
+            , connRDBMS = "sqlite"
+            , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
+            , connLogFunc = logFunc
+            }
   where
     helper t getter = do
         stmt <- getter t
@@ -454,44 +454,42 @@ migrate' allDefs getter val = do
 -- with the difference that an actual database isn't needed for it.
 mockMigration :: Migration -> IO ()
 mockMigration mig = do
-  smap <- newIORef $ Map.empty
-  let sqlbackend = SqlBackend
-                   { connPrepare = \_ -> do
-                                     return Statement
-                                                { stmtFinalize = return ()
-                                                , stmtReset = return ()
-                                                , stmtExecute = undefined
-                                                , stmtQuery = \_ -> return $ return ()
-                                                }
-                   , connStmtMap = smap
-                   , connInsertSql = insertSql'
-                   , connInsertManySql = Nothing
-                   , connClose = undefined
-                   , connMigrateSql = migrate'
-                   , connBegin = \f _ -> helper "BEGIN" f
-                   , connCommit = helper "COMMIT"
-                   , connRollback = ignoreExceptions . helper "ROLLBACK"
-                   , connEscapeFieldName = escape . unFieldNameDB
-                   , connEscapeTableName = escape . unEntityNameDB . entityDB
-                   , connEscapeRawName = escape
-                   , connNoLimit = "LIMIT -1"
-                   , connRDBMS = "sqlite"
-                   , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
-                   , connLogFunc = undefined
-                   , connUpsertSql = undefined
-                   , connPutManySql = undefined
-                   , connMaxParams = Just 999
-                   , connRepsertManySql = Nothing
-                   }
-      result = runReaderT . runWriterT . runWriterT $ mig
-  resp <- result sqlbackend
-  mapM_ TIO.putStrLn $ map snd $ snd resp
-    where
-      helper t getter = do
-                      stmt <- getter t
-                      _ <- stmtExecute stmt []
-                      stmtReset stmt
-      ignoreExceptions = E.handle (\(_ :: E.SomeException) -> return ())
+    smap <- newIORef $ Map.empty
+    let sqlbackend =
+            setConnMaxParams 999 $
+            mkSqlBackend MkSqlBackendArgs
+                { connPrepare = \_ -> do
+                    return Statement
+                        { stmtFinalize = return ()
+                        , stmtReset = return ()
+                        , stmtExecute = undefined
+                        , stmtQuery = \_ -> return $ return ()
+                        }
+                , connStmtMap = smap
+                , connInsertSql = insertSql'
+                , connClose = undefined
+                , connMigrateSql = migrate'
+                , connBegin = \f _ -> helper "BEGIN" f
+                , connCommit = helper "COMMIT"
+                , connRollback = ignoreExceptions . helper "ROLLBACK"
+                , connEscapeFieldName = escape . unFieldNameDB
+                , connEscapeTableName = escape . unEntityNameDB . entityDB
+                , connEscapeRawName = escape
+                , connNoLimit = "LIMIT -1"
+                , connRDBMS = "sqlite"
+                , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
+                , connLogFunc = undefined
+                }
+        result = runReaderT . runWriterT . runWriterT $ mig
+    resp <- result sqlbackend
+    mapM_ TIO.putStrLn $ map snd $ snd resp
+  where
+    helper t getter = do
+        stmt <- getter t
+        _ <- stmtExecute stmt []
+        stmtReset stmt
+    ignoreExceptions =
+        E.handle (\(_ :: E.SomeException) -> return ())
 
 -- | Check if a column name is listed as the "safe to remove" in the entity
 -- list.
