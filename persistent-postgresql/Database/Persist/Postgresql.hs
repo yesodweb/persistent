@@ -1949,7 +1949,7 @@ mkBulkUpsertQuery records conn fieldValues updates filters =
         , Util.parenWrapped . Util.commaSeparated $ entityFieldNames
         , " VALUES "
         , recordPlaceholders
-        , " ON CONFLICT"
+        , " ON CONFLICT "
         , Util.parenWrapped $ Util.commaSeparated $ conflictColumns
         , " DO UPDATE SET "
         , updateText
