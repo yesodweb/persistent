@@ -1,6 +1,6 @@
 # Changelog for persistent
 
-## 2.12.1.1
+## 2.12.1.1 (unreleased)
 
 * [#1229](https://github.com/yesodweb/persistent/pull/1229)
     * The `#id` labels are now generated for entities.
@@ -8,7 +8,7 @@
 ## 2.12.1.0
 
 * [#1218](https://github.com/yesodweb/persistent/pull/1218)
-    * Refactoring name generating functions in TH 
+    * Refactoring name generating functions in TH
 * [#1226](https://github.com/yesodweb/persistent/pull/1226)
     * Expose the `filterClause` and `filterClauseWithValues` functions to support
       the `upsertWhere` functionality in `persistent-postgresql`.
