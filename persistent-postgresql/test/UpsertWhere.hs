@@ -18,6 +18,7 @@ import PgInit
 share [mkPersist sqlSettings, mkMigrate "upsertWhereMigrate"] [persistLowerCase|
   Item
      name        Text sqltype=varchar(80)
+     UniqueName  name
      description Text
      price       Double Maybe
      quantity    Int Maybe
@@ -44,7 +45,7 @@ specs = describe "UpsertWhere" $ do
       let newDescription = "I am a new description"
       insert_ item1
       upsertWhere
-        (Item "item1" "i am inserted description" (Just 1) (Just 2))
+        (Item "item1" "i am an inserted description" (Just 1) (Just 2))
         [ItemDescription =. newDescription] 
         []
       Just item <- get (ItemKey "item1")
