@@ -2,6 +2,8 @@
 
 ## 2.12.1.0
 
+* [#1231](https://github.com/yesodweb/persistent/pull/1231)
+    * Simplify Line type in Quasi module, always use NonEmpty 
 * [#1218](https://github.com/yesodweb/persistent/pull/1218)
     * Refactoring name generating functions in TH 
 * [#1226](https://github.com/yesodweb/persistent/pull/1226)
