@@ -1817,6 +1817,7 @@ upsertWhere
      , MonadIO m
      , PersistStore backend
      , BackendCompatible SqlBackend backend
+     , OnlyOneUniqueKey record
      )
   => record
   -> [Update record]
@@ -1825,11 +1826,43 @@ upsertWhere
 upsertWhere record updates filts =
   upsertManyWhere [record] [] updates filts
 
+-- | Postgres specific 'upsertManyWhere'. This method does the following:
+-- It will insert a record if no matching unique key exists.
+-- If a unique key exists, it will update the relevant field with a user-supplied value, however,
+-- it will only do this update on a user-supplied condition.
+-- For example, here's how this method could be called like such:
+--
+-- upsertManyWhere [record] [recordField =. newValue] [recordField !=. newValue]
+--
+-- Called thusly, this method will insert a new record (if none exists) OR update a recordField with a new value
+-- assuming the condition in the last block is met.
+--
+-- @since 2.12.1.0
+upsertManyWhere 
+    :: forall record backend m.
+    ( backend ~ PersistEntityBackend record
+    , BackendCompatible SqlBackend backend
+    , PersistEntityBackend record ~ SqlBackend
+    , PersistEntity record
+    , OnlyOneUniqueKey record
+    , MonadIO m
+    ) 
+    => [record] -- ^ A list of the records you want to insert, or update
+    -> [HandleUpdateCollision record] -- ^ A list of the fields you want to copy over.
+    -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
+    -> [Filter record] -- ^ A filter condition that dictates the scope of the updates
+    -> ReaderT backend m ()
+upsertManyWhere [] _ _ _ = return ()
+upsertManyWhere records fieldValues updates filters = do
+  conn <- asks projectBackend
+  uncurry rawExecute $
+    mkBulkUpsertQuery records conn fieldValues updates filters
+
 -- | Exclude any record field if it doesn't match the filter record.  Used only in `upsertWhere` and
 -- `upsertManyWhere`
 --
 -- @since 2.12.1.0
--- TODO: we could probably make a sum type for the `Filter` record that's passed into the `upserWhere` and
+-- TODO: we could probably make a sum type for the `Filter` record that's passed into the `upsertWhere` and
 -- `upsertManyWhere` methods that has similar behavior to the HandleCollisionUpdate type.
 excludeNotEqualToOriginal ::
   (PersistField typ
@@ -1854,43 +1887,12 @@ excludeNotEqualToOriginal field =
         "EXCLUDED."
           <> fieldName field
 
--- | Postgres specific 'upsertManyWhere'. This method does the following:
--- It will insert a record if no matching unique key exists.
--- If a unique key exists, it will update the relevant field with a user-supplied value, however,
--- it will only do this update on a user-supplied condition.
--- For example, here's how this method could be called like such:
---
--- upsertManyWhere [record] [recordField =. newValue] [recordField /= newValue]
---
--- Called thusly, this method will insert a new record (if none exists) OR update a recordField with a new value
--- assuming the condition in the last block is met.
---
--- @since 2.12.1.0
-upsertManyWhere ::
-    forall record backend m.
-    ( backend ~ PersistEntityBackend record,
-      BackendCompatible SqlBackend backend,
-      PersistEntityBackend record ~ SqlBackend,
-      PersistEntity record,
-      MonadIO m
-    ) =>
-    [record] -> -- ^ A list of the records you want to insert, or update
-    [HandleUpdateCollision record] -> -- ^ A list of the fields you want to copy over.
-    [Update record] -> -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
-    [Filter record] -> -- ^ A filter condition that dictates the scope of the updates
-    ReaderT backend m ()
-upsertManyWhere [] _ _ _ = return ()
-upsertManyWhere records fieldValues updates filters = do
-  conn <- asks projectBackend
-  uncurry rawExecute $
-    mkBulkUpsertQuery records conn fieldValues updates filters
-
 -- | This creates the query for 'upsertManyWhere'. If you
 -- provide an empty list of updates to perform, then it will generate
 -- a dummy/no-op update using the first field of the record. This avoids
 -- duplicate key exceptions.
 mkBulkUpsertQuery
-    :: (PersistEntity record, PersistEntityBackend record ~ SqlBackend)
+    :: (PersistEntity record, PersistEntityBackend record ~ SqlBackend, OnlyOneUniqueKey record)
     => [record] -- ^ A list of the records you want to insert, or update
     -> SqlBackend
     -> [HandleUpdateCollision record] -- ^ A list of the fields you want to copy over.
@@ -1906,7 +1908,7 @@ mkBulkUpsertQuery records conn fieldValues updates filters =
     (fieldsToMaybeCopy, updateFieldNames) = partitionEithers $ map mfieldDef fieldValues
     fieldDbToText = escapeF . fieldDB
     entityDef' = entityDef records
-    conflictColumns = escapeF . fieldDB <$> entityKeyFields entityDef'
+    conflictColumns = (escapeF . fieldDB <$> entityKeyFields entityDef') ++ concatMap (map (escapeF . snd) . uniqueFields) (entityUniques entityDef')
     firstField = case entityFieldNames of
         [] -> error "The entity you're trying to insert does not have any fields."
         (field:_) -> field
