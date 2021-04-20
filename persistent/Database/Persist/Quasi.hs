@@ -1,7 +1,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -434,15 +434,15 @@ module Database.Persist.Quasi
 
 import Prelude hiding (lines)
 
-import Control.Applicative ( Alternative((<|>)) )
+import Control.Applicative (Alternative((<|>)))
 import Control.Arrow ((&&&))
-import Control.Monad (msum, mplus)
-import Data.Char ( isLower, isSpace, isUpper, toLower )
+import Control.Monad (mplus, msum)
+import Data.Char (isLower, isSpace, isUpper, toLower)
 import Data.List (find, foldl')
-import qualified Data.List.NonEmpty as NEL
 import Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as M
-import Data.Maybe (mapMaybe, fromMaybe, maybeToList, listToMaybe)
+import Data.Maybe (fromMaybe, listToMaybe, mapMaybe, maybeToList)
 import Data.Monoid (mappend)
 #if !MIN_VERSION_base(4,11,0)
 -- This can be removed when GHC < 8.2.2 isn't supported anymore
