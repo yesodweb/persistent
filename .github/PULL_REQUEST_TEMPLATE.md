@@ -2,6 +2,8 @@ Before submitting your PR, check that you've:
 
 - [ ] Documented new APIs with [Haddock markup](https://www.haskell.org/haddock/doc/html/index.html)
 - [ ] Added [`@since` declarations](http://haskell-haddock.readthedocs.io/en/latest/markup.html#since) to the Haddock
+- [ ] Ran `stylish-haskell` on any changed files.
+- [ ] Adhered to the code style (see the `.editorconfig` file for details)
 
 After submitting your PR:
 

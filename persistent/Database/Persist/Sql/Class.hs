@@ -1135,12 +1135,12 @@ extractMaybe = fromMaybe (error "Database.Persist.GenericSql.extractMaybe")
 -- @
 -- import qualified Data.UUID as UUID
 -- instance 'PersistField' UUID where
---   'toPersistValue' = 'PersistDbSpecific' . toASCIIBytes
---   'fromPersistValue' ('PersistDbSpecific' uuid) =
+--   'toPersistValue' = 'PersistLiteralEncoded' . toASCIIBytes
+--   'fromPersistValue' ('PersistLiteralEncoded' uuid) =
 --     case fromASCIIBytes uuid of
 --       'Nothing' -> 'Left' $ "Model/CustomTypes.hs: Failed to deserialize a UUID; received: " <> T.pack (show uuid)
 --       'Just' uuid' -> 'Right' uuid'
---   'fromPersistValue' x = Left $ "File.hs: When trying to deserialize a UUID: expected PersistDbSpecific, received: "-- >  <> T.pack (show x)
+--   'fromPersistValue' x = Left $ "File.hs: When trying to deserialize a UUID: expected PersistLiteralEncoded, received: "-- >  <> T.pack (show x)
 --
 -- instance 'PersistFieldSql' UUID where
 --   'sqlType' _ = 'SqlOther' "uuid"

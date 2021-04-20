@@ -423,10 +423,8 @@ module Database.Persist.Quasi
     , Token (..)
     , Line' (..)
     , preparse
-    , tokenize
+    , parseLine
     , parseFieldType
-    , empty
-    , removeSpaces
     , associateLines
     , skipEmpty
     , LinesWithComments(..)
@@ -541,31 +539,48 @@ parse :: PersistSettings -> Text -> [EntityDef]
 parse ps = maybe [] (parseLines ps) . preparse
 
 preparse :: Text -> Maybe (NonEmpty Line)
-preparse =
-    NEL.nonEmpty
-        . removeSpaces
-        . filter (not . empty)
-        . map tokenize
-        . T.lines
+preparse txt = do
+    lns <- NEL.nonEmpty (T.lines txt)
+    NEL.nonEmpty $ mapMaybe parseLine (NEL.toList lns)
+
+-- TODO: refactor to return (Line' NonEmpty), made possible by
+-- https://github.com/yesodweb/persistent/pull/1206 but left out
+-- in order to minimize the diff
+parseLine :: Text -> Maybe Line
+parseLine txt =
+    case tokenize txt of
+      [] ->
+          Nothing
+      toks ->
+          pure $ Line (parseIndentationAmount txt) toks
 
 -- | A token used by the parser.
-data Token = Spaces !Int   -- ^ @Spaces n@ are @n@ consecutive spaces.
-           | Token Text    -- ^ @Token tok@ is token @tok@ already unquoted.
+data Token = Token Text    -- ^ @Token tok@ is token @tok@ already unquoted.
            | DocComment Text -- ^ @DocComment@ is a documentation comment, unmodified.
   deriving (Show, Eq)
+
+tokenText :: Token -> Text
+tokenText tok =
+    case tok of
+        Token t -> t
+        DocComment t -> "-- | " <> t
+
+parseIndentationAmount :: Text -> Int
+parseIndentationAmount txt =
+    let (spaces, _) = T.span isSpace txt
+     in T.length spaces
 
 -- | Tokenize a string.
 tokenize :: Text -> [Token]
 tokenize t
     | T.null t = []
-    | "-- | " `T.isPrefixOf` t = [DocComment t]
+    | Just txt <- T.stripPrefix "-- | " t = [DocComment txt]
     | "--" `T.isPrefixOf` t = [] -- Comment until the end of the line.
     | "#" `T.isPrefixOf` t = [] -- Also comment to the end of the line, needed for a CPP bug (#110)
     | T.head t == '"' = quotes (T.tail t) id
     | T.head t == '(' = parens 1 (T.tail t) id
     | isSpace (T.head t) =
-        let (spaces, rest) = T.span isSpace t
-         in Spaces (T.length spaces) : tokenize rest
+        tokenize (T.dropWhile isSpace t)
 
     -- support mid-token quotes and parens
     | Just (beforeEquals, afterEquals) <- findMidToken t
@@ -607,23 +622,16 @@ tokenize t
             let (x, y) = T.break (`elem` ['\\','(',')']) t'
              in parens count y (front . (x:))
 
--- | A string of tokens is empty when it has only spaces.  There
--- can't be two consecutive 'Spaces', so this takes /O(1)/ time.
-empty :: [Token] -> Bool
-empty []         = True
-empty [Spaces _] = True
-empty _          = False
-
 -- | A line.  We don't care about spaces in the middle of the
 -- line.  Also, we don't care about the amount of indentation.
 data Line' f
     = Line
     { lineIndent   :: Int
-    , tokens       :: f Text
+    , tokens       :: f Token
     }
 
-deriving instance Show (f Text) => Show (Line' f)
-deriving instance Eq (f Text) => Eq (Line' f)
+deriving instance Show (f Token) => Show (Line' f)
+deriving instance Eq (f Token) => Eq (Line' f)
 
 mapLine :: (forall x. f x -> g x) -> Line' f -> Line' g
 mapLine k (Line i t) = Line i (k t)
@@ -631,22 +639,18 @@ mapLine k (Line i t) = Line i (k t)
 traverseLine :: Functor t => (forall x. f x -> t (g x)) -> Line' f -> t (Line' g)
 traverseLine k (Line i xs) = Line i <$> k xs
 
+lineText :: Functor f => Line' f -> f Text
+lineText = fmap tokenText . tokens
+
 type Line = Line' []
 
--- | Remove leading spaces and remove spaces in the middle of the
--- tokens.
-removeSpaces :: [[Token]] -> [Line]
-removeSpaces =
-    map toLine
-  where
-    toLine (Spaces i:rest) = toLine' i rest
-    toLine xs              = toLine' 0 xs
-
-    toLine' i = Line i . mapMaybe fromToken
-
-    fromToken (Token t) = Just t
-    fromToken (DocComment t) = Just t
-    fromToken Spaces{}  = Nothing
+lowestIndent
+    :: Functor f
+    => Foldable f
+    => Functor g
+    => f (Line' g)
+    -> Int
+lowestIndent = minimum . fmap lineIndent
 
 -- | Divide lines into blocks and make entity definitions.
 parseLines :: PersistSettings -> NonEmpty Line -> [EntityDef]
@@ -655,12 +659,15 @@ parseLines ps =
   where
     mk :: LinesWithComments -> UnboundEntityDef
     mk lwc =
-        let Line _ (name :| entAttribs) :| rest = lwcLines lwc
+        let ln :| rest = lwcLines lwc
+            (name :| entAttribs) = lineText ln
          in setComments (lwcComments lwc) $ mkEntityDef ps name entAttribs (map (mapLine NEL.toList) rest)
 
-isComment :: Text -> Maybe Text
-isComment xs =
-    T.stripPrefix "-- | " xs
+isDocComment :: Token -> Maybe Text
+isDocComment tok =
+    case tok of
+        DocComment txt -> Just txt
+        _ -> Nothing
 
 data LinesWithComments = LinesWithComments
     { lwcLines :: NonEmpty (Line' NonEmpty)
@@ -690,24 +697,24 @@ associateLines lines =
     foldr combine [] $
     foldr toLinesWithComments [] lines
   where
+    toLinesWithComments :: Line' NonEmpty -> [LinesWithComments] -> [LinesWithComments]
     toLinesWithComments line linesWithComments =
         case linesWithComments of
             [] ->
                 [newLine line]
             (lwc : lwcs) ->
-                case isComment (NEL.head (tokens line)) of
+                case isDocComment (NEL.head (tokens line)) of
                     Just comment
-                        | lineIndent line == lowestIndent ->
+                        | lineIndent line == lowestIndent lines ->
                         consComment comment lwc : lwcs
                     _ ->
                         if lineIndent line <= lineIndent (firstLine lwc)
-                            && lineIndent (firstLine lwc) /= lowestIndent
+                            && lineIndent (firstLine lwc) /= lowestIndent lines
                         then
                             consLine line lwc : lwcs
                         else
                             newLine line : lwc : lwcs
 
-    lowestIndent = minimum . fmap lineIndent $ lines
     combine :: LinesWithComments -> [LinesWithComments] -> [LinesWithComments]
     combine lwc [] =
         [lwc]
@@ -721,7 +728,7 @@ associateLines lines =
                 lwc : lwc' : lwcs
 
 
-    minimumIndentOf = minimum . fmap lineIndent . lwcLines
+    minimumIndentOf = lowestIndent . lwcLines
 
 skipEmpty :: NonEmpty (Line' []) -> [Line' NonEmpty]
 skipEmpty = mapMaybe (traverseLine NEL.nonEmpty) . NEL.toList
@@ -854,7 +861,7 @@ mkEntityDef ps name entattribs lines =
         , entityFields = cols
         , entityUniques = uniqs
         , entityForeigns = []
-        , entityDerives = concat $ mapMaybe takeDerives attribs
+        , entityDerives = concat $ mapMaybe takeDerives textAttribs
         , entityExtra = extras
         , entitySum = isSum
         , entityComments = Nothing
@@ -867,6 +874,10 @@ mkEntityDef ps name entattribs lines =
             _ -> (False, name)
     (attribs, extras) = splitExtras lines
 
+    textAttribs :: [[Text]]
+    textAttribs =
+        fmap tokenText <$> attribs
+
     attribPrefix = flip lookupKeyVal entattribs
     idName | Just _ <- attribPrefix "id" = error "id= is deprecated, ad a field named 'Id' and use sql="
            | otherwise = Nothing
@@ -874,21 +885,21 @@ mkEntityDef ps name entattribs lines =
     (idField, primaryComposite, uniqs, foreigns) = foldl' (\(mid, mp, us, fs) attr ->
         let (i, p, u, f) = takeConstraint ps name' cols attr
             squish xs m = xs `mappend` maybeToList m
-        in (just1 mid i, just1 mp p, squish us u, squish fs f)) (Nothing, Nothing, [],[]) attribs
+        in (just1 mid i, just1 mp p, squish us u, squish fs f)) (Nothing, Nothing, [],[]) textAttribs
 
     cols :: [FieldDef]
     cols = reverse . fst . foldr k ([], []) $ reverse attribs
+
     k x (!acc, !comments) =
-        case isComment =<< listToMaybe x of
-            Just comment ->
+        case listToMaybe x of
+            Just (DocComment comment) ->
                 (acc, comment : comments)
-            Nothing ->
-                ( maybe id (:) (setFieldComments comments <$> takeColsEx ps x) acc
-                , []
-                )
-    setFieldComments [] x = x
-    setFieldComments xs fld =
-        fld { fieldComments = Just (T.unlines xs) }
+            _ ->
+                case (setFieldComments comments <$> takeColsEx ps (tokenText <$> x)) of
+                  Just sm ->
+                      (sm : acc, [])
+                  Nothing ->
+                      (acc, [])
 
     autoIdField = mkAutoIdField ps entName (FieldNameDB `fmap` idName) idSqlType
     idSqlType = maybe SqlInt64 (const $ SqlOther "Primary Key") primaryComposite
@@ -898,6 +909,11 @@ mkEntityDef ps name entattribs lines =
         { fieldReference = CompositeRef c
         }
 
+setFieldComments :: [Text] -> FieldDef -> FieldDef
+setFieldComments xs fld =
+    case xs of
+        [] -> fld
+        _ -> fld { fieldComments = Just (T.unlines xs) }
 
 just1 :: (Show x) => Maybe x -> Maybe x -> Maybe x
 just1 (Just x) (Just y) = error $ "expected only one of: "
@@ -931,20 +947,26 @@ keyConName entName = entName `mappend` "Id"
 
 splitExtras
     :: [Line]
-    -> ( [[Text]]
-       , M.Map Text [[Text]]
+    -> ( [[Token]]
+       , M.Map Text [ExtraLine]
        )
 splitExtras lns =
     case lns of
         [] -> ([], M.empty)
-        (Line indent [name]:rest)
-          | not (T.null name) && isUpper (T.head name) ->
-            let (children, rest') = span ((> indent) . lineIndent) rest
-                (x, y) = splitExtras rest'
-             in (x, M.insert name (map tokens children) y)
-        (Line _ ts:rest) ->
-            let (x, y) = splitExtras rest
-             in (ts:x, y)
+        (line : rest) ->
+            case line of
+                Line indent [Token name]
+                  | isCapitalizedText name ->
+                    let (children, rest') = span ((> indent) . lineIndent) rest
+                        (x, y) = splitExtras rest'
+                     in (x, M.insert name (map lineText children) y)
+                Line _ ts ->
+                    let (x, y) = splitExtras rest
+                     in (ts:x, y)
+
+isCapitalizedText :: Text -> Bool
+isCapitalizedText t =
+    not (T.null t) && isUpper (T.head t)
 
 takeColsEx :: PersistSettings -> [Text] -> Maybe FieldDef
 takeColsEx =
@@ -996,7 +1018,7 @@ takeConstraint :: PersistSettings
           -> [FieldDef]
           -> [Text]
           -> (Maybe FieldDef, Maybe CompositeDef, Maybe UniqueDef, Maybe UnboundForeignDef)
-takeConstraint ps tableName defs (n:rest) | not (T.null n) && isUpper (T.head n) = takeConstraint'
+takeConstraint ps tableName defs (n:rest) | isCapitalizedText n = takeConstraint'
     where
       takeConstraint'
             | n == "Unique"  = (Nothing, Nothing, Just $ takeUniq ps tableName defs rest, Nothing)
@@ -1058,7 +1080,7 @@ takeUniq :: PersistSettings
          -> [Text]
          -> UniqueDef
 takeUniq ps tableName defs (n:rest)
-    | not (T.null n) && isUpper (T.head n)
+    | isCapitalizedText n
         = UniqueDef
             (ConstraintNameHS n)
             dbName

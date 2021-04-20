@@ -82,4 +82,5 @@ jobs:
       - run: cabal v2-build all --disable-optimization $CONFIG
       - run: cabal v2-test all --disable-optimization $CONFIG
       - run: cabal v2-haddock all $CONFIG
+        continue-on-error: true
       - run: cabal v2-sdist all

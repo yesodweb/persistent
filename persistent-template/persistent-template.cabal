@@ -12,7 +12,7 @@ cabal-version:   >= 1.10
 build-type:      Simple
 homepage:        http://www.yesodweb.com/book/persistent
 bug-reports:     https://github.com/yesodweb/persistent/issues
-extra-source-files: test/main.hs ChangeLog.md README.md
+extra-source-files: ChangeLog.md README.md
 
 library
     build-depends:   base                     >= 4.10      && < 5

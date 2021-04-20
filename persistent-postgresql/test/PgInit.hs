@@ -56,7 +56,7 @@ import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
 import Test.QuickCheck
 
 import Control.Monad (unless, (>=>))
-import Control.Monad.IO.Class
+
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
