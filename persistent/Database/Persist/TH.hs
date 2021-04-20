@@ -967,30 +967,42 @@ mkKeyTypeDec mps entDef = do
     supplement :: [Name] -> [Name]
     supplement names = names <> (filter (`notElem` names) $ mpsDeriveInstances mps)
 
--- | Returns 'True' if the key definition has more than 1 field.
+-- | Returns 'True' if the key definition has less than 2 fields.
 --
 -- @since 2.11.0.0
 pkNewtype :: MkPersistSettings -> EntityDef -> Bool
 pkNewtype mps entDef = length (keyFields mps entDef) < 2
 
 defaultIdType :: EntityDef -> Bool
-defaultIdType entDef = fieldType (entityId entDef) == FTTypeCon Nothing (keyIdText entDef)
+defaultIdType entDef =
+    fieldType (entityId entDef) == FTTypeCon Nothing (keyIdText entDef)
 
 keyFields :: MkPersistSettings -> EntityDef -> [(Name, Strict, Type)]
-keyFields mps entDef = case entityPrimary entDef of
-  Just pdef -> map primaryKeyVar (compositeFields pdef)
-  Nothing   -> if defaultIdType entDef
-    then [idKeyVar backendKeyType]
-    else [idKeyVar $ ftToType $ fieldType $ entityId entDef]
+keyFields mps entDef =
+    case entityPrimary entDef of
+        Just pdef ->
+            map primaryKeyVar (compositeFields pdef)
+        Nothing ->
+            pure . idKeyVar $
+                if defaultIdType entDef
+                then backendKeyType
+                else ftToType $ fieldType $ entityId entDef
   where
     backendKeyType
-        | mpsGeneric mps = ConT ''BackendKey `AppT` backendT
-        | otherwise      = ConT ''BackendKey `AppT` mpsBackend mps
-    idKeyVar ft = (unKeyName entDef, notStrict, ft)
-    primaryKeyVar fieldDef = ( keyFieldName mps entDef fieldDef
-                       , notStrict
-                       , ftToType $ fieldType fieldDef
-                       )
+        | mpsGeneric mps =
+            ConT ''BackendKey `AppT` backendT
+        | otherwise =
+            ConT ''BackendKey `AppT` mpsBackend mps
+    idKeyVar ft =
+        ( unKeyName entDef
+        , notStrict
+        , ft
+        )
+    primaryKeyVar fieldDef =
+        ( keyFieldName mps entDef fieldDef
+        , notStrict
+        , ftToType $ fieldType fieldDef
+        )
 
 mkKeyToValues :: MkPersistSettings -> EntityDef -> Q Dec
 mkKeyToValues mps entDef = do

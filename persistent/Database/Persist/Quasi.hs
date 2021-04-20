@@ -856,7 +856,9 @@ mkEntityDef ps name entattribs lines =
         -- idField is the user-specified Id
         -- otherwise useAutoIdField
         -- but, adjust it if the user specified a Primary
-        , entityId = setComposite primaryComposite $ fromMaybe autoIdField idField
+        , entityId =
+            setComposite primaryComposite
+            $ fromMaybe autoIdField idField
         , entityAttrs = entattribs
         , entityFields = cols
         , entityUniques = uniqs
@@ -879,13 +881,12 @@ mkEntityDef ps name entattribs lines =
         fmap tokenText <$> attribs
 
     attribPrefix = flip lookupKeyVal entattribs
-    idName | Just _ <- attribPrefix "id" = error "id= is deprecated, ad a field named 'Id' and use sql="
-           | otherwise = Nothing
 
-    (idField, primaryComposite, uniqs, foreigns) = foldl' (\(mid, mp, us, fs) attr ->
-        let (i, p, u, f) = takeConstraint ps name' cols attr
-            squish xs m = xs `mappend` maybeToList m
-        in (just1 mid i, just1 mp p, squish us u, squish fs f)) (Nothing, Nothing, [],[]) textAttribs
+    idName
+        | Just _ <- attribPrefix "id" =
+            error "id= is deprecated, ad a field named 'Id' and use sql="
+        | otherwise =
+            Nothing
 
     cols :: [FieldDef]
     cols = reverse . fst . foldr k ([], []) $ reverse attribs
@@ -901,12 +902,18 @@ mkEntityDef ps name entattribs lines =
                   Nothing ->
                       (acc, [])
 
-    autoIdField = mkAutoIdField ps entName (FieldNameDB `fmap` idName) idSqlType
-    idSqlType = maybe SqlInt64 (const $ SqlOther "Primary Key") primaryComposite
+    autoIdField =
+        mkAutoIdField ps entName
+
+    (idField, primaryComposite, uniqs, foreigns) = foldl' (\(mid, mp, us, fs) attr ->
+        let (i, p, u, f) = takeConstraint ps name' cols attr
+            squish xs m = xs `mappend` maybeToList m
+        in (just1 mid i, just1 mp p, squish us u, squish fs f)) (Nothing, Nothing, [],[]) textAttribs
 
     setComposite Nothing fd = fd
     setComposite (Just c) fd = fd
         { fieldReference = CompositeRef c
+        , fieldSqlType = SqlOther "Primary Key"
         }
 
 setFieldComments :: [Text] -> FieldDef -> FieldDef
@@ -920,16 +927,17 @@ just1 (Just x) (Just y) = error $ "expected only one of: "
   `mappend` show x `mappend` " " `mappend` show y
 just1 x y = x `mplus` y
 
-mkAutoIdField :: PersistSettings -> EntityNameHS -> Maybe FieldNameDB -> SqlType -> FieldDef
-mkAutoIdField ps entName idName idSqlType =
+mkAutoIdField :: PersistSettings -> EntityNameHS -> FieldDef
+mkAutoIdField ps entName =
     FieldDef
         { fieldHaskell = FieldNameHS "Id"
         -- this should be modeled as a Maybe
         -- but that sucks for non-ID field
         -- TODO: use a sumtype FieldDef | IdFieldDef
-        , fieldDB = fromMaybe (FieldNameDB $ psIdName ps) idName
+        , fieldDB = FieldNameDB $ psIdName ps
         , fieldType = FTTypeCon Nothing $ keyConName $ unEntityNameHS entName
-        , fieldSqlType = idSqlType
+        , fieldSqlType =
+            SqlInt64
         -- the primary field is actually a reference to the entity
         , fieldReference = ForeignRef entName defaultReferenceTypeCon
         , fieldAttrs = []
