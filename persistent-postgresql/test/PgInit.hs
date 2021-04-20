@@ -18,6 +18,7 @@ module PgInit
     , module Control.Monad.Trans.Reader
     , module Control.Monad
     , module Database.Persist.Sql
+    , module Database.Persist.SqlBackend
     , module Database.Persist
     , module Database.Persist.Sql.Raw.QQ
     , module Init
@@ -79,6 +80,7 @@ import Test.Hspec
 import Test.Hspec.Expectations.Lifted
 import Test.QuickCheck.Instances ()
 import UnliftIO
+import Database.Persist.SqlBackend
 
 -- testing
 import Test.HUnit (Assertion, assertBool, assertFailure, (@=?), (@?=))

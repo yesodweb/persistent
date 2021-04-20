@@ -12,15 +12,15 @@ import Database.Persist.Types.Base (FieldCascade)
 
 import Control.Exception (Exception(..))
 import Control.Monad.Logger (NoLoggingT)
-import Control.Monad.Trans.Reader (ReaderT (..))
+import Control.Monad.Trans.Reader (ReaderT(..))
 import Control.Monad.Trans.Resource (ResourceT)
 import Control.Monad.Trans.Writer (WriterT)
 import Data.Pool (Pool)
 import Data.Text (Text, unpack)
 
-import Database.Persist.Types
-import Database.Persist.Sql.Types.Internal
 import Data.Time (NominalDiffTime)
+import Database.Persist.Sql.Types.Internal
+import Database.Persist.Types
 
 data Column = Column
     { cName      :: !FieldNameDB
