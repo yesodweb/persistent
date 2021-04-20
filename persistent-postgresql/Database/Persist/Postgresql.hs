@@ -84,7 +84,7 @@ import Data.Function (on)
 import Data.IORef
 import Data.Int (Int64)
 import qualified Data.IntMap as I
-import Data.List (find, foldl', groupBy, sort, nub)
+import Data.List (find, foldl', groupBy, sort)
 import qualified Data.List as List
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NEL
@@ -1908,7 +1908,7 @@ mkBulkUpsertQuery records conn fieldValues updates filters =
     (fieldsToMaybeCopy, updateFieldNames) = partitionEithers $ map mfieldDef fieldValues
     fieldDbToText = escapeF . fieldDB
     entityDef' = entityDef records
-    conflictColumns = nub (escapeF . fieldDB <$> entityKeyFields entityDef') ++ concatMap (map (escapeF . snd) . uniqueFields) (entityUniques entityDef')
+    conflictColumns = (escapeF . fieldDB <$> entityKeyFields entityDef') ++ concatMap (map (escapeF . snd) . uniqueFields) (entityUniques entityDef')
     firstField = case entityFieldNames of
         [] -> error "The entity you're trying to insert does not have any fields."
         (field:_) -> field
@@ -1949,7 +1949,7 @@ mkBulkUpsertQuery records conn fieldValues updates filters =
         , Util.parenWrapped . Util.commaSeparated $ entityFieldNames
         , " VALUES "
         , recordPlaceholders
-        , " ON CONFLICT "
+        , " ON CONFLICT"
         , Util.parenWrapped $ Util.commaSeparated $ conflictColumns
         , " DO UPDATE SET "
         , updateText
