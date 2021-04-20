@@ -52,5 +52,11 @@ spec = describe "OverloadedLabels" $ do
 
         compiles
 
+    it "works for id labels" $ do
+        let UserId = #id
+            orgId = #id :: EntityField Organization OrganizationId
+
+        compiles
+
 compiles :: Expectation
 compiles = True `shouldBe` True
