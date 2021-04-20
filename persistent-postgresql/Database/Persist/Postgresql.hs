@@ -1860,8 +1860,13 @@ upsertManyWhere
 upsertManyWhere [] _ _ _ = return ()
 upsertManyWhere records fieldValues updates filters = do
     conn <- asks projectBackend
+    let uniqDef = -- onlyOneUniqueDef (Nothing :: Maybe record)
+            case entityUniques (entityDef (Nothing :: Maybe record)) of
+                [uniq] -> uniq
+                _ -> error "impossible due to OnlyOneUniqueKey constraint"
+            -- TODO: use onlyOneUniqueDef when it's exported
     uncurry rawExecute $
-        mkBulkUpsertQuery records conn fieldValues updates filters
+        mkBulkUpsertQuery records conn fieldValues updates filters uniqDef
 
 -- | Exclude any record field if it doesn't match the filter record.  Used only in `upsertWhere` and
 -- `upsertManyWhere`
@@ -1898,13 +1903,21 @@ excludeNotEqualToOriginal field =
 -- duplicate key exceptions.
 mkBulkUpsertQuery
     :: (PersistEntity record, PersistEntityBackend record ~ SqlBackend, OnlyOneUniqueKey record)
-    => [record] -- ^ A list of the records you want to insert, or update
+    => [record]
+    -- ^ A list of the records you want to insert, or update
     -> SqlBackend
-    -> [HandleUpdateCollision record] -- ^ A list of the fields you want to copy over.
-    -> [Update record] -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
-    -> [Filter record] -- ^ A filter condition that dictates the scope of the updates
+    -> [HandleUpdateCollision record]
+    -- ^ A list of the fields you want to copy over.
+    -> [Update record]
+    -- ^ A list of the updates to apply that aren't dependent on the record being inserted.
+    -> [Filter record]
+    -- ^ A filter condition that dictates the scope of the updates
+    -> UniqueDef
+    -- ^ The specific uniqueness constraint to use on the record. Postgres
+    -- rquires that we use exactly one relevant constraint, and it can't do
+    -- a catch-all. How frustrating!
     -> (Text, [PersistValue])
-mkBulkUpsertQuery records conn fieldValues updates filters =
+mkBulkUpsertQuery records conn fieldValues updates filters uniqDef =
   (q, recordValues <> updsValues <> copyUnlessValues <> whereVals)
   where
     mfieldDef x = case x of
@@ -1913,9 +1926,8 @@ mkBulkUpsertQuery records conn fieldValues updates filters =
     (fieldsToMaybeCopy, updateFieldNames) = partitionEithers $ map mfieldDef fieldValues
     fieldDbToText = escapeF . fieldDB
     entityDef' = entityDef records
-    -- conflictColumns = (escapeF . fieldDB <$> entityKeyFields entityDef') ++ concatMap (map (escapeF . snd) . uniqueFields) (entityUniques entityDef')
     conflictColumns =
-        concatMap (map (escapeF . snd) . uniqueFields) (entityUniques entityDef')
+        map (escapeF . snd) $ uniqueFields uniqDef
     firstField = case entityFieldNames of
         [] -> error "The entity you're trying to insert does not have any fields."
         (field:_) -> field
