@@ -3,42 +3,42 @@
 {-# LANGUAGE TypeOperators #-}
 
 module Database.Persist.Class.PersistUnique
-  ( PersistUniqueRead(..)
-  , PersistUniqueWrite(..)
-  , OnlyOneUniqueKey(..)
-  , onlyOneUniqueDef
-  , AtLeastOneUniqueKey(..)
-  , atLeastOneUniqueDef
-  , NoUniqueKeysError
-  , MultipleUniqueKeysError
-  , getByValue
-  , getByValueUniques
-  , insertBy
-  , insertUniqueEntity
-  , replaceUnique
-  , checkUnique
-  , checkUniqueUpdateable
-  , onlyUnique
-  , defaultUpsertBy
-  , defaultPutMany
-  , persistUniqueKeyValues
-  )
-  where
+    ( PersistUniqueRead(..)
+    , PersistUniqueWrite(..)
+    , OnlyOneUniqueKey(..)
+    , onlyOneUniqueDef
+    , AtLeastOneUniqueKey(..)
+    , atLeastOneUniqueDef
+    , NoUniqueKeysError
+    , MultipleUniqueKeysError
+    , getByValue
+    , getByValueUniques
+    , insertBy
+    , insertUniqueEntity
+    , replaceUnique
+    , checkUnique
+    , checkUniqueUpdateable
+    , onlyUnique
+    , defaultUpsertBy
+    , defaultPutMany
+    , persistUniqueKeyValues
+    )
+    where
 
 import Control.Monad (liftM)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.Function (on)
-import Data.List ((\\), deleteFirstsBy)
+import Data.List (deleteFirstsBy, (\\))
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes)
 import GHC.TypeLits (ErrorMessage(..))
 
-import Database.Persist.Types
-import Database.Persist.Class.PersistStore
 import Database.Persist.Class.PersistEntity
+import Database.Persist.Class.PersistStore
+import Database.Persist.Types
 
 -- | Queries against 'Unique' keys (other than the id 'Key').
 --
@@ -419,10 +419,13 @@ insertBy val = do
 -- > +----+-------+-----+
 
 insertUniqueEntity
-    :: forall record backend m. (MonadIO m
-       ,PersistRecordBackend record backend
-       ,PersistUniqueWrite backend)
-    => record -> ReaderT backend m (Maybe (Entity record))
+    :: forall record backend m
+     . ( MonadIO m
+       , PersistRecordBackend record backend
+       , PersistUniqueWrite backend
+       )
+    => record
+    -> ReaderT backend m (Maybe (Entity record))
 insertUniqueEntity datum =
   fmap (\key -> Entity key datum) `liftM` insertUnique datum
 
