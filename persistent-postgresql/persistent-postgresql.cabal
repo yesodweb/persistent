@@ -68,6 +68,7 @@ test-suite test
                    , HUnit
                    , hspec                >= 2.4
                    , hspec-expectations
+                   , hspec-expectations-lifted
                    , monad-logger
                    , QuickCheck
                    , quickcheck-instances

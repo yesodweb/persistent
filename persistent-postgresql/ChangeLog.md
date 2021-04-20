@@ -1,9 +1,18 @@
 # Changelog for persistent-postgresql
 
+
 ## 2.13.0.0
 
 * [#]()
     * Support `persistent-2.13.0.0`
+
+# 2.12.1.1
+
+* [#1235](https://github.com/yesodweb/persistent/pull/1235)
+    * `upsertWhere` and `upsertManyWhere` only worked in cases where a `Primary`
+      key was defined on a record, and no other uniqueness constraints. They
+      have been fixed to only work with records that have a single Uniqueness
+      constraint defined.
 
 ## 2.12.1.0
 
