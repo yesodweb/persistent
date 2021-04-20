@@ -544,8 +544,7 @@ preparse txt = do
 
 parseLine :: Text -> Maybe Line
 parseLine txt = do
-    parsedTokens <- NEL.nonEmpty (tokenize txt)
-    pure $ Line (parseIndentationAmount txt) parsedTokens
+    Line (parseIndentationAmount txt) <$> NEL.nonEmpty (tokenize txt)
 
 -- | A token used by the parser.
 data Token = Token Text    -- ^ @Token tok@ is token @tok@ already unquoted.
@@ -624,11 +623,7 @@ data Line = Line
 lineText :: Line -> NonEmpty Text
 lineText = fmap tokenText . tokens
 
-lowestIndent
-    :: Functor f
-    => Foldable f
-    => f Line
-    -> Int
+lowestIndent :: NonEmpty Line -> Int
 lowestIndent = minimum . fmap lineIndent
 
 -- | Divide lines into blocks and make entity definitions.

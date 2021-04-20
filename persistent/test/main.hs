@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -229,14 +229,6 @@ main = hspec $ do
                             (DocComment "this is a comment")
                         )
 
-            it "map parseLine" $ do
-                mapM parseLine ["Foo", "-- | Hello"]
-                    `shouldBe`
-                        Just
-                            [ Line 0 (pure (Token "Foo"))
-                            , Line 0 (pure (DocComment "Hello"))
-                            ]
-
             it "works if comment is indented" $ do
                 parseLine "  -- | comment" `shouldBe`
                     Just (Line 2 (pure (DocComment "comment")))
@@ -464,13 +456,6 @@ Baz
                     , tokens = Token "c" :| [Token "FooId"]
                     }
                 ]
-            resultLines =
-                concat
-                    [ fooLines
-                    , emptyLines
-                    , barLines
-                    , bazLines
-                    ]
 
         let linesAssociated =
                 case preparsed of
@@ -825,7 +810,7 @@ Baz
                         , ""
                         ] of
                             [a, b, c] ->
-                                [a, b, c]
+                                [a, b, c] :: [EntityDef]
                             xs ->
                                 error
                                 $ "Expected 3 elements in list, got: "
