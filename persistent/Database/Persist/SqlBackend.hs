@@ -92,7 +92,7 @@ getEscapedRawName
     :: (BackendCompatible SqlBackend backend, MonadReader backend m)
     => Text -> m Text
 getEscapedRawName name = do
-    func <- asks (SqlBackend.connEscapeRawName . projectBackend)
+    func <- getEscapeRawNameFunction
     pure (func name)
 
 -- | Return the function for escaping a raw name.
