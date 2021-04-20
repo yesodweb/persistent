@@ -421,12 +421,11 @@ module Database.Persist.Quasi
     , nullable
 #if TEST
     , Token (..)
-    , Line' (..)
+    , Line (..)
     , preparse
     , parseLine
     , parseFieldType
     , associateLines
-    , skipEmpty
     , LinesWithComments(..)
     , splitExtras
     , takeColsEx
@@ -543,16 +542,10 @@ preparse txt = do
     lns <- NEL.nonEmpty (T.lines txt)
     NEL.nonEmpty $ mapMaybe parseLine (NEL.toList lns)
 
--- TODO: refactor to return (Line' NonEmpty), made possible by
--- https://github.com/yesodweb/persistent/pull/1206 but left out
--- in order to minimize the diff
 parseLine :: Text -> Maybe Line
-parseLine txt =
-    case tokenize txt of
-      [] ->
-          Nothing
-      toks ->
-          pure $ Line (parseIndentationAmount txt) toks
+parseLine txt = do
+    parsedTokens <- NEL.nonEmpty (tokenize txt)
+    pure $ Line (parseIndentationAmount txt) parsedTokens
 
 -- | A token used by the parser.
 data Token = Token Text    -- ^ @Token tok@ is token @tok@ already unquoted.
@@ -622,46 +615,32 @@ tokenize t
             let (x, y) = T.break (`elem` ['\\','(',')']) t'
              in parens count y (front . (x:))
 
--- | A line.  We don't care about spaces in the middle of the
--- line.  Also, we don't care about the amount of indentation.
-data Line' f
-    = Line
+-- | A line of parsed tokens
+data Line = Line
     { lineIndent   :: Int
-    , tokens       :: f Token
-    }
+    , tokens       :: NonEmpty Token
+    } deriving (Eq, Show)
 
-deriving instance Show (f Token) => Show (Line' f)
-deriving instance Eq (f Token) => Eq (Line' f)
-
-mapLine :: (forall x. f x -> g x) -> Line' f -> Line' g
-mapLine k (Line i t) = Line i (k t)
-
-traverseLine :: Functor t => (forall x. f x -> t (g x)) -> Line' f -> t (Line' g)
-traverseLine k (Line i xs) = Line i <$> k xs
-
-lineText :: Functor f => Line' f -> f Text
+lineText :: Line -> NonEmpty Text
 lineText = fmap tokenText . tokens
-
-type Line = Line' []
 
 lowestIndent
     :: Functor f
     => Foldable f
-    => Functor g
-    => f (Line' g)
+    => f Line
     -> Int
 lowestIndent = minimum . fmap lineIndent
 
 -- | Divide lines into blocks and make entity definitions.
 parseLines :: PersistSettings -> NonEmpty Line -> [EntityDef]
 parseLines ps =
-    fixForeignKeysAll . map mk . associateLines . skipEmpty
+    fixForeignKeysAll . map mk . associateLines
   where
     mk :: LinesWithComments -> UnboundEntityDef
     mk lwc =
         let ln :| rest = lwcLines lwc
             (name :| entAttribs) = lineText ln
-         in setComments (lwcComments lwc) $ mkEntityDef ps name entAttribs (map (mapLine NEL.toList) rest)
+         in setComments (lwcComments lwc) $ mkEntityDef ps name entAttribs rest
 
 isDocComment :: Token -> Maybe Text
 isDocComment tok =
@@ -670,7 +649,7 @@ isDocComment tok =
         _ -> Nothing
 
 data LinesWithComments = LinesWithComments
-    { lwcLines :: NonEmpty (Line' NonEmpty)
+    { lwcLines :: NonEmpty Line
     , lwcComments :: [Text]
     } deriving (Eq, Show)
 
@@ -680,24 +659,24 @@ appendLwc :: LinesWithComments -> LinesWithComments -> LinesWithComments
 appendLwc a b =
     LinesWithComments (foldr NEL.cons (lwcLines b) (lwcLines a)) (lwcComments a `mappend` lwcComments b)
 
-newLine :: Line' NonEmpty -> LinesWithComments
+newLine :: Line -> LinesWithComments
 newLine l = LinesWithComments (pure l) []
 
-firstLine :: LinesWithComments -> Line' NonEmpty
+firstLine :: LinesWithComments -> Line
 firstLine = NEL.head . lwcLines
 
-consLine :: Line' NonEmpty -> LinesWithComments -> LinesWithComments
+consLine :: Line -> LinesWithComments -> LinesWithComments
 consLine l lwc = lwc { lwcLines = NEL.cons l (lwcLines lwc) }
 
 consComment :: Text -> LinesWithComments -> LinesWithComments
 consComment l lwc = lwc { lwcComments = l : lwcComments lwc }
 
-associateLines :: [Line' NonEmpty] -> [LinesWithComments]
+associateLines :: NonEmpty Line -> [LinesWithComments]
 associateLines lines =
     foldr combine [] $
     foldr toLinesWithComments [] lines
   where
-    toLinesWithComments :: Line' NonEmpty -> [LinesWithComments] -> [LinesWithComments]
+    toLinesWithComments :: Line -> [LinesWithComments] -> [LinesWithComments]
     toLinesWithComments line linesWithComments =
         case linesWithComments of
             [] ->
@@ -729,9 +708,6 @@ associateLines lines =
 
 
     minimumIndentOf = lowestIndent . lwcLines
-
-skipEmpty :: NonEmpty (Line' []) -> [Line' NonEmpty]
-skipEmpty = mapMaybe (traverseLine NEL.nonEmpty) . NEL.toList
 
 setComments :: [Text] -> UnboundEntityDef -> UnboundEntityDef
 setComments [] = id
@@ -954,13 +930,14 @@ splitExtras lns =
     case lns of
         [] -> ([], M.empty)
         (line : rest) ->
-            case line of
-                Line indent [Token name]
+            case NEL.toList (tokens line) of
+                [Token name]
                   | isCapitalizedText name ->
-                    let (children, rest') = span ((> indent) . lineIndent) rest
+                    let indent = lineIndent line
+                        (children, rest') = span ((> indent) . lineIndent) rest
                         (x, y) = splitExtras rest'
-                     in (x, M.insert name (map lineText children) y)
-                Line _ ts ->
+                     in (x, M.insert name (NEL.toList . lineText <$> children) y)
+                ts ->
                     let (x, y) = splitExtras rest
                      in (ts:x, y)
 
