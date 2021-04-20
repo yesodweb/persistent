@@ -1,18 +1,21 @@
-{-# LANGUAGE CPP, BangPatterns, PolyKinds, AllowAmbiguousTypes, TypeApplications #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveLift #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE DeriveLift #-}
+{-# LANGUAGE ViewPatterns #-}
 
 -- {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-missing-fields #-}
 
@@ -61,49 +64,55 @@ module Database.Persist.TH
 -- Development Tip: See persistent-template/README.md for advice on seeing generated Template Haskell code
 -- It's highly recommended to check the diff between master and your PR's generated code.
 
-import Prelude hiding ((++), take, concat, splitAt, exp)
+import Prelude hiding (concat, exp, splitAt, take, (++))
 
-import Data.Either
 import Control.Monad
 import Data.Aeson
-    ( ToJSON (toJSON), FromJSON (parseJSON), (.=), object
-    , Value (Object), (.:), (.:?)
-    , eitherDecodeStrict'
-    )
+       ( FromJSON(parseJSON)
+       , ToJSON(toJSON)
+       , Value(Object)
+       , eitherDecodeStrict'
+       , object
+       , (.:)
+       , (.:?)
+       , (.=)
+       )
 import qualified Data.ByteString as BS
-import Data.Typeable (Typeable)
-import Type.Reflection
-import Data.Ix (Ix)
-import Data.Data (Data)
 import Data.Char (toLower, toUpper)
+import Data.Data (Data)
+import Data.Either
 import qualified Data.HashMap.Strict as HM
 import Data.Int (Int64)
+import Data.Ix (Ix)
 import Data.List (foldl')
 import qualified Data.List as List
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as M
-import Data.Maybe (isJust, listToMaybe, mapMaybe, fromMaybe)
-import Data.Monoid ((<>), mappend, mconcat)
-import Data.Proxy (Proxy (Proxy))
-import Data.Text (pack, Text, append, unpack, concat, uncons, cons, stripSuffix)
+import Data.Maybe (fromMaybe, isJust, listToMaybe, mapMaybe)
+import Data.Monoid (mappend, mconcat, (<>))
+import Data.Proxy (Proxy(Proxy))
+import Data.Text (Text, append, concat, cons, pack, stripSuffix, uncons, unpack)
 import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
 import qualified Data.Text.Encoding as TE
+import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 import GHC.TypeLits
 import Instances.TH.Lift ()
     -- Bring `Lift (Map k v)` instance into scope, as well as `Lift Text`
     -- instance on pre-1.2.4 versions of `text`
-import Language.Haskell.TH.Lib (appT, varT, conK, conT, varE, varP, conE, litT, strTyLit)
+import qualified Data.Set as Set
+import Language.Haskell.TH.Lib
+       (appT, conE, conK, conT, litT, strTyLit, varE, varP, varT)
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
+import Web.HttpApiData (FromHttpApiData(..), ToHttpApiData(..))
 import Web.PathPieces (PathPiece(..))
-import Web.HttpApiData (ToHttpApiData(..), FromHttpApiData(..))
-import qualified Data.Set as Set
 
 import Database.Persist
-import Database.Persist.Sql (Migration, PersistFieldSql, SqlBackend, migrate, sqlType)
 import Database.Persist.Quasi
+import Database.Persist.Sql
+       (Migration, PersistFieldSql, SqlBackend, migrate, sqlType)
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).

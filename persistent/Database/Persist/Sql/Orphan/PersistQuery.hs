@@ -123,7 +123,7 @@ instance PersistQueryRead SqlBackend where
 
         wher conn = if null filts
                     then ""
-                    else filterClause False conn filts
+                    else filterClause Nothing conn filts
         sql conn = connLimitOffset conn (limit,offset) $ mconcat
             [ "SELECT "
             , cols conn

@@ -7,7 +7,8 @@
 {-# LANGUAGE ViewPatterns #-}
 
 -- | This @Internal@ module may have breaking changes that will not be reflected
--- in major version bumps. Please use "Database.Persist.Quasi" instead.
+-- in major version bumps. Please use "Database.Persist.Quasi" instead. If you
+-- need something in this module, please file an issue on GitHub.
 --
 -- @since 2.13.0.0
 module Database.Persist.Quasi.Internal
@@ -17,12 +18,11 @@ module Database.Persist.Quasi.Internal
     , lowerCaseSettings
     , nullable
     , Token (..)
-    , Line' (..)
+    , Line (..)
     , preparse
     , parseLine
     , parseFieldType
     , associateLines
-    , skipEmpty
     , LinesWithComments(..)
     , splitExtras
     , takeColsEx
