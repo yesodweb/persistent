@@ -1,10 +1,10 @@
 # Changelog for persistent-postgresql
 
 
-## 2.13.0.0
+## 2.13.0.0 (unreleased)
 
-* [#]()
-    * Support `persistent-2.13.0.0`
+* [#1225](https://github.com/yesodweb/persistent/pull/1225)
+    * Support `persistent-2.13.0.0` making SQlBackend internal
 
 # 2.12.1.1
 

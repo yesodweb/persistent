@@ -2,8 +2,8 @@
 
 ## 2.13.0.0 (unreleased)
 
-* [#]()
-    * Support `persistent-2.13.0.0`
+* [#1225](https://github.com/yesodweb/persistent/pull/1225)
+    * Support `persistent-2.13` changes for SqlBackend being made internal.
 
 ## 2.12.0.0
 

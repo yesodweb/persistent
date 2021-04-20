@@ -1,9 +1,9 @@
 # Changelog for persistent-mysql
 
-## 2.13.0.0
+## 2.13.0.0 (unreleased)
 
-* [#]()
-    * Support `persistent-2.13`
+* [#1225](https://github.com/yesodweb/persistent/pull/1225)
+    * Support `persistent-2.13` changes for SqlBackend being made internal.
     * Remove the deprecated `SomeField` type and pattern.
 
 ## 2.12.0.0

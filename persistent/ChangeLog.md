@@ -2,7 +2,7 @@
 
 ## 2.13.0.0 (unreleased)
 
-* [#]()
+* [#1225](https://github.com/yesodweb/persistent/pull/1225)
     * The fields and constructor for `SqlBackend` are no longer exported by
       default. They are available from an internal module,
       `Database.Persist.Sql.Types.Internal`. Breaking changes from `Internal`
