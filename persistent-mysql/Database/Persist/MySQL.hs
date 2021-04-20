@@ -26,8 +26,6 @@ module Database.Persist.MySQL
     , insertOnDuplicateKeyUpdate
     , insertManyOnDuplicateKeyUpdate
     , HandleUpdateCollision
-    , pattern SomeField
-    , SomeField
     , copyField
     , copyUnlessNull
     , copyUnlessEmpty
@@ -72,6 +70,7 @@ import qualified Data.Text.IO as T
 import System.Environment (getEnvironment)
 
 import Database.Persist.Sql
+import Database.Persist.SqlBackend
 import Database.Persist.Sql.Types.Internal (makeIsolationLevelStatement)
 import qualified Database.Persist.Sql.Util as Util
 
@@ -86,39 +85,39 @@ import qualified Database.MySQL.Simple.Types  as MySQL
 -- The pool is properly released after the action finishes using
 -- it.  Note that you should not use the given 'ConnectionPool'
 -- outside the action since it may be already been released.
-withMySQLPool :: (MonadLoggerIO m, MonadUnliftIO m)
-              => MySQL.ConnectInfo
-              -- ^ Connection information.
-              -> Int
-              -- ^ Number of connections to be kept open in the pool.
-              -> (Pool SqlBackend -> m a)
-              -- ^ Action to be executed that uses the connection pool.
-              -> m a
+withMySQLPool
+    :: (MonadLoggerIO m, MonadUnliftIO m)
+    => MySQL.ConnectInfo
+    -- ^ Connection information.
+    -> Int
+    -- ^ Number of connections to be kept open in the pool.
+    -> (Pool SqlBackend -> m a)
+    -- ^ Action to be executed that uses the connection pool.
+    -> m a
 withMySQLPool ci = withSqlPool $ open' ci
-
 
 -- | Create a MySQL connection pool.  Note that it's your
 -- responsibility to properly close the connection pool when
 -- unneeded.  Use 'withMySQLPool' for automatic resource control.
-createMySQLPool :: (MonadUnliftIO m, MonadLoggerIO m)
-                => MySQL.ConnectInfo
-                -- ^ Connection information.
-                -> Int
-                -- ^ Number of connections to be kept open in the pool.
-                -> m (Pool SqlBackend)
+createMySQLPool
+    :: (MonadUnliftIO m, MonadLoggerIO m)
+    => MySQL.ConnectInfo
+    -- ^ Connection information.
+    -> Int
+    -- ^ Number of connections to be kept open in the pool.
+    -> m (Pool SqlBackend)
 createMySQLPool ci = createSqlPool $ open' ci
-
 
 -- | Same as 'withMySQLPool', but instead of opening a pool
 -- of connections, only one connection is opened.
-withMySQLConn :: (MonadUnliftIO m, MonadLoggerIO m)
-              => MySQL.ConnectInfo
-              -- ^ Connection information.
-              -> (SqlBackend -> m a)
-              -- ^ Action to be executed that uses the connection.
-              -> m a
+withMySQLConn
+    :: (MonadUnliftIO m, MonadLoggerIO m)
+    => MySQL.ConnectInfo
+    -- ^ Connection information.
+    -> (SqlBackend -> m a)
+    -- ^ Action to be executed that uses the connection.
+    -> m a
 withMySQLConn = withSqlConn . open'
-
 
 -- | Internal function that opens a connection to the MySQL
 -- server.
@@ -127,32 +126,30 @@ open' ci logFunc = do
     conn <- MySQL.connect ci
     MySQLBase.autocommit conn False -- disable autocommit!
     smap <- newIORef $ Map.empty
-    return $ SqlBackend
-        { connPrepare    = prepare' conn
-        , connStmtMap    = smap
-        , connInsertSql  = insertSql'
-        , connInsertManySql = Nothing
-        , connUpsertSql = Nothing
-        , connPutManySql = Just putManySql
-        , connClose      = MySQL.close conn
-        , connMigrateSql = migrate' ci
-        , connBegin      = \_ mIsolation -> do
-            forM_ mIsolation $ \iso -> MySQL.execute_ conn (makeIsolationLevelStatement iso)
-            MySQL.execute_ conn "start transaction" >> return ()
-        , connCommit     = const $ MySQL.commit   conn
-        , connRollback   = const $ MySQL.rollback conn
-        , connEscapeFieldName = T.pack . escapeF
-        , connEscapeTableName = T.pack . escapeE . entityDB
-        , connEscapeRawName = T.pack . escapeDBName . T.unpack
-        , connNoLimit    = "LIMIT 18446744073709551615"
-        -- This noLimit is suggested by MySQL's own docs, see
-        -- <http://dev.mysql.com/doc/refman/5.5/en/select.html>
-        , connRDBMS      = "mysql"
-        , connLimitOffset = decorateSQLWithLimitOffset "LIMIT 18446744073709551615"
-        , connLogFunc    = logFunc
-        , connMaxParams = Nothing
-        , connRepsertManySql = Just repsertManySql
-        }
+    return $
+        setConnPutManySql putManySql $
+        setConnRepsertManySql repsertManySql $
+        mkSqlBackend MkSqlBackendArgs
+            { connPrepare    = prepare' conn
+            , connStmtMap    = smap
+            , connInsertSql  = insertSql'
+            , connClose      = MySQL.close conn
+            , connMigrateSql = migrate' ci
+            , connBegin      = \_ mIsolation -> do
+                forM_ mIsolation $ \iso -> MySQL.execute_ conn (makeIsolationLevelStatement iso)
+                MySQL.execute_ conn "start transaction" >> return ()
+            , connCommit     = const $ MySQL.commit   conn
+            , connRollback   = const $ MySQL.rollback conn
+            , connEscapeFieldName = T.pack . escapeF
+            , connEscapeTableName = T.pack . escapeE . entityDB
+            , connEscapeRawName = T.pack . escapeDBName . T.unpack
+            , connNoLimit    = "LIMIT 18446744073709551615"
+            -- This noLimit is suggested by MySQL's own docs, see
+            -- <http://dev.mysql.com/doc/refman/5.5/en/select.html>
+            , connRDBMS      = "mysql"
+            , connLimitOffset = decorateSQLWithLimitOffset "LIMIT 18446744073709551615"
+            , connLogFunc    = logFunc
+            }
 
 -- | Prepare a query.  We don't support prepared statements, but
 -- we'll do some client-side preprocessing here.
@@ -1244,37 +1241,34 @@ mockMigrate _connectInfo allDefs _getter val = do
 -- the actual database isn't already present in the system.
 mockMigration :: Migration -> IO ()
 mockMigration mig = do
-  smap <- newIORef $ Map.empty
-  let sqlbackend = SqlBackend { connPrepare = \_ -> do
-                                             return Statement
-                                                        { stmtFinalize = return ()
-                                                        , stmtReset = return ()
-                                                        , stmtExecute = undefined
-                                                        , stmtQuery = \_ -> return $ return ()
-                                                        },
-                             connInsertManySql = Nothing,
-                             connInsertSql = undefined,
-                             connStmtMap = smap,
-                             connClose = undefined,
-                             connMigrateSql = mockMigrate undefined,
-                             connBegin = undefined,
-                             connCommit = undefined,
-                             connRollback = undefined,
-                             connEscapeFieldName = T.pack . escapeDBName . T.unpack . unFieldNameDB,
-                             connEscapeTableName = T.pack . escapeDBName . T.unpack . unEntityNameDB . entityDB,
-                             connEscapeRawName = T.pack . escapeDBName . T.unpack,
-                             connNoLimit = undefined,
-                             connRDBMS = undefined,
-                             connLimitOffset = undefined,
-                             connLogFunc = undefined,
-                             connUpsertSql = undefined,
-                             connPutManySql = undefined,
-                             connMaxParams = Nothing,
-                             connRepsertManySql = Nothing
-                             }
-      result = runReaderT . runWriterT . runWriterT $ mig
-  resp <- result sqlbackend
-  mapM_ T.putStrLn $ map snd $ snd resp
+    smap <- newIORef $ Map.empty
+    let sqlbackend =
+            mkSqlBackend MkSqlBackendArgs
+                { connPrepare = \_ -> do
+                    return Statement
+                        { stmtFinalize = return ()
+                        , stmtReset = return ()
+                        , stmtExecute = undefined
+                        , stmtQuery = \_ -> return $ return ()
+                        }
+                , connInsertSql = undefined
+                , connStmtMap = smap
+                , connClose = undefined
+                , connMigrateSql = mockMigrate undefined
+                , connBegin = undefined
+                , connCommit = undefined
+                , connRollback = undefined
+                , connEscapeFieldName = T.pack . escapeDBName . T.unpack . unFieldNameDB
+                , connEscapeTableName = T.pack . escapeDBName . T.unpack . unEntityNameDB . entityDB
+                , connEscapeRawName = T.pack . escapeDBName . T.unpack
+                , connNoLimit = undefined
+                , connRDBMS = undefined
+                , connLimitOffset = undefined
+                , connLogFunc = undefined
+                }
+        result = runReaderT . runWriterT . runWriterT $ mig
+    resp <- result sqlbackend
+    mapM_ T.putStrLn $ map snd $ snd resp
 
 -- | MySQL specific 'upsert_'. This will prevent multiple queries, when one will
 -- do. The record will be inserted into the database. In the event that the
@@ -1299,21 +1293,10 @@ insertOnDuplicateKeyUpdate record =
 --
 -- @since 2.8.0
 data HandleUpdateCollision record where
-  -- | Copy the field directly from the record.
-  CopyField :: EntityField record typ -> HandleUpdateCollision record
-  -- | Only copy the field if it is not equal to the provided value.
-  CopyUnlessEq :: PersistField typ => EntityField record typ -> typ -> HandleUpdateCollision record
-
--- | An alias for 'HandleUpdateCollision'. The type previously was only
--- used to copy a single value, but was expanded to be handle more complex
--- queries.
---
--- @since 2.6.2
-type SomeField = HandleUpdateCollision
-
-pattern SomeField :: EntityField record typ -> SomeField record
-pattern SomeField x = CopyField x
-{-# DEPRECATED SomeField "The type SomeField is deprecated. Use the type HandleUpdateCollision instead, and use the function copyField instead of the data constructor." #-}
+    -- | Copy the field directly from the record.
+    CopyField :: EntityField record typ -> HandleUpdateCollision record
+    -- | Only copy the field if it is not equal to the provided value.
+    CopyUnlessEq :: PersistField typ => EntityField record typ -> typ -> HandleUpdateCollision record
 
 -- | Copy the field into the database only if the value in the
 -- corresponding record is non-@NULL@.

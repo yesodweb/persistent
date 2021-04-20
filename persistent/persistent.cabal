@@ -1,5 +1,5 @@
 name:            persistent
-version:         2.12.1.1
+version:         2.13.0.0
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -15,79 +15,95 @@ bug-reports:     https://github.com/yesodweb/persistent/issues
 extra-source-files: ChangeLog.md README.md
 
 library
-    build-depends:   base                     >= 4.9       && < 5
-                   , aeson                    >= 1.0
-                   , attoparsec
-                   , base64-bytestring
-                   , blaze-html               >= 0.9
-                   , bytestring               >= 0.10
-                   , conduit                  >= 1.2.12
-                   , containers               >= 0.5
-                   , fast-logger              >= 2.4
-                   , http-api-data            >= 0.3
-                   , monad-logger             >= 0.3.28
-                   , mtl
-                   , path-pieces              >= 0.2
-                   , resource-pool            >= 0.2.3
-                   , resourcet                >= 1.1.10
-                   , scientific
-                   , silently
-                   , template-haskell         >= 2.11 && < 2.17
-                   , text                     >= 1.2
-                   , time                     >= 1.6
-                   , transformers             >= 0.5
-                   , unliftio-core
-                   , unliftio
-                   , unordered-containers
-                   , th-lift-instances        >= 0.1.14    && < 0.2
-                   , vector
+    build-depends:   
+        base                     >= 4.9       && < 5
+      , aeson                    >= 1.0
+      , attoparsec
+      , base64-bytestring
+      , blaze-html               >= 0.9
+      , bytestring               >= 0.10
+      , conduit                  >= 1.2.12
+      , containers               >= 0.5
+      , fast-logger              >= 2.4
+      , http-api-data            >= 0.3
+      , monad-logger             >= 0.3.28
+      , mtl
+      , path-pieces              >= 0.2
+      , resource-pool            >= 0.2.3
+      , resourcet                >= 1.1.10
+      , scientific
+      , silently
+      , template-haskell         >= 2.11 && < 2.18
+      , text                     >= 1.2
+      , time                     >= 1.6
+      , transformers             >= 0.5
+      , unliftio-core
+      , unliftio
+      , unordered-containers
+      , th-lift-instances        >= 0.1.14    && < 0.2
+      , vector
 
-    default-extensions: FlexibleContexts
-                      , MultiParamTypeClasses
-                      , OverloadedStrings
-                      , TypeFamilies
+    default-extensions: 
+        FlexibleContexts
+      , MultiParamTypeClasses
+      , OverloadedStrings
+      , TypeFamilies
 
-    exposed-modules: Database.Persist
-                     Database.Persist.Quasi
-                     Database.Persist.TH
+    exposed-modules: 
+        Database.Persist
+        Database.Persist.Types
+        Database.Persist.TH
 
-                     Database.Persist.Types
-                     Database.Persist.Class
-                     Database.Persist.Sql
-                     Database.Persist.Sql.Util
-                     Database.Persist.Sql.Types.Internal
+        Database.Persist.Quasi
+        Database.Persist.Quasi.Internal
 
-    other-modules:   Database.Persist.Types.Base
-                     Database.Persist.Class.DeleteCascade
-                     Database.Persist.Class.PersistEntity
-                     Database.Persist.Class.PersistQuery
-                     Database.Persist.Class.PersistUnique
-                     Database.Persist.Class.PersistConfig
-                     Database.Persist.Class.PersistField
-                     Database.Persist.Class.PersistStore
+        Database.Persist.Sql
+        Database.Persist.Sql.Util
+        Database.Persist.Sql.Types.Internal
 
-                     Database.Persist.Sql.Migration
-                     Database.Persist.Sql.Internal
-                     Database.Persist.Sql.Types
-                     Database.Persist.Sql.Raw
-                     Database.Persist.Sql.Run
-                     Database.Persist.Sql.Class
-                     Database.Persist.Sql.Orphan.PersistQuery
-                     Database.Persist.Sql.Orphan.PersistStore
-                     Database.Persist.Sql.Orphan.PersistUnique
+        Database.Persist.SqlBackend
+        Database.Persist.SqlBackend.Internal
+        Database.Persist.SqlBackend.Internal.InsertSqlResult
+        Database.Persist.SqlBackend.Internal.IsolationLevel
+        Database.Persist.SqlBackend.Internal.Statement
+        Database.Persist.SqlBackend.Internal.MkSqlBackend
+
+        Database.Persist.Class
+        Database.Persist.Class.DeleteCascade
+        Database.Persist.Class.PersistEntity
+        Database.Persist.Class.PersistQuery
+        Database.Persist.Class.PersistUnique
+        Database.Persist.Class.PersistConfig
+        Database.Persist.Class.PersistField
+        Database.Persist.Class.PersistStore
+
+    other-modules:   
+        Database.Persist.Types.Base
+
+        Database.Persist.Sql.Migration
+        Database.Persist.Sql.Internal
+        Database.Persist.Sql.Types
+        Database.Persist.Sql.Raw
+        Database.Persist.Sql.Run
+        Database.Persist.Sql.Class
+        Database.Persist.Sql.Orphan.PersistQuery
+        Database.Persist.Sql.Orphan.PersistStore
+        Database.Persist.Sql.Orphan.PersistUnique
 
     -- These modules only make sense for compilers with access to DerivingVia
     if impl(ghc >= 8.6.1)
-      exposed-modules: Database.Persist.Compatible
-      other-modules: Database.Persist.Compatible.Types
-                     Database.Persist.Compatible.TH
+        exposed-modules: 
+            Database.Persist.Compatible
+        other-modules: 
+            Database.Persist.Compatible.Types
+            Database.Persist.Compatible.TH
 
     ghc-options:     -Wall
     default-language: Haskell2010
 
 test-suite test
     type:          exitcode-stdio-1.0
-    main-is:       test/main.hs
+    main-is:       main.hs
 
     build-depends:   
         base >= 4.9 && < 5
@@ -100,6 +116,7 @@ test-suite test
       , hspec         >= 2.4
       , http-api-data
       , path-pieces
+      , persistent
       , scientific
       , shakespeare
       , text
@@ -124,7 +141,6 @@ test-suite test
       , th-lift-instances
 
     hs-source-dirs:
-        ./
         test/
     cpp-options: -DTEST
 
@@ -134,11 +150,11 @@ test-suite test
                       , TypeFamilies
 
     other-modules:   
-        Database.Persist.Class.PersistEntity
-        Database.Persist.Class.PersistField
-        Database.Persist.Quasi
-        Database.Persist.Types
-        Database.Persist.Types.Base
+        -- Database.Persist.Class.PersistEntity
+        -- Database.Persist.Class.PersistField
+        -- Database.Persist.Quasi
+        -- Database.Persist.Types
+        -- Database.Persist.Types.Base
         Database.Persist.THSpec
         TemplateTestImports
         Database.Persist.TH.SharedPrimaryKeySpec

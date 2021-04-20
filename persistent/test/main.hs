@@ -22,7 +22,7 @@ import Data.Aeson
 import qualified Data.ByteString.Char8 as BS8
 
 import Database.Persist.Class.PersistField
-import Database.Persist.Quasi
+import Database.Persist.Quasi.Internal
 import Database.Persist.Types
 
 import qualified Database.Persist.THSpec as THSpec

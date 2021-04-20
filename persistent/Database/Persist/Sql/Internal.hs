@@ -8,6 +8,8 @@ module Database.Persist.Sql.Internal
     ( mkColumns
     , defaultAttribute
     , BackendSpecificOverrides(..)
+    , getBackendSpecificForeignKeyName
+    , setBackendSpecificForeignKeyName
     , emptyBackendSpecificOverrides
     ) where
 
@@ -21,14 +23,42 @@ import Database.Persist.Sql.Types
 import Database.Persist.Types
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 
--- | Record of functions to override the default behavior in 'mkColumns'.
--- It is recommended you initialize this with 'emptyBackendSpecificOverrides' and override the default values,
--- so that as new fields are added, your code still compiles.
+-- | Record of functions to override the default behavior in 'mkColumns'.  It is
+-- recommended you initialize this with 'emptyBackendSpecificOverrides' and
+-- override the default values, so that as new fields are added, your code still
+-- compiles.
+--
+-- For added safety, use the @getBackendSpecific*@ and @setBackendSpecific*@
+-- functions, as a breaking change to the record field labels won't be reflected
+-- in a major version bump of the library.
 --
 -- @since 2.11
 data BackendSpecificOverrides = BackendSpecificOverrides
     { backendSpecificForeignKeyName :: Maybe (EntityNameDB -> FieldNameDB -> ConstraintNameDB)
     }
+
+-- | If the override is defined, then this returns a function that accepts an
+-- entity name and field name and provides the 'ConstraintNameDB' for the
+-- foreign key constraint.
+--
+-- An abstract accessor for the 'BackendSpecificOverrides'
+--
+-- @since 2.13.0.0
+getBackendSpecificForeignKeyName
+    :: BackendSpecificOverrides
+    -> Maybe (EntityNameDB -> FieldNameDB -> ConstraintNameDB)
+getBackendSpecificForeignKeyName =
+    backendSpecificForeignKeyName
+
+-- | Set the backend's foreign key generation function to this value.
+--
+-- @since 2.13.0.0
+setBackendSpecificForeignKeyName
+    :: (EntityNameDB -> FieldNameDB -> ConstraintNameDB)
+    -> BackendSpecificOverrides
+    -> BackendSpecificOverrides
+setBackendSpecificForeignKeyName func bso =
+    bso { backendSpecificForeignKeyName = Just func }
 
 findMaybe :: (a -> Maybe b) -> [a] -> Maybe b
 findMaybe p = listToMaybe . mapMaybe p
