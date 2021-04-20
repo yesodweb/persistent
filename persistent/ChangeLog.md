@@ -1,9 +1,9 @@
 # Changelog for persistent
 
-## 2.12.1.1 (unreleased)
+## 2.12.1.1
 
 * [#1231](https://github.com/yesodweb/persistent/pull/1231)
-    * Simplify Line type in Quasi module, always use NonEmpty 
+    * Simplify Line type in Quasi module, always use NonEmpty
 * [#1229](https://github.com/yesodweb/persistent/pull/1229)
     * The `#id` labels are now generated for entities.
 
