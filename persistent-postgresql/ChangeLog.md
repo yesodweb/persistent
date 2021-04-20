@@ -5,6 +5,10 @@
 * [#]()
     * Support `persistent-2.13.0.0`
 
+## 2.12.1.0
+
+* Added `upsertWhere` and `upsertManyWhere` to `persistent-postgresql`.  [#1222](https://github.com/yesodweb/persistent/pull/1222).
+
 ## 2.12.0.0
 
 * Decomposed `HaskellName` into `ConstraintNameHS`, `EntityNameHS`, `FieldNameHS`. Decomposed `DBName` into `ConstraintNameDB`, `EntityNameDB`, `FieldNameDB` respectively. [#1174](https://github.com/yesodweb/persistent/pull/1174)

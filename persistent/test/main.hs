@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -9,7 +9,7 @@ import Test.QuickCheck
 import qualified Data.Char as Char
 import qualified Data.Text as T
 import Data.List
-import Data.List.NonEmpty (NonEmpty(..))
+import Data.List.NonEmpty (NonEmpty(..), (<|))
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
 #if !MIN_VERSION_base(4,11,0)
@@ -34,8 +34,8 @@ main = hspec $ do
 
     THSpec.spec
     describe "splitExtras" $ do
-        let helloWorldTokens = asTokens ["hello", "world"]
-            foobarbazTokens = asTokens ["foo", "bar", "baz"]
+        let helloWorldTokens = Token "hello" :| [Token "world"]
+            foobarbazTokens = Token "foo" :| [Token "bar", Token "baz"]
         it "works" $ do
             splitExtras []
                 `shouldBe`
@@ -45,20 +45,21 @@ main = hspec $ do
                 [ Line 0 helloWorldTokens
                 ]
                 `shouldBe`
-                    ( [helloWorldTokens], mempty )
+                    ( [NEL.toList helloWorldTokens], mempty )
         it "works3" $ do
             splitExtras
                 [ Line 0 helloWorldTokens
                 , Line 2 foobarbazTokens
                 ]
                 `shouldBe`
-                    ( [helloWorldTokens, foobarbazTokens], mempty )
+                    ( [NEL.toList helloWorldTokens, NEL.toList foobarbazTokens], mempty )
         it "works4" $ do
             let foobarbarz = ["foo", "Bar", "baz"]
+                fbbTokens = Token <$> nonEmptyOrFail foobarbarz
             splitExtras
-                [ Line 0 [Token "Hello"]
-                , Line 2 (asTokens foobarbarz)
-                , Line 2 (asTokens foobarbarz)
+                [ Line 0 (pure (Token "Hello"))
+                , Line 2 fbbTokens
+                , Line 2 fbbTokens
                 ]
                 `shouldBe`
                     ( []
@@ -68,10 +69,11 @@ main = hspec $ do
                     )
         it "works5" $ do
             let foobarbarz = ["foo", "Bar", "baz"]
+                fbbTokens = Token <$> nonEmptyOrFail foobarbarz
             splitExtras
-                [ Line 0 (asTokens ["Hello"])
-                , Line 2 (asTokens foobarbarz)
-                , Line 4 (asTokens foobarbarz)
+                [ Line 0 (pure (Token "Hello"))
+                , Line 2 fbbTokens
+                , Line 4 fbbTokens
                 ]
                 `shouldBe`
                     ( []
@@ -138,7 +140,7 @@ main = hspec $ do
         it "handles normal words" $
             parseLine " foo   bar  baz" `shouldBe`
                 Just
-                    ( Line 1
+                    ( Line 1 $ nonEmptyOrFail
                         [ Token "foo"
                         , Token "bar"
                         , Token "baz"
@@ -148,7 +150,7 @@ main = hspec $ do
         it "handles quotes" $
             parseLine "  \"foo bar\"  \"baz\"" `shouldBe`
                 Just
-                    ( Line 2
+                    ( Line 2 $ nonEmptyOrFail
                         [ Token "foo bar"
                         , Token "baz"
                         ]
@@ -157,7 +159,7 @@ main = hspec $ do
         it "handles quotes mid-token" $
             parseLine "  x=\"foo bar\"  \"baz\"" `shouldBe`
                 Just
-                    ( Line 2
+                    ( Line 2 $ nonEmptyOrFail
                         [ Token "x=foo bar"
                         , Token "baz"
                         ]
@@ -166,7 +168,7 @@ main = hspec $ do
         it "handles escaped quote mid-token" $
             parseLine "  x=\\\"foo bar\"  \"baz\"" `shouldBe`
                 Just
-                    ( Line 2
+                    ( Line 2 $ nonEmptyOrFail
                         [ Token "x=\\\"foo"
                         , Token "bar\""
                         , Token "baz"
@@ -176,7 +178,7 @@ main = hspec $ do
         it "handles unnested parantheses" $
             parseLine "  (foo bar)  (baz)" `shouldBe`
                 Just
-                    ( Line 2
+                    ( Line 2 $ nonEmptyOrFail
                         [ Token "foo bar"
                         , Token "baz"
                         ]
@@ -185,7 +187,7 @@ main = hspec $ do
         it "handles unnested parantheses mid-token" $
             parseLine "  x=(foo bar)  (baz)" `shouldBe`
                 Just
-                    ( Line 2
+                    ( Line 2 $ nonEmptyOrFail
                         [ Token "x=foo bar"
                         , Token "baz"
                         ]
@@ -194,7 +196,7 @@ main = hspec $ do
         it "handles nested parantheses" $
             parseLine "  (foo (bar))  (baz)" `shouldBe`
                 Just
-                    ( Line 2
+                    ( Line 2 $ nonEmptyOrFail
                         [ Token "foo (bar)"
                         , Token "baz"
                         ]
@@ -203,7 +205,7 @@ main = hspec $ do
         it "escaping" $
             parseLine "  (foo \\(bar)  y=\"baz\\\"\"" `shouldBe`
                 Just
-                    ( Line 2
+                    ( Line 2 $ nonEmptyOrFail
                         [ Token "foo (bar"
                         , Token "y=baz\""
                         ]
@@ -212,7 +214,7 @@ main = hspec $ do
         it "mid-token quote in later token" $
             parseLine "foo bar baz=(bin\")" `shouldBe`
                 Just
-                    ( Line 0
+                    ( Line 0 $ nonEmptyOrFail
                         [ Token "foo"
                         , Token "bar"
                         , Token "baz=bin\""
@@ -223,22 +225,13 @@ main = hspec $ do
             it "recognizes one line" $ do
                 parseLine "-- | this is a comment" `shouldBe`
                     Just
-                        ( Line 0
-                            [ DocComment "this is a comment"
-                            ]
+                        ( Line 0 $ pure
+                            (DocComment "this is a comment")
                         )
-
-            it "map parseLine" $ do
-                mapM parseLine ["Foo", "-- | Hello"]
-                    `shouldBe`
-                        Just
-                            [ Line 0 [Token "Foo"]
-                            , Line 0 [DocComment "Hello"]
-                            ]
 
             it "works if comment is indented" $ do
                 parseLine "  -- | comment" `shouldBe`
-                    Just (Line 2 [ DocComment "comment"])
+                    Just (Line 2 (pure (DocComment "comment")))
 
     describe "parse" $ do
         let subject =
@@ -415,9 +408,7 @@ Baz
         it "preparse works" $ do
             (length <$> preparsed) `shouldBe` Just 10
 
-        let skippedEmpty =
-                maybe [] skipEmpty preparsed
-            fooLines =
+        let fooLines =
                 [ Line
                     { lineIndent = 0
                     , tokens = Token "Foo" :| []
@@ -465,19 +456,11 @@ Baz
                     , tokens = Token "c" :| [Token "FooId"]
                     }
                 ]
-            resultLines =
-                concat
-                    [ fooLines
-                    , emptyLines
-                    , barLines
-                    , bazLines
-                    ]
-
-        it "skipEmpty works" $ do
-            skippedEmpty `shouldBe` resultLines
 
         let linesAssociated =
-                associateLines skippedEmpty
+                case preparsed of
+                    Nothing -> error "preparsed failed"
+                    Just lines -> associateLines lines
         it "associateLines works" $ do
             linesAssociated `shouldMatchList`
                 [ LinesWithComments
@@ -529,20 +512,20 @@ Baz
 
         it "recognizes entity" $ do
             let expected =
-                    Line { lineIndent = 0, tokens = asTokens ["Person"] } :|
-                    [ Line { lineIndent = 2, tokens = asTokens ["name", "String"] }
-                    , Line { lineIndent = 2, tokens = asTokens ["age", "Int"] }
+                    Line { lineIndent = 0, tokens = pure (Token "Person") } :|
+                    [ Line { lineIndent = 2, tokens = Token "name" :| [Token "String"] }
+                    , Line { lineIndent = 2, tokens = Token "age" :| [Token "Int"] }
                     ]
             preparse "Person\n  name String\n  age Int" `shouldBe` Just expected
 
         it "recognizes comments" $ do
             let text = "Foo\n  x X\n-- | Hello\nBar\n name String"
             let expected =
-                    Line { lineIndent = 0, tokens = asTokens ["Foo"] } :|
-                    [ Line { lineIndent = 2, tokens = asTokens ["x", "X"] }
-                    , Line { lineIndent = 0, tokens = [DocComment "Hello"] }
-                    , Line { lineIndent = 0, tokens = asTokens ["Bar"] }
-                    , Line { lineIndent = 1, tokens = asTokens ["name", "String"] }
+                    Line { lineIndent = 0, tokens = pure (Token "Foo") } :|
+                    [ Line { lineIndent = 2, tokens = Token "x" :| [Token "X"] }
+                    , Line { lineIndent = 0, tokens = pure (DocComment "Hello") }
+                    , Line { lineIndent = 0, tokens = pure (Token "Bar") }
+                    , Line { lineIndent = 1, tokens = Token "name" :| [Token "String"] }
                     ]
             preparse text `shouldBe` Just expected
 
@@ -556,11 +539,11 @@ Baz
                     , "    name String"
                     ]
                 expected =
-                    Line { lineIndent = 2, tokens = asTokens ["Foo"] } :|
-                    [ Line { lineIndent = 4, tokens = asTokens ["x", "X"] }
-                    , Line { lineIndent = 2, tokens = [DocComment "Comment"] }
-                    , Line { lineIndent = 2, tokens = asTokens ["Bar"] }
-                    , Line { lineIndent = 4, tokens = asTokens ["name", "String"] }
+                    Line { lineIndent = 2, tokens = pure (Token "Foo") } :|
+                    [ Line { lineIndent = 4, tokens = Token "x" :| [Token "X"] }
+                    , Line { lineIndent = 2, tokens = pure (DocComment "Comment") }
+                    , Line { lineIndent = 2, tokens = pure (Token "Bar") }
+                    , Line { lineIndent = 4, tokens = Token "name" :| [Token "String"] }
                     ]
             preparse t `shouldBe` Just expected
 
@@ -575,13 +558,13 @@ Baz
                     , "    something"
                     ]
                 expected =
-                    Line { lineIndent = 0, tokens = asTokens ["LowerCaseTable"] } :|
-                    [ Line { lineIndent = 2, tokens = asTokens ["name", "String"] }
-                    , Line { lineIndent = 2, tokens = asTokens ["ExtraBlock"] }
-                    , Line { lineIndent = 4, tokens = asTokens ["foo", "bar"] }
-                    , Line { lineIndent = 4, tokens = asTokens ["baz"] }
-                    , Line { lineIndent = 2, tokens = asTokens ["ExtraBlock2"] }
-                    , Line { lineIndent = 4, tokens = asTokens ["something"] }
+                    Line { lineIndent = 0, tokens = pure (Token "LowerCaseTable") } :|
+                    [ Line { lineIndent = 2, tokens = Token "name" :| [Token "String"] }
+                    , Line { lineIndent = 2, tokens = pure (Token "ExtraBlock") }
+                    , Line { lineIndent = 4, tokens = Token "foo" :| [Token "bar"] }
+                    , Line { lineIndent = 4, tokens = pure (Token "baz") }
+                    , Line { lineIndent = 2, tokens = pure (Token "ExtraBlock2") }
+                    , Line { lineIndent = 4, tokens = pure (Token "something") }
                     ]
             preparse t `shouldBe` Just expected
 
@@ -593,10 +576,10 @@ Baz
                     , "  name String"
                     ]
                 expected =
-                    Line { lineIndent = 0, tokens = [DocComment "Model"] } :|
-                    [ Line { lineIndent = 0, tokens = asTokens ["Foo"] }
-                    , Line { lineIndent = 2, tokens = [DocComment "Field"] }
-                    , Line { lineIndent = 2, tokens = asTokens ["name", "String"] }
+                    Line { lineIndent = 0, tokens = pure (DocComment "Model") } :|
+                    [ Line { lineIndent = 0, tokens = pure (Token "Foo") }
+                    , Line { lineIndent = 2, tokens = pure (DocComment "Field") }
+                    , Line { lineIndent = 2, tokens = Token "name" :| [Token "String"] }
                     ]
             preparse text `shouldBe` Just expected
 
@@ -618,10 +601,10 @@ Baz
                     }
         it "works" $ do
             associateLines
-                [ comment
-                , foo
+                ( comment :|
+                [ foo
                 , name'String
-                ]
+                ])
                 `shouldBe`
                     [ LinesWithComments
                         { lwcComments = ["comment"]
@@ -631,7 +614,7 @@ Baz
         let bar =
                 Line
                     { lineIndent = 0
-                    , tokens = Token "Bar" :| asTokens ["sql", "=", "bars"]
+                    , tokens = Token "Bar" :| [Token "sql", Token "=", Token "bars"]
                     }
             age'Int =
                 Line
@@ -640,12 +623,12 @@ Baz
                     }
         it "works when used consecutively" $ do
             associateLines
-                [ bar
-                , age'Int
+                ( bar :|
+                [ age'Int
                 , comment
                 , foo
                 , name'String
-                ]
+                ])
                 `shouldBe`
                     [ LinesWithComments
                         { lwcComments = []
@@ -657,11 +640,9 @@ Baz
                         }
                     ]
         it "works with textual input" $ do
-            let text = "Foo\n  x X\n-- | Hello\nBar\n name String"
-                parsed = preparse text
-                allFull = maybe [] skipEmpty parsed
-            associateLines allFull
-                `shouldBe`
+            let text = preparse "Foo\n  x X\n-- | Hello\nBar\n name String"
+            associateLines <$> text
+                `shouldBe` Just
                     [ LinesWithComments
                         { lwcLines =
                             Line {lineIndent = 0, tokens = Token "Foo" :| []}
@@ -678,7 +659,7 @@ Baz
                         }
                     ]
         it "works with extra blocks" $ do
-            let text = maybe [] skipEmpty . preparse . T.unlines $
+            let text = preparse . T.unlines $
                     [ "LowerCaseTable"
                     , "    Id             sql=my_id"
                     , "    fullName Text"
@@ -689,7 +670,7 @@ Baz
                     , "    ExtraBlock2"
                     , "        something"
                     ]
-            associateLines text `shouldBe`
+            associateLines <$> text `shouldBe` Just
                 [ LinesWithComments
                     { lwcLines =
                         Line { lineIndent = 0, tokens = pure (Token "LowerCaseTable") } :|
@@ -707,7 +688,7 @@ Baz
                 ]
 
         it "works with extra blocks twice" $ do
-            let text = maybe [] skipEmpty . preparse . T.unlines $
+            let text = preparse . T.unlines $
                     [ "IdTable"
                     , "    Id Day default=CURRENT_DATE"
                     , "    name Text"
@@ -722,11 +703,11 @@ Baz
                     , "    ExtraBlock2"
                     , "        something"
                     ]
-            associateLines text `shouldBe`
+            associateLines <$> text `shouldBe` Just
                 [ LinesWithComments
                     { lwcLines = Line 0 (pure (Token "IdTable")) :|
-                        [ Line 4 (Token "Id" :| asTokens ["Day", "default=CURRENT_DATE"])
-                        , Line 4 (Token "name" :| asTokens ["Text"])
+                        [ Line 4 (Token "Id" <| Token "Day" :| [Token "default=CURRENT_DATE"])
+                        , Line 4 (Token "name" :| [Token "Text"])
                         ]
                     , lwcComments = []
                     }
@@ -748,13 +729,13 @@ Baz
 
 
         it "works with field comments" $ do
-            let text = maybe [] skipEmpty . preparse . T.unlines $
+            let text = preparse . T.unlines $
                     [ "-- | Model"
                     , "Foo"
                     , "  -- | Field"
                     , "  name String"
                     ]
-            associateLines text `shouldBe`
+            associateLines <$> text `shouldBe` Just
                 [ LinesWithComments
                     { lwcLines =
                         Line { lineIndent = 0, tokens = (Token "Foo") :| [] } :|
@@ -829,7 +810,7 @@ Baz
                         , ""
                         ] of
                             [a, b, c] ->
-                                [a, b, c]
+                                [a, b, c] :: [EntityDef]
                             xs ->
                                 error
                                 $ "Expected 3 elements in list, got: "
@@ -900,8 +881,11 @@ takePrefix :: Value -> Value
 takePrefix (String a) = String (T.take 1 a)
 takePrefix a = a
 
-asTokens :: [T.Text] -> [Token]
-asTokens = fmap Token
+nonEmptyOrFail :: [a] -> NonEmpty a
+nonEmptyOrFail = maybe failure id . NEL.nonEmpty
+  where
+    failure =
+        error "nonEmptyOrFail expected a non empty list"
 
 arbitraryWhiteSpaceChar :: Gen Char
 arbitraryWhiteSpaceChar =

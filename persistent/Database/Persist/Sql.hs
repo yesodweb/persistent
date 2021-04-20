@@ -12,6 +12,9 @@ module Database.Persist.Sql
     , rawSql
     , deleteWhereCount
     , updateWhereCount
+    , filterClause
+    , filterClauseWithVals
+    , FilterTablePrefix (..)
     , transactionSave
     , transactionSaveWithIsolation
     , transactionUndo
@@ -35,10 +38,11 @@ import Database.Persist
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal (SqlBackend(..), IsolationLevel (..))
 import Database.Persist.Sql.Class
-import Database.Persist.Sql.Run hiding (rawAcquireSqlConn, rawRunSqlPool)
-import Database.Persist.Sql.Raw
-import Database.Persist.Sql.Migration
 import Database.Persist.Sql.Internal
+import Database.Persist.Sql.Migration
+import Database.Persist.Sql.Raw
+import Database.Persist.Sql.Run hiding (rawAcquireSqlConn, rawRunSqlPool)
+import Database.Persist.Sql.Types
 
 import Database.Persist.Sql.Orphan.PersistQuery
 import Database.Persist.Sql.Orphan.PersistStore

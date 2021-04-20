@@ -51,6 +51,7 @@ import qualified TransactionLevelTest
 import qualified TreeTest
 import qualified UniqueTest
 import qualified UpsertTest
+import qualified UpsertWhere
 import qualified CustomConstraintTest
 import qualified LongIdentifierTest
 import qualified PgIntervalTest
@@ -128,6 +129,7 @@ main = do
       , ForeignKey.compositeMigrate
       , MigrationTest.migrationMigrate
       , PgIntervalTest.pgIntervalMigrate
+      , UpsertWhere.upsertWhereMigrate
       ]
     PersistentTest.cleanDB
     ForeignKey.cleanDB
@@ -195,6 +197,7 @@ main = do
     LongIdentifierTest.specsWith runConnAssertUseConf -- Have at least one test use the conf variant of connecting to Postgres, to improve test coverage.
     JSONTest.specs
     CustomConstraintTest.specs
+    UpsertWhere.specs
     PgIntervalTest.specs
     ArrayAggTest.specs
     GeneratedColumnTestSQL.specsWith runConnAssert

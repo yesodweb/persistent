@@ -208,6 +208,7 @@ commaSeparated = T.intercalate ", "
 mkUpdateText :: PersistEntity record => SqlBackend -> Update record -> Text
 mkUpdateText conn = mkUpdateText' (connEscapeFieldName conn) id
 
+-- TODO: incorporate the table names into a sum type
 mkUpdateText' :: PersistEntity record => (FieldNameDB -> Text) -> (Text -> Text) -> Update record -> Text
 mkUpdateText' escapeName refColumn x =
   case updateUpdate x of
@@ -224,7 +225,7 @@ mkUpdateText' escapeName refColumn x =
 parenWrapped :: Text -> Text
 parenWrapped t = T.concat ["(", t, ")"]
 
--- | Make a list 'PersistValue' suitable for detabase inserts. Pairs nicely
+-- | Make a list 'PersistValue' suitable for database inserts. Pairs nicely
 -- with the function 'mkInsertPlaceholders'.
 --
 -- Does not include generated columns.

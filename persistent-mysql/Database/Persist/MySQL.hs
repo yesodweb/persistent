@@ -1411,7 +1411,7 @@ copyField = CopyField
 --   []
 -- @
 --
--- Once we run that code on the datahase, the new data set looks like this:
+-- Once we run that code on the database, the new data set looks like this:
 --
 -- > items:
 -- > +------+-------------+-------+----------+
