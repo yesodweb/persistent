@@ -53,6 +53,8 @@ library
         Database.Persist
         Database.Persist.Types
         Database.Persist.Names
+        Database.Persist.EntityDef
+        Database.Persist.EntityDef.Internal
         Database.Persist.TH
 
         Database.Persist.Quasi

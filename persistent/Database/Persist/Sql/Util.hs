@@ -4,9 +4,8 @@ module Database.Persist.Sql.Util
     , keyAndEntityColumnNames
     , entityColumnCount
     , isIdField
-    , hasCompositeKey
-    , hasCompositePrimaryKey
     , hasNaturalKey
+    , hasCompositePrimaryKey
     , dbIdColumns
     , dbIdColumnsEsc
     , dbColumns
@@ -39,7 +38,7 @@ import Database.Persist.SqlBackend.Internal(SqlBackend(..))
 
 entityColumnNames :: EntityDef -> SqlBackend -> [Sql]
 entityColumnNames ent conn =
-     (if hasCompositeKey ent
+     (if hasNaturalKey ent
       then [] else [connEscapeFieldName conn . fieldDB $ entityId ent])
   <> map (connEscapeFieldName conn . fieldDB) (entityFields ent)
 
@@ -48,13 +47,7 @@ keyAndEntityColumnNames ent conn = map (connEscapeFieldName conn . fieldDB) (key
 
 entityColumnCount :: EntityDef -> Int
 entityColumnCount e = length (entityFields e)
-                    + if hasCompositeKey e then 0 else 1
-
-{-# DEPRECATED hasCompositeKey "hasCompositeKey is misleading - it returns True if the entity is defined with the Primary keyword. See issue #685 for discussion. \n If you want the same behavior, use 'hasNaturalKey'. If you want to know if the key has multiple fields, use 'hasCompositePrimaryKey'. This function will be removed in the next major version." #-}
--- | Deprecated as of 2.11. See 'hasNaturalKey' or 'hasCompositePrimaryKey'
--- for replacements.
-hasCompositeKey :: EntityDef -> Bool
-hasCompositeKey = Maybe.isJust . entityPrimary
+                    + if hasNaturalKey e then 0 else 1
 
 -- | Returns 'True' if the entity has a natural key defined with the
 -- Primary keyword.

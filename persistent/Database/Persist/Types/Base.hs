@@ -1,16 +1,17 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE LambdaCase, PatternSynonyms #-}
 {-# LANGUAGE DeriveLift #-}
-{-# OPTIONS_GHC -fno-warn-deprecations #-} -- usage of Error typeclass
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE PatternSynonyms #-}
+
 module Database.Persist.Types.Base
     ( module Database.Persist.Types.Base
+    -- * Re-exports
     , PersistValue(.., PersistLiteral, PersistLiteralEscaped, PersistDbSpecific)
     , LiteralType(..)
     ) where
 
 import Control.Arrow (second)
 import Control.Exception (Exception)
-import Control.Monad.Trans.Error (Error (..))
 import qualified Data.Aeson as A
 import Data.Bits (shiftL, shiftR)
 import Data.ByteString (ByteString, foldl')
@@ -21,7 +22,7 @@ import Data.Char (isSpace)
 import qualified Data.HashMap.Strict as HM
 import Data.Int (Int64)
 import Data.Map (Map)
-import Data.Maybe ( isNothing )
+import Data.Maybe (isNothing)
 #if !MIN_VERSION_base(4,11,0)
 -- This can be removed when GHC < 8.2.2 isn't supported anymore
 import Data.Semigroup ((<>))
@@ -34,10 +35,17 @@ import Data.Text.Encoding.Error (lenientDecode)
 import Data.Time (Day, TimeOfDay, UTCTime)
 import qualified Data.Vector as V
 import Data.Word (Word32)
-import Numeric (showHex, readHex)
-import Web.PathPieces (PathPiece(..))
-import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData (..), parseUrlPieceMaybe, showTextData, readTextData, parseBoundedTextData)
 import Language.Haskell.TH.Syntax (Lift(..))
+import Numeric (readHex, showHex)
+import Web.HttpApiData
+       ( FromHttpApiData(..)
+       , ToHttpApiData(..)
+       , parseBoundedTextData
+       , parseUrlPieceMaybe
+       , readTextData
+       , showTextData
+       )
+import Web.PathPieces (PathPiece(..))
     -- Bring `Lift (Map k v)` instance into scope, as well as `Lift Text`
     -- instance on pre-1.2.4 versions of `text`
 import Instances.TH.Lift ()
@@ -108,10 +116,10 @@ instance PathPiece Checkmark where
   fromPathPiece "inactive" = Just Inactive
   fromPathPiece _ = Nothing
 
-data IsNullable = Nullable !WhyNullable
-                | NotNullable
-                  deriving (Eq, Show)
-
+data IsNullable
+    = Nullable !WhyNullable
+    | NotNullable
+    deriving (Eq, Show)
 
 -- | The reason why a field is 'nullable' is very important.  A
 -- field that is nullable because of a @Maybe@ tag will have its
@@ -421,8 +429,6 @@ data PersistException
     deriving Show
 
 instance Exception PersistException
-instance Error PersistException where
-    strMsg = PersistError . pack
 
 -- | A raw value which can be stored in any backend and can be marshalled to
 -- and from a 'PersistField'.
@@ -486,6 +492,7 @@ data LiteralType
 -- 'PersistLiteral_' directly.
 --
 -- @since 2.12.0.0
+pattern PersistDbSpecific :: ByteString -> PersistValue
 pattern PersistDbSpecific bs <- PersistLiteral_ _ bs where
     PersistDbSpecific bs = PersistLiteral_ DbSpecific bs
 
@@ -495,6 +502,7 @@ pattern PersistDbSpecific bs <- PersistLiteral_ _ bs where
 -- 'PersistDbSpecific' for more details.
 --
 -- @since 2.12.0.0
+pattern PersistLiteralEscaped :: ByteString -> PersistValue
 pattern PersistLiteralEscaped bs <- PersistLiteral_ _ bs where
     PersistLiteralEscaped bs = PersistLiteral_ Escaped bs
 
@@ -504,6 +512,7 @@ pattern PersistLiteralEscaped bs <- PersistLiteral_ _ bs where
 -- 'PersistDbSpecific' for more details.
 --
 -- @since 2.12.0.0
+pattern PersistLiteral :: ByteString -> PersistValue
 pattern PersistLiteral bs <- PersistLiteral_ _ bs where
     PersistLiteral bs = PersistLiteral_ Unescaped bs
 
@@ -670,8 +679,9 @@ instance Show OnlyUniqueException where
 instance Exception OnlyUniqueException
 
 
-data PersistUpdate = Assign | Add | Subtract | Multiply | Divide
-                   | BackendSpecificUpdate T.Text
+data PersistUpdate
+    = Assign | Add | Subtract | Multiply | Divide
+    | BackendSpecificUpdate T.Text
     deriving (Read, Show, Lift)
 
 -- | A 'FieldDef' represents the inormation that @persistent@ knows about

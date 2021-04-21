@@ -1853,37 +1853,6 @@ isStrict = Bang NoSourceUnpackedness SourceStrict
 instanceD :: Cxt -> Type -> [Dec] -> Dec
 instanceD = InstanceD Nothing
 
--- entityUpdates :: EntityDef -> [(EntityNameHS, FieldType, IsNullable, PersistUpdate)]
--- entityUpdates =
---     concatMap go . entityFields
---   where
---     go FieldDef {..} = map (\a -> (fieldHaskell, fieldType, nullable fieldAttrs, a)) [minBound..maxBound]
-
--- mkToUpdate :: String -> [(String, PersistUpdate)] -> Q Dec
--- mkToUpdate name pairs = do
---     pairs' <- mapM go pairs
---     return $ FunD (mkName name) $ degen pairs'
---   where
---     go (constr, pu) = do
---         pu' <- lift pu
---         return $ normalClause [RecP (mkName constr) []] pu'
-
-
--- mkToFieldName :: String -> [(String, String)] -> Dec
--- mkToFieldName func pairs =
---         FunD (mkName func) $ degen $ map go pairs
---   where
---     go (constr, name) =
---         normalClause [RecP (mkName constr) []] (LitE $ StringL name)
-
--- mkToValue :: String -> [String] -> Dec
--- mkToValue func = FunD (mkName func) . degen . map go
---   where
---     go constr =
---         let x = mkName "x"
---          in normalClause [ConP (mkName constr) [VarP x]]
---                    (VarE 'toPersistValue `AppE` VarE x)
-
 -- | Check that all of Persistent's required extensions are enabled, or else fail compilation
 --
 -- This function should be called before any code that depends on one of the required extensions being enabled.

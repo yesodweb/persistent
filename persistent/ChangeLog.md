@@ -31,6 +31,13 @@
     * Previously hidden modules are now exposed under the `Internal` namespace.
     * The `connLimitOffset` function used to have a `Bool` parameter. This
       parameter is unused and has been removed.
+* []()
+    * Moved the various `Name` types into `Databse.Persist.Names`
+    * Removed the `hasCompositeKey` function. See `hasCompositePrimaryKey` and
+      `hasNaturalKey` as replacements.
+    * The `EntityDef` constructor and field labels are not exported by default.
+      Get those from `Database.Persist.EntityDef.Internal`, but you should
+      migrate to the getters/setters in `Database.Persist.EntityDef` as you can.
 
 ## 2.12.1.1
 

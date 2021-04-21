@@ -131,8 +131,7 @@ mkColumns allDefs t overrides =
             }
 
     tableName :: EntityNameDB
-    tableName = entityDB t
-
+    tableName = getEntityDBName t
 
     go :: FieldDef -> Column
     go fd =
@@ -196,5 +195,5 @@ refName (EntityNameDB table) (FieldNameDB column) =
 resolveTableName :: [EntityDef] -> EntityNameHS -> EntityNameDB
 resolveTableName [] (EntityNameHS t) = error $ "Table not found: " `Data.Monoid.mappend` T.unpack t
 resolveTableName (e:es) hn
-    | entityHaskell e == hn = entityDB e
+    | getEntityHaskellName e == hn = getEntityDBName e
     | otherwise = resolveTableName es hn
