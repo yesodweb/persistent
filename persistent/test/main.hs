@@ -229,13 +229,14 @@ main = hspec $ do
             it "recognizes one line" $ do
                 parseLine "-- | this is a comment" `shouldBe`
                     Just
-                        ( Line 0 $ pure
-                            (DocComment "this is a comment")
+                        ( Line 0
+                            [ DocComment "this is a comment"
+                            ]
                         )
 
             it "works if comment is indented" $ do
                 parseLine "  -- | comment" `shouldBe`
-                    Just (Line 2 (pure (DocComment "comment")))
+                    Just (Line 2 [ DocComment "comment"])
 
     describe "parse" $ do
         let subject =
@@ -580,10 +581,10 @@ Baz
                     , "  name String"
                     ]
                 expected =
-                    Line { lineIndent = 0, tokens = pure (DocComment "Model") } :|
-                    [ Line { lineIndent = 0, tokens = pure (Token "Foo") }
-                    , Line { lineIndent = 2, tokens = pure (DocComment "Field") }
-                    , Line { lineIndent = 2, tokens = Token "name" :| [Token "String"] }
+                    Line { lineIndent = 0, tokens = [DocComment "Model"] } :|
+                    [ Line { lineIndent = 0, tokens = [Token "Foo"] }
+                    , Line { lineIndent = 2, tokens = [DocComment "Field"] }
+                    , Line { lineIndent = 2, tokens = (Token <$> ["name", "String"]) }
                     ]
             preparse text `shouldBe` Just expected
 
