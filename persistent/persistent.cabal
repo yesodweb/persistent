@@ -52,6 +52,9 @@ library
     exposed-modules: 
         Database.Persist
         Database.Persist.Types
+        Database.Persist.Types.Names
+        Database.Persist.Types.FieldDef
+        Database.Persist.Types.FieldDef.Internal
         Database.Persist.TH
 
         Database.Persist.Quasi

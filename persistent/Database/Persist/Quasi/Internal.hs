@@ -316,7 +316,8 @@ fixForeignKeysAll unEnts = map fixForeignKeys unEnts
     fixForeignKeys (UnboundEntityDef foreigns ent) =
       ent { entityForeigns = map (fixForeignKey ent) foreigns }
 
-    -- check the count and the sqltypes match and update the foreignFields with the names of the referenced columns
+    -- check the count and the sqltypes match and update the foreignFields with
+    -- the names of the referenced columns
     fixForeignKey :: EntityDef -> UnboundForeignDef -> ForeignDef
     fixForeignKey ent (UnboundForeignDef foreignFieldTexts parentFieldTexts fdef) =
         case mfdefs of
@@ -394,10 +395,11 @@ fixForeignKeysAll unEnts = map fixForeignKeys unEnts
         lengthError pdef = error $ "found " ++ show (length foreignFieldTexts) ++ " fkeys and " ++ show (length pdef) ++ " pkeys: fdef=" ++ show fdef ++ " pdef=" ++ show pdef
 
 
-data UnboundEntityDef = UnboundEntityDef
-                        { _unboundForeignDefs :: [UnboundForeignDef]
-                        , unboundEntityDef :: EntityDef
-                        }
+data UnboundEntityDef
+    = UnboundEntityDef
+    { _unboundForeignDefs :: [UnboundForeignDef]
+    , unboundEntityDef :: EntityDef
+    }
 
 overUnboundEntityDef
     :: (EntityDef -> EntityDef) -> UnboundEntityDef -> UnboundEntityDef
@@ -411,29 +413,30 @@ lookupPrefix :: Text -> [Text] -> Maybe Text
 lookupPrefix prefix = msum . map (T.stripPrefix prefix)
 
 -- | Construct an entity definition.
-mkEntityDef :: PersistSettings
-            -> Text -- ^ name
-            -> [Attr] -- ^ entity attributes
-            -> [Line] -- ^ indented lines
-            -> UnboundEntityDef
+mkEntityDef
+    :: PersistSettings
+    -> Text -- ^ name
+    -> [Attr] -- ^ entity attributes
+    -> [Line] -- ^ indented lines
+    -> UnboundEntityDef
 mkEntityDef ps name entattribs lines =
-  UnboundEntityDef foreigns $
-    EntityDef
-        { entityHaskell = EntityNameHS name'
-        , entityDB = EntityNameDB $ getDbName ps name' entattribs
-        -- idField is the user-specified Id
-        -- otherwise useAutoIdField
-        -- but, adjust it if the user specified a Primary
-        , entityId = setComposite primaryComposite $ fromMaybe autoIdField idField
-        , entityAttrs = entattribs
-        , entityFields = cols
-        , entityUniques = uniqs
-        , entityForeigns = []
-        , entityDerives = concat $ mapMaybe takeDerives textAttribs
-        , entityExtra = extras
-        , entitySum = isSum
-        , entityComments = Nothing
-        }
+    UnboundEntityDef foreigns $
+        EntityDef
+            { entityHaskell = entName
+            , entityDB = EntityNameDB $ getDbName ps name' entattribs
+            -- idField is the user-specified Id
+            -- otherwise useAutoIdField
+            -- but, adjust it if the user specified a Primary
+            , entityId = setComposite primaryComposite $ fromMaybe autoIdField idField
+            , entityAttrs = entattribs
+            , entityFields = cols
+            , entityUniques = uniqs
+            , entityForeigns = []
+            , entityDerives = concat $ mapMaybe takeDerives textAttribs
+            , entityExtra = extras
+            , entitySum = isSum
+            , entityComments = Nothing
+            }
   where
     entName = EntityNameHS name'
     (isSum, name') =
