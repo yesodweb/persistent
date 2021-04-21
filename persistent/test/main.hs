@@ -3,23 +3,23 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 
-import Test.Hspec
-import Test.Hspec.QuickCheck
-import Test.QuickCheck
 import qualified Data.Char as Char
-import qualified Data.Text as T
 import Data.List
 import Data.List.NonEmpty (NonEmpty(..), (<|))
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
+import qualified Data.Text as T
+import Test.Hspec
+import Test.Hspec.QuickCheck
+import Test.QuickCheck
 #if !MIN_VERSION_base(4,11,0)
 -- This can be removed when GHC < 8.2.2 isn't supported anymore
 import Data.Semigroup ((<>))
 #endif
-import Data.Time
-import Text.Shakespeare.Text
 import Data.Aeson
 import qualified Data.ByteString.Char8 as BS8
+import Data.Time
+import Text.Shakespeare.Text
 
 import Database.Persist.Class.PersistField
 import Database.Persist.Quasi
@@ -236,7 +236,7 @@ main = hspec $ do
 
             it "works if comment is indented" $ do
                 parseLine "  -- | comment" `shouldBe`
-                    Just (Line 2 [ DocComment "comment"])
+                    Just (Line 2 [DocComment "comment"])
 
     describe "parse" $ do
         let subject =
