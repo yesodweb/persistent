@@ -82,15 +82,15 @@ mkColumns
     -> BackendSpecificOverrides
     -> ([Column], [UniqueDef], [ForeignDef])
 mkColumns allDefs t overrides =
-    (cols, entityUniques t, entityForeigns t)
+    (cols, getEntityUniques t, getEntityForeignDefs t)
   where
     cols :: [Column]
-    cols = map goId idCol `mappend` map go (entityFields t)
+    cols = map goId idCol `mappend` map go (getEntityFields t)
 
     idCol :: [FieldDef]
     idCol = case entityPrimary t of
         Just _ -> []
-        Nothing -> [entityId t]
+        Nothing -> [getEntityId t]
 
     goId :: FieldDef -> Column
     goId fd =
@@ -137,7 +137,7 @@ mkColumns allDefs t overrides =
     go fd =
         Column
             { cName = fieldDB fd
-            , cNull = nullable (fieldAttrs fd) /= NotNullable || entitySum t
+            , cNull = nullable (fieldAttrs fd) /= NotNullable || isEntitySum t
             , cSqlType = fieldSqlType fd
             , cDefault = defaultAttribute $ fieldAttrs fd
             , cGenerated = fieldGenerated fd

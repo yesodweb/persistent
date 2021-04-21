@@ -157,7 +157,7 @@ instance PersistQueryRead SqlBackend where
                            _ -> return xs
                       Just pdef ->
                            let pks = map fieldHaskell $ compositeFields pdef
-                               keyvals = map snd $ filter (\(a, _) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ entityFields t) xs
+                               keyvals = map snd $ filter (\(a, _) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ getEntityFields t) xs
                            in return keyvals
             case keyFromValues keyvals of
                 Right k -> return k

@@ -27,8 +27,8 @@ import qualified Data.Text as T
 import Database.Persist (
     Entity(Entity), EntityDef, EntityField, FieldNameHS(FieldNameHS)
   , PersistEntity(..), PersistValue
-  , keyFromValues, fromPersistValues, fieldDB, entityId, entityPrimary
-  , entityFields, entityKeyFields, fieldHaskell, compositeFields, persistFieldDef
+  , keyFromValues, fromPersistValues, fieldDB, getEntityId, entityPrimary
+  , getEntityFields, getEntityKeyFields, fieldHaskell, compositeFields, persistFieldDef
   , keyAndEntityFields, toPersistValue, FieldNameDB, Update(..), PersistUpdate(..)
   , FieldDef(..)
   )
@@ -39,14 +39,14 @@ import Database.Persist.SqlBackend.Internal(SqlBackend(..))
 entityColumnNames :: EntityDef -> SqlBackend -> [Sql]
 entityColumnNames ent conn =
      (if hasNaturalKey ent
-      then [] else [connEscapeFieldName conn . fieldDB $ entityId ent])
-  <> map (connEscapeFieldName conn . fieldDB) (entityFields ent)
+      then [] else [connEscapeFieldName conn . fieldDB $ getEntityId ent])
+  <> map (connEscapeFieldName conn . fieldDB) (getEntityFields ent)
 
 keyAndEntityColumnNames :: EntityDef -> SqlBackend -> [Sql]
 keyAndEntityColumnNames ent conn = map (connEscapeFieldName conn . fieldDB) (keyAndEntityFields ent)
 
 entityColumnCount :: EntityDef -> Int
-entityColumnCount e = length (entityFields e)
+entityColumnCount e = length (getEntityFields e)
                     + if hasNaturalKey e then 0 else 1
 
 -- | Returns 'True' if the entity has a natural key defined with the
@@ -142,15 +142,15 @@ dbIdColumns :: SqlBackend -> EntityDef -> [Text]
 dbIdColumns conn = dbIdColumnsEsc (connEscapeFieldName conn)
 
 dbIdColumnsEsc :: (FieldNameDB -> Text) -> EntityDef -> [Text]
-dbIdColumnsEsc esc t = map (esc . fieldDB) $ entityKeyFields t
+dbIdColumnsEsc esc t = map (esc . fieldDB) $ getEntityKeyFields t
 
 dbColumns :: SqlBackend -> EntityDef -> [Text]
 dbColumns conn t = case entityPrimary t of
     Just _  -> flds
-    Nothing -> escapeColumn (entityId t) : flds
+    Nothing -> escapeColumn (getEntityId t) : flds
   where
     escapeColumn = connEscapeFieldName conn . fieldDB
-    flds = map escapeColumn (entityFields t)
+    flds = map escapeColumn (getEntityFields t)
 
 parseEntityValues :: PersistEntity record
                   => EntityDef -> [PersistValue] -> Either Text (Entity record)
@@ -159,7 +159,7 @@ parseEntityValues t vals =
       Just pdef ->
             let pks = map fieldHaskell $ compositeFields pdef
                 keyvals = map snd . filter ((`elem` pks) . fst)
-                        $ zip (map fieldHaskell $ entityFields t) vals
+                        $ zip (map fieldHaskell $ getEntityFields t) vals
             in fromPersistValuesComposite' keyvals vals
       Nothing -> fromPersistValues' vals
   where
@@ -230,7 +230,7 @@ mkInsertValues
     -> [PersistValue]
 mkInsertValues entity =
     Maybe.catMaybes
-        . zipWith redactGeneratedCol (entityFields . entityDef $ Just entity)
+        . zipWith redactGeneratedCol (getEntityFields . entityDef $ Just entity)
         . map toPersistValue
         $ toPersistFields entity
   where
@@ -252,7 +252,7 @@ mkInsertPlaceholders
     -- ^ An `escape` function
     -> [(Text, Text)]
 mkInsertPlaceholders ed escape =
-    Maybe.mapMaybe redactGeneratedCol (entityFields ed)
+    Maybe.mapMaybe redactGeneratedCol (getEntityFields ed)
   where
     redactGeneratedCol fd = case fieldGenerated fd of
         Nothing ->

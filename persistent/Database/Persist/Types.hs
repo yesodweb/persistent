@@ -32,6 +32,7 @@ import Database.Persist.Types.Base
     , IsNullable(..)
     , WhyNullable(..)
     , ExtraLine
+    , Checkmark(..)
     , FieldType(..)
     , PersistException(..)
     , ForeignFieldDef
@@ -47,4 +48,6 @@ import Database.Persist.Types.Base
     , PersistValue(..)
     , PersistFilter(..)
     , PersistUpdate(..)
+    , EmbedEntityDef(..)
+    , EmbedFieldDef(..)
     )

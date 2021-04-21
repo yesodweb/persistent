@@ -7,18 +7,28 @@ module Database.Persist.EntityDef
       EntityDef
       -- * Construction
       -- * Accessors
-    , getEntityUniques
     , getEntityHaskellName
     , getEntityDBName
+    , getEntityFields
+    , getEntityForeignDefs
+    , getEntityUniques
+    , getEntityId
+    , getEntityKeyFields
+    , isEntitySum
+    , entityPrimary
     , entitiesPrimary
     , keyAndEntityFields
      -- * Setters
+    , overEntityFields
     ) where
 
 import Database.Persist.EntityDef.Internal
 
 import Database.Persist.Types.Base
     ( UniqueDef
+    , ForeignDef
+    , FieldDef
+    , entityKeyFields
     )
 import Database.Persist.Names
 
@@ -48,3 +58,54 @@ getEntityDBName
     :: EntityDef
     -> EntityNameDB
 getEntityDBName = entityDB
+
+-- |
+--
+-- @since 2.13.0.0
+getEntityForeignDefs
+    :: EntityDef
+    -> [ForeignDef]
+getEntityForeignDefs = entityForeigns
+
+-- | Retrieve the list of 'FieldDef' that makes up the fields of the entity.
+--
+-- This does not return the fields for an @Id@ column or an implicit @id@. It
+-- will return the key columns if you used the @Primary@ syntax for defining the
+-- primary key.
+--
+-- @since 2.13.0.0
+getEntityFields
+    :: EntityDef
+    -> [FieldDef]
+getEntityFields = entityFields
+
+-- |
+--
+-- @since 2.13.0.0
+isEntitySum
+    :: EntityDef
+    -> Bool
+isEntitySum = entitySum
+
+-- |
+--
+-- @since 2.13.0.0
+getEntityId
+    :: EntityDef
+    -> FieldDef
+getEntityId = entityId
+
+getEntityKeyFields
+    :: EntityDef
+    -> [FieldDef]
+getEntityKeyFields = entityKeyFields
+
+setEntityFields :: [FieldDef] -> EntityDef -> EntityDef
+setEntityFields fd ed = ed { entityFields = fd }
+
+overEntityFields
+    :: ([FieldDef] -> [FieldDef])
+    -> EntityDef
+    -> EntityDef
+overEntityFields f ed =
+    setEntityFields (f (getEntityFields ed)) ed
