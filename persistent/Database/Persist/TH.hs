@@ -244,9 +244,10 @@ embedEntityDefsMap rawEnts = (embedEntityMap, noCycleEnts)
         where
             membed = emFieldEmbed emf
 
--- calls parse to Quasi.parse individual entities in isolation
+-- | Calls 'parse' to Quasi.parse individual entities in isolation
 -- afterwards, sets references to other entities
--- | @since 2.5.3
+--
+-- @since 2.5.3
 parseReferences :: PersistSettings -> Text -> Q Exp
 parseReferences ps s = lift $
     map (mkEntityDefSqlTypeExp embedEntityMap entityMap) noCycleEnts

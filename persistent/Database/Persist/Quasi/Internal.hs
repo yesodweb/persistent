@@ -100,6 +100,7 @@ parseFieldType t0 =
 
 data PersistSettings = PersistSettings
     { psToDBName :: !(Text -> Text)
+    -- ^ Modify the Haskell-style name into a database-style name.
     , psStrictFields :: !Bool
     -- ^ Whether fields are by default strict. Default value: @True@.
     --
