@@ -21,6 +21,7 @@ import Data.Text (Text, unpack)
 import Data.Time (NominalDiffTime)
 import Database.Persist.Sql.Types.Internal
 import Database.Persist.Types
+import Database.Persist.Names
 
 data Column = Column
     { cName      :: !FieldNameDB

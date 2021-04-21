@@ -48,6 +48,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Database.Persist.Types
 import Text.Read (readEither)
+import Database.Persist.Names
 
 data ParseState a = PSDone | PSFail String | PSSuccess a Text deriving Show
 

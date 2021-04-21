@@ -4,7 +4,7 @@
 -- disambiguating database and Haskell names.
 --
 -- @since 2.13.0.0
-module Database.Persist.Types.Names where
+module Database.Persist.Names where
 
 import Data.Text (Text)
 import Language.Haskell.TH.Syntax (Lift)
@@ -52,3 +52,21 @@ newtype EntityNameDB = EntityNameDB { unEntityNameDB :: Text }
 
 instance DatabaseName EntityNameDB where
     escapeWith f (EntityNameDB n) = f n
+
+-- | A 'ConstraintNameDB' represents the datastore-side name that @persistent@
+-- will use for a constraint.
+--
+-- @since 2.12.0.0
+newtype ConstraintNameDB = ConstraintNameDB { unConstraintNameDB :: Text }
+  deriving (Show, Eq, Read, Ord, Lift)
+
+-- | @since 2.12.0.0
+instance DatabaseName ConstraintNameDB where
+  escapeWith f (ConstraintNameDB n) = f n
+
+-- | An 'ConstraintNameHS' represents the Haskell-side name that @persistent@
+-- will use for a constraint.
+--
+-- @since 2.12.0.0
+newtype ConstraintNameHS = ConstraintNameHS { unConstraintNameHS :: Text }
+  deriving (Show, Eq, Read, Ord, Lift)

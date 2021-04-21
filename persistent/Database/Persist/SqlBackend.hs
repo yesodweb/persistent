@@ -32,6 +32,7 @@ import qualified Database.Persist.SqlBackend.Internal as SqlBackend
        (SqlBackend(..))
 import Database.Persist.SqlBackend.Internal.MkSqlBackend as Mk (MkSqlBackendArgs(..))
 import Database.Persist.Types.Base
+import Database.Persist.Names
 import Database.Persist.SqlBackend.Internal.InsertSqlResult
 import Data.List.NonEmpty (NonEmpty)
 

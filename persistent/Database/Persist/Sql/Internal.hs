@@ -21,6 +21,7 @@ import qualified Data.Text as T
 import Database.Persist.Quasi
 import Database.Persist.Sql.Types
 import Database.Persist.Types
+import Database.Persist.Names
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 
 -- | Record of functions to override the default behavior in 'mkColumns'.  It is

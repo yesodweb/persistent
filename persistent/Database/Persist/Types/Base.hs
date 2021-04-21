@@ -42,8 +42,7 @@ import Language.Haskell.TH.Syntax (Lift(..))
     -- instance on pre-1.2.4 versions of `text`
 import Instances.TH.Lift ()
 
-import Database.Persist.Types.FieldDef.Internal
-import Database.Persist.Types.Names
+import Database.Persist.Names
 
 -- | A 'Checkmark' should be used as a field type whenever a
 -- uniqueness constraint should guarantee that a certain kind of
@@ -304,35 +303,26 @@ toEmbedEntityDef ent = embDef
                         _ -> Nothing
                     }
 
--- | A 'ConstraintNameDB' represents the datastore-side name that @persistent@
--- will use for a constraint.
+-- | Type for storing the Uniqueness constraint in the Schema.  Assume you have
+-- the following schema with a uniqueness constraint:
 --
--- @since 2.12.0.0
-newtype ConstraintNameDB = ConstraintNameDB { unConstraintNameDB :: Text }
-  deriving (Show, Eq, Read, Ord, Lift)
-
--- | @since 2.12.0.0
-instance DatabaseName ConstraintNameDB where
-  escapeWith f (ConstraintNameDB n) = f n
-
--- | An 'ConstraintNameHS' represents the Haskell-side name that @persistent@
--- will use for a constraint.
---
--- @since 2.12.0.0
-newtype ConstraintNameHS = ConstraintNameHS { unConstraintNameHS :: Text }
-  deriving (Show, Eq, Read, Ord, Lift)
-
--- Type for storing the Uniqueness constraint in the Schema.
--- Assume you have the following schema with a uniqueness
--- constraint:
+-- @
 -- Person
 --   name String
 --   age Int
 --   UniqueAge age
+-- @
 --
 -- This will be represented as:
--- UniqueDef (ConstraintNameHS (packPTH "UniqueAge"))
--- (ConstraintNameDB (packPTH "unique_age")) [(FieldNameHS (packPTH "age"), FieldNameDB (packPTH "age"))] []
+--
+-- @
+-- UniqueDef
+--     { uniqueHaskell = ConstraintNameHS (packPTH "UniqueAge")
+--     , uniqueDBName = ConstraintNameDB (packPTH "unique_age")
+--     , uniqueFields = [(FieldNameHS (packPTH "age"), FieldNameDB (packPTH "age"))]
+--     , uniqueAttrs = []
+--     }
+-- @
 --
 data UniqueDef = UniqueDef
     { uniqueHaskell :: !ConstraintNameHS
@@ -683,3 +673,47 @@ instance Exception OnlyUniqueException
 data PersistUpdate = Assign | Add | Subtract | Multiply | Divide
                    | BackendSpecificUpdate T.Text
     deriving (Read, Show, Lift)
+
+-- | A 'FieldDef' represents the inormation that @persistent@ knows about
+-- a field of a datatype. This includes information used to parse the field
+-- out of the database and what the field corresponds to.
+data FieldDef = FieldDef
+    { fieldHaskell   :: !FieldNameHS
+    -- ^ The name of the field. Note that this does not corresponds to the
+    -- record labels generated for the particular entity - record labels
+    -- are generated with the type name prefixed to the field, so
+    -- a 'FieldDef' that contains a @'FieldNameHS' "name"@ for a type
+    -- @User@ will have a record field @userName@.
+    , fieldDB        :: !FieldNameDB
+    -- ^ The name of the field in the database. For SQL databases, this
+    -- corresponds to the column name.
+    , fieldType      :: !FieldType
+    -- ^ The type of the field in Haskell.
+    , fieldSqlType   :: !SqlType
+    -- ^ The type of the field in a SQL database.
+    , fieldAttrs     :: ![FieldAttr]
+    -- ^ User annotations for a field. These are provided with the @!@
+    -- operator.
+    , fieldStrict    :: !Bool
+    -- ^ If this is 'True', then the Haskell datatype will have a strict
+    -- record field. The default value for this is 'True'.
+    , fieldReference :: !ReferenceDef
+    , fieldCascade :: !FieldCascade
+    -- ^ Defines how operations on the field cascade on to the referenced
+    -- tables. This doesn't have any meaning if the 'fieldReference' is set
+    -- to 'NoReference' or 'SelfReference'. The cascade option here should
+    -- be the same as the one obtained in the 'fieldReference'.
+    --
+    -- @since 2.11.0
+    , fieldComments  :: !(Maybe Text)
+    -- ^ Optional comments for a 'Field'. There is not currently a way to
+    -- attach comments to a field in the quasiquoter.
+    --
+    -- @since 2.10.0
+    , fieldGenerated :: !(Maybe Text)
+    -- ^ Whether or not the field is a @GENERATED@ column, and additionally
+    -- the expression to use for generation.
+    --
+    -- @since 2.11.0.0
+    }
+    deriving (Show, Eq, Read, Ord, Lift)
