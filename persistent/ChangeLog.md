@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## 2.12.1.2
+
+* [1244](https://github.com/yesodweb/persistent/pull/1244)
+  * Implement config for customising the FK name
+
 ## 2.12.1.1
 
 * [#1231](https://github.com/yesodweb/persistent/pull/1231)
