@@ -1699,11 +1699,11 @@ liftAndFixKeys entityMap EntityDef{..} =
     |]
 
 liftAndFixKey :: EntityMap -> FieldDef -> Q Exp
-liftAndFixKey entityMap fd@(FieldDef a b c sqlTyp e f fieldRef fc mcomments fg) =
+liftAndFixKey entityMap fieldDef@(FieldDef a b c sqlTyp e f fieldRef fc mcomments fg) =
     [|FieldDef a b c $(sqlTyp') e f fieldRef' fc mcomments fg|]
   where
       (fieldRef', sqlTyp') =
-          case extractForeignRef entityMap fd of
+          case extractForeignRef entityMap fieldDef of
             Just (fr, ft) ->
                 (fr, lift (SqlTypeExp ft))
             Nothing ->
