@@ -3,23 +3,23 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 
-import Test.Hspec
-import Test.Hspec.QuickCheck
-import Test.QuickCheck
 import qualified Data.Char as Char
-import qualified Data.Text as T
 import Data.List
 import Data.List.NonEmpty (NonEmpty(..), (<|))
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
+import qualified Data.Text as T
+import Test.Hspec
+import Test.Hspec.QuickCheck
+import Test.QuickCheck
 #if !MIN_VERSION_base(4,11,0)
 -- This can be removed when GHC < 8.2.2 isn't supported anymore
 import Data.Semigroup ((<>))
 #endif
-import Data.Time
-import Text.Shakespeare.Text
 import Data.Aeson
 import qualified Data.ByteString.Char8 as BS8
+import Data.Time
+import Text.Shakespeare.Text
 
 import Database.Persist.Class.PersistField
 import Database.Persist.Quasi
@@ -357,6 +357,25 @@ Notification
             entityComments bicycle `shouldBe` Nothing
             entityComments car `shouldBe` Just "This is a Car\n"
             entityComments vehicle `shouldBe` Nothing
+
+        it "should parse the `entityForeigns` field" $ do
+            let [user, notification] = parse (lowerCaseSettings { psToFKName = (<>) "_" }) [st|
+User
+    name            Text
+    emailFirst      Text
+    emailSecond     Text
+
+    UniqueEmail emailFirst emailSecond
+
+Notification
+    content         Text
+    sentToFirst     Text
+    sentToSecond    Text
+
+    Foreign User fk_noti_user sentToFirst sentToSecond References emailFirst emailSecond
+|]
+            let [notificationForeignDef] = entityForeigns notification
+            foreignConstraintNameDBName notificationForeignDef `shouldBe` ConstraintNameDB "notification_fk_noti_user"
 
     describe "parseFieldType" $ do
         it "simple types" $

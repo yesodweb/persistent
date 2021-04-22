@@ -504,6 +504,10 @@ parseFieldType t0 =
 
 data PersistSettings = PersistSettings
     { psToDBName :: !(Text -> Text)
+    , psToFKName :: !(Text -> Text)
+    -- ^ Configuration. Default value: @identity@
+    --
+    -- @since 2.12.1.2
     , psStrictFields :: !Bool
     -- ^ Whether fields are by default strict. Default value: @True@.
     --
@@ -519,6 +523,7 @@ data PersistSettings = PersistSettings
 defaultPersistSettings, upperCaseSettings, lowerCaseSettings :: PersistSettings
 defaultPersistSettings = PersistSettings
     { psToDBName = id
+    , psToFKName = id
     , psStrictFields = True
     , psIdName       = "id"
     }
@@ -1124,7 +1129,7 @@ takeForeign ps tableName _defs = takeRefTable
                 , foreignConstraintNameHaskell =
                     ConstraintNameHS n
                 , foreignConstraintNameDBName =
-                    ConstraintNameDB $ psToDBName ps (tableName `T.append` n)
+                    ConstraintNameDB $ psToDBName ps (tableName `T.append` (psToFKName ps n))
                 , foreignFieldCascade = FieldCascade
                     { fcOnDelete = onDelete
                     , fcOnUpdate = onUpdate
