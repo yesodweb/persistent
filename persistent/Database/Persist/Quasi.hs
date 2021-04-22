@@ -418,6 +418,7 @@ module Database.Persist.Quasi
     , PersistSettings (..)
     , upperCaseSettings
     , lowerCaseSettings
+    , toFKNameInfixed
     , nullable
 #if TEST
     , Token (..)
@@ -502,10 +503,14 @@ parseFieldType t0 =
             PSDone -> PSSuccess (front []) t
             -- _ ->
 
+newtype ToFKName = ToFKName
+  { unToFKName :: Text -> Text -> Text
+  }
+
 data PersistSettings = PersistSettings
     { psToDBName :: !(Text -> Text)
-    , psToFKName :: !(Text -> Text)
-    -- ^ Configuration. Default value: @identity@
+    , psToFKName :: !ToFKName
+    -- ^ Function used to generate the FK name. Default value: @mappend@
     --
     -- @since 2.12.1.2
     , psStrictFields :: !Bool
@@ -523,7 +528,7 @@ data PersistSettings = PersistSettings
 defaultPersistSettings, upperCaseSettings, lowerCaseSettings :: PersistSettings
 defaultPersistSettings = PersistSettings
     { psToDBName = id
-    , psToFKName = id
+    , psToFKName = ToFKName mappend
     , psStrictFields = True
     , psIdName       = "id"
     }
@@ -537,6 +542,9 @@ lowerCaseSettings = defaultPersistSettings
                 | otherwise = T.singleton c
          in T.dropWhile (== '_') . T.concatMap go
     }
+
+toFKNameInfixed :: Text -> ToFKName
+toFKNameInfixed inf = ToFKName $ \table name -> table <> inf <> name
 
 -- | Parses a quasi-quoted syntax into a list of entity definitions.
 parse :: PersistSettings -> Text -> [EntityDef]
@@ -1129,7 +1137,7 @@ takeForeign ps tableName _defs = takeRefTable
                 , foreignConstraintNameHaskell =
                     ConstraintNameHS n
                 , foreignConstraintNameDBName =
-                    ConstraintNameDB $ psToDBName ps (tableName `T.append` (psToFKName ps n))
+                    toFKConstraintNameDB ps tableName n
                 , foreignFieldCascade = FieldCascade
                     { fcOnDelete = onDelete
                     , fcOnUpdate = onUpdate
@@ -1168,6 +1176,13 @@ takeForeign ps tableName _defs = takeRefTable
                     error $ errorPrefix ++ "found more than one OnUpdate actions"
 
         go xs _ _ = error $ errorPrefix ++ "expecting a lower case constraint name or a cascading action xs=" ++ show xs
+
+toFKConstraintNameDB :: PersistSettings -> Text -> Text -> ConstraintNameDB
+toFKConstraintNameDB ps tableName n =
+    ConstraintNameDB $ psToDBName ps (toFKName tableName n)
+  where
+    toFKName =
+        unToFKName (psToFKName ps)
 
 data CascadePrefix = CascadeUpdate | CascadeDelete
 

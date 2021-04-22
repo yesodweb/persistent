@@ -359,7 +359,7 @@ Notification
             entityComments vehicle `shouldBe` Nothing
 
         it "should allow you to modify the FK name via provided function" $ do
-            let [user, notification] = parse (lowerCaseSettings { psToFKName = (<>) "_" }) [st|
+            let [user, notification] = parse (lowerCaseSettings { psToFKName = toFKNameInfixed "_" }) [st|
 User
     name            Text
     emailFirst      Text
