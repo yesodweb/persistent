@@ -350,27 +350,26 @@ mEmbedded ents (FTApp x y) =
         else mEmbedded ents y
 
 setEmbedField :: EntityNameHS -> EmbedEntityMap -> FieldDef -> FieldDef
-setEmbedField entName allEntities field = setFieldReference ref field
+setEmbedField entName allEntities field =
+    case fieldReference field of
+      NoReference -> setFieldReference ref field
+      _ -> field
   where
     ref =
-        case fieldReference field of
-            NoReference ->
-                case mEmbedded allEntities (fieldType field) of
-                    Left _ -> fromMaybe NoReference $ do
-                        entName <- lookupEmbedEntity allEntities field
-                        -- This can get corrected in mkEntityDefSqlTypeExp
-                        let placeholderIdType = FTTypeCon (Just "Data.Int") "Int64"
-                        pure $ ForeignRef entName placeholderIdType
-                    Right em ->
-                        if embeddedHaskell em /= entName
-                             then EmbedRef em
-                        else if maybeNullable field
-                             then SelfReference
-                        else case fieldType field of
-                                 FTList _ -> SelfReference
-                                 _ -> error $ unpack $ unEntityNameHS entName <> ": a self reference must be a Maybe"
-            existing ->
-                existing
+        case mEmbedded allEntities (fieldType field) of
+            Left _ -> fromMaybe NoReference $ do
+                entName <- lookupEmbedEntity allEntities field
+                -- This can get corrected in mkEntityDefSqlTypeExp
+                let placeholderIdType = FTTypeCon (Just "Data.Int") "Int64"
+                pure $ ForeignRef entName placeholderIdType
+            Right em ->
+                if embeddedHaskell em /= entName
+                     then EmbedRef em
+                else if maybeNullable field
+                     then SelfReference
+                else case fieldType field of
+                         FTList _ -> SelfReference
+                         _ -> error $ unpack $ unEntityNameHS entName <> ": a self reference must be a Maybe"
 
 setFieldReference :: ReferenceDef -> FieldDef -> FieldDef
 setFieldReference ref field = field { fieldReference = ref }
