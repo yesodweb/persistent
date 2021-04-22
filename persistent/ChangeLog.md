@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## Unreleased
+
+* [#1243](https://github.com/yesodweb/persistent/pull/1243)
+    * Assorted cleanup of TH module
+
 ## 2.12.1.1
 
 * [#1231](https://github.com/yesodweb/persistent/pull/1231)
