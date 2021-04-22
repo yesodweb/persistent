@@ -191,7 +191,7 @@ embedEntityDefs = snd . embedEntityDefsMap
 embedEntityDefsMap :: [EntityDef] -> (M.Map EntityNameHS EmbedEntityDef, [EntityDef])
 embedEntityDefsMap rawEnts = (embedEntityMap, noCycleEnts)
   where
-    noCycleEnts = map breakCycleEnt entsWithEmbeds
+    noCycleEnts = map breakEntDefCycle entsWithEmbeds
     -- every EntityDef could reference each-other (as an EmbedRef)
     -- let Haskell tie the knot
     embedEntityMap = constructEmbedEntityMap entsWithEmbeds
@@ -200,12 +200,15 @@ embedEntityDefsMap rawEnts = (embedEntityMap, noCycleEnts)
         { entityFields = map (setEmbedField (entityHaskell ent) embedEntityMap) $ entityFields ent
         }
 
-    -- self references are already broken
-    -- look at every emFieldEmbed to see if it refers to an already seen EntityNameHS
-    -- so start with entityHaskell ent and accumulate embeddedHaskell em
-    breakCycleEnt entDef =
-        let entName = entityHaskell entDef
-         in entDef { entityFields = map (breakCycleField entName) $ entityFields entDef }
+-- self references are already broken
+-- look at every emFieldEmbed to see if it refers to an already seen EntityNameHS
+-- so start with entityHaskell ent and accumulate embeddedHaskell em
+breakEntDefCycle :: EntityDef -> EntityDef
+breakEntDefCycle entDef =
+    entDef { entityFields = breakCycleField entName <$> entityFields entDef }
+  where
+    entName =
+        entityHaskell entDef
 
     breakCycleField entName f = case f of
         FieldDef { fieldReference = EmbedRef em } ->
