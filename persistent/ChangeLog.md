@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## Unreleased
+
+* [1242](https://github.com/yesodweb/persistent/pull/1242)
+    * Refactor setEmbedField to use do notation
+
 ## 2.12.1.1
 
 * [#1231](https://github.com/yesodweb/persistent/pull/1231)
