@@ -554,14 +554,6 @@ recNameNoUnderscore mps entName fieldName
     modifier = mpsFieldLabelModifier mps
     ft = unFieldNameHS fieldName
 
-recNameF :: MkPersistSettings -> EntityNameHS -> FieldNameHS -> Text
-recNameF mps entName fieldName =
-    addUnderscore $ recNameNoUnderscore mps entName fieldName
-  where
-    addUnderscore
-        | mpsGenerateLenses mps = ("_" ++)
-        | otherwise = id
-
 lowerFirst :: Text -> Text
 lowerFirst t =
     case uncons t of
@@ -1999,11 +1991,17 @@ entityDefConE = ConE . mkEntityDefName
 --
 -- This would generate `customerName` as a TH Name
 fieldNameToRecordName :: MkPersistSettings -> EntityDef -> FieldNameHS -> Name
-fieldNameToRecordName mps entDef fieldName = mkName $ T.unpack $ recNameF mps (entityHaskell entDef) fieldName
+fieldNameToRecordName mps entDef fieldName =
+    mkName $ T.unpack $ addUnderscore $ recNameNoUnderscore mps (entityHaskell entDef) fieldName
+  where
+    addUnderscore
+        | mpsGenerateLenses mps = ("_" ++)
+        | otherwise = id
 
 -- | as above, only takes a `FieldDef`
 fieldDefToRecordName :: MkPersistSettings -> EntityDef -> FieldDef -> Name
-fieldDefToRecordName mps entDef fieldDef = fieldNameToRecordName mps entDef (fieldHaskell fieldDef)
+fieldDefToRecordName mps entDef fieldDef =
+    fieldNameToRecordName mps entDef (fieldHaskell fieldDef)
 
 -- | Construct a list of TH Names for the typeclasses of an EntityDef's `entityDerives`
 mkEntityDefDeriveNames :: MkPersistSettings -> EntityDef -> [Name]
