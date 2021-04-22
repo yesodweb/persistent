@@ -546,14 +546,6 @@ mkPersistSettings backend = MkPersistSettings
 sqlSettings :: MkPersistSettings
 sqlSettings = mkPersistSettings $ ConT ''SqlBackend
 
-recNameNoUnderscore :: MkPersistSettings -> EntityNameHS -> FieldNameHS -> Text
-recNameNoUnderscore mps entName fieldName
-  | mpsPrefixFields mps = lowerFirst $ modifier (unEntityNameHS entName) (upperFirst ft)
-  | otherwise           = lowerFirst ft
-  where
-    modifier = mpsFieldLabelModifier mps
-    ft = unFieldNameHS fieldName
-
 lowerFirst :: Text -> Text
 lowerFirst t =
     case uncons t of
@@ -1992,11 +1984,11 @@ entityDefConE = ConE . mkEntityDefName
 -- This would generate `customerName` as a TH Name
 fieldNameToRecordName :: MkPersistSettings -> EntityDef -> FieldNameHS -> Name
 fieldNameToRecordName mps entDef fieldName =
-    mkName $ T.unpack $ addUnderscore $ recNameNoUnderscore mps (entityHaskell entDef) fieldName
+    mkRecordName mps mUnderscore (entityHaskell entDef) fieldName
   where
-    addUnderscore
-        | mpsGenerateLenses mps = ("_" ++)
-        | otherwise = id
+    mUnderscore
+        | mpsGenerateLenses mps = Just "_"
+        | otherwise = Nothing
 
 -- | as above, only takes a `FieldDef`
 fieldDefToRecordName :: MkPersistSettings -> EntityDef -> FieldDef -> Name
@@ -2014,7 +2006,24 @@ fieldDefToRecordName mps entDef fieldDef =
 -- `_customerName`
 mkEntityLensName :: MkPersistSettings -> EntityDef -> FieldDef -> Name
 mkEntityLensName mps entDef fieldDef =
-  mkName $ T.unpack $ recNameNoUnderscore mps (entityHaskell entDef) (fieldHaskell fieldDef)
+    mkRecordName mps Nothing (entityHaskell entDef) (fieldHaskell fieldDef)
+
+mkRecordName :: MkPersistSettings -> Maybe Text -> EntityNameHS -> FieldNameHS -> Name
+mkRecordName mps prefix entNameHS fieldNameHS =
+    mkName $ T.unpack $ fromMaybe "" prefix <> lowerFirst recName
+  where
+    recName :: Text
+    recName
+      | mpsPrefixFields mps = mpsFieldLabelModifier mps entityNameText (upperFirst fieldNameText)
+      | otherwise           = fieldNameText
+
+    entityNameText :: Text
+    entityNameText =
+      unEntityNameHS entNameHS
+
+    fieldNameText :: Text
+    fieldNameText =
+        unFieldNameHS fieldNameHS
 
 -- | Construct a list of TH Names for the typeclasses of an EntityDef's `entityDerives`
 mkEntityDefDeriveNames :: MkPersistSettings -> EntityDef -> [Name]
