@@ -1279,7 +1279,7 @@ mkLenses :: MkPersistSettings -> EntityDef -> Q [Dec]
 mkLenses mps _ | not (mpsGenerateLenses mps) = return []
 mkLenses _ ent | entitySum ent = return []
 mkLenses mps ent = fmap mconcat $ forM (entityFields ent) $ \field -> do
-    let lensName = mkName $ T.unpack $ recNameNoUnderscore mps (entityHaskell ent) (fieldHaskell field)
+    let lensName = mkEntityLensName mps ent field
         fieldName = fieldDefToRecordName mps ent field
     needleN <- newName "needle"
     setterN <- newName "setter"
@@ -2002,6 +2002,19 @@ fieldNameToRecordName mps entDef fieldName =
 fieldDefToRecordName :: MkPersistSettings -> EntityDef -> FieldDef -> Name
 fieldDefToRecordName mps entDef fieldDef =
     fieldNameToRecordName mps entDef (fieldHaskell fieldDef)
+
+-- | creates a TH Name for a lens on an entity's field, based on the entity
+-- name and the field name, so as above but for the Lens
+--
+-- Customer
+--   name Text
+--
+-- Generates a lens `customerName` when `mpsGenerateLenses` is true
+-- while `fieldNameToRecordName` generates a prefixed function
+-- `_customerName`
+mkEntityLensName :: MkPersistSettings -> EntityDef -> FieldDef -> Name
+mkEntityLensName mps entDef fieldDef =
+  mkName $ T.unpack $ recNameNoUnderscore mps (entityHaskell entDef) (fieldHaskell fieldDef)
 
 -- | Construct a list of TH Names for the typeclasses of an EntityDef's `entityDerives`
 mkEntityDefDeriveNames :: MkPersistSettings -> EntityDef -> [Name]
