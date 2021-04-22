@@ -306,6 +306,12 @@ constructEmbedEntityMap :: [EntityDef] -> EmbedEntityMap
 constructEmbedEntityMap =
     M.fromList . fmap (\ent -> (entityHaskell ent, toEmbedEntityDef ent))
 
+lookupEmbedEntity :: EmbedEntityMap -> FieldDef -> Maybe EntityNameHS
+lookupEmbedEntity allEntities field = do
+    entName <- EntityNameHS <$> stripId (fieldType field)
+    guard (M.member entName allEntities) -- check entity name exists in embed map
+    pure entName
+
 type EntityMap = M.Map EntityNameHS EntityDef
 
 constructEntityMap :: [EntityDef] -> EntityMap
@@ -350,19 +356,11 @@ setEmbedField entName allEntities field = setFieldReference ref field
         case fieldReference field of
             NoReference ->
                 case mEmbedded allEntities (fieldType field) of
-                    Left _ ->
-                        case stripId $ fieldType field of
-                            Nothing ->
-                                NoReference
-                            Just name ->
-                                case M.lookup (EntityNameHS name) allEntities of
-                                    Nothing ->
-                                        NoReference
-                                    Just _ ->
-                                        ForeignRef
-                                            (EntityNameHS name)
-                                            -- This can get corrected in mkEntityDefSqlTypeExp
-                                            (FTTypeCon (Just "Data.Int") "Int64")
+                    Left _ -> fromMaybe NoReference $ do
+                        entName <- lookupEmbedEntity allEntities field
+                        -- This can get corrected in mkEntityDefSqlTypeExp
+                        let placeholderIdType = FTTypeCon (Just "Data.Int") "Int64"
+                        pure $ ForeignRef entName placeholderIdType
                     Right em ->
                         if embeddedHaskell em /= entName
                              then EmbedRef em
