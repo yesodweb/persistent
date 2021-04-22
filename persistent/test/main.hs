@@ -358,7 +358,7 @@ Notification
             entityComments car `shouldBe` Just "This is a Car\n"
             entityComments vehicle `shouldBe` Nothing
 
-        it "should parse the `entityForeigns` field" $ do
+        it "should allow you to modify the FK name via provided function" $ do
             let [user, notification] = parse (lowerCaseSettings { psToFKName = (<>) "_" }) [st|
 User
     name            Text
