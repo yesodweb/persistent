@@ -671,11 +671,12 @@ mkUnique mps entDef (UniqueDef constr _ fields attrs) =
               , "on the end of the line that defines your uniqueness "
               , "constraint in order to disable this check. ***" ]
 
-maybeIdType :: MkPersistSettings
-           -> FieldDef
-           -> Maybe Name -- ^ backend
-           -> Maybe IsNullable
-           -> Type
+maybeIdType
+    :: MkPersistSettings
+    -> FieldDef
+    -> Maybe Name -- ^ backend
+    -> Maybe IsNullable
+    -> Type
 maybeIdType mps fieldDef mbackend mnull = maybeTyp mayNullable idtyp
   where
     mayNullable = case mnull of
@@ -1363,18 +1364,17 @@ maybeTyp :: Bool -> Type -> Type
 maybeTyp may typ | may = ConT ''Maybe `AppT` typ
                  | otherwise = typ
 
-
-
 entityToPersistValueHelper :: (PersistEntity record) => record -> PersistValue
 entityToPersistValueHelper entity = PersistMap $ zip columnNames fieldsAsPersistValues
     where
         columnNames = map (unFieldNameHS . fieldHaskell) (entityFields (entityDef (Just entity)))
         fieldsAsPersistValues = map toPersistValue $ toPersistFields entity
 
-entityFromPersistValueHelper :: (PersistEntity record)
-                             => [String] -- ^ Column names, as '[String]' to avoid extra calls to "pack" in the generated code
-                             -> PersistValue
-                             -> Either Text record
+entityFromPersistValueHelper
+    :: (PersistEntity record)
+    => [String] -- ^ Column names, as '[String]' to avoid extra calls to "pack" in the generated code
+    -> PersistValue
+    -> Either Text record
 entityFromPersistValueHelper columnNames pv = do
     (persistMap :: [(T.Text, PersistValue)]) <- getPersistMap pv
 
@@ -1561,9 +1561,12 @@ sqlTypeFunD :: Exp -> Dec
 sqlTypeFunD st = FunD 'sqlType
                 [ normalClause [WildP] st ]
 
-typeInstanceD :: Name
-              -> Bool -- ^ include PersistStore backend constraint
-              -> Type -> [Dec] -> Dec
+typeInstanceD
+    :: Name
+    -> Bool -- ^ include PersistStore backend constraint
+    -> Type
+    -> [Dec]
+    -> Dec
 typeInstanceD clazz hasBackend typ =
     instanceD ctx (ConT clazz `AppT` typ)
   where
@@ -2078,16 +2081,18 @@ keyFieldName mps entDef fieldDef
   | pkNewtype mps entDef = unKeyName entDef
   | otherwise = mkName $ T.unpack $ lowerFirst (keyText entDef) `mappend` unFieldNameHS (fieldHaskell fieldDef)
 
-filterConName :: MkPersistSettings
-              -> EntityDef
-              -> FieldDef
-              -> Name
+filterConName
+    :: MkPersistSettings
+    -> EntityDef
+    -> FieldDef
+    -> Name
 filterConName mps entity field = filterConName' mps (entityHaskell entity) (fieldHaskell field)
 
-filterConName' :: MkPersistSettings
-               -> EntityNameHS
-               -> FieldNameHS
-               -> Name
+filterConName'
+    :: MkPersistSettings
+    -> EntityNameHS
+    -> FieldNameHS
+    -> Name
 filterConName' mps entity field = mkName $ T.unpack name
     where
         name
