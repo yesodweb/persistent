@@ -733,7 +733,6 @@ mkToPersistFields mps ed@EntityDef { entitySum = isSum, entityFields = fields } 
                 ]
         return $ normalClause [ConP name [VarP x]] body
 
-
 mkToFieldNames :: [UniqueDef] -> Q Dec
 mkToFieldNames pairs = do
     pairs' <- mapM go pairs
@@ -1466,8 +1465,6 @@ mkDeleteCascade mps defs = do
                 val (Nullable ByMaybeAttr) = just `AppE` VarE key
                 val _                      =             VarE key
 
-
-
         let stmts :: [Stmt]
             stmts = map mkStmt deps `mappend`
                     [NoBindS $ del `AppE` VarE key]
@@ -1855,7 +1852,6 @@ instanceD = InstanceD Nothing
 --     go (constr, pu) = do
 --         pu' <- lift pu
 --         return $ normalClause [RecP (mkName constr) []] pu'
-
 
 -- mkToFieldName :: String -> [(String, String)] -> Dec
 -- mkToFieldName func pairs =
