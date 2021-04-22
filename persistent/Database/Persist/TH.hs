@@ -1082,6 +1082,7 @@ mkEntity entityMap mps entDef = do
         if mpsGeneric mps
            then liftAndFixKeys entityMap entDef
            else makePersistEntityDefExp mps entityMap entDef
+
     let name = mkEntityDefName entDef
     let clazz = ConT ''PersistEntity `AppT` genDataType
     tpf <- mkToPersistFields mps entDef
@@ -1135,7 +1136,7 @@ mkEntity entityMap mps entDef = do
         allEntDefClauses = entityFieldTHClause <$> efthAllFields fields
     return $ addSyn $
        dtd : mconcat fkc `mappend`
-      ([ TySynD (keyIdName entDef) [] $
+      ( [ TySynD (keyIdName entDef) [] $
             ConT ''Key `AppT` ConT name
       , instanceD instanceConstraint clazz
         [ uniqueTypeDec mps entDef
@@ -1711,21 +1712,28 @@ liftAndFixKeys entityMap EntityDef{..} =
     |]
 
 liftAndFixKey :: EntityMap -> FieldDef -> Q Exp
-liftAndFixKey entityMap (FieldDef a b c sqlTyp e f fieldRef fc mcomments fg) =
-    [|FieldDef a b c $(sqlTyp') e f (fieldRef') fc mcomments fg|]
+liftAndFixKey entityMap fd@(FieldDef a b c sqlTyp e f fieldRef fc mcomments fg) =
+    [|FieldDef a b c $(sqlTyp') e f fieldRef' fc mcomments fg|]
   where
-    (fieldRef', sqlTyp') =
-        fromMaybe (fieldRef, lift sqlTyp) $
-            case fieldRef of
-                ForeignRef refName _ft ->  do
-                    ent <- M.lookup refName entityMap
-                    case fieldReference $ entityId ent of
-                        fr@(ForeignRef _ ft) ->
-                            Just (fr, lift $ SqlTypeExp ft)
-                        _ ->
-                            Nothing
+      (fieldRef', sqlTyp') =
+          case extractForeignRef entityMap fd of
+            Just (fr, ft) ->
+                (fr, lift (SqlTypeExp ft))
+            Nothing ->
+                (fieldRef, lift sqlTyp)
+
+extractForeignRef :: EntityMap -> FieldDef -> Maybe (ReferenceDef, FieldType)
+extractForeignRef entityMap fieldDef =
+    case fieldReference fieldDef of
+        ForeignRef refName _ft ->  do
+            ent <- M.lookup refName entityMap
+            case fieldReference $ entityId ent of
+                fr@(ForeignRef _ ft) ->
+                    Just (fr, ft)
                 _ ->
                     Nothing
+        _ ->
+            Nothing
 
 data EntityFieldTH = EntityFieldTH
     { entityFieldTHCon :: Con
