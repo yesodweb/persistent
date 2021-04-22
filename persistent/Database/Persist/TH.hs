@@ -344,8 +344,9 @@ mEmbedded ents (FTApp x y) =
         else mEmbedded ents y
 
 setEmbedField :: EntityNameHS -> EmbedEntityMap -> FieldDef -> FieldDef
-setEmbedField entName allEntities field = field
-    { fieldReference =
+setEmbedField entName allEntities field = setFieldReference ref field
+  where
+    ref =
         case fieldReference field of
             NoReference ->
                 case mEmbedded allEntities (fieldType field) of
@@ -372,7 +373,9 @@ setEmbedField entName allEntities field = field
                                  _ -> error $ unpack $ unEntityNameHS entName <> ": a self reference must be a Maybe"
             existing ->
                 existing
-  }
+
+setFieldReference :: ReferenceDef -> FieldDef -> FieldDef
+setFieldReference ref field = field { fieldReference = ref }
 
 mkEntityDefSqlTypeExp :: EmbedEntityMap -> EntityMap -> EntityDef -> EntityDefSqlTypeExp
 mkEntityDefSqlTypeExp emEntities entityMap ent =
