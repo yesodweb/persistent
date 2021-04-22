@@ -1798,7 +1798,7 @@ mkJSON mps def = do
 
     xs <- mapM fieldToJSONValName (entityFields def)
 
-    let conName = mkName $ unpack $ unEntityNameHS $ entityHaskell def
+    let conName = mkEntityDefName def
         typ = genericDataType mps (entityHaskell def) backendT
         toJSONI = typeInstanceD ''ToJSON (mpsGeneric mps) typ [toJSON']
         toJSON' = FunD 'toJSON $ return $ normalClause
@@ -2099,6 +2099,7 @@ filterConName' mps entity field = mkName $ T.unpack name
             | field == FieldNameHS "Id" = entityName ++ fieldName
             | mpsPrefixFields mps       = modifiedName
             | otherwise                 = fieldName
+
         modifiedName = mpsConstraintLabelModifier mps entityName fieldName
-        entityName   = unEntityNameHS entity
-        fieldName    = upperFirst $ unFieldNameHS field
+        entityName = unEntityNameHS entity
+        fieldName = upperFirst $ unFieldNameHS field
