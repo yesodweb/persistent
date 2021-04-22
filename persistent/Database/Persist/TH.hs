@@ -1077,6 +1077,7 @@ fieldError tableName fieldName err = mconcat
 
 mkEntity :: EntityMap -> MkPersistSettings -> EntityDef -> Q [Dec]
 mkEntity entityMap mps entDef = do
+    fields <- mkFields mps entDef
     entityDefExp <-
         if mpsGeneric mps
            then liftAndFixKeys entityMap entDef
@@ -1087,8 +1088,6 @@ mkEntity entityMap mps entDef = do
     fpv <- mkFromPersistValues mps entDef
     utv <- mkUniqueToValues $ entityUniques entDef
     puk <- mkUniqueKeys entDef
-    let primaryField = entityId entDef
-    fields <- mapM (mkField mps entDef) $ primaryField : entityFields entDef
     fkc <- mapM (mkForeignKeysComposite mps entDef) $ entityForeigns entDef
 
     toFieldNames <- mkToFieldNames $ entityUniques entDef
@@ -1132,6 +1131,8 @@ mkEntity entityMap mps entDef = do
                 [d|$(varP 'keyFromRecordM) = Nothing|]
 
     dtd <- dataTypeDec mps entDef
+    let allEntDefs = entityFieldTHCon <$> efthAllFields fields
+        allEntDefClauses = entityFieldTHClause <$> efthAllFields fields
     return $ addSyn $
        dtd : mconcat fkc `mappend`
       ([ TySynD (keyIdName entDef) [] $
@@ -1154,7 +1155,7 @@ mkEntity entityMap mps entDef = do
             Nothing
             (AppT (AppT (ConT ''EntityField) genDataType) (VarT $ mkName "typ"))
             Nothing
-            (map fst fields)
+            allEntDefs
             []
 #else
         , DataInstD
@@ -1164,10 +1165,10 @@ mkEntity entityMap mps entDef = do
             , VarT $ mkName "typ"
             ]
             Nothing
-            (map fst fields)
+            allEntDefs
             []
 #endif
-        , FunD 'persistFieldDef (map snd fields)
+        , FunD 'persistFieldDef allEntDefClauses
 #if MIN_VERSION_template_haskell(2,15,0)
         , TySynInstD
             (TySynEqn
@@ -1188,6 +1189,20 @@ mkEntity entityMap mps entDef = do
   where
     genDataType = genericDataType mps entName backendT
     entName = entityHaskell entDef
+
+data EntityFieldsTH = EntityFieldsTH
+    { entityFieldsTHPrimary :: EntityFieldTH
+    , entityFieldsTHFields :: [EntityFieldTH]
+    }
+
+efthAllFields :: EntityFieldsTH -> [EntityFieldTH]
+efthAllFields EntityFieldsTH{..} = entityFieldsTHPrimary : entityFieldsTHFields
+
+mkFields :: MkPersistSettings -> EntityDef -> Q EntityFieldsTH
+mkFields mps entDef =
+    EntityFieldsTH
+        <$> mkField mps entDef (entityId entDef)
+        <*> mapM (mkField mps entDef) (entityFields entDef)
 
 mkUniqueKeyInstances :: MkPersistSettings -> EntityDef -> Q [Dec]
 mkUniqueKeyInstances mps entDef = do
@@ -1712,13 +1727,18 @@ liftAndFixKey entityMap (FieldDef a b c sqlTyp e f fieldRef fc mcomments fg) =
                 _ ->
                     Nothing
 
+data EntityFieldTH = EntityFieldTH
+    { entityFieldTHCon :: Con
+    , entityFieldTHClause :: Clause
+    }
+
 -- Ent
 --   fieldName FieldType
 --
 -- forall . typ ~ FieldType => EntFieldName
 --
 -- EntFieldName = FieldDef ....
-mkField :: MkPersistSettings -> EntityDef -> FieldDef -> Q (Con, Clause)
+mkField :: MkPersistSettings -> EntityDef -> FieldDef -> Q EntityFieldTH
 mkField mps et cd = do
     let con = ForallC
                 []
@@ -1728,7 +1748,7 @@ mkField mps et cd = do
     let cla = normalClause
                 [ConP name []]
                 bod
-    return (con, cla)
+    return $ EntityFieldTH con cla
   where
     name = filterConName mps et cd
 
