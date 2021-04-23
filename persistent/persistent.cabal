@@ -55,6 +55,8 @@ library
         Database.Persist.Names
         Database.Persist.EntityDef
         Database.Persist.EntityDef.Internal
+        Database.Persist.FieldDef
+        Database.Persist.FieldDef.Internal
         Database.Persist.TH
 
         Database.Persist.Quasi

@@ -156,6 +156,7 @@ import Database.MongoDB.Query (Database)
 
 import Database.Persist
 import qualified Database.Persist.Sql as Sql
+import Database.Persist.EntityDef.Internal (toEmbedEntityDef)
 
 instance HasPersistBackend DB.MongoContext where
     type BaseBackend DB.MongoContext = DB.MongoContext
@@ -448,13 +449,13 @@ entityToInsertDoc (Entity key record) = keyToMongoDoc key ++ toInsertDoc record
 
 collectionName :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
                => record -> Text
-collectionName = unEntityNameDB . entityDB . entityDef . Just
+collectionName = unEntityNameDB . getEntityDBName . entityDef . Just
 
 -- | convert a PersistEntity into document fields.
 -- unlike 'toInsertDoc', nulls are included.
 recordToDocument :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
                  => record -> DB.Document
-recordToDocument record = zipToDoc (map fieldDB $ entityFields entity) (toPersistFields record)
+recordToDocument record = zipToDoc (map fieldDB $ getEntityFields entity) (toPersistFields record)
   where
     entity = entityDef $ Just record
 
@@ -658,7 +659,7 @@ collectionNameFromKey = collectionName . recordTypeFromKey
 
 projectionFromEntityDef :: EntityDef -> DB.Projector
 projectionFromEntityDef eDef =
-  map toField (entityFields eDef)
+  map toField (getEntityFields eDef)
   where
     toField :: FieldDef -> DB.Field
     toField fDef = (unFieldNameDB (fieldDB fDef)) DB.=: (1 :: Int)
@@ -920,7 +921,7 @@ fromPersistValuesThrow :: (Trans.MonadIO m, PersistEntity record, PersistEntityB
 fromPersistValuesThrow entDef doc =
     case eitherFromPersistValues entDef doc of
         Left t -> Trans.liftIO . throwIO $ PersistMarshalError $
-                   unEntityNameHS (entityHaskell entDef) `mappend` ": " `mappend` t
+                   unEntityNameHS (getEntityHaskellName entDef) `mappend` ": " `mappend` t
         Right entity -> return entity
 
 mapLeft :: (a -> c) -> Either a b -> Either c b

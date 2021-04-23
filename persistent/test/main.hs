@@ -24,6 +24,7 @@ import qualified Data.ByteString.Char8 as BS8
 import Database.Persist.Class.PersistField
 import Database.Persist.Quasi.Internal
 import Database.Persist.Types
+import Database.Persist.EntityDef.Internal
 
 import qualified Database.Persist.THSpec as THSpec
 

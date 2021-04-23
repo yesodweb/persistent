@@ -14,13 +14,20 @@ module Database.Persist.EntityDef
     , getEntityUniques
     , getEntityId
     , getEntityKeyFields
+    , getEntityComments
+    , getEntityExtra
     , isEntitySum
     , entityPrimary
     , entitiesPrimary
     , keyAndEntityFields
      -- * Setters
+    , setEntityId
+    , setEntityDBName
     , overEntityFields
     ) where
+
+import Data.Text (Text)
+import Data.Map (Map)
 
 import Database.Persist.EntityDef.Internal
 
@@ -59,6 +66,18 @@ getEntityDBName
     -> EntityNameDB
 getEntityDBName = entityDB
 
+getEntityExtra :: EntityDef -> Map Text [[Text]]
+getEntityExtra = entityExtra
+
+-- |
+--
+-- @since 2.13.0.0
+setEntityDBName :: EntityNameDB -> EntityDef -> EntityDef
+setEntityDBName db ed = ed { entityDB = db }
+
+getEntityComments :: EntityDef -> Maybe Text
+getEntityComments = entityComments
+
 -- |
 --
 -- @since 2.13.0.0
@@ -94,6 +113,12 @@ getEntityId
     :: EntityDef
     -> FieldDef
 getEntityId = entityId
+
+setEntityId
+    :: FieldDef
+    -> EntityDef
+    -> EntityDef
+setEntityId fd ed = ed { entityId = fd }
 
 getEntityKeyFields
     :: EntityDef

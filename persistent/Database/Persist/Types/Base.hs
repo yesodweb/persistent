@@ -28,7 +28,7 @@ import Data.Maybe (isNothing)
 import Data.Semigroup ((<>))
 #endif
 import qualified Data.Scientific
-import Data.Text (Text, pack)
+import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import Data.Text.Encoding.Error (lenientDecode)
