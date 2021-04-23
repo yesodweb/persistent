@@ -211,7 +211,12 @@ addMigrations
     -> Migration
 addMigrations = lift . tell
 
--- | Run an action against the database during a migration.
+-- | Run an action against the database during a migration. Can be useful for eg
+-- creating Postgres extensions:
+--
+-- @
+-- runSqlCommand $ 'rawExecute' "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";" []
+-- @
 --
 -- @since 2.13.0.0
 runSqlCommand :: SqlPersistT IO () -> Migration

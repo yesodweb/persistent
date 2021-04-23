@@ -31,13 +31,24 @@
     * Previously hidden modules are now exposed under the `Internal` namespace.
     * The `connLimitOffset` function used to have a `Bool` parameter. This
       parameter is unused and has been removed.
-* []()
-    * Moved the various `Name` types into `Databse.Persist.Names`
+* [#1234](https://github.com/yesodweb/persistent/pull/1234)
+    * You can now customize the default implied ID column. See the documentation
+      in `Database.Persist.ImplicitIdDef` for more details.
+    * Moved the various `Name` types into `Database.Persist.Names`
     * Removed the `hasCompositeKey` function. See `hasCompositePrimaryKey` and
       `hasNaturalKey` as replacements.
     * The `EntityDef` constructor and field labels are not exported by default.
       Get those from `Database.Persist.EntityDef.Internal`, but you should
       migrate to the getters/setters in `Database.Persist.EntityDef` as you can.
+    * Added the `Database.Persist.FieldDef` and
+      `Database.Persist.FieldDef.Internal` modules.
+    * The `PersistSettings` type was made abstract. Please migrate to the
+      getters/setters defined in that `Database.Persist.Quasi`, or use
+      `Database.Persist.Quasi.Internal` if you don't mind the possibility of
+      breaking changes.
+    * Add the `runSqlCommand` function for running arbitrary SQL during
+      migrations.
+    * Add `migrateModels` function for a TH-free migration facility.
 
 ## 2.12.1.1
 

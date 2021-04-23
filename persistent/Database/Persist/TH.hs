@@ -1082,28 +1082,11 @@ keyFields mps entDef =
             map primaryKeyVar (compositeFields pdef)
         Nothing ->
             pure . idKeyVar $
-                -- TODO: Okay, so my problem is right here.
-                --
-                -- The 'defaultIdType' function asks if the field's type is
-                -- defined as ${ModelName}Id. If it is, then we peek through to
-                -- the underlying type.
                 if defaultIdType entDef
                 then
-                 -- backendKeyType is the behavior-preserving original code.
-                    -- backendKeyType
-                -- This is the somewhat naive variant - just grab the ID type
-                -- and convert it! But this is loopy - it recurses and is sad.
-                -- We want to "see through" the type alias.
-                    -- ftToType $ fieldType $ entityId entDef
-                -- SO let's just copy the type.
                     getImplicitIdType mps
                 else ftToType $ fieldType $ entityId entDef
   where
-    backendKeyType =
-        ConT ''BackendKey `AppT`
-            if mpsGeneric mps
-            then backendT
-            else mpsBackend mps
     idKeyVar ft =
         ( unKeyName entDef
         , notStrict
@@ -1746,6 +1729,18 @@ derivePersistFieldJSON s = do
             ]
         ]
 
+-- | The basic function for migrating models, no Template Haskell required.
+--
+-- It's probably best to use this in concert with 'mkEntityDefList', and then
+-- call 'migrateModels' with the result from that function.
+--
+-- @
+-- share [mkPersist sqlSettings, mkEntityDefList "entities"] [persistLowerCase| ... |]
+--
+-- migrateAll = 'migrateModels' entities
+-- @
+--
+-- @since 2.13.0.0
 migrateModels :: [EntityDef] -> Migration
 migrateModels eds =
     forM_ eds $ \ed ->

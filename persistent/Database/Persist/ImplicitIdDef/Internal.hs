@@ -1,32 +1,118 @@
-{-# LANGUAGE RankNTypes, AllowAmbiguousTypes, PolyKinds #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
+-- | WARNING: This is an @Internal@ module. As such, breaking changes to the API
+-- of this module will not have a corresponding major version bump.
+--
+-- Please depend on "Database.Persist.ImplicitIdDef" instead. If you can't use
+-- that module, please file an issue on GitHub with your desired use case.
+--
+-- @since 2.13.0.0
 module Database.Persist.ImplicitIdDef.Internal where
 
 import Data.Proxy
 import Data.Text (Text)
+import qualified Data.Text as Text
 import Language.Haskell.TH (Type)
 import LiftType
 import Type.Reflection
-import qualified Data.Text as T
 
 import Database.Persist.Names
-import Database.Persist.Types
 import Database.Persist.Sql.Class
+import Database.Persist.Types
 
--- |
+-- | A specification for how the implied ID columns are created.
+--
+-- By default, @persistent@ will give each table a default column named @id@
+-- (customizable by 'PersistSettings'), and the column type will be whatever
+-- you'd expect from @'BackendKey' yourBackendType@. For The 'SqlBackend' type,
+-- this is an auto incrementing integer primary key.
+--
+-- You might want to give a different example. A common use case in postgresql
+-- is to use the UUID type, and automatically generate them using a SQL
+-- function.
+--
+-- Previously, you'd need to add a custom @Id@ annotation for each model.
+--
+-- > User
+-- >     Id   UUID default="uuid_generate_v1mc()"
+-- >     name Text
+-- >
+-- > Dog
+-- >     Id   UUID default="uuid_generate_v1mc()"
+-- >     name Text
+-- >     user UserId
+--
+-- Now, you can simply create an 'ImplicitIdDef' that corresponds to this
+-- declaration.
+--
+-- @
+-- newtype UUID = UUID 'ByteString'
+--
+-- instance 'PersistField' UUID where
+--     'toPersistValue' (UUID bs) =
+--         'PersistLiteral_' 'Escaped' bs
+--     'fromPersistValue' pv =
+--         case pv of
+--             PersistLiteral_ Escaped bs ->
+--                 Right (UUID bs)
+--             _ ->
+--                 Left "nope"
+--
+-- instance 'PersistFieldSql' UUID where
+--     'sqlType' _ = 'SqlOther' "UUID"
+-- @
+--
+-- With this instance at the ready, we can now create our implicit definition:
+--
+-- @
+-- uuidDef :: ImplicitIdDef
+-- uuidDef = mkImplicitIdDef \@UUID "uuid_generate_v1mc()"
+-- @
+--
+-- And we can use 'setImplicitIdDef' to use this with the 'MkPersistSettings'
+-- for our block.
+--
+-- @
+-- mkPersist (setImplicitIdDef uuidDef sqlSettings) [persistLowerCase| ... |]
+-- @
+--
+-- TODO: either explain interaction with mkMigrate or fix it. see issue #1249
+-- for more details.
 --
 -- @since 2.13.0.0
 data ImplicitIdDef = ImplicitIdDef
     { iidFieldType :: EntityNameHS -> FieldType
+    -- ^ The field type. Accepts the 'EntityNameHS' if you want to refer to it.
+    -- By default, @Id@ is appended to the end of the Haskell name.
+    --
+    -- @since 2.13.0.0
     , iidFieldSqlType :: SqlType
+    -- ^ The 'SqlType' for the default column. By default, this is 'SqlInt64' to
+    -- correspond with an autoincrementing integer primary key.
+    --
+    -- @since 2.13.0.0
     , iidType :: Bool -> Type -> Type
     -- ^ The Bool argument is whether or not the 'MkPersistBackend' type has the
     -- 'mpsGeneric' field set.
     --
     -- The 'Type' is the 'mpsBackend' value.
+    --
+    -- The default uses @'BackendKey' 'SqlBackend'@ (or a generic equivalent).
+    --
+    -- @since 2.13.0.0
     , iidDefault :: Maybe Text
+    -- ^ The default expression for the field. Note that setting this to
+    -- 'Nothing' is unsafe. see
+    -- https://github.com/yesodweb/persistent/issues/1247 for more information.
+    --
+    -- With some cases - like the Postgresql @SERIAL@ type - this is safe, since
+    -- there's an implied default.
+    --
+    -- @since 2.13.0.0
     }
 
 -- | Create an 'ImplicitIdDef' based on the 'Typeable' and 'PersistFieldSql'
@@ -67,6 +153,10 @@ mkImplicitIdDef def =
             Just def
         }
 
+-- |  This function converts a 'Typeable' type into a @persistent@
+-- representation of the type of a field - 'FieldTyp'.
+--
+-- @since 2.13.0.0
 fieldTypeFromTypeable :: forall (t :: *). Typeable t => FieldType
 fieldTypeFromTypeable = go (typeRep @t)
   where
@@ -75,8 +165,8 @@ fieldTypeFromTypeable = go (typeRep @t)
         case tr of
             Con tyCon ->
                 let
-                    tyName = T.pack $ tyConName tyCon
-                    modName = T.pack $ tyConModule tyCon
+                    tyName = Text.pack $ tyConName tyCon
+                    modName = Text.pack $ tyConModule tyCon
                 in
                     FTTypeCon Nothing tyName
             App trA trB ->
@@ -104,4 +194,3 @@ fieldTypeFromTypeable = go (typeRep @t)
 -- @since 2.13.0.0
 unsafeClearDefaultImplicitId :: ImplicitIdDef -> ImplicitIdDef
 unsafeClearDefaultImplicitId iid = iid { iidDefault = Nothing }
-
