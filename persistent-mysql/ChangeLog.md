@@ -1,5 +1,10 @@
 # Changelog for persistent-mysql
 
+## Unreleased
+
+* Expose `openMySQLConn` for explicit reference to opened connection. [#1248](https://github.com/yesodweb/persistent/pull/1248)
+  * Makes it convenient to use with `mysql-simple`.
+
 ## 2.12.0.0
 
 * Decomposed `HaskellName` into `ConstraintNameHS`, `EntityNameHS`, `FieldNameHS`. Decomposed `DBName` into `ConstraintNameDB`, `EntityNameDB`, `FieldNameDB` respectively. [#1174](https://github.com/yesodweb/persistent/pull/1174)
