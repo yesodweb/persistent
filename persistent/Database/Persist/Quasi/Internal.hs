@@ -702,18 +702,7 @@ mkUnboundEntityDef ps parsedEntDef =
             textAttribs
 
     cols :: [UnboundFieldDef]
-    cols = reverse . fst . foldr k ([], []) $ reverse attribs
-
-    k x (!acc, !comments) =
-        case listToMaybe x of
-            Just (DocComment comment) ->
-                (acc, comment : comments)
-            _ ->
-                case (setFieldComments comments <$> takeColsEx ps (tokenText <$> x)) of
-                  Just sm ->
-                      (sm : acc, [])
-                  Nothing ->
-                      (acc, [])
+    cols = reverse . fst . foldr (associateComments ps) ([], []) $ reverse attribs
 
     autoIdField :: FieldDef
     autoIdField =
@@ -789,6 +778,22 @@ unbindIdDef entityName fd =
         , unboundIdType =
             Just $ fieldType fd
         }
+
+associateComments
+    :: PersistSettings
+    -> [Token]
+    -> ([UnboundFieldDef], [Text])
+    -> ([UnboundFieldDef], [Text])
+associateComments ps x (!acc, !comments) =
+    case listToMaybe x of
+        Just (DocComment comment) ->
+            (acc, comment : comments)
+        _ ->
+            case (setFieldComments comments <$> takeColsEx ps (tokenText <$> x)) of
+              Just sm ->
+                  (sm : acc, [])
+              Nothing ->
+                  (acc, [])
 
 setFieldComments :: [Text] -> UnboundFieldDef -> UnboundFieldDef
 setFieldComments xs fld =
