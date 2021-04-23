@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeInType #-} -- needed for ghc 8.2.2
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
