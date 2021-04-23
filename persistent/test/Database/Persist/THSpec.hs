@@ -268,6 +268,7 @@ spec = do
                                     , fieldComments = Nothing
                                     , fieldCascade = noCascade
                                     , fieldGenerated = Nothing
+                                    , fieldIsImplicitIdColumn = True
                                     }
                             , entityAttrs = []
                             , entityFields =
@@ -286,6 +287,7 @@ spec = do
                                         FieldCascade { fcOnUpdate = Nothing, fcOnDelete = Just Cascade }
                                     , fieldComments = Nothing
                                     , fieldGenerated = Nothing
+                                    , fieldIsImplicitIdColumn = False
                                     }
                                 ]
                             , entityUniques = []

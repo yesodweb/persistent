@@ -54,6 +54,7 @@ test-suite test
                      CustomConstraintTest
                      PgIntervalTest
                      UpsertWhere
+                     ImplicitUuidSpec
     ghc-options:     -Wall
 
     build-depends:   base                 >= 4.9 && < 5

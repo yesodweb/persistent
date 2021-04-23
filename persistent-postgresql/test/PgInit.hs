@@ -1,3 +1,5 @@
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
@@ -29,11 +31,13 @@ module PgInit
     , Int32, Int64
     , liftIO
     , mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase
+    , setImplicitIdDef
     , SomeException
     , Text
     , TestFn(..)
     , LoggingT
     , ResourceT
+    , UUID(..)
     ) where
 
 import Init
@@ -64,7 +68,6 @@ import Data.Aeson (Value(..))
 import Database.Persist.Postgresql.JSON ()
 import Database.Persist.Sql.Raw.QQ
 import Database.Persist.SqlBackend
-import Database.Persist.Postgresql.JSON()
 import Database.Persist.TH
        ( MkPersistSettings(..)
        , mkMigrate
@@ -73,14 +76,25 @@ import Database.Persist.TH
        , persistUpperCase
        , share
        , sqlSettings
+       , setImplicitIdDef
        )
 import Test.Hspec
-       (Spec, afterAll_, before, beforeAll, describe, fdescribe, fit, it,
-       before_, SpecWith, Arg, hspec)
+       ( Arg
+       , Spec
+       , SpecWith
+       , afterAll_
+       , before
+       , beforeAll
+       , before_
+       , describe
+       , fdescribe
+       , fit
+       , hspec
+       , it
+       )
 import Test.Hspec.Expectations.Lifted
 import Test.QuickCheck.Instances ()
 import UnliftIO
-import Database.Persist.SqlBackend
 
 -- testing
 import Test.HUnit (Assertion, assertBool, assertFailure, (@=?), (@?=))
@@ -199,3 +213,14 @@ instance Arbitrary Value where
                     . listOf -- [(,)] -> (,)
                     . liftA2 (,) arbText -- (,) -> Text and Value
                     $ limitIt 4 arbitrary -- Again, precaution against divergent recursion.
+
+-- * For "ImplicitUuidSpec"
+
+newtype UUID = UUID { unUUID :: Text }
+    deriving stock
+        (Show, Eq)
+    deriving newtype
+        PersistField
+
+instance PersistFieldSql UUID where
+    sqlType _ = SqlOther "UUID"

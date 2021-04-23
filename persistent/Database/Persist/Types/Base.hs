@@ -1,7 +1,11 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP, AllowAmbiguousTypes #-}
 {-# LANGUAGE DeriveLift #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Database.Persist.Types.Base
     ( module Database.Persist.Types.Base
@@ -23,6 +27,7 @@ import qualified Data.HashMap.Strict as HM
 import Data.Int (Int64)
 import Data.Map (Map)
 import Data.Maybe (isNothing)
+import Type.Reflection
 #if !MIN_VERSION_base(4,11,0)
 -- This can be removed when GHC < 8.2.2 isn't supported anymore
 import Data.Semigroup ((<>))
@@ -725,5 +730,9 @@ data FieldDef = FieldDef
     -- the expression to use for generation.
     --
     -- @since 2.11.0.0
+    , fieldIsImplicitIdColumn :: !Bool
+    -- ^ 'True' if the field is an implicit ID column. 'False' otherwise.
+    --
+    -- @since 2.13.0.0
     }
     deriving (Show, Eq, Read, Ord, Lift)

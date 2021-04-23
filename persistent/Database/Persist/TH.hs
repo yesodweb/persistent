@@ -11,6 +11,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE StrictData #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
@@ -40,6 +41,9 @@ module Database.Persist.TH
     , EntityJSON(..)
     , mkPersistSettings
     , sqlSettings
+    -- ** Implicit ID Columns
+    , ImplicitIdDef
+    , setImplicitIdDef
       -- * Various other TH functions
     , mkMigrate
     , mkSave
@@ -112,8 +116,10 @@ import Database.Persist.Quasi
 import Database.Persist.Sql
        (Migration, PersistFieldSql, SqlBackend, migrate, sqlType)
 
-import Database.Persist.Types.Base (toEmbedEntityDef)
+import Database.Persist.ImplicitIdDef (autoIncrementingInteger)
+import Database.Persist.ImplicitIdDef.Internal
 import Database.Persist.EntityDef.Internal (EntityDef(..))
+import Database.Persist.Types.Base (toEmbedEntityDef)
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
@@ -302,9 +308,9 @@ data FieldSqlTypeExp = FieldSqlTypeExp FieldDef SqlTypeExp
 
 instance Lift FieldSqlTypeExp where
     lift (FieldSqlTypeExp FieldDef{..} sqlTypeExp) =
-        [|FieldDef fieldHaskell fieldDB fieldType $(lift sqlTypeExp) fieldAttrs fieldStrict fieldReference fieldCascade fieldComments fieldGenerated|]
+        [|FieldDef fieldHaskell fieldDB fieldType $(lift sqlTypeExp) fieldAttrs fieldStrict fieldReference fieldCascade fieldComments fieldGenerated fieldIsImplicitIdColumn|]
       where
-        FieldDef _x _ _ _ _ _ _ _ _ _ =
+        FieldDef _x _ _ _ _ _ _ _ _ _ _ =
             error "need to update this record wildcard match"
 #if MIN_VERSION_template_haskell(2,16,0)
     liftTyped = unsafeTExpCoerce . lift
@@ -470,23 +476,29 @@ mkPersist mps ents' = do
     entityMap = constructEntityMap ents
 
 setDefaultIdFields :: MkPersistSettings -> EntityDef -> EntityDef
-setDefaultIdFields mps ed =
-    case mpsImplicitIdSpec mps of
-        Nothing ->
-            ed
-        Just iis
-            | defaultIdType ed ->
-                setEntityId (setToMpsDefault iis (getEntityId ed)) ed
-            | otherwise ->
-                ed
+setDefaultIdFields mps ed
+    | defaultIdType ed =
+        ed -- setEntityId (setToMpsDefault (mpsImplicitIdDef mps) (getEntityId ed)) ed
+    | otherwise =
+        ed
   where
-    setToMpsDefault :: ImplicitIdSpec -> FieldDef -> FieldDef
-    setToMpsDefault iis fd =
+    setToMpsDefault :: ImplicitIdDef -> FieldDef -> FieldDef
+    setToMpsDefault iid fd =
         fd
             { fieldType =
-                iisFieldType iis (getEntityHaskellName ed)
+                iidFieldType iid (getEntityHaskellName ed)
             , fieldSqlType =
-                iisFieldSqlType iis
+                iidFieldSqlType iid
+            , fieldAttrs =
+                let
+                    old =
+                        fieldAttrs fd
+                 in
+                    case iidDefault iid of
+                        Nothing ->
+                            old
+                        Just def ->
+                            FieldAttrDefault def : old
             }
 
 -- | Implement special preprocessing on EntityDef as necessary for 'mkPersist'.
@@ -554,52 +566,40 @@ data MkPersistSettings = MkPersistSettings
     --      , 'entityFromJSON' = 'entityIdFromJSON
     --      }
     -- @
-    , mpsGenerateLenses :: !Bool
+    , mpsGenerateLenses :: Bool
     -- ^ Instead of generating normal field accessors, generator lens-style
     -- accessors.
     --
     -- Default: False
     --
     -- @since 1.3.1
-    , mpsDeriveInstances :: ![Name]
+    , mpsDeriveInstances :: [Name]
     -- ^ Automatically derive these typeclass instances for all record and key
     -- types.
     --
     -- Default: []
     --
     -- @since 2.8.1
-    , mpsImplicitIdSpec :: !(Maybe ImplicitIdSpec)
+    , mpsImplicitIdDef :: ImplicitIdDef
+    -- ^ TODO: document
+    --
+    -- @since 2.13.0.0
     }
 
--- |
+-- |  Set the 'ImplicitIdDef' in the given 'MkPersistSettings'. The default
+-- value is 'autoIncrementingInteger'.
 --
 -- @since 2.13.0.0
-data ImplicitIdSpec = ImplicitIdSpec
-    { iisFieldType :: EntityNameHS -> FieldType
-    , iisFieldSqlType :: SqlType
-    , iisType :: MkPersistSettings -> Type
-    }
+setImplicitIdDef :: ImplicitIdDef -> MkPersistSettings -> MkPersistSettings
+setImplicitIdDef iid mps =
+    mps { mpsImplicitIdDef = iid }
 
-getImplicitIdType :: MkPersistSettings -> Maybe Type
-getImplicitIdType mps =
-    (\x -> iisType x mps ) <$> mpsImplicitIdSpec mps
-
--- |
---
--- @since 2.13.0.0
-autoIncrementingInteger :: ImplicitIdSpec
-autoIncrementingInteger =
-    ImplicitIdSpec
-        { iisFieldType = \entName ->
-            FTTypeCon Nothing $ unEntityNameHS entName `mappend` "Id"
-        , iisFieldSqlType =
-            SqlInt64
-        , iisType = \mps ->
-            ConT ''BackendKey `AppT`
-                if mpsGeneric mps
-                then backendT
-                else mpsBackend mps
-        }
+getImplicitIdType :: MkPersistSettings -> Type
+getImplicitIdType = do
+    idDef <- mpsImplicitIdDef
+    isGeneric <- mpsGeneric
+    backendTy <- mpsBackend
+    pure $ iidType idDef isGeneric backendTy
 
 data EntityJSON = EntityJSON
     { entityToJSON :: Name
@@ -624,8 +624,8 @@ mkPersistSettings backend = MkPersistSettings
         }
     , mpsGenerateLenses = False
     , mpsDeriveInstances = []
-    , mpsImplicitIdSpec =
-        Just autoIncrementingInteger
+    , mpsImplicitIdDef =
+        autoIncrementingInteger
     }
 
 -- | Use the 'SqlPersist' backend.
@@ -1064,9 +1064,13 @@ mkKeyTypeDec mps entDef = do
 pkNewtype :: MkPersistSettings -> EntityDef -> Bool
 pkNewtype mps entDef = length (keyFields mps entDef) < 2
 
+-- | Kind of a nasty hack. Checks to see if the 'fieldType' matches what the
+-- QuasiQuoter produces for an implicit ID and
 defaultIdType :: EntityDef -> Bool
 defaultIdType entDef =
-    fieldType (entityId entDef) == FTTypeCon Nothing (keyIdText entDef)
+    fieldType field == FTTypeCon Nothing (keyIdText entDef)
+  where
+    field = getEntityId entDef
 
 keyFields :: MkPersistSettings -> EntityDef -> [(Name, Strict, Type)]
 keyFields mps entDef =
@@ -1074,16 +1078,8 @@ keyFields mps entDef =
         Just pdef ->
             map primaryKeyVar (compositeFields pdef)
         Nothing ->
-            pure . idKeyVar $
-                if defaultIdType entDef
-                then backendKeyType
-                else ftToType $ fieldType $ entityId entDef
+            pure . idKeyVar $ ftToType $ fieldType $ entityId entDef
   where
-    backendKeyType
-        | mpsGeneric mps =
-            ConT ''BackendKey `AppT` backendT
-        | otherwise =
-            ConT ''BackendKey `AppT` mpsBackend mps
     idKeyVar ft =
         ( unKeyName entDef
         , notStrict
@@ -1799,8 +1795,8 @@ liftAndFixKeys entityMap EntityDef{..} =
     |]
 
 liftAndFixKey :: EntityMap -> FieldDef -> Q Exp
-liftAndFixKey entityMap (FieldDef a b c sqlTyp e f fieldRef fc mcomments fg) =
-    [|FieldDef a b c $(sqlTyp') e f (fieldRef') fc mcomments fg|]
+liftAndFixKey entityMap (FieldDef a b c sqlTyp e f fieldRef fc mcomments fg fh) =
+    [|FieldDef a b c $(sqlTyp') e f (fieldRef') fc mcomments fg fh|]
   where
     (fieldRef', sqlTyp') =
         fromMaybe (fieldRef, lift sqlTyp) $

@@ -20,6 +20,7 @@ import qualified Data.Text as T
 import Data.Time
 import Test.QuickCheck
 
+import qualified ImplicitUuidSpec
 import qualified ArrayAggTest
 import qualified CompositeTest
 import qualified ForeignKey
@@ -130,6 +131,7 @@ main = do
       , MigrationTest.migrationMigrate
       , PgIntervalTest.pgIntervalMigrate
       , UpsertWhere.upsertWhereMigrate
+      , ImplicitUuidSpec.implicitUuidMigrate
       ]
     PersistentTest.cleanDB
     ForeignKey.cleanDB

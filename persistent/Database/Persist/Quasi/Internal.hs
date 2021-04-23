@@ -450,10 +450,6 @@ mkEntityDef ps name entattribs lines =
     textAttribs =
         fmap tokenText <$> attribs
 
-    attribPrefix = flip lookupKeyVal entattribs
-    idName | Just _ <- attribPrefix "id" = error "id= is deprecated, ad a field named 'Id' and use sql="
-           | otherwise = Nothing
-
     (idField, primaryComposite, uniqs, foreigns) = foldl' (\(mid, mp, us, fs) attr ->
         let (i, p, u, f) = takeConstraint ps name' cols attr
             squish xs m = xs `mappend` maybeToList m
@@ -473,7 +469,7 @@ mkEntityDef ps name entattribs lines =
                   Nothing ->
                       (acc, [])
 
-    autoIdField = mkAutoIdField ps entName (FieldNameDB `fmap` idName) idSqlType
+    autoIdField = mkAutoIdField ps entName idSqlType
     idSqlType = maybe SqlInt64 (const $ SqlOther "Primary Key") primaryComposite
 
     setComposite Nothing fd = fd
@@ -492,14 +488,14 @@ just1 (Just x) (Just y) = error $ "expected only one of: "
   `mappend` show x `mappend` " " `mappend` show y
 just1 x y = x `mplus` y
 
-mkAutoIdField :: PersistSettings -> EntityNameHS -> Maybe FieldNameDB -> SqlType -> FieldDef
-mkAutoIdField ps entName idName idSqlType =
+mkAutoIdField :: PersistSettings -> EntityNameHS -> SqlType -> FieldDef
+mkAutoIdField ps entName idSqlType =
     FieldDef
         { fieldHaskell = FieldNameHS "Id"
         -- this should be modeled as a Maybe
         -- but that sucks for non-ID field
         -- TODO: use a sumtype FieldDef | IdFieldDef
-        , fieldDB = fromMaybe (FieldNameDB $ psIdName ps) idName
+        , fieldDB = FieldNameDB $ psIdName ps
         , fieldType = FTTypeCon Nothing $ keyConName $ unEntityNameHS entName
         , fieldSqlType = idSqlType
         -- the primary field is actually a reference to the entity
@@ -509,6 +505,7 @@ mkAutoIdField ps entName idName idSqlType =
         , fieldComments = Nothing
         , fieldCascade = noCascade
         , fieldGenerated = Nothing
+        , fieldIsImplicitIdColumn = True
         }
 
 defaultReferenceTypeCon :: FieldType
@@ -567,6 +564,7 @@ takeCols onErr ps (n':typ:rest')
                 , fieldComments = Nothing
                 , fieldCascade = cascade_
                 , fieldGenerated = generated_
+                , fieldIsImplicitIdColumn = False
                 }
   where
     fieldAttrs_ = parseFieldAttrs attrs_
