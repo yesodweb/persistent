@@ -77,6 +77,8 @@ test-suite test
                    , text
                    , time
                    , transformers
+                   , path-pieces
+                   , http-api-data
                    , unliftio-core
                    , unliftio
                    , unordered-containers

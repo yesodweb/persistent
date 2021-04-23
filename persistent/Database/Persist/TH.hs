@@ -46,6 +46,7 @@ module Database.Persist.TH
     , setImplicitIdDef
       -- * Various other TH functions
     , mkMigrate
+    , migrateModels
     , mkSave
     , mkDeleteCascade
     , mkEntityDefList
@@ -116,9 +117,9 @@ import Database.Persist.Quasi
 import Database.Persist.Sql
        (Migration, PersistFieldSql, SqlBackend, migrate, sqlType)
 
+import Database.Persist.EntityDef.Internal (EntityDef(..))
 import Database.Persist.ImplicitIdDef (autoIncrementingInteger)
 import Database.Persist.ImplicitIdDef.Internal
-import Database.Persist.EntityDef.Internal (EntityDef(..))
 import Database.Persist.Types.Base (toEmbedEntityDef)
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
@@ -477,8 +478,8 @@ mkPersist mps ents' = do
 
 setDefaultIdFields :: MkPersistSettings -> EntityDef -> EntityDef
 setDefaultIdFields mps ed
-    | defaultIdType ed =
-        ed -- setEntityId (setToMpsDefault (mpsImplicitIdDef mps) (getEntityId ed)) ed
+    | defaultIdType ed || fieldIsImplicitIdColumn (getEntityId ed) =
+        setEntityId (setToMpsDefault (mpsImplicitIdDef mps) (getEntityId ed)) ed
     | otherwise =
         ed
   where
@@ -499,6 +500,8 @@ setDefaultIdFields mps ed
                             old
                         Just def ->
                             FieldAttrDefault def : old
+            , fieldIsImplicitIdColumn =
+                True
             }
 
 -- | Implement special preprocessing on EntityDef as necessary for 'mkPersist'.
@@ -1078,8 +1081,29 @@ keyFields mps entDef =
         Just pdef ->
             map primaryKeyVar (compositeFields pdef)
         Nothing ->
-            pure . idKeyVar $ ftToType $ fieldType $ entityId entDef
+            pure . idKeyVar $
+                -- TODO: Okay, so my problem is right here.
+                --
+                -- The 'defaultIdType' function asks if the field's type is
+                -- defined as ${ModelName}Id. If it is, then we peek through to
+                -- the underlying type.
+                if defaultIdType entDef
+                then
+                 -- backendKeyType is the behavior-preserving original code.
+                    -- backendKeyType
+                -- This is the somewhat naive variant - just grab the ID type
+                -- and convert it! But this is loopy - it recurses and is sad.
+                -- We want to "see through" the type alias.
+                    -- ftToType $ fieldType $ entityId entDef
+                -- SO let's just copy the type.
+                    getImplicitIdType mps
+                else ftToType $ fieldType $ entityId entDef
   where
+    backendKeyType =
+        ConT ''BackendKey `AppT`
+            if mpsGeneric mps
+            then backendT
+            else mpsBackend mps
     idKeyVar ft =
         ( unKeyName entDef
         , notStrict
@@ -1722,6 +1746,11 @@ derivePersistFieldJSON s = do
             ]
         ]
 
+migrateModels :: [EntityDef] -> Migration
+migrateModels eds =
+    forM_ eds $ \ed ->
+        migrate eds ed
+
 -- | Creates a single function to perform all migrations for the entities
 -- defined here. One thing to be aware of is dependencies: if you have entities
 -- with foreign references, make sure to place those definitions after the
@@ -1795,8 +1824,11 @@ liftAndFixKeys entityMap EntityDef{..} =
     |]
 
 liftAndFixKey :: EntityMap -> FieldDef -> Q Exp
-liftAndFixKey entityMap (FieldDef a b c sqlTyp e f fieldRef fc mcomments fg fh) =
-    [|FieldDef a b c $(sqlTyp') e f (fieldRef') fc mcomments fg fh|]
+liftAndFixKey entityMap fd@(FieldDef a b c sqlTyp e f fieldRef fc mcomments fg fieldIsImplicitIdColumn)
+    | not fieldIsImplicitIdColumn =
+        [|FieldDef a b c $(sqlTyp') e f (fieldRef') fc mcomments fg fieldIsImplicitIdColumn|]
+    | otherwise =
+        [|FieldDef a b c sqlTyp e f fieldRef fc mcomments fg fieldIsImplicitIdColumn|]
   where
     (fieldRef', sqlTyp') =
         fromMaybe (fieldRef, lift sqlTyp) $

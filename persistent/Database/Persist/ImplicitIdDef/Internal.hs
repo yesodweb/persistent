@@ -78,7 +78,7 @@ fieldTypeFromTypeable = go (typeRep @t)
                     tyName = T.pack $ tyConName tyCon
                     modName = T.pack $ tyConModule tyCon
                 in
-                    FTTypeCon (Just modName) tyName
+                    FTTypeCon Nothing tyName
             App trA trB ->
                 FTApp (go trA) (go trB)
             Fun _ _ ->

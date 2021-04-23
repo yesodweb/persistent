@@ -16,18 +16,20 @@ module ImplicitUuidSpec where
 
 import PgInit
 
+import Data.Proxy
 import Database.Persist.Postgresql
 
 import Database.Persist.ImplicitIdDef
+import Database.Persist.ImplicitIdDef.Internal (fieldTypeFromTypeable)
 
 do
     let
         uuidDef =
-           mkImplicitIdDefTypeable @UUID "uuid_generate_v1mc()"
+           mkImplicitIdDef @UUID "uuid_generate_v1mc()"
         settings =
             setImplicitIdDef uuidDef sqlSettings
     share
-        [mkPersist settings, mkMigrate "implicitUuidMigrate"] [persistLowerCase|
+        [mkPersist settings, mkEntityDefList "entities"] [persistLowerCase|
 
 WithDefUuid
     name        Text sqltype=varchar(80)
@@ -36,9 +38,15 @@ WithDefUuid
 
         |]
 
+implicitUuidMigrate :: Migration
+implicitUuidMigrate = do
+    runSqlCommand $ rawExecute "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"" []
+    migrateModels entities
+
 wipe :: IO ()
 wipe = runConnAssert $ do
-    deleteWhere ([] :: [Filter WithDefUuid])
+    rawExecute "DROP TABLE with_def_uuid;" []
+    runMigration implicitUuidMigrate
 
 itDb :: String -> SqlPersistT (LoggingT (ResourceT IO)) a -> SpecWith (Arg (IO ()))
 itDb msg action = it msg $ runConnAssert $ void action
@@ -46,12 +54,21 @@ itDb msg action = it msg $ runConnAssert $ void action
 pass :: IO ()
 pass = pure ()
 
-specs :: Spec
-specs = describe "ImplicitUuidSpec" $ before_ wipe $ do
+spec :: Spec
+spec = fdescribe "ImplicitUuidSpec" $ before_ wipe $ do
     describe "WithDefUuidKey" $ do
         it "works on UUIDs" $ do
             let withDefUuidKey = WithDefUuidKey (UUID "Hello")
             pass
+    describe "getEntityId" $ do
+        let idField = getEntityId (entityDef (Proxy @WithDefUuid))
+        it "has a UUID SqlType" $ asIO $ do
+            fieldSqlType idField `shouldBe` SqlOther "UUID"
+        it "has a UUID type" $ asIO $ do
+            fieldType idField `shouldBe` fieldTypeFromTypeable @UUID
+        it "is an implicit ID column" $ asIO $ do
+            fieldIsImplicitIdColumn idField `shouldBe` True
+
     describe "insert" $ do
         itDb "successfully has a default" $ do
             let matt = WithDefUuid
@@ -61,5 +78,3 @@ specs = describe "ImplicitUuidSpec" $ before_ wipe $ do
             k <- insert matt
             mrec <- get k
             mrec `shouldBe` Just matt
-
-

@@ -30,7 +30,8 @@ module PgInit
     , BS.ByteString
     , Int32, Int64
     , liftIO
-    , mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase
+    , mkPersist, migrateModels, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase
+    , mkEntityDefList
     , setImplicitIdDef
     , SomeException
     , Text
@@ -64,19 +65,21 @@ import Init
 import Control.Exception (SomeException)
 import Control.Monad (forM_, liftM, replicateM, void, when)
 import Control.Monad.Trans.Reader
-import Data.Aeson (Value(..))
+import Data.Aeson (ToJSON, FromJSON, Value(..))
 import Database.Persist.Postgresql.JSON ()
 import Database.Persist.Sql.Raw.QQ
 import Database.Persist.SqlBackend
 import Database.Persist.TH
        ( MkPersistSettings(..)
        , mkMigrate
+       , migrateModels
        , mkPersist
        , persistLowerCase
        , persistUpperCase
        , share
        , sqlSettings
        , setImplicitIdDef
+       , mkEntityDefList
        )
 import Test.Hspec
        ( Arg
@@ -95,11 +98,14 @@ import Test.Hspec
 import Test.Hspec.Expectations.Lifted
 import Test.QuickCheck.Instances ()
 import UnliftIO
+import qualified Data.Text.Encoding as TE
 
 -- testing
 import Test.HUnit (Assertion, assertBool, assertFailure, (@=?), (@?=))
 import Test.QuickCheck
 
+import Web.PathPieces
+import Web.Internal.HttpApiData
 import Control.Monad (unless, (>=>))
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger
@@ -218,9 +224,19 @@ instance Arbitrary Value where
 
 newtype UUID = UUID { unUUID :: Text }
     deriving stock
-        (Show, Eq)
+        (Show, Eq, Ord, Read)
     deriving newtype
-        PersistField
+        (ToJSON, FromJSON, FromHttpApiData, ToHttpApiData, PathPiece)
 
 instance PersistFieldSql UUID where
     sqlType _ = SqlOther "UUID"
+
+instance PersistField UUID where
+    toPersistValue (UUID txt) =
+        PersistLiteral_ Escaped (TE.encodeUtf8 txt)
+    fromPersistValue pv =
+        case pv of
+            PersistLiteral_ Escaped bs ->
+                Right $ UUID (TE.decodeUtf8 bs)
+            _ ->
+                Left "Nope"

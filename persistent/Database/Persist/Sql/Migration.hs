@@ -15,6 +15,7 @@ module Database.Persist.Sql.Migration
   , reportError
   , addMigrations
   , addMigration
+  , runSqlCommand
   ) where
 
 
@@ -209,3 +210,9 @@ addMigrations
     :: CautiousMigration
     -> Migration
 addMigrations = lift . tell
+
+-- | Run an action against the database during a migration.
+--
+-- @since 2.13.0.0
+runSqlCommand :: SqlPersistT IO () -> Migration
+runSqlCommand = lift . lift
