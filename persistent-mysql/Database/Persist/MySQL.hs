@@ -123,6 +123,8 @@ withMySQLConn = withSqlConn . open'
 
 -- | Open a connection to MySQL server, initialize the 'SqlBackend' and return
 -- their tuple
+--
+-- @since 2.12.0.1
 openMySQLConn :: MySQL.ConnectInfo -> LogFunc -> IO (MySQL.Connection, SqlBackend)
 openMySQLConn ci logFunc = do
     conn <- MySQL.connect ci
