@@ -22,7 +22,7 @@ import Data.Time
 import Text.Shakespeare.Text
 
 import Database.Persist.Class.PersistField
-import Database.Persist.Quasi
+import Database.Persist.Quasi.Internal
 import Database.Persist.Types
 
 import qualified Database.Persist.THSpec as THSpec

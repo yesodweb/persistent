@@ -103,6 +103,7 @@ import Data.Time (NominalDiffTime, localTimeToUTC, utc)
 import System.Environment (getEnvironment)
 
 import Database.Persist.Sql
+import Database.Persist.SqlBackend
 import qualified Database.Persist.Sql.Util as Util
 
 -- | A @libpq@ connection string.  A simple example of connection
@@ -348,14 +349,15 @@ openSimpleConnWithVersion getVerDouble logFunc conn = do
 -- and connection.
 createBackend :: LogFunc -> NonEmpty Word
               -> IORef (Map.Map Text Statement) -> PG.Connection -> SqlBackend
-createBackend logFunc serverVersion smap conn = do
-    SqlBackend
+createBackend logFunc serverVersion smap conn =
+    maybe id setConnPutManySql (upsertFunction putManySql serverVersion) $
+    maybe id setConnUpsertSql (upsertFunction upsertSql' serverVersion) $
+    setConnInsertManySql insertManySql' $
+    maybe id setConnRepsertManySql (upsertFunction repsertManySql serverVersion) $
+    mkSqlBackend MkSqlBackendArgs
         { connPrepare    = prepare' conn
         , connStmtMap    = smap
         , connInsertSql  = insertSql'
-        , connInsertManySql = Just insertManySql'
-        , connUpsertSql  = upsertFunction upsertSql' serverVersion
-        , connPutManySql = upsertFunction putManySql serverVersion
         , connClose      = PG.close conn
         , connMigrateSql = migrate'
         , connBegin      = \_ mIsolation -> case mIsolation of
@@ -374,8 +376,6 @@ createBackend logFunc serverVersion smap conn = do
         , connRDBMS      = "postgresql"
         , connLimitOffset = decorateSQLWithLimitOffset "LIMIT ALL"
         , connLogFunc = logFunc
-        , connMaxParams = Nothing
-        , connRepsertManySql = upsertFunction repsertManySql serverVersion
         }
 
 prepare' :: PG.Connection -> Text -> IO Statement
@@ -1706,37 +1706,34 @@ mockMigrate allDefs _ entity = fmap (fmap $ map showAlterDb) $ do
 -- with the difference that an actual database is not needed.
 mockMigration :: Migration -> IO ()
 mockMigration mig = do
-  smap <- newIORef $ Map.empty
-  let sqlbackend = SqlBackend { connPrepare = \_ -> do
-                                             return Statement
-                                                        { stmtFinalize = return ()
-                                                        , stmtReset = return ()
-                                                        , stmtExecute = undefined
-                                                        , stmtQuery = \_ -> return $ return ()
-                                                        },
-                             connInsertManySql = Nothing,
-                             connInsertSql = undefined,
-                             connUpsertSql = Nothing,
-                             connPutManySql = Nothing,
-                             connStmtMap = smap,
-                             connClose = undefined,
-                             connMigrateSql = mockMigrate,
-                             connBegin = undefined,
-                             connCommit = undefined,
-                             connRollback = undefined,
-                             connEscapeFieldName = escapeF,
-                             connEscapeTableName = escapeE . entityDB,
-                             connEscapeRawName = escape,
-                             connNoLimit = undefined,
-                             connRDBMS = undefined,
-                             connLimitOffset = undefined,
-                             connLogFunc = undefined,
-                             connMaxParams = Nothing,
-                             connRepsertManySql = Nothing
-                             }
-      result = runReaderT $ runWriterT $ runWriterT mig
-  resp <- result sqlbackend
-  mapM_ T.putStrLn $ map snd $ snd resp
+    smap <- newIORef $ Map.empty
+    let sqlbackend =
+            mkSqlBackend MkSqlBackendArgs
+                { connPrepare = \_ -> do
+                    return Statement
+                        { stmtFinalize = return ()
+                        , stmtReset = return ()
+                        , stmtExecute = undefined
+                        , stmtQuery = \_ -> return $ return ()
+                        }
+                , connInsertSql = undefined
+                , connStmtMap = smap
+                , connClose = undefined
+                , connMigrateSql = mockMigrate
+                , connBegin = undefined
+                , connCommit = undefined
+                , connRollback = undefined
+                , connEscapeFieldName = escapeF
+                , connEscapeTableName = escapeE . entityDB
+                , connEscapeRawName = escape
+                , connNoLimit = undefined
+                , connRDBMS = undefined
+                , connLimitOffset = undefined
+                , connLogFunc = undefined
+                }
+        result = runReaderT $ runWriterT $ runWriterT mig
+    resp <- result sqlbackend
+    mapM_ T.putStrLn $ map snd $ snd resp
 
 putManySql :: EntityDef -> Int -> Text
 putManySql ent n = putManySql' conflictColumns fields ent n
@@ -2025,7 +2022,5 @@ migrateEnableExtension extName = WriterT $ WriterT $ do
 
 postgresMkColumns :: [EntityDef] -> EntityDef -> ([Column], [UniqueDef], [ForeignDef])
 postgresMkColumns allDefs t =
-    mkColumns allDefs t (emptyBackendSpecificOverrides
-        { backendSpecificForeignKeyName = Just refName
-        }
-    )
+    mkColumns allDefs t
+    $ setBackendSpecificForeignKeyName refName emptyBackendSpecificOverrides

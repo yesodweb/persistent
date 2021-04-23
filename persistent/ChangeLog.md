@@ -1,9 +1,38 @@
 # Changelog for persistent
 
-## 2.12.1.2
+## 2.13.0.0 (unreleased)
 
-* [1244](https://github.com/yesodweb/persistent/pull/1244)
+* [#1244](https://github.com/yesodweb/persistent/pull/1244)
   * Implement config for customising the FK name
+* [#1225](https://github.com/yesodweb/persistent/pull/1225)
+    * The fields and constructor for `SqlBackend` are no longer exported by
+      default. They are available from an internal module,
+      `Database.Persist.Sql.Types.Internal`. Breaking changes from `Internal`
+      modules are not reflected in the major version. This will allow us to
+      release new functionality without breaking your code. It's recommended to
+      switch to using the smart constructor functions and setter functions that
+      are now exported from `Database.Persist.Sql` instead.
+    * A new API is available for constructing and using a `SqlBackend`, provided
+      in `Database.Persist.SqlBackend`. Instead of using the `SqlBackend`
+      directly, use `mkSqlBackend` and the datatype `MkSqlBackendArgs`. The
+      `MkSqlBackendArgs` record has the same field names as the `SqlBackend`, so
+      the translation is easy:
+      ```diff
+- SqlBackend
++ mkSqlBackend MkSqlBackendArgs
+    { connInsertSql = ...
+    , connCommit = ...
+    , connEscapeFieldName = ...
+    , connEscapeTableName = ...
+    , etc
+    }
+      ```
+      Some fields were omitted in `MkSqlBackendArgs`. These fields are
+      *optional* - they provide enhanced or backend-specific functionality. For
+      these, use the setter functions like `setConnUpsertSql`.
+    * Previously hidden modules are now exposed under the `Internal` namespace.
+    * The `connLimitOffset` function used to have a `Bool` parameter. This
+      parameter is unused and has been removed.
 
 ## 2.12.1.1
 
