@@ -21,7 +21,6 @@ import Language.Haskell.TH (Type)
 import LiftType
 import Type.Reflection
 
-
 import Database.Persist.Names
 import Database.Persist.Sql.Class
 import Database.Persist.Types
@@ -166,11 +165,7 @@ fieldTypeFromTypeable = go (typeRep @t)
     go tr =
         case tr of
             Con tyCon ->
-                let
-                    tyName = Text.pack $ tyConName tyCon
-                    modName = Text.pack $ tyConModule tyCon
-                in
-                    FTTypeCon Nothing tyName
+                FTTypeCon Nothing $ Text.pack $ tyConName tyCon
             App trA trB ->
                 FTApp (go trA) (go trB)
             Fun _ _ ->
