@@ -21,6 +21,7 @@ import Language.Haskell.TH (Type)
 import LiftType
 import Type.Reflection
 
+
 import Database.Persist.Names
 import Database.Persist.Sql.Class
 import Database.Persist.Types
@@ -158,7 +159,7 @@ mkImplicitIdDef def =
 -- representation of the type of a field - 'FieldTyp'.
 --
 -- @since 2.13.0.0
-fieldTypeFromTypeable :: forall (t :: *). Typeable t => FieldType
+fieldTypeFromTypeable :: forall t. Typeable t => FieldType
 fieldTypeFromTypeable = go (typeRep @t)
   where
     go :: forall k (a :: k). TypeRep a -> FieldType
