@@ -39,6 +39,7 @@ module PgInit
     , LoggingT
     , ResourceT
     , UUID(..)
+    , sqlSettingsUuid
     ) where
 
 import Init
@@ -59,6 +60,8 @@ import Init
        , (==@)
        , (@/=)
        , (@==)
+       , UUID(..)
+       , sqlSettingsUuid
        )
 
 -- re-exports
@@ -219,24 +222,3 @@ instance Arbitrary Value where
                     . listOf -- [(,)] -> (,)
                     . liftA2 (,) arbText -- (,) -> Text and Value
                     $ limitIt 4 arbitrary -- Again, precaution against divergent recursion.
-
--- * For "ImplicitUuidSpec"
-
-newtype UUID = UUID { unUUID :: Text }
-    deriving stock
-        (Show, Eq, Ord, Read)
-    deriving newtype
-        (ToJSON, FromJSON, FromHttpApiData, ToHttpApiData, PathPiece)
-
-instance PersistFieldSql UUID where
-    sqlType _ = SqlOther "UUID"
-
-instance PersistField UUID where
-    toPersistValue (UUID txt) =
-        PersistLiteral_ Escaped (TE.encodeUtf8 txt)
-    fromPersistValue pv =
-        case pv of
-            PersistLiteral_ Escaped bs ->
-                Right $ UUID (TE.decodeUtf8 bs)
-            _ ->
-                Left "Nope"

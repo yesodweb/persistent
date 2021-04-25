@@ -22,21 +22,18 @@ import Database.Persist.Postgresql
 import Database.Persist.ImplicitIdDef
 import Database.Persist.ImplicitIdDef.Internal (fieldTypeFromTypeable)
 
-do
-    let
-        uuidDef =
-           mkImplicitIdDef @UUID "uuid_generate_v1mc()"
-        settings =
-            setImplicitIdDef uuidDef sqlSettings
-    share
-        [mkPersist settings, mkEntityDefList "entities"] [persistLowerCase|
+share
+    [ mkPersist (sqlSettingsUuid "uuid_generate_v1mc()")
+    , mkEntityDefList "entities"
+    ]
+    [persistLowerCase|
 
 WithDefUuid
     name        Text sqltype=varchar(80)
 
     deriving Eq Show Ord
 
-        |]
+|]
 
 implicitUuidMigrate :: Migration
 implicitUuidMigrate = do
