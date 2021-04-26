@@ -2227,13 +2227,13 @@ discoverEntities = do
                 InstanceD _moverlap _cxt typ _decs ->
                     stripPersistEntity typ
                 _ ->
-                    error $ show dec
+                    Nothing
         stripPersistEntity typ =
             case typ of
                 AppT (ConT tyName) t | tyName == ''PersistEntity ->
                     Just t
                 _ ->
-                    error $ show typ
+                    Nothing
 
     fmap ListE $
         forM types $ \typ -> do
