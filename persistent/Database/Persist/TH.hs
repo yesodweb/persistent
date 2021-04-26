@@ -589,6 +589,9 @@ data MkPersistSettings = MkPersistSettings
     -- @since 2.13.0.0
     }
 
+
+{-# DEPRECATED mpsGeneric "The mpsGeneric function adds a considerable amount of overhead and complexity to the library without bringing significant benefit. We would like to remove it. If you require this feature, please comment on the linked GitHub issue, and we'll either keep it around, or we can figure out a nicer way to solve your problem.\n\n Github: https://github.com/yesodweb/persistent/issues/1204" #-}
+
 -- |  Set the 'ImplicitIdDef' in the given 'MkPersistSettings'. The default
 -- value is 'autoIncrementingInteger'.
 --
