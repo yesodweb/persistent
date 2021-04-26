@@ -19,6 +19,7 @@ import Test.QuickCheck
 import qualified Data.Text as T
 import Data.IntMap (IntMap)
 import qualified Data.ByteString as BS
+import Database.Persist.Sql
 
 import qualified CompositeTest
 import qualified CustomPersistFieldTest
@@ -169,9 +170,12 @@ main = do
     Recursive.specsWith db
     SumTypeTest.specsWith db (Just (runMigrationSilent SumTypeTest.sumTypeMigrate))
     MigrationOnlyTest.specsWith db
-        (Just
-            $ runMigrationSilent MigrationOnlyTest.migrateAll1
-            >> runMigrationSilent MigrationOnlyTest.migrateAll2
+        (Just $ do
+            runSqlCommand $ do
+                rawExecute_ "DROP TABLE IF EXISTS two_field;" []
+                rawExecute_ "DROP TABLE IF EXISTS referencing;" []
+            runMigrationSilent MigrationOnlyTest.migrateAll1
+            runMigrationSilent MigrationOnlyTest.migrateAll2
         )
     PersistentTest.specsWith db
     PersistentTest.filterOrSpecs db
