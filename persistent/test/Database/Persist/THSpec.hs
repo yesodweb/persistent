@@ -1,16 +1,18 @@
-{-# LANGUAGE TypeApplications, DeriveGeneric, RecordWildCards #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# language DataKinds #-}
 --
 -- DeriveAnyClass is not actually used by persistent-template
 -- But a long standing bug was that if it was enabled, it was used to derive instead of GeneralizedNewtypeDeriving
@@ -21,34 +23,35 @@
 
 module Database.Persist.THSpec where
 
-import Data.Int
-import Data.Proxy
-import Control.Applicative (Const (..))
+import Control.Applicative (Const(..))
 import Data.Aeson
 import Data.ByteString.Lazy.Char8 ()
-import Data.Functor.Identity (Identity (..))
+import Data.Coerce
+import Data.Functor.Identity (Identity(..))
+import Data.Int
+import qualified Data.List as List
+import Data.Proxy
 import Data.Text (Text, pack)
+import GHC.Generics (Generic)
 import Test.Hspec
 import Test.Hspec.QuickCheck
 import Test.QuickCheck.Arbitrary
 import Test.QuickCheck.Gen (Gen)
-import GHC.Generics (Generic)
-import qualified Data.List as List
-import Data.Coerce
 
 import Database.Persist
+import Database.Persist.EntityDef.Internal
 import Database.Persist.Sql
 import Database.Persist.Sql.Util
 import Database.Persist.TH
 import TemplateTestImports
-import Database.Persist.EntityDef.Internal
 
-import qualified Database.Persist.TH.SharedPrimaryKeySpec as SharedPrimaryKeySpec
-import qualified Database.Persist.TH.SharedPrimaryKeyImportedSpec as SharedPrimaryKeyImportedSpec
-import qualified Database.Persist.TH.OverloadedLabelSpec as OverloadedLabelSpec
+import qualified Database.Persist.TH.DiscoverEntitiesSpec as DiscoverEntitiesSpec
 import qualified Database.Persist.TH.ImplicitIdColSpec as ImplicitIdColSpec
 import qualified Database.Persist.TH.MigrationOnlySpec as MigrationOnlySpec
 import qualified Database.Persist.TH.EmbedSpec as EmbedSpec
+import qualified Database.Persist.TH.OverloadedLabelSpec as OverloadedLabelSpec
+import qualified Database.Persist.TH.SharedPrimaryKeyImportedSpec as SharedPrimaryKeyImportedSpec
+import qualified Database.Persist.TH.SharedPrimaryKeySpec as SharedPrimaryKeySpec
 
 share [mkPersist sqlSettings { mpsGeneric = False, mpsDeriveInstances = [''Generic] }, mkDeleteCascade sqlSettings { mpsGeneric = False }] [persistUpperCase|
 
@@ -146,6 +149,7 @@ spec = describe "THSpec" $ do
     ImplicitIdColSpec.spec
     MigrationOnlySpec.spec
     EmbedSpec.spec
+    DiscoverEntitiesSpec.spec
     describe "TestDefaultKeyCol" $ do
         let FieldDef{..} =
                 entityId (entityDef (Proxy @TestDefaultKeyCol))

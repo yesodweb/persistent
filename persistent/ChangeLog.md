@@ -58,6 +58,14 @@
     * Add the `runSqlCommand` function for running arbitrary SQL during
       migrations.
     * Add `migrateModels` function for a TH-free migration facility.
+* [#1253](https://github.com/yesodweb/persistent/pull/1253)
+    * Add `discoverEntities` to discover instances of the class and return their
+      entity definitions.
+* [#1250](https://github.com/yesodweb/persistent/pull/1250)
+    * The `mpsGeneric` function has been deprecated. If you need this
+      functionality, please comment with your needs on the GitHub issue tracker.
+      We may un-deprecate it, or we may provide a new and better means of
+      facilitating a solution to your problem.
 
 ## 2.12.1.1
 
