@@ -1644,35 +1644,29 @@ derivePersistFieldJSON s = do
 -- defined here. One thing to be aware of is dependencies: if you have entities
 -- with foreign references, make sure to place those definitions after the
 -- entities they reference.
+--
+-- In @persistent-2.13.0.0@, this was changed to *ignore* the input entity def
+-- list, and instead defer to 'mkEntityDefList' to get the correct entities.
+-- This avoids problems where the QuasiQuoter is unable to know what the right
+-- reference types are. This sets 'mkPersist' to be the "single source of truth"
+-- for entity definitions.
 mkMigrate :: String -> [EntityDef] -> Q [Dec]
-mkMigrate fun allDefs = do
-    body' <- body
-    return
-        [ SigD (mkName fun) typ
-        , FunD (mkName fun) [normalClause [] body']
+mkMigrate fun eds = do
+    let entityDefListName = ("entityDefListFor" <> fun)
+    body <-
+        [|
+          let
+              defs = $(varE (mkName entityDefListName))
+              isMigrated def = pack "no-migrate" `notElem` entityAttrs def
+           in
+              forM_ (filter isMigrated defs) $ \def ->
+                  migrate defs def
+        |]
+    edList <- mkEntityDefList entityDefListName eds
+    pure $ edList <>
+        [ SigD (mkName fun) (ConT ''Migration)
+        , FunD (mkName fun) [normalClause [] body]
         ]
-  where
-    defs = filter isMigrated allDefs
-    isMigrated def = "no-migrate" `notElem` entityAttrs def
-    typ = ConT ''Migration
-    entityMap = constructEntityMap allDefs
-    body :: Q Exp
-    body =
-        case defs of
-            [] -> [|return ()|]
-            _  -> do
-              defsName <- newName "defs"
-              defsStmt <- do
-                defs' <- mapM (liftAndFixKeys entityMap) defs
-                let defsExp = ListE defs'
-                return $ LetS [ValD (VarP defsName) (NormalB defsExp) []]
-              stmts <- mapM (toStmt $ VarE defsName) defs
-              return (DoE $ defsStmt : stmts)
-    toStmt :: Exp -> EntityDef -> Q Stmt
-    toStmt defsExp ed = do
-        u <- liftAndFixKeys entityMap ed
-        m <- [|migrate|]
-        return $ NoBindS $ m `AppE` defsExp `AppE` u
 
 makePersistEntityDefExp :: MkPersistSettings -> EntityMap -> EntityDef -> Q Exp
 makePersistEntityDefExp mps entityMap entDef@EntityDef{..} =
