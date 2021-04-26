@@ -54,28 +54,34 @@ test-suite test
     type:            exitcode-stdio-1.0
     main-is:         main.hs
     hs-source-dirs:  test
-    other-modules:   MyInit
-                     InsertDuplicateUpdate
-                     CustomConstraintTest
+    other-modules:   
+        MyInit
+        InsertDuplicateUpdate
+        CustomConstraintTest
+        ImplicitUuidSpec
     ghc-options:     -Wall
 
-    build-depends:   base             >= 4.9 && < 5
-                   , persistent
-                   , persistent-mysql
-                   , persistent-qq
-                   , persistent-test
-                   , bytestring
-                   , containers
-                   , fast-logger
-                   , hspec            >= 2.4
-                   , HUnit
-                   , monad-logger
-                   , mysql
-                   , QuickCheck
-                   , quickcheck-instances
-                   , resourcet
-                   , text
-                   , time
-                   , transformers
-                   , unliftio-core
+    build-depends:   
+        base             >= 4.9 && < 5
+      , aeson
+      , bytestring
+      , containers
+      , fast-logger
+      , hspec            >= 2.4
+      , http-api-data
+      , HUnit
+      , monad-logger
+      , mysql
+      , path-pieces
+      , persistent
+      , persistent-mysql
+      , persistent-qq
+      , persistent-test
+      , QuickCheck
+      , quickcheck-instances
+      , resourcet
+      , text
+      , time
+      , transformers
+      , unliftio-core
     default-language: Haskell2010

@@ -225,7 +225,7 @@ instance (PersistEntity a) => PersistEntity (ReverseFieldOrder a) where
       where
         unRfoProxy :: proxy (ReverseFieldOrder a) -> Proxy a
         unRfoProxy _ = Proxy
-        revFields ed = ed { entityFields = reverse (entityFields ed) }
+        revFields = overEntityFields reverse
 
     toPersistFields = reverse . toPersistFields . unRFO
     newtype EntityField (ReverseFieldOrder a) b = EFRFO {unEFRFO :: EntityField a b}

@@ -74,8 +74,8 @@ instance
               $ map fieldDB
               -- Hacky for a composite key because
               -- it selects the same field multiple times
-              $ entityKeyFields entDef ++ entityFields entDef
-          name = escapeWith escape (entityDB entDef)
+              $ getEntityKeyFields entDef ++ getEntityFields entDef
+          name = escapeWith escape (getEntityDBName entDef)
           entDef = entityDef (Nothing :: Maybe record)
     rawSqlColCountReason a =
         case fst (rawSqlCols (error "RawSql") a) of
@@ -85,7 +85,7 @@ instance
       (rowKey, rowVal) -> Entity <$> keyFromValues rowKey
                                  <*> fromPersistValues rowVal
       where
-        nKeyFields = length $ entityKeyFields entDef
+        nKeyFields = length $ getEntityKeyFields entDef
         entDef = entityDef (Nothing :: Maybe record)
 
 -- | This newtype wrapper is useful when selecting an entity out of the
@@ -156,7 +156,7 @@ instance
               $ map fieldDB
               -- Hacky for a composite key because
               -- it selects the same field multiple times
-              $ entityKeyFields entDef ++ entityFields entDef
+              $ getEntityKeyFields entDef ++ getEntityFields entDef
           name = pack $ symbolVal (Proxy :: Proxy prefix)
           entDef = entityDef (Nothing :: Maybe record)
     rawSqlColCountReason a =
@@ -167,7 +167,7 @@ instance
       (rowKey, rowVal) -> fmap EntityWithPrefix $ Entity <$> keyFromValues rowKey
                                  <*> fromPersistValues rowVal
       where
-        nKeyFields = length $ entityKeyFields entDef
+        nKeyFields = length $ getEntityKeyFields entDef
         entDef = entityDef (Nothing :: Maybe record)
 
 -- | @since 1.0.1

@@ -41,10 +41,12 @@ import Database.Persist.Sql
 import Database.Persist.Sql.Util
 import Database.Persist.TH
 import TemplateTestImports
+import Database.Persist.EntityDef.Internal
 
 import qualified Database.Persist.TH.SharedPrimaryKeySpec as SharedPrimaryKeySpec
 import qualified Database.Persist.TH.SharedPrimaryKeyImportedSpec as SharedPrimaryKeyImportedSpec
 import qualified Database.Persist.TH.OverloadedLabelSpec as OverloadedLabelSpec
+import qualified Database.Persist.TH.ImplicitIdColSpec as ImplicitIdColSpec
 
 share [mkPersist sqlSettings { mpsGeneric = False, mpsDeriveInstances = [''Generic] }, mkDeleteCascade sqlSettings { mpsGeneric = False }] [persistUpperCase|
 
@@ -79,6 +81,10 @@ HasMultipleColPrimaryDef
     foobar Int
     barbaz String
     Primary foobar barbaz
+
+TestDefaultKeyCol
+    Id TestDefaultKeyColId
+    name String
 
 HasIdDef
     Id Int
@@ -134,6 +140,20 @@ spec = do
     OverloadedLabelSpec.spec
     SharedPrimaryKeySpec.spec
     SharedPrimaryKeyImportedSpec.spec
+    ImplicitIdColSpec.spec
+    describe "TestDefaultKeyCol" $ do
+        let FieldDef{..} =
+                entityId (entityDef (Proxy @TestDefaultKeyCol))
+        it "should be a BackendKey SqlBackend" $ do
+            -- the purpose of this test is to verify that a custom Id column of
+            -- the form:
+            -- > ModelName
+            -- >     Id ModelNameId
+            --
+            -- should behave like an implicit id column.
+            TestDefaultKeyColKey (SqlBackendKey 32)
+                `shouldBe`
+                    toSqlKey 32
     describe "HasDefaultId" $ do
         let FieldDef{..} =
                 entityId (entityDef (Proxy @HasDefaultId))
@@ -250,6 +270,7 @@ spec = do
                                     , fieldComments = Nothing
                                     , fieldCascade = noCascade
                                     , fieldGenerated = Nothing
+                                    , fieldIsImplicitIdColumn = True
                                     }
                             , entityAttrs = []
                             , entityFields =
@@ -268,6 +289,7 @@ spec = do
                                         FieldCascade { fcOnUpdate = Nothing, fcOnDelete = Just Cascade }
                                     , fieldComments = Nothing
                                     , fieldGenerated = Nothing
+                                    , fieldIsImplicitIdColumn = False
                                     }
                                 ]
                             , entityUniques = []

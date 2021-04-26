@@ -51,6 +51,7 @@ import GHC.TypeLits
 
 import Database.Persist.Class.PersistField
 import Database.Persist.Types.Base
+import Database.Persist.Names
 
 -- | Persistent serialized Haskell records to the database.
 -- A Database 'Entity' (A row in SQL, a document in MongoDB, etc)

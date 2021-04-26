@@ -141,7 +141,7 @@ open' ci logFunc = do
             , connCommit     = const $ MySQL.commit   conn
             , connRollback   = const $ MySQL.rollback conn
             , connEscapeFieldName = T.pack . escapeF
-            , connEscapeTableName = T.pack . escapeE . entityDB
+            , connEscapeTableName = T.pack . escapeE . getEntityDBName
             , connEscapeRawName = T.pack . escapeDBName . T.unpack
             , connNoLimit    = "LIMIT 18446744073709551615"
             -- This noLimit is suggested by MySQL's own docs, see
@@ -174,7 +174,7 @@ insertSql' ent vals =
     (fieldNames, placeholders) = unzip (Util.mkInsertPlaceholders ent escapeFT)
     sql = T.concat
         [ "INSERT INTO "
-        , escapeET $ entityDB ent
+        , escapeET $ getEntityDBName ent
         , "("
         , T.intercalate "," fieldNames
         , ") VALUES("
@@ -339,7 +339,7 @@ migrate' :: MySQL.ConnectInfo
          -> EntityDef
          -> IO (Either [Text] [(Bool, Text)])
 migrate' connectInfo allDefs getter val = do
-    let name = entityDB val
+    let name = getEntityDBName val
     let (newcols, udefs, fdefs) = mysqlMkColumns allDefs val
     old <- getColumns connectInfo getter val newcols
     let udspair = map udToPair udefs
@@ -360,7 +360,7 @@ migrate' connectInfo allDefs getter val = do
                     let refTarget =
                           addReference allDefs refConstraintName refTblName cname (crFieldCascade cRef)
 
-                    guard $ cname /= fieldDB (entityId val)
+                    guard $ cname /= fieldDB (getEntityId val)
                     return $ AlterColumn name refTarget
 
 
@@ -434,35 +434,60 @@ migrate' connectInfo allDefs getter val = do
 
 addTable :: [Column] -> EntityDef -> AlterDB
 addTable cols entity = AddTable $ concat
-           -- Lower case e: see Database.Persist.Sql.Migration
-           [ "CREATe TABLE "
-           , escapeE name
-           , "("
-           , idtxt
-           , if null nonIdCols then [] else ","
-           , intercalate "," $ map showColumn nonIdCols
-           , ")"
-           ]
-    where
-      nonIdCols =
-          filter (\c -> cName c /= fieldDB (entityId entity) ) cols
-      name = entityDB entity
-      idtxt = case entityPrimary entity of
-                Just pdef -> concat [" PRIMARY KEY (", intercalate "," $ map (escapeF . fieldDB) $ compositeFields pdef, ")"]
-                Nothing ->
-                  let defText = defaultAttribute $ fieldAttrs $ entityId entity
-                      sType = fieldSqlType $ entityId entity
-                      autoIncrementText = case (sType, defText) of
-                        (SqlInt64, Nothing) -> " AUTO_INCREMENT"
-                        _ -> ""
-                      maxlen = findMaxLenOfField (entityId entity)
-                  in concat
-                         [ escapeF $ fieldDB $ entityId entity
-                         , " " <> showSqlType sType maxlen False
-                         , " NOT NULL"
-                         , autoIncrementText
-                         , " PRIMARY KEY"
-                         ]
+    -- Lower case e: see Database.Persist.Sql.Migration
+    [ "CREATe TABLE "
+    , escapeE name
+    , "("
+    , idtxt
+    , if null nonIdCols then [] else ","
+    , intercalate "," $ map showColumn nonIdCols
+    , ")"
+    ]
+  where
+    nonIdCols =
+        filter (\c -> cName c /= fieldDB (getEntityId entity) ) cols
+    name =
+        getEntityDBName entity
+    idtxt =
+        case entityPrimary entity of
+            Just pdef ->
+                concat
+                    [ " PRIMARY KEY ("
+                    , intercalate ","
+                  $ map (escapeF . fieldDB) $ compositeFields pdef
+                    , ")"
+                    ]
+            Nothing ->
+                let
+                    idField =
+                        getEntityId entity
+                    defText =
+                        defaultAttribute $ fieldAttrs idField
+                    sType =
+                        fieldSqlType idField
+                    autoIncrementText =
+                        case (sType, defText) of
+                            (SqlInt64, Nothing) -> " AUTO_INCREMENT"
+                            _ -> ""
+                    maxlen =
+                        findMaxLenOfField idField
+                in
+                    concat
+                        [ escapeF $ fieldDB $ getEntityId entity
+                        , " " <> showSqlType sType maxlen False
+                        , " NOT NULL"
+                        , autoIncrementText
+                        , " PRIMARY KEY"
+                        , case defText of
+                            Nothing ->
+                                ""
+                            Just def ->
+                                concat
+                                    [ " DEFAULT ("
+                                    , T.unpack def
+                                    , ")"
+                                    ]
+                        ]
 
 -- | Find out the type of a column.
 findTypeOfColumn :: [EntityDef] -> EntityNameDB -> FieldNameDB -> (FieldNameDB, FieldType)
@@ -474,8 +499,8 @@ findTypeOfColumn allDefs name col =
         )
         ((,) col)
         $ do
-            entDef   <- find ((== name) . entityDB) allDefs
-            fieldDef <- find ((== col)  . fieldDB) (entityFields entDef)
+            entDef   <- find ((== name) . getEntityDBName) allDefs
+            fieldDef <- find ((== col)  . fieldDB) (getEntityFields entDef)
             return (fieldType fieldDef)
 
 -- | Find out the maxlen of a column (default to 200)
@@ -483,8 +508,8 @@ findMaxLenOfColumn :: [EntityDef] -> EntityNameDB -> FieldNameDB -> (FieldNameDB
 findMaxLenOfColumn allDefs name col =
    maybe (col, 200)
          ((,) col) $ do
-           entDef     <- find ((== name) . entityDB) allDefs
-           fieldDef   <- find ((== col) . fieldDB) (entityFields entDef)
+           entDef     <- find ((== name) . getEntityDBName) allDefs
+           fieldDef   <- find ((== col) . fieldDB) (getEntityFields entDef)
            findMaxLenOfField fieldDef
 
 -- | Find out the maxlen of a field
@@ -518,8 +543,8 @@ addReference allDefs fkeyname reftable cname fc =
             ++ " (allDefs = " ++ show allDefs ++ ")"
     referencedColumns =
         fromMaybe errorMessage $ do
-            entDef <- find ((== reftable) . entityDB) allDefs
-            return $ map fieldDB $ entityKeyFields entDef
+            entDef <- find ((== reftable) . getEntityDBName) allDefs
+            return $ map fieldDB $ getEntityKeyFields entDef
 
 data AlterColumn = Change Column
                  | Add' Column
@@ -607,15 +632,15 @@ getColumns connectInfo getter def cols = do
                 Nothing -> rs
                 (Just r) -> (unFieldNameDB $ cName c, r) : rs
     vals = [ PersistText $ pack $ MySQL.connectDatabase connectInfo
-           , PersistText $ unEntityNameDB $ entityDB def
-        --   , PersistText $ unDBName $ fieldDB $ entityId def
+           , PersistText $ unEntityNameDB $ getEntityDBName def
+        --   , PersistText $ unDBName $ fieldDB $ getEntityId def
            ]
 
     helperClmns = CL.mapM getIt .| CL.consume
         where
           getIt row = fmap (either Left (Right . Left)) .
                       liftIO .
-                      getColumn connectInfo getter (entityDB def) row $ ref
+                      getColumn connectInfo getter (getEntityDBName def) row $ ref
             where ref = case row of
                     (PersistText cname : _) -> (Map.lookup cname refMap)
                     _ -> Nothing
@@ -823,7 +848,7 @@ getAlters
 getAlters allDefs edef (c1, u1) (c2, u2) =
     (getAltersC c1 c2, getAltersU u1 u2)
   where
-    tblName = entityDB edef
+    tblName = getEntityDBName edef
     getAltersC [] old = concatMap dropColumn old
     getAltersC (new:news) old =
         let (alters, old') = findAlters edef allDefs new old
@@ -886,8 +911,8 @@ findAlters edef allDefs col@(Column name isNull type_ def gen _defConstraintName
                 refAdd  =
                     case (ref == ref', ref) of
                         (False, Just ColumnReference {crTableName=tname, crConstraintName=cname, crFieldCascade = cfc })
-                            | tname /= entityDB edef
-                            , unConstraintNameDB cname /= unFieldNameDB (fieldDB (entityId edef))
+                            | tname /= getEntityDBName edef
+                            , unConstraintNameDB cname /= unFieldNameDB (fieldDB (getEntityId edef))
                             ->
                             [addReference allDefs cname tname name cfc]
                         _ -> []
@@ -1197,7 +1222,7 @@ mockMigrate :: MySQL.ConnectInfo
          -> EntityDef
          -> IO (Either [Text] [(Bool, Text)])
 mockMigrate _connectInfo allDefs _getter val = do
-    let name = entityDB val
+    let name = getEntityDBName val
     let (newcols, udefs, fdefs) = mysqlMkColumns allDefs val
     let udspair = map udToPair udefs
     case () of
@@ -1259,7 +1284,7 @@ mockMigration mig = do
                 , connCommit = undefined
                 , connRollback = undefined
                 , connEscapeFieldName = T.pack . escapeDBName . T.unpack . unFieldNameDB
-                , connEscapeTableName = T.pack . escapeDBName . T.unpack . unEntityNameDB . entityDB
+                , connEscapeTableName = T.pack . escapeDBName . T.unpack . unEntityNameDB . getEntityDBName
                 , connEscapeRawName = T.pack . escapeDBName . T.unpack
                 , connNoLimit = undefined
                 , connRDBMS = undefined
@@ -1459,8 +1484,8 @@ mkBulkInsertQuery records fieldValues updates =
     firstField = case entityFieldNames of
         [] -> error "The entity you're trying to insert does not have any fields."
         (field:_) -> field
-    entityFieldNames = map fieldDbToText (entityFields entityDef')
-    tableName = T.pack . escapeE . entityDB $ entityDef'
+    entityFieldNames = map fieldDbToText (getEntityFields entityDef')
+    tableName = T.pack . escapeE . getEntityDBName $ entityDef'
     copyUnlessValues = map snd fieldsToMaybeCopy
     recordValues = concatMap (map toPersistValue . toPersistFields) records
     recordPlaceholders = Util.commaSeparated $ map (Util.parenWrapped . Util.commaSeparated . map (const "?") . toPersistFields) records
@@ -1496,7 +1521,7 @@ mkBulkInsertQuery records fieldValues updates =
 putManySql :: EntityDef -> Int -> Text
 putManySql ent n = putManySql' fields ent n
   where
-    fields = entityFields ent
+    fields = getEntityFields ent
 
 repsertManySql :: EntityDef -> Int -> Text
 repsertManySql ent n = putManySql' fields ent n
@@ -1509,7 +1534,7 @@ putManySql' (filter isFieldNotGenerated -> fields) ent n = q
     fieldDbToText = (T.pack . escapeF) . fieldDB
     mkAssignment f = T.concat [f, "=VALUES(", f, ")"]
 
-    table = (T.pack . escapeE) . entityDB $ ent
+    table = (T.pack . escapeE) . getEntityDBName $ ent
     columns = Util.commaSeparated $ map fieldDbToText fields
     placeholders = map (const "?") fields
     updates = map (mkAssignment . fieldDbToText) fields

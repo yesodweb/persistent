@@ -58,5 +58,5 @@ spec = describe "OverloadedLabels" $ do
 
         compiles
 
-compiles :: Expectation
-compiles = True `shouldBe` True
+compiles :: IO ()
+compiles = pure ()
