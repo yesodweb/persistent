@@ -38,6 +38,13 @@ SelfEmbed
     name Text
     self SelfEmbed Maybe
     deriving Eq Show
+
+MutualEmbed
+    thing MutualTarget
+
+MutualTarget
+    thing [MutualEmbed]
+
 |]
 
 pass :: IO ()

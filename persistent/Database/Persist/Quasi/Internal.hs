@@ -463,16 +463,24 @@ mkEntityDef ps name entattribs lines =
                   Nothing ->
                       (acc, [])
 
-    maybeSetSelfReference field =
-        case fieldType field of
-            FTTypeCon Nothing x
-                | x == name ->
+    maybeSetSelfReference field = go (fieldType field)
+      where
+        go ft =
+            case ft of
+                FTTypeCon Nothing x
+                    | x == name ->
+                        field
+                            { fieldReference =
+                                SelfReference
+                            }
+                    | otherwise ->
+                        field
+                FTTypeCon _ _ ->
                     field
-                        { fieldReference =
-                            SelfReference
-                        }
-            _ ->
-                field
+                FTList ft' ->
+                    go ft'
+                _ ->
+                    field
     autoIdField = mkAutoIdField ps entName idSqlType
     idSqlType = maybe SqlInt64 (const $ SqlOther "Primary Key") primaryComposite
 

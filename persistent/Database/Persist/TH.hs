@@ -47,7 +47,6 @@ module Database.Persist.TH
       -- * Various other TH functions
     , mkMigrate
     , migrateModels
-    , discoverEntities
     , mkSave
     , mkDeleteCascade
     , mkEntityDefList
@@ -70,6 +69,7 @@ module Database.Persist.TH
 
 import Prelude hiding (concat, exp, splitAt, take, (++))
 
+import qualified Debug.Trace as Debug
 import Control.Monad
 import Data.Aeson
        ( FromJSON(parseJSON)
@@ -91,7 +91,7 @@ import Data.Ix (Ix)
 import Data.List (foldl')
 import qualified Data.List as List
 import qualified Data.List.NonEmpty as NEL
-import qualified Data.Map as M
+import qualified Data.Map.Strict as M
 import Data.Maybe (fromMaybe, isJust, listToMaybe, mapMaybe)
 import Data.Monoid (mappend, mconcat, (<>))
 import Data.Proxy (Proxy(Proxy))
@@ -235,13 +235,16 @@ embedEntityDefsMap rawEnts = (embedEntityMap, noCycleEnts)
         let entName = getEntityHaskellName entDef
          in overEntityFields (map (breakCycleField entName)) entDef
 
-    breakCycleField entName f = case f of
-        FieldDef { fieldReference = EmbedRef em } ->
-            f { fieldReference = EmbedRef $ breakCycleEmbed [entName] em }
-        _ ->
-            f
+    breakCycleField entName f =
+        case fieldReference f of
+            EmbedRef em ->
+                Debug.trace "breakCycleField, hit embedRef" $
+                f { fieldReference = EmbedRef $ breakCycleEmbed [entName] em }
+            _ ->
+                f
 
     breakCycleEmbed ancestors em =
+        Debug.trace ("Ancestors: " <> show ancestors) $
         em { embeddedFields = breakCycleEmField (emName : ancestors) <$> embeddedFields em
            }
         where
@@ -249,8 +252,11 @@ embedEntityDefsMap rawEnts = (embedEntityMap, noCycleEnts)
 
     breakCycleEmField ancestors emf = case embeddedHaskell <$> membed of
         Nothing -> emf
-        Just embName -> if embName `elem` ancestors
-            then emf { emFieldEmbed = Nothing, emFieldCycle = Just embName }
+        Just embName ->
+            if embName `elem` ancestors
+            then
+                Debug.trace ("emFieldCycle: " <> show embName) $
+                emf { emFieldEmbed = Nothing, emFieldCycle = Just embName }
             else emf { emFieldEmbed = breakCycleEmbed ancestors <$> membed }
         where
             membed = emFieldEmbed emf
@@ -359,44 +365,65 @@ mEmbedded
     -> FieldType
     -> Either (Maybe FTTypeConDescr) EmbedEntityDef
 mEmbedded _ (FTTypeCon Just{} _) =
+    Debug.trace "Hit a qualified type" $
     Left Nothing
 mEmbedded ents (FTTypeCon Nothing (EntityNameHS -> name)) =
+    Debug.trace ("Looking up " <> show name) $
     maybe (Left Nothing) Right $ M.lookup name ents
 mEmbedded ents (FTList x) =
+    Debug.trace "Hit FTList, recurring" $
     mEmbedded ents x
 mEmbedded ents (FTApp x y) =
+    Debug.trace "Hit FTApp" $
     -- Key converts an Record to a RecordId
     -- special casing this is obviously a hack
     -- This problem may not be solvable with the current QuasiQuoted approach though
     if x == FTTypeCon Nothing "Key"
-        then Left $ Just FTKeyCon
-        else mEmbedded ents y
+        then
+            Debug.trace ("Got a key constructor") $
+            Left $ Just FTKeyCon
+        else
+            Debug.trace ("else branch, recurring on " <> show y) $
+            mEmbedded ents y
 
 setEmbedField :: EntityNameHS -> EmbedEntityMap -> FieldDef -> FieldDef
-setEmbedField entName allEntities field = field
+setEmbedField entName allEntities field = Debug.traceShowId $ field
     { fieldReference =
+        Debug.trace ("setEmbedField for " <> show entName) $
+        Debug.trace ("field name: " <> show (fieldDB field)) $
+        Debug.trace ("field ref: " <> show (fieldReference field)) $
+        Debug.trace ("field typ: " <> show (fieldType field)) $
         case fieldReference field of
             NoReference ->
+                Debug.trace "On NoReference..." $
                 case mEmbedded allEntities (fieldType field) of
                     Left _ ->
+                        Debug.trace "On LeftNothing..." $
                         case stripId $ fieldType field of
                             Nothing ->
+                                Debug.trace "No ID on fieldType" $
                                 NoReference
                             Just name ->
+                                Debug.trace ("Found a name: " <> show name) $
                                 case M.lookup (EntityNameHS name) allEntities of
                                     Nothing ->
+                                        Debug.trace "Name not in allEntities" $
                                         NoReference
                                     Just _ ->
+                                        Debug.trace "Found it!" $
                                         ForeignRef
                                             (EntityNameHS name)
                                             -- This can get corrected in mkEntityDefSqlTypeExp
                                             (FTTypeCon (Just "Data.Int") "Int64")
                     Right em ->
+                        Debug.trace ("on Right em: " <> show em) $
+                        Debug.trace ("embedded Haskell: " <> do show $ embeddedHaskell em) $
                         if embeddedHaskell em /= entName
                              then EmbedRef em
                         else if maybeNullable field
-                             then SelfReference
+                             then Debug.trace "hiut maybeNullable" SelfReference
                         else
+                            Debug.trace "hit a self reference" $
                             case fieldType field of
                                  FTList _ -> SelfReference
                                  _ -> error $ unpack $ unEntityNameHS entName <> ": a self reference must be a Maybe"
@@ -406,6 +433,7 @@ setEmbedField entName allEntities field = field
 
 mkEntityDefSqlTypeExp :: EmbedEntityMap -> EntityMap -> EntityDef -> EntityDefSqlTypeExp
 mkEntityDefSqlTypeExp emEntities entityMap ent =
+    Debug.trace ("making " <> show (getEntityHaskellName ent)) $
     EntityDefSqlTypeExp ent (getSqlType $ entityId ent) (map getSqlType $ getEntityFieldsDatabase ent)
   where
     getSqlType field =
@@ -421,16 +449,22 @@ mkEntityDefSqlTypeExp emEntities entityMap ent =
     -- In the case of embedding, there won't be any datatype created yet.
     -- We just use SqlString, as the data will be serialized to JSON.
     defaultSqlTypeExp field =
+        Debug.trace ("on defaultSqlTypeExpr for field: " <> show (fieldDB field)) $
         case mEmbedded emEntities ftype of
             Right _ ->
+                Debug.trace ("Found Right, returning SqlType' SqlString") $
                 SqlType' SqlString
             Left (Just FTKeyCon) ->
+                Debug.trace ("Assuming SqlString for FTKeyCon") $
                 SqlType' SqlString
             Left Nothing ->
                 case fieldReference field of
                     ForeignRef refName ft ->
                         case M.lookup refName entityMap of
-                            Nothing  -> SqlTypeExp ft
+                            Nothing  ->
+                                Debug.trace "refName not in entityMap, sqlTypeExp" $
+                                Debug.traceShowId $
+                                SqlTypeExp ft
                             -- A ForeignRef is blindly set to an Int64 in setEmbedField
                             -- correct that now
                             Just ent' ->
@@ -480,7 +514,7 @@ mkPersist mps ents' = do
         , symbolToFieldInstances
         ]
   where
-    ents = map (setDefaultIdFields mps) ents'
+    ents = embedEntityDefs $ map (setDefaultIdFields mps) ents'
     entityMap = constructEntityMap ents
 
 setDefaultIdFields :: MkPersistSettings -> EntityDef -> EntityDef
@@ -595,9 +629,6 @@ data MkPersistSettings = MkPersistSettings
     --
     -- @since 2.13.0.0
     }
-
-
-{-# DEPRECATED mpsGeneric "The mpsGeneric function adds a considerable amount of overhead and complexity to the library without bringing significant benefit. We would like to remove it. If you require this feature, please comment on the linked GitHub issue, and we'll either keep it around, or we can figure out a nicer way to solve your problem.\n\n Github: https://github.com/yesodweb/persistent/issues/1204" #-}
 
 -- |  Set the 'ImplicitIdDef' in the given 'MkPersistSettings'. The default
 -- value is 'autoIncrementingInteger'.
@@ -2164,80 +2195,3 @@ filterConName' mps entity field = mkName $ T.unpack name
         modifiedName = mpsConstraintLabelModifier mps entityName fieldName
         entityName   = unEntityNameHS entity
         fieldName    = upperFirst $ unFieldNameHS field
-
--- | Splice in a list of all 'EntityDef' in scope. This is useful when running
--- 'mkPersist' to ensure that all entity definitions are available for setting
--- foreign keys, and for performing migrations with all entities available.
---
--- 'mkPersist' has the type @MkPersistSettings -> [EntityDef] -> DecsQ@. So, to
--- account for entities defined elsewhere, you'll @mappend $(discoverEntities)@.
---
--- For example,
---
--- @
--- share
---   [ mkPersist sqlSettings . mappend $(discoverEntities)
---   ]
---   [persistLowerCase| ... |]
--- @
---
--- Likewise, to run migrations with all entity instances in scope, you'd write:
---
--- @
--- migrateAll = migrateModels $(discoverEntities)
--- @
---
--- Note that there is some odd behavior with Template Haskell and splicing
--- groups. If you call 'discoverEntities' in the same module that defines
--- 'PersistEntity' instances, you need to ensure they are in different top-level
--- binding groups. You can write @$(pure [])@ at the top level to do this.
---
--- @
--- -- Foo and Bar both export an instance of PersistEntity
--- import Foo
--- import Bar
---
--- -- Since Foo and Bar are both imported, discoverEntities can find them here.
--- mkPersist sqlSettings . mappend $(discoverEntities) [persistLowerCase|
---   User
---     name Text
---     age  Int
---   |]
---
--- -- onlyFooBar is defined in the same 'top level group' as the above generated
--- -- instance for User, so it isn't present in this list.
--- onlyFooBar :: [EntityDef]
--- onlyFooBar = $(discoverEntities)
---
--- -- We can manually create a new binding group with this, which splices an
--- -- empty list of declarations in.
--- $(pure [])
---
--- -- fooBarUser is able to see the 'User' instance.
--- fooBarUser :: [EntityDef]
--- fooBarUser = $(discoverEntities)
--- @
---
--- @since 2.13.0.0
-discoverEntities :: Q Exp
-discoverEntities = do
-    instances <- reifyInstances ''PersistEntity [VarT (mkName "a")]
-    let
-        types =
-            mapMaybe getDecType instances
-        getDecType dec =
-            case dec of
-                InstanceD _moverlap _cxt typ _decs ->
-                    stripPersistEntity typ
-                _ ->
-                    Nothing
-        stripPersistEntity typ =
-            case typ of
-                AppT (ConT tyName) t | tyName == ''PersistEntity ->
-                    Just t
-                _ ->
-                    Nothing
-
-    fmap ListE $
-        forM types $ \typ -> do
-            [e| entityDef (Proxy :: Proxy $(pure typ)) |]

@@ -42,7 +42,6 @@ import Database.Persist.Class
     , BackendCompatible(..)
     )
 import Database.Persist.Class.PersistStore (IsPersistBackend (..))
-import Database.Persist.Types
 import Database.Persist.SqlBackend.Internal
 import Database.Persist.SqlBackend.Internal.InsertSqlResult
 import Database.Persist.SqlBackend.Internal.MkSqlBackend

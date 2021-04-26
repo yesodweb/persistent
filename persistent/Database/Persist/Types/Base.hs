@@ -311,7 +311,7 @@ toEmbedEntityDef ent = embDef
   where
     embDef = EmbedEntityDef
         { embeddedHaskell = entityHaskell ent
-        , embeddedFields = map toEmbedFieldDef $ filter isHaskellField $ entityFields ent
+        , embeddedFields = map toEmbedFieldDef $ entityFields ent
         }
     toEmbedFieldDef :: FieldDef -> EmbedFieldDef
     toEmbedFieldDef field =
