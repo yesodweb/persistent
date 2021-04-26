@@ -52,7 +52,7 @@ pass :: IO ()
 pass = pure ()
 
 spec :: Spec
-spec = fdescribe "ImplicitUuidSpec" $ before_ wipe $ do
+spec = describe "ImplicitUuidSpec" $ before_ wipe $ do
     describe "WithDefUuidKey" $ do
         it "works on UUIDs" $ do
             let withDefUuidKey = WithDefUuidKey (UUID "Hello")
