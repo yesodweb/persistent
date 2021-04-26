@@ -49,6 +49,9 @@
     * Add the `runSqlCommand` function for running arbitrary SQL during
       migrations.
     * Add `migrateModels` function for a TH-free migration facility.
+* [#1253](https://github.com/yesodweb/persistent/pull/1253)
+    * Add `discoverEntities` to discover instances of the class and return their
+      entity definitions.
 
 ## 2.12.1.1
 

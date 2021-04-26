@@ -47,7 +47,7 @@ pass = pure ()
 asIO :: IO a -> IO a
 asIO = id
 
-pure []
+$(pure [])
 
 spec :: Spec
 spec = describe "DiscoverEntitiesSpec" $ do
