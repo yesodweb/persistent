@@ -1,10 +1,8 @@
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE ViewPatterns #-}
 
 {-|
 This module defines the Persistent entity syntax used in the quasiquoter to generate persistent entities.
@@ -415,10 +413,53 @@ Unfortunately, we can't use this to create Haddocks for you, because <https://gi
 -}
 module Database.Persist.Quasi
     ( parse
-    , PersistSettings (..)
+    -- * 'PersistSettings'
+    , PersistSettings
     , upperCaseSettings
     , lowerCaseSettings
     , nullable
+    -- ** Getters and Setters
+    , module Database.Persist.Quasi
     ) where
 
+import Data.Text (Text)
 import Database.Persist.Quasi.Internal
+
+-- | Retrieve the function in the 'PersistSettings' that modifies the names into
+-- database names.
+--
+-- @since 2.13.0.0
+getPsToDBName :: PersistSettings -> Text -> Text
+getPsToDBName = psToDBName
+
+-- | Set the name modification function that translates the QuasiQuoted names
+-- for use in the database.
+--
+-- @since 2.13.0.0
+setPsToDBName :: (Text -> Text) -> PersistSettings -> PersistSettings
+setPsToDBName f ps = ps { psToDBName = f }
+
+-- | Retrieve whether or not the 'PersistSettings' will generate code with
+-- strict fields.
+--
+-- @since 2.13.0.0
+getPsStrictFields :: PersistSettings -> Bool
+getPsStrictFields = psStrictFields
+
+-- | Set whether or not the 'PersistSettings' will make fields strict.
+--
+-- @since 2.13.0.0
+setPsStrictFields :: Bool -> PersistSettings -> PersistSettings
+setPsStrictFields a ps = ps { psStrictFields = a }
+
+-- | Retrievce the default name of the @id@ column.
+--
+-- @since 2.13.0.0
+getPsIdName :: PersistSettings -> Text
+getPsIdName = psIdName
+
+-- | Set the default name of the @id@ column.
+--
+-- @since 2.13.0.0
+setPsIdName :: Text -> PersistSettings -> PersistSettings
+setPsIdName n ps = ps { psIdName = n }

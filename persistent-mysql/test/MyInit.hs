@@ -1,4 +1,7 @@
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 
 module MyInit (
   (@/=), (@==), (==@)
@@ -26,12 +29,14 @@ module MyInit (
   , MonadUnliftIO
   , liftIO
   , mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase
+  , mkEntityDefList, sqlSettingsUuid
   , Int32, Int64
   , Text
   , module Control.Monad.Trans.Reader
   , module Control.Monad
   , module Database.Persist.Sql
   , BS.ByteString
+  , migrateModels
   , SomeException
   , MonadFail
   , TestFn(..)
@@ -40,44 +45,71 @@ module MyInit (
   , truncateUTCTime
   , arbText
   , liftA2
+  , LoggingT, ResourceT, UUID(..)
   ) where
 
 import Init
-    ( TestFn(..), truncateTimeOfDay, truncateUTCTime
-    , truncateToMicro, arbText, GenerateKey(..)
-    , (@/=), (@==), (==@)
-    , assertNotEqual, assertNotEmpty, assertEmpty, asIO
-    , isTravis, RunDb, MonadFail
-    )
+       ( GenerateKey(..)
+       , MonadFail
+       , RunDb
+       , TestFn(..)
+       , arbText
+       , asIO
+       , assertEmpty
+       , assertNotEmpty
+       , assertNotEqual
+       , isTravis
+       , truncateTimeOfDay
+       , truncateToMicro
+       , truncateUTCTime
+       , (==@)
+       , (@/=)
+       , (@==)
+       )
 
 -- re-exports
 import Control.Applicative (liftA2)
 import Control.Exception (SomeException)
-import Control.Monad (void, replicateM, liftM, when, forM_)
+import Control.Monad (forM_, liftM, replicateM, void, when)
 import Control.Monad.Trans.Reader
-import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase, MkPersistSettings(..))
+import Data.Aeson (FromJSON, ToJSON, Value(..))
 import Database.Persist.Sql.Raw.QQ
+import Database.Persist.TH
+       ( MkPersistSettings(..)
+       , migrateModels
+       , setImplicitIdDef
+       , mkEntityDefList
+       , mkMigrate
+       , mkPersist
+       , persistLowerCase
+       , persistUpperCase
+       , share
+       , sqlSettings
+       )
 import Test.Hspec
 import Test.QuickCheck.Instances ()
+import Web.Internal.HttpApiData
+import Web.PathPieces
+import Database.Persist.ImplicitIdDef
 
 -- testing
-import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
+import Test.HUnit (Assertion, assertBool, assertFailure, (@=?), (@?=))
 
 import Control.Monad (unless, (>=>))
-import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.IO.Class
+import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import qualified Data.ByteString as BS
 import Data.Int (Int32, Int64)
 import Data.Text (Text)
+import qualified Data.Text.Encoding as TE
 import qualified Database.MySQL.Base as MySQL
 import System.Log.FastLogger (fromLogStr)
 
 import Database.Persist
 import Database.Persist.MySQL
 import Database.Persist.Sql
-import Database.Persist.TH ()
 
 _debugOn :: Bool
 _debugOn = False
@@ -122,3 +154,22 @@ runConn f = do
 db :: SqlPersistT (LoggingT (ResourceT IO)) () -> Assertion
 db actions = do
   runResourceT $ runConn $ actions >> transactionUndo
+
+newtype UUID = UUID { unUUID :: Text }
+    deriving stock
+        (Show, Eq, Ord, Read)
+    deriving newtype
+        ( ToJSON, FromJSON
+        , PersistField, PersistFieldSql
+        , FromHttpApiData, ToHttpApiData, PathPiece
+        )
+
+sqlSettingsUuid :: Text -> MkPersistSettings
+sqlSettingsUuid defExpr =
+    let
+        uuidDef =
+           setImplicitIdDefMaxLen 100 $ mkImplicitIdDef @UUID defExpr
+        settings =
+            setImplicitIdDef uuidDef sqlSettings
+     in
+        settings

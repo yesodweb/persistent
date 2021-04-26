@@ -24,6 +24,7 @@ import qualified Data.ByteString.Char8 as BS8
 import Database.Persist.Class.PersistField
 import Database.Persist.Quasi.Internal
 import Database.Persist.Types
+import Database.Persist.EntityDef.Internal
 
 import qualified Database.Persist.THSpec as THSpec
 
@@ -101,6 +102,7 @@ main = hspec $ do
                         , fieldCascade = noCascade
                         , fieldComments = Nothing
                         , fieldGenerated = Nothing
+                        , fieldIsImplicitIdColumn = False
                         }
         it "works if it has a name, type, and cascade" $ do
             subject ["asdf", "Int", "OnDeleteCascade", "OnUpdateCascade"]
@@ -116,6 +118,7 @@ main = hspec $ do
                         , fieldCascade = FieldCascade (Just Cascade) (Just Cascade)
                         , fieldComments = Nothing
                         , fieldGenerated = Nothing
+                        , fieldIsImplicitIdColumn = False
                         }
         it "never tries to make a refernece" $ do
             subject ["asdf", "UserId", "OnDeleteCascade"]
@@ -131,6 +134,7 @@ main = hspec $ do
                         , fieldCascade = FieldCascade Nothing (Just Cascade)
                         , fieldComments = Nothing
                         , fieldGenerated = Nothing
+                        , fieldIsImplicitIdColumn = False
                         }
 
     describe "parseLine" $ do

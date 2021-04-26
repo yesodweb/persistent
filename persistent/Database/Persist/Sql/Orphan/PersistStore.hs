@@ -19,7 +19,7 @@ module Database.Persist.Sql.Orphan.PersistStore
 import GHC.Generics (Generic)
 import Control.Exception (throwIO)
 import Control.Monad.IO.Class
-import Control.Monad.Trans.Reader (ReaderT, ask, withReaderT)
+import Control.Monad.Trans.Reader (ReaderT, ask)
 import Data.Acquire (with)
 import qualified Data.Aeson as A
 import Data.ByteString.Char8 (readInteger)
@@ -90,7 +90,7 @@ getTableName rec = withCompatibleBackend $ do
 
 -- | useful for a backend to implement tableName by adding escaping
 tableDBName :: (PersistEntity record) => record -> EntityNameDB
-tableDBName rec = entityDB $ entityDef (Just rec)
+tableDBName rec = getEntityDBName $ entityDef (Just rec)
 
 -- | get the SQL string for the field that an EntityField represents
 -- Useful for raw SQL queries
@@ -198,7 +198,7 @@ instance PersistStoreWrite SqlBackend where
                        Nothing -> error $ "ISRManyKeys is used when Primary is defined " ++ show sql
                        Just pdef ->
                             let pks = map fieldHaskell $ compositeFields pdef
-                                keyvals = map snd $ filter (\(a, _) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ entityFields t) fs
+                                keyvals = map snd $ filter (\(a, _) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ getEntityFields t) fs
                             in  case keyFromValues keyvals of
                                     Right k -> return k
                                     Left e  -> error $ "ISRManyKeys: unexpected keyvals result: " `mappend` unpack e
@@ -225,7 +225,7 @@ instance PersistStoreWrite SqlBackend where
                     ent = entityDef vals
                     valss = map mkInsertValues vals
 
-    insertMany_ vals0 = runChunked (length $ entityFields t) insertMany_' vals0
+    insertMany_ vals0 = runChunked (length $ getEntityFields t) insertMany_' vals0
       where
         t = entityDef vals0
         insertMany_' vals = do
@@ -235,9 +235,9 @@ instance PersistStoreWrite SqlBackend where
                   [ "INSERT INTO "
                   , connEscapeTableName conn t
                   , "("
-                  , T.intercalate "," $ map (connEscapeFieldName conn . fieldDB) $ entityFields t
+                  , T.intercalate "," $ map (connEscapeFieldName conn . fieldDB) $ getEntityFields t
                   , ") VALUES ("
-                  , T.intercalate "),(" $ replicate (length valss) $ T.intercalate "," $ map (const "?") (entityFields t)
+                  , T.intercalate "),(" $ replicate (length valss) $ T.intercalate "," $ map (const "?") (getEntityFields t)
                   , ")"
                   ]
           rawExecute sql (concat valss)
@@ -250,7 +250,7 @@ instance PersistStoreWrite SqlBackend where
                 [ "UPDATE "
                 , connEscapeTableName conn t
                 , " SET "
-                , T.intercalate "," (map (go conn . fieldDB) $ entityFields t)
+                , T.intercalate "," (map (go conn . fieldDB) $ getEntityFields t)
                 , " WHERE "
                 , wher
                 ]

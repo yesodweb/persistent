@@ -17,6 +17,7 @@ import Database.Persist.SqlBackend.Internal.Statement
 import Database.Persist.SqlBackend.Internal.InsertSqlResult
 import Database.Persist.SqlBackend.Internal.IsolationLevel
 import Database.Persist.Types.Base
+import Database.Persist.Names
 
 -- | This type shares many of the same field names as the 'SqlBackend' type.
 -- It's useful for library authors to use this when migrating from using the
