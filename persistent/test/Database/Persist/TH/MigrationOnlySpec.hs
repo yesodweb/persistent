@@ -12,8 +12,6 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-{-# OPTIONS_GHC -ddump-splices #-}
-
 module Database.Persist.TH.MigrationOnlySpec where
 
 import TemplateTestImports
@@ -39,7 +37,7 @@ asIO = id
 
 spec :: Spec
 spec = describe "MigrationOnlySpec" $ do
-    fdescribe "HasMigrationOnly" $ do
+    describe "HasMigrationOnly" $ do
         let
             edef =
                 entityDef $ Proxy @HasMigrationOnly

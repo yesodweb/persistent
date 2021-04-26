@@ -461,11 +461,6 @@ mkEntityDefSqlTypeExp emEntities entityMap ent =
 -- 'EntityDef's. Works well with the persist quasi-quoter.
 mkPersist :: MkPersistSettings -> [EntityDef] -> Q [Dec]
 mkPersist mps ents' = do
-    forM_ ents' $ \preEntDef ->
-        liftIO $ do
-            when (getEntityHaskellName preEntDef == EntityNameHS "HasMigrationOnly") $ do
-                void $ traverse print (entityFields preEntDef)
-
     requireExtensions
         [ [TypeFamilies], [GADTs, ExistentialQuantification]
         , [DerivingStrategies], [GeneralizedNewtypeDeriving], [StandaloneDeriving]
@@ -1194,13 +1189,11 @@ fieldError tableName fieldName err = mconcat
 
 mkEntity :: EntityMap -> MkPersistSettings -> EntityDef -> Q [Dec]
 mkEntity entityMap mps preEntDef = do
-    liftIO $ do
-        when (getEntityHaskellName preEntDef == EntityNameHS "HasMigrationOnly") $ do
-            void $ traverse print (entityFields preEntDef)
     entityDefExp <-
-        if mpsGeneric mps
-           then liftAndFixKeys entityMap preEntDef
-           else makePersistEntityDefExp mps entityMap preEntDef
+        liftAndFixKeys entityMap preEntDef
+--        if mpsGeneric mps
+--           then liftAndFixKeys entityMap preEntDef
+--           else makePersistEntityDefExp mps entityMap preEntDef
     let
         entDef = fixEntityDef preEntDef
         genDataType = genericDataType mps entName backendT
@@ -1997,7 +1990,7 @@ requirePersistentExtensions = requireExtensions requiredExtensions
 
 mkSymbolToFieldInstances :: MkPersistSettings -> EntityDef -> Q [Dec]
 mkSymbolToFieldInstances mps ed = do
-    fmap join $ forM (keyAndEntityFields ed) $ \fieldDef -> do
+    fmap join $ forM (keyAndEntityFields (fixEntityDef ed)) $ \fieldDef -> do
         let fieldNameT :: Q Type
             fieldNameT =
                 litT $ strTyLit
