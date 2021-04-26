@@ -1,9 +1,10 @@
-{-# LANGUAGE TypeInType #-} -- needed for ghc 8.2.2
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StrictData #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeInType #-}
 
 -- | WARNING: This is an @Internal@ module. As such, breaking changes to the API
 -- of this module will not have a corresponding major version bump.
@@ -20,7 +21,10 @@ import qualified Data.Text as Text
 import Language.Haskell.TH (Type)
 import LiftType
 import Type.Reflection
+import Data.Typeable (eqT)
+import Data.Foldable (asum)
 
+import Database.Persist.Class.PersistField (PersistField)
 import Database.Persist.Names
 import Database.Persist.Sql.Class
 import Database.Persist.Types
@@ -114,6 +118,13 @@ data ImplicitIdDef = ImplicitIdDef
     -- there's an implied default.
     --
     -- @since 2.13.0.0
+    , iidMaxLen :: Maybe Integer
+    -- ^ Specify the maximum length for a key column. This is necessary for
+    -- @VARCHAR@ columns, like @UUID@ in MySQL. MySQL will throw a runtime error
+    -- if a text or binary column is used in an index without a length
+    -- specification.
+    --
+    -- @since 2.13.0.0
     }
 
 -- | Create an 'ImplicitIdDef' based on the 'Typeable' and 'PersistFieldSql'
@@ -135,6 +146,9 @@ data ImplicitIdDef = ImplicitIdDef
 -- will call the @uuid_generate_v1mc()@  function to generate the value for new
 -- rows being inserted.
 --
+-- If the type @t@ is 'Text' or 'String' then a @max_len@ attribute of 200 is
+-- set. To customize this, use 'setImplicitIdDefMaxLen'.
+--
 -- @since 2.13.0.0
 mkImplicitIdDef
     :: forall t. (Typeable t, PersistFieldSql t)
@@ -152,13 +166,32 @@ mkImplicitIdDef def =
             \_ _ -> liftType @t
         , iidDefault =
             Just def
+        , iidMaxLen =
+            -- this follows a special casing behavior that @persistent@ has done
+            -- for a while now. this keeps folks code from breaking and probably
+            -- is mostly what people want.
+            asum
+                [ 200 <$ eqT @t @Text
+                , 200 <$ eqT @t @String
+                ]
         }
+
+-- | Set the maximum length of the implied ID column. This is required for
+-- any type where the associated 'SqlType' is a @TEXT@ or @VARCHAR@ sort of
+-- thing.
+--
+-- @since 2.13.0.0
+setImplicitIdDefMaxLen
+    :: Integer
+    -> ImplicitIdDef
+    -> ImplicitIdDef
+setImplicitIdDefMaxLen i iid = iid { iidMaxLen = Just i }
 
 -- |  This function converts a 'Typeable' type into a @persistent@
 -- representation of the type of a field - 'FieldTyp'.
 --
 -- @since 2.13.0.0
-fieldTypeFromTypeable :: forall t. Typeable t => FieldType
+fieldTypeFromTypeable :: forall t. (PersistField t, Typeable t) => FieldType
 fieldTypeFromTypeable = go (typeRep @t)
   where
     go :: forall k (a :: k). TypeRep a -> FieldType

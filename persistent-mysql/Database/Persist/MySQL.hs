@@ -434,35 +434,60 @@ migrate' connectInfo allDefs getter val = do
 
 addTable :: [Column] -> EntityDef -> AlterDB
 addTable cols entity = AddTable $ concat
-           -- Lower case e: see Database.Persist.Sql.Migration
-           [ "CREATe TABLE "
-           , escapeE name
-           , "("
-           , idtxt
-           , if null nonIdCols then [] else ","
-           , intercalate "," $ map showColumn nonIdCols
-           , ")"
-           ]
-    where
-      nonIdCols =
-          filter (\c -> cName c /= fieldDB (getEntityId entity) ) cols
-      name = getEntityDBName entity
-      idtxt = case entityPrimary entity of
-                Just pdef -> concat [" PRIMARY KEY (", intercalate "," $ map (escapeF . fieldDB) $ compositeFields pdef, ")"]
-                Nothing ->
-                  let defText = defaultAttribute $ fieldAttrs $ getEntityId entity
-                      sType = fieldSqlType $ getEntityId entity
-                      autoIncrementText = case (sType, defText) of
-                        (SqlInt64, Nothing) -> " AUTO_INCREMENT"
-                        _ -> ""
-                      maxlen = findMaxLenOfField (getEntityId entity)
-                  in concat
-                         [ escapeF $ fieldDB $ getEntityId entity
-                         , " " <> showSqlType sType maxlen False
-                         , " NOT NULL"
-                         , autoIncrementText
-                         , " PRIMARY KEY"
-                         ]
+    -- Lower case e: see Database.Persist.Sql.Migration
+    [ "CREATe TABLE "
+    , escapeE name
+    , "("
+    , idtxt
+    , if null nonIdCols then [] else ","
+    , intercalate "," $ map showColumn nonIdCols
+    , ")"
+    ]
+  where
+    nonIdCols =
+        filter (\c -> cName c /= fieldDB (getEntityId entity) ) cols
+    name =
+        getEntityDBName entity
+    idtxt =
+        case entityPrimary entity of
+            Just pdef ->
+                concat
+                    [ " PRIMARY KEY ("
+                    , intercalate ","
+                  $ map (escapeF . fieldDB) $ compositeFields pdef
+                    , ")"
+                    ]
+            Nothing ->
+                let
+                    idField =
+                        getEntityId entity
+                    defText =
+                        defaultAttribute $ fieldAttrs idField
+                    sType =
+                        fieldSqlType idField
+                    autoIncrementText =
+                        case (sType, defText) of
+                            (SqlInt64, Nothing) -> " AUTO_INCREMENT"
+                            _ -> ""
+                    maxlen =
+                        findMaxLenOfField idField
+                in
+                    concat
+                        [ escapeF $ fieldDB $ getEntityId entity
+                        , " " <> showSqlType sType maxlen False
+                        , " NOT NULL"
+                        , autoIncrementText
+                        , " PRIMARY KEY"
+                        , case defText of
+                            Nothing ->
+                                ""
+                            Just def ->
+                                concat
+                                    [ " DEFAULT ("
+                                    , T.unpack def
+                                    , ")"
+                                    ]
+                        ]
 
 -- | Find out the type of a column.
 findTypeOfColumn :: [EntityDef] -> EntityNameDB -> FieldNameDB -> (FieldNameDB, FieldType)

@@ -159,23 +159,16 @@ newtype UUID = UUID { unUUID :: Text }
     deriving stock
         (Show, Eq, Ord, Read)
     deriving newtype
-        (ToJSON, PersistFieldSql, FromJSON, FromHttpApiData, ToHttpApiData, PathPiece)
-
-instance PersistField UUID where
-    toPersistValue (UUID txt) =
-        PersistLiteral_ Escaped (TE.encodeUtf8 txt)
-    fromPersistValue pv =
-        case pv of
-            PersistLiteral_ Escaped bs ->
-                Right $ UUID (TE.decodeUtf8 bs)
-            _ ->
-                Left "Nope"
+        ( ToJSON, FromJSON
+        , PersistField, PersistFieldSql
+        , FromHttpApiData, ToHttpApiData, PathPiece
+        )
 
 sqlSettingsUuid :: Text -> MkPersistSettings
 sqlSettingsUuid defExpr =
     let
         uuidDef =
-           mkImplicitIdDef @UUID defExpr
+           setImplicitIdDefMaxLen 100 $ mkImplicitIdDef @UUID defExpr
         settings =
             setImplicitIdDef uuidDef sqlSettings
      in

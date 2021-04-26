@@ -29,7 +29,7 @@ share
     [persistLowerCase|
 
 WithDefUuid
-    name        Text sqltype=varchar(80)
+    name        Text
 
     deriving Eq Show Ord
 
@@ -58,8 +58,8 @@ spec = fdescribe "ImplicitUuidSpec" $ before_ wipe $ do
             pass
     describe "getEntityId" $ do
         let idField = getEntityId (entityDef (Proxy @WithDefUuid))
-        it "has a UUID SqlType" $ asIO $ do
-            fieldSqlType idField `shouldBe` SqlOther "UUID"
+        it "has a SqlString SqlType" $ asIO $ do
+            fieldSqlType idField `shouldBe` SqlString
         it "has a UUID type" $ asIO $ do
             fieldType idField `shouldBe` fieldTypeFromTypeable @UUID
         it "is an implicit ID column" $ asIO $ do
@@ -73,5 +73,13 @@ spec = fdescribe "ImplicitUuidSpec" $ before_ wipe $ do
                     }
             k <- insert matt
             mrec <- get k
-            liftIO $ mrec `shouldBe` Just matt
+            uuids <- selectList @WithDefUuid [] []
+            liftIO $ do
+                -- MySQL's insert functionality is currently broken. The @k@
+                -- here is derived from @SELECT LAST_INSERT_ID()@ which only
+                -- works on auto incrementing IDs.
+                --
+                -- See #1251 for more details.
+                mrec `shouldBe` Nothing
 
+                map entityVal uuids `shouldSatisfy` (matt `elem`)

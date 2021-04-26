@@ -19,6 +19,7 @@ module Database.Persist.ImplicitIdDef
     , autoIncrementingInteger
     -- * Getters
     -- * Setters
+    , setImplicitIdDefMaxLen
     , unsafeClearDefaultImplicitId
     ) where
 
@@ -50,5 +51,7 @@ autoIncrementingInteger =
                 then VarT (mkName "backend")
                 else mpsBackendType
         , iidDefault =
+            Nothing
+        , iidMaxLen =
             Nothing
         }

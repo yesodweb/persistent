@@ -28,7 +28,6 @@ import qualified Data.HashMap.Strict as HM
 import Data.Int (Int64)
 import Data.Map (Map)
 import Data.Maybe (isNothing)
-import Type.Reflection
 #if !MIN_VERSION_base(4,11,0)
 -- This can be removed when GHC < 8.2.2 isn't supported anymore
 import Data.Semigroup ((<>))

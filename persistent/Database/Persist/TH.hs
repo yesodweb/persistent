@@ -104,6 +104,7 @@ import GHC.TypeLits
 import Instances.TH.Lift ()
     -- Bring `Lift (Map k v)` instance into scope, as well as `Lift Text`
     -- instance on pre-1.2.4 versions of `text`
+import Data.Foldable (toList)
 import qualified Data.Set as Set
 import Language.Haskell.TH.Lib
        (appT, conE, conK, conT, litT, strTyLit, varE, varP, varT)
@@ -492,14 +493,12 @@ setDefaultIdFields mps ed
                 iidFieldSqlType iid
             , fieldAttrs =
                 let
-                    old =
-                        fieldAttrs fd
+                    def =
+                        toList (FieldAttrDefault <$> iidDefault iid)
+                    maxlen =
+                        toList (FieldAttrMaxlen <$> iidMaxLen iid)
                  in
-                    case iidDefault iid of
-                        Nothing ->
-                            old
-                        Just def ->
-                            FieldAttrDefault def : old
+                    def <> maxlen <> fieldAttrs fd
             , fieldIsImplicitIdColumn =
                 True
             }
@@ -1819,7 +1818,7 @@ liftAndFixKeys entityMap EntityDef{..} =
     |]
 
 liftAndFixKey :: EntityMap -> FieldDef -> Q Exp
-liftAndFixKey entityMap fd@(FieldDef a b c sqlTyp e f fieldRef fc mcomments fg fieldIsImplicitIdColumn)
+liftAndFixKey entityMap (FieldDef a b c sqlTyp e f fieldRef fc mcomments fg fieldIsImplicitIdColumn)
     | not fieldIsImplicitIdColumn =
         [|FieldDef a b c $(sqlTyp') e f (fieldRef') fc mcomments fg fieldIsImplicitIdColumn|]
     | otherwise =
