@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## Unreleased
+
+* [#1237](https://github.com/yesodweb/persistent/pull/1237)
+    * Remove nonEmptyOrFail function from recent tests
+
 ## 2.12.1.1
 
 * [#1231](https://github.com/yesodweb/persistent/pull/1231)
