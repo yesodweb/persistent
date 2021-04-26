@@ -158,12 +158,13 @@ test-suite test
                       , TypeFamilies
 
     other-modules:   
+        Database.Persist.TH.ImplicitIdColSpec
+        Database.Persist.TH.MigrationOnlySpec
+        Database.Persist.TH.OverloadedLabelSpec
+        Database.Persist.TH.SharedPrimaryKeyImportedSpec
+        Database.Persist.TH.SharedPrimaryKeySpec
         Database.Persist.THSpec
         TemplateTestImports
-        Database.Persist.TH.SharedPrimaryKeySpec
-        Database.Persist.TH.SharedPrimaryKeyImportedSpec
-        Database.Persist.TH.OverloadedLabelSpec
-        Database.Persist.TH.ImplicitIdColSpec
     default-language: Haskell2010
 
 source-repository head

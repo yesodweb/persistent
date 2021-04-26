@@ -47,6 +47,7 @@ import qualified Database.Persist.TH.SharedPrimaryKeySpec as SharedPrimaryKeySpe
 import qualified Database.Persist.TH.SharedPrimaryKeyImportedSpec as SharedPrimaryKeyImportedSpec
 import qualified Database.Persist.TH.OverloadedLabelSpec as OverloadedLabelSpec
 import qualified Database.Persist.TH.ImplicitIdColSpec as ImplicitIdColSpec
+import qualified Database.Persist.TH.MigrationOnlySpec as MigrationOnlySpec
 
 share [mkPersist sqlSettings { mpsGeneric = False, mpsDeriveInstances = [''Generic] }, mkDeleteCascade sqlSettings { mpsGeneric = False }] [persistUpperCase|
 
@@ -108,6 +109,7 @@ SharedPrimaryKeyWithCascade
 SharedPrimaryKeyWithCascadeAndCustomName
     Id (Key HasDefaultId) OnDeleteCascade sql=my_id
     name String
+
 |]
 
 share [mkPersist sqlSettings { mpsGeneric = False, mpsGenerateLenses = True }] [persistLowerCase|
@@ -136,11 +138,12 @@ instance Arbitrary Address where
     arbitrary = Address <$> arbitraryT <*> arbitraryT <*> arbitrary
 
 spec :: Spec
-spec = do
+spec = describe "THSpec" $ do
     OverloadedLabelSpec.spec
     SharedPrimaryKeySpec.spec
     SharedPrimaryKeyImportedSpec.spec
     ImplicitIdColSpec.spec
+    MigrationOnlySpec.spec
     describe "TestDefaultKeyCol" $ do
         let FieldDef{..} =
                 entityId (entityDef (Proxy @TestDefaultKeyCol))

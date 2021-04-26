@@ -70,6 +70,7 @@ module Database.Persist.TH
 import Prelude hiding (concat, exp, splitAt, take, (++))
 
 import Control.Monad
+import Control.Monad.IO.Class
 import Data.Aeson
        ( FromJSON(parseJSON)
        , ToJSON(toJSON)
@@ -320,7 +321,7 @@ instance Lift FieldSqlTypeExp where
 
 instance Lift EntityDefSqlTypeExp where
     lift (EntityDefSqlTypeExp ent sqlTypeExp sqlTypeExps) =
-        [|ent { entityFields = $(lift $ FieldsSqlTypeExp (getEntityFields ent) sqlTypeExps)
+        [|ent { entityFields = $(lift $ FieldsSqlTypeExp (getEntityFieldsDatabase ent) sqlTypeExps)
               , entityId = $(lift $ FieldSqlTypeExp (entityId ent) sqlTypeExp)
               }
         |]
@@ -404,13 +405,17 @@ setEmbedField entName allEntities field = field
 
 mkEntityDefSqlTypeExp :: EmbedEntityMap -> EntityMap -> EntityDef -> EntityDefSqlTypeExp
 mkEntityDefSqlTypeExp emEntities entityMap ent =
-    EntityDefSqlTypeExp ent (getSqlType $ entityId ent) (map getSqlType $ getEntityFields ent)
+    EntityDefSqlTypeExp ent (getSqlType $ entityId ent) (map getSqlType $ getEntityFieldsDatabase ent)
   where
     getSqlType field =
         maybe
             (defaultSqlTypeExp field)
             (SqlType' . SqlOther)
-            (listToMaybe $ mapMaybe (\case {FieldAttrSqltype x -> Just x; _ -> Nothing}) $ fieldAttrs field)
+            (listToMaybe $ mapMaybe attrSqlType $ fieldAttrs field)
+
+    attrSqlType = \case
+        FieldAttrSqltype x -> Just x
+        _ -> Nothing
 
     -- In the case of embedding, there won't be any datatype created yet.
     -- We just use SqlString, as the data will be serialized to JSON.
@@ -456,6 +461,11 @@ mkEntityDefSqlTypeExp emEntities entityMap ent =
 -- 'EntityDef's. Works well with the persist quasi-quoter.
 mkPersist :: MkPersistSettings -> [EntityDef] -> Q [Dec]
 mkPersist mps ents' = do
+    forM_ ents' $ \preEntDef ->
+        liftIO $ do
+            when (getEntityHaskellName preEntDef == EntityNameHS "HasMigrationOnly") $ do
+                void $ traverse print (entityFields preEntDef)
+
     requireExtensions
         [ [TypeFamilies], [GADTs, ExistentialQuantification]
         , [DerivingStrategies], [GeneralizedNewtypeDeriving], [StandaloneDeriving]
@@ -474,7 +484,7 @@ mkPersist mps ents' = do
         , symbolToFieldInstances
         ]
   where
-    ents = map (fixEntityDef . setDefaultIdFields mps) ents'
+    ents = map (setDefaultIdFields mps) ents'
     entityMap = constructEntityMap ents
 
 setDefaultIdFields :: MkPersistSettings -> EntityDef -> EntityDef
@@ -505,12 +515,14 @@ setDefaultIdFields mps ed
 
 -- | Implement special preprocessing on EntityDef as necessary for 'mkPersist'.
 -- For example, strip out any fields marked as MigrationOnly.
+--
+-- This should be called when performing Haskell codegen, but the 'EntityDef'
+-- *should* keep all of the fields present when defining 'entityDef'. This is
+-- necessary so that migrations know to keep these columns around, or to delete
+-- them, as appropriate.
 fixEntityDef :: EntityDef -> EntityDef
 fixEntityDef =
-    overEntityFields (filter keepField)
-  where
-    keepField fd = FieldAttrMigrationOnly `notElem` fieldAttrs fd &&
-                   FieldAttrSafeToRemove `notElem` fieldAttrs fd
+    overEntityFields (filter isHaskellField)
 
 -- | Settings to be passed to the 'mkPersist' function.
 data MkPersistSettings = MkPersistSettings
@@ -1181,19 +1193,27 @@ fieldError tableName fieldName err = mconcat
     ]
 
 mkEntity :: EntityMap -> MkPersistSettings -> EntityDef -> Q [Dec]
-mkEntity entityMap mps entDef = do
+mkEntity entityMap mps preEntDef = do
+    liftIO $ do
+        when (getEntityHaskellName preEntDef == EntityNameHS "HasMigrationOnly") $ do
+            void $ traverse print (entityFields preEntDef)
     entityDefExp <-
         if mpsGeneric mps
-           then liftAndFixKeys entityMap entDef
-           else makePersistEntityDefExp mps entityMap entDef
-    let name = mkEntityDefName entDef
-    let clazz = ConT ''PersistEntity `AppT` genDataType
+           then liftAndFixKeys entityMap preEntDef
+           else makePersistEntityDefExp mps entityMap preEntDef
+    let
+        entDef = fixEntityDef preEntDef
+        genDataType = genericDataType mps entName backendT
+        entName = entityHaskell entDef
+        name = mkEntityDefName entDef
+        clazz = ConT ''PersistEntity `AppT` genDataType
+
     tpf <- mkToPersistFields mps entDef
     fpv <- mkFromPersistValues mps entDef
     utv <- mkUniqueToValues $ entityUniques entDef
     puk <- mkUniqueKeys entDef
     let primaryField = entityId entDef
-    fields <- mapM (mkField mps entDef) $ primaryField : getEntityFields entDef
+    fields <- mapM (mkField mps entDef) $ primaryField : getEntityFieldsDatabase entDef
     fkc <- mapM (mkForeignKeysComposite mps entDef) $ entityForeigns entDef
 
     toFieldNames <- mkToFieldNames $ entityUniques entDef
@@ -1290,9 +1310,6 @@ mkEntity entityMap mps entDef = do
         , FunD 'fieldLens lensClauses
         ]
       ] `mappend` lenses) `mappend` keyInstanceDecs
-  where
-    genDataType = genericDataType mps entName backendT
-    entName = entityHaskell entDef
 
 mkUniqueKeyInstances :: MkPersistSettings -> EntityDef -> Q [Dec]
 mkUniqueKeyInstances mps entDef = do
@@ -1509,6 +1526,9 @@ share :: [[EntityDef] -> Q [Dec]] -> [EntityDef] -> Q [Dec]
 share fs x = mconcat <$> mapM ($ x) fs
 
 -- | Save the @EntityDef@s passed in under the given name.
+--
+-- This function was deprecated in @persistent-2.13.0.0@. It doesn't properly
+-- fix foreign keys. Please refer to 'mkEntityDefList' for a replacement.
 mkSave :: String -> [EntityDef] -> Q [Dec]
 mkSave name' defs' = do
     let name = mkName name'
@@ -1516,6 +1536,8 @@ mkSave name' defs' = do
     return [ SigD name $ ListT `AppT` ConT ''EntityDef
            , FunD name [normalClause [] defs]
            ]
+
+{-# DEPRECATED mkSave "This function is broken. mkEntityDefList is a drop-in replacement that will properly handle foreign keys correctly." #-}
 
 data Dep = Dep
     { depTarget :: EntityNameHS
@@ -1739,11 +1761,36 @@ derivePersistFieldJSON s = do
 -- migrateAll = 'migrateModels' entities
 -- @
 --
+-- The function 'mkMigrate' currently implements exactly this behavior now. If
+-- you're splitting up the entity definitions into separate files, then it is
+-- better to use the entity definition list and the concatenate all the models
+-- together into a big list to call with 'migrateModels'.
+--
+-- @
+-- module Foo where
+--
+--     share [mkPersist s, mkEntityDefList "fooModels"] ...
+--
+--
+-- module Bar where
+--
+--     share [mkPersist s, mkEntityDefList "barModels"] ...
+--
+-- module Migration where
+--
+--     import Foo
+--     import Bar
+--
+--     migrateAll = migrateModels (fooModels <> barModels)
+-- @
+--
 -- @since 2.13.0.0
 migrateModels :: [EntityDef] -> Migration
-migrateModels eds =
-    forM_ eds $ \ed ->
-        migrate eds ed
+migrateModels defs=
+    forM_ (filter isMigrated defs) $ \def ->
+        migrate defs def
+  where
+    isMigrated def = pack "no-migrate" `notElem` entityAttrs def
 
 -- | Creates a single function to perform all migrations for the entities
 -- defined here. One thing to be aware of is dependencies: if you have entities
@@ -1758,15 +1805,7 @@ migrateModels eds =
 mkMigrate :: String -> [EntityDef] -> Q [Dec]
 mkMigrate fun eds = do
     let entityDefListName = ("entityDefListFor" <> fun)
-    body <-
-        [|
-          let
-              defs = $(varE (mkName entityDefListName))
-              isMigrated def = pack "no-migrate" `notElem` entityAttrs def
-           in
-              forM_ (filter isMigrated defs) $ \def ->
-                  migrate defs def
-        |]
+    body <- [| migrateModels $(varE (mkName entityDefListName)) |]
     edList <- mkEntityDefList entityDefListName eds
     pure $ edList <>
         [ SigD (mkName fun) (ConT ''Migration)
