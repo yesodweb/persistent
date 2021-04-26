@@ -407,12 +407,6 @@ overUnboundEntityDef
 overUnboundEntityDef f ubed =
     ubed { unboundEntityDef = f (unboundEntityDef ubed) }
 
-lookupKeyVal :: Text -> [Text] -> Maybe Text
-lookupKeyVal key = lookupPrefix $ key `mappend` "="
-
-lookupPrefix :: Text -> [Text] -> Maybe Text
-lookupPrefix prefix = msum . map (T.stripPrefix prefix)
-
 -- | Construct an entity definition.
 mkEntityDef
     :: PersistSettings

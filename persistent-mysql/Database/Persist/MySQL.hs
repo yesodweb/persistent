@@ -500,7 +500,7 @@ findTypeOfColumn allDefs name col =
         ((,) col)
         $ do
             entDef   <- find ((== name) . getEntityDBName) allDefs
-            fieldDef <- find ((== col)  . fieldDB) (getEntityFields entDef)
+            fieldDef <- find ((== col)  . fieldDB) (getEntityFieldsDatabase entDef)
             return (fieldType fieldDef)
 
 -- | Find out the maxlen of a column (default to 200)
@@ -509,7 +509,7 @@ findMaxLenOfColumn allDefs name col =
    maybe (col, 200)
          ((,) col) $ do
            entDef     <- find ((== name) . getEntityDBName) allDefs
-           fieldDef   <- find ((== col) . fieldDB) (getEntityFields entDef)
+           fieldDef   <- find ((== col) . fieldDB) (getEntityFieldsDatabase entDef)
            findMaxLenOfField fieldDef
 
 -- | Find out the maxlen of a field
@@ -1484,7 +1484,7 @@ mkBulkInsertQuery records fieldValues updates =
     firstField = case entityFieldNames of
         [] -> error "The entity you're trying to insert does not have any fields."
         (field:_) -> field
-    entityFieldNames = map fieldDbToText (getEntityFields entityDef')
+    entityFieldNames = map fieldDbToText (getEntityFieldsDatabase entityDef')
     tableName = T.pack . escapeE . getEntityDBName $ entityDef'
     copyUnlessValues = map snd fieldsToMaybeCopy
     recordValues = concatMap (map toPersistValue . toPersistFields) records
@@ -1521,7 +1521,7 @@ mkBulkInsertQuery records fieldValues updates =
 putManySql :: EntityDef -> Int -> Text
 putManySql ent n = putManySql' fields ent n
   where
-    fields = getEntityFields ent
+    fields = getEntityFieldsDatabase ent
 
 repsertManySql :: EntityDef -> Int -> Text
 repsertManySql ent n = putManySql' fields ent n

@@ -375,7 +375,7 @@ insertSql' ent vals =
     notGenerated =
         isNothing . fieldGenerated
     cols =
-        filter notGenerated $ getEntityFields ent
+        filter notGenerated $ getEntityFieldsDatabase ent
 
 execute' :: Sqlite.Connection -> Sqlite.Statement -> [PersistValue] -> IO Int64
 execute' conn stmt vals = flip finally (liftIO $ Sqlite.reset conn stmt) $ do
@@ -497,7 +497,7 @@ safeToRemove :: EntityDef -> FieldNameDB -> Bool
 safeToRemove def (FieldNameDB colName)
     = any (elem FieldAttrSafeToRemove . fieldAttrs)
     $ filter ((== FieldNameDB colName) . fieldDB)
-    $ getEntityFields def
+    $ getEntityFieldsDatabase def
 
 getCopyTable :: [EntityDef]
              -> (Text -> IO Statement)
@@ -674,7 +674,7 @@ escape s =
 putManySql :: EntityDef -> Int -> Text
 putManySql ent n = putManySql' conflictColumns fields ent n
   where
-    fields = getEntityFields ent
+    fields = getEntityFieldsDatabase ent
     conflictColumns = concatMap (map (escapeF . snd) . uniqueFields) (getEntityUniques ent)
 
 repsertManySql :: EntityDef -> Int -> Text

@@ -70,7 +70,6 @@ module Database.Persist.TH
 import Prelude hiding (concat, exp, splitAt, take, (++))
 
 import Control.Monad
-import Control.Monad.IO.Class
 import Data.Aeson
        ( FromJSON(parseJSON)
        , ToJSON(toJSON)
@@ -1189,11 +1188,7 @@ fieldError tableName fieldName err = mconcat
 
 mkEntity :: EntityMap -> MkPersistSettings -> EntityDef -> Q [Dec]
 mkEntity entityMap mps preEntDef = do
-    entityDefExp <-
-        liftAndFixKeys entityMap preEntDef
---        if mpsGeneric mps
---           then liftAndFixKeys entityMap preEntDef
---           else makePersistEntityDefExp mps entityMap preEntDef
+    entityDefExp <- liftAndFixKeys entityMap preEntDef
     let
         entDef = fixEntityDef preEntDef
         genDataType = genericDataType mps entName backendT
@@ -1804,28 +1799,6 @@ mkMigrate fun eds = do
         [ SigD (mkName fun) (ConT ''Migration)
         , FunD (mkName fun) [normalClause [] body]
         ]
-
-makePersistEntityDefExp :: MkPersistSettings -> EntityMap -> EntityDef -> Q Exp
-makePersistEntityDefExp mps entityMap entDef@EntityDef{..} =
-    [|EntityDef
-        entityHaskell
-        entityDB
-        $(liftAndFixKey entityMap entityId)
-        entityAttrs
-        $(fieldDefReferences mps entDef entityFields)
-        entityUniques
-        entityForeigns
-        entityDerives
-        entityExtra
-        entitySum
-        entityComments
-    |]
-
-fieldDefReferences :: MkPersistSettings -> EntityDef -> [FieldDef] -> Q Exp
-fieldDefReferences mps entDef fieldDefs =
-  fmap ListE $ forM fieldDefs $ \fieldDef -> do
-    let fieldDefConE = ConE (filterConName mps entDef fieldDef)
-    pure $ VarE 'persistFieldDef `AppE` fieldDefConE
 
 liftAndFixKeys :: EntityMap -> EntityDef -> Q Exp
 liftAndFixKeys entityMap EntityDef{..} =
