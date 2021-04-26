@@ -48,6 +48,7 @@ import qualified Database.Persist.TH.SharedPrimaryKeyImportedSpec as SharedPrima
 import qualified Database.Persist.TH.OverloadedLabelSpec as OverloadedLabelSpec
 import qualified Database.Persist.TH.ImplicitIdColSpec as ImplicitIdColSpec
 import qualified Database.Persist.TH.MigrationOnlySpec as MigrationOnlySpec
+import qualified Database.Persist.TH.EmbedSpec as EmbedSpec
 
 share [mkPersist sqlSettings { mpsGeneric = False, mpsDeriveInstances = [''Generic] }, mkDeleteCascade sqlSettings { mpsGeneric = False }] [persistUpperCase|
 
@@ -144,6 +145,7 @@ spec = describe "THSpec" $ do
     SharedPrimaryKeyImportedSpec.spec
     ImplicitIdColSpec.spec
     MigrationOnlySpec.spec
+    EmbedSpec.spec
     describe "TestDefaultKeyCol" $ do
         let FieldDef{..} =
                 entityId (entityDef (Proxy @TestDefaultKeyCol))

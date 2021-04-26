@@ -459,10 +459,20 @@ mkEntityDef ps name entattribs lines =
             _ ->
                 case (setFieldComments comments <$> takeColsEx ps (tokenText <$> x)) of
                   Just sm ->
-                      (sm : acc, [])
+                      (maybeSetSelfReference sm : acc, [])
                   Nothing ->
                       (acc, [])
 
+    maybeSetSelfReference field =
+        case fieldType field of
+            FTTypeCon Nothing x
+                | x == name ->
+                    field
+                        { fieldReference =
+                            SelfReference
+                        }
+            _ ->
+                field
     autoIdField = mkAutoIdField ps entName idSqlType
     idSqlType = maybe SqlInt64 (const $ SqlOther "Primary Key") primaryComposite
 

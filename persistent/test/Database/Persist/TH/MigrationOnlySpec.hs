@@ -20,6 +20,7 @@ import Data.Text (Text)
 
 import Database.Persist.ImplicitIdDef
 import Database.Persist.ImplicitIdDef.Internal (fieldTypeFromTypeable)
+import Database.Persist.Types
 
 mkPersist sqlSettings [persistLowerCase|
 
@@ -27,6 +28,7 @@ HasMigrationOnly
     name String
     blargh Int MigrationOnly
 
+    deriving Eq Show
 |]
 
 pass :: IO ()
@@ -49,3 +51,15 @@ spec = describe "MigrationOnlySpec" $ do
             it "has two fields" $ do
                 length (getEntityFieldsDatabase edef)
                     `shouldBe` 2
+        describe "toPersistFields" $ do
+            it "should have one field" $ do
+                map toPersistValue (toPersistFields (HasMigrationOnly "asdf"))
+                    `shouldBe`
+                        map toPersistValue [SomePersistField ("asdf" :: Text)]
+        describe "fromPersistValues" $ do
+            it "should work with only item in list" $ do
+                fromPersistValues [PersistText "Hello"]
+                    `shouldBe`
+                        Right (HasMigrationOnly "Hello")
+
+

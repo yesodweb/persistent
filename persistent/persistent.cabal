@@ -158,6 +158,7 @@ test-suite test
                       , TypeFamilies
 
     other-modules:   
+        Database.Persist.TH.EmbedSpec
         Database.Persist.TH.ImplicitIdColSpec
         Database.Persist.TH.MigrationOnlySpec
         Database.Persist.TH.OverloadedLabelSpec

@@ -297,24 +297,37 @@ data EmbedFieldDef = EmbedFieldDef
     }
     deriving (Show, Eq, Read, Ord, Lift)
 
+-- | Returns 'True' if the 'FieldDef' does not have a 'MigrationOnly' or
+-- 'SafeToRemove' flag from the QuasiQuoter.
+--
+-- @since 2.13.0.0
+isHaskellField :: FieldDef -> Bool
+isHaskellField fd =
+    FieldAttrMigrationOnly `notElem` fieldAttrs fd &&
+    FieldAttrSafeToRemove `notElem` fieldAttrs fd
+
 toEmbedEntityDef :: EntityDef -> EmbedEntityDef
 toEmbedEntityDef ent = embDef
   where
     embDef = EmbedEntityDef
-      { embeddedHaskell = entityHaskell ent
-      , embeddedFields = map toEmbedFieldDef $ entityFields ent
-      }
+        { embeddedHaskell = entityHaskell ent
+        , embeddedFields = map toEmbedFieldDef $ filter isHaskellField $ entityFields ent
+        }
     toEmbedFieldDef :: FieldDef -> EmbedFieldDef
     toEmbedFieldDef field =
-      EmbedFieldDef { emFieldDB       = fieldDB field
-                    , emFieldEmbed = case fieldReference field of
-                        EmbedRef em -> Just em
-                        SelfReference -> Just embDef
-                        _ -> Nothing
-                    , emFieldCycle = case fieldReference field of
-                        SelfReference -> Just $ entityHaskell ent
-                        _ -> Nothing
-                    }
+        EmbedFieldDef
+          { emFieldDB =
+              fieldDB field
+          , emFieldEmbed =
+              case fieldReference field of
+                  EmbedRef em -> Just em
+                  SelfReference -> Just embDef
+                  _ -> Nothing
+          , emFieldCycle =
+              case fieldReference field of
+                  SelfReference -> Just $ entityHaskell ent
+                  _ -> Nothing
+          }
 
 -- | Type for storing the Uniqueness constraint in the Schema.  Assume you have
 -- the following schema with a uniqueness constraint:
