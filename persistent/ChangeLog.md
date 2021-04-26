@@ -4,6 +4,8 @@
 
 * [1242](https://github.com/yesodweb/persistent/pull/1242)
     * Refactor setEmbedField to use do notation
+* [#1237](https://github.com/yesodweb/persistent/pull/1237)
+    * Remove nonEmptyOrFail function from recent tests
 
 ## 2.12.1.1
 
