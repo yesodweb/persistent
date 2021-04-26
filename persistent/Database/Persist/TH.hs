@@ -2185,7 +2185,7 @@ filterConName' mps entity field = mkName $ T.unpack name
 -- @
 --
 -- Note that there is some odd behavior with Template Haskell and splicing
--- groups. If you call 'discoverEntities' in the same module taht defines
+-- groups. If you call 'discoverEntities' in the same module that defines
 -- 'PersistEntity' instances, you need to ensure they are in different top-level
 -- binding groups. You can write @$(pure [])@ at the top level to do this.
 --
@@ -2195,7 +2195,7 @@ filterConName' mps entity field = mkName $ T.unpack name
 -- import Bar
 --
 -- -- Since Foo and Bar are both imported, discoverEntities can find them here.
--- mkPersist sqlSettings . mappend $(disoverEntities) [persistLowerCase|
+-- mkPersist sqlSettings . mappend $(discoverEntities) [persistLowerCase|
 --   User
 --     name Text
 --     age  Int
