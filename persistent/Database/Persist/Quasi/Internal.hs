@@ -48,6 +48,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Database.Persist.Types
 import Text.Read (readEither)
+import Database.Persist.EntityDef.Internal
 
 data ParseState a = PSDone | PSFail String | PSSuccess a Text deriving Show
 
@@ -100,6 +101,7 @@ parseFieldType t0 =
 
 data PersistSettings = PersistSettings
     { psToDBName :: !(Text -> Text)
+    -- ^ Modify the Haskell-style name into a database-style name.
     , psStrictFields :: !Bool
     -- ^ Whether fields are by default strict. Default value: @True@.
     --
@@ -315,7 +317,8 @@ fixForeignKeysAll unEnts = map fixForeignKeys unEnts
     fixForeignKeys (UnboundEntityDef foreigns ent) =
       ent { entityForeigns = map (fixForeignKey ent) foreigns }
 
-    -- check the count and the sqltypes match and update the foreignFields with the names of the referenced columns
+    -- check the count and the sqltypes match and update the foreignFields with
+    -- the names of the referenced columns
     fixForeignKey :: EntityDef -> UnboundForeignDef -> ForeignDef
     fixForeignKey ent (UnboundForeignDef foreignFieldTexts parentFieldTexts fdef) =
         case mfdefs of
@@ -393,10 +396,11 @@ fixForeignKeysAll unEnts = map fixForeignKeys unEnts
         lengthError pdef = error $ "found " ++ show (length foreignFieldTexts) ++ " fkeys and " ++ show (length pdef) ++ " pkeys: fdef=" ++ show fdef ++ " pdef=" ++ show pdef
 
 
-data UnboundEntityDef = UnboundEntityDef
-                        { _unboundForeignDefs :: [UnboundForeignDef]
-                        , unboundEntityDef :: EntityDef
-                        }
+data UnboundEntityDef
+    = UnboundEntityDef
+    { _unboundForeignDefs :: [UnboundForeignDef]
+    , unboundEntityDef :: EntityDef
+    }
 
 overUnboundEntityDef
     :: (EntityDef -> EntityDef) -> UnboundEntityDef -> UnboundEntityDef
@@ -410,29 +414,30 @@ lookupPrefix :: Text -> [Text] -> Maybe Text
 lookupPrefix prefix = msum . map (T.stripPrefix prefix)
 
 -- | Construct an entity definition.
-mkEntityDef :: PersistSettings
-            -> Text -- ^ name
-            -> [Attr] -- ^ entity attributes
-            -> [Line] -- ^ indented lines
-            -> UnboundEntityDef
+mkEntityDef
+    :: PersistSettings
+    -> Text -- ^ name
+    -> [Attr] -- ^ entity attributes
+    -> [Line] -- ^ indented lines
+    -> UnboundEntityDef
 mkEntityDef ps name entattribs lines =
-  UnboundEntityDef foreigns $
-    EntityDef
-        { entityHaskell = EntityNameHS name'
-        , entityDB = EntityNameDB $ getDbName ps name' entattribs
-        -- idField is the user-specified Id
-        -- otherwise useAutoIdField
-        -- but, adjust it if the user specified a Primary
-        , entityId = setComposite primaryComposite $ fromMaybe autoIdField idField
-        , entityAttrs = entattribs
-        , entityFields = cols
-        , entityUniques = uniqs
-        , entityForeigns = []
-        , entityDerives = concat $ mapMaybe takeDerives textAttribs
-        , entityExtra = extras
-        , entitySum = isSum
-        , entityComments = Nothing
-        }
+    UnboundEntityDef foreigns $
+        EntityDef
+            { entityHaskell = entName
+            , entityDB = EntityNameDB $ getDbName ps name' entattribs
+            -- idField is the user-specified Id
+            -- otherwise useAutoIdField
+            -- but, adjust it if the user specified a Primary
+            , entityId = setComposite primaryComposite $ fromMaybe autoIdField idField
+            , entityAttrs = entattribs
+            , entityFields = cols
+            , entityUniques = uniqs
+            , entityForeigns = []
+            , entityDerives = concat $ mapMaybe takeDerives textAttribs
+            , entityExtra = extras
+            , entitySum = isSum
+            , entityComments = Nothing
+            }
   where
     entName = EntityNameHS name'
     (isSum, name') =
@@ -444,10 +449,6 @@ mkEntityDef ps name entattribs lines =
     textAttribs :: [[Text]]
     textAttribs =
         fmap tokenText <$> attribs
-
-    attribPrefix = flip lookupKeyVal entattribs
-    idName | Just _ <- attribPrefix "id" = error "id= is deprecated, ad a field named 'Id' and use sql="
-           | otherwise = Nothing
 
     (idField, primaryComposite, uniqs, foreigns) = foldl' (\(mid, mp, us, fs) attr ->
         let (i, p, u, f) = takeConstraint ps name' cols attr
@@ -468,7 +469,7 @@ mkEntityDef ps name entattribs lines =
                   Nothing ->
                       (acc, [])
 
-    autoIdField = mkAutoIdField ps entName (FieldNameDB `fmap` idName) idSqlType
+    autoIdField = mkAutoIdField ps entName idSqlType
     idSqlType = maybe SqlInt64 (const $ SqlOther "Primary Key") primaryComposite
 
     setComposite Nothing fd = fd
@@ -487,14 +488,14 @@ just1 (Just x) (Just y) = error $ "expected only one of: "
   `mappend` show x `mappend` " " `mappend` show y
 just1 x y = x `mplus` y
 
-mkAutoIdField :: PersistSettings -> EntityNameHS -> Maybe FieldNameDB -> SqlType -> FieldDef
-mkAutoIdField ps entName idName idSqlType =
+mkAutoIdField :: PersistSettings -> EntityNameHS -> SqlType -> FieldDef
+mkAutoIdField ps entName idSqlType =
     FieldDef
         { fieldHaskell = FieldNameHS "Id"
         -- this should be modeled as a Maybe
         -- but that sucks for non-ID field
         -- TODO: use a sumtype FieldDef | IdFieldDef
-        , fieldDB = fromMaybe (FieldNameDB $ psIdName ps) idName
+        , fieldDB = FieldNameDB $ psIdName ps
         , fieldType = FTTypeCon Nothing $ keyConName $ unEntityNameHS entName
         , fieldSqlType = idSqlType
         -- the primary field is actually a reference to the entity
@@ -504,6 +505,7 @@ mkAutoIdField ps entName idName idSqlType =
         , fieldComments = Nothing
         , fieldCascade = noCascade
         , fieldGenerated = Nothing
+        , fieldIsImplicitIdColumn = True
         }
 
 defaultReferenceTypeCon :: FieldType
@@ -562,6 +564,7 @@ takeCols onErr ps (n':typ:rest')
                 , fieldComments = Nothing
                 , fieldCascade = cascade_
                 , fieldGenerated = generated_
+                , fieldIsImplicitIdColumn = False
                 }
   where
     fieldAttrs_ = parseFieldAttrs attrs_

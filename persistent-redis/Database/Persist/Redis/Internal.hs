@@ -14,6 +14,7 @@ import Data.Text (Text, unpack)
 import qualified Data.Text as T
 import Control.Monad.Fail (MonadFail)
 
+import Database.Persist.EntityDef.Internal
 import Database.Persist.Class
 import Database.Persist.Types
 import Database.Persist.Redis.Parser

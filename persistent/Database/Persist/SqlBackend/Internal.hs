@@ -12,6 +12,7 @@ import Data.Acquire
 import Database.Persist.Class.PersistStore
 import Conduit
 import Database.Persist.Types.Base
+import Database.Persist.Names
 import Data.Int
 import Data.IORef
 import Control.Monad.Reader
