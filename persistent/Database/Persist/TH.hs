@@ -284,7 +284,8 @@ preprocessUnboundDefs
     :: [EntityDef]
     -> [UnboundEntityDef]
     -> (M.Map EntityNameHS EmbedEntityDef, [EntityDef])
-preprocessUnboundDefs preexistingEntities unboundDefs = (embedEntityMap, noCycleEnts)
+preprocessUnboundDefs preexistingEntities unboundDefs =
+    (embedEntityMap, noCycleEnts)
   where
     (embedEntityMap, noCycleEnts) =
         embedEntityDefsMap $ fixForeignKeysAll unboundDefs
@@ -300,15 +301,77 @@ foreignReference field = case fieldReference field of
     ForeignRef ref _ -> Just ref
     _              -> Nothing
 
--- fieldSqlType at parse time can be an Exp
--- This helps delay setting fieldSqlType until lift time
-data EntityDefSqlTypeExp
-    = EntityDefSqlTypeExp
-    { edsteEntityDef :: EntityDef
-    , edsteEntityId :: SqlTypeExp
-    , edsteEntityFields :: [SqlTypeExp]
-    }
-    deriving Show
+-- * entity def sql type exp
+
+fusedLiftEntityDefSqlTypeExp
+    :: EmbedEntityMap
+    -> EntityMap
+    -> EntityDef
+    -> Q Exp
+fusedLiftEntityDefSqlTypeExp emEntities entityMap ent =
+    let
+        sqlTypeExp =
+            getSqlType $ entityId ent
+        sqlTypeExps =
+            map getSqlType $ getEntityFieldsDatabase ent
+    in
+        [|ent { entityFields =
+                    $(liftFieldsSqlTypeExp $ FieldsSqlTypeExp (getEntityFieldsDatabase ent) sqlTypeExps)
+              , entityId =
+                  $(liftFieldSqlTypeExp $ FieldSqlTypeExp (entityId ent) sqlTypeExp)
+              }
+        |]
+  where
+    getSqlType field =
+        maybe
+            (defaultSqlTypeExp field)
+            (SqlType' . SqlOther)
+            (listToMaybe $ mapMaybe attrSqlType $ fieldAttrs field)
+
+    attrSqlType = \case
+        FieldAttrSqltype x -> Just x
+        _ -> Nothing
+
+    -- In the case of embedding, there won't be any datatype created yet.
+    -- We just use SqlString, as the data will be serialized to JSON.
+    defaultSqlTypeExp field =
+        case mEmbedded emEntities ftype of
+            Right _ ->
+                SqlType' SqlString
+            Left (Just FTKeyCon) ->
+                SqlType' SqlString
+            Left Nothing ->
+                case fieldReference field of
+                    ForeignRef refName ft ->
+                        case M.lookup refName entityMap of
+                            Nothing  ->
+                                SqlTypeExp ft
+                            -- A ForeignRef is blindly set to an Int64 in setEmbedField
+                            -- correct that now
+                            Just ent' ->
+                                case entityPrimary ent' of
+                                    Nothing -> SqlTypeExp ft
+                                    Just pdef ->
+                                        case compositeFields pdef of
+                                            [] -> error "mkEntityDefSqlTypeExp: no composite fields"
+                                            [x] -> SqlTypeExp $ fieldType x
+                                            _ -> SqlType' $ SqlOther "Composite Reference"
+                    CompositeRef _ ->
+                        SqlType' $ SqlOther "Composite Reference"
+                    _ ->
+                        case ftype of
+                            -- In the case of lists, we always serialize to a string
+                            -- value (via JSON).
+                            --
+                            -- Normally, this would be determined automatically by
+                            -- SqlTypeExp. However, there's one corner case: if there's
+                            -- a list of entity IDs, the datatype for the ID has not
+                            -- yet been created, so the compiler will fail. This extra
+                            -- clause works around this limitation.
+                            FTList _ -> SqlType' SqlString
+                            _ -> SqlTypeExp ftype
+        where
+            ftype = fieldType field
 
 data SqlTypeExp
     = SqlTypeExp FieldType
@@ -327,18 +390,6 @@ liftSqlTypeExp ste =
                 typedNothing = SigE (ConE 'Proxy) mtyp
             pure $ VarE 'sqlType `AppE` typedNothing
 
-instance Lift SqlTypeExp where
-    lift (SqlType' t)       = lift t
-    lift (SqlTypeExp ftype) = return st
-        where
-            typ = ftToType ftype
-            mtyp = ConT ''Proxy `AppT` typ
-            typedNothing = SigE (ConE 'Proxy) mtyp
-            st = VarE 'sqlType `AppE` typedNothing
-#if MIN_VERSION_template_haskell(2,16,0)
-    liftTyped = unsafeTExpCoerce . lift
-#endif
-
 data FieldsSqlTypeExp = FieldsSqlTypeExp [FieldDef] [SqlTypeExp]
 
 liftFieldsSqlTypeExp :: FieldsSqlTypeExp -> Q Exp
@@ -349,19 +400,10 @@ data FieldSqlTypeExp = FieldSqlTypeExp FieldDef SqlTypeExp
 
 liftFieldSqlTypeExp :: FieldSqlTypeExp -> Q Exp
 liftFieldSqlTypeExp (FieldSqlTypeExp FieldDef{..} sqlTypeExp) =
-    [|FieldDef fieldHaskell fieldDB fieldType $(lift sqlTypeExp) fieldAttrs fieldStrict fieldReference fieldCascade fieldComments fieldGenerated fieldIsImplicitIdColumn|]
+    [|FieldDef fieldHaskell fieldDB fieldType $(liftSqlTypeExp sqlTypeExp) fieldAttrs fieldStrict fieldReference fieldCascade fieldComments fieldGenerated fieldIsImplicitIdColumn|]
   where
     FieldDef _x _ _ _ _ _ _ _ _ _ _ =
         error "need to update this record wildcard match"
-
-liftEntityDefSqlTypeExp :: EntityDefSqlTypeExp -> Q Exp
-liftEntityDefSqlTypeExp (EntityDefSqlTypeExp ent sqlTypeExp sqlTypeExps) =
-    [|ent { entityFields =
-                $(liftFieldsSqlTypeExp $ FieldsSqlTypeExp (getEntityFieldsDatabase ent) sqlTypeExps)
-          , entityId =
-              $(liftFieldSqlTypeExp $ FieldSqlTypeExp (entityId ent) sqlTypeExp)
-          }
-    |]
 
 type EmbedEntityMap = M.Map EntityNameHS EmbedEntityDef
 
@@ -445,68 +487,6 @@ setEmbedField entName allEntities field =
 
 setFieldReference :: ReferenceDef -> FieldDef -> FieldDef
 setFieldReference ref field = field { fieldReference = ref }
-
-mkEntityDefSqlTypeExp :: EmbedEntityMap -> EntityMap -> EntityDef -> EntityDefSqlTypeExp
-mkEntityDefSqlTypeExp emEntities entityMap ent =
-    EntityDefSqlTypeExp
-        { edsteEntityDef =
-            ent
-        , edsteEntityId =
-            getSqlType $ entityId ent
-        , edsteEntityFields =
-            map getSqlType $ getEntityFieldsDatabase ent
-        }
-  where
-    getSqlType field =
-        maybe
-            (defaultSqlTypeExp field)
-            (SqlType' . SqlOther)
-            (listToMaybe $ mapMaybe attrSqlType $ fieldAttrs field)
-
-    attrSqlType = \case
-        FieldAttrSqltype x -> Just x
-        _ -> Nothing
-
-    -- In the case of embedding, there won't be any datatype created yet.
-    -- We just use SqlString, as the data will be serialized to JSON.
-    defaultSqlTypeExp field =
-        case mEmbedded emEntities ftype of
-            Right _ ->
-                SqlType' SqlString
-            Left (Just FTKeyCon) ->
-                SqlType' SqlString
-            Left Nothing ->
-                case fieldReference field of
-                    ForeignRef refName ft ->
-                        case M.lookup refName entityMap of
-                            Nothing  ->
-                                SqlTypeExp ft
-                            -- A ForeignRef is blindly set to an Int64 in setEmbedField
-                            -- correct that now
-                            Just ent' ->
-                                case entityPrimary ent' of
-                                    Nothing -> SqlTypeExp ft
-                                    Just pdef ->
-                                        case compositeFields pdef of
-                                            [] -> error "mkEntityDefSqlTypeExp: no composite fields"
-                                            [x] -> SqlTypeExp $ fieldType x
-                                            _ -> SqlType' $ SqlOther "Composite Reference"
-                    CompositeRef _ ->
-                        SqlType' $ SqlOther "Composite Reference"
-                    _ ->
-                        case ftype of
-                            -- In the case of lists, we always serialize to a string
-                            -- value (via JSON).
-                            --
-                            -- Normally, this would be determined automatically by
-                            -- SqlTypeExp. However, there's one corner case: if there's
-                            -- a list of entity IDs, the datatype for the ID has not
-                            -- yet been created, so the compiler will fail. This extra
-                            -- clause works around this limitation.
-                            FTList _ -> SqlType' SqlString
-                            _ -> SqlTypeExp ftype
-        where
-            ftype = fieldType field
 
 -- | Create data types and appropriate 'PersistEntity' instances for the given
 -- 'EntityDef's. Works well with the persist quasi-quoter.
@@ -1919,7 +1899,7 @@ liftAndFixKey entityMap fieldDef@(FieldDef a b c sqlTyp e f fieldRef fc mcomment
       (fieldRef', sqlTyp') =
           case extractForeignRef entityMap fieldDef of
             Just (fr, ft) ->
-                (fr, lift (SqlTypeExp ft))
+                (fr, liftSqlTypeExp (SqlTypeExp ft))
             Nothing ->
                 (fieldRef, lift sqlTyp)
 
