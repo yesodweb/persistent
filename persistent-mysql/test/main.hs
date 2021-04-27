@@ -1,24 +1,28 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE DataKinds, FlexibleInstances #-}
-{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 import MyInit
 
-import Data.Time (Day, UTCTime (..), TimeOfDay, timeToTimeOfDay, timeOfDayToTime)
-import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds, posixSecondsToUTCTime)
-import Data.Fixed
-import Test.QuickCheck
-import qualified Data.Text as T
-import Data.IntMap (IntMap)
 import qualified Data.ByteString as BS
+import Data.Fixed
+import Data.IntMap (IntMap)
+import qualified Data.Text as T
+import Data.Time (Day, TimeOfDay, UTCTime(..), timeOfDayToTime, timeToTimeOfDay)
+import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
+import Database.Persist.Sql
+import Test.QuickCheck
 
 import qualified CompositeTest
 import qualified CustomPersistFieldTest
@@ -35,25 +39,26 @@ import qualified MaxLenTest
 import qualified MigrationColumnLengthTest
 import qualified MigrationIdempotencyTest
 import qualified MigrationOnlyTest
-import qualified MpsNoPrefixTest
 import qualified MpsCustomPrefixTest
-import qualified PersistentTest
+import qualified MpsNoPrefixTest
 import qualified PersistUniqueTest
+import qualified PersistentTest
 -- FIXME: Not used... should it be?
 -- import qualified PrimaryTest
 import qualified RawSqlTest
 import qualified ReadWriteTest
 import qualified Recursive
 -- TODO: can't use this as MySQL can't do DEFAULT CURRENT_DATE
+import qualified CustomConstraintTest
+import qualified ForeignKey
+import qualified GeneratedColumnTestSQL
+import qualified ImplicitUuidSpec
+import qualified LongIdentifierTest
 import qualified RenameTest
 import qualified SumTypeTest
 import qualified TransactionLevelTest
 import qualified UniqueTest
 import qualified UpsertTest
-import qualified CustomConstraintTest
-import qualified LongIdentifierTest
-import qualified GeneratedColumnTestSQL
-import qualified ForeignKey
 
 type Tuple a b = (a, b)
 
@@ -109,98 +114,101 @@ setup migration = do
 
 main :: IO ()
 main = do
-  runConn $ do
-    mapM_ setup
-      [ PersistentTest.testMigrate
-      , PersistentTest.noPrefixMigrate
-      , PersistentTest.customPrefixMigrate
-      , EmbedTest.embedMigrate
-      , EmbedOrderTest.embedOrderMigrate
-      , LargeNumberTest.numberMigrate
-      , UniqueTest.uniqueMigrate
-      , MaxLenTest.maxlenMigrate
-      , Recursive.recursiveMigrate
-      , CompositeTest.compositeMigrate
-      , PersistUniqueTest.migration
-      , RenameTest.migration
-      , CustomPersistFieldTest.customFieldMigrate
-      , InsertDuplicateUpdate.duplicateMigrate
-      , MigrationIdempotencyTest.migration
-      , CustomPrimaryKeyReferenceTest.migration
-      , MigrationColumnLengthTest.migration
-      , TransactionLevelTest.migration
-      -- , LongIdentifierTest.migration
-      , ForeignKey.compositeMigrate
-      ]
-    PersistentTest.cleanDB
-    ForeignKey.cleanDB
+    runConn $ do
+        mapM_ setup
+            [ PersistentTest.testMigrate
+            , PersistentTest.noPrefixMigrate
+            , PersistentTest.customPrefixMigrate
+            , EmbedTest.embedMigrate
+            , EmbedOrderTest.embedOrderMigrate
+            , LargeNumberTest.numberMigrate
+            , UniqueTest.uniqueMigrate
+            , MaxLenTest.maxlenMigrate
+            , Recursive.recursiveMigrate
+            , CompositeTest.compositeMigrate
+            , PersistUniqueTest.migration
+            , RenameTest.migration
+            , CustomPersistFieldTest.customFieldMigrate
+            , InsertDuplicateUpdate.duplicateMigrate
+            , MigrationIdempotencyTest.migration
+            , CustomPrimaryKeyReferenceTest.migration
+            , MigrationColumnLengthTest.migration
+            , TransactionLevelTest.migration
+            -- , LongIdentifierTest.migration
+            , ForeignKey.compositeMigrate
+            ]
+        PersistentTest.cleanDB
+        ForeignKey.cleanDB
 
-  hspec $ do
-    xdescribe "This is pending on MySQL because you can't have DEFAULT CURRENT_DATE" $ do
-        RenameTest.specsWith db
-    DataTypeTest.specsWith
-        db
-        (Just (runMigrationSilent dataTypeMigrate))
-        [ TestFn "text" dataTypeTableText
-        , TestFn "textMaxLen" dataTypeTableTextMaxLen
-        , TestFn "bytes" dataTypeTableBytes
-        , TestFn "bytesTextTuple" dataTypeTableBytesTextTuple
-        , TestFn "bytesMaxLen" dataTypeTableBytesMaxLen
-        , TestFn "int" dataTypeTableInt
-        , TestFn "intList" dataTypeTableIntList
-        , TestFn "intMap" dataTypeTableIntMap
-        , TestFn "bool" dataTypeTableBool
-        , TestFn "day" dataTypeTableDay
-        , TestFn "time" (roundTime . dataTypeTableTime)
-        , TestFn "utc" (roundUTCTime . dataTypeTableUtc)
-        , TestFn "timeFrac" (dataTypeTableTimeFrac)
-        , TestFn "utcFrac" (dataTypeTableUtcFrac)
-        ]
-        [ ("pico", dataTypeTablePico) ]
-        dataTypeTableDouble
-    HtmlTest.specsWith
-        db
-        (Just (runMigrationSilent HtmlTest.htmlMigrate))
-    EmbedTest.specsWith db
-    EmbedOrderTest.specsWith db
-    LargeNumberTest.specsWith db
-    UniqueTest.specsWith db
-    MaxLenTest.specsWith db
-    Recursive.specsWith db
-    SumTypeTest.specsWith db (Just (runMigrationSilent SumTypeTest.sumTypeMigrate))
-    MigrationOnlyTest.specsWith db
-        (Just
-            $ runMigrationSilent MigrationOnlyTest.migrateAll1
-            >> runMigrationSilent MigrationOnlyTest.migrateAll2
-        )
-    PersistentTest.specsWith db
-    PersistentTest.filterOrSpecs db
-    ReadWriteTest.specsWith db
-    RawSqlTest.specsWith db
-    UpsertTest.specsWith
-        db
-        UpsertTest.Don'tUpdateNull
-        UpsertTest.UpsertPreserveOldKey
+    hspec $ do
+        ImplicitUuidSpec.spec
+        xdescribe "This is pending on MySQL because you can't have DEFAULT CURRENT_DATE" $ do
+            RenameTest.specsWith db
+        DataTypeTest.specsWith
+            db
+            (Just (runMigrationSilent dataTypeMigrate))
+            [ TestFn "text" dataTypeTableText
+            , TestFn "textMaxLen" dataTypeTableTextMaxLen
+            , TestFn "bytes" dataTypeTableBytes
+            , TestFn "bytesTextTuple" dataTypeTableBytesTextTuple
+            , TestFn "bytesMaxLen" dataTypeTableBytesMaxLen
+            , TestFn "int" dataTypeTableInt
+            , TestFn "intList" dataTypeTableIntList
+            , TestFn "intMap" dataTypeTableIntMap
+            , TestFn "bool" dataTypeTableBool
+            , TestFn "day" dataTypeTableDay
+            , TestFn "time" (roundTime . dataTypeTableTime)
+            , TestFn "utc" (roundUTCTime . dataTypeTableUtc)
+            , TestFn "timeFrac" (dataTypeTableTimeFrac)
+            , TestFn "utcFrac" (dataTypeTableUtcFrac)
+            ]
+            [ ("pico", dataTypeTablePico) ]
+            dataTypeTableDouble
+        HtmlTest.specsWith
+            db
+            (Just (runMigrationSilent HtmlTest.htmlMigrate))
+        EmbedTest.specsWith db
+        EmbedOrderTest.specsWith db
+        LargeNumberTest.specsWith db
+        UniqueTest.specsWith db
+        MaxLenTest.specsWith db
+        Recursive.specsWith db
+        SumTypeTest.specsWith db (Just (runMigrationSilent SumTypeTest.sumTypeMigrate))
+        MigrationOnlyTest.specsWith db
+            (Just $ do
+                void $ rawExecute "DROP TABLE IF EXISTS referencing;" []
+                void $ rawExecute "DROP TABLE IF EXISTS two_field;" []
+                void $ runMigrationSilent MigrationOnlyTest.migrateAll1
+                void $ runMigrationSilent MigrationOnlyTest.migrateAll2
+            )
+        PersistentTest.specsWith db
+        PersistentTest.filterOrSpecs db
+        ReadWriteTest.specsWith db
+        RawSqlTest.specsWith db
+        UpsertTest.specsWith
+            db
+            UpsertTest.Don'tUpdateNull
+            UpsertTest.UpsertPreserveOldKey
 
-    ForeignKey.specsWith db
-    MpsNoPrefixTest.specsWith db
-    MpsCustomPrefixTest.specsWith db
-    EmptyEntityTest.specsWith db (Just (runMigrationSilent EmptyEntityTest.migration))
-    CompositeTest.specsWith db
-    PersistUniqueTest.specsWith db
-    CustomPersistFieldTest.specsWith db
-    CustomPrimaryKeyReferenceTest.specsWith db
-    InsertDuplicateUpdate.specs
-    MigrationColumnLengthTest.specsWith db
-    EquivalentTypeTest.specsWith db
-    TransactionLevelTest.specsWith db
+        ForeignKey.specsWith db
+        MpsNoPrefixTest.specsWith db
+        MpsCustomPrefixTest.specsWith db
+        EmptyEntityTest.specsWith db (Just (runMigrationSilent EmptyEntityTest.migration))
+        CompositeTest.specsWith db
+        PersistUniqueTest.specsWith db
+        CustomPersistFieldTest.specsWith db
+        CustomPrimaryKeyReferenceTest.specsWith db
+        InsertDuplicateUpdate.specs
+        MigrationColumnLengthTest.specsWith db
+        EquivalentTypeTest.specsWith db
+        TransactionLevelTest.specsWith db
 
-    MigrationIdempotencyTest.specsWith db
-    CustomConstraintTest.specs db
-    -- TODO: implement automatic truncation for too long foreign keys, so we can run this test.
-    xdescribe "The migration for this test currently fails because of MySQL's 64 character limit for identifiers. See https://github.com/yesodweb/persistent/issues/1000 for details" $
-        LongIdentifierTest.specsWith db
-    GeneratedColumnTestSQL.specsWith db
+        MigrationIdempotencyTest.specsWith db
+        CustomConstraintTest.specs db
+        -- TODO: implement automatic truncation for too long foreign keys, so we can run this test.
+        xdescribe "The migration for this test currently fails because of MySQL's 64 character limit for identifiers. See https://github.com/yesodweb/persistent/issues/1000 for details" $
+            LongIdentifierTest.specsWith db
+        GeneratedColumnTestSQL.specsWith db
 
 roundFn :: RealFrac a => a -> Integer
 roundFn = round

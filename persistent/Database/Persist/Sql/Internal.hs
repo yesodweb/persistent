@@ -21,6 +21,7 @@ import qualified Data.Text as T
 import Database.Persist.Quasi
 import Database.Persist.Sql.Types
 import Database.Persist.Types
+import Database.Persist.Names
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 
 -- | Record of functions to override the default behavior in 'mkColumns'.  It is
@@ -81,15 +82,15 @@ mkColumns
     -> BackendSpecificOverrides
     -> ([Column], [UniqueDef], [ForeignDef])
 mkColumns allDefs t overrides =
-    (cols, entityUniques t, entityForeigns t)
+    (cols, getEntityUniques t, getEntityForeignDefs t)
   where
     cols :: [Column]
-    cols = map goId idCol `mappend` map go (entityFields t)
+    cols = map goId idCol `mappend` map go (getEntityFieldsDatabase t)
 
     idCol :: [FieldDef]
     idCol = case entityPrimary t of
         Just _ -> []
-        Nothing -> [entityId t]
+        Nothing -> [getEntityId t]
 
     goId :: FieldDef -> Column
     goId fd =
@@ -130,14 +131,13 @@ mkColumns allDefs t overrides =
             }
 
     tableName :: EntityNameDB
-    tableName = entityDB t
-
+    tableName = getEntityDBName t
 
     go :: FieldDef -> Column
     go fd =
         Column
             { cName = fieldDB fd
-            , cNull = nullable (fieldAttrs fd) /= NotNullable || entitySum t
+            , cNull = nullable (fieldAttrs fd) /= NotNullable || isEntitySum t
             , cSqlType = fieldSqlType fd
             , cDefault = defaultAttribute $ fieldAttrs fd
             , cGenerated = fieldGenerated fd
@@ -195,5 +195,5 @@ refName (EntityNameDB table) (FieldNameDB column) =
 resolveTableName :: [EntityDef] -> EntityNameHS -> EntityNameDB
 resolveTableName [] (EntityNameHS t) = error $ "Table not found: " `Data.Monoid.mappend` T.unpack t
 resolveTableName (e:es) hn
-    | entityHaskell e == hn = entityDB e
+    | getEntityHaskellName e == hn = getEntityDBName e
     | otherwise = resolveTableName es hn

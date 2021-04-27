@@ -1,16 +1,18 @@
-{-# LANGUAGE TypeApplications, DeriveGeneric, RecordWildCards #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# language DataKinds #-}
 --
 -- DeriveAnyClass is not actually used by persistent-template
 -- But a long standing bug was that if it was enabled, it was used to derive instead of GeneralizedNewtypeDeriving
@@ -21,30 +23,37 @@
 
 module Database.Persist.THSpec where
 
-import Data.Int
-import Data.Proxy
-import Control.Applicative (Const (..))
+import Control.Applicative (Const(..))
 import Data.Aeson
 import Data.ByteString.Lazy.Char8 ()
-import Data.Functor.Identity (Identity (..))
+import Data.Coerce
+import Data.Functor.Identity (Identity(..))
+import Data.Int
+import qualified Data.List as List
+import Data.Proxy
 import Data.Text (Text, pack)
+import GHC.Generics (Generic)
 import Test.Hspec
 import Test.Hspec.QuickCheck
 import Test.QuickCheck.Arbitrary
 import Test.QuickCheck.Gen (Gen)
-import GHC.Generics (Generic)
-import qualified Data.List as List
-import Data.Coerce
 
 import Database.Persist
+import Database.Persist.EntityDef.Internal
 import Database.Persist.Sql
 import Database.Persist.Sql.Util
 import Database.Persist.TH
 import TemplateTestImports
 
-import qualified Database.Persist.TH.SharedPrimaryKeySpec as SharedPrimaryKeySpec
-import qualified Database.Persist.TH.SharedPrimaryKeyImportedSpec as SharedPrimaryKeyImportedSpec
+
+import qualified Database.Persist.TH.MultiBlockSpec as MultiBlockSpec
+import qualified Database.Persist.TH.DiscoverEntitiesSpec as DiscoverEntitiesSpec
+import qualified Database.Persist.TH.ImplicitIdColSpec as ImplicitIdColSpec
+import qualified Database.Persist.TH.MigrationOnlySpec as MigrationOnlySpec
+import qualified Database.Persist.TH.EmbedSpec as EmbedSpec
 import qualified Database.Persist.TH.OverloadedLabelSpec as OverloadedLabelSpec
+import qualified Database.Persist.TH.SharedPrimaryKeyImportedSpec as SharedPrimaryKeyImportedSpec
+import qualified Database.Persist.TH.SharedPrimaryKeySpec as SharedPrimaryKeySpec
 
 share [mkPersist sqlSettings { mpsGeneric = False, mpsDeriveInstances = [''Generic] }, mkDeleteCascade sqlSettings { mpsGeneric = False }] [persistUpperCase|
 
@@ -80,6 +89,10 @@ HasMultipleColPrimaryDef
     barbaz String
     Primary foobar barbaz
 
+TestDefaultKeyCol
+    Id TestDefaultKeyColId
+    name String
+
 HasIdDef
     Id Int
     name String
@@ -102,6 +115,7 @@ SharedPrimaryKeyWithCascade
 SharedPrimaryKeyWithCascadeAndCustomName
     Id (Key HasDefaultId) OnDeleteCascade sql=my_id
     name String
+
 |]
 
 share [mkPersist sqlSettings { mpsGeneric = False, mpsGenerateLenses = True }] [persistLowerCase|
@@ -130,10 +144,28 @@ instance Arbitrary Address where
     arbitrary = Address <$> arbitraryT <*> arbitraryT <*> arbitrary
 
 spec :: Spec
-spec = do
+spec = describe "THSpec" $ do
     OverloadedLabelSpec.spec
     SharedPrimaryKeySpec.spec
     SharedPrimaryKeyImportedSpec.spec
+    ImplicitIdColSpec.spec
+    MigrationOnlySpec.spec
+    EmbedSpec.spec
+    DiscoverEntitiesSpec.spec
+    MultiBlockSpec.spec
+    describe "TestDefaultKeyCol" $ do
+        let FieldDef{..} =
+                entityId (entityDef (Proxy @TestDefaultKeyCol))
+        it "should be a BackendKey SqlBackend" $ do
+            -- the purpose of this test is to verify that a custom Id column of
+            -- the form:
+            -- > ModelName
+            -- >     Id ModelNameId
+            --
+            -- should behave like an implicit id column.
+            TestDefaultKeyColKey (SqlBackendKey 32)
+                `shouldBe`
+                    toSqlKey 32
     describe "HasDefaultId" $ do
         let FieldDef{..} =
                 entityId (entityDef (Proxy @HasDefaultId))
@@ -250,6 +282,7 @@ spec = do
                                     , fieldComments = Nothing
                                     , fieldCascade = noCascade
                                     , fieldGenerated = Nothing
+                                    , fieldIsImplicitIdColumn = True
                                     }
                             , entityAttrs = []
                             , entityFields =
@@ -268,6 +301,7 @@ spec = do
                                         FieldCascade { fcOnUpdate = Nothing, fcOnDelete = Just Cascade }
                                     , fieldComments = Nothing
                                     , fieldGenerated = Nothing
+                                    , fieldIsImplicitIdColumn = False
                                     }
                                 ]
                             , entityUniques = []

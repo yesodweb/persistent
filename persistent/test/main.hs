@@ -35,15 +35,15 @@ import Database.Persist.Quasi.Internal
        , takeColsEx
        )
 import Database.Persist.Types
+import Database.Persist.EntityDef.Internal
 
 import qualified Database.Persist.THSpec as THSpec
 
 main :: IO ()
 main = hspec $ do
-    describe "Database.Persist" $ do
-        describe "THSpec" THSpec.spec
+    describe "Database" $ describe "Persist" $ do
+        THSpec.spec
 
-    THSpec.spec
     describe "splitExtras" $ do
         let helloWorldTokens = Token "hello" :| [Token "world"]
             foobarbazTokens = Token "foo" :| [Token "bar", Token "baz"]
@@ -65,32 +65,36 @@ main = hspec $ do
                 `shouldBe`
                     ( [NEL.toList helloWorldTokens, NEL.toList foobarbazTokens], mempty )
         it "works4" $ do
-            let foobarbarz = ["foo", "Bar", "baz"]
-                fbbTokens = Token <$> nonEmptyOrFail foobarbarz
             splitExtras
-                [ Line 0 (pure (Token "Hello"))
-                , Line 2 fbbTokens
-                , Line 2 fbbTokens
+                [ Line 0 [Token "Product"]
+                , Line 2 (Token <$> ["name", "Text"])
+                , Line 2 (Token <$> ["added", "UTCTime", "default=CURRENT_TIMESTAMP"])
                 ]
                 `shouldBe`
                     ( []
                     , Map.fromList
-                        [ ("Hello", [foobarbarz, foobarbarz])
-                        ]
+                        [ ("Product",
+                            [ ["name", "Text"]
+                            , ["added", "UTCTime", "default=CURRENT_TIMESTAMP"]
+                            ]
+                        ) ]
                     )
         it "works5" $ do
-            let foobarbarz = ["foo", "Bar", "baz"]
-                fbbTokens = Token <$> nonEmptyOrFail foobarbarz
             splitExtras
-                [ Line 0 (pure (Token "Hello"))
-                , Line 2 fbbTokens
-                , Line 4 fbbTokens
+                [ Line 0 [Token "Product"]
+                , Line 2 (Token <$> ["name", "Text"])
+                , Line 4 [Token "ExtraBlock"]
+                , Line 4 (Token <$> ["added", "UTCTime", "default=CURRENT_TIMESTAMP"])
                 ]
                 `shouldBe`
                     ( []
                     , Map.fromList
-                        [ ("Hello", [foobarbarz, foobarbarz])
-                        ]
+                        [ ("Product",
+                            [ ["name", "Text"]
+                            , ["ExtraBlock"]
+                            , ["added", "UTCTime", "default=CURRENT_TIMESTAMP"]
+                            ]
+                        )]
                     )
     describe "takeColsEx" $ do
         let subject = takeColsEx upperCaseSettings
@@ -112,6 +116,7 @@ main = hspec $ do
                         , fieldCascade = noCascade
                         , fieldComments = Nothing
                         , fieldGenerated = Nothing
+                        , fieldIsImplicitIdColumn = False
                         }
         it "works if it has a name, type, and cascade" $ do
             subject ["asdf", "Int", "OnDeleteCascade", "OnUpdateCascade"]
@@ -127,6 +132,7 @@ main = hspec $ do
                         , fieldCascade = FieldCascade (Just Cascade) (Just Cascade)
                         , fieldComments = Nothing
                         , fieldGenerated = Nothing
+                        , fieldIsImplicitIdColumn = False
                         }
         it "never tries to make a refernece" $ do
             subject ["asdf", "UserId", "OnDeleteCascade"]
@@ -142,6 +148,7 @@ main = hspec $ do
                         , fieldCascade = FieldCascade Nothing (Just Cascade)
                         , fieldComments = Nothing
                         , fieldGenerated = Nothing
+                        , fieldIsImplicitIdColumn = False
                         }
 
     describe "parseLine" $ do
@@ -151,7 +158,7 @@ main = hspec $ do
         it "handles normal words" $
             parseLine " foo   bar  baz" `shouldBe`
                 Just
-                    ( Line 1 $ nonEmptyOrFail
+                    ( Line 1
                         [ Token "foo"
                         , Token "bar"
                         , Token "baz"
@@ -161,7 +168,7 @@ main = hspec $ do
         it "handles quotes" $
             parseLine "  \"foo bar\"  \"baz\"" `shouldBe`
                 Just
-                    ( Line 2 $ nonEmptyOrFail
+                    ( Line 2
                         [ Token "foo bar"
                         , Token "baz"
                         ]
@@ -170,7 +177,7 @@ main = hspec $ do
         it "handles quotes mid-token" $
             parseLine "  x=\"foo bar\"  \"baz\"" `shouldBe`
                 Just
-                    ( Line 2 $ nonEmptyOrFail
+                    ( Line 2
                         [ Token "x=foo bar"
                         , Token "baz"
                         ]
@@ -179,7 +186,7 @@ main = hspec $ do
         it "handles escaped quote mid-token" $
             parseLine "  x=\\\"foo bar\"  \"baz\"" `shouldBe`
                 Just
-                    ( Line 2 $ nonEmptyOrFail
+                    ( Line 2
                         [ Token "x=\\\"foo"
                         , Token "bar\""
                         , Token "baz"
@@ -189,7 +196,7 @@ main = hspec $ do
         it "handles unnested parantheses" $
             parseLine "  (foo bar)  (baz)" `shouldBe`
                 Just
-                    ( Line 2 $ nonEmptyOrFail
+                    ( Line 2
                         [ Token "foo bar"
                         , Token "baz"
                         ]
@@ -198,7 +205,7 @@ main = hspec $ do
         it "handles unnested parantheses mid-token" $
             parseLine "  x=(foo bar)  (baz)" `shouldBe`
                 Just
-                    ( Line 2 $ nonEmptyOrFail
+                    ( Line 2
                         [ Token "x=foo bar"
                         , Token "baz"
                         ]
@@ -207,7 +214,7 @@ main = hspec $ do
         it "handles nested parantheses" $
             parseLine "  (foo (bar))  (baz)" `shouldBe`
                 Just
-                    ( Line 2 $ nonEmptyOrFail
+                    ( Line 2
                         [ Token "foo (bar)"
                         , Token "baz"
                         ]
@@ -216,7 +223,7 @@ main = hspec $ do
         it "escaping" $
             parseLine "  (foo \\(bar)  y=\"baz\\\"\"" `shouldBe`
                 Just
-                    ( Line 2 $ nonEmptyOrFail
+                    ( Line 2
                         [ Token "foo (bar"
                         , Token "y=baz\""
                         ]
@@ -225,7 +232,7 @@ main = hspec $ do
         it "mid-token quote in later token" $
             parseLine "foo bar baz=(bin\")" `shouldBe`
                 Just
-                    ( Line 0 $ nonEmptyOrFail
+                    ( Line 0
                         [ Token "foo"
                         , Token "bar"
                         , Token "baz=bin\""
@@ -236,13 +243,14 @@ main = hspec $ do
             it "recognizes one line" $ do
                 parseLine "-- | this is a comment" `shouldBe`
                     Just
-                        ( Line 0 $ pure
-                            (DocComment "this is a comment")
+                        ( Line 0
+                            [ DocComment "this is a comment"
+                            ]
                         )
 
             it "works if comment is indented" $ do
                 parseLine "  -- | comment" `shouldBe`
-                    Just (Line 2 (pure (DocComment "comment")))
+                    Just (Line 2 [DocComment "comment"])
 
     describe "parse" $ do
         let subject =
@@ -615,10 +623,10 @@ Baz
                     , "  name String"
                     ]
                 expected =
-                    Line { lineIndent = 0, tokens = pure (DocComment "Model") } :|
-                    [ Line { lineIndent = 0, tokens = pure (Token "Foo") }
-                    , Line { lineIndent = 2, tokens = pure (DocComment "Field") }
-                    , Line { lineIndent = 2, tokens = Token "name" :| [Token "String"] }
+                    Line { lineIndent = 0, tokens = [DocComment "Model"] } :|
+                    [ Line { lineIndent = 0, tokens = [Token "Foo"] }
+                    , Line { lineIndent = 2, tokens = [DocComment "Field"] }
+                    , Line { lineIndent = 2, tokens = (Token <$> ["name", "String"]) }
                     ]
             preparse text `shouldBe` Just expected
 
@@ -919,12 +927,6 @@ Baz
 takePrefix :: Value -> Value
 takePrefix (String a) = String (T.take 1 a)
 takePrefix a = a
-
-nonEmptyOrFail :: [a] -> NonEmpty a
-nonEmptyOrFail = maybe failure id . NEL.nonEmpty
-  where
-    failure =
-        error "nonEmptyOrFail expected a non empty list"
 
 arbitraryWhiteSpaceChar :: Gen Char
 arbitraryWhiteSpaceChar =

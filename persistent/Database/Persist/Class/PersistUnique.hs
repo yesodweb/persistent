@@ -39,6 +39,7 @@ import GHC.TypeLits (ErrorMessage(..))
 import Database.Persist.Class.PersistEntity
 import Database.Persist.Class.PersistStore
 import Database.Persist.Types
+import Database.Persist.EntityDef
 
 -- | Queries against 'Unique' keys (other than the id 'Key').
 --
@@ -302,7 +303,7 @@ onlyOneUniqueDef
     => proxy record
     -> UniqueDef
 onlyOneUniqueDef prxy =
-    case entityUniques (entityDef prxy) of
+    case getEntityUniques (entityDef prxy) of
         [uniq] -> uniq
         _ -> error "impossible due to OnlyOneUniqueKey constraint"
 
@@ -351,7 +352,7 @@ atLeastOneUniqueDef
     => proxy record
     -> NonEmpty UniqueDef
 atLeastOneUniqueDef prxy =
-    case entityUniques (entityDef prxy) of
+    case getEntityUniques (entityDef prxy) of
         (x:xs) -> x :| xs
         _ ->
             error "impossible due to AtLeastOneUniqueKey record constraint"

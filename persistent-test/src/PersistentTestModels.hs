@@ -18,7 +18,7 @@ import Data.Text (append)
 -- just need to ensure this compiles
 import PersistentTestModelsImports()
 
-share [mkPersist persistSettings { mpsGeneric = True },  mkMigrate "testMigrate", mkDeleteCascade persistSettings, mkSave "_ignoredSave"] [persistUpperCase|
+share [mkPersist persistSettings { mpsGeneric = True },  mkMigrate "testMigrate", mkDeleteCascade persistSettings] [persistUpperCase|
 
 -- Dedented comment
   -- Header-level comment
@@ -225,7 +225,7 @@ instance (PersistEntity a) => PersistEntity (ReverseFieldOrder a) where
       where
         unRfoProxy :: proxy (ReverseFieldOrder a) -> Proxy a
         unRfoProxy _ = Proxy
-        revFields ed = ed { entityFields = reverse (entityFields ed) }
+        revFields = overEntityFields reverse
 
     toPersistFields = reverse . toPersistFields . unRFO
     newtype EntityField (ReverseFieldOrder a) b = EFRFO {unEFRFO :: EntityField a b}

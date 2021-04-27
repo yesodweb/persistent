@@ -28,7 +28,6 @@ module Database.Persist.Sql.Types.Internal
     ) where
 
 import Data.List.NonEmpty (NonEmpty(..))
-import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Logger (LogSource, LogLevel, Loc)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, ask)
@@ -42,7 +41,6 @@ import Database.Persist.Class
     , BackendCompatible(..)
     )
 import Database.Persist.Class.PersistStore (IsPersistBackend (..))
-import Database.Persist.Types
 import Database.Persist.SqlBackend.Internal
 import Database.Persist.SqlBackend.Internal.InsertSqlResult
 import Database.Persist.SqlBackend.Internal.MkSqlBackend

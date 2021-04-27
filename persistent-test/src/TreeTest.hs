@@ -41,14 +41,14 @@ specsWith runDb = describe "tree" $ do
         gp <- getJust kgp
         treeFkparent gp @== Nothing
     describe "entityDef" $ do
-        let EntityDef{..} = entityDef (Proxy :: Proxy Tree)
+        let ed = entityDef (Proxy :: Proxy Tree)
         it "has the right haskell name" $ do
-            entityHaskell `shouldBe` EntityNameHS "Tree"
+            getEntityHaskellName ed `shouldBe` EntityNameHS "Tree"
         it "has the right DB name" $ do
-            entityDB `shouldBe` EntityNameDB "trees"
+            getEntityDBName ed `shouldBe` EntityNameDB "trees"
 
     describe "foreign ref" $ do
-        let [ForeignDef{..}] = entityForeigns (entityDef (Proxy :: Proxy Tree))
+        let [ForeignDef{..}] = getEntityForeignDefs (entityDef (Proxy :: Proxy Tree))
         it "has the right haskell name" $ do
             foreignRefTableHaskell `shouldBe`
                 EntityNameHS "Tree"

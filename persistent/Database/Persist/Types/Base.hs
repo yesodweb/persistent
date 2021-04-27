@@ -1,16 +1,22 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE LambdaCase, PatternSynonyms #-}
 {-# LANGUAGE DeriveLift #-}
-{-# OPTIONS_GHC -fno-warn-deprecations #-} -- usage of Error typeclass
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
+
 module Database.Persist.Types.Base
     ( module Database.Persist.Types.Base
+    -- * Re-exports
     , PersistValue(.., PersistLiteral, PersistLiteralEscaped, PersistDbSpecific)
     , LiteralType(..)
     ) where
 
 import Control.Arrow (second)
 import Control.Exception (Exception)
-import Control.Monad.Trans.Error (Error (..))
 import qualified Data.Aeson as A
 import Data.Bits (shiftL, shiftR)
 import Data.ByteString (ByteString, foldl')
@@ -21,26 +27,35 @@ import Data.Char (isSpace)
 import qualified Data.HashMap.Strict as HM
 import Data.Int (Int64)
 import Data.Map (Map)
-import Data.Maybe ( isNothing )
+import Data.Maybe (isNothing)
 #if !MIN_VERSION_base(4,11,0)
 -- This can be removed when GHC < 8.2.2 isn't supported anymore
 import Data.Semigroup ((<>))
 #endif
 import qualified Data.Scientific
-import Data.Text (Text, pack)
+import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import Data.Text.Encoding.Error (lenientDecode)
 import Data.Time (Day, TimeOfDay, UTCTime)
 import qualified Data.Vector as V
 import Data.Word (Word32)
-import Numeric (showHex, readHex)
-import Web.PathPieces (PathPiece(..))
-import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData (..), parseUrlPieceMaybe, showTextData, readTextData, parseBoundedTextData)
 import Language.Haskell.TH.Syntax (Lift(..))
+import Numeric (readHex, showHex)
+import Web.HttpApiData
+       ( FromHttpApiData(..)
+       , ToHttpApiData(..)
+       , parseBoundedTextData
+       , parseUrlPieceMaybe
+       , readTextData
+       , showTextData
+       )
+import Web.PathPieces (PathPiece(..))
     -- Bring `Lift (Map k v)` instance into scope, as well as `Lift Text`
     -- instance on pre-1.2.4 versions of `text`
 import Instances.TH.Lift ()
+
+import Database.Persist.Names
 
 -- | A 'Checkmark' should be used as a field type whenever a
 -- uniqueness constraint should guarantee that a certain kind of
@@ -106,10 +121,10 @@ instance PathPiece Checkmark where
   fromPathPiece "inactive" = Just Inactive
   fromPathPiece _ = Nothing
 
-data IsNullable = Nullable !WhyNullable
-                | NotNullable
-                  deriving (Eq, Show)
-
+data IsNullable
+    = Nullable !WhyNullable
+    | NotNullable
+    deriving (Eq, Show)
 
 -- | The reason why a field is 'nullable' is very important.  A
 -- field that is nullable because of a @Maybe@ tag will have its
@@ -119,29 +134,6 @@ data IsNullable = Nullable !WhyNullable
 data WhyNullable = ByMaybeAttr
                  | ByNullableAttr
                   deriving (Eq, Show)
-
--- | Convenience operations for working with '-NameDB' types.
---
--- @since 2.12.0.0
-class DatabaseName a where
-  escapeWith :: (Text -> str) -> (a -> str)
-
--- | An 'EntityNameDB' represents the datastore-side name that @persistent@
--- will use for an entity.
---
--- @since 2.12.0.0
-newtype EntityNameDB = EntityNameDB { unEntityNameDB :: Text }
-  deriving (Show, Eq, Read, Ord, Lift)
-
-instance DatabaseName EntityNameDB where
-  escapeWith f (EntityNameDB n) = f n
-
--- | An 'EntityNameHS' represents the Haskell-side name that @persistent@
--- will use for an entity.
---
--- @since 2.12.0.0
-newtype EntityNameHS = EntityNameHS { unEntityNameHS :: Text }
-  deriving (Show, Eq, Read, Ord, Lift)
 
 -- | An 'EntityDef' represents the information that @persistent@ knows
 -- about an Entity. It uses this information to generate the Haskell
@@ -268,68 +260,6 @@ data FieldType
     | FTList FieldType
     deriving (Show, Eq, Read, Ord, Lift)
 
--- | An 'EntityNameDB' represents the datastore-side name that @persistent@
--- will use for an entity.
---
--- @since 2.12.0.0
-newtype FieldNameDB = FieldNameDB { unFieldNameDB :: Text }
-    deriving (Show, Eq, Read, Ord, Lift)
-
--- | @since 2.12.0.0
-instance DatabaseName FieldNameDB where
-    escapeWith f (FieldNameDB n) = f n
-
--- | A 'FieldNameHS' represents the Haskell-side name that @persistent@
--- will use for a field.
---
--- @since 2.12.0.0
-newtype FieldNameHS = FieldNameHS { unFieldNameHS :: Text }
-    deriving (Show, Eq, Read, Ord, Lift)
-
--- | A 'FieldDef' represents the inormation that @persistent@ knows about
--- a field of a datatype. This includes information used to parse the field
--- out of the database and what the field corresponds to.
-data FieldDef = FieldDef
-    { fieldHaskell   :: !FieldNameHS
-    -- ^ The name of the field. Note that this does not corresponds to the
-    -- record labels generated for the particular entity - record labels
-    -- are generated with the type name prefixed to the field, so
-    -- a 'FieldDef' that contains a @'FieldNameHS' "name"@ for a type
-    -- @User@ will have a record field @userName@.
-    , fieldDB        :: !FieldNameDB
-    -- ^ The name of the field in the database. For SQL databases, this
-    -- corresponds to the column name.
-    , fieldType      :: !FieldType
-    -- ^ The type of the field in Haskell.
-    , fieldSqlType   :: !SqlType
-    -- ^ The type of the field in a SQL database.
-    , fieldAttrs     :: ![FieldAttr]
-    -- ^ User annotations for a field. These are provided with the @!@
-    -- operator.
-    , fieldStrict    :: !Bool
-    -- ^ If this is 'True', then the Haskell datatype will have a strict
-    -- record field. The default value for this is 'True'.
-    , fieldReference :: !ReferenceDef
-    , fieldCascade :: !FieldCascade
-    -- ^ Defines how operations on the field cascade on to the referenced
-    -- tables. This doesn't have any meaning if the 'fieldReference' is set
-    -- to 'NoReference' or 'SelfReference'. The cascade option here should
-    -- be the same as the one obtained in the 'fieldReference'.
-    --
-    -- @since 2.11.0
-    , fieldComments  :: !(Maybe Text)
-    -- ^ Optional comments for a 'Field'. There is not currently a way to
-    -- attach comments to a field in the quasiquoter.
-    --
-    -- @since 2.10.0
-    , fieldGenerated :: !(Maybe Text)
-    -- ^ Whether or not the field is a @GENERATED@ column, and additionally
-    -- the expression to use for generation.
-    --
-    -- @since 2.11.0.0
-    }
-    deriving (Show, Eq, Read, Ord, Lift)
-
 isFieldNotGenerated :: FieldDef -> Bool
 isFieldNotGenerated = isNothing . fieldGenerated
 
@@ -350,15 +280,15 @@ data ReferenceDef = NoReference
 -- But it is only used for fieldReference
 -- so it only has data needed for embedding
 data EmbedEntityDef = EmbedEntityDef
-    { embeddedHaskell :: !EntityNameHS
-    , embeddedFields  :: ![EmbedFieldDef]
+    { embeddedHaskell :: EntityNameHS
+    , embeddedFields  :: [EmbedFieldDef]
     } deriving (Show, Eq, Read, Ord, Lift)
 
 -- | An EmbedFieldDef is the same as a FieldDef
 -- But it is only used for embeddedFields
 -- so it only has data needed for embedding
 data EmbedFieldDef = EmbedFieldDef
-    { emFieldDB    :: !FieldNameDB
+    { emFieldDB    :: FieldNameDB
     , emFieldEmbed :: Maybe EmbedEntityDef
     , emFieldCycle :: Maybe EntityNameHS
     -- ^ 'emFieldEmbed' can create a cycle (issue #311)
@@ -367,54 +297,61 @@ data EmbedFieldDef = EmbedFieldDef
     }
     deriving (Show, Eq, Read, Ord, Lift)
 
+-- | Returns 'True' if the 'FieldDef' does not have a 'MigrationOnly' or
+-- 'SafeToRemove' flag from the QuasiQuoter.
+--
+-- @since 2.13.0.0
+isHaskellField :: FieldDef -> Bool
+isHaskellField fd =
+    FieldAttrMigrationOnly `notElem` fieldAttrs fd &&
+    FieldAttrSafeToRemove `notElem` fieldAttrs fd
+
 toEmbedEntityDef :: EntityDef -> EmbedEntityDef
 toEmbedEntityDef ent = embDef
   where
     embDef = EmbedEntityDef
-      { embeddedHaskell = entityHaskell ent
-      , embeddedFields = map toEmbedFieldDef $ entityFields ent
-      }
+        { embeddedHaskell = entityHaskell ent
+        , embeddedFields =
+            map toEmbedFieldDef
+            $ filter isHaskellField
+            $ entityFields ent
+        }
     toEmbedFieldDef :: FieldDef -> EmbedFieldDef
     toEmbedFieldDef field =
-      EmbedFieldDef { emFieldDB       = fieldDB field
-                    , emFieldEmbed = case fieldReference field of
-                        EmbedRef em -> Just em
-                        SelfReference -> Just embDef
-                        _ -> Nothing
-                    , emFieldCycle = case fieldReference field of
-                        SelfReference -> Just $ entityHaskell ent
-                        _ -> Nothing
-                    }
+        EmbedFieldDef
+            { emFieldDB =
+                fieldDB field
+            , emFieldEmbed =
+                case fieldReference field of
+                    EmbedRef em -> Just em
+                    SelfReference -> Just embDef
+                    _ -> Nothing
+            , emFieldCycle =
+                case fieldReference field of
+                    SelfReference -> Just $ entityHaskell ent
+                    _ -> Nothing
+            }
 
--- | A 'ConstraintNameDB' represents the datastore-side name that @persistent@
--- will use for a constraint.
+-- | Type for storing the Uniqueness constraint in the Schema.  Assume you have
+-- the following schema with a uniqueness constraint:
 --
--- @since 2.12.0.0
-newtype ConstraintNameDB = ConstraintNameDB { unConstraintNameDB :: Text }
-  deriving (Show, Eq, Read, Ord, Lift)
-
--- | @since 2.12.0.0
-instance DatabaseName ConstraintNameDB where
-  escapeWith f (ConstraintNameDB n) = f n
-
--- | An 'ConstraintNameHS' represents the Haskell-side name that @persistent@
--- will use for a constraint.
---
--- @since 2.12.0.0
-newtype ConstraintNameHS = ConstraintNameHS { unConstraintNameHS :: Text }
-  deriving (Show, Eq, Read, Ord, Lift)
-
--- Type for storing the Uniqueness constraint in the Schema.
--- Assume you have the following schema with a uniqueness
--- constraint:
+-- @
 -- Person
 --   name String
 --   age Int
 --   UniqueAge age
+-- @
 --
 -- This will be represented as:
--- UniqueDef (ConstraintNameHS (packPTH "UniqueAge"))
--- (ConstraintNameDB (packPTH "unique_age")) [(FieldNameHS (packPTH "age"), FieldNameDB (packPTH "age"))] []
+--
+-- @
+-- UniqueDef
+--     { uniqueHaskell = ConstraintNameHS (packPTH "UniqueAge")
+--     , uniqueDBName = ConstraintNameDB (packPTH "unique_age")
+--     , uniqueFields = [(FieldNameHS (packPTH "age"), FieldNameDB (packPTH "age"))]
+--     , uniqueAttrs = []
+--     }
+-- @
 --
 data UniqueDef = UniqueDef
     { uniqueHaskell :: !ConstraintNameHS
@@ -513,8 +450,6 @@ data PersistException
     deriving Show
 
 instance Exception PersistException
-instance Error PersistException where
-    strMsg = PersistError . pack
 
 -- | A raw value which can be stored in any backend and can be marshalled to
 -- and from a 'PersistField'.
@@ -578,6 +513,7 @@ data LiteralType
 -- 'PersistLiteral_' directly.
 --
 -- @since 2.12.0.0
+pattern PersistDbSpecific :: ByteString -> PersistValue
 pattern PersistDbSpecific bs <- PersistLiteral_ _ bs where
     PersistDbSpecific bs = PersistLiteral_ DbSpecific bs
 
@@ -587,6 +523,7 @@ pattern PersistDbSpecific bs <- PersistLiteral_ _ bs where
 -- 'PersistDbSpecific' for more details.
 --
 -- @since 2.12.0.0
+pattern PersistLiteralEscaped :: ByteString -> PersistValue
 pattern PersistLiteralEscaped bs <- PersistLiteral_ _ bs where
     PersistLiteralEscaped bs = PersistLiteral_ Escaped bs
 
@@ -596,6 +533,7 @@ pattern PersistLiteralEscaped bs <- PersistLiteral_ _ bs where
 -- 'PersistDbSpecific' for more details.
 --
 -- @since 2.12.0.0
+pattern PersistLiteral :: ByteString -> PersistValue
 pattern PersistLiteral bs <- PersistLiteral_ _ bs where
     PersistLiteral bs = PersistLiteral_ Unescaped bs
 
@@ -762,6 +700,55 @@ instance Show OnlyUniqueException where
 instance Exception OnlyUniqueException
 
 
-data PersistUpdate = Assign | Add | Subtract | Multiply | Divide
-                   | BackendSpecificUpdate T.Text
+data PersistUpdate
+    = Assign | Add | Subtract | Multiply | Divide
+    | BackendSpecificUpdate T.Text
     deriving (Read, Show, Lift)
+
+-- | A 'FieldDef' represents the inormation that @persistent@ knows about
+-- a field of a datatype. This includes information used to parse the field
+-- out of the database and what the field corresponds to.
+data FieldDef = FieldDef
+    { fieldHaskell   :: !FieldNameHS
+    -- ^ The name of the field. Note that this does not corresponds to the
+    -- record labels generated for the particular entity - record labels
+    -- are generated with the type name prefixed to the field, so
+    -- a 'FieldDef' that contains a @'FieldNameHS' "name"@ for a type
+    -- @User@ will have a record field @userName@.
+    , fieldDB        :: !FieldNameDB
+    -- ^ The name of the field in the database. For SQL databases, this
+    -- corresponds to the column name.
+    , fieldType      :: !FieldType
+    -- ^ The type of the field in Haskell.
+    , fieldSqlType   :: !SqlType
+    -- ^ The type of the field in a SQL database.
+    , fieldAttrs     :: ![FieldAttr]
+    -- ^ User annotations for a field. These are provided with the @!@
+    -- operator.
+    , fieldStrict    :: !Bool
+    -- ^ If this is 'True', then the Haskell datatype will have a strict
+    -- record field. The default value for this is 'True'.
+    , fieldReference :: !ReferenceDef
+    , fieldCascade :: !FieldCascade
+    -- ^ Defines how operations on the field cascade on to the referenced
+    -- tables. This doesn't have any meaning if the 'fieldReference' is set
+    -- to 'NoReference' or 'SelfReference'. The cascade option here should
+    -- be the same as the one obtained in the 'fieldReference'.
+    --
+    -- @since 2.11.0
+    , fieldComments  :: !(Maybe Text)
+    -- ^ Optional comments for a 'Field'. There is not currently a way to
+    -- attach comments to a field in the quasiquoter.
+    --
+    -- @since 2.10.0
+    , fieldGenerated :: !(Maybe Text)
+    -- ^ Whether or not the field is a @GENERATED@ column, and additionally
+    -- the expression to use for generation.
+    --
+    -- @since 2.11.0.0
+    , fieldIsImplicitIdColumn :: !Bool
+    -- ^ 'True' if the field is an implicit ID column. 'False' otherwise.
+    --
+    -- @since 2.13.0.0
+    }
+    deriving (Show, Eq, Read, Ord, Lift)

@@ -282,7 +282,7 @@ wrapConnectionInfo connInfo conn logFunc = do
             , connCommit = helper "COMMIT"
             , connRollback = ignoreExceptions . helper "ROLLBACK"
             , connEscapeFieldName = escape . unFieldNameDB
-            , connEscapeTableName = escape . unEntityNameDB . entityDB
+            , connEscapeTableName = escape . unEntityNameDB . getEntityDBName
             , connEscapeRawName = escape
             , connNoLimit = "LIMIT -1"
             , connRDBMS = "sqlite"
@@ -341,7 +341,7 @@ insertSql' ent vals =
           ISRManyKeys sql vals
             where sql = T.concat
                     [ "INSERT INTO "
-                    , escapeE $ entityDB ent
+                    , escapeE $ getEntityDBName ent
                     , "("
                     , T.intercalate "," $ map (escapeF . fieldDB) cols
                     , ") VALUES("
@@ -353,14 +353,14 @@ insertSql' ent vals =
             where
               sel = T.concat
                   [ "SELECT "
-                  , escapeF $ fieldDB (entityId ent)
+                  , escapeF $ fieldDB (getEntityId ent)
                   , " FROM "
-                  , escapeE $ entityDB ent
+                  , escapeE $ getEntityDBName ent
                   , " WHERE _ROWID_=last_insert_rowid()"
                   ]
               ins = T.concat
                   [ "INSERT INTO "
-                  , escapeE $ entityDB ent
+                  , escapeE $ getEntityDBName ent
                   , if null cols
                         then " VALUES(null)"
                         else T.concat
@@ -375,7 +375,7 @@ insertSql' ent vals =
     notGenerated =
         isNothing . fieldGenerated
     cols =
-        filter notGenerated $ entityFields ent
+        filter notGenerated $ getEntityFieldsDatabase ent
 
 execute' :: Sqlite.Connection -> Sqlite.Statement -> [PersistValue] -> IO Int64
 execute' conn stmt vals = flip finally (liftIO $ Sqlite.reset conn stmt) $ do
@@ -441,7 +441,7 @@ migrate' allDefs getter val = do
                     return $ Right sql
   where
     def = val
-    table = entityDB def
+    table = getEntityDBName def
     go = do
         x <- CL.head
         case x of
@@ -473,7 +473,7 @@ mockMigration mig = do
                 , connCommit = helper "COMMIT"
                 , connRollback = ignoreExceptions . helper "ROLLBACK"
                 , connEscapeFieldName = escape . unFieldNameDB
-                , connEscapeTableName = escape . unEntityNameDB . entityDB
+                , connEscapeTableName = escape . unEntityNameDB . getEntityDBName
                 , connEscapeRawName = escape
                 , connNoLimit = "LIMIT -1"
                 , connRDBMS = "sqlite"
@@ -497,7 +497,7 @@ safeToRemove :: EntityDef -> FieldNameDB -> Bool
 safeToRemove def (FieldNameDB colName)
     = any (elem FieldAttrSafeToRemove . fieldAttrs)
     $ filter ((== FieldNameDB colName) . fieldDB)
-    $ entityFields def
+    $ getEntityFieldsDatabase def
 
 getCopyTable :: [EntityDef]
              -> (Text -> IO Statement)
@@ -525,12 +525,12 @@ getCopyTable allDefs getter def = do
                 names <- getCols
                 return $ name : names
             Just y -> error $ "Invalid result from PRAGMA table_info: " ++ show y
-    table = entityDB def
+    table = getEntityDBName def
     tableTmp = EntityNameDB $ unEntityNameDB table <> "_backup"
     (cols, uniqs, fdef) = sqliteMkColumns allDefs def
     cols' = filter (not . safeToRemove def . cName) cols
     newSql = mkCreateTable False def (cols', uniqs, fdef)
-    tmpSql = mkCreateTable True def { entityDB = tableTmp } (cols', uniqs, [])
+    tmpSql = mkCreateTable True (setEntityDBName tableTmp def) (cols', uniqs, [])
     dropTmp = "DROP TABLE " <> escapeE tableTmp
     dropOld = "DROP TABLE " <> escapeE table
     copyToTemp common = T.concat
@@ -560,7 +560,7 @@ mkCreateTable isTemp entity (cols, uniqs, fdefs) =
         [ "CREATE"
         , if isTemp then " TEMP" else ""
         , " TABLE "
-        , escapeE $ entityDB entity
+        , escapeE $ getEntityDBName entity
         , "("
         ]
 
@@ -580,15 +580,15 @@ mkCreateTable isTemp entity (cols, uniqs, fdefs) =
             ]
 
         Nothing ->
-            [ escapeF $ fieldDB (entityId entity)
+            [ escapeF $ fieldDB (getEntityId entity)
             , " "
-            , showSqlType $ fieldSqlType $ entityId entity
+            , showSqlType $ fieldSqlType $ getEntityId entity
             , " PRIMARY KEY"
-            , mayDefault $ defaultAttribute $ fieldAttrs $ entityId entity
+            , mayDefault $ defaultAttribute $ fieldAttrs $ getEntityId entity
             , T.concat $ map (sqlColumn isTemp) nonIdCols
             ]
 
-    nonIdCols = filter (\c -> cName c /= fieldDB (entityId entity)) cols
+    nonIdCols = filter (\c -> cName c /= fieldDB (getEntityId entity)) cols
 
 mayDefault :: Maybe Text -> Text
 mayDefault def = case def of
@@ -674,14 +674,14 @@ escape s =
 putManySql :: EntityDef -> Int -> Text
 putManySql ent n = putManySql' conflictColumns fields ent n
   where
-    fields = entityFields ent
-    conflictColumns = concatMap (map (escapeF . snd) . uniqueFields) (entityUniques ent)
+    fields = getEntityFieldsDatabase ent
+    conflictColumns = concatMap (map (escapeF . snd) . uniqueFields) (getEntityUniques ent)
 
 repsertManySql :: EntityDef -> Int -> Text
 repsertManySql ent n = putManySql' conflictColumns fields ent n
   where
     fields = keyAndEntityFields ent
-    conflictColumns = escapeF . fieldDB <$> entityKeyFields ent
+    conflictColumns = escapeF . fieldDB <$> getEntityKeyFields ent
 
 putManySql' :: [Text] -> [FieldDef] -> EntityDef -> Int -> Text
 putManySql' conflictColumns fields ent n = q
@@ -689,7 +689,7 @@ putManySql' conflictColumns fields ent n = q
     fieldDbToText = escapeF . fieldDB
     mkAssignment f = T.concat [f, "=EXCLUDED.", f]
 
-    table = escapeE . entityDB $ ent
+    table = escapeE . getEntityDBName $ ent
     columns = Util.commaSeparated $ map fieldDbToText fields
     placeholders = map (const "?") fields
     updates = map (mkAssignment . fieldDbToText) fields

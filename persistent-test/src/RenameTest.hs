@@ -75,7 +75,7 @@ specsWith
 specsWith runDb = describe "rename specs" $ do
     describe "LowerCaseTable" $ do
         it "LowerCaseTable has the right sql name" $ do
-            fieldDB (entityId (entityDef (Proxy @LowerCaseTable)))
+            fieldDB (getEntityId (entityDef (Proxy @LowerCaseTable)))
                 `shouldBe`
                     FieldNameDB "my_id"
 
@@ -92,7 +92,7 @@ specsWith runDb = describe "rename specs" $ do
         key' @== key
 
     it "extra blocks" $
-        entityExtra (entityDef (Nothing :: Maybe LowerCaseTable)) @?=
+        getEntityExtra (entityDef (Nothing :: Maybe LowerCaseTable)) @?=
             Map.fromList
                 [ ("ExtraBlock", map T.words ["foo bar", "baz", "bin"])
                 , ("ExtraBlock2", map T.words ["something"])

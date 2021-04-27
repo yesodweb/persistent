@@ -370,7 +370,7 @@ createBackend logFunc serverVersion smap conn =
         , connCommit     = const $ PG.commit   conn
         , connRollback   = const $ PG.rollback conn
         , connEscapeFieldName = escapeF
-        , connEscapeTableName = escapeE . entityDB
+        , connEscapeTableName = escapeE . getEntityDBName
         , connEscapeRawName = escape
         , connNoLimit    = "LIMIT ALL"
         , connRDBMS      = "postgresql"
@@ -392,13 +392,13 @@ insertSql' :: EntityDef -> [PersistValue] -> InsertSqlResult
 insertSql' ent vals =
     case entityPrimary ent of
         Just _pdef -> ISRManyKeys sql vals
-        Nothing -> ISRSingle (sql <> " RETURNING " <> escapeF (fieldDB (entityId ent)))
+        Nothing -> ISRSingle (sql <> " RETURNING " <> escapeF (fieldDB (getEntityId ent)))
   where
     (fieldNames, placeholders) = unzip (Util.mkInsertPlaceholders ent escapeF)
     sql = T.concat
         [ "INSERT INTO "
-        , escapeE $ entityDB ent
-        , if null (entityFields ent)
+        , escapeE $ getEntityDBName ent
+        , if null (getEntityFieldsDatabase ent)
             then " DEFAULT VALUES"
             else T.concat
                 [ "("
@@ -413,7 +413,7 @@ upsertSql' :: EntityDef -> NonEmpty (FieldNameHS, FieldNameDB) -> Text -> Text
 upsertSql' ent uniqs updateVal =
     T.concat
         [ "INSERT INTO "
-        , escapeE (entityDB ent)
+        , escapeE (getEntityDBName ent)
         , "("
         , T.intercalate "," fieldNames
         , ") VALUES ("
@@ -432,7 +432,7 @@ upsertSql' ent uniqs updateVal =
     wher = T.intercalate " AND " $ map (singleClause . snd) $ NEL.toList uniqs
 
     singleClause :: FieldNameDB -> Text
-    singleClause field = escapeE (entityDB ent) <> "." <> (escapeF field) <> " =?"
+    singleClause field = escapeE (getEntityDBName ent) <> "." <> (escapeF field) <> " =?"
 
 -- | SQL for inserting multiple rows at once and returning their primary keys.
 insertManySql' :: EntityDef -> [[PersistValue]] -> InsertSqlResult
@@ -442,7 +442,7 @@ insertManySql' ent valss =
     (fieldNames, placeholders)= unzip (Util.mkInsertPlaceholders ent escapeF)
     sql = T.concat
         [ "INSERT INTO "
-        , escapeE (entityDB ent)
+        , escapeE (getEntityDBName ent)
         , "("
         , T.intercalate "," fieldNames
         , ") VALUES ("
@@ -789,7 +789,7 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
             return $ Right $ migrationText exists' old''
         (errs, _) -> return $ Left errs
   where
-    name = entityDB entity
+    name = getEntityDBName entity
     (newcols', udefs, fdefs) = postgresMkColumns allDefs entity
     migrationText exists' old''
         | not exists' =
@@ -827,7 +827,7 @@ mkForeignAlt
     -> Maybe AlterDB
 mkForeignAlt entity fdef = pure $ AlterColumn tableName_ addReference
   where
-    tableName_ = entityDB entity
+    tableName_ = getEntityDBName entity
     addReference =
         AddReference
             (foreignRefTableDBName fdef)
@@ -860,10 +860,10 @@ addTable cols entity =
             Just _ ->
                 cols
             _ ->
-                filter (\c -> cName c /= fieldDB (entityId entity) ) cols
+                filter (\c -> cName c /= fieldDB (getEntityId entity) ) cols
 
     name =
-        entityDB entity
+        getEntityDBName entity
     idtxt =
         case entityPrimary entity of
             Just pdef ->
@@ -873,10 +873,10 @@ addTable cols entity =
                     , ")"
                     ]
             Nothing ->
-                let defText = defaultAttribute $ fieldAttrs $ entityId entity
-                    sType = fieldSqlType $ entityId entity
+                let defText = defaultAttribute $ fieldAttrs $ getEntityId entity
+                    sType = fieldSqlType $ getEntityId entity
                 in  T.concat
-                        [ escapeF $ fieldDB (entityId entity)
+                        [ escapeF $ fieldDB (getEntityId entity)
                         , maySerial sType defText
                         , " PRIMARY KEY UNIQUE"
                         , mayDefault defText
@@ -947,7 +947,7 @@ getColumns getter def cols = do
 
     stmt <- getter sqlv
     let vals =
-            [ PersistText $ unEntityNameDB $ entityDB def
+            [ PersistText $ unEntityNameDB $ getEntityDBName def
             ]
     columns <- with (stmtQuery stmt vals) (\src -> runConduit $ src .| processColumns .| CL.consume)
     let sqlc = T.concat
@@ -994,7 +994,7 @@ getColumns getter def cols = do
                $ groupBy ((==) `on` fst) rows
     processColumns =
         CL.mapM $ \x'@((PersistText cname) : _) -> do
-            col <- liftIO $ getColumn getter (entityDB def) x' (Map.lookup cname refMap)
+            col <- liftIO $ getColumn getter (getEntityDBName def) x' (Map.lookup cname refMap)
             pure $ case col of
                 Left e -> Left e
                 Right c -> Right $ Left c
@@ -1248,12 +1248,12 @@ findAlters defs edef col@(Column name isNull sqltype def _gen _defConstraintName
 
                 refAdd Nothing = []
                 refAdd (Just colRef) =
-                    case find ((== crTableName colRef) . entityDB) defs of
+                    case find ((== crTableName colRef) . getEntityDBName) defs of
                         Just refdef
-                            | _oldName /= fieldDB (entityId edef)
+                            | _oldName /= fieldDB (getEntityId edef)
                             ->
                             [AddReference
-                                (entityDB edef)
+                                (getEntityDBName edef)
                                 (crConstraintName colRef)
                                 [name]
                                 (Util.dbIdColumnsEsc escapeF refdef)
@@ -1269,7 +1269,7 @@ findAlters defs edef col@(Column name isNull sqltype def _gen _defConstraintName
                         else refDrop ref' ++ refAdd ref
                 modNull = case (isNull, isNull') of
                             (True, False) ->  do
-                                guard $ name /= fieldDB (entityId edef)
+                                guard $ name /= fieldDB (getEntityId edef)
                                 pure (IsNull col)
                             (False, True) ->
                                 let up = case def of
@@ -1328,18 +1328,18 @@ getAddReference
     -> ColumnReference
     -> Maybe AlterDB
 getAddReference allDefs entity cname cr@ColumnReference {crTableName = s, crConstraintName=constraintName} = do
-    guard $ cname /= fieldDB (entityId entity)
+    guard $ cname /= fieldDB (getEntityId entity)
     pure $ AlterColumn
         table
         (AddReference s constraintName [cname] id_ (crFieldCascade cr)
         )
   where
-    table = entityDB entity
+    table = getEntityDBName entity
     id_ =
         fromMaybe
             (error $ "Could not find ID of entity " ++ show s)
             $ do
-                entDef <- find ((== s) . entityDB) allDefs
+                entDef <- find ((== s) . getEntityDBName) allDefs
                 return $ Util.dbIdColumnsEsc escapeF entDef
 
 showColumn :: Column -> Text
@@ -1672,7 +1672,7 @@ mockMigrate allDefs _ entity = fmap (fmap $ map showAlterDb) $ do
         ([], old'') -> return $ Right $ migrationText False old''
         (errs, _) -> return $ Left errs
   where
-    name = entityDB entity
+    name = getEntityDBName entity
     migrationText exists' old'' =
         if not exists'
             then createText newcols fdefs udspair
@@ -1724,7 +1724,7 @@ mockMigration mig = do
                 , connCommit = undefined
                 , connRollback = undefined
                 , connEscapeFieldName = escapeF
-                , connEscapeTableName = escapeE . entityDB
+                , connEscapeTableName = escapeE . getEntityDBName
                 , connEscapeRawName = escape
                 , connNoLimit = undefined
                 , connRDBMS = undefined
@@ -1738,14 +1738,14 @@ mockMigration mig = do
 putManySql :: EntityDef -> Int -> Text
 putManySql ent n = putManySql' conflictColumns fields ent n
   where
-    fields = entityFields ent
-    conflictColumns = concatMap (map (escapeF . snd) . uniqueFields) (entityUniques ent)
+    fields = getEntityFieldsDatabase ent
+    conflictColumns = concatMap (map (escapeF . snd) . uniqueFields) (getEntityUniques ent)
 
 repsertManySql :: EntityDef -> Int -> Text
 repsertManySql ent n = putManySql' conflictColumns fields ent n
   where
     fields = keyAndEntityFields ent
-    conflictColumns = escapeF . fieldDB <$> entityKeyFields ent
+    conflictColumns = escapeF . fieldDB <$> getEntityKeyFields ent
 
 -- | This type is used to determine how to update rows using Postgres'
 -- @INSERT ... ON CONFLICT KEY UPDATE@ functionality, exposed via
@@ -1858,7 +1858,7 @@ upsertManyWhere [] _ _ _ = return ()
 upsertManyWhere records fieldValues updates filters = do
     conn <- asks projectBackend
     let uniqDef = -- onlyOneUniqueDef (Nothing :: Maybe record)
-            case entityUniques (entityDef (Nothing :: Maybe record)) of
+            case getEntityUniques (entityDef (Nothing :: Maybe record)) of
                 [uniq] -> uniq
                 _ -> error "impossible due to OnlyOneUniqueKey constraint"
             -- TODO: use onlyOneUniqueDef when it's exported
@@ -1928,8 +1928,8 @@ mkBulkUpsertQuery records conn fieldValues updates filters uniqDef =
     firstField = case entityFieldNames of
         [] -> error "The entity you're trying to insert does not have any fields."
         (field:_) -> field
-    entityFieldNames = map fieldDbToText (entityFields entityDef')
-    nameOfTable = escapeE . entityDB $ entityDef'
+    entityFieldNames = map fieldDbToText (getEntityFieldsDatabase entityDef')
+    nameOfTable = escapeE . getEntityDBName $ entityDef'
     copyUnlessValues = map snd fieldsToMaybeCopy
     recordValues = concatMap (map toPersistValue . toPersistFields) records
     recordPlaceholders =
@@ -1991,7 +1991,7 @@ putManySql' conflictColumns (filter isFieldNotGenerated -> fields) ent n = q
     fieldDbToText = escapeF . fieldDB
     mkAssignment f = T.concat [f, "=EXCLUDED.", f]
 
-    table = escapeE . entityDB $ ent
+    table = escapeE . getEntityDBName $ ent
     columns = Util.commaSeparated $ map fieldDbToText fields
     placeholders = map (const "?") fields
     updates = map (mkAssignment . fieldDbToText) fields

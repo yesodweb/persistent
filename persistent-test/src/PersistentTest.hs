@@ -632,11 +632,11 @@ specsWith runDb = describe "persistent" $ do
   describe "documentation syntax" $ do
     let edef = entityDef (Proxy :: Proxy Relationship)
     it "provides comments on entity def" $ do
-      entityComments edef
+      getEntityComments edef
         `shouldBe`
           Just "This is a doc comment for a relationship.\nYou need to put the pipe character for each line of documentation.\nBut you can resume the doc comments afterwards.\n"
     it "provides comments on the field" $ do
-      let [nameField, _] = entityFields edef
+      let [nameField, _] = getEntityFields edef
       fieldComments nameField
         `shouldBe`
           Just "Fields should be documentable.\n"

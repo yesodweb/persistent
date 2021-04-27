@@ -1,4 +1,5 @@
 {-# LANGUAGE ExistentialQuantification #-}
+
 module Database.Persist
     ( module Database.Persist.Class
     , module Database.Persist.Types

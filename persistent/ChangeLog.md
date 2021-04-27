@@ -4,6 +4,15 @@
 
 * [#1244](https://github.com/yesodweb/persistent/pull/1244)
   * Implement config for customising the FK name
+* [#1252](https://github.com/yesodweb/persistent/pull/1252)
+    * `mkMigrate` now defers to `mkEntityDefList` and `migrateModels` instead of
+      fixing the foreign key references itself.
+    * `mkSave` was deprecated - the function did not fix foreign key references.
+      Please use `mkEntityDefList` instead.
+    * `EntityDef` will now include fields marked `MigrationOnly` and
+      `SafeToRemove`. Beforehand, those were filtered out, and `mkMigrate`
+      applied. The function `getEntityFields` wll only return fields defined on
+      the Haskell type - for all columns, see `getEntityFieldsDatabase`.
 * [#1225](https://github.com/yesodweb/persistent/pull/1225)
     * The fields and constructor for `SqlBackend` are no longer exported by
       default. They are available from an internal module,
@@ -33,6 +42,43 @@
     * Previously hidden modules are now exposed under the `Internal` namespace.
     * The `connLimitOffset` function used to have a `Bool` parameter. This
       parameter is unused and has been removed.
+* [#1234](https://github.com/yesodweb/persistent/pull/1234)
+    * You can now customize the default implied ID column. See the documentation
+      in `Database.Persist.ImplicitIdDef` for more details.
+    * Moved the various `Name` types into `Database.Persist.Names`
+    * Removed the `hasCompositeKey` function. See `hasCompositePrimaryKey` and
+      `hasNaturalKey` as replacements.
+    * The `EntityDef` constructor and field labels are not exported by default.
+      Get those from `Database.Persist.EntityDef.Internal`, but you should
+      migrate to the getters/setters in `Database.Persist.EntityDef` as you can.
+    * Added the `Database.Persist.FieldDef` and
+      `Database.Persist.FieldDef.Internal` modules.
+    * The `PersistSettings` type was made abstract. Please migrate to the
+      getters/setters defined in that `Database.Persist.Quasi`, or use
+      `Database.Persist.Quasi.Internal` if you don't mind the possibility of
+      breaking changes.
+    * Add the `runSqlCommand` function for running arbitrary SQL during
+      migrations.
+    * Add `migrateModels` function for a TH-free migration facility.
+* [#1253](https://github.com/yesodweb/persistent/pull/1253)
+    * Add `discoverEntities` to discover instances of the class and return their
+      entity definitions.
+* [#1250](https://github.com/yesodweb/persistent/pull/1250)
+    * The `mpsGeneric` function has been deprecated. If you need this
+      functionality, please comment with your needs on the GitHub issue tracker.
+      We may un-deprecate it, or we may provide a new and better means of
+      facilitating a solution to your problem.
+* [#1255](https://github.com/yesodweb/persistent/pull/1255)
+    * `mkPersist` now checks to see if an instance already exists for
+      `PersistEntity` for the inputs. This allows you to pass `EntityDef`s into
+      `mkPersist` which have been previously defined, which allows the foreign
+      field information to be generated more reliably across modules.
+* [#1243](https://github.com/yesodweb/persistent/pull/1243)
+    * Assorted cleanup of TH module
+* [1242](https://github.com/yesodweb/persistent/pull/1242)
+    * Refactor setEmbedField to use do notation
+* [#1237](https://github.com/yesodweb/persistent/pull/1237)
+    * Remove nonEmptyOrFail function from recent tests
 
 ## 2.12.1.1
 

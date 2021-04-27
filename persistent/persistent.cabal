@@ -26,6 +26,7 @@ library
       , containers               >= 0.5
       , fast-logger              >= 2.4
       , http-api-data            >= 0.3
+      , lift-type                >= 0.1.0.0 && < 0.2.0.0
       , monad-logger             >= 0.3.28
       , mtl
       , path-pieces              >= 0.2
@@ -35,12 +36,12 @@ library
       , silently
       , template-haskell         >= 2.11 && < 2.18
       , text                     >= 1.2
+      , th-lift-instances        >= 0.1.14    && < 0.2
       , time                     >= 1.6
       , transformers             >= 0.5
-      , unliftio-core
       , unliftio
+      , unliftio-core
       , unordered-containers
-      , th-lift-instances        >= 0.1.14    && < 0.2
       , vector
 
     default-extensions: 
@@ -52,6 +53,13 @@ library
     exposed-modules: 
         Database.Persist
         Database.Persist.Types
+        Database.Persist.Names
+        Database.Persist.EntityDef
+        Database.Persist.EntityDef.Internal
+        Database.Persist.FieldDef
+        Database.Persist.FieldDef.Internal
+        Database.Persist.ImplicitIdDef
+        Database.Persist.ImplicitIdDef.Internal
         Database.Persist.TH
 
         Database.Persist.Quasi
@@ -150,16 +158,21 @@ test-suite test
                       , TypeFamilies
 
     other-modules:   
-        -- Database.Persist.Class.PersistEntity
-        -- Database.Persist.Class.PersistField
-        -- Database.Persist.Quasi
-        -- Database.Persist.Types
-        -- Database.Persist.Types.Base
+        Database.Persist.TH.EmbedSpec
+        Database.Persist.TH.ImplicitIdColSpec
+        Database.Persist.TH.MigrationOnlySpec
+        Database.Persist.TH.OverloadedLabelSpec
+        Database.Persist.TH.SharedPrimaryKeyImportedSpec
+        Database.Persist.TH.SharedPrimaryKeySpec
+        Database.Persist.TH.MultiBlockSpec
+        Database.Persist.TH.MultiBlockSpec.Model
         Database.Persist.THSpec
         TemplateTestImports
         Database.Persist.TH.SharedPrimaryKeySpec
         Database.Persist.TH.SharedPrimaryKeyImportedSpec
         Database.Persist.TH.OverloadedLabelSpec
+        Database.Persist.TH.ImplicitIdColSpec
+        Database.Persist.TH.DiscoverEntitiesSpec
     default-language: Haskell2010
 
 source-repository head
