@@ -313,7 +313,7 @@ Car
             (simplifyUnique <$> entityUniques vehicle) `shouldBe` []
 
         it "should parse the `entityForeigns` field" $ do
-            let [user, notification] = unboundEntityDef <$> parse lowerCaseSettings [st|
+            let [user, notification] = parse lowerCaseSettings [st|
 User
     name            Text
     emailFirst      Text
@@ -328,8 +328,8 @@ Notification
 
     Foreign User fk_noti_user sentToFirst sentToSecond References emailFirst emailSecond
 |]
-            entityForeigns user `shouldBe` []
-            entityForeigns notification `shouldBe`
+            unboundForeignDefs user `shouldBe` []
+            map _unboundForeignDef (unboundForeignDefs notification) `shouldBe`
                 [ ForeignDef
                     { foreignRefTableHaskell = EntityNameHS "User"
                     , foreignRefTableDBName = EntityNameDB "user"
@@ -337,9 +337,9 @@ Notification
                     , foreignConstraintNameDBName = ConstraintNameDB "notificationfk_noti_user"
                     , foreignFieldCascade = FieldCascade Nothing Nothing
                     , foreignFields =
-                        [ ((FieldNameHS "sentToFirst", FieldNameDB "sent_to_first"), (FieldNameHS "emailFirst", FieldNameDB "email_first"))
-                        , ((FieldNameHS "sentToSecond", FieldNameDB "sent_to_second"), (FieldNameHS "emailSecond", FieldNameDB "email_second"))
-                        ]
+                        []
+                        -- the foreign fields are not set yet in an unbound
+                        -- entity def
                     , foreignAttrs = []
                     , foreignNullable = False
                     , foreignToPrimary = False

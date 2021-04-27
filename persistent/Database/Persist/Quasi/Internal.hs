@@ -634,7 +634,7 @@ data UnboundForeignDef
     , _unboundForeignDef :: ForeignDef
     -- ^ The 'ForeignDef' which needs information filled in.
     }
-    deriving (Show, Lift)
+    deriving (Eq, Show, Lift)
 
 takeForeign
     :: PersistSettings
