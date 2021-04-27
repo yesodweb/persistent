@@ -413,11 +413,14 @@ Unfortunately, we can't use this to create Haddocks for you, because <https://gi
 -}
 module Database.Persist.Quasi
     ( parse
-    , PersistSettings (..)
+    , PersistSettings
     , upperCaseSettings
     , lowerCaseSettings
-    , toFKNameInfixed
+    , setPsUseSnakeCaseForiegnKeys
     , nullable
     ) where
 
 import Database.Persist.Quasi.Internal
+
+setPsUseSnakeCaseForiegnKeys :: PersistSettings -> PersistSettings
+setPsUseSnakeCaseForiegnKeys ps = ps { psToFKName = toFKNameInfixed "_" }

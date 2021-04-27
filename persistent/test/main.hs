@@ -22,7 +22,18 @@ import Data.Time
 import Text.Shakespeare.Text
 
 import Database.Persist.Class.PersistField
+import Database.Persist.Quasi
 import Database.Persist.Quasi.Internal
+       ( Line(..)
+       , LinesWithComments(..)
+       , Token(..)
+       , associateLines
+       , parseFieldType
+       , parseLine
+       , preparse
+       , splitExtras
+       , takeColsEx
+       )
 import Database.Persist.Types
 
 import qualified Database.Persist.THSpec as THSpec
@@ -359,7 +370,7 @@ Notification
             entityComments vehicle `shouldBe` Nothing
 
         it "should allow you to modify the FK name via provided function" $ do
-            let [user, notification] = parse (lowerCaseSettings { psToFKName = toFKNameInfixed "_" }) [st|
+            let [user, notification] = parse (setPsUseSnakeCaseForiegnKeys lowerCaseSettings) [st|
 User
     name            Text
     emailFirst      Text

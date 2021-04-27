@@ -108,7 +108,7 @@ data PersistSettings = PersistSettings
     , psToFKName :: !ToFKName
     -- ^ Function used to generate the FK name. Default value: @mappend@
     --
-    -- @since 2.12.1.2
+    -- @since 2.13
     , psStrictFields :: !Bool
     -- ^ Whether fields are by default strict. Default value: @True@.
     --
