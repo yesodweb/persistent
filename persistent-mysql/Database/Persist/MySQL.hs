@@ -30,36 +30,36 @@ module Database.Persist.MySQL
     , copyUnlessNull
     , copyUnlessEmpty
     , copyUnlessEq
+    , openMySQLConn
     ) where
 
-import qualified Blaze.ByteString.Builder.Char8 as BBB
 import qualified Blaze.ByteString.Builder.ByteString as BBS
+import qualified Blaze.ByteString.Builder.Char8 as BBB
 
 import Control.Arrow
 import Control.Monad
-import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLoggerIO, runNoLoggingT)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT, runExceptT)
-import Control.Monad.Trans.Reader (runReaderT, ReaderT)
+import Control.Monad.Trans.Reader (ReaderT, runReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
 
-import GHC.Stack
-import Data.Conduit
-import qualified Data.Conduit.List as CL
 import Data.Acquire (Acquire, mkAcquire, with)
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import Data.ByteString (ByteString)
+import Data.Conduit
+import qualified Data.Conduit.List as CL
 import Data.Either (partitionEithers)
 import Data.Fixed (Pico)
 import Data.Function (on)
-import Data.Int (Int64)
 import Data.IORef
-import Data.List (find, intercalate, sort, groupBy)
+import Data.Int (Int64)
+import Data.List (find, groupBy, intercalate, sort)
 import qualified Data.Map as Map
-import Data.Maybe (listToMaybe, mapMaybe, fromMaybe)
+import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import Data.Monoid ((<>))
 import qualified Data.Monoid as Monoid
 import Data.Pool (Pool)
@@ -67,6 +67,7 @@ import Data.Text (Text, pack)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.IO as T
+import GHC.Stack
 import System.Environment (getEnvironment)
 
 import Database.Persist.Sql
@@ -74,12 +75,12 @@ import Database.Persist.SqlBackend
 import Database.Persist.Sql.Types.Internal (makeIsolationLevelStatement)
 import qualified Database.Persist.Sql.Util as Util
 
-import qualified Database.MySQL.Base          as MySQLBase
-import qualified Database.MySQL.Base.Types    as MySQLBase
-import qualified Database.MySQL.Simple        as MySQL
-import qualified Database.MySQL.Simple.Param  as MySQL
+import qualified Database.MySQL.Base as MySQLBase
+import qualified Database.MySQL.Base.Types as MySQLBase
+import qualified Database.MySQL.Simple as MySQL
+import qualified Database.MySQL.Simple.Param as MySQL
 import qualified Database.MySQL.Simple.Result as MySQL
-import qualified Database.MySQL.Simple.Types  as MySQL
+import qualified Database.MySQL.Simple.Types as MySQL
 
 -- | Create a MySQL connection pool and run the given action.
 -- The pool is properly released after the action finishes using
@@ -119,37 +120,46 @@ withMySQLConn
     -> m a
 withMySQLConn = withSqlConn . open'
 
--- | Internal function that opens a connection to the MySQL
--- server.
-open' :: MySQL.ConnectInfo -> LogFunc -> IO SqlBackend
-open' ci logFunc = do
+-- | Open a connection to MySQL server, initialize the 'SqlBackend' and return
+-- their tuple
+--
+-- @since 2.12.1.0
+openMySQLConn :: MySQL.ConnectInfo -> LogFunc -> IO (MySQL.Connection, SqlBackend)
+openMySQLConn ci logFunc = do
     conn <- MySQL.connect ci
     MySQLBase.autocommit conn False -- disable autocommit!
     smap <- newIORef $ Map.empty
-    return $
-        setConnPutManySql putManySql $
-        setConnRepsertManySql repsertManySql $
-        mkSqlBackend MkSqlBackendArgs
-            { connPrepare    = prepare' conn
-            , connStmtMap    = smap
-            , connInsertSql  = insertSql'
-            , connClose      = MySQL.close conn
-            , connMigrateSql = migrate' ci
-            , connBegin      = \_ mIsolation -> do
-                forM_ mIsolation $ \iso -> MySQL.execute_ conn (makeIsolationLevelStatement iso)
-                MySQL.execute_ conn "start transaction" >> return ()
-            , connCommit     = const $ MySQL.commit   conn
-            , connRollback   = const $ MySQL.rollback conn
-            , connEscapeFieldName = T.pack . escapeF
-            , connEscapeTableName = T.pack . escapeE . getEntityDBName
-            , connEscapeRawName = T.pack . escapeDBName . T.unpack
-            , connNoLimit    = "LIMIT 18446744073709551615"
-            -- This noLimit is suggested by MySQL's own docs, see
-            -- <http://dev.mysql.com/doc/refman/5.5/en/select.html>
-            , connRDBMS      = "mysql"
-            , connLimitOffset = decorateSQLWithLimitOffset "LIMIT 18446744073709551615"
-            , connLogFunc    = logFunc
-            }
+    let
+        backend =
+            setConnPutManySql putManySql $
+            setConnRepsertManySql repsertManySql $
+            mkSqlBackend MkSqlBackendArgs
+                { connPrepare    = prepare' conn
+                , connStmtMap    = smap
+                , connInsertSql  = insertSql'
+                , connClose      = MySQL.close conn
+                , connMigrateSql = migrate' ci
+                , connBegin      = \_ mIsolation -> do
+                    forM_ mIsolation $ \iso -> MySQL.execute_ conn (makeIsolationLevelStatement iso)
+                    MySQL.execute_ conn "start transaction" >> return ()
+                , connCommit     = const $ MySQL.commit   conn
+                , connRollback   = const $ MySQL.rollback conn
+                , connEscapeFieldName = T.pack . escapeF
+                , connEscapeTableName = T.pack . escapeE . getEntityDBName
+                , connEscapeRawName = T.pack . escapeDBName . T.unpack
+                , connNoLimit    = "LIMIT 18446744073709551615"
+                -- This noLimit is suggested by MySQL's own docs, see
+                -- <http://dev.mysql.com/doc/refman/5.5/en/select.html>
+                , connRDBMS      = "mysql"
+                , connLimitOffset = decorateSQLWithLimitOffset "LIMIT 18446744073709551615"
+                , connLogFunc    = logFunc
+                }
+    pure (conn, backend)
+
+
+-- | Internal function that opens a connection to the MySQL server.
+open' :: MySQL.ConnectInfo -> LogFunc -> IO SqlBackend
+open' ci logFunc = snd <$> openMySQLConn ci logFunc
 
 -- | Prepare a query.  We don't support prepared statements, but
 -- we'll do some client-side preprocessing here.
