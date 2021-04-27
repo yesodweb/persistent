@@ -69,7 +69,6 @@ module Database.Persist.TH
 
 import Prelude hiding (concat, exp, splitAt, take, (++))
 
-import qualified Debug.Trace as Debug
 import Control.Monad
 import Data.Aeson
        ( FromJSON(parseJSON)
@@ -238,13 +237,11 @@ embedEntityDefsMap rawEnts = (embedEntityMap, noCycleEnts)
     breakCycleField entName f =
         case fieldReference f of
             EmbedRef em ->
-                Debug.trace "breakCycleField, hit embedRef" $
                 f { fieldReference = EmbedRef $ breakCycleEmbed [entName] em }
             _ ->
                 f
 
     breakCycleEmbed ancestors em =
-        Debug.trace ("Ancestors: " <> show ancestors) $
         em { embeddedFields = breakCycleEmField (emName : ancestors) <$> embeddedFields em
            }
         where
@@ -255,7 +252,6 @@ embedEntityDefsMap rawEnts = (embedEntityMap, noCycleEnts)
         Just embName ->
             if embName `elem` ancestors
             then
-                Debug.trace ("emFieldCycle: " <> show embName) $
                 emf { emFieldEmbed = Nothing, emFieldCycle = Just embName }
             else emf { emFieldEmbed = breakCycleEmbed ancestors <$> membed }
         where
@@ -328,7 +324,6 @@ instance Lift FieldSqlTypeExp where
 instance Lift EntityDefSqlTypeExp where
     lift (EntityDefSqlTypeExp ent sqlTypeExp sqlTypeExps) =
         [|ent { entityFields =
-                    Debug.trace "[Lift EntityDefSqlTypeExp]" $
                     $(lift $ FieldsSqlTypeExp (getEntityFieldsDatabase ent) sqlTypeExps)
               , entityId = $(lift $ FieldSqlTypeExp (entityId ent) sqlTypeExp)
               }
@@ -344,8 +339,7 @@ constructEmbedEntityMap =
     M.fromList . fmap
         (\ent ->
                 ( entityHaskell ent
-                , Debug.trace ("[constructEmbedEntityMap] demanding embedDefFor " <> show (entityHaskell ent))
-                $ toEmbedEntityDef ent
+                , toEmbedEntityDef ent
                 )
         )
 
@@ -373,80 +367,58 @@ mEmbedded
     -> FieldType
     -> Either (Maybe FTTypeConDescr) EmbedEntityDef
 mEmbedded _ (FTTypeCon Just{} _) =
-    Debug.trace "[mEmbedded] Hit a qualified type" $
     Left Nothing
 mEmbedded ents (FTTypeCon Nothing (EntityNameHS -> name)) =
-    Debug.trace ("[mEmbedded] Looking up " <> show name) $
     maybe (Left Nothing) Right $ M.lookup name ents
 mEmbedded ents (FTList x) =
-    Debug.trace "[mEmbedded] Hit FTList, recurring" $
     mEmbedded ents x
 mEmbedded ents (FTApp x y) =
-    Debug.trace "[mEmbedded] Hit FTApp" $
     -- Key converts an Record to a RecordId
     -- special casing this is obviously a hack
     -- This problem may not be solvable with the current QuasiQuoted approach though
     if x == FTTypeCon Nothing "Key"
         then
-            Debug.trace ("[mEmbedded] Got a key constructor") $
             Left $ Just FTKeyCon
         else
-            Debug.trace ("[mEmbedded] else branch, recurring on " <> show y) $
             mEmbedded ents y
 
 setEmbedField :: EntityNameHS -> EmbedEntityMap -> FieldDef -> FieldDef
 setEmbedField entName allEntities field = field
     { fieldReference =
-        Debug.trace ("[setEmbedField] for " <> show entName) $
-        Debug.trace ("[setEmbedField] field name: " <> show (fieldDB field)) $
-        -- Debug.trace ("field ref: " <> show (fieldReference field)) $
-        -- Debug.trace ("field typ: " <> show (fieldType field)) $
         case fieldReference field of
             NoReference ->
-                Debug.trace "[setEmbedField] On NoReference..." $
                 case mEmbedded allEntities (fieldType field) of
                     Left _ ->
-                        Debug.trace "[setEmbedField] On LeftNothing..." $
                         case stripId $ fieldType field of
                             Nothing ->
-                                Debug.trace "No ID on fieldType" $
                                 NoReference
                             Just name ->
-                                Debug.trace ("[setEmbedField] Found a name: " <> show name) $
                                 case M.lookup (EntityNameHS name) allEntities of
                                     Nothing ->
-                                        Debug.trace "[setEmbedField] Name not in allEntities" $
                                         NoReference
                                     Just _ ->
-                                        Debug.trace "[setEmbedField] Found it!" $
                                         ForeignRef
                                             (EntityNameHS name)
                                             -- This can get corrected in mkEntityDefSqlTypeExp
                                             (FTTypeCon (Just "Data.Int") "Int64")
                     Right em ->
-                        Debug.trace ("on Right em: ") $
-                        Debug.trace ("embedded Haskell: " ) $
                         if embeddedHaskell em /= entName
                              then EmbedRef em
                         else if maybeNullable field
-                             then Debug.trace "hiut maybeNullable" SelfReference
+                             then SelfReference
                         else
-                            Debug.trace "hit a self reference" $
                             case fieldType field of
                                  FTList _ -> SelfReference
                                  _ -> error $ unpack $ unEntityNameHS entName <> ": a self reference must be a Maybe"
             existing ->
-                Debug.trace "existing" $
                 existing
   }
 
 mkEntityDefSqlTypeExp :: EmbedEntityMap -> EntityMap -> EntityDef -> EntityDefSqlTypeExp
 mkEntityDefSqlTypeExp emEntities entityMap ent =
-    Debug.trace ("making " <> show (getEntityHaskellName ent)) $
     EntityDefSqlTypeExp ent (getSqlType $ entityId ent) (map getSqlType $ getEntityFieldsDatabase ent)
   where
     getSqlType field =
-        Debug.trace "[mkEntityDefSqlTypeExp] getSqlType" $
         maybe
             (defaultSqlTypeExp field)
             (SqlType' . SqlOther)
@@ -459,28 +431,20 @@ mkEntityDefSqlTypeExp emEntities entityMap ent =
     -- In the case of embedding, there won't be any datatype created yet.
     -- We just use SqlString, as the data will be serialized to JSON.
     defaultSqlTypeExp field =
-        Debug.trace ("on defaultSqlTypeExpr for field: " <> show (fieldDB field)) $
         case mEmbedded emEntities ftype of
             Right _ ->
-                Debug.trace ("Found Right, returning SqlType' SqlString") $
                 SqlType' SqlString
             Left (Just FTKeyCon) ->
-                Debug.trace ("Assuming SqlString for FTKeyCon") $
                 SqlType' SqlString
             Left Nothing ->
-                Debug.trace ("in defaultSqlTypeExp, got Left Nothing") $
                 case fieldReference field of
                     ForeignRef refName ft ->
-                        Debug.trace ("[defaultSqlTypeExp] got ForeignReif") $
                         case M.lookup refName entityMap of
                             Nothing  ->
-                                Debug.trace "refName not in entityMap, sqlTypeExp" $
-                                Debug.traceShowId $
                                 SqlTypeExp ft
                             -- A ForeignRef is blindly set to an Int64 in setEmbedField
                             -- correct that now
                             Just ent' ->
-                                Debug.trace "[defaultSqlTypeExp] Got Just ent'" $
                                 case entityPrimary ent' of
                                     Nothing -> SqlTypeExp ft
                                     Just pdef ->
