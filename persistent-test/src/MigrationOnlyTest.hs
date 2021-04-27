@@ -18,7 +18,7 @@ TwoField1 sql=two_field
     deriving Eq Show
 |]
 
-share [mkPersist sqlSettings { mpsGeneric = True }, mkMigrate "migrateAll2", mkDeleteCascade sqlSettings] [persistLowerCase|
+share [mkPersist sqlSettings { mpsGeneric = True }, mkMigrate "migrateAll2"] [persistLowerCase|
 TwoField
     field1 Int
     field2 T.Text

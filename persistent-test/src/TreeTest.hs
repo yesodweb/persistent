@@ -5,15 +5,13 @@ module TreeTest where
 
 import Init
 
-import Database.Persist.TH (mkDeleteCascade)
-
 
 -- mpsGeneric = False is due to a bug or at least lack of a feature in
 -- mkKeyTypeDec TH.hs
 share
     [ mkPersist persistSettings { mpsGeneric = False }
     , mkMigrate "treeMigrate"
-    , mkDeleteCascade persistSettings { mpsGeneric = False } ] [persistLowerCase|
+    ] [persistLowerCase|
   Tree sql=trees
       name    Text
       parent  Text Maybe

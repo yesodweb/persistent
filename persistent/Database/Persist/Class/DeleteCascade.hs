@@ -1,5 +1,7 @@
 {-# LANGUAGE ExplicitForAll #-}
-module Database.Persist.Class.DeleteCascade
+
+
+module Database.Persist.Class.DeleteCascade {-# DEPRECATED "The DeleteCascade module is deprecated. You can now set cascade behavior directly on entities in the quasiquoter." #-}
     ( DeleteCascade (..)
     , deleteCascadeWhere
     ) where
@@ -14,6 +16,8 @@ import Database.Persist.Class.PersistStore
 import Database.Persist.Class.PersistQuery
 import Database.Persist.Class.PersistEntity
 
+{-# DEPRECATED DeleteCascade "The DeleteCascade class is deprecated since you can now define cascade behavior directly on an entity." #-}
+
 -- | For combinations of backends and entities that support
 -- cascade-deletion. “Cascade-deletion” means that entries that depend on
 -- other entries to be deleted will be deleted as well.
@@ -23,6 +27,8 @@ class (PersistStoreWrite backend, PersistEntity record, BaseBackend backend ~ Pe
     -- | Perform cascade-deletion of single database
     -- entry.
     deleteCascade :: MonadIO m => Key record -> ReaderT backend m ()
+
+{-# DEPRECATED deleteCascadeWhere "This function is deprecated since you can set cascading delete behavior directly on the entity." #-}
 
 -- | Cascade-deletion of entries satisfying given filters.
 deleteCascadeWhere :: forall record backend m. (MonadIO m, DeleteCascade record backend, PersistQueryWrite backend)

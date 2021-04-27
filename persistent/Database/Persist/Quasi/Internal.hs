@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveLift #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE RankNTypes #-}
@@ -52,6 +53,7 @@ import qualified Data.Text as T
 import Database.Persist.Types
 import Text.Read (readEither)
 import Database.Persist.EntityDef.Internal
+import Language.Haskell.TH.Syntax (Lift)
 
 data ParseState a = PSDone | PSFail String | PSSuccess a Text deriving Show
 
@@ -315,7 +317,7 @@ data UnboundEntityDef
     { unboundForeignDefs :: [UnboundForeignDef]
     , unboundEntityDef :: EntityDef
     }
-    deriving Show
+    deriving (Show, Lift)
 
 overUnboundEntityDef
     :: (EntityDef -> EntityDef) -> UnboundEntityDef -> UnboundEntityDef
@@ -632,7 +634,7 @@ data UnboundForeignDef
     , _unboundForeignDef :: ForeignDef
     -- ^ The 'ForeignDef' which needs information filled in.
     }
-    deriving Show
+    deriving (Show, Lift)
 
 takeForeign
     :: PersistSettings

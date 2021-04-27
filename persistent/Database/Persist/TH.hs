@@ -28,6 +28,7 @@ module Database.Persist.TH
     , persistManyFileWith
       -- * Turn @EntityDef@s into types
     , mkPersist
+    , mkPersistWith
     , MkPersistSettings
     , mpsBackend
     , mpsGeneric
@@ -264,13 +265,27 @@ breakEntDefCycle entDef =
 -- | Calls 'parse' to Quasi.parse individual entities in isolation
 -- afterwards, sets references to other entities
 --
+-- In 2.13.0.0, this was changed to splice in @['UnboundEntityDef']@
+-- instead of @['EntityDef']@.
+--
 -- @since 2.5.3
 parseReferences :: PersistSettings -> Text -> Q Exp
-parseReferences ps s = lift $
-    map (mkEntityDefSqlTypeExp embedEntityMap entityMap) noCycleEnts
+parseReferences ps s = lift $ parse ps s
+    -- map (mkEntityDefSqlTypeExp embedEntityMap entityMap) noCycleEnts
   where
     unboundDefs =
         parse ps s
+    (embedEntityMap, noCycleEnts) =
+        embedEntityDefsMap $ fixForeignKeysAll unboundDefs
+    entityMap =
+        constructEntityMap noCycleEnts
+
+preprocessUnboundDefs
+    :: [EntityDef]
+    -> [UnboundEntityDef]
+    -> (M.Map EntityNameHS EmbedEntityDef, [EntityDef])
+preprocessUnboundDefs preexistingEntities unboundDefs = (embedEntityMap, noCycleEnts)
+  where
     (embedEntityMap, noCycleEnts) =
         embedEntityDefsMap $ fixForeignKeysAll unboundDefs
     entityMap =
@@ -480,12 +495,28 @@ mkEntityDefSqlTypeExp emEntities entityMap ent =
 
 -- | Create data types and appropriate 'PersistEntity' instances for the given
 -- 'EntityDef's. Works well with the persist quasi-quoter.
-mkPersist :: MkPersistSettings -> [EntityDef] -> Q [Dec]
-mkPersist mps ents' = do
+mkPersist
+    :: MkPersistSettings
+    -> [UnboundEntityDef]
+    -> Q [Dec]
+mkPersist mps = mkPersistWith mps []
+
+-- | Like '
+--
+-- @since 2.13.0.0
+mkPersistWith
+    :: MkPersistSettings
+    -> [EntityDef]
+    -> [UnboundEntityDef]
+    -> Q [Dec]
+mkPersistWith mps preexistingEntities ents' = do
     ents <-
         filterM shouldGenerateCode
         $ embedEntityDefs
+        $ mappend preexistingEntities
         $ map (setDefaultIdFields mps)
+        $ snd
+        $ preprocessUnboundDefs []
         $ ents'
     let
         entityMap =
@@ -1550,7 +1581,7 @@ persistFieldFromEntity mps entDef = do
 -- This function is useful for cases such as:
 --
 -- >>> share [mkSave "myDefs", mkPersist sqlSettings] [persistLowerCase|...|]
-share :: [[EntityDef] -> Q [Dec]] -> [EntityDef] -> Q [Dec]
+share :: [[a] -> Q [Dec]] -> [a] -> Q [Dec]
 share fs x = mconcat <$> mapM ($ x) fs
 
 -- | Save the @EntityDef@s passed in under the given name.
@@ -1574,9 +1605,15 @@ data Dep = Dep
     , depSourceNull  :: IsNullable
     }
 
+{-# DEPRECATED mkDeleteCascade "You can now set update and delete cascade behavior directly on the entity in the quasiquoter. This function and class are deprecated and will be removed in the next major ersion." #-}
+
 -- | Generate a 'DeleteCascade' instance for the given @EntityDef@s.
-mkDeleteCascade :: MkPersistSettings -> [EntityDef] -> Q [Dec]
-mkDeleteCascade mps defs = do
+--
+-- This function is deprecated as of 2.13.0.0. You can now set cascade
+-- behavior directly in the quasiquoter.
+mkDeleteCascade :: MkPersistSettings -> [UnboundEntityDef] -> Q [Dec]
+mkDeleteCascade mps unboundDefs = do
+    let defs = map unboundEntityDef unboundDefs
     let deps = concatMap getDeps defs
     mapM (go deps) defs
   where
@@ -1649,14 +1686,14 @@ mkDeleteCascade mps defs = do
 mkEntityDefList
     :: String
     -- ^ The name that will be given to the 'EntityDef' list.
-    -> [EntityDef]
+    -> [UnboundEntityDef]
     -> Q [Dec]
 mkEntityDefList entityList entityDefs = do
     let entityListName = mkName entityList
     edefs <- fmap ListE
         . forM entityDefs
         $ \entDef ->
-            let entityType = entityDefConT entDef
+            let entityType = entityDefConT (unboundEntityDef entDef)
              in [|entityDef (Proxy :: Proxy $(entityType))|]
     typ <- [t|[EntityDef]|]
     pure
@@ -1831,7 +1868,7 @@ migrateModels defs=
 -- This avoids problems where the QuasiQuoter is unable to know what the right
 -- reference types are. This sets 'mkPersist' to be the "single source of truth"
 -- for entity definitions.
-mkMigrate :: String -> [EntityDef] -> Q [Dec]
+mkMigrate :: String -> [UnboundEntityDef] -> Q [Dec]
 mkMigrate fun eds = do
     let entityDefListName = ("entityDefListFor" <> fun)
     body <- [| migrateModels $(varE (mkName entityDefListName)) |]
@@ -2263,7 +2300,7 @@ filterConName' mps entity field = mkName $ T.unpack name
 --
 -- @
 -- share
---   [ mkPersist sqlSettings . mappend $(discoverEntities)
+--   [ mkPersistWith sqlSettings $(discoverEntities)
 --   ]
 --   [persistLowerCase| ... |]
 -- @
@@ -2285,7 +2322,7 @@ filterConName' mps entity field = mkName $ T.unpack name
 -- import Bar
 --
 -- -- Since Foo and Bar are both imported, discoverEntities can find them here.
--- mkPersist sqlSettings . mappend $(discoverEntities) [persistLowerCase|
+-- mkPersistWith sqlSettings $(discoverEntities) [persistLowerCase|
 --   User
 --     name Text
 --     age  Int
@@ -2431,3 +2468,131 @@ fixForeignKeysAll unEnts = map fixForeignKeys unEnts
                 | otherwise = go fs
 
         lengthError pdef = error $ "found " ++ show (length foreignFieldTexts) ++ " fkeys and " ++ show (length pdef) ++ " pkeys: fdef=" ++ show fdef ++ " pdef=" ++ show pdef
+
+-- Note [Phases in Persistent Code Generation]
+--
+-- Persistent has a few phases of code generation where it tries to figure
+-- out what types fields have, whether or not foreign keys are correct,
+-- etc.
+--
+-- Historically, persistent was only internally consistent - entities
+-- defined outside of the same QuasiQuote block wouldn't have the right
+-- references and foreign key types. It used a clever trick with laziness
+-- to ensure that entities in a single block could refer to each other.
+--
+-- # Phase 1:
+--
+-- The first phase starts by parsing the text input into a list of entity
+-- definitions. Then it provides some minor fixup for the foreign key
+-- references and embeddings to break cycles. Finally, it performs
+-- a special lifting step to convert it into a Template Haskell expression,
+-- where the expression has some 'SqlType's deferred.
+--
+-- 1. QuasiQuote          :: Text -> [EntityDef]
+-- 2. embedEntityMap      :: [EntityDef] -> [EntityDef]
+-- 3. EntityDefSqlTypeExp :: [EntityDef] -> [EntityDefSqlTypeExp]
+--                        :: [EntityDefSqlTypeEx] -> Q Exp
+--
+-- ## Phase 1.1: QuasiQuotation
+--
+-- The first phase is the QuasiQuoter. It used to have the type:
+--
+-- > parse :: PersistSettings -> Text -> [EntityDef]
+--
+-- Now, the [EntityDef] returned were hopelessly incomplete. This is a pure
+-- function, returning a complete definition - but we don't know types of
+-- various things. So @persistent@ stuck placeholder values where we didn't
+-- understand what to do.
+--
+-- ## Phase 1.2: embedEntityDefMap
+--
+-- This constructs a list of entities with cycles broken in embeddings. It
+-- assumes that a 'NoReference' constructor needs to be intelligently
+-- filled in.
+--
+-- ## Phase 1.3: EntityDefSqlTypeExp
+--
+-- 'parseReferences' performs a specialized lifting step. This function
+-- converts the @[EntityDef]@ into a @[EntityDefSqlTypeExp]@ and then
+-- 'lift's that value up into @Q Exp@. The 'Lift' instance for this type is
+-- interesting - it doesn't return an 'EntityDefSqlTypeExp', but an
+-- 'EntityDef'!
+--
+-- > instance Lift EntityDefSqlTypeExp where
+-- >     lift (EntityDefSqlTypeExp ent sqlTypeExp sqlTypeExps) =
+-- >         [|ent { entityFields =
+-- >                     $(lift $ FieldsSqlTypeExp (getEntityFieldsDatabase ent) sqlTypeExps)
+-- >               , entityId = $(lift $ FieldSqlTypeExp (entityId ent) sqlTypeExp)
+-- >               }
+-- >         |]
+--
+-- 'FieldsSqlTypExp' defers to 'FieldSqlTypExp', so let's look at that:
+--
+-- > data FieldSqlTypeExp = FieldSqlTypeExp FieldDef SqlTypeExp
+-- >
+-- > instance Lift FieldSqlTypeExp where
+-- >     lift (FieldSqlTypeExp FieldDef{..} sqlTypeExp) =
+-- >         [|FieldDef fieldHaskell fieldDB fieldType $(lift sqlTypeExp) fieldAttrs fieldStrict fieldReference fieldCascade fieldComments fieldGenerated fieldIsImplicitIdColumn|]
+-- >       where
+-- >         FieldDef _x _ _ _ _ _ _ _ _ _ _ =
+-- >             error "need to update this record wildcard match"
+--
+-- OK, finally we're deferring to @lift sqlTypeExp@ and we're overwriting
+-- the 'fieldSqlTyp' value.
+--
+-- > data SqlTypeExp
+-- >     = SqlTypeExp FieldType
+-- >     | SqlType' SqlType
+-- >     deriving Show
+-- >
+-- > instance Lift SqlTypeExp where
+-- >     lift (SqlType' t)       = lift t
+-- >     lift (SqlTypeExp ftype) = return st
+-- >         where
+-- >             typ = ftToType ftype
+-- >             mtyp = ConT ''Proxy `AppT` typ
+-- >             typedNothing = SigE (ConE 'Proxy) mtyp
+-- >             st = VarE 'sqlType `AppE` typedNothing
+--
+-- So, for the easy case - when we just have a @SqlType'@ wrapper around
+-- @SqlType@ - we just lift it.
+--
+-- But if we have the 'SqlTypeExp', then we replace it with a call to
+-- @'sqlType' (Proxy :: Proxy typ)@. This allows us to defer a SQL type
+-- to a type class member, which will be smart enough to do what we need.
+--
+-- # Phase 2: mkPersist
+--
+-- Now, in 'mkPersist', we accept the input @[EntityDef]@, and then we
+-- provide further 'fixing' for the entities. The final, correct
+-- 'EntityDef' for a given entity is only present on the 'entityDef' class
+-- method on 'PersistEntity' - none of the input 'EntityDef' are proper.
+--
+-- ## Phase 2.1: liftAndFixKeys
+--
+-- This is what generates the final expression used in 'entityDef'. It
+-- defers to 'liftAndFixKey' on all fields of the entity.
+--
+-- > liftAndFixKey :: EntityMap -> FieldDef -> Q Exp
+-- > liftAndFixKey entityMap fieldDef@(FieldDef a b c sqlTyp e f fieldRef fc mcomments fg fieldIsImplicitIdColumn)
+-- >     | not fieldIsImplicitIdColumn =
+-- >         [|FieldDef a b c $(sqlTyp') e f (fieldRef') fc mcomments fg fieldIsImplicitIdColumn|]
+-- >     | otherwise =
+-- >         [|FieldDef a b c sqlTyp e f fieldRef fc mcomments fg fieldIsImplicitIdColumn|]
+-- >   where
+-- >       (fieldRef', sqlTyp') =
+-- >           case extractForeignRef entityMap fieldDef of
+-- >             Just (fr, ft) ->
+-- >                 (fr, lift (SqlTypeExp ft))
+-- >             Nothing ->
+-- >                 (fieldRef, lift sqlTyp)
+--
+-- It's the same trick as 'SqlTypeExp' before. But, this time, we've also
+-- got the 'entityMap' with which to check and see what we've got defined.
+-- And, since we're already in Q, it's relatively easy to ensure that we've
+-- got a more complete listing of entities.
+--
+-- All told, this is quite a bit of hassle, and the core dysfunction is
+-- that we make the QuasiQuoter emit an 'EntityDef'. If each step in the
+-- pipeline emitted partial types, then we wouldn't need to worry about all
+-- this fancy business!

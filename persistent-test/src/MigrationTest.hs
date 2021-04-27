@@ -7,7 +7,7 @@ import qualified Data.Text as T
 
 import Init
 
-share [mkPersist sqlSettings, mkMigrate "migrationMigrate", mkDeleteCascade sqlSettings] [persistLowerCase|
+share [mkPersist sqlSettings, mkMigrate "migrationMigrate"] [persistLowerCase|
 Target
     field1 Int
     field2 T.Text
@@ -23,7 +23,7 @@ CustomSqlId
     Primary pk
 |]
 
-share [mkPersist sqlSettings, mkMigrate "migrationAddCol", mkDeleteCascade sqlSettings] [persistLowerCase|
+share [mkPersist sqlSettings, mkMigrate "migrationAddCol"] [persistLowerCase|
 Target1 sql=target
     field1 Int
     field2 T.Text

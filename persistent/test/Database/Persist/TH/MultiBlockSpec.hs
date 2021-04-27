@@ -22,7 +22,7 @@ import TemplateTestImports
 import Database.Persist.TH.MultiBlockSpec.Model
 
 share
-    [ mkPersist sqlSettings . mappend importDefList
+    [ mkPersistWith sqlSettings importDefList
     ]
     [persistLowerCase|
 

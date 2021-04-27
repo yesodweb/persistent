@@ -7,12 +7,11 @@ module CompositeTest where
 import qualified Data.Map as Map
 import Data.Maybe (isJust)
 
-import Database.Persist.TH (mkDeleteCascade)
 import Init
 
 
 -- mpsGeneric = False is due to a bug or at least lack of a feature in mkKeyTypeDec TH.hs
-share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMigrate", mkDeleteCascade persistSettings { mpsGeneric = False }] [persistLowerCase|
+share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMigrate"] [persistLowerCase|
   TestParent
       name  String maxlen=20
       name2 String maxlen=20
