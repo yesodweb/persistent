@@ -320,11 +320,35 @@ fusedLiftEntityDefSqlTypeExp emEntities entityMap ent =
         [|
     ent
         { entityFields =
-            $(fmap ListE . traverse liftFieldSqlTypeExp $ zipWith FieldSqlTypeExp (getEntityFieldsDatabase ent) sqlTypeExps)
+            $(ListE <$> traverse liftFieldSqlTypeExp (getEntityFieldsDatabase ent))
         , entityId =
-            $(liftFieldSqlTypeExp $ FieldSqlTypeExp (entityId ent) sqlTypeExp)
+            $(liftFieldSqlTypeExp $ entityId ent)
         }
     |]
+  where
+    liftFieldSqlTypeExp :: FieldDef -> Q Exp
+    liftFieldSqlTypeExp fieldDef@FieldDef{..} =
+        let
+            sqlTypeExp = getSqlType emEntities entityMap fieldDef
+        in
+            [|
+                FieldDef
+                    fieldHaskell
+                    fieldDB
+                    fieldType
+                    $(liftSqlTypeExp sqlTypeExp)
+                    fieldAttrs
+                    fieldStrict
+                    fieldReference
+                    fieldCascade
+                    fieldComments
+                    fieldGenerated
+                    fieldIsImplicitIdColumn
+            |]
+      where
+        FieldDef _x _ _ _ _ _ _ _ _ _ _ =
+            error "need to update this record wildcard match"
+
 
 getSqlType :: EmbedEntityMap -> EntityMap -> FieldDef -> SqlTypeExp
 getSqlType emEntities entityMap field =
@@ -399,25 +423,6 @@ liftSqlTypeExp ste =
 
 data FieldSqlTypeExp = FieldSqlTypeExp FieldDef SqlTypeExp
 
-liftFieldSqlTypeExp :: FieldSqlTypeExp -> Q Exp
-liftFieldSqlTypeExp (FieldSqlTypeExp FieldDef{..} sqlTypeExp) =
-    [|
-        FieldDef
-            fieldHaskell
-            fieldDB
-            fieldType
-            $(liftSqlTypeExp sqlTypeExp)
-            fieldAttrs
-            fieldStrict
-            fieldReference
-            fieldCascade
-            fieldComments
-            fieldGenerated
-            fieldIsImplicitIdColumn
-    |]
-  where
-    FieldDef _x _ _ _ _ _ _ _ _ _ _ =
-        error "need to update this record wildcard match"
 
 type EmbedEntityMap = M.Map EntityNameHS EmbedEntityDef
 
