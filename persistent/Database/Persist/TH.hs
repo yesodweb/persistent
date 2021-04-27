@@ -115,7 +115,7 @@ import Web.PathPieces (PathPiece(..))
 
 import Database.Persist
 import Database.Persist.Quasi
-import Database.Persist.Quasi.Internal (fixForeignKeysAll)
+import Database.Persist.Quasi.Internal (UnboundEntityDef(..), UnboundForeignDef(..))
 import Database.Persist.Sql
        (Migration, PersistFieldSql, SqlBackend, migrate, sqlType)
 
@@ -1922,8 +1922,8 @@ ftToType (FTApp x y) = ftToType x `AppT` ftToType y
 ftToType (FTList x) = ListT `AppT` ftToType x
 
 infixr 5 ++
-(++) :: Text -> Text -> Text
-(++) = append
+(++) :: Monoid m => m -> m -> m
+(++) = mappend
 
 mkJSON :: MkPersistSettings -> EntityDef -> Q [Dec]
 mkJSON _ def | ("json" `notElem` entityAttrs def) = return []
@@ -2328,3 +2328,106 @@ discoverEntities = do
     fmap ListE $
         forM types $ \typ -> do
             [e| entityDef (Proxy :: Proxy $(pure typ)) |]
+
+fixForeignKeysAll :: [UnboundEntityDef] -> [EntityDef]
+fixForeignKeysAll unEnts = map fixForeignKeys unEnts
+  where
+    ents = map unboundEntityDef unEnts
+    entLookup = M.fromList $ map (\e -> (entityHaskell e, e)) ents
+
+    fixForeignKeys :: UnboundEntityDef -> EntityDef
+    fixForeignKeys (UnboundEntityDef foreigns ent) =
+      ent { entityForeigns = map (fixForeignKey ent) foreigns }
+
+    -- check the count and the sqltypes match and update the foreignFields with
+    -- the names of the referenced columns
+    fixForeignKey :: EntityDef -> UnboundForeignDef -> ForeignDef
+    fixForeignKey ent (UnboundForeignDef foreignFieldTexts parentFieldTexts fdef) =
+        let
+            errorNoPrimaryKeyFound =
+                error $ "no primary key found fdef="++show fdef++ " ent="++show ent
+            fdefs =
+                fromMaybe errorNoPrimaryKeyFound mfdefs
+            pentError =
+                error $ "could not find table " ++ show (foreignRefTableHaskell fdef)
+                ++ " fdef=" ++ show fdef ++ " allnames="
+                ++ show (map (unEntityNameHS . entityHaskell . unboundEntityDef) unEnts)
+                ++ "\n\nents=" ++ show ents
+            pent =
+                fromMaybe pentError $ M.lookup (foreignRefTableHaskell fdef) entLookup
+            mfdefs =
+                case parentFieldTexts of
+                    [] -> entitiesPrimary pent
+                    _  -> Just $ map (getFieldDef pent . FieldNameHS) parentFieldTexts
+        in
+             if length foreignFieldTexts /= length fdefs
+             then
+                 lengthError fdefs
+             else
+                 let
+                     fds_ffs =
+                         zipWith toForeignFields
+                             foreignFieldTexts
+                             fdefs
+                     dbname =
+                         unEntityNameDB (entityDB pent)
+                     oldDbName =
+                         unEntityNameDB (foreignRefTableDBName fdef)
+                  in
+                      fdef
+                          { foreignFields = map snd fds_ffs
+                          , foreignNullable = setNull $ map fst fds_ffs
+                          , foreignRefTableDBName =
+                              EntityNameDB dbname
+                          , foreignConstraintNameDBName =
+                              ConstraintNameDB
+                              . T.replace oldDbName dbname . unConstraintNameDB
+                              $ foreignConstraintNameDBName fdef
+                          }
+      where
+        setNull :: [FieldDef] -> Bool
+        setNull [] =
+            error "setNull: impossible!"
+        setNull (fd:fds) =
+            let
+                nullSetting = isNull fd
+            in
+                if all ((nullSetting ==) . isNull) fds
+                then nullSetting
+                else error $
+                    "foreign key columns must all be nullable or non-nullable"
+                   ++ show (map (unFieldNameHS . fieldHaskell) (fd:fds))
+
+        isNull =
+            (NotNullable /=) . nullable . fieldAttrs
+
+        toForeignFields
+            :: Text
+            -> FieldDef
+            -> (FieldDef, (ForeignFieldDef, ForeignFieldDef))
+        toForeignFields fieldText parentFieldDef =
+           case checkTypes fieldDef parentFieldDef of
+               Just err ->
+                   error err
+               Nothing ->
+                   (fieldDef, ((haskellField, fieldDB fieldDef), (parentFieldHaskellName, parentFieldNameDB)))
+          where
+            fieldDef = getFieldDef ent haskellField
+            haskellField = FieldNameHS fieldText
+            parentFieldHaskellName = fieldHaskell parentFieldDef
+            parentFieldNameDB = fieldDB parentFieldDef
+            checkTypes foreignField parentField =
+                if fieldType foreignField == fieldType parentField
+                then Nothing
+                else Just $ "fieldType mismatch: " ++ show (fieldType foreignField) ++ ", " ++ show (fieldType parentField)
+
+        getFieldDef :: EntityDef -> FieldNameHS -> FieldDef
+        getFieldDef entity t = go (keyAndEntityFields entity)
+          where
+            go [] = error $ "foreign key constraint for: " ++ show (unEntityNameHS $ entityHaskell entity)
+                       ++ " unknown column: " ++ show t
+            go (f:fs)
+                | fieldHaskell f == t = f
+                | otherwise = go fs
+
+        lengthError pdef = error $ "found " ++ show (length foreignFieldTexts) ++ " fkeys and " ++ show (length pdef) ++ " pkeys: fdef=" ++ show fdef ++ " pdef=" ++ show pdef
