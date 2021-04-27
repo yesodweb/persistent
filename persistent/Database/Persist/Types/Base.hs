@@ -453,6 +453,13 @@ data ForeignDef = ForeignDef
     }
     deriving (Show, Eq, Read, Ord, Lift)
 
+-- | A 'TableNameDB' represents the datastore-side name that @persistent@
+-- will use for a table.
+--
+-- @since 2.13.0.0
+newtype TableNameDB = TableNameDB { unTableNameDB :: Text }
+  deriving (Show, Eq, Read, Ord, Lift)
+
 -- | This datatype describes how a foreign reference field cascades deletes
 -- or updates.
 --

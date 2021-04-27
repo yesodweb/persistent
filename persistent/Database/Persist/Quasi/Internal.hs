@@ -16,6 +16,7 @@ module Database.Persist.Quasi.Internal
     , PersistSettings (..)
     , upperCaseSettings
     , lowerCaseSettings
+    , ToFKName (..)
     , toFKNameInfixed
     , nullable
     , Token (..)
@@ -99,16 +100,12 @@ parseFieldType t0 =
             PSDone -> PSSuccess (front []) t
             -- _ ->
 
-newtype ToFKName = ToFKName
-  { unToFKName :: Text -> Text -> Text
-  }
-
 data PersistSettings = PersistSettings
     { psToDBName :: !(Text -> Text)
     , psToFKName :: !ToFKName
     -- ^ Function used to generate the FK name. Default value: @mappend@
     --
-    -- @since 2.13
+    -- @since 2.13.0.0
     , psStrictFields :: !Bool
     -- ^ Whether fields are by default strict. Default value: @True@.
     --
@@ -124,7 +121,7 @@ data PersistSettings = PersistSettings
 defaultPersistSettings, upperCaseSettings, lowerCaseSettings :: PersistSettings
 defaultPersistSettings = PersistSettings
     { psToDBName = id
-    , psToFKName = ToFKName mappend
+    , psToFKName = ToFKName $ \(TableNameDB table) name -> table <> name
     , psStrictFields = True
     , psIdName       = "id"
     }
@@ -139,8 +136,15 @@ lowerCaseSettings = defaultPersistSettings
          in T.dropWhile (== '_') . T.concatMap go
     }
 
+-- | A function for converting a table and column name into a constraint name.
+--
+-- @since 2.13.0.0
+newtype ToFKName = ToFKName
+    { unToFKName :: TableNameDB -> Text -> Text
+    }
+
 toFKNameInfixed :: Text -> ToFKName
-toFKNameInfixed inf = ToFKName $ \table name -> table <> inf <> name
+toFKNameInfixed inf = ToFKName $ \(TableNameDB table) name -> table <> inf <> name
 
 -- | Parses a quasi-quoted syntax into a list of entity definitions.
 parse :: PersistSettings -> Text -> [EntityDef]
@@ -431,8 +435,8 @@ mkEntityDef :: PersistSettings
 mkEntityDef ps name entattribs lines =
   UnboundEntityDef foreigns $
     EntityDef
-        { entityHaskell = EntityNameHS name'
-        , entityDB = EntityNameDB $ getDbName ps name' entattribs
+        { entityHaskell = entName
+        , entityDB = EntityNameDB $ getDbName ps (unTableNameDB name') entattribs
         -- idField is the user-specified Id
         -- otherwise useAutoIdField
         -- but, adjust it if the user specified a Primary
@@ -447,11 +451,11 @@ mkEntityDef ps name entattribs lines =
         , entityComments = Nothing
         }
   where
-    entName = EntityNameHS name'
+    entName = EntityNameHS (unTableNameDB name')
     (isSum, name') =
         case T.uncons name of
-            Just ('+', x) -> (True, x)
-            _ -> (False, name)
+            Just ('+', x) -> (True, TableNameDB x)
+            _ -> (False, TableNameDB name)
     (attribs, extras) = splitExtras lines
 
     textAttribs :: [[Text]]
@@ -594,11 +598,12 @@ getDbName :: PersistSettings -> Text -> [Text] -> Text
 getDbName ps n [] = psToDBName ps n
 getDbName ps n (a:as) = fromMaybe (getDbName ps n as) $ T.stripPrefix "sql=" a
 
-takeConstraint :: PersistSettings
-          -> Text
-          -> [FieldDef]
-          -> [Text]
-          -> (Maybe FieldDef, Maybe CompositeDef, Maybe UniqueDef, Maybe UnboundForeignDef)
+takeConstraint
+    :: PersistSettings
+    -> TableNameDB
+    -> [FieldDef]
+    -> [Text]
+    -> (Maybe FieldDef, Maybe CompositeDef, Maybe UniqueDef, Maybe UnboundForeignDef)
 takeConstraint ps tableName defs (n:rest) | isCapitalizedText n = takeConstraint'
     where
       takeConstraint'
@@ -606,12 +611,12 @@ takeConstraint ps tableName defs (n:rest) | isCapitalizedText n = takeConstraint
             | n == "Foreign" = (Nothing, Nothing, Nothing, Just $ takeForeign ps tableName defs rest)
             | n == "Primary" = (Nothing, Just $ takeComposite defs rest, Nothing, Nothing)
             | n == "Id"      = (Just $ takeId ps tableName (n:rest), Nothing, Nothing, Nothing)
-            | otherwise      = (Nothing, Nothing, Just $ takeUniq ps "" defs (n:rest), Nothing) -- retain compatibility with original unique constraint
+            | otherwise      = (Nothing, Nothing, Just $ takeUniq ps (TableNameDB "") defs (n:rest), Nothing) -- retain compatibility with original unique constraint
 takeConstraint _ _ _ _ = (Nothing, Nothing, Nothing, Nothing)
 
 -- TODO: this is hacky (the double takeCols, the setFieldDef stuff, and setIdName.
 -- need to re-work takeCols function
-takeId :: PersistSettings -> Text -> [Text] -> FieldDef
+takeId :: PersistSettings -> TableNameDB -> [Text] -> FieldDef
 takeId ps tableName (n:rest) =
     setFieldDef
     $ fromMaybe (error "takeId: impossible!")
@@ -623,12 +628,12 @@ takeId ps tableName (n:rest) =
     addDefaultIdType = takeColsEx ps (field : keyCon : rest ) -- `mappend` setIdName)
     setFieldDef fd = fd
         { fieldReference =
-            ForeignRef (EntityNameHS tableName) $
+            ForeignRef (EntityNameHS (unTableNameDB tableName)) $
                 if fieldType fd == FTTypeCon Nothing keyCon
                 then defaultReferenceTypeCon
                 else fieldType fd
         }
-    keyCon = keyConName tableName
+    keyCon = keyConName (unTableNameDB tableName)
     -- this will be ignored if there is already an existing sql=
     -- TODO: I think there is a ! ignore syntax that would screw this up
     -- setIdName = ["sql=" `mappend` psIdName ps]
@@ -656,11 +661,11 @@ takeComposite fields pkcols =
 -- `UniqueTestNull fieldA fieldB sql=ConstraintNameInDatabase !force`
 -- Here using sql= sets the name of the constraint.
 takeUniq :: PersistSettings
-         -> Text
+         -> TableNameDB
          -> [FieldDef]
          -> [Text]
          -> UniqueDef
-takeUniq ps tableName defs (n:rest)
+takeUniq ps (TableNameDB tableName) defs (n:rest)
     | isCapitalizedText n
         = UniqueDef
             (ConstraintNameHS n)
@@ -710,7 +715,7 @@ data UnboundForeignDef = UnboundForeignDef
 
 takeForeign
     :: PersistSettings
-    -> Text
+    -> TableNameDB
     -> [FieldDef]
     -> [Text]
     -> UnboundForeignDef
@@ -773,7 +778,7 @@ takeForeign ps tableName _defs = takeRefTable
 
         go xs _ _ = error $ errorPrefix ++ "expecting a lower case constraint name or a cascading action xs=" ++ show xs
 
-toFKConstraintNameDB :: PersistSettings -> Text -> Text -> ConstraintNameDB
+toFKConstraintNameDB :: PersistSettings -> TableNameDB -> Text -> ConstraintNameDB
 toFKConstraintNameDB ps tableName n =
     ConstraintNameDB $ psToDBName ps (toFKName tableName n)
   where
