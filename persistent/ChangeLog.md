@@ -9,7 +9,7 @@
       Please use `mkEntityDefList` instead.
     * `EntityDef` will now include fields marked `MigrationOnly` and
       `SafeToRemove`. Beforehand, those were filtered out, and `mkMigrate`
-      applied. The function `getEntityFields` wll only return fields defiend on
+      applied. The function `getEntityFields` wll only return fields defined on
       the Haskell type - for all columns, see `getEntityFieldsDatabase`.
 * [#1225](https://github.com/yesodweb/persistent/pull/1225)
     * The fields and constructor for `SqlBackend` are no longer exported by
