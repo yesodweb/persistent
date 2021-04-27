@@ -10,6 +10,7 @@ module Database.Persist.EntityDef
     , getEntityHaskellName
     , getEntityDBName
     , getEntityFields
+    , getEntityFieldsDatabase
     , getEntityForeignDefs
     , getEntityUniques
     , getEntityId
@@ -30,6 +31,7 @@ import Data.Text (Text)
 import Data.Map (Map)
 
 import Database.Persist.EntityDef.Internal
+import Database.Persist.FieldDef (isHaskellField)
 
 import Database.Persist.Types.Base
     ( UniqueDef
@@ -92,11 +94,29 @@ getEntityForeignDefs = entityForeigns
 -- will return the key columns if you used the @Primary@ syntax for defining the
 -- primary key.
 --
+-- This does not return fields that are marked 'SafeToRemove' or 'MigrationOnly'
+-- - so it only returns fields that are represented in the Haskell type. If you
+-- need those fields, use 'getEntityFieldsDatabase'.
+--
 -- @since 2.13.0.0
 getEntityFields
     :: EntityDef
     -> [FieldDef]
-getEntityFields = entityFields
+getEntityFields = filter isHaskellField . entityFields
+
+-- | This returns all of the 'FieldDef' defined for the 'EntityDef', including
+-- those fields that are marked as 'MigrationOnly' (and therefore only present
+-- in the database) or 'SafeToRemove' (and a migration will drop the column if
+-- it exists in the database).
+--
+-- For all the fields that are present on the Haskell-type, see
+-- 'getEntityFields'.
+--
+-- @since 2.13.0.0
+getEntityFieldsDatabase
+    :: EntityDef
+    -> [FieldDef]
+getEntityFieldsDatabase = entityFields
 
 -- |
 --
@@ -125,12 +145,19 @@ getEntityKeyFields
     -> [FieldDef]
 getEntityKeyFields = entityKeyFields
 
+-- | TODO
+--
+-- @since 2.13.0.0
 setEntityFields :: [FieldDef] -> EntityDef -> EntityDef
 setEntityFields fd ed = ed { entityFields = fd }
 
+-- | Perform a mapping function over all of the entity fields, as determined by
+-- 'getEntityFieldsDatabase'.
+--
+-- @since 2.13.0.0
 overEntityFields
     :: ([FieldDef] -> [FieldDef])
     -> EntityDef
     -> EntityDef
 overEntityFields f ed =
-    setEntityFields (f (getEntityFields ed)) ed
+    setEntityFields (f (getEntityFieldsDatabase ed)) ed

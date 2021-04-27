@@ -407,12 +407,6 @@ overUnboundEntityDef
 overUnboundEntityDef f ubed =
     ubed { unboundEntityDef = f (unboundEntityDef ubed) }
 
-lookupKeyVal :: Text -> [Text] -> Maybe Text
-lookupKeyVal key = lookupPrefix $ key `mappend` "="
-
-lookupPrefix :: Text -> [Text] -> Maybe Text
-lookupPrefix prefix = msum . map (T.stripPrefix prefix)
-
 -- | Construct an entity definition.
 mkEntityDef
     :: PersistSettings
@@ -465,10 +459,28 @@ mkEntityDef ps name entattribs lines =
             _ ->
                 case (setFieldComments comments <$> takeColsEx ps (tokenText <$> x)) of
                   Just sm ->
-                      (sm : acc, [])
+                      (maybeSetSelfReference sm : acc, [])
                   Nothing ->
                       (acc, [])
 
+    maybeSetSelfReference field = go (fieldType field)
+      where
+        go ft =
+            case ft of
+                FTTypeCon Nothing x
+                    | x == name ->
+                        field
+                            { fieldReference =
+                                SelfReference
+                            }
+                    | otherwise ->
+                        field
+                FTTypeCon _ _ ->
+                    field
+                FTList ft' ->
+                    go ft'
+                _ ->
+                    field
     autoIdField = mkAutoIdField ps entName idSqlType
     idSqlType = maybe SqlInt64 (const $ SqlOther "Primary Key") primaryComposite
 

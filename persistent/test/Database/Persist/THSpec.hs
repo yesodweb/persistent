@@ -47,6 +47,8 @@ import TemplateTestImports
 
 import qualified Database.Persist.TH.DiscoverEntitiesSpec as DiscoverEntitiesSpec
 import qualified Database.Persist.TH.ImplicitIdColSpec as ImplicitIdColSpec
+import qualified Database.Persist.TH.MigrationOnlySpec as MigrationOnlySpec
+import qualified Database.Persist.TH.EmbedSpec as EmbedSpec
 import qualified Database.Persist.TH.OverloadedLabelSpec as OverloadedLabelSpec
 import qualified Database.Persist.TH.SharedPrimaryKeyImportedSpec as SharedPrimaryKeyImportedSpec
 import qualified Database.Persist.TH.SharedPrimaryKeySpec as SharedPrimaryKeySpec
@@ -111,6 +113,7 @@ SharedPrimaryKeyWithCascade
 SharedPrimaryKeyWithCascadeAndCustomName
     Id (Key HasDefaultId) OnDeleteCascade sql=my_id
     name String
+
 |]
 
 share [mkPersist sqlSettings { mpsGeneric = False, mpsGenerateLenses = True }] [persistLowerCase|
@@ -139,11 +142,13 @@ instance Arbitrary Address where
     arbitrary = Address <$> arbitraryT <*> arbitraryT <*> arbitrary
 
 spec :: Spec
-spec = do
+spec = describe "THSpec" $ do
     OverloadedLabelSpec.spec
     SharedPrimaryKeySpec.spec
     SharedPrimaryKeyImportedSpec.spec
     ImplicitIdColSpec.spec
+    MigrationOnlySpec.spec
+    EmbedSpec.spec
     DiscoverEntitiesSpec.spec
     describe "TestDefaultKeyCol" $ do
         let FieldDef{..} =

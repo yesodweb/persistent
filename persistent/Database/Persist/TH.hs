@@ -11,7 +11,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE StrictData #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
@@ -235,11 +234,12 @@ embedEntityDefsMap rawEnts = (embedEntityMap, noCycleEnts)
         let entName = getEntityHaskellName entDef
          in overEntityFields (map (breakCycleField entName)) entDef
 
-    breakCycleField entName f = case f of
-        FieldDef { fieldReference = EmbedRef em } ->
-            f { fieldReference = EmbedRef $ breakCycleEmbed [entName] em }
-        _ ->
-            f
+    breakCycleField entName f =
+        case fieldReference f of
+            EmbedRef em ->
+                f { fieldReference = EmbedRef $ breakCycleEmbed [entName] em }
+            _ ->
+                f
 
     breakCycleEmbed ancestors em =
         em { embeddedFields = breakCycleEmField (emName : ancestors) <$> embeddedFields em
@@ -249,8 +249,10 @@ embedEntityDefsMap rawEnts = (embedEntityMap, noCycleEnts)
 
     breakCycleEmField ancestors emf = case embeddedHaskell <$> membed of
         Nothing -> emf
-        Just embName -> if embName `elem` ancestors
-            then emf { emFieldEmbed = Nothing, emFieldCycle = Just embName }
+        Just embName ->
+            if embName `elem` ancestors
+            then
+                emf { emFieldEmbed = Nothing, emFieldCycle = Just embName }
             else emf { emFieldEmbed = breakCycleEmbed ancestors <$> membed }
         where
             membed = emFieldEmbed emf
@@ -321,7 +323,8 @@ instance Lift FieldSqlTypeExp where
 
 instance Lift EntityDefSqlTypeExp where
     lift (EntityDefSqlTypeExp ent sqlTypeExp sqlTypeExps) =
-        [|ent { entityFields = $(lift $ FieldsSqlTypeExp (getEntityFields ent) sqlTypeExps)
+        [|ent { entityFields =
+                    $(lift $ FieldsSqlTypeExp (getEntityFieldsDatabase ent) sqlTypeExps)
               , entityId = $(lift $ FieldSqlTypeExp (entityId ent) sqlTypeExp)
               }
         |]
@@ -333,7 +336,12 @@ type EmbedEntityMap = M.Map EntityNameHS EmbedEntityDef
 
 constructEmbedEntityMap :: [EntityDef] -> EmbedEntityMap
 constructEmbedEntityMap =
-    M.fromList . fmap (\ent -> (entityHaskell ent, toEmbedEntityDef ent))
+    M.fromList . fmap
+        (\ent ->
+                ( entityHaskell ent
+                , toEmbedEntityDef ent
+                )
+        )
 
 type EntityMap = M.Map EntityNameHS EntityDef
 
@@ -369,8 +377,10 @@ mEmbedded ents (FTApp x y) =
     -- special casing this is obviously a hack
     -- This problem may not be solvable with the current QuasiQuoted approach though
     if x == FTTypeCon Nothing "Key"
-        then Left $ Just FTKeyCon
-        else mEmbedded ents y
+        then
+            Left $ Just FTKeyCon
+        else
+            mEmbedded ents y
 
 setEmbedField :: EntityNameHS -> EmbedEntityMap -> FieldDef -> FieldDef
 setEmbedField entName allEntities field = field
@@ -396,7 +406,8 @@ setEmbedField entName allEntities field = field
                              then EmbedRef em
                         else if maybeNullable field
                              then SelfReference
-                        else case fieldType field of
+                        else
+                            case fieldType field of
                                  FTList _ -> SelfReference
                                  _ -> error $ unpack $ unEntityNameHS entName <> ": a self reference must be a Maybe"
             existing ->
@@ -405,13 +416,17 @@ setEmbedField entName allEntities field = field
 
 mkEntityDefSqlTypeExp :: EmbedEntityMap -> EntityMap -> EntityDef -> EntityDefSqlTypeExp
 mkEntityDefSqlTypeExp emEntities entityMap ent =
-    EntityDefSqlTypeExp ent (getSqlType $ entityId ent) (map getSqlType $ getEntityFields ent)
+    EntityDefSqlTypeExp ent (getSqlType $ entityId ent) (map getSqlType $ getEntityFieldsDatabase ent)
   where
     getSqlType field =
         maybe
             (defaultSqlTypeExp field)
             (SqlType' . SqlOther)
-            (listToMaybe $ mapMaybe (\case {FieldAttrSqltype x -> Just x; _ -> Nothing}) $ fieldAttrs field)
+            (listToMaybe $ mapMaybe attrSqlType $ fieldAttrs field)
+
+    attrSqlType = \case
+        FieldAttrSqltype x -> Just x
+        _ -> Nothing
 
     -- In the case of embedding, there won't be any datatype created yet.
     -- We just use SqlString, as the data will be serialized to JSON.
@@ -425,7 +440,8 @@ mkEntityDefSqlTypeExp emEntities entityMap ent =
                 case fieldReference field of
                     ForeignRef refName ft ->
                         case M.lookup refName entityMap of
-                            Nothing  -> SqlTypeExp ft
+                            Nothing  ->
+                                SqlTypeExp ft
                             -- A ForeignRef is blindly set to an Int64 in setEmbedField
                             -- correct that now
                             Just ent' ->
@@ -475,7 +491,7 @@ mkPersist mps ents' = do
         , symbolToFieldInstances
         ]
   where
-    ents = map (fixEntityDef . setDefaultIdFields mps) ents'
+    ents = embedEntityDefs $ map (setDefaultIdFields mps) ents'
     entityMap = constructEntityMap ents
 
 setDefaultIdFields :: MkPersistSettings -> EntityDef -> EntityDef
@@ -506,12 +522,14 @@ setDefaultIdFields mps ed
 
 -- | Implement special preprocessing on EntityDef as necessary for 'mkPersist'.
 -- For example, strip out any fields marked as MigrationOnly.
+--
+-- This should be called when performing Haskell codegen, but the 'EntityDef'
+-- *should* keep all of the fields present when defining 'entityDef'. This is
+-- necessary so that migrations know to keep these columns around, or to delete
+-- them, as appropriate.
 fixEntityDef :: EntityDef -> EntityDef
 fixEntityDef =
-    overEntityFields (filter keepField)
-  where
-    keepField fd = FieldAttrMigrationOnly `notElem` fieldAttrs fd &&
-                   FieldAttrSafeToRemove `notElem` fieldAttrs fd
+    overEntityFields (filter isHaskellField)
 
 -- | Settings to be passed to the 'mkPersist' function.
 data MkPersistSettings = MkPersistSettings
@@ -588,7 +606,6 @@ data MkPersistSettings = MkPersistSettings
     --
     -- @since 2.13.0.0
     }
-
 
 {-# DEPRECATED mpsGeneric "The mpsGeneric function adds a considerable amount of overhead and complexity to the library without bringing significant benefit. We would like to remove it. If you require this feature, please comment on the linked GitHub issue, and we'll either keep it around, or we can figure out a nicer way to solve your problem.\n\n Github: https://github.com/yesodweb/persistent/issues/1204" #-}
 
@@ -1185,19 +1202,21 @@ fieldError tableName fieldName err = mconcat
     ]
 
 mkEntity :: EntityMap -> MkPersistSettings -> EntityDef -> Q [Dec]
-mkEntity entityMap mps entDef = do
-    entityDefExp <-
-        if mpsGeneric mps
-           then liftAndFixKeys entityMap entDef
-           else makePersistEntityDefExp mps entityMap entDef
-    let name = mkEntityDefName entDef
-    let clazz = ConT ''PersistEntity `AppT` genDataType
+mkEntity entityMap mps preEntDef = do
+    entityDefExp <- liftAndFixKeys entityMap preEntDef
+    let
+        entDef = fixEntityDef preEntDef
+        genDataType = genericDataType mps entName backendT
+        entName = entityHaskell entDef
+        name = mkEntityDefName entDef
+        clazz = ConT ''PersistEntity `AppT` genDataType
+
     tpf <- mkToPersistFields mps entDef
     fpv <- mkFromPersistValues mps entDef
     utv <- mkUniqueToValues $ entityUniques entDef
     puk <- mkUniqueKeys entDef
     let primaryField = entityId entDef
-    fields <- mapM (mkField mps entDef) $ primaryField : getEntityFields entDef
+    fields <- mapM (mkField mps entDef) $ primaryField : getEntityFieldsDatabase entDef
     fkc <- mapM (mkForeignKeysComposite mps entDef) $ entityForeigns entDef
 
     toFieldNames <- mkToFieldNames $ entityUniques entDef
@@ -1294,9 +1313,6 @@ mkEntity entityMap mps entDef = do
         , FunD 'fieldLens lensClauses
         ]
       ] `mappend` lenses) `mappend` keyInstanceDecs
-  where
-    genDataType = genericDataType mps entName backendT
-    entName = entityHaskell entDef
 
 mkUniqueKeyInstances :: MkPersistSettings -> EntityDef -> Q [Dec]
 mkUniqueKeyInstances mps entDef = do
@@ -1513,6 +1529,9 @@ share :: [[EntityDef] -> Q [Dec]] -> [EntityDef] -> Q [Dec]
 share fs x = mconcat <$> mapM ($ x) fs
 
 -- | Save the @EntityDef@s passed in under the given name.
+--
+-- This function was deprecated in @persistent-2.13.0.0@. It doesn't properly
+-- fix foreign keys. Please refer to 'mkEntityDefList' for a replacement.
 mkSave :: String -> [EntityDef] -> Q [Dec]
 mkSave name' defs' = do
     let name = mkName name'
@@ -1520,6 +1539,8 @@ mkSave name' defs' = do
     return [ SigD name $ ListT `AppT` ConT ''EntityDef
            , FunD name [normalClause [] defs]
            ]
+
+{-# DEPRECATED mkSave "This function is broken. mkEntityDefList is a drop-in replacement that will properly handle foreign keys correctly." #-}
 
 data Dep = Dep
     { depTarget :: EntityNameHS
@@ -1743,67 +1764,56 @@ derivePersistFieldJSON s = do
 -- migrateAll = 'migrateModels' entities
 -- @
 --
+-- The function 'mkMigrate' currently implements exactly this behavior now. If
+-- you're splitting up the entity definitions into separate files, then it is
+-- better to use the entity definition list and the concatenate all the models
+-- together into a big list to call with 'migrateModels'.
+--
+-- @
+-- module Foo where
+--
+--     share [mkPersist s, mkEntityDefList "fooModels"] ...
+--
+--
+-- module Bar where
+--
+--     share [mkPersist s, mkEntityDefList "barModels"] ...
+--
+-- module Migration where
+--
+--     import Foo
+--     import Bar
+--
+--     migrateAll = migrateModels (fooModels <> barModels)
+-- @
+--
 -- @since 2.13.0.0
 migrateModels :: [EntityDef] -> Migration
-migrateModels eds =
-    forM_ eds $ \ed ->
-        migrate eds ed
+migrateModels defs=
+    forM_ (filter isMigrated defs) $ \def ->
+        migrate defs def
+  where
+    isMigrated def = pack "no-migrate" `notElem` entityAttrs def
 
 -- | Creates a single function to perform all migrations for the entities
 -- defined here. One thing to be aware of is dependencies: if you have entities
 -- with foreign references, make sure to place those definitions after the
 -- entities they reference.
+--
+-- In @persistent-2.13.0.0@, this was changed to *ignore* the input entity def
+-- list, and instead defer to 'mkEntityDefList' to get the correct entities.
+-- This avoids problems where the QuasiQuoter is unable to know what the right
+-- reference types are. This sets 'mkPersist' to be the "single source of truth"
+-- for entity definitions.
 mkMigrate :: String -> [EntityDef] -> Q [Dec]
-mkMigrate fun allDefs = do
-    body' <- body
-    return
-        [ SigD (mkName fun) typ
-        , FunD (mkName fun) [normalClause [] body']
+mkMigrate fun eds = do
+    let entityDefListName = ("entityDefListFor" <> fun)
+    body <- [| migrateModels $(varE (mkName entityDefListName)) |]
+    edList <- mkEntityDefList entityDefListName eds
+    pure $ edList <>
+        [ SigD (mkName fun) (ConT ''Migration)
+        , FunD (mkName fun) [normalClause [] body]
         ]
-  where
-    defs = filter isMigrated allDefs
-    isMigrated def = "no-migrate" `notElem` entityAttrs def
-    typ = ConT ''Migration
-    entityMap = constructEntityMap allDefs
-    body :: Q Exp
-    body =
-        case defs of
-            [] -> [|return ()|]
-            _  -> do
-              defsName <- newName "defs"
-              defsStmt <- do
-                defs' <- mapM (liftAndFixKeys entityMap) defs
-                let defsExp = ListE defs'
-                return $ LetS [ValD (VarP defsName) (NormalB defsExp) []]
-              stmts <- mapM (toStmt $ VarE defsName) defs
-              return (DoE $ defsStmt : stmts)
-    toStmt :: Exp -> EntityDef -> Q Stmt
-    toStmt defsExp ed = do
-        u <- liftAndFixKeys entityMap ed
-        m <- [|migrate|]
-        return $ NoBindS $ m `AppE` defsExp `AppE` u
-
-makePersistEntityDefExp :: MkPersistSettings -> EntityMap -> EntityDef -> Q Exp
-makePersistEntityDefExp mps entityMap entDef@EntityDef{..} =
-    [|EntityDef
-        entityHaskell
-        entityDB
-        $(liftAndFixKey entityMap entityId)
-        entityAttrs
-        $(fieldDefReferences mps entDef entityFields)
-        entityUniques
-        entityForeigns
-        entityDerives
-        entityExtra
-        entitySum
-        entityComments
-    |]
-
-fieldDefReferences :: MkPersistSettings -> EntityDef -> [FieldDef] -> Q Exp
-fieldDefReferences mps entDef fieldDefs =
-  fmap ListE $ forM fieldDefs $ \fieldDef -> do
-    let fieldDefConE = ConE (filterConName mps entDef fieldDef)
-    pure $ VarE 'persistFieldDef `AppE` fieldDefConE
 
 liftAndFixKeys :: EntityMap -> EntityDef -> Q Exp
 liftAndFixKeys entityMap EntityDef{..} =
@@ -1968,7 +1978,7 @@ requirePersistentExtensions = requireExtensions requiredExtensions
 
 mkSymbolToFieldInstances :: MkPersistSettings -> EntityDef -> Q [Dec]
 mkSymbolToFieldInstances mps ed = do
-    fmap join $ forM (keyAndEntityFields ed) $ \fieldDef -> do
+    fmap join $ forM (keyAndEntityFields (fixEntityDef ed)) $ \fieldDef -> do
         let fieldNameT :: Q Type
             fieldNameT =
                 litT $ strTyLit

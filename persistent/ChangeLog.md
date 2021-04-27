@@ -2,6 +2,15 @@
 
 ## 2.13.0.0 (unreleased)
 
+* [#1252](https://github.com/yesodweb/persistent/pull/1252)
+    * `mkMigrate` now defers to `mkEntityDefList` and `migrateModels` instead of
+      fixing the foreign key references itself.
+    * `mkSave` was deprecated - the function did not fix foreign key references.
+      Please use `mkEntityDefList` instead.
+    * `EntityDef` will now include fields marked `MigrationOnly` and
+      `SafeToRemove`. Beforehand, those were filtered out, and `mkMigrate`
+      applied. The function `getEntityFields` wll only return fields defined on
+      the Haskell type - for all columns, see `getEntityFieldsDatabase`.
 * [#1225](https://github.com/yesodweb/persistent/pull/1225)
     * The fields and constructor for `SqlBackend` are no longer exported by
       default. They are available from an internal module,

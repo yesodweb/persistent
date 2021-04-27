@@ -1,24 +1,28 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE DataKinds, FlexibleInstances #-}
-{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 import MyInit
 
-import Data.Time (Day, UTCTime (..), TimeOfDay, timeToTimeOfDay, timeOfDayToTime)
-import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds, posixSecondsToUTCTime)
-import Data.Fixed
-import Test.QuickCheck
-import qualified Data.Text as T
-import Data.IntMap (IntMap)
 import qualified Data.ByteString as BS
+import Data.Fixed
+import Data.IntMap (IntMap)
+import qualified Data.Text as T
+import Data.Time (Day, TimeOfDay, UTCTime(..), timeOfDayToTime, timeToTimeOfDay)
+import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
+import Database.Persist.Sql
+import Test.QuickCheck
 
 import qualified CompositeTest
 import qualified CustomPersistFieldTest
@@ -35,26 +39,26 @@ import qualified MaxLenTest
 import qualified MigrationColumnLengthTest
 import qualified MigrationIdempotencyTest
 import qualified MigrationOnlyTest
-import qualified MpsNoPrefixTest
 import qualified MpsCustomPrefixTest
-import qualified PersistentTest
+import qualified MpsNoPrefixTest
 import qualified PersistUniqueTest
+import qualified PersistentTest
 -- FIXME: Not used... should it be?
 -- import qualified PrimaryTest
 import qualified RawSqlTest
 import qualified ReadWriteTest
 import qualified Recursive
 -- TODO: can't use this as MySQL can't do DEFAULT CURRENT_DATE
+import qualified CustomConstraintTest
+import qualified ForeignKey
+import qualified GeneratedColumnTestSQL
+import qualified ImplicitUuidSpec
+import qualified LongIdentifierTest
 import qualified RenameTest
 import qualified SumTypeTest
 import qualified TransactionLevelTest
 import qualified UniqueTest
 import qualified UpsertTest
-import qualified CustomConstraintTest
-import qualified LongIdentifierTest
-import qualified GeneratedColumnTestSQL
-import qualified ForeignKey
-import qualified ImplicitUuidSpec
 
 type Tuple a b = (a, b)
 
@@ -171,9 +175,11 @@ main = do
         Recursive.specsWith db
         SumTypeTest.specsWith db (Just (runMigrationSilent SumTypeTest.sumTypeMigrate))
         MigrationOnlyTest.specsWith db
-            (Just
-                $ runMigrationSilent MigrationOnlyTest.migrateAll1
-                >> runMigrationSilent MigrationOnlyTest.migrateAll2
+            (Just $ do
+                void $ rawExecute "DROP TABLE IF EXISTS referencing;" []
+                void $ rawExecute "DROP TABLE IF EXISTS two_field;" []
+                void $ runMigrationSilent MigrationOnlyTest.migrateAll1
+                void $ runMigrationSilent MigrationOnlyTest.migrateAll2
             )
         PersistentTest.specsWith db
         PersistentTest.filterOrSpecs db

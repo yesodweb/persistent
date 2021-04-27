@@ -107,8 +107,6 @@ import qualified Data.Text.Encoding as TE
 import Test.HUnit (Assertion, assertBool, assertFailure, (@=?), (@?=))
 import Test.QuickCheck
 
-import Web.PathPieces
-import Web.Internal.HttpApiData
 import Control.Monad (unless, (>=>))
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger

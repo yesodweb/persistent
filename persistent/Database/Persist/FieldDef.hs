@@ -6,6 +6,7 @@ module Database.Persist.FieldDef
       FieldDef
       -- ** Helpers
     , isFieldNotGenerated
+    , isHaskellField
       -- * 'FieldCascade'
     , FieldCascade(..)
     , renderFieldCascade
@@ -15,3 +16,8 @@ module Database.Persist.FieldDef
     ) where
 
 import Database.Persist.FieldDef.Internal
+
+import Database.Persist.Types.Base
+    ( isHaskellField
+    )
+

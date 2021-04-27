@@ -158,6 +158,12 @@ test-suite test
                       , TypeFamilies
 
     other-modules:   
+        Database.Persist.TH.EmbedSpec
+        Database.Persist.TH.ImplicitIdColSpec
+        Database.Persist.TH.MigrationOnlySpec
+        Database.Persist.TH.OverloadedLabelSpec
+        Database.Persist.TH.SharedPrimaryKeyImportedSpec
+        Database.Persist.TH.SharedPrimaryKeySpec
         Database.Persist.THSpec
         TemplateTestImports
         Database.Persist.TH.SharedPrimaryKeySpec

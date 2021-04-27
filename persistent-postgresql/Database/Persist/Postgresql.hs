@@ -398,7 +398,7 @@ insertSql' ent vals =
     sql = T.concat
         [ "INSERT INTO "
         , escapeE $ getEntityDBName ent
-        , if null (getEntityFields ent)
+        , if null (getEntityFieldsDatabase ent)
             then " DEFAULT VALUES"
             else T.concat
                 [ "("
@@ -1738,7 +1738,7 @@ mockMigration mig = do
 putManySql :: EntityDef -> Int -> Text
 putManySql ent n = putManySql' conflictColumns fields ent n
   where
-    fields = getEntityFields ent
+    fields = getEntityFieldsDatabase ent
     conflictColumns = concatMap (map (escapeF . snd) . uniqueFields) (getEntityUniques ent)
 
 repsertManySql :: EntityDef -> Int -> Text
@@ -1928,7 +1928,7 @@ mkBulkUpsertQuery records conn fieldValues updates filters uniqDef =
     firstField = case entityFieldNames of
         [] -> error "The entity you're trying to insert does not have any fields."
         (field:_) -> field
-    entityFieldNames = map fieldDbToText (getEntityFields entityDef')
+    entityFieldNames = map fieldDbToText (getEntityFieldsDatabase entityDef')
     nameOfTable = escapeE . getEntityDBName $ entityDef'
     copyUnlessValues = map snd fieldsToMaybeCopy
     recordValues = concatMap (map toPersistValue . toPersistFields) records
