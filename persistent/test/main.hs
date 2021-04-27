@@ -369,8 +369,8 @@ Notification
             entityComments car `shouldBe` Just "This is a Car\n"
             entityComments vehicle `shouldBe` Nothing
 
-        it "should allow you to modify the FK name via provided function" $ do
-            let [user, notification] = parse (setPsUseSnakeCaseForiegnKeys lowerCaseSettings) [st|
+        describe "foreign keys" $ do
+            let definitions = [st|
 User
     name            Text
     emailFirst      Text
@@ -385,8 +385,17 @@ Notification
 
     Foreign User fk_noti_user sentToFirst sentToSecond References emailFirst emailSecond
 |]
-            let [notificationForeignDef] = entityForeigns notification
-            foreignConstraintNameDBName notificationForeignDef `shouldBe` ConstraintNameDB "notification_fk_noti_user"
+
+            it "should allow you to modify the FK name via provided function" $ do
+                let flippedFK = \(EntityNameHS entName) (ConstraintNameHS conName) -> conName <> entName
+                let [user, notification] = parse (setPsToFKName flippedFK lowerCaseSettings) definitions
+                let [notificationForeignDef] = entityForeigns notification
+                foreignConstraintNameDBName notificationForeignDef `shouldBe` ConstraintNameDB "fk_noti_user_notification"
+
+            it "should allow you to enable snake cased foriegn keys via a preset configuration function" $ do
+                let [user, notification] = parse (setPsUseSnakeCaseForiegnKeys lowerCaseSettings) definitions
+                let [notificationForeignDef] = entityForeigns notification
+                foreignConstraintNameDBName notificationForeignDef `shouldBe` ConstraintNameDB "notification_fk_noti_user"
 
     describe "parseFieldType" $ do
         it "simple types" $

@@ -416,11 +416,26 @@ module Database.Persist.Quasi
     , PersistSettings
     , upperCaseSettings
     , lowerCaseSettings
+    , setPsToFKName
     , setPsUseSnakeCaseForiegnKeys
     , nullable
     ) where
 
+import Data.Text (Text)
 import Database.Persist.Quasi.Internal
+import Database.Persist.Types.Base
 
+-- | Set a custom function used to create the constraint name
+-- for a foreign key.
+--
+-- @since 2.13.0.0
+setPsToFKName :: (EntityNameHS -> ConstraintNameHS -> Text) -> PersistSettings -> PersistSettings
+setPsToFKName setter ps = ps { psToFKName = setter }
+
+-- | A preset configuration function that puts an underscore
+-- between the entity name and the constraint name when
+-- creating a foreign key constraint name
+--
+-- @since 2.13.0.0
 setPsUseSnakeCaseForiegnKeys :: PersistSettings -> PersistSettings
-setPsUseSnakeCaseForiegnKeys ps = ps { psToFKName = toFKNameInfixed "_" }
+setPsUseSnakeCaseForiegnKeys = setPsToFKName (toFKNameInfixed "_")

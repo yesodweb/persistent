@@ -16,7 +16,6 @@ module Database.Persist.Quasi.Internal
     , PersistSettings (..)
     , upperCaseSettings
     , lowerCaseSettings
-    , ToFKName (..)
     , toFKNameInfixed
     , nullable
     , Token (..)
@@ -102,8 +101,9 @@ parseFieldType t0 =
 
 data PersistSettings = PersistSettings
     { psToDBName :: !(Text -> Text)
-    , psToFKName :: !ToFKName
-    -- ^ Function used to generate the FK name. Default value: @mappend@
+    , psToFKName :: !(EntityNameHS -> ConstraintNameHS -> Text)
+    -- ^ A function for generating the constraint name, with access to
+    -- the entity and constraint names. Default value: @mappend@
     --
     -- @since 2.13.0.0
     , psStrictFields :: !Bool
@@ -121,7 +121,7 @@ data PersistSettings = PersistSettings
 defaultPersistSettings, upperCaseSettings, lowerCaseSettings :: PersistSettings
 defaultPersistSettings = PersistSettings
     { psToDBName = id
-    , psToFKName = ToFKName $ \(EntityNameHS entName) (ConstraintNameHS conName) -> entName <> conName
+    , psToFKName = \(EntityNameHS entName) (ConstraintNameHS conName) -> entName <> conName
     , psStrictFields = True
     , psIdName       = "id"
     }
@@ -136,15 +136,9 @@ lowerCaseSettings = defaultPersistSettings
          in T.dropWhile (== '_') . T.concatMap go
     }
 
--- | A function for converting a table and column name into a constraint name.
---
--- @since 2.13.0.0
-newtype ToFKName = ToFKName
-    { unToFKName :: EntityNameHS -> ConstraintNameHS -> Text
-    }
-
-toFKNameInfixed :: Text -> ToFKName
-toFKNameInfixed inf = ToFKName $ \(EntityNameHS entName) (ConstraintNameHS conName) -> entName <> inf <> conName
+toFKNameInfixed :: Text -> EntityNameHS -> ConstraintNameHS -> Text
+toFKNameInfixed inf (EntityNameHS entName) (ConstraintNameHS conName) =
+    entName <> inf <> conName
 
 -- | Parses a quasi-quoted syntax into a list of entity definitions.
 parse :: PersistSettings -> Text -> [EntityDef]
@@ -787,10 +781,7 @@ takeForeign ps entityName _defs = takeRefTable
 
 toFKConstraintNameDB :: PersistSettings -> EntityNameHS -> ConstraintNameHS -> ConstraintNameDB
 toFKConstraintNameDB ps entityName constraintName =
-    ConstraintNameDB $ psToDBName ps (toFKName entityName constraintName)
-  where
-    toFKName =
-        unToFKName (psToFKName ps)
+    ConstraintNameDB $ psToDBName ps (psToFKName ps entityName constraintName)
 
 data CascadePrefix = CascadeUpdate | CascadeDelete
 
