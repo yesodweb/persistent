@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+* [#1243](https://github.com/yesodweb/persistent/pull/1243)
+    * Assorted cleanup of TH module
 * [1242](https://github.com/yesodweb/persistent/pull/1242)
     * Refactor setEmbedField to use do notation
 * [#1237](https://github.com/yesodweb/persistent/pull/1237)
