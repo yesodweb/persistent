@@ -66,7 +66,7 @@
       functionality, please comment with your needs on the GitHub issue tracker.
       We may un-deprecate it, or we may provide a new and better means of
       facilitating a solution to your problem.
-* []()
+* [#1255](https://github.com/yesodweb/persistent/pull/1255)
     * `mkPersist` now checks to see if an instance already exists for
       `PersistEntity` for the inputs. This allows you to pass `EntityDef`s into
       `mkPersist` which have been previously defined, which allows the foreign
