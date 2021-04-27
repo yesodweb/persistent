@@ -121,7 +121,7 @@ data PersistSettings = PersistSettings
 defaultPersistSettings, upperCaseSettings, lowerCaseSettings :: PersistSettings
 defaultPersistSettings = PersistSettings
     { psToDBName = id
-    , psToFKName = ToFKName $ \(TableNameDB table) name -> table <> name
+    , psToFKName = ToFKName $ \(EntityNameHS entName) name -> entName <> name
     , psStrictFields = True
     , psIdName       = "id"
     }
@@ -140,11 +140,11 @@ lowerCaseSettings = defaultPersistSettings
 --
 -- @since 2.13.0.0
 newtype ToFKName = ToFKName
-    { unToFKName :: TableNameDB -> Text -> Text
+    { unToFKName :: EntityNameHS -> Text -> Text
     }
 
 toFKNameInfixed :: Text -> ToFKName
-toFKNameInfixed inf = ToFKName $ \(TableNameDB table) name -> table <> inf <> name
+toFKNameInfixed inf = ToFKName $ \(EntityNameHS entName) name -> entName <> inf <> name
 
 -- | Parses a quasi-quoted syntax into a list of entity definitions.
 parse :: PersistSettings -> Text -> [EntityDef]
@@ -242,13 +242,12 @@ lowestIndent = minimum . fmap lineIndent
 -- | Divide lines into blocks and make entity definitions.
 parseLines :: PersistSettings -> NonEmpty Line -> [EntityDef]
 parseLines ps =
-    fixForeignKeysAll . map mk . associateLines
+    fixForeignKeysAll . fmap mk . associateLines
   where
     mk :: LinesWithComments -> UnboundEntityDef
     mk lwc =
-        let ln :| rest = lwcLines lwc
-            (name :| entAttribs) = lineText ln
-         in setComments (lwcComments lwc) $ mkEntityDef ps name entAttribs rest
+        let entityLine :| fieldLines = lwcLines lwc
+         in setComments (lwcComments lwc) $ mkEntityDef ps entityLine fieldLines
 
 isDocComment :: Token -> Maybe Text
 isDocComment tok =
@@ -427,21 +426,21 @@ lookupPrefix :: Text -> [Text] -> Maybe Text
 lookupPrefix prefix = msum . map (T.stripPrefix prefix)
 
 -- | Construct an entity definition.
-mkEntityDef :: PersistSettings
-            -> Text -- ^ name
-            -> [Attr] -- ^ entity attributes
-            -> [Line] -- ^ indented lines
-            -> UnboundEntityDef
-mkEntityDef ps name entattribs lines =
+mkEntityDef
+    :: PersistSettings
+    -> Line -- ^ opening entity line
+    -> [Line] -- ^ remaining indented lines
+    -> UnboundEntityDef
+mkEntityDef ps entityLine fieldLines =
   UnboundEntityDef foreigns $
     EntityDef
-        { entityHaskell = entName
-        , entityDB = EntityNameDB $ getDbName ps (unTableNameDB name') entattribs
+        { entityHaskell = entNameHS
+        , entityDB = EntityNameDB $ getDbName ps (unEntityNameHS entNameHS) entAttribs
         -- idField is the user-specified Id
         -- otherwise useAutoIdField
         -- but, adjust it if the user specified a Primary
         , entityId = setComposite primaryComposite $ fromMaybe autoIdField idField
-        , entityAttrs = entattribs
+        , entityAttrs = entAttribs
         , entityFields = cols
         , entityUniques = uniqs
         , entityForeigns = []
@@ -451,23 +450,27 @@ mkEntityDef ps name entattribs lines =
         , entityComments = Nothing
         }
   where
-    entName = EntityNameHS (unTableNameDB name')
-    (isSum, name') =
-        case T.uncons name of
-            Just ('+', x) -> (True, TableNameDB x)
-            _ -> (False, TableNameDB name)
-    (attribs, extras) = splitExtras lines
+    (entityName :| entAttribs) =
+        lineText entityLine
+
+    (isSum, entNameHS) =
+        case T.uncons entityName of
+            Just ('+', x) -> (True, EntityNameHS x)
+            _ -> (False, EntityNameHS entityName)
+
+    (attribs, extras) =
+        splitExtras fieldLines
 
     textAttribs :: [[Text]]
     textAttribs =
         fmap tokenText <$> attribs
 
-    attribPrefix = flip lookupKeyVal entattribs
+    attribPrefix = flip lookupKeyVal entAttribs
     idName | Just _ <- attribPrefix "id" = error "id= is deprecated, ad a field named 'Id' and use sql="
            | otherwise = Nothing
 
     (idField, primaryComposite, uniqs, foreigns) = foldl' (\(mid, mp, us, fs) attr ->
-        let (i, p, u, f) = takeConstraint ps name' cols attr
+        let (i, p, u, f) = takeConstraint ps entNameHS cols attr
             squish xs m = xs `mappend` maybeToList m
         in (just1 mid i, just1 mp p, squish us u, squish fs f)) (Nothing, Nothing, [],[]) textAttribs
 
@@ -485,7 +488,7 @@ mkEntityDef ps name entattribs lines =
                   Nothing ->
                       (acc, [])
 
-    autoIdField = mkAutoIdField ps entName (FieldNameDB `fmap` idName) idSqlType
+    autoIdField = mkAutoIdField ps entNameHS (FieldNameDB `fmap` idName) idSqlType
     idSqlType = maybe SqlInt64 (const $ SqlOther "Primary Key") primaryComposite
 
     setComposite Nothing fd = fd
@@ -512,7 +515,7 @@ mkAutoIdField ps entName idName idSqlType =
         -- but that sucks for non-ID field
         -- TODO: use a sumtype FieldDef | IdFieldDef
         , fieldDB = fromMaybe (FieldNameDB $ psIdName ps) idName
-        , fieldType = FTTypeCon Nothing $ keyConName $ unEntityNameHS entName
+        , fieldType = FTTypeCon Nothing $ keyConName entName
         , fieldSqlType = idSqlType
         -- the primary field is actually a reference to the entity
         , fieldReference = ForeignRef entName defaultReferenceTypeCon
@@ -526,8 +529,8 @@ mkAutoIdField ps entName idName idSqlType =
 defaultReferenceTypeCon :: FieldType
 defaultReferenceTypeCon = FTTypeCon (Just "Data.Int") "Int64"
 
-keyConName :: Text -> Text
-keyConName entName = entName `mappend` "Id"
+keyConName :: EntityNameHS -> Text
+keyConName entName = unEntityNameHS entName `mappend` "Id"
 
 splitExtras
     :: [Line]
@@ -600,24 +603,24 @@ getDbName ps n (a:as) = fromMaybe (getDbName ps n as) $ T.stripPrefix "sql=" a
 
 takeConstraint
     :: PersistSettings
-    -> TableNameDB
+    -> EntityNameHS
     -> [FieldDef]
     -> [Text]
     -> (Maybe FieldDef, Maybe CompositeDef, Maybe UniqueDef, Maybe UnboundForeignDef)
-takeConstraint ps tableName defs (n:rest) | isCapitalizedText n = takeConstraint'
-    where
-      takeConstraint'
-            | n == "Unique"  = (Nothing, Nothing, Just $ takeUniq ps tableName defs rest, Nothing)
-            | n == "Foreign" = (Nothing, Nothing, Nothing, Just $ takeForeign ps tableName defs rest)
-            | n == "Primary" = (Nothing, Just $ takeComposite defs rest, Nothing, Nothing)
-            | n == "Id"      = (Just $ takeId ps tableName (n:rest), Nothing, Nothing, Nothing)
-            | otherwise      = (Nothing, Nothing, Just $ takeUniq ps (TableNameDB "") defs (n:rest), Nothing) -- retain compatibility with original unique constraint
+takeConstraint ps entityName defs (n:rest) | isCapitalizedText n = takeConstraint'
+  where
+    takeConstraint'
+          | n == "Unique"  = (Nothing, Nothing, Just $ takeUniq ps (unEntityNameHS entityName) defs rest, Nothing)
+          | n == "Foreign" = (Nothing, Nothing, Nothing, Just $ takeForeign ps entityName defs rest)
+          | n == "Primary" = (Nothing, Just $ takeComposite defs rest, Nothing, Nothing)
+          | n == "Id"      = (Just $ takeId ps entityName (n:rest), Nothing, Nothing, Nothing)
+          | otherwise      = (Nothing, Nothing, Just $ takeUniq ps "" defs (n:rest), Nothing) -- retain compatibility with original unique constraint
 takeConstraint _ _ _ _ = (Nothing, Nothing, Nothing, Nothing)
 
 -- TODO: this is hacky (the double takeCols, the setFieldDef stuff, and setIdName.
 -- need to re-work takeCols function
-takeId :: PersistSettings -> TableNameDB -> [Text] -> FieldDef
-takeId ps tableName (n:rest) =
+takeId :: PersistSettings -> EntityNameHS -> [Text] -> FieldDef
+takeId ps entityName (n:rest) =
     setFieldDef
     $ fromMaybe (error "takeId: impossible!")
     $ takeCols (\_ _ -> addDefaultIdType) ps (field:rest) -- `mappend` setIdName)
@@ -628,16 +631,16 @@ takeId ps tableName (n:rest) =
     addDefaultIdType = takeColsEx ps (field : keyCon : rest ) -- `mappend` setIdName)
     setFieldDef fd = fd
         { fieldReference =
-            ForeignRef (EntityNameHS (unTableNameDB tableName)) $
+            ForeignRef entityName $
                 if fieldType fd == FTTypeCon Nothing keyCon
                 then defaultReferenceTypeCon
                 else fieldType fd
         }
-    keyCon = keyConName (unTableNameDB tableName)
+    keyCon = keyConName entityName
     -- this will be ignored if there is already an existing sql=
     -- TODO: I think there is a ! ignore syntax that would screw this up
     -- setIdName = ["sql=" `mappend` psIdName ps]
-takeId _ tableName _ = error $ "empty Id field for " `mappend` show tableName
+takeId _ (EntityNameHS tableName) _ = error $ "empty Id field for " `mappend` show tableName
 
 
 takeComposite
@@ -661,11 +664,11 @@ takeComposite fields pkcols =
 -- `UniqueTestNull fieldA fieldB sql=ConstraintNameInDatabase !force`
 -- Here using sql= sets the name of the constraint.
 takeUniq :: PersistSettings
-         -> TableNameDB
+         -> Text
          -> [FieldDef]
          -> [Text]
          -> UniqueDef
-takeUniq ps (TableNameDB tableName) defs (n:rest)
+takeUniq ps tableName defs (n : rest)
     | isCapitalizedText n
         = UniqueDef
             (ConstraintNameHS n)
@@ -678,11 +681,12 @@ takeUniq ps (TableNameDB tableName) defs (n:rest)
     isSqlName a =
       "sql=" `T.isPrefixOf` a
     isNonField a =
-       isAttr a
-      || isSqlName a
+       isAttr a || isSqlName a
     (fields, nonFields) =
       break isNonField rest
+
     attrs = filter isAttr nonFields
+
     usualDbName =
       ConstraintNameDB $ psToDBName ps (tableName `T.append` n)
     sqlName :: Maybe ConstraintNameDB
@@ -701,6 +705,7 @@ takeUniq ps (TableNameDB tableName) defs (n:rest)
     getDBName (d:ds) t
         | fieldHaskell d == FieldNameHS t = fieldDB d
         | otherwise = getDBName ds t
+
 takeUniq _ tableName _ xs =
   error $ "invalid unique constraint on table["
           ++ show tableName
@@ -715,14 +720,14 @@ data UnboundForeignDef = UnboundForeignDef
 
 takeForeign
     :: PersistSettings
-    -> TableNameDB
+    -> EntityNameHS
     -> [FieldDef]
     -> [Text]
     -> UnboundForeignDef
-takeForeign ps tableName _defs = takeRefTable
+takeForeign ps entityName _defs = takeRefTable
   where
     errorPrefix :: String
-    errorPrefix = "invalid foreign key constraint on table[" ++ show tableName ++ "] "
+    errorPrefix = "invalid foreign key constraint on table[" ++ show (unEntityNameHS entityName) ++ "] "
 
     takeRefTable :: [Text] -> UnboundForeignDef
     takeRefTable [] = error $ errorPrefix ++ " expecting foreign table name"
@@ -738,7 +743,7 @@ takeForeign ps tableName _defs = takeRefTable
                 , foreignConstraintNameHaskell =
                     ConstraintNameHS n
                 , foreignConstraintNameDBName =
-                    toFKConstraintNameDB ps tableName n
+                    toFKConstraintNameDB ps entityName n
                 , foreignFieldCascade = FieldCascade
                     { fcOnDelete = onDelete
                     , fcOnUpdate = onUpdate
@@ -778,9 +783,9 @@ takeForeign ps tableName _defs = takeRefTable
 
         go xs _ _ = error $ errorPrefix ++ "expecting a lower case constraint name or a cascading action xs=" ++ show xs
 
-toFKConstraintNameDB :: PersistSettings -> TableNameDB -> Text -> ConstraintNameDB
-toFKConstraintNameDB ps tableName n =
-    ConstraintNameDB $ psToDBName ps (toFKName tableName n)
+toFKConstraintNameDB :: PersistSettings -> EntityNameHS -> Text -> ConstraintNameDB
+toFKConstraintNameDB ps entityName n =
+    ConstraintNameDB $ psToDBName ps (toFKName entityName n)
   where
     toFKName =
         unToFKName (psToFKName ps)
