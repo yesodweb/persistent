@@ -30,6 +30,10 @@ MBBar
     name Text
     age  Int
     user UserId
+    profile MBDogId
+
+    -- TODO: make the QQ not care about this table being missing
+    -- Foreign MBCompositePrimary bar_to_comp name age
 |]
 
 spec :: Spec
@@ -40,12 +44,18 @@ spec = describe "MultiBlockSpec" $ do
                 entityDef $ Proxy @MBBar
         describe "Foreign Key Works" $ do
             let
-                [n, a, userRef] =
+                [n, a, userRef, profileRef] =
                     getEntityFields edef
-            it "has foreign ref" $ do
+            it "User reference works" $ do
                 fieldReference userRef
                     `shouldBe`
-                        ForeignRef (EntityNameHS "User") (FTTypeCon Nothing "")
+                        ForeignRef
+                            (EntityNameHS "User")
+                            (FTTypeCon (Just "Data.Int") "Int64")
 
-
-
+            it "Primary key reference works" $ do
+                fieldReference profileRef
+                    `shouldBe`
+                        ForeignRef
+                            (EntityNameHS "MBDog")
+                            (FTTypeCon (Just "Data.Int") "Int64")

@@ -474,7 +474,8 @@ mkEntityDefSqlTypeExp emEntities entityMap ent =
 mkPersist :: MkPersistSettings -> [EntityDef] -> Q [Dec]
 mkPersist mps ents' = do
     ents <-
-        filterM isNotPersistEntityInstanceAlready
+        -- filterM (const (pure True)) -- isNotPersistEntityInstanceAlready
+        filterM shouldGenerateCode
         $ embedEntityDefs
         $ map (setDefaultIdFields mps)
         $ ents'
@@ -500,16 +501,18 @@ mkPersist mps ents' = do
         ]
 
 -- we can't just use 'isInstance' because TH throws an error
-isNotPersistEntityInstanceAlready :: EntityDef -> Q Bool
-isNotPersistEntityInstanceAlready ed = do
-    info <- reify entityName
-    fmap not (isInstance ''PersistEntity [entityType])
-
+shouldGenerateCode :: EntityDef -> Q Bool
+shouldGenerateCode ed = do
+    mtyp <- lookupTypeName entityName
+    case mtyp of
+        Nothing -> do
+            pure True
+        Just typeName -> do
+            instanceExists <- isInstance ''PersistEntity [ConT typeName]
+            pure (not instanceExists)
   where
     entityName =
-        mkName . T.unpack . unEntityNameHS . getEntityHaskellName $ ed
-    entityType =
-       ConT entityName
+        T.unpack . unEntityNameHS . getEntityHaskellName $ ed
 
 setDefaultIdFields :: MkPersistSettings -> EntityDef -> EntityDef
 setDefaultIdFields mps ed

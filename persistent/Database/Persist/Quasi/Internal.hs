@@ -336,16 +336,17 @@ fixForeignKeysAll unEnts = map fixForeignKeys unEnts
                              unEntityNameDB (entityDB pent)
                          oldDbName =
                              unEntityNameDB (foreignRefTableDBName fdef)
-                      in fdef
-                         { foreignFields = map snd fds_ffs
-                         , foreignNullable = setNull $ map fst fds_ffs
-                         , foreignRefTableDBName =
-                             EntityNameDB dbname
-                         , foreignConstraintNameDBName =
-                             ConstraintNameDB
-                             . T.replace oldDbName dbname . unConstraintNameDB
-                             $ foreignConstraintNameDBName fdef
-                         }
+                      in
+                          fdef
+                              { foreignFields = map snd fds_ffs
+                              , foreignNullable = setNull $ map fst fds_ffs
+                              , foreignRefTableDBName =
+                                  EntityNameDB dbname
+                              , foreignConstraintNameDBName =
+                                  ConstraintNameDB
+                                  . T.replace oldDbName dbname . unConstraintNameDB
+                                  $ foreignConstraintNameDBName fdef
+                              }
              Nothing ->
                  error $ "no primary key found fdef="++show fdef++ " ent="++show ent
       where
@@ -722,42 +723,54 @@ takeForeign ps tableName _defs = takeRefTable
     errorPrefix = "invalid foreign key constraint on table[" ++ show tableName ++ "] "
 
     takeRefTable :: [Text] -> UnboundForeignDef
-    takeRefTable [] = error $ errorPrefix ++ " expecting foreign table name"
-    takeRefTable (refTableName:restLine) = go restLine Nothing Nothing
+    takeRefTable [] =
+        error $ errorPrefix ++ " expecting foreign table name"
+    takeRefTable (refTableName:restLine) =
+        go restLine Nothing Nothing
       where
         go :: [Text] -> Maybe CascadeAction -> Maybe CascadeAction -> UnboundForeignDef
-        go (n:rest) onDelete onUpdate | not (T.null n) && isLower (T.head n)
-            = UnboundForeignDef fFields pFields $ ForeignDef
-                { foreignRefTableHaskell =
-                    EntityNameHS refTableName
-                , foreignRefTableDBName =
-                    EntityNameDB $ psToDBName ps refTableName
-                , foreignConstraintNameHaskell =
-                    ConstraintNameHS n
-                , foreignConstraintNameDBName =
-                    ConstraintNameDB $ psToDBName ps (tableName `T.append` n)
-                , foreignFieldCascade = FieldCascade
-                    { fcOnDelete = onDelete
-                    , fcOnUpdate = onUpdate
+        go (n:rest) onDelete onUpdate
+            | not (T.null n) && isLower (T.head n) =
+                UnboundForeignDef fFields pFields $ ForeignDef
+                    { foreignRefTableHaskell =
+                        EntityNameHS refTableName
+                    , foreignRefTableDBName =
+                        EntityNameDB $ psToDBName ps refTableName
+                    , foreignConstraintNameHaskell =
+                        ConstraintNameHS n
+                    , foreignConstraintNameDBName =
+                        ConstraintNameDB $ psToDBName ps (tableName `T.append` n)
+                    , foreignFieldCascade = FieldCascade
+                        { fcOnDelete = onDelete
+                        , fcOnUpdate = onUpdate
+                        }
+                    , foreignFields =
+                        []
+                    , foreignAttrs =
+                        attrs
+                    , foreignNullable =
+                        False
+                    , foreignToPrimary =
+                        null pFields
                     }
-                , foreignFields =
-                    []
-                , foreignAttrs =
-                    attrs
-                , foreignNullable =
-                    False
-                , foreignToPrimary =
-                    null pFields
-                }
           where
-            (fields,attrs) = break ("!" `T.isPrefixOf`) rest
-            (fFields, pFields) = case break (== "References") fields of
-                (ffs, []) -> (ffs, [])
-                (ffs, _ : pfs) -> case (length ffs, length pfs) of
-                    (flen, plen) | flen == plen -> (ffs, pfs)
-                    (flen, plen) -> error $ errorPrefix ++ concat
-                        [ "Found ", show flen, " foreign fields but "
-                        , show plen, " parent fields" ]
+            (fields, attrs) =
+                break ("!" `T.isPrefixOf`) rest
+            (fFields, pFields) =
+                case break (== "References") fields of
+                    (ffs, []) ->
+                        (ffs, [])
+                    (ffs, _ : pfs) ->
+                        case (length ffs, length pfs) of
+                            (flen, plen)
+                                | flen == plen ->
+                                    (ffs, pfs)
+                            (flen, plen) ->
+                                error $ errorPrefix ++ concat
+                                    [ "Found " , show flen
+                                    , " foreign fields but "
+                                    , show plen, " parent fields"
+                                    ]
 
         go ((parseCascadeAction CascadeDelete -> Just cascadingAction) : rest) onDelete' onUpdate =
             case onDelete' of

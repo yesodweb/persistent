@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -29,5 +30,16 @@ User
     age  Int
 
     deriving Eq Show
+
+MBDog
+    name Text
+    Primary name
+
+MBCompositePrimary
+    name    Text
+    age     Int
+
+    Primary name age
+
 |]
 
