@@ -533,8 +533,12 @@ mkEntityDef ps parsedEntDef =
                     go ft'
                 _ ->
                     field
-    autoIdField = mkAutoIdField ps entNameHS idSqlType
-    idSqlType = maybe SqlInt64 (const $ SqlOther "Primary Key") primaryComposite
+
+    autoIdField =
+        mkAutoIdField ps entNameHS idSqlType
+
+    idSqlType =
+        maybe SqlInt64 (const $ SqlOther "Primary Key") primaryComposite
 
     setComposite Nothing fd = fd
     setComposite (Just c) fd = fd
