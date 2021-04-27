@@ -316,6 +316,12 @@ constructEmbedEntityMap :: [EntityDef] -> EmbedEntityMap
 constructEmbedEntityMap =
     M.fromList . fmap (\ent -> (entityHaskell ent, toEmbedEntityDef ent))
 
+lookupEmbedEntity :: EmbedEntityMap -> FieldDef -> Maybe EntityNameHS
+lookupEmbedEntity allEntities field = do
+    entName <- EntityNameHS <$> stripId (fieldType field)
+    guard (M.member entName allEntities) -- check entity name exists in embed map
+    pure entName
+
 type EntityMap = M.Map EntityNameHS EntityDef
 
 constructEntityMap :: [EntityDef] -> EntityMap
@@ -354,35 +360,29 @@ mEmbedded ents (FTApp x y) =
         else mEmbedded ents y
 
 setEmbedField :: EntityNameHS -> EmbedEntityMap -> FieldDef -> FieldDef
-setEmbedField entName allEntities field = field
-    { fieldReference =
-        case fieldReference field of
-            NoReference ->
-                case mEmbedded allEntities (fieldType field) of
-                    Left _ ->
-                        case stripId $ fieldType field of
-                            Nothing ->
-                                NoReference
-                            Just name ->
-                                case M.lookup (EntityNameHS name) allEntities of
-                                    Nothing ->
-                                        NoReference
-                                    Just _ ->
-                                        ForeignRef
-                                            (EntityNameHS name)
-                                            -- This can get corrected in mkEntityDefSqlTypeExp
-                                            (FTTypeCon (Just "Data.Int") "Int64")
-                    Right em ->
-                        if embeddedHaskell em /= entName
-                             then EmbedRef em
-                        else if maybeNullable field
-                             then SelfReference
-                        else case fieldType field of
-                                 FTList _ -> SelfReference
-                                 _ -> error $ unpack $ unEntityNameHS entName <> ": a self reference must be a Maybe"
-            existing ->
-                existing
-  }
+setEmbedField entName allEntities field =
+    case fieldReference field of
+      NoReference -> setFieldReference ref field
+      _ -> field
+  where
+    ref =
+        case mEmbedded allEntities (fieldType field) of
+            Left _ -> fromMaybe NoReference $ do
+                entName <- lookupEmbedEntity allEntities field
+                -- This can get corrected in mkEntityDefSqlTypeExp
+                let placeholderIdType = FTTypeCon (Just "Data.Int") "Int64"
+                pure $ ForeignRef entName placeholderIdType
+            Right em ->
+                if embeddedHaskell em /= entName
+                     then EmbedRef em
+                else if maybeNullable field
+                     then SelfReference
+                else case fieldType field of
+                         FTList _ -> SelfReference
+                         _ -> error $ unpack $ unEntityNameHS entName <> ": a self reference must be a Maybe"
+
+setFieldReference :: ReferenceDef -> FieldDef -> FieldDef
+setFieldReference ref field = field { fieldReference = ref }
 
 mkEntityDefSqlTypeExp :: EmbedEntityMap -> EntityMap -> EntityDef -> EntityDefSqlTypeExp
 mkEntityDefSqlTypeExp emEntities entityMap ent =
