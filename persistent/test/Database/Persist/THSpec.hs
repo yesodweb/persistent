@@ -45,6 +45,8 @@ import Database.Persist.Sql.Util
 import Database.Persist.TH
 import TemplateTestImports
 
+
+import qualified Database.Persist.TH.MultiBlockSpec as MultiBlockSpec
 import qualified Database.Persist.TH.DiscoverEntitiesSpec as DiscoverEntitiesSpec
 import qualified Database.Persist.TH.ImplicitIdColSpec as ImplicitIdColSpec
 import qualified Database.Persist.TH.MigrationOnlySpec as MigrationOnlySpec
@@ -150,6 +152,7 @@ spec = describe "THSpec" $ do
     MigrationOnlySpec.spec
     EmbedSpec.spec
     DiscoverEntitiesSpec.spec
+    MultiBlockSpec.spec
     describe "TestDefaultKeyCol" $ do
         let FieldDef{..} =
                 entityId (entityDef (Proxy @TestDefaultKeyCol))

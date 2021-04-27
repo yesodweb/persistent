@@ -473,6 +473,14 @@ mkEntityDefSqlTypeExp emEntities entityMap ent =
 -- 'EntityDef's. Works well with the persist quasi-quoter.
 mkPersist :: MkPersistSettings -> [EntityDef] -> Q [Dec]
 mkPersist mps ents' = do
+    ents <-
+        filterM isNotPersistEntityInstanceAlready
+        $ embedEntityDefs
+        $ map (setDefaultIdFields mps)
+        $ ents'
+    let
+        entityMap =
+            constructEntityMap ents
     requireExtensions
         [ [TypeFamilies], [GADTs, ExistentialQuantification]
         , [DerivingStrategies], [GeneralizedNewtypeDeriving], [StandaloneDeriving]
@@ -490,9 +498,18 @@ mkPersist mps ents' = do
         , uniqueKeyInstances
         , symbolToFieldInstances
         ]
+
+-- we can't just use 'isInstance' because TH throws an error
+isNotPersistEntityInstanceAlready :: EntityDef -> Q Bool
+isNotPersistEntityInstanceAlready ed = do
+    info <- reify entityName
+    fmap not (isInstance ''PersistEntity [entityType])
+
   where
-    ents = embedEntityDefs $ map (setDefaultIdFields mps) ents'
-    entityMap = constructEntityMap ents
+    entityName =
+        mkName . T.unpack . unEntityNameHS . getEntityHaskellName $ ed
+    entityType =
+       ConT entityName
 
 setDefaultIdFields :: MkPersistSettings -> EntityDef -> EntityDef
 setDefaultIdFields mps ed
