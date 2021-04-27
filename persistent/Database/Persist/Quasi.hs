@@ -417,16 +417,14 @@ module Database.Persist.Quasi
     , PersistSettings
     , upperCaseSettings
     , lowerCaseSettings
-    , setPsToFKName
-    , setPsUseSnakeCaseForiegnKeys
     , nullable
     -- ** Getters and Setters
     , module Database.Persist.Quasi
     ) where
 
 import Data.Text (Text)
+import Database.Persist.Names
 import Database.Persist.Quasi.Internal
-import Database.Persist.Types.Base
 
 -- | Retrieve the function in the 'PersistSettings' that modifies the names into
 -- database names.

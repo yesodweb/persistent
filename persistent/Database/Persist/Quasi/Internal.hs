@@ -237,13 +237,50 @@ lowestIndent = minimum . fmap lineIndent
 
 -- | Divide lines into blocks and make entity definitions.
 parseLines :: PersistSettings -> NonEmpty Line -> [EntityDef]
-parseLines ps =
-    fixForeignKeysAll . fmap mk . associateLines
+parseLines ps = do
+    fixForeignKeysAll . fmap (mkEntityDef ps . toParsedEntityDef) . associateLines
+
+data ParsedEntityDef = ParsedEntityDef
+    { parsedEntityDefComments :: [Text]
+    , parsedEntityDefEntityName :: EntityNameHS
+    , parsedEntityDefIsSum :: Bool
+    , parsedEntityDefEntityAttributes :: [Attr]
+    , parsedEntityDefFieldAttributes :: [[Token]]
+    , parsedEntityDefExtras :: M.Map Text [ExtraLine]
+    }
+
+entityNamesFromParsedDef :: PersistSettings -> ParsedEntityDef -> (EntityNameHS, EntityNameDB)
+entityNamesFromParsedDef ps parsedEntDef = (entNameHS, entNameDB)
   where
-    mk :: LinesWithComments -> UnboundEntityDef
-    mk lwc =
-        let entityLine :| fieldLines = lwcLines lwc
-         in setComments (lwcComments lwc) $ mkEntityDef ps entityLine fieldLines
+    entNameHS =
+        parsedEntityDefEntityName parsedEntDef
+
+    entNameDB =
+        EntityNameDB $ getDbName ps (unEntityNameHS entNameHS) (parsedEntityDefEntityAttributes parsedEntDef)
+
+toParsedEntityDef :: LinesWithComments -> ParsedEntityDef
+toParsedEntityDef lwc = ParsedEntityDef
+    { parsedEntityDefComments = lwcComments lwc
+    , parsedEntityDefEntityName = entNameHS
+    , parsedEntityDefIsSum = isSum
+    , parsedEntityDefEntityAttributes = entAttribs
+    , parsedEntityDefFieldAttributes = attribs
+    , parsedEntityDefExtras = extras
+    }
+  where
+    entityLine :| fieldLines =
+        lwcLines lwc
+
+    (entityName :| entAttribs) =
+        lineText entityLine
+
+    (isSum, entNameHS) =
+        case T.uncons entityName of
+            Just ('+', x) -> (True, EntityNameHS x)
+            _ -> (False, EntityNameHS entityName)
+
+    (attribs, extras) =
+        splitExtras fieldLines
 
 isDocComment :: Token -> Maybe Text
 isDocComment tok =
@@ -311,11 +348,6 @@ associateLines lines =
 
 
     minimumIndentOf = lowestIndent . lwcLines
-
-setComments :: [Text] -> UnboundEntityDef -> UnboundEntityDef
-setComments [] = id
-setComments comments =
-    overUnboundEntityDef (\ed -> ed { entityComments = Just (T.unlines comments) })
 
 fixForeignKeysAll :: [UnboundEntityDef] -> [EntityDef]
 fixForeignKeysAll unEnts = map fixForeignKeys unEnts
@@ -427,46 +459,38 @@ data UnboundEntityDef
     , unboundEntityDef :: EntityDef
     }
 
-overUnboundEntityDef
-    :: (EntityDef -> EntityDef) -> UnboundEntityDef -> UnboundEntityDef
-overUnboundEntityDef f ubed =
-    ubed { unboundEntityDef = f (unboundEntityDef ubed) }
-
 -- | Construct an entity definition.
 mkEntityDef
     :: PersistSettings
-    -> Line -- ^ opening entity line
-    -> [Line] -- ^ remaining indented lines
+    -> ParsedEntityDef -- ^ parsed entity definition
     -> UnboundEntityDef
-mkEntityDef ps entityLine fieldLines =
+mkEntityDef ps parsedEntDef =
     UnboundEntityDef foreigns $
         EntityDef
             { entityHaskell = entNameHS
-            , entityDB = EntityNameDB $ getDbName ps (unEntityNameHS entNameHS) entAttribs
+            , entityDB = entNameDB
             -- idField is the user-specified Id
             -- otherwise useAutoIdField
             -- but, adjust it if the user specified a Primary
             , entityId = setComposite primaryComposite $ fromMaybe autoIdField idField
-            , entityAttrs = entAttribs
+            , entityAttrs = parsedEntityDefEntityAttributes parsedEntDef
             , entityFields = cols
             , entityUniques = uniqs
             , entityForeigns = []
             , entityDerives = concat $ mapMaybe takeDerives textAttribs
-            , entityExtra = extras
-            , entitySum = isSum
-            , entityComments = Nothing
+            , entityExtra = parsedEntityDefExtras parsedEntDef
+            , entitySum = parsedEntityDefIsSum parsedEntDef
+            , entityComments =
+                case parsedEntityDefComments parsedEntDef of
+                    [] -> Nothing
+                    comments -> Just (T.unlines comments)
             }
   where
-    (entityName :| entAttribs) =
-        lineText entityLine
+    (entNameHS, entNameDB) =
+        entityNamesFromParsedDef ps parsedEntDef
 
-    (isSum, entNameHS) =
-        case T.uncons entityName of
-            Just ('+', x) -> (True, EntityNameHS x)
-            _ -> (False, EntityNameHS entityName)
-
-    (attribs, extras) =
-        splitExtras fieldLines
+    attribs =
+        parsedEntityDefFieldAttributes parsedEntDef
 
     textAttribs :: [[Text]]
     textAttribs =
