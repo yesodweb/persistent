@@ -303,13 +303,29 @@ foreignReference field = case fieldReference field of
 -- fieldSqlType at parse time can be an Exp
 -- This helps delay setting fieldSqlType until lift time
 data EntityDefSqlTypeExp
-    = EntityDefSqlTypeExp EntityDef SqlTypeExp [SqlTypeExp]
+    = EntityDefSqlTypeExp
+    { edsteEntityDef :: EntityDef
+    , edsteEntityId :: SqlTypeExp
+    , edsteEntityFields :: [SqlTypeExp]
+    }
     deriving Show
 
 data SqlTypeExp
     = SqlTypeExp FieldType
     | SqlType' SqlType
     deriving Show
+
+liftSqlTypeExp :: SqlTypeExp -> Q Exp
+liftSqlTypeExp ste =
+    case ste of
+        SqlType' t ->
+            lift t
+        SqlTypeExp ftype -> do
+            let
+                typ = ftToType ftype
+                mtyp = ConT ''Proxy `AppT` typ
+                typedNothing = SigE (ConE 'Proxy) mtyp
+            pure $ VarE 'sqlType `AppE` typedNothing
 
 instance Lift SqlTypeExp where
     lift (SqlType' t)       = lift t
@@ -325,35 +341,27 @@ instance Lift SqlTypeExp where
 
 data FieldsSqlTypeExp = FieldsSqlTypeExp [FieldDef] [SqlTypeExp]
 
-instance Lift FieldsSqlTypeExp where
-    lift (FieldsSqlTypeExp fields sqlTypeExps) =
-        lift $ zipWith FieldSqlTypeExp fields sqlTypeExps
-#if MIN_VERSION_template_haskell(2,16,0)
-    liftTyped = unsafeTExpCoerce . lift
-#endif
+liftFieldsSqlTypeExp :: FieldsSqlTypeExp -> Q Exp
+liftFieldsSqlTypeExp (FieldsSqlTypeExp fields sqlTypeExps) =
+    fmap ListE . traverse liftFieldSqlTypeExp $ zipWith FieldSqlTypeExp fields sqlTypeExps
 
 data FieldSqlTypeExp = FieldSqlTypeExp FieldDef SqlTypeExp
 
-instance Lift FieldSqlTypeExp where
-    lift (FieldSqlTypeExp FieldDef{..} sqlTypeExp) =
-        [|FieldDef fieldHaskell fieldDB fieldType $(lift sqlTypeExp) fieldAttrs fieldStrict fieldReference fieldCascade fieldComments fieldGenerated fieldIsImplicitIdColumn|]
-      where
-        FieldDef _x _ _ _ _ _ _ _ _ _ _ =
-            error "need to update this record wildcard match"
-#if MIN_VERSION_template_haskell(2,16,0)
-    liftTyped = unsafeTExpCoerce . lift
-#endif
+liftFieldSqlTypeExp :: FieldSqlTypeExp -> Q Exp
+liftFieldSqlTypeExp (FieldSqlTypeExp FieldDef{..} sqlTypeExp) =
+    [|FieldDef fieldHaskell fieldDB fieldType $(lift sqlTypeExp) fieldAttrs fieldStrict fieldReference fieldCascade fieldComments fieldGenerated fieldIsImplicitIdColumn|]
+  where
+    FieldDef _x _ _ _ _ _ _ _ _ _ _ =
+        error "need to update this record wildcard match"
 
-instance Lift EntityDefSqlTypeExp where
-    lift (EntityDefSqlTypeExp ent sqlTypeExp sqlTypeExps) =
-        [|ent { entityFields =
-                    $(lift $ FieldsSqlTypeExp (getEntityFieldsDatabase ent) sqlTypeExps)
-              , entityId = $(lift $ FieldSqlTypeExp (entityId ent) sqlTypeExp)
-              }
-        |]
-#if MIN_VERSION_template_haskell(2,16,0)
-    liftTyped = unsafeTExpCoerce . lift
-#endif
+liftEntityDefSqlTypeExp :: EntityDefSqlTypeExp -> Q Exp
+liftEntityDefSqlTypeExp (EntityDefSqlTypeExp ent sqlTypeExp sqlTypeExps) =
+    [|ent { entityFields =
+                $(liftFieldsSqlTypeExp $ FieldsSqlTypeExp (getEntityFieldsDatabase ent) sqlTypeExps)
+          , entityId =
+              $(liftFieldSqlTypeExp $ FieldSqlTypeExp (entityId ent) sqlTypeExp)
+          }
+    |]
 
 type EmbedEntityMap = M.Map EntityNameHS EmbedEntityDef
 
@@ -440,7 +448,14 @@ setFieldReference ref field = field { fieldReference = ref }
 
 mkEntityDefSqlTypeExp :: EmbedEntityMap -> EntityMap -> EntityDef -> EntityDefSqlTypeExp
 mkEntityDefSqlTypeExp emEntities entityMap ent =
-    EntityDefSqlTypeExp ent (getSqlType $ entityId ent) (map getSqlType $ getEntityFieldsDatabase ent)
+    EntityDefSqlTypeExp
+        { edsteEntityDef =
+            ent
+        , edsteEntityId =
+            getSqlType $ entityId ent
+        , edsteEntityFields =
+            map getSqlType $ getEntityFieldsDatabase ent
+        }
   where
     getSqlType field =
         maybe
@@ -1247,7 +1262,7 @@ fieldError tableName fieldName err = mconcat
 mkEntity :: EntityMap -> MkPersistSettings -> EntityDef -> Q [Dec]
 mkEntity entityMap mps entDef = do
     fields <- mkFields mps entDef
-    entityDefExp <- liftAndFixKeys entityMap entDef
+    entityDefExp <- liftAndFixKeys mempty entityMap entDef
 
     let name = mkEntityDefName entDef
     let clazz = ConT ''PersistEntity `AppT` genDataType
@@ -1878,8 +1893,8 @@ mkMigrate fun eds = do
         , FunD (mkName fun) [normalClause [] body]
         ]
 
-liftAndFixKeys :: EntityMap -> EntityDef -> Q Exp
-liftAndFixKeys entityMap EntityDef{..} =
+liftAndFixKeys :: EmbedEntityMap -> EntityMap -> EntityDef -> Q Exp
+liftAndFixKeys embedEntityMap entityMap EntityDef{..} =
     [|EntityDef
         entityHaskell
         entityDB
