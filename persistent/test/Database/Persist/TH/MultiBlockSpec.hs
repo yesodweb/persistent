@@ -42,7 +42,7 @@ MBBar
     profile MBDogId
 
     -- TODO: make the QQ not care about this table being missing
-    -- Foreign MBCompositePrimary bar_to_comp name age
+    Foreign MBCompositePrimary bar_to_comp name age
 |]
 
 spec :: Spec

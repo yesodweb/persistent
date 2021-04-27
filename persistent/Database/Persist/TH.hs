@@ -271,14 +271,6 @@ breakEntDefCycle entDef =
 -- @since 2.5.3
 parseReferences :: PersistSettings -> Text -> Q Exp
 parseReferences ps s = lift $ parse ps s
-    -- map (mkEntityDefSqlTypeExp embedEntityMap entityMap) noCycleEnts
-  where
-    unboundDefs =
-        parse ps s
-    (embedEntityMap, noCycleEnts) =
-        embedEntityDefsMap $ fixForeignKeysAll unboundDefs
-    entityMap =
-        constructEntityMap noCycleEnts
 
 preprocessUnboundDefs
     :: [EntityDef]
@@ -288,7 +280,7 @@ preprocessUnboundDefs preexistingEntities unboundDefs =
     (embedEntityMap, noCycleEnts)
   where
     (embedEntityMap, noCycleEnts) =
-        embedEntityDefsMap $ fixForeignKeysAll unboundDefs
+        embedEntityDefsMap $ fixForeignKeysAll preexistingEntities unboundDefs
     entityMap =
         constructEntityMap noCycleEnts
 
@@ -303,12 +295,12 @@ foreignReference field = case fieldReference field of
 
 -- * entity def sql type exp
 
-fusedLiftEntityDefSqlTypeExp
+liftAndFixKeys
     :: EmbedEntityMap
     -> EntityMap
     -> EntityDef
     -> Q Exp
-fusedLiftEntityDefSqlTypeExp emEntities entityMap ent =
+liftAndFixKeys emEntities entityMap ent =
     let
         sqlTypeExp =
             getSqlType' $ entityId ent
@@ -320,35 +312,49 @@ fusedLiftEntityDefSqlTypeExp emEntities entityMap ent =
         [|
     ent
         { entityFields =
-            $(ListE <$> traverse liftFieldSqlTypeExp (getEntityFieldsDatabase ent))
+            $(ListE <$> traverse combinedFixFieldDef (getEntityFieldsDatabase ent))
         , entityId =
-            $(liftFieldSqlTypeExp $ entityId ent)
+            $(combinedFixFieldDef $ entityId ent)
         }
     |]
   where
-    liftFieldSqlTypeExp :: FieldDef -> Q Exp
-    liftFieldSqlTypeExp fieldDef@FieldDef{..} =
-        let
-            sqlTypeExp = getSqlType emEntities entityMap fieldDef
-        in
+    combinedFixFieldDef :: FieldDef -> Q Exp
+    combinedFixFieldDef fieldDef@FieldDef{..}
+        | fieldIsImplicitIdColumn =
             [|
-                FieldDef
-                    fieldHaskell
-                    fieldDB
-                    fieldType
-                    $(liftSqlTypeExp sqlTypeExp)
-                    fieldAttrs
-                    fieldStrict
-                    fieldReference
-                    fieldCascade
-                    fieldComments
-                    fieldGenerated
-                    fieldIsImplicitIdColumn
+                fieldDef
+                    { fieldSqlType =
+                        $(liftSqlTypeExp (getSqlType emEntities entityMap fieldDef))
+                    }
+
             |]
+        | otherwise =
+            let
+                sqlTypeExp = getSqlType emEntities entityMap fieldDef
+            in
+                [|
+                    FieldDef
+                        fieldHaskell
+                        fieldDB
+                        fieldType
+                        $(liftSqlTypeExp sqlTypeExp)
+                        fieldAttrs
+                        fieldStrict
+                        fieldRef'
+                        fieldCascade
+                        fieldComments
+                        fieldGenerated
+                        fieldIsImplicitIdColumn
+                |]
       where
         FieldDef _x _ _ _ _ _ _ _ _ _ _ =
             error "need to update this record wildcard match"
-
+        (fieldRef', sqlTyp') =
+            case extractForeignRef entityMap fieldDef of
+                Just (fr, ft) ->
+                    (fr, liftSqlTypeExp (SqlTypeExp ft))
+                Nothing ->
+                    (fieldReference, lift fieldSqlType)
 
 getSqlType :: EmbedEntityMap -> EntityMap -> FieldDef -> SqlTypeExp
 getSqlType emEntities entityMap field =
@@ -360,17 +366,19 @@ getSqlType emEntities entityMap field =
 -- In the case of embedding, there won't be any datatype created yet.
 -- We just use SqlString, as the data will be serialized to JSON.
 defaultSqlTypeExp :: EmbedEntityMap -> EntityMap -> FieldDef -> SqlTypeExp
+defaultSqlTypeExp _ _ field | fieldIsImplicitIdColumn field =
+    SqlType' (fieldSqlType field)
 defaultSqlTypeExp emEntities entityMap field =
     case mEmbedded emEntities ftype of
         Right _ ->
             SqlType' SqlString
-        Left (Just FTKeyCon) ->
-            SqlType' SqlString
+        Left (Just (FTKeyCon ty)) ->
+            SqlTypeExp (FTTypeCon Nothing ty)
         Left Nothing ->
             case fieldReference field of
                 ForeignRef refName ft ->
                     case M.lookup refName entityMap of
-                        Nothing  ->
+                        Nothing ->
                             SqlTypeExp ft
                         -- A ForeignRef is blindly set to an Int64 in setEmbedField
                         -- correct that now
@@ -447,7 +455,7 @@ constructEntityMap :: [EntityDef] -> EntityMap
 constructEntityMap =
     M.fromList . fmap (\ent -> (entityHaskell ent, ent))
 
-data FTTypeConDescr = FTKeyCon
+data FTTypeConDescr = FTKeyCon Text
     deriving Show
 
 -- | Recurses through the 'FieldType'. Returns a 'Right' with the
@@ -470,15 +478,10 @@ mEmbedded ents (FTTypeCon Nothing (EntityNameHS -> name)) =
     maybe (Left Nothing) Right $ M.lookup name ents
 mEmbedded ents (FTList x) =
     mEmbedded ents x
+mEmbedded ents (FTApp (FTTypeCon Nothing "Key") (FTTypeCon _ a)) =
+    Left $ Just $ FTKeyCon $ a <> "Id"
 mEmbedded ents (FTApp x y) =
-    -- Key converts an Record to a RecordId
-    -- special casing this is obviously a hack
-    -- This problem may not be solvable with the current QuasiQuoted approach though
-    if x == FTTypeCon Nothing "Key"
-        then
-            Left $ Just FTKeyCon
-        else
-            mEmbedded ents y
+    mEmbedded ents y
 
 setEmbedField :: EntityNameHS -> EmbedEntityMap -> FieldDef -> FieldDef
 setEmbedField entName allEntities field =
@@ -524,14 +527,15 @@ mkPersistWith
     -> [UnboundEntityDef]
     -> Q [Dec]
 mkPersistWith mps preexistingEntities ents' = do
+    let
+        (embedEntityMap, predefs) =
+            preprocessUnboundDefs preexistingEntities ents'
     ents <-
         filterM shouldGenerateCode
         $ embedEntityDefs
         $ mappend preexistingEntities
         $ map (setDefaultIdFields mps)
-        $ snd
-        $ preprocessUnboundDefs []
-        $ ents'
+        $ predefs
     let
         entityMap =
             constructEntityMap ents
@@ -541,7 +545,7 @@ mkPersistWith mps preexistingEntities ents' = do
         , [UndecidableInstances], [DataKinds], [FlexibleInstances]
         ]
     persistFieldDecs <- fmap mconcat $ mapM (persistFieldFromEntity mps) ents
-    entityDecs <- fmap mconcat $ mapM (mkEntity entityMap mps) ents
+    entityDecs <- fmap mconcat $ mapM (mkEntity embedEntityMap entityMap mps) ents
     jsonDecs <- fmap mconcat $ mapM (mkJSON mps) ents
     uniqueKeyInstances <- fmap mconcat $ mapM (mkUniqueKeyInstances mps) ents
     symbolToFieldInstances <- fmap mconcat $ mapM (mkSymbolToFieldInstances mps) ents
@@ -1258,10 +1262,10 @@ fieldError tableName fieldName err = mconcat
     , err
     ]
 
-mkEntity :: EntityMap -> MkPersistSettings -> EntityDef -> Q [Dec]
-mkEntity entityMap mps entDef = do
+mkEntity :: EmbedEntityMap -> EntityMap -> MkPersistSettings -> EntityDef -> Q [Dec]
+mkEntity embedEntityMap entityMap mps entDef = do
     fields <- mkFields mps entDef
-    entityDefExp <- liftAndFixKeys mempty entityMap entDef
+    entityDefExp <- liftAndFixKeys embedEntityMap entityMap entDef
 
     let name = mkEntityDefName entDef
     let clazz = ConT ''PersistEntity `AppT` genDataType
@@ -1892,36 +1896,6 @@ mkMigrate fun eds = do
         , FunD (mkName fun) [normalClause [] body]
         ]
 
-liftAndFixKeys :: EmbedEntityMap -> EntityMap -> EntityDef -> Q Exp
-liftAndFixKeys embedEntityMap entityMap EntityDef{..} =
-    [|EntityDef
-        entityHaskell
-        entityDB
-        $(liftAndFixKey entityMap entityId)
-        entityAttrs
-        $(ListE <$> mapM (liftAndFixKey entityMap) entityFields)
-        entityUniques
-        entityForeigns
-        entityDerives
-        entityExtra
-        entitySum
-        entityComments
-    |]
-
-liftAndFixKey :: EntityMap -> FieldDef -> Q Exp
-liftAndFixKey entityMap fieldDef@(FieldDef a b c sqlTyp e f fieldRef fc mcomments fg fieldIsImplicitIdColumn)
-    | not fieldIsImplicitIdColumn =
-        [|FieldDef a b c $(sqlTyp') e f (fieldRef') fc mcomments fg fieldIsImplicitIdColumn|]
-    | otherwise =
-        [|FieldDef a b c sqlTyp e f fieldRef fc mcomments fg fieldIsImplicitIdColumn|]
-  where
-      (fieldRef', sqlTyp') =
-          case extractForeignRef entityMap fieldDef of
-            Just (fr, ft) ->
-                (fr, liftSqlTypeExp (SqlTypeExp ft))
-            Nothing ->
-                (fieldRef, lift sqlTyp)
-
 extractForeignRef :: EntityMap -> FieldDef -> Maybe (ReferenceDef, FieldType)
 extractForeignRef entityMap fieldDef =
     case fieldReference fieldDef of
@@ -2380,10 +2354,13 @@ discoverEntities = do
         forM types $ \typ -> do
             [e| entityDef (Proxy :: Proxy $(pure typ)) |]
 
-fixForeignKeysAll :: [UnboundEntityDef] -> [EntityDef]
-fixForeignKeysAll unEnts = map fixForeignKeys unEnts
+fixForeignKeysAll
+    :: [EntityDef]
+    -> [UnboundEntityDef]
+    -> [EntityDef]
+fixForeignKeysAll preEnts unEnts = map fixForeignKeys unEnts
   where
-    ents = map unboundEntityDef unEnts
+    ents = map unboundEntityDef unEnts ++ preEnts
     entLookup = M.fromList $ map (\e -> (entityHaskell e, e)) ents
 
     fixForeignKeys :: UnboundEntityDef -> EntityDef

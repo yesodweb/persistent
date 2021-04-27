@@ -105,7 +105,7 @@ HasCustomSqlId
     name String
 
 SharedPrimaryKey
-    Id (Key HasDefaultId)
+    Id HasDefaultIdId
     name String
 
 SharedPrimaryKeyWithCascade
@@ -213,8 +213,10 @@ spec = describe "THSpec" $ do
             fieldHaskell `shouldBe` FieldNameHS "id"
         it "should have correct underlying sql type" $ do
             fieldSqlType `shouldBe` SqlInt64
+        it "should have correct underlying (as reported by sqltype)" $ do
+            fieldSqlType `shouldBe` sqlType (Proxy :: Proxy HasDefaultIdId)
         it "should have correct haskell type" $ do
-            fieldType `shouldBe` FTApp (FTTypeCon Nothing "Key") (FTTypeCon Nothing "HasDefaultId")
+            fieldType `shouldBe` (FTTypeCon Nothing "HasDefaultIdId")
         it "should have correct sql type from PersistFieldSql" $ do
             sqlType (Proxy @SharedPrimaryKeyId)
                 `shouldBe`

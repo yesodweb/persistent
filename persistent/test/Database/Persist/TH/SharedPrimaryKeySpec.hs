@@ -27,31 +27,72 @@ share [ mkPersist sqlSettings ] [persistLowerCase|
 User
     name    String
 
--- TODO: uncomment this out https://github.com/yesodweb/persistent/issues/1149
--- Profile
---     Id      UserId
---     email   String
-
 Profile
+    Id      UserId
+    email   String
+
+Profile2
     Id      (Key User)
     email   String
 
 |]
 
+
+
 spec :: Spec
 spec = describe "Shared Primary Keys" $ do
+    let
+        getSqlType :: PersistEntity a => Proxy a -> SqlType
+        getSqlType =
+            fieldSqlType . getEntityId . entityDef
 
+        keyProxy :: Proxy a -> Proxy (Key a)
+        keyProxy _ = Proxy
+
+        sqlTypeEquivalent
+            :: (PersistFieldSql (Key a), PersistEntity a)
+            => Proxy a
+            -> Expectation
+        sqlTypeEquivalent proxy =
+            getSqlType proxy `shouldBe` sqlType (keyProxy proxy)
+
+        testSqlTypeEquivalent
+            :: (PersistFieldSql (Key a), PersistEntity a)
+            => Proxy a
+            -> Spec
+        testSqlTypeEquivalent prxy =
+            it "has equivalent SqlType from sqlType and entityId" $
+                sqlTypeEquivalent prxy
     describe "PersistFieldSql" $ do
         it "should match underlying key" $ do
             sqlType (Proxy @UserId)
                 `shouldBe`
                     sqlType (Proxy @ProfileId)
 
+    describe "User" $ do
+        it "has default ID key, SqlInt64" $ do
+            sqlType (Proxy @UserId)
+                `shouldBe`
+                    SqlInt64
+
+        testSqlTypeEquivalent (Proxy @User)
+
+    describe "Profile"  $ do
+        it "has same ID key type as User" $ do
+            sqlType (Proxy @ProfileId)
+                `shouldBe`
+                    sqlType (Proxy @UserId)
+        testSqlTypeEquivalent(Proxy @Profile)
+
+    describe "Profile2" $ do
+        it "has same ID key type as User" $ do
+            sqlType (Proxy @Profile2Id)
+                `shouldBe`
+                    sqlType (Proxy @UserId)
+        testSqlTypeEquivalent (Proxy @Profile2)
+
     describe "getEntityId FieldDef" $ do
         it "should match underlying primary key" $ do
-            let getSqlType :: PersistEntity a => Proxy a -> SqlType
-                getSqlType =
-                    fieldSqlType . getEntityId . entityDef
             getSqlType (Proxy @User)
                 `shouldBe`
                     getSqlType (Proxy @Profile)
