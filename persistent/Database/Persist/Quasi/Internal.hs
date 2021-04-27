@@ -121,7 +121,7 @@ data PersistSettings = PersistSettings
 defaultPersistSettings, upperCaseSettings, lowerCaseSettings :: PersistSettings
 defaultPersistSettings = PersistSettings
     { psToDBName = id
-    , psToFKName = ToFKName $ \(EntityNameHS entName) name -> entName <> name
+    , psToFKName = ToFKName $ \(EntityNameHS entName) (ConstraintNameHS conName) -> entName <> conName
     , psStrictFields = True
     , psIdName       = "id"
     }
@@ -140,11 +140,11 @@ lowerCaseSettings = defaultPersistSettings
 --
 -- @since 2.13.0.0
 newtype ToFKName = ToFKName
-    { unToFKName :: EntityNameHS -> Text -> Text
+    { unToFKName :: EntityNameHS -> ConstraintNameHS -> Text
     }
 
 toFKNameInfixed :: Text -> ToFKName
-toFKNameInfixed inf = ToFKName $ \(EntityNameHS entName) name -> entName <> inf <> name
+toFKNameInfixed inf = ToFKName $ \(EntityNameHS entName) (ConstraintNameHS conName) -> entName <> inf <> conName
 
 -- | Parses a quasi-quoted syntax into a list of entity definitions.
 parse :: PersistSettings -> Text -> [EntityDef]
@@ -741,9 +741,9 @@ takeForeign ps entityName _defs = takeRefTable
                 , foreignRefTableDBName =
                     EntityNameDB $ psToDBName ps refTableName
                 , foreignConstraintNameHaskell =
-                    ConstraintNameHS n
+                    constraintName
                 , foreignConstraintNameDBName =
-                    toFKConstraintNameDB ps entityName n
+                    toFKConstraintNameDB ps entityName constraintName
                 , foreignFieldCascade = FieldCascade
                     { fcOnDelete = onDelete
                     , fcOnUpdate = onUpdate
@@ -758,6 +758,8 @@ takeForeign ps entityName _defs = takeRefTable
                     null pFields
                 }
           where
+            constraintName =
+                ConstraintNameHS n
             (fields,attrs) = break ("!" `T.isPrefixOf`) rest
             (fFields, pFields) = case break (== "References") fields of
                 (ffs, []) -> (ffs, [])
@@ -783,9 +785,9 @@ takeForeign ps entityName _defs = takeRefTable
 
         go xs _ _ = error $ errorPrefix ++ "expecting a lower case constraint name or a cascading action xs=" ++ show xs
 
-toFKConstraintNameDB :: PersistSettings -> EntityNameHS -> Text -> ConstraintNameDB
-toFKConstraintNameDB ps entityName n =
-    ConstraintNameDB $ psToDBName ps (toFKName entityName n)
+toFKConstraintNameDB :: PersistSettings -> EntityNameHS -> ConstraintNameHS -> ConstraintNameDB
+toFKConstraintNameDB ps entityName constraintName =
+    ConstraintNameDB $ psToDBName ps (toFKName entityName constraintName)
   where
     toFKName =
         unToFKName (psToFKName ps)
