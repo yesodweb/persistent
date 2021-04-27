@@ -164,6 +164,8 @@ test-suite test
         Database.Persist.TH.OverloadedLabelSpec
         Database.Persist.TH.SharedPrimaryKeyImportedSpec
         Database.Persist.TH.SharedPrimaryKeySpec
+        Database.Persist.TH.MultiBlockSpec
+        Database.Persist.TH.MultiBlockSpec.Model
         Database.Persist.THSpec
         TemplateTestImports
         Database.Persist.TH.SharedPrimaryKeySpec

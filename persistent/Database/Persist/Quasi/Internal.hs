@@ -321,71 +321,86 @@ fixForeignKeysAll unEnts = map fixForeignKeys unEnts
     -- the names of the referenced columns
     fixForeignKey :: EntityDef -> UnboundForeignDef -> ForeignDef
     fixForeignKey ent (UnboundForeignDef foreignFieldTexts parentFieldTexts fdef) =
-        case mfdefs of
-             Just fdefs ->
-                 if length foreignFieldTexts /= length fdefs
-                 then
-                     lengthError fdefs
-                 else
-                     let
-                         fds_ffs =
-                             zipWith toForeignFields
-                                 foreignFieldTexts
-                                 fdefs
-                         dbname =
-                             unEntityNameDB (entityDB pent)
-                         oldDbName =
-                             unEntityNameDB (foreignRefTableDBName fdef)
-                      in fdef
-                         { foreignFields = map snd fds_ffs
-                         , foreignNullable = setNull $ map fst fds_ffs
-                         , foreignRefTableDBName =
-                             EntityNameDB dbname
-                         , foreignConstraintNameDBName =
-                             ConstraintNameDB
-                             . T.replace oldDbName dbname . unConstraintNameDB
-                             $ foreignConstraintNameDBName fdef
-                         }
-             Nothing ->
-                 error $ "no primary key found fdef="++show fdef++ " ent="++show ent
+        let
+            errorNoPrimaryKeyFound =
+                error $ "no primary key found fdef="++show fdef++ " ent="++show ent
+            fdefs =
+                fromMaybe errorNoPrimaryKeyFound mfdefs
+            pentError =
+                error $ "could not find table " ++ show (foreignRefTableHaskell fdef)
+                ++ " fdef=" ++ show fdef ++ " allnames="
+                ++ show (map (unEntityNameHS . entityHaskell . unboundEntityDef) unEnts)
+                ++ "\n\nents=" ++ show ents
+            pent =
+                fromMaybe pentError $ M.lookup (foreignRefTableHaskell fdef) entLookup
+            mfdefs =
+                case parentFieldTexts of
+                    [] -> entitiesPrimary pent
+                    _  -> Just $ map (getFieldDef pent . FieldNameHS) parentFieldTexts
+        in
+             if length foreignFieldTexts /= length fdefs
+             then
+                 lengthError fdefs
+             else
+                 let
+                     fds_ffs =
+                         zipWith toForeignFields
+                             foreignFieldTexts
+                             fdefs
+                     dbname =
+                         unEntityNameDB (entityDB pent)
+                     oldDbName =
+                         unEntityNameDB (foreignRefTableDBName fdef)
+                  in
+                      fdef
+                          { foreignFields = map snd fds_ffs
+                          , foreignNullable = setNull $ map fst fds_ffs
+                          , foreignRefTableDBName =
+                              EntityNameDB dbname
+                          , foreignConstraintNameDBName =
+                              ConstraintNameDB
+                              . T.replace oldDbName dbname . unConstraintNameDB
+                              $ foreignConstraintNameDBName fdef
+                          }
       where
-        pentError =
-            error $ "could not find table " ++ show (foreignRefTableHaskell fdef)
-            ++ " fdef=" ++ show fdef ++ " allnames="
-            ++ show (map (unEntityNameHS . entityHaskell . unboundEntityDef) unEnts)
-            ++ "\n\nents=" ++ show ents
-        pent =
-            fromMaybe pentError $ M.lookup (foreignRefTableHaskell fdef) entLookup
-        mfdefs = case parentFieldTexts of
-            [] -> entitiesPrimary pent
-            _  -> Just $ map (getFd pent . FieldNameHS) parentFieldTexts
-
         setNull :: [FieldDef] -> Bool
-        setNull [] = error "setNull: impossible!"
-        setNull (fd:fds) = let nullSetting = isNull fd in
-          if all ((nullSetting ==) . isNull) fds then nullSetting
-            else error $ "foreign key columns must all be nullable or non-nullable"
+        setNull [] =
+            error "setNull: impossible!"
+        setNull (fd:fds) =
+            let
+                nullSetting = isNull fd
+            in
+                if all ((nullSetting ==) . isNull) fds
+                then nullSetting
+                else error $
+                    "foreign key columns must all be nullable or non-nullable"
                    ++ show (map (unFieldNameHS . fieldHaskell) (fd:fds))
-        isNull = (NotNullable /=) . nullable . fieldAttrs
 
-        toForeignFields :: Text -> FieldDef
+        isNull =
+            (NotNullable /=) . nullable . fieldAttrs
+
+        toForeignFields
+            :: Text
+            -> FieldDef
             -> (FieldDef, (ForeignFieldDef, ForeignFieldDef))
-        toForeignFields fieldText pfd =
-           case chktypes fd haskellField pfd of
-               Just err -> error err
-               Nothing -> (fd, ((haskellField, fieldDB fd), (pfh, pfdb)))
+        toForeignFields fieldText parentFieldDef =
+           case checkTypes fieldDef parentFieldDef of
+               Just err ->
+                   error err
+               Nothing ->
+                   (fieldDef, ((haskellField, fieldDB fieldDef), (parentFieldHaskellName, parentFieldNameDB)))
           where
-            fd = getFd ent haskellField
-
+            fieldDef = getFieldDef ent haskellField
             haskellField = FieldNameHS fieldText
-            (pfh, pfdb) = (fieldHaskell pfd, fieldDB pfd)
+            parentFieldHaskellName = fieldHaskell parentFieldDef
+            parentFieldNameDB = fieldDB parentFieldDef
+            checkTypes foreignField parentField =
+                if fieldType foreignField == fieldType parentField
+                then Nothing
+                else Just $ "fieldType mismatch: " ++ show (fieldType foreignField) ++ ", " ++ show (fieldType parentField)
 
-            chktypes ffld _fkey pfld =
-                if fieldType ffld == fieldType pfld then Nothing
-                  else Just $ "fieldType mismatch: " ++ show (fieldType ffld) ++ ", " ++ show (fieldType pfld)
-
-        getFd :: EntityDef -> FieldNameHS -> FieldDef
-        getFd entity t = go (keyAndEntityFields entity)
+        getFieldDef :: EntityDef -> FieldNameHS -> FieldDef
+        getFieldDef entity t = go (keyAndEntityFields entity)
           where
             go [] = error $ "foreign key constraint for: " ++ show (unEntityNameHS $ entityHaskell entity)
                        ++ " unknown column: " ++ show t
@@ -704,11 +719,15 @@ takeUniq _ tableName _ xs =
           ++ "] expecting an uppercase constraint name xs="
           ++ show xs
 
-data UnboundForeignDef = UnboundForeignDef
-                         { _unboundForeignFields :: [Text] -- ^ fields in the parent entity
-                         , _unboundParentFields :: [Text] -- ^ fields in parent entity
-                         , _unboundForeignDef :: ForeignDef
-                         }
+data UnboundForeignDef
+    = UnboundForeignDef
+    { _unboundForeignFields :: [Text]
+    -- ^ fields in the source entity
+    , _unboundParentFields :: [Text]
+    -- ^ fields in target entity
+    , _unboundForeignDef :: ForeignDef
+    -- ^ The 'ForeignDef' which needs information filled in.
+    }
 
 takeForeign
     :: PersistSettings
@@ -722,42 +741,61 @@ takeForeign ps tableName _defs = takeRefTable
     errorPrefix = "invalid foreign key constraint on table[" ++ show tableName ++ "] "
 
     takeRefTable :: [Text] -> UnboundForeignDef
-    takeRefTable [] = error $ errorPrefix ++ " expecting foreign table name"
-    takeRefTable (refTableName:restLine) = go restLine Nothing Nothing
+    takeRefTable [] =
+        error $ errorPrefix ++ " expecting foreign table name"
+    takeRefTable (refTableName:restLine) =
+        go restLine Nothing Nothing
       where
         go :: [Text] -> Maybe CascadeAction -> Maybe CascadeAction -> UnboundForeignDef
-        go (n:rest) onDelete onUpdate | not (T.null n) && isLower (T.head n)
-            = UnboundForeignDef fFields pFields $ ForeignDef
-                { foreignRefTableHaskell =
-                    EntityNameHS refTableName
-                , foreignRefTableDBName =
-                    EntityNameDB $ psToDBName ps refTableName
-                , foreignConstraintNameHaskell =
-                    ConstraintNameHS n
-                , foreignConstraintNameDBName =
-                    ConstraintNameDB $ psToDBName ps (tableName `T.append` n)
-                , foreignFieldCascade = FieldCascade
-                    { fcOnDelete = onDelete
-                    , fcOnUpdate = onUpdate
+        go (constraintName:rest) onDelete onUpdate
+            | not (T.null constraintName) && isLower (T.head constraintName) =
+                UnboundForeignDef
+                    { _unboundForeignFields =
+                        foreignFields
+                    , _unboundParentFields =
+                        parentFields
+                    , _unboundForeignDef =
+                        ForeignDef
+                            { foreignRefTableHaskell =
+                                EntityNameHS refTableName
+                            , foreignRefTableDBName =
+                                EntityNameDB $ psToDBName ps refTableName
+                            , foreignConstraintNameHaskell =
+                                ConstraintNameHS constraintName
+                            , foreignConstraintNameDBName =
+                                ConstraintNameDB $ psToDBName ps (tableName `T.append` constraintName)
+                            , foreignFieldCascade = FieldCascade
+                                { fcOnDelete = onDelete
+                                , fcOnUpdate = onUpdate
+                                }
+                            , foreignFields =
+                                []
+                            , foreignAttrs =
+                                attrs
+                            , foreignNullable =
+                                False
+                            , foreignToPrimary =
+                                null parentFields
+                            }
                     }
-                , foreignFields =
-                    []
-                , foreignAttrs =
-                    attrs
-                , foreignNullable =
-                    False
-                , foreignToPrimary =
-                    null pFields
-                }
           where
-            (fields,attrs) = break ("!" `T.isPrefixOf`) rest
-            (fFields, pFields) = case break (== "References") fields of
-                (ffs, []) -> (ffs, [])
-                (ffs, _ : pfs) -> case (length ffs, length pfs) of
-                    (flen, plen) | flen == plen -> (ffs, pfs)
-                    (flen, plen) -> error $ errorPrefix ++ concat
-                        [ "Found ", show flen, " foreign fields but "
-                        , show plen, " parent fields" ]
+            (fields, attrs) =
+                break ("!" `T.isPrefixOf`) rest
+            (foreignFields, parentFields) =
+                case break (== "References") fields of
+                    (ffs, []) ->
+                        (ffs, [])
+                    (ffs, _ : pfs) ->
+                        case (length ffs, length pfs) of
+                            (flen, plen)
+                                | flen == plen ->
+                                    (ffs, pfs)
+                            (flen, plen) ->
+                                error $ errorPrefix ++ concat
+                                    [ "Found " , show flen
+                                    , " foreign fields but "
+                                    , show plen, " parent fields"
+                                    ]
 
         go ((parseCascadeAction CascadeDelete -> Just cascadingAction) : rest) onDelete' onUpdate =
             case onDelete' of
