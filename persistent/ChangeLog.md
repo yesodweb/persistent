@@ -3,7 +3,7 @@
 ## 2.13.0.0 (unreleased)
 
 * [#1244](https://github.com/yesodweb/persistent/pull/1244)
-  * Implement config for customising the FK name
+    * Implement config for customising the FK name
 * [#1252](https://github.com/yesodweb/persistent/pull/1252)
     * `mkMigrate` now defers to `mkEntityDefList` and `migrateModels` instead of
       fixing the foreign key references itself.
