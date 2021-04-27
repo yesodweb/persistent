@@ -722,9 +722,9 @@ takeUniq _ tableName _ xs =
 data UnboundForeignDef
     = UnboundForeignDef
     { _unboundForeignFields :: [Text]
-    -- ^ fields in the parent entity
+    -- ^ fields in the source entity
     , _unboundParentFields :: [Text]
-    -- ^ fields in parent entity
+    -- ^ fields in target entity
     , _unboundForeignDef :: ForeignDef
     -- ^ The 'ForeignDef' which needs information filled in.
     }
