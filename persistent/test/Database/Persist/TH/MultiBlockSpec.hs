@@ -26,10 +26,19 @@ share
     ]
     [persistLowerCase|
 
+Thing
+    name Text
+    Primary name
+
+ThingAuto
+    name Text
+
 MBBar
     name Text
     age  Int
     user UserId
+    thing ThingId
+    thingAuto ThingAutoId
     profile MBDogId
 
     -- TODO: make the QQ not care about this table being missing
@@ -44,7 +53,7 @@ spec = describe "MultiBlockSpec" $ do
                 entityDef $ Proxy @MBBar
         describe "Foreign Key Works" $ do
             let
-                [n, a, userRef, profileRef] =
+                [n, a, userRef, thingRef, thingAutoRef, profileRef] =
                     getEntityFields edef
             it "User reference works" $ do
                 fieldReference userRef
@@ -58,4 +67,18 @@ spec = describe "MultiBlockSpec" $ do
                     `shouldBe`
                         ForeignRef
                             (EntityNameHS "MBDog")
+                            (FTTypeCon (Just "Data.Int") "Int64")
+
+            it "Thing ref works (same block)" $ do
+                fieldReference thingRef
+                    `shouldBe`
+                        ForeignRef
+                            (EntityNameHS "Thing")
+                            (FTTypeCon (Just "Data.Int") "Int64")
+
+            it "ThingAuto ref works (same block)" $ do
+                fieldReference thingAutoRef
+                    `shouldBe`
+                        ForeignRef
+                            (EntityNameHS "ThingAuto")
                             (FTTypeCon (Just "Data.Int") "Int64")
