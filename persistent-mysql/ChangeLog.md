@@ -1,6 +1,6 @@
 # Changelog for persistent-mysql
 
-## 2.12.0.1
+## 2.12.1.0
 
 * Expose `openMySQLConn` for explicit reference to opened connection. [#1248](https://github.com/yesodweb/persistent/pull/1248)
   * Makes it convenient to use with `mysql-simple`.
