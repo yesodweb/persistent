@@ -474,7 +474,6 @@ mkEntityDefSqlTypeExp emEntities entityMap ent =
 mkPersist :: MkPersistSettings -> [EntityDef] -> Q [Dec]
 mkPersist mps ents' = do
     ents <-
-        -- filterM (const (pure True)) -- isNotPersistEntityInstanceAlready
         filterM shouldGenerateCode
         $ embedEntityDefs
         $ map (setDefaultIdFields mps)
