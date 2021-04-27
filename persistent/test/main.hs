@@ -263,7 +263,7 @@ Car
     car CarId         -- | the car reference
 
                     |]
-        let [bicycle, car, vehicle] = parse lowerCaseSettings subject
+        let [bicycle, car, vehicle] = unboundEntityDef <$> parse lowerCaseSettings subject
 
         it "should parse the `entityHaskell` field" $ do
             entityHaskell bicycle `shouldBe` EntityNameHS "Bicycle"
@@ -313,7 +313,7 @@ Car
             (simplifyUnique <$> entityUniques vehicle) `shouldBe` []
 
         it "should parse the `entityForeigns` field" $ do
-            let [user, notification] = parse lowerCaseSettings [st|
+            let [user, notification] = unboundEntityDef <$> parse lowerCaseSettings [st|
 User
     name            Text
     emailFirst      Text
@@ -494,7 +494,8 @@ Baz
                                 <> " and " <> show fieldCount <> " fields"
                                 <> ", but the list was empty..."
 
-                        ((name, fieldCount) : ys, (EntityDef {..} : xs)) -> do
+                        ((name, fieldCount) : ys, (x : xs)) -> do
+                            let EntityDef {..} = unboundEntityDef x
                             (unEntityNameHS entityHaskell, length entityFields)
                                 `shouldBe`
                                     (T.pack name, fieldCount)
@@ -771,7 +772,7 @@ Baz
                     , "  Extra2"
                     , "    something"
                     ]
-        let [subject] = parse lowerCaseSettings lines
+        let [subject] = unboundEntityDef <$> parse lowerCaseSettings lines
         it "produces the right name" $ do
             entityHaskell subject `shouldBe` EntityNameHS "Foo"
         describe "entityFields" $ do
@@ -818,14 +819,14 @@ Baz
                         , ""
                         ] of
                             [a, b, c] ->
-                                [a, b, c] :: [EntityDef]
+                                [a, b, c] :: [UnboundEntityDef]
                             xs ->
                                 error
                                 $ "Expected 3 elements in list, got: "
                                 <> show (length xs)
                                 <> ", list contents: \n\n" <> intercalate "\n" (map show xs)
             describe "idTable" $ do
-                let EntityDef {..} = idTable
+                let EntityDef {..} = unboundEntityDef idTable
                 it "has no extra blocks" $ do
                     entityExtra `shouldBe` mempty
                 it "has the right name" $ do
@@ -835,7 +836,7 @@ Baz
                         [ FieldNameHS "name"
                         ]
             describe "lowerCaseTable" $ do
-                let EntityDef {..} = lowerCaseTable
+                let EntityDef {..} = unboundEntityDef lowerCaseTable
                 it "has the right name" $ do
                     entityHaskell `shouldBe` EntityNameHS "LowerCaseTable"
                 it "has the right fields" $ do

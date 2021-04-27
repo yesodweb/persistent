@@ -26,6 +26,9 @@ module Database.Persist.Quasi.Internal
     , LinesWithComments(..)
     , splitExtras
     , takeColsEx
+    -- * UnboundEntityDef
+    , UnboundEntityDef(..)
+    , fixForeignKeysAll
     ) where
 
 import Prelude hiding (lines)
@@ -132,7 +135,7 @@ lowerCaseSettings = defaultPersistSettings
     }
 
 -- | Parses a quasi-quoted syntax into a list of entity definitions.
-parse :: PersistSettings -> Text -> [EntityDef]
+parse :: PersistSettings -> Text -> [UnboundEntityDef]
 parse ps = maybe [] (parseLines ps) . preparse
 
 preparse :: Text -> Maybe (NonEmpty Line)
@@ -225,15 +228,15 @@ lowestIndent :: NonEmpty Line -> Int
 lowestIndent = minimum . fmap lineIndent
 
 -- | Divide lines into blocks and make entity definitions.
-parseLines :: PersistSettings -> NonEmpty Line -> [EntityDef]
+parseLines :: PersistSettings -> NonEmpty Line -> [UnboundEntityDef]
 parseLines ps =
-    fixForeignKeysAll . map mk . associateLines
+    map mk . associateLines
   where
     mk :: LinesWithComments -> UnboundEntityDef
     mk lwc =
         let ln :| rest = lwcLines lwc
             (name :| entAttribs) = lineText ln
-         in setComments (lwcComments lwc) $ mkEntityDef ps name entAttribs rest
+         in setComments (lwcComments lwc) $ mkUnboundEntityDef ps name entAttribs rest
 
 isDocComment :: Token -> Maybe Text
 isDocComment tok =
@@ -413,9 +416,10 @@ fixForeignKeysAll unEnts = map fixForeignKeys unEnts
 
 data UnboundEntityDef
     = UnboundEntityDef
-    { _unboundForeignDefs :: [UnboundForeignDef]
+    { unboundForeignDefs :: [UnboundForeignDef]
     , unboundEntityDef :: EntityDef
     }
+    deriving Show
 
 overUnboundEntityDef
     :: (EntityDef -> EntityDef) -> UnboundEntityDef -> UnboundEntityDef
@@ -423,30 +427,34 @@ overUnboundEntityDef f ubed =
     ubed { unboundEntityDef = f (unboundEntityDef ubed) }
 
 -- | Construct an entity definition.
-mkEntityDef
+mkUnboundEntityDef
     :: PersistSettings
     -> Text -- ^ name
     -> [Attr] -- ^ entity attributes
     -> [Line] -- ^ indented lines
     -> UnboundEntityDef
-mkEntityDef ps name entattribs lines =
-    UnboundEntityDef foreigns $
-        EntityDef
-            { entityHaskell = entName
-            , entityDB = EntityNameDB $ getDbName ps name' entattribs
-            -- idField is the user-specified Id
-            -- otherwise useAutoIdField
-            -- but, adjust it if the user specified a Primary
-            , entityId = setComposite primaryComposite $ fromMaybe autoIdField idField
-            , entityAttrs = entattribs
-            , entityFields = cols
-            , entityUniques = uniqs
-            , entityForeigns = []
-            , entityDerives = concat $ mapMaybe takeDerives textAttribs
-            , entityExtra = extras
-            , entitySum = isSum
-            , entityComments = Nothing
-            }
+mkUnboundEntityDef ps name entattribs lines =
+    UnboundEntityDef
+        { unboundForeignDefs =
+            foreigns
+        , unboundEntityDef =
+            EntityDef
+                { entityHaskell = entName
+                , entityDB = EntityNameDB $ getDbName ps name' entattribs
+                -- idField is the user-specified Id
+                -- otherwise useAutoIdField
+                -- but, adjust it if the user specified a Primary
+                , entityId = setComposite primaryComposite $ fromMaybe autoIdField idField
+                , entityAttrs = entattribs
+                , entityFields = cols
+                , entityUniques = uniqs
+                , entityForeigns = []
+                , entityDerives = concat $ mapMaybe takeDerives textAttribs
+                , entityExtra = extras
+                , entitySum = isSum
+                , entityComments = Nothing
+                }
+        }
   where
     entName = EntityNameHS name'
     (isSum, name') =
@@ -728,6 +736,7 @@ data UnboundForeignDef
     , _unboundForeignDef :: ForeignDef
     -- ^ The 'ForeignDef' which needs information filled in.
     }
+    deriving Show
 
 takeForeign
     :: PersistSettings

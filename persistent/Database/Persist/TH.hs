@@ -115,6 +115,7 @@ import Web.PathPieces (PathPiece(..))
 
 import Database.Persist
 import Database.Persist.Quasi
+import Database.Persist.Quasi.Internal (fixForeignKeysAll)
 import Database.Persist.Sql
        (Migration, PersistFieldSql, SqlBackend, migrate, sqlType)
 
@@ -268,8 +269,12 @@ parseReferences :: PersistSettings -> Text -> Q Exp
 parseReferences ps s = lift $
     map (mkEntityDefSqlTypeExp embedEntityMap entityMap) noCycleEnts
   where
-    (embedEntityMap, noCycleEnts) = embedEntityDefsMap $ parse ps s
-    entityMap = constructEntityMap noCycleEnts
+    unboundDefs =
+        parse ps s
+    (embedEntityMap, noCycleEnts) =
+        embedEntityDefsMap $ fixForeignKeysAll unboundDefs
+    entityMap =
+        constructEntityMap noCycleEnts
 
 stripId :: FieldType -> Maybe Text
 stripId (FTTypeCon Nothing t) = stripSuffix "Id" t
