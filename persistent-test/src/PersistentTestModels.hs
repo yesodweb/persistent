@@ -18,7 +18,7 @@ import Data.Text (append)
 -- just need to ensure this compiles
 import PersistentTestModelsImports()
 
-share [mkPersist persistSettings { mpsGeneric = True },  mkMigrate "testMigrate", mkDeleteCascade persistSettings, mkSave "_ignoredSave"] [persistUpperCase|
+share [mkPersist persistSettings { mpsGeneric = True },  mkMigrate "testMigrate", mkDeleteCascade persistSettings] [persistUpperCase|
 
 -- Dedented comment
   -- Header-level comment

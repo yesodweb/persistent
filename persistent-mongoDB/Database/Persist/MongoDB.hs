@@ -659,7 +659,7 @@ collectionNameFromKey = collectionName . recordTypeFromKey
 
 projectionFromEntityDef :: EntityDef -> DB.Projector
 projectionFromEntityDef eDef =
-  map toField (getEntityFieldsDatabase eDef)
+  map toField (getEntityFields eDef)
   where
     toField :: FieldDef -> DB.Field
     toField fDef = (unFieldNameDB (fieldDB fDef)) DB.=: (1 :: Int)
