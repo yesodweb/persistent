@@ -150,7 +150,8 @@ test-suite test
 
     hs-source-dirs:
         test/
-    cpp-options: -DTEST
+
+    ghc-options: -Wall
 
     default-extensions: FlexibleContexts
                       , MultiParamTypeClasses
@@ -167,6 +168,7 @@ test-suite test
         Database.Persist.TH.MultiBlockSpec
         Database.Persist.TH.MultiBlockSpec.Model
         Database.Persist.THSpec
+        Database.Persist.QuasiSpec
         TemplateTestImports
         Database.Persist.TH.SharedPrimaryKeySpec
         Database.Persist.TH.SharedPrimaryKeyImportedSpec
