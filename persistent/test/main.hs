@@ -376,7 +376,7 @@ CustomerTransfer
 |]
                 let [customerTransfer] = parse lowerCaseSettings tickedDefinition
                 let expectedType =
-                        FTTypeCon Nothing "MoneyAmount" `FTApp` FTTypeCon Nothing "'Customer" `FTApp` FTTypeCon Nothing "'Debit"
+                        FTTypeCon Nothing "MoneyAmount" `FTApp` FTTypePromoted "Customer" `FTApp` FTTypePromoted "Debit"
 
                 (simplifyField <$> entityFields customerTransfer) `shouldBe`
                     [ (FieldNameHS "customerId", FTTypeCon Nothing "CustomerId")

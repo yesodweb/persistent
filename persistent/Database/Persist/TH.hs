@@ -349,6 +349,8 @@ mEmbedded _ (FTTypeCon Just{} _) =
     Left Nothing
 mEmbedded ents (FTTypeCon Nothing (EntityNameHS -> name)) =
     maybe (Left Nothing) Right $ M.lookup name ents
+mEmbedded ents (FTTypePromoted (EntityNameHS -> name)) =
+    maybe (Left Nothing) Right $ M.lookup name ents
 mEmbedded ents (FTList x) =
     mEmbedded ents x
 mEmbedded ents (FTApp x y) =
@@ -1767,6 +1769,8 @@ ftToType = \case
         ConT ''Int64
     FTTypeCon (Just m) t ->
         ConT $ mkName $ unpack $ concat [m, ".", t]
+    FTTypePromoted t ->
+        PromotedT $ mkName $ T.unpack t
     FTApp x y ->
         ftToType x `AppT` ftToType y
     FTList x ->
