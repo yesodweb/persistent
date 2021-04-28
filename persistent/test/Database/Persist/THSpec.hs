@@ -116,6 +116,17 @@ SharedPrimaryKeyWithCascadeAndCustomName
     Id (Key HasDefaultId) OnDeleteCascade sql=my_id
     name String
 
+Top
+    name Text
+
+Middle
+    top TopId
+    Primary top
+
+Bottom
+    middle MiddleId
+    Primary middle
+
 |]
 
 share [mkPersist sqlSettings { mpsGeneric = False, mpsGenerateLenses = True }] [persistLowerCase|

@@ -77,6 +77,8 @@
     * Refactor setEmbedField to use do notation
 * [#1237](https://github.com/yesodweb/persistent/pull/1237)
     * Remove nonEmptyOrFail function from recent tests
+* [#1256](https://github.com/yesodweb/persistent/pull/1256)
+    * The QuasiQuoter has been improved.
 
 ## 2.12.1.1
 

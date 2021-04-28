@@ -15,6 +15,7 @@ module Database.Persist.TH.SharedPrimaryKeySpec where
 
 import TemplateTestImports
 
+import Data.Time
 import Data.Proxy
 import Test.Hspec
 import Database.Persist
@@ -35,12 +36,19 @@ Profile2
     Id      (Key User)
     email   String
 
+DayKeyTable
+    Id Day
+    name Text
+
+RefDayKey
+    dayKey DayKeyTableId
+
 |]
 
 
 
 spec :: Spec
-spec = describe "Shared Primary Keys" $ do
+spec = fdescribe "Shared Primary Keys" $ do
     let
         getSqlType :: PersistEntity a => Proxy a -> SqlType
         getSqlType =
@@ -96,3 +104,28 @@ spec = describe "Shared Primary Keys" $ do
             getSqlType (Proxy @User)
                 `shouldBe`
                     getSqlType (Proxy @Profile)
+
+    describe "DayKeyTable" $ do
+        testSqlTypeEquivalent (Proxy @DayKeyTable)
+
+        it "sqlType has Day type" $ do
+            sqlType (Proxy @Day)
+                `shouldBe`
+                    sqlType (Proxy @DayKeyTableId)
+
+        it "getSqlType has Day type" $ do
+            sqlType (Proxy @Day)
+                `shouldBe`
+                    getSqlType (Proxy @DayKeyTable)
+
+    describe "RefDayKey" $ do
+        let
+            [dayKeyField] =
+                getEntityFields (entityDef (Proxy @RefDayKey))
+        testSqlTypeEquivalent (Proxy @RefDayKey)
+
+        it "has same sqltype as underlying" $ do
+            sqlType (Proxy @Day)
+                `shouldBe`
+                    fieldSqlType dayKeyField
+
