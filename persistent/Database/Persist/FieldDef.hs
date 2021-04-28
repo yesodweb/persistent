@@ -9,6 +9,7 @@ module Database.Persist.FieldDef
     , overFieldAttrs
     , addFieldAttr
       -- ** Helpers
+    , isFieldNullable
     , isFieldNotGenerated
     , isHaskellField
       -- * 'FieldCascade'
@@ -22,9 +23,11 @@ module Database.Persist.FieldDef
 import Database.Persist.FieldDef.Internal
 
 import Database.Persist.Types.Base
-    ( isHaskellField
-    , FieldAttr
-    )
+       ( FieldAttr(..)
+       , IsNullable(..)
+       , fieldAttrsContainsNullable
+       , isHaskellField
+       )
 
 -- | Replace the 'FieldDef' 'FieldAttr' with the new list.
 --
@@ -43,3 +46,10 @@ overFieldAttrs k fd = fd { fieldAttrs = k (fieldAttrs fd) }
 -- @since 2.13.0.0
 addFieldAttr :: FieldAttr -> FieldDef -> FieldDef
 addFieldAttr fa = overFieldAttrs (fa :)
+
+-- | Check if the field definition is nullable
+--
+-- @since 2.13.0.0
+isFieldNullable :: FieldDef -> IsNullable
+isFieldNullable =
+    fieldAttrsContainsNullable . fieldAttrs

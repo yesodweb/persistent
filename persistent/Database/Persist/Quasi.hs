@@ -417,7 +417,6 @@ module Database.Persist.Quasi
     , PersistSettings
     , upperCaseSettings
     , lowerCaseSettings
-    , nullable
     -- ** Getters and Setters
     , module Database.Persist.Quasi
     ) where

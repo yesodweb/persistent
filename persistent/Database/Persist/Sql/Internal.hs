@@ -140,7 +140,10 @@ mkColumns allDefs t overrides =
     go fd =
         Column
             { cName = fieldDB fd
-            , cNull = nullable (fieldAttrs fd) /= NotNullable || isEntitySum t
+            , cNull =
+                case isFieldNullable fd of
+                    Nullable _ -> True
+                    NotNullable -> isEntitySum t
             , cSqlType = fieldSqlType fd
             , cDefault = defaultAttribute $ fieldAttrs fd
             , cGenerated = fieldGenerated fd

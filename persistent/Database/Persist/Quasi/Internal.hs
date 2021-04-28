@@ -19,7 +19,6 @@ module Database.Persist.Quasi.Internal
     , upperCaseSettings
     , lowerCaseSettings
     , toFKNameInfixed
-    , nullable
     , Token (..)
     , Line (..)
     , preparse
@@ -40,6 +39,7 @@ module Database.Persist.Quasi.Internal
     , UnboundCompositeDef(..)
     , UnboundIdDef(..)
     , unbindFieldDef
+    , isUnboundFieldNullable
     , unboundIdDefToFieldDef
     , PrimarySpec(..)
     , mkAutoIdField'
@@ -569,6 +569,10 @@ unbindFieldDef fd = UnboundFieldDef
     , unboundFieldGenerated =
         fieldGenerated fd
     }
+
+isUnboundFieldNullable :: UnboundFieldDef -> IsNullable
+isUnboundFieldNullable =
+    fieldAttrsContainsNullable . unboundFieldAttrs
 
 -- | The specification for how an entity's primary key should be formed.
 --
@@ -1368,13 +1372,6 @@ parseCascadeAction prfx text = do
 takeDerives :: [Text] -> Maybe [Text]
 takeDerives ("deriving":rest) = Just rest
 takeDerives _ = Nothing
-
-nullable :: [FieldAttr] -> IsNullable
-nullable s
-    | FieldAttrMaybe    `elem` s = Nullable ByMaybeAttr
-    | FieldAttrNullable `elem` s = Nullable ByNullableAttr
-    | otherwise = NotNullable
-
 
 -- | Returns 'True' if the 'UnboundFieldDef' does not have a 'MigrationOnly' or
 -- 'SafeToRemove' flag from the QuasiQuoter.
