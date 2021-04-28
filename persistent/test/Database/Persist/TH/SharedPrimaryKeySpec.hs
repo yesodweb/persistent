@@ -45,8 +45,6 @@ RefDayKey
 
 |]
 
-
-
 spec :: Spec
 spec = fdescribe "Shared Primary Keys" $ do
     let
@@ -62,7 +60,7 @@ spec = fdescribe "Shared Primary Keys" $ do
             => Proxy a
             -> Expectation
         sqlTypeEquivalent proxy =
-            getSqlType proxy `shouldBe` sqlType (keyProxy proxy)
+            sqlType (keyProxy proxy) `shouldBe` getSqlType proxy
 
         testSqlTypeEquivalent
             :: (PersistFieldSql (Key a), PersistEntity a)
@@ -125,7 +123,29 @@ spec = fdescribe "Shared Primary Keys" $ do
         testSqlTypeEquivalent (Proxy @RefDayKey)
 
         it "has same sqltype as underlying" $ do
-            sqlType (Proxy @Day)
+            fieldSqlType dayKeyField
                 `shouldBe`
-                    fieldSqlType dayKeyField
+                    sqlType (Proxy @Day)
 
+        it "has the right fieldType" $ do
+            fieldType dayKeyField
+                `shouldBe`
+                    FTTypeCon Nothing "DayKeyTableId"
+
+        it "has the right type" $ do
+            let
+                _ =
+                    refDayKeyDayKey
+                        :: RefDayKey -> DayKeyTableId
+                _ =
+                    RefDayKeyDayKey
+                        :: EntityField RefDayKey DayKeyTableId
+            True `shouldBe` True
+
+        it "has a foreign ref" $ do
+            case fieldReference dayKeyField of
+                ForeignRef refName ft -> do
+                    refName `shouldBe` EntityNameHS "DayKeyTable"
+                    ft `shouldBe` FTTypeCon Nothing "Day"
+                _ ->
+                    fail "nope"
