@@ -370,13 +370,13 @@ Notification
                 let tickedDefinition = [st|
 CustomerTransfer
     customerId CustomerId
-    moneyAmount (MoneyAmount Customer Debit)
+    moneyAmount (MoneyAmount 'Customer 'Debit)
     currencyCode CurrencyCode
     uuid TransferUuid
 |]
                 let [customerTransfer] = parse lowerCaseSettings tickedDefinition
                 let expectedType =
-                        FTTypeCon Nothing "MoneyAmount" `FTApp` FTTypeCon Nothing "Customer" `FTApp` FTTypeCon Nothing "Debit"
+                        FTTypeCon Nothing "MoneyAmount" `FTApp` FTTypeCon Nothing "'Customer" `FTApp` FTTypeCon Nothing "'Debit"
 
                 (simplifyField <$> entityFields customerTransfer) `shouldBe`
                     [ (FieldNameHS "customerId", FTTypeCon Nothing "CustomerId")

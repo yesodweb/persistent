@@ -486,7 +486,7 @@ parseFieldType t0 =
                 | isSpace c -> parse1 $ T.dropWhile isSpace t'
                 | c == '(' -> parseEnclosed ')' id t'
                 | c == '[' -> parseEnclosed ']' FTList t'
-                | isUpper c ->
+                | isUpper c || c == '\'' ->
                     let (a, b) = T.break (\x -> isSpace x || x `elem` ("()[]"::String)) t
                      in PSSuccess (getCon a) b
                 | otherwise -> PSFail $ show (c, t')
