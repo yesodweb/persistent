@@ -2,17 +2,10 @@
 
 module Database.Persist.SqlBackend.Internal.MkSqlBackend where
 
-import Conduit
 import Control.Monad.Logger (Loc, LogLevel, LogSource, LogStr)
-import Control.Monad.Reader
-import Data.Acquire
 import Data.IORef
-import Data.Int
-import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
-import Data.String
 import Data.Text (Text)
-import Database.Persist.Class.PersistStore
 import Database.Persist.SqlBackend.Internal.Statement
 import Database.Persist.SqlBackend.Internal.InsertSqlResult
 import Database.Persist.SqlBackend.Internal.IsolationLevel

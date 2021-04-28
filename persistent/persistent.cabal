@@ -54,6 +54,7 @@ library
         Database.Persist
         Database.Persist.Types
         Database.Persist.Names
+        Database.Persist.PersistValue
         Database.Persist.EntityDef
         Database.Persist.EntityDef.Internal
         Database.Persist.FieldDef
@@ -169,6 +170,7 @@ test-suite test
         Database.Persist.TH.MultiBlockSpec.Model
         Database.Persist.THSpec
         Database.Persist.QuasiSpec
+        Database.Persist.ClassSpec
         TemplateTestImports
         Database.Persist.TH.SharedPrimaryKeySpec
         Database.Persist.TH.SharedPrimaryKeyImportedSpec

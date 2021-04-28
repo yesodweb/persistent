@@ -1,6 +1,6 @@
-{-# LANGUAGE DeriveLift #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveLift #-}
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -37,7 +37,7 @@ import Prelude hiding (lines)
 
 import Control.Applicative (Alternative((<|>)))
 import Control.Arrow ((&&&))
-import Control.Monad (mplus, msum)
+import Control.Monad (mplus)
 import Data.Char (isLower, isSpace, isUpper, toLower)
 import Data.List (find, foldl')
 import Data.List.NonEmpty (NonEmpty(..))
@@ -53,9 +53,8 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Database.Persist.EntityDef.Internal
 import Database.Persist.Types
-import Text.Read (readEither)
-import Database.Persist.EntityDef.Internal
 import Language.Haskell.TH.Syntax (Lift)
+import Text.Read (readEither)
 
 data ParseState a = PSDone | PSFail String | PSSuccess a Text deriving Show
 
