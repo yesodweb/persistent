@@ -423,6 +423,7 @@ module Database.Persist.Quasi
     ) where
 
 import Data.Text (Text)
+import Database.Persist.Names
 import Database.Persist.Quasi.Internal
 
 -- | Retrieve the function in the 'PersistSettings' that modifies the names into
@@ -438,6 +439,21 @@ getPsToDBName = psToDBName
 -- @since 2.13.0.0
 setPsToDBName :: (Text -> Text) -> PersistSettings -> PersistSettings
 setPsToDBName f ps = ps { psToDBName = f }
+
+-- | Set a custom function used to create the constraint name
+-- for a foreign key.
+--
+-- @since 2.13.0.0
+setPsToFKName :: (EntityNameHS -> ConstraintNameHS -> Text) -> PersistSettings -> PersistSettings
+setPsToFKName setter ps = ps { psToFKName = setter }
+
+-- | A preset configuration function that puts an underscore
+-- between the entity name and the constraint name when
+-- creating a foreign key constraint name
+--
+-- @since 2.13.0.0
+setPsUseSnakeCaseForiegnKeys :: PersistSettings -> PersistSettings
+setPsUseSnakeCaseForiegnKeys = setPsToFKName (toFKNameInfixed "_")
 
 -- | Retrieve whether or not the 'PersistSettings' will generate code with
 -- strict fields.

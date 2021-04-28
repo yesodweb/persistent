@@ -234,11 +234,8 @@ embedEntityDefsMap rawEnts = (embedEntityMap, noCycleEnts)
 -- so start with entityHaskell ent and accumulate embeddedHaskell em
 breakEntDefCycle :: EntityDef -> EntityDef
 breakEntDefCycle entDef =
-    overEntityFields (map (breakCycleField entName)) entDef
+    overEntityFields (map (breakCycleField (entityHaskell entDef))) entDef
   where
-    entName =
-        entityHaskell entDef
-
     breakCycleField entName f =
         case fieldReference f of
             EmbedRef em ->
@@ -494,10 +491,10 @@ setEmbedField entName allEntities field =
     ref =
         case mEmbedded allEntities (fieldType field) of
             Left _ -> fromMaybe NoReference $ do
-                entName <- lookupEmbedEntity allEntities field
+                refEntName <- lookupEmbedEntity allEntities field
                 -- This can get corrected in mkEntityDefSqlTypeExp
                 let placeholderIdType = FTTypeCon (Just "Data.Int") "Int64"
-                pure $ ForeignRef entName placeholderIdType
+                pure $ ForeignRef refEntName placeholderIdType
             Right em ->
                 if embeddedHaskell em /= entName
                      then EmbedRef em
