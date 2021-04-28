@@ -18,4 +18,4 @@ instance PersistField (MoneyAmount a b) where
     toPersistValue (MoneyAmount n) = PersistRational n
     fromPersistValue = \case
       PersistRational n -> pure (MoneyAmount n)
-      x -> Left $ "Failed to read MoneyAmount: " <> (T.pack (show x))
+      x -> Left $ T.pack $ "Failed to read MoneyAmount: " ++ show x
