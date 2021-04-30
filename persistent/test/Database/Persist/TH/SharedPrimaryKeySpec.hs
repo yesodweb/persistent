@@ -19,6 +19,7 @@ import Data.Time
 import Data.Proxy
 import Test.Hspec
 import Database.Persist
+import Database.Persist.EntityDef
 import Database.Persist.Sql
 import Database.Persist.Sql.Util
 import Database.Persist.TH
@@ -46,11 +47,15 @@ RefDayKey
 |]
 
 spec :: Spec
-spec = fdescribe "Shared Primary Keys" $ do
+spec = describe "Shared Primary Keys" $ do
     let
         getSqlType :: PersistEntity a => Proxy a -> SqlType
-        getSqlType =
-            fieldSqlType . getEntityId . entityDef
+        getSqlType p =
+            case getEntityId (entityDef p) of
+                EntityIdField fd ->
+                    fieldSqlType fd
+                _ ->
+                    SqlOther "Composite Key"
 
         keyProxy :: Proxy a -> Proxy (Key a)
         keyProxy _ = Proxy
@@ -144,8 +149,7 @@ spec = fdescribe "Shared Primary Keys" $ do
 
         it "has a foreign ref" $ do
             case fieldReference dayKeyField of
-                ForeignRef refName ft -> do
+                ForeignRef refName -> do
                     refName `shouldBe` EntityNameHS "DayKeyTable"
-                    ft `shouldBe` FTTypeCon Nothing "Day"
-                _ ->
-                    fail "nope"
+                other ->
+                    fail $ "expected foreign ref, got: " <> show other

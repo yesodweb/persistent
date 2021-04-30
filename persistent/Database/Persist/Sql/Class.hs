@@ -1,10 +1,11 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE TypeOperators, FlexibleInstances #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE DataKinds #-}
 
 module Database.Persist.Sql.Class
     ( RawSql (..)
@@ -13,10 +14,10 @@ module Database.Persist.Sql.Class
     , unPrefix
     ) where
 
-import GHC.TypeLits (Symbol, KnownSymbol, symbolVal)
 import Data.Bits (bitSizeMaybe)
 import Data.ByteString (ByteString)
 import Data.Fixed
+import Data.Foldable (toList)
 import Data.Int
 import qualified Data.IntMap as IM
 import qualified Data.Map as M
@@ -27,9 +28,10 @@ import qualified Data.Set as S
 import Data.Text (Text, intercalate, pack)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
-import Data.Time (UTCTime, TimeOfDay, Day)
+import Data.Time (Day, TimeOfDay, UTCTime)
 import qualified Data.Vector as V
 import Data.Word
+import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
 import Text.Blaze.Html (Html)
 
 import Database.Persist
@@ -68,19 +70,19 @@ instance
 instance
     (PersistEntity record, PersistEntityBackend record ~ backend, IsPersistBackend backend) =>
     RawSql (Entity record) where
-    rawSqlCols escape _ent = (length sqlFields, [intercalate ", " sqlFields])
+    rawSqlCols escape _ent = (length sqlFields, [intercalate ", " $ toList sqlFields])
         where
-          sqlFields = map (((name <> ".") <>) . escapeWith escape)
-              $ map fieldDB
+          sqlFields = fmap (((name <> ".") <>) . escapeWith escape)
+              $ fmap fieldDB
               -- Hacky for a composite key because
               -- it selects the same field multiple times
-              $ getEntityKeyFields entDef ++ getEntityFields entDef
+              $ keyAndEntityFields entDef
           name = escapeWith escape (getEntityDBName entDef)
           entDef = entityDef (Nothing :: Maybe record)
     rawSqlColCountReason a =
         case fst (rawSqlCols (error "RawSql") a) of
           1 -> "one column for an 'Entity' data type without fields"
-          n -> show n ++ " columns for an 'Entity' data type"
+          n -> show n <> " columns for an 'Entity' data type"
     rawSqlProcessRow row = case splitAt nKeyFields row of
       (rowKey, rowVal) -> Entity <$> keyFromValues rowKey
                                  <*> fromPersistValues rowVal
@@ -134,7 +136,7 @@ newtype EntityWithPrefix (prefix :: Symbol) record
 --
 -- @
 -- myQuery :: 'SqlPersistM' ['Entity' Person]
--- myQuery = map (unPrefix @\"p\") <$> rawSql query []
+-- myQuery = fmap (unPrefix @\"p\") <$> rawSql query []
 --   where
 --     query = "SELECT ?? FROM person AS p"
 -- @
@@ -150,13 +152,13 @@ instance
     , IsPersistBackend backend
     )
   => RawSql (EntityWithPrefix prefix record) where
-    rawSqlCols escape _ent = (length sqlFields, [intercalate ", " sqlFields])
+    rawSqlCols escape _ent = (length sqlFields, [intercalate ", " $ toList sqlFields])
         where
-          sqlFields = map (((name <> ".") <>) . escapeWith escape)
-              $ map fieldDB
+          sqlFields = fmap (((name <> ".") <>) . escapeWith escape)
+              $ fmap fieldDB
               -- Hacky for a composite key because
               -- it selects the same field multiple times
-              $ getEntityKeyFields entDef ++ getEntityFields entDef
+              $ keyAndEntityFields entDef
           name = pack $ symbolVal (Proxy :: Proxy prefix)
           entDef = entityDef (Nothing :: Maybe record)
     rawSqlColCountReason a =

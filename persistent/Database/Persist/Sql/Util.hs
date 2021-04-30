@@ -1,6 +1,5 @@
 module Database.Persist.Sql.Util
     ( parseEntityValues
-    , entityColumnNames
     , keyAndEntityColumnNames
     , entityColumnCount
     , isIdField
@@ -23,6 +22,7 @@ import qualified Data.Maybe as Maybe
 import Data.Monoid ((<>))
 import Data.Text (Text, pack)
 import qualified Data.Text as T
+import Data.List.NonEmpty (NonEmpty(..))
 
 import Database.Persist (
     Entity(Entity), EntityDef, EntityField, FieldNameHS(FieldNameHS)
@@ -36,14 +36,9 @@ import Database.Persist (
 import Database.Persist.Sql.Types (Sql)
 import Database.Persist.SqlBackend.Internal(SqlBackend(..))
 
-entityColumnNames :: EntityDef -> SqlBackend -> [Sql]
-entityColumnNames ent conn =
-     (if hasNaturalKey ent
-      then [] else [connEscapeFieldName conn . fieldDB $ getEntityId ent])
-  <> map (connEscapeFieldName conn . fieldDB) (getEntityFields ent)
-
-keyAndEntityColumnNames :: EntityDef -> SqlBackend -> [Sql]
-keyAndEntityColumnNames ent conn = map (connEscapeFieldName conn . fieldDB) (keyAndEntityFields ent)
+keyAndEntityColumnNames :: EntityDef -> SqlBackend -> NonEmpty Sql
+keyAndEntityColumnNames ent conn =
+    fmap (connEscapeFieldName conn . fieldDB) (keyAndEntityFields ent)
 
 entityColumnCount :: EntityDef -> Int
 entityColumnCount e = length (getEntityFields e)
@@ -131,33 +126,31 @@ hasCompositePrimaryKey ed =
     case entityPrimary ed of
         Just cdef ->
             case compositeFields cdef of
-                (_ : _ : _) ->
+                (_ :| _ : _) ->
                     True
                 _ ->
                     False
         Nothing ->
             False
 
-dbIdColumns :: SqlBackend -> EntityDef -> [Text]
+dbIdColumns :: SqlBackend -> EntityDef -> NonEmpty Text
 dbIdColumns conn = dbIdColumnsEsc (connEscapeFieldName conn)
 
-dbIdColumnsEsc :: (FieldNameDB -> Text) -> EntityDef -> [Text]
-dbIdColumnsEsc esc t = map (esc . fieldDB) $ getEntityKeyFields t
+dbIdColumnsEsc :: (FieldNameDB -> Text) -> EntityDef -> NonEmpty Text
+dbIdColumnsEsc esc t = fmap (esc . fieldDB) $ getEntityKeyFields t
 
-dbColumns :: SqlBackend -> EntityDef -> [Text]
-dbColumns conn t = case entityPrimary t of
-    Just _  -> flds
-    Nothing -> escapeColumn (getEntityId t) : flds
+dbColumns :: SqlBackend -> EntityDef -> NonEmpty Text
+dbColumns conn =
+    fmap escapeColumn . keyAndEntityFields
   where
     escapeColumn = connEscapeFieldName conn . fieldDB
-    flds = map escapeColumn (getEntityFields t)
 
 parseEntityValues :: PersistEntity record
                   => EntityDef -> [PersistValue] -> Either Text (Entity record)
 parseEntityValues t vals =
     case entityPrimary t of
       Just pdef ->
-            let pks = map fieldHaskell $ compositeFields pdef
+            let pks = fmap fieldHaskell $ compositeFields pdef
                 keyvals = map snd . filter ((`elem` pks) . fst)
                         $ zip (map fieldHaskell $ getEntityFields t) vals
             in fromPersistValuesComposite' keyvals vals

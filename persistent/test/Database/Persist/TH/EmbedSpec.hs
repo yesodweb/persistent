@@ -88,7 +88,7 @@ spec = describe "EmbedSpec" $ do
             it "has self reference" $ do
                 fieldReference selfField
                     `shouldBe`
-                        SelfReference
+                        NoReference
         describe "toEmbedEntityDef" $ do
             let
                 embedDef =

@@ -16,6 +16,8 @@ module Database.Persist.Types.Base
     , LiteralType(..)
     ) where
 
+import Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NEL
 import Control.Exception (Exception)
 import Data.Char (isSpace)
 import Data.Map (Map)
@@ -128,7 +130,7 @@ data EntityDef = EntityDef
     -- ^ The name of the entity as Haskell understands it.
     , entityDB      :: !EntityNameDB
     -- ^ The name of the database table corresponding to the entity.
-    , entityId      :: !FieldDef
+    , entityId      :: !EntityIdDef
     -- ^ The entity's primary key or identifier.
     , entityAttrs   :: ![Attr]
     -- ^ The @persistent@ entity syntax allows you to add arbitrary 'Attr's
@@ -155,29 +157,60 @@ data EntityDef = EntityDef
     }
     deriving (Show, Eq, Read, Ord, Lift)
 
-entitiesPrimary :: EntityDef -> Maybe [FieldDef]
-entitiesPrimary t = case fieldReference primaryField of
-    CompositeRef c -> Just $ compositeFields c
-    ForeignRef _ -> Just [primaryField]
-    _ -> Nothing
-  where
-    primaryField = entityId t
+-- | The definition for the entity's primary key ID.
+--
+-- @since 2.13.0.0
+data EntityIdDef
+    = EntityIdField !FieldDef
+    -- ^ The entity has a single key column, and it is a surrogate key - that
+    -- is, you can't go from @rec -> Key rec@.
+    --
+    -- @since 2.13.0.0
+    | EntityIdNaturalKey !CompositeDef
+    -- ^ The entity has a natural key. This means you can write @rec -> Key rec@
+    -- because all the key fields are present on the datatype.
+    --
+    -- A natural key can have one or more columns.
+    --
+    -- @since 2.13.0.0
+    deriving (Show, Eq, Read, Ord, Lift)
+
+-- | Return the @['FieldDef']@ for the entity keys.
+entitiesPrimary :: EntityDef -> NonEmpty FieldDef
+entitiesPrimary t =
+    case entityId t of
+        EntityIdNaturalKey fds ->
+            compositeFields fds
+        EntityIdField fd ->
+            pure fd
 
 entityPrimary :: EntityDef -> Maybe CompositeDef
-entityPrimary t = case fieldReference (entityId t) of
-    CompositeRef c -> Just c
-    _ -> Nothing
+entityPrimary t =
+    case entityId t of
+        EntityIdNaturalKey c ->
+            Just c
+        _ ->
+            Nothing
 
-entityKeyFields :: EntityDef -> [FieldDef]
-entityKeyFields ent =
-    maybe [entityId ent] compositeFields $ entityPrimary ent
+entityKeyFields :: EntityDef -> NonEmpty FieldDef
+entityKeyFields =
+    entitiesPrimary
 
-keyAndEntityFields :: EntityDef -> [FieldDef]
+keyAndEntityFields :: EntityDef -> NonEmpty FieldDef
 keyAndEntityFields ent =
-  case entityPrimary ent of
-    Nothing -> entityId ent : entityFields ent
-    Just _  -> entityFields ent
-
+        case entityId ent of
+            EntityIdField fd ->
+                fd :| entityFields ent
+            EntityIdNaturalKey _ ->
+                case NEL.nonEmpty (entityFields ent) of
+                    Nothing ->
+                        error $ mconcat
+                            [ "persistent internal guarantee failed: entity is "
+                            , "defined with an entityId = EntityIdNaturalKey, "
+                            , "but somehow doesn't have any entity fields."
+                            ]
+                    Just xs ->
+                        xs
 
 type ExtraLine = [Text]
 
@@ -342,13 +375,13 @@ toEmbedEntityDef ent = embDef
 data UniqueDef = UniqueDef
     { uniqueHaskell :: !ConstraintNameHS
     , uniqueDBName  :: !ConstraintNameDB
-    , uniqueFields  :: ![(FieldNameHS, FieldNameDB)]
+    , uniqueFields  :: !(NonEmpty (FieldNameHS, FieldNameDB))
     , uniqueAttrs   :: ![Attr]
     }
     deriving (Show, Eq, Read, Ord, Lift)
 
 data CompositeDef = CompositeDef
-    { compositeFields  :: ![FieldDef]
+    { compositeFields  :: !(NonEmpty FieldDef)
     , compositeAttrs   :: ![Attr]
     }
     deriving (Show, Eq, Read, Ord, Lift)

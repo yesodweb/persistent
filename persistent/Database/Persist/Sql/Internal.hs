@@ -23,6 +23,7 @@ import Database.Persist.Sql.Types
 import Database.Persist.Types
 import Database.Persist.Names
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
+import Database.Persist.EntityDef
 
 -- | Record of functions to override the default behavior in 'mkColumns'.  It is
 -- recommended you initialize this with 'emptyBackendSpecificOverrides' and
@@ -88,9 +89,12 @@ mkColumns allDefs t overrides =
     cols = map goId idCol `mappend` map go (getEntityFieldsDatabase t)
 
     idCol :: [FieldDef]
-    idCol = case entityPrimary t of
-        Just _ -> []
-        Nothing -> [getEntityId t]
+    idCol =
+        case getEntityId t of
+            EntityIdNaturalKey _ ->
+                []
+            EntityIdField fd ->
+                [fd]
 
     goId :: FieldDef -> Column
     goId fd =

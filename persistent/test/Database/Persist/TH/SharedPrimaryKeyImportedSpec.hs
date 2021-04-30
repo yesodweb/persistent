@@ -46,9 +46,14 @@ spec = describe "Shared Primary Keys Imported" $ do
 
     describe "getEntityId FieldDef" $ do
         it "should match underlying primary key" $ do
-            let getSqlType :: PersistEntity a => Proxy a -> SqlType
-                getSqlType =
-                    fieldSqlType . getEntityId . entityDef
+            let
+                getSqlType :: PersistEntity a => Proxy a -> SqlType
+                getSqlType p =
+                    case getEntityId (entityDef p) of
+                        EntityIdField fd ->
+                            fieldSqlType fd
+                        _ ->
+                            SqlOther "Composite Key"
             getSqlType (Proxy @User)
                 `shouldBe`
                     getSqlType (Proxy @Profile)

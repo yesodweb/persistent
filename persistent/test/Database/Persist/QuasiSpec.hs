@@ -132,18 +132,18 @@ spec = describe "Quasi" $ do
         it "never tries to make a refernece" $ do
             subject ["asdf", "UserId", "OnDeleteCascade"]
                 `shouldBe`
-                    Just FieldDef
-                        { fieldHaskell = FieldNameHS "asdf"
-                        , fieldDB = FieldNameDB "asdf"
-                        , fieldType = FTTypeCon Nothing "UserId"
-                        , fieldSqlType = SqlOther "SqlType unset for asdf"
-                        , fieldAttrs = []
-                        , fieldStrict = True
-                        , fieldReference = NoReference
-                        , fieldCascade = FieldCascade Nothing (Just Cascade)
-                        , fieldComments = Nothing
-                        , fieldGenerated = Nothing
-                        , fieldIsImplicitIdColumn = False
+                    Just UnboundFieldDef
+                        { unboundFieldNameHS = FieldNameHS "asdf"
+                        , unboundFieldNameDB = FieldNameDB "asdf"
+                        , unboundFieldType = FTTypeCon Nothing "UserId"
+                        , unboundFieldAttrs = []
+                        , unboundFieldStrict = True
+                        , unboundFieldReference =
+                            Just $ ForeignRef (EntityNameHS "User")
+                        , unboundFieldCascade = FieldCascade Nothing (Just Cascade)
+                        , unboundFieldComments = Nothing
+                        , unboundFieldGenerated = Nothing
+                        , unboundFieldIsImplicitIdColumn = False
                         }
 
     describe "parseLine" $ do
@@ -282,6 +282,12 @@ Car
             entityDB vehicle `shouldBe` EntityNameDB "vehicle"
 
         it "should parse the `entityId` field" $ do
+            entityId <- pure $ \ent ->
+                case entityId ent of
+                    EntityIdField fd ->
+                        fd
+                    _ ->
+                        error "entityId was natural key"
             fieldHaskell (entityId bicycle) `shouldBe` FieldNameHS "Id"
             fieldComments (entityId bicycle) `shouldBe` Nothing
             fieldHaskell (entityId car) `shouldBe` FieldNameHS "Id"

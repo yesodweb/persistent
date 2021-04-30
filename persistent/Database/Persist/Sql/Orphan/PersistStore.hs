@@ -1,29 +1,28 @@
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE DeriveGeneric #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Database.Persist.Sql.Orphan.PersistStore
-  ( withRawQuery
-  , BackendKey(..)
-  , toSqlKey
-  , fromSqlKey
-  , getFieldName
-  , getTableName
-  , tableDBName
-  , fieldDBName
-  ) where
+    ( withRawQuery
+    , BackendKey(..)
+    , toSqlKey
+    , fromSqlKey
+    , getFieldName
+    , getTableName
+    , tableDBName
+    , fieldDBName
+    ) where
 
-import GHC.Generics (Generic)
 import Control.Exception (throwIO)
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader (ReaderT, ask)
 import Data.Acquire (with)
 import qualified Data.Aeson as A
 import Data.ByteString.Char8 (readInteger)
-import Data.Conduit (ConduitM, (.|), runConduit)
+import Data.Conduit (ConduitM, runConduit, (.|))
 import qualified Data.Conduit.List as CL
 import qualified Data.Foldable as Foldable
 import Data.Function (on)
@@ -35,8 +34,9 @@ import Data.Monoid (mappend, (<>))
 import Data.Text (Text, unpack)
 import qualified Data.Text as T
 import Data.Void (Void)
+import GHC.Generics (Generic)
+import Web.HttpApiData (FromHttpApiData, ToHttpApiData)
 import Web.PathPieces (PathPiece)
-import Web.HttpApiData (ToHttpApiData, FromHttpApiData)
 
 import Database.Persist
 import Database.Persist.Class ()
@@ -44,9 +44,15 @@ import Database.Persist.Sql.Class (PersistFieldSql)
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal
-import Database.Persist.Sql.Util (
-    dbIdColumns, keyAndEntityColumnNames, parseEntityValues, entityColumnNames
-  , updatePersistValue, mkUpdateText, commaSeparated, mkInsertValues)
+import Database.Persist.Sql.Util
+       ( commaSeparated
+       , dbIdColumns
+       , keyAndEntityColumnNames
+       , mkInsertValues
+       , mkUpdateText
+       , parseEntityValues
+       , updatePersistValue
+       )
 
 withRawQuery :: MonadIO m
              => Text
@@ -66,7 +72,8 @@ fromSqlKey = unSqlBackendKey . toBackendKey
 whereStmtForKey :: PersistEntity record => SqlBackend -> Key record -> Text
 whereStmtForKey conn k =
     T.intercalate " AND "
-  $ map (<> "=? ")
+  $ Foldable.toList
+  $ fmap (<> "=? ")
   $ dbIdColumns conn entDef
   where
     entDef = entityDef $ dummyFromKey k
@@ -195,9 +202,10 @@ instance PersistStoreWrite SqlBackend where
                 ISRManyKeys sql fs -> do
                     rawExecute sql vals
                     case entityPrimary t of
-                       Nothing -> error $ "ISRManyKeys is used when Primary is defined " ++ show sql
+                       Nothing ->
+                           error $ "ISRManyKeys is used when Primary is defined " ++ show sql
                        Just pdef ->
-                            let pks = map fieldHaskell $ compositeFields pdef
+                            let pks = Foldable.toList $ fmap fieldHaskell $ compositeFields pdef
                                 keyvals = map snd $ filter (\(a, _) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ getEntityFields t) fs
                             in  case keyFromValues keyvals of
                                     Right k -> return k
@@ -323,7 +331,7 @@ instance PersistStoreRead SqlBackend where
     getMany ks@(k:_)= do
         conn <- ask
         let t = entityDef . dummyFromKey $ k
-        let cols = commaSeparated . entityColumnNames t
+        let cols = commaSeparated . Foldable.toList . keyAndEntityColumnNames t
         let wher = whereStmtForKeys conn ks
         let sql = T.concat
                 [ "SELECT "
@@ -361,7 +369,7 @@ insrepHelper :: (MonadIO m, PersistEntity val)
 insrepHelper _       []  = return ()
 insrepHelper command es = do
     conn <- ask
-    let columnNames = keyAndEntityColumnNames entDef conn
+    let columnNames = Foldable.toList $ keyAndEntityColumnNames entDef conn
     rawExecute (sql conn columnNames) vals
   where
     entDef = entityDef $ map entityVal es
@@ -372,7 +380,7 @@ insrepHelper command es = do
         , "("
         , T.intercalate "," columnNames
         , ") VALUES ("
-        , T.intercalate "),(" $ replicate (length es) $ T.intercalate "," $ map (const "?") columnNames
+        , T.intercalate "),(" $ replicate (length es) $ T.intercalate "," $ fmap (const "?") columnNames
         , ")"
         ]
     vals = Foldable.foldMap entityValues es
