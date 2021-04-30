@@ -417,16 +417,32 @@ toUniquesDoc uniq = zipWith (DB.:=)
 -- 'recordToDocument' includes nulls
 toInsertDoc :: forall record.  (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
             => record -> DB.Document
-toInsertDoc record = zipFilter (embeddedFields $ toEmbedEntityDef entDef)
-    (map toPersistValue $ toPersistFields record)
+toInsertDoc record =
+    zipFilter
+        (embeddedFields $ toEmbedEntityDef entDef)
+        (map toPersistValue $ toPersistFields record)
   where
     entDef = entityDef $ Just record
+    zipFilter' =
+        map (\(fd, pv) ->
+            fieldToLabel fd
+                DB.:=
+                    embeddedVal (embeddedFields <$> emFieldEmbed fd) pv
+        )
+        $ filter (\(_, pv) -> isNull pv)
+        $ zip (embeddedFields $ toEmbedEntityDef entDef) (map toPersistValue $ toPersistFields record)
     zipFilter :: [EmbedFieldDef] -> [PersistValue] -> DB.Document
     zipFilter [] _  = []
     zipFilter _  [] = []
     zipFilter (fd:efields) (pv:pvs) =
-        if isNull pv then recur else
-          (fieldToLabel fd DB.:= embeddedVal (emFieldEmbed fd) pv):recur
+        if isNull pv
+        then recur
+        else
+            (fieldToLabel fd
+                DB.:=
+                    embeddedVal (embeddedFields <$> emFieldEmbed fd) pv
+            )
+            : recur
 
       where
         recur = zipFilter efields pvs
@@ -437,11 +453,14 @@ toInsertDoc record = zipFilter (embeddedFields $ toEmbedEntityDef entDef)
         isNull _ = False
 
     -- make sure to removed nulls from embedded entities also
-    embeddedVal :: Maybe EmbedEntityDef -> PersistValue -> DB.Value
-    embeddedVal (Just emDef) (PersistMap m) = DB.Doc $
-      zipFilter (embeddedFields emDef) $ map snd m
-    embeddedVal je@(Just _) (PersistList l) = DB.Array $ map (embeddedVal je) l
-    embeddedVal _ pv = DB.val pv
+    embeddedVal :: Maybe [EmbedFieldDef] -> PersistValue -> DB.Value
+    embeddedVal (Just fields) (PersistMap m) =
+        DB.Doc $
+            zipFilter fields $ map snd m
+    embeddedVal je@(Just _) (PersistList l) =
+        DB.Array $ map (embeddedVal je) l
+    embeddedVal _ pv =
+        DB.val pv
 
 entityToInsertDoc :: forall record.  (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
                   => Entity record -> DB.Document

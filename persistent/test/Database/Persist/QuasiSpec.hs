@@ -437,6 +437,8 @@ Notification
                 baz = FTTypeCon Nothing "Baz"
             parseFieldType "Foo [Bar] Baz" `shouldBe` Right (
                 foo `FTApp` bars `FTApp` baz)
+        it "fails on lowercase starts" $ do
+            parseFieldType "nothanks" `shouldBe` Left "PSFail ('n',\"othanks\")"
 
     describe "#1175 empty entity" $ do
         let subject =

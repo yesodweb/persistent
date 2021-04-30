@@ -175,7 +175,7 @@ mkColumns allDefs t overrides =
         -> [FieldAttr]
         -> Maybe (EntityNameDB, ConstraintNameDB) -- table name, constraint name
     ref c fe []
-        | ForeignRef f _ <- fe =
+        | ForeignRef f <- fe =
             Just (resolveTableName allDefs f, refNameFn tableName c)
         | otherwise = Nothing
     ref _ _ (FieldAttrNoreference:_) = Nothing

@@ -1,3 +1,4 @@
+{-# LANGUAGE StrictData, RecordWildCards #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveLift #-}
@@ -30,13 +31,21 @@ module Database.Persist.Quasi.Internal
     , takeColsEx
     -- * UnboundEntityDef
     , UnboundEntityDef(..)
+    , getUnboundFieldDefs
     , UnboundForeignDef(..)
+    , getSqlNameOr
+    , UnboundFieldDef(..)
+    , UnboundCompositeDef(..)
+    , UnboundIdDef(..)
+    , unbindFieldDef
+    , unboundIdDefToFieldDef
+    , PrimarySpec(..)
+    , mkAutoIdField'
     ) where
 
 import Prelude hiding (lines)
 
 import Control.Applicative (Alternative((<|>)))
-import Control.Arrow ((&&&))
 import Control.Monad (mplus)
 import Data.Char (isLower, isSpace, isUpper, toLower)
 import Data.List (find, foldl')
@@ -357,8 +366,46 @@ associateLines lines =
 data UnboundEntityDef
     = UnboundEntityDef
     { unboundForeignDefs :: [UnboundForeignDef]
+    , unboundPrimarySpec :: PrimarySpec
     , unboundEntityDef :: EntityDef
     }
+    deriving (Show, Lift)
+
+getUnboundFieldDefs :: UnboundEntityDef -> [UnboundFieldDef]
+getUnboundFieldDefs = map unbindFieldDef . entityFields . unboundEntityDef
+
+data UnboundFieldDef
+    = UnboundFieldDef
+    { unboundFieldNameHS :: FieldNameHS
+    , unboundFieldAttrs :: [FieldAttr]
+    , unboundFieldReference :: Maybe EntityNameHS
+    , unboundFieldStrict :: Bool
+    , unboundFieldType :: FieldType
+    }
+    deriving (Show, Lift)
+
+unbindFieldDef :: FieldDef -> UnboundFieldDef
+unbindFieldDef fd = UnboundFieldDef
+    { unboundFieldNameHS =
+        fieldHaskell fd
+    , unboundFieldAttrs =
+        fieldAttrs fd
+    , unboundFieldReference =
+        case fieldReference fd of
+            ForeignRef ref ->
+                Just ref
+            _ ->
+                Nothing
+    , unboundFieldType =
+        fieldType fd
+    , unboundFieldStrict =
+        fieldStrict fd
+    }
+
+data PrimarySpec
+    = NaturalKey UnboundCompositeDef
+    | SurrogateKey UnboundIdDef
+    | DefaultKey FieldNameDB
     deriving (Show, Lift)
 
 -- | Construct an entity definition.
@@ -370,6 +417,17 @@ mkUnboundEntityDef ps parsedEntDef =
     UnboundEntityDef
         { unboundForeignDefs =
             foreigns
+        , unboundPrimarySpec =
+            case (idField, primaryComposite) of
+                (Just {}, Just {}) ->
+                    error "Specified both an ID field and a Primary field"
+                (Just a, Nothing) ->
+                    SurrogateKey a
+                (Nothing, Just a) ->
+                    NaturalKey a
+                (Nothing, Nothing) ->
+                    DefaultKey (FieldNameDB $ psIdName ps)
+
         , unboundEntityDef =
             EntityDef
                 { entityHaskell = entNameHS
@@ -377,7 +435,8 @@ mkUnboundEntityDef ps parsedEntDef =
                 -- idField is the user-specified Id
                 -- otherwise useAutoIdField
                 -- but, adjust it if the user specified a Primary
-                , entityId = setComposite primaryComposite $ fromMaybe autoIdField idField
+                , entityId =
+                    maybe autoIdField (unboundIdDefToFieldDef (defaultIdName ps) entNameHS) idField
                 , entityAttrs = parsedEntityDefEntityAttributes parsedEntDef
                 , entityFields = cols
                 , entityUniques = uniqs
@@ -402,10 +461,17 @@ mkUnboundEntityDef ps parsedEntDef =
     textAttribs =
         fmap tokenText <$> attribs
 
-    (idField, primaryComposite, uniqs, foreigns) = foldl' (\(mid, mp, us, fs) attr ->
-        let (i, p, u, f) = takeConstraint ps entNameHS cols attr
-            squish xs m = xs `mappend` maybeToList m
-        in (just1 mid i, just1 mp p, squish us u, squish fs f)) (Nothing, Nothing, [],[]) textAttribs
+    (idField, primaryComposite, uniqs, foreigns) =
+        foldl'
+            (\(mid, mp, us, fs) attr ->
+                let
+                    (i, p, u, f) = takeConstraint ps entNameHS cols attr
+                    squish xs m = xs `mappend` maybeToList m
+                in
+                    (just1 mid i, just1 mp p, squish us u, squish fs f)
+            )
+            (Nothing, Nothing, [],[])
+            textAttribs
 
     cols :: [FieldDef]
     cols = reverse . fst . foldr k ([], []) $ reverse attribs
@@ -451,6 +517,52 @@ mkUnboundEntityDef ps parsedEntDef =
         { fieldReference = CompositeRef c
         }
 
+defaultIdName :: PersistSettings -> FieldNameDB
+defaultIdName = FieldNameDB . psIdName
+
+unboundIdDefToFieldDef
+    :: FieldNameDB
+    -> EntityNameHS
+    -> UnboundIdDef
+    -> FieldDef
+unboundIdDefToFieldDef dbField entNameHS uid =
+    FieldDef
+        { fieldHaskell =
+            FieldNameHS "Id"
+        , fieldDB =
+            getSqlNameOr dbField (unboundIdAttrs uid)
+        , fieldType =
+            fromMaybe (FTTypeCon Nothing (keyConName entNameHS)) $ unboundIdType uid
+        , fieldSqlType =
+            SqlOther "SqlType unset for Id"
+        , fieldStrict =
+            False
+        , fieldReference =
+            ForeignRef entNameHS
+        , fieldAttrs =
+            unboundIdAttrs uid
+        , fieldComments =
+            Nothing
+        , fieldCascade = unboundIdCascade uid
+        , fieldGenerated = Nothing
+        , fieldIsImplicitIdColumn = True
+        }
+
+unbindIdDef :: EntityNameHS -> FieldDef -> UnboundIdDef
+unbindIdDef entityName fd =
+    UnboundIdDef
+        { unboundIdEntityName =
+            entityName
+        , unboundIdDBName =
+            fieldDB fd
+        , unboundIdAttrs =
+            fieldAttrs fd
+        , unboundIdCascade =
+            fieldCascade fd
+        , unboundIdType =
+            Just $ fieldType fd
+        }
+
 setFieldComments :: [Text] -> FieldDef -> FieldDef
 setFieldComments xs fld =
     case xs of
@@ -463,17 +575,18 @@ just1 (Just x) (Just y) = error $ "expected only one of: "
 just1 x y = x `mplus` y
 
 mkAutoIdField :: PersistSettings -> EntityNameHS -> SqlType -> FieldDef
-mkAutoIdField ps entName idSqlType =
+mkAutoIdField ps =
+    mkAutoIdField' (FieldNameDB $ psIdName ps)
+
+mkAutoIdField' :: FieldNameDB -> EntityNameHS -> SqlType -> FieldDef
+mkAutoIdField' dbName entName idSqlType =
     FieldDef
         { fieldHaskell = FieldNameHS "Id"
-        -- this should be modeled as a Maybe
-        -- but that sucks for non-ID field
-        -- TODO: use a sumtype FieldDef | IdFieldDef
-        , fieldDB = FieldNameDB $ psIdName ps
+        , fieldDB = dbName
         , fieldType = FTTypeCon Nothing $ keyConName entName
         , fieldSqlType = idSqlType
-        -- the primary field is actually a reference to the entity
-        , fieldReference = ForeignRef entName defaultReferenceTypeCon
+        , fieldReference =
+            NoReference
         , fieldAttrs = []
         , fieldStrict = True
         , fieldComments = Nothing
@@ -558,63 +671,164 @@ getDbName :: PersistSettings -> Text -> [Text] -> Text
 getDbName ps n [] = psToDBName ps n
 getDbName ps n (a:as) = fromMaybe (getDbName ps n as) $ T.stripPrefix "sql=" a
 
+getDbName' :: PersistSettings -> Text -> [FieldAttr] -> FieldNameDB
+getDbName' ps n =
+    getSqlNameOr (FieldNameDB $ psToDBName ps n)
+
+getSqlNameOr
+    :: FieldNameDB
+    -> [FieldAttr]
+    -> FieldNameDB
+getSqlNameOr def =
+    maybe def FieldNameDB . findAttrSql
+  where
+    findAttrSql =
+        listToMaybe . mapMaybe isAttrSql
+    isAttrSql attr =
+        case attr of
+            FieldAttrSql t ->
+                Just t
+            _ ->
+                Nothing
+
+
 takeConstraint
     :: PersistSettings
     -> EntityNameHS
     -> [FieldDef]
     -> [Text]
-    -> (Maybe FieldDef, Maybe CompositeDef, Maybe UniqueDef, Maybe UnboundForeignDef)
+    -> (Maybe UnboundIdDef, Maybe UnboundCompositeDef, Maybe UniqueDef, Maybe UnboundForeignDef)
 takeConstraint ps entityName defs (n:rest) | isCapitalizedText n = takeConstraint'
   where
     takeConstraint'
           | n == "Unique"  = (Nothing, Nothing, Just $ takeUniq ps (unEntityNameHS entityName) defs rest, Nothing)
           | n == "Foreign" = (Nothing, Nothing, Nothing, Just $ takeForeign ps entityName defs rest)
-          | n == "Primary" = (Nothing, Just $ takeComposite defs rest, Nothing, Nothing)
-          | n == "Id"      = (Just $ takeId ps entityName (n:rest), Nothing, Nothing, Nothing)
+          | n == "Primary" = (Nothing, Just $ takeComposite ps defNames rest, Nothing, Nothing)
+          | n == "Id"      = (Just $ takeId ps entityName rest, Nothing, Nothing, Nothing)
           | otherwise      = (Nothing, Nothing, Just $ takeUniq ps "" defs (n:rest), Nothing) -- retain compatibility with original unique constraint
+    defNames = map fieldHaskell defs
 takeConstraint _ _ _ _ = (Nothing, Nothing, Nothing, Nothing)
+
+-- | This type represents an @Id@ declaration in the QuasiQuoted syntax.
+--
+-- > Id
+--
+-- This uses the implied settings, and is equivalent to omitting the @Id@
+-- statement entirely.
+--
+-- > Id Text
+--
+-- This will set the field type of the ID to be 'Text'.
+--
+-- > Id Text sql=foo_id
+--
+-- This will set the field type of the Id to be 'Text' and the SQL DB name to be @foo_id@.
+--
+-- > Id FooId
+--
+-- This results in a shared primary key - the @FooId@ refers to a @Foo@ table.
+--
+-- > Id FooId OnDelete Cascade
+--
+-- You can set a cascade behavior on an ID column.
+--
+-- @since 2.13.0.0
+data UnboundIdDef = UnboundIdDef
+    { unboundIdEntityName :: EntityNameHS
+    , unboundIdDBName :: !FieldNameDB
+    , unboundIdAttrs :: [FieldAttr]
+    , unboundIdCascade :: FieldCascade
+    , unboundIdType :: Maybe FieldType
+    }
+    deriving (Show, Lift)
 
 -- TODO: this is hacky (the double takeCols, the setFieldDef stuff, and setIdName.
 -- need to re-work takeCols function
-takeId :: PersistSettings -> EntityNameHS -> [Text] -> FieldDef
-takeId ps entityName (n:rest) =
-    setFieldDef
-    $ fromMaybe (error "takeId: impossible!")
-    $ takeCols (\_ _ -> addDefaultIdType) ps (field:rest) -- `mappend` setIdName)
+takeId :: PersistSettings -> EntityNameHS -> [Text] -> UnboundIdDef
+takeId ps entityName texts =
+    UnboundIdDef
+        { unboundIdDBName =
+            FieldNameDB $ psIdName ps
+        , unboundIdEntityName =
+            entityName
+        , unboundIdCascade =
+            cascade_
+        , unboundIdAttrs =
+            parseFieldAttrs attrs_
+        , unboundIdType =
+            typ
+        }
   where
-    field = case T.uncons n of
-        Nothing -> error "takeId: empty field"
-        Just (f, ield) -> toLower f `T.cons` ield
-    addDefaultIdType = takeColsEx ps (field : keyCon : rest ) -- `mappend` setIdName)
-    setFieldDef fd = fd
+    typ =
+        case texts of
+            [] ->
+                Nothing
+            (t : _) ->
+                case parseFieldType t of
+                    Left _ ->
+                        Nothing
+                    Right ft ->
+                        Just ft
+    (cascade_, attrs_) = parseCascade texts
+    toUnboundIdDef FieldDef{..} =
+        UnboundIdDef
+            { unboundIdDBName =
+                fieldDB
+            , unboundIdEntityName =
+                entityName
+            , unboundIdAttrs =
+                fieldAttrs
+            , unboundIdCascade =
+                fieldCascade
+            , unboundIdType =
+                Just fieldType
+            }
+    n = "Id"
+    field n =
+        case T.uncons n of
+            Nothing -> error "takeId: empty field"
+            Just (f, ield) -> toLower f `T.cons` ield
+    addDefaultIdType =
+        takeColsEx ps (field n : keyCon : texts)
+    setFieldDefReference fd = fd
         { fieldReference =
-            ForeignRef entityName $
-                if fieldType fd == FTTypeCon Nothing keyCon
-                then defaultReferenceTypeCon
-                else fieldType fd
+            ForeignRef entityName
         }
     keyCon = keyConName entityName
-    -- this will be ignored if there is already an existing sql=
-    -- TODO: I think there is a ! ignore syntax that would screw this up
-    -- setIdName = ["sql=" `mappend` psIdName ps]
-takeId _ (EntityNameHS tableName) _ = error $ "empty Id field for " `mappend` show tableName
 
+data UnboundCompositeDef = UnboundCompositeDef
+    { unboundCompositeCols :: [FieldNameHS]
+    , unboundCompositeAttrs :: [Attr]
+    , unboundCompositeDefaultIdName :: FieldNameDB
+    -- ^ TODO: refactor so we don't need this
+    }
+    deriving (Show, Lift)
 
 takeComposite
-    :: [FieldDef]
+    :: PersistSettings
+    -> [FieldNameHS]
     -> [Text]
-    -> CompositeDef
-takeComposite fields pkcols =
-    CompositeDef (map (getDef fields) pkcols) attrs
+    -> UnboundCompositeDef
+takeComposite ps fields pkcols =
+    UnboundCompositeDef
+        { unboundCompositeCols =
+            map (getDef fields) cols
+        , unboundCompositeAttrs =
+            attrs
+        , unboundCompositeDefaultIdName =
+            defaultIdName ps
+        }
   where
-    (_, attrs) = break ("!" `T.isPrefixOf`) pkcols
+    (cols, attrs) = break ("!" `T.isPrefixOf`) pkcols
     getDef [] t = error $ "Unknown column in primary key constraint: " ++ show t
     getDef (d:ds) t
-        | fieldHaskell d == FieldNameHS t =
-            if nullable (fieldAttrs d) /= NotNullable
-                then error $ "primary key column cannot be nullable: " ++ show t ++ show fields
-                else d
-        | otherwise = getDef ds t
+        | d == FieldNameHS t =
+            -- TODO: check for nullability in later step
+            -- if nullable (fieldAttrs d) /= NotNullable
+            --     then error $ "primary key column cannot be nullable: " ++ show t ++ show fields
+            d
+        | otherwise =
+            getDef ds t
 
 -- Unique UppercaseConstraintName list of lowercasefields terminated
 -- by ! or sql= such that a unique constraint can look like:
@@ -630,7 +844,7 @@ takeUniq ps tableName defs (n : rest)
         = UniqueDef
             (ConstraintNameHS n)
             dbName
-            (map (FieldNameHS &&& getDBName defs) fields)
+            (map (\a -> (FieldNameHS a, getDBName defs a)) fields)
             attrs
   where
     isAttr a =
@@ -656,12 +870,15 @@ takeUniq ps tableName defs (n : rest)
             (x : _) -> Just (ConstraintNameDB x)
             _ -> Nothing
     dbName = fromMaybe usualDbName sqlName
+
     getDBName [] t =
       error $ "Unknown column in unique constraint: " ++ show t
               ++ " " ++ show defs ++ show n ++ " " ++ show attrs
     getDBName (d:ds) t
-        | fieldHaskell d == FieldNameHS t = fieldDB d
-        | otherwise = getDBName ds t
+        | fieldHaskell d == FieldNameHS t =
+            fieldDB d
+        | otherwise =
+            getDBName ds t
 
 takeUniq _ tableName _ xs =
   error $ "invalid unique constraint on table["
@@ -679,6 +896,20 @@ data UnboundForeignDef
     -- ^ The 'ForeignDef' which needs information filled in.
     }
     deriving (Eq, Show, Lift)
+
+unbindForeignDef :: ForeignDef -> UnboundForeignDef
+unbindForeignDef fd =
+    UnboundForeignDef
+        { _unboundForeignFields =
+            fmap fst unFielded
+        , _unboundParentFields =
+            fmap snd unFielded
+        , _unboundForeignDef =
+            fd
+        }
+  where
+    unFielded = map f (foreignFields fd)
+    f ((fH, _), (pH, _))  = (unFieldNameHS fH, unFieldNameHS pH)
 
 takeForeign
     :: PersistSettings

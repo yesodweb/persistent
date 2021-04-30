@@ -158,7 +158,7 @@ data EntityDef = EntityDef
 entitiesPrimary :: EntityDef -> Maybe [FieldDef]
 entitiesPrimary t = case fieldReference primaryField of
     CompositeRef c -> Just $ compositeFields c
-    ForeignRef _ _ -> Just [primaryField]
+    ForeignRef _ -> Just [primaryField]
     _ -> Nothing
   where
     primaryField = entityId t
@@ -201,6 +201,7 @@ data FieldAttr
     | FieldAttrDefault Text
     | FieldAttrSqltype Text
     | FieldAttrMaxlen Integer
+    | FieldAttrSql Text
     | FieldAttrOther Text
     deriving (Show, Eq, Read, Ord, Lift)
 
@@ -224,6 +225,8 @@ parseFieldAttrs = fmap $ \case
         | Just x <- T.stripPrefix "maxlen=" raw -> case reads (T.unpack x) of
             [(n, s)] | all isSpace s -> FieldAttrMaxlen n
             _ -> error $ "Could not parse maxlen field with value " <> show raw
+        | Just x <- T.stripPrefix "sql=" raw ->
+            FieldAttrSql x
         | otherwise -> FieldAttrOther raw
 
 -- | A 'FieldType' describes a field parsed from the QuasiQuoter and is
@@ -252,14 +255,16 @@ isFieldNotGenerated = isNothing . fieldGenerated
 -- 1) composite (to fields that exist in the record)
 -- 2) single field
 -- 3) embedded
-data ReferenceDef = NoReference
-                  | ForeignRef !EntityNameHS !FieldType
-                    -- ^ A ForeignRef has a late binding to the EntityDef it references via name and has the Haskell type of the foreign key in the form of FieldType
-                  | EmbedRef EmbedEntityDef
-                  | CompositeRef CompositeDef
-                  | SelfReference
-                    -- ^ A SelfReference stops an immediate cycle which causes non-termination at compile-time (issue #311).
-                  deriving (Show, Eq, Read, Ord, Lift)
+data ReferenceDef
+    = NoReference
+    | ForeignRef !EntityNameHS
+    -- ^ A ForeignRef has a late binding to the EntityDef it references via name
+    -- and has the Haskell type of the foreign key in the form of FieldType
+    | EmbedRef EntityNameHS
+    | CompositeRef CompositeDef
+    | SelfReference
+    -- ^ A SelfReference stops an immediate cycle which causes non-termination at compile-time (issue #311).
+    deriving (Show, Eq, Read, Ord, Lift)
 
 -- | An EmbedEntityDef is the same as an EntityDef
 -- But it is only used for fieldReference
@@ -274,12 +279,11 @@ data EmbedEntityDef = EmbedEntityDef
 -- so it only has data needed for embedding
 data EmbedFieldDef = EmbedFieldDef
     { emFieldDB    :: FieldNameDB
-    , emFieldEmbed :: Maybe EmbedEntityDef
-    , emFieldCycle :: Maybe EntityNameHS
-    -- ^ 'emFieldEmbed' can create a cycle (issue #311)
-    -- when a cycle is detected, 'emFieldEmbed' will be Nothing
-    -- and 'emFieldCycle' will be Just
+    , emFieldEmbed :: Maybe (Either SelfEmbed EntityNameHS)
     }
+    deriving (Show, Eq, Read, Ord, Lift)
+
+data SelfEmbed = SelfEmbed
     deriving (Show, Eq, Read, Ord, Lift)
 
 -- | Returns 'True' if the 'FieldDef' does not have a 'MigrationOnly' or
@@ -308,12 +312,9 @@ toEmbedEntityDef ent = embDef
                 fieldDB field
             , emFieldEmbed =
                 case fieldReference field of
-                    EmbedRef em -> Just em
-                    SelfReference -> Just embDef
-                    _ -> Nothing
-            , emFieldCycle =
-                case fieldReference field of
-                    SelfReference -> Just $ entityHaskell ent
+                    EmbedRef em ->
+                        Just $ Right em
+                    SelfReference -> Just $ Left SelfEmbed
                     _ -> Nothing
             }
 

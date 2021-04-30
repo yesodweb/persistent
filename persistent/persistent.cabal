@@ -134,9 +134,6 @@ test-suite test
       , unordered-containers
       , vector
       , QuickCheck
-        -- needed because of the `source-dirs: .`
-        -- TODO: factor the internal modules out so we can use them in tests
-        -- maybe in another package
       , template-haskell         >= 2.4
       , unliftio-core
       , mtl
@@ -171,6 +168,7 @@ test-suite test
         Database.Persist.THSpec
         Database.Persist.QuasiSpec
         Database.Persist.ClassSpec
+        Database.Persist.PersistValueSpec
         TemplateTestImports
         Database.Persist.TH.SharedPrimaryKeySpec
         Database.Persist.TH.SharedPrimaryKeyImportedSpec
