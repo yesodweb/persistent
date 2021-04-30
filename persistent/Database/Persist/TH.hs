@@ -1,5 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveLift #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -70,7 +71,6 @@ module Database.Persist.TH
 
 import Prelude hiding (concat, exp, splitAt, take, (++))
 
-import Debug.Trace
 import Control.Monad
 import Data.Aeson
        ( FromJSON(parseJSON)
@@ -91,8 +91,8 @@ import Data.Int (Int64)
 import Data.Ix (Ix)
 import Data.List (foldl')
 import qualified Data.List as List
-import qualified Data.List.NonEmpty as NEL
 import Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe, isJust, listToMaybe, mapMaybe)
 import Data.Monoid (mappend, mconcat, (<>))
@@ -102,6 +102,7 @@ import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
 import qualified Data.Text.Encoding as TE
 import Data.Typeable (Typeable)
+import Debug.Trace
 import GHC.Generics (Generic)
 import GHC.TypeLits
 import Instances.TH.Lift ()
@@ -119,21 +120,23 @@ import Web.PathPieces (PathPiece(..))
 import Database.Persist
 import Database.Persist.Quasi
 import Database.Persist.Quasi.Internal
-       ( UnboundEntityDef(..)
-       , unboundIdDefToFieldDef
-       , getSqlNameOr
-       , unbindEntityDef
-       , mkKeyConType
-       , mkAutoIdField'
+       ( ForeignFieldReference(..)
+       , PrimarySpec(..)
        , UnboundFieldDef(..)
        , UnboundCompositeDef(..)
+       , UnboundEntityDef(..)
+       , UnboundFieldDef(..)
        , UnboundForeignDef(..)
-       , UnboundIdDef(..)
-       , unbindFieldDef
-       , PrimarySpec(..)
-       , getUnboundFieldDefs
        , UnboundForeignFieldList(..)
-       , ForeignFieldReference(..)
+       , UnboundIdDef(..)
+       , getSqlNameOr
+       , getUnboundFieldDefs
+       , isHaskellUnboundField
+       , mkAutoIdField'
+       , mkKeyConType
+       , unbindEntityDef
+       , unbindFieldDef
+       , unboundIdDefToFieldDef
        )
 import Database.Persist.Sql
        (Migration, PersistFieldSql, SqlBackend, migrate, sqlType)
@@ -716,8 +719,11 @@ setDefaultIdFields mps ued
 -- necessary so that migrations know to keep these columns around, or to delete
 -- them, as appropriate.
 fixEntityDef :: UnboundEntityDef -> UnboundEntityDef
-fixEntityDef =
-    overEntityDef (overEntityFields (filter isHaskellField))
+fixEntityDef ued =
+    ued
+        { unboundEntityFields =
+            filter isHaskellUnboundField (unboundEntityFields ued)
+        }
 
 -- | Settings to be passed to the 'mkPersist' function.
 data MkPersistSettings = MkPersistSettings
@@ -2395,8 +2401,11 @@ mkSymbolToFieldInstances mps (fixEntityDef -> ed) = do
         entityHaskellName =
             getEntityHaskellName $ unboundEntityDef ed
         allFields =
-            fmap unbindFieldDef $ keyAndEntityFields $ unboundEntityDef ed
-    fmap join $ forM (toList allFields) $ \fieldDef -> do
+            getUnboundFieldDefs ed
+        mkEntityFieldConstr fieldHaskellName =
+            conE $ filterConName' mps entityHaskellName fieldHaskellName
+                :: Q Exp
+    regularFields <- forM (toList allFields) $ \fieldDef -> do
         let
             fieldHaskellName =
                 unboundFieldNameHS fieldDef
@@ -2410,26 +2419,44 @@ mkSymbolToFieldInstances mps (fixEntityDef -> ed) = do
             lowerFirstIfId "Id" = "id"
             lowerFirstIfId xs = xs
 
-            nameG = mkEntityDefGenericName ed
-
-            recordNameT
-                | mpsGeneric mps =
-                    conT nameG `appT` varT backendName
-                | otherwise =
-                    entityDefConT ed
-
             fieldTypeT
                 | fieldHaskellName == FieldNameHS "Id" =
                     conT ''Key `appT` recordNameT
                 | otherwise =
                     pure $ maybeIdType mps fieldDef Nothing Nothing
             entityFieldConstr =
-                conE $ filterConName' mps entityHaskellName fieldHaskellName
-                    :: Q Exp
+                mkEntityFieldConstr fieldHaskellName
+        mkInstance fieldNameT fieldTypeT entityFieldConstr
+
+    mkey <-
+        case unboundPrimarySpec ed of
+            NaturalKey _ ->
+                pure []
+            _ -> do
+                let
+                    fieldHaskellName =
+                        FieldNameHS "Id"
+                    entityFieldConstr =
+                        mkEntityFieldConstr fieldHaskellName
+                    fieldTypeT =
+                        conT ''Key `appT` recordNameT
+                mkInstance [t|"id"|] fieldTypeT entityFieldConstr
+
+    pure (mkey <> join regularFields)
+  where
+    nameG =
+        mkEntityDefGenericName ed
+    recordNameT
+        | mpsGeneric mps =
+            conT nameG `appT` varT backendName
+        | otherwise =
+            entityDefConT ed
+    mkInstance fieldNameT fieldTypeT entityFieldConstr =
         [d|
             instance SymbolToField $(fieldNameT) $(recordNameT) $(fieldTypeT) where
                 symbolToField = $(entityFieldConstr)
             |]
+
 
 -- | Pass in a list of lists of extensions, where any of the given
 -- extensions will satisfy it. For example, you might need either GADTs or

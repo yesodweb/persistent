@@ -22,18 +22,6 @@ import Data.Semigroup ((<>))
 import Database.Persist.EntityDef.Internal
 import Database.Persist.Quasi
 import Database.Persist.Quasi.Internal
-       ( Line(..)
-       , LinesWithComments(..)
-       , Token(..)
-       , UnboundEntityDef(..)
-       , UnboundForeignDef(..)
-       , associateLines
-       , parseFieldType
-       , parseLine
-       , preparse
-       , splitExtras
-       , takeColsEx
-       )
 import Database.Persist.Types
 import Text.Shakespeare.Text (st)
 
@@ -100,34 +88,30 @@ spec = describe "Quasi" $ do
         it "works if it has a name and a type" $ do
             subject ["asdf", "Int"]
                 `shouldBe`
-                    Just FieldDef
-                        { fieldHaskell = FieldNameHS "asdf"
-                        , fieldDB = FieldNameDB "asdf"
-                        , fieldType = FTTypeCon Nothing "Int"
-                        , fieldSqlType = SqlOther "SqlType unset for asdf"
-                        , fieldAttrs = []
-                        , fieldStrict = True
-                        , fieldReference = NoReference
-                        , fieldCascade = noCascade
-                        , fieldComments = Nothing
-                        , fieldGenerated = Nothing
-                        , fieldIsImplicitIdColumn = False
+                    Just UnboundFieldDef
+                        { unboundFieldNameHS = FieldNameHS "asdf"
+                        , unboundFieldNameDB = FieldNameDB "asdf"
+                        , unboundFieldType = FTTypeCon Nothing "Int"
+                        , unboundFieldAttrs = []
+                        , unboundFieldStrict = True
+                        , unboundFieldReference = Nothing
+                        , unboundFieldCascade = noCascade
+                        , unboundFieldComments = Nothing
+                        , unboundFieldGenerated = Nothing
                         }
         it "works if it has a name, type, and cascade" $ do
             subject ["asdf", "Int", "OnDeleteCascade", "OnUpdateCascade"]
                 `shouldBe`
-                    Just FieldDef
-                        { fieldHaskell = FieldNameHS "asdf"
-                        , fieldDB = FieldNameDB "asdf"
-                        , fieldType = FTTypeCon Nothing "Int"
-                        , fieldSqlType = SqlOther "SqlType unset for asdf"
-                        , fieldAttrs = []
-                        , fieldStrict = True
-                        , fieldReference = NoReference
-                        , fieldCascade = FieldCascade (Just Cascade) (Just Cascade)
-                        , fieldComments = Nothing
-                        , fieldGenerated = Nothing
-                        , fieldIsImplicitIdColumn = False
+                    Just UnboundFieldDef
+                        { unboundFieldNameHS = FieldNameHS "asdf"
+                        , unboundFieldNameDB = FieldNameDB "asdf"
+                        , unboundFieldType = FTTypeCon Nothing "Int"
+                        , unboundFieldAttrs = []
+                        , unboundFieldStrict = True
+                        , unboundFieldReference = Nothing
+                        , unboundFieldCascade = FieldCascade (Just Cascade) (Just Cascade)
+                        , unboundFieldComments = Nothing
+                        , unboundFieldGenerated = Nothing
                         }
         it "never tries to make a refernece" $ do
             subject ["asdf", "UserId", "OnDeleteCascade"]
@@ -139,11 +123,10 @@ spec = describe "Quasi" $ do
                         , unboundFieldAttrs = []
                         , unboundFieldStrict = True
                         , unboundFieldReference =
-                            Just $ ForeignRef (EntityNameHS "User")
+                            Just (EntityNameHS "User")
                         , unboundFieldCascade = FieldCascade Nothing (Just Cascade)
                         , unboundFieldComments = Nothing
                         , unboundFieldGenerated = Nothing
-                        , unboundFieldIsImplicitIdColumn = False
                         }
 
     describe "parseLine" $ do
@@ -269,17 +252,17 @@ Car
     car CarId         -- | the car reference
 
                     |]
-        let [bicycle, car, vehicle] = unboundEntityDef <$> parse lowerCaseSettings subject
+        let [bicycle, car, vehicle] = parse lowerCaseSettings subject
 
         it "should parse the `entityHaskell` field" $ do
-            entityHaskell bicycle `shouldBe` EntityNameHS "Bicycle"
-            entityHaskell car `shouldBe` EntityNameHS "Car"
-            entityHaskell vehicle `shouldBe` EntityNameHS "Vehicle"
+            getUnboundEntityNameHS bicycle `shouldBe` EntityNameHS "Bicycle"
+            getUnboundEntityNameHS car `shouldBe` EntityNameHS "Car"
+            getUnboundEntityNameHS vehicle `shouldBe` EntityNameHS "Vehicle"
 
         it "should parse the `entityDB` field" $ do
-            entityDB bicycle `shouldBe` EntityNameDB "bicycle"
-            entityDB car `shouldBe` EntityNameDB "car"
-            entityDB vehicle `shouldBe` EntityNameDB "vehicle"
+            entityDB (unboundEntityDef bicycle) `shouldBe` EntityNameDB "bicycle"
+            entityDB (unboundEntityDef car) `shouldBe` EntityNameDB "car"
+            entityDB (unboundEntityDef vehicle) `shouldBe` EntityNameDB "vehicle"
 
         it "should parse the `entityId` field" $ do
             entityId <- pure $ \ent ->
@@ -883,21 +866,21 @@ Baz
                                 <> show (length xs)
                                 <> ", list contents: \n\n" <> intercalate "\n" (map show xs)
             describe "idTable" $ do
-                let EntityDef {..} = unboundEntityDef idTable
+                let UnboundEntityDef { unboundEntityDef = EntityDef {..}, .. } = idTable
                 it "has no extra blocks" $ do
                     entityExtra `shouldBe` mempty
                 it "has the right name" $ do
                     entityHaskell `shouldBe` EntityNameHS "IdTable"
                 it "has the right fields" $ do
-                    map fieldHaskell entityFields `shouldMatchList`
+                    map unboundFieldNameHS unboundEntityFields `shouldMatchList`
                         [ FieldNameHS "name"
                         ]
             describe "lowerCaseTable" $ do
-                let EntityDef {..} = unboundEntityDef lowerCaseTable
+                let UnboundEntityDef { unboundEntityDef = EntityDef {..}, ..} = lowerCaseTable
                 it "has the right name" $ do
                     entityHaskell `shouldBe` EntityNameHS "LowerCaseTable"
                 it "has the right fields" $ do
-                    map fieldHaskell entityFields `shouldMatchList`
+                    map unboundFieldNameHS unboundEntityFields `shouldMatchList`
                         [ FieldNameHS "fullName"
                         ]
                 it "has ExtraBlock" $ do

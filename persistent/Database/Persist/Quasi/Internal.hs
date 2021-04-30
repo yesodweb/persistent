@@ -45,6 +45,7 @@ module Database.Persist.Quasi.Internal
     , UnboundForeignFieldList(..)
     , ForeignFieldReference(..)
     , mkKeyConType
+    , isHaskellUnboundField
     ) where
 
 import Prelude hiding (lines)
@@ -419,7 +420,7 @@ data UnboundFieldDef
     , unboundFieldGenerated :: Maybe Text
     , unboundFieldComments :: Maybe Text
     }
-    deriving (Show, Lift)
+    deriving (Eq, Show, Lift)
 
 unbindFieldDef :: FieldDef -> UnboundFieldDef
 unbindFieldDef fd = UnboundFieldDef
@@ -1131,3 +1132,13 @@ nullable s
     | FieldAttrMaybe    `elem` s = Nullable ByMaybeAttr
     | FieldAttrNullable `elem` s = Nullable ByNullableAttr
     | otherwise = NotNullable
+
+
+-- | Returns 'True' if the 'UnboundFieldDef' does not have a 'MigrationOnly' or
+-- 'SafeToRemove' flag from the QuasiQuoter.
+--
+-- @since 2.13.0.0
+isHaskellUnboundField :: UnboundFieldDef -> Bool
+isHaskellUnboundField fd =
+    FieldAttrMigrationOnly `notElem` unboundFieldAttrs fd &&
+    FieldAttrSafeToRemove `notElem` unboundFieldAttrs fd
