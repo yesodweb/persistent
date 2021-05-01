@@ -56,6 +56,7 @@ specsWith runDb mmigrate = describe "MigrationOnly field" $ do
             length fields `shouldBe` 3
         it "should have at one migration only field" $ do
             length (filter (not . isHaskellField) fields) `shouldBe` 1
+
     it "doesn't have the field in the Haskell entity" $ asIO $ runDb $ do
         sequence_ mmigrate
         sequence_ mmigrate
