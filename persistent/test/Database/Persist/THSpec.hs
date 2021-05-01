@@ -45,7 +45,7 @@ import Database.Persist.Sql.Util
 import Database.Persist.TH
 import TemplateTestImports
 
-
+import qualified Database.Persist.TH.ForeignRefSpec as ForeignRefSpec
 import qualified Database.Persist.TH.MultiBlockSpec as MultiBlockSpec
 import qualified Database.Persist.TH.DiscoverEntitiesSpec as DiscoverEntitiesSpec
 import qualified Database.Persist.TH.ImplicitIdColSpec as ImplicitIdColSpec
@@ -54,6 +54,10 @@ import qualified Database.Persist.TH.EmbedSpec as EmbedSpec
 import qualified Database.Persist.TH.OverloadedLabelSpec as OverloadedLabelSpec
 import qualified Database.Persist.TH.SharedPrimaryKeyImportedSpec as SharedPrimaryKeyImportedSpec
 import qualified Database.Persist.TH.SharedPrimaryKeySpec as SharedPrimaryKeySpec
+
+-- test to ensure we can have types ending in Id that don't trash the TH
+-- machinery
+type TextId = Text
 
 share [mkPersist sqlSettings { mpsGeneric = False, mpsDeriveInstances = [''Generic] }] [persistUpperCase|
 
@@ -127,6 +131,10 @@ Bottom
     middle MiddleId
     Primary middle
 
+-- Test that a field can be named Key
+KeyTable
+    key Text
+
 |]
 
 share [mkPersist sqlSettings { mpsGeneric = False, mpsGenerateLenses = True }] [persistLowerCase|
@@ -164,6 +172,7 @@ spec = describe "THSpec" $ do
     EmbedSpec.spec
     DiscoverEntitiesSpec.spec
     MultiBlockSpec.spec
+    ForeignRefSpec.spec
     describe "TestDefaultKeyCol" $ do
         let EntityIdField FieldDef{..} =
                 entityId (entityDef (Proxy @TestDefaultKeyCol))

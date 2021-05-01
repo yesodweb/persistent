@@ -94,7 +94,6 @@ spec = describe "Quasi" $ do
                         , unboundFieldType = FTTypeCon Nothing "Int"
                         , unboundFieldAttrs = []
                         , unboundFieldStrict = True
-                        , unboundFieldReference = Nothing
                         , unboundFieldCascade = noCascade
                         , unboundFieldComments = Nothing
                         , unboundFieldGenerated = Nothing
@@ -108,7 +107,6 @@ spec = describe "Quasi" $ do
                         , unboundFieldType = FTTypeCon Nothing "Int"
                         , unboundFieldAttrs = []
                         , unboundFieldStrict = True
-                        , unboundFieldReference = Nothing
                         , unboundFieldCascade = FieldCascade (Just Cascade) (Just Cascade)
                         , unboundFieldComments = Nothing
                         , unboundFieldGenerated = Nothing
@@ -122,8 +120,6 @@ spec = describe "Quasi" $ do
                         , unboundFieldType = FTTypeCon Nothing "UserId"
                         , unboundFieldAttrs = []
                         , unboundFieldStrict = True
-                        , unboundFieldReference =
-                            Just (EntityNameHS "User")
                         , unboundFieldCascade = FieldCascade Nothing (Just Cascade)
                         , unboundFieldComments = Nothing
                         , unboundFieldGenerated = Nothing
@@ -264,36 +260,22 @@ Car
             entityDB (unboundEntityDef car) `shouldBe` EntityNameDB "car"
             entityDB (unboundEntityDef vehicle) `shouldBe` EntityNameDB "vehicle"
 
-        it "should parse the `entityId` field" $ do
-            entityId <- pure $ \ent ->
-                case entityId ent of
-                    EntityIdField fd ->
-                        fd
-                    _ ->
-                        error "entityId was natural key"
-            fieldHaskell (entityId bicycle) `shouldBe` FieldNameHS "Id"
-            fieldComments (entityId bicycle) `shouldBe` Nothing
-            fieldHaskell (entityId car) `shouldBe` FieldNameHS "Id"
-            fieldComments (entityId car) `shouldBe` Nothing
-            fieldHaskell (entityId vehicle) `shouldBe` FieldNameHS "Id"
-            fieldComments (entityId vehicle) `shouldBe` Nothing
-
         it "should parse the `entityAttrs` field" $ do
-            entityAttrs bicycle `shouldBe` ["-- | this is a bike"]
-            entityAttrs car `shouldBe` []
-            entityAttrs vehicle `shouldBe` []
+            entityAttrs (unboundEntityDef bicycle) `shouldBe` ["-- | this is a bike"]
+            entityAttrs (unboundEntityDef car) `shouldBe` []
+            entityAttrs (unboundEntityDef vehicle) `shouldBe` []
 
-        it "should parse the `entityFields` field" $ do
+        it "should parse the `unboundEntityFields` field" $ do
             let simplifyField field =
-                    (fieldHaskell field, fieldDB field, fieldComments field)
-            (simplifyField <$> entityFields bicycle) `shouldBe`
+                    (unboundFieldNameHS field, unboundFieldNameDB field, unboundFieldComments field)
+            (simplifyField <$> unboundEntityFields bicycle) `shouldBe`
                 [ (FieldNameHS "brand", FieldNameDB "brand", Nothing)
                 ]
-            (simplifyField <$> entityFields car) `shouldBe`
+            (simplifyField <$> unboundEntityFields car) `shouldBe`
                 [ (FieldNameHS "make", FieldNameDB "make", Just "the make of the Car\n")
                 , (FieldNameHS "model", FieldNameDB "model", Just "the model of the Car\n")
                 ]
-            (simplifyField <$> entityFields vehicle) `shouldBe`
+            (simplifyField <$> unboundEntityFields vehicle) `shouldBe`
                 [ (FieldNameHS "bicycle", FieldNameDB "bicycle", Nothing)
                 , (FieldNameHS "car", FieldNameDB "car", Nothing)
                 ]
@@ -301,11 +283,11 @@ Car
         it "should parse the `entityUniques` field" $ do
             let simplifyUnique unique =
                     (uniqueHaskell unique, uniqueFields unique)
-            (simplifyUnique <$> entityUniques bicycle) `shouldBe` []
-            (simplifyUnique <$> entityUniques car) `shouldBe`
+            (simplifyUnique <$> entityUniques (unboundEntityDef bicycle)) `shouldBe` []
+            (simplifyUnique <$> entityUniques (unboundEntityDef car)) `shouldBe`
                 [ (ConstraintNameHS "UniqueModel", [(FieldNameHS "model", FieldNameDB "model")])
                 ]
-            (simplifyUnique <$> entityUniques vehicle) `shouldBe` []
+            (simplifyUnique <$> entityUniques (unboundEntityDef vehicle)) `shouldBe` []
 
         it "should parse the `entityForeigns` field" $ do
             let [user, notification] = parse lowerCaseSettings [st|
@@ -342,24 +324,24 @@ Notification
                 ]
 
         it "should parse the `entityDerives` field" $ do
-            entityDerives bicycle `shouldBe` ["Eq"]
-            entityDerives car `shouldBe` ["Eq", "Show"]
-            entityDerives vehicle `shouldBe` []
+            entityDerives (unboundEntityDef bicycle) `shouldBe` ["Eq"]
+            entityDerives (unboundEntityDef car) `shouldBe` ["Eq", "Show"]
+            entityDerives (unboundEntityDef vehicle) `shouldBe` []
 
         it "should parse the `entityEntities` field" $ do
-            entityExtra bicycle `shouldBe` Map.singleton "ExtraBike" [["foo", "bar", "-- | this is a foo bar"], ["baz"]]
-            entityExtra car `shouldBe` mempty
-            entityExtra vehicle `shouldBe` mempty
+            entityExtra (unboundEntityDef bicycle) `shouldBe` Map.singleton "ExtraBike" [["foo", "bar", "-- | this is a foo bar"], ["baz"]]
+            entityExtra (unboundEntityDef car) `shouldBe` mempty
+            entityExtra (unboundEntityDef vehicle) `shouldBe` mempty
 
         it "should parse the `entitySum` field" $ do
-            entitySum bicycle `shouldBe` False
-            entitySum car `shouldBe` False
-            entitySum vehicle `shouldBe` True
+            entitySum (unboundEntityDef bicycle) `shouldBe` False
+            entitySum (unboundEntityDef car) `shouldBe` False
+            entitySum (unboundEntityDef vehicle) `shouldBe` True
 
         it "should parse the `entityComments` field" $ do
-            entityComments bicycle `shouldBe` Nothing
-            entityComments car `shouldBe` Just "This is a Car\n"
-            entityComments vehicle `shouldBe` Nothing
+            entityComments (unboundEntityDef bicycle) `shouldBe` Nothing
+            entityComments (unboundEntityDef car) `shouldBe` Just "This is a Car\n"
+            entityComments (unboundEntityDef vehicle) `shouldBe` Nothing
 
         describe "foreign keys" $ do
             let definitions = [st|
@@ -531,9 +513,9 @@ Baz
 
                         ((name, fieldCount) : ys, (x : xs)) -> do
                             let
-                                EntityDef {..} =
-                                    unboundEntityDef x
-                            (unEntityNameHS entityHaskell, length entityFields)
+                                UnboundEntityDef {..} =
+                                    x
+                            (unEntityNameHS (getUnboundEntityNameHS x), length unboundEntityFields)
                                 `shouldBe`
                                     (T.pack name, fieldCount)
                             test ys xs
@@ -812,26 +794,26 @@ Baz
                     , "  Extra2"
                     , "    something"
                     ]
-        let [subject] = unboundEntityDef <$> parse lowerCaseSettings lines
+        let [subject] = parse lowerCaseSettings lines
         it "produces the right name" $ do
-            entityHaskell subject `shouldBe` EntityNameHS "Foo"
-        describe "entityFields" $ do
-            let fields = entityFields subject
+            getUnboundEntityNameHS subject `shouldBe` EntityNameHS "Foo"
+        describe "unboundEntityFields" $ do
+            let fields = unboundEntityFields subject
             it "has the right field names" $ do
-                map fieldHaskell fields `shouldMatchList`
+                map unboundFieldNameHS fields `shouldMatchList`
                     [ FieldNameHS "name"
                     , FieldNameHS "age"
                     ]
             it "has comments" $ do
-                map fieldComments fields `shouldBe`
+                map unboundFieldComments fields `shouldBe`
                     [ Just "Field\n"
                     , Nothing
                     ]
         it "has the comments" $ do
-            entityComments subject `shouldBe`
+            entityComments (unboundEntityDef subject) `shouldBe`
                 Just "Comment\n"
         it "combines extrablocks" $ do
-            entityExtra subject `shouldBe` Map.fromList
+            entityExtra (unboundEntityDef subject) `shouldBe` Map.fromList
                 [ ("Extra", [["foo", "bar"], ["baz"]])
                 , ("Extra2", [["something"]])
                 ]

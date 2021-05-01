@@ -31,6 +31,7 @@ module Database.Persist.Quasi.Internal
     , takeColsEx
     -- * UnboundEntityDef
     , UnboundEntityDef(..)
+    , getUnboundEntityNameHS
     , unbindEntityDef
     , getUnboundFieldDefs
     , UnboundForeignDef(..)
@@ -413,7 +414,6 @@ data UnboundFieldDef
     { unboundFieldNameHS :: FieldNameHS
     , unboundFieldNameDB :: FieldNameDB
     , unboundFieldAttrs :: [FieldAttr]
-    , unboundFieldReference :: Maybe EntityNameHS
     , unboundFieldStrict :: Bool
     , unboundFieldType :: FieldType
     , unboundFieldCascade :: FieldCascade
@@ -430,12 +430,6 @@ unbindFieldDef fd = UnboundFieldDef
         fieldDB fd
     , unboundFieldAttrs =
         fieldAttrs fd
-    , unboundFieldReference =
-        case fieldReference fd of
-            ForeignRef ref ->
-                Just ref
-            _ ->
-                Nothing
     , unboundFieldType =
         fieldType fd
     , unboundFieldStrict =
@@ -682,8 +676,6 @@ takeCols onErr ps (n':typ:rest')
                     fieldAttrs_
                 , unboundFieldStrict =
                     fromMaybe (psStrictFields ps) mstrict
-                , unboundFieldReference =
-                    guessReference ft
                 , unboundFieldComments =
                     Nothing
                 , unboundFieldCascade =
@@ -692,14 +684,6 @@ takeCols onErr ps (n':typ:rest')
                     generated_
                 }
   where
-    guessReference ft =
-        case ft of
-            FTTypeCon Nothing (T.stripSuffix "Id" -> Just tableName) ->
-                Just (EntityNameHS tableName)
-            FTApp (FTTypeCon Nothing "Key") (FTTypeCon Nothing tableName) ->
-                Just (EntityNameHS tableName)
-            _ ->
-                Nothing
     fieldAttrs_ = parseFieldAttrs attrs_
     generated_ = parseGenerated attrs_
     (cascade_, attrs_) = parseCascade rest'
@@ -1142,3 +1126,6 @@ isHaskellUnboundField :: UnboundFieldDef -> Bool
 isHaskellUnboundField fd =
     FieldAttrMigrationOnly `notElem` unboundFieldAttrs fd &&
     FieldAttrSafeToRemove `notElem` unboundFieldAttrs fd
+
+getUnboundEntityNameHS :: UnboundEntityDef -> EntityNameHS
+getUnboundEntityNameHS = entityHaskell . unboundEntityDef

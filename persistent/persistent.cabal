@@ -164,6 +164,7 @@ test-suite test
         Database.Persist.TH.SharedPrimaryKeyImportedSpec
         Database.Persist.TH.SharedPrimaryKeySpec
         Database.Persist.TH.MultiBlockSpec
+        Database.Persist.TH.ForeignRefSpec
         Database.Persist.TH.MultiBlockSpec.Model
         Database.Persist.THSpec
         Database.Persist.QuasiSpec

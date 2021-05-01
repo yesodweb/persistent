@@ -6,6 +6,7 @@ module PersistentTestModels where
 
 import Data.Aeson
 
+import qualified Data.List.NonEmpty as NEL
 import Data.Proxy
 import Test.QuickCheck
 import Database.Persist.Sql
@@ -233,9 +234,9 @@ instance (PersistEntity a) => PersistEntity (ReverseFieldOrder a) where
     fromPersistValues = fmap RFO . fromPersistValues . reverse
 
     newtype Unique      (ReverseFieldOrder a)   = URFO  {unURFO  :: Unique      a  }
-    persistUniqueToFieldNames = reverse . persistUniqueToFieldNames . unURFO
+    persistUniqueToFieldNames = NEL.reverse . persistUniqueToFieldNames . unURFO
     persistUniqueToValues = reverse . persistUniqueToValues . unURFO
-    persistUniqueKeys = map URFO . reverse . persistUniqueKeys . unRFO
+    persistUniqueKeys = fmap URFO . reverse . persistUniqueKeys . unRFO
 
     persistIdField = error "ReverseFieldOrder.persistIdField"
     fieldLens = error "ReverseFieldOrder.fieldLens"

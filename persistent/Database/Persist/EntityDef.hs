@@ -14,6 +14,7 @@ module Database.Persist.EntityDef
     , getEntityForeignDefs
     , getEntityUniques
     , getEntityId
+    , getEntityIdField
     , getEntityKeyFields
     , getEntityComments
     , getEntityExtra
@@ -137,6 +138,17 @@ getEntityId
     :: EntityDef
     -> EntityIdDef
 getEntityId = entityId
+
+-- |
+--
+-- @since 2.13.0.0
+getEntityIdField :: EntityDef -> Maybe FieldDef
+getEntityIdField ed =
+    case getEntityId ed of
+        EntityIdField fd ->
+            pure fd
+        _ ->
+            Nothing
 
 -- | Set an 'entityId' to be the given 'FieldDef'.
 --
