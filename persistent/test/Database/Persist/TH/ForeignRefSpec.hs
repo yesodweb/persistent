@@ -68,6 +68,21 @@ ForeignPrimarySource
 NullableRef
     name Text Maybe
     Foreign ForeignPrimary fk_nullable_ref name
+
+ParentImplicit
+    name Text
+
+ChildImplicit
+    name Text
+    parent ParentImplicitId OnDeleteCascade OnUpdateCascade
+
+ParentExplicit
+    name Text
+    Primary name
+
+ChildExplicit
+    name Text
+    Foreign ParentExplicit OnDeleteCascade OnUpdateCascade fkparent name
 |]
 
 spec :: Spec
@@ -85,3 +100,92 @@ spec = describe "ForeignRefSpec" $ do
             foreignPrimarySourceFk_name_target (ForeignPrimarySource "asdf")
                 `shouldBe`
                     ForeignPrimaryKey "asdf"
+
+    describe "Cascade" $ do
+        describe "Explicit" $ do
+            let
+                parentDef =
+                    entityDef $ Proxy @ParentExplicit
+                childDef =
+                    entityDef $ Proxy @ChildExplicit
+                childForeigns =
+                    entityForeigns childDef
+            it "should have a single foreign reference defined" $ do
+                    case entityForeigns childDef of
+                        [a] ->
+                            pure ()
+                        as ->
+                            expectationFailure . mconcat $
+                                [ "Expected one foreign reference on childDef, "
+                                , "got: "
+                                , show as
+                                ]
+            let
+                [ForeignDef {..}] =
+                    childForeigns
+
+            describe "ChildExplicit" $ do
+                it "should have the right target table" $ do
+                    foreignRefTableHaskell `shouldBe`
+                        EntityNameHS "ParentExplicit"
+                    foreignRefTableDBName `shouldBe`
+                        EntityNameDB "parent_explicit"
+                it "should have the right cascade behavior" $ do
+                    foreignFieldCascade
+                        `shouldBe`
+                            FieldCascade
+                                { fcOnUpdate =
+                                    Just Cascade
+                                , fcOnDelete =
+                                    Just Cascade
+                                }
+                it "is not nullable" $ do
+                    foreignNullable `shouldBe` False
+                it "is to the Primary key" $ do
+                    foreignToPrimary `shouldBe` True
+
+
+
+
+
+        describe "Implicit" $ do
+            let
+                parentDef =
+                    entityDef $ Proxy @ParentImplicit
+                childDef =
+                    entityDef $ Proxy @ChildImplicit
+                childForeigns =
+                    entityForeigns childDef
+            it "should have a single foreign reference defined" $ do
+                    case entityForeigns childDef of
+                        [a] ->
+                            pure ()
+                        as ->
+                            expectationFailure . mconcat $
+                                [ "Expected one foreign reference on childDef, "
+                                , "got: "
+                                , show as
+                                ]
+            let
+                [ForeignDef {..}] =
+                    childForeigns
+
+            describe "ChildImplicit" $ do
+                it "should have the right target table" $ do
+                    foreignRefTableHaskell `shouldBe`
+                        EntityNameHS "ParentImplicit"
+                    foreignRefTableDBName `shouldBe`
+                        EntityNameDB "parent_explicit"
+                it "should have the right cascade behavior" $ do
+                    foreignFieldCascade
+                        `shouldBe`
+                            FieldCascade
+                                { fcOnUpdate =
+                                    Just Cascade
+                                , fcOnDelete =
+                                    Just Cascade
+                                }
+                it "is not nullable" $ do
+                    foreignNullable `shouldBe` False
+                it "is to the Primary key" $ do
+                    foreignToPrimary `shouldBe` True

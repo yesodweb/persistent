@@ -1,107 +1,30 @@
 # TODOs remaining for improving QQ PR:
 
+* MigrationOnly woes
+    * Ok, so I have `getEntityFields` and then `getEntityFieldsDatabase`. Ths is
+      annoying. The code should *just work* for `MigrationOnly` fields - for
+      example, `fromPersistValues` possibly should *ignore* a potential
+      `PersistNull` , instead of conditionally ignoring it.
+* JSON decoding didn't work. Should have the test render an error message...
+* Apparently calling 'persistFieldDef' on a composite primary key. Maybe I
+  should defer that error to actual composite keys so natural single column keys
+  work fine.
+* Ugh. Okay, so `persistent` fully expects composite primary keys to Just Work
+  with filter operators. This is bad. This means I can't just throw away the
+  field defs. To be entirely proper, I could return a `NonEmpty FieldDef` from
+  the `fieldDef` function. Or, like, `fieldDefMany`, and then `fieldDef =
+  NEL.head . fieldDefMany`. But that's awful!
+
+  In reality, I do want tos upport multi column fields, but I really don't want
+  to include that support in this PR... it's already too big.
+* RawSql Entity instance is broken?
+* keyFromRecordM works on singleton case - apparently it isn't defined right.
+* Cascades aren't working. This means the unbound cascades aren't properly being
+  set on the behavior. This can be fixed in THSpec.
+
 Test errors from `persistent-sqlite`:
 
 ```
-Failures:
-
-  src/MigrationOnlyTest.hs:60:5:
-  1) MigrationOnly field doesn't have the field in the Haskell entity
-       uncaught exception: PersistException
-       PersistMarshalError "TwoField: fromPersistValues failed on: [PersistInt64 5,PersistText \"hello\",PersistNull]"
-
-  To rerun use: --match "/MigrationOnly field/doesn't have the field in the Haskell entity/"
-
-  src/PersistentTest.hs:666:7:
-  2) persistent.JsonEncoding decodes without an ID field
-       expected: Just (Entity {entityKey = JsonEncodingKey {unJsonEncodingKey = "Bob"}, entityVal = JsonEncoding {jsonEncodingName = "Bob", jsonEncodingAge = 32}})
-        but got: Nothing
-
-  To rerun use: --match "/persistent/JsonEncoding/decodes without an ID field/"
-
-  src/CompositeTest.hs:14:1:
-  3) composite, primary keys, Insert
-       uncaught exception: ErrorCall
-       cannot get single FieldDef for Natural Key
-       CallStack (from HasCallStack):
-         error, called at src/CompositeTest.hs:14:1 in persistent-test-2.13.0.0-6vTeb9ClxA397Na0xrWicM:CompositeTest
-
-  To rerun use: --match "/composite/primary keys/Insert/"
-
-  src/CompositeTest.hs:14:1:
-  4) composite, primary keys, Id field
-       uncaught exception: ErrorCall
-       cannot get single FieldDef for Natural Key
-       CallStack (from HasCallStack):
-         error, called at src/CompositeTest.hs:14:1 in persistent-test-2.13.0.0-6vTeb9ClxA397Na0xrWicM:CompositeTest
-
-  To rerun use: --match "/composite/primary keys/Id field/"
-
-  src/CompositeTest.hs:14:1:
-  5) composite, primary keys, Filter by Id with 'not equal'
-       uncaught exception: ErrorCall
-       cannot get single FieldDef for Natural Key
-       CallStack (from HasCallStack):
-         error, called at src/CompositeTest.hs:14:1 in persistent-test-2.13.0.0-6vTeb9ClxA397Na0xrWicM:CompositeTest
-
-  To rerun use: --match "/composite/primary keys/Filter by Id with 'not equal'/"
-
-  src/CompositeTest.hs:14:1:
-  6) composite, primary keys, Filter by Id with 'in'
-       uncaught exception: ErrorCall
-       cannot get single FieldDef for Natural Key
-       CallStack (from HasCallStack):
-         error, called at src/CompositeTest.hs:14:1 in persistent-test-2.13.0.0-6vTeb9ClxA397Na0xrWicM:CompositeTest
-
-  To rerun use: --match "/composite/primary keys/Filter by Id with 'in'/"
-
-  src/CompositeTest.hs:14:1:
-  7) composite, primary keys, Filter by Id with 'not in'
-       uncaught exception: ErrorCall
-       cannot get single FieldDef for Natural Key
-       CallStack (from HasCallStack):
-         error, called at src/CompositeTest.hs:14:1 in persistent-test-2.13.0.0-6vTeb9ClxA397Na0xrWicM:CompositeTest
-
-  To rerun use: --match "/composite/primary keys/Filter by Id with 'not in'/"
-
-  src/CompositeTest.hs:14:1:
-  8) composite, primary keys, Filter by Id with 'not in' with no data
-       uncaught exception: ErrorCall
-       cannot get single FieldDef for Natural Key
-       CallStack (from HasCallStack):
-         error, called at src/CompositeTest.hs:14:1 in persistent-test-2.13.0.0-6vTeb9ClxA397Na0xrWicM:CompositeTest
-
-  To rerun use: --match "/composite/primary keys/Filter by Id with 'not in' with no data/"
-
-  src/CompositeTest.hs:14:1:
-  9) composite, primary keys, Insert Many to Many
-       uncaught exception: ErrorCall
-       cannot get single FieldDef for Natural Key
-       CallStack (from HasCallStack):
-         error, called at src/CompositeTest.hs:14:1 in persistent-test-2.13.0.0-6vTeb9ClxA397Na0xrWicM:CompositeTest
-
-  To rerun use: --match "/composite/primary keys/Insert Many to Many/"
-
-  src/CompositeTest.hs:233:5:
-  10) composite, primary keys, RawSql Entity instance
-       uncaught exception: ErrorCall
-       TestParent: fromPersistValues failed on: [PersistText "p1"]
-
-  To rerun use: --match "/composite/primary keys/RawSql Entity instance/"
-
-  src/PrimaryTest.hs:51:7:
-  11) primary key reference, keyFromRecordM, works on singleton case
-       expected: Just (FooKey {unFooKey = "hello"})
-        but got: Nothing
-
-  To rerun use: --match "/primary key reference/keyFromRecordM/works on singleton case/"
-
-  src/PrimaryTest.hs:57:7:
-  12) primary key reference, keyFromRecordM, works on multiple fields
-       expected: Just (CompositePrimaryKey {compositePrimaryKeyname = "hello", compositePrimaryKeyage = 31})
-        but got: Nothing
-
-  To rerun use: --match "/primary key reference/keyFromRecordM/works on multiple fields/"
 
   src/ForeignKey.hs:112:9:
   13) foreign keys options delete cascades

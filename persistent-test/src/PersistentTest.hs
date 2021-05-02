@@ -663,9 +663,9 @@ specsWith runDb = describe "persistent" $ do
           [ ("name", String "Bob")
           , ("age", toJSON (32 :: Int))
           ]
-      decode json_
+      eitherDecode json_
         `shouldBe`
-          Just subjectEntity
+          Right subjectEntity
 
     prop "works with a Primary" $ \jsonEncoding -> do
       let

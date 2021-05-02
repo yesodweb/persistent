@@ -1600,7 +1600,8 @@ data EntityFieldsTH = EntityFieldsTH
     }
 
 efthAllFields :: EntityFieldsTH -> [EntityFieldTH]
-efthAllFields EntityFieldsTH{..} = stripIdFieldDef entityFieldsTHPrimary : entityFieldsTHFields
+efthAllFields EntityFieldsTH{..} =
+    stripIdFieldDef entityFieldsTHPrimary : entityFieldsTHFields
 
 stripIdFieldDef :: EntityFieldTH -> EntityFieldTH
 stripIdFieldDef efth = efth
