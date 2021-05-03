@@ -19,7 +19,7 @@ share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "migration"] 
     name String
     parent String Maybe
     Primary name
-    -- Foreign Trees fkparent parent
+    Foreign Trees fkparent parent
 
   CompositePrimary
     name String
