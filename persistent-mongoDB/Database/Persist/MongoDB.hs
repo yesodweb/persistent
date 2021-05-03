@@ -112,6 +112,7 @@ module Database.Persist.MongoDB
     , module Database.Persist
     ) where
 
+import qualified Data.List.NonEmpty as NEL
 import Control.Exception (throw, throwIO)
 import Control.Monad (liftM, (>=>), forM_, unless)
 import Control.Monad.IO.Class (liftIO)
@@ -409,7 +410,7 @@ updateToMongoField (BackendUpdate up)  = mongoUpdateToDoc up
 -- | convert a unique key into a MongoDB document
 toUniquesDoc :: forall record. (PersistEntity record) => Unique record -> [DB.Field]
 toUniquesDoc uniq = zipWith (DB.:=)
-  (map (unFieldNameDB . snd) $ persistUniqueToFieldNames uniq)
+  (map (unFieldNameDB . snd) $ NEL.toList $ persistUniqueToFieldNames uniq)
   (map DB.val (persistUniqueToValues uniq))
 
 -- | convert a PersistEntity into document fields.
@@ -423,43 +424,28 @@ toInsertDoc record =
         (map toPersistValue $ toPersistFields record)
   where
     entDef = entityDef $ Just record
-    zipFilter' =
+    zipFilter xs ys =
         map (\(fd, pv) ->
             fieldToLabel fd
                 DB.:=
-                    embeddedVal (embeddedFields <$> emFieldEmbed fd) pv
+                    embeddedVal pv
         )
         $ filter (\(_, pv) -> isNull pv)
-        $ zip (embeddedFields $ toEmbedEntityDef entDef) (map toPersistValue $ toPersistFields record)
-    zipFilter :: [EmbedFieldDef] -> [PersistValue] -> DB.Document
-    zipFilter [] _  = []
-    zipFilter _  [] = []
-    zipFilter (fd:efields) (pv:pvs) =
-        if isNull pv
-        then recur
-        else
-            (fieldToLabel fd
-                DB.:=
-                    embeddedVal (embeddedFields <$> emFieldEmbed fd) pv
-            )
-            : recur
-
+        $ zip xs ys
       where
-        recur = zipFilter efields pvs
-
         isNull PersistNull = True
         isNull (PersistMap m) = null m
         isNull (PersistList l) = null l
         isNull _ = False
 
     -- make sure to removed nulls from embedded entities also
-    embeddedVal :: Maybe [EmbedFieldDef] -> PersistValue -> DB.Value
-    embeddedVal (Just fields) (PersistMap m) =
-        DB.Doc $
-            zipFilter fields $ map snd m
-    embeddedVal je@(Just _) (PersistList l) =
-        DB.Array $ map (embeddedVal je) l
-    embeddedVal _ pv =
+    embeddedVal :: PersistValue -> DB.Value
+    embeddedVal (PersistMap m) =
+        DB.Doc $ fmap (\(k, v) -> k DB.:= DB.val v) $ m
+            -- zipFilter fields $ map snd m
+    embeddedVal (PersistList l) =
+        DB.Array $ map embeddedVal l
+    embeddedVal pv =
         DB.val pv
 
 entityToInsertDoc :: forall record.  (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
@@ -666,7 +652,7 @@ keyToMongoDoc k = case entityPrimary $ entityDefFromKey k of
     Nothing   -> zipToDoc [FieldNameDB id_] values
     Just pdef -> [id_ DB.=: zipToDoc (primaryNames pdef)  values]
   where
-    primaryNames = map fieldDB . compositeFields
+    primaryNames = map fieldDB . NEL.toList . compositeFields
     values = keyToValues k
 
 entityDefFromKey :: PersistEntity record => Key record -> EntityDef
@@ -969,10 +955,13 @@ eitherFromPersistValues entDef doc = case mKey of
 -- Persistent creates a Haskell record from a list of PersistValue
 -- But most importantly it puts all PersistValues in the proper order
 orderPersistValues :: EmbedEntityDef -> [(Text, PersistValue)] -> [(Text, PersistValue)]
-orderPersistValues entDef castDoc = reorder
+orderPersistValues entDef castDoc =
+    match castColumns castDoc []
   where
-    castColumns = map nameAndEmbed (embeddedFields entDef)
-    nameAndEmbed fdef = (fieldToLabel fdef, emFieldEmbed fdef)
+    castColumns =
+        map nameAndEmbed (embeddedFields entDef)
+    nameAndEmbed fdef =
+        (fieldToLabel fdef, emFieldEmbed fdef)
 
     -- TODO: the below reasoning should be re-thought now that we are no longer inserting null: searching for a null column will look at every returned field before giving up
     -- Also, we are now doing the _id lookup at the start.
@@ -990,44 +979,44 @@ orderPersistValues entDef castDoc = reorder
     -- * but once we found an item in the alist use a new alist without that item for future lookups
     -- * so for the last query there is only one item left
     --
-    reorder :: [(Text, PersistValue)]
-    reorder = match castColumns castDoc []
+    match :: [(Text, Maybe (Either a EntityNameHS) )]
+          -> [(Text, PersistValue)]
+          -> [(Text, PersistValue)]
+          -> [(Text, PersistValue)]
+    -- when there are no more Persistent castColumns we are done
+    --
+    -- allow extra mongoDB fields that persistent does not know about
+    -- another application may use fields we don't care about
+    -- our own application may set extra fields with the raw driver
+    match [] _ values = values
+    match ((fieldName, medef) : columns) fields values =
+        let
+            ((_, pv) , unused) =
+                matchOne fields []
+        in
+            match columns unused $
+                values ++ [(fieldName, nestedOrder medef pv)]
       where
-        match :: [(Text, Maybe EmbedEntityDef)]
-              -> [(Text, PersistValue)]
-              -> [(Text, PersistValue)]
-              -> [(Text, PersistValue)]
-        -- when there are no more Persistent castColumns we are done
-        --
-        -- allow extra mongoDB fields that persistent does not know about
-        -- another application may use fields we don't care about
-        -- our own application may set extra fields with the raw driver
-        match [] _ values = values
-        match (column:columns) fields values =
-          let (found, unused) = matchOne fields []
-          in match columns unused $ values ++
-                [(fst column, nestedOrder (snd column) (snd found))]
-          where
-            nestedOrder (Just em) (PersistMap m) =
-              PersistMap $ orderPersistValues em m
-            nestedOrder (Just em) (PersistList l) =
-              PersistList $ map (nestedOrder (Just em)) l
-            -- implied: nestedOrder Nothing found = found
-            nestedOrder _ found = found
+        nestedOrder (Just _) (PersistMap m) =
+            PersistMap m
+        nestedOrder (Just em) (PersistList l) =
+            PersistList $ map (nestedOrder (Just em)) l
+        nestedOrder Nothing found =
+            found
 
-            matchOne (field:fs) tried =
-              if fst column == fst field
+        matchOne (field:fs) tried =
+            if fieldName == fst field
                 -- snd drops the name now that it has been used to make the match
                 -- persistent will add the field name later
                 then (field, tried ++ fs)
                 else matchOne fs (field:tried)
-            -- if field is not found, assume it was a Nothing
-            --
-            -- a Nothing could be stored as null, but that would take up space.
-            -- instead, we want to store no field at all: that takes less space.
-            -- Also, another ORM may be doing the same
-            -- Also, this adding a Maybe field means no migration required
-            matchOne [] tried = ((fst column, PersistNull), tried)
+        -- if field is not found, assume it was a Nothing
+        --
+        -- a Nothing could be stored as null, but that would take up space.
+        -- instead, we want to store no field at all: that takes less space.
+        -- Also, another ORM may be doing the same
+        -- Also, this adding a Maybe field means no migration required
+        matchOne [] tried = ((fieldName, PersistNull), tried)
 
 assocListFromDoc :: DB.Document -> [(Text, PersistValue)]
 assocListFromDoc = Prelude.map (\f -> ( (DB.label f), cast (DB.value f) ) )
