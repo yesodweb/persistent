@@ -16,8 +16,6 @@ module Database.Persist.Sql.Orphan.PersistStore
     , fieldDBName
     ) where
 
-import Debug.Trace
-
 import Control.Exception (throwIO)
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader (ReaderT, ask)
@@ -345,7 +343,8 @@ instance PersistStoreRead SqlBackend where
                 ]
         let parse vals
                 = case parseEntityValues t vals of
-                    Left s -> liftIO $ throwIO $ PersistMarshalError s
+                    Left s -> liftIO $ throwIO $
+                        PersistMarshalError ("getBy: " <> s)
                     Right row -> return row
         withRawQuery sql (Foldable.foldMap keyToValues ks) $ do
             es <- CL.mapM parse .| CL.consume

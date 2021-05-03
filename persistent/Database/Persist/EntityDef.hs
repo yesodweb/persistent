@@ -36,12 +36,11 @@ import Data.Map (Map)
 import Data.List.NonEmpty (NonEmpty)
 
 import Database.Persist.EntityDef.Internal
-import Database.Persist.FieldDef (isHaskellField)
+import Database.Persist.FieldDef
 
 import Database.Persist.Types.Base
     ( UniqueDef
     , ForeignDef
-    , FieldDef
     , entityKeyFields
     )
 import Database.Persist.Names

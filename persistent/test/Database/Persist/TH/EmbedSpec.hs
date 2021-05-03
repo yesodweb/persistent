@@ -17,6 +17,8 @@ module Database.Persist.TH.EmbedSpec where
 import TemplateTestImports
 
 import Data.Text (Text)
+import qualified Data.Map as M
+import qualified Data.Text as T
 
 import Database.Persist.ImplicitIdDef
 import Database.Persist.ImplicitIdDef.Internal (fieldTypeFromTypeable)
@@ -49,6 +51,12 @@ MutualEmbed
 MutualTarget
     thing [MutualEmbed]
 
+ModelWithList
+    names [Text]
+
+HasMap
+    map (M.Map T.Text T.Text)
+    deriving Show Eq Read Ord
 |]
 
 pass :: IO ()
@@ -59,6 +67,40 @@ asIO = id
 
 spec :: Spec
 spec = describe "EmbedSpec" $ do
+    describe "ModelWithList" $ do
+        let
+            edef =
+                entityDef $ Proxy @ModelWithList
+            [fieldDef] =
+                getEntityFields edef
+        it "has the right type" $ do
+            fieldType fieldDef
+                `shouldBe`
+                    FTList (FTTypeCon Nothing "Text")
+        it "has the right sqltype" $ do
+            fieldSqlType fieldDef
+                `shouldBe`
+                    SqlString
+    describe "HasMap" $ do
+        let
+            edef =
+                entityDef $ Proxy @HasMap
+            [fieldDef] =
+                getEntityFields edef
+        it "has the right type" $ do
+            fieldType fieldDef
+                `shouldBe`
+                    ( FTTypeCon (Just "M") "Map"
+                    `FTApp`
+                    FTTypeCon (Just "T") "Text"
+                    `FTApp`
+                    FTTypeCon (Just "T") "Text"
+                    )
+        it "has the right sqltype" $ do
+            fieldSqlType fieldDef
+                `shouldBe`
+                    SqlString
+
     describe "SomeThing" $ do
         let
             edef =

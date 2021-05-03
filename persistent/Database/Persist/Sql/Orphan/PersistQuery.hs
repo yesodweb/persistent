@@ -101,9 +101,13 @@ instance PersistQueryRead SqlBackend where
       where
         (limit, offset, orders) = limitOffsetOrder opts
 
-        parse vals = case parseEntityValues t vals of
-                       Left s -> liftIO $ throwIO $ PersistMarshalError s
-                       Right row -> return row
+        parse vals =
+            case parseEntityValues t vals of
+                Left s ->
+                    liftIO $ throwIO $
+                        PersistMarshalError ("selectSourceRes: " <> s <> ", vals: " <> T.pack (show vals ))
+                Right row ->
+                    return row
         t = entityDef $ dummyFromFilts filts
         wher conn = if null filts
                     then ""

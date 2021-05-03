@@ -549,6 +549,19 @@ guessReference ft =
         _ ->
             Nothing
 
+mkDefaultKey
+    :: MkPersistSettings
+    -> FieldNameDB
+    -> EntityNameHS
+    -> FieldDef
+mkDefaultKey mps  pk unboundHaskellName =
+    let
+        iid =
+            mpsImplicitIdDef mps
+    in
+        maybe id addFieldAttr (FieldAttrMaxlen <$> iidMaxLen iid) $
+        mkAutoIdField' pk unboundHaskellName (iidFieldSqlType iid)
+
 fixPrimarySpec
     :: MkPersistSettings
     -> UnboundEntityDef
@@ -557,7 +570,7 @@ fixPrimarySpec mps unboundEnt= do
     case unboundPrimarySpec unboundEnt of
         DefaultKey pk ->
             lift $ EntityIdField $
-                mkAutoIdField' pk unboundHaskellName (iidFieldSqlType (mpsImplicitIdDef mps))
+                mkDefaultKey mps pk unboundHaskellName
         SurrogateKey uid -> do
             let
                 entNameHS =
