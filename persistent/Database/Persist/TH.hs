@@ -559,6 +559,7 @@ mkDefaultKey mps  pk unboundHaskellName =
         iid =
             mpsImplicitIdDef mps
     in
+        maybe id addFieldAttr (FieldAttrDefault <$> iidDefault iid) $
         maybe id addFieldAttr (FieldAttrMaxlen <$> iidMaxLen iid) $
         mkAutoIdField' pk unboundHaskellName (iidFieldSqlType iid)
 
