@@ -755,7 +755,7 @@ mEmbedded ents (FTList x) =
 mEmbedded ents (FTApp (FTTypeCon Nothing "Key") (FTTypeCon _ a)) =
     Left $ Just $ FTKeyCon $ a <> "Id"
 mEmbedded ents (FTApp x y) =
-    mEmbedded ents y
+    Left Nothing
 
 setEmbedField :: EntityNameHS -> M.Map EntityNameHS a -> FieldDef -> FieldDef
 setEmbedField entName allEntities field =

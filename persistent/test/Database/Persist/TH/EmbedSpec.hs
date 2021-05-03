@@ -57,6 +57,11 @@ ModelWithList
 HasMap
     map (M.Map T.Text T.Text)
     deriving Show Eq Read Ord
+
+MapIdValue
+    map (M.Map T.Text (Key Thing))
+    deriving Show Eq Read Ord
+
 |]
 
 pass :: IO ()
@@ -77,6 +82,28 @@ spec = describe "EmbedSpec" $ do
             fieldType fieldDef
                 `shouldBe`
                     FTList (FTTypeCon Nothing "Text")
+        it "has the right sqltype" $ do
+            fieldSqlType fieldDef
+                `shouldBe`
+                    SqlString
+    describe "MapIdValue" $ do
+        let
+            edef =
+                entityDef $ Proxy @MapIdValue
+            [fieldDef] =
+                getEntityFields edef
+        it "has the right type" $ do
+            fieldType fieldDef
+                `shouldBe`
+                    ( FTTypeCon (Just "M") "Map"
+                        `FTApp`
+                        FTTypeCon (Just "T") "Text"
+                        `FTApp`
+                        (FTTypeCon Nothing "Key"
+                            `FTApp`
+                            FTTypeCon Nothing "Thing"
+                        )
+                    )
         it "has the right sqltype" $ do
             fieldSqlType fieldDef
                 `shouldBe`

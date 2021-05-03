@@ -721,7 +721,6 @@ getSqlNameOr def =
             _ ->
                 Nothing
 
-
 takeConstraint
     :: PersistSettings
     -> EntityNameHS

@@ -58,7 +58,7 @@ specsWith runDb = describe "tree" $ do
                 ConstraintNameHS "fkparent"
         it "has the right DB constraint name" $ do
             foreignConstraintNameDBName `shouldBe`
-                ConstraintNameDB "treesfkparent"
+                ConstraintNameDB "treefkparent"
         it "has the right fields" $ do
             foreignFields `shouldBe`
                 [ ( (FieldNameHS "parent", FieldNameDB "parent")
