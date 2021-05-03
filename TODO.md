@@ -5,7 +5,6 @@
       annoying. The code should *just work* for `MigrationOnly` fields - for
       example, `fromPersistValues` possibly should *ignore* a potential
       `PersistNull` , instead of conditionally ignoring it.
-* JSON decoding didn't work. Should have the test render an error message...
 * Apparently calling 'persistFieldDef' on a composite primary key. Maybe I
   should defer that error to actual composite keys so natural single column keys
   work fine.
@@ -18,7 +17,6 @@
   In reality, I do want tos upport multi column fields, but I really don't want
   to include that support in this PR... it's already too big.
 * RawSql Entity instance is broken?
-* keyFromRecordM works on singleton case - apparently it isn't defined right.
 * Cascades aren't working. This means the unbound cascades aren't properly being
   set on the behavior. This can be fixed in THSpec.
 

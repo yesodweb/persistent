@@ -306,7 +306,7 @@ Notification
     Foreign User fk_noti_user sentToFirst sentToSecond References emailFirst emailSecond
 |]
             unboundForeignDefs user `shouldBe` []
-            map _unboundForeignDef (unboundForeignDefs notification) `shouldBe`
+            map unboundForeignDef (unboundForeignDefs notification) `shouldBe`
                 [ ForeignDef
                     { foreignRefTableHaskell = EntityNameHS "User"
                     , foreignRefTableDBName = EntityNameDB "user"
@@ -367,7 +367,7 @@ Notification
                     [_user, notification] =
                         parse (setPsToFKName flippedFK lowerCaseSettings) definitions
                     [notificationForeignDef] =
-                        _unboundForeignDef <$> unboundForeignDefs notification
+                        unboundForeignDef <$> unboundForeignDefs notification
                 foreignConstraintNameDBName notificationForeignDef
                     `shouldBe`
                         ConstraintNameDB "fk_noti_user_notification"
@@ -377,7 +377,7 @@ Notification
                     [_user, notification] =
                         parse (setPsUseSnakeCaseForiegnKeys lowerCaseSettings) definitions
                     [notificationForeignDef] =
-                        _unboundForeignDef <$> unboundForeignDefs notification
+                        unboundForeignDef <$> unboundForeignDefs notification
                 foreignConstraintNameDBName notificationForeignDef
                     `shouldBe`
                         ConstraintNameDB "notification_fk_noti_user"

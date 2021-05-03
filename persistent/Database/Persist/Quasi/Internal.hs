@@ -908,9 +908,9 @@ takeUniq _ tableName _ xs =
 
 data UnboundForeignDef
     = UnboundForeignDef
-    { _unboundForeignFields :: UnboundForeignFieldList
+    { unboundForeignFields :: UnboundForeignFieldList
     -- ^ fields in the source entity
-    , _unboundForeignDef :: ForeignDef
+    , unboundForeignDef :: ForeignDef
     -- ^ The 'ForeignDef' which needs information filled in.
     }
     deriving (Eq, Show, Lift)
@@ -932,9 +932,9 @@ data ForeignFieldReference =
 unbindForeignDef :: ForeignDef -> UnboundForeignDef
 unbindForeignDef fd =
     UnboundForeignDef
-        { _unboundForeignFields =
+        { unboundForeignFields =
             FieldListHasReferences $ NEL.fromList $ fmap mk (foreignFields fd)
-        , _unboundForeignDef =
+        , unboundForeignDef =
             fd
         }
   where
@@ -985,9 +985,9 @@ takeForeign ps entityName = takeRefTable
         go (constraintNameText:rest) onDelete onUpdate
             | not (T.null constraintNameText) && isLower (T.head constraintNameText) =
                 UnboundForeignDef
-                    { _unboundForeignFields =
+                    { unboundForeignFields =
                         either error id $ mkUnboundForeignFieldList foreignFields parentFields
-                    , _unboundForeignDef =
+                    , unboundForeignDef =
                         ForeignDef
                             { foreignRefTableHaskell =
                                 EntityNameHS refTableName
@@ -1002,10 +1002,10 @@ takeForeign ps entityName = takeRefTable
                                     { fcOnDelete = onDelete
                                     , fcOnUpdate = onUpdate
                                     }
-                            , foreignFields =
-                                []
                             , foreignAttrs =
                                 attrs
+                            , foreignFields =
+                                []
                             , foreignNullable =
                                 False
                             , foreignToPrimary =

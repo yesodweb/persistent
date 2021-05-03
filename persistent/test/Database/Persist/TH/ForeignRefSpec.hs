@@ -144,48 +144,23 @@ spec = describe "ForeignRefSpec" $ do
                 it "is to the Primary key" $ do
                     foreignToPrimary `shouldBe` True
 
-
-
-
-
         describe "Implicit" $ do
             let
                 parentDef =
                     entityDef $ Proxy @ParentImplicit
                 childDef =
                     entityDef $ Proxy @ChildImplicit
-                childForeigns =
-                    entityForeigns childDef
-            it "should have a single foreign reference defined" $ do
-                    case entityForeigns childDef of
-                        [a] ->
-                            pure ()
-                        as ->
-                            expectationFailure . mconcat $
-                                [ "Expected one foreign reference on childDef, "
-                                , "got: "
-                                , show as
-                                ]
-            let
-                [ForeignDef {..}] =
-                    childForeigns
-
+                childFields =
+                    entityFields childDef
             describe "ChildImplicit" $ do
-                it "should have the right target table" $ do
-                    foreignRefTableHaskell `shouldBe`
-                        EntityNameHS "ParentImplicit"
-                    foreignRefTableDBName `shouldBe`
-                        EntityNameDB "parent_explicit"
-                it "should have the right cascade behavior" $ do
-                    foreignFieldCascade
-                        `shouldBe`
-                            FieldCascade
-                                { fcOnUpdate =
-                                    Just Cascade
-                                , fcOnDelete =
-                                    Just Cascade
-                                }
-                it "is not nullable" $ do
-                    foreignNullable `shouldBe` False
-                it "is to the Primary key" $ do
-                    foreignToPrimary `shouldBe` True
+                case childFields of
+                    [nameField, parentIdField] -> do
+                        it "parentId has reference" $ do
+                            fieldReference parentIdField `shouldBe`
+                                ForeignRef (EntityNameHS "ParentImplicit")
+                    as ->
+                        fail . mconcat $
+                            [ "Expected one foreign reference on childDef, "
+                            , "got: "
+                            , show as
+                            ]

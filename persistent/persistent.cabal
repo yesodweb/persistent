@@ -121,30 +121,31 @@ test-suite test
       , base64-bytestring
       , blaze-html
       , bytestring
+      , conduit
       , containers
+      , fast-logger
       , hspec         >= 2.4
       , http-api-data
+      , monad-logger
+      , mtl
       , path-pieces
       , persistent
+      , QuickCheck
+      , quickcheck-instances     >= 0.3
+      , resource-pool
+      , resourcet
       , scientific
       , shakespeare
+      , silently
+      , template-haskell         >= 2.4
       , text
+      , th-lift-instances
       , time
       , transformers
+      , unliftio
+      , unliftio-core
       , unordered-containers
       , vector
-      , QuickCheck
-      , template-haskell         >= 2.4
-      , unliftio-core
-      , mtl
-      , resourcet
-      , conduit
-      , monad-logger
-      , fast-logger
-      , resource-pool
-      , unliftio
-      , silently
-      , th-lift-instances
 
     hs-source-dirs:
         test/
@@ -165,6 +166,7 @@ test-suite test
         Database.Persist.TH.SharedPrimaryKeySpec
         Database.Persist.TH.MultiBlockSpec
         Database.Persist.TH.ForeignRefSpec
+        Database.Persist.TH.JsonEncodingSpec
         Database.Persist.TH.MultiBlockSpec.Model
         Database.Persist.THSpec
         Database.Persist.QuasiSpec

@@ -329,37 +329,146 @@ liftAndFixKeys mps emEntities entityMap unboundEnt =
         , entityId =
             $(fixPrimarySpec mps unboundEnt)
         , entityForeigns =
-            $(lift (entityForeigns ent))
+            $(fixUnboundForeignDefs (unboundForeignDefs unboundEnt))
         }
     |]
   where
+    fixUnboundForeignDefs
+        :: [UnboundForeignDef]
+        -> Q Exp
+    fixUnboundForeignDefs fdefs =
+        fmap ListE $ forM fdefs fixUnboundForeignDef
+      where
+        fixUnboundForeignDef UnboundForeignDef{..} =
+            [|
+            unboundForeignDef
+                { foreignFields =
+                    $(lift fixForeignFields)
+                , foreignNullable =
+                    $(lift fixForeignNullable)
+                }
+            |]
+          where
+            foreignFieldNames =
+                case unboundForeignFields of
+                    FieldListImpliedId ffns ->
+                        ffns
+                    FieldListHasReferences references ->
+                        fmap ffrSourceField references
+            parentDef =
+                case M.lookup parentTableName entityMap of
+                    Nothing ->
+                        error $ mconcat
+                        [ "Foreign table not defined: "
+                        , show parentTableName
+                        ]
+                    Just a ->
+                        a
+            parentTableName =
+                foreignRefTableHaskell unboundForeignDef
+            parentFields =
+                unboundEntityFields parentDef
+            fixForeignFields :: [(ForeignFieldDef, ForeignFieldDef)]
+            fixForeignFields =
+                case unboundForeignFields of
+                    FieldListImpliedId foreignFieldNames ->
+                        mkReferences $ toList foreignFieldNames
+                    FieldListHasReferences references ->
+                        toList $ fmap convReferences references
+              where
+                -- in this case, we're up against the implied ID of the parent
+                -- dodgy assumption: columns are listed in the right order. we
+                -- can't check this any more clearly right now.
+                mkReferences fieldNames
+                    | length fieldNames /= length parentKeyFieldNames =
+                        error $ mconcat
+                            [ "Foreign reference needs to have the same number "
+                            , "of fields as the target table."
+                            , "\n  Table        : "
+                            , show (getUnboundEntityNameHS unboundEnt)
+                            , "\n  Foreign Table: "
+                            , show parentTableName
+                            , "\n  Fields       : "
+                            , show fieldNames
+                            , "\n  Parent fields: "
+                            , show (fmap fst parentKeyFieldNames)
+                            , "\n\nYou can use the References keyword to fix this."
+                            ]
+                    | otherwise =
+                        zip (fmap (withDbName fieldStore) fieldNames) parentKeyFieldNames
+                  where
+                    parentKeyFieldNames
+                        :: [(FieldNameHS, FieldNameDB)]
+                    parentKeyFieldNames =
+                        case unboundPrimarySpec parentDef of
+                            NaturalKey ucd ->
+                                fmap (withDbName parentFieldStore) (unboundCompositeCols ucd)
+                            SurrogateKey uid ->
+                                [(FieldNameHS "Id", unboundIdDBName  uid)]
+                            DefaultKey dbName ->
+                                [(FieldNameHS "Id", dbName)]
+                withDbName store fieldNameHS =
+                    ( fieldNameHS
+                    , findDBName store fieldNameHS
+                    )
+                convReferences
+                    :: ForeignFieldReference
+                    -> (ForeignFieldDef, ForeignFieldDef)
+                convReferences ForeignFieldReference {..} =
+                    ( withDbName fieldStore ffrSourceField
+                    , withDbName parentFieldStore ffrTargetField
+                    )
+            fixForeignNullable =
+                all ((NotNullable /=) . isFieldNullable) foreignFieldNames
+              where
+                isFieldNullable fieldNameHS =
+                    case getFieldDef fieldNameHS fieldStore of
+                        Nothing ->
+                            error "Field name not present in map"
+                        Just a ->
+                            nullable (unboundFieldAttrs a)
+
+            fieldStore =
+                mkFieldStore unboundEnt
+            parentFieldStore =
+                mkFieldStore parentDef
+            findDBName store fieldNameHS =
+                case getFieldDBName fieldNameHS store of
+                    Nothing ->
+                        error $ mconcat
+                            [ "findDBName: failed to fix dbname for: "
+                            , show fieldNameHS
+                            ]
+                    Just a->
+                        a
+
     unboundHaskellName =
         getUnboundEntityNameHS unboundEnt
 
     combinedFixFieldDef :: UnboundFieldDef -> Q Exp
-    combinedFixFieldDef ufd =
+    combinedFixFieldDef ufd@UnboundFieldDef{..} =
         [|
         FieldDef
             { fieldHaskell =
-                unboundFieldNameHS ufd
+                unboundFieldNameHS
             , fieldDB =
-                unboundFieldNameDB ufd
+                unboundFieldNameDB
             , fieldType =
-                unboundFieldType ufd
+                unboundFieldType
             , fieldSqlType =
                 $(sqlTyp')
             , fieldAttrs =
-                unboundFieldAttrs ufd
+                unboundFieldAttrs
             , fieldStrict =
-                unboundFieldStrict ufd
+                unboundFieldStrict
             , fieldReference =
                 $(fieldRef')
             , fieldCascade =
-                unboundFieldCascade ufd
+                unboundFieldCascade
             , fieldComments =
-                unboundFieldComments ufd
+                unboundFieldComments
             , fieldGenerated =
-                unboundFieldGenerated ufd
+                unboundFieldGenerated
             , fieldIsImplicitIdColumn =
                 False
             }
@@ -375,6 +484,47 @@ liftAndFixKeys mps emEntities entityMap unboundEnt =
                     (lift (ForeignRef targetTable), liftSqlTypeExp (SqlTypeReference targetTable))
                 Nothing ->
                     (lift NoReference, liftSqlTypeExp sqlTypeExp)
+
+data FieldStore
+    = FieldStore
+    { fieldStoreMap :: M.Map FieldNameHS UnboundFieldDef
+    , fieldStoreId :: Maybe FieldNameDB
+    , fieldStoreEntity :: UnboundEntityDef
+    }
+
+mkFieldStore :: UnboundEntityDef -> FieldStore
+mkFieldStore ued =
+    FieldStore
+        { fieldStoreEntity = ued
+        , fieldStoreMap =
+            M.fromList
+                $ fmap (\ufd ->
+                    ( unboundFieldNameHS ufd
+                    , ufd
+                    )
+                )
+                $ getUnboundFieldDefs
+                $ ued
+        , fieldStoreId =
+            case unboundPrimarySpec ued of
+                NaturalKey _ ->
+                    Nothing
+                SurrogateKey fd ->
+                    Just $ unboundIdDBName fd
+                DefaultKey n ->
+                    Just n
+        }
+
+getFieldDBName :: FieldNameHS -> FieldStore -> Maybe FieldNameDB
+getFieldDBName name fs
+    | FieldNameHS "Id" == name =
+        fieldStoreId fs
+    | otherwise =
+        unboundFieldNameDB <$> getFieldDef name fs
+
+getFieldDef :: FieldNameHS -> FieldStore -> Maybe UnboundFieldDef
+getFieldDef fieldNameHS fs =
+    M.lookup fieldNameHS (fieldStoreMap fs)
 
 extractForeignRef :: EntityMap -> UnboundFieldDef -> Maybe EntityNameHS
 extractForeignRef entityMap fieldDef = do
@@ -1338,10 +1488,8 @@ keyFields mps entDef =
   where
     unboundFieldDefs =
         getUnboundFieldDefs entDef
-    findField fieldName =
-        List.find ((fieldName ==) . unboundFieldNameHS) unboundFieldDefs
     naturalKeyVar fieldName =
-        case findField fieldName of
+        case findField fieldName unboundFieldDefs of
             Nothing ->
                 error "column not defined on entity"
             Just unboundFieldDef ->
@@ -1355,6 +1503,10 @@ keyFields mps entDef =
         , notStrict
         , ft
         )
+
+findField :: FieldNameHS -> [UnboundFieldDef] -> Maybe UnboundFieldDef
+findField fieldName =
+    List.find ((fieldName ==) . unboundFieldNameHS)
 
 mkKeyToValues :: MkPersistSettings -> UnboundEntityDef -> Q Dec
 mkKeyToValues mps entDef = do
@@ -1504,13 +1656,14 @@ mkEntity embedEntityMap entityMap mps entDef = do
           [mkClassP ''PersistStore [backendT]]
 
     [keyFromRecordM'] <-
-        case entityPrimary (unboundEntityDef entDef) of
-            Just prim -> do
+        case unboundPrimarySpec entDef of
+            NaturalKey ucd -> do
                 recordName <- newName "record"
-                let keyCon =
+                let
+                    keyCon =
                         keyConName entDef
                     keyFields' =
-                        fieldDefToRecordName mps entDef . unbindFieldDef <$> compositeFields prim
+                        fieldNameToRecordName mps entDef <$> unboundCompositeCols ucd
                     constr =
                         foldl'
                             AppE
@@ -1526,7 +1679,7 @@ mkEntity embedEntityMap entityMap mps entDef = do
                     $(keyFromRec) = Just ( \ $(varP recordName) -> $(pure constr))
                     |]
 
-            Nothing ->
+            _ ->
                 [d|$(varP 'keyFromRecordM) = Nothing|]
 
     dtd <- dataTypeDec mps entityMap entDef
@@ -1780,18 +1933,20 @@ mkForeignKeysComposite
     -> UnboundForeignDef
     -> Q [Dec]
 mkForeignKeysComposite mps entDef foreignDef
-    | foreignToPrimary (_unboundForeignDef foreignDef) = do
+    | foreignToPrimary (unboundForeignDef foreignDef) = do
         let
             fieldName =
                 fieldNameToRecordName mps entDef
             fname =
-                fieldName $ constraintToField $ foreignConstraintNameHaskell $ _unboundForeignDef foreignDef
+                fieldName $ constraintToField $ foreignConstraintNameHaskell $ unboundForeignDef foreignDef
             reftableString =
-                unpack $ unEntityNameHS $ foreignRefTableHaskell $ _unboundForeignDef foreignDef
+                unpack $ unEntityNameHS $ foreignRefTableHaskell $ unboundForeignDef foreignDef
             reftableKeyName =
                 mkName $ reftableString `mappend` "Key"
             tablename =
                 mkEntityDefName entDef
+            fieldStore =
+                mkFieldStore entDef
 
         recordName <- newName "record_mkForeignKeysComposite"
 
@@ -1819,18 +1974,20 @@ mkForeignKeysComposite mps entDef foreignDef
                         fmap ffrSourceField refs
 
             fldsE =
-                getForeignNames $ (_unboundForeignFields foreignDef)
+                getForeignNames $ (unboundForeignFields foreignDef)
             getForeignNames = \case
                 FieldListImpliedId xs ->
                    fmap mkFldE xs
                 FieldListHasReferences xs ->
                     fmap mkFldR xs
 
+            nullErr n =
+               error $ "Could not find field definition for: " <> show n
             fNullable =
-                setNull -- foreignNullable (_unboundForeignDef foreignDef)
-                   $ fmap (getFieldDef entDef)
+                setNull
+                   $ fmap (\n -> fromMaybe (nullErr n) $ getFieldDef n fieldStore)
                    $ foreignFieldNames
-                   $ _unboundForeignFields foreignDef
+                   $ unboundForeignFields foreignDef
             mkKeyE =
                 foldl' AppE (maybeExp fNullable $ ConE reftableKeyName) fldsE
             fn =
@@ -2327,35 +2484,45 @@ mkJSON mps def = do
 
     xs <- mapM fieldToJSONValName fields
 
-    let conName = mkEntityDefName def
-        typ = genericDataType mps (entityHaskell (unboundEntityDef def)) backendT
-        toJSONI = typeInstanceD ''ToJSON (mpsGeneric mps) typ [toJSON']
-        toJSON' = FunD 'toJSON $ return $ normalClause
-            [ConP conName $ fmap VarP xs]
-            (objectE `AppE` ListE pairs)
-        pairs = zipWith toPair (getUnboundFieldDefs def) xs
-        toPair f x = InfixE
-            (Just (packE `AppE` LitE (StringL $ unpack $ unFieldNameHS $ unboundFieldNameHS f)))
-            dotEqualE
-            (Just $ VarE x)
-        fromJSONI = typeInstanceD ''FromJSON (mpsGeneric mps) typ [parseJSON']
-        parseJSON' = FunD 'parseJSON
-            [ normalClause [ConP 'Object [VarP obj]]
-                (foldl'
-                    (\x y -> InfixE (Just x) apE' (Just y))
-                    (pureE `AppE` ConE conName)
-                    pulls
-                )
-            , normalClause [WildP] mzeroE
-            ]
-        pulls = fmap toPull fields
-        -- just needs fieldHaskell
-        toPull f = InfixE
-            (Just $ VarE obj)
-            (if maybeNullable f then dotColonQE else dotColonE)
-            (Just $ AppE packE $ LitE $ StringL $ unpack $ unFieldNameHS $ unboundFieldNameHS f)
+    let
+        conName =
+            mkEntityDefName def
+        typ =
+            genericDataType mps (entityHaskell (unboundEntityDef def)) backendT
+        toJSONI =
+            typeInstanceD ''ToJSON (mpsGeneric mps) typ [toJSON']
+          where
+            toJSON' = FunD 'toJSON $ return $ normalClause
+                [ConP conName $ fmap VarP xs]
+                (objectE `AppE` ListE pairs)
+              where
+                pairs = zipWith toPair fields xs
+                toPair f x = InfixE
+                    (Just (packE `AppE` LitE (StringL $ unpack $ unFieldNameHS $ unboundFieldNameHS f)))
+                    dotEqualE
+                    (Just $ VarE x)
+        fromJSONI =
+            typeInstanceD ''FromJSON (mpsGeneric mps) typ [parseJSON']
+          where
+            parseJSON' = FunD 'parseJSON
+                [ normalClause [ConP 'Object [VarP obj]]
+                    (foldl'
+                        (\x y -> InfixE (Just x) apE' (Just y))
+                        (pureE `AppE` ConE conName)
+                        pulls
+                    )
+                , normalClause [WildP] mzeroE
+                ]
+              where
+                pulls =
+                    fmap toPull fields
+                toPull f = InfixE
+                    (Just $ VarE obj)
+                    (if maybeNullable f then dotColonQE else dotColonE)
+                    (Just $ AppE packE $ LitE $ StringL $ unpack $ unFieldNameHS $ unboundFieldNameHS f)
     case mpsEntityJSON mps of
-        Nothing -> return [toJSONI, fromJSONI]
+        Nothing ->
+            return [toJSONI, fromJSONI]
         Just entityJSON -> do
             entityJSONIs <- if mpsGeneric mps
               then [d|
@@ -2919,8 +3086,19 @@ toForeignFields ent haskellField parentFieldDef =
        Nothing ->
            (fieldDef, ((haskellField, unboundFieldNameDB fieldDef), (parentFieldHaskellName, parentFieldNameDB)))
   where
+    fieldStore =
+        mkFieldStore ent
     fieldDef =
-        getFieldDef ent haskellField
+        case getFieldDef haskellField fieldStore of
+            Nothing ->
+                error $ mconcat
+                    [ "foreign key constraint for: "
+                    , show (unEntityNameHS $ getUnboundEntityNameHS ent)
+                    , " unknown column: "
+                    , show haskellField
+                    ]
+            Just a ->
+                a
     parentFieldHaskellName =
         unboundFieldNameHS parentFieldDef
     parentFieldNameDB =
@@ -2938,19 +3116,3 @@ toForeignFields ent haskellField parentFieldDef =
                 , "\n  unboundFieldType parentField: "
                 , show (unboundFieldType parentField)
                 ]
-
-getFieldDef :: UnboundEntityDef -> FieldNameHS -> UnboundFieldDef
-getFieldDef entity t = go (toList $ getUnboundFieldDefs entity)
-  where
-    go [] =
-        error $ mconcat
-            [ "foreign key constraint for: "
-            , show (unEntityNameHS $ getUnboundEntityNameHS entity)
-            , " unknown column: "
-            , show t
-            ]
-    go (f:fs)
-        | unboundFieldNameHS f == t =
-            f
-        | otherwise =
-            go fs
