@@ -232,6 +232,8 @@ specsWith runDb = describe "composite" $
 
     it "RawSql Entity instance" $ runDb $ do
       key <- insert p1
+      Just x <- get key
+      x @== p1
       newp1 <- rawSql "SELECT ?? FROM test_parent LIMIT 1" []
       [Entity key p1] @== newp1
 

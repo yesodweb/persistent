@@ -14,4 +14,3 @@ main = hspec $ do
         QuasiSpec.spec
         ClassSpec.spec
         PersistValueSpec.spec
-

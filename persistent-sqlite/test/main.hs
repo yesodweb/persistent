@@ -70,6 +70,7 @@ import Database.Persist.Sqlite
 import qualified Database.Sqlite as Sqlite
 import PersistentTestModels
 
+import qualified Database.Persist.Sqlite.CompositeSpec as CompositeSpec
 import qualified MigrationTest
 
 type Tuple = (,)
@@ -91,37 +92,6 @@ DataTypeTable no-json
     pico Pico
     time TimeOfDay
     utc UTCTime
-|]
-
-share [mkPersist sqlSettings, mkMigrate "compositeSetup"] [persistLowerCase|
-SimpleComposite
-    int Int
-    text Text
-    Primary text int
-    deriving Show Eq
-
-SimpleCompositeReference
-    int Int
-    text Text
-    label Text
-    Foreign SimpleComposite fk_simple_composite text int
-    deriving Show Eq
-|]
-
-share [mkPersist sqlSettings, mkMigrate "compositeMigrateTest"] [persistLowerCase|
-SimpleComposite2 sql=simple_composite
-    int Int
-    text Text
-    new Int default=0
-    Primary text int
-    deriving Show Eq
-
-SimpleCompositeReference2 sql=simple_composite_reference
-    int Int
-    text Text
-    label Text
-    Foreign SimpleComposite2 fk_simple_composite text int
-    deriving Show Eq
 |]
 
 share [mkPersist sqlSettings, mkMigrate "idSetup"] [persistLowerCase|
@@ -207,6 +177,8 @@ main = do
 
 
     hspec $ do
+        describe "Database" $ describe "Persist" $ describe "Sqlite" $ do
+            CompositeSpec.spec
         RenameTest.specsWith db
         DataTypeTest.specsWith
             db
@@ -286,43 +258,6 @@ main = do
             void $ runMigrationSilent migrateAll
             insertMany_ $ replicate 1000 (Test $ read "2014-11-30 05:15:25.123Z")
 
-        it "properly migrates to a composite primary key (issue #669)" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
-            void $ runMigrationSilent compositeSetup
-            void $ runMigrationSilent compositeMigrateTest
-            pure ()
-
-        it "test migrating sparse primary keys (issue #1184)" $ asIO $ withSystemTempFile "test564.sqlite3"$ \fp h -> do
-            hClose h
-            let connInfo = Lens.set fkEnabled False $ mkSqliteConnectionInfo (T.pack fp)
-            runSqliteInfo connInfo $ do
-                void $ runMigrationSilent idSetup
-                forM_ (map toSqlKey [1,3]) $ \key -> do
-                    insertKey key (Simple "foo")
-                    insert (SimpleReference key "test")
-
-                validateForeignKeys
-
-            runSqliteInfo connInfo $ do
-                void $ runMigrationSilent idMigrateTest
-                validateForeignKeys
-
-        it "test migrating sparse composite primary keys (issue #1184)" $ asIO $ withSystemTempFile "test564.sqlite3"$ \fp h -> do
-            hClose h
-            let connInfo = Lens.set fkEnabled False $ mkSqliteConnectionInfo (T.pack fp)
-
-            runSqliteInfo connInfo $ do
-                void $ runMigrationSilent compositeSetup
-                forM_ [(1,"foo"),(3,"bar")] $ \(intKey, strKey) -> do
-                    let key = SimpleCompositeKey strKey intKey
-                    insertKey key (SimpleComposite intKey strKey)
-                    insert (SimpleCompositeReference intKey strKey "test")
-
-                validateForeignKeys
-
-            runSqliteInfo connInfo $ do
-                void $ runMigrationSilent compositeMigrateTest
-                validateForeignKeys
-
         it "afterException" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
             void $ runMigrationSilent testMigrate
             let catcher :: forall m. Monad m => SomeException -> m ()
@@ -331,11 +266,3 @@ main = do
             insert_ (Person "A" 1 Nothing) `catch` catcher
             insert_ $ Person "B" 0 Nothing
             return ()
-
-validateForeignKeys
-    :: (MonadResource m, MonadReader env m, BackendCompatible SqlBackend env)
-    => m ()
-validateForeignKeys = do
-    violations <- map (T.pack . show) <$> runConduit (checkForeignKeys .| CL.consume)
-    unless (null violations) . liftIO . throwIO $
-        PersistForeignConstraintUnmet (T.unlines violations)

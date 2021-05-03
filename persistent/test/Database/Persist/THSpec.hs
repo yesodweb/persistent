@@ -45,6 +45,7 @@ import Database.Persist.Sql.Util
 import Database.Persist.TH
 import TemplateTestImports
 
+import qualified Database.Persist.TH.ToFromPersistValuesSpec as ToFromPersistValuesSpec
 import qualified Database.Persist.TH.ForeignRefSpec as ForeignRefSpec
 import qualified Database.Persist.TH.JsonEncodingSpec as JsonEncodingSpec
 import qualified Database.Persist.TH.MultiBlockSpec as MultiBlockSpec
@@ -174,6 +175,7 @@ spec = describe "THSpec" $ do
     DiscoverEntitiesSpec.spec
     MultiBlockSpec.spec
     ForeignRefSpec.spec
+    ToFromPersistValuesSpec.spec
     JsonEncodingSpec.spec
     describe "TestDefaultKeyCol" $ do
         let EntityIdField FieldDef{..} =

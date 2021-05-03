@@ -104,7 +104,6 @@ import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
 import qualified Data.Text.Encoding as TE
 import Data.Typeable (Typeable)
-import Debug.Trace
 import GHC.Generics (Generic)
 import GHC.TypeLits
 import Instances.TH.Lift ()
@@ -347,9 +346,13 @@ liftAndFixKeys mps emEntities entityMap unboundEnt =
                     $(lift fixForeignFields)
                 , foreignNullable =
                     $(lift fixForeignNullable)
+                , foreignRefTableDBName =
+                    $(lift fixForeignRefTableDBName)
                 }
             |]
           where
+            fixForeignRefTableDBName =
+                entityDB (unboundEntityDef parentDef)
             foreignFieldNames =
                 case unboundForeignFields of
                     FieldListImpliedId ffns ->
@@ -2979,110 +2982,6 @@ discoverEntities = do
         forM types $ \typ -> do
             [e| entityDef (Proxy :: Proxy $(pure typ)) |]
 
--- fixForeignKeysAll
---     :: [EntityDef]
---     -> [UnboundEntityDef]
---     -> [UnboundEntityDef]
--- fixForeignKeysAll preEnts unEnts = fmap fixForeignKeys unEnts
---   where
---     ents = unEnts ++ map unbindEntityDef preEnts
---     entLookup = M.fromList $ fmap (\e -> (getUnboundEntityNameHS e, e)) ents
---
---     fixForeignKeys :: UnboundEntityDef -> UnboundEntityDef
---     fixForeignKeys ued =
---         overEntityDef
---             (\ent -> ent
---                 { entityForeigns =
---                     fmap (fixForeignKey ent) (unboundForeignDefs ued)
---                 }
---             )
---             ued
---
---     -- check the count and the sqltypes match and update the foreignFields with
---     -- the names of the referenced columns
---     fixForeignKey :: EntityDef -> UnboundForeignDef -> ForeignDef
---     fixForeignKey ent (UnboundForeignDef foreignFieldList fdef) =
---         let
---             parentFieldTexts =
---                 case foreignFieldList of
---                     FieldListImpliedId _ ->
---                         []
---                     FieldListHasReferences refs ->
---                         toList $ fmap ffrTargetField refs
---             foreignFieldTexts =
---                 toList $ case foreignFieldList of
---                     FieldListImpliedId xs ->
---                         xs
---                     FieldListHasReferences refs ->
---                         fmap ffrSourceField refs
---
---             pent =
---                 fromMaybe pentError $ M.lookup (foreignRefTableHaskell fdef) entLookup
---             pentError =
---                 error $ mconcat
---                     [ "could not find table "
---                     , show (foreignRefTableHaskell fdef)
---                     , " fdef=", show fdef
---                     , " allnames=", show (fmap (unEntityNameHS . entityHaskell . unboundEntityDef) unEnts)
---                     , "\n\nents=", show ents
---                     ]
---             parentFieldDefs =
---                 case parentFieldTexts of
---                     [] ->
---                         trace "parentFieldTexts is []" $
---                         case unboundPrimarySpec pent of
---                             NaturalKey ucd ->
---                                 let
---                                     parentFieldColumns =
---                                         NEL.fromList $ unboundCompositeCols ucd
---                                 in
---                                     fmap (getFieldDef pent) parentFieldColumns
---
---                             SurrogateKey _ ->
---                                 pure $ entityId (unboundEntityDef pent)
---                             DefaultKey _ ->
---                                 pure $ entityId (unboundEntityDef pent)
---
---                     (x:xs)  ->
---                         trace "parentFieldTexs is (x:xs)" $
---                         fmap (getFieldDef pent) (x :| xs)
---             lengthError pdef =
---                 error $ unlines
---                     [ "found " ++ show (length foreignFieldTexts) ++ " fkeys and " ++ show (length pdef) ++ " pkeys."
---                     , ""
---                     , "fdef=" ++ show fdef
---                     , ""
---                     , " pdef=" ++ show pdef
---                     ]
---         in
---              if length foreignFieldTexts /= length parentFieldDefs
---              then
---                  lengthError parentFieldDefs
---              else
---                  let
---                      fds_ffs =
---                          zipWith
---                             (toForeignFields ent)
---                             foreignFieldTexts
---                             (toList parentFieldDefs)
---                      dbname =
---                          unEntityNameDB (entityDB pent)
---                      oldDbName =
---                          unEntityNameDB (foreignRefTableDBName fdef)
---                   in
---                       fdef
---                           { foreignFields =
---                               fmap snd fds_ffs
---                           , foreignNullable =
---                               setNull $ fmap fst fds_ffs
---                           , foreignRefTableDBName =
---                               EntityNameDB dbname
---                           , foreignConstraintNameDBName =
---                               ConstraintNameDB
---                               . T.replace oldDbName dbname . unConstraintNameDB
---                               $ foreignConstraintNameDBName fdef
---                           }
---
 setNull :: NonEmpty UnboundFieldDef -> Bool
 setNull (fd :| fds) =
     let

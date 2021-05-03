@@ -376,7 +376,7 @@ insertSql' ent vals =
     notGenerated =
         isNothing . fieldGenerated
     cols =
-        filter notGenerated $ getEntityFieldsDatabase ent
+        filter notGenerated $ getEntityFields ent
 
 execute' :: Sqlite.Connection -> Sqlite.Statement -> [PersistValue] -> IO Int64
 execute' conn stmt vals = flip finally (liftIO $ Sqlite.reset conn stmt) $ do

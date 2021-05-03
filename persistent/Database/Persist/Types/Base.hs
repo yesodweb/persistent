@@ -196,21 +196,25 @@ entityKeyFields :: EntityDef -> NonEmpty FieldDef
 entityKeyFields =
     entitiesPrimary
 
+-- | Returns a 'NonEmpty' list of 'FieldDef' that correspond with the key
+-- columns for an 'EntityDef'.
 keyAndEntityFields :: EntityDef -> NonEmpty FieldDef
 keyAndEntityFields ent =
-        case entityId ent of
-            EntityIdField fd ->
-                fd :| entityFields ent
-            EntityIdNaturalKey _ ->
-                case NEL.nonEmpty (entityFields ent) of
-                    Nothing ->
-                        error $ mconcat
-                            [ "persistent internal guarantee failed: entity is "
-                            , "defined with an entityId = EntityIdNaturalKey, "
-                            , "but somehow doesn't have any entity fields."
-                            ]
-                    Just xs ->
-                        xs
+    case entityId ent of
+        EntityIdField fd ->
+            fd :| fields
+        EntityIdNaturalKey pcd ->
+            case NEL.nonEmpty fields of
+                Nothing ->
+                    error $ mconcat
+                        [ "persistent internal guarantee failed: entity is "
+                        , "defined with an entityId = EntityIdNaturalKey, "
+                        , "but somehow doesn't have any entity fields."
+                        ]
+                Just xs ->
+                    xs
+  where
+    fields = filter isHaskellField $ entityFields ent
 
 type ExtraLine = [Text]
 

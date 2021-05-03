@@ -16,6 +16,8 @@ module Database.Persist.Sql.Orphan.PersistStore
     , fieldDBName
     ) where
 
+import Debug.Trace
+
 import Control.Exception (throwIO)
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader (ReaderT, ask)

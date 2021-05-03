@@ -68,27 +68,42 @@ instance
     rawSqlProcessRow         = keyFromValues
 
 instance
-    (PersistEntity record, PersistEntityBackend record ~ backend, IsPersistBackend backend) =>
-    RawSql (Entity record) where
+    (PersistEntity record, PersistEntityBackend record ~ backend, IsPersistBackend backend)
+  =>
+    RawSql (Entity record)
+  where
     rawSqlCols escape _ent = (length sqlFields, [intercalate ", " $ toList sqlFields])
-        where
-          sqlFields = fmap (((name <> ".") <>) . escapeWith escape)
-              $ fmap fieldDB
-              -- Hacky for a composite key because
-              -- it selects the same field multiple times
-              $ keyAndEntityFields entDef
-          name = escapeWith escape (getEntityDBName entDef)
-          entDef = entityDef (Nothing :: Maybe record)
+      where
+        sqlFields =
+            fmap (((name <> ".") <>) . escapeWith escape)
+            $ fmap fieldDB
+            $ keyAndEntityFields entDef
+        name =
+            escapeWith escape (getEntityDBName entDef)
+        entDef =
+            entityDef (Nothing :: Maybe record)
     rawSqlColCountReason a =
         case fst (rawSqlCols (error "RawSql") a) of
           1 -> "one column for an 'Entity' data type without fields"
           n -> show n <> " columns for an 'Entity' data type"
-    rawSqlProcessRow row = case splitAt nKeyFields row of
-      (rowKey, rowVal) -> Entity <$> keyFromValues rowKey
-                                 <*> fromPersistValues rowVal
-      where
-        nKeyFields = length $ getEntityKeyFields entDef
-        entDef = entityDef (Nothing :: Maybe record)
+    rawSqlProcessRow row =
+        case keyFromRecordM of
+            Just mkKey -> do
+                val <- fromPersistValues row
+                pure Entity
+                    { entityKey =
+                        mkKey val
+                    , entityVal =
+                        val
+                    }
+            Nothing ->
+                case row of
+                    (k : rest) ->
+                        Entity
+                            <$> keyFromValues [k]
+                            <*> fromPersistValues rest
+                    [] ->
+                        Left "Row was empty"
 
 -- | This newtype wrapper is useful when selecting an entity out of the
 -- database and you want to provide a prefix to the table being selected.
@@ -151,23 +166,32 @@ instance
     , PersistEntityBackend record ~ backend
     , IsPersistBackend backend
     )
-  => RawSql (EntityWithPrefix prefix record) where
+  =>
+    RawSql (EntityWithPrefix prefix record)
+  where
     rawSqlCols escape _ent = (length sqlFields, [intercalate ", " $ toList sqlFields])
-        where
-          sqlFields = fmap (((name <> ".") <>) . escapeWith escape)
+      where
+          sqlFields =
+              fmap (((name <> ".") <>) . escapeWith escape)
               $ fmap fieldDB
               -- Hacky for a composite key because
               -- it selects the same field multiple times
               $ keyAndEntityFields entDef
-          name = pack $ symbolVal (Proxy :: Proxy prefix)
-          entDef = entityDef (Nothing :: Maybe record)
+          name =
+              pack $ symbolVal (Proxy :: Proxy prefix)
+          entDef =
+              entityDef (Nothing :: Maybe record)
     rawSqlColCountReason a =
         case fst (rawSqlCols (error "RawSql") a) of
-          1 -> "one column for an 'Entity' data type without fields"
-          n -> show n ++ " columns for an 'Entity' data type"
-    rawSqlProcessRow row = case splitAt nKeyFields row of
-      (rowKey, rowVal) -> fmap EntityWithPrefix $ Entity <$> keyFromValues rowKey
-                                 <*> fromPersistValues rowVal
+            1 -> "one column for an 'Entity' data type without fields"
+            n -> show n ++ " columns for an 'Entity' data type"
+    rawSqlProcessRow row =
+        case splitAt nKeyFields row of
+            (rowKey, rowVal) ->
+                fmap EntityWithPrefix $
+                    Entity
+                        <$> keyFromValues rowKey
+                        <*> fromPersistValues rowVal
       where
         nKeyFields = length $ getEntityKeyFields entDef
         entDef = entityDef (Nothing :: Maybe record)

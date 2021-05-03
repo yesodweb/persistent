@@ -47,6 +47,9 @@ import TemplateTestImports
 
 mkPersist sqlSettings [persistLowerCase|
 
+HasCustomName sql=custom_name
+    name Text
+
 ForeignTarget
     name Text
     deriving Eq Show
@@ -87,6 +90,15 @@ ChildExplicit
 
 spec :: Spec
 spec = describe "ForeignRefSpec" $ do
+    describe "HasCustomName" $ do
+        let
+            edef =
+                entityDef $ Proxy @HasCustomName
+        it "should have a custom db name" $ do
+            entityDB edef
+                `shouldBe`
+                    EntityNameDB "custom_name"
+
     it "should compile" $ do
         True `shouldBe` True
 
