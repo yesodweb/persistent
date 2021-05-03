@@ -34,8 +34,8 @@ ParentImplicit
 
 ChildImplicit
     pname Int
-    parentId ParentImplicitId
-    -- Foreign ParentImplicit OnDeleteCascade OnUpdateCascade fkparent parentId
+    parentId ParentImplicitId noreference
+    Foreign ParentImplicit OnDeleteCascade OnUpdateCascade fkparent parentId
     deriving Show Eq
 
 ParentComposite

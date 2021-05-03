@@ -27,7 +27,6 @@ import Data.Monoid (Monoid(..), (<>))
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Foldable (toList)
-import Data.Typeable (Typeable)
 
 import Database.Persist hiding (updateField)
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)

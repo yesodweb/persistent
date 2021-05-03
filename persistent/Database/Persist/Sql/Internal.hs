@@ -18,12 +18,11 @@ import Data.Monoid (mappend, mconcat)
 import Data.Text (Text)
 import qualified Data.Text as T
 
+import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
+import Database.Persist.EntityDef
 import Database.Persist.Quasi
 import Database.Persist.Sql.Types
 import Database.Persist.Types
-import Database.Persist.Names
-import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
-import Database.Persist.EntityDef
 
 -- | Record of functions to override the default behavior in 'mkColumns'.  It is
 -- recommended you initialize this with 'emptyBackendSpecificOverrides' and

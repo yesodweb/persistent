@@ -99,7 +99,7 @@ import qualified Data.Map as M
 import Data.Maybe (fromMaybe, isJust, listToMaybe, mapMaybe)
 import Data.Monoid (mappend, mconcat, (<>))
 import Data.Proxy (Proxy(Proxy))
-import Data.Text (Text, append, concat, cons, pack, stripSuffix, uncons, unpack)
+import Data.Text (Text, concat, cons, pack, stripSuffix, uncons, unpack)
 import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
 import qualified Data.Text.Encoding as TE
@@ -127,7 +127,6 @@ import Database.Persist.Sql
 import Database.Persist.EntityDef.Internal (EntityDef(..), EntityIdDef(..))
 import Database.Persist.ImplicitIdDef (autoIncrementingInteger)
 import Database.Persist.ImplicitIdDef.Internal
-import Database.Persist.Types.Base (toEmbedEntityDef)
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
@@ -255,20 +254,6 @@ embedEntityDefsMap existingEnts rawEnts =
                 }
 
 
--- self references are already broken
--- look at every emFieldEmbed to see if it refers to an already seen EntityNameHS
--- so start with entityHaskell ent and accumulate embeddedHaskell em
-breakEntDefCycle :: EntityDef -> EntityDef
-breakEntDefCycle entDef =
-    overEntityFields (fmap (breakCycleField (entityHaskell entDef))) entDef
-  where
-    breakCycleField entName f =
-        case fieldReference f of
-            EmbedRef em ->
-                f
-            _ ->
-                f
-
 -- | Calls 'parse' to Quasi.parse individual entities in isolation
 -- afterwards, sets references to other entities
 --
@@ -293,16 +278,6 @@ stripId :: FieldType -> Maybe Text
 stripId (FTTypeCon Nothing t) = stripSuffix "Id" t
 stripId _ = Nothing
 
-foreignReference :: FieldDef -> Maybe EntityNameHS
-foreignReference field =
-    case fieldReference field of
-        ForeignRef ref ->
-            Just ref
-        _ ->
-            Nothing
-
--- * entity def sql type exp
-
 liftAndFixKeys
     :: MkPersistSettings
     -> M.Map EntityNameHS a
@@ -313,12 +288,6 @@ liftAndFixKeys mps emEntities entityMap unboundEnt =
     let
         ent =
             unboundEntityDef unboundEnt
-        -- sqlTypeExp =
-        --     getSqlType' $ entityId ent
-        sqlTypeExps =
-            fmap getSqlType' $ getUnboundFieldDefs unboundEnt
-        getSqlType' =
-            getSqlType emEntities entityMap
         fields =
             getUnboundFieldDefs unboundEnt
     in
@@ -370,13 +339,11 @@ liftAndFixKeys mps emEntities entityMap unboundEnt =
                         a
             parentTableName =
                 foreignRefTableHaskell unboundForeignDef
-            parentFields =
-                unboundEntityFields parentDef
             fixForeignFields :: [(ForeignFieldDef, ForeignFieldDef)]
             fixForeignFields =
                 case unboundForeignFields of
-                    FieldListImpliedId foreignFieldNames ->
-                        mkReferences $ toList foreignFieldNames
+                    FieldListImpliedId ffns ->
+                        mkReferences $ toList ffns
                     FieldListHasReferences references ->
                         toList $ fmap convReferences references
               where
@@ -445,9 +412,6 @@ liftAndFixKeys mps emEntities entityMap unboundEnt =
                             ]
                     Just a->
                         a
-
-    unboundHaskellName =
-        getUnboundEntityNameHS unboundEnt
 
     combinedFixFieldDef :: UnboundFieldDef -> Q Exp
     combinedFixFieldDef ufd@UnboundFieldDef{..} =
@@ -752,9 +716,9 @@ mEmbedded ents (FTTypeCon Nothing (EntityNameHS -> name)) =
     maybe (Left Nothing) (\_ -> Right name) $ M.lookup name ents
 mEmbedded ents (FTList x) =
     mEmbedded ents x
-mEmbedded ents (FTApp (FTTypeCon Nothing "Key") (FTTypeCon _ a)) =
+mEmbedded _ (FTApp (FTTypeCon Nothing "Key") (FTTypeCon _ a)) =
     Left $ Just $ FTKeyCon $ a <> "Id"
-mEmbedded ents (FTApp x y) =
+mEmbedded _ (FTApp _ _) =
     Left Nothing
 
 setEmbedField :: EntityNameHS -> M.Map EntityNameHS a -> FieldDef -> FieldDef
@@ -1461,12 +1425,12 @@ mkKeyTypeDec mps entDef = do
             [ not (defaultIdType entDef)
             , not useNewtype
             , isJust (entityPrimary (unboundEntityDef entDef))
-            , not $ isBackendKey mps
+            , not isBackendKey
             ]
 
-    isBackendKey mps =
+    isBackendKey =
         case getImplicitIdType mps of
-            ConT bk `AppT` a
+            ConT bk `AppT` _
                 | bk == ''BackendKey ->
                     True
             _ ->
@@ -1644,9 +1608,11 @@ fieldError tableName fieldName err = mconcat
     ]
 
 mkEntity :: M.Map EntityNameHS a -> EntityMap -> MkPersistSettings -> UnboundEntityDef -> Q [Dec]
-mkEntity embedEntityMap entityMap mps entDef = do
-    entityDefExp <- liftAndFixKeys mps embedEntityMap entityMap entDef
-    entDef <- pure $ fixEntityDef entDef
+mkEntity embedEntityMap entityMap mps preDef = do
+    entityDefExp <- liftAndFixKeys mps embedEntityMap entityMap preDef
+    let
+        entDef =
+            fixEntityDef preDef
     fields <- mkFields mps entityMap entDef
     let name = mkEntityDefName entDef
     let clazz = ConT ''PersistEntity `AppT` genDataType
@@ -1764,7 +1730,7 @@ mkEntity embedEntityMap entityMap mps entDef = do
     genDataType =
         genericDataType mps entName backendT
     entName =
-        getUnboundEntityNameHS entDef
+        getUnboundEntityNameHS preDef
 
 data EntityFieldsTH = EntityFieldsTH
     { entityFieldsTHPrimary :: EntityFieldTH
@@ -1836,7 +1802,7 @@ stripIdFieldImpl eid =
 mkFields :: MkPersistSettings -> EntityMap -> UnboundEntityDef -> Q EntityFieldsTH
 mkFields mps entityMap entDef =
     EntityFieldsTH
-        <$> mkIdField mps entDef (unboundPrimarySpec entDef)
+        <$> mkIdField mps entDef
         <*> mapM (mkField mps entityMap entDef) (getUnboundFieldDefs entDef)
 
 mkUniqueKeyInstances :: MkPersistSettings -> UnboundEntityDef -> Q [Dec]
@@ -2439,8 +2405,8 @@ mkField mps entityMap et fieldDef = do
   where
     name = filterConName mps et fieldDef
 
-mkIdField :: MkPersistSettings -> UnboundEntityDef -> PrimarySpec -> Q EntityFieldTH
-mkIdField mps ued primSpec = do
+mkIdField :: MkPersistSettings -> UnboundEntityDef -> Q EntityFieldTH
+mkIdField mps ued = do
     let
         entityName =
             getUnboundEntityNameHS ued
@@ -3009,47 +2975,3 @@ setNull (fd :| fds) =
         else error $
             "foreign key columns must all be nullable or non-nullable"
            ++ show (fmap (unFieldNameHS . unboundFieldNameHS) (fd:fds))
---
---
-toForeignFields
-    :: UnboundEntityDef
-    -> FieldNameHS
-    -> UnboundFieldDef
-    -> (UnboundFieldDef, (ForeignFieldDef, ForeignFieldDef))
-toForeignFields ent haskellField parentFieldDef =
-   case checkTypes fieldDef parentFieldDef of
-       Just err ->
-           error err
-       Nothing ->
-           (fieldDef, ((haskellField, unboundFieldNameDB fieldDef), (parentFieldHaskellName, parentFieldNameDB)))
-  where
-    fieldStore =
-        mkFieldStore ent
-    fieldDef =
-        case getFieldDef haskellField fieldStore of
-            Nothing ->
-                error $ mconcat
-                    [ "foreign key constraint for: "
-                    , show (unEntityNameHS $ getUnboundEntityNameHS ent)
-                    , " unknown column: "
-                    , show haskellField
-                    ]
-            Just a ->
-                a
-    parentFieldHaskellName =
-        unboundFieldNameHS parentFieldDef
-    parentFieldNameDB =
-        unboundFieldNameDB parentFieldDef
-    checkTypes foreignField parentField =
-        if unboundFieldType foreignField == unboundFieldType parentField
-        then Nothing
-        else
-            -- TODO: reenable foreign key type checking
-            const Nothing $
-            Just $ mconcat
-                [ "fieldType mismatch: \n"
-                , "  fieldType foreignField: "
-                , show (unboundFieldType foreignField)
-                , "\n  unboundFieldType parentField: "
-                , show (unboundFieldType parentField)
-                ]

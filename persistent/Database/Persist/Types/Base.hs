@@ -203,7 +203,7 @@ keyAndEntityFields ent =
     case entityId ent of
         EntityIdField fd ->
             fd :| fields
-        EntityIdNaturalKey pcd ->
+        EntityIdNaturalKey _ ->
             case NEL.nonEmpty fields of
                 Nothing ->
                     error $ mconcat

@@ -30,10 +30,8 @@ import qualified Data.HashMap.Strict as HM
 import Web.HttpApiData
        ( FromHttpApiData(..)
        , ToHttpApiData(..)
-       , parseBoundedTextData
        , parseUrlPieceMaybe
        , readTextData
-       , showTextData
        )
 
 -- | A raw value which can be stored in any backend and can be marshalled to

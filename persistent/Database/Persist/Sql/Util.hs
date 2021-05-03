@@ -1,4 +1,4 @@
-{-# language ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Database.Persist.Sql.Util
     ( parseEntityValues
@@ -20,23 +20,38 @@ module Database.Persist.Sql.Util
     , mkInsertPlaceholders
     ) where
 
+import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Maybe as Maybe
 import Data.Monoid ((<>))
 import Data.Text (Text, pack)
 import qualified Data.Text as T
-import Data.List.NonEmpty (NonEmpty(..))
 
-import Database.Persist (
-    Entity(Entity), EntityDef, EntityField, FieldNameHS(FieldNameHS)
-  , PersistEntity(..), PersistValue
-  , keyFromValues, fromPersistValues, fieldDB, getEntityId, entityPrimary
-  , getEntityFields, getEntityKeyFields, fieldHaskell, compositeFields, persistFieldDef
-  , keyAndEntityFields, toPersistValue, FieldNameDB, Update(..), PersistUpdate(..)
-  , FieldDef(..)
-  )
+import Database.Persist
+       ( Entity(Entity)
+       , EntityDef
+       , EntityField
+       , FieldDef(..)
+       , FieldNameDB
+       , FieldNameHS(FieldNameHS)
+       , PersistEntity(..)
+       , PersistUpdate(..)
+       , PersistValue
+       , Update(..)
+       , compositeFields
+       , entityPrimary
+       , fieldDB
+       , fieldHaskell
+       , fromPersistValues
+       , getEntityFields
+       , getEntityKeyFields
+       , keyAndEntityFields
+       , keyFromValues
+       , persistFieldDef
+       , toPersistValue
+       )
 
 import Database.Persist.Sql.Types (Sql)
-import Database.Persist.SqlBackend.Internal(SqlBackend(..))
+import Database.Persist.SqlBackend.Internal (SqlBackend(..))
 
 keyAndEntityColumnNames :: EntityDef -> SqlBackend -> NonEmpty Sql
 keyAndEntityColumnNames ent conn =

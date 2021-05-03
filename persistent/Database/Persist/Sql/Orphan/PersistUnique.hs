@@ -10,7 +10,6 @@ import Control.Monad.Trans.Reader (ask)
 import qualified Data.Conduit.List as CL
 import Data.Function (on)
 import Data.List (nubBy)
-import qualified Data.List.NonEmpty as NEL
 import Data.Monoid (mappend)
 import qualified Data.Text as T
 import Data.Foldable (toList)

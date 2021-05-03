@@ -17,7 +17,6 @@ import qualified Data.Text as T
 import Database.Persist
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal
-import Database.Persist.SqlBackend.Internal
 import Database.Persist.Sql.Class
 
 rawQuery :: (MonadResource m, MonadReader env m, BackendCompatible SqlBackend env)
