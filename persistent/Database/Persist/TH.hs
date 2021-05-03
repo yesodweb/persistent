@@ -1768,19 +1768,32 @@ stripIdFieldDef efth = efth
         bdy' =
             case bdy of
                 NormalB e ->
-                    NormalB $ case e of
-                        AppE (ConE name) a
-                            | name == 'EntityIdNaturalKey ->
-                                VarE 'error
-                                `AppE`
-                                LitE (StringL "cannot get single FieldDef for Natural Key")
-                            | name == 'EntityIdField ->
-                                a
-                        _ ->
-                            e
+                    NormalB $ AppE (ConE 'stripIdFieldImpl) e
                 _ ->
                     bdy
 
+-- | @persistent@ used to assume that an Id was always a single field.
+--
+-- This method preserves as much backwards compatibility as possible.
+stripIdFieldImpl :: EntityIdDef -> FieldDef
+stripIdFieldImpl eid =
+    case eid of
+        EntityIdField fd -> fd
+        EntityIdNaturalKey cd ->
+            case compositeFields cd of
+                (x :| xs) ->
+                    case xs of
+                        [] ->
+                            x
+                        _ ->
+                            boom
+  where
+    boom =
+        error $ mconcat
+            [ "Can't fetch a single field definition because there are "
+            , "multiple columns on the primary key."
+            , "\n    " show eid
+            ]
 
 -- uses:
 --
